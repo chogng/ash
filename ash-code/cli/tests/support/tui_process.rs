@@ -557,6 +557,8 @@ impl TuiProcess {
             }
             if Instant::now() >= deadline {
                 trace_pty("screen timeout");
+                #[cfg(target_os = "linux")]
+                self.trace_child_process();
                 trace_pty(&format!("screen contents:\n{screen}"));
                 let raw = self.raw_text();
                 let tail = raw.chars().rev().take(4_096).collect::<String>();
@@ -606,6 +608,39 @@ impl TuiProcess {
 
     pub fn screen(&self) -> String {
         self.capture.lock().unwrap().screen()
+    }
+
+    #[cfg(target_os = "linux")]
+    fn trace_child_process(&self) {
+        if std::env::var_os("ASH_TUI_TEST_TRACE").is_none() {
+            return;
+        }
+        let Some(pid) = self.child.child.process_id() else {
+            trace_pty("child PID unavailable");
+            return;
+        };
+        let root = PathBuf::from(format!("/proc/{pid}"));
+        let executable = fs::read_link(root.join("exe"))
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|error| format!("unavailable: {error}"));
+        let command = fs::read(root.join("cmdline"))
+            .map(|bytes| String::from_utf8_lossy(&bytes).replace('\0', " "))
+            .unwrap_or_else(|error| format!("unavailable: {error}"));
+        let state = fs::read_to_string(root.join("status"))
+            .ok()
+            .and_then(|status| {
+                status
+                    .lines()
+                    .find(|line| line.starts_with("State:"))
+                    .map(str::to_owned)
+            })
+            .unwrap_or_else(|| "State: unavailable".into());
+        let wait = fs::read_to_string(root.join("wchan"))
+            .map(|wait| wait.trim().to_string())
+            .unwrap_or_else(|error| format!("unavailable: {error}"));
+        trace_pty(&format!(
+            "child pid={pid} exe={executable} cmdline={command:?} {state} wchan={wait}"
+        ));
     }
 
     pub fn raw_text(&self) -> String {
