@@ -204,20 +204,11 @@ baseUrl = "{base_url}"
 impl Drop for Fixture {
     fn drop(&mut self) {
         trace_pty("fixture cleanup begin");
-        if thread::panicking() {
-            if let Ok(entries) = fs::read_dir(self.profile.join("run")) {
-                for entry in entries.flatten() {
-                    if entry
-                        .path()
-                        .extension()
-                        .is_some_and(|extension| extension == "log")
-                    {
-                        if let Ok(log) = fs::read_to_string(entry.path()) {
-                            eprintln!("Test daemon log ({}):\n{log}", entry.path().display());
-                        }
-                    }
-                }
-            }
+        if thread::panicking()
+            && let Ok(path) = daemon_log_path(&self.profile)
+            && let Ok(log) = fs::read_to_string(&path)
+        {
+            eprintln!("Test daemon log ({}):\n{log}", path.display());
         }
         // Stop only the daemon belonging to this isolated fixture before deleting it.
         let _ = std::process::Command::new(env!("CARGO_BIN_EXE_ash"))
@@ -226,6 +217,10 @@ impl Drop for Fixture {
             .output();
         trace_pty("fixture cleanup end");
     }
+}
+
+fn daemon_log_path(profile: &Path) -> Result<PathBuf, String> {
+    ash_app_server_daemon::daemon_endpoint_path(profile).map(|socket| socket.with_extension("log"))
 }
 
 fn find_named(root: &Path, name: &str) -> Option<PathBuf> {
@@ -664,22 +659,25 @@ impl TuiProcess {
                 .unwrap_or_else(|| "State: unavailable".into());
             trace_pty(&format!("child {child_pid}: cmdline={command:?} {state}"));
         }
-        if let Ok(entries) = fs::read_dir(self.profile.join("run")) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.extension().is_some_and(|extension| extension == "log") {
-                    let log = fs::read_to_string(&path)
-                        .unwrap_or_else(|error| format!("unavailable: {error}"));
-                    let tail = log.chars().rev().take(4_096).collect::<String>();
-                    trace_pty(&format!(
-                        "daemon log {}:\n{}",
-                        path.display(),
-                        tail.chars().rev().collect::<String>()
-                    ));
-                }
+        match daemon_log_path(&self.profile) {
+            Ok(path) => {
+                let socket = path.with_extension("sock");
+                let operation = path.with_extension("operation");
+                trace_pty(&format!(
+                    "daemon endpoint socket={} operation_lock={}",
+                    socket.exists(),
+                    operation.exists()
+                ));
+                let log = fs::read_to_string(&path)
+                    .unwrap_or_else(|error| format!("unavailable: {error}"));
+                let tail = log.chars().rev().take(4_096).collect::<String>();
+                trace_pty(&format!(
+                    "daemon log {}:\n{}",
+                    path.display(),
+                    tail.chars().rev().collect::<String>()
+                ));
             }
-        } else {
-            trace_pty("daemon log directory unavailable");
+            Err(error) => trace_pty(&format!("daemon endpoint unavailable: {error}")),
         }
     }
 
