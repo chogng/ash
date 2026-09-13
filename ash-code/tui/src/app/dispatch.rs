@@ -302,7 +302,7 @@ where
                     .into(),
                 );
             } else {
-                let update = models::set_preferred_model(client, &arguments)
+                let update = models::set_model(client, &arguments)
                     .map_err(|error| CommandExecutionError(error.to_string()))?;
                 output
                     .events

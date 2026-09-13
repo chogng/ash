@@ -10,7 +10,7 @@ export interface ISessionsProvider extends IDisposable {
 	subscribe(session: ISession): Promise<ISession>;
 	unsubscribe(sessionId: SessionId): Promise<void>;
 	create(title: string, model?: ModelRef): Promise<IActiveSessionThread>;
-	setPreferredModel(model: ModelRef): Promise<void>;
+	setModel(model: ModelRef): Promise<void>;
 	archive(session: ISession): Promise<ISession>;
 	stop(session: ISession): Promise<ISession>;
 	interrupt(session: ISession, threadId: ThreadId): Promise<void>;

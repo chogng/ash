@@ -71,7 +71,7 @@ test('Stanza text model service restores undo and redo after the final reference
 	const textFiles = new TestTextFileService('alpha');
 	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
 	let reference = await models.acquire({ resource }, new AbortController().signal);
-	reference.model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (5) + 1)), text: '!' }]);
+	reference.model.applyOperations([{ range: Range.fromPositions(new Position((0) + 1, (5) + 1)), text: '!' }]);
 	await reference.save(new AbortController().signal);
 	const releasedModel = reference.model;
 	reference.dispose();
@@ -133,7 +133,7 @@ test("Stanza text model references track dirty content, save snapshots, and expl
 	assert.equal(reference.isDirty, true);
 	textFiles.setText("external\r\ncontent");
 	await reference.revert(new AbortController().signal);
-	assert.equal(reference.model.getText(), "external\ncontent");
+	assert.equal(reference.model.getText(), "external\r\ncontent");
 	assert.equal(reference.model.canUndo(), false);
 	assert.equal(reference.model.canRedo(), false);
 	assert.equal(reference.isDirty, false);
@@ -174,7 +174,7 @@ test("Stanza text model preserves the source CRLF convention when saving", async
 	const textFiles = new TestTextFileService("first\r\nsecond");
 	using models = new BrowserTextModelService(new BrowserTextResourceStore(textFiles));
 	const reference = await models.acquire({ resource: URI.file("C:\\project\\main.ts") }, new AbortController().signal);
-	assert.equal(reference.model.getText(), "first\nsecond");
+	assert.equal(reference.model.getText(), "first\r\nsecond");
 	reference.model.applyEdits([{
 		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)),
 		text: "saved",

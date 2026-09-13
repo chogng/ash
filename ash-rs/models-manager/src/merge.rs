@@ -47,8 +47,8 @@ impl CatalogRecord {
             capabilities,
             supported_reasoning_efforts: (!info.supported_reasoning_efforts.is_empty())
                 .then_some(MetadataSource::ProviderSeed),
-            default_reasoning_effort: info
-                .default_reasoning_effort
+            model_reasoning_effort: info
+                .model_reasoning_effort
                 .map(|_| MetadataSource::ProviderSeed),
             default_personality: info
                 .default_personality
@@ -182,9 +182,9 @@ fn apply_live_patch(record: &mut CatalogRecord, patch: &ModelMetadataPatch) {
         record.info.supported_reasoning_efforts = efforts.clone();
         record.provenance.supported_reasoning_efforts = Some(source);
     }
-    if let Some(effort) = patch.default_reasoning_effort {
-        record.info.default_reasoning_effort = Some(effort);
-        record.provenance.default_reasoning_effort = Some(source);
+    if let Some(effort) = patch.model_reasoning_effort {
+        record.info.model_reasoning_effort = Some(effort);
+        record.provenance.model_reasoning_effort = Some(source);
     }
     if let Some(personality) = patch.default_personality {
         record.info.default_personality = Some(personality);
@@ -226,7 +226,7 @@ fn highest_metadata_source(provenance: &ModelMetadataProvenance) -> Option<Metad
         provenance.capabilities.personality,
         provenance.capabilities.image_detail_original,
         provenance.supported_reasoning_efforts,
-        provenance.default_reasoning_effort,
+        provenance.model_reasoning_effort,
         provenance.default_personality,
         provenance.lifecycle,
     ];

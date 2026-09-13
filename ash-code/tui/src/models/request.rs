@@ -13,7 +13,7 @@ use ash_protocol::Patch;
 use ash_protocol::ReasoningEffort;
 
 #[derive(Debug)]
-pub(crate) struct PreferredModelUpdate {
+pub(crate) struct ModelUpdate {
     pub(crate) summary: ModelSummary,
     pub(crate) notice: String,
     pub(crate) picker: Option<ModelChoices>,
@@ -23,7 +23,7 @@ impl Command {
     pub(crate) const fn request_name(&self) -> &'static str {
         match self {
             Self::Pin { .. } => "ash-tui-pin-model",
-            Self::SetPreferred { .. } => "ash-tui-set-preferred-model",
+            Self::SetModel { .. } => "ash-tui-set-model",
         }
     }
 
@@ -33,7 +33,7 @@ impl Command {
                 "/model {} {preference}",
                 if *pinned { "pin" } else { "unpin" }
             ),
-            Self::SetPreferred { preference } => format!("/model {preference}"),
+            Self::SetModel { preference } => format!("/model {preference}"),
         }
     }
 }
@@ -41,12 +41,12 @@ impl Command {
 pub(crate) fn execute<T>(
     client: &mut AppServerClient<T>,
     command: Command,
-) -> Result<PreferredModelUpdate, String>
+) -> Result<ModelUpdate, String>
 where
     T: JsonRpcTransport,
 {
     match command {
-        Command::SetPreferred { preference } => set_preferred_model(client, &preference),
+        Command::SetModel { preference } => set_model(client, &preference),
         Command::Pin { preference, pinned } => set_pin(client, &preference, pinned),
     }
     .map_err(|error| error.to_string())
@@ -64,10 +64,10 @@ where
     model_choices(&catalog, &config, &providers).map_err(ModelCommandError)
 }
 
-pub(crate) fn set_preferred_model<T>(
+pub(crate) fn set_model<T>(
     client: &mut AppServerClient<T>,
     arguments: &str,
-) -> Result<PreferredModelUpdate, ModelCommandError>
+) -> Result<ModelUpdate, ModelCommandError>
 where
     T: JsonRpcTransport,
 {
@@ -79,11 +79,11 @@ where
     }
 
     let mut tokens = arguments.split_whitespace();
-    let first = tokens.next().ok_or_else(|| {
-        ModelCommandError("model selection requires a model or 'clear'".into())
-    })?;
+    let first = tokens
+        .next()
+        .ok_or_else(|| ModelCommandError("model selection requires a model or 'clear'".into()))?;
 
-    let (preferred_model, preferred_reasoning_effort) = if first == "clear" {
+    let (model, model_reasoning_effort) = if first == "clear" {
         if tokens.next().is_some() {
             return Err(ModelCommandError(
                 "/model clear does not accept additional arguments".into(),
@@ -171,8 +171,8 @@ where
         features: Default::default(),
         command_id: new_command_id("model"),
         expected_revision: config.revision,
-        preferred_model,
-        preferred_reasoning_effort,
+        model,
+        model_reasoning_effort,
         commit_message_model: Patch::Missing,
         approval_review_model: Patch::Missing,
         tool_mode: Patch::Missing,
@@ -183,25 +183,22 @@ where
     let config = client.read_config()?;
     let catalog = client.list_models().ok();
     let summary = ModelSummary::from_catalog(
-        config.preferred_model,
-        config.preferred_reasoning_effort,
+        config.model,
+        config.model_reasoning_effort,
         catalog.as_ref(),
     );
     let notice = format!(
-        "Preferred model: {}",
-        preferred_model_label(summary.preferred_model(), summary.reasoning_effort())
+        "Model: {}",
+        model_label(summary.model(), summary.model_reasoning_effort())
     );
-    Ok(PreferredModelUpdate {
+    Ok(ModelUpdate {
         summary,
         notice,
         picker: None,
     })
 }
 
-fn preferred_model_label(
-    model: Option<&ModelRefDto>,
-    effort: Option<ReasoningEffort>,
-) -> String {
+fn model_label(model: Option<&ModelRefDto>, effort: Option<ReasoningEffort>) -> String {
     match (model, effort) {
         (Some(model), Some(effort)) => {
             format!("{}/{} ({})", model.provider, model.model, effort.as_str())
@@ -241,8 +238,8 @@ fn write_pins<T: JsonRpcTransport>(
         features: Default::default(),
         command_id: new_command_id("pin-model"),
         expected_revision: config.revision,
-        preferred_model: Patch::Missing,
-        preferred_reasoning_effort: Patch::Missing,
+        model: Patch::Missing,
+        model_reasoning_effort: Patch::Missing,
         commit_message_model: Patch::Missing,
         approval_review_model: Patch::Missing,
         tool_mode: Patch::Missing,
@@ -256,7 +253,7 @@ fn set_pin<T: JsonRpcTransport>(
     client: &mut AppServerClient<T>,
     preference: &str,
     pinned: bool,
-) -> Result<PreferredModelUpdate, ModelCommandError> {
+) -> Result<ModelUpdate, ModelCommandError> {
     let config = client.read_config()?;
     let mut pins = super::picker::pinned_models(&config.tui).map_err(ModelCommandError)?;
     let (provider, model) = preference
@@ -280,13 +277,10 @@ fn set_pin<T: JsonRpcTransport>(
     } else {
         pins.retain(|pin| pin != &model);
     }
-    let summary = ModelSummary::from_catalog(
-        config.preferred_model.clone(),
-        config.preferred_reasoning_effort,
-        None,
-    );
+    let summary =
+        ModelSummary::from_catalog(config.model.clone(), config.model_reasoning_effort, None);
     write_pins(client, config, pins)?;
-    Ok(PreferredModelUpdate {
+    Ok(ModelUpdate {
         summary,
         notice: if pinned {
             "Model pinned"

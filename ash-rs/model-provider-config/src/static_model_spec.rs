@@ -28,7 +28,7 @@ pub struct StaticModelSpec {
     pub auto_compact_token_limit: Option<u32>,
     pub capabilities: ModelCapabilities,
     pub supported_reasoning_efforts: &'static [ReasoningEffort],
-    pub default_reasoning_effort: Option<ReasoningEffort>,
+    pub model_reasoning_effort: Option<ReasoningEffort>,
     pub default_personality: Option<Personality>,
     pub supports_input_token_count: bool,
     pub is_approval_review_default: bool,
@@ -54,7 +54,7 @@ impl StaticModelSpec {
         model.auto_compact_token_limit = self.auto_compact_token_limit;
         model.capabilities = self.capabilities;
         model.supported_reasoning_efforts = self.supported_reasoning_efforts.to_vec();
-        model.default_reasoning_effort = self.default_reasoning_effort;
+        model.model_reasoning_effort = self.model_reasoning_effort;
         model.default_personality = self.default_personality;
         model
     }
@@ -78,7 +78,7 @@ macro_rules! static_model {
             $($capability:ident: $support:ident),* $(,)?
         },)?
         $(reasoning: [$($reasoning:ident),* $(,)?],)?
-        $(default_reasoning: $default_reasoning:ident,)?
+        $(model_reasoning_effort: $model_reasoning_effort:ident,)?
         $(default_personality: $default_personality:ident,)?
         $(input_token_count: $input_token_count:literal,)?
         $(approval_review_default: $approval_review_default:literal,)?
@@ -98,7 +98,7 @@ macro_rules! static_model {
                 ..ash_protocol::ModelCapabilities::UNKNOWN
             },
             supported_reasoning_efforts: &[$($(static_model!(@reasoning $reasoning)),*)?],
-            default_reasoning_effort: static_model!(@optional_reasoning $($default_reasoning)?),
+            model_reasoning_effort: static_model!(@optional_reasoning $($model_reasoning_effort)?),
             default_personality: static_model!(@optional_personality $($default_personality)?),
             supports_input_token_count: static_model!(@bool $($input_token_count)?),
             is_approval_review_default: static_model!(@bool $($approval_review_default)?),
@@ -164,7 +164,7 @@ mod tests {
             reasoning: unsupported,
         },
         reasoning: [medium, high],
-        default_reasoning: high,
+        model_reasoning_effort: high,
         default_personality: pragmatic,
         input_token_count: true,
         approval_review_default: true,
@@ -192,7 +192,7 @@ mod tests {
             &[ReasoningEffort::Medium, ReasoningEffort::High]
         );
         assert_eq!(
-            COMPLETE_SPEC.default_reasoning_effort,
+            COMPLETE_SPEC.model_reasoning_effort,
             Some(ReasoningEffort::High)
         );
         assert_eq!(

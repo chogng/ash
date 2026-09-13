@@ -51,10 +51,7 @@ impl Settings {
                 model_context: BTreeMap::new(),
             });
         Self {
-            inherited_model: config
-                .preferred_model
-                .as_ref()
-                .map(|model| model.model.clone()),
+            inherited_model: config.model.as_ref().map(|model| model.model.clone()),
             revision: config.revision,
             key_saved: providers
                 .providers

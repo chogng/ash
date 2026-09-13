@@ -458,10 +458,7 @@ pub(super) fn submit_shell_command(
     Ok(())
 }
 
-pub(super) fn set_preferred_model(
-    client: &mut AppServerRequestHandle,
-    model: ModelRef,
-) -> Result<()> {
+pub(super) fn set_model(client: &mut AppServerRequestHandle, model: ModelRef) -> Result<()> {
     let config = client.read_config().map_err(client_error)?;
     client
         .update_config(ConfigUpdateParams {
@@ -469,11 +466,11 @@ pub(super) fn set_preferred_model(
             features: Default::default(),
             command_id: next_command_id("model"),
             expected_revision: config.revision,
-            preferred_model: Patch::Value(ModelRefDto {
+            model: Patch::Value(ModelRefDto {
                 provider: model.provider.to_string(),
                 model: model.model.to_string(),
             }),
-            preferred_reasoning_effort: Patch::Missing,
+            model_reasoning_effort: Patch::Missing,
             approval_review_model: Patch::Missing,
             commit_message_model: Patch::Missing,
             tool_mode: Patch::Missing,

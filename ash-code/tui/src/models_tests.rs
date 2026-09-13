@@ -13,18 +13,18 @@ use ash_protocol::ReasoningEffort;
 
 #[test]
 fn model_summary_resolves_the_selected_models_access_path() {
-    let preferred = ModelRefDto {
+    let model = ModelRefDto {
         provider: "openai-chatgpt".into(),
         model: "gpt-5.6".into(),
     };
     let mut selected = entry("openai-chatgpt", "gpt-5.6", ModelAccess::Subscription);
     selected.display_name = "GPT-5.6".into();
-    selected.default_reasoning_effort = Some(ReasoningEffort::High);
+    selected.model_reasoning_effort = Some(ReasoningEffort::High);
     let catalog = ModelListResult {
         models: vec![selected],
     };
 
-    let summary = ModelSummary::from_catalog(Some(preferred), None, Some(&catalog));
+    let summary = ModelSummary::from_catalog(Some(model), None, Some(&catalog));
 
     assert_eq!(summary.model_label(), "openai-chatgpt/gpt-5.6");
     assert_eq!(summary.model_and_effort_label(), "GPT-5.6 (high)");
@@ -52,26 +52,26 @@ fn missing_or_automatic_models_are_reported_without_guessing_access() {
 }
 
 #[test]
-fn preferred_reasoning_effort_overrides_catalog_default() {
-    let preferred = ModelRefDto {
+fn model_reasoning_effort_overrides_catalog_value() {
+    let model = ModelRefDto {
         provider: "openai-chatgpt".into(),
         model: "gpt-5.6".into(),
     };
     let mut selected = entry("openai-chatgpt", "gpt-5.6", ModelAccess::Subscription);
     selected.display_name = "GPT-5.6".into();
-    selected.default_reasoning_effort = Some(ReasoningEffort::Medium);
+    selected.model_reasoning_effort = Some(ReasoningEffort::Medium);
     let catalog = ModelListResult {
         models: vec![selected],
     };
 
-    let summary = ModelSummary::from_catalog(
-        Some(preferred),
-        Some(ReasoningEffort::High),
-        Some(&catalog),
-    );
+    let summary =
+        ModelSummary::from_catalog(Some(model), Some(ReasoningEffort::High), Some(&catalog));
 
     assert_eq!(summary.model_and_effort_label(), "GPT-5.6 (high)");
-    assert_eq!(summary.reasoning_effort(), Some(ReasoningEffort::High));
+    assert_eq!(
+        summary.model_reasoning_effort(),
+        Some(ReasoningEffort::High)
+    );
 }
 
 fn entry(provider: &str, model: &str, access: ModelAccess) -> ModelCatalogEntry {
@@ -88,7 +88,7 @@ fn entry(provider: &str, model: &str, access: ModelAccess) -> ModelCatalogEntry 
         available_context_window: None,
         capabilities: ModelCapabilities::UNKNOWN,
         supported_reasoning_efforts: Vec::new(),
-        default_reasoning_effort: None,
+        model_reasoning_effort: None,
         default_personality: None,
     }
 }

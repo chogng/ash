@@ -99,7 +99,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
     );
     assert!(state.visible_items().iter().all(|item| !matches!(
         item.label(),
-        "Revision" | "Generation" | "Preferred model" | "Approval review model" | "Providers"
+        "Revision" | "Generation" | "Model" | "Approval review model" | "Providers"
     )));
     assert!(
         state

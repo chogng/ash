@@ -3,6 +3,9 @@
   "private": true,
   "license": "UNLICENSED",
   "packageManager": "pnpm@11.17.0",
+  "engines": {
+    "node": ">=25 <26"
+  },
   "scripts": {
     "preinstall": "node build/pnpm/preinstall.ts",
     "build": "corepack pnpm run build:desktop",
@@ -26,7 +29,6 @@
     "test:desktop:smoke:browser:full": "corepack pnpm --dir ash-ts run test:smoke:browser:full",
     "test:desktop:e2e": "corepack pnpm --dir ash-ts run test:smoke:desktop",
     "typecheck:build": "corepack pnpm --dir build typecheck",
-    "typecheck:scripts": "corepack pnpm --dir scripts typecheck",
     "typecheck:stanza": "corepack pnpm --dir ash-ts typecheck:stanza",
     "dev:desktop": "corepack pnpm --dir ash-ts dev",
     "dev:stanza": "corepack pnpm --dir ash-ts dev:stanza",

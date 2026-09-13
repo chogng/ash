@@ -132,7 +132,7 @@ static_model! {
         reasoning: supported,
     },
     reasoning: [low, medium, high],
-    default_reasoning: medium,
+    model_reasoning_effort: medium,
     default_personality: pragmatic,
     input_token_count: true,
     approval_review_default: true,

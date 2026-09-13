@@ -30,8 +30,8 @@ test("built-in themes define every registered color", () => {
 	for (const id of colorIdentifiers) {
 		assert.equal(typeof darkColorTheme.colors[id], "string");
 		assert.equal(typeof lightColorTheme.colors[id], "string");
-		assert.equal(darkColorTheme.getColor(id)?.toString(), darkColorTheme.colors[id]);
-		assert.equal(lightColorTheme.getColor(id)?.toString(), lightColorTheme.colors[id]);
+		assert.equal(darkColorTheme.getColorCss(id), darkColorTheme.colors[id]);
+		assert.equal(lightColorTheme.getColorCss(id), lightColorTheme.colors[id]);
 	}
 });
 
@@ -68,8 +68,8 @@ test('current-line colors preserve transparent fills and high-contrast borders',
 		highContrastLightBorder: highContrastLightColorTheme.colors[ColorId.editorLineHighlightBorder],
 		strokeThickness: darkColorTheme.getSize('strokeThickness'),
 	}, {
-		darkBackground: 'rgba(0, 0, 0, 0)',
-		lightBackground: 'rgba(0, 0, 0, 0)',
+		darkBackground: '#00000000',
+		lightBackground: '#00000000',
 		highContrastDarkBorder: '#f38518',
 		highContrastLightBorder: '#0f4a85',
 		strokeThickness: { value: 1, unit: 'px' },
@@ -99,11 +99,11 @@ test('overview ruler colors preserve transparent normal borders and a solid high
 		darkBackground: darkColorTheme.colors[ColorId.editorOverviewRulerBackground],
 		lightBackground: lightColorTheme.colors[ColorId.editorOverviewRulerBackground],
 	}, {
-		darkBorder: 'rgba(127, 127, 127, 0.3)',
-		lightBorder: 'rgba(127, 127, 127, 0.3)',
-		highContrastDarkBorder: 'rgba(127, 127, 127, 0.3)',
+		darkBorder: '#7f7f7f4d',
+		lightBorder: '#7f7f7f4d',
+		highContrastDarkBorder: '#7f7f7f4d',
 		highContrastLightBorder: '#666666',
-		darkBackground: 'rgba(30, 30, 30, 0)',
-		lightBackground: 'rgba(255, 255, 255, 0)',
+		darkBackground: '#1e1e1e00',
+		lightBackground: '#ffffff00',
 	});
 });

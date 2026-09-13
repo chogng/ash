@@ -6,6 +6,7 @@ import { Range } from "../../../../../editor/common/core/range.js";
 import { LanguageDiagnosticSeverity } from "../../../../../editor/common/languages/languageResults.js";
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
 import { type IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
+import { AppServerRemoteError } from "../../../../../platform/app-server/common/appServerError.js";
 import { type ILanguageApi } from "../../../../../platform/language/common/languageApi.js";
 import { type IDirPermissionsService } from "../../../../../platform/dirPermissions/common/dirPermissionsService.js";
 import type { PermissionDto } from "../../../../../../../generated/app-server/index.js";
@@ -156,8 +157,8 @@ test("App Server diagnostics service includes unopened workspace reports", async
 test("App Server diagnostics service treats typed unavailable pulls as unsupported", async () => {
 	const events = new FakeServerEvents();
 	const api = new FakeLanguageApi();
-	api.documentDiagnosticsError = new Error("LanguageRequestFailed");
-	api.directoryDiagnosticsError = new Error("LanguageServiceUnavailable");
+	api.documentDiagnosticsError = new AppServerRemoteError(-32000, "Language request failed", { kind: "LanguageRequestFailed" });
+	api.directoryDiagnosticsError = new AppServerRemoteError(-32000, "Language service unavailable", { kind: "LanguageServiceUnavailable" });
 	const reported: unknown[][] = [];
 	const originalConsoleError = console.error;
 	console.error = (...arguments_: unknown[]) => reported.push(arguments_);

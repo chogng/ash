@@ -371,8 +371,8 @@ fn drive(
                 Ok(SessionRuntimeCommand::SubmitShellCommand(command)) => {
                     submit_shell_command(client, active, command)?;
                 }
-                Ok(SessionRuntimeCommand::SetPreferredModel(model)) => {
-                    set_preferred_model(client, model)?;
+                Ok(SessionRuntimeCommand::SetModel(model)) => {
+                    set_model(client, model)?;
                 }
                 Ok(SessionRuntimeCommand::SelectNextApprovalMode(approval_mode)) => {
                     select_next_approval_mode(active, approval_mode);

@@ -1864,13 +1864,13 @@ struct ModelProviderSnapshotResolver {
 
 impl ModelSnapshotResolver for ModelProviderSnapshotResolver {
     fn resolve(&self, config: &ResolvedConfig) -> Arc<dyn ModelInvoker> {
-        let Some(model_ref) = config.preferred_model.as_ref() else {
+        let Some(model_ref) = config.model.as_ref() else {
             return Arc::new(UnavailableModel::from_error(
                 ash_model_provider::ModelProviderError::ConfigurationMissing,
             ));
         };
         let provider = config.selected_provider().cloned().or_else(|| {
-            let model = config.preferred_model.as_ref()?;
+            let model = config.model.as_ref()?;
             let runtime = find_static_model(model)?.runtime;
             (runtime != StaticModelRuntime::ProviderApi)
                 .then(|| ModelProviderConfig::new(model.provider.clone()))
@@ -1899,7 +1899,7 @@ struct ConfigBackedModelService {
 impl ModelService for ConfigBackedModelService {
     fn billing_scope(&self, selection: ModelSelection<'_>) -> Result<ModelBillingScope, CoreError> {
         let config = self.config_for_selection(selection)?;
-        let Some(model) = config.preferred_model.as_ref() else {
+        let Some(model) = config.model.as_ref() else {
             return Ok(ModelBillingScope::Unavailable);
         };
         let access = find_static_model(model)
@@ -1952,13 +1952,13 @@ impl ModelService for ConfigBackedModelService {
         selection: ModelSelection<'_>,
     ) -> Result<Option<ash_protocol::ReasoningConfig>, CoreError> {
         let config = self.config_for_selection(selection)?;
-        let Some(model) = config.preferred_model.as_ref() else {
+        let Some(model) = config.model.as_ref() else {
             return Ok(None);
         };
         let static_model = find_static_model(model);
         let effort = config
-            .preferred_reasoning_effort
-            .or_else(|| static_model.and_then(|m| m.default_reasoning_effort));
+            .model_reasoning_effort
+            .or_else(|| static_model.and_then(|m| m.model_reasoning_effort));
         Ok(effort.map(|effort| ash_protocol::ReasoningConfig {
             effort,
             summary: false,
@@ -2142,15 +2142,15 @@ impl ModelCatalog for ConfigBackedModelService {
                 models.push(runtime_catalog_entry(resolved.entry(), &config, &registry)?);
             }
         }
-        if let Some(preferred) = config.preferred_model.clone()
+        if let Some(model) = config.model.clone()
             && config
                 .providers
-                .get(&preferred.provider)
+                .get(&model.provider)
                 .is_none_or(|provider| provider.custom.is_none())
-            && !models.iter().any(|entry| entry.model == preferred)
+            && !models.iter().any(|entry| entry.model == model)
         {
             let resolved = manager
-                .resolve_static(&preferred, &ModelRequirements::agent())
+                .resolve_static(&model, &ModelRequirements::agent())
                 .map_err(|error| CoreError::Model(error.to_string()))?;
             models.push(runtime_catalog_entry(resolved.entry(), &config, &registry)?);
         }
@@ -2174,7 +2174,7 @@ impl ModelCatalog for ConfigBackedModelService {
     }
 
     fn configured_default(&self) -> Result<Option<ash_protocol::ModelRef>, CoreError> {
-        Ok(self.resolved_config()?.preferred_model)
+        Ok(self.resolved_config()?.model)
     }
 }
 
@@ -2188,7 +2188,7 @@ impl ConfigBackedModelService {
         })?;
         let mut config = self.resolve_config(&user)?;
         if let ModelSelection::Session(model) = selection {
-            config.preferred_model = Some(model.clone());
+            config.model = Some(model.clone());
         }
         Ok(config)
     }
@@ -2227,7 +2227,7 @@ fn context_budget_for_config(
     providers: &ProviderConfigRegistry,
     manager: &ModelsManager,
 ) -> Result<ContextBudget, CoreError> {
-    let Some(model_ref) = config.preferred_model.as_ref() else {
+    let Some(model_ref) = config.model.as_ref() else {
         return Ok(ContextBudget::provider_managed());
     };
     let Some(provider_config) = config.providers.get(&model_ref.provider) else {
@@ -2322,7 +2322,7 @@ fn image_input_policy_for_config(
     const ANTHROPIC: ModelImageInputLimits = ModelImageInputLimits::new(1_568, 1_120);
     const GOOGLE: ModelImageInputLimits = ModelImageInputLimits::new(3_072, 9_216);
 
-    let Some(model_ref) = config.preferred_model.as_ref() else {
+    let Some(model_ref) = config.model.as_ref() else {
         return ModelImageInputPolicy::default();
     };
     let Some(provider) = providers.get(&model_ref.provider) else {

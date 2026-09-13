@@ -3,7 +3,7 @@ use super::App;
 use super::AppCommand;
 use super::Status;
 use super::apply_active_turn_snapshot;
-use crate::models::set_preferred_model;
+use crate::models::set_model;
 use crate::sessions::Event as SessionEvent;
 use crate::thread::Command as ThreadCommand;
 use crate::thread::Event as ThreadEvent;
@@ -92,7 +92,7 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
             "test-api-key".into(),
         ))
         .unwrap();
-    set_preferred_model(&mut client, "openai/gpt-5.6").unwrap();
+    set_model(&mut client, "openai/gpt-5.6").unwrap();
     let mut conversation =
         ActiveConversation::start(&mut client, "Conversation flow".into()).unwrap();
     let mut app = app_for_conversation(&mut client, &conversation);

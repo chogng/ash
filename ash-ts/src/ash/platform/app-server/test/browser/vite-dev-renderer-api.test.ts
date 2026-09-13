@@ -3,7 +3,7 @@ import test from "node:test";
 import { isCancellationError } from "../../../../base/common/errors.js";
 import { isRecord } from "../../../../base/common/types.js";
 import { AppServerRemoteError } from "../../../../platform/app-server/common/appServerError.js";
-import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS, APP_SERVER_CAPABILITY_VERSION, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH, type ServerNotification } from "../../../../../../generated/app-server/index.js";
+import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS, APP_SERVER_CAPABILITY_VERSION, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH, type InitializeResult, type ServerNotification } from "../../../../../../generated/app-server/index.js";
 import { connectViteDevRendererApi } from "../../../../platform/app-server/browser/webRendererApi.js";
 import { AppServerProtocolClient, WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION, type AppServerTransport } from "../../../../platform/app-server/browser/appServerProtocolClient.js";
 
@@ -46,7 +46,7 @@ class FakeHotContext implements AppServerTransport {
 		if (request.method === "initialize") {
 			this.respond(request, {
 				serverInfo: { name: "ash-app-server", version: "0.1.0" },
-				protocolVersion: { major: APP_SERVER_PROTOCOL_MAJOR, revision: 1 },
+				protocolVersion: { major: APP_SERVER_PROTOCOL_MAJOR, revision: APP_SERVER_PROTOCOL_REVISION },
 				schemaHash: APP_SERVER_SCHEMA_HASH,
 				capabilities: {
 					agentInteractions: true,
@@ -55,6 +55,7 @@ class FakeHotContext implements AppServerTransport {
 					threads: true,
 					turns: true,
 					projects: true,
+					memories: true,
 					resources: true,
 					attachments: true,
 					fileSystem: true,
@@ -80,7 +81,7 @@ class FakeHotContext implements AppServerTransport {
 					},
 				},
 				slashCommands: [],
-			});
+			} satisfies InitializeResult);
 		} else if (request.method === "session/list") {
 			this.respond(request, { sessions: [] });
 		} else if (request.method === "syntax/analyze") {

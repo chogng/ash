@@ -1,7 +1,7 @@
 packages:
   - build
-  - scripts
   - ash-ts
+engineStrict: true
 allowBuilds:
   electron: true
   esbuild: true

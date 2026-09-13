@@ -61,9 +61,9 @@ impl DirConfigRevision {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DirAgentConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub preferred_model: Option<ModelRef>,
+    pub model: Option<ModelRef>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub preferred_reasoning_effort: Option<ReasoningEffort>,
+    pub model_reasoning_effort: Option<ReasoningEffort>,
 }
 
 /// Runtime-free MCP declaration requested by a directory.

@@ -87,7 +87,7 @@ fn status_line_context_follows_thread_snapshots() {
     }
     let mut config = crate::test_support::empty_config_snapshot();
     config.tui = settings.write_to_tui(&config.tui);
-    config.preferred_model = Some(ash_app_server_protocol::protocol::config::ModelRefDto {
+    config.model = Some(ash_app_server_protocol::protocol::config::ModelRefDto {
         provider: "provider".into(),
         model: "model".into(),
     });
@@ -103,7 +103,7 @@ fn status_line_context_follows_thread_snapshots() {
                 available_context_window: Some(100),
                 capabilities: ash_protocol::ModelCapabilities::UNKNOWN,
                 supported_reasoning_efforts: vec![],
-                default_reasoning_effort: None,
+                model_reasoning_effort: None,
                 default_personality: None,
             },
         ],

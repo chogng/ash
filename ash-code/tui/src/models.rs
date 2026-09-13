@@ -10,7 +10,7 @@ pub(crate) enum Event {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Command {
-    SetPreferred { preference: String },
+    SetModel { preference: String },
     Pin { preference: String, pinned: bool },
 }
 
@@ -22,59 +22,59 @@ use ash_protocol::ReasoningEffort;
 pub(crate) use picker::ModelChoices;
 pub(crate) use picker::ModelSelectionAction;
 pub(crate) use picker::model_choices;
-pub(crate) use request::PreferredModelUpdate;
+pub(crate) use request::ModelUpdate;
 pub(crate) use request::execute;
 pub(crate) use request::load_selection;
 pub(crate) use request::remove_provider_pins;
-pub(crate) use request::set_preferred_model;
+pub(crate) use request::set_model;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ModelSummary {
-    preferred_model: Option<ModelRefDto>,
+    model: Option<ModelRefDto>,
     display_name: Option<String>,
-    reasoning_effort: Option<ReasoningEffort>,
+    model_reasoning_effort: Option<ReasoningEffort>,
     access: ModelAccess,
     context_capacity: Option<u64>,
 }
 
 impl ModelSummary {
     pub(crate) fn from_catalog(
-        preferred_model: Option<ModelRefDto>,
-        preferred_reasoning_effort: Option<ReasoningEffort>,
+        model: Option<ModelRefDto>,
+        model_reasoning_effort: Option<ReasoningEffort>,
         catalog: Option<&ModelListResult>,
     ) -> Self {
-        let entry = preferred_model.as_ref().and_then(|preferred| {
+        let entry = model.as_ref().and_then(|selected| {
             catalog.and_then(|catalog| {
                 catalog.models.iter().find(|entry| {
-                    entry.model.provider.as_str() == preferred.provider
-                        && entry.model.model.as_str() == preferred.model
+                    entry.model.provider.as_str() == selected.provider
+                        && entry.model.model.as_str() == selected.model
                 })
             })
         });
-        let (display_name, reasoning_effort, access, context_capacity) = match entry {
+        let (display_name, model_reasoning_effort, access, context_capacity) = match entry {
             Some(entry) => (
                 Some(entry.display_name.clone()),
-                preferred_reasoning_effort.or(entry.default_reasoning_effort),
+                model_reasoning_effort.or(entry.model_reasoning_effort),
                 entry.access,
                 entry.available_context_window.map(u64::from),
             ),
-            None => (None, preferred_reasoning_effort, ModelAccess::Unknown, None),
+            None => (None, model_reasoning_effort, ModelAccess::Unknown, None),
         };
         Self {
-            preferred_model,
+            model,
             display_name,
-            reasoning_effort,
+            model_reasoning_effort,
             access,
             context_capacity,
         }
     }
 
-    pub(crate) fn preferred_model(&self) -> Option<&ModelRefDto> {
-        self.preferred_model.as_ref()
+    pub(crate) fn model(&self) -> Option<&ModelRefDto> {
+        self.model.as_ref()
     }
 
-    pub(crate) const fn reasoning_effort(&self) -> Option<ReasoningEffort> {
-        self.reasoning_effort
+    pub(crate) const fn model_reasoning_effort(&self) -> Option<ReasoningEffort> {
+        self.model_reasoning_effort
     }
 
     pub(crate) const fn context_capacity(&self) -> Option<u64> {
@@ -82,7 +82,7 @@ impl ModelSummary {
     }
 
     pub(crate) fn model_label(&self) -> String {
-        self.preferred_model
+        self.model
             .as_ref()
             .map(|model| format!("{}/{}", model.provider, model.model))
             .unwrap_or_else(|| "Automatic model".into())
@@ -92,13 +92,9 @@ impl ModelSummary {
         let model = self
             .display_name
             .as_deref()
-            .or_else(|| {
-                self.preferred_model
-                    .as_ref()
-                    .map(|model| model.model.as_str())
-            })
+            .or_else(|| self.model.as_ref().map(|model| model.model.as_str()))
             .unwrap_or("Automatic model");
-        match self.reasoning_effort {
+        match self.model_reasoning_effort {
             Some(effort) => format!("{model} ({})", reasoning_effort_label(effort)),
             None => model.into(),
         }

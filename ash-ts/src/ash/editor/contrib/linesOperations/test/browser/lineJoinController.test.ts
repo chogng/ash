@@ -8,9 +8,9 @@ import { operatingSystem, OperatingSystem } from '../../../../../base/common/pla
 
 installDom(new JSDOM('<!doctype html><body></body>'));
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
-await import('../../browser/linesOperations.js');
+const { JoinLinesAction } = await import('../../browser/linesOperations.js');
 
-test('linesOperations owns the join-lines shortcut and transaction', () => {
+test('the host owns the join shortcut and the registered action joins lines', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
@@ -24,7 +24,9 @@ test('linesOperations owns the join-lines shortcut and transaction', () => {
 		...(operatingSystem === OperatingSystem.Macintosh ? { metaKey: true } : { ctrlKey: true }),
 	});
 	editor.view.element.dispatchEvent(event);
-	assert.equal(event.defaultPrevented, true);
+	assert.equal(event.defaultPrevented, false);
+	assert.equal(model.getText(), 'first\n  second');
+	new JoinLinesAction().run({} as never, editor);
 	assert.equal(model.getText(), 'first second');
 	assert.deepEqual(editor.getSelection(), Selection.fromPositions(new Position(1, 6)));
 	dom.window.close();

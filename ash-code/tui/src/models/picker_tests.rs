@@ -27,21 +27,21 @@ fn model_picker_shows_names_only_and_keeps_selection_identity_and_pin_state() {
             available_context_window: None,
             capabilities: ModelCapabilities::UNKNOWN,
             supported_reasoning_efforts: Vec::new(),
-            default_reasoning_effort: None,
+            model_reasoning_effort: None,
             default_personality: None,
         }],
     };
-    let preferred_model = ModelRefDto {
+    let model = ModelRefDto {
         provider: "openai".into(),
         model: "gpt-ash".into(),
     };
 
     let mut config = crate::test_support::empty_config_snapshot();
-    config.preferred_model = Some(preferred_model.clone());
+    config.model = Some(model.clone());
     config
         .tui
         .0
-        .insert("pinnedModels".into(), serde_json::json!([preferred_model]));
+        .insert("pinnedModels".into(), serde_json::json!([model]));
     let view = model_choices(
         &catalog,
         &config,

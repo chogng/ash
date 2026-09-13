@@ -21,8 +21,8 @@ export function createDisconnectedSessionApi(unavailable: UnavailableOperation):
 export function createDisconnectedModelApi(unavailable: UnavailableOperation): IModelApi {
 	return {
 		list: () => unavailable("model.list"),
-		readPreferred: () => unavailable("model.readPreferred"),
-		setPreferred: () => unavailable("model.setPreferred"),
+		readModel: () => unavailable("model.readModel"),
+		setModel: () => unavailable("model.setModel"),
 	};
 }
 
@@ -64,13 +64,13 @@ export function createAppServerSessionApi(connection: AppServerProtocolClient): 
 export function createAppServerModelApi(connection: AppServerProtocolClient): IModelApi {
 	return {
 		list: () => appServerRequest(connection, "model/list", {}),
-		readPreferred: async () => (await appServerRequest(connection, "config/read", {})).preferredModel,
-		setPreferred: async ({ commandId, model }) => {
+		readModel: async () => (await appServerRequest(connection, "config/read", {})).model,
+		setModel: async ({ commandId, model }) => {
 			const config = await appServerRequest(connection, "config/read", {});
 			await appServerRequest(connection, "config/update", {
 				commandId,
 				expectedRevision: config.revision,
-				preferredModel: model,
+				model,
 			});
 		},
 	};

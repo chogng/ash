@@ -141,7 +141,7 @@ impl AppDriver {
                 self.requests.spawn(
                     request_key,
                     name,
-                    move || Completion::PreferredModelUpdated {
+                    move || Completion::ModelUpdated {
                         command: command_line,
                         result: crate::models::execute(&mut client, command),
                     },

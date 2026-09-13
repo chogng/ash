@@ -3,7 +3,7 @@ import test from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { AppServerMemoryDiagnosticsService } from '../../browser/appServerMemoryDiagnosticsService.js';
 import { AppServerProtocolClient, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CLOSED_EVENT, type AppServerTransport } from '../../../app-server/browser/appServerProtocolClient.js';
-import { APP_SERVER_SCHEMA_HASH, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_CAPABILITY_VERSION } from '../../../../../../generated/app-server/index.js';
+import { APP_SERVER_SCHEMA_HASH, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_CAPABILITY_VERSION, type InitializeResult, type ServerCapabilities } from '../../../../../../generated/app-server/index.js';
 import { DisposableTracker, installDisposableTracker } from '../../../../base/common/lifecycle.js';
 import type { MemoryObservation } from '../../common/memoryDiagnosticsService.js';
 
@@ -21,8 +21,34 @@ class Transport implements AppServerTransport {
 		this.requests.push(request.method);
 		let result: unknown;
 		if (request.method === 'initialize') {
-			const capabilities = Object.fromEntries(['agentInteractions', 'documentCollaboration', 'sessions', 'threads', 'turns', 'projects', 'resources', 'attachments', 'fileSystem', 'git', 'contentSearch', 'codebase', 'cloudCodebase', 'terminal', 'debugAdapter', 'typst', 'updateReplay', 'extensions', 'extensionHost', 'connectors', 'plugins', 'marketplace', 'mcp', 'mcpOAuth'].map(key => [key, true]));
-			result = { serverInfo: { name: 'ash-app-server', version: '1' }, protocolVersion: { major: APP_SERVER_PROTOCOL_MAJOR, revision: APP_SERVER_PROTOCOL_REVISION }, schemaHash: APP_SERVER_SCHEMA_HASH, capabilities: { ...capabilities, contracts: { sessions: { version: APP_SERVER_CAPABILITY_VERSION }, threads: { version: APP_SERVER_CAPABILITY_VERSION }, turns: { version: APP_SERVER_CAPABILITY_VERSION }, memoryDiagnostics: { version: 1 } } }, slashCommands: [] };
+			const capabilities = {
+				agentInteractions: true,
+				documentCollaboration: true,
+				sessions: true,
+				threads: true,
+				turns: true,
+				projects: true,
+				memories: true,
+				resources: true,
+				attachments: true,
+				fileSystem: true,
+				git: true,
+				contentSearch: true,
+				codebase: true,
+				cloudCodebase: true,
+				terminal: true,
+				debugAdapter: true,
+				typst: true,
+				updateReplay: true,
+				extensions: true,
+				extensionHost: true,
+				connectors: true,
+				plugins: true,
+				marketplace: true,
+				mcp: true,
+				mcpOAuth: true,
+			} satisfies Omit<ServerCapabilities, 'contracts'>;
+			result = { serverInfo: { name: 'ash-app-server', version: '1' }, protocolVersion: { major: APP_SERVER_PROTOCOL_MAJOR, revision: APP_SERVER_PROTOCOL_REVISION }, schemaHash: APP_SERVER_SCHEMA_HASH, capabilities: { ...capabilities, contracts: { sessions: { version: APP_SERVER_CAPABILITY_VERSION }, threads: { version: APP_SERVER_CAPABILITY_VERSION }, turns: { version: APP_SERVER_CAPABILITY_VERSION }, memoryDiagnostics: { version: 1 } } }, slashCommands: [] } satisfies InitializeResult;
 		} else if (request.method === 'memoryDiagnostics/submit') { result = null; }
 		else {
 			if (request.method === 'memoryDiagnostics/stop') { this.status = 'stopped'; }

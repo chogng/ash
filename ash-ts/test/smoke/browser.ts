@@ -3,11 +3,11 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-const desktopDirectory = resolve(import.meta.dirname, '../../../ash-ts');
+const desktopDirectory = resolve(import.meta.dirname, '../..');
 const mode = process.argv[2];
 const playwrightArguments = process.argv.slice(3);
 if (mode !== 'disconnected' && mode !== 'full') {
-	throw new Error('Usage: node scripts/ash-ts/test/web-integration.ts <disconnected|full>');
+	throw new Error('Usage: node test/smoke/browser.ts <disconnected|full>');
 }
 
 if (mode === 'full') {

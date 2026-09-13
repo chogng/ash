@@ -74,7 +74,7 @@ fn issue_config_write_uses_its_backend_contract_without_changing_tui_preferences
         serde_json::json!({"autoRefreshMinutes":30})
     );
     assert!(requests[0]["params"].get("tui").is_none());
-    assert!(requests[0]["params"].get("preferredModel").is_none());
+    assert!(requests[0]["params"].get("model").is_none());
 }
 
 #[test]

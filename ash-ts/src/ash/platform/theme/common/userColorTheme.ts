@@ -1,3 +1,4 @@
+import { Color } from "../../../base/common/color.js";
 import { type ColorValue } from "./colorRegistry.js";
 import { createColorTheme, type IColorTheme } from "./colorTheme.js";
 import { ColorScheme } from "./theme.js";
@@ -17,7 +18,7 @@ export interface IUserColorThemeDocument {
 
 /** Creates a self-contained editable user-theme document from a resolved theme. */
 export function serializeUserColorThemeDraft(theme: IColorTheme, id: string, label: string): string {
-	const colors = Object.fromEntries(theme.colorEntries.flatMap(({ id: colorId, value }) => value ? [[colorId, value.toString()]] : []));
+	const colors = Object.fromEntries(theme.colorEntries.flatMap(({ id: colorId, value }) => value ? [[colorId, Color.Format.CSS.formatHexA(value, true)]] : []));
 	const document = {
 		$schema: USER_COLOR_THEME_SCHEMA_URL,
 		version: 1,

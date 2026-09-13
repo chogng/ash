@@ -294,7 +294,7 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
 }
 
 #[test]
-fn model_command_updates_and_clears_preferred_model_with_config_revision() {
+fn model_command_updates_and_clears_model_with_config_revision() {
     let (mut client, state_root) = client();
     let mut conversation = ActiveConversation::start(&mut client, "model".into()).unwrap();
     let revision = client.read_config().unwrap().revision;
@@ -321,7 +321,7 @@ fn model_command_updates_and_clears_preferred_model_with_config_revision() {
     );
 
     let configured = client.read_config().unwrap();
-    let selected = configured.preferred_model.unwrap();
+    let selected = configured.model.unwrap();
     assert_eq!(selected.provider, "test");
     assert_eq!(selected.model, "model-one");
     assert_eq!(
@@ -341,7 +341,7 @@ fn model_command_updates_and_clears_preferred_model_with_config_revision() {
         invocation(TuiSlashCommandAction::Model, "clear"),
         &mut app,
     );
-    assert_eq!(client.read_config().unwrap().preferred_model, None);
+    assert_eq!(client.read_config().unwrap().model, None);
     assert_eq!(
         app.status_line()
             .policy_text_for_width(80, app.approval_mode()),
@@ -975,7 +975,7 @@ fn custom_model_picker_replaces_inherited_ids_with_the_configured_id() {
             .any(|entry| entry.model.provider.as_str() == "custom-gateway"
                 && entry.model.model.as_str() == "gpt-5.6")
     );
-    crate::models::set_preferred_model(&mut *client, "custom-gateway/gpt-5.6").unwrap();
+    crate::models::set_model(&mut *client, "custom-gateway/gpt-5.6").unwrap();
     config.custom.as_mut().unwrap().model = Some("private-alias".into());
     let revision = client.read_config().unwrap().revision;
     client
@@ -999,7 +999,7 @@ fn custom_model_picker_replaces_inherited_ids_with_the_configured_id() {
 }
 
 #[test]
-fn set_preferred_model_sets_and_clears_reasoning_effort() {
+fn set_model_sets_and_clears_model_reasoning_effort() {
     let (mut client, root, transport) = client_with_model_probe();
     let config = ProviderConfigDto {
         provider: "openai".into(),
@@ -1018,42 +1018,45 @@ fn set_preferred_model_sets_and_clears_reasoning_effort() {
         .unwrap();
 
     // Specifying valid effort on a model that supports it
-    let update =
-        crate::models::set_preferred_model(&mut *client, "openai/gpt-6-astra high").unwrap();
+    let update = crate::models::set_model(&mut *client, "openai/gpt-6-astra high").unwrap();
+    crate::tui_assert_snapshot!(&update.notice, @"Model: openai/gpt-6-astra (high)");
     assert_eq!(
-        update.notice,
-        "Preferred model: openai/gpt-6-astra (high)"
+        update.summary.model_reasoning_effort(),
+        Some(ReasoningEffort::High)
     );
-    assert_eq!(update.summary.reasoning_effort(), Some(ReasoningEffort::High));
     let read = client.read_config().unwrap();
-    assert_eq!(read.preferred_reasoning_effort, Some(ReasoningEffort::High));
+    assert_eq!(read.model_reasoning_effort, Some(ReasoningEffort::High));
 
     // Unsupported model fails
-    let err = crate::models::set_preferred_model(&mut *client, "openai/gpt-5.6 high").unwrap_err();
-    assert!(err.to_string().contains("does not support reasoning effort"));
+    let err = crate::models::set_model(&mut *client, "openai/gpt-5.6 high").unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("does not support reasoning effort")
+    );
 
     // Invalid effort fails
-    let err =
-        crate::models::set_preferred_model(&mut *client, "openai/gpt-6-astra super").unwrap_err();
+    let err = crate::models::set_model(&mut *client, "openai/gpt-6-astra super").unwrap_err();
     assert!(err.to_string().contains("invalid reasoning effort"));
 
-    // Setting model without effort clears reasoning effort
-    let update =
-        crate::models::set_preferred_model(&mut *client, "openai/gpt-6-astra").unwrap();
-    assert_eq!(update.notice, "Preferred model: openai/gpt-6-astra");
-    assert_eq!(update.summary.reasoning_effort(), None);
+    // Setting model without effort clears model reasoning effort.
+    let update = crate::models::set_model(&mut *client, "openai/gpt-6-astra").unwrap();
+    assert_eq!(update.notice, "Model: openai/gpt-6-astra");
+    assert_eq!(update.summary.model_reasoning_effort(), None);
     let read = client.read_config().unwrap();
-    assert_eq!(read.preferred_reasoning_effort, None);
+    assert_eq!(read.model_reasoning_effort, None);
 
     // Clear unsets model and effort
-    let update = crate::models::set_preferred_model(&mut *client, "clear").unwrap();
-    assert_eq!(update.notice, "Preferred model: not configured");
-    assert_eq!(update.summary.preferred_model(), None);
-    assert_eq!(update.summary.reasoning_effort(), None);
+    let update = crate::models::set_model(&mut *client, "clear").unwrap();
+    assert_eq!(update.notice, "Model: not configured");
+    assert_eq!(update.summary.model(), None);
+    assert_eq!(update.summary.model_reasoning_effort(), None);
 
     // Clear with extra argument fails
-    let err = crate::models::set_preferred_model(&mut *client, "clear now").unwrap_err();
-    assert!(err.to_string().contains("does not accept additional arguments"));
+    let err = crate::models::set_model(&mut *client, "clear now").unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("does not accept additional arguments")
+    );
 
     assert_eq!(transport.calls(), 0);
     drop(client);

@@ -25,7 +25,7 @@ pub struct ModelCatalogEntry {
     pub available_context_window: Option<u32>,
     pub capabilities: ModelCapabilities,
     pub supported_reasoning_efforts: Vec<ReasoningEffort>,
-    pub default_reasoning_effort: Option<ReasoningEffort>,
+    pub model_reasoning_effort: Option<ReasoningEffort>,
     pub default_personality: Option<Personality>,
 }
 
@@ -50,7 +50,7 @@ impl ModelCatalogEntry {
             available_context_window: None,
             capabilities: info.capabilities,
             supported_reasoning_efforts: info.supported_reasoning_efforts.clone(),
-            default_reasoning_effort: info.default_reasoning_effort,
+            model_reasoning_effort: info.model_reasoning_effort,
             default_personality: info.default_personality,
         }
     }
@@ -81,7 +81,7 @@ mod tests {
         info.auto_compact_token_limit = Some(900_000);
         info.capabilities.reasoning = CapabilitySupport::Supported;
         info.supported_reasoning_efforts = vec![ReasoningEffort::Medium, ReasoningEffort::High];
-        info.default_reasoning_effort = Some(ReasoningEffort::High);
+        info.model_reasoning_effort = Some(ReasoningEffort::High);
         info.default_personality = Some(Personality::Pragmatic);
 
         let entry = ModelCatalogEntry::from_info(
@@ -105,7 +105,7 @@ mod tests {
             entry.supported_reasoning_efforts,
             vec![ReasoningEffort::Medium, ReasoningEffort::High]
         );
-        assert_eq!(entry.default_reasoning_effort, Some(ReasoningEffort::High));
+        assert_eq!(entry.model_reasoning_effort, Some(ReasoningEffort::High));
         assert_eq!(entry.default_personality, Some(Personality::Pragmatic));
     }
 }

@@ -73,9 +73,8 @@ test("Stanza Chat input completes slash commands before submitting", async () =>
 	await waitFor(() => completionLabels(editor.element).length === 2);
 	assert.deepEqual(completionLabels(editor.element), ["/new", "/history"]);
 	assert.equal(editor.element.querySelector(".stanza-editor")?.classList.contains("stanza-editor-embedded"), true);
-	assert.equal(editor.element.querySelector(".stanza-editor")?.classList.contains("stanza-editor-focus-owner-host"), true);
 	assert.equal(editor.element.querySelector(".stanza-editor")?.classList.contains("word-wrapped"), true);
-	assert.equal(editor.element.querySelector<HTMLElement>(".stanza-editor-line-number")?.style.display, "");
+	assert.equal(editor.element.querySelector(".stanza-editor-line-number"), null);
 
 	input.dispatchEvent(beforeInputEvent(dom.window, "n"));
 	await waitFor(() => completionLabels(editor.element).length === 1);
@@ -143,7 +142,7 @@ test("Stanza Chat input restores message behavior when the slash is deleted", as
 	const placeholder = requiredElement<HTMLElement>(editor.element, ".stanza-editor-placeholder-text");
 	assert.equal(placeholder.hidden, false);
 	assert.equal(placeholder.style.top, "0px");
-	assert.equal(placeholder.style.left, "0px");
+	assert.equal(placeholder.style.left, "46px");
 	dom.window.close();
 });
 

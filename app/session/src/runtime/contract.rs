@@ -132,8 +132,8 @@ pub enum SessionRuntimeCommand {
     },
     /// Submit a shell turn to the active Thread.
     SubmitShellCommand(String),
-    /// Change the preferred model used by subsequent Turns.
-    SetPreferredModel(ModelRef),
+    /// Change the model used by subsequent Turns without an explicit Agent selection.
+    SetModel(ModelRef),
     /// Change the approval mode frozen by the next Turn in the active Session.
     SelectNextApprovalMode(ApprovalMode),
     /// Refresh the active Session and Thread snapshot.
@@ -203,7 +203,7 @@ pub fn reject_disconnected_command(command: SessionRuntimeCommand) -> bool {
         | SessionRuntimeCommand::SubmitAgentMessage(_)
         | SessionRuntimeCommand::RewriteAgentMessage { .. }
         | SessionRuntimeCommand::SubmitShellCommand(_)
-        | SessionRuntimeCommand::SetPreferredModel(_)
+        | SessionRuntimeCommand::SetModel(_)
         | SessionRuntimeCommand::SelectNextApprovalMode(_)
         | SessionRuntimeCommand::Refresh => {}
     }

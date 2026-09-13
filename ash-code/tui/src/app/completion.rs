@@ -51,9 +51,9 @@ pub(super) enum Completion {
         result: Result<ProductCommandCompletion, String>,
     },
     Presentation(Result<AppEvent, String>),
-    PreferredModelUpdated {
+    ModelUpdated {
         command: String,
-        result: Result<models::PreferredModelUpdate, String>,
+        result: Result<models::ModelUpdate, String>,
     },
     Skills(Result<SkillRefreshCompletion, String>),
     Theme(Result<crate::theme::CommandCompletion, String>),
@@ -328,7 +328,7 @@ pub(super) fn apply_request_completion(
             }
         }
         Completion::Presentation(Ok(event)) => app.update_from_origin(origin, event),
-        Completion::PreferredModelUpdated {
+        Completion::ModelUpdated {
             command,
             result: Ok(update),
         } => {
@@ -352,7 +352,7 @@ pub(super) fn apply_request_completion(
                 app.update_for_panel(panel_generation, AppEvent::CommandPanelClosed);
             }
         }
-        Completion::PreferredModelUpdated {
+        Completion::ModelUpdated {
             command,
             result: Err(error),
         } => app.update_for_panel(
@@ -610,8 +610,8 @@ pub(super) fn apply_tui_config(
     }
     app.update(ModelEvent::SummaryReceived(
         crate::models::ModelSummary::from_catalog(
-            config.preferred_model,
-            config.preferred_reasoning_effort,
+            config.model,
+            config.model_reasoning_effort,
             model_catalog,
         ),
     ));

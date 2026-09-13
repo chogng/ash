@@ -219,7 +219,7 @@ export class BrowserTextModelService implements ITextModelResourceService {
 				this.setExternalChange(entry, true);
 				return;
 			}
-			if (normalizeTextLineEndings(content.text) === entry.savedText) {
+			if (content.text === entry.savedText) {
 				entry.lineEnding = detectExternalLineEnding(content.text);
 				entry.revision = content.revision;
 				this.setExternalChange(entry, false);
@@ -233,7 +233,7 @@ export class BrowserTextModelService implements ITextModelResourceService {
 	}
 
 	private applyFileContent(entry: TextModelEntry, text: string, revision: string | undefined): void {
-		entry.savedText = normalizeTextLineEndings(text);
+		entry.savedText = text;
 		entry.revision = revision;
 		entry.lineEnding = detectExternalLineEnding(text);
 		entry.model.reset(text);
@@ -309,5 +309,6 @@ function detectExternalLineEnding(text: string): ExternalLineEnding {
 }
 
 function toExternalLineEndings(text: string, lineEnding: ExternalLineEnding): string {
-	return lineEnding === ExternalLineEnding.CRLF ? text.replaceAll("\n", "\r\n") : text;
+	const normalized = normalizeTextLineEndings(text);
+	return lineEnding === ExternalLineEnding.CRLF ? normalized.replaceAll("\n", "\r\n") : normalized;
 }

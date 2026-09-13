@@ -24,7 +24,7 @@
           "$ref": "#/$defs/AgentGrepBackend",
           "default": "ripgrep"
         },
-        "preferredModel": {
+        "model": {
           "anyOf": [
             {
               "$ref": "#/$defs/ModelRef"
@@ -34,7 +34,7 @@
             }
           ]
         },
-        "preferredReasoningEffort": {
+        "modelReasoningEffort": {
           "anyOf": [
             {
               "$ref": "#/$defs/ReasoningEffort"
@@ -1356,7 +1356,7 @@
       "type": "object"
     },
     "schemaVersion": {
-      "const": 2,
+      "const": 3,
       "type": "integer"
     },
     "skills": {

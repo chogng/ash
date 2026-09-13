@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import test from "node:test";
 import { compileDesignTokenArtifacts } from "../../common/tokenCompiler.js";
+import { colorIdentifiers, sizeIdentifiers } from "../../common/colorTheme.js";
 import { parseUserColorTheme } from "../../common/userColorTheme.js";
 
 test("design token compiler emits deterministic validated artifacts", () => {
@@ -10,8 +11,8 @@ test("design token compiler emits deterministic validated artifacts", () => {
 	const second = compileDesignTokenArtifacts();
 	assert.deepEqual(first, second);
 	const manifest = JSON.parse(first.manifest) as { colors: unknown[]; sizes: unknown[] };
-	assert.equal(manifest.colors.length, 167);
-	assert.equal(manifest.sizes.length, 27);
+	assert.deepEqual((manifest.colors as Array<{ id: string }>).map(({ id }) => id), colorIdentifiers);
+	assert.deepEqual((manifest.sizes as Array<{ id: string }>).map(({ id }) => id), sizeIdentifiers);
 	assert.match(first.catalog, /Generated design token catalog/);
 	assert.equal(parseUserColorTheme(first.userThemeTemplate).id, "my-custom-theme");
 });

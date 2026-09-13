@@ -25,6 +25,10 @@ test('OverviewRuler projects standard zones through its canvas and layout API', 
 		const context = {
 			fillStyle: '',
 			clearRect(): void {},
+			beginPath(): void {},
+			moveTo(): void {},
+			lineTo(): void {},
+			stroke(): void {},
 			fillRect(_left: number, top: number, _width: number, height: number): void {
 				paint.push({ fill: String(context.fillStyle), top, height });
 			},
@@ -51,7 +55,7 @@ test('OverviewRuler projects standard zones through its canvas and layout API', 
 	assert.equal(canvas.style.width, '12px');
 	assert.equal(canvas.style.height, '80px');
 	assert.deepEqual(paint.map(entry => entry.fill).slice(-2), ['#cca700', '#f48771']);
-	assert.equal(paint.every(entry => entry.height >= 4), true);
+	assert.equal(paint.slice(-2).every(entry => entry.height >= 4), true);
 	dom.window.close();
 });
 

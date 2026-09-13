@@ -161,14 +161,14 @@ fn configuring_provider_selects_its_first_api_model_and_preserves_selection_afte
     let configured = configure_provider(&store, 0, "openai");
     let expected = model_ref("openai", "gpt-6-astra");
     assert_eq!(
-        store.read_snapshot().unwrap().values.preferred_model,
+        store.read_snapshot().unwrap().values.model,
         Some(expected.clone())
     );
     configure_provider(&store, configured.revision.get(), "anthropic");
     drop(store);
     let reopened = ConfigStore::open(&path).unwrap();
     assert_eq!(
-        reopened.read_snapshot().unwrap().values.preferred_model,
+        reopened.read_snapshot().unwrap().values.model,
         Some(expected)
     );
     drop(reopened);
@@ -189,7 +189,7 @@ fn saving_existing_provider_restores_missing_model_but_preserves_explicit_choice
         .unwrap();
     let saved = configure_provider(&store, cleared.revision.get(), "anthropic");
     assert_eq!(
-        store.read_snapshot().unwrap().values.preferred_model,
+        store.read_snapshot().unwrap().values.model,
         Some(model_ref("anthropic", "claude-sonnet-4-20250514"))
     );
     let explicit = model_ref("anthropic", "custom-deployment");
@@ -201,10 +201,7 @@ fn saving_existing_provider_restores_missing_model_but_preserves_explicit_choice
         ))
         .unwrap();
     configure_provider(&store, selected.revision.get(), "anthropic");
-    assert_eq!(
-        store.read_snapshot().unwrap().values.preferred_model,
-        Some(explicit)
-    );
+    assert_eq!(store.read_snapshot().unwrap().values.model, Some(explicit));
     drop(store);
     remove_config_files(&path);
 }
@@ -214,7 +211,7 @@ fn configuring_provider_without_builtin_models_does_not_invent_a_model() {
     let path = config_path("provider-no-default");
     let store = ConfigStore::open(&path).unwrap();
     configure_provider(&store, 0, "ollama");
-    assert_eq!(store.read_snapshot().unwrap().values.preferred_model, None);
+    assert_eq!(store.read_snapshot().unwrap().values.model, None);
     drop(store);
     remove_config_files(&path);
 }
@@ -285,7 +282,7 @@ fn issue_execution_settings_are_removed_once_from_versioned_configuration() {
     ] {
         assert!(!encoded.contains(removed));
     }
-    assert!(encoded.contains("schemaVersion = 2"));
+    assert!(encoded.contains("schemaVersion = 3"));
     assert!(
         !crate::document_migration::decode(&encoded)
             .unwrap()
@@ -294,6 +291,71 @@ fn issue_execution_settings_are_removed_once_from_versioned_configuration() {
     assert!(
         crate::document_migration::decode("schemaVersion = 2\n[issues]\nrecommendMerge = true\n")
             .is_err()
+    );
+}
+
+#[test]
+fn model_settings_are_migrated_once_from_version_two() {
+    let database_path = config_path("model-settings-migration");
+    let config_path = database_path.with_extension("toml");
+    let mut document = UserConfigDocument::default();
+    document.providers.insert(
+        provider_id("openai"),
+        ModelProviderConfig::new(provider_id("openai")),
+    );
+    document.agent.model = Some(model_ref("openai", "gpt-6-astra"));
+    document.agent.model_reasoning_effort = Some(ash_protocol::ReasoningEffort::High);
+    let mut legacy: toml::Value =
+        toml::from_str(&crate::document_migration::encode(&document).unwrap()).unwrap();
+    let root = legacy.as_table_mut().unwrap();
+    root.insert("schemaVersion".into(), toml::Value::Integer(2));
+    let agent = root.get_mut("agent").unwrap().as_table_mut().unwrap();
+    let model = agent.remove("model").unwrap();
+    agent.insert("preferredModel".into(), model);
+    let effort = agent.remove("modelReasoningEffort").unwrap();
+    agent.insert("preferredReasoningEffort".into(), effort);
+    std::fs::write(&config_path, toml::to_string_pretty(&legacy).unwrap()).unwrap();
+
+    let store = ConfigStore::open(&database_path).unwrap();
+    let snapshot = store.read_snapshot().unwrap();
+    assert_eq!(snapshot.values.model, document.agent.model);
+    assert_eq!(
+        snapshot.values.model_reasoning_effort,
+        document.agent.model_reasoning_effort
+    );
+    let persisted = std::fs::read_to_string(&config_path).unwrap();
+    assert!(persisted.contains("schemaVersion = 3"));
+    assert!(!persisted.contains("preferredModel"));
+    assert!(!persisted.contains("preferredReasoningEffort"));
+    drop(store);
+
+    let reopened = ConfigStore::open(&database_path).unwrap();
+    assert_eq!(
+        reopened.read_snapshot().unwrap().values.model,
+        document.agent.model
+    );
+    assert_eq!(std::fs::read_to_string(&config_path).unwrap(), persisted);
+    drop(reopened);
+    remove_config_files(&database_path);
+}
+
+#[test]
+fn model_setting_migration_rejects_conflicting_names() {
+    let error = crate::document_migration::decode(
+        "schemaVersion = 2\n[agent]\nmodelReasoningEffort = 'low'\npreferredReasoningEffort = 'high'\n",
+    )
+    .err()
+    .unwrap();
+    assert!(
+        error
+            .0
+            .contains("both agent.preferredReasoningEffort and agent.modelReasoningEffort")
+    );
+    assert!(
+        crate::document_migration::decode(
+            "schemaVersion = 3\n[agent]\npreferredReasoningEffort = 'high'\n"
+        )
+        .is_err()
     );
 }
 
@@ -343,7 +405,7 @@ fn custom_provider_survives_restart_and_rejects_stale_update() {
 fn update_preferences(
     command_id: &str,
     revision: u64,
-    preferred_model: Patch<ModelRef>,
+    model: Patch<ModelRef>,
 ) -> ConfigCommandRequest {
     ConfigCommandRequest {
         command_id: CommandId::new(command_id).unwrap(),
@@ -351,8 +413,8 @@ fn update_preferences(
         command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
             time_context: ash_protocol::Patch::Missing,
             features: Default::default(),
-            preferred_model,
-            preferred_reasoning_effort: Patch::Missing,
+            model,
+            model_reasoning_effort: Patch::Missing,
             approval_review_model: Patch::Missing,
             commit_message_model: Patch::Missing,
             tool_mode: Patch::Missing,
@@ -454,7 +516,7 @@ type = "disabled"
     );
 
     let persisted = persisted_config_document(&database_path);
-    assert!(persisted.contains("schemaVersion = 2"));
+    assert!(persisted.contains("schemaVersion = 3"));
     assert!(persisted.contains("[codebase]"));
     assert!(persisted.contains("[dirPermissions.entries]"));
     assert!(!persisted.contains("semanticCodeIndex"));
@@ -567,11 +629,11 @@ fn versioned_config_keeps_unknown_fields_strict() {
 #[test]
 fn newer_file_schema_is_rejected_explicitly() {
     let database_path = config_path("newer-file-schema");
-    std::fs::write(database_path.with_extension("toml"), "schemaVersion = 3\n").unwrap();
+    std::fs::write(database_path.with_extension("toml"), "schemaVersion = 4\n").unwrap();
 
     let error = ConfigStore::open(&database_path).err().unwrap();
 
-    assert!(error.0.contains("newer than supported version 2"));
+    assert!(error.0.contains("newer than supported version 3"));
     remove_config_files(&database_path);
 }
 
@@ -691,8 +753,8 @@ fn tool_mode_defaults_to_direct_and_updates_durably() {
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
                 time_context: ash_protocol::Patch::Missing,
                 features: Default::default(),
-                preferred_model: Patch::Missing,
-                preferred_reasoning_effort: Patch::Missing,
+                model: Patch::Missing,
+                model_reasoning_effort: Patch::Missing,
                 approval_review_model: Patch::Missing,
                 commit_message_model: Patch::Missing,
                 tool_mode: Patch::Value(ash_protocol::ToolMode::CodeModeOnly),
@@ -890,7 +952,7 @@ fn dir_scope() -> DirConfigScope {
     DirConfigScope::new(dir_permissions_id())
 }
 
-fn dir_document(preferred_model: Option<ModelRef>) -> DirConfigDocument {
+fn dir_document(model: Option<ModelRef>) -> DirConfigDocument {
     let namespace = format!("dir:{}", dir_permissions_id());
     let mcp_id = format!("{namespace}:mcp:github");
     let skill_id = format!("{namespace}:skill-source:review");
@@ -912,8 +974,8 @@ fn dir_document(preferred_model: Option<ModelRef>) -> DirConfigDocument {
     let plugin_id = PluginPackageId::new("acme/code-review").unwrap();
     DirConfigDocument {
         agent: DirAgentConfig {
-            preferred_model,
-            preferred_reasoning_effort: None,
+            model,
+            model_reasoning_effort: None,
         },
         mcp: DirMcpConfig {
             servers: BTreeMap::from([(mcp_server.id.clone(), mcp_server)]),
@@ -956,10 +1018,7 @@ fn toml_authority_and_sqlite_metadata_survive_reopen() {
     assert_eq!(updated.revision, ConfigRevision::new(2));
     assert_eq!(snapshot.revision, updated.revision);
     assert_eq!(snapshot.generation.get(), 2);
-    assert_eq!(
-        snapshot.values.preferred_model,
-        Some(model_ref("openai", "model"))
-    );
+    assert_eq!(snapshot.values.model, Some(model_ref("openai", "model")));
     assert_eq!(
         snapshot.values.selected_provider().unwrap().provider,
         provider_id("openai")
@@ -1121,7 +1180,7 @@ fn preference_patches_preserve_missing_fields_and_clear_null_fields() {
         .unwrap();
 
     let snapshot = store.read_snapshot().unwrap();
-    assert_eq!(snapshot.values.preferred_model, None);
+    assert_eq!(snapshot.values.model, None);
     remove_config_files(&path);
 }
 
@@ -1228,8 +1287,8 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
                 time_context: ash_protocol::Patch::Missing,
                 features: Default::default(),
-                preferred_model: Patch::Missing,
-                preferred_reasoning_effort: Patch::Missing,
+                model: Patch::Missing,
+                model_reasoning_effort: Patch::Missing,
                 commit_message_model: Patch::Missing,
                 tool_mode: Patch::Missing,
                 grep_backend: Patch::Missing,
@@ -1251,8 +1310,8 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
                 time_context: ash_protocol::Patch::Missing,
                 features: Default::default(),
-                preferred_model: Patch::Missing,
-                preferred_reasoning_effort: Patch::Missing,
+                model: Patch::Missing,
+                model_reasoning_effort: Patch::Missing,
                 commit_message_model: Patch::Missing,
                 tool_mode: Patch::Missing,
                 grep_backend: Patch::Missing,
@@ -1287,7 +1346,7 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
 #[test]
 fn automatic_approval_review_follows_the_selected_model_provider() {
     let resolved = ResolvedConfig {
-        preferred_model: Some(model_ref("anthropic", "claude-main")),
+        model: Some(model_ref("anthropic", "claude-main")),
         providers: BTreeMap::from([(
             provider_id("anthropic"),
             ModelProviderConfig::new(provider_id("anthropic")),
@@ -1363,7 +1422,7 @@ fn command_replay_returns_its_original_revision_without_copying_a_snapshot() {
     assert_eq!(replayed.revision, first_result.revision);
     assert_eq!(second.revision, ConfigRevision::new(3));
     assert_eq!(
-        store.read_snapshot().unwrap().values.preferred_model,
+        store.read_snapshot().unwrap().values.model,
         Some(model_ref("openai", "model-b"))
     );
 
@@ -1425,7 +1484,7 @@ fn committed_changes_publish_after_the_sqlite_snapshot_advances() {
     assert_eq!(notification.revision, changed.revision);
     assert_eq!(notification.generation, changed.generation);
     assert_eq!(
-        store.read_snapshot().unwrap().values.preferred_model,
+        store.read_snapshot().unwrap().values.model,
         Some(model_ref("openai", "model"))
     );
     remove_config_files(&path);
@@ -1470,7 +1529,7 @@ fn valid_external_toml_edits_advance_revision_and_publish() {
         crate::document_migration::decode(&std::fs::read_to_string(&config_path).unwrap())
             .unwrap()
             .document;
-    document.agent.preferred_model = Some(model_ref("openai", "external-model"));
+    document.agent.model = Some(model_ref("openai", "external-model"));
     std::fs::write(
         &config_path,
         crate::document_migration::encode(&document).unwrap(),
@@ -1482,7 +1541,7 @@ fn valid_external_toml_edits_advance_revision_and_publish() {
         .unwrap();
     assert_eq!(change.revision, configured.revision.next());
     assert_eq!(
-        store.read_snapshot().unwrap().values.preferred_model,
+        store.read_snapshot().unwrap().values.model,
         Some(model_ref("openai", "external-model"))
     );
     drop(store);
@@ -1572,7 +1631,7 @@ fn command_rejects_stale_revisions_and_conflicting_retries() {
 }
 
 #[test]
-fn a_preferred_provider_cannot_be_removed_until_the_model_is_cleared() {
+fn a_model_provider_cannot_be_removed_until_the_model_is_cleared() {
     let path = config_path("remove-provider");
     let store = ConfigStore::open(&path).unwrap();
     let configured = configure_provider(&store, 0, "openai");
@@ -1940,6 +1999,18 @@ shell = true
 }
 
 #[test]
+fn dir_document_requires_current_model_names_without_rewriting_the_file() {
+    let path = dir_config_path("model-names");
+    let scope = dir_scope();
+    let source = "[agent]\npreferredReasoningEffort = 'high'\n";
+    std::fs::write(&path, source).unwrap();
+
+    assert!(DirConfigStore::open(&path, scope).read_document().is_err());
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), source);
+    std::fs::remove_file(path).unwrap();
+}
+
+#[test]
 fn dir_resolution_overrides_only_a_user_configured_model_provider() {
     let path = config_path("dir-resolution");
     let store = ConfigStore::open(&path).unwrap();
@@ -1961,11 +2032,11 @@ fn dir_resolution_overrides_only_a_user_configured_model_provider() {
     assert_eq!(resolved.user_revision, user.revision);
     assert_eq!(resolved.dir_revision, Some(DirConfigRevision::new(7)));
     assert_eq!(
-        resolved.values.preferred_model,
+        resolved.values.model,
         Some(model_ref("openai", "gpt-6-astra"))
     );
     assert_eq!(
-        resolved.provenance.preferred_model,
+        resolved.provenance.model,
         Some(ConfigValueSource::Dir(dir_permissions_id()))
     );
     assert_eq!(
@@ -2016,9 +2087,9 @@ fn dir_resolution_keeps_user_model_when_the_dir_provider_is_unconfigured() {
     )
     .unwrap();
 
-    assert_eq!(resolved.values.preferred_model, None);
+    assert_eq!(resolved.values.model, None);
     assert!(resolved.diagnostics.iter().any(|diagnostic| {
-        diagnostic.code == ConfigDiagnosticCode::DirPreferredModelProviderUnconfigured
+        diagnostic.code == ConfigDiagnosticCode::DirModelProviderUnconfigured
             && diagnostic.subject == "anthropic"
     }));
     remove_config_files(&path);
@@ -2194,8 +2265,8 @@ fn time_context_policy_validates_persists_and_resets_without_changing_model_pref
         TimeContextConfig::default()
     );
     assert_eq!(
-        store.read_snapshot().unwrap().values.preferred_model,
-        snapshot.values.preferred_model
+        store.read_snapshot().unwrap().values.model,
+        snapshot.values.model
     );
     drop(store);
     remove_config_files(&path);

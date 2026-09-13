@@ -6,7 +6,7 @@ import {
 	resolveKeybinding,
 } from "../../../../base/common/keybindings.js";
 import { DisposableStore } from "../../../../base/common/lifecycle.js";
-import { OperatingSystem } from "../../../../base/common/platform.js";
+import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
 import { KeyCode, KeyMod } from "../../../../base/common/keyCodes.js";
 import {
 	Action2,
@@ -152,13 +152,13 @@ test("registerAction2 routes VS Code numeric keybindings through the canonical r
 
 	const rule = KeybindingsRegistry.getKeybindings().find(candidate => candidate.kind === KeybindingRuleKind.Command && candidate.command === commandId);
 	assert.ok(rule);
-	const resolved = resolveKeybinding(rule.keybinding, OperatingSystem.Windows).chords[0];
+	const resolved = resolveKeybinding(rule.keybinding, operatingSystem).chords[0];
 	assert.deepEqual({ key: resolved.key, ctrlKey: resolved.ctrlKey, shiftKey: resolved.shiftKey, altKey: resolved.altKey, metaKey: resolved.metaKey }, {
 		key: "m",
-		ctrlKey: true,
+		ctrlKey: operatingSystem !== OperatingSystem.Macintosh,
 		shiftKey: false,
 		altKey: false,
-		metaKey: false,
+		metaKey: operatingSystem === OperatingSystem.Macintosh,
 	});
 	assert.equal(rule.priority, KeybindingWeight.EditorContrib);
 });

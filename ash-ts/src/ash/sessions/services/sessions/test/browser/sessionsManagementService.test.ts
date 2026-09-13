@@ -151,12 +151,13 @@ function agentNode(): AgentTreeNodeProjection {
 function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection) {
 	const listeners = new Set<(event: ServerNotification) => void>();
 	const sessions = [...initial];
+	const agentTree = { roots: tree ? [tree] : [] };
 	const archiveRequests: Parameters<ISessionApi["archive"]>[0][] = [];
 	const interruptRequests: Parameters<ITurnApi["interrupt"]>[0][] = [];
 	let subscribeCount = 0;
 	const api: ISessionApi = {
 		async create() { throw new Error("Not used"); },
-		async read({ sessionId }) { return { session: sessions.find(candidate => candidate.sessionId === sessionId)! }; },
+		async read({ sessionId }) { return { session: sessions.find(candidate => candidate.sessionId === sessionId)!, agentTree }; },
 		async list() { return { sessions }; },
 		async subscribe({ sessionId }) {
 			subscribeCount += 1;
@@ -164,7 +165,7 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection) {
 			return {
 				session: value,
 				threadProjections: value.threads.map(thread => threadProjection(sessionId, thread.threadId)),
-				agentTree: { roots: tree ? [tree] : [] },
+				agentTree,
 			};
 		},
 		async unsubscribe() {},
@@ -174,7 +175,7 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection) {
 			archiveRequests.push(params);
 			const index = sessions.findIndex(candidate => candidate.sessionId === params.sessionId);
 			sessions[index] = { ...sessions[index]!, status: "archived" };
-			return { session: sessions[index]! };
+			return { session: sessions[index]!, agentTree };
 		},
 		async stop() { throw new Error("Not used"); },
 	};

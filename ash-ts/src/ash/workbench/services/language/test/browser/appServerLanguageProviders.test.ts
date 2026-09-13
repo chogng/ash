@@ -42,7 +42,7 @@ test("App Server language providers map cross-resource locations without double-
 	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
-	using model = new TextModel("value");
+	using model = new TextModel("value", { languageId: "typescript" });
 	using navigation = createNavigationService(languages, model, URI.file("C:\\project\\main file.ts"));
 
 	const locations = await navigation.provideDefinition("typescript", new Position((0) + 1, (2) + 1));
@@ -67,7 +67,7 @@ test("App Server language providers route resources through their owning Workspa
 	});
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
-	using model = new TextModel("value");
+	using model = new TextModel("value", { languageId: "typescript" });
 	using navigation = createNavigationService(languages, model, URI.file("C:\\backend\\main.ts"));
 
 	const locations = await navigation.provideDefinition("typescript", new Position((0) + 1, (2) + 1));
@@ -135,7 +135,7 @@ test("App Server rename and code actions preserve ordered workspace file operati
 	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
-	using model = new TextModel("value");
+	using model = new TextModel("value", { languageId: "typescript" });
 	const resource = URI.file("C:\\project\\main.ts");
 	using rename = new RenameService(model, resource, languages.renameProvider);
 	using actions = new CodeActionService(model, resource, languages.codeActionProvider);
@@ -180,7 +180,7 @@ test("App Server language providers do not send documents above their transport 
 	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
-	using model = new TextModel("界".repeat(Math.ceil((10 * 1024 * 1024 + 1) / 3)));
+	using model = new TextModel("界".repeat(Math.ceil((10 * 1024 * 1024 + 1) / 3)), { languageId: "typescript" });
 	using navigation = createNavigationService(languages, model, URI.file("C:\\project\\large.ts"));
 
 	assert.deepEqual(await navigation.provideDefinition("typescript", new Position((0) + 1, (0) + 1)), []);
@@ -194,7 +194,7 @@ test("App Server language providers register only while directory permissions al
 	const events = new FakeServerEvents();
 	const permissions = new FakeDirPermissionsService("workspace", []);
 	using providers = new AppServerLanguageProviders(languages, api, workspace, { dirPermissions: permissions, events });
-	using model = new TextModel("value");
+	using model = new TextModel("value", { languageId: "typescript" });
 	using navigation = createNavigationService(languages, model, URI.file("C:\\project\\main.ts"));
 
 	await tick();

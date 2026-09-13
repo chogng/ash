@@ -1,18 +1,18 @@
 import assert from "node:assert/strict";
 import { readFileSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import test from "node:test";
 import { findDesktopRoot } from "./testPaths.js";
 
 const desktopRoot = findDesktopRoot(import.meta.dirname);
-const desktopScriptsRoot = resolve(desktopRoot, "../scripts/ash-ts");
+const unitRoot = join(desktopRoot, "test/unit");
 const editorRoot = join(desktopRoot, "src/ash/editor");
-const browserIntegrationRoot = join(desktopRoot, "test/editor/browser");
+const browserIntegrationRoot = join(desktopRoot, "test/integration/browser");
 const desktopPackage = JSON.parse(readFileSync(join(desktopRoot, "package.json"), "utf8")) as { scripts?: Record<string, string> };
 
 test("Stanza unit tests follow the flat editor common, browser, and contrib layout", () => {
 	assert.equal(exists(join(desktopRoot, "test/monaco")), false);
-	assert.equal(exists(join(desktopScriptsRoot, "test/editor-unit.ts")), true);
+	assert.equal(exists(join(unitRoot, "editor.ts")), true);
 	assert.equal(exists(join(editorRoot, "test/common/textModel.test.ts")), true);
 	assert.equal(exists(join(desktopRoot, "src/ash/workbench/contrib/codeEditor/test/browser/codeEditorPane.test.ts")), true);
 	assert.equal(exists(join(editorRoot, "contrib/find/test/browser/findController.test.ts")), true);
@@ -47,9 +47,10 @@ test("browser integrations import the stable API and only their mode bundle", ()
 });
 
 test("desktop exposes one editor browser test entrypoint", () => {
-	assert.equal(desktopPackage.scripts?.["test:editor:browser"], "tsc -p test/editor/browser/tsconfig.json && node ../scripts/ash-ts/test/editor-browser.ts");
-	assert.equal(exists(join(desktopScriptsRoot, "test-editor.ts")), false);
-	assert.equal(exists(join(desktopScriptsRoot, "test/pnpm-script.ts")), false);
+	assert.equal(desktopPackage.scripts?.["test:editor:browser"], "tsc -p test/integration/browser/tsconfig.json && node test/integration/browser/run.ts");
+	assert.equal(exists(join(desktopRoot, "test/runner")), false);
+	assert.equal(exists(join(unitRoot, "test-editor.ts")), false);
+	assert.equal(exists(join(unitRoot, "pnpm-script.ts")), false);
 });
 
 function exists(file: string): boolean {

@@ -26,11 +26,12 @@ test.after(() => browserEnvironment.window.close());
 
 test("minimal text editor assembly creates only the engine surface", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	using domCleanup = { [Symbol.dispose]: () => dom.window.close() };
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
-	const model = new TextModel("const value = (1);");
+	using model = new TextModel("const value = (1);");
 	const resource = URI.file("C:\\project\\minimal.ts");
-	const editor = new CodeEditorWidget({
+	using editor = new CodeEditorWidget({
 		container,
 		input: { resource, label: "minimal.ts" },
 		languageId: "typescript",
@@ -49,9 +50,5 @@ test("minimal text editor assembly creates only the engine surface", () => {
 
 	const copy = new dom.window.Event("copy", { bubbles: true, cancelable: true });
 	editor.view.element.dispatchEvent(copy);
-	assert.equal(copy.defaultPrevented, false);
-
-	editor.dispose();
-	model.dispose();
-	dom.window.close();
+	assert.equal(copy.defaultPrevented, true);
 });

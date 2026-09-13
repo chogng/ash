@@ -161,7 +161,7 @@ fn automatic_review_resolves_provider_default_and_uses_a_review_only_request() {
         }),
     );
     let config = ResolvedConfig {
-        preferred_model: Some(model_ref("test", "agent-model")),
+        model: Some(model_ref("test", "agent-model")),
         providers: BTreeMap::from([(
             provider_id("test"),
             ModelProviderConfig::new(provider_id("test")),

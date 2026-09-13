@@ -1,4 +1,4 @@
-import { Color } from "../../../base/common/color.js";
+import { Color, RGBA } from "../../../base/common/color.js";
 import { ColorScheme } from "./theme.js";
 
 export type ColorIdentifier = string;
@@ -119,17 +119,29 @@ function resolveColorValue(value: ColorValue, resolveIdentifier: (id: string) =>
 	if (!source) return null;
 	switch (value.op) {
 		case "transparent": return source.transparent(value.factor);
-		case "lighten": return source.lighten(value.factor);
-		case "darken": return source.darken(value.factor);
+		case "lighten": return mixColor(source, Color.white, value.factor);
+		case "darken": return mixColor(source, Color.black, value.factor);
 		case "mix": {
 			const other = resolveColorValue(value.other, resolveIdentifier);
-			return other ? source.mix(other, value.factor) : null;
+			return other ? mixColor(source, other, value.factor) : null;
 		}
 		case "opaque": {
 			const background = resolveColorValue(value.background, resolveIdentifier);
 			return background ? source.makeOpaque(background) : null;
 		}
 	}
+}
+
+function mixColor(source: Color, other: Color, factor: number): Color {
+	const amount = Math.min(Math.max(factor, 0), 1);
+	const start = source.rgba;
+	const end = other.rgba;
+	return new Color(new RGBA(
+		Math.round(start.r + (end.r - start.r) * amount),
+		Math.round(start.g + (end.g - start.g) * amount),
+		Math.round(start.b + (end.b - start.b) * amount),
+		start.a + (end.a - start.a) * amount,
+	));
 }
 
 export function validateTokenId(id: string, kind: string): void {

@@ -468,7 +468,7 @@ impl App {
                 .into(),
             ),
             CommandPanelOutcome::Model(ModelSelectionAction::Select { preference, .. }) => {
-                Some(ModelCommand::SetPreferred { preference }.into())
+                Some(ModelCommand::SetModel { preference }.into())
             }
             CommandPanelOutcome::Model(ModelSelectionAction::Pin { preference, pinned }) => {
                 Some(ModelCommand::Pin { preference, pinned }.into())
@@ -2333,7 +2333,7 @@ impl App {
                     .apply_model_label(model_label);
                 self.chat_panel
                     .status_line_mut()
-                    .apply_context_capacity(summary.preferred_model(), summary.context_capacity());
+                    .apply_context_capacity(summary.model(), summary.context_capacity());
                 self.welcome.apply_model_summary(&summary);
             }
             ModelEvent::PickerOpened(view) => self.show_model_picker(view),

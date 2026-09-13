@@ -37,7 +37,7 @@ test("regular-expression search supports multiline captures and bounded ranges",
 	assert.equal(matches.length, 1);
 	assert.equal(matches[0].text, "name: ash");
 	assert.deepEqual(matches[0].captures, ["ash"]);
-	assert.deepEqual(matches[0].range, Range.fromPositions(new Position((1) + 1, (0) + 1), new Position((1) + 1, (10) + 1)));
+	assert.deepEqual(matches[0].range, Range.fromPositions(new Position((1) + 1, (0) + 1), new Position((1) + 1, (9) + 1)));
 });
 
 test("whole-word search uses Unicode word boundaries", () => {

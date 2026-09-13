@@ -345,11 +345,11 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 	assert.equal(dom.window.document.querySelector(".ash-chat-input-mode-menu"), null);
 	assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [false, true]);
 	const composerInputs = [...chatPanes].map((chatPane) => {
-		const input = chatPane.querySelector<HTMLTextAreaElement>(".stanza-editor-input");
+		const input = chatPane.querySelector<HTMLTextAreaElement>(".ash-chat-textarea-input");
 		assert.ok(input);
 		return input;
 	});
-	typeStanzaText(dom.window, composerInputs[0], "First draft");
+	typeChatText(dom.window, composerInputs[0], "First draft");
 	assert.equal(firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.send'] button")?.disabled, false);
 
 	tabs?.[1]?.click();
@@ -361,12 +361,12 @@ test("Chat title separates Session tabs from its action toolbar", async () => {
 		["false", "true"],
 	);
 	assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [true, false]);
-	typeStanzaText(dom.window, composerInputs[1], "Second draft");
+	typeChatText(dom.window, composerInputs[1], "Second draft");
 	chatTitleContent(pane).querySelectorAll<HTMLButtonElement>("[role='tab']")[0]?.click();
 	assert.equal(sessions.active?.session.sessionId, "session-1");
 	assert.deepEqual([...chatPanes].map((chatPane) => chatPane.hidden), [false, true]);
-	assert.equal(chatPanes[0]?.querySelector(".stanza-editor-line-text")?.textContent, "First draft");
-	assert.equal(chatPanes[1]?.querySelector(".stanza-editor-line-text")?.textContent, "Second draft");
+	assert.equal(composerInputs[0]?.value, "First draft");
+	assert.equal(composerInputs[1]?.value, "Second draft");
 
 	const closeButtons = chatTitleContent(pane).querySelectorAll<HTMLButtonElement>(
 		`[data-action-id="${TAB_CLOSE_ACTION_ID}"] button`,
@@ -517,7 +517,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
 	assert.equal(sessions.untitledSessions.length, 1);
 	const untitledPane = pane.element.querySelector<HTMLElement>("[role='tabpanel']");
 	assert.ok(untitledPane?.dataset.untitledSessionId);
-	const input = untitledPane.querySelector<HTMLTextAreaElement>(".stanza-editor-input");
+	const input = untitledPane.querySelector<HTMLTextAreaElement>(".ash-chat-textarea-input");
 	assert.ok(input);
 	assert.equal(untitledPane.classList.contains("empty"), true);
 	let contextResolutions = 0;
@@ -531,7 +531,7 @@ test("an empty Session list opens an untitled session and persists it on its fir
 		},
 	});
 	assert.equal(untitledPane.querySelector(".ash-chat-input-attachment-label")?.textContent, "abc1234 · Explain context transport");
-	typeStanzaText(dom.window, input, "Hello from an untitled session");
+	typeChatText(dom.window, input, "Hello from an untitled session");
 	input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
 		bubbles: true,
 		cancelable: true,
@@ -618,9 +618,9 @@ test("the New Chat slash command opens an untitled session", async () => {
 	await sessions.initialize();
 	await nextTask();
 
-	const input = pane.element.querySelector<HTMLTextAreaElement>(".ash-chat:not([hidden]) .stanza-editor-input");
+	const input = pane.element.querySelector<HTMLTextAreaElement>(".ash-chat:not([hidden]) .ash-chat-textarea-input");
 	assert.ok(input);
-	typeStanzaText(dom.window, input, "/new");
+	typeChatText(dom.window, input, "/new");
 	assert.equal(pane.element.querySelector("[data-action-id='ash.chat.input.command'] button")?.textContent, "Command");
 	input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
 		bubbles: true,
@@ -693,7 +693,7 @@ test("failed first send keeps the untitled session and its input draft", async (
 	await sessions.initialize();
 	await nextTask();
 
-	const input = pane.element.querySelector<HTMLTextAreaElement>(".stanza-editor-input");
+	const input = pane.element.querySelector<HTMLTextAreaElement>(".ash-chat-textarea-input");
 	assert.ok(input);
 	pane.addContext({
 		id: "failed-commit",
@@ -701,19 +701,19 @@ test("failed first send keeps the untitled session and its input draft", async (
 		name: "failed commit",
 		resolve: async () => ({ name: "Git commit failed", content: "change" }),
 	});
-	typeStanzaText(dom.window, input, "Keep this draft");
+	typeChatText(dom.window, input, "Keep this draft");
 	input.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
 		bubbles: true,
 		cancelable: true,
 		key: "Enter",
 	}));
-	await waitFor(() => pane.element.querySelector(".stanza-editor-line-text")?.textContent === "Keep this draft");
+	await waitFor(() => input.value === "Keep this draft");
 
 	assert.equal(fake.createSessionRequests.length, 1);
 	assert.equal(sessions.sessions.length, 0);
 	assert.equal(sessions.untitledSessions.length, 1);
 	assert.equal(pane.element.querySelector(".ash-chat-input-attachment-label")?.textContent, "failed commit");
-	assert.equal(pane.element.querySelector(".stanza-editor-line-text")?.textContent, "Keep this draft");
+	assert.equal(input.value, "Keep this draft");
 	assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.dataset.untitledSessionId, sessions.untitledSessions[0]?.untitledSessionId);
 	assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.classList.contains("empty"), true);
 	assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.classList.contains("has-conversation"), false);
@@ -969,7 +969,7 @@ test("AppServerSessionsManagementService selects another untitled session and pe
 	assert.equal(fake.createThreadRequests.length, 0);
 });
 
-test("AppServerSessionsManagementService persists and reflects the preferred model", async () => {
+test("AppServerSessionsManagementService persists and reflects the model", async () => {
 	const fake = fakeApi({
 		sessions: [
 			session("session-1", "thread-1"),
@@ -980,12 +980,12 @@ test("AppServerSessionsManagementService persists and reflects the preferred mod
 	await service.initialize();
 	const model: ModelRef = { provider: "openai", model: "gpt-session" };
 
-	await service.setPreferredModel(model);
+	await service.setModel(model);
 
 	assert.deepEqual(service.sessions.find(({ sessionId }) => sessionId === "session-1")?.model, model);
 	assert.deepEqual(service.sessions.find(({ sessionId }) => sessionId === "session-2")?.model, model);
 	assert.deepEqual(service.active?.session.model, model);
-	assert.deepEqual(fake.preferredModelRequests.map(request => request.model), [model]);
+	assert.deepEqual(fake.modelRequests.map(request => request.model), [model]);
 });
 
 test("ChatPaneModel applies backend-assembled transcript entries", async () => {
@@ -1463,7 +1463,7 @@ test("Chat service caches the static catalog and filters picker entries by user 
 	assert.equal(fake.modelListRequests.length, 2);
 });
 
-test("Chat picker retains the preferred model when it is hidden", async () => {
+test("Chat picker retains the selected model when it is hidden", async () => {
 	const entry = {
 		model: { provider: "openai", model: "gpt-5.6-sol" },
 		displayName: "GPT-5.6 Sol",
@@ -1573,7 +1573,7 @@ function fakeApi(options: FakeOptions = {}): {
 	readonly turnCompactRequests: readonly SessionOperationInput<"compactContext">[];
 	readonly turnSteerRequests: readonly SessionOperationInput<"steerTurn">[];
 	readonly modelListRequests: readonly undefined[];
-	readonly preferredModelRequests: readonly { readonly commandId: string; readonly model: ModelRef }[];
+	readonly modelRequests: readonly { readonly commandId: string; readonly model: ModelRef }[];
 	readonly emit: (notification: ServerNotification) => void;
 	readonly emitReady: () => void;
 } {
@@ -1587,7 +1587,7 @@ function fakeApi(options: FakeOptions = {}): {
 	const turnCompactRequests: SessionOperationInput<"compactContext">[] = [];
 	const turnSteerRequests: SessionOperationInput<"steerTurn">[] = [];
 	const modelListRequests: undefined[] = [];
-	const preferredModelRequests: { readonly commandId: string; readonly model: ModelRef }[] = [];
+	const modelRequests: { readonly commandId: string; readonly model: ModelRef }[] = [];
 	const currentThread = () => options.thread?.() ?? thread();
 	const currentSession = (sessionId: string): ISession => options.sessions?.find(candidate => candidate.sessionId === sessionId)
 		?? (options.createThread?.session.sessionId === sessionId ? options.createThread.session : undefined)
@@ -1657,9 +1657,9 @@ function fakeApi(options: FakeOptions = {}): {
 				modelListRequests.push(undefined);
 				return { models: [...(options.models ?? [])] };
 			},
-			readPreferred: async () => options.sessions?.find(session => session.model)?.model ?? null,
-			setPreferred: async (params: { readonly commandId: string; readonly model: ModelRef }) => {
-				preferredModelRequests.push(params);
+			readModel: async () => options.sessions?.find(session => session.model)?.model ?? null,
+			setModel: async (params: { readonly commandId: string; readonly model: ModelRef }) => {
+				modelRequests.push(params);
 			},
 		},
 		skills: {
@@ -1710,7 +1710,7 @@ function fakeApi(options: FakeOptions = {}): {
 		turnCompactRequests,
 		turnSteerRequests,
 		modelListRequests,
-		preferredModelRequests,
+		modelRequests,
 		emit: (notification) => {
 			for (const listener of listeners) listener(notification);
 		},
@@ -1838,13 +1838,9 @@ function emptyUsage(): Thread["usage"] {
 	};
 }
 
-function typeStanzaText(targetWindow: typeof browserEnvironment.window, input: HTMLTextAreaElement, text: string): void {
-	input.dispatchEvent(new targetWindow.InputEvent("beforeinput", {
-		bubbles: true,
-		cancelable: true,
-		data: text,
-		inputType: "insertText",
-	}));
+function typeChatText(targetWindow: typeof browserEnvironment.window, input: HTMLTextAreaElement, text: string): void {
+	input.value = text;
+	input.dispatchEvent(new targetWindow.Event("input", { bubbles: true }));
 }
 
 function nextTask(): Promise<void> {

@@ -466,7 +466,7 @@ export interface ITextModel extends IDisposable {
 	getLinesContent(): string[];
 	getEOL(): string;
 	getEndOfLineSequence(): EndOfLineSequence;
-	pushEOL(eol: EndOfLineSequence): void;
+	pushEOL(eol: EndOfLineSequence, reason?: TextModelEditSource): void;
 	setEOL(eol: EndOfLineSequence): void;
 	getLineMinColumn(lineNumber: number): number;
 	getLineMaxColumn(lineNumber: number): number;

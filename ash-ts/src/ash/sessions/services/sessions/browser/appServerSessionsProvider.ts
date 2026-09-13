@@ -39,19 +39,19 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 	}
 
 	async list(): Promise<readonly ISession[]> {
-		const [result, preferredModel] = await Promise.all([
+		const [result, model] = await Promise.all([
 			this.host.session.list(),
-			this.host.model?.readPreferred() ?? Promise.resolve(null),
+			this.host.model?.readModel() ?? Promise.resolve(null),
 		]);
-		return result.sessions.map(session => ({ ...toSession(session), model: preferredModel }));
+		return result.sessions.map(session => ({ ...toSession(session), model }));
 	}
 
 	async read(sessionId: SessionId): Promise<ISession> {
-		const [result, preferredModel] = await Promise.all([
+		const [result, model] = await Promise.all([
 			this.host.session.read({ sessionId }),
-			this.host.model?.readPreferred() ?? Promise.resolve(null),
+			this.host.model?.readModel() ?? Promise.resolve(null),
 		]);
-		return { ...toSession(result.session), model: preferredModel };
+		return { ...toSession(result.session), model };
 	}
 
 	async subscribe(session: ISession): Promise<ISession> {
@@ -73,20 +73,20 @@ export class AppServerSessionsProvider extends Disposable implements ISessionsPr
 	}
 
 	async create(title: string, model?: ModelRef): Promise<IActiveSessionThread> {
-		if (model) await this.setPreferredModel(model);
+		if (model) await this.setModel(model);
 		const created = await this.host.session.create({ commandId: commandId("session"), title, agent: { type: "default" } });
 		const thread = await this.host.session.createThread({ commandId: commandId("thread"), sessionId: created.session.sessionId, title: "Main" });
-		const preferredModel = model ?? await this.host.model?.readPreferred();
-		const session = await this.subscribe({ ...toSession(thread.session), model: preferredModel ?? null });
+		const selected = model ?? await this.host.model?.readModel();
+		const session = await this.subscribe({ ...toSession(thread.session), model: selected ?? null });
 		if (!session.chats.some(candidate => candidate.threadId === thread.threadId && candidate.status === "active")) {
 			throw new Error(`Created Thread is missing from subscribed Session snapshot: ${thread.threadId}`);
 		}
 		return { session, threadId: thread.threadId };
 	}
 
-	async setPreferredModel(model: ModelRef): Promise<void> {
-		if (!this.host.model) throw new Error("Preferred model selection is unavailable in this renderer host.");
-		await this.host.model.setPreferred({ commandId: commandId("preferred-model"), model });
+	async setModel(model: ModelRef): Promise<void> {
+		if (!this.host.model) throw new Error("Model selection is unavailable in this renderer host.");
+		await this.host.model.setModel({ commandId: commandId("model"), model });
 	}
 
 	async archive(session: ISession): Promise<ISession> {

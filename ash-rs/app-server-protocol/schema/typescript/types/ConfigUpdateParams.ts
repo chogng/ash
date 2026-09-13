@@ -9,4 +9,4 @@ import type { ReasoningEffort } from './ReasoningEffort.js';
 import type { TimeContextConfigDto } from './TimeContextConfigDto.js';
 import type { ToolMode } from './ToolMode.js';
 
-export type ConfigUpdateParams = { timeContext?: TimeContextConfigDto | null, features?: { [key in Feature]?: boolean } | null, commandId: CommandId, expectedRevision: number, preferredModel?: ModelRef | null, preferredReasoningEffort?: ReasoningEffort | null, approvalReviewModel?: ApprovalReviewModelSelection | null, commitMessageModel?: ModelRef | null, toolMode?: ToolMode | null, agentGrepBackend?: AgentGrepBackendDto | null, gui?: FrontendConfigDto | null, tui?: FrontendConfigDto | null, };
+export type ConfigUpdateParams = { timeContext?: TimeContextConfigDto | null, features?: { [key in Feature]?: boolean } | null, commandId: CommandId, expectedRevision: number, model?: ModelRef | null, modelReasoningEffort?: ReasoningEffort | null, approvalReviewModel?: ApprovalReviewModelSelection | null, commitMessageModel?: ModelRef | null, toolMode?: ToolMode | null, agentGrepBackend?: AgentGrepBackendDto | null, gui?: FrontendConfigDto | null, tui?: FrontendConfigDto | null, };

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { AccessibilitySupport } from '../../../platform/accessibility/common/accessibility.js';
+import { isMacintosh } from '../../../base/common/platform.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
 import {
@@ -117,7 +118,7 @@ test('common font settings produce a zoom-aware bare font descriptor', () => {
 		}, 2);
 
 		assert.equal(fontInfo.fontSize, 16.8);
-		assert.equal(fontInfo.lineHeight, 23);
+		assert.equal(fontInfo.lineHeight, isMacintosh ? 25 : 23);
 		assert.equal(fontInfo.fontWeight, 'normal');
 		assert.equal(fontInfo.fontVariationSettings, "'wght' 700");
 		assert.equal(fontInfo.fontFeatureSettings, '"liga" on, "calt" on');

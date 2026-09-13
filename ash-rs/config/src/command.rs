@@ -31,9 +31,9 @@ pub struct PreferencesUpdate {
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     pub features: Patch<features::FeatureOverrides>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
-    pub preferred_model: Patch<ModelRef>,
+    pub model: Patch<ModelRef>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
-    pub preferred_reasoning_effort: Patch<ReasoningEffort>,
+    pub model_reasoning_effort: Patch<ReasoningEffort>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     pub approval_review_model: Patch<ApprovalReviewModelSelection>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]

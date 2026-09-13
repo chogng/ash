@@ -131,10 +131,10 @@ export class AppServerSessionsManagementService extends Disposable implements IS
 	async archiveSession(sessionId: SessionId): Promise<void> { await this.finishSession(sessionId, "archiving"); }
 	async stopSession(sessionId: SessionId): Promise<void> { await this.finishSession(sessionId, "stopping"); }
 
-	async setPreferredModel(model: ModelRef): Promise<void> {
+	async setModel(model: ModelRef): Promise<void> {
 		await this.initialize();
 		if (this._sessions.length > 0 && this._sessions.every(session => sameModel(session.model, model))) return;
-		await this.provider.setPreferredModel(model);
+		await this.provider.setModel(model);
 		this._sessions = this._sessions.map(session => ({ ...session, model }));
 		if (this._active) {
 			const session = this._sessions.find(candidate => candidate.sessionId === this._active?.session.sessionId);

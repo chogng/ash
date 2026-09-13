@@ -11,7 +11,7 @@ import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../..
 import { AppServerSyntaxProviders, syntaxLanguageForEditorLanguage } from '../../browser/appServerSyntaxProviders.js';
 
 test('App Server syntax registers tokens, diagnostics, symbols, folds, and selection ranges through Editor providers', async () => {
-	using model = new TextModel('fn main() {\n  /* hi\n  */\n}\n');
+	using model = new TextModel('fn main() {\n  /* hi\n  */\n}\n', { languageId: 'rust' });
 	using languages = new LanguageFeaturesService();
 	let analyzeCalls = 0;
 	let selectionCalls = 0;

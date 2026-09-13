@@ -66,7 +66,7 @@ pub struct ModelMetadataProvenance {
     pub auto_compact_token_limit: Option<MetadataSource>,
     pub capabilities: ModelCapabilitiesProvenance,
     pub supported_reasoning_efforts: Option<MetadataSource>,
-    pub default_reasoning_effort: Option<MetadataSource>,
+    pub model_reasoning_effort: Option<MetadataSource>,
     pub default_personality: Option<MetadataSource>,
     pub lifecycle: Option<MetadataSource>,
 }

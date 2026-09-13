@@ -829,7 +829,7 @@ export class TextModel implements ITextModel {
 		if (result) this.publishTextChange(result.change);
 	}
 
-	pushEOL(eol: EndOfLineSequence): void {
+	pushEOL(eol: EndOfLineSequence, reason?: TextModelEditSource): void {
 		this.assertNotDisposed();
 		this.ensureDirectTextMutationAllowed();
 		const targetEOL = requireEndOfLineSequence(eol);
@@ -840,7 +840,7 @@ export class TextModel implements ITextModel {
 		const result = this.commitOffsetEdits([], {
 			reason: TextModelChangeReason.EOL,
 			eol: targetEOL,
-			editSource: EditSources.eolChange(),
+			editSource: reason ?? EditSources.eolChange(),
 			transactionId: coalescingEntry?.transactionId,
 		});
 		if (!result) return;

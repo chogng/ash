@@ -122,7 +122,7 @@ impl Fixture {
         fs::write(
             self.profile.join("config.toml"),
             format!(
-                r#"[agent.preferredModel]
+                r#"[agent.model]
 provider = "openai-compatible"
 model = "ash-real-scenario"
 

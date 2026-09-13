@@ -10,7 +10,7 @@ use ash_protocol::ModelRef;
 ///
 /// Every row requires `provider`, `id`, `name`, and `access`. Optional named fields are
 /// `context_window`, `auto_compact_token_limit`, `capabilities`, `reasoning`,
-/// `default_reasoning`, `default_personality`, `input_token_count`, and
+/// `model_reasoning_effort`, `default_personality`, `input_token_count`, and
 /// `approval_review_default`. Omitted metadata stays unknown, absent, or false. Use
 /// `context_window: 1_000_000` for a 1M model. Array order is the display order within a provider.
 pub const STATIC_MODEL_CATALOG: &[StaticModelSpec] = &[

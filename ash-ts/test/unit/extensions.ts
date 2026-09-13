@@ -1,10 +1,10 @@
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
-const desktopDirectory = resolve(import.meta.dirname, '../../../ash-ts');
+const desktopDirectory = resolve(import.meta.dirname, '../..');
 const result = spawnSync(process.execPath, [
 	'--import',
-	'../scripts/ash-ts/test/ignore-css-imports.ts',
+	'./test/unit/ignore-css-imports.ts',
 	'--test',
 	'--test-concurrency=1',
 	...process.argv.slice(2),

@@ -1367,7 +1367,7 @@ fn configured_model_context_enables_core_managed_compaction() {
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
                 time_context: ash_protocol::Patch::Missing,
                 features: Default::default(),
-                preferred_model: Patch::Value(ModelRef::new(provider.clone(), model.clone())),
+                model: Patch::Value(ModelRef::new(provider.clone(), model.clone())),
                 ..Default::default()
             }),
         })
@@ -1411,7 +1411,7 @@ fn configured_model_context_enables_core_managed_compaction() {
 }
 
 #[test]
-fn config_backed_model_service_resolves_reasoning_effort() {
+fn config_backed_model_service_resolves_model_reasoning_effort() {
     let provider = ProviderId::new("openai").unwrap();
     let model = ModelId::new("gpt-5.6").unwrap();
     let provider_config = ModelProviderConfig::new(provider.clone());
@@ -1433,8 +1433,8 @@ fn config_backed_model_service_resolves_reasoning_effort() {
             expected_revision: configured.revision,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
                 time_context: ash_protocol::Patch::Missing,
-                preferred_model: Patch::Value(ModelRef::new(provider.clone(), model.clone())),
-                preferred_reasoning_effort: Patch::Value(ReasoningEffort::High),
+                model: Patch::Value(ModelRef::new(provider.clone(), model.clone())),
+                model_reasoning_effort: Patch::Value(ReasoningEffort::High),
                 ..Default::default()
             }),
         })
@@ -1467,14 +1467,14 @@ fn config_backed_model_service_resolves_reasoning_effort() {
 fn image_input_policy_tracks_the_selected_provider_and_original_detail_capability() {
     let providers = ProviderConfigRegistry::builtin();
     let openai = ResolvedConfig {
-        preferred_model: Some(ModelRef::new(
+        model: Some(ModelRef::new(
             ProviderId::new("openai").unwrap(),
             ModelId::new("gpt-5.6").unwrap(),
         )),
         ..ResolvedConfig::default()
     };
     let anthropic = ResolvedConfig {
-        preferred_model: Some(ModelRef::new(
+        model: Some(ModelRef::new(
             ProviderId::new("anthropic").unwrap(),
             ModelId::new("claude-sonnet-4-20250514").unwrap(),
         )),
@@ -1528,8 +1528,8 @@ fn select_model(
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
                 time_context: ash_protocol::Patch::Missing,
                 features: Default::default(),
-                preferred_model: Patch::Value(model_ref(model)),
-                preferred_reasoning_effort: Patch::Missing,
+                model: Patch::Value(model_ref(model)),
+                model_reasoning_effort: Patch::Missing,
                 approval_review_model: Patch::Missing,
                 commit_message_model: Patch::Missing,
                 tool_mode: Patch::Missing,
@@ -1638,7 +1638,7 @@ fn subscription_model_resolution_does_not_require_an_api_key_provider_config() {
         model_provider: provider.clone(),
     };
     let config = ResolvedConfig {
-        preferred_model: Some(ModelRef::new(
+        model: Some(ModelRef::new(
             ProviderId::new("openai").unwrap(),
             ModelId::new("gpt-5.6-sol").unwrap(),
         )),
@@ -1648,7 +1648,7 @@ fn subscription_model_resolution_does_not_require_an_api_key_provider_config() {
     let _ = resolver.resolve(&config);
 
     let request = provider.request.lock().unwrap().clone().unwrap();
-    assert_eq!(request.model, config.preferred_model.unwrap());
+    assert_eq!(request.model, config.model.unwrap());
     assert_eq!(request.config.provider.as_str(), "openai");
     assert_eq!(request.config.base_url, None);
 }
@@ -1657,7 +1657,7 @@ impl ModelSnapshotResolver for RecordingSnapshotResolver {
     fn resolve(&self, config: &ResolvedConfig) -> Arc<dyn ModelInvoker> {
         Arc::new(SnapshotModel {
             model: config
-                .preferred_model
+                .model
                 .as_ref()
                 .map(|model| model.model.as_str().to_owned())
                 .unwrap_or_else(|| "unconfigured".into()),
@@ -1732,7 +1732,7 @@ fn local_model_resolution_applies_dir_model_at_the_next_safe_point() {
     std::fs::write(
         &path,
         r#"
-[agent.preferredModel]
+[agent.model]
 provider = "test"
 model = "dir-model"
 "#,
@@ -1761,7 +1761,7 @@ model = "dir-model"
         model
             .resolve_config(&user)
             .unwrap()
-            .preferred_model
+            .model
             .unwrap()
             .model
             .as_str(),
@@ -2058,7 +2058,7 @@ fn missing_model_or_provider_is_a_configuration_failure_before_invocation() {
     for config in [
         ResolvedConfig::default(),
         ResolvedConfig {
-            preferred_model: Some(ModelRef::new(
+            model: Some(ModelRef::new(
                 ProviderId::new("openai-compatible").unwrap(),
                 ModelId::new("missing").unwrap(),
             )),

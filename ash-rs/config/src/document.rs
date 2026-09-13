@@ -114,9 +114,9 @@ pub struct AgentConfig {
     #[serde(default)]
     pub time_context: crate::TimeContextConfig,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub preferred_model: Option<ModelRef>,
+    pub model: Option<ModelRef>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub preferred_reasoning_effort: Option<ReasoningEffort>,
+    pub model_reasoning_effort: Option<ReasoningEffort>,
     #[serde(default)]
     pub approval_review_model: ApprovalReviewModelSelection,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -193,11 +193,11 @@ impl UserConfigDocument {
                 "issues.autoRefreshMinutes must be 0, 5, 10, 30 or 60".into(),
             ));
         }
-        if let Some(model) = &self.agent.preferred_model
+        if let Some(model) = &self.agent.model
             && !self.providers.contains_key(&model.provider)
         {
             return Err(ConfigError(format!(
-                "preferred model provider '{}' is not configured",
+                "model provider '{}' is not configured",
                 model.provider
             )));
         }
@@ -273,8 +273,8 @@ pub struct ResolvedConfig {
     pub time_context: crate::TimeContextConfig,
     pub features: features::FeatureOverrides,
     pub issues: crate::IssueConfig,
-    pub preferred_model: Option<ModelRef>,
-    pub preferred_reasoning_effort: Option<ReasoningEffort>,
+    pub model: Option<ModelRef>,
+    pub model_reasoning_effort: Option<ReasoningEffort>,
     pub approval_review_model: ApprovalReviewModelSelection,
     pub commit_message_model: Option<ModelRef>,
     pub tool_mode: ash_protocol::ToolMode,
@@ -298,7 +298,7 @@ pub struct ResolvedConfig {
 
 impl ResolvedConfig {
     pub fn selected_provider(&self) -> Option<&ModelProviderConfig> {
-        self.preferred_model
+        self.model
             .as_ref()
             .and_then(|model| self.providers.get(&model.provider))
     }
@@ -324,10 +324,8 @@ impl ResolvedConfig {
             .map_err(provider_config_error)?;
         let model = match &self.approval_review_model {
             ApprovalReviewModelSelection::Automatic => {
-                let active_model = self.preferred_model.as_ref().ok_or_else(|| {
-                    ConfigError(
-                        "automatic approval review requires a configured preferred model".into(),
-                    )
+                let active_model = self.model.as_ref().ok_or_else(|| {
+                    ConfigError("automatic approval review requires a configured model".into())
                 })?;
                 registry
                     .automatic_approval_review_model(active_model)
@@ -361,8 +359,8 @@ impl From<&UserConfigDocument> for ResolvedConfig {
             time_context: document.agent.time_context.clone(),
             features: document.features.clone(),
             issues: document.issues.clone(),
-            preferred_model: document.agent.preferred_model.clone(),
-            preferred_reasoning_effort: document.agent.preferred_reasoning_effort,
+            model: document.agent.model.clone(),
+            model_reasoning_effort: document.agent.model_reasoning_effort,
             approval_review_model: document.agent.approval_review_model.clone(),
             commit_message_model: document.agent.commit_message_model.clone(),
             tool_mode: document.agent.tool_mode,

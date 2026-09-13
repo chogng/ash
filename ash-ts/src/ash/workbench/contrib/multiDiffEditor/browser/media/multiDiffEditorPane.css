@@ -102,10 +102,10 @@
 	gap: 12px;
 	padding: 16px;
 	color: var(--ash-foreground);
-	background: var(--ash-widget-background, var(--ash-editor-background));
+	background: var(--ash-editor-widget-background, var(--ash-editor-background));
 	border: 1px solid var(--ash-widget-border);
 	border-radius: 8px;
-	box-shadow: 0 8px 28px rgb(0 0 0 / 30%);
+	box-shadow: 0 8px 28px var(--ash-widget-shadow);
 }
 
 .stanza-multi-diff-commit-dialog h2 {

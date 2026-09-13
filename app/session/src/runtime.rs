@@ -224,11 +224,11 @@ impl SessionRuntime {
         )
     }
 
-    /// Sets the preferred model used by subsequent Turns.
-    pub fn set_preferred_model(&self, model: ModelRef) -> Result<()> {
+    /// Sets the model used by subsequent Turns without an explicit Agent selection.
+    pub fn set_model(&self, model: ModelRef) -> Result<()> {
         self.try_send(
-            SessionRuntimeCommand::SetPreferredModel(model),
-            "Preferred model selection queue is unavailable",
+            SessionRuntimeCommand::SetModel(model),
+            "Model selection queue is unavailable",
         )
     }
 

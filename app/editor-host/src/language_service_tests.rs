@@ -47,11 +47,11 @@ fn desktop_configuration_maps_persisted_mode_into_catalog_policy() {
     );
     let configuration = ConfigReadResult {
         time_context: Default::default(),
-        preferred_reasoning_effort: None,
+        model_reasoning_effort: None,
         features: vec![],
         revision: 4,
         generation: 7,
-        preferred_model: None,
+        model: None,
         approval_review_model: ApprovalReviewModelSelectionDto::Automatic,
         commit_message_model: None,
         commit_message_active_dir_authorized: false,
@@ -100,11 +100,11 @@ fn desktop_configuration_maps_persisted_mode_into_catalog_policy() {
 fn desktop_configuration_does_not_start_unconfigured_language_servers() {
     let configuration = ConfigReadResult {
         time_context: Default::default(),
-        preferred_reasoning_effort: None,
+        model_reasoning_effort: None,
         features: vec![],
         revision: 1,
         generation: 1,
-        preferred_model: None,
+        model: None,
         approval_review_model: ApprovalReviewModelSelectionDto::Automatic,
         commit_message_model: None,
         commit_message_active_dir_authorized: false,

@@ -18,8 +18,8 @@ pub enum ConfigValueSource {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ConfigProvenance {
     pub issues: ConfigValueSource,
-    pub preferred_model: Option<ConfigValueSource>,
-    pub preferred_reasoning_effort: Option<ConfigValueSource>,
+    pub model: Option<ConfigValueSource>,
+    pub model_reasoning_effort: Option<ConfigValueSource>,
     pub approval_review_model: ConfigValueSource,
     pub commit_message_model: Option<ConfigValueSource>,
     pub providers: BTreeMap<ProviderId, ConfigValueSource>,
@@ -36,14 +36,14 @@ impl ConfigProvenance {
     pub(crate) fn from_user(document: &UserConfigDocument) -> Self {
         Self {
             issues: ConfigValueSource::User,
-            preferred_model: document
+            model: document
                 .agent
-                .preferred_model
+                .model
                 .as_ref()
                 .map(|_| ConfigValueSource::User),
-            preferred_reasoning_effort: document
+            model_reasoning_effort: document
                 .agent
-                .preferred_reasoning_effort
+                .model_reasoning_effort
                 .as_ref()
                 .map(|_| ConfigValueSource::User),
             approval_review_model: ConfigValueSource::User,
@@ -102,7 +102,7 @@ impl ConfigProvenance {
 /// Stable category for a configuration diagnostic that does not rewrite desired configuration.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ConfigDiagnosticCode {
-    DirPreferredModelProviderUnconfigured,
+    DirModelProviderUnconfigured,
     DirMcpCapabilityRequired,
     DirSkillCapabilityRequired,
     DirPluginCapabilityRequired,
@@ -171,7 +171,7 @@ pub fn resolve_scoped_config(
         let dir_id = dir.scope.dir_id.clone();
         dir_revision = Some(dir.revision);
 
-        if let Some(model) = &dir.document.agent.preferred_model {
+        if let Some(model) = &dir.document.agent.model {
             apply_dir_model_preference(
                 &mut values,
                 &mut provenance,
@@ -180,9 +180,9 @@ pub fn resolve_scoped_config(
                 model,
             );
         }
-        if let Some(effort) = dir.document.agent.preferred_reasoning_effort {
-            values.preferred_reasoning_effort = Some(effort);
-            provenance.preferred_reasoning_effort = Some(ConfigValueSource::Dir(dir_id.clone()));
+        if let Some(effort) = dir.document.agent.model_reasoning_effort {
+            values.model_reasoning_effort = Some(effort);
+            provenance.model_reasoning_effort = Some(ConfigValueSource::Dir(dir_id.clone()));
         }
 
         let source = ConfigValueSource::Dir(dir_id.clone());
@@ -270,12 +270,12 @@ fn apply_dir_model_preference(
     model: &ModelRef,
 ) {
     if values.providers.contains_key(&model.provider) {
-        values.preferred_model = Some(model.clone());
-        provenance.preferred_model = Some(ConfigValueSource::Dir(dir_id.clone()));
+        values.model = Some(model.clone());
+        provenance.model = Some(ConfigValueSource::Dir(dir_id.clone()));
         return;
     }
     diagnostics.push(ConfigDiagnostic {
-        code: ConfigDiagnosticCode::DirPreferredModelProviderUnconfigured,
+        code: ConfigDiagnosticCode::DirModelProviderUnconfigured,
         subject: model.provider.to_string(),
     });
 }

@@ -53,8 +53,8 @@ export interface ISessionApi {
 
 export interface IModelApi {
 	list(): Promise<ModelListResult>;
-	readPreferred(): Promise<ModelRef | null>;
-	setPreferred(params: { readonly commandId: string; readonly model: ModelRef }): Promise<void>;
+	readModel(): Promise<ModelRef | null>;
+	setModel(params: { readonly commandId: string; readonly model: ModelRef }): Promise<void>;
 }
 
 export interface IThreadApi {

@@ -106,7 +106,7 @@ pub(crate) fn unlisted_entry(provider: &ProviderId, model: &ModelId) -> ModelCat
             auto_compact_token_limit: None,
             capabilities: Default::default(),
             supported_reasoning_efforts: None,
-            default_reasoning_effort: None,
+            model_reasoning_effort: None,
             default_personality: None,
             lifecycle: None,
         },

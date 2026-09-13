@@ -17,7 +17,7 @@ use ash_file_access::Permissions;
 use ash_model_provider_config::ModelProviderConfig;
 use ash_protocol::ProviderId;
 
-pub(crate) const CURRENT_FILE_SCHEMA_VERSION: i64 = 2;
+pub(crate) const CURRENT_FILE_SCHEMA_VERSION: i64 = 3;
 // Raise this only when the product support window no longer includes the removed versions.
 const MIN_SUPPORTED_FILE_SCHEMA_VERSION: i64 = 1;
 
@@ -77,12 +77,16 @@ pub(crate) fn decode(source: &str) -> Result<DecodedDocument, ConfigError> {
         None => {
             migrate_unversioned(root)?;
             remove_issue_workflow(root);
+            migrate_agent_model_names(root)?;
             true
         }
         Some(toml::Value::Integer(version)) => {
             validate_version(version)?;
             if version < 2 {
                 remove_issue_workflow(root);
+            }
+            if version < 3 {
+                migrate_agent_model_names(root)?;
             }
             version != CURRENT_FILE_SCHEMA_VERSION
         }
@@ -135,6 +139,28 @@ fn validate_version(version: i64) -> Result<(), ConfigError> {
 fn migrate_unversioned(root: &mut toml::map::Map<String, toml::Value>) -> Result<(), ConfigError> {
     for migration in UNVERSIONED_MIGRATIONS {
         (migration.apply)(root)?;
+    }
+    Ok(())
+}
+
+fn migrate_agent_model_names(
+    root: &mut toml::map::Map<String, toml::Value>,
+) -> Result<(), ConfigError> {
+    let Some(toml::Value::Table(agent)) = root.get_mut("agent") else {
+        return Ok(());
+    };
+    for (old, new) in [
+        ("preferredModel", "model"),
+        ("preferredReasoningEffort", "modelReasoningEffort"),
+    ] {
+        if agent.contains_key(old) && agent.contains_key(new) {
+            return Err(ConfigError(format!(
+                "user configuration contains both agent.{old} and agent.{new}"
+            )));
+        }
+        if let Some(value) = agent.remove(old) {
+            agent.insert(new.into(), value);
+        }
     }
     Ok(())
 }

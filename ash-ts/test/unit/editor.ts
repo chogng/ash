@@ -1,14 +1,17 @@
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
+import { requireNode25 } from '../../../build/lib/requireNode25.ts';
 
-const desktopDirectory = resolve(import.meta.dirname, '../../../ash-ts');
+requireNode25();
+const desktopDirectory = resolve(import.meta.dirname, '../..');
 const result = spawnSync(process.execPath, [
 	'--import',
-	'../scripts/ash-ts/test/ignore-css-imports.ts',
+	'./test/unit/ignore-css-imports.ts',
 	'--import',
-	'../scripts/ash-ts/test/editor-test-environment.ts',
+	'./test/unit/editor-environment.ts',
 	'--test',
 	'--test-concurrency=1',
+	'--test-timeout=60000',
 	...process.argv.slice(2),
 	'../.build/desktop/test/src/ash/editor/**/test/**/*.test.js',
 	'../.build/desktop/test/src/ash/workbench/contrib/academic/**/test/**/*.test.js',

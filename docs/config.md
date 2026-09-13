@@ -44,7 +44,7 @@ Runtime snapshot
 - TOML 替换和回执提交保持原子；
 - 成功提交只影响后续安全点，不改写已经冻结的 Turn。
 
-`config.toml` 顶层使用 `schemaVersion` 标记文件格式。读取无版本的历史文件时，Config 只执行已登记且无歧义的迁移，完成严格校验后原子重写为当前版本；历史字段和当前字段同时出现、未登记字段、过新版本或低于最低支持版本都会拒绝启动。`semanticCodeIndex` 迁到 `codebase` 时不会保留旧的源码外发授权；`workspaceTrust` 只转换路径仍存在、旧身份与路径一致的 `trusted` 项，并为它生成当前目录身份，其他项不落盘。
+`config.toml` 顶层使用 `schemaVersion` 标记文件格式。读取旧版本或无版本的历史文件时，Config 只执行已登记且无歧义的迁移，完成严格校验后原子重写为当前版本；历史字段和当前字段同时出现、未登记字段、过新版本或低于最低支持版本都会拒绝启动。v2 的 `agent.preferredModel`、`agent.preferredReasoningEffort` 会分别迁到 v3 的 `agent.model`、`agent.modelReasoningEffort`。`semanticCodeIndex` 迁到 `codebase` 时不会保留旧的源码外发授权；`workspaceTrust` 只转换路径仍存在、旧身份与路径一致的 `trusted` 项，并为它生成当前目录身份，其他项不落盘。
 
 用户文档的主要 section 是 `agent`、`gui`、`tui`、`providers`、`mcp`、`skills`、`plugins`、
 `hooks`、`toolSearch`、`execPolicy`、`dirPermissions` 和 `codebase`。Config 保存非敏感引用，不保存
@@ -78,7 +78,9 @@ Config 和 App Server 将 `[gui]`、`[tui]` 作为不透明键值表保存，不
 
 ## 供应商默认模型
 
-保存供应商配置时，若 `agent.preferredModel` 尚未设置，Config 从内置模型目录中选取该供应商
+主 Agent 使用 `[agent.model]` 中的 `provider`、`model` 选择模型；可选的 `[agent] modelReasoningEffort` 指定推理强度，缺失时使用模型目录默认值。审批审查和提交说明分别使用独立的 `approvalReviewModel`、`commitMessageModel`。
+
+保存供应商配置时，若 `agent.model` 尚未设置，Config 从内置模型目录中选取该供应商
 首个 `ProviderApi` 模型，并与供应商配置一起持久化。已有选择保持不变，包括新增其他供应商时。
 没有内置 API 模型的连接不生成模型 ID。保存过程不请求模型列表，也不验证远端调用权限。
 重新保存旧连接可以补齐缺失选择；目录顺序后续变化不会改写已经保存的模型。
@@ -86,7 +88,7 @@ Config 和 App Server 将 `[gui]`、`[tui]` 作为不透明键值表保存，不
 ## 目录配置
 
 `DirConfigStore` 严格读取一个目录中的 `.ash/config.toml`。Host 在文档之外提供 `DirId` 与内容
-revision；文件不能选择自己的身份或 generation。
+revision；文件不能选择自己的身份或 generation。目录文件中的 Agent 字段同样使用 `model` 和 `modelReasoningEffort`；旧字段需要由目录文件所有者改名，读取过程不会修改受版本控制的目录文件。
 
 ```rust
 pub struct DirConfigDocument {
@@ -141,7 +143,7 @@ BuiltInDefaults
 
 | 配置 | 来源 | 关键规则 |
 | --- | --- | --- |
-| Preferred model | User、Dir、Session、launch | 只影响下一次模型安全点 |
+| Agent model | User、Dir、Session、launch | 只影响下一次模型安全点 |
 | Tool Mode | User、StartTurn override | Turn 接受时冻结 |
 | Provider endpoint | User、Host | Dir 不能替换认证或网络边界 |
 | MCP / Skill / Plugin / Hook | User、Dir | Dir 只提供待处理意图；领域管理器决定实际状态 |

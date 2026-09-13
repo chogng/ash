@@ -20,6 +20,8 @@ Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保
 
 根 `Justfile` 是三个产品和根 Rust workspace 的统一入口。根 `package.json` 只提供 pnpm workspace 与 Electron、Browser、Stanza 等 Node 构建入口，不编排 Rust workspace。
 
+Node 工具与 Desktop 单测使用仓库根 `.nvmrc` 固定的 Node 25.2.1。运行 `nvm use` 后再执行 `corepack pnpm install`、构建或测试；Node 22 已不受支持，安装和单测入口会明确拒绝它。
+
 | 命令 | 结果 |
 | --- | --- |
 | `just build` | 构建 Electron Desktop 和根 Cargo workspace |
@@ -38,7 +40,7 @@ Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保
 | `corepack pnpm test:web-integration` | 直接运行带 App Server 的完整 Web 集成测试 |
 | `corepack pnpm test:desktop:smoke` | 直接运行 Electron Desktop smoke tests |
 | `corepack pnpm typecheck:build` | 严格检查整个 `build/` 中的 TypeScript 构建代码 |
-| `corepack pnpm typecheck:scripts` | 严格检查整个 `scripts/` 中的 TypeScript 仓库脚本 |
+| `corepack pnpm --dir ash-ts typecheck:test-unit` | 检查 Desktop 单测入口及其辅助代码 |
 | `corepack pnpm clean` | 删除 `.build/` 和已知旧输出，不删除依赖、目录状态或源码生成物 |
 
 Desktop 的 `code` 与 `academic` 仍通过同一个 `build:desktop` 入口构建；`ASH_PRODUCT` 只选择矩阵项，不创建另一套命令。
@@ -103,7 +105,11 @@ Desktop 的 `code` 与 `academic` 仍通过同一个 `build:desktop` 入口构�
 
 共享发布包先收集未提供预编译文件的第一方程序，再用一次 Cargo 调用构建并读取其报告的可执行文件路径。App 发布直接使用打包参数和 `signing.py sign / verify / record`；签名凭据由环境变量提供。
 
-`scripts/` 根目录只保存仓库级工具和四个代码 owner 依赖的脚本环境：`just-shell.py` 提供 Just 的跨平台 shell，`cargo.py` 为整个 Cargo workspace 准备锁定的构建输入，`format.py` 统一已有格式化器，`test-python.py` 按 `ash-code`、`build`、`release` 分别运行 Python 测试并在不指定范围时聚合执行。其余操作按代码 owner 分开：`scripts/ash-ts/` 保存 Electron Desktop 真正的 Node、Electron 和 Playwright 测试运行器与 loader，根 `package.json` 直接调用 `ash-ts` 中的公开测试命令，不增加只转发一层的脚本；`scripts/ash-code/` 保存 Code TUI 的源码运行和完整开发包运行入口；`scripts/ash-rs/` 保存共享 Rust 后端的开发环境操作；`scripts/app/` 只保存 Rust GUI 的独立仓库操作。`app` 当前没有独立脚本，因此不创建空占位文件。`scripts/ash-code/run.py` 用一次 Cargo 调用构建 Code TUI、本地 daemon 和当前平台沙箱程序，再把这些可执行文件放入按内容区分的 `.build/ash-development/` 目录后启动；这个小目录避免 Windows 上仍在运行的程序阻塞下一次构建，不是产品包。技能、扩展和产品服务直接读取源码。`scripts/ash-code/run_package.py` 只服务于显式的完整开发包运行。只有形成真实、可运行的操作契约时才新增入口；当前没有独立的远端 SSH 端到端测试，因此不提供空入口。
+`scripts/` 根目录保存跨产品仓库工具：`just-shell.py` 提供 Just 的跨平台 shell，`cargo.py` 为整个 Cargo workspace 准备锁定的构建输入，`format.py` 统一已有格式化器，`test-python.py` 按 `ash-code`、`build`、`release` 分别运行 Python 测试并在不指定范围时聚合执行。
+
+Desktop 的 Node、Browser 和 Playwright 测试入口与 loader 归 `ash-ts/test/`，根 `package.json` 直接调用 `ash-ts` 的公开测试命令。`scripts/ash-code/` 保存 Code TUI 的源码运行和完整开发包运行入口；`scripts/ash-rs/` 保存共享 Rust 后端的开发环境操作。`app` 当前没有独立脚本，因此不创建空占位文件。
+
+`scripts/ash-code/run.py` 用一次 Cargo 调用构建 Code TUI、本地 daemon 和当前平台沙箱程序，再把这些可执行文件放入按内容区分的 `.build/ash-development/` 目录后启动；这个小目录避免 Windows 上仍在运行的程序阻塞下一次构建，不是产品包。技能、扩展和产品服务直接读取源码。`scripts/ash-code/run_package.py` 只服务于显式的完整开发包运行。只有形成真实、可运行的操作契约时才新增入口；当前没有独立的远端 SSH 端到端测试，因此不提供空入口。
 
 `scripts/ash-rs/setup-windows.ps1` 是 Windows Rust 开发环境的独立初始化入口。它可以在 `just` 可用前直接运行，因此不依赖根 `Justfile`；它安装源码开发所需的 `rg`，产品包仍从锁文件组装自身的 `rg.exe`。
 
@@ -115,7 +121,7 @@ Desktop 的 `code` 与 `academic` 仍通过同一个 `build:desktop` 入口构�
 
 同理，`.bazelrc`、根 `BUILD.bazel`、`.cargo/config.toml` 和 `tsconfig.base.json` 是对应工具从仓库根发现的协议文件，不能为了让 `build/` 看起来更大而移动。文档站框架配置、内容生成、打包和验收全部归独立的 `ash-docs` 仓库。
 
-Node 构建工具和测试编排使用可擦除语法范围内的 TypeScript（`.ts`），由当前 Node.js 直接执行，不生成中间 JavaScript。跨语言仓库命令、归档和下载流程可以使用 Python；平台发布工具要求 Shell 时保留 Shell。语言由操作依赖决定，不由所在目录强制统一。`build/tsconfig.json` 和 `scripts/tsconfig.json` 分别严格检查两个目录中的 TypeScript；`scripts/pyproject.toml` 和 `scripts/uv.lock` 锁定 Python 仓库工具，`just install` 通过 uv 准备它们。
+Node 构建工具和测试编排使用可擦除语法范围内的 TypeScript（`.ts`），由当前 Node.js 直接执行，不生成中间 JavaScript。跨语言仓库命令、归档和下载流程可以使用 Python；平台发布工具要求 Shell 时保留 Shell。语言由操作依赖决定，不由所在目录强制统一。`build/tsconfig.json` 检查构建工具，`ash-ts/test/unit/tsconfig.json` 检查 Desktop 单测入口；`scripts/pyproject.toml` 和 `scripts/uv.lock` 锁定 Python 仓库工具，`just install` 通过 uv 准备它们。
 
 平台专属构建流程只有在出现实际实现时才新增 `build/win32/` 或 `build/linux/`，不创建空分类。`ash-ts/` 只保存产品源码、测试内容和产品清单；构建、资源生成、下载与发布逻辑由根 `build/` 拥有，跨产品测试和维护编排由根 `scripts/` 拥有。Renderer、Workbench 和平台服务不得拥有构建工具配置或仓库操作入口。
 

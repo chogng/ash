@@ -143,8 +143,7 @@ fn execute_connection<T: JsonRpcTransport>(
     }
 
     if request.operation == super::provider::Operation::Save
-        && (current.providers.get(&provider) != Some(&request.config)
-            || current.preferred_model.is_none())
+        && (current.providers.get(&provider) != Some(&request.config) || current.model.is_none())
     {
         client
             .configure_provider(
@@ -201,7 +200,7 @@ where
 {
     let (provider, api_key) = edit.into_parts();
     let current = client.read_config()?;
-    if !current.providers.contains_key(&provider) || current.preferred_model.is_none() {
+    if !current.providers.contains_key(&provider) || current.model.is_none() {
         let config = current
             .providers
             .get(&provider)
@@ -245,8 +244,8 @@ where
         features: Default::default(),
         command_id: new_command_id("tui"),
         expected_revision: edit.server_config.revision,
-        preferred_model: Patch::Missing,
-        preferred_reasoning_effort: Patch::Missing,
+        model: Patch::Missing,
+        model_reasoning_effort: Patch::Missing,
         approval_review_model: Patch::Missing,
         commit_message_model: Patch::Missing,
         tool_mode: Patch::Missing,

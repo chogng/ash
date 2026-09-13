@@ -212,7 +212,7 @@ export class ChatPaneModel extends Disposable {
 			this.sessionService.setUntitledSessionModel(this.selection.session.untitledSessionId, model);
 			return;
 		}
-		await this.sessionService.setPreferredModel(model);
+		await this.sessionService.setModel(model);
 	}
 
 	async send(text: string, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[]): Promise<void> {

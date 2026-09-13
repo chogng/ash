@@ -92,6 +92,9 @@ export class BrowserWorkspaceEditService extends Disposable implements IWorkspac
 				if (entry.version !== undefined && model.reference.model.version !== entry.version) throw new Error(`Workspace edit for '${entry.resource.toString()}' is stale`);
 				if (entry.expectedText !== undefined && normalizeTextLineEndings(entry.expectedText) !== state.text) throw new Error(`Workspace edit content for '${entry.resource.toString()}' is stale`);
 				using snapshot = new TextModel(state.text);
+				for (const edit of entry.edits) {
+					if (!snapshot.isValidRange(edit.range)) throw new Error("Workspace edit range is outside the document: " + entry.resource.toString());
+				}
 				snapshot.applyEdits(entry.edits);
 				const before = state.text;
 				const after = snapshot.getText();

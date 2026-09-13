@@ -19,7 +19,7 @@ Colors: 183 · Sizes: 29
 | `focusBorder` | platform.theme | `#007fd4` | `#0078d4` | `--ash-focus-border` |
 | `border` | platform.theme | `#2b2b2b` | `#e5e5e5` | `--ash-border` |
 | `widget.border` | platform.theme | `#454545` | `#d4d4d4` | `--ash-widget-border` |
-| `widget.shadow` | platform.theme | `rgba(0, 0, 0, 0.4)` | `rgba(0, 0, 0, 0.16)` | `--ash-widget-shadow` |
+| `widget.shadow` | platform.theme | `#00000066` | `#00000029` | `--ash-widget-shadow` |
 | `chat.tabBackground` | chat.presentation | `#eeeeee` | `#eeeeee` | `--ash-chat-tab-background` |
 | `collaboration.selection0Background` | collaboration.presentation | `#3584e4` | `#3584e4` | `--ash-collaboration-selection0-background` |
 | `collaboration.selection1Background` | collaboration.presentation | `#9141ac` | `#9141ac` | `--ash-collaboration-selection1-background` |
@@ -33,8 +33,8 @@ Colors: 183 · Sizes: 29
 | `selection.background` | platform.theme.components | `#264f78` | `#add6ff` | `--ash-selection-background` |
 | `hover.foreground` | platform.theme.components | `#f5f5f7` | `#f5f5f7` | `--ash-hover-foreground` |
 | `hover.background` | platform.theme.components | `#2d2e33` | `#2d2e33` | `--ash-hover-background` |
-| `hover.border` | platform.theme.components | `rgba(255, 255, 255, 0.09)` | `rgba(255, 255, 255, 0.09)` | `--ash-hover-border` |
-| `hover.shadow` | platform.theme.components | `rgba(0, 0, 0, 0.19)` | `rgba(0, 0, 0, 0.19)` | `--ash-hover-shadow` |
+| `hover.border` | platform.theme.components | `#ffffff18` | `#ffffff18` | `--ash-hover-border` |
+| `hover.shadow` | platform.theme.components | `#00000030` | `#00000030` | `--ash-hover-shadow` |
 | `list.hoverBackground` | platform.theme.components | `#2a2d2e` | `#e8e8e8` | `--ash-list-hover-background` |
 | `list.activeSelectionForeground` | platform.theme.components | `#ffffff` | `#ffffff` | `--ash-list-active-selection-foreground` |
 | `list.activeSelectionBackground` | platform.theme.components | `#04395e` | `#0060c0` | `--ash-list-active-selection-background` |
@@ -57,24 +57,24 @@ Colors: 183 · Sizes: 29
 | `button.primaryForeground` | platform.theme.components | `#ffffff` | `#ffffff` | `--ash-button-primary-foreground` |
 | `button.primaryBackground` | platform.theme.components | `#0e639c` | `#0078d4` | `--ash-button-primary-background` |
 | `button.primaryHoverBackground` | platform.theme.components | `#1177bb` | `#006cbe` | `--ash-button-primary-hover-background` |
-| `toolbar.hoverBackground` | platform.theme.components | `rgba(90, 93, 94, 0.31)` | `rgba(90, 93, 94, 0.16)` | `--ash-toolbar-hover-background` |
+| `toolbar.hoverBackground` | platform.theme.components | `#5a5d5e50` | `#5a5d5e29` | `--ash-toolbar-hover-background` |
 | `keybindingLabel.foreground` | platform.theme.components | `#cccccc` | `#555555` | `--ash-keybinding-label-foreground` |
-| `keybindingLabel.background` | platform.theme.components | `rgba(128, 128, 128, 0.17)` | `rgba(221, 221, 221, 0.4)` | `--ash-keybinding-label-background` |
-| `keybindingLabel.border` | platform.theme.components | `rgba(128, 128, 128, 0.2)` | `rgba(204, 204, 204, 0.4)` | `--ash-keybinding-label-border` |
+| `keybindingLabel.background` | platform.theme.components | `#8080802b` | `#dddddd66` | `--ash-keybinding-label-background` |
+| `keybindingLabel.border` | platform.theme.components | `#80808033` | `#cccccc66` | `--ash-keybinding-label-border` |
 | `keybindingLabel.bottomBorder` | platform.theme.components | `#6b6b6b` | `#b0b0b0` | `--ash-keybinding-label-bottom-border` |
 | `scrollbar.shadow` | platform.theme.components | `#000000` | `#dddddd` | `--ash-scrollbar-shadow` |
-| `scrollbar.sliderBackground` | platform.theme.components | `rgba(121, 121, 121, 0.4)` | `rgba(100, 100, 100, 0.2)` | `--ash-scrollbar-slider-background` |
-| `scrollbar.sliderHoverBackground` | platform.theme.components | `rgba(100, 100, 100, 0.7)` | `rgba(100, 100, 100, 0.35)` | `--ash-scrollbar-slider-hover-background` |
-| `scrollbar.sliderActiveBackground` | platform.theme.components | `rgba(191, 191, 191, 0.4)` | `rgba(0, 0, 0, 0.2)` | `--ash-scrollbar-slider-active-background` |
+| `scrollbar.sliderBackground` | platform.theme.components | `#79797966` | `#64646433` | `--ash-scrollbar-slider-background` |
+| `scrollbar.sliderHoverBackground` | platform.theme.components | `#646464b3` | `#64646459` | `--ash-scrollbar-slider-hover-background` |
+| `scrollbar.sliderActiveBackground` | platform.theme.components | `#bfbfbf66` | `#00000033` | `--ash-scrollbar-slider-active-background` |
 | `dialog.background` | platform.theme.components | `#252526` | `#ffffff` | `--ash-dialog-background` |
 | `dialog.border` | platform.theme.components | `#454545` | `#d4d4d4` | `--ash-dialog-border` |
-| `dialog.backdropBackground` | platform.theme.components | `rgba(0, 0, 0, 0.45)` | `rgba(0, 0, 0, 0.35)` | `--ash-dialog-backdrop-background` |
-| `dialog.shadow` | platform.theme.components | `rgba(0, 0, 0, 0.45)` | `rgba(0, 0, 0, 0.24)` | `--ash-dialog-shadow` |
+| `dialog.backdropBackground` | platform.theme.components | `#00000073` | `#00000059` | `--ash-dialog-backdrop-background` |
+| `dialog.shadow` | platform.theme.components | `#00000073` | `#0000003d` | `--ash-dialog-shadow` |
 | `quickInput.background` | platform.theme.components | `#252526` | `#f8f8f8` | `--ash-quick-input-background` |
-| `quickInput.backdropBackground` | platform.theme.components | `rgba(0, 0, 0, 0.15)` | `rgba(0, 0, 0, 0.12)` | `--ash-quick-input-backdrop-background` |
+| `quickInput.backdropBackground` | platform.theme.components | `#00000026` | `#0000001f` | `--ash-quick-input-backdrop-background` |
 | `textLink.activeForeground` | platform.theme.components | `#4e94ce` | `#006ab1` | `--ash-text-link-active-foreground` |
 | `text.codeBlockBackground` | platform.theme.components | `#0f0f0f` | `#f2f2f2` | `--ash-text-code-block-background` |
-| `search.matchBackground` | platform.theme.components | `rgba(249, 199, 79, 0.55)` | `rgba(249, 199, 79, 0.55)` | `--ash-search-match-background` |
+| `search.matchBackground` | platform.theme.components | `#f9c74f8c` | `#f9c74f8c` | `--ash-search-match-background` |
 | `sectionHeader.foreground` | workbench.shell | `#b8b8b8` | `#616161` | `--ash-section-header-foreground` |
 | `workbench.background` | workbench.shell | `#1e1e1e` | `#ffffff` | `--ash-workbench-background` |
 | `editor.background` | workbench.shell | `#1e1e1e` | `#ffffff` | `--ash-editor-background` |
@@ -92,13 +92,13 @@ Colors: 183 · Sizes: 29
 | `statusBar.foreground` | workbench.shell | `#1f1f1f` | `#1f1f1f` | `--ash-status-bar-foreground` |
 | `statusBar.background` | workbench.shell | `#ffffff` | `#ffffff` | `--ash-status-bar-background` |
 | `statusBarItem.hoverForeground` | workbench.shell | `#1f1f1f` | `#1f1f1f` | `--ash-status-bar-item-hover-foreground` |
-| `statusBarItem.hoverBackground` | workbench.shell | `rgba(90, 93, 94, 0.31)` | `rgba(90, 93, 94, 0.16)` | `--ash-status-bar-item-hover-background` |
-| `statusBarItem.compactHoverBackground` | workbench.shell | `rgba(90, 93, 94, 0.31)` | `rgba(90, 93, 94, 0.16)` | `--ash-status-bar-item-compact-hover-background` |
+| `statusBarItem.hoverBackground` | workbench.shell | `#5a5d5e50` | `#5a5d5e29` | `--ash-status-bar-item-hover-background` |
+| `statusBarItem.compactHoverBackground` | workbench.shell | `#5a5d5e50` | `#5a5d5e29` | `--ash-status-bar-item-compact-hover-background` |
 | `statusBarItem.activeBackground` | workbench.shell | `#37373d` | `#dcdcdc` | `--ash-status-bar-item-active-background` |
 | `statusBarItem.remoteForeground` | workbench.shell | `#ffffff` | `#ffffff` | `--ash-status-bar-item-remote-foreground` |
 | `statusBarItem.remoteBackground` | workbench.shell | `#328eb9` | `#328eb9` | `--ash-status-bar-item-remote-background` |
 | `statusBarItem.remoteHoverForeground` | workbench.shell | `#1f1f1f` | `#1f1f1f` | `--ash-status-bar-item-remote-hover-foreground` |
-| `statusBarItem.remoteHoverBackground` | workbench.shell | `rgba(90, 93, 94, 0.31)` | `rgba(90, 93, 94, 0.16)` | `--ash-status-bar-item-remote-hover-background` |
+| `statusBarItem.remoteHoverBackground` | workbench.shell | `#5a5d5e50` | `#5a5d5e29` | `--ash-status-bar-item-remote-hover-background` |
 | `sash.hoverBackground` | workbench.shell | `#007acc` | `#007acc` | `--ash-sash-hover-background` |
 | `editor.token.commentForeground` | editor.presentation | `#6a9955` | `#008000` | `--ash-editor-token-comment-foreground` |
 | `editor.token.keywordForeground` | editor.presentation | `#c586c0` | `#af00db` | `--ash-editor-token-keyword-foreground` |
@@ -120,17 +120,17 @@ Colors: 183 · Sizes: 29
 | `editor.border` | editor.presentation | `#2b2b2b` | `#e5e5e5` | `--ash-editor-border` |
 | `editor.widgetBackground` | editor.presentation | `#252526` | `#f3f3f3` | `--ash-editor-widget-background` |
 | `editor.widgetBorder` | editor.presentation | `#454545` | `#d4d4d4` | `--ash-editor-widget-border` |
-| `editor.widgetShadow` | editor.presentation | `rgba(0, 0, 0, 0.4)` | `rgba(0, 0, 0, 0.16)` | `--ash-editor-widget-shadow` |
+| `editor.widgetShadow` | editor.presentation | `#00000066` | `#00000029` | `--ash-editor-widget-shadow` |
 | `editor.inputBackground` | editor.presentation | `#313131` | `#ffffff` | `--ash-editor-input-background` |
 | `editor.listHoverBackground` | editor.presentation | `#2a2d2e` | `#e8e8e8` | `--ash-editor-list-hover-background` |
 | `editor.descriptionForeground` | editor.presentation | `#b8b8b8` | `#616161` | `--ash-editor-description-foreground` |
 | `editor.hoverForeground` | editor.presentation | `#f5f5f7` | `#f5f5f7` | `--ash-editor-hover-foreground` |
 | `editor.hoverBackground` | editor.presentation | `#2d2e33` | `#2d2e33` | `--ash-editor-hover-background` |
-| `editor.hoverBorder` | editor.presentation | `rgba(255, 255, 255, 0.09)` | `rgba(255, 255, 255, 0.09)` | `--ash-editor-hover-border` |
+| `editor.hoverBorder` | editor.presentation | `#ffffff18` | `#ffffff18` | `--ash-editor-hover-border` |
 | `editor.inlayHintForeground` | editor.presentation | `#8f8f8f` | `#767676` | `--ash-editor-inlay-hint-foreground` |
 | `editor.inlineCompletionForeground` | editor.presentation | `#8f8f8f` | `#767676` | `--ash-editor-inline-completion-foreground` |
 | `editor.compositionBorder` | editor.presentation | `#a0a0a0` | `#a0a0a0` | `--ash-editor-composition-border` |
-| `editor.foldBackground` | editor.presentation | `rgba(38, 79, 120, 0.3)` | `rgba(173, 214, 255, 0.3)` | `--ash-editor-fold-background` |
+| `editor.foldBackground` | editor.presentation | `#264f784d` | `#add6ff4d` | `--ash-editor-fold-background` |
 | `editor.foldPlaceholderForeground` | editor.presentation | `#808080` | `#808080` | `--ash-editor-fold-placeholder-foreground` |
 | `editorGutter.foldingControlForeground` | editor.presentation | `#cccccc` | `#3b3b3b` | `--ash-editor-gutter-folding-control-foreground` |
 | `editorCursor.foreground` | editor.presentation | `#aeafad` | `#000000` | `--ash-editor-cursor-foreground` |
@@ -139,10 +139,10 @@ Colors: 183 · Sizes: 29
 | `editorMultiCursor.primary.background` | editor.presentation | `#1e1e1e` | `#ffffff` | `--ash-editor-multi-cursor-primary-background` |
 | `editorMultiCursor.secondary.foreground` | editor.presentation | `#aeafad` | `#000000` | `--ash-editor-multi-cursor-secondary-foreground` |
 | `editorMultiCursor.secondary.background` | editor.presentation | `#1e1e1e` | `#ffffff` | `--ash-editor-multi-cursor-secondary-background` |
-| `editorOverviewRuler.border` | editor.presentation | `rgba(127, 127, 127, 0.3)` | `rgba(127, 127, 127, 0.3)` | `--ash-editor-overview-ruler-border` |
-| `editorOverviewRuler.background` | editor.presentation | `rgba(30, 30, 30, 0)` | `rgba(255, 255, 255, 0)` | `--ash-editor-overview-ruler-background` |
-| `editor.lineHighlightBackground` | editor.presentation | `rgba(0, 0, 0, 0)` | `rgba(0, 0, 0, 0)` | `--ash-editor-line-highlight-background` |
-| `editor.inactiveLineHighlightBackground` | editor.presentation | `rgba(0, 0, 0, 0)` | `rgba(0, 0, 0, 0)` | `--ash-editor-inactive-line-highlight-background` |
+| `editorOverviewRuler.border` | editor.presentation | `#7f7f7f4d` | `#7f7f7f4d` | `--ash-editor-overview-ruler-border` |
+| `editorOverviewRuler.background` | editor.presentation | `#1e1e1e00` | `#ffffff00` | `--ash-editor-overview-ruler-background` |
+| `editor.lineHighlightBackground` | editor.presentation | `#00000000` | `#00000000` | `--ash-editor-line-highlight-background` |
+| `editor.inactiveLineHighlightBackground` | editor.presentation | `#00000000` | `#00000000` | `--ash-editor-inactive-line-highlight-background` |
 | `editor.lineHighlightBorder` | editor.presentation | `#282828` | `#eeeeee` | `--ash-editor-line-highlight-border` |
 | `editorRuler.foreground` | editor.presentation | `#5a5a5a` | `#d3d3d3` | `--ash-editor-ruler-foreground` |
 | `diffEditor.removedLineBackground` | editor.presentation | `#4b1818` | `#ffebe9` | `--ash-diff-editor-removed-line-background` |
@@ -170,8 +170,8 @@ Colors: 183 · Sizes: 29
 | `settings.headerForeground` | workbench.preferences | `#cccccc` | `#3b3b3b` | `--ash-settings-header-foreground` |
 | `settings.headerBorder` | workbench.preferences | `#454545` | `#d4d4d4` | `--ash-settings-header-border` |
 | `settings.modifiedItemIndicator` | workbench.preferences | `#0c7d9d` | `#2f7ead` | `--ash-settings-modified-item-indicator` |
-| `settings.focusedRowBackground` | workbench.preferences | `rgba(42, 45, 46, 0.6)` | `rgba(232, 232, 232, 0.6)` | `--ash-settings-focused-row-background` |
-| `settings.rowHoverBackground` | workbench.preferences | `rgba(42, 45, 46, 0.3)` | `rgba(232, 232, 232, 0.3)` | `--ash-settings-row-hover-background` |
+| `settings.focusedRowBackground` | workbench.preferences | `#2a2d2e99` | `#e8e8e899` | `--ash-settings-focused-row-background` |
+| `settings.rowHoverBackground` | workbench.preferences | `#2a2d2e4d` | `#e8e8e84d` | `--ash-settings-row-hover-background` |
 | `terminal.background` | terminal.presentation | `#1e1e1e` | `#ffffff` | `--ash-terminal-background` |
 | `terminal.foreground` | terminal.presentation | `#d4d4d4` | `#333333` | `--ash-terminal-foreground` |
 | `terminal.cursorForeground` | terminal.presentation | `#cccccc` | `#3b3b3b` | `--ash-terminal-cursor-foreground` |

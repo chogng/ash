@@ -1,12 +1,12 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { resolve } from 'node:path';
 
-const desktopDirectory = resolve(import.meta.dirname, '../../../ash-ts');
+const desktopDirectory = resolve(import.meta.dirname, '../../..');
 const serverUrl = 'http://127.0.0.1:5185/textModel.html';
 const server = spawn(process.execPath, [
 	'node_modules/vite/bin/vite.js',
 	'--config',
-	'test/editor/browser/vite.config.ts',
+	'test/integration/browser/vite.config.ts',
 ], {
 	cwd: desktopDirectory,
 	stdio: 'inherit',
@@ -19,7 +19,7 @@ try {
 		'node_modules/@playwright/test/cli.js',
 		'test',
 		'--config',
-		'test/editor/browser/playwright.config.ts',
+		'test/integration/browser/playwright.config.ts',
 		...process.argv.slice(2),
 	], {
 		...process.env,

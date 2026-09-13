@@ -109,8 +109,20 @@ export class ModelService extends Disposable implements IModelService {
 		const { textBuffer, disposable } = createModelBuffer(value, concreteModel.getOptions().defaultEOL);
 		try {
 			if (concreteModel.equalsTextBuffer(textBuffer)) return;
-			concreteModel.pushEOL(textBuffer.getEOL() === '\r\n' ? EndOfLineSequence.CRLF : EndOfLineSequence.LF);
-			concreteModel.applyOperations(ModelService._computeEdits(concreteModel, textBuffer), { editSource: reason });
+			const edits = ModelService._computeEdits(concreteModel, textBuffer);
+			if (edits.length > 0) {
+				concreteModel.applyOperations(edits, { editSource: reason });
+			}
+			const targetEOL = textBuffer.getEOL() === '\r\n' ? EndOfLineSequence.CRLF : EndOfLineSequence.LF;
+			if (concreteModel.getEndOfLineSequence() !== targetEOL) {
+				if (edits.length > 0) {
+					concreteModel.popStackElement();
+				} else {
+					concreteModel.pushStackElement();
+				}
+				concreteModel.pushEOL(targetEOL, reason);
+				concreteModel.pushStackElement();
+			}
 		} finally {
 			disposable.dispose();
 		}

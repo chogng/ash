@@ -26,7 +26,7 @@ export interface ISessionsManagementService {
 	startNewSession(title?: string): Promise<IActiveSessionThread>;
 	stopSession(sessionId: SessionId): Promise<void>;
 	archiveSession(sessionId: SessionId): Promise<void>;
-	setPreferredModel(model: ModelRef): Promise<void>;
+	setModel(model: ModelRef): Promise<void>;
 }
 
 export const ISessionsManagementService = createServiceIdentifier<ISessionsManagementService>("sessionsManagementService");

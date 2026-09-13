@@ -4,12 +4,13 @@ import { JSDOM } from 'jsdom';
 import { Position } from '../../../../common/core/position.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { TextModel } from '../../../../common/model/textModel.js';
+import { EditorExtensionsRegistry } from '../../../../browser/editorExtensions.js';
 
 installDom(new JSDOM('<!doctype html><body></body>'));
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 await import('../../browser/linesOperations.js');
 
-test('linesOperations owns copy, move, delete, and insert shortcut responsibilities', () => {
+test('line actions are registered while the host owns their shortcuts', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
@@ -17,14 +18,25 @@ test('linesOperations owns copy, move, delete, and insert shortcut responsibilit
 	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
 	editor.setSelection(Selection.fromPositions(new Position(2, 2)));
 
-	editor.view.element.dispatchEvent(key(dom.window, 'ArrowDown', { altKey: true, shiftKey: true }));
-	assert.equal(model.getText(), 'zero\none\none\ntwo');
-	editor.view.element.dispatchEvent(key(dom.window, 'ArrowDown', { altKey: true }));
-	assert.equal(model.getText(), 'zero\none\ntwo\none');
-	editor.view.element.dispatchEvent(key(dom.window, 'k', { ctrlKey: true, shiftKey: true }));
-	assert.equal(model.getText(), 'zero\none\ntwo');
-	editor.view.element.dispatchEvent(key(dom.window, 'Enter', { ctrlKey: true }));
-	assert.equal(model.getText(), 'zero\none\ntwo\n');
+	const actionIds = new Set(Array.from(EditorExtensionsRegistry.getEditorActions(), action => action.id));
+	for (const id of [
+		'editor.action.copyLinesDownAction',
+		'editor.action.moveLinesDownAction',
+		'editor.action.deleteLines',
+		'editor.action.insertLineAfter',
+	]) {
+		assert.ok(actionIds.has(id), id + ' should be registered');
+	}
+	for (const event of [
+		key(dom.window, 'ArrowDown', { altKey: true, shiftKey: true }),
+		key(dom.window, 'ArrowDown', { altKey: true }),
+		key(dom.window, 'k', { ctrlKey: true, shiftKey: true }),
+		key(dom.window, 'Enter', { ctrlKey: true }),
+	]) {
+		editor.view.element.dispatchEvent(event);
+		assert.equal(event.defaultPrevented, false);
+		assert.equal(model.getText(), 'zero\none\ntwo');
+	}
 	dom.window.close();
 });
 

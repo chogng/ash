@@ -1,6 +1,6 @@
 ---
 description: Ash editor ownership, projection, input, layout, and rendering rules.
-applyTo: "**/src/ash/editor/**/*.ts,**/test/editor/**"
+applyTo: "**/src/ash/editor/**/*.ts,**/test/integration/browser/**"
 ---
 
 # Editor Implementation Guidelines

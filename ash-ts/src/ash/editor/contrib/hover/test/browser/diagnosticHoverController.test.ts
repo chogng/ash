@@ -47,7 +47,7 @@ test("Diagnostic hover presents current gutter-marker messages and hides on poin
 	viewport.layout({ width: 160, height: 20 });
 	const marker = dom.window.document.createElement('span');
 	marker.className = 'stanza-editor-diagnostic-marker';
-	marker.dataset.diagnosticMessage = 'Use let instead';
+	marker.dataset.diagnosticHoverText = 'Use let instead';
 	viewport.domNode.domNode.append(marker);
 	marker.dispatchEvent(new dom.window.Event("pointerover", { bubbles: true }));
 	const hover = dom.window.document.body.querySelector<HTMLElement>(".stanza-editor-diagnostic-hover")!;

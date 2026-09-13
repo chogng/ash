@@ -37,8 +37,8 @@ pub(crate) fn apply_command(
                 };
             }
             document.providers.insert(provider.clone(), config);
-            if document.agent.preferred_model.is_none() {
-                document.agent.preferred_model = STATIC_MODEL_CATALOG
+            if document.agent.model.is_none() {
+                document.agent.model = STATIC_MODEL_CATALOG
                     .iter()
                     .find(|model| {
                         model.provider_id == provider.as_str()
@@ -50,12 +50,12 @@ pub(crate) fn apply_command(
         UserConfigCommand::RemoveProvider { provider } => {
             if document
                 .agent
-                .preferred_model
+                .model
                 .as_ref()
                 .is_some_and(|model| model.provider == *provider)
             {
                 return Err(ConfigError(format!(
-                    "cannot remove provider '{}' while it is the preferred model provider",
+                    "cannot remove provider '{}' while it is the model provider",
                     provider
                 )));
             }
@@ -261,15 +261,15 @@ fn apply_preferences(document: &mut UserConfigDocument, update: &PreferencesUpda
         Patch::Null => document.features.clear(),
         Patch::Value(values) => document.features = values.clone(),
     }
-    match &update.preferred_model {
+    match &update.model {
         Patch::Missing => {}
-        Patch::Null => document.agent.preferred_model = None,
-        Patch::Value(model) => document.agent.preferred_model = Some(model.clone()),
+        Patch::Null => document.agent.model = None,
+        Patch::Value(model) => document.agent.model = Some(model.clone()),
     }
-    match &update.preferred_reasoning_effort {
+    match &update.model_reasoning_effort {
         Patch::Missing => {}
-        Patch::Null => document.agent.preferred_reasoning_effort = None,
-        Patch::Value(effort) => document.agent.preferred_reasoning_effort = Some(*effort),
+        Patch::Null => document.agent.model_reasoning_effort = None,
+        Patch::Value(effort) => document.agent.model_reasoning_effort = Some(*effort),
     }
     match &update.approval_review_model {
         Patch::Missing => {}

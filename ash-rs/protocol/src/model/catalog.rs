@@ -232,7 +232,7 @@ pub struct ModelInfo {
     pub auto_compact_token_limit: Option<u32>,
     pub capabilities: ModelCapabilities,
     pub supported_reasoning_efforts: Vec<ReasoningEffort>,
-    pub default_reasoning_effort: Option<ReasoningEffort>,
+    pub model_reasoning_effort: Option<ReasoningEffort>,
     pub default_personality: Option<Personality>,
 }
 
@@ -246,7 +246,7 @@ impl ModelInfo {
             auto_compact_token_limit: None,
             capabilities: ModelCapabilities::UNKNOWN,
             supported_reasoning_efforts: Vec::new(),
-            default_reasoning_effort: None,
+            model_reasoning_effort: None,
             default_personality: None,
         }
     }
@@ -260,7 +260,7 @@ pub struct ModelPreset {
     pub id: String,
     pub name: String,
     pub model: ModelRef,
-    pub reasoning_effort: Option<ReasoningEffort>,
+    pub model_reasoning_effort: Option<ReasoningEffort>,
     pub personality: Option<Personality>,
 }
 

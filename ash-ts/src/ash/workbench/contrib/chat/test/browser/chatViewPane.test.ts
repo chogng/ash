@@ -95,7 +95,7 @@ class PendingSessionService implements ISessionsManagementService {
 	startNewSession(_title?: string): Promise<IActiveSessionThread> { return Promise.reject(new Error("Backend is unavailable")); }
 	stopSession(_sessionId: SessionId): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
 	archiveSession(_sessionId: SessionId): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
-	setPreferredModel(_model: ModelRef): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
+	setModel(_model: ModelRef): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
 	setNextApprovalMode(_sessionId: SessionId, _approvalMode: ApprovalMode): Promise<void> { return Promise.reject(new Error("Backend is unavailable")); }
 }
 

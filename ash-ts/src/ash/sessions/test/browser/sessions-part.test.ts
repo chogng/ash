@@ -77,7 +77,7 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
 		async stopSession() {
 			throw new Error("Session stopping is unavailable");
 		},
-		async setPreferredModel() {
+		async setModel() {
 			throw new Error("Model selection is unavailable");
 		},
 		async archiveSession() {

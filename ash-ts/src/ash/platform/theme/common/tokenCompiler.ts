@@ -1,4 +1,5 @@
 import "./colorTheme.js";
+import { Color } from "../../../base/common/color.js";
 import { Colors, colorCssVariable, type ColorDefaults, type ColorValue } from "./colorRegistry.js";
 import { Sizes, sizeCssVariable, sizeToCss } from "./sizeRegistry.js";
 import { ColorScheme } from "./theme.js";
@@ -15,7 +16,7 @@ export interface DesignTokenArtifacts {
 /** Validates every registered token graph and emits deterministic build artifacts. */
 export function compileDesignTokenArtifacts(): DesignTokenArtifacts {
 	const schemes = [ColorScheme.Dark, ColorScheme.Light, ColorScheme.HighContrastDark, ColorScheme.HighContrastLight];
-	const resolved = new Map(schemes.map((scheme) => [scheme, new Map(Colors.resolve(scheme).map(({ id, value }) => [id, value?.toString() ?? null]))]));
+	const resolved = new Map(schemes.map((scheme) => [scheme, new Map(Colors.resolve(scheme).map(({ id, value }) => [id, value ? Color.Format.CSS.formatHexA(value, true) : null]))]));
 	const colors = Colors.getColors().map(({ id, defaults, description, owner, needsTransparency = false, deprecated }) => ({
 		id,
 		kind: "color",
@@ -227,7 +228,7 @@ function defaultsForScheme(defaults: ColorDefaults, scheme: ColorScheme): ColorV
 
 function serializeColorValue(value: ColorValue): unknown {
 	if (value === null || typeof value === "string") return value;
-	if (!("op" in value)) return value.toString();
+	if (!("op" in value)) return Color.Format.CSS.formatHexA(value, true);
 	switch (value.op) {
 		case "transparent":
 		case "lighten":

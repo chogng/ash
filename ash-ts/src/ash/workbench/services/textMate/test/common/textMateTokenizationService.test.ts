@@ -60,12 +60,12 @@ test("TextMate tokenization uses real Oniguruma scopes across lines", async () =
 	const result = await tokenization.tokenize("demo", model.createVersionedSnapshot(), new AbortController().signal);
 
 	assert.deepEqual(project(result), [
-		[0, 0, 2, "keyword"],
-		[0, 3, 8, "variable"],
-		[0, 9, 10, "operator"],
-		[0, 11, 17, "string"],
-		[1, 0, 6, "string"],
-		[2, 0, 2, "number"],
+		[1, 1, 3, "keyword"],
+		[1, 4, 9, "variable"],
+		[1, 10, 11, "operator"],
+		[1, 12, 18, "string"],
+		[2, 1, 7, "string"],
+		[3, 1, 3, "number"],
 	]);
 	assert.deepEqual(updates, [{
 		modelVersion: 1,
@@ -133,9 +133,9 @@ test("TextMate runtime loads registered injection grammars", async () => {
 	const result = await tokenization.tokenize("demo", model.createVersionedSnapshot(), new AbortController().signal);
 
 	assert.deepEqual(project(result), [
-		[0, 0, 3, "comment"],
-		[0, 3, 7, "keyword"],
-		[0, 7, 10, "comment"],
+		[1, 1, 4, "comment"],
+		[1, 4, 8, "keyword"],
+		[1, 8, 11, "comment"],
 	]);
 });
 

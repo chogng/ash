@@ -26,15 +26,15 @@ where
     let Some(scope) = scope else {
         let config = client.read_config()?;
         let catalog = client.list_models()?;
-        let entry = config.preferred_model.as_ref().and_then(|selected| {
+        let entry = config.model.as_ref().and_then(|selected| {
             catalog.models.iter().find(|entry| {
                 entry.model.provider.as_str() == selected.provider
                     && entry.model.model.as_str() == selected.model
             })
         });
         let summary = crate::models::ModelSummary::from_catalog(
-            config.preferred_model.clone(),
-            config.preferred_reasoning_effort,
+            config.model.clone(),
+            config.model_reasoning_effort,
             Some(&catalog),
         );
         let label = summary.model_label();

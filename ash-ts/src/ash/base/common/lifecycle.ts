@@ -21,7 +21,10 @@ export function isDisposable<T>(value: T): value is T & IDisposable {
 
 /** A reference whose value is borrowed and therefore never disposed here. */
 export class ImmortalReference<T> implements IReference<T> {
-	constructor(readonly object: T) {}
+	readonly object: T;
+	constructor(object: T) {
+		this.object = object;
+	}
 	dispose(): void {}
 	[Symbol.dispose](): void {}
 }

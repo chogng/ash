@@ -1,4 +1,4 @@
-import type { Color } from "../../../base/common/color.js";
+import { Color } from "../../../base/common/color.js";
 import { Colors, colorCssVariable, type ColorIdentifier, type ColorValue, type ResolvedColorContribution } from "./colorRegistry.js";
 import * as baseColors from "./colors/baseColors.js";
 import * as chatColors from "./colors/chatColors.js";
@@ -192,7 +192,7 @@ export function createColorTheme(options: IColorThemeOptions): IColorTheme {
 	Sizes.seal();
 	const colorEntries = Colors.resolve(options.colorScheme, options.colorOverrides);
 	const colorMap = new Map(colorEntries.map(({ id, value }) => [id, value] as const));
-	const colors = Object.freeze(Object.fromEntries(colorEntries.filter(({ value }) => value !== null).map(({ id, value }) => [id, value!.toString()])));
+	const colors = Object.freeze(Object.fromEntries(colorEntries.filter(({ value }) => value !== null).map(({ id, value }) => [id, Color.Format.CSS.formatHexA(value!, true)])));
 	const sizeEntries = Object.freeze(Sizes.getSizes().map((entry) => Object.freeze({ ...entry, value: Object.freeze({ ...entry.value }) })));
 	const sizeMap = new Map(sizeEntries.map(({ id, value }) => [id, value] as const));
 	return Object.freeze({
@@ -203,7 +203,10 @@ export function createColorTheme(options: IColorThemeOptions): IColorTheme {
 		colorEntries,
 		sizeEntries,
 		getColor: (id: ColorIdentifier) => colorMap.get(id) ?? undefined,
-		getColorCss: (id: ColorIdentifier) => colorMap.get(id)?.toString(),
+		getColorCss: (id: ColorIdentifier) => {
+			const color = colorMap.get(id);
+			return color ? Color.Format.CSS.formatHexA(color, true) : undefined;
+		},
 		getSize: (id: string) => sizeMap.get(id),
 	});
 }

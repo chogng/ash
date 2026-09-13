@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { Emitter } from "../../../../base/common/event.js";
 import { URI } from "../../../../base/common/uri.js";
+import { AppServerRemoteError } from "../../../../platform/app-server/common/appServerError.js";
 import { BrowserFileService, workspaceRelativePath, workspaceResourceFromPath } from "../../../../platform/files/browser/fileService.js";
 import { FileKind, FileRevisionConflictError } from "../../../../platform/files/common/files.js";
 import type { FsChanged } from "../../../../../../generated/app-server/index.js";
@@ -152,7 +153,7 @@ test("BrowserFileService maps App Server revision conflicts to the file contract
 			readDirectory: async () => { throw new Error("unavailable"); },
 			readFile: async () => { throw new Error("unavailable"); },
 			readBinaryFile: async () => { throw new Error("unavailable"); },
-			writeFile: async () => { throw new Error("FileSystemRevisionConflict"); },
+			writeFile: async () => { throw new AppServerRemoteError(-32000, "Revision conflict", { kind: "FileSystemRevisionConflict" }); },
 			createFile: async () => { throw new Error("unavailable"); },
 			rename: async () => { throw new Error("unavailable"); },
 			delete: async () => { throw new Error("unavailable"); },

@@ -23,6 +23,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use ash_protocol::ContentDigest;
 use ash_protocol::Patch;
+use ash_protocol::ReasoningEffort;
 use ash_protocol::SkillId;
 use ash_protocol::SkillName;
 use ash_protocol::SkillRef;
@@ -374,14 +375,15 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
 
     assert!(typescript.contains("export type ModelRef = { provider: string, model: string, };"));
     assert!(typescript.contains(
-        "export type ModelCatalogEntry = { model: ModelRef, displayName: string, access: ModelAccess, outputTransport: ModelOutputTransport, contextWindow: number | null, autoCompactTokenLimit: number | null, availableContextWindow?: number | null, capabilities: ModelCapabilities, supportedReasoningEfforts: Array<ReasoningEffort>, defaultReasoningEffort: ReasoningEffort | null, defaultPersonality: Personality | null, };"
+        "export type ModelCatalogEntry = { model: ModelRef, displayName: string, access: ModelAccess, outputTransport: ModelOutputTransport, contextWindow: number | null, autoCompactTokenLimit: number | null, availableContextWindow?: number | null, capabilities: ModelCapabilities, supportedReasoningEfforts: Array<ReasoningEffort>, modelReasoningEffort: ReasoningEffort | null, defaultPersonality: Personality | null, };"
     ));
     assert!(
         typescript
             .contains("export type ApprovalReviewModelSelection = { \"type\": \"automatic\" }")
     );
-    assert!(typescript.contains("preferredModel: ModelRef | null"));
-    assert!(typescript.contains("preferredModel?: ModelRef | null"));
+    assert!(typescript.contains("model: ModelRef | null"));
+    assert!(typescript.contains("model?: ModelRef | null"));
+    assert!(typescript.contains("modelReasoningEffort?: ReasoningEffort | null"));
     assert!(typescript.contains("approvalReviewModel: ApprovalReviewModelSelection"));
     assert!(typescript.contains("approvalReviewModel?: ApprovalReviewModelSelection | null"));
     assert!(
@@ -418,7 +420,7 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(typescript.contains(r#""skill/resource/open": { method: "skill/resource/open" }"#));
     assert!(typescript.contains(r#""skills/changed": { method: "skills/changed" }"#));
     assert!(typescript.contains(r#""git/statusChanged": { method: "git/statusChanged" }"#));
-    assert!(!typescript.contains("preferredModel: string"));
+    assert!(!typescript.contains("preferredModel:"));
     assert!(typescript.contains(r#""type": "toolResult""#));
     assert!(typescript.contains("export type ToolName = string;"));
     assert!(typescript.contains("items: Array<ThreadItem>"));
@@ -598,10 +600,11 @@ fn config_patch_fixture_round_trips_the_provider_scoped_model() {
     let fixture = serde_json::json!({
         "commandId": "config-model",
         "expectedRevision": 4,
-        "preferredModel": {
+        "model": {
             "provider": "openai",
             "model": "gpt-5.6"
         },
+        "modelReasoningEffort": "high",
         "approvalReviewModel": {
             "type": "explicit",
             "model": {
@@ -614,9 +617,13 @@ fn config_patch_fixture_round_trips_the_provider_scoped_model() {
     let params: ConfigUpdateParams = serde_json::from_value(fixture.clone()).unwrap();
 
     assert!(matches!(
-        &params.preferred_model,
+        &params.model,
         Patch::Value(model) if model.provider == "openai"
     ));
+    assert_eq!(
+        params.model_reasoning_effort,
+        Patch::Value(ReasoningEffort::High)
+    );
     assert!(matches!(
         &params.approval_review_model,
         Patch::Value(ApprovalReviewModelSelectionDto::Explicit { model })
@@ -640,7 +647,7 @@ fn config_patch_distinguishes_missing_null_and_value() {
     let null: ConfigUpdateParams = serde_json::from_value(serde_json::json!({
         "commandId": "null",
         "expectedRevision": 3,
-        "preferredModel": null,
+        "model": null,
         "approvalReviewModel": null,
         "agentGrepBackend": null,
         "gui": null,
@@ -648,13 +655,13 @@ fn config_patch_distinguishes_missing_null_and_value() {
     }))
     .unwrap();
 
-    assert_eq!(missing.preferred_model, Patch::Missing);
+    assert_eq!(missing.model, Patch::Missing);
     assert_eq!(missing.approval_review_model, Patch::Missing);
     assert_eq!(missing.agent_grep_backend, Patch::Missing);
     assert_eq!(missing.gui, Patch::Missing);
     assert_eq!(missing.tui, Patch::Missing);
     assert_eq!(missing.expected_revision, 0);
-    assert_eq!(null.preferred_model, Patch::Null);
+    assert_eq!(null.model, Patch::Null);
     assert_eq!(null.approval_review_model, Patch::Null);
     assert_eq!(null.agent_grep_backend, Patch::Null);
     assert_eq!(null.gui, Patch::Null);
@@ -668,12 +675,28 @@ fn config_patch_distinguishes_missing_null_and_value() {
         serde_json::json!({
             "commandId": "null",
             "expectedRevision": 3,
-            "preferredModel": null,
+            "model": null,
             "approvalReviewModel": null,
             "agentGrepBackend": null,
             "gui": null,
             "tui": null
         })
+    );
+    assert!(
+        serde_json::from_value::<ConfigUpdateParams>(serde_json::json!({
+            "commandId": "old-model-key",
+            "expectedRevision": 3,
+            "preferredModel": {"provider": "openai", "model": "gpt-5.6"}
+        }))
+        .is_err()
+    );
+    assert!(
+        serde_json::from_value::<ConfigUpdateParams>(serde_json::json!({
+            "commandId": "old-effort-key",
+            "expectedRevision": 3,
+            "preferredReasoningEffort": "high"
+        }))
+        .is_err()
     );
 }
 

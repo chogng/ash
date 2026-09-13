@@ -8,6 +8,8 @@
 | --- | --- | --- |
 | 单元与组件契约 | `src/ash/<owner>/test/common|browser|node|electron-*` | `pnpm test:unit` |
 | 仓库级架构约束 | `test/architecture` | `pnpm test:unit` |
+| 单测入口与 Node loader | `test/unit` | `pnpm test:unit` |
+| Editor 浏览器集成测试 | `test/integration/browser` | `pnpm test:editor:browser` |
 | Playwright 自动化驱动 | `test/automation` | Browser/Electron smoke tests 共享 |
 | Browser Renderer 场景 | `test/smoke/areas/<area>` | `pnpm test:smoke:browser` |
 | Browser + App Server 场景 | `test/smoke/areas/<area>` | `pnpm test:smoke:browser:full` |
@@ -15,7 +17,7 @@
 | Electron + App Server 场景 | `test/smoke/areas/<area>` | `pnpm test:smoke:desktop` |
 | 构建工具测试 | `../build/**/*.test.ts` | `pnpm test:build-tools` |
 
-`pnpm test:main` 依次运行构建工具测试和全部单元测试。仓库根 `package.json` 直接调用这里的公开测试命令，具体测试运行器和 Node loader 位于 `scripts/ash-ts/test/`。`pnpm test:smoke:browser` 启动 5173 的 disconnected Browser Workbench；`pnpm test:smoke:browser:full` 启动 5174 的 Browser + Vite App Server 模式。`pnpm test:smoke:ui` 启动禁用 App Server 的 Electron，适合快速验证 Renderer 和 Workbench；`pnpm test:smoke:desktop` 会额外组装 Rust 开发包并启动真实 App Server。默认的 `pnpm test:smoke` 和仓库根目录 `pnpm test:desktop:smoke` 均指向完整 Electron + App Server 模式；根目录 `pnpm test:desktop:smoke:ui` 显式运行 Electron 快速模式，也可通过 `pnpm test:desktop:smoke:browser` 和 `pnpm test:desktop:smoke:browser:full` 运行 Browser 模式。
+`pnpm test:main` 依次运行构建工具测试和全部单元测试。仓库根 `package.json` 直接调用这里的公开测试命令。Node 单测入口、清理和 loader 位于 `test/unit/`，由 `pnpm typecheck:test-unit` 检查；编辑器浏览器集成测试位于 `test/integration/browser/`，Browser smoke 入口位于 `test/smoke/`。`pnpm test:smoke:browser` 启动 5173 的 disconnected Browser Workbench；`pnpm test:smoke:browser:full` 启动 5174 的 Browser + Vite App Server 模式。`pnpm test:smoke:ui` 启动禁用 App Server 的 Electron，适合快速验证 Renderer 和 Workbench；`pnpm test:smoke:desktop` 会额外组装 Rust 开发包并启动真实 App Server。默认的 `pnpm test:smoke` 和仓库根目录 `pnpm test:desktop:smoke` 均指向完整 Electron + App Server 模式；根目录 `pnpm test:desktop:smoke:ui` 显式运行 Electron 快速模式，也可通过 `pnpm test:desktop:smoke:browser` 和 `pnpm test:desktop:smoke:browser:full` 运行 Browser 模式。
 
 新增测试时先选择拥有被验证 contract 的最窄源码模块，再按真实运行时选择 `common`、`browser`、`node`、`electron-browser` 或 `electron-main`。只有没有单一源码 owner 的全仓库约束才进入 `test/architecture`；跨多个用户操作的场景才进入 `test/smoke`。
 # Test layout
@@ -25,6 +27,6 @@ Editor tests follow VS Code's two-layer layout with one shared editor browser su
 | Layer | Location | Purpose |
 | --- | --- | --- |
 | Editor unit | `src/ash/editor/test` and editor contribution `test` folders | Code/Academic TextModel, command, controller, persistence, and projection contracts in Node/jsdom |
-| Editor browser | `test/editor/browser` | Code/Academic TextModel mount points, mode bundles, pane, input, save, worker, code-block range, and accessibility contracts in Chromium |
+| Editor browser | `test/integration/browser` | Code/Academic TextModel mount points, mode bundles, pane, input, save, worker, code-block range, and accessibility contracts in Chromium |
 | Editor architecture | `test/architecture/editor-architecture.test.ts` | Flat `common/browser/contrib/test` ownership, mode bundles, and synchronous-layer dependency rules |
 Run `pnpm test:editor`; it runs the editor unit tests and the single browser integration suite.

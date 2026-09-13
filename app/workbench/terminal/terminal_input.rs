@@ -487,7 +487,7 @@ impl WorkbenchApplication {
             }
             Some(ComposerInteractionActivation::Model(model)) => {
                 if let Some(session) = self.session_runtime.as_ref()
-                    && let Err(error) = session.set_preferred_model(model)
+                    && let Err(error) = session.set_model(model)
                 {
                     eprintln!("could not select Agent model: {error}");
                 }

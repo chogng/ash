@@ -32,6 +32,7 @@ for (const [name, value] of Object.entries({
 	});
 }
 
+const { EditorTextDirection } = await import("../../../../browser/view.js");
 const { TestView: View } = await import("../../../../test/browser/viewModel/testViewModel.js");
 const { ViewController } = await import('../../../../browser/view/viewController.js');
 
@@ -47,6 +48,7 @@ test("Completion widget projects named options, focus, ARIA, and content coordin
 		container,
 		model,
 		glyphMargin: false,
+		textDirection: EditorTextDirection.LeftToRight,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
@@ -64,7 +66,7 @@ test("Completion widget projects named options, focus, ARIA, and content coordin
 
 	assert.equal(widget.visible, true);
 	assert.equal(widget.element.hidden, false);
-	assert.equal(widget.element.style.left, "68px");
+	assert.equal(widget.element.style.left, "76px");
 	assert.equal(widget.element.style.top, "20px");
 	assert.equal(input.element.getAttribute("aria-autocomplete"), "list");
 	assert.equal(input.element.getAttribute("aria-haspopup"), "true");

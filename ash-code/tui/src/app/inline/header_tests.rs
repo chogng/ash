@@ -28,7 +28,7 @@ fn wide_header_keeps_pet_and_identity_information_together() {
                 available_context_window: None,
                 capabilities: ash_protocol::ModelCapabilities::UNKNOWN,
                 supported_reasoning_efforts: Vec::new(),
-                default_reasoning_effort: None,
+                model_reasoning_effort: None,
                 default_personality: None,
             },
         ],

@@ -6,4 +6,4 @@ import type { ModelRef } from './ModelRef.js';
 import type { Personality } from './Personality.js';
 import type { ReasoningEffort } from './ReasoningEffort.js';
 
-export type ModelCatalogEntry = { model: ModelRef, displayName: string, access: ModelAccess, outputTransport: ModelOutputTransport, contextWindow: number | null, autoCompactTokenLimit: number | null, availableContextWindow?: number | null, capabilities: ModelCapabilities, supportedReasoningEfforts: Array<ReasoningEffort>, defaultReasoningEffort: ReasoningEffort | null, defaultPersonality: Personality | null, };
+export type ModelCatalogEntry = { model: ModelRef, displayName: string, access: ModelAccess, outputTransport: ModelOutputTransport, contextWindow: number | null, autoCompactTokenLimit: number | null, availableContextWindow?: number | null, capabilities: ModelCapabilities, supportedReasoningEfforts: Array<ReasoningEffort>, modelReasoningEffort: ReasoningEffort | null, defaultPersonality: Personality | null, };

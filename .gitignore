@@ -25,7 +25,7 @@ output/
 # Legacy Desktop build products
 ash-ts/node_modules/
 ash-ts/dist/
-ash-ts/test/editor/browser/dist/
+ash-ts/test/integration/browser/dist/
 ash-ts/.tmp/
 ash-ts/debug.log
 node_modules/

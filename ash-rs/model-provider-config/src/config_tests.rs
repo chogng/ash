@@ -537,8 +537,8 @@ fn static_model_catalog_has_unique_valid_rows() {
             spec.has_one_million_context(),
             spec.context_window == ash_protocol::ContextWindow::Known(1_000_000)
         );
-        if let Some(default) = spec.default_reasoning_effort {
-            assert!(spec.supported_reasoning_efforts.contains(&default));
+        if let Some(effort) = spec.model_reasoning_effort {
+            assert!(spec.supported_reasoning_efforts.contains(&effort));
         }
         match spec.access {
             ash_protocol::ModelAccess::Subscription => {

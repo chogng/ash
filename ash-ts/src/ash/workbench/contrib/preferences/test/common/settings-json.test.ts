@@ -168,8 +168,9 @@ test('the text-model save path updates configuration and accepts later external 
 
 	await configuration.updateValue(enabled, true);
 	await nextTurn();
+	assert.equal(configuration.getValue(enabled), true);
 	assert.match(reference.model.getText(), /Keep me/u);
-	assert.match(reference.model.getText(), /"editor\.enabled": true/u);
+	assert.doesNotMatch(reference.model.getText(), /"editor\.enabled"/u);
 	assert.equal(reference.hasExternalChange, false);
 });
 
