@@ -186,9 +186,7 @@ fn actual_tui_approves_and_declines_real_file_tool_calls() {
     approve.wait_for_screen("工具已获批准并执行");
     approve_gate.release();
     approve.wait_for_stable_screen("文件写入完成");
-    for _ in 0..3 {
-        approve.back_tab();
-    }
+    approve.refresh_policy_tip();
     approve.wait_for_stable_screen("ask permissions on");
     approve.assert_snapshot("real/03-approval/01-approved-final");
     approve.control_up();
@@ -237,6 +235,8 @@ fn actual_tui_approves_and_declines_real_file_tool_calls() {
     decline.wait_for_screen("工具调用被用户拒绝");
     decline_gate.release();
     decline.wait_for_stable_screen("没有写入文件");
+    decline.refresh_policy_tip();
+    decline.wait_for_stable_screen("ask permissions on");
     decline.assert_snapshot("real/03-approval/03-declined-final");
     assert!(decline_fixture.find_file("declined-by-tui.txt").is_none());
     assert!(decline_server.request_bodies()[1].contains("declin"));
@@ -315,6 +315,8 @@ fn actual_tui_approval_modes_change_file_tool_authority() {
     bypass.wait_for_screen("bypass permissions on");
     bypass.submit("请直接创建 permission-bypassed.txt");
     bypass.wait_for_stable_screen("文件直接写入完成");
+    bypass.refresh_policy_tip();
+    bypass.wait_for_stable_screen("bypass permissions on");
     bypass.assert_snapshot("real/03-approval/07-bypass-final");
     bypass.control_up();
     bypass.up();

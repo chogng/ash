@@ -345,6 +345,8 @@ fn actual_tui_process_details_show_sandbox_enforcement() {
     process.wait_for_screen("bypass permissions on");
     process.submit("尝试在工作区外创建 sandbox-must-not-write.txt");
     process.wait_for_stable_screen("目标文件没有生成");
+    process.refresh_policy_tip();
+    process.wait_for_stable_screen("bypass permissions on");
     process.assert_snapshot("real/03-approval/09-sandbox-blocked");
     assert!(!outside_path.exists());
     assert_eq!(server.request_count(), 3);

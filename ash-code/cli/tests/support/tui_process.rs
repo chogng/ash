@@ -418,6 +418,13 @@ impl TuiProcess {
         self.send_input(b"\x1b[Z");
     }
 
+    pub fn refresh_policy_tip(&mut self) {
+        // A full cycle preserves the selected mode and restarts its transient hint.
+        for _ in 0..3 {
+            self.back_tab();
+        }
+    }
+
     pub fn up(&mut self) {
         self.send_input(b"\x1b[A");
     }
