@@ -668,10 +668,33 @@ fn normalize_snapshot(mut screen: String, paths: &[String]) -> String {
         .replace("macOS Seatbelt", "platform sandbox")
         .replace("Linux Bubblewrap", "platform sandbox")
         .lines()
-        .map(|line| normalize_truncated_fixture_path(line, paths))
+        .map(|line| normalize_elapsed_time(&normalize_truncated_fixture_path(line, paths)))
         .collect::<Vec<_>>()
         .join("\n");
     normalize_assessment_ids(&normalize_session_thread_ids(&screen))
+}
+
+fn normalize_elapsed_time(line: &str) -> String {
+    let Some(total) = line.find(" total · ") else {
+        return line.into();
+    };
+    let Some(start) = line[..total].rfind(" · ").map(|start| start + " · ".len()) else {
+        return line.into();
+    };
+    let Some((minutes, seconds)) = line[start..total].split_once("m ") else {
+        return line.into();
+    };
+    let Some(seconds) = seconds.strip_suffix('s') else {
+        return line.into();
+    };
+    if minutes.is_empty()
+        || seconds.len() != 2
+        || !minutes.bytes().all(|byte| byte.is_ascii_digit())
+        || !seconds.bytes().all(|byte| byte.is_ascii_digit())
+    {
+        return line.into();
+    }
+    format!("{}0m 00s{}", &line[..start], &line[total..])
 }
 
 fn normalize_truncated_fixture_path(line: &str, paths: &[String]) -> String {
@@ -779,6 +802,16 @@ fn normalize_assessment_ids(screen: &str) -> String {
     }
     normalized.push_str(remaining);
     normalized
+}
+
+#[test]
+fn snapshot_normalization_freezes_elapsed_status_without_changing_other_text() {
+    let screen =
+        "○ Waiting for approval · 0m 01s total · ctrl+c to interrupt\nresponse took 0m 01s";
+    assert_eq!(
+        normalize_snapshot(screen.into(), &[]),
+        "○ Waiting for approval · 0m 00s total · ctrl+c to interrupt\nresponse took 0m 01s"
+    );
 }
 
 #[test]
