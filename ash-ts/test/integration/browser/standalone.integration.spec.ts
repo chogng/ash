@@ -50,3 +50,42 @@ test('standalone editors type and release their models, contributions, registry 
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	expect(errors).toEqual([]);
 });
+
+test('standalone editor switches a live model in place and keeps caller ownership', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.stack ?? error.message));
+	await page.goto('/standalone.html');
+	await page.locator('#owned .stanza-editor-input').focus();
+	const switched = await page.evaluate(() => window.ashStandaloneIntegration.switchOwnedToCaller());
+	expect(switched).toEqual({
+		ownedModelDisposed: true,
+		ownedModelRegistered: false,
+		rootRetained: true,
+		editorCount: 2,
+		currentModelIsCaller: true,
+	});
+	await expect(page.locator('#owned .stanza-editor')).toHaveCount(1);
+	await expect(page.locator('#owned .stanza-editor-input')).toBeFocused();
+	await page.keyboard.press('ControlOrMeta+End');
+	await page.keyboard.type('!');
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.getOwnedValue())).toBe('caller!');
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('caller!');
+
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.detachOwned())).toEqual({
+		modelIsNull: true,
+		value: '',
+		rootMounted: true,
+		inputCount: 0,
+	});
+	await page.evaluate(() => window.ashStandaloneIntegration.reattachOwned());
+	await expect(page.locator('#owned .stanza-editor-input')).toHaveCount(1);
+	await page.locator('#owned .stanza-editor-input').focus();
+	await page.keyboard.press('ControlOrMeta+End');
+	await page.keyboard.type('?');
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('caller!?');
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.events.length)).toBe(2);
+	await page.evaluate(() => window.ashStandaloneIntegration.releaseOwned());
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.state('caller').disposed)).toBe(false);
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	expect(errors).toEqual([]);
+});

@@ -1,6 +1,6 @@
 import { addDisposableListener } from '../../base/browser/dom.js';
 import { type Event, Emitter } from '../../base/common/event.js';
-import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
 import {
 	autorun,
 	constObservable,
@@ -45,6 +45,7 @@ export class ObservableCodeEditor extends Disposable {
 	private readonly layoutState: ObservableState<EditorLayoutInfo>;
 	private readonly typeChannel: ObservableChannel<string>;
 	private readonly pasteChannel: ObservableChannel<IClipboardPasteEvent | undefined>;
+	private readonly modelContentListener = this._register(new MutableDisposable<IDisposable>());
 	private currentTransaction: ITransaction | undefined;
 
 	public readonly editor: ICodeEditor;
@@ -169,7 +170,11 @@ export class ObservableCodeEditor extends Disposable {
 		});
 		this.openedPeekWidgets = this._register(new ObservableState(0));
 
-		if (model) this._register(model.onDidChangeContent(() => this.runInTransaction(transaction => this.synchronizeState(transaction))));
+		this.modelContentListener.value = model?.onDidChangeContent(() => this.runInTransaction(transaction => this.synchronizeState(transaction)));
+		this._register(editor.onDidChangeModel(() => {
+			this.modelContentListener.value = editor.getModel()?.onDidChangeContent(() => this.runInTransaction(transaction => this.synchronizeState(transaction)));
+			this.runInTransaction(transaction => this.synchronizeState(transaction, true));
+		}));
 		this._register(editor.onDidChangeCursorSelection(() => this.runInTransaction(transaction => this.synchronizeState(transaction))));
 		this._register(editor.onDidLayoutChange(layout => this.runInTransaction(transaction => {
 			this.layoutState.set(layout, transaction);
@@ -217,7 +222,10 @@ export class ObservableCodeEditor extends Disposable {
 	public setDecorations(decorations: IObservable<IModelDeltaDecoration[]>): IDisposable {
 		const store = new DisposableStore();
 		const collection = this.editor.createDecorationsCollection();
-		store.add(autorun(reader => collection.set(decorations.read(reader))));
+		store.add(autorun(reader => {
+			this.model.read(reader);
+			collection.set(decorations.read(reader));
+		}));
 		store.add(toDisposable(() => collection.clear()));
 		return store;
 	}

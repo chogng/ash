@@ -147,6 +147,7 @@ window.ashTextModelIntegration = {
 	switchToOther: async () => {
 		const oldEditor = requiredEditorPart();
 		const oldModel = oldEditor.getModel();
+		if (!oldModel) throw new Error('Workbench integration editor has no model');
 		const oldDom = oldEditor.getDomNode();
 		await pane.setInput({ resource: URI.parse('inmemory://editor/other.ts'), label: 'other.ts', initialText: 'fn other() {\n  answer();\n}\n' }, new AbortController().signal);
 		return {

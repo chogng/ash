@@ -21,6 +21,10 @@ interface CreationEvent {
 interface StandaloneHarness {
 	readonly events: readonly CreationEvent[];
 	state(kind: 'caller' | 'owned'): EditorState;
+	switchOwnedToCaller(): { readonly ownedModelDisposed: boolean; readonly ownedModelRegistered: boolean; readonly rootRetained: boolean; readonly editorCount: number; readonly currentModelIsCaller: boolean };
+	detachOwned(): { readonly modelIsNull: boolean; readonly value: string; readonly rootMounted: boolean; readonly inputCount: number };
+	reattachOwned(): void;
+	getOwnedValue(): string;
 	releaseCaller(): void;
 	releaseOwned(): void;
 	dispose(): void;
@@ -55,10 +59,12 @@ const ownedEditor = stanza.editor.create(ownedContainer, { value: 'owned', langu
 callerEditor.layout({ width: callerContainer.clientWidth, height: callerContainer.clientHeight });
 ownedEditor.layout({ width: ownedContainer.clientWidth, height: ownedContainer.clientHeight });
 const ownedModel = ownedEditor.getModel();
+if (!ownedModel) throw new Error('Owned standalone editor has no model');
 
 function state(kind: 'caller' | 'owned'): EditorState {
 	const editor = kind === 'caller' ? callerEditor : ownedEditor;
 	const model = kind === 'caller' ? callerModel : ownedModel;
+	if (!model) throw new Error('Standalone integration model is missing');
 	const container = kind === 'caller' ? callerContainer : ownedContainer;
 	return {
 		value: model.isDisposed() ? null : model.getValue(),
@@ -74,6 +80,28 @@ function state(kind: 'caller' | 'owned'): EditorState {
 window.ashStandaloneIntegration = {
 	events,
 	state,
+	switchOwnedToCaller: () => {
+		const root = ownedEditor.getDomNode();
+		ownedEditor.setModel(callerModel);
+		return {
+			ownedModelDisposed: ownedModel.isDisposed(),
+			ownedModelRegistered: stanza.editor.getModel(ownedResource) !== null,
+			rootRetained: ownedEditor.getDomNode() === root,
+			editorCount: stanza.editor.getEditors().length,
+			currentModelIsCaller: ownedEditor.getModel() === callerModel,
+		};
+	},
+	detachOwned: () => {
+		ownedEditor.setModel(null);
+		return {
+			modelIsNull: ownedEditor.getModel() === null,
+			value: ownedEditor.getValue(),
+			rootMounted: ownedContainer.contains(ownedEditor.getDomNode()),
+			inputCount: ownedContainer.querySelectorAll('.stanza-editor-input').length,
+		};
+	},
+	reattachOwned: () => ownedEditor.setModel(callerModel),
+	getOwnedValue: () => ownedEditor.getValue(),
 	releaseCaller: () => {
 		callerEditor.dispose();
 		callerModel.setValue('changed after editor disposal');

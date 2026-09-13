@@ -114,8 +114,8 @@ export function create(
 			instantiationService: services.instantiationService,
 		};
 		const editor = services.completionWorkerFactory
-			? new StandaloneEditor({ ...editorOptions, completionWorkerFactory: services.completionWorkerFactory }, model, ownsModel, services.themeService, services.codeEditorService)
-			: new StandaloneEditor(editorOptions, model, ownsModel, services.themeService, services.codeEditorService);
+			? new StandaloneEditor({ ...editorOptions, completionWorkerFactory: services.completionWorkerFactory }, model, ownsModel, services.themeService, services.codeEditorService, services.modelService)
+			: new StandaloneEditor(editorOptions, model, ownsModel, services.themeService, services.codeEditorService, services.modelService);
 		return editor;
 	} catch (error) {
 		if (ownsModel) model.dispose();

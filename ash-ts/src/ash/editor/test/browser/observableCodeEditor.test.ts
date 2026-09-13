@@ -106,3 +106,56 @@ test('observable code editor owns reactive decorations and follows editor dispos
 	assert.equal(observableEditor.isDisposed, true);
 	dom.window.close();
 });
+
+test('observable code editor follows model attachment changes without retaining old listeners', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const container = dom.window.document.querySelector<HTMLElement>('main')!;
+	using first = new TextModel('first');
+	using second = new TextModel('second');
+	using editor = new CodeEditorWidget({ container, model: first, input: { resource: first.uri }, languageId: first.getLanguageId(), lineHeight: 20 });
+	using observableEditor = observableCodeEditor(editor);
+	const values: string[] = [];
+	using reaction = autorun(reader => {
+		values.push(`${observableEditor.model.read(reader)?.uri.toString() ?? 'none'}:${observableEditor.value.read(reader)}`);
+	});
+
+	editor.setModel(second);
+	assert.strictEqual(observableEditor.model.get(), second);
+	assert.equal(observableEditor.value.get(), 'second');
+	first.setValue('stale');
+	assert.equal(values.at(-1), `${second.uri}:second`);
+	second.setValue('current');
+	assert.equal(values.at(-1), `${second.uri}:current`);
+
+	editor.setModel(null);
+	assert.deepEqual({ model: observableEditor.model.get(), value: observableEditor.value.get(), selection: observableEditor.cursorSelection.get() }, { model: null, value: '', selection: null });
+	editor.setModel(first);
+	assert.strictEqual(observableEditor.model.get(), first);
+	assert.equal(observableEditor.value.get(), 'stale');
+	dom.window.close();
+});
+
+test('observable decorations follow the attached model and release old ranges', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const container = dom.window.document.querySelector<HTMLElement>('main')!;
+	using first = new TextModel('first');
+	using second = new TextModel('second');
+	using editor = new CodeEditorWidget({ container, model: first, input: { resource: first.uri }, languageId: first.getLanguageId(), lineHeight: 20 });
+	using observableEditor = observableCodeEditor(editor);
+	const source = observableValue('switch-decorations', [{ range: new Range(1, 1, 1, 2), options: { description: 'switch' } }]);
+	using owner = observableEditor.setDecorations(source);
+	assert.equal(first.getAllDecorations().length, 1);
+
+	editor.setModel(second);
+	assert.equal(first.getAllDecorations().length, 0);
+	assert.equal(second.getAllDecorations().length, 1);
+	source.set([{ range: new Range(1, 2, 1, 3), options: { description: 'moved' } }]);
+	assert.deepEqual(second.getAllDecorations().map(decoration => decoration.range), [new Range(1, 2, 1, 3)]);
+	editor.setModel(null);
+	assert.equal(second.getAllDecorations().length, 0);
+	editor.setModel(first);
+	assert.deepEqual(first.getAllDecorations().map(decoration => decoration.range), [new Range(1, 2, 1, 3)]);
+	dom.window.close();
+});

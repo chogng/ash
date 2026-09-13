@@ -5,18 +5,21 @@ import type { ICodeEditorService } from '../../browser/services/codeEditorServic
 import { CodeEditorWidget, type CodeEditorWidgetOptions } from '../../browser/widget/codeEditor/codeEditorWidget.js';
 import type { ILanguageSelection, ILanguageService } from '../../common/languages/language.js';
 import type { ITextModel } from '../../common/model.js';
-import type { TextModel } from '../../common/model/textModel.js';
+import { TextModel } from '../../common/model/textModel.js';
 import type { IModelService } from '../../common/services/model.js';
 
 export interface IStandaloneCodeEditor extends CodeEditorWidget {
-	getModel(): TextModel;
+	getModel(): TextModel | null;
 }
 
 /** Standalone editor owner whose identity is shared by create(), editor events, and the editor registry. */
 export class StandaloneEditor extends CodeEditorWidget implements IStandaloneCodeEditor {
-	constructor(options: CodeEditorWidgetOptions, private readonly modelToDispose: TextModel, private readonly ownsModel: boolean, themeService: Parameters<typeof bindColorTheme>[0], codeEditorService: ICodeEditorService) {
+	private modelToDispose: TextModel | null;
+
+	constructor(options: CodeEditorWidgetOptions, modelToDispose: TextModel, ownsModel: boolean, themeService: Parameters<typeof bindColorTheme>[0], codeEditorService: ICodeEditorService, private readonly modelService: IModelService) {
 		codeEditorService.willCreateCodeEditor();
 		super(options);
+		this.modelToDispose = ownsModel ? modelToDispose : null;
 		try {
 			this._register(bindColorTheme(themeService, options.container));
 			this._register(toDisposable(() => codeEditorService.removeCodeEditor(this)));
@@ -27,11 +30,29 @@ export class StandaloneEditor extends CodeEditorWidget implements IStandaloneCod
 		}
 	}
 
+	public override setModel(model: ITextModel | null): void {
+		if (model !== null && (!(model instanceof TextModel) || this.modelService.getModel(model.uri) !== model)) {
+			throw new ReferenceError('Standalone editor model is not registered with the model service');
+		}
+		const previousModel = this.getModel();
+		const ownedModel = previousModel !== model && previousModel === this.modelToDispose ? this.modelToDispose : null;
+		try {
+			super.setModel(model);
+		} finally {
+			if (ownedModel && this.getModel() !== previousModel) {
+				this.modelToDispose = null;
+				ownedModel.dispose();
+			}
+		}
+	}
+
 	protected override disposeCore(): void {
 		try {
 			super.disposeCore();
 		} finally {
-			if (this.ownsModel) this.modelToDispose.dispose();
+			const model = this.modelToDispose;
+			this.modelToDispose = null;
+			model?.dispose();
 		}
 	}
 }

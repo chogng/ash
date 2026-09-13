@@ -351,12 +351,114 @@ test("standalone editor owns only the implicit model it creates", () => {
 		resource: URI.parse("inmemory://stanza/owned.txt"),
 	});
 	const model = editor.getModel();
+	assert.ok(model);
 
 	editor.dispose();
 	assert.equal(model.isDisposed(), true);
 	assert.equal(createdWorkerCount, terminatedWorkerCount);
 	assert.equal(stanza.editor.getModel(URI.parse("inmemory://stanza/owned.txt")), null);
 	dom.window.close();
+});
+
+test('standalone editor releases an implicit model on switch and retains caller-owned replacements', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const container = dom.window.document.querySelector<HTMLElement>('main')!;
+	const ownedResource = URI.parse('inmemory://stanza/switch-owned.txt');
+	const caller = stanza.editor.createModel('caller', 'plaintext', URI.parse('inmemory://stanza/switch-caller.txt'));
+	const editor = stanza.editor.create(container, { value: 'owned', resource: ownedResource });
+	try {
+		const owned = editor.getModel();
+		assert.ok(owned);
+		const root = editor.getDomNode();
+		const modelEvents: string[] = [];
+		using listener = editor.onDidChangeModel(event => modelEvents.push(`${event.oldModelUrl?.toString()}->${event.newModelUrl?.toString()}`));
+		editor.setModel(caller);
+		assert.deepEqual({
+			ownedDisposed: owned.isDisposed(),
+			ownedRegistered: stanza.editor.getModel(ownedResource) !== null,
+			currentModel: editor.getModel(),
+			rootRetained: editor.getDomNode() === root,
+			registeredEditors: stanza.editor.getEditors().filter(candidate => candidate === editor).length,
+		}, {
+			ownedDisposed: true,
+			ownedRegistered: false,
+			currentModel: caller,
+			rootRetained: true,
+			registeredEditors: 1,
+		});
+		editor.setModel(null);
+		assert.equal(editor.getModel(), null);
+		assert.equal(caller.isDisposed(), false);
+		editor.setModel(caller);
+		assert.deepEqual(modelEvents, [
+			`${ownedResource}->${caller.uri}`,
+			`${caller.uri}->undefined`,
+			`undefined->${caller.uri}`,
+		]);
+	} finally {
+		editor.dispose();
+		assert.equal(createdWorkerCount, terminatedWorkerCount);
+		assert.equal(caller.isDisposed(), false);
+		caller.dispose();
+		dom.window.close();
+	}
+});
+
+test('standalone editor rejects an unregistered replacement without disturbing its current model', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const container = dom.window.document.querySelector<HTMLElement>('main')!;
+	const editor = stanza.editor.create(container, { value: 'current' });
+	using unregistered = new stanza.TextModel('unregistered');
+	try {
+		const model = editor.getModel();
+		assert.ok(model);
+		assert.throws(() => editor.setModel(unregistered), /not registered/);
+		assert.strictEqual(editor.getModel(), model);
+		assert.equal(model.isDisposed(), false);
+		assert.equal(container.querySelectorAll('.stanza-editor').length, 1);
+	} finally {
+		editor.dispose();
+		dom.window.close();
+	}
+});
+
+test('standalone editors keep caller-owned models and selections isolated when one switches', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main><aside></aside></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const firstModel = stanza.editor.createModel('shared', 'plaintext', URI.parse('inmemory://stanza/switch-shared.txt'));
+	const secondModel = stanza.editor.createModel('other', 'plaintext', URI.parse('inmemory://stanza/switch-other.txt'));
+	const switching = stanza.editor.create(dom.window.document.querySelector<HTMLElement>('main')!, { model: firstModel });
+	const staying = stanza.editor.create(dom.window.document.querySelector<HTMLElement>('aside')!, { model: firstModel });
+	try {
+		switching.setModel(secondModel);
+		firstModel.setValue('still shared');
+		assert.deepEqual({
+			switchingValue: switching.getValue(),
+			stayingValue: staying.getValue(),
+			firstDisposed: firstModel.isDisposed(),
+			secondDisposed: secondModel.isDisposed(),
+		}, {
+			switchingValue: 'other',
+			stayingValue: 'still shared',
+			firstDisposed: false,
+			secondDisposed: false,
+		});
+		switching.setValue('changed other');
+		assert.equal(staying.getValue(), 'still shared');
+		switching.setPosition(new stanza.Position(1, 5));
+		staying.setPosition(new stanza.Position(1, 2));
+		assert.deepEqual({ switchingColumn: switching.getPosition()?.column, stayingColumn: staying.getPosition()?.column }, { switchingColumn: 5, stayingColumn: 2 });
+	} finally {
+		switching.dispose();
+		staying.dispose();
+		assert.equal(firstModel.isDisposed(), false);
+		assert.equal(secondModel.isDisposed(), false);
+		firstModel.dispose();
+		secondModel.dispose();
+		dom.window.close();
+	}
 });
 
 test("standalone editor rejects unregistered models and conflicting model options", () => {

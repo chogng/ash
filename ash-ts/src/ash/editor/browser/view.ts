@@ -105,6 +105,8 @@ export interface EditorViewportPadding {
 
 export interface EditorViewportOptions {
 	readonly container: HTMLElement;
+	/** Reused by the Widget across model attachments; View owns its children. */
+	readonly rootDomNode?: HTMLDivElement;
 	readonly viewModel: IViewModel;
 	readonly controller?: ViewControllerOptions;
 	readonly configuration: EditorConfiguration;
@@ -245,9 +247,12 @@ export class View extends ViewEventHandler {
 		if (!(options.viewModel.model instanceof TextModel)) throw new TypeError('Editor view requires the editor text model implementation');
 		const viewport = options.viewModel.viewLayout;
 		if (!(viewport instanceof ViewLayout)) throw new TypeError('Editor view requires the editor view layout implementation');
+		if (options.rootDomNode && (options.rootDomNode.parentElement !== options.container || options.rootDomNode.childNodes.length > 0)) {
+			throw new TypeError('Editor view requires an empty root in its container');
+		}
 		this.viewModel = options.viewModel;
 		this.model = options.viewModel.model;
-		this.domNode = new FastDomNode(h(ownerDocument, "div"));
+		this.domNode = new FastDomNode(options.rootDomNode ?? h(ownerDocument, "div"));
 		this.contentElement = h(ownerDocument, "div");
 		this.contentNode = new FastDomNode(this.contentElement);
 		this.textMetricsElement = h(ownerDocument, "span");
@@ -287,8 +292,16 @@ export class View extends ViewEventHandler {
 		this.accessibilityStatusElement.setAttribute("aria-live", "polite");
 		this.accessibilityStatusElement.setAttribute("aria-atomic", "true");
 		this.domNode.domNode.append(this.contentElement, this.textMetricsElement, this.accessibilityStatusElement);
-		options.container.append(this.domNode.domNode);
-		this._register(toDisposable(() => this.domNode.domNode.remove()));
+		if (options.rootDomNode) {
+			this._register(toDisposable(() => {
+				this.domNode.domNode.replaceChildren();
+				this.domNode.domNode.scrollLeft = 0;
+				this.domNode.domNode.scrollTop = 0;
+			}));
+		} else {
+			options.container.append(this.domNode.domNode);
+			this._register(toDisposable(() => this.domNode.domNode.remove()));
+		}
 		this.textMeasurer =
 			options.textMeasurer ??
 			new BrowserTextMeasurer(this.textMetricsElement);

@@ -110,6 +110,7 @@ test('Stanza editor pane switches files without leaving the old model, DOM, or k
 		await pane.setInput({ resource: URI.file('/project/first.ts'), label: 'first.ts' }, new AbortController().signal);
 		const first = parts[0]!;
 		const oldModel = first.getModel();
+		assert.ok(oldModel);
 		const oldDom = first.getDomNode();
 		first.focus();
 		assert.equal(first.hasTextFocus(), true);
@@ -136,6 +137,7 @@ test('Stanza editor pane switches files without leaving the old model, DOM, or k
 
 		const second = parts[1]!;
 		const secondModel = second.getModel();
+		assert.ok(secondModel);
 		const outside = dom.window.document.querySelector<HTMLButtonElement>('#outside')!;
 		outside.focus();
 		assert.equal(dom.window.document.activeElement, outside);

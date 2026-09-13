@@ -57,6 +57,8 @@ const { ServiceContainer } = await import("../../../../platform/instantiation/co
 const { ILogService, NullLoggerService } = await import('../../../../platform/log/common/log.js');
 const { PlaceholderTextContribution } = await import("../../../contrib/placeholderText/browser/placeholderTextContribution.js");
 const { createEditorBrowserServices } = await import('../../../browser/services/contribution.js');
+const { VersionedEditorWorkerClient } = await import('../../../browser/services/editorWorkerService.js');
+const { EditorWorkerRequestExecutor } = await import('../../../common/services/editorWorkerRequestExecutor.js');
 await import("../../../contrib/placeholderText/browser/placeholderText.contribution.js");
 await import('../../../contrib/inPlaceReplace/browser/inPlaceReplace.js');
 
@@ -112,12 +114,13 @@ test("CodeEditorWidget owns one canonical browser editing surface", () => {
 	assert.equal(fontTarget.style.fontFamily, editor.getDomNode().style.fontFamily);
 	assert.equal(fontTarget.style.fontFeatureSettings, editor.getDomNode().style.fontFeatureSettings);
 
+	const selections = editor.selections;
 	editor.dispose();
 	assert.equal(TextAreaEditContextRegistry.get(ownerId), undefined);
 	assert.equal(editor.getDomNode().isConnected, false);
 	assert.equal(model.getText(), "alpha");
-	assert.equal(editor.selections.context.model, model);
-	assert.throws(() => editor.selections.getSelections(), /already disposed/);
+	assert.equal(selections.context.model, model);
+	assert.throws(() => selections.getSelections(), /already disposed/);
 	dom.window.close();
 });
 
@@ -876,6 +879,215 @@ test('CodeEditorWidget publishes service lifecycle in construction order', () =>
 	dom.window.close();
 });
 
+test('CodeEditorWidget switches models without replacing its identity or retaining the old view', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const container = requiredElement(dom.window.document, 'main');
+	using first = new TextModel('first');
+	using second = new TextModel('second');
+	const contributionEvents: string[] = [];
+	class TrackingContribution extends Disposable {
+		constructor(editor: ICodeEditor) {
+			super();
+			const resource = editor.getModel()?.uri.toString();
+			contributionEvents.push(`create:${resource}`);
+			this._register(toDisposable(() => contributionEvents.push(`dispose:${resource}`)));
+		}
+	}
+	const editor = new CodeEditorWidget({
+		container,
+		model: first,
+		input: { resource: first.uri },
+		languageId: first.getLanguageId(),
+		lineHeight: 20,
+		contributions: [{ id: 'test.modelSwitch', ctor: TrackingContribution, instantiation: EditorContributionInstantiation.Eager }],
+	});
+	try {
+		const root = editor.getDomNode();
+		const oldInput = root.querySelector('.stanza-editor-input');
+		const widgetDomNode = dom.window.document.createElement('button');
+		const widget: IContentWidget = {
+			getId: () => 'test.modelSwitchWidget',
+			getDomNode: () => widgetDomNode,
+			getPosition: () => ({ position: new Position(1, 1), preference: [ContentWidgetPositionPreference.EXACT] }),
+		};
+		editor.addContentWidget(widget);
+		assert.equal(root.contains(widgetDomNode), true);
+		const decorations = editor.createDecorationsCollection([{ range: new Range(1, 1, 1, 2), options: { description: 'first model' } }]);
+		assert.equal(decorations.length, 1);
+		const modelEvents: string[] = [];
+		const focusedAtChange: boolean[] = [];
+		using willChange = editor.onWillChangeModel(event => modelEvents.push(`will:${event.oldModelUrl?.toString()}->${event.newModelUrl?.toString()}`));
+		using didChange = editor.onDidChangeModel(event => {
+			modelEvents.push(`did:${event.oldModelUrl?.toString()}->${event.newModelUrl?.toString()}`);
+			focusedAtChange.push(editor.hasTextFocus());
+		});
+		let contentChanges = 0;
+		using contentListener = editor.onDidChange(() => { contentChanges += 1; });
+		editor.setModel(first);
+		assert.deepEqual(modelEvents, []);
+		editor.focus();
+		editor.setModel(second);
+		assert.strictEqual(editor.getDomNode(), root);
+		assert.strictEqual(editor.getModel(), second);
+		assert.equal(editor.hasTextFocus(), true);
+		assert.notStrictEqual(root.querySelector('.stanza-editor-input'), oldInput);
+		assert.equal(root.contains(widgetDomNode), true);
+		assert.equal(first.isDisposed(), false);
+		assert.equal(first.getAllDecorations().length, 0);
+		assert.equal(decorations.length, 0);
+		decorations.set([{ range: new Range(1, 1, 1, 2), options: { description: 'second model' } }]);
+		assert.equal(second.getAllDecorations().length, 1);
+		first.setValue('old edit');
+		assert.equal(contentChanges, 0);
+		second.setValue('new edit');
+		assert.equal(contentChanges, 1);
+
+		editor.setModel(null);
+		assert.deepEqual({ model: editor.getModel(), hasModel: editor.hasModel(), value: editor.getValue(), mounted: container.contains(root), input: root.querySelector('.stanza-editor-input') }, {
+			model: null,
+			hasModel: false,
+			value: '',
+			mounted: true,
+			input: null,
+		});
+		assert.equal(widgetDomNode.isConnected, false);
+		assert.equal(decorations.length, 0);
+		editor.setModel(first);
+		assert.strictEqual(editor.getDomNode(), root);
+		assert.strictEqual(editor.getModel(), first);
+		assert.equal(root.contains(widgetDomNode), true);
+		decorations.set([{ range: new Range(1, 2, 1, 3), options: { description: 'reattached' } }]);
+		assert.deepEqual(decorations.getRanges(), [new Range(1, 2, 1, 3)]);
+		assert.deepEqual(contributionEvents, [
+			`create:${first.uri}`, `dispose:${first.uri}`,
+			`create:${second.uri}`, `dispose:${second.uri}`,
+			`create:${first.uri}`,
+		]);
+		assert.deepEqual(modelEvents, [
+			`will:${first.uri}->${second.uri}`, `did:${first.uri}->${second.uri}`,
+			`will:${second.uri}->undefined`, `did:${second.uri}->undefined`,
+			`will:undefined->${first.uri}`, `did:undefined->${first.uri}`,
+		]);
+		assert.deepEqual(focusedAtChange, [true, false, false]);
+	} finally {
+		editor.dispose();
+		dom.window.close();
+	}
+});
+
+test('CodeEditorWidget detaches a disposed model and can attach a later model', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const container = requiredElement(dom.window.document, 'main');
+	const first = new TextModel('first');
+	using second = new TextModel('second');
+	const editor = new CodeEditorWidget({ container, model: first, input: { resource: first.uri }, languageId: first.getLanguageId(), lineHeight: 20 });
+	try {
+		const root = editor.getDomNode();
+		first.dispose();
+		assert.deepEqual({ model: editor.getModel(), input: root.querySelector('.stanza-editor-input'), mounted: container.contains(root) }, { model: null, input: null, mounted: true });
+		editor.setModel(second);
+		assert.strictEqual(editor.getModel(), second);
+		assert.strictEqual(editor.getDomNode(), root);
+		assert.equal(root.querySelectorAll('.stanza-editor-input').length, 1);
+		assert.throws(() => editor.setModel(first), /live TextModel/);
+		assert.strictEqual(editor.getModel(), second);
+	} finally {
+		editor.dispose();
+		dom.window.close();
+	}
+});
+
+test('CodeEditorWidget leaves a usable empty editor when replacement setup fails', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const container = requiredElement(dom.window.document, 'main');
+	using first = new TextModel('first');
+	using failed = new TextModel('failed');
+	const editor = new CodeEditorWidget({
+		container,
+		model: first,
+		input: { resource: first.uri },
+		languageId: first.getLanguageId(),
+		lineHeight: 20,
+		editorWorkerFactory: model => {
+			if (model === failed) throw new Error('worker unavailable');
+			return new VersionedEditorWorkerClient(model, () => new EditorWorkerRequestExecutor());
+		},
+	});
+	try {
+		const root = editor.getDomNode();
+		const changes: string[] = [];
+		using listener = editor.onDidChangeModel(event => changes.push(`${event.oldModelUrl?.toString()}->${event.newModelUrl?.toString()}`));
+		assert.throws(() => editor.setModel(failed), /worker unavailable/);
+		assert.deepEqual({ model: editor.getModel(), input: root.querySelector('.stanza-editor-input'), mounted: container.contains(root) }, { model: null, input: null, mounted: true });
+		assert.deepEqual(changes, [`${first.uri}->undefined`]);
+		editor.setModel(first);
+		assert.strictEqual(editor.getModel(), first);
+		assert.equal(root.querySelectorAll('.stanza-editor-input').length, 1);
+	} finally {
+		editor.dispose();
+		dom.window.close();
+	}
+});
+
+test('CodeEditorWidget stops a model switch when a will-change listener disposes it', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const container = requiredElement(dom.window.document, 'main');
+	using first = new TextModel('first');
+	using second = new TextModel('second');
+	const editor = new CodeEditorWidget({ container, model: first, input: { resource: first.uri }, languageId: first.getLanguageId(), lineHeight: 20 });
+	const root = editor.getDomNode();
+	using listener = editor.onWillChangeModel(() => editor.dispose());
+	assert.doesNotThrow(() => editor.setModel(second));
+	assert.deepEqual({ disposed: editor.isDisposed, rootMounted: container.contains(root), firstDisposed: first.isDisposed(), secondDisposed: second.isDisposed() }, {
+		disposed: true,
+		rootMounted: false,
+		firstDisposed: false,
+		secondDisposed: false,
+	});
+	dom.window.close();
+});
+
+test('CodeEditorWidget clears its model state when contribution disposal fails during a switch', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const container = requiredElement(dom.window.document, 'main');
+	using first = new TextModel('first');
+	using second = new TextModel('second');
+	class FailingContribution extends Disposable {
+		protected override disposeCore(): void {
+			super.disposeCore();
+			throw new Error('contribution cleanup failed');
+		}
+	}
+	const editor = new CodeEditorWidget({
+		container,
+		model: first,
+		input: { resource: first.uri },
+		languageId: first.getLanguageId(),
+		lineHeight: 20,
+		contributions: [{ id: 'test.failOnDispose', ctor: FailingContribution, instantiation: EditorContributionInstantiation.Eager }],
+	});
+	try {
+		const root = editor.getDomNode();
+		const events: string[] = [];
+		using listener = editor.onDidChangeModel(event => events.push(`${event.oldModelUrl?.toString()}->${event.newModelUrl?.toString()}`));
+		assert.throws(() => editor.setModel(second));
+		assert.deepEqual({ model: editor.getModel(), mounted: container.contains(root), input: root.querySelector('.stanza-editor-input'), events }, {
+			model: null,
+			mounted: true,
+			input: null,
+			events: [`${first.uri}->undefined`],
+		});
+	} finally {
+		editor.dispose();
+		dom.window.close();
+	}
+});
+
 test('CodeEditorWidget exposes editor-owned scroll geometry', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
@@ -1032,7 +1244,7 @@ test('CodeEditorWidget reveals ranges through the ViewModel event contract', () 
 	assert.ok(editor.getBottomForLineNumber(10) <= editor.getScrollTop() + 40);
 
 	editor.setScrollTop(0, ScrollType.Immediate);
-	editor._getViewModel().revealRange('test', false, target, VerticalRevealType.Center, ScrollType.Immediate);
+	editor._getViewModel()!.revealRange('test', false, target, VerticalRevealType.Center, ScrollType.Immediate);
 	assert.equal(editor.getScrollTop(), 170);
 	dom.window.close();
 });
@@ -1103,14 +1315,14 @@ test('ViewCursors follows view positions, configuration, focus, composition, and
 		overtypeCursorStyle: 'block',
 	});
 	editor.layout({ width: 90, height: 100 });
-	const targetPosition = editor._getViewModel().coordinatesConverter.convertViewPositionToModelPosition(new Position(3, 1));
+	const targetPosition = editor._getViewModel()!.coordinatesConverter.convertViewPositionToModelPosition(new Position(3, 1));
 	editor.setPosition(targetPosition);
 
 	const layer = requiredElement<HTMLElement>(editor.getDomNode(), '.cursors-layer');
 	const primary = requiredElement<HTMLElement>(layer, '.cursor');
 	assert.equal(layer.getAttribute('role'), 'presentation');
 	assert.equal(layer.getAttribute('aria-hidden'), 'true');
-	const viewPosition = editor._getViewModel().coordinatesConverter.convertModelPositionToViewPosition(targetPosition);
+	const viewPosition = editor._getViewModel()!.coordinatesConverter.convertModelPositionToViewPosition(targetPosition);
 	assert.equal(viewPosition.lineNumber, 3);
 	assert.equal(primary.style.top, `${(viewPosition.lineNumber - 1) * 20}px`);
 	assert.equal(primary.style.visibility, 'hidden');
@@ -1127,9 +1339,9 @@ test('ViewCursors follows view positions, configuration, focus, composition, and
 	assert.equal(editor.getDomNode().classList.contains('overtype'), true);
 	assert.equal(layer.classList.contains('cursor-block-style'), true);
 
-	editor._getViewModel().onCompositionStart();
+	editor._getViewModel()!.onCompositionStart();
 	assert.equal(primary.style.visibility, 'hidden');
-	editor._getViewModel().onCompositionEnd();
+	editor._getViewModel()!.onCompositionEnd();
 	assert.equal(primary.style.visibility, 'inherit');
 	editor.view.textArea!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'Insert' }));
 	assert.equal(editor.getDomNode().classList.contains('overtype'), false);

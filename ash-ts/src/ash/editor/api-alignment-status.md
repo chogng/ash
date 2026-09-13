@@ -163,7 +163,7 @@
 | 文件 | 声明 | 分类 |
 | --- | --- | --- |
 | `browser/view.ts` | `View` | 根节点已从仅本地 `element` 迁为标准 `domNode`，40 余个 Editor/Workbench 调用方全部改接；焦点、Widget 焦点、ARIA、辅助阅读器、强制渲染、行宽缓存与 `onWillCopy` / `onWillCut` / `onWillPaste` 已回到该 owner。输入实例当前仍由 Controller 构造回调建立，需继续迁回 `View` 后再计为完成 |
-| `browser/widget/codeEditor/codeEditorWidget.ts` | `CodeEditorWidget` | 已接通标准 editor contribution 注册表，并补齐 `setScrollLeft` / `setScrollPosition`、`updateOptions`、`getOptions`、`getRawOptions` 和 `onDidChangeConfiguration` 供 contribution 只依赖公开编辑器契约；Workbench pane 已验收通过替换 part 切换文件，不等于同一 Widget 的 `setModel` 已实现。完整 Widget 声明仍需随 model attach/detach、view state 和对象生命周期继续收敛 |
+| `browser/widget/codeEditor/codeEditorWidget.ts` | `CodeEditorWidget` | 已接通标准 editor contribution 注册表与滚动、配置 API；`setModel`、`onWillChangeModel`、`onDidChangeModel` 和模型装饰事件沿同一 Widget 的可替换模型资源生效，根 DOM、注册身份、外部 Widget 与装饰集合句柄保持稳定，旧 View/worker/贡献/监听释放。Standalone 处理隐式模型所有权，单测及 Chromium 验证共享模型、输入、焦点、事件、空模型、错误恢复与释放。Widget 仍有其他公开成员差异，按对应行为分部继续处理 |
 | `common/cursor/cursor.ts` | `CursorsController` | 已恢复上游公开名；文档 undo/redo 已回到 `TextModel`，标准 Cursor Undo 已改走 `ICodeEditor` 事件，自动闭合和组合输入结果已改为内部会话状态，仅测试调用的 `beginComposition` / `CompositionSession` 平行入口已移除。成员差异由 12 项降至 8 项；View、EditContext、ScreenReaderSupport、Anchor Select、In-place Replace、Line Selection、Selection Highlighter 和 14 个只读写选区的 contribution controller 已改走 `IViewModel` 或 `ICodeEditor`。Editor 内仍有 14 个外部生产调用方，剩余链涉及编辑事务、光标历史、只读事件、仅 Ash 文件和装配契约，不能按成员差异直接删除或包一层转发 |
 | `common/cursor/cursorDeleteOperations.ts` | `DeleteOperations` | 4 个公开入口的成员边界比较为 0，已恢复 `CursorConfiguration`、`Selection[]`、`ICommand`、`EditOperationResult` 和自动闭合范围语义；浏览器删除、语言成对删除与剪贴板剪切均通过 `CursorsController.executeCommands` 进入模型事务，连续同向删除由 `pushUndoStop` 和 `EditOperationType` 控制撤销边界 |
 | `common/model/textModel.ts` | `TextModel` | 文本模型与 Piece Tree |
@@ -172,7 +172,8 @@
 
 - 当前 80 项严格完成项均已进入生产调用链并核对 owner 与生命周期，或属于已验证不会进入生产创建链的诊断工具；“类名已改名”“成员数量相同”或“本地实现能工作”都不作为完成依据。
 - Standalone 模型创建现在由 `standaloneCodeEditor.ts::createTextModel` 统一决定语言：显式语言优先，否则读取 URI 与第一行；Model Service 仍是模型注册、查询、语言事件和释放 owner。
-- Code 模式入口只加载行式编辑 bundle，Academic 模式入口只加载文档格式与协作 bundle；独立浏览器入口验证真实 pane 中的贡献激活、模式隔离和销毁。Academic 工具栏与重复成员操作的监听由贡献持有并释放，销毁后的异步成员结果不再更新 DOM；同一 Widget 的 `setModel` 仍留在待处理表。
+- Code 模式入口只加载行式编辑 bundle，Academic 模式入口只加载文档格式与协作 bundle；独立浏览器入口验证真实 pane 中的贡献激活、模式隔离和销毁。Academic 工具栏与重复成员操作的监听由贡献持有并释放，销毁后的异步成员结果不再更新 DOM。
+- 同一 `CodeEditorWidget` 已支持 `setModel` 切换与 `null` 拆除，`View` 复用 Widget 拥有的稳定根 DOM；每次挂接的 ViewModel、View、worker、输入和贡献由模型资源集合释放。Observable facade 重绑内容与装饰，调用方 Widget 和装饰集合句柄继续可用；Standalone 在切走隐式模型后释放它。完整 Widget 公开成员仍待按视图、输入和宿主行为分别验收。
 - `IClipboardPasteEvent`、`ColumnSelection`、`ColorPickerModel` 已分别通过真实输入、鼠标列选和 Color Picker 生产调用链复核。
 - `cursorColumns.ts`、`base/common/charCode.ts`、`base/common/uint.ts` 已作为后续 Cursor 迁移的同路径基础能力落地；它们不计入 119 项完成数。
 - `ITextModel` 的公开成员、内部历史入口和 ViewModel 生命周期已对齐；`TextModel` 现在唯一持有 decoration range、owner 隔离、模型部件事件与 tokenization/bracket pairs 调度。实现类仍需继续统一私有 owner，因此 `TextModel` 声明本身尚未计入完成数。
