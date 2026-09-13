@@ -20,12 +20,15 @@ use tar::Header;
 
 use super::RemoteRuntimeArtifact;
 use super::RemoteRuntimeArtifactIntegrity;
+#[cfg(unix)]
 use super::RemoteRuntimeInstallDisposition;
 use super::RemoteRuntimeInstallFailureKind;
 use super::RemoteRuntimeInstallLocation;
+#[cfg(unix)]
 use super::RemoteRuntimeInstallProgress;
 use super::RemoteRuntimeInstallRoot;
 use super::RemoteRuntimeVersion;
+#[cfg(unix)]
 use super::SshRemoteRuntimeInstaller;
 use super::install::parse_remote_platform;
 use super::install::remote_platform_probe_command;
@@ -33,6 +36,7 @@ use super::install::remote_runtime_install_command;
 use ash_remote::RemoteArchitecture;
 use ash_remote::RemoteLinuxLibc;
 use ash_remote::RemotePlatform;
+#[cfg(unix)]
 use ash_remote::SshHost;
 
 const VERSION: &str = "0.1.0";
