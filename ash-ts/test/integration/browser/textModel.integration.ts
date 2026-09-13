@@ -1,7 +1,7 @@
 import { URI } from "../../../src/ash/base/common/uri.js";
 import { DisposableStore, toDisposable } from "../../../src/ash/base/common/lifecycle.js";
 import { Event } from "../../../src/ash/base/common/event.js";
-import { createBrowserEditorPart } from "../../../src/ash/workbench/contrib/codeEditor/browser/browserEditorPart.js";
+import { createBrowserEditorPart, editorBrowserServices } from "../../../src/ash/workbench/contrib/codeEditor/browser/browserEditorPart.js";
 import { CodeEditorPane } from "../../../src/ash/workbench/contrib/codeEditor/browser/codeEditorPane.js";
 import { LanguageConfigurationService } from "../../../src/ash/editor/common/languages/languageConfigurationRegistry.js";
 import { LanguageFeaturesService } from "../../../src/ash/editor/common/services/languageFeaturesService.js";
@@ -22,6 +22,14 @@ import "../../../src/ash/editor/editor.code.all.js";
 import { MemoryTextFiles } from "./memoryTextFiles.js";
 import { AccessibilitySupport, type IAccessibilityService } from '../../../src/ash/platform/accessibility/common/accessibility.js';
 
+interface WorkbenchSwitchResult {
+	readonly oldEditorDisposed: boolean;
+	readonly oldModelDisposed: boolean;
+	readonly oldDomConnected: boolean;
+	readonly editorCount: number;
+	readonly value: string;
+}
+
 interface IntegrationHarness {
 	readonly apiText: string;
 	getValue(): string;
@@ -29,6 +37,7 @@ interface IntegrationHarness {
 	save(): Promise<void>;
 	getSavedText(): string;
 	getSyntaxAnalysisCount(): number;
+	switchToOther(): Promise<WorkbenchSwitchResult>;
 	getSelection(): { readonly startLineIndex: number; readonly startColumnIndex: number; readonly endLineIndex: number; readonly endColumnIndex: number };
 	setCursors(positions: readonly { readonly lineIndex: number; readonly columnIndex: number }[], primaryIndex?: number): void;
 	revealPosition(lineIndex: number, columnIndex: number): void;
@@ -130,6 +139,19 @@ window.ashTextModelIntegration = {
 	save: () => pane.save(),
 	getSavedText: () => files.read(resource),
 	getSyntaxAnalysisCount: () => syntaxAnalysisCount,
+	switchToOther: async () => {
+		const oldEditor = requiredEditorPart();
+		const oldModel = oldEditor.getModel();
+		const oldDom = oldEditor.getDomNode();
+		await pane.setInput({ resource: URI.parse('inmemory://editor/other.ts'), label: 'other.ts', initialText: 'fn other() {\n  answer();\n}\n' }, new AbortController().signal);
+		return {
+			oldEditorDisposed: oldEditor.isDisposed,
+			oldModelDisposed: oldModel.isDisposed(),
+			oldDomConnected: oldDom.isConnected,
+			editorCount: editorBrowserServices.codeEditorService.listCodeEditors().length,
+			value: pane.getValue(),
+		};
+	},
 	getSelection: () => {
 		const selection = requiredEditorPart().getSelection();
 		if (!selection) throw new Error('Text model integration editor has no selection');

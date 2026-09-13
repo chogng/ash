@@ -257,6 +257,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 			if (!workingCopy) modelReference.dispose();
 			throw error;
 		}
+		const shouldRestoreFocus = container.contains(container.ownerDocument.activeElement);
 		this.statusListener.clear();
 		this.part.value = part;
 		this.beforeSaveHooks = beforeSaveHooks;
@@ -270,6 +271,9 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 		}));
 		this.statusListener.value = statusListeners;
 		part.layout(this.dimension);
+		if (shouldRestoreFocus && !container.hidden) {
+			part.focus();
+		}
 		this.statusChangeEmitter.fire();
 	}
 

@@ -44,6 +44,26 @@ test("text-model editor public API, pane, undo, save, and browser worker", async
 	await expect.poll(() => workers.length).toBeGreaterThan(0);
 });
 
+test('switching a Workbench file keeps keyboard input on the new editor and releases the old one', async ({ page }) => {
+	await page.goto('/textModel.html');
+	await page.locator('.stanza-editor-input').focus();
+	const switched = await page.evaluate(() => window.ashTextModelIntegration.switchToOther());
+
+	expect(switched).toEqual({
+		oldEditorDisposed: true,
+		oldModelDisposed: true,
+		oldDomConnected: false,
+		editorCount: 1,
+		value: 'fn other() {\n  answer();\n}\n',
+	});
+	await expect(page.locator('.stanza-editor')).toHaveCount(1);
+	await expect(page.locator('.stanza-editor')).toHaveAttribute('aria-label', 'other.ts');
+	await expect(page.locator('.stanza-editor-input')).toBeFocused();
+	await page.keyboard.press('ControlOrMeta+End');
+	await page.keyboard.type('!');
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('fn other() {\n  answer();\n}\n!');
+});
+
 test('textarea fallback routes type and composition through the standard input pipeline', async ({ page }) => {
 	await page.addInitScript(() => {
 		Reflect.deleteProperty(window, 'EditContext');

@@ -163,7 +163,7 @@
 | 文件 | 声明 | 分类 |
 | --- | --- | --- |
 | `browser/view.ts` | `View` | 根节点已从仅本地 `element` 迁为标准 `domNode`，40 余个 Editor/Workbench 调用方全部改接；焦点、Widget 焦点、ARIA、辅助阅读器、强制渲染、行宽缓存与 `onWillCopy` / `onWillCut` / `onWillPaste` 已回到该 owner。输入实例当前仍由 Controller 构造回调建立，需继续迁回 `View` 后再计为完成 |
-| `browser/widget/codeEditor/codeEditorWidget.ts` | `CodeEditorWidget` | 已接通标准 editor contribution 注册表，并补齐 `setScrollLeft` / `setScrollPosition`、`updateOptions`、`getOptions`、`getRawOptions` 和 `onDidChangeConfiguration` 供 contribution 只依赖公开编辑器契约；完整 Widget 声明仍需随 model attach/detach、view state 和对象生命周期继续收敛 |
+| `browser/widget/codeEditor/codeEditorWidget.ts` | `CodeEditorWidget` | 已接通标准 editor contribution 注册表，并补齐 `setScrollLeft` / `setScrollPosition`、`updateOptions`、`getOptions`、`getRawOptions` 和 `onDidChangeConfiguration` 供 contribution 只依赖公开编辑器契约；Workbench pane 已验收通过替换 part 切换文件，不等于同一 Widget 的 `setModel` 已实现。完整 Widget 声明仍需随 model attach/detach、view state 和对象生命周期继续收敛 |
 | `common/cursor/cursor.ts` | `CursorsController` | 已恢复上游公开名；文档 undo/redo 已回到 `TextModel`，标准 Cursor Undo 已改走 `ICodeEditor` 事件，自动闭合和组合输入结果已改为内部会话状态，仅测试调用的 `beginComposition` / `CompositionSession` 平行入口已移除。成员差异由 12 项降至 8 项；View、EditContext、ScreenReaderSupport、Anchor Select、In-place Replace、Line Selection、Selection Highlighter 和 14 个只读写选区的 contribution controller 已改走 `IViewModel` 或 `ICodeEditor`。Editor 内仍有 14 个外部生产调用方，剩余链涉及编辑事务、光标历史、只读事件、仅 Ash 文件和装配契约，不能按成员差异直接删除或包一层转发 |
 | `common/cursor/cursorDeleteOperations.ts` | `DeleteOperations` | 4 个公开入口的成员边界比较为 0，已恢复 `CursorConfiguration`、`Selection[]`、`ICommand`、`EditOperationResult` 和自动闭合范围语义；浏览器删除、语言成对删除与剪贴板剪切均通过 `CursorsController.executeCommands` 进入模型事务，连续同向删除由 `pushUndoStop` 和 `EditOperationType` 控制撤销边界 |
 | `common/model/textModel.ts` | `TextModel` | 文本模型与 Piece Tree |

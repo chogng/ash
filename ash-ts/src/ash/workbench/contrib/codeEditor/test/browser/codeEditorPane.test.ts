@@ -36,6 +36,7 @@ for (const [name, value] of Object.entries({
 
 await import("../../../../../editor/editor.code.all.js");
 const { CodeEditorPane: EditorPane } = await import("../../browser/codeEditorPane.js");
+const { CodeEditorWidget } = await import('../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js');
 const { BrowserTextModelService } = await import("../../../../services/textmodelResolver/browser/browserTextModelService.js");
 const { BrowserTextResourceStore } = await import("../../browser/browserTextResourceStore.js");
 const { EditorTextDirection } = await import("../../../../../editor/browser/view.js");
@@ -86,6 +87,76 @@ test("Stanza editor pane loads, lays out, focuses, hides, and clears one editor 
 	pane.dispose();
 	assert.equal(parent.children.length, 0);
 	dom.window.close();
+});
+
+test('Stanza editor pane switches files without leaving the old model, DOM, or keyboard focus behind', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main><button id="outside">Outside</button></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const parent = dom.window.document.querySelector<HTMLElement>('main')!;
+	const resourceStore = new BrowserTextResourceStore(new ImmediateTextFiles('first file'));
+	using models = new BrowserTextModelService(resourceStore);
+	const parts: InstanceType<typeof CodeEditorWidget>[] = [];
+	const pane = new EditorPane(resourceStore, {
+		modelService: models,
+		createPart: options => {
+			const part = new CodeEditorWidget(options);
+			parts.push(part);
+			return part;
+		},
+	});
+	try {
+		pane.create(parent);
+		pane.layout({ width: 640, height: 320 });
+		await pane.setInput({ resource: URI.file('/project/first.ts'), label: 'first.ts' }, new AbortController().signal);
+		const first = parts[0]!;
+		const oldModel = first.getModel();
+		const oldDom = first.getDomNode();
+		first.focus();
+		assert.equal(first.hasTextFocus(), true);
+
+		await pane.setInput({ resource: URI.file('/project/second.ts'), label: 'second.ts', initialText: 'second file' }, new AbortController().signal);
+
+		assert.deepEqual({
+			value: pane.getValue(),
+			parts: parts.length,
+			oldEditorDisposed: first.isDisposed,
+			oldModelDisposed: oldModel.isDisposed(),
+			oldDomConnected: oldDom.isConnected,
+			mountedEditors: parent.querySelectorAll('.stanza-editor').length,
+			newEditorFocused: parts[1]?.hasTextFocus(),
+		}, {
+			value: 'second file',
+			parts: 2,
+			oldEditorDisposed: true,
+			oldModelDisposed: true,
+			oldDomConnected: false,
+			mountedEditors: 1,
+			newEditorFocused: true,
+		});
+
+		const second = parts[1]!;
+		const secondModel = second.getModel();
+		const outside = dom.window.document.querySelector<HTMLButtonElement>('#outside')!;
+		outside.focus();
+		assert.equal(dom.window.document.activeElement, outside);
+		await pane.setInput({ resource: URI.file('/project/third.ts'), label: 'third.ts', initialText: 'third file' }, new AbortController().signal);
+		assert.deepEqual({
+			value: pane.getValue(),
+			oldEditorDisposed: second.isDisposed,
+			oldModelDisposed: secondModel.isDisposed(),
+			mountedEditors: parent.querySelectorAll('.stanza-editor').length,
+			focusStayedOutside: dom.window.document.activeElement === outside,
+		}, {
+			value: 'third file',
+			oldEditorDisposed: true,
+			oldModelDisposed: true,
+			mountedEditors: 1,
+			focusStayedOutside: true,
+		});
+	} finally {
+		pane.dispose();
+		dom.window.close();
+	}
 });
 
 test("Stanza editor pane acquires the Workbench language service for its detected model", async () => {

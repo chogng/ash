@@ -8,7 +8,7 @@
 
 - 本路线图覆盖 `ash-ts/src/ash/editor`、它在 Workbench 中的 pane 和服务接线，以及 Standalone 入口。Rust App Server 提供文件与语言等异步能力，不接管 TypeScript 编辑器的同步文本、选区或输入状态。
 - 同一职责要对齐 VS Code 的公开名称、参数、事件、生命周期和可观察行为。Ash 内部依照现有 `TextModel`、视图和服务所有权独立实现；不复制上游私有结构，也不为同名而添加空方法。
-- 截至 2026-09-13，Node 25 下 Editor 单测为 240/240 文件通过，浏览器集成为 19/19 通过，Renderer 构建通过。这证明已覆盖的路径可运行，不代表整个 Editor 已完成。`editor-architecture.test.ts` 仍有 11 项失败，`dom-foundation.test.ts` 仍有 2 项失败；其中既有真实职责缺口，也有需核实的旧断言。它们保持可见，逐项按生产调用链处理。
+- 截至 2026-09-13，Node 25 下 Editor 单测为 240/240 文件通过，浏览器集成为 20/20 通过，Renderer 构建通过。这证明已覆盖的路径可运行，不代表整个 Editor 已完成。`editor-architecture.test.ts` 仍有 11 项失败，`dom-foundation.test.ts` 仍有 2 项失败；其中既有真实职责缺口，也有需核实的旧断言。它们保持可见，逐项按生产调用链处理。
 
 ## API 名称与契约怎么对齐
 
@@ -47,7 +47,7 @@
 
 | 顺序 | 部分 | 主要 owner | 逐项完成的用户行为 | 当前状态 |
 | --- | --- | --- | --- | --- |
-| 0 | 入口与装配 | `editor.api.ts`、`editor.*.all.ts`、`CodeEditorWidget` | 创建、挂载、切换模型、激活贡献、释放 | 0.1 已验收；其余待逐项验收 |
+| 0 | 入口与装配 | `editor.api.ts`、`editor.*.all.ts`、`CodeEditorWidget` | 创建、挂载、切换模型、激活贡献、释放 | 0.1、0.2 已验收；其余待逐项验收 |
 | 1 | 文本与文档内核 | `common/model`、`common/core` | 编辑、撤销、快照、结构事务、超大文件 | 基础具备，待逐项验收 |
 | 2 | 选区与输入 | `common/cursor`、`browser/controller` | 键盘和指针编辑、多光标、IME、剪贴板 | 基础具备，待逐项验收 |
 | 3 | 视图与几何 | `common/viewModel`、`common/viewLayout`、`browser/view*` | 换行、滚动、命中、装饰、控件、DOM/GPU 绘制 | 部分具备 |
@@ -97,6 +97,10 @@
 
 0.1 的验收链是：调用 `editor.create`，分别传入 `editor.createModel` 创建的模型和使用 `value` 隐式创建模型；完成一次输入，销毁编辑器，再检查模型归属、注册表、贡献和 DOM/监听资源。生产链从 `editor.api.ts`、`standalone/browser/standaloneEditor.ts`、`standalone/browser/standaloneCodeEditor.ts` 到 `browser/widget/codeEditor/codeEditorWidget.ts` 和 `TextModel`。
 
-2026-09-13 已验收：Standalone 创建事件在贡献、主题绑定和释放责任建立后发出；回调可立即使用或释放编辑器。显式模型在编辑器销毁后继续可用，隐式模型随编辑器销毁；注册表、贡献实例、DOM 和主题绑定同时退出。`standaloneEditor.test.ts`、`editorExtensions.test.ts`、`codeEditorWidget.test.ts` 的相关单测及 `standalone.integration.spec.ts` 的真实 Chromium 输入与释放用例覆盖这条链。第 0 部分仍需逐项验收切换模型及 Code/Academic bundle；完成后再进入第 1 部分。
+2026-09-13 已验收：Standalone 创建事件在贡献、主题绑定和释放责任建立后发出；回调可立即使用或释放编辑器。显式模型在编辑器销毁后继续可用，隐式模型随编辑器销毁；注册表、贡献实例、DOM 和主题绑定同时退出。`standaloneEditor.test.ts`、`editorExtensions.test.ts`、`codeEditorWidget.test.ts` 的相关单测及 `standalone.integration.spec.ts` 的真实 Chromium 输入与释放用例覆盖这条链。
+
+## 0.2 Workbench pane 切换文件（已验收）
+
+用户在同一 pane 打开另一文件时，`CodeEditorPane.setInput` 获取新模型并创建新 part，随后释放旧 part 和旧模型引用。切换前焦点若仍在 pane 内，新 part 布局后恢复编辑焦点；焦点已移到外部时不抢回。`codeEditorPane.test.ts` 和 `textModel.integration.spec.ts` 验证旧模型、DOM、编辑器服务登记退出，新文件可直接接收键盘输入。此项验收的是 Workbench 输入切换；同一 `CodeEditorWidget` 实例的 `setModel`、Code/Academic bundle 仍待逐项验收，第 0 部分完成后再进入第 1 部分。
 
 整个 Editor 的最终验收还要求上述各部分的真实入口、单测、浏览器/Electron 行为、Renderer 构建和相关架构测试全部闭合。当前已通过的套件不能代替仍未覆盖的平台、屏幕阅读器或未接线能力。
