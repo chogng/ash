@@ -46,8 +46,8 @@ use ash_protocol::ModelId;
 use ash_protocol::ModelRef;
 use ash_protocol::ProviderId;
 use ash_protocol::UserInput;
-use ash_utils_absolute_path::AbsolutePathBuf;
 use ash_shell_command::RipgrepExecutable;
+use ash_utils_absolute_path::AbsolutePathBuf;
 use std::num::NonZeroU64;
 use std::path::Path;
 use std::path::PathBuf;
@@ -124,7 +124,9 @@ fn clearing_directories_keeps_home_instructions_in_model_requests() {
                 tool_mode: ash_protocol::ToolMode::Direct,
                 tool_profile: None,
                 activated_skills: Vec::new(),
-                input: vec![UserInput::Text { text: "hello".into() }],
+                input: vec![UserInput::Text {
+                    text: "hello".into(),
+                }],
             },
         )
         .unwrap();
@@ -151,6 +153,30 @@ fn clearing_directories_keeps_home_instructions_in_model_requests() {
 }
 
 struct PermissionBoundSemanticEmbedding;
+
+#[test]
+fn init_does_not_import_external_instructions_into_agent_input() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::write(root.path().join("CLAUDE.md"), "External-only guidance.").unwrap();
+    let server = server();
+    let grant = ash_file_access::Grant::for_environment(
+        Dir::open_local(root.path()).unwrap(),
+        GrantSource::HostConfiguration,
+        ash_file_access::Permissions::new([ash_file_access::Permission::LoadInstructions]),
+    );
+    server.env_runtime.write().unwrap().selected_grant = Some(grant);
+    let mut input = vec![UserInput::Text {
+        text: "/init workspace".into(),
+    }];
+
+    server.turn_instruction_selection(&mut input);
+
+    assert!(!input.iter().any(|item| match item {
+        UserInput::Text { text } => text.contains("External-only guidance."),
+        UserInput::Context { content, .. } => content.contains("External-only guidance."),
+        _ => false,
+    }));
+}
 
 impl EmbeddingInvoker for PermissionBoundSemanticEmbedding {
     fn embed(&self, request: &EmbeddingRequest) -> Result<EmbeddingResponse, ModelProviderError> {

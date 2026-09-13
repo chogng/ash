@@ -18,6 +18,7 @@ use ash_instructions::InstructionCatalog;
 use ash_instructions::InstructionCatalogSnapshot;
 use ash_protocol::SessionId;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -37,6 +38,7 @@ pub(super) struct DirContributions {
     env_dir: Mutex<Option<DirContributionCatalog>>,
     dir_grants: Arc<DirGrants>,
     dirs: Mutex<BTreeMap<SessionId, BTreeMap<PathBuf, DirContributionCatalog>>>,
+    nested_warnings: Mutex<BTreeMap<SessionId, BTreeSet<String>>>,
     hooks: RwLock<Option<Arc<ash_hooks::DeclarativeHookRuntime>>>,
 }
 
@@ -76,6 +78,7 @@ impl DirContributions {
             env_dir: Mutex::new(env_dir),
             dir_grants,
             dirs: Mutex::new(BTreeMap::new()),
+            nested_warnings: Mutex::new(BTreeMap::new()),
             hooks: RwLock::new(None),
         }))
     }
@@ -213,6 +216,10 @@ impl DirContributions {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .remove(session_id);
+        self.nested_warnings
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(session_id);
     }
 
     pub(super) fn dir_files_changed(
@@ -329,9 +336,25 @@ impl HarnessContextProvider for DirContributions {
         request: &HarnessContextRequest<'_>,
     ) -> Result<Arc<HarnessContext>, CoreError> {
         let base_paths = matching_paths(&self.dir_root, request.read_paths);
+        let primary = self.instruction_snapshot();
+        let nested = self
+            .env_dir
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+            .filter(|catalog| catalog.authorization.is_active())
+            .map(|catalog| catalog.instructions.nested_instructions(&base_paths))
+            .unwrap_or_default();
+        let mut nested_diagnostics = nested
+            .diagnostics()
+            .iter()
+            .cloned()
+            .map(|diagnostic| (self.dir_root.clone(), diagnostic))
+            .collect::<Vec<_>>();
+        let base_content =
+            combine_content(primary.automatic_content(&base_paths), nested.content());
         let base_instructions = Arc::new(render_harness_instructions(
-            self.instruction_snapshot().as_ref(),
-            &base_paths,
+            base_content.clone(),
             &self.dir_root,
         ));
         let roots = self
@@ -361,30 +384,38 @@ impl HarnessContextProvider for DirContributions {
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             let mut user_paths = base_paths.clone();
-            let content = dirs.get(request.session_id)
+            let content = dirs
+                .get(request.session_id)
                 .into_iter()
                 .flat_map(BTreeMap::iter)
                 .filter(|(_, catalog)| catalog.authorization.ensure_active().is_ok())
                 .filter_map(|(root, catalog)| {
                     let paths = matching_paths(root, request.read_paths);
                     user_paths.extend(paths.iter().cloned());
-                    catalog
-                        .instructions
-                        .snapshot()
-                        .automatic_content(&paths)
-                        .map(|content| (root.clone(), content))
+                    let nested = catalog.instructions.nested_instructions(&paths);
+                    nested_diagnostics.extend(
+                        nested
+                            .diagnostics()
+                            .iter()
+                            .cloned()
+                            .map(|diagnostic| (root.clone(), diagnostic)),
+                    );
+                    combine_content(
+                        catalog.instructions.snapshot().automatic_content(&paths),
+                        nested.content(),
+                    )
+                    .map(|content| (root.clone(), content))
                 })
                 .collect::<Vec<_>>();
             (content, user_paths)
         };
+        self.record_nested_diagnostics(request.session_id, &nested_diagnostics);
         let instructions = if dir_content.is_empty() {
             base_instructions
         } else {
-            let primary = self.instruction_snapshot();
             Arc::new(render_harness_instructions_with_dirs(
-                primary.as_ref(),
+                base_content,
                 &dir_content,
-                &base_paths,
                 &self.dir_root,
             ))
         };
@@ -395,6 +426,45 @@ impl HarnessContextProvider for DirContributions {
         Ok(Arc::new(
             HarnessContext::new(instructions).with_environment(environment),
         ))
+    }
+}
+
+impl DirContributions {
+    fn record_nested_diagnostics(
+        &self,
+        session_id: &SessionId,
+        diagnostics: &[(PathBuf, ash_instructions::InstructionDiagnostic)],
+    ) {
+        let mut history = self
+            .nested_warnings
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let previous = history.get(session_id).cloned().unwrap_or_default();
+        let mut current = BTreeSet::new();
+        for (root, diagnostic) in diagnostics {
+            let key = format!(
+                "{}:{}:{:?}",
+                root.display(),
+                diagnostic
+                    .relative_path()
+                    .unwrap_or(Path::new("."))
+                    .display(),
+                diagnostic.code()
+            );
+            if !previous.contains(&key) {
+                log::warn!(
+                    "nested Instructions in {}: {}",
+                    root.display(),
+                    diagnostic.message()
+                );
+            }
+            current.insert(key);
+        }
+        if current.is_empty() {
+            history.remove(session_id);
+        } else {
+            history.insert(session_id.clone(), current);
+        }
     }
 }
 
@@ -435,14 +505,8 @@ fn affects_instructions(path: &Path) -> bool {
         || path == Path::new("ASH.md")
 }
 
-fn render_harness_instructions(
-    instructions: &InstructionCatalogSnapshot,
-    paths: &[PathBuf],
-    root: &Path,
-) -> HarnessInstructions {
-    let directory_content = instructions
-        .automatic_content(paths)
-        .map(|content| render_directory(root, &content));
+fn render_harness_instructions(content: Option<String>, root: &Path) -> HarnessInstructions {
+    let directory_content = content.map(|content| render_directory(root, &content));
     let directory_revision = content_revision(
         "directory-instructions",
         directory_content.as_deref().unwrap_or_default(),
@@ -451,22 +515,31 @@ fn render_harness_instructions(
 }
 
 fn render_harness_instructions_with_dirs(
-    instructions: &InstructionCatalogSnapshot,
+    primary: Option<String>,
     dirs: &[(PathBuf, String)],
-    paths: &[PathBuf],
     root: &Path,
 ) -> HarnessInstructions {
     let mut sections = Vec::new();
-    if let Some(primary) = instructions.automatic_content(paths) {
+    if let Some(primary) = primary {
         sections.push(render_directory(root, &primary));
     }
-    sections.extend(dirs.iter().map(|(root, content)| {
-        render_directory(root, content)
-    }));
+    sections.extend(
+        dirs.iter()
+            .map(|(root, content)| render_directory(root, content)),
+    );
     let content = sections.join("\n\n");
     let directory_revision = content_revision("directory-instructions", &content);
     HarnessInstructions::directory((!content.is_empty()).then_some(content))
         .with_directory_revision(directory_revision)
+}
+
+fn combine_content(base: Option<String>, nested: Option<&str>) -> Option<String> {
+    let content = base
+        .into_iter()
+        .chain(nested.map(str::to_owned))
+        .collect::<Vec<_>>()
+        .join("\n\n");
+    (!content.is_empty()).then_some(content)
 }
 
 fn render_directory(root: &Path, content: &str) -> String {

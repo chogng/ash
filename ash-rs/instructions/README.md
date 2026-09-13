@@ -29,7 +29,8 @@ Codex/Claude 格式，不组装模型请求，也不拥有 watcher、目录授�
 Contextual 条目；`global_content` 只渲染 Global。两者均带
 artifact name 与相对路径 provenance。
 同级正文按 `AGENTS.md`、`ASH.md`、细分文件顺序拼接；App Server 再区分用户级和授权工作区级。
-当前只发现选定 home 或已授权目录根部的 always-on 文件，尚不沿子目录继承嵌套 `AGENTS.md`。
+工作区子目录的 `AGENTS.md` 与 `ASH.md` 只在本 Turn 成功读取其下文件后，按浅到深顺序加入；
+用户 home 不做子目录继承。嵌套最多检查 64 个目录、每条路径最多 16 层。
 
 frontmatter 必须显式声明：
 

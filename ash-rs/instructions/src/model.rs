@@ -1,6 +1,6 @@
+use globset::Glob;
 use std::path::PathBuf;
 use std::sync::Arc;
-use globset::Glob;
 
 /// Canonical policy controlling when one Instruction contributes model-facing content.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -108,8 +108,28 @@ pub struct InstructionCatalogSnapshot {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct AlwaysOnInstruction {
-    pub(crate) source: &'static str,
+    pub(crate) source: PathBuf,
     pub(crate) body: String,
+}
+
+impl AlwaysOnInstruction {
+    pub(crate) fn render(&self) -> String {
+        let source = self.source.display().to_string();
+        let source = source
+            .replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+            .replace('"', "&quot;");
+        format!(
+            "<instruction name=\"{}\" source=\"{}\">\n{}\n</instruction>",
+            self.source
+                .file_name()
+                .expect("always-on source has a filename")
+                .to_string_lossy(),
+            source,
+            self.body
+        )
+    }
 }
 
 impl InstructionCatalogSnapshot {
@@ -139,7 +159,6 @@ impl InstructionCatalogSnapshot {
         &self.always_on
     }
 
-
     pub fn diagnostics(&self) -> &[InstructionDiagnostic] {
         &self.diagnostics
     }
@@ -167,26 +186,22 @@ impl InstructionCatalogSnapshot {
         let mut sections = self
             .always_on
             .iter()
-            .map(|entry| {
-                format!(
-                    "<instruction name=\"{}\" source=\"{}\">\n{}\n</instruction>",
-                    entry.source, entry.source, entry.body
-                )
-            })
+            .map(AlwaysOnInstruction::render)
             .collect::<Vec<_>>();
-        sections.extend(self
-            .entries
-            .iter()
-            .filter(|entry| include(entry))
-            .map(|entry| {
-                format!(
-                    "<instruction name=\"{}\" source=\"{}\">\n{}\n</instruction>",
-                    entry.name(),
-                    entry.relative_path().display(),
-                    entry.body()
-                )
-            })
-            .collect::<Vec<_>>());
+        sections.extend(
+            self.entries
+                .iter()
+                .filter(|entry| include(entry))
+                .map(|entry| {
+                    format!(
+                        "<instruction name=\"{}\" source=\"{}\">\n{}\n</instruction>",
+                        entry.name(),
+                        entry.relative_path().display(),
+                        entry.body()
+                    )
+                })
+                .collect::<Vec<_>>(),
+        );
         let content = sections.join("\n\n");
         (!content.is_empty()).then_some(content)
     }

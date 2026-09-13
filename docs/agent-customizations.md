@@ -149,7 +149,8 @@ Instructions 时，目标是 Ash 专属 `ASH.md` 或相应 `instructions/` 文�
 专属 `ASH.md`，最后放命中的多文件 Instruction。每份正文带原文件来源，工作区内容标出所属根目录。
 系统与安全规则高于全部这些文件；用户级规则高于工作区级，`ASH.md` 可以细化同作用域的
 `AGENTS.md`。文件顺序不授予工具、目录或审批权限。
-当前 always-on 发现只覆盖选定 home 和已授权目录根；嵌套 `AGENTS.md` 的目录继承尚未实现。
+工作区嵌套 `AGENTS.md` 与 `ASH.md` 在本 Turn 成功读取其下文件后，按浅到深顺序加入；
+不会预先扫描无关子树，也不会让一个目录的规则影响其他目录。
 
 ## 4. `external-agent-migration` 是外部反腐化层
 
@@ -245,6 +246,10 @@ Slash Command catalog 只包含产品和服务命令；独立 `$name` Skill sele
 `/create-instructions` 是创建细分 Instruction 的产品 Slash Command；`/init` 生成或更新 Ash 专属
 `ASH.md`。两者都不是 Skill，均为普通 Agent Turn 冻结对应任务说明与起始模板。Agent 按正常
 文件工具和目录授权写入；已有文件先读取再修改，不直接覆盖。
+外部 `CLAUDE.md` 导入是独立的确定性文件操作：重新校验用户选中的来源，只在目标缺失或为空时
+复制到 Ash 的目标文件；已有非空目标报告冲突，不交给 Agent 合并。来源正文不进入 `/init`
+或任何用于整理导入内容的 Agent Turn。当前导入仅有
+发现与预览，尚未接通目标写入。
 
 实施顺序：
 

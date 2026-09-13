@@ -57,7 +57,11 @@ fn user_instructions_are_present_with_authorized_directory_instructions() {
         "---\nname: user\nload: global\n---\n\nUser guidance.\n",
     )
     .unwrap();
-    fs::write(home_root.path().join("AGENTS.md"), "Personal shared guidance.").unwrap();
+    fs::write(
+        home_root.path().join("AGENTS.md"),
+        "Personal shared guidance.",
+    )
+    .unwrap();
     fs::write(home_root.path().join("ASH.md"), "Personal Ash guidance.").unwrap();
     fs::write(dir.path().join("AGENTS.md"), "Workspace shared guidance.").unwrap();
     fs::write(dir.path().join("ASH.md"), "Workspace Ash guidance.").unwrap();
@@ -78,7 +82,9 @@ fn user_instructions_are_present_with_authorized_directory_instructions() {
     let directory = harness.instructions().directory_instructions().unwrap();
     assert!(user.find("Personal shared guidance.") < user.find("Personal Ash guidance."));
     assert!(user.find("Personal Ash guidance.") < user.find("User guidance."));
-    assert!(directory.find("Workspace shared guidance.") < directory.find("Workspace Ash guidance."));
+    assert!(
+        directory.find("Workspace shared guidance.") < directory.find("Workspace Ash guidance.")
+    );
     assert!(directory.find("Workspace Ash guidance.") < directory.find("Directory guidance."));
     assert_eq!(user.matches("Personal shared guidance.").count(), 1);
     assert_eq!(directory.matches("Workspace shared guidance.").count(), 1);
@@ -96,6 +102,7 @@ fn contextual_instructions_match_only_confirmed_files_in_their_scope() {
     let outside = unrelated.path().join("src/lib.rs");
     fs::write(&selected, "").unwrap();
     fs::write(&outside, "").unwrap();
+    fs::write(dir.path().join("src/AGENTS.md"), "Nested shared rule.").unwrap();
     fs::write(
         home_root.path().join("instructions/user-rust.md"),
         "---\nname: user-rust\nload: contextual\npatterns:\n  - '**/*.rs'\n---\n\nUser Rust rule.\n",
@@ -130,9 +137,16 @@ fn contextual_instructions_match_only_confirmed_files_in_their_scope() {
 
     let matched =
         instruction_snapshot_with_paths(contributions.as_ref(), "session-match", &[selected]);
-    assert!(matched.instructions().user_instructions().unwrap().contains("User Rust rule."));
+    assert!(
+        matched
+            .instructions()
+            .user_instructions()
+            .unwrap()
+            .contains("User Rust rule.")
+    );
     let directory = matched.instructions().directory_instructions().unwrap();
     assert!(directory.contains("Workspace Rust rule."));
+    assert!(directory.contains("Nested shared rule."));
     assert!(!directory.contains("Manual rule."));
     assert_eq!(
         contributions
@@ -188,14 +202,24 @@ fn root_agent_can_explicitly_reference_on_demand_user_instruction() {
     )
     .unwrap()
     .unwrap();
-    assert!(selected.role.unwrap().instructions.contains("Review the changed behavior."));
+    assert!(
+        selected
+            .role
+            .unwrap()
+            .instructions
+            .contains("Review the changed behavior.")
+    );
 }
 
 #[test]
 fn cwd_without_load_instructions_does_not_load_contributions() {
     let dir = TempDir::new().unwrap();
     write_instruction(dir.path(), "global", "global", "Must not be loaded.");
-    fs::write(dir.path().join("AGENTS.md"), "Shared rule must not be loaded.").unwrap();
+    fs::write(
+        dir.path().join("AGENTS.md"),
+        "Shared rule must not be loaded.",
+    )
+    .unwrap();
     write_agent(
         dir.path(),
         "reviewer",

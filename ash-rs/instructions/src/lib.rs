@@ -8,6 +8,7 @@ mod catalog;
 mod model;
 
 pub use catalog::InstructionCatalog;
+pub use catalog::NestedInstructions;
 pub use model::InstructionArtifact;
 pub use model::InstructionCatalogSnapshot;
 pub use model::InstructionDiagnostic;

@@ -283,7 +283,10 @@ receipt、provenance 与 remove/rollback contract 尚未实现。
 
 共享的项目 `AGENTS.md` 已由 Ash Instruction authority 直接读取，不能再导入成第二份。
 `CLAUDE.md` 等专有来源的目标为 Ash 专属 `ASH.md` 或细分 `instructions/` 文件；
-目前只有发现与预览，写入目标的 apply 尚未实现。
+导入应由 App Server 协调受信文件读写：选定来源、重新校验、仅在目标缺失或为空时直接复制正文；
+已有非空 `ASH.md` 应报告冲突，不由 Agent 合并或覆盖。
+全程不调用 Agent，也不把来源正文放进 `/init` 的模型上下文。`/init` 只负责让 Agent 根据
+项目事实生成或更新 Ash 自己的 `ASH.md`。目前只有发现与预览，写入目标的 apply 尚未实现。
 
 `ash-file-access` 与 Import workflow 是两条不同路径。前者保存目录 Grant，并按明确的来源能力开放 Skills、Agent definitions 或 Plugin declaration；后者让用户预览、选择并迁移外部 Agent 配置，不授予持续文件访问。两条路径可以复用来源检查和解析，但不能复用授权生命周期或应用决定；本 crate 不依赖 `ash-file-access`，由 App Server 根据 Authorization 调用。
 
