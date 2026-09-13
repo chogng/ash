@@ -112,7 +112,7 @@ jobs:
 
       - name: Reject Rust workspace warnings, including tests
         shell: bash
-        run: ${{ matrix.python }} -B scripts/cargo.py --deny-warnings check --workspace --all-targets --locked
+        run: ${{ matrix.python }} -B scripts/cargo.py --deny-warnings check --workspace --all-targets --locked --keep-going
 
   tui:
     name: TUI tests
