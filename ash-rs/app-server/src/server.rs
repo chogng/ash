@@ -1759,7 +1759,6 @@ impl AppServer {
         writer: W,
         mut connection: ConnectionState,
     ) -> Result<(), std::io::Error> {
-        trace_jsonl("connection begin");
         let mut reader = JsonlReader::new(reader, DEFAULT_MAX_MESSAGE_BYTES);
         let notifications = self.connection_notifications(&connection);
         let activity = Arc::new(ConnectionDispatchActivity::default());
@@ -1771,9 +1770,7 @@ impl AppServer {
             let writer_handle = scope.spawn(move || {
                 let mut writer = JsonlWriter::new(writer, DEFAULT_MAX_MESSAGE_BYTES);
                 while let Ok(message) = outbound_rx.recv() {
-                    trace_jsonl("response write begin");
                     writer.write_message(&message)?;
-                    trace_jsonl("response written");
                 }
                 Ok::<(), std::io::Error>(())
             });
@@ -1830,7 +1827,6 @@ impl AppServer {
             }
             let read_result = (|| {
                 while let Some(mut line) = reader.read_message()? {
-                    trace_jsonl("request read");
                     let envelope = serde_json::from_str::<Value>(&line).map_err(|error| {
                         std::io::Error::new(
                             std::io::ErrorKind::InvalidData,
@@ -1862,9 +1858,7 @@ impl AppServer {
                         })?;
                     } else {
                         let _dispatch = activity.enter();
-                        trace_jsonl("initialize dispatch begin");
                         let response = self.handle_json(&mut connection, &line);
-                        trace_jsonl("initialize dispatch returned");
                         line.zeroize();
                         if !response.is_empty() {
                             outbound_tx.send(response).map_err(|_| {
@@ -2544,17 +2538,6 @@ fn resource_error(error: ResourceError) -> String {
         ResourceError::InvalidOffset => "InvalidResourceOffset",
     }
     .into()
-}
-
-fn trace_jsonl(stage: &str) {
-    if let Some(path) = std::env::var_os("ASH_TUI_TEST_TRACE_FILE")
-        && let Ok(mut file) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)
-    {
-        let _ = file.write_all(format!("ASH JSONL server: {stage}\n").as_bytes());
-    }
 }
 
 #[cfg(test)]

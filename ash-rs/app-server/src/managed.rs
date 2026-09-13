@@ -2,10 +2,6 @@
 
 mod registry;
 
-use ash_app_server_daemon::ConnectionOptions;
-use ash_app_server_daemon::GrantSource;
-use ash_app_server_daemon::ManagedEndpoint;
-use ash_app_server_transport::LocalConnections;
 use std::io;
 use std::io::Write;
 use std::path::PathBuf;
@@ -13,6 +9,10 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
+use ash_app_server_daemon::ConnectionOptions;
+use ash_app_server_daemon::GrantSource;
+use ash_app_server_daemon::ManagedEndpoint;
+use ash_app_server_transport::LocalConnections;
 
 use registry::ProfileAppServerRegistry;
 
@@ -60,7 +60,6 @@ pub(crate) fn run(profile_root: PathBuf) -> Result<(), String> {
             continue;
         }
         if let Some(connection) = endpoint.poll_connection()? {
-            trace_managed("connection accepted");
             idle_since = None;
             let server = match registry.server_for(connection.options) {
                 Ok(server) => server,
@@ -69,7 +68,6 @@ pub(crate) fn run(profile_root: PathBuf) -> Result<(), String> {
                     continue;
                 }
             };
-            trace_managed("server ready");
             let shutdown_stream = connection
                 .writer
                 .try_clone()
@@ -81,7 +79,6 @@ pub(crate) fn run(profile_root: PathBuf) -> Result<(), String> {
                 .name("ash-local-app-server-connection".into())
                 .spawn(move || {
                     let _registration = registration;
-                    trace_managed("connection handler begin");
                     if let Err(error) =
                         server.serve_product_host_jsonl(connection.reader, connection.writer)
                         && !is_peer_disconnect(&error)
@@ -108,17 +105,6 @@ pub(crate) fn run(profile_root: PathBuf) -> Result<(), String> {
             }
             thread::sleep(IDLE_POLL_INTERVAL);
         }
-    }
-}
-
-fn trace_managed(stage: &str) {
-    if let Some(path) = std::env::var_os("ASH_TUI_TEST_TRACE_FILE")
-        && let Ok(mut file) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)
-    {
-        let _ = file.write_all(format!("ASH managed server: {stage}\n").as_bytes());
     }
 }
 

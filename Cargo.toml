@@ -285,7 +285,6 @@ log = "0.4"
 lru = "0.18.2"
 lsp-types = "0.97"
 memmap2 = "0.9.11"
-mio = { version = "1.2.2", features = ["os-ext", "os-poll"] }
 hf-chat-template = { version = "1.0.0", features = ["strftime"] }
 # Recursive workspace watches must use FSEvents on macOS; kqueue holds one file
 # descriptor per watched entry and exhausts the process limit on large workspaces.

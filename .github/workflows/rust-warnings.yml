@@ -72,6 +72,7 @@ jobs:
 
   warnings:
     name: ${{ matrix.runner }}
+    needs: changes
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     strategy:
@@ -113,6 +114,40 @@ jobs:
       - name: Reject Rust workspace warnings, including tests
         shell: bash
         run: ${{ matrix.python }} -B scripts/cargo.py --deny-warnings check --workspace --all-targets --locked --keep-going
+
+      - name: Prepare locked ripgrep for macOS TUI sandbox tests
+        if: matrix.runner == 'macos-15' && needs.changes.outputs.tui == 'true'
+        run: |
+          python3 -B - <<'PY'
+          import os
+          import subprocess
+          from pathlib import Path
+          from build.lib.ash_build.targets import TARGETS, default_target
+          from build.release.package.ripgrep import resolve_ripgrep
+
+          root = Path.cwd()
+          ripgrep = resolve_ripgrep(
+              TARGETS[default_target()],
+              root / "third_party/ripgrep/runtime-lock.json",
+              root / "third_party/.cache/ripgrep",
+          ).executable
+          subprocess.run([ripgrep, "--version"], check=True)
+          with open(os.environ["GITHUB_ENV"], "a") as output:
+              output.write(f"ASH_RG_PATH={ripgrep}\n")
+          PY
+
+      - name: Install Just for macOS TUI sandbox tests
+        if: matrix.runner == 'macos-15' && needs.changes.outputs.tui == 'true'
+        uses: taiki-e/install-action@a6b2e2dcd845ddd7f509ce4f3ed3d922b80cc5d9
+        with:
+          tool: just@1.46.0
+
+      - name: Test TUI sandbox scenarios
+        if: matrix.runner == 'macos-15' && needs.changes.outputs.tui == 'true'
+        run: |
+          just test-tui actual_tui_approves_and_declines_real_file_tool_calls
+          just test-tui actual_tui_process_details_show_sandbox_enforcement
+          just test-tui actual_tui_approval_modes_change_file_tool_authority
 
   tui:
     name: TUI tests
@@ -173,9 +208,11 @@ jobs:
 
       - name: Test real TUI terminal scenarios
         timeout-minutes: 20
-        env:
-          ASH_TUI_TEST_TRACE: "1"
-        run: just --set tui_profile ci-test test-tui -- --test-threads=4
+        run: >-
+          just --set tui_profile ci-test test-tui -- --test-threads=4
+          --skip actual_tui_approves_and_declines_real_file_tool_calls
+          --skip actual_tui_process_details_show_sandbox_enforcement
+          --skip actual_tui_approval_modes_change_file_tool_authority
 
       - name: Test remote TUI reconnect
         run: just test ash-cli interactive_remote_tui_preserves_home_draft_after_transport_loss --profile ci-test

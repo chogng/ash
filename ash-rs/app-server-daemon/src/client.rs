@@ -75,13 +75,10 @@ pub(crate) fn run_lifecycle(
 }
 
 pub(crate) fn connect(options: ConnectionOptions, backend_executable: &Path) -> Result<(), String> {
-    trace_local_connection("lifecycle begin");
     run_lifecycle(LifecycleCommand::Start, options.clone(), backend_executable)?;
-    trace_local_connection("lifecycle ready");
     let endpoint = EndpointPaths::prepare(options.profile_root())?;
     let stream = connect_existing(&endpoint.socket)?
         .ok_or_else(|| "Local App Server daemon exited before the client connected".to_string())?;
-    trace_local_connection("socket connected");
     proxy_stdio(stream, &options).map_err(|error| error.to_string())
 }
 
@@ -408,23 +405,17 @@ fn probe_app_server(
 }
 
 fn proxy_stdio(mut stream: UnixStream, options: &ConnectionOptions) -> io::Result<()> {
-    trace_local_connection("proxy prelude begin");
     write_json_line(&mut stream, &ConnectionPrelude::from_options(options))?;
-    trace_local_connection("proxy prelude written");
     let mut socket_writer = stream.try_clone()?;
     let input = thread::Builder::new()
         .name("ash-local-app-server-stdin".into())
         .spawn(move || {
-            trace_local_connection("stdin copy begin");
             let copied = io::copy(&mut io::stdin().lock(), &mut socket_writer);
-            trace_local_connection("stdin copy returned");
             let _ = socket_writer.shutdown(Shutdown::Write);
             copied
         })?;
     let mut output = io::stdout().lock();
-    trace_local_connection("stdout copy begin");
     copy_output(&mut BufReader::new(stream), &mut output)?;
-    trace_local_connection("stdout copy returned");
     input
         .join()
         .map_err(|_| io::Error::other("Local App Server stdin proxy panicked"))??;
@@ -444,17 +435,6 @@ fn copy_output(reader: &mut impl Read, writer: &mut impl Write) -> io::Result<()
         }
         writer.write_all(&buffer[..read])?;
         writer.flush()?;
-    }
-}
-
-fn trace_local_connection(stage: &str) {
-    if let Some(path) = std::env::var_os("ASH_TUI_TEST_TRACE_FILE")
-        && let Ok(mut file) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)
-    {
-        let _ = file.write_all(format!("ASH local connection: {stage}\n").as_bytes());
     }
 }
 

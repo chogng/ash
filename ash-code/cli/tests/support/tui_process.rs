@@ -18,10 +18,6 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
-#[cfg(unix)]
-use std::sync::atomic::AtomicBool;
-#[cfg(unix)]
-use std::sync::atomic::Ordering;
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
@@ -54,7 +50,6 @@ pub struct Fixture {
 
 impl Fixture {
     pub fn new() -> Self {
-        trace_pty("fixture begin");
         #[cfg(unix)]
         let base = fs::canonicalize(std::env::temp_dir()).unwrap();
         #[cfg(unix)]
@@ -101,7 +96,6 @@ impl Fixture {
             daemon.is_file(),
             "build the matching daemon with `just test-tui`"
         );
-        trace_pty("fixture ready");
         Self {
             _root: root,
             root: path,
@@ -254,24 +248,27 @@ baseUrl = "{base_url}"
 
 impl Drop for Fixture {
     fn drop(&mut self) {
-        trace_pty("fixture cleanup begin");
-        if thread::panicking()
-            && let Ok(path) = daemon_log_path(&self.profile)
-            && let Ok(log) = fs::read_to_string(&path)
-        {
-            eprintln!("Test daemon log ({}):\n{log}", path.display());
+        if thread::panicking() {
+            if let Ok(entries) = fs::read_dir(self.profile.join("run")) {
+                for entry in entries.flatten() {
+                    if entry
+                        .path()
+                        .extension()
+                        .is_some_and(|extension| extension == "log")
+                    {
+                        if let Ok(log) = fs::read_to_string(entry.path()) {
+                            eprintln!("Test daemon log ({}):\n{log}", entry.path().display());
+                        }
+                    }
+                }
+            }
         }
         // Stop only the daemon belonging to this isolated fixture before deleting it.
         let _ = std::process::Command::new(env!("CARGO_BIN_EXE_ash"))
             .args(["app-server", "daemon", "stop"])
             .envs(self.environment())
             .output();
-        trace_pty("fixture cleanup end");
     }
-}
-
-fn daemon_log_path(profile: &Path) -> Result<PathBuf, String> {
-    ash_app_server_daemon::daemon_endpoint_path(profile).map(|socket| socket.with_extension("log"))
 }
 
 fn find_named(root: &Path, name: &str) -> Option<PathBuf> {
@@ -294,12 +291,6 @@ pub struct TuiProcess {
     child: ChildGuard,
     capture: Arc<Mutex<TerminalCapture>>,
     reader: Option<thread::JoinHandle<()>>,
-    #[cfg(target_os = "linux")]
-    profile: PathBuf,
-    #[cfg(target_os = "linux")]
-    trace_file: PathBuf,
-    #[cfg(unix)]
-    reader_stop: Arc<AtomicBool>,
     snapshot_paths: Vec<String>,
 }
 
@@ -319,6 +310,38 @@ impl TuiProcess {
         terminal: Option<(&str, &str)>,
     ) -> Self {
         let pair = native_pty_system().openpty(size).unwrap();
+        let mut reader = pair.master.try_clone_reader().unwrap();
+        let writer = Arc::new(Mutex::new(pair.master.take_writer().unwrap()));
+        let reply_writer = Arc::clone(&writer);
+        let capture = Arc::new(Mutex::new(TerminalCapture::new(size)));
+        let reader_capture = Arc::clone(&capture);
+        let reader_thread = thread::spawn(move || {
+            let mut buffer = [0_u8; 8_192];
+            loop {
+                match reader.read(&mut buffer) {
+                    Ok(0) => break,
+                    Ok(read) => {
+                        let replies = {
+                            let mut capture = reader_capture.lock().unwrap();
+                            capture.push(&buffer[..read]);
+                            capture.core.take_reply_bytes()
+                        };
+                        if !replies.is_empty() {
+                            let mut writer = reply_writer.lock().unwrap();
+                            if writer
+                                .write_all(&replies)
+                                .and_then(|_| writer.flush())
+                                .is_err()
+                            {
+                                break;
+                            }
+                        }
+                    }
+                    Err(error) if error.kind() == ErrorKind::Interrupted => continue,
+                    Err(_) => break,
+                }
+            }
+        });
         let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_ash"));
         command.args(args);
         command.cwd(&fixture.workspace);
@@ -341,78 +364,8 @@ impl TuiProcess {
             command.env(name, value);
         }
         command.env("ASH_LOCAL_APP_SERVER_IDLE_TIMEOUT_MILLIS", "5000");
-        let trace_file = fixture.root.join("startup-trace.log");
-        if std::env::var_os("ASH_TUI_TEST_TRACE").is_some() {
-            command.env("ASH_TUI_TEST_TRACE_FILE", trace_file.as_os_str());
-        }
-        // Spawn before adding the reader thread; portable-pty uses a Unix pre-exec hook.
-        trace_pty("spawn begin");
         let child = ChildGuard::new(pair.slave.spawn_command(command).unwrap());
-        trace_pty("spawn ready");
         drop(pair.slave);
-        let mut reader = pair.master.try_clone_reader().unwrap();
-        let writer = Arc::new(Mutex::new(pair.master.take_writer().unwrap()));
-        let reply_writer = Arc::clone(&writer);
-        let capture = Arc::new(Mutex::new(TerminalCapture::new(size)));
-        let reader_capture = Arc::clone(&capture);
-        #[cfg(unix)]
-        let reader_stop = Arc::new(AtomicBool::new(false));
-        #[cfg(unix)]
-        let thread_stop = Arc::clone(&reader_stop);
-        #[cfg(unix)]
-        let master_fd = pair.master.as_raw_fd().expect("Unix PTY master fd");
-        let reader_thread = thread::spawn(move || {
-            let mut buffer = [0_u8; 8_192];
-            let mut reads = 0;
-            trace_pty("reader loop begin");
-            loop {
-                #[cfg(unix)]
-                if !wait_for_pty_output(master_fd, &thread_stop) {
-                    trace_pty("reader poll stopped");
-                    break;
-                }
-                if reads < 20 {
-                    trace_pty("reader read begin");
-                }
-                match reader.read(&mut buffer) {
-                    Ok(0) => {
-                        trace_pty("reader EOF");
-                        break;
-                    }
-                    Ok(read) => {
-                        if reads < 20 {
-                            trace_pty(&format!("reader read {read} bytes"));
-                            trace_pty("reader capture begin");
-                        }
-                        let replies = {
-                            let mut capture = reader_capture.lock().unwrap();
-                            capture.push(&buffer[..read]);
-                            capture.core.take_reply_bytes()
-                        };
-                        if reads < 20 {
-                            trace_pty("reader capture ready");
-                        }
-                        reads += 1;
-                        if !replies.is_empty() {
-                            let mut writer = reply_writer.lock().unwrap();
-                            if writer
-                                .write_all(&replies)
-                                .and_then(|_| writer.flush())
-                                .is_err()
-                            {
-                                break;
-                            }
-                        }
-                    }
-                    Err(error) if error.kind() == ErrorKind::Interrupted => continue,
-                    Err(error) => {
-                        trace_pty(&format!("reader error {error}"));
-                        break;
-                    }
-                }
-            }
-        });
-        trace_pty("reader ready");
         let mut snapshot_paths = vec![fixture.root.to_string_lossy().into_owned()];
         if let Ok(path) = fs::canonicalize(&fixture.root) {
             let path = path.to_string_lossy().into_owned();
@@ -440,12 +393,6 @@ impl TuiProcess {
             child,
             capture,
             reader: Some(reader_thread),
-            #[cfg(target_os = "linux")]
-            profile: fixture.profile.clone(),
-            #[cfg(target_os = "linux")]
-            trace_file,
-            #[cfg(unix)]
-            reader_stop,
             snapshot_paths,
         }
     }
@@ -531,7 +478,6 @@ impl TuiProcess {
     }
 
     fn wait_for_redraw_after(&mut self, revision: u64) {
-        trace_pty("redraw begin");
         let deadline = Instant::now() + STATE_TIMEOUT;
         let mut observed_revision = None;
         loop {
@@ -543,7 +489,6 @@ impl TuiProcess {
             let current_revision = self.capture.lock().unwrap().revision();
             if current_revision > revision {
                 if observed_revision == Some(current_revision) {
-                    trace_pty("redraw ready");
                     return;
                 }
                 observed_revision = Some(current_revision);
@@ -578,35 +523,13 @@ impl TuiProcess {
     }
 
     pub fn wait_for_screen(&mut self, expected: &str) {
-        trace_pty(&format!("screen wait {expected}"));
         let deadline = Instant::now() + STATE_TIMEOUT;
-        let mut next_report = Instant::now() + Duration::from_secs(5);
-        let mut first = true;
         loop {
-            if Instant::now() >= next_report {
-                trace_pty("screen still waiting");
-                next_report += Duration::from_secs(5);
-            }
-            if first {
-                trace_pty("screen read begin");
-            }
             let screen = self.screen();
-            if first {
-                trace_pty("screen read ready");
-            }
             if screen.contains(expected) {
-                trace_pty(&format!("screen ready {expected}"));
                 return;
             }
-            if first {
-                trace_pty("screen child status begin");
-            }
-            let status = self.child.try_wait().unwrap();
-            if first {
-                trace_pty("screen child status ready");
-            }
-            if let Some(status) = status {
-                trace_pty(&format!("screen child exited {status:?}"));
+            if let Some(status) = self.child.try_wait().unwrap() {
                 self.close_terminal();
                 panic!(
                     "TUI exited before drawing {expected:?}: {status:?}; raw:\n{}",
@@ -614,22 +537,11 @@ impl TuiProcess {
                 );
             }
             if Instant::now() >= deadline {
-                trace_pty("screen timeout");
-                #[cfg(target_os = "linux")]
-                self.trace_child_process();
-                trace_pty(&format!("screen contents:\n{screen}"));
-                let raw = self.raw_text();
-                let tail = raw.chars().rev().take(4_096).collect::<String>();
-                trace_pty(&format!(
-                    "raw output tail:\n{}",
-                    tail.chars().rev().collect::<String>()
-                ));
                 panic!(
                     "TUI screen did not contain {expected:?}; screen:\n{screen}\nraw:\n{}",
                     self.raw_text()
                 );
             }
-            first = false;
             thread::sleep(Duration::from_millis(20));
         }
     }
@@ -668,86 +580,6 @@ impl TuiProcess {
         self.capture.lock().unwrap().screen()
     }
 
-    #[cfg(target_os = "linux")]
-    fn trace_child_process(&self) {
-        if std::env::var_os("ASH_TUI_TEST_TRACE").is_none() {
-            return;
-        }
-        let Some(pid) = self.child.child.process_id() else {
-            trace_pty("child PID unavailable");
-            return;
-        };
-        let root = PathBuf::from(format!("/proc/{pid}"));
-        let executable = fs::read_link(root.join("exe"))
-            .map(|path| path.display().to_string())
-            .unwrap_or_else(|error| format!("unavailable: {error}"));
-        let command = fs::read(root.join("cmdline"))
-            .map(|bytes| String::from_utf8_lossy(&bytes).replace('\0', " "))
-            .unwrap_or_else(|error| format!("unavailable: {error}"));
-        let state = fs::read_to_string(root.join("status"))
-            .ok()
-            .and_then(|status| {
-                status
-                    .lines()
-                    .find(|line| line.starts_with("State:"))
-                    .map(str::to_owned)
-            })
-            .unwrap_or_else(|| "State: unavailable".into());
-        let wait = fs::read_to_string(root.join("wchan"))
-            .map(|wait| wait.trim().to_string())
-            .unwrap_or_else(|error| format!("unavailable: {error}"));
-        trace_pty(&format!(
-            "child pid={pid} exe={executable} cmdline={command:?} {state} wchan={wait}"
-        ));
-        let children = fs::read_to_string(root.join("task").join(pid.to_string()).join("children"))
-            .unwrap_or_default();
-        trace_pty(&format!("child descendants: {children:?}"));
-        for child_pid in children.split_whitespace() {
-            let child_root = PathBuf::from(format!("/proc/{child_pid}"));
-            let command = fs::read(child_root.join("cmdline"))
-                .map(|bytes| String::from_utf8_lossy(&bytes).replace('\0', " "))
-                .unwrap_or_else(|error| format!("unavailable: {error}"));
-            let state = fs::read_to_string(child_root.join("status"))
-                .ok()
-                .and_then(|status| {
-                    status
-                        .lines()
-                        .find(|line| line.starts_with("State:"))
-                        .map(str::to_owned)
-                })
-                .unwrap_or_else(|| "State: unavailable".into());
-            trace_pty(&format!("child {child_pid}: cmdline={command:?} {state}"));
-        }
-        let trace = fs::read_to_string(&self.trace_file)
-            .unwrap_or_else(|error| format!("unavailable: {error}"));
-        let tail = trace.chars().rev().take(8_192).collect::<String>();
-        trace_pty(&format!(
-            "startup trace {}:\n{}",
-            self.trace_file.display(),
-            tail.chars().rev().collect::<String>()
-        ));
-        match daemon_log_path(&self.profile) {
-            Ok(path) => {
-                let socket = path.with_extension("sock");
-                let operation = path.with_extension("operation");
-                trace_pty(&format!(
-                    "daemon endpoint socket={} operation_lock={}",
-                    socket.exists(),
-                    operation.exists()
-                ));
-                let log = fs::read_to_string(&path)
-                    .unwrap_or_else(|error| format!("unavailable: {error}"));
-                let tail = log.chars().rev().take(4_096).collect::<String>();
-                trace_pty(&format!(
-                    "daemon log {}:\n{}",
-                    path.display(),
-                    tail.chars().rev().collect::<String>()
-                ));
-            }
-            Err(error) => trace_pty(&format!("daemon endpoint unavailable: {error}")),
-        }
-    }
-
     pub fn raw_text(&self) -> String {
         self.capture.lock().unwrap().raw_text()
     }
@@ -771,7 +603,6 @@ impl TuiProcess {
     }
 
     pub fn quit(&mut self) {
-        trace_pty("quit begin");
         let deadline = Instant::now() + PROCESS_TIMEOUT;
         let mut sent_revision = self.capture.lock().unwrap().revision();
         let mut observed_revision = sent_revision;
@@ -779,7 +610,6 @@ impl TuiProcess {
         self.send(&[0x03]);
         loop {
             if let Some(status) = self.child.try_wait().unwrap() {
-                trace_pty("quit child exited");
                 self.close_terminal();
                 assert!(
                     status.success(),
@@ -811,19 +641,13 @@ impl TuiProcess {
             thread::sleep(Duration::from_millis(20));
         }
         self.close_terminal();
-        trace_pty("quit end");
     }
 
     fn close_terminal(&mut self) {
-        trace_pty("terminal close begin");
-        #[cfg(unix)]
-        self.reader_stop.store(true, Ordering::Release);
         *self.writer.lock().unwrap() = Box::new(std::io::sink());
-        trace_pty("terminal writer closed");
-        // ConPTY closes its output pipe with the pseudoconsole. On Unix, a
-        // descendant can keep the slave open, so the reader stops by signal.
+        // ConPTY keeps its output pipe open until the pseudoconsole is closed.
+        // Keep the reader draining while closing, then join it after EOF.
         drop(self.master.take());
-        trace_pty("terminal master closed");
         if let Some(reader) = self.reader.take() {
             if let Err(error) = reader.join() {
                 if !thread::panicking() {
@@ -831,57 +655,7 @@ impl TuiProcess {
                 }
             }
         }
-        trace_pty("terminal reader joined");
     }
-}
-
-fn trace_pty(stage: &str) {
-    if std::env::var_os("ASH_TUI_TEST_TRACE").is_none() {
-        return;
-    }
-    let current = thread::current();
-    let name = current.name().unwrap_or("unnamed");
-    let _ = writeln!(std::io::stderr(), "PTY {name}: {stage}");
-}
-
-#[cfg(unix)]
-fn wait_for_pty_output(master_fd: std::os::fd::RawFd, stop: &AtomicBool) -> bool {
-    // A fresh registration sees output left after the previous bounded read.
-    let mut poll = mio::Poll::new().expect("PTY output poll");
-    poll.registry()
-        .register(
-            &mut mio::unix::SourceFd(&master_fd),
-            mio::Token(0),
-            mio::Interest::READABLE,
-        )
-        .expect("register PTY output");
-    let mut events = mio::Events::with_capacity(1);
-    while !stop.load(Ordering::Acquire) {
-        match poll.poll(&mut events, Some(Duration::from_millis(100))) {
-            Ok(_) if !events.is_empty() => return !stop.load(Ordering::Acquire),
-            Ok(_) => {}
-            Err(error) if error.kind() == ErrorKind::Interrupted => {}
-            Err(_) => return false,
-        }
-    }
-    false
-}
-
-#[cfg(unix)]
-#[test]
-fn pty_output_wait_stops_when_a_slave_is_still_open() {
-    let pair = native_pty_system().openpty(LARGE_SIZE).unwrap();
-    let master_fd = pair.master.as_raw_fd().unwrap();
-    let stop = Arc::new(AtomicBool::new(false));
-    let reader_stop = Arc::clone(&stop);
-    let reader = thread::spawn(move || wait_for_pty_output(master_fd, &reader_stop));
-
-    thread::sleep(Duration::from_millis(20));
-    stop.store(true, Ordering::Release);
-    let started = Instant::now();
-    assert!(!reader.join().unwrap());
-    assert!(started.elapsed() < Duration::from_secs(2));
-    drop(pair.slave);
 }
 
 fn normalize_snapshot(mut screen: String, paths: &[String]) -> String {
@@ -1087,11 +861,8 @@ fn assert_named_snapshot(name: &str, screen: String) {
 
 impl Drop for TuiProcess {
     fn drop(&mut self) {
-        trace_pty("process drop begin");
         self.child.terminate();
-        trace_pty("process child terminated");
         self.close_terminal();
-        trace_pty("process drop end");
     }
 }
 

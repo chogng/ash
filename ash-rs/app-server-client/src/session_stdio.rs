@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::io::BufReader;
-use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::ChildStdin;
@@ -17,6 +16,7 @@ use std::sync::mpsc::Receiver;
 use std::sync::mpsc::SyncSender;
 use std::thread;
 
+use serde_json::Value;
 use ash_app_server_protocol::protocol::common::ClientCapabilities;
 use ash_app_server_protocol::protocol::common::ClientInfo;
 use ash_app_server_protocol::protocol::initialize::InitializeParams;
@@ -28,7 +28,6 @@ use ash_app_server_protocol::rpc::JsonRpcResponse;
 use ash_app_server_transport::DEFAULT_MAX_MESSAGE_BYTES;
 use ash_app_server_transport::JsonlReader;
 use ash_app_server_transport::JsonlWriter;
-use serde_json::Value;
 
 use super::AppServerEvent;
 use super::AppServerEvents;
@@ -125,7 +124,6 @@ pub(super) fn start(
     client_info: ClientInfo,
     capabilities: ClientCapabilities,
 ) -> Result<AppServerSession, ClientError> {
-    trace_stdio("spawn begin");
     let mut process_command = Command::new(command.executable());
     process_command
         .args(command.arguments())
@@ -139,7 +137,6 @@ pub(super) fn start(
     let mut process = process_command
         .spawn()
         .map_err(|error| ClientError::Transport(error.to_string()))?;
-    trace_stdio("spawn ready");
     let stdin = process
         .stdin
         .take()
@@ -193,12 +190,10 @@ pub(super) fn start(
         in_process: false,
         commands: commands.clone(),
     });
-    trace_stdio("initialize begin");
     let initialized = client.initialize(InitializeParams {
         client_info,
         capabilities,
     });
-    trace_stdio("initialize returned");
     match initialized {
         Ok(initialized) => {
             if let Err(compatibility_error) =
@@ -262,7 +257,6 @@ fn write_requests(stdin: ChildStdin, requests: Receiver<DriverCommand>, pending:
             );
             return;
         }
-        trace_stdio("request write begin");
         if let Err(error) = writer.write_message(&request) {
             if let Some(response) = pending
                 .lock()
@@ -277,7 +271,6 @@ fn write_requests(stdin: ChildStdin, requests: Receiver<DriverCommand>, pending:
             );
             return;
         }
-        trace_stdio("request written");
     }
     fail_pending(
         &pending,
@@ -319,7 +312,6 @@ fn read_output(
                 return;
             }
         };
-        trace_stdio("response read");
         let value: Value = match serde_json::from_str(&raw) {
             Ok(value) => value,
             Err(error) => {
@@ -455,17 +447,6 @@ fn fail_pending(pending: &PendingRequests, error: ClientError) {
         .unwrap_or_default();
     for (_, response) in pending {
         let _ = response.send(Err(error.clone()));
-    }
-}
-
-fn trace_stdio(stage: &str) {
-    if let Some(path) = std::env::var_os("ASH_TUI_TEST_TRACE_FILE")
-        && let Ok(mut file) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)
-    {
-        let _ = file.write_all(format!("ASH stdio client: {stage}\n").as_bytes());
     }
 }
 

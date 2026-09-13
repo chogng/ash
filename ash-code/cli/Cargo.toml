@@ -46,9 +46,6 @@ tempfile = { workspace = true }
 ash-terminal = { workspace = true }
 ash-product-update = { workspace = true, features = ["signing"] }
 
-[target.'cfg(unix)'.dev-dependencies]
-mio = { workspace = true }
-
 [lints]
 workspace = true
 
