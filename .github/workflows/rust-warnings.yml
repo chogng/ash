@@ -169,10 +169,10 @@ jobs:
           tool: just@1.46.0
 
       - name: Test TUI interactions
-        run: just test ash-tui
+        run: just test ash-tui --profile ci-test
 
       - name: Test real TUI terminal scenarios
-        run: just test-tui -- --test-threads=4
+        run: just --set tui_profile ci-test test-tui -- --test-threads=4
 
       - name: Test remote TUI reconnect
-        run: just test ash-cli interactive_remote_tui_preserves_home_draft_after_transport_loss
+        run: just test ash-cli interactive_remote_tui_preserves_home_draft_after_transport_loss --profile ci-test
