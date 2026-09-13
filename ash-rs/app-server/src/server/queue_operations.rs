@@ -263,6 +263,8 @@ impl AppServer {
         self.threads
             .install_session_extensions(snapshot.session_id.clone(), self.agent_extensions.clone())
             .map_err(|error| error.to_string())?;
+        let mut input = request.input.clone();
+        let selection = self.turn_instruction_selection(&mut input);
         let start = self.start_agent_turn_request(
             ThreadMutation {
                 command_id: request.command_id.clone(),
@@ -272,9 +274,9 @@ impl AppServer {
             request.thread_id.clone(),
             request.approval_mode,
             TurnToolModeSelection::Explicit(request.tool_mode),
-            request.input.clone(),
+            input,
             ash_protocol::TurnKind::Coding,
-            ash_prompts::AGENT_INSTRUCTIONS.freeze(),
+            selection,
         );
         let current = self
             .threads

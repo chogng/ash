@@ -754,12 +754,14 @@ impl TurnExecutor {
             let base_budget = calibrated_budget(configured_budget, calibration)
                 .map_err(|error| ExecutionFailure::model(CoreError::Context(error.to_string())))?;
             let budget = measurement_policy.adjusted_budget(base_budget);
+            let read_paths = crate::services::read_paths_for_turn(&snapshot, turn_id);
             let harness_context = self
                 .harness_context
                 .snapshot(&crate::HarnessContextRequest {
                     session_id: &snapshot.session_id,
                     thread_id,
                     turn_id,
+                    read_paths: &read_paths,
                 })
                 .map_err(ExecutionFailure::model)?;
             let mut evidence = Vec::new();

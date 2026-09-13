@@ -14,6 +14,7 @@ use ash_protocol::TurnId;
 pub(crate) enum InstructionLayer {
     System,
     Product,
+    User,
     Directory,
     Skill,
     /// Per-invocation context appended after the reusable history prefix.

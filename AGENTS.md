@@ -1,4 +1,3 @@
-`/Volumes/1t/..` or
 - `../vscode` and `../codex` and `../zed` and `../warp`, `../marketplace`, `../mxc`
 
 # Ash Agent Instructions

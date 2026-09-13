@@ -10,9 +10,6 @@ use crate::HarnessInstructions;
 use crate::ThreadCommandSnapshot;
 use crate::ThreadSnapshot;
 use crate::TurnSnapshot;
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-use std::path::PathBuf;
 use ash_agent_environment::AgentEnvironmentSnapshot;
 use ash_agent_environment::Dirs;
 use ash_agent_environment::HostEnvironment;
@@ -25,6 +22,9 @@ use ash_protocol::ToolDefinition;
 use ash_protocol::ToolName;
 use ash_protocol::TurnId;
 use ash_protocol::TurnStatus;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::path::PathBuf;
 
 #[test]
 fn assembles_messages_and_paired_tool_results_from_durable_items() {
@@ -290,7 +290,7 @@ fn injects_instructions_before_history_and_environment_at_the_request_tail() {
     };
     assert!(matches!(message.role, MessageRole::User));
     assert!(
-        matches!(&message.content[0], ContentPart::Text(text) if text.contains("Directory Instructions from .ash/instructions"))
+        matches!(&message.content[0], ContentPart::Text(text) if text.contains("Directory Instructions apply only to their declared roots"))
     );
     assert!(
         matches!(&message.content[0], ContentPart::Text(text) if text.ends_with("follow the directory rules\n</directory-instructions>"))
@@ -305,6 +305,43 @@ fn injects_instructions_before_history_and_environment_at_the_request_tail() {
     assert!(
         matches!(&message.content[0], ContentPart::Text(text) if text.contains(&format!("<dir>{}</dir>", additional_root.display())))
     );
+}
+
+#[test]
+fn user_instructions_precede_directory_instructions_without_entering_system_body() {
+    let turn_id = id::<TurnId>("turn");
+    let snapshot = snapshot(
+        turn_id.clone(),
+        vec![ThreadItem::UserMessage {
+            item_id: id("user"),
+            turn_id,
+            text: "hello".into(),
+        }],
+    );
+    let harness = HarnessContext::new(
+        HarnessInstructions::new("system body", Some("directory guidance".into()))
+            .with_user_instructions(Some("user guidance".into()), "user-revision"),
+    );
+
+    let request = assemble(&snapshot, Vec::new(), &harness).unwrap();
+
+    let resolved = request.instructions.as_deref().unwrap();
+    assert_eq!(resolved, "system body");
+    let InputItem::Message(message) = &request.input[0] else {
+        panic!("scoped instructions must be the first input message");
+    };
+    assert!(matches!(message.role, MessageRole::User));
+    let ContentPart::Text(text) = &message.content[0] else {
+        panic!("scoped instructions must be text");
+    };
+    assert!(text.contains("user guidance"));
+    assert!(text.contains("directory guidance"));
+    assert!(text.find("user guidance") < text.find("directory guidance"));
+    let InputItem::Message(message) = &request.input[1] else {
+        panic!("durable user input must follow scoped instructions");
+    };
+    assert!(matches!(&message.content[0], ContentPart::Text(text) if text == "hello"));
+    assert_eq!(request.input.len(), 2);
 }
 
 #[test]

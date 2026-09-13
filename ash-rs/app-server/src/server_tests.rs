@@ -2799,6 +2799,121 @@ fn explicit_skill_flows_through_core_extension_lifecycle() {
 }
 
 #[test]
+fn create_instructions_command_freezes_product_prompt_without_skill_activation() {
+    let home_root = tempfile::tempdir().unwrap();
+    let home = Arc::new(ash_home::AshHome::new(
+        ash_utils_absolute_path::AbsolutePathBuf::from_absolute(home_root.path()).unwrap(),
+    ));
+    let model = Arc::new(RecordingModel::default());
+    let server = server_with_model(model.clone()).with_home(home);
+    let mut connection = server.connection();
+    let initialized = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":1,"method":"initialize",
+            "params":{"clientInfo":{"name":"test","version":"1"},"capabilities":{}}
+        }),
+    );
+    assert!(initialized["result"]["slashCommands"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|command| command["name"] == "create-instructions"));
+    let session = create_session(&server, &mut connection, 2, "instructions-session");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let thread = create_thread(&server, &mut connection, 3, "instructions-thread", session_id, 1);
+    let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
+
+    let started = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":4,"method":"session/request",
+            "params":{
+                "commandId":"create-instructions-turn","sessionId":session_id,
+                "request":{
+                    "type":"startTurn","expectedSequence":1,"threadId":thread_id,
+                    "input":[{"type":"text","text":"/create-instructions workspace Rust rules"}]
+                }
+            }
+        }),
+    );
+
+    assert!(started["result"]["value"]["turnId"].is_string(), "{started}");
+    wait_for_latest_turn(&server, thread_id, TurnStatus::Completed);
+    let snapshot = server
+        .threads()
+        .read_thread(&ash_protocol::ThreadId::new(thread_id).unwrap())
+        .unwrap();
+    let instructions = snapshot.turns[0].instructions.as_ref().unwrap();
+    assert_eq!(instructions.owner(), "app-server");
+    assert_eq!(instructions.id(), "instructions/create");
+    assert!(snapshot.turns[0].activated_skills.is_empty());
+    let requests = model.requests.lock().unwrap();
+    assert!(requests[0]
+        .instructions
+        .as_deref()
+        .unwrap()
+        .contains("Create or update an Ash Instruction file, not a Skill"));
+    assert!(requests[0].input.iter().any(|item| {
+        let InputItem::Message(message) = item else { return false };
+        message.content.iter().any(|part| matches!(part, ContentPart::Text(text) if text.contains(&home_root.path().display().to_string()) && text.contains("context_attachment")))
+    }));
+    assert!(requests[0].input.iter().any(|item| {
+        let InputItem::Message(message) = item else { return false };
+        message.content.iter().any(|part| matches!(part, ContentPart::Text(text) if text.contains("/create-instructions workspace Rust rules")))
+    }));
+}
+
+#[test]
+fn init_command_freezes_ash_md_guidance_without_skill_activation() {
+    let home_root = tempfile::tempdir().unwrap();
+    let home = Arc::new(ash_home::AshHome::new(
+        ash_utils_absolute_path::AbsolutePathBuf::from_absolute(home_root.path()).unwrap(),
+    ));
+    let model = Arc::new(RecordingModel::default());
+    let server = server_with_model(model.clone()).with_home(home);
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let session = create_session(&server, &mut connection, 2, "init-session");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let thread = create_thread(&server, &mut connection, 3, "init-thread", session_id, 1);
+    let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
+
+    let started = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":4,"method":"session/request",
+            "params":{
+                "commandId":"init-turn","sessionId":session_id,
+                "request":{
+                    "type":"startTurn","expectedSequence":1,"threadId":thread_id,
+                    "input":[{"type":"text","text":"/init workspace"}]
+                }
+            }
+        }),
+    );
+
+    assert!(started["result"]["value"]["turnId"].is_string(), "{started}");
+    wait_for_latest_turn(&server, thread_id, TurnStatus::Completed);
+    let snapshot = server
+        .threads()
+        .read_thread(&ash_protocol::ThreadId::new(thread_id).unwrap())
+        .unwrap();
+    let instructions = snapshot.turns[0].instructions.as_ref().unwrap();
+    assert_eq!(instructions.id(), "instructions/init");
+    assert!(snapshot.turns[0].activated_skills.is_empty());
+    let requests = model.requests.lock().unwrap();
+    assert!(requests[0]
+        .instructions
+        .as_deref()
+        .unwrap()
+        .contains("Create or update `ASH.md`"));
+}
+
+#[test]
 fn session_request_routes_thread_mutations_and_freezes_turn_approval_mode() {
     let server = server();
     let mut connection = server.connection();

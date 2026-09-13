@@ -82,8 +82,10 @@ ash-git = { workspace = true }
 github = { workspace = true }
 ash-http-client = { workspace = true }
 ash-hooks = { workspace = true }
+ash-home = { workspace = true }
 ash-install-context = { workspace = true }
 ash-instructions = { workspace = true }
+ash-utils-absolute-path = { workspace = true }
 ash-kimi = { workspace = true }
 ash-lsp-server-provider = { workspace = true }
 ash-lsp-manager = { workspace = true }

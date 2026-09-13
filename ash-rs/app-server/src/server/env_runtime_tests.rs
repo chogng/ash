@@ -33,6 +33,7 @@ use ash_core::StartThreadRequest;
 use ash_core::StartTurnRequest;
 use ash_core::ThreadController;
 use ash_file_access::GrantSource;
+use ash_home::AshHome;
 use ash_model_provider::EchoModel;
 use ash_model_provider::EmbeddingInvoker;
 use ash_model_provider::EmbeddingRequest;
@@ -45,6 +46,7 @@ use ash_protocol::ModelId;
 use ash_protocol::ModelRef;
 use ash_protocol::ProviderId;
 use ash_protocol::UserInput;
+use ash_utils_absolute_path::AbsolutePathBuf;
 use ash_shell_command::RipgrepExecutable;
 use std::num::NonZeroU64;
 use std::path::Path;
@@ -52,6 +54,101 @@ use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use std::time::Duration;
+use std::time::Instant;
+
+#[derive(Default)]
+struct RequestRecordingModel {
+    requests: Mutex<Vec<ash_protocol::ModelRequest>>,
+}
+
+impl ash_core::ModelService for RequestRecordingModel {
+    fn invoke(
+        &self,
+        _: ash_core::ModelSelection<'_>,
+        request: &ash_protocol::ModelRequest,
+        _: &CancellationToken,
+    ) -> Result<ash_protocol::ModelResponse, CoreError> {
+        self.requests.lock().unwrap().push(request.clone());
+        Ok(ash_protocol::ModelResponse {
+            output: vec![ash_protocol::ResponseItem::Text("done".into())],
+            usage: None,
+            billing: None,
+            stop_reason: ash_protocol::StopReason::Completed,
+        })
+    }
+}
+
+#[test]
+fn clearing_directories_keeps_home_instructions_in_model_requests() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir(root.path().join("instructions")).unwrap();
+    std::fs::write(
+        root.path().join("instructions/user.md"),
+        "---\nname: user\nload: global\n---\n\nKeep this user guidance.\n",
+    )
+    .unwrap();
+    let home = Arc::new(AshHome::new(
+        AbsolutePathBuf::from_absolute(root.path()).unwrap(),
+    ));
+    let model = Arc::new(RequestRecordingModel::default());
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        InMemoryThreadStore::default(),
+    )));
+    let server = AppServer::new(threads, model.clone())
+        .with_ephemeral_env_state()
+        .with_home(home)
+        .with_local_env_host(None, host_policy())
+        .unwrap();
+    server.activate_local_dirs(Vec::new()).unwrap();
+    let thread = server
+        .start_thread(StartThreadRequest {
+            agent_id: None,
+            agent: None,
+            command_id: CommandId::new("create-home-thread").unwrap(),
+            title: "home".into(),
+        })
+        .unwrap();
+    let turn = server
+        .threads
+        .start_turn(
+            &thread.thread_id,
+            StartTurnRequest {
+                kind: ash_protocol::TurnKind::Coding,
+                instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
+                command_id: CommandId::new("start-home-turn").unwrap(),
+                expected_sequence: SequenceExpectation::Exact(1),
+                model: None,
+                policy_revision: "test-policy-v1".into(),
+                approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+                tool_mode: ash_protocol::ToolMode::Direct,
+                tool_profile: None,
+                activated_skills: Vec::new(),
+                input: vec![UserInput::Text { text: "hello".into() }],
+            },
+        )
+        .unwrap();
+    server
+        .turn_executor_backend()
+        .start(&thread.thread_id, &turn.turn_id)
+        .unwrap();
+
+    let deadline = Instant::now() + Duration::from_secs(3);
+    let request = loop {
+        if let Some(request) = model.requests.lock().unwrap().first().cloned() {
+            break request;
+        }
+        assert!(Instant::now() < deadline, "model request was not captured");
+        std::thread::yield_now();
+    };
+    let ash_protocol::InputItem::Message(message) = &request.input[0] else {
+        panic!("home instructions must precede the durable user input");
+    };
+    assert!(matches!(
+        &message.content[0],
+        ash_protocol::ContentPart::Text(text) if text.contains("Keep this user guidance.")
+    ));
+}
 
 struct PermissionBoundSemanticEmbedding;
 

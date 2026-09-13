@@ -1311,6 +1311,10 @@ pub fn open_local_app_server_with_codebase_providers(
         None
     };
     let cloud_codebase_root = state_runtime.cloud_codebase_root().to_path_buf();
+    let home = Arc::new(ash_home::AshHome::new(
+        ash_utils_absolute_path::AbsolutePathBuf::from_absolute(state_runtime.profile_root())
+            .map_err(open_error)?,
+    ));
     let state_runtime = Arc::clone(&state_runtime);
     let mut server = match &profile_runtime {
         Some(runtime) => AppServer::new_with_updates(
@@ -1320,6 +1324,7 @@ pub fn open_local_app_server_with_codebase_providers(
         ),
         None => AppServer::new(threads, agent_model),
     }
+    .with_home(home)
     .with_telemetry(diagnostics, telemetry, analytics)
     .with_model_catalog(direct_catalog)
     .with_provider_credentials(Arc::new(

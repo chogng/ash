@@ -12,16 +12,21 @@ fn command(name: &str) -> SlashCommandDefinition {
 }
 
 #[test]
-fn default_catalog_advertises_manual_context_compaction() {
+fn default_catalog_advertises_product_commands() {
     let catalog = SlashCommandCatalog::default();
 
-    assert_eq!(catalog.commands().len(), 1);
+    assert_eq!(catalog.commands().len(), 3);
     assert_eq!(catalog.commands()[0].name, "compact");
     assert_eq!(
         catalog.commands()[0].argument_mode,
         SlashCommandArgumentMode::Optional
     );
     assert_eq!(catalog.origin("compact"), Some(SlashCommandOrigin::Server));
+    assert_eq!(catalog.commands()[1].name, "create-instructions");
+    assert_eq!(catalog.commands()[1].argument_hint.as_deref(), Some("[user|workspace] <rule>"));
+    assert_eq!(catalog.origin("create-instructions"), Some(SlashCommandOrigin::Server));
+    assert_eq!(catalog.commands()[2].name, "init");
+    assert_eq!(catalog.origin("init"), Some(SlashCommandOrigin::Server));
 }
 
 #[test]

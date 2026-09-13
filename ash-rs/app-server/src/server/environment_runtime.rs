@@ -8,6 +8,7 @@ use super::dir_contributions::DirContributions;
 use super::fs_watcher::FileSystemWatcher;
 use super::git_runtime::GitRuntime;
 use super::git_runtime::GitWatcher;
+use super::home_context::HomeContext;
 use super::semantic_index_job::AppServerSemanticIndexMetrics;
 use super::semantic_index_job::SemanticIndexJobController;
 use super::symbol_index_runtime::SymbolIndexRuntime;
@@ -1305,13 +1306,14 @@ impl AppServer {
                 .write()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             current.dir_grants.clear();
-            let mut next = EnvRuntime::empty(
-                current
-                    .turn_executor
-                    .clone()
-                    .with_instructions(Arc::new(ash_core::HarnessInstructions::default()))
-                    .without_context_source("codebase"),
-            );
+            let executor = current.turn_executor.clone().without_context_source("codebase");
+            let executor = match &self.home {
+                Some(home) => executor
+                    .with_harness_context_provider(Arc::new(HomeContext::new(Arc::clone(home)))),
+                None => executor
+                    .with_instructions(Arc::new(ash_core::HarnessInstructions::default())),
+            };
+            let mut next = EnvRuntime::empty(executor);
             next.cwd = current.cwd.clone();
             next.dir_grants = Arc::clone(&current.dir_grants);
             let previous = std::mem::replace(&mut *current, next);
@@ -1838,6 +1840,7 @@ impl AppServer {
             &canonical_root,
             dir_grants,
             authorization.authorize(Permission::LoadInstructions).ok(),
+            self.home.clone(),
         )
         .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
         let file_system_watcher = FileSystemWatcher::start_with_observers(
@@ -1939,6 +1942,7 @@ impl AppServer {
             &canonical_root,
             dir_grants,
             authorization.authorize(Permission::LoadInstructions).ok(),
+            self.home.clone(),
         )
         .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
         let repository_mutation = authorization

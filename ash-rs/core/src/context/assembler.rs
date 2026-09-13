@@ -20,7 +20,7 @@ pub(crate) struct ContextAssembler;
 impl ContextAssembler {
     pub(crate) fn assemble(plan: &ContextPlan) -> Result<ModelRequest, CoreError> {
         validate_diagnostics(plan)?;
-        let mut input = directory_instruction_message(plan)
+        let mut input = scoped_instruction_message(plan)
             .into_iter()
             .collect::<Vec<_>>();
         input.extend(checkpoint_message(plan));
@@ -287,7 +287,7 @@ fn resolved_instructions(plan: &ContextPlan) -> Option<String> {
     let body = plan
         .instructions()
         .iter()
-        .filter(|fragment| fragment.layer() < InstructionLayer::Directory)
+        .filter(|fragment| fragment.layer() < InstructionLayer::User)
         .map(|fragment| fragment.body().trim())
         .filter(|body| !body.is_empty())
         .collect::<Vec<_>>()
@@ -295,13 +295,12 @@ fn resolved_instructions(plan: &ContextPlan) -> Option<String> {
     (!body.is_empty()).then_some(body)
 }
 
-fn directory_instruction_message(plan: &ContextPlan) -> Option<InputItem> {
+fn scoped_instruction_message(plan: &ContextPlan) -> Option<InputItem> {
     let body = plan
         .instructions()
         .iter()
         .filter(|fragment| {
-            fragment.layer() >= InstructionLayer::Directory
-                && fragment.layer() != InstructionLayer::Turn
+            fragment.layer() >= InstructionLayer::User && fragment.layer() != InstructionLayer::Turn
         })
         .map(|fragment| fragment.body().trim())
         .filter(|body| !body.is_empty())

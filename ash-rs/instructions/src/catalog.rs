@@ -1,8 +1,10 @@
+use crate::model::AlwaysOnInstruction;
 use crate::model::InstructionArtifact;
 use crate::model::InstructionCatalogSnapshot;
 use crate::model::InstructionDiagnostic;
 use crate::model::InstructionDiagnosticCode;
 use crate::model::InstructionLoadPolicy;
+use globset::Glob;
 use serde::Deserialize;
 use std::fs;
 use std::io::ErrorKind;
@@ -10,9 +12,13 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-const INSTRUCTION_DIRECTORY: &str = ".ash/instructions";
+const DIRECTORY_INSTRUCTIONS: &str = ".ash/instructions";
+const USER_INSTRUCTIONS: &str = "instructions";
 const MAX_ENTRIES: usize = 128;
 const MAX_FILE_BYTES: usize = 32 * 1024;
+const MAX_PATTERNS: usize = 32;
+const MAX_PATTERN_BYTES: usize = 256;
+const ALWAYS_ON_FILES: [&str; 2] = ["AGENTS.md", "ASH.md"];
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -23,19 +29,31 @@ struct InstructionFrontmatter {
     patterns: Vec<String>,
 }
 
-/// Refreshable catalog for one directory's native Instruction directory.
+/// Refreshable catalog for one Ash-owned Instruction directory.
 pub struct InstructionCatalog {
-    dir_root: PathBuf,
+    root: PathBuf,
+    source_root: PathBuf,
     snapshot: Arc<InstructionCatalogSnapshot>,
 }
 
 impl InstructionCatalog {
     pub fn discover(dir_root: impl AsRef<Path>) -> Self {
-        let dir_root = dir_root.as_ref().to_path_buf();
-        let (entries, diagnostics) = scan(&dir_root);
+        Self::from_roots(dir_root.as_ref(), DIRECTORY_INSTRUCTIONS)
+    }
+
+    /// Discovers Ash-owned Instructions directly under the selected user home.
+    pub fn discover_user(home: impl AsRef<Path>) -> Self {
+        Self::from_roots(home.as_ref(), USER_INSTRUCTIONS)
+    }
+
+    fn from_roots(root: &Path, relative_source: &str) -> Self {
+        let root = root.to_path_buf();
+        let source_root = root.join(relative_source);
+        let (always_on, entries, diagnostics) = scan(&root, &source_root);
         Self {
-            dir_root,
-            snapshot: Arc::new(InstructionCatalogSnapshot::new(1, entries, diagnostics)),
+            root,
+            source_root,
+            snapshot: Arc::new(InstructionCatalogSnapshot::new(1, always_on, entries, diagnostics)),
         }
     }
 
@@ -44,8 +62,11 @@ impl InstructionCatalog {
     }
 
     pub fn refresh(&mut self) -> Arc<InstructionCatalogSnapshot> {
-        let (entries, diagnostics) = scan(&self.dir_root);
-        if self.snapshot.entries() == entries && self.snapshot.diagnostics() == diagnostics {
+        let (always_on, entries, diagnostics) = scan(&self.root, &self.source_root);
+        if self.snapshot.always_on() == always_on
+            && self.snapshot.entries() == entries
+            && self.snapshot.diagnostics() == diagnostics
+        {
             return Arc::clone(&self.snapshot);
         }
         self.snapshot = Arc::new(InstructionCatalogSnapshot::new(
@@ -53,6 +74,7 @@ impl InstructionCatalog {
                 .generation()
                 .checked_add(1)
                 .expect("Instruction catalog generation overflowed"),
+            always_on,
             entries,
             diagnostics,
         ));
@@ -60,31 +82,40 @@ impl InstructionCatalog {
     }
 }
 
-fn scan(dir_root: &Path) -> (Vec<InstructionArtifact>, Vec<InstructionDiagnostic>) {
-    let source_root = dir_root.join(INSTRUCTION_DIRECTORY);
-    let metadata = match fs::symlink_metadata(&source_root) {
+fn scan(
+    root: &Path,
+    source_root: &Path,
+) -> (
+    Vec<AlwaysOnInstruction>,
+    Vec<InstructionArtifact>,
+    Vec<InstructionDiagnostic>,
+) {
+    let mut diagnostics = Vec::new();
+    let always_on = ALWAYS_ON_FILES
+        .into_iter()
+        .filter_map(|name| load_always_on(root, name, &mut diagnostics))
+        .collect::<Vec<_>>();
+    let metadata = match fs::symlink_metadata(source_root) {
         Ok(metadata) => metadata,
-        Err(error) if error.kind() == ErrorKind::NotFound => return (Vec::new(), Vec::new()),
+        Err(error) if error.kind() == ErrorKind::NotFound => {
+            return (always_on, Vec::new(), diagnostics);
+        }
         Err(_) => {
-            return (
-                Vec::new(),
-                vec![diagnostic(
+            diagnostics.push(diagnostic(
                     None,
                     InstructionDiagnosticCode::SourceUnavailable,
-                    "Directory Instruction directory metadata is unavailable",
-                )],
-            );
+                    "Instruction directory metadata is unavailable",
+            ));
+            return (always_on, Vec::new(), diagnostics);
         }
     };
     if metadata.file_type().is_symlink() || !metadata.is_dir() {
-        return (
-            Vec::new(),
-            vec![diagnostic(
+        diagnostics.push(diagnostic(
                 None,
                 InstructionDiagnosticCode::SourceUnavailable,
-                "Directory Instruction path must be a real directory",
-            )],
-        );
+                "Instruction path must be a real directory",
+        ));
+        return (always_on, Vec::new(), diagnostics);
     }
     let mut paths = match fs::read_dir(&source_root) {
         Ok(entries) => entries
@@ -92,18 +123,15 @@ fn scan(dir_root: &Path) -> (Vec<InstructionArtifact>, Vec<InstructionDiagnostic
             .map(|entry| entry.path())
             .collect::<Vec<_>>(),
         Err(_) => {
-            return (
-                Vec::new(),
-                vec![diagnostic(
+            diagnostics.push(diagnostic(
                     None,
                     InstructionDiagnosticCode::SourceUnavailable,
-                    "Directory Instruction directory cannot be read",
-                )],
-            );
+                    "Instruction directory cannot be read",
+            ));
+            return (always_on, Vec::new(), diagnostics);
         }
     };
     paths.sort();
-    let mut diagnostics = Vec::new();
     if paths.len() > MAX_ENTRIES {
         diagnostics.push(diagnostic(
             None,
@@ -124,7 +152,74 @@ fn scan(dir_root: &Path) -> (Vec<InstructionArtifact>, Vec<InstructionDiagnostic
             right.message(),
         ))
     });
-    (entries, diagnostics)
+    (always_on, entries, diagnostics)
+}
+
+fn load_always_on(
+    root: &Path,
+    name: &'static str,
+    diagnostics: &mut Vec<InstructionDiagnostic>,
+) -> Option<AlwaysOnInstruction> {
+    let path = root.join(name);
+    let metadata = match fs::symlink_metadata(&path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == ErrorKind::NotFound => return None,
+        Err(_) => {
+            diagnostics.push(diagnostic(
+                Some(PathBuf::from(name)),
+                InstructionDiagnosticCode::SourceUnavailable,
+                "always-on Instruction metadata is unavailable",
+            ));
+            return None;
+        }
+    };
+    if metadata.file_type().is_symlink() || !metadata.is_file() {
+        diagnostics.push(diagnostic(
+            Some(PathBuf::from(name)),
+            InstructionDiagnosticCode::SourceUnavailable,
+            "always-on Instruction must be a regular file",
+        ));
+        return None;
+    }
+    if metadata.len() > MAX_FILE_BYTES as u64 {
+        diagnostics.push(diagnostic(
+            Some(PathBuf::from(name)),
+            InstructionDiagnosticCode::ContentTooLarge,
+            format!("Instruction content exceeds {MAX_FILE_BYTES} bytes"),
+        ));
+        return None;
+    }
+    let bytes = match fs::read(&path) {
+        Ok(bytes) => bytes,
+        Err(_) => {
+            diagnostics.push(diagnostic(
+                Some(PathBuf::from(name)),
+                InstructionDiagnosticCode::SourceUnavailable,
+                "always-on Instruction cannot be read",
+            ));
+            return None;
+        }
+    };
+    if bytes.len() > MAX_FILE_BYTES {
+        diagnostics.push(diagnostic(
+            Some(PathBuf::from(name)),
+            InstructionDiagnosticCode::ContentTooLarge,
+            format!("Instruction content exceeds {MAX_FILE_BYTES} bytes"),
+        ));
+        return None;
+    }
+    let body = match String::from_utf8(bytes) {
+        Ok(body) => body.trim().to_owned(),
+        Err(_) => {
+            diagnostics.push(diagnostic(
+                Some(PathBuf::from(name)),
+                InstructionDiagnosticCode::ContentInvalidUtf8,
+                "always-on Instruction must be UTF-8",
+            ));
+            return None;
+        }
+    };
+    (!body.is_empty()).then_some(AlwaysOnInstruction { source: name, body })
 }
 
 fn load_entry(
@@ -262,8 +357,19 @@ fn load_entry(
 }
 
 fn load_policy(load: String, patterns: Vec<String>) -> Result<InstructionLoadPolicy, &'static str> {
-    if patterns.iter().any(|pattern| pattern.trim().is_empty()) {
-        return Err("Instruction patterns cannot be empty");
+    if patterns.len() > MAX_PATTERNS {
+        return Err("Instruction pattern count exceeds 32");
+    }
+    if patterns.iter().any(|pattern| {
+        pattern.trim().is_empty()
+            || pattern.len() > MAX_PATTERN_BYTES
+            || Path::new(pattern).is_absolute()
+            || Path::new(pattern)
+                .components()
+                .any(|component| component == std::path::Component::ParentDir)
+            || Glob::new(pattern).is_err()
+    }) {
+        return Err("Instruction patterns must be valid relative globs");
     }
     match load.as_str() {
         "global" if patterns.is_empty() => Ok(InstructionLoadPolicy::Global),

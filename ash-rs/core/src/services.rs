@@ -716,6 +716,52 @@ pub struct ToolExecutionFacts {
     activated_skills: Vec<ash_protocol::FrozenSkillActivation>,
 }
 
+/// Returns paths confirmed by successful `read_file` calls in this Turn.
+pub(crate) fn read_paths_for_turn(
+    snapshot: &crate::ThreadSnapshot,
+    turn_id: &ash_protocol::TurnId,
+) -> Vec<PathBuf> {
+    successful_read_paths(snapshot.items.iter().filter(|item| item.turn_id() == turn_id))
+        .into_iter()
+        .collect()
+}
+
+fn successful_read_paths<'a>(
+    items: impl IntoIterator<Item = &'a ash_protocol::ThreadItem>,
+) -> BTreeSet<PathBuf> {
+    let mut calls = std::collections::BTreeMap::new();
+    let mut paths = BTreeSet::new();
+    for item in items {
+        match item {
+            ash_protocol::ThreadItem::ToolCall {
+                tool_call_id,
+                name,
+                arguments_json,
+                ..
+            } => {
+                if name.as_str() == "read_file"
+                    && let Ok(arguments) =
+                        serde_json::from_str::<serde_json::Value>(arguments_json)
+                    && let Some(path) = arguments.get("path").and_then(serde_json::Value::as_str)
+                {
+                    calls.insert(tool_call_id.clone(), PathBuf::from(path));
+                }
+            }
+            ash_protocol::ThreadItem::ToolResult {
+                tool_call_id,
+                is_error: false,
+                ..
+            } => {
+                if let Some(path) = calls.get(tool_call_id) {
+                    paths.insert(path.clone());
+                }
+            }
+            _ => {}
+        }
+    }
+    paths
+}
+
 impl ToolExecutionFacts {
     pub(crate) fn for_turn(
         snapshot: &crate::ThreadSnapshot,
@@ -727,7 +773,6 @@ impl ToolExecutionFacts {
             .iter()
             .find(|turn| &turn.turn_id == turn_id)
             .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
-        let mut calls = std::collections::BTreeMap::new();
         let mut host_tools = available_tools.into_iter().collect::<BTreeSet<_>>();
         if turn.tool_mode.requires_code_mode() {
             host_tools.insert(
@@ -765,7 +810,7 @@ impl ToolExecutionFacts {
             }
             None => (host_tools.clone(), host_tools),
         };
-        let mut facts = Self {
+        let facts = Self {
             execution: Some(ToolExecutionIdentity {
                 session_id: snapshot.session_id.clone(),
                 thread_id: snapshot.thread_id.clone(),
@@ -774,40 +819,11 @@ impl ToolExecutionFacts {
                 policy_revision: turn.policy_revision.clone(),
                 tool_profile: turn.tool_profile.clone(),
             }),
-            read_paths: BTreeSet::new(),
+            read_paths: successful_read_paths(snapshot.items.iter()),
             available_tools,
             delegation_tools,
             activated_skills: turn.activated_skills.clone(),
         };
-        for item in &snapshot.items {
-            match item {
-                ash_protocol::ThreadItem::ToolCall {
-                    tool_call_id,
-                    name,
-                    arguments_json,
-                    ..
-                } => {
-                    if name.as_str() == "read_file"
-                        && let Ok(arguments) =
-                            serde_json::from_str::<serde_json::Value>(arguments_json)
-                        && let Some(path) =
-                            arguments.get("path").and_then(serde_json::Value::as_str)
-                    {
-                        calls.insert(tool_call_id.clone(), PathBuf::from(path));
-                    }
-                }
-                ash_protocol::ThreadItem::ToolResult {
-                    tool_call_id,
-                    is_error: false,
-                    ..
-                } => {
-                    if let Some(path) = calls.get(tool_call_id) {
-                        facts.read_paths.insert(path.clone());
-                    }
-                }
-                _ => {}
-            }
-        }
         Ok(facts)
     }
 
@@ -900,3 +916,7 @@ impl ToolService for NoTools {
         )))
     }
 }
+
+#[cfg(test)]
+#[path = "services_tests.rs"]
+mod tests;

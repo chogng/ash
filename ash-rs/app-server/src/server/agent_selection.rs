@@ -16,7 +16,7 @@ impl super::AppServer {
             match &environment._dir_contributions {
                 Some(contributions) => (
                     vec![contributions.agent_snapshot()],
-                    vec![contributions.instruction_snapshot()],
+                    contributions.instruction_snapshots(),
                 ),
                 None => (Vec::new(), Vec::new()),
             }

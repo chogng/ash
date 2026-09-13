@@ -3,11 +3,13 @@ use super::InstructionLayer;
 use super::InstructionRetention;
 use super::InstructionSource;
 
-/// Immutable system and directory instructions supplied by the host.
+/// Immutable system, user, and directory instructions supplied by the host.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct HarnessInstructions {
     system_body: String,
     system_revision: String,
+    user_instructions: Option<String>,
+    user_revision: String,
     directory_instructions: Option<String>,
     directory_revision: String,
 }
@@ -18,6 +20,8 @@ impl HarnessInstructions {
         Self {
             system_body: system_body.into(),
             system_revision: "unversioned-system".into(),
+            user_instructions: None,
+            user_revision: "unversioned-user".into(),
             directory_instructions,
             directory_revision: "unversioned-directory".into(),
         }
@@ -33,6 +37,17 @@ impl HarnessInstructions {
         self
     }
 
+    /// Adds the selected Ash home's Global Instructions to this host snapshot.
+    pub fn with_user_instructions(
+        mut self,
+        instructions: Option<String>,
+        revision: impl Into<String>,
+    ) -> Self {
+        self.user_instructions = instructions;
+        self.user_revision = revision.into();
+        self
+    }
+
     pub fn with_directory_revision(mut self, revision: impl Into<String>) -> Self {
         self.directory_revision = revision.into();
         self
@@ -44,6 +59,10 @@ impl HarnessInstructions {
 
     pub fn directory_instructions(&self) -> Option<&str> {
         self.directory_instructions.as_deref()
+    }
+
+    pub fn user_instructions(&self) -> Option<&str> {
+        self.user_instructions.as_deref()
     }
 
     pub(crate) fn context_fragments(&self) -> Vec<InstructionFragment> {
@@ -61,6 +80,21 @@ impl HarnessInstructions {
             ));
         }
         if let Some(instructions) = self
+            .user_instructions
+            .as_ref()
+            .filter(|instructions| !instructions.trim().is_empty())
+        {
+            fragments.push(InstructionFragment::new(
+                InstructionSource::new("user", "ash-home-instructions", self.user_revision.clone()),
+                InstructionLayer::User,
+                InstructionRetention::Required,
+                format!(
+                    "<user-instructions>\nUser Instructions from the selected Ash home. They rank below system and safety policy, and above Directory Instructions. Within this scope, ASH.md refines shared AGENTS.md guidance.\n{}\n</user-instructions>",
+                    instructions
+                ),
+            ));
+        }
+        if let Some(instructions) = self
             .directory_instructions
             .as_ref()
             .filter(|instructions| !instructions.trim().is_empty())
@@ -74,7 +108,7 @@ impl HarnessInstructions {
                 InstructionLayer::Directory,
                 InstructionRetention::Required,
                 format!(
-                    "<directory-instructions>\nDirectory Instructions from .ash/instructions. They rank below system and safety policy.\n{}\n</directory-instructions>",
+                    "<directory-instructions>\nDirectory Instructions apply only to their declared roots. They rank below system, safety policy, and User Instructions. Within a root, ASH.md refines shared AGENTS.md guidance.\n{}\n</directory-instructions>",
                     instructions
                 ),
             ));

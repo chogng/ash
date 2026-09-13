@@ -1,5 +1,5 @@
 [package]
-name = "ash-instructions"
+name = "ash-home"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
@@ -8,13 +8,12 @@ readme = "README.md"
 
 [lib]
 doctest = false
-name = "ash_instructions"
+name = "ash_home"
 path = "src/lib.rs"
 
 [dependencies]
-globset = { workspace = true }
-serde = { workspace = true }
-serde_yaml = { workspace = true }
+ash-instructions = { workspace = true }
+ash-utils-absolute-path = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

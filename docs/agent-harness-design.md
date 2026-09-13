@@ -1,6 +1,6 @@
 # Agent Harness 设计
 
-> 状态：Accepted（2026-08-03）；实现状态最后核对于 2026-08-30。
+> 状态：Accepted（2026-08-03）；实现状态最后核对于 2026-09-13。
 > 定位：回答"Core 的 agent loop 具体怎么搭起来"——一次模型调用长什么样、Turn 内循环与
 > 失败弹性、steering、提示词组织、工具选择与注册时机、上下文裁剪压缩、prompt cache、评测。
 >
@@ -138,15 +138,22 @@ durable Thread history 和当前 Turn 输入之后，不进入可复用缓存前
 
 ### 4.3 Directory Instruction 发现与注入
 
-- 发现：只读取已授权目录的 `.ash/instructions/*.md` 文件；`AGENTS.md` 和其他生态
-  格式必须经 `external-agent-migration`，原生 loader 不兼容扫描；
-- 注入：当前只把 `load: global` 条目渲染为 `input[0]` user message，并标注其优先级低于
+- 发现：读取已授权目录的 `AGENTS.md`、`ASH.md` 和 `.ash/instructions/*.md`；前两者
+  是 always-on 纯 Markdown，其他生态专有格式经 `external-agent-migration`；
+- 注入：把 `load: global` 与本 Turn 成功读取文件命中的 `load: contextual` 条目渲染为 `input[0]` user message，并标注其优先级低于
   system 与安全策略；
 - 大小：每个文件最多 32 KiB、直接条目最多 128，非法条目产生隔离 diagnostic；
-- `load: contextual` / `on-demand`：catalog 已保留类型化策略，但资源匹配和显式选择尚未实现；
-- 目录不存在或没有合法 Global 条目：省略 `input[0]`，不放占位符；
+- `load: contextual`：只匹配本 Turn 成功读取且位于对应授权目录内的文件；
+- `load: on-demand`：Agent definition 可显式按名称引用；用户手动附加尚未实现；
+- 目录不存在或没有合法 Global 条目：省略该目录的贡献，不放占位符；
 - 文件变化：Directory watcher 触发 catalog refresh；已经组装的 model request 不变，后续
   model invocation 从 `HarnessContextProvider` 读取新 snapshot。
+
+用户级 Instructions 从 `ASH_HOME/instructions/*.md` 读取，沿用相同格式与大小限制。`ash-home`
+在每次模型调用前刷新，匹配内容先于目录级内容进入首条 user-role 指令消息；未选目录时 Global 仍生效。
+共享 `AGENTS.md` 由 Ash 直接读取，Ash 专属规则位于 `ASH.md`；`CLAUDE.md` 等专有文件不自动读取。
+两级 `AGENTS.md` 和 `ASH.md` 都是 always-on；同级先共享后专属，用户级先于工作区级，
+每个工作区片段带根目录与文件来源。`/init` 创建 `ASH.md`，`/create-instructions` 创建细分规则。
 
 ### 4.4 动态注入：append-only reminder
 

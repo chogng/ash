@@ -23,12 +23,26 @@ pub struct SlashCommandCatalog {
 
 impl Default for SlashCommandCatalog {
     fn default() -> Self {
-        Self::new([SlashCommandDefinition {
-            name: "compact".into(),
-            description: "Summarize conversation history to free context space".into(),
-            argument_mode: SlashCommandArgumentMode::Optional,
-            argument_hint: None,
-        }])
+        Self::new([
+            SlashCommandDefinition {
+                name: "compact".into(),
+                description: "Summarize conversation history to free context space".into(),
+                argument_mode: SlashCommandArgumentMode::Optional,
+                argument_hint: None,
+            },
+            SlashCommandDefinition {
+                name: "create-instructions".into(),
+                description: "Create user or workspace Agent Instructions".into(),
+                argument_mode: SlashCommandArgumentMode::Optional,
+                argument_hint: Some("[user|workspace] <rule>".into()),
+            },
+            SlashCommandDefinition {
+                name: "init".into(),
+                description: "Create or update Ash-specific ASH.md guidance".into(),
+                argument_mode: SlashCommandArgumentMode::Optional,
+                argument_hint: Some("[workspace|user]".into()),
+            },
+        ])
         .expect("built-in slash command definitions are valid")
     }
 }

@@ -1,6 +1,7 @@
 use super::HarnessInstructions;
 use crate::CoreError;
 use std::sync::Arc;
+use std::path::PathBuf;
 use ash_agent_environment::AgentEnvironmentSnapshot;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
@@ -40,7 +41,7 @@ impl HarnessContext {
         self.time_context.as_ref()
     }
 
-    /// Returns the immutable system and directory instructions.
+    /// Returns the immutable system, user, and directory instructions.
     pub fn instructions(&self) -> &HarnessInstructions {
         &self.instructions
     }
@@ -59,6 +60,8 @@ pub struct HarnessContextRequest<'a> {
     pub thread_id: &'a ThreadId,
     /// Turn about to invoke the model.
     pub turn_id: &'a TurnId,
+    /// Files confirmed by successful reads in this Turn's durable transcript.
+    pub read_paths: &'a [PathBuf],
 }
 
 /// Supplies one immutable host-context snapshot at each model-invocation boundary.

@@ -533,6 +533,7 @@ dependencies = [
  "ash-goal",
  "ash-guardian-v2",
  "ash-history-notes",
+ "ash-home",
  "ash-hooks",
  "ash-http-client",
  "ash-image-generation",
@@ -574,6 +575,7 @@ dependencies = [
  "ash-tools",
  "ash-typst",
  "ash-uds",
+ "ash-utils-absolute-path",
  "ash-utils-home-dir",
  "ash-utils-pty",
  "ash-web-search-extension",
@@ -1426,6 +1428,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ash-home"
+version = "0.1.0"
+dependencies = [
+ "ash-instructions",
+ "ash-utils-absolute-path",
+ "tempfile",
+]
+
+[[package]]
 name = "ash-hooks"
 version = "0.1.0"
 dependencies = [
@@ -1522,6 +1533,7 @@ dependencies = [
 name = "ash-instructions"
 version = "0.1.0"
 dependencies = [
+ "globset",
  "serde",
  "serde_yaml",
  "tempfile",

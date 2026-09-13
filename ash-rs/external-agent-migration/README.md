@@ -281,6 +281,10 @@ authority 可以 prepare/publish 前，它们必须保持 unsupported，不能�
 当前 Config 只有逐 command mutation；atomic import batch、跨 authority prepare/publish、import
 receipt、provenance 与 remove/rollback contract 尚未实现。
 
+共享的项目 `AGENTS.md` 已由 Ash Instruction authority 直接读取，不能再导入成第二份。
+`CLAUDE.md` 等专有来源的目标为 Ash 专属 `ASH.md` 或细分 `instructions/` 文件；
+目前只有发现与预览，写入目标的 apply 尚未实现。
+
 `ash-file-access` 与 Import workflow 是两条不同路径。前者保存目录 Grant，并按明确的来源能力开放 Skills、Agent definitions 或 Plugin declaration；后者让用户预览、选择并迁移外部 Agent 配置，不授予持续文件访问。两条路径可以复用来源检查和解析，但不能复用授权生命周期或应用决定；本 crate 不依赖 `ash-file-access`，由 App Server 根据 Authorization 调用。
 
 原生加载是第四条独立路径：directory `.ash/{instructions,skills,agents}`、Ash user root、

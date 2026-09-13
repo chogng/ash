@@ -24,6 +24,7 @@ members = [
     "ash-rs/github",
     "ash-rs/external-agent-migration",
     "ash-rs/agent-roles",
+    "ash-rs/ash-home",
     "ash-rs/attachments",
     "ash-rs/app-server",
     "ash-rs/app-server-daemon",
@@ -435,6 +436,7 @@ ash-files = { path = "app/files" }
 github = { package = "ash-github", path = "ash-rs/github" }
 ash-git = { path = "ash-rs/git" }
 ash-history = { path = "ash-rs/history" }
+ash-home = { path = "ash-rs/ash-home" }
 message-history = { package = "ash-message-history", path = "ash-rs/message-history" }
 ash-hooks = { path = "ash-rs/hooks" }
 ash-http-client = { path = "ash-rs/http-client" }

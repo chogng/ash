@@ -26,6 +26,7 @@ use crate::TurnExecutionOutcome;
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::collections::VecDeque;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Condvar;
 use std::sync::Mutex;
@@ -1378,7 +1379,7 @@ fn durable_turn_instructions_stay_frozen_while_harness_context_refreshes() {
     let executor = TurnExecutor::new(
         threads,
         model.clone(),
-        Arc::new(WeatherTool),
+        Arc::new(ReadInstructionTargetTool),
         Arc::new(SandboxActionPolicyService),
     )
     .with_harness_context_provider(instructions.clone());
@@ -1413,6 +1414,10 @@ fn durable_turn_instructions_stay_frozen_while_harness_context_refreshes() {
             ("session".into(), "thread".into(), turn_id.to_string()),
             ("session".into(), "thread".into(), turn_id.to_string()),
         ]
+    );
+    assert_eq!(
+        instructions.read_paths.lock().unwrap().as_slice(),
+        [Vec::<PathBuf>::new(), vec![PathBuf::from("src/lib.rs")]]
     );
 }
 
@@ -2910,6 +2915,7 @@ struct LongRunningToolModel {
 struct MutableInstructions {
     current: Mutex<Arc<HarnessContext>>,
     requests: Mutex<Vec<(String, String, String)>>,
+    read_paths: Mutex<Vec<Vec<PathBuf>>>,
 }
 
 impl MutableInstructions {
@@ -2917,6 +2923,7 @@ impl MutableInstructions {
         Self {
             current: Mutex::new(Arc::new(test_harness_context(content, "first environment"))),
             requests: Mutex::new(Vec::new()),
+            read_paths: Mutex::new(Vec::new()),
         }
     }
 
@@ -2940,6 +2947,7 @@ impl HarnessContextProvider for MutableInstructions {
             request.thread_id.to_string(),
             request.turn_id.to_string(),
         ));
+        self.read_paths.lock().unwrap().push(request.read_paths.to_vec());
         Ok(Arc::clone(&self.current.lock().unwrap()))
     }
 }
@@ -2980,8 +2988,8 @@ impl ModelService for InstructionRefreshingModel {
             return Ok(ModelResponse {
                 output: vec![ResponseItem::ToolCall(ToolCall {
                     id: ToolCallId::new("refresh_instructions").unwrap(),
-                    name: ToolName::new("weather").unwrap(),
-                    arguments: json!({"city": "Paris"}),
+                    name: ToolName::new("read_file").unwrap(),
+                    arguments: json!({"path": "src/lib.rs"}),
                 })],
                 usage: None,
                 billing: None,
@@ -3209,6 +3217,8 @@ impl ModelService for ScriptedModel {
 }
 
 struct WeatherTool;
+
+struct ReadInstructionTargetTool;
 
 struct FailingWeatherTool;
 
@@ -3473,6 +3483,45 @@ impl ToolService for WeatherTool {
         assert!(matches!(authorization, ToolAuthorization::Sandboxed(_)));
         assert_eq!(call.arguments["city"], "Paris");
         Ok(ToolExecutionOutput::Success("sunny".into()))
+    }
+}
+
+impl ToolService for ReadInstructionTargetTool {
+    fn definitions(&self) -> Vec<ToolDefinition> {
+        vec![ToolDefinition {
+            name: ToolName::new("read_file").unwrap(),
+            description: "Read a file for instruction matching".into(),
+            parameters: json!({"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}),
+            strict: true,
+        }]
+    }
+
+    fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
+        Ok(ActionReviewRequest::new(
+            ResolvedAction::new(
+                ActionDigest::from_canonical_bytes(serde_json::to_vec(call).unwrap()),
+                ActionKind::NetworkRequest,
+                "read a test file",
+                CapabilitySet::new([Capability::new(CapabilityKind::Network, "weather.example")]),
+            ),
+            ActionProvenance::new(ActionSource::BuiltInTool, "read_file"),
+            SandboxCompatibility::Supported(SandboxPolicy::new(
+                FileSystemAccess::ReadOnly,
+                NetworkAccess::Allowed,
+            )),
+            ActionPolicyRevision::new("test-policy"),
+        ))
+    }
+
+    fn execute(
+        &self,
+        call: &ToolCall,
+        authorization: &ToolAuthorization,
+        _: &CancellationToken,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        assert!(matches!(authorization, ToolAuthorization::Sandboxed(_)));
+        assert_eq!(call.arguments["path"], "src/lib.rs");
+        Ok(ToolExecutionOutput::Success("source".into()))
     }
 }
 

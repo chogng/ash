@@ -90,6 +90,49 @@ use ash_typst::TypstCompileOutcome;
 use ash_typst::TypstDiagnostic;
 use ash_typst::TypstDiagnosticSeverity;
 
+pub(super) enum TurnInstructionSelection {
+    Agent,
+    Product(ash_protocol::TurnInstructions),
+}
+
+fn create_instruction_prompt() -> ash_protocol::TurnInstructions {
+    ash_protocol::TurnInstructions::new(
+        "app-server",
+        "instructions/create",
+        "instructions-create-v1",
+        format!(
+            "{}\n\n<file-based-template>\n{}\n</file-based-template>",
+            include_str!("../../templates/instructions/create.md").trim(),
+            ash_instructions::STARTER_TEMPLATE.trim(),
+        ),
+    )
+    .expect("built-in instruction creation prompt is valid")
+}
+
+fn init_prompt() -> ash_protocol::TurnInstructions {
+    ash_protocol::TurnInstructions::new(
+        "app-server",
+        "instructions/init",
+        "instructions-init-v1",
+        format!(
+            "{}\n\n<always-on-template>\n{}\n</always-on-template>",
+            include_str!("../../templates/instructions/init.md").trim(),
+            ash_instructions::STARTER_ALWAYS_ON_TEMPLATE.trim()
+        ),
+    )
+    .expect("built-in Ash initialization prompt is valid")
+}
+
+fn product_command(input: &[UserInput]) -> Option<&str> {
+    input
+        .iter()
+        .find_map(|item| match item {
+            UserInput::Text { text } => Some(text),
+            _ => None,
+        })
+        .and_then(|text| text.split_whitespace().next())
+}
+
 pub(super) struct SessionMutation {
     pub(super) command_id: ash_protocol::CommandId,
     pub(super) session_id: ash_protocol::SessionId,
@@ -982,7 +1025,8 @@ impl AppServer {
             Some(tool_mode) => TurnToolModeSelection::Explicit(tool_mode),
             None => TurnToolModeSelection::ConfiguredDefault,
         };
-        let input = self.normalize_input(&mutation.session_id, input)?;
+        let mut input = self.normalize_input(&mutation.session_id, input)?;
+        let selection = self.turn_instruction_selection(&mut input);
         self.start_agent_turn_request(
             mutation,
             thread_id,
@@ -990,8 +1034,28 @@ impl AppServer {
             tool_mode,
             input,
             ash_protocol::TurnKind::Coding,
-            ash_prompts::AGENT_INSTRUCTIONS.freeze(),
+            selection,
         )
+    }
+
+    pub(super) fn turn_instruction_selection(
+        &self,
+        input: &mut Vec<UserInput>,
+    ) -> TurnInstructionSelection {
+        let selection = match product_command(input) {
+            Some("/create-instructions") => {
+                TurnInstructionSelection::Product(create_instruction_prompt())
+            }
+            Some("/init") => TurnInstructionSelection::Product(init_prompt()),
+            _ => return TurnInstructionSelection::Agent,
+        };
+        if let Some(home) = &self.home {
+            input.push(UserInput::Context {
+                name: "ash-home".into(),
+                content: home.root().display().to_string(),
+            });
+        }
+        selection
     }
 
     fn start_review_request(
@@ -1009,7 +1073,7 @@ impl AppServer {
             TurnToolModeSelection::Explicit(ash_protocol::ToolMode::Direct),
             vec![UserInput::Text { text: prompt }],
             ash_protocol::TurnKind::Review,
-            ash_prompts::REVIEW_PROMPT.freeze(),
+            TurnInstructionSelection::Product(ash_prompts::REVIEW_PROMPT.freeze()),
         )
     }
 
@@ -1021,7 +1085,7 @@ impl AppServer {
         tool_mode_selection: TurnToolModeSelection,
         input: Vec<UserInput>,
         kind: ash_protocol::TurnKind,
-        instructions: ash_protocol::TurnInstructions,
+        selection: TurnInstructionSelection,
     ) -> Result<TurnStartResult, RpcError> {
         let thread_before = self.threads.read_thread(&thread_id).map_err(core_error)?;
         if thread_before.session_id != mutation.session_id {
@@ -1089,10 +1153,9 @@ impl AppServer {
             .filter(|guidance| guidance.model() == model.as_ref())
             .cloned()
             .unwrap_or_else(|| self.model_instructions.resolve(model.as_ref()));
-        let instructions = if kind == ash_protocol::TurnKind::Coding {
-            base
-        } else {
-            instructions.with_shared(&base)
+        let instructions = match selection {
+            TurnInstructionSelection::Agent => base,
+            TurnInstructionSelection::Product(prompt) => prompt.with_shared(&base),
         }
         .with_model_guidance(guidance);
         let activated_skills = thread_before

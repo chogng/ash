@@ -3,10 +3,10 @@
 > 本文是 Ash 原生 Agent 自定义对象、物理命名空间、加载语义和外部生态导入边界的跨系统
 > canonical owner。
 >
-> 状态：架构边界已接受（2026-08-12）；Directory catalog slice 已实现：Global
-> Instructions 会进入后续 model invocation，Skills 已有 metadata catalog、显式 activation 和通用
+> 状态：架构边界已接受（2026-08-12）；User 与 Directory 的 `AGENTS.md`、`ASH.md`、Global Instructions 和
+> 成功读取文件命中的 Contextual Instructions 会进入后续 model invocation。Skills 已有 metadata catalog、显式 activation 和通用
 > context injection，可信 built-in Skill 自动 selector 与 Agent delegation definition 选择已经接通。
-> Contextual/OnDemand Instruction 的通用选择、Agent definition list/picker API 和完整 import apply
+> 用户手动附加 OnDemand Instruction、Agent definition list/picker API 和完整 import apply
 > 仍未实现。
 >
 > Skill 的格式、来源与激活细节见 [`skills.md`](skills.md)；外部格式发现和转换实现契约见
@@ -16,9 +16,9 @@
 ## 快速理解
 
 Ash 只把 Instructions、Skills 和 Agents 作为 Agent 自定义领域对象。Prompt 是运行时送入模型的
-信息形式，Slash Command 是调用入口；两者都不是第四种可持久化自定义对象。目录级 Ash 对象统一
-位于小写 `.ash/`，其他产品的目录和格式必须经过 `external-agent-migration`，不能由原生 loader
-顺便扫描。
+信息形式，Slash Command 是调用入口；两者都不是第四种可持久化自定义对象。目录级多文件 Ash 对象
+位于小写 `.ash/`；共享的 `AGENTS.md` 与 Ash 专属 `ASH.md` 位于目录根，始终加载。其他产品的
+专有目录和格式必须经过 `external-agent-migration`。
 
 内置 Agent 不是 `.ash` 自定义对象。它们随产品发布、不会进入设置或被同名自定义定义覆盖，但与自定义 Agent 使用同一种定义契约；会话入口、委托和工作流只表示本次运行的启动来源，不产生“主 Agent 定义”或“子 Agent 定义”。
 
@@ -88,6 +88,12 @@ pub enum InstructionLoadPolicy {
 语义。`applyTo: "**"` 仍是“恰好匹配所有文件的上下文规则”，不能偷偷改写成 Global；真正的
 Global 必须由来源格式中明确等价的语义产生。
 
+Ash 原生 `patterns` 对应 `applyTo` 的文件匹配用途。当前只使用本 Turn 已成功读取、并由 App Server
+确认仍位于对应授权目录内的文件路径；不会从聊天正文猜路径，也不会让父 Agent 的读取记录决定子
+Agent 的匹配。Agent definition 按名称显式引用的 Instruction 不受自动匹配限制。
+文件匹配只决定该 Agent 本次上下文应包含哪些规则，不选择 Agent 角色、拆分任务或授予工具；编排仍由
+Agent definition、任务与现有 capability ceiling 决定。
+
 ### 2.2 Skill 调用策略
 
 Skill 的可发现性与调用方也使用 named policy，而不是两个容易产生非法组合的布尔字段：
@@ -125,8 +131,8 @@ extension 按 durable digest 精确加载正文。扫描 Agent catalog 本身不
 | Scope/source | 物理 owner | 是否经过 `external-agent-migration` |
 | --- | --- | --- |
 | Built-in | release/package resources | ❌ 原生 authority 直接加载 |
-| User | `<profile_root>` 下的 Ash-owned artifact root（Proposed） | ❌ 原生 authority 直接加载 |
-| Directory | `<dir_root>/.ash/{instructions,skills,agents}`（Current catalog slice） | ❌ 原生 authority 直接加载 |
+| User | `<profile_root>/{AGENTS.md,ASH.md,instructions/}` | ❌ 原生 authority 直接加载 |
+| Directory | `<dir_root>/{AGENTS.md,ASH.md,.ash/}` | ❌ 原生 authority 直接加载 |
 | Plugin | Plugin package contribution | ❌ 由 Plugin snapshot 交给目标 authority |
 | External ecosystem | `.codex`、`.agents`、`.claude` 等已知布局 | ✅ 只经 `external-agent-migration` |
 
@@ -134,9 +140,16 @@ extension 按 durable digest 精确加载正文。扫描 Agent catalog 本身不
 Directory `.ash` 继续作为受保护 metadata；普通文件搜索、Agent 工具写入和外部 source
 registration 不能把它当作任意内容目录。
 
-原生 loader 只读取自己的 canonical roots。它不得自动扫描 `AGENTS.md`、`.codex/`、`.agents/`、
-`.claude/`、`.github/` 或其他产品目录；否则 compatibility policy 会散落到三个 authority 中，
-外部格式也会反向定义 Ash schema。
+原生 loader 只读取自身文件与通用共享的 `AGENTS.md`。它不得自动扫描 `.codex/`、`.agents/`、
+`.claude/`、`.github/` 等产品专有目录；否则外部格式会反向定义 Ash schema。导入外部专有
+Instructions 时，目标是 Ash 专属 `ASH.md` 或相应 `instructions/` 文件；已经直接读取的
+`AGENTS.md` 不能再导入一份。
+
+每次模型调用的拼接顺序固定为用户级、工作区级；同一作用域内先放共享 `AGENTS.md`，再放 Ash
+专属 `ASH.md`，最后放命中的多文件 Instruction。每份正文带原文件来源，工作区内容标出所属根目录。
+系统与安全规则高于全部这些文件；用户级规则高于工作区级，`ASH.md` 可以细化同作用域的
+`AGENTS.md`。文件顺序不授予工具、目录或审批权限。
+当前 always-on 发现只覆盖选定 home 和已授权目录根；嵌套 `AGENTS.md` 的目录继承尚未实现。
 
 ## 4. `external-agent-migration` 是外部反腐化层
 
@@ -222,11 +235,16 @@ Slash Command catalog 只包含产品和服务命令；独立 `$name` Skill sele
 | Skill metadata 自动 selector | 已实现 | 仅 `BuiltInVerified`、唯一高置信、pinned `SkillRef` 后加载正文 |
 | Codex/Claude known-path inspection | 已实现 | `external-agent-migration::inspect_agent_paths` |
 | Codex/Claude bounded source parsers 与 `MigrationPlan` fragments | 部分具备 | settings/MCP/hooks/plugins/memory/agents/commands fragments 已实现；sessions、apply adapter、wire contract 未实现 |
-| Directory Instructions authority | 部分具备 | `ash-instructions` + `DirContributions`；Global 注入已实现，其他选择策略未实现 |
+| User Instructions authority | 部分具备 | `ash-home` + `ash-instructions`；`AGENTS.md`、`ASH.md`、Global 与已读文件 Contextual 注入已实现 |
+| Directory Instructions authority | 部分具备 | `ash-instructions` + `DirContributions`；共享/专属 always-on、Global 与已读文件 Contextual 注入已实现 |
 | Directory Agents authority | 部分具备 | catalog/refresh、spawn 显式/自动选择、reference/capability freezing 已实现；list/picker API 未实现 |
 | `.ash/{instructions,skills,agents}` loader | 已实现 | 固定 roots、有界校验、Directory activation 与 watcher refresh |
 | External parser、preview 与 apply | 尚未完成 | typed fragments、digest、wire contract、transaction/receipt |
 | `$name` Skill selector | 已实现 | TUI/Desktop `$name` 绑定 stable `SkillRef`；`/skills` 只管理，`@` 留给文件和 Plugin 上下文 |
+
+`/create-instructions` 是创建细分 Instruction 的产品 Slash Command；`/init` 生成或更新 Ash 专属
+`ASH.md`。两者都不是 Skill，均为普通 Agent Turn 冻结对应任务说明与起始模板。Agent 按正常
+文件工具和目录授权写入；已有文件先读取再修改，不直接覆盖。
 
 实施顺序：
 

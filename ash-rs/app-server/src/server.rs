@@ -98,6 +98,7 @@ mod git_turn_changes_message;
 mod git_turn_changes_observer;
 mod git_turn_changes_operations;
 mod git_turn_changes_runtime;
+mod home_context;
 mod interaction_runtime;
 mod issue_operations;
 mod issue_runtime;
@@ -191,6 +192,7 @@ pub struct AppServer {
     pub(super) collaboration: Mutex<collaboration_runtime::DocumentCollaborationStore>,
     pub(super) extensions: Mutex<ExtensionCatalog>,
     pub(super) config: Option<Arc<ConfigStore>>,
+    home: Option<Arc<ash_home::AshHome>>,
     pub(super) provider_credentials: Option<Arc<ProviderCredentialService>>,
     pub(super) local_tool_config: Arc<RwLock<crate::local_tools::LocalToolConfig>>,
     pub(super) connectors: Option<Arc<connectors::ConnectorCredentialService>>,
@@ -516,6 +518,7 @@ impl AppServer {
             collaboration: Mutex::new(collaboration_runtime::DocumentCollaborationStore::default()),
             extensions: Mutex::new(ExtensionCatalog::default()),
             config: None,
+            home: None,
             provider_credentials: None,
             local_tool_config: Arc::new(
                 RwLock::new(crate::local_tools::LocalToolConfig::default()),
@@ -605,6 +608,25 @@ impl AppServer {
             .turn_executor = executor;
         self.git_turn_changes = Some(runtime);
         Ok(self)
+    }
+
+    pub(crate) fn with_home(mut self, home: Arc<ash_home::AshHome>) -> Self {
+        let executor = self
+            .env_runtime
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .turn_executor
+            .clone()
+            .with_harness_context_provider(Arc::new(home_context::HomeContext::new(Arc::clone(
+                &home,
+            ))));
+        self.turn_backend.install_executor(executor.clone());
+        self.env_runtime
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .turn_executor = executor;
+        self.home = Some(home);
+        self
     }
 
     pub(crate) fn with_local_dir_services(
