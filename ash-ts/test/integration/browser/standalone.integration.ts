@@ -28,6 +28,14 @@ interface UndoState {
 	readonly activeInput: 'caller' | 'owned' | 'other';
 }
 
+interface LineIdentityState {
+	readonly value: string;
+	readonly version: number;
+	readonly ids: readonly string[];
+	readonly longLineIndex: number;
+	readonly longLineEnd: readonly [number, number];
+}
+
 interface StandaloneHarness {
 	readonly events: readonly CreationEvent[];
 	state(kind: 'caller' | 'owned'): EditorState;
@@ -48,6 +56,9 @@ interface StandaloneHarness {
 	applySelectionEdit(): UndoState;
 	readSelectionUndo(): UndoState;
 	enableCodeActions(): void;
+	prepareLineIdentity(): LineIdentityState;
+	splitLineIdentity(): LineIdentityState;
+	readLineIdentity(): LineIdentityState;
 	releaseCaller(): void;
 	releaseOwned(): void;
 	dispose(): void;
@@ -84,6 +95,7 @@ ownedEditor.layout({ width: ownedContainer.clientWidth, height: ownedContainer.c
 const ownedModel = ownedEditor.getModel();
 if (!ownedModel) throw new Error('Owned standalone editor has no model');
 let codeActionRegistration: ReturnType<typeof stanza.languages.registerCodeActionProvider> | undefined;
+let longLineId: string | undefined;
 
 function state(kind: 'caller' | 'owned'): EditorState {
 	const editor = kind === 'caller' ? callerEditor : ownedEditor;
@@ -117,6 +129,18 @@ function readSelectionUndo(): UndoState {
 		callerFocused: callerEditor.hasTextFocus(),
 		ownedFocused: ownedEditor.hasTextFocus(),
 		activeInput,
+	};
+}
+
+function readLineIdentity(): LineIdentityState {
+	if (!(callerModel instanceof stanza.TextModel) || !longLineId) throw new Error('Line identity model is unavailable');
+	const end = callerModel.textPositionAt({ lineId: longLineId, offset: 6 });
+	return {
+		value: callerModel.getValue(),
+		version: callerModel.getVersionId(),
+		ids: callerModel.lineDocument.lines.values.map(line => line.id),
+		longLineIndex: callerModel.getLineIndex(longLineId),
+		longLineEnd: [end.lineNumber, end.column],
 	};
 }
 
@@ -211,6 +235,17 @@ window.ashStandaloneIntegration = {
 			provideCodeActions: () => [{ title: 'Example code action' }],
 		});
 	},
+	prepareLineIdentity: () => {
+		callerEditor.setValue('a\nlonger');
+		if (!(callerModel instanceof stanza.TextModel)) throw new Error('Line identity model is unavailable');
+		longLineId = callerModel.getLineId(1);
+		return readLineIdentity();
+	},
+	splitLineIdentity: () => {
+		callerEditor.executeEdits('browser', [{ range: new stanza.Range(1, 2, 1, 2), text: '\n' }]);
+		return readLineIdentity();
+	},
+	readLineIdentity,
 	releaseCaller: () => {
 		callerEditor.dispose();
 		callerModel.setValue('changed after editor disposal');

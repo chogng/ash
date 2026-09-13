@@ -135,3 +135,97 @@ test('TextModel preserves logical line identity through edits and history withou
 	assert.deepEqual(model.linePointAt(new Position((1) + 1, (1) + 1)), { lineId: 'second', offset: 1 });
 	assert.deepEqual(model.textPositionAt({ lineId: 'second', offset: 1 }), new Position((1) + 1, (1) + 1));
 });
+
+test('TextModel line points use the identified line length and reject invalid indexes', () => {
+	using model = new TextModel('a\nlonger', { lineIds: ['short', 'long'] });
+	assert.deepEqual(model.textPositionAt({ lineId: 'short', offset: 1 }), new Position(1, 2));
+	assert.deepEqual(model.textPositionAt({ lineId: 'long', offset: 6 }), new Position(2, 7));
+	assert.deepEqual(model.linePointAt(new Position(2, 7)), { lineId: 'long', offset: 6 });
+	assert.throws(() => model.getLineId(-1), /outside/);
+	assert.throws(() => model.getLineId(1.5), /outside/);
+	assert.throws(() => model.textPositionAt({ lineId: 'short', offset: 2 }), /outside/);
+});
+
+test('TextModel leaves text and line identities unchanged when a line id generator fails', () => {
+	let fail = true;
+	let requests = 0;
+	using model = new TextModel('a\nb', {
+		lineIds: ['first', 'second'],
+		lineIdGenerator: () => {
+			requests += 1;
+			if (fail && requests === 2) throw new Error('line id unavailable');
+			return `generated:${requests}`;
+		},
+	});
+	const snapshot = model.lineDocument;
+	const events: unknown[] = [];
+	using listener = model.onDidChangeContent(change => events.push(change));
+	const edit = { range: new Range(1, 2, 1, 2), text: '\n\n' };
+
+	assert.throws(() => model.applyOperations([edit]), /line id unavailable/);
+	assert.deepEqual({
+		text: model.getText(),
+		version: model.getVersionId(),
+		lineIds: model.lineDocument.lines.values.map(line => line.id),
+		snapshotRetained: model.lineDocument === snapshot,
+		canUndo: model.canUndo(),
+		eventCount: events.length,
+	}, {
+		text: 'a\nb',
+		version: 1,
+		lineIds: ['first', 'second'],
+		snapshotRetained: true,
+		canUndo: false,
+		eventCount: 0,
+	});
+
+	fail = false;
+	requests = 0;
+	model.applyOperations([edit]);
+	assert.deepEqual({
+		text: model.getText(),
+		lineIds: model.lineDocument.lines.values.map(line => line.id),
+		version: model.getVersionId(),
+	}, {
+		text: 'a\n\n\nb',
+		lineIds: ['first', 'generated:1', 'generated:2', 'second'],
+		version: 2,
+	});
+});
+
+test('TextModel keeps undo history when reset cannot allocate line identities', () => {
+	let fail = true;
+	using model = new TextModel('a\nb', {
+		lineIds: ['first', 'second'],
+		lineIdGenerator: () => {
+			if (fail) throw new Error('reset line id unavailable');
+			return 'inserted';
+		},
+	});
+	model.applyOperations([{ range: new Range(1, 2, 1, 2), text: '!' }]);
+	const version = model.getVersionId();
+	const snapshot = model.lineDocument;
+	const events: unknown[] = [];
+	using listener = model.onDidChangeContent(change => events.push(change));
+
+	assert.throws(() => model.reset('a!\n\nb'), /reset line id unavailable/);
+	assert.deepEqual({
+		text: model.getText(),
+		version: model.getVersionId(),
+		lineIds: model.lineDocument.lines.values.map(line => line.id),
+		snapshotRetained: model.lineDocument === snapshot,
+		canUndo: model.canUndo(),
+		eventCount: events.length,
+	}, {
+		text: 'a!\nb',
+		version,
+		lineIds: ['first', 'second'],
+		snapshotRetained: true,
+		canUndo: true,
+		eventCount: 0,
+	});
+
+	fail = false;
+	model.undo();
+	assert.equal(model.getText(), 'a\nb');
+});

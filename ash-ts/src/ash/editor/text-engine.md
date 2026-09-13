@@ -76,6 +76,8 @@ flowchart LR
 
 模型历史在提交成功后记录编辑前后的选区；拒绝的编辑与空批次不改变已有撤销组。
 
+逻辑行 ID 的投影和新身份校验发生在 TextBuffer 写入前；提交成功后才公布新行序列。行点转换先通过 ID 定位物理行，再用该行的一基缓冲区长度检查零基 UTF-16 offset。生成身份失败时文本、版本、历史和内容事件保持原状；结构文档的行身份由同一个模型的 schema 事务投影，不另设行状态 owner。
+
 `ModelService` 通过 `platform/configuration` 读取模型创建选项，通过 `ITextResourcePropertiesService` 决定资源 EOL。语言、资源或相关配置变化会清空 creation-options cache 并更新已打开模型；关闭文件的 undo/redo 只有在 URI 策略允许、内容 SHA-1 一致且内存预算允许时才恢复。
 
 ### Selection、command 和 composition

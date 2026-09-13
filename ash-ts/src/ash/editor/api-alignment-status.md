@@ -166,7 +166,7 @@
 | `browser/widget/codeEditor/codeEditorWidget.ts` | `CodeEditorWidget` | 已接通标准 editor contribution 注册表与滚动、配置 API；`setModel`、`onWillChangeModel`、`onDidChangeModel` 和模型装饰事件沿同一 Widget 的可替换模型资源生效，根 DOM、注册身份、外部 Widget 与装饰集合句柄保持稳定，旧 View/worker/贡献/监听释放。`setValue` 直接进入模型重置，同值写入也发布新版本；Standalone 处理隐式模型所有权，单测及 Chromium 验证共享模型、输入、焦点、事件、空模型、错误恢复与释放。Widget 仍有其他公开成员差异，按对应行为分部继续处理 |
 | `common/cursor/cursor.ts` | `CursorsController` | 已恢复上游公开名；文档 undo/redo 已回到 `TextModel`，标准 Cursor Undo 已改走 `ICodeEditor` 事件，自动闭合和组合输入结果已改为内部会话状态，仅测试调用的 `beginComposition` / `CompositionSession` 平行入口已移除。成员差异由 12 项降至 8 项；View、EditContext、ScreenReaderSupport、Anchor Select、In-place Replace、Line Selection、Selection Highlighter 和 14 个只读写选区的 contribution controller 已改走 `IViewModel` 或 `ICodeEditor`。Editor 内仍有 14 个外部生产调用方，剩余链涉及编辑事务、光标历史、只读事件、仅 Ash 文件和装配契约，不能按成员差异直接删除或包一层转发 |
 | `common/cursor/cursorDeleteOperations.ts` | `DeleteOperations` | 4 个公开入口的成员边界比较为 0，已恢复 `CursorConfiguration`、`Selection[]`、`ICommand`、`EditOperationResult` 和自动闭合范围语义；浏览器删除、语言成对删除与剪贴板剪切均通过 `CursorsController.executeCommands` 进入模型事务，连续同向删除由 `pushUndoStop` 和 `EditOperationType` 控制撤销边界 |
-| `common/model/textModel.ts` | `TextModel` | 1.1–1.3 已验收：编辑范围按 UTF-16 代理对边界约束，整批重叠编辑在提交前拒绝；同值 `setValue` 仍推进版本并发布重置事件，使旧异步请求失效。快照在编辑、重置和释放后可读；失败或空编辑保留撤销组，成功事务保存选区供 undo/redo 恢复。稳定行身份、文档语义和其余私有 owner 仍待逐项验收 |
+| `common/model/textModel.ts` | `TextModel` | 1.1–1.4 已验收：编辑范围按 UTF-16 边界约束，重叠编辑提交前拒绝；同值重置推进版本，旧快照可读，undo/redo 恢复选区。行 ID 在文本提交前完成投影和校验，生成失败不留下半次提交；物理行点按目标行长度转换，普通与结构文档的行身份均有测试。超大文件预算和其余私有 owner 仍待逐项验收 |
 
 ## 当前已验证能力
 

@@ -202,3 +202,50 @@ test('code action dismissal restores focus only when its menu owns focus', async
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	expect(errors).toEqual([]);
 });
+
+test('shared editors retain line identities through split, undo, and redo', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.stack ?? error.message));
+	await page.goto('/standalone.html');
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.switchOwnedToCaller())).currentModelIsCaller).toBe(true);
+	const initial = await page.evaluate(() => window.ashStandaloneIntegration.prepareLineIdentity());
+	expect({
+		value: initial.value,
+		lineCount: initial.ids.length,
+		longLineIndex: initial.longLineIndex,
+		longLineEnd: initial.longLineEnd,
+	}).toEqual({
+		value: 'a\nlonger',
+		lineCount: 2,
+		longLineIndex: 1,
+		longLineEnd: [2, 7],
+	});
+	const input = page.locator('#caller .stanza-editor-input');
+	await input.focus();
+	const split = await page.evaluate(() => window.ashStandaloneIntegration.splitLineIdentity());
+	expect(split).toEqual({
+		value: 'a\n\nlonger',
+		version: initial.version + 1,
+		ids: [initial.ids[0], split.ids[1], initial.ids[1]],
+		longLineIndex: 2,
+		longLineEnd: [3, 7],
+	});
+	expect(split.ids[1]).not.toBe(initial.ids[0]);
+	expect(split.ids[1]).not.toBe(initial.ids[1]);
+	await expect(page.locator('#caller .view-line')).toHaveCount(3);
+	await expect(page.locator('#owned .view-line')).toHaveCount(3);
+
+	await page.keyboard.press('ControlOrMeta+z');
+	const undone = await page.evaluate(() => window.ashStandaloneIntegration.readLineIdentity());
+	expect(undone).toEqual({ ...initial, version: split.version + 1 });
+	await expect(page.locator('#caller .view-line')).toHaveCount(2);
+	await expect(page.locator('#owned .view-line')).toHaveCount(2);
+
+	await page.keyboard.press('ControlOrMeta+Shift+z');
+	const redone = await page.evaluate(() => window.ashStandaloneIntegration.readLineIdentity());
+	expect(redone).toEqual({ ...split, version: undone.version + 1 });
+	await expect(page.locator('#caller .view-line')).toHaveCount(3);
+	await expect(page.locator('#owned .view-line')).toHaveCount(3);
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	expect(errors).toEqual([]);
+});

@@ -327,6 +327,7 @@ export class TextModel implements ITextModel {
 
 	getLineId(lineIndex: number): LineId {
 		this.assertNotDisposed();
+		if (!Number.isSafeInteger(lineIndex) || lineIndex < 0) throw new RangeError("Line index is outside the TextModel");
 		const line = this.lineDocument.lines.at(lineIndex);
 		if (!line) throw new RangeError("Line index is outside the TextModel");
 		return line.id;
@@ -348,7 +349,7 @@ export class TextModel implements ITextModel {
 	textPositionAt(point: LinePoint): Position {
 		this.assertNotDisposed();
 		const lineIndex = this.getLineIndex(point.lineId);
-		if (!Number.isSafeInteger(point.offset) || point.offset < 0 || point.offset > this.buffer.getLineLength(lineIndex)) {
+		if (!Number.isSafeInteger(point.offset) || point.offset < 0 || point.offset > this.buffer.getLineLength(lineIndex + 1)) {
 			throw new RangeError("Line point offset is outside the TextModel");
 		}
 		return new Position((lineIndex) + 1, (point.offset) + 1);
@@ -1683,17 +1684,23 @@ export class TextModel implements ITextModel {
 			throw new TypeError("TextModel reset text must be a string");
 		}
 		const nextBuffer = createPieceTreeTextBuffer(text, this.modelOptionsValue.defaultEOL);
-		this.history.reset();
 		const previousBuffer = this.buffer;
-		const result = this.commitOffsetEdits([{
-			startOffset: 0,
-			endOffset: this.buffer.getLength(),
-			text: nextBuffer.createSnapshot().getText(),
-		}], {
-			reason: TextModelChangeReason.Reset,
-			editSource,
-			eol: nextBuffer.getEOL() === '\r\n' ? EndOfLineSequence.CRLF : EndOfLineSequence.LF,
-		});
+		let result: CommitResult | undefined;
+		try {
+			result = this.commitOffsetEdits([{
+				startOffset: 0,
+				endOffset: previousBuffer.getLength(),
+				text: nextBuffer.createSnapshot().getText(),
+			}], {
+				reason: TextModelChangeReason.Reset,
+				editSource,
+				eol: nextBuffer.getEOL() === '\r\n' ? EndOfLineSequence.CRLF : EndOfLineSequence.LF,
+			});
+		} catch (error) {
+			nextBuffer.dispose();
+			throw error;
+		}
+		this.history.reset();
 		this.buffer = nextBuffer;
 		previousBuffer.dispose();
 		if (result) {
@@ -1878,9 +1885,14 @@ export class TextModel implements ITextModel {
 		const eolChanged = targetEOL !== previousEOL;
 		if (prepared.length === 0 && !eolChanged) return undefined;
 		const previousLineIds = this.plainLineIds;
-		const transactionId =
-			context.transactionId ??
-			this.nextTransactionId++;
+		const reservedLineIds = new Set<LineId>();
+		let nextLineIds: readonly LineId[] | undefined;
+		if (previousLineIds) {
+			const projectedLineIds = this.projectLineIds(prepared);
+			nextLineIds = context.lineIds === undefined
+				? this.mapLineIds(projectedLineIds, reservedLineIds)
+				: this.validateCommittedLineIds(context.lineIds, projectedLineIds.length);
+		}
 
 		const bufferResult = this.buffer.applyEdits(
 			prepared.map(edit => new ValidAnnotatedEditOperation(
@@ -1915,8 +1927,10 @@ export class TextModel implements ITextModel {
 					text: change.text,
 				})),
 		);
-		if (this.plainLineIds) {
-			this.plainLineIds = context.lineIds === undefined ? this.mapLineIds(prepared) : this.validateCommittedLineIds(context.lineIds);
+		if (nextLineIds) {
+			if (nextLineIds.length !== this.buffer.getLineCount()) throw new Error("TextModel line identity mapping diverged from the ITextBuffer");
+			this.plainLineIds = nextLineIds;
+			for (const lineId of context.lineIds === undefined ? reservedLineIds : nextLineIds) this.issuedLineIds.add(lineId);
 			this.plainLineSnapshot = undefined;
 		}
 		this.trackedRanges.acceptChanges(appliedChanges);
@@ -1940,6 +1954,7 @@ export class TextModel implements ITextModel {
 		const resultingSelection = context.cursorStateComputer
 			? this.computeCursorState(context.cursorStateComputer, inverseEditOperations)
 			: cloneSelections(context.resultingSelection ?? null);
+		const transactionId = context.transactionId ?? this.nextTransactionId++;
 		this._version += 1;
 		this._alternativeVersion = this._version;
 		const changes = eolChanged
@@ -2110,26 +2125,32 @@ export class TextModel implements ITextModel {
 			if (!Array.isArray(lineIds) || lineIds.length !== this.buffer.getLineCount()) {
 				throw new RangeError(`TextModel requires exactly ${this.buffer.getLineCount()} line ids`);
 			}
-			return this.validateLineIdentities(lineIds);
+			const validated = this.validateLineIdentities(lineIds);
+			for (const lineId of validated) this.issuedLineIds.add(lineId);
+			return validated;
 		}
 		return Object.freeze(Array.from({ length: this.buffer.getLineCount() }, () => this.allocateLineId()));
 	}
 
-	private mapLineIds(prepared: readonly PreparedEdit[]): readonly LineId[] {
+	private projectLineIds(prepared: readonly PreparedEdit[]): readonly (LineId | undefined)[] {
 		const lineEdit = LengthEdit.create(prepared.map(edit => new LengthReplacement(
 			new OffsetRange(edit.range.startLineNumber, edit.range.endLineNumber),
 			countEOL(edit.text)[0],
 		)));
-		const lineIds = lineEdit
-			.applyArray<LineId | undefined>(this.plainLineIds!, undefined)
-			.map(lineId => lineId ?? this.allocateLineId());
-		if (lineIds.length !== this.buffer.getLineCount()) throw new Error("TextModel line identity mapping diverged from the ITextBuffer");
-		return Object.freeze(lineIds);
+		const projected = lineEdit.applyArray<LineId | undefined>(this.plainLineIds!, undefined);
+		const expected = this.buffer.getLineCount() + prepared.reduce((delta, edit) =>
+			delta + countEOL(edit.text)[0] - (edit.range.endLineNumber - edit.range.startLineNumber), 0);
+		if (projected.length !== expected) throw new Error("TextModel line identity projection does not match the edit ranges");
+		return projected;
 	}
 
-	private validateCommittedLineIds(lineIds: readonly LineId[]): readonly LineId[] {
-		if (lineIds.length !== this.buffer.getLineCount()) {
-			throw new RangeError(`Committed TextModel state requires exactly ${this.buffer.getLineCount()} line ids`);
+	private mapLineIds(projected: readonly (LineId | undefined)[], reserved: Set<LineId>): readonly LineId[] {
+		return Object.freeze(projected.map(lineId => lineId ?? this.allocateLineId(reserved)));
+	}
+
+	private validateCommittedLineIds(lineIds: readonly LineId[], expected: number): readonly LineId[] {
+		if (lineIds.length !== expected) {
+			throw new RangeError(`Committed TextModel state requires exactly ${expected} line ids`);
 		}
 		return this.validateLineIdentities(lineIds);
 	}
@@ -2140,19 +2161,18 @@ export class TextModel implements ITextModel {
 			if (typeof lineId !== "string" || lineId.trim().length === 0) throw new TypeError("TextModel line ids must be non-empty strings");
 			if (unique.has(lineId)) throw new TypeError(`Duplicate TextModel line id '${lineId}'`);
 			unique.add(lineId);
-			this.issuedLineIds.add(lineId);
 		}
 		return Object.freeze([...lineIds]);
 	}
 
-	private allocateLineId(): LineId {
+	private allocateLineId(reserved: Set<LineId> = this.issuedLineIds): LineId {
 		for (let attempt = 0; attempt < 1_000; attempt += 1) {
 			const lineId = this.lineIdGenerator();
 			if (typeof lineId !== "string" || lineId.trim().length === 0) {
 				throw new TypeError("TextModel lineIdGenerator must return a non-empty string");
 			}
-			if (this.issuedLineIds.has(lineId)) continue;
-			this.issuedLineIds.add(lineId);
+			if (this.issuedLineIds.has(lineId) || reserved.has(lineId)) continue;
+			reserved.add(lineId);
 			return lineId;
 		}
 		throw new Error("TextModel lineIdGenerator did not produce a unique identity");

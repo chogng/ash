@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { URI } from "../../../base/common/uri.js";
+import { Position } from '../../common/core/position.js';
 import { createDefaultDocumentSchema, DocumentSchema } from "../../common/model/documentSchema.js";
 import { createInsertCitationCommand, createInsertReferenceCommand } from "../../contrib/citation/common/citationCommands.js";
 import { buildReferenceIndex, createReferenceIndexPlugin, REFERENCE_INDEX_KEY } from "../../contrib/citation/common/references.js";
@@ -371,6 +372,9 @@ test("DocumentSchema expresses the Stanza group, typed-block, and line hierarchy
 	assert.equal(model.getText(), "First\nSecond\nQuoted\nconst value = 1;\nreturn value;\n\uFFFC\nFigure 1");
 	assert.equal(model.lineCount, 7);
 	const codeBlock = group.content[2]!;
+	const codeLineId = codeBlock.content[0]!.id;
+	assert.equal(model.getLineId(3), codeLineId);
+	assert.deepEqual(model.textPositionAt({ lineId: codeLineId, offset: 6 }), new Position(4, 7));
 	const codeRegion = model.lineDocument.regions.get(`${codeBlock.id}:region`)!;
 	assert.deepEqual({
 		kind: codeRegion.kind,
@@ -402,6 +406,8 @@ test("DocumentSchema expresses the Stanza group, typed-block, and line hierarchy
 	assert.equal(model.version, 3);
 	assert.equal(model.getText(), textBeforeAttributeChange);
 	assert.equal(model.lineDocument.regions.get(`${codeBlock.id}:region`)?.attrs.languageId, "rust");
+	assert.equal(model.getLineId(3), codeLineId);
+	assert.deepEqual(model.textPositionAt({ lineId: codeLineId, offset: 6 }), new Position(4, 7));
 	assert.equal(textChanges[1]?.reason, "blocks");
 	assert.equal(textChanges[1]?.changes[0]?.rangeOffset, 0);
 	assert.equal(textChanges[1]?.changes[0]?.rangeLength, textBeforeAttributeChange.length);
