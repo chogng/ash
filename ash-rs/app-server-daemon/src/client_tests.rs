@@ -2,6 +2,7 @@ use std::io::Write;
 
 use ash_app_server_protocol::schema_hash;
 
+use super::copy_output;
 use super::diagnostic_error;
 use super::validate_managed_response;
 use crate::endpoint::EndpointPaths;
@@ -9,6 +10,71 @@ use crate::process::ProcessRecord;
 use crate::process::ProcessRecordGuard;
 use crate::wire::ControlResponse;
 use crate::wire::ControlState;
+
+#[test]
+fn stdio_proxy_flushes_a_response_without_waiting_for_connection_close() {
+    use std::io;
+    use std::io::Read;
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
+    struct PausedReader {
+        first: bool,
+        release: mpsc::Receiver<()>,
+    }
+
+    impl Read for PausedReader {
+        fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+            if !self.first {
+                self.first = true;
+                let response = b"{\"id\":1}\n";
+                buffer[..response.len()].copy_from_slice(response);
+                return Ok(response.len());
+            }
+            self.release.recv().unwrap();
+            Ok(0)
+        }
+    }
+
+    struct FlushObserver {
+        buffered: Vec<u8>,
+        delivered: mpsc::Sender<Vec<u8>>,
+    }
+
+    impl Write for FlushObserver {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.buffered.extend_from_slice(bytes);
+            Ok(bytes.len())
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            self.delivered
+                .send(std::mem::take(&mut self.buffered))
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    let (release, receiver) = mpsc::channel();
+    let (delivered, output) = mpsc::channel();
+    let worker = thread::spawn(move || {
+        copy_output(
+            &mut PausedReader {
+                first: false,
+                release: receiver,
+            },
+            &mut FlushObserver {
+                buffered: Vec::new(),
+                delivered,
+            },
+        )
+    });
+    let response = output.recv_timeout(Duration::from_secs(1));
+    release.send(()).unwrap();
+    worker.join().unwrap().unwrap();
+    assert_eq!(response.unwrap(), b"{\"id\":1}\n");
+}
 
 #[test]
 fn managed_control_response_must_match_the_private_process_record() {

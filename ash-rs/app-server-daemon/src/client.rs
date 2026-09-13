@@ -423,13 +423,28 @@ fn proxy_stdio(mut stream: UnixStream, options: &ConnectionOptions) -> io::Resul
         })?;
     let mut output = io::stdout().lock();
     trace_local_connection("stdout copy begin");
-    io::copy(&mut BufReader::new(stream), &mut output)?;
+    copy_output(&mut BufReader::new(stream), &mut output)?;
     trace_local_connection("stdout copy returned");
-    output.flush()?;
     input
         .join()
         .map_err(|_| io::Error::other("Local App Server stdin proxy panicked"))??;
     Ok(())
+}
+
+fn copy_output(reader: &mut impl Read, writer: &mut impl Write) -> io::Result<()> {
+    let mut buffer = [0_u8; 8192];
+    loop {
+        let read = match reader.read(&mut buffer) {
+            Ok(read) => read,
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error),
+        };
+        if read == 0 {
+            return Ok(());
+        }
+        writer.write_all(&buffer[..read])?;
+        writer.flush()?;
+    }
 }
 
 fn trace_local_connection(stage: &str) {
