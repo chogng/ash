@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import type { AppServerConnectionState, IAppServerApi } from "../../../../../platform/app-server/common/appServerApi.js";
 import { OutputService } from "../../browser/outputService.js";
 import { SystemOutputService } from "../../browser/systemOutputService.js";

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { Color } from '../../../base/common/color.js';
 import { TokenizationRegistry } from '../../common/tokenizationRegistry.js';
 

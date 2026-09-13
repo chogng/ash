@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { createStringDataTransferItem, VSDataTransfer } from '../../../base/common/dataTransfer.js';
 import { ServiceContainer } from '../../../platform/instantiation/common/instantiation.js';
 import { ITreeViewsDnDService, registerTreeViewsDnDService } from '../../common/services/treeViewsDndService.js';

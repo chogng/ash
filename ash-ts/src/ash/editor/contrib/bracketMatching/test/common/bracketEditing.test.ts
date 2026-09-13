@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { createRemoveMatchingBracketsCommand } from "../../common/bracketEditing.js";
 import { TestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
 import { LanguageBracketPairs } from "../../../../common/languages/languageBracketPairs.js";

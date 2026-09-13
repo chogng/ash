@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../../common/viewModel/textMeasurer.js";
 import { CursorsController } from "../../../../common/cursor/cursor.js";

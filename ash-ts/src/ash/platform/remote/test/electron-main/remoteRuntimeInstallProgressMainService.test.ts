@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import type { RemoteRuntimeInstallProgressState } from "../../../../platform/remote/common/remoteRuntimeInstallProgress.js";
 import { RemoteRuntimeInstallProgressMainService } from "../../../../platform/remote/electron-main/remoteRuntimeInstallProgressMainService.js";
 

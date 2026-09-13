@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Emitter } from '../../../../../base/common/event.js';
 import { h } from '../../../../../base/browser/dom.js';
@@ -40,7 +40,7 @@ for (const [name, value] of Object.entries({
 const { TestView: View } = await import('../../../../test/browser/viewModel/testViewModel.js');
 const { InlineCompletionsController } = await import('../../browser/controller/inlineCompletionsController.js');
 
-test.after(() => browserEnvironment.window.close());
+suiteTeardown(() => browserEnvironment.window.close());
 
 test('Registered editor commands retrigger inline completions after their edit', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');

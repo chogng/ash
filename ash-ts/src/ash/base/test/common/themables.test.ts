@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { ThemeColor, themeColorFromId, ThemeIcon } from '../../common/themables.js';
 
 test('ThemeIcon parses, modifies, compares, and emits stable classes', () => {

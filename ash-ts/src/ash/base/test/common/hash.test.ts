@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { hash, StringSHA1 } from '../../common/hash.js';
 
 test('hash is stable across plain-object key ordering', () => {

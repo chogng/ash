@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { LanguageLexicalSyntaxCache, type LanguageLexicalCacheUpdate } from "../../common/languages/languageLexicalSyntaxCache.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";

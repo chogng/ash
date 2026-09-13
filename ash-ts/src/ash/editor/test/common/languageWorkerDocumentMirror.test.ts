@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { LanguageWorkerDocumentMirror } from '../../common/services/textModelSync/textModelSync.impl.js';
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";

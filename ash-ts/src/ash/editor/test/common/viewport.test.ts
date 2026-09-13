@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { Emitter, Event } from "../../../base/common/event.js";
 import { Disposable as DisposableBase } from '../../../base/common/lifecycle.js';
 import { MenuId } from '../../../platform/actions/common/actions.js';

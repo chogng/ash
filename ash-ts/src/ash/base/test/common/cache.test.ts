@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { CachedFunction, LRUCachedFunction, WeakCachedFunction } from '../../common/cache.js';
 
 test('CachedFunction memoizes every computed key', () => {

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { DragAndDropDataKind } from "../../browser/ui/dnd/dnd.js";
 import { AsyncDataTree, CompressibleAsyncDataTree } from "../../browser/ui/tree/asyncDataTree.js";

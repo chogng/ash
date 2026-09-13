@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { Checkbox, Switch, Toggle } from "../../browser/ui/toggle/toggle.js";
 import { h } from "../../browser/dom.js";

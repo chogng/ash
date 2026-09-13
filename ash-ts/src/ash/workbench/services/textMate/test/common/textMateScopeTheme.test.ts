@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { TextMateScopeThemeModel, createTextMateScopeThemeResolver, matchesTextMateScopeSelector, normalizeTextMateScopeTheme } from "../../common/textMateScopeTheme.js";
 
 test("Scope themes apply last matching rules before the stable fallback", () => {

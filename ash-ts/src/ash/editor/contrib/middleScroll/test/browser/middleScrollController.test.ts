@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { TextModel } from '../../../../common/model/textModel.js';
 import '../../browser/middleScroll.contribution.js';
@@ -22,7 +22,7 @@ environment.window.HTMLCanvasElement.prototype.getContext = () => null;
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { MiddleScrollController } = await import('../../browser/middleScrollController.js');
 
-test.after(() => environment.window.close());
+suiteTeardown(() => environment.window.close());
 
 test('middle click opens a scroll session and keyboard input closes it', () => {
 	const container = environment.window.document.createElement('main');

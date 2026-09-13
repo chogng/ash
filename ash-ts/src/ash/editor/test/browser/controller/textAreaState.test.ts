@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { Selection } from '../../../common/core/selection.js';
 import { TextAreaState } from '../../../browser/controller/editContext/textArea/textAreaEditContextState.js';
 

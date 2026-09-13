@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { createServiceIdentifier, ServiceContainer } from "../../../platform/instantiation/common/instantiation.js";
 import { WorkbenchServiceContributionRegistry, type WorkbenchServiceContributionContext } from "../../browser/workbenchServiceContributions.js";
 

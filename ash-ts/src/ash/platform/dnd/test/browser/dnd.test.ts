@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { LocalSelectionTransfer } from "../../browser/dnd.js";
 
 test("LocalSelectionTransfer isolates one renderer drag payload by token", () => {

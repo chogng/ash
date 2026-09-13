@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { LinesLayout } from '../../../common/viewLayout/linesLayout.js';
 
 test('whitespace batches preserve visual order, offsets, and width', () => {

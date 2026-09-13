@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { createCancelablePromise, DeferredPromise, Delayer, disposableTimeout, first, promiseWithResolvers, RunOnceScheduler, TaskQueue, TimeoutTimer, timeout } from '../../common/async.js';
 import { isCancellationError } from '../../common/errors.js';
 

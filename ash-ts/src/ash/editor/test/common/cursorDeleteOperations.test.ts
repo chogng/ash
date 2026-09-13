@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { DeleteOperations } from '../../common/cursor/cursorDeleteOperations.js';
 import { EditOperationType } from '../../common/cursorCommon.js';
 import { Position } from '../../common/core/position.js';

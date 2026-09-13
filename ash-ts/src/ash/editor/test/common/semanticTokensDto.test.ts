@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { attachLanguageTokenResultDelta, getLanguageTokenResultDelta } from '../../common/services/semanticTokensDto.js';
 import type { LanguageTokenResult } from '../../common/tokens/languageTokens.js';
 

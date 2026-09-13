@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { CommandRegistry } from "../../common/commands.js";
 
 test("CommandRegistry atomically replaces one caller-owned command batch", () => {

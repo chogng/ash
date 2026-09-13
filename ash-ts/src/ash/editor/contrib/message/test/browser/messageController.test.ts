@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
 import { Selection } from '../../../../common/core/selection.js';
@@ -28,7 +28,7 @@ const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor
 const { MessageController } = await import('../../browser/messageController.js');
 const { ReadOnlyMessageController } = await import('../../../readOnlyMessage/browser/contribution.js');
 
-test.after(() => environment.window.close());
+suiteTeardown(() => environment.window.close());
 
 test('read-only edit attempts use MessageController and close after cursor movement', () => {
 	const container = environment.window.document.createElement('main');

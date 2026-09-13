@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { Emitter } from "../../../../../base/common/event.js";
 import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";
 import { Disposable } from "../../../../../base/common/lifecycle.js";

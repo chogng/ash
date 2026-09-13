@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { toDisposable } from "../../../base/common/lifecycle.js";
 import { type TextMeasurer } from "../../common/viewModel/textMeasurer.js";
 import { LineWidthIndex } from "../../browser/viewParts/viewLines/viewLines.js";

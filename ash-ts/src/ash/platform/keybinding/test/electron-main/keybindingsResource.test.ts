@@ -6,7 +6,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import test from "node:test";
+import { test } from "mocha";
 import {
 	type IKeybindingsResourceApi,
 	type IKeybindingsResourceSnapshot,
@@ -106,43 +106,44 @@ test("workbench keybindings resource accepts host snapshots and CAS updates", as
 	]);
 });
 
-test("main keybindings resource persists a standalone top-level array", async (context) => {
+test("main keybindings resource persists a standalone top-level array", async () => {
 	const directory = await mkdtemp(join(tmpdir(), "ash-keybindings-"));
-	context.after(async () => {
-		await rm(directory, { recursive: true, force: true });
-	});
-	const filePath = join(directory, "keybindings.json");
-	const service = await KeybindingsResourceMainService.create({ filePath });
-	const bindings = [{
-		key: "primary+n",
-		command: "ash.new",
-		when: "windowFocused",
-	}] as const;
+	try {
+		const filePath = join(directory, "keybindings.json");
+		const service = await KeybindingsResourceMainService.create({ filePath });
+		const bindings = [{
+			key: "primary+n",
+			command: "ash.new",
+			when: "windowFocused",
+		}] as const;
 
-	const updated = await service.update({
-		expectedRevision: 0,
-		bindings,
-	});
-	assert.equal(updated.revision, 1);
-	await assert.rejects(
-		() => service.update({
+		const updated = await service.update({
 			expectedRevision: 0,
-			bindings: [],
-		}),
-		/revision conflict/,
-	);
-	await service.close();
+			bindings,
+		});
+		assert.equal(updated.revision, 1);
+		await assert.rejects(
+			() => service.update({
+				expectedRevision: 0,
+				bindings: [],
+			}),
+			/revision conflict/,
+		);
+		await service.close();
 
-	assert.deepEqual(
-		JSON.parse(await readFile(filePath, "utf8")),
-		bindings,
-	);
-	const reopened = await KeybindingsResourceMainService.create({ filePath });
-	assert.deepEqual(reopened.read(), {
-		revision: 0,
-		bindings,
-	});
-	await reopened.close();
+		assert.deepEqual(
+			JSON.parse(await readFile(filePath, "utf8")),
+			bindings,
+		);
+		const reopened = await KeybindingsResourceMainService.create({ filePath });
+		assert.deepEqual(reopened.read(), {
+			revision: 0,
+			bindings,
+		});
+		await reopened.close();
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
 });
 
 class TestKeybindingsResourceApi implements IKeybindingsResourceApi {

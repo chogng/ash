@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { arraysEqual, CallbackIterable, commonArraySuffixLength, commonPrefixLength, distinct, isNonEmptyArray } from '../../common/arrays.js';
 
 test('arraysEqual compares complete sequences', () => {

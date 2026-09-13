@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import type { DocumentNode } from "../../../../../editor/common/model/document.js";
 import { createDefaultDocumentSchema, type DocumentSchema } from "../../../../../editor/common/model/documentSchema.js";
 import { serializeDocument } from "../../../../../editor/common/model/documentSerialization.js";

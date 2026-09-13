@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { escapeIcons, getIconAriaLabel, matchesFuzzyIconAware, parseLabelWithIcons, stripIcons } from '../../common/iconLabels.js';
 
 test('icon labels escape, strip, and describe literal icon syntax', () => {

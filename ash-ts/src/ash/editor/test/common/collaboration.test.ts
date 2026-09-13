@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { rebaseDocumentHistory, rebaseDocumentTransaction } from "../../contrib/collaboration/common/rebase.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { TextModelRemoteHistoryPolicy } from "../../common/model/textModelBlockState.js";

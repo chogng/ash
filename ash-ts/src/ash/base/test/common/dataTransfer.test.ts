@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { createFileDataTransferItem, createStringDataTransferItem, matchesMimeType, UriList, VSDataTransfer } from '../../common/dataTransfer.js';
 import { URI } from '../../common/uri.js';
 

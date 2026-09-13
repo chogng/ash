@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import {
 	StandardKeyboardEvent,
 } from "../../browser/keyboardEvent.js";

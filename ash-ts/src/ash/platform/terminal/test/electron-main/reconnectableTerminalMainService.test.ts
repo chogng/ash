@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { APP_SERVER_METHODS } from "../../../../../../generated/app-server/index.js";
 import { toDisposable } from "../../../../base/common/lifecycle.js";
 import type { AppServerConnectionState } from "../../../../platform/app-server/common/appServerApi.js";

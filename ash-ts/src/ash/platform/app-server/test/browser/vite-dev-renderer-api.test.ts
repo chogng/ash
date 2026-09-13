@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { isCancellationError } from "../../../../base/common/errors.js";
 import { isRecord } from "../../../../base/common/types.js";
 import { AppServerRemoteError } from "../../../../platform/app-server/common/appServerError.js";

@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { lxiconsLibrary } from "../../common/lxiconsLibrary.js";
 import { Icon, register, resolveIconDefinition } from "../../common/icon.js";
 

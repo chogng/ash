@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { BufferDirtyTracker } from '../../browser/gpu/bufferDirtyTracker.js';
 import { segmentContent } from '../../browser/gpu/contentSegmenter.js';
@@ -30,7 +30,7 @@ for (const [name, value] of Object.entries({
 	Element: browserEnvironment.window.Element,
 	HTMLElement: browserEnvironment.window.HTMLElement,
 })) Object.defineProperty(globalThis, name, { configurable: true, value });
-test.after(() => browserEnvironment.window.close());
+suiteTeardown(() => browserEnvironment.window.close());
 
 test('BufferDirtyTracker exposes one inclusive dirty range', () => {
 	const tracker = new BufferDirtyTracker();

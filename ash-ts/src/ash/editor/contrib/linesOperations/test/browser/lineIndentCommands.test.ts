@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { ShiftCommand } from '../../../../common/commands/shiftCommand.js';
 import { EditorAutoIndentStrategy } from '../../../../common/config/editorOptions.js';
 import { Position } from '../../../../common/core/position.js';

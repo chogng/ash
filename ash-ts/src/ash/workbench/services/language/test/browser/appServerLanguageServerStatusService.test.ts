@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { type IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
 import { DialogService } from "../../../dialogs/common/dialogService.js";
 import { OutputService } from "../../../output/browser/outputService.js";

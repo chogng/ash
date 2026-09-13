@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { darkColorTheme, lightColorTheme } from '../../../../platform/theme/common/colorTheme.js';
 import { EditorTheme } from '../../../common/editorTheme.js';

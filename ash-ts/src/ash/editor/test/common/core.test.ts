@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { BugIndicatingError } from "../../../base/common/errors.js";
 import { Rect } from "../../common/core/2d/rect.js";
 import { ArrayEdit, ArrayReplacement } from "../../common/core/edits/arrayEdit.js";

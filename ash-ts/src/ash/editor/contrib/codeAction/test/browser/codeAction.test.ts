@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { h } from '../../../../../base/browser/dom.js';
 import { type ICodeEditor } from '../../../../browser/editorBrowser.js';
@@ -30,7 +30,7 @@ for (const [name, value] of Object.entries({
 const { TestView: View } = await import('../../../../test/browser/viewModel/testViewModel.js');
 const { CodeActionController } = await import('../../browser/codeActionController.js');
 
-test.after(() => browserEnvironment.window.close());
+suiteTeardown(() => browserEnvironment.window.close());
 
 test('CodeActionController applies a local action through ICodeEditor', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');

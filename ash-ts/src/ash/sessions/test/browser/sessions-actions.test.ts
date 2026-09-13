@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { Emitter } from "../../../base/common/event.js";
 import { ServiceContainer } from "../../../platform/instantiation/common/instantiation.js";
 import { NEW_CHAT_COMMAND_ID } from "../../../workbench/contrib/chat/common/chat.js";

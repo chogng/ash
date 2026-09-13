@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { createHash } from "node:crypto";
-import test from "node:test";
+import { test } from "mocha";
 import { DisposableTracker, installDisposableTracker, toDisposable } from "../../../../../base/common/lifecycle.js";
 import type { ExtensionCatalog, ExtensionDescriptor, IExtensionApi } from "../../../../../platform/extensions/common/extensionApi.js";
 import type { IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";

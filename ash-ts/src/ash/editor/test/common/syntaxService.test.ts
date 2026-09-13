@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { DisposableStore } from "../../../base/common/lifecycle.js";
 import { SyntaxProviderRegistry, type SyntaxProvider } from "../../common/languages/syntax/syntaxProviders.js";
 import { SYNTAX_SYNCHRONIZATION, SYNTAX_DIAGNOSTIC_LANE, SYNTAX_TOKEN_LANE, SyntaxProviderWorker, SyntaxService } from "../../common/languages/syntax/syntaxService.js";

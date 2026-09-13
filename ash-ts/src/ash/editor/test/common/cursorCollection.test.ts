@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { toDisposable } from '../../../base/common/lifecycle.js';
 import { CursorCollection } from '../../common/cursor/cursorCollection.js';
 import { CursorContext } from '../../common/cursor/cursorContext.js';

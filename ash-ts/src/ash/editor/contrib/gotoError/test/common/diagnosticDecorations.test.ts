@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { TextDecorationChangeReason } from "../../../../common/model/decorationCollection.js";
 import { LanguageDiagnosticDecorationBridge } from "../../common/diagnosticDecorations.js";
 import { LanguageResultAcceptance } from "../../../../common/languages/languageResultStore.js";

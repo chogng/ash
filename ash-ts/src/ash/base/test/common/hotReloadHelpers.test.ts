@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { enableHotReload } from "../../common/hotReload.js";
 import { createHotClass } from "../../common/hotReloadHelpers.js";
 import { readHotReloadableExport } from "../../common/hotReloadHelpers.js";

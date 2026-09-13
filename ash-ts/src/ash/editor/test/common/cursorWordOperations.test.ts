@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { WordNavigationType, WordOperations, WordPartOperations } from '../../common/cursor/cursorWordOperations.js';
 import { ReplaceCommand } from '../../common/commands/replaceCommand.js';
 import { Position } from '../../common/core/position.js';

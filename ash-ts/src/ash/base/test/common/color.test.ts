@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { Color } from '../../common/color.js';
 
 test("Color parses, normalizes, and composes immutable RGBA values", () => {

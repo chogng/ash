@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { TEXT_FILE_TRANSFER_MAX_BYTES, selectTextFileTransfer, type TextFileTransfer } from "../../browser/textFileTransfer.js";
 
 function file(name: string, type: string, size = 1): TextFileTransfer {

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { assert as assertCondition, assertDefined, assertReturnsDefined, assertType, isDefined, isFunction, isNonEmptyString, isObject, isRecord, type Mutable } from "../../common/types.js";
 
 test("assert narrows caller-defined conditions", () => {

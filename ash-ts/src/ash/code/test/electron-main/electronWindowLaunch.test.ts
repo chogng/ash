@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { electronWorkspaceLaunchArguments } from "../../electron-main/electronWindowLaunch.js";
 
 test("packaged second-instance arguments retain the Workspace target without process-only switches", () => {

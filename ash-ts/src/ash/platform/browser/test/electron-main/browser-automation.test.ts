@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { BrowserAutomationMainService } from "../../../../platform/browser/electron-main/browserAutomationMainService.js";
 import type { IBrowserViewMainService } from "../../../../platform/browser/electron-main/browserViewIpc.js";
 import { BrowserTargetRegistry, type BrowserTargetView } from "../../../../platform/browser/electron-main/browserTargetRegistry.js";

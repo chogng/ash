@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { REMOTE_RUNTIME_INSTALL_PROGRESS_CANCEL_CHANNEL } from "../../../../platform/remote/common/remoteRuntimeInstallProgress.js";
 import { REMOTE_RUNTIME_INSTALL_PROGRESS_READ_CHANNEL } from "../../../../platform/remote/common/remoteRuntimeInstallProgress.js";
 import { RemoteRuntimeInstallProgressMainService } from "../../../../platform/remote/electron-main/remoteRuntimeInstallProgressMainService.js";

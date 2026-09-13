@@ -6,16 +6,17 @@ import test from "node:test";
 const repositoryRoot = resolve(import.meta.dirname, "..");
 
 test("repository build orchestration and developer scripts have separate root owners", () => {
-  for (const directory of ["ash-ts/scripts"]) {
+  for (const directory of ["ash-ts/scripts", "scripts/ash-ts"]) {
     const path = join(repositoryRoot, directory);
     assert.equal(existsSync(path), false, `${directory} must not own repository tooling`);
   }
   for (const category of ["desktop", "download", "lib", "pnpm", "release", "resources", "vite", "ash-package"]) {
     assert.equal(existsSync(join(import.meta.dirname, category)), true, category);
   }
-  for (const entry of ["cargo.py", "format.py", "just-shell.py", "test-python.py", "test.ts", "test-editor.ts", "test-extensions.ts", "test-integration.ts", "test-smoke.ts", "test-web-integration.ts", "test", "ash.py"]) {
+  for (const entry of ["cargo.py", "format.py", "just-shell.py", "test-python.py"]) {
     assert.equal(existsSync(join(repositoryRoot, "scripts", entry)), true, entry);
   }
+  assert.equal(existsSync(join(repositoryRoot, "ash-ts/test/unit/mocha.ts")), true);
   for (const retiredEntry of ["cargo_with_v8.py", "lib/just_shell.py"]) {
     assert.equal(existsSync(join(import.meta.dirname, retiredEntry)), false, retiredEntry);
   }

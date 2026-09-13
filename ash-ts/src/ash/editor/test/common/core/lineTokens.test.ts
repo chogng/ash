@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { OffsetRange } from '../../../common/core/ranges/offsetRange.js';
 import { LanguageId, MetadataConsts } from '../../../common/encodedTokenAttributes.js';
 import { type ILanguageIdCodec } from '../../../common/languages.js';

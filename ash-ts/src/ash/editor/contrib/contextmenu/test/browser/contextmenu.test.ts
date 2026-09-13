@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { type IContextMenuDelegate } from '../../../../../base/browser/contextmenu.js';
 import { Event } from '../../../../../base/common/event.js';
@@ -28,7 +28,7 @@ const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor
 const { ContextMenuController } = await import('../../browser/contextmenu.js');
 const { IContextMenuService } = await import('../../../../../platform/contextview/browser/contextView.js');
 
-test.after(() => environment.window.close());
+suiteTeardown(() => environment.window.close());
 
 test('ContextMenuController opens the host menu at the active cursor from Shift+F10', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');

@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { LanguageCompletionSessionController } from "../../contrib/suggest/common/languageCompletionSessionController.js";
 import { LanguageCompletionService } from "../../common/languages/completion/languageCompletionService.js";
 import { LanguageCompletionProviderRegistry, LanguageCompletionTriggerKind, createLanguageCompletionIncompleteRefreshContext, createLanguageCompletionInvokeContext, createLanguageCompletionTriggerCharacterContext, type LanguageCompletionContext, type LanguageCompletionProvider, type LanguageCompletionProviderItem, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from "../../common/languages/completion/languageCompletionProviders.js";

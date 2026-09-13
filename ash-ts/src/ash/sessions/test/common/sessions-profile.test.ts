@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { codeSessionsProfile } from "../../browser/code/codeSessionsProfile.js";
 import { resolveSessionsPageUrl } from "../../browser/common/sessionNavigation.js";
 import { createSessionsProfile } from "../../common/sessionsProfile.js";

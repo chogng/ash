@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { EditorZoom } from "../../common/config/editorZoom.js";
 import { TextModel } from "../../common/model/textModel.js";
@@ -18,7 +18,7 @@ for (const [name, value] of Object.entries({
 
 const { TestView: View } = await import("./viewModel/testViewModel.js");
 
-test.after(() => browserEnvironment.window.close());
+suiteTeardown(() => browserEnvironment.window.close());
 
 test("Stanza viewport automatic layout uses the observed content box", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");

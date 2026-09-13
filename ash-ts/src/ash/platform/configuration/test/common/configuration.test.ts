@@ -6,7 +6,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import test from "node:test";
+import { test } from "mocha";
 import { URI } from "../../../../base/common/uri.js";
 import {
 	ConfigurationRegistry,
@@ -379,42 +379,43 @@ test("workbench configuration change compares values after language overrides", 
 	assert.equal(affectsJavaScript, true);
 });
 
-test("main configuration service persists atomic revisions", async (context) => {
+test("main configuration service persists atomic revisions", async () => {
 	const directory = await mkdtemp(join(tmpdir(), "ash-configuration-"));
-	context.after(async () => {
+	try {
+		const filePath = join(directory, "configuration.json");
+		const service = await ConfigurationMainService.create({ filePath });
+
+		const updated = await service.update({
+			expectedRevision: 0,
+			document: {
+				version: 1,
+				source: '{\n\t// persisted\n\t"editor.fontSize": 14,\n}\n',
+			},
+		});
+		assert.equal(updated.revision, 1);
+		await assert.rejects(
+			() => service.update({
+					expectedRevision: 0,
+					document: { version: 1, source: '{}' },
+			}),
+			/revision conflict/,
+		);
+		await service.close();
+
+		assert.deepEqual(
+			JSON.parse(await readFile(filePath, "utf8")),
+			updated.document,
+		);
+		assert.deepEqual(configurationValues(updated.document), { "editor.fontSize": 14 });
+		const reopened = await ConfigurationMainService.create({ filePath });
+		assert.deepEqual(reopened.read(), {
+			revision: 0,
+			document: updated.document,
+		});
+		await reopened.close();
+	} finally {
 		await rm(directory, { recursive: true, force: true });
-	});
-	const filePath = join(directory, "configuration.json");
-	const service = await ConfigurationMainService.create({ filePath });
-
-	const updated = await service.update({
-		expectedRevision: 0,
-		document: {
-			version: 1,
-			source: '{\n\t// persisted\n\t"editor.fontSize": 14,\n}\n',
-		},
-	});
-	assert.equal(updated.revision, 1);
-	await assert.rejects(
-		() => service.update({
-				expectedRevision: 0,
-				document: { version: 1, source: '{}' },
-		}),
-		/revision conflict/,
-	);
-	await service.close();
-
-	assert.deepEqual(
-		JSON.parse(await readFile(filePath, "utf8")),
-		updated.document,
-	);
-	assert.deepEqual(configurationValues(updated.document), { "editor.fontSize": 14 });
-	const reopened = await ConfigurationMainService.create({ filePath });
-	assert.deepEqual(reopened.read(), {
-		revision: 0,
-		document: updated.document,
-	});
-	await reopened.close();
+	}
 });
 
 class TestConfigurationApi implements IConfigurationApi {

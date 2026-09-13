@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import type { ModelRef, ServerNotification, Session as SessionDto, SessionCreateParams, Thread, ThreadTranscriptSnapshot } from "../../../../../../../generated/app-server/index.js";
 import type { SessionMutationParams, SessionOperationInput } from "../../../../../platform/sessions/common/sessionApi.js";
@@ -78,7 +78,7 @@ const { ChatListWidget } = await import(
 await import(
 	"../../../../../workbench/contrib/preferences/browser/preferences.contribution.js"
 );
-test.after(() => {
+suiteTeardown(() => {
 	browserEnvironment.window.close();
 	for (const name of [
 		"window",

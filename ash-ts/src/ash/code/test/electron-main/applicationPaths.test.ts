@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import test from 'node:test';
+import { test } from 'mocha';
 import { AshRendererDirectory } from '../../common/application.js';
 import { resolveApplicationDataPaths, resolvePackagedRendererRoot } from '../../electron-main/applicationPaths.js';
 

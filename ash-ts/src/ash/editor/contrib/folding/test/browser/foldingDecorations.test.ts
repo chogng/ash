@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { OperatingSystem, operatingSystem } from '../../../../../base/common/platform.js';
@@ -28,7 +28,7 @@ await import('../../browser/folding.js');
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { FoldingDecorationProvider } = await import('../../browser/foldingDecorations.js');
 
-test.after(() => browser.window.close());
+suiteTeardown(() => browser.window.close());
 
 test('FoldingDecorationProvider selects controls, highlights, and editor-owned decoration lifetime', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');

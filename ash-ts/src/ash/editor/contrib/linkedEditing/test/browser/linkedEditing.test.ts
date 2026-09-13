@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { type CancellationToken } from '../../../../../base/common/cancellation.js';
 import { CursorsController } from '../../../../common/cursor/cursor.js';
@@ -35,7 +35,7 @@ const { TestView: View } = await import('../../../../test/browser/viewModel/test
 const { LanguageEditingAdapter, ViewController } = await import('../../../../browser/view/viewController.js');
 const { LinkedEditingContribution } = await import('../../browser/linkedEditing.js');
 
-test.after(() => browserEnvironment.window.close());
+suiteTeardown(() => browserEnvironment.window.close());
 
 test('linked editing applies one input transaction to every provider range', async () => {
 	const calls: Array<{ readonly model: TextModel; readonly position: Position; readonly token: CancellationToken }> = [];

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { EditContext } from '../../../browser/controller/editContext/native/editContextFactory.js';
 import { clampOffset, createNativeTextWindow, FocusTracker, isNativeTextUpdateEvent, NATIVE_TEXT_WINDOW_LENGTH } from '../../../browser/controller/editContext/native/nativeEditContextUtils.js';

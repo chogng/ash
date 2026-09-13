@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { TypeOperations } from "../../../common/cursor/cursorTypeOperations.js";
 import { EnterOperation } from "../../../common/cursor/cursorTypeEditOperations.js";
 import { EditorIndentationKind, resolveEditorIndentationOptions, type EditorIndentationOptions } from "../../../common/core/misc/indentation.js";

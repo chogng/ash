@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { toDisposable } from "../../../../../base/common/lifecycle.js";
@@ -30,7 +30,7 @@ for (const [name, value] of Object.entries({
 const { ChatViewPane } = await import("../../browser/view/chatViewPane.js");
 const { BrowserContextViewService } = await import("../../../../../platform/contextview/browser/contextViewService.js");
 
-test.after(() => browserEnvironment.window.close());
+suiteTeardown(() => browserEnvironment.window.close());
 
 test("opens a local Chat tab before the backend session request settles", () => {
 	const document = browserEnvironment.window.document;

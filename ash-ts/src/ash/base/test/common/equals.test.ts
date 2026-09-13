@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { arrayEqualsC, equalsIfDefinedC, structuralEquals, thisEqualsC } from '../../common/equals.js';
 import { equals as objectEquals } from '../../common/objects.js';
 

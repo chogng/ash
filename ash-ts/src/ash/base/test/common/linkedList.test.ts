@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { LinkedList } from '../../common/linkedList.js';
 
 test('LinkedList removes the exact registration even for duplicate values', () => {

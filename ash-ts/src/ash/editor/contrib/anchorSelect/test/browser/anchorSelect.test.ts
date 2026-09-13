@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { h } from '../../../../../base/browser/dom.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
@@ -27,7 +27,7 @@ for (const [name, value] of Object.entries({
 const { TestView: View } = await import('../../../../test/browser/viewModel/testViewModel.js');
 const { SelectionAnchorController } = await import('../../browser/anchorSelect.js');
 
-test.after(() => browserEnvironment.window.close());
+suiteTeardown(() => browserEnvironment.window.close());
 
 test('Selection anchor follows edits and supports set, go to, select, and cancel', async () => {
 	const fixture = createFixture('abcd');

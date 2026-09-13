@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { LanguageCompletionProviderRegistry, LanguageCompletionTriggerKind, createLanguageCompletionIncompleteRefreshContext, createLanguageCompletionInvokeContext, createLanguageCompletionTriggerCharacterContext, normalizeLanguageCompletionProviderCatalog, type LanguageCompletionContext, type LanguageCompletionProvider, type LanguageCompletionProviderCatalog } from "../../common/languages/completion/languageCompletionProviders.js";
 
 test("Completion provider registry preserves registration order and selectors", () => {

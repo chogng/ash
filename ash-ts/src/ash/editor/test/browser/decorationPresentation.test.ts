@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { themeColorFromId } from '../../../base/common/themables.js';
 import { ColorId } from '../../../platform/theme/common/colorTheme.js';
 import { TextDecorationCollection } from '../../common/model/decorationCollection.js';

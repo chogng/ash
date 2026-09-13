@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import test from "node:test";
+import { test } from "mocha";
 import { findDesktopRoot } from "./testPaths.js";
 
 const desktopRoot = findDesktopRoot(import.meta.dirname);

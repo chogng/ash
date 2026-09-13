@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { URI } from "../../../base/common/uri.js";
 import { TextModel } from "../../common/model/textModel.js";
@@ -22,7 +22,7 @@ for (const [name, value] of Object.entries({
 
 const { CodeEditorWidget } = await import('../../browser/widget/codeEditor/codeEditorWidget.js');
 
-test.after(() => browserEnvironment.window.close());
+suiteTeardown(() => browserEnvironment.window.close());
 
 test("minimal text editor assembly creates only the engine surface", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");

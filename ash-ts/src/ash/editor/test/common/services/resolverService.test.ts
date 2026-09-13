@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { ITextModelService, isResolvedTextEditorModel, type ITextEditorModel } from '../../../common/services/resolverService.js';
 import type { ITextModel } from '../../../common/model.js';
 

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Position } from '../../../../common/core/position.js';
 import { Selection } from '../../../../common/core/selection.js';
@@ -29,7 +29,7 @@ const { EditorExtensionsRegistry } = await import('../../../../browser/editorExt
 await import('../../../caretOperations/browser/transpose.js');
 await import('../../../linesOperations/browser/linesOperations.js');
 
-test.after(() => browserEnvironment.window.close());
+suiteTeardown(() => browserEnvironment.window.close());
 
 test('Transpose Letters runs directly through its canonical action', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');

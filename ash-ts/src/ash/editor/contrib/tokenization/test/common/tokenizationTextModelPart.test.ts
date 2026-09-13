@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { SyntaxProviderRegistry } from '../../../../common/languages/syntax/syntaxProviders.js';
 import { Range } from '../../../../common/core/range.js';

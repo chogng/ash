@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import type { ContextViewHideReason as ContextViewHideReasonValue } from "../../browser/ui/contextview/contextview.js";
 import { h } from "../../browser/dom.js";

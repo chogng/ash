@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { editJsonObjectProperty, formatJson, JsonTokenKind, parseJsonDocument, scanJson } from '../../common/json.js';
 import { parse, parseJsonc, stripComments } from '../../common/jsonc.js';
 

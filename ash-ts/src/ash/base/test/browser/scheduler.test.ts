@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { WindowIdleValue, WindowIntervalTimer } from "../../browser/dom.js";
 import { disposableWindowInterval, disposableWindowTimeout, measure, modify, runAtThisOrScheduleAtNextAnimationFrame, scheduleAtNextAnimationFrame } from "../../browser/scheduler.js";
 

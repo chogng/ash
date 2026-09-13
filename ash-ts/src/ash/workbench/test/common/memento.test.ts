@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { Emitter } from "../../../base/common/event.js";
 import type { JsonValue } from "../../../base/common/jsonValue.js";
 import { isRecord } from "../../../base/common/types.js";

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { URI } from "../../../../../base/common/uri.js";
 import { BrowserBulkEditService } from "../../browser/bulkEditService.js";
 import { type IWorkspaceEditService, type WorkspaceEditResult } from "../../../../services/language/common/workspaceEditService.js";

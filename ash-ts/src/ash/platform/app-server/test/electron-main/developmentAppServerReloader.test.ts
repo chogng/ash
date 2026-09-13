@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { chmod, mkdtemp, mkdir, rm, utimes, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import test from "node:test";
+import { test } from "mocha";
 import { toDisposable } from "../../../../base/common/lifecycle.js";
 import type { AppServerConnectionState } from "../../../../platform/app-server/common/appServerApi.js";
 import { LocalAppServerProcessLauncher } from "../../../../platform/app-server/electron-main/localAppServerProcessLauncher.js";

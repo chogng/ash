@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { applyLanguageCompletionSnippetTransform, createLanguageCompletionSnippetTransform } from "../../common/snippetTransform.js";
 
 test("Completion snippet transforms expand captures, case modifiers, conditionals, and global matches", () => {

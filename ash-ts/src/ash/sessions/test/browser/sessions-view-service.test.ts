@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { Emitter } from "../../../base/common/event.js";
 import type { ApprovalMode, IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../services/sessions/common/session.js";
 import type { ISessionsManagementService, SessionsManagementState } from "../../services/sessions/common/sessionsManagementService.js";

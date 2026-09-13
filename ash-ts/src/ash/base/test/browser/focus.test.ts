@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 
 class FakeNode extends EventTarget {
 	static readonly ELEMENT_NODE = 1;

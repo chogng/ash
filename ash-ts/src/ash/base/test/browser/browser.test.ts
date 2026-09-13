@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { getBrowserFeatures, getMonacoEnvironment } from '../../browser/browser.js';
 
 test('getBrowserFeatures distinguishes supported browser engines and hosts', () => {

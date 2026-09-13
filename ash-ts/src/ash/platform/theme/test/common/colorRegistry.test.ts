@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { ColorRegistry, transparent } from "../../common/colorRegistry.js";
 import { SizeRegistry, size, sizeToCss } from "../../common/sizeRegistry.js";
 import { ColorScheme } from "../../common/theme.js";

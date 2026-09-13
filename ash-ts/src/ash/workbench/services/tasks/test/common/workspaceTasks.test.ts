@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { cargoWorkspaceTasks, parsePackageTasks, parseWorkspaceTasks } from "../../common/workspaceTasks.js";
 
 test("workspace tasks parse supported VS Code shell tasks and preserve explicit execution", () => {

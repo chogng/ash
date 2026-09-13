@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { createFastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { CharWidthRequest, CharWidthRequestType } from '../../../browser/config/charWidthReader.js';

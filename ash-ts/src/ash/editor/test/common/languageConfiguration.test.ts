@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { IndentAction, StandardAutoClosingPairConditional } from '../../common/languages/languageConfiguration.js';
 import { LanguageConfigurationService } from '../../common/languages/languageConfigurationRegistry.js';

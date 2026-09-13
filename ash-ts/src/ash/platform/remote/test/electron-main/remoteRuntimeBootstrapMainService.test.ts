@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { URI } from "../../../../base/common/uri.js";
 import type { RemoteRuntimeInstallProgress } from "../../../../platform/remote/common/remoteRuntimeInstallProgress.js";
 import { createRemoteRuntimeInstallProgressLogger } from "../../../../platform/remote/electron-main/remoteRuntimeBootstrapMainService.js";

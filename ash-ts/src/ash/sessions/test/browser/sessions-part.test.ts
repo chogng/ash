@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { Emitter } from "../../../base/common/event.js";
 import { toDisposable } from "../../../base/common/lifecycle.js";
@@ -25,7 +25,7 @@ for (const [name, value] of Object.entries({
 }
 const { SessionsPart } = await import("../../../sessions/browser/parts/sessionsPart.js");
 
-test.after(() => {
+suiteTeardown(() => {
 	browserEnvironment.window.close();
 	for (const name of ["window", "document", "Node", "Element", "HTMLElement", "Event", "MouseEvent", "navigator"]) Reflect.deleteProperty(globalThis, name);
 });

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { enableHotReload } from '../../../../base/common/hotReload.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { createServiceIdentifier, IInstantiationService, ServiceContainer } from '../../../instantiation/common/instantiation.js';

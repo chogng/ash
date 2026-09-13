@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import test from 'node:test';
+import { test } from 'mocha';
 import { OperatingSystem } from '../../../../base/common/platform.js';
 import {
 	parseUserKeyboardLayoutResource,
@@ -41,41 +41,46 @@ test('user keyboard layout parser accepts VS Code debug JSON and canonical Ash J
 	}), /unknown fields/);
 });
 
-test('profile keyboard-layout.json is created and hot-reloaded, including invalidation', async (context) => {
+test('profile keyboard-layout.json is created and hot-reloaded, including invalidation', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'ash-keyboard-layout-'));
-	context.after(async () => rm(directory, { recursive: true, force: true }));
-	const filePath = join(directory, 'keyboard-layout.json');
-	const errors: unknown[] = [];
-	let openedResource: string | undefined;
-	const service = await UserKeyboardLayoutMainService.create({
-		filePath,
-		onError: (error) => errors.push(error),
-		openResource: async (resource) => {
-			openedResource = resource;
-			return '';
-		},
-	});
-	context.after(async () => service.close());
+	try {
+		const filePath = join(directory, 'keyboard-layout.json');
+		const errors: unknown[] = [];
+		let openedResource: string | undefined;
+		const service = await UserKeyboardLayoutMainService.create({
+			filePath,
+			onError: (error) => errors.push(error),
+			openResource: async (resource) => {
+				openedResource = resource;
+				return '';
+			},
+		});
+		try {
+			assert.equal(await service.readKeyboardLayout(), undefined);
+			assert.equal(await service.ensureResource(), filePath);
+			assert.equal(await readFile(filePath, 'utf8'), USER_KEYBOARD_LAYOUT_DEFAULT_CONTENT);
+			await service.openResource();
+			assert.equal(openedResource, filePath);
 
-	assert.equal(await service.readKeyboardLayout(), undefined);
-	assert.equal(await service.ensureResource(), filePath);
-	assert.equal(await readFile(filePath, 'utf8'), USER_KEYBOARD_LAYOUT_DEFAULT_CONTENT);
-	await service.openResource();
-	assert.equal(openedResource, filePath);
+			const loaded = nextChange(service);
+			await writeFile(filePath, `${JSON.stringify({
+				layout: { id: 'custom.test', label: 'Custom Test', source: 'user', operatingSystem: 'linux' },
+				rawMapping: { KeyT: mappingEntry('t', 'T') },
+			}, null, 2)}\n`, 'utf8');
+			await loaded;
+			assert.equal((await service.readKeyboardLayout())?.layout.id, 'custom.test');
 
-	const loaded = nextChange(service);
-	await writeFile(filePath, `${JSON.stringify({
-		layout: { id: 'custom.test', label: 'Custom Test', source: 'user', operatingSystem: 'linux' },
-		rawMapping: { KeyT: mappingEntry('t', 'T') },
-	}, null, 2)}\n`, 'utf8');
-	await loaded;
-	assert.equal((await service.readKeyboardLayout())?.layout.id, 'custom.test');
-
-	const invalidated = nextChange(service);
-	await writeFile(filePath, '{ invalid', 'utf8');
-	await invalidated;
-	assert.equal(await service.readKeyboardLayout(), undefined);
-	assert.equal(errors.length, 1);
+			const invalidated = nextChange(service);
+			await writeFile(filePath, '{ invalid', 'utf8');
+			await invalidated;
+			assert.equal(await service.readKeyboardLayout(), undefined);
+			assert.equal(errors.length, 1);
+		} finally {
+			await service.close();
+		}
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
 });
 
 function mappingEntry(value: string, withShift: string, vkey?: string) {

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../../common/viewModel/textMeasurer.js";
 import { Selection } from "../../../../common/core/selection.js";
@@ -68,7 +68,7 @@ const progress = {
 	showWhile: <T>(_position: Position, _title: string, promise: Promise<T>): Promise<T> => promise,
 };
 
-test.after(() => browserEnvironment.window.close());
+suiteTeardown(() => browserEnvironment.window.close());
 
 test("Plain-text drops insert at the viewport hit target", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");

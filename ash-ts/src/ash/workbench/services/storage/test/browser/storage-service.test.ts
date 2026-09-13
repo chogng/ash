@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { DisposableStore } from "../../../../../base/common/lifecycle.js";
 import { StorageScope, StorageTarget, WillSaveStateReason } from "../../../../../platform/storage/common/storage.js";

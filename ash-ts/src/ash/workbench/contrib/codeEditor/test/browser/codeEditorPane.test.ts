@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { isCancellationError } from "../../../../../base/common/errors.js";
 import { URI } from "../../../../../base/common/uri.js";
@@ -42,7 +42,7 @@ const { EditorTextDirection } = await import("../../../../../editor/browser/view
 const { EditorIndentationKind } = await import("../../../../../editor/common/core/misc/indentation.js");
 const { EditorLineWrapping } = await import("../../../../../editor/common/config/editorOptions.js");
 
-test.after(() => browserEnvironment.window.close());
+suiteTeardown(() => browserEnvironment.window.close());
 
 test("Stanza editor pane loads, lays out, focuses, hides, and clears one editor part", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");

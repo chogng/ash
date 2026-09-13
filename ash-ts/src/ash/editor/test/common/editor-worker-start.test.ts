@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import type { IDisposable } from "../../../base/common/lifecycle.js";
 import { start, type StanzaWorkerPort } from "../../editor.worker.start.js";
 

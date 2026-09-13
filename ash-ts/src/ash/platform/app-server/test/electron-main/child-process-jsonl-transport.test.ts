@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { EventEmitter, once } from "node:events";
-import test from "node:test";
+import { test } from "mocha";
 import { PassThrough, Writable } from "node:stream";
 import {
 	ChildProcessJsonlTransport,

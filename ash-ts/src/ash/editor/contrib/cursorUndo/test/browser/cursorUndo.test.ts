@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
@@ -22,7 +22,7 @@ for (const [name, value] of Object.entries({
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { CursorUndoRedoController } = await import('../../browser/cursorUndo.js');
 
-test.after(() => environment.window.close());
+suiteTeardown(() => environment.window.close());
 
 test('CursorUndoRedoController records canonical same-version selection events', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');

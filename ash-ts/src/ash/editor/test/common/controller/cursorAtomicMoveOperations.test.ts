@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
-import { describe, test } from 'node:test';
+import { suite, test } from 'mocha';
 import { AtomicTabMoveOperations, Direction } from '../../../common/cursor/cursorAtomicMoveOperations.js';
 
-describe('Cursor move command test', () => {
+suite('Cursor move command test', () => {
 	test('Test whitespaceVisibleColumn', () => {
 		const testCases = [
 			{

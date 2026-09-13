@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { parseLaunchConfigurationDocument, parseLaunchConfigurations } from "../../common/launchConfiguration.js";
 
 test("launch configurations parse an explicit generic DAP command", () => {

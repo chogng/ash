@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { URI } from "../../../../base/common/uri.js";
 import type { AppServerConnectionRelay } from "../../../../platform/app-server/electron-main/appServerConnectionRelay.js";
 import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/remote.js";

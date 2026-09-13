@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { EditorOption, RenderMinimap, type EditorLayoutInfo, type InternalEditorScrollbarOptions } from '../../../common/config/editorOptions.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';

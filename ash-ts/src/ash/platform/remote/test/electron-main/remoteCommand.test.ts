@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { isCancellationError } from "../../../../base/common/errors.js";
 import { runRemoteCommand } from "../../../../platform/remote/electron-main/remoteCommand.js";
 

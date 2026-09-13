@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { JSDOM, type DOMWindow } from "jsdom";
 import { scheduleAtNextAnimationFrame } from "../../browser/scheduler.js";
 import { alert, AriaLiveRegion, setARIAContainer, setAriaAttribute, setRole, status } from "../../browser/ui/aria/aria.js";

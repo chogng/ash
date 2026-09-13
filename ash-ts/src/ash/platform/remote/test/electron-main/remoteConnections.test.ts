@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import type { RemoteConnectionDefinition } from "../../../../platform/remote/common/remoteConnectionService.js";
 import { RemoteConnections } from "../../../../platform/remote/electron-main/remoteConnections.js";
 

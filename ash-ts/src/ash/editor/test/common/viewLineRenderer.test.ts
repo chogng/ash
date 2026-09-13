@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { Range } from '../../common/core/range.js';
 import { ColorId, StandardTokenType, type ITokenPresentation } from '../../common/encodedTokenAttributes.js';
 import { TextDirection } from '../../common/model.js';

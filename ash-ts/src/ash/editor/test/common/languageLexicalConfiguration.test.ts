@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { registerBuiltinLanguageConfigurations } from "../../common/languages/languageBuiltinConfigurations.js";
 import { TestLanguageConfigurationService } from './modes/testLanguageConfigurationService.js';
 import { type SyntaxProviderRequest } from "../../common/languages/syntax/syntaxProviders.js";

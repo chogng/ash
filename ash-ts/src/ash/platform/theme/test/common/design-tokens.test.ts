@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
-import test from "node:test";
+import { test } from "mocha";
 import { compileDesignTokenArtifacts } from "../../../../platform/theme/common/tokenCompiler.js";
 
 test("CSS consumes registered design tokens and isolates intentional color samples", async () => {

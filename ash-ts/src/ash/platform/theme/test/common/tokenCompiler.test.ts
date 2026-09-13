@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import test from "node:test";
+import { test } from "mocha";
 import { compileDesignTokenArtifacts } from "../../common/tokenCompiler.js";
 import { colorIdentifiers, sizeIdentifiers } from "../../common/colorTheme.js";
 import { parseUserColorTheme } from "../../common/userColorTheme.js";

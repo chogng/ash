@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { PdfAnnotationModel } from "../../../../../workbench/contrib/pdf/browser/pdfAnnotationModel.js";
 import { emptyPdfAnnotationDocument } from "../../../../../workbench/contrib/pdf/common/pdfAnnotations.js";
 

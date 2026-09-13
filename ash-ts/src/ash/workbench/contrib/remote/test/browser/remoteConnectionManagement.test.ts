@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { Emitter } from "../../../../../base/common/event.js";
 import { DialogResult, type IDialogService, type IPromptDialogOptions } from "../../../../../platform/dialogs/common/dialogs.js";
 import type { IConfirmationDialogOptions } from "../../../../../platform/dialogs/common/dialogs.js";

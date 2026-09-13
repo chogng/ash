@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import test from "node:test";
+import { test } from "mocha";
 import * as onigurumaNamespace from "vscode-oniguruma";
 import { type IOnigLib } from "vscode-textmate";
 import { SyntaxProviderRegistry } from "../../../../../editor/common/languages/syntax/syntaxProviders.js";

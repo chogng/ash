@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { RemoteRuntimeInstaller, remoteRuntimeArtifactFromEnvironment } from "../../../../platform/remote/electron-main/remoteRuntimeInstaller.js";
 
 const artifact = Object.freeze({

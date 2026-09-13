@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { MAX_EXTENSION_RESOURCE_BYTES, normalizeExtensionCatalog, normalizeExtensionResourceChunk, normalizeExtensionResourceOpenResult } from "../../common/extensionApi.js";
 
 test("normalizes an extension catalog and preserves explicit diagnostics", () => {

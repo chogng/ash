@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { h } from "../../../../../base/browser/dom.js";
 
@@ -22,7 +22,7 @@ for (const [name, value] of Object.entries({
 
 const { TerminalTabsLayout } = await import("../../../../../workbench/contrib/terminal/browser/view/terminalTabsLayout.js");
 
-test.after(() => {
+suiteTeardown(() => {
 	browserEnvironment.window.close();
 	for (const name of ["window", "document", "Node", "Element", "HTMLElement", "Event", "KeyboardEvent", "MouseEvent"]) {
 		Reflect.deleteProperty(globalThis, name);

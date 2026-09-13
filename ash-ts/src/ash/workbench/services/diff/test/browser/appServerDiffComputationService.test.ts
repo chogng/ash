@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { AppServerDiffComputationService } from "../../browser/appServerDiffComputationService.js";
 import type { IDiffApi } from "../../../../../platform/diff/common/diffApi.js";
 

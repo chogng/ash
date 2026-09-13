@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { LanguageCompletionProviderRegistry, createLanguageCompletionInvokeContext, type LanguageCompletionProvider } from "../../common/languages/completion/languageCompletionProviders.js";
 import { LanguageCompletionProviderModuleHost, LanguageCompletionProviderModuleRegistry, LanguageCompletionProviderModuleState, normalizeLanguageCompletionProviderModuleCatalog } from "../../common/languages/completion/languageCompletionProviderModules.js";
 

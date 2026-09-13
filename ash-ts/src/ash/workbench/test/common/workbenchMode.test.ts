@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { resolveWorkbenchModeIdFromUrl, WorkbenchModeId, WorkbenchModeRegistry, withWorkbenchModeId } from '../../common/workbenchMode.js';
 
 test('Workbench mode registry is the complete owner of built-in definitions', () => {

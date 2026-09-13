@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { LanguageBracketPairs } from "../../../common/languages/languageBracketPairs.js";
 import { TestLanguageConfigurationService } from '../modes/testLanguageConfigurationService.js';

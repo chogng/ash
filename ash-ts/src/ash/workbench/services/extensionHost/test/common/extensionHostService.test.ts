@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { EmptyExtensionHostSnapshot, type ExtensionHostExtension, type ExtensionHostSnapshot } from "../../common/extensionHostService.js";
 
 test("empty Extension Host snapshot is immutable and has no transport surface", () => {

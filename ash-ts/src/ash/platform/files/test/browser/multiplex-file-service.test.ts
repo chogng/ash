@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { Emitter } from '../../../../base/common/event.js';
 import { URI } from '../../../../base/common/uri.js';
 import { MultiplexFileService } from '../../../../platform/files/browser/multiplexFileService.js';

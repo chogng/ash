@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { Emitter } from "../../../../base/common/event.js";
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from "../../../../base/common/layout.js";

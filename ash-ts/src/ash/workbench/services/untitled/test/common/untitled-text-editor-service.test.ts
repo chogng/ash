@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { Emitter } from "../../../../../base/common/event.js";
 import { URI } from "../../../../../base/common/uri.js";
@@ -29,7 +29,7 @@ for (const [name, value] of Object.entries({
 const { IEditorPart } = await import("../../../../browser/parts/editor/editorPart.js");
 const { NewFileFromTemplateCommandId, NewUntitledTextEditorCommandId } = await import("../../../../browser/parts/editor/editorActions.js");
 
-test.after(() => browserEnvironment.window.close());
+suiteTeardown(() => browserEnvironment.window.close());
 
 test("untitled service creates stable virtual editor identities", () => {
 	using service = new BrowserUntitledTextEditorService();

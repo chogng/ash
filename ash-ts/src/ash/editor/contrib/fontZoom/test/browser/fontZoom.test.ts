@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { type ICodeEditor } from '../../../../browser/editorBrowser.js';
 import { EditorExtensionsRegistry, type ServicesAccessor } from '../../../../browser/editorExtensions.js';
 import { EditorZoom } from '../../../../common/config/editorZoom.js';

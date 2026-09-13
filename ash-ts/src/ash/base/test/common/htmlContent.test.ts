@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { escapeMarkdownSyntaxTokens, isMarkdownString, MarkdownString } from '../../common/htmlContent.js';
 import { URI } from '../../common/uri.js';
 

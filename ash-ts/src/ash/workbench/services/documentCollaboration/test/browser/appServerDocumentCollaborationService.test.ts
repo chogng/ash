@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import type { DocumentCollaborationOpenParams } from "../../../../../../../generated/app-server/index.js";
 import type { DocumentCollaborationOpenResult } from "../../../../../../../generated/app-server/index.js";
 import type { DocumentCollaborationPresenceParams } from "../../../../../../../generated/app-server/index.js";

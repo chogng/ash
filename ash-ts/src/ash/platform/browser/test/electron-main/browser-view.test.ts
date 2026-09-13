@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import {
 	BROWSER_VIEW_CREATE_CHANNEL,
 	BROWSER_VIEW_LAYOUT_CHANNEL,

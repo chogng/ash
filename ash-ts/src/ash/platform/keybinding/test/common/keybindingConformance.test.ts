@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import type { KeybindingEvent } from "../../../../base/common/keybindings.js";
 import { resolveKeybinding } from "../../../../base/common/keybindings.js";
 import { parseKeybinding } from "../../../../base/common/keybindingParser.js";

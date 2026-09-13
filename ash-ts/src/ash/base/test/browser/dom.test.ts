@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { addDisposableListener, computeScreenAwareSize, Dimension, getActiveDocument, getActiveElement, getDocument, getDomNodePagePosition, getShadowRoot, getWindow, h, isEditableElement, isElement, isHTMLElement, isNode, stopEvent, svg } from "../../browser/dom.js";
 import { registerWindow } from "../../browser/window.js";

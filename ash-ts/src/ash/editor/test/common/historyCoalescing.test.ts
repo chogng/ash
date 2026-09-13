@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { UndoRedoGroup } from '../../../platform/undoRedo/common/undoRedo.js';
 import { CursorsController } from '../../common/cursor/cursor.js';
 import { DeleteOperations } from '../../common/cursor/cursorDeleteOperations.js';

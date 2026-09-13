@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { h } from '../../../../base/browser/dom.js';
 import { type DiffComputationRequest, type IDiffComputationService } from '../../../common/diff/diffComputationService.js';

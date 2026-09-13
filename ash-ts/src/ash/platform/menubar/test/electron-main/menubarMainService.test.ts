@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { NativeMenubarMainService, type INativeMenubarMainHost, type INativeMenubarMainMenuItem, type INativeMenubarMainWindow } from '../../../../platform/menubar/electron-main/menubarMainService.js';
 import type { INativeMenubarData } from '../../../../platform/menubar/common/nativeMenubar.js';
 

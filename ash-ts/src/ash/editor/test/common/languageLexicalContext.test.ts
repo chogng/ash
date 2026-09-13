@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { Event } from "../../../base/common/event.js";
 import { TestLanguageConfigurationService } from './modes/testLanguageConfigurationService.js';
 import { LanguageLexicalContextIndex, TokenAwareLanguageLexicalContext } from "../../common/languages/languageLexicalContext.js";

@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { REMOTE_CONNECTION_CONNECT_CHANNEL } from "../../../../platform/remote/common/remoteConnectionIpc.js";
 import { REMOTE_CONNECTION_LIST_CHANNEL } from "../../../../platform/remote/common/remoteConnectionIpc.js";
 import { REMOTE_CONNECTION_REMOVE_CHANNEL } from "../../../../platform/remote/common/remoteConnectionIpc.js";

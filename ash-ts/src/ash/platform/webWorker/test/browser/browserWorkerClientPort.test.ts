@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { BrowserWorkerClientPort } from '../../browser/browserWorkerClientPort.js';
 
 test('Browser Worker client port forwards messages and owns termination', () => {

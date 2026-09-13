@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { OverviewRulerZone } from '../../../../common/viewModel/overviewZoneManager.js';
 import { TextModel } from '../../../../common/model/textModel.js';
@@ -17,7 +17,7 @@ for (const [name, value] of Object.entries({
 
 const { TestView: View } = await import('../../../../test/browser/viewModel/testViewModel.js');
 
-test.after(() => browserEnvironment.window.close());
+suiteTeardown(() => browserEnvironment.window.close());
 
 test('OverviewRuler projects standard zones through its canvas and layout API', () => {
 	const paint: { readonly fill: string; readonly top: number; readonly height: number }[] = [];

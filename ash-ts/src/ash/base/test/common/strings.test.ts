@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { commonPrefixLength, commonSuffixLength, containsRTL, createRegExp, escapeRegExpCharacters, getCharContainingOffset, getLeadingWhitespace, GraphemeIterator, isBasicASCII, isHighSurrogate, isLowSurrogate, splitLines } from '../../common/strings.js';
 
 test('escapeRegExpCharacters turns arbitrary text into a literal pattern', () => {

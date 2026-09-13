@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { getPathLabel, shorten, splitRecentLabel, template, tildify, type IRelativePathProvider } from '../../common/labels.js';
 import { OperatingSystem } from '../../common/platform.js';
 import { URI } from '../../common/uri.js';

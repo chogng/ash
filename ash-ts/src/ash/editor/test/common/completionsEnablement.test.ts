@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { isCompletionsEnabledFromObject, isCompletionsEnablement } from '../../common/services/completionsEnablement.js';
 
 test('completion enablement resolves language overrides before the wildcard', () => {

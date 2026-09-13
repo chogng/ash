@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { EditorFoldingModel } from "../../browser/foldingModel.js";
 import { EditorFoldingRangeSource } from "../../browser/foldingRanges.js";
 import { EditorHiddenRangeModel } from "../../browser/hiddenRangeModel.js";

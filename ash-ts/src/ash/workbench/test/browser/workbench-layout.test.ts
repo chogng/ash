@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
 import type { IAction } from "../../../base/common/actions.js";

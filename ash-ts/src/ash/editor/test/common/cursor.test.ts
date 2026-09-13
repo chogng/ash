@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { DisposableTracker, installDisposableTracker } from "../../../base/common/lifecycle.js";
 import { CursorsController } from "../../common/cursor/cursor.js";
 import { Cursor } from '../../common/cursor/oneCursor.js';

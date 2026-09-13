@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
-import { describe, test } from 'node:test';
+import { suite, test } from 'mocha';
 import { CursorColumns } from '../../../common/core/cursorColumns.js';
 
-describe('CursorColumns', () => {
+suite('CursorColumns', () => {
 	test('visibleColumnFromColumn', () => {
 		function testVisibleColumnFromColumn(text: string, tabSize: number, column: number, expected: number): void {
 			assert.strictEqual(CursorColumns.visibleColumnFromColumn(text, column, tabSize), expected);

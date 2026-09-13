@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { ActionRunner, type IRunEvent } from "../../common/actions.js";
 
 test("ActionRunner forwards context and reports action failures", async () => {

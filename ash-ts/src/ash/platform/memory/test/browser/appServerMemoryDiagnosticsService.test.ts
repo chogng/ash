@@ -1,5 +1,5 @@
 import { strict as assert } from 'node:assert';
-import test from 'node:test';
+import { test } from 'mocha';
 import { setTimeout as delay } from 'node:timers/promises';
 import { AppServerMemoryDiagnosticsService } from '../../browser/appServerMemoryDiagnosticsService.js';
 import { AppServerProtocolClient, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CLOSED_EVENT, type AppServerTransport } from '../../../app-server/browser/appServerProtocolClient.js';

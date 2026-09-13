@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { findUnicodeHighlights } from "../../common/unicodeHighlights.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 

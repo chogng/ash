@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../../common/viewModel/textMeasurer.js";
 import { type ICodeEditor } from '../../../../browser/editorBrowser.js';
@@ -31,7 +31,7 @@ for (const [name, value] of Object.entries({
 const { TestView: View } = await import("../../../../test/browser/viewModel/testViewModel.js");
 const { FindController } = await import("../../browser/findController.js");
 
-test.after(() => browserEnvironment.window.close());
+suiteTeardown(() => browserEnvironment.window.close());
 
 test("find opens from the editor shortcut, highlights matches, navigates, and restores focus", () => {
 	const fixture = createFixture("alpha beta alpha", new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1));

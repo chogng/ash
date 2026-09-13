@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { ColorScheme } from "../../../../../platform/theme/common/theme.js";
 import { projectExtensionTokenTheme } from "../../common/textMateThemeProjection.js";
 

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { mergeEditorFoldingRanges } from '../../browser/syntaxRangeProvider.js';
 
 test('syntax folding merge keeps deterministic nested and disjoint ranges', () => {

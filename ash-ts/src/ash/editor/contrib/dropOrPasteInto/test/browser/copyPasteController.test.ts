@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Selection } from '../../../../common/core/selection.js';
 import { TextModel } from '../../../../common/model/textModel.js';
@@ -22,7 +22,7 @@ await import('../../browser/copyPasteContribution.js');
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { CopyPasteController } = await import('../../browser/copyPasteController.js');
 
-test.after(() => environment.window.close());
+suiteTeardown(() => environment.window.close());
 
 test('CopyPasteController owns URI-list and bounded text-file paste extensions', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');

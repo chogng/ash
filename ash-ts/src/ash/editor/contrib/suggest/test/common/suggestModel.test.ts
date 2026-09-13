@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { ReplaceCommand } from '../../../../common/commands/replaceCommand.js';
 import { CursorsController } from '../../../../common/cursor/cursor.js';
 import { LanguageCompletionDetailsStatus, LanguageCompletionSessionChangeReason, LanguageCompletionSessionController } from "../../common/languageCompletionSessionController.js";

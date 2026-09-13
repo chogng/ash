@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { autorun, observableValue } from '../../../base/common/observable.js';
 import { Position } from '../../common/core/position.js';
@@ -30,7 +30,7 @@ for (const [name, value] of Object.entries({
 const { observableCodeEditor } = await import('../../browser/observableCodeEditor.js');
 const { CodeEditorWidget } = await import('../../browser/widget/codeEditor/codeEditorWidget.js');
 
-test.after(() => browserEnvironment.window.close());
+suiteTeardown(() => browserEnvironment.window.close());
 
 test('observable code editor tracks canonical model, selections, and layout', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');

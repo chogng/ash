@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/remote.js";
 import { getRemoteWorkspacePath } from "../../../../platform/remote/common/remote.js";
 

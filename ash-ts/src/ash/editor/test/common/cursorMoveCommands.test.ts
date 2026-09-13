@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { CursorMove, CursorMoveCommands } from '../../common/cursor/cursorMoveCommands.js';
 
 test('CursorMoveCommands exposes only the standard movement command surface', () => {

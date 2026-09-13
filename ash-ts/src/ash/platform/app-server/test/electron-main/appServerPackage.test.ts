@@ -2,7 +2,7 @@ import { strict as assert } from "node:assert";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import test from "node:test";
+import { test } from "mocha";
 import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH } from "../../../../../../generated/app-server/index.js";
 import { appServerDaemonExecutablePath, packagedAppServerDaemonSha256, packagedAppServerSha256, remoteExecutablePath } from "../../../../platform/app-server/electron-main/appServerPackage.js";
 

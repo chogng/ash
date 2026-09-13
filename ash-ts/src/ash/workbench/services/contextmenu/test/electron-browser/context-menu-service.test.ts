@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { Event } from "../../../../../base/common/event.js";
 import type { INativeContextMenuApi } from "../../../../../base/parts/contextmenu/common/contextmenu.js";

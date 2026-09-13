@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import test from "node:test";
+import { test } from "mocha";
 import { ColorId, lightColorTheme } from "../../../../platform/theme/common/colorTheme.js";
 import { parseUserColorTheme, serializeUserColorThemeDraft } from "../../../../platform/theme/common/userColorTheme.js";
 import { validateUserThemeFileDeleteRequest, validateUserThemeFileWriteRequest } from "../../../../platform/theme/common/userThemeFiles.js";

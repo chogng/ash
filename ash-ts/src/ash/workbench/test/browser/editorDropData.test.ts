@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { extractExternalEditorInputs } from "../../browser/parts/editor/editorDropData.js";
 
 test("external editor drop data preserves URIs and snapshots browser files", async () => {

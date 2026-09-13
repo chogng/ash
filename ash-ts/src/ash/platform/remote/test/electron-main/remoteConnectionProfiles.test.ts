@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { RemoteConnectionProfiles } from "../../../../platform/remote/electron-main/remoteConnectionProfiles.js";
 
 test("Electron Main delegates Remote profile reads, activation, and rollback to the shared Rust store", async () => {

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { URI } from "../../../base/common/uri.js";
 import { lightColorTheme } from "../../../platform/theme/common/colorTheme.js";
@@ -51,7 +51,7 @@ for (const [name, value] of Object.entries({
 
 const stanza = await import("../../editor.main.js");
 
-test.after(() => browserEnvironment.window.close());
+suiteTeardown(() => browserEnvironment.window.close());
 
 test("standalone service collection honors explicit first-scope overrides", () => {
 	const languageConfigurations = new TestLanguageConfigurationService();

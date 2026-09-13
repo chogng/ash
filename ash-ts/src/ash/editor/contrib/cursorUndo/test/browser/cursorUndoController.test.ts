@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Position } from '../../../../common/core/position.js';
 import { Selection } from '../../../../common/core/selection.js';
@@ -22,7 +22,7 @@ const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor
 const { EditorExtensionsRegistry } = await import('../../../../browser/editorExtensions.js');
 const { CursorUndoRedoController } = await import('../../browser/cursorUndo.js');
 
-test.after(() => environment.window.close());
+suiteTeardown(() => environment.window.close());
 
 test('CursorUndoRedoController restores and reapplies cursor-only history', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');

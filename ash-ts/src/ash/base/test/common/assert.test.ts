@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { assert as invariant, assertFn, assertNever, checkAdjacentItems } from '../../common/assert.js';
 import { BugIndicatingError } from '../../common/errors.js';
 

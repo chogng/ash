@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Minimap } from '../../browser/viewParts/minimap/minimap.js';
 import { PartFingerprint, PartFingerprints } from '../../browser/view/viewPart.js';

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { Action2, MenuId, MenusRegistry, registerAction2 } from "../../../../../platform/actions/common/actions.js";
 import {

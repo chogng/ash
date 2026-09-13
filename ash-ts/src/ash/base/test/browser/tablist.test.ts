@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { TAB_CLOSE_ACTION_ID, TabList, type TabListItem } from "../../browser/ui/tablist/tabList.js";
 import type { IAction } from "../../common/actions.js";

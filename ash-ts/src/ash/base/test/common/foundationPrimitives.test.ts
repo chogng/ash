@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { ArrayQueue, binarySearch2, groupAdjacentBy, numberComparator, sumBy } from '../../common/arrays.js';
 import { diffSets, intersection, SetWithKey } from '../../common/collections.js';
 import { safeIntl } from '../../common/date.js';

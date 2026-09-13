@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { BrowserStorageService } from "../../../../../workbench/services/storage/browser/storageService.js";
 import { OutputFilterState } from "../../browser/outputFilterState.js";

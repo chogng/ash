@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import test from "node:test";
+import { test } from "mocha";
 import { RemoteRuntimeProvisioner } from "../../../../platform/remote/electron-main/remoteRuntimeProvisioner.js";
 
 test("provisioner probes the Remote target and installs only its packaged artifact", async () => {

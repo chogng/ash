@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { h } from '../../../../../base/browser/dom.js';
 import { URI } from '../../../../../base/common/uri.js';
@@ -29,7 +29,7 @@ for (const [name, value] of Object.entries({
 const { TestView: View } = await import('../../../../test/browser/viewModel/testViewModel.js');
 const { RenameCommandId, RenameController } = await import('../../browser/renameController.js');
 
-test.after(() => browserEnvironment.window.close());
+suiteTeardown(() => browserEnvironment.window.close());
 
 test('Rename reports its command after applying the provider edit', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');

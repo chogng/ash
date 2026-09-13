@@ -1,6 +1,6 @@
 ---
-description: VS Code test writing guidelines — unit tests, integration tests, snapshot tests, and clean teardown patterns. Reference when writing or updating tests.
-applyTo: "{src/vs/**/test/**,src/vs/**/*.test.ts,src/vs/**/*.integrationTest.ts}"
+description: Ash TypeScript test writing guidelines — unit tests, browser integration, snapshots, and clean teardown.
+applyTo: "**/src/ash/**/test/**/*.ts,**/src/ash/**/*.test.ts,ash-ts/test/**/*.ts"
 ---
 
 # Writing Tests
@@ -11,46 +11,47 @@ Canonical reference: https://github.com/microsoft/vscode/wiki/Writing-Tests
 
 | Type | File suffix | Location | Runs in |
 |------|-------------|----------|---------|
-| Unit tests | `.test.ts` | `src/vs/**/test/` | Browser, Electron, or Node.js (depends on layer) |
-| Integration tests | `.integrationTest.ts` | `src/vs/**/test/` | Real external APIs |
-| Extension tests | Standard extension test system | `extensions/*/` | Extension host |
+| Unit tests | `.test.ts` | `src/ash/**/test/` | Mocha in Node/jsdom |
+| Browser integration tests | `.integration.spec.ts` | `test/integration/browser/` | Chromium via Playwright |
+| Smoke tests | `.spec.ts` | `test/smoke/areas/` | Browser or Electron via Playwright |
 
 ## Running Tests
 
-- **Unit tests:** `scripts/test.sh` (macOS/Linux) or `scripts/test.bat` (Windows)
+- **Unit tests:** `corepack pnpm --dir ash-ts test:unit`
   - Filter: `--grep <pattern>`
-  - Glob: `--runGlob **/myFile.test.js`
-- **Integration tests:** `scripts/test-integration.sh` or `scripts/test-integration.bat`
-- **VS Code UI:** Use the [Selfhost Test Provider](https://marketplace.visualstudio.com/items?itemName=ms-vscode.vscode-selfhost-test-provider)
+  - File: `--run src/ash/<owner>/test/<runtime>/myFile.test.ts`
+  - Glob: `--runGlob '**/myFile.test.js'`
+- **Editor browser integration:** `corepack pnpm --dir ash-ts test:editor:browser`
+- **Browser and Electron UI:** use the owning `test:smoke:*` Playwright project.
 
 ## Writing Unit Tests
 
-Tests use Mocha's BDD interface (`suite`/`test`) with the `assert` module and `sinon` for mocks.
+Tests use Mocha's TDD interface (`suite`/`test`) with `node:assert/strict`. Import Mocha functions explicitly; use injected test doubles for dependencies.
 
 ### Clean Teardown
 
-Always use `ensureNoDisposablesAreLeakedInTestSuite()` to catch disposal leaks:
+Keep disposables with the test that creates them. Use `using` for synchronous ownership and `try`/`finally` for asynchronous cleanup:
 
 ```typescript
-suite('myTests', () => {
-  const store = ensureNoDisposablesAreLeakedInTestSuite();
+import { suite, test } from 'mocha';
 
-  test('example', () => {
-    const disposable = store.add(new MyDisposable());
-    // ...
-  });
+suite('MyComponent', () => {
+	test('releases its listener', () => {
+		using component = new MyComponent();
+		// Assert the behavior and lifecycle contract.
+	});
 });
 ```
 
-Always call `sinon.restore()` in `teardown` to avoid leaking mocks.
+Restore any test-owned mock or global change in the same test. File-level resources use Mocha's `suiteTeardown` and must be released before the test file finishes.
 
 ### Best Practices
 
 - Minimize assertions per test — prefer one `assert.deepStrictEqual` snapshot over many fine-grained assertions
 - Don't add tests to the wrong suite — find the relevant `suite` block
-- Follow existing patterns (`describe`/`test` or `suite`/`test`) consistently within a file
+- Follow `suite`/`test` consistently within a file
 - Don't stub globals (e.g., `(mainWindow as any).X = ...`) — make dependencies injectable instead
 
 ### Snapshot Testing
 
-Use `assertSnapshot` for Jest-like snapshot tests. Snapshots are written to a `__snapshots__` directory beside the test file on first run — verify the output is correct, then subsequent runs compare against it.
+When an existing snapshot baseline covers the behavior, update it in the same change and review the diff. Otherwise assert the owned behavior directly.

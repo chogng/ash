@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../common/viewModel/textMeasurer.js";
 import { Selection } from "../../common/core/selection.js";
@@ -29,7 +29,7 @@ const { KeyboardNavigationController } = await import('../../browser/view/viewCo
 await import('../../contrib/lineSelection/browser/lineSelection.js');
 const { CodeEditorWidget } = await import('../../browser/widget/codeEditor/codeEditorWidget.js');
 
-test.after(() => browserEnvironment.window.close());
+suiteTeardown(() => browserEnvironment.window.close());
 
 test("core commands select all", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");

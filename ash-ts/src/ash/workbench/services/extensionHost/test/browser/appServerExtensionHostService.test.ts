@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import { CommandRegistry } from "../../../../../platform/commands/common/commands.js";
 import type { ServicesAccessor } from "../../../../../platform/instantiation/common/instantiation.js";

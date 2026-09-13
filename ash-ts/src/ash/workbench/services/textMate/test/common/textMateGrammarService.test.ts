@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { TextMateGrammarService } from "../../common/textMateGrammarService.js";
 
 test("grammar service materializes registered contributions into its catalog", async () => {

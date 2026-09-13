@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
-import test from "node:test";
+import { test } from "mocha";
 
 const sharedInteractionSelector = /\.ash-(?:action-bar|button|tab(?:\b|-)|view-pane(?:\b|-))/;
 const ariaStateSelector = /\[aria-(?:checked|pressed|selected)\b/;

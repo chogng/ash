@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { BugIndicatingError, CancellationError, ErrorHandler, errorHandler, getErrorMessage, illegalArgument, isCancellationError, onBugIndicatingError, onUnexpectedError, setUnexpectedErrorHandler, toError } from '../../common/errors.js';
 
 test('CancellationError preserves context and is the only project cancellation error', () => {

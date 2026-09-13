@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { appendIcon } from "../../browser/ui/icon/icon.js";
 import { register } from "../../common/icon.js";

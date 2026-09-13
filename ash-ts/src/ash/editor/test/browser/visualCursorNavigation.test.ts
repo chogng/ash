@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { navigateStanzaVisualCursors } from "../../common/viewModel/visualCursorNavigation.js";
 import { EditorCursorNavigationCommand, EditorCursorNavigationMode } from "../../common/viewModel/visualCursorNavigation.js";
 import { Selection } from "../../common/core/selection.js";

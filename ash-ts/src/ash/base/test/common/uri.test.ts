@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { URI } from "../../common/uri.js";
 
 test("URI parses and canonicalizes absolute hierarchical resources", () => {

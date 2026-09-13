@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { createColorTheme, darkColorTheme } from "../../../platform/theme/common/colorTheme.js";
 import { ThemeService } from "../../../platform/theme/common/themeService.js";
 import { ColorScheme } from "../../../platform/theme/common/theme.js";

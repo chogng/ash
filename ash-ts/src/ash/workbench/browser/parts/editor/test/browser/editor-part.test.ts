@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import type {
 	IDimension,
@@ -95,7 +95,7 @@ await import(
 	"../../../../../../workbench/contrib/preferences/browser/preferences.contribution.js"
 );
 
-test.after(() => browserEnvironment.window.close());
+suiteTeardown(() => browserEnvironment.window.close());
 
 test("editor registry resolves defaults and explicit Open With choices", () => {
 	const registry = new EditorPaneRegistry();

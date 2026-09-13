@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { URI } from '../../../../base/common/uri.js';
 import { ConfigurationTarget } from '../../../../platform/configuration/common/configuration.js';
 import { ConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';

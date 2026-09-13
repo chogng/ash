@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { CursorMoveCommands } from '../../../../common/cursor/cursorMoveCommands.js';
 import { CursorState } from '../../../../common/cursorCommon.js';

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { StandardKeyboardEvent, type IKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
@@ -60,7 +60,7 @@ const { createEditorBrowserServices } = await import('../../../browser/services/
 await import("../../../contrib/placeholderText/browser/placeholderText.contribution.js");
 await import('../../../contrib/inPlaceReplace/browser/inPlaceReplace.js');
 
-test.after(() => browserEnvironment.window.close());
+suiteTeardown(() => browserEnvironment.window.close());
 
 const enabledAccessibilityService: IAccessibilityService = {
 	onDidChangeScreenReaderOptimized: EditorEvent.None,

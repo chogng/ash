@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { URI } from '../../../base/common/uri.js';
 import { LanguageFeatureRegistry } from '../../common/languageFeatureRegistry.js';
 import { TestLanguageConfigurationService } from './modes/testLanguageConfigurationService.js';

@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
 import { createLanguageCompletionInvokeContext, LanguageCompletionProviderRegistry, type LanguageCompletionRequest } from "../../common/languages/completion/languageCompletionProviders.js";

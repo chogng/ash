@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { URI } from "../../../base/common/uri.js";
 import { createDefaultDocumentSchema, DocumentSchema } from "../../common/model/documentSchema.js";
 import { createInsertCitationCommand, createInsertReferenceCommand } from "../../contrib/citation/common/citationCommands.js";

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import type { ChatContextPicker, IChatContextPickService } from '../../../../../workbench/services/chat/common/chatContextService.js';
@@ -20,7 +20,7 @@ const {
 	createCommitChangeChatAttachment,
 	ScmHistoryChatContextContribution,
 } = await import('../../../../../workbench/contrib/scm/browser/scmHistoryChatContext.js');
-test.after(() => {
+suiteTeardown(() => {
 	browserEnvironment.window.close();
 	for (const name of ['window', 'document', 'Node', 'Element', 'HTMLElement']) Reflect.deleteProperty(globalThis, name);
 });

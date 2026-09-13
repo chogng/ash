@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { DraggedTreeItemsIdentifier, TreeViewsDnDService } from '../../common/services/treeViewsDnd.js';
 
 test('TreeViewsDnDService returns a drag operation exactly once', async () => {

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { Button } from "../../browser/ui/button/button.js";
 import { setHoverDelegate, type IManagedHover } from "../../browser/ui/hover/hoverDelegate.js";

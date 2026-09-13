@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import type { IWorkbenchWindowRecord } from "../../electron-main/workbenchWindowRegistry.js";
 import { WorkbenchWindowRegistry } from "../../electron-main/workbenchWindowRegistry.js";
 

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import type { ChatTabsDelegate } from "../../browser/view/chatTabsControl.js";
 import { MultiChatTabsControl } from "../../browser/view/multiChatTabsControl.js";

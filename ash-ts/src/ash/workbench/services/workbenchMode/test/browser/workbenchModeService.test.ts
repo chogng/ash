@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import type { ILifecycleService, ShutdownReason } from '../../../../../platform/lifecycle/common/lifecycleService.js';
 import { WorkbenchModeId } from '../../../../common/workbenchMode.js';
 import { WorkbenchConfiguration } from '../../../../common/configuration.js';

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { getOrSet, LRUCache, NKeyMap } from '../../common/map.js';
 
 test('getOrSet returns existing values without replacing them', () => {

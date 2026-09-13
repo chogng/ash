@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Selection } from '../../../../common/core/selection.js';
 import { TextModel } from '../../../../common/model/textModel.js';
@@ -32,7 +32,7 @@ assert.ok(CopyAction);
 assert.ok(CutAction);
 assert.ok(PasteAction);
 
-test.after(() => environment.window.close());
+suiteTeardown(() => environment.window.close());
 
 test('clipboard actions use the focused code editor and platform clipboard service', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');

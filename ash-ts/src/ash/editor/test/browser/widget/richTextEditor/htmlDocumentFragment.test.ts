@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { createDefaultDocumentSchema } from '../../../../common/model/documentSchema.js';
 import { createDocumentFragmentFromHtml } from '../../../../browser/widget/richTextEditor/htmlDocumentFragment.js';

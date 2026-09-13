@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { createEventDeliveryQueue, Emitter, Event, PauseableEmitter, runWithBufferedEvents, ValueWithChangeEvent } from "../../common/event.js";
 import { DisposableStore, type IDisposable, noneDisposable } from "../../common/lifecycle.js";
 

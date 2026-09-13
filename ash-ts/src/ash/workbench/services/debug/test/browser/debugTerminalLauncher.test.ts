@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { type ITerminalService } from "../../../terminal/common/terminal.js";
 import { runDebuggeeInTerminal } from "../../browser/debugTerminalLauncher.js";
 

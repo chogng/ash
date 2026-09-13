@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { createStaticDebugAdapterFactory, DebugAdapterFactoryRegistry } from "../../common/debugAdapterFactory.js";
 
 test("DebugAdapterFactoryRegistry composes independent producers and removes only its owner", () => {

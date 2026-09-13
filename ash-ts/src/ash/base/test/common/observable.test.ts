@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { Emitter } from "../../common/event.js";
 import { toDisposable } from "../../common/lifecycle.js";
 import { autorun, autorunWithStore, derived, observableFromEvent, observableValue, transaction } from "../../common/observable.js";

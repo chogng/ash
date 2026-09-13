@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { decodeBase64, encodeHex, VSBuffer } from '../../common/buffer.js';
 
 test('VSBuffer converts strings and concatenates buffers', () => {

@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { syntaxWireCodec } from "../../common/languages/syntax/syntaxWire.js";
 import { SYNTAX_DIAGNOSTIC_LANE, SYNTAX_TOKEN_LANE, type SyntaxLane, type SyntaxResult } from "../../common/languages/syntax/syntaxService.js";
 import { LanguageLexicalSyntaxCache } from "../../common/languages/languageLexicalSyntaxCache.js";

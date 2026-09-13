@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { AccessibilitySupport } from '../../../platform/accessibility/common/accessibility.js';
 import { isMacintosh } from '../../../base/common/platform.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';

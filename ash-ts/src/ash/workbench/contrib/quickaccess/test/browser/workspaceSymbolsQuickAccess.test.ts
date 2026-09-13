@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import test from "node:test";
+import { test } from "mocha";
 
 import { URI } from "../../../../../base/common/uri.js";
 import { Position } from "../../../../../editor/common/core/position.js";

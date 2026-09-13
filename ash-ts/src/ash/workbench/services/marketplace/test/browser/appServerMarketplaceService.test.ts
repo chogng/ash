@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import type { ServerNotification } from "../../../../../../../generated/app-server/index.js";
 import type { IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
 import type { IMarketplaceApi } from "../../../../../platform/marketplace/common/marketplaceApi.js";

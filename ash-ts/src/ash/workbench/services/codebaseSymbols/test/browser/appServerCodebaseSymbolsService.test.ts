@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import type { ICodebaseSymbolsApi } from "../../../../../platform/codebaseSymbols/common/codebaseSymbolsApi.js";
 import { AppServerCodebaseSymbolsService } from "../../browser/appServerCodebaseSymbolsService.js";
 

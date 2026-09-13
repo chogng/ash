@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -26,7 +26,7 @@ const { Range } = await import("../../../../../editor/common/core/range.js");
 const { LanguageCompletionTriggerKind } = await import("../../../../../editor/common/languages/completion/languageCompletionProviders.js");
 const { TextModel } = await import("../../../../../editor/common/model/textModel.js");
 
-test.after(() => browserEnvironment.window.close());
+suiteTeardown(() => browserEnvironment.window.close());
 
 test("Chat completion providers use one-based editor positions and ranges", async () => {
 	const slashCommands = new SlashCommandCatalog(DesktopSlashCommands, []);

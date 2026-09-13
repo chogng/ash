@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { readFile } from "node:fs/promises";
-import test from "node:test";
+import { test } from "mocha";
 import * as onigurumaNamespace from "vscode-oniguruma";
 import { type IOnigLib } from "vscode-textmate";
 import { Emitter, type Event } from "../../../../../base/common/event.js";

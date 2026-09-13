@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { toDisposable } from "../../../base/common/lifecycle.js";
 import { EditorLineWrapping, WrappingIndent } from "../../common/config/editorOptions.js";
 import { FontInfo } from "../../common/config/fontInfo.js";

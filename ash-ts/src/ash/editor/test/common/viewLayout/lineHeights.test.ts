@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { type IEditorConfiguration } from '../../../common/config/editorConfiguration.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { type ICoordinatesConverter } from '../../../common/coordinatesConverter.js';

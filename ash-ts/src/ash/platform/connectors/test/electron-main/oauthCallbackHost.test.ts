@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { OAuthCallbackHost } from '../../electron-main/oauthCallbackHost.js';
 
 test('callback capacity includes concurrent listeners still opening', async () => {

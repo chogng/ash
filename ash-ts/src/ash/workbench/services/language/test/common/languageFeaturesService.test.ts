@@ -1,5 +1,5 @@
 import { strict as assert } from 'node:assert';
-import test from 'node:test';
+import { test } from 'mocha';
 import { URI } from '../../../../../base/common/uri.js';
 import { Position } from '../../../../../editor/common/core/position.js';
 import { Range } from '../../../../../editor/common/core/range.js';

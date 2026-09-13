@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { MinimapCharRendererFactory } from '../../browser/viewParts/minimap/minimapCharRendererFactory.js';
 import { Constants } from '../../browser/viewParts/minimap/minimapCharSheet.js';
 import { RGBA8 } from '../../common/core/misc/rgba.js';

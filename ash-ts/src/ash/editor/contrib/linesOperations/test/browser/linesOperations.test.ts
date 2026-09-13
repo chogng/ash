@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { DeleteLinesAction, InsertLineAfterAction, InsertLineBeforeAction } from "../../browser/linesOperations.js";
 import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";

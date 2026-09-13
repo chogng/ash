@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { ClientCoordinates, DynamicCssRules, EditorDom, EditorMouseEventFactory, GlobalEditorPointerMoveMonitor, PageCoordinates, createCoordinatesRelativeToEditor, createEditorPagePosition } from '../../browser/editorDom.js';
 import { type ICodeEditor } from '../../browser/editorBrowser.js';

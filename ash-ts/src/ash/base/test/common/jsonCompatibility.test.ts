@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { ParseErrorCode, SyntaxKind, createScanner, findNodeAtLocation, findNodeAtOffset, getLocation, getNodePath, getNodeValue, parse, parseTree } from '../../common/json.js';
 import { getParseErrorMessage } from '../../common/jsonErrorMessages.js';
 

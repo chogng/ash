@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { LanguageRequestCoordinator, LanguageRequestStatus, type LanguageWorker, type LanguageWorkerRequest } from "../../common/languages/languageRequestCoordinator.js";
 import { LanguageResultAcceptance, LanguageResultStoreChangeReason, VersionedLanguageResultStore } from "../../common/languages/languageResultStore.js";
 import { LanguageDiagnosticSeverity, createLanguageDiagnosticStore, createLanguageTokenStore, type LanguageDiagnosticResult, type LanguageTokenResult } from "../../common/languages/languageResults.js";

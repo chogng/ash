@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { EditorLineWrapping } from "../../common/config/editorOptions.js";
 import { FontInfo } from "../../common/config/fontInfo.js";
 import { ViewModelLinesFromProjectedModel } from "../../common/viewModel/viewModelLines.js";

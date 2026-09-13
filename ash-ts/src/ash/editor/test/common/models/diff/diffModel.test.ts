@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { type DiffComputationRequest, type IDiffComputationService } from "../../../../common/diff/diffComputationService.js";
 import { DiffModel } from "../../../../common/diff/diffModel.js";
 import { LineDiffKind, type LineDiff } from "../../../../common/diff/lineDiff.js";

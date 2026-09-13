@@ -2,7 +2,7 @@ import { strict as assert } from "node:assert";
 import { EventEmitter } from "node:events";
 import type { ChildProcess } from "node:child_process";
 import { createServer } from "node:net";
-import test from "node:test";
+import { test } from "mocha";
 import { isCancellationError } from "../../../../base/common/errors.js";
 import { URI } from "../../../../base/common/uri.js";
 import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/remote.js";

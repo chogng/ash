@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import test from "node:test";
+import { test } from "mocha";
 import { PackagedRemoteRuntimeCatalog, packagedRemoteRuntimeBundleRoot, packagedRemoteRuntimeCatalogSource } from "../../../../platform/remote/electron-main/packagedRemoteRuntimeCatalog.js";
 
 test("packaged catalog validates and selects a release artifact", async () => {
@@ -106,7 +106,8 @@ test("packaged catalog rejects archive content that changed after release metada
 	}
 });
 
-test("packaged catalog rejects symbolic artifact paths", { skip: process.platform === "win32" }, async () => {
+test("packaged catalog rejects symbolic artifact paths", async function () {
+	if (process.platform === "win32") this.skip();
 	const root = await mkdtemp(join(tmpdir(), "ash-remote-catalog-test-"));
 	const outside = join(root, "outside.tar.gz");
 	try {

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { URI } from '../../../../../base/common/uri.js';
 import { Position } from '../../../../common/core/position.js';
@@ -32,7 +32,7 @@ for (const [name, value] of Object.entries({
 await import('../../browser/colorPickerController.js');
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 
-test.after(() => browserEnvironment.window.close());
+suiteTeardown(() => browserEnvironment.window.close());
 
 test('color picker decorates, edits, and undoes a CSS color as one operation', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');

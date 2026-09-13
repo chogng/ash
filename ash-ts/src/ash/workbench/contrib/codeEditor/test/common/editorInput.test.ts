@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { URI } from "../../../../../base/common/uri.js";
 import { ACADEMIC_DOCUMENT_CONTENT_TYPE } from "../../../../services/documentEditor/common/documentTypes.js";
 import { EditorPaneMatch } from "../../../../browser/parts/editor/editorPane.js";

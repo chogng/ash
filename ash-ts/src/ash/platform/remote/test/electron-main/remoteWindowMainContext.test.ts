@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import type { AppServerConnectionState } from "../../../../platform/app-server/common/appServerApi.js";
 import type { AppServerConnectionRelay } from "../../../../platform/app-server/electron-main/appServerConnectionRelay.js";
 import type { IDisposable } from "../../../../base/common/lifecycle.js";

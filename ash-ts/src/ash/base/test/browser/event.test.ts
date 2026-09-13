@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test } from 'mocha';
 import { DomEmitter } from '../../browser/event.js';
 import { DisposableTracker, installDisposableTracker } from '../../common/lifecycle.js';
 

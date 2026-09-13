@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>', { pretendToBeVisual: true });
@@ -40,7 +40,7 @@ const { createKeyboardShortcutsEditorInput, isKeyboardShortcutsEditorInput } = a
 const { PreferencesService } = await import('../../../../../workbench/services/preferences/browser/preferencesService.js');
 const { isPreferencesEditorInput } = await import('../../../../../workbench/services/preferences/common/preferencesEditorInput.js');
 
-test.after(() => browserEnvironment.window.close());
+suiteTeardown(() => browserEnvironment.window.close());
 
 test('Keyboard Shortcuts opens as one Editor tab and reconciles resource rows incrementally', async () => {
 	using disposables = new DisposableStore();

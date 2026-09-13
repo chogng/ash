@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { SyntaxProviderRegistry, type SyntaxProvider } from "../../common/languages/syntax/syntaxProviders.js";
 import { SyntaxProviderModuleHost, SyntaxProviderModuleRegistry, SyntaxProviderModuleState } from "../../common/languages/syntax/syntaxProviderModules.js";
 

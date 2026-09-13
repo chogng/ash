@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import { registerTrustedIpcRoutes, TrustedIpcRouter, type IpcMainInvokeEventLike, type IpcMainLike, type IpcRoute } from "../../../../platform/ipc/electron-main/trustedIpcRouter.js";
 
 class FakeIpcMain implements IpcMainLike {

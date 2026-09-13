@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "mocha";
 import { classifyTextModelSize, TEXT_MODEL_LARGE_FILE_LIMITS } from "../../common/model/textModelLargeFile.js";
 
 test("text model large-file policy follows the fixed editor limits", () => {

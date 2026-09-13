@@ -1,5 +1,5 @@
 import { strict as assert } from "node:assert";
-import test from "node:test";
+import { test } from "mocha";
 import type { AppServerConnectionState } from "../../../../platform/app-server/common/appServerApi.js";
 import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/remote.js";
 import { RemoteConnectionRecoveryCoordinator, type RemoteConnectionRecoveryHost } from "../../../../platform/remote/electron-main/remoteConnectionRecoveryCoordinator.js";
