@@ -309,19 +309,36 @@ impl TuiProcess {
         let master_fd = pair.master.as_raw_fd().expect("Unix PTY master fd");
         let reader_thread = thread::spawn(move || {
             let mut buffer = [0_u8; 8_192];
+            let mut reads = 0;
+            trace_pty("reader loop begin");
             loop {
                 #[cfg(unix)]
                 if !wait_for_pty_output(master_fd, &thread_stop) {
+                    trace_pty("reader poll stopped");
                     break;
                 }
+                if reads < 20 {
+                    trace_pty("reader read begin");
+                }
                 match reader.read(&mut buffer) {
-                    Ok(0) => break,
+                    Ok(0) => {
+                        trace_pty("reader EOF");
+                        break;
+                    }
                     Ok(read) => {
+                        if reads < 20 {
+                            trace_pty(&format!("reader read {read} bytes"));
+                            trace_pty("reader capture begin");
+                        }
                         let replies = {
                             let mut capture = reader_capture.lock().unwrap();
                             capture.push(&buffer[..read]);
                             capture.core.take_reply_bytes()
                         };
+                        if reads < 20 {
+                            trace_pty("reader capture ready");
+                        }
+                        reads += 1;
                         if !replies.is_empty() {
                             let mut writer = reply_writer.lock().unwrap();
                             if writer
@@ -334,7 +351,10 @@ impl TuiProcess {
                         }
                     }
                     Err(error) if error.kind() == ErrorKind::Interrupted => continue,
-                    Err(_) => break,
+                    Err(error) => {
+                        trace_pty(&format!("reader error {error}"));
+                        break;
+                    }
                 }
             }
         });
@@ -502,13 +522,33 @@ impl TuiProcess {
     pub fn wait_for_screen(&mut self, expected: &str) {
         trace_pty(&format!("screen wait {expected}"));
         let deadline = Instant::now() + STATE_TIMEOUT;
+        let mut next_report = Instant::now() + Duration::from_secs(5);
+        let mut first = true;
         loop {
+            if Instant::now() >= next_report {
+                trace_pty("screen still waiting");
+                next_report += Duration::from_secs(5);
+            }
+            if first {
+                trace_pty("screen read begin");
+            }
             let screen = self.screen();
+            if first {
+                trace_pty("screen read ready");
+            }
             if screen.contains(expected) {
                 trace_pty(&format!("screen ready {expected}"));
                 return;
             }
-            if let Some(status) = self.child.try_wait().unwrap() {
+            if first {
+                trace_pty("screen child status begin");
+            }
+            let status = self.child.try_wait().unwrap();
+            if first {
+                trace_pty("screen child status ready");
+            }
+            if let Some(status) = status {
+                trace_pty(&format!("screen child exited {status:?}"));
                 self.close_terminal();
                 panic!(
                     "TUI exited before drawing {expected:?}: {status:?}; raw:\n{}",
@@ -516,11 +556,20 @@ impl TuiProcess {
                 );
             }
             if Instant::now() >= deadline {
+                trace_pty("screen timeout");
+                trace_pty(&format!("screen contents:\n{screen}"));
+                let raw = self.raw_text();
+                let tail = raw.chars().rev().take(4_096).collect::<String>();
+                trace_pty(&format!(
+                    "raw output tail:\n{}",
+                    tail.chars().rev().collect::<String>()
+                ));
                 panic!(
                     "TUI screen did not contain {expected:?}; screen:\n{screen}\nraw:\n{}",
                     self.raw_text()
                 );
             }
+            first = false;
             thread::sleep(Duration::from_millis(20));
         }
     }
@@ -898,8 +947,11 @@ fn assert_named_snapshot(name: &str, screen: String) {
 
 impl Drop for TuiProcess {
     fn drop(&mut self) {
+        trace_pty("process drop begin");
         self.child.terminate();
+        trace_pty("process child terminated");
         self.close_terminal();
+        trace_pty("process drop end");
     }
 }
 

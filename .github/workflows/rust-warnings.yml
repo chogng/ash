@@ -172,10 +172,10 @@ jobs:
         run: just test ash-tui --profile ci-test
 
       - name: Test real TUI terminal scenarios
-        # portable-pty spawns through a Unix pre-exec hook; avoid parallel forks.
+        timeout-minutes: 20
         env:
           ASH_TUI_TEST_TRACE: "1"
-        run: just --set tui_profile ci-test test-tui -- --test-threads=1
+        run: just --set tui_profile ci-test test-tui -- --test-threads=4
 
       - name: Test remote TUI reconnect
         run: just test ash-cli interactive_remote_tui_preserves_home_draft_after_transport_loss --profile ci-test
