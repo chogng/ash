@@ -36,7 +36,7 @@ Desktop UI、Electron IPC、`ash-code` 的 TUI 宿主和第三方网页 UI 不�
 ```text
 ash-rs/
 ├── protocol/             # canonical shared domain contract
-├── agent-import/         # external Agent ecosystem discovery + metadata-only import plan
+├── external-agent-migration/         # external Agent ecosystem discovery, bounded parsing, and import plan
 ├── tools/                # target host-side tool types, interfaces and pure adapters
 ├── shell-command/        # concrete approved-process executor
 ├── file-system/          # concrete read-only filesystem executor

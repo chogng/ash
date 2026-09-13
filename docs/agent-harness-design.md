@@ -129,16 +129,17 @@ loop:
 ```
 
 冻结纪律：git、platform、shell 等字段在 Environment 连接时采集一次；需要新鲜状态时模型自己调工具。
-`accessible_dirs` 来自当前 Session tree 的有效 Grant，每次模型调用读取一次。Core 把完整快照作为最后一条
-user-role context 放在 durable Thread history 之后，因此目录变化只改请求尾部，不改 system instructions，
-也不制造持久用户消息。
+`accessible_dirs` 来自当前 Session tree 的有效 Grant，每次模型调用读取一次。Core 每次渲染完整
+`<environment_context>` 块，与启用时的本次 `<time_context>` 一起作为最后一条 user-role context 放在
+durable Thread history 和当前 Turn 输入之后，不进入可复用缓存前缀，也不制造持久用户消息。
+环境增量渲染及历史前缀内的环境消息复用尚未实现。
 
 职责边界：`ash-agent-environment` 只拥有不可变值、目录不变量和确定性渲染；App Server 采集平台与 Git 信息，并通过 `DirGrants` 读取 Session tree 的有效 Authorization；Core 的 `HarnessContextProvider` 在每次模型调用边界冻结两者，并由 Context Planner 负责预算与位置。环境 crate 不执行命令、不保存 Session、不签发 Grant，也不参与工具路径判定。
 
 ### 4.3 Directory Instruction 发现与注入
 
 - 发现：只读取已授权目录的 `.ash/instructions/*.md` 文件；`AGENTS.md` 和其他生态
-  格式必须经 `ash-agent-import`，原生 loader 不兼容扫描；
+  格式必须经 `external-agent-migration`，原生 loader 不兼容扫描；
 - 注入：当前只把 `load: global` 条目渲染为 `input[0]` user message，并标注其优先级低于
   system 与安全策略；
 - 大小：每个文件最多 32 KiB、直接条目最多 128，非法条目产生隔离 diagnostic；

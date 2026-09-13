@@ -197,8 +197,9 @@ approval 的模糊复用。Directory rule 只允许收紧。任何规则变更�
 ### 受控内容来源不是长期执行批准
 
 Desktop 外部 Agent 配置导入计划允许用户把明确选择的 Codex `~/.agents/skills`、Claude
-`~/.claude/skills` 等目录注册为可撤销的只读内容来源。当前 `ash-agent-import` 只实现已知
-路径的 metadata-only 检查和 `AgentPathInspection`，尚未实现 Desktop 确认与 Config apply。未来
+`~/.claude/skills` 等目录注册为可撤销的只读内容来源。当前 `external-agent-migration` 实现已知
+路径检查、`AgentPathInspection` 和有界源格式解析的 `MigrationPlan`，尚未实现 Desktop 确认与
+Config apply。未来
 apply 操作产生类型化配置和受控来源身份，不产生按工具、命令前缀或路径模式匹配的执行授权，
 因此不属于“是，不再询问”或“此项目始终允许”。
 

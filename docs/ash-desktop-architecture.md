@@ -140,10 +140,12 @@ Renderer component
 ### 2.2 外部 Agent 配置导入（仅限 Desktop）
 
 外部 Agent 配置导入是 Desktop 专属的用户工作流。当前
-[`ash-agent-import`](../ash-rs/agent-import/README.md) 已实现 Codex/Claude 已知路径的
-metadata-only 检查、canonical containment、symlink 拒绝、确定性 `AgentPathInspection` 和安全诊断；
-它不读取候选正文。Desktop 的目录选择、内容预览、冲突确认、导入进度和撤销入口，以及 App
-Server 的 apply orchestration 仍是计划设计。TUI 不提供对应命令、目录选择器或配置界面。
+[`external-agent-migration`](../ash-rs/external-agent-migration/README.md) 已实现 Codex/Claude 已知路径的
+检查、canonical containment、symlink 拒绝、确定性 `AgentPathInspection` 和安全诊断，并能读取
+有界源格式生成类型化 `MigrationPlan`（settings、MCP、hooks、plugins、memory、agents 等
+fragment）；它不读取 skill/command/memory 正文，不应用配置。Desktop 的目录选择、内容预览、
+冲突确认、导入进度和撤销入口，以及 App Server 的 apply orchestration 仍是计划设计。TUI 不提供
+对应命令、目录选择器或配置界面。
 
 底层解析、来源身份、安全校验和持久化仍由各 Rust 领域 authority 与 App Server typed
 contract 拥有，Renderer 不能直接扫描用户主目录或自行解释外部配置。
@@ -164,7 +166,7 @@ Ash 原生 Instructions/Skills/Agents、`.ash` 命名空间以及 Import 与 sou
 [`permissions.md`](permissions.md) 定义。
 
 该功能即使首版很小，也不能整体放入 `ash-rs/utils`。外部目录识别、格式映射、敏感内容排除和
-配置 mutation 都属于产品领域语义；`ash-agent-import` 拥有只读发现与计划模型，Desktop 只
+配置 mutation 都属于产品领域语义；`external-agent-migration` 拥有只读发现与计划模型，Desktop 只
 拥有交互，App Server 负责协调，各目标领域负责校验和落库。只有不理解 Codex、Claude、Skill、
 MCP 或 Agent definition 的路径规范化、目录 containment 和文件 identity 原语可以复用
 `ash-rs/utils/path-utils`、`ash-rs/utils/path-uri` 等基础 crate。

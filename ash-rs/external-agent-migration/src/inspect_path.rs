@@ -68,7 +68,7 @@ pub fn inspect_agent_paths(
     Ok(AgentPathInspection::new(candidates, diagnostics))
 }
 
-fn validate_import_root(
+pub(crate) fn validate_import_root(
     location: &AgentImportLocation,
 ) -> Result<CanonicalPathRoot, AgentImportError> {
     let metadata = fs::symlink_metadata(location.root()).map_err(|error| {

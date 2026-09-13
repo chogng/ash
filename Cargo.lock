@@ -433,14 +433,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ash-agent-import"
-version = "0.1.0"
-dependencies = [
- "ash-utils-path",
- "tempfile",
-]
-
-[[package]]
 name = "ash-agent-roles"
 version = "0.1.0"
 dependencies = [
@@ -4737,6 +4729,18 @@ checksum = "8be9f3dfaaffdae2972880079a491a1a8bb7cbed0b8dd7a347f668b4150a3b93"
 dependencies = [
  "event-listener",
  "pin-project-lite",
+]
+
+[[package]]
+name = "external-agent-migration"
+version = "0.1.0"
+dependencies = [
+ "ash-utils-path",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "tempfile",
+ "toml 0.9.12+spec-1.1.0",
 ]
 
 [[package]]

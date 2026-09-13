@@ -695,10 +695,11 @@ Skill install/remove 不属于 Skill manager：
 
 ### 15.1 外部 Agent Skill 导入（仅限 Desktop）
 
-[`ash-agent-import`](../ash-rs/agent-import/README.md) 当前已经能只读发现 Codex 的
+[`external-agent-migration`](../ash-rs/external-agent-migration/README.md) 当前已经能只读发现 Codex 的
 `~/.agents/skills`、项目 `.agents/skills`、Claude 的 `~/.claude/skills` 和项目
-`.claude/skills`，并把 canonical path、来源、scope 与 review category 放入 metadata-only
-`AgentPathInspection`；它不读取或转换 Skill 正文，也不修改 Config。
+`.claude/skills`（含 Claude commands 候选），并把 canonical path、来源、scope 与 review
+category 放入 `AgentPathInspection`，同时在 `MigrationPlan` 中给出 skill 名称清单；它不读取或
+转换 Skill 正文，也不修改 Config。
 
 用户可见的导入工作流只在 Desktop 提供。Desktop 的目录选择、导入预览、冲突确认和撤销入口，
 以及 App Server/Config authority 把用户确认结果保存为明确用户 Skill 来源的 apply path 仍是
@@ -719,13 +720,13 @@ Desktop 导入，其 Skill 可以与其他来源一起出现在 TUI catalog 中�
 - 导入来源必须可查询、禁用和移除，移除后不能继续激活其中的 Skill；
 - 导入只建立只读内容来源，不授予脚本执行、网络、凭据或沙箱绕过能力。
 
-外部路径发现和导入计划由 `ash-agent-import` 拥有，来源注册与内容解析仍属于 Config/Skill
+外部路径发现和导入计划由 `external-agent-migration` 拥有，来源注册与内容解析仍属于 Config/Skill
 边界，不属于通用 `utils`；只有不理解外部 Agent 格式的路径规范化、目录 containment 和文件
 identity 原语可以下沉到已有基础 crate。Desktop 交互所有权与其他外部配置类型的映射见
 [`ash-desktop-architecture.md`](ash-desktop-architecture.md#22-外部-agent-配置导入仅限-desktop)；
 TUI 当前不提供外部 Agent 导入入口；Ash Code 的公共边界以其[API 入口](../ash-code/README.md)为准。
 
-目录贡献不是 Import。`ash-file-access` 拥有目录来源与能力契约；只有带 `DiscoverSkills` 的有效 Grant 才能发现 Skill。该发现可以复用 `ash-agent-import` 的安全路径检查，但不写入 Config、不产生 imported source，也不改变 `cwd`。完整语义见 [`environment-access.md`](environment-access.md#5-来源权限取代目录-trust)。
+目录贡献不是 Import。`ash-file-access` 拥有目录来源与能力契约；只有带 `DiscoverSkills` 的有效 Grant 才能发现 Skill。该发现可以复用 `external-agent-migration` 的安全路径检查，但不写入 Config、不产生 imported source，也不改变 `cwd`。完整语义见 [`environment-access.md`](environment-access.md#5-来源权限取代目录-trust)。
 
 ## 16. 错误与诊断
 

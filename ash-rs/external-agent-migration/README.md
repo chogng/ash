@@ -1,17 +1,21 @@
-# `ash-agent-import`
+# `external-agent-migration`
 
-> 文档所有权：本 README 是外部 Agent 配置只读发现、路径校验、导入计划与失败语义的当前实现
-> 契约。
+> 文档所有权：本 README 是外部 Agent 配置只读发现、有界源格式解析、导入计划与失败语义的当前
+> 实现契约。
 >
 > 产品交互与长期演进由
 > [`docs/ash-desktop-architecture.md`](../../docs/ash-desktop-architecture.md#22-外部-agent-配置导入仅限-desktop)
 > 拥有；Ash 原生 Instructions/Skills/Agents、`.ash` 命名空间和 Import/source registration
 > 边界由 [`docs/agent-customizations.md`](../../docs/agent-customizations.md) 拥有；Skill 来源与激活
 > 语义由 [`docs/skills.md`](../../docs/skills.md) 拥有。
+>
+> 上游对照：本 crate 对应 codex 仓库的 `codex-rs/external-agent-migration`，名称一致。
 
-`ash-agent-import` 只识别 Codex 和 Claude 已知的用户级、项目级配置位置，并生成仅元数据
-（metadata-only）的 `AgentPathInspection`。当前实现不读取候选正文、不递归扫描未知目录、不修改
-Ash 配置，也不导入认证、会话、日志或历史记录。
+`external-agent-migration` 识别 Codex 和 Claude 已知的用户级、项目级配置位置，产出两层只读结果：
+`AgentPathInspection`（已知路径的元数据检查）和 `MigrationPlan`（读取有界源格式后的类型化迁移
+计划，覆盖 instructions、settings、skills、commands、agents、rules、MCP servers、hooks、plugins
+与 memory 文件）。本 crate 不递归扫描未知目录、不修改 Ash 配置，也不导入认证、会话、日志或
+历史记录；把 plan fragment 映射到 Ash 领域并应用，仍是调用方 adapter 的职责。
 
 ## 1. Crate 边界与依赖方向
 
@@ -21,7 +25,10 @@ Ash 配置，也不导入认证、会话、日志或历史记录。
 - Codex/Claude 已知相对路径与预期文件类型；
 - 调用方所选根目录的规范化和目录包含关系校验；
 - 确定性排序、去重、候选与安全诊断；
-- 私有绝对路径的 `Debug` 隐藏。
+- 外部源格式的有界解析：Claude `settings.json` 合并、`config.toml`、`.mcp.json`/`.claude.json`
+  MCP 声明、hooks 声明、agent frontmatter、enabledPlugins 与 marketplace registry、项目 memory
+  文件发现；
+- 私有绝对路径和设置文档的 `Debug` 隐藏。
 
 本 crate 不拥有：
 
@@ -33,9 +40,9 @@ Ash 配置，也不导入认证、会话、日志或历史记录。
 - `.ash/{instructions,skills,agents}` 的原生发现、加载或 runtime activation。
 
 生产代码依赖 [`ash-utils-path`](../utils/path-utils/README.md) 的 host canonical containment
-primitive，测试使用 directory `tempfile`。它不得反向依赖
-`ash-config`、`ash-skills`、App Server、Core 或 Desktop。后续内容 parser 可以依赖窄格式
-crate，但不能为了落库或 UI 方便引入上述高层领域。
+primitive，以及 `serde`、`serde_json`、`serde_yaml`、`toml` 格式 crate，测试使用
+directory `tempfile`。它不得反向依赖
+`ash-config`、`ash-skills`、App Server、Core 或 Desktop，也不能为了落库或 UI 方便引入上述高层领域。
 
 ## 2. 公共契约
 
@@ -44,7 +51,10 @@ crate，但不能为了落库或 UI 方便引入上述高层领域。
 | `ExternalAgent` | 区分 `Codex` 与 `Claude` 布局 | 动态 provider registry |
 | `ImportScope` | 区分 `User` 与 `Project` 来源 | directory capability 或配置优先级 |
 | `AgentImportLocation::{codex_user,codex_project,claude_user,claude_project}` | 将来源、作用范围和调用方选择的根目录绑定为一个发现输入 | 环境变量解析、文件访问授权 |
-| `inspect_agent_paths` | 校验所有输入根并检查已知相对位置 | 读取正文、转换内容或应用配置 |
+| `inspect_agent_paths` | 校验所有输入根并检查已知相对位置 | 转换内容或应用配置 |
+| `detect_migration_plan` | 校验输入根并解析有界源格式，产出按条目排序的 `MigrationPlanItem` | 映射到 Ash 领域、过滤已导入项、应用配置 |
+| `MigrationPlanItem` / `MigrationItemDetail` | 一个可迁移条目及其类型化源格式 fragment | Ash config schema、目标 authority 命令 |
+| `repository_root_for_cwd` | 从任意 cwd 向上解析 `.git` 仓库根 | home/project 作用范围决策、目录授权 |
 | `AgentImportCandidate` | 返回来源、作用范围、条目类型、审查类别、相对路径和 canonical host path | 表示内容已受信任、已批准或可执行 |
 | `AgentImportDiagnostic` | 说明一个已存在的已知路径为什么未进入候选 | 暴露根目录、正文或凭据 |
 | `AgentImportError` | 表达调用方选择的根目录整体无效 | 表达单个候选的隔离错误 |
@@ -52,7 +62,7 @@ crate，但不能为了落库或 UI 方便引入上述高层领域。
 典型调用点保持自解释，不传递布尔模式或裸来源字符串：
 
 ```rust
-use ash_agent_import::{AgentImportLocation, inspect_agent_paths};
+use external_agent_migration::{AgentImportLocation, inspect_agent_paths};
 
 let inspection = inspect_agent_paths([
     AgentImportLocation::codex_user(user_home),
@@ -60,17 +70,27 @@ let inspection = inspect_agent_paths([
 ])?;
 ```
 
-`AgentPathInspection` 只是检查结果和预览输入。调用方仍须让用户选择具体候选，并把确认结果交给相应领域重新
-解析和校验；不能把 `candidates()` 非空解释为可自动导入。
+`AgentPathInspection` 与 `MigrationPlan` 都只是预览输入。调用方仍须让用户选择具体条目，把 fragment
+映射到目标领域并重新解析校验；不能把 `candidates()` 或 `items()` 非空解释为可自动导入。
+
+```rust
+use external_agent_migration::{AgentImportLocation, detect_migration_plan};
+
+let plan = detect_migration_plan(
+    [AgentImportLocation::claude_user(user_home)],
+    Some(user_home),
+)?;
+```
 
 ## 3. 已知布局与审查分类
 
-`agent_paths.rs` 是外部 Agent 路径映射的唯一实现 owner。当前固定布局如下：
+`agent_paths.rs` 拥有元数据 inspection 的静态路径表；`detect.rs` 和各内容模块拥有计划读取的固定布局。
+当前识别的路径如下：
 
 | 来源 | 用户级路径 | 项目级路径 |
 | --- | --- | --- |
 | Codex | `~/.codex/{AGENTS.md,AGENTS.override.md,config.toml,agents/,rules/}`、`~/.agents/skills/` | `{AGENTS.md,AGENTS.override.md}`、`.codex/{config.toml,agents/,rules/}`、`.agents/skills/` |
-| Claude | `~/.claude/{CLAUDE.md,settings.json,skills/,agents/,rules/}` | `{CLAUDE.md,CLAUDE.local.md,.mcp.json}`、`.claude/{CLAUDE.md,settings.json,settings.local.json,skills/,agents/,rules/}` |
+| Claude | `~/.claude/{CLAUDE.md,settings.json,settings.local.json,skills/,commands/,agents/,rules/}`、`~/.claude.json`（MCP 声明）、`~/.claude/projects/*/memory/` | `{CLAUDE.md,CLAUDE.local.md,.mcp.json}`、`.claude/{CLAUDE.md,settings.json,settings.local.json,skills/,commands/,agents/,rules/}`、`~/.claude.json` 对应项目条目（MCP 声明） |
 
 路径映射依据 Codex 的
 [导入说明](https://learn.chatgpt.com/docs/import)和
@@ -79,28 +99,39 @@ let inspection = inspect_agent_paths([
 [Skill 位置说明](https://code.claude.com/docs/en/skills)。外部产品改变路径时，先更新
 官方契约证据和 fixture，再修改 `agent_paths.rs`；不能靠扫描整个 home 猜测新位置。
 
-Claude 的 legacy `.claude/commands/` 明确不在 Import surface 中。Ash 当前没有接收外部 command
-body、source provenance、enablement 与执行语义的产品契约；发现这些文件只会产生无法消费的候选项。
-
 | `ImportItemKind` | `ImportReviewCategory` | 原因 |
 | --- | --- | --- |
-| `Instructions`、`Skills`、`InstructionRules` | `Content` | 包含将进入模型上下文的外部指令 |
-| `Settings`、`Agents` | `Configuration` | 需要目标领域映射，不能按原格式直接生效 |
+| `Instructions`、`Skills`、`Commands`、`Memory`、`InstructionRules` | `Content` | 包含将进入模型上下文的外部指令 |
+| `Settings`、`Agents`、`Plugins` | `Configuration` | 需要目标领域映射，不能按原格式直接生效 |
 | `McpServers` | `Connection` | 可能引入进程、网络、header 或重新登录要求 |
-| `ExecutionRules` | `ExecutionPolicy` | 可能改变命令是否提示、允许或阻止 |
+| `ExecutionRules`、`Hooks` | `ExecutionPolicy` | 可能改变命令是否提示、允许或阻止 |
+
+Claude commands 按 plan 条目发现（文件 stem），与上游一样作为可迁移为 skill 的候选；把 command
+body 转成 Ash Skill 仍是 adapter 的职责，本 crate 不读取 command 正文。Codex execution rules 只发现
+`.rules` 文件，Claude instruction rules 发现 `.md` 文件。
 
 审查类别只用于 UI 分组和后续处理路由，不是授权结果。特别是 `ExecutionPolicy` 不能生成 Ash
 长期批准，`Connection` 不能自动启动 MCP。
 
 `~/.codex/auth.json` 永不进入候选。`~/.claude.json` 同时包含 OAuth session、MCP、
-per-project state 和 cache，当前整体排除。未来若需要其中的非敏感 MCP 声明，必须增加专门的
-有界 parser 与结构化脱敏，不能把整个文件交给 Desktop、模型或普通日志。
+per-project state 和 cache，因此只允许专门的有界 parser 读取其中的 `mcpServers` 与匹配项目的
+MCP 声明；整个文件不进入候选，也不交给 Desktop、模型或普通日志。
 
 ## 4. 文件与内部所有权
 
 | 文件 / private symbol | 单一职责 | 修改时同步检查 |
 | --- | --- | --- |
 | `import.rs` | 公共导入值类型、named constructor、getter 和私有路径 `Debug` | App Server DTO、Desktop preview、隐私测试 |
+| `plan.rs` | `MigrationPlan`/`MigrationPlanItem` 与类型化源格式 fragment；`Debug` 隐藏路径与设置文档 | App Server DTO、preview UI、redaction |
+| `detect.rs::detect_migration_plan` | 按 agent/scope 编排 discovery 与解析，排序去重 plan item 与 diagnostic | 新条目类型、排序契约 |
+| `source.rs` | 读取前路径校验、有界文件读取和目录枚举、按来源诊断 | 软链接、大小与深度上限、失败隔离 |
+| `settings.rs` | JSON/TOML 解析、Claude 两份设置的合并与来源记录 | 源格式变化、失败语义 |
+| `frontmatter.rs` | Markdown frontmatter 拆分与标量提取 | agent/命令 frontmatter 字段 |
+| `mcp.rs` | 外部 MCP 声明收集、`${VAR}` 语义、stdio/http 归一化与 unsupported 标记 | transport 类型、placeholder 规则 |
+| `hooks.rs` | Claude hooks 组发现与可转换组计数 | hook 字段白名单 |
+| `plugins.rs` | enabledPlugins 分组与 marketplace source 解析 | registry 格式、official fallback |
+| `memory.rs` | 外部项目 memory markdown 发现 | 项目 key 归属（adapter 职责） |
+| `scope.rs::repository_root_for_cwd` | `.git` 仓库根向上解析 | 作用范围决策调用方 |
 | `agent_paths.rs::paths_for` | `ExternalAgent + ImportScope` 到固定 `AgentPath` 的穷尽映射 | 官方路径、review category、fixture 和本表 |
 | `agent_paths.rs::{file,directory}` | 构造带预期 entry 类型的 Agent 路径 | type-mismatch diagnostic |
 | `inspect_path.rs::inspect_agent_paths` | 逐 root 检查 Agent 路径、排序、去重并构造 immutable inspection | 多 root 失败语义和顺序测试 |
@@ -131,8 +162,48 @@ inspect_agent_paths
   → AgentPathInspection::new
 ```
 
-发现只访问根目录和静态 `AgentPath` 指向的 metadata。它不会枚举 `.codex`、`.claude` 或
-Skill 目录的子项，也不会打开文件，因此当前 inspection 不能证明正文有效。
+`inspect_agent_paths` 只访问根目录和静态 `AgentPath` 指向的 metadata，不枚举子项、不打开文件。
+`detect_migration_plan` 在同一 root 校验之后枚举固定目录并读取有界文件（settings、config、
+`.mcp.json`、`.claude.json` 的 MCP 字段、agent frontmatter、plugins registry、memory 文件名），
+输出：
+
+```text
+detect_migration_plan
+  → Source::new → validate_import_root（同 inspection）
+  → Source::read / directory
+      → 检查各级路径、文件类型、symlink 和 canonical containment
+      → 限制读取字节数与目录条目数
+      → 有界解析 → 文档与实际 source_paths，或隔离 diagnostic
+  → Claude: settings 合并；hooks 分文件累加；MCP 按来源合并；memory 独立发现
+  → Codex: config.toml → document + mcp_servers fragment；.rules 文件发现
+  → sort + dedup items（agent, scope, kind, source_paths）与 diagnostics
+  → MigrationPlan::new
+```
+
+不读取 skill/command/memory 正文，不执行任何内容。计划读取在打开文件或枚举目录之前拒绝候选及其
+根内祖先的 symlink；无效候选不产生内容 fragment。
+
+`source.rs` 统一拥有资源限制，按一次选中 root 的读取累计：
+
+| 资源 | 上限 |
+| --- | --- |
+| 单文件 | 1 MiB；实际读取也受上限约束，不能只检查 metadata 大小 |
+| 单 root 累计读取 | 16 MiB |
+| 单目录直接条目 | 1,024 |
+| 单 root 累计枚举条目 | 4,096 |
+| root 以下相对路径层数 | 16 |
+| JSON/TOML/YAML 文档嵌套层数 | 64；格式解析器也保留自身递归限制 |
+| 单文档节点数 | 65,536 |
+| YAML 别名展开后的累计文本 | 1 MiB；构造值树前校验展开预算 |
+
+超过限制产生 `LimitExceeded`；不能读取的目录不返回部分目录清单，其他预算允许的来源继续处理。
+传入的跨 home MCP 来源独立校验，并使用自己的 root 预算和 User scope diagnostic。
+
+- Settings 保留两份成功解析的文件路径；仅有 `settings.local.json` 也产生条目，单份文件无效不丢弃有效的另一份。
+- Hooks 分别收集两份设置中的事件组；`disableAllHooks` 按 local 优先级生效，非法 hook 元素使整组不可转换。
+- MCP 按既定优先级合并有效来源，记录实际读取的 `.mcp.json`、`.claude.json` 和参与 enablement 的设置文件；Codex `enabled = false` 标记为 `Disabled`。
+- Memory 发现只由 User scope 控制，不依赖 settings 存在或有效。
+- Plugins 记录设置及有效 registry 的来源；registry 错误通过脱敏 diagnostic 返回，不写原始路径或解析错误日志。
 
 ## 6. 失败、隔离与隐私语义
 
@@ -144,8 +215,10 @@ Skill 目录的子项，也不会打开文件，因此当前 inspection 不能�
 | 已知相对路径不存在 | 不产生候选或 diagnostic | ✅ |
 | 候选 metadata/canonicalize 失败 | `MetadataUnavailable` | ✅ |
 | 候选类型与 specification 不符 | `UnexpectedFileType` | ✅ |
-| 候选自身是 symlink | `SymlinkNotAllowed` | ✅ |
-| ancestor symlink 使 canonical candidate 逃出 root | `EscapesSelectedRoot` | ✅ |
+| 候选自身是 symlink；或计划读取遇到根内 ancestor symlink | `SymlinkNotAllowed` | ✅ |
+| inspection 的 ancestor symlink 使 canonical candidate 逃出 root | `EscapesSelectedRoot` | ✅ |
+| settings/config/MCP/frontmatter/registry 解析失败 | `InvalidContent` diagnostic，跳过该文件 | ✅ |
+| 读取、枚举或文档深度超限 | `LimitExceeded` diagnostic | ✅ 继续剩余预算允许的来源 |
 | 候选合法 | 保存 canonical path | ✅ |
 
 多 root 调用不是部分成功协议：任一输入 root 无效都会返回 `Err`，不会返回其他 root 的半份 inspection。
@@ -179,12 +252,12 @@ Skill、Agent 或其他 authority；本 crate 不拥有这些领域的 canonical
 
 ```text
 external source
-  → ash-agent-import normalized preview fragment
+  → external-agent-migration normalized preview fragment
   → App Server import adapter
   → target authority typed command / prepare-publish contract
 ```
 
-`ash-agent-import` 不依赖 `ash-config`，也不直接构造 `UserConfigCommand`。App Server adapter 同时
+`external-agent-migration` 不依赖 `ash-config`，也不直接构造 `UserConfigCommand`。App Server adapter 同时
 依赖两者，负责 source-specific conversion、conflict preview、用户逐项确认和 Config transaction。
 这样外部格式变化不会反向决定 Ash Config schema，inspection 成功也不会被误当成 configuration
 commit。
@@ -224,7 +297,7 @@ desired-state 基础。两者可以复用 discovery/parser，但由目标 author
 
 ### 增加一个已知路径
 
-1. 在对应 `agent_paths.rs` source/scope 数组增加 `AgentPath`；
+1. 在对应 inspection 的 `agent_paths.rs` 表或计划的内容模块增加固定路径；
 2. 选择准确的 `ImportItemKind`、`ImportReviewCategory` 和 expected file/directory；
 3. 增加存在、缺失、错误类型和敏感排除测试；
 4. 更新本 README 的布局表，并检查 Desktop/Skill/权限文档是否受影响。
@@ -246,10 +319,10 @@ parser 必须位于新的 private module，设置 byte/entry/depth 上限，拒�
 ## 9. 验证
 
 ```bash
-cargo test --manifest-path Cargo.toml -p ash-agent-import
-cargo clippy --manifest-path Cargo.toml \
-  -p ash-agent-import --all-targets --no-deps -- -D warnings
-bazel test //ash-rs/agent-import:agent-import-unit-tests
+just check external-agent-migration
+just test external-agent-migration
+just rust-warnings external-agent-migration
+bazel test //ash-rs/external-agent-migration:external-agent-migration-unit-tests
 ```
 
 当前测试覆盖：
@@ -259,26 +332,32 @@ bazel test //ash-rs/agent-import:agent-import-unit-tests
 - Claude project 内容、配置和连接审查分类；
 - 已知路径错误文件类型的 diagnostic；
 - ancestor symlink 逃逸；
-- inspection `Debug` 不泄露临时 root。
+- inspection `Debug` 不泄露临时 root；
+- Claude settings 合并、hooks 计数、MCP 归一化与 placeholder 语义、plugins marketplace source、
+  memory 发现（各模块 sibling 测试）；
+- Codex/Claude 端到端 plan：条目种类、排序、去重、`InvalidContent` 隔离、空布局；
+- 文件/ancestor symlink 在计划读取前被拒绝、跨 home 文件实际来源及诊断 scope；
+- local-only Settings、hooks 跨文件累加与非法元素、独立 memory 发现、Codex `.rules` 和禁用 MCP；
+- 单文件与累计读取大小、单目录与累计条目数量、memory 路径深度、三种文档节点与深度限制、YAML 别名展开预算；
+- frontmatter sibling 测试已注册并参与 Cargo 与 Bazel 测试。
 
 测试只使用 `tempfile`，不读取真实 home。修改根目录错误分支、去重或多 root 行为时，应补充对应
 failure fixture；当前测试尚未覆盖所有 `AgentImportError` 分支，这是明确的测试缺口。
 
 ## 10. 当前限制与扩展点
 
-- **Current**：Codex/Claude 已知路径的 metadata-only 检查、根目录/候选校验、确定性 inspection、
-  diagnostic 与私有路径 `Debug` 隐藏。
-- **Current limitation**：不解析正文，不能生成按条目选择的转换 diff，也不能识别设置文件内嵌
-  的 hook、Plugin、MCP 或 Agent definition 声明。
+- **Current**：Codex/Claude 已知路径的元数据检查、根目录/候选校验、确定性 inspection、有界源
+  格式解析与 `MigrationPlan` fragment、diagnostic 与私有路径 `Debug` 隐藏。
+- **Current limitation**：不读取 skill/command/memory 正文，不能生成按条目选择的转换 diff；
+  sessions、认证与历史导入明确不在本 crate 范围。
 - **Current limitation**：user constructor 只识别默认 home layout；自定义 `CODEX_HOME`、
   `CLAUDE_CONFIG_DIR` 或独立外部 source root 尚无公共构造契约。
 - **Current limitation**：没有 stable inspection identity、TOCTOU revalidation 或 App Server wire
   contract。
-- **Current limitation**：没有 normalized import fragment、Config batch adapter、import receipt 或
-  source-qualified rollback contract。
-- **Proposed**：增加有界的 source-specific parser，输出不含 secret 的 typed preview fragment。
-- **Proposed**：App Server 组合 parser 结果并调用各 authority；Desktop 只提交用户确认后的
-  exact inspection identity。
+- **Current limitation**：没有 Config batch adapter、import receipt 或 source-qualified rollback
+  contract。
+- **Proposed**：App Server 组合 `MigrationPlan` fragment 并调用各 authority；Desktop 只提交用户
+ 确认后的 exact item identity。
 - **Proposed**：为 host `add-dir` adapter 提供只返回 allowlisted contribution kind 的窄
   inspection projection；它不等同完整 Import，也不处理 directory authorization。
 

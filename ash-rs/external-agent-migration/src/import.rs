@@ -84,10 +84,14 @@ pub enum ImportItemKind {
     Instructions,
     Settings,
     Skills,
+    Commands,
     Agents,
     InstructionRules,
     ExecutionRules,
     McpServers,
+    Hooks,
+    Plugins,
+    Memory,
 }
 
 /// Additional review boundary required before a candidate can be applied.
@@ -176,10 +180,12 @@ pub enum AgentImportDiagnosticCode {
     UnexpectedFileType,
     SymlinkNotAllowed,
     EscapesSelectedRoot,
+    InvalidContent,
+    LimitExceeded,
 }
 
 /// Safe diagnostic for one known path excluded during discovery.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct AgentImportDiagnostic {
     agent: ExternalAgent,
     scope: ImportScope,

@@ -10,14 +10,14 @@
 > 仍未实现。
 >
 > Skill 的格式、来源与激活细节见 [`skills.md`](skills.md)；外部格式发现和转换实现契约见
-> [`ash-agent-import` README](../ash-rs/agent-import/README.md)；配置与事务边界见
+> [`external-agent-migration` README](../ash-rs/external-agent-migration/README.md)；配置与事务边界见
 > [`config.md`](config.md)；内置与自定义 Agent 的统一定义契约、专化职责和启动范围见 [`agents.md`](agents.md)；最终模型输入由 [`core-context.md`](core-context.md) 定义。
 
 ## 快速理解
 
 Ash 只把 Instructions、Skills 和 Agents 作为 Agent 自定义领域对象。Prompt 是运行时送入模型的
 信息形式，Slash Command 是调用入口；两者都不是第四种可持久化自定义对象。目录级 Ash 对象统一
-位于小写 `.ash/`，其他产品的目录和格式必须经过 `ash-agent-import`，不能由原生 loader
+位于小写 `.ash/`，其他产品的目录和格式必须经过 `external-agent-migration`，不能由原生 loader
 顺便扫描。
 
 内置 Agent 不是 `.ash` 自定义对象。它们随产品发布、不会进入设置或被同名自定义定义覆盖，但与自定义 Agent 使用同一种定义契约；会话入口、委托和工作流只表示本次运行的启动来源，不产生“主 Agent 定义”或“子 Agent 定义”。
@@ -84,7 +84,7 @@ pub enum InstructionLoadPolicy {
 - `Contextual`：只有当前资源或工作上下文命中 pattern 时加载。
 - `OnDemand`：只在用户或上层已验证引用显式选择时加载。
 
-外部格式中的 `applyTo`、`globs`、`alwaysApply` 等字段由 `ash-agent-import` adapter 转换成这三种
+外部格式中的 `applyTo`、`globs`、`alwaysApply` 等字段由 `external-agent-migration` adapter 转换成这三种
 语义。`applyTo: "**"` 仍是“恰好匹配所有文件的上下文规则”，不能偷偷改写成 Global；真正的
 Global 必须由来源格式中明确等价的语义产生。
 
@@ -122,13 +122,13 @@ pub enum SkillInvocationPolicy {
 中扫描 catalog：Global Instructions 使用冻结的 `HarnessInstructions` snapshot；已激活 Skill 由
 extension 按 durable digest 精确加载正文。扫描 Agent catalog 本身不会执行定义。当前只有 `spawn_agent` 在委托安全点完成目录定义的选择、引用解析与冻结；让会话入口和工作流使用同一契约属于 [`agents.md`](agents.md) 的计划设计。
 
-| Scope/source | 物理 owner | 是否经过 `ash-agent-import` |
+| Scope/source | 物理 owner | 是否经过 `external-agent-migration` |
 | --- | --- | --- |
 | Built-in | release/package resources | ❌ 原生 authority 直接加载 |
 | User | `<profile_root>` 下的 Ash-owned artifact root（Proposed） | ❌ 原生 authority 直接加载 |
 | Directory | `<dir_root>/.ash/{instructions,skills,agents}`（Current catalog slice） | ❌ 原生 authority 直接加载 |
 | Plugin | Plugin package contribution | ❌ 由 Plugin snapshot 交给目标 authority |
-| External ecosystem | `.codex`、`.agents`、`.claude` 等已知布局 | ✅ 只经 `ash-agent-import` |
+| External ecosystem | `.codex`、`.agents`、`.claude` 等已知布局 | ✅ 只经 `external-agent-migration` |
 
 `<profile_root>` 本身已经是 Ash 的用户级命名空间，因此不再嵌套一个 `~/.ash` 兼容目录。
 Directory `.ash` 继续作为受保护 metadata；普通文件搜索、Agent 工具写入和外部 source
@@ -138,14 +138,14 @@ registration 不能把它当作任意内容目录。
 `.claude/`、`.github/` 或其他产品目录；否则 compatibility policy 会散落到三个 authority 中，
 外部格式也会反向定义 Ash schema。
 
-## 4. `ash-agent-import` 是外部反腐化层
+## 4. `external-agent-migration` 是外部反腐化层
 
-`ash-agent-import` 的“Agent”表示外部 Agent 生态，不表示它只导入 Agents artifact。它统一处理
+`external-agent-migration` 的“Agent”表示外部 Agent 生态，不表示它只导入 Agents artifact。它统一处理
 Codex、Claude 以及未来明确支持的其他生态中的 Instructions、Skills、Agents 和设置类内容。
 
 ```mermaid
 flowchart LR
-    external["外部 Agent 生态<br/>已知目录与格式"] --> inspect["ash-agent-import<br/>discover / inspect / parse / normalize"]
+    external["外部 Agent 生态<br/>已知目录与格式"] --> inspect["external-agent-migration<br/>discover / inspect / parse / normalize"]
     inspect --> preview["App Server import coordinator<br/>preview / conflict / user confirmation"]
     preview --> instruction["Instruction authority"]
     preview --> skill["Skill authority / Config source"]
@@ -156,11 +156,11 @@ flowchart LR
     agent --> runtime
 ```
 
-| 责任 | `ash-agent-import` | App Server coordinator | 目标 authority |
+| 责任 | `external-agent-migration` | App Server coordinator | 目标 authority |
 | --- | --- | --- | --- |
 | 已知外部路径与敏感排除 | ✅ | ❌ | ❌ |
-| source-specific bounded parser | ✅（Proposed） | ❌ | ❌ |
-| normalized preview fragment 与 provenance | ✅（Proposed） | 组合 | 最终复核 |
+| source-specific bounded parser | ✅ | ❌ | ❌ |
+| normalized preview fragment 与 provenance | ✅ | 组合 | 最终复核 |
 | 用户选择、冲突预览与 apply orchestration | ❌ | ✅（Proposed） | 提供 prepare/publish contract |
 | Ash canonical schema 与领域校验 | ❌ | ❌ | ✅ |
 | `.ash` 原生发现与加载 | ❌ | 协调 snapshot | ✅ |
@@ -168,11 +168,13 @@ flowchart LR
 
 parser 输出必须是目标明确、可审查的 typed fragment，例如 Instruction、Skill source、Agent
 definition 或 Config mutation fragment；不能输出一段“以后再解释”的原始 JSON/Markdown。外部字段
-无法确定性映射时必须标记 unsupported，不能 raw passthrough，也不能让 `ash-agent-import` 依赖
+无法确定性映射时必须标记 unsupported，不能 raw passthrough，也不能让 `external-agent-migration` 依赖
 `ash-config`、Core 或具体产品 UI。
 
-当前 `ash-agent-import` 只完成 metadata-only `AgentPathInspection`，尚未读取正文或生成 normalized
-fragment。上图除 inspection 之外的 import apply 路径均为 Proposed。
+当前 `external-agent-migration` 已完成 `AgentPathInspection` 和有界 source parser 输出的
+`MigrationPlan` fragment（settings、MCP、hooks、plugins、memory、agents、commands、rules、skills
+名称清单）；仍不读取 skill/command/memory 正文，session 与认证明确不在范围。上图 import apply
+路径保持 Proposed。
 
 ## 5. Import 与来源注册不等价
 
@@ -218,7 +220,8 @@ Slash Command catalog 只包含产品和服务命令；独立 `$name` Skill sele
 | Skill built-in/user/Directory catalog 与 enablement | 已实现 | `ash-skills`、`SkillRuntime::compose_sources` 与 [`skills.md`](skills.md) |
 | Skill activation snapshot 与通用 context injection | 已实现 | validated `SkillRef`、正文加载、safe-point freezing 与 extension contributors |
 | Skill metadata 自动 selector | 已实现 | 仅 `BuiltInVerified`、唯一高置信、pinned `SkillRef` 后加载正文 |
-| Codex/Claude known-path inspection | 已实现 | `ash-agent-import::inspect_agent_paths` |
+| Codex/Claude known-path inspection | 已实现 | `external-agent-migration::inspect_agent_paths` |
+| Codex/Claude bounded source parsers 与 `MigrationPlan` fragments | 部分具备 | settings/MCP/hooks/plugins/memory/agents/commands fragments 已实现；sessions、apply adapter、wire contract 未实现 |
 | Directory Instructions authority | 部分具备 | `ash-instructions` + `DirContributions`；Global 注入已实现，其他选择策略未实现 |
 | Directory Agents authority | 部分具备 | catalog/refresh、spawn 显式/自动选择、reference/capability freezing 已实现；list/picker API 未实现 |
 | `.ash/{instructions,skills,agents}` loader | 已实现 | 固定 roots、有界校验、Directory activation 与 watcher refresh |
@@ -233,15 +236,15 @@ Slash Command catalog 只包含产品和服务命令；独立 `$name` Skill sele
    和通用 context injection；下一步是通用 Contextual/OnDemand Instruction 解析。
 4. Agent definition catalog 已开放给 multi-agent delegation 的受限选择；下一步补 list/picker API，
    cross-authority reference 在具备明确 authority contract 前继续拒绝。
-5. 为 `ash-agent-import` 增加 source-specific bounded parsers 和 typed preview fragments；App
-   Server 只对已经具备 target authority 的条目开放 apply。
+5. `external-agent-migration` 的 bounded parsers 和 typed preview fragments 已实现；下一步是 App
+   Server adapter 只对已经具备 target authority 的条目开放 apply。
 
 ## 8. 长期不变量
 
 - Ash 原生 Agent customization 只有 Instructions、Skills、Agents 三类领域对象。
 - Prompt、Task、Preset 和 Slash Command 不成为第四种 artifact；重复任务使用 Skill。
 - Directory 的 Ash-owned 目录只使用小写 `.ash`，不维护 `.ASH` alias。
-- 外部生态格式只由 `ash-agent-import` 理解；原生 authority 不扫描兼容目录。
+- 外部生态格式只由 `external-agent-migration` 理解；原生 authority 不扫描兼容目录。
 - 类型、scope/source、provenance 与 activation policy 分开建模。
 - 导入成功不授予工具、脚本、网络、凭据、沙箱绕过或长期执行批准。
 - Preview 不是 authorization；apply 前必须重读并验证 source identity/digest。
