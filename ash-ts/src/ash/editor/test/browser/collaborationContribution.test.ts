@@ -84,10 +84,77 @@ test("Stanza collaboration contribution lets a room owner inspect, rotate, and r
 	assert.deepEqual(rotations, ["member-1"]);
 	assert.equal(contribution.element.querySelector<HTMLPreElement>(".stanza-document-collaboration-invitation-token")?.textContent, "Room ID: stanza-room\nAccess token: rotated-token");
 
-	writer?.querySelector<HTMLButtonElement>("button:last-child")?.click();
+	const currentWriter = contribution.element.querySelector<HTMLElement>("[data-principal-id='member-1']");
+	currentWriter?.querySelector<HTMLButtonElement>("button:last-child")?.click();
 	await flushMicrotasks();
 	assert.deepEqual(revocations, ["member-1"]);
 	environment.window.close();
+});
+
+test('Stanza collaboration contribution releases replaced and disposed member actions', async () => {
+	const environment = new JSDOM('<!doctype html><body></body>');
+	Object.defineProperty(environment.window, 'confirm', { configurable: true, value: () => true });
+	const rotations: string[] = [];
+	const revocations: string[] = [];
+	const contribution = new CollaborationContribution(environment.window.document.body, {
+		onStart: async () => ({ roomId: 'unused', principalId: undefined, canManageMembers: false }),
+		onStop: () => undefined,
+		onInvite: async () => ({ roomId: 'room', principalId: 'member', displayName: 'Writer', role: 'editor', accessToken: 'token' }),
+		onListMembers: async () => [{ principalId: 'member', displayName: 'Writer', role: 'editor' }],
+		onRotateMemberAccessToken: async principalId => {
+			rotations.push(principalId);
+			return { roomId: 'room', principalId, displayName: 'Writer', role: 'editor', accessToken: 'token' };
+		},
+		onRevokeMember: async principalId => { revocations.push(principalId); },
+	});
+	try {
+		contribution.setState('connected', { roomId: 'room', principalId: 'owner', canManageMembers: true });
+		const manage = contribution.element.querySelector<HTMLButtonElement>("[data-action-id='manageCollaborators'] button")!;
+		manage.click();
+		await flushMicrotasks();
+		const oldRotate = contribution.element.querySelector<HTMLButtonElement>("[data-principal-id='member'] button")!;
+		manage.click();
+		await flushMicrotasks();
+		const rotate = contribution.element.querySelector<HTMLButtonElement>("[data-principal-id='member'] button")!;
+		const revoke = contribution.element.querySelector<HTMLButtonElement>("[data-principal-id='member'] button:last-child")!;
+		assert.notStrictEqual(oldRotate, rotate);
+		oldRotate.click();
+		await flushMicrotasks();
+		assert.deepEqual(rotations, []);
+
+		contribution.dispose();
+		rotate.click();
+		revoke.click();
+		await flushMicrotasks();
+		assert.deepEqual({ rotations, revocations }, { rotations: [], revocations: [] });
+	} finally {
+		contribution.dispose();
+		environment.window.close();
+	}
+});
+
+test('Stanza collaboration contribution ignores member results after disposal', async () => {
+	const environment = new JSDOM('<!doctype html><body></body>');
+	let resolveMembers!: (members: readonly { readonly principalId: string; readonly displayName: string; readonly role: 'editor' }[]) => void;
+	const contribution = new CollaborationContribution(environment.window.document.body, {
+		onStart: async () => ({ roomId: 'unused', principalId: undefined, canManageMembers: false }),
+		onStop: () => undefined,
+		onInvite: async () => ({ roomId: 'room', principalId: 'member', displayName: 'Writer', role: 'editor', accessToken: 'token' }),
+		onListMembers: () => new Promise(resolve => { resolveMembers = resolve; }),
+		onRotateMemberAccessToken: async () => ({ roomId: 'room', principalId: 'member', displayName: 'Writer', role: 'editor', accessToken: 'token' }),
+		onRevokeMember: async () => undefined,
+	});
+	try {
+		contribution.setState('connected', { roomId: 'room', principalId: 'owner', canManageMembers: true });
+		contribution.element.querySelector<HTMLButtonElement>("[data-action-id='manageCollaborators'] button")?.click();
+		contribution.dispose();
+		resolveMembers([{ principalId: 'late', displayName: 'Late', role: 'editor' }]);
+		await flushMicrotasks();
+		assert.equal(contribution.element.querySelector("[data-principal-id='late']"), null);
+	} finally {
+		contribution.dispose();
+		environment.window.close();
+	}
 });
 
 async function flushMicrotasks(): Promise<void> {

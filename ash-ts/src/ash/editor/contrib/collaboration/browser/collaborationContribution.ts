@@ -4,11 +4,11 @@ import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.
 import type { IAction } from "../../../../base/common/actions.js";
 import { isCancellationError } from "../../../../base/common/errors.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { DocumentCollaborationInvite } from "../../../common/services/documentCollaborationService.js";
 import type { DocumentCollaborationMember } from "../../../common/services/documentCollaborationService.js";
 import type { DocumentCollaborationRoomRole } from "../../../common/services/documentCollaborationService.js";
-import { h, fragment as createFragment } from "../../../../base/browser/dom.js";
+import { addDisposableListener, h, fragment as createFragment } from "../../../../base/browser/dom.js";
 
 export type CollaborationToolbarState = "unavailable" | "inactive" | "connecting" | "connected" | "resyncRequired" | "error";
 
@@ -41,6 +41,7 @@ export class CollaborationContribution extends Disposable {
 	private message: string | undefined;
 	private principalId: string | undefined;
 	private canManageMembers = false;
+	private readonly memberActionListeners = this._register(new MutableDisposable<DisposableStore>());
 
 	constructor(container: HTMLElement, private readonly options: CollaborationContributionOptions) {
 		super();
@@ -59,7 +60,7 @@ export class CollaborationContribution extends Disposable {
 			highlightToggledItems: true,
 		}));
 		this.toolbar.element.classList.add("stanza-document-collaboration-actions");
-		this.toolbar.element.addEventListener("mousedown", event => event.preventDefault());
+		this._register(addDisposableListener(this.toolbar.element, 'mousedown', event => event.preventDefault()));
 		const status = h(ownerDocument, "span");
 		status.className = "stanza-document-collaboration-status";
 		status.setAttribute("role", "status");
@@ -79,7 +80,7 @@ export class CollaborationContribution extends Disposable {
 		dismissInvitation.className = "stanza-document-collaboration-invitation-dismiss";
 		dismissInvitation.type = "button";
 		dismissInvitation.textContent = "Dismiss";
-		dismissInvitation.addEventListener("click", () => this.clearInvitation());
+		this._register(addDisposableListener(dismissInvitation, 'click', () => this.clearInvitation()));
 		invitation.append(invitationToken, dismissInvitation);
 		const members = h(ownerDocument, "div");
 		members.className = "stanza-document-collaboration-members";
@@ -146,6 +147,10 @@ export class CollaborationContribution extends Disposable {
 		}
 	}
 
+	private isCurrentRoom(roomId: string, principalId: string | undefined): boolean {
+		return !this.isDisposed && this._state === "connected" && this.roomId === roomId && this.principalId === principalId;
+	}
+
 	private toggle(): void {
 		if (this._state === "connected") {
 			this.options.onStop();
@@ -156,10 +161,15 @@ export class CollaborationContribution extends Disposable {
 		this.setState("connecting");
 		void this.options.onStart(entered.trim() || undefined).then(
 			result => {
-				if (this._state === "connecting") this.setState("connected", { roomId: result.roomId, principalId: result.principalId, canManageMembers: result.canManageMembers });
+				if (this.isDisposed || this._state !== "connecting") {
+					return;
+				}
+				this.setState("connected", { roomId: result.roomId, principalId: result.principalId, canManageMembers: result.canManageMembers });
 			},
 			error => {
-				if (this._state !== "connecting") return;
+				if (this.isDisposed || this._state !== "connecting") {
+					return;
+				}
 				if (isCancellationError(error)) this.setState("inactive");
 				else this.setState("error", { message: error instanceof Error ? error.message : "Collaboration could not be started" });
 			},
@@ -176,12 +186,22 @@ export class CollaborationContribution extends Disposable {
 		const principalId = this.principalId;
 		void this.options.onInvite(displayName, role).then(
 			invite => {
-				if (this._state !== "connected" || this.roomId !== roomId || this.principalId !== principalId) return;
+				if (!this.isCurrentRoom(roomId, principalId)) {
+					return;
+				}
 				this.setState("connected", { roomId, principalId, canManageMembers: true, message: `Invitation created for ${invite.displayName}` });
 				this.showInvitation(invite);
 			},
 			error => {
-				if (this._state === "connected" && this.roomId === roomId && this.principalId === principalId) this.setState("connected", { roomId, principalId, canManageMembers: true, message: error instanceof Error ? error.message : "Collaboration invitation could not be created" });
+				if (!this.isCurrentRoom(roomId, principalId)) {
+					return;
+				}
+				this.setState("connected", {
+					roomId,
+					principalId,
+					canManageMembers: true,
+					message: error instanceof Error ? error.message : "Collaboration invitation could not be created",
+				});
 			},
 		);
 	}
@@ -196,14 +216,25 @@ export class CollaborationContribution extends Disposable {
 		const roomId = this.roomId;
 		const principalId = this.principalId;
 		this.members.hidden = false;
+		this.memberActionListeners.clear();
 		this.memberList.replaceChildren("Loading collaborators…");
 		void this.options.onListMembers().then(
 			members => {
-				if (this._state !== "connected" || this.roomId !== roomId || this.principalId !== principalId) return;
+				if (!this.isCurrentRoom(roomId, principalId)) {
+					return;
+				}
 				this.renderMembers(members);
 			},
 			error => {
-				if (this._state === "connected" && this.roomId === roomId && this.principalId === principalId) this.setState("connected", { roomId, principalId, canManageMembers: true, message: error instanceof Error ? error.message : "Collaboration members could not be read" });
+				if (!this.isCurrentRoom(roomId, principalId)) {
+					return;
+				}
+				this.setState("connected", {
+					roomId,
+					principalId,
+					canManageMembers: true,
+					message: error instanceof Error ? error.message : "Collaboration members could not be read",
+				});
 			},
 		);
 	}
@@ -211,6 +242,8 @@ export class CollaborationContribution extends Disposable {
 	private renderMembers(members: readonly DocumentCollaborationMember[]): void {
 		const document = this.element.ownerDocument;
 		const fragment = createFragment(document);
+		const listeners = new DisposableStore();
+		this.memberActionListeners.value = listeners;
 		if (members.length === 0) {
 			const empty = h(document, "div");
 			empty.className = "stanza-document-collaboration-members-empty";
@@ -234,7 +267,7 @@ export class CollaborationContribution extends Disposable {
 			const rotate = h(document, "button");
 			rotate.type = "button";
 			rotate.textContent = "Rotate token";
-			rotate.addEventListener("click", () => this.rotateMemberAccessToken(member));
+			listeners.add(addDisposableListener(rotate, 'click', () => this.rotateMemberAccessToken(member)));
 			actions.append(rotate);
 			const revoke = h(document, "button");
 			revoke.type = "button";
@@ -243,7 +276,7 @@ export class CollaborationContribution extends Disposable {
 				revoke.disabled = true;
 				revoke.title = "You cannot revoke your own active owner credential";
 			}
-			revoke.addEventListener("click", () => this.revokeMember(member));
+			listeners.add(addDisposableListener(revoke, 'click', () => this.revokeMember(member)));
 			actions.append(revoke);
 			item.append(identity, details, actions);
 			fragment.append(item);
@@ -257,13 +290,23 @@ export class CollaborationContribution extends Disposable {
 		const principalId = this.principalId;
 		void this.options.onRotateMemberAccessToken(member.principalId).then(
 			invite => {
-				if (this._state !== "connected" || this.roomId !== roomId || this.principalId !== principalId) return;
+				if (!this.isCurrentRoom(roomId, principalId)) {
+					return;
+				}
 				this.setState("connected", { roomId, principalId, canManageMembers: true, message: `Access token rotated for ${invite.displayName}` });
 				this.showInvitation(invite);
 				this.refreshMembers();
 			},
 			error => {
-				if (this._state === "connected" && this.roomId === roomId && this.principalId === principalId) this.setState("connected", { roomId, principalId, canManageMembers: true, message: error instanceof Error ? error.message : "Collaboration credential could not be rotated" });
+				if (!this.isCurrentRoom(roomId, principalId)) {
+					return;
+				}
+				this.setState("connected", {
+					roomId,
+					principalId,
+					canManageMembers: true,
+					message: error instanceof Error ? error.message : "Collaboration credential could not be rotated",
+				});
 			},
 		);
 	}
@@ -275,12 +318,22 @@ export class CollaborationContribution extends Disposable {
 		const principalId = this.principalId;
 		void this.options.onRevokeMember(member.principalId).then(
 			() => {
-				if (this._state !== "connected" || this.roomId !== roomId || this.principalId !== principalId) return;
+				if (!this.isCurrentRoom(roomId, principalId)) {
+					return;
+				}
 				this.setState("connected", { roomId, principalId, canManageMembers: true, message: `Access revoked for ${member.displayName}` });
 				this.refreshMembers();
 			},
 			error => {
-				if (this._state === "connected" && this.roomId === roomId && this.principalId === principalId) this.setState("connected", { roomId, principalId, canManageMembers: true, message: error instanceof Error ? error.message : "Collaboration member could not be revoked" });
+				if (!this.isCurrentRoom(roomId, principalId)) {
+					return;
+				}
+				this.setState("connected", {
+					roomId,
+					principalId,
+					canManageMembers: true,
+					message: error instanceof Error ? error.message : "Collaboration member could not be revoked",
+				});
 			},
 		);
 	}
@@ -305,6 +358,7 @@ export class CollaborationContribution extends Disposable {
 	}
 
 	private clearMembers(): void {
+		this.memberActionListeners.clear();
 		this.memberList.replaceChildren();
 		this.members.hidden = true;
 	}

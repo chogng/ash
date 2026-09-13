@@ -21,6 +21,7 @@ import { TextModel } from "../../../src/ash/editor/editor.api.js";
 import "../../../src/ash/editor/editor.code.all.js";
 import { MemoryTextFiles } from "./memoryTextFiles.js";
 import { AccessibilitySupport, type IAccessibilityService } from '../../../src/ash/platform/accessibility/common/accessibility.js';
+import { getTextEditorCapabilityContributions } from '../../../src/ash/editor/browser/editorExtensions.js';
 
 interface WorkbenchSwitchResult {
 	readonly oldEditorDisposed: boolean;
@@ -37,6 +38,8 @@ interface IntegrationHarness {
 	save(): Promise<void>;
 	getSavedText(): string;
 	getSyntaxAnalysisCount(): number;
+	getBundleIds(): readonly string[];
+	hasPlaceholderContribution(): boolean;
 	switchToOther(): Promise<WorkbenchSwitchResult>;
 	getSelection(): { readonly startLineIndex: number; readonly startColumnIndex: number; readonly endLineIndex: number; readonly endColumnIndex: number };
 	setCursors(positions: readonly { readonly lineIndex: number; readonly columnIndex: number }[], primaryIndex?: number): void;
@@ -139,6 +142,8 @@ window.ashTextModelIntegration = {
 	save: () => pane.save(),
 	getSavedText: () => files.read(resource),
 	getSyntaxAnalysisCount: () => syntaxAnalysisCount,
+	getBundleIds: () => getTextEditorCapabilityContributions().map(contribution => contribution.id),
+	hasPlaceholderContribution: () => requiredEditorPart().getContribution('editor.contrib.placeholderText') !== null,
 	switchToOther: async () => {
 		const oldEditor = requiredEditorPart();
 		const oldModel = oldEditor.getModel();

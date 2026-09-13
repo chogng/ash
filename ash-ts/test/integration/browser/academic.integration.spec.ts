@@ -41,6 +41,22 @@ test("TextModel API and Academic code-block editing run in real browsers", async
 	await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getStructuredBlockTexts())).toEqual(["Title", "Body"]);
 });
 
+test('Academic bundle activates document contributions without Code editor UI and releases them', async ({ page }) => {
+	await page.goto('/academic.html');
+	const ids = await page.evaluate(() => window.ashAcademicIntegration.getBundleIds());
+	expect(ids).toContain('editor.contrib.documentFormatting');
+	expect(ids).toContain('editor.contrib.collaboration');
+	expect(ids).not.toContain('editor.contrib.clipboard');
+	expect(ids).not.toContain('editor.contrib.findController');
+	await expect(page.locator('#document-editor .stanza-structured-format-toolbar')).toHaveAttribute('role', 'group');
+	await expect(page.locator('#document-editor .stanza-document-collaboration-toolbar')).toHaveAttribute('role', 'group');
+	await expect(page.locator('.stanza-editor')).toHaveCount(0);
+
+	await page.evaluate(() => window.ashAcademicIntegration.dispose());
+	await expect(page.locator('.stanza-structured-format-toolbar')).toHaveCount(0);
+	await expect(page.locator('.stanza-document-collaboration-toolbar')).toHaveCount(0);
+});
+
 test("Academic TextModel editor persists selected font, size, and emphasis formatting", async ({ page }) => {
 	await page.goto("/academic.html");
 	const input = page.locator("#document-editor textarea.stanza-document-text-input").first();

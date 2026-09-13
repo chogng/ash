@@ -172,6 +172,7 @@
 
 - 当前 80 项严格完成项均已进入生产调用链并核对 owner 与生命周期，或属于已验证不会进入生产创建链的诊断工具；“类名已改名”“成员数量相同”或“本地实现能工作”都不作为完成依据。
 - Standalone 模型创建现在由 `standaloneCodeEditor.ts::createTextModel` 统一决定语言：显式语言优先，否则读取 URI 与第一行；Model Service 仍是模型注册、查询、语言事件和释放 owner。
+- Code 模式入口只加载行式编辑 bundle，Academic 模式入口只加载文档格式与协作 bundle；独立浏览器入口验证真实 pane 中的贡献激活、模式隔离和销毁。Academic 工具栏与重复成员操作的监听由贡献持有并释放，销毁后的异步成员结果不再更新 DOM；同一 Widget 的 `setModel` 仍留在待处理表。
 - `IClipboardPasteEvent`、`ColumnSelection`、`ColorPickerModel` 已分别通过真实输入、鼠标列选和 Color Picker 生产调用链复核。
 - `cursorColumns.ts`、`base/common/charCode.ts`、`base/common/uint.ts` 已作为后续 Cursor 迁移的同路径基础能力落地；它们不计入 119 项完成数。
 - `ITextModel` 的公开成员、内部历史入口和 ViewModel 生命周期已对齐；`TextModel` 现在唯一持有 decoration range、owner 隔离、模型部件事件与 tokenization/bracket pairs 调度。实现类仍需继续统一私有 owner，因此 `TextModel` 声明本身尚未计入完成数。

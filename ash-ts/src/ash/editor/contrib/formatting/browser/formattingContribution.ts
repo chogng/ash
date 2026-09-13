@@ -4,7 +4,7 @@ import type { IAction } from "../../../../base/common/actions.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import type { DocumentTextStyleAttributes, DocumentTextStyleFontFamily } from "../../../common/model/documentSchema.js";
-import { h } from "../../../../base/browser/dom.js";
+import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 
 export type FormattingContext = "none" | "text" | "code";
 
@@ -66,7 +66,7 @@ export class FormattingContribution extends Disposable {
 			highlightToggledItems: true,
 		}));
 		inlineActions.element.classList.add("stanza-structured-format-inline-actions");
-		inlineActions.element.addEventListener("mousedown", event => event.preventDefault());
+		this._register(addDisposableListener(inlineActions.element, 'mousedown', event => event.preventDefault()));
 		this.inlineActions = inlineActions;
 
 		const typographyControls = h(ownerDocument, "div");
@@ -81,28 +81,28 @@ export class FormattingContribution extends Disposable {
 			{ value: "monospace", label: "Monospace" },
 		]);
 		fontFamily.element.classList.add("stanza-structured-format-font-family");
-		fontFamily.select.addEventListener("change", () => {
+		this._register(addDisposableListener(fontFamily.select, 'change', () => {
 			const value = fontFamily.select.value;
 			if (value === "") {
 				options.onClearTextStyle();
 				return;
 			}
 			options.onSetTextStyle({ fontFamily: value as DocumentTextStyleFontFamily });
-		});
+		}));
 		this.fontFamily = fontFamily.select;
 		const fontSize = createSelectControl(ownerDocument, "Size", "Font size", [
 			{ value: "", label: "Default" },
 			...[10, 11, 12, 14, 16, 18, 20, 24, 28, 32].map(value => ({ value: String(value), label: `${value}` })),
 		]);
 		fontSize.element.classList.add("stanza-structured-format-font-size");
-		fontSize.select.addEventListener("change", () => {
+		this._register(addDisposableListener(fontSize.select, 'change', () => {
 			const value = fontSize.select.value;
 			if (value === "") {
 				options.onClearTextStyle();
 				return;
 			}
 			options.onSetTextStyle({ fontSize: Number(value) });
-		});
+		}));
 		this.fontSize = fontSize.select;
 		typographyControls.append(fontFamily.element, fontSize.element);
 
@@ -112,7 +112,7 @@ export class FormattingContribution extends Disposable {
 			highlightToggledItems: true,
 		}));
 		documentActions.element.classList.add("stanza-structured-format-document-actions");
-		documentActions.element.addEventListener("mousedown", event => event.preventDefault());
+		this._register(addDisposableListener(documentActions.element, 'mousedown', event => event.preventDefault()));
 		this.documentActions = documentActions;
 
 		const codeContext = h(ownerDocument, "div");

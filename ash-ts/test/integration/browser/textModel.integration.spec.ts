@@ -64,6 +64,30 @@ test('switching a Workbench file keeps keyboard input on the new editor and rele
 	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe('fn other() {\n  answer();\n}\n!');
 });
 
+test('Code bundle activates text editor contributions and releases their UI', async ({ page }) => {
+	await page.goto('/textModel.html');
+	const ids = await page.evaluate(() => window.ashTextModelIntegration.getBundleIds());
+	expect(ids).toContain('editor.contrib.clipboard');
+	expect(ids).toContain('editor.contrib.findController');
+	expect(ids).not.toContain('editor.contrib.documentFormatting');
+	expect(ids).not.toContain('editor.contrib.collaboration');
+	expect(await page.evaluate(() => window.ashTextModelIntegration.hasPlaceholderContribution())).toBe(true);
+	await expect(page.locator('.stanza-editor')).toBeVisible();
+	await expect(page.locator('.stanza-structured-format-toolbar')).toHaveCount(0);
+	const find = page.locator('.stanza-editor-find-widget');
+	await expect(find).toHaveAttribute('role', 'dialog');
+	await page.locator('.stanza-editor-input').focus();
+	await page.keyboard.press('ControlOrMeta+f');
+	await expect(find).toBeVisible();
+	await find.locator('input[aria-label="Find"]').fill('fn');
+	await page.keyboard.press('Escape');
+	await expect(find).toBeHidden();
+
+	await page.evaluate(() => window.ashTextModelIntegration.dispose());
+	await expect(page.locator('.stanza-editor')).toHaveCount(0);
+	await expect(find).toHaveCount(0);
+});
+
 test('textarea fallback routes type and composition through the standard input pipeline', async ({ page }) => {
 	await page.addInitScript(() => {
 		Reflect.deleteProperty(window, 'EditContext');
