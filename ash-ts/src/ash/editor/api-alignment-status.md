@@ -4,7 +4,7 @@
 
 ## 当前结论
 
-- 2026-09-01 重新按相对路径扫描非测试 `.ts`、`.tsx`、`.js`、`.css` 生产文件：Ash Editor 597 个，VS Code Editor 729 个；392 个同路径，205 个仅本地，337 个仅上游。
+- 2026-09-13 按相对路径扫描非测试 `.ts`、`.tsx`、`.js`、`.css` 生产文件：Ash Editor 597 个，VS Code Editor 733 个；392 个同路径，205 个仅本地，341 个仅上游。
 - 首次重扫发现 49 个目录大小写错误，全部来自工作区实际目录 `browser/viewparts` 与上游 `browser/viewParts` 不一致；已做两步大小写重命名，当前大小写错误为 0。
 - 账目摘要：当前表格记录 119 组同名声明结构差异，已处理 80 组，剩余 39 组。只有通过文件集合、import owner、生产调用链和生命周期复核的声明才计入已处理；调试工具需明确证明其不进入生产创建链是职责本身。
 - 205 个仅本地文件正在逐项分类为“错误承载，迁移并删除”或“Ash 专有”。分类完成前，不再声称不存在 import owner、重复 owner 或错放文件问题。上游存在而本地缺失的文件按原相对路径直接建立，先恢复 API 名称并独立实现逻辑，再把现有 import 迁入该 owner；同路径文件只原地修改。
@@ -75,8 +75,8 @@
 | `common/services/modelService.ts` | `ModelService` | 统一持有资源模型、创建配置、语言事件、内容更新、关闭文件历史与释放；生产由 Standalone 服务注册并通过 `IModelService` 使用，5 项测试覆盖资源身份、事件、配置失效、工厂所有权和历史校验 |
 | `common/viewLayout/lineHeights.ts` | `LineHeightsManager` | 由 `LinesLayout` 唯一持有默认行高和自定义行高范围；重叠范围取最大高度，插删行移动或收缩范围，5 项测试覆盖累计高度、范围变更和装饰转换 |
 | `common/viewLayout/linesLayout.ts` | `LinesLayout` | 文件只保留行高、纵向几何与空白区职责；视区编排移回 `viewLayout.ts`，生产由布局 owner 调用，3 项直接测试与 11 项布局测试覆盖批处理、坐标、插删行、视图区间和空白区查询 |
-| `standalone/browser/standaloneEditor.ts` | `create` | 创建并返回同一个 `StandaloneEditor` 实例；该实例由代码编辑器服务登记并触发创建事件，释放时从服务移除，仅隐式创建的模型随编辑器释放 |
-| `standalone/browser/standaloneEditor.ts` | `getEditors` | 直接读取代码编辑器服务持有的当前实例；与 `create`、`onDidCreateEditor` 共享对象身份和释放时机，Standalone 测试覆盖双编辑器登记、共享模型和独立释放 |
+| `standalone/browser/standaloneEditor.ts` | `create` | 创建并返回同一个 `StandaloneEditor` 实例；贡献和主题绑定完成后才由代码编辑器服务登记并触发创建事件，回调可立即使用或释放该实例。释放时从服务移除，仅隐式创建的模型随编辑器释放；Standalone 单测与真实 Chromium 输入、注册、DOM 和释放用例覆盖 |
+| `standalone/browser/standaloneEditor.ts` | `getEditors` | 直接读取代码编辑器服务持有的 `ICodeEditor` 实例，`onDidCreateEditor` 回调也使用同一公开类型；与 `create` 共享对象身份和释放时机，Standalone 测试覆盖双编辑器登记、共享模型和独立释放 |
 | `browser/viewParts/viewLines/viewLineOptions.ts` | `ViewLineOptions` | 公开成员差异归零；从计算后的编辑器配置和主题类型生成不可变行渲染快照，由 `ViewLines` 持有并在配置变化时比较后通知已渲染行；段落方向、制表宽度和 GPU 输入不再错误归入该类型，定向测试覆盖全部快照字段、相等比较与调用链 |
 | `browser/gpu/atlas/textureAtlas.ts` | `TextureAtlas` | 删除本地 styled atlas 分支；页面查找、子像素键、空闲预热、清空事件、用量预览和统计统一由标准 atlas owner 持有，生产帧只调用标准 token metadata 入口 |
 | `browser/gpu/atlas/textureAtlasPage.ts` | `TextureAtlasPage` | 删除页面 `index` 和 styled glyph API；页面以标准四元缓存键持有 OffscreenCanvas、glyph 顺序、版本与使用区域，页索引由 atlas 数组位置决定 |
@@ -190,7 +190,7 @@
 
 ## 验证状态
 
-- 文件集合审计：392 个同路径、0 个大小写错误、205 个仅本地、337 个仅上游；Ash 597 个生产文件，VS Code 729 个。该结果只说明路径集合，不说明同路径文件的职责和 API 已一致。
+- 文件集合审计：392 个同路径、0 个大小写错误、205 个仅本地、341 个仅上游；Ash 597 个生产文件，VS Code 733 个。该结果只说明路径集合，不说明同路径文件的职责和 API 已一致。
 - 119 项账本：80 项已处理、39 项待处理、总计 119 个唯一声明。
 - `tsconfig.test.json` 编译通过；`MoveOperations` 的 17 个标准入口通过 12 项定向行为测试，真实 `CodeEditorWidget` 连续向下移动测试证明短行后的可视列余量能够恢复。`tsconfig.json --noEmit` 仍只报既有 Electron、Embedded Editor、BrowserView、Workbench 与 TextMate 基线错误，本批文件无新增类型错误。
 - Editor 浏览器测试 TypeScript 已编译通过；GPU Chromium 用例通过，证明 WGSL pipeline、Rectangle clear pass、ViewLinesGpu load pass、编辑与 undo 的真实帧链可用。本批 Widget、pointer、decoration 与 CodeEditorWidget 相关 40 项单测全部通过；Decoration owner 本批另有 25 项聚焦单测通过，真实 Chromium 验证标准 inline、whole-line、collapsed decoration 的非零几何和删除重绘。View Zone 场景精确验证 4 行 × 18px + 500px 空白区高度、1200px 最小宽度及移除后恢复，Widget 场景验证 Content Widget 非零几何、Glyph Widget 跨行迁移、模型 decoration z-index winner 和释放。全量浏览器入口仍有既有 Academic 多行键入、旧 token/语法分析断言和旧 minimap slider 断言，不通过兼容文件恢复退场 API。

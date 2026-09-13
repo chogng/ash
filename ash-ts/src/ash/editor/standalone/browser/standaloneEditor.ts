@@ -1,6 +1,6 @@
 import { type IDisposable } from "../../../base/common/lifecycle.js";
 import { URI } from "../../../base/common/uri.js";
-import { ContentWidgetPositionPreference, OverlayWidgetPositionPreference } from "../../browser/editorBrowser.js";
+import { ContentWidgetPositionPreference, OverlayWidgetPositionPreference, type ICodeEditor } from "../../browser/editorBrowser.js";
 import { type CodeEditorWidgetOptions } from '../../browser/widget/codeEditor/codeEditorWidget.js';
 import { PositionAffinity, type ITextModel } from "../../common/model.js";
 import { TextModel } from "../../common/model/textModel.js";
@@ -54,8 +54,8 @@ const overlayWidgetPositionPreference = Object.freeze({
 	TOP_CENTER: OverlayWidgetPositionPreference.TOP_CENTER,
 });
 
-export function onDidCreateEditor(listener: (codeEditor: IStandaloneCodeEditor) => void): IDisposable {
-	return StandaloneServices.get().codeEditorService.onCodeEditorAdd(editor => listener(editor as IStandaloneCodeEditor));
+export function onDidCreateEditor(listener: (codeEditor: ICodeEditor) => void): IDisposable {
+	return StandaloneServices.get().codeEditorService.onCodeEditorAdd(listener);
 }
 
 export function onDidCreateModel(listener: (model: TextModel) => void): IDisposable {
@@ -143,8 +143,8 @@ export function setModelLanguage(model: ITextModel, mimeTypeOrLanguageId: string
 	model.setLanguage(languageService.createById(languageId));
 }
 
-export function getEditors(): readonly IStandaloneCodeEditor[] {
-	return StandaloneServices.get().codeEditorService.listCodeEditors() as readonly IStandaloneCodeEditor[];
+export function getEditors(): readonly ICodeEditor[] {
+	return StandaloneServices.get().codeEditorService.listCodeEditors();
 }
 
 export function defineNamedTheme(themeId: string, themeData: NamedEditorThemeData): void {

@@ -1,4 +1,5 @@
 import { URI } from '../../../base/common/uri.js';
+import { toDisposable } from '../../../base/common/lifecycle.js';
 import { bindColorTheme } from '../../../platform/theme/browser/themeStyles.js';
 import type { ICodeEditorService } from '../../browser/services/codeEditorService.js';
 import { CodeEditorWidget, type CodeEditorWidgetOptions } from '../../browser/widget/codeEditor/codeEditorWidget.js';
@@ -14,9 +15,12 @@ export interface IStandaloneCodeEditor extends CodeEditorWidget {
 /** Standalone editor owner whose identity is shared by create(), editor events, and the editor registry. */
 export class StandaloneEditor extends CodeEditorWidget implements IStandaloneCodeEditor {
 	constructor(options: CodeEditorWidgetOptions, private readonly modelToDispose: TextModel, private readonly ownsModel: boolean, themeService: Parameters<typeof bindColorTheme>[0], codeEditorService: ICodeEditorService) {
-		super({ ...options, codeEditorService });
+		codeEditorService.willCreateCodeEditor();
+		super(options);
 		try {
 			this._register(bindColorTheme(themeService, options.container));
+			this._register(toDisposable(() => codeEditorService.removeCodeEditor(this)));
+			codeEditorService.addCodeEditor(this);
 		} catch (error) {
 			this.dispose();
 			throw error;

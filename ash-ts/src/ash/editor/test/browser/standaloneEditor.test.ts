@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { URI } from "../../../base/common/uri.js";
+import { AbstractDisposable } from '../../../base/common/lifecycle.js';
 import { lightColorTheme } from "../../../platform/theme/common/colorTheme.js";
 import { ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
 import { LanguageFeaturesService } from "../../common/services/languageFeaturesService.js";
+import { EditorContributionInstantiation } from '../../browser/editorExtensions.js';
 import { TestLanguageConfigurationService } from '../common/modes/testLanguageConfigurationService.js';
 import { LanguageHoverService } from '../../contrib/hover/common/hover.js';
 import { StandaloneServiceCollection, StandaloneServices } from "../../standalone/browser/standaloneServices.js";
@@ -262,6 +264,81 @@ test("standalone editors share caller-owned models and dispose independently", (
 	second.dispose();
 	assert.equal(model.getValue(), "shared model");
 	model.dispose();
+	dom.window.close();
+});
+
+test('standalone creation event exposes an assembled editor and caller-owned model', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const container = dom.window.document.querySelector<HTMLElement>('main')!;
+	const model = stanza.editor.createModel('caller text', 'plaintext', URI.parse('inmemory://stanza/event-ready.txt'));
+	const observations: unknown[] = [];
+	using listener = stanza.editor.onDidCreateEditor(editor => observations.push({
+		model: editor.getModel(),
+		registered: stanza.editor.getEditors().includes(editor),
+		mounted: container.contains(editor.getDomNode()),
+		placeholder: editor.getContribution('editor.contrib.placeholderText') !== null,
+		theme: container.getAttribute('data-color-theme'),
+	}));
+	const editor = stanza.editor.create(container, { model, placeholder: 'Start typing' });
+
+	assert.deepEqual(observations, [{
+		model,
+		registered: true,
+		mounted: true,
+		placeholder: true,
+		theme: 'ash-light',
+	}]);
+	editor.dispose();
+	assert.equal(model.isDisposed(), false);
+	assert.equal(container.querySelector('.stanza-editor'), null);
+	assert.equal(container.getAttribute('data-color-theme'), null);
+	model.dispose();
+	dom.window.close();
+});
+
+test('standalone creation listener can release an implicit model and editor immediately', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const container = dom.window.document.querySelector<HTMLElement>('main')!;
+	const resource = URI.parse('inmemory://stanza/event-dispose.txt');
+	let observedModel: ReturnType<typeof stanza.editor.createModel> | null | undefined;
+	using listener = stanza.editor.onDidCreateEditor(editor => {
+		observedModel = editor.getModel();
+		(editor as ReturnType<typeof stanza.editor.create>).dispose();
+	});
+	const editor = stanza.editor.create(container, { value: 'owned', resource });
+
+	assert.equal(editor.isDisposed, true);
+	assert.equal(observedModel?.isDisposed(), true);
+	assert.equal(stanza.editor.getModel(resource), null);
+	assert.equal(stanza.editor.getEditors().includes(editor), false);
+	assert.equal(container.querySelector('.stanza-editor'), null);
+	assert.equal(container.getAttribute('data-color-theme'), null);
+	dom.window.close();
+});
+
+test('standalone editor releases its eager contribution with the editor', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const container = dom.window.document.querySelector<HTMLElement>('main')!;
+	let created = 0;
+	let disposed = 0;
+	class TrackingContribution extends AbstractDisposable {
+		constructor() { super(); created += 1; }
+		protected override disposeCore(): void { disposed += 1; }
+	}
+	const editor = stanza.editor.create(container, {
+		value: 'tracked',
+		contributions: [{ id: 'editor.contrib.standaloneLifecycleTest', ctor: TrackingContribution, instantiation: EditorContributionInstantiation.Eager }],
+	});
+
+	assert.equal(created, 1);
+	assert.ok(editor.getContribution('editor.contrib.standaloneLifecycleTest'));
+	editor.dispose();
+	assert.equal(disposed, 1);
+	assert.equal(stanza.editor.getEditors().includes(editor), false);
+	assert.equal(container.querySelector('.stanza-editor'), null);
 	dom.window.close();
 });
 

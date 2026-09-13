@@ -1,0 +1,52 @@
+import { expect, test } from '@playwright/test';
+
+test('standalone editors type and release their models, contributions, registry entries, and DOM', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.stack ?? error.message));
+	await page.goto('/standalone.html');
+	await expect(page.locator('#caller .stanza-editor')).toBeVisible();
+	await expect(page.locator('#owned .stanza-editor')).toBeVisible();
+	const initial = await page.evaluate(() => ({
+		events: window.ashStandaloneIntegration.events,
+		caller: window.ashStandaloneIntegration.state('caller'),
+		owned: window.ashStandaloneIntegration.state('owned'),
+	}));
+	expect(initial).toEqual({
+		events: [
+			{ model: 'inmemory://stanza/caller.txt', registered: true, mounted: true, placeholder: true, theme: 'ash-light' },
+			{ model: 'inmemory://stanza/owned.txt', registered: true, mounted: true, placeholder: true, theme: 'ash-light' },
+		],
+		caller: {
+			value: 'caller', disposed: false, registered: true, modelRegistered: true,
+			mounted: true, placeholder: true, theme: 'ash-light',
+		},
+		owned: {
+			value: 'owned', disposed: false, registered: true, modelRegistered: true,
+			mounted: true, placeholder: true, theme: 'ash-light',
+		},
+	});
+
+	for (const kind of ['caller', 'owned'] as const) {
+		const input = page.locator(`#${kind} .stanza-editor-input`);
+		await expect(input).toHaveAttribute('aria-label', /.+/u);
+		await input.focus();
+		await page.keyboard.press('ControlOrMeta+End');
+		await page.keyboard.type('!');
+		await expect.poll(() => page.evaluate(name => window.ashStandaloneIntegration.state(name).value, kind)).toBe(`${kind}!`);
+	}
+
+	await page.evaluate(() => window.ashStandaloneIntegration.releaseCaller());
+	await expect(page.locator('#caller .stanza-editor')).toHaveCount(0);
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).toEqual({
+		value: 'changed after editor disposal', disposed: false, registered: false, modelRegistered: true,
+		mounted: false, placeholder: false, theme: null,
+	});
+	await page.evaluate(() => window.ashStandaloneIntegration.releaseOwned());
+	await expect(page.locator('#owned .stanza-editor')).toHaveCount(0);
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.state('owned'))).toEqual({
+		value: null, disposed: true, registered: false, modelRegistered: false,
+		mounted: false, placeholder: false, theme: null,
+	});
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	expect(errors).toEqual([]);
+});

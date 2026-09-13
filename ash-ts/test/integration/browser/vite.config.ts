@@ -10,6 +10,7 @@ export default defineConfig({
 		rollupOptions: {
 			input: {
 				textModel: resolve(import.meta.dirname, "textModel.html"),
+				standalone: resolve(import.meta.dirname, 'standalone.html'),
 				gpuText: resolve(import.meta.dirname, "gpuText.html"),
 				academic: resolve(import.meta.dirname, "academic.html"),
 			},
