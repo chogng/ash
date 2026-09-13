@@ -1991,6 +1991,7 @@ dependencies = [
  "ash-app-server",
  "ash-app-server-client",
  "ash-app-server-protocol",
+ "ash-app-server-transport",
  "ash-arg0",
  "ash-build-info",
  "ash-fast-regex-search",

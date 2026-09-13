@@ -27,6 +27,7 @@ rustix = { workspace = true, features = ["process"] }
 sha2 = { workspace = true }
 ash-app-server = { workspace = true }
 ash-app-server-protocol = { workspace = true }
+ash-app-server-transport = { workspace = true }
 
 [dev-dependencies]
 ash-fast-regex-search = { workspace = true }

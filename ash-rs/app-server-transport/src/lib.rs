@@ -17,7 +17,10 @@ pub use websocket::WebSocketWriter;
 pub use websocket::parse_loopback_websocket_bind;
 pub use websocket::start_websocket_acceptor;
 
-use std::io::{self, BufRead, Write};
+use std::io;
+use std::io::BufRead;
+use std::io::Read;
+use std::io::Write;
 
 /// Maximum JSONL frame size shared by both ends of the local App Server transport.
 ///
@@ -25,6 +28,23 @@ use std::io::{self, BufRead, Write};
 /// expand one UTF-8 byte to six wire bytes. Keep the transport bound large enough
 /// to carry that validated payload without making framing unbounded.
 pub const DEFAULT_MAX_MESSAGE_BYTES: usize = 320 * 1024 * 1024;
+
+/// Relays an open response stream without retaining bytes until connection close.
+pub fn relay_output(reader: &mut impl Read, writer: &mut impl Write) -> io::Result<()> {
+    let mut buffer = [0_u8; 8192];
+    loop {
+        let read = match reader.read(&mut buffer) {
+            Ok(read) => read,
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error),
+        };
+        if read == 0 {
+            return Ok(());
+        }
+        writer.write_all(&buffer[..read])?;
+        writer.flush()?;
+    }
+}
 
 /// A JSON Lines transport whose read and write operations enforce the negotiated message limit.
 pub struct JsonlTransport<R, W> {
@@ -120,3 +140,7 @@ impl StdioTransport {
         "stdio://"
     }
 }
+
+#[cfg(test)]
+#[path = "relay_tests.rs"]
+mod relay_tests;

@@ -2,7 +2,6 @@ use std::io;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Read;
-use std::io::Write;
 use std::net::Shutdown;
 use std::path::Path;
 use std::thread;
@@ -40,6 +39,7 @@ use crate::wire::ControlResponse;
 use crate::wire::ControlState;
 use crate::wire::write_json_line;
 use ash_app_server_transport::DeadlineStream;
+use ash_app_server_transport::relay_output;
 
 const CONNECT_RETRY_INTERVAL: Duration = Duration::from_millis(50);
 const CONTROL_TIMEOUT: Duration = Duration::from_secs(2);
@@ -415,27 +415,11 @@ fn proxy_stdio(mut stream: UnixStream, options: &ConnectionOptions) -> io::Resul
             copied
         })?;
     let mut output = io::stdout().lock();
-    copy_output(&mut BufReader::new(stream), &mut output)?;
+    relay_output(&mut BufReader::new(stream), &mut output)?;
     input
         .join()
         .map_err(|_| io::Error::other("Local App Server stdin proxy panicked"))??;
     Ok(())
-}
-
-fn copy_output(reader: &mut impl Read, writer: &mut impl Write) -> io::Result<()> {
-    let mut buffer = [0_u8; 8192];
-    loop {
-        let read = match reader.read(&mut buffer) {
-            Ok(read) => read,
-            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
-            Err(error) => return Err(error),
-        };
-        if read == 0 {
-            return Ok(());
-        }
-        writer.write_all(&buffer[..read])?;
-        writer.flush()?;
-    }
 }
 
 fn diagnostic_error(endpoint: &EndpointPaths, message: &str) -> String {

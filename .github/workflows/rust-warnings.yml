@@ -72,7 +72,6 @@ jobs:
 
   warnings:
     name: ${{ matrix.runner }}
-    needs: changes
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     strategy:
@@ -114,40 +113,6 @@ jobs:
       - name: Reject Rust workspace warnings, including tests
         shell: bash
         run: ${{ matrix.python }} -B scripts/cargo.py --deny-warnings check --workspace --all-targets --locked --keep-going
-
-      - name: Prepare locked ripgrep for macOS TUI sandbox tests
-        if: matrix.runner == 'macos-15' && needs.changes.outputs.tui == 'true'
-        run: |
-          python3 -B - <<'PY'
-          import os
-          import subprocess
-          from pathlib import Path
-          from build.lib.ash_build.targets import TARGETS, default_target
-          from build.release.package.ripgrep import resolve_ripgrep
-
-          root = Path.cwd()
-          ripgrep = resolve_ripgrep(
-              TARGETS[default_target()],
-              root / "third_party/ripgrep/runtime-lock.json",
-              root / "third_party/.cache/ripgrep",
-          ).executable
-          subprocess.run([ripgrep, "--version"], check=True)
-          with open(os.environ["GITHUB_ENV"], "a") as output:
-              output.write(f"ASH_RG_PATH={ripgrep}\n")
-          PY
-
-      - name: Install Just for macOS TUI sandbox tests
-        if: matrix.runner == 'macos-15' && needs.changes.outputs.tui == 'true'
-        uses: taiki-e/install-action@a6b2e2dcd845ddd7f509ce4f3ed3d922b80cc5d9
-        with:
-          tool: just@1.46.0
-
-      - name: Test TUI sandbox scenarios
-        if: matrix.runner == 'macos-15' && needs.changes.outputs.tui == 'true'
-        run: |
-          just test-tui actual_tui_approves_and_declines_real_file_tool_calls
-          just test-tui actual_tui_process_details_show_sandbox_enforcement
-          just test-tui actual_tui_approval_modes_change_file_tool_authority
 
   tui:
     name: TUI tests
@@ -216,3 +181,49 @@ jobs:
 
       - name: Test remote TUI reconnect
         run: just test ash-cli interactive_remote_tui_preserves_home_draft_after_transport_loss --profile ci-test
+
+  tui-sandbox:
+    name: TUI sandbox tests
+    needs: changes
+    if: needs.changes.outputs.tui == 'true'
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          workspaces: ". -> .build/cargo"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: true
+
+      - name: Prepare locked ripgrep for macOS TUI tests
+        run: |
+          python3 -B - <<'PY'
+          import os
+          import subprocess
+          from pathlib import Path
+          from build.lib.ash_build.targets import TARGETS, default_target
+          from build.release.package.ripgrep import resolve_ripgrep
+
+          root = Path.cwd()
+          ripgrep = resolve_ripgrep(
+              TARGETS[default_target()],
+              root / "third_party/ripgrep/runtime-lock.json",
+              root / "third_party/.cache/ripgrep",
+          ).executable
+          subprocess.run([ripgrep, "--version"], check=True)
+          with open(os.environ["GITHUB_ENV"], "a") as output:
+              output.write(f"ASH_RG_PATH={ripgrep}\n")
+          PY
+
+      - name: Install Just for TUI sandbox tests
+        uses: taiki-e/install-action@a6b2e2dcd845ddd7f509ce4f3ed3d922b80cc5d9
+        with:
+          tool: just@1.46.0
+
+      - name: Test TUI sandbox scenarios
+        run: |
+          just --set tui_profile ci-test test-tui actual_tui_approves_and_declines_real_file_tool_calls
+          just --set tui_profile ci-test test-tui actual_tui_process_details_show_sandbox_enforcement
+          just --set tui_profile ci-test test-tui actual_tui_approval_modes_change_file_tool_authority
