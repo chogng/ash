@@ -399,21 +399,31 @@ fn send_stopped(
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
     use std::num::NonZeroU16;
+    #[cfg(unix)]
     use std::path::Path;
+    #[cfg(unix)]
     use std::path::PathBuf;
+    #[cfg(unix)]
     use std::sync::mpsc;
+    #[cfg(unix)]
     use std::thread::JoinHandle;
     use std::time::Duration;
+    #[cfg(unix)]
     use std::time::Instant;
 
+    #[cfg(unix)]
     use tempfile::TempDir;
+    #[cfg(unix)]
     use ash_remote::SshHost;
 
     use super::RemoteTunnelId;
+    #[cfg(unix)]
     use super::RemoteTunnelTarget;
     use super::RemoteTunnelUpdate;
     use super::recovery_delay;
+    #[cfg(unix)]
     use super::spawn_remote_tunnel;
 
     #[cfg(unix)]
