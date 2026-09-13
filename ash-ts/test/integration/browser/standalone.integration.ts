@@ -27,6 +27,13 @@ interface StandaloneHarness {
 	getOwnedValue(): string;
 	tryOverlappingSurrogateEdits(): { readonly rejected: boolean; readonly value: string; readonly versionUnchanged: boolean };
 	applySurrogateEdit(): string;
+	resetSameValue(): {
+		readonly beforeVersion: number;
+		readonly afterVersion: number;
+		readonly alternativeVersion: number;
+		readonly snapshotValue: string | null;
+		readonly events: readonly { readonly version: number; readonly reason: string; readonly changes: number }[];
+	};
 	releaseCaller(): void;
 	releaseOwned(): void;
 	dispose(): void;
@@ -122,6 +129,25 @@ window.ashStandaloneIntegration = {
 	applySurrogateEdit: () => {
 		callerEditor.executeEdits('browser', [{ range: new stanza.Range(1, 2, 1, 3), text: '' }]);
 		return callerModel.getValue();
+	},
+	resetSameValue: () => {
+		callerEditor.setValue('stable');
+		const snapshot = callerModel.createSnapshot();
+		const beforeVersion = callerModel.getVersionId();
+		const events: Array<{ readonly version: number; readonly reason: string; readonly changes: number }> = [];
+		using listener = callerModel.onDidChangeContent(change => events.push({
+			version: change.version,
+			reason: change.reason,
+			changes: change.changes.length,
+		}));
+		callerEditor.setValue('stable');
+		return {
+			beforeVersion,
+			afterVersion: callerModel.getVersionId(),
+			alternativeVersion: callerModel.getAlternativeVersionId(),
+			snapshotValue: snapshot.read(),
+			events,
+		};
 	},
 	releaseCaller: () => {
 		callerEditor.dispose();

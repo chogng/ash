@@ -816,8 +816,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 
 	setValue(value: string): void {
 		if (!this.currentModel) return;
-		if (this.getValue() === value) return;
-		this.currentModel.reset(value);
+		this.currentModel.setValue(value);
 	}
 
 	revealRange(range: Range, scrollType: ScrollType = ScrollType.Smooth): void {

@@ -714,6 +714,8 @@ export class TextModel implements ITextModel {
 	}
 
 	setValue(newValue: string | ITextSnapshot): void {
+		this.assertNotDisposed();
+		this.ensureDirectTextMutationAllowed();
 		if (typeof newValue === 'string') {
 			this.reset(newValue);
 			return;
@@ -1663,22 +1665,15 @@ export class TextModel implements ITextModel {
 		if (result) this.publishTextChange(result.change);
 	}
 
-	/** Clears edit history and replaces changed content as a non-undoable document reset. */
-	reset(text: string, editSource: TextModelEditSource = EditSources.setValue()): TextModelChange | undefined {
+	/** Clears edit history and replaces document content as a non-undoable reset. */
+	reset(text: string, editSource: TextModelEditSource = EditSources.setValue()): TextModelChange {
 		this.assertNotDisposed();
 		this.ensureDirectTextMutationAllowed();
 		if (typeof text !== "string") {
 			throw new TypeError("TextModel reset text must be a string");
 		}
 		const nextBuffer = createPieceTreeTextBuffer(text, this.modelOptionsValue.defaultEOL);
-		const sameText = nextBuffer.createSnapshot().getText() === this.buffer.createSnapshot().getText();
-		const sameEOL = nextBuffer.getEOL() === this.buffer.getEOL();
-		const sameBOM = nextBuffer.getBOM() === this.buffer.getBOM();
 		this.history.reset();
-		if (sameText && sameEOL && sameBOM) {
-			nextBuffer.dispose();
-			return undefined;
-		}
 		const previousBuffer = this.buffer;
 		const result = this.commitOffsetEdits([{
 			startOffset: 0,

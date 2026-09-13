@@ -7,6 +7,7 @@ import { TextChange, TextModelChangeReason } from "../../common/core/textChange.
 import { EndOfLinePreference, EndOfLineSequence, MinimapPosition, OverviewRulerLane, PositionAffinity, TrackedRangeStickiness, isITextSnapshot } from '../../common/model.js';
 import { TextModel } from "../../common/model/textModel.js";
 import { createBuiltinLanguageConfigurationService } from '../../common/languages/languageBuiltinConfigurations.js';
+import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent } from '../../common/languages/languageFeatureRequest.js';
 import type { IViewModel } from '../../common/viewModel.js';
 
 const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);
@@ -197,6 +198,7 @@ test('TextModel delegates unusual-line-terminator state to ITextBuffer', () => {
 test('TextModel separates the editor snapshot iterator from versioned language snapshots', () => {
 	using model = new TextModel(`\uFEFF${'x'.repeat(70_000)}`);
 	const snapshot = model.createSnapshot(true);
+	const retainedSnapshot = model.createSnapshot(true);
 	const versionedSnapshot = model.createVersionedSnapshot();
 
 	assert.equal(isITextSnapshot(snapshot), true);
@@ -213,6 +215,68 @@ test('TextModel separates the editor snapshot iterator from versioned language s
 	assert.equal(model.canUndo(), false);
 	assert.equal(versionedSnapshot.version, 1);
 	assert.equal(versionedSnapshot.getText(), 'x'.repeat(70_000));
+	model.dispose();
+	const retainedChunks: string[] = [];
+	for (let chunk = retainedSnapshot.read(); chunk !== null; chunk = retainedSnapshot.read()) retainedChunks.push(chunk);
+	assert.equal(retainedChunks.join(''), `\uFEFF${'x'.repeat(70_000)}`);
+	assert.equal(retainedSnapshot.read(), null);
+	assert.deepEqual({
+		version: versionedSnapshot.version,
+		length: versionedSnapshot.length,
+		lineCount: versionedSnapshot.lineCount,
+		firstCharacter: versionedSnapshot.getTextBetweenOffsets(0, 1),
+		lastCharacter: versionedSnapshot.getTextBetweenOffsets(69_999, 70_000),
+	}, { version: 1, length: 70_000, lineCount: 1, firstCharacter: 'x', lastCharacter: 'x' });
+});
+
+test('TextModel rejects snapshot input before reading it after disposal', () => {
+	const model = new TextModel('original');
+	let reads = 0;
+	const snapshot = {
+		read: () => {
+			reads += 1;
+			return null;
+		},
+	};
+	model.dispose();
+	assert.throws(() => model.setValue(snapshot), /disposed/i);
+	assert.equal(reads, 0);
+});
+
+test('TextModel setValue advances the version and flushes even when the text is unchanged', () => {
+	using model = new TextModel('same');
+	model.applyOperations([{ range: new Range(1, 5, 1, 5), text: '!' }]);
+	model.undo();
+	const previousSnapshot = model.createVersionedSnapshot();
+	const request = createLanguageFeatureRequest(model, model.getLanguageId(), new AbortController().signal);
+	assert.equal(isLanguageFeatureRequestCurrent(request), true);
+	const previousVersion = model.getVersionId();
+	const events: Array<{ readonly version: number; readonly reason: TextModelChangeReason; readonly changes: number }> = [];
+	using listener = model.onDidChangeContent(change => events.push({
+		version: change.version,
+		reason: change.reason,
+		changes: change.changes.length,
+	}));
+
+	model.setValue('same');
+
+	assert.deepEqual({
+		version: model.getVersionId(),
+		alternativeVersion: model.getAlternativeVersionId(),
+		canUndo: model.canUndo(),
+		canRedo: model.canRedo(),
+		previousRequestIsCurrent: isLanguageFeatureRequestCurrent(request),
+		events,
+		previousSnapshot: { version: previousSnapshot.version, text: previousSnapshot.getText() },
+	}, {
+		version: previousVersion + 1,
+		alternativeVersion: previousVersion + 1,
+		canUndo: false,
+		canRedo: false,
+		previousRequestIsCurrent: false,
+		events: [{ version: previousVersion + 1, reason: TextModelChangeReason.Reset, changes: 0 }],
+		previousSnapshot: { version: previousVersion, text: 'same' },
+	});
 });
 
 test('TextModel owns resolved indentation options and publishes exact changes', () => {
@@ -309,8 +373,11 @@ test("TextModel reset replaces content and clears undo and redo history", () => 
 	assert.equal(model.getValue(EndOfLinePreference.TextDefined, true), "\uFEFFnext\nline");
 	assert.equal(model.createSnapshot(true).read(), "\uFEFFnext\nline");
 	assert.equal(events.length, 5);
-	assert.equal(model.reset("\uFEFFnext\nline"), undefined);
-	assert.equal(events.length, 5);
+	const identicalReset = model.reset("\uFEFFnext\nline");
+	assert.ok(identicalReset);
+	assert.equal(identicalReset.version, bomReset.version + 1);
+	assert.equal(identicalReset.changes.length, 0);
+	assert.equal(events.length, 6);
 });
 
 test('TextModel EOL changes preserve positions, history, and event identity', () => {

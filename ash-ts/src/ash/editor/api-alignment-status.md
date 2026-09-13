@@ -163,10 +163,10 @@
 | 文件 | 声明 | 分类 |
 | --- | --- | --- |
 | `browser/view.ts` | `View` | 根节点已从仅本地 `element` 迁为标准 `domNode`，40 余个 Editor/Workbench 调用方全部改接；焦点、Widget 焦点、ARIA、辅助阅读器、强制渲染、行宽缓存与 `onWillCopy` / `onWillCut` / `onWillPaste` 已回到该 owner。输入实例当前仍由 Controller 构造回调建立，需继续迁回 `View` 后再计为完成 |
-| `browser/widget/codeEditor/codeEditorWidget.ts` | `CodeEditorWidget` | 已接通标准 editor contribution 注册表与滚动、配置 API；`setModel`、`onWillChangeModel`、`onDidChangeModel` 和模型装饰事件沿同一 Widget 的可替换模型资源生效，根 DOM、注册身份、外部 Widget 与装饰集合句柄保持稳定，旧 View/worker/贡献/监听释放。Standalone 处理隐式模型所有权，单测及 Chromium 验证共享模型、输入、焦点、事件、空模型、错误恢复与释放。Widget 仍有其他公开成员差异，按对应行为分部继续处理 |
+| `browser/widget/codeEditor/codeEditorWidget.ts` | `CodeEditorWidget` | 已接通标准 editor contribution 注册表与滚动、配置 API；`setModel`、`onWillChangeModel`、`onDidChangeModel` 和模型装饰事件沿同一 Widget 的可替换模型资源生效，根 DOM、注册身份、外部 Widget 与装饰集合句柄保持稳定，旧 View/worker/贡献/监听释放。`setValue` 直接进入模型重置，同值写入也发布新版本；Standalone 处理隐式模型所有权，单测及 Chromium 验证共享模型、输入、焦点、事件、空模型、错误恢复与释放。Widget 仍有其他公开成员差异，按对应行为分部继续处理 |
 | `common/cursor/cursor.ts` | `CursorsController` | 已恢复上游公开名；文档 undo/redo 已回到 `TextModel`，标准 Cursor Undo 已改走 `ICodeEditor` 事件，自动闭合和组合输入结果已改为内部会话状态，仅测试调用的 `beginComposition` / `CompositionSession` 平行入口已移除。成员差异由 12 项降至 8 项；View、EditContext、ScreenReaderSupport、Anchor Select、In-place Replace、Line Selection、Selection Highlighter 和 14 个只读写选区的 contribution controller 已改走 `IViewModel` 或 `ICodeEditor`。Editor 内仍有 14 个外部生产调用方，剩余链涉及编辑事务、光标历史、只读事件、仅 Ash 文件和装配契约，不能按成员差异直接删除或包一层转发 |
 | `common/cursor/cursorDeleteOperations.ts` | `DeleteOperations` | 4 个公开入口的成员边界比较为 0，已恢复 `CursorConfiguration`、`Selection[]`、`ICommand`、`EditOperationResult` 和自动闭合范围语义；浏览器删除、语言成对删除与剪贴板剪切均通过 `CursorsController.executeCommands` 进入模型事务，连续同向删除由 `pushUndoStop` 和 `EditOperationType` 控制撤销边界 |
-| `common/model/textModel.ts` | `TextModel` | 1.1 已验收：公开位置与范围校验按 UTF-16 代理对边界约束，非空范围扩为完整字符，offset 转换保留码元位置；相邻半字符编辑在提交前判为重叠，整批拒绝且版本、历史、事件不变。版本/快照、撤销/选区映射和其余私有 owner 仍待逐项验收 |
+| `common/model/textModel.ts` | `TextModel` | 1.1–1.2 已验收：编辑范围按 UTF-16 代理对边界约束，整批重叠编辑在提交前拒绝；同值 `setValue` 仍推进版本并发布重置事件，使旧异步请求失效。顺序快照与版本化快照在编辑、重置和释放后仍可读取。撤销/选区映射和其余私有 owner 仍待逐项验收 |
 
 ## 当前已验证能力
 

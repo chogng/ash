@@ -72,7 +72,7 @@ flowchart LR
 
 `TextModel.createSnapshot` 遵循 editor 公共契约，返回顺序消费的 `ITextSnapshot.read()`；它用于模型服务、独立入口和其他只需要读取文本的调用方。语言请求、Worker 同步与 diff 需要额外的 model version、长度和随机区间读取，因此使用独立的 `createVersionedSnapshot`。两种快照都在后续 edit 或 model disposal 后保持可读，但不再由一个同名 API 混合两套职责。文档 history 有 transaction 与 UTF-16 text-unit 双重预算；typing、Backspace 和 Delete 只有在光标连续性可证明时才合并。
 
-`TextModel.reset` 用于 reload/revert，不建立普通 undo entry。`ModelService.updateModel` 会先按目标 buffer 更新 EOL，再提交最小文本 edit；模型、snapshot、undo/redo 和 worker mirror 始终使用同一个 `ITextBuffer` EOL。
+`TextModel.reset` 用于 reload/revert，不建立普通 undo entry；即使新旧文本相同，也会清空旧历史、推进版本并发布重置事件，使旧版本异步请求失效。`ModelService.updateModel` 会先按目标 buffer 更新 EOL，再提交最小文本 edit；模型、snapshot、undo/redo 和 worker mirror 始终使用同一个 `ITextBuffer` EOL。
 
 `ModelService` 通过 `platform/configuration` 读取模型创建选项，通过 `ITextResourcePropertiesService` 决定资源 EOL。语言、资源或相关配置变化会清空 creation-options cache 并更新已打开模型；关闭文件的 undo/redo 只有在 URI 策略允许、内容 SHA-1 一致且内存预算允许时才恢复。
 

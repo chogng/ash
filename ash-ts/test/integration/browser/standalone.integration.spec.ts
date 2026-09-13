@@ -108,3 +108,22 @@ test('public editor edits preserve complete UTF-16 characters and reject overlap
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	expect(errors).toEqual([]);
 });
+
+test('same-value reset advances the shared model version and preserves existing snapshots', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.stack ?? error.message));
+	await page.goto('/standalone.html');
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.switchOwnedToCaller())).currentModelIsCaller).toBe(true);
+	const result = await page.evaluate(() => window.ashStandaloneIntegration.resetSameValue());
+	expect(result).toEqual({
+		beforeVersion: result.beforeVersion,
+		afterVersion: result.beforeVersion + 1,
+		alternativeVersion: result.beforeVersion + 1,
+		snapshotValue: 'stable',
+		events: [{ version: result.beforeVersion + 1, reason: 'reset', changes: 0 }],
+	});
+	await expect(page.locator('#caller .view-line')).toContainText('stable');
+	await expect(page.locator('#owned .view-line')).toContainText('stable');
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	expect(errors).toEqual([]);
+});
