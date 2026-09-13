@@ -2,6 +2,7 @@
 use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+#[cfg(unix)]
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
@@ -15,10 +16,15 @@ use ash_app_server_client::ConnectionCloseReason;
 use ash_app_server_client::StdioAppServerCommand;
 use ash_app_server_protocol::protocol::common::ClientCapabilities;
 use ash_app_server_protocol::protocol::common::ClientInfo;
+#[cfg(unix)]
 use ash_app_server_protocol::protocol::terminal::TerminalAttachParams;
+#[cfg(unix)]
 use ash_app_server_protocol::protocol::terminal::TerminalCloseParams;
+#[cfg(unix)]
 use ash_app_server_protocol::protocol::terminal::TerminalCreateParams;
+#[cfg(unix)]
 use ash_app_server_protocol::protocol::terminal::TerminalLifecycle;
+#[cfg(unix)]
 use ash_app_server_protocol::protocol::terminal::TerminalProfileSelection;
 #[cfg(unix)]
 use ash_remote::RemoteDirPath;
