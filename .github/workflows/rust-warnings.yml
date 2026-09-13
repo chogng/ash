@@ -46,11 +46,11 @@ jobs:
   changes:
     runs-on: ubuntu-24.04
     outputs:
-      tui: ${{ steps.impact.outputs.tui || steps.manual.outputs.tui }}
+      tui: ${{ steps.impact.outputs.tui || steps.full.outputs.tui }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Find changed paths
-        if: github.event_name != 'workflow_dispatch'
+        if: github.event_name == 'pull_request'
         id: filter
         uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
         with:
@@ -60,14 +60,14 @@ jobs:
             changed:
               - '**'
       - name: Select affected TUI tests
-        if: github.event_name != 'workflow_dispatch'
+        if: github.event_name == 'pull_request'
         id: impact
         env:
           CHANGED_FILES_JSON: ${{ steps.filter.outputs.changed_files }}
         run: python3 -B scripts/ci_impact.py
-      - name: Run all TUI tests on manual dispatch
-        if: github.event_name == 'workflow_dispatch'
-        id: manual
+      - name: Run all TUI tests on main and manual dispatch
+        if: github.event_name != 'pull_request'
+        id: full
         run: echo 'tui=true' >> "$GITHUB_OUTPUT"
 
   warnings:
