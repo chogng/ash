@@ -1,6 +1,5 @@
-use super::{
-    UiRenderError, glyphon_wrap, prepare_text_buffer, same_text_buffer_layout, validate_text_block,
-};
+use super::text::glyphon_wrap;
+use super::{UiRenderError, prepare_text_buffer, same_text_buffer_layout, validate_text_block};
 use crate::ui::foundation::{Color, Point, Size};
 use crate::ui::presentation::{TextBlock, TextBlockWrap};
 use crate::ui::text::{TextSpan, TextStyle};

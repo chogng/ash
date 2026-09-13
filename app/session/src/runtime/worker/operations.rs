@@ -466,7 +466,6 @@ pub(super) fn set_preferred_model(
     client
         .update_config(ConfigUpdateParams {
             time_context: Default::default(),
-            preferred_reasoning_effort: Patch::Missing,
             features: Default::default(),
             command_id: next_command_id("model"),
             expected_revision: config.revision,

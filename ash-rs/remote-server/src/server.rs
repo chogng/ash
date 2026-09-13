@@ -119,8 +119,8 @@ fn options_from_environment() -> Result<RemoteServerOptions, RemoteServerError> 
         .ok_or_else(|| {
             RemoteServerError::new("ASH_WORKSPACE_ROOT must be an absolute Remote Directory path")
         })?;
-    let profile_root =
-        ash_utils_home_dir::find_ash_home().map_err(|error| RemoteServerError::new(error.to_string()))?;
+    let profile_root = ash_utils_home_dir::find_ash_home()
+        .map_err(|error| RemoteServerError::new(error.to_string()))?;
     if env::var_os("ASH_HOME").is_none() {
         check_legacy_home(&profile_root, legacy_home().as_deref())?;
     }
@@ -206,7 +206,6 @@ impl RemoteServerError {
         }
     }
 
-    #[cfg(unix)]
     pub(crate) fn from_io(error: std::io::Error) -> Self {
         Self::new(error.to_string())
     }

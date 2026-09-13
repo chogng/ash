@@ -4,6 +4,7 @@ use std::error::Error;
 use std::fmt;
 
 use raw_window_handle::HandleError;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use raw_window_handle::HasWindowHandle;
 use winit::window::Window;
 use winit::window::WindowAttributes;
