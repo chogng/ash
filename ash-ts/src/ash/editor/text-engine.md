@@ -68,6 +68,8 @@ flowchart LR
 
 `TextModel` 在一次提交前验证所有 range 和 edit，拒绝重叠或越界输入，然后通过一个 mutation boundary 更新 TextBuffer、tracked ranges、history、version 和同步事件。内容变化统一从 `onDidChangeContent` 发布；普通状态对象仍可使用自己的 `onDidChange`，因此调试时可以直接按 VS Code 的模型事件名追调用链。Exact replacement 是 no-op，不增加版本，也不产生 history。当前 TextBuffer 由 `PieceTreeTextBufferBuilder` 构建的红黑 PieceTree 实现，但调用方不能依赖该具体类型。
 
+公开位置校验将代理对内部位置移到字符前，非空范围校验向两端扩展以覆盖完整字符；单纯的 offset/position 转换仍按 UTF-16 码元计数。编辑批次在范围归一后统一检查重叠，失败不改变模型状态。
+
 `TextModel.createSnapshot` 遵循 editor 公共契约，返回顺序消费的 `ITextSnapshot.read()`；它用于模型服务、独立入口和其他只需要读取文本的调用方。语言请求、Worker 同步与 diff 需要额外的 model version、长度和随机区间读取，因此使用独立的 `createVersionedSnapshot`。两种快照都在后续 edit 或 model disposal 后保持可读，但不再由一个同名 API 混合两套职责。文档 history 有 transaction 与 UTF-16 text-unit 双重预算；typing、Backspace 和 Delete 只有在光标连续性可证明时才合并。
 
 `TextModel.reset` 用于 reload/revert，不建立普通 undo entry。`ModelService.updateModel` 会先按目标 buffer 更新 EOL，再提交最小文本 edit；模型、snapshot、undo/redo 和 worker mirror 始终使用同一个 `ITextBuffer` EOL。

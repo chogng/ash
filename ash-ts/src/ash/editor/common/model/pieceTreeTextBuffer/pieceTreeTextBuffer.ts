@@ -194,8 +194,12 @@ export class PieceTreeTextBuffer extends Disposable implements ITextBuffer {
 	}
 
 	getLineCharCode(lineNumber: number, index: number): number {
+		this.assertLineNumber(lineNumber);
 		assertSafeIndex(index, 'index');
-		return this.getLineContent(lineNumber).charCodeAt(index);
+		const lineIndex = lineNumber - 1;
+		const startOffset = this.lineStartOffset(lineIndex);
+		const offset = startOffset + index;
+		return offset < this.lineEndOffset(lineIndex) ? this.getCharCode(offset) : Number.NaN;
 	}
 
 	getCharCode(offset: number): number {

@@ -114,6 +114,8 @@ test('PieceTreeTextBufferBuilder joins split surrogate pairs without normalizing
 	assert.equal(buffer.getEOL(), '\n');
 	assert.equal(buffer.createSnapshot().getText(), 'alpha\r\nbeta😃\ngamma');
 	assert.equal(buffer.getLineContent(2), 'beta😃');
+	assert.deepEqual([buffer.getLineCharCode(2, 4), buffer.getLineCharCode(2, 5)], [0xD83D, 0xDE03]);
+	assert.equal(Number.isNaN(buffer.getLineCharCode(2, 6)), true);
 	disposable.dispose();
 });
 

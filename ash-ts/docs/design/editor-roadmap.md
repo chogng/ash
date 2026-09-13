@@ -8,7 +8,7 @@
 
 - 本路线图覆盖 `ash-ts/src/ash/editor`、它在 Workbench 中的 pane 和服务接线，以及 Standalone 入口。Rust App Server 提供文件与语言等异步能力，不接管 TypeScript 编辑器的同步文本、选区或输入状态。
 - 同一职责要对齐 VS Code 的公开名称、参数、事件、生命周期和可观察行为。Ash 内部依照现有 `TextModel`、视图和服务所有权独立实现；不复制上游私有结构，也不为同名而添加空方法。
-- 截至 2026-09-13，Node 25 下 Editor 单测为 241/241 文件通过，浏览器集成为 23/23 通过，Renderer 构建通过。这证明已覆盖的路径可运行，不代表整个 Editor 已完成。`editor-architecture.test.ts` 仍有 11 项失败，`dom-foundation.test.ts` 仍有 2 项失败；其中既有真实职责缺口，也有需核实的旧断言。它们保持可见，逐项按生产调用链处理。
+- 截至 2026-09-13，Node 25 下 Editor 单测为 241/241 文件通过，浏览器集成为 24/24 通过，Renderer 构建通过。这证明已覆盖的路径可运行，不代表整个 Editor 已完成。`editor-architecture.test.ts` 仍有 11 项失败，`dom-foundation.test.ts` 仍有 2 项失败；其中既有真实职责缺口，也有需核实的旧断言。它们保持可见，逐项按生产调用链处理。
 
 ## API 名称与契约怎么对齐
 
@@ -48,7 +48,7 @@
 | 顺序 | 部分 | 主要 owner | 逐项完成的用户行为 | 当前状态 |
 | --- | --- | --- | --- | --- |
 | 0 | 入口与装配 | `editor.api.ts`、`editor.*.all.ts`、`CodeEditorWidget` | 创建、挂载、切换模型、激活贡献、释放 | 0.1–0.4 行为已验收；完整 Widget API 仍待随各分部核对 |
-| 1 | 文本与文档内核 | `common/model`、`common/core` | 编辑、撤销、快照、结构事务、超大文件 | 基础具备，待逐项验收 |
+| 1 | 文本与文档内核 | `common/model`、`common/core` | 编辑、撤销、快照、结构事务、超大文件 | 1.1 已验收；其余待逐项验收 |
 | 2 | 选区与输入 | `common/cursor`、`browser/controller` | 键盘和指针编辑、多光标、IME、剪贴板 | 基础具备，待逐项验收 |
 | 3 | 视图与几何 | `common/viewModel`、`common/viewLayout`、`browser/view*` | 换行、滚动、命中、装饰、控件、DOM/GPU 绘制 | 部分具备 |
 | 4 | 语言与异步结果 | `common/languages`、`common/services`、语言贡献 | 配置、分词、诊断、折叠、符号、过期结果拒绝 | 部分具备 |
@@ -110,5 +110,9 @@ Code 模式入口加载行式编辑贡献，Academic 模式入口只加载文档
 ## 0.4 同一 Widget 切换模型（行为已验收）
 
 调用 `setModel` 时，`CodeEditorWidget` 保持对象、注册表身份和根 DOM，按模型释放旧 worker、ViewModel、View、输入与贡献，再装配新模型。切换前聚焦的编辑器在新模型挂接后恢复焦点；内容、光标、模型和装饰事件只读取当前模型。外部 Widget 与装饰集合句柄保留，旧模型上的装饰清除；空模型与外部销毁模型都释放旧视图并允许再次挂接。Standalone 在切走隐式模型时释放它，外部传入的模型始终由调用方持有。`CodeEditorWidget`、Standalone、Observable owner 级测试及 Chromium 公开入口用例覆盖输入、共享模型隔离、事件顺序、失败后的空状态、资源与销毁。Widget 的其余公开 API 差异仍按各自用户行为分部留在对齐台账，不计作本项完成。
+
+## 1.1 原子编辑与 UTF-16 坐标（已验收）
+
+调用公开编辑器的 `executeEdits` 时，`TextModel` 先把编辑范围约束到文档和完整的 UTF-16 字符边界，再检查整批范围是否重叠。两个各占半个代理对的相邻编辑会被判为重叠，整批拒绝且文本、版本、历史和内容事件保持不变；单个跨行编辑则扩展到完整字符后一次提交。公开 offset/position 转换保留 UTF-16 码元位置，并约束越界输入。模型、Piece Tree 测试和真实 Chromium 用例覆盖这些边界；两个编辑器共享同一模型时，拒绝和提交的结果在两个视图中一致。版本与快照等后续能力仍按第 1 部分的顺序验收。
 
 整个 Editor 的最终验收还要求上述各部分的真实入口、单测、浏览器/Electron 行为、Renderer 构建和相关架构测试全部闭合。当前已通过的套件不能代替仍未覆盖的平台、屏幕阅读器或未接线能力。

@@ -41,6 +41,79 @@ test("TextModel normalizes line endings and maps UTF-16 positions", () => {
 	assert.equal(model.mightContainUnusualLineTerminators(), true);
 });
 
+test('TextModel validates surrogate boundaries before committing an edit batch', () => {
+	using model = new TextModel('a📚b');
+	const changes: unknown[] = [];
+	using listener = model.onDidChangeContent(change => changes.push(change));
+	assert.deepEqual({
+		position: model.validatePosition(new Position(1, 3)),
+		fractional: model.validatePosition(new Position(1.8, 3.9)),
+		notANumber: model.validatePosition(new Position(Number.NaN, 3)),
+		beforeFirstLine: model.validatePosition(new Position(0, 99)),
+		afterLastLine: model.validatePosition(new Position(99, 1)),
+		collapsed: model.validateRange(new Range(1, 3, 1, 3)),
+		partial: model.validateRange(new Range(1, 2, 1, 3)),
+		crossing: model.validateRange(new Range(1, 3, 1, 4)),
+		partialIsValid: model.isValidRange(new Range(1, 2, 1, 3)),
+	}, {
+		position: new Position(1, 2),
+		fractional: new Position(1, 2),
+		notANumber: new Position(1, 2),
+		beforeFirstLine: new Position(1, 1),
+		afterLastLine: new Position(1, 5),
+		collapsed: new Range(1, 2, 1, 2),
+		partial: new Range(1, 2, 1, 4),
+		crossing: new Range(1, 2, 1, 4),
+		partialIsValid: false,
+	});
+
+	assert.throws(() => model.applyEdits([
+		{ range: new Range(1, 2, 1, 3), text: 'X' },
+		{ range: new Range(1, 3, 1, 4), text: 'Y' },
+	]), /must not overlap/);
+	assert.deepEqual({ text: model.getText(), version: model.version, eventCount: changes.length, canUndo: model.canUndo() }, {
+		text: 'a📚b', version: 1, eventCount: 0, canUndo: false,
+	});
+	model.applyEdits([{ range: new Range(1, 2, 1, 3), text: '' }]);
+	assert.deepEqual({ text: model.getText(), version: model.version, eventCount: changes.length }, {
+		text: 'ab', version: 2, eventCount: 1,
+	});
+});
+
+test('TextModel clamps public UTF-16 offset conversions while retaining relaxed interior offsets', () => {
+	using model = new TextModel('a📚b\nz');
+	assert.deepEqual({
+		interiorOffset: model.getOffsetAt(new Position(1, 3)),
+		pastLineOffset: model.getOffsetAt(new Position(1, 99)),
+		beforeDocumentOffset: model.getOffsetAt(new Position(0, 99)),
+		pastDocumentOffset: model.getOffsetAt(new Position(99, 1)),
+		beforeDocumentPosition: model.getPositionAt(-99),
+		pastDocumentPosition: model.getPositionAt(99),
+		interiorPosition: model.getPositionAt(2),
+	}, {
+		interiorOffset: 2,
+		pastLineOffset: 4,
+		beforeDocumentOffset: 0,
+		pastDocumentOffset: 6,
+		beforeDocumentPosition: new Position(1, 1),
+		pastDocumentPosition: new Position(2, 2),
+		interiorPosition: new Position(1, 3),
+	});
+});
+
+test('TextModel expands a cross-line UTF-16 edit to complete surrogate pairs', () => {
+	using model = new TextModel('x📚\r\ny📚z');
+	const events: unknown[] = [];
+	using listener = model.onDidChangeContent(event => events.push(event));
+	const range = model.validateRange(new Range(1, 3, 2, 3));
+	assert.deepEqual(range, new Range(1, 2, 2, 4));
+
+	model.applyEdits([{ range: new Range(1, 3, 2, 3), text: 'Q\nR' }]);
+	assert.deepEqual({ text: model.getText(), version: model.version, events: events.length }, {
+		text: 'xQ\r\nRz', version: 2, events: 1,
+	});
+});
+
 test("TextModel exposes allocation-free document and line lengths", () => {
 	using model = new TextModel("alpha\n😀");
 

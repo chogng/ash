@@ -89,3 +89,22 @@ test('standalone editor switches a live model in place and keeps caller ownershi
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	expect(errors).toEqual([]);
 });
+
+test('public editor edits preserve complete UTF-16 characters and reject overlapping batches', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.stack ?? error.message));
+	await page.goto('/standalone.html');
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.switchOwnedToCaller())).currentModelIsCaller).toBe(true);
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.tryOverlappingSurrogateEdits())).toEqual({
+		rejected: true,
+		value: 'a📚b',
+		versionUnchanged: true,
+	});
+	await expect(page.locator('#caller .view-line')).toContainText('a📚b');
+	await expect(page.locator('#owned .view-line')).toContainText('a📚b');
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.applySurrogateEdit())).toBe('ab');
+	await expect(page.locator('#caller .view-line')).toContainText('ab');
+	await expect(page.locator('#owned .view-line')).toContainText('ab');
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	expect(errors).toEqual([]);
+});

@@ -898,7 +898,9 @@ export class TextModel implements ITextModel {
 	}
 
 	getOffsetAt(position: IPosition): number {
-		return this.offsetAt(Position.lift(position));
+		this.assertNotDisposed();
+		const bounded = this.clampPosition(position);
+		return this.buffer.getOffsetAt(bounded.lineNumber, bounded.column);
 	}
 
 	positionAt(offset: number): Position {
@@ -907,7 +909,9 @@ export class TextModel implements ITextModel {
 	}
 
 	getPositionAt(offset: number): Position {
-		return this.positionAt(offset);
+		this.assertNotDisposed();
+		const normalized = typeof offset === 'number' && !Number.isNaN(offset) ? Math.floor(offset) : 0;
+		return this.buffer.getPositionAt(Math.min(Math.max(normalized, 0), this.length));
 	}
 
 	getRangeAt(offset: number, length: number): Range {
@@ -916,19 +920,35 @@ export class TextModel implements ITextModel {
 	}
 
 	validatePosition(position: IPosition): Position {
-		const lifted = Position.lift(position);
-		if (lifted.lineNumber < 1) return new Position(1, 1);
-		if (lifted.lineNumber > this.lineCount) return new Position(this.lineCount, this.getLineMaxColumn(this.lineCount));
-		return new Position(lifted.lineNumber, Math.min(Math.max(lifted.column, 1), this.getLineMaxColumn(lifted.lineNumber)));
+		this.assertNotDisposed();
+		const bounded = this.clampPosition(position);
+		return this.isInsideSurrogatePair(bounded)
+			? new Position(bounded.lineNumber, bounded.column - 1)
+			: bounded;
 	}
 
 	validateRange(range: IRange): Range {
+		this.assertNotDisposed();
 		const lifted = Range.lift(range);
-		return Range.fromPositions(this.validatePosition(lifted.getStartPosition()), this.validatePosition(lifted.getEndPosition()));
+		const start = this.clampPosition(lifted.getStartPosition());
+		const end = this.clampPosition(lifted.getEndPosition());
+		const startInside = this.isInsideSurrogatePair(start);
+		const endInside = this.isInsideSurrogatePair(end);
+		if (start.equals(end) && startInside) {
+			return new Range(start.lineNumber, start.column - 1, end.lineNumber, end.column - 1);
+		}
+		return new Range(
+			start.lineNumber,
+			start.column - (startInside ? 1 : 0),
+			end.lineNumber,
+			end.column + (endInside ? 1 : 0),
+		);
 	}
 
 	isValidRange(range: IRange): boolean {
 		this.assertNotDisposed();
+		if (!Number.isSafeInteger(range.startLineNumber) || !Number.isSafeInteger(range.startColumn)
+			|| !Number.isSafeInteger(range.endLineNumber) || !Number.isSafeInteger(range.endColumn)) return false;
 		if (!Position.isBeforeOrEqual(
 			{ lineNumber: range.startLineNumber, column: range.startColumn },
 			{ lineNumber: range.endLineNumber, column: range.endColumn },
@@ -938,7 +958,20 @@ export class TextModel implements ITextModel {
 		if (lifted.startColumn < 1 || lifted.endColumn < 1) return false;
 		if (lifted.startColumn > this.getLineMaxColumn(lifted.startLineNumber)) return false;
 		if (lifted.endColumn > this.getLineMaxColumn(lifted.endLineNumber)) return false;
-		return true;
+		return !this.isInsideSurrogatePair(lifted.getStartPosition()) && !this.isInsideSurrogatePair(lifted.getEndPosition());
+	}
+
+	private clampPosition(position: IPosition): Position {
+		const rawLine = typeof position.lineNumber === 'number' && !Number.isNaN(position.lineNumber) ? Math.floor(position.lineNumber) : 1;
+		const rawColumn = typeof position.column === 'number' && !Number.isNaN(position.column) ? Math.floor(position.column) : 1;
+		if (rawLine < 1) return new Position(1, 1);
+		if (rawLine > this.lineCount) return new Position(this.lineCount, this.getLineMaxColumn(this.lineCount));
+		return new Position(rawLine, Math.min(Math.max(rawColumn, 1), this.getLineMaxColumn(rawLine)));
+	}
+
+	private isInsideSurrogatePair(position: IPosition): boolean {
+		if (position.column <= 1 || position.column >= this.getLineMaxColumn(position.lineNumber)) return false;
+		return strings.isHighSurrogate(this.buffer.getLineCharCode(position.lineNumber, position.column - 2));
 	}
 
 	getLanguageIdAtPosition(lineNumber: number, column: number): string {

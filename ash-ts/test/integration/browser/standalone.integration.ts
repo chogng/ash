@@ -25,6 +25,8 @@ interface StandaloneHarness {
 	detachOwned(): { readonly modelIsNull: boolean; readonly value: string; readonly rootMounted: boolean; readonly inputCount: number };
 	reattachOwned(): void;
 	getOwnedValue(): string;
+	tryOverlappingSurrogateEdits(): { readonly rejected: boolean; readonly value: string; readonly versionUnchanged: boolean };
+	applySurrogateEdit(): string;
 	releaseCaller(): void;
 	releaseOwned(): void;
 	dispose(): void;
@@ -102,6 +104,25 @@ window.ashStandaloneIntegration = {
 	},
 	reattachOwned: () => ownedEditor.setModel(callerModel),
 	getOwnedValue: () => ownedEditor.getValue(),
+	tryOverlappingSurrogateEdits: () => {
+		callerEditor.setValue('a📚b');
+		const version = callerModel.getVersionId();
+		let rejected = false;
+		try {
+			callerEditor.executeEdits('browser', [
+				{ range: new stanza.Range(1, 2, 1, 3), text: 'X' },
+				{ range: new stanza.Range(1, 3, 1, 4), text: 'Y' },
+			]);
+		} catch (error) {
+			if (!(error instanceof Error) || !/overlap/u.test(error.message)) throw error;
+			rejected = true;
+		}
+		return { rejected, value: callerModel.getValue(), versionUnchanged: callerModel.getVersionId() === version };
+	},
+	applySurrogateEdit: () => {
+		callerEditor.executeEdits('browser', [{ range: new stanza.Range(1, 2, 1, 3), text: '' }]);
+		return callerModel.getValue();
+	},
 	releaseCaller: () => {
 		callerEditor.dispose();
 		callerModel.setValue('changed after editor disposal');

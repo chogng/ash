@@ -68,7 +68,7 @@
 | `contrib/folding/browser/foldingDecorations.ts` | `FoldingDecorationProvider` | 公共配置与装饰事务由该 provider 持有；生产链从 Folding Model 经编辑器所有者写入 TextModel，再由标准 line/block/minimap ViewPart 渲染，释放时只清理对应编辑器的装饰；折叠背景、占位符和控制图标颜色由主题 token 持有，测试覆盖配置、所有权、折叠状态和 DOM 输出 |
 | `standalone/browser/standaloneEditor.ts` | `createModel`、`getModel`、`getModels`、`setModelLanguage` | 公共模型边界使用 `ITextModel`；`createModel` 委托 `standaloneCodeEditor.ts::createTextModel`，未显式给语言时按 URI 和首行推断，显式语言优先；模型注册、查询、语言事件和释放由 Standalone 测试覆盖 |
 | `common/viewLayout/lineHeights.ts` | `CustomLineHeightData` | 构造参数、公开字段和 `fromDecorations` owner 与上游一致；生产由 `ViewModelImpl` 转换模型装饰，再交给 `LinesLayout`，测试覆盖视觉范围转换与配置行高倍率 |
-| `common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.ts` | `PieceTreeTextBuffer` | 实现 `common/model.ts` 的 `ITextBuffer` 契约；独立红黑树实现负责 1-based 查询、原子编辑与逆编辑、搜索、内容事件、BOM/EOL、快照和释放，确定性编辑测试同时检查字符串结果与树不变量 |
+| `common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.ts` | `PieceTreeTextBuffer` | 实现 `common/model.ts` 的 `ITextBuffer` 契约；独立红黑树实现负责 1-based 查询、原子编辑与逆编辑、搜索、内容事件、BOM/EOL、快照和释放；单个码元查询不物化整行，测试覆盖跨 chunk 代理对与树不变量 |
 | `common/model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.ts` | `PieceTreeTextBufferBuilder` | 保持 Builder → Factory 两阶段 owner；跨 chunk 连接 CRLF 与代理对，按主导换行选择 EOL，并把 `finish(false)` 的保留换行语义传给主缓冲区 |
 | `common/services/model.ts` | `IModelService` | 公共方法、事件、模型类型与 owner 一致；`getCreationOptions` 只暴露语言 ID、确定资源和 Widget 类型，不再把实现类的宽参数泄漏到服务接口 |
 | `common/model.ts` | `ITextModel` | 同名成员差异归零；模型统一持有装饰事务和 owner 查询、外部 undo/redo 入口、token/语言配置/字体/行高事件以及 ViewModel 注册生命周期，27 项测试覆盖事务回滚、事件顺序、所有者隔离、历史负载和释放 |
@@ -166,7 +166,7 @@
 | `browser/widget/codeEditor/codeEditorWidget.ts` | `CodeEditorWidget` | 已接通标准 editor contribution 注册表与滚动、配置 API；`setModel`、`onWillChangeModel`、`onDidChangeModel` 和模型装饰事件沿同一 Widget 的可替换模型资源生效，根 DOM、注册身份、外部 Widget 与装饰集合句柄保持稳定，旧 View/worker/贡献/监听释放。Standalone 处理隐式模型所有权，单测及 Chromium 验证共享模型、输入、焦点、事件、空模型、错误恢复与释放。Widget 仍有其他公开成员差异，按对应行为分部继续处理 |
 | `common/cursor/cursor.ts` | `CursorsController` | 已恢复上游公开名；文档 undo/redo 已回到 `TextModel`，标准 Cursor Undo 已改走 `ICodeEditor` 事件，自动闭合和组合输入结果已改为内部会话状态，仅测试调用的 `beginComposition` / `CompositionSession` 平行入口已移除。成员差异由 12 项降至 8 项；View、EditContext、ScreenReaderSupport、Anchor Select、In-place Replace、Line Selection、Selection Highlighter 和 14 个只读写选区的 contribution controller 已改走 `IViewModel` 或 `ICodeEditor`。Editor 内仍有 14 个外部生产调用方，剩余链涉及编辑事务、光标历史、只读事件、仅 Ash 文件和装配契约，不能按成员差异直接删除或包一层转发 |
 | `common/cursor/cursorDeleteOperations.ts` | `DeleteOperations` | 4 个公开入口的成员边界比较为 0，已恢复 `CursorConfiguration`、`Selection[]`、`ICommand`、`EditOperationResult` 和自动闭合范围语义；浏览器删除、语言成对删除与剪贴板剪切均通过 `CursorsController.executeCommands` 进入模型事务，连续同向删除由 `pushUndoStop` 和 `EditOperationType` 控制撤销边界 |
-| `common/model/textModel.ts` | `TextModel` | 文本模型与 Piece Tree |
+| `common/model/textModel.ts` | `TextModel` | 1.1 已验收：公开位置与范围校验按 UTF-16 代理对边界约束，非空范围扩为完整字符，offset 转换保留码元位置；相邻半字符编辑在提交前判为重叠，整批拒绝且版本、历史、事件不变。版本/快照、撤销/选区映射和其余私有 owner 仍待逐项验收 |
 
 ## 当前已验证能力
 
