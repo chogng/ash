@@ -10,7 +10,7 @@ Before changing a file, identify its owner and read every matching scoped instru
 | Editor implementation | [`editor.instructions.md`](instructions/editor.instructions.md) |
 | Browser UI or CSS | [`browser-ui.instructions.md`](instructions/browser-ui.instructions.md) |
 | Any implementation or test | [`testing.instructions.md`](instructions/testing.instructions.md) |
-| Rust | [`rust.instructions.md`](instructions/rust.instructions.md) and [`rust-testing.instructions.md`](instructions/rust-testing.instructions.md) |
+| Rust, Cargo manifests/lockfile, `.cargo/`, or Rust build checks | [`rust.instructions.md`](instructions/rust.instructions.md) and [`rust-testing.instructions.md`](instructions/rust-testing.instructions.md) |
 | TypeScript tests and validation | [`typescript-testing.instructions.md`](instructions/typescript-testing.instructions.md) |
 | `ash-rs/native` or `app` | [`native.instructions.md`](instructions/native.instructions.md) |
 | Markdown documentation | [`documentation.instructions.md`](instructions/documentation.instructions.md) |

@@ -3,6 +3,9 @@
 //! Unix targets use the Rust standard library. Windows uses `uds_windows` while the equivalent
 //! standard-library API remains unstable.
 
+#[cfg(windows)]
+extern crate windows_sys_052 as windows_sys;
+
 mod directory;
 #[cfg(unix)]
 mod unix;

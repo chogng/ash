@@ -1,0 +1,478 @@
+# Reviewed coexisting API versions across all products and platforms.
+# Changes require inspecting each introducing dependency; this file is not a count budget.
+# Exact sets also reject replacement versions and stale exceptions.
+
+[[multiple_versions]]
+name = "accesskit_consumer"
+versions = ["0.35.0", "0.36.0", "0.38.0"]
+reason = "Current upstream API families: 0.35.0 via accesskit_windows; 0.36.0 via accesskit_atspi_common; 0.38.0 via accesskit_macos. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "base64"
+versions = ["0.13.1", "0.22.1"]
+reason = "Current upstream API families: 0.13.1 via spm_precompiled; 0.22.1 via ash-api, ash-app-server, ash-app-server-client and other importers. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "bit-set"
+versions = ["0.10.0", "0.8.0"]
+reason = "Current upstream API families: 0.10.0 via naga, wgpu-core, wgpu-hal; 0.8.0 via fancy-regex. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "bit-vec"
+versions = ["0.8.0", "0.9.1"]
+reason = "Current upstream API families: 0.8.0 via bit-set; 0.9.1 via bit-set, wgpu-core. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "bitflags"
+versions = ["1.3.2", "2.13.1"]
+reason = "Current upstream API families: 1.3.2 via core-graphics, core-graphics-types, defmt and other importers; 2.13.1 via android-activity, bindgen, cairo-rs and other importers. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "block-buffer"
+versions = ["0.10.4", "0.12.1"]
+reason = "Current upstream API families: 0.10.4 via digest; 0.12.1 via digest. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "block2"
+versions = ["0.5.1", "0.6.2"]
+reason = "Current upstream API families: 0.5.1 via objc2-app-kit, objc2-cloud-kit, objc2-contacts and other importers; 0.6.2 via dispatch2, objc2-app-kit, objc2-foundation and other importers. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "cfg_aliases"
+versions = ["0.1.1", "0.2.2"]
+reason = "Current upstream API families: 0.1.1 via nix; 0.2.2 via naga, nix, quinn and other importers. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "compact_str"
+versions = ["0.8.2", "0.9.1"]
+reason = "Current upstream API families: 0.8.2 via ratatui; 0.9.1 via tokenizers. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "const-oid"
+versions = ["0.10.2", "0.9.6"]
+reason = "Current upstream API families: 0.10.2 via digest; 0.9.6 via der, digest. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "core-foundation"
+versions = ["0.10.1", "0.9.4"]
+reason = "Current upstream API families: 0.10.1 via ash-user-verification, rustls-platform-verifier, security-framework; 0.9.4 via core-graphics, core-graphics-types, security-framework and other importers. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "cpufeatures"
+versions = ["0.2.17", "0.3.0"]
+reason = "Current upstream API families: 0.2.17 via aes, sha1, sha2; 0.3.0 via chacha20, curve25519-dalek, sha2. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "crypto-common"
+versions = ["0.1.7", "0.2.2"]
+reason = "Current upstream API families: 0.1.7 via cipher, digest; 0.2.2 via digest. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "darling"
+versions = ["0.20.11", "0.24.0"]
+reason = "Current upstream API families: 0.20.11 via cached_proc_macro, derive_builder_core; 0.24.0 via instability. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "darling_core"
+versions = ["0.20.11", "0.24.0"]
+reason = "Current upstream API families: 0.20.11 via darling, darling_macro; 0.24.0 via darling, darling_macro. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "darling_macro"
+versions = ["0.20.11", "0.24.0"]
+reason = "Current upstream API families: 0.20.11 via darling; 0.24.0 via darling. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "digest"
+versions = ["0.10.7", "0.11.3"]
+reason = "Current upstream API families: 0.10.7 via ecdsa, elliptic-curve, hmac and other importers; 0.11.3 via curve25519-dalek, sha2. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "fancy-regex"
+versions = ["0.14.0", "0.16.2", "0.17.0"]
+reason = "Current upstream API families: 0.14.0 via ratex-parser; 0.16.2 via syntect; 0.17.0 via tokenizers. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "foldhash"
+versions = ["0.1.5", "0.2.0"]
+reason = "Current upstream API families: 0.1.5 via hashbrown; 0.2.0 via glifo, hashbrown. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "font-types"
+versions = ["0.11.3", "0.12.2"]
+reason = "Current upstream API families: 0.11.3 via read-fonts, write-fonts; 0.12.2 via read-fonts. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "getrandom"
+versions = ["0.2.17", "0.3.4", "0.4.3"]
+reason = "Current upstream API families: 0.2.17 via appcontainer_common, ash-app-server, ash-collaboration and other importers; 0.3.4 via ahash, rand_core, tokenizers; 0.4.3 via ashpd, jobserver, quinn-proto and other importers. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "hashbrown"
+versions = ["0.13.2", "0.14.5", "0.15.5", "0.16.1", "0.17.1"]
+reason = "Current upstream API families: 0.13.2 via ordered-multimap; 0.14.5 via dashmap; 0.15.5 via cached, lru, petgraph; 0.16.1 via accesskit_consumer, accesskit_macos, accesskit_windows and other importers; 0.17.1 via glifo, hashlink, indexmap and other importers. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "heck"
+versions = ["0.4.1", "0.5.0"]
+reason = "Current upstream API families: 0.4.1 via glib-macros; 0.5.0 via clap_derive, enum-as-inner, prost-build and other importers. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "itertools"
+versions = ["0.13.0", "0.14.0", "0.15.0"]
+reason = "Current upstream API families: 0.13.0 via bindgen, ratatui, unicode-truncate; 0.14.0 via prost-build, prost-derive, rayon-cond and other importers; 0.15.0 via pdfium-render. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "jni-sys"
+versions = ["0.3.1", "0.4.1"]
+reason = "Current upstream API families: 0.3.1 via ndk, ndk-sys; 0.4.1 via jni, jni-sys. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "libloading"
+versions = ["0.7.4", "0.8.9", "0.9.0"]
+reason = "Current upstream API families: 0.7.4 via libappindicator-sys; 0.8.9 via ash, clang-sys, dlib and other importers; 0.9.0 via pdfium-render. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "linux-raw-sys"
+versions = ["0.12.1", "0.4.15"]
+reason = "Current upstream API families: 0.12.1 via rustix; 0.4.15 via rustix. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "lru"
+versions = ["0.12.5", "0.16.4", "0.18.3"]
+reason = "Current upstream API families: 0.12.5 via ratatui; 0.16.4 via glyphon; 0.18.3 via ash-utils-cache. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "nix"
+versions = ["0.28.0", "0.29.0", "0.31.3"]
+reason = "Current upstream API families: 0.28.0 via portable-pty; 0.29.0 via bwrap_common, lxc_common, mxc_pty and other importers; 0.31.3 via process-wrap. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "nom"
+versions = ["7.1.3", "8.0.0"]
+reason = "Current upstream API families: 7.1.3 via ansi-to-tui, cexpr, spm_precompiled; 8.0.0 via tree_magic_mini. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "objc2"
+versions = ["0.5.2", "0.6.4"]
+reason = "Current upstream API families: 0.5.2 via accesskit_macos, block2, objc2-app-kit and other importers; 0.6.4 via arboard, ash-user-verification, block2 and other importers. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "objc2-app-kit"
+versions = ["0.2.2", "0.3.2"]
+reason = "Current upstream API families: 0.2.2 via accesskit_macos, objc2-link-presentation, winit and other importers; 0.3.2 via arboard, global-hotkey, muda and other importers. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "objc2-foundation"
+versions = ["0.2.2", "0.3.2"]
+reason = "Current upstream API families: 0.2.2 via accesskit_macos, objc2-app-kit, objc2-cloud-kit and other importers; 0.3.2 via arboard, ash-user-verification, muda and other importers. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "objc2-metal"
+versions = ["0.2.2", "0.3.2"]
+reason = "Current upstream API families: 0.2.2 via objc2-core-image, objc2-quartz-core; 0.3.2 via objc2-quartz-core, wgpu-hal. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "objc2-quartz-core"
+versions = ["0.2.2", "0.3.2"]
+reason = "Current upstream API families: 0.2.2 via objc2-app-kit, objc2-ui-kit; 0.3.2 via raw-window-metal, wgpu-hal. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "openssl-probe"
+versions = ["0.1.6", "0.2.1"]
+reason = "Current upstream API families: 0.1.6 via rustls-native-certs; 0.2.1 via rustls-native-certs. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "phf"
+versions = ["0.11.3", "0.12.1", "0.13.1"]
+reason = "Current upstream API families: 0.11.3 via ratex-font; 0.12.1 via chrono-tz; 0.13.1 via accesskit_atspi_common, hayro-interpret, typst-library. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "phf_generator"
+versions = ["0.11.3", "0.13.1"]
+reason = "Current upstream API families: 0.11.3 via phf_macros; 0.13.1 via phf_macros. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "phf_macros"
+versions = ["0.11.3", "0.13.1"]
+reason = "Current upstream API families: 0.11.3 via phf; 0.13.1 via phf. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "phf_shared"
+versions = ["0.11.3", "0.12.1", "0.13.1"]
+reason = "Current upstream API families: 0.11.3 via phf, phf_generator, phf_macros; 0.12.1 via phf; 0.13.1 via phf, phf_generator, phf_macros. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "pollster"
+versions = ["0.4.0", "1.0.1"]
+reason = "Current upstream API families: 0.4.0 via rfd; 1.0.1 via ash-agent, ash-app-server, ash-async-utils and other importers. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "proc-macro-crate"
+versions = ["1.3.1", "2.0.2", "3.5.0"]
+reason = "Current upstream API families: 1.3.1 via gtk3-macros; 2.0.2 via glib-macros; 3.5.0 via num_enum_derive, zbus_macros, zvariant_derive. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "quick-xml"
+versions = ["0.38.4", "0.41.0"]
+reason = "Current upstream API families: 0.38.4 via citationberg; 0.41.0 via plist, wayland-scanner. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "r-efi"
+versions = ["5.3.0", "6.0.0"]
+reason = "Current upstream API families: 5.3.0 via getrandom; 6.0.0 via getrandom. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "rand"
+versions = ["0.10.2", "0.8.7", "0.9.5"]
+reason = "Current upstream API families: 0.10.2 via quinn-proto; 0.8.7 via lipsum, phf_generator, secret-service and other importers; 0.9.5 via candle-core, float8, half and other importers. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "rand_chacha"
+versions = ["0.3.1", "0.9.0"]
+reason = "Current upstream API families: 0.3.1 via lipsum, rand; 0.9.0 via rand. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "rand_core"
+versions = ["0.10.1", "0.6.4", "0.9.5"]
+reason = "Current upstream API families: 0.10.1 via chacha20, getrandom, rand and other importers; 0.6.4 via crypto-bigint, elliptic-curve, ff and other importers; 0.9.5 via rand, rand_chacha. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "read-fonts"
+versions = ["0.37.0", "0.39.2", "0.41.0"]
+reason = "Current upstream API families: 0.37.0 via harfrust, skrifa; 0.39.2 via skrifa, write-fonts; 0.41.0 via skrifa. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "redox_syscall"
+versions = ["0.4.1", "0.5.18", "0.9.1"]
+reason = "Current upstream API families: 0.4.1 via winit; 0.5.18 via parking_lot_core; 0.9.1 via libredox. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "roxmltree"
+versions = ["0.20.0", "0.21.1"]
+reason = "Current upstream API families: 0.20.0 via fontconfig-parser; 0.21.1 via typst-library, usvg. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "rustc-hash"
+versions = ["1.1.0", "2.1.3"]
+reason = "Current upstream API families: 1.1.0 via naga, naga-types, wgpu-core; 2.1.3 via bindgen, comemo, cosmic-text and other importers. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "rustix"
+versions = ["0.38.44", "1.1.4"]
+reason = "Current upstream API families: 0.38.44 via calloop, calloop-wayland-source, crossterm and other importers; 1.1.4 via ash-app-server-daemon, ash-app-server-transport, ash-remote-server and other importers. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "rustls-native-certs"
+versions = ["0.7.3", "0.8.4"]
+reason = "Current upstream API families: 0.7.3 via ash-http-client, ureq; 0.8.4 via rustls-platform-verifier. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "security-framework"
+versions = ["2.11.1", "3.7.0"]
+reason = "Current upstream API families: 2.11.1 via keyring, rustls-native-certs; 3.7.0 via ash-user-verification, keyring, rustls-native-certs and other importers. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "serde_spanned"
+versions = ["0.6.9", "1.1.1"]
+reason = "Current upstream API families: 0.6.9 via toml, toml_edit; 1.1.1 via toml. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "sha2"
+versions = ["0.10.9", "0.11.0"]
+reason = "Current upstream API families: 0.10.9 via ash-action-policy, ash-agent-roles, ash-app-server and other importers; 0.11.0 via ed25519-dalek, rust-embed-utils. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "shlex"
+versions = ["1.3.0", "2.0.1"]
+reason = "Current upstream API families: 1.3.0 via bindgen; 2.0.1 via cc. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "signature"
+versions = ["2.2.0", "3.0.0"]
+reason = "Current upstream API families: 2.2.0 via ecdsa; 3.0.0 via ed25519. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "skrifa"
+versions = ["0.40.0", "0.42.1", "0.44.0"]
+reason = "Current upstream API families: 0.40.0 via cosmic-text; 0.42.1 via glifo, hayro-interpret, krilla and other importers; 0.44.0 via swash. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "smol_str"
+versions = ["0.2.2", "0.3.6"]
+reason = "Current upstream API families: 0.2.2 via winit; 0.3.6 via cosmic-text. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "strum"
+versions = ["0.26.3", "0.27.2"]
+reason = "Current upstream API families: 0.26.3 via ratatui; 0.27.2 via ash-tui, biblatex. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "strum_macros"
+versions = ["0.26.4", "0.27.2"]
+reason = "Current upstream API families: 0.26.4 via strum; 0.27.2 via ash-tui, strum. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "syn"
+versions = ["1.0.109", "2.0.119", "3.0.3"]
+reason = "Current upstream API families: 1.0.109 via proc-macro-error; 2.0.119 via async-recursion, bindgen, bytemuck_derive and other importers; 3.0.3 via async-trait, clap_derive, darling_core and other importers. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "thiserror"
+versions = ["1.0.69", "2.0.19"]
+reason = "Current upstream API families: 1.0.69 via ansi-to-tui, cairo-rs, calloop and other importers; 2.0.19 via android-activity, appcontainer_common, ash-attachments and other importers. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "thiserror-impl"
+versions = ["1.0.69", "2.0.19"]
+reason = "Current upstream API families: 1.0.69 via thiserror; 2.0.19 via thiserror. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "tiny-skia"
+versions = ["0.11.4", "0.12.0"]
+reason = "Current upstream API families: 0.11.4 via sctk-adwaita; 0.12.0 via krilla-svg, resvg. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "tiny-skia-path"
+versions = ["0.11.4", "0.12.0"]
+reason = "Current upstream API families: 0.11.4 via tiny-skia; 0.12.0 via krilla, tiny-skia, usvg. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "toml"
+versions = ["0.8.2", "0.9.12+spec-1.1.0"]
+reason = "Current upstream API families: 0.8.2 via system-deps, typst-eval, typst-library and other importers; 0.9.12+spec-1.1.0 via ash-agent-roles, ash-chatgpt, ash-config and other importers. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "toml_datetime"
+versions = ["0.6.3", "0.7.5+spec-1.1.0", "1.1.1+spec-1.1.0"]
+reason = "Current upstream API families: 0.6.3 via proc-macro-crate, toml, toml_edit; 0.7.5+spec-1.1.0 via toml; 1.1.1+spec-1.1.0 via toml_edit. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "toml_edit"
+versions = ["0.19.15", "0.20.2", "0.25.13+spec-1.1.0"]
+reason = "Current upstream API families: 0.19.15 via proc-macro-crate; 0.20.2 via proc-macro-crate, toml; 0.25.13+spec-1.1.0 via proc-macro-crate. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "typed-path"
+versions = ["0.12.3", "0.9.3"]
+reason = "Current upstream API families: 0.12.3 via zip; 0.9.3 via tough. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "unicode-width"
+versions = ["0.1.14", "0.2.0"]
+reason = "Current upstream API families: 0.1.14 via unicode-truncate; 0.2.0 via ash-editor, ash-terminal, ash-terminal-runtime and other importers. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "untrusted"
+versions = ["0.7.1", "0.9.0"]
+reason = "Current upstream API families: 0.7.1 via aws-lc-rs, tough; 0.9.0 via ring, rustls-webpki. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "vello_common"
+versions = ["0.0.8", "0.0.9"]
+reason = "Current upstream API families: 0.0.8 via vello_cpu; 0.0.9 via glifo. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "webpki-roots"
+versions = ["0.26.11", "1.0.9"]
+reason = "Current upstream API families: 0.26.11 via ureq; 1.0.9 via webpki-roots. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "windows-sys"
+versions = ["0.52.0", "0.59.0", "0.60.2", "0.61.2"]
+reason = "Current upstream API families: 0.52.0 via ash-uds, ring, winit and other importers; 0.59.0 via ash-app-server-daemon, ash-file-identity, ash-package-store and other importers; 0.60.2 via arboard, keyring, notify; 0.61.2 via anstyle-query, anstyle-wincon, ash-windows-sandbox and other importers. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "windows-targets"
+versions = ["0.52.6", "0.53.5"]
+reason = "Current upstream API families: 0.52.6 via windows-sys; 0.53.5 via windows-sys. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "windows_aarch64_gnullvm"
+versions = ["0.52.6", "0.53.1"]
+reason = "Current upstream API families: 0.52.6 via windows-targets; 0.53.1 via windows-targets. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "windows_aarch64_msvc"
+versions = ["0.52.6", "0.53.1"]
+reason = "Current upstream API families: 0.52.6 via windows-targets; 0.53.1 via windows-targets. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "windows_i686_gnu"
+versions = ["0.52.6", "0.53.1"]
+reason = "Current upstream API families: 0.52.6 via windows-targets; 0.53.1 via windows-targets. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "windows_i686_gnullvm"
+versions = ["0.52.6", "0.53.1"]
+reason = "Current upstream API families: 0.52.6 via windows-targets; 0.53.1 via windows-targets. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "windows_i686_msvc"
+versions = ["0.52.6", "0.53.1"]
+reason = "Current upstream API families: 0.52.6 via windows-targets; 0.53.1 via windows-targets. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "windows_x86_64_gnu"
+versions = ["0.52.6", "0.53.1"]
+reason = "Current upstream API families: 0.52.6 via windows-targets; 0.53.1 via windows-targets. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "windows_x86_64_gnullvm"
+versions = ["0.52.6", "0.53.1"]
+reason = "Current upstream API families: 0.52.6 via windows-targets; 0.53.1 via windows-targets. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "windows_x86_64_msvc"
+versions = ["0.52.6", "0.53.1"]
+reason = "Current upstream API families: 0.52.6 via windows-targets; 0.53.1 via windows-targets. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "winnow"
+versions = ["0.5.40", "0.7.15", "1.0.4"]
+reason = "Current upstream API families: 0.5.40 via toml_edit; 0.7.15 via toml; 1.0.4 via toml_edit, toml_parser, zbus and other importers. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "winreg"
+versions = ["0.10.1", "0.55.0"]
+reason = "Current upstream API families: 0.10.1 via portable-pty; 0.55.0 via appcontainer_common, ash-windows-sandbox, wxc_common. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "zbus"
+versions = ["4.4.0", "5.19.0"]
+reason = "Current upstream API families: 4.4.0 via keyring, secret-service; 5.19.0 via accesskit_unix, ashpd, atspi-common and other importers. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "zbus_macros"
+versions = ["4.4.0", "5.19.0"]
+reason = "Current upstream API families: 4.4.0 via zbus; 5.19.0 via zbus. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "zbus_names"
+versions = ["3.0.0", "4.3.4"]
+reason = "Current upstream API families: 3.0.0 via zbus; 4.3.4 via atspi-common, zbus, zbus_macros and other importers. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "zip"
+versions = ["4.6.1", "7.2.0"]
+reason = "Current upstream API families: 4.6.1 via ash-cli, ash-core-plugins; 7.2.0 via candle-core. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "zvariant"
+versions = ["4.2.0", "5.15.0"]
+reason = "Current upstream API families: 4.2.0 via zbus, zbus_names; 5.15.0 via accesskit_atspi_common, atspi-common, zbus and other importers. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "zvariant_derive"
+versions = ["4.2.0", "5.15.0"]
+reason = "Current upstream API families: 4.2.0 via zvariant; 5.15.0 via zvariant. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "zvariant_utils"
+versions = ["2.1.0", "4.2.0"]
+reason = "Current upstream API families: 2.1.0 via zbus_macros, zvariant_derive; 4.2.0 via zbus_macros, zvariant, zvariant_derive. Review the introducing packages together before changing this set."
+
+[[multiple_versions]]
+name = "io-lifetimes"
+versions = ["2.0.4", "3.0.1"]
+reason = "cap-std 4.0.3 uses io-lifetimes 3 through cap-primitives/io-extras; its fs-set-times 0.20.3 dependency still requires io-lifetimes 2."

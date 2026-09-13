@@ -30,7 +30,6 @@ ash-package-store = { workspace = true }
 process-hardening = { workspace = true }
 memories = { workspace = true }
 memories-extension = { workspace = true }
-extension-items = { workspace = true }
 queue = { workspace = true }
 ash-otel = { workspace = true }
 build-info = { workspace = true }
@@ -48,7 +47,6 @@ getrandom = { workspace = true }
 ignore = { workspace = true }
 log = { workspace = true }
 pollster = { workspace = true }
-semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
@@ -77,7 +75,6 @@ ash-extensions = { workspace = true }
 ash-editor-extension-host = { workspace = true }
 ash-extension-api = { workspace = true }
 ash-mcp-extension = { workspace = true }
-ash-mcp = { workspace = true }
 ash-file-system = { workspace = true }
 ash-file-watcher = { workspace = true }
 ash-fast-regex-search = { workspace = true }
@@ -86,7 +83,6 @@ github = { workspace = true }
 ash-http-client = { workspace = true }
 ash-hooks = { workspace = true }
 ash-install-context = { workspace = true }
-ash-tool-executor = { workspace = true }
 ash-instructions = { workspace = true }
 ash-kimi = { workspace = true }
 ash-lsp-server-provider = { workspace = true }
@@ -104,7 +100,6 @@ ash-protocol = { workspace = true }
 ash-projects = { workspace = true }
 ash-rollout = { workspace = true }
 ash-state = { workspace = true }
-ash-rmcp-client = { workspace = true }
 ash-sandboxing = { workspace = true }
 ash-file-access = { workspace = true }
 ash-content-search = { workspace = true }

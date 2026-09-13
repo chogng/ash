@@ -25,8 +25,6 @@ ash-app-server-protocol = { workspace = true }
 ash-app-server-transport = { workspace = true }
 ash-client = { workspace = true }
 ash-protocol = { workspace = true }
-ash-file-access = { workspace = true }
-
 [lints]
 workspace = true
 
@@ -34,6 +32,5 @@ workspace = true
 ash-utils-pty = { workspace = true }
 
 [dev-dependencies]
-tempfile = { workspace = true }
 ash-async-utils = { workspace = true }
 ash-core = { workspace = true }

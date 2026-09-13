@@ -1,5 +1,8 @@
 //! Windows account execution, explicit installation, and execution-owned cleanup.
 #[cfg(windows)]
+extern crate windows_sys_061 as windows_sys;
+
+#[cfg(windows)]
 mod windows;
 
 use ash_file_access::Dir;

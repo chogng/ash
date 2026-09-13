@@ -20,7 +20,6 @@ fs2 = { workspace = true }
 rusqlite = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sha2 = { workspace = true }
 ash-history = { workspace = true }
 ash-protocol = { workspace = true }
 ash-projects = { workspace = true }
@@ -33,7 +32,5 @@ ash-file-access = { workspace = true }
 rusqlite = { workspace = true, features = ["hooks"] }
 ash-core = { workspace = true }
 tempfile = { workspace = true }
-ash-environment = { workspace = true }
-
 [lints]
 workspace = true

@@ -455,8 +455,6 @@ version = "0.1.0"
 dependencies = [
  "schemars",
  "serde",
- "serde_json",
- "tempfile",
  "ts-rs",
 ]
 
@@ -522,7 +520,6 @@ dependencies = [
  "ash-editor-extension-host",
  "ash-execpolicy",
  "ash-extension-api",
- "ash-extension-items",
  "ash-extensions",
  "ash-fast-regex-search",
  "ash-features",
@@ -545,7 +542,6 @@ dependencies = [
  "ash-login",
  "ash-lsp-manager",
  "ash-lsp-server-provider",
- "ash-mcp",
  "ash-mcp-extension",
  "ash-memories",
  "ash-memories-extension",
@@ -563,7 +559,6 @@ dependencies = [
  "ash-prompts",
  "ash-protocol",
  "ash-queue",
- "ash-rmcp-client",
  "ash-rollout",
  "ash-sandboxing",
  "ash-secrets",
@@ -576,7 +571,6 @@ dependencies = [
  "ash-syntax",
  "ash-thread-store",
  "ash-thread-transcript",
- "ash-tool-executor",
  "ash-tools",
  "ash-typst",
  "ash-uds",
@@ -594,7 +588,6 @@ dependencies = [
  "image",
  "log",
  "pollster 1.0.1",
- "semver",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -618,7 +611,6 @@ dependencies = [
  "ash-core",
  "ash-diagnostics",
  "ash-feedback",
- "ash-file-access",
  "ash-memories",
  "ash-memory-diagnostics",
  "ash-protocol",
@@ -627,7 +619,6 @@ dependencies = [
  "base64 0.22.1",
  "serde",
  "serde_json",
- "tempfile",
  "zeroize",
 ]
 
@@ -685,11 +676,9 @@ dependencies = [
 name = "ash-app-server-transport"
 version = "0.1.0"
 dependencies = [
- "ash-app-server-protocol",
  "ash-uds",
  "futures",
  "rustix 1.1.4",
- "serde_json",
  "sha2 0.10.9",
  "tempfile",
  "tokio",
@@ -733,7 +722,6 @@ dependencies = [
  "ash-utils-image",
  "ash-utils-path",
  "image",
- "sha2 0.10.9",
  "tempfile",
  "thiserror 2.0.19",
  "url",
@@ -917,7 +905,6 @@ dependencies = [
 name = "ash-codebase-store"
 version = "0.1.0"
 dependencies = [
- "ash-api",
  "ash-codebase",
  "ash-file-access",
  "ash-model-provider",
@@ -1058,7 +1045,6 @@ dependencies = [
  "ash-tools",
  "ash-utils-path",
  "base64 0.22.1",
- "flate2",
  "getrandom 0.2.17",
  "semver",
  "serde",
@@ -1090,7 +1076,6 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
- "tempfile",
  "ts-rs",
 ]
 
@@ -1216,7 +1201,6 @@ name = "ash-extensions"
 version = "0.1.0"
 dependencies = [
  "ash-file-identity",
- "serde",
  "serde_json",
  "sha2 0.10.9",
  "tempfile",
@@ -1238,7 +1222,6 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "tempfile",
- "thiserror 2.0.19",
 ]
 
 [[package]]
@@ -1263,7 +1246,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
- "tempfile",
  "ts-rs",
  "url",
 ]
@@ -1370,7 +1352,6 @@ dependencies = [
 name = "ash-github"
 version = "0.1.0"
 dependencies = [
- "ash-protocol",
  "serde",
  "serde_json",
  "tempfile",
@@ -1417,8 +1398,6 @@ dependencies = [
  "ash-model-provider",
  "ash-model-provider-config",
  "ash-protocol",
- "serde_json",
- "tempfile",
 ]
 
 [[package]]
@@ -1833,7 +1812,6 @@ dependencies = [
  "log",
  "mxc-sdk",
  "tempfile",
- "tracelogging",
 ]
 
 [[package]]
@@ -1902,7 +1880,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
- "tempfile",
 ]
 
 [[package]]
@@ -1980,12 +1957,10 @@ version = "0.1.0"
 name = "ash-remote-connections"
 version = "0.1.0"
 dependencies = [
- "ash-app-server",
  "ash-app-server-client",
  "ash-app-server-protocol",
  "ash-build-info",
  "ash-http-client",
- "ash-install-context",
  "ash-package-store",
  "ash-process-hardening",
  "ash-remote",
@@ -2190,7 +2165,6 @@ dependencies = [
  "pollster 1.0.1",
  "serde",
  "serde_json",
- "tempfile",
  "tokio",
 ]
 
@@ -2238,7 +2212,6 @@ dependencies = [
  "ash-agent-graph-store",
  "ash-async-utils",
  "ash-core",
- "ash-environment",
  "ash-file-access",
  "ash-github",
  "ash-history",
@@ -2253,7 +2226,6 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
- "sha2 0.10.9",
  "tempfile",
 ]
 
@@ -2283,9 +2255,6 @@ dependencies = [
 [[package]]
 name = "ash-terminal-detection"
 version = "0.1.0"
-dependencies = [
- "pretty_assertions",
-]
 
 [[package]]
 name = "ash-terminal-runtime"
@@ -2380,11 +2349,9 @@ version = "0.1.0"
 dependencies = [
  "arboard",
  "ash-ansi-escape",
- "ash-app-server",
  "ash-app-server-client",
  "ash-app-server-protocol",
  "ash-client",
- "ash-diff",
  "ash-file-access",
  "ash-file-search",
  "ash-keybinding",
@@ -2401,7 +2368,6 @@ dependencies = [
  "ash-utils-elapsed",
  "ash-utils-home-dir",
  "ash-utils-image",
- "ash-utils-path",
  "base64 0.22.1",
  "chrono",
  "crossterm",
@@ -2682,7 +2648,6 @@ name = "ash-workbench"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "ash-app-server",
  "ash-app-server-client",
  "ash-app-server-daemon",
  "ash-app-server-protocol",
@@ -2691,11 +2656,8 @@ dependencies = [
  "ash-diff",
  "ash-editor",
  "ash-editor-host",
- "ash-file-access",
- "ash-file-search",
  "ash-files",
  "ash-icons",
- "ash-input-classifier",
  "ash-keybinding",
  "ash-keybindings-host",
  "ash-lsp-manager",
@@ -2709,7 +2671,6 @@ dependencies = [
  "ash-scm",
  "ash-session",
  "ash-settings",
- "ash-slash-commands",
  "ash-state",
  "ash-terminal",
  "ash-terminal-runtime",
@@ -2718,14 +2679,12 @@ dependencies = [
  "ash-ui-components",
  "ash-ui-theme",
  "ash-utils-home-dir",
- "ash-utils-path",
  "flate2",
  "serde_json",
  "sha2 0.10.9",
  "signal-hook",
  "tar",
  "tempfile",
- "unicode-width 0.2.0",
  "zui",
 ]
 

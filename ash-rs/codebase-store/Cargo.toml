@@ -20,7 +20,6 @@ ash-file-access = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
-ash-api = { workspace = true }
 ash-file-access = { workspace = true }
 
 [lints]

@@ -11,7 +11,6 @@ name = "ash_attachments"
 path = "src/lib.rs"
 
 [dependencies]
-sha2 = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
 url = { workspace = true }

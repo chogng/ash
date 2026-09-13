@@ -19,9 +19,6 @@ model-provider-config = { package = "ash-model-provider-config", path = "../../m
 protocol = { package = "ash-protocol", path = "../../protocol" }
 
 [dev-dependencies]
-serde_json = { workspace = true }
 ash-core = { workspace = true }
-tempfile = { workspace = true }
-
 [lints]
 workspace = true

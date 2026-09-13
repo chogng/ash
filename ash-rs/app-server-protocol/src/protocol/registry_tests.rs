@@ -1,6 +1,86 @@
 use super::CLIENT_METHODS;
 use super::ClientRequestSerializationScope;
 use super::SerializationAccess;
+use schemars::JsonSchema;
+
+#[test]
+fn shared_method_schema_matches_derived_tagged_payloads() {
+    #[derive(serde::Serialize, JsonSchema)]
+    struct Payload {
+        value: bool,
+    }
+
+    #[derive(serde::Serialize, JsonSchema)]
+    #[serde(tag = "method", content = "params")]
+    enum Reference {
+        #[serde(rename = "value")]
+        Value(Payload),
+        #[serde(rename = "null")]
+        Null(()),
+        #[serde(rename = "optional")]
+        Optional(Option<Payload>),
+        #[serde(rename = "boxed")]
+        Boxed(Box<Payload>),
+    }
+
+    let mut derived = schemars::SchemaGenerator::default();
+    let expected = Reference::json_schema(&mut derived);
+    let mut shared = schemars::SchemaGenerator::default();
+    let actual = super::method_schema(
+        &mut shared,
+        "params",
+        &[
+            ("value", schemars::SchemaGenerator::subschema_for::<Payload>),
+            ("null", schemars::SchemaGenerator::subschema_for::<()>),
+            (
+                "optional",
+                schemars::SchemaGenerator::subschema_for::<Option<Payload>>,
+            ),
+            (
+                "boxed",
+                schemars::SchemaGenerator::subschema_for::<Box<Payload>>,
+            ),
+        ],
+    );
+    assert_eq!(actual, expected);
+    assert_eq!(shared.definitions(), derived.definitions());
+
+    let examples = [
+        Reference::Value(Payload { value: true }),
+        Reference::Null(()),
+        Reference::Optional(None),
+        Reference::Boxed(Box::new(Payload { value: false })),
+    ];
+    let schema = serde_json::to_value(actual).unwrap();
+    for (variant, example) in schema["oneOf"].as_array().unwrap().iter().zip(examples) {
+        let wire = serde_json::to_value(example).unwrap();
+        assert_eq!(variant["properties"]["method"]["const"], wire["method"]);
+        assert!(wire.get("params").is_some());
+        assert_eq!(variant["required"], serde_json::json!(["method", "params"]));
+    }
+}
+
+#[test]
+fn method_schema_markers_preserve_derived_names_and_ids() {
+    assert_eq!(
+        super::ClientRequestSchema::schema_name(),
+        "ClientRequestSchema"
+    );
+    assert_eq!(
+        super::ClientRequestSchema::schema_id(),
+        "ash_app_server_protocol::protocol::registry::ClientRequestSchema"
+    );
+    assert_eq!(
+        super::ClientResultSchema::schema_name(),
+        "ClientResultSchema"
+    );
+    assert_eq!(super::HostRequestSchema::schema_name(), "HostRequestSchema");
+    assert_eq!(super::HostResultSchema::schema_name(), "HostResultSchema");
+    assert_eq!(
+        super::ServerNotificationSchema::schema_name(),
+        "ServerNotificationSchema"
+    );
+}
 
 fn definition(method: &str) -> &'static super::ClientMethodDefinition {
     CLIENT_METHODS

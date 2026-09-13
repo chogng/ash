@@ -12,7 +12,6 @@ path = "lib.rs"
 
 [dependencies]
 ash-utils-home-dir = { workspace = true }
-ash-app-server = { workspace = true }
 memories = { workspace = true }
 message-history = { workspace = true }
 state = { package = "ash-state", path = "../../ash-rs/state" }
@@ -20,7 +19,6 @@ ash-memory-diagnostics = { workspace = true }
 anyhow = { workspace = true }
 serde_json = { workspace = true }
 signal-hook = { workspace = true }
-unicode-width = { workspace = true }
 ash-app-server-client = { workspace = true }
 ash-app-server-daemon = { workspace = true }
 ash-app-server-protocol = { workspace = true }
@@ -28,10 +26,8 @@ ash-commands = { workspace = true }
 ash-diff = { workspace = true }
 ash-editor = { workspace = true }
 ash-editor-host = { workspace = true }
-ash-file-search = { workspace = true }
 ash-files = { workspace = true }
 ash-icons = { workspace = true }
-ash-input-classifier = { workspace = true }
 ash-keybinding = { workspace = true }
 ash-keybindings-host = { workspace = true }
 ash-lsp-manager = { workspace = true }
@@ -43,14 +39,12 @@ ash-session = { workspace = true }
 ash-settings = { workspace = true }
 ash-scm = { workspace = true }
 arg0 = { workspace = true }
-ash-slash-commands = { workspace = true }
 ash-terminal = { workspace = true }
 ash-terminal-runtime = { workspace = true }
 ash-text-file = { workspace = true }
 ash-theme = { workspace = true }
 ash-ui-components = { workspace = true }
 ash-ui-theme = { workspace = true }
-ash-utils-path = { workspace = true }
 zui = { workspace = true, features = ["wgpu"] }
 
 [lints]
@@ -63,4 +57,3 @@ tar = { workspace = true }
 tempfile = { workspace = true }
 ash-diff = { workspace = true }
 ash-text-file = { workspace = true }
-ash-file-access = { workspace = true }

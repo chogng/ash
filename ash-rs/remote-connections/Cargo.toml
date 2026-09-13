@@ -16,8 +16,6 @@ path = "src/lib.rs"
 
 [dependencies]
 ash-utils-home-dir = { workspace = true }
-ash-install-context = { workspace = true }
-ash-app-server = { workspace = true }
 build-info = { workspace = true }
 ash-package-store = { workspace = true }
 process-hardening = { workspace = true }

@@ -19,7 +19,6 @@ regex-syntax = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
-thiserror = { workspace = true }
 ash-file-access = { workspace = true }
 ash-immutable-generation-store = { workspace = true }
 ash-uds = { workspace = true }

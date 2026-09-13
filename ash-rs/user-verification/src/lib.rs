@@ -1,5 +1,10 @@
 //! Device credentials and signing, independent of RPC routing, UI, and backend registration.
 
+#[cfg(target_os = "macos")]
+extern crate objc2_06 as objc2;
+#[cfg(target_os = "macos")]
+extern crate objc2_foundation_03 as objc2_foundation;
+
 mod credential;
 #[cfg(any(target_os = "macos", test))]
 mod device_operation;

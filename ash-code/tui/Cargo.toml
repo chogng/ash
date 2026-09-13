@@ -12,7 +12,6 @@ path = "src/lib.rs"
 
 [dependencies]
 ash-utils-home-dir = { workspace = true }
-ash-app-server = { workspace = true }
 memories = { workspace = true }
 queue = { workspace = true }
 message-history = { workspace = true }
@@ -42,14 +41,12 @@ ash-app-server-protocol = { workspace = true }
 ash-file-search = { workspace = true }
 ash-file-access = { workspace = true }
 ash-keybinding = { workspace = true }
-ash-diff = { workspace = true }
 ash-protocol = { workspace = true }
 ash-product-update = { workspace = true }
 ash-slash-commands = { workspace = true }
 ash-sprite = { workspace = true }
 ash-terminal-detection = { workspace = true }
 ash-utils-elapsed = { workspace = true }
-ash-utils-path = { workspace = true }
 ash-utils-image = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]

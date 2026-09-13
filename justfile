@@ -18,7 +18,15 @@ fmt-check:
 
 # Run repository-owned Python tests, optionally selecting ash-code, build, or release.
 test-python *args:
-    {{ python }} -B scripts/test-python.py {args}
+    uv run --frozen --project scripts python -B scripts/test-python.py {args}
+
+# Reject dependency declaration, ownership, version, and unused-dependency violations.
+dependencies *args:
+    uv run --frozen --project scripts python -B scripts/dependencies.py {args}
+
+# Measure a selected Cargo package in isolated build directories.
+bench-build *args:
+    uv run --frozen --project scripts python -B scripts/benchmark.py {args}
 
 # Build all three product lines from the repository root.
 build: build-desktop build-rust

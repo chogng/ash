@@ -13774,7 +13774,7 @@
       ]
     },
     "DirId": {
-      "description": "Opaque, durable lookup key for one canonical directory.\n\nHosts persist this value instead of the filesystem path itself. It intentionally identifies\nthe canonical path boundary rather than directory-controlled content, so aliases resolve to\nthe same key and moving the directory produces a new identity.",
+      "description": "Opaque, durable lookup key for one canonical directory.\n\nHosts persist this value instead of the filesystem path itself. It intentionally identifies\nthe environment, canonical path, and physical directory object. Aliases resolve to the same\nkey; replacing or moving the directory produces a different identity.",
       "type": "string"
     },
     "DirPermissionsEntryDto": {

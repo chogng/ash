@@ -22,15 +22,15 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-core-foundation = "0.10"
+core-foundation = { workspace = true }
 dirs = { workspace = true }
-objc2 = "0.6.3"
-objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSString"] }
-objc2-local-authentication = { version = "0.3.2", default-features = false, features = ["std", "LAContext", "LABiometryType"] }
-security-framework = { version = "3.5", features = ["OSX_10_15"] }
-security-framework-sys = "2.15"
+objc2-06 = { workspace = true }
+objc2-foundation-03 = { workspace = true, default-features = false, features = ["std", "NSString"] }
+objc2-local-authentication = { workspace = true, default-features = false, features = ["std", "LAContext", "LABiometryType"] }
+security-framework = { workspace = true, features = ["OSX_10_15"] }
+security-framework-sys = { workspace = true }
 
 [dev-dependencies]
-p256 = { version = "0.13", features = ["ecdsa"] }
+p256 = { workspace = true, features = ["ecdsa"], default-features = true }
 pretty_assertions = { workspace = true }
 tempfile = { workspace = true }

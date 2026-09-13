@@ -31,7 +31,9 @@ Node 工具与 Desktop 单测使用仓库根 `.nvmrc` 固定的 Node 25.2.1。�
 | `just ash-package` | 组装并发布 Desktop、Web 与 Code TUI 共用的完整不可变开发包 |
 | `just ash-package-run` | 组装完整开发包，并让 Code TUI 连接该包中的 daemon 与产品服务 |
 | `just fmt` / `just fmt-check` | 格式化或检查 Just、Rust 和第一方 Python 源码 |
-| `just test-python [ash-code|build|release]` | 运行全部 Python 单元测试，或只运行指定 owner 的测试 |
+| `just test-python [scripts|ash-code|build|release]` | 使用锁定的 Python 工具环境运行全部单元测试，或只运行指定 owner 的测试 |
+| `just dependencies` | 检查 Rust 依赖声明、间接依赖边界、已审查的多版本集合和无用依赖 |
+| `just bench-build <package> [--profile dev]` | 记录一个 Cargo package 的构建耗时、RSS 和产物大小 |
 | `corepack pnpm build` | 构建 Electron Main、Preload 和当前 `ASH_PRODUCT` Renderer |
 | `corepack pnpm build:desktop` | 构建 Electron Main、Preload 和当前 `ASH_PRODUCT` Renderer |
 | `corepack pnpm test:build` | 运行构建工具自身的单元测试 |
@@ -72,6 +74,51 @@ Desktop 的 `code` 与 `academic` 仍通过同一个 `build:desktop` 入口构�
 
 根 Cargo profile 在 `dev` 与 `test` 中对完整依赖图使用轻量优化，并对 `app`、`ash-app-server` 与 `ash-app-server-client` 的超大最终链接单元使用 size optimization；debug assertions、各 profile 既有的调试信息与增量编译仍然保留。该配置把 macOS 产物的 `__eh_frame` 控制在 compact-unwind 的 16 MiB 编码上限内，不能用关闭 `linker_messages` 代替。
 
+## Rust 依赖检查与构建测量
+
+依赖规则由 [Rust 规范](../.github/instructions/rust.instructions.md#dependencies-and-build-costs)维护。`scripts/dependencies.py` 是本地与 CI 共用的检查入口；使用 Cargo 返回的工作区成员，读取全部平台的普通、构建和测试依赖声明，并按普通/构建依赖检查内部依赖路径。它不把测试依赖当作产品依赖边界，也不尝试推断外部库内部的业务层次。
+
+安装固定工具版本后运行检查：
+
+```sh
+cargo install cargo-shear --version 1.13.4 --locked
+just dependencies
+just test-python scripts
+```
+
+`.cargo/dependencies.toml` 记录整个锁文件中的多版本包、精确版本及当前引入方。版本集合发生变化或记录失效时检查失败；新版本必须结合 `cargo tree --workspace --target all -i <package>` 审阅。它不禁止所有传递依赖的多版本并存，也不把锁文件数量当作当前产品实际编译单元数。
+
+cargo-shear 的依赖错误和依赖警告都会阻断检查，工具处理失败也会失败。工作区内自有 crate 的根目录别名本身不产生编译任务，允许没有依赖方；第三方根依赖仍检查是否被使用。孤立源码文件诊断会打印，但不属于依赖检查的失败条件。依赖误报必须在所属包的 `package.metadata.cargo-shear` 中逐项说明，不能用整个工作区的忽略列表屏蔽真实依赖问题。CI 不运行 `--fix`。
+
+构建基线使用 macOS 或 Linux 的 `/usr/bin/time`，至少重复三轮。每轮分配自己的空 Cargo 输出目录，依次测量构建、无改动重跑和触碰选定源码时间戳后的重编译；保留日志、Cargo timings、JSON 测量及产物文件大小，然后删除本轮独占的编译输出。共享的 `.build/cargo` 不会被清理。触碰后恢复原时间戳，不覆盖同时发生的编辑。
+
+```sh
+cargo fetch --locked
+just bench-build ash-keybinding --profile dev --jobs 4
+just bench-build ash-cli --profile dev-small --jobs 4
+just bench-build ash-cli --profile release --jobs 4
+```
+
+报告保存在 `.build/build-health/`。RSS 是 `time` 报告的最大驻留集，不是全部并行编译进程内存之和；产物大小是 Cargo 报告的文件大小，不是签名、剥离符号和压缩后的发布包大小。空 Cargo 输出不代表清空操作系统、下载或外部编译器缓存。依赖下载应在测量前完成，构建使用 `--offline`。
+
+同机、同工具链、同 profile/target、并发数、输入文件和环境参数的报告可以显式比较：
+
+```sh
+just bench-build ash-keybinding --jobs 4 --compare .build/build-health/<run>/report.json --max-regression 15
+```
+
+超过调用方指定的耗时阈值会失败；`--absolute-regression 2` 可额外允许两秒以内的绝对波动，只有相对和绝对阈值同时超过才失败。负载不同或结果波动时必须复测。
+
+`Rust build health` 在 push/PR 检查依赖与工具回归测试，并对编译热点 `ash-app-server-protocol` 执行性能门禁：在同一个 Ubuntu 作业中分别检出基线和当前源码，两份源码使用当前版本的 Rust 工具链、四个并发任务，各测三轮。任一场景的耗时中位数同时增加超过 25% 和两秒时检查失败，两份日志和报告都会上传。基线取 PR 的 base commit 或 push 前的 commit；首次推送没有基线时仅执行依赖检查。这是协议包的编译门禁，不代表其他产品的整包耗时预算。
+
+测量脚本的 `--root <workspace>` 允许当前版本的工具测量旧源码，即使旧源码中还没有测量工具。CI 将两个 checkout 放在并列目录，避免当前版本的 `.cargo/config.toml` 影响基线。手动触发 CI 时默认测量 `ash-cli`，也可选择 `ash-app-server` 或 `app`，分别记录产品构建基线。
+
+协议注册表的 Schema 对象构造、TypeScript 默认配置初始化和依赖名称收集由非泛型函数处理。注册表保存具体类型的方法指针，避免把相同包装逻辑在大量类型和下游消费者中重复实例化。JSON Schema、TypeScript 和 schema hash 仍由协议测试验证同步。
+
+2026-09-13 的本机对照使用固定源码、Rust 1.98.0、aarch64-apple-darwin 和六个 Cargo 任务。第三方依赖已缓存，回切协议注册表实现后构建 `ash` 发布程序，三组无其他 Rust 编译重叠的有效配对结果为 122.70→83.61 秒、108.17→75.63 秒、120.07→83.46 秒，中位数 120.07→83.46 秒，减少 30.5%。六次的重编译包集合一致；早期受干扰、误判 Fresh 或重编译范围不同的运行均未计入。这个结果只说明该重编译场景，不代表所有构建都提速 30.5%。
+
+同次实验没有采用全局 Profile 候选：`4 CGU + ThinLTO` 的单次冷构建约快 9%，但仅修改 CLI 入口后的 Release 重编译中位数从 6.50 秒增加到 159.24 秒；build-override O1 加六个宏相关包 O3 则使开发冷构建从约 313 秒增加到 341 秒，touch 重编译中位数只减少约 0.36 秒。默认参数保留，实际改进来自消除重复生成和实例化。
+
 ## 构建源码与仓库脚本边界
 
 `build/` 沿用 VS Code 的机制分类，而不是按产品复制工具链。只为已经存在的构建职责创建目录：
@@ -105,7 +152,7 @@ Desktop 的 `code` 与 `academic` 仍通过同一个 `build:desktop` 入口构�
 
 共享发布包先收集未提供预编译文件的第一方程序，再用一次 Cargo 调用构建并读取其报告的可执行文件路径。App 发布直接使用打包参数和 `signing.py sign / verify / record`；签名凭据由环境变量提供。
 
-`scripts/` 根目录保存跨产品仓库工具：`just-shell.py` 提供 Just 的跨平台 shell，`cargo.py` 为整个 Cargo workspace 准备锁定的构建输入，`format.py` 统一已有格式化器，`test-python.py` 按 `ash-code`、`build`、`release` 分别运行 Python 测试并在不指定范围时聚合执行。
+`scripts/` 根目录保存跨产品仓库工具：`just-shell.py` 提供 Just 的跨平台 shell，`cargo.py` 为整个 Cargo workspace 准备锁定的构建输入，`format.py` 统一已有格式化器，`test-python.py` 按 `scripts`、`ash-code`、`build`、`release` 分别运行 Python 测试并在不指定范围时聚合执行。
 
 Desktop 的 Node、Browser 和 Playwright 测试入口与 loader 归 `ash-ts/test/`，根 `package.json` 直接调用 `ash-ts` 的公开测试命令。`scripts/ash-code/` 保存 Code TUI 的源码运行和完整开发包运行入口；`scripts/ash-rs/` 保存共享 Rust 后端的开发环境操作。`app` 当前没有独立脚本，因此不创建空占位文件。
 

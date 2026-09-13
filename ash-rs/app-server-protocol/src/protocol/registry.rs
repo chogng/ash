@@ -675,28 +675,6 @@ use crate::protocol::turn_changes::TurnChangesReadResult;
 use crate::protocol::turn_changes::TurnChangesUpdateDraftParams;
 use analytics::UsageEvent;
 use analytics::UsageSnapshot;
-use build_info::BuildInfo;
-use diagnostics::Activity;
-use diagnostics::ActivitySummary;
-use diagnostics::DiagnosticSnapshot;
-use diagnostics::Observation;
-use diagnostics::Outcome;
-use extension_items::ExtensionItem;
-use extension_items::ExtensionItemContent;
-use extension_items::ExtensionItemStatus;
-use extension_items::SearchSource;
-use features::Feature;
-use features::FeatureSource;
-use features::FeatureStage;
-use features::FeatureState;
-use feedback::PreparedFeedback;
-use queue::QueueInput;
-use queue::QueueMove;
-use queue::QueueStatus;
-use queue::QueuedMessage;
-use schemars::JsonSchema;
-use ts_rs::Config;
-use ts_rs::TS;
 use ash_environment::EnvId;
 use ash_file_access::DirId;
 use ash_memory_diagnostics::MemoryEvidence;
@@ -869,6 +847,28 @@ use ash_protocol::UserInputAnswer;
 use ash_protocol::UserInputOption;
 use ash_protocol::UserInputQuestion;
 use ash_protocol::WorkspaceCheckpoint;
+use build_info::BuildInfo;
+use diagnostics::Activity;
+use diagnostics::ActivitySummary;
+use diagnostics::DiagnosticSnapshot;
+use diagnostics::Observation;
+use diagnostics::Outcome;
+use extension_items::ExtensionItem;
+use extension_items::ExtensionItemContent;
+use extension_items::ExtensionItemStatus;
+use extension_items::SearchSource;
+use features::Feature;
+use features::FeatureSource;
+use features::FeatureStage;
+use features::FeatureState;
+use feedback::PreparedFeedback;
+use queue::QueueInput;
+use queue::QueueMove;
+use queue::QueueStatus;
+use queue::QueuedMessage;
+use schemars::JsonSchema;
+use ts_rs::Config;
+use ts_rs::TS;
 
 /// Selects whether equal scheduling keys exclude or share execution.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -922,17 +922,17 @@ pub struct ClientMethodDefinition {
     pub method: &'static str,
     pub serialization: SerializationScopeDefinition,
     pub cancellation: CancellationDefinition,
-    params_type: fn() -> String,
-    result_type: fn() -> String,
+    params_type: fn(&Config) -> String,
+    result_type: fn(&Config) -> String,
 }
 
 impl ClientMethodDefinition {
     pub fn params_type(&self) -> String {
-        (self.params_type)()
+        (self.params_type)(&Config::default())
     }
 
     pub fn result_type(&self) -> String {
-        (self.result_type)()
+        (self.result_type)(&Config::default())
     }
 
     /// Resolves the client-generated operation identity declared by this method.
@@ -1049,17 +1049,17 @@ fn serialization_parameter(
 pub struct HostMethodDefinition {
     pub kind: HostMethod,
     pub method: &'static str,
-    params_type: fn() -> String,
-    result_type: fn() -> String,
+    params_type: fn(&Config) -> String,
+    result_type: fn(&Config) -> String,
 }
 
 impl HostMethodDefinition {
     pub fn params_type(&self) -> String {
-        (self.params_type)()
+        (self.params_type)(&Config::default())
     }
 
     pub fn result_type(&self) -> String {
-        (self.result_type)()
+        (self.result_type)(&Config::default())
     }
 }
 
@@ -1067,53 +1067,89 @@ impl HostMethodDefinition {
 pub struct ServerNotificationDefinition {
     pub kind: ServerNotificationMethod,
     pub method: &'static str,
-    params_type: fn() -> String,
+    params_type: fn(&Config) -> String,
 }
 
 impl ServerNotificationDefinition {
     pub fn params_type(&self) -> String {
-        (self.params_type)()
+        (self.params_type)(&Config::default())
     }
 }
 
 #[derive(Clone, Copy)]
 pub(crate) struct TypeScriptBinding {
-    declaration: fn() -> String,
-    dependencies: fn() -> Vec<String>,
-    identifier: fn() -> String,
+    declaration: fn(&Config) -> String,
+    dependencies: fn(&Config) -> Vec<ts_rs::Dependency>,
+    identifier: fn(&Config) -> String,
 }
 
 impl TypeScriptBinding {
     pub(crate) fn declaration(&self) -> String {
-        (self.declaration)()
+        (self.declaration)(&Config::default())
     }
 
     pub(crate) fn dependencies(&self) -> Vec<String> {
-        (self.dependencies)()
+        (self.dependencies)(&Config::default())
+            .into_iter()
+            .map(|dependency| dependency.ts_name)
+            .collect()
     }
 
     pub(crate) fn identifier(&self) -> String {
-        (self.identifier)()
+        (self.identifier)(&Config::default())
     }
 }
 
-fn type_name<T: TS>() -> String {
-    T::name(&Config::default())
+type VariantSchema = (
+    &'static str,
+    fn(&mut schemars::SchemaGenerator) -> schemars::Schema,
+);
+
+// Keep object construction out of the hundreds of registered method instantiations.
+// The payload schema functions retain their concrete types; this loop is compiled once.
+#[inline(never)]
+fn method_schema(
+    generator: &mut schemars::SchemaGenerator,
+    content: &str,
+    variants: &[VariantSchema],
+) -> schemars::Schema {
+    let variants = variants
+        .iter()
+        .map(|(method, payload)| {
+            let payload = payload(generator);
+            schemars::json_schema!({
+                "type": "object",
+                "properties": {
+                    "method": { "type": "string", "const": method },
+                    content: payload,
+                },
+                "required": ["method", content],
+            })
+        })
+        .collect::<Vec<_>>();
+    schemars::json_schema!({ "oneOf": variants })
 }
 
-fn declaration<T: TS>() -> String {
-    T::decl(&Config::default())
-}
+macro_rules! method_schema_type {
+    ($name:ident, $content:literal, { $($method:literal => $payload:ty,)+ }) => {
+        pub(crate) struct $name;
 
-fn dependencies<T: TS + 'static>() -> Vec<String> {
-    T::dependencies(&Config::default())
-        .into_iter()
-        .map(|dependency| dependency.ts_name)
-        .collect()
-}
+        impl JsonSchema for $name {
+            fn schema_name() -> std::borrow::Cow<'static, str> {
+                std::borrow::Cow::Borrowed(stringify!($name))
+            }
 
-fn identifier<T: TS>() -> String {
-    T::ident(&Config::default())
+            fn schema_id() -> std::borrow::Cow<'static, str> {
+                std::borrow::Cow::Borrowed(concat!(module_path!(), "::", stringify!($name)))
+            }
+
+            fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+                method_schema(generator, $content, &[
+                    $(($method, schemars::SchemaGenerator::subschema_for::<$payload>),)+
+                ])
+            }
+        }
+    };
 }
 
 macro_rules! client_methods {
@@ -1154,31 +1190,14 @@ macro_rules! client_methods {
                     method: $method,
                     serialization: SerializationScopeDefinition::$serialization$(($serialization_key))?,
                     cancellation: cancellation_definition!($($cancellation_parameter)?),
-                    params_type: type_name::<$params>,
-                    result_type: type_name::<$response>,
+                    params_type: <$params as TS>::name,
+                    result_type: <$response as TS>::name,
                 },
             )+
         ];
 
-        #[allow(dead_code)]
-        #[derive(JsonSchema)]
-        #[serde(tag = "method", content = "params")]
-        pub(crate) enum ClientRequestSchema {
-            $(
-                #[serde(rename = $method)]
-                $variant($params),
-            )+
-        }
-
-        #[allow(dead_code)]
-        #[derive(JsonSchema)]
-        #[serde(tag = "method", content = "result")]
-        pub(crate) enum ClientResultSchema {
-            $(
-                #[serde(rename = $method)]
-                $variant(Box<$response>),
-            )+
-        }
+        method_schema_type!(ClientRequestSchema, "params", { $($method => $params,)+ });
+        method_schema_type!(ClientResultSchema, "result", { $($method => Box<$response>,)+ });
     };
 }
 
@@ -2475,31 +2494,14 @@ macro_rules! host_methods {
                 HostMethodDefinition {
                     kind: HostMethod::$variant,
                     method: $method,
-                    params_type: type_name::<$params>,
-                    result_type: type_name::<$response>,
+                    params_type: <$params as TS>::name,
+                    result_type: <$response as TS>::name,
                 },
             )+
         ];
 
-        #[allow(clippy::enum_variant_names, dead_code)]
-        #[derive(JsonSchema)]
-        #[serde(tag = "method", content = "params")]
-        pub(crate) enum HostRequestSchema {
-            $(
-                #[serde(rename = $method)]
-                $variant($params),
-            )+
-        }
-
-        #[allow(clippy::enum_variant_names, dead_code)]
-        #[derive(JsonSchema)]
-        #[serde(tag = "method", content = "result")]
-        pub(crate) enum HostResultSchema {
-            $(
-                #[serde(rename = $method)]
-                $variant(Box<$response>),
-            )+
-        }
+        method_schema_type!(HostRequestSchema, "params", { $($method => $params,)+ });
+        method_schema_type!(HostResultSchema, "result", { $($method => Box<$response>,)+ });
     };
 }
 
@@ -2591,20 +2593,12 @@ macro_rules! server_notifications {
                 ServerNotificationDefinition {
                     kind: ServerNotificationMethod::$variant,
                     method: $method,
-                    params_type: type_name::<$params>,
+                    params_type: <$params as TS>::name,
                 },
             )+
         ];
 
-        #[allow(dead_code, clippy::large_enum_variant)]
-        #[derive(JsonSchema)]
-        #[serde(tag = "method", content = "params")]
-        pub(crate) enum ServerNotificationSchema {
-            $(
-                #[serde(rename = $method)]
-                $variant($params),
-            )+
-        }
+        method_schema_type!(ServerNotificationSchema, "params", { $($method => $params,)+ });
     };
 }
 
@@ -2717,9 +2711,9 @@ macro_rules! typescript_bindings {
         pub(crate) const TYPESCRIPT_BINDINGS: &[TypeScriptBinding] = &[
             $(
                 TypeScriptBinding {
-                    declaration: declaration::<$type>,
-                    dependencies: dependencies::<$type>,
-                    identifier: identifier::<$type>,
+                    declaration: <$type as TS>::decl,
+                    dependencies: <$type as TS>::dependencies,
+                    identifier: <$type as TS>::ident,
                 },
             )+
         ];
