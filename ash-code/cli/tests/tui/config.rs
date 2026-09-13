@@ -249,6 +249,7 @@ fn actual_tui_opens_chatgpt_subscription_and_returns_to_providers() {
 #[test]
 fn actual_tui_reuses_chatgpt_subscription_without_changing_codex_auth() {
     let fixture = Fixture::new();
+    fixture.install_codex_marker();
     let server = ScenarioServer::start([]);
     fixture.write_config(&server.base_url());
     fs::create_dir_all(fixture.codex_home()).unwrap();

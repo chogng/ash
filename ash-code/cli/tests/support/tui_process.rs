@@ -46,6 +46,7 @@ pub const SMALL_SIZE: PtySize = PtySize {
 
 pub struct Fixture {
     _root: TempDir,
+    root: PathBuf,
     workspace: PathBuf,
     profile: PathBuf,
     daemon: PathBuf,
@@ -54,9 +55,41 @@ pub struct Fixture {
 impl Fixture {
     pub fn new() -> Self {
         trace_pty("fixture begin");
+        #[cfg(unix)]
+        let base = fs::canonicalize(std::env::temp_dir()).unwrap();
+        #[cfg(unix)]
+        let root = tempfile::Builder::new()
+            .prefix("zt-")
+            .tempdir_in(base)
+            .unwrap();
+        #[cfg(windows)]
         let root = tempfile::Builder::new().prefix("zt-").tempdir().unwrap();
-        let workspace = root.path().join("workspace");
-        let profile = root.path().join("profile");
+        #[cfg(unix)]
+        let path = {
+            // Path clipping in text snapshots must be identical on macOS and Linux.
+            const LENGTH: usize = 66;
+            let path = fs::canonicalize(root.path()).unwrap();
+            let padding = LENGTH
+                .checked_sub(path.as_os_str().len())
+                .expect("Unix PTY fixture root exceeds the fixed snapshot path length");
+            let path = if padding == 0 {
+                path
+            } else {
+                assert!(
+                    padding > 1,
+                    "Unix PTY fixture path cannot be padded by one byte"
+                );
+                let padded = path.join("x".repeat(padding - 1));
+                fs::create_dir(&padded).unwrap();
+                padded
+            };
+            assert_eq!(path.as_os_str().len(), LENGTH);
+            path
+        };
+        #[cfg(windows)]
+        let path = root.path().to_path_buf();
+        let workspace = path.join("workspace");
+        let profile = path.join("profile");
         fs::create_dir_all(&workspace).unwrap();
         fs::create_dir_all(&profile).unwrap();
         assert!(Path::new(env!("CARGO_BIN_EXE_ash")).is_absolute());
@@ -71,6 +104,7 @@ impl Fixture {
         trace_pty("fixture ready");
         Self {
             _root: root,
+            root: path,
             workspace,
             profile,
             daemon,
@@ -102,7 +136,7 @@ impl Fixture {
 
     #[cfg(unix)]
     pub fn install_issue_provider(&self) {
-        let bin = self._root.path().join("bin");
+        let bin = self.root.join("bin");
         fs::create_dir_all(&bin).unwrap();
         let issue = serde_json::json!({"number":3,"title":"Repair first issue","body":"First requirement","html_url":"https://github.com/team/repo/issues/3","updated_at":"2026-09-07T00:00:00Z","state":"open"});
         let mut second = issue.clone();
@@ -122,6 +156,23 @@ impl Fixture {
         let script = bin.join("gh");
         fs::write(&script, include_str!("issue_provider.py")).unwrap();
         fs::set_permissions(script, fs::Permissions::from_mode(0o700)).unwrap();
+    }
+
+    pub fn install_codex_marker(&self) {
+        let bin = self.root.join("bin");
+        fs::create_dir_all(&bin).unwrap();
+        let marker = bin.join(if cfg!(windows) { "codex.cmd" } else { "codex" });
+        fs::write(
+            &marker,
+            if cfg!(windows) {
+                "@echo off\r\n"
+            } else {
+                "#!/bin/sh\nexit 0\n"
+            },
+        )
+        .unwrap();
+        #[cfg(unix)]
+        fs::set_permissions(marker, fs::Permissions::from_mode(0o700)).unwrap();
     }
 
     pub fn write_config(&self, base_url: &str) {
@@ -162,7 +213,7 @@ baseUrl = "{base_url}"
     }
 
     pub fn find_file(&self, name: &str) -> Option<PathBuf> {
-        find_named(self._root.path(), name)
+        find_named(&self.root, name)
     }
 
     pub fn sessions(&self) -> Vec<ash_protocol::Session> {
@@ -276,7 +327,7 @@ impl TuiProcess {
             command.env("TERM_PROGRAM", program);
             command.env("TERM_PROGRAM_VERSION", version);
         }
-        let fixture_bin = fixture._root.path().join("bin");
+        let fixture_bin = fixture.root.join("bin");
         if fixture_bin.is_dir() {
             let mut paths = vec![fixture_bin];
             paths.extend(std::env::split_paths(
@@ -290,7 +341,7 @@ impl TuiProcess {
             command.env(name, value);
         }
         command.env("ASH_LOCAL_APP_SERVER_IDLE_TIMEOUT_MILLIS", "5000");
-        let trace_file = fixture._root.path().join("startup-trace.log");
+        let trace_file = fixture.root.join("startup-trace.log");
         if std::env::var_os("ASH_TUI_TEST_TRACE").is_some() {
             command.env("ASH_TUI_TEST_TRACE_FILE", trace_file.as_os_str());
         }
@@ -362,15 +413,15 @@ impl TuiProcess {
             }
         });
         trace_pty("reader ready");
-        let mut snapshot_paths = vec![fixture._root.path().to_string_lossy().into_owned()];
-        if let Ok(path) = fs::canonicalize(fixture._root.path()) {
+        let mut snapshot_paths = vec![fixture.root.to_string_lossy().into_owned()];
+        if let Ok(path) = fs::canonicalize(&fixture.root) {
             let path = path.to_string_lossy().into_owned();
             if !snapshot_paths.contains(&path) {
                 snapshot_paths.push(path);
             }
         }
         if let Some(profile) = std::env::var_os("USERPROFILE")
-            && let Ok(relative) = fixture._root.path().strip_prefix(profile)
+            && let Ok(relative) = fixture.root.strip_prefix(profile)
         {
             snapshot_paths.push(format!(
                 "~{}{}",
