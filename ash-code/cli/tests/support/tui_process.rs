@@ -1,3 +1,8 @@
+use ash_app_server_client::AppServerSession;
+use ash_app_server_client::StdioAppServerCommand;
+use ash_app_server_protocol::protocol::common::ClientInfo;
+use ash_terminal::GridSize;
+use ash_terminal::TerminalCore;
 use portable_pty::CommandBuilder;
 use portable_pty::ExitStatus;
 use portable_pty::MasterPty;
@@ -13,15 +18,14 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
+#[cfg(unix)]
+use std::sync::atomic::AtomicBool;
+#[cfg(unix)]
+use std::sync::atomic::Ordering;
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 use tempfile::TempDir;
-use ash_app_server_client::AppServerSession;
-use ash_app_server_client::StdioAppServerCommand;
-use ash_app_server_protocol::protocol::common::ClientInfo;
-use ash_terminal::GridSize;
-use ash_terminal::TerminalCore;
 
 const PROCESS_TIMEOUT: Duration = Duration::from_secs(20);
 const STATE_TIMEOUT: Duration = Duration::from_secs(30);
@@ -240,6 +244,8 @@ pub struct TuiProcess {
     child: ChildGuard,
     capture: Arc<Mutex<TerminalCapture>>,
     reader: Option<thread::JoinHandle<()>>,
+    #[cfg(unix)]
+    reader_stop: Arc<AtomicBool>,
     snapshot_paths: Vec<String>,
 }
 
@@ -264,9 +270,19 @@ impl TuiProcess {
         let reply_writer = Arc::clone(&writer);
         let capture = Arc::new(Mutex::new(TerminalCapture::new(size)));
         let reader_capture = Arc::clone(&capture);
+        #[cfg(unix)]
+        let reader_stop = Arc::new(AtomicBool::new(false));
+        #[cfg(unix)]
+        let thread_stop = Arc::clone(&reader_stop);
+        #[cfg(unix)]
+        let master_fd = pair.master.as_raw_fd().expect("Unix PTY master fd");
         let reader_thread = thread::spawn(move || {
             let mut buffer = [0_u8; 8_192];
             loop {
+                #[cfg(unix)]
+                if !wait_for_pty_output(master_fd, &thread_stop) {
+                    break;
+                }
                 match reader.read(&mut buffer) {
                     Ok(0) => break,
                     Ok(read) => {
@@ -342,6 +358,8 @@ impl TuiProcess {
             child,
             capture,
             reader: Some(reader_thread),
+            #[cfg(unix)]
+            reader_stop,
             snapshot_paths,
         }
     }
@@ -593,9 +611,11 @@ impl TuiProcess {
     }
 
     fn close_terminal(&mut self) {
+        #[cfg(unix)]
+        self.reader_stop.store(true, Ordering::Release);
         *self.writer.lock().unwrap() = Box::new(std::io::sink());
-        // ConPTY keeps its output pipe open until the pseudoconsole is closed.
-        // Keep the reader draining while closing, then join it after EOF.
+        // ConPTY closes its output pipe with the pseudoconsole. On Unix, a
+        // descendant can keep the slave open, so the reader stops by signal.
         drop(self.master.take());
         if let Some(reader) = self.reader.take() {
             if let Err(error) = reader.join() {
@@ -605,6 +625,46 @@ impl TuiProcess {
             }
         }
     }
+}
+
+#[cfg(unix)]
+fn wait_for_pty_output(master_fd: std::os::fd::RawFd, stop: &AtomicBool) -> bool {
+    // A fresh registration sees output left after the previous bounded read.
+    let mut poll = mio::Poll::new().expect("PTY output poll");
+    poll.registry()
+        .register(
+            &mut mio::unix::SourceFd(&master_fd),
+            mio::Token(0),
+            mio::Interest::READABLE,
+        )
+        .expect("register PTY output");
+    let mut events = mio::Events::with_capacity(1);
+    while !stop.load(Ordering::Acquire) {
+        match poll.poll(&mut events, Some(Duration::from_millis(100))) {
+            Ok(_) if !events.is_empty() => return !stop.load(Ordering::Acquire),
+            Ok(_) => {}
+            Err(error) if error.kind() == ErrorKind::Interrupted => {}
+            Err(_) => return false,
+        }
+    }
+    false
+}
+
+#[cfg(unix)]
+#[test]
+fn pty_output_wait_stops_when_a_slave_is_still_open() {
+    let pair = native_pty_system().openpty(LARGE_SIZE).unwrap();
+    let master_fd = pair.master.as_raw_fd().unwrap();
+    let stop = Arc::new(AtomicBool::new(false));
+    let reader_stop = Arc::clone(&stop);
+    let reader = thread::spawn(move || wait_for_pty_output(master_fd, &reader_stop));
+
+    thread::sleep(Duration::from_millis(20));
+    stop.store(true, Ordering::Release);
+    let started = Instant::now();
+    assert!(!reader.join().unwrap());
+    assert!(started.elapsed() < Duration::from_secs(2));
+    drop(pair.slave);
 }
 
 fn normalize_snapshot(mut screen: String, paths: &[String]) -> String {

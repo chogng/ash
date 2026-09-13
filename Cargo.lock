@@ -810,6 +810,7 @@ dependencies = [
  "flate2",
  "fs2",
  "insta",
+ "mio",
  "portable-pty",
  "semver",
  "serde",
