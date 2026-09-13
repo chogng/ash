@@ -65,6 +65,7 @@ fn one_database_reopens_source_symbol_and_vector_generations() {
             }],
         )
         .expect("vector generation");
+    #[cfg(unix)]
     let database = store.database_path().expect("database").to_path_buf();
     drop(vector_store);
     drop(symbols);
