@@ -42,15 +42,18 @@ fn exact_and_snapshot_rules_resolve_once_with_deny_precedence() {
     assert!(
         resolved
             .readonly_paths()
-            .contains(&temp.path().join("config"))
+            .contains(&dir.canonical_path().join("config"))
     );
     assert_eq!(
         resolved.denied_paths(),
-        &[temp.path().join(".env"), temp.path().join("nested/.env")]
+        &[
+            dir.canonical_path().join(".env"),
+            dir.canonical_path().join("nested/.env"),
+        ]
     );
-    assert!(!resolved.allows_read(&temp.path().join(".env")));
-    assert!(!resolved.allows_write(&temp.path().join("config/settings.json")));
-    assert!(resolved.allows_write(&temp.path().join("output.txt")));
+    assert!(!resolved.allows_read(&dir.canonical_path().join(".env")));
+    assert!(!resolved.allows_write(&dir.canonical_path().join("config/settings.json")));
+    assert!(resolved.allows_write(&dir.canonical_path().join("output.txt")));
 }
 
 #[test]
@@ -106,6 +109,31 @@ fn continuous_patterns_fail_before_backend_selection() {
 }
 
 #[test]
+fn denied_file_with_a_hard_link_fails_closed() {
+    let temp = tempfile::tempdir().unwrap();
+    fs::write(temp.path().join(".env"), "secret").unwrap();
+    fs::hard_link(temp.path().join(".env"), temp.path().join("alias")).unwrap();
+    let dir = Dir::open_local(temp.path()).unwrap();
+    let scope = SandboxScope::single(dir.clone())
+        .with_path_rules(vec![
+            SandboxPathRule::pattern(
+                dir,
+                "**/.env",
+                SandboxPathAccess::Denied,
+                PatternMatchTiming::PreparationSnapshot,
+            )
+            .unwrap(),
+        ])
+        .unwrap();
+
+    let error = scope
+        .resolve_filesystem(FileSystemAccess::DirectoryWrite)
+        .unwrap_err();
+    assert!(matches!(error, SandboxError::UnsupportedPolicy(_)));
+    assert!(error.to_string().contains("hard links"));
+}
+
+#[test]
 fn minimal_host_read_requires_an_explicit_read_rule() {
     let temp = tempfile::tempdir().unwrap();
     fs::write(temp.path().join("input"), "allowed").unwrap();
@@ -115,7 +143,7 @@ fn minimal_host_read_requires_an_explicit_read_rule() {
         .resolve_filesystem(FileSystemAccess::ReadOnly)
         .unwrap();
 
-    assert!(resolved.allows_read(&temp.path().join("input")));
+    assert!(resolved.allows_read(&dir.canonical_path().join("input")));
     assert!(!resolved.allows_read(Path::new(if cfg!(windows) {
         r"C:\Windows\outside"
     } else {

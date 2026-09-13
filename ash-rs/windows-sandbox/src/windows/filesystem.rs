@@ -46,7 +46,21 @@ pub(super) fn pin(path: &Path) -> Result<Handle> {
 }
 
 fn hidden_objects(root: &Path, grants: &[PathBuf], objects: &mut BTreeSet<PathBuf>) -> Result<()> {
-    if grants.iter().any(|grant| root.starts_with(grant)) {
+    // A grant is an exception only when it is strictly below this denied root.
+    // A denied file inside a granted directory must still receive a deny ACE.
+    let reopened = grants
+        .iter()
+        .filter(|grant| grant.as_path() != root && grant.starts_with(root))
+        .collect::<Vec<_>>();
+    collect_hidden_objects(root, &reopened, objects)
+}
+
+fn collect_hidden_objects(
+    root: &Path,
+    reopened: &[&PathBuf],
+    objects: &mut BTreeSet<PathBuf>,
+) -> Result<()> {
+    if reopened.iter().any(|grant| root.starts_with(grant)) {
         return Ok(());
     }
     let metadata = std::fs::symlink_metadata(root).map_err(|error| error.to_string())?;
@@ -63,7 +77,7 @@ fn hidden_objects(root: &Path, grants: &[PathBuf], objects: &mut BTreeSet<PathBu
     if metadata.is_dir() {
         for entry in std::fs::read_dir(root).map_err(|error| error.to_string())? {
             let entry = entry.map_err(|error| error.to_string())?;
-            hidden_objects(&entry.path(), grants, objects)?;
+            collect_hidden_objects(&entry.path(), reopened, objects)?;
         }
     }
     Ok(())

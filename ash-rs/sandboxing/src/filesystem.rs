@@ -15,6 +15,8 @@ use crate::PROTECTED_DIR_METADATA_NAMES;
 use crate::SandboxDirAccess;
 use crate::SandboxError;
 use crate::SandboxScope;
+use ash_file_access::Dir;
+use ash_file_access::DirPathError;
 use globset::GlobBuilder;
 use std::collections::BTreeSet;
 use std::path::Component;
@@ -22,8 +24,6 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 use std::time::Instant;
-use ash_file_access::Dir;
-use ash_file_access::DirPathError;
 
 const MAX_PATTERN_OBJECTS: usize = 50_000;
 const MAX_PATTERN_TIME: Duration = Duration::from_secs(2);
@@ -221,6 +221,11 @@ pub(crate) fn resolve(
 
     for rule in scope.path_rules() {
         let paths = resolve_rule(rule)?;
+        if rule.access() == SandboxPathAccess::Denied {
+            for path in &paths {
+                reject_linked_file(path)?;
+            }
+        }
         match rule.access() {
             SandboxPathAccess::ReadOnly => readonly.extend(paths),
             SandboxPathAccess::ReadWrite => readwrite.extend(paths),
@@ -242,6 +247,50 @@ pub(crate) fn resolve(
         readonly_paths: readonly.into_iter().collect(),
         denied_paths: denied.into_iter().collect(),
     })
+}
+
+fn reject_linked_file(path: &Path) -> Result<(), SandboxError> {
+    let metadata = std::fs::metadata(path).map_err(|error| {
+        SandboxError::Io(format!(
+            "cannot inspect denied path '{}': {error}",
+            path.display()
+        ))
+    })?;
+    if metadata.is_file() && !file_has_one_link(path, &metadata)? {
+        return Err(SandboxError::UnsupportedPolicy(format!(
+            "denied file has multiple or unknown hard links: {}",
+            path.display()
+        )));
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn file_has_one_link(_: &Path, metadata: &std::fs::Metadata) -> Result<bool, SandboxError> {
+    use std::os::unix::fs::MetadataExt;
+    Ok(metadata.nlink() == 1)
+}
+
+#[cfg(windows)]
+fn file_has_one_link(path: &Path, _: &std::fs::Metadata) -> Result<bool, SandboxError> {
+    let file = std::fs::File::open(path).map_err(|error| {
+        SandboxError::Io(format!(
+            "cannot open denied path '{}': {error}",
+            path.display()
+        ))
+    })?;
+    let information = winapi_util::file::information(&file).map_err(|error| {
+        SandboxError::Io(format!(
+            "cannot inspect denied path '{}': {error}",
+            path.display()
+        ))
+    })?;
+    Ok(information.number_of_links() == 1)
+}
+
+#[cfg(not(any(unix, windows)))]
+fn file_has_one_link(_: &Path, _: &std::fs::Metadata) -> Result<bool, SandboxError> {
+    Ok(false)
 }
 
 fn resolve_rule(rule: &SandboxPathRule) -> Result<Vec<PathBuf>, SandboxError> {
@@ -348,15 +397,17 @@ fn validate_relative(path: &Path) -> Result<(), SandboxError> {
 /// Canonicalizes a rule-owned relative path through its directory owner so
 /// symlink containment stays the file-access layer's single implementation.
 fn resolve_owned(owner: &Dir, relative: &Path) -> Result<PathBuf, SandboxError> {
-    owner.resolve_existing(relative).map_err(|error| match error {
-        DirPathError::OutsideDir(path) => SandboxError::OutsideDir(path),
-        DirPathError::InvalidRelativePath(path) => SandboxError::InvalidRelativePath(path),
-        DirPathError::RootNotDirectory(path) => SandboxError::Io(format!(
-            "sandbox directory root is not a directory: {}",
-            path.display()
-        )),
-        DirPathError::RootUnavailable { message, .. } => SandboxError::Io(message),
-    })
+    owner
+        .resolve_existing(relative)
+        .map_err(|error| match error {
+            DirPathError::OutsideDir(path) => SandboxError::OutsideDir(path),
+            DirPathError::InvalidRelativePath(path) => SandboxError::InvalidRelativePath(path),
+            DirPathError::RootNotDirectory(path) => SandboxError::Io(format!(
+                "sandbox directory root is not a directory: {}",
+                path.display()
+            )),
+            DirPathError::RootUnavailable { message, .. } => SandboxError::Io(message),
+        })
 }
 
 fn contained_by(path: &Path, roots: &[PathBuf]) -> bool {

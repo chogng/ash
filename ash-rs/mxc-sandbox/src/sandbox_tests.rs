@@ -158,11 +158,12 @@ fn processcontainer_requires_its_proxy_constraints_without_relaxing_the_request(
 #[cfg(target_os = "macos")]
 mod execution {
     use super::*;
-    use std::fs;
-    use std::time::Duration;
     use ash_async_utils::CancellationSource;
+    use ash_sandboxing::PatternMatchTiming;
     use ash_sandboxing::SandboxDirAccess;
     use ash_sandboxing::SandboxDirGrant;
+    use ash_sandboxing::SandboxPathAccess;
+    use ash_sandboxing::SandboxPathRule;
     use ash_tool_executor::ApprovalPolicy;
     use ash_tool_executor::ApprovalRequirement;
     use ash_tool_executor::CommandExecutionAuthority;
@@ -172,6 +173,8 @@ mod execution {
     use ash_tool_executor::CommandOutput;
     use ash_tool_executor::CommandRequest;
     use ash_tool_executor::ExecutionLimits;
+    use std::fs;
+    use std::time::Duration;
 
     struct Approved;
     impl ApprovalPolicy for Approved {
@@ -258,6 +261,56 @@ mod execution {
             ],
         );
         assert_eq!(output.exit_code, Some(125));
+    }
+
+    #[test]
+    fn writable_workspace_keeps_an_existing_env_file_unreadable() {
+        let temp = tempfile::tempdir().unwrap();
+        fs::write(temp.path().join(".env"), "private-value").unwrap();
+        fs::write(temp.path().join("public.txt"), "public-value").unwrap();
+        let dir = Dir::open_local(temp.path()).unwrap();
+        let scope = SandboxScope::single(dir.clone())
+            .with_path_rules(vec![
+                SandboxPathRule::pattern(
+                    dir,
+                    "**/.env",
+                    SandboxPathAccess::Denied,
+                    PatternMatchTiming::PreparationSnapshot,
+                )
+                .unwrap(),
+            ])
+            .unwrap();
+        let policy = SandboxPolicy::new(FileSystemAccess::DirectoryWrite, NetworkAccess::Denied);
+
+        let public = run(&scope, policy, "/bin/cat", &["public.txt".into()]);
+        assert_eq!(
+            (public.exit_code, public.stdout.as_str()),
+            (Some(0), "public-value")
+        );
+
+        let private = run(&scope, policy, "/bin/cat", &[".env".into()]);
+        assert!(!private.stdout.contains("private-value"), "{private:?}");
+        assert_ne!(private.exit_code, Some(0), "{private:?}");
+
+        let approved = SandboxPolicy::new(FileSystemAccess::FullAccess, NetworkAccess::Allowed);
+        let approved_private = run(&scope, approved, "/bin/cat", &[".env".into()]);
+        assert!(
+            !approved_private.stdout.contains("private-value"),
+            "{approved_private:?}"
+        );
+        assert_ne!(approved_private.exit_code, Some(0), "{approved_private:?}");
+
+        let write = run(
+            &scope,
+            policy,
+            "/bin/sh",
+            &["-c".into(), "printf allowed > created.txt".into()],
+        );
+        assert_eq!(write.exit_code, Some(0), "{write:?}");
+        assert_eq!(
+            fs::read_to_string(temp.path().join("created.txt")).unwrap(),
+            "allowed"
+        );
     }
 
     #[test]

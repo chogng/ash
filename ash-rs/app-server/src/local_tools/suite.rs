@@ -796,7 +796,11 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                     .map_err(|error| CoreError::Execution(error.to_string()))?
                     .with_dir_root(resolved.root.canonical_path());
                 let scope = super::local_sandbox_scope(&resolved.root)?;
-                let authority = self.command_authority(authorization);
+                let authority = super::local_command_authority(
+                    authorization,
+                    self.shell.shell_policy,
+                    Some(&scope),
+                )?;
                 let started = self
                     .shell
                     .shell
@@ -915,29 +919,6 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 "unsupported shell-session action: {action}"
             ))),
         }
-    }
-
-    fn command_authority(&self, authorization: &ToolAuthorization) -> CommandExecutionAuthority {
-        let mut authority = match authorization {
-            ToolAuthorization::Sandboxed(policy) => CommandExecutionAuthority::Sandboxed(*policy),
-            ToolAuthorization::UnsandboxedGrant { .. }
-            | ToolAuthorization::ExecPolicyGranted(_)
-            | ToolAuthorization::AutoReviewed(_)
-            | ToolAuthorization::PermissionBypassed(_)
-            | ToolAuthorization::ApprovedOnce(_) => CommandExecutionAuthority::Unrestricted,
-        };
-        if self.shell.shell_policy.network() == ash_sandboxing::NetworkAccess::Managed
-            && matches!(authority, CommandExecutionAuthority::Unrestricted)
-        {
-            authority = CommandExecutionAuthority::Sandboxed(
-                ash_sandboxing::SandboxPolicy::new(
-                    ash_sandboxing::FileSystemAccess::FullAccess,
-                    ash_sandboxing::NetworkAccess::Managed,
-                )
-                .with_host_acl_changes(self.shell.shell_policy.host_acl_changes()),
-            );
-        }
-        authority
     }
 
     fn review_shell_session(

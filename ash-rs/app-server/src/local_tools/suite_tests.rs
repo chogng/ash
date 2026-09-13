@@ -139,6 +139,19 @@ fn dir_resolution_is_bound_to_the_exact_session_and_grant() {
         };
         assert!(error.contains("denied by the local filesystem policy"));
     }
+    let alias = session_dir.path().join("alias");
+    std::fs::hard_link(&denied, &alias).unwrap();
+    let Err(error) = suite.resolve(
+        &alias.display().to_string(),
+        true,
+        Some(&session_id),
+        None,
+        Permission::InspectRepository,
+    ) else {
+        panic!("hard-link alias unexpectedly resolved")
+    };
+    assert!(error.contains("hard links"));
+    std::fs::remove_file(alias).unwrap();
     assert!(
         suite
             .resolve(

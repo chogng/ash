@@ -2,7 +2,7 @@
 
 Ash 保留 macOS/Linux 使用 MXC、Windows 按请求能力选择 PSEC 或账户后端的架构，并把 Codex 的路径级权限、交互终端和持续执行会话纳入正式范围。后端必须同时满足权限、输入输出方式及平台能力，任何失败都不能降低要求或自动重跑命令。
 
-> 状态：对齐范围与实现要求已明确；已有普通命令接线、结构化 PSEC 准备门禁和 Windows UI 请求策略。路径策略、PSEC 受管代理、PTY、执行会话及完整验收尚未完成。
+> 状态：对齐范围与实现要求已明确；已有普通命令接线、精确路径与执行前模式快照、结构化 PSEC 准备门禁和 Windows UI 请求策略。可配置路径授权、PSEC 受管代理、PTY 及完整验收尚未完成。
 >
 > Owner：`ash-rs` 沙箱系统。源码核对日期：2026-09-12。
 
@@ -25,8 +25,8 @@ Ash 保留 macOS/Linux 使用 MXC、Windows 按请求能力选择 PSEC 或账户
 | 能力 | Ash 当前状态 | 本方案的完成要求 |
 | --- | --- | --- |
 | 普通命令、参数、工作目录、退出码、管道 | 已有实现 | PowerShell/Bash、Git、Python、Node、Cargo 的实际工具链验证 |
-| 路径级读/写/拒绝与权限例外 | 主要是目录 Grant、隐藏目录和固定元数据保护 | 单文件规则、目录内只读/拒绝例外、可读基线与拒绝模式 |
-| 文件工具与 shell 的权限一致 | 各自有授权入口 | 同一授权结果覆盖读取、搜索、补丁和子进程 |
+| 路径级读/写/拒绝与权限例外 | 已有目录 Grant、单路径规则、执行前模式快照和固定 `.env` 拒绝 | 可配置规则、所有执行路径一致及跨平台验收 |
+| 文件工具与 shell 的权限一致 | 固定 `.env` 规则覆盖本地工具与沙箱范围；普通批准保留快照命中的拒绝 | 同一可配置授权结果覆盖读取、搜索、补丁和子进程 |
 | 断网、允许网络、受管代理 | 有实现及部分平台证据 | 准确区分出口、入站、宿主回环和代理客户端行为 |
 | 本地工具 IPC | macOS 受限网络请求目前全禁 Unix socket | 执行私有 IPC 可用，敏感/跨任务 socket 仍不可访问 |
 | 持续运行并返回进程会话标识 | 当前执行器等待命令结束 | 有界等待返回，后续读取/输入/关闭/中断/终止 |
@@ -280,7 +280,7 @@ Windows Managed 请求仍受官方代理模型的入站耦合限制。当前适�
 | PSEC 准备门禁 | 已区分明确不支持与运行故障；按本次请求创建临时环境并检查启动属性，启动前复核 | [MXC 请求](../vendor/mxc/core/mxc_engine/src/request.rs)、[平台探测](../vendor/mxc/backends/appcontainer/common/src/base_container_runner.rs) |
 | PSEC Managed 接入 | 当前明确拒绝不能保持默认禁止入站的组合；正式代理身份及成功路径未完成 | [适配器门禁](../mxc-sandbox/src/lib.rs)、[拒绝组合测试](../mxc-sandbox/src/sandbox_tests.rs) |
 | Windows 工具 UI 兼容 | 已显式允许窗口与桌面资源，同时禁止剪贴板、输入注入、桌面控制和系统设置；需按 PSEC 路径实机验证 | [请求转换](../mxc-sandbox/src/policy.rs)、[UI 转换](../vendor/mxc/core/mxc_engine/src/configs/process_container.rs) |
-| 路径级规则与最小读取基线 | 目标已定义，现有目录模型需扩展 | [目录范围](../sandboxing/src/scope.rs) |
+| 路径级规则与最小读取基线 | 精确路径、执行前模式快照和宿主读取选择已接入；可配置授权与跨平台验收未完成 | [目录范围](../sandboxing/src/scope.rs)、[规则解析](../sandboxing/src/filesystem.rs) |
 | 受控 Unix socket | 当前有全禁补丁，目标需支持私有 IPC | [请求转换](../mxc-sandbox/src/policy.rs) |
 | PTY 与命令会话 | 有底层 PTY/driver；统一沙箱链和会话层尚未完成 | [进程接口](../sandboxing/src/process.rs)、[执行器](../tool-executor/src/lib.rs)、[PTY](../utils/pty/README.md) |
 | 选择器故障停止、启动不重跑 | 已有替身测试；不证明 SDK 错误转换正确 | [选择器测试](../sandboxing/src/backends_tests.rs) |

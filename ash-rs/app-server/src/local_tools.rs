@@ -796,22 +796,7 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         sandbox_scope: Option<&SandboxScope>,
         network_policy: Option<&network_proxy::NetworkPolicyHandle>,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        let mut authority = match authorization {
-            ToolAuthorization::Sandboxed(policy) => CommandExecutionAuthority::Sandboxed(*policy),
-            ToolAuthorization::UnsandboxedGrant { .. }
-            | ToolAuthorization::ExecPolicyGranted(_)
-            | ToolAuthorization::AutoReviewed(_)
-            | ToolAuthorization::PermissionBypassed(_)
-            | ToolAuthorization::ApprovedOnce(_) => CommandExecutionAuthority::Unrestricted,
-        };
-        if self.shell_policy.network() == NetworkAccess::Managed
-            && matches!(authority, CommandExecutionAuthority::Unrestricted)
-        {
-            authority = CommandExecutionAuthority::Sandboxed(
-                SandboxPolicy::new(FileSystemAccess::FullAccess, NetworkAccess::Managed)
-                    .with_host_acl_changes(self.shell_policy.host_acl_changes()),
-            );
-        }
+        let authority = local_command_authority(authorization, self.shell_policy, sandbox_scope)?;
         let effective_scope = matches!(authority, CommandExecutionAuthority::Sandboxed(_))
             .then_some(sandbox_scope)
             .flatten();
@@ -1570,6 +1555,50 @@ fn local_sandbox_scope(dir: &Dir) -> Result<SandboxScope, CoreError> {
     SandboxScope::single(dir.clone())
         .with_path_rules(rules)
         .map_err(|error| CoreError::Policy(error.to_string()))
+}
+
+fn local_command_authority(
+    authorization: &ToolAuthorization,
+    shell_policy: SandboxPolicy,
+    scope: Option<&SandboxScope>,
+) -> Result<CommandExecutionAuthority, CoreError> {
+    match authorization {
+        ToolAuthorization::Sandboxed(policy) => {
+            return Ok(CommandExecutionAuthority::Sandboxed(*policy));
+        }
+        ToolAuthorization::UnsandboxedGrant { .. }
+        | ToolAuthorization::ExecPolicyGranted(_)
+        | ToolAuthorization::AutoReviewed(_)
+        | ToolAuthorization::PermissionBypassed(_)
+        | ToolAuthorization::ApprovedOnce(_) => {}
+    }
+    // Ordinary execution approval widens the remaining access, not explicit
+    // files denied by this execution's preparation snapshot.
+    let denied = scope
+        .map(|scope| {
+            scope
+                .resolve_filesystem(FileSystemAccess::FullAccess)
+                .map(|filesystem| !filesystem.denied_paths().is_empty())
+        })
+        .transpose()
+        .map_err(|error| CoreError::Policy(error.to_string()))?
+        .unwrap_or(false);
+    let network = shell_policy.network();
+    if denied || network == NetworkAccess::Managed {
+        return Ok(CommandExecutionAuthority::Sandboxed(
+            SandboxPolicy::new(
+                FileSystemAccess::FullAccess,
+                if network == NetworkAccess::Managed {
+                    NetworkAccess::Managed
+                } else {
+                    NetworkAccess::Allowed
+                },
+            )
+            .with_host_acl_changes(shell_policy.host_acl_changes())
+            .with_file_system_isolation(shell_policy.file_system_isolation()),
+        ));
+    }
+    Ok(CommandExecutionAuthority::Unrestricted)
 }
 
 fn ensure_local_file_access(dir: &Dir, path: &Path, write: bool) -> Result<(), CoreError> {

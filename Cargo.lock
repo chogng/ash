@@ -2048,6 +2048,7 @@ dependencies = [
  "ash-utils-pty",
  "globset",
  "tempfile",
+ "winapi-util",
 ]
 
 [[package]]

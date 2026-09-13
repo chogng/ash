@@ -1,6 +1,7 @@
 #![cfg(unix)]
 
 use super::*;
+use ash_action_policy::GrantId;
 use ash_async_utils::CancellationSource;
 use ash_file_access::Grant;
 use ash_file_access::GrantSource;
@@ -20,6 +21,110 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
 struct PassThroughBackend;
+
+struct DeniedPathBackend {
+    prepared: Arc<AtomicUsize>,
+}
+
+impl SandboxBackend for DeniedPathBackend {
+    fn kind(&self) -> SandboxKind {
+        SandboxKind::Restricted
+    }
+
+    fn prepare(
+        &self,
+        _: &SandboxCommand,
+        _: SandboxPolicy,
+        _: &Dir,
+    ) -> Result<PreparedCommand, SandboxError> {
+        panic!("approved commands with an existing denied path must keep their scope");
+    }
+
+    fn prepare_scoped(
+        &self,
+        _: &SandboxCommand,
+        policy: SandboxPolicy,
+        scope: &SandboxScope,
+    ) -> Result<PreparedCommand, SandboxError> {
+        assert_eq!(policy.file_system(), FileSystemAccess::FullAccess);
+        assert_eq!(policy.network(), NetworkAccess::Allowed);
+        let filesystem = scope.resolve_filesystem(policy.file_system()).unwrap();
+        assert!(
+            filesystem
+                .denied_paths()
+                .iter()
+                .any(|path| path.ends_with(".env"))
+        );
+        self.prepared.fetch_add(1, Ordering::SeqCst);
+        Err(SandboxError::UnsupportedPolicy("denied-path probe".into()))
+    }
+}
+
+#[test]
+fn approved_shell_keeps_an_existing_env_denial() {
+    let temp = tempfile::tempdir().unwrap();
+    let dir = Dir::open_local(temp.path()).unwrap();
+    let scope = local_sandbox_scope(&dir).unwrap();
+    let approval = ToolAuthorization::UnsandboxedGrant {
+        grant_id: GrantId::new("approved-shell"),
+    };
+
+    assert_eq!(
+        local_command_authority(&approval, shell_sandbox(), Some(&scope)).unwrap(),
+        CommandExecutionAuthority::Unrestricted
+    );
+
+    let managed = SandboxPolicy::new(FileSystemAccess::DirectoryWrite, NetworkAccess::Managed)
+        .with_host_acl_changes(local_acl_changes())
+        .with_file_system_isolation(local_isolation());
+    let CommandExecutionAuthority::Sandboxed(managed_policy) =
+        local_command_authority(&approval, managed, Some(&scope)).unwrap()
+    else {
+        panic!("managed network policy must remain enforced after approval");
+    };
+    assert_eq!(managed_policy.network(), NetworkAccess::Managed);
+
+    fs::write(temp.path().join(".env"), "secret").unwrap();
+    let authority = local_command_authority(&approval, shell_sandbox(), Some(&scope)).unwrap();
+    let CommandExecutionAuthority::Sandboxed(policy) = authority else {
+        panic!("an existing denied file must keep the approved command sandboxed");
+    };
+    assert_eq!(policy.file_system(), FileSystemAccess::FullAccess);
+    assert_eq!(policy.network(), NetworkAccess::Allowed);
+    assert_eq!(
+        policy.file_system_isolation(),
+        shell_sandbox().file_system_isolation()
+    );
+}
+
+#[test]
+fn approved_shell_reaches_the_restricted_backend_with_an_env_denial() {
+    let dir = TestDir::new();
+    fs::write(dir.path().join(".env"), "secret").unwrap();
+    let prepared = Arc::new(AtomicUsize::new(0));
+    let service = LocalShellToolService::new(
+        dir.authorization(),
+        RipgrepExecutable::from_path(dir.ripgrep()).unwrap(),
+        DeniedPathBackend {
+            prepared: Arc::clone(&prepared),
+        },
+    )
+    .unwrap();
+    let call = tool_call(json!({
+        "program": "/bin/cat",
+        "arguments": [".env"],
+        "working_directory": "."
+    }));
+    let approval = ToolAuthorization::UnsandboxedGrant {
+        grant_id: GrantId::new("approved-shell"),
+    };
+
+    let result = service
+        .execute(&call, &approval, &CancellationSource::new().token())
+        .unwrap();
+    assert!(matches!(result, ToolExecutionOutput::SandboxDenied(_)));
+    assert_eq!(prepared.load(Ordering::SeqCst), 1);
+}
 
 impl SandboxBackend for PassThroughBackend {
     fn kind(&self) -> SandboxKind {

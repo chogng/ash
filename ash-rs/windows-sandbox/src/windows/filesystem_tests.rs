@@ -1,6 +1,38 @@
 use super::*;
 
 #[test]
+fn denied_file_inside_writable_grant_is_not_discarded() {
+    let temp = tempfile::tempdir().unwrap();
+    let work = temp.path().join("work");
+    std::fs::create_dir(&work).unwrap();
+    let secret = work.join(".env");
+    std::fs::write(&secret, "secret").unwrap();
+
+    let mut denied = BTreeSet::new();
+    hidden_objects(&secret, &[work], &mut denied).unwrap();
+
+    assert_eq!(denied, BTreeSet::from([secret]));
+}
+
+#[test]
+fn hidden_parent_keeps_its_granted_descendant_open() {
+    let temp = tempfile::tempdir().unwrap();
+    let shared = temp.path().join("shared");
+    let work = shared.join("work");
+    std::fs::create_dir_all(&work).unwrap();
+    std::fs::write(shared.join("secret"), "secret").unwrap();
+    std::fs::write(work.join("source"), "source").unwrap();
+
+    let mut denied = BTreeSet::new();
+    hidden_objects(&shared, &[work.clone()], &mut denied).unwrap();
+
+    assert!(denied.contains(&shared));
+    assert!(denied.contains(&shared.join("secret")));
+    assert!(!denied.contains(&work));
+    assert!(!denied.contains(&work.join("source")));
+}
+
+#[test]
 fn a_write_grant_cannot_change_an_outside_file_through_a_hard_link() {
     let temp = tempfile::tempdir().unwrap();
     let work = temp.path().join("work");
