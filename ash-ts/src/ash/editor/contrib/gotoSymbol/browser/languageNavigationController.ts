@@ -6,7 +6,8 @@ import { type Position } from "../../../common/core/position.js";
 import { type View } from "../../../browser/view.js";
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { EditorPeekViewWidget } from "../../peekView/browser/editorPeekViewWidget.js";
-import { type LanguageLocation, type LanguageNavigationService } from "../common/languageNavigation.js";
+import { type LanguageNavigationService } from "../common/languageNavigation.js";
+import { type LanguageLocation } from "../../../common/languages.js";
 
 export type LanguageNavigationKind = "definition" | "declaration" | "implementation" | "typeDefinition" | "references";
 

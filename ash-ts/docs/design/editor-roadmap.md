@@ -1,0 +1,100 @@
+# Stanza 编辑器分部实施路线图
+
+本文把 Ash TypeScript 编辑器按依赖和用户行为分成九部分。每次只完成一项能从真实入口走到可观察结果的功能，再进入下一项；文件数量、同名 API 数量和单独的类型检查都不是完成标准。
+
+本文只维护实施顺序和验收边界。当前职责与已有实现分别见 [Editor 目录说明](../../src/ash/editor/README.md)、[文本内核](../../src/ash/editor/text-engine.md)、[富文档内核](../../src/ash/editor/document-engine.md) 和[跨系统边界](../../../docs/editor-architecture.md)；VS Code 对应关系及未处理项由 [API 对齐台账](../../src/ash/editor/api-alignment-status.md)维护。
+
+## 范围与当前基线
+
+- 本路线图覆盖 `ash-ts/src/ash/editor`、它在 Workbench 中的 pane 和服务接线，以及 Standalone 入口。Rust App Server 提供文件与语言等异步能力，不接管 TypeScript 编辑器的同步文本、选区或输入状态。
+- 同一职责要对齐 VS Code 的公开名称、参数、事件、生命周期和可观察行为。Ash 内部依照现有 `TextModel`、视图和服务所有权独立实现；不复制上游私有结构，也不为同名而添加空方法。
+- 截至 2026-09-13，Node 25 下 Editor 单测为 240/240 文件通过，浏览器集成为 18/18 通过，Renderer 构建通过。这证明已覆盖的路径可运行，不代表整个 Editor 已完成。`editor-architecture.test.ts` 仍有 11 项失败，`dom-foundation.test.ts` 仍有 2 项失败；其中既有真实职责缺口，也有需核实的旧断言。它们保持可见，逐项按生产调用链处理。
+
+## API 名称与契约怎么对齐
+
+**目前没有全部对上。**[API 对齐台账](../../src/ash/editor/api-alignment-status.md)仍有待处理项，结构检查发现同名也不等于行为正确。每做一个功能，都要把 VS Code 同路径的公开导出、类/接口成员、命令或注册 ID，与 Ash 当前公开面逐项对应；同时核对大小写、参数和返回类型、事件、取消、释放及真实调用方。对照结果只能记为“已验收”“待补”“Ash 专属”或“职责冲突待决定”，不能把只存在同名声明记为已验收。
+
+| 部分 | 优先核对的 VS Code 同路径公开面 |
+| --- | --- |
+| 0 入口与装配 | `editor.api.ts`、`editor.all.ts`、`browser/widget/codeEditor/codeEditorWidget.ts` |
+| 1 文本与文档内核 | `common/model/textModel.ts`、`common/core/{position,range,selection}.ts` |
+| 2 选区与输入 | `common/cursor/cursor.ts`、`browser/view/viewController.ts`、`browser/controller/editContext/*` |
+| 3 视图与几何 | `browser/view.ts`、`browser/viewParts/*`，包括 `minimap/minimap.ts` |
+| 4 语言与异步结果 | `common/languages.ts`、`common/services/languageFeaturesService.ts` |
+| 5 Code 编辑功能 | 本次功能对应的 `contrib/<feature>` 文件、贡献 ID 和命令 ID |
+| 6 Academic 富文档 | 与行式编辑器共用的 `TextModel` 等公开面；Academic 的 schema 与功能按 Ash 自有契约验收 |
+| 7 Diff 与多文件审阅 | `browser/widget/diffEditor/diffEditorWidget.ts`、`browser/widget/multiDiffEditor/multiDiffEditorWidget.ts` |
+| 8 宿主与持久化 | `standalone/browser/standaloneEditor.ts`、`workbench/browser/parts/editor/editorPane.ts` |
+
+这张表是核对入口，不表示表中 API 已对齐。Ash 专属的 Code/Academic bundle、`CodeEditorPane`、`DocumentEditorPane` 和 App Server 适配不强行套用 VS Code 名称；共享职责仍须回到上游同路径 owner。具体差异和处理决定只维护在台账中，不在这里复制一份易过期的成员清单。
+
+以第一项为例，双方的 `standalone/browser/standaloneEditor.ts` 都有 `create`、`createModel`、`getEditors`、`onDidCreateEditor`；这只确认名称存在。`create` 的 options、返回对象、模型归属和释放，`onDidCreateEditor` 的回调类型与触发时机仍须逐项验收。上游还有 `createDiffEditor`、`createMultiFileDiffEditor` 等入口，放到第 7 部分按真实调用需求核对，不能因为第 0 部分通过就宣称整个公开 API 对齐。
+
+## 一次只做一个功能
+
+每项工作先写出一条短链：**用户动作 → 生产入口 → 唯一状态与 DOM owner → 状态变化 → 可观察结果 → 测试**。先查 Ash 的调用方、实现和测试，再查 VS Code 同路径的公开契约与行为；只在当前链路需要时修改文件。未接线的 Editor 文件先查标准 bundle 和调用方，不能为让架构测试变绿而删除。
+
+一个功能完成须同时满足：
+
+1. 同路径公开文件、导出、成员和注册名称已逐项核对；真实入口已经调用目标职责，旧入口和重复状态退出。行为、事件顺序、失败和释放语义也须一致。
+2. 现有行为没有退化；新行为由 owner 级测试和必要的 Playwright 浏览器或 Electron 用例观察。键盘、屏幕阅读器、主题与高对比度在涉及界面时同批验收。
+3. 受影响的 TypeScript 编译和正常 Renderer 构建通过；相关架构断言通过。全量架构套件中的其他既有失败须准确记录，不能改弱断言来隐藏缺口。
+4. 更新本表的状态和 [API 对齐台账](../../src/ash/editor/api-alignment-status.md)中受影响的项目。未完成的能力仍标为未完成。
+
+## 分部顺序
+
+表中的“基础具备”只表示仓库已有实现和测试，不表示该部分已经验收完成。后续部分可以先调查，但实现要沿依赖从下向上闭合。
+
+| 顺序 | 部分 | 主要 owner | 逐项完成的用户行为 | 当前状态 |
+| --- | --- | --- | --- | --- |
+| 0 | 入口与装配 | `editor.api.ts`、`editor.*.all.ts`、`CodeEditorWidget` | 创建、挂载、切换模型、激活贡献、释放 | 基础具备，待逐项验收 |
+| 1 | 文本与文档内核 | `common/model`、`common/core` | 编辑、撤销、快照、结构事务、超大文件 | 基础具备，待逐项验收 |
+| 2 | 选区与输入 | `common/cursor`、`browser/controller` | 键盘和指针编辑、多光标、IME、剪贴板 | 基础具备，待逐项验收 |
+| 3 | 视图与几何 | `common/viewModel`、`common/viewLayout`、`browser/view*` | 换行、滚动、命中、装饰、控件、DOM/GPU 绘制 | 部分具备 |
+| 4 | 语言与异步结果 | `common/languages`、`common/services`、语言贡献 | 配置、分词、诊断、折叠、符号、过期结果拒绝 | 部分具备 |
+| 5 | Code 编辑功能 | `contrib/<feature>` | 查找、补全、悬停、导航、重命名、代码操作等 | 部分具备 |
+| 6 | Academic 富文档 | `common/model` 的文档语义、`RichTextEditorWidget`、Academic 贡献 | 结构编辑、代码区域、格式、协作 | 部分具备 |
+| 7 | Diff 与多文件审阅 | `DiffModel`、diff/multi-diff widget | 比较、同步滚动、内联差异、多文件审阅 | 部分具备 |
+| 8 | 宿主与持久化 | `standalone`、Workbench editor pane 与服务 | 打开、保存、回退、冲突、恢复、模式切换 | 部分具备 |
+
+### 0. 入口与装配
+
+先验收外部传入模型与编辑器自己创建的模型各由谁释放，再验收 `editor.create`、Workbench pane 和 Code/Academic bundle 是否只装配各自的能力。一个贡献必须从标准入口真正激活，并随编辑器释放；“源文件存在”不算接入。
+
+### 1. 文本与文档内核
+
+按原子编辑与 UTF-16 坐标、版本和快照、undo/redo 与选区映射、稳定行身份和文档语义、超大文件预算的顺序处理。文本和结构事务都只由 `TextModel` 提交；浏览器视图不保存另一份权威文本。每项用模型测试覆盖边界、失败不留半次提交，并检查两个编辑器共享同一模型时的状态隔离。
+
+### 2. 选区与输入
+
+按键盘导航与编辑、指针和拖动、多光标、textarea 与 EditContext、IME、剪贴板的顺序处理。每个输入先归一成一个编辑意图，再由拥有选区的控制器提交；验证组合输入取消、焦点转移、撤销和浏览器默认行为不会造成双写。
+
+### 3. 视图与几何
+
+按行布局与软换行、可见行复用、光标和 gutter、装饰与 View Zone、滚动条和 Minimap、GPU 绘制的顺序处理。`View` 管装配和渲染时序，Part 管自己的节点；布局坐标、指针命中和输入候选位置须引用同一几何结果。浏览器测试检查 DOM 身份、计算样式、滚动和释放，不靠截图判断正确性。
+
+### 4. 语言与异步结果
+
+先完成语言身份和配置，再完成 provider 注册与取消、版本化 token/diagnostic 结果、TextMate 与 App Server 适配、折叠和符号。Worker 和后端只返回带版本的事实；过期结果不能覆盖较新模型。一次功能须从真实 provider 走到 Editor 可见结果，并验证失败和 dispose。
+
+### 5. Code 编辑功能
+
+每个贡献独立交付，不把所有贡献当成一批文件迁移。建议顺序是查找/替换、补全/悬停、跳转/引用、重命名/代码操作、格式化及其余交互。每项核对标准注册入口、命令与快捷键、取消、选区变化、可访问性和销毁；功能逻辑留在贡献，文件与产品决策留在 Workbench。
+
+### 6. Academic 富文档
+
+先验收 schema 和事务，再验收段落、表格、代码区域的输入与选区，接着验收格式、剪贴板、序列化和协作。代码区域仍属于同一个 `TextModel`，不能启动嵌套 Code 编辑器。持久格式或协作 schema 变化必须同时验证旧数据的读取与迁移。
+
+### 7. Diff 与多文件审阅
+
+依次验收版本绑定的差异计算、单文件 Diff 的行内与跨行几何、同步滚动和选择、多文件列表与切换。比较结果只读当前版本的模型；切换输入或关闭 pane 后取消旧请求并释放旧视图。
+
+### 8. 宿主与持久化
+
+在第 0 部分建立挂载契约后，再逐项闭合 Standalone 服务、Workbench pane/input、文件 dirty/save/revert、外部变更冲突、工作副本恢复和 Code/Academic 模式装配。Workbench 持有文件与 pane 生命周期；Editor 仍持有编辑事务、选区和视图。Web 与 Electron 分别用真实入口验证。
+
+## 第一项工作
+
+从 **0.1 编辑器创建与释放** 开始：调用 `editor.create`，分别传入 `editor.createModel` 创建的模型和使用 `value` 隐式创建模型；完成一次输入，销毁编辑器，再检查模型归属、注册表、贡献和 DOM/监听资源。生产链从 `editor.api.ts`、`standalone/browser/standaloneEditor.ts`、`standalone/browser/standaloneCodeEditor.ts` 到 `browser/widget/codeEditor/codeEditorWidget.ts` 和 `TextModel`。先复用 `standaloneEditor.test.ts`、`editorExtensions.test.ts` 与浏览器公开入口用例，查明缺口后只修改这条链上的 owner。第 0 部分完成后再进入第 1 部分；其中每个小功能依次验收。
+
+整个 Editor 的最终验收还要求上述各部分的真实入口、单测、浏览器/Electron 行为、Renderer 构建和相关架构测试全部闭合。当前已通过的套件不能代替仍未覆盖的平台、屏幕阅读器或未接线能力。

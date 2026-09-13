@@ -5,7 +5,7 @@ import { Selection } from "../../../common/core/selection.js";
 import { type Position } from "../../../common/core/position.js";
 import { type View } from "../../../browser/view.js";
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
-import { type LanguageLocation } from "../../gotoSymbol/common/languageNavigation.js";
+import { type LanguageLocation } from "../../../common/languages.js";
 import { EditorPeekViewWidget } from "../../peekView/browser/editorPeekViewWidget.js";
 import { type LanguageHierarchyItem, type LanguageHierarchyService, type PreparedCallHierarchy, type PreparedTypeHierarchy } from "../common/languageHierarchy.js";
 

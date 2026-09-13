@@ -9,7 +9,8 @@ import type { ILanguageFeaturesService } from '../../../../editor/common/service
 import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind } from "../../../../editor/common/languages/completion/languageCompletions.js";
 import { LanguageCompletionTriggerKind, type LanguageCompletionProvider, type LanguageCompletionProviderCommandRequest, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResolveRequest } from "../../../../editor/common/languages/completion/languageCompletionProviders.js";
 import { type LanguageHoverProvider, type LanguageHoverRequest } from "../../../../editor/contrib/hover/common/hover.js";
-import { type LanguageDeclarationProvider, type LanguageDefinitionProvider, type LanguageImplementationProvider, type LanguageLocation, type LanguageLocationRequest, type LanguageReferenceProvider, type LanguageReferenceRequest, type LanguageTypeDefinitionProvider } from "../../../../editor/contrib/gotoSymbol/common/languageNavigation.js";
+import { type LanguageDeclarationProvider, type LanguageDefinitionProvider, type LanguageImplementationProvider, type LanguageLocationRequest, type LanguageReferenceProvider, type LanguageReferenceRequest, type LanguageTypeDefinitionProvider } from "../../../../editor/contrib/gotoSymbol/common/languageNavigation.js";
+import { type LanguageLocation } from "../../../../editor/common/languages.js";
 import { type LanguageCallHierarchyEntry, type LanguageCallHierarchyProvider, type LanguageHierarchyFollowupRequest, type LanguageHierarchyItem, type LanguageHierarchyRequest, type LanguageTypeHierarchyProvider } from "../../../../editor/contrib/callHierarchy/common/languageHierarchy.js";
 import { type LanguageCompletionItemKindDto, type LanguageHierarchyItemDto } from "../../../../../../generated/app-server/index.js";
 import { type LanguageWorkspaceSymbol, type LanguageWorkspaceSymbolProvider } from "../../../../editor/common/languages/workspaceSymbols.js";

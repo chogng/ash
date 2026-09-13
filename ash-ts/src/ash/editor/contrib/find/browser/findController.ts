@@ -3,8 +3,7 @@ import { addDisposableListener, stopEvent, h } from "../../../../base/browser/do
 import { Disposable, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { rot } from "../../../../base/common/numbers.js";
 import { type ICodeEditor } from "../../../browser/editorBrowser.js";
-import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
-import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
+import { type TextDecorationCollection } from "../../../common/model/decorationCollection.js";
 import { Selection } from "../../../common/core/selection.js";
 import { Range } from "../../../common/core/range.js";
 import { type TextModel } from "../../../common/model/textModel.js";
@@ -14,7 +13,6 @@ import { type TrackedRange } from "../../../common/model/trackedRange.js";
 import { type View } from "../../../browser/view.js";
 import { EditorOptions, type IEditorFindOptions } from '../../../common/config/editorOptions.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
-import { TextEditorCapability } from '../../textEditorCapabilities.js';
 
 const DISPLAY_RESULT_LIMIT = 999;
 const REPLACE_ALL_RESULT_LIMIT = 100_000;
@@ -465,21 +463,3 @@ function validateFindControllerOptions(options: FindControllerOptions): void {
 		if (typeof value !== "boolean") throw new TypeError(`Stanza Find option '${name}' must be boolean`);
 	}
 }
-
-registerTextEditorCapabilityContribution({
-	id: FindController.ID,
-	configure: context => {
-		const decorations = context.register(new TextDecorationCollection<void>(context.model));
-		context.provideCapability(TextEditorCapability.searchDecorations, decorations);
-	},
-	install: context => {
-		if (context.kind !== 'text') return;
-		context.register(new FindController(
-			context.view.element,
-			context.editor,
-			context.viewport,
-			context.getCapability(TextEditorCapability.searchDecorations),
-			context.options.find,
-		));
-	},
-});

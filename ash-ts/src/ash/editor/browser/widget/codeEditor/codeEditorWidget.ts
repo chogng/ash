@@ -35,7 +35,7 @@ import { type ConfigurationChangedEvent, EditorLineWrapping, EditorOption, type 
 import { type LanguageCompletionWorkerFactory } from '../../../common/languages/completion/languageCompletionService.js';
 import { type ILanguageDiagnosticsService } from '../../../common/services/languageDiagnosticsService.js';
 import { isCompletionsEnablement, type CompletionsEnablement } from '../../../common/services/completionsEnablement.js';
-import { type LanguageLocation } from '../../../contrib/gotoSymbol/common/languageNavigation.js';
+import { type LanguageLocation } from '../../../common/languages.js';
 import { type LanguageWorkspaceEdit } from '../../../common/languages/languageWorkspaceEdit.js';
 import { type EditorLineVisibilitySource } from '../../../common/viewModel/viewModelLines.js';
 import { type LanguageLexicalContextSource } from '../../../common/languages/languageLexicalContext.js';

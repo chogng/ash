@@ -20,7 +20,7 @@ import type { IWorkingCopyService, IWorkingCopy } from "../../../services/workin
 import type { IDocumentCollaborationApi } from "../../../../platform/collaboration/common/documentCollaborationApi.js";
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { Range } from "../../../../editor/common/core/range.js";
-import type { LanguageLocation } from "../../../../editor/contrib/gotoSymbol/common/languageNavigation.js";
+import type { LanguageLocation } from "../../../../editor/common/languages.js";
 import type { LanguageWorkspaceEdit } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
 import type { ILanguageDiagnosticsService } from "../../../../editor/common/services/languageDiagnosticsService.js";
 import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";

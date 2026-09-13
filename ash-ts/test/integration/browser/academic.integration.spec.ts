@@ -26,7 +26,7 @@ test("TextModel API and Academic code-block editing run in real browsers", async
 
 	const codeBlockInput = page.locator("#code-block textarea.stanza-document-text-input");
 	await codeBlockInput.focus();
-	await page.keyboard.press("Control+Home");
+	await page.keyboard.press("Home");
 	await page.keyboard.type("// bridge\n");
 	await expect.poll(() => page.evaluate(() => window.ashAcademicIntegration.getCodeBlockText())).toBe("// bridge\nconst editor = 1;");
 	await page.evaluate(() => window.ashAcademicIntegration.saveCodeBlock());

@@ -1,4 +1,3 @@
-import { BrowserClipboardService } from '../../../../platform/clipboard/browser/browserClipboardService.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { IInstantiationService, ServiceConstructionDescriptor } from '../../../../platform/instantiation/common/instantiation.js';
@@ -9,9 +8,7 @@ import { ClipboardController } from './clipboardController.js';
 class ClipboardContribution extends Disposable {
 	public constructor(context: TextEditorContributionContext, instantiationService: IInstantiationService) {
 		super();
-		const ownerWindow = context.view.element.ownerDocument.defaultView;
-		const clipboardService = instantiationService.getOptional(IClipboardService)
-			?? new BrowserClipboardService(ownerWindow?.navigator.clipboard);
+		const clipboardService = instantiationService.get(IClipboardService);
 		this._register(new ClipboardController(context.view.editContext, context.viewport, context.selectionController, context.view, clipboardService, {
 			semanticTokens: context.getOptionalCapability(TextEditorCapability.semanticTokenSource),
 			isEditingAllowed: () => !context.view.compositionController.composing,

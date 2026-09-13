@@ -15,7 +15,7 @@ import { Disposable, toDisposable } from "../../../../../../base/common/lifecycl
 import { URI } from "../../../../../../base/common/uri.js";
 import { Position } from "../../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../../editor/common/core/range.js";
-import type { LanguageLocation } from "../../../../../../editor/contrib/gotoSymbol/common/languageNavigation.js";
+import type { LanguageLocation } from "../../../../../../editor/common/languages.js";
 import type {
 	CommandId,
 } from "../../../../../../platform/commands/common/commands.js";

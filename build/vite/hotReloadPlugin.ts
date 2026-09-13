@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { relative, resolve, sep } from "node:path";
+import { relative, resolve, sep, win32 } from "node:path";
 import { normalizePath, type HtmlTagDescriptor, type Plugin } from "vite";
 import { analyzeHotReloadModule, type HotReloadModuleAnalysis, unsafeHotReloadChangeReason } from "./hotReloadAnalysis.ts";
 
@@ -27,8 +27,8 @@ export interface AshHotReloadPlugin extends Plugin {
 
 /** Owns Vite's development-only bridge to the generic Renderer hot-reload runtime. */
 export function hotReloadPlugin(options: HotReloadPluginOptions = {}): AshHotReloadPlugin {
-  const desktopRoot = resolve(options.desktopRoot ?? resolve(import.meta.dirname, "../../ash-ts"));
-  const setupPath = resolve(options.setupPath ?? resolve(import.meta.dirname, "setup-dev.ts"));
+  const desktopRoot = resolveHostPath(options.desktopRoot ?? resolve(import.meta.dirname, "../../ash-ts"));
+  const setupPath = resolveHostPath(options.setupPath ?? resolve(import.meta.dirname, "setup-dev.ts"));
   const analyses = new Map<string, HotReloadModuleAnalysis>();
   return {
     name: "ash-hot-reload",
@@ -81,8 +81,12 @@ function cleanModuleId(id: string): string {
   return id.split("?", 1)[0];
 }
 
+function resolveHostPath(path: string): string {
+  return win32.isAbsolute(path) ? path : resolve(path);
+}
+
 function viteFileUrl(file: string): string {
-  return `/@fs/${normalizePath(file).replace(/^\/+/, "")}`;
+  return `/@fs/${normalizePath(file).replaceAll("\\", "/").replace(/^\/+/, "")}`;
 }
 
 function neutralModuleId(file: string, root: string): string {

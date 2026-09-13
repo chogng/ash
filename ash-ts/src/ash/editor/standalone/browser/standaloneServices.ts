@@ -25,6 +25,8 @@ import { NamedEditorThemeService } from "./namedEditorThemeService.js";
 import { type Event } from '../../../base/common/event.js';
 import { type IWorkspaceFolder } from '../../../platform/workspace/common/workspace.js';
 import { ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
+import { BrowserClipboardService } from '../../../platform/clipboard/browser/browserClipboardService.js';
+import { IClipboardService } from '../../../platform/clipboard/common/clipboardService.js';
 
 export interface StandaloneServiceOverrides {
 	readonly languageService?: IAshLanguageService;
@@ -52,6 +54,7 @@ export class StandaloneServiceCollection extends Disposable {
 		super();
 		const instantiationService = this.instantiationService = this._register(new ServiceContainer());
 		instantiationService.registerInstance(ILogService, new NullLoggerService());
+		instantiationService.registerInstance(IClipboardService, new BrowserClipboardService(window.navigator.clipboard));
 		const browserServices = createEditorBrowserServices();
 		this._register(browserServices.codeEditorService);
 		this.codeEditorService = browserServices.codeEditorService;

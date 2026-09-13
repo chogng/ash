@@ -35,7 +35,12 @@ export class Minimap extends ViewPart {
 	private readonly domNode: HTMLDivElement;
 	private readonly root: FastDomNode<HTMLDivElement>;
 	private readonly canvas: HTMLCanvasElement;
+	private readonly slider: HTMLDivElement;
 	private dragging = false;
+	private dragOffset = 0;
+	private contentHeight = 0;
+	private sliderHeight = 0;
+	private sliderTop = 0;
 
 	constructor(context: ViewContext, private readonly source: MinimapOptions) {
 		super(context);
@@ -49,12 +54,20 @@ export class Minimap extends ViewPart {
 		this.canvas = h(source.host.ownerDocument, 'canvas');
 		this.canvas.style.position = 'absolute';
 		this.canvas.style.left = '0';
-		this.domNode.append(this.canvas);
+		this.slider = h(source.host.ownerDocument, 'div');
+		this.slider.className = 'stanza-editor-minimap-slider';
+		this.slider.setAttribute('aria-hidden', 'true');
+		this.domNode.append(this.canvas, this.slider);
 		source.host.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		this._register(addDisposableListener(this.domNode, 'pointerdown', event => {
 			if (event.button !== 0) return;
+			const localY = event.clientY - this.domNode.getBoundingClientRect().top;
+			this.dragOffset = localY >= this.sliderTop && localY <= this.sliderTop + this.sliderHeight
+				? localY - this.sliderTop
+				: this.sliderHeight / 2;
 			this.dragging = true;
+			this.domNode.classList.add('stanza-editor-minimap-dragging');
 			this.domNode.setPointerCapture(event.pointerId);
 			this.moveTo(event.clientY);
 			event.preventDefault();
@@ -64,9 +77,13 @@ export class Minimap extends ViewPart {
 		}));
 		this._register(addDisposableListener(this.domNode, 'pointerup', event => {
 			this.dragging = false;
+			this.domNode.classList.remove('stanza-editor-minimap-dragging');
 			if (this.domNode.hasPointerCapture(event.pointerId)) this.domNode.releasePointerCapture(event.pointerId);
 		}));
-		this._register(addDisposableListener(this.domNode, 'pointercancel', () => this.dragging = false));
+		this._register(addDisposableListener(this.domNode, 'pointercancel', () => {
+			this.dragging = false;
+			this.domNode.classList.remove('stanza-editor-minimap-dragging');
+		}));
 	}
 
 	public getDomNode(): FastDomNode<HTMLElement> {
@@ -75,14 +92,26 @@ export class Minimap extends ViewPart {
 
 	render(context: RestrictedRenderingContext): void {
 		const geometry = this.source.readMinimapLayout();
-		const visible = this.source.options.enabled && geometry.renderMinimap !== RenderMinimap.None && geometry.minimapWidth > 0;
+		const visible = this.source.options.enabled && geometry.renderMinimap !== RenderMinimap.None && geometry.minimapWidth > 0 && context.viewportHeight > 0;
 		this.domNode.style.display = visible ? '' : 'none';
+		this.slider.hidden = !visible;
 		if (!visible) return;
 
+		const projection = this.source.readVisualProjection();
+		const lineHeight = Math.max(1, this.source.readLayout().lineHeight);
+		const rows = projection.visualLineCount + (this.source.paddingTop + this.source.paddingBottom) / lineHeight;
+		const pixelRatio = geometry.minimapCanvasInnerHeight / Math.max(1, geometry.minimapCanvasOuterHeight);
+		this.contentHeight = Math.min(context.viewportHeight, Math.max(0, rows * geometry.minimapLineHeight / Math.max(1, pixelRatio)));
+		this.sliderHeight = Math.min(this.contentHeight, Math.max(8, this.contentHeight * context.viewportHeight / Math.max(1, context.scrollHeight)));
+		const scrollRange = Math.max(0, context.scrollHeight - context.viewportHeight);
+		this.sliderTop = scrollRange > 0 ? context.scrollTop / scrollRange * (this.contentHeight - this.sliderHeight) : 0;
+		this.domNode.classList.toggle('stanza-editor-minimap-hover-slider', this.source.options.showSlider === 'mouseover');
 		this.domNode.style.left = `${context.scrollLeft + geometry.minimapLeft}px`;
 		this.domNode.style.top = `${context.scrollTop}px`;
 		this.domNode.style.width = `${geometry.minimapWidth}px`;
 		this.domNode.style.height = `${context.viewportHeight}px`;
+		this.slider.style.top = `${this.sliderTop}px`;
+		this.slider.style.height = `${this.sliderHeight}px`;
 		this.canvas.style.width = `${geometry.minimapCanvasOuterWidth}px`;
 		this.canvas.style.height = `${geometry.minimapCanvasOuterHeight}px`;
 		this.canvas.width = Math.max(1, Math.round(geometry.minimapCanvasInnerWidth));
@@ -97,18 +126,18 @@ export class Minimap extends ViewPart {
 		const height = this.canvas.height;
 		painter.clearRect(0, 0, width, height);
 		const projection = this.source.readVisualProjection();
-		const scaleY = height / Math.max(1, projection.visualLineCount + this.source.paddingTop + this.source.paddingBottom);
-		const rowHeight = Math.max(1, geometry.minimapLineHeight * geometry.minimapScale);
+		const lineHeight = Math.max(1, this.source.readLayout().lineHeight);
+		const paddingRows = this.source.paddingTop / lineHeight;
+		const scaleY = this.contentHeight * height / context.viewportHeight / Math.max(1, projection.visualLineCount + (this.source.paddingTop + this.source.paddingBottom) / lineHeight);
+		const rowHeight = Math.max(1, scaleY);
 		const charWidth = Math.max(1, geometry.minimapScale);
-		const styles = this.source.host.ownerDocument.defaultView!.getComputedStyle(this.source.host);
-		const foreground = styles.getPropertyValue('--vscode-editor-foreground').trim() || styles.color || '#808080';
-		painter.fillStyle = foreground;
+		painter.fillStyle = this.source.host.ownerDocument.defaultView!.getComputedStyle(this.source.host).color;
 		painter.globalAlpha = 0.55;
 		for (const line of projection.lines) {
 			const text = this.source.model.getLineContent(line.logicalLineIndex + 1).slice(line.startColumn, line.endColumn);
 			const indentation = leadingWidth(text, this.source.tabSize);
 			const visibleWidth = Math.max(1, Math.min(width - indentation * charWidth, (text.length - indentation) * charWidth));
-			const y = Math.floor((line.visualLineIndex + this.source.paddingTop) * scaleY);
+			const y = Math.floor((line.visualLineIndex + paddingRows) * scaleY);
 			painter.fillRect(indentation * charWidth, y, visibleWidth, rowHeight);
 		}
 		painter.globalAlpha = 1;
@@ -125,20 +154,15 @@ export class Minimap extends ViewPart {
 			painter.fillRect(Math.max(0, width - 3), top, 3, markerHeight);
 		}
 
-		const contentHeight = Math.max(context.viewportHeight, context.scrollHeight);
-		const sliderTop = context.scrollTop / contentHeight * height;
-		const sliderHeight = Math.max(8, context.viewportHeight / contentHeight * height);
-		painter.fillStyle = styles.getPropertyValue('--vscode-minimapSlider-background').trim() || 'rgba(128, 128, 128, 0.25)';
-		painter.fillRect(0, sliderTop, width, Math.min(height - sliderTop, sliderHeight));
 	}
 
 	private moveTo(clientY: number): void {
 		const bounds = this.domNode.getBoundingClientRect();
 		if (bounds.height <= 0) return;
 		const layout = this.source.readLayout();
-		const ratio = clamp((clientY - bounds.top) / bounds.height, 0, 1);
-		const top = ratio * layout.contentSize.height - layout.viewportSize.height / 2;
-		this.source.scrollTo({ left: layout.scrollPosition.left, top: clamp(top, 0, layout.maximumScrollPosition.top) });
+		const travel = this.contentHeight - this.sliderHeight;
+		const ratio = travel > 0 ? clamp((clientY - bounds.top - this.dragOffset) / travel, 0, 1) : 0;
+		this.source.scrollTo({ left: layout.scrollPosition.left, top: ratio * layout.maximumScrollPosition.top });
 	}
 }
 

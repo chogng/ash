@@ -18,6 +18,14 @@ type Thenable<T> = PromiseLike<T>;
 
 export type ProviderResult<T> = T | undefined | null | Thenable<T | undefined | null>;
 
+/** One source or target position returned by a cross-resource language feature. */
+export interface LanguageLocation {
+	readonly resource: URI;
+	readonly range: Range;
+	/** The narrower symbol-name range to select after opening the target. */
+	readonly selectionRange?: Range;
+}
+
 export interface Command {
 	id: string;
 	title: string;

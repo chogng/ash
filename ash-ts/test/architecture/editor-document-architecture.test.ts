@@ -21,7 +21,6 @@ test("document editing separates editor capabilities from Workbench hosting", ()
 	for (const file of [
 		"common/core/documentSelection.ts",
 		"common/model/textModel.ts",
-		"common/model/textBuffer.ts",
 		"common/model/textBufferFactory.ts",
 		"common/model/pieceTreeTextBuffer/rbTreeBase.ts",
 		"common/model/pieceTreeTextBuffer/pieceTreeBase.ts",
@@ -82,7 +81,7 @@ test("document editing separates editor capabilities from Workbench hosting", ()
 test("document editing keeps lines and orthogonal rich semantics in one TextModel", () => {
 	const schema = readFileSync(join(editorRoot, "common/model/documentSchema.ts"), "utf8");
 	const textModel = readFileSync(join(editorRoot, "common/model/textModel.ts"), "utf8");
-	const textBuffer = readFileSync(join(editorRoot, "common/model/textBuffer.ts"), "utf8");
+	const textBuffer = readFileSync(join(editorRoot, "common/model.ts"), "utf8");
 	const textBufferFactory = readFileSync(join(editorRoot, "common/model/textBufferFactory.ts"), "utf8");
 	const pieceTree = readFileSync(join(editorRoot, "common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.ts"), "utf8");
 	const pieceTreeBuilder = readFileSync(join(editorRoot, "common/model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.ts"), "utf8");
@@ -101,13 +100,13 @@ test("document editing keeps lines and orthogonal rich semantics in one TextMode
 	assert.match(textModel, /static create\(/u);
 	assert.match(textModel, /get lineDocument/u);
 	assert.match(textModel, /getLineId/u);
-	assert.match(textModel, /private buffer: TextBuffer/u);
+	assert.match(textModel, /private buffer: ITextBuffer/u);
 	assert.doesNotMatch(textModel, /TextModelStructure|structureIndex|TextModelBlockTree/u);
-	assert.match(textBuffer, /export interface TextBuffer/u);
+	assert.match(textBuffer, /export interface ITextBuffer/u);
 	assert.doesNotMatch(textBuffer, /PieceTree/u);
 	assert.match(textBufferFactory, /new PieceTreeTextBufferBuilder/u);
-	assert.match(textBufferFactory, /return builder\.finish\(\)/u);
-	assert.match(pieceTreeBuilder, /implements TextBufferBuilder/u);
+	assert.match(textBufferFactory, /return builder\.finish\(\)\.create\(defaultEOL\)\.textBuffer/u);
+	assert.match(pieceTreeBuilder, /implements ITextBufferBuilder/u);
 	assert.match(pieceTreeBuilder, /return new PieceTreeTextBuffer/u);
 	assert.match(pieceTree, /from "\.\/rbTreeBase\.js"/u);
 	assert.match(redBlackTree, /export const enum NodeColor/u);
@@ -124,7 +123,7 @@ test("document editing keeps lines and orthogonal rich semantics in one TextMode
 	assert.match(lineProjection, /node\.type === 'codeBlock'/u);
 	assert.match(pane, /DocumentEditorTextModelService/u);
 	assert.match(editor, /export class RichTextEditorWidget/u);
-	assert.match(editor, /ITextModelService/u);
+	assert.match(editor, /ITextModelResourceService/u);
 	assert.match(editor, /TextModelWorkingCopyReference/u);
 	assert.match(editor, /case "codeBlock":[\s\S]*this\.appendEditableText\(element, node, model, decorations\)/u);
 	assert.doesNotMatch(editor, /new TextModel|TextModel\.createStructured|EmbeddedTextEditor|CodeBlockEditorWidget/u);

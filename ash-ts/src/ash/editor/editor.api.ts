@@ -47,7 +47,8 @@ export type { LanguageColorPresentationRequest, LanguageColorProvider, LanguageC
 export type { LanguageDocumentSymbol, LanguageDocumentSymbolProvider, LanguageDocumentSymbolRequest, LanguageSymbolKind } from './contrib/documentSymbols/common/languageDocumentSymbols.js';
 export type { LanguageFoldingRange, LanguageFoldingRangeKind, LanguageFoldingRangeProvider, LanguageFoldingRangeRequest } from './contrib/folding/common/languageFoldingRanges.js';
 export type { LanguageFormattingOptions, LanguageFormattingProvider, LanguageFormattingRequest } from './contrib/format/common/formatCommands.js';
-export type { LanguageDeclarationProvider, LanguageDefinitionProvider, LanguageImplementationProvider, LanguageLocation, LanguageLocationRequest, LanguageReferenceProvider, LanguageReferenceRequest, LanguageTypeDefinitionProvider } from './contrib/gotoSymbol/common/languageNavigation.js';
+export type { LanguageDeclarationProvider, LanguageDefinitionProvider, LanguageImplementationProvider, LanguageLocationRequest, LanguageReferenceProvider, LanguageReferenceRequest, LanguageTypeDefinitionProvider } from './contrib/gotoSymbol/common/languageNavigation.js';
+export type { LanguageLocation } from './common/languages.js';
 export type { LanguageHover, LanguageHoverContent, LanguageHoverProvider, LanguageHoverRequest } from './contrib/hover/common/hover.js';
 export type { LanguageInlayHint, LanguageInlayHintKind, LanguageInlayHintLabel, LanguageInlayHintsProvider, LanguageInlayHintsRequest } from './contrib/inlayHints/common/languageInlayHints.js';
 export type { LanguageInlineCompletionItem, LanguageInlineCompletionsProvider, LanguageInlineCompletionsRequest } from './contrib/inlineCompletions/common/inlineCompletions.js';

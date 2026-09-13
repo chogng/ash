@@ -92,6 +92,7 @@ test("cursor layer retains nodes, animates stable moves, and resolves multi-curs
 	const retainedCaret = layer.locator('.stanza-editor-caret[data-selection-index="0"]');
 	await expect(layer).toHaveClass(/cursor-smooth-caret-animation/u);
 	await retainedCaret.evaluate(element => { element.dataset.retainedIdentity = "true"; });
+	const lineHeight = await editor.locator('.view-line').first().evaluate(element => element.getBoundingClientRect().height);
 
 	const stableMove = await page.evaluate(() => {
 		window.ashTextModelIntegration.setCursors([{ lineIndex: 1, columnIndex: 2 }]);
@@ -99,7 +100,7 @@ test("cursor layer retains nodes, animates stable moves, and resolves multi-curs
 		if (!caret) throw new Error("Moved cursor is missing");
 		return { top: caret.style.top, transitionProperty: caret.style.transitionProperty };
 	});
-	expect(stableMove).toEqual({ top: "20px", transitionProperty: "" });
+	expect(stableMove).toEqual({ top: `${lineHeight}px`, transitionProperty: "" });
 	await expect(retainedCaret).toHaveAttribute("data-retained-identity", "true");
 
 	await editor.evaluate(element => {
@@ -146,7 +147,7 @@ test("text-model editor projects revision-bound Rust syntax, diagnostics, foldin
 	await page.goto("/textModel.html");
 	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getSyntaxAnalysisCount())).toBeGreaterThan(0);
 	await expect(page.locator(".stanza-editor-token.token-keyword")).toHaveText("fn");
-	await expect(page.locator(".stanza-editor-diagnostic-marker.error")).toHaveCount(1);
+	await expect(page.locator(".cdr.squiggly-error")).toHaveCount(1);
 	const symbolIcon = page.locator(".stanza-editor-symbol-icon");
 	await expect(symbolIcon).toHaveCount(1);
 	await expect(symbolIcon).toHaveAttribute("title", "main");
@@ -163,7 +164,7 @@ test("short documents have no false scroll range and use a proportional hover sl
 	await page.goto("/textModel.html");
 	await expect(page.locator(".stanza-editor")).toBeVisible();
 	const geometry = await page.locator(".stanza-editor").evaluate(editor => {
-		const minimap = editor.querySelector<HTMLElement>(".stanza-editor-minimap");
+		const minimap = editor.querySelector<HTMLElement>(".minimap");
 		const slider = editor.querySelector<HTMLElement>(".stanza-editor-minimap-slider");
 		if (!minimap || !slider) throw new Error("Missing minimap geometry");
 		return {
@@ -180,16 +181,42 @@ test("short documents have no false scroll range and use a proportional hover sl
 	expect(geometry.scrollTop).toBe(0);
 	expect(geometry.sliderHidden).toBe(false);
 	expect(geometry.sliderHeight).toBeLessThan(geometry.minimapHeight);
-	const minimap = page.locator('.stanza-editor-minimap');
+	const minimap = page.locator('.minimap');
 	const slider = page.locator('.stanza-editor-minimap-slider');
+	await page.locator('.stanza-editor').evaluate(element => {
+		element.style.setProperty('--ash-scrollbar-slider-background', '#010203');
+		element.style.setProperty('--ash-scrollbar-slider-hover-background', '#040506');
+		element.style.setProperty('--ash-scrollbar-slider-active-background', '#070809');
+	});
 	await expect(slider).toHaveCSS('opacity', '0');
+	await expect(slider).toHaveCSS('background-color', 'rgb(1, 2, 3)');
 	await minimap.hover();
 	await expect(slider).toHaveCSS('opacity', '1');
+	await expect(slider).toHaveCSS('background-color', 'rgb(4, 5, 6)');
+
+	await page.evaluate(() => window.ashTextModelIntegration.setValue(`fn main() {\n  answer();\n}\n${Array.from({ length: 100 }, (_, index) => `line ${index}`).join('\n')}`));
+	const editor = page.locator('.stanza-editor');
+	await expect.poll(() => editor.evaluate(element => element.scrollHeight)).toBeGreaterThan(geometry.clientHeight);
+	const sliderBox = await slider.boundingBox();
+	const minimapBox = await minimap.boundingBox();
+	assertBox(sliderBox, 'minimap slider');
+	assertBox(minimapBox, 'minimap');
+	await page.mouse.move(sliderBox.x + sliderBox.width / 2, sliderBox.y + sliderBox.height / 2);
+	await page.mouse.down();
+	await expect(minimap).toHaveClass(/stanza-editor-minimap-dragging/u);
+	await expect(slider).toHaveCSS('background-color', 'rgb(7, 8, 9)');
+	await page.mouse.move(sliderBox.x + sliderBox.width / 2, minimapBox.y + minimapBox.height / 2, { steps: 5 });
+	await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+	await expect.poll(() => slider.evaluate(element => Number.parseFloat(getComputedStyle(element).top))).toBeGreaterThan(0);
+	await page.mouse.move(sliderBox.x + sliderBox.width / 2, minimapBox.y + minimapBox.height - 1, { steps: 5 });
+	await expect.poll(() => editor.evaluate(element => element.scrollTop === element.scrollHeight - element.clientHeight)).toBe(true);
+	await page.mouse.up();
+	await expect(minimap).not.toHaveClass(/stanza-editor-minimap-dragging/u);
 });
 
 test("glyph margin, line numbers, and folding controls keep VS Code gutter order", async ({ page }) => {
 	await page.goto("/textModel.html");
-	const glyphMargin = page.locator(".stanza-editor-glyph-margin");
+	const glyphMargin = page.locator(".glyph-margin");
 	const foldingControl = page.locator('.ash-icon-folding-expanded').first();
 	await expect(glyphMargin).toBeVisible();
 	await expect(foldingControl).toBeVisible();
@@ -242,7 +269,7 @@ test('view zones use the standard accessor, whitespace geometry, and disposal ch
 			'.stanza-native-ime-text-area',
 			'.stanza-native-edit-context',
 			'.minimap',
-			'.stanza-editor-overview-ruler',
+			'.decorationsOverviewRuler',
 			'.stanza-editor-scrollbar-track-horizontal',
 			'.stanza-editor-scrollbar-track-vertical',
 		].map(selector => {

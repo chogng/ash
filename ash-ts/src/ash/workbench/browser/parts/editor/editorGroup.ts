@@ -29,7 +29,7 @@ import { EditorGroupWatermark } from "./editorGroupWatermark.js";
 import { EditorWelcome, type EditorWelcomeOptions, type IEditorWelcomeProject } from "../../../contrib/files/browser/editorWelcome.js";
 import { editorInputKey, type EditorTabDescriptor } from "./editorTabsControl.js";
 import { EditorTitleControl, type EditorTitleActions } from "./editorTitleControl.js";
-import type { LanguageLocation } from "../../../../editor/contrib/gotoSymbol/common/languageNavigation.js";
+import type { LanguageLocation } from "../../../../editor/common/languages.js";
 import type { LanguageWorkspaceEdit } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
 import type { ILanguageDiagnosticsService } from "../../../../editor/common/services/languageDiagnosticsService.js";
 import type { IKeybindingsResourceService } from "../../../../platform/keybinding/common/keybindingsResource.js";

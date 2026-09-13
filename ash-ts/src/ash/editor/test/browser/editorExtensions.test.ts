@@ -15,7 +15,7 @@ test("editor contributions retain bundle registration order and stable identity"
 	const before = getTextEditorCapabilityContributions().map(contribution => contribution.id);
 	assert.equal(before.includes("editor.contrib.findController"), false);
 
-	await import("../../contrib/find/browser/findController.js");
+	await import("../../contrib/find/browser/find.contribution.js");
 	const after = getTextEditorCapabilityContributions().map(contribution => contribution.id);
 	assert.deepEqual(after, [...before, "editor.contrib.findController"]);
 	const contribution = getTextEditorCapabilityContributions().find(candidate => candidate.id === "editor.contrib.findController");
@@ -31,7 +31,9 @@ test("Code bundle explicitly registers independently selectable editor capabilit
 	const ids = new Set(getTextEditorCapabilityContributions().map(contribution => contribution.id));
 	for (const id of [
 		"editor.contrib.bracketMatching",
+		"editor.contrib.clipboard",
 		"editor.contrib.codeAction",
+		"editor.contrib.comment",
 		"editor.contrib.folding",
 		"editor.contrib.format",
 		"editor.contrib.gotoSymbol",

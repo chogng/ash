@@ -5,14 +5,7 @@ import { Range } from "../../../common/core/range.js";
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
 import { LanguageFeatureRegistry } from "../../../common/languageFeatureRegistry.js";
 import { type TextModel } from "../../../common/model/textModel.js";
-
-/** One source or target position returned by a cross-resource language feature. */
-export interface LanguageLocation {
-	readonly resource: URI;
-	readonly range: Range;
-	/** The narrower symbol-name range to select after opening the target. */
-	readonly selectionRange?: Range;
-}
+import { type LanguageLocation } from "../../../common/languages.js";
 
 export interface LanguageLocationRequest extends LanguageFeatureRequest {
 	readonly resource: URI;

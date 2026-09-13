@@ -43,7 +43,7 @@ test.afterEach(async ({ page }) => {
 test('GPU text keeps wrapped rows disjoint and the gutter in VS Code order', async ({ page }) => {
 	await page.goto('/gpuText.html');
 	await expect(page.locator('.stanza-editor-gpu-canvas')).toBeVisible();
-	await expect(page.locator('[data-decoration-owner="folding"]').first()).toBeVisible();
+	await expect(page.locator('.margin-view-overlays .view-overlay-line[data-line-index="0"] .ash-icon-folding-expanded')).toBeVisible();
 	await expect.poll(() => gpuEditorState(page)).toEqual(healthyGpuEditorState());
 
 	const input = page.locator('.stanza-editor-input');
@@ -92,9 +92,9 @@ async function gpuEditorState(page: Page): Promise<GpuEditorState> {
 		const editor = requireElement(document, '.stanza-editor');
 		const canvas = requireElement<HTMLCanvasElement>(document, '.stanza-editor-gpu-canvas');
 		const firstLine = requireElement(document, '.view-line[data-logical-line-index="0"]');
-		const glyphMargin = requireElement(document, '.stanza-editor-glyph-margin');
+		const glyphMargin = requireElement(document, '.glyph-margin');
 		const lineNumber = requireElement(document, '.margin-view-overlays .view-overlay-line[data-line-index="0"] .line-numbers');
-		const folding = requireElement(document, '[data-decoration-owner="folding"][data-logical-line-index="0"]');
+		const folding = requireElement(document, '.margin-view-overlays .view-overlay-line[data-line-index="0"] .ash-icon-folding-expanded');
 		const text = requireElement(firstLine, '.stanza-editor-line-text');
 		const rows = [...editor.querySelectorAll<HTMLElement>('.view-line')];
 		const rowRectangles = rows.map(row => row.getBoundingClientRect());

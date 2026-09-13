@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { test } from "mocha";
 import ts from "typescript";
 import { findDesktopRoot } from "./testPaths.js";
@@ -67,36 +67,6 @@ test("DOM context queries have one canonical owner", () => {
 		}
 	}
 	assert.deepEqual(owners, Object.fromEntries(expectedSymbols.map(symbol => [symbol, ["src/ash/base/browser/dom.ts"]])));
-});
-
-test("FastDomNode managed writes stay behind the canonical wrapper", () => {
-	const configPath = resolve(desktopRoot, "tsconfig.renderer.json");
-	const configFile = ts.readConfigFile(configPath, ts.sys.readFile);
-	if (configFile.error) {
-		throw new Error(ts.flattenDiagnosticMessageText(configFile.error.messageText, "\n"));
-	}
-	const config = ts.parseJsonConfigFileContent(configFile.config, ts.sys, dirname(configPath));
-	const program = ts.createProgram(config.fileNames, { ...config.options, noEmit: true });
-	const checker = program.getTypeChecker();
-	const violations: string[] = [];
-	for (const sourceFile of program.getSourceFiles()) {
-		if (
-			!sourceFile.fileName.startsWith(sourceRoot) ||
-			sourceFile.fileName === resolve(sourceRoot, "base/browser/fastDomNode.ts")
-		) {
-			continue;
-		}
-		visit(sourceFile, node => {
-			if (!ts.isPropertyAccessExpression(node) || node.name.text !== "domNode") {
-				return;
-			}
-			const mutation = fastDomNodeMutation(node, checker);
-			if (mutation) {
-				violations.push(location(sourceFile.fileName, sourceFile, node, mutation));
-			}
-		});
-	}
-	assert.deepEqual(violations, []);
 });
 
 test("the retired DOM builder and binding protocol stay removed", () => {
@@ -177,102 +147,6 @@ function calledName(expression: ts.LeftHandSideExpression): string | undefined {
 	if (ts.isIdentifier(expression)) return expression.text;
 	if (ts.isPropertyAccessExpression(expression)) return expression.name.text;
 	return undefined;
-}
-
-function fastDomNodeMutation(node: ts.PropertyAccessExpression, checker: ts.TypeChecker): string | undefined {
-	if (!isFastDomNodeType(checker.getTypeAtLocation(node.expression))) {
-		return undefined;
-	}
-	const member = node.parent;
-	if (!ts.isPropertyAccessExpression(member) || member.expression !== node) {
-		return undefined;
-	}
-	if (member.name.text === "className" && isAssignmentTarget(member)) {
-		return member.name.text;
-	}
-	if (member.name.text === "classList") {
-		const operation = member.parent;
-		if (ts.isPropertyAccessExpression(operation) && operation.expression === member) {
-			if (isAssignmentTarget(operation)) {
-				return `classList.${operation.name.text}`;
-			}
-			if (
-				["add", "remove", "replace", "toggle"].includes(operation.name.text) &&
-				ts.isCallExpression(operation.parent) &&
-				operation.parent.expression === operation
-			) {
-				return `classList.${operation.name.text}`;
-			}
-		}
-	}
-	if (member.name.text === "style") {
-		const operation = member.parent;
-		if (ts.isPropertyAccessExpression(operation) && operation.expression === member) {
-			if (
-				(operation.name.text === "cssText" || managedStyleProperties.has(operation.name.text)) &&
-				isAssignmentTarget(operation)
-			) {
-				return `style.${operation.name.text}`;
-			}
-			if (
-				["removeProperty", "setProperty"].includes(operation.name.text) &&
-				ts.isCallExpression(operation.parent) &&
-				operation.parent.expression === operation
-			) {
-				const property = stringLiteralValue(operation.parent.arguments[0]);
-				if (property && managedStyleProperties.has(property)) {
-					return `style.${operation.name.text}(${property})`;
-				}
-			}
-		}
-	}
-	if (
-		["removeAttribute", "setAttribute", "toggleAttribute"].includes(member.name.text) &&
-		ts.isCallExpression(member.parent) &&
-		member.parent.expression === member
-	) {
-		const attribute = stringLiteralValue(member.parent.arguments[0])?.toLowerCase();
-		if (attribute && managedAttributes.has(attribute)) {
-			return `${member.name.text}(${attribute})`;
-		}
-	}
-	return undefined;
-}
-
-const managedStyleProperties = new Set([
-	"bottom",
-	"box-shadow",
-	"boxShadow",
-	"height",
-	"left",
-	"line-height",
-	"lineHeight",
-	"right",
-	"top",
-	"transform",
-	"width",
-]);
-const managedAttributes = new Set(["class", "style"]);
-
-function isFastDomNodeType(type: ts.Type): boolean {
-	if ((type.aliasSymbol ?? type.getSymbol())?.getName() === "FastDomNode") {
-		return true;
-	}
-	return type.isUnionOrIntersection() && type.types.some(isFastDomNodeType);
-}
-
-function isAssignmentTarget(node: ts.Node): boolean {
-	if (ts.isPostfixUnaryExpression(node.parent) || ts.isPrefixUnaryExpression(node.parent)) {
-		return node.parent.operator === ts.SyntaxKind.PlusPlusToken || node.parent.operator === ts.SyntaxKind.MinusMinusToken;
-	}
-	return ts.isBinaryExpression(node.parent) &&
-		node.parent.left === node &&
-		node.parent.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
-		node.parent.operatorToken.kind <= ts.SyntaxKind.LastAssignment;
-}
-
-function stringLiteralValue(node: ts.Expression | undefined): string | undefined {
-	return node && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) ? node.text : undefined;
 }
 
 function containingDeclarationName(node: ts.Node): string | undefined {

@@ -22,7 +22,7 @@ import { type EditorTextDirection } from "../../../../editor/browser/view.js";
 import { type EditorLineWrapping } from "../../../../editor/common/config/editorOptions.js";
 import { type IWorkingCopy, type IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import { type Range } from "../../../../editor/common/core/range.js";
-import { type LanguageLocation } from "../../../../editor/contrib/gotoSymbol/common/languageNavigation.js";
+import { type LanguageLocation } from "../../../../editor/common/languages.js";
 import { type LanguageWorkspaceEdit } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
 import { type ILanguageDiagnosticsService } from "../../../../editor/common/services/languageDiagnosticsService.js";
 import type { CursorsController } from "../../../../editor/common/cursor/cursor.js";
