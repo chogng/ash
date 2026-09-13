@@ -53,6 +53,7 @@ pub struct Fixture {
 
 impl Fixture {
     pub fn new() -> Self {
+        trace_pty("fixture begin");
         let root = tempfile::Builder::new().prefix("zt-").tempdir().unwrap();
         let workspace = root.path().join("workspace");
         let profile = root.path().join("profile");
@@ -67,6 +68,7 @@ impl Fixture {
             daemon.is_file(),
             "build the matching daemon with `just test-tui`"
         );
+        trace_pty("fixture ready");
         Self {
             _root: root,
             workspace,
@@ -201,6 +203,7 @@ baseUrl = "{base_url}"
 
 impl Drop for Fixture {
     fn drop(&mut self) {
+        trace_pty("fixture cleanup begin");
         if thread::panicking() {
             if let Ok(entries) = fs::read_dir(self.profile.join("run")) {
                 for entry in entries.flatten() {
@@ -221,6 +224,7 @@ impl Drop for Fixture {
             .args(["app-server", "daemon", "stop"])
             .envs(self.environment())
             .output();
+        trace_pty("fixture cleanup end");
     }
 }
 
@@ -265,6 +269,33 @@ impl TuiProcess {
         terminal: Option<(&str, &str)>,
     ) -> Self {
         let pair = native_pty_system().openpty(size).unwrap();
+        let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_ash"));
+        command.args(args);
+        command.cwd(&fixture.workspace);
+        command.env("TERM", "xterm-256color");
+        if let Some((program, version)) = terminal {
+            command.env("TERM_PROGRAM", program);
+            command.env("TERM_PROGRAM_VERSION", version);
+        }
+        let fixture_bin = fixture._root.path().join("bin");
+        if fixture_bin.is_dir() {
+            let mut paths = vec![fixture_bin];
+            paths.extend(std::env::split_paths(
+                &std::env::var_os("PATH").unwrap_or_default(),
+            ));
+            command.env("PATH", std::env::join_paths(paths).unwrap());
+        }
+        // Never let an offline PTY scenario reuse the developer's actual Codex subscription.
+        fs::create_dir_all(fixture.codex_home()).unwrap();
+        for (name, value) in fixture.environment() {
+            command.env(name, value);
+        }
+        command.env("ASH_LOCAL_APP_SERVER_IDLE_TIMEOUT_MILLIS", "5000");
+        // Spawn before adding the reader thread; portable-pty uses a Unix pre-exec hook.
+        trace_pty("spawn begin");
+        let child = ChildGuard::new(pair.slave.spawn_command(command).unwrap());
+        trace_pty("spawn ready");
+        drop(pair.slave);
         let mut reader = pair.master.try_clone_reader().unwrap();
         let writer = Arc::new(Mutex::new(pair.master.take_writer().unwrap()));
         let reply_writer = Arc::clone(&writer);
@@ -307,30 +338,7 @@ impl TuiProcess {
                 }
             }
         });
-        let mut command = CommandBuilder::new(env!("CARGO_BIN_EXE_ash"));
-        command.args(args);
-        command.cwd(&fixture.workspace);
-        command.env("TERM", "xterm-256color");
-        if let Some((program, version)) = terminal {
-            command.env("TERM_PROGRAM", program);
-            command.env("TERM_PROGRAM_VERSION", version);
-        }
-        let fixture_bin = fixture._root.path().join("bin");
-        if fixture_bin.is_dir() {
-            let mut paths = vec![fixture_bin];
-            paths.extend(std::env::split_paths(
-                &std::env::var_os("PATH").unwrap_or_default(),
-            ));
-            command.env("PATH", std::env::join_paths(paths).unwrap());
-        }
-        // Never let an offline PTY scenario reuse the developer's actual Codex subscription.
-        fs::create_dir_all(fixture.codex_home()).unwrap();
-        for (name, value) in fixture.environment() {
-            command.env(name, value);
-        }
-        command.env("ASH_LOCAL_APP_SERVER_IDLE_TIMEOUT_MILLIS", "5000");
-        let child = ChildGuard::new(pair.slave.spawn_command(command).unwrap());
-        drop(pair.slave);
+        trace_pty("reader ready");
         let mut snapshot_paths = vec![fixture._root.path().to_string_lossy().into_owned()];
         if let Ok(path) = fs::canonicalize(fixture._root.path()) {
             let path = path.to_string_lossy().into_owned();
@@ -445,6 +453,7 @@ impl TuiProcess {
     }
 
     fn wait_for_redraw_after(&mut self, revision: u64) {
+        trace_pty("redraw begin");
         let deadline = Instant::now() + STATE_TIMEOUT;
         let mut observed_revision = None;
         loop {
@@ -456,6 +465,7 @@ impl TuiProcess {
             let current_revision = self.capture.lock().unwrap().revision();
             if current_revision > revision {
                 if observed_revision == Some(current_revision) {
+                    trace_pty("redraw ready");
                     return;
                 }
                 observed_revision = Some(current_revision);
@@ -490,10 +500,12 @@ impl TuiProcess {
     }
 
     pub fn wait_for_screen(&mut self, expected: &str) {
+        trace_pty(&format!("screen wait {expected}"));
         let deadline = Instant::now() + STATE_TIMEOUT;
         loop {
             let screen = self.screen();
             if screen.contains(expected) {
+                trace_pty(&format!("screen ready {expected}"));
                 return;
             }
             if let Some(status) = self.child.try_wait().unwrap() {
@@ -570,6 +582,7 @@ impl TuiProcess {
     }
 
     pub fn quit(&mut self) {
+        trace_pty("quit begin");
         let deadline = Instant::now() + PROCESS_TIMEOUT;
         let mut sent_revision = self.capture.lock().unwrap().revision();
         let mut observed_revision = sent_revision;
@@ -577,6 +590,7 @@ impl TuiProcess {
         self.send(&[0x03]);
         loop {
             if let Some(status) = self.child.try_wait().unwrap() {
+                trace_pty("quit child exited");
                 self.close_terminal();
                 assert!(
                     status.success(),
@@ -608,15 +622,19 @@ impl TuiProcess {
             thread::sleep(Duration::from_millis(20));
         }
         self.close_terminal();
+        trace_pty("quit end");
     }
 
     fn close_terminal(&mut self) {
+        trace_pty("terminal close begin");
         #[cfg(unix)]
         self.reader_stop.store(true, Ordering::Release);
         *self.writer.lock().unwrap() = Box::new(std::io::sink());
+        trace_pty("terminal writer closed");
         // ConPTY closes its output pipe with the pseudoconsole. On Unix, a
         // descendant can keep the slave open, so the reader stops by signal.
         drop(self.master.take());
+        trace_pty("terminal master closed");
         if let Some(reader) = self.reader.take() {
             if let Err(error) = reader.join() {
                 if !thread::panicking() {
@@ -624,7 +642,17 @@ impl TuiProcess {
                 }
             }
         }
+        trace_pty("terminal reader joined");
     }
+}
+
+fn trace_pty(stage: &str) {
+    if std::env::var_os("ASH_TUI_TEST_TRACE").is_none() {
+        return;
+    }
+    let current = thread::current();
+    let name = current.name().unwrap_or("unnamed");
+    let _ = writeln!(std::io::stderr(), "PTY {name}: {stage}");
 }
 
 #[cfg(unix)]
