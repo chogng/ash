@@ -1457,12 +1457,22 @@ export class TextModel implements ITextModel {
 	 * insertions at the same position, are rejected before any mutation.
 	 */
 	applyOperations(operations: readonly ISingleEditOperation[], options: TextEditOptions = {}): TextModelChange | undefined {
+		this.assertNotDisposed();
+		this.ensureDirectTextMutationAllowed();
 		if (!Array.isArray(operations)) throw new TypeError("Edit operations must be an array");
+		const previousStepOpen = options.historyGroup === undefined
+			&& this.history.findUndoEntry(undefined, () => true) !== undefined;
+		const versionBefore = this._version;
 		if (options.historyGroup === undefined) this.history.pushStackElement();
+		let change: TextModelChange | undefined;
 		try {
-			return this.pushEditOperationsWithOptions(null, operations, null, options)?.change;
+			change = this.pushEditOperationsWithOptions(null, operations, null, options)?.change;
+			return change;
 		} finally {
-			if (options.historyGroup === undefined) this.history.pushStackElement();
+			if (options.historyGroup === undefined) {
+				this.history.pushStackElement();
+				if (!change && this._version === versionBefore && previousStepOpen) this.history.popStackElement();
+			}
 		}
 	}
 

@@ -74,11 +74,15 @@ flowchart LR
 
 `TextModel.reset` 用于 reload/revert，不建立普通 undo entry；即使新旧文本相同，也会清空旧历史、推进版本并发布重置事件，使旧版本异步请求失效。`ModelService.updateModel` 会先按目标 buffer 更新 EOL，再提交最小文本 edit；模型、snapshot、undo/redo 和 worker mirror 始终使用同一个 `ITextBuffer` EOL。
 
+模型历史在提交成功后记录编辑前后的选区；拒绝的编辑与空批次不改变已有撤销组。
+
 `ModelService` 通过 `platform/configuration` 读取模型创建选项，通过 `ITextResourcePropertiesService` 决定资源 EOL。语言、资源或相关配置变化会清空 creation-options cache 并更新已打开模型；关闭文件的 undo/redo 只有在 URI 策略允许、内容 SHA-1 一致且内存预算允许时才恢复。
 
 ### Selection、command 和 composition
 
 一个 `TextModel` 可以由多个编辑器共享，但 selection、cursor 和 composition 状态属于各自的 `ViewModelImpl`。目标生产链固定为 `ViewModelImpl → CursorsController → CursorCollection → CommandExecutor`；模型只保存文本、装饰和 undo/redo 数据，不保存某个编辑器的 cursor 状态。
+
+共享模型的编辑器各自持有选区；一个编辑器的输入、撤销和重做不能让未聚焦的另一个编辑器接管焦点或选区。
 
 当前生产构造已经是 `ViewModelImpl → CursorsController → CursorCollection → Cursor`，`CodeEditorWidget` 只通过内部入口取得同一个 controller，不再创建第二份 selection owner。模型内容事件由 ViewModel 的 collector 进入 `CursorsController.onModelContentChanged`，flush 会重建 collection 和 tracked marker；同一状态变化不会再由 collector 与 controller 事件重复投影。Contribution context 分别暴露真实 `IViewModel` 和同一份 `selectionController`，不再用选择 owner 冒充视图模型。键盘、行选择和上下添加多光标通过 `CursorMoveCommands` 的标准模型/视图状态 API；删除、输入、转置和行操作使用 `MoveOperations` 的标准位置 API。剩余缺口是 contribution 仍直接调用若干仅本地 controller 入口，需继续迁回 `IViewModel` / `ICodeEditor` 的标准公共边界。
 
@@ -177,6 +181,7 @@ contrib/<feature>/
 - 简单 feature 在 browser 主文件中注册；只有 configure phase、能力注入或多对象编排才使用独立 `.contribution.ts`。
 - Contribution 通过窄 capability 或 host callback 请求外部能力，不能 import 模式 bundle。
 - Provider contract 与 DOM presentation 分离；没有 browser UI 时，common contract 仍应可独立测试。
+- 弹出菜单关闭时仅在菜单内部拥有焦点的情况下恢复所属输入节点；共享模型的其他编辑器改动内容不能抢走当前焦点。
 - 不创建空目录、barrel 或 placeholder controller 来表示尚未实现的能力。
 
 当前 feature 分为 editing、language UX、view/navigation 三组。逐文件 owner 由目录和对应 README/测试表达，不再维护一份会过期的全量 feature ledger。

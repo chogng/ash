@@ -86,6 +86,28 @@ test("TextModel pushStackElement and popStackElement control the current undo st
 	assert.equal(model.getText(), "abcd");
 });
 
+test('Rejected and empty edit batches preserve an open undo step and its selections', () => {
+	using model = new TextModel('');
+	const before = [new Selection(1, 1, 1, 1)];
+	const afterFirst = [new Selection(1, 2, 1, 2)];
+	const afterSecond = [new Selection(1, 3, 1, 3)];
+	model.pushEditOperations(before, [{ range: new Range(1, 1, 1, 1), text: 'a' }], () => afterFirst);
+	const version = model.getVersionId();
+
+	assert.throws(() => model.applyOperations([
+		{ range: new Range(1, 2, 1, 2), text: 'X' },
+		{ range: new Range(1, 2, 1, 2), text: 'Y' },
+	]), /must not overlap/);
+	assert.equal(model.applyOperations([]), undefined);
+	assert.deepEqual({ text: model.getText(), version: model.getVersionId() }, { text: 'a', version });
+
+	model.pushEditOperations(afterFirst, [{ range: new Range(1, 2, 1, 2), text: 'b' }], () => afterSecond);
+	const undo = model.undo();
+	assert.deepEqual({ text: model.getText(), selection: undo?.resultingSelection }, { text: '', selection: before });
+	const redo = model.redo();
+	assert.deepEqual({ text: model.getText(), selection: redo?.resultingSelection }, { text: 'ab', selection: afterSecond });
+});
+
 test("TextModel replays deterministic history across changing line maps", () => {
 	using model = new TextModel("seed\ntext");
 	const states = [model.getText()];

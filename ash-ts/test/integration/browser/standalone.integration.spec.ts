@@ -127,3 +127,78 @@ test('same-value reset advances the shared model version and preserves existing 
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	expect(errors).toEqual([]);
 });
+
+test('keyboard undo and redo restore multi-cursor selections in a shared model', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.stack ?? error.message));
+	await page.goto('/standalone.html');
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.switchOwnedToCaller())).currentModelIsCaller).toBe(true);
+	const input = page.locator('#caller .stanza-editor-input');
+	const before = await page.evaluate(() => window.ashStandaloneIntegration.prepareSelectionUndo());
+	expect(before.ownedSelections).toEqual(['[2,3 -> 2,3]']);
+	await input.focus();
+	await expect(input).toBeFocused();
+	const focused = await page.evaluate(() => window.ashStandaloneIntegration.readSelectionUndo());
+	expect({
+		caller: focused.callerFocused,
+		owned: focused.ownedFocused,
+		activeInput: focused.activeInput,
+	}).toEqual({ caller: true, owned: false, activeInput: 'caller' });
+	const edited = await page.evaluate(() => window.ashStandaloneIntegration.applySelectionEdit());
+	expect(edited.value).toBe('A\nB');
+	expect(edited.callerSelections).toEqual(['[1,2 -> 1,2]', '[2,2 -> 2,2]']);
+	expect(edited.ownedSelections).toHaveLength(1);
+	expect({
+		caller: edited.callerFocused,
+		owned: edited.ownedFocused,
+		activeInput: edited.activeInput,
+	}).toEqual({ caller: true, owned: false, activeInput: 'caller' });
+
+	await page.keyboard.press('ControlOrMeta+z');
+	const undone = await page.evaluate(() => window.ashStandaloneIntegration.readSelectionUndo());
+	expect({ value: undone.value, version: undone.version, selections: undone.callerSelections }).toEqual({
+		value: 'alpha\nbeta',
+		version: edited.version + 1,
+		selections: ['[1,6 -> 1,1]', '[2,1 -> 2,5]'],
+	});
+	expect(undone.ownedSelections).toHaveLength(1);
+	await expect(page.locator('#caller .view-line')).toContainText(['alpha', 'beta']);
+	await expect(page.locator('#owned .view-line')).toContainText(['alpha', 'beta']);
+
+	await page.keyboard.press('ControlOrMeta+Shift+z');
+	const redone = await page.evaluate(() => window.ashStandaloneIntegration.readSelectionUndo());
+	expect({ value: redone.value, version: redone.version, selections: redone.callerSelections }).toEqual({
+		value: 'A\nB',
+		version: undone.version + 1,
+		selections: edited.callerSelections,
+	});
+	expect(redone.ownedSelections).toHaveLength(1);
+	await expect(page.locator('#caller .view-line')).toContainText(['A', 'B']);
+	await expect(page.locator('#owned .view-line')).toContainText(['A', 'B']);
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	expect(errors).toEqual([]);
+});
+
+test('code action dismissal restores focus only when its menu owns focus', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.stack ?? error.message));
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.enableCodeActions());
+	const input = page.locator('#caller .stanza-editor-input');
+	const menu = page.locator('#caller .stanza-editor-code-action');
+	const action = menu.getByRole('menuitem', { name: 'Example code action' });
+	await input.focus();
+	await page.keyboard.press('ControlOrMeta+.');
+	await expect(action).toBeFocused();
+	await page.keyboard.press('Escape');
+	await expect(menu).toBeHidden();
+	await expect(input).toBeFocused();
+
+	await page.keyboard.press('ControlOrMeta+.');
+	await expect(action).toBeFocused();
+	await page.evaluate(() => window.ashStandaloneIntegration.resetSameValue());
+	await expect(menu).toBeHidden();
+	await expect(input).toBeFocused();
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	expect(errors).toEqual([]);
+});

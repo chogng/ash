@@ -18,6 +18,16 @@ interface CreationEvent {
 	readonly theme: string | null;
 }
 
+interface UndoState {
+	readonly value: string;
+	readonly version: number;
+	readonly callerSelections: readonly string[];
+	readonly ownedSelections: readonly string[];
+	readonly callerFocused: boolean;
+	readonly ownedFocused: boolean;
+	readonly activeInput: 'caller' | 'owned' | 'other';
+}
+
 interface StandaloneHarness {
 	readonly events: readonly CreationEvent[];
 	state(kind: 'caller' | 'owned'): EditorState;
@@ -34,6 +44,10 @@ interface StandaloneHarness {
 		readonly snapshotValue: string | null;
 		readonly events: readonly { readonly version: number; readonly reason: string; readonly changes: number }[];
 	};
+	prepareSelectionUndo(): UndoState;
+	applySelectionEdit(): UndoState;
+	readSelectionUndo(): UndoState;
+	enableCodeActions(): void;
 	releaseCaller(): void;
 	releaseOwned(): void;
 	dispose(): void;
@@ -69,6 +83,7 @@ callerEditor.layout({ width: callerContainer.clientWidth, height: callerContaine
 ownedEditor.layout({ width: ownedContainer.clientWidth, height: ownedContainer.clientHeight });
 const ownedModel = ownedEditor.getModel();
 if (!ownedModel) throw new Error('Owned standalone editor has no model');
+let codeActionRegistration: ReturnType<typeof stanza.languages.registerCodeActionProvider> | undefined;
 
 function state(kind: 'caller' | 'owned'): EditorState {
 	const editor = kind === 'caller' ? callerEditor : ownedEditor;
@@ -83,6 +98,25 @@ function state(kind: 'caller' | 'owned'): EditorState {
 		mounted: container.contains(editor.getDomNode()),
 		placeholder: container.querySelector('.stanza-editor-placeholder-text') !== null,
 		theme: container.getAttribute('data-color-theme'),
+	};
+}
+
+function readSelectionUndo(): UndoState {
+	const callerSelections = callerEditor.getSelections();
+	const ownedSelections = ownedEditor.getSelections();
+	if (!callerSelections || !ownedSelections) throw new Error('Shared editor selections are unavailable');
+	const activeElement = document.activeElement;
+	let activeInput: UndoState['activeInput'] = 'other';
+	if (callerContainer.contains(activeElement)) activeInput = 'caller';
+	else if (ownedContainer.contains(activeElement)) activeInput = 'owned';
+	return {
+		value: callerModel.getValue(),
+		version: callerModel.getVersionId(),
+		callerSelections: callerSelections.map(selection => selection.toString()),
+		ownedSelections: ownedSelections.map(selection => selection.toString()),
+		callerFocused: callerEditor.hasTextFocus(),
+		ownedFocused: ownedEditor.hasTextFocus(),
+		activeInput,
 	};
 }
 
@@ -149,12 +183,41 @@ window.ashStandaloneIntegration = {
 			events,
 		};
 	},
+	prepareSelectionUndo: () => {
+		callerEditor.setValue('alpha\nbeta');
+		callerEditor.setSelections([
+			new stanza.Selection(1, 6, 1, 1),
+			new stanza.Selection(2, 1, 2, 5),
+		]);
+		ownedEditor.setSelections([new stanza.Selection(2, 3, 2, 3)]);
+		return readSelectionUndo();
+	},
+	applySelectionEdit: () => {
+		callerEditor.pushUndoStop();
+		callerEditor.executeEdits('browser', [
+			{ range: new stanza.Range(1, 1, 1, 6), text: 'A' },
+			{ range: new stanza.Range(2, 1, 2, 5), text: 'B' },
+		], [
+			new stanza.Selection(1, 2, 1, 2),
+			new stanza.Selection(2, 2, 2, 2),
+		]);
+		callerEditor.pushUndoStop();
+		return readSelectionUndo();
+	},
+	readSelectionUndo,
+	enableCodeActions: () => {
+		codeActionRegistration?.dispose();
+		codeActionRegistration = stanza.languages.registerCodeActionProvider('plaintext', {
+			provideCodeActions: () => [{ title: 'Example code action' }],
+		});
+	},
 	releaseCaller: () => {
 		callerEditor.dispose();
 		callerModel.setValue('changed after editor disposal');
 	},
 	releaseOwned: () => ownedEditor.dispose(),
 	dispose: () => {
+		codeActionRegistration?.dispose();
 		ownedEditor.dispose();
 		callerEditor.dispose();
 		callerModel.dispose();

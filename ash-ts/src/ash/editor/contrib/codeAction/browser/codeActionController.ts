@@ -1,5 +1,5 @@
 import "./media/codeAction.css";
-import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
+import { addDisposableListener, getActiveElement, stopEvent, h } from "../../../../base/browser/dom.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
@@ -112,6 +112,7 @@ export class CodeActionController extends Disposable {
 	}
 
 	private close(): void {
+		const restoreFocus = this.element.contains(getActiveElement(this.element.ownerDocument));
 		this.cancelRequest();
 		this.actions = [];
 		this.actionRange = undefined;
@@ -119,7 +120,7 @@ export class CodeActionController extends Disposable {
 		this.element.hidden = true;
 		this.actionListeners.clear();
 		this.element.replaceChildren();
-		this.input.focus({ preventScroll: true });
+		if (restoreFocus) this.input.focus({ preventScroll: true });
 	}
 
 	private cancelRequest(): void {
