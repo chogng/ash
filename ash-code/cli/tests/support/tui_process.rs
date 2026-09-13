@@ -248,6 +248,8 @@ pub struct TuiProcess {
     child: ChildGuard,
     capture: Arc<Mutex<TerminalCapture>>,
     reader: Option<thread::JoinHandle<()>>,
+    #[cfg(target_os = "linux")]
+    profile: PathBuf,
     #[cfg(unix)]
     reader_stop: Arc<AtomicBool>,
     snapshot_paths: Vec<String>,
@@ -386,6 +388,8 @@ impl TuiProcess {
             child,
             capture,
             reader: Some(reader_thread),
+            #[cfg(target_os = "linux")]
+            profile: fixture.profile.clone(),
             #[cfg(unix)]
             reader_stop,
             snapshot_paths,
@@ -641,6 +645,42 @@ impl TuiProcess {
         trace_pty(&format!(
             "child pid={pid} exe={executable} cmdline={command:?} {state} wchan={wait}"
         ));
+        let children = fs::read_to_string(root.join("task").join(pid.to_string()).join("children"))
+            .unwrap_or_default();
+        trace_pty(&format!("child descendants: {children:?}"));
+        for child_pid in children.split_whitespace() {
+            let child_root = PathBuf::from(format!("/proc/{child_pid}"));
+            let command = fs::read(child_root.join("cmdline"))
+                .map(|bytes| String::from_utf8_lossy(&bytes).replace('\0', " "))
+                .unwrap_or_else(|error| format!("unavailable: {error}"));
+            let state = fs::read_to_string(child_root.join("status"))
+                .ok()
+                .and_then(|status| {
+                    status
+                        .lines()
+                        .find(|line| line.starts_with("State:"))
+                        .map(str::to_owned)
+                })
+                .unwrap_or_else(|| "State: unavailable".into());
+            trace_pty(&format!("child {child_pid}: cmdline={command:?} {state}"));
+        }
+        if let Ok(entries) = fs::read_dir(self.profile.join("run")) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().is_some_and(|extension| extension == "log") {
+                    let log = fs::read_to_string(&path)
+                        .unwrap_or_else(|error| format!("unavailable: {error}"));
+                    let tail = log.chars().rev().take(4_096).collect::<String>();
+                    trace_pty(&format!(
+                        "daemon log {}:\n{}",
+                        path.display(),
+                        tail.chars().rev().collect::<String>()
+                    ));
+                }
+            }
+        } else {
+            trace_pty("daemon log directory unavailable");
+        }
     }
 
     pub fn raw_text(&self) -> String {
