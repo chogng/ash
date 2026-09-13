@@ -186,6 +186,7 @@ fn actual_tui_approves_and_declines_real_file_tool_calls() {
     approve.wait_for_screen("工具已获批准并执行");
     approve_gate.release();
     approve.wait_for_stable_screen("文件写入完成");
+    approve.wait_for_stable_screen("ask permissions on");
     approve.assert_snapshot("real/03-approval/01-approved-final");
     approve.control_up();
     approve.up();
