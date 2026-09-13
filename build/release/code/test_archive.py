@@ -52,7 +52,7 @@ class AshCodeArchiveTests(unittest.TestCase):
             with tarfile.open(first, "r:gz") as archive:
                 self.assertEqual(
                     archive.getnames(),
-                    ["bin", "bin/ash", "ash-package.json"],
+                    ["ash-package.json", "bin", "bin/ash"],
                 )
                 self.assertEqual(archive.extractfile("bin/ash").read(), b"ash")
                 self.assertEqual(archive.getmember("bin/ash").mode, 0o755)
@@ -92,7 +92,7 @@ class AshCodeArchiveTests(unittest.TestCase):
             self.assertEqual(first.read_bytes(), second.read_bytes())
             with zipfile.ZipFile(first) as archive:
                 self.assertEqual(
-                    archive.namelist(), ["bin/", "bin/ash", "ash-package.json"]
+                    archive.namelist(), ["ash-package.json", "bin/", "bin/ash"]
                 )
 
     def test_archive_requires_cli_package_identity_and_new_output(self) -> None:
