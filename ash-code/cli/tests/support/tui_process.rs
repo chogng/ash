@@ -245,6 +245,8 @@ pub struct TuiProcess {
     reader: Option<thread::JoinHandle<()>>,
     #[cfg(target_os = "linux")]
     profile: PathBuf,
+    #[cfg(target_os = "linux")]
+    trace_file: PathBuf,
     #[cfg(unix)]
     reader_stop: Arc<AtomicBool>,
     snapshot_paths: Vec<String>,
@@ -288,6 +290,10 @@ impl TuiProcess {
             command.env(name, value);
         }
         command.env("ASH_LOCAL_APP_SERVER_IDLE_TIMEOUT_MILLIS", "5000");
+        let trace_file = fixture._root.path().join("startup-trace.log");
+        if std::env::var_os("ASH_TUI_TEST_TRACE").is_some() {
+            command.env("ASH_TUI_TEST_TRACE_FILE", trace_file.as_os_str());
+        }
         // Spawn before adding the reader thread; portable-pty uses a Unix pre-exec hook.
         trace_pty("spawn begin");
         let child = ChildGuard::new(pair.slave.spawn_command(command).unwrap());
@@ -385,6 +391,8 @@ impl TuiProcess {
             reader: Some(reader_thread),
             #[cfg(target_os = "linux")]
             profile: fixture.profile.clone(),
+            #[cfg(target_os = "linux")]
+            trace_file,
             #[cfg(unix)]
             reader_stop,
             snapshot_paths,
@@ -659,6 +667,14 @@ impl TuiProcess {
                 .unwrap_or_else(|| "State: unavailable".into());
             trace_pty(&format!("child {child_pid}: cmdline={command:?} {state}"));
         }
+        let trace = fs::read_to_string(&self.trace_file)
+            .unwrap_or_else(|error| format!("unavailable: {error}"));
+        let tail = trace.chars().rev().take(8_192).collect::<String>();
+        trace_pty(&format!(
+            "startup trace {}:\n{}",
+            self.trace_file.display(),
+            tail.chars().rev().collect::<String>()
+        ));
         match daemon_log_path(&self.profile) {
             Ok(path) => {
                 let socket = path.with_extension("sock");
