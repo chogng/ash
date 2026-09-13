@@ -11,18 +11,15 @@ name = "ash_file_access"
 path = "src/lib.rs"
 
 [dependencies]
-dunce = { workspace = true }
-path-utils = { package = "ash-utils-path", path = "../utils/path-utils" }
 schemars = { workspace = true }
 serde = { workspace = true }
 sha2 = { workspace = true }
-thiserror = { workspace = true }
 ts-rs = { workspace = true }
-ash-utils-absolute-path = { workspace = true }
 ash-environment = { workspace = true }
 ash-protocol = { workspace = true }
 
 [dev-dependencies]
+dunce = { workspace = true }
 tempfile = { workspace = true }
 
 [lints]

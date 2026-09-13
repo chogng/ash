@@ -7,9 +7,6 @@ use crate::ConnectorMcpRuntimeProvider;
 use crate::RuntimeInvocationFence;
 use crate::RuntimeInvocationLease;
 use crate::StandaloneMcpServer;
-use connectors::ConnectorDefinition;
-use connectors::ConnectorId;
-use connectors::ConnectorRuntimeBinding;
 use ash_config::McpServerId;
 use ash_core_plugins::AcquireCapabilityRequest;
 use ash_core_plugins::ActivationSpec;
@@ -24,6 +21,9 @@ use ash_core_plugins::ReleaseCapabilityRequest;
 use ash_mcp::McpServerDefinition;
 use ash_mcp::McpServerTransport;
 use ash_secrets::SecretValue;
+use connectors::ConnectorDefinition;
+use connectors::ConnectorId;
+use connectors::ConnectorRuntimeBinding;
 
 use self::contract::MarketplaceMcpTransport;
 use self::contract::parse_transport;
@@ -114,7 +114,11 @@ impl MarketplaceConnectorCatalog {
         for source in connector_sources {
             let dir = file_access::Dir::open_local(source.package_root())
                 .map_err(|error| error.to_string())?;
-            let files = file_system::LocalFileSystem::new(dir);
+            let files = file_system::LocalFileSystem::new(file_access::Grant::for_environment(
+                dir,
+                file_access::GrantSource::HostConfiguration,
+                file_access::Permissions::new([file_access::Permission::ReadFiles]),
+            ));
             let path = source
                 .host_path()
                 .strip_prefix(source.package_root())

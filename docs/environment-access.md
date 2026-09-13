@@ -9,7 +9,7 @@
 | --- | --- | --- |
 | 在哪里执行？ | `Environment` / `Env` | Workspace、Project |
 | 相对路径从哪里解析？ | `cwd` | 主工作区 |
-| 目录属于哪个运行位置？ | `Dir = EnvId + canonical path` | 裸路径身份 |
+| 目录属于哪个运行位置？ | `Dir = EnvId + canonical path + 目录对象身份` | 裸路径身份 |
 | 主体可以对目录做什么？ | `Permission + Grant` | Trusted / Untrusted |
 | 当前动作是否允许？ | `AuthorizationDecision` | 持久 Permit |
 | 缺少授权时怎么办？ | `ApprovalRequest` | 自动把目录设为 trusted |
@@ -48,6 +48,7 @@ struct Dir {
     env: EnvId,
     requested_path: AbsolutePathBuf,
     canonical_path: PathBuf,
+    object_id: [u64; 2], // 环境文件驱动提供，并保留对应目录句柄。
 }
 ```
 
@@ -92,8 +93,9 @@ type AuthorizationDecision = Result<Authorization, PermissionDenied>;
 `SessionTree` 只是主体作用域，不代表存在 Session store 或 Session event log。
 
 允许分支携带的 `Authorization` 只在当前操作入口与执行之间传递。它绑定主体、目录、Permission、
-来源和撤销租约；撤销 Grant 后，已有 Authorization 立即失效。它不持久化，也不升级成新的领域
-对象。
+来源和撤销租约。它可复制、可重复使用，每次操作必须重新校验完整绑定，不是一次性凭证。
+文件执行入口持有租约直到 I/O 完成；撤销等待已获准操作结束，返回后旧 Authorization 不能开始新操作。
+它不持久化，也不升级成新的领域对象。
 
 `ApprovalRequest` 是缺少 Grant 时的交互。批准可以只覆盖当前动作，也可以由明确的配置入口创建
 长期规则；不能把一次批准历史模糊匹配成长期授权。
@@ -105,7 +107,7 @@ flowchart TD
     request["具体动作<br/>subject + Env + Dir + Permission"] --> resolve["解析路径并校验目录边界"]
     resolve --> check["检查有效 Grant 与策略"]
     check --> decision{"AuthorizationDecision"}
-    decision -- "allow" --> auth["Authorization<br/>当前操作立即消费"]
+    decision -- "allow" --> auth["Authorization<br/>当前操作完整校验"]
     decision -- "deny: 缺少可请求授权" --> approval["ApprovalRequest"]
     approval -- "批准" --> recheck["建立精确授权并重新检查"]
     approval -- "拒绝" --> denied["deny(reason)"]
@@ -163,8 +165,9 @@ env dir remove <env-id> <dir-id>
 
 | 所有者 | 负责什么 |
 | --- | --- |
-| `ash-environment` | 环境身份与执行位置 |
+| `ash-environment` | 环境身份、物理目录绑定、安全路径解析和目录句柄 |
 | `ash-file-access` | `Dir`、`Permission`、`Grant`、撤销、快照与授权决定 |
+| `ash-file-system` | 按完整授权执行文件操作，目录句柄约束实际 I/O |
 | 权限策略 | 判断动作应允许、询问还是拒绝 |
 | 批准交互 | 收集用户决定 |
 | 沙箱 | 强制文件、网络和进程边界 |
@@ -179,3 +182,13 @@ env dir remove <env-id> <dir-id>
 - Project、Project 根目录表和同 Project 关系不能产生 Grant；
 - Workspace 只表示编辑器窗口、多根 folder 集合、配置作用域、Cargo 或外部标准中的同名概念；
 - 后端执行位置使用 Environment，执行范围使用 `cwd`、`dirs` 和 `grants`，不能再借用 Workspace 表达。
+
+## 8. 文件执行契约
+
+- 读文件需要 `ReadFiles`；元数据、列举需要 `BrowseFiles`；写入、条件写入、创建、重命名、删除需要 `WriteFiles`。
+- `Access` 绑定唯一主体，所有查询与撤销使用包含环境和物理对象身份的目录键。
+- 本地驱动在实际承载环境的进程中运行；不能把任意远端环境 ID 当成本机路径的归属。
+- 目录规范化只确定名称；实际 I/O 使用保留的目录句柄。重新绑定后旧 Grant 不获得新对象的权限。
+- 条件写入在同一物理目录的进程内写锁下检查和提交；不承诺与其他进程的文件修改进行事务隔离。
+- 配置来源可以影响签发政策；配置目录引用不能签发 Grant，已明确签发的贡献权限不再被来源过滤。
+- 旧的仅路径目录 ID 不匹配新的物理对象绑定，必须重新建立绑定并取得授权。

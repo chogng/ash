@@ -2,6 +2,7 @@
 
 mod session;
 
+pub use ash_utils_pty::TerminalSize as CommandTerminalSize;
 pub use session::CommandSessionCursor;
 pub use session::CommandSessionId;
 pub use session::CommandSessionOptions;
@@ -10,13 +11,7 @@ pub use session::CommandSessionOwner;
 pub use session::CommandSessionStart;
 pub use session::CommandSessionStatus;
 pub use session::CommandSessionUpdate;
-pub use ash_utils_pty::TerminalSize as CommandTerminalSize;
 
-use std::io::Read;
-use std::io::Write;
-use std::path::PathBuf;
-use std::thread;
-use std::time::{Duration, Instant};
 use ash_async_utils::CancellationToken;
 use ash_file_access::Dir;
 use ash_protocol::{ProcessExecutionOutput, ProcessExitStatus, SandboxDenialOutput};
@@ -25,6 +20,11 @@ use ash_sandboxing::{
     FileSystemAccess, NetworkAccess, SandboxBackend, SandboxCommand, SandboxDenialTiming,
     SandboxError, SandboxManager, SandboxPolicy, SandboxProcessExitStatus, SandboxScope,
 };
+use std::io::Read;
+use std::io::Write;
+use std::path::PathBuf;
+use std::thread;
+use std::time::{Duration, Instant};
 
 /// Decides whether a fully materialized local process action can start.
 ///
@@ -467,7 +467,11 @@ fn prepare_runtime_scope(
         .prefix("ash-exec-")
         .tempdir()
         .map_err(|error| ExecutionError::Spawn(error.to_string()))?;
-    let dir = Dir::open(default_dir.env().clone(), runtime_dir.path())
+    let dir = default_dir
+        .directory()
+        .driver()
+        .open_directory(runtime_dir.path())
+        .map(Dir::from_directory)
         .map_err(|error| ExecutionError::Spawn(error.to_string()))?;
     let scope = scope
         .cloned()

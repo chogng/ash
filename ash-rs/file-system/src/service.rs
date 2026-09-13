@@ -6,7 +6,6 @@ use crate::FileMetadata;
 use crate::FileSystemError;
 use crate::FileWriteCondition;
 use crate::MissingTargetBehavior;
-use crate::file_revision;
 use std::path::Path;
 
 /// Directory-scoped filesystem access used by both client adapters and Agent tools.
@@ -14,6 +13,13 @@ use std::path::Path;
 /// Implementations must resolve every relative input beneath their configured authority root and
 /// must reject absolute paths, parent traversal, and symlink escapes before performing I/O.
 pub trait FileSystem: Send + Sync {
+    /// Checks the requested action against this service's subject and directory grant.
+    /// Every I/O entry must also validate its exact permission under the revocation lease.
+    fn ensure_permission(
+        &self,
+        permission: ash_file_access::Permission,
+    ) -> Result<(), FileSystemError>;
+
     /// Reads one existing file, failing if its content exceeds `maximum_bytes`.
     fn read_file(&self, path: &Path, maximum_bytes: usize) -> Result<Vec<u8>, FileSystemError>;
 
@@ -22,13 +28,7 @@ pub trait FileSystem: Send + Sync {
         &self,
         path: &Path,
         maximum_bytes: usize,
-    ) -> Result<FileContent, FileSystemError> {
-        let bytes = self.read_file(path, maximum_bytes)?;
-        Ok(FileContent {
-            revision: file_revision(&bytes),
-            bytes,
-        })
-    }
+    ) -> Result<FileContent, FileSystemError>;
 
     /// Atomically replaces or creates one file, failing if `content` exceeds `maximum_bytes`.
     fn write_file(
@@ -40,23 +40,14 @@ pub trait FileSystem: Send + Sync {
 
     /// Writes only when the condition still matches the current file bytes.
     ///
-    /// Implementations that can serialize a revision check with replacement should override this
-    /// default so concurrent clients cannot pass the same stale condition.
+    /// Implementations must serialize the revision check with replacement across service instances.
     fn write_file_with_condition(
         &self,
         path: &Path,
         content: &[u8],
         maximum_bytes: usize,
         condition: &FileWriteCondition,
-    ) -> Result<FileMetadata, FileSystemError> {
-        if let FileWriteCondition::ExpectedRevision(expected) = condition {
-            let current = self.read_file(path, maximum_bytes)?;
-            if file_revision(&current) != *expected {
-                return Err(FileSystemError::RevisionConflict(path.to_path_buf()));
-            }
-        }
-        self.write_file(path, content, maximum_bytes)
-    }
+    ) -> Result<FileMetadata, FileSystemError>;
 
     /// Returns metadata for one existing path.
     fn get_metadata(&self, path: &Path) -> Result<FileMetadata, FileSystemError>;
@@ -70,6 +61,9 @@ pub trait FileSystem: Send + Sync {
         path: &Path,
         existing: ExistingTargetBehavior,
     ) -> Result<FileMetadata, FileSystemError>;
+
+    /// Creates a directory and its missing parents. Requires WriteFiles.
+    fn create_directory(&self, path: &Path) -> Result<FileMetadata, FileSystemError>;
 
     /// Renames one directory resource according to the explicit destination behavior.
     fn rename(

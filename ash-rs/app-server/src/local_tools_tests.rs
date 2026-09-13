@@ -1,11 +1,6 @@
 #![cfg(unix)]
 
 use super::*;
-use std::fs;
-use std::path::Path;
-use std::path::PathBuf;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
 use ash_async_utils::CancellationSource;
 use ash_file_access::Grant;
 use ash_file_access::GrantSource;
@@ -18,6 +13,11 @@ use ash_sandboxing::PreparedCommand;
 use ash_sandboxing::SandboxCommand;
 use ash_sandboxing::SandboxError;
 use ash_sandboxing::SandboxKind;
+use std::fs;
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
 struct PassThroughBackend;
 
@@ -34,6 +34,14 @@ impl SandboxBackend for PassThroughBackend {
     ) -> Result<PreparedCommand, SandboxError> {
         assert!(policy == read_only_sandbox() || policy == shell_sandbox());
         Ok(PreparedCommand::unrestricted(command))
+    }
+    fn prepare_scoped(
+        &self,
+        command: &SandboxCommand,
+        policy: SandboxPolicy,
+        scope: &ash_sandboxing::SandboxScope,
+    ) -> Result<PreparedCommand, SandboxError> {
+        self.prepare(command, policy, scope.command_dir())
     }
 }
 
@@ -74,7 +82,7 @@ fn local_registry_exposes_shell_command_and_preserves_read_only_ripgrep() {
         )
         .unwrap();
     let ToolExecutionOutput::Success(output) = output else {
-        panic!("fake ripgrep should complete");
+        panic!("fake ripgrep should complete: {output:?}");
     };
     assert!(output.contains("--no-config needle ."));
 }
@@ -200,7 +208,7 @@ fn shell_executor_runs_in_a_session_dir() {
         )
         .unwrap();
     let CommandExecutionOutcome::Completed(output) = outcome else {
-        panic!("session-dir shell command should complete");
+        panic!("session-dir shell command should complete: {outcome:?}");
     };
     assert_eq!(
         PathBuf::from(output.stdout.trim()).canonicalize().unwrap(),
@@ -461,6 +469,7 @@ fn local_tool_port_exposes_one_canonical_coding_tool_surface() {
             ripgrep.clone(),
             Arc::clone(&agent_grep),
             Arc::new(crate::dir_grants::DirGrants::default()),
+            dir.grant(),
         )),
         policy: Arc::new(LocalShellPolicy::default()),
         ripgrep,
@@ -520,6 +529,7 @@ fn local_tool_port_exposes_one_canonical_coding_tool_surface() {
             "grep",
             "read_file",
             "shell-command",
+            "shell-session",
             "write_file"
         ]
     );
@@ -545,6 +555,7 @@ fn agent_edit_refreshes_an_existing_fast_regex_generation_before_returning() {
         ripgrep,
         agent_grep,
         Arc::new(crate::dir_grants::DirGrants::default()),
+        dir.grant(),
     );
     let authorization = ToolAuthorization::Sandboxed(read_only_sandbox());
     let cancellation = CancellationSource::new().token();
@@ -618,6 +629,7 @@ fn local_suite_reads_and_edits_with_spec_errors() {
         ripgrep,
         agent_grep,
         Arc::new(crate::dir_grants::DirGrants::default()),
+        dir.grant(),
     );
     let path = dir.path().join("src/main.rs");
     fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -729,14 +741,22 @@ impl TestDir {
         Dir::open_local(&self.path).unwrap()
     }
 
-    fn authorization(&self) -> Authorization {
+    fn grant(&self) -> Grant {
         Grant::for_environment(
             self.root(),
             GrantSource::HostConfiguration,
-            Permissions::new([Permission::ExecuteCommands]),
+            Permissions::new([
+                Permission::ExecuteCommands,
+                Permission::ReadFiles,
+                Permission::WriteFiles,
+                Permission::InspectRepository,
+                Permission::MutateRepository,
+            ]),
         )
-        .authorize(Permission::ExecuteCommands)
-        .unwrap()
+    }
+
+    fn authorization(&self) -> Authorization {
+        self.grant().authorize(Permission::ExecuteCommands).unwrap()
     }
 
     fn ripgrep(&self) -> PathBuf {

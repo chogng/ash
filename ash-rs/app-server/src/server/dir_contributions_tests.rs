@@ -1,10 +1,5 @@
 use super::*;
 use crate::server::fs_watcher::DirFileChangeSink;
-use std::fs;
-use std::path::Path;
-use std::path::PathBuf;
-use std::sync::Arc;
-use tempfile::TempDir;
 use ash_file_access::Authorization;
 use ash_file_access::Dir;
 use ash_file_access::Grant;
@@ -12,6 +7,11 @@ use ash_file_access::GrantSource;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use ash_protocol::TurnId;
+use std::fs;
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::Arc;
+use tempfile::TempDir;
 
 #[test]
 fn global_instructions_are_injected_but_other_load_policies_are_not() {
@@ -308,4 +308,62 @@ fn write_agent(dir: &Path, name: &str, description: &str, body: &str) {
         format!("---\nname: {name}\ndescription: {description}\n---\n\n{body}\n"),
     )
     .unwrap();
+}
+
+#[test]
+fn revoked_environment_grant_removes_cached_harness_instructions() {
+    let dir = TempDir::new().unwrap();
+    write_instruction(dir.path(), "global", "global", "Revocable guidance.");
+    let grant = Grant::for_environment(
+        Dir::open_local(dir.path()).unwrap(),
+        GrantSource::ExplicitUser,
+        ash_file_access::Permissions::new([ash_file_access::Permission::LoadInstructions]),
+    );
+    let contributions = DirContributions::discover(
+        dir.path(),
+        Arc::new(crate::dir_grants::DirGrants::default()),
+        Some(
+            grant
+                .authorize(ash_file_access::Permission::LoadInstructions)
+                .unwrap(),
+        ),
+    )
+    .unwrap();
+    assert!(
+        instruction_snapshot(contributions.as_ref(), "session")
+            .instructions()
+            .directory_instructions()
+            .is_some()
+    );
+    grant.revoke();
+    assert!(
+        instruction_snapshot(contributions.as_ref(), "session")
+            .instructions()
+            .directory_instructions()
+            .is_none()
+    );
+    assert!(contributions.instruction_snapshot().entries().is_empty());
+}
+
+#[test]
+fn a_valid_authorization_for_another_directory_cannot_load_contributions() {
+    let authorized = TempDir::new().unwrap();
+    let other = TempDir::new().unwrap();
+    write_instruction(other.path(), "global", "global", "Must not be loaded.");
+    let grant = Grant::for_environment(
+        Dir::open_local(authorized.path()).unwrap(),
+        GrantSource::ExplicitUser,
+        ash_file_access::Permissions::new([ash_file_access::Permission::LoadInstructions]),
+    );
+    let contributions = DirContributions::discover(
+        other.path(),
+        Arc::new(crate::dir_grants::DirGrants::default()),
+        Some(
+            grant
+                .authorize(ash_file_access::Permission::LoadInstructions)
+                .unwrap(),
+        ),
+    )
+    .unwrap();
+    assert!(contributions.instruction_snapshot().entries().is_empty());
 }

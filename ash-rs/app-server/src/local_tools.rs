@@ -1,11 +1,3 @@
-use serde_json::json;
-use std::fmt;
-use std::path::Component;
-use std::path::Path;
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::LazyLock;
-use std::time::Duration;
 use ash_action_policy::ActionClassifier;
 use ash_action_policy::ActionDigest;
 use ash_action_policy::ActionKind;
@@ -79,6 +71,14 @@ use ash_shell_command::ShellCommandRequest;
 use ash_shell_command::ShellCommandTool;
 use ash_tools::ToolPayload;
 use ash_tools::to_protocol_tool_definition;
+use serde_json::json;
+use std::fmt;
+use std::path::Component;
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::LazyLock;
+use std::time::Duration;
 
 use crate::dir_grants::DirGrants;
 use crate::tool_composition::ToolCompositionError;
@@ -144,18 +144,16 @@ struct LocalExecutorContribution {
 }
 
 pub(crate) fn compose_local_tools_with_config(
-    authorization: Authorization,
+    grant: ash_file_access::Grant,
     config: &LocalToolConfig,
     dir_grants: Arc<DirGrants>,
     existing_agent_grep: Option<Arc<AgentGrepService>>,
     state_runtime: Option<Arc<ash_state::StateRuntime>>,
     fast_regex_worker_command: Option<&ash_fast_regex_search::FastRegexWorkerCommand>,
 ) -> Result<LocalToolComposition, LocalToolError> {
-    if authorization.permission() != DirPermission::ExecuteCommands {
-        return Err(LocalToolError::permission(
-            "local tools require the execute-command directory capability",
-        ));
-    }
+    let authorization = grant
+        .authorize(DirPermission::ExecuteCommands)
+        .map_err(|error| LocalToolError::permission(error.to_string()))?;
     let install_context = InstallContext::current();
     let sandbox = || {
         ash_sandboxing::SandboxBackends::new(vec![
@@ -232,7 +230,13 @@ pub(crate) fn compose_local_tools_with_config(
             _ => AgentGrepService::new(config.agent_grep_backend, ripgrep.clone(), state_runtime),
         },
     });
-    let service = LocalToolSuite::new(shell, ripgrep.clone(), Arc::clone(&agent_grep), dir_grants);
+    let service = LocalToolSuite::new(
+        shell,
+        ripgrep.clone(),
+        Arc::clone(&agent_grep),
+        dir_grants,
+        grant,
+    );
     Ok(LocalToolComposition {
         tools: Arc::new(service),
         policy: Arc::new(policy),

@@ -1,9 +1,9 @@
+use ash_environment::EnvId;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use sha2::{Digest, Sha256};
 use std::fmt;
 use std::path::Path;
 use std::str::FromStr;
-use ash_environment::EnvId;
 
 const DIR_ID_PREFIX: &str = "sha256:";
 const SHA256_HEX_LENGTH: usize = 64;
@@ -11,20 +11,24 @@ const SHA256_HEX_LENGTH: usize = 64;
 /// Opaque, durable lookup key for one canonical directory.
 ///
 /// Hosts persist this value instead of the filesystem path itself. It intentionally identifies
-/// the canonical path boundary rather than directory-controlled content, so aliases resolve to
-/// the same key and moving the directory produces a new identity.
+/// the environment, canonical path, and physical directory object. Aliases resolve to the same
+/// key; replacing or moving the directory produces a different identity.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, schemars::JsonSchema, ts_rs::TS)]
 #[schemars(transparent)]
 #[ts(type = "string")]
 pub struct DirId(String);
 
 impl DirId {
-    pub(crate) fn from_env_and_canonical_path(env: &EnvId, path: &Path) -> Self {
+    pub(crate) fn from_directory(env: &EnvId, path: &Path, object: [u64; 2]) -> Self {
         let mut digest = Sha256::new();
         digest.update(b"env\0");
         digest.update(env.as_str().as_bytes());
         digest.update(b"\0path\0");
         hash_platform_path(&mut digest, path);
+        digest.update(b"\0object\0");
+        for part in object {
+            digest.update(part.to_le_bytes());
+        }
         let encoded = digest
             .finalize()
             .iter()

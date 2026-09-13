@@ -75,17 +75,19 @@ impl DirGrants {
     }
 
     pub(crate) fn bind_thread_dir(&self, thread_id: ThreadId, dir: Dir) {
-        self.threads
+        let mut threads = self
+            .threads
             .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .entry(thread_id.clone())
-            .or_default()
-            .default = Some(Grant::for_thread(
-            thread_id.clone(),
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let dirs = threads.entry(thread_id.clone()).or_default();
+        if let Some(previous) = dirs.default.replace(Grant::for_thread(
+            thread_id,
             dir,
             GrantSource::HostConfiguration,
             thread_dir_permissions(),
-        ));
+        )) {
+            previous.revoke();
+        }
     }
 
     pub(crate) fn unbind_thread_dir(&self, thread_id: &ThreadId) {
@@ -148,8 +150,8 @@ impl DirGrants {
         self.session_trees
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .entry(session_id)
-            .or_insert_with(Access::new)
+            .entry(session_id.clone())
+            .or_insert_with(|| Access::new(ash_file_access::GrantSubject::SessionTree(session_id)))
             .add(grant, DirSource::SessionRequest)
     }
 
@@ -161,7 +163,7 @@ impl DirGrants {
         let Some(access) = session_trees.get_mut(session_id) else {
             return Mutation::NotPresent;
         };
-        let Some(dir) = access.find(path) else {
+        let Some(dir) = access.find(&ash_file_access::EnvId::local(), path) else {
             return Mutation::NotPresent;
         };
         access.remove(&dir, DirSource::SessionRequest)
@@ -219,7 +221,7 @@ impl DirGrants {
                 actual: 0,
             });
         };
-        let Some(dir) = access.find(path) else {
+        let Some(dir) = access.find(&ash_file_access::EnvId::local(), path) else {
             return Ok(Mutation::NotPresent);
         };
         access.set_permissions(
@@ -269,22 +271,25 @@ impl DirGrants {
         path: &Path,
         permission: Permission,
     ) -> Result<Option<Authorization>, AccessError> {
-        let Some(snapshot) = self.snapshot_for(session_id, permission)? else {
+        let session_trees = self
+            .session_trees
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let Some(access) = session_trees.get(session_id) else {
             return Ok(None);
         };
-        Ok(snapshot
-            .authorizations()
-            .iter()
-            .find(|authorization| {
-                authorization.dir().canonical_path() == path
-                    || authorization.dir().requested_path() == path
-            })
-            .cloned())
+        let Some(dir) = access.find(&ash_file_access::EnvId::local(), path) else {
+            return Ok(None);
+        };
+        access.authorize(&dir, permission).map(Some)
     }
 }
 
 fn thread_dir_permissions() -> Permissions {
     Permissions::new([
+        Permission::ReadFiles,
+        Permission::WriteFiles,
+        Permission::BrowseFiles,
         Permission::ExecuteCommands,
         Permission::InspectRepository,
         Permission::MutateRepository,

@@ -199,7 +199,15 @@ impl TestDir {
     }
 
     fn file_system(&self) -> LocalFileSystem {
-        LocalFileSystem::new(Dir::open_local(&self.path).unwrap())
+        LocalFileSystem::new(ash_file_access::Grant::for_environment(
+            Dir::open_local(&self.path).unwrap(),
+            ash_file_access::GrantSource::ExplicitUser,
+            ash_file_access::Permissions::new([
+                ash_file_access::Permission::ReadFiles,
+                ash_file_access::Permission::WriteFiles,
+                ash_file_access::Permission::BrowseFiles,
+            ]),
+        ))
     }
 }
 
@@ -207,4 +215,171 @@ impl Drop for TestDir {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.path);
     }
+}
+
+#[test]
+fn a_read_authorization_cannot_mutate_or_browse() {
+    let directory = TestDir::new();
+    fs::write(directory.path.join("file"), "old").unwrap();
+    let grant = ash_file_access::Grant::for_environment(
+        Dir::open_local(&directory.path).unwrap(),
+        ash_file_access::GrantSource::ExplicitUser,
+        ash_file_access::Permissions::new([ash_file_access::Permission::ReadFiles]),
+    );
+    let files = LocalFileSystem::from_authorization(
+        grant
+            .authorize(ash_file_access::Permission::ReadFiles)
+            .unwrap(),
+    );
+    assert_eq!(files.read_file(Path::new("file"), 10).unwrap(), b"old");
+    assert!(files.write_file(Path::new("file"), b"new", 10).is_err());
+    assert!(
+        files
+            .write_file_with_condition(
+                Path::new("file"),
+                b"new",
+                10,
+                &FileWriteCondition::Unconditional
+            )
+            .is_err()
+    );
+    assert!(
+        files
+            .create_file(Path::new("created"), ExistingTargetBehavior::Error)
+            .is_err()
+    );
+    assert!(
+        files
+            .rename(
+                Path::new("file"),
+                Path::new("moved"),
+                ExistingTargetBehavior::Error
+            )
+            .is_err()
+    );
+    assert!(
+        files
+            .delete(
+                Path::new("file"),
+                MissingTargetBehavior::Error,
+                FileDeleteMode::FileOrEmptyDirectory
+            )
+            .is_err()
+    );
+    assert!(files.create_directory(Path::new("created-dir")).is_err());
+    assert!(files.read_directory(Path::new("")).is_err());
+    assert!(files.get_metadata(Path::new("file")).is_err());
+    grant.revoke();
+    assert!(files.read_file(Path::new("file"), 10).is_err());
+    assert_eq!(fs::read(directory.path.join("file")).unwrap(), b"old");
+}
+
+#[test]
+fn old_filesystem_cannot_access_a_replacement_root() {
+    let parent = tempfile::tempdir().unwrap();
+    let path = parent.path().join("root");
+    fs::create_dir(&path).unwrap();
+    let grant = ash_file_access::Grant::for_environment(
+        Dir::open_local(&path).unwrap(),
+        ash_file_access::GrantSource::ExplicitUser,
+        ash_file_access::Permissions::new([
+            ash_file_access::Permission::ReadFiles,
+            ash_file_access::Permission::WriteFiles,
+        ]),
+    );
+    let files = LocalFileSystem::new(grant);
+    fs::rename(&path, parent.path().join("old")).unwrap();
+    fs::create_dir(&path).unwrap();
+    fs::write(path.join("file"), "replacement").unwrap();
+    assert!(files.read_file(Path::new("file"), 100).is_err());
+    assert!(
+        files
+            .write_file(Path::new("file"), b"changed", 100)
+            .is_err()
+    );
+    assert_eq!(fs::read(path.join("file")).unwrap(), b"replacement");
+}
+
+#[test]
+fn root_replacement_after_admission_keeps_io_on_the_opened_object() {
+    let parent = tempfile::tempdir().unwrap();
+    let root = parent.path().join("root");
+    fs::create_dir(&root).unwrap();
+    fs::write(root.join("file"), "original").unwrap();
+    let grant = ash_file_access::Grant::for_environment(
+        Dir::open_local(&root).unwrap(),
+        ash_file_access::GrantSource::ExplicitUser,
+        ash_file_access::Permissions::new([ash_file_access::Permission::ReadFiles]),
+    );
+    let files = LocalFileSystem::new(grant);
+    let bytes = files
+        .execute(ash_file_access::Permission::ReadFiles, |scoped| {
+            let relative = scoped.resolve_existing(Path::new("file"))?;
+            fs::rename(&root, parent.path().join("old")).unwrap();
+            fs::create_dir(&root).unwrap();
+            fs::write(root.join("file"), "replacement").unwrap();
+            scoped.handle().read(relative).map_err(io_error)
+        })
+        .unwrap();
+    assert_eq!(bytes, b"original");
+}
+
+#[test]
+#[cfg(unix)]
+fn parent_symlink_replacement_after_resolution_cannot_escape() {
+    let directory = TestDir::new();
+    let outside = tempfile::tempdir().unwrap();
+    fs::create_dir(directory.path.join("nested")).unwrap();
+    fs::write(directory.path.join("nested/file"), "inside").unwrap();
+    fs::write(outside.path().join("file"), "outside").unwrap();
+    let files = directory.file_system();
+    let result = files.execute(ash_file_access::Permission::ReadFiles, |scoped| {
+        let relative = scoped.resolve_existing(Path::new("nested/file"))?;
+        fs::rename(directory.path.join("nested"), directory.path.join("old")).unwrap();
+        std::os::unix::fs::symlink(outside.path(), directory.path.join("nested")).unwrap();
+        scoped.handle().read(relative).map_err(io_error)
+    });
+    assert!(result.is_err());
+}
+
+#[test]
+fn separate_services_serialize_conditional_writes() {
+    let directory = TestDir::new();
+    fs::write(directory.path.join("file"), "old").unwrap();
+    let first = directory.file_system();
+    let second = directory.file_system();
+    let revision = first
+        .read_file_with_revision(Path::new("file"), 100)
+        .unwrap()
+        .revision;
+    let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+    let workers = [first, second]
+        .into_iter()
+        .enumerate()
+        .map(|(index, files)| {
+            let barrier = barrier.clone();
+            let revision = revision.clone();
+            std::thread::spawn(move || {
+                barrier.wait();
+                files.write_file_with_condition(
+                    Path::new("file"),
+                    format!("new {index}").as_bytes(),
+                    100,
+                    &FileWriteCondition::ExpectedRevision(revision),
+                )
+            })
+        })
+        .collect::<Vec<_>>();
+    let results = workers
+        .into_iter()
+        .map(|worker| worker.join().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+    assert_eq!(
+        results
+            .iter()
+            .filter(|result| matches!(result, Err(FileSystemError::RevisionConflict(_))))
+            .count(),
+        1
+    );
 }

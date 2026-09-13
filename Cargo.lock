@@ -178,6 +178,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923"
 
 [[package]]
+name = "ambient-authority"
+version = "0.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9d4ee0d472d1cd2e28c97dfa124b3d8d992e10eb0a035f33f5d12e3a177ba3b"
+
+[[package]]
 name = "android-activity"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -449,8 +455,6 @@ version = "0.1.0"
 dependencies = [
  "schemars",
  "serde",
- "serde_json",
- "tempfile",
  "ts-rs",
 ]
 
@@ -516,7 +520,6 @@ dependencies = [
  "ash-editor-extension-host",
  "ash-execpolicy",
  "ash-extension-api",
- "ash-extension-items",
  "ash-extensions",
  "ash-fast-regex-search",
  "ash-features",
@@ -539,7 +542,6 @@ dependencies = [
  "ash-login",
  "ash-lsp-manager",
  "ash-lsp-server-provider",
- "ash-mcp",
  "ash-mcp-extension",
  "ash-memories",
  "ash-memories-extension",
@@ -557,7 +559,6 @@ dependencies = [
  "ash-prompts",
  "ash-protocol",
  "ash-queue",
- "ash-rmcp-client",
  "ash-rollout",
  "ash-sandboxing",
  "ash-secrets",
@@ -570,7 +571,6 @@ dependencies = [
  "ash-syntax",
  "ash-thread-store",
  "ash-thread-transcript",
- "ash-tool-executor",
  "ash-tools",
  "ash-typst",
  "ash-uds",
@@ -588,7 +588,6 @@ dependencies = [
  "image",
  "log",
  "pollster 1.0.1",
- "semver",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -612,7 +611,6 @@ dependencies = [
  "ash-core",
  "ash-diagnostics",
  "ash-feedback",
- "ash-file-access",
  "ash-memories",
  "ash-memory-diagnostics",
  "ash-protocol",
@@ -621,7 +619,6 @@ dependencies = [
  "base64 0.22.1",
  "serde",
  "serde_json",
- "tempfile",
  "zeroize",
 ]
 
@@ -679,11 +676,9 @@ dependencies = [
 name = "ash-app-server-transport"
 version = "0.1.0"
 dependencies = [
- "ash-app-server-protocol",
  "ash-uds",
  "futures",
  "rustix 1.1.4",
- "serde_json",
  "sha2 0.10.9",
  "tempfile",
  "tokio",
@@ -727,7 +722,6 @@ dependencies = [
  "ash-utils-image",
  "ash-utils-path",
  "image",
- "sha2 0.10.9",
  "tempfile",
  "thiserror 2.0.19",
  "url",
@@ -911,7 +905,6 @@ dependencies = [
 name = "ash-codebase-store"
 version = "0.1.0"
 dependencies = [
- "ash-api",
  "ash-codebase",
  "ash-file-access",
  "ash-model-provider",
@@ -1052,7 +1045,6 @@ dependencies = [
  "ash-tools",
  "ash-utils-path",
  "base64 0.22.1",
- "flate2",
  "getrandom 0.2.17",
  "semver",
  "serde",
@@ -1084,7 +1076,6 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
- "tempfile",
  "ts-rs",
 ]
 
@@ -1149,9 +1140,15 @@ dependencies = [
 name = "ash-environment"
 version = "0.1.0"
 dependencies = [
+ "ash-utils-absolute-path",
+ "ash-utils-path",
+ "cap-std",
+ "dunce",
  "schemars",
  "serde",
+ "thiserror 2.0.19",
  "ts-rs",
+ "winapi-util",
 ]
 
 [[package]]
@@ -1204,7 +1201,6 @@ name = "ash-extensions"
 version = "0.1.0"
 dependencies = [
  "ash-file-identity",
- "serde",
  "serde_json",
  "sha2 0.10.9",
  "tempfile",
@@ -1226,7 +1222,6 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "tempfile",
- "thiserror 2.0.19",
 ]
 
 [[package]]
@@ -1251,7 +1246,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
- "tempfile",
  "ts-rs",
  "url",
 ]
@@ -1262,14 +1256,11 @@ version = "0.1.0"
 dependencies = [
  "ash-environment",
  "ash-protocol",
- "ash-utils-absolute-path",
- "ash-utils-path",
  "dunce",
  "schemars",
  "serde",
  "sha2 0.10.9",
  "tempfile",
- "thiserror 2.0.19",
  "ts-rs",
 ]
 
@@ -1295,6 +1286,7 @@ name = "ash-file-system"
 version = "0.1.0"
 dependencies = [
  "ash-file-access",
+ "cap-std",
  "sha2 0.10.9",
  "tempfile",
 ]
@@ -1360,7 +1352,6 @@ dependencies = [
 name = "ash-github"
 version = "0.1.0"
 dependencies = [
- "ash-protocol",
  "serde",
  "serde_json",
  "tempfile",
@@ -1407,8 +1398,6 @@ dependencies = [
  "ash-model-provider",
  "ash-model-provider-config",
  "ash-protocol",
- "serde_json",
- "tempfile",
 ]
 
 [[package]]
@@ -1823,7 +1812,6 @@ dependencies = [
  "log",
  "mxc-sdk",
  "tempfile",
- "tracelogging",
 ]
 
 [[package]]
@@ -1892,7 +1880,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
- "tempfile",
 ]
 
 [[package]]
@@ -1970,12 +1957,10 @@ version = "0.1.0"
 name = "ash-remote-connections"
 version = "0.1.0"
 dependencies = [
- "ash-app-server",
  "ash-app-server-client",
  "ash-app-server-protocol",
  "ash-build-info",
  "ash-http-client",
- "ash-install-context",
  "ash-package-store",
  "ash-process-hardening",
  "ash-remote",
@@ -2179,7 +2164,6 @@ dependencies = [
  "pollster 1.0.1",
  "serde",
  "serde_json",
- "tempfile",
  "tokio",
 ]
 
@@ -2227,7 +2211,6 @@ dependencies = [
  "ash-agent-graph-store",
  "ash-async-utils",
  "ash-core",
- "ash-environment",
  "ash-file-access",
  "ash-github",
  "ash-history",
@@ -2242,7 +2225,6 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
- "sha2 0.10.9",
  "tempfile",
 ]
 
@@ -2272,9 +2254,6 @@ dependencies = [
 [[package]]
 name = "ash-terminal-detection"
 version = "0.1.0"
-dependencies = [
- "pretty_assertions",
-]
 
 [[package]]
 name = "ash-terminal-runtime"
@@ -2369,11 +2348,9 @@ version = "0.1.0"
 dependencies = [
  "arboard",
  "ash-ansi-escape",
- "ash-app-server",
  "ash-app-server-client",
  "ash-app-server-protocol",
  "ash-client",
- "ash-diff",
  "ash-file-access",
  "ash-file-search",
  "ash-keybinding",
@@ -2390,7 +2367,6 @@ dependencies = [
  "ash-utils-elapsed",
  "ash-utils-home-dir",
  "ash-utils-image",
- "ash-utils-path",
  "base64 0.22.1",
  "chrono",
  "crossterm",
@@ -2671,7 +2647,6 @@ name = "ash-workbench"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "ash-app-server",
  "ash-app-server-client",
  "ash-app-server-daemon",
  "ash-app-server-protocol",
@@ -2680,11 +2655,8 @@ dependencies = [
  "ash-diff",
  "ash-editor",
  "ash-editor-host",
- "ash-file-access",
- "ash-file-search",
  "ash-files",
  "ash-icons",
- "ash-input-classifier",
  "ash-keybinding",
  "ash-keybindings-host",
  "ash-lsp-manager",
@@ -2698,7 +2670,6 @@ dependencies = [
  "ash-scm",
  "ash-session",
  "ash-settings",
- "ash-slash-commands",
  "ash-state",
  "ash-terminal",
  "ash-terminal-runtime",
@@ -2707,14 +2678,12 @@ dependencies = [
  "ash-ui-components",
  "ash-ui-theme",
  "ash-utils-home-dir",
- "ash-utils-path",
  "flate2",
  "serde_json",
  "sha2 0.10.9",
  "signal-hook",
  "tar",
  "tempfile",
- "unicode-width 0.2.0",
  "zui",
 ]
 
@@ -3377,6 +3346,36 @@ dependencies = [
  "prost",
  "prost-build",
  "protoc-bin-vendored",
+]
+
+[[package]]
+name = "cap-primitives"
+version = "4.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b5f74729fd2f44701d1a8eb47e906cdb3ccd9ec0f02baad85a744b791940b18"
+dependencies = [
+ "ambient-authority",
+ "fs-set-times",
+ "io-extras",
+ "io-lifetimes 3.0.1",
+ "ipnet",
+ "maybe-owned",
+ "rustix 1.1.4",
+ "rustix-linux-procfs",
+ "windows-sys 0.61.2",
+ "winx",
+]
+
+[[package]]
+name = "cap-std"
+version = "4.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1ec78e242cfa2cfe276807ac2ecc00315a6c97786977414bcd1c3963b6c91b8"
+dependencies = [
+ "cap-primitives",
+ "io-extras",
+ "io-lifetimes 3.0.1",
+ "rustix 1.1.4",
 ]
 
 [[package]]
@@ -5021,6 +5020,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fs-set-times"
+version = "0.20.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94e7099f6313ecacbe1256e8ff9d617b75d1bcb16a6fddef94866d225a01a14a"
+dependencies = [
+ "io-lifetimes 2.0.4",
+ "rustix 1.1.4",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
 name = "fs2"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6513,6 +6523,28 @@ dependencies = [
  "quote",
  "syn 3.0.3",
 ]
+
+[[package]]
+name = "io-extras"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20fd6de4ccfcc187e38bc21cfa543cb5a302cb86a8b114eb7f0bf0dc9f8ac00f"
+dependencies = [
+ "io-lifetimes 3.0.1",
+ "windows-sys 0.60.2",
+]
+
+[[package]]
+name = "io-lifetimes"
+version = "2.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06432fb54d3be7964ecd3649233cddf80db2832f47fec34c01f65b3d9d774983"
+
+[[package]]
+name = "io-lifetimes"
+version = "3.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2f0fb0570afe1fed943c5c3d4102d5358592d8625fda6a0007fdbe65a92fba96"
 
 [[package]]
 name = "ipnet"
@@ -9790,6 +9822,16 @@ dependencies = [
  "libc",
  "linux-raw-sys 0.12.1",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "rustix-linux-procfs"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2fc84bf7e9aa16c4f2c758f27412dc9841341e16aa682d9c7ac308fe3ee12056"
+dependencies = [
+ "once_cell",
+ "rustix 1.1.4",
 ]
 
 [[package]]
@@ -13316,6 +13358,16 @@ name = "winsafe"
 version = "0.0.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d135d17ab770252ad95e9a872d365cf3090e3be864a34ab46f48555993efc904"
+
+[[package]]
+name = "winx"
+version = "0.36.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f3fd376f71958b862e7afb20cfe5a22830e1963462f3a17f49d82a6c1d1f42d"
+dependencies = [
+ "bitflags 2.13.1",
+ "windows-sys 0.59.0",
+]
 
 [[package]]
 name = "wit-bindgen"

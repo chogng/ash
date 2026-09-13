@@ -251,9 +251,14 @@ fn ripgrep_backend_executes_the_frozen_binary_without_creating_an_index() {
         )
         .unwrap();
 
-    assert!(
-        matches!(output, ToolExecutionOutput::Success(text) if text.contains("--no-config -n --no-heading -i --glob *.rs -- -leading-dash"))
-    );
+    let ToolExecutionOutput::Success(text) = output else {
+        panic!("ripgrep should succeed: {output:?}");
+    };
+    assert!(text.contains("--no-config -n --no-heading -i --glob *.rs"));
+    assert!(text.contains("-- -leading-dash"));
+    for glob in crate::local_tools::LOCAL_DENIED_GLOBS {
+        assert!(text.contains(&format!("--glob !{glob}")));
+    }
     assert!(!service.watches_fast_regex());
     assert!(!service.has_active_index(&root));
 }

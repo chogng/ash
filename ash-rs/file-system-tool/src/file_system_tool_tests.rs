@@ -1,11 +1,4 @@
 use super::*;
-use serde_json::json;
-use std::fs;
-use std::future::Future;
-use std::path::{Path, PathBuf};
-use std::pin::Pin;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::task::{Context, Poll, Waker};
 use ash_async_utils::CancellationSource;
 use ash_file_access::Dir;
 use ash_file_system::LocalFileSystem;
@@ -15,6 +8,13 @@ use ash_tools::{
     ToolExecutor, ToolInvocation, ToolOperationId, ToolOutputStatus, ToolPayload,
     ToolRegistryGeneration, ToolRuntimeAuthority, ToolRuntimeKey,
 };
+use serde_json::json;
+use std::fs;
+use std::future::Future;
+use std::path::{Path, PathBuf};
+use std::pin::Pin;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::task::{Context, Poll, Waker};
 
 static NEXT_DIR: AtomicU64 = AtomicU64::new(1);
 
@@ -78,14 +78,22 @@ fn preserves_tool_limits_and_dir_confinement() {
         panic!("directory escape should return a model-visible error");
     };
     assert_eq!(escape.status(), ToolOutputStatus::Error);
-    assert!(format!("{:?}", escape.content()).contains("not available"));
+    assert!(format!("{:?}", escape.content()).contains("outside the authorized directory"));
 }
 
 fn tool(directory: &TestWorkspace, limits: FileSystemLimits) -> FileSystemTool {
     FileSystemTool::new(
         environment_id(),
         Arc::new(LocalFileSystem::new(
-            Dir::open_local(&directory.path).unwrap(),
+            ash_file_access::Grant::for_environment(
+                Dir::open_local(&directory.path).unwrap(),
+                ash_file_access::GrantSource::ExplicitUser,
+                ash_file_access::Permissions::new([
+                    ash_file_access::Permission::ReadFiles,
+                    ash_file_access::Permission::WriteFiles,
+                    ash_file_access::Permission::BrowseFiles,
+                ]),
+            ),
         )),
         limits,
     )

@@ -1,195 +1,74 @@
-use crate::{DirId, EnvId};
-use std::hash::{Hash, Hasher};
-use std::path::{Path, PathBuf};
-use thiserror::Error;
-use ash_utils_absolute_path::AbsolutePathBuf;
+use crate::DirId;
+use crate::EnvId;
+use ash_environment::Directory;
+use std::hash::Hash;
+use std::hash::Hasher;
+use std::path::Path;
+use std::path::PathBuf;
 
-/// Failure to establish or resolve one directory filesystem boundary.
-#[derive(Clone, Debug, Eq, Error, PartialEq)]
-pub enum DirPathError {
-    #[error("directory root does not exist or cannot be resolved: {path}: {message}")]
-    RootUnavailable { path: PathBuf, message: String },
-    #[error("directory root is not a directory: {}", .0.display())]
-    RootNotDirectory(PathBuf),
-    #[error("path must be relative and contain no parent, root, or platform prefix: {}", .0.display())]
-    InvalidRelativePath(PathBuf),
-    #[error("path is outside the directory root: {}", .0.display())]
-    OutsideDir(PathBuf),
-}
+pub use ash_environment::DirPathError;
 
-/// Stable identity and filesystem boundary for one existing directory.
-///
-/// Identity uses the canonical path. The originally requested path is retained because
-/// operating-system watcher events can use a lexical alias such as macOS `/var` while filesystem
-/// and Git APIs report `/private/var`. That alias is lexically normalized so observed paths can be
-/// matched by prefix, while canonicalization runs on the caller's original spelling so `..` after
-/// a symlinked component keeps operating-system semantics.
+/// Directory identity and scope, established by its execution environment's file driver.
+/// This value grants no permissions.
 #[derive(Clone, Debug)]
 pub struct Dir {
-    env: EnvId,
-    requested: AbsolutePathBuf,
-    canonical: PathBuf,
+    directory: Directory,
 }
 
 impl Dir {
-    /// Opens one existing directory and freezes both its requested and canonical namespaces.
-    pub fn open(env: EnvId, path: impl AsRef<Path>) -> Result<Self, DirPathError> {
-        let path = path.as_ref();
-        let requested = AbsolutePathBuf::resolve_against_current_dir(path).map_err(|error| {
-            DirPathError::RootUnavailable {
-                path: path.to_path_buf(),
-                message: error.to_string(),
-            }
-        })?;
-        let canonical =
-            dunce::canonicalize(path).map_err(|error| DirPathError::RootUnavailable {
-                path: requested.to_path_buf(),
-                message: error.to_string(),
-            })?;
-        let metadata = canonical
-            .metadata()
-            .map_err(|error| DirPathError::RootUnavailable {
-                path: canonical.clone(),
-                message: error.to_string(),
-            })?;
-        if !metadata.is_dir() {
-            return Err(DirPathError::RootNotDirectory(canonical));
-        }
-        Ok(Self {
-            env,
-            requested,
-            canonical,
-        })
+    pub fn from_directory(directory: Directory) -> Self {
+        Self { directory }
     }
 
-    /// Opens one directory in the host-local execution environment.
     pub fn open_local(path: impl AsRef<Path>) -> Result<Self, DirPathError> {
-        Self::open(EnvId::local(), path)
+        Directory::open_local(path).map(Self::from_directory)
     }
 
-    /// Returns the execution environment containing this directory.
     pub fn env(&self) -> &EnvId {
-        &self.env
+        self.directory.env()
     }
-
-    /// Returns the absolute path supplied by the host before symlink and platform-alias collapse.
     pub fn requested_path(&self) -> &Path {
-        self.requested.as_path()
+        self.directory.requested_path()
     }
-
-    /// Returns the canonical directory used for identity, containment, and filesystem access.
     pub fn canonical_path(&self) -> &Path {
-        &self.canonical
+        self.directory.canonical_path()
     }
-
-    /// Returns the opaque persistence key for stable identity of this canonical directory.
     pub fn id(&self) -> DirId {
-        DirId::from_env_and_canonical_path(&self.env, &self.canonical)
+        DirId::from_directory(
+            self.env(),
+            self.canonical_path(),
+            self.directory.object_identity(),
+        )
     }
-
-    /// Resolves an existing relative path after following symlinks and proving containment.
-    pub fn resolve_existing(
-        &self,
-        relative_path: impl AsRef<Path>,
-    ) -> Result<PathBuf, DirPathError> {
-        let relative_path = relative_path.as_ref();
-        let candidate = self.candidate(relative_path)?;
-        let canonical =
-            dunce::canonicalize(&candidate).map_err(|error| DirPathError::RootUnavailable {
-                path: candidate,
-                message: error.to_string(),
-            })?;
-        self.ensure_contained(canonical)
+    pub fn directory(&self) -> &Directory {
+        &self.directory
     }
-
-    /// Resolves a relative write target while checking its nearest existing ancestor.
-    ///
-    /// This authorizations creating a new file but rejects lexical escapes and existing parent symlinks
-    /// that leave the directory boundary.
-    pub fn resolve_for_write(
-        &self,
-        relative_path: impl AsRef<Path>,
-    ) -> Result<PathBuf, DirPathError> {
-        let relative_path = relative_path.as_ref();
-        let candidate = self.candidate(relative_path)?;
-        if candidate.exists() {
-            return self.resolve_existing(relative_path);
-        }
-
-        let mut existing_parent = candidate.as_path();
-        while !existing_parent.exists() {
-            existing_parent = existing_parent
-                .parent()
-                .ok_or_else(|| DirPathError::InvalidRelativePath(relative_path.to_path_buf()))?;
-        }
-        let canonical_parent = dunce::canonicalize(existing_parent).map_err(|error| {
-            DirPathError::RootUnavailable {
-                path: existing_parent.to_path_buf(),
-                message: error.to_string(),
-            }
-        })?;
-        self.ensure_contained(canonical_parent)?;
-        Ok(candidate)
+    pub fn resolve_existing(&self, path: impl AsRef<Path>) -> Result<PathBuf, DirPathError> {
+        self.directory.resolve_existing(path)
     }
-
-    /// Projects an observed absolute path into this directory's relative namespace.
-    ///
-    /// Both the requested and canonical root aliases are accepted. The method intentionally does
-    /// not canonicalize the observed path because removal events commonly refer to paths that no
-    /// longer exist.
+    pub fn resolve_for_write(&self, path: impl AsRef<Path>) -> Result<PathBuf, DirPathError> {
+        self.directory.resolve_for_write(path)
+    }
     pub fn project_observed_path(&self, path: impl AsRef<Path>) -> Option<PathBuf> {
-        let path = path.as_ref();
-        path.strip_prefix(&self.requested)
-            .or_else(|_| path.strip_prefix(&self.canonical))
-            .ok()
-            .map(Path::to_path_buf)
+        self.directory.project_observed_path(path)
     }
-
-    /// Returns this root relative to an existing canonical ancestor.
-    ///
-    /// Git uses this result when the directory is nested below a repository worktree.
     pub fn relative_to_existing_ancestor(
         &self,
-        ancestor: impl AsRef<Path>,
+        path: impl AsRef<Path>,
     ) -> Result<PathBuf, DirPathError> {
-        let ancestor = ancestor.as_ref();
-        let canonical_ancestor =
-            dunce::canonicalize(ancestor).map_err(|error| DirPathError::RootUnavailable {
-                path: ancestor.to_path_buf(),
-                message: error.to_string(),
-            })?;
-        self.canonical
-            .strip_prefix(&canonical_ancestor)
-            .map(Path::to_path_buf)
-            .map_err(|_| DirPathError::OutsideDir(canonical_ancestor))
-    }
-
-    fn candidate(&self, relative_path: &Path) -> Result<PathBuf, DirPathError> {
-        path_utils::join_descendant(&self.canonical, relative_path)
-            .map_err(|_| DirPathError::InvalidRelativePath(relative_path.to_path_buf()))
-    }
-
-    fn ensure_contained(&self, canonical: PathBuf) -> Result<PathBuf, DirPathError> {
-        if canonical.starts_with(&self.canonical) {
-            Ok(canonical)
-        } else {
-            Err(DirPathError::OutsideDir(canonical))
-        }
+        self.directory.relative_to_existing_ancestor(path)
     }
 }
 
 impl PartialEq for Dir {
     fn eq(&self, other: &Self) -> bool {
-        self.env == other.env && self.canonical == other.canonical
+        self.id() == other.id()
     }
 }
-
 impl Eq for Dir {}
-
 impl Hash for Dir {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.env.hash(state);
-        self.canonical.hash(state);
+        self.id().hash(state);
     }
 }
 

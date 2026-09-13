@@ -1,12 +1,11 @@
 use crate::Dir;
+use ash_protocol::{SessionId, ThreadId};
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::BTreeSet;
 use std::fmt;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
-use ash_protocol::{SessionId, ThreadId};
+use std::sync::RwLock;
 
 /// Subject that receives one directory grant.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -134,22 +133,28 @@ impl std::error::Error for PermissionDenied {}
 
 #[derive(Debug)]
 struct Lease {
-    active: AtomicBool,
+    active: RwLock<bool>,
 }
 
 impl Lease {
     fn new() -> Self {
         Self {
-            active: AtomicBool::new(true),
+            active: RwLock::new(true),
         }
     }
 
     fn is_active(&self) -> bool {
-        self.active.load(Ordering::Acquire)
+        *self
+            .active
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     fn revoke(&self) {
-        self.active.store(false, Ordering::Release);
+        *self
+            .active
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = false;
     }
 }
 
@@ -223,16 +228,22 @@ impl Grant {
         &self.permissions
     }
 
+    pub(crate) fn shares_lease(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.lease, &other.lease)
+    }
+
     pub fn revoke(&self) {
         self.lease.revoke();
     }
 
     pub fn is_active(&self) -> bool {
         self.lease.is_active()
+            && !matches!(&self.subject, GrantSubject::Environment(env) if env != self.dir.env())
+            && self.dir.directory().ensure_current().is_ok()
     }
 
     pub fn authorize(&self, permission: Permission) -> AuthorizationDecision {
-        if !self.permissions.allows(permission) || !self.lease.is_active() {
+        if !self.permissions.allows(permission) || !self.is_active() {
             return Err(PermissionDenied {
                 dir: self.dir.clone(),
                 permission,
@@ -290,8 +301,38 @@ impl Authorization {
         self.permission
     }
 
+    /// Validates the full operation binding, then holds the lease until I/O completes.
+    /// Revocation waits for operations already admitted; later operations are denied.
+    pub fn execute<T>(
+        &self,
+        subject: &GrantSubject,
+        dir: &Dir,
+        permission: Permission,
+        operation: impl FnOnce() -> T,
+    ) -> Result<T, PermissionDenied> {
+        let active = self
+            .lease
+            .active
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if !*active
+            || self.subject() != subject
+            || self.dir() != dir
+            || self.permission() != permission
+            || self.dir.directory().ensure_current().is_err()
+            || dir.directory().ensure_current().is_err()
+            || matches!(&self.subject, GrantSubject::Environment(env) if env != dir.env())
+        {
+            return Err(PermissionDenied {
+                dir: dir.clone(),
+                permission,
+            });
+        }
+        Ok(operation())
+    }
+
     pub fn ensure_active(&self) -> Result<(), PermissionDenied> {
-        if self.lease.is_active() {
+        if self.is_active() {
             Ok(())
         } else {
             Err(PermissionDenied {
@@ -303,6 +344,8 @@ impl Authorization {
 
     pub fn is_active(&self) -> bool {
         self.lease.is_active()
+            && !matches!(&self.subject, GrantSubject::Environment(env) if env != self.dir.env())
+            && self.dir.directory().ensure_current().is_ok()
     }
 }
 

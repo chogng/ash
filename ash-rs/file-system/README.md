@@ -1,8 +1,8 @@
 # `ash-file-system`
 
-> 本 README 拥有目录内文件操作的实现契约；目录身份和授权由
-> [`ash-file-access`](../file-access/README.md) 负责。
-
-- `FileSystem` 定义读取、写入、列举、重命名和删除文件的通用接口。
-- `LocalFileSystem` 只在传入 `Dir` 的规范化边界内解析路径并执行宿主文件操作。
-- 本 crate 不决定目录是否获权；调用方必须在构造或调用服务前检查对应 `Authorization`。
+- `FileSystem` 定义读取、元数据、列举、创建、写入、条件写入、重命名和删除。
+- `LocalFileSystem` 必须持有显式 Grant 或 Authorization；每个入口按完整绑定和对应动作检查授权。
+- 读取使用 `ReadFiles`，元数据和列举使用 `BrowseFiles`，所有修改使用 `WriteFiles`。
+- 操作通过环境驱动保留的目录句柄执行；路径检查之后的替换不能把操作导向新根或目录外。
+- 条件检查和提交在同一物理目录的写锁内完成；外部程序的写入不受该进程内锁约束。
+- 撤销等待已获准操作完成；返回后，旧授权不能开始新的操作。

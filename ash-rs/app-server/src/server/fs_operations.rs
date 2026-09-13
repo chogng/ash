@@ -5,8 +5,6 @@ use super::decode;
 use super::operations::resource_rpc_error;
 use super::result;
 use crate::resource_store::MAX_RESOURCE_BYTES;
-use serde_json::Value;
-use std::time::Duration;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::fs::FsCreateFileParams;
 use ash_app_server_protocol::protocol::fs::FsDeleteMode;
@@ -36,6 +34,8 @@ use ash_file_system::FileType;
 use ash_file_system::FileWriteCondition;
 use ash_file_system::MissingTargetBehavior;
 use ash_file_system::file_revision;
+use serde_json::Value;
+use std::time::Duration;
 
 const MAX_EDITOR_FILE_BYTES: usize = 50 * 1024 * 1024;
 const BINARY_PREVIEW_RESOURCE_TTL: Duration = Duration::from_secs(300);
@@ -79,7 +79,7 @@ impl AppServer {
             .file_system_for_request(
                 params.dir_id.as_deref(),
                 params.session_directory.as_ref(),
-                Permission::BrowseFiles,
+                Permission::ReadFiles,
             )?
             .read_file_with_revision(&params.path, MAX_EDITOR_FILE_BYTES)
             .map_err(file_system_error)?;
@@ -102,7 +102,7 @@ impl AppServer {
             .file_system_for_request(
                 params.dir_id.as_deref(),
                 params.session_directory.as_ref(),
-                Permission::BrowseFiles,
+                Permission::ReadFiles,
             )?
             .read_file_with_revision(&params.path, MAX_RESOURCE_BYTES)
             .map_err(file_system_error)?;
@@ -138,7 +138,7 @@ impl AppServer {
             .file_system_for_request(
                 params.dir_id.as_deref(),
                 params.session_directory.as_ref(),
-                Permission::MutateRepository,
+                Permission::WriteFiles,
             )?
             .write_file_with_condition(
                 &params.path,
@@ -159,7 +159,7 @@ impl AppServer {
             .file_system_for_request(
                 params.dir_id.as_deref(),
                 params.session_directory.as_ref(),
-                Permission::MutateRepository,
+                Permission::WriteFiles,
             )?
             .create_file(&params.path, existing_behavior(params.existing))
             .map_err(file_system_error)?;
@@ -171,7 +171,7 @@ impl AppServer {
         self.file_system_for_request(
             params.dir_id.as_deref(),
             params.session_directory.as_ref(),
-            Permission::MutateRepository,
+            Permission::WriteFiles,
         )?
         .rename(
             &params.source,
@@ -195,7 +195,7 @@ impl AppServer {
         self.file_system_for_request(
             params.dir_id.as_deref(),
             params.session_directory.as_ref(),
-            Permission::MutateRepository,
+            Permission::WriteFiles,
         )?
         .delete(&params.path, missing, mode)
         .map_err(file_system_error)?;
@@ -215,7 +215,13 @@ impl AppServer {
             (_, Some(selector)) => {
                 self.file_system_service_for_session_directory(selector, permission)
             }
-            (_, None) => self.file_system_service_for(dir_id),
+            (_, None) => {
+                let files = self.file_system_service_for(dir_id)?;
+                files
+                    .ensure_permission(permission)
+                    .map_err(file_system_error)?;
+                Ok(files)
+            }
         }
     }
 }

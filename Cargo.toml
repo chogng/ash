@@ -190,6 +190,28 @@ publish = false
 version = "0.1.0"
 
 [workspace.dependencies]
+cap-std = "4.0.3"
+winapi-util = "0.1.11"
+core-foundation = { version = "0.10" }
+ctor = { version = "=0.6.3" }
+filedescriptor = { version = "0.8.3" }
+# Explicit SDK API version; consumers retain their existing ABI and feature selection.
+objc2-06 = { package = "objc2", version = "0.6.3" }
+# Explicit SDK API version; consumers retain their existing ABI and feature selection.
+objc2-foundation-03 = { package = "objc2-foundation", version = "0.3.2", default-features = false }
+objc2-local-authentication = { version = "0.3.2", default-features = false }
+security-framework = { version = "3.5" }
+security-framework-sys = { version = "2.15" }
+shared_library = { version = "0.1.9" }
+socket2 = { version = "0.6" }
+tinyjson = { version = "2.5.1" }
+winapi = { version = "0.3.9" }
+# Explicit SDK API version; consumers retain their existing ABI and feature selection.
+windows-sys-052 = { package = "windows-sys", version = "0.52" }
+# Explicit SDK API version; consumers retain their existing ABI and feature selection.
+windows-sys-061 = { package = "windows-sys", version = "0.61" }
+winreg = { version = "0.55" }
+wxc_common = { path = "ash-rs/vendor/mxc/core/wxc_common" }
 async-io = "2.6.0"
 event-listener = "5.4.2"
 sleep = { package = "ash-sleep", path = "ash-rs/ext/sleep" }

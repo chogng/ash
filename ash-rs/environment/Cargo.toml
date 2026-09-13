@@ -12,9 +12,17 @@ name = "ash_environment"
 path = "src/lib.rs"
 
 [dependencies]
+cap-std = { workspace = true }
+dunce = { workspace = true }
+path-utils = { package = "ash-utils-path", path = "../utils/path-utils" }
+ash-utils-absolute-path = { workspace = true }
+thiserror = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }
 ts-rs = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+winapi-util = { workspace = true }
 
 [lints]
 workspace = true

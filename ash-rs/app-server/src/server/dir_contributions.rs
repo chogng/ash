@@ -4,14 +4,6 @@ use super::fs_watcher::SessionDirFileChangeSink;
 use crate::dir_grants::DirGrants;
 use agent_roles::AgentRoleCatalog;
 use agent_roles::AgentRoleCatalogSnapshot;
-use sha2::Digest;
-use sha2::Sha256;
-use std::collections::BTreeMap;
-use std::path::Path;
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::sync::RwLock;
 use ash_app_server_protocol::protocol::fs::FsChanged;
 use ash_core::CoreError;
 use ash_core::HarnessContext;
@@ -22,6 +14,14 @@ use ash_file_access::Authorization;
 use ash_instructions::InstructionCatalog;
 use ash_instructions::InstructionCatalogSnapshot;
 use ash_protocol::SessionId;
+use sha2::Digest;
+use sha2::Sha256;
+use std::collections::BTreeMap;
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::RwLock;
 
 struct DirContributionCatalog {
     authorization: Authorization,
@@ -32,7 +32,6 @@ struct DirContributionCatalog {
 pub(super) struct DirContributions {
     environment: AgentEnvironmentSource,
     env_dir: Mutex<Option<DirContributionCatalog>>,
-    harness_instructions: RwLock<Arc<HarnessInstructions>>,
     dir_grants: Arc<DirGrants>,
     dirs: Mutex<BTreeMap<SessionId, BTreeMap<PathBuf, DirContributionCatalog>>>,
     hooks: RwLock<Option<Arc<ash_hooks::DeclarativeHookRuntime>>>,
@@ -45,26 +44,30 @@ impl DirContributions {
         authorization: Option<Authorization>,
     ) -> Result<Arc<Self>, ash_agent_environment::AgentEnvironmentError> {
         let dir_root = dir_root.as_ref().to_path_buf();
-        let env_dir = authorization.map(|authorization| {
-            let source_id = authorization.dir().id().to_string();
-            DirContributionCatalog {
-                instructions: InstructionCatalog::discover(&dir_root),
-                agents: AgentRoleCatalog::discover(source_id, &dir_root),
-                authorization,
-            }
-        });
+        let env_dir = authorization
+            .filter(|authorization| {
+                authorization.permission() == ash_file_access::Permission::LoadInstructions
+                    && authorization.is_active()
+                    && authorization
+                        .dir()
+                        .directory()
+                        .driver()
+                        .open_directory(&dir_root)
+                        .map(ash_file_access::Dir::from_directory)
+                        .is_ok_and(|dir| &dir == authorization.dir())
+            })
+            .map(|authorization| {
+                let source_id = authorization.dir().id().to_string();
+                DirContributionCatalog {
+                    instructions: InstructionCatalog::discover(&dir_root),
+                    agents: AgentRoleCatalog::discover(source_id, &dir_root),
+                    authorization,
+                }
+            });
         let environment = AgentEnvironmentSource::capture(&dir_root)?;
-        let harness_instructions = Arc::new(render_harness_instructions(
-            env_dir
-                .as_ref()
-                .map(|catalog| catalog.instructions.snapshot())
-                .unwrap_or_default()
-                .as_ref(),
-        ));
         Ok(Arc::new(Self {
             environment,
             env_dir: Mutex::new(env_dir),
-            harness_instructions: RwLock::new(harness_instructions),
             dir_grants,
             dirs: Mutex::new(BTreeMap::new()),
             hooks: RwLock::new(None),
@@ -158,9 +161,18 @@ impl DirContributions {
         let mut previous = dirs.remove(session_id).unwrap_or_default();
         let catalogs = authorizations
             .into_iter()
+            .filter(|authorization| {
+                authorization.permission() == ash_file_access::Permission::LoadInstructions
+                    && authorization.subject()
+                        == &ash_file_access::GrantSubject::SessionTree(session_id.clone())
+                    && authorization.is_active()
+            })
             .map(|authorization| {
                 let root = authorization.dir().canonical_path().to_path_buf();
-                let catalog = if let Some(mut catalog) = previous.remove(&root) {
+                let catalog = if let Some(mut catalog) = previous
+                    .remove(&root)
+                    .filter(|catalog| catalog.authorization.dir() == authorization.dir())
+                {
                     catalog.authorization = authorization;
                     catalog
                 } else {
@@ -270,22 +282,15 @@ impl DirContributions {
     }
 
     fn refresh_instructions(&self) {
-        let snapshot = {
-            let mut env_dir = self
-                .env_dir
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            env_dir
-                .as_mut()
-                .filter(|catalog| catalog.authorization.is_active())
-                .map(|catalog| catalog.instructions.refresh())
-                .unwrap_or_default()
-        };
-        let harness_instructions = Arc::new(render_harness_instructions(snapshot.as_ref()));
-        *self
-            .harness_instructions
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = harness_instructions;
+        if let Some(catalog) = self
+            .env_dir
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_mut()
+            .filter(|catalog| catalog.authorization.is_active())
+        {
+            catalog.instructions.refresh();
+        }
     }
 
     fn refresh_agents(&self) {
@@ -306,12 +311,9 @@ impl HarnessContextProvider for DirContributions {
         &self,
         request: &HarnessContextRequest<'_>,
     ) -> Result<Arc<HarnessContext>, CoreError> {
-        let base_instructions = Arc::clone(
-            &self
-                .harness_instructions
-                .read()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-        );
+        let base_instructions = Arc::new(render_harness_instructions(
+            self.instruction_snapshot().as_ref(),
+        ));
         let roots = self
             .dir_grants
             .snapshot_for(

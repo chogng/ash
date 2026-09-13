@@ -63,3 +63,8 @@ impl std::error::Error for EnvIdError {}
 #[cfg(test)]
 #[path = "lib_tests.rs"]
 mod tests;
+
+mod directory;
+pub use directory::DirPathError;
+pub use directory::Directory;
+pub use directory::LocalFileDriver;

@@ -1,6 +1,7 @@
 # `ash-file-access`
 
-- `Dir` 的相对路径拼接复用 `path-utils::join_descendant`；随后仍由 `Dir` 校验文件系统实际范围。
-- `Dir` 用 `EnvId + canonical path` 标识目录并约束路径解析；路径、`cwd` 和 Workspace 都不授予权限。
-- `Grant` 明确绑定 `GrantSubject`、目录范围、`Permissions`、来源和撤销生命周期；`Access` 与 `Snapshot` 管理同一主体的有效 Grant。
-- `AuthorizationDecision = Result<Authorization, PermissionDenied>` 判断单次操作；允许值只供当前操作立即消费，撤销 Grant 后失效。长期语义见 [`docs/environment-access.md`](../../docs/environment-access.md)。
+- `Dir` 表达环境、目录路径和实际对象身份，不授予权限；环境文件驱动负责打开与校验物理目录。
+- `Grant` 绑定主体、目录、权限、来源和撤销租约；`Access` 拒绝其他主体，按完整目录身份索引。
+- `Access::authorize` 只裁决目标目录；贡献由业务所有者持有效授权加载。
+- `Authorization::execute` 校验主体、目录和动作，并持有租约直到操作完成。撤销等待已开始操作结束，之后拒绝旧凭证。
+- `Authorization` 可复制和重复校验，不是一次性凭证。长期契约见 [环境与目录访问](../../docs/environment-access.md)。

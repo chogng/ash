@@ -32,7 +32,10 @@ impl DirBinding {
 
     /// Returns true only when a currently opened directory has the same canonical identity.
     pub fn matches(&self, dir: &Dir) -> bool {
-        self.id == dir.id() && self.env == *dir.env() && self.path == dir.canonical_path()
+        dir.directory().ensure_current().is_ok()
+            && self.id == dir.id()
+            && self.env == *dir.env()
+            && self.path == dir.canonical_path()
     }
 
     /// Returns the canonical directory path recorded with the Session.

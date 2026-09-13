@@ -1,12 +1,6 @@
 use super::*;
 use crate::local::ProviderModelService;
 use crate::local_tools::LocalToolComposition;
-use std::num::NonZeroU64;
-use std::path::Path;
-use std::path::PathBuf;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
 use ash_action_policy::ActionReviewRequest;
 use ash_action_policy::ExecutionDecision;
 use ash_async_utils::CancellationToken;
@@ -52,6 +46,12 @@ use ash_protocol::ModelRef;
 use ash_protocol::ProviderId;
 use ash_protocol::UserInput;
 use ash_shell_command::RipgrepExecutable;
+use std::num::NonZeroU64;
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
 struct PermissionBoundSemanticEmbedding;
 
@@ -973,6 +973,8 @@ fn user_config_revocation_removes_executable_services_but_keeps_file_access() {
         )
         .unwrap();
 
+    let previous_files = server.file_system_service_for(None).unwrap();
+
     config
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("restrict-revoked-dir").unwrap(),
@@ -990,6 +992,11 @@ fn user_config_revocation_removes_executable_services_but_keeps_file_access() {
         .reconcile_user_dir_permissions(&config.read_snapshot().unwrap().values)
         .unwrap();
 
+    assert!(
+        previous_files
+            .read_file(Path::new("readable.txt"), 1024)
+            .is_err()
+    );
     let Ok(file_system) = server.file_system_service_for(None) else {
         panic!("restricted filesystem should remain installed after permission revocation");
     };

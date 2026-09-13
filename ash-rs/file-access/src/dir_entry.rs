@@ -8,12 +8,6 @@ pub enum DirSource {
     PersistentConfiguration,
 }
 
-impl DirSource {
-    pub(crate) fn allows_contributions(self) -> bool {
-        matches!(self, Self::LaunchArgument | Self::SessionRequest)
-    }
-}
-
 /// One canonical directory and every source currently retaining it.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DirEntry {

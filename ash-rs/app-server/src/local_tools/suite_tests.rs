@@ -52,7 +52,17 @@ fn dir_resolution_is_bound_to_the_exact_session_and_grant() {
     let cwd_authorization = cwd_grant.authorize(Permission::ExecuteCommands).unwrap();
     let access = Arc::new(crate::dir_grants::DirGrants::default());
     let session_id = SessionId::new("session-with-extra").unwrap();
-    access.add_dir(session_id.clone(), session_grant).unwrap();
+    access
+        .add_dir(
+            session_id.clone(),
+            Grant::for_session_tree(
+                session_id.clone(),
+                session_grant.dir().clone(),
+                session_grant.source(),
+                session_grant.permissions().clone(),
+            ),
+        )
+        .unwrap();
     let ripgrep = RipgrepExecutable::from_path(std::env::current_exe().unwrap()).unwrap();
     let shell = LocalShellToolService::new_with_action_policy_revision(
         cwd_authorization,
@@ -67,7 +77,7 @@ fn dir_resolution_is_bound_to_the_exact_session_and_grant() {
         ripgrep.clone(),
         None,
     ));
-    let suite = LocalToolSuite::new(shell, ripgrep, agent_grep, Arc::clone(&access));
+    let suite = LocalToolSuite::new(shell, ripgrep, agent_grep, Arc::clone(&access), cwd_grant);
 
     let resolved = suite
         .resolve(
@@ -166,7 +176,17 @@ fn shell_session_tool_returns_early_then_drives_the_same_process() {
     let access = Arc::new(crate::dir_grants::DirGrants::default());
     let session_id = SessionId::new("session-command").unwrap();
     let thread_id = ThreadId::new("thread-command").unwrap();
-    access.add_dir(session_id.clone(), grant).unwrap();
+    access
+        .add_dir(
+            session_id.clone(),
+            Grant::for_session_tree(
+                session_id.clone(),
+                grant.dir().clone(),
+                grant.source(),
+                grant.permissions().clone(),
+            ),
+        )
+        .unwrap();
     let ripgrep = RipgrepExecutable::from_path(std::env::current_exe().unwrap()).unwrap();
     let shell = LocalShellToolService::new_with_action_policy_revision(
         shell_authorization,
@@ -181,7 +201,13 @@ fn shell_session_tool_returns_early_then_drives_the_same_process() {
         ripgrep.clone(),
         None,
     ));
-    let suite = LocalToolSuite::new(shell, ripgrep, agent_grep, access);
+    let suite = LocalToolSuite::new(
+        shell,
+        ripgrep,
+        agent_grep,
+        access,
+        authorization(cwd_dir.path()),
+    );
     #[cfg(windows)]
     let (program, arguments) = (
         std::path::PathBuf::from(std::env::var_os("SystemRoot").unwrap())

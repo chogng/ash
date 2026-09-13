@@ -18,8 +18,16 @@ fn aliases_share_one_directory_identity() {
 #[test]
 fn identical_paths_in_different_environments_have_distinct_identities() {
     let directory = tempfile::tempdir().unwrap();
-    let first = Dir::open(EnvId::new("first").unwrap(), directory.path()).unwrap();
-    let second = Dir::open(EnvId::new("second").unwrap(), directory.path()).unwrap();
+    let first = Dir::from_directory(
+        ash_environment::LocalFileDriver::new(EnvId::new("first").unwrap())
+            .open_directory(directory.path())
+            .unwrap(),
+    );
+    let second = Dir::from_directory(
+        ash_environment::LocalFileDriver::new(EnvId::new("second").unwrap())
+            .open_directory(directory.path())
+            .unwrap(),
+    );
 
     assert_ne!(first.id(), second.id());
 }

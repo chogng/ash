@@ -2,20 +2,6 @@ use super::LocalShellToolService;
 use super::ShellCommandRequest;
 use super::read_only_sandbox;
 use crate::dir_grants::DirGrants;
-use serde_json::Value;
-use serde_json::json;
-use sha2::Digest;
-use sha2::Sha256;
-use std::collections::BTreeSet;
-use std::fs;
-use std::path::PathBuf;
-use std::process::Command;
-use std::process::Output;
-use std::process::Stdio;
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::time::Duration;
-use std::time::Instant;
 use ash_action_policy::ActionDigest;
 use ash_action_policy::ActionKind;
 use ash_action_policy::ActionProvenance;
@@ -55,6 +41,20 @@ use ash_shell_command::CommandSessionStart;
 use ash_shell_command::CommandSessionStatus;
 use ash_shell_command::CommandTerminalSize;
 use ash_shell_command::RipgrepExecutable;
+use serde_json::Value;
+use serde_json::json;
+use sha2::Digest;
+use sha2::Sha256;
+use std::collections::BTreeSet;
+use std::fs;
+use std::path::PathBuf;
+use std::process::Command;
+use std::process::Output;
+use std::process::Stdio;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::time::Duration;
+use std::time::Instant;
 
 use super::AgentGrepService;
 
@@ -144,6 +144,7 @@ pub(crate) struct LocalToolSuite<B> {
     ripgrep: RipgrepExecutable,
     agent_grep: Arc<AgentGrepService>,
     authorization: Authorization,
+    grant: ash_file_access::Grant,
     dir_grants: Arc<DirGrants>,
     read_paths: Mutex<BTreeSet<(String, PathBuf)>>,
     read_fingerprints: Mutex<std::collections::BTreeMap<(String, PathBuf), String>>,
@@ -163,6 +164,7 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
         ripgrep: RipgrepExecutable,
         agent_grep: Arc<AgentGrepService>,
         dir_grants: Arc<DirGrants>,
+        grant: ash_file_access::Grant,
     ) -> Self {
         let authorization = shell.authorization.clone();
         let definitions = vec![
@@ -183,6 +185,7 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
             ripgrep,
             agent_grep,
             authorization,
+            grant,
             dir_grants,
             read_paths: Mutex::new(BTreeSet::new()),
             read_fingerprints: Mutex::new(std::collections::BTreeMap::new()),
@@ -210,19 +213,22 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
             })
             .transpose()?
             .flatten();
+        let default = self.grant.authorize(permission).ok();
         let primary = thread_scope
             .as_ref()
             .map(|scope| scope.primary().clone())
-            .unwrap_or_else(|| self.authorization.clone());
+            .or_else(|| default.clone());
         let mut authorizations = thread_scope
             .as_ref()
             .map(|scope| scope.authorizations().cloned().collect::<Vec<_>>())
-            .unwrap_or_else(|| vec![self.authorization.clone()]);
-        if !authorizations
-            .iter()
-            .any(|value| value.dir() == self.authorization.dir())
-        {
-            authorizations.push(self.authorization.clone());
+            .unwrap_or_default();
+        if let Some(default) = default {
+            if !authorizations
+                .iter()
+                .any(|value| value.dir() == default.dir())
+            {
+                authorizations.push(default);
+            }
         }
         if let Some(session_id) = session_id {
             if let Some(snapshot) = self
@@ -253,7 +259,10 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 })
                 .ok_or_else(|| format!("path is outside the authorized directories: {value}"))?
         } else {
-            (primary, path)
+            (
+                primary.ok_or_else(|| format!("directory permission required: {permission}"))?,
+                path,
+            )
         };
         let root = authorization.dir().clone();
         let absolute = if relative.as_os_str().is_empty() {
@@ -265,11 +274,11 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
         }
         .map_err(|_| format!("path is outside the authorized directories: {value}"))?;
         match permission {
-            DirPermission::InspectRepository => {
+            DirPermission::ReadFiles | DirPermission::InspectRepository => {
                 super::ensure_local_file_access(&root, &absolute, false)
                     .map_err(|error| error.to_string())?;
             }
-            DirPermission::MutateRepository => {
+            DirPermission::WriteFiles | DirPermission::MutateRepository => {
                 super::ensure_local_file_access(&root, &absolute, true)
                     .map_err(|error| error.to_string())?;
             }
@@ -308,7 +317,9 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 session_id,
                 thread_id,
                 if write {
-                    DirPermission::MutateRepository
+                    DirPermission::WriteFiles
+                } else if call.name.as_str() == "read_file" {
+                    DirPermission::ReadFiles
                 } else {
                     DirPermission::InspectRepository
                 },
@@ -373,7 +384,7 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 false,
                 session_id,
                 thread_id,
-                DirPermission::InspectRepository,
+                DirPermission::ReadFiles,
             )
             .map_err(CoreError::Execution)?;
         let metadata = fs::metadata(&resolved.absolute)
@@ -388,7 +399,8 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 "file too large to read: {path} exceeds 10485760 bytes"
             )));
         }
-        let bytes = fs::read(&resolved.absolute)
+        let bytes = LocalFileSystem::from_authorization(resolved.authorization.clone())
+            .read_file(&resolved.relative, MAX_READ_FILE_BYTES as usize)
             .map_err(|error| CoreError::Execution(error.to_string()))?;
         let text = match String::from_utf8(bytes) {
             Ok(text) if !text.as_bytes().contains(&0) => text,
@@ -452,7 +464,7 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 false,
                 session_id,
                 thread_id,
-                DirPermission::MutateRepository,
+                DirPermission::WriteFiles,
             )
             .map_err(CoreError::Execution)?;
         if resolved.absolute.is_dir() {
@@ -471,8 +483,10 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 "{path} exists but has not been read in this conversation. Read it first, or choose a new path"
             )));
         }
-        if let Some(parent) = resolved.absolute.parent() {
-            fs::create_dir_all(parent).map_err(|error| CoreError::Execution(error.to_string()))?;
+        if let Some(parent) = resolved.relative.parent() {
+            LocalFileSystem::from_authorization(resolved.authorization.clone())
+                .create_directory(parent)
+                .map_err(|error| CoreError::Execution(error.to_string()))?;
         }
         let expected_revision = self
             .read_fingerprints
@@ -485,7 +499,7 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 "{path} must be read again after reconnecting before it can be overwritten"
             )));
         }
-        let file_system = LocalFileSystem::new(resolved.root.clone());
+        let file_system = LocalFileSystem::from_authorization(resolved.authorization.clone());
         let write = match expected_revision {
             Some(revision) => file_system.write_file_with_condition(
                 &resolved.relative,
@@ -540,7 +554,7 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 false,
                 session_id,
                 thread_id,
-                DirPermission::MutateRepository,
+                DirPermission::WriteFiles,
             )
             .map_err(CoreError::Execution)?;
         if !self
@@ -553,8 +567,14 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 "{path} has not been read in this conversation. Read it first"
             )));
         }
-        let text = fs::read_to_string(&resolved.absolute)
+        let read = self
+            .resolve(&path, true, session_id, thread_id, DirPermission::ReadFiles)
+            .map_err(CoreError::Execution)?;
+        let bytes = LocalFileSystem::from_authorization(read.authorization)
+            .read_file(&read.relative, MAX_READ_FILE_BYTES as usize)
             .map_err(|error| CoreError::Execution(error.to_string()))?;
+        let text =
+            String::from_utf8(bytes).map_err(|error| CoreError::Execution(error.to_string()))?;
         if let Some(expected) = self
             .read_fingerprints
             .lock()
@@ -597,7 +617,7 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 "{path} must be read again after reconnecting before it can be edited"
             )));
         };
-        LocalFileSystem::new(resolved.root.clone())
+        LocalFileSystem::from_authorization(resolved.authorization.clone())
             .write_file_with_condition(
                 &resolved.relative,
                 replaced.as_bytes(),

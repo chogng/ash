@@ -28,13 +28,6 @@ use crate::tool_composition::combine_tool_ports_at_generation_with_search;
 use crate::tool_search_models::ToolSearchEmbeddingStatus;
 use crate::tool_search_models::resolve_tool_search;
 use agent::MultiAgentToolService;
-use goal::GoalToolService;
-use std::collections::BTreeMap;
-use std::fmt;
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::sync::RwLock;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_cloud_codebase::CloudCodebaseController;
 use ash_cloud_codebase::CloudCodebaseStorage;
@@ -78,6 +71,13 @@ use ash_protocol::SessionId;
 use ash_protocol::TurnStatus;
 use ash_shell_command::RipgrepExecutable;
 use ash_tools::ToolRegistryGeneration;
+use goal::GoalToolService;
+use std::collections::BTreeMap;
+use std::fmt;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::RwLock;
 
 pub(super) struct EnvRuntime {
     pub(super) cwd: Option<PathBuf>,
@@ -254,7 +254,7 @@ impl EnvRuntimeControl {
             .authorize(Permission::ExecuteCommands)
             .map_err(|_| EnvRuntimeError::PermissionRequired)?;
         let mut local = compose_local_tools_with_config(
-            execution.clone(),
+            authorization.clone(),
             &local_tool_config,
             dir_grants,
             agent_grep,
@@ -335,10 +335,7 @@ impl EnvRuntimeControl {
         }
     }
 
-    pub(crate) fn replace_mcp_status(
-        &self,
-        snapshot: ash_mcp_extension::McpRuntimeStatusSnapshot,
-    ) {
+    pub(crate) fn replace_mcp_status(&self, snapshot: ash_mcp_extension::McpRuntimeStatusSnapshot) {
         *self
             .mcp_status
             .write()
@@ -428,7 +425,7 @@ impl EnvRuntimeControl {
             .dir_grants
             .clone();
         let local = compose_local_tools_with_config(
-            execution.clone(),
+            authorization.clone(),
             &local_tool_config,
             dir_grants,
             self.runtime
@@ -563,6 +560,7 @@ impl EnvRuntimeControl {
         runtime.cloud_codebase = None;
         runtime.codebase_semantic = None;
         runtime.codebase_semantic_job = None;
+        runtime.selected_file_system = Some(Arc::new(LocalFileSystem::new(replacement.clone())));
         runtime.selected_grant = Some(replacement);
         runtime.git = inspection_git;
         drop(runtime);
@@ -1346,7 +1344,7 @@ impl AppServer {
             .iter()
             .map(|(id, authorization)| {
                 let file_system: Arc<dyn FileSystem> =
-                    Arc::new(LocalFileSystem::new(authorization.dir().clone()));
+                    Arc::new(LocalFileSystem::new(authorization.clone()));
                 (id.clone(), file_system)
             })
             .collect::<BTreeMap<_, _>>();
@@ -1778,9 +1776,6 @@ impl AppServer {
         {
             self.commit_limited_dir_runtime(authorization, host)
         } else {
-            let execution = authorization
-                .authorize(Permission::ExecuteCommands)
-                .map_err(|_| EnvRuntimeError::PermissionRequired)?;
             let local_tool_config = self
                 .local_tool_config
                 .read()
@@ -1793,7 +1788,7 @@ impl AppServer {
                 .dir_grants
                 .clone();
             let local = compose_local_tools_with_config(
-                execution,
+                authorization.clone(),
                 &local_tool_config,
                 dir_grants,
                 None,
@@ -1823,7 +1818,8 @@ impl AppServer {
         let dir = authorization.dir().clone();
         let canonical_root = dir.canonical_path().to_path_buf();
         self.revoke_cloud_index_for_dir(&dir);
-        let file_system: Arc<dyn FileSystem> = Arc::new(LocalFileSystem::new(dir.clone()));
+        let file_system: Arc<dyn FileSystem> =
+            Arc::new(LocalFileSystem::new(authorization.clone()));
         let codebase = self.open_codebase_runtime(dir.clone())?;
         let symbol_index = self.open_symbol_index_runtime(&codebase)?;
         self.retry_persisted_cloud_index_deletion(&codebase);
@@ -1914,7 +1910,8 @@ impl AppServer {
         host: &LocalEnvHost,
     ) -> Result<PathBuf, EnvRuntimeError> {
         let dir = authorization.dir().clone();
-        let file_system: Arc<dyn FileSystem> = Arc::new(LocalFileSystem::new(dir.clone()));
+        let file_system: Arc<dyn FileSystem> =
+            Arc::new(LocalFileSystem::new(authorization.clone()));
         let codebase = self.open_codebase_runtime(dir.clone())?;
         let symbol_index = self.open_symbol_index_runtime(&codebase)?;
         let codebase_semantic = self.open_codebase_semantic(&codebase)?;
@@ -2376,7 +2373,7 @@ impl AppServer {
     ) -> Result<Arc<dyn FileSystem>, RpcError> {
         let dir =
             self.session_dir_authorization(&selector.session_id, &selector.path, permission)?;
-        Ok(Arc::new(LocalFileSystem::new(dir.dir().clone())))
+        Ok(Arc::new(LocalFileSystem::from_authorization(dir)))
     }
 
     pub(super) fn language_dir_root_for(

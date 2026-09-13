@@ -12,22 +12,6 @@ mod automation_tests;
 mod infrastructure_tests;
 #[path = "memory_tests.rs"]
 mod memory_tests;
-use base64::Engine;
-use std::io::Cursor;
-use std::io::Write;
-use std::net::Shutdown;
-use std::sync::Arc;
-use std::sync::Condvar;
-use std::sync::Mutex;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
-use std::sync::mpsc::Receiver;
-use std::sync::mpsc::Sender;
-use std::thread;
-use std::time::Duration;
-use std::time::Instant;
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
 use ash_action_policy::ActionDigest;
 use ash_action_policy::ActionKind;
 use ash_action_policy::ActionPolicyRevision;
@@ -104,6 +88,22 @@ use ash_sandboxing::SandboxPolicy;
 use ash_secrets::MemorySecretStore;
 use ash_secrets::SecretStore;
 use ash_uds::UnixStream;
+use base64::Engine;
+use std::io::Cursor;
+use std::io::Write;
+use std::net::Shutdown;
+use std::sync::Arc;
+use std::sync::Condvar;
+use std::sync::Mutex;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use std::sync::mpsc::Receiver;
+use std::sync::mpsc::Sender;
+use std::thread;
+use std::time::Duration;
+use std::time::Instant;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 fn server_with_model(model: Arc<dyn ModelService>) -> AppServer {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
@@ -2287,11 +2287,7 @@ struct CountingStartBackend {
 }
 
 impl ash_core::TurnExecutionBackend for CountingStartBackend {
-    fn start(
-        &self,
-        _: &ash_protocol::ThreadId,
-        _: &ash_protocol::TurnId,
-    ) -> Result<(), CoreError> {
+    fn start(&self, _: &ash_protocol::ThreadId, _: &ash_protocol::TurnId) -> Result<(), CoreError> {
         self.starts.fetch_add(1, Ordering::Relaxed);
         Ok(())
     }
@@ -2306,11 +2302,7 @@ impl ash_core::TurnExecutionBackend for CountingStartBackend {
 }
 
 impl ash_core::TurnExecutionBackend for FailingSteerBackend {
-    fn start(
-        &self,
-        _: &ash_protocol::ThreadId,
-        _: &ash_protocol::TurnId,
-    ) -> Result<(), CoreError> {
+    fn start(&self, _: &ash_protocol::ThreadId, _: &ash_protocol::TurnId) -> Result<(), CoreError> {
         Ok(())
     }
 
@@ -4107,9 +4099,9 @@ impl ToolService for AppServerInteractiveTool {
                 allow_free_form: true,
             }],
         })? {
-            ash_core::ToolUserInputOutcome::Answered(response) => Ok(
-                ToolExecutionOutput::Success(response.answers["city"].value.clone()),
-            ),
+            ash_core::ToolUserInputOutcome::Answered(response) => Ok(ToolExecutionOutput::Success(
+                response.answers["city"].value.clone(),
+            )),
             ash_core::ToolUserInputOutcome::Cancelled(reason) => Ok(ToolExecutionOutput::Failure(
                 format!("interaction cancelled: {reason:?}"),
             )),
@@ -4780,7 +4772,15 @@ fn filesystem_rpc_lists_and_describes_paths() {
     std::fs::write(root.join("src/lib.rs"), "hello").unwrap();
     std::fs::write(root.join("paper.pdf"), b"%PDF-1.7\n").unwrap();
     let server = server().with_file_system(Arc::new(LocalFileSystem::new(
-        Dir::open_local(&root).unwrap(),
+        ash_file_access::Grant::for_environment(
+            Dir::open_local(&root).unwrap(),
+            ash_file_access::GrantSource::ExplicitUser,
+            ash_file_access::Permissions::new([
+                ash_file_access::Permission::ReadFiles,
+                ash_file_access::Permission::WriteFiles,
+                ash_file_access::Permission::BrowseFiles,
+            ]),
+        ),
     )));
     let mut connection = server.connection();
     initialize(&server, &mut connection);
@@ -4912,7 +4912,17 @@ fn filesystem_watcher_publishes_only_dir_relative_paths() {
     std::fs::create_dir_all(&root).unwrap();
     let dir = Dir::open_local(&root).unwrap();
     let server = server()
-        .with_file_system(Arc::new(LocalFileSystem::new(dir.clone())))
+        .with_file_system(Arc::new(LocalFileSystem::new(
+            ash_file_access::Grant::for_environment(
+                dir.clone(),
+                ash_file_access::GrantSource::ExplicitUser,
+                ash_file_access::Permissions::new([
+                    ash_file_access::Permission::ReadFiles,
+                    ash_file_access::Permission::WriteFiles,
+                    ash_file_access::Permission::BrowseFiles,
+                ]),
+            ),
+        )))
         .with_file_system_watcher(dir)
         .unwrap();
     let mut connection = server.connection();
@@ -5737,10 +5747,8 @@ fn message_restore_interrupts_the_source_and_replays_without_interrupting_later_
     let branch = server
         .threads()
         .read_thread(
-            &ash_protocol::ThreadId::new(
-                restored["result"]["value"]["threadId"].as_str().unwrap(),
-            )
-            .unwrap(),
+            &ash_protocol::ThreadId::new(restored["result"]["value"]["threadId"].as_str().unwrap())
+                .unwrap(),
         )
         .unwrap();
     assert_eq!(branch.agent_id, current.agent_id);
@@ -5762,4 +5770,64 @@ fn message_restore_interrupts_the_source_and_replays_without_interrupting_later_
             .iter()
             .any(|turn| turn.turn_id == later.turn_id && turn.status != TurnStatus::Interrupted)
     );
+}
+
+#[test]
+fn filesystem_rpc_enforces_file_permissions_and_revocation() {
+    for permission in [
+        ash_file_access::Permission::ReadFiles,
+        ash_file_access::Permission::BrowseFiles,
+        ash_file_access::Permission::WriteFiles,
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        std::fs::write(root.path().join("file"), "old").unwrap();
+        let grant = ash_file_access::Grant::for_environment(
+            Dir::open_local(root.path()).unwrap(),
+            ash_file_access::GrantSource::ExplicitUser,
+            ash_file_access::Permissions::new([permission]),
+        );
+        let server = server().with_file_system(Arc::new(ash_file_system::LocalFileSystem::new(
+            grant.clone(),
+        )));
+        let mut connection = server.connection();
+        initialize(&server, &mut connection);
+        for (index, method, params, required) in [
+            (
+                2,
+                "fs/readFile",
+                serde_json::json!({"path":"file"}),
+                ash_file_access::Permission::ReadFiles,
+            ),
+            (
+                3,
+                "fs/readDirectory",
+                serde_json::json!({"path":""}),
+                ash_file_access::Permission::BrowseFiles,
+            ),
+            (
+                4,
+                "fs/writeFile",
+                serde_json::json!({"path":"file", "content":"new"}),
+                ash_file_access::Permission::WriteFiles,
+            ),
+        ] {
+            let response = call(
+                &server,
+                &mut connection,
+                serde_json::json!({"jsonrpc":"2.0", "id":index, "method":method, "params":params}),
+            );
+            assert_eq!(
+                response.get("error").is_none(),
+                permission == required,
+                "{method}: {response}"
+            );
+        }
+        grant.revoke();
+        let response = call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0", "id":5, "method":"fs/readFile", "params":{"path":"file"}}),
+        );
+        assert!(response.get("error").is_some());
+    }
 }

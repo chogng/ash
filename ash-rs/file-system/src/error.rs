@@ -4,6 +4,7 @@ use std::path::PathBuf;
 /// Failure returned by a directory-scoped filesystem implementation.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum FileSystemError {
+    PermissionDenied(String),
     InvalidPath(PathBuf),
     NotFile(PathBuf),
     NotDirectory(PathBuf),
@@ -60,7 +61,7 @@ impl fmt::Display for FileSystemError {
             Self::NotFound(path) => {
                 write!(formatter, "path does not exist: {}", path.display())
             }
-            Self::Io(message) => formatter.write_str(message),
+            Self::PermissionDenied(message) | Self::Io(message) => formatter.write_str(message),
         }
     }
 }
