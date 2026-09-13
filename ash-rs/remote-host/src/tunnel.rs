@@ -409,6 +409,7 @@ mod tests {
     use std::sync::mpsc;
     #[cfg(unix)]
     use std::thread::JoinHandle;
+    #[cfg(unix)]
     use std::time::Duration;
     #[cfg(unix)]
     use std::time::Instant;
