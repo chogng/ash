@@ -2269,6 +2269,7 @@ impl App {
     }
 
     fn apply_config_event(&mut self, event: ConfigEvent) {
+        self.fullscreen.pointer.cancel_click();
         match event {
             ConfigEvent::Connection(reply) => {
                 if let Err(error) = &reply.result {

@@ -359,15 +359,14 @@ impl CommandPanel {
         }
     }
 
-    pub(super) fn focus_pointer(
+    pub(super) fn handle_click(
         &mut self,
         target: &list_selection::ListSelectionPointerTarget,
         area: Rect,
+        click: list_selection::ListSelectionClick,
     ) -> CommandPanelOutcome {
         if let Self::Config(editor) = self {
-            return CommandPanelOutcome::Config(
-                editor.focus_pointer(target, std::time::Instant::now()),
-            );
+            return CommandPanelOutcome::Config(editor.handle_click(target, click));
         }
         let selection = match self {
             Self::Help(s) | Self::Startup(s) | Self::Loading(s) => Some(s.state_mut()),

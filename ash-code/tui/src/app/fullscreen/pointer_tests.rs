@@ -1005,9 +1005,58 @@ fn pointer_hover_is_transient_and_has_no_selection_side_effect() {
     pointer.update_pressed(Some("second"));
     assert_eq!(pointer.pressed(), Some(&"second"));
 
-    pointer.clear_pressed();
+    pointer.cancel_click();
     assert_eq!(pointer.hovered(), Some(&"second"));
     assert_eq!(pointer.pressed(), None);
     pointer.clear();
     assert_eq!(pointer.pressed(), None);
+}
+
+#[test]
+fn completed_clicks_pair_by_target_and_time_and_cancel_on_drag_or_missed_release() {
+    use crate::widgets::list_selection::ListSelectionClick;
+    use std::time::Duration;
+    use std::time::Instant;
+    let mut pointer = super::PointerInteraction::default();
+    let start = Instant::now();
+    for (target, millis, expected) in [
+        (1, 0, ListSelectionClick::Single),
+        (1, 501, ListSelectionClick::Single),
+        (2, 550, ListSelectionClick::Single),
+        (2, 600, ListSelectionClick::Double),
+        (2, 650, ListSelectionClick::Single),
+    ] {
+        pointer.update_pressed(Some(target));
+        assert_eq!(
+            pointer.finish_click(Some(target), start + Duration::from_millis(millis)),
+            Some(expected)
+        );
+    }
+    pointer.update_pressed(Some(2));
+    pointer.cancel_click();
+    assert_eq!(
+        pointer.finish_click(Some(2), start + Duration::from_millis(700)),
+        None
+    );
+    pointer.update_pressed(Some(2));
+    assert_eq!(
+        pointer.finish_click(Some(2), start + Duration::from_millis(750)),
+        Some(ListSelectionClick::Single)
+    );
+    pointer.update_pressed(Some(2));
+    assert_eq!(
+        pointer.finish_click(Some(3), start + Duration::from_millis(800)),
+        None
+    );
+    pointer.update_pressed(Some(2));
+    assert_eq!(
+        pointer.finish_click(Some(2), start + Duration::from_millis(850)),
+        Some(ListSelectionClick::Single)
+    );
+    pointer.clear();
+    pointer.update_pressed(Some(2));
+    assert_eq!(
+        pointer.finish_click(Some(2), start + Duration::from_millis(900)),
+        Some(ListSelectionClick::Single)
+    );
 }

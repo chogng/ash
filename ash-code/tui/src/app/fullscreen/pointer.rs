@@ -29,6 +29,7 @@ use std::time::Instant;
 pub(crate) struct PointerInteraction<T> {
     hovered: Option<T>,
     pressed: Option<T>,
+    click: Option<(T, Instant)>,
 }
 
 impl<T> Default for PointerInteraction<T> {
@@ -36,6 +37,7 @@ impl<T> Default for PointerInteraction<T> {
         Self {
             hovered: None,
             pressed: None,
+            click: None,
         }
     }
 }
@@ -49,13 +51,14 @@ impl<T> PointerInteraction<T> {
         self.pressed = target;
     }
 
-    pub(crate) fn clear_pressed(&mut self) {
+    pub(crate) fn cancel_click(&mut self) {
         self.pressed = None;
+        self.click = None;
     }
 
     pub(crate) fn clear(&mut self) {
         self.hovered = None;
-        self.pressed = None;
+        self.cancel_click();
     }
 
     pub(crate) fn hovered(&self) -> Option<&T> {
@@ -68,6 +71,30 @@ impl<T> PointerInteraction<T> {
 }
 
 impl<T: PartialEq> PointerInteraction<T> {
+    fn finish_click(
+        &mut self,
+        target: Option<T>,
+        now: Instant,
+    ) -> Option<crate::widgets::list_selection::ListSelectionClick> {
+        use crate::widgets::list_selection::ListSelectionClick;
+        let pressed = self.pressed.take();
+        if target.is_none() || pressed != target {
+            self.click = None;
+            return None;
+        }
+        let previous = self.click.take();
+        if previous.is_some_and(|(previous, time)| {
+            Some(&previous) == target.as_ref()
+                && now
+                    .checked_duration_since(time)
+                    .is_some_and(|elapsed| elapsed <= std::time::Duration::from_millis(500))
+        }) {
+            return Some(ListSelectionClick::Double);
+        }
+        self.click = target.map(|target| (target, now));
+        Some(ListSelectionClick::Single)
+    }
+
     pub(crate) fn interaction_state(&self, target: &T) -> InteractionState {
         InteractionState {
             hovered: self.hovered.as_ref() == Some(target),
@@ -302,14 +329,14 @@ pub(in crate::app) fn handle_mouse(
                 }
                 app.fullscreen.pointer.update_pressed(target);
             }
-            MouseEventKind::Drag(MouseButton::Left) => app.fullscreen.pointer.clear_pressed(),
+            MouseEventKind::Drag(MouseButton::Left) => app.fullscreen.pointer.cancel_click(),
             MouseEventKind::Up(MouseButton::Left) => {
-                let activate = target
-                    .as_ref()
-                    .is_some_and(|target| app.fullscreen.pointer.pressed() == Some(target));
-                app.fullscreen.pointer.clear_pressed();
-                if activate && let Some(PointerTarget::Modal(target)) = target {
-                    return MouseAction::Command(super::modal::activate(app, area, target));
+                let click = app
+                    .fullscreen
+                    .pointer
+                    .finish_click(target.clone(), Instant::now());
+                if let (Some(click), Some(PointerTarget::Modal(target))) = (click, target) {
+                    return MouseAction::Command(super::modal::activate(app, area, target, click));
                 }
             }
             MouseEventKind::Moved => app.fullscreen.pointer.update_hover(target),
@@ -375,12 +402,12 @@ pub(in crate::app) fn handle_mouse(
             app.fullscreen.selection.begin(position);
         }
         MouseEventKind::Drag(MouseButton::Left) => {
-            app.fullscreen.pointer.clear_pressed();
+            app.fullscreen.pointer.cancel_click();
             app.fullscreen.selection.drag(position);
         }
         MouseEventKind::Up(MouseButton::Left) => {
             let outcome = app.fullscreen.selection.finish(position, Instant::now());
-            app.fullscreen.pointer.clear_pressed();
+            app.fullscreen.pointer.cancel_click();
             return MouseAction::Selection(outcome);
         }
         MouseEventKind::Moved => update_pointer_hover(app, area, mouse.column, mouse.row),
@@ -456,7 +483,12 @@ pub(super) fn activate_pointer_item(
             }
             Some(crate::sessions::Command::SwitchThread { thread_id }.into())
         }
-        PointerTarget::Modal(target) => super::modal::activate(app, area, target),
+        PointerTarget::Modal(target) => super::modal::activate(
+            app,
+            area,
+            target,
+            crate::widgets::list_selection::ListSelectionClick::Single,
+        ),
         PointerTarget::Composer(ChatComposerPointerTarget::Input) => {
             super::navigation::focus_input(app);
             None

@@ -114,7 +114,6 @@ pub(crate) struct ConfigEditor {
     subscription: Option<ListSelection<ConfigSelectionAction>>,
     prompt: Option<ProviderApiKeyPromptState>,
     removing: Option<super::provider::Request>,
-    click: Option<(ListSelectionItemId, std::time::Instant)>,
 }
 
 #[derive(Debug)]
@@ -148,7 +147,6 @@ impl ConfigEditor {
             subscription: None,
             prompt: None,
             removing: None,
-            click: None,
         }
     }
 
@@ -175,7 +173,6 @@ impl ConfigEditor {
     }
 
     pub(crate) fn replace(&mut self, spec: ConfigChoices) {
-        self.click = None;
         let revision = config_revision(&spec);
         if revision < self.revision {
             return;
@@ -199,7 +196,6 @@ impl ConfigEditor {
     }
 
     pub(crate) fn handle_key(&mut self, key: crossterm::event::KeyEvent) -> ConfigEditorOutcome {
-        self.click = None;
         if let Some(subscription) = self.subscription.as_mut() {
             let outcome = subscription.handle_key(key);
             return self.handle_subscription_outcome(outcome);
@@ -275,33 +271,26 @@ impl ConfigEditor {
         self.handle_selection_outcome(outcome)
     }
 
-    pub(crate) fn focus_pointer(
+    pub(crate) fn handle_click(
         &mut self,
         target: &crate::widgets::list_selection::ListSelectionPointerTarget,
-        now: std::time::Instant,
+        click: crate::widgets::list_selection::ListSelectionClick,
     ) -> ConfigEditorOutcome {
         let focused = self
             .selection_mut()
             .is_some_and(|selection| selection.focus_pointer(target));
-        let crate::widgets::list_selection::ListSelectionPointerTarget::Item(id) = target else {
-            self.click = None;
-            return ConfigEditorOutcome::Consumed;
-        };
-        if !focused {
-            self.click = None;
+        if !focused
+            || !matches!(
+                target,
+                crate::widgets::list_selection::ListSelectionPointerTarget::Item(_)
+            )
+        {
             return ConfigEditorOutcome::Consumed;
         }
-        if self.subscription.is_none() && self.reset_action().is_some() {
-            let double = self.click.take().is_some_and(|(previous, time)| {
-                previous == *id
-                    && now
-                        .checked_duration_since(time)
-                        .is_some_and(|elapsed| elapsed <= std::time::Duration::from_millis(500))
-            });
-            if !double {
-                self.click = Some((id.clone(), now));
-                return ConfigEditorOutcome::Consumed;
-            }
+        // General settings select on a single click; other pages retain direct activation.
+        let general = self.subscription.is_none() && self.selected_setting().is_some();
+        if general && click == crate::widgets::list_selection::ListSelectionClick::Single {
+            return ConfigEditorOutcome::Consumed;
         }
         self.handle_key(crossterm::event::KeyEvent::new(
             crossterm::event::KeyCode::Enter,
@@ -309,9 +298,24 @@ impl ConfigEditor {
         ))
     }
 
+    fn selected_setting(&self) -> Option<&ConfigSelectionAction> {
+        let id = self.selection.state().selected_item()?.id()?;
+        let action = self.selection.action(id)?;
+        matches!(
+            action,
+            ConfigSelectionAction::SetVimMode(_)
+                | ConfigSelectionAction::SetLanguage(_)
+                | ConfigSelectionAction::SetUpdatePolicy(_)
+                | ConfigSelectionAction::SetShowGitChangesAsDiff(_)
+                | ConfigSelectionAction::SetStatusLineStyle(_)
+                | ConfigSelectionAction::SetTerminalSettings(_)
+        )
+        .then_some(action)
+    }
+
     fn reset_action(&self) -> Option<ConfigSelectionAction> {
         let id = self.selection.state().selected_item()?.id()?;
-        let mut action = self.selection.action(id)?.clone();
+        let mut action = self.selected_setting()?.clone();
         let defaults = TerminalSettings::default();
         let status_defaults = StatusLineSettings::default();
         match &mut action {
@@ -403,7 +407,6 @@ impl ConfigEditor {
     }
 
     pub(crate) fn handle_paste(&mut self, pasted: String) {
-        self.click = None;
         if let Some(subscription) = self.subscription.as_mut() {
             subscription.handle_paste(pasted);
         } else if let Some(prompt) = self.prompt.as_mut() {
@@ -454,25 +457,7 @@ impl ConfigEditor {
                 if let Some(provider_panel) = &self.provider_panel {
                     provider_panel.key_hints()
                 } else {
-                    if self.selection.state().items_focused()
-                        && self
-                            .selection
-                            .state()
-                            .selected_item()
-                            .and_then(ListSelectionItem::id)
-                            .and_then(|id| self.selection.action(id))
-                            .is_some_and(|action| {
-                                matches!(
-                                    action,
-                                    ConfigSelectionAction::SetTerminalSettings(_)
-                                        | ConfigSelectionAction::SetVimMode(_)
-                                        | ConfigSelectionAction::SetLanguage(_)
-                                        | ConfigSelectionAction::SetUpdatePolicy(_)
-                                        | ConfigSelectionAction::SetShowGitChangesAsDiff(_)
-                                        | ConfigSelectionAction::SetStatusLineStyle(_)
-                                )
-                            })
-                    {
+                    if self.selection.state().items_focused() && self.selected_setting().is_some() {
                         return &RESET;
                     }
                     if self.selection.state().items_focused() && self.selection.state().selected_item().and_then(ListSelectionItem::id).and_then(|id| self.selection.action(id)).is_some_and(|action| matches!(action, ConfigSelectionAction::OpenProvider(settings) if settings.config.custom.is_some())) {

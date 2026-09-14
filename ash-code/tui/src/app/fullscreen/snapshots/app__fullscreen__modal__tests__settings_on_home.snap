@@ -27,6 +27,6 @@ expression: frame_text(&app)
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
-  ╭─────────│  Enter/Space change · ←/→ details · Tab tabs · / search · Esc close     │──────────╮  
+  ╭─────────│  Enter change · r reset · ←/→ details · Tab tabs · / search · Esc close │──────────╮  
   │ > preser└─────────────────────────────────────────────────────────────────────────┘          │  
   ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯

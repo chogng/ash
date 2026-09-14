@@ -674,7 +674,7 @@ fn detail_tabs_use_the_same_mouse_routing_as_list_tabs() {
         crate::app::frame::process_resource_demand(&app, area),
         ash_memory_diagnostics::ProcessResourceDemand::Disabled
     );
-    assert_eq!(super::activate(&mut app, area, tab), None);
+    assert_eq!(super::activate(&mut app, area, tab, crate::widgets::list_selection::ListSelectionClick::Single), None);
     assert_eq!(
         crate::app::frame::process_resource_demand(&app, area),
         ash_memory_diagnostics::ProcessResourceDemand::Detailed
@@ -847,7 +847,7 @@ fn provider_mouse_input_and_parent_title_return_to_config() {
 
     let target = super::target_at(&app, area, Position::new(parent.x, parent.y));
     assert_eq!(target, Some(super::Target::Parent));
-    super::activate(&mut app, area, target.unwrap());
+    super::activate(&mut app, area, target.unwrap(), crate::widgets::list_selection::ListSelectionClick::Single);
     assert_eq!(
         app.list_selection().unwrap().active_tab().label(),
         "Providers"
@@ -959,4 +959,49 @@ fn config_double_click_changes_the_selected_item_once() {
         panic!("reset remains available after double click")
     };
     assert!(!edit.terminal.memory_diagnostics());
+}
+
+#[test]
+fn config_drag_and_keyboard_input_cancel_pending_double_click() {
+    use crate::app::fullscreen::pointer::MouseAction;
+    let mut app = crate::app::App::new();
+    app.open_home();
+    app.update(crate::config::Event::EditorOpened(config_choices()));
+    let area = Rect::new(0, 0, 100, 30);
+    let body = super::body_area(app.command_panel().unwrap(), super::layout(area).content);
+    let event = |kind| MouseEvent {
+        kind,
+        column: body.x + 8,
+        row: body.y + crate::widgets::search_box::SEARCH_BOX_HEIGHT + 1,
+        modifiers: KeyModifiers::NONE,
+    };
+    let click = |app: &mut crate::app::App| {
+        crate::app::fullscreen::pointer::handle_mouse(
+            app,
+            area,
+            event(MouseEventKind::Down(MouseButton::Left)),
+        );
+        crate::app::fullscreen::pointer::handle_mouse(
+            app,
+            area,
+            event(MouseEventKind::Up(MouseButton::Left)),
+        )
+    };
+    assert!(matches!(click(&mut app), MouseAction::Command(None)));
+    for kind in [
+        MouseEventKind::Down(MouseButton::Left),
+        MouseEventKind::Drag(MouseButton::Left),
+        MouseEventKind::Up(MouseButton::Left),
+    ] {
+        assert!(matches!(
+            crate::app::fullscreen::pointer::handle_mouse(&mut app, area, event(kind)),
+            MouseAction::Selection(None)
+        ));
+    }
+    assert!(matches!(click(&mut app), MouseAction::Command(None)));
+    app.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE));
+    assert!(matches!(click(&mut app), MouseAction::Command(None)));
+    assert!(
+        matches!(click(&mut app), MouseAction::Command(Some(crate::app::AppCommand::Config(crate::config::Command::Edit(edit)))) if edit.terminal.memory_diagnostics())
+    );
 }

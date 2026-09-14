@@ -103,7 +103,12 @@ pub(super) fn target_at(
     }
 }
 
-pub(super) fn activate(app: &mut App, available: Rect, target: Target) -> Option<AppCommand> {
+pub(super) fn activate(
+    app: &mut App,
+    available: Rect,
+    target: Target,
+    click: crate::widgets::list_selection::ListSelectionClick,
+) -> Option<AppCommand> {
     match target {
         Target::Parent => {
             app.fullscreen.panels.command_mut()?.return_to_parent();
@@ -140,7 +145,7 @@ pub(super) fn activate(app: &mut App, available: Rect, target: Target) -> Option
             app.fullscreen.modal_alert = false;
             let panel = app.fullscreen.panels.command_mut()?;
             let body = body_area(panel, layout(available).content);
-            let outcome = panel.focus_pointer(&target, body);
+            let outcome = panel.handle_click(&target, body, click);
             app.handle_command_panel_outcome(outcome)
         }
     }
@@ -313,6 +318,7 @@ pub(super) fn handle_key(
         return None;
     }
     app.fullscreen.modal_alert = false;
+    app.fullscreen.pointer.cancel_click();
     let layout = layout(available);
     if let Some(detail) = app.overlay_mut() {
         if key.kind == KeyEventKind::Press && bindings::CLOSE.matches(key) {

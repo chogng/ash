@@ -810,46 +810,34 @@ fn reset_is_scoped_to_focused_settings_and_press_events() {
 }
 
 #[test]
-fn general_items_require_two_clicks_on_the_same_item_within_500_ms() {
+fn general_items_select_on_single_click_and_activate_on_double_click() {
+    use crate::widgets::list_selection::ListSelectionClick;
     use crate::widgets::list_selection::ListSelectionItemId;
     use crate::widgets::list_selection::ListSelectionPointerTarget;
-    use std::time::Duration;
-    use std::time::Instant;
     let mut editor = super::ConfigEditor::new(config_choices(
         &empty_config_snapshot(),
         &providers(),
         TerminalSettings::default(),
         StatusLineSettings::default(),
     ));
-    let vim = ListSelectionPointerTarget::Item(ListSelectionItemId::new("terminal-vim-mode"));
     let memory = ListSelectionPointerTarget::Item(ListSelectionItemId::new("memory-diagnostics"));
-    let start = Instant::now();
-    for (target, millis) in [(&vim, 0), (&vim, 501), (&memory, 550)] {
-        assert!(matches!(
-            editor.focus_pointer(target, start + Duration::from_millis(millis)),
-            super::ConfigEditorOutcome::Consumed
-        ));
-    }
+    assert!(matches!(
+        editor.handle_click(&memory, ListSelectionClick::Single),
+        super::ConfigEditorOutcome::Consumed
+    ));
+    assert_eq!(
+        editor.selection().unwrap().selected_item().unwrap().id(),
+        Some(&ListSelectionItemId::new("memory-diagnostics"))
+    );
     assert!(
-        matches!(editor.focus_pointer(&memory, start + Duration::from_millis(600)),
+        matches!(editor.handle_click(&memory, ListSelectionClick::Double),
         super::ConfigEditorOutcome::Action(ConfigSelectionAction::SetTerminalSettings(edit)) if edit.terminal.memory_diagnostics())
     );
-    // A third click starts a new pair, rather than applying the change again.
     assert!(matches!(
-        editor.focus_pointer(&memory, start + Duration::from_millis(650)),
-        super::ConfigEditorOutcome::Consumed
-    ));
-    editor.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE));
-    assert!(matches!(
-        editor.focus_pointer(&memory, start + Duration::from_millis(700)),
-        super::ConfigEditorOutcome::Consumed
-    ));
-    editor.focus_pointer(
-        &ListSelectionPointerTarget::Search,
-        start + Duration::from_millis(720),
-    );
-    assert!(matches!(
-        editor.focus_pointer(&memory, start + Duration::from_millis(750)),
+        editor.handle_click(
+            &ListSelectionPointerTarget::Search,
+            ListSelectionClick::Double
+        ),
         super::ConfigEditorOutcome::Consumed
     ));
 }

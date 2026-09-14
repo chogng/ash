@@ -20,3 +20,10 @@ pub(crate) use view::draw_body_with_pointer;
 pub(crate) use view::draw_tabs;
 pub(crate) use view::item_style;
 pub(crate) use view::pointer_target_at;
+
+/// Completed pointer activation delivered by the input host to a list owner.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ListSelectionClick {
+    Single,
+    Double,
+}
