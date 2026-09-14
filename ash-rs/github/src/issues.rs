@@ -453,6 +453,6 @@ fn string(value: &serde_json::Value, pointer: &str) -> Result<String> {
         .ok_or_else(|| format!("Missing GitHub field {pointer}"))
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 #[path = "issues_tests.rs"]
 mod tests;

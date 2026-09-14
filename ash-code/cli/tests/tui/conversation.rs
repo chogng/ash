@@ -155,7 +155,7 @@ fn actual_tui_queues_restores_and_completes_messages() {
 }
 
 #[test]
-fn actual_tui_approves_and_declines_real_file_tool_calls() {
+fn actual_tui_sandbox_approves_and_declines_real_file_tool_calls() {
     let approve_fixture = Fixture::new();
     let approve_gate = Gate::new();
     let approve_server = ScenarioServer::start([
@@ -186,6 +186,8 @@ fn actual_tui_approves_and_declines_real_file_tool_calls() {
     approve.wait_for_screen("工具已获批准并执行");
     approve_gate.release();
     approve.wait_for_stable_screen("文件写入完成");
+    approve.refresh_policy_tip();
+    approve.wait_for_stable_screen("ask permissions on");
     approve.assert_snapshot("real/03-approval/01-approved-final");
     approve.control_up();
     approve.up();
@@ -233,6 +235,8 @@ fn actual_tui_approves_and_declines_real_file_tool_calls() {
     decline.wait_for_screen("工具调用被用户拒绝");
     decline_gate.release();
     decline.wait_for_stable_screen("没有写入文件");
+    decline.refresh_policy_tip();
+    decline.wait_for_stable_screen("ask permissions on");
     decline.assert_snapshot("real/03-approval/03-declined-final");
     assert!(decline_fixture.find_file("declined-by-tui.txt").is_none());
     assert!(decline_server.request_bodies()[1].contains("declin"));
@@ -240,7 +244,7 @@ fn actual_tui_approves_and_declines_real_file_tool_calls() {
 }
 
 #[test]
-fn actual_tui_approval_modes_change_file_tool_authority() {
+fn actual_tui_sandbox_approval_modes_change_file_tool_authority() {
     let auto_fixture = Fixture::new();
     let auto_gate = Gate::new();
     let auto_review = serde_json::json!({
@@ -276,12 +280,13 @@ fn actual_tui_approval_modes_change_file_tool_authority() {
     assert!(auto_fixture.find_file("auto-reviewed.txt").is_none());
     auto.back_tab();
     auto.wait_for_screen("current: auto review on");
+    // Inspect the review result after the follow-up turn can finish.
+    auto_gate.release();
+    auto.wait_for_stable_screen("文件没有写入");
     auto.control_up();
     auto.up();
     auto.space();
     auto.wait_for_screen("fixture automatic reviewer denied");
-    auto_gate.release();
-    auto.wait_for_stable_screen("文件没有写入");
     let auto_bodies = auto_server.request_bodies();
     assert_eq!(auto_bodies.len(), 4);
     assert!(auto_bodies[2].contains("Return JSON matching this response schema"));
@@ -311,6 +316,8 @@ fn actual_tui_approval_modes_change_file_tool_authority() {
     bypass.wait_for_screen("bypass permissions on");
     bypass.submit("请直接创建 permission-bypassed.txt");
     bypass.wait_for_stable_screen("文件直接写入完成");
+    bypass.refresh_policy_tip();
+    bypass.wait_for_stable_screen("bypass permissions on");
     bypass.assert_snapshot("real/03-approval/07-bypass-final");
     bypass.control_up();
     bypass.up();

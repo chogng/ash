@@ -2,20 +2,19 @@ use std::io;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Read;
-use std::io::Write;
 use std::net::Shutdown;
 use std::path::Path;
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 
-use serde_json::Value;
-use serde_json::json;
 use ash_app_server_protocol::protocol::initialize::InitializeResult;
 use ash_app_server_protocol::protocol::initialize::REQUIRED_SESSION_CAPABILITIES;
 use ash_app_server_protocol::protocol::initialize::ensure_protocol_compatible;
 use ash_app_server_protocol::schema_hash;
 use ash_uds::UnixStream;
+use serde_json::Value;
+use serde_json::json;
 
 use crate::ConnectionOptions;
 use crate::LifecycleCommand;
@@ -40,6 +39,7 @@ use crate::wire::ControlResponse;
 use crate::wire::ControlState;
 use crate::wire::write_json_line;
 use ash_app_server_transport::DeadlineStream;
+use ash_app_server_transport::relay_output;
 
 const CONNECT_RETRY_INTERVAL: Duration = Duration::from_millis(50);
 const CONTROL_TIMEOUT: Duration = Duration::from_secs(2);
@@ -415,8 +415,7 @@ fn proxy_stdio(mut stream: UnixStream, options: &ConnectionOptions) -> io::Resul
             copied
         })?;
     let mut output = io::stdout().lock();
-    io::copy(&mut BufReader::new(stream), &mut output)?;
-    output.flush()?;
+    relay_output(&mut BufReader::new(stream), &mut output)?;
     input
         .join()
         .map_err(|_| io::Error::other("Local App Server stdin proxy panicked"))??;

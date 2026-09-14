@@ -45,8 +45,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: rust-build-health-${{ github.ref }}
-  cancel-in-progress: true
+  group: rust-build-health-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   dependencies:
@@ -64,7 +64,7 @@ jobs:
         run: python3 -B scripts/dependencies.py
 
   performance:
-    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000')
+    if: github.event_name == 'push' && github.event.before != '0000000000000000000000000000000000000000'
     needs: dependencies
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -77,7 +77,7 @@ jobs:
       - name: Check out the comparison source separately
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.base.sha || github.event.before }}
+          ref: ${{ github.event.before }}
           path: base
           persist-credentials: false
       - name: Use the proposed toolchain for both sources

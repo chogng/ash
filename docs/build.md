@@ -109,7 +109,11 @@ just bench-build ash-keybinding --jobs 4 --compare .build/build-health/<run>/rep
 
 超过调用方指定的耗时阈值会失败；`--absolute-regression 2` 可额外允许两秒以内的绝对波动，只有相对和绝对阈值同时超过才失败。负载不同或结果波动时必须复测。
 
-`Rust build health` 在 push/PR 检查依赖与工具回归测试，并对编译热点 `ash-app-server-protocol` 执行性能门禁：在同一个 Ubuntu 作业中分别检出基线和当前源码，两份源码使用当前版本的 Rust 工具链、四个并发任务，各测三轮。任一场景的耗时中位数同时增加超过 25% 和两秒时检查失败，两份日志和报告都会上传。基线取 PR 的 base commit 或 push 前的 commit；首次推送没有基线时仅执行依赖检查。这是协议包的编译门禁，不代表其他产品的整包耗时预算。
+`Rust build health` 在 push/PR 检查依赖与工具回归测试；仅在 main push 对编译热点 `ash-app-server-protocol` 执行性能门禁，避免 PR 等待重复的全冷编译。每次 main push 的性能作业独立运行，不被后续推送取消，以免遗漏被取消的提交。在同一个 Ubuntu 作业中分别检出推送前后的源码，两份源码使用当前版本的 Rust 工具链、四个并发任务，各测三轮。任一场景的耗时中位数同时增加超过 25% 和两秒时检查失败，两份日志和报告都会上传。首次推送没有基线时仅执行依赖检查。这是协议包的编译门禁，不代表其他产品的整包耗时预算。
+
+`Rust warnings` 在 Linux、macOS、Windows 并行检查工作区；Linux TUI 测试单独并行运行。PR 改动路径按 Cargo 包及其依赖关系判断是否影响 TUI、CLI 或测试所需的服务程序；根 Cargo 配置、构建入口和无法归属的相关源码改动仍运行 TUI 测试。main push 和手动触发始终运行完整 TUI 覆盖，避免连续推送取消前一次运行后遗漏测试。GitHub Ubuntu runner 无法完成 Bubblewrap 的隔离网络 loopback 设置，因此三个依赖真实沙盒执行的 PTY 场景在单独并行的 macOS 作业中运行，其余 PTY 场景仍在 Linux 运行。测试使用锁定的 ripgrep 产物，并在耗时的 Rust 编译前验证它能启动。Linux 与 macOS TUI 作业的服务程序和 CLI 测试目标统一使用已有的 `ci-test` profile，避免同一作业在 `dev` 与 `test` profile 间重复编译后端依赖；普通 `just test-tui` 仍使用原有默认 profile。
+
+2026-09-13 在 macOS aarch64、Rust 1.98.0、四个 Cargo 任务、`CARGO_INCREMENTAL=0`、第三方源码已下载的条件下，用独立空目标目录测量 TUI 测试目标、三个服务程序和 CLI PTY 测试目标的顺序冷编译。原有 `test`/`dev` 组合分别用时 624、449、27 秒，统一使用 `ci-test` 分别用时 409、136、10 秒；总时间约 18 分 20 秒降至 9 分 15 秒，产物目录约 10 GB 降至 9.1 GB。两组无改动重跑均约 0.6 秒；仅触碰 TUI 源码后的重编译从 29.4 秒降至 11.6 秒。`ci-test` 在本机链接时会产生 macOS compact-unwind warning，macOS 沙盒 PTY 作业因此可能输出该链接器提示。GitHub Linux runner 的三段 Cargo 编译日志从原配置合计 29 分 35 秒降至 18 分 10 秒。
 
 测量脚本的 `--root <workspace>` 允许当前版本的工具测量旧源码，即使旧源码中还没有测量工具。CI 将两个 checkout 放在并列目录，避免当前版本的 `.cargo/config.toml` 影响基线。手动触发 CI 时默认测量 `ash-cli`，也可选择 `ash-app-server` 或 `app`，分别记录产品构建基线。
 

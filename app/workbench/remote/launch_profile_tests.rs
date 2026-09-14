@@ -3,11 +3,17 @@ use crate::launch::LaunchParseError;
 use crate::launch::RemoteRuntimeCatalogSource;
 use crate::launch::RemoteRuntimeSource;
 
+#[cfg(unix)]
 use ash_remote::RemoteDirPath;
+#[cfg(unix)]
 use ash_remote::RemoteProfile;
+#[cfg(unix)]
 use ash_remote::RemoteRuntime;
+#[cfg(unix)]
 use ash_remote::SshHost;
+#[cfg(unix)]
 use ash_remote::SshTarget;
+#[cfg(unix)]
 use ash_remote_connections::RemoteConnectionProfileStore;
 
 #[cfg(unix)]
@@ -272,10 +278,12 @@ fn write_runtime_fake_ssh(path: &Path, log: &Path, runtime: &str, response: Stri
     make_executable(path);
 }
 
+#[cfg(unix)]
 fn profile_store(directory: &tempfile::TempDir) -> RemoteConnectionProfileStore {
     RemoteConnectionProfileStore::new(directory.path().join("remote-connections.json"))
 }
 
+#[cfg(unix)]
 fn target() -> SshTarget {
     SshTarget::new(
         SshHost::parse("build").unwrap(),
@@ -283,6 +291,7 @@ fn target() -> SshTarget {
     )
 }
 
+#[cfg(unix)]
 fn profile(target: SshTarget, runtime: &str) -> RemoteProfile {
     RemoteProfile::new(target, RemoteRuntime::new(runtime).unwrap())
 }

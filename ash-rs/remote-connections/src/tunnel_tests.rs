@@ -1,10 +1,13 @@
 use std::num::NonZeroU16;
 use std::path::Path;
+#[cfg(unix)]
 use std::time::Duration;
+#[cfg(unix)]
 use std::time::Instant;
 
 use super::SshTunnelError;
 use super::SshTunnelOptions;
+#[cfg(unix)]
 use super::SshTunnelReadiness;
 use super::select_available_loopback_port;
 use ash_remote::SshHost;
@@ -113,6 +116,7 @@ fn listener_readiness_distinguishes_a_live_tunnel_from_an_early_exit() {
     assert!(!status.success());
 }
 
+#[cfg(unix)]
 fn wait_until_ready(
     tunnel: &mut super::SshTunnel,
     timeout: Duration,

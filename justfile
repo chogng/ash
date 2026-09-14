@@ -7,6 +7,8 @@ set shell := ["python3", "-c", 'import os, runpy; runpy.run_path(os.environ["JUS
 set windows-shell := ["python", "-c", 'import os, runpy; runpy.run_path(os.environ["JUST_SHELL"], run_name="__main__")']
 
 python := if os_family() == "windows" { "python" } else { "python3" }
+tui_profile := ""
+tui_profile_arg := if tui_profile == "" { "" } else { "--profile " + tui_profile }
 
 # Format Just, Rust, and first-party Python sources.
 fmt:
@@ -45,8 +47,8 @@ test *args:
 
 # Build the matching daemon and run real CLI/TUI scenarios through a PTY.
 test-tui *args:
-    {{ python }} -B scripts/cargo.py build -p ash-app-server --bin ash-app-server -p ash-app-server-daemon --bin ash-app-server-daemon -p ash-remote-server --bin ash-remote-server
-    {{ python }} -B scripts/cargo.py test -p ash-cli --test tui_real_scenarios {args}
+    {{ python }} -B scripts/cargo.py build -p ash-app-server --bin ash-app-server -p ash-app-server-daemon --bin ash-app-server-daemon -p ash-remote-server --bin ash-remote-server {{ tui_profile_arg }}
+    {{ python }} -B scripts/cargo.py test -p ash-cli --test tui_real_scenarios {{ tui_profile_arg }} {args}
 
 # Check one Rust package. V8 inputs are configured only when its dependency graph needs them.
 check *args:

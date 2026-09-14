@@ -231,7 +231,7 @@ impl AppLaunch {
         self.prepare_remote_runtime_with_store_and_progress(&store, report_progress)
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub(crate) fn prepare_remote_runtime_with_store(
         &mut self,
         store: &RemoteConnectionProfileStore,

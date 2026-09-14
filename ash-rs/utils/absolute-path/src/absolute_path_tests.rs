@@ -104,6 +104,7 @@ fn resolve_against_current_dir_anchors_a_relative_path() -> io::Result<()> {
     Ok(())
 }
 
+#[cfg(unix)]
 const REMOVED_CURRENT_DIR_CHILD: &str = "ASH_ABSOLUTE_PATH_REMOVED_CURRENT_DIR_CHILD";
 
 /// The child runs alone in its own process because it replaces and then deletes the working

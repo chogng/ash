@@ -30,7 +30,7 @@ mod tests;
 - Profile changes require measurements using the actual product/package, toolchain, target, features, and cache conditions. Report clean-target, unchanged, and incremental results separately, together with memory and artifact sizes. Preserve the current unwind constraints. Cargo defaults, source complexity, and LLVM IR counts alone do not establish a speedup.
 - Build-performance work must deliver a measured product/code improvement or a measured rejection of a proposed optimization. Adding rules, CI checks, or a benchmark runner alone does not complete the optimization; report implementation and measurement status separately.
 - `just bench-build` records reproducible package measurements; its touch scenario measures a source-timestamp rebuild, not a representative implementation edit. Use a controlled real edit for a claim about feature-edit iteration. See [build commands and measurement limits](../../docs/build.md#rust-依赖检查与构建测量).
-- Push/PR CI compares the protocol package against the base revision on the same runner and toolchain, using three samples. A slowdown exceeding both 25% and two seconds fails the gate. Inspect the uploaded before/after reports and repeat noisy runs; do not increase the threshold solely to pass a change.
+- Every main-branch push CI compares the protocol package against the previous revision on the same runner and toolchain, using three samples; later pushes do not cancel an unfinished comparison. A slowdown exceeding both 25% and two seconds fails the gate. Inspect the uploaded before/after reports and repeat noisy runs; do not increase the threshold solely to pass a change.
 
 ## Learnings
 

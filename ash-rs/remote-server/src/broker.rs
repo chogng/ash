@@ -6,7 +6,6 @@ mod unix {
     use std::fs::OpenOptions;
     use std::io;
     use std::io::BufReader;
-    use std::io::Write;
     use std::net::Shutdown;
     use std::os::unix::ffi::OsStrExt;
     use std::os::unix::fs::DirBuilderExt;
@@ -28,9 +27,10 @@ mod unix {
     use std::time::Duration;
     use std::time::Instant;
 
+    use ash_app_server_protocol::schema_hash;
+    use ash_app_server_transport::relay_output;
     use sha2::Digest;
     use sha2::Sha256;
-    use ash_app_server_protocol::schema_hash;
 
     use crate::server::PRODUCT_SERVICES_PATH_ENV;
     use crate::server::RemoteServerError;
@@ -424,8 +424,7 @@ mod unix {
                 copied
             })?;
         let mut output = io::stdout().lock();
-        io::copy(&mut BufReader::new(stream), &mut output)?;
-        output.flush()?;
+        relay_output(&mut BufReader::new(stream), &mut output)?;
         input
             .join()
             .map_err(|_| io::Error::other("Remote server stdin proxy panicked"))??;
