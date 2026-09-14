@@ -17,4 +17,4 @@ expression: text(&buffer)
 > Key hint style                                                                          Contrast  
 > Screen mode                                                                               inline  
                                                                                                     
-  Enter/Space change · ←/→ details · Tab tabs · / search · Esc close
+  Enter change · r reset · ←/→ details · Tab tabs · / search · Esc close

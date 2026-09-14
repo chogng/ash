@@ -12,15 +12,15 @@ expression: frame_text(&app)
   │    ▝  ▘ │  ╭────────────────────────────────────────────────────────────────────╮ │          │  
   │         │  │ Search configuration                                               │ │          │  
   │         │  ╰────────────────────────────────────────────────────────────────────╯ │          │  
-  │         │v Vim mode                                                           off │          │  
-  │         │    Use Vim editing in ChatInput                                         │          │  
-  │         │> Memory diagnostics                                                 off │          │  
+  │         │> Vim mode                                                           off │          │  
+  │         │> Memory diagnostics                                                  on │          │  
   │         │> Automatic updates                                               Latest │          │  
-  ╰─────────│> Show Git changes as diff                                           off │──────────╯  
-            │> Language                                                       English │             
+  │         │> Show Git changes as diff                                           off │          │  
+  ╰─────────│> Language                                                       English │──────────╯  
             │> Status bar style                                                Simple │             
             │> Key hint style                                                Contrast │             
             │> Screen mode                                                 fullscreen │             
+            │                                                                         │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             

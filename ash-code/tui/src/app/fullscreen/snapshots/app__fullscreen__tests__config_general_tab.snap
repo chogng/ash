@@ -18,6 +18,6 @@ expression: "render(&app, 100, 21)"
             │> 状 态 栏 风 格                                                         简 洁  │             
             │> 按 键 提 示 风 格                                                       对 比  │             
             │> 屏 幕 模 式                                                     fullscreen │             
-  ╭─────────│  Enter/Space change · ←/→ details · Tab tabs · / search · Esc close     │──────────╮  
+  ╭─────────│  Enter change · r reset · ←/→ details · Tab tabs · / search · Esc close │──────────╮  
   │ > Build └─────────────────────────────────────────────────────────────────────────┘          │  
   ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯

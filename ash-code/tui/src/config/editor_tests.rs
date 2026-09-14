@@ -700,3 +700,156 @@ fn status_line_style_changes_from_config_without_changing_items() {
         }
     }
 }
+
+#[test]
+fn reset_restores_only_the_selected_general_setting() {
+    let mut terminal = TerminalSettings::default();
+    terminal.set_input_mode(ChatInputMode::Vim);
+    terminal.set_memory_diagnostics(true);
+    terminal.set_auto_update(crate::UpdatePolicy::Never);
+    terminal.set_language(Language::Chinese);
+    terminal.set_key_hint_style(crate::config::KeyHintStyle::Muted);
+    terminal.set_screen_mode(crate::terminal::ScreenMode::Inline);
+    let mut status = StatusLineSettings::default();
+    status.set_style(status.style().next());
+    status.set_show_git_changes_as_diff(true);
+    let mut config = empty_config_snapshot();
+    config.revision = 42;
+    config
+        .tui
+        .0
+        .insert("unrelated".into(), serde_json::json!({"keep": true}));
+    let catalog = providers();
+    for row in 0..8 {
+        let mut editor =
+            super::ConfigEditor::new(config_choices(&config, &catalog, terminal, status.clone()));
+        for _ in 0..row {
+            editor.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        }
+        assert!(editor.key_hints().text().contains("r reset"));
+        let mut expected_terminal = terminal;
+        let mut expected_status = status.clone();
+        let defaults = TerminalSettings::default();
+        let status_defaults = StatusLineSettings::default();
+        match row {
+            0 => expected_terminal.set_input_mode(defaults.input_mode()),
+            1 => expected_terminal.set_memory_diagnostics(defaults.memory_diagnostics()),
+            2 => expected_terminal.set_auto_update(defaults.auto_update()),
+            3 => expected_status
+                .set_show_git_changes_as_diff(status_defaults.show_git_changes_as_diff()),
+            4 => expected_terminal.set_language(defaults.language()),
+            5 => expected_status.set_style(status_defaults.style()),
+            6 => expected_terminal.set_key_hint_style(defaults.key_hint_style()),
+            7 => expected_terminal.set_screen_mode(defaults.screen_mode()),
+            _ => unreachable!(),
+        }
+        // A refresh and a second reset must preserve the selection and stay at the default.
+        for _ in 0..2 {
+            let super::ConfigEditorOutcome::Action(action) =
+                editor.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE))
+            else {
+                panic!("reset should emit an edit for row {row}")
+            };
+            let (ConfigSelectionAction::SetTerminalSettings(edit)
+            | ConfigSelectionAction::SetVimMode(edit)
+            | ConfigSelectionAction::SetLanguage(edit)
+            | ConfigSelectionAction::SetUpdatePolicy(edit)
+            | ConfigSelectionAction::SetShowGitChangesAsDiff(edit)
+            | ConfigSelectionAction::SetStatusLineStyle(edit)) = action
+            else {
+                panic!("reset should use the existing save command")
+            };
+            assert_eq!(edit.terminal, expected_terminal);
+            assert_eq!(edit.status_line, expected_status);
+            assert_eq!(edit.server_config, config);
+            assert_eq!(edit.providers, catalog);
+            editor.replace(config_choices(
+                &config,
+                &catalog,
+                edit.terminal,
+                edit.status_line,
+            ));
+        }
+    }
+}
+
+#[test]
+fn reset_is_scoped_to_focused_settings_and_press_events() {
+    let mut editor = super::ConfigEditor::new(config_choices(
+        &empty_config_snapshot(),
+        &providers(),
+        TerminalSettings::default(),
+        StatusLineSettings::default(),
+    ));
+    for kind in [
+        crossterm::event::KeyEventKind::Repeat,
+        crossterm::event::KeyEventKind::Release,
+    ] {
+        assert!(matches!(
+            editor.handle_key(KeyEvent::new_with_kind(
+                KeyCode::Char('r'),
+                KeyModifiers::NONE,
+                kind
+            )),
+            super::ConfigEditorOutcome::Consumed
+        ));
+    }
+    editor.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+    assert!(!editor.key_hints().text().contains("r reset"));
+    assert!(matches!(
+        editor.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE)),
+        super::ConfigEditorOutcome::Consumed
+    ));
+    assert_eq!(editor.selection().unwrap().search().unwrap().query(), "r");
+    editor.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    assert!(!editor.key_hints().text().contains("r reset"));
+    assert!(matches!(
+        editor.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE)),
+        super::ConfigEditorOutcome::Consumed
+    ));
+}
+
+#[test]
+fn general_items_require_two_clicks_on_the_same_item_within_500_ms() {
+    use crate::widgets::list_selection::ListSelectionItemId;
+    use crate::widgets::list_selection::ListSelectionPointerTarget;
+    use std::time::Duration;
+    use std::time::Instant;
+    let mut editor = super::ConfigEditor::new(config_choices(
+        &empty_config_snapshot(),
+        &providers(),
+        TerminalSettings::default(),
+        StatusLineSettings::default(),
+    ));
+    let vim = ListSelectionPointerTarget::Item(ListSelectionItemId::new("terminal-vim-mode"));
+    let memory = ListSelectionPointerTarget::Item(ListSelectionItemId::new("memory-diagnostics"));
+    let start = Instant::now();
+    for (target, millis) in [(&vim, 0), (&vim, 501), (&memory, 550)] {
+        assert!(matches!(
+            editor.focus_pointer(target, start + Duration::from_millis(millis)),
+            super::ConfigEditorOutcome::Consumed
+        ));
+    }
+    assert!(
+        matches!(editor.focus_pointer(&memory, start + Duration::from_millis(600)),
+        super::ConfigEditorOutcome::Action(ConfigSelectionAction::SetTerminalSettings(edit)) if edit.terminal.memory_diagnostics())
+    );
+    // A third click starts a new pair, rather than applying the change again.
+    assert!(matches!(
+        editor.focus_pointer(&memory, start + Duration::from_millis(650)),
+        super::ConfigEditorOutcome::Consumed
+    ));
+    editor.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE));
+    assert!(matches!(
+        editor.focus_pointer(&memory, start + Duration::from_millis(700)),
+        super::ConfigEditorOutcome::Consumed
+    ));
+    editor.focus_pointer(
+        &ListSelectionPointerTarget::Search,
+        start + Duration::from_millis(720),
+    );
+    assert!(matches!(
+        editor.focus_pointer(&memory, start + Duration::from_millis(750)),
+        super::ConfigEditorOutcome::Consumed
+    ));
+}

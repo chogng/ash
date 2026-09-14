@@ -894,3 +894,69 @@ fn config_descriptions_expand_below_items_and_keep_mouse_targets_aligned() {
     );
     assert_eq!(frame_text(&app), collapsed);
 }
+
+#[test]
+fn config_double_click_changes_the_selected_item_once() {
+    use crate::app::fullscreen::pointer::MouseAction;
+    let mut app = crate::app::App::new();
+    app.open_home();
+    app.update(crate::config::Event::EditorOpened(config_choices()));
+    let area = Rect::new(0, 0, 100, 30);
+    let body = super::body_area(app.command_panel().unwrap(), super::layout(area).content);
+    let row = body.y + crate::widgets::search_box::SEARCH_BOX_HEIGHT + 1;
+    for click in 0..2 {
+        let event = |kind| MouseEvent {
+            kind,
+            column: body.x + 8,
+            row,
+            modifiers: KeyModifiers::NONE,
+        };
+        let down = crate::app::fullscreen::pointer::handle_mouse(
+            &mut app,
+            area,
+            event(MouseEventKind::Down(MouseButton::Left)),
+        );
+        assert!(matches!(down, MouseAction::Selection(None)));
+        let up = crate::app::fullscreen::pointer::handle_mouse(
+            &mut app,
+            area,
+            event(MouseEventKind::Up(MouseButton::Left)),
+        );
+        if click == 0 {
+            assert!(matches!(up, MouseAction::Command(None)));
+            assert_eq!(
+                app.list_selection().unwrap().selected_item().unwrap().id(),
+                Some(&crate::widgets::list_selection::ListSelectionItemId::new(
+                    "memory-diagnostics"
+                ))
+            );
+        } else {
+            let MouseAction::Command(Some(crate::app::AppCommand::Config(
+                crate::config::Command::Edit(edit),
+            ))) = up
+            else {
+                panic!("double click should save one edit")
+            };
+            assert!(edit.terminal.memory_diagnostics());
+            app.update(crate::config::Event::Updated(
+                crate::config::ConfigEditResult {
+                    terminal: edit.terminal,
+                    status_line: edit.status_line.clone(),
+                    choices: crate::config::config_choices(
+                        &edit.server_config,
+                        &edit.providers,
+                        edit.terminal,
+                        edit.status_line,
+                    ),
+                },
+            ));
+        }
+    }
+    crate::tui_assert_snapshot!("config_double_click_changes_item", frame_text(&app));
+    let Some(crate::app::AppCommand::Config(crate::config::Command::Edit(edit))) =
+        app.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE))
+    else {
+        panic!("reset remains available after double click")
+    };
+    assert!(!edit.terminal.memory_diagnostics());
+}

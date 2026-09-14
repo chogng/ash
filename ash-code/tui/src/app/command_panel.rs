@@ -364,6 +364,11 @@ impl CommandPanel {
         target: &list_selection::ListSelectionPointerTarget,
         area: Rect,
     ) -> CommandPanelOutcome {
+        if let Self::Config(editor) = self {
+            return CommandPanelOutcome::Config(
+                editor.focus_pointer(target, std::time::Instant::now()),
+            );
+        }
         let selection = match self {
             Self::Help(s) | Self::Startup(s) | Self::Loading(s) => Some(s.state_mut()),
             Self::Dirs(s) => s.selection_mut(),

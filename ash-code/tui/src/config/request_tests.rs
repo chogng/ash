@@ -465,3 +465,68 @@ fn saving_unchanged_connection_with_no_model_still_configures_provider() {
         ]
     );
 }
+
+#[test]
+fn config_reset_saves_with_revision_and_preserves_other_values() {
+    let mut current = empty_config_snapshot();
+    current.revision = 7;
+    let mut terminal = crate::config::TerminalSettings::default();
+    terminal.set_input_mode(crate::thread::composer::ChatInputMode::Vim);
+    terminal.set_memory_diagnostics(true);
+    current.tui = terminal.write_to_tui(&current.tui).unwrap();
+    current
+        .tui
+        .0
+        .insert("other".into(), serde_json::json!(["keep"]));
+    let mut editor = crate::config::ConfigEditor::new(crate::config::config_choices(
+        &current,
+        &ProviderListResult {
+            providers: Vec::new(),
+        },
+        terminal,
+        crate::status::StatusLineSettings::default(),
+    ));
+    let crate::config::ConfigEditorOutcome::Action(
+        crate::config::ConfigSelectionAction::SetVimMode(edit),
+    ) = editor.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE))
+    else {
+        panic!("expected reset edit")
+    };
+    let mut saved = current.clone();
+    saved.revision = 8;
+    saved.tui = edit
+        .status_line
+        .write_to_tui(&edit.terminal.write_to_tui(&current.tui).unwrap());
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let mut client = AppServerClient::new(RecordingTransport {
+        requests: requests.clone(),
+        responses: VecDeque::from([
+            response(
+                1,
+                serde_json::json!({"revision":8,"generation":2,"disposition":"updated"}),
+            ),
+            response(2, serde_json::to_value(&saved).unwrap()),
+        ]),
+    });
+    let crate::config::Event::Updated(result) =
+        super::execute(&mut client, super::Command::Edit(edit)).unwrap()
+    else {
+        panic!("expected refreshed settings")
+    };
+    assert_eq!(
+        result.terminal.input_mode(),
+        crate::thread::composer::ChatInputMode::Standard
+    );
+    assert!(result.terminal.memory_diagnostics());
+    let requests = requests.lock().unwrap();
+    assert_eq!(requests.len(), 2);
+    assert_eq!(requests[0]["method"], "config/update");
+    assert_eq!(requests[1]["method"], "config/read");
+    let params = &requests[0]["params"];
+    assert_eq!(params["expectedRevision"], 7);
+    assert_eq!(params["tui"]["inputMode"], "standard");
+    assert_eq!(params["tui"]["memoryDiagnostics"], true);
+    assert_eq!(params["tui"]["other"], serde_json::json!(["keep"]));
+    assert!(params.get("gui").is_none());
+    assert!(params.get("model").is_none());
+}

@@ -114,6 +114,7 @@ pub(crate) struct ConfigEditor {
     subscription: Option<ListSelection<ConfigSelectionAction>>,
     prompt: Option<ProviderApiKeyPromptState>,
     removing: Option<super::provider::Request>,
+    click: Option<(ListSelectionItemId, std::time::Instant)>,
 }
 
 #[derive(Debug)]
@@ -147,6 +148,7 @@ impl ConfigEditor {
             subscription: None,
             prompt: None,
             removing: None,
+            click: None,
         }
     }
 
@@ -173,6 +175,7 @@ impl ConfigEditor {
     }
 
     pub(crate) fn replace(&mut self, spec: ConfigChoices) {
+        self.click = None;
         let revision = config_revision(&spec);
         if revision < self.revision {
             return;
@@ -196,6 +199,7 @@ impl ConfigEditor {
     }
 
     pub(crate) fn handle_key(&mut self, key: crossterm::event::KeyEvent) -> ConfigEditorOutcome {
+        self.click = None;
         if let Some(subscription) = self.subscription.as_mut() {
             let outcome = subscription.handle_key(key);
             return self.handle_subscription_outcome(outcome);
@@ -219,6 +223,17 @@ impl ConfigEditor {
                 return ConfigEditorOutcome::Consumed;
             }
             return outcome;
+        }
+        if key.code == crossterm::event::KeyCode::Char('r')
+            && key.modifiers.is_empty()
+            && self.selection.state().items_focused()
+        {
+            return if key.kind == crossterm::event::KeyEventKind::Press {
+                self.reset_action()
+                    .map_or(ConfigEditorOutcome::Consumed, ConfigEditorOutcome::Action)
+            } else {
+                ConfigEditorOutcome::Consumed
+            };
         }
         if key.code == crossterm::event::KeyCode::Delete
             && key.modifiers.is_empty()
@@ -258,6 +273,79 @@ impl ConfigEditor {
         }
         let outcome = self.selection.handle_key(key);
         self.handle_selection_outcome(outcome)
+    }
+
+    pub(crate) fn focus_pointer(
+        &mut self,
+        target: &crate::widgets::list_selection::ListSelectionPointerTarget,
+        now: std::time::Instant,
+    ) -> ConfigEditorOutcome {
+        let focused = self
+            .selection_mut()
+            .is_some_and(|selection| selection.focus_pointer(target));
+        let crate::widgets::list_selection::ListSelectionPointerTarget::Item(id) = target else {
+            self.click = None;
+            return ConfigEditorOutcome::Consumed;
+        };
+        if !focused {
+            self.click = None;
+            return ConfigEditorOutcome::Consumed;
+        }
+        if self.subscription.is_none() && self.reset_action().is_some() {
+            let double = self.click.take().is_some_and(|(previous, time)| {
+                previous == *id
+                    && now
+                        .checked_duration_since(time)
+                        .is_some_and(|elapsed| elapsed <= std::time::Duration::from_millis(500))
+            });
+            if !double {
+                self.click = Some((id.clone(), now));
+                return ConfigEditorOutcome::Consumed;
+            }
+        }
+        self.handle_key(crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Enter,
+            crossterm::event::KeyModifiers::NONE,
+        ))
+    }
+
+    fn reset_action(&self) -> Option<ConfigSelectionAction> {
+        let id = self.selection.state().selected_item()?.id()?;
+        let mut action = self.selection.action(id)?.clone();
+        let defaults = TerminalSettings::default();
+        let status_defaults = StatusLineSettings::default();
+        match &mut action {
+            ConfigSelectionAction::SetVimMode(edit) => {
+                edit.terminal.set_input_mode(defaults.input_mode());
+            }
+            ConfigSelectionAction::SetLanguage(edit) => {
+                edit.terminal.set_language(defaults.language());
+            }
+            ConfigSelectionAction::SetUpdatePolicy(edit) => {
+                edit.terminal.set_auto_update(defaults.auto_update());
+            }
+            ConfigSelectionAction::SetShowGitChangesAsDiff(edit) => {
+                edit.status_line
+                    .set_show_git_changes_as_diff(status_defaults.show_git_changes_as_diff());
+            }
+            ConfigSelectionAction::SetStatusLineStyle(edit) => {
+                edit.status_line.set_style(status_defaults.style());
+            }
+            ConfigSelectionAction::SetTerminalSettings(edit) => {
+                if *id == ListSelectionItemId::new("screen-mode") {
+                    edit.terminal.set_screen_mode(defaults.screen_mode());
+                } else if *id == ListSelectionItemId::new("key-hint-style") {
+                    edit.terminal.set_key_hint_style(defaults.key_hint_style());
+                } else if *id == ListSelectionItemId::new("memory-diagnostics") {
+                    edit.terminal
+                        .set_memory_diagnostics(defaults.memory_diagnostics());
+                } else {
+                    return None;
+                }
+            }
+            _ => return None,
+        }
+        Some(action)
     }
 
     fn handle_selection_outcome(
@@ -315,6 +403,7 @@ impl ConfigEditor {
     }
 
     pub(crate) fn handle_paste(&mut self, pasted: String) {
+        self.click = None;
         if let Some(subscription) = self.subscription.as_mut() {
             subscription.handle_paste(pasted);
         } else if let Some(prompt) = self.prompt.as_mut() {
@@ -346,6 +435,15 @@ impl ConfigEditor {
                 .with_action("Delete", "remove provider")
                 .with_action("Esc", "return")
         });
+        static RESET: LazyLock<KeyHints> = LazyLock::new(|| {
+            KeyHints::compact()
+                .with_compact_action("Enter", "change")
+                .with_compact_action("r", "reset")
+                .with_compact_action("←/→", "details")
+                .with_compact_action("Tab", "tabs")
+                .with_compact_action("/", "search")
+                .with_compact_action("Esc", "close")
+        });
         if let Some(subscription) = &self.subscription {
             return subscription.key_hints();
         }
@@ -356,6 +454,27 @@ impl ConfigEditor {
                 if let Some(provider_panel) = &self.provider_panel {
                     provider_panel.key_hints()
                 } else {
+                    if self.selection.state().items_focused()
+                        && self
+                            .selection
+                            .state()
+                            .selected_item()
+                            .and_then(ListSelectionItem::id)
+                            .and_then(|id| self.selection.action(id))
+                            .is_some_and(|action| {
+                                matches!(
+                                    action,
+                                    ConfigSelectionAction::SetTerminalSettings(_)
+                                        | ConfigSelectionAction::SetVimMode(_)
+                                        | ConfigSelectionAction::SetLanguage(_)
+                                        | ConfigSelectionAction::SetUpdatePolicy(_)
+                                        | ConfigSelectionAction::SetShowGitChangesAsDiff(_)
+                                        | ConfigSelectionAction::SetStatusLineStyle(_)
+                                )
+                            })
+                    {
+                        return &RESET;
+                    }
                     if self.selection.state().items_focused() && self.selection.state().selected_item().and_then(ListSelectionItem::id).and_then(|id| self.selection.action(id)).is_some_and(|action| matches!(action, ConfigSelectionAction::OpenProvider(settings) if settings.config.custom.is_some())) {
                         &CUSTOM_PROVIDER
                     } else { self.selection.key_hints() }
