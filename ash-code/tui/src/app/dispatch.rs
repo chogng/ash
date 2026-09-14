@@ -274,11 +274,23 @@ where
                 .events
                 .push(crate::thread::Event::CommandCompleted { command, result }.into());
         }
-        TuiSlashCommandAction::Fork => {
+        TuiSlashCommandAction::Branch => {
             output.conversation_change = Some(
                 require_conversation_mut(conversation)?
-                    .fork_active_thread(client, &arguments)
+                    .branch_active_thread(client, &arguments)
                     .map_err(session_error)?,
+            );
+        }
+        TuiSlashCommandAction::Fork => {
+            let notice = require_conversation_mut(conversation)?
+                .fork_session(client, &arguments)
+                .map_err(session_error)?;
+            output.events.push(
+                crate::thread::Event::CommandCompleted {
+                    command: invocation.display_text(),
+                    result: notice,
+                }
+                .into(),
             );
         }
         TuiSlashCommandAction::Config

@@ -60,10 +60,12 @@ impl ThreadBinding {
     pub fn validate_source(&self, source: &Self) -> Result<(), AgentGraphStoreError> {
         if self.source_thread_id() != Some(&source.thread_id)
             || self.thread_id == source.thread_id
-            || self.session_id != source.session_id
+            || (self.session_id != source.session_id
+                && !(matches!(self.origin, ThreadOrigin::Fork { .. })
+                    && self.thread_id.as_str() == self.session_id.as_str()))
         {
             return Err(AgentGraphStoreError(
-                "Thread origin must refer to another branch in the same Session".into(),
+                "Thread origin must refer to another branch; only a fork may create a Session root".into(),
             ));
         }
         if self.spawn_parent().is_none() && self.agent_id != source.agent_id {

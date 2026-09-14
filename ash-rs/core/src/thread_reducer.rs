@@ -515,7 +515,11 @@ pub(crate) fn reduce_thread_event_with_prefix(
             })?;
             if source.thread_id != prefix.source_thread_id
                 || source.sequence != prefix.source_sequence
-                || source.session_id != snapshot.session_id
+                || (source.session_id != snapshot.session_id
+                    && !(snapshot.thread_id.as_str() == snapshot.session_id.as_str()
+                        && matches!(&snapshot.origin, ash_protocol::ThreadOrigin::Fork {
+                            parent_thread_id, parent_sequence
+                        } if parent_thread_id == &source.thread_id && *parent_sequence == source.sequence)))
             {
                 return Err(CoreError::Journal(
                     "resolved history prefix has an invalid source".into(),

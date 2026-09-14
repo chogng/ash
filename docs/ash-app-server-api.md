@@ -684,6 +684,9 @@ Session planned/attached saga。
 
 `session/request` 的 `request.type = forkThread` 比 create 多一个 `parentThreadId`。Server 固定父 Thread 的当前 sequence；新分支以 `HistoryPrefixBound` 引用截至该位置的原事件。它只追加自己的事件并独立计数。第一段未完成 Turn 保留已有内容并标为 Interrupted，未配对的工具调用得到中断结果，不重放旧工具；之后尚未执行的 Turn 不导入。父分支的后续提交不改变该前缀。
 
+`request.type = forkSession` 接受相同的 `parentThreadId` 和 `title`，将该 Thread 的当前历史复制到独立 Session 的根 Thread，返回目标 Session 和 Thread ID。保留 Agent 身份、配置和来源记录，目标 Session ID 等于新根 Thread ID；只有这种根 Thread 复制允许 Fork 来源跨 Session。命令重试返回同一副本。此请求不订阅目标 Thread，也不启动 Turn；调用方可用目标身份提交 `StartTurn` 在后台执行，并通过 `/resume` 打开，结果不自动写回来源会话。
+
+
 ### 消息恢复点
 
 `session/thread/checkpoints` 接受 `{ "sessionId": "...", "threadId": "..." }`，按可见消息顺序返回 `{ "checkpoints": [...] }`。每项含 `itemId`、`turnId`、原始 `sourceThreadId`、`sourceSequence`、`afterSequence` 和 `workspace`。继承的消息仍指向其原始位置；`workspace.type = unavailable` 时同时给出原因。

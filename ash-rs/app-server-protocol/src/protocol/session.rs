@@ -93,6 +93,11 @@ pub enum SessionRequest {
         boundary: ash_protocol::MessageBoundary,
         title: String,
     },
+    /// Copies the selected Thread history into an independent Session without subscribing to it.
+    ForkSession {
+        parent_thread_id: ThreadId,
+        title: String,
+    },
     ForkThread {
         parent_thread_id: ThreadId,
         title: String,

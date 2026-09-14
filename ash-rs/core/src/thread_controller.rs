@@ -195,6 +195,11 @@ pub struct CreateBranchRequest {
     pub title: String,
 }
 
+enum ForkDestination {
+    CurrentSession,
+    NewSession,
+}
+
 pub struct ForkThreadRequest {
     pub command_id: CommandId,
     pub source_thread_id: ThreadId,
@@ -758,8 +763,30 @@ impl ThreadController {
         binder: &dyn ThreadWorktreeBinder,
         request: ForkThreadRequest,
     ) -> Result<ThreadSnapshot, CoreError> {
+        self.fork_into(binder, request, ForkDestination::CurrentSession)
+    }
+
+    /// Copies the current history into the root Thread of an independent Session.
+    pub fn fork_session(
+        &self,
+        binder: &dyn ThreadWorktreeBinder,
+        request: ForkThreadRequest,
+    ) -> Result<ThreadSnapshot, CoreError> {
+        self.fork_into(binder, request, ForkDestination::NewSession)
+    }
+
+    fn fork_into(
+        &self,
+        binder: &dyn ThreadWorktreeBinder,
+        request: ForkThreadRequest,
+        destination: ForkDestination,
+    ) -> Result<ThreadSnapshot, CoreError> {
         validate_thread_title(&request.command_id, &request.title)?;
-        let thread_id = command_thread_id("fork", &request.command_id)?;
+        let prefix = match destination {
+            ForkDestination::CurrentSession => "fork",
+            ForkDestination::NewSession => "session-fork",
+        };
+        let thread_id = command_thread_id(prefix, &request.command_id)?;
         if let Some(binding) = self.store.read_thread_binding(&thread_id)? {
             if matches!(&binding.origin, ThreadOrigin::Fork { parent_thread_id, .. } if parent_thread_id == &request.source_thread_id)
             {
@@ -771,8 +798,13 @@ impl ThreadController {
             return Err(CoreError::CommandConflict);
         }
         let source = self.read_thread(&request.source_thread_id)?;
+        let session_id = match destination {
+            ForkDestination::CurrentSession => source.session_id.clone(),
+            ForkDestination::NewSession => SessionId::new(thread_id.as_str())
+                .map_err(|error| CoreError::InvalidInput(error.to_string()))?,
+        };
         binder.provision(&ThreadWorktreeBindingRequest {
-            session_id: source.session_id.clone(),
+            session_id: session_id.clone(),
             thread_id: thread_id.clone(),
             origin: ThreadOrigin::Fork {
                 parent_thread_id: source.thread_id.clone(),
@@ -780,7 +812,7 @@ impl ThreadController {
             },
         })?;
         self.create_forked_thread(CreateForkedThreadRequest {
-            session_id: source.session_id,
+            session_id,
             thread_id,
             title: request.title,
             source_thread_id: source.thread_id,
@@ -871,7 +903,7 @@ impl ThreadController {
         )
     }
 
-    /// Creates a child Thread containing the source history at one exact fork point.
+    /// Creates a branch or an independent Session root from one exact history point.
     ///
     /// The source prefix is replayed from durable events so Session saga recovery cannot import
     /// parent updates committed after the recorded fork sequence.
@@ -881,9 +913,11 @@ impl ThreadController {
     ) -> Result<ThreadSnapshot, CoreError> {
         let source =
             self.load_snapshot_at_sequence(&request.source_thread_id, request.source_sequence)?;
-        if source.session_id != request.session_id {
+        if source.session_id != request.session_id
+            && request.thread_id.as_str() != request.session_id.as_str()
+        {
             return Err(CoreError::InvalidInput(
-                "fork source belongs to another Session".into(),
+                "cross-Session history copy must create a Session root".into(),
             ));
         }
         let prefix = ash_history::HistoryPrefix {

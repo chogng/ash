@@ -888,3 +888,19 @@ fn issue_list_requires_an_explicit_supported_state() {
         assert!(serde_json::from_value::<IssueListParams>(value).is_err());
     }
 }
+
+#[test]
+fn fork_session_request_round_trips_source_and_title() {
+    let value = serde_json::json!({
+        "commandId": "copy-command",
+        "sessionId": "source-session",
+        "request": { "type": "forkSession", "parentThreadId": "source-thread", "title": "Copy" }
+    });
+    let request: crate::protocol::session::SessionRequestParams =
+        serde_json::from_value(value.clone()).unwrap();
+    assert!(matches!(
+        request.request,
+        crate::protocol::session::SessionRequest::ForkSession { .. }
+    ));
+    assert_eq!(serde_json::to_value(request).unwrap(), value);
+}

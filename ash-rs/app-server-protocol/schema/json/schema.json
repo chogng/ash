@@ -27581,6 +27581,27 @@
           "type": "object"
         },
         {
+          "description": "Copies the selected Thread history into an independent Session without subscribing to it.",
+          "properties": {
+            "parentThreadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "title": {
+              "type": "string"
+            },
+            "type": {
+              "const": "forkSession",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "parentThreadId",
+            "title"
+          ],
+          "type": "object"
+        },
+        {
           "properties": {
             "parentThreadId": {
               "$ref": "#/$defs/ThreadId"

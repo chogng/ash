@@ -206,7 +206,7 @@ impl ActiveConversation {
         })
     }
 
-    pub(crate) fn fork_active_thread<T>(
+    pub(crate) fn branch_active_thread<T>(
         &mut self,
         client: &mut AppServerClient<T>,
         arguments: &str,
@@ -215,7 +215,7 @@ impl ActiveConversation {
         T: JsonRpcTransport,
     {
         let title = if arguments.is_empty() {
-            format!("Fork of {}", self.session.title)
+            format!("Branch of {}", self.session.title)
         } else {
             arguments.to_owned()
         };
@@ -240,9 +240,66 @@ impl ActiveConversation {
         self.thread_id = result.thread_id;
         self.thread_sequence = snapshot.sequence;
         Ok(ConversationChange {
-            notice: format!("Forked to thread {}.", self.thread_id),
+            notice: format!("Switched to branch {}.", self.thread_id),
             transcript: ConversationTranscript::Replace,
         })
+    }
+
+    pub(crate) fn fork_session<T>(
+        &self,
+        client: &mut AppServerClient<T>,
+        prompt: &str,
+    ) -> Result<String, SessionsError>
+    where
+        T: JsonRpcTransport,
+    {
+        let result = client
+            .request_session(SessionRequestParams {
+                command_id: new_command_id("fork-session"),
+                session_id: self.session.session_id.clone(),
+                request: SessionRequest::ForkSession {
+                    parent_thread_id: self.thread_id.clone(),
+                    title: format!("Fork of {}", self.session.title),
+                },
+            })
+            .and_then(expect_thread_result)?;
+        let session_id = result.session.session_id;
+        if prompt.is_empty() {
+            return Ok(format!(
+                "Copied to session {session_id}. Waiting for input. Open with /resume {session_id}."
+            ));
+        }
+        let start = (|| {
+            let thread = client
+                .read_session_thread(SessionThreadReadParams {
+                    session_id: session_id.clone(),
+                    thread_id: result.thread_id.clone(),
+                    history: None,
+                })?
+                .thread;
+            crate::thread::submit_prompt(
+                client,
+                crate::thread::ThreadRequestScope::new(
+                    &session_id,
+                    &result.thread_id,
+                    thread.sequence,
+                ),
+                crate::thread::composer::ChatSubmission {
+                    display_text: prompt.into(),
+                    input: vec![crate::thread::composer::ChatInputItem::Text(prompt.into())],
+                },
+                ash_protocol::ApprovalMode::default(),
+            )?;
+            Ok::<_, ClientError>(())
+        })();
+        match start {
+            Ok(()) => Ok(format!(
+                "Started session {session_id} in the background. Results stay there. Open with /resume {session_id}."
+            )),
+            Err(error) => Err(SessionsError(format!(
+                "Copied to session {session_id}, but could not start the prompt: {error}. Open with /resume {session_id}."
+            ))),
+        }
     }
 
     pub(crate) fn rewind_active_thread<T>(

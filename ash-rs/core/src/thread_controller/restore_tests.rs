@@ -378,3 +378,72 @@ fn fork_continuations_keep_identical_model_input_prefixes() {
     );
     assert_ne!(parent.input[boundary + 1..], fork.input[boundary + 1..]);
 }
+
+#[test]
+fn fork_session_copies_history_and_keeps_future_turns_independent() {
+    let (store, threads, root) = fixture();
+    let first = turn(&threads, &root.thread_id, "original request");
+    threads
+        .complete_turn(&root.thread_id, &first, "original answer".into())
+        .unwrap();
+    let source = threads.read_thread(&root.thread_id).unwrap();
+    let request = || crate::ForkThreadRequest {
+        command_id: CommandId::new("independent").unwrap(),
+        source_thread_id: root.thread_id.clone(),
+        title: "Independent".into(),
+    };
+    let copied = threads
+        .fork_session(&NoThreadWorktreeBinder, request())
+        .unwrap();
+    assert_ne!(copied.session_id, source.session_id);
+    assert_eq!(copied.thread_id.as_str(), copied.session_id.as_str());
+    assert_eq!(copied.items, source.items);
+    assert_eq!(copied.agent_id, source.agent_id);
+    assert_eq!(copied.parent_thread_id, None);
+    assert_eq!(copied.forked_from_id.as_ref(), Some(&source.thread_id));
+    assert_eq!(
+        threads
+            .fork_session(&NoThreadWorktreeBinder, request())
+            .unwrap()
+            .thread_id,
+        copied.thread_id
+    );
+    let background = turn(&threads, &copied.thread_id, "background request");
+    threads
+        .complete_turn(&copied.thread_id, &background, "background answer".into())
+        .unwrap();
+    assert_eq!(
+        threads.read_thread(&root.thread_id).unwrap().items,
+        source.items
+    );
+    threads.delete_session_threads(&source.session_id).unwrap();
+    let restarted = ThreadController::with_store(store);
+    assert_eq!(
+        restarted
+            .list_session_threads(&copied.session_id)
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        restarted
+            .read_thread(&copied.thread_id)
+            .unwrap()
+            .turns
+            .len(),
+        2
+    );
+}
+
+#[test]
+fn fork_cannot_import_into_an_unrelated_session_branch() {
+    let (_, threads, root) = fixture();
+    let result = threads.create_forked_thread(crate::CreateForkedThreadRequest {
+        session_id: ash_protocol::SessionId::new("another-session").unwrap(),
+        thread_id: ThreadId::new("unrelated-branch").unwrap(),
+        title: "Invalid".into(),
+        source_thread_id: root.thread_id,
+        source_sequence: root.sequence,
+    });
+    assert!(matches!(result, Err(CoreError::InvalidInput(_))));
+}

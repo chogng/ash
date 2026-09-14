@@ -104,7 +104,7 @@ fn recovery_keeps_the_explicit_branch_after_another_branch_is_created() {
     let session_id = conversation.session_id().clone();
     let stale_thread_id = conversation.thread_id().clone();
     conversation
-        .fork_active_thread(&mut client, "surviving thread")
+        .branch_active_thread(&mut client, "surviving thread")
         .unwrap();
     assert_ne!(conversation.thread_id(), &stale_thread_id);
 

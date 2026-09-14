@@ -398,6 +398,28 @@ impl AppServer {
                     title,
                 )?,
             )),
+            SessionRequest::ForkSession {
+                parent_thread_id,
+                title,
+            } => {
+                self.read_session_thread_snapshot(&mutation.session_id, &parent_thread_id)?;
+                let forked = self
+                    .threads
+                    .fork_session(
+                        self.thread_worktree_binder.as_ref(),
+                        ForkThreadRequest {
+                            command_id: mutation.command_id,
+                            source_thread_id: parent_thread_id,
+                            title,
+                        },
+                    )
+                    .map_err(core_error)?;
+                self.updates.publish_session_changed(&forked.session_id);
+                result(&SessionRequestResult::Thread(SessionThreadResult {
+                    session: self.session_view(&forked.session_id)?,
+                    thread_id: forked.thread_id,
+                }))
+            }
             SessionRequest::ForkThread {
                 parent_thread_id,
                 title,

@@ -98,7 +98,8 @@ Theme picker，带 ID 时静默直接切换；Theme picker 不启用搜索，通
 | `/theme` | `optional` | `<theme>` | 切换主题，带参数直接设置，无参数打开选择器 |
 | `/resume` | `required` | `<session-id>` | 恢复指定会话 |
 | `/rewind` | `required` | `<checkpoint>` | 回退到指定检查点 |
-| `/fork` | `required` | `<message>` | 基于指定消息分叉新会话 |
+| `/branch` | `optional` | `<name>` | 从当前节点复制分支并立即切换；不启动模型 |
+| `/fork` | `optional` | `<prompt>` | 复制当前对话到独立 session，留在当前会话；有 prompt 时后台执行，无 prompt 时等待输入；结果不自动回传 |
 | `/new` | `optional` | `<prompt>` | 新建会话，可选初始提示语 |
 | `/compact` | `optional` | 无 | 压缩上下文，由服务端声明 |
 | `/clear` | `none` | 无 | 清空当前对话，不接受参数 |

@@ -24,6 +24,7 @@ fn builtins_follow_enum_presentation_order() {
             "home",
             "add-dir",
             "cd",
+            "branch",
             "fork",
             "help",
             "shortcuts",
@@ -38,11 +39,12 @@ fn builtins_follow_enum_presentation_order() {
             "pr",
         ]
     );
-    assert_eq!(definitions.len(), 26);
+    assert_eq!(definitions.len(), 27);
 }
 
 #[test]
 fn builtins_declare_argument_support() {
+    assert_eq!(TuiSlashCommandAction::Branch.argument_mode(), SlashCommandArgumentMode::Optional);
     assert_eq!(
         TuiSlashCommandAction::Cd.argument_mode(),
         SlashCommandArgumentMode::Optional
@@ -83,6 +85,7 @@ fn builtins_declare_argument_support() {
 
 #[test]
 fn builtins_declare_argument_hints() {
+    assert_eq!(TuiSlashCommandAction::Branch.argument_hint(), Some("<name>"));
     assert_eq!(TuiSlashCommandAction::Cd.argument_hint(), Some("<path>"));
     assert_eq!(TuiSlashCommandAction::AddDir.argument_hint(), Some("<path>"));
     assert_eq!(TuiSlashCommandAction::Export.argument_hint(), Some("<path>"));
@@ -93,7 +96,7 @@ fn builtins_declare_argument_hints() {
     assert_eq!(TuiSlashCommandAction::Theme.argument_hint(), Some("<theme>"));
     assert_eq!(TuiSlashCommandAction::Resume.argument_hint(), Some("<session-id>"));
     assert_eq!(TuiSlashCommandAction::Rewind.argument_hint(), Some("<checkpoint>"));
-    assert_eq!(TuiSlashCommandAction::Fork.argument_hint(), Some("<message>"));
+    assert_eq!(TuiSlashCommandAction::Fork.argument_hint(), Some("<prompt>"));
     assert_eq!(TuiSlashCommandAction::New.argument_hint(), Some("<prompt>"));
     assert_eq!(TuiSlashCommandAction::Status.argument_hint(), None);
     assert_eq!(TuiSlashCommandAction::Quit.argument_hint(), None);

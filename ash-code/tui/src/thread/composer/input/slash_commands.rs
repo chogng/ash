@@ -31,6 +31,7 @@ pub(crate) enum TuiSlashCommandAction {
     Home,
     AddDir,
     Cd,
+    Branch,
     Fork,
     Help,
     Shortcuts,
@@ -52,7 +53,7 @@ impl TuiSlashCommandAction {
     ) -> crate::thread::transcript::LocalCommandCompletion {
         use crate::thread::transcript::LocalCommandCompletion;
         match self {
-            Self::New | Self::Fork | Self::Archive => LocalCommandCompletion::Deferred,
+            Self::New | Self::Branch | Self::Fork | Self::Archive => LocalCommandCompletion::Deferred,
             Self::Theme | Self::AddDir | Self::Cd | Self::Resume | Self::Rewind
                 if !arguments.is_empty() =>
             {
@@ -86,7 +87,8 @@ impl TuiSlashCommandAction {
             Self::Home => "return to the home page",
             Self::AddDir => "add or manage a session directory",
             Self::Cd => "move this session to a new working directory",
-            Self::Fork => "fork the current chat",
+            Self::Branch => "copy this conversation and switch to the new branch",
+            Self::Fork => "copy to an independent session; optionally run a prompt in the background",
             Self::Help => "show shortcuts and commands",
             Self::Shortcuts => "browse and customize terminal shortcuts",
             Self::Export => "export this conversation as Markdown",
@@ -104,6 +106,7 @@ impl TuiSlashCommandAction {
             | Self::Rewind
             | Self::AddDir
             | Self::Cd
+            | Self::Branch
             | Self::Fork
             | Self::Export
             | Self::Model
@@ -120,7 +123,8 @@ impl TuiSlashCommandAction {
             Self::Theme => Some("<theme>"),
             Self::Resume => Some("<session-id>"),
             Self::Rewind => Some("<checkpoint>"),
-            Self::Fork => Some("<message>"),
+            Self::Branch => Some("<name>"),
+            Self::Fork => Some("<prompt>"),
             Self::New => Some("<prompt>"),
             _ => None,
         }
