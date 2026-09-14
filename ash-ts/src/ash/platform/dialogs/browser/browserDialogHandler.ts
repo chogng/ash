@@ -2,6 +2,7 @@ import { Button } from "../../../base/browser/ui/button/button.js";
 import { Dialog } from "../../../base/browser/ui/dialog/dialog.js";
 import { restoreFocus } from "../../../base/browser/focus.js";
 import { addDisposableListener, getActiveElement, isHTMLElement, h } from "../../../base/browser/dom.js";
+import { observeResize } from "../../../base/browser/observer.js";
 import { DisposableStore } from "../../../base/common/lifecycle.js";
 import {
 	type DialogRequest,
@@ -65,7 +66,20 @@ export class BrowserDialogHandler implements IDialogHandler {
 				dialog.close(DialogResult.Cancel);
 			}, { once: true }));
 
-			const result = await dialog.show();
+			const resultPromise = dialog.show();
+			if (content.detail) {
+				const detail = content.detail;
+				const updateFocusability = (): void => {
+					if (detail.scrollHeight > detail.clientHeight) {
+						detail.tabIndex = 0;
+					} else {
+						detail.removeAttribute("tabindex");
+					}
+				};
+				updateFocusability();
+				disposables.add(observeResize(detail, updateFocusability));
+			}
+			const result = await resultPromise;
 			if (result === DialogResult.Primary) return DialogResult.Primary;
 			if (result === DialogResult.Secondary) return DialogResult.Secondary;
 			return DialogResult.Cancel;
@@ -79,6 +93,7 @@ export class BrowserDialogHandler implements IDialogHandler {
 interface IDialogContent {
 	readonly element: HTMLDivElement;
 	readonly actions: HTMLElement;
+	readonly detail?: HTMLParagraphElement;
 }
 
 function createDialogContent(
@@ -93,8 +108,9 @@ function createDialogContent(
 	message.textContent = request.message;
 	element.append(message);
 
+	let detail: HTMLParagraphElement | undefined;
 	if (request.detail) {
-		const detail = h(ownerDocument, "p");
+		detail = h(ownerDocument, "p");
 		detail.className = "ash-dialog-detail";
 		detail.textContent = request.detail;
 		element.append(detail);
@@ -103,7 +119,7 @@ function createDialogContent(
 	const actions = h(ownerDocument, "footer");
 	actions.className = "ash-dialog-actions";
 	element.append(actions);
-	return { element, actions };
+	return { element, actions, detail };
 }
 
 function defaultTitle(request: DialogRequest): string {

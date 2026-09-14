@@ -9,6 +9,7 @@ export default defineConfig({
 		emptyOutDir: true,
 		rollupOptions: {
 			input: {
+				dialog: resolve(import.meta.dirname, "dialog.html"),
 				textModel: resolve(import.meta.dirname, "textModel.html"),
 				standalone: resolve(import.meta.dirname, 'standalone.html'),
 				gpuText: resolve(import.meta.dirname, "gpuText.html"),

@@ -48,7 +48,15 @@
   color: var(--ash-description-foreground);
   font-size: 12px;
   line-height: 1.5;
+  max-height: 50vh;
+  min-height: 0;
+  overflow-y: auto;
   white-space: pre-wrap;
+}
+
+.ash-dialog-detail:focus-visible {
+  outline: 1px solid var(--ash-focus-border);
+  outline-offset: -1px;
 }
 
 .ash-dialog-actions {
