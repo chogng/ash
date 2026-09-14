@@ -155,7 +155,7 @@ fn actual_tui_queues_restores_and_completes_messages() {
 }
 
 #[test]
-fn actual_tui_approves_and_declines_real_file_tool_calls() {
+fn actual_tui_sandbox_approves_and_declines_real_file_tool_calls() {
     let approve_fixture = Fixture::new();
     let approve_gate = Gate::new();
     let approve_server = ScenarioServer::start([
@@ -244,7 +244,7 @@ fn actual_tui_approves_and_declines_real_file_tool_calls() {
 }
 
 #[test]
-fn actual_tui_approval_modes_change_file_tool_authority() {
+fn actual_tui_sandbox_approval_modes_change_file_tool_authority() {
     let auto_fixture = Fixture::new();
     let auto_gate = Gate::new();
     let auto_review = serde_json::json!({

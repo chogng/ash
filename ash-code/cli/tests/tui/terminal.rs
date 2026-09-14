@@ -311,7 +311,7 @@ fn actual_tui_scrolls_the_transcript_with_the_mouse_wheel() {
 
 #[cfg(unix)]
 #[test]
-fn actual_tui_process_details_show_sandbox_enforcement() {
+fn actual_tui_sandbox_process_details_show_enforcement() {
     let fixture = Fixture::new();
     let outside_path = fixture
         .workspace()

@@ -175,9 +175,7 @@ jobs:
         timeout-minutes: 20
         run: >-
           just --set tui_profile ci-test test-tui -- --test-threads=4
-          --skip actual_tui_approves_and_declines_real_file_tool_calls
-          --skip actual_tui_process_details_show_sandbox_enforcement
-          --skip actual_tui_approval_modes_change_file_tool_authority
+          --skip actual_tui_sandbox_
 
       - name: Test remote TUI reconnect
         run: just test ash-cli interactive_remote_tui_preserves_home_draft_after_transport_loss --profile ci-test
@@ -223,7 +221,4 @@ jobs:
           tool: just@1.46.0
 
       - name: Test TUI sandbox scenarios
-        run: |
-          just --set tui_profile ci-test test-tui actual_tui_approves_and_declines_real_file_tool_calls
-          just --set tui_profile ci-test test-tui actual_tui_process_details_show_sandbox_enforcement
-          just --set tui_profile ci-test test-tui actual_tui_approval_modes_change_file_tool_authority
+        run: just --set tui_profile ci-test test-tui actual_tui_sandbox_ -- --test-threads=1
