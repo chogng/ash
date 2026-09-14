@@ -26,6 +26,7 @@ const MAX_NESTED_DEPTH: usize = 16;
 /// Rules found along the paths of files this Agent has actually read.
 #[derive(Default)]
 pub struct NestedInstructions {
+    files: Vec<PathBuf>,
     content: Option<String>,
     diagnostics: Vec<InstructionDiagnostic>,
 }
@@ -44,6 +45,7 @@ impl NestedInstructions {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct InstructionFrontmatter {
     name: Option<String>,
+    description: Option<String>,
     load: String,
     #[serde(default)]
     patterns: Vec<String>,
@@ -108,6 +110,66 @@ impl InstructionCatalog {
         Arc::clone(&self.snapshot)
     }
 
+    /// Reads a discovered rule or an in-scope nested AGENTS.md/ASH.md file.
+    pub fn read(&self, path: &Path) -> Option<String> {
+        if let Some(body) = self.snapshot.body_at(path, &self.root, &self.source_root) {
+            return Some(body.to_owned());
+        }
+        let relative = path.strip_prefix(&self.root).ok()?;
+        if !self.nested
+            || !relative
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| ALWAYS_ON_FILES.contains(&name))
+            || relative.components().count() > MAX_NESTED_DEPTH + 1
+            || relative.components().any(|part| {
+                matches!(
+                    part,
+                    std::path::Component::ParentDir | std::path::Component::CurDir
+                )
+            })
+        {
+            return None;
+        }
+        let root = fs::canonicalize(&self.root).ok()?;
+        if !fs::canonicalize(path.parent()?).ok()?.starts_with(root) {
+            return None;
+        }
+        load_always_on(&self.root, relative, &mut Vec::new()).map(|entry| entry.body)
+    }
+
+    /// Lists applicable rules that must be read before changing the target paths.
+    /// Both path sets are relative to this catalog's authorized directory.
+    pub fn required_reads(
+        &self,
+        targets: &[PathBuf],
+        known: &[PathBuf],
+        selected: &[PathBuf],
+    ) -> Vec<PathBuf> {
+        let mut required = BTreeSet::new();
+        for entry in self.snapshot.entries() {
+            if !matches!(
+                entry.load_policy(),
+                InstructionLoadPolicy::Contextual { .. }
+            ) {
+                continue;
+            }
+            let file = self.source_root.join(entry.relative_path());
+            let read = selected.contains(&file);
+            if entry.applies_to(targets) && !entry.applies_to(known) && !read {
+                required.insert(file);
+            }
+        }
+        let known_nested = self.nested_instructions(known);
+        let target_nested = self.nested_instructions(targets);
+        for path in target_nested.files {
+            if !known_nested.files.contains(&path) && !selected.contains(&self.root.join(&path)) {
+                required.insert(self.root.join(path));
+            }
+        }
+        required.into_iter().collect()
+    }
+
     /// Reads nested always-on files only below confirmed file paths in this directory.
     pub fn nested_instructions(&self, paths: &[PathBuf]) -> NestedInstructions {
         if !self.nested || paths.is_empty() {
@@ -169,11 +231,13 @@ impl InstructionCatalog {
                 "Instruction root cannot be resolved",
             ));
             return NestedInstructions {
+                files: Vec::new(),
                 content: None,
                 diagnostics,
             };
         };
         let mut loaded = Vec::new();
+        let mut files = Vec::new();
         for dir in dirs {
             let absolute_dir = self.root.join(&dir);
             if !fs::canonicalize(&absolute_dir)
@@ -188,12 +252,14 @@ impl InstructionCatalog {
             }
             for name in ALWAYS_ON_FILES {
                 if let Some(entry) = load_always_on(&self.root, &dir.join(name), &mut diagnostics) {
+                    files.push(entry.source.clone());
                     loaded.push(entry.render());
                 }
             }
         }
         let content = (!loaded.is_empty()).then(|| loaded.join("\n\n"));
         NestedInstructions {
+            files,
             content,
             diagnostics,
         }
@@ -213,6 +279,9 @@ fn scan(
         .into_iter()
         .filter_map(|name| load_always_on(root, Path::new(name), &mut diagnostics))
         .collect::<Vec<_>>();
+    let relative_source = source_root
+        .strip_prefix(root)
+        .expect("instruction source belongs to scope");
     let metadata = match fs::symlink_metadata(source_root) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == ErrorKind::NotFound => {
@@ -220,7 +289,7 @@ fn scan(
         }
         Err(_) => {
             diagnostics.push(diagnostic(
-                None,
+                Some(relative_source.to_path_buf()),
                 InstructionDiagnosticCode::SourceUnavailable,
                 "Instruction directory metadata is unavailable",
             ));
@@ -229,7 +298,7 @@ fn scan(
     };
     if metadata.file_type().is_symlink() || !metadata.is_dir() {
         diagnostics.push(diagnostic(
-            None,
+            Some(relative_source.to_path_buf()),
             InstructionDiagnosticCode::SourceUnavailable,
             "Instruction path must be a real directory",
         ));
@@ -242,7 +311,7 @@ fn scan(
             .collect::<Vec<_>>(),
         Err(_) => {
             diagnostics.push(diagnostic(
-                None,
+                Some(relative_source.to_path_buf()),
                 InstructionDiagnosticCode::SourceUnavailable,
                 "Instruction directory cannot be read",
             ));
@@ -252,7 +321,7 @@ fn scan(
     paths.sort();
     if paths.len() > MAX_ENTRIES {
         diagnostics.push(diagnostic(
-            None,
+            Some(relative_source.to_path_buf()),
             InstructionDiagnosticCode::EntryLimitExceeded,
             format!("only the first {MAX_ENTRIES} Instruction entries are inspected"),
         ));
@@ -260,7 +329,18 @@ fn scan(
     }
     let mut entries = paths
         .into_iter()
-        .filter_map(|path| load_entry(&source_root, &path, &mut diagnostics))
+        .filter_map(|path| {
+            let mut errors = Vec::new();
+            let entry = load_entry(source_root, &path, &mut errors);
+            diagnostics.extend(errors.into_iter().map(|error| {
+                InstructionDiagnostic::new(
+                    Some(relative_source.join(error.relative_path().unwrap_or(Path::new(".")))),
+                    error.code(),
+                    error.message(),
+                )
+            }));
+            entry
+        })
         .collect::<Vec<_>>();
     entries.sort_by(|left, right| left.name().cmp(right.name()));
     diagnostics.sort_by(|left, right| {
@@ -449,6 +529,18 @@ fn load_entry(
         ));
         return None;
     }
+    if frontmatter
+        .description
+        .as_ref()
+        .is_some_and(|description| description.trim().is_empty() || description.len() > 1024)
+    {
+        diagnostics.push(diagnostic(
+            Some(relative_path),
+            InstructionDiagnosticCode::InvalidFrontmatter,
+            "Instruction description must contain 1–1024 bytes",
+        ));
+        return None;
+    }
     let load_policy = match load_policy(frontmatter.load, frontmatter.patterns) {
         Ok(policy) => policy,
         Err(message) => {
@@ -473,6 +565,7 @@ fn load_entry(
         file_name.to_owned(),
         relative_path,
         load_policy,
+        frontmatter.description,
         body,
     ))
 }

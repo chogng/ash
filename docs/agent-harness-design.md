@@ -153,7 +153,7 @@ durable Thread history 和当前 Turn 输入之后，不进入可复用缓存前
 在每次模型调用前刷新，匹配内容先于目录级内容进入首条 user-role 指令消息；未选目录时 Global 仍生效。
 共享 `AGENTS.md` 由 Ash 直接读取，Ash 专属规则位于 `ASH.md`；`CLAUDE.md` 等专有文件不自动读取。
 两级 `AGENTS.md` 和 `ASH.md` 都是 always-on；同级先共享后专属，用户级先于工作区级，
-每个工作区片段带根目录与文件来源。`/init` 创建 `ASH.md`，`/create-instructions` 创建细分规则。
+每个工作区片段带根目录与文件来源。`/init` 创建 `ASH.md`，`$create-instructions` 内置 Skill 创建细分规则。
 
 ### 4.4 动态注入：append-only reminder
 

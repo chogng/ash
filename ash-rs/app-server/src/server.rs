@@ -141,6 +141,7 @@ mod search_operations;
 mod semantic_index_job;
 mod session_operations;
 mod skill_operations;
+mod instruction_operations;
 mod start_turn;
 mod symbol_index_operations;
 mod symbol_index_runtime;
@@ -2204,6 +2205,7 @@ impl AppServer {
             Some(ClientMethod::HookUpsert) => self.hook_upsert(&request.params),
             Some(ClientMethod::HookRemove) => self.hook_remove(&request.params),
             Some(ClientMethod::HookSetEnablement) => self.hook_set_enablement(&request.params),
+            Some(ClientMethod::InstructionList) => self.instruction_list(&request.params),
             Some(ClientMethod::SkillList) => self.skill_list(&request.params),
             Some(ClientMethod::SkillSetEnablement) => self.skill_set_enablement(&request.params),
             Some(ClientMethod::SkillResourceOpen) => {

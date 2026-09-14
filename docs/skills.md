@@ -65,7 +65,7 @@ Skill 内容是带来源的外部 instruction：
 frontmatter parse、metadata-only scan、完整 `SKILL.md` digest、isolated diagnostic 和 immutable
 catalog generation。内置内容由 `ash-rs/skills/assets/` 拥有，release staging 将其复制到
 `ash-resources/skills/`，`ash-install-context` 提供 directory candidate，host 再构造
-`SkillSourceRoot::built_in`。当前正式内置内容只有 `skill-creator`；新增 built-in 需要明确的
+`SkillSourceRoot::built_in`。当前正式内置内容包括 `skill-creator` 和 `create-instructions`；新增 built-in 需要明确的
 产品语义、触发边界和选择评测，不能把 catalog fixture 直接升级为产品能力。实现细节与 limits 由
 [`ash-rs/skills/README.md`](../ash-rs/skills/README.md) 维护。
 

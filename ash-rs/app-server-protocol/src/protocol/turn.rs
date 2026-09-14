@@ -1,10 +1,10 @@
 use crate::protocol::common::TurnId;
+use ash_protocol::ImageAttachmentRef;
+use ash_protocol::SkillRef;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use ts_rs::TS;
-use ash_protocol::ImageAttachmentRef;
-use ash_protocol::SkillRef;
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(
@@ -31,6 +31,10 @@ pub enum InputItem {
     /// Legacy transport form. New clients should use the attachment upload/import methods.
     Image {
         url: String,
+    },
+    /// Attaches one currently authorized instruction file to this Turn by its listed path.
+    Instruction {
+        path: String,
     },
     Skill {
         skill: SkillRef,

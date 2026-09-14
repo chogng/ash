@@ -5145,6 +5145,22 @@
         {
           "properties": {
             "method": {
+              "const": "instructions/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/InstructionListParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "skills/list",
               "type": "string"
             },
@@ -9218,6 +9234,22 @@
             },
             "result": {
               "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "instructions/list",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/InstructionListResult"
             }
           },
           "required": [
@@ -18035,6 +18067,23 @@
           "type": "object"
         },
         {
+          "description": "Attaches one currently authorized instruction file to this Turn by its listed path.",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "type": {
+              "const": "instruction",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "path"
+          ],
+          "type": "object"
+        },
+        {
           "properties": {
             "skill": {
               "$ref": "#/$defs/SkillRef"
@@ -18051,6 +18100,105 @@
           "type": "object"
         }
       ]
+    },
+    "InstructionDiagnosticDto": {
+      "properties": {
+        "message": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "message"
+      ],
+      "type": "object"
+    },
+    "InstructionDto": {
+      "description": "Metadata only; listing does not attach instruction bodies to a Turn.",
+      "properties": {
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "load": {
+          "$ref": "#/$defs/InstructionLoadDto"
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "patterns": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "scope": {
+          "$ref": "#/$defs/InstructionScopeDto"
+        }
+      },
+      "required": [
+        "path",
+        "scope",
+        "name",
+        "load",
+        "patterns"
+      ],
+      "type": "object"
+    },
+    "InstructionListParams": {
+      "properties": {
+        "sessionId": {
+          "$ref": "#/$defs/SessionId"
+        }
+      },
+      "required": [
+        "sessionId"
+      ],
+      "type": "object"
+    },
+    "InstructionListResult": {
+      "properties": {
+        "diagnostics": {
+          "items": {
+            "$ref": "#/$defs/InstructionDiagnosticDto"
+          },
+          "type": "array"
+        },
+        "instructions": {
+          "items": {
+            "$ref": "#/$defs/InstructionDto"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "instructions",
+        "diagnostics"
+      ],
+      "type": "object"
+    },
+    "InstructionLoadDto": {
+      "enum": [
+        "global",
+        "contextual",
+        "onDemand"
+      ],
+      "type": "string"
+    },
+    "InstructionScopeDto": {
+      "enum": [
+        "user",
+        "directory"
+      ],
+      "type": "string"
     },
     "InstructionText": {
       "description": "One immutable asset in an instruction composition; it cannot contain nested compositions.",

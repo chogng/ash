@@ -127,13 +127,37 @@ fn contextual_instructions_match_only_confirmed_files_in_their_scope() {
     .unwrap();
 
     let none = instruction_snapshot_with_paths(contributions.as_ref(), "session-match", &[]);
-    assert!(none.instructions().user_instructions().is_none());
-    assert!(none.instructions().directory_instructions().is_none());
+    assert!(
+        !none
+            .instructions()
+            .user_instructions()
+            .unwrap()
+            .contains("User Rust rule.")
+    );
+    assert!(
+        !none
+            .instructions()
+            .directory_instructions()
+            .unwrap()
+            .contains("Workspace Rust rule.")
+    );
 
     let outside =
         instruction_snapshot_with_paths(contributions.as_ref(), "session-match", &[outside]);
-    assert!(outside.instructions().user_instructions().is_none());
-    assert!(outside.instructions().directory_instructions().is_none());
+    assert!(
+        !outside
+            .instructions()
+            .user_instructions()
+            .unwrap()
+            .contains("User Rust rule.")
+    );
+    assert!(
+        !outside
+            .instructions()
+            .directory_instructions()
+            .unwrap()
+            .contains("Workspace Rust rule.")
+    );
 
     let matched =
         instruction_snapshot_with_paths(contributions.as_ref(), "session-match", &[selected]);
@@ -563,4 +587,141 @@ fn a_valid_authorization_for_another_directory_cannot_load_contributions() {
     )
     .unwrap();
     assert!(contributions.instruction_snapshot().entries().is_empty());
+}
+
+#[test]
+fn new_file_preflight_loads_rules_before_retry_and_refreshes_deleted_selection() {
+    let dir = TempDir::new().unwrap();
+    let rules = dir.path().join(".ash/instructions");
+    fs::create_dir_all(&rules).unwrap();
+    fs::write(rules.join("rust.md"), "---\nname: rust\ndescription: Rust conventions\nload: contextual\npatterns: ['**/*.rs']\n---\nRust body").unwrap();
+    write_instruction(dir.path(), "review", "on-demand", "Review body");
+    let contributions = customizations(dir.path());
+    let session_id = SessionId::new("session").unwrap();
+    let thread_id = ThreadId::new("thread").unwrap();
+    let turn_id = TurnId::new("turn").unwrap();
+    let mut request = HarnessContextRequest {
+        session_id: &session_id,
+        thread_id: &thread_id,
+        turn_id: &turn_id,
+        read_paths: &[],
+    };
+    let call = ash_protocol::ToolCall {
+        id: ash_protocol::ToolCallId::new("write").unwrap(),
+        name: ash_protocol::ToolName::new("write_file").unwrap(),
+        arguments: serde_json::json!({"path": dir.path().join("new/deep.rs"), "content": "fn main() {}"}),
+    };
+    let error = contributions
+        .validate_tool_context(&request, &call)
+        .unwrap_err();
+    assert!(error.to_string().contains("rust.md"));
+    assert!(!dir.path().join("new").exists());
+    let paths = [rules.join("rust.md"), rules.join("review.md")];
+    request.read_paths = &paths;
+    let snapshot = contributions.snapshot(&request).unwrap();
+    let content = snapshot.instructions().directory_instructions().unwrap();
+    assert!(content.contains("Rust body"));
+    assert!(content.contains("Review body"));
+    contributions
+        .validate_tool_context(&request, &call)
+        .unwrap();
+    fs::remove_file(rules.join("review.md")).unwrap();
+    assert!(
+        !contributions
+            .snapshot(&request)
+            .unwrap()
+            .instructions()
+            .directory_instructions()
+            .unwrap()
+            .contains("Review body")
+    );
+}
+
+#[test]
+fn patch_preflight_checks_every_target_without_leaking_outside_rules() {
+    let dir = TempDir::new().unwrap();
+    let outside = TempDir::new().unwrap();
+    let rules = dir.path().join(".ash/instructions");
+    fs::create_dir_all(&rules).unwrap();
+    fs::write(
+        rules.join("rust.md"),
+        "---\nload: contextual\npatterns: ['**/*.rs']\n---\nRust body",
+    )
+    .unwrap();
+    let contributions = customizations(dir.path());
+    let session_id = SessionId::new("session").unwrap();
+    let thread_id = ThreadId::new("thread").unwrap();
+    let turn_id = TurnId::new("turn").unwrap();
+    let request = HarnessContextRequest {
+        session_id: &session_id,
+        thread_id: &thread_id,
+        turn_id: &turn_id,
+        read_paths: &[],
+    };
+    let call = ash_protocol::ToolCall {
+        id: ash_protocol::ToolCallId::new("patch").unwrap(),
+        name: ash_protocol::ToolName::new("apply_patch").unwrap(),
+        arguments: serde_json::json!({"patch": "*** Begin Patch\n*** Add File: readme.txt\n+hello\n*** Add File: src/new.rs\n+fn main() {}\n*** End Patch"}),
+    };
+    assert!(
+        contributions
+            .validate_tool_context(&request, &call)
+            .unwrap_err()
+            .to_string()
+            .contains("rust.md")
+    );
+    assert!(matching_paths(dir.path(), &[outside.path().join("new.rs")]).is_empty());
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(outside.path(), dir.path().join("escape")).unwrap();
+        assert!(matching_paths(dir.path(), &[dir.path().join("escape/new.rs")]).is_empty());
+    }
+}
+
+#[test]
+fn instruction_reader_exposes_only_catalog_files_and_rechecks_revocation() {
+    let dir = TempDir::new().unwrap();
+    let home = TempDir::new().unwrap();
+    fs::create_dir(home.path().join("instructions")).unwrap();
+    fs::write(
+        home.path().join("instructions/review.md"),
+        "---\nload: on-demand\n---\nPersonal review rule",
+    )
+    .unwrap();
+    fs::write(home.path().join("secret.txt"), "Private").unwrap();
+    write_instruction(dir.path(), "project", "global", "Project rule");
+    let grant = Grant::for_environment(
+        Dir::open_local(dir.path()).unwrap(),
+        GrantSource::ExplicitUser,
+        ash_file_access::Permissions::new([ash_file_access::Permission::LoadInstructions]),
+    );
+    let contributions = DirContributions::discover(
+        dir.path(),
+        Arc::new(crate::dir_grants::DirGrants::default()),
+        Some(
+            grant
+                .authorize(ash_file_access::Permission::LoadInstructions)
+                .unwrap(),
+        ),
+        Some(Arc::new(AshHome::new(
+            AbsolutePathBuf::from_absolute(home.path()).unwrap(),
+        ))),
+    )
+    .unwrap();
+    let session = SessionId::new("reader").unwrap();
+    assert_eq!(
+        contributions
+            .read_instruction(&session, &home.path().join("instructions/review.md"))
+            .as_deref(),
+        Some("Personal review rule")
+    );
+    assert!(
+        contributions
+            .read_instruction(&session, &home.path().join("secret.txt"))
+            .is_none()
+    );
+    let project = dir.path().join(".ash/instructions/project.md");
+    assert!(contributions.read_instruction(&session, &project).is_some());
+    grant.revoke();
+    assert!(contributions.read_instruction(&session, &project).is_none());
 }

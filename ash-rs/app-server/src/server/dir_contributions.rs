@@ -134,6 +134,75 @@ impl DirContributions {
         snapshots
     }
 
+    pub(super) fn read_instruction(&self, session: &SessionId, path: &Path) -> Option<String> {
+        if let Some(home) = &self.home
+            && let Some(body) =
+                home.instructions()
+                    .body_at(path, home.root(), &home.root().join("instructions"))
+        {
+            return Some(body.to_owned());
+        }
+        if let Some(catalog) = self
+            .env_dir
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_mut()
+            .filter(|catalog| catalog.authorization.is_active())
+        {
+            catalog.instructions.refresh();
+            if let Some(body) = catalog.instructions.read(path) {
+                return Some(body);
+            }
+        }
+        if let Some(catalogs) = self
+            .dirs
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get_mut(session)
+        {
+            for catalog in catalogs
+                .values_mut()
+                .filter(|catalog| catalog.authorization.is_active())
+            {
+                catalog.instructions.refresh();
+                if let Some(body) = catalog.instructions.read(path) {
+                    return Some(body);
+                }
+            }
+        }
+        None
+    }
+
+    pub(super) fn directory_instruction_sources(
+        &self,
+        session_id: &SessionId,
+    ) -> Vec<(PathBuf, Arc<InstructionCatalogSnapshot>)> {
+        let mut sources = BTreeMap::new();
+        if let Some(catalog) = self
+            .env_dir
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_mut()
+            .filter(|catalog| catalog.authorization.is_active())
+        {
+            sources.insert(self.dir_root.clone(), catalog.instructions.refresh());
+        }
+        if let Some(catalogs) = self
+            .dirs
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get_mut(session_id)
+        {
+            for (root, catalog) in catalogs
+                .iter_mut()
+                .filter(|(_, catalog)| catalog.authorization.is_active())
+            {
+                sources.insert(root.clone(), catalog.instructions.refresh());
+            }
+        }
+        sources.into_iter().collect()
+    }
+
     pub(super) fn instruction_snapshots(&self) -> Vec<Arc<InstructionCatalogSnapshot>> {
         let mut snapshots = Vec::new();
         if let Some(home) = &self.home {
@@ -331,11 +400,105 @@ impl DirContributions {
 }
 
 impl HarnessContextProvider for DirContributions {
+    fn validate_tool_context(
+        &self,
+        request: &HarnessContextRequest<'_>,
+        call: &ash_protocol::ToolCall,
+    ) -> Result<(), CoreError> {
+        let targets = match call.name.as_str() {
+            "write_file" | "edit" => vec![PathBuf::from(
+                call.arguments
+                    .get("path")
+                    .and_then(serde_json::Value::as_str)
+                    .ok_or_else(|| {
+                        CoreError::InvalidInput("file mutation requires a path".into())
+                    })?,
+            )],
+            "apply_patch" => ash_apply_patch::changed_paths(
+                call.arguments
+                    .get("patch")
+                    .and_then(serde_json::Value::as_str)
+                    .ok_or_else(|| {
+                        CoreError::InvalidInput("apply_patch requires patch text".into())
+                    })?,
+                ash_apply_patch::ApplyPatchLimits::default(),
+            )
+            .map_err(CoreError::InvalidInput)?,
+            _ => return Ok(()),
+        };
+        let targets = targets
+            .into_iter()
+            .map(|path| {
+                if path.is_absolute() {
+                    path
+                } else {
+                    self.dir_root.join(path)
+                }
+            })
+            .collect::<Vec<_>>();
+        let mut required = BTreeSet::new();
+        let mut user_targets = Vec::new();
+        let mut user_known = Vec::new();
+        let mut inspect = |root: &Path, catalog: &mut DirContributionCatalog| {
+            if !catalog.authorization.is_active() {
+                return;
+            }
+            catalog.instructions.refresh();
+            let targets = matching_paths(root, &targets);
+            let known = matching_paths(root, request.read_paths);
+            required.extend(catalog.instructions.required_reads(
+                &targets,
+                &known,
+                &known.iter().map(|path| root.join(path)).collect::<Vec<_>>(),
+            ));
+            user_targets.extend(targets);
+            user_known.extend(known);
+        };
+        if let Some(catalog) = self
+            .env_dir
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_mut()
+        {
+            inspect(&self.dir_root, catalog);
+        }
+        if let Some(catalogs) = self
+            .dirs
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get_mut(request.session_id)
+        {
+            for (root, catalog) in catalogs {
+                inspect(root, catalog);
+            }
+        }
+        if let Some(home) = &self.home {
+            let catalog = InstructionCatalog::discover_user(home.root());
+            let selected = matching_paths(home.root(), request.read_paths)
+                .iter()
+                .map(|path| home.root().join(path))
+                .collect::<Vec<_>>();
+            required.extend(catalog.required_reads(&user_targets, &user_known, &selected));
+        }
+        if required.is_empty() {
+            return Ok(());
+        }
+        Err(CoreError::InvalidInput(format!(
+            "No files were changed. Use read_instruction to read these applicable instruction files, reconsider the proposed changes, then submit a new tool call:\n{}",
+            required
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect::<Vec<_>>()
+                .join("\n")
+        )))
+    }
+
     fn snapshot(
         &self,
         request: &HarnessContextRequest<'_>,
     ) -> Result<Arc<HarnessContext>, CoreError> {
         let base_paths = matching_paths(&self.dir_root, request.read_paths);
+        self.refresh_instructions();
         let primary = self.instruction_snapshot();
         let nested = self
             .env_dir
@@ -351,8 +514,17 @@ impl HarnessContextProvider for DirContributions {
             .cloned()
             .map(|diagnostic| (self.dir_root.clone(), diagnostic))
             .collect::<Vec<_>>();
-        let base_content =
-            combine_content(primary.automatic_content(&base_paths), nested.content());
+        let base_content = combine_content(
+            primary.context_content(
+                &base_paths,
+                &base_paths
+                    .iter()
+                    .map(|path| self.dir_root.join(path))
+                    .collect::<Vec<_>>(),
+                &self.dir_root.join(".ash/instructions"),
+            ),
+            nested.content(),
+        );
         let base_instructions = Arc::new(render_harness_instructions(
             base_content.clone(),
             &self.dir_root,
@@ -379,17 +551,18 @@ impl HarnessContextProvider for DirContributions {
             .snapshot(roots)
             .map_err(|error| CoreError::Context(error.to_string()))?;
         let (dir_content, user_paths) = {
-            let dirs = self
+            let mut dirs = self
                 .dirs
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             let mut user_paths = base_paths.clone();
             let content = dirs
-                .get(request.session_id)
+                .get_mut(request.session_id)
                 .into_iter()
-                .flat_map(BTreeMap::iter)
+                .flat_map(BTreeMap::iter_mut)
                 .filter(|(_, catalog)| catalog.authorization.ensure_active().is_ok())
                 .filter_map(|(root, catalog)| {
+                    catalog.instructions.refresh();
                     let paths = matching_paths(root, request.read_paths);
                     user_paths.extend(paths.iter().cloned());
                     let nested = catalog.instructions.nested_instructions(&paths);
@@ -401,7 +574,11 @@ impl HarnessContextProvider for DirContributions {
                             .map(|diagnostic| (root.clone(), diagnostic)),
                     );
                     combine_content(
-                        catalog.instructions.snapshot().automatic_content(&paths),
+                        catalog.instructions.snapshot().context_content(
+                            &paths,
+                            &paths.iter().map(|path| root.join(path)).collect::<Vec<_>>(),
+                            &root.join(".ash/instructions"),
+                        ),
                         nested.content(),
                     )
                     .map(|content| (root.clone(), content))
@@ -420,7 +597,12 @@ impl HarnessContextProvider for DirContributions {
             ))
         };
         let instructions = match &self.home {
-            Some(home) => add_home_instructions(instructions.as_ref().clone(), home, &user_paths),
+            Some(home) => add_home_instructions(
+                instructions.as_ref().clone(),
+                home,
+                &user_paths,
+                request.read_paths,
+            ),
             None => instructions.as_ref().clone(),
         };
         Ok(Arc::new(
@@ -562,7 +744,23 @@ fn matching_paths(root: &Path, read_paths: &[PathBuf]) -> Vec<PathBuf> {
             } else {
                 root.join(path)
             };
-            let canonical = dunce::canonicalize(selected).ok()?;
+            if selected
+                .components()
+                .any(|part| matches!(part, std::path::Component::ParentDir))
+            {
+                return None;
+            }
+            // Resolve the existing ancestor, including symlinks, before accepting a new file.
+            let mut ancestor = selected.as_path();
+            let mut suffix = Vec::new();
+            while !ancestor.exists() {
+                suffix.push(ancestor.file_name()?.to_owned());
+                ancestor = ancestor.parent()?;
+            }
+            let mut canonical = dunce::canonicalize(ancestor).ok()?;
+            for part in suffix.into_iter().rev() {
+                canonical.push(part);
+            }
             canonical.strip_prefix(&root).ok().map(Path::to_path_buf)
         })
         .collect()

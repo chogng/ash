@@ -2,11 +2,6 @@ use crate::ContextBudget;
 use crate::ContextTokenMeasurementCapability;
 use crate::ContextTokenMeasurementOutcome;
 use crate::CoreError;
-use sha2::Digest;
-use sha2::Sha256;
-use std::collections::BTreeSet;
-use std::path::PathBuf;
-use std::sync::Arc;
 use ash_action_policy::ActionReviewRequest;
 use ash_action_policy::AutoReviewGrant;
 use ash_action_policy::DeterministicPolicyGrant;
@@ -35,6 +30,11 @@ use ash_protocol::ToolExecutionOutput;
 use ash_protocol::ToolOutputStream;
 use ash_protocol::ToolSourceProvenance;
 use ash_sandboxing::SandboxPolicy;
+use sha2::Digest;
+use sha2::Sha256;
+use std::collections::BTreeSet;
+use std::path::PathBuf;
+use std::sync::Arc;
 
 /// Pixel and patch ceilings applied to one ephemeral provider-bound image clone.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -716,14 +716,32 @@ pub struct ToolExecutionFacts {
     activated_skills: Vec<ash_protocol::FrozenSkillActivation>,
 }
 
-/// Returns paths confirmed by successful `read_file` calls in this Turn.
+/// Returns paths confirmed by successful `read_file` or `read_instruction` calls in this Turn.
 pub(crate) fn read_paths_for_turn(
     snapshot: &crate::ThreadSnapshot,
     turn_id: &ash_protocol::TurnId,
 ) -> Vec<PathBuf> {
-    successful_read_paths(snapshot.items.iter().filter(|item| item.turn_id() == turn_id))
-        .into_iter()
-        .collect()
+    successful_read_paths(
+        snapshot
+            .items
+            .iter()
+            .filter(|item| item.turn_id() == turn_id),
+    )
+    .into_iter()
+    .collect()
+}
+
+/// Restricts prerequisites to reads visible before the model submitted this call.
+/// For Code Mode callers the boundary is the parent cell, not a nested call inside it.
+pub(crate) fn read_paths_before_call(
+    snapshot: &crate::ThreadSnapshot,
+    turn_id: &ash_protocol::TurnId,
+    call_id: &ash_protocol::ToolCallId,
+) -> Vec<PathBuf> {
+    successful_read_paths(snapshot.items.iter()
+        .take_while(|item| !matches!(item, ash_protocol::ThreadItem::ToolCall { tool_call_id, .. } if tool_call_id == call_id))
+        .filter(|item| item.turn_id() == turn_id))
+        .into_iter().collect()
 }
 
 fn successful_read_paths<'a>(
@@ -739,9 +757,8 @@ fn successful_read_paths<'a>(
                 arguments_json,
                 ..
             } => {
-                if name.as_str() == "read_file"
-                    && let Ok(arguments) =
-                        serde_json::from_str::<serde_json::Value>(arguments_json)
+                if matches!(name.as_str(), "read_file" | "read_instruction")
+                    && let Ok(arguments) = serde_json::from_str::<serde_json::Value>(arguments_json)
                     && let Some(path) = arguments.get("path").and_then(serde_json::Value::as_str)
                 {
                     calls.insert(tool_call_id.clone(), PathBuf::from(path));
@@ -775,12 +792,10 @@ impl ToolExecutionFacts {
             .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
         let mut host_tools = available_tools.into_iter().collect::<BTreeSet<_>>();
         if turn.tool_mode.requires_code_mode() {
-            host_tools.insert(
-                ash_protocol::ToolName::new("exec").expect("Code Mode Tool name is valid"),
-            );
-            host_tools.insert(
-                ash_protocol::ToolName::new("wait").expect("Code Mode Tool name is valid"),
-            );
+            host_tools
+                .insert(ash_protocol::ToolName::new("exec").expect("Code Mode Tool name is valid"));
+            host_tools
+                .insert(ash_protocol::ToolName::new("wait").expect("Code Mode Tool name is valid"));
         }
         let (available_tools, delegation_tools) = match snapshot.agent_configuration() {
             Some(seed) => {
@@ -819,7 +834,10 @@ impl ToolExecutionFacts {
                 policy_revision: turn.policy_revision.clone(),
                 tool_profile: turn.tool_profile.clone(),
             }),
-            read_paths: successful_read_paths(snapshot.items.iter()),
+            // Instruction readers return the rule body, not the entire editable source file.
+            read_paths: successful_read_paths(snapshot.items.iter().filter(|item| !matches!(
+                item, ash_protocol::ThreadItem::ToolCall { name, .. } if name.as_str() == "read_instruction"
+            ))),
             available_tools,
             delegation_tools,
             activated_skills: turn.activated_skills.clone(),

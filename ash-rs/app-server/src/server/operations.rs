@@ -95,20 +95,6 @@ pub(super) enum TurnInstructionSelection {
     Product(ash_protocol::TurnInstructions),
 }
 
-fn create_instruction_prompt() -> ash_protocol::TurnInstructions {
-    ash_protocol::TurnInstructions::new(
-        "app-server",
-        "instructions/create",
-        "instructions-create-v1",
-        format!(
-            "{}\n\n<file-based-template>\n{}\n</file-based-template>",
-            include_str!("../../templates/instructions/create.md").trim(),
-            ash_instructions::STARTER_TEMPLATE.trim(),
-        ),
-    )
-    .expect("built-in instruction creation prompt is valid")
-}
-
 fn init_prompt() -> ash_protocol::TurnInstructions {
     ash_protocol::TurnInstructions::new(
         "app-server",
@@ -1046,9 +1032,6 @@ impl AppServer {
         input: &mut Vec<UserInput>,
     ) -> TurnInstructionSelection {
         let selection = match product_command(input) {
-            Some("/create-instructions") => {
-                TurnInstructionSelection::Product(create_instruction_prompt())
-            }
             Some("/init") => TurnInstructionSelection::Product(init_prompt()),
             _ => return TurnInstructionSelection::Agent,
         };
@@ -2021,7 +2004,7 @@ fn thread_mutation(mutation: SessionMutation, expected_sequence: u64) -> ThreadM
 impl AppServer {
     pub(super) fn normalize_input(
         &self,
-        _session_id: &ash_protocol::SessionId,
+        session_id: &ash_protocol::SessionId,
         input: Vec<InputItem>,
     ) -> Result<Vec<UserInput>, RpcError> {
         input
@@ -2045,6 +2028,7 @@ impl AppServer {
                         UserInput::ImageAttachment { attachment }
                     }
                     InputItem::Image { url } => UserInput::Image { url },
+                    InputItem::Instruction { path } => self.attach_instruction(session_id, &path)?,
                     InputItem::Skill { skill } => UserInput::Skill { skill },
                 })
             })

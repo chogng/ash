@@ -2799,13 +2799,22 @@ fn explicit_skill_flows_through_core_extension_lifecycle() {
 }
 
 #[test]
-fn create_instructions_command_freezes_product_prompt_without_skill_activation() {
+fn create_instructions_skill_uses_normal_activation() {
     let home_root = tempfile::tempdir().unwrap();
     let home = Arc::new(ash_home::AshHome::new(
         ash_utils_absolute_path::AbsolutePathBuf::from_absolute(home_root.path()).unwrap(),
     ));
     let model = Arc::new(RecordingModel::default());
-    let server = server_with_model(model.clone()).with_home(home);
+    let server = server_with_model(model.clone())
+        .with_home(home)
+        .with_skill_runtime(
+            ash_skills_extension::BuiltInSkillSource::Root(
+                std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../skills/assets"),
+            ),
+            Arc::new(EmptySkillConfig),
+            None,
+        )
+        .unwrap();
     let mut connection = server.connection();
     let initialized = call(
         &server,
@@ -2815,14 +2824,23 @@ fn create_instructions_command_freezes_product_prompt_without_skill_activation()
             "params":{"clientInfo":{"name":"test","version":"1"},"capabilities":{}}
         }),
     );
-    assert!(initialized["result"]["slashCommands"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .any(|command| command["name"] == "create-instructions"));
+    assert!(
+        !initialized["result"]["slashCommands"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|command| command["name"] == "create-instructions")
+    );
     let session = create_session(&server, &mut connection, 2, "instructions-session");
     let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
-    let thread = create_thread(&server, &mut connection, 3, "instructions-thread", session_id, 1);
+    let thread = create_thread(
+        &server,
+        &mut connection,
+        3,
+        "instructions-thread",
+        session_id,
+        1,
+    );
     let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
 
     let started = call(
@@ -2834,36 +2852,32 @@ fn create_instructions_command_freezes_product_prompt_without_skill_activation()
                 "commandId":"create-instructions-turn","sessionId":session_id,
                 "request":{
                     "type":"startTurn","expectedSequence":1,"threadId":thread_id,
-                    "input":[{"type":"text","text":"/create-instructions workspace Rust rules"}]
+                    "input":[{"type":"skill","skill":{"id":{"source":"builtin:skill-source:ash-release","name":"create-instructions"},"version":{"type":"followLatest"}}},{"type":"text","text":"Create workspace Rust rules"}]
                 }
             }
         }),
     );
 
-    assert!(started["result"]["value"]["turnId"].is_string(), "{started}");
+    assert!(
+        started["result"]["value"]["turnId"].is_string(),
+        "{started}"
+    );
     wait_for_latest_turn(&server, thread_id, TurnStatus::Completed);
     let snapshot = server
         .threads()
         .read_thread(&ash_protocol::ThreadId::new(thread_id).unwrap())
         .unwrap();
-    let instructions = snapshot.turns[0].instructions.as_ref().unwrap();
-    assert_eq!(instructions.owner(), "app-server");
-    assert_eq!(instructions.id(), "instructions/create");
-    assert!(snapshot.turns[0].activated_skills.is_empty());
+    assert_eq!(snapshot.turns[0].activated_skills.len(), 1);
+    assert_eq!(
+        snapshot.turns[0].activated_skills[0].id.name.as_str(),
+        "create-instructions"
+    );
     let requests = model.requests.lock().unwrap();
-    assert!(requests[0]
-        .instructions
-        .as_deref()
-        .unwrap()
-        .contains("Create or update an Ash Instruction file, not a Skill"));
-    assert!(requests[0].input.iter().any(|item| {
-        let InputItem::Message(message) = item else { return false };
-        message.content.iter().any(|part| matches!(part, ContentPart::Text(text) if text.contains(&home_root.path().display().to_string()) && text.contains("context_attachment")))
-    }));
-    assert!(requests[0].input.iter().any(|item| {
-        let InputItem::Message(message) = item else { return false };
-        message.content.iter().any(|part| matches!(part, ContentPart::Text(text) if text.contains("/create-instructions workspace Rust rules")))
-    }));
+    assert!(requests[0].input.iter().any(|item| matches!(item, InputItem::Message(message) if message.content.iter().any(|part| matches!(part, ContentPart::Text(text) if text.contains("# Create instructions"))))));
+    assert_ne!(
+        snapshot.turns[0].instructions.as_ref().unwrap().id(),
+        "instructions/create"
+    );
 }
 
 #[test]
@@ -2896,7 +2910,10 @@ fn init_command_freezes_ash_md_guidance_without_skill_activation() {
         }),
     );
 
-    assert!(started["result"]["value"]["turnId"].is_string(), "{started}");
+    assert!(
+        started["result"]["value"]["turnId"].is_string(),
+        "{started}"
+    );
     wait_for_latest_turn(&server, thread_id, TurnStatus::Completed);
     let snapshot = server
         .threads()
@@ -2906,11 +2923,13 @@ fn init_command_freezes_ash_md_guidance_without_skill_activation() {
     assert_eq!(instructions.id(), "instructions/init");
     assert!(snapshot.turns[0].activated_skills.is_empty());
     let requests = model.requests.lock().unwrap();
-    assert!(requests[0]
-        .instructions
-        .as_deref()
-        .unwrap()
-        .contains("Create or update `ASH.md`"));
+    assert!(
+        requests[0]
+            .instructions
+            .as_deref()
+            .unwrap()
+            .contains("Create or update `ASH.md`")
+    );
 }
 
 #[test]
@@ -5945,4 +5964,87 @@ fn filesystem_rpc_enforces_file_permissions_and_revocation() {
         );
         assert!(response.get("error").is_some());
     }
+}
+
+#[test]
+fn instruction_list_and_explicit_attachment_use_current_authorized_files() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir(root.path().join("instructions")).unwrap();
+    let path = root.path().join("instructions/review.md");
+    std::fs::write(&path, "---\nname: review\ndescription: API review\nload: on-demand\n---\nCheck public API compatibility.").unwrap();
+    std::fs::write(
+        root.path().join("instructions/bad.md"),
+        "---\nload: unknown\n---\nBad rule",
+    )
+    .unwrap();
+    let model = Arc::new(RecordingModel::default());
+    let server = server_with_model(model.clone()).with_home(Arc::new(ash_home::AshHome::new(
+        ash_utils_absolute_path::AbsolutePathBuf::from_absolute(root.path()).unwrap(),
+    )));
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let session = create_session(&server, &mut connection, 2, "instruction-list-session");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let listed = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"instructions/list","params":{"sessionId":session_id}}),
+    );
+    assert_eq!(
+        listed["result"]["instructions"][0]["path"],
+        path.display().to_string()
+    );
+    assert_eq!(listed["result"]["instructions"][0]["load"], "onDemand");
+    assert_eq!(listed["result"]["diagnostics"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        listed["result"]["diagnostics"][0]["path"],
+        root.path()
+            .join("instructions/bad.md")
+            .display()
+            .to_string()
+    );
+    assert!(
+        !listed
+            .to_string()
+            .contains("Check public API compatibility.")
+    );
+    let thread = create_thread(
+        &server,
+        &mut connection,
+        4,
+        "instruction-list-thread",
+        session_id,
+        1,
+    );
+    let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
+    let started = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":5,"method":"session/request","params":{"commandId":"attach-instruction","sessionId":session_id,"request":{"type":"startTurn","expectedSequence":1,"threadId":thread_id,"input":[{"type":"instruction","path":path},{"type":"text","text":"Review this API"}]}}}),
+    );
+    assert!(
+        started["result"]["value"]["turnId"].is_string(),
+        "{started}"
+    );
+    wait_for_latest_turn(&server, thread_id, TurnStatus::Completed);
+    assert!(model.requests.lock().unwrap()[0].input.iter().any(|item| matches!(item, InputItem::Message(message) if message.content.iter().any(|part| matches!(part, ContentPart::Text(text) if text.contains("Check public API compatibility."))))));
+    let rejected = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":6,"method":"session/request",
+            "params":{"commandId":"outside-instruction","sessionId":session_id,"request":{"type":"startTurn","expectedSequence":1,"threadId":thread_id,"input":[{"type":"instruction","path":root.path().join("private.md")},{"type":"text","text":"Review"}]}}
+        }),
+    );
+    assert_eq!(rejected["error"]["code"], -32602, "{rejected}");
+    std::fs::remove_file(&path).unwrap();
+    let rejected = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":7,"method":"session/request",
+            "params":{"commandId":"deleted-instruction","sessionId":session_id,"request":{"type":"startTurn","expectedSequence":1,"threadId":thread_id,"input":[{"type":"instruction","path":path},{"type":"text","text":"Review"}]}}
+        }),
+    );
+    assert_eq!(rejected["error"]["code"], -32602, "{rejected}");
 }

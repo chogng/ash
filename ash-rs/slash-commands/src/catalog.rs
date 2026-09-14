@@ -31,12 +31,6 @@ impl Default for SlashCommandCatalog {
                 argument_hint: None,
             },
             SlashCommandDefinition {
-                name: "create-instructions".into(),
-                description: "Create user or workspace Agent Instructions".into(),
-                argument_mode: SlashCommandArgumentMode::Optional,
-                argument_hint: Some("[user|workspace] <rule>".into()),
-            },
-            SlashCommandDefinition {
                 name: "init".into(),
                 description: "Create or update Ash-specific ASH.md guidance".into(),
                 argument_mode: SlashCommandArgumentMode::Optional,

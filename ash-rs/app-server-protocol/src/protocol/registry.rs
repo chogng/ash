@@ -342,6 +342,12 @@ use crate::protocol::initialize::InitializeParams;
 use crate::protocol::initialize::InitializeResult;
 use crate::protocol::initialize::ProtocolVersion;
 use crate::protocol::initialize::ServerCapabilities;
+use crate::protocol::instructions::InstructionDiagnosticDto;
+use crate::protocol::instructions::InstructionDto;
+use crate::protocol::instructions::InstructionListParams;
+use crate::protocol::instructions::InstructionListResult;
+use crate::protocol::instructions::InstructionLoadDto;
+use crate::protocol::instructions::InstructionScopeDto;
 use crate::protocol::issues::IssueConfigureParams;
 use crate::protocol::issues::IssueListParams;
 use crate::protocol::issues::IssueListResult;
@@ -1870,6 +1876,11 @@ client_methods! {
         response: ConfigCommandResult,
         serialization: GlobalExclusive,
     },
+    InstructionList => "instructions/list" {
+        params: InstructionListParams,
+        response: InstructionListResult,
+        serialization: GlobalSharedRead,
+    },
     SkillList => "skills/list" {
         params: SkillListParams,
         response: SkillListResult,
@@ -2988,6 +2999,12 @@ typescript_bindings! {
     SkillDto,
     SkillDiagnosticCodeDto,
     SkillDiagnosticDto,
+    InstructionListParams,
+    InstructionListResult,
+    InstructionDto,
+    InstructionDiagnosticDto,
+    InstructionScopeDto,
+    InstructionLoadDto,
     SkillListParams,
     SkillListResult,
     SkillResourceKindDto,

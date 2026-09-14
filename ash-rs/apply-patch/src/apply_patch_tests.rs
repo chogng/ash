@@ -1,11 +1,4 @@
 use super::*;
-use serde_json::json;
-use std::fs;
-use std::future::Future;
-use std::path::{Path, PathBuf};
-use std::pin::Pin;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::task::{Context, Poll, Waker};
 use ash_async_utils::CancellationSource;
 use ash_file_access::Dir;
 use ash_protocol::{ToolCallId, TurnId};
@@ -14,6 +7,13 @@ use ash_tools::{
     ToolExecutor, ToolInvocation, ToolInvocationKind, ToolOperationId, ToolOutputStatus,
     ToolPayload, ToolRegistryGeneration, ToolRuntimeAuthority, ToolRuntimeKey,
 };
+use serde_json::json;
+use std::fs;
+use std::future::Future;
+use std::path::{Path, PathBuf};
+use std::pin::Pin;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::task::{Context, Poll, Waker};
 
 #[test]
 fn exposes_the_canonical_apply_patch_schema() {
@@ -281,4 +281,19 @@ fn resolve(
         Poll::Ready(outcome) => outcome,
         Poll::Pending => panic!("local tool future should complete synchronously"),
     }
+}
+
+#[test]
+fn changed_paths_uses_execution_grammar_and_limits() {
+    let patch =
+        "*** Begin Patch\n*** Add File: new.rs\n+new\n*** Delete File: old.rs\n*** End Patch";
+    assert_eq!(
+        changed_paths(patch, ApplyPatchLimits::default()).unwrap(),
+        vec![
+            std::path::PathBuf::from("new.rs"),
+            std::path::PathBuf::from("old.rs")
+        ]
+    );
+    assert!(changed_paths(patch, ApplyPatchLimits::new(1024, 1).unwrap()).is_err());
+    assert!(changed_paths("*** Add File: new.rs", ApplyPatchLimits::default()).is_err());
 }

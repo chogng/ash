@@ -1,5 +1,6 @@
 ---
 name: example
+description: Describe the task where this rule is relevant.
 load: on-demand
 ---
 

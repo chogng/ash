@@ -1,11 +1,11 @@
 use super::HarnessInstructions;
 use crate::CoreError;
-use std::sync::Arc;
-use std::path::PathBuf;
 use ash_agent_environment::AgentEnvironmentSnapshot;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use ash_protocol::TurnId;
+use std::path::PathBuf;
+use std::sync::Arc;
 
 /// Immutable host context captured for one model invocation.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -69,6 +69,16 @@ pub struct HarnessContextRequest<'a> {
 /// Implementations collect host-owned instructions and environment facts. The returned value must
 /// remain stable while Core plans and assembles that invocation.
 pub trait HarnessContextProvider: Send + Sync {
+    /// Validates host-owned context prerequisites before an unstarted tool call is reviewed.
+    /// A rejection is returned to the model without executing the call.
+    fn validate_tool_context(
+        &self,
+        _request: &HarnessContextRequest<'_>,
+        _call: &ash_protocol::ToolCall,
+    ) -> Result<(), CoreError> {
+        Ok(())
+    }
+
     fn snapshot(
         &self,
         request: &HarnessContextRequest<'_>,

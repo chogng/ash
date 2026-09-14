@@ -26,7 +26,7 @@ native 可以依赖本 crate；本 crate 禁止反向依赖这些消费者。
 ## 2. 公共契约
 
 - `SlashCommandCatalog::new` 构造 server-only snapshot；
-- `SlashCommandCatalog::default` 构造包含 `/compact`、`/create-instructions` 与 `/init` 的内置 server snapshot；
+- `SlashCommandCatalog::default` 构造包含 `/compact` 与 `/init` 的内置 server snapshot；
   前者由产品 adapter 绑定到 typed context-compaction request，后两者分别冻结细分 Instruction 与 `ASH.md` 的创建提示；
 - `SlashCommandCatalog::with_local_and_server` 按 local、server 顺序合并并拒绝任何重名；
 - `SlashCommandInput` 对同一 catalog 提供 query、completion、invocation、argument hint 与 command element range；

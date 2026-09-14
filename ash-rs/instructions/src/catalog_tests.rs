@@ -266,3 +266,116 @@ fn write_instruction(root: &Path, name: &str, load: &str, patterns: &[&str], bod
     )
     .unwrap();
 }
+
+#[test]
+fn descriptions_are_discoverable_without_loading_bodies_and_reads_select_only_exact_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join(".ash/instructions");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("review.md"), "---\nname: review\ndescription: 'Review <API> & contracts'\nload: on-demand\n---\nREVIEW BODY").unwrap();
+    write_instruction(&root, "other", "on-demand", &[], "OTHER BODY");
+    let snapshot = InstructionCatalog::discover(dir.path()).snapshot();
+    let initial = snapshot.context_content(&[], &[], &root).unwrap();
+    assert!(initial.contains("Review &lt;API&gt; &amp; contracts"));
+    assert!(!initial.contains("REVIEW BODY"));
+    let selected = snapshot
+        .context_content(&[], &[root.join("review.md")], &root)
+        .unwrap();
+    assert!(selected.contains("REVIEW BODY"));
+    assert!(!selected.contains("OTHER BODY"));
+    assert!(
+        !snapshot
+            .context_content(&[], &[dir.path().join("review.md")], &root)
+            .unwrap()
+            .contains("REVIEW BODY")
+    );
+}
+
+#[test]
+fn new_file_requires_contextual_and_nested_rules_before_writing() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join(".ash/instructions");
+    fs::create_dir_all(&root).unwrap();
+    fs::create_dir_all(dir.path().join("src")).unwrap();
+    fs::write(dir.path().join("src/AGENTS.md"), "Source rules").unwrap();
+    write_instruction(&root, "rust", "contextual", &["**/*.rs"], "Rust rules");
+    let catalog = InstructionCatalog::discover(dir.path());
+    let targets = [PathBuf::from("src/new/deep.rs")];
+    assert_eq!(
+        catalog.read(&dir.path().join("src/AGENTS.md")).as_deref(),
+        Some("Source rules")
+    );
+    assert!(catalog.read(&dir.path().join("src/secret.txt")).is_none());
+    assert_eq!(
+        catalog.required_reads(&targets, &[], &[]),
+        vec![root.join("rust.md"), dir.path().join("src/AGENTS.md")]
+    );
+    assert!(
+        catalog
+            .required_reads(
+                &targets,
+                &[],
+                &[root.join("rust.md"), dir.path().join("src/AGENTS.md")]
+            )
+            .is_empty()
+    );
+    assert!(
+        catalog
+            .required_reads(&targets, &[PathBuf::from("src/old.rs")], &[])
+            .is_empty()
+    );
+}
+
+#[test]
+fn invalid_description_is_diagnosed_and_deleted_selection_disappears_after_refresh() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join(".ash/instructions");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(
+        root.join("bad.md"),
+        "---\nload: on-demand\ndescription: ''\n---\nBad.",
+    )
+    .unwrap();
+    write_instruction(&root, "selected", "on-demand", &[], "Selected body");
+    let mut catalog = InstructionCatalog::discover(dir.path());
+    let selected = [root.join("selected.md")];
+    let content = catalog
+        .snapshot()
+        .context_content(&[], &selected, &root)
+        .unwrap();
+    assert!(content.contains("Selected body"));
+    assert!(content.contains("instruction-diagnostics"));
+    fs::remove_file(&selected[0]).unwrap();
+    assert!(
+        !catalog
+            .refresh()
+            .context_content(&[], &selected, &root)
+            .unwrap()
+            .contains("Selected body")
+    );
+}
+
+#[test]
+fn personal_rule_selection_cannot_be_spoofed_by_a_workspace_relative_path() {
+    let home = tempfile::tempdir().unwrap();
+    let root = home.path().join("instructions");
+    fs::create_dir(&root).unwrap();
+    write_instruction(
+        &root,
+        "rust",
+        "contextual",
+        &["**/*.rs"],
+        "Personal Rust rule",
+    );
+    let catalog = InstructionCatalog::discover_user(home.path());
+    let targets = [PathBuf::from("new.rs")];
+    assert_eq!(
+        catalog.required_reads(&targets, &[PathBuf::from("instructions/rust.md")], &[]),
+        vec![root.join("rust.md")]
+    );
+    assert!(
+        catalog
+            .required_reads(&targets, &[], &[root.join("rust.md")])
+            .is_empty()
+    );
+}

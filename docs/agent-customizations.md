@@ -6,7 +6,7 @@
 > 状态：架构边界已接受（2026-08-12）；User 与 Directory 的 `AGENTS.md`、`ASH.md`、Global Instructions 和
 > 成功读取文件命中的 Contextual Instructions 会进入后续 model invocation。Skills 已有 metadata catalog、显式 activation 和通用
 > context injection，可信 built-in Skill 自动 selector 与 Agent delegation definition 选择已经接通。
-> 用户手动附加 OnDemand Instruction、Agent definition list/picker API 和完整 import apply
+> 已有指令列表与显式附件 API；独立指令管理界面、Agent definition list/picker API 和完整 import apply
 > 仍未实现。
 >
 > Skill 的格式、来源与激活细节见 [`skills.md`](skills.md)；外部格式发现和转换实现契约见
@@ -25,7 +25,7 @@ Ash 只把 Instructions、Skills 和 Agents 作为 Agent 自定义领域对象�
 | 用户想表达什么 | Ash 对象 | 何时进入运行时 | 典型入口 |
 | --- | --- | --- | --- |
 | “在这个环境里应长期遵循什么” | Instructions | 全局、上下文匹配或显式按需加载 | 自动解析或用户选择 |
-| “这类工作应该怎样完成” | Skills | 被用户选择或模型匹配后渐进加载 | picker、Slash Command 或模型选择 |
+| “这类工作应该怎样完成” | Skills | 被用户选择或模型匹配后渐进加载 | picker、`$name` 或模型选择 |
 | “由哪种执行配置来工作” | Agents | 启动会话入口、委托执行或工作流阶段时冻结配置引用 | Agent 选择器、委托或工作流 |
 | “现在请完成这件事” | 当前 Turn 的用户输入 | 构造本次 `ModelRequest` 时 | 普通消息 |
 | “快速调用某个能力” | 不是新对象 | `$name` 选择已有 Skill，`/name` 调用产品命令 | `$review`、`/status` |
@@ -82,7 +82,7 @@ pub enum InstructionLoadPolicy {
 
 - `Global`：在对应 scope 的每次 Agent interaction 中加载。
 - `Contextual`：只有当前资源或工作上下文命中 pattern 时加载。
-- `OnDemand`：只在用户或上层已验证引用显式选择时加载。
+- `OnDemand`：在用户显式附加、Agent 成功读取准确文件或上层已验证引用选择时加载。描述仅用于发现。
 
 外部格式中的 `applyTo`、`globs`、`alwaysApply` 等字段由 `external-agent-migration` adapter 转换成这三种
 语义。`applyTo: "**"` 仍是“恰好匹配所有文件的上下文规则”，不能偷偷改写成 Global；真正的
@@ -107,7 +107,7 @@ pub enum SkillInvocationPolicy {
 ```
 
 保存的 review、fix-tests、create-component 等重复任务属于 `UserOnly` 或 `UserOrModel` Skill。
-当 `UserOnly` Skill 被投影为 `/review` 时，Skill 仍是领域对象，`/review` 只是调用它的入口。
+Skill 统一使用 `$name` 选择器，产品 Slash Command 不注册 Skill 的别名。
 
 ## 3. `.ash` 是目录级 Ash 命名空间
 
@@ -243,9 +243,10 @@ Slash Command catalog 只包含产品和服务命令；独立 `$name` Skill sele
 | External parser、preview 与 apply | 尚未完成 | typed fragments、digest、wire contract、transaction/receipt |
 | `$name` Skill selector | 已实现 | TUI/Desktop `$name` 绑定 stable `SkillRef`；`/skills` 只管理，`@` 留给文件和 Plugin 上下文 |
 
-`/create-instructions` 是创建细分 Instruction 的产品 Slash Command；`/init` 生成或更新 Ash 专属
-`ASH.md`。两者都不是 Skill，均为普通 Agent Turn 冻结对应任务说明与起始模板。Agent 按正常
-文件工具和目录授权写入；已有文件先读取再修改，不直接覆盖。
+`$create-instructions` 是创建或更新细分 Instruction 的内置 Skill，复用通用激活机制；`/init`
+保留为初始化 `ASH.md` 的产品命令。两者使用正常文件工具和目录授权；已有文件先读取再修改。
+指令 metadata、按需读取、显式附件 API 与写入前置条件由
+[`ash-instructions` README](../ash-rs/instructions/README.md) 维护。
 外部 `CLAUDE.md` 导入是独立的确定性文件操作：重新校验用户选中的来源，只在目标缺失或为空时
 复制到 Ash 的目标文件；已有非空目标报告冲突，不交给 Agent 合并。来源正文不进入 `/init`
 或任何用于整理导入内容的 Agent Turn。当前导入仅有
@@ -256,7 +257,7 @@ Slash Command catalog 只包含产品和服务命令；独立 `$name` Skill sele
 1. 固定本文的三类对象、命名空间和 import boundary，代码与文档不再新增 Prompt/Task artifact。
 2. 已完成 Directory 三类 catalog、Global Instruction safe-point injection 与 watcher refresh。
 3. 已完成 Skill 显式 activation、可信 built-in 自动 selector、Directory source、用户可调用投影
-   和通用 context injection；下一步是通用 Contextual/OnDemand Instruction 解析。
+   和通用 context injection；已接通按需读取、显式附件与写入前规则检查；管理界面仍待接入。
 4. Agent definition catalog 已开放给 multi-agent delegation 的受限选择；下一步补 list/picker API，
    cross-authority reference 在具备明确 authority contract 前继续拒绝。
 5. `external-agent-migration` 的 bounded parsers 和 typed preview fragments 已实现；下一步是 App

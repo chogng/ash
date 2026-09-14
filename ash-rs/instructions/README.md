@@ -6,7 +6,13 @@
 
 `ash-instructions` 读取目录或选定 Ash home 下的 `AGENTS.md`、`ASH.md`，也对目录的
 `.ash/instructions/*.md` 或用户 home 的 `instructions/*.md` 执行有界、非递归发现，校验
-YAML frontmatter、三态加载策略和 UTF-8 Markdown 正文，并发布不可变 catalog snapshot。它不解析
+YAML frontmatter、三态加载策略和 UTF-8 Markdown 正文，并发布不可变 catalog snapshot。
+
+- 隔离指令发现、格式校验、匹配和读取前置条件。
+- 提供按需正文、未加载规则的 metadata 与解析诊断。
+- 不拥有模型请求、目录授权、工具执行或界面。
+
+它不解析
 Codex/Claude 格式，不组装模型请求，也不拥有 watcher、目录授权或 UI。
 
 ## 快速理解
@@ -19,7 +25,7 @@ Codex/Claude 格式，不组装模型请求，也不拥有 watcher、目录授�
 | 单文件格式错误 | 产生隔离 diagnostic，其他文件继续 |
 | `load: global` | 注入后续模型调用 |
 | `load: contextual` | 本 Turn 成功读取的目录内文件命中 `patterns` 时注入 |
-| `load: on-demand` | 由 Agent definition 显式引用时加载 |
+| `load: on-demand` | Agent 读取准确文件、用户显式附加，或 Agent definition 引用时加载 |
 
 ## 边界与公共契约
 
@@ -37,6 +43,7 @@ frontmatter 必须显式声明：
 ```yaml
 ---
 name: rust-style
+description: Rust coding conventions.
 load: contextual
 patterns:
   - "**/*.rs"
@@ -45,7 +52,8 @@ patterns:
 
 `load` 只接受 `global`、`contextual`、`on-demand`。只有 contextual 可以且必须声明非空
 `patterns`，每项须为有效的相对 glob。它对应 VS Code 的 `applyTo` 概念，但 Ash 的原生字段仍叫
-`patterns`，不扫描 VS Code 的目录。每文件最多 32 条 pattern、每条最多 256 字节。文件名使用小写字母、数字和连字符；可选 `name` 存在时必须与文件名一致。
+`patterns`，不扫描 VS Code 的目录。每文件最多 32 条 pattern、每条最多 256 字节。可选 `description` 为 1–1024 字节的非空描述，用于 Agent 判断任务相关性，不自动注入正文。
+文件名使用小写字母、数字和连字符；可选 `name` 存在时必须与文件名一致。
 
 实现限制为 128 个直接条目、每个文件 32 KiB。source/entry symlink、目录、非 Markdown、非法
 UTF-8、空正文和未知 frontmatter 字段均不会进入 catalog。
@@ -78,10 +86,15 @@ just check ash-instructions
 just rust-warnings ash-instructions
 ```
 
-当前已实现目录和用户 home 的共享 `AGENTS.md`、Ash 专属 `ASH.md` 与多文件 Instruction 发现、格式校验、不可变 snapshot 与 Global 内容渲染；App Server 的
-`DirContributions` 在目录加入 Env 时发现 catalog，由 filesystem invalidation refresh，并在
-下一次 model invocation 通过 `HarnessContextProvider` 提供 Global 与匹配的 Contextual 内容。Core
-仅从本 Turn 成功的 `read_file` 调用提取路径；App Server 校验路径仍落在对应目录内，再交给 catalog
-匹配。`ash-home` 在每次模型调用前刷新用户 home catalog，并把其内容放在目录级内容之前。
-Agent definition 可按名称显式引用 OnDemand 条目。按当前用户消息或编辑器活动文件自动匹配、用户
-手动附加 OnDemand、Plugin source composition 及 catalog/diagnostic list API 尚未实现。
+- 每次模型调用重新取得授权目录与用户目录的规则；修改和删除在下一次调用生效。
+- `context_content` 同时提供适用正文、未加载规则的描述和准确路径、解析诊断；没有把未选择正文全部加入模型请求。
+- Agent 通过 `read_instruction` 成功读取某条指令后，该规则进入本 Turn 后续调用；下一 Turn 不继承自动选择状态。历史消息中的旧文本仍属于对话历史。
+- `write_file`、`edit`、`apply_patch` 在执行前检查目标文件的 contextual 与子目录规则，包括尚不存在的文件。缺少规则时返回待读路径，不写入、不请求额外权限；模型通过 `read_instruction` 读取并重新提交后继续。该工具只读取当前授权 catalog 中的规则正文，不开放用户 home 的其他文件，也不满足修改源文件前的完整读取要求。
+- 同一批工具调用或同一个 Code Mode cell 中临时读到的规则，不能直接满足本批写入前置条件；必须先返回模型。Shell 等任意程序的写入目标不在这项检查的覆盖范围内。
+- 用户可通过 `instructions/list` 获取当前会话授权范围内的 metadata 与 diagnostics，并在 Turn input 使用 `{ "type": "instruction", "path": "列表返回的绝对路径" }` 显式附加。服务器重新匹配当前 catalog，拒绝已删除、格式错误或范围外的文件；正文作为本轮上下文附件保存。
+- 列表响应不包含正文，也不等同于“本轮已使用”。当前没有独立的 Desktop/TUI 指令管理面板、逐轮使用记录、启停配置或 Plugin 指令来源。
+
+## 创建入口
+
+`$create-instructions` 是内置 Skill，复用通用技能选择和文件工具。`/init` 仍负责初始化 `ASH.md`。
+创建 Skill 不负责指令匹配、授权或执行检查。

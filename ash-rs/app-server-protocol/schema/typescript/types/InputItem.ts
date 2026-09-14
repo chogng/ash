@@ -2,4 +2,4 @@
 import type { ImageAttachmentRef } from './ImageAttachmentRef.js';
 import type { SkillRef } from './SkillRef.js';
 
-export type InputItem = { "type": "issue", number: number, } | { "type": "text", text: string, } | { "type": "context", name: string, content: string, } | { "type": "imageAttachment", attachment: ImageAttachmentRef, } | { "type": "image", url: string, } | { "type": "skill", skill: SkillRef, };
+export type InputItem = { "type": "issue", number: number, } | { "type": "text", text: string, } | { "type": "context", name: string, content: string, } | { "type": "imageAttachment", attachment: ImageAttachmentRef, } | { "type": "image", url: string, } | { "type": "instruction", path: string, } | { "type": "skill", skill: SkillRef, };

@@ -10,17 +10,17 @@ use crate::patch_commit::{ChangeKind, PreparedChange, commit};
 use crate::patch_format::{
     PatchDocument, PatchError, PatchOperation, apply_hunks, new_file_content,
 };
-use serde::Deserialize;
-use serde_json::json;
-use std::fmt;
-use std::fs;
-use std::future;
 use ash_file_access::Dir;
 use ash_tools::{
     ToolConcurrency, ToolConflictClass, ToolDefinition, ToolExecutionFuture, ToolExecutionOutcome,
     ToolExecutor, ToolInputSchema, ToolInvocation, ToolLoading, ToolName, ToolOutput,
     ToolOutputSchema, ToolPayload, ToolSchemaMode, ToolStartFailure, ToolUncertainOutcome,
 };
+use serde::Deserialize;
+use serde_json::json;
+use std::fmt;
+use std::fs;
+use std::future;
 
 const DEFAULT_MAX_PATCH_BYTES: usize = 512 * 1024;
 const DEFAULT_MAX_CHANGED_FILES: usize = 128;
@@ -85,6 +85,30 @@ impl fmt::Display for ApplyPatchError {
 }
 
 impl std::error::Error for ApplyPatchError {}
+
+/// Returns mutation targets using the same bounded grammar as patch execution.
+/// Hosts use these paths to load applicable instructions before a patch can run.
+pub fn changed_paths(
+    patch: &str,
+    limits: ApplyPatchLimits,
+) -> Result<Vec<std::path::PathBuf>, String> {
+    if patch.len() > limits.max_patch_bytes() {
+        return Err("patch exceeds the byte limit".into());
+    }
+    let document = PatchDocument::parse(patch).map_err(|error| error.to_string())?;
+    if document.operations.len() > limits.max_changed_files() {
+        return Err("patch exceeds the changed-file limit".into());
+    }
+    Ok(document
+        .operations
+        .into_iter()
+        .map(|operation| match operation {
+            PatchOperation::Add { path, .. }
+            | PatchOperation::Update { path, .. }
+            | PatchOperation::Delete { path } => path,
+        })
+        .collect())
+}
 
 /// Applies a validated, dir-contained patch.
 ///
@@ -340,9 +364,11 @@ fn returned_error(message: impl Into<String>) -> ToolExecutionOutcome {
 
 fn returned_json(value: serde_json::Value) -> ToolExecutionOutcome {
     match serde_json::to_string_pretty(&value) {
-        Ok(text) => ToolExecutionOutcome::Returned(ToolOutput::success(vec![
-            ash_tools::ToolContent::Text(text),
-        ])),
+        Ok(text) => {
+            ToolExecutionOutcome::Returned(ToolOutput::success(vec![ash_tools::ToolContent::Text(
+                text,
+            )]))
+        }
         Err(error) => returned_error(format!("could not encode tool output: {error}")),
     }
 }

@@ -31,7 +31,6 @@ use crate::ToolService;
 use crate::TurnExecutionObserver;
 use crate::action_policy_service::approval_matches_review;
 use crate::durable_approval_request;
-use std::sync::Arc;
 use ash_action_policy::ExecutionDecision;
 use ash_async_utils::CancellationToken;
 use ash_protocol::ActionApprovalDecision;
@@ -43,6 +42,7 @@ use ash_protocol::ThreadItem;
 use ash_protocol::ToolCall;
 use ash_protocol::ToolCallId;
 use ash_protocol::TurnId;
+use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum ToolSchedulingProgress {
@@ -58,6 +58,7 @@ pub(super) struct ToolScheduler {
     hooks: Arc<dyn HookService>,
     updates: Arc<dyn ThreadUpdateSink>,
     code_mode: Option<CodeModeBroker>,
+    harness_context: Option<Arc<dyn crate::HarnessContextProvider>>,
     execution_observer: Arc<dyn TurnExecutionObserver>,
 }
 
@@ -74,8 +75,17 @@ impl ToolScheduler {
             hooks: Arc::new(NoHooks),
             updates: Arc::new(NoThreadUpdates),
             code_mode: None,
+            harness_context: None,
             execution_observer: Arc::new(crate::NoTurnExecutionObserver),
         }
+    }
+
+    pub(super) fn with_harness_context(
+        mut self,
+        provider: Arc<dyn crate::HarnessContextProvider>,
+    ) -> Self {
+        self.harness_context = Some(provider);
+        self
     }
 
     pub(super) fn with_thread_updates(mut self, updates: Arc<dyn ThreadUpdateSink>) -> Self {
@@ -179,6 +189,32 @@ impl ToolScheduler {
                 };
                 self.record_failure(thread_id, turn_id, pending.call.id, message)?;
                 continue;
+            }
+            if !snapshot.started_tool_calls.contains(&pending.call.id)
+                && let Some(provider) = &self.harness_context
+            {
+                let boundary = match pending.binding.as_ref().map(|binding| &binding.caller) {
+                    Some(ash_protocol::ToolCallCaller::CodeMode {
+                        parent_tool_call_id,
+                        ..
+                    }) => parent_tool_call_id,
+                    _ => &pending.call.id,
+                };
+                let paths = crate::services::read_paths_before_call(&snapshot, turn_id, boundary);
+                let request = crate::HarnessContextRequest {
+                    session_id: &snapshot.session_id,
+                    thread_id,
+                    turn_id,
+                    read_paths: &paths,
+                };
+                match provider.validate_tool_context(&request, &pending.call) {
+                    Ok(()) => {}
+                    Err(CoreError::InvalidInput(message)) => {
+                        self.record_failure(thread_id, turn_id, pending.call.id, message)?;
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                }
             }
             let frozen_policy_revision = turn.policy_revision.as_str();
             let approval_mode = turn.approval_mode;

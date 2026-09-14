@@ -23,19 +23,6 @@ use crate::ToolOutputSink;
 use crate::ToolService;
 use crate::ToolUserInputOutcome;
 use crate::TurnExecutionOutcome;
-use serde_json::json;
-use std::collections::BTreeMap;
-use std::collections::VecDeque;
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::Condvar;
-use std::sync::Mutex;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
-use std::thread;
-use std::time::Duration;
-use std::time::Instant;
 use ash_action_policy::ActionDigest;
 use ash_action_policy::ActionKind;
 use ash_action_policy::ActionPolicyRevision;
@@ -95,6 +82,19 @@ use ash_protocol::UserInputQuestion;
 use ash_sandboxing::FileSystemAccess;
 use ash_sandboxing::NetworkAccess;
 use ash_sandboxing::SandboxPolicy;
+use serde_json::json;
+use std::collections::BTreeMap;
+use std::collections::VecDeque;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::Condvar;
+use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use std::thread;
+use std::time::Duration;
+use std::time::Instant;
 
 #[test]
 fn completes_a_text_turn_from_durable_context() {
@@ -2947,7 +2947,10 @@ impl HarnessContextProvider for MutableInstructions {
             request.thread_id.to_string(),
             request.turn_id.to_string(),
         ));
-        self.read_paths.lock().unwrap().push(request.read_paths.to_vec());
+        self.read_paths
+            .lock()
+            .unwrap()
+            .push(request.read_paths.to_vec());
         Ok(Arc::clone(&self.current.lock().unwrap()))
     }
 }
@@ -3849,4 +3852,164 @@ impl ash_extension_api::ToolLifecycleContributor for ToolLifecycleLog {
             }
         });
     }
+}
+
+struct MissingToolInstructions;
+
+impl HarnessContextProvider for MissingToolInstructions {
+    fn snapshot(
+        &self,
+        _: &crate::HarnessContextRequest<'_>,
+    ) -> Result<Arc<HarnessContext>, CoreError> {
+        Ok(Arc::new(HarnessContext::default()))
+    }
+    fn validate_tool_context(
+        &self,
+        _: &crate::HarnessContextRequest<'_>,
+        _: &ToolCall,
+    ) -> Result<(), CoreError> {
+        Err(CoreError::InvalidInput(
+            "Read the applicable instruction file before retrying".into(),
+        ))
+    }
+}
+
+#[test]
+fn missing_instructions_return_to_model_without_starting_tool_or_requesting_approval() {
+    let (threads, thread_id, turn_id) = started_turn();
+    let call_id = ToolCallId::new("requires-instructions").unwrap();
+    let model = Arc::new(ScriptedModel::new([
+        Ok(ModelResponse {
+            output: vec![ResponseItem::ToolCall(ToolCall {
+                id: call_id.clone(),
+                name: ToolName::new("weather").unwrap(),
+                arguments: json!({"city":"Paris"}),
+            })],
+            usage: None,
+            billing: None,
+            stop_reason: StopReason::ToolUse,
+        }),
+        Ok(text_response("Read the rules first")),
+    ]));
+    let executor = TurnExecutor::new(
+        threads.clone(),
+        model.clone(),
+        Arc::new(WeatherTool),
+        Arc::new(SandboxActionPolicyService),
+    )
+    .with_harness_context_provider(Arc::new(MissingToolInstructions));
+    executor
+        .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+        .unwrap();
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+    assert!(!snapshot.started_tool_calls.contains(&call_id));
+    assert!(snapshot.items.iter().any(|item| matches!(item, ThreadItem::ToolResult { tool_call_id, is_error: true, text, .. } if tool_call_id == &call_id && text.contains("instruction file"))));
+    assert!(model.requests()[1].input.iter().any(|item| matches!(item, InputItem::ToolResult(result) if result.is_error && result.content.iter().any(|part| matches!(part, ContentPart::Text(text) if text.contains("Read the applicable instruction file before retrying"))))));
+    assert!(snapshot.turns[0].pending_interaction.is_none());
+}
+
+struct InstructionReadBarrier;
+
+impl HarnessContextProvider for InstructionReadBarrier {
+    fn snapshot(
+        &self,
+        _: &crate::HarnessContextRequest<'_>,
+    ) -> Result<Arc<HarnessContext>, CoreError> {
+        Ok(Arc::new(HarnessContext::default()))
+    }
+    fn validate_tool_context(
+        &self,
+        request: &crate::HarnessContextRequest<'_>,
+        call: &ToolCall,
+    ) -> Result<(), CoreError> {
+        if call.name.as_str() == "weather" && request.read_paths.is_empty() {
+            return Err(CoreError::InvalidInput(
+                "Read rules and submit a new call".into(),
+            ));
+        }
+        Ok(())
+    }
+}
+
+struct InstructionBarrierTools(AtomicUsize);
+
+impl ToolService for InstructionBarrierTools {
+    fn definitions(&self) -> Vec<ToolDefinition> {
+        let mut definitions = WeatherTool.definitions();
+        definitions.extend(ReadInstructionTargetTool.definitions());
+        definitions
+    }
+    fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
+        WeatherTool.prepare(call)
+    }
+    fn execute(
+        &self,
+        call: &ToolCall,
+        authorization: &ToolAuthorization,
+        cancellation: &CancellationToken,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        if call.name.as_str() == "read_file" {
+            return Ok(ToolExecutionOutput::Success("Rules".into()));
+        }
+        self.0.fetch_add(1, Ordering::SeqCst);
+        WeatherTool.execute(call, authorization, cancellation)
+    }
+}
+
+#[test]
+fn a_read_in_the_same_model_batch_does_not_satisfy_instruction_preflight() {
+    let (threads, thread_id, turn_id) = started_turn();
+    let tools = Arc::new(InstructionBarrierTools(AtomicUsize::new(0)));
+    let model = Arc::new(ScriptedModel::new([
+        Ok(ModelResponse {
+            output: vec![
+                ResponseItem::ToolCall(ToolCall {
+                    id: ToolCallId::new("read").unwrap(),
+                    name: ToolName::new("read_file").unwrap(),
+                    arguments: json!({"path":"rules.md"}),
+                }),
+                ResponseItem::ToolCall(ToolCall {
+                    id: ToolCallId::new("early").unwrap(),
+                    name: ToolName::new("weather").unwrap(),
+                    arguments: json!({"city":"Paris"}),
+                }),
+            ],
+            usage: None,
+            billing: None,
+            stop_reason: StopReason::ToolUse,
+        }),
+        Ok(ModelResponse {
+            output: vec![ResponseItem::ToolCall(ToolCall {
+                id: ToolCallId::new("retry").unwrap(),
+                name: ToolName::new("weather").unwrap(),
+                arguments: json!({"city":"Paris"}),
+            })],
+            usage: None,
+            billing: None,
+            stop_reason: StopReason::ToolUse,
+        }),
+        Ok(text_response("done")),
+    ]));
+    let executor = TurnExecutor::new(
+        threads.clone(),
+        model,
+        tools.clone(),
+        Arc::new(SandboxActionPolicyService),
+    )
+    .with_harness_context_provider(Arc::new(InstructionReadBarrier));
+    executor
+        .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+        .unwrap();
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+    assert!(
+        !snapshot
+            .started_tool_calls
+            .contains(&ToolCallId::new("early").unwrap())
+    );
+    assert!(
+        snapshot
+            .started_tool_calls
+            .contains(&ToolCallId::new("retry").unwrap())
+    );
+    assert_eq!(tools.0.load(Ordering::SeqCst), 1);
 }

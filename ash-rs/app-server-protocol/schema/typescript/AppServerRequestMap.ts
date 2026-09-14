@@ -151,6 +151,8 @@ import type { HookSetEnablementParams } from './types/HookSetEnablementParams.js
 import type { HookUpsertParams } from './types/HookUpsertParams.js';
 import type { InitializeParams } from './types/InitializeParams.js';
 import type { InitializeResult } from './types/InitializeResult.js';
+import type { InstructionListParams } from './types/InstructionListParams.js';
+import type { InstructionListResult } from './types/InstructionListResult.js';
 import type { IssueConfigureParams } from './types/IssueConfigureParams.js';
 import type { IssueListParams } from './types/IssueListParams.js';
 import type { IssueListResult } from './types/IssueListResult.js';
@@ -512,6 +514,7 @@ export interface AppServerRequestMap {
   "hook/upsert": { params: HookUpsertParams; response: ConfigCommandResult };
   "hook/remove": { params: HookRemoveParams; response: ConfigCommandResult };
   "hook/enablement/set": { params: HookSetEnablementParams; response: ConfigCommandResult };
+  "instructions/list": { params: InstructionListParams; response: InstructionListResult };
   "skills/list": { params: SkillListParams; response: SkillListResult };
   "skill/enablement/set": { params: SkillSetEnablementParams; response: ConfigCommandResult };
   "skill/resource/open": { params: SkillResourceOpenParams; response: SkillResourceOpenResult };
@@ -779,6 +782,7 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "hook/upsert": { method: "hook/upsert" },
   "hook/remove": { method: "hook/remove" },
   "hook/enablement/set": { method: "hook/enablement/set" },
+  "instructions/list": { method: "instructions/list" },
   "skills/list": { method: "skills/list" },
   "skill/enablement/set": { method: "skill/enablement/set" },
   "skill/resource/open": { method: "skill/resource/open" },

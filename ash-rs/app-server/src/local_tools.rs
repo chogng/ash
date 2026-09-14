@@ -1355,6 +1355,12 @@ static LOCAL_EXEC_POLICY_HOST_LAYER: LazyLock<ExecPolicyLayer> = LazyLock::new(|
             ExecPolicyEffect::AllowUnsandboxed,
         ),
         local_rule(
+            "built-in:read_instruction",
+            "read_instruction",
+            ExecPolicyActionKind::SystemOperation,
+            ExecPolicyEffect::AllowUnsandboxed,
+        ),
+        local_rule(
             "built-in:update_plan",
             crate::server::update_plan_tool::UPDATE_PLAN_TOOL_NAME,
             ExecPolicyActionKind::SystemOperation,

@@ -1378,6 +1378,7 @@ impl TurnExecutor {
             self.policy.clone(),
         )
         .with_thread_updates(self.updates.clone())
+        .with_harness_context(self.harness_context.clone())
         .with_hooks(self.hooks.clone())
         .with_code_mode(self.code_mode.clone())
         .with_execution_observer(self.execution_observer.clone())

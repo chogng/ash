@@ -2703,6 +2703,16 @@ fn append_multi_agent_tools(
             action_policy_revision.clone(),
         )),
     );
+    let local = match customizations {
+        Some(catalogs) => append_local_tool(
+            local,
+            Arc::new(super::instruction_operations::InstructionToolService::new(
+                Arc::clone(catalogs),
+                action_policy_revision.clone(),
+            )),
+        ),
+        None => local,
+    };
     let mut multi_agent = MultiAgentToolService::new(
         Arc::clone(coordinator),
         Arc::clone(threads),
