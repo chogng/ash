@@ -280,12 +280,13 @@ fn actual_tui_approval_modes_change_file_tool_authority() {
     assert!(auto_fixture.find_file("auto-reviewed.txt").is_none());
     auto.back_tab();
     auto.wait_for_screen("current: auto review on");
+    // Inspect the review result after the follow-up turn can finish.
+    auto_gate.release();
+    auto.wait_for_stable_screen("文件没有写入");
     auto.control_up();
     auto.up();
     auto.space();
     auto.wait_for_screen("fixture automatic reviewer denied");
-    auto_gate.release();
-    auto.wait_for_stable_screen("文件没有写入");
     let auto_bodies = auto_server.request_bodies();
     assert_eq!(auto_bodies.len(), 4);
     assert!(auto_bodies[2].contains("Return JSON matching this response schema"));
