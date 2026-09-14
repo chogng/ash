@@ -27,6 +27,7 @@ mod turn_execution_observer;
 
 pub use action_policy_service::ActionPolicyService;
 pub use action_policy_service::durable_approval_request;
+pub use ash_prompts::PromptArtifact;
 pub(crate) use context::ContextAssembler;
 pub use context::ContextBudget;
 pub use context::ContextCompactionLimit;
@@ -156,7 +157,6 @@ pub use turn_execution_observer::TurnExecutionStarted;
 pub use turn_execution_observer::TurnExecutionTerminalState;
 pub use turn_execution_observer::TurnToolExecutionFinished;
 pub use turn_execution_observer::TurnToolExecutionStarted;
-pub use ash_prompts::PromptArtifact;
 
 #[cfg(test)]
 pub(crate) fn test_turn_instructions() -> ash_protocol::TurnInstructions {
@@ -204,3 +204,7 @@ pub use context::TimeContextProvider;
 #[cfg(test)]
 #[path = "time_context_tests.rs"]
 mod time_context_tests;
+
+pub use context::HarnessInstruction;
+pub use context::InstructionActivation;
+pub use context::InstructionScope;

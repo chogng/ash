@@ -9,7 +9,7 @@
 YAML frontmatter、三态加载策略和 UTF-8 Markdown 正文，并发布不可变 catalog snapshot。
 
 - 隔离指令发现、格式校验、匹配和读取前置条件。
-- 提供按需正文、未加载规则的 metadata 与解析诊断。
+- 提供逐文件选择结果、按需正文、未加载规则的 metadata 与解析诊断。
 - 不拥有模型请求、目录授权、工具执行或界面。
 
 它不解析
@@ -34,7 +34,9 @@ Codex/Claude 格式，不组装模型请求，也不拥有 watcher、目录授�
 变化时推进 generation。`InstructionCatalogSnapshot::automatic_content` 渲染 Global 与命中文件的
 Contextual 条目；`global_content` 只渲染 Global。两者均带
 artifact name 与相对路径 provenance。
-同级正文按 `AGENTS.md`、`ASH.md`、细分文件顺序拼接；App Server 再区分用户级和授权工作区级。
+同级规则按 `AGENTS.md`、`ASH.md`、细分文件顺序展示；此顺序不是冲突覆盖规则。
+`selected_files` 返回逐文件正文与选择原因，`reference_content` 只返回未加载规则索引和诊断。
+App Server 将用户级、授权工作区级及嵌套规则作为独立贡献交给 Core，不提前合并成 scope 级正文。
 工作区子目录的 `AGENTS.md` 与 `ASH.md` 只在本 Turn 成功读取其下文件后，按浅到深顺序加入；
 用户 home 不做子目录继承。嵌套最多检查 64 个目录、每条路径最多 16 层。
 
@@ -93,6 +95,9 @@ just rust-warnings ash-instructions
 - 同一批工具调用或同一个 Code Mode cell 中临时读到的规则，不能直接满足本批写入前置条件；必须先返回模型。Shell 等任意程序的写入目标不在这项检查的覆盖范围内。
 - 用户可通过 `instructions/list` 获取当前会话授权范围内的 metadata 与 diagnostics，并在 Turn input 使用 `{ "type": "instruction", "path": "列表返回的绝对路径" }` 显式附加。服务器重新匹配当前 catalog，拒绝已删除、格式错误或范围外的文件；正文作为本轮上下文附件保存。
 - 列表响应不包含正文，也不等同于“本轮已使用”。当前没有独立的 Desktop/TUI 指令管理面板、逐轮使用记录、启停配置或 Plugin 指令来源。
+
+指令权威、请求位置与预算保留的独立契约见 [指令优先级](../../docs/core-context.md#62-指令优先级)。
+目录匹配及来源测试不等同于真实模型遵守率评测。
 
 ## 创建入口
 

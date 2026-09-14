@@ -20,3 +20,6 @@ pub const STARTER_TEMPLATE: &str = include_str!("../assets/starter.md");
 
 /// Plain Markdown starting content for an always-on `AGENTS.md` or `ASH.md`.
 pub const STARTER_ALWAYS_ON_TEMPLATE: &str = include_str!("../assets/always-on.md");
+
+pub use model::InstructionSelection;
+pub use model::SelectedInstruction;

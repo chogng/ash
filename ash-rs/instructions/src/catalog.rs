@@ -27,11 +27,19 @@ const MAX_NESTED_DEPTH: usize = 16;
 #[derive(Default)]
 pub struct NestedInstructions {
     files: Vec<PathBuf>,
+    entries: Vec<AlwaysOnInstruction>,
     content: Option<String>,
     diagnostics: Vec<InstructionDiagnostic>,
 }
 
 impl NestedInstructions {
+    /// Selected nested files retain their individual bodies and relative source paths.
+    pub fn entries(&self) -> impl Iterator<Item = (&Path, &str)> {
+        self.entries
+            .iter()
+            .map(|entry| (entry.source.as_path(), entry.body.as_str()))
+    }
+
     pub fn content(&self) -> Option<&str> {
         self.content.as_deref()
     }
@@ -232,12 +240,14 @@ impl InstructionCatalog {
             ));
             return NestedInstructions {
                 files: Vec::new(),
+                entries: Vec::new(),
                 content: None,
                 diagnostics,
             };
         };
         let mut loaded = Vec::new();
         let mut files = Vec::new();
+        let mut entries = Vec::new();
         for dir in dirs {
             let absolute_dir = self.root.join(&dir);
             if !fs::canonicalize(&absolute_dir)
@@ -254,12 +264,14 @@ impl InstructionCatalog {
                 if let Some(entry) = load_always_on(&self.root, &dir.join(name), &mut diagnostics) {
                     files.push(entry.source.clone());
                     loaded.push(entry.render());
+                    entries.push(entry);
                 }
             }
         }
         let content = (!loaded.is_empty()).then(|| loaded.join("\n\n"));
         NestedInstructions {
             files,
+            entries,
             content,
             diagnostics,
         }

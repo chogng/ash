@@ -2,7 +2,7 @@ use super::agent_environment_source::AgentEnvironmentSource;
 use super::fs_watcher::DirFileChangeSink;
 use super::fs_watcher::SessionDirFileChangeSink;
 use super::home_context::add_home_instructions;
-use super::home_context::content_revision;
+use super::home_context::catalog_instructions;
 use crate::dir_grants::DirGrants;
 use agent_roles::AgentRoleCatalog;
 use agent_roles::AgentRoleCatalogSnapshot;
@@ -514,21 +514,17 @@ impl HarnessContextProvider for DirContributions {
             .cloned()
             .map(|diagnostic| (self.dir_root.clone(), diagnostic))
             .collect::<Vec<_>>();
-        let base_content = combine_content(
-            primary.context_content(
-                &base_paths,
-                &base_paths
-                    .iter()
-                    .map(|path| self.dir_root.join(path))
-                    .collect::<Vec<_>>(),
-                &self.dir_root.join(".ash/instructions"),
-            ),
-            nested.content(),
-        );
-        let base_instructions = Arc::new(render_harness_instructions(
-            base_content.clone(),
-            &self.dir_root,
-        ));
+        let mut contributions = if self
+            .env_dir
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+            .is_some_and(|catalog| catalog.authorization.is_active())
+        {
+            directory_contributions(&primary, &nested, &base_paths, &self.dir_root)
+        } else {
+            Vec::new()
+        };
         let roots = self
             .dir_grants
             .snapshot_for(
@@ -550,7 +546,7 @@ impl HarnessContextProvider for DirContributions {
             .environment
             .snapshot(roots)
             .map_err(|error| CoreError::Context(error.to_string()))?;
-        let (dir_content, user_paths) = {
+        let (dir_contributions, user_paths) = {
             let mut dirs = self
                 .dirs
                 .lock()
@@ -561,7 +557,7 @@ impl HarnessContextProvider for DirContributions {
                 .into_iter()
                 .flat_map(BTreeMap::iter_mut)
                 .filter(|(_, catalog)| catalog.authorization.ensure_active().is_ok())
-                .filter_map(|(root, catalog)| {
+                .map(|(root, catalog)| {
                     catalog.instructions.refresh();
                     let paths = matching_paths(root, request.read_paths);
                     user_paths.extend(paths.iter().cloned());
@@ -573,37 +569,23 @@ impl HarnessContextProvider for DirContributions {
                             .cloned()
                             .map(|diagnostic| (root.clone(), diagnostic)),
                     );
-                    combine_content(
-                        catalog.instructions.snapshot().context_content(
-                            &paths,
-                            &paths.iter().map(|path| root.join(path)).collect::<Vec<_>>(),
-                            &root.join(".ash/instructions"),
-                        ),
-                        nested.content(),
-                    )
-                    .map(|content| (root.clone(), content))
+                    directory_contributions(&catalog.instructions.snapshot(), &nested, &paths, root)
                 })
                 .collect::<Vec<_>>();
             (content, user_paths)
         };
         self.record_nested_diagnostics(request.session_id, &nested_diagnostics);
-        let instructions = if dir_content.is_empty() {
-            base_instructions
-        } else {
-            Arc::new(render_harness_instructions_with_dirs(
-                base_content,
-                &dir_content,
-                &self.dir_root,
-            ))
-        };
+        contributions.extend(dir_contributions.into_iter().flatten());
+        let instructions = contributions
+            .into_iter()
+            .fold(HarnessInstructions::default(), |instructions, entry| {
+                instructions.with_instruction(entry)
+            });
         let instructions = match &self.home {
-            Some(home) => add_home_instructions(
-                instructions.as_ref().clone(),
-                home,
-                &user_paths,
-                request.read_paths,
-            ),
-            None => instructions.as_ref().clone(),
+            Some(home) => {
+                add_home_instructions(instructions, home, &user_paths, request.read_paths)
+            }
+            None => instructions,
         };
         Ok(Arc::new(
             HarnessContext::new(instructions).with_environment(environment),
@@ -687,49 +669,31 @@ fn affects_instructions(path: &Path) -> bool {
         || path == Path::new("ASH.md")
 }
 
-fn render_harness_instructions(content: Option<String>, root: &Path) -> HarnessInstructions {
-    let directory_content = content.map(|content| render_directory(root, &content));
-    let directory_revision = content_revision(
-        "directory-instructions",
-        directory_content.as_deref().unwrap_or_default(),
-    );
-    HarnessInstructions::directory(directory_content).with_directory_revision(directory_revision)
-}
-
-fn render_harness_instructions_with_dirs(
-    primary: Option<String>,
-    dirs: &[(PathBuf, String)],
+fn directory_contributions(
+    snapshot: &ash_instructions::InstructionCatalogSnapshot,
+    nested: &ash_instructions::NestedInstructions,
+    paths: &[PathBuf],
     root: &Path,
-) -> HarnessInstructions {
-    let mut sections = Vec::new();
-    if let Some(primary) = primary {
-        sections.push(render_directory(root, &primary));
-    }
-    sections.extend(
-        dirs.iter()
-            .map(|(root, content)| render_directory(root, content)),
+) -> Vec<ash_core::HarnessInstruction> {
+    let selected = paths.iter().map(|path| root.join(path)).collect::<Vec<_>>();
+    let mut entries = catalog_instructions(
+        ash_core::InstructionScope::Directory,
+        snapshot,
+        root,
+        &root.join(".ash/instructions"),
+        paths,
+        &selected,
     );
-    let content = sections.join("\n\n");
-    let directory_revision = content_revision("directory-instructions", &content);
-    HarnessInstructions::directory((!content.is_empty()).then_some(content))
-        .with_directory_revision(directory_revision)
-}
-
-fn combine_content(base: Option<String>, nested: Option<&str>) -> Option<String> {
-    let content = base
-        .into_iter()
-        .chain(nested.map(str::to_owned))
-        .collect::<Vec<_>>()
-        .join("\n\n");
-    (!content.is_empty()).then_some(content)
-}
-
-fn render_directory(root: &Path, content: &str) -> String {
-    format!(
-        "<directory root=\"{}\">\n{}\n</directory>",
-        escape_xml(&root.display().to_string()),
-        content
-    )
+    entries.extend(nested.entries().map(|(path, body)| {
+        ash_core::HarnessInstruction::new(
+            ash_core::InstructionScope::Directory,
+            root.join(path).display().to_string(),
+            root.display().to_string(),
+            ash_core::InstructionActivation::Nested,
+            body,
+        )
+    }));
+    entries
 }
 
 fn matching_paths(root: &Path, read_paths: &[PathBuf]) -> Vec<PathBuf> {
@@ -764,14 +728,6 @@ fn matching_paths(root: &Path, read_paths: &[PathBuf]) -> Vec<PathBuf> {
             canonical.strip_prefix(&root).ok().map(Path::to_path_buf)
         })
         .collect()
-}
-
-fn escape_xml(value: &str) -> String {
-    value
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
 }
 
 #[cfg(test)]

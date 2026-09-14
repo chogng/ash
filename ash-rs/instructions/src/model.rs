@@ -10,6 +10,22 @@ pub enum InstructionLoadPolicy {
     OnDemand,
 }
 
+/// Why a validated file body was selected for this invocation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InstructionSelection {
+    AlwaysOn,
+    PathMatch,
+    Selected,
+}
+
+/// One selected file, retaining its identity until the host constructs context.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SelectedInstruction {
+    pub path: PathBuf,
+    pub selection: InstructionSelection,
+    pub body: String,
+}
+
 /// One validated Ash Instruction.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InstructionArtifact {
@@ -218,6 +234,42 @@ impl InstructionCatalogSnapshot {
         self.render_content(|entry| entry.applies_to(paths))
     }
 
+    /// Selects bodies without flattening file identities into a scope-wide string.
+    pub fn selected_files(
+        &self,
+        paths: &[PathBuf],
+        selected: &[PathBuf],
+        root: &std::path::Path,
+        source_root: &std::path::Path,
+    ) -> Vec<SelectedInstruction> {
+        let mut files = self
+            .always_on_files()
+            .map(|(path, body)| SelectedInstruction {
+                path: root.join(path),
+                selection: InstructionSelection::AlwaysOn,
+                body: body.to_owned(),
+            })
+            .collect::<Vec<_>>();
+        files.extend(self.entries.iter().filter_map(|entry| {
+            let path = source_root.join(entry.relative_path());
+            let selection = if matches!(entry.load_policy(), InstructionLoadPolicy::Global) {
+                InstructionSelection::AlwaysOn
+            } else if selected.contains(&path) {
+                InstructionSelection::Selected
+            } else if entry.applies_to(paths) {
+                InstructionSelection::PathMatch
+            } else {
+                return None;
+            };
+            Some(SelectedInstruction {
+                path,
+                selection,
+                body: entry.body().to_owned(),
+            })
+        }));
+        files
+    }
+
     /// Includes selected bodies and metadata for rules the agent can read when relevant.
     /// Selected paths are authorized file mentions or successful reads, scoped to this Turn.
     pub fn context_content(
@@ -231,6 +283,22 @@ impl InstructionCatalogSnapshot {
         };
         let active = |entry: &InstructionArtifact| selected_entry(entry) || entry.applies_to(paths);
         let mut sections = self.render_content(active).into_iter().collect::<Vec<_>>();
+        sections.extend(self.reference_content(paths, selected, source_root));
+        let content = sections.join("\n\n");
+        (!content.is_empty()).then_some(content)
+    }
+
+    /// Metadata and diagnostics only; file bodies remain separate contributions.
+    pub fn reference_content(
+        &self,
+        paths: &[PathBuf],
+        selected: &[PathBuf],
+        source_root: &std::path::Path,
+    ) -> Option<String> {
+        let active = |entry: &InstructionArtifact| {
+            selected.contains(&source_root.join(entry.relative_path())) || entry.applies_to(paths)
+        };
+        let mut sections = Vec::new();
         let references = self.entries.iter().filter(|entry| !active(entry)).map(|entry| {
             let policy = match entry.load_policy() {
                 InstructionLoadPolicy::Global => "global".to_owned(),

@@ -5,15 +5,13 @@ use super::super::ContextPreparation;
 use super::super::ContextPreparationError;
 use super::super::ContextTokenCount;
 use super::super::InstructionFragment;
-use super::super::InstructionLayer;
+use super::super::InstructionPlacement;
 use super::super::InstructionRetention;
 use super::super::InstructionSource;
 use super::ContextPlanner;
 use crate::ThreadCommandSnapshot;
 use crate::ThreadSnapshot;
 use crate::TurnSnapshot;
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use ash_protocol::ContextCheckpoint;
 use ash_protocol::ContextCheckpointId;
 use ash_protocol::ContextCheckpointVerification;
@@ -28,6 +26,8 @@ use ash_protocol::ToolDefinition;
 use ash_protocol::ToolName;
 use ash_protocol::TurnId;
 use ash_protocol::TurnStatus;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 #[test]
 fn same_input_produces_an_equivalent_ordered_plan() {
@@ -44,20 +44,24 @@ fn same_input_produces_an_equivalent_ordered_plan() {
     let input = ContextInput::new(
         &base_snapshot,
         current_turn,
-        vec![
+        [
+            InstructionPlacement::Turn,
+            InstructionPlacement::Skill,
+            InstructionPlacement::Directory,
+            InstructionPlacement::User,
+            InstructionPlacement::Product,
+            InstructionPlacement::System,
+        ]
+        .into_iter()
+        .map(|placement| {
             instruction(
-                "directory",
-                InstructionLayer::Directory,
+                &format!("{placement:?}"),
+                placement,
                 InstructionRetention::Required,
-                "directory rule",
-            ),
-            instruction(
-                "system",
-                InstructionLayer::System,
-                InstructionRetention::Required,
-                "system rule",
-            ),
-        ],
+                "rule",
+            )
+        })
+        .collect(),
         Vec::new(),
         budget(1_000),
     );
@@ -72,8 +76,21 @@ fn same_input_produces_an_equivalent_ordered_plan() {
     assert_eq!(format!("{first:?}"), format!("{second:?}"));
     assert_eq!(first.source_thread_sequence(), base_snapshot.sequence);
     assert_eq!(first.selected_items().len(), 3);
-    assert_eq!(first.instructions()[0].layer(), InstructionLayer::System);
-    assert_eq!(first.instructions()[1].layer(), InstructionLayer::Directory);
+    assert_eq!(
+        first
+            .instructions()
+            .iter()
+            .map(|entry| entry.placement())
+            .collect::<Vec<_>>(),
+        vec![
+            InstructionPlacement::System,
+            InstructionPlacement::Product,
+            InstructionPlacement::User,
+            InstructionPlacement::Directory,
+            InstructionPlacement::Skill,
+            InstructionPlacement::Turn
+        ]
+    );
     let super::super::ContextBudgetReport::CoreManaged { maximum_input, .. } = first.budget()
     else {
         panic!("test budget must be Core-managed");
@@ -94,13 +111,13 @@ fn skills_preserve_provider_order_within_their_context_layer() {
         vec![
             instruction(
                 "skill-ash",
-                InstructionLayer::Skill,
+                InstructionPlacement::Skill,
                 InstructionRetention::Required,
                 "first selected Skill",
             ),
             instruction(
                 "skill-alpha",
-                InstructionLayer::Skill,
+                InstructionPlacement::Skill,
                 InstructionRetention::Required,
                 "second selected Skill",
             ),
@@ -129,7 +146,7 @@ fn reports_distinct_mandatory_tool_current_and_shape_failures() {
         turn_id.clone(),
         vec![instruction(
             "system",
-            InstructionLayer::System,
+            InstructionPlacement::System,
             InstructionRetention::Required,
             &"x".repeat(1_000),
         )],
@@ -405,7 +422,7 @@ fn best_effort_instructions_are_omitted_before_history_is_compacted() {
         current,
         vec![instruction(
             "best-effort-skill",
-            InstructionLayer::Skill,
+            InstructionPlacement::Skill,
             InstructionRetention::BestEffort,
             &"x".repeat(1_000),
         )],
@@ -511,7 +528,7 @@ fn invalid_budget_is_not_treated_as_empty_history() {
 
 fn instruction(
     identity: &str,
-    layer: InstructionLayer,
+    layer: InstructionPlacement,
     retention: InstructionRetention,
     body: &str,
 ) -> InstructionFragment {

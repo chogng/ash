@@ -1,7 +1,6 @@
 use super::ContextPlan;
-use super::InstructionLayer;
+use super::InstructionPlacement;
 use crate::CoreError;
-use std::collections::BTreeMap;
 use ash_protocol::ContentPart;
 use ash_protocol::ImageDetail;
 use ash_protocol::InputItem;
@@ -13,6 +12,7 @@ use ash_protocol::ToolCall;
 use ash_protocol::ToolChoice;
 use ash_protocol::ToolResult;
 use ash_protocol::TurnId;
+use std::collections::BTreeMap;
 
 /// Assembles one provider-independent model request from an immutable context plan.
 pub(crate) struct ContextAssembler;
@@ -287,7 +287,12 @@ fn resolved_instructions(plan: &ContextPlan) -> Option<String> {
     let body = plan
         .instructions()
         .iter()
-        .filter(|fragment| fragment.layer() < InstructionLayer::User)
+        .filter(|fragment| {
+            matches!(
+                fragment.placement(),
+                InstructionPlacement::System | InstructionPlacement::Product
+            )
+        })
         .map(|fragment| fragment.body().trim())
         .filter(|body| !body.is_empty())
         .collect::<Vec<_>>()
@@ -300,7 +305,12 @@ fn scoped_instruction_message(plan: &ContextPlan) -> Option<InputItem> {
         .instructions()
         .iter()
         .filter(|fragment| {
-            fragment.layer() >= InstructionLayer::User && fragment.layer() != InstructionLayer::Turn
+            matches!(
+                fragment.placement(),
+                InstructionPlacement::User
+                    | InstructionPlacement::Directory
+                    | InstructionPlacement::Skill
+            )
         })
         .map(|fragment| fragment.body().trim())
         .filter(|body| !body.is_empty())
@@ -313,7 +323,7 @@ fn turn_instruction_message(plan: &ContextPlan) -> Option<InputItem> {
     let body = plan
         .instructions()
         .iter()
-        .filter(|fragment| fragment.layer() == InstructionLayer::Turn)
+        .filter(|fragment| fragment.placement() == InstructionPlacement::Turn)
         .map(|fragment| fragment.body().trim())
         .filter(|body| !body.is_empty())
         .collect::<Vec<_>>()

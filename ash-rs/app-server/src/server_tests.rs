@@ -6028,6 +6028,17 @@ fn instruction_list_and_explicit_attachment_use_current_authorized_files() {
     );
     wait_for_latest_turn(&server, thread_id, TurnStatus::Completed);
     assert!(model.requests.lock().unwrap()[0].input.iter().any(|item| matches!(item, InputItem::Message(message) if message.content.iter().any(|part| matches!(part, ContentPart::Text(text) if text.contains("Check public API compatibility."))))));
+    {
+        let requests = model.requests.lock().unwrap();
+        let request = &requests[0];
+        let product = request.instructions.as_deref().unwrap();
+        assert!(product.contains("current user's explicit request takes precedence"));
+        assert!(!product.contains("Check public API compatibility."));
+        let text = serde_json::to_string(&request.input).unwrap();
+        assert!(text.contains("activation="));
+        assert!(text.contains("revision="));
+        assert!(text.contains("scope="));
+    }
     let rejected = call(
         &server,
         &mut connection,

@@ -379,3 +379,42 @@ fn personal_rule_selection_cannot_be_spoofed_by_a_workspace_relative_path() {
             .is_empty()
     );
 }
+
+#[test]
+fn selection_keeps_file_identity_and_loading_reason_separate() {
+    let dir = tempfile::TempDir::new().unwrap();
+    std::fs::write(dir.path().join("AGENTS.md"), "Root rule").unwrap();
+    let source = dir.path().join(".ash/instructions");
+    std::fs::create_dir_all(&source).unwrap();
+    write_instruction(&source, "always", "global", &[], "Same body");
+    write_instruction(&source, "rust", "contextual", &["**/*.rs"], "Same body");
+    write_instruction(&source, "manual", "on-demand", &[], "Manual body");
+    let catalog = InstructionCatalog::discover(dir.path());
+    let snapshot = catalog.snapshot();
+    let source = dir.path().join(".ash/instructions");
+    let files = snapshot.selected_files(
+        &["src/new.rs".into()],
+        &[source.join("manual.md")],
+        dir.path(),
+        &source,
+    );
+    assert_eq!(files.len(), 4);
+    assert!(files.iter().any(|file| file.path == source.join("rust.md")
+        && file.selection == crate::InstructionSelection::PathMatch));
+    assert!(
+        files
+            .iter()
+            .any(|file| file.path == source.join("manual.md")
+                && file.selection == crate::InstructionSelection::Selected)
+    );
+    assert_eq!(
+        files
+            .iter()
+            .filter(|file| file.body.trim() == "Same body")
+            .count(),
+        2
+    );
+    let references = snapshot.reference_content(&[], &[], &source).unwrap();
+    assert!(!references.contains("Same body"));
+    assert!(!references.contains("Manual body"));
+}

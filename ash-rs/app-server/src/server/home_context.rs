@@ -4,8 +4,6 @@ use ash_core::HarnessContextProvider;
 use ash_core::HarnessContextRequest;
 use ash_core::HarnessInstructions;
 use ash_home::AshHome;
-use sha2::Digest;
-use sha2::Sha256;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -48,32 +46,67 @@ pub(super) fn add_home_instructions(
             Some(home.root().join(canonical.strip_prefix(root).ok()?))
         })
         .collect::<Vec<_>>();
-    let body =
-        home.instructions()
-            .context_content(paths, &selected, &home.root().join("instructions"));
-    let content = Some(format!(
-        "<ash-home>{}</ash-home>\n{}",
-        home.root()
-            .display()
-            .to_string()
-            .replace('&', "&amp;")
-            .replace('<', "&lt;")
-            .replace('>', "&gt;"),
-        body.unwrap_or_default()
-    ));
-    let revision = content_revision("user-instructions", content.as_deref().unwrap_or_default());
-    instructions.with_user_instructions(content, revision)
+    catalog_instructions(
+        ash_core::InstructionScope::User,
+        &home.instructions(),
+        home.root(),
+        &home.root().join("instructions"),
+        paths,
+        &selected,
+    )
+    .into_iter()
+    .fold(instructions, |instructions, entry| {
+        instructions.with_instruction(entry)
+    })
 }
 
-pub(super) fn content_revision(kind: &str, content: &str) -> String {
-    let digest = Sha256::digest(content.as_bytes());
-    format!(
-        "{kind}:sha256:{}",
-        digest
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>()
-    )
+pub(super) fn catalog_instructions(
+    scope: ash_core::InstructionScope,
+    snapshot: &ash_instructions::InstructionCatalogSnapshot,
+    root: &std::path::Path,
+    source_root: &std::path::Path,
+    paths: &[PathBuf],
+    selected: &[PathBuf],
+) -> Vec<ash_core::HarnessInstruction> {
+    let root_text = root.display().to_string();
+    let mut entries = snapshot
+        .selected_files(paths, selected, root, source_root)
+        .into_iter()
+        .map(|file| {
+            let activation = match file.selection {
+                ash_instructions::InstructionSelection::AlwaysOn => {
+                    ash_core::InstructionActivation::AlwaysOn
+                }
+                ash_instructions::InstructionSelection::PathMatch => {
+                    ash_core::InstructionActivation::PathMatch
+                }
+                ash_instructions::InstructionSelection::Selected => {
+                    ash_core::InstructionActivation::Selected
+                }
+            };
+            ash_core::HarnessInstruction::new(
+                scope,
+                file.path.display().to_string(),
+                &root_text,
+                activation,
+                file.body,
+            )
+        })
+        .collect::<Vec<_>>();
+    let root_xml = root_text
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;");
+    let marker = match scope {
+        ash_core::InstructionScope::User => format!("<ash-home>{root_xml}</ash-home>"),
+        ash_core::InstructionScope::Directory => format!("<directory root=\"{root_xml}\" />"),
+    };
+    entries.push(ash_core::HarnessInstruction::new(scope, format!("{root_text}:catalog"), root_text,
+        ash_core::InstructionActivation::Context,
+        format!("{marker}\nThis is the current instruction catalog for this scope. Use the current versions of loaded files; historical copies do not reactivate removed rules.\n{}",
+            snapshot.reference_content(paths, selected, source_root).unwrap_or_default())));
+    entries
 }
 
 #[cfg(test)]

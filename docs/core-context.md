@@ -209,7 +209,7 @@ ContextInput + ContextPolicy
   | ContextError
 ```
 
-把 planner 保持为纯函数可以独立验证 precedence、budget、Tool pairing、checkpoint selection 和
+把 planner 保持为纯函数可以独立验证 放置顺序、budget、Tool pairing、checkpoint selection 和
 determinism。`ContextManager` 只协调生命周期与缓存。
 
 ### 5.3 ContextAssembler
@@ -234,14 +234,14 @@ ContextManager/Planner 完成。
 记账余量的估算，并返回 `Fits`、`NeedsCompaction` 或 `ExceedsContextWindow`。
 
 它不读取 Thread、不选择历史、不执行 provider 请求，也不消费响应 usage。Core planner 使用它解析
-预算边界，仍拥有 instruction precedence、完整语义单元选择和 compaction outcome。provider adapter
+预算边界，仍拥有 指令放置顺序、完整语义单元选择和 compaction outcome。provider adapter
 只负责产生与所选模型匹配的计量结果，不能拥有另一套预算公式。
 
 ### 5.5 提示词所有权与组装
 
 提示词按功能归属：`ash-models-manager` 拥有所选模型的基础 instructions，Goal 提示归 `ext/goal`，动态上下文由对应贡献者提供，`ash-guardian-reviewer` 拥有与动作授权 response schema 绑定的审查提示词，Skill、扩展和工具描述由各能力 crate 拥有。[`ash-prompts`](../ash-rs/prompts/README.md) 提供统一资产和冻结契约，并拥有 context compaction、通用代码 review 这类共享产品提示词。
 
-App Server 在接受普通 Turn 前把 `ash-models-manager` 的基础 instructions 冻结为 durable `TurnInstructions`，review Turn 则冻结共享 review rubric 并标记 `TurnKind::Review`。`$create-instructions` 使用通用 Skill 激活流程创建指令文件。Core 不在 invocation 时重新读取模型配置；它把 Turn 快照连同 User、Directory、Goal、Skill 与扩展 fragment 按 instruction layer、precedence、budget 和 provenance 组装成最终 request。User Instructions 位于 Directory 之前，两者作为 user-role 指令进入首条输入消息，不进入 system body。Core 从本 Turn 成功的 `read_file` / `read_instruction` 调用提供路径，App Server 确认目录归属后做 Contextual 匹配，并按准确指令文件读取路径加载 OnDemand 正文。写入工具提交后，由 host 在执行前校验目标路径的规则；缺少规则以工具错误返回模型，不能用同一批调用中新读到的规则直接执行写入。Review Turn 跳过 active Goal 注入与 Goal continuation。历史旧 Turn 可以读取为缺少快照，但不能以临时查询或默认文本继续执行。
+App Server 在接受普通 Turn 前把 `ash-models-manager` 的基础 instructions 冻结为 durable `TurnInstructions`，review Turn 则冻结共享 review rubric 并标记 `TurnKind::Review`。`$create-instructions` 使用通用 Skill 激活流程创建指令文件。Core 不在 invocation 时重新读取模型配置；它把 Turn 快照连同 User、Directory、Goal、Skill 与扩展 fragment 按 instruction layer、放置顺序、budget 和 provenance 组装成最终 request。User Instructions 位于 Directory 之前，两者作为 user-role 指令进入首条输入消息，不进入 system body。Core 从本 Turn 成功的 `read_file` / `read_instruction` 调用提供路径，App Server 确认目录归属后做 Contextual 匹配，并按准确指令文件读取路径加载 OnDemand 正文。写入工具提交后，由 host 在执行前校验目标路径的规则；缺少规则以工具错误返回模型，不能用同一批调用中新读到的规则直接执行写入。Review Turn 跳过 active Goal 注入与 Goal continuation。历史旧 Turn 可以读取为缺少快照，但不能以临时查询或默认文本继续执行。
 
 当前 assembler 会把同一 Turn 中相邻的 `UserMessage` / `UserImage` 按 durable 顺序合并成一个
 provider-neutral user `Message`，分别映射为 `ContentPart::Text` 与
@@ -252,33 +252,44 @@ provider-neutral user `Message`，分别映射为 `ContentPart::Text` 与
 
 ### 6.1 逻辑层次
 
-当前 instruction fragment 使用以下层级：
+当前 instruction fragment 使用以下放置顺序；它不代表语义权威或工具权限：
 
 ```text
 1. System
 2. Product
-3. Directory
-4. Skill
+3. User
+4. Directory
+5. Skill
+6. Turn（本次调用上下文）
 ```
 
 验证过的 checkpoint 随后替代其覆盖的历史前缀，未覆盖 tail、Tool Call/Result 和当前 Turn 输入
 保持 durable 顺序。Session defaults、Agent role/seed 和 reference resources 尚未接入；接入时必须
 增加明确 layer/retention/provenance，而不能依赖字符串拼接顺序。Provider adapter 只能做 wire
-映射，不能改变 Core 已解析的 precedence。
+映射，不能改变 Core 已解析的放置顺序与消息角色。
 
 ### 6.2 指令优先级
 
-每段 instruction 必须带：
+Core 的 `InstructionPlacement` 只决定请求位置；`InstructionRetention` 独立决定预算保留。
+用户和目录文件以独立 `HarnessInstruction` 进入 Core，保留来源路径、正文 SHA-256、scope、root
+和 activation。上下文计划按文件保留 source identity 与 revision；最终文本带 scope、root、activation
+和 revision。相同正文的不同文件不会按正文去重。
 
-- source kind；
-- source revision；
-- scope；
-- precedence；
-- provenance；
-- sensitivity/visibility metadata。
+产品提示中的 `instruction-priority` 统一规定：
 
-低优先级内容不能覆盖高优先级约束。Agent delegation 可以收紧 policy 或增加任务说明，但不能
-放宽 system/session policy ceiling。
+- 系统、产品安全规则与工具权限不受 Markdown、Skill、附件或委托任务覆盖。
+- 在上述限制内，当前用户明确要求优先于持久指令；个人规则优先于目录规则。
+- 目录规则只适用于声明的 root；子目录规则和 `ASH.md` 可以细化约定，不能默默取消上层明确约束。
+- 同级冲突不按文件名字典序决定胜负；阻碍任务时说明冲突并澄清。
+- 手动附加、工具读取、Skill 激活、消息位置不提升来源权威或扩大作用范围。
+- 当前自动规则快照决定当前激活规则，旧对话副本不重新激活已删除或撤权的规则。
+
+显式附件保存本次选择时的正文与来源标记，仍作为普通 Turn 上下文保存；它不变成系统指令。
+Core 不解析自然语言冲突，也不声称通过排序保证模型遵守。权限与文件工具前置条件由执行路径检查。
+“已选择”“已注入”“已读取”和“已遵守”是不同结论，读取成功不能作为遵守证明。
+
+每次调用重新选择当前授权范围的文件并计算正文 revision，不冻结旧 catalog 来换取缓存命中。
+逐文件来源存在于内部上下文计划与渲染内容中；尚无独立的逐调用指令清单查询 API。
 
 ### 6.3 结构不变量
 
@@ -605,7 +616,7 @@ TurnExecutor
 必须覆盖：
 
 - 相同 ContextInput 产生字节级等价的 ContextPlan；
-- instruction precedence；
+- 指令放置顺序、角色与来源；
 - budget boundary 与 mandatory overflow；
 - Tool Call/Result 原子保留；
 - Agent delegation/result 原子保留（阶段 D protocol 类型落地后启用）；

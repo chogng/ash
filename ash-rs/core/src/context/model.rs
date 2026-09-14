@@ -1,17 +1,17 @@
 use super::ContextBudget;
 use crate::ContextEvidence;
 use crate::ThreadSnapshot;
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use ash_protocol::ContextCheckpoint;
 use ash_protocol::ItemId;
 use ash_protocol::ThreadItem;
 use ash_protocol::ToolDefinition;
 use ash_protocol::TurnId;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
-/// The semantic precedence of one instruction fragment.
+/// Stable rendering position, not permission or semantic authority.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub(crate) enum InstructionLayer {
+pub(crate) enum InstructionPlacement {
     System,
     Product,
     User,
@@ -82,11 +82,11 @@ impl TryFrom<&ash_extension_api::PromptFragmentSource> for InstructionSource {
     }
 }
 
-/// One bounded instruction contribution before precedence and budget resolution.
+/// One bounded instruction contribution before placement and budget resolution.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct InstructionFragment {
     source: InstructionSource,
-    layer: InstructionLayer,
+    placement: InstructionPlacement,
     retention: InstructionRetention,
     body: String,
 }
@@ -94,13 +94,13 @@ pub(crate) struct InstructionFragment {
 impl InstructionFragment {
     pub(crate) fn new(
         source: InstructionSource,
-        layer: InstructionLayer,
+        placement: InstructionPlacement,
         retention: InstructionRetention,
         body: impl Into<String>,
     ) -> Self {
         Self {
             source,
-            layer,
+            placement,
             retention,
             body: body.into(),
         }
@@ -110,8 +110,8 @@ impl InstructionFragment {
         &self.source
     }
 
-    pub(crate) const fn layer(&self) -> InstructionLayer {
-        self.layer
+    pub(crate) const fn placement(&self) -> InstructionPlacement {
+        self.placement
     }
 
     pub(crate) const fn retention(&self) -> InstructionRetention {
@@ -134,11 +134,13 @@ impl TryFrom<ash_extension_api::PromptFragment> for InstructionFragment {
         }
         Ok(Self {
             source: InstructionSource::try_from(fragment.source())?,
-            layer: match fragment.layer() {
-                ash_extension_api::PromptFragmentLayer::System => InstructionLayer::System,
-                ash_extension_api::PromptFragmentLayer::Product => InstructionLayer::Product,
-                ash_extension_api::PromptFragmentLayer::Directory => InstructionLayer::Directory,
-                ash_extension_api::PromptFragmentLayer::Skill => InstructionLayer::Skill,
+            placement: match fragment.layer() {
+                ash_extension_api::PromptFragmentLayer::System => InstructionPlacement::System,
+                ash_extension_api::PromptFragmentLayer::Product => InstructionPlacement::Product,
+                ash_extension_api::PromptFragmentLayer::Directory => {
+                    InstructionPlacement::Directory
+                }
+                ash_extension_api::PromptFragmentLayer::Skill => InstructionPlacement::Skill,
             },
             retention: match fragment.retention() {
                 ash_extension_api::PromptFragmentRetention::Required => {

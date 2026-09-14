@@ -264,7 +264,7 @@ impl ThreadController {
                     instructions.id(),
                     instructions.revision(),
                 ),
-                crate::context::InstructionLayer::System,
+                crate::context::InstructionPlacement::System,
                 crate::context::InstructionRetention::Required,
                 instructions.body(),
             )];
@@ -278,7 +278,7 @@ impl ThreadController {
                             asset.id.clone(),
                             asset.revision.clone(),
                         ),
-                        crate::context::InstructionLayer::System,
+                        crate::context::InstructionPlacement::System,
                         crate::context::InstructionRetention::Required,
                         asset.body.clone(),
                     )
@@ -297,7 +297,7 @@ impl ThreadController {
                                 asset.id(),
                                 asset.revision(),
                             ),
-                            crate::context::InstructionLayer::System,
+                            crate::context::InstructionPlacement::System,
                             crate::context::InstructionRetention::Required,
                             asset.body(),
                         )
@@ -314,7 +314,7 @@ impl ThreadController {
                         asset.id.clone(),
                         asset.revision.clone(),
                     ),
-                    crate::context::InstructionLayer::Product,
+                    crate::context::InstructionPlacement::Product,
                     crate::context::InstructionRetention::Required,
                     asset.body.clone(),
                 ));

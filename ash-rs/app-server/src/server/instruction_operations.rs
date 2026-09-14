@@ -133,7 +133,17 @@ impl AppServer {
             {
                 return Ok(UserInput::Context {
                     name: path.into(),
-                    content: body.into(),
+                    content: ash_core::HarnessInstruction::new(
+                        match source.scope {
+                            InstructionScopeDto::User => ash_core::InstructionScope::User,
+                            InstructionScopeDto::Directory => ash_core::InstructionScope::Directory,
+                        },
+                        path,
+                        source.root.display().to_string(),
+                        ash_core::InstructionActivation::Selected,
+                        body,
+                    )
+                    .render(),
                 });
             }
         }

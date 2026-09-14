@@ -5,9 +5,6 @@ use crate::StartThreadRequest;
 use crate::StartTurnRequest;
 use crate::ThreadController;
 use crate::thread_controller::PrepareModelInvocationRequest;
-use std::hint::black_box;
-use std::sync::Arc;
-use std::time::Instant;
 use ash_protocol::AgentCapabilityScope;
 use ash_protocol::AgentConfiguration;
 use ash_protocol::AgentRoleSnapshot;
@@ -19,6 +16,9 @@ use ash_protocol::ToolName;
 use ash_protocol::TurnId;
 use ash_protocol::TurnInstructions;
 use ash_protocol::UserInput;
+use std::hint::black_box;
+use std::sync::Arc;
+use std::time::Instant;
 
 struct Fixture {
     controller: ThreadController,
@@ -191,7 +191,7 @@ fn time_context_benchmark() {
         let snapshot = fixture.controller.read_thread(&fixture.thread).unwrap();
         let instructions = vec![InstructionFragment::new(
             InstructionSource::new("benchmark", "stable-instructions", "v1"),
-            InstructionLayer::System,
+            InstructionPlacement::System,
             InstructionRetention::Required,
             ash_prompts::AGENT_INSTRUCTIONS.freeze().body(),
         )];

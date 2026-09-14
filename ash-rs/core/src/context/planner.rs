@@ -11,8 +11,6 @@ use super::OmittedInstruction;
 use super::compaction::estimate_compaction_input;
 use super::input_limits::limit_model_input_items;
 use super::plan::ContextPlanInput;
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use ash_context_engine::ResolvedContextBudget;
 use ash_protocol::ContentPart;
 use ash_protocol::ContextCheckpoint;
@@ -21,6 +19,8 @@ use ash_protocol::ThreadItem;
 use ash_protocol::ToolCallId;
 use ash_protocol::ToolDefinition;
 use ash_protocol::TurnId;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 pub(crate) const CONTEXT_ESTIMATOR_REVISION: &str = "deterministic-bytes-v2";
 const TEXT_ITEM_OVERHEAD: u32 = 6;
@@ -759,7 +759,7 @@ fn bounded_compaction_prefix(
 }
 
 fn sort_instructions(instructions: &mut [InstructionFragment]) {
-    instructions.sort_by_key(InstructionFragment::layer);
+    instructions.sort_by_key(InstructionFragment::placement);
 }
 
 fn estimate_instructions(instructions: &[InstructionFragment]) -> ContextTokenCount {

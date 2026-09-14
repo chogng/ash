@@ -12,6 +12,12 @@ mod planner;
 pub(crate) mod time;
 pub use time::TimeContextProvider;
 
+pub use ash_context_engine::ContextBudget;
+pub use ash_context_engine::ContextCompactionLimit;
+pub use ash_context_engine::ContextTokenCount;
+pub use ash_context_engine::ContextTokenMeasurementCapability;
+pub use ash_context_engine::ContextTokenMeasurementOutcome;
+pub use ash_context_engine::ResolvedContextBudget;
 pub(crate) use assembler::ContextAssembler;
 pub(crate) use calibration::CONTEXT_CALIBRATION_REVISION;
 pub(crate) use calibration::ContextCalibration;
@@ -36,7 +42,7 @@ pub(crate) use measurement_policy::ContextMeasurementDisposition;
 pub(crate) use measurement_policy::ContextMeasurementPolicy;
 pub(crate) use model::ContextInput;
 pub(crate) use model::InstructionFragment;
-pub(crate) use model::InstructionLayer;
+pub(crate) use model::InstructionPlacement;
 pub(crate) use model::InstructionRetention;
 pub(crate) use model::InstructionSource;
 pub(crate) use plan::CompactionPlan;
@@ -47,13 +53,11 @@ pub(crate) use plan::ContextPreparationError;
 pub(crate) use plan::OmittedInstruction;
 pub(crate) use planner::CONTEXT_ESTIMATOR_REVISION;
 pub(crate) use planner::ContextPlanner;
-pub use ash_context_engine::ContextBudget;
-pub use ash_context_engine::ContextCompactionLimit;
-pub use ash_context_engine::ContextTokenCount;
-pub use ash_context_engine::ContextTokenMeasurementCapability;
-pub use ash_context_engine::ContextTokenMeasurementOutcome;
-pub use ash_context_engine::ResolvedContextBudget;
 
 #[cfg(test)]
 #[path = "context/benchmarks.rs"]
 mod benchmarks;
+
+pub use instructions::HarnessInstruction;
+pub use instructions::InstructionActivation;
+pub use instructions::InstructionScope;

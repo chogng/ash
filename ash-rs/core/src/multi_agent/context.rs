@@ -1,12 +1,12 @@
 use crate::ThreadSnapshot;
 use crate::context::InstructionFragment;
-use crate::context::InstructionLayer;
+use crate::context::InstructionPlacement;
 use crate::context::InstructionRetention;
 use crate::context::InstructionSource;
-use std::collections::BTreeSet;
 use ash_protocol::AgentContextContent;
 use ash_protocol::AgentMessageContent;
 use ash_protocol::ToolDefinition;
+use std::collections::BTreeSet;
 
 pub(crate) fn agent_context_fragments(snapshot: &ThreadSnapshot) -> Vec<InstructionFragment> {
     let mut fragments = Vec::new();
@@ -17,7 +17,7 @@ pub(crate) fn agent_context_fragments(snapshot: &ThreadSnapshot) -> Vec<Instruct
         let revision = ash_protocol::ContentDigest::sha256(role.instructions.as_bytes());
         fragments.push(InstructionFragment::new(
             InstructionSource::new("agent-role", role.name.clone(), revision.as_str()),
-            InstructionLayer::Product,
+            InstructionPlacement::Product,
             InstructionRetention::Required,
             format!(
                 "<agent-role name=\"{}\">\n{}\n</agent-role>",
@@ -29,7 +29,7 @@ pub(crate) fn agent_context_fragments(snapshot: &ThreadSnapshot) -> Vec<Instruct
     if let Some(seed) = &snapshot.agent_context_seed {
         fragments.push(InstructionFragment::new(
             InstructionSource::new("agent-delegation", seed.delegation_id.to_string(), seed.digest.as_str()),
-            InstructionLayer::Turn,
+            InstructionPlacement::Turn,
             InstructionRetention::Required,
             format!("This is delegated work from Agent Thread {}. Complete the assigned task within your own role and permissions, and return the result and verification evidence to the caller.", seed.parent_thread_id),
         ));
@@ -42,7 +42,7 @@ pub(crate) fn agent_context_fragments(snapshot: &ThreadSnapshot) -> Vec<Instruct
                     format!("{source_thread_id}:{source_id}"),
                     format!("{source_sequence}:{}", materialized.content_digest.as_str()),
                 ),
-                InstructionLayer::Directory,
+                InstructionPlacement::Directory,
                 InstructionRetention::Required,
                 format!(
                     "<inherited-agent-context source-thread=\"{}\" source-sequence=\"{}\" kind=\"{}\">\n{}\n</inherited-agent-context>",
@@ -79,7 +79,7 @@ pub(crate) fn agent_context_fragments(snapshot: &ThreadSnapshot) -> Vec<Instruct
                 message.message_id.to_string(),
                 message.sender_sequence.to_string(),
             ),
-            InstructionLayer::Directory,
+            InstructionPlacement::Directory,
             InstructionRetention::BestEffort,
             format!(
                 "<agent-message sender=\"{}\" provenance=\"{:?}\">\n{}\n</agent-message>",

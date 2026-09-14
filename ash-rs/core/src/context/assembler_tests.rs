@@ -283,17 +283,18 @@ fn injects_instructions_before_history_and_environment_at_the_request_tail() {
     let request = assemble(&snapshot, Vec::new(), &harness).unwrap();
 
     let resolved = request.instructions.as_deref().unwrap();
-    assert_eq!(resolved, "system body");
+    assert!(resolved.starts_with("system body\n\n<instruction-priority>"));
+    assert!(resolved.contains("current user\'s explicit request takes precedence"));
     assert!(request.parallel_tool_calls);
     let InputItem::Message(message) = &request.input[0] else {
         panic!("Directory instructions must be the first input message");
     };
     assert!(matches!(message.role, MessageRole::User));
     assert!(
-        matches!(&message.content[0], ContentPart::Text(text) if text.contains("Directory Instructions apply only to their declared roots"))
+        matches!(&message.content[0], ContentPart::Text(text) if text.contains("<directory-instructions>"))
     );
     assert!(
-        matches!(&message.content[0], ContentPart::Text(text) if text.ends_with("follow the directory rules\n</directory-instructions>"))
+        matches!(&message.content[0], ContentPart::Text(text) if text.ends_with("follow the directory rules\n</instruction>\n</directory-instructions>"))
     );
     let InputItem::Message(message) = &request.input[1] else {
         panic!("durable user input must follow Directory instructions");
@@ -326,7 +327,8 @@ fn user_instructions_precede_directory_instructions_without_entering_system_body
     let request = assemble(&snapshot, Vec::new(), &harness).unwrap();
 
     let resolved = request.instructions.as_deref().unwrap();
-    assert_eq!(resolved, "system body");
+    assert!(resolved.starts_with("system body\n\n<instruction-priority>"));
+    assert!(resolved.contains("current user\'s explicit request takes precedence"));
     let InputItem::Message(message) = &request.input[0] else {
         panic!("scoped instructions must be the first input message");
     };
