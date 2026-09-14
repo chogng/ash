@@ -266,10 +266,7 @@ pub(in crate::app) fn activate_header_target(
             Some(crate::status::Command::OpenPanel.into())
         }
         Target::Dashboard => {
-            if matches!(
-                app.fullscreen.sessions.screen(),
-                Some(SessionScreen::Manager)
-            ) {
+            if app.session_manager_view().is_some() {
                 return exit_manager(app).flatten();
             }
             show_manager(app);

@@ -40,6 +40,40 @@ fn text(buffer: &Buffer) -> String {
 }
 
 #[test]
+fn home_dashboard_header_opens_the_session_manager() {
+    for keyboard in [false, true] {
+        let mut app = unstarted_app();
+        super::super::navigation::show_manager(&mut app);
+        app.open_home();
+        assert!(app.fullscreen_home_visible());
+        assert!(app.session_manager_view().is_none());
+
+        let command = if keyboard {
+            app.handle_key(key(KeyCode::F(6)));
+            app.handle_key(key(KeyCode::Enter))
+        } else {
+            let area = ratatui::layout::Rect::new(0, 0, 80, 24);
+            let header = super::super::layout(&app, area).header;
+            let position = (0..area.width)
+                .map(|column| ratatui::layout::Position::new(column, header.y))
+                .find(|position| {
+                    super::super::header::target_at(&app, header, *position)
+                        == Some(super::super::header::Target::Dashboard)
+                })
+                .unwrap();
+            super::super::pointer::activate_pointer_item(&mut app, area, position.x, position.y)
+        };
+        assert_eq!(command, None);
+        assert!(!app.fullscreen_home_visible());
+        assert!(app.session_manager_view().is_some());
+        crate::tui_assert_snapshot!(
+            "home_dashboard_session_manager",
+            text(&render(&app, 80, 24))
+        );
+    }
+}
+
+#[test]
 fn home_keeps_actions_above_the_fixed_composer() {
     let mut app = unstarted_app();
     app.open_home();
