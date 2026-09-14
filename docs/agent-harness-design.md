@@ -144,7 +144,7 @@ durable Thread history 和当前 Turn 输入之后，不进入可复用缓存前
   system 与安全策略；
 - 大小：每个文件最多 32 KiB、直接条目最多 128，非法条目产生隔离 diagnostic；
 - `load: contextual`：只匹配本 Turn 成功读取且位于对应授权目录内的文件；
-- `load: on-demand`：Agent definition 可显式按名称引用；用户手动附加尚未实现；
+- `load: on-demand`：Agent definition 可显式按名称引用；Desktop 和 TUI 已支持用户手动附加；
 - 目录不存在或没有合法 Global 条目：省略该目录的贡献，不放占位符；
 - 文件变化：Directory watcher 触发 catalog refresh；已经组装的 model request 不变，后续
   model invocation 从 `HarnessContextProvider` 读取新 snapshot。
