@@ -86,14 +86,20 @@ restart; failures are retained for `ash update --status`. Run `ash update` or
 with:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/chogng/ash/main/scripts/ash-code/install.sh | sh
+curl -fsSL https://chogng.github.io/ash/cli/install.sh | sh
 ```
 
 Windows PowerShell uses:
 
 ```powershell
-irm https://raw.githubusercontent.com/chogng/ash/main/scripts/ash-code/install.ps1 | iex
+irm https://chogng.github.io/ash/cli/install.ps1 | iex
 ```
+
+The [Pages workflow](../.github/workflows/pages.yml) publishes the canonical installers from
+`scripts/ash-code/` whenever they change on `main`. Its static artifact contains `.nojekyll`
+at the root and the two scripts under `cli/`; no Jekyll build runs. Installation packages
+remain GitHub Release assets and must be published before installation can succeed.
+On macOS, Linux, and WSL, ensure `~/.local/bin` is on `PATH` to invoke `ash` after installation.
 
 `ash-code/cli/tests/remote_connect.rs` exercises target resolution, the real local Remote Server
 broker, trusted runtime preparation, and `--check` through a fake OpenSSH executable.

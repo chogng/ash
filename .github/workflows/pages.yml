@@ -1,0 +1,54 @@
+name: Publish installation scripts
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - scripts/ash-code/install.sh
+      - scripts/ash-code/install.ps1
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Configure Pages
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+
+      - name: Stage installation scripts
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/ash-pages/cli"
+          touch "$RUNNER_TEMP/ash-pages/.nojekyll"
+          cp scripts/ash-code/install.sh scripts/ash-code/install.ps1 "$RUNNER_TEMP/ash-pages/cli/"
+          sh -n "$RUNNER_TEMP/ash-pages/cli/install.sh"
+          cmp scripts/ash-code/install.sh "$RUNNER_TEMP/ash-pages/cli/install.sh"
+          cmp scripts/ash-code/install.ps1 "$RUNNER_TEMP/ash-pages/cli/install.ps1"
+
+      - name: Upload static files
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: ${{ runner.temp }}/ash-pages
+          include-hidden-files: true
+
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
