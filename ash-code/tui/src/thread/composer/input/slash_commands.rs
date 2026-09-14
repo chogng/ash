@@ -155,6 +155,20 @@ pub(crate) struct SlashCommandInvocation {
 }
 
 impl SlashCommandInvocation {
+    pub(crate) fn text_arguments(&self) -> Result<String, String> {
+        let texts = self
+            .arguments
+            .iter()
+            .map(|argument| match argument {
+                ChatInputItem::Text(text) => Ok(text.as_str()),
+                _ => Err(
+                    "product commands do not accept image arguments or Skill selections".to_owned(),
+                ),
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(texts.join(" ").trim().to_owned())
+    }
+
     pub(crate) fn display_text(&self) -> String {
         let command = format!("/{}", self.command.name);
         if self.display_arguments.is_empty() {

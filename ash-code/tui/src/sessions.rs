@@ -2,8 +2,6 @@ use ash_app_server_protocol::protocol::session::SessionRequestResult;
 use ash_app_server_protocol::protocol::session::SessionThreadReadParams;
 mod active;
 mod completion;
-#[cfg(test)]
-mod completion_tests;
 mod details;
 mod manager;
 mod navigation;
@@ -53,6 +51,7 @@ pub(crate) enum Event {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Command {
+    Fork { prompt: String },
     Preview {
         generation: u64,
         params: SessionThreadReadParams,

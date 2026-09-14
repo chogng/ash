@@ -32,6 +32,10 @@ pub(crate) struct ManagerSessionCompletion {
 
 /// Result of one asynchronous Session or active-conversation operation.
 pub(crate) enum SessionCompletion {
+    Forked {
+        command: String,
+        result: Result<ForkCompletion, String>,
+    },
     Preview {
         generation: u64,
         result: Result<SessionThreadReadResult, String>,
@@ -46,6 +50,10 @@ pub(crate) enum SessionCompletion {
 }
 
 pub(crate) enum CommandRequest {
+    Fork {
+        prompt: String,
+        approval_mode: ApprovalMode,
+    },
     Preview {
         generation: u64,
         params: SessionThreadReadParams,
@@ -76,6 +84,7 @@ pub(crate) enum CommandRequest {
 impl Command {
     pub(crate) fn command_line(&self) -> Option<String> {
         match self {
+            Self::Fork { prompt } => Some(fork_command(prompt)),
             Self::Resume { session_id, .. } => Some(format!("/resume {session_id}")),
             Self::Preview { .. }
             | Self::Restore { .. }
@@ -90,6 +99,7 @@ impl Command {
 impl CommandRequest {
     pub(crate) const fn name(&self) -> &'static str {
         match self {
+            Self::Fork { .. } => "ash-tui-fork-session",
             Self::Preview { .. } => "ash-tui-preview-session",
             Self::Restore { .. } => "ash-tui-restore-session",
             Self::Delete { .. } => "ash-tui-delete-session",
@@ -106,6 +116,14 @@ impl CommandRequest {
         current: Option<Conversation>,
     ) -> SessionCompletion {
         match self {
+            Self::Fork { prompt, approval_mode } => SessionCompletion::Forked {
+                command: fork_command(&prompt),
+                result: current
+                    .ok_or_else(|| "No active session".to_owned())
+                    .and_then(|current| {
+                        fork_session(&mut client, &current.conversation, &prompt, approval_mode)
+                    }),
+            },
             Self::Preview { generation, params } => SessionCompletion::Preview {
                 generation,
                 result: client
@@ -182,6 +200,7 @@ impl CommandRequest {
 
 pub(crate) fn prepare_command(approval_mode: ApprovalMode, command: Command) -> CommandRequest {
     match command {
+        Command::Fork { prompt } => CommandRequest::Fork { prompt, approval_mode },
         Command::Preview { generation, params } => CommandRequest::Preview { generation, params },
         Command::Restore { session_id } => CommandRequest::Restore { session_id },
         Command::Delete { session_id } => CommandRequest::Delete { session_id },
@@ -271,3 +290,90 @@ pub(crate) fn create_manager_session_and_start(
 pub(crate) fn subscription_error(error: ClientError) -> String {
     format!("the command changed the conversation, but the TUI could not subscribe to it: {error}")
 }
+
+pub(crate) struct ForkCompletion {
+    session_id: SessionId,
+    status: ForkStatus,
+}
+
+enum ForkStatus {
+    Waiting,
+    Started,
+    StartFailed(String),
+}
+
+impl ForkCompletion {
+    pub(crate) fn into_event(self, command: String) -> crate::thread::Event {
+        let session_id = self.session_id;
+        let result = match self.status {
+            ForkStatus::Waiting => format!("Copied to session {session_id}. Waiting for input. Open with /resume {session_id}."),
+            ForkStatus::Started => format!("Started session {session_id} in the background. Results stay there. Open with /resume {session_id}."),
+            ForkStatus::StartFailed(error) => return crate::thread::Event::CommandFailed {
+                command,
+                error: format!("Copied to session {session_id}, but could not start the prompt: {error}. Open with /resume {session_id}."),
+            },
+        };
+        crate::thread::Event::CommandCompleted { command, result }
+    }
+}
+
+fn fork_command(prompt: &str) -> String {
+    if prompt.is_empty() {
+        "/fork".into()
+    } else {
+        format!("/fork {prompt}")
+    }
+}
+
+fn fork_session(
+    client: &mut AppServerRequestHandle,
+    source: &ActiveConversation,
+    prompt: &str,
+    approval_mode: ApprovalMode,
+) -> Result<ForkCompletion, String> {
+    use ash_app_server_protocol::protocol::session::SessionRequest;
+    use ash_app_server_protocol::protocol::session::SessionRequestParams;
+    let result = client
+        .request_session(SessionRequestParams {
+            command_id: crate::client::new_command_id("fork-session"),
+            session_id: source.session_id().clone(),
+            request: SessionRequest::ForkSession {
+                parent_thread_id: source.thread_id().clone(),
+                title: format!("Fork of {}", source.title()),
+            },
+        })
+        .and_then(super::active::expect_thread_result)
+        .map_err(|error| error.to_string())?;
+    let session_id = result.session.session_id;
+    let status = if prompt.is_empty() {
+        ForkStatus::Waiting
+    } else {
+        let start = (|| {
+            let thread = client
+                .read_session_thread(SessionThreadReadParams {
+                    session_id: session_id.clone(),
+                    thread_id: result.thread_id.clone(),
+                    history: None,
+                })?
+                .thread;
+            crate::thread::submit_prompt(
+                client,
+                ThreadRequestScope::new(&session_id, &result.thread_id, thread.sequence),
+                ChatSubmission {
+                    display_text: prompt.into(),
+                    input: vec![crate::thread::composer::ChatInputItem::Text(prompt.into())],
+                },
+                approval_mode,
+            )
+        })();
+        match start {
+            Ok(_) => ForkStatus::Started,
+            Err(error) => ForkStatus::StartFailed(error.to_string()),
+        }
+    };
+    Ok(ForkCompletion { session_id, status })
+}
+
+#[cfg(test)]
+#[path = "completion_tests.rs"]
+mod tests;

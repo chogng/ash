@@ -1513,9 +1513,7 @@ impl AppServer {
 
     pub(crate) fn bind_session_extensions(&self) -> Result<(), CoreError> {
         for session_id in self.session_ids()? {
-            self.updates.bind_session_scope(session_id.clone());
-            self.threads
-                .install_session_extensions(session_id, Arc::clone(&self.agent_extensions))?;
+            self.bind_session_runtime(&session_id)?;
         }
         Ok(())
     }

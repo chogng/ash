@@ -2562,3 +2562,20 @@ fn panel_search_owns_letters_and_paste_then_returns_to_the_list_and_original_dra
     assert!(app.command_panel().is_none());
     assert_eq!(app.input(), "original draft");
 }
+
+#[test]
+fn fork_rejects_image_arguments_before_session_creation() {
+    let mut app = App::new();
+    app.insert_text("/fork ");
+    app.update(HostEvent::ClipboardImageRead {
+        target: app.draft_target(),
+        result: Ok(ClipboardImage {
+            png: b"\x89PNG\r\n\x1a\npayload".to_vec(),
+            fingerprint: ClipboardImageFingerprint(1),
+            width: 1,
+            height: 1,
+        }),
+    });
+    assert_eq!(app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)), None);
+    assert!(app.messages().last().unwrap().detail().unwrap().contains("do not accept image arguments"));
+}

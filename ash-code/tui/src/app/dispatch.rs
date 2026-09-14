@@ -9,7 +9,6 @@ use crate::sessions::ActiveConversation;
 use crate::sessions::ConversationChange;
 use crate::skills::load_selection;
 use crate::status;
-use crate::thread::composer::ChatInputItem;
 use crate::thread::composer::SlashCommandInvocation;
 use crate::thread::composer::TuiSlashCommandAction;
 use crate::thread::rewind;
@@ -65,7 +64,7 @@ where
         .map_err(|_| {
             CommandExecutionError("server command reached the TUI-local dispatcher".into())
         })?;
-    let arguments = text_arguments(&invocation.arguments)?;
+    let arguments = invocation.text_arguments().map_err(CommandExecutionError)?;
     let mut output = CommandOutput::default();
 
     match command {
@@ -281,19 +280,8 @@ where
                     .map_err(session_error)?,
             );
         }
-        TuiSlashCommandAction::Fork => {
-            let notice = require_conversation_mut(conversation)?
-                .fork_session(client, &arguments)
-                .map_err(session_error)?;
-            output.events.push(
-                crate::thread::Event::CommandCompleted {
-                    command: invocation.display_text(),
-                    result: notice,
-                }
-                .into(),
-            );
-        }
-        TuiSlashCommandAction::Config
+        TuiSlashCommandAction::Fork
+        | TuiSlashCommandAction::Config
         | TuiSlashCommandAction::Export
         | TuiSlashCommandAction::Help
         | TuiSlashCommandAction::Shortcuts
@@ -338,35 +326,6 @@ where
 struct CommandOutput {
     events: Vec<AppEvent>,
     conversation_change: Option<ConversationChange>,
-}
-
-fn text_arguments(arguments: &[ChatInputItem]) -> Result<String, CommandExecutionError> {
-    if arguments.iter().any(|argument| {
-        matches!(
-            argument,
-            ChatInputItem::Image { .. }
-                | ChatInputItem::Attachment(_)
-                | ChatInputItem::Context { .. }
-                | ChatInputItem::Skill { .. }
-        )
-    }) {
-        return Err(CommandExecutionError(
-            "product commands do not accept image arguments or Skill selections".into(),
-        ));
-    }
-    Ok(arguments
-        .iter()
-        .filter_map(|argument| match argument {
-            ChatInputItem::Text(text) => Some(text.as_str()),
-            ChatInputItem::Image { .. }
-            | ChatInputItem::Attachment(_)
-            | ChatInputItem::Context { .. }
-            | ChatInputItem::Skill { .. } => None,
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
-        .trim()
-        .to_owned())
 }
 
 fn require_conversation(

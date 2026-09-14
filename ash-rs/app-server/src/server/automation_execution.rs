@@ -1,6 +1,5 @@
 use super::AppServer;
 use super::operations::ThreadMutation;
-use std::sync::Arc;
 use ash_app_server_protocol::protocol::turn::InputItem;
 use ash_core::StartThreadRequest;
 use ash_core::ThreadCommandResult;
@@ -87,12 +86,7 @@ impl AppServer {
             observed.finished_at = Some(now);
             return Ok(observed);
         }
-        self.updates.bind_session_scope(snapshot.session_id.clone());
-        self.threads
-            .install_session_extensions(
-                snapshot.session_id.clone(),
-                Arc::clone(&self.agent_extensions),
-            )
+        self.bind_session_runtime(&snapshot.session_id)
             .map_err(|error| error.to_string())?;
         let snapshot = if accepted.is_none() {
             let start = self.start_turn_request(

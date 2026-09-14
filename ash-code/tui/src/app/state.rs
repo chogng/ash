@@ -2657,6 +2657,18 @@ impl App {
             {
                 Some(AppCommand::Quit)
             }
+            (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Fork)) => {
+                match invocation.text_arguments() {
+                    Ok(prompt) => Some(SessionCommand::Fork { prompt }.into()),
+                    Err(error) => {
+                        self.thread.update(ThreadPresentationEvent::CommandFailed {
+                            command: invocation.display_text(),
+                            error,
+                        });
+                        None
+                    }
+                }
+            }
             (SlashCommandOrigin::Local, Some(TuiSlashCommandAction::Export)) => {
                 let requested_path = (!invocation.display_arguments.trim().is_empty())
                     .then(|| PathBuf::from(invocation.display_arguments.trim()));

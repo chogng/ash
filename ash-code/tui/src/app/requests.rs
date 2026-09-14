@@ -214,7 +214,7 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
             | SessionCommand::Archive { .. }
             | SessionCommand::CreateAndEnter { .. },
         ) => Some(RequestKey::Sessions),
-        AppCommand::Sessions(SessionCommand::SwitchThread { .. })
+        AppCommand::Sessions(SessionCommand::Fork { .. } | SessionCommand::SwitchThread { .. })
         | AppCommand::Thread(
             ThreadCommand::ExecuteProductCommand(_)
             | ThreadCommand::LoadOlderHistory

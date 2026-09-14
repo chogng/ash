@@ -281,3 +281,128 @@ fn missing_role_fails_before_a_session_is_created_and_default_never_routes_by_ti
             .is_none()
     );
 }
+
+struct SessionActivation(std::sync::atomic::AtomicUsize);
+
+impl ash_extension_api::SkillActivationContributor for SessionActivation {
+    fn contribute(
+        &self,
+        _: ash_extension_api::SkillActivationContext<'_>,
+    ) -> Result<Vec<ash_protocol::FrozenSkillActivation>, ash_extension_api::ExtensionError> {
+        self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(Vec::new())
+    }
+}
+
+#[test]
+fn fork_session_binds_extensions_and_delivers_approval_after_subscription() {
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        InMemoryThreadStore::default(),
+    )));
+    let (tx, _) = mpsc::channel();
+    let mut server = AppServer::new(threads.clone(), Arc::new(CaptureModel(tx)));
+    let activation = Arc::new(SessionActivation(std::sync::atomic::AtomicUsize::new(0)));
+    let mut extensions = ash_extension_api::ExtensionRegistryBuilder::new();
+    extensions.skill_activation_contributor(activation.clone());
+    server.agent_extensions = Arc::new(extensions.build());
+    let mut connection = server.connection();
+    let initialized = call(
+        &server,
+        &mut connection,
+        "initialize",
+        serde_json::json!({
+            "clientInfo":{"name":"fork-test","version":"1"},
+            "capabilities":{"agentInteractions":{"version":1,"kinds":["approval"]}}
+        }),
+    );
+    assert!(initialized.get("result").is_some(), "{initialized}");
+    let created = call(
+        &server,
+        &mut connection,
+        "session/create",
+        serde_json::json!({"commandId":"source", "title":"Source"}),
+    );
+    let source_id = created["result"]["session"]["sessionId"].as_str().unwrap();
+    let params = serde_json::json!({"commandId":"copy", "sessionId":source_id,
+        "request":{"type":"forkSession", "parentThreadId":source_id, "title":"Copy"}});
+    let copied = call(&server, &mut connection, "session/request", params.clone());
+    assert!(copied.get("result").is_some(), "{copied}");
+    let repeated = call(&server, &mut connection, "session/request", params);
+    assert_eq!(copied["result"], repeated["result"]);
+    let session_id = ash_protocol::SessionId::new(
+        copied["result"]["value"]["session"]["sessionId"]
+            .as_str()
+            .unwrap(),
+    )
+    .unwrap();
+    let thread_id = ThreadId::new(copied["result"]["value"]["threadId"].as_str().unwrap()).unwrap();
+    assert_ne!(session_id.as_str(), source_id);
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+    let started = threads
+        .start_turn(
+            &thread_id,
+            ash_core::StartTurnRequest {
+                command_id: CommandId::new("copy-turn").unwrap(),
+                expected_sequence: ash_core::SequenceExpectation::Exact(snapshot.sequence),
+                model: None,
+                kind: ash_protocol::TurnKind::Coding,
+                instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
+                policy_revision: "test-policy".into(),
+                approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+                tool_mode: ash_protocol::ToolMode::Direct,
+                tool_profile: None,
+                activated_skills: Vec::new(),
+                input: vec![ash_protocol::UserInput::Text {
+                    text: "background task".into(),
+                }],
+            },
+        )
+        .unwrap();
+    assert_eq!(activation.0.load(std::sync::atomic::Ordering::SeqCst), 1);
+    threads
+        .request_turn_interaction(
+            &thread_id,
+            &started.turn_id,
+            ash_core::RequestTurnInteraction {
+                request_id: ash_protocol::RequestId::new("copy-approval").unwrap(),
+                item_id: None,
+                request: ash_protocol::AgentRequest::Approval {
+                    request: ash_protocol::ActionApprovalRequest {
+                        action_digest: "a".repeat(64),
+                        policy_revision: "test-policy".into(),
+                        capabilities: vec![ash_protocol::ActionApprovalCapability {
+                            kind: ash_protocol::ActionApprovalCapabilityKind::Network,
+                            scope: "example.test".into(),
+                        }],
+                        reason: "test approval".into(),
+                        sandbox_denial: None,
+                    },
+                },
+                deadline: None,
+            },
+        )
+        .unwrap();
+    server.offer_pending_interactions(&threads.read_thread(&thread_id).unwrap());
+    assert!(
+        !server
+            .drain_notifications(&mut connection)
+            .iter()
+            .any(|notice| notice.contains("\"method\":\"agent/request\""))
+    );
+    let subscribed = call(
+        &server,
+        &mut connection,
+        "session/thread/subscribe",
+        serde_json::json!({
+            "sessionId":session_id, "threadId":thread_id, "afterSequence":0
+        }),
+    );
+    assert!(subscribed.get("result").is_some(), "{subscribed}");
+    assert!(
+        server
+            .drain_notifications(&mut connection)
+            .iter()
+            .any(|notice| notice.contains("\"method\":\"agent/request\"")
+                && notice.contains("copy-approval"))
+    );
+}

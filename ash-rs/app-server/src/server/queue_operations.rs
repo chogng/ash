@@ -259,9 +259,7 @@ impl AppServer {
         if snapshot.turns.iter().any(|turn| active(turn.status)) {
             return Ok(Delivery::Waiting);
         }
-        self.updates.bind_session_scope(snapshot.session_id.clone());
-        self.threads
-            .install_session_extensions(snapshot.session_id.clone(), self.agent_extensions.clone())
+        self.bind_session_runtime(&snapshot.session_id)
             .map_err(|error| error.to_string())?;
         let mut input = request.input.clone();
         let selection = self.turn_instruction_selection(&mut input);

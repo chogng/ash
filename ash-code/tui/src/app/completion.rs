@@ -166,6 +166,9 @@ pub(super) fn apply_request_completion(
         Completion::ConfigRefreshed(Err(error)) => {
             app.update_for_panel(panel_generation, ThreadEvent::FailureReported(error));
         }
+        Completion::Sessions(SessionCompletion::Forked { command, result: Ok(result) }) => {
+            app.update_for_panel(panel_generation, result.into_event(command));
+        }
         Completion::Sessions(SessionCompletion::Preview { generation, result }) => {
             app.finish_session_preview(origin.mode, generation, result);
         }
@@ -275,6 +278,7 @@ pub(super) fn apply_request_completion(
             command,
             result: Err(error),
         })
+        | Completion::Sessions(SessionCompletion::Forked { command, result: Err(error) })
         | Completion::ProductCommand {
             command,
             result: Err(error),

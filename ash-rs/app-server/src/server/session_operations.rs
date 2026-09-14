@@ -99,16 +99,49 @@ impl AppServer {
             })
             .map_err(core_error)?
         };
-        self.updates.bind_session_scope(created.session_id.clone());
-        self.threads
-            .install_session_extensions(
-                created.session_id.clone(),
-                Arc::clone(&self.agent_extensions),
-            )
-            .map_err(core_error)?;
+        self.bind_session_runtime(&created.session_id).map_err(core_error)?;
         self.updates
             .subscribe_session(connection.connection_id, created.session_id.clone());
         result(&self.session_result(&created.session_id)?)
+    }
+
+    pub(super) fn bind_session_runtime(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<(), ash_core::CoreError> {
+        self.threads
+            .install_session_extensions(session_id.clone(), Arc::clone(&self.agent_extensions))?;
+        self.updates.bind_session_scope(session_id.clone());
+        Ok(())
+    }
+
+    pub(super) fn fork_session_request(
+        &self,
+        mutation: SessionMutation,
+        parent_thread_id: ash_protocol::ThreadId,
+        title: String,
+    ) -> Result<ash_app_server_protocol::protocol::session::SessionThreadResult, RpcError> {
+        self.read_session_thread_snapshot(&mutation.session_id, &parent_thread_id)?;
+        let forked = self
+            .threads
+            .fork_session(
+                self.thread_worktree_binder.as_ref(),
+                ash_core::ForkThreadRequest {
+                    command_id: mutation.command_id,
+                    source_thread_id: parent_thread_id,
+                    title,
+                },
+            )
+            .map_err(core_error)?;
+        self.bind_session_runtime(&forked.session_id)
+            .map_err(core_error)?;
+        self.updates.publish_session_changed(&forked.session_id);
+        Ok(
+            ash_app_server_protocol::protocol::session::SessionThreadResult {
+                session: self.session_view(&forked.session_id)?,
+                thread_id: forked.thread_id,
+            },
+        )
     }
 
     pub(super) fn session_read(&self, params: &Value) -> Result<Value, RpcError> {
