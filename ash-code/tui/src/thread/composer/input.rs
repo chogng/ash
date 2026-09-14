@@ -8,8 +8,10 @@ mod view;
 mod vim;
 mod wrap;
 
+pub(crate) use ash_slash_commands::SlashCommandCatalog;
 pub(crate) use completion::ChatInputCatalog;
 pub(crate) use completion::CompletionView;
+pub(crate) use completion::InstructionCompletionItem;
 pub(crate) use completion::MentionPluginItem;
 pub(crate) use completion::SkillCompletionItem;
 pub(crate) use completion::draw as draw_completion;
@@ -34,7 +36,6 @@ pub(crate) use view::ChatInputFocus;
 pub(crate) use view::content_area;
 pub(crate) use view::draw as draw_chat_input;
 pub(crate) use vim::ChatInputMode;
-pub(crate) use ash_slash_commands::SlashCommandCatalog;
 
 #[cfg(test)]
 #[path = "input/completion_tests.rs"]

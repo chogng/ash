@@ -1,10 +1,4 @@
 use super::*;
-use std::collections::VecDeque;
-use std::fs;
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::thread;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use ash_app_server::AppServer;
 use ash_app_server::SlashCommandCatalog;
 use ash_app_server_protocol::protocol::common::ClientCapabilities;
@@ -21,6 +15,8 @@ use ash_app_server_protocol::protocol::fs::{
     FsReadFileParams, FsWriteFileParams,
 };
 use ash_app_server_protocol::protocol::initialize::InitializeParams;
+use ash_app_server_protocol::protocol::instructions::InstructionListParams;
+use ash_app_server_protocol::protocol::instructions::InstructionLoadPolicyDto;
 use ash_app_server_protocol::protocol::language::LanguageCloseParams;
 use ash_app_server_protocol::protocol::language::LanguageCompletionTriggerKindDto;
 use ash_app_server_protocol::protocol::language::LanguageCompletionsParams;
@@ -55,11 +51,18 @@ use ash_app_server_protocol::protocol::turn::InputItem;
 use ash_app_server_protocol::schema_hash;
 use ash_async_utils::CancellationToken;
 use ash_core::{CoreError, InMemoryThreadStore, ModelService, ThreadController};
+use ash_protocol::InstructionSource;
 use ash_protocol::SessionId;
 use ash_protocol::{
     CommandId, ContentPart, InputItem as ModelInputItem, ModelRequest, ModelResponse, ResponseItem,
     StopReason, ThreadEvent, ThreadItem, ThreadUpdate, TurnStatus,
 };
+use std::collections::VecDeque;
+use std::fs;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::thread;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 struct MockTransport(VecDeque<String>);
 
@@ -824,6 +827,43 @@ fn embedded_skill_catalog_lists_built_ins_and_persists_enablement() {
     drop(client);
     let _ = fs::remove_dir_all(state_root);
     let _ = fs::remove_dir_all(skills_root);
+}
+
+#[test]
+fn embedded_instruction_catalog_lists_pinned_user_on_demand_entries() {
+    let profile = unique_directory("instruction-list");
+    fs::create_dir_all(profile.join("instructions")).unwrap();
+    fs::write(
+        profile.join("instructions/manual.md"),
+        "---\nname: manual\nload: on-demand\n---\n\nManual guidance.\n",
+    )
+    .unwrap();
+    let mut client = start_in_process_client(InProcessClientOptions::new(
+        &profile,
+        ClientInfo {
+            name: "instruction-client".into(),
+            version: "1".into(),
+        },
+    ))
+    .unwrap();
+
+    let catalog = client
+        .list_instructions(InstructionListParams::default())
+        .unwrap();
+
+    assert_eq!(catalog.instructions.len(), 1);
+    let entry = &catalog.instructions[0];
+    assert_eq!(entry.name, "manual");
+    assert_eq!(entry.load_policy, InstructionLoadPolicyDto::OnDemand);
+    assert_eq!(entry.reference.source, InstructionSource::User);
+    assert_eq!(
+        entry.path,
+        fs::canonicalize(&profile)
+            .unwrap()
+            .join("instructions/manual.md")
+    );
+    drop(client);
+    let _ = fs::remove_dir_all(profile);
 }
 
 #[test]

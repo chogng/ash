@@ -1,19 +1,26 @@
-use std::sync::Arc;
 use ash_attachments::ImageAttachments;
 use ash_protocol::FrozenSkillActivation;
 use ash_protocol::ImageAttachmentRef;
+use ash_protocol::InstructionRef;
 use ash_protocol::ItemId;
 use ash_protocol::SkillActivationReason;
 use ash_protocol::SkillVersionSelector;
 use ash_protocol::ThreadItem;
 use ash_protocol::TurnId;
 use ash_protocol::UserInput;
+use std::path::PathBuf;
+use std::sync::Arc;
 
 use crate::CoreError;
 pub(super) enum ValidatedUserInput<'a> {
     Text(&'a str),
-    Context { name: &'a str, content: &'a str },
+    Context {
+        name: &'a str,
+        content: &'a str,
+        file_path: Option<&'a PathBuf>,
+    },
     Image(&'a ImageAttachmentRef),
+    Instruction(&'a InstructionRef),
 }
 
 pub(super) fn normalize_images(
@@ -44,6 +51,7 @@ pub(super) fn normalize_images(
             | UserInput::Context { .. }
             | UserInput::LocalImage { .. }
             | UserInput::Skill { .. }
+            | UserInput::Instruction { .. }
             | UserInput::Mention { .. } => Ok(input.clone()),
         })
         .collect()
@@ -68,10 +76,16 @@ pub(super) fn validate<'a>(
             UserInput::Text { .. } => Some(Err(CoreError::InvalidInput(
                 "Turn text input must not be empty".into(),
             ))),
-            UserInput::Context { name, content }
-                if !name.trim().is_empty() && !content.trim().is_empty() =>
-            {
-                Some(Ok(ValidatedUserInput::Context { name, content }))
+            UserInput::Context {
+                name,
+                content,
+                file_path,
+            } if !name.trim().is_empty() && !content.trim().is_empty() => {
+                Some(Ok(ValidatedUserInput::Context {
+                    name,
+                    content,
+                    file_path: file_path.as_ref(),
+                }))
             }
             UserInput::Context { .. } => Some(Err(CoreError::InvalidInput(
                 "Turn context input must have a non-empty name and content".into(),
@@ -83,6 +97,9 @@ pub(super) fn validate<'a>(
                 "legacy image input must be normalized before validation".into(),
             ))),
             UserInput::Skill { .. } => None,
+            UserInput::Instruction { reference } => {
+                Some(Ok(ValidatedUserInput::Instruction(reference)))
+            }
             UserInput::LocalImage { .. } | UserInput::Mention { .. } => {
                 Some(Err(CoreError::InvalidInput(
                     "this Thread controller currently accepts text and normalized image URLs only"
@@ -94,7 +111,7 @@ pub(super) fn validate<'a>(
     validate_skill_activations(input, activated_skills)?;
     if validated.is_empty() {
         return Err(CoreError::InvalidInput(
-            "Turn input must include text or an image in addition to any Skill selection".into(),
+            "Turn input must include text or an image in addition to any selection".into(),
         ));
     }
     Ok(validated)
@@ -114,6 +131,7 @@ fn validate_skill_activations(
             | UserInput::Image { .. }
             | UserInput::LocalImage { .. }
             | UserInput::Mention { .. } => None,
+            UserInput::Instruction { .. } => None,
         })
         .collect::<Vec<_>>();
     let explicit = activated_skills
@@ -155,16 +173,26 @@ pub(super) fn thread_items(
                 turn_id: turn_id.clone(),
                 text: (*text).to_owned(),
             },
-            ValidatedUserInput::Context { name, content } => ThreadItem::UserContext {
+            ValidatedUserInput::Context {
+                name,
+                content,
+                file_path,
+            } => ThreadItem::UserContext {
                 item_id: next_item_id(),
                 turn_id: turn_id.clone(),
                 name: (*name).to_owned(),
                 content: (*content).to_owned(),
+                file_path: file_path.map(|path| (*path).clone()),
             },
             ValidatedUserInput::Image(attachment) => ThreadItem::UserImageAttachment {
                 item_id: next_item_id(),
                 turn_id: turn_id.clone(),
                 attachment: (*attachment).clone(),
+            },
+            ValidatedUserInput::Instruction(reference) => ThreadItem::UserInstruction {
+                item_id: next_item_id(),
+                turn_id: turn_id.clone(),
+                reference: (*reference).clone(),
             },
         })
         .collect()

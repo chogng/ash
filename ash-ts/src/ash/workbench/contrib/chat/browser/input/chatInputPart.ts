@@ -14,7 +14,7 @@ import type { IContextMenuService } from "../../../../../platform/contextview/br
 import type { IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { IQuickInputService } from "../../../../../platform/quickinput/common/quickInput.js";
 import type { ModelCatalogEntry } from "../../../../services/chat/common/chatService.js";
-import type { ChatContextAttachment, IChatContextPickService } from "../../../../services/chat/common/chatContextService.js";
+import type { ChatContextAttachment, IChatContextPickService, ResolvedChatAttachment } from "../../../../services/chat/common/chatContextService.js";
 import { modelAccessLabel } from "../../../../services/chat/common/modelCatalog.js";
 import type { ModelRef } from "../../../../../sessions/services/sessions/common/session.js";
 import { DesktopSlashCommands, parseSlashCommandInput, SlashCommandCatalog } from "../../common/slashCommands.js";
@@ -47,7 +47,7 @@ export class ChatInputPart extends Disposable {
 	private readonly delegate: ChatInputDelegate;
 	private readonly interactionListeners = this._register(new DisposableStore());
 	private readonly attachmentListeners = this._register(new DisposableStore());
-	private readonly attachments = new Map<string, ChatContextAttachment>();
+	private readonly attachments = new Map<string, ChatContextAttachment<ResolvedChatAttachment>>();
 	private readonly status: HTMLDivElement;
 	private readonly interaction: HTMLDivElement;
 	private readonly attachmentList: HTMLDivElement;
@@ -115,7 +115,7 @@ export class ChatInputPart extends Disposable {
 		this._register(toDisposable(() => this.element.remove()));
 	}
 
-	private async submit(value: string, contexts: readonly ChatContextAttachment[], operation: Promise<void>): Promise<void> {
+	private async submit(value: string, contexts: readonly ChatContextAttachment<ResolvedChatAttachment>[], operation: Promise<void>): Promise<void> {
 		this.input.value = "";
 		this.renderToolbar();
 		try {
@@ -138,7 +138,7 @@ export class ChatInputPart extends Disposable {
 		this.input.focus();
 	}
 
-	addContext(attachment: ChatContextAttachment): void {
+	addContext(attachment: ChatContextAttachment<ResolvedChatAttachment>): void {
 		if (!attachment.id.trim() || !attachment.kind.trim() || !attachment.name.trim()) throw new TypeError("Chat context attachment requires an ID, kind, and name");
 		this.attachments.set(attachmentKey(attachment), attachment);
 		this.renderAttachments();
@@ -425,7 +425,7 @@ export class ChatInputPart extends Disposable {
 	}
 }
 
-function attachmentKey(attachment: ChatContextAttachment): string {
+function attachmentKey(attachment: ChatContextAttachment<ResolvedChatAttachment>): string {
 	return `${attachment.kind}\0${attachment.id}`;
 }
 

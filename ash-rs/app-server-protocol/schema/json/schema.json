@@ -1751,6 +1751,10 @@
         "SkillsUnavailable",
         "SkillOperationFailed",
         "SkillNotFound",
+        "InstructionImportNotFound",
+        "InstructionImportConflict",
+        "InstructionImportFailed",
+        "InstructionSelectionInvalid",
         "EnvCwdSetUnavailable",
         "EnvCwdSetBusy",
         "EnvCwdSetFailed",
@@ -5150,6 +5154,54 @@
             },
             "params": {
               "$ref": "#/$defs/SkillListParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "instructions/list",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/InstructionListParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "instructions/import/preview",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/InstructionImportPreviewParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "instructions/import/apply",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/InstructionImportApplyParams"
             }
           },
           "required": [
@@ -9234,6 +9286,54 @@
             },
             "result": {
               "$ref": "#/$defs/SkillListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "instructions/list",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/InstructionListResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "instructions/import/preview",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/InstructionImportPreviewResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "instructions/import/apply",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/InstructionImportApplyResult"
             }
           },
           "required": [
@@ -17986,6 +18086,12 @@
             "content": {
               "type": "string"
             },
+            "filePath": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "name": {
               "type": "string"
             },
@@ -18047,6 +18153,339 @@
           "required": [
             "type",
             "skill"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "reference": {
+              "$ref": "#/$defs/InstructionRef"
+            },
+            "type": {
+              "const": "instruction",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "reference"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "InstructionCatalogDiagnosticDto": {
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/InstructionDiagnosticCodeDto"
+        },
+        "message": {
+          "type": "string"
+        },
+        "relativePath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source": {
+          "$ref": "#/$defs/InstructionSource"
+        }
+      },
+      "required": [
+        "source",
+        "code",
+        "message"
+      ],
+      "type": "object"
+    },
+    "InstructionDiagnosticCodeDto": {
+      "enum": [
+        "sourceUnavailable",
+        "entryLimitExceeded",
+        "unsupportedFileType",
+        "symlinkNotAllowed",
+        "invalidName",
+        "invalidFrontmatter",
+        "invalidLoadPolicy",
+        "contentTooLarge",
+        "contentInvalidUtf8",
+        "emptyBody"
+      ],
+      "type": "string"
+    },
+    "InstructionDto": {
+      "properties": {
+        "loadPolicy": {
+          "$ref": "#/$defs/InstructionLoadPolicyDto"
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "reference": {
+          "$ref": "#/$defs/InstructionRef"
+        }
+      },
+      "required": [
+        "reference",
+        "name",
+        "loadPolicy",
+        "path"
+      ],
+      "type": "object"
+    },
+    "InstructionImportApplyParams": {
+      "description": "The user confirms the exact previewed source bytes and source path.",
+      "properties": {
+        "expectedSha256": {
+          "type": "string"
+        },
+        "expectedTarget": {
+          "type": "string"
+        },
+        "relativePath": {
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/InstructionImportScopeDto"
+        }
+      },
+      "required": [
+        "scope",
+        "relativePath",
+        "expectedSha256",
+        "expectedTarget"
+      ],
+      "type": "object"
+    },
+    "InstructionImportApplyResult": {
+      "properties": {
+        "sha256": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "target",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "InstructionImportDiagnosticCodeDto": {
+      "enum": [
+        "metadataUnavailable",
+        "unexpectedFileType",
+        "symlinkNotAllowed",
+        "escapesSelectedRoot",
+        "invalidContent",
+        "limitExceeded"
+      ],
+      "type": "string"
+    },
+    "InstructionImportDiagnosticDto": {
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/InstructionImportDiagnosticCodeDto"
+        },
+        "relativePath": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "relativePath",
+        "code"
+      ],
+      "type": "object"
+    },
+    "InstructionImportPreviewParams": {
+      "properties": {
+        "scope": {
+          "$ref": "#/$defs/InstructionImportScopeDto"
+        }
+      },
+      "required": [
+        "scope"
+      ],
+      "type": "object"
+    },
+    "InstructionImportPreviewResult": {
+      "properties": {
+        "diagnostics": {
+          "items": {
+            "$ref": "#/$defs/InstructionImportDiagnosticDto"
+          },
+          "type": "array"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/InstructionImportSourceDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target": {
+          "type": "string"
+        },
+        "targetConflict": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "target",
+        "targetConflict",
+        "diagnostics"
+      ],
+      "type": "object"
+    },
+    "InstructionImportScopeDto": {
+      "description": "Selected Ash destination and its corresponding Claude source scope.",
+      "oneOf": [
+        {
+          "properties": {
+            "type": {
+              "const": "user",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "workspace",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "InstructionImportSourceDto": {
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "relativePath": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "relativePath",
+        "content",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "InstructionListParams": {
+      "properties": {
+        "sessionId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "InstructionListResult": {
+      "properties": {
+        "diagnostics": {
+          "items": {
+            "$ref": "#/$defs/InstructionCatalogDiagnosticDto"
+          },
+          "type": "array"
+        },
+        "instructions": {
+          "items": {
+            "$ref": "#/$defs/InstructionDto"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "instructions",
+        "diagnostics"
+      ],
+      "type": "object"
+    },
+    "InstructionLoadPolicyDto": {
+      "enum": [
+        "global",
+        "contextual",
+        "onDemand"
+      ],
+      "type": "string"
+    },
+    "InstructionRef": {
+      "additionalProperties": false,
+      "description": "Exact catalog entry selected by a user for one Turn.",
+      "properties": {
+        "digest": {
+          "$ref": "#/$defs/ContentDigest"
+        },
+        "relativePath": {
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/InstructionSource"
+        }
+      },
+      "required": [
+        "source",
+        "relativePath",
+        "digest"
+      ],
+      "type": "object"
+    },
+    "InstructionSource": {
+      "description": "Authority that owns one Ash Instruction file.",
+      "oneOf": [
+        {
+          "properties": {
+            "type": {
+              "const": "user",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "root": {
+              "type": "string"
+            },
+            "type": {
+              "const": "directory",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "root"
           ],
           "type": "object"
         }
@@ -31324,6 +31763,12 @@
             "content": {
               "type": "string"
             },
+            "filePath": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "itemId": {
               "$ref": "#/$defs/ItemId"
             },
@@ -31344,6 +31789,30 @@
             "turnId",
             "name",
             "content"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "itemId": {
+              "$ref": "#/$defs/ItemId"
+            },
+            "reference": {
+              "$ref": "#/$defs/InstructionRef"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "const": "userInstruction",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "itemId",
+            "turnId",
+            "reference"
           ],
           "type": "object"
         },
@@ -33770,6 +34239,12 @@
             "content": {
               "type": "string"
             },
+            "filePath": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "name": {
               "type": "string"
             },
@@ -33847,6 +34322,22 @@
           "required": [
             "type",
             "skill"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "reference": {
+              "$ref": "#/$defs/InstructionRef"
+            },
+            "type": {
+              "const": "instruction",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "reference"
           ],
           "type": "object"
         },

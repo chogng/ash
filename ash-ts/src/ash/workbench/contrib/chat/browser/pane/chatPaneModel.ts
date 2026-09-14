@@ -2,6 +2,7 @@ import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import type { AgentResponse, IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnChangeDetails, TurnChangeSetSummary, TurnInteraction } from "../../../../services/chat/common/chatService.js";
 import type { SkillReference } from "../../../../../platform/skills/common/skillApi.js";
+import type { InstructionReference } from '../../../../../platform/instructions/common/instructionApi.js';
 import type { ResolvedChatContext } from "../../../../services/chat/common/chatContextService.js";
 import type { IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
 import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
@@ -215,7 +216,7 @@ export class ChatPaneModel extends Disposable {
 		await this.sessionService.setModel(model);
 	}
 
-	async send(text: string, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[]): Promise<void> {
+	async send(text: string, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], instructions?: readonly InstructionReference[]): Promise<void> {
 		const input = text.trim();
 		if (!input) return;
 		try {
@@ -243,6 +244,7 @@ export class ChatPaneModel extends Disposable {
 					expectedSequence: thread.sequence,
 					text: input,
 					contexts,
+					instructions,
 				});
 			} else {
 				await this.chatService.startTurn({
@@ -251,6 +253,7 @@ export class ChatPaneModel extends Disposable {
 					expectedSequence: thread.sequence,
 					text: input,
 					contexts,
+					instructions,
 					skills,
 				});
 			}

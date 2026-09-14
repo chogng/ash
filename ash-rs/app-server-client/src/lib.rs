@@ -75,6 +75,8 @@ use ash_app_server_protocol::protocol::git::{
     GitTextDiffResult,
 };
 use ash_app_server_protocol::protocol::initialize::{InitializeParams, InitializeResult};
+use ash_app_server_protocol::protocol::instructions::InstructionListParams;
+use ash_app_server_protocol::protocol::instructions::InstructionListResult;
 use ash_app_server_protocol::protocol::language::LanguageCloseParams;
 use ash_app_server_protocol::protocol::language::LanguageCompletionsParams;
 use ash_app_server_protocol::protocol::language::LanguageCompletionsResult;
@@ -1114,6 +1116,13 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
 
     pub fn list_skills(&mut self, params: SkillListParams) -> Result<SkillListResult, ClientError> {
         self.call(ClientMethod::SkillList, params)
+    }
+
+    pub fn list_instructions(
+        &mut self,
+        params: InstructionListParams,
+    ) -> Result<InstructionListResult, ClientError> {
+        self.call(ClientMethod::InstructionList, params)
     }
 
     pub fn set_skill_enablement(

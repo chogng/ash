@@ -119,6 +119,7 @@ function itemLabel(item: IChatListItem): string {
 	switch (item.type) {
 		case "userMessage":
 		case "userContext":
+		case 'userInstruction':
 		case "userImage":
 		case "userImageAttachment":
 			return "You";

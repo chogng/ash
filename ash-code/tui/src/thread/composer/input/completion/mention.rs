@@ -1,7 +1,8 @@
 //! Workspace-file mention query and completion state owned by `ChatInput`.
 
-use std::ops::Range;
 use ash_file_search::PathSearchSnapshot;
+use ash_protocol::InstructionRef;
+use std::ops::Range;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct ActiveMention<'a> {
@@ -37,6 +38,7 @@ pub(super) fn active_mention(text: &str, cursor: usize) -> Option<ActiveMention<
 pub(crate) enum MentionMatchKind {
     File,
     Plugin,
+    Instruction,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -46,6 +48,24 @@ pub(crate) struct MentionMatch {
     pub(crate) kind: MentionMatchKind,
     pub(crate) indices: Vec<usize>,
     pub(crate) score: u32,
+    pub(crate) instruction: Option<InstructionRef>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct InstructionCompletionItem {
+    name: String,
+    path: String,
+    reference: InstructionRef,
+}
+
+impl InstructionCompletionItem {
+    pub(crate) fn new(name: String, path: String, reference: InstructionRef) -> Self {
+        Self {
+            name,
+            path,
+            reference,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -69,6 +89,7 @@ pub(crate) struct MentionPopupView<'a> {
 pub(super) struct MentionCompletion {
     pub(super) range: Range<usize>,
     pub(super) value: String,
+    pub(super) instruction: Option<InstructionRef>,
 }
 
 #[derive(Debug, Default, Eq, PartialEq)]
@@ -76,6 +97,7 @@ pub(super) struct MentionPopup {
     token_range: Option<Range<usize>>,
     query: Option<String>,
     plugin_catalog: Vec<MentionPluginItem>,
+    instruction_catalog: Vec<InstructionCompletionItem>,
     file_matches: Vec<MentionMatch>,
     matches: Vec<MentionMatch>,
     selected: usize,
@@ -127,6 +149,7 @@ impl MentionPopup {
                         .map(|index| index as usize)
                         .collect(),
                     score: matched.score,
+                    instruction: None,
                 })
             })
             .collect();
@@ -136,6 +159,11 @@ impl MentionPopup {
 
     pub(super) fn replace_plugin_catalog(&mut self, catalog: Vec<MentionPluginItem>) {
         self.plugin_catalog = catalog;
+        self.refresh_matches();
+    }
+
+    pub(super) fn replace_instruction_catalog(&mut self, catalog: Vec<InstructionCompletionItem>) {
+        self.instruction_catalog = catalog;
         self.refresh_matches();
     }
 
@@ -168,14 +196,23 @@ impl MentionPopup {
         self.dismissed = true;
     }
 
-    pub(super) fn selected_completion(&self) -> Option<(Range<usize>, String)> {
+    pub(super) fn selected_completion(
+        &self,
+    ) -> Option<(Range<usize>, String, Option<InstructionRef>)> {
         self.completion_at(self.selected)
     }
 
-    pub(super) fn completion_at(&self, index: usize) -> Option<(Range<usize>, String)> {
+    pub(super) fn completion_at(
+        &self,
+        index: usize,
+    ) -> Option<(Range<usize>, String, Option<InstructionRef>)> {
         let view = self.view()?;
-        let completion = view.matches.get(index)?.completion.clone();
-        Some((self.token_range.clone()?, completion))
+        let selected = view.matches.get(index)?;
+        Some((
+            self.token_range.clone()?,
+            selected.completion.clone(),
+            selected.instruction.clone(),
+        ))
     }
 
     pub(super) fn clear(&mut self) {
@@ -204,7 +241,22 @@ impl MentionPopup {
                 kind: MentionMatchKind::Plugin,
                 indices: (0..query.chars().count()).collect(),
                 score: u32::MAX,
+                instruction: None,
             })
+            .chain(self.instruction_catalog.iter().filter_map(|item| {
+                let name = item.name.to_ascii_lowercase();
+                if !name.starts_with(&query) {
+                    return None;
+                }
+                Some(MentionMatch {
+                    label: format!("{} · {}", item.name, item.path),
+                    completion: format!("@{}", item.name),
+                    kind: MentionMatchKind::Instruction,
+                    indices: (0..query.chars().count()).collect(),
+                    score: u32::MAX - 1,
+                    instruction: Some(item.reference.clone()),
+                })
+            }))
             .chain(self.file_matches.iter().cloned())
             .collect();
         self.selected = self.selected.min(self.matches.len().saturating_sub(1));
@@ -240,6 +292,13 @@ impl Mentions {
         self.popup.replace_plugin_catalog(catalog);
     }
 
+    pub(in crate::thread::composer) fn replace_instruction_catalog(
+        &mut self,
+        catalog: Vec<InstructionCompletionItem>,
+    ) {
+        self.popup.replace_instruction_catalog(catalog);
+    }
+
     pub(in crate::thread::composer) fn view(&self) -> Option<MentionPopupView<'_>> {
         self.popup.view()
     }
@@ -257,18 +316,26 @@ impl Mentions {
     }
 
     pub(in crate::thread::composer) fn complete_selected(&mut self) -> Option<MentionCompletion> {
-        let (range, value) = self.popup.selected_completion()?;
+        let (range, value, instruction) = self.popup.selected_completion()?;
         self.popup.clear();
-        Some(MentionCompletion { range, value })
+        Some(MentionCompletion {
+            range,
+            value,
+            instruction,
+        })
     }
 
     pub(in crate::thread::composer) fn complete_at(
         &mut self,
         index: usize,
     ) -> Option<MentionCompletion> {
-        let (range, value) = self.popup.completion_at(index)?;
+        let (range, value, instruction) = self.popup.completion_at(index)?;
         self.popup.clear();
-        Some(MentionCompletion { range, value })
+        Some(MentionCompletion {
+            range,
+            value,
+            instruction,
+        })
     }
 
     pub(in crate::thread::composer) fn clear(&mut self) {

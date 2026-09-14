@@ -308,11 +308,20 @@ impl ScopedFiles {
             .directory()
             .lock_writes()
             .map_err(|_| FileSystemError::Io("directory write lock is poisoned".into()))?;
-        if let FileWriteCondition::ExpectedRevision(expected) = condition {
-            let current = self.read_file(path, maximum_bytes)?;
-            if file_revision(&current) != *expected {
-                return Err(FileSystemError::RevisionConflict(path.to_path_buf()));
+        match condition {
+            FileWriteCondition::Unconditional => {}
+            FileWriteCondition::ExpectedRevision(expected) => {
+                let current = self.read_file(path, maximum_bytes)?;
+                if file_revision(&current) != *expected {
+                    return Err(FileSystemError::RevisionConflict(path.to_path_buf()));
+                }
             }
+            FileWriteCondition::MissingOrEmpty => match self.read_file(path, maximum_bytes) {
+                Ok(current) if current.is_empty() => {}
+                Err(FileSystemError::NotFound(_)) => {}
+                Ok(_) => return Err(FileSystemError::AlreadyExists(path.to_path_buf())),
+                Err(error) => return Err(error),
+            },
         }
         self.write_file_inner(path, content, maximum_bytes)
     }

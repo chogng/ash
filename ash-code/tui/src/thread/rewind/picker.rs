@@ -101,6 +101,9 @@ pub(crate) fn rewind_choices(
 }
 
 fn message_label(item: &ThreadItem) -> String {
+    if let ThreadItem::UserInstruction { reference, .. } = item {
+        return format!("instruction: {}", reference.relative_path.display());
+    }
     let (kind, text) = match item {
         ThreadItem::UserMessage { text, .. } => ("user", text.as_str()),
         ThreadItem::UserContext { content, .. } => ("context", content.as_str()),
@@ -112,6 +115,7 @@ fn message_label(item: &ThreadItem) -> String {
         ThreadItem::Plan { text, .. } => ("plan", text.as_str()),
         ThreadItem::ToolCall { name, .. } => ("tool call", name.as_str()),
         ThreadItem::ToolResult { text, .. } => ("tool result", text.as_str()),
+        ThreadItem::UserInstruction { .. } => unreachable!("handled above"),
     };
     format!("{kind}: {}", compact_label(text))
 }
@@ -122,6 +126,7 @@ fn checkpoint_text(items: &[ThreadItem]) -> Option<String> {
         .filter_map(|item| match item {
             ThreadItem::UserMessage { text, .. } => Some(text.as_str()),
             ThreadItem::UserContext { content, .. } => Some(content.as_str()),
+            ThreadItem::UserInstruction { .. } => None,
             ThreadItem::UserImage { .. } | ThreadItem::UserImageAttachment { .. } => {
                 Some("[Image]")
             }

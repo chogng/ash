@@ -268,7 +268,8 @@ commit。
 | `McpServers` | `UpsertMcpServer` | Config command 已有；导入时默认不连接，credential 必须剥离并单独绑定 |
 | Settings 内的 Plugin request | `UpsertPluginRequest` | Config command 已有；只接受可解析的 exact package/version request，不代表安装或激活 |
 | Settings 内的 Hook | `UpsertHook` | Config command 已有；导入后保持 disabled，执行仍需 trust、policy、approval 与 sandbox |
-| `Instructions`、`InstructionRules` | Ash Instruction authority | 目标模型尚未完成，不能把原始文件塞入普通 Config |
+| Claude `Instructions` | Ash Instruction authority | `read_claude_instructions` 读取有界原文；App Server 预览并确认后直接复制到 `ASH.md` |
+| 其他 `Instructions`、`InstructionRules` | Ash Instruction authority | 仍无完整目标写入；不能把原始文件塞入普通 Config |
 | `Agents` | Ash Agent definition authority | 目标模型尚未完成 |
 | `Settings` 其他字段 | 对应 Ash typed field-by-field mapping | 不支持项必须显示为 skipped/unsupported，禁止 raw passthrough |
 | `ExecutionRules` | Policy migration review | 不能生成长期 approval，也不能自动转换为 Hook |
@@ -284,9 +285,10 @@ receipt、provenance 与 remove/rollback contract 尚未实现。
 共享的项目 `AGENTS.md` 已由 Ash Instruction authority 直接读取，不能再导入成第二份。
 `CLAUDE.md` 等专有来源的目标为 Ash 专属 `ASH.md` 或细分 `instructions/` 文件；
 导入应由 App Server 协调受信文件读写：选定来源、重新校验、仅在目标缺失或为空时直接复制正文；
-已有非空 `ASH.md` 应报告冲突，不由 Agent 合并或覆盖。
+已有非空 `ASH.md` 应报告冲突，不由 Agent 合并或覆盖。导入不移动或删除来源 `CLAUDE.md`。
 全程不调用 Agent，也不把来源正文放进 `/init` 的模型上下文。`/init` 只负责让 Agent 根据
-项目事实生成或更新 Ash 自己的 `ASH.md`。目前只有发现与预览，写入目标的 apply 尚未实现。
+项目事实生成或更新 Ash 自己的 `ASH.md`。Claude Instruction 的预览和目标写入已由 App Server 接通；
+其他外部对象的 apply 尚未实现。
 
 `ash-file-access` 与 Import workflow 是两条不同路径。前者保存目录 Grant，并按明确的来源能力开放 Skills、Agent definitions 或 Plugin declaration；后者让用户预览、选择并迁移外部 Agent 配置，不授予持续文件访问。两条路径可以复用来源检查和解析，但不能复用授权生命周期或应用决定；本 crate 不依赖 `ash-file-access`，由 App Server 根据 Authorization 调用。
 
@@ -359,12 +361,12 @@ failure fixture；当前测试尚未覆盖所有 `AgentImportError` 分支，这
   sessions、认证与历史导入明确不在本 crate 范围。
 - **Current limitation**：user constructor 只识别默认 home layout；自定义 `CODEX_HOME`、
   `CLAUDE_CONFIG_DIR` 或独立外部 source root 尚无公共构造契约。
-- **Current limitation**：没有 stable inspection identity、TOCTOU revalidation 或 App Server wire
-  contract。
+- **Current limitation**：通用 `MigrationPlan` 尚无稳定预览身份和跨对象写入协议；Claude Instruction
+  的来源摘要、目标绑定及 App Server 单文件复制已接通。
 - **Current limitation**：没有 Config batch adapter、import receipt 或 source-qualified rollback
   contract。
-- **Proposed**：App Server 组合 `MigrationPlan` fragment 并调用各 authority；Desktop 只提交用户
- 确认后的 exact item identity。
+- **Proposed**：对 Claude Instruction 之外的对象，App Server 组合 `MigrationPlan` fragment 并调用
+  各 authority；Desktop 只提交用户确认后的条目身份。
 - **Proposed**：为 host `add-dir` adapter 提供只返回 allowlisted contribution kind 的窄
   inspection projection；它不等同完整 Import，也不处理 directory authorization。
 

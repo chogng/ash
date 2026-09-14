@@ -18,10 +18,9 @@ use crate::rpc::JsonRpcId;
 use crate::rpc::JsonRpcNotification;
 use crate::rpc::JsonRpcRequest;
 use crate::rpc::JsonRpcSuccess;
-use std::collections::BTreeSet;
-use std::path::Path;
-use std::path::PathBuf;
 use ash_protocol::ContentDigest;
+use ash_protocol::InstructionRef;
+use ash_protocol::InstructionSource;
 use ash_protocol::Patch;
 use ash_protocol::ReasoningEffort;
 use ash_protocol::SkillId;
@@ -29,6 +28,9 @@ use ash_protocol::SkillName;
 use ash_protocol::SkillRef;
 use ash_protocol::SkillSourceId;
 use ash_protocol::ThreadEvent;
+use std::collections::BTreeSet;
+use std::path::Path;
+use std::path::PathBuf;
 
 fn generated_typescript() -> String {
     typescript_files()
@@ -200,7 +202,7 @@ fn issue_browser_and_agent_session_types_are_declared_without_workflow_methods()
 }
 
 #[test]
-fn turn_input_items_preserve_ordered_text_context_image_and_skill_shapes() {
+fn turn_input_items_preserve_ordered_text_context_image_skill_and_instruction_shapes() {
     let input = vec![
         InputItem::Issue { number: 3 },
         InputItem::Text {
@@ -209,6 +211,7 @@ fn turn_input_items_preserve_ordered_text_context_image_and_skill_shapes() {
         InputItem::Context {
             name: "Git commit abc1234".into(),
             content: "diff --git a/file b/file".into(),
+            file_path: None,
         },
         InputItem::Image {
             url: "https://example.test/image.png".into(),
@@ -221,6 +224,13 @@ fn turn_input_items_preserve_ordered_text_context_image_and_skill_shapes() {
                 ),
                 ContentDigest::sha256(b"skill"),
             ),
+        },
+        InputItem::Instruction {
+            reference: InstructionRef {
+                source: InstructionSource::User,
+                relative_path: PathBuf::from("instructions/manual.md"),
+                digest: ContentDigest::sha256(b"manual"),
+            },
         },
     ];
 
@@ -246,6 +256,14 @@ fn turn_input_items_preserve_ordered_text_context_image_and_skill_shapes() {
                         "type": "pinnedDigest",
                         "digest": "sha256:9c53c074d7ac6a2728b638ac1f376c5fa9eb8f71603017c3ea638c2fd40548df"
                     }
+                }
+            },
+            {
+                "type": "instruction",
+                "reference": {
+                    "source": {"type": "user"},
+                    "relativePath": "instructions/manual.md",
+                    "digest": ContentDigest::sha256(b"manual").as_str()
                 }
             }
         ])
@@ -452,7 +470,7 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(!typescript.contains(r#""turn/start": { method: "turn/start" }"#));
     assert!(!typescript.contains(r#""turn/shell/start": { method: "turn/shell/start" }"#));
     assert!(typescript.contains(
-        r#"export type InputItem = { "type": "issue", number: number, } | { "type": "text", text: string, } | { "type": "context", name: string, content: string, } | { "type": "imageAttachment", attachment: ImageAttachmentRef, } | { "type": "image", url: string, } | { "type": "skill", skill: SkillRef, };"#
+        r#"export type InputItem = { "type": "issue", number: number, } | { "type": "text", text: string, } | { "type": "context", name: string, content: string, filePath?: string, } | { "type": "imageAttachment", attachment: ImageAttachmentRef, } | { "type": "image", url: string, } | { "type": "skill", skill: SkillRef, } | { "type": "instruction", reference: InstructionRef, };"#
     ));
     assert!(!typescript.contains("InputItemKind"));
     assert!(typescript.contains(r#"{ "type": "userImage""#));

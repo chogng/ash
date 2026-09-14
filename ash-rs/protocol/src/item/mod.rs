@@ -6,6 +6,7 @@ pub use plan::PlanUpdate;
 
 use crate::ContentPart;
 use crate::ImageAttachmentRef;
+use crate::InstructionRef;
 use crate::ItemId;
 use crate::ToolCallBinding;
 use crate::ToolCallId;
@@ -34,6 +35,13 @@ pub enum ThreadItem {
         turn_id: TurnId,
         name: String,
         content: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        file_path: Option<std::path::PathBuf>,
+    },
+    UserInstruction {
+        item_id: ItemId,
+        turn_id: TurnId,
+        reference: InstructionRef,
     },
     UserImage {
         item_id: ItemId,
@@ -85,6 +93,7 @@ impl ThreadItem {
         match self {
             Self::UserMessage { item_id, .. }
             | Self::UserContext { item_id, .. }
+            | Self::UserInstruction { item_id, .. }
             | Self::UserImage { item_id, .. }
             | Self::UserImageAttachment { item_id, .. }
             | Self::AgentMessage { item_id, .. }
@@ -99,6 +108,7 @@ impl ThreadItem {
         match self {
             Self::UserMessage { turn_id, .. }
             | Self::UserContext { turn_id, .. }
+            | Self::UserInstruction { turn_id, .. }
             | Self::UserImage { turn_id, .. }
             | Self::UserImageAttachment { turn_id, .. }
             | Self::AgentMessage { turn_id, .. }

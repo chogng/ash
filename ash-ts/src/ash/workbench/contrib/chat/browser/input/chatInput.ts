@@ -1,7 +1,7 @@
 import type { AgentResponse, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, TurnInteraction } from "../../../../services/chat/common/chatService.js";
 import type { SkillReference } from "../../../../../platform/skills/common/skillApi.js";
 import type { ModelRef } from "../../../../../sessions/services/sessions/common/session.js";
-import type { ChatContextAttachment } from "../../../../services/chat/common/chatContextService.js";
+import type { ChatContextAttachment, ResolvedChatAttachment } from "../../../../services/chat/common/chatContextService.js";
 
 export type ChatInputPhase = "loading" | "ready" | "submitting" | "error";
 
@@ -29,7 +29,7 @@ export interface ChatInputState {
 
 /** Operations that the input area may request from its owning Chat pane. */
 export interface ChatInputDelegate {
-	send(text: string, skills?: readonly SkillReference[], contexts?: readonly ChatContextAttachment[]): Promise<void>;
+	send(text: string, skills?: readonly SkillReference[], contexts?: readonly ChatContextAttachment<ResolvedChatAttachment>[]): Promise<void>;
 	executeCommand(invocation: ChatInputCommandInvocation): Promise<void>;
 	executeServerCommand(invocation: ChatInputServerCommandInvocation): Promise<void>;
 	interrupt(): Promise<void>;

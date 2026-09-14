@@ -148,7 +148,8 @@ export class ChatService extends Disposable implements IChatService {
 	async startTurn(options: StartTurnOptions): Promise<void> {
 		const input: InputItem[] = [
 			...(options.skills ?? []).map(skill => ({ type: "skill" as const, skill: skill as SkillRefDto })),
-			...(options.contexts ?? []).map(context => ({ type: "context" as const, name: context.name, content: context.content })),
+			...(options.contexts ?? []).map(context => ({ type: "context" as const, name: context.name, content: context.content, ...(context.filePath ? { filePath: context.filePath } : {}) })),
+			...(options.instructions ?? []).map(reference => ({ type: 'instruction' as const, reference })),
 			{ type: "text", text: options.text },
 		];
 		await this.options.turnApi.start({ commandId: commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, approvalMode: "askPermissions", input });
@@ -172,7 +173,8 @@ export class ChatService extends Disposable implements IChatService {
 			turnId: options.turnId,
 			expectedSequence: options.expectedSequence,
 			input: [
-				...(options.contexts ?? []).map(context => ({ type: "context" as const, name: context.name, content: context.content })),
+				...(options.contexts ?? []).map(context => ({ type: "context" as const, name: context.name, content: context.content, ...(context.filePath ? { filePath: context.filePath } : {}) })),
+				...(options.instructions ?? []).map(reference => ({ type: 'instruction' as const, reference })),
 				{ type: "text", text: options.text },
 			],
 		});
@@ -370,6 +372,7 @@ function toThreadItem(item: ThreadItemDto): ThreadItem {
 	switch (item.type) {
 		case "userMessage": return { type: item.type, itemId: item.itemId, turnId: item.turnId, text: item.text };
 		case "userContext": return { type: item.type, itemId: item.itemId, turnId: item.turnId, name: item.name, content: item.content };
+		case 'userInstruction': return { type: item.type, itemId: item.itemId, turnId: item.turnId, reference: { ...item.reference, source: { ...item.reference.source } } };
 		case "userImage": return { type: item.type, itemId: item.itemId, turnId: item.turnId, url: item.url };
 		case "userImageAttachment": return { type: item.type, itemId: item.itemId, turnId: item.turnId, attachment: { ...item.attachment } };
 		case "agentMessage":

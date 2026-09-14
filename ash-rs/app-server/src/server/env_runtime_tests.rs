@@ -62,6 +62,55 @@ struct RequestRecordingModel {
     requests: Mutex<Vec<ash_protocol::ModelRequest>>,
 }
 
+struct InstructionWritingModel {
+    target: PathBuf,
+    content: String,
+    calls: AtomicUsize,
+    requests: Mutex<Vec<ash_protocol::ModelRequest>>,
+}
+
+impl ash_core::ModelService for InstructionWritingModel {
+    fn invoke(
+        &self,
+        _: ash_core::ModelSelection<'_>,
+        request: &ash_protocol::ModelRequest,
+        _: &CancellationToken,
+    ) -> Result<ash_protocol::ModelResponse, CoreError> {
+        self.requests.lock().unwrap().push(request.clone());
+        let round = self.calls.fetch_add(1, Ordering::Relaxed);
+        let output = match round {
+            0 => ash_protocol::ResponseItem::ToolCall(ash_protocol::ToolCall {
+                id: ash_protocol::ToolCallId::new("instruction-write").unwrap(),
+                name: ash_protocol::ToolName::new("write_file").unwrap(),
+                arguments: serde_json::json!({
+                    "path": self.target,
+                    "content": self.content
+                }),
+            }),
+            1 => ash_protocol::ResponseItem::ToolCall(ash_protocol::ToolCall {
+                id: ash_protocol::ToolCallId::new("instruction-read-back").unwrap(),
+                name: ash_protocol::ToolName::new("read_file").unwrap(),
+                arguments: serde_json::json!({
+                    "path": self.target,
+                    "offset": null,
+                    "limit": null
+                }),
+            }),
+            _ => ash_protocol::ResponseItem::Text("Instruction created and read back.".into()),
+        };
+        Ok(ash_protocol::ModelResponse {
+            output: vec![output],
+            usage: None,
+            billing: None,
+            stop_reason: if round < 2 {
+                ash_protocol::StopReason::ToolUse
+            } else {
+                ash_protocol::StopReason::Completed
+            },
+        })
+    }
+}
+
 impl ash_core::ModelService for RequestRecordingModel {
     fn invoke(
         &self,
@@ -150,6 +199,421 @@ fn clearing_directories_keeps_home_instructions_in_model_requests() {
         &message.content[0],
         ash_protocol::ContentPart::Text(text) if text.contains("Keep this user guidance.")
     ));
+}
+
+#[test]
+fn attached_file_activates_contextual_and_nested_rules_on_first_model_request() {
+    let dir = TestDir::new("attached-file-rules", "root.txt");
+    std::fs::create_dir_all(dir.path.join("src")).unwrap();
+    std::fs::create_dir_all(dir.path.join(".ash/instructions")).unwrap();
+    let file = dir.path.join("src/lib.rs");
+    std::fs::write(&file, "pub fn run() {}\n").unwrap();
+    std::fs::write(dir.path.join("src/AGENTS.md"), "Nested Rust rule.").unwrap();
+    std::fs::write(
+        dir.path.join(".ash/instructions/rust.md"),
+        "---\nname: rust\nload: contextual\npatterns:\n  - '**/*.rs'\n---\n\nContextual Rust rule.\n",
+    ).unwrap();
+    let model = Arc::new(RequestRecordingModel::default());
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        InMemoryThreadStore::default(),
+    )));
+    let server = AppServer::new(threads, model.clone())
+        .with_ephemeral_env_state()
+        .with_local_env_host(None, host_policy())
+        .unwrap();
+    let host = server.local_env_host.as_ref().unwrap();
+    server
+        .commit_full_env_runtime(dir.authorization(), test_local_tools(), host)
+        .unwrap();
+    let thread = server
+        .start_thread(StartThreadRequest {
+            agent_id: None,
+            agent: None,
+            command_id: CommandId::new("create-attached-file-thread").unwrap(),
+            title: "attached".into(),
+        })
+        .unwrap();
+    let turn = server
+        .threads
+        .start_turn(
+            &thread.thread_id,
+            StartTurnRequest {
+                kind: ash_protocol::TurnKind::Coding,
+                instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
+                command_id: CommandId::new("start-attached-file-turn").unwrap(),
+                expected_sequence: SequenceExpectation::Exact(1),
+                model: None,
+                policy_revision: "test-policy-v1".into(),
+                approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+                tool_mode: ash_protocol::ToolMode::Direct,
+                tool_profile: None,
+                activated_skills: Vec::new(),
+                input: vec![
+                    UserInput::Context {
+                        name: "File src/lib.rs".into(),
+                        content: "pub fn run() {}\n".into(),
+                        file_path: Some(file),
+                    },
+                    UserInput::Text {
+                        text: "Review this file".into(),
+                    },
+                ],
+            },
+        )
+        .unwrap();
+    server
+        .turn_executor_backend()
+        .start(&thread.thread_id, &turn.turn_id)
+        .unwrap();
+
+    let deadline = Instant::now() + Duration::from_secs(3);
+    let request = loop {
+        if let Some(request) = model.requests.lock().unwrap().first().cloned() {
+            break request;
+        }
+        assert!(Instant::now() < deadline, "model request was not captured");
+        std::thread::yield_now();
+    };
+    let content = format!("{:?}", request.input);
+    assert!(content.contains("Contextual Rust rule."), "{content}");
+    assert!(content.contains("Nested Rust rule."), "{content}");
+}
+
+#[test]
+fn selected_on_demand_instruction_is_pinned_and_present_on_first_model_request() {
+    let dir = TestDir::new("on-demand-instructions", "README.md");
+    let instruction = dir.path.join(".ash/instructions/manual.md");
+    std::fs::create_dir_all(instruction.parent().unwrap()).unwrap();
+    std::fs::write(
+        &instruction,
+        "---\nname: manual\nload: on-demand\n---\n\nManual guidance.\n",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.path.join(".ash/instructions/invalid.md"),
+        "Missing frontmatter.",
+    )
+    .unwrap();
+    let model = Arc::new(RequestRecordingModel::default());
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        InMemoryThreadStore::default(),
+    )));
+    let server = AppServer::new(threads, model.clone())
+        .with_ephemeral_env_state()
+        .with_local_env_host(None, host_policy())
+        .unwrap();
+    let host = server.local_env_host.as_ref().unwrap();
+    server
+        .commit_full_env_runtime(dir.authorization(), test_local_tools(), host)
+        .unwrap();
+
+    let catalog: ash_app_server_protocol::protocol::instructions::InstructionListResult =
+        serde_json::from_value(server.instruction_list(&serde_json::json!({})).unwrap()).unwrap();
+    let entry = catalog
+        .instructions
+        .iter()
+        .find(|entry| entry.name == "manual")
+        .unwrap();
+    assert!(
+        catalog
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.relative_path.as_deref() == Some(Path::new("invalid.md")))
+    );
+    assert_eq!(entry.path, instruction);
+    assert_eq!(
+        entry.load_policy,
+        ash_app_server_protocol::protocol::instructions::InstructionLoadPolicyDto::OnDemand
+    );
+    let reference = entry.reference.clone();
+    let thread = server
+        .start_thread(StartThreadRequest {
+            agent_id: None,
+            agent: None,
+            command_id: CommandId::new("create-on-demand-thread").unwrap(),
+            title: "manual".into(),
+        })
+        .unwrap();
+    let mut wrong_source = reference.clone();
+    wrong_source.source = ash_protocol::InstructionSource::Directory {
+        root: dir.path.join("other"),
+    };
+    assert!(
+        server
+            .normalize_input(
+                &thread.session_id,
+                vec![
+                    ash_app_server_protocol::protocol::turn::InputItem::Instruction {
+                        reference: wrong_source
+                    }
+                ],
+            )
+            .is_err()
+    );
+    let input = server
+        .normalize_input(
+            &thread.session_id,
+            vec![
+                ash_app_server_protocol::protocol::turn::InputItem::Instruction {
+                    reference: reference.clone(),
+                },
+            ],
+        )
+        .unwrap();
+    let turn = server
+        .threads
+        .start_turn(
+            &thread.thread_id,
+            StartTurnRequest {
+                kind: ash_protocol::TurnKind::Coding,
+                instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
+                command_id: CommandId::new("start-on-demand-turn").unwrap(),
+                expected_sequence: SequenceExpectation::Exact(1),
+                model: None,
+                policy_revision: "test-policy-v1".into(),
+                approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+                tool_mode: ash_protocol::ToolMode::Direct,
+                tool_profile: None,
+                activated_skills: Vec::new(),
+                input: [
+                    input,
+                    vec![UserInput::Text {
+                        text: "Review this".into(),
+                    }],
+                ]
+                .concat(),
+            },
+        )
+        .unwrap();
+    server
+        .turn_executor_backend()
+        .start(&thread.thread_id, &turn.turn_id)
+        .unwrap();
+
+    let deadline = Instant::now() + Duration::from_secs(3);
+    let request = loop {
+        if let Some(request) = model.requests.lock().unwrap().first().cloned() {
+            break request;
+        }
+        assert!(Instant::now() < deadline, "model request was not captured");
+        std::thread::yield_now();
+    };
+    let content = format!("{:?}", request.input);
+    assert!(content.contains("Manual guidance."), "{content}");
+    assert!(!content.contains("selectedInstruction"), "{content}");
+
+    std::fs::write(
+        &instruction,
+        "---\nname: manual\nload: on-demand\n---\n\nChanged guidance.\n",
+    )
+    .unwrap();
+    let stale = server
+        .normalize_input(
+            &thread.session_id,
+            vec![ash_app_server_protocol::protocol::turn::InputItem::Instruction { reference }],
+        )
+        .unwrap_err();
+    assert!(stale.to_string().contains("Choose it again."));
+}
+
+#[test]
+fn init_command_can_write_and_read_back_ash_md_through_product_file_tools() {
+    instruction_command_writes_valid_file(
+        "/init workspace",
+        "ASH.md",
+        "Ash-specific test guidance.\n",
+        "Create or update `ASH.md`",
+        None,
+    );
+}
+
+#[test]
+fn create_instructions_command_writes_and_discovers_a_valid_md_file() {
+    instruction_command_writes_valid_file(
+        "/create-instructions workspace Rust review rules",
+        ".ash/instructions/rust-review.md",
+        "---\nname: rust-review\nload: on-demand\n---\n\nReview Rust changes carefully.\n",
+        "Create or update an Ash Instruction file",
+        Some("rust-review"),
+    );
+}
+
+fn instruction_command_writes_valid_file(
+    command: &str,
+    relative_target: &str,
+    content: &str,
+    expected_prompt: &str,
+    expected_entry: Option<&str>,
+) {
+    let dir = TestDir::new("instruction-write-tools", "README.md");
+    let target = dir.path.join(relative_target);
+    let model = Arc::new(InstructionWritingModel {
+        target: target.clone(),
+        content: content.to_owned(),
+        calls: AtomicUsize::new(0),
+        requests: Mutex::new(Vec::new()),
+    });
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        InMemoryThreadStore::default(),
+    )));
+    let server = AppServer::new(threads, model.clone())
+        .with_ephemeral_env_state()
+        .with_local_env_host(None, host_policy())
+        .unwrap();
+    let tools = crate::local_tools::compose_local_tools_with_config(
+        dir.authorization(),
+        &crate::local_tools::LocalToolConfig::default(),
+        Arc::new(crate::dir_grants::DirGrants::default()),
+        None,
+        None,
+        None,
+    )
+    .unwrap();
+    let host = server.local_env_host.as_ref().unwrap();
+    server
+        .commit_full_env_runtime(dir.authorization(), tools, host)
+        .unwrap();
+    let mut connection = server.connection();
+    let initialized: serde_json::Value = serde_json::from_str(&server.handle_json(
+        &mut connection,
+        &serde_json::json!({
+            "jsonrpc":"2.0","id":1,"method":"initialize",
+            "params":{"clientInfo":{"name":"test","version":"1"},"capabilities":{"agentInteractions":{"version":1,"kinds":["approval"]}}}
+        }).to_string(),
+    )).unwrap();
+    assert!(initialized.get("result").is_some());
+    let session: serde_json::Value = serde_json::from_str(
+        &server.handle_json(
+            &mut connection,
+            &serde_json::json!({
+                "jsonrpc":"2.0","id":2,"method":"session/create",
+                "params":{"commandId":"instruction-tool-session","title":"instructions"}
+            })
+            .to_string(),
+        ),
+    )
+    .unwrap();
+    let session_id =
+        ash_protocol::SessionId::new(session["result"]["session"]["sessionId"].as_str().unwrap())
+            .unwrap();
+    let created: serde_json::Value = serde_json::from_str(&server.handle_json(
+        &mut connection,
+        &serde_json::json!({
+            "jsonrpc":"2.0","id":3,"method":"session/request",
+            "params":{"commandId":"instruction-tool-thread","sessionId":session_id,"request":{"type":"createThread","title":"root"}}
+        }).to_string(),
+    )).unwrap();
+    let thread_id =
+        ash_protocol::ThreadId::new(created["result"]["value"]["threadId"].as_str().unwrap())
+            .unwrap();
+    let started: serde_json::Value = serde_json::from_str(
+        &server.handle_json(
+            &mut connection,
+            &serde_json::json!({
+                "jsonrpc":"2.0","id":4,"method":"session/request",
+                "params":{
+                    "commandId":"instruction-tool-turn","sessionId":session_id,
+                    "request":{
+                        "type":"startTurn","expectedSequence":1,"threadId":thread_id,
+                        "input":[{"type":"text","text":command}]
+                    }
+                }
+            })
+            .to_string(),
+        ),
+    )
+    .unwrap();
+    assert!(
+        started["result"]["value"]["turnId"].is_string(),
+        "{started}"
+    );
+
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let mut resolved = std::collections::BTreeSet::new();
+    let mut request_id = 5;
+    loop {
+        let snapshot = server.threads.read_thread(&thread_id).unwrap();
+        if snapshot.turns[0].status == ash_protocol::TurnStatus::Completed {
+            break;
+        }
+        if let Some(pending) = &snapshot.turns[0].pending_interaction
+            && !resolved.contains(&pending.request_id)
+        {
+            let subscribed: serde_json::Value = serde_json::from_str(
+                &server.handle_json(
+                    &mut connection,
+                    &serde_json::json!({
+                        "jsonrpc":"2.0","id":request_id,"method":"session/thread/subscribe",
+                        "params":{"sessionId":session_id,"threadId":thread_id,"afterSequence":0}
+                    })
+                    .to_string(),
+                ),
+            )
+            .unwrap();
+            assert!(subscribed.get("result").is_some(), "{subscribed}");
+            request_id += 1;
+            let notifications = server.drain_notifications(&mut connection);
+            assert!(
+                notifications
+                    .iter()
+                    .any(|notification| notification.contains("\"method\":\"agent/request\"")),
+                "{notifications:?}"
+            );
+            let approval: serde_json::Value = serde_json::from_str(
+                &server.handle_json(
+                    &mut connection,
+                    &serde_json::json!({
+                        "jsonrpc":"2.0","id":request_id,"method":"session/request",
+                        "params":{
+                            "commandId":format!("instruction-approval-{request_id}"),
+                            "sessionId":session_id,
+                            "request":{
+                                "type":"resolveInteraction",
+                                "expectedSequence":snapshot.sequence,
+                                "threadId":thread_id,
+                                "turnId":snapshot.turns[0].turn_id,
+                                "requestId":pending.request_id,
+                                "response":{"type":"approval","response":{"decision":"approveOnce"}}
+                            }
+                        }
+                    })
+                    .to_string(),
+                ),
+            )
+            .unwrap();
+            assert!(approval.get("result").is_some(), "{approval}");
+            resolved.insert(pending.request_id.clone());
+            request_id += 1;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "Instruction Turn did not complete: {:?}, pending={:?}",
+            snapshot.turns[0].status,
+            snapshot.turns[0].pending_interaction
+        );
+        std::thread::yield_now();
+    }
+    assert_eq!(std::fs::read_to_string(&target).unwrap(), content);
+    let requests = model.requests.lock().unwrap();
+    assert!(
+        requests[0]
+            .instructions
+            .as_deref()
+            .unwrap()
+            .contains(expected_prompt)
+    );
+    assert_eq!(requests.len(), 3);
+    if let Some(name) = expected_entry {
+        let listed: ash_app_server_protocol::protocol::instructions::InstructionListResult =
+            serde_json::from_value(server.instruction_list(&serde_json::json!({})).unwrap())
+                .unwrap();
+        assert!(
+            listed
+                .instructions
+                .iter()
+                .any(|entry| { entry.name == name && entry.path == target })
+        );
+    }
 }
 
 struct PermissionBoundSemanticEmbedding;
@@ -470,6 +934,106 @@ fn dirs_are_session_scoped_and_removable() {
         .unwrap();
     assert_eq!(mutation, Mutation::RemovedDir);
     assert!(directories.dirs.is_empty());
+}
+
+#[test]
+fn claude_instruction_import_copies_confirmed_source_without_an_agent_turn() {
+    let primary = TestDir::new("import-primary", "primary.txt");
+    let source = primary.path.join("CLAUDE.md");
+    let target = primary.path.join("ASH.md");
+    std::fs::write(&source, "Follow these project rules.\n").unwrap();
+    let server = server().with_local_env_host(None, host_policy()).unwrap();
+    let host = server.local_env_host.as_ref().unwrap();
+    server
+        .commit_full_env_runtime(primary.authorization(), test_local_tools(), host)
+        .unwrap();
+    let scope = serde_json::json!({"type": "workspace"});
+    let mut connection = server.connection();
+    let initialized: serde_json::Value = serde_json::from_str(
+        &server.handle_json(
+            &mut connection,
+            &serde_json::json!({
+                "jsonrpc":"2.0","id":1,"method":"initialize",
+                "params":{"clientInfo":{"name":"test","version":"1"},"capabilities":{}}
+            })
+            .to_string(),
+        ),
+    )
+    .unwrap();
+    assert!(initialized.get("result").is_some());
+
+    let preview: serde_json::Value = serde_json::from_str(
+        &server.handle_json(
+            &mut connection,
+            &serde_json::json!({
+                "jsonrpc":"2.0","id":2,"method":"instructions/import/preview",
+                "params":{"scope":scope}
+            })
+            .to_string(),
+        ),
+    )
+    .unwrap();
+    assert_eq!(
+        preview["result"]["source"]["content"],
+        "Follow these project rules.\n"
+    );
+    assert_eq!(preview["result"]["source"]["relativePath"], "CLAUDE.md");
+    assert_eq!(preview["result"]["targetConflict"], false);
+    let digest = preview["result"]["source"]["sha256"].as_str().unwrap();
+    let apply = |id| {
+        serde_json::json!({
+            "jsonrpc":"2.0","id":id,"method":"instructions/import/apply",
+            "params":{"scope":scope,"relativePath":"CLAUDE.md","expectedSha256":digest,"expectedTarget":preview["result"]["target"]}
+        })
+    };
+
+    let wrong_target: serde_json::Value = serde_json::from_str(&server.handle_json(
+        &mut connection,
+        &serde_json::json!({
+            "jsonrpc":"2.0","id":3,"method":"instructions/import/apply",
+            "params":{"scope":scope,"relativePath":"CLAUDE.md","expectedSha256":digest,"expectedTarget":primary.path.join("other/ASH.md")}
+        }).to_string(),
+    )).unwrap();
+    assert_eq!(
+        wrong_target["error"]["message"],
+        "InstructionImportConflict"
+    );
+    assert!(!target.exists());
+
+    std::fs::write(&source, "Changed before confirmation.\n").unwrap();
+    let changed: serde_json::Value =
+        serde_json::from_str(&server.handle_json(&mut connection, &apply(4).to_string())).unwrap();
+    assert_eq!(changed["error"]["message"], "InstructionImportConflict");
+    assert!(!target.exists());
+
+    std::fs::write(&source, "Follow these project rules.\n").unwrap();
+    let copied: serde_json::Value =
+        serde_json::from_str(&server.handle_json(&mut connection, &apply(5).to_string())).unwrap();
+    assert_eq!(copied["result"]["sha256"], digest, "{copied}");
+    assert_eq!(
+        std::fs::read_to_string(&target).unwrap(),
+        "Follow these project rules.\n"
+    );
+    let repeated: serde_json::Value =
+        serde_json::from_str(&server.handle_json(&mut connection, &apply(6).to_string())).unwrap();
+    assert_eq!(repeated["error"]["message"], "InstructionImportConflict");
+    assert_eq!(
+        std::fs::read_to_string(&target).unwrap(),
+        "Follow these project rules.\n"
+    );
+
+    std::fs::write(&target, "").unwrap();
+    let empty_target: serde_json::Value =
+        serde_json::from_str(&server.handle_json(&mut connection, &apply(7).to_string())).unwrap();
+    assert_eq!(empty_target["result"]["sha256"], digest);
+    assert_eq!(
+        std::fs::read_to_string(&target).unwrap(),
+        "Follow these project rules.\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&source).unwrap(),
+        "Follow these project rules.\n"
+    );
 }
 
 #[test]

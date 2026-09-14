@@ -99,6 +99,8 @@ mod git_turn_changes_observer;
 mod git_turn_changes_operations;
 mod git_turn_changes_runtime;
 mod home_context;
+mod instruction_import_operations;
+mod instruction_operations;
 mod interaction_runtime;
 mod issue_operations;
 mod issue_runtime;
@@ -2207,6 +2209,13 @@ impl AppServer {
             Some(ClientMethod::HookRemove) => self.hook_remove(&request.params),
             Some(ClientMethod::HookSetEnablement) => self.hook_set_enablement(&request.params),
             Some(ClientMethod::SkillList) => self.skill_list(&request.params),
+            Some(ClientMethod::InstructionList) => self.instruction_list(&request.params),
+            Some(ClientMethod::InstructionImportPreview) => {
+                self.instruction_import_preview(&request.params)
+            }
+            Some(ClientMethod::InstructionImportApply) => {
+                self.instruction_import_apply(&request.params)
+            }
             Some(ClientMethod::SkillSetEnablement) => self.skill_set_enablement(&request.params),
             Some(ClientMethod::SkillResourceOpen) => {
                 self.skill_resource_open(connection, &request.params)

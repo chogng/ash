@@ -49,6 +49,15 @@ impl InstructionArtifact {
     pub fn body(&self) -> &str {
         &self.body
     }
+
+    pub fn render(&self) -> String {
+        format!(
+            "<instruction name=\"{}\" source=\"{}\">\n{}\n</instruction>",
+            self.name,
+            self.relative_path.display(),
+            self.body
+        )
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -192,14 +201,7 @@ impl InstructionCatalogSnapshot {
             self.entries
                 .iter()
                 .filter(|entry| include(entry))
-                .map(|entry| {
-                    format!(
-                        "<instruction name=\"{}\" source=\"{}\">\n{}\n</instruction>",
-                        entry.name(),
-                        entry.relative_path().display(),
-                        entry.body()
-                    )
-                })
+                .map(InstructionArtifact::render)
                 .collect::<Vec<_>>(),
         );
         let content = sections.join("\n\n");

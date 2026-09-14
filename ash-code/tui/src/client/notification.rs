@@ -19,6 +19,7 @@ pub(crate) enum ClientEvent {
     ConnectorsChanged,
     PackageSourcesChanged,
     SkillsChanged,
+    InstructionsChanged,
     MemoriesChanged,
     SessionChanged(SessionId),
     ThreadUpdated(Box<ThreadUpdateEnvelope>),
@@ -51,6 +52,19 @@ fn project_notification(notification: ServerNotification) -> Option<ClientEvent>
         }
         ServerNotification::MemoryChanged(_) => Some(ClientEvent::MemoriesChanged),
         ServerNotification::SkillsChanged(_) => Some(ClientEvent::SkillsChanged),
+        ServerNotification::FsChanged(changed) => match changed {
+            ash_app_server_protocol::protocol::fs::FsChanged::RescanRequired { .. } => {
+                Some(ClientEvent::InstructionsChanged)
+            }
+            ash_app_server_protocol::protocol::fs::FsChanged::PathsChanged { paths, .. }
+                if paths.iter().any(|path| {
+                    path.starts_with(".ash/instructions") || path.starts_with("instructions")
+                }) =>
+            {
+                Some(ClientEvent::InstructionsChanged)
+            }
+            _ => None,
+        },
         ServerNotification::GitStatusChanged(changed) => {
             Some(ClientEvent::GitStatusChanged(changed.status))
         }

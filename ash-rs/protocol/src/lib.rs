@@ -8,6 +8,7 @@ mod error;
 #[path = "thread/history.rs"]
 mod history;
 mod ids;
+mod instruction;
 mod interaction;
 mod item;
 mod model;
@@ -73,6 +74,8 @@ pub use ids::SessionId;
 pub use ids::ThreadId;
 pub use ids::ToolCallId;
 pub use ids::TurnId;
+pub use instruction::InstructionRef;
+pub use instruction::InstructionSource;
 pub use interaction::ActionApprovalCapability;
 pub use interaction::ActionApprovalCapabilityKind;
 pub use interaction::ActionApprovalDecision;

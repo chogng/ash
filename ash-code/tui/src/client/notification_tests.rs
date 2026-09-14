@@ -3,6 +3,7 @@ use super::map_event;
 use ash_app_server_client::{AppServerEvent, ConnectionCloseReason, ServerNotification};
 use ash_app_server_protocol::protocol::config::ConfigChanged;
 use ash_app_server_protocol::protocol::connectors::ConnectorsChanged;
+use ash_app_server_protocol::protocol::fs::FsChanged;
 use ash_app_server_protocol::protocol::git::{GitHeadDto, GitStatusChanged, GitStatusResult};
 use ash_app_server_protocol::protocol::marketplace::MarketplaceChanged;
 use ash_app_server_protocol::protocol::notification::{SkillsChanged, ThreadUpdateEnvelope};
@@ -21,6 +22,28 @@ fn skills_changed_is_mapped_without_exposing_the_wire_notification() {
             ServerNotification::SkillsChanged(SkillsChanged { generation: 7 })
         )),
         Some(ClientEvent::SkillsChanged)
+    );
+}
+
+#[test]
+fn instruction_file_changes_refresh_the_tui_completion_catalog() {
+    assert_eq!(
+        map_event(AppServerEvent::Notification(ServerNotification::FsChanged(
+            FsChanged::PathsChanged {
+                dir_id: None,
+                paths: vec![".ash/instructions/manual.md".into()],
+            }
+        ))),
+        Some(ClientEvent::InstructionsChanged)
+    );
+    assert_eq!(
+        map_event(AppServerEvent::Notification(ServerNotification::FsChanged(
+            FsChanged::PathsChanged {
+                dir_id: None,
+                paths: vec!["src/lib.rs".into()],
+            }
+        ))),
+        None
     );
 }
 

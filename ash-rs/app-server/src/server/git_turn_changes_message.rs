@@ -185,6 +185,9 @@ fn commit_message_prompt(
                         redact_sensitive_text(&content)
                     ));
                 }
+                ash_protocol::ThreadItem::UserInstruction { .. } => {
+                    context.push("User selected an Instruction.".into());
+                }
                 ash_protocol::ThreadItem::UserImage { .. }
                 | ash_protocol::ThreadItem::UserImageAttachment { .. } => {
                     context.push("User attached an image.".into());

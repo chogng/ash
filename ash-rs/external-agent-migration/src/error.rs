@@ -6,6 +6,9 @@ use crate::import::{ExternalAgent, ImportScope};
 /// Failure to validate a caller-selected external configuration root.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AgentImportError {
+    UnsupportedInstructionAgent {
+        agent: ExternalAgent,
+    },
     RootUnavailable {
         agent: ExternalAgent,
         scope: ImportScope,
@@ -24,6 +27,12 @@ pub enum AgentImportError {
 impl fmt::Display for AgentImportError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::UnsupportedInstructionAgent { agent } => {
+                write!(
+                    formatter,
+                    "{agent:?} has no dedicated Instruction import reader"
+                )
+            }
             Self::RootUnavailable {
                 agent,
                 scope,

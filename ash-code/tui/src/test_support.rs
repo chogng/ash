@@ -1,7 +1,3 @@
-use std::collections::BTreeMap;
-use std::fmt::Display;
-use std::sync::Mutex;
-use std::sync::MutexGuard;
 use ash_app_server_protocol::protocol::config::AgentGrepBackendDto;
 use ash_app_server_protocol::protocol::config::ApprovalReviewModelSelectionDto;
 use ash_app_server_protocol::protocol::config::CodebaseAutomaticContextDto;
@@ -11,6 +7,10 @@ use ash_app_server_protocol::protocol::config::FrontendConfigDto;
 use ash_app_server_protocol::protocol::config::ToolSearchConfigDto;
 use ash_app_server_protocol::protocol::config::ToolSearchEmbeddingStatusDto;
 use ash_app_server_protocol::protocol::config::ToolSearchModeDto;
+use std::collections::BTreeMap;
+use std::fmt::Display;
+use std::sync::Mutex;
+use std::sync::MutexGuard;
 
 static IN_PROCESS_TEST_LOCK: Mutex<()> = Mutex::new(());
 
@@ -86,9 +86,15 @@ pub(crate) fn queued_message(command: crate::app::AppCommand) -> ::queue::Queued
         .input
         .into_iter()
         .map(|input| match input {
-            crate::thread::composer::ChatInputItem::Context { name, content } => {
-                ash_protocol::UserInput::Context { name, content }
-            }
+            crate::thread::composer::ChatInputItem::Context {
+                name,
+                content,
+                file_path,
+            } => ash_protocol::UserInput::Context {
+                name,
+                content,
+                file_path,
+            },
             crate::thread::composer::ChatInputItem::Text(text) => {
                 ash_protocol::UserInput::Text { text }
             }
@@ -97,6 +103,9 @@ pub(crate) fn queued_message(command: crate::app::AppCommand) -> ::queue::Queued
             }
             crate::thread::composer::ChatInputItem::Skill { skill } => {
                 ash_protocol::UserInput::Skill { skill }
+            }
+            crate::thread::composer::ChatInputItem::Instruction { reference } => {
+                ash_protocol::UserInput::Instruction { reference }
             }
             crate::thread::composer::ChatInputItem::Image { .. } => {
                 panic!("image tests must provide a materialized server attachment")

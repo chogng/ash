@@ -18,8 +18,8 @@ Codex/Claude 格式，不组装模型请求，也不拥有 watcher、目录授�
 | 合法 `.md` | 进入确定性 catalog |
 | 单文件格式错误 | 产生隔离 diagnostic，其他文件继续 |
 | `load: global` | 注入后续模型调用 |
-| `load: contextual` | 本 Turn 成功读取的目录内文件命中 `patterns` 时注入 |
-| `load: on-demand` | 由 Agent definition 显式引用时加载 |
+| `load: contextual` | 本 Turn 显式附加或成功读取的目录内文件命中 `patterns` 时注入 |
+| `load: on-demand` | 由 Agent definition、Desktop 聊天附件或 TUI 的 `@` 指令候选显式选择时加载 |
 
 ## 边界与公共契约
 
@@ -29,7 +29,7 @@ Codex/Claude 格式，不组装模型请求，也不拥有 watcher、目录授�
 Contextual 条目；`global_content` 只渲染 Global。两者均带
 artifact name 与相对路径 provenance。
 同级正文按 `AGENTS.md`、`ASH.md`、细分文件顺序拼接；App Server 再区分用户级和授权工作区级。
-工作区子目录的 `AGENTS.md` 与 `ASH.md` 只在本 Turn 成功读取其下文件后，按浅到深顺序加入；
+工作区子目录的 `AGENTS.md` 与 `ASH.md` 在本 Turn 显式附加或成功读取其下文件后，按浅到深顺序加入；
 用户 home 不做子目录继承。嵌套最多检查 64 个目录、每条路径最多 16 层。
 
 frontmatter 必须显式声明：
@@ -81,7 +81,9 @@ just rust-warnings ash-instructions
 当前已实现目录和用户 home 的共享 `AGENTS.md`、Ash 专属 `ASH.md` 与多文件 Instruction 发现、格式校验、不可变 snapshot 与 Global 内容渲染；App Server 的
 `DirContributions` 在目录加入 Env 时发现 catalog，由 filesystem invalidation refresh，并在
 下一次 model invocation 通过 `HarnessContextProvider` 提供 Global 与匹配的 Contextual 内容。Core
-仅从本 Turn 成功的 `read_file` 调用提取路径；App Server 校验路径仍落在对应目录内，再交给 catalog
+从本 Turn 显式附加的文件与成功的 `read_file` 调用提取路径；App Server 校验路径仍落在对应目录内，再交给 catalog
 匹配。`ash-home` 在每次模型调用前刷新用户 home catalog，并把其内容放在目录级内容之前。
-Agent definition 可按名称显式引用 OnDemand 条目。按当前用户消息或编辑器活动文件自动匹配、用户
-手动附加 OnDemand、Plugin source composition 及 catalog/diagnostic list API 尚未实现。
+Agent definition 可按名称显式引用 OnDemand 条目。App Server 提供 catalog/diagnostic list API，
+Desktop 聊天附件与 TUI `@` 指令候选只展示 OnDemand 条目；选中项以来源、相对路径和正文摘要提交，
+模型调用前再次核对授权和摘要。按聊天正文或未附加的编辑器活动文件自动匹配与 Plugin source composition
+尚未实现。

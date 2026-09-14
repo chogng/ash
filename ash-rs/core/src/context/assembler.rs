@@ -89,6 +89,7 @@ impl ContextAssembler {
                         )),
                     );
                 }
+                ThreadItem::UserInstruction { .. } => {}
                 ThreadItem::UserImage { turn_id, url, .. } => {
                     append_user_content(
                         &mut input,

@@ -1,7 +1,7 @@
 load("//:defs.bzl", "ash_rust_crate")
 
 ash_rust_crate(
-    name = "agent_roles",
+    name = "agent-roles",
     crate_name = "agent_roles",
     data = glob(["assets/builtins/*.toml"]),
 )

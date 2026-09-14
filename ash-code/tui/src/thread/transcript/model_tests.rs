@@ -4,9 +4,11 @@ use super::TranscriptModel;
 use crate::thread::transcript::CommandStatus;
 use crate::thread::transcript::LocalCommandCompletion;
 use crate::thread::transcript::MessageRole;
-use std::collections::BTreeSet;
 use ash_app_server_protocol::protocol::transcript::ThreadTranscriptEntry;
 use ash_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
+use ash_protocol::ContentDigest;
+use ash_protocol::InstructionRef;
+use ash_protocol::InstructionSource;
 use ash_protocol::ItemId;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
@@ -15,6 +17,30 @@ use ash_protocol::ToolCallId;
 use ash_protocol::ToolName;
 use ash_protocol::ToolOutputStream;
 use ash_protocol::TurnId;
+use std::collections::BTreeSet;
+
+#[test]
+fn selected_instruction_is_visible_without_exposing_its_body_as_chat_text() {
+    let turn_id = turn_id("selected-instruction");
+    let mut model = TranscriptModel::default();
+    model.replace(snapshot(vec![ThreadTranscriptEntry::Item {
+        entry_id: "instruction-entry".into(),
+        turn_id: turn_id.clone(),
+        item: ThreadItem::UserInstruction {
+            item_id: item_id("instruction-item"),
+            turn_id,
+            reference: InstructionRef {
+                source: InstructionSource::User,
+                relative_path: "manual.md".into(),
+                digest: ContentDigest::sha256(b"secret guidance"),
+            },
+        },
+        transient: false,
+    }]));
+
+    let views = model.views(&BTreeSet::new(), None);
+    assert_eq!(views[0].text(), "Instruction · manual.md");
+}
 
 #[test]
 fn tool_call_output_and_result_form_one_exec_cell() {

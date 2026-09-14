@@ -168,6 +168,13 @@ export function chatListItem(item: ThreadItem, transient = false): IChatListItem
 				text: item.name,
 				transient,
 			};
+		case 'userInstruction':
+			return {
+				id: item.itemId,
+				type: item.type,
+				text: `Instruction: ${item.reference.relativePath}`,
+				transient,
+			};
 		case "userImage":
 		case "userImageAttachment":
 			return {

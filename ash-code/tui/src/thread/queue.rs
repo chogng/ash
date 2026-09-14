@@ -366,10 +366,15 @@ fn submission(input: &[ash_protocol::UserInput]) -> Result<ChatSubmission, Strin
     let mut display = Vec::new();
     for item in input {
         match item {
-            ash_protocol::UserInput::Context { name, content } => {
+            ash_protocol::UserInput::Context {
+                name,
+                content,
+                file_path,
+            } => {
                 values.push(crate::thread::composer::ChatInputItem::Context {
                     name: name.clone(),
                     content: content.clone(),
+                    file_path: file_path.clone(),
                 });
                 display.push(format!("[Context: {name}]"));
             }
@@ -387,6 +392,15 @@ fn submission(input: &[ash_protocol::UserInput]) -> Result<ChatSubmission, Strin
                 values.push(crate::thread::composer::ChatInputItem::Skill {
                     skill: skill.clone(),
                 });
+            }
+            ash_protocol::UserInput::Instruction { reference } => {
+                values.push(crate::thread::composer::ChatInputItem::Instruction {
+                    reference: reference.clone(),
+                });
+                display.push(format!(
+                    "[Instruction: {}]",
+                    reference.relative_path.display()
+                ));
             }
             _ => return Err("queued input contains a type this composer cannot edit".into()),
         }

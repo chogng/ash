@@ -588,6 +588,7 @@ fn validate_items(items: &[ThreadItem]) -> Result<(), ContextPreparationError> {
             }
             ThreadItem::UserMessage { .. }
             | ThreadItem::UserContext { .. }
+            | ThreadItem::UserInstruction { .. }
             | ThreadItem::UserImage { .. }
             | ThreadItem::UserImageAttachment { .. }
             | ThreadItem::AgentMessage { .. }
@@ -837,7 +838,9 @@ fn estimate_item(item: &ThreadItem) -> ContextTokenCount {
             || estimate_bytes(text.len(), TOOL_ITEM_OVERHEAD),
             |content| estimate_content(content),
         ),
-        ThreadItem::Reasoning { .. } | ThreadItem::Plan { .. } => ContextTokenCount::ZERO,
+        ThreadItem::UserInstruction { .. }
+        | ThreadItem::Reasoning { .. }
+        | ThreadItem::Plan { .. } => ContextTokenCount::ZERO,
     }
 }
 

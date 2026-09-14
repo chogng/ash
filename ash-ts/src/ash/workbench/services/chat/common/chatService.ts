@@ -2,6 +2,7 @@ import type { Event } from "../../../../base/common/event.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { ApprovalMode, ModelRef, SessionId, ThreadId } from "../../../../sessions/services/sessions/common/session.js";
 import type { SkillReference } from "../../../../platform/skills/common/skillApi.js";
+import type { InstructionReference } from '../../../../platform/instructions/common/instructionApi.js';
 import type { ModelCatalogEntry } from "./modelCatalog.js";
 import type { ResolvedChatContext } from "./chatContextService.js";
 
@@ -32,6 +33,7 @@ export interface SkillSelectorDefinition {
 export type ThreadItem =
 	| { readonly type: "userMessage"; readonly itemId: string; readonly turnId: string; readonly text: string }
 	| { readonly type: "userContext"; readonly itemId: string; readonly turnId: string; readonly name: string; readonly content: string }
+	| { readonly type: 'userInstruction'; readonly itemId: string; readonly turnId: string; readonly reference: InstructionReference }
 	| { readonly type: "userImage"; readonly itemId: string; readonly turnId: string; readonly url: string }
 	| { readonly type: "userImageAttachment"; readonly itemId: string; readonly turnId: string; readonly attachment: ChatImageAttachment }
 	| { readonly type: "agentMessage"; readonly itemId: string; readonly turnId: string; readonly text: string }
@@ -243,9 +245,9 @@ export interface ThreadSubscription {
 	readonly updates: readonly ThreadUpdateEnvelope[];
 }
 
-export interface StartTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly text: string; readonly contexts?: readonly ResolvedChatContext[]; readonly skills?: readonly SkillReference[] }
+export interface StartTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly text: string; readonly contexts?: readonly ResolvedChatContext[]; readonly skills?: readonly SkillReference[]; readonly instructions?: readonly InstructionReference[] }
 export interface CompactContextOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly retentionPrompt?: string }
-export interface SteerTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number; readonly text: string; readonly contexts?: readonly ResolvedChatContext[] }
+export interface SteerTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number; readonly text: string; readonly contexts?: readonly ResolvedChatContext[]; readonly instructions?: readonly InstructionReference[] }
 export interface InterruptTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number }
 export interface ResolveInteractionOptions extends InterruptTurnOptions { readonly requestId: string; readonly response: AgentResponse }
 

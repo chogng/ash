@@ -98,6 +98,32 @@ fn conditionally_writes_only_the_revision_that_was_read() {
 }
 
 #[test]
+fn imported_file_write_accepts_only_missing_or_empty_targets() {
+    let dir = TestDir::new();
+    let files = dir.file_system();
+    let target = Path::new("ASH.md");
+    files
+        .write_file_with_condition(target, b"first", 32, &FileWriteCondition::MissingOrEmpty)
+        .unwrap();
+    assert_eq!(
+        files.write_file_with_condition(
+            target,
+            b"replacement",
+            32,
+            &FileWriteCondition::MissingOrEmpty,
+        ),
+        Err(FileSystemError::AlreadyExists(target.to_path_buf()))
+    );
+    assert_eq!(fs::read_to_string(dir.path.join(target)).unwrap(), "first");
+
+    fs::write(dir.path.join(target), "").unwrap();
+    files
+        .write_file_with_condition(target, b"second", 32, &FileWriteCondition::MissingOrEmpty)
+        .unwrap();
+    assert_eq!(fs::read_to_string(dir.path.join(target)).unwrap(), "second");
+}
+
+#[test]
 fn rejects_unsafe_or_oversized_write_targets() {
     let dir = TestDir::new();
     fs::create_dir(dir.path.join("src")).unwrap();

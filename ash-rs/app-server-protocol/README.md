@@ -22,5 +22,11 @@
 | `memory/citation/read` | Memory ID、作用域、revision、UTF-8 范围 → 引用正文 | 引用不授予权限；已删除或版本不符明确报错 |
 | `memory/policy/read` / `memory/policy/update` | 作用域、commandId、policy revision、automaticRead、modelWrite → 读取与模型保存授权 | 默认关闭；修改与重放沿用 Memory 通知和冲突契约 |
 | `memoryDiagnostics/start` / `read` / `submit` / `stop` / `export` | 诊断 Session → report/resource | 进程内存诊断，不读取长期 Memory |
+| `instructions/import/preview` | User 或当前 Workspace → 来源正文、摘要、目标冲突 | 只读 Claude 已知路径，供用户确认 |
+| `instructions/import/apply` | 同一作用域、来源路径与摘要、预览目标 → 目标路径与摘要 | 重读来源并核对目标；仅在缺失或为空时写入 `ASH.md` |
+| `instructions/list` | 可选 Session → 指令条目与诊断 | 只列出用户级及该 Session 已授权目录；条目包含加载策略、来源和正文摘要 |
+
+`turn/start` 和 `turn/steer` 的 `instruction` 输入只接受从 catalog 选出的来源、相对路径和
+`sha256:` 正文摘要。App Server 接收时校验，模型调用前再次核对；缺失、权限撤销或正文变化均拒绝旧引用。
 
 `memory/changed` 只向产品 host 发布作用域和新 catalog revision；客户端随后重新读取。`queue/changed` 是无内容的失效通知。Config 的 Feature 来源由 `ash-features` 解释。反馈待审阅包在 connection 关闭时释放，持久队列由 profile 后台调度器恢复。

@@ -1,10 +1,12 @@
 use crate::protocol::common::TurnId;
+use ash_protocol::ImageAttachmentRef;
+use ash_protocol::InstructionRef;
+use ash_protocol::SkillRef;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
+use std::path::PathBuf;
 use ts_rs::TS;
-use ash_protocol::ImageAttachmentRef;
-use ash_protocol::SkillRef;
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(
@@ -24,6 +26,9 @@ pub enum InputItem {
     Context {
         name: String,
         content: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        file_path: Option<PathBuf>,
     },
     ImageAttachment {
         attachment: ImageAttachmentRef,
@@ -34,6 +39,9 @@ pub enum InputItem {
     },
     Skill {
         skill: SkillRef,
+    },
+    Instruction {
+        reference: InstructionRef,
     },
 }
 

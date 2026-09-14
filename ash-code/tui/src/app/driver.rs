@@ -32,10 +32,10 @@ use crate::thread::composer::file_search::FileSearchManager;
 use crate::thread::interaction::approval::Approval;
 use crate::thread::interaction::query::Query;
 use crate::thread::read_thread_history;
-use std::collections::VecDeque;
-use std::path::PathBuf;
 use ash_app_server_client::AppServerRequestHandle;
 use ash_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
+use std::collections::VecDeque;
+use std::path::PathBuf;
 
 #[derive(Debug, Eq, PartialEq)]
 pub(super) struct ScheduledCommand {
@@ -543,6 +543,10 @@ fn refresh_server_event(
             skills: true,
             ..ServerRefresh::default()
         },
+        client::ClientEvent::InstructionsChanged => ServerRefresh {
+            skills: true,
+            ..ServerRefresh::default()
+        },
         client::ClientEvent::ConnectorsChanged => ServerRefresh {
             connectors: app.connector_picker_open(),
             ..ServerRefresh::default()
@@ -561,9 +565,16 @@ fn refresh_server_event(
         }
         client::ClientEvent::SessionChanged(_) => ServerRefresh {
             sessions: true,
+            skills: true,
             ..ServerRefresh::default()
         },
         client::ClientEvent::ThreadUpdated(update) => {
+            let completed = matches!(
+                &update.update,
+                ash_protocol::ThreadUpdate::Committed {
+                    event: ash_protocol::ThreadEvent::TurnCompleted { .. },
+                }
+            );
             let Some(current) = current else {
                 return ServerRefresh::default();
             };
@@ -571,6 +582,7 @@ fn refresh_server_event(
                 ThreadUpdateDisposition::Ignore => ServerRefresh::default(),
                 ThreadUpdateDisposition::RefreshSnapshot => ServerRefresh {
                     thread: true,
+                    skills: completed,
                     ..ServerRefresh::default()
                 },
             }

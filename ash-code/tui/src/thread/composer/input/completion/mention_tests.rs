@@ -1,12 +1,16 @@
 use super::ActiveMention;
+use super::InstructionCompletionItem;
 use super::MentionMatchKind;
 use super::MentionPluginItem;
 use super::MentionPopup;
 use super::Mentions;
 use super::active_mention;
-use std::path::PathBuf;
 use ash_file_search::PathMatch;
 use ash_file_search::PathSearchSnapshot;
+use ash_protocol::ContentDigest;
+use ash_protocol::InstructionRef;
+use ash_protocol::InstructionSource;
+use std::path::PathBuf;
 
 #[test]
 fn active_token_resolves_at_the_cursor_without_matching_email_text() {
@@ -69,6 +73,29 @@ fn plugin_catalog_joins_file_mentions_and_keeps_the_at_prefix() {
     let completion = mentions.complete_selected().unwrap();
     assert_eq!(completion.range, 4..7);
     assert_eq!(completion.value, "@acme/review");
+}
+
+#[test]
+fn on_demand_instruction_completion_carries_a_pinned_reference() {
+    let reference = InstructionRef {
+        source: InstructionSource::User,
+        relative_path: "manual.md".into(),
+        digest: ContentDigest::sha256(b"manual guidance"),
+    };
+    let mut mentions = Mentions::default();
+    mentions.replace_instruction_catalog(vec![InstructionCompletionItem::new(
+        "manual".into(),
+        "/ash-home/instructions/manual.md".into(),
+        reference.clone(),
+    )]);
+    mentions.sync("Review @man", "Review @man".len());
+
+    let view = mentions.view().unwrap();
+    assert_eq!(view.matches[0].kind, MentionMatchKind::Instruction);
+    assert!(view.matches[0].label.contains("manual.md"));
+    let completion = mentions.complete_selected().unwrap();
+    assert_eq!(completion.value, "@manual");
+    assert_eq!(completion.instruction, Some(reference));
 }
 
 fn snapshot(query: &str, paths: &[&str]) -> PathSearchSnapshot {

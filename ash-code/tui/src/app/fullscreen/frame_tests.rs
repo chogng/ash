@@ -27,6 +27,7 @@ use crate::thread::Event as ThreadEvent;
 use crate::thread::TurnActivity;
 use crate::thread::composer::ChatComposerPointerTarget;
 use crate::thread::composer::ChatInputCatalog;
+use crate::thread::composer::InstructionCompletionItem;
 use crate::thread::composer::SkillCompletionItem;
 use crate::thread::composer::SlashCommandCatalog;
 use crate::thread::composer::built_in_slash_command_definitions;
@@ -35,26 +36,12 @@ use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionModel;
 use crate::widgets::search_box::SearchBoxModel;
-use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyModifiers;
-use ratatui::Terminal;
-use ratatui::backend::TestBackend;
-use ratatui::buffer::Buffer;
-use ratatui::layout::Rect;
-use ratatui::style::Color;
-use ratatui::style::Modifier;
-use std::fs;
-use std::path::Path;
-use std::time::Duration;
-use std::time::Instant;
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
-use unicode_width::UnicodeWidthStr;
 use ash_app_server_protocol::protocol::config::ModelRefDto;
 use ash_memory_diagnostics::ProcessResourceDemand;
 use ash_memory_diagnostics::ProcessResourceMetrics;
 use ash_protocol::ContentDigest;
+use ash_protocol::InstructionRef;
+use ash_protocol::InstructionSource;
 use ash_protocol::ReasoningEffort;
 use ash_protocol::Session;
 use ash_protocol::SessionId;
@@ -71,6 +58,22 @@ use ash_protocol::ThreadId;
 use ash_protocol::ThreadStatus;
 use ash_slash_commands::SlashCommandArgumentMode;
 use ash_slash_commands::SlashCommandDefinition;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyModifiers;
+use ratatui::Terminal;
+use ratatui::backend::TestBackend;
+use ratatui::buffer::Buffer;
+use ratatui::layout::Rect;
+use ratatui::style::Color;
+use ratatui::style::Modifier;
+use std::fs;
+use std::path::Path;
+use std::time::Duration;
+use std::time::Instant;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
+use unicode_width::UnicodeWidthStr;
 
 #[test]
 fn input_history_search_and_cancel_preserve_the_composer() {
@@ -761,10 +764,7 @@ fn top_tip_shows_permission_modes_above_input_shortcuts() {
             ash_protocol::ApprovalMode::AskPermissions,
             "⏸ ask permissions on",
         ),
-        (
-            ash_protocol::ApprovalMode::AutoReview,
-            "⏩  auto review on",
-        ),
+        (ash_protocol::ApprovalMode::AutoReview, "⏩  auto review on"),
         (
             ash_protocol::ApprovalMode::BypassPermissions,
             "▶ bypass permissions on",
@@ -1804,6 +1804,7 @@ fn skill_popup_wraps_descriptions_to_two_clickable_lines_and_truncates_the_rest(
             skill,
         )],
         Vec::new(),
+        Vec::new(),
     ));
     app.insert_text("$diagnose");
     let terminal_area = Rect::new(0, 0, 36, 20);
@@ -1828,6 +1829,36 @@ fn skill_popup_wraps_descriptions_to_two_clickable_lines_and_truncates_the_rest(
         input_overlay_index_at(&app, terminal_area, 2, popup_top - 1),
         None
     );
+}
+
+#[test]
+fn on_demand_instruction_appears_as_a_distinct_at_completion() {
+    let slash_commands = SlashCommandCatalog::with_local_and_server(
+        built_in_slash_command_definitions(),
+        std::iter::empty(),
+    )
+    .unwrap();
+    let mut app = App::for_dir_with_slash_commands(Path::new("."), slash_commands.clone());
+    app.replace_chat_input_catalog(ChatInputCatalog::new(
+        slash_commands,
+        Vec::new(),
+        Vec::new(),
+        vec![InstructionCompletionItem::new(
+            "manual".into(),
+            "/ash-home/instructions/manual.md".into(),
+            InstructionRef {
+                source: InstructionSource::User,
+                relative_path: "manual.md".into(),
+                digest: ContentDigest::sha256(b"manual guidance"),
+            },
+        )],
+    ));
+    app.insert_text("Review @man");
+
+    let rendered = render(&app, 80, 20);
+    assert!(rendered.contains("manual"));
+    assert!(rendered.contains("instruction"));
+    crate::tui_assert_snapshot!("on_demand_instruction_at_completion", rendered);
 }
 
 #[test]

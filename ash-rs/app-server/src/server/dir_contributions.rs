@@ -3,6 +3,8 @@ use super::fs_watcher::DirFileChangeSink;
 use super::fs_watcher::SessionDirFileChangeSink;
 use super::home_context::add_home_instructions;
 use super::home_context::content_revision;
+use super::instruction_operations::InstructionCatalogSource;
+use super::instruction_operations::selected_instruction_content;
 use crate::dir_grants::DirGrants;
 use agent_roles::AgentRoleCatalog;
 use agent_roles::AgentRoleCatalogSnapshot;
@@ -16,6 +18,7 @@ use ash_file_access::Authorization;
 use ash_home::AshHome;
 use ash_instructions::InstructionCatalog;
 use ash_instructions::InstructionCatalogSnapshot;
+use ash_protocol::InstructionSource;
 use ash_protocol::SessionId;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
@@ -167,6 +170,57 @@ impl DirContributions {
             );
         }
         snapshots
+    }
+
+    pub(super) fn instruction_sources_for(
+        &self,
+        session_id: Option<&SessionId>,
+    ) -> Vec<InstructionCatalogSource> {
+        let mut sources = Vec::new();
+        if let Some(home) = &self.home {
+            sources.push(InstructionCatalogSource::user(home));
+        }
+        if let Some(catalog) = self
+            .env_dir
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_mut()
+            .filter(|catalog| catalog.authorization.is_active())
+        {
+            let root = catalog.authorization.dir().canonical_path().to_path_buf();
+            sources.push(InstructionCatalogSource {
+                source: InstructionSource::Directory { root: root.clone() },
+                root: root.join(".ash/instructions"),
+                snapshot: catalog.instructions.refresh(),
+            });
+        }
+        if let Some(session_id) = session_id {
+            let mut seen = sources
+                .iter()
+                .map(|catalog| catalog.source.clone())
+                .collect::<BTreeSet<_>>();
+            let mut dirs = self
+                .dirs
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if let Some(catalogs) = dirs.get_mut(session_id) {
+                sources.extend(catalogs.iter_mut().filter_map(|(root, catalog)| {
+                    if catalog.authorization.ensure_active().is_err() {
+                        return None;
+                    }
+                    let source = InstructionSource::Directory { root: root.clone() };
+                    if !seen.insert(source.clone()) {
+                        return None;
+                    }
+                    Some(InstructionCatalogSource {
+                        source,
+                        root: root.join(".ash/instructions"),
+                        snapshot: catalog.instructions.refresh(),
+                    })
+                }));
+            }
+        }
+        sources
     }
 
     pub(super) fn reconcile_session(
@@ -335,6 +389,14 @@ impl HarnessContextProvider for DirContributions {
         &self,
         request: &HarnessContextRequest<'_>,
     ) -> Result<Arc<HarnessContext>, CoreError> {
+        let mut selected = if request.selected_instructions.is_empty() {
+            BTreeMap::new()
+        } else {
+            selected_instruction_content(
+                &self.instruction_sources_for(Some(request.session_id)),
+                request.selected_instructions,
+            )?
+        };
         let base_paths = matching_paths(&self.dir_root, request.read_paths);
         let primary = self.instruction_snapshot();
         let nested = self
@@ -351,8 +413,18 @@ impl HarnessContextProvider for DirContributions {
             .cloned()
             .map(|diagnostic| (self.dir_root.clone(), diagnostic))
             .collect::<Vec<_>>();
-        let base_content =
-            combine_content(primary.automatic_content(&base_paths), nested.content());
+        let base_source = InstructionSource::Directory {
+            root: dunce::canonicalize(&self.dir_root).unwrap_or_else(|_| self.dir_root.clone()),
+        };
+        if selected.contains_key(&base_source) && primary.entries().is_empty() {
+            return Err(CoreError::InvalidInput(
+                "selected Instruction source is no longer authorized".into(),
+            ));
+        }
+        let base_content = combine_content(
+            combine_content(primary.automatic_content(&base_paths), nested.content()),
+            selected.remove(&base_source).as_deref(),
+        );
         let base_instructions = Arc::new(render_harness_instructions(
             base_content.clone(),
             &self.dir_root,
@@ -400,9 +472,13 @@ impl HarnessContextProvider for DirContributions {
                             .cloned()
                             .map(|diagnostic| (root.clone(), diagnostic)),
                     );
+                    let source = InstructionSource::Directory { root: root.clone() };
                     combine_content(
-                        catalog.instructions.snapshot().automatic_content(&paths),
-                        nested.content(),
+                        combine_content(
+                            catalog.instructions.snapshot().automatic_content(&paths),
+                            nested.content(),
+                        ),
+                        selected.remove(&source).as_deref(),
                     )
                     .map(|content| (root.clone(), content))
                 })
@@ -420,9 +496,19 @@ impl HarnessContextProvider for DirContributions {
             ))
         };
         let instructions = match &self.home {
-            Some(home) => add_home_instructions(instructions.as_ref().clone(), home, &user_paths),
+            Some(home) => add_home_instructions(
+                instructions.as_ref().clone(),
+                home,
+                &user_paths,
+                selected.remove(&InstructionSource::User).as_deref(),
+            ),
             None => instructions.as_ref().clone(),
         };
+        if !selected.is_empty() {
+            return Err(CoreError::InvalidInput(
+                "selected Instruction source is no longer authorized".into(),
+            ));
+        }
         Ok(Arc::new(
             HarnessContext::new(instructions).with_environment(environment),
         ))

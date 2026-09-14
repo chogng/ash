@@ -172,6 +172,8 @@ import { GitService } from "../services/git/browser/gitService.js";
 import { IGitService } from "../services/git/common/gitService.js";
 import { ChatService } from "../services/chat/browser/chatService.js";
 import { IChatService } from "../services/chat/common/chatService.js";
+import { IInstructionImportApi } from '../../platform/instructions/common/instructionImportApi.js';
+import { IInstructionApi } from '../../platform/instructions/common/instructionApi.js';
 import { ICodebaseService } from "../../platform/codebase/common/codebaseService.js";
 import { AppServerCodebaseService } from "../services/codebase/browser/appServerCodebaseService.js";
 import { IToolSearchService } from "../../platform/toolSearch/common/toolSearchService.js";
@@ -473,6 +475,8 @@ export class Workbench extends Disposable {
 
 		const chatService = this._register(new ChatService({ modelApi: api.model, threadApi: api.thread, turnApi: api.turn, turnChangesApi: api.turnChanges, skillApi: api.skills, appServerApi: api.appServer, eventApi: api.events, configurationService: configuration }));
 		services.registerInstance(IChatService, chatService);
+		services.registerInstance(IInstructionImportApi, api.instructionImport);
+		services.registerInstance(IInstructionApi, api.instructions);
 		const languagePackService = this._register(new MarketplaceLanguagePackService(marketplaceService, builtinLanguagePackCatalogs));
 		services.registerInstance(ILanguagePackService, languagePackService);
 		const localeService = this._register(new WorkbenchLocaleService(configuration, languagePackService));

@@ -1,0 +1,24 @@
+---
+source: ash-code/tui/src/app/fullscreen/frame_tests.rs
+expression: rendered
+---
+  .                                                        [— / —] [Dashboard]  
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+  ────────────────────────────────────────────────────────────────────────────  
+  + manual · /ash-home/instructions/manual.md  instruction                      
+  ╭──────────────────────────────────────────────────────────────────────────╮  
+  │ > Review @man                                                            │  
+  ╰──────────────────────────────────────────────────────── Automatic model ─╯  
+                                                                                
+  Enter send  ·  shift+tab permissions  ·  /home

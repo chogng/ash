@@ -241,7 +241,10 @@ ContextManager/Planner 完成。
 
 提示词按功能归属：`ash-models-manager` 拥有所选模型的基础 instructions，Goal 提示归 `ext/goal`，动态上下文由对应贡献者提供，`ash-guardian-reviewer` 拥有与动作授权 response schema 绑定的审查提示词，Skill、扩展和工具描述由各能力 crate 拥有。[`ash-prompts`](../ash-rs/prompts/README.md) 提供统一资产和冻结契约，并拥有 context compaction、通用代码 review 这类共享产品提示词。
 
-App Server 在接受普通 Turn 前把 `ash-models-manager` 的基础 instructions 冻结为 durable `TurnInstructions`，review Turn 则冻结共享 review rubric 并标记 `TurnKind::Review`。`/create-instructions` 冻结创建 Instruction 的产品说明与起始模板，不将 Instruction 当成 Skill。Core 不在 invocation 时重新读取模型配置；它把 Turn 快照连同 User、Directory、Goal、Skill 与扩展 fragment 按 instruction layer、precedence、budget 和 provenance 组装成最终 request。User Instructions 位于 Directory 之前，两者作为 user-role 指令进入首条输入消息，不进入 system body。Core 从本 Turn 成功的 `read_file` 调用提供路径，App Server 确认目录归属后做 Contextual 匹配。Review Turn 跳过 active Goal 注入与 Goal continuation。历史旧 Turn 可以读取为缺少快照，但不能以临时查询或默认文本继续执行。
+App Server 在接受普通 Turn 前把 `ash-models-manager` 的基础 instructions 冻结为 durable `TurnInstructions`，review Turn 则冻结共享 review rubric 并标记 `TurnKind::Review`。`/create-instructions` 冻结创建 Instruction 的产品说明与起始模板，不将 Instruction 当成 Skill。Core 不在 invocation 时重新读取模型配置；它把 Turn 快照连同 User、Directory、Goal、Skill 与扩展 fragment 按 instruction layer、precedence、budget 和 provenance 组装成最终 request。User Instructions 位于 Directory 之前，两者作为 user-role 指令进入首条输入消息，不进入 system body。Core 从本 Turn 显式附加的文件和成功的 `read_file` 调用提供路径，App Server 确认目录归属后做 Contextual 匹配。Review Turn 跳过 active Goal 注入与 Goal continuation。历史旧 Turn 可以读取为缺少快照，但不能以临时查询或默认文本继续执行。
+
+用户显式选择的 OnDemand Instruction 以来源、相对路径和正文摘要进入 durable Turn。App Server 在接受
+输入和模型调用前核对当前 catalog；正文由对应 User 或 Directory 指令层提供，不作为普通附件数据拼入用户消息。
 
 当前 assembler 会把同一 Turn 中相邻的 `UserMessage` / `UserImage` 按 durable 顺序合并成一个
 provider-neutral user `Message`，分别映射为 `ContentPart::Text` 与

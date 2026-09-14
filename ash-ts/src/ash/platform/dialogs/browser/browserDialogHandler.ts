@@ -97,6 +97,10 @@ function createDialogContent(
 		const detail = h(ownerDocument, "p");
 		detail.className = "ash-dialog-detail";
 		detail.textContent = request.detail;
+		if (request.detail.length > 1024) {
+			detail.tabIndex = 0;
+			detail.setAttribute('aria-label', 'Dialog details');
+		}
 		element.append(detail);
 	}
 

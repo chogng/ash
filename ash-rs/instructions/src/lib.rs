@@ -15,6 +15,9 @@ pub use model::InstructionDiagnostic;
 pub use model::InstructionDiagnosticCode;
 pub use model::InstructionLoadPolicy;
 
+/// Largest always-on Instruction body accepted by the catalog.
+pub const MAX_INSTRUCTION_BYTES: usize = 32 * 1024;
+
 /// Valid, inactive starting content for a newly created Ash Instruction file.
 pub const STARTER_TEMPLATE: &str = include_str!("../assets/starter.md");
 

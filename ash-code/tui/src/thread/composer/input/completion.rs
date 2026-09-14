@@ -7,8 +7,18 @@ mod view;
 use super::slash_commands::built_in_slash_command_definitions;
 use super::state::ChatInput;
 use super::state::ChatInputOutcome;
+use ash_file_search::PathSearchSnapshot;
+use ash_protocol::InstructionRef;
+use ash_protocol::SkillRef;
+use ash_slash_commands::SlashCommandCatalog;
+use ash_slash_commands::SlashCommandDefinition;
+use ash_slash_commands::SlashCommandInput;
+use ash_slash_commands::SlashCommandInvocation;
+use ash_slash_commands::SlashCommandsState;
+use ash_slash_commands::SlashCommandsView;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
+pub(crate) use mention::InstructionCompletionItem;
 pub(crate) use mention::MentionPluginItem;
 pub(crate) use mention::MentionPopupView;
 use mention::Mentions;
@@ -18,20 +28,13 @@ pub(crate) use skill::SkillCompletionView;
 use std::ops::Range;
 pub(crate) use view::draw;
 pub(crate) use view::index_at;
-use ash_file_search::PathSearchSnapshot;
-use ash_protocol::SkillRef;
-use ash_slash_commands::SlashCommandCatalog;
-use ash_slash_commands::SlashCommandDefinition;
-use ash_slash_commands::SlashCommandInput;
-use ash_slash_commands::SlashCommandInvocation;
-use ash_slash_commands::SlashCommandsState;
-use ash_slash_commands::SlashCommandsView;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ChatInputCatalog {
     slash_commands: SlashCommandCatalog,
     skills: Vec<SkillCompletionItem>,
     plugins: Vec<MentionPluginItem>,
+    instructions: Vec<InstructionCompletionItem>,
 }
 
 impl ChatInputCatalog {
@@ -39,16 +42,18 @@ impl ChatInputCatalog {
         slash_commands: SlashCommandCatalog,
         skills: Vec<SkillCompletionItem>,
         plugins: Vec<MentionPluginItem>,
+        instructions: Vec<InstructionCompletionItem>,
     ) -> Self {
         Self {
             slash_commands,
             skills,
             plugins,
+            instructions,
         }
     }
 
     pub(crate) fn with_slash_commands(slash_commands: SlashCommandCatalog) -> Self {
-        Self::new(slash_commands, Vec::new(), Vec::new())
+        Self::new(slash_commands, Vec::new(), Vec::new(), Vec::new())
     }
 
     pub(crate) fn slash_commands(&self) -> &SlashCommandCatalog {
@@ -102,6 +107,7 @@ pub(super) enum CompletionEdit {
         range: Range<usize>,
         value: String,
         skill: Option<SkillRef>,
+        instruction: Option<InstructionRef>,
     },
 }
 
@@ -118,7 +124,7 @@ impl CompletionState {
             mentions: Mentions::default(),
             skills: SkillCompletionState::default(),
         }
-        .with_catalog_entries(catalog.skills, catalog.plugins)
+        .with_catalog_entries(catalog.skills, catalog.plugins, catalog.instructions)
     }
 
     pub(super) fn handle_key(&mut self, key: KeyEvent) -> CompletionInputOutcome {
@@ -250,6 +256,8 @@ impl CompletionState {
         self.slash_commands.set_catalog(catalog.slash_commands);
         self.skills.replace_catalog(catalog.skills);
         self.mentions.replace_plugin_catalog(catalog.plugins);
+        self.mentions
+            .replace_instruction_catalog(catalog.instructions);
     }
 
     pub(super) fn activate(&mut self, index: usize) -> Option<CompletionInputOutcome> {
@@ -302,9 +310,11 @@ impl CompletionState {
         mut self,
         skills: Vec<SkillCompletionItem>,
         plugins: Vec<MentionPluginItem>,
+        instructions: Vec<InstructionCompletionItem>,
     ) -> Self {
         self.skills.replace_catalog(skills);
         self.mentions.replace_plugin_catalog(plugins);
+        self.mentions.replace_instruction_catalog(instructions);
         self
     }
 }
@@ -314,6 +324,7 @@ fn mention_edit(completion: mention::MentionCompletion) -> CompletionEdit {
         range: completion.range,
         value: completion.value,
         skill: None,
+        instruction: completion.instruction,
     }
 }
 
@@ -322,6 +333,7 @@ fn skill_edit(completion: skill::SkillCompletion) -> CompletionEdit {
         range: completion.range,
         value: completion.value,
         skill: Some(completion.skill),
+        instruction: None,
     }
 }
 
@@ -398,11 +410,15 @@ impl ChatInput {
                 range,
                 value,
                 skill,
+                instruction,
             } => {
                 self.textarea.replace_range(range, "");
                 let element_id = self.textarea.insert_element(&value);
                 if let Some(skill) = skill {
                     self.skill_bindings.push((element_id, skill));
+                }
+                if let Some(reference) = instruction {
+                    self.instruction_bindings.push((element_id, reference));
                 }
                 if !self.textarea.text()[self.textarea.cursor()..]
                     .chars()
@@ -420,6 +436,8 @@ impl ChatInput {
         self.pending_pastes.retain_present_in(&self.textarea);
         self.attachments.reconcile(&mut self.textarea);
         self.skill_bindings
+            .retain(|(element_id, _)| self.textarea.has_element(*element_id));
+        self.instruction_bindings
             .retain(|(element_id, _)| self.textarea.has_element(*element_id));
         if let Some(element_id) = self.slash_command_element {
             let current = self.textarea.element_range(element_id);

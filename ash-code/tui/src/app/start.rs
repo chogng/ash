@@ -23,6 +23,7 @@ use crate::thread::composer::chat_input_catalog_snapshot;
 use crate::thread::composer::file_search::FileSearchManager;
 use crate::thread::composer::slash_command_registry;
 use ash_app_server_client::AppServerSession;
+use ash_app_server_protocol::protocol::instructions::InstructionListParams;
 use ash_app_server_protocol::protocol::skills::SkillCatalogReloadDto;
 use ash_app_server_protocol::protocol::skills::SkillListParams;
 use ash_memory_diagnostics::ProcessResourceTargets;
@@ -71,16 +72,9 @@ pub(super) fn start(
             session_id: None,
         })
         .ok();
-    let input_catalog = initial_skill_catalog
-        .as_ref()
-        .and_then(|catalog| {
-            chat_input_catalog_snapshot(&server_slash_commands, catalog, &plugins).ok()
-        })
-        .unwrap_or(ChatInputCatalog::with_slash_commands(
-            slash_command_registry(&server_slash_commands)?,
-        ));
     let initial_skill_diagnostics = initial_skill_catalog
-        .map(|catalog| catalog.diagnostics)
+        .as_ref()
+        .map(|catalog| catalog.diagnostics.clone())
         .unwrap_or_default();
     let initial_config = client.read_config()?;
     let terminal_settings = crate::config::TerminalSettings::from_tui(&initial_config.tui)
@@ -109,6 +103,25 @@ pub(super) fn start(
         ))
     })
     .transpose()?;
+    let initial_instructions = client.list_instructions(InstructionListParams {
+        session_id: initial
+            .as_ref()
+            .map(|(active, _, _)| active.conversation.session_id().clone()),
+    })?;
+    let input_catalog = initial_skill_catalog
+        .as_ref()
+        .and_then(|catalog| {
+            chat_input_catalog_snapshot(
+                &server_slash_commands,
+                catalog,
+                &plugins,
+                &initial_instructions,
+            )
+            .ok()
+        })
+        .unwrap_or(ChatInputCatalog::with_slash_commands(
+            slash_command_registry(&server_slash_commands)?,
+        ));
     let terminal = TerminalSession::open(terminal_settings.screen_mode())?;
     let theme_resource = match theme_root {
         Some(theme_root) => ThemeResource::in_product_root(theme_root, terminal.background_color()),

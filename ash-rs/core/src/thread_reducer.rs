@@ -1263,6 +1263,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                 }
                 ThreadItem::UserMessage { .. }
                 | ThreadItem::UserContext { .. }
+                | ThreadItem::UserInstruction { .. }
                 | ThreadItem::UserImage { .. }
                 | ThreadItem::UserImageAttachment { .. }
                 | ThreadItem::AgentMessage { .. }
@@ -2051,6 +2052,7 @@ fn turn_skill_activations_match(
         | ash_protocol::UserInput::Image { .. }
         | ash_protocol::UserInput::LocalImage { .. }
         | ash_protocol::UserInput::Mention { .. } => None,
+        ash_protocol::UserInput::Instruction { .. } => None,
     });
     selected
         .zip(activated_skills.iter().filter(|activation| {
@@ -2248,6 +2250,7 @@ fn import_history(
                 }
                 ThreadItem::UserMessage { .. }
                 | ThreadItem::UserContext { .. }
+                | ThreadItem::UserInstruction { .. }
                 | ThreadItem::UserImage { .. }
                 | ThreadItem::UserImageAttachment { .. }
                 | ThreadItem::AgentMessage { .. }
@@ -2355,6 +2358,7 @@ fn append_imported_turn(
             }
             ThreadItem::UserMessage { .. }
             | ThreadItem::UserContext { .. }
+            | ThreadItem::UserInstruction { .. }
             | ThreadItem::UserImage { .. }
             | ThreadItem::UserImageAttachment { .. }
             | ThreadItem::AgentMessage { .. }

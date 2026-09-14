@@ -62,6 +62,8 @@ pub struct HarnessContextRequest<'a> {
     pub turn_id: &'a TurnId,
     /// Files confirmed by successful reads in this Turn's durable transcript.
     pub read_paths: &'a [PathBuf],
+    /// User-selected Instructions whose current catalog entries must be verified.
+    pub selected_instructions: &'a [ash_protocol::InstructionRef],
 }
 
 /// Supplies one immutable host-context snapshot at each model-invocation boundary.

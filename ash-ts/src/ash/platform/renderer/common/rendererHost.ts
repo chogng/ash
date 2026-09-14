@@ -28,6 +28,8 @@ import type { IDirPermissionsApi } from "../../dirPermissions/common/dirPermissi
 import type { IAccountApi } from "../../accounts/common/accountApi.js";
 import type { ITurnChangesApi } from "../../turnChanges/common/turnChangesApi.js";
 import type { IAutomationService } from '../../automation/common/automationService.js';
+import type { IInstructionImportApi } from '../../instructions/common/instructionImportApi.js';
+import type { IInstructionApi } from '../../instructions/common/instructionApi.js';
 
 /** Optional product capabilities contributed by a statically selected host bundle. */
 export interface RendererHostCapabilities {
@@ -65,6 +67,8 @@ export interface IRendererHost extends RendererHostCapabilities {
 	readonly turn: ITurnApi;
 	readonly turnChanges: ITurnChangesApi;
 	readonly skills: ISkillApi;
+	readonly instructionImport: IInstructionImportApi;
+	readonly instructions: IInstructionApi;
 	readonly typst: ITypstApi;
 	readonly documentCollaboration: IDocumentCollaborationApi;
 	readonly resource: IResourceApi;

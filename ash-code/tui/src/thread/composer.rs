@@ -19,6 +19,7 @@ pub(crate) use input::ChatInputOutcome;
 pub(crate) use input::ChatInputQueueOutcome;
 pub(crate) use input::ChatSubmission;
 pub(crate) use input::CompletionView;
+pub(crate) use input::InstructionCompletionItem;
 pub(crate) use input::MentionPluginItem;
 pub(crate) use input::QueuedChatInput;
 pub(crate) use input::SkillCompletionItem;

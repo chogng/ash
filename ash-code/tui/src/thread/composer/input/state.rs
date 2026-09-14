@@ -12,6 +12,9 @@ use super::vim::ChatInputMode;
 use super::vim::VimOutcome;
 use super::vim::VimState;
 use super::wrap::wrap_input;
+use ash_protocol::InstructionRef;
+use ash_protocol::SkillRef;
+use ash_slash_commands::SlashCommandOrigin;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -19,8 +22,6 @@ use message_history::MessageHistory;
 use message_history::MessageHistoryKind as InputKind;
 use message_history::MessageHistoryRecall as HistoryRecall;
 use message_history::MessageHistoryRecallEffect as RecallEffect;
-use ash_protocol::SkillRef;
-use ash_slash_commands::SlashCommandOrigin;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ChatInputOutcome {
@@ -40,10 +41,21 @@ pub(crate) enum ChatInputQueueOutcome {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ChatInputItem {
     Text(String),
-    Image { url: String },
+    Image {
+        url: String,
+    },
     Attachment(ash_protocol::ImageAttachmentRef),
-    Context { name: String, content: String },
-    Skill { skill: SkillRef },
+    Context {
+        name: String,
+        content: String,
+        file_path: Option<std::path::PathBuf>,
+    },
+    Skill {
+        skill: SkillRef,
+    },
+    Instruction {
+        reference: InstructionRef,
+    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -66,6 +78,14 @@ impl QueuedChatInput {
             .iter()
             .filter_map(|item| match item {
                 ChatInputItem::Skill { skill } => Some(skill.clone()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let instructions = submission
+            .input
+            .iter()
+            .filter_map(|item| match item {
+                ChatInputItem::Instruction { reference } => Some(reference.clone()),
                 _ => None,
             })
             .collect::<Vec<_>>();
@@ -110,13 +130,20 @@ impl QueuedChatInput {
                 ChatInputItem::Image { .. } | ChatInputItem::Attachment(_) => input
                     .attachments
                     .insert_item(&mut input.textarea, item.clone()),
-                ChatInputItem::Context { name, content } => {
+                ChatInputItem::Context {
+                    name,
+                    content,
+                    file_path,
+                } => {
                     let element = input.textarea.insert_element(&format!("[Context: {name}]"));
-                    input
-                        .contexts
-                        .push((element, name.clone(), content.clone()));
+                    input.contexts.push((
+                        element,
+                        name.clone(),
+                        content.clone(),
+                        file_path.clone(),
+                    ));
                 }
-                ChatInputItem::Skill { .. } => {}
+                ChatInputItem::Skill { .. } | ChatInputItem::Instruction { .. } => {}
             }
         }
         for skill in skills {
@@ -125,6 +152,39 @@ impl QueuedChatInput {
                 .textarea
                 .insert_element(&format!("${}", skill.id.name));
             input.skill_bindings.push((element, skill));
+        }
+        for reference in instructions {
+            let name = reference
+                .relative_path
+                .file_stem()
+                .and_then(|name| name.to_str())
+                .expect("catalog Instruction paths have validated UTF-8 names");
+            let selector = format!("@{name}");
+            let range = input
+                .textarea
+                .text()
+                .match_indices(&selector)
+                .find_map(|(start, _)| {
+                    let end = start + selector.len();
+                    let before = &input.textarea.text()[..start];
+                    let after = &input.textarea.text()[end..];
+                    let boundary = (before.is_empty() || before.ends_with(char::is_whitespace))
+                        && after.chars().next().is_none_or(|ch| {
+                            !ch.is_alphanumeric() && !matches!(ch, '_' | '-' | '.')
+                        });
+                    let clear = input
+                        .textarea
+                        .elements()
+                        .all(|(_, other)| other.end <= start || other.start >= end);
+                    (boundary && clear).then_some(start..end)
+                });
+            let element = if let Some(range) = range {
+                input.textarea.mark_element(range)
+            } else {
+                input.textarea.insert_text(" ");
+                input.textarea.insert_element(&selector)
+            };
+            input.instruction_bindings.push((element, reference));
         }
         Self {
             submission,
@@ -147,7 +207,8 @@ pub(crate) struct ChatInputDraft {
     vim: VimState,
     slash_command_element: Option<TextElementId>,
     skill_bindings: Vec<(TextElementId, SkillRef)>,
-    contexts: Vec<(TextElementId, String, String)>,
+    instruction_bindings: Vec<(TextElementId, InstructionRef)>,
+    contexts: Vec<(TextElementId, String, String, Option<std::path::PathBuf>)>,
     pending_pastes: PendingPastes,
     attachments: Attachments,
 }
@@ -162,7 +223,8 @@ pub(crate) struct ChatInput {
     vim: VimState,
     pub(super) slash_command_element: Option<TextElementId>,
     pub(super) skill_bindings: Vec<(TextElementId, SkillRef)>,
-    contexts: Vec<(TextElementId, String, String)>,
+    pub(super) instruction_bindings: Vec<(TextElementId, InstructionRef)>,
+    contexts: Vec<(TextElementId, String, String, Option<std::path::PathBuf>)>,
     pub(super) pending_pastes: PendingPastes,
     pub(super) attachments: Attachments,
     history: HistoryRecall,
@@ -184,6 +246,7 @@ impl ChatInput {
             vim: VimState::default(),
             slash_command_element: None,
             skill_bindings: Vec::new(),
+            instruction_bindings: Vec::new(),
             contexts: Vec::new(),
             pending_pastes: PendingPastes::default(),
             attachments: Attachments::default(),
@@ -415,6 +478,7 @@ impl ChatInput {
             vim: self.vim.clone(),
             slash_command_element: self.slash_command_element,
             skill_bindings: self.skill_bindings.clone(),
+            instruction_bindings: self.instruction_bindings.clone(),
             contexts: self.contexts.clone(),
             pending_pastes: self.pending_pastes.clone(),
             attachments: self.attachments.clone(),
@@ -427,6 +491,7 @@ impl ChatInput {
         self.vim = draft.vim;
         self.slash_command_element = draft.slash_command_element;
         self.skill_bindings = draft.skill_bindings;
+        self.instruction_bindings = draft.instruction_bindings;
         self.contexts = draft.contexts;
         self.pending_pastes = draft.pending_pastes;
         self.attachments = draft.attachments;
@@ -448,6 +513,7 @@ impl ChatInput {
         let display_text = display_text.trim().to_owned();
         let mut input = Vec::new();
         let mut selected_skills = Vec::new();
+        let mut selected_instructions = Vec::new();
         let mut text = String::new();
         let mut cursor = 0;
 
@@ -455,13 +521,14 @@ impl ChatInput {
             text.push_str(&raw_text[cursor..range.start]);
             if let Some(replacement) = self.pending_pastes.replacement(element_id) {
                 text.push_str(replacement);
-            } else if let Some((_, name, content)) =
-                self.contexts.iter().find(|(id, _, _)| *id == element_id)
+            } else if let Some((_, name, content, file_path)) =
+                self.contexts.iter().find(|(id, _, _, _)| *id == element_id)
             {
                 push_text_input(&mut input, &mut text);
                 input.push(ChatInputItem::Context {
                     name: name.clone(),
                     content: content.clone(),
+                    file_path: file_path.clone(),
                 });
             } else if let Some(image) = self.attachments.image_item(element_id) {
                 push_text_input(&mut input, &mut text);
@@ -477,6 +544,15 @@ impl ChatInput {
                 {
                     selected_skills.push(skill.clone());
                 }
+                if let Some(reference) = self
+                    .instruction_bindings
+                    .iter()
+                    .find(|(candidate, _)| *candidate == element_id)
+                    .map(|(_, reference)| reference)
+                    && !selected_instructions.contains(reference)
+                {
+                    selected_instructions.push(reference.clone());
+                }
             }
             cursor = range.end;
         }
@@ -487,6 +563,12 @@ impl ChatInput {
             selected_skills
                 .into_iter()
                 .map(|skill| ChatInputItem::Skill { skill }),
+        );
+        input.splice(
+            0..0,
+            selected_instructions
+                .into_iter()
+                .map(|reference| ChatInputItem::Instruction { reference }),
         );
 
         (!input.is_empty()).then_some(ChatSubmission {
@@ -501,6 +583,7 @@ impl ChatInput {
             vim: std::mem::take(&mut self.vim),
             slash_command_element: self.slash_command_element.take(),
             skill_bindings: std::mem::take(&mut self.skill_bindings),
+            instruction_bindings: std::mem::take(&mut self.instruction_bindings),
             contexts: std::mem::take(&mut self.contexts),
             pending_pastes: std::mem::take(&mut self.pending_pastes),
             attachments: std::mem::take(&mut self.attachments),
@@ -536,6 +619,7 @@ impl ChatInput {
         self.vim.reset_draft();
         self.slash_command_element = None;
         self.skill_bindings.clear();
+        self.instruction_bindings.clear();
         self.contexts.clear();
         self.pending_pastes.clear();
         self.attachments.clear();
@@ -649,6 +733,7 @@ impl ChatInput {
                     self.vim = draft.vim;
                     self.slash_command_element = draft.slash_command_element;
                     self.skill_bindings = draft.skill_bindings;
+                    self.instruction_bindings = draft.instruction_bindings;
                     self.contexts = draft.contexts;
                     self.pending_pastes = draft.pending_pastes;
                     self.attachments = draft.attachments;
@@ -665,6 +750,7 @@ impl ChatInput {
                 self.attachments.clear();
                 self.slash_command_element = None;
                 self.skill_bindings.clear();
+                self.instruction_bindings.clear();
                 self.contexts.clear();
                 self.completion.clear();
             }

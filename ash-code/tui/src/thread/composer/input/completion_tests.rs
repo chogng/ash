@@ -4,16 +4,16 @@ use super::ChatInputMode;
 use super::ChatInputOutcome;
 use super::ChatInputQueueOutcome;
 use super::CompletionView;
+use super::InstructionCompletionItem;
 use super::SkillCompletionItem;
 use super::TuiSlashCommandAction;
 use super::built_in_catalog_command;
 use super::built_in_slash_command_definitions;
 use super::default_slash_command_catalog;
 use crate::thread::composer::ChatSubmission;
-use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyModifiers;
 use ash_protocol::ContentDigest;
+use ash_protocol::InstructionRef;
+use ash_protocol::InstructionSource;
 use ash_protocol::SkillId;
 use ash_protocol::SkillName;
 use ash_protocol::SkillRef;
@@ -21,6 +21,9 @@ use ash_protocol::SkillSourceId;
 use ash_slash_commands::{
     SlashCommandArgumentMode, SlashCommandCatalog, SlashCommandDefinition, SlashCommandOrigin,
 };
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyModifiers;
 
 fn key(code: KeyCode) -> KeyEvent {
     KeyEvent::new(code, KeyModifiers::NONE)
@@ -73,6 +76,7 @@ impl ChatInputHarness {
         self.input.replace_catalog(super::ChatInputCatalog::new(
             slash_commands,
             skills,
+            Vec::new(),
             Vec::new(),
         ));
     }
@@ -358,6 +362,54 @@ fn queued_input_preserves_exact_text_image_paste_and_skill_bindings() {
 }
 
 #[test]
+fn selected_instruction_survives_submission_and_queue_restore_as_a_typed_reference() {
+    let reference = InstructionRef {
+        source: InstructionSource::User,
+        relative_path: "manual.md".into(),
+        digest: ContentDigest::sha256(b"manual guidance"),
+    };
+    let mut input = ChatInput::with_catalog(super::ChatInputCatalog::new(
+        default_slash_command_catalog(),
+        Vec::new(),
+        Vec::new(),
+        vec![InstructionCompletionItem::new(
+            "manual".into(),
+            "/ash-home/instructions/manual.md".into(),
+            reference.clone(),
+        )],
+    ));
+    input.insert_text("Review @man");
+    assert!(matches!(
+        input.completion(),
+        Some(CompletionView::Mention(_))
+    ));
+    input.handle_key(key(KeyCode::Tab));
+    input.insert_text("changes");
+
+    let ChatInputQueueOutcome::Queued(queued) = input.queue_current() else {
+        panic!("selected Instruction should be queued");
+    };
+    assert!(
+        queued
+            .submission()
+            .input
+            .contains(&ChatInputItem::Instruction {
+                reference: reference.clone()
+            })
+    );
+    let reconstructed = super::state::QueuedChatInput::from_submission(queued.submission().clone());
+    input.restore_queued(reconstructed).unwrap();
+    assert_eq!(input.text().matches("@manual").count(), 1);
+    let ChatInputOutcome::Submit(sent) = input.handle_key(key(KeyCode::Enter)) else {
+        panic!("restored Instruction should submit");
+    };
+    assert!(
+        sent.input
+            .contains(&ChatInputItem::Instruction { reference })
+    );
+}
+
+#[test]
 fn queue_restore_rebuilds_skill_and_context_bindings_without_duplicate_selectors() {
     let skill = SkillRef::follow_latest(SkillId::new(
         SkillSourceId::new("user:skill-source:test").unwrap(),
@@ -373,6 +425,7 @@ fn queue_restore_rebuilds_skill_and_context_bindings_without_duplicate_selectors
             ChatInputItem::Context {
                 name: "file".into(),
                 content: "file contents".into(),
+                file_path: Some(std::path::PathBuf::from("src/lib.rs")),
             },
         ],
     };
@@ -398,7 +451,8 @@ fn queue_restore_rebuilds_skill_and_context_bindings_without_duplicate_selectors
             .input
             .contains(&ChatInputItem::Context {
                 name: "file".into(),
-                content: "file contents".into()
+                content: "file contents".into(),
+                file_path: Some(std::path::PathBuf::from("src/lib.rs")),
             })
     );
 }

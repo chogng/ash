@@ -12,7 +12,7 @@ import type { ChatTurnErrorAction } from "../list/chatListItems.js";
 import { ChatListWidget } from "../list/chatListWidget.js";
 import { ChatPaneModel, type ChatPaneSelection } from "./chatPaneModel.js";
 import { h } from "../../../../../base/browser/dom.js";
-import type { ChatContextAttachment } from "../../../../services/chat/common/chatContextService.js";
+import type { ChatContextAttachment, ResolvedChatAttachment, ResolvedChatContext, ResolvedInstructionAttachment } from "../../../../services/chat/common/chatContextService.js";
 import type { IChatContextPickService } from "../../../../services/chat/common/chatContextService.js";
 import type { IQuickInputService } from "../../../../../platform/quickinput/common/quickInput.js";
 
@@ -106,7 +106,7 @@ export class ChatPane extends Disposable {
 		this.inputPart.focus();
 	}
 
-	addContext(attachment: ChatContextAttachment): void {
+	addContext(attachment: ChatContextAttachment<ResolvedChatAttachment>): void {
 		this.inputPart.addContext(attachment);
 	}
 
@@ -114,12 +114,14 @@ export class ChatPane extends Disposable {
 		return this.inputPart.acceptInput(value);
 	}
 
-	private async send(text: string, skills?: readonly SkillReference[], contexts: readonly ChatContextAttachment[] = []): Promise<void> {
+	private async send(text: string, skills?: readonly SkillReference[], contexts: readonly ChatContextAttachment<ResolvedChatAttachment>[] = []): Promise<void> {
 		this.submittedMessage = true;
 		this.updateConversationState();
 		try {
-			const resolvedContexts = await Promise.all(contexts.map(context => context.resolve()));
-			await this.model.send(text, skills, resolvedContexts);
+			const resolved = await Promise.all(contexts.map(context => context.resolve()));
+			const instructions = resolved.filter((item): item is ResolvedInstructionAttachment => 'type' in item && item.type === 'instruction').map(item => item.reference);
+			const contextItems = resolved.filter((item): item is ResolvedChatContext => !('type' in item));
+			await this.model.send(text, skills, contextItems, instructions);
 		} catch (error) {
 			if (this.model.items.length === 0) {
 				this.submittedMessage = false;

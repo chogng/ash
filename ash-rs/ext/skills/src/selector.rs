@@ -92,6 +92,7 @@ fn selector_text(input: &[UserInput]) -> String {
         | UserInput::LocalImage { .. }
         | UserInput::Skill { .. }
         | UserInput::Mention { .. } => None,
+        UserInput::Instruction { .. } => None,
     }) {
         if !result.is_empty() {
             if result.len() == MAX_SELECTOR_INPUT_BYTES {

@@ -36,9 +36,9 @@ mod mention {
         let lines = if popup.matches.is_empty() {
             vec![Line::from(Span::styled(
                 if popup.searching {
-                    "Searching files and plugins…"
+                    "Searching files, instructions and plugins…"
                 } else {
-                    "No matching files or plugins"
+                    "No matching files, instructions or plugins"
                 },
                 Style::default().fg(context.muted()),
             ))]
@@ -69,6 +69,8 @@ mod mention {
                     ));
                     if mention_match.kind == MentionMatchKind::Plugin {
                         spans.push(Span::styled("  plugin", base_style));
+                    } else if mention_match.kind == MentionMatchKind::Instruction {
+                        spans.push(Span::styled("  instruction", base_style));
                     }
                     Line::from(spans)
                 })

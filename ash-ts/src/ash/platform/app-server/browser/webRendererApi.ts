@@ -12,6 +12,8 @@ import { mergeRendererHostCapabilities, type IRendererHost, type RendererHostCap
 import { createAppServerContentSearchApi } from "../../search/browser/searchApi.js";
 import { createAppServerModelApi, createAppServerSessionApi, createAppServerThreadApi, createAppServerTurnApi } from "../../sessions/browser/sessionApi.js";
 import { createAppServerSkillApi } from "../../skills/browser/skillApi.js";
+import { createAppServerInstructionImportApi } from '../../instructions/browser/instructionImportApi.js';
+import { createAppServerInstructionApi } from '../../instructions/browser/instructionApi.js';
 import { AppServerTerminalProcessService } from "../../terminal/browser/appServerTerminalProcessService.js";
 import { createAppServerTypstApi } from "../../typst/browser/typstApi.js";
 import { createAppServerDocumentCollaborationApi } from "../../collaboration/browser/documentCollaborationApi.js";
@@ -69,6 +71,8 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 		turn: createAppServerTurnApi(connection),
 		turnChanges: createAppServerTurnChangesApi(connection),
 		skills: createAppServerSkillApi(connection),
+		instructionImport: createAppServerInstructionImportApi(connection),
+		instructions: createAppServerInstructionApi(connection),
 		typst: createAppServerTypstApi(connection),
 		documentCollaboration: createAppServerDocumentCollaborationApi(connection),
 		resource,

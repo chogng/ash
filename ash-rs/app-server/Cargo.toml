@@ -83,6 +83,7 @@ github = { workspace = true }
 ash-http-client = { workspace = true }
 ash-hooks = { workspace = true }
 ash-home = { workspace = true }
+external-agent-migration = { workspace = true }
 ash-install-context = { workspace = true }
 ash-instructions = { workspace = true }
 ash-utils-absolute-path = { workspace = true }

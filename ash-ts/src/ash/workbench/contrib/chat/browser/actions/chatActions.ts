@@ -3,10 +3,46 @@ import { DisposableStore } from "../../../../../base/common/lifecycle.js";
 import { Action2, MenuId, registerAction2 } from "../../../../../platform/actions/common/actions.js";
 import type { ServicesAccessor } from "../../../../../platform/instantiation/common/instantiation.js";
 import { IQuickInputService, type IQuickPickItem } from "../../../../../platform/quickinput/common/quickInput.js";
+import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { IInstructionImportApi } from '../../../../../platform/instructions/common/instructionImportApi.js';
+import { IInstructionApi } from '../../../../../platform/instructions/common/instructionApi.js';
 import type { SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
 import { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
 import { IViewsService } from "../../../../services/views/browser/viewsService.js";
 import { CHAT_VIEW_ID, NEW_CHAT_COMMAND_ID, OPEN_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from "../../common/chat.js";
+import { importClaudeInstructions } from './claudeInstructionImport.js';
+import { showInstructionDiagnostics } from '../promptSyntax/instructionDiagnostics.js';
+
+registerAction2(class ShowInstructionDiagnosticsAction extends Action2 {
+	constructor() {
+		super({ id: 'ash.chat.showInstructionDiagnostics', title: 'Show Instruction Diagnostics', f1: true });
+	}
+
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const sessionId = accessor.get(ISessionsManagementService).active?.session.sessionId;
+		await showInstructionDiagnostics(accessor.get(IInstructionApi), accessor.get(IDialogService), sessionId);
+	}
+});
+
+registerAction2(class ImportClaudeUserInstructionsAction extends Action2 {
+	constructor() {
+		super({ id: 'ash.chat.importClaudeUserInstructions', title: 'Import Claude User Instructions', f1: true });
+	}
+
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		await importClaudeInstructions(accessor.get(IInstructionImportApi), accessor.get(IDialogService), { type: 'user' });
+	}
+});
+
+registerAction2(class ImportClaudeWorkspaceInstructionsAction extends Action2 {
+	constructor() {
+		super({ id: 'ash.chat.importClaudeWorkspaceInstructions', title: 'Import Claude Workspace Instructions', f1: true });
+	}
+
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		await importClaudeInstructions(accessor.get(IInstructionImportApi), accessor.get(IDialogService), { type: 'workspace' });
+	}
+});
 
 registerAction2(class OpenChatAction extends Action2 {
 	constructor() {

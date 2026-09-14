@@ -342,6 +342,20 @@ use crate::protocol::initialize::InitializeParams;
 use crate::protocol::initialize::InitializeResult;
 use crate::protocol::initialize::ProtocolVersion;
 use crate::protocol::initialize::ServerCapabilities;
+use crate::protocol::instructions::InstructionImportApplyParams;
+use crate::protocol::instructions::InstructionImportApplyResult;
+use crate::protocol::instructions::InstructionImportDiagnosticCodeDto;
+use crate::protocol::instructions::InstructionImportDiagnosticDto;
+use crate::protocol::instructions::InstructionImportPreviewParams;
+use crate::protocol::instructions::InstructionImportPreviewResult;
+use crate::protocol::instructions::InstructionImportScopeDto;
+use crate::protocol::instructions::InstructionImportSourceDto;
+use crate::protocol::instructions::InstructionCatalogDiagnosticDto;
+use crate::protocol::instructions::InstructionDiagnosticCodeDto;
+use crate::protocol::instructions::InstructionDto;
+use crate::protocol::instructions::InstructionListParams;
+use crate::protocol::instructions::InstructionListResult;
+use crate::protocol::instructions::InstructionLoadPolicyDto;
 use crate::protocol::issues::IssueConfigureParams;
 use crate::protocol::issues::IssueListParams;
 use crate::protocol::issues::IssueListResult;
@@ -809,6 +823,8 @@ use ash_protocol::SkillActivationReason;
 use ash_protocol::SkillId;
 use ash_protocol::SkillName;
 use ash_protocol::SkillRef;
+use ash_protocol::InstructionRef;
+use ash_protocol::InstructionSource;
 use ash_protocol::SkillSourceId;
 use ash_protocol::SkillVersionSelector;
 use ash_protocol::StableTurnError;
@@ -1874,6 +1890,21 @@ client_methods! {
         params: SkillListParams,
         response: SkillListResult,
         serialization: GlobalSharedRead,
+    },
+    InstructionList => "instructions/list" {
+        params: InstructionListParams,
+        response: InstructionListResult,
+        serialization: GlobalSharedRead,
+    },
+    InstructionImportPreview => "instructions/import/preview" {
+        params: InstructionImportPreviewParams,
+        response: InstructionImportPreviewResult,
+        serialization: GlobalSharedRead,
+    },
+    InstructionImportApply => "instructions/import/apply" {
+        params: InstructionImportApplyParams,
+        response: InstructionImportApplyResult,
+        serialization: GlobalExclusive,
     },
     SkillSetEnablement => "skill/enablement/set" {
         params: SkillSetEnablementParams,
@@ -2979,6 +3010,8 @@ typescript_bindings! {
     AgentJoin,
     SkillVersionSelector,
     SkillRef,
+    InstructionRef,
+    InstructionSource,
     SkillActivationReason,
     FrozenSkillActivation,
     SkillCatalogReloadDto,
@@ -2994,6 +3027,20 @@ typescript_bindings! {
     SkillResourceOpenParams,
     SkillResourceOpenResult,
     SkillSetEnablementParams,
+    InstructionImportScopeDto,
+    InstructionListParams,
+    InstructionListResult,
+    InstructionDto,
+    InstructionLoadPolicyDto,
+    InstructionCatalogDiagnosticDto,
+    InstructionDiagnosticCodeDto,
+    InstructionImportPreviewParams,
+    InstructionImportSourceDto,
+    InstructionImportDiagnosticCodeDto,
+    InstructionImportDiagnosticDto,
+    InstructionImportPreviewResult,
+    InstructionImportApplyParams,
+    InstructionImportApplyResult,
     SkillsChanged,
     ExtensionCatalogReloadDto,
     ExtensionSourceKindDto,

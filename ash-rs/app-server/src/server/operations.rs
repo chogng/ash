@@ -1053,6 +1053,7 @@ impl AppServer {
             input.push(UserInput::Context {
                 name: "ash-home".into(),
                 content: home.root().display().to_string(),
+                file_path: None,
             });
         }
         selection
@@ -1408,7 +1409,10 @@ impl AppServer {
             && input.iter().any(|item| {
                 !matches!(
                     item,
-                    InputItem::Text { .. } | InputItem::Context { .. } | InputItem::Issue { .. }
+                    InputItem::Text { .. }
+                        | InputItem::Context { .. }
+                        | InputItem::Instruction { .. }
+                        | InputItem::Issue { .. }
                 )
             })
         {
@@ -2018,7 +2022,7 @@ fn thread_mutation(mutation: SessionMutation, expected_sequence: u64) -> ThreadM
 impl AppServer {
     pub(super) fn normalize_input(
         &self,
-        _session_id: &ash_protocol::SessionId,
+        session_id: &ash_protocol::SessionId,
         input: Vec<InputItem>,
     ) -> Result<Vec<UserInput>, RpcError> {
         input
@@ -2034,15 +2038,20 @@ impl AppServer {
                         UserInput::Context {
                             name: "issue".into(),
                             content: format!("[issue #{number}]"),
+                            file_path: None,
                         }
                     }
                     InputItem::Text { text } => UserInput::Text { text },
-                    InputItem::Context { name, content } => UserInput::Context { name, content },
+                    InputItem::Context { name, content, file_path } => UserInput::Context { name, content, file_path },
                     InputItem::ImageAttachment { attachment } => {
                         UserInput::ImageAttachment { attachment }
                     }
                     InputItem::Image { url } => UserInput::Image { url },
                     InputItem::Skill { skill } => UserInput::Skill { skill },
+                    InputItem::Instruction { reference } => {
+                        self.validate_instruction_ref(session_id, &reference)?;
+                        UserInput::Instruction { reference }
+                    }
                 })
             })
             .collect()

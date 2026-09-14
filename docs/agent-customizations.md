@@ -4,9 +4,9 @@
 > canonical owner。
 >
 > 状态：架构边界已接受（2026-08-12）；User 与 Directory 的 `AGENTS.md`、`ASH.md`、Global Instructions 和
-> 成功读取文件命中的 Contextual Instructions 会进入后续 model invocation。Skills 已有 metadata catalog、显式 activation 和通用
+> 显式附加或成功读取文件命中的 Contextual Instructions 会进入 model invocation。Skills 已有 metadata catalog、显式 activation 和通用
 > context injection，可信 built-in Skill 自动 selector 与 Agent delegation definition 选择已经接通。
-> 用户手动附加 OnDemand Instruction、Agent definition list/picker API 和完整 import apply
+> Desktop 与 TUI 用户手动选择 OnDemand Instruction 已接通；Agent definition list/picker API 和完整 import apply
 > 仍未实现。
 >
 > Skill 的格式、来源与激活细节见 [`skills.md`](skills.md)；外部格式发现和转换实现契约见
@@ -88,7 +88,7 @@ pub enum InstructionLoadPolicy {
 语义。`applyTo: "**"` 仍是“恰好匹配所有文件的上下文规则”，不能偷偷改写成 Global；真正的
 Global 必须由来源格式中明确等价的语义产生。
 
-Ash 原生 `patterns` 对应 `applyTo` 的文件匹配用途。当前只使用本 Turn 已成功读取、并由 App Server
+Ash 原生 `patterns` 对应 `applyTo` 的文件匹配用途。当前只使用本 Turn 显式附加或已成功读取、并由 App Server
 确认仍位于对应授权目录内的文件路径；不会从聊天正文猜路径，也不会让父 Agent 的读取记录决定子
 Agent 的匹配。Agent definition 按名称显式引用的 Instruction 不受自动匹配限制。
 文件匹配只决定该 Agent 本次上下文应包含哪些规则，不选择 Agent 角色、拆分任务或授予工具；编排仍由
@@ -149,7 +149,7 @@ Instructions 时，目标是 Ash 专属 `ASH.md` 或相应 `instructions/` 文�
 专属 `ASH.md`，最后放命中的多文件 Instruction。每份正文带原文件来源，工作区内容标出所属根目录。
 系统与安全规则高于全部这些文件；用户级规则高于工作区级，`ASH.md` 可以细化同作用域的
 `AGENTS.md`。文件顺序不授予工具、目录或审批权限。
-工作区嵌套 `AGENTS.md` 与 `ASH.md` 在本 Turn 成功读取其下文件后，按浅到深顺序加入；
+工作区嵌套 `AGENTS.md` 与 `ASH.md` 在本 Turn 显式附加或成功读取其下文件后，按浅到深顺序加入；
 不会预先扫描无关子树，也不会让一个目录的规则影响其他目录。
 
 ## 4. `external-agent-migration` 是外部反腐化层
@@ -175,7 +175,7 @@ flowchart LR
 | 已知外部路径与敏感排除 | ✅ | ❌ | ❌ |
 | source-specific bounded parser | ✅ | ❌ | ❌ |
 | normalized preview fragment 与 provenance | ✅ | 组合 | 最终复核 |
-| 用户选择、冲突预览与 apply orchestration | ❌ | ✅（Proposed） | 提供 prepare/publish contract |
+| 用户选择、冲突预览与 apply orchestration | ❌ | 部分具备：Claude Instruction | 其他对象仍需 prepare/publish contract |
 | Ash canonical schema 与领域校验 | ❌ | ❌ | ✅ |
 | `.ash` 原生发现与加载 | ❌ | 协调 snapshot | ✅ |
 | 持久化、enablement 与 runtime activation | ❌ | 调用 | ✅ |
@@ -187,8 +187,8 @@ definition 或 Config mutation fragment；不能输出一段“以后再解释�
 
 当前 `external-agent-migration` 已完成 `AgentPathInspection` 和有界 source parser 输出的
 `MigrationPlan` fragment（settings、MCP、hooks、plugins、memory、agents、commands、rules、skills
-名称清单）；仍不读取 skill/command/memory 正文，session 与认证明确不在范围。上图 import apply
-路径保持 Proposed。
+名称清单）；仍不读取 skill/command/memory 正文，session 与认证明确不在范围。Claude Instruction
+已接通预览、确认与单文件复制；上图中其他对象的 apply 路径保持规划状态。
 
 ## 5. Import 与来源注册不等价
 
@@ -224,7 +224,7 @@ Core 不读取 customization 文件，也不在组装模型请求时扫描目录
 Instructions、Agent references、已激活 Skill 内容、用户消息和 Tool results，但它仍是
 `ModelRequest`，不是一个需要持久化的 Prompt artifact。
 
-Slash Command catalog 只包含产品和服务命令；独立 `$name` Skill selector 把用户选择绑定到稳定 `SkillRef`。两种入口的名称、补全和展示状态都不能代替目标对象的 identity、权限或 activation validation。文件和 Plugin 提供的上下文继续使用 `@`，不进入 Skill selector。
+Slash Command catalog 只包含产品和服务命令；独立 `$name` Skill selector 把用户选择绑定到稳定 `SkillRef`。两种入口的名称、补全和展示状态都不能代替目标对象的 identity、权限或 activation validation。文件和 Plugin 提供的上下文继续使用 `@`；TUI 的 `@` 指令候选提交独立的固定摘要引用，普通 `@file` 仍只是上下文数据。二者不进入 Skill selector。
 
 ## 7. 当前状态与实施顺序
 
@@ -235,28 +235,32 @@ Slash Command catalog 只包含产品和服务命令；独立 `$name` Skill sele
 | Skill activation snapshot 与通用 context injection | 已实现 | validated `SkillRef`、正文加载、safe-point freezing 与 extension contributors |
 | Skill metadata 自动 selector | 已实现 | 仅 `BuiltInVerified`、唯一高置信、pinned `SkillRef` 后加载正文 |
 | Codex/Claude known-path inspection | 已实现 | `external-agent-migration::inspect_agent_paths` |
-| Codex/Claude bounded source parsers 与 `MigrationPlan` fragments | 部分具备 | settings/MCP/hooks/plugins/memory/agents/commands fragments 已实现；sessions、apply adapter、wire contract 未实现 |
-| User Instructions authority | 部分具备 | `ash-home` + `ash-instructions`；`AGENTS.md`、`ASH.md`、Global 与已读文件 Contextual 注入已实现 |
-| Directory Instructions authority | 部分具备 | `ash-instructions` + `DirContributions`；共享/专属 always-on、Global 与已读文件 Contextual 注入已实现 |
+| Codex/Claude bounded source parsers 与 `MigrationPlan` fragments | 部分具备 | settings/MCP/hooks/plugins/memory/agents/commands fragments 已实现；Claude Instruction 读取与复制已接通，其他 apply 尚未实现 |
+| User Instructions authority | 部分具备 | `ash-home` + `ash-instructions`；always-on、Global、Contextual 与选中的 OnDemand 注入已实现 |
+| Directory Instructions authority | 部分具备 | `ash-instructions` + `DirContributions`；授权目录的 always-on、Global、Contextual 与选中的 OnDemand 注入已实现 |
+| Instruction list 与手动选择 | 已实现 | `instructions/list` 返回条目和隔离诊断；Desktop 聊天附件与 TUI `@` 候选只列出 OnDemand，提交固定摘要引用；Desktop 命令面板展示无效文件原因 |
 | Directory Agents authority | 部分具备 | catalog/refresh、spawn 显式/自动选择、reference/capability freezing 已实现；list/picker API 未实现 |
 | `.ash/{instructions,skills,agents}` loader | 已实现 | 固定 roots、有界校验、Directory activation 与 watcher refresh |
-| External parser、preview 与 apply | 尚未完成 | typed fragments、digest、wire contract、transaction/receipt |
+| External parser、preview 与 apply | 部分具备 | Claude `CLAUDE.md` 可预览、确认并复制为 `ASH.md`；其他对象的 apply、跨 authority transaction/receipt 尚未实现 |
 | `$name` Skill selector | 已实现 | TUI/Desktop `$name` 绑定 stable `SkillRef`；`/skills` 只管理，`@` 留给文件和 Plugin 上下文 |
 
 `/create-instructions` 是创建细分 Instruction 的产品 Slash Command；`/init` 生成或更新 Ash 专属
 `ASH.md`。两者都不是 Skill，均为普通 Agent Turn 冻结对应任务说明与起始模板。Agent 按正常
 文件工具和目录授权写入；已有文件先读取再修改，不直接覆盖。
+`/create-instructions` 的产品路径已用真实写入、读回和目录重新发现测试验证。
 外部 `CLAUDE.md` 导入是独立的确定性文件操作：重新校验用户选中的来源，只在目标缺失或为空时
 复制到 Ash 的目标文件；已有非空目标报告冲突，不交给 Agent 合并。来源正文不进入 `/init`
-或任何用于整理导入内容的 Agent Turn。当前导入仅有
-发现与预览，尚未接通目标写入。
+或任何用于整理导入内容的 Agent Turn。App Server 的 `instructions/import/preview` 与
+`instructions/import/apply` 已接通用户级和工作区级 Claude Instruction；Desktop 命令面板提供对应入口。
+导入不移动或删除来源 `CLAUDE.md`，原文件仍由 Claude 生态拥有。
+其他外部对象仍停留在发现与迁移计划阶段。
 
 实施顺序：
 
 1. 固定本文的三类对象、命名空间和 import boundary，代码与文档不再新增 Prompt/Task artifact。
 2. 已完成 Directory 三类 catalog、Global Instruction safe-point injection 与 watcher refresh。
 3. 已完成 Skill 显式 activation、可信 built-in 自动 selector、Directory source、用户可调用投影
-   和通用 context injection；下一步是通用 Contextual/OnDemand Instruction 解析。
+   和通用 context injection；Instruction 的 Contextual 匹配和 Desktop/TUI OnDemand 显式选择已接通。
 4. Agent definition catalog 已开放给 multi-agent delegation 的受限选择；下一步补 list/picker API，
    cross-authority reference 在具备明确 authority contract 前继续拒绝。
 5. `external-agent-migration` 的 bounded parsers 和 typed preview fragments 已实现；下一步是 App

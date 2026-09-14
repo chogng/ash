@@ -140,10 +140,10 @@ durable Thread history 和当前 Turn 输入之后，不进入可复用缓存前
 
 - 发现：读取已授权目录的 `AGENTS.md`、`ASH.md` 和 `.ash/instructions/*.md`；前两者
   是 always-on 纯 Markdown，其他生态专有格式经 `external-agent-migration`；
-- 注入：把 `load: global` 与本 Turn 成功读取文件命中的 `load: contextual` 条目渲染为 `input[0]` user message，并标注其优先级低于
+- 注入：把 `load: global` 与本 Turn 显式附加或成功读取文件命中的 `load: contextual` 条目渲染为 `input[0]` user message，并标注其优先级低于
   system 与安全策略；
 - 大小：每个文件最多 32 KiB、直接条目最多 128，非法条目产生隔离 diagnostic；
-- `load: contextual`：只匹配本 Turn 成功读取且位于对应授权目录内的文件；
+- `load: contextual`：只匹配本 Turn 显式附加或成功读取且位于对应授权目录内的文件；
 - `load: on-demand`：Agent definition 可显式按名称引用；用户手动附加尚未实现；
 - 目录不存在或没有合法 Global 条目：省略该目录的贡献，不放占位符；
 - 文件变化：Directory watcher 触发 catalog refresh；已经组装的 model request 不变，后续

@@ -1,8 +1,10 @@
 use crate::ImageAttachmentRef;
+use crate::InstructionRef;
 use crate::SkillRef;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
+use std::path::PathBuf;
 use ts_rs::TS;
 
 /// A provider-independent input supplied by the user for one turn.
@@ -19,6 +21,9 @@ pub enum UserInput {
     Context {
         name: String,
         content: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        file_path: Option<PathBuf>,
     },
     ImageAttachment {
         attachment: ImageAttachmentRef,
@@ -32,6 +37,9 @@ pub enum UserInput {
     },
     Skill {
         skill: SkillRef,
+    },
+    Instruction {
+        reference: InstructionRef,
     },
     Mention {
         name: String,

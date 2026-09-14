@@ -3,5 +3,5 @@ load("//:defs.bzl", "ash_rust_crate")
 ash_rust_crate(
     name = "app-server-protocol",
     crate_name = "ash_app_server_protocol",
-    data = glob(["schema/**"]),
+    data = glob(["schema/**"]) + ["src/typescript_decoder.template.ts"],
 )

@@ -6,10 +6,9 @@ use crate::thread::Event as ThreadEvent;
 use crate::thread::composer::chat_input_catalog_snapshot;
 use crate::thread::present_turn_error;
 use crate::thread::transcript::MessageRole;
-use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyModifiers;
-use std::path::PathBuf;
+use ash_app_server_protocol::protocol::instructions::InstructionDto;
+use ash_app_server_protocol::protocol::instructions::InstructionListResult;
+use ash_app_server_protocol::protocol::instructions::InstructionLoadPolicyDto;
 use ash_app_server_protocol::protocol::plugins::PluginPackageDto;
 use ash_app_server_protocol::protocol::skills::SkillCompatibilityDto;
 use ash_app_server_protocol::protocol::skills::SkillDto;
@@ -20,6 +19,8 @@ use ash_app_server_protocol::protocol::slash_commands::{
     SlashCommandArgumentModeDto, SlashCommandDefinition,
 };
 use ash_protocol::ContentDigest;
+use ash_protocol::InstructionRef;
+use ash_protocol::InstructionSource;
 use ash_protocol::ItemId;
 use ash_protocol::SessionId;
 use ash_protocol::SkillId;
@@ -33,6 +34,10 @@ use ash_protocol::ThreadStatus;
 use ash_protocol::Turn;
 use ash_protocol::TurnId;
 use ash_protocol::TurnStatus;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyModifiers;
+use std::path::PathBuf;
 
 #[test]
 fn tui_declares_the_host_authority_required_by_add_dir() {
@@ -360,6 +365,7 @@ fn server_slash_commands_become_the_tui_runtime_registry() {
         }],
         &empty_skill_catalog(),
         &[],
+        &empty_instruction_catalog(),
     )
     .unwrap();
 
@@ -382,6 +388,7 @@ fn server_slash_commands_cannot_shadow_local_builtins() {
         }],
         &empty_skill_catalog(),
         &[],
+        &empty_instruction_catalog(),
     ) else {
         panic!("server slash commands must not shadow local built-ins");
     };
@@ -420,6 +427,7 @@ fn enabled_unique_skills_become_dollar_selector_items() {
             diagnostics: vec![],
         },
         &[],
+        &empty_instruction_catalog(),
     )
     .unwrap();
 
@@ -447,16 +455,66 @@ fn effective_plugins_become_at_mention_items() {
         &[],
         &empty_skill_catalog(),
         &[plugin("acme/review", true), plugin("acme/disabled", false)],
+        &empty_instruction_catalog(),
     )
     .unwrap();
 
     assert_eq!(registry.plugins().len(), 1);
 }
 
+#[test]
+fn only_on_demand_catalog_entries_become_at_instruction_choices() {
+    let reference = InstructionRef {
+        source: InstructionSource::User,
+        relative_path: "manual.md".into(),
+        digest: ContentDigest::sha256(b"manual guidance"),
+    };
+    let registry = chat_input_catalog_snapshot(
+        &[],
+        &empty_skill_catalog(),
+        &[],
+        &InstructionListResult {
+            instructions: vec![
+                InstructionDto {
+                    reference: reference.clone(),
+                    name: "manual".into(),
+                    load_policy: InstructionLoadPolicyDto::OnDemand,
+                    path: "/ash-home/instructions/manual.md".into(),
+                },
+                InstructionDto {
+                    reference: InstructionRef {
+                        relative_path: "global.md".into(),
+                        ..reference
+                    },
+                    name: "global".into(),
+                    load_policy: InstructionLoadPolicyDto::Global,
+                    path: "/ash-home/instructions/global.md".into(),
+                },
+            ],
+            diagnostics: Vec::new(),
+        },
+    )
+    .unwrap();
+    let mut input = crate::thread::composer::ChatInput::with_catalog(registry);
+    input.insert_text("@man");
+    let Some(crate::thread::composer::CompletionView::Mention(view)) = input.completion() else {
+        panic!("OnDemand Instruction should appear in @ completion");
+    };
+    assert_eq!(view.matches.len(), 1);
+    assert!(view.matches[0].label.contains("manual"));
+}
+
 fn empty_skill_catalog() -> SkillListResult {
     SkillListResult {
         generation: 1,
         skills: Vec::new(),
+        diagnostics: Vec::new(),
+    }
+}
+
+fn empty_instruction_catalog() -> InstructionListResult {
+    InstructionListResult {
+        instructions: Vec::new(),
         diagnostics: Vec::new(),
     }
 }

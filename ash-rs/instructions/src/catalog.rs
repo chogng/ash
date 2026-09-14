@@ -16,7 +16,7 @@ use std::sync::Arc;
 const DIRECTORY_INSTRUCTIONS: &str = ".ash/instructions";
 const USER_INSTRUCTIONS: &str = "instructions";
 const MAX_ENTRIES: usize = 128;
-const MAX_FILE_BYTES: usize = 32 * 1024;
+const MAX_FILE_BYTES: usize = crate::MAX_INSTRUCTION_BYTES;
 const MAX_PATTERNS: usize = 32;
 const MAX_PATTERN_BYTES: usize = 256;
 const ALWAYS_ON_FILES: [&str; 2] = ["AGENTS.md", "ASH.md"];

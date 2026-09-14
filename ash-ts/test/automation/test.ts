@@ -7,6 +7,7 @@ import { launchElectron } from "./playwrightElectron.js";
 import type { PlaywrightApplication, PlaywrightDriver } from "./playwrightDriver.js";
 import { playwrightTargetForProject, type PlaywrightTarget } from "./testTarget.js";
 import { createTestWorkspace, disposeTestWorkspace, type TestWorkspace } from "./testWorkspace.js";
+import { prepareDirectoryPermissions } from './prepareDirectoryPermissions.js';
 import type { Workbench } from "./workbench.js";
 
 interface PlaywrightFixtures {
@@ -45,16 +46,20 @@ export const test = base.extend<PlaywrightFixtures>({
 		}
 
 		const userDataDirectory = await mkdtemp(join(tmpdir(), "ash-playwright-"));
-		const { application, driver } = await launchElectron({
-			appServerMode: target.appServerMode,
-			workbenchMode: target.workbenchMode,
-			userDataDirectory,
-			workspaceDirectory: testWorkspace.directory,
-		});
+		let launched: Awaited<ReturnType<typeof launchElectron>> | undefined;
 		try {
-			await use(driver);
+			if (target.appServerMode === 'required') {
+				await prepareDirectoryPermissions(join(userDataDirectory, 'profile'), testWorkspace.directory);
+			}
+			launched = await launchElectron({
+				appServerMode: target.appServerMode,
+				workbenchMode: target.workbenchMode,
+				userDataDirectory,
+				workspaceDirectory: testWorkspace.directory,
+			});
+			await use(launched.driver);
 		} finally {
-			await application.close().catch(() => undefined);
+			await launched?.application.close().catch(() => undefined);
 			await rm(userDataDirectory, { force: true, recursive: true });
 		}
 	},

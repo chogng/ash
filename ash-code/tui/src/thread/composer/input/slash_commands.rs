@@ -2,12 +2,12 @@
 
 use super::state::ChatInputItem;
 use super::state::ChatSubmission;
-use strum::IntoEnumIterator;
-use strum_macros::{AsRefStr, EnumIter, EnumString, IntoStaticStr};
 use ash_slash_commands::SlashCommandArgumentMode;
 use ash_slash_commands::SlashCommandDefinition;
 use ash_slash_commands::SlashCommandInvocation as ParsedSlashCommand;
 use ash_slash_commands::SlashCommandOrigin;
+use strum::IntoEnumIterator;
+use strum_macros::{AsRefStr, EnumIter, EnumString, IntoStaticStr};
 
 #[cfg(test)]
 use ash_slash_commands::SlashCommandCatalog;
@@ -172,6 +172,7 @@ impl SlashCommandInvocation {
             | Some(ChatInputItem::Attachment(_))
             | Some(ChatInputItem::Context { .. })
             | Some(ChatInputItem::Skill { .. })
+            | Some(ChatInputItem::Instruction { .. })
             | None => {
                 self.arguments.insert(0, ChatInputItem::Text(command_text));
             }

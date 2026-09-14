@@ -12,6 +12,7 @@ mod frontmatter;
 mod hooks;
 mod import;
 mod inspect_path;
+mod instructions;
 mod mcp;
 mod memory;
 mod plan;
@@ -31,6 +32,9 @@ pub use import::{
     AgentPathInspection, ExternalAgent, ImportItemKind, ImportReviewCategory, ImportScope,
 };
 pub use inspect_path::inspect_agent_paths;
+pub use instructions::ClaudeInstructionRead;
+pub use instructions::ExternalInstruction;
+pub use instructions::read_claude_instructions;
 pub use plan::{
     ExternalAgentDefinition, ExternalDocument, ExternalHookEvent, ExternalMcpDefinition,
     ExternalMcpServer, ExternalMemoryFile, ExternalPluginMarketplace, MarketplaceSource,

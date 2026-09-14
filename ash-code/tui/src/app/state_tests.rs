@@ -63,17 +63,6 @@ use crate::thread::transcript::MessageRole;
 use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionModel;
-use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyModifiers;
-use ratatui::layout::Rect;
-use ratatui::style::Color;
-use std::collections::BTreeMap;
-use std::fs;
-use std::path::Path;
-use std::time::Duration;
-use std::time::Instant;
-use std::time::{SystemTime, UNIX_EPOCH};
 use ash_app_server_protocol::protocol::config::FrontendConfigDto;
 use ash_app_server_protocol::protocol::config::LanguageServerConfigDto;
 use ash_app_server_protocol::protocol::config::LanguageServerModeDto;
@@ -106,6 +95,17 @@ use ash_protocol::Turn;
 use ash_protocol::TurnId;
 use ash_protocol::TurnStatus;
 use ash_terminal_detection::ColorLevel;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyModifiers;
+use ratatui::layout::Rect;
+use ratatui::style::Color;
+use std::collections::BTreeMap;
+use std::fs;
+use std::path::Path;
+use std::time::Duration;
+use std::time::Instant;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[test]
 fn skill_diagnostics_are_notices_and_are_suppressed_until_they_clear() {
@@ -1483,6 +1483,7 @@ fn dollar_skill_selector_submits_exact_skill_ref_with_visible_intent() {
             skill.clone(),
         )],
         Vec::new(),
+        Vec::new(),
     ));
     app.insert_text("$com");
     assert!(matches!(
@@ -1507,6 +1508,52 @@ fn dollar_skill_selector_submits_exact_skill_ref_with_visible_intent() {
         }))
     );
     assert_eq!(app.messages()[0].text(), "$commit staged changes");
+    let _ = fs::remove_dir_all(dir);
+}
+
+#[test]
+fn at_instruction_selector_submits_a_pinned_instruction_ref() {
+    let dir = temporary_dir("instruction-selector");
+    let reference = ash_protocol::InstructionRef {
+        source: ash_protocol::InstructionSource::User,
+        relative_path: "manual.md".into(),
+        digest: ContentDigest::sha256(b"manual guidance"),
+    };
+    let registry = SlashCommandCatalog::with_local_and_server(
+        built_in_slash_command_definitions(),
+        std::iter::empty(),
+    )
+    .unwrap();
+    let mut app = App::for_dir_with_slash_commands(&dir, registry.clone());
+    app.replace_chat_input_catalog(crate::thread::composer::ChatInputCatalog::new(
+        registry,
+        Vec::new(),
+        Vec::new(),
+        vec![crate::thread::composer::InstructionCompletionItem::new(
+            "manual".into(),
+            "/ash-home/instructions/manual.md".into(),
+            reference.clone(),
+        )],
+    ));
+    app.insert_text("Review @man");
+    assert!(matches!(app.completion(), Some(CompletionView::Mention(_))));
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+    app.insert_text("changes");
+
+    let action = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+    assert_eq!(
+        action,
+        Some(AppCommand::Thread(ThreadCommand::SubmitTurn {
+            submission: ChatSubmission {
+                display_text: "Review @manual changes".into(),
+                input: vec![
+                    ChatInputItem::Instruction { reference },
+                    ChatInputItem::Text("Review @manual changes".into()),
+                ],
+            },
+        }))
+    );
     let _ = fs::remove_dir_all(dir);
 }
 

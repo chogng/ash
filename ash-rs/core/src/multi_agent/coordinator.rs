@@ -992,6 +992,11 @@ fn materialize_item(
                         .to_string(),
             }
         }
+        ash_protocol::ThreadItem::UserInstruction { reference, .. } => {
+            AgentContextContent::UserText {
+                text: serde_json::json!({ "selectedInstruction": reference }).to_string(),
+            }
+        }
         ash_protocol::ThreadItem::UserImage { url, .. } => {
             AgentContextContent::UserImage { url: url.clone() }
         }

@@ -8,7 +8,7 @@ const test = base.extend<{ readonly testWorkspace: TestWorkspace }>({
 	testWorkspace: async ({ target }, use) => {
 		const workspace = await createTestWorkspace();
 		try {
-			if (target.kind === "electron" && target.appServerMode === "required" && target.product === "code") {
+			if (target.kind === "electron" && target.appServerMode === "required" && target.workbenchMode === "code") {
 				await downloadAcademicPdfCorpus(workspace.directory);
 			}
 			await use(workspace);
@@ -22,7 +22,7 @@ test.setTimeout(420_000);
 
 test("Code renders and annotates the open-access academic PDF corpus", async ({ target, testWorkspace, workbench }) => {
 	test.skip(
-		target.kind !== "electron" || target.appServerMode !== "required" || target.product !== "code",
+		target.kind !== "electron" || target.appServerMode !== "required" || target.workbenchMode !== "code",
 		"This scenario requires the Code Electron App Server product",
 	);
 	const explorer = workbench.page.locator(".ash-explorer");

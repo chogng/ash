@@ -1,16 +1,19 @@
 use crate::thread::composer::ChatInputCatalog;
+use crate::thread::composer::InstructionCompletionItem;
 use crate::thread::composer::MentionPluginItem;
 use crate::thread::composer::SkillCompletionItem;
 use crate::thread::composer::SlashCommandCatalog;
 use crate::thread::composer::built_in_slash_command_definitions;
-use std::collections::BTreeMap;
 use ash_app_server_client::ClientError;
+use ash_app_server_protocol::protocol::instructions::InstructionListResult;
+use ash_app_server_protocol::protocol::instructions::InstructionLoadPolicyDto;
 use ash_app_server_protocol::protocol::plugins::PluginPackageDto;
 use ash_app_server_protocol::protocol::skills::SkillCompatibilityDto;
 use ash_app_server_protocol::protocol::skills::SkillEnablementDto;
 use ash_app_server_protocol::protocol::skills::SkillListResult;
 use ash_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
 use ash_protocol::SkillRef;
+use std::collections::BTreeMap;
 
 pub(crate) fn slash_command_registry(
     definitions: &[SlashCommandDefinition],
@@ -30,6 +33,7 @@ pub(crate) fn chat_input_catalog_snapshot(
     definitions: &[SlashCommandDefinition],
     skills: &SkillListResult,
     plugins: &[PluginPackageDto],
+    instructions: &InstructionListResult,
 ) -> Result<ChatInputCatalog, ClientError> {
     let mut name_counts = BTreeMap::new();
     for skill in skills.skills.iter().filter(|skill| {
@@ -62,6 +66,18 @@ pub(crate) fn chat_input_catalog_snapshot(
             .iter()
             .filter(|plugin| plugin.effective)
             .map(|plugin| MentionPluginItem::new(plugin.id.clone()))
+            .collect(),
+        instructions
+            .instructions
+            .iter()
+            .filter(|entry| entry.load_policy == InstructionLoadPolicyDto::OnDemand)
+            .map(|entry| {
+                InstructionCompletionItem::new(
+                    entry.name.clone(),
+                    entry.path.display().to_string(),
+                    entry.reference.clone(),
+                )
+            })
             .collect(),
     ))
 }

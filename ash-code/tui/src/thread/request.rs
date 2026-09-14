@@ -1,8 +1,6 @@
 use crate::client::new_command_id;
 use crate::thread::composer::ChatInputItem;
 use crate::thread::composer::ChatSubmission;
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD;
 use ash_app_server_client::AppServerClient;
 use ash_app_server_client::ClientError;
 use ash_app_server_client::JsonRpcTransport;
@@ -33,6 +31,8 @@ use ash_protocol::SessionId;
 use ash_protocol::Thread;
 use ash_protocol::ThreadId;
 use ash_protocol::TurnId;
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ThreadRequestKind {
@@ -190,13 +190,22 @@ where
     let mut input = Vec::with_capacity(submission.input.len());
     for item in submission.input {
         input.push(match item {
-            ChatInputItem::Context { name, content } => InputItem::Context { name, content },
+            ChatInputItem::Context {
+                name,
+                content,
+                file_path,
+            } => InputItem::Context {
+                name,
+                content,
+                file_path,
+            },
             ChatInputItem::Attachment(attachment) => InputItem::ImageAttachment { attachment },
             ChatInputItem::Text(text) => InputItem::Text { text },
             ChatInputItem::Image { url } => InputItem::ImageAttachment {
                 attachment: materialize_image(client, &url)?,
             },
             ChatInputItem::Skill { skill } => InputItem::Skill { skill },
+            ChatInputItem::Instruction { reference } => InputItem::Instruction { reference },
         });
     }
     Ok(input)

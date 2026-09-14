@@ -1428,6 +1428,37 @@ test("Chat service projects unique enabled Skills and submits the exact pinned r
 	]);
 });
 
+test("Chat service forwards explicit file paths with their attached content", async () => {
+	const fake = fakeApi();
+	using chat = createChatService(fake.api);
+	await chat.startTurn({
+		sessionId: "session-1",
+		threadId: "thread-1",
+		expectedSequence: 1,
+		text: "Review this file",
+		contexts: [{ name: "File src/example.ts", content: "export const example = true;", filePath: "/workspace/src/example.ts" }],
+	});
+	assert.deepEqual(fake.turnStartRequests[0]?.input, [
+		{ type: "context", name: "File src/example.ts", content: "export const example = true;", filePath: "/workspace/src/example.ts" },
+		{ type: "text", text: "Review this file" },
+	]);
+});
+
+test('Chat service sends selected Instructions as references instead of context text', async () => {
+	const fake = fakeApi();
+	using chat = createChatService(fake.api);
+	const reference = {
+		source: { type: 'directory' as const, root: '/workspace' },
+		relativePath: '.ash/instructions/manual.md',
+		digest: `sha256:${'a'.repeat(64)}`,
+	};
+	await chat.startTurn({ sessionId: 'session-1', threadId: 'thread-1', expectedSequence: 1, text: 'Review this', instructions: [reference] });
+	assert.deepEqual(fake.turnStartRequests[0]?.input, [
+		{ type: 'instruction', reference },
+		{ type: 'text', text: 'Review this' },
+	]);
+});
+
 test("Chat service caches the static catalog and filters picker entries by user visibility", async () => {
 	const first = {
 		model: { provider: "openai", model: "gpt-5.6-sol" },

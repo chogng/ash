@@ -1,3 +1,4 @@
+use super::instruction_paths;
 use super::successful_read_paths;
 use ash_protocol::ItemId;
 use ash_protocol::ThreadItem;
@@ -48,4 +49,21 @@ fn only_successful_read_file_calls_supply_instruction_paths() {
 
     let paths = successful_read_paths(&items);
     assert_eq!(paths, [PathBuf::from("src/lib.rs")].into());
+}
+
+#[test]
+fn explicit_file_context_supplies_instruction_path_before_any_tool_call() {
+    let items = vec![ThreadItem::UserContext {
+        item_id: ItemId::new("file-context").unwrap(),
+        turn_id: TurnId::new("turn").unwrap(),
+        name: "File src/lib.rs".into(),
+        content: "pub fn run() {}".into(),
+        file_path: Some(PathBuf::from("src/lib.rs")),
+    }];
+
+    assert_eq!(
+        instruction_paths(&items),
+        [PathBuf::from("src/lib.rs")].into()
+    );
+    assert!(successful_read_paths(&items).is_empty());
 }

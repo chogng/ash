@@ -12,7 +12,7 @@ import type { ISessionsManagementService } from "../../../../../sessions/service
 import { ChatPane } from "../pane/chatPane.js";
 import { ChatTitleControl } from "./chatTitleControl.js";
 import { h } from "../../../../../base/browser/dom.js";
-import type { IChatContextPickService, ChatContextAttachment } from "../../../../services/chat/common/chatContextService.js";
+import type { IChatContextPickService, ChatContextAttachment, ResolvedChatAttachment } from "../../../../services/chat/common/chatContextService.js";
 import type { IQuickInputService } from "../../../../../platform/quickinput/common/quickInput.js";
 import { ContextKeyService, type IContextKey, type IContextKeyService } from "../../../../../platform/contextkey/common/contextkey.js";
 import { ChatSessionInspectorVisibleContext } from "../../common/chat.js";
@@ -140,7 +140,7 @@ export class ChatViewPane extends ViewPane {
 		this.setInspectorVisible(!this.inspectorVisible.get());
 	}
 
-	addContext(attachment: ChatContextAttachment): void {
+	addContext(attachment: ChatContextAttachment<ResolvedChatAttachment>): void {
 		this.ensureTabForVisibleChat();
 		this.activePane?.addContext(attachment);
 	}

@@ -1,6 +1,9 @@
 use super::RewindSelectionAction;
 use super::rewind_choices;
 use crate::widgets::list_selection::ListSelectionState;
+use ash_protocol::ContentDigest;
+use ash_protocol::InstructionRef;
+use ash_protocol::InstructionSource;
 use ash_protocol::ItemId;
 use ash_protocol::SessionId;
 use ash_protocol::Thread;
@@ -10,6 +13,21 @@ use ash_protocol::ThreadStatus;
 use ash_protocol::Turn;
 use ash_protocol::TurnId;
 use ash_protocol::TurnStatus;
+
+#[test]
+fn selected_instruction_has_a_readable_checkpoint_label_without_becoming_message_text() {
+    let item = ThreadItem::UserInstruction {
+        item_id: ItemId::new("instruction-item").unwrap(),
+        turn_id: TurnId::new("instruction-turn").unwrap(),
+        reference: InstructionRef {
+            source: InstructionSource::User,
+            relative_path: "manual.md".into(),
+            digest: ContentDigest::sha256(b"secret guidance"),
+        },
+    };
+    assert_eq!(super::message_label(&item), "instruction: manual.md");
+    assert_eq!(super::checkpoint_text(&[item]), None);
+}
 
 #[test]
 fn rewind_picker_lists_user_message_checkpoints_and_selects_the_latest() {

@@ -773,7 +773,7 @@ fn ordinary_approval_omits_the_sandbox_escalation_payload() {
 }
 
 #[test]
-fn user_input_supports_text_images_skills_and_mentions() {
+fn user_input_supports_text_images_skills_instructions_and_mentions() {
     let input = [
         UserInput::Text {
             text: "hello".into(),
@@ -787,13 +787,28 @@ fn user_input_supports_text_images_skills_and_mentions() {
                 crate::SkillName::new("review").unwrap(),
             )),
         },
+        UserInput::Instruction {
+            reference: crate::InstructionRef {
+                source: crate::InstructionSource::User,
+                relative_path: "manual.md".into(),
+                digest: crate::ContentDigest::sha256(b"manual"),
+            },
+        },
         UserInput::Mention {
             name: "issues".into(),
             path: "app://issues".into(),
         },
     ];
 
-    assert_eq!(input.len(), 4);
+    assert_eq!(input.len(), 5);
+    let encoded = serde_json::to_value(&input[3]).unwrap();
+    assert_eq!(encoded["type"], "instruction");
+    assert_eq!(encoded["reference"]["source"]["type"], "user");
+    assert_eq!(encoded["reference"]["relativePath"], "manual.md");
+    assert_eq!(
+        serde_json::from_value::<UserInput>(encoded).unwrap(),
+        input[3]
+    );
 }
 
 #[test]

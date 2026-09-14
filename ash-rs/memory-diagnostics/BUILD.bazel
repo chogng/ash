@@ -1,0 +1,6 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "memory-diagnostics",
+    crate_name = "ash_memory_diagnostics",
+)

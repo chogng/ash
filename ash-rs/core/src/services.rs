@@ -716,14 +716,41 @@ pub struct ToolExecutionFacts {
     activated_skills: Vec<ash_protocol::FrozenSkillActivation>,
 }
 
-/// Returns paths confirmed by successful `read_file` calls in this Turn.
+/// Returns paths from successful reads and explicit file context in this Turn.
 pub(crate) fn read_paths_for_turn(
     snapshot: &crate::ThreadSnapshot,
     turn_id: &ash_protocol::TurnId,
 ) -> Vec<PathBuf> {
-    successful_read_paths(snapshot.items.iter().filter(|item| item.turn_id() == turn_id))
+    instruction_paths(snapshot.items.iter().filter(|item| item.turn_id() == turn_id))
         .into_iter()
         .collect()
+}
+
+pub(crate) fn selected_instructions_for_turn(
+    snapshot: &crate::ThreadSnapshot,
+    turn_id: &ash_protocol::TurnId,
+) -> Vec<ash_protocol::InstructionRef> {
+    snapshot
+        .items
+        .iter()
+        .filter(|item| item.turn_id() == turn_id)
+        .filter_map(|item| match item {
+            ash_protocol::ThreadItem::UserInstruction { reference, .. } => Some(reference.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+fn instruction_paths<'a>(
+    items: impl IntoIterator<Item = &'a ash_protocol::ThreadItem>,
+) -> BTreeSet<PathBuf> {
+    let items = items.into_iter().collect::<Vec<_>>();
+    let mut paths = successful_read_paths(items.iter().copied());
+    paths.extend(items.into_iter().filter_map(|item| match item {
+        ash_protocol::ThreadItem::UserContext { file_path, .. } => file_path.clone(),
+        _ => None,
+    }));
+    paths
 }
 
 fn successful_read_paths<'a>(

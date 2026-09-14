@@ -49,6 +49,13 @@
   font-size: 12px;
   line-height: 1.5;
   white-space: pre-wrap;
+  max-height: min(50vh, 400px);
+  overflow: auto;
+}
+
+.ash-dialog-detail:focus-visible {
+  outline: 1px solid var(--ash-focus-border);
+  outline-offset: -1px;
 }
 
 .ash-dialog-actions {

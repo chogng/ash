@@ -349,6 +349,7 @@ fn authorized_dir_contributions_are_session_scoped_refreshable_and_revocable() {
     let cwd = TempDir::new().unwrap();
     let dir = TempDir::new().unwrap();
     write_instruction(dir.path(), "extra", "global", "Directory guidance.");
+    write_instruction(dir.path(), "manual", "on-demand", "Selected guidance.");
     write_agent(
         dir.path(),
         "extra-reviewer",
@@ -382,6 +383,39 @@ fn authorized_dir_contributions_are_session_scoped_refreshable_and_revocable() {
         .authorizations()
         .to_vec();
     customizations.reconcile_session(&first, authorizations);
+
+    let listed = customizations.instruction_sources_for(Some(&first));
+    let source = ash_protocol::InstructionSource::Directory {
+        root: root.canonical_path().to_path_buf(),
+    };
+    let manual = listed
+        .iter()
+        .find(|catalog| catalog.source == source)
+        .unwrap()
+        .snapshot
+        .entries()
+        .iter()
+        .find(|entry| entry.name() == "manual")
+        .unwrap();
+    let reference = ash_protocol::InstructionRef {
+        source,
+        relative_path: manual.relative_path().to_path_buf(),
+        digest: ash_protocol::ContentDigest::sha256(manual.body().as_bytes()),
+    };
+    assert!(
+        super::super::instruction_operations::selected_instruction_content(
+            &listed,
+            std::slice::from_ref(&reference)
+        )
+        .is_ok()
+    );
+    assert!(
+        super::super::instruction_operations::selected_instruction_content(
+            &customizations.instruction_sources_for(Some(&second)),
+            std::slice::from_ref(&reference),
+        )
+        .is_err()
+    );
 
     assert!(
         instruction_snapshot(customizations.as_ref(), first.as_str())
@@ -430,6 +464,13 @@ fn authorized_dir_contributions_are_session_scoped_refreshable_and_revocable() {
         )
         .unwrap();
     customizations.reconcile_session(&first, Vec::new());
+    assert!(
+        super::super::instruction_operations::selected_instruction_content(
+            &customizations.instruction_sources_for(Some(&first)),
+            std::slice::from_ref(&reference),
+        )
+        .is_err()
+    );
     assert!(
         instruction_snapshot(customizations.as_ref(), first.as_str())
             .instructions()
@@ -480,6 +521,7 @@ fn instruction_snapshot_with_paths(
             thread_id: &thread_id,
             turn_id: &turn_id,
             read_paths,
+            selected_instructions: &[],
         },
     )
     .unwrap()

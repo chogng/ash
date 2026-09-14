@@ -399,7 +399,7 @@ fn matches_extension(path: &Path, extension: &str) -> bool {
         && path.file_stem().and_then(|stem| stem.to_str()) != Some("README")
 }
 
-fn claude_instruction_candidates(scope: ImportScope) -> Vec<PathBuf> {
+pub(crate) fn claude_instruction_candidates(scope: ImportScope) -> Vec<PathBuf> {
     match scope {
         ImportScope::Project => vec![
             PathBuf::from("CLAUDE.md"),

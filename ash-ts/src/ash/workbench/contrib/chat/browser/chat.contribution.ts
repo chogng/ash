@@ -18,11 +18,28 @@ import { ChatViewPane } from "./view/chatViewPane.js";
 import { IChatContextPickService } from "../../../services/chat/common/chatContextService.js";
 import { IQuickInputService } from "../../../../platform/quickinput/common/quickInput.js";
 import { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
+import { IEditorService } from "../../../services/editor/common/editorService.js";
+import { IFileService } from "../../../../platform/files/common/files.js";
+import { ChatFileContextContribution } from "./chatFileContext.js";
+import { ChatInstructionContextContribution } from './promptSyntax/attachInstructionsAction.js';
+import { IInstructionApi } from '../../../../platform/instructions/common/instructionApi.js';
 
 registerWorkbenchContribution('workbench.contrib.chatInputEditor', WorkbenchPhase.BlockStartup, accessor => {
 	const instantiationService = accessor.get(IInstantiationService);
 	return ChatInputEditors.register({ id: 'stanza', create: options => new ChatInputEditor({ ...options, instantiationService }) });
 });
+
+registerWorkbenchContribution('workbench.contrib.chatFileContext', WorkbenchPhase.BlockRestore, accessor => new ChatFileContextContribution(
+	accessor.get(IChatContextPickService),
+	accessor.get(IEditorService),
+	accessor.get(IFileService),
+));
+
+registerWorkbenchContribution('workbench.contrib.chatInstructionContext', WorkbenchPhase.BlockRestore, accessor => new ChatInstructionContextContribution(
+	accessor.get(IChatContextPickService),
+	accessor.get(IInstructionApi),
+	accessor.get(ISessionsManagementService),
+));
 
 /** Registers the fixed Chat view. */
 export function registerChatViews(registry: WorkbenchViewRegistry = ViewsRegistry): void {

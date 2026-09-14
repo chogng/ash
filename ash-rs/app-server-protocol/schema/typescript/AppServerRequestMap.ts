@@ -151,6 +151,12 @@ import type { HookSetEnablementParams } from './types/HookSetEnablementParams.js
 import type { HookUpsertParams } from './types/HookUpsertParams.js';
 import type { InitializeParams } from './types/InitializeParams.js';
 import type { InitializeResult } from './types/InitializeResult.js';
+import type { InstructionImportApplyParams } from './types/InstructionImportApplyParams.js';
+import type { InstructionImportApplyResult } from './types/InstructionImportApplyResult.js';
+import type { InstructionImportPreviewParams } from './types/InstructionImportPreviewParams.js';
+import type { InstructionImportPreviewResult } from './types/InstructionImportPreviewResult.js';
+import type { InstructionListParams } from './types/InstructionListParams.js';
+import type { InstructionListResult } from './types/InstructionListResult.js';
 import type { IssueConfigureParams } from './types/IssueConfigureParams.js';
 import type { IssueListParams } from './types/IssueListParams.js';
 import type { IssueListResult } from './types/IssueListResult.js';
@@ -513,6 +519,9 @@ export interface AppServerRequestMap {
   "hook/remove": { params: HookRemoveParams; response: ConfigCommandResult };
   "hook/enablement/set": { params: HookSetEnablementParams; response: ConfigCommandResult };
   "skills/list": { params: SkillListParams; response: SkillListResult };
+  "instructions/list": { params: InstructionListParams; response: InstructionListResult };
+  "instructions/import/preview": { params: InstructionImportPreviewParams; response: InstructionImportPreviewResult };
+  "instructions/import/apply": { params: InstructionImportApplyParams; response: InstructionImportApplyResult };
   "skill/enablement/set": { params: SkillSetEnablementParams; response: ConfigCommandResult };
   "skill/resource/open": { params: SkillResourceOpenParams; response: SkillResourceOpenResult };
   "extensions/list": { params: ExtensionListParams; response: ExtensionListResult };
@@ -780,6 +789,9 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "hook/remove": { method: "hook/remove" },
   "hook/enablement/set": { method: "hook/enablement/set" },
   "skills/list": { method: "skills/list" },
+  "instructions/list": { method: "instructions/list" },
+  "instructions/import/preview": { method: "instructions/import/preview" },
+  "instructions/import/apply": { method: "instructions/import/apply" },
   "skill/enablement/set": { method: "skill/enablement/set" },
   "skill/resource/open": { method: "skill/resource/open" },
   "extensions/list": { method: "extensions/list" },

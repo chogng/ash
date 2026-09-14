@@ -760,6 +760,12 @@ fn cell_from_entry(entry: &ThreadTranscriptEntry, render_revision: u64) -> Trans
                     text: format!("Context · {name}\n{content}"),
                 })
             }
+            ThreadItem::UserInstruction { reference, .. } => {
+                TranscriptCellBody::Content(ContentCell {
+                    role: MessageRole::User,
+                    text: format!("Instruction · {}", reference.relative_path.display()),
+                })
+            }
             ThreadItem::UserImage { .. } | ThreadItem::UserImageAttachment { .. } => {
                 TranscriptCellBody::Content(ContentCell {
                     role: MessageRole::User,
