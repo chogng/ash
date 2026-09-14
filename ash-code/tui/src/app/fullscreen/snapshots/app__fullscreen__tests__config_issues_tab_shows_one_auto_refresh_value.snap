@@ -18,5 +18,5 @@ expression: "render(&app, 100, 20)"
             │                                                                         │             
             │                                                                         │             
   ╭─────────│                                                                         │──────────╮  
-  │ > Build │  Enter/Space to change · Tab/Shift+Tab to switch · Esc to close         │          │  
+  │ > Build │  Enter/Space change · ←/→ details · Tab tabs · / search · Esc close     │          │  
   ╰─────────└─────────────────────────────────────────────────────────────────────────┘ic model ─╯

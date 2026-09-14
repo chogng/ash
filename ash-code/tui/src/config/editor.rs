@@ -18,16 +18,16 @@ use crate::widgets::search_box::SearchBoxModel;
 use crate::widgets::text_prompt::TextPrompt;
 use crate::widgets::text_prompt::TextPromptOutcome;
 use crate::widgets::text_prompt::TextPromptSpec;
-use std::collections::BTreeMap;
-use std::fmt;
-use std::sync::LazyLock;
-use zeroize::Zeroizing;
 use ash_app_server_protocol::protocol::config::ConfigReadResult;
 use ash_app_server_protocol::protocol::config::LanguageServerConfigDto;
 use ash_app_server_protocol::protocol::config::LanguageServerModeDto;
 use ash_app_server_protocol::protocol::provider::{
     ProviderApiKeyPolicyDto, ProviderCatalogEntryDto, ProviderListResult,
 };
+use std::collections::BTreeMap;
+use std::fmt;
+use std::sync::LazyLock;
+use zeroize::Zeroizing;
 
 const ISSUE_REFRESH_ROW: &str = "issue-refresh";
 const ISSUE_REFRESH_INTERVALS: [u32; 5] = [0, 5, 10, 30, 60];
@@ -148,6 +148,28 @@ impl ConfigEditor {
             prompt: None,
             removing: None,
         }
+    }
+
+    pub(crate) fn parent_title(&self) -> Option<&str> {
+        (self.provider_panel.is_some() || self.prompt.is_some() || self.subscription.is_some())
+            .then(|| self.selection.state().title())
+    }
+
+    pub(crate) fn return_to_parent(&mut self) {
+        if self
+            .provider_panel
+            .as_ref()
+            .is_some_and(|panel| panel.is_saving_pending())
+        {
+            return;
+        }
+        self.provider_panel = None;
+        self.prompt = None;
+        self.subscription = None;
+    }
+
+    pub(crate) fn provider_mut(&mut self) -> Option<&mut super::provider::Panel> {
+        self.provider_panel.as_mut()
     }
 
     pub(crate) fn replace(&mut self, spec: ConfigChoices) {
@@ -620,14 +642,14 @@ pub(crate) fn config_choices(
             .with_columns(
                 nls::text(language, Message::ConfigVimMode),
                 nls::text(language, Message::ConfigVimModeDescription),
-                checkbox(vim_mode),
+                switch_value(vim_mode),
             ),
         ListSelectionItem::new(nls::text(language, Message::ConfigMemoryDiagnostics))
             .with_id(memory_diagnostics_id)
             .with_columns(
                 nls::text(language, Message::ConfigMemoryDiagnostics),
                 nls::text(language, Message::ConfigMemoryDiagnosticsDescription),
-                checkbox(memory_diagnostics),
+                switch_value(memory_diagnostics),
             ),
         ListSelectionItem::new(nls::text(language, Message::ConfigAutoUpdate))
             .with_id(auto_update_id)
@@ -641,7 +663,7 @@ pub(crate) fn config_choices(
             .with_columns(
                 nls::text(language, Message::ConfigGitChangesAsDiff),
                 nls::text(language, Message::ConfigGitChangesAsDiffDescription),
-                checkbox(show_git_changes_as_diff),
+                switch_value(show_git_changes_as_diff),
             ),
         ListSelectionItem::new(nls::text(language, Message::ConfigLanguage))
             .with_id(language_id)
@@ -690,6 +712,7 @@ pub(crate) fn config_choices(
                 issue_tab,
             ],
         )
+        .with_expandable_descriptions()
         .with_activation(bindings::CONFIG_CHANGE)
         .with_search(SearchBoxModel::new(nls::text(
             language,
@@ -777,8 +800,8 @@ fn issue_refresh_label(minutes: u32) -> &'static str {
     }
 }
 
-const fn checkbox(checked: bool) -> &'static str {
-    if checked { "[ ✔ ]" } else { "[   ]" }
+const fn switch_value(checked: bool) -> &'static str {
+    if checked { "on" } else { "off" }
 }
 
 pub(crate) fn provider_api_key_prompt(
@@ -912,7 +935,7 @@ fn language_servers(
                 ListSelectionItem::new(server_id).with_id(id).with_columns(
                     server_id,
                     description,
-                    checkbox(enabled),
+                    switch_value(enabled),
                 )
             })
             .collect(),

@@ -9,6 +9,11 @@ use crate::widgets::search_box::SearchBoxModel;
 use crate::widgets::text_field;
 use crate::widgets::text_field::TextField;
 use crate::widgets::text_field::TextFieldOutcome;
+use ash_app_server_protocol::protocol::config::ConfigReadResult;
+use ash_app_server_protocol::protocol::config::CustomProviderConfigDto;
+use ash_app_server_protocol::protocol::config::CustomProviderProtocolDto;
+use ash_app_server_protocol::protocol::config::ProviderConfigDto;
+use ash_app_server_protocol::protocol::provider::ProviderListResult;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
@@ -23,11 +28,6 @@ use ratatui::widgets::Paragraph;
 use std::collections::BTreeMap;
 use std::sync::LazyLock;
 use std::time::Instant;
-use ash_app_server_protocol::protocol::config::ConfigReadResult;
-use ash_app_server_protocol::protocol::config::CustomProviderConfigDto;
-use ash_app_server_protocol::protocol::config::CustomProviderProtocolDto;
-use ash_app_server_protocol::protocol::config::ProviderConfigDto;
-use ash_app_server_protocol::protocol::provider::ProviderListResult;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct Settings {
@@ -113,6 +113,9 @@ fn field(value: &str, placeholder: &str) -> TextField {
 
 const FIELD_HEIGHTS: [u16; 7] = [4, 4, 4, 4, 1, 1, 1];
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct Target(usize);
+
 impl Panel {
     pub(crate) fn new(settings: Settings) -> Self {
         let model = settings
@@ -165,6 +168,75 @@ impl Panel {
             status: TestStatus::Untested,
             pending: None,
         }
+    }
+
+    pub(crate) fn is_saving_pending(&self) -> bool {
+        self.pending
+            .as_ref()
+            .is_some_and(|request| request.operation == Operation::Save)
+    }
+
+    fn rows(&self, area: Rect) -> Vec<(usize, Rect)> {
+        let available = area
+            .height
+            .saturating_sub(u16::from(!self.message.is_empty()));
+        let mut start = 0;
+        while start < self.focus
+            && FIELD_HEIGHTS[start..=self.focus].iter().sum::<u16>() > available
+        {
+            start += 1;
+        }
+        let mut y = area.y;
+        let mut rows = Vec::new();
+        for (index, &height) in FIELD_HEIGHTS.iter().enumerate().skip(start) {
+            if y + height > area.y + available {
+                break;
+            }
+            rows.push((index, Rect::new(area.x, y, area.width, height)));
+            y += height;
+        }
+        rows
+    }
+
+    pub(crate) fn target_at(
+        &self,
+        area: Rect,
+        position: ratatui::layout::Position,
+    ) -> Option<Target> {
+        if self.pending.is_some() {
+            return None;
+        }
+        self.rows(area)
+            .into_iter()
+            .find(|(_, row)| row.contains(position))
+            .map(|(index, _)| Target(index))
+    }
+
+    pub(crate) fn activate(&mut self, target: Target) -> ConfigEditorOutcome {
+        if self.pending.is_some() {
+            return ConfigEditorOutcome::Consumed;
+        }
+        if self.focus != target.0 {
+            if let Some(field) = self.field_mut() {
+                field.blur();
+            }
+            self.focus = target.0;
+        }
+        if self.field_mut().is_some_and(|field| field.is_editing()) {
+            return ConfigEditorOutcome::Consumed;
+        }
+        self.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    }
+
+    pub(crate) fn draw_with_pointer(
+        &self,
+        frame: &mut Frame<'_>,
+        area: Rect,
+        hovered: Option<Target>,
+        pressed: Option<Target>,
+        context: RenderContext<'_>,
+    ) {
+        self.draw_body_at_with_pointer(frame, area, context, Instant::now(), hovered, pressed);
     }
 
     pub(crate) fn provider_id(&self) -> &str {
@@ -496,19 +568,22 @@ impl Panel {
         context: RenderContext<'_>,
         now: Instant,
     ) {
-        let heights = FIELD_HEIGHTS;
-        let available = area
-            .height
-            .saturating_sub(u16::from(!self.message.is_empty()));
-        let mut start = 0;
-        while start < self.focus && heights[start..=self.focus].iter().sum::<u16>() > available {
-            start += 1;
-        }
+        self.draw_body_at_with_pointer(frame, area, context, now, None, None);
+    }
+
+    fn draw_body_at_with_pointer(
+        &self,
+        frame: &mut Frame<'_>,
+        area: Rect,
+        context: RenderContext<'_>,
+        now: Instant,
+        hovered: Option<Target>,
+        pressed: Option<Target>,
+    ) {
         let mut y = area.y;
-        for (index, height) in heights.iter().enumerate().skip(start) {
-            if y + height > area.y + available {
-                break;
-            }
+        for (index, row) in self.rows(area) {
+            y = row.y;
+            let height = row.height;
             let label = [
                 "Provider name",
                 "Base URL",
@@ -524,6 +599,15 @@ impl Panel {
             } else {
                 context.foreground()
             });
+            let style = style.patch(crate::render::interaction_style(
+                context,
+                crate::render::InteractionState {
+                    selected: false,
+                    hovered: hovered == Some(Target(index)),
+                    pressed: pressed == Some(Target(index)),
+                    ..Default::default()
+                },
+            ));
             let mut spans = Vec::new();
             if index == 6 {
                 let color = match self.status {

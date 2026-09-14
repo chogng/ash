@@ -49,8 +49,13 @@ pub(crate) fn pointer_target_at(
     if !viewport.items.contains(position) {
         return None;
     }
+    let rows = view.item_rows(areas[1].width);
+    let (index, detail) = *rows.get(viewport.start + usize::from(position.y - viewport.items.y))?;
+    if detail > 0 {
+        return None;
+    }
     view.visible_items()
-        .get(viewport.start + usize::from(position.y - viewport.items.y))
+        .get(index)
         .and_then(|item| item.id())
         .cloned()
         .map(ListSelectionPointerTarget::Item)
@@ -123,20 +128,37 @@ pub(crate) fn draw_body_with_pointer(
     } else {
         let list_area = with_state_column(areas[1]);
         let column_layout = ItemColumnLayout::new(list_area.width, &visible_items);
-        for (row, (index, item)) in visible_items
+        let rows = view.item_rows(areas[1].width);
+        for (row, &(index, detail)) in rows
             .iter()
-            .enumerate()
             .skip(viewport.start)
             .take(viewport.end - viewport.start)
             .enumerate()
         {
+            let item = visible_items[index];
             let selected = view.selected_visible_index() == Some(index);
             let row_area = Rect::new(
                 list_area.x,
-                viewport.items.y.saturating_add(row as u16),
+                viewport.items.y + row as u16,
                 list_area.width,
                 1,
             );
+            if detail > 0 {
+                let description = item.detail().unwrap_or_default();
+                frame.render_widget(
+                    Paragraph::new(description)
+                        .wrap(ratatui::widgets::Wrap { trim: false })
+                        .scroll(((detail - 1) as u16, 0))
+                        .style(Style::default().fg(context.muted())),
+                    Rect::new(
+                        areas[1].x + 2,
+                        row_area.y,
+                        areas[1].width.saturating_sub(2),
+                        1,
+                    ),
+                );
+                continue;
+            }
             draw_item(
                 frame,
                 row_area,
@@ -146,12 +168,13 @@ pub(crate) fn draw_body_with_pointer(
                 hovered_item == Some(index),
                 pressed_item == Some(index),
                 column_layout,
+                view.expandable().then_some(view.expanded(item)),
                 context,
             );
         }
         for (area, count, position) in [
             (viewport.above, viewport.start, "above"),
-            (viewport.below, visible_items.len() - viewport.end, "below"),
+            (viewport.below, rows.len() - viewport.end, "below"),
         ] {
             if !area.is_empty() {
                 frame.render_widget(
@@ -216,11 +239,31 @@ pub(crate) fn draw_body_with_pointer(
 
 impl ListSelectionState {
     fn viewport(&self, area: Rect) -> ListViewport {
-        ListViewport::new(
-            area,
-            self.visible_items().len(),
-            self.selected_visible_index(),
-        )
+        let rows = self.item_rows(area.width);
+        let selected = self.selected_visible_index().and_then(|selected| {
+            let first = rows.iter().position(|&(index, _)| index == selected)?;
+            let last = rows.iter().rposition(|&(index, _)| index == selected)?;
+            Some(last.min(first + usize::from(area.height.saturating_sub(3))))
+        });
+        ListViewport::new(area, rows.len(), selected)
+    }
+
+    pub(super) fn item_rows(&self, width: u16) -> Vec<(usize, usize)> {
+        let mut rows = Vec::new();
+        for (index, item) in self.visible_items().iter().enumerate() {
+            rows.push((index, 0));
+            if self.expandable() && self.expanded(item) {
+                let description = item.detail().unwrap_or_default();
+                if !description.is_empty() {
+                    let paragraph =
+                        Paragraph::new(description).wrap(ratatui::widgets::Wrap { trim: false });
+                    for line in 1..=paragraph.line_count(width.saturating_sub(2).max(1)) {
+                        rows.push((index, line));
+                    }
+                }
+            }
+        }
+        rows
     }
 }
 
@@ -344,6 +387,7 @@ fn draw_item(
     hovered: bool,
     pressed: bool,
     column_layout: ItemColumnLayout,
+    expanded: Option<bool>,
     context: RenderContext<'_>,
 ) {
     let row_style = item_style(context, selected, hovered, pressed);
@@ -357,7 +401,10 @@ fn draw_item(
     } else {
         row_style
     };
-    let marker = selection_marker(show_marker);
+    let marker = expanded.filter(|_| item.detail().is_some()).map_or_else(
+        || selection_marker(show_marker),
+        |expanded| if expanded { "v " } else { "> " },
+    );
     let marker_style = if selected {
         Style::default()
             .fg(context.foreground())
@@ -370,6 +417,27 @@ fn draw_item(
     } else {
         row_style
     };
+    if expanded.is_some() {
+        let value = item.columns().map_or("", |c| c.trailing.as_str());
+        let value_width = (value.width() as u16).min(area.width);
+        frame.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::styled(marker, marker_style),
+                Span::styled(item.label(), label_style),
+            ])),
+            Rect::new(
+                area.x,
+                area.y,
+                area.width.saturating_sub(value_width + 2),
+                1,
+            ),
+        );
+        frame.render_widget(
+            Paragraph::new(value).style(detail_style),
+            Rect::new(area.right() - value_width, area.y, value_width, 1),
+        );
+        return;
+    }
     let Some(columns) = item.columns() else {
         let spans = item_spans(item, marker, marker_style, label_style, detail_style);
         frame.render_widget(Paragraph::new(Line::from(spans)), area);

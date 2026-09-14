@@ -101,6 +101,14 @@ impl ListSelectionItem {
         self.description.as_deref()
     }
 
+    pub(super) fn detail(&self) -> Option<&str> {
+        self.columns
+            .as_ref()
+            .map(|columns| columns.middle.as_str())
+            .or(self.description())
+            .filter(|description| !description.is_empty())
+    }
+
     pub(super) fn columns(&self) -> Option<&ListSelectionItemColumns> {
         self.columns.as_ref()
     }
@@ -174,6 +182,7 @@ struct ListSelectionPresentation {
     key_hints: KeyHints,
     show_tabs: bool,
     initial_selected: usize,
+    expandable: bool,
 }
 
 impl ListSelectionModel {
@@ -195,8 +204,14 @@ impl ListSelectionModel {
                 key_hints: KeyHints::new(),
                 show_tabs: true,
                 initial_selected: 0,
+                expandable: false,
             },
         }
+    }
+
+    pub(crate) fn with_expandable_descriptions(mut self) -> Self {
+        self.presentation.expandable = true;
+        self
     }
 
     pub(crate) fn with_activation(mut self, shortcut: Keybinding) -> Self {
@@ -249,6 +264,23 @@ impl ListSelectionModel {
 
     pub(crate) fn key_hints(&self) -> KeyHints {
         let presentation = &self.presentation;
+        if presentation.expandable {
+            let mut hints = KeyHints::compact()
+                .with_compact_action(
+                    presentation.activation.keys(),
+                    presentation.activation.action(),
+                )
+                .with_compact_action("←/→", "details");
+            if presentation.show_tabs {
+                hints = hints.with_compact_action("Tab", "tabs");
+            }
+            if presentation.search.is_some() {
+                hints = hints.with_compact_action("/", "search");
+            }
+            return hints
+                .with_compact_action(presentation.dismiss.keys(), presentation.dismiss.action())
+                .extend(presentation.key_hints.clone());
+        }
         let mut hints = KeyHints::new();
         if presentation.show_activation_hint {
             hints = hints.with_binding(presentation.activation);
@@ -292,6 +324,7 @@ pub(crate) struct ListSelectionState {
     search: Option<SearchBoxState>,
     focus: ListSelectionFocus,
     message: Option<String>,
+    expanded: std::collections::BTreeSet<ListSelectionItemId>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -312,6 +345,7 @@ impl ListSelectionState {
             search,
             focus: ListSelectionFocus::Items,
             message: None,
+            expanded: Default::default(),
         };
         state.selected_visible = (state.visible_len() > 0).then_some(
             state
@@ -334,6 +368,12 @@ impl ListSelectionState {
         };
         self.model = model;
         self.tabs.replace_tabs(tabs);
+        self.expanded.retain(|id| {
+            self.tabs
+                .tabs()
+                .iter()
+                .any(|group| group.items.iter().any(|item| item.id() == Some(id)))
+        });
         self.reconcile_selection();
         if self.focus == ListSelectionFocus::Search && self.search.is_none()
             || self.focus == ListSelectionFocus::Tabs && !self.show_tabs()
@@ -341,6 +381,14 @@ impl ListSelectionState {
             self.focus = ListSelectionFocus::Items;
         }
         self.sync_search_focus();
+    }
+
+    pub(super) fn expandable(&self) -> bool {
+        self.model.expandable
+    }
+
+    pub(super) fn expanded(&self, item: &ListSelectionItem) -> bool {
+        item.id().is_some_and(|id| self.expanded.contains(id))
     }
 
     pub(crate) fn title(&self) -> &str {
@@ -478,9 +526,9 @@ impl ListSelectionState {
         }
     }
 
-    pub(crate) fn body_rows(&self) -> u16 {
+    pub(crate) fn body_rows(&self, width: u16) -> u16 {
         let search_rows = self.search.as_ref().map(|_| SEARCH_BOX_HEIGHT).unwrap_or(0);
-        let list_rows = self.visible_len().max(1);
+        let list_rows = self.item_rows(width).len().max(1);
         let preview_rows = self
             .selected_item()
             .and_then(ListSelectionItem::preview)
@@ -599,6 +647,14 @@ impl ListSelectionState {
                 && (bindings::LEFT.matches(key) || bindings::RIGHT.matches(key)) =>
             {
                 if let Some(id) = self.selected_item_id() {
+                    if self.model.expandable {
+                        if bindings::RIGHT.matches(key) {
+                            self.expanded.insert(id);
+                        } else {
+                            self.expanded.remove(&id);
+                        }
+                        return ListSelectionInputOutcome::Consumed;
+                    }
                     let adjustment = if bindings::LEFT.matches(key) {
                         ListSelectionAdjustment::Previous
                     } else {

@@ -1,0 +1,32 @@
+---
+source: ash-code/tui/src/app/fullscreen/modal_tests.rs
+expression: frame_text(&app)
+---
+  .                                                                            [— / —] [Dashboard]  
+                                                                                                    
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────╮  
+  │         ┌── Config ───────────────────────────────────────────────────────────[✗]─┐          │  
+  │    ▄  ▄ │                                                                         │          │  
+  │  ▗█▛██▜█│   General    Providers    Language servers    Issues                    │          │  
+  │  ▝▜████▛│                                                                         │          │  
+  │    ▝  ▘ │  ╭────────────────────────────────────────────────────────────────────╮ │          │  
+  │         │  │ Search configuration                                               │ │          │  
+  │         │  ╰────────────────────────────────────────────────────────────────────╯ │          │  
+  │         │v Vim mode                                                           off │          │  
+  │         │    Use Vim editing in ChatInput                                         │          │  
+  │         │> Memory diagnostics                                                 off │          │  
+  │         │> Automatic updates                                               Latest │          │  
+  ╰─────────│> Show Git changes as diff                                           off │──────────╯  
+            │> Language                                                       English │             
+            │> Status bar style                                                Simple │             
+            │> Key hint style                                                Contrast │             
+            │> Screen mode                                                 fullscreen │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │ Esc return  
+  ╭─────────│  Enter/Space change · ←/→ details · Tab tabs · / search · Esc close     │──────────╮  
+  │ > Build └─────────────────────────────────────────────────────────────────────────┘          │  
+  ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯

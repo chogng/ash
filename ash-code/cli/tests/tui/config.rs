@@ -112,7 +112,7 @@ fn actual_tui_issue_refresh_setting_persists_across_restart() {
     process.wait_for_screen("Auto refresh");
     process.down();
     process.down();
-    process.right();
+    process.enter();
     wait_for_config(&fixture, "autoRefreshMinutes = 30");
     process.wait_for_screen("30m");
     process.escape();

@@ -47,6 +47,8 @@ pub(super) fn body_area(panel: &CommandPanel, content: Rect) -> Rect {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(in crate::app) enum Target {
     Close,
+    Parent,
+    Provider(crate::config::provider::Target),
     Backdrop,
     Blocked,
     Tab(usize),
@@ -76,7 +78,15 @@ pub(super) fn target_at(
         return None;
     }
     let panel = app.command_panel()?;
+    if let Some(parent) = panel.parent_title() {
+        if parent_area(layout, parent).contains(position) {
+            return Some(Target::Parent);
+        }
+    }
     let body = body_area(panel, layout.content);
+    if let crate::app::command_panel::CommandPanelBody::Provider(provider) = panel.body() {
+        return provider.target_at(body, position).map(Target::Provider);
+    }
     let tabs = Rect {
         height: panel
             .body()
@@ -95,6 +105,18 @@ pub(super) fn target_at(
 
 pub(super) fn activate(app: &mut App, available: Rect, target: Target) -> Option<AppCommand> {
     match target {
+        Target::Parent => {
+            app.fullscreen.panels.command_mut()?.return_to_parent();
+            None
+        }
+        Target::Provider(target) => {
+            let outcome = app
+                .fullscreen
+                .panels
+                .command_mut()?
+                .activate_provider(target);
+            app.handle_command_panel_outcome(outcome)
+        }
         Target::Tab(index) => {
             app.fullscreen.modal_alert = false;
             app.fullscreen.panels.command_mut()?.select_tab(index);
@@ -187,6 +209,9 @@ pub(super) fn draw_panel(
     context: RenderContext<'_>,
 ) {
     let body = panel.body();
+    let title = panel
+        .parent_title()
+        .map(|parent| format!("{parent} › {}", body.title()));
     let alert_hints;
     let hints = if blocked_alert {
         alert_hints = crate::widgets::key_hint::KeyHints::new()
@@ -199,13 +224,30 @@ pub(super) fn draw_panel(
     crate::widgets::modal::draw(
         frame,
         layout,
-        body.title(),
+        title.as_deref().unwrap_or(body.title()),
         hints,
         close,
         blocked_alert,
         hint_style,
         context,
     );
+    if let Some(parent) = panel.parent_title() {
+        let style = ratatui::style::Style::default()
+            .fg(context.foreground())
+            .add_modifier(ratatui::style::Modifier::UNDERLINED | ratatui::style::Modifier::BOLD)
+            .patch(crate::render::interaction_style(
+                context,
+                InteractionState {
+                    hovered: hovered == Some(&Target::Parent),
+                    pressed: pressed == Some(&Target::Parent),
+                    ..Default::default()
+                },
+            ));
+        frame.render_widget(
+            ratatui::widgets::Paragraph::new(parent).style(style),
+            parent_area(layout, parent),
+        );
+    }
     let tabs = Rect {
         height: body
             .tab_rows(layout.content.width)
@@ -228,6 +270,20 @@ pub(super) fn draw_panel(
         _ => None,
     };
     body.draw_tabs(frame, tabs, tab(hovered), tab(pressed), context);
+    if let crate::app::command_panel::CommandPanelBody::Provider(provider) = body {
+        let target = |target: Option<&Target>| match target {
+            Some(Target::Provider(target)) => Some(*target),
+            _ => None,
+        };
+        provider.draw_with_pointer(
+            frame,
+            body_area(panel, layout.content),
+            target(hovered),
+            target(pressed),
+            context,
+        );
+        return;
+    }
     body.draw_body(
         frame,
         body_area(panel, layout.content),
@@ -235,6 +291,16 @@ pub(super) fn draw_panel(
         pressed_list,
         context,
     );
+}
+
+fn parent_area(layout: ModalLayout, title: &str) -> Rect {
+    use unicode_width::UnicodeWidthStr;
+    Rect::new(
+        layout.title.x + 1,
+        layout.title.y,
+        (title.width() as u16).min(layout.title.width.saturating_sub(1)),
+        layout.title.height,
+    )
 }
 
 /// An open modal consumes every key; unhandled content input never reaches the page below.

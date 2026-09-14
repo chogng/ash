@@ -2,12 +2,6 @@ use super::set_language_server_mode;
 use crate::config::LanguageServerEdit;
 use crate::test_support::empty_config_snapshot;
 use crate::widgets::list_selection::ListSelectionState;
-use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyModifiers;
-use std::collections::VecDeque;
-use std::sync::Arc;
-use std::sync::Mutex;
 use ash_app_server_client::AppServerClient;
 use ash_app_server_client::ClientError;
 use ash_app_server_client::JsonRpcTransport;
@@ -16,6 +10,12 @@ use ash_app_server_protocol::protocol::config::ConfigCommandResult;
 use ash_app_server_protocol::protocol::config::LanguageServerConfigDto;
 use ash_app_server_protocol::protocol::config::LanguageServerModeDto;
 use ash_app_server_protocol::protocol::provider::ProviderListResult;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyModifiers;
+use std::collections::VecDeque;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 #[derive(Clone)]
 struct RecordingTransport {
@@ -211,7 +211,7 @@ fn language_server_switch_uses_the_backend_config_authority_and_refreshes_the_ta
     assert_eq!(state.visible_items().len(), 1);
     assert_eq!(
         state.visible_items()[0].description(),
-        Some("C:\\tools\\rust-analyzer.exe [ ✔ ]")
+        Some("C:\\tools\\rust-analyzer.exe on")
     );
 }
 

@@ -527,7 +527,11 @@ fn editing_modal_blocks_backdrop_dismiss_and_protects_input() {
     app.handle_paste("Important draft".into());
     assert!(!super::allows_backdrop_dismiss(&app));
     assert_eq!(
-        super::target_at(&app, area, ratatui::layout::Position::new(outside.0, outside.1)),
+        super::target_at(
+            &app,
+            area,
+            ratatui::layout::Position::new(outside.0, outside.1)
+        ),
         Some(super::Target::Blocked)
     );
 
@@ -584,7 +588,10 @@ fn editing_modal_blocks_backdrop_dismiss_and_protects_input() {
                 .collect::<String>()
         })
         .collect::<Vec<_>>();
-    assert!(rows.iter().any(|row| row.contains("editing in progress") && row.contains("Esc to cancel")));
+    assert!(
+        rows.iter()
+            .any(|row| row.contains("editing in progress") && row.contains("Esc to cancel"))
+    );
 
     // Typing any key clears the alert while continuing to edit.
     app.handle_key(KeyEvent::new(KeyCode::Char('!'), KeyModifiers::NONE));
@@ -755,4 +762,135 @@ fn memories_manager_edits_multiline_text_keeps_failed_drafts_and_restores_home()
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.command_panel().is_none());
     assert_eq!(app.input(), "background draft");
+}
+
+#[test]
+fn provider_mouse_input_and_parent_title_return_to_config() {
+    use crate::app::command_panel::CommandPanel;
+    use crate::widgets::list_selection::ListSelectionItemId;
+    use ratatui::layout::Position;
+    let mut app = crate::app::App::new();
+    app.open_home();
+    app.update(crate::config::Event::EditorOpened(config_choices()));
+    let Some(CommandPanel::Config(editor)) = app.fullscreen.panels.command_mut() else {
+        panic!("config editor")
+    };
+    editor
+        .selection_mut()
+        .unwrap()
+        .focus_item(&ListSelectionItemId::new("new-custom-provider"));
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    let area = Rect::new(0, 0, 100, 30);
+    let layout = super::layout(area);
+    let body = super::body_area(app.command_panel().unwrap(), layout.content);
+    let position = Position::new(body.x + 4, body.y + 2);
+    assert!(matches!(
+        super::target_at(&app, area, position),
+        Some(super::Target::Provider(_))
+    ));
+    for kind in [
+        MouseEventKind::Down(MouseButton::Left),
+        MouseEventKind::Up(MouseButton::Left),
+    ] {
+        crate::app::fullscreen::pointer::handle_mouse(
+            &mut app,
+            area,
+            MouseEvent {
+                kind,
+                column: position.x,
+                row: position.y,
+                modifiers: KeyModifiers::NONE,
+            },
+        );
+    }
+    app.handle_key(KeyEvent::new(KeyCode::Char('N'), KeyModifiers::NONE));
+    assert!(frame_text(&app).contains("│ N"));
+    assert_eq!(app.input(), "");
+    crate::tui_assert_snapshot!("provider_clicked_input", frame_text(&app));
+    let parent = super::parent_area(layout, "Config");
+    for pressed in [None, Some(&super::Target::Parent)] {
+        let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+        terminal
+            .draw(|frame| {
+                super::draw_panel(
+                    frame,
+                    app.command_panel().unwrap(),
+                    layout,
+                    Some(&super::Target::Parent),
+                    pressed,
+                    Default::default(),
+                    false,
+                    Default::default(),
+                    test_context(),
+                )
+            })
+            .unwrap();
+        let cell = &terminal.backend().buffer()[(parent.x, parent.y)];
+        assert!(cell.modifier.contains(Modifier::UNDERLINED));
+        assert_eq!(
+            cell.fg,
+            if pressed.is_some() {
+                test_context().pressed_foreground()
+            } else {
+                test_context().hover_foreground()
+            }
+        );
+        assert_eq!(
+            cell.bg,
+            if pressed.is_some() {
+                test_context().pressed_background()
+            } else {
+                test_context().hover_background()
+            }
+        );
+    }
+
+    let target = super::target_at(&app, area, Position::new(parent.x, parent.y));
+    assert_eq!(target, Some(super::Target::Parent));
+    super::activate(&mut app, area, target.unwrap());
+    assert_eq!(
+        app.list_selection().unwrap().active_tab().label(),
+        "Providers"
+    );
+    assert_eq!(
+        app.list_selection().unwrap().selected_item().unwrap().id(),
+        Some(&ListSelectionItemId::new("new-custom-provider"))
+    );
+    crate::tui_assert_snapshot!("provider_parent_restores_config", frame_text(&app));
+}
+
+#[test]
+fn config_descriptions_expand_below_items_and_keep_mouse_targets_aligned() {
+    use crate::widgets::list_selection::ListSelectionItemId;
+    use crate::widgets::list_selection::ListSelectionPointerTarget;
+    use ratatui::layout::Position;
+    let mut app = crate::app::App::new();
+    app.open_home();
+    app.update(crate::config::Event::EditorOpened(config_choices()));
+    let collapsed = frame_text(&app);
+    assert!(!collapsed.contains("Use Vim editing"));
+    assert!(
+        app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE))
+            .is_none()
+    );
+    assert!(frame_text(&app).contains("Use Vim editing in ChatInput"));
+    crate::tui_assert_snapshot!("config_expanded_description", frame_text(&app));
+    let area = Rect::new(0, 0, 100, 30);
+    let body = super::body_area(app.command_panel().unwrap(), super::layout(area).content);
+    let first = body.y + crate::widgets::search_box::SEARCH_BOX_HEIGHT;
+    assert_eq!(
+        super::target_at(&app, area, Position::new(body.x + 3, first + 1)),
+        None
+    );
+    assert_eq!(
+        super::target_at(&app, area, Position::new(body.x + 3, first + 2)),
+        Some(super::Target::List(ListSelectionPointerTarget::Item(
+            ListSelectionItemId::new("memory-diagnostics")
+        )))
+    );
+    assert!(
+        app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE))
+            .is_none()
+    );
+    assert_eq!(frame_text(&app), collapsed);
 }

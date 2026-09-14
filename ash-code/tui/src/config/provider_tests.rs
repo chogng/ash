@@ -524,3 +524,94 @@ fn model_id_is_the_last_input_and_api_type_arrows_autosave_the_next_row() {
         CustomProviderProtocolDto::ChatCompletions
     );
 }
+
+#[test]
+fn clicking_fields_starts_editing_and_does_not_submit_on_second_click() {
+    let mut panel = panel();
+    let area = Rect::new(2, 0, 76, 25);
+    let target = panel
+        .target_at(area, ratatui::layout::Position::new(10, 6))
+        .unwrap();
+    assert!(matches!(
+        panel.activate(target),
+        ConfigEditorOutcome::Consumed
+    ));
+    key(&mut panel, KeyCode::Char('h'));
+    assert_eq!(panel.url.query(), "h");
+    assert!(panel.url.is_editing());
+    assert!(matches!(
+        panel.activate(target),
+        ConfigEditorOutcome::Consumed
+    ));
+    assert!(panel.pending.is_none());
+    let name = panel
+        .target_at(area, ratatui::layout::Position::new(10, 2))
+        .unwrap();
+    panel.activate(name);
+    key(&mut panel, KeyCode::Char('N'));
+    assert_eq!(panel.name.query(), "N");
+    assert!(!panel.url.is_editing());
+    assert_eq!(panel.url.query(), "h");
+    crate::tui_assert_snapshot!(
+        "provider_click_to_edit",
+        text(&render(&panel, 80, 25, Instant::now()))
+    );
+}
+
+#[test]
+fn scrolled_provider_hit_targets_follow_rendered_fields_and_pending_requests_disable_them() {
+    let mut panel = populated();
+    panel.focus = 3;
+    let area = Rect::new(2, 0, 32, 8);
+    let rows = panel.rows(area);
+    for (index, row) in rows {
+        for y in row.y..row.bottom() {
+            assert_eq!(
+                panel.target_at(area, ratatui::layout::Position::new(row.x, y)),
+                Some(Target(index))
+            );
+        }
+    }
+    let target = panel
+        .target_at(area, ratatui::layout::Position::new(4, 6))
+        .unwrap();
+    assert_eq!(target, Target(3));
+    panel.activate(target);
+    assert!(panel.model.is_editing());
+    let request = request(key(&mut panel, KeyCode::Enter));
+    assert_eq!(request.operation, Operation::Save);
+    assert!(
+        panel
+            .target_at(area, ratatui::layout::Position::new(4, 6))
+            .is_none()
+    );
+}
+
+#[test]
+fn provider_hover_and_press_use_shared_feedback_without_changing_keyboard_focus() {
+    let panel = panel();
+    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(80, 25)).unwrap();
+    for pressed in [None, Some(Target(1))] {
+        terminal
+            .draw(|frame| {
+                panel.draw_with_pointer(
+                    frame,
+                    Rect::new(2, 0, 76, 25),
+                    Some(Target(1)),
+                    pressed,
+                    crate::render::test_context(),
+                )
+            })
+            .unwrap();
+        let cell = &terminal.backend().buffer()[(2, 4)];
+        assert_eq!(
+            cell.bg,
+            if pressed.is_some() {
+                crate::render::test_context().pressed_background()
+            } else {
+                crate::render::test_context().hover_background()
+            }
+        );
+        assert_eq!(panel.focus, 0);
+    }
+}

@@ -8,13 +8,13 @@ expression: text(&buffer)
   ╭──────────────────────────────────────────────────────────────────────────────────────────────╮  
   │ Search configuration                                                                         │  
   ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  
-> Vim mode                    Use Vim editing in ChatInput                                [   ]     
-  Memory diagnostics          Continuously collect bounded memory evidence                [   ]     
-  Automatic updates           Choose release cadence                                      Latest    
-  Show Git changes as diff    Show added and deleted lines instead of changed files       [   ]     
-  Language                    Change the interface language                               English   
-  Status bar style            Text and numbers, clean and easy to read                    Simple    
-  Key hint style              Emphasize keys over their descriptions                      Contrast  
-  Screen mode                 Use a full screen or keep terminal history                  inline    
+> Vim mode                                                                                     off  
+> Memory diagnostics                                                                           off  
+> Automatic updates                                                                         Latest  
+> Show Git changes as diff                                                                     off  
+> Language                                                                                 English  
+> Status bar style                                                                          Simple  
+> Key hint style                                                                          Contrast  
+> Screen mode                                                                               inline  
                                                                                                     
-  Enter/Space to change  ·  Tab/Shift+Tab to switch  ·  / to search  ·  Esc to close
+  Enter/Space change · ←/→ details · Tab tabs · / search · Esc close

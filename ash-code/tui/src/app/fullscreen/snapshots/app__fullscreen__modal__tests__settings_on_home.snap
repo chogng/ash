@@ -12,14 +12,14 @@ expression: frame_text(&app)
             │  ╭────────────────────────────────────────────────────────────────────╮ │             
             │  │ Search configuration                                               │ │             
             │  ╰────────────────────────────────────────────────────────────────────╯ │             
-            │> Vim mode                    Use Vim editing in ChatInput    [   ]      │             
-            │  Memory diagnostics          Continuously collect bounded    [   ]      │             
-            │  Automatic updates           Choose release cadence          Latest     │             
-            │  Show Git changes as diff    Show added and deleted lines    [   ]      │             
-            │  Language                    Change the interface languag    English    │             
-            │  Status bar style            Text and numbers, clean and     Simple     │             
-            │  Key hint style              Emphasize keys over their de    Contrast   │             
-            │  Screen mode                 Use a full screen or keep te    fullscreen │             
+            │> Vim mode                                                           off │             
+            │> Memory diagnostics                                                 off │             
+            │> Automatic updates                                               Latest │             
+            │> Show Git changes as diff                                           off │             
+            │> Language                                                       English │             
+            │> Status bar style                                                Simple │             
+            │> Key hint style                                                Contrast │             
+            │> Screen mode                                                 fullscreen │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
@@ -27,6 +27,6 @@ expression: frame_text(&app)
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
-  ╭─────────│  Enter/Space to change · Tab/Shift+Tab to switch · Esc to close         │──────────╮  
+  ╭─────────│  Enter/Space change · ←/→ details · Tab tabs · / search · Esc close     │──────────╮  
   │ > preser└─────────────────────────────────────────────────────────────────────────┘          │  
   ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯

@@ -125,6 +125,32 @@ impl CommandPanel {
         ))
     }
 
+    pub(super) fn parent_title(&self) -> Option<&str> {
+        match self {
+            Self::Config(editor) => editor.parent_title(),
+            _ => None,
+        }
+    }
+
+    pub(super) fn return_to_parent(&mut self) {
+        if let Self::Config(editor) = self {
+            editor.return_to_parent();
+        }
+    }
+
+    pub(super) fn activate_provider(
+        &mut self,
+        target: crate::config::provider::Target,
+    ) -> CommandPanelOutcome {
+        match self {
+            Self::Config(editor) => editor
+                .provider_mut()
+                .map(|panel| CommandPanelOutcome::Config(panel.activate(target)))
+                .unwrap_or(CommandPanelOutcome::Consumed),
+            _ => CommandPanelOutcome::Consumed,
+        }
+    }
+
     pub(crate) fn is_testing(&self) -> bool {
         matches!(self, Self::Config(editor) if editor.is_testing())
     }
@@ -597,7 +623,7 @@ impl<'a> CommandPanelBody<'a> {
 
     pub(super) fn body_rows(self, width: u16) -> u16 {
         match self {
-            Self::Selection(selection) => selection.body_rows(),
+            Self::Selection(selection) => selection.body_rows(width),
             Self::MemoryEditor(_) => 16,
             Self::Prompt(prompt) => prompt.desired_height(),
             Self::KeyCapture(capture) => capture.desired_height(),

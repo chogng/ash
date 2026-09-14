@@ -35,7 +35,7 @@ fn overflowing_lists_keep_selection_visible_and_notices_inside_the_area() {
         )
         .without_tab_bar(),
     );
-    assert_eq!(view.body_rows(), 30);
+    assert_eq!(view.body_rows(80), 30);
     for height in 1..35 {
         for selected in 0..30 {
             assert!(view.select_visible_item(selected));
@@ -196,4 +196,65 @@ fn keyboard_selection_and_a_different_hovered_row_remain_visible_together() {
     assert_eq!(buffer[(0, 1)].symbol(), " ");
     assert_eq!(buffer[(2, 1)].fg, test_context().hover_foreground());
     assert_eq!(buffer[(2, 1)].bg, test_context().hover_background());
+}
+
+#[test]
+fn expanded_descriptions_wrap_and_follow_items_after_filtering_and_refresh() {
+    use crate::widgets::list_selection::ListSelectionItemId;
+    use ratatui::layout::Rect;
+    let model = ListSelectionModel::new(
+        "Config",
+        vec![ListSelectionGroup::new(
+            "General",
+            vec![
+                ListSelectionItem::new("First")
+                    .with_id(ListSelectionItemId::new("first"))
+                    .with_columns(
+                        "First",
+                        "A long description that wraps across several narrow terminal lines.",
+                        "off",
+                    ),
+                ListSelectionItem::new("Second")
+                    .with_id(ListSelectionItemId::new("second"))
+                    .with_columns("Second", "Another explanation", "on"),
+            ],
+        )],
+    )
+    .without_tab_bar()
+    .with_expandable_descriptions()
+    .with_search(SearchBoxModel::new("Search"));
+    let mut view = ListSelectionState::new(model.clone());
+    view.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    assert!(view.expanded(view.selected_item().unwrap()));
+    view.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    view.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
+    view.replace_model(model);
+    assert!(view.visible_items().iter().all(|item| view.expanded(item)));
+    let mut terminal = Terminal::new(TestBackend::new(32, 12)).unwrap();
+    terminal
+        .draw(|frame| {
+            draw_body_with_pointer(
+                frame,
+                Rect::new(2, 0, 30, 12),
+                &view,
+                false,
+                false,
+                None,
+                None,
+                test_context(),
+            )
+        })
+        .unwrap();
+    crate::tui_assert_snapshot!(
+        "narrow_expanded_descriptions",
+        terminal.backend().to_string()
+    );
+    view.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+    view.handle_paste("explanation".into());
+    assert_eq!(view.visible_items().len(), 1);
+    assert_eq!(view.visible_items()[0].label(), "Second");
+    assert!(view.expanded(view.visible_items()[0]));
+    view.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    view.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+    assert!(!view.expanded(view.visible_items()[0]));
 }

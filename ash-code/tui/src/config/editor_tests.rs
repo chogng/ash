@@ -9,14 +9,14 @@ use crate::thread::composer::ChatInputMode;
 use crate::widgets::list_selection::ListSelectionState;
 use crate::widgets::text_prompt::TextPrompt;
 use crate::widgets::text_prompt::TextPromptOutcome;
-use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyModifiers;
 use ash_app_server_protocol::protocol::config::LanguageServerConfigDto;
 use ash_app_server_protocol::protocol::config::LanguageServerModeDto;
 use ash_app_server_protocol::protocol::provider::{
     ProviderApiKeyPolicyDto, ProviderCatalogEntryDto, ProviderListResult,
 };
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyModifiers;
 
 fn providers() -> ProviderListResult {
     ProviderListResult {
@@ -38,17 +38,12 @@ fn providers() -> ProviderListResult {
 }
 
 #[test]
-fn screen_mode_can_be_changed_with_activation_and_both_arrow_keys() {
+fn screen_mode_can_be_changed_with_activation() {
     for mode in [
         crate::terminal::ScreenMode::Fullscreen,
         crate::terminal::ScreenMode::Inline,
     ] {
-        for code in [
-            KeyCode::Enter,
-            KeyCode::Char(' '),
-            KeyCode::Left,
-            KeyCode::Right,
-        ] {
+        for code in [KeyCode::Enter, KeyCode::Char(' ')] {
             let mut terminal = TerminalSettings::default();
             terminal.set_screen_mode(mode);
             let mut editor = super::ConfigEditor::new(config_choices(
@@ -83,7 +78,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
     );
     assert_eq!(
         view.model.key_hints().text(),
-        "Enter/Space to change  ·  Tab/Shift+Tab to switch  ·  / to search  ·  Esc to close"
+        "Enter/Space change · ←/→ details · Tab tabs · / search · Esc close"
     );
     let mut state = ListSelectionState::new(view.model);
 
@@ -117,7 +112,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
     assert_eq!(vim_mode.label(), "Vim mode");
     assert_eq!(
         vim_mode.description(),
-        Some("Use Vim editing in ChatInput [   ]")
+        Some("Use Vim editing in ChatInput off")
     );
     assert!(matches!(
         view.actions.get(vim_mode.id().unwrap()).unwrap(),
@@ -128,7 +123,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
     assert_eq!(memory_diagnostics.label(), "Memory diagnostics");
     assert_eq!(
         memory_diagnostics.description(),
-        Some("Continuously collect bounded memory evidence [   ]")
+        Some("Continuously collect bounded memory evidence off")
     );
     assert!(matches!(
         view.actions
@@ -152,7 +147,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
     assert_eq!(git_changes.label(), "Show Git changes as diff");
     assert_eq!(
         git_changes.description(),
-        Some("Show added and deleted lines instead of changed files [   ]")
+        Some("Show added and deleted lines instead of changed files off")
     );
     assert!(matches!(
         view.actions.get(git_changes.id().unwrap()).unwrap(),
@@ -266,8 +261,7 @@ fn language_setting_cycles_with_activation_and_directional_keys() {
     }
     assert!(matches!(
         editor.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE)),
-        super::ConfigEditorOutcome::Action(ConfigSelectionAction::SetLanguage(edit))
-            if edit.terminal.language() == Language::French
+        super::ConfigEditorOutcome::Consumed
     ));
 }
 
@@ -309,13 +303,11 @@ fn config_root_uses_the_selected_language_through_nls() {
 }
 
 #[test]
-fn key_hint_style_cycles_with_activation_and_arrow_keys() {
+fn key_hint_style_cycles_with_activation() {
     use crate::widgets::list_selection::ListSelectionItemId;
     for (key, expected) in [
         (KeyCode::Enter, crate::config::KeyHintStyle::Muted),
         (KeyCode::Char(' '), crate::config::KeyHintStyle::Muted),
-        (KeyCode::Right, crate::config::KeyHintStyle::Muted),
-        (KeyCode::Left, crate::config::KeyHintStyle::Muted),
     ] {
         let mut editor = super::ConfigEditor::new(config_choices(
             &empty_config_snapshot(),
@@ -338,13 +330,11 @@ fn key_hint_style_cycles_with_activation_and_arrow_keys() {
 }
 
 #[test]
-fn automatic_update_policy_cycles_with_activation_and_arrow_keys() {
+fn automatic_update_policy_cycles_with_activation() {
     use crate::widgets::list_selection::ListSelectionItemId;
     for (key, expected) in [
         (KeyCode::Enter, crate::UpdatePolicy::Stable),
         (KeyCode::Char(' '), crate::UpdatePolicy::Stable),
-        (KeyCode::Right, crate::UpdatePolicy::Stable),
-        (KeyCode::Left, crate::UpdatePolicy::Never),
     ] {
         let mut editor = super::ConfigEditor::new(config_choices(
             &empty_config_snapshot(),
@@ -400,7 +390,7 @@ fn language_server_tab_exposes_one_switch_per_configured_server() {
     assert_eq!(state.active_tab().label(), "Language servers");
     assert_eq!(state.visible_items().len(), 2);
     assert_eq!(state.visible_items()[0].label(), "rust-analyzer");
-    assert_eq!(state.visible_items()[0].description(), Some(" [ ✔ ]"));
+    assert_eq!(state.visible_items()[0].description(), Some(" on"));
     assert!(matches!(
         view.actions
             .get(state.visible_items()[0].id().unwrap())
@@ -417,7 +407,7 @@ fn language_server_tab_exposes_one_switch_per_configured_server() {
     );
     assert_eq!(
         state.visible_items()[1].description(),
-        Some("C:\\tools\\typescript-language-server.exe [   ]")
+        Some("C:\\tools\\typescript-language-server.exe off")
     );
     assert!(matches!(
         view.actions
@@ -433,7 +423,7 @@ fn language_server_tab_exposes_one_switch_per_configured_server() {
 }
 
 #[test]
-fn config_editor_uses_an_empty_unicode_checkbox_when_vim_is_disabled() {
+fn config_editor_shows_off_when_vim_is_disabled() {
     let mut terminal = TerminalSettings::default();
     terminal.set_input_mode(ChatInputMode::Standard);
 
@@ -447,7 +437,7 @@ fn config_editor_uses_an_empty_unicode_checkbox_when_vim_is_disabled() {
 
     assert_eq!(
         state.visible_items()[0].description(),
-        Some("Use Vim editing in ChatInput [   ]")
+        Some("Use Vim editing in ChatInput off")
     );
     state.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     assert!(state.search().unwrap().input_active());
@@ -459,7 +449,7 @@ fn config_editor_uses_an_empty_unicode_checkbox_when_vim_is_disabled() {
 }
 
 #[test]
-fn config_option_arrows_toggle_values_without_switching_pages() {
+fn config_option_arrows_do_not_change_values_or_pages() {
     for key in [
         KeyEvent::new(KeyCode::Left, KeyModifiers::NONE),
         KeyEvent::new(KeyCode::Right, KeyModifiers::NONE),
@@ -471,15 +461,15 @@ fn config_option_arrows_toggle_values_without_switching_pages() {
             StatusLineSettings::default(),
         ));
         editor.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-        assert!(matches!(editor.handle_key(key),
-            super::ConfigEditorOutcome::Action(ConfigSelectionAction::SetTerminalSettings(edit))
-                if edit.terminal.memory_diagnostics()
+        assert!(matches!(
+            editor.handle_key(key),
+            super::ConfigEditorOutcome::Consumed
         ));
     }
 }
 
 #[test]
-fn config_editor_shows_a_checked_vim_mode_when_enabled() {
+fn config_editor_shows_on_when_vim_is_enabled() {
     let mut terminal = TerminalSettings::default();
     terminal.set_input_mode(ChatInputMode::Vim);
 
@@ -493,7 +483,7 @@ fn config_editor_shows_a_checked_vim_mode_when_enabled() {
 
     assert_eq!(
         state.visible_items()[0].description(),
-        Some("Use Vim editing in ChatInput [ ✔ ]")
+        Some("Use Vim editing in ChatInput on")
     );
 }
 
@@ -678,12 +668,7 @@ fn status_line_style_changes_from_config_without_changing_items() {
         Language::French,
     ] {
         for style in [StatusLineStyle::Compact, StatusLineStyle::Rich] {
-            for key in [
-                KeyCode::Enter,
-                KeyCode::Char(' '),
-                KeyCode::Left,
-                KeyCode::Right,
-            ] {
+            for key in [KeyCode::Enter, KeyCode::Char(' ')] {
                 let mut terminal = TerminalSettings::default();
                 terminal.set_language(language);
                 let mut settings = StatusLineSettings::default();

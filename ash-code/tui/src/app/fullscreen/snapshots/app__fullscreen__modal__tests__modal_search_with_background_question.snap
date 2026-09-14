@@ -12,7 +12,7 @@ expression: frame_text(&app)
             │  ╭────────────────────────────────────────────────────────────────────╮ │             
             │  │ Screen mode                                                        │ │             
             │  ╰────────────────────────────────────────────────────────────────────╯ │             
-            │  Screen mode    Use a full screen or keep terminal histor    fullscreen │             
+            │> Screen mode                                                 fullscreen │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
