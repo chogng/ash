@@ -38,9 +38,11 @@ pub trait FileSystem: Send + Sync {
         maximum_bytes: usize,
     ) -> Result<FileMetadata, FileSystemError>;
 
-    /// Writes only when the condition still matches the current file bytes.
+    /// Writes only when the requested condition matches.
     ///
-    /// Implementations must serialize the revision check with replacement across service instances.
+    /// Implementations must serialize revision checks with replacement across service instances.
+    /// `MissingOrEmpty` must check the target during publication and must not replace a file
+    /// that another process creates or fills after the caller's inspection.
     fn write_file_with_condition(
         &self,
         path: &Path,

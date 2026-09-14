@@ -98,6 +98,113 @@ fn conditionally_writes_only_the_revision_that_was_read() {
 }
 
 #[test]
+fn missing_or_empty_write_accepts_only_missing_or_empty_targets() {
+    let dir = TestDir::new();
+    fs::write(dir.path.join("empty.md"), "").unwrap();
+    fs::write(dir.path.join("occupied.md"), "editor content").unwrap();
+    let file_system = dir.file_system();
+
+    for name in ["missing.md", "empty.md"] {
+        file_system
+            .write_file_with_condition(
+                Path::new(name),
+                b"imported content",
+                100,
+                &FileWriteCondition::MissingOrEmpty,
+            )
+            .unwrap();
+        assert_eq!(fs::read(dir.path.join(name)).unwrap(), b"imported content");
+    }
+    assert_eq!(
+        file_system.write_file_with_condition(
+            Path::new("occupied.md"),
+            b"imported content",
+            100,
+            &FileWriteCondition::MissingOrEmpty,
+        ),
+        Err(FileSystemError::RevisionConflict(PathBuf::from(
+            "occupied.md"
+        ))),
+    );
+    assert_eq!(
+        fs::read(dir.path.join("occupied.md")).unwrap(),
+        b"editor content"
+    );
+}
+
+#[test]
+fn missing_or_empty_publication_keeps_files_saved_after_preparation() {
+    for initially_empty in [false, true] {
+        let dir = TestDir::new();
+        let target = dir.path.join("ASH.md");
+        if initially_empty {
+            fs::write(&target, "").unwrap();
+        }
+        let file_system = dir.file_system();
+        let prepared = PreparedWrite::new(
+            file_system.files.handle(),
+            Path::new("ASH.md"),
+            b"imported content",
+            None,
+        )
+        .unwrap();
+
+        fs::write(&target, "saved by editor").unwrap();
+        assert_eq!(
+            prepared
+                .publish(WritePublication::MissingOrEmpty)
+                .unwrap_err()
+                .kind(),
+            std::io::ErrorKind::AlreadyExists,
+        );
+        assert_eq!(fs::read(&target).unwrap(), b"saved by editor");
+        assert_eq!(fs::read_dir(&dir.path).unwrap().count(), 1);
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn missing_or_empty_write_rejects_an_empty_file_linked_outside_the_dir() {
+    let dir = TestDir::new();
+    let outside = tempfile::tempdir().unwrap();
+    let external = outside.path().join("shared.md");
+    fs::write(&external, "").unwrap();
+    fs::hard_link(&external, dir.path.join("ASH.md")).unwrap();
+
+    assert_eq!(
+        dir.file_system().write_file_with_condition(
+            Path::new("ASH.md"),
+            b"imported content",
+            100,
+            &FileWriteCondition::MissingOrEmpty,
+        ),
+        Err(FileSystemError::RevisionConflict(PathBuf::from("ASH.md"))),
+    );
+    assert_eq!(fs::read(external).unwrap(), b"");
+}
+
+#[test]
+fn create_publication_does_not_replace_a_file_created_after_preparation() {
+    let dir = TestDir::new();
+    let file_system = dir.file_system();
+    let prepared =
+        PreparedWrite::new(file_system.files.handle(), Path::new("new.md"), b"", None).unwrap();
+    fs::write(dir.path.join("new.md"), "editor content").unwrap();
+
+    assert_eq!(
+        prepared
+            .publish(WritePublication::Create)
+            .unwrap_err()
+            .kind(),
+        std::io::ErrorKind::AlreadyExists,
+    );
+    assert_eq!(
+        fs::read(dir.path.join("new.md")).unwrap(),
+        b"editor content"
+    );
+}
+
+#[test]
 fn rejects_unsafe_or_oversized_write_targets() {
     let dir = TestDir::new();
     fs::create_dir(dir.path.join("src")).unwrap();

@@ -13,8 +13,10 @@ use ash_file_access::Authorization;
 use ash_file_access::Dir;
 use ash_file_access::Grant;
 use ash_file_access::Permission;
+use ash_file_identity::FileInformation;
 use cap_std::fs::Dir as Directory;
 use cap_std::fs::OpenOptions;
+use std::ffi::OsString;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
@@ -207,6 +209,7 @@ impl ScopedFiles {
         path: &Path,
         content: &[u8],
         maximum_bytes: usize,
+        publication: WritePublication,
     ) -> Result<FileMetadata, FileSystemError> {
         if content.len() > maximum_bytes {
             return Err(FileSystemError::WriteLimitExceeded { maximum_bytes });
@@ -246,8 +249,17 @@ impl ScopedFiles {
             existing_metadata
                 .as_ref()
                 .map(cap_std::fs::Metadata::permissions),
+            publication,
         )
-        .map_err(io_error)?;
+        .map_err(|error| match (publication, error.kind()) {
+            (WritePublication::Create, std::io::ErrorKind::AlreadyExists) => {
+                FileSystemError::AlreadyExists(path.to_path_buf())
+            }
+            (WritePublication::MissingOrEmpty, std::io::ErrorKind::AlreadyExists) => {
+                FileSystemError::RevisionConflict(path.to_path_buf())
+            }
+            _ => io_error(error),
+        })?;
         metadata(self.handle(), &resolved)
     }
 }
@@ -281,7 +293,7 @@ impl ScopedFiles {
             .directory()
             .lock_writes()
             .map_err(|_| FileSystemError::Io("directory write lock is poisoned".into()))?;
-        self.write_file_inner(path, content, maximum_bytes)
+        self.write_file_inner(path, content, maximum_bytes, WritePublication::Replace)
     }
 
     fn read_file_with_revision(
@@ -308,13 +320,18 @@ impl ScopedFiles {
             .directory()
             .lock_writes()
             .map_err(|_| FileSystemError::Io("directory write lock is poisoned".into()))?;
-        if let FileWriteCondition::ExpectedRevision(expected) = condition {
-            let current = self.read_file(path, maximum_bytes)?;
-            if file_revision(&current) != *expected {
-                return Err(FileSystemError::RevisionConflict(path.to_path_buf()));
+        let publication = match condition {
+            FileWriteCondition::Unconditional => WritePublication::Replace,
+            FileWriteCondition::ExpectedRevision(expected) => {
+                let current = self.read_file(path, maximum_bytes)?;
+                if file_revision(&current) != *expected {
+                    return Err(FileSystemError::RevisionConflict(path.to_path_buf()));
+                }
+                WritePublication::Replace
             }
-        }
-        self.write_file_inner(path, content, maximum_bytes)
+            FileWriteCondition::MissingOrEmpty => WritePublication::MissingOrEmpty,
+        };
+        self.write_file_inner(path, content, maximum_bytes, publication)
     }
 
     fn get_metadata(&self, path: &Path) -> Result<FileMetadata, FileSystemError> {
@@ -361,10 +378,25 @@ impl ScopedFiles {
                     Err(FileSystemError::AlreadyExists(path.to_path_buf()))
                 }
                 ExistingTargetBehavior::Ignore => metadata(self.handle(), &resolved),
-                ExistingTargetBehavior::Overwrite => self.write_file_inner(path, &[], 1),
+                ExistingTargetBehavior::Overwrite => {
+                    self.write_file_inner(path, &[], 1, WritePublication::Replace)
+                }
             };
         }
-        self.write_file_inner(path, &[], 1)
+        let publication = match existing {
+            ExistingTargetBehavior::Overwrite => WritePublication::Replace,
+            ExistingTargetBehavior::Error | ExistingTargetBehavior::Ignore => {
+                WritePublication::Create
+            }
+        };
+        match self.write_file_inner(path, &[], 1, publication) {
+            Err(FileSystemError::AlreadyExists(_))
+                if existing == ExistingTargetBehavior::Ignore =>
+            {
+                metadata(self.handle(), &resolved)
+            }
+            result => result,
+        }
     }
 
     fn rename(
@@ -481,51 +513,133 @@ fn remove_resource(
     }
 }
 
+#[derive(Clone, Copy)]
+enum WritePublication {
+    Replace,
+    Create,
+    MissingOrEmpty,
+}
+
+struct PreparedWrite<'a> {
+    parent: Directory,
+    target: OsString,
+    temporary: String,
+    content: &'a [u8],
+    remove_temporary_on_drop: bool,
+}
+
+impl<'a> PreparedWrite<'a> {
+    fn new(
+        root: &Directory,
+        target: &Path,
+        content: &'a [u8],
+        permissions: Option<cap_std::fs::Permissions>,
+    ) -> std::io::Result<Self> {
+        let parent = target
+            .parent()
+            .ok_or_else(|| std::io::Error::other("write target has no parent"))?;
+        let parent = root.open_dir(if parent.as_os_str().is_empty() {
+            Path::new(".")
+        } else {
+            parent
+        })?;
+        let target = target
+            .file_name()
+            .ok_or_else(|| std::io::Error::other("write target has no file name"))?
+            .to_os_string();
+        static SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let (temporary, mut file) = loop {
+            let name = format!(
+                ".ash-write-{}-{}",
+                std::process::id(),
+                SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+            );
+            match parent.open_with(&name, OpenOptions::new().write(true).create_new(true)) {
+                Ok(file) => break (name, file),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) => return Err(error),
+            }
+        };
+        let result = (|| {
+            file.write_all(content)?;
+            if let Some(permissions) = permissions {
+                file.set_permissions(permissions)?;
+            }
+            file.sync_all()
+        })();
+        if let Err(error) = result {
+            let _ = parent.remove_file(&temporary);
+            return Err(error);
+        }
+        Ok(Self {
+            parent,
+            target,
+            temporary,
+            content,
+            remove_temporary_on_drop: true,
+        })
+    }
+
+    fn publish(mut self, publication: WritePublication) -> std::io::Result<()> {
+        match publication {
+            WritePublication::Replace => {
+                self.parent
+                    .rename(&self.temporary, &self.parent, &self.target)?;
+                self.remove_temporary_on_drop = false;
+            }
+            WritePublication::Create => {
+                self.parent
+                    .hard_link(&self.temporary, &self.parent, &self.target)?;
+                self.parent.remove_file(&self.temporary)?;
+                self.remove_temporary_on_drop = false;
+            }
+            WritePublication::MissingOrEmpty => {
+                match self
+                    .parent
+                    .hard_link(&self.temporary, &self.parent, &self.target)
+                {
+                    Ok(()) => {}
+                    Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                        let mut existing = self
+                            .parent
+                            .open_with(&self.target, OpenOptions::new().append(true))?;
+                        if existing.metadata()?.len() != 0
+                            || FileInformation::from_file(&existing.try_clone()?.into_std())?
+                                .has_multiple_links()
+                        {
+                            return Err(error);
+                        }
+                        existing.write_all(self.content)?;
+                        existing.sync_all()?;
+                    }
+                    Err(error) => return Err(error),
+                }
+                self.parent.remove_file(&self.temporary)?;
+                self.remove_temporary_on_drop = false;
+            }
+        }
+        #[cfg(unix)]
+        self.parent.try_clone()?.into_std_file().sync_all()?;
+        Ok(())
+    }
+}
+
+impl Drop for PreparedWrite<'_> {
+    fn drop(&mut self) {
+        if self.remove_temporary_on_drop {
+            let _ = self.parent.remove_file(&self.temporary);
+        }
+    }
+}
+
 fn atomic_write(
     root: &Directory,
     target: &Path,
     content: &[u8],
     permissions: Option<cap_std::fs::Permissions>,
+    publication: WritePublication,
 ) -> std::io::Result<()> {
-    let parent = target
-        .parent()
-        .ok_or_else(|| std::io::Error::other("write target has no parent"))?;
-    let parent = root.open_dir(if parent.as_os_str().is_empty() {
-        Path::new(".")
-    } else {
-        parent
-    })?;
-    let target = target
-        .file_name()
-        .ok_or_else(|| std::io::Error::other("write target has no file name"))?;
-    static SEQUENCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let (name, mut temporary) = loop {
-        let name = format!(
-            ".ash-write-{}-{}",
-            std::process::id(),
-            SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-        );
-        match parent.open_with(&name, OpenOptions::new().write(true).create_new(true)) {
-            Ok(file) => break (name, file),
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(error) => return Err(error),
-        }
-    };
-    let result = (|| {
-        temporary.write_all(content)?;
-        if let Some(permissions) = permissions {
-            temporary.set_permissions(permissions)?;
-        }
-        temporary.sync_all()?;
-        parent.rename(&name, &parent, target)?;
-        #[cfg(unix)]
-        parent.try_clone()?.into_std_file().sync_all()?;
-        Ok(())
-    })();
-    if result.is_err() {
-        let _ = parent.remove_file(&name);
-    }
-    result
+    PreparedWrite::new(root, target, content, permissions)?.publish(publication)
 }
 
 fn metadata(dir: &Directory, path: &Path) -> Result<FileMetadata, FileSystemError> {

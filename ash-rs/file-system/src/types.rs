@@ -28,6 +28,8 @@ pub struct FileContent {
 pub enum FileWriteCondition {
     Unconditional,
     ExpectedRevision(String),
+    /// Publish only to a missing or empty file without replacing an intervening writer's bytes.
+    MissingOrEmpty,
 }
 
 /// Behavior when a create or rename target already exists.

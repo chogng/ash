@@ -14,6 +14,7 @@ path = "src/lib.rs"
 cap-std = { workspace = true }
 sha2 = { workspace = true }
 ash-file-access = { workspace = true }
+ash-file-identity = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

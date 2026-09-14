@@ -1288,6 +1288,7 @@ name = "ash-file-system"
 version = "0.1.0"
 dependencies = [
  "ash-file-access",
+ "ash-file-identity",
  "cap-std",
  "sha2 0.10.9",
  "tempfile",
