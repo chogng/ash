@@ -150,6 +150,7 @@ members = [
     "ash-rs/utils/path-utils",
     "ash-rs/utils/pdf",
     "ash-rs/utils/pty",
+    "ash-rs/utils/sleep-inhibitor",
     "ash-rs/utils/stream-parser",
     "ash-rs/utils/template",
     "ash-rs/utils/typst",
@@ -529,6 +530,7 @@ ash-utils-template = { path = "ash-rs/utils/template" }
 ash-pdf = { path = "ash-rs/utils/pdf" }
 ash-typst = { path = "ash-rs/utils/typst" }
 ash-utils-pty = { path = "ash-rs/utils/pty" }
+sleep_inhibitor = { package = "ash-utils-sleep-inhibitor", path = "ash-rs/utils/sleep-inhibitor" }
 ash-file-access = { path = "ash-rs/file-access" }
 worktree = { path = "ash-rs/worktree" }
 ash-user-verification = { path = "ash-rs/user-verification" }

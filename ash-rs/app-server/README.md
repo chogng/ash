@@ -6,6 +6,7 @@
 2. 通过 `core-api::AgentRuntime` 调用 Agent 操作；Core 负责执行、重试、取消和恢复。
 3. 在文件、搜索、Git、Terminal、语言服务和目录贡献入口校验 Permission，传递有效授权。
 4. 组合 profile 配置、环境服务与 Core 实现；目录贡献只在获得对应授权后生效。
+5. 在 Agent、Shell 和上下文压缩执行期间持有空闲防休眠租约，同一进程内的目录服务共享系统资源。
 
 连接建立、鉴权和消息队列由 `ash-app-server-transport` 负责。Core 契约和装配边界见
 [`Core 架构`](../../docs/core.md#7-依赖边界)。
@@ -21,6 +22,10 @@ just test ash-app-server
 ```
 
 ## 执行环境
+
+- Core 执行作用域结束时释放防休眠租约，包括完成、失败、中断及让出执行的审批或能力等待；恢复执行时重新获取。
+- 工具内部的同步交互等待仍保留执行作用域，期间可能还有正在运行的命令；空闲连接和持久化的未完成任务不持有租约。
+- 防休眠能力由 [sleep-inhibitor](../utils/sleep-inhibitor/README.md) 提供；系统拒绝获取时记录警告，任务按正常执行规则继续。
 
 - `ASH_EXEC_ENVIRONMENTS` 指定宿主配置的执行环境列表，格式见 [exec-server](../exec-server/README.md)。
 - Core 审批后调用显式选定的环境，执行结果仍写回当前 Thread。
@@ -47,3 +52,10 @@ just test ash-app-server
 - `src/managed/registry.rs` 拥有目录服务组合，以及共享队列与自动化运行。
 - 先取得 profile 端点，再启动后台工作，避免并发启动重复运行任务。
 - daemon crate 提供进程管理和控制端点机制，App Server 依赖它；依赖方向保持单向。
+
+## Agent grep
+
+- `AgentGrepBackend::FastRegex` 使用 [`fast-regex-search`](../fast-regex-search/README.md) 的目录索引与私有 worker，最多返回 100 个匹配行；编辑器搜索独立使用 Content Search。
+- 目录 watcher 的路径事件发布增量，重扫事件核对文件集合；查询只覆盖已处理更新的索引版本。空结果标明异步更新边界，不能当作最新磁盘内容不存在的证明。
+- 索引容量不足或遍历失败返回工具失败；不会把未覆盖的文件默认为无匹配。候选内容变更触发一次更新重试。
+- 验证命令：`just test ash-app-server --lib agent_grep`。

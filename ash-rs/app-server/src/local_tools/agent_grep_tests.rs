@@ -258,3 +258,65 @@ fn ripgrep_backend_executes_the_frozen_binary_without_creating_an_index() {
     assert!(!service.watches_fast_regex());
     assert!(!service.has_active_index(&root));
 }
+
+#[test]
+fn fast_regex_worker_preserves_unicode_case_matches_and_qualifies_empty_results() {
+    let (directory, root, resolved) = dir_fixture();
+    fs::write(directory.path().join("unicode.txt"), "Kelvin\n").unwrap();
+    fs::write(directory.path().join("ascii.txt"), "Kelvin\n").unwrap();
+    let storage = tempfile::tempdir().unwrap();
+    let binary = worker_binary();
+    let service = AgentGrepService::new_with_worker(
+        AgentGrepBackend::FastRegex,
+        RipgrepExecutable::from_path(std::env::current_exe().unwrap()).unwrap(),
+        Arc::new(ash_state::StateRuntime::open(storage.path()).unwrap()),
+        FastRegexWorkerCommand::new(binary.executable(), binary.arguments()),
+    );
+    let cancellation = ash_async_utils::CancellationSource::new();
+    let output = service
+        .execute(
+            ".*kelvin.*".into(),
+            &resolved,
+            None,
+            true,
+            &cancellation.token(),
+        )
+        .unwrap();
+    let ToolExecutionOutput::Success(text) = output else {
+        panic!("search failed: {output:?}")
+    };
+    assert!(text.contains("unicode.txt:1:Kelvin"));
+    assert!(text.contains("ascii.txt:1:Kelvin"));
+    let changed = directory.path().join("new.txt");
+    fs::write(&changed, "newly_written_marker\n").unwrap();
+    let pending = service
+        .execute(
+            "newly_written_marker".into(),
+            &resolved,
+            None,
+            false,
+            &cancellation.token(),
+        )
+        .unwrap();
+    assert!(
+        matches!(pending, ToolExecutionOutput::Success(text) if text.contains("no matches in indexed files") && text.contains("asynchronously"))
+    );
+    service.apply_watcher_event(
+        &root,
+        &FileWatcherEvent::PathsChanged {
+            paths: vec![changed],
+        },
+    );
+    let current = service
+        .execute(
+            "newly_written_marker".into(),
+            &resolved,
+            None,
+            false,
+            &cancellation.token(),
+        )
+        .unwrap();
+    assert!(
+        matches!(current, ToolExecutionOutput::Success(text) if text.contains("new.txt:1:newly_written_marker"))
+    );
+}

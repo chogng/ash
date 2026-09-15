@@ -484,6 +484,7 @@ impl AppServer {
             Arc::new(BrowserToolPolicy),
         );
         let turn_executor = TurnExecutor::without_tools(threads.clone(), model.clone())
+            .with_execution_activity(runtime_extensions::ExecutionActivity::shared())
             .with_thread_updates(Arc::new(AppServerThreadUpdates {
                 threads: Arc::clone(&threads),
                 updates: updates.clone(),

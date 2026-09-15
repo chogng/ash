@@ -96,6 +96,9 @@ use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 
+#[path = "activity_tests.rs"]
+mod activity_tests;
+
 #[test]
 fn completes_a_text_turn_from_durable_context() {
     let (threads, thread_id, turn_id) = started_turn();
@@ -2149,10 +2152,13 @@ fn per_thread_mailboxes_run_independently_and_interrupt_the_active_turn() {
         .unwrap()
         .turn_id;
     let model = Arc::new(BlockingFirstModel::default());
-    let executor = TurnExecutor::without_tools(threads.clone(), model.clone());
+    let activity = Arc::new(activity_tests::Activity::default());
+    let executor = TurnExecutor::without_tools(threads.clone(), model.clone())
+        .with_execution_activity(activity.clone());
 
     executor.start(&slow_thread_id, &slow_turn_id).unwrap();
     model.wait_until_slow_invocation_enters();
+    activity.assert_active(1);
     executor.start(&fast_thread_id, &fast_turn_id).unwrap();
     wait_for_turn_status(
         &threads,
@@ -2160,6 +2166,8 @@ fn per_thread_mailboxes_run_independently_and_interrupt_the_active_turn() {
         &fast_turn_id,
         TurnStatus::Completed,
     );
+    activity.wait_released(1);
+    activity.assert_active(1);
 
     threads
         .interrupt_turn(
@@ -2179,6 +2187,8 @@ fn per_thread_mailboxes_run_independently_and_interrupt_the_active_turn() {
     );
 
     wait_for_flag(&model.slow_was_cancelled, "slow model was not cancelled");
+    activity.wait_released(2);
+    activity.assert_active(0);
 }
 
 #[test]

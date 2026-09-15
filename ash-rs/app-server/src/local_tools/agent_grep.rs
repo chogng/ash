@@ -1,19 +1,7 @@
 use super::suite::ResolvedFilePath;
 use super::suite::limit_matches;
-use std::collections::BTreeMap;
-use std::path::PathBuf;
-use std::process::Command;
-use std::process::Output;
-use std::process::Stdio;
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
-use std::time::Duration;
-use std::time::Instant;
 use ash_async_utils::CancellationToken;
 use ash_config::AgentGrepBackend;
-use core_api::CoreError;
 use ash_core::ToolExecutionOutput;
 use ash_fast_regex_search::FastRegexCaseSensitivity;
 use ash_fast_regex_search::FastRegexError;
@@ -34,6 +22,18 @@ use ash_shell_command::RipgrepExecutable;
 use ash_state::DirIndexKind;
 use ash_state::DirIndexLease;
 use ash_state::StateRuntime;
+use core_api::CoreError;
+use std::collections::BTreeMap;
+use std::path::PathBuf;
+use std::process::Command;
+use std::process::Output;
+use std::process::Stdio;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
+use std::time::Instant;
 
 const SEARCH_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_AGENT_MATCHES: usize = 100;
@@ -299,7 +299,10 @@ impl AgentGrepService {
             .check()
             .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
         if result.matches.is_empty() {
-            return Ok(ToolExecutionOutput::Success("no matches".into()));
+            return Ok(ToolExecutionOutput::Success(format!(
+                "no matches in indexed files (generation {}; filesystem updates are applied asynchronously)",
+                result.statistics.generation,
+            )));
         }
         let limit_hit = result.limit_hit;
         let output = result

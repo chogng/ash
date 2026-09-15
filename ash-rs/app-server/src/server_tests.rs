@@ -1,5 +1,9 @@
 use super::*;
 
+#[cfg(target_os = "macos")]
+#[path = "sleep_tests.rs"]
+mod sleep_tests;
+
 #[path = "checkpoint_live_tests.rs"]
 mod checkpoint_live_tests;
 

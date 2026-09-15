@@ -91,6 +91,7 @@ pub struct TurnExecutor {
     context_sources: std::collections::BTreeMap<&'static str, Arc<dyn crate::ContextSource>>,
     hooks: Arc<dyn HookService>,
     execution_observer: Arc<dyn TurnExecutionObserver>,
+    activity: Option<Arc<dyn core_api::TurnExecutionActivity>>,
     extensions: Arc<ash_extension_api::ExtensionRegistry>,
     code_mode: CodeModeBroker,
 }
@@ -236,6 +237,7 @@ impl TurnExecutor {
             context_sources: std::collections::BTreeMap::new(),
             hooks: Arc::new(NoHooks),
             execution_observer: Arc::new(crate::NoTurnExecutionObserver),
+            activity: None,
             extensions: Arc::new(ash_extension_api::ExtensionRegistry::default()),
             code_mode,
         }
@@ -322,6 +324,15 @@ impl TurnExecutor {
     /// Installs the host-owned durable change checkpoint observer.
     pub fn with_execution_observer(mut self, observer: Arc<dyn TurnExecutionObserver>) -> Self {
         self.execution_observer = observer;
+        self
+    }
+
+    /// Installs host resources scoped to execution, including resumed and Shell Turns.
+    pub fn with_execution_activity(
+        mut self,
+        activity: Arc<dyn core_api::TurnExecutionActivity>,
+    ) -> Self {
+        self.activity = Some(activity);
         self
     }
 
@@ -459,6 +470,7 @@ impl TurnExecutor {
         turn_id: &TurnId,
         cancellation: &CancellationToken,
     ) -> Result<TurnExecutionOutcome, CoreError> {
+        let _activity = self.activity.as_ref().and_then(|activity| activity.enter());
         let sequence_before_execution = self
             .threads
             .read_thread(thread_id)
@@ -590,6 +602,7 @@ impl TurnExecutor {
         turn_id: &TurnId,
         cancellation: &CancellationToken,
     ) -> Result<TurnExecutionOutcome, CoreError> {
+        let _activity = self.activity.as_ref().and_then(|activity| activity.enter());
         let sequence_before_execution = self
             .threads
             .read_thread(thread_id)

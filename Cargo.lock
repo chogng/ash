@@ -582,6 +582,7 @@ dependencies = [
  "ash-uds",
  "ash-utils-absolute-path",
  "ash-utils-home-dir",
+ "ash-utils-sleep-inhibitor",
  "ash-web-search-extension",
  "ash-windows-sandbox",
  "base64 0.22.1",
@@ -2670,6 +2671,16 @@ dependencies = [
  "shared_library",
  "tokio",
  "winapi",
+]
+
+[[package]]
+name = "ash-utils-sleep-inhibitor"
+version = "0.1.0"
+dependencies = [
+ "core-foundation 0.10.1",
+ "log",
+ "windows-sys 0.59.0",
+ "zbus 5.19.0",
 ]
 
 [[package]]
