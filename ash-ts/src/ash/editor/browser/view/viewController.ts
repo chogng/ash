@@ -2,7 +2,7 @@ import { type IKeyboardEvent } from '../../../base/browser/keyboardEvent.js';
 import { type IMouseWheelEvent } from '../../../base/browser/mouseEvent.js';
 import { addDisposableListener } from '../../../base/browser/dom.js';
 import { Emitter, type Event } from '../../../base/common/event.js';
-import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { isLinux, operatingSystem, OperatingSystem } from '../../../base/common/platform.js';
 import { ReplaceCommand } from '../../common/commands/replaceCommand.js';
 import { EditorLineWrapping, EditorOption } from '../../common/config/editorOptions.js';
@@ -10,7 +10,6 @@ import { ColumnSelection } from '../../common/cursor/cursorColumnSelection.js';
 import { CursorMove, CursorMoveCommands } from '../../common/cursor/cursorMoveCommands.js';
 import { DeleteOperations } from '../../common/cursor/cursorDeleteOperations.js';
 import { type DeleteWordContext, WordNavigationType, WordOperations } from '../../common/cursor/cursorWordOperations.js';
-import { type CursorsController } from '../../common/cursor/cursor.js';
 import { CursorChangeReason } from '../../common/cursorEvents.js';
 import { CursorState, EditOperationType, SelectionStartKind, SingleCursorState } from '../../common/cursorCommon.js';
 import { TypeOperations } from '../../common/cursor/cursorTypeOperations.js';
@@ -19,10 +18,6 @@ import { Position } from '../../common/core/position.js';
 import { Range } from '../../common/core/range.js';
 import { getMapForWordSeparators } from '../../common/core/wordCharacterClassifier.js';
 import { type TextModelChange } from '../../common/core/textChange.js';
-import { resolveEditorIndentationOptions, type EditorIndentationOptions } from '../../common/core/misc/indentation.js';
-import { type ILanguageConfigurationService } from '../../common/languages/languageConfigurationRegistry.js';
-import { type LanguageLexicalContextSource, LanguageLexicalContextIndex } from '../../common/languages/languageLexicalContext.js';
-import { assertLanguageId } from '../../common/languages/languageId.js';
 import { type TextModel } from '../../common/model/textModel.js';
 import { EditorCursorNavigationCommand, EditorCursorNavigationMode, navigateStanzaVisualCursors } from '../../common/viewModel/visualCursorNavigation.js';
 import { type IViewModel } from '../../common/viewModel.js';
@@ -37,21 +32,7 @@ import { type IEditorMouseEvent, type IPartialEditorMouseEvent } from '../editor
 import { type BracketColorizationSource, type SemanticTokenSource } from '../viewParts/viewLines/viewLine.js';
 import { type ILogService } from '../../../platform/log/common/log.js';
 import { type ICommand } from '../../common/editorCommon.js';
-import { type EditOperationResult } from '../../common/cursorCommon.js';
 import { InputMode } from '../../common/inputMode.js';
-
-export interface EditorLanguageTypeCommand {
-	readonly command: EditOperationResult;
-	readonly insertedText: boolean;
-	afterExecute?(change: TextModelChange): void;
-}
-
-/** Optional language-aware editing seam implemented by editor contributions. */
-export interface EditorLanguageEditingAdapter extends IDisposable {
-	readonly textModel: TextModel;
-	createTypeCommand(selections: readonly Selection[], text: string): EditorLanguageTypeCommand | undefined;
-	createEnterCommand(selections: readonly Selection[]): EditOperationResult | undefined;
-}
 
 /** A native text update that can be consumed by an editor contribution before model routing. */
 export interface EditorViewTextUpdateEvent extends EditContextTextUpdate {
@@ -73,7 +54,6 @@ export interface ViewControllerOptions {
 	readonly accessibilityService?: IAccessibilityService;
 	readonly semanticTokenSource?: SemanticTokenSource;
 	readonly bracketColorizationSource?: BracketColorizationSource;
-	readonly languageEditing?: EditorLanguageEditingAdapter;
 	readonly userInputEvents?: ViewUserInputEvents;
 }
 
@@ -118,7 +98,6 @@ interface MouseSelectionState {
 export class ViewController extends Disposable {
 	private readonly didChangeOvertypeEmitter = this._register(new Emitter<boolean>());
 	private readonly didEditEmitter = this._register(new Emitter<EditorViewDidEditEvent>());
-	private readonly languageEditing: EditorLanguageEditingAdapter | undefined;
 	readonly userInputEvents: ViewUserInputEvents;
 	readonly ownerId: string;
 	readonly editContext: AbstractEditContext;
@@ -142,10 +121,6 @@ export class ViewController extends Disposable {
 	) {
 		super();
 		try {
-			if (options.languageEditing && options.languageEditing.textModel !== viewport.textModel) {
-				throw new TypeError('Stanza view language editing must share its text model');
-			}
-			this.languageEditing = options.languageEditing;
 			this.userInputEvents = options.userInputEvents ?? new ViewUserInputEvents(viewport.coordinatesConverter);
 			this.ownerId = options.ownerId === undefined ? nextViewId() : validateOwnerId(options.ownerId);
 			this.editContext = createEditContext(this);
@@ -616,44 +591,6 @@ function nextViewId(): string { return `ash-editor-view-${viewId++}`; }
 function validateOwnerId(value: string): string {
 	if (typeof value !== 'string' || value.trim().length === 0) throw new TypeError('Editor view ownerId must be a non-empty string');
 	return value;
-}
-
-/** Browser input adapter for DOM-free language editing commands. */
-export class LanguageEditingAdapter extends Disposable implements EditorLanguageEditingAdapter {
-	private readonly lexicalContext: LanguageLexicalContextSource;
-
-	constructor(readonly textModel: TextModel, private readonly selections: CursorsController, private readonly languageId: string, private readonly configurations: ILanguageConfigurationService, lexicalContext: LanguageLexicalContextSource | undefined = undefined, private readonly indentation: EditorIndentationOptions | undefined = undefined) {
-		super();
-		assertLanguageId(languageId);
-		if (!configurations || typeof configurations.getLanguageConfiguration !== "function") throw new TypeError("Stanza text input language requires a configuration source");
-		resolveEditorIndentationOptions(indentation);
-		if (lexicalContext && (lexicalContext.textModel !== textModel || lexicalContext.languageId !== languageId)) throw new TypeError("Stanza text input lexical context must match its model and language");
-		this.lexicalContext = lexicalContext ?? this._register(new LanguageLexicalContextIndex(textModel, languageId, configurations));
-	}
-
-	createTypeCommand(selections: readonly Selection[], text: string): EditorLanguageTypeCommand | undefined {
-		const result = TypeOperations.typeWithInterceptors(
-			false,
-			this.selections.getPrevEditOperationType(),
-			this.selections.context.cursorConfig,
-			this.textModel,
-			[...selections],
-			[...this.selections.getAutoClosedCharacters()],
-			text,
-		);
-		return Object.freeze({
-			command: result,
-			insertedText: true,
-		});
-	}
-
-	createEnterCommand(selections: readonly Selection[]): EditOperationResult {
-		return TypeOperations.typeWithInterceptors(false, this.selections.getPrevEditOperationType(), this.selections.context.cursorConfig, this.textModel, [...selections], [...this.selections.getAutoClosedCharacters()], '\n');
-	}
-
-	private configurationAt(position: Position) {
-		return this.configurations.getLanguageConfiguration(this.lexicalContext.getLanguageIdAt(position));
-	}
 }
 
 function createDeleteToLineBoundaryCommands(model: TextModel, selections: readonly Selection[], boundary: 'start' | 'end'): Array<ICommand | null> {

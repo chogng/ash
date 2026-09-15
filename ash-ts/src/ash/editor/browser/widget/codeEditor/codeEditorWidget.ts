@@ -29,7 +29,6 @@ import { EditorWorkerRequestExecutor } from '../../../common/services/editorWork
 import { ILanguageConfigurationService } from '../../../common/languages/languageConfigurationRegistry.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { ResolvedSemanticTokensService } from '../../../common/services/resolvedSemanticTokensService.js';
-import { LanguageEditingAdapter } from '../../view/viewController.js';
 import { type EditorIndentationOptions } from '../../../common/core/misc/indentation.js';
 import { type ConfigurationChangedEvent, EditorLineWrapping, EditorOption, type EditorLayoutInfo, type FindComputedEditorOptionValueById, type IComputedEditorOptions, type IEditorOptions, WrappingIndent } from '../../../common/config/editorOptions.js';
 import { type LanguageCompletionWorkerFactory } from '../../../common/languages/completion/languageCompletionService.js';
@@ -37,7 +36,6 @@ import { type ILanguageDiagnosticsService } from '../../../common/services/langu
 import { isCompletionsEnablement, type CompletionsEnablement } from '../../../common/services/completionsEnablement.js';
 import { type LanguageLocation } from '../../../common/languages.js';
 import { type LanguageWorkspaceEdit } from '../../../common/languages/languageWorkspaceEdit.js';
-import { type LanguageLexicalContextSource } from '../../../common/languages/languageLexicalContext.js';
 import { type BracketColorizationSource, type SemanticTokenSource } from '../../viewParts/viewLines/viewLine.js';
 import { type EditorTextDirection, type EditorViewportPresentation } from '../../view.js';
 import { type IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
@@ -390,7 +388,6 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			const provideService = services.registerInstance.bind(services);
 			let semanticTokenSource: SemanticTokenSource | undefined;
 			let bracketColorizationSource: BracketColorizationSource | undefined;
-			let languageLexicalContext: LanguageLexicalContextSource | undefined;
 			const selectedContributions = options.contributions ?? EditorExtensionsRegistry.getEditorContributions();
 			this.contributions = modelStore.add(this.instantiationService.createInstance(CodeEditorContributions));
 			this.contributions.configure(selectedContributions, {
@@ -417,20 +414,8 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 					if (bracketColorizationSource) throw new Error('Text editor bracket-colorization source is already configured');
 					bracketColorizationSource = source;
 				},
-				setLanguageLexicalContext: source => {
-					if (languageLexicalContext) throw new Error('Text editor lexical context is already configured');
-					languageLexicalContext = source;
-				},
 				register: value => modelStore.add(value),
 			});
-			const languageEditing = modelStore.add(new LanguageEditingAdapter(
-				options.model,
-				this.selections,
-				options.languageId,
-				languageConfigurationService,
-				languageLexicalContext,
-				options.indentation,
-			));
 			this.view = modelStore.add(new View({
 				container: options.container,
 				rootDomNode: this.rootDomNode,
@@ -451,7 +436,6 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 					accessibilityService: options.accessibilityService,
 					semanticTokenSource,
 					bracketColorizationSource,
-					languageEditing,
 				},
 			}));
 			modelStore.add(this.view.onDidChangeLayout(() => this.layoutChangeEmitter.fire(this.getLayoutInfo())));

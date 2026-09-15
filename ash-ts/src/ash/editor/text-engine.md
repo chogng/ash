@@ -175,7 +175,7 @@ Textarea 和 EditContext 都把 Enter、删除及文本变化送到同一个 `Vi
 
 复制、剪切和粘贴的 DOM 事件由当前聚焦的 TextArea 或 EditContext owner 消费；失焦节点不读取旧选区，也不提交编辑。Web EditContext 的键盘快捷键由 `clipboard.ts` 的编辑器贡献送入同一组剪贴板操作；浏览器未发出剪切事件时，命令先完成系统剪贴板写入再删除选区。命令式剪切和粘贴跨越异步边界后核对焦点、模型身份、版本和选区，只有原编辑意图仍对应当前编辑器状态时才提交。
 
-- `EditorInputContext`：browser input contract；`BrowserEditContext` 使用浏览器 EditContext，`EditorTextAreaInputContext` 是 textarea 实现；每个具体 edit context 拥有自己的 DOM、focus/ARIA、screen-reader support、`CompositionController` 和 browser event 路由，`ViewController` 选择并暴露这份契约、执行 common command，suggest widget 通过 `ViewController.setAriaOptions` 管理 completion 的 active descendant；language-aware typing 通过显式 `EditorLanguageEditingAdapter` 注入。
+- `EditorInputContext`：browser input contract；`BrowserEditContext` 使用浏览器 EditContext，`EditorTextAreaInputContext` 是 textarea 实现；每个具体 edit context 拥有自己的 DOM、focus/ARIA、screen-reader support、`CompositionController` 和 browser event 路由，`ViewController` 选择并暴露这份契约、执行 common command，suggest widget 通过 `ViewController.setAriaOptions` 管理 completion 的 active descendant；语言输入与回车通过 `IViewModel.type` 交给 `CursorsController` 和 `TypeOperations`，由 common 层管理编辑状态。
 - `CompositionController`：浏览器 composition sequence 与 common composition session 的适配。
 - `KeyboardNavigationController`：把平台 chord 转成 `CursorMoveCommands` 使用的无 DOM 移动参数，并保留连续垂直移动的期望列。
 - `editorDom.ts`：页面、客户区、编辑器相对坐标和可释放 mouse/pointer 事件工厂的 browser owner。

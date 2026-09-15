@@ -8,11 +8,9 @@ import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { LanguageFeatureRegistry } from '../../../../common/languageFeatureRegistry.js';
-import { registerBuiltinLanguageConfigurations } from '../../../../common/languages/languageBuiltinConfigurations.js';
 import { type LinkedEditingRangeProvider } from '../../../../common/languages.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { type TextMeasurer } from '../../../../common/viewModel/textMeasurer.js';
-import { TestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
 import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 import { type ICodeEditor } from '../../../../browser/editorBrowser.js';
 import { type ICommand } from '../../../../common/editorCommon.js';
@@ -32,7 +30,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { TestView: View } = await import('../../../../test/browser/viewModel/testViewModel.js');
-const { LanguageEditingAdapter, ViewController } = await import('../../../../browser/view/viewController.js');
+const { ViewController } = await import('../../../../browser/view/viewController.js');
 const { LinkedEditingContribution } = await import('../../browser/linkedEditing.js');
 
 suiteTeardown(() => browserEnvironment.window.close());
@@ -97,16 +95,12 @@ function createFixture(provider: LinkedEditingRangeProvider): Fixture {
 	const registration = registry.register('html', provider);
 	const model = new TextModel('tag tag', { languageId: 'html' });
 	const selections = createTestCursorsController(model, [Selection.fromPositions(new Position(1, 2))]);
-	const configurations = new TestLanguageConfigurationService();
-	const builtinConfigurations = registerBuiltinLanguageConfigurations(configurations);
-	const languageEditing = new LanguageEditingAdapter(model, selections, 'html', configurations);
 	const viewport = new View({
 		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
 		model,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
-		controller: { languageEditing },
 	});
 	viewport.layout({ width: 300, height: 40 });
 	const input = viewport.controller;
@@ -120,13 +114,10 @@ function createFixture(provider: LinkedEditingRangeProvider): Fixture {
 		selections,
 		[Symbol.dispose](): void {
 			contribution.dispose();
-			languageEditing.dispose();
 			viewport.dispose();
 			selections.dispose();
 			model.dispose();
 			registration.dispose();
-			builtinConfigurations.dispose();
-			configurations.dispose();
 			dom.window.close();
 		},
 	};

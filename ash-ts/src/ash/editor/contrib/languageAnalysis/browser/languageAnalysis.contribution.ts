@@ -17,6 +17,5 @@ registerEditorContribution({
 		const diagnostics = context.register(new LanguageDiagnosticDecorationBridge(syntax.diagnostics, languageDiagnostics, context.options.input.resource, context.renderDiagnosticDecorations));
 		context.provideService(TextEditorCapability.languageLexicalContext, lexicalContext);
 		context.provideService(TextEditorCapability.diagnosticDecorations, diagnostics.decorations);
-		context.setLanguageLexicalContext(lexicalContext);
 	},
 });
