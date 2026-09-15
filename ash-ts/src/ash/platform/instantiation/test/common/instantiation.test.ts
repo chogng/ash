@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "mocha";
 import {
 	createServiceIdentifier,
+	createDecorator,
+	IInstantiationService,
 	ServiceCollection,
 	ServiceContainer,
 	ServiceConstructionDescriptor,
@@ -9,6 +11,56 @@ import {
 } from "../../../../platform/instantiation/common/instantiation.js";
 import { getSingletonServiceDescriptors, InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { Disposable } from "../../../../base/common/lifecycle.js";
+
+test('constructor services resolve from the creating scope after explicit arguments', () => {
+	const IMessage = createDecorator<string>('test.constructor.message');
+	class Consumer {
+		constructor(
+			readonly label: string,
+			@IMessage readonly message: string,
+			@IInstantiationService readonly services: IInstantiationService,
+		) {}
+	}
+	using parent = new ServiceContainer();
+	parent.registerInstance(IMessage, 'parent');
+	using child = parent.createChild();
+	child.registerInstance(IMessage, 'child');
+	const instance = child.createInstance(Consumer, 'label');
+	assert.deepEqual([instance.label, instance.message, instance.services], ['label', 'child', child]);
+	assert.equal(parent.createInstance(new ServiceConstructionDescriptor(Consumer, { staticArguments: ['label'] })).message, 'parent');
+});
+
+test('constructor service metadata is inherited without changing the base class', () => {
+	const IMessage = createDecorator<string>('test.constructor.inheritance');
+	const IOther = createDecorator<string>('test.constructor.other');
+	class Base { constructor(@IMessage readonly message: string) {} }
+	class Inherited extends Base {}
+	class Overridden extends Base { constructor(@IOther message: string) { super(message); } }
+	using services = new ServiceContainer();
+	services.registerInstance(IMessage, 'base');
+	services.registerInstance(IOther, 'override');
+	assert.deepEqual([
+		services.createInstance(Base).message,
+		services.createInstance(Inherited).message,
+		services.createInstance(Overridden).message,
+		services.createInstance(Base).message,
+	], ['base', 'base', 'override', 'base']);
+});
+
+test('missing services and invalid constructor arguments fail before construction', () => {
+	const IMessage = createDecorator<string>('test.constructor.required');
+	let created = 0;
+	class Consumer {
+		constructor(label: string, @IMessage message: string) { created++; }
+	}
+	using services = new ServiceContainer();
+	assert.throws(() => services.createInstance(Consumer, 'label'), /Unknown service: test.constructor.required/);
+	services.registerInstance(IMessage, 'message');
+	assert.throws(() => services.createInstance(Consumer), /Invalid constructor arguments/);
+	assert.throws(() => services.createInstance(Consumer, 'label', 'override'), /Invalid constructor arguments/);
+	assert.throws(() => services.createInstance(new ServiceConstructionDescriptor(Consumer, { serviceDependencies: [IMessage] }), 'label'), /only in the constructor/);
+	assert.equal(created, 0);
+});
 
 test("instantiation resolves descriptor arguments in contract order", () => {
 	const serviceId = createServiceIdentifier<string>("test.message");

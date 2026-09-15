@@ -23,6 +23,7 @@ import { AccessibilitySupport, type IAccessibilityService } from '../../../../pl
 import { CursorChangeReason } from '../../../common/cursorEvents.js';
 import { ViewContext } from '../../../common/viewModel/viewContext.js';
 import { darkColorTheme } from '../../../../platform/theme/common/colorTheme.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 class TestResizeObserver {
@@ -1549,6 +1550,44 @@ test("CodeEditorWidget stages and owns per-instance contributions", () => {
 	editor.dispose();
 	assert.deepEqual(events, ["eager:create", "lazy:create", "lazy:dispose", "eager:dispose"]);
 	dom.window.close();
+});
+
+test('CodeEditorWidget injects scoped services into contributions and releases them on model detach', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using parent = new ServiceContainer();
+	using model = new TextModel('alpha');
+	const instances: Contribution[] = [];
+	class Contribution extends Disposable {
+		constructor(readonly editor: ICodeEditor, @IInstantiationService readonly services: IInstantiationService) {
+			super();
+			instances.push(this);
+		}
+	}
+	try {
+		using editor = new CodeEditorWidget({
+			container: requiredElement(dom.window.document, 'main'),
+			model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20,
+			instantiationService: parent,
+			contributions: [{ id: 'test.injected', ctor: Contribution, instantiation: EditorContributionInstantiation.Eager }],
+		});
+		assert.equal(instances.length, 1);
+		assert.equal(instances[0].editor, editor);
+		assert.notEqual(instances[0].services, parent);
+		assert.equal(instances[0].services, editor.invokeWithinContext(accessor => accessor.get(IInstantiationService)));
+		editor.setModel(null);
+		assert.equal(instances[0].isDisposed, true);
+		assert.throws(() => instances[0].services.get(IInstantiationService), /disposed/i);
+		editor.setModel(model);
+		assert.equal(instances.length, 2);
+		assert.equal(instances[1].isDisposed, false);
+		assert.notEqual(instances[1].services, instances[0].services);
+		assert.equal(instances[1].services, editor.invokeWithinContext(accessor => accessor.get(IInstantiationService)));
+	} finally {
+		dom.window.close();
+	}
+	assert.equal(instances[1].isDisposed, true);
+	assert.equal(parent.isDisposed, false);
 });
 
 test("CodeEditorWidget creates one selection controller for its model", () => {

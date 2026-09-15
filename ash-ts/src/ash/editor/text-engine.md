@@ -273,4 +273,6 @@ Editor contract 使用领域类型；generated DTO 和 transport error 在 runti
 - 创建配置保留显式 `wordWrap`。滚动接口把 `ScrollType` 交给同一 ViewLayout，动画查询读取其实际状态；View 忽略自身同步 DOM 位置产生的滚动通知，外部滚动仍能中断动画。
 - `onDidChangeModelContent` 复用 ViewModel 已产生的完整事件；旧模型分离后不再向当前编辑器发布内容事件。Workbench 使用该事件和公开选区事件更新状态。
 - 未挂载模型时，`saveViewState` 返回 `null`，`restoreViewState` 和 `changeViewZones` 不执行操作。
-- 功能上下文的内部依赖与 Widget 服务构造仍需继续收拢；本批仅迁移 Workbench 的内容事件和选区访问，没有完成整体服务装配重构。
+- 功能实例由模型作用域的 `IInstantiationService.createInstance` 创建，构造参数装饰器声明稳定服务依赖。`CodeEditorContributions` 在构造时获得容器，初始化只接收编辑器、功能声明和错误回调；拖入功能也通过构造参数接收容器。
+- 模型分离会释放功能实例和模型服务作用域，重新挂载时创建新作用域；父容器不随模型释放。缺少必需服务或构造参数错位时，容器在执行构造函数之前报错。
+- 功能上下文的内部依赖与 Widget options 中的服务装配仍需收拢；构造注入底座和功能创建链已接通，整体迁移尚未完成。

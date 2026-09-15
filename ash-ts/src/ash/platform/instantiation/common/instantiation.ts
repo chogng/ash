@@ -4,17 +4,37 @@ import {
 } from "../../../base/common/lifecycle.js";
 import { InstantiationType } from './extensions.js';
 
-/** A typed key for a service available while a command is executing. */
-export type ServiceIdentifier<T> = symbol & {
+/** A typed service key that also declares a constructor dependency. */
+export interface ServiceIdentifier<T> {
+	(target: object, propertyKey: string | symbol | undefined, parameterIndex: number): void;
+	readonly description: string;
 	readonly __serviceType?: T;
-};
+}
+
+const constructorDependencies = new WeakMap<Function, Map<number, ServiceIdentifier<unknown>>>();
 
 /** Constructor accepted by synchronous instance descriptors. */
 export type Constructor<T> = new (...args: any[]) => T;
 
 /** Creates a stable typed service key. Export and reuse the returned value. */
 export function createServiceIdentifier<T>(id: string): ServiceIdentifier<T> {
-	return Symbol(id) as ServiceIdentifier<T>;
+	const identifier = ((target: object, propertyKey: string | symbol | undefined, parameterIndex: number) => {
+		if (typeof target !== 'function' || propertyKey !== undefined || !Number.isInteger(parameterIndex) || parameterIndex < 0) {
+			throw new TypeError('Service decorators must annotate constructor parameters');
+		}
+		let dependencies = constructorDependencies.get(target);
+		if (!dependencies) {
+			dependencies = new Map();
+			constructorDependencies.set(target, dependencies);
+		}
+		if (dependencies.has(parameterIndex)) {
+			throw new TypeError(`Duplicate service at parameter ${parameterIndex}`);
+		}
+		dependencies.set(parameterIndex, identifier);
+	}) as ServiceIdentifier<T>;
+	Object.defineProperty(identifier, 'description', { value: id });
+	identifier.toString = () => id;
+	return identifier;
 }
 
 /** VS Code-compatible name for declaring a service identifier. */
@@ -44,7 +64,8 @@ export interface ServiceConstructionDescriptorOptions {
  * Describes how the instantiation service constructs a contributed object.
  *
  * Static arguments are placed before call-site arguments. Resolved services
- * are appended last, in the declared order.
+ * are appended last. Constructor decorators declare service positions;
+ * serviceDependencies declares the order for undecorated constructors.
  */
 export class ServiceConstructionDescriptor<T> {
 	readonly staticArguments: readonly unknown[];
@@ -84,7 +105,7 @@ export class ServiceCollection {
 /** The service container used by commands, contributions, and views. */
 export interface IInstantiationService extends ServicesAccessor {
 	createInstance<T>(
-		descriptor: ServiceConstructionDescriptor<T>,
+		descriptor: ServiceConstructionDescriptor<T> | Constructor<T>,
 		...dynamicArguments: unknown[]
 	): T;
 
@@ -201,17 +222,33 @@ export class ServiceContainer extends Disposable implements IInstantiationServic
 	}
 
 	createInstance<T>(
-		descriptor: ServiceConstructionDescriptor<T>,
+		descriptor: ServiceConstructionDescriptor<T> | Constructor<T>,
 		...dynamicArguments: unknown[]
 	): T {
 		this.assertNotDisposed();
-		const serviceArguments = descriptor.serviceDependencies.map(
-			(id) => this.get(id),
-		);
-		return Reflect.construct(descriptor.ctor, [
-			...descriptor.staticArguments,
-			...dynamicArguments,
-			...serviceArguments,
+		const construction = typeof descriptor === 'function' ? new ServiceConstructionDescriptor(descriptor) : descriptor;
+		const explicitArguments = [...construction.staticArguments, ...dynamicArguments];
+		let ctor: Function | null = construction.ctor;
+		while (ctor && !constructorDependencies.has(ctor)) {
+			ctor = Object.getPrototypeOf(ctor);
+		}
+		const dependencies = ctor ? constructorDependencies.get(ctor) : undefined;
+		let serviceIds = construction.serviceDependencies;
+		if (dependencies) {
+			if (serviceIds.length > 0) {
+				throw new TypeError('Service dependencies must be declared only in the constructor');
+			}
+			const ordered = [...dependencies.entries()].sort(([a], [b]) => a - b);
+			for (const [offset, [index, id]] of ordered.entries()) {
+				if (index !== explicitArguments.length + offset) {
+					throw new TypeError(`Invalid constructor arguments for ${construction.ctor.name}: expected service ${id} at parameter ${index}`);
+				}
+			}
+			serviceIds = ordered.map(([, id]) => id);
+		}
+		return Reflect.construct(construction.ctor, [
+			...explicitArguments,
+			...serviceIds.map(id => this.get(id)),
 		]) as T;
 	}
 

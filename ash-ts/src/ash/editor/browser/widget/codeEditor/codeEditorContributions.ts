@@ -1,13 +1,13 @@
 import { addDisposableListener, getWindow, runWhenWindowIdle } from '../../../../base/browser/dom.js';
 import { DisposableMap, Disposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { type IInstantiationService, ServiceConstructionDescriptor } from '../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { type IEditorContribution } from '../../../common/editorCommon.js';
 import { type ICodeEditor } from '../../editorBrowser.js';
 import { EditorContributionInstantiation, type IEditorContributionDescription } from '../../editorExtensions.js';
 
 interface PendingCodeEditorContribution {
 	readonly id: string;
-	readonly descriptor: ServiceConstructionDescriptor<IEditorContribution>;
+	readonly ctor: IEditorContributionDescription['ctor'];
 	readonly instantiation: EditorContributionInstantiation;
 }
 
@@ -17,10 +17,9 @@ export class CodeEditorContributions extends Disposable {
 	private readonly instances = this._register(new DisposableMap<string, IEditorContribution>());
 	private readonly pending = new Map<string, PendingCodeEditorContribution>();
 	private readonly completedInstantiation = new Set<EditorContributionInstantiation>();
-	private instantiationService: IInstantiationService | undefined;
 	private onError: (error: unknown) => void = reportContributionError;
 
-	constructor() {
+	constructor(@IInstantiationService private readonly instantiationService: IInstantiationService) {
 		super();
 		this._register(toDisposable(() => this.pending.clear()));
 	}
@@ -28,15 +27,12 @@ export class CodeEditorContributions extends Disposable {
 	initialize(
 		editor: ICodeEditor,
 		descriptions: readonly IEditorContributionDescription[],
-		instantiationService: IInstantiationService,
 		onError?: (error: unknown) => void,
 	): void {
 		this.assertNotDisposed();
-		if (this.instantiationService) throw new Error('Code editor contributions have already been initialized');
-		if (!instantiationService || typeof instantiationService.createInstance !== 'function') throw new TypeError('Code editor contributions require an instantiation service');
+		if (this.editor) throw new Error('Code editor contributions have already been initialized');
 		if (typeof onError === 'function') this.onError = onError;
 		this.editor = editor;
-		this.instantiationService = instantiationService;
 		const incomingIds = new Set<string>();
 		for (const description of descriptions) {
 			if (!isValidDescription(description)) throw new TypeError('Code editor contribution is invalid');
@@ -48,7 +44,7 @@ export class CodeEditorContributions extends Disposable {
 		for (const description of descriptions) {
 			this.pending.set(description.id, {
 				id: description.id,
-				descriptor: new ServiceConstructionDescriptor(description.ctor),
+				ctor: description.ctor,
 				instantiation: description.instantiation,
 			});
 		}
@@ -113,10 +109,8 @@ export class CodeEditorContributions extends Disposable {
 		const pending = this.pending.get(id);
 		if (!pending) return;
 		this.pending.delete(id);
-		const instantiationService = this.instantiationService;
-		if (!instantiationService) throw new Error('Code editor contributions have not been initialized');
 		try {
-			const instance = instantiationService.createInstance(pending.descriptor, this.editor);
+			const instance = this.instantiationService.createInstance(pending.ctor, this.editor);
 			if (!instance || typeof instance.dispose !== 'function') throw new TypeError(`Code editor contribution '${id}' did not return a disposable`);
 			this.instances.set(id, instance);
 			if (pending.instantiation !== EditorContributionInstantiation.Eager && (typeof instance.saveViewState === 'function' || typeof instance.restoreViewState === 'function')) {

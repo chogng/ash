@@ -604,7 +604,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				this._register(observableCodeEditor(this));
 				this.observableInitialized = true;
 			}
-			this.contributions = modelStore.add(new CodeEditorContributions());
+			this.contributions = modelStore.add(this.instantiationService.createInstance(CodeEditorContributions));
 			modelStore.add(new KeyboardNavigationController(this.viewport, this.viewModel, this.userInputEvents));
 			const installContext: TextEditorContributionContext = {
 				kind: 'text',
@@ -632,7 +632,6 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			this.contributions.initialize(
 				this,
 				options.contributions ?? EditorExtensionsRegistry.getEditorContributions(),
-				this.instantiationService,
 				options.onContributionError,
 			);
 			modelStore.add(this.contributions.onAfterModelAttached());

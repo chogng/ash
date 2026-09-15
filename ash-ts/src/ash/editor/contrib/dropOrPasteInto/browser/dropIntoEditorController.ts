@@ -22,13 +22,16 @@ export class DropIntoEditorController extends Disposable implements IEditorContr
 	private readonly progress: InlineProgressManager;
 	private asynchronousDropRequest = 0;
 
-	constructor(private readonly editor: ICodeEditor) {
+	constructor(
+		private readonly editor: ICodeEditor,
+		@IInstantiationService instantiationService: IInstantiationService,
+	) {
 		super();
-		this.progress = this._register(editor.invokeWithinContext(accessor => new InlineProgressManager(
+		this.progress = this._register(new InlineProgressManager(
 			'dropIntoEditor',
 			editor,
-			accessor.get(IInstantiationService),
-		)));
+			instantiationService,
+		));
 		this._register(editor.onDropIntoEditor(event => this.onDrop(event.position, event.event)));
 		const domNode = editor.getDomNode();
 		if (domNode) this._register(addDisposableListener<DragEvent>(domNode, 'dragover', event => this.onDragOver(event)));
