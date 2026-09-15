@@ -2,8 +2,8 @@ import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { isRecord } from '../../../base/common/types.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { invoke, subscribe } from '../../ipc/electron-browser/rendererIpc.js';
-import type { AppServerTransport } from '../browser/appServerProtocolClient.js';
-import { WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT } from '../browser/appServerProtocolClient.js';
+import type { AppServerTransport } from '../common/appServerTransport.js';
+import { WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT } from '../common/appServerTransport.js';
 
 /** Acquires and owns a renderer-exclusive MessagePort without interpreting protocol messages. */
 export class AppServerMessagePortTransport extends Disposable implements AppServerTransport {

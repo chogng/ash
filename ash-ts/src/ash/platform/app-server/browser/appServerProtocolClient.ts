@@ -1,3 +1,4 @@
+import { WEB_APP_SERVER_PROTOCOL_VERSION, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CLOSED_EVENT, type AppServerTransport } from '../common/appServerTransport.js';
 import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS, type AppServerMethod, type AppServerMethodDefinition, type InitializeResult, type MethodParams, type MethodResult, type ServerCapabilities, type ServerNotification } from "../../../../../generated/app-server/index.js";
 import { decodeAppServerEnvelope, decodeAppServerNotification, decodeAppServerResponse, decodeAppServerServerRequest } from "../../../../../generated/app-server/AppServerProtocolDecoder.js";
 import { VSBuffer } from "../../../base/common/buffer.js";
@@ -11,22 +12,11 @@ import type { AppServerServerRequestDefinition, AppServerServerRequestMethod, Cl
 import { decodeAppServerServerRequestResult } from '../../../../../generated/app-server/AppServerProtocolDecoder.js';
 import { type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 
-export const WEB_APP_SERVER_PROTOCOL_VERSION = 1;
-export const WEB_APP_SERVER_CONNECT_EVENT = "ash:app-server:connect";
-export const WEB_APP_SERVER_CONNECTED_EVENT = "ash:app-server:connected";
-export const WEB_APP_SERVER_DISCONNECT_EVENT = "ash:app-server:disconnect";
-export const WEB_APP_SERVER_FRAME_EVENT = "ash:app-server:frame";
-export const WEB_APP_SERVER_CLOSED_EVENT = "ash:app-server:closed";
 
 const DEFAULT_CONNECT_TIMEOUT = 10_000;
 const DEFAULT_REQUEST_TIMEOUT = 30_000;
 const MAX_FRAME_BYTES = 320 * 1024 * 1024;
 
-export interface AppServerTransport {
-	on(event: string, listener: (payload: unknown) => void): void;
-	off(event: string, listener: (payload: unknown) => void): void;
-	send(event: string, payload?: unknown): void;
-}
 
 export interface AppServerConnectionMetadata {
 	readonly workspaceId: string;

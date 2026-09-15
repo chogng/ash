@@ -2,7 +2,8 @@ import { AppServerMemoriesService } from '../../memories/browser/appServerMemori
 import { AppServerMemoryDiagnosticsService } from '../../memory/browser/appServerMemoryDiagnosticsService.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { createAppServerAppServerApi, createAppServerResourceApi, createAppServerServerEventApi } from "./appServerApi.js";
-import { AppServerProtocolClient, type AppServerProtocolClientOptions, type AppServerConnectionMetadata, type AppServerTransport } from "./appServerProtocolClient.js";
+import { type AppServerTransport } from "../common/appServerTransport.js";
+import { AppServerProtocolClient, type AppServerProtocolClientOptions, type AppServerConnectionMetadata } from "./appServerProtocolClient.js";
 import { createAppServerFileApi } from "../../files/browser/fileApi.js";
 import { createAppServerExtensionApi } from "../../extensions/browser/extensionApi.js";
 import { createAppServerDiffApi } from "../../diff/browser/diffApi.js";

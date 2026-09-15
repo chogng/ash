@@ -2,6 +2,12 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "target": "ES2024",
+    "lib": [
+      "ES2024",
+      "DOM",
+      "DOM.Iterable",
+      "ESNext.Disposable"
+    ],
     "allowJs": true,
     "allowImportingTsExtensions": true,
     "erasableSyntaxOnly": true,
@@ -16,7 +22,8 @@
     ]
   },
   "include": [
-    "**/*.ts"
+    "**/*.ts",
+    "../scripts/*.ts"
   ],
   "exclude": [
     "node_modules/**",

@@ -1,5 +1,5 @@
 import { AbstractDisposable } from '../../../base/common/lifecycle.js';
-import { type AppServerTransport, WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CONNECTED_EVENT } from './appServerProtocolClient.js';
+import { type AppServerTransport, WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CONNECTED_EVENT } from '../common/appServerTransport.js';
 
 const maxBufferedBytes = 320 * 1024 * 1024;
 

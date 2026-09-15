@@ -4,12 +4,12 @@ import { constants, createReadStream, type FSWatcher, watch } from "node:fs";
 import { copyFile, mkdir, readFile, readdir, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
-import { fileURLToPath } from "node:url";
 
-import { cargoArtifactExecutable, cargoRenderedDiagnostic, cargoTargetDirectory, parseCargoMessage } from "../../lib/cargo.ts";
-import { desktopBuildPath } from "../../lib/paths.ts";
+import { cargoArtifactExecutable, cargoRenderedDiagnostic, cargoTargetDirectory, parseCargoMessage } from "./cargo.ts";
+import { desktopBuildPath } from "./paths.ts";
+import { developmentAshPackagePath } from '../package/store.ts';
 
-const desktopRoot = resolve(import.meta.dirname, "../../../ash-ts");
+const desktopRoot = resolve(import.meta.dirname, "../../ash-ts");
 const repositoryRoot = resolve(desktopRoot, "..");
 const sharedRustSource = join(repositoryRoot, "ash-rs");
 const cargoWorkspace = join(repositoryRoot, "Cargo.toml");
@@ -17,22 +17,21 @@ const targetDirectory = cargoTargetDirectory(repositoryRoot);
 const watchedTargetDirectory = relativeWatchedDirectory(sharedRustSource, targetDirectory);
 const generationDirectory = desktopBuildPath(repositoryRoot, "dev", "app-server");
 const generationFile = join(generationDirectory, "current.json");
-const skipInitial = process.argv.includes("--skip-initial");
 const debounceMs = 250;
 const retainedPreviousGenerations = 1;
 
-let activeBuild: ChildProcess | undefined;
-let buildRequested = !skipInitial;
-let debounce: NodeJS.Timeout | undefined;
-let stopped = false;
-
-const watchers: FSWatcher[] = [];
-
-if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
-  void start().catch(error => {
-    console.error(`[app-server] ${error instanceof Error ? error.message : String(error)}`);
-    process.exitCode = 1;
-  });
+export function webAppServerOptions(): { workspaceRoot: string; profileRoot: string; executable: string; appServer: string; ripgrep: string; productServices?: string } {
+  const packageRoot = developmentAshPackagePath(repositoryRoot, 'packaged-node');
+  const suffix = process.platform === 'win32' ? '.exe' : '';
+  const options: ReturnType<typeof webAppServerOptions> = {
+    workspaceRoot: resolve(process.env.ASH_WORKSPACE_ROOT ?? repositoryRoot),
+    profileRoot: resolve(process.env.ASH_WEB_APP_SERVER_PROFILE ?? desktopBuildPath(repositoryRoot, 'dev', 'web-profile')),
+    executable: join(packageRoot, 'bin', `ash-app-server-daemon${suffix}`),
+    appServer: join(packageRoot, 'bin', `ash-app-server${suffix}`),
+    ripgrep: resolve(process.env.ASH_RG_PATH ?? join(packageRoot, 'ash-path', `rg${suffix}`)),
+  };
+  if (process.env.ASH_PRODUCT_SERVICES_PATH) options.productServices = process.env.ASH_PRODUCT_SERVICES_PATH;
+  return options;
 }
 
 export function shouldRebuildAppServer(file: string | null, ignoredDirectory?: string): boolean {
@@ -55,7 +54,14 @@ export function shouldRebuildWorkspaceManifest(file: string | null): boolean {
   return file === "Cargo.toml" || file === "Cargo.lock";
 }
 
-async function start(): Promise<void> {
+export async function watchAppServer(options: { skipInitial?: boolean } = {}): Promise<() => void> {
+  let activeBuild: ChildProcess | undefined;
+  let buildRequested = !options.skipInitial;
+  let debounce: NodeJS.Timeout | undefined;
+  let stopped = false;
+
+  const watchers: FSWatcher[] = [];
+
   await prunePublishedGenerations();
   watchers.push(
     watch(sharedRustSource, { recursive: true }, (_event, file) => requestBuild(file, fileName => shouldRebuildAppServer(fileName, watchedTargetDirectory))),
@@ -63,78 +69,85 @@ async function start(): Promise<void> {
   );
   console.log("[app-server] Watching Rust App Server sources");
   if (buildRequested) void drainBuilds();
-  process.once("SIGINT", stop);
-  process.once("SIGTERM", stop);
-}
+  return stop;
 
-function requestBuild(file: string | null, shouldRebuild: (file: string | null) => boolean): void {
-  if (stopped || !shouldRebuild(file)) return;
-  clearTimeout(debounce);
-  debounce = setTimeout(() => {
-    buildRequested = true;
-    void drainBuilds();
-  }, debounceMs);
-}
+  function requestBuild(file: string | null, shouldRebuild: (file: string | null) => boolean): void {
+    if (stopped || !shouldRebuild(file)) return;
+    clearTimeout(debounce);
+    debounce = setTimeout(() => {
+      buildRequested = true;
+      void drainBuilds();
+    }, debounceMs);
+  }
 
-async function drainBuilds(): Promise<void> {
-  if (activeBuild || stopped) return;
-  while (buildRequested && !stopped) {
-    buildRequested = false;
-    try {
-      await buildAndPublish();
-    } catch (error) {
-      console.error(`[app-server] ${error instanceof Error ? error.message : String(error)}`);
+  async function drainBuilds(): Promise<void> {
+    if (activeBuild || stopped) return;
+    while (buildRequested && !stopped) {
+      buildRequested = false;
+      try {
+        await buildAndPublish();
+      } catch (error) {
+        console.error(`[app-server] ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
   }
-}
 
-async function buildAndPublish(): Promise<void> {
-  console.log("[app-server] Building ash-app-server");
-  const source = await runCargo();
-  const published = await publishAppServerGeneration(source, generationDirectory, generationFile, process.platform);
-  console.log(published.changed ? `[app-server] Published ${published.generation}` : `[app-server] Unchanged ${published.generation}`);
-}
+  async function buildAndPublish(): Promise<void> {
+    console.log("[app-server] Building ash-app-server");
+    const source = await runCargo();
+    const published = await publishAppServerGeneration(source, generationDirectory, generationFile, process.platform);
+    console.log(published.changed ? `[app-server] Published ${published.generation}` : `[app-server] Unchanged ${published.generation}`);
+  }
 
-function runCargo(): Promise<string> {
-  return new Promise<string>((resolvePromise, reject) => {
-    let executable: string | undefined;
-    let settled = false;
-    const child = spawn("cargo", [
-      "build",
-      "--manifest-path", cargoWorkspace,
-      "--package", "ash-app-server",
-      "--bin", "ash-app-server",
-      "--profile", "dev-small",
-      "--target-dir", targetDirectory,
-      "--message-format", "json-render-diagnostics",
-    ], { cwd: repositoryRoot, env: process.env, stdio: ["inherit", "pipe", "inherit"], windowsHide: true });
-    activeBuild = child;
-    const messages = createInterface({ input: child.stdout });
-    messages.on("line", line => {
-      const message = parseCargoMessage(line);
-      const diagnostic = cargoRenderedDiagnostic(message);
-      if (diagnostic) process.stderr.write(diagnostic);
-      executable = cargoArtifactExecutable(message, "ash-app-server") ?? executable;
+  function runCargo(): Promise<string> {
+    return new Promise<string>((resolvePromise, reject) => {
+      let executable: string | undefined;
+      let settled = false;
+      const child = spawn("cargo", [
+        "build",
+        "--manifest-path", cargoWorkspace,
+        "--package", "ash-app-server",
+        "--bin", "ash-app-server",
+        "--profile", "dev-small",
+        "--target-dir", targetDirectory,
+        "--message-format", "json-render-diagnostics",
+      ], { cwd: repositoryRoot, env: process.env, stdio: ["inherit", "pipe", "inherit"], windowsHide: true });
+      activeBuild = child;
+      const messages = createInterface({ input: child.stdout });
+      messages.on("line", line => {
+        const message = parseCargoMessage(line);
+        const diagnostic = cargoRenderedDiagnostic(message);
+        if (diagnostic) process.stderr.write(diagnostic);
+        executable = cargoArtifactExecutable(message, "ash-app-server") ?? executable;
+      });
+      child.once("error", error => {
+        if (settled) return;
+        settled = true;
+        activeBuild = undefined;
+        reject(error);
+      });
+      child.once("close", (code, signal) => {
+        activeBuild = undefined;
+        if (settled) return;
+        settled = true;
+        if (code !== 0) {
+          reject(new Error(signal ? `cargo build stopped by ${signal}` : `cargo build exited with status ${code ?? "unknown"}`));
+        } else if (!executable) {
+          reject(new Error("cargo build did not report the ash-app-server executable"));
+        } else {
+          resolvePromise(executable);
+        }
+      });
     });
-    child.once("error", error => {
-      if (settled) return;
-      settled = true;
-      activeBuild = undefined;
-      reject(error);
-    });
-    child.once("close", (code, signal) => {
-      activeBuild = undefined;
-      if (settled) return;
-      settled = true;
-      if (code !== 0) {
-        reject(new Error(signal ? `cargo build stopped by ${signal}` : `cargo build exited with status ${code ?? "unknown"}`));
-      } else if (!executable) {
-        reject(new Error("cargo build did not report the ash-app-server executable"));
-      } else {
-        resolvePromise(executable);
-      }
-    });
-  });
+  }
+
+  function stop(): void {
+    if (stopped) return;
+    stopped = true;
+    clearTimeout(debounce);
+    for (const watcher of watchers) watcher.close();
+    activeBuild?.kill("SIGTERM");
+  }
 }
 
 export async function publishAppServerGeneration(source: string, directory: string, pointer: string, platform: NodeJS.Platform = process.platform): Promise<Readonly<{ changed: boolean; generation: string }>> {
@@ -153,7 +166,7 @@ export async function publishAppServerGeneration(source: string, directory: stri
       await copyFile(source, staging, constants.COPYFILE_FICLONE);
       await rename(staging, executable);
     } finally {
-      await unlink(staging).catch(() => {});
+      await unlink(staging).catch(() => { });
     }
   }
   const nextGeneration = `${pointer}.${process.pid}.tmp`;
@@ -161,7 +174,7 @@ export async function publishAppServerGeneration(source: string, directory: stri
     await writeFile(nextGeneration, `${JSON.stringify({ version: 1, executable: generation })}\n`, "utf8");
     await replaceGenerationFile(nextGeneration, pointer);
   } finally {
-    await unlink(nextGeneration).catch(() => {});
+    await unlink(nextGeneration).catch(() => { });
   }
   await pruneGenerations(directory, generation);
   return { changed: true, generation };
@@ -185,7 +198,7 @@ async function pruneGenerations(directory: string, current: string): Promise<voi
   for (const generation of generations) {
     const digest = await generationDigest(directory, generation.name);
     if (retainedDigests.has(digest) || retained >= retainedPreviousGenerations) {
-      await unlink(join(directory, generation.name)).catch(() => {});
+      await unlink(join(directory, generation.name)).catch(() => { });
       continue;
     }
     retainedDigests.add(digest);
@@ -248,12 +261,4 @@ function isReplaceError(error: unknown): boolean {
 
 function isMissingFileError(error: unknown): boolean {
   return error instanceof Error && "code" in error && error.code === "ENOENT";
-}
-
-function stop(): void {
-  if (stopped) return;
-  stopped = true;
-  clearTimeout(debounce);
-  for (const watcher of watchers) watcher.close();
-  activeBuild?.kill("SIGTERM");
 }

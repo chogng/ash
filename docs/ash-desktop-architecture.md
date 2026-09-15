@@ -340,7 +340,7 @@ App Server 连接并重新读取 Session/Thread；Renderer 不直接读写 SQLit
 Electron sandbox 边界分为两层。`ISandboxGlobals` 是 preload 唯一暴露到主世界的底层桥接：
 它只包含只读进程元数据，以及受 `ash:` 频道前缀约束的 `invoke` / `on`。preload 必须保持
 自包含，运行时除 `electron` 外不得加载任何模块，也不得把 Electron event 对象传给 Renderer。
-构建后的 preload 由 `build/desktop/verifySandboxPreload.ts` 检查这一约束。
+构建后的 preload 由 `build/lib/compilation.ts` 检查这一约束。
 
 `createElectronRendererApi()` 是该桥接的唯一产品适配器。它在普通 Renderer bundle 中引用频道
 常量，并组装领域化、强类型、可枚举的 `AshElectronRendererApi`。跨宿主领域能力由其父接口
@@ -580,7 +580,9 @@ Browser 入口没有 App Server 连接时会明确显示不可用状态。`dev:w
 `dev:web:full` 与 `build:web` / `start:web` 使用同一条独立 WebSocket `/ash/app-server`，
 业务通信不依赖 Vite HMR。每个浏览器通过独立 connection carrier 连接 profile 共享 daemon
 管理的 App Server；浏览器断开只回收自己的连接。连接入口仅接受同源 loopback 请求。
-`build/desktop/serveWeb.ts` 提供正式静态产物的本地 HTTP 服务，复用开发入口的连接实现。
+`scripts/web.ts` 提供正式静态产物的本地 HTTP 服务。它与 Vite 开发入口共同加载
+`ash-ts/src/ash/platform/app-server/node/webAppServer.ts` 的编译产物，并传入运行路径；
+连接模块复用同目录的 JSONL 进程传输和 `common` 中的环境变量规则。
 普通 `build:renderer` 保留 disconnected 模式；`build:web` 显式启用后端连接。
 Web renderer 初始化完成后通过 `env/dirs/set` 注册宿主提供的目录 ID 和路径，完成后才启动
 Workbench；文件请求与后端使用同一目录 ID。授权沿用本地启动目录的 host 权限范围。

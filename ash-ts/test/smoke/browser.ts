@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { developmentAshPackagePath } from '../../../build/package/store.ts';
 
 const desktopDirectory = resolve(import.meta.dirname, '../..');
 const mode = process.argv[2];
@@ -31,7 +32,8 @@ const workspaceDirectory = mode === 'full'
 	? await mkdtemp(join(tmpdir(), 'ash-playwright-browser-workspace-'))
 	: undefined;
 const profileDirectory = mode === 'full'
-	? await mkdtemp(join(tmpdir(), 'ash-playwright-browser-profile-'))
+	// Leave room for the daemon's socket name within Windows AF_UNIX limits.
+	? await mkdtemp(join(tmpdir(), 'ash-web-'))
 	: undefined;
 const productServicesPath = profileDirectory ? join(profileDirectory, 'product-services.json') : undefined;
 let languageServerExecutable = process.env.ASH_PLAYWRIGHT_RUST_ANALYZER;
@@ -74,7 +76,7 @@ const serverEnvironment = mode === 'full' ? {
 	...(productServicesPath ? { ASH_PRODUCT_SERVICES_PATH: productServicesPath } : {}),
 } : testEnvironment;
 const server = spawn(process.execPath, [
-	'../build/desktop/serveWeb.ts',
+	'../scripts/web.ts',
 	'../.build/desktop/renderer/ash',
 	String(port),
 ], {
@@ -100,6 +102,12 @@ try {
 	});
 } finally {
 	await stop(server);
+	if (profileDirectory) {
+		const packageRoot = developmentAshPackagePath(resolve(desktopDirectory, '..'), 'packaged-node');
+		const daemon = join(packageRoot, 'bin', process.platform === 'win32' ? 'ash-app-server-daemon.exe' : 'ash-app-server-daemon');
+		const result = await run(daemon, ['stop'], { ...serverEnvironment, ASH_HOME: profileDirectory });
+		if (result !== 0) throw new Error(`Could not stop the test profile's App Server: ${result}`);
+	}
 	if (workspaceDirectory) {
 		await rm(workspaceDirectory, { force: true, recursive: true });
 	}
@@ -142,15 +150,12 @@ function run(command: string, args: readonly string[], env: NodeJS.ProcessEnv): 
 }
 
 async function stop(child: ChildProcess): Promise<void> {
-	if (child.exitCode !== null) {
+	if (child.exitCode !== null || child.signalCode !== null) {
 		return;
 	}
-	child.kill('SIGTERM');
-	await Promise.race([
-		new Promise(resolvePromise => child.once('exit', resolvePromise)),
-		new Promise(resolvePromise => setTimeout(resolvePromise, 5_000)),
-	]);
-	if (child.exitCode === null) {
-		child.kill('SIGKILL');
-	}
+	await new Promise<void>(resolvePromise => {
+		const timeout = setTimeout(() => child.kill('SIGKILL'), 5_000);
+		child.once('close', () => { clearTimeout(timeout); resolvePromise(); });
+		child.kill('SIGTERM');
+	});
 }

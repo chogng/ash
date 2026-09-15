@@ -228,19 +228,27 @@ just bench-build ash-keybinding --jobs 4 --compare .build/build-health/<run>/rep
 | 路径 | 单一职责 |
 | --- | --- |
 | `build/lib/` | 通用路径、归档、签名、Cargo、目标识别和 V8 构建输入 |
-| `build/desktop/watch/` | Electron TypeScript 与 Rust Server Host 的增量监听和重启协调 |
+| `build/compile.ts`、`build/watch.ts` | 编译和增量监听的任务入口 |
+| `build/lib/compilation.ts`、`build/lib/appServer.ts` | 编译准备、产物校验、TypeScript 监听和 Rust 可执行文件代次发布 |
+| `scripts/electron.ts`、`scripts/web.ts` | Electron 启动与重启、本地 Web 静态服务启动 |
+| `ash-ts/src/ash/platform/app-server/node/` | WebSocket 连接、共享 JSONL 进程传输；由启动方提供工作区、配置目录和可执行文件路径 |
 | `build/pnpm/` | pnpm 版本约束、安装入口和单锁文件 workspace 校验 |
-| `build/desktop/` | Desktop 输出准备、Electron 启动和打包校验 |
 | `build/package/` | 共享包布局、资源、开发包组装与存储、发布包组装与签名记录 |
 | `build/app/`、`build/code/`、`build/remote/` | 各交付物的组装、验证与归档 |
 | `build/darwin/` | macOS 签名命令和公证 |
 | `build/win32/` | Windows 签名命令 |
 | `build/linux/` | Linux 分离签名命令 |
-| `build/vite/` | Renderer 入口、Vite 配置、开发桥接与热重载插件 |
+| `build/vite/` | Renderer 入口、Vite 配置、开发连接装配与热重载插件 |
 | `build/download/` | 第三方构建运行时下载器 |
 | `build/resources/` | 共享资源生成 |
 | `build/clean.ts` | 根清理入口 |
-| `build/package.json`、`build/tsconfig.json` | 构建工具的依赖、测试和类型检查 |
+| `build/package.json`、`build/tsconfig.json` | 构建工具及根目录 TypeScript 脚本的测试和类型检查 |
+
+`.build/desktop/` 是产物目录，按 `main`、`preload`、`renderer`、`node` 等运行目标存放输出；不要求源码保留同名目录。
+`compile.ts` 接受这些编译目标，`watch.ts` 接受 TypeScript 目标或 `app-server`。启动脚本调用构建能力，构建模块不反向调用启动脚本。
+
+Web 连接实现编译到 `node` 输出后，由 `scripts/web.ts` 或 Vite 插件加载。两者提供开发包路径和运行配置；连接实现不读取仓库构建目录。
+`ws` 属于 `ash-ts` 的运行依赖，静态服务器使用的 `sirv` 属于根脚本的开发依赖，共用根锁文件。
 
 ### 共享包组装
 

@@ -1,5 +1,5 @@
 import { AppServerWebSocketTransport } from '../../../src/ash/platform/app-server/browser/appServerWebSocketTransport.js';
-import { WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT } from '../../../src/ash/platform/app-server/browser/appServerProtocolClient.js';
+import { WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT } from '../../../src/ash/platform/app-server/common/appServerTransport.js';
 
 declare global {
 	interface Window {

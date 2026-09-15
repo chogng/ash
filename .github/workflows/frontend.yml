@@ -6,6 +6,7 @@ on:
     paths:
       - 'ash-ts/**'
       - 'build/**'
+      - 'scripts/*.ts'
       - 'resources/**'
       - 'extensions/**'
       - 'ash-rs/**'
@@ -23,6 +24,7 @@ on:
     paths:
       - 'ash-ts/**'
       - 'build/**'
+      - 'scripts/*.ts'
       - 'resources/**'
       - 'extensions/**'
       - 'ash-rs/**'

@@ -8,7 +8,7 @@ import { isRecord } from '../../../base/common/types.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
 import type { AppServerConnectionState } from '../common/appServerApi.js';
 import type { IAppServerProcessLauncher } from './appServerProcessLauncher.js';
-import { ChildProcessJsonlTransport, DEFAULT_MAX_JSONL_FRAME_BYTES } from './childProcessJsonlTransport.js';
+import { ChildProcessJsonlTransport, DEFAULT_MAX_JSONL_FRAME_BYTES } from '../node/childProcessJsonlTransport.js';
 
 /** Owns one renderer's connection carrier; the carrier connects to the shared profile daemon. */
 export class AppServerConnectionRelay extends Disposable {

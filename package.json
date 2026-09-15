@@ -1,6 +1,7 @@
 {
   "name": "ash",
   "private": true,
+  "type": "module",
   "license": "UNLICENSED",
   "packageManager": "pnpm@12.4.2",
   "engines": {
@@ -39,5 +40,8 @@
     "package:ash": "just package",
     "generate:protocol": "just generate-protocol",
     "verify:protocol": "cargo test --manifest-path Cargo.toml -p ash-app-server-protocol"
+  },
+  "devDependencies": {
+    "sirv": "^3.0.2"
   }
 }
