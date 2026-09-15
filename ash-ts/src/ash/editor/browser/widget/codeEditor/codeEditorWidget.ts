@@ -24,7 +24,7 @@ import { observableCodeEditor } from '../../observableCodeEditor.js';
 import { EditorConfiguration, type IEditorConstructionOptions } from '../../config/editorConfiguration.js';
 import { migrateOptions } from '../../config/migrateOptions.js';
 import { EditorExtensionsRegistry, type EditorCommandEvent, type EditorContributionRegistration, type TextEditorContributionContext } from '../../editorExtensions.js';
-import { VersionedEditorWorkerClient, type VersionedEditorWorkerFactory } from '../../services/editorWorkerService.js';
+import { IVersionedEditorWorkerClient, VersionedEditorWorkerClient, type VersionedEditorWorkerFactory } from '../../services/editorWorkerService.js';
 import { EditorWorkerRequestExecutor } from '../../../common/services/editorWorkerRequestExecutor.js';
 import { ILanguageConfigurationService } from '../../../common/languages/languageConfigurationRegistry.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
@@ -333,6 +333,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			const editorWorker = modelStore.add(options.editorWorkerFactory
 				? options.editorWorkerFactory(model)
 				: new VersionedEditorWorkerClient(model, () => new EditorWorkerRequestExecutor()));
+			services.registerInstance(IVersionedEditorWorkerClient, editorWorker);
 			this.configuration.setModelLineCount(model.lineCount);
 			modelStore.add(model.onDidChangeDecorations(event => this.modelDecorationsEmitter.fire(event)));
 			modelStore.add(model.onWillDispose(() => this.setModel(null)));

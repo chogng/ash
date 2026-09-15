@@ -4,6 +4,14 @@
 
 ## 当前结论
 
+- 格式化职责回收：按用户指定删除 `contrib/format/browser/formatController.ts`。请求编排、交叠处理和取消归回 `format.ts`；命令、现有键盘入口与保存钩子归回 `formatActions.ts`；`formattingEdit.ts` 继续提交编辑。贡献只注册触发入口，不再返回控制器。Widget 将原本拥有的 `IVersionedEditorWorkerClient` 注册到模型作用域，Action 通过容器取得同一实例，模型解绑时仍由 Widget 释放。`formatEditor` 是当前模型绑定的调用入口，不冒充完整上游调度 API；资源级 worker 缺口仍保留。
+
+- 职责回收验证：旧控制器的 TypeScript 引用清零；62 项定向单测、119 项浏览器回归、Editor 对齐与类型检查、Stanza 和 Renderer 构建通过。覆盖保存模式、当前模型格式化选项、worker 实例复用与解绑释放、无模型命令、快捷键、重复请求取消、语言与模型切换、交叠处理和撤销。保留既有 JSDOM Canvas、颜色环境提示及未触及 CSS 债务。
+
+- 格式化回归修复：先用浏览器测试确认，在选择提供者期间或取得编辑结果前改变模型语言，旧请求仍会写回文本。`FormatController` 现监听模型语言变化，复用现有取消流程；监听随请求释放。该修复不改变公开 API、提供者选择规则或文件归属，也不表示资源级 worker 和格式化器选择界面已经完成。
+
+- 本次验证：新增两项浏览器用例修复前均失败，修复后 119 项浏览器测试通过；Editor 对齐与类型检查、Stanza 和 Renderer 构建通过。仅修改一行实现、两份测试文件及本记录，保留既有颜色环境提示和未触及的 CSS 债务。
+
 - 2026-09-15 格式化提供者选择契约：在同路径 `format.ts` 补齐 `FormattingKind`、`FormattingMode`、`IFormattingEditProviderSelector` 和 `FormattingConflicts` 的公开契约。后注册的选择策略优先，释放后恢复旧策略；拒绝选择不继续调用旧策略。整文与选区控制器在同一取消范围内先选择再执行，保存格式化传递 `Silent`，手动命令传递 `Explicit`。选中提供者返回空结果或失败时，不再改用另一个提供者。
 
 - 本批修改 10 个文件：选择契约、控制器、Standalone API 注册、Workbench 生命周期注册、四份行为测试和两份现有文档。Standalone 和 Workbench 当前策略均选择排序首位；默认格式化器配置和选择界面仍待补齐，不能据此宣称冲突处理产品功能完成。原签名不完整的 `getDocumentFormattingEditsUntilResult` 在生产调用退出后删除，其标准查询能力仍待资源级 worker 就绪后按真实调用需求实现。其余完整调度函数和 `formatOnType` 自动触发仍待处理，80/41 声明计数不变。

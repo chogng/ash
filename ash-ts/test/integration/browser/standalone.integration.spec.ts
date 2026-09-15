@@ -1509,13 +1509,13 @@ for (const cancel of [false, true]) {
 	});
 }
 
-for (const outcome of ['second', 'empty', 'decline', 'error', 'cancel', 'silent'] as const) {
+for (const outcome of ['second', 'empty', 'decline', 'error', 'cancel', 'silent', 'languageChoice', 'languageResult'] as const) {
 	test(`formatter selection honors ${outcome} without running another provider`, async ({ page }) => {
 		await page.goto('/standalone.html');
 		const result = await page.evaluate(outcome => window.ashStandaloneIntegration.runFormatterChoice(outcome), outcome);
 		expect(result).toEqual({
 			value: outcome === 'second' || outcome === 'silent' ? 'SELECTED' : 'alpha',
-			calls: outcome === 'decline' || outcome === 'cancel' ? [] : ['selected'],
+			calls: outcome === 'decline' || outcome === 'cancel' || outcome === 'languageChoice' ? [] : ['selected'],
 			modes: [outcome === 'silent' ? 2 : 1],
 			errors: outcome === 'error' ? ['formatter failed'] : [],
 		});

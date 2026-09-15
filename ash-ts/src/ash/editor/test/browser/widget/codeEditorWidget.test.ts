@@ -2204,8 +2204,7 @@ test('selection formatting merges expanded edits repeatedly before one undoable 
 		languageId: model.getLanguageId(),
 		contributions: [],
 	});
-	const { FormatController } = await import('../../../contrib/format/browser/formatController.js');
-	const { FormattingConflicts } = await import('../../../contrib/format/browser/format.js');
+	const { formatEditor, FormattingKind, FormattingConflicts } = await import('../../../contrib/format/browser/format.js');
 	using selector = FormattingConflicts.setFormatterSelector(async providers => providers[0]);
 	const features = editor.invokeWithinContext(accessor => accessor.get(ILanguageFeaturesService));
 	const queried: string[] = [];
@@ -2217,12 +2216,64 @@ test('selection formatting merges expanded edits repeatedly before one undoable 
 		},
 	});
 	using worker = new VersionedEditorWorkerClient(model, () => new EditorWorkerRequestExecutor());
-	using controller = new FormatController(editor, editor.view, features, worker, { onError: error => { throw error; } });
 	editor.setSelections([new Selection(1, 1, 1, 6), new Selection(2, 1, 2, 5), new Selection(3, 1, 3, 6)]);
-	await controller.formatSelection();
+	await formatEditor(editor, features, worker, FormattingKind.Selection);
 	assert.equal(model.getValue(), 'ALPHA\nBETA\nGAMMA');
 	assert.deepEqual(queried, ['[1,1 -> 1,6]', '[2,1 -> 2,5]', '[1,1 -> 2,5]', '[3,1 -> 3,6]', '[1,1 -> 3,6]']);
 	model.undo();
 	assert.equal(model.getValue(), 'alpha\nbeta\ngamma');
+	dom.window.close();
+});
+
+test('format actions share the model worker and release the save hook on detach', async () => {
+	await import('../../../contrib/format/browser/formatActions.js');
+	const { FormattingConflicts, FormattingMode } = await import('../../../contrib/format/browser/format.js');
+	const { IVersionedEditorWorkerClient } = await import('../../../browser/services/editorWorkerService.js');
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('alpha');
+	model.updateOptions({ tabSize: 2, indentSize: 2, insertSpaces: false });
+	let saveHook: (() => void | Promise<void>) | undefined;
+	let worker: InstanceType<typeof VersionedEditorWorkerClient> | undefined;
+	let mode: number | undefined;
+	using selector = FormattingConflicts.setFormatterSelector(async (providers, _model, selectedMode) => {
+		mode = selectedMode;
+		return providers[0];
+	});
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'), model,
+		input: { resource: model.uri }, languageId: model.getLanguageId(),
+		formatOnSave: true,
+		onLanguageError: error => { throw error; },
+		editorWorkerFactory: model => worker = new VersionedEditorWorkerClient(model, () => new EditorWorkerRequestExecutor()),
+		registerBeforeSave: hook => {
+			saveHook = hook;
+			return toDisposable(() => { saveHook = undefined; });
+		},
+	});
+	const features = editor.invokeWithinContext(accessor => accessor.get(ILanguageFeaturesService));
+	using registration = features.documentFormattingEditProvider.register('*', {
+		provideDocumentFormattingEdits(model, options) {
+			assert.deepEqual(options, { tabSize: 2, insertSpaces: false });
+			return [{ range: model.getFullModelRange(), text: 'ALPHA' }];
+		},
+	});
+	assert.equal(editor.invokeWithinContext(accessor => accessor.get(IVersionedEditorWorkerClient)), worker);
+	assert.equal(editor.getContribution('editor.contrib.format'), null);
+	assert.ok(saveHook);
+	await saveHook();
+	assert.equal(model.getValue(), 'ALPHA');
+	assert.equal(mode, FormattingMode.Silent);
+	editor.setModel(null);
+	assert.equal(saveHook, undefined);
+	assert.equal(worker?.isDisposed, true);
+	const { EditorExtensionsRegistry } = await import('../../../browser/editorExtensions.js');
+	for (const id of ['editor.action.formatDocument', 'editor.action.formatSelection']) {
+		const action = [...EditorExtensionsRegistry.getEditorActions()].find(action => action.id === id)!;
+		await action.run({
+			get: () => { throw new Error('Detached model service was requested'); },
+			getOptional: () => { throw new Error('Detached model service was requested'); },
+		}, editor, {});
+	}
 	dom.window.close();
 });

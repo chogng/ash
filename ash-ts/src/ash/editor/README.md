@@ -100,7 +100,7 @@ standalone/{common,browser} ─→ window services + model/editor/language/theme
 - `format.ts` 整理整文与范围提供者，按扩展身份忽略大小写去重，并通过 `FormattingConflicts` 选择。后注册的策略优先，释放后恢复旧策略。Standalone API 与 Workbench 生命周期分别注册默认排序策略；默认格式化器配置和选择界面仍待实现。
 - 整文与选区命令只执行选中的提供者，空结果或失败不切换到其他提供者。手动命令传递 `FormattingMode.Explicit`，保存格式化传递 `Silent`。
 - `editor.action.formatSelection`（Ctrl/Cmd+K、Ctrl/Cmd+F）把空选区扩展为当前行；多选区优先使用批量接口，否则逐范围查询。结果交叠时合并请求范围重新查询，丢弃旧结果；选区变化取消等待，所有编辑共享一次撤销。命令可用状态随提供者注册、注销和模型语言变化更新。
-- 控制器拥有取消与编辑提交，worker 最小化文本编辑并保留换行符；资源级 worker-service 与完整格式化调度 API 仍待对齐。
+- `format.ts` 拥有请求选择、交叠处理、取消和 worker 调用，`formattingEdit.ts` 提交编辑；不再构造格式化控制器。`formatActions.ts` 注册命令、当前键盘入口和保存钩子。Widget 将既有 worker 客户端注册到模型作用域，模型解绑时释放；格式化选项读取当前模型。资源级 worker-service 与完整上游格式化调度 API 仍待对齐，`formatEditor` 是当前模型绑定调用入口。
 - 输入格式化要求提供者声明触发字符；Standalone 支持显式注册，`formatOnType` 自动触发链仍未接通。扩展注册协议尚未提供触发字符，因此扩展桥接只注册文档和范围格式化。
 
 Workbench 模式 contribution 是唯一能力选择点。Code 与 Academic 各自加载一个功能实现 bundle，并与对应 Workbench contribution 配对；Academic 不以 `editor.all.ts` 为基底。共享入口在窗口启动时只加载一个 bundle；切换模式通过 reload 创建新的 Renderer 生命周期。新增模式必须先登记 `WorkbenchModeId` 并补齐 Browser/Electron 的穷尽 loader 映射；不得在共享 Workbench、widget 或 model 内增加模式分支。

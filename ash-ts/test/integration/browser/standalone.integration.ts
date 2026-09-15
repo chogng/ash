@@ -1,10 +1,11 @@
-import { FormattingConflicts, FormattingKind, FormattingMode } from '../../../src/ash/editor/contrib/format/browser/format.js';
+import { formatEditor, FormattingConflicts, FormattingKind, FormattingMode } from '../../../src/ash/editor/contrib/format/browser/format.js';
 import { type CancellationToken } from '../../../src/ash/base/common/cancellation.js';
 import { scheduleAtNextAnimationFrame } from '../../../src/ash/base/browser/scheduler.js';
 import { h } from '../../../src/ash/base/browser/dom.js';
 import { type Range } from '../../../src/ash/editor/common/core/range.js';
 import { EndOfLineSequence, type ITextModel } from '../../../src/ash/editor/common/model.js';
-import type { FormatController } from '../../../src/ash/editor/contrib/format/browser/formatController.js';
+import { IVersionedEditorWorkerClient } from '../../../src/ash/editor/browser/services/editorWorkerService.js';
+import { ILanguageFeaturesService } from '../../../src/ash/editor/common/services/languageFeatures.js';
 import { StandaloneServices } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
 import { IMarkerService, MarkerSeverity } from '../../../src/ash/platform/markers/common/markers.js';
 import { Color } from '../../../src/ash/base/common/color.js';
@@ -72,7 +73,7 @@ interface ViewZoneState {
 }
 
 interface StandaloneHarness {
-	runFormatterChoice(outcome: 'second' | 'empty' | 'decline' | 'error' | 'cancel' | 'silent'): Promise<{ value: string; calls: string[]; modes: number[]; errors: string[] }>;
+	runFormatterChoice(outcome: 'second' | 'empty' | 'decline' | 'error' | 'cancel' | 'silent' | 'languageChoice' | 'languageResult'): Promise<{ value: string; calls: string[]; modes: number[]; errors: string[] }>;
 
 	runOverlappingFormatting(cancel: boolean): Promise<{ value: string; ranges: string[]; cancelled: boolean }>;
 
@@ -277,6 +278,9 @@ let formattingProvider: { dispose(): void } | undefined;
 
 window.ashStandaloneIntegration = {
 	runFormatterChoice: async outcome => {
+		const language = callerModel.getLanguageId();
+		let release!: () => void;
+		const gate = new Promise<void>(resolve => { release = resolve; });
 		callerEditor.setValue('alpha');
 		callerEditor.setPosition(new stanza.Position(1, 1));
 		const calls: string[] = [];
@@ -285,6 +289,7 @@ window.ashStandaloneIntegration = {
 		const selected = stanza.languages.registerDocumentFormattingEditProvider('*', {
 			provideDocumentFormattingEdits: model => {
 				calls.push('selected');
+				if (outcome === 'languageResult') callerModel.setLanguage('typescript');
 				if (outcome === 'error') throw new Error('formatter failed');
 				return outcome === 'empty' ? [] : [{ range: model.getFullModelRange(), text: 'SELECTED' }];
 			},
@@ -299,17 +304,23 @@ window.ashStandaloneIntegration = {
 			modes.push(mode);
 			choosing();
 			if (outcome === 'cancel') return new Promise(() => {});
+			if (outcome === 'languageChoice') await gate;
 			return outcome === 'decline' ? undefined : providers[1];
 		});
 		try {
-			const controller = callerEditor.getContribution<FormatController>('editor.contrib.format')!;
-			const request = controller.formatDocument(error => errors.push((error as Error).message), outcome === 'silent' ? FormattingMode.Silent : FormattingMode.Explicit);
+			const request = callerEditor.invokeWithinContext(accessor => formatEditor(
+				callerEditor, accessor.get(ILanguageFeaturesService), accessor.get(IVersionedEditorWorkerClient),
+				FormattingKind.File, outcome === 'silent' ? FormattingMode.Silent : FormattingMode.Explicit,
+			)).catch(error => { errors.push((error as Error).message); });
 			await started;
 			if (outcome === 'cancel') callerEditor.setPosition(new stanza.Position(1, 3));
+			if (outcome === 'languageChoice') callerModel.setLanguage('typescript');
+			release();
 			await request;
 			return { value: callerEditor.getValue(), calls, modes, errors };
 		} finally {
 			selector.dispose();
+			callerModel.setLanguage(language);
 			other.dispose();
 			selected.dispose();
 		}
@@ -412,9 +423,7 @@ window.ashStandaloneIntegration = {
 			? stanza.languages.registerDocumentRangeFormattingEditProvider('*', { provideDocumentRangeFormattingEdits: provideEdits })
 			: stanza.languages.registerDocumentFormattingEditProvider('*', { provideDocumentFormattingEdits: provideEdits });
 		try {
-			const controller = callerEditor.getContribution<FormatController>('editor.contrib.format');
-			if (!controller) throw new Error('Formatting contribution is missing');
-			const formatting = controller.formatDocument(error => { throw error; });
+			const formatting = window.ashStandaloneIntegration.runLineAction('editor.action.formatDocument');
 			if (change === 'position' || change === 'returnPosition') callerEditor.setPosition(new stanza.Position(1, 3));
 			if (change === 'returnPosition') callerEditor.setPosition(new stanza.Position(1, 1));
 			if (change === 'model') callerEditor.setModel(ownedModel);

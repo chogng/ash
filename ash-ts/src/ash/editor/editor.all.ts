@@ -21,7 +21,6 @@ import "./contrib/find/browser/find.contribution.js";
 import './contrib/fontZoom/browser/fontZoom.js';
 import './contrib/folding/browser/folding.js';
 import "./contrib/format/browser/formatActions.js";
-import "./contrib/format/browser/formatController.js";
 import "./contrib/gotoError/browser/gotoError.contribution.js";
 import "./contrib/gotoSymbol/browser/gotoSymbol.contribution.js";
 import "./contrib/gotoSymbol/browser/languageNavigation.contribution.js";

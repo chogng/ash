@@ -1,3 +1,4 @@
+import { createServiceIdentifier } from '../../../platform/instantiation/common/instantiation.js';
 import { Disposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { Range } from '../../common/core/range.js';
 import { LanguageRequestCoordinator, LanguageRequestStatus } from '../../common/languages/languageRequestCoordinator.js';
@@ -15,6 +16,8 @@ import {
 import { type UnicodeHighlight } from '../../common/services/unicodeTextModelHighlighter.js';
 
 export type VersionedEditorWorkerFactory = (model: TextModel) => IVersionedEditorWorkerClient;
+
+export const IVersionedEditorWorkerClient = createServiceIdentifier<IVersionedEditorWorkerClient>('versionedEditorWorkerClient');
 
 export interface IVersionedEditorWorkerClient extends IDisposable {
 	computeUnicodeHighlights(signal?: AbortSignal): Promise<readonly UnicodeHighlight[] | undefined>;

@@ -3,9 +3,11 @@ import { KeyChord, KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { localize2 } from '../../../../nls.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import type { ICodeEditor } from '../../../browser/editorBrowser.js';
-import { EditorAction, registerEditorAction, type ServicesAccessor } from '../../../browser/editorExtensions.js';
+import { EditorAction, registerEditorAction, registerEditorContribution, type ServicesAccessor } from '../../../browser/editorExtensions.js';
 import { EditorContextKeys } from '../../../common/editorContextKeys.js';
-import type { FormatController } from './formatController.js';
+import { IVersionedEditorWorkerClient } from '../../../browser/services/editorWorkerService.js';
+import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
+import { formatEditor, FormattingKind, FormattingMode } from './format.js';
 
 class FormatDocumentAction extends EditorAction {
 	constructor() {
@@ -21,12 +23,15 @@ class FormatDocumentAction extends EditorAction {
 		});
 	}
 
-	public async run(_accessor: ServicesAccessor, editor: ICodeEditor): Promise<void> {
-		await editor.getContribution<FormatController>('editor.contrib.format')?.formatDocument();
+	public async run(accessor: ServicesAccessor, editor: ICodeEditor): Promise<void> {
+		if (!editor.getModel()) {
+			return;
+		}
+		await formatEditor(editor, accessor.get(ILanguageFeaturesService), accessor.get(IVersionedEditorWorkerClient), FormattingKind.File);
 	}
 }
 
-registerEditorAction(FormatDocumentAction);
+const formatDocumentAction = registerEditorAction(FormatDocumentAction);
 
 class FormatSelectionAction extends EditorAction {
 	constructor() {
@@ -42,9 +47,29 @@ class FormatSelectionAction extends EditorAction {
 		});
 	}
 
-	public async run(_accessor: ServicesAccessor, editor: ICodeEditor): Promise<void> {
-		await editor.getContribution<FormatController>('editor.contrib.format')?.formatSelection();
+	public async run(accessor: ServicesAccessor, editor: ICodeEditor): Promise<void> {
+		if (!editor.getModel()) {
+			return;
+		}
+		await formatEditor(editor, accessor.get(ILanguageFeaturesService), accessor.get(IVersionedEditorWorkerClient), FormattingKind.Selection);
 	}
 }
 
 registerEditorAction(FormatSelectionAction);
+
+registerEditorContribution({ id: 'editor.contrib.format', install: context => {
+	if (context.kind !== 'text') {
+		return;
+	}
+	context.register(context.editor.onKeyDown(event => {
+		if (event.browserEvent.defaultPrevented || event.isComposing || event.altKey || (!event.ctrlKey && !event.metaKey) || !event.shiftKey || event.key.toLowerCase() !== 'i') return;
+		event.stop();
+		void context.editor.invokeWithinContext(accessor => formatDocumentAction.run(accessor, context.editor)).catch(context.onLanguageError);
+	}));
+	if (!context.options.formatOnSave || !context.registerBeforeSave) {
+		return;
+	}
+	context.register(context.registerBeforeSave(() => formatEditor(
+		context.editor, context.languageFeaturesService, context.editorWorker, FormattingKind.File, FormattingMode.Silent,
+	).catch(context.onLanguageError)));
+} });
