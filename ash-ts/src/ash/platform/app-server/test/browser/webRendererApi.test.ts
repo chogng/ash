@@ -13,6 +13,43 @@ const connectorHostServices = {
 	clipboardService: { readText: async () => '', writeText: async () => undefined },
 };
 
+test('Web reconnect initializes again without replaying an uncertain write', async () => {
+	const transport = new FakeTransport();
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	try {
+		const pending = connected.api.fs.writeFile({ dirId: 'web-dev:test', path: 'main.ts', content: 'changed' });
+		const rejected = assert.rejects(pending, /backend restarted/);
+		transport.close('backend restarted');
+		await rejected;
+		await new Promise<void>((resolve, reject) => {
+			const timeout = setTimeout(() => reject(new Error('Web did not reconnect')), 3_000);
+			const subscription = connected.api.appServer.onConnectionState(state => {
+				if (state === 'ready') { clearTimeout(timeout); subscription.dispose(); resolve(); }
+			});
+		});
+		assert.equal(transport.requests.filter(request => request.method === 'initialize').length, 2);
+		assert.equal(transport.requests.filter(request => request.method === 'fs/writeFile').length, 1);
+		assert.deepEqual(await connected.api.session.list(), { sessions: [] });
+	} finally { connected.dispose(); }
+});
+
+test('Web disposal cancels scheduled reconnect and revoked authorization is terminal', async () => {
+	const transport = new FakeTransport();
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	transport.close('connection lost');
+	connected.dispose();
+	await new Promise(resolve => setTimeout(resolve, 600));
+	assert.equal(transport.sentEvents.filter(event => event === WEB_APP_SERVER_CONNECT_EVENT).length, 1);
+	const revokedTransport = new FakeTransport();
+	const revoked = await connectWebRendererApi(revokedTransport, connectorHostServices);
+	try {
+		revokedTransport.emit(WEB_APP_SERVER_CLOSED_EVENT, { intentional: true, message: 'Authorization revoked' });
+		await new Promise(resolve => setTimeout(resolve, 600));
+		assert.equal(await revoked.api.appServer.getConnectionState(), 'stopped');
+		assert.equal(revokedTransport.sentEvents.filter(event => event === WEB_APP_SERVER_CONNECT_EVENT).length, 1);
+	} finally { revoked.dispose(); }
+});
+
 class FakeTransport implements AppServerTransport {
 	private readonly listeners = new Map<string, Set<(payload: unknown) => void>>();
 	readonly requests: Array<Record<string, unknown>> = [];

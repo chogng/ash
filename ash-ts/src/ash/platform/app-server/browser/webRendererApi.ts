@@ -42,6 +42,27 @@ export async function connectWebRendererApi(transport: AppServerTransport, conne
 	const connection = new AppServerProtocolClient(transport, options);
 	try {
 		const metadata = await connection.connect();
+		let disposed = false;
+		let reconnecting = false;
+		let retryTimer: ReturnType<typeof setTimeout> | undefined;
+		let releaseWait: (() => void) | undefined;
+		const reconnect = connection.onStateChange(state => {
+			if (state !== 'crashed' || disposed || reconnecting) { return; }
+			reconnecting = true;
+			void (async () => {
+				const deadline = Date.now() + 5 * 60_000;
+				let delay = 500;
+				try {
+					while (!disposed && connection.state === 'crashed' && Date.now() < deadline) {
+						await new Promise<void>(resolve => { releaseWait = resolve; retryTimer = setTimeout(resolve, delay); });
+						releaseWait = undefined;
+						if (disposed || connection.state !== 'crashed') { return; }
+						try { await connection.connect(); return; }
+						catch { delay = Math.min(delay * 2, 10_000); }
+					}
+				} finally { reconnecting = false; }
+			})();
+		});
 		const instanceId = generateUuid();
 		const memoryDiagnostics = connection.capabilities?.contracts.memoryDiagnostics?.version === 1 ? new AppServerMemoryDiagnosticsService(connection, 'browser', async () => [{ instanceId, processId: null, role: 'renderer', phase: 'unknown', metrics: [{ kind: 'domNodes', value: document.getElementsByTagName('*').length, unavailable: null }, { kind: 'javaScriptHeapBytes', value: null, unavailable: 'unsupported' }, { kind: 'residentBytes', value: null, unavailable: 'unsupported' }] }]) : undefined;
 		const memories = connection.capabilities?.memories ? new AppServerMemoriesService(connection) : undefined;
@@ -49,7 +70,7 @@ export async function connectWebRendererApi(transport: AppServerTransport, conne
 		return {
 			api: { ...createRendererHost(connection, connectorHostServices, contributions), automation, memoryDiagnostics, memories },
 			metadata,
-			dispose: () => { memories?.dispose(); memoryDiagnostics?.dispose(); automation?.dispose(); connection.dispose(); },
+			dispose: () => { disposed = true; reconnect.dispose(); clearTimeout(retryTimer); releaseWait?.(); memories?.dispose(); memoryDiagnostics?.dispose(); automation?.dispose(); connection.dispose(); },
 		};
 	} catch (error) {
 		connection.dispose();

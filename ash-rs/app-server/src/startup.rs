@@ -55,7 +55,10 @@ pub fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
 }
 
 fn launch_web(arguments: &[String]) -> Result<(), String> {
+    let mut lease_id = [0_u8; 32];
+    getrandom::getrandom(&mut lease_id).map_err(|error| error.to_string())?;
     let mut web = ash_app_server_protocol::WebLaunchOptions {
+        lease_id,
         port: 0,
         assets: None,
         origin: None,

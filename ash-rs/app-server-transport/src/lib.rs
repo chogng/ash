@@ -6,6 +6,7 @@ mod local_socket;
 mod websocket;
 pub use browser::BrowserListener;
 pub use browser::BrowserOptions;
+pub use browser::browser_session_directory;
 pub use browser::start_browser_listener;
 
 pub use deadline_stream::DeadlineStream;

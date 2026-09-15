@@ -7,6 +7,7 @@ use ts_rs::TS;
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct WebLaunchOptions {
+    pub lease_id: [u8; 32],
     pub port: u16,
     pub assets: Option<std::path::PathBuf>,
     pub origin: Option<String>,

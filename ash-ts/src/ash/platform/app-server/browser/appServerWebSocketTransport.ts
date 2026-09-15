@@ -29,6 +29,8 @@ export class AppServerWebSocketTransport extends AbstractDisposable implements A
 	private readonly listeners = new Map<string, Set<(payload: unknown) => void>>();
 	private socket: WebSocket | undefined;
 	private closed = true;
+	private connectedBefore = false;
+	private authentication: AbortController | undefined;
 
 	constructor(private readonly endpoint: URL, private readonly session: WebSessionInfo) { super(); }
 
@@ -45,14 +47,8 @@ export class AppServerWebSocketTransport extends AbstractDisposable implements A
 		if (event === WEB_APP_SERVER_CONNECT_EVENT) {
 			if (!this.closed) { return; }
 			this.releaseSocket();
-			const url = new URL('/ash/app-server', this.endpoint);
-			url.protocol = 'ws:';
 			this.closed = false;
-			this.socket = new WebSocket(url, `ash-session.${this.session.token}`);
-			this.socket.addEventListener('open', this.handleOpen);
-			this.socket.addEventListener('message', this.handleMessage);
-			this.socket.addEventListener('close', this.handleClose);
-			this.socket.addEventListener('error', this.handleClose);
+			void this.openSocket();
 			return;
 		}
 		if (event === WEB_APP_SERVER_DISCONNECT_EVENT) { this.handleClose(); return; }
@@ -65,8 +61,43 @@ export class AppServerWebSocketTransport extends AbstractDisposable implements A
 	}
 
 	private readonly handleOpen = (): void => {
+		this.connectedBefore = true;
 		this.emit(WEB_APP_SERVER_CONNECTED_EVENT, { protocolVersion: WEB_APP_SERVER_PROTOCOL_VERSION, workspaceId: this.session.workspaceId, workspaceRoot: this.session.workspaceRoot });
 	};
+
+	private async openSocket(): Promise<void> {
+		const authentication = new AbortController();
+		this.authentication = authentication;
+		try {
+			if (this.connectedBefore) {
+				const response = await fetch(new URL('/ash/session', this.endpoint), {
+					method: 'POST', credentials: 'omit', cache: 'no-store',
+					headers: { Authorization: `Bearer ${this.session.token}` }, body: '',
+					signal: AbortSignal.any([authentication.signal, AbortSignal.timeout(10_000)]),
+				});
+				if (response.status === 401 || response.status === 403) {
+					this.closed = true;
+					this.emit(WEB_APP_SERVER_CLOSED_EVENT, { intentional: true, message: 'Web authorization expired or was revoked. Open a new authenticated link.' });
+					return;
+				}
+				if (!response.ok) { throw new Error('Web App Server is unavailable'); }
+				const session = decodeWebSessionInfo(await response.json());
+				if (session.workspaceId !== this.session.workspaceId || session.workspaceRoot !== this.session.workspaceRoot) {
+					this.closed = true;
+					this.emit(WEB_APP_SERVER_CLOSED_EVENT, { intentional: true, message: 'Web workspace changed. Open a new authenticated link.' });
+					return;
+				}
+			}
+			if (authentication.signal.aborted || this.isDisposed || this.closed) { return; }
+			const url = new URL('/ash/app-server', this.endpoint);
+			url.protocol = 'ws:';
+			this.socket = new WebSocket(url, `ash-session.${this.session.token}`);
+			this.socket.addEventListener('open', this.handleOpen);
+			this.socket.addEventListener('message', this.handleMessage);
+			this.socket.addEventListener('close', this.handleClose);
+			this.socket.addEventListener('error', this.handleClose);
+		} catch { if (!authentication.signal.aborted) { this.handleClose(); } }
+	}
 
 	private readonly handleMessage = (event: MessageEvent): void => {
 		if (typeof event.data !== 'string' || new TextEncoder().encode(event.data).byteLength > maxBufferedBytes) { this.handleClose(); return; }
@@ -85,6 +116,8 @@ export class AppServerWebSocketTransport extends AbstractDisposable implements A
 	}
 
 	private releaseSocket(): void {
+		this.authentication?.abort();
+		this.authentication = undefined;
 		const socket = this.socket;
 		this.socket = undefined;
 		if (!socket) { return; }

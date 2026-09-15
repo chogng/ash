@@ -11,7 +11,7 @@ import { Workbench } from '../../../automation/workbench.js';
 const repository = resolve(import.meta.dirname, '../../../../..');
 
 for (const mode of ['production', 'development'] as const) {
-	test(`Web ${mode} authenticates a real page and releases its listener`, async ({ target, testWorkspace }) => {
+	test(`Web ${mode} reconnects after backend restart without reloading and revokes closed launches`, async ({ target, testWorkspace }) => {
 		test.skip(target.kind !== 'browser' || target.appServerMode !== 'required', 'Requires built Web and App Server artifacts');
 		test.setTimeout(90_000);
 		const profile = await mkdtemp(join(tmpdir(), 'ash-web-lifecycle-'));
@@ -41,22 +41,39 @@ for (const mode of ['production', 'development'] as const) {
 				expect(await page.evaluate(() => performance.getEntriesByType('resource').some(entry => entry.name.includes('/@vite/client')))).toBe(true);
 				await page.reload();
 				await expectWorkspace(page);
-			} else {
-				await stopBackend(env);
-				await expect.poll(() => launch!.child.exitCode).not.toBeNull();
-				await expect.poll(async () => {
-					try { await fetch(session.endpoint, { signal: AbortSignal.timeout(500) }); return true; } catch { return false; }
-				}).toBe(false);
-				launch = await launchWeb(mode, port, env);
-				const denied = await fetch(new URL('/ash/session', session.endpoint), { method: 'POST', headers: { Origin: new URL(session.endpoint).origin, Authorization: `Bearer ${session.token}` } });
-				expect(denied.status).toBe(401);
-				await Promise.all([page.waitForEvent('load'), page.goto(launch.url)]);
-				await expectWorkspace(page);
 			}
+			await page.evaluate(() => {
+				(globalThis as typeof globalThis & { acceptanceHost: unknown }).acceptanceHost = globalThis.ashWebWorkbenchHost;
+			});
+			await stopBackend(env);
+			await expect.poll(async () => {
+				try { await fetch(session.endpoint, { signal: AbortSignal.timeout(500) }); return true; } catch { return false; }
+			}).toBe(false);
+			expect(launch.child.exitCode).toBeNull();
+			await stopBackend(env, 'start');
+			await expect.poll(async () => {
+				return page.evaluate(async () => {
+					try {
+						const host = globalThis.ashWebWorkbenchHost!;
+						return (await host.api.fs.readFile({ dirId: host.workspace!.id, path: 'main.ts' })).content;
+					} catch { return undefined; }
+				});
+			}, { timeout: 30_000 }).toBe('const value = 1;\n');
+			expect(await page.evaluate(() => (globalThis as typeof globalThis & { acceptanceHost: unknown }).acceptanceHost === globalThis.ashWebWorkbenchHost)).toBe(true);
+			const resumed = await fetch(new URL('/ash/session', session.endpoint), { method: 'POST', headers: { Origin: mode === 'development' ? new URL(page.url()).origin : new URL(session.endpoint).origin, Authorization: `Bearer ${session.token}` } });
+			expect(resumed.status).toBe(200);
+
 			await stop(launch.child);
 			await expect.poll(async () => {
 				try { await fetch(session.endpoint, { signal: AbortSignal.timeout(500) }); return true; } catch { return false; }
 			}).toBe(false);
+			if (mode === 'production') {
+				launch = await launchWeb(mode, port, env);
+				const revoked = await fetch(new URL('/ash/session', session.endpoint), { method: 'POST', headers: { Origin: new URL(session.endpoint).origin, Authorization: `Bearer ${session.token}` } });
+				expect(revoked.status).toBe(401);
+				await Promise.all([page.waitForEvent('load'), page.goto(launch.url)]);
+				await expectWorkspace(page);
+			}
 		} catch (error) {
 			throw new Error(`${String(error)}\n${diagnostics.slice(-12).join('\n')}\n${await page.locator('body').innerText()}`, { cause: error });
 		} finally {
@@ -107,11 +124,11 @@ async function launchWeb(mode: 'production' | 'development', port: number, env: 
 	} catch (error) { await stop(child); throw error; }
 }
 
-async function stopBackend(env: NodeJS.ProcessEnv): Promise<void> {
+async function stopBackend(env: NodeJS.ProcessEnv, command: 'stop' | 'start' = 'stop'): Promise<void> {
 	const root = developmentAshPackagePath(repository, 'packaged-node');
 	const executable = join(root, 'bin', process.platform === 'win32' ? 'ash-app-server-daemon.exe' : 'ash-app-server-daemon');
 	await new Promise<void>((resolveExit, reject) => {
-		const child = spawn(executable, ['stop'], { env, stdio: 'ignore', windowsHide: true });
+		const child = spawn(executable, [command], { env, stdio: 'ignore', windowsHide: true });
 		child.once('error', reject);
 		child.once('exit', code => code === 0 ? resolveExit() : reject(new Error(`Backend stop failed: ${code}`)));
 	});

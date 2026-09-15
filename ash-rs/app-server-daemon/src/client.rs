@@ -84,17 +84,112 @@ pub(crate) fn connect(options: ConnectionOptions, backend_executable: &Path) -> 
 
 pub(crate) fn launch_web(
     options: ConnectionOptions,
-    web: ash_app_server_protocol::WebLaunchOptions,
+    mut web: ash_app_server_protocol::WebLaunchOptions,
     backend_executable: &Path,
 ) -> Result<(), String> {
+    use std::io::Write;
+    use std::sync::mpsc;
     run_lifecycle(LifecycleCommand::Start, options.clone(), backend_executable)?;
     let endpoint = EndpointPaths::prepare(options.profile_root())?;
-    let mut stream = connect_existing(&endpoint.socket)?
-        .ok_or_else(|| "Managed App Server exited before Web launch".to_string())?;
-    let mut prelude = ConnectionPrelude::from_options(&options);
-    prelude.web = Some(web);
-    write_json_line(&mut stream, &prelude).map_err(io_error)?;
-    relay_stdio(stream).map_err(io_error)
+    let workspace = dunce::canonicalize(
+        options
+            .dir_root()
+            .ok_or("Web launch requires a workspace")?,
+    )
+    .map_err(io_error)?;
+    let directory = ash_app_server_transport::browser_session_directory(
+        options.profile_root(),
+        &workspace,
+        web.origin.as_deref(),
+        &web.lease_id,
+    );
+    let (events, receiver) = mpsc::channel();
+    let input_events = events.clone();
+    thread::Builder::new()
+        .name("ash-web-lease-input".into())
+        .spawn(move || {
+            let _ = io::stdin().lock().read(&mut [0_u8; 1]);
+            let _ = input_events.send(true);
+        })
+        .map_err(io_error)?;
+    let mut published = false;
+    loop {
+        match receiver.recv_timeout(Duration::from_millis(250)) {
+            Ok(true) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            _ => {}
+        }
+        let Some(control) = request_control(&endpoint, ControlCommand::Status)? else {
+            continue;
+        };
+        if control.state == ControlState::Stopping {
+            continue;
+        }
+        validate_managed_response(&endpoint, &control)?;
+        let Some(stream) = connect_existing(&endpoint.socket)? else {
+            continue;
+        };
+        let mut stream =
+            DeadlineStream::new(stream, Instant::now() + START_TIMEOUT).map_err(io_error)?;
+        let mut prelude = ConnectionPrelude::from_options(&options);
+        prelude.web = Some(web.clone());
+        write_json_line(&mut stream, &prelude).map_err(io_error)?;
+        let mut reader = BufReader::new(stream);
+        let mut line = String::new();
+        (&mut reader)
+            .take(16_385)
+            .read_line(&mut line)
+            .map_err(io_error)?;
+        if line.len() > 16_384 || !line.ends_with('\n') {
+            return Err("Invalid Web listener response".into());
+        }
+        let info: ash_app_server_protocol::WebListenInfo =
+            serde_json::from_str(&line).map_err(|error| error.to_string())?;
+        let port = info
+            .endpoint
+            .strip_prefix("http://127.0.0.1:")
+            .and_then(|value| value.strip_suffix('/'))
+            .and_then(|value| value.parse::<u16>().ok())
+            .filter(|port| *port != 0)
+            .ok_or("Invalid Web listener endpoint")?;
+        if published && port != web.port {
+            return Err("Web listener changed its port".into());
+        }
+        web.port = port;
+        reader.get_mut().clear_deadline().map_err(io_error)?;
+        let shutdown = reader.get_ref().try_clone().map_err(io_error)?;
+        if !published {
+            io::stdout()
+                .lock()
+                .write_all(line.as_bytes())
+                .map_err(io_error)?;
+            io::stdout().lock().flush().map_err(io_error)?;
+            published = true;
+        }
+        let closed_events = events.clone();
+        let closed = thread::Builder::new()
+            .name("ash-web-lease-backend".into())
+            .spawn(move || {
+                let _ = reader.read(&mut [0_u8; 1]);
+                let _ = closed_events.send(false);
+            })
+            .map_err(io_error)?;
+        let stopping = receiver.recv().unwrap_or(true);
+        let _ = shutdown.shutdown(Shutdown::Both);
+        closed
+            .join()
+            .map_err(|_| "Web lease reader panicked".to_string())?;
+        if stopping {
+            break;
+        }
+    }
+    if published {
+        match std::fs::remove_file(directory.join(format!("{}.session", web.port))) {
+            Ok(()) => {}
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.to_string()),
+        }
+    }
+    Ok(())
 }
 
 fn start_unlocked(

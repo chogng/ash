@@ -9,6 +9,8 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use bytes::Bytes;
 use http_body_util::BodyExt;
@@ -47,9 +49,10 @@ pub struct BrowserOptions {
     pub port: u16,
     pub assets: Option<PathBuf>,
     pub origin: Option<String>,
+    pub session_directory: Option<PathBuf>,
 }
 
-/// Listener lease. Dropping it revokes browser sessions and closes their connections.
+/// Listener lease. Dropping it closes connections; the launcher owns persisted authorization revocation.
 pub struct BrowserListener {
     address: SocketAddr,
     ticket: String,
@@ -83,11 +86,17 @@ impl Drop for BrowserListener {
 
 struct Authority {
     ticket: Option<([u8; 32], Instant)>,
-    sessions: BTreeMap<[u8; 32], Instant>,
+    sessions: BTreeMap<[u8; 32], SystemTime>,
+    path: Option<PathBuf>,
 }
 
 impl Authority {
     fn exchange(&mut self, value: &str) -> io::Result<Option<String>> {
+        self.sessions
+            .retain(|_, expires| *expires > SystemTime::now());
+        if self.sessions.len() >= 128 {
+            return Ok(None);
+        }
         let valid = self.ticket.as_ref().is_some_and(|(expected, expires)| {
             *expires > Instant::now() && constant_time_eq(expected, &digest(value))
         });
@@ -97,18 +106,109 @@ impl Authority {
         let token = random_token()?;
         self.ticket = None;
         self.sessions
-            .insert(digest(&token), Instant::now() + SESSION_LIFETIME);
+            .insert(digest(&token), SystemTime::now() + SESSION_LIFETIME);
+        self.save()?;
         Ok(Some(token))
     }
 
     fn authorize(&mut self, value: &str) -> bool {
-        self.sessions.retain(|_, expires| *expires > Instant::now());
+        self.sessions
+            .retain(|_, expires| *expires > SystemTime::now());
         let Some(expires) = self.sessions.get_mut(&digest(value)) else {
             return false;
         };
-        *expires = Instant::now() + SESSION_LIFETIME;
-        true
+        *expires = SystemTime::now() + SESSION_LIFETIME;
+        self.save().is_ok()
     }
+
+    fn load(path: Option<PathBuf>, ticket: &str) -> io::Result<Self> {
+        use std::io::Read;
+        let mut authority = Self {
+            ticket: Some((digest(ticket), Instant::now() + TICKET_LIFETIME)),
+            sessions: BTreeMap::new(),
+            path,
+        };
+        if let Some(path) = &authority.path {
+            match std::fs::File::open(path) {
+                Ok(file) => {
+                    let mut bytes = Vec::new();
+                    file.take(128 * 40 + 1).read_to_end(&mut bytes)?;
+                    if bytes.len() > 128 * 40 || bytes.len() % 40 != 0 {
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "Invalid Web session store",
+                        ));
+                    }
+                    for entry in bytes.chunks_exact(40) {
+                        let key: [u8; 32] = entry[..32].try_into().expect("fixed digest");
+                        let seconds =
+                            u64::from_le_bytes(entry[32..].try_into().expect("fixed timestamp"));
+                        let expires = UNIX_EPOCH
+                            .checked_add(Duration::from_secs(seconds))
+                            .ok_or_else(|| {
+                                io::Error::new(io::ErrorKind::InvalidData, "Invalid session expiry")
+                            })?;
+                        if expires > SystemTime::now() {
+                            authority.sessions.insert(key, expires);
+                        }
+                    }
+                }
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(authority)
+    }
+
+    fn save(&self) -> io::Result<()> {
+        use std::io::Write;
+        let Some(path) = &self.path else {
+            return Ok(());
+        };
+        std::fs::create_dir_all(path.parent().expect("session directory"))?;
+        let temporary = path.with_extension("tmp");
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create(true).truncate(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let mut file = options.open(&temporary)?;
+        for (key, expires) in &self.sessions {
+            file.write_all(key)?;
+            file.write_all(
+                &expires
+                    .duration_since(UNIX_EPOCH)
+                    .map_err(io::Error::other)?
+                    .as_secs()
+                    .to_le_bytes(),
+            )?;
+        }
+        file.sync_all()?;
+        drop(file);
+        std::fs::rename(temporary, path)
+    }
+}
+
+/// Separates persisted Web authorization by profile, canonical workspace and development origin.
+pub fn browser_session_directory(
+    profile: &std::path::Path,
+    workspace: &std::path::Path,
+    origin: Option<&str>,
+    lease_id: &[u8; 32],
+) -> PathBuf {
+    let scope = format!(
+        "{}\n{}",
+        workspace.display(),
+        origin.unwrap_or("same-origin")
+    );
+    let key: String = digest(&scope)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    let lease: String = lease_id.iter().map(|byte| format!("{byte:02x}")).collect();
+    profile.join("web-sessions").join(key).join(lease)
 }
 
 struct Boundary {
@@ -140,10 +240,12 @@ where
         host: address.to_string(),
         origin,
         assets,
-        authority: Mutex::new(Authority {
-            ticket: Some((digest(&ticket), Instant::now() + TICKET_LIFETIME)),
-            sessions: BTreeMap::new(),
-        }),
+        authority: Mutex::new(Authority::load(
+            options
+                .session_directory
+                .map(|directory| directory.join(format!("{}.session", address.port()))),
+            &ticket,
+        )?),
     });
     let (shutdown, mut stopping) = watch::channel(false);
     let handler = Arc::new(handler);

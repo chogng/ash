@@ -21,6 +21,7 @@ fn authenticates_browser_sessions_and_preserves_independent_connections() {
         let accepted = Arc::clone(&calls);
         let listener = start_browser_listener(
             BrowserOptions {
+                session_directory: None,
                 port: 0,
                 assets: None,
                 origin: None,
@@ -165,6 +166,7 @@ fn static_assets_cannot_escape_the_launch_root_or_accept_another_host() {
     runtime.block_on(async {
         let listener = start_browser_listener(
             BrowserOptions {
+                session_directory: None,
                 port: 0,
                 assets: Some(root),
                 origin: None,
@@ -207,11 +209,13 @@ fn expired_tickets_and_sessions_cannot_be_used() {
     let mut authority = Authority {
         ticket: Some((digest("ticket"), Instant::now() - Duration::from_secs(1))),
         sessions: BTreeMap::new(),
+        path: None,
     };
     assert!(authority.exchange("ticket").unwrap().is_none());
-    authority
-        .sessions
-        .insert(digest("session"), Instant::now() - Duration::from_secs(1));
+    authority.sessions.insert(
+        digest("session"),
+        SystemTime::now() - Duration::from_secs(1),
+    );
     assert!(!authority.authorize("session"));
     assert!(validate_origin("http://127.0.0.1:5173").is_ok());
     for origin in [
@@ -222,6 +226,60 @@ fn expired_tickets_and_sessions_cannot_be_used() {
     ] {
         assert!(validate_origin(origin).is_err());
     }
+}
+
+#[test]
+fn sessions_survive_backend_restart_but_not_revocation_or_workspace_changes() {
+    let root = tempfile::tempdir().unwrap();
+    let directory = browser_session_directory(
+        root.path(),
+        std::path::Path::new("workspace-a"),
+        None,
+        &[1; 32],
+    );
+    assert_ne!(
+        directory,
+        browser_session_directory(
+            root.path(),
+            std::path::Path::new("workspace-a"),
+            None,
+            &[2; 32]
+        )
+    );
+    let path = directory.join("5174.session");
+    let mut first = Authority::load(Some(path.clone()), "initial-ticket").unwrap();
+    let token = first.exchange("initial-ticket").unwrap().unwrap();
+    let stored = std::fs::read(&path).unwrap();
+    assert!(
+        !stored
+            .windows(token.len())
+            .any(|bytes| bytes == token.as_bytes())
+    );
+    drop(first);
+    let mut restored = Authority::load(Some(path.clone()), "new-ticket").unwrap();
+    assert!(restored.authorize(&token));
+    assert!(restored.exchange("initial-ticket").unwrap().is_none());
+    std::fs::remove_file(&path).unwrap();
+    let mut revoked = Authority::load(Some(path), "another-ticket").unwrap();
+    assert!(!revoked.authorize(&token));
+    assert_ne!(
+        directory,
+        browser_session_directory(
+            root.path(),
+            std::path::Path::new("workspace-b"),
+            None,
+            &[1; 32]
+        )
+    );
+    assert_ne!(
+        directory,
+        browser_session_directory(
+            root.path(),
+            std::path::Path::new("workspace-a"),
+            Some("http://127.0.0.1:5173"),
+            &[1; 32],
+        )
+    );
 }
 
 fn request(

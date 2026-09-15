@@ -31,6 +31,12 @@ pub(super) fn serve(
     let workspace_id = server
         .browser_workspace_id(std::path::Path::new(&workspace_root))
         .map_err(io::Error::other)?;
+    let session_directory = ash_app_server_transport::browser_session_directory(
+        connection.options.profile_root(),
+        std::path::Path::new(&workspace_root),
+        options.origin.as_deref(),
+        &options.lease_id,
+    );
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()
@@ -41,6 +47,7 @@ pub(super) fn serve(
                 port: options.port,
                 assets: options.assets,
                 origin: options.origin,
+                session_directory: Some(session_directory),
             },
             move |reader, writer| {
                 if let Err(error) = server.serve_jsonl(BufReader::new(reader), writer)
