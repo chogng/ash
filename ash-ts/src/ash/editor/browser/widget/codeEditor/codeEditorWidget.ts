@@ -7,7 +7,7 @@ import { CursorsController } from "../../../common/cursor/cursor.js";
 import { type IDimension } from '../../../common/core/2d/dimension.js';
 import { Selection, type ISelection } from "../../../common/core/selection.js";
 import { Position } from "../../../common/core/position.js";
-import { Range } from "../../../common/core/range.js";
+import { Range, type IRange } from "../../../common/core/range.js";
 import { TextModel } from "../../../common/model/textModel.js";
 import { type ICursorStateComputer, type IIdentifiedSingleEditOperation, type IModelDecoration, type IModelDecorationsChangeAccessor, type IModelDeltaDecoration, type ITextModel } from '../../../common/model.js';
 import { type IModelDecorationsChangedEvent } from '../../../common/textModelEvents.js';
@@ -940,9 +940,19 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		return this.currentModel ? this.viewModel.getSelections() : null;
 	}
 
-	setSelection(selection: ISelection, source?: string): void {
+	setSelection(selection: IRange, source?: string): void;
+	setSelection(selection: ISelection, source?: string): void;
+	setSelection(selection: IRange | ISelection, source = 'api'): void {
+		let cursorSelection: ISelection;
+		if (Selection.isISelection(selection)) {
+			cursorSelection = selection;
+		} else if (Range.isIRange(selection)) {
+			cursorSelection = new Selection(selection.startLineNumber, selection.startColumn, selection.endLineNumber, selection.endColumn);
+		} else {
+			throw new TypeError('Editor selection must be a range or a selection');
+		}
 		if (!this.currentModel) return;
-		this.viewModel.setSelections(source, [selection]);
+		this.viewModel.setSelections(source, [cursorSelection]);
 	}
 
 	setPosition(position: import('../../../common/core/position.js').IPosition, source?: string): void {

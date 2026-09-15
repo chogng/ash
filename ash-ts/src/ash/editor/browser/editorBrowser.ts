@@ -219,6 +219,7 @@ export interface ICodeEditor {
 	getSelection(): Selection | null;
 	getSelections(): Selection[] | null;
 	setPosition(position: IPosition, source?: string): void;
+	setSelection(selection: IRange, source?: string): void;
 	setSelection(selection: ISelection, source?: string): void;
 	setSelections(selections: readonly ISelection[], source?: string): void;
 	executeCommand(source: string | null | undefined, command: ICommand): void;

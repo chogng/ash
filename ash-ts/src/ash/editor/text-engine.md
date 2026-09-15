@@ -88,6 +88,8 @@ flowchart LR
 
 共享模型的编辑器各自持有选区；一个编辑器的输入、撤销和重做不能让未聚焦的另一个编辑器接管焦点或选区。
 
+`ICodeEditor.setSelection` 接受 `Range / IRange` 或 `Selection / ISelection`。范围的起止坐标转为选区锚点与光标；带方向的选区保留方向。入口拒绝形状不合法的参数，坐标约束与次光标清理由既有 ViewModel/Cursor 完成；选区事件保留显式来源，省略时使用 `api`。未挂载模型时，合法调用不改变状态。
+
 Alt 点选通过当前 `ViewModelImpl` 增删光标，不把光标列表写入共享模型；`CursorsController` 将所有光标的一次输入合成同一个 `TextModel` 事务，撤销也以这次事务为边界。
 
 当前生产构造已经是 `ViewModelImpl → CursorsController → CursorCollection → Cursor`，`CodeEditorWidget` 只通过内部入口取得同一个 controller，不再创建第二份 selection owner。模型内容事件由 ViewModel 的 collector 进入 `CursorsController.onModelContentChanged`，flush 会重建 collection 和 tracked marker；同一状态变化不会再由 collector 与 controller 事件重复投影。Contribution context 分别暴露真实 `IViewModel` 和同一份 `selectionController`，不再用选择 owner 冒充视图模型。键盘、行选择和上下添加多光标通过 `CursorMoveCommands` 的标准模型/视图状态 API；删除、输入、转置和行操作使用 `MoveOperations` 的标准位置 API。剩余缺口是 contribution 仍直接调用若干仅本地 controller 入口，需继续迁回 `IViewModel` / `ICodeEditor` 的标准公共边界。

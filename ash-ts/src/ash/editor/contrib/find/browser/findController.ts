@@ -304,7 +304,7 @@ export class FindController extends Disposable {
 		const match = this.matches[index];
 		if (!match) return;
 		this.currentMatchIndex = index;
-		this.editor.setSelection(Selection.fromPositions(match.range.getStartPosition(), match.range.getEndPosition()), 'find');
+		this.editor.setSelection(match.range, 'find');
 		this.viewport.revealPosition(match.range.getStartPosition());
 		this.projectResultLabel(this.matchesTruncated);
 	}

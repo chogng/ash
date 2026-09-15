@@ -1,5 +1,25 @@
 import { expect, test } from '@playwright/test';
 
+test('public range selection replaces the selected text through keyboard input and undo', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/standalone.html');
+	const before = await page.evaluate(() => window.ashStandaloneIntegration.prepareKeyboardEditing());
+	const input = page.locator('#caller .stanza-editor-input');
+	await input.focus();
+	const selected = await page.evaluate(() => window.ashStandaloneIntegration.selectRange());
+	expect(selected).toEqual({ value: 'first\nsecond', version: before.version, selection: '[1,2 -> 2,4]', focused: true });
+	await expect(page.locator('#caller .stanza-editor-selection')).toHaveCount(2);
+	await expect(input).toBeFocused();
+	await page.keyboard.type('X');
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('fXond');
+	await page.keyboard.press('ControlOrMeta+z');
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('first\nsecond');
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().selection)).toBe('[1,2 -> 2,4]');
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	expect(errors).toEqual([]);
+});
+
 test('standalone editors type and release their models, contributions, registry entries, and DOM', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.stack ?? error.message));

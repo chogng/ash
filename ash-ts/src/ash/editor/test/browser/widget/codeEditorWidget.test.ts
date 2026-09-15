@@ -396,6 +396,59 @@ test('editor configuration updates rerender line-number, selection, whitespace, 
 	dom.window.close();
 });
 
+test('setSelection accepts ranges, preserves selection direction, and reports its source', () => {
+	using model = new TextModel('alpha\nbeta');
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using closeWindow = toDisposable(() => dom.window.close());
+	const container = requiredElement<HTMLElement>(dom.window.document, 'main');
+	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId() });
+	const api: ICodeEditor = editor;
+	const events: { selection: string; source: string }[] = [];
+	using listener = api.onDidChangeCursorSelection(event => events.push({ selection: event.selection.toString(), source: event.source }));
+	api.setSelections([new Selection(1, 1, 1, 1), new Selection(2, 1, 2, 1)]);
+	events.length = 0;
+	const version = model.getVersionId();
+
+	api.setSelection(new Range(1, 2, 1, 4), 'find');
+	assert.deepEqual(api.getSelections(), [new Selection(1, 2, 1, 4)]);
+	api.setSelection({ startLineNumber: 1, startColumn: 3, endLineNumber: 9, endColumn: 99 });
+	assert.deepEqual(api.getSelection(), new Selection(1, 3, 2, 5));
+	api.setSelection(new Selection(2, 4, 1, 2), 'reverse');
+	assert.deepEqual(api.getSelection(), new Selection(2, 4, 1, 2));
+	api.setSelection({ selectionStartLineNumber: 2, selectionStartColumn: 3, positionLineNumber: 1, positionColumn: 1 });
+	assert.deepEqual(api.getSelection(), new Selection(2, 3, 1, 1));
+	assert.deepEqual(events, [
+		{ selection: '[1,2 -> 1,4]', source: 'find' },
+		{ selection: '[1,3 -> 2,5]', source: 'api' },
+		{ selection: '[2,4 -> 1,2]', source: 'reverse' },
+		{ selection: '[2,3 -> 1,1]', source: 'api' },
+	]);
+	assert.equal(model.getVersionId(), version);
+});
+
+test('setSelection rejects malformed input without changing selection or detached editor state', () => {
+	using model = new TextModel('alpha');
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using closeWindow = toDisposable(() => dom.window.close());
+	const container = requiredElement<HTMLElement>(dom.window.document, 'main');
+	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId() });
+	const selection = new Selection(1, 2, 1, 4);
+	editor.setSelection(selection);
+	let changes = 0;
+	using listener = editor.onDidChangeCursorSelection(() => changes++);
+	for (const value of [null, undefined, {}, { startLineNumber: 1, startColumn: 1 }]) {
+		assert.throws(() => Reflect.apply(editor.setSelection, editor, [value]), TypeError);
+	}
+	assert.deepEqual(editor.getSelection(), selection);
+	assert.equal(changes, 0);
+	editor.setModel(null);
+	editor.setSelection(new Range(1, 1, 2, 3));
+	assert.equal(editor.getSelection(), null);
+	assert.throws(() => Reflect.apply(editor.setSelection, editor, [null]), TypeError);
+});
+
 test('executeEdits applies one editor transaction and its requested cursor state', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;

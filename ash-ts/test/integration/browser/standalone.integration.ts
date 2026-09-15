@@ -93,6 +93,7 @@ interface StandaloneHarness {
 	getCallerPosition(): { readonly lineNumber: number; readonly column: number } | null;
 	prepareKeyboardEditing(): KeyboardEditingState;
 	readKeyboardEditing(): KeyboardEditingState;
+	selectRange(): KeyboardEditingState;
 	prepareClipboard(): KeyboardEditingState;
 	prepareWrappedLayout(): WrappedLayoutState;
 	prepareProportionalWrap(): WrappedLayoutState;
@@ -378,6 +379,10 @@ window.ashStandaloneIntegration = {
 		return readKeyboardEditing();
 	},
 	readKeyboardEditing,
+	selectRange: () => {
+		callerEditor.setSelection({ startLineNumber: 1, startColumn: 2, endLineNumber: 2, endColumn: 4 });
+		return readKeyboardEditing();
+	},
 	prepareClipboard: () => {
 		callerEditor.setValue('alpha beta');
 		callerEditor.setSelection(new stanza.Selection(1, 1, 1, 6));

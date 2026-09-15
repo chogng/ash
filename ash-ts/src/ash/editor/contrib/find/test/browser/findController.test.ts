@@ -1,17 +1,12 @@
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
-import { type TextMeasurer } from "../../../../common/viewModel/textMeasurer.js";
-import { type ICodeEditor } from '../../../../browser/editorBrowser.js';
 import { TextDecorationCollection } from "../../../../common/model/decorationCollection.js";
 import { CursorsController } from "../../../../common/cursor/cursor.js";
-import { Selection, type ISelection } from "../../../../common/core/selection.js";
+import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";
-import { type ICommand } from '../../../../common/editorCommon.js';
 import { TextModel } from "../../../../common/model/textModel.js";
-import { h } from "../../../../../base/browser/dom.js";
-import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -28,7 +23,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { TestView: View } = await import("../../../../test/browser/viewModel/testViewModel.js");
+const { CodeEditorWidget } = await import("../../../../browser/widget/codeEditor/codeEditorWidget.js");
 const { FindController } = await import("../../browser/findController.js");
 
 suiteTeardown(() => browserEnvironment.window.close());
@@ -173,7 +168,7 @@ interface Fixture extends Disposable {
 	readonly model: TextModel;
 	readonly selections: CursorsController;
 	readonly decorations: TextDecorationCollection<void>;
-	readonly viewport: InstanceType<typeof View>;
+	readonly viewport: InstanceType<typeof CodeEditorWidget>["viewport"];
 	readonly editorInput: HTMLTextAreaElement;
 	readonly find: InstanceType<typeof FindController>;
 }
@@ -182,19 +177,20 @@ function createFixture(text: string, anchor = new Position((0) + 1, (0) + 1), ac
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	const model = new TextModel(text);
-	const selections = createTestCursorsController(model, [Selection.fromPositions(anchor, active)]);
-	const decorations = new TextDecorationCollection<void>(model);
-	const viewport = new View({
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const editor = new CodeEditorWidget({
 		container,
 		model,
 		lineHeight: 20,
-		textMeasurer: new FixedTextMeasurer(),
-		selectionController: selections,
+		input: { resource: model.uri },
+		languageId: model.getLanguageId(),
 	});
-	viewport.layout({ width: 600, height: 120 });
-	const editorInput = h(dom.window.document, "textarea") as unknown as HTMLTextAreaElement;
-	viewport.domNode.domNode.append(editorInput);
-	const find = new FindController(editorInput, createEditor(model, selections), viewport, decorations, options);
+	editor.layout({ width: 600, height: 120 });
+	editor.setSelection(Selection.fromPositions(anchor, active));
+	const { viewport, selections } = editor;
+	const decorations = new TextDecorationCollection<void>(model);
+	const editorInput = requiredElement<HTMLTextAreaElement>(container, ".stanza-editor-input");
+	const find = new FindController(editorInput, editor, viewport, decorations, options);
 	return {
 		dom,
 		model,
@@ -205,24 +201,12 @@ function createFixture(text: string, anchor = new Position((0) + 1, (0) + 1), ac
 		find,
 		[Symbol.dispose](): void {
 			find.dispose();
-			editorInput.remove();
-			viewport.dispose();
 			decorations.dispose();
-			selections.dispose();
+			editor.dispose();
 			model.dispose();
 			dom.window.close();
 		},
 	};
-}
-
-function createEditor(model: TextModel, selections: CursorsController): ICodeEditor {
-	return {
-		getModel: () => model,
-		getSelection: () => selections.getSelections()[0] ?? null,
-		setSelection: (selection: ISelection) => selections.setSelections([Selection.liftSelection(selection)]),
-		pushUndoStop: () => selections.pushUndoStop(),
-		executeCommand: (source: string | null | undefined, command: ICommand) => selections.executeCommand(command, source),
-	} as unknown as ICodeEditor;
 }
 
 function setInputValue(input: HTMLInputElement, value: string): void {
@@ -243,17 +227,4 @@ function requiredElement<T extends Element = HTMLElement>(root: ParentNode, sele
 	const element = root.querySelector<T>(selector);
 	assert.ok(element);
 	return element;
-}
-
-class FixedTextMeasurer implements TextMeasurer {
-	readonly horizontalPadding = 24;
-	readonly contentLeftPadding = 12;
-
-	refresh(): boolean {
-		return false;
-	}
-
-	measureLineWidth(text: string): number {
-		return text.length * 10;
-	}
 }
