@@ -1,8 +1,10 @@
 //! Converts Ash authority into Microsoft MXC SDK requests and adapts its process handles.
 mod policy;
 mod process;
+mod pty;
+pub use pty::PTY_HELPER_ARGUMENT;
+pub use pty::run_pty_helper;
 
-use std::path::PathBuf;
 use ash_file_access::Dir;
 use ash_install_context::InstallContext;
 use ash_sandboxing::PreparedCommand;
@@ -14,6 +16,7 @@ use ash_sandboxing::SandboxPolicy;
 use ash_sandboxing::SandboxProcessDenial;
 use ash_sandboxing::SandboxProcessExitStatus;
 use ash_sandboxing::SandboxScope;
+use std::path::PathBuf;
 
 /// MXC-backed execution. The SDK owns backend selection, process creation and OS resource cleanup.
 pub struct MxcSandbox {
@@ -79,11 +82,6 @@ impl SandboxBackend for MxcSandbox {
         if !policy.requires_platform_sandbox() && scope.is_single_unhidden() {
             return Ok(PreparedCommand::unrestricted(command));
         }
-        if matches!(command.io(), ash_sandboxing::ProcessIo::Pty(_)) {
-            return Err(SandboxError::UnsupportedPolicy(
-                "the MXC streaming SDK does not yet expose a PTY-attached restricted launch".into(),
-            ));
-        }
         let mut request = policy::request(command, policy, scope)?;
         #[cfg(target_os = "windows")]
         if policy.network() == ash_sandboxing::NetworkAccess::Managed {
@@ -104,6 +102,9 @@ impl SandboxBackend for MxcSandbox {
                 unavailable(error.to_string())
             }
         })?;
+        if let ash_sandboxing::ProcessIo::Pty(size) = command.io() {
+            return pty::prepare(command, request, scope, size);
+        }
         Ok(PreparedCommand::sandboxed(
             command,
             process::Launch {

@@ -10,6 +10,7 @@ name = "arg0"
 doctest = false
 
 [dependencies]
+mxc-sandbox = { workspace = true }
 ash-fast-regex-search = { workspace = true }
 
 [lints]

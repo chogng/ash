@@ -99,7 +99,7 @@ gate；`ash-exec` 当前拥有 new/resume/fork、Turn start/interrupt、事件�
 [`sandboxing.md`](sandboxing.md)。
 
 当前远程 process/filesystem execution 的实现契约见
-[`ash-exec-server`](../ash-rs/exec-server/README.md)。桌面 PTY 已归该 crate；远程受限 PTY 受 MXC 能力限制，尚未提供。
+[`ash-exec-server`](../ash-rs/exec-server/README.md)。桌面 PTY 与远程受限 PTY 均归该 crate；远程 PTY 通过内部启动器继承终端并保留 MXC 约束。
 
 ```text
 ash-tool-executor

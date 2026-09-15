@@ -450,3 +450,27 @@ mod tests {
         assert!(err.message.contains("experimental"), "got: {}", err.message);
     }
 }
+
+/// Attached execution retains the backend's ordinary policy checks and process ownership.
+pub(crate) fn spawn_inherited(request: &ExecutionRequest) -> Result<Box<dyn SandboxProcess>, MxcError> {
+    use wxc_common::sandbox_process::SandboxBackend;
+    use wxc_common::sandbox_process::StdioMode;
+    ensure_host_supported()?;
+    if request.dry_run { return Err(MxcError::malformed_request("dry_run cannot start an attached process")); }
+    let mut logger = Logger::new(wxc_common::logger::Mode::Buffer);
+    match request.containment {
+        #[cfg(target_os = "macos")]
+        ContainmentBackend::Seatbelt => seatbelt_common::seatbelt_runner::SeatbeltScriptRunner::new()
+            .spawn(request, &mut logger, StdioMode::Inherit).map_err(map_spawn_error),
+        #[cfg(target_os = "linux")]
+        ContainmentBackend::Bubblewrap => bwrap_common::bwrap_runner::BubblewrapScriptRunner::new()
+            .spawn(request, &mut logger, StdioMode::Inherit).map_err(map_spawn_error),
+        #[cfg(target_os = "windows")]
+        ContainmentBackend::ProcessContainer => {
+            require_windows_psec(request)?;
+            appcontainer_common::base_container_runner::BaseContainerRunner::new()
+                .spawn(request, &mut logger, StdioMode::Inherit).map_err(map_spawn_error)
+        }
+        _ => Err(MxcError::unsupported_containment("this backend cannot inherit a terminal")),
+    }
+}

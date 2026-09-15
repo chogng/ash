@@ -396,3 +396,153 @@ fn shutdown_reaps_active_processes() {
         "child survived server shutdown"
     );
 }
+
+#[test]
+fn restricted_terminal_survives_reconnect_and_resizes() {
+    let host = Host::start();
+    let client = host.client();
+    let mut start = command(
+        "terminal",
+        "test -t 0 && test -t 1 || exit 80; printf ready; read answer; stty size; printf 'answer=%s' \"$answer\"",
+    );
+    start.input = exec_server_protocol::ProcessInput::Terminal { rows: 24, cols: 80 };
+    client.request(Request::ProcessStart(start)).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let snapshot = read(&client, "terminal");
+        if snapshot.stdout.text.contains("ready") {
+            break;
+        }
+        assert_eq!(snapshot.state, ProcessState::Running, "{snapshot:?}");
+        assert!(Instant::now() < deadline, "{snapshot:?}");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    drop(client);
+    let client = host.client();
+    assert!(matches!(
+        client.request(Request::ProcessCloseInput {
+            operation_id: "terminal".into(),
+        }),
+        Err(exec_server::Error::Remote(ExecError::InvalidInput))
+    ));
+    assert!(matches!(
+        client.request(Request::ProcessResize {
+            operation_id: "terminal".into(),
+            rows: 0,
+            cols: 100,
+        }),
+        Err(exec_server::Error::Remote(ExecError::InvalidInput))
+    ));
+    client
+        .request(Request::ProcessResize {
+            operation_id: "terminal".into(),
+            rows: 40,
+            cols: 100,
+        })
+        .unwrap();
+    client
+        .request(Request::ProcessWrite {
+            operation_id: "terminal".into(),
+            bytes: b"hello\n".to_vec(),
+        })
+        .unwrap();
+    let snapshot = finish(&client, "terminal");
+    assert_eq!(
+        snapshot.state,
+        ProcessState::Exited { code: Some(0) },
+        "{snapshot:?}"
+    );
+    assert!(snapshot.stdout.text.contains("40 100"), "{snapshot:?}");
+    assert!(
+        snapshot.stdout.text.contains("answer=hello"),
+        "{snapshot:?}"
+    );
+}
+
+#[test]
+fn restricted_terminal_cannot_write_outside_host_ceiling() {
+    let host = Host::with_access("read-only");
+    let client = host.client();
+    let mut start = command("terminal-denied", "test -t 0 || exit 80; printf x > denied");
+    start.input = exec_server_protocol::ProcessInput::Terminal { rows: 24, cols: 80 };
+    client.request(Request::ProcessStart(start)).unwrap();
+    let snapshot = finish(&client, "terminal-denied");
+    assert_ne!(snapshot.state, ProcessState::Exited { code: Some(0) });
+    assert!(
+        snapshot.stdout.text.to_lowercase().contains("permitted")
+            || snapshot.stdout.text.to_lowercase().contains("denied"),
+        "{snapshot:?}"
+    );
+    assert!(!host.root.path().join("denied").exists());
+}
+
+#[test]
+fn cancelling_a_restricted_terminal_reaps_its_child() {
+    let host = Host::start();
+    let client = host.client();
+    let mut start = command("terminal-cancel", "echo $$; exec sleep 60");
+    start.input = exec_server_protocol::ProcessInput::Terminal { rows: 24, cols: 80 };
+    client.request(Request::ProcessStart(start)).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(15);
+    let pid = loop {
+        let snapshot = read(&client, "terminal-cancel");
+        if let Ok(pid) = snapshot.stdout.text.trim().parse::<u32>() {
+            break pid;
+        }
+        assert_eq!(snapshot.state, ProcessState::Running, "{snapshot:?}");
+        assert!(Instant::now() < deadline);
+        std::thread::sleep(Duration::from_millis(20));
+    };
+    client
+        .request(Request::ProcessCancel {
+            operation_id: "terminal-cancel".into(),
+        })
+        .unwrap();
+    assert_eq!(
+        finish(&client, "terminal-cancel").state,
+        ProcessState::Cancelled
+    );
+    loop {
+        if !Command::new("kill")
+            .args(["-0", &pid.to_string()])
+            .stderr(Stdio::null())
+            .status()
+            .unwrap()
+            .success()
+        {
+            break;
+        }
+        assert!(Instant::now() < deadline, "PTY child survived cancellation");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+#[test]
+fn interrupting_a_restricted_terminal_stops_the_workload() {
+    let host = Host::start();
+    let client = host.client();
+    let mut start = command("terminal-interrupt", "printf ready; exec sleep 60");
+    start.input = exec_server_protocol::ProcessInput::Terminal { rows: 24, cols: 80 };
+    client.request(Request::ProcessStart(start)).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let snapshot = read(&client, "terminal-interrupt");
+        if snapshot.stdout.text.contains("ready") {
+            break;
+        }
+        assert_eq!(snapshot.state, ProcessState::Running, "{snapshot:?}");
+        assert!(Instant::now() < deadline);
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    client
+        .request(Request::ProcessInterrupt {
+            operation_id: "terminal-interrupt".into(),
+        })
+        .unwrap();
+    let snapshot = finish(&client, "terminal-interrupt");
+    assert!(
+        matches!(snapshot.state, ProcessState::Exited { .. }),
+        "{snapshot:?}"
+    );
+    assert_ne!(snapshot.state, ProcessState::Exited { code: Some(0) });
+}

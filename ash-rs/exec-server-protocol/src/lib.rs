@@ -40,6 +40,7 @@ pub enum NetworkAccess {
 pub enum ProcessInput {
     Closed,
     Open,
+    Terminal { rows: u16, cols: u16 },
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
@@ -67,6 +68,11 @@ impl ProcessStart {
             || !(1..=43_200_000).contains(&self.timeout_millis)
         {
             return Err(ExecError::InvalidInput);
+        }
+        if let ProcessInput::Terminal { rows, cols } = self.input {
+            if rows == 0 || cols == 0 {
+                return Err(ExecError::InvalidInput);
+            }
         }
         validate_path(&self.cwd)
     }
@@ -163,6 +169,14 @@ pub enum Request {
     ProcessWrite {
         operation_id: String,
         bytes: Vec<u8>,
+    },
+    ProcessResize {
+        operation_id: String,
+        rows: u16,
+        cols: u16,
+    },
+    ProcessInterrupt {
+        operation_id: String,
     },
     ProcessCloseInput {
         operation_id: String,

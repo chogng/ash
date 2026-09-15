@@ -11,6 +11,9 @@ doctest = false
 
 [dependencies]
 log = { workspace = true }
+mxc_engine = { workspace = true }
+ash-utils-pty = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "sync", "time"] }
 mxc-sdk = { workspace = true }
 dunce = { workspace = true }
 ash-install-context = { workspace = true }

@@ -3,7 +3,6 @@ use super::filesystem_from_resolved;
 use super::windows_process_container;
 #[cfg(target_os = "windows")]
 use super::windows_ui;
-use std::path::Path;
 use ash_file_access::Dir;
 use ash_sandboxing::FileSystemAccess;
 use ash_sandboxing::MissingPathBehavior;
@@ -12,6 +11,7 @@ use ash_sandboxing::SandboxDirGrant;
 use ash_sandboxing::SandboxPathAccess;
 use ash_sandboxing::SandboxPathRule;
 use ash_sandboxing::SandboxScope;
+use std::path::Path;
 
 #[cfg(target_os = "windows")]
 #[test]
@@ -136,12 +136,13 @@ fn exact_path_rules_are_carried_into_the_mxc_filesystem_policy() {
         policy
             .readonly_paths
             .iter()
-            .any(|path| Path::new(path) == temp.path().join("config"))
+            .any(|path| Path::new(path)
+                == std::fs::canonicalize(temp.path().join("config")).unwrap())
     );
     assert!(
         policy
             .denied_paths
             .iter()
-            .any(|path| Path::new(path) == temp.path().join(".env"))
+            .any(|path| Path::new(path) == std::fs::canonicalize(temp.path().join(".env")).unwrap())
     );
 }

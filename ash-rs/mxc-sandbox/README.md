@@ -1,7 +1,7 @@
 # ash-mxc-sandbox
 
 - 将 Ash 已批准的文件、网络和宿主 ACL 要求转换为 Microsoft MXC 请求。
-- 通过 `mxc_sdk::spawn_sandbox` 启动受限进程。
+- 管道进程通过 `mxc_sdk::spawn_sandbox` 启动；PTY 通过继承终端的内部启动器调用 MXC 底层后端。
 - 将 SDK 进程句柄接入 Ash 的输入输出、取消与关闭接口。
 - 隔离 SDK 类型和错误；不实现 PSEC、DACL、Bubblewrap 或 Seatbelt。
 
@@ -43,12 +43,22 @@ App Server 的固定沙箱配置允许策略范围内的宿主 ACL 改动，命�
 SDK 的 ACL 正常关闭清理不等于宿主崩溃后的恢复保证；Windows 异常退出仍需实机验收。
 子进程退出码不再经过私有运行器重映射。输出中的权限错误只产生“可能已有副作用”的诊断，不能证明进程未启动或授权重跑。
 
+## PTY 启动
+
+- `utils-pty` 分配 PTY，并启动当前宿主程序的 `--ash-mxc-pty` 内部角色；宿主必须在产品入口前调用 `arg0::dispatch`。
+- 受信启动交接保存完整权限、固定执行路径和准备阶段的文件身份；普通 MXC 配置仍不能反序列化这些授权字段。
+- 启动参数仅由宿主生成，通过有界环境项交给内部角色；序列化上限 16 KiB，超限在启动前拒绝。
+- 工作负载环境与启动器环境分开，MXC 在应用约束后设置工作负载环境。
+- Seatbelt、Bubblewrap 和 Windows PSEC 继承终端；Windows 不进入其他实现。
+- PTY 输入输出、尺寸、信号和进程树关闭归 Ash 执行句柄管理。
+- macOS 真实进程测试覆盖断连输入、resize、只读拒绝和取消回收；Linux/Windows 交叉编译通过不代表实机验收。
+
 ## SDK 依赖
 
 固定 Microsoft MXC `6cd3d58f05d3447e67109cfb75e042803b843ca4`。
 为承接 Ash 的现有契约，部分上游 crate 以可审查源码补丁保存在
 [vendor/mxc](../vendor/mxc/README.md)，由根 Cargo patch 配置和 Bazel 使用。
-这些是 MXC 自己的核心和平台 crate；Ash 适配器只依赖公开 SDK。
+这些是 MXC 自己的核心和平台 crate；Ash 适配器依赖 SDK 与执行引擎的受信启动交接接口。
 
 上游仍将此版本标为早期预览，接线与测试不代表生产隔离资格。
 [上游说明](https://github.com/microsoft/mxc/tree/6cd3d58f05d3447e67109cfb75e042803b843ca4)

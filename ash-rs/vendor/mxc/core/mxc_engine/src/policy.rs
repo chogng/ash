@@ -1325,6 +1325,7 @@ mod tests {
             .contains(&"com.example.service".to_string()));
     }
 
+    #[cfg(target_os = "windows")]
     fn process_container_with_capture_denials(config: CaptureDenials) -> Containment {
         Containment::ProcessContainer(ProcessContainer {
             capture_denials: Some(config),
@@ -1509,7 +1510,9 @@ mod tests {
         assert!(request.inner.policy.network_proxy.is_enabled());
     }
 
-    use super::{build_request_with_containment, Containment, ProcessContainer, WslcSection};
+    use super::{build_request_with_containment, Containment, WslcSection};
+    #[cfg(target_os = "windows")]
+    use super::ProcessContainer;
     use wxc_common::models::ContainmentBackend;
 
     fn minimal_policy() -> SandboxPolicy {

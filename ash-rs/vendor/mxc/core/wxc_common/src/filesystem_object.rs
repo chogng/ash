@@ -62,21 +62,21 @@ impl Intent {
 /// refer to the same underlying object even if reached via different names
 /// (bind mount, symlink, or hard link).
 #[cfg(unix)]
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, serde::Serialize, serde::Deserialize)]
 struct ObjectId {
     dev: u64,
     ino: u64,
 }
 
 #[cfg(windows)]
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, serde::Serialize, serde::Deserialize)]
 struct ObjectId {
     volume_serial: u64,
     file_id: u128,
 }
 
 #[cfg(not(any(unix, windows)))]
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, serde::Serialize, serde::Deserialize)]
 struct ObjectId {
     _unused: u8,
 }
@@ -96,7 +96,7 @@ enum PathResolution {
 }
 
 /// Existing filesystem objects retained as the identity of a prepared request.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct FilesystemSnapshot {
     objects: Vec<(std::path::PathBuf, ObjectId)>,
 }

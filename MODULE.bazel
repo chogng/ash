@@ -79,6 +79,7 @@ osx.frameworks(names = [
     "UniformTypeIdentifiers",
     "VideoToolbox",
 ])
+osx.libraries(names = ["libsandbox"])
 use_repo(osx, "macos_sdk")
 
 rules_rust = use_extension("@rules_rs//rs:rules_rust.bzl", "rules_rust")

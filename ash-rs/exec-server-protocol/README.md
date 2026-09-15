@@ -4,9 +4,11 @@
 
 - `Message` 包含版本、鉴权 token、服务实例 ID 和请求；版本必须严格匹配。
 - `environmentInfo` 返回环境身份、目录和权限上限。
-- `processStart` 使用客户端生成的操作 ID，指定程序、参数、相对目录、超时和 `closed`/`open` 输入模式。
+- `processStart` 使用客户端生成的操作 ID，指定程序、参数、相对目录、超时和 `closed`/`open`/`terminal` 输入模式；`terminal` 附带 `rows`、`cols`。
 - `processRead` 按 stdout/stderr 字节游标读取；`gap` 表示输出已被淘汰。
 - `processWrite`、`processCloseInput`、`processCancel` 控制已启动进程；启动尚未完成或进程已结束时，输入控制返回冲突。
+- `processResize` 调整 PTY 尺寸；`processInterrupt` 发送进程中断，`processCancel` 终止整个执行。PTY 的 stderr 合并到 stdout，不接受 `processCloseInput`。
+- `processInterrupt` 当前支持 Unix 进程组；Windows 终端使用 `processWrite` 发送 Ctrl-C 字节，独立信号请求返回冲突。
 - `fileRead` 返回原始字节和版本；`fileWrite` 要求原版本匹配，或目标不存在/为空。
 - `terminal` 包含桌面 PTY 的领域数据，不属于 TCP 方法集合。
 - 不接收客户端授权对象、Thread 命令或模型请求。

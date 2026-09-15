@@ -30,3 +30,34 @@ fn process_contract_round_trips_and_rejects_unknown_authority_fields() {
     value["params"]["authorization"] = serde_json::json!("unrestricted");
     assert!(serde_json::from_value::<Request>(value).is_err());
 }
+
+#[test]
+fn terminal_start_and_control_round_trip_without_extra_authority() {
+    let start = ProcessStart {
+        operation_id: "tty".into(),
+        program: "sh".into(),
+        arguments: vec![],
+        cwd: ".".into(),
+        timeout_millis: 1000,
+        input: ProcessInput::Terminal { rows: 24, cols: 80 },
+    };
+    assert!(start.validate().is_ok());
+    let mut invalid = start.clone();
+    invalid.input = ProcessInput::Terminal { rows: 0, cols: 80 };
+    assert_eq!(invalid.validate(), Err(ExecError::InvalidInput));
+    for request in [
+        Request::ProcessStart(start),
+        Request::ProcessResize {
+            operation_id: "tty".into(),
+            rows: 40,
+            cols: 100,
+        },
+        Request::ProcessInterrupt {
+            operation_id: "tty".into(),
+        },
+    ] {
+        let value = serde_json::to_value(request).unwrap();
+        let decoded: Request = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(serde_json::to_value(decoded).unwrap(), value);
+    }
+}

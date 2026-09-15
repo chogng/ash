@@ -708,6 +708,7 @@ name = "ash-arg0"
 version = "0.1.0"
 dependencies = [
  "ash-fast-regex-search",
+ "ash-mxc-sandbox",
 ]
 
 [[package]]
@@ -1858,10 +1859,13 @@ dependencies = [
  "ash-protocol",
  "ash-sandboxing",
  "ash-tool-executor",
+ "ash-utils-pty",
  "dunce",
  "log",
  "mxc-sdk",
+ "mxc_engine",
  "tempfile",
+ "tokio",
 ]
 
 [[package]]

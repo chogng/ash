@@ -249,10 +249,35 @@ impl Processes {
         })
     }
     pub fn close_input(&self, id: &str) -> Result<(), ExecError> {
+        if matches!(
+            self.record(id)?.request.input,
+            exec_server_protocol::ProcessInput::Terminal { .. }
+        ) {
+            return Err(ExecError::InvalidInput);
+        }
         self.control(id, |session| {
             session
                 .executor
                 .close_session_input(&session.owner, &session.id)
+        })
+    }
+    pub fn resize(&self, id: &str, rows: u16, cols: u16) -> Result<(), ExecError> {
+        if rows == 0 || cols == 0 {
+            return Err(ExecError::InvalidInput);
+        }
+        self.control(id, |session| {
+            session.executor.resize_session(
+                &session.owner,
+                &session.id,
+                ash_tool_executor::CommandTerminalSize { rows, cols },
+            )
+        })
+    }
+    pub fn interrupt(&self, id: &str) -> Result<(), ExecError> {
+        self.control(id, |session| {
+            session
+                .executor
+                .interrupt_session(&session.owner, &session.id)
         })
     }
     fn control(
@@ -324,6 +349,12 @@ fn run(
         },
     ));
     let owner = CommandSessionOwner::new("exec-server", &record.request.operation_id, "host");
+    let terminal = match record.request.input {
+        exec_server_protocol::ProcessInput::Terminal { rows, cols } => {
+            Some(ash_tool_executor::CommandTerminalSize { rows, cols })
+        }
+        _ => None,
+    };
     let input = match record.request.input {
         exec_server_protocol::ProcessInput::Closed => CommandInput::Closed,
         _ => CommandInput::Open,
@@ -343,7 +374,7 @@ fn run(
         CommandSessionOptions {
             execution_timeout: Duration::from_millis(record.request.timeout_millis),
             wait_budget: Duration::ZERO,
-            terminal: None,
+            terminal,
         },
     );
     let state = match result {
@@ -435,8 +466,8 @@ fn execution_error(error: ExecutionError) -> ProcessState {
             ProcessState::Cancelled
         }
         ExecutionError::TimedOut => ProcessState::TimedOut,
-        _ => ProcessState::Failed {
-            message: "process execution failed".into(),
+        error => ProcessState::Failed {
+            message: format!("{error:?}"),
         },
     }
 }

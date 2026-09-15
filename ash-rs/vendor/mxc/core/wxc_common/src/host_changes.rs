@@ -8,7 +8,7 @@ use std::path::PathBuf;
 
 /// The host paths on which an embedding application authorized ACL changes.
 /// This value is never deserialized from a sandbox command or policy document.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct HostAclScope {
     objects: crate::filesystem_object::FilesystemSnapshot,
 }
@@ -41,7 +41,7 @@ impl HostAclScope {
 }
 
 /// A ceiling on host filesystem access, separate from explicit path grants.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum HostFilesystemAccess {
     ReadOnly,
     ReadWrite,

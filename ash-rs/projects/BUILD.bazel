@@ -1,6 +1,6 @@
 load("//:defs.bzl", "ash_rust_crate")
 
 ash_rust_crate(
-    name = "core",
-    crate_name = "ash_core",
+    name = "projects",
+    crate_name = "ash_projects",
 )

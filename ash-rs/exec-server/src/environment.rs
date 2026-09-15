@@ -96,6 +96,18 @@ impl LocalEnvironment {
                 .processes
                 .write(&operation_id, bytes)
                 .map(|()| Response::ProcessUpdated),
+            Request::ProcessResize {
+                operation_id,
+                rows,
+                cols,
+            } => self
+                .processes
+                .resize(&operation_id, rows, cols)
+                .map(|()| Response::ProcessUpdated),
+            Request::ProcessInterrupt { operation_id } => self
+                .processes
+                .interrupt(&operation_id)
+                .map(|()| Response::ProcessUpdated),
             Request::ProcessCloseInput { operation_id } => self
                 .processes
                 .close_input(&operation_id)

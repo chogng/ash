@@ -1,8 +1,8 @@
 //! Shared internal process roles for executables that embed Ash helper capabilities.
 
+use ash_fast_regex_search::FastRegexWorkerCommand;
 use std::ffi::OsString;
 use std::path::PathBuf;
-use ash_fast_regex_search::FastRegexWorkerCommand;
 
 const FAST_REGEX_WORKER: &str = "--ash-fast-regex-worker";
 
@@ -11,7 +11,14 @@ const FAST_REGEX_WORKER: &str = "--ash-fast-regex-worker";
 /// Arguments exclude the executable name. Malformed helper invocations fail before execution.
 pub fn dispatch(arguments: impl IntoIterator<Item = OsString>) -> Option<Result<(), String>> {
     let mut arguments = arguments.into_iter();
-    if arguments.next().as_deref() != Some(std::ffi::OsStr::new(FAST_REGEX_WORKER)) {
+    let role = arguments.next();
+    if role.as_deref() == Some(std::ffi::OsStr::new(mxc_sandbox::PTY_HELPER_ARGUMENT)) {
+        if arguments.next().is_some() {
+            return Some(Err("PTY helper accepts no arguments".into()));
+        }
+        return Some(mxc_sandbox::run_pty_helper().map(|code| std::process::exit(code)));
+    }
+    if role.as_deref() != Some(std::ffi::OsStr::new(FAST_REGEX_WORKER)) {
         return None;
     }
     if arguments.next().is_some() {

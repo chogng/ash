@@ -40,7 +40,9 @@ Rust 宿主也可以通过 `LocalAppServerOptions::with_execution_environments` 
 ## PTY 边界
 
 - `terminal::TerminalService` 承接原 terminal-service 的完整桌面 PTY 生命周期。
-- TCP 进程接口目前支持管道输入输出；MXC 不支持受限 PTY 启动，因此不暴露远程 PTY 方法。
+- TCP 进程接口支持管道与受限 PTY；`processStart.input` 选择 `terminal` 并提供行列数，后续可写入、调整尺寸、中断或取消。
+- PTY 由执行宿主分配，内部启动器继承终端后交给 MXC；目录、网络及文件身份约束保持有效。
+- PTY 标准错误合并到标准输出；半关闭输入不适用于 PTY，调用方应发送终端 EOF 字符或取消进程。
 - 桌面 Terminal API 继续通过目录授权调用；不将桌面交互式终端作为远程沙箱命令的替代执行路径。
 
 协议、大小限制及错误见 [exec-server-protocol](../exec-server-protocol/README.md)。

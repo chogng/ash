@@ -125,7 +125,7 @@ diff --git a/src/core/mxc_engine/src/configs/process_container.rs b/src/core/mxc
 diff --git a/src/core/mxc_engine/src/dispatch.rs b/src/core/mxc_engine/src/dispatch.rs
 --- a/src/core/mxc_engine/src/dispatch.rs
 +++ b/src/core/mxc_engine/src/dispatch.rs
-@@ -146,10 +146,32 @@
+@@ -146,12 +146,34 @@
  }
  
  #[cfg(target_os = "windows")]
@@ -138,7 +138,7 @@ diff --git a/src/core/mxc_engine/src/dispatch.rs b/src/core/mxc_engine/src/dispa
      request: &ExecutionRequest,
      logger: &mut Logger,
  ) -> Result<Box<dyn SandboxProcess>, MxcError> {
-+    if request.host_filesystem.is_some() {
++    if request.host_filesystem.is_some() || request.require_process_security_environment {
 +        use appcontainer_common::base_container_runner::BaseContainerRunner;
 +        use wxc_common::sandbox_process::SandboxBackend;
 +        if let Some(snapshot) = &request.prepared_files {
@@ -156,17 +156,183 @@ diff --git a/src/core/mxc_engine/src/dispatch.rs b/src/core/mxc_engine/src/dispa
 +            .map_err(map_spawn_error);
 +    }
      use appcontainer_common::dispatcher::{
-         spawn_with_fallback_and_capture, DispatchError, SpawnDispatchError,
+-        spawn_with_fallback_and_capture, DispatchError, SpawnDispatchError,
++        DispatchError, SpawnDispatchError, spawn_with_fallback_and_capture,
      };
+     use std::fmt::Write;
+     use wxc_common::sandbox_process::StdioMode;
+@@ -267,7 +289,7 @@
+ #[cfg(test)]
+ mod tests {
+     use super::{ensure_host_supported, map_spawn_error, spawn_runner};
+-    use crate::policy::{build_request, SandboxPolicy};
++    use crate::policy::{SandboxPolicy, build_request};
+     use wxc_common::logger::{Logger, Mode};
+     use wxc_common::models::ContainmentBackend;
+     use wxc_common::mxc_error::MxcErrorCode;
+@@ -428,3 +450,27 @@
+         assert!(err.message.contains("experimental"), "got: {}", err.message);
+     }
+ }
++
++/// Attached execution retains the backend's ordinary policy checks and process ownership.
++pub(crate) fn spawn_inherited(request: &ExecutionRequest) -> Result<Box<dyn SandboxProcess>, MxcError> {
++    use wxc_common::sandbox_process::SandboxBackend;
++    use wxc_common::sandbox_process::StdioMode;
++    ensure_host_supported()?;
++    if request.dry_run { return Err(MxcError::malformed_request("dry_run cannot start an attached process")); }
++    let mut logger = Logger::new(wxc_common::logger::Mode::Buffer);
++    match request.containment {
++        #[cfg(target_os = "macos")]
++        ContainmentBackend::Seatbelt => seatbelt_common::seatbelt_runner::SeatbeltScriptRunner::new()
++            .spawn(request, &mut logger, StdioMode::Inherit).map_err(map_spawn_error),
++        #[cfg(target_os = "linux")]
++        ContainmentBackend::Bubblewrap => bwrap_common::bwrap_runner::BubblewrapScriptRunner::new()
++            .spawn(request, &mut logger, StdioMode::Inherit).map_err(map_spawn_error),
++        #[cfg(target_os = "windows")]
++        ContainmentBackend::ProcessContainer => {
++            require_windows_psec(request)?;
++            appcontainer_common::base_container_runner::BaseContainerRunner::new()
++                .spawn(request, &mut logger, StdioMode::Inherit).map_err(map_spawn_error)
++        }
++        _ => Err(MxcError::unsupported_containment("this backend cannot inherit a terminal")),
++    }
++}
+diff --git a/src/core/mxc_engine/src/inherited.rs b/src/core/mxc_engine/src/inherited.rs
+new file mode 100644
+--- /dev/null
++++ b/src/core/mxc_engine/src/inherited.rs
+@@ -0,0 +1,67 @@
++//! Trusted embedding-process handoff, separate from the public policy/config parser.
++use crate::Error;
++use crate::ErrorCode;
++use crate::SandboxRequest;
++use serde::Deserialize;
++use serde::Serialize;
++use wxc_common::models::ExecutionRequest;
++use wxc_common::sandbox_process::SandboxProcess;
++
++#[derive(Serialize, Deserialize)]
++#[serde(deny_unknown_fields)]
++struct Launch {
++    request: ExecutionRequest,
++    host_acl_scope: Option<wxc_common::host_changes::HostAclScope>,
++    host_filesystem: Option<wxc_common::host_changes::HostFilesystemAccess>,
++    host_filesystem_roots: Vec<String>,
++    require_process_security_environment: bool,
++    prepared_files: Option<wxc_common::filesystem_object::FilesystemSnapshot>,
++    bubblewrap_executable: Option<std::path::PathBuf>,
++}
++
++/// Encodes a prepared embedding request for a trusted child process, preserving host authority.
++/// This is not a public sandbox configuration and must never be accepted from an untrusted client.
++pub fn encode_inherited_launch(request: &SandboxRequest) -> Result<String, Error> {
++    let r = &request.inner;
++    serde_json::to_string(&Launch {
++        request: r.clone(),
++        host_acl_scope: r.host_acl_scope.clone(),
++        host_filesystem: r.host_filesystem,
++        host_filesystem_roots: r.host_filesystem_roots.clone(),
++        require_process_security_environment: r.require_process_security_environment,
++        prepared_files: r.prepared_files.clone(),
++        bubblewrap_executable: r.bubblewrap_executable.clone(),
++    })
++    .map_err(|_| Error::new(ErrorCode::MalformedRequest, "invalid inherited launch"))
++}
++
++/// Runs inside the dedicated embedding helper with an already attached terminal.
++/// Accept only a launch envelope supplied by the embedding host, never public configuration.
++pub fn spawn_inherited_launch(encoded: &str) -> Result<Box<dyn SandboxProcess>, Error> {
++    use std::io::IsTerminal;
++    if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
++        return Err(Error::new(
++            ErrorCode::MalformedRequest,
++            "inherited launch requires terminal stdio",
++        ));
++    }
++    let launch: Launch = serde_json::from_str(encoded)
++        .map_err(|_| Error::new(ErrorCode::MalformedRequest, "invalid inherited launch"))?;
++    let mut request = launch.request;
++    request.host_acl_scope = launch.host_acl_scope;
++    request.host_filesystem = launch.host_filesystem;
++    request.host_filesystem_roots = launch.host_filesystem_roots;
++    request.require_process_security_environment = launch.require_process_security_environment;
++    request.prepared_files = launch.prepared_files;
++    request.bubblewrap_executable = launch.bubblewrap_executable;
++    if let Some(snapshot) = &request.prepared_files {
++        snapshot
++            .validate()
++            .map_err(|_| Error::new(ErrorCode::MalformedRequest, "prepared filesystem changed"))?;
++    }
++    crate::dispatch::spawn_inherited(&request).map_err(Error::from)
++}
++
++#[cfg(test)]
++#[path = "inherited_tests.rs"]
++mod tests;
+diff --git a/src/core/mxc_engine/src/inherited_tests.rs b/src/core/mxc_engine/src/inherited_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/src/core/mxc_engine/src/inherited_tests.rs
+@@ -0,0 +1,46 @@
++use super::*;
++
++#[test]
++fn helper_handoff_retains_embedding_authority_and_object_identity() {
++    let temp = tempfile::tempdir().unwrap();
++    let root = std::fs::canonicalize(temp.path()).unwrap();
++    let policy = crate::SandboxPolicy {
++        version: "0.8.0-alpha".into(),
++        filesystem: None,
++        network: None,
++        ui: None,
++        timeout_ms: None,
++    };
++    let mut request = crate::build_request(&policy, None).unwrap();
++    request
++        .permit_host_acl_changes(std::slice::from_ref(&root))
++        .unwrap();
++    request.inner.host_filesystem = Some(wxc_common::host_changes::HostFilesystemAccess::ReadOnly);
++    request.inner.host_filesystem_roots = vec![root.to_string_lossy().into_owned()];
++    request.inner.require_process_security_environment = true;
++    request.inner.prepared_files =
++        Some(wxc_common::filesystem_object::FilesystemSnapshot::capture([root.clone()]).unwrap());
++    request.inner.bubblewrap_executable = Some(root.join("bwrap"));
++    let value: Launch = serde_json::from_str(&encode_inherited_launch(&request).unwrap()).unwrap();
++    assert_eq!(value.host_acl_scope, request.inner.host_acl_scope);
++    assert_eq!(value.host_filesystem, request.inner.host_filesystem);
++    assert_eq!(
++        value.host_filesystem_roots,
++        request.inner.host_filesystem_roots
++    );
++    assert!(value.require_process_security_environment);
++    assert_eq!(value.prepared_files, request.inner.prepared_files);
++    assert_eq!(
++        value.bubblewrap_executable,
++        request.inner.bubblewrap_executable
++    );
++    value.prepared_files.as_ref().unwrap().validate().unwrap();
++    std::fs::rename(&root, root.with_extension("moved")).unwrap();
++    std::fs::create_dir(&root).unwrap();
++    assert!(value.prepared_files.unwrap().validate().is_err());
++    std::fs::remove_dir(root.with_extension("moved")).unwrap();
++    // Ordinary public configuration still cannot populate embedding-only fields.
++    assert!(value.request.host_acl_scope.is_none());
++    assert!(value.request.host_filesystem.is_none());
++    assert!(!value.request.require_process_security_environment);
++}
 diff --git a/src/core/mxc_engine/src/lib.rs b/src/core/mxc_engine/src/lib.rs
 --- a/src/core/mxc_engine/src/lib.rs
 +++ b/src/core/mxc_engine/src/lib.rs
-@@ -141,3 +141,5 @@
+@@ -141,3 +141,8 @@
          self.inner.stderr_closer()
      }
  }
 +
 +mod request;
++mod inherited;
++pub use inherited::encode_inherited_launch;
++pub use inherited::spawn_inherited_launch;
 diff --git a/src/core/mxc_engine/src/policy/network.rs b/src/core/mxc_engine/src/policy/network.rs
 --- a/src/core/mxc_engine/src/policy/network.rs
 +++ b/src/core/mxc_engine/src/policy/network.rs
@@ -226,7 +392,26 @@ diff --git a/src/core/mxc_engine/src/policy.rs b/src/core/mxc_engine/src/policy.
          self.inner.working_directory = working_directory.into();
          self
      }
-@@ -1715,3 +1717,5 @@
+@@ -1323,6 +1325,7 @@
+             .contains(&"com.example.service".to_string()));
+     }
+ 
++    #[cfg(target_os = "windows")]
+     fn process_container_with_capture_denials(config: CaptureDenials) -> Containment {
+         Containment::ProcessContainer(ProcessContainer {
+             capture_denials: Some(config),
+@@ -1507,7 +1510,9 @@
+         assert!(request.inner.policy.network_proxy.is_enabled());
+     }
+ 
+-    use super::{build_request_with_containment, Containment, ProcessContainer, WslcSection};
++    use super::{build_request_with_containment, Containment, WslcSection};
++    #[cfg(target_os = "windows")]
++    use super::ProcessContainer;
+     use wxc_common::models::ContainmentBackend;
+ 
+     fn minimal_policy() -> SandboxPolicy {
+@@ -1715,3 +1720,5 @@
          );
      }
  }
@@ -236,15 +421,15 @@ diff --git a/src/core/mxc_engine/src/request.rs b/src/core/mxc_engine/src/reques
 new file mode 100644
 --- /dev/null
 +++ b/src/core/mxc_engine/src/request.rs
-@@ -0,0 +1,194 @@
+@@ -0,0 +1,202 @@
 +// Copyright (c) Microsoft Corporation.
 +// Licensed under the MIT License.
 +
 +//! Request construction controls used by embedding applications.
-+use crate::policy::HostFilesystemAccess;
-+use crate::policy::SandboxRequest;
 +use crate::Error;
 +use crate::ErrorCode;
++use crate::policy::HostFilesystemAccess;
++use crate::policy::SandboxRequest;
 +use std::path::Path;
 +use std::path::PathBuf;
 +
@@ -304,12 +489,11 @@ new file mode 100644
 +        Ok(self)
 +    }
 +
-+    /// Denies pathname Unix sockets on Seatbelt, independently of filesystem write grants.
-+    pub fn deny_seatbelt_unix_sockets(&mut self) -> &mut Self {
-+        self.inner
-+            .seatbelt
-+            .get_or_insert_with(Default::default)
-+            .allow_unix_sockets = false;
++    /// Restricts pathname Unix sockets to execution-owned directories on Seatbelt.
++    pub fn restrict_seatbelt_unix_sockets(&mut self, paths: Vec<String>) -> &mut Self {
++        let seatbelt = self.inner.seatbelt.get_or_insert_with(Default::default);
++        seatbelt.allow_unix_sockets = false;
++        seatbelt.allowed_unix_socket_paths = paths;
 +        self
 +    }
 +
@@ -350,12 +534,21 @@ new file mode 100644
 +        Ok(self)
 +    }
 +
++    /// Requires the Windows ProcessContainer request to use PSEC even when the
++    /// caller intentionally omits a host-wide filesystem visibility ceiling.
++    pub fn require_process_security_environment(&mut self) -> &mut Self {
++        self.inner.require_process_security_environment = true;
++        self.inner.prepared_files = None;
++        self
++    }
++
 +    /// Select a complete implementation without provisioning or starting a process.
 +    /// Spawn revalidates the selected implementation and never switches it after failure.
 +    pub fn prepare(&mut self) -> Result<&mut Self, Error> {
 +        #[cfg(windows)]
 +        if self.inner.containment == wxc_common::models::ContainmentBackend::ProcessContainer
-+            && self.inner.host_filesystem.is_some()
++            && (self.inner.host_filesystem.is_some()
++                || self.inner.require_process_security_environment)
 +        {
 +            self.inner.prepared_files = Some(
 +                wxc_common::filesystem_object::FilesystemSnapshot::capture(
@@ -435,7 +628,7 @@ diff --git a/src/core/mxc_engine/src/request_tests.rs b/src/core/mxc_engine/src/
 new file mode 100644
 --- /dev/null
 +++ b/src/core/mxc_engine/src/request_tests.rs
-@@ -0,0 +1,64 @@
+@@ -0,0 +1,87 @@
 +use super::*;
 +use crate::policy::FilesystemSection;
 +use crate::policy::SandboxPolicy;
@@ -499,6 +692,29 @@ new file mode 100644
 +        network.runtime_config.unwrap().network_proxy.as_deref(),
 +        Some("http://127.0.0.1:3128")
 +    );
++}
++
++#[cfg(windows)]
++#[test]
++fn psec_can_be_required_without_opening_host_read_access() {
++    let policy = SandboxPolicy {
++        version: "0.8.0-alpha".into(),
++        filesystem: Some(FilesystemSection::default()),
++        network: None,
++        ui: None,
++        timeout_ms: None,
++    };
++    let mut request = crate::build_request_with_containment(
++        &policy,
++        &crate::Containment::ProcessContainer(Default::default()),
++        None,
++    )
++    .unwrap();
++
++    request.require_process_security_environment();
++
++    assert!(request.inner.require_process_security_environment);
++    assert!(request.inner.host_filesystem.is_none());
 +}
 diff --git a/src/core/wxc_common/Cargo.toml b/src/core/wxc_common/Cargo.toml
 --- a/src/core/wxc_common/Cargo.toml
@@ -648,26 +864,127 @@ rename to src/core/wxc_common/src/config_contract_adapters.rs
 diff --git a/src/core/wxc_common/src/config_parser.rs b/src/core/wxc_common/src/config_parser.rs
 --- a/src/core/wxc_common/src/config_parser.rs
 +++ b/src/core/wxc_common/src/config_parser.rs
-@@ -614,6 +614,7 @@
+@@ -15,8 +15,8 @@
+ };
+ use crate::mxc_error::MxcError;
+ use crate::network_parser::{
+-    directional_network_version_error, host_is_any_loopback, parse_network_policy,
+-    supports_directional_network, NetworkSections,
++    NetworkSections, directional_network_version_error, host_is_any_loopback, parse_network_policy,
++    supports_directional_network,
+ };
+ use crate::state_aware_request::{MxcRequest, ParsedStateAwareRequest, Phase};
+ use crate::wire;
+@@ -614,6 +614,8 @@
          extra_mach_lookups,
      } = sb;
      SeatbeltConfig {
 +        allow_unix_sockets: true,
++        allowed_unix_socket_paths: Vec::new(),
          profile_override,
          gui_access: gui_access.unwrap_or(false),
          launch_method: launch_method.map(Into::into).unwrap_or_default(),
-@@ -1342,6 +1343,11 @@
+@@ -1342,6 +1344,12 @@
      }
  
      Ok(ExecutionRequest {
 +        host_acl_scope: None,
 +        host_filesystem: None,
 +        host_filesystem_roots: Vec::new(),
++        require_process_security_environment: false,
 +        prepared_files: None,
 +        bubblewrap_executable: None,
          schema_version,
          container_id,
          env,
+@@ -1586,7 +1594,7 @@
+         _ => {
+             return Err(WxcError::ConfigParse(
+                 "Unable to locate the experimental configuration block".to_string(),
+-            ))
++            ));
+         }
+     };
+ 
+@@ -2196,9 +2204,10 @@
+         assert_eq!(masked[..start], json[..start]);
+         assert_eq!(masked[end..], json[end..]);
+         let span = &masked[start..end];
+-        assert!(span
+-            .bytes()
+-            .all(|b| matches!(b, b'{' | b'}' | b' ' | b'\r' | b'\n')));
++        assert!(
++            span.bytes()
++                .all(|b| matches!(b, b'{' | b'}' | b' ' | b'\r' | b'\n'))
++        );
+         assert_eq!(span.bytes().filter(|b| *b == b'{').count(), 1);
+         assert_eq!(span.bytes().filter(|b| *b == b'}').count(), 1);
+     }
+@@ -2372,10 +2381,11 @@
+         assert_eq!(req.script_timeout, 3000);
+         assert_eq!(req.container_id, "TestProfile");
+         assert!(req.policy.least_privilege_mode);
+-        assert!(req
+-            .policy
+-            .capabilities
+-            .contains(&"internetClient".to_string()));
++        assert!(
++            req.policy
++                .capabilities
++                .contains(&"internetClient".to_string())
++        );
+         assert_eq!(req.policy.readwrite_paths, vec!["C:\\rw"]);
+         assert_eq!(req.policy.readonly_paths, vec!["C:\\ro"]);
+         assert_eq!(req.policy.denied_paths, vec!["C:\\denied"]);
+@@ -2662,15 +2672,17 @@
+         let mut logger = test_logger();
+ 
+         let req = load_request(&encoded, &mut logger, true).unwrap();
+-        assert!(req
+-            .policy
+-            .capabilities
+-            .contains(&"learningModeLogging".to_string()));
++        assert!(
++            req.policy
++                .capabilities
++                .contains(&"learningModeLogging".to_string())
++        );
+         // The boolean must NOT inject the allow-all permissive capability.
+-        assert!(!req
+-            .policy
+-            .capabilities
+-            .contains(&"permissiveLearningMode".to_string()));
++        assert!(
++            !req.policy
++                .capabilities
++                .contains(&"permissiveLearningMode".to_string())
++        );
+     }
+ 
+     #[test]
+@@ -5646,12 +5658,16 @@
+             Err(error) => error,
+         };
+ 
+-        assert!(discriminator_err
+-            .to_string()
+-            .contains("expected a configuration object"));
+-        assert!(wire_err
+-            .to_string()
+-            .contains("expected a configuration object"));
++        assert!(
++            discriminator_err
++                .to_string()
++                .contains("expected a configuration object")
++        );
++        assert!(
++            wire_err
++                .to_string()
++                .contains("expected a configuration object")
++        );
+     }
+ 
+     #[test]
 diff --git a/src/core/wxc_common/src/filesystem_dacl.rs b/src/core/wxc_common/src/filesystem_dacl.rs
 --- a/src/core/wxc_common/src/filesystem_dacl.rs
 +++ b/src/core/wxc_common/src/filesystem_dacl.rs
@@ -997,12 +1314,39 @@ diff --git a/src/core/wxc_common/src/filesystem_dacl.rs b/src/core/wxc_common/sr
 diff --git a/src/core/wxc_common/src/filesystem_object.rs b/src/core/wxc_common/src/filesystem_object.rs
 --- a/src/core/wxc_common/src/filesystem_object.rs
 +++ b/src/core/wxc_common/src/filesystem_object.rs
-@@ -95,6 +95,51 @@
-     Unknown,
+@@ -62,21 +62,21 @@
+ /// refer to the same underlying object even if reached via different names
+ /// (bind mount, symlink, or hard link).
+ #[cfg(unix)]
+-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
++#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, serde::Serialize, serde::Deserialize)]
+ struct ObjectId {
+     dev: u64,
+     ino: u64,
  }
  
+ #[cfg(windows)]
+-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
++#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, serde::Serialize, serde::Deserialize)]
+ struct ObjectId {
+     volume_serial: u64,
+     file_id: u128,
+ }
+ 
+ #[cfg(not(any(unix, windows)))]
+-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
++#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, serde::Serialize, serde::Deserialize)]
+ struct ObjectId {
+     _unused: u8,
+ }
+@@ -93,6 +93,51 @@
+     /// permission denied, an unreachable mount, or another I/O error. This is
+     /// the fail-closed trigger when `deniedPaths` are present.
+     Unknown,
++}
++
 +/// Existing filesystem objects retained as the identity of a prepared request.
-+#[derive(Clone, Debug, Default, Eq, PartialEq)]
++#[derive(Clone, Debug, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 +pub struct FilesystemSnapshot {
 +    objects: Vec<(std::path::PathBuf, ObjectId)>,
 +}
@@ -1044,11 +1388,9 @@ diff --git a/src/core/wxc_common/src/filesystem_object.rs b/src/core/wxc_common/
 +        }
 +        Ok(())
 +    }
-+}
-+
+ }
+ 
  /// Result of comparing two paths by filesystem-object identity.
- #[derive(Clone, Copy, PartialEq, Eq, Debug)]
- pub enum ExistingObjectComparison {
 diff --git a/src/core/wxc_common/src/host_changes.rs b/src/core/wxc_common/src/host_changes.rs
 new file mode 100644
 --- /dev/null
@@ -1064,7 +1406,7 @@ new file mode 100644
 +
 +/// The host paths on which an embedding application authorized ACL changes.
 +/// This value is never deserialized from a sandbox command or policy document.
-+#[derive(Clone, Debug, Default, Eq, PartialEq)]
++#[derive(Clone, Debug, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 +pub struct HostAclScope {
 +    objects: crate::filesystem_object::FilesystemSnapshot,
 +}
@@ -1097,7 +1439,7 @@ new file mode 100644
 +}
 +
 +/// A ceiling on host filesystem access, separate from explicit path grants.
-+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
++#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 +pub enum HostFilesystemAccess {
 +    ReadOnly,
 +    ReadWrite,
@@ -1248,25 +1590,30 @@ diff --git a/src/core/wxc_common/src/log_symbols.rs b/src/core/wxc_common/src/lo
 diff --git a/src/core/wxc_common/src/models.rs b/src/core/wxc_common/src/models.rs
 --- a/src/core/wxc_common/src/models.rs
 +++ b/src/core/wxc_common/src/models.rs
-@@ -139,6 +139,9 @@
+@@ -139,6 +139,13 @@
  #[derive(Debug, Clone, Serialize, Deserialize)]
  #[serde(default)]
  pub struct SeatbeltConfig {
 +    /// Whether writable filesystem grants may also open pathname Unix sockets.
 +    #[serde(default = "default_true")]
 +    pub allow_unix_sockets: bool,
++    /// Embedding-only directories where pathname Unix sockets remain available
++    /// when `allow_unix_sockets` is false.
++    #[serde(skip)]
++    pub allowed_unix_socket_paths: Vec<String>,
      /// Optional override of the generated TinyScheme profile.
      #[serde(rename = "profileOverride", skip_serializing_if = "Option::is_none")]
      pub profile_override: Option<String>,
-@@ -204,6 +207,7 @@
+@@ -204,6 +211,8 @@
  impl Default for SeatbeltConfig {
      fn default() -> Self {
          Self {
 +            allow_unix_sockets: true,
++            allowed_unix_socket_paths: Vec::new(),
              profile_override: None,
              gui_access: false,
              launch_method: LaunchMethod::default(),
-@@ -944,6 +948,19 @@
+@@ -944,6 +953,23 @@
  #[derive(Debug, Clone, Default, Serialize, Deserialize)]
  #[serde(default)]
  pub struct ExecutionRequest {
@@ -1278,6 +1625,10 @@ diff --git a/src/core/wxc_common/src/models.rs b/src/core/wxc_common/src/models.
 +    pub host_filesystem: Option<crate::host_changes::HostFilesystemAccess>,
 +    #[serde(skip)]
 +    pub host_filesystem_roots: Vec<String>,
++    /// Embedding-only requirement that forbids ProcessContainer from selecting
++    /// AppContainer or host-DACL implementations for this request.
++    #[serde(skip)]
++    pub require_process_security_environment: bool,
 +    #[serde(skip)]
 +    pub prepared_files: Option<crate::filesystem_object::FilesystemSnapshot>,
 +    /// Host-resolved executable; unavailable to untrusted serialized requests.
@@ -1988,6 +2339,31 @@ diff --git a/src/backends/appcontainer/common/src/appcontainer_runner.rs b/src/b
  }
  
  /// Owned capability SID derived from a capability name. Frees the underlying
+@@ -2181,10 +2184,10 @@
+         let proxy = wxc_common::models::ProxyAddress::new("127.0.0.1".to_string(), 8080);
+         let entries = super::build_explicit_entries(&env, Some(&proxy));
+ 
+-        // Original proxy vars should be stripped.
++        // Original proxy vars should be scrubbed.
+         assert!(!entries
+             .iter()
+-            .any(|(k, _)| k == "http_proxy" || k == "https_proxy" || k == "NO_PROXY"));
++            .any(|(k, _)| k == "http_proxy" || k == "https_proxy"));
+         // FOO should remain.
+         assert!(entries.iter().any(|(k, v)| k == "FOO" && v == "bar"));
+         // Injected proxy vars should be present.
+@@ -2195,6 +2198,11 @@
+         assert!(entries
+             .iter()
+             .any(|(k, v)| k == "HTTPS_PROXY" && v == &proxy_url));
++        // NO_PROXY is neutralized to the empty string rather than omitted, so
++        // an inherited exemption cannot survive the cooperative proxy.
++        assert!(entries
++            .iter()
++            .any(|(k, v)| k == "NO_PROXY" && v.is_empty()));
+     }
+ 
+     // ---- validate_runner: unsupported policy fields surface as errors. ----
 diff --git a/src/backends/appcontainer/common/src/base_container_helpers.rs b/src/backends/appcontainer/common/src/base_container_helpers.rs
 --- a/src/backends/appcontainer/common/src/base_container_helpers.rs
 +++ b/src/backends/appcontainer/common/src/base_container_helpers.rs
@@ -2025,28 +2401,89 @@ diff --git a/src/backends/appcontainer/common/src/base_container_helpers.rs b/sr
 diff --git a/src/backends/appcontainer/common/src/base_container_runner.rs b/src/backends/appcontainer/common/src/base_container_runner.rs
 --- a/src/backends/appcontainer/common/src/base_container_runner.rs
 +++ b/src/backends/appcontainer/common/src/base_container_runner.rs
-@@ -18,8 +18,9 @@
+@@ -18,23 +18,23 @@
  
  use learning_mode_core::DenialAnalyzer;
  use learning_mode_windows::{
 -    CaptureSession, EtlDenialAnalyzer, LearningModeApi, ProcessSecurityEnvironment,
 -    SecurityEnvironmentApi, SecurityEnvironmentStartupInfo, PROCESS_SECURITY_ENVIRONMENT_FLAG_NONE,
 +    CaptureSession, EtlDenialAnalyzer, LearningModeApi, LearningModeError,
-+    ProcessSecurityEnvironment, SecurityEnvironmentApi, SecurityEnvironmentStartupInfo,
-+    PROCESS_SECURITY_ENVIRONMENT_FLAG_NONE,
++    PROCESS_SECURITY_ENVIRONMENT_FLAG_NONE, ProcessSecurityEnvironment, SecurityEnvironmentApi,
++    SecurityEnvironmentStartupInfo,
  };
  use windows::Win32::Foundation::{
-     CloseHandle, GetLastError, SetHandleInformation, ERROR_CALL_NOT_IMPLEMENTED,
-@@ -67,6 +68,8 @@
+-    CloseHandle, GetLastError, SetHandleInformation, ERROR_CALL_NOT_IMPLEMENTED,
+-    ERROR_NOT_SUPPORTED, E_NOTIMPL, HANDLE, HANDLE_FLAG_INHERIT, WAIT_OBJECT_0, WAIT_TIMEOUT,
++    CloseHandle, E_NOTIMPL, ERROR_CALL_NOT_IMPLEMENTED, ERROR_NOT_SUPPORTED, GetLastError, HANDLE,
++    HANDLE_FLAG_INHERIT, SetHandleInformation, WAIT_OBJECT_0, WAIT_TIMEOUT,
+ };
+ use windows::Win32::System::Console::{
+     GetStdHandle, STD_ERROR_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE,
+ };
+ use windows::Win32::System::LibraryLoader::{
+-    GetProcAddress, LoadLibraryExW, LOAD_LIBRARY_SEARCH_SYSTEM32,
++    GetProcAddress, LOAD_LIBRARY_SEARCH_SYSTEM32, LoadLibraryExW,
+ };
+ use windows::Win32::System::Threading::{
+-    CreateProcessW, GetExitCodeProcess, TerminateProcess, WaitForSingleObject,
+-    EXTENDED_STARTUPINFO_PRESENT, PROCESS_CREATION_FLAGS, PROCESS_INFORMATION,
+-    STARTF_USESTDHANDLES, STARTUPINFOW,
++    CreateProcessW, EXTENDED_STARTUPINFO_PRESENT, GetExitCodeProcess, PROCESS_CREATION_FLAGS,
++    PROCESS_INFORMATION, STARTF_USESTDHANDLES, STARTUPINFOW, TerminateProcess, WaitForSingleObject,
+ };
+ use windows_core::{PCWSTR, PWSTR};
+ 
+@@ -47,8 +47,8 @@
+     write_stderr_line_best_effort,
+ };
+ use crate::guarded_capture::{
+-    finalize_guarded_capture, validate_retain_etl_supported, GuardedCaptureFactory,
+-    GuardedCaptureSession, GuardedStop,
++    GuardedCaptureFactory, GuardedCaptureSession, GuardedStop, finalize_guarded_capture,
++    validate_retain_etl_supported,
+ };
+ use crate::job_object::UiJobObject;
+ use crate::launch_diagnostics::{
+@@ -67,20 +67,22 @@
      CaptureDenialsErrorOutput, CaptureDenialsOutput, ExecutionRequest, FailurePhase, ProxyAddress,
      SandboxOutputMetadata, ScriptResponse,
  };
 +use wxc_common::mxc_error::ApiFailure;
 +use wxc_common::mxc_error::MxcError;
  use wxc_common::process_util::{
-     create_std_pipes, InterruptiblePipeReader, OwnedHandle, PipeReadCanceller, PipeWriter,
-     SendOwnedHandle,
-@@ -278,6 +281,58 @@
+-    create_std_pipes, InterruptiblePipeReader, OwnedHandle, PipeReadCanceller, PipeWriter,
+-    SendOwnedHandle,
++    InterruptiblePipeReader, OwnedHandle, PipeReadCanceller, PipeWriter, SendOwnedHandle,
++    create_std_pipes,
+ };
+ use wxc_common::sandbox_process::{
+-    boxed_closer, cancel_and_join_discard, spawn_discard, take_boxed_read, take_boxed_write,
+-    SandboxBackend, SandboxProcess, StdioMode, StreamCloser,
++    SandboxBackend, SandboxProcess, StdioMode, StreamCloser, boxed_closer, cancel_and_join_discard,
++    spawn_discard, take_boxed_read, take_boxed_write,
+ };
+ use wxc_common::script_runner::get_timeout_milliseconds;
+ use wxc_common::string_util;
+-use wxc_common::validator::{validate_network_policy_support, NetworkPolicySupport};
++use wxc_common::validator::{NetworkPolicySupport, validate_network_policy_support};
+ 
+ use windows::Win32::System::Threading::{
+-    ResumeThread, CREATE_NO_WINDOW, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT,
++    CREATE_NO_WINDOW, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT, ResumeThread,
+ };
+ 
+ fn build_child_env_block(
+@@ -223,8 +225,7 @@
+ const SANDBOX_CAP_NETWORK_PROXY: u64 = 0x0000_0000_0000_0004;
+ const CAPTURE_API_AVAILABLE_LOG: &str =
+     "captureDenials: learning-mode trace API available (processmodel.dll)";
+-const PSEC_DENIED_PATHS_UNSUPPORTED_MSG: &str =
+-    "filesystem.deniedPaths on the process-security-environment path requires \
++const PSEC_DENIED_PATHS_UNSUPPORTED_MSG: &str = "filesystem.deniedPaths on the process-security-environment path requires \
+      QueryProcessSecurityEnvironmentSupport to advertise PSE_SUPPORT_FS_DENY; this OS \
+      build does not support that policy, and the process-security-environment path \
+      cannot fall back to AppContainer or host-DACL enforcement";
+@@ -278,6 +279,58 @@
          }
          _ => false,
      }
@@ -2105,7 +2542,7 @@ diff --git a/src/backends/appcontainer/common/src/base_container_runner.rs b/src
  }
  
  trait CaptureSessionOps {
-@@ -579,6 +634,65 @@
+@@ -579,6 +632,65 @@
          })
      }
  
@@ -2171,7 +2608,7 @@ diff --git a/src/backends/appcontainer/common/src/base_container_runner.rs b/src
      /// Whether this host can create a PSEC environment and start a Learning Mode trace.
      ///
      /// The successful probe session is dropped immediately, which closes and discards the trace.
-@@ -869,6 +983,11 @@
+@@ -869,6 +981,11 @@
              self.process_security_environment_usable(),
              supports_deny_paths,
          )
@@ -2183,11 +2620,13 @@ diff --git a/src/backends/appcontainer/common/src/base_container_runner.rs b/src
      }
  
      pub(crate) fn is_usable_for_request(request: &ExecutionRequest) -> bool {
-@@ -1166,6 +1285,12 @@
+@@ -1166,6 +1283,14 @@
  
          let capture_denials = request.policy.capture_denials.clone();
          let use_process_security_environment = self.uses_process_security_environment(&request);
-+        if request.host_filesystem.is_some() && !use_process_security_environment {
++        if (request.host_filesystem.is_some() || request.require_process_security_environment)
++            && !use_process_security_environment
++        {
 +            let mut error =
 +                ScriptResponse::error("the prepared PSEC implementation is no longer available");
 +            error.failure_phase = wxc_common::models::FailurePhase::BackendUnavailable;
@@ -2196,7 +2635,58 @@ diff --git a/src/backends/appcontainer/common/src/base_container_runner.rs b/src
          Self::validate_resolved_network_contract(&request, use_process_security_environment)?;
          let use_guarded_capture = capture_denials.is_some() && !use_process_security_environment;
          let spec_bytes = if !use_process_security_environment {
-@@ -2987,6 +3112,58 @@
+@@ -1393,19 +1518,19 @@
+                 h_stdin = match unsafe { GetStdHandle(STD_INPUT_HANDLE) } {
+                     Ok(h) => h,
+                     Err(e) => {
+-                        return Err(ScriptResponse::error(&format!("GetStdHandle(STDIN): {e}")))
++                        return Err(ScriptResponse::error(&format!("GetStdHandle(STDIN): {e}")));
+                     }
+                 };
+                 h_stdout = match unsafe { GetStdHandle(STD_OUTPUT_HANDLE) } {
+                     Ok(h) => h,
+                     Err(e) => {
+-                        return Err(ScriptResponse::error(&format!("GetStdHandle(STDOUT): {e}")))
++                        return Err(ScriptResponse::error(&format!("GetStdHandle(STDOUT): {e}")));
+                     }
+                 };
+                 h_stderr = match unsafe { GetStdHandle(STD_ERROR_HANDLE) } {
+                     Ok(h) => h,
+                     Err(e) => {
+-                        return Err(ScriptResponse::error(&format!("GetStdHandle(STDERR): {e}")))
++                        return Err(ScriptResponse::error(&format!("GetStdHandle(STDERR): {e}")));
+                     }
+                 };
+ 
+@@ -1683,7 +1808,7 @@
+                 None => {
+                     return Err(ScriptResponse::error(
+                         "internal error: SBOX launch API was not initialized",
+-                    ))
++                    ));
+                 }
+             };
+             let spec_bytes = match spec_bytes.as_deref() {
+@@ -1691,7 +1816,7 @@
+                 None => {
+                     return Err(ScriptResponse::error(
+                         "internal error: SBOX specification was not initialized",
+-                    ))
++                    ));
+                 }
+             };
+             let (success, error) = SandboxLaunchArgs {
+@@ -1859,8 +1984,7 @@
+                     self.proxy_coordinator.stop(logger);
+                 }
+ 
+-                const JOB_SETUP_FAILED_MSG: &str =
+-                    "BaseContainer sandbox could not be placed in a job object, so it \
++                const JOB_SETUP_FAILED_MSG: &str = "BaseContainer sandbox could not be placed in a job object, so it \
+                      could not be reliably terminated; the launch was rejected to \
+                      avoid running an uncontainable sandbox.";
+                 let mut extended_error = format!("BaseContainer job-object setup failed: {e}");
+@@ -2987,6 +3111,58 @@
      use wxc_common::ui_policy::EffectiveUiRestrictions;
  
      #[test]
@@ -2255,6 +2745,66 @@ diff --git a/src/backends/appcontainer/common/src/base_container_runner.rs b/src
      fn guarded_capture_rejects_a_child_that_was_never_suspended() {
          assert!(guarded_capture_started_too_late(0, true));
          assert!(!guarded_capture_started_too_late(1, true));
+@@ -3122,8 +3298,10 @@
+             first.etl_path.extension().and_then(|ext| ext.to_str()),
+             Some("etl")
+         );
+-        assert!(wxc_common::filesystem_dacl::owner_is_self(&first.directory)
+-            .expect("read managed directory owner"));
++        assert!(
++            wxc_common::filesystem_dacl::owner_is_self(&first.directory)
++                .expect("read managed directory owner")
++        );
+         drop(first);
+         drop(second);
+         assert!(!first_directory.exists());
+@@ -3670,9 +3848,11 @@
+         let error = BaseContainerRunner::validate_resolved_network_contract(&request, false)
+             .expect_err("a late PSEC-to-SBOX transition must fail closed");
+         assert_eq!(error.failure_phase, FailurePhase::BackendUnavailable);
+-        assert!(error
+-            .error_message
+-            .contains("requires process-security-environment networking"));
++        assert!(
++            error
++                .error_message
++                .contains("requires process-security-environment networking")
++        );
+     }
+ 
+     #[test]
+@@ -3718,10 +3898,11 @@
+         let bytes = BaseContainerRunner::build_sandbox_spec(&request);
+         let spec = base_container_layout::root_as_sandbox_spec(&bytes).unwrap();
+         assert_eq!(spec.capabilities(), Some("privateNetworkClientServer"));
+-        assert!(spec
+-            .network_policy()
+-            .and_then(|policy| policy.allowed_appcontainer_peer())
+-            .is_none());
++        assert!(
++            spec.network_policy()
++                .and_then(|policy| policy.allowed_appcontainer_peer())
++                .is_none()
++        );
+     }
+ 
+     #[test]
+@@ -4426,10 +4607,11 @@
+         );
+         assert!(egress.allow().is_none());
+         assert!(egress.deny().is_none());
+-        assert!(spec
+-            .network_policy()
+-            .and_then(|policy| policy.allowed_appcontainer_peer())
+-            .is_none());
++        assert!(
++            spec.network_policy()
++                .and_then(|policy| policy.allowed_appcontainer_peer())
++                .is_none()
++        );
+     }
+ 
+     #[test]
 diff --git a/src/backends/appcontainer/common/src/dispatcher.rs b/src/backends/appcontainer/common/src/dispatcher.rs
 --- a/src/backends/appcontainer/common/src/dispatcher.rs
 +++ b/src/backends/appcontainer/common/src/dispatcher.rs
@@ -2544,7 +3094,16 @@ diff --git a/src/backends/seatbelt/common/Cargo.toml b/src/backends/seatbelt/com
 diff --git a/src/backends/seatbelt/common/src/profile_builder.rs b/src/backends/seatbelt/common/src/profile_builder.rs
 --- a/src/backends/seatbelt/common/src/profile_builder.rs
 +++ b/src/backends/seatbelt/common/src/profile_builder.rs
-@@ -82,6 +82,13 @@
+@@ -28,7 +28,7 @@
+ use std::fmt::Write as _;
+ 
+ use crate::seatbelt_policy;
+-use wxc_common::filesystem_resolve::{resolve_path_plan, FsIntent};
++use wxc_common::filesystem_resolve::{FsIntent, resolve_path_plan};
+ use wxc_common::host_is_canonical_loopback;
+ use wxc_common::models::{ClipboardPolicy, ContainerPolicy, ExecutionRequest, ProxyAddress};
+ 
+@@ -82,6 +82,29 @@
      write_extra_seatbelt_rules(&mut out, request);
      write_ui_rules(&mut out, request);
  
@@ -2553,12 +3112,28 @@ diff --git a/src/backends/seatbelt/common/src/profile_builder.rs b/src/backends/
 +        .as_ref()
 +        .is_some_and(|config| !config.allow_unix_sockets)
 +    {
-+        out.push_str("(deny network-bind network-outbound (subpath \"/\"))\n");
++        let allowed = request
++            .seatbelt
++            .as_ref()
++            .expect("restricted Unix socket policy has Seatbelt configuration")
++            .allowed_unix_socket_paths
++            .iter()
++            .map(|path| resolve_policy_path(path))
++            .collect::<Result<Vec<_>, _>>()?;
++        if allowed.is_empty() {
++            out.push_str("(deny network-bind network-outbound (subpath \"/\"))\n");
++        } else {
++            out.push_str("(deny network-bind network-outbound (require-all (subpath \"/\")");
++            for path in allowed {
++                let _ = write!(out, " (require-not (subpath {}))", quote_scheme(&path));
++            }
++            out.push_str("))\n");
++        }
 +    }
      // Policy-derived deny rules go LAST so they win on conflict.
      write_filesystem_deny(&mut out, &resolved);
  
-@@ -174,7 +181,7 @@
+@@ -174,7 +197,7 @@
          let readonly = resolve_all(&policy.readonly_paths)?;
          let mut readwrite = resolve_all(&policy.readwrite_paths)?;
  
@@ -2567,7 +3142,7 @@ diff --git a/src/backends/seatbelt/common/src/profile_builder.rs b/src/backends/
          // dropping the path keeps the emitted profile an honest description of
          // the effective policy.
          let mut readonly: Vec<String> = readonly;
-@@ -204,8 +211,8 @@
+@@ -204,8 +227,8 @@
      // makes the *deepest* intent win at every path — a `readonlyPaths` entry
      // nested inside a broader `readwritePaths` subtree stays read-only rather
      // than inheriting the parent's write grant. `deniedPaths` is deliberately
@@ -2578,7 +3153,7 @@ diff --git a/src/backends/seatbelt/common/src/profile_builder.rs b/src/backends/
      out.push_str(";; --- policy.readonlyPaths / policy.readwritePaths (shallow-to-deep) ---\n");
      for mount in resolve_path_plan(&paths.readwrite, &paths.readonly, &[]) {
          let subpath = [mount.path.clone()];
-@@ -256,11 +263,27 @@
+@@ -256,11 +279,31 @@
          // whatever listens there. A Docker / ssh-agent / gpg-agent socket is a
          // control plane, so that would be an escape.
          out.push_str(";; --- policy.deniedPaths (override broader allow rules) ---\n");
@@ -2601,7 +3176,11 @@ diff --git a/src/backends/seatbelt/common/src/profile_builder.rs b/src/backends/
 +                    &[hidden.clone()],
 +                );
 +            } else {
-+                let _ = write!(out, "(deny file-read* file-write* network-bind network-outbound (require-all (subpath {})", quote_scheme(hidden));
++                let _ = write!(
++                    out,
++                    "(deny file-read* file-write* network-bind network-outbound (require-all (subpath {})",
++                    quote_scheme(hidden)
++                );
 +                for path in exceptions {
 +                    let _ = write!(out, " (require-not (subpath {}))", quote_scheme(path));
 +                }
@@ -2611,6 +3190,31 @@ diff --git a/src/backends/seatbelt/common/src/profile_builder.rs b/src/backends/
      }
  }
  
+@@ -1327,6 +1370,24 @@
+     }
+ 
+     #[test]
++    fn restricted_unix_sockets_reopen_only_the_execution_private_directory() {
++        let mut r = req();
++        r.policy.readwrite_paths = vec!["/tmp/work".into(), "/tmp/ash-exec".into()];
++        r.seatbelt = Some(SeatbeltConfig {
++            allow_unix_sockets: false,
++            allowed_unix_socket_paths: vec!["/tmp/ash-exec".into()],
++            ..Default::default()
++        });
++
++        let profile = build_profile(&r).unwrap();
++
++        assert!(profile.contains(
++            "(deny network-bind network-outbound (require-all (subpath \"/\") (require-not (subpath \"/private/tmp/ash-exec\"))))"
++        ));
++        assert!(profile.contains("(subpath \"/private/tmp/work\")"));
++    }
++
++    #[test]
+     fn denied_paths_deny_outbound_under_default_allow() {
+         // `defaultPolicy: allow` emits a bare `(allow network-outbound)`, which
+         // on its own grants AF_UNIX `connect()`. A denied subtree must still
 diff --git a/src/backends/seatbelt/common/src/seatbelt_runner.rs b/src/backends/seatbelt/common/src/seatbelt_runner.rs
 --- a/src/backends/seatbelt/common/src/seatbelt_runner.rs
 +++ b/src/backends/seatbelt/common/src/seatbelt_runner.rs

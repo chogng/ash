@@ -13,8 +13,8 @@
 
 | 上游包 | 修正 |
 | --- | --- |
-| `mxc_engine` | 结构化 argv、独立 ACL 授权、宿主读取基线、准备阶段传递结构化 PSEC 结果和文件身份、显式 ProcessContainer UI 构造、固定 Bubblewrap 路径和 Unix socket 控制 |
-| `wxc_common` | 文件对象身份与 ACL 授权；独立日志和严格恢复；不传播到子项的祖先属性授权；退出观察保留 PID 到回收；代理环境保留 SOCKS 协议 |
+| `mxc_engine` | 结构化 argv、独立 ACL 授权、宿主读取基线、准备阶段传递结构化 PSEC 结果和文件身份、显式 ProcessContainer UI 构造、固定 Bubblewrap 路径和 Unix socket 控制；保留完整权限及文件身份的受信 PTY 启动交接 |
+| `wxc_common` | 文件对象身份与 ACL 授权及受信交接序列化；独立日志和严格恢复；不传播到子项的祖先属性授权；退出观察保留 PID 到回收；代理环境保留 SOCKS 协议 |
 | `seatbelt_common` | 隐藏父目录中的授权例外；独立禁止 Unix socket；完整环境与句柄生命周期 |
 | `bwrap_common` | 固定执行路径；恢复根挂载后的虚拟文件系统；封闭隐藏父目录；代理环境与退出观察 |
 | `appcontainer_common` | 按本次请求探测 PSEC 并区分能力缺失与运行故障；禁止 Ash 请求转入其他 Windows 实现 |
