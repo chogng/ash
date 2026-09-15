@@ -1,6 +1,11 @@
 # 构建系统、仓库脚本与输出目录
 
-> 本文拥有 Ash 构建入口、开发者脚本、受版本控制的构建逻辑与本地可删除产物之间的目录边界。产品线与宿主选择由 [`product-lines.md`](product-lines.md) 维护。
+本文说明构建和测试入口、工具要求、输出目录，以及 `build/` 与 `scripts/` 的职责。产品选择见 [`product-lines.md`](product-lines.md)。
+
+- [环境与命令](#构建入口)
+- [输出与清理](#输出布局)
+- [依赖检查、构建测量与 CI](#rust-依赖检查与构建测量)
+- [构建源码与脚本职责](#构建源码与仓库脚本边界)
 
 ## 快速理解
 
@@ -24,7 +29,7 @@ Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保
 - Windows 本机拥有 MSVC、Windows SDK 和桌面运行环境。安装后使用对应目标架构的 Visual Studio Developer PowerShell 构建。LLVM 的 `bin` 目录需在构建终端 PATH 中；使用自定义 LLVM 路径时，在该终端设置 `LIBCLANG_PATH` 指向含 `libclang.dll` 的目录。无需全局设置 `CC`、`CXX`。
 - 普通构建和启动入口只准备项目依赖与产物，不调用系统工具安装器。分别用 `just ash`、`just ash-desktop`、`just app` 启动产品。
 - Bazel 由 Bazelisk 管理；它读取仓库根的 [`.bazelversion`](../.bazelversion)，不需要手动选择 Bazel 版本。Windows 运行测试前需让 `BAZEL_SH` 指向 Git Bash，例如 `C:\Program Files\Git\bin\bash.exe`。
-- 当前未提供 Dev Container。后续如提供，它只拥有容器内的 Linux 开发工具与依赖；Windows 桌面构建、调试和平台验证仍在 Windows 上完成。
+- 当前未提供 Dev Container。Windows 桌面构建、调试和平台验证在 Windows 上完成。
 
 | 工具 | 版本要求与来源 | 安装来源或组件 |
 | --- | --- | --- |
@@ -37,38 +42,60 @@ Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保
 | Git | 未固定版本，命令需在 PATH 中可用 | git-scm.com 或 winget `Git.Git` |
 | ripgrep | 开发工具未固定版本；产品使用独立锁定产物 | winget `BurntSushi.ripgrep.MSVC` |
 | just | 未固定版本，命令需在 PATH 中可用 | winget `Casey.Just` |
+| uv | Python 工具环境由 `scripts/uv.lock` 锁定 | winget `astral-sh.uv` |
 | CMake | 未固定版本，命令需在 PATH 中可用 | cmake.org 或 winget `Kitware.CMake` |
 | LLVM/Clang | 未固定版本；需要 Clang 和 libclang | LLVM 官方发行包或 winget `LLVM.LLVM` |
 | Bazelisk | [`.bazelversion`](../.bazelversion) 固定 Bazel 版本 | winget `Bazel.Bazelisk`；CI 使用 `setup-bazel` |
 
+### 初始化
+
+在仓库根目录执行：
+
+1. 按根 [README](../README.md#quick-start) 配置 Node 和 pnpm，确认 `node --version`、`pnpm --version` 与仓库要求一致。
+2. 执行 `pnpm install` 安装 Node workspace 依赖。
+3. 执行 `just install` 获取 Rust 依赖并通过 uv 准备 Python 工具环境。Windows 上此命令会在缺少 PowerShell 7 时调用 winget 安装。
+
 ### 项目命令
 
-根 `Justfile` 是三个产品和根 Rust workspace 的统一入口。根 `package.json` 只提供 pnpm workspace 与 Electron、Browser、Stanza 等 Node 构建入口，不编排 Rust workspace。
+根 `Justfile` 是三个产品和根 Rust workspace 的统一入口。根 `package.json` 提供 pnpm workspace 与 Electron、Browser、Stanza 等 Node 构建入口；`pnpm test` 还会调用 Rust 协议验证。完整 Rust workspace 构建由 `Justfile` 编排。
 
 Node 工具、发布包组装与 Desktop 单测使用 Node 24 LTS，具体版本由仓库根 `.nvmrc` 固定。切换到该版本后，按 [README 初始化步骤](../README.md#quick-start) 安装根 `package.json` 声明的 pnpm，再执行 `pnpm install`、构建或测试。所有入口直接调用 pnpm，安装检查要求 pnpm 版本与声明完全一致；其他 Node 主版本不受支持。
 
+#### 产品启动与 Rust 构建
+
 | 命令 | 结果 |
 | --- | --- |
+| `just ash-desktop` | 启动 Electron Desktop 开发环境 |
+| `just app` | 构建 App Server 并启动 Rust Desktop |
+| `pnpm dev:web:full` | 启动带 App Server 的完整 Web 开发环境 |
 | `just build` | 构建 Electron Desktop 和根 Cargo workspace |
 | `just build-desktop` | 构建 Electron Main、Preload 和当前 `ASH_PRODUCT` Renderer |
 | `just build-rust` | 通过统一 Cargo 执行器构建根 Rust workspace |
 | `just ash` | 用一次 Cargo 调用构建 Code TUI、本地 daemon 和当前平台沙箱程序，然后直接从源码开发运行目录启动 |
 | `just ash-package` | 组装并发布 Desktop、Web 与 Code TUI 共用的完整不可变开发包 |
 | `just ash-package-run` | 组装完整开发包，并让 Code TUI 连接该包中的 daemon 与产品服务 |
+| `just check <package>` | 检查指定 Rust 包 |
+| `just test <package>` | 测试指定 Rust 包 |
+| `just test-tui` | 构建服务程序并运行 CLI/TUI PTY 场景 |
+| `just package <args>` | 组装正式发布包 |
+
+#### 仓库维护
+
+| 命令 | 结果 |
+| --- | --- |
 | `just fmt` / `just fmt-check` | 格式化或检查 Just、Rust 和第一方 Python 源码 |
-| `just test-python [scripts|ash-code|build]` | 使用锁定的 Python 工具环境运行全部单元测试，或只运行指定 owner 的测试 |
+| `just test-python` / `just test-python build` | 使用锁定的 Python 工具环境运行全部单元测试，或只运行指定 owner 的测试 |
 | `just dependencies` | 检查 Rust 依赖声明、间接依赖边界、已审查的多版本集合和无用依赖 |
 | `just bench-build <package> [--profile dev]` | 记录一个 Cargo package 的构建耗时、RSS 和产物大小 |
 
-Bazel 边界测试使用 Bazelisk，命令会按照 `.bazelversion` 自动选择 Bazel：
+#### Node 构建与测试
 
-```sh
-bazelisk test //app:app_ci --test_output=errors
-```
+| 命令 | 结果 |
+| --- | --- |
 | `pnpm build` | 构建 Electron Main、Preload 和当前 `ASH_PRODUCT` Renderer |
 | `pnpm build:desktop` | 构建 Electron Main、Preload 和当前 `ASH_PRODUCT` Renderer |
 | `pnpm test:build` | 运行构建工具自身的单元测试 |
-| `pnpm test` | 直接运行构建工具检查和 Desktop 单元测试 |
+| `pnpm test` | 先验证 Rust 协议，再生成前端协议并运行构建工具检查和 Desktop 单元测试 |
 | `pnpm test:integration` | 直接运行 Editor 浏览器集成测试 |
 | `pnpm test:web-integration` | 直接运行带 App Server 的完整 Web 集成测试 |
 | `pnpm test:desktop:smoke` | 直接运行 Electron Desktop smoke tests |
@@ -76,14 +103,25 @@ bazelisk test //app:app_ci --test_output=errors
 | `pnpm --dir ash-ts typecheck:test-unit` | 检查 Desktop 单测入口及其辅助代码 |
 | `pnpm clean` | 删除 `.build/` 和已知旧输出，不删除依赖、目录状态或源码生成物 |
 
-Desktop 的 `code` 与 `academic` 仍通过同一个 `build:desktop` 入口构建；`ASH_PRODUCT` 只选择矩阵项，不创建另一套命令。
+Desktop 的 `code` 与 `academic` 通过同一个 `build:desktop` 入口构建；`ASH_PRODUCT` 选择产品。
+
+#### Bazel 边界测试
+
+Bazelisk 按 `.bazelversion` 选择 Bazel。Windows 先在当前 PowerShell 中配置 Git Bash 路径：
+
+```powershell
+$env:BAZEL_SH = "C:\Program Files\Git\bin\bash.exe"
+bazelisk test //app:app_ci --test_output=errors
+```
+
+其他平台直接运行同一条 `bazelisk test` 命令。该目标检查 App 边界和打包契约；产品行为测试使用上面的对应入口。
 
 ## 输出布局
 
 ```text
 .build/
 ├── cargo/                       # Cargo target-dir
-├── ash-development/<digest>/   # 源码开发所需的少量可执行文件；不含资源副本和包清单
+├── ash-development/<digest>/    # 源码开发所需的少量可执行文件；不含资源副本和包清单
 ├── desktop/
 │   ├── main/                    # Electron Main TypeScript
 │   ├── preload/                 # sandbox Preload TypeScript
@@ -107,6 +145,8 @@ Desktop 的 `code` 与 `academic` 仍通过同一个 `build:desktop` 入口构�
 
 ## Rust 依赖检查与构建测量
 
+### 依赖检查
+
 依赖规则由 [Rust 规范](../.github/instructions/rust.instructions.md#dependencies-and-build-costs)维护。`scripts/dependencies.py` 是本地与 CI 共用的检查入口；使用 Cargo 返回的工作区成员，读取全部平台的普通、构建和测试依赖声明，并按普通/构建依赖检查内部依赖路径。它不把测试依赖当作产品依赖边界，也不尝试推断外部库内部的业务层次。
 
 安装固定工具版本后运行检查：
@@ -120,6 +160,8 @@ just test-python scripts
 `.cargo/dependencies.toml` 记录整个锁文件中的多版本包、精确版本及当前引入方。版本集合发生变化或记录失效时检查失败；新版本必须结合 `cargo tree --workspace --target all -i <package>` 审阅。它不禁止所有传递依赖的多版本并存，也不把锁文件数量当作当前产品实际编译单元数。
 
 cargo-shear 的依赖错误和依赖警告都会阻断检查，工具处理失败也会失败。工作区内自有 crate 的根目录别名本身不产生编译任务，允许没有依赖方；第三方根依赖仍检查是否被使用。孤立源码文件诊断会打印，但不属于依赖检查的失败条件。依赖误报必须在所属包的 `package.metadata.cargo-shear` 中逐项说明，不能用整个工作区的忽略列表屏蔽真实依赖问题。CI 不运行 `--fix`。
+
+### 构建测量
 
 构建基线使用 macOS 或 Linux 的 `/usr/bin/time`，至少重复三轮。每轮分配自己的空 Cargo 输出目录，依次测量构建、无改动重跑和触碰选定源码时间戳后的重编译；保留日志、Cargo timings、JSON 测量及产物文件大小，然后删除本轮独占的编译输出。共享的 `.build/cargo` 不会被清理。触碰后恢复原时间戳，不覆盖同时发生的编辑。
 
@@ -140,13 +182,19 @@ just bench-build ash-keybinding --jobs 4 --compare .build/build-health/<run>/rep
 
 超过调用方指定的耗时阈值会失败；`--absolute-regression 2` 可额外允许两秒以内的绝对波动，只有相对和绝对阈值同时超过才失败。负载不同或结果波动时必须复测。
 
+### CI 检查
+
 `Rust build health` 在 push/PR 检查依赖与工具回归测试；仅在 main push 对编译热点 `ash-app-server-protocol` 执行性能门禁，避免 PR 等待重复的全冷编译。每次 main push 的性能作业独立运行，不被后续推送取消，以免遗漏被取消的提交。在同一个 Ubuntu 作业中分别检出推送前后的源码，两份源码使用当前版本的 Rust 工具链、四个并发任务，各测三轮。任一场景的耗时中位数同时增加超过 25% 和两秒时检查失败，两份日志和报告都会上传。首次推送没有基线时仅执行依赖检查。这是协议包的编译门禁，不代表其他产品的整包耗时预算。
 
 `Rust warnings` 在 Linux、macOS、Windows 并行检查工作区；Linux TUI 测试单独并行运行。PR 改动路径按 Cargo 包及其依赖关系判断是否影响 TUI、CLI 或测试所需的服务程序；根 Cargo 配置、构建入口和无法归属的相关源码改动仍运行 TUI 测试。main push 和手动触发始终运行完整 TUI 覆盖，避免连续推送取消前一次运行后遗漏测试。GitHub Ubuntu runner 无法完成 Bubblewrap 的隔离网络 loopback 设置，因此三个依赖真实沙盒执行的 PTY 场景在单独并行的 macOS 作业中运行，其余 PTY 场景仍在 Linux 运行。测试使用锁定的 ripgrep 产物，并在耗时的 Rust 编译前验证它能启动。Linux 与 macOS TUI 作业的服务程序和 CLI 测试目标统一使用已有的 `ci-test` profile，避免同一作业在 `dev` 与 `test` profile 间重复编译后端依赖；普通 `just test-tui` 仍使用原有默认 profile。
 
-2026-09-13 在 macOS aarch64、Rust 1.98.0、四个 Cargo 任务、`CARGO_INCREMENTAL=0`、第三方源码已下载的条件下，用独立空目标目录测量 TUI 测试目标、三个服务程序和 CLI PTY 测试目标的顺序冷编译。原有 `test`/`dev` 组合分别用时 624、449、27 秒，统一使用 `ci-test` 分别用时 409、136、10 秒；总时间约 18 分 20 秒降至 9 分 15 秒，产物目录约 10 GB 降至 9.1 GB。两组无改动重跑均约 0.6 秒；仅触碰 TUI 源码后的重编译从 29.4 秒降至 11.6 秒。`ci-test` 在本机链接时会产生 macOS compact-unwind warning，macOS 沙盒 PTY 作业因此可能输出该链接器提示。GitHub Linux runner 的三段 Cargo 编译日志从原配置合计 29 分 35 秒降至 18 分 10 秒。
-
 测量脚本的 `--root <workspace>` 允许当前版本的工具测量旧源码，即使旧源码中还没有测量工具。CI 将两个 checkout 放在并列目录，避免当前版本的 `.cargo/config.toml` 影响基线。手动触发 CI 时默认测量 `ash-cli`，也可选择 `ash-app-server` 或 `app`，分别记录产品构建基线。
+
+### 历史测量与适用范围
+
+以下为特定机器和场景的测量记录，不是当前所有产品的构建预算。
+
+2026-09-13 在 macOS aarch64、Rust 1.98.0、四个 Cargo 任务、`CARGO_INCREMENTAL=0`、第三方源码已下载的条件下，用独立空目标目录测量 TUI 测试目标、三个服务程序和 CLI PTY 测试目标的顺序冷编译。原有 `test`/`dev` 组合分别用时 624、449、27 秒，统一使用 `ci-test` 分别用时 409、136、10 秒；总时间约 18 分 20 秒降至 9 分 15 秒，产物目录约 10 GB 降至 9.1 GB。两组无改动重跑均约 0.6 秒；仅触碰 TUI 源码后的重编译从 29.4 秒降至 11.6 秒。`ci-test` 在本机链接时会产生 macOS compact-unwind warning，macOS 沙盒 PTY 作业因此可能输出该链接器提示。GitHub Linux runner 的三段 Cargo 编译日志从原配置合计 29 分 35 秒降至 18 分 10 秒。
 
 协议注册表的 Schema 对象构造、TypeScript 默认配置初始化和依赖名称收集由非泛型函数处理。注册表保存具体类型的方法指针，避免把相同包装逻辑在大量类型和下游消费者中重复实例化。JSON Schema、TypeScript 和 schema hash 仍由协议测试验证同步。
 
@@ -176,24 +224,19 @@ just bench-build ash-keybinding --jobs 4 --compare .build/build-health/<run>/rep
 | `build/clean.ts` | 根清理入口 |
 | `build/package.json`、`build/tsconfig.json` | 构建工具的依赖、测试和类型检查 |
 
-开发入口 `build/package/prepare.ts` 与 Python 发布入口共用 `build/package/layout.ts` 组装包，布局与许可证清单由 `layout.json` 声明。发布入口通过标准输入传入解析后的程序、资源和协议版本，因此发布环境也需要仓库固定的 Node 24；Desktop 开发入口不调用 Python。
+### 共享包组装
+
+开发入口 `build/package/prepare.ts` 与 Python 发布入口共用 `build/package/layout.ts` 组装包，布局与许可证清单由 `layout.json` 声明。组装器要求调用方显式传入协议元数据，不读取前端本地生成文件。开发入口使用受版本控制的协议常量；发布入口使用本次协议生成结果，并通过标准输入传入程序、资源和协议元数据。因此发布环境也需要仓库固定的 Node 24；Desktop 开发入口不调用 Python。
 
 下载与解压由 `build/download/artifacts.ts` 和 `artifacts.py` 按调用语言提供。Node、ripgrep、V8 下载都采用流式校验和独立临时文件，通过大小及摘要检查后才发布缓存；失败只清理本次临时文件。
 
-打包脚本按实际产物分目录；文件名只写操作，共享能力保留单一实现：
+打包入口按交付物定位：`build/package/build.py`、`build/app/build.py`、`build/code/archive.py` 和 `build/remote/bundle.py`。共享包签名使用 `build/package/sign.py`，App 签名使用 `build/app/signing.py`，macOS 公证使用 `build/darwin/notarize.py`。
 
-| 路径 | 职责与入口 |
-| --- | --- |
-| `build/package/` | 共享包的组装、内容校验和签名；入口为 `build.py`、`sign.py` |
-| `build/app/` | App 打包、签名和发布契约；入口为 `build.py`、`signing.py` |
-| `build/code/` | Ash Code 发布压缩包和校验和；入口为 `archive.py` |
-| `build/remote/` | Remote 运行时压缩包和 catalog；入口为 `bundle.py` |
-| `build/lib/` | 共享 gzip 流和签名执行；`archive.py`、`signing.py` |
-| `build/darwin/`、`build/win32/`、`build/linux/` | 平台签名命令；macOS 公证入口为 `darwin/notarize.py` |
-
-各入口可用 `python3 -B <脚本路径>` 直接运行；模块导入从 `build` 下的所属目录开始。测试放在对应职责目录，`just test-python build` 统一发现并运行。各目录的 `BUILD.bazel` 声明自身工具和直接依赖。
+各 Python 入口可用 `python3 -B <脚本路径>` 直接运行，Windows 使用 `python -B <脚本路径>`；模块导入从 `build` 下的所属目录开始。测试放在对应职责目录，`just test-python build` 统一发现并运行。各目录的 `BUILD.bazel` 声明自身工具和直接依赖。
 
 共享发布包先收集未提供预编译文件的第一方程序，再用一次 Cargo 调用构建并读取其报告的可执行文件路径。App 发布直接使用打包参数和 `signing.py sign / verify / record`；签名凭据由环境变量提供。
+
+### 仓库脚本与开发运行
 
 `scripts/` 根目录保存跨产品仓库工具：`just-shell.py` 提供 Just 的跨平台 shell，`cargo.py` 为整个 Cargo workspace 准备锁定的构建输入，`format.py` 统一已有格式化器，`test-python.py` 按 `scripts`、`ash-code`、`build` 分别运行 Python 测试并在不指定范围时聚合执行。
 
@@ -205,12 +248,14 @@ Desktop 的 Node、Browser 和 Playwright 测试入口与 loader 归 `ash-ts/tes
 
 `scripts/` 可以调用 `build/` 公开的构建准备能力，`build/` 不得依赖或调用 `scripts/`。包组装由 `build/package/` 拥有；共享目标识别和 V8 输入解析由 `build/lib/ash_build/` 拥有，日常 Cargo 命令与发布构建器都依赖这一层。测试内容和 fixture 仍归对应产品目录拥有，仓库脚本只负责入口、进程编排和临时测试输出生命周期。
 
+### 根配置与工具语言
+
 根 `Justfile` 只声明稳定命令并委托到 `build/`、`scripts/` 或产品自身的构建入口，不保存构建机制。根 `package.json`、`pnpm-workspace.yaml` 和 `pnpm-lock.yaml` 必须留在仓库根，因为它们是 pnpm 发现 workspace 和执行 Node 命令的协议文件；安装策略与校验实现由 `build/pnpm/` 拥有。`build`、`scripts` 和 `ash-ts` 共用根锁文件与 TypeScript 版本，pnpm 内容寻址 store 使用用户级默认缓存，子项目不得再声明独立 `packageManager`、`pnpm` 策略或 npm 锁文件。
 
 同理，`.bazelrc`、根 `BUILD.bazel`、`.cargo/config.toml` 和 `tsconfig.base.json` 是对应工具从仓库根发现的协议文件，不能为了让 `build/` 看起来更大而移动。文档站框架配置、内容生成、打包和验收全部归独立的 `ash-docs` 仓库。
 
 Node 构建工具和测试编排使用可擦除语法范围内的 TypeScript（`.ts`），由当前 Node.js 直接执行，不生成中间 JavaScript。跨语言仓库命令、归档和下载流程可以使用 Python；平台发布工具要求 Shell 时保留 Shell。语言由操作依赖决定，不由所在目录强制统一。`build/tsconfig.json` 检查构建工具，`ash-ts/test/unit/tsconfig.json` 检查 Desktop 单测入口；`scripts/pyproject.toml` 和 `scripts/uv.lock` 锁定 Python 仓库工具，`just install` 通过 uv 准备它们。
 
-平台专属构建流程只有在出现实际实现时才新增 `build/win32/` 或 `build/linux/`，不创建空分类。`ash-ts/` 只保存产品源码、测试内容和产品清单；构建、资源生成、下载与发布逻辑由根 `build/` 拥有，跨产品测试和维护编排由根 `scripts/` 拥有。Renderer、Workbench 和平台服务不得拥有构建工具配置或仓库操作入口。
+`ash-ts/` 只保存产品源码、测试内容和产品清单；构建、资源生成、下载与发布逻辑由根 `build/` 拥有，跨产品测试和维护编排由根 `scripts/` 拥有。Renderer、Workbench 和平台服务不得拥有构建工具配置或仓库操作入口。
 
 旧的 `target/`、`ash-ts/dist/`、`ash-ts/output/`、`ash-ts/.tmp/` 和根 `output/` 仍保留忽略规则，只为防止旧工具或旧分支重新提交这些产物；当前命令不得再写入这些路径。

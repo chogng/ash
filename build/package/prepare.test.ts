@@ -5,7 +5,6 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
 
-import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH } from "../../ash-ts/generated/app-server/protocol.ts";
 import { assemblePackage } from "./layout.ts";
 import { cargoTargetDirectory } from "../lib/cargo.ts";
 import { developmentAshPackagePath, developmentHostTarget } from "./store.ts";
@@ -16,6 +15,8 @@ import {
   selectRipgrepArtifact,
   selectV8ArtifactPair,
 } from "./prepare.ts";
+
+const protocol = { major: 5, revision: 7, schemaHash: `sha256:${"9".repeat(64)}` };
 
 test("selects the latest published package and rejects invalid manifests", async () => {
   const root = await mkdtemp(join(tmpdir(), "ash-package-store-"));
@@ -204,6 +205,7 @@ test("assembles and validates the canonical Windows development layout", async (
       staging,
       "x86_64-pc-windows-msvc",
       "win32",
+      protocol,
       executables,
       {
         archive: "rg.zip",
@@ -234,11 +236,7 @@ test("assembles and validates the canonical Windows development layout", async (
     assert.equal(metadata.components.appServer.binarySha256, createHash("sha256").update("ash-app-server").digest("hex"));
     assert.equal(metadata.components.appServerDaemon.binarySha256, createHash("sha256").update("ash-app-server-daemon").digest("hex"));
     assert.match(metadata.buildId, /^sha256:[a-f0-9]{64}$/);
-    assert.deepEqual(metadata.protocol, {
-      major: APP_SERVER_PROTOCOL_MAJOR,
-      revision: APP_SERVER_PROTOCOL_REVISION,
-      schemaHash: APP_SERVER_SCHEMA_HASH,
-    });
+    assert.deepEqual(metadata.protocol, protocol);
     assert.deepEqual(metadata.remoteRuntimeCatalog, {
       path: "ash-remote-runtimes/catalog.json",
       sha256: createHash("sha256").update(await readFile(join(remoteRuntimeBundle, "catalog.json"))).digest("hex"),
@@ -324,6 +322,7 @@ test("host-provided runtime package omits the standalone Node payload", async ()
       staging,
       "x86_64-pc-windows-msvc",
       "win32",
+      protocol,
       executables,
       {
         archive: "rg.zip",
@@ -359,7 +358,7 @@ test("Linux development packages retain Bubblewrap without a Ash namespace helpe
     const names = ["ash-remote", "ash-remote-server", "ash-exec-server", "ash-app-server", "ash-app-server-daemon", "ash-code-mode-host", "bwrap", "COPYING", "rg"];
     await Promise.all(names.map((name) => writeFile(join(root, name), name)));
     const staging = join(root, "package");
-    await assemblePackage(staging, "x86_64-unknown-linux-gnu", "linux", {
+    await assemblePackage(staging, "x86_64-unknown-linux-gnu", "linux", protocol, {
       remote: join(root, "ash-remote"), remoteServer: join(root, "ash-remote-server"),
       execServer: join(root, "ash-exec-server"),
       appServer: join(root, "ash-app-server"), appServerDaemon: join(root, "ash-app-server-daemon"),
@@ -429,7 +428,7 @@ async function copyBuiltinExtensions(destination: string, source: string): Promi
   await mkdir(join(root, "ash-rs", "skills", "assets", "review"), { recursive: true });
   await writeFile(join(root, "ash-rs", "skills", "assets", "review", "SKILL.md"), "review");
   await rename(source, join(root, "extensions"));
-  await assemblePackage(join(destination, "package"), "aarch64-apple-darwin", "darwin", {
+  await assemblePackage(join(destination, "package"), "aarch64-apple-darwin", "darwin", protocol, {
     appServer: "unused", appServerDaemon: "unused", codeModeHost: "unused",
     remote: "unused", remoteServer: "unused", execServer: "unused",
   }, { executable: "unused", binarySha256: "", source: "local-override", version: "1" },
@@ -443,7 +442,7 @@ test("assembly rejects linked Skill assets", async () => {
     await mkdir(skill, { recursive: true });
     await writeFile(join(skill, "SKILL.md"), "review");
     await symlink(skill, join(skill, "linked"), process.platform === "win32" ? "junction" : "dir");
-    await assert.rejects(assemblePackage(join(root, "output"), "aarch64-apple-darwin", "darwin", {
+    await assert.rejects(assemblePackage(join(root, "output"), "aarch64-apple-darwin", "darwin", protocol, {
       appServer: "unused", appServerDaemon: "unused", codeModeHost: "unused",
       remote: "unused", remoteServer: "unused", execServer: "unused",
     }, { executable: "unused", binarySha256: "", source: "local-override", version: "1" },

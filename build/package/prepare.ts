@@ -482,6 +482,14 @@ export async function prepareDevelopmentPackage(
   if (!javascriptRuntimeKinds.has(javascriptRuntime)) {
     throw new Error(`Unsupported JavaScript runtime package mode: ${javascriptRuntime}`);
   }
+  const source = await readFile(join(repositoryRoot, "ash-rs/app-server-protocol/schema/typescript/protocol.ts"), "utf8");
+  const major = /^export const APP_SERVER_PROTOCOL_MAJOR = (\d+) as const;$/m.exec(source)?.[1];
+  const revision = /^export const APP_SERVER_PROTOCOL_REVISION = (\d+) as const;$/m.exec(source)?.[1];
+  const schemaHash = /^export const APP_SERVER_SCHEMA_HASH = "(sha256:[a-f0-9]{64})" as const;$/m.exec(source)?.[1];
+  if (major === undefined || revision === undefined || schemaHash === undefined) {
+    throw new Error("Generated App Server protocol metadata is invalid");
+  }
+  const protocol = { major: Number(major), revision: Number(revision), schemaHash };
   const target = developmentHostTarget();
   const isWindows = process.platform === "win32";
   const outputDirectory = ashPackageBuildPath(repositoryRoot, "dev", "store-v1", target, javascriptRuntime, developmentBuildProfile);
@@ -492,6 +500,7 @@ export async function prepareDevelopmentPackage(
     staging,
     target,
     process.platform,
+    protocol,
     executables,
     ripgrep,
     node,

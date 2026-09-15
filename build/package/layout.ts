@@ -5,7 +5,6 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { sha256 } from "../download/artifacts.ts";
 import { validateProductServices } from "./productServices.ts";
-import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH } from "../../ash-ts/generated/app-server/protocol.ts";
 
 const repositoryRoot = resolve(import.meta.dirname, "../..");
 const layout = JSON.parse(readFileSync(new URL("./layout.json", import.meta.url), "utf8")) as {
@@ -186,7 +185,6 @@ interface AssemblyOptions {
   readonly sourceRoot?: string;
   readonly version?: string;
   readonly buildProfile?: string;
-  readonly protocol?: PackageIdentityMetadata["protocol"];
   readonly cliBinary?: string;
   readonly updatePublicKey?: string;
 }
@@ -195,6 +193,7 @@ export async function assemblePackage(
   staging: string,
   target: string,
   platform: NodeJS.Platform,
+  protocol: PackageIdentityMetadata["protocol"],
   executables: Omit<FirstPartyExecutables, "packageStore">,
   ripgrep: ResolvedRipgrep,
   node?: ResolvedNode,
@@ -297,11 +296,6 @@ export async function assemblePackage(
     throw new Error("--update-public-key requires --cli-bin");
   }
   const version = options.version ?? await workspaceVersion(sourceRoot);
-  const protocol = options.protocol ?? {
-    major: APP_SERVER_PROTOCOL_MAJOR,
-    revision: APP_SERVER_PROTOCOL_REVISION,
-    schemaHash: APP_SERVER_SCHEMA_HASH,
-  };
   const runtimeKind = node ? "packagedNode" : "hostProvidedNode";
   let remoteRuntimeCatalog: PackageIdentityMetadata["remoteRuntimeCatalog"];
   if (remoteRuntimeBundle || remoteRuntimeRelease) {
@@ -493,6 +487,6 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   let input = "";
   for await (const block of process.stdin) input += block;
   const args = JSON.parse(input);
-  await assemblePackage(args.staging, args.target, args.platform, args.executables, args.ripgrep,
+  await assemblePackage(args.staging, args.target, args.platform, args.options.protocol, args.executables, args.ripgrep,
     args.node ?? undefined, undefined, undefined, args.options);
 }

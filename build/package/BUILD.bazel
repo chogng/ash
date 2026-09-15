@@ -17,6 +17,5 @@ filegroup(
         "layout.json",
         "productServices.ts",
         "//build/download:artifacts.ts",
-        "//:ash-ts/generated/app-server/protocol.ts",
     ],
 )

@@ -2,10 +2,12 @@
 
 import hashlib
 import json
+import shutil
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from build.lib.ash_build.targets import TARGETS
 from build.package.bubblewrap import BubblewrapResolution
@@ -29,7 +31,7 @@ import {{ assemblePackage }} from {json.dumps((ROOT / "build/package/layout.ts")
 let text = '';
 for await (const block of process.stdin) text += block;
 const args = JSON.parse(text);
-await assemblePackage(args.output, args.target, args.platform, args.executables, args.ripgrep, args.node);
+await assemblePackage(args.output, args.target, args.platform, args.protocol, args.executables, args.ripgrep, args.node);
 """
         for target, platform in [
             ("x86_64-pc-windows-msvc", "win32"),
@@ -90,27 +92,41 @@ await assemblePackage(args.output, args.target, args.platform, args.executables,
                         if bwrap
                         else None
                     )
-                    release = root / "release"
-                    build_package_directory(
-                        release,
-                        ROOT,
-                        read_workspace_version(ROOT / "Cargo.toml"),
-                        spec,
-                        executables["appServer"],
-                        executables["remote"],
-                        executables["remoteServer"],
-                        executables["execServer"],
-                        executables["appServerDaemon"],
-                        executables["codeModeHost"],
-                        ripgrep,
-                        node,
-                        bubblewrap,
-                        protocol_metadata=load_protocol_metadata(
-                            ROOT, ROOT / "ash-ts/generated/app-server/protocol.ts"
-                        ),
-                        build_profile="dev-small",
-                        windows_sandbox_binary=sandbox,
-                    )
+                    # Reproduce a checkout with no Desktop-generated protocol files.
+                    isolated = root / "checkout"
+                    for name in (
+                        "build/package/layout.ts",
+                        "build/package/layout.json",
+                        "build/package/productServices.ts",
+                        "build/download/artifacts.ts",
+                    ):
+                        destination = isolated / name
+                        destination.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copyfile(ROOT / name, destination)
+                    self.assertFalse((isolated / "ash-ts/generated").exists())
+                    with patch(
+                        "build.package.layout.__file__",
+                        str(isolated / "build/package/layout.py"),
+                    ):
+                        release = root / "release"
+                        build_package_directory(
+                            release,
+                            ROOT,
+                            read_workspace_version(ROOT / "Cargo.toml"),
+                            spec,
+                            executables["appServer"],
+                            executables["remote"],
+                            executables["remoteServer"],
+                            executables["execServer"],
+                            executables["appServerDaemon"],
+                            executables["codeModeHost"],
+                            ripgrep,
+                            node,
+                            bubblewrap,
+                            protocol_metadata=load_protocol_metadata(ROOT),
+                            build_profile="dev-small",
+                            windows_sandbox_binary=sandbox,
+                        )
                     inputs = {name: str(path) for name, path in executables.items()}
                     if sandbox:
                         inputs["windowsSandbox"] = str(sandbox)
@@ -127,6 +143,7 @@ await assemblePackage(args.output, args.target, args.platform, args.executables,
                         "output": str(development),
                         "target": target,
                         "platform": platform,
+                        "protocol": load_protocol_metadata(ROOT),
                         "executables": inputs,
                         "ripgrep": {
                             "executable": str(rg),
