@@ -7,11 +7,11 @@ test('document formatting uses a range-only provider and remains undoable', asyn
 	expect(await page.evaluate(() => window.ashStandaloneIntegration.readDeferredFormatting().value)).toBe('alpha');
 });
 
-test('line comments preserve the primary selection below a secondary caret', async ({ page }) => {
+test('line comment shortcuts share actions and preserve the primary selection below a secondary caret', async ({ page }) => {
 	await page.goto('/standalone.html');
 	await page.evaluate(() => window.ashStandaloneIntegration.prepareLineComment());
 	const before = await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy());
-	await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.commentLine'));
+	await page.keyboard.press('ControlOrMeta+/');
 	const commented = { value: '// alpha\nbeta\n// gamma', selections: ['[3,7 -> 3,5]', '[1,5 -> 1,5]'] };
 	expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual(commented);
 	await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.commentLine'));
@@ -21,6 +21,36 @@ test('line comments preserve the primary selection below a secondary caret', asy
 	await page.keyboard.press('ControlOrMeta+z');
 	expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual(before);
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+for (const kind of ['line', 'block'] as const) {
+	test(`${kind} comment shortcuts honor spacing and toggle through the action`, async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareLineComment({ insertSpace: false, value: 'alpha' }));
+		await page.keyboard.press(kind === 'line' ? 'ControlOrMeta+/' : 'Alt+Shift+a');
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe(kind === 'line' ? '//alpha' : '/*alpha*/');
+		await page.evaluate(kind => window.ashStandaloneIntegration.runLineAction(kind === 'line' ? 'editor.action.commentLine' : 'editor.action.blockComment'), kind);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('alpha');
+		await page.keyboard.press('ControlOrMeta+z');
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe(kind === 'line' ? '//alpha' : '/*alpha*/');
+	});
+
+	for (const mode of ['readonly', 'unsupported'] as const) {
+		test(`${kind} comment shortcuts leave ${mode} text unchanged`, async ({ page }) => {
+			await page.goto('/standalone.html');
+			await page.evaluate(mode => window.ashStandaloneIntegration.prepareLineComment({ readOnly: mode === 'readonly', languageId: mode === 'unsupported' ? 'plaintext' : 'typescript' }), mode);
+			const before = await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy());
+			await page.keyboard.press(kind === 'line' ? 'ControlOrMeta+/' : 'Alt+Shift+a');
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual(before);
+		});
+	}
+}
+
+test('line comment shortcuts use the configured empty-line policy', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareLineComment({ value: 'alpha\n\nbeta' }));
+	await page.keyboard.press('ControlOrMeta+/');
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('// alpha\n\n// beta');
 });
 
 test('transpose letters keeps a selected primary range while editing a secondary caret', async ({ page }) => {

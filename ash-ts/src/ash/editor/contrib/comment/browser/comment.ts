@@ -2,7 +2,7 @@ import { KeyChord, KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import * as nls from '../../../../nls.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
-import { EditorAction, registerEditorAction, type IActionOptions, type ServicesAccessor } from '../../../browser/editorExtensions.js';
+import { EditorAction, registerEditorAction, registerEditorContribution, type IActionOptions, type ServicesAccessor } from '../../../browser/editorExtensions.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { Range } from '../../../common/core/range.js';
 import { type ICommand } from '../../../common/editorCommon.js';
@@ -109,7 +109,39 @@ class BlockCommentAction extends EditorAction {
 	}
 }
 
-registerEditorAction(ToggleCommentLineAction);
+const toggleLineComment = registerEditorAction(ToggleCommentLineAction);
 registerEditorAction(AddLineCommentAction);
 registerEditorAction(RemoveLineCommentAction);
-registerEditorAction(BlockCommentAction);
+const toggleBlockComment = registerEditorAction(BlockCommentAction);
+
+registerEditorContribution({ id: 'editor.contrib.comment', install: context => {
+	if (context.kind !== 'text') {
+		return;
+	}
+	context.register(context.editor.onKeyDown(event => {
+		if (event.browserEvent.defaultPrevented || event.isComposing || event.browserEvent.getModifierState('AltGraph')) {
+			return;
+		}
+		const line = (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key === '/';
+		const block = event.shiftKey && event.altKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === 'a';
+		if ((!line && !block) || context.editor.getOption(EditorOption.readOnly)) {
+			return;
+		}
+		const position = context.editor.getPosition();
+		const model = context.editor.getModel();
+		if (!position || !model) {
+			return;
+		}
+		const languageId = model.getLanguageIdAtPosition(position.lineNumber, position.column);
+		const comments = context.configurations.getLanguageConfiguration(languageId).comments;
+		if (line ? !comments?.lineCommentToken : !comments?.blockCommentStartToken || !comments.blockCommentEndToken) {
+			return;
+		}
+		event.stop();
+		context.editor.invokeWithinContext(accessor => (line ? toggleLineComment : toggleBlockComment).run(accessor, context.editor));
+		const selection = context.editor.getSelection();
+		if (selection) {
+			context.view.revealPosition(selection.getPosition());
+		}
+	}));
+} });

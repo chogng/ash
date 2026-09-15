@@ -85,7 +85,7 @@ interface StandaloneHarness {
 	readEOL(): string;
 	runFormatting(change: 'none' | 'position' | 'model' | 'readonly' | 'eol' | 'returnPosition' | 'range'): Promise<string>;
 
-	prepareLineComment(): void;
+	prepareLineComment(options?: { insertSpace?: boolean; ignoreEmptyLines?: boolean; readOnly?: boolean; languageId?: string; value?: string }): void;
 	prepareLineCopy(emptyTail?: boolean): void;
 	runLineAction(id: string): Promise<void>;
 	readLineCopy(): { value: string; selections: string[] };
@@ -437,9 +437,14 @@ window.ashStandaloneIntegration = {
 			if (change === 'model') callerEditor.setModel(callerModel);
 		}
 	},
-	prepareLineComment: () => {
+	prepareLineComment: options => {
 		window.ashStandaloneIntegration.prepareLineCopy();
-		callerModel.setLanguage('typescript');
+		callerModel.setLanguage(options?.languageId ?? 'typescript');
+		callerEditor.updateOptions({ comments: { insertSpace: options?.insertSpace ?? true, ignoreEmptyLines: options?.ignoreEmptyLines ?? true }, readOnly: options?.readOnly ?? false });
+		if (options?.value !== undefined) {
+			callerEditor.setValue(options.value);
+			callerEditor.setSelection(callerModel.getFullModelRange());
+		}
 	},
 	prepareLineCopy: emptyTail => {
 		callerEditor.setValue(emptyTail ? 'head\ntail\n' : 'alpha\nbeta\ngamma');

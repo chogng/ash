@@ -13,7 +13,6 @@ import "./contrib/codeAction/browser/codeAction.contribution.js";
 import "./contrib/codelens/browser/codelensController.js";
 import "./contrib/colorPicker/browser/colorPickerController.js";
 import "./contrib/comment/browser/comment.js";
-import "./contrib/comment/browser/comment.contribution.js";
 import './contrib/contextmenu/browser/contextmenu.js';
 import './contrib/cursorUndo/browser/cursorUndo.js';
 import "./contrib/editorState/browser/editorStateController.js";

@@ -113,9 +113,9 @@ The Suggest contribution installs one `LanguageCompletionService`, `SuggestModel
 
 `GotoLineController` owns Stanza's Ctrl+G (Command+G on macOS) line/column dialog. Its common parser supports one-based `line[:column]`, backward negative values, and `::` UTF-16 offsets; while the dialog is open it previews by revealing the parsed position without mutating selections. Enter commits one collapsed primary selection, while Escape restores the pre-dialog scroll position. Its geometry and interaction states are owned by `media/gotoLineWidget.css`.
 
-`LineCommentController` consumes Ctrl/Cmd+`/` only when the resolved language configuration has a line-comment token. It delegates all mutation, selection mapping, and undo grouping to `common/lineCommentCommands.ts`; the browser adapter only handles the key event and reveal. Unsupported languages keep the shortcut available to other browser or workbench handlers.
+`contrib/comment/browser/comment.ts` routes Ctrl/Cmd+`/` through the registered line-comment action. The action reads the current comment options and uses `LineCommentCommand` for edits and selection mapping. Unsupported languages leave the shortcut available to other handlers.
 
-`BlockCommentController` maps Shift+Alt+A to the configured block-comment pair. Its common command handles range wrapping, pair removal, collapsed cursor placement, selection mapping, and undo; the browser adapter only filters the platform chord and reveals the resulting primary cursor.
+The same module routes Shift+Alt+A through the block-comment action and `BlockCommentCommand`. Both shortcuts share the actions' undo grouping and spacing policy; their listeners follow the editor model scope.
 
 `../contrib/linesOperations/browser/linesOperations.ts` owns Ctrl/Cmd+Enter, Ctrl/Cmd+Shift+Enter, Ctrl/Cmd+Shift+K, Shift+Alt+ArrowUp/ArrowDown, and Alt+ArrowUp/ArrowDown. Copy, move, and sort use the canonical `ICommand` files in that directory; delete and insert still form one selection-aware model transaction before revealing the primary cursor.
 
