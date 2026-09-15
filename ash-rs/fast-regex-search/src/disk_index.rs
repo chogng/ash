@@ -6,6 +6,8 @@ use crate::storage::header_length;
 use crate::storage::io_error;
 use crate::storage::read_u32;
 use crate::storage::read_u64;
+use ash_immutable_generation_store::OpenGenerationFile;
+use ash_immutable_generation_store::PublishedSnapshot;
 use memmap2::Mmap;
 use memmap2::MmapOptions;
 use std::collections::BTreeSet;
@@ -13,8 +15,6 @@ use std::fs;
 use std::io;
 use std::path::Path;
 use std::path::PathBuf;
-use ash_immutable_generation_store::OpenGenerationFile;
-use ash_immutable_generation_store::PublishedSnapshot;
 
 pub(crate) struct DiskBaseIndex {
     lookup: Mmap,
@@ -54,12 +54,11 @@ impl DiskBaseIndex {
     pub(crate) fn intersect_postings(
         &self,
         grams: &[u64],
-        folded: bool,
         excluded_paths: &BTreeSet<PathBuf>,
     ) -> Result<BTreeSet<PathBuf>, FastRegexError> {
         let mut spans = Vec::with_capacity(grams.len());
         for gram in grams {
-            let Some(span) = self.posting_span(*gram, folded) else {
+            let Some(span) = self.posting_span(*gram) else {
                 return Ok(BTreeSet::new());
             };
             spans.push(span);
@@ -84,22 +83,22 @@ impl DiskBaseIndex {
             .collect())
     }
 
-    fn posting_span(&self, gram: u64, folded: bool) -> Option<(u64, usize)> {
+    fn posting_span(&self, gram: u64) -> Option<(u64, usize)> {
         let entry_count = read_u64(&self.lookup, header_length())? as usize;
         let entries_offset = header_length() + 8;
-        let target = (u8::from(folded), gram);
+        let target = gram;
         let mut left = 0usize;
         let mut right = entry_count;
         while left < right {
             let middle = left + (right - left) / 2;
-            let offset = entries_offset + middle * 21;
-            let key = (self.lookup[offset], read_u64(&self.lookup, offset + 1)?);
+            let offset = entries_offset + middle * 20;
+            let key = read_u64(&self.lookup, offset)?;
             match key.cmp(&target) {
                 std::cmp::Ordering::Less => left = middle + 1,
                 std::cmp::Ordering::Greater => right = middle,
                 std::cmp::Ordering::Equal => {
-                    let posting_offset = read_u64(&self.lookup, offset + 9)?;
-                    let count = read_u32(&self.lookup, offset + 17)? as usize;
+                    let posting_offset = read_u64(&self.lookup, offset + 8)?;
+                    let count = read_u32(&self.lookup, offset + 16)? as usize;
                     let start = header_length() as u64 + posting_offset;
                     return Some((start, count));
                 }
@@ -149,26 +148,21 @@ fn validate_disk_lookup(
     let entry_count = read_u64(lookup, header_length()).ok_or_else(|| corrupt(path))? as usize;
     let entries_offset = header_length() + 8;
     let lookup_end = entries_offset
-        .checked_add(entry_count.checked_mul(21).ok_or_else(|| corrupt(path))?)
+        .checked_add(entry_count.checked_mul(20).ok_or_else(|| corrupt(path))?)
         .ok_or_else(|| corrupt(path))?;
     if lookup_end != lookup.len() {
         return Err(corrupt(path));
     }
     let mut previous = None;
     for index in 0..entry_count {
-        let offset = entries_offset + index * 21;
-        let folded = lookup[offset];
-        if folded > 1 {
-            return Err(corrupt(path));
-        }
-        let gram = read_u64(lookup, offset + 1).ok_or_else(|| corrupt(path))?;
-        let key = (folded, gram);
+        let offset = entries_offset + index * 20;
+        let key = read_u64(lookup, offset).ok_or_else(|| corrupt(path))?;
         if previous.is_some_and(|previous| previous >= key) {
             return Err(corrupt(path));
         }
         previous = Some(key);
-        let posting_offset = read_u64(lookup, offset + 9).ok_or_else(|| corrupt(path))?;
-        let expected_count = u64::from(read_u32(lookup, offset + 17).ok_or_else(|| corrupt(path))?);
+        let posting_offset = read_u64(lookup, offset + 8).ok_or_else(|| corrupt(path))?;
+        let expected_count = u64::from(read_u32(lookup, offset + 16).ok_or_else(|| corrupt(path))?);
         let posting_start = (header_length() as u64)
             .checked_add(posting_offset)
             .ok_or_else(|| corrupt(path))?;

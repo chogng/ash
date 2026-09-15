@@ -1126,3 +1126,334 @@ fn indexed_candidates_match_an_exhaustive_scan_across_regex_shapes() {
         assert!(!limit_hit);
     }
 }
+
+#[test]
+fn internal_literals_and_nested_branches_narrow_candidates() {
+    let directory = dir();
+    let documents = [
+        ("alpha.txt", "xx alpha_rare_handler yy\n"),
+        ("beta.txt", "xx beta_rare_handler yy\n"),
+        ("noise.txt", "xx unrelated yy\n"),
+        ("short.txt", "x aaa\n"),
+    ];
+    for (path, content) in documents {
+        fs::write(directory.path().join(path), content).unwrap();
+    }
+    let storage = tempfile::tempdir().unwrap();
+    let index = search(
+        &directory,
+        FastRegexSearchStorage::Persistent(storage.path().into()),
+    );
+    index.rebuild().unwrap();
+    for (pattern, candidates, matches) in [
+        (r".*alpha_rare_handler.*", 1, 1),
+        (r".*(?:alpha_rare_handler|beta_rare_handler).*", 2, 2),
+        (r".*(?:alpha|beta)_rare_handler.*", 2, 2),
+        (r"(?:alpha_rare_handler|beta_rare_handler)+", 2, 2),
+        (r"alpha_rare_handler|x", 4, 4),
+        (r"(?:alpha_rare_handler)?x", 4, 4),
+        (r"a{3}", 1, 1),
+    ] {
+        let result = index.search(&query(pattern)).unwrap();
+        assert_eq!(
+            result.statistics.candidate_file_count, candidates,
+            "{pattern}"
+        );
+        assert_eq!(result.matches.len(), matches, "{pattern}");
+    }
+}
+
+#[test]
+fn unicode_case_equivalents_are_retained_in_separate_files_and_overlays() {
+    let directory = dir();
+    let documents = [
+        ("kelvin.txt", "Kelvin\n"),
+        ("long-s.txt", "ſignal\n"),
+        ("accent.txt", "ÉCOLE\n"),
+        ("ascii.txt", "Kelvin\nsignal\n"),
+        ("noise.txt", "unrelated\n"),
+    ];
+    for (path, content) in documents {
+        fs::write(directory.path().join(path), content).unwrap();
+    }
+    let storage = tempfile::tempdir().unwrap();
+    let mode = FastRegexSearchStorage::Persistent(storage.path().into());
+    let built = search(&directory, mode.clone());
+    built.rebuild().unwrap();
+    drop(built);
+    let index = search(&directory, mode);
+    for (pattern, insensitive) in [
+        ("kelvin", true),
+        ("signal", true),
+        ("école", true),
+        ("(?i)kelvin", false),
+        (r".*(?i:signal).*", false),
+        ("(?i:kel)(?-i:vin)", false),
+        ("(?-i:kelvin)", true),
+        ("ÉCOLE", false),
+        (r"(?-u:[Kk])elvin", false),
+    ] {
+        let mut q = query(pattern);
+        if insensitive {
+            q.case_sensitivity = FastRegexCaseSensitivity::Insensitive;
+        }
+        let matcher = RegexBuilder::new(pattern)
+            .case_insensitive(insensitive)
+            .build()
+            .unwrap();
+        let expected = documents
+            .iter()
+            .flat_map(|(path, content)| {
+                content
+                    .lines()
+                    .enumerate()
+                    .filter_map(|(line, text)| {
+                        matcher
+                            .is_match(text)
+                            .then(|| (PathBuf::from(path), line + 1, text.to_string()))
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect::<BTreeSet<_>>();
+        let actual = index
+            .search(&q)
+            .unwrap()
+            .matches
+            .into_iter()
+            .map(|found| (found.path, found.line_number, found.preview))
+            .collect::<BTreeSet<_>>();
+        assert_eq!(actual, expected, "{pattern}, insensitive={insensitive}");
+    }
+    index
+        .synchronize_overlay(PathBuf::from("noise.txt"), "KELVIN\n".into())
+        .unwrap();
+    let mut literal = query("kelvin");
+    literal.pattern = FastRegexPattern::Literal;
+    literal.case_sensitivity = FastRegexCaseSensitivity::Insensitive;
+    assert_eq!(index.search(&literal).unwrap().matches.len(), 3);
+}
+
+#[test]
+fn file_capacity_failure_does_not_publish_a_partial_corpus() {
+    let directory = dir();
+    fs::write(directory.path().join("a.txt"), "alpha\n").unwrap();
+    fs::write(directory.path().join("z.txt"), "target_marker\n").unwrap();
+    let index = FastRegexSearch::open(
+        Dir::open_local(directory.path()).unwrap(),
+        FastRegexSearchStorage::Memory,
+        FastRegexSearchLimits {
+            max_files: 1,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert!(matches!(
+        index.rebuild(),
+        Err(FastRegexError::IndexLimitExceeded("max_files"))
+    ));
+    assert_eq!(index.snapshot().generation, 0);
+    assert!(matches!(
+        index.search(&query("target_marker")),
+        Err(FastRegexError::NotReady)
+    ));
+}
+
+#[test]
+fn source_capacity_is_checked_during_build_and_incremental_growth() {
+    let directory = dir();
+    let first = directory.path().join("a.txt");
+    let second = directory.path().join("b.txt");
+    fs::write(&first, "alpha").unwrap();
+    fs::write(&second, "beta").unwrap();
+    let limits = FastRegexSearchLimits {
+        max_file_bytes: 10,
+        max_total_source_bytes: 10,
+        ..Default::default()
+    };
+    let index = FastRegexSearch::open(
+        Dir::open_local(directory.path()).unwrap(),
+        FastRegexSearchStorage::Memory,
+        limits,
+    )
+    .unwrap();
+    let initial = index.rebuild().unwrap();
+    fs::write(&first, "alpha12345").unwrap();
+    assert!(matches!(
+        index.refresh_observed_paths(&[first]),
+        Err(FastRegexError::IndexLimitExceeded("max_total_source_bytes"))
+    ));
+    assert_eq!(index.snapshot(), initial);
+    assert!(matches!(
+        index.reconcile_dir(),
+        Err(FastRegexError::IndexLimitExceeded("max_total_source_bytes"))
+    ));
+    assert!(matches!(
+        index.rebuild(),
+        Err(FastRegexError::IndexLimitExceeded("max_total_source_bytes"))
+    ));
+    assert_eq!(index.snapshot(), initial);
+}
+
+#[test]
+fn binary_files_do_not_consume_text_file_capacity() {
+    let directory = dir();
+    fs::write(directory.path().join("a.bin"), b"binary\0").unwrap();
+    fs::write(directory.path().join("z.txt"), "target_marker\n").unwrap();
+    let index = FastRegexSearch::open(
+        Dir::open_local(directory.path()).unwrap(),
+        FastRegexSearchStorage::Memory,
+        FastRegexSearchLimits {
+            max_files: 1,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(index.rebuild().unwrap().indexed_file_count, 1);
+    assert_eq!(
+        index.search(&query("target_marker")).unwrap().matches.len(),
+        1
+    );
+}
+
+#[test]
+fn reopening_with_a_lower_capacity_rejects_the_existing_corpus() {
+    let directory = dir();
+    fs::write(directory.path().join("a.txt"), "alpha").unwrap();
+    fs::write(directory.path().join("b.txt"), "beta").unwrap();
+    let storage = tempfile::tempdir().unwrap();
+    let mode = FastRegexSearchStorage::Persistent(storage.path().into());
+    let index = search(&directory, mode.clone());
+    index.rebuild().unwrap();
+    drop(index);
+    assert!(matches!(
+        FastRegexSearch::open(
+            Dir::open_local(directory.path()).unwrap(),
+            mode,
+            FastRegexSearchLimits {
+                max_files: 1,
+                ..Default::default()
+            },
+        ),
+        Err(FastRegexError::IndexLimitExceeded("max_files"))
+    ));
+}
+
+#[test]
+fn search_generation_records_visibility_before_and_after_observed_changes() {
+    let directory = dir();
+    let path = directory.path().join("source.txt");
+    fs::write(&path, "before_marker\n").unwrap();
+    let index = search(&directory, FastRegexSearchStorage::Memory);
+    let before = index.rebuild().unwrap();
+    fs::write(&path, "after_marker\n").unwrap();
+    let pending = index.search(&query("after_marker")).unwrap();
+    assert!(pending.matches.is_empty());
+    assert_eq!(pending.statistics.generation, before.generation);
+    index.refresh_observed_paths(&[path]).unwrap();
+    let current = index.search(&query("after_marker")).unwrap();
+    assert_eq!(current.matches.len(), 1);
+    assert!(current.statistics.generation > pending.statistics.generation);
+}
+
+#[test]
+fn parallel_verification_keeps_order_ranges_and_the_global_line_limit() {
+    let directory = dir();
+    for file in 0..300 {
+        fs::write(
+            directory.path().join(format!("file-{file:03}.txt")),
+            "alpha beta alpha\nnoise\nalpha\n",
+        )
+        .unwrap();
+    }
+    let storage = tempfile::tempdir().unwrap();
+    let index = search(
+        &directory,
+        FastRegexSearchStorage::Persistent(storage.path().into()),
+    );
+    index.rebuild().unwrap();
+    for limit in [100, 256, 599, 600, 601] {
+        let mut q = query("alpha");
+        q.max_results = limit;
+        let result = index.search(&q).unwrap();
+        assert_eq!(result.matches.len(), limit.min(600));
+        assert_eq!(result.limit_hit, limit < 600);
+        for (offset, found) in result.matches.iter().enumerate() {
+            assert_eq!(
+                found.path,
+                PathBuf::from(format!("file-{:03}.txt", offset / 2))
+            );
+            assert_eq!(found.line_number, if offset % 2 == 0 { 1 } else { 3 });
+            let mut ranges = vec![FastRegexRange {
+                start_byte: 0,
+                end_byte: 5,
+            }];
+            if offset % 2 == 0 {
+                ranges.push(FastRegexRange {
+                    start_byte: 11,
+                    end_byte: 16,
+                });
+            }
+            assert_eq!(found.ranges, ranges);
+        }
+    }
+}
+
+#[test]
+fn older_index_format_is_rebuilt_before_searching_the_full_directory() {
+    let directory = dir();
+    fs::write(directory.path().join("a.txt"), "original_marker\n").unwrap();
+    let storage = tempfile::tempdir().unwrap();
+    let mode = FastRegexSearchStorage::Persistent(storage.path().into());
+    let index = search(&directory, mode.clone());
+    let built = index.rebuild().unwrap();
+    drop(index);
+    let path = base_file(&storage, built.generation, "format.bin");
+    let mut format = fs::read(&path).unwrap();
+    format[..crate::storage::STORE_VERSION.len()].copy_from_slice(b"ash-fast-regex-v5\0");
+    fs::write(path, format).unwrap();
+    fs::write(directory.path().join("z.txt"), "new_marker\n").unwrap();
+    let reopened = search(&directory, mode);
+    assert!(reopened.snapshot().generation > built.generation);
+    assert_eq!(reopened.snapshot().indexed_file_count, 2);
+    assert_eq!(
+        reopened.search(&query("new_marker")).unwrap().matches.len(),
+        1
+    );
+}
+
+#[test]
+fn incremental_file_capacity_failure_preserves_the_published_generation() {
+    let directory = dir();
+    fs::write(directory.path().join("a.txt"), "original_marker\n").unwrap();
+    let index = FastRegexSearch::open(
+        Dir::open_local(directory.path()).unwrap(),
+        FastRegexSearchStorage::Memory,
+        FastRegexSearchLimits {
+            max_files: 1,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let built = index.rebuild().unwrap();
+    let added = directory.path().join("z.txt");
+    fs::write(&added, "added_marker\n").unwrap();
+    assert!(matches!(
+        index.refresh_observed_paths(&[added]),
+        Err(FastRegexError::IndexLimitExceeded("max_files"))
+    ));
+    assert_eq!(index.snapshot(), built);
+    assert!(matches!(
+        index.reconcile_dir(),
+        Err(FastRegexError::IndexLimitExceeded("max_files"))
+    ));
+    assert_eq!(index.snapshot(), built);
+}
+
+#[test]
+fn traversal_failure_does_not_publish_an_empty_corpus() {
+    let directory = dir();
+    let index = search(&directory, FastRegexSearchStorage::Memory);
+    fs::remove_dir_all(directory.path()).unwrap();
+    assert!(matches!(index.rebuild(), Err(FastRegexError::Io { .. })));
+    assert_eq!(index.snapshot().generation, 0);
+}

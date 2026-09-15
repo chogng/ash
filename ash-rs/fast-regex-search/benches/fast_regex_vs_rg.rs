@@ -1,12 +1,3 @@
-use std::collections::BTreeSet;
-use std::fs;
-use std::hint::black_box;
-use std::path::Path;
-use std::path::PathBuf;
-use std::process::Command;
-use std::time::Duration;
-use std::time::Instant;
-use tempfile::TempDir;
 use ash_fast_regex_search::FastRegexCaseSensitivity;
 use ash_fast_regex_search::FastRegexPattern;
 use ash_fast_regex_search::FastRegexQuery;
@@ -15,6 +6,18 @@ use ash_fast_regex_search::FastRegexWorkerClient;
 use ash_fast_regex_search::FastRegexWorkerCommand;
 use ash_fast_regex_search::serve_worker_from_environment;
 use ash_file_access::Dir;
+use std::collections::BTreeSet;
+use std::fs;
+use std::hint::black_box;
+use std::io::BufRead;
+use std::io::BufReader;
+use std::path::Path;
+use std::path::PathBuf;
+use std::process::Command;
+use std::process::Stdio;
+use std::time::Duration;
+use std::time::Instant;
+use tempfile::TempDir;
 
 const DEFAULT_FILE_COUNT: usize = 8_000;
 const DEFAULT_RUN_COUNT: usize = 15;
@@ -29,6 +32,7 @@ struct BenchmarkCase {
 struct Measurement {
     source: &'static str,
     name: &'static str,
+    mode: &'static str,
     candidates: usize,
     matches: usize,
     fast_p50: Duration,
@@ -38,8 +42,8 @@ struct Measurement {
 }
 
 struct RipgrepResult {
-    paths: BTreeSet<PathBuf>,
-    matching_lines: usize,
+    rows: BTreeSet<(PathBuf, usize, String)>,
+    limit_hit: bool,
 }
 
 struct IndexFileSizes {
@@ -69,7 +73,11 @@ fn main() {
     let rg = std::env::var_os("RG").unwrap_or_else(|| "rg".into());
     let corpus = build_corpus(file_count);
     let storage = tempfile::tempdir().expect("benchmark index storage");
-    let max_results = AGENT_RESULT_LIMIT;
+    assert!(
+        file_count > 0 && run_count > 0,
+        "benchmark counts must be positive"
+    );
+    let max_results = file_count.saturating_mul(32).max(AGENT_RESULT_LIMIT);
     let limits = FastRegexSearchLimits {
         max_files: file_count + 10,
         max_results,
@@ -111,21 +119,28 @@ fn main() {
             pattern: r"missing_request_dispatch_.*_completion",
         },
         BenchmarkCase {
+            name: "internal-literal",
+            pattern: r".*alpha_rare_handler.*",
+        },
+        BenchmarkCase {
             name: "unselective-short",
             pattern: r"fn",
         },
     ];
     let mut measurements = Vec::new();
-    for case in cases {
-        measurements.push(measure_case(
-            "built",
-            &index,
-            corpus.path(),
-            &rg,
-            max_results,
-            run_count,
-            case,
-        ));
+    for (mode, limit) in [("full", max_results), ("100", AGENT_RESULT_LIMIT)] {
+        for case in cases {
+            measurements.push(measure_case(
+                "built",
+                &index,
+                corpus.path(),
+                &rg,
+                limit,
+                run_count,
+                mode,
+                case,
+            ));
+        }
     }
 
     let changed_path = corpus.path().join("src/batch-0/module-1.rs");
@@ -145,16 +160,19 @@ fn main() {
     assert_ne!(reopened.snapshot().expect("snapshot").generation, 0);
     let warm_parent_rss = process_rss_kib(std::process::id());
     let warm_worker_rss = reopened.process_id().and_then(process_rss_kib);
-    for case in cases {
-        measurements.push(measure_case(
-            "reopened",
-            &reopened,
-            corpus.path(),
-            &rg,
-            max_results,
-            run_count,
-            case,
-        ));
+    for (mode, limit) in [("full", max_results), ("100", AGENT_RESULT_LIMIT)] {
+        for case in cases {
+            measurements.push(measure_case(
+                "reopened",
+                &reopened,
+                corpus.path(),
+                &rg,
+                limit,
+                run_count,
+                mode,
+                case,
+            ));
+        }
     }
 
     println!(
@@ -188,7 +206,7 @@ fn main() {
     );
     println!(
         "{:<9} {:<24} {:>11} {:>9} {:>11} {:>11} {:>11} {:>11} {:>9}",
-        "state",
+        "state/mode",
         "case",
         "candidates",
         "matches",
@@ -201,7 +219,7 @@ fn main() {
     for measurement in &measurements {
         println!(
             "{:<9} {:<24} {:>11} {:>9} {:>8.3} ms {:>8.3} ms {:>8.3} ms {:>8.3} ms {:>8.2}x",
-            measurement.source,
+            format!("{}/{}", measurement.source, measurement.mode),
             measurement.name,
             measurement.candidates,
             measurement.matches,
@@ -233,6 +251,7 @@ fn measure_case(
     rg: &std::ffi::OsStr,
     max_results: usize,
     run_count: usize,
+    mode: &'static str,
     case: BenchmarkCase,
 ) -> Measurement {
     let query = FastRegexQuery {
@@ -245,32 +264,42 @@ fn measure_case(
         max_results,
     };
     let fast_warmup = index.search(&query).expect("fast regex warmup");
-    let rg_warmup = run_rg(root, rg, case.pattern);
+    let complete = run_rg(root, rg, case.pattern, usize::MAX);
+    let fast_rows = matched_rows(&fast_warmup.matches);
     assert_eq!(
-        fast_warmup.matches.len(),
-        rg_warmup.matching_lines.min(max_results),
-        "bounded matching-line count differs from rg for {}",
+        fast_rows.len(),
+        complete.rows.len().min(max_results),
+        "line count differs: {}",
         case.name
     );
-    let fast_paths = matched_paths(&fast_warmup.matches);
-    assert!(fast_paths.is_subset(&rg_warmup.paths));
-    if rg_warmup.matching_lines <= max_results {
-        assert_eq!(fast_paths, rg_warmup.paths);
-    }
+    assert!(
+        fast_rows.is_subset(&complete.rows),
+        "line contents differ: {}",
+        case.name
+    );
+    assert_eq!(fast_warmup.limit_hit, complete.rows.len() > max_results);
+    let rg_warmup = run_rg(root, rg, case.pattern, max_results);
+    assert_eq!(rg_warmup.rows.len(), fast_rows.len());
+    assert!(rg_warmup.rows.is_subset(&complete.rows));
+    assert_eq!(rg_warmup.limit_hit, fast_warmup.limit_hit);
     let mut fast_samples = Vec::with_capacity(run_count);
     let mut rg_samples = Vec::with_capacity(run_count);
-    for _ in 0..run_count {
-        let started = Instant::now();
-        let result = index.search(black_box(&query)).expect("fast regex query");
-        black_box(result);
-        fast_samples.push(started.elapsed());
-
-        let started = Instant::now();
-        black_box(run_rg(root, rg, black_box(case.pattern)));
-        rg_samples.push(started.elapsed());
+    for round in 0..run_count {
+        // Alternate execution order so one backend is not always measured first.
+        for fast_first in [round % 2 == 0, round % 2 != 0] {
+            let started = Instant::now();
+            if fast_first {
+                black_box(index.search(black_box(&query)).expect("fast regex query"));
+                fast_samples.push(started.elapsed());
+            } else {
+                black_box(run_rg(root, rg, black_box(case.pattern), max_results));
+                rg_samples.push(started.elapsed());
+            }
+        }
     }
     Measurement {
         source,
+        mode,
         name: case.name,
         candidates: fast_warmup.statistics.candidate_file_count,
         matches: fast_warmup.matches.len(),
@@ -281,38 +310,62 @@ fn measure_case(
     }
 }
 
-fn run_rg(root: &Path, rg: &std::ffi::OsStr, pattern: &str) -> RipgrepResult {
-    let output = Command::new(rg)
+fn run_rg(root: &Path, rg: &std::ffi::OsStr, pattern: &str, limit: usize) -> RipgrepResult {
+    let mut child = Command::new(rg)
         .current_dir(root)
-        .args(["--no-config", "--no-heading", "--line-number", "--"])
+        .args([
+            "--no-config",
+            "--no-heading",
+            "--line-number",
+            "--color",
+            "never",
+            "--",
+        ])
         .arg(pattern)
         .arg(".")
-        .output()
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
         .expect("execute rg benchmark baseline");
+    let stdout = child.stdout.take().expect("rg stdout");
+    let mut rows = BTreeSet::new();
+    let mut limit_hit = false;
+    for line in BufReader::new(stdout).lines() {
+        let line = line.expect("rg line");
+        if rows.len() == limit {
+            limit_hit = true;
+            break;
+        }
+        let mut fields = line.splitn(3, ':');
+        let path = fields.next().expect("rg path").trim_start_matches("./");
+        let number = fields
+            .next()
+            .expect("rg line number")
+            .parse()
+            .expect("numeric line");
+        let text = fields.next().expect("rg text").to_owned();
+        rows.insert((PathBuf::from(path), number, text));
+    }
+    if limit_hit {
+        // A global limit requires stopping the process; rg -m limits each file.
+        let _ = child.kill();
+    }
+    let output = child.wait_with_output().expect("wait for rg");
     assert!(
-        output.status.success() || output.status.code() == Some(1),
+        limit_hit || output.status.success() || output.status.code() == Some(1),
         "rg failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let output = String::from_utf8(output.stdout)
-        .expect("rg output is UTF-8")
-        .lines()
-        .map(str::to_owned)
-        .collect::<Vec<_>>();
-    let paths = output
-        .iter()
-        .map(|line| line.split_once(':').expect("rg path separator").0)
-        .map(|path| path.strip_prefix("./").unwrap_or(path))
-        .map(PathBuf::from)
-        .collect();
-    RipgrepResult {
-        paths,
-        matching_lines: output.len(),
-    }
+    RipgrepResult { rows, limit_hit }
 }
 
-fn matched_paths(matches: &[ash_fast_regex_search::FastRegexMatch]) -> BTreeSet<PathBuf> {
-    matches.iter().map(|found| found.path.clone()).collect()
+fn matched_rows(
+    matches: &[ash_fast_regex_search::FastRegexMatch],
+) -> BTreeSet<(PathBuf, usize, String)> {
+    matches
+        .iter()
+        .map(|found| (found.path.clone(), found.line_number, found.preview.clone()))
+        .collect()
 }
 
 fn build_corpus(file_count: usize) -> TempDir {

@@ -19,14 +19,14 @@ use crate::disk_index::DiskBaseIndex;
 use crate::file_stamp::FileStamp;
 use crate::ngram::covering_ngrams;
 use crate::ngram::sparse_ngrams;
+use crate::query::Plan;
 use crate::storage;
+use ash_file_access::Dir;
 use globset::GlobBuilder;
 use globset::GlobSet;
 use globset::GlobSetBuilder;
 use regex::Regex;
 use regex::RegexBuilder;
-use regex_syntax::hir::literal::ExtractKind;
-use regex_syntax::hir::literal::Extractor;
 use sha2::Digest;
 use sha2::Sha256;
 use std::collections::BTreeMap;
@@ -38,7 +38,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
-use ash_file_access::Dir;
+use std::thread;
 
 const DELTA_COMPACTION_MIN_PATHS: usize = 128;
 const DELTA_COMPACTION_MAX_PATHS: usize = 4_096;
@@ -60,7 +60,6 @@ pub(crate) struct IndexState {
     pub(crate) document_paths: BTreeMap<u32, PathBuf>,
     pub(crate) next_document_id: u32,
     pub(crate) postings: HashMap<u64, BTreeSet<u32>>,
-    pub(crate) folded_postings: HashMap<u64, BTreeSet<u32>>,
     pub(crate) overlays: BTreeMap<PathBuf, String>,
     pub(crate) dirty_paths: BTreeSet<PathBuf>,
     pub(crate) disk_base: Option<Arc<DiskBaseIndex>>,
@@ -74,7 +73,6 @@ pub(crate) struct IndexedDocument {
     pub(crate) source_bytes: usize,
     pub(crate) stamp: FileStamp,
     pub(crate) grams: Vec<u64>,
-    pub(crate) folded_grams: Vec<u64>,
 }
 
 impl FastRegexSearch {
@@ -100,6 +98,7 @@ impl FastRegexSearch {
             .next()
             .expect("directory walk has exactly one root");
         let state = storage::load(&storage)?.unwrap_or_default();
+        limits.check_capacity(state.documents.len(), state.source_bytes)?;
         let requires_rebuild = state.requires_rebuild;
         let search = Self {
             root,
@@ -214,13 +213,10 @@ impl FastRegexSearch {
                 else {
                     continue;
                 };
-                if next.documents.len() == self.limits.max_files
-                    || next.source_bytes.saturating_add(content.len())
-                        > self.limits.max_total_source_bytes
-                {
-                    drop(state);
-                    return self.rebuild().map(FastRegexUpdateOutcome::Rebuilt);
-                }
+                self.limits.check_capacity(
+                    next.documents.len() + 1,
+                    next.source_bytes.saturating_add(content.len()),
+                )?;
                 insert_document(&mut next, path.clone(), content, stamp);
                 next.dirty_paths.insert(path);
                 changed = true;
@@ -236,6 +232,16 @@ impl FastRegexSearch {
                     {
                         continue;
                     }
+                    let previous_bytes = next
+                        .documents
+                        .get(&path)
+                        .map_or(0, |document| document.source_bytes);
+                    self.limits.check_capacity(
+                        next.documents.len(),
+                        next.source_bytes
+                            .saturating_sub(previous_bytes)
+                            .saturating_add(content.len()),
+                    )?;
                     remove_document(&mut next, &path);
                     insert_document(&mut next, path.clone(), content, stamp);
                     next.dirty_paths.insert(path);
@@ -295,6 +301,9 @@ impl FastRegexSearch {
         Ok(())
     }
 
+    /// Searches the published corpus plus overlays. Callers apply observed changes before
+    /// searching; unobserved files cannot be detected by candidate-only verification.
+    /// The result identifies the generation used, not a filesystem freshness guarantee.
     pub fn search(&self, query: &FastRegexQuery) -> Result<FastRegexSearchResult, FastRegexError> {
         validate_query(query, &self.limits)?;
         let sensitive = case_sensitive(query);
@@ -308,52 +317,99 @@ impl FastRegexSearch {
         if state.generation == 0 {
             return Err(FastRegexError::NotReady);
         }
-        let candidates = candidate_paths(&state, query, sensitive)?;
+        let expression = match query.pattern {
+            FastRegexPattern::Literal => regex::escape(&query.query),
+            FastRegexPattern::Regex => query.query.clone(),
+        };
+        let plan = crate::query::plan(&expression, sensitive)?;
+        let candidates = candidate_paths(&state, &plan)?;
         let candidate_file_count = candidates.len();
+        let paths = candidates
+            .into_iter()
+            .filter(|path| filters.matches(path))
+            .collect::<Vec<_>>();
+        let batches = if paths.len() >= 128 && query.max_results >= 256 {
+            let workers = thread::available_parallelism()
+                .map_or(1, usize::from)
+                .min(8)
+                .min(paths.len().div_ceil(64));
+            thread::scope(|scope| {
+                let jobs = paths
+                    .chunks(paths.len().div_ceil(workers))
+                    .map(|paths| {
+                        let matcher = matcher.clone();
+                        let state = &*state;
+                        scope.spawn(move || {
+                            self.verify_candidates(state, paths, &matcher, query.max_results)
+                        })
+                    })
+                    .collect::<Vec<_>>();
+                jobs.into_iter()
+                    .map(|job| job.join().expect("candidate verification thread panicked"))
+                    .collect::<Result<Vec<_>, _>>()
+            })?
+        } else {
+            vec![self.verify_candidates(&state, &paths, &matcher, query.max_results)?]
+        };
         let mut matches = Vec::new();
         let mut limit_hit = false;
-        let mut scanned_file_count = 0usize;
-        for path in candidates {
-            if !filters.matches(&path) {
-                continue;
-            }
-            scanned_file_count = scanned_file_count.saturating_add(1);
-            let content = if let Some(content) = state.overlays.get(&path) {
-                content.clone()
-            } else {
-                let Some(document) = state.documents.get(&path) else {
-                    continue;
-                };
-                let absolute = self.root.canonical_path().join(&path);
-                let Some(content) = read_text_file(&absolute, self.limits.max_file_bytes)? else {
-                    return Err(FastRegexError::StaleSource(path));
-                };
-                if revision(&content) != document.revision {
-                    return Err(FastRegexError::StaleSource(path));
-                }
-                content
-            };
-            collect_matches(
-                &path,
-                &content,
-                &matcher,
-                query.max_results,
-                &mut matches,
-                &mut limit_hit,
-            );
-            if limit_hit {
-                break;
-            }
+        let mut scanned_file_count = 0;
+        for batch in batches {
+            scanned_file_count += batch.scanned;
+            let remaining = query.max_results.saturating_sub(matches.len());
+            limit_hit |= batch.limit_hit || batch.matches.len() > remaining;
+            matches.extend(batch.matches.into_iter().take(remaining));
         }
         Ok(FastRegexSearchResult {
             matches,
             limit_hit,
             statistics: FastRegexSearchStatistics {
+                generation: state.generation,
                 indexed_file_count: state.documents.len(),
                 candidate_file_count,
                 scanned_file_count,
             },
         })
+    }
+
+    fn verify_candidates(
+        &self,
+        state: &IndexState,
+        paths: &[PathBuf],
+        matcher: &Regex,
+        limit: usize,
+    ) -> Result<SearchBatch, FastRegexError> {
+        let mut batch = SearchBatch::default();
+        for path in paths {
+            batch.scanned += 1;
+            let content = if let Some(content) = state.overlays.get(path) {
+                content.clone()
+            } else {
+                let Some(document) = state.documents.get(path) else {
+                    continue;
+                };
+                let absolute = self.root.canonical_path().join(path);
+                let Some(content) = read_text_file(&absolute, self.limits.max_file_bytes)? else {
+                    return Err(FastRegexError::StaleSource(path.clone()));
+                };
+                if revision(&content) != document.revision {
+                    return Err(FastRegexError::StaleSource(path.clone()));
+                }
+                content
+            };
+            collect_matches(
+                path,
+                &content,
+                matcher,
+                limit,
+                &mut batch.matches,
+                &mut batch.limit_hit,
+            );
+            if batch.limit_hit {
+                break;
+            }
+        }
+        Ok(batch)
     }
 
     fn is_indexable_path(&self, relative: &Path) -> bool {
@@ -401,13 +457,10 @@ impl FastRegexSearch {
             let Some((content, stamp)) = content else {
                 continue;
             };
-            if next.documents.len() == self.limits.max_files
-                || next.source_bytes.saturating_add(content.len())
-                    > self.limits.max_total_source_bytes
-            {
-                drop(state);
-                return self.rebuild().map(FastRegexUpdateOutcome::Rebuilt);
-            }
+            self.limits.check_capacity(
+                next.documents.len() + 1,
+                next.source_bytes.saturating_add(content.len()),
+            )?;
             insert_document(&mut next, path.clone(), content, stamp);
             next.dirty_paths.insert(path);
             changed = true;
@@ -454,21 +507,24 @@ impl FastRegexSearch {
     }
 }
 
+#[derive(Default)]
+struct SearchBatch {
+    matches: Vec<FastRegexMatch>,
+    limit_hit: bool,
+    scanned: usize,
+}
+
 fn insert_document(state: &mut IndexState, path: PathBuf, content: String, stamp: FileStamp) {
     let id = state.next_document_id;
     state.next_document_id = state.next_document_id.saturating_add(1);
-    let grams = sparse_ngrams(content.as_bytes());
     let folded = content
         .as_bytes()
         .iter()
         .map(u8::to_ascii_lowercase)
         .collect::<Vec<_>>();
-    let folded_grams = sparse_ngrams(&folded);
+    let grams = sparse_ngrams(&folded);
     for gram in &grams {
         state.postings.entry(*gram).or_default().insert(id);
-    }
-    for gram in &folded_grams {
-        state.folded_postings.entry(*gram).or_default().insert(id);
     }
     state.source_bytes = state.source_bytes.saturating_add(content.len());
     state.document_paths.insert(id, path.clone());
@@ -480,7 +536,6 @@ fn insert_document(state: &mut IndexState, path: PathBuf, content: String, stamp
             source_bytes: content.len(),
             stamp,
             grams,
-            folded_grams,
         },
     );
 }
@@ -492,11 +547,6 @@ fn remove_document(state: &mut IndexState, path: &Path) -> bool {
     state.source_bytes = state.source_bytes.saturating_sub(document.source_bytes);
     state.document_paths.remove(&document.id);
     remove_postings(&mut state.postings, document.id, &document.grams);
-    remove_postings(
-        &mut state.folded_postings,
-        document.id,
-        &document.folded_grams,
-    );
     true
 }
 
@@ -511,68 +561,53 @@ fn remove_postings(postings: &mut HashMap<u64, BTreeSet<u32>>, id: u32, grams: &
     }
 }
 
-fn candidate_paths(
+fn candidate_paths(state: &IndexState, plan: &Plan) -> Result<BTreeSet<PathBuf>, FastRegexError> {
+    let mut candidates = candidates_for_plan(state, plan)?
+        .unwrap_or_else(|| state.documents.keys().cloned().collect());
+    // Unsaved contents are outside the persistent corpus. Always verify them;
+    // stale on-disk postings must never exclude an overlay.
+    candidates.extend(state.overlays.keys().cloned());
+    Ok(candidates)
+}
+
+fn candidates_for_plan(
     state: &IndexState,
-    query: &FastRegexQuery,
-    sensitive: bool,
-) -> Result<BTreeSet<PathBuf>, FastRegexError> {
-    let clauses = required_literal_clauses(query, sensitive);
-    let mut candidates = match clauses.as_ref() {
-        None => state.documents.keys().cloned().collect(),
-        Some(clauses) if clauses.is_empty() => state.documents.keys().cloned().collect(),
-        Some(clauses) => {
+    plan: &Plan,
+) -> Result<Option<BTreeSet<PathBuf>>, FastRegexError> {
+    match plan {
+        Plan::All => Ok(None),
+        Plan::Literal(literal) => candidates_for_literal(state, literal),
+        Plan::And(plans) => {
             let mut intersection: Option<BTreeSet<PathBuf>> = None;
-            for alternatives in clauses {
-                let mut clause_candidates = BTreeSet::new();
-                for literal in alternatives {
-                    match candidates_for_literal(state, sensitive, literal)? {
-                        Some(literal_candidates) => clause_candidates.extend(literal_candidates),
-                        None => {
-                            clause_candidates = state.documents.keys().cloned().collect();
-                            break;
-                        }
+            for plan in plans {
+                if let Some(next) = candidates_for_plan(state, plan)? {
+                    if let Some(current) = &mut intersection {
+                        current.retain(|path| next.contains(path));
+                    } else {
+                        intersection = Some(next);
+                    }
+                    if intersection.as_ref().is_some_and(BTreeSet::is_empty) {
+                        break;
                     }
                 }
-                if let Some(candidates) = &mut intersection {
-                    candidates.retain(|path| clause_candidates.contains(path));
-                } else {
-                    intersection = Some(clause_candidates);
-                }
-                if intersection.as_ref().is_some_and(BTreeSet::is_empty) {
-                    break;
+            }
+            Ok(intersection)
+        }
+        Plan::Or(plans) => {
+            let mut union = BTreeSet::new();
+            for plan in plans {
+                match candidates_for_plan(state, plan)? {
+                    Some(next) => union.extend(next),
+                    None => return Ok(None),
                 }
             }
-            intersection.unwrap_or_else(|| state.documents.keys().cloned().collect())
-        }
-    };
-    for (path, content) in &state.overlays {
-        candidates.remove(path);
-        let bytes = if sensitive {
-            content.as_bytes().to_vec()
-        } else {
-            content
-                .as_bytes()
-                .iter()
-                .map(u8::to_ascii_lowercase)
-                .collect()
-        };
-        let include = clauses.as_ref().is_none_or(|clauses| {
-            clauses.iter().all(|alternatives| {
-                alternatives
-                    .iter()
-                    .any(|literal| find_bytes(&bytes, literal))
-            })
-        });
-        if include {
-            candidates.insert(path.clone());
+            Ok(Some(union))
         }
     }
-    Ok(candidates)
 }
 
 fn candidates_for_literal(
     state: &IndexState,
-    sensitive: bool,
     literal: &[u8],
 ) -> Result<Option<BTreeSet<PathBuf>>, FastRegexError> {
     let grams = covering_ngrams(literal);
@@ -582,14 +617,10 @@ fn candidates_for_literal(
     let mut intersection = state
         .disk_base
         .as_ref()
-        .map(|base| base.intersect_postings(&grams, !sensitive, &state.dirty_paths))
+        .map(|base| base.intersect_postings(&grams, &state.dirty_paths))
         .transpose()?
         .unwrap_or_default();
-    let postings = if sensitive {
-        &state.postings
-    } else {
-        &state.folded_postings
-    };
+    let postings = &state.postings;
     let mut lists = Vec::with_capacity(grams.len());
     for gram in &grams {
         let Some(paths) = postings.get(gram) else {
@@ -614,42 +645,6 @@ fn candidates_for_literal(
         );
     }
     Ok(Some(intersection))
-}
-
-fn required_literal_clauses(query: &FastRegexQuery, sensitive: bool) -> Option<Vec<Vec<Vec<u8>>>> {
-    let mut clauses = match query.pattern {
-        FastRegexPattern::Literal => vec![vec![query.query.as_bytes().to_vec()]],
-        FastRegexPattern::Regex => {
-            let hir = regex_syntax::parse(&query.query).ok()?;
-            let prefix = Extractor::new().extract(&hir);
-            let mut suffix_extractor = Extractor::new();
-            suffix_extractor.kind(ExtractKind::Suffix);
-            let suffix = suffix_extractor.extract(&hir);
-            let mut clauses = [prefix, suffix]
-                .into_iter()
-                .filter_map(|sequence| sequence.literals().map(<[_]>::to_vec))
-                .filter(|literals| !literals.iter().any(|literal| literal.as_bytes().is_empty()))
-                .map(|literals| {
-                    literals
-                        .into_iter()
-                        .map(|literal| literal.as_bytes().to_vec())
-                        .collect::<Vec<_>>()
-                })
-                .collect::<Vec<_>>();
-            clauses.sort();
-            clauses.dedup();
-            clauses
-        }
-    };
-    if !sensitive {
-        if clauses.iter().flatten().any(|literal| !literal.is_ascii()) {
-            return None;
-        }
-        for literal in clauses.iter_mut().flatten() {
-            literal.make_ascii_lowercase();
-        }
-    }
-    Some(clauses)
 }
 
 fn compile_matcher(query: &FastRegexQuery, sensitive: bool) -> Result<Regex, FastRegexError> {
@@ -812,14 +807,6 @@ fn snapshot(state: &IndexState) -> FastRegexSearchSnapshot {
         indexed_file_count: state.documents.len(),
         indexed_source_bytes: state.source_bytes,
     }
-}
-
-fn find_bytes(haystack: &[u8], needle: &[u8]) -> bool {
-    needle.is_empty()
-        || (needle.len() <= haystack.len()
-            && haystack
-                .windows(needle.len())
-                .any(|window| window == needle))
 }
 
 fn io_error(path: &Path, source: std::io::Error) -> FastRegexError {

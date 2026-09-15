@@ -9,20 +9,20 @@ use crate::file_stamp::FileStamp;
 use crate::index::IndexState;
 use crate::index::IndexedDocument;
 use crate::ngram::bigram_frequency_digest;
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-use std::collections::HashMap;
-use std::path::Path;
-use std::path::PathBuf;
-use std::sync::Arc;
 use ash_immutable_generation_store::ExpectedCurrent;
 use ash_immutable_generation_store::GenerationFile;
 use ash_immutable_generation_store::ImmutableGenerationStore;
 use ash_immutable_generation_store::PublishError;
 use ash_immutable_generation_store::PublishOutcome;
 use ash_immutable_generation_store::PublishReport;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::collections::HashMap;
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::Arc;
 
-pub(crate) const STORE_VERSION: &[u8] = b"ash-fast-regex-v5\0";
+pub(crate) const STORE_VERSION: &[u8] = b"ash-fast-regex-v7\0";
 const DELTA_FILE: &str = "delta.bin";
 const DOCUMENTS_FILE: &str = "documents.bin";
 const FORMAT_FILE: &str = "format.bin";
@@ -68,7 +68,6 @@ pub(crate) fn load(storage: &FastRegexSearchStorage) -> Result<Option<IndexState
         next_document_id: document_paths.len() as u32,
         document_paths,
         postings: HashMap::new(),
-        folded_postings: HashMap::new(),
         overlays: BTreeMap::new(),
         dirty_paths: BTreeSet::new(),
         disk_base: Some(Arc::new(disk_base)),
@@ -106,11 +105,9 @@ pub(crate) fn persist(
 
     let mut postings = generation_header(state.generation);
     let mut lookup = generation_header(state.generation);
-    let sensitive = sorted_postings(&state.postings);
-    let folded = sorted_postings(&state.folded_postings);
-    lookup.extend_from_slice(&((sensitive.len() + folded.len()) as u64).to_le_bytes());
-    write_posting_entries(&mut lookup, &mut postings, &ids, false, sensitive);
-    write_posting_entries(&mut lookup, &mut postings, &ids, true, folded);
+    let folded = sorted_postings(&state.postings);
+    lookup.extend_from_slice(&(folded.len() as u64).to_le_bytes());
+    write_posting_entries(&mut lookup, &mut postings, &ids, folded);
 
     let delta = delta_header(state.generation, state.generation, 0);
     open_store(directory)?
@@ -155,7 +152,6 @@ pub(crate) fn persist_delta(
         bytes.extend_from_slice(&document.stamp.change_nanos.to_le_bytes());
         write_bytes(&mut bytes, document.revision.as_bytes());
         write_grams(&mut bytes, &document.grams);
-        write_grams(&mut bytes, &document.folded_grams);
     }
     open_store(directory)?
         .publish_layer(
@@ -202,7 +198,6 @@ fn apply_delta(path: &Path, bytes: &[u8], state: &mut IndexState) -> Result<(), 
                     },
                     revision: reader.string()?,
                     grams: reader.grams()?,
-                    folded_grams: reader.grams()?,
                 };
                 insert_stored_document(state, changed_path.clone(), document);
             }
@@ -222,11 +217,6 @@ fn remove_stored_document(state: &mut IndexState, path: &Path) {
     state.source_bytes = state.source_bytes.saturating_sub(document.source_bytes);
     state.document_paths.remove(&document.id);
     remove_stored_postings(&mut state.postings, document.id, &document.grams);
-    remove_stored_postings(
-        &mut state.folded_postings,
-        document.id,
-        &document.folded_grams,
-    );
 }
 
 fn remove_stored_postings(postings: &mut HashMap<u64, BTreeSet<u32>>, id: u32, grams: &[u64]) {
@@ -247,9 +237,6 @@ fn insert_stored_document(state: &mut IndexState, path: PathBuf, mut document: I
     for gram in &document.grams {
         state.postings.entry(*gram).or_default().insert(id);
     }
-    for gram in &document.folded_grams {
-        state.folded_postings.entry(*gram).or_default().insert(id);
-    }
     state.source_bytes = state.source_bytes.saturating_add(document.source_bytes);
     state.document_paths.insert(id, path.clone());
     state.documents.insert(path, document);
@@ -265,7 +252,6 @@ fn write_posting_entries(
     lookup: &mut Vec<u8>,
     postings: &mut Vec<u8>,
     ids: &BTreeMap<u32, u32>,
-    folded: bool,
     entries: Vec<(&u64, &BTreeSet<u32>)>,
 ) {
     for (gram, document_ids) in entries {
@@ -274,7 +260,6 @@ fn write_posting_entries(
         for document_id in document_ids {
             postings.extend_from_slice(&ids[document_id].to_le_bytes());
         }
-        lookup.push(u8::from(folded));
         lookup.extend_from_slice(&gram.to_le_bytes());
         lookup.extend_from_slice(&offset.to_le_bytes());
         lookup.extend_from_slice(&(document_ids.len() as u32).to_le_bytes());
@@ -329,7 +314,6 @@ fn read_documents(
                 source_bytes: document_source_bytes,
                 stamp,
                 grams: Vec::new(),
-                folded_grams: Vec::new(),
             },
         );
     }

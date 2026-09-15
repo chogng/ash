@@ -6,6 +6,9 @@ use crate::FastRegexSearchResult;
 use crate::FastRegexSearchSnapshot;
 use crate::FastRegexSearchStorage;
 use crate::FastRegexUpdateOutcome;
+use ash_file_access::Dir;
+use ash_uds::SocketDirectory;
+use ash_uds::UnixStream;
 use serde::Deserialize;
 use serde::Serialize;
 use std::ffi::OsString;
@@ -29,11 +32,8 @@ use std::sync::atomic::Ordering;
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
-use ash_file_access::Dir;
-use ash_uds::SocketDirectory;
-use ash_uds::UnixStream;
 
-const PROTOCOL_VERSION: u16 = 1;
+const PROTOCOL_VERSION: u16 = 2;
 const MAX_REQUEST_BYTES: u64 = 2 * 1024 * 1024;
 const MAX_RESPONSE_BYTES: usize = 32 * 1024 * 1024;
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(5);
@@ -209,10 +209,11 @@ impl FastRegexWorkerClient {
             version: PROTOCOL_VERSION,
             request,
         };
-        serde_json::to_writer(&mut stream, &envelope)
-            .map_err(|error| protocol_error(error.to_string()))?;
+        let mut bytes =
+            serde_json::to_vec(&envelope).map_err(|error| protocol_error(error.to_string()))?;
+        bytes.push(b'\n');
         stream
-            .write_all(b"\n")
+            .write_all(&bytes)
             .and_then(|_| stream.flush())
             .map_err(|error| worker_io("write request", error))?;
 
@@ -412,13 +413,14 @@ pub fn serve_worker_from_environment() -> Result<(), FastRegexError> {
     let listener = directory
         .bind(name)
         .map_err(|error| worker_io("bind", error))?;
-    listener
-        .set_nonblocking(true)
-        .map_err(|error| worker_io("configure listener", error))?;
+    let directory = Arc::new(directory);
     let stopping = Arc::new(AtomicBool::new(false));
     while !stopping.load(Ordering::Acquire) {
         match listener.accept() {
             Ok((stream, _address)) => {
+                if stopping.load(Ordering::Acquire) {
+                    break;
+                }
                 if validate_worker_peer(&stream).is_err() {
                     continue;
                 }
@@ -427,11 +429,10 @@ pub fn serve_worker_from_environment() -> Result<(), FastRegexError> {
                     .map_err(|error| worker_io("configure connection", error))?;
                 let search = Arc::clone(&search);
                 let stopping = Arc::clone(&stopping);
-                thread::spawn(move || handle_connection(stream, &search, &stopping));
+                let directory = Arc::clone(&directory);
+                thread::spawn(move || handle_connection(stream, &search, &stopping, &directory));
             }
-            Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
-                thread::sleep(Duration::from_millis(10));
-            }
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
             Err(error) => return Err(worker_io("accept", error)),
         }
     }
@@ -452,10 +453,16 @@ fn validate_worker_peer(stream: &UnixStream) -> io::Result<()> {
     }
 }
 
-fn handle_connection(mut stream: UnixStream, search: &FastRegexSearch, stopping: &AtomicBool) {
+fn handle_connection(
+    mut stream: UnixStream,
+    search: &FastRegexSearch,
+    stopping: &AtomicBool,
+    directory: &SocketDirectory,
+) {
     let Some(request) = read_request(&stream).transpose() else {
         return;
     };
+    let shutdown = matches!(&request, Ok(WorkerRequest::Shutdown));
     let result = request.and_then(|request| match request {
         WorkerRequest::Snapshot => Ok(WorkerValue::Snapshot(search.snapshot())),
         WorkerRequest::Rebuild => search.rebuild().map(WorkerValue::Snapshot),
@@ -464,10 +471,7 @@ fn handle_connection(mut stream: UnixStream, search: &FastRegexSearch, stopping:
             .map(WorkerValue::Update),
         WorkerRequest::ReconcileDir => search.reconcile_dir().map(WorkerValue::Update),
         WorkerRequest::Search { query } => search.search(&query).map(WorkerValue::Search),
-        WorkerRequest::Shutdown => {
-            stopping.store(true, Ordering::Release);
-            Ok(WorkerValue::Shutdown)
-        }
+        WorkerRequest::Shutdown => Ok(WorkerValue::Shutdown),
     });
     let response = ResponseEnvelope {
         version: PROTOCOL_VERSION,
@@ -489,6 +493,13 @@ fn handle_connection(mut stream: UnixStream, search: &FastRegexSearch, stopping:
     }
     bytes.push(b'\n');
     let _ = stream.write_all(&bytes).and_then(|_| stream.flush());
+    if shutdown {
+        // Reply before waking accept: returning from the worker entrypoint ends
+        // the process, including this response thread. A connection wakes a
+        // blocking listener on every supported UDS platform without polling.
+        stopping.store(true, Ordering::Release);
+        let _ = directory.connect(Path::new("worker.sock"));
+    }
 }
 
 fn read_request(stream: &UnixStream) -> Result<Option<WorkerRequest>, FastRegexError> {
@@ -645,51 +656,58 @@ pub(crate) mod serde_path {
     use serde::Deserializer;
     use serde::Serialize;
     use serde::Serializer;
-    use std::ffi::OsString;
     use std::path::Path;
     use std::path::PathBuf;
 
-    #[cfg(unix)]
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum EncodedPath {
+        Text(String),
+        #[cfg(unix)]
+        Bytes(Vec<u8>),
+        #[cfg(windows)]
+        Units(Vec<u16>),
+    }
+
     pub fn serialize<S>(path: &Path, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        use std::os::unix::ffi::OsStrExt;
-
-        path.as_os_str().as_bytes().serialize(serializer)
+        if let Some(text) = path.to_str() {
+            return serializer.serialize_str(text);
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::ffi::OsStrExt;
+            path.as_os_str().as_bytes().serialize(serializer)
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::ffi::OsStrExt;
+            path.as_os_str()
+                .encode_wide()
+                .collect::<Vec<_>>()
+                .serialize(serializer)
+        }
     }
 
-    #[cfg(unix)]
     pub fn deserialize<'de, D>(deserializer: D) -> Result<PathBuf, D::Error>
     where
         D: Deserializer<'de>,
     {
-        use std::os::unix::ffi::OsStringExt;
-
-        Vec::<u8>::deserialize(deserializer).map(|bytes| OsString::from_vec(bytes).into())
-    }
-
-    #[cfg(windows)]
-    pub fn serialize<S>(path: &Path, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        use std::os::windows::ffi::OsStrExt;
-
-        path.as_os_str()
-            .encode_wide()
-            .collect::<Vec<_>>()
-            .serialize(serializer)
-    }
-
-    #[cfg(windows)]
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<PathBuf, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        use std::os::windows::ffi::OsStringExt;
-
-        Vec::<u16>::deserialize(deserializer).map(|units| OsString::from_wide(&units).into())
+        match EncodedPath::deserialize(deserializer)? {
+            EncodedPath::Text(text) => Ok(PathBuf::from(text)),
+            #[cfg(unix)]
+            EncodedPath::Bytes(bytes) => {
+                use std::os::unix::ffi::OsStringExt;
+                Ok(std::ffi::OsString::from_vec(bytes).into())
+            }
+            #[cfg(windows)]
+            EncodedPath::Units(units) => {
+                use std::os::windows::ffi::OsStringExt;
+                Ok(std::ffi::OsString::from_wide(&units).into())
+            }
+        }
     }
 }
 

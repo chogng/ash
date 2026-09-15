@@ -106,3 +106,73 @@ fn worker_owns_rebuild_refresh_and_search() {
         "worker endpoint directory must be released and removed"
     );
 }
+
+#[test]
+fn shutdown_wakes_an_idle_listener_and_exits_successfully() {
+    let dir = tempfile::tempdir().unwrap();
+    let storage = tempfile::tempdir().unwrap();
+    let binary = worker_binary();
+    let client = FastRegexWorkerClient::open(
+        FastRegexWorkerCommand::new(binary.executable(), binary.arguments()),
+        &Dir::open_local(dir.path()).unwrap(),
+        storage.path(),
+        FastRegexSearchLimits::default(),
+    )
+    .unwrap();
+    assert!(matches!(
+        client.request(WorkerRequest::Shutdown).unwrap(),
+        WorkerValue::Shutdown
+    ));
+    let mut child = client.child.lock().unwrap().take().unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            assert!(status.success(), "worker must exit gracefully: {status}");
+            break;
+        }
+        if Instant::now() >= deadline {
+            child.kill().unwrap();
+            child.wait().unwrap();
+            panic!("shutdown failed to wake accept");
+        }
+        thread::sleep(Duration::from_millis(5));
+    }
+    let endpoint = client.endpoint_directory.clone();
+    drop(client);
+    assert!(!endpoint.exists());
+}
+
+#[test]
+fn query_paths_use_compact_text_and_preserve_non_unicode_paths() {
+    let mut query = FastRegexQuery {
+        query: "alpha".into(),
+        pattern: FastRegexPattern::Regex,
+        case_sensitivity: FastRegexCaseSensitivity::Sensitive,
+        scope: PathBuf::from("src/解析器.rs"),
+        include_patterns: Vec::new(),
+        exclude_patterns: Vec::new(),
+        max_results: 100,
+    };
+    let encoded = serde_json::to_value(&query).unwrap();
+    assert_eq!(encoded["scope"], "src/解析器.rs");
+    assert_eq!(
+        serde_json::from_value::<FastRegexQuery>(encoded).unwrap(),
+        query
+    );
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStringExt;
+        query.scope = PathBuf::from(OsString::from_vec(b"source-\xff.rs".to_vec()));
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStringExt;
+        query.scope = PathBuf::from(OsString::from_wide(&[b's' as u16, 0xD800]));
+    }
+    let encoded = serde_json::to_value(&query).unwrap();
+    assert!(encoded["scope"].is_array());
+    assert_eq!(
+        serde_json::from_value::<FastRegexQuery>(encoded).unwrap(),
+        query
+    );
+}

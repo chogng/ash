@@ -9,6 +9,7 @@ mod file_stamp;
 mod index;
 mod ngram;
 mod path_codec;
+mod query;
 mod storage;
 mod types;
 mod worker;

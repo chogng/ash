@@ -52,6 +52,8 @@ pub struct FastRegexSearchResult {
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct FastRegexSearchStatistics {
+    /// Published corpus used for candidate selection. Filesystem events may still be pending.
+    pub generation: u64,
     pub indexed_file_count: usize,
     pub candidate_file_count: usize,
     pub scanned_file_count: usize,
@@ -91,6 +93,18 @@ impl Default for FastRegexSearchLimits {
     }
 }
 
+impl FastRegexSearchLimits {
+    pub(crate) fn check_capacity(&self, files: usize, bytes: usize) -> Result<(), FastRegexError> {
+        if files > self.max_files {
+            return Err(FastRegexError::IndexLimitExceeded("max_files"));
+        }
+        if bytes > self.max_total_source_bytes {
+            return Err(FastRegexError::IndexLimitExceeded("max_total_source_bytes"));
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum FastRegexUpdateOutcome {
     NoChange,
@@ -103,6 +117,7 @@ pub enum FastRegexError {
     InvalidQuery(&'static str),
     InvalidGlob,
     InvalidLimits,
+    IndexLimitExceeded(&'static str),
     CorruptIndex(PathBuf),
     NotReady,
     StaleSource(PathBuf),
@@ -131,6 +146,10 @@ impl fmt::Display for FastRegexError {
             Self::InvalidQuery(message) => formatter.write_str(message),
             Self::InvalidGlob => formatter.write_str("search glob is invalid"),
             Self::InvalidLimits => formatter.write_str("fast regex search limits are invalid"),
+            Self::IndexLimitExceeded(limit) => write!(
+                formatter,
+                "fast regex index exceeds {limit}; the directory cannot be searched completely"
+            ),
             Self::CorruptIndex(path) => {
                 write!(
                     formatter,

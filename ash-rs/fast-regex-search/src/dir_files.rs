@@ -1,18 +1,19 @@
 use crate::FastRegexError;
 use crate::FastRegexSearchLimits;
 use crate::file_stamp::FileStamp;
+use ash_file_access::Dir;
 use ignore::WalkBuilder;
 use std::collections::BTreeMap;
 use std::fs;
+use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
-use ash_file_access::Dir;
 
 pub(crate) fn scan_dir(
     root: &Dir,
     limits: &FastRegexSearchLimits,
 ) -> Result<Vec<(PathBuf, String, FileStamp)>, FastRegexError> {
-    let paths = dir_paths(root, limits);
+    let paths = dir_paths(root)?;
     let mut source_bytes = 0usize;
     let mut documents = Vec::new();
     for path in paths {
@@ -21,10 +22,8 @@ pub(crate) fn scan_dir(
         else {
             continue;
         };
-        if source_bytes.saturating_add(content.len()) > limits.max_total_source_bytes {
-            break;
-        }
         source_bytes = source_bytes.saturating_add(content.len());
+        limits.check_capacity(documents.len() + 1, source_bytes)?;
         documents.push((path, content, stamp));
     }
     Ok(documents)
@@ -35,7 +34,7 @@ pub(crate) fn scan_dir_stamps(
     limits: &FastRegexSearchLimits,
 ) -> Result<BTreeMap<PathBuf, FileStamp>, FastRegexError> {
     let mut stamps = BTreeMap::new();
-    for path in dir_paths(root, limits) {
+    for path in dir_paths(root)? {
         let absolute = root.canonical_path().join(&path);
         let stamp = FileStamp::read(&absolute).map_err(|source| io_error(&absolute, source))?;
         if stamp.length <= limits.max_file_bytes as u64 {
@@ -51,7 +50,18 @@ pub(crate) fn read_text_file(
 ) -> Result<Option<String>, FastRegexError> {
     #[cfg(test)]
     SOURCE_READ_COUNT.with(|count| count.set(count.get().saturating_add(1)));
-    let bytes = fs::read(path).map_err(|source| io_error(path, source))?;
+    let file = fs::File::open(path).map_err(|source| io_error(path, source))?;
+    let length = file
+        .metadata()
+        .map_err(|source| io_error(path, source))?
+        .len();
+    if length > max_bytes as u64 {
+        return Ok(None);
+    }
+    let mut bytes = Vec::with_capacity(length as usize);
+    file.take((max_bytes as u64).saturating_add(1))
+        .read_to_end(&mut bytes)
+        .map_err(|source| io_error(path, source))?;
     if bytes.len() > max_bytes || bytes.iter().take(8 * 1024).any(|byte| *byte == 0) {
         return Ok(None);
     }
@@ -85,22 +95,27 @@ pub(crate) fn dir_walk_builder(root: &Path) -> WalkBuilder {
     builder
 }
 
-fn dir_paths(root: &Dir, limits: &FastRegexSearchLimits) -> Vec<PathBuf> {
-    let mut paths = dir_walk_builder(root.canonical_path())
-        .build()
-        .filter_map(Result::ok)
-        .filter(|entry| entry.file_type().is_some_and(|kind| kind.is_file()))
-        .filter_map(|entry| {
-            entry
+fn dir_paths(root: &Dir) -> Result<Vec<PathBuf>, FastRegexError> {
+    let mut paths = Vec::new();
+    for entry in dir_walk_builder(root.canonical_path()).build() {
+        let entry =
+            entry.map_err(|error| io_error(root.canonical_path(), std::io::Error::other(error)))?;
+        if let Some(error) = entry.error() {
+            return Err(io_error(
+                entry.path(),
+                std::io::Error::other(error.to_string()),
+            ));
+        }
+        if entry.file_type().is_some_and(|kind| kind.is_file()) {
+            let relative = entry
                 .path()
                 .strip_prefix(root.canonical_path())
-                .ok()
-                .map(Path::to_path_buf)
-        })
-        .collect::<Vec<_>>();
+                .map_err(|error| io_error(entry.path(), std::io::Error::other(error)))?;
+            paths.push(relative.to_path_buf());
+        }
+    }
     paths.sort();
-    paths.truncate(limits.max_files);
-    paths
+    Ok(paths)
 }
 
 #[cfg(test)]
