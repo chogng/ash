@@ -31,6 +31,8 @@ import { Margin } from './viewParts/margin/margin.js';
 import { GlyphMarginWidgets } from './viewParts/glyphMargin/glyphMargin.js';
 import { GlyphMarginLane } from '../common/model.js';
 import { Rulers } from './viewParts/rulers/rulers.js';
+import { GpuMarkOverlay } from './viewParts/gpuMark/gpuMark.js';
+import { MinimapTokensColorTracker } from '../common/viewModel/minimapTokensColorTracker.js';
 import { RulersGpu } from './viewParts/rulersGpu/rulersGpu.js';
 import { EditorScrollbar } from './viewParts/editorScrollbar/editorScrollbar.js';
 import { LineNumbersOverlay } from './viewParts/lineNumbers/lineNumbers.js';
@@ -417,6 +419,7 @@ export class View extends ViewEventHandler {
 		this.margin.getDomNode().domNode.append(this.viewZones.marginDomNode.domNode, this.marginViewOverlays.getDomNode().domNode, this.glyphMarginWidgets.domNode.domNode);
 		let rulersDomNode: HTMLElement | undefined;
 		if (this.viewLinesGpu) {
+			this.marginViewOverlays.addDynamicOverlay(new GpuMarkOverlay(this.viewContext, this.viewGpuContext!));
 			this.registerViewPart(new RulersGpu(
 				this.viewContext,
 				this.viewGpuContext!,
@@ -476,6 +479,7 @@ export class View extends ViewEventHandler {
 		);
 		viewport.setMaxLineWidth(this.measuredContentWidth);
 
+		this._register(MinimapTokensColorTracker.getInstance().onDidChange(() => this.project(viewport.layout)));
 		this._register(this.lineWidths.onDidChange(() => {
 			viewport.setMaxLineWidth(this.measuredContentWidth);
 			this.scheduleProjection();

@@ -1,4 +1,6 @@
 import './minimap.css';
+import { MinimapTokensColorTracker } from '../../../common/viewModel/minimapTokensColorTracker.js';
+import { TokenizationRegistry } from '../../../common/languages.js';
 
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
@@ -131,14 +133,33 @@ export class Minimap extends ViewPart {
 		const scaleY = this.contentHeight * height / context.viewportHeight / Math.max(1, projection.visualLineCount + (this.source.paddingTop + this.source.paddingBottom) / lineHeight);
 		const rowHeight = Math.max(1, scaleY);
 		const charWidth = Math.max(1, geometry.minimapScale);
-		painter.fillStyle = this.source.host.ownerDocument.defaultView!.getComputedStyle(this.source.host).color;
+		const foreground = this.source.host.ownerDocument.defaultView!.getComputedStyle(this.source.host).color;
+		const colors = MinimapTokensColorTracker.getInstance();
+		const hasTokenColors = (TokenizationRegistry.getColorMap()?.length ?? 0) > 2;
 		painter.globalAlpha = 0.55;
 		for (const line of projection.lines) {
 			const text = this.source.model.getLineContent(line.logicalLineIndex + 1).slice(line.startColumn, line.endColumn);
 			const indentation = leadingWidth(text, this.source.tabSize);
 			const visibleWidth = Math.max(1, Math.min(width - indentation * charWidth, (text.length - indentation) * charWidth));
 			const y = Math.floor((line.visualLineIndex + paddingRows) * scaleY);
-			painter.fillRect(indentation * charWidth, y, visibleWidth, rowHeight);
+			if (!hasTokenColors) {
+				painter.fillStyle = foreground;
+				painter.fillRect(indentation * charWidth, y, visibleWidth, rowHeight);
+				continue;
+			}
+			const tokens = this.source.model.tokenization.getLineTokens(line.logicalLineIndex + 1);
+			const firstCharacter = text.search(/\S/u);
+			if (firstCharacter < 0) continue;
+			for (let index = 0; index < tokens.getCount(); index++) {
+				const start = Math.max(line.startColumn + firstCharacter, tokens.getStartOffset(index));
+				const end = Math.min(line.endColumn, tokens.getEndOffset(index));
+				if (end <= start) continue;
+				const color = colors.getColor(tokens.getForeground(index));
+				painter.fillStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${color.a / 255})`;
+				const left = displayWidth(text.slice(0, start - line.startColumn), this.source.tabSize) * charWidth;
+				const right = displayWidth(text.slice(0, end - line.startColumn), this.source.tabSize) * charWidth;
+				painter.fillRect(left, y, Math.max(0, Math.min(width, right) - left), rowHeight);
+			}
 		}
 		painter.globalAlpha = 1;
 
@@ -173,5 +194,11 @@ function leadingWidth(text: string, tabSize: number): number {
 		else if (character === '\t') width += tabSize - width % tabSize;
 		else break;
 	}
+	return width;
+}
+
+function displayWidth(text: string, tabSize: number): number {
+	let width = 0;
+	for (const character of text) width += character === '\t' ? tabSize - width % tabSize : 1;
 	return width;
 }

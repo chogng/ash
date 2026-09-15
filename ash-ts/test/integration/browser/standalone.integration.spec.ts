@@ -1139,3 +1139,45 @@ test('public editor contracts honor initial wrapping, animated scrolling, conten
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	expect(errors).toEqual([]);
 });
+
+
+test('standalone marker decorations appear and clear through the shared marker service', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.setTestMarkers(true));
+	await expect(page.locator('#caller .squiggly-error')).toHaveCount(1);
+	await page.evaluate(() => window.ashStandaloneIntegration.setTestMarkers(false));
+	await expect(page.locator('#caller .squiggly-error')).toHaveCount(0);
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+test('reference Peek embeds a read-only editor that follows parent configuration and releases on Escape', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareReferencePreview());
+	const input = page.locator('#caller > .stanza-editor .stanza-editor-input').first();
+	await input.focus();
+	await page.keyboard.press('Shift+F12');
+	const preview = page.locator('.stanza-editor-language-preview .stanza-editor');
+	await expect(preview).toBeVisible();
+	await expect(preview.locator('.stanza-editor-line-text').first()).toContainText('alpha beta');
+	await page.evaluate(() => window.ashStandaloneIntegration.setParentFontSize());
+	await expect(preview.locator('.stanza-editor-line-text').first()).toHaveCSS('font-size', '18px');
+	await preview.locator('.stanza-editor-input').focus();
+	await page.keyboard.type('X');
+	await expect(preview.locator('.stanza-editor-line-text').first()).toContainText('alpha beta');
+	await page.keyboard.press('Escape');
+	await expect(preview).toHaveCount(0);
+	await expect(input).toBeFocused();
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	expect(errors).toEqual([]);
+});
+
+test('minimap repaints token colors when the registry palette changes', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.setMinimapColor('#ff0000'));
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readMinimapPixel().slice(0, 3))).toEqual([255, 0, 0]);
+	await page.evaluate(() => window.ashStandaloneIntegration.setMinimapColor('#0000ff'));
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readMinimapPixel().slice(0, 3))).toEqual([0, 0, 255]);
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});

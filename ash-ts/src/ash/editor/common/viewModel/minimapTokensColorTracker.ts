@@ -32,12 +32,13 @@ export class MinimapTokensColorTracker extends Disposable {
 
 	private _updateColorMap(): void {
 		const colorMap = TokenizationRegistry.getColorMap();
-		if (!colorMap) {
+		if (!colorMap || colorMap.length <= ColorId.DefaultBackground) {
 			this._colors = [];
 			for (let i = 0; i <= ColorId.DefaultBackground; i++) {
 				this._colors[i] = RGBA8.Empty;
 			}
 			this._backgroundIsLight = true;
+			this._onDidChange.fire(undefined);
 			return;
 		}
 		this._colors = [RGBA8.Empty];

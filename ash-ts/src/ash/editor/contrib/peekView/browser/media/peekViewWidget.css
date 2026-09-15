@@ -95,3 +95,9 @@
   background: var(--ash-list-hover-background);
   outline: 1px solid var(--ash-focus-border);
 }
+
+.stanza-editor-language-preview {
+  height: 180px;
+  min-width: 0;
+  border-top: 1px solid var(--ash-widget-border);
+}

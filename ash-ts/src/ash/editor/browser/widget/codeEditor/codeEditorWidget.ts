@@ -1,3 +1,5 @@
+import { MarkerDecorationsContribution } from '../../services/markerDecorations.js';
+import { IMarkerDecorationsService } from '../../../common/services/markerDecorations.js';
 import { getClientArea, h, isHTMLElement, scheduleAtNextAnimationFrame } from "../../../../base/browser/dom.js";
 import { type IKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
 import { type IMouseWheelEvent } from '../../../../base/browser/mouseEvent.js';
@@ -426,6 +428,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			for (const contribution of selectedContributions) {
 				contribution.configure?.({
 					kind: 'text',
+					renderDiagnosticDecorations: !services.has(IMarkerDecorationsService),
 					options,
 					model: options.model,
 					viewModel: this.viewModel,
@@ -634,6 +637,9 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				options.contributions ?? EditorExtensionsRegistry.getEditorContributions(),
 				options.onContributionError,
 			);
+			if (services.has(IMarkerDecorationsService)) {
+				this.contributions.set(MarkerDecorationsContribution.ID, services.createInstance(MarkerDecorationsContribution, this, options.languageDiagnosticsService));
+			}
 			modelStore.add(this.contributions.onAfterModelAttached());
 		} catch (error) {
 			this.modelSlot.clear();

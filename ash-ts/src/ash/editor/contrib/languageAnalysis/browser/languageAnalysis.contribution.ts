@@ -14,7 +14,7 @@ registerTextEditorCapabilityContribution({
 		const languageDiagnostics = context.options.languageDiagnosticsService;
 		if (languageDiagnostics) context.register(languageDiagnostics.acquire(context.options.input.resource, context.languageId, context.model));
 		if (languageDiagnostics) context.register(new LanguageDiagnosticPublisherBridge(syntax.diagnostics, languageDiagnostics.createPublisher(context.options.input.resource)));
-		const diagnostics = context.register(new LanguageDiagnosticDecorationBridge(syntax.diagnostics, languageDiagnostics, context.options.input.resource));
+		const diagnostics = context.register(new LanguageDiagnosticDecorationBridge(syntax.diagnostics, languageDiagnostics, context.options.input.resource, context.renderDiagnosticDecorations));
 		context.provideCapability(TextEditorCapability.languageLexicalContext, lexicalContext);
 		context.provideCapability(TextEditorCapability.diagnosticDecorations, diagnostics.decorations);
 		context.setLanguageLexicalContext(lexicalContext);

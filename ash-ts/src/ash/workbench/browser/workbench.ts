@@ -1,3 +1,5 @@
+import { MarkerDecorationsService } from '../../editor/common/services/markerDecorationsService.js';
+import { IMarkerDecorationsService } from '../../editor/common/services/markerDecorations.js';
 import { IMemoriesService } from '../../platform/memories/common/memoriesService.js';
 import { IMemoryDiagnosticsService } from '../../platform/memory/common/memoryDiagnosticsService.js';
 import "./style.js";
@@ -432,6 +434,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(ILanguageDiagnosticsService, languageDiagnosticsService);
 		const markerService = this._register(new MarkerService());
 		services.registerInstance(IMarkerService, markerService);
+		services.registerSingleton(IMarkerDecorationsService, () => services.createInstance(MarkerDecorationsService));
 		this._register(new LanguageDiagnosticsMarkerBridge(languageDiagnosticsService, markerService));
 		const extensionService = this._register(new AppServerExtensionService({ api: api.extensions, eventApi: api.events, textMateService, languageService, languageConfigurationService, languageFeaturesService }));
 		services.registerInstance(IExtensionService, extensionService);

@@ -1,3 +1,7 @@
+import { StandaloneServices } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
+import { IMarkerService, MarkerSeverity } from '../../../src/ash/platform/markers/common/markers.js';
+import { Color } from '../../../src/ash/base/common/color.js';
+import { TokenizationRegistry } from '../../../src/ash/editor/common/languages.js';
 import * as stanza from '../../../src/ash/editor/editor.main.js';
 import { EditorOption } from '../../../src/ash/editor/common/config/editorOptions.js';
 import { ScrollType } from '../../../src/ash/editor/common/editorCommon.js';
@@ -60,6 +64,12 @@ interface ViewZoneState {
 }
 
 interface StandaloneHarness {
+	prepareReferencePreview(): void;
+	setParentFontSize(): void;
+	setTestMarkers(enabled: boolean): void;
+	setMinimapColor(color: string): void;
+	readMinimapPixel(): number[];
+
 	checkContracts(): Promise<{ wrapping: string; wrapped: boolean; animated: boolean; settled: boolean; top: number; interrupted: boolean; detached: boolean; eventTexts: string[] }>;
 	readonly events: readonly CreationEvent[];
 	state(kind: 'caller' | 'owned'): EditorState;
@@ -153,6 +163,7 @@ const ownedModel = ownedEditor.getModel();
 if (!ownedModel) throw new Error('Owned standalone editor has no model');
 let pointerMouseUpEvents = 0;
 const pointerMouseUpListener = callerEditor.onMouseUp(() => { pointerMouseUpEvents += 1; });
+let referenceRegistration: { dispose(): void } | undefined;
 let codeActionRegistration: ReturnType<typeof stanza.languages.registerCodeActionProvider> | undefined;
 let completionRegistration: ReturnType<typeof stanza.languages.registerCompletionItemProvider> | undefined;
 let viewZone: stanza.IViewZone | undefined;
@@ -236,6 +247,36 @@ function readViewZone(): ViewZoneState {
 }
 
 window.ashStandaloneIntegration = {
+	prepareReferencePreview: () => {
+		callerEditor.setValue('alpha beta\nalpha gamma');
+		callerEditor.setPosition(new stanza.Position(1, 2));
+		referenceRegistration?.dispose();
+		referenceRegistration = stanza.languages.registerReferenceProvider('plaintext', {
+			provideReferences: () => [
+				{ resource: callerResource, range: new stanza.Range(1, 1, 1, 6) },
+				{ resource: callerResource, range: new stanza.Range(2, 1, 2, 6) },
+			],
+		});
+	},
+	setParentFontSize: () => callerEditor.updateOptions({ fontSize: 18 }),
+	setTestMarkers: enabled => {
+		const markers = StandaloneServices.get().instantiationService.get(IMarkerService);
+		if (enabled) markers.set('integration', [{ resource: callerResource, range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 3 } }, severity: MarkerSeverity.Error, message: 'Test marker' }]);
+		else markers.remove('integration');
+	},
+	setMinimapColor: color => {
+		callerEditor.setValue('abcdefghijk');
+		callerEditor.updateOptions({ minimap: { enabled: true } });
+		TokenizationRegistry.setColorMap([Color.fromHex('#000000'), Color.fromHex(color), Color.fromHex('#ffffff')]);
+	},
+	readMinimapPixel: () => {
+		const canvas = callerContainer.querySelector<HTMLCanvasElement>('.minimap canvas')!;
+		const data = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
+		for (let index = 0; index < data.length; index += 4) {
+			if (data[index + 3] > 0) return Array.from(data.slice(index, index + 4));
+		}
+		return [];
+	},
 	checkContracts: async () => {
 		const host = document.createElement('div');
 		document.body.append(host);
@@ -559,6 +600,8 @@ window.ashStandaloneIntegration = {
 	},
 	releaseOwned: () => ownedEditor.dispose(),
 	dispose: () => {
+		referenceRegistration?.dispose();
+		TokenizationRegistry.setColorMap([]);
 		codeActionRegistration?.dispose();
 		completionRegistration?.dispose();
 		ownedEditor.dispose();

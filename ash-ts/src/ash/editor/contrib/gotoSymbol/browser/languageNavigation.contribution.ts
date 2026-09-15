@@ -11,7 +11,7 @@ registerTextEditorCapabilityContribution({ id: "editor.contrib.languageNavigatio
 		typeDefinitions: context.languageFeaturesService.typeDefinitionProvider,
 		references: context.languageFeaturesService.referenceProvider,
 	}));
-	context.register(new LanguageNavigationController(
+	context.register(context.instantiationService.createInstance(LanguageNavigationController,
 		context.view.element,
 		context.editor,
 		context.viewport,

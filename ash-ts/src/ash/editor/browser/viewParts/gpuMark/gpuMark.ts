@@ -38,7 +38,15 @@ export class GpuMarkOverlay extends DynamicViewOverlay {
 		const output: string[] = [];
 		for (let lineNumber = start; lineNumber <= end; lineNumber++) {
 			const reasons = this.gpuContext.canRenderDetailed(options, ctx.viewportData, lineNumber);
-			output[lineNumber - start] = reasons.length > 0 ? `<div class="${GpuMarkOverlay.CLASS_NAME}" title="Cannot render on GPU: ${reasons.join(', ')}"></div>` : '';
+			if (reasons.length === 0) {
+				output[lineNumber - start] = '';
+				continue;
+			}
+			const marker = this.gpuContext.canvas.domNode.ownerDocument.createElement('div');
+			marker.className = GpuMarkOverlay.CLASS_NAME;
+			marker.setAttribute('aria-hidden', 'true');
+			marker.title = `Cannot render on GPU: ${reasons.join(', ')}`;
+			output[lineNumber - start] = marker.outerHTML;
 		}
 		this.renderResult = output;
 	}

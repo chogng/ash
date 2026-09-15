@@ -1,3 +1,6 @@
+import { MarkerService, IMarkerService } from '../../../platform/markers/common/markers.js';
+import { MarkerDecorationsService } from '../../common/services/markerDecorationsService.js';
+import { IMarkerDecorationsService } from '../../common/services/markerDecorations.js';
 import { Disposable } from "../../../base/common/lifecycle.js";
 import { ServiceContainer } from "../../../platform/instantiation/common/instantiation.js";
 import { IThemeService } from "../../../platform/theme/common/themeService.js";
@@ -54,6 +57,8 @@ export class StandaloneServiceCollection extends Disposable {
 		super();
 		const instantiationService = this.instantiationService = this._register(new ServiceContainer());
 		instantiationService.registerInstance(ILogService, new NullLoggerService());
+		instantiationService.registerSingleton(IMarkerService, () => new MarkerService());
+		instantiationService.registerSingleton(IMarkerDecorationsService, () => instantiationService.createInstance(MarkerDecorationsService));
 		instantiationService.registerInstance(IClipboardService, new BrowserClipboardService(window.navigator.clipboard));
 		const browserServices = createEditorBrowserServices();
 		this._register(browserServices.codeEditorService);

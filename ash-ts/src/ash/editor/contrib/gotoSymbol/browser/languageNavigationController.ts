@@ -1,4 +1,6 @@
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { EmbeddedCodeEditorWidget } from '../../../browser/widget/codeEditor/embeddedCodeEditorWidget.js';
 import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { Selection } from "../../../common/core/selection.js";
@@ -24,7 +26,8 @@ export class LanguageNavigationController extends Disposable {
 		private readonly resource: URI,
 		private readonly languageId: string,
 		private readonly openLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined,
-		private readonly onError: (error: unknown) => void = error => console.error("Editor language navigation failed", error),
+		private readonly onError: (error: unknown) => void,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super();
 		if (viewport.textModel !== editor.getModel()) throw new TypeError("Language navigation dependencies must share one text model");
@@ -98,7 +101,25 @@ export class LanguageNavigationController extends Disposable {
 			this.peek.add(addDisposableListener(button, "click", () => void this.open(location)));
 			list.append(button);
 		}
-		widget.setBody(list);
+		const body = h(widget.element.ownerDocument, 'div');
+		body.append(list);
+		const sameResource = locations.find(location => location.resource.toString() === this.resource.toString());
+		const model = this.editor.getModel();
+		if (sameResource && model) {
+			const previewHost = h(widget.element.ownerDocument, 'div');
+			previewHost.className = 'stanza-editor-language-preview';
+			body.append(previewHost);
+			const preview = this.peek.add(this.instantiationService.createInstance(EmbeddedCodeEditorWidget,
+				previewHost,
+				{ readOnly: true, automaticLayout: true, minimap: { enabled: false }, scrollBeyondLastLine: false },
+				{ container: previewHost, model, input: { resource: model.uri, readOnly: true }, languageId: model.getLanguageId(), presentation: 'embedded', ariaLabel: 'Reference preview' },
+				this.editor,
+			));
+			const range = sameResource.selectionRange ?? sameResource.range;
+			preview.setSelection(range);
+			preview.revealRange(range);
+		}
+		widget.setBody(body);
 		widget.show();
 		(list.firstElementChild as HTMLButtonElement | null)?.focus({ preventScroll: true });
 		this.peek.add(addDisposableListener(widget.element, "keydown", event => {

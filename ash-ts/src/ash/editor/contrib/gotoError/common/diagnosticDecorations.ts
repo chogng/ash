@@ -19,7 +19,7 @@ import { LanguageDiagnosticSeverity } from '../../../common/languages/languageRe
 export class LanguageDiagnosticDecorationBridge extends Disposable {
 	readonly decorations: TextDecorationCollection<LanguageDiagnostic>;
 
-	constructor(private readonly store: VersionedLanguageResultStore<LanguageDiagnosticResult>, private readonly externalSource?: LanguageDiagnosticsSource, private readonly resource?: URI) {
+	constructor(private readonly store: VersionedLanguageResultStore<LanguageDiagnosticResult>, private readonly externalSource?: LanguageDiagnosticsSource, private readonly resource?: URI, private readonly renderDecorations = true) {
 		super();
 		this.decorations = this._register(new TextDecorationCollection(store.textModel));
 		try {
@@ -43,7 +43,7 @@ export class LanguageDiagnosticDecorationBridge extends Disposable {
 		this.decorations.replaceAll(diagnostics.map(diagnostic => ({
 			range: diagnostic.range,
 			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-			options: diagnosticDecorationOptions(diagnostic),
+			options: this.renderDecorations ? diagnosticDecorationOptions(diagnostic) : undefined,
 			metadata: diagnostic,
 		})));
 	}

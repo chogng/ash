@@ -26,6 +26,7 @@ console.log(describe(sample));
 interface GpuTextIntegrationHarness {
 	readonly initialText: string;
 	getValue(): string;
+	setFontLigatures(enabled: boolean): void;
 	measureGpuAdvance(text: string): number;
 	resetGpuFrameTrace(): void;
 	readGpuFrameTrace(): readonly GpuRenderPassTrace[];
@@ -72,6 +73,7 @@ editor.layout({ width: container.clientWidth, height: container.clientHeight });
 editor.focus();
 
 window.ashGpuTextIntegration = {
+	setFontLigatures: enabled => editor.updateOptions({ fontLigatures: enabled }),
 	initialText,
 	getValue: () => editor.getValue(),
 	measureGpuAdvance: text => measureGpuAdvance(text),

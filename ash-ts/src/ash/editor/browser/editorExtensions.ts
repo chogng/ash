@@ -535,6 +535,7 @@ interface SharedTextContext {
 }
 
 export interface TextEditorContributionConfigurationContext extends SharedTextContext {
+	readonly renderDiagnosticDecorations: boolean;
 	readonly viewModel: IViewModel;
 	readonly selectionController: CursorsController;
 	readonly resolvedSemanticTokensService: IResolvedSemanticTokensService;

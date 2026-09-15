@@ -7,13 +7,14 @@ import { findDesktopRoot } from "./testPaths.js";
 const desktopRoot = findDesktopRoot(import.meta.dirname);
 const editorRoot = resolve(desktopRoot, "src/ash/editor");
 const workbenchRoot = resolve(desktopRoot, "src/ash/workbench");
+const workbenchImportPattern = /(?:from\s+|import\s*(?:\(\s*)?)["'][^"']*\/workbench\/[^"']*["']/u;
 
 test("Editor keeps explicit feature files without index barrels", () => {
 	const indexFiles = collectFiles(editorRoot).filter(file => file.endsWith("\\index.ts") || file.endsWith("/index.ts"));
 	assert.deepEqual(indexFiles, []);
 });
 
-test("Cursor files keep the upstream owner layout plus Ash selection and language editing", () => {
+test("Cursor operations keep one canonical owner", () => {
 	assert.deepEqual(readdirSync(join(editorRoot, "common/cursor")).sort(), [
 		"cursor.ts",
 		"cursorAtomicMoveOperations.ts",
@@ -23,18 +24,10 @@ test("Cursor files keep the upstream owner layout plus Ash selection and languag
 		"cursorDeleteOperations.ts",
 		"cursorMoveCommands.ts",
 		"cursorMoveOperations.ts",
-		"cursorNavigation.ts",
 		"cursorTypeEditOperations.ts",
 		"cursorTypeOperations.ts",
 		"cursorWordOperations.ts",
-		"languageAutoClosingTracker.ts",
-		"languageEnter.ts",
-		"languagePairEditing.ts",
 		"oneCursor.ts",
-		"selectionSet.ts",
-		"selectionSetDeleteOperations.ts",
-		"selectionSetWordOperations.ts",
-		"wordSelection.ts",
 	]);
 });
 
@@ -65,20 +58,27 @@ test('Cursor owner files expose their canonical API names', () => {
 
 test("Editor production code does not depend on Workbench or generated transport DTOs", () => {
 	for (const file of collectFiles(editorRoot)) {
-		if (!file.endsWith(".ts") || file.includes(`${join("editor", "test")}`)) continue;
+		if (!file.endsWith(".ts") || isTestFile(file)) continue;
 		const source = readFileSync(file, "utf8");
-		assert.doesNotMatch(source, /from\s+["'][^"']*workbench[^"']*["']|import\s+["'][^"']*workbench[^"']*["']/u, relative(editorRoot, file));
+		assert.doesNotMatch(source, workbenchImportPattern, relative(editorRoot, file));
 		assert.doesNotMatch(source, /from\s+["'][^"']*generated\/app-server[^"']*["']/u, relative(editorRoot, file));
 		assert.doesNotMatch(source, /from\s+["'][^"']*platform\/(?:syntax|diff)\/[^"']*["']/u, relative(editorRoot, file));
 	}
 });
 
+test('Editor dependency checks distinguish layer paths from Platform filenames', () => {
+	assert.doesNotMatch("import { editorBackground } from '../../../platform/theme/common/colors/workbenchColors.js';", workbenchImportPattern);
+	assert.match("import { EditorPart } from '../../../workbench/browser/parts/editor/editorPart.js';", workbenchImportPattern);
+	assert.match("import '../../../workbench/browser/workbench.contribution.js';", workbenchImportPattern);
+	assert.match("await import('../../../workbench/browser/workbench.js');", workbenchImportPattern);
+});
+
 test("Bracket structure, cursor editing, and browser presentation keep separate owners", () => {
 	for (const file of [
 		"common/languages/languageBracketPairs.ts",
-		"common/cursor/languageAutoClosingTracker.ts",
-		"common/cursor/languagePairEditing.ts",
-		"common/cursor/languageEnter.ts",
+		"common/cursor/cursor.ts",
+		"common/cursor/cursorTypeOperations.ts",
+		"common/cursor/cursorTypeEditOperations.ts",
 		"browser/view/viewController.ts",
 	]) assert.equal(existsSync(join(editorRoot, file)), true, file);
 	for (const file of [
@@ -93,7 +93,7 @@ test("Bracket structure, cursor editing, and browser presentation keep separate 
 	assert.match(contribution, /LanguageBracketPairs/u);
 	assert.doesNotMatch(contribution, /LanguageLexicalContextIndex|TokenAwareLanguageLexicalContext|LanguageEditingAdapter|LanguageAutoClosingTracker/u);
 	const adapter = readFileSync(join(editorRoot, "browser/view/viewController.ts"), "utf8");
-	assert.match(adapter, /common\/cursor\/language(?:AutoClosingTracker|Enter|PairEditing)/u);
+	assert.match(adapter, /common\/cursor\/cursorTypeOperations/u);
 	assert.doesNotMatch(adapter, /\/contrib\//u);
 });
 
@@ -127,10 +127,27 @@ test("Editor synchronous layers do not import Electron or generated DTOs", () =>
 
 test("Flat editor layout keeps one TextModel owner and both mode bundles", () => {
 	const requiredFiles = [
+		"browser/controller/dragScrolling.ts",
+		"browser/view/dynamicViewOverlay.ts",
+		"browser/view/viewOverlays.ts",
+		"browser/gpu/atlas/textureAtlas.ts",
+		"browser/gpu/atlas/textureAtlasPage.ts",
+		"browser/gpu/atlas/textureAtlasShelfAllocator.ts",
+		"browser/gpu/atlas/textureAtlasSlabAllocator.ts",
+		"browser/gpu/raster/glyphRasterizer.ts",
+		"browser/gpu/rectangleRenderer.ts",
+		"browser/gpu/renderStrategy/baseRenderStrategy.ts",
+		"browser/gpu/renderStrategy/fullFileRenderStrategy.ts",
+		"browser/gpu/renderStrategy/viewportRenderStrategy.ts",
+		"browser/gpu/viewGpuContext.ts",
+		"browser/viewParts/gpuMark/gpuMark.ts",
+		"browser/viewParts/rulersGpu/rulersGpu.ts",
+		"browser/viewParts/viewLinesGpu/viewLinesGpu.ts",
+		"contrib/message/browser/messageController.ts",
+		"contrib/indentation/browser/indentation.ts",
+		"common/model/tokens/tokenizationTextModelPart.ts",
+		"common/model/tokens/semanticTokensTextModelPart.ts",
 		"browser/editorBrowser.ts",
-		"browser/configuredCodeEditor.ts",
-		"browser/editorInput.ts",
-		"browser/editorView.ts",
 		"browser/dataTransfer.ts",
 		"browser/editorDom.ts",
 		"browser/editorExtensions.ts",
@@ -141,11 +158,9 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/widget/codeEditor/editor.css",
 		"browser/widget/richTextEditor/richTextEditorWidget.ts",
 		"browser/widget/richTextEditor/richTextEditorWidget.css",
-		"browser/view/editorOverlayCoordinator.ts",
 		"browser/view/viewLayer.ts",
 		"browser/view/renderingContext.ts",
 		"browser/view/domLineBreaksComputer.ts",
-		'browser/view/editorDynamicViewOverlay.ts',
 		"browser/view/viewUserInputEvents.ts",
 		"browser/view.ts",
 		"browser/view/viewController.ts",
@@ -166,7 +181,6 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/controller/editContext/native/screenReaderContentSimple.ts",
 		"browser/controller/editContext/native/screenReaderContentRich.ts",
 		"browser/controller/editContext/native/screenReaderUtils.ts",
-		"browser/controller/bidirectionalDragScrolling.ts",
 		"browser/services/abstractCodeEditorService.ts",
 		"browser/services/codeEditorService.ts",
 		"browser/services/contribution.ts",
@@ -186,8 +200,7 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"common/model/textModel.ts",
 		"common/cursor/cursor.ts",
 		"common/services/editorBaseApi.ts",
-		"common/services/ownedCompletionsEnablement.ts",
-		"common/languages/ownedLanguageConfigurationContributions.ts",
+		"common/services/completionsEnablement.ts",
 		"common/services/languageFeatures.ts",
 		"common/services/languageFeaturesService.ts",
 		"common/services/languageService.ts",
@@ -195,14 +208,11 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/view/viewPart.ts",
 		"browser/viewParts/viewLines/viewLines.ts",
 		"browser/viewParts/viewLines/viewLine.ts",
-		"browser/viewParts/viewLinesGpu/styledViewLinesGpu.ts",
 		"browser/viewParts/currentLineHighlight/currentLineHighlight.ts",
 		"browser/viewParts/contentWidgets/contentWidgets.ts",
-		"browser/viewParts/gpuMark/styledGpuMark.ts",
 		"browser/viewParts/gpuMark/gpuMark.css",
 		"browser/viewParts/overlayWidgets/overlayWidgets.ts",
 		"browser/viewParts/overlayWidgets/overlayWidgets.css",
-		"browser/viewParts/rulersGpu/styledRulersGpu.ts",
 		"browser/viewParts/whitespace/whitespace.ts",
 		"browser/viewParts/whitespace/whitespace.css",
 		"contrib/folding/browser/foldingDecorations.ts",
@@ -250,8 +260,6 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/viewParts/viewLines/domReadingContext.ts",
 		"browser/viewParts/viewLines/rangeUtil.ts",
 		"browser/viewParts/viewLines/viewLineOptions.ts",
-		"contrib/tokenization/common/languageTokenLineIndexPart.ts",
-		"contrib/semanticTokens/common/semanticTokens.ts",
 		"common/model/textBufferFactory.ts",
 		"common/model/pieceTreeTextBuffer/rbTreeBase.ts",
 		"common/model/pieceTreeTextBuffer/pieceTreeBase.ts",
@@ -266,7 +274,6 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"common/viewLayout/lineHeights.ts",
 		"common/viewLayout/linePart.ts",
 		"common/viewLayout/linesLayout.ts",
-		"common/viewLayout/editorViewportLinesLayout.ts",
 		"common/viewLayout/viewLayout.ts",
 		"common/viewLayout/viewLineRenderer.ts",
 		"common/viewLayout/viewLinesViewportData.ts",
@@ -297,24 +304,21 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 	assert.deepEqual(requiredFiles.filter(file => !statSafe(join(editorRoot, file))), []);
 
 	const removedLegacyNames = [
-		"browser/controller/dragScrolling.ts",
-		"browser/view/dynamicViewOverlay.ts",
-		"browser/view/viewOverlays.ts",
-		"browser/gpu/atlas/textureAtlas.ts",
-		"browser/gpu/atlas/textureAtlasPage.ts",
-		"browser/gpu/atlas/textureAtlasShelfAllocator.ts",
-		"browser/gpu/atlas/textureAtlasSlabAllocator.ts",
-		"browser/gpu/raster/glyphRasterizer.ts",
-		"browser/gpu/rectangleRenderer.ts",
-		"browser/gpu/renderStrategy/baseRenderStrategy.ts",
-		"browser/gpu/renderStrategy/fullFileRenderStrategy.ts",
-		"browser/gpu/renderStrategy/viewportRenderStrategy.ts",
-		"browser/gpu/viewGpuContext.ts",
-		"browser/viewParts/gpuMark/gpuMark.ts",
-		"browser/viewParts/rulersGpu/rulersGpu.ts",
-		"browser/viewParts/viewLinesGpu/viewLinesGpu.ts",
+		"browser/configuredCodeEditor.ts",
+		"browser/editorInput.ts",
+		"browser/editorView.ts",
+		"browser/view/editorOverlayCoordinator.ts",
+		"browser/view/editorDynamicViewOverlay.ts",
+		"browser/controller/bidirectionalDragScrolling.ts",
+		"common/languages/ownedLanguageConfigurationContributions.ts",
+		"browser/viewParts/viewLinesGpu/styledViewLinesGpu.ts",
+		"browser/viewParts/gpuMark/styledGpuMark.ts",
+		"browser/viewParts/rulersGpu/styledRulersGpu.ts",
+		"contrib/tokenization/common/languageTokenLineIndexPart.ts",
+		"contrib/semanticTokens/common/semanticTokens.ts",
+		"common/viewLayout/editorViewportLinesLayout.ts",
+
 		"contrib/colorPicker/browser/colorPickerWidget.ts",
-		"contrib/message/browser/messageController.ts",
 		"contrib/peekView/browser/peekView.ts",
 		"browser/controller/inputController.ts",
 		"browser/controller/inputCommandController.ts",
@@ -350,7 +354,6 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/browserEditorSession.ts",
 		"common/model/decoration.ts",
 		"contrib/gotoError/browser/gotoErrorController.ts",
-		"contrib/indentation/browser/indentation.ts",
 		"browser/view/renderedLine.ts",
 		"browser/viewParts/viewLines/renderedLine.ts",
 		"browser/viewParts/viewLines/viewLinesPart.ts",
@@ -448,27 +451,31 @@ test('Required editor view parts are connected to their production owners', () =
 	const editorBrowser = readFileSync(join(editorRoot, 'browser/editorBrowser.ts'), 'utf8');
 	const codeEditorWidget = readFileSync(join(editorRoot, 'browser/widget/codeEditor/codeEditorWidget.ts'), 'utf8');
 	const view = readFileSync(join(editorRoot, 'browser/view.ts'), 'utf8');
-	const overlayCoordinator = readFileSync(join(editorRoot, 'browser/view/editorOverlayCoordinator.ts'), 'utf8');
+	const viewOverlays = readFileSync(join(editorRoot, 'browser/view/viewOverlays.ts'), 'utf8');
 	const whitespace = readFileSync(join(editorRoot, 'browser/viewParts/whitespace/whitespace.ts'), 'utf8');
 	const overviewRuler = readFileSync(join(editorRoot, 'browser/viewParts/overviewRuler/overviewRuler.ts'), 'utf8');
-	const styledTextureAtlas = readFileSync(join(editorRoot, 'browser/gpu/atlas/styledTextureAtlas.ts'), 'utf8');
+	const textureAtlas = readFileSync(join(editorRoot, 'browser/gpu/atlas/textureAtlas.ts'), 'utf8');
 	const placeholder = readFileSync(join(editorRoot, 'contrib/placeholderText/browser/placeholderTextContribution.ts'), 'utf8');
 	const textModel = readFileSync(join(editorRoot, 'common/model/textModel.ts'), 'utf8');
 	const textModelSearch = readFileSync(join(editorRoot, 'common/model/textModelSearch.ts'), 'utf8');
 
 	assert.match(editorBrowser, /interface IOverlayWidget[\s\S]*getId\(\)[\s\S]*getDomNode\(\)[\s\S]*getPosition\(\)/u);
 	assert.match(editorBrowser, /interface IViewZoneChangeAccessor[\s\S]*addZone[\s\S]*removeZone[\s\S]*layoutZone/u);
-	assert.match(codeEditorWidget, /viewport\.addOverlayWidget[\s\S]*viewport\.layoutOverlayWidget[\s\S]*viewport\.removeOverlayWidget/u);
+	for (const operation of ['addOverlayWidget', 'layoutOverlayWidget', 'removeOverlayWidget']) {
+		assert.match(codeEditorWidget, new RegExp(`viewport(?:\\?\\.)?\\.?${operation}\\(`, 'u'));
+	}
 	assert.match(codeEditorWidget, /viewport\.changeViewZones/u);
 	assert.match(view, /new ViewOverlayWidgets/u);
-	assert.match(view, /new StyledRulersGpu/u);
-	assert.match(view, /readGpuLineIndexes/u);
-	assert.match(overlayCoordinator, /new StyledGpuMarkOverlay/u);
-	assert.match(whitespace, /selectionController\.selections/u);
+	assert.match(view, /new RulersGpu/u);
+	assert.match(view, /new ViewGpuContext/u);
+	assert.match(view, /new ContentViewOverlays/u);
+	assert.match(view, /new MarginViewOverlays/u);
+	assert.match(viewOverlays, /addDynamicOverlay/u);
+	assert.match(whitespace, /viewModel\.getCursorStates\(/u);
 	assert.match(overviewRuler, /new OverviewZoneManager/u);
-	assert.match(styledTextureAtlas, /from ['"]\.\.\/taskQueue\.js['"]/u);
+	assert.match(textureAtlas, /from ['"]\.\.\/taskQueue\.js['"]/u);
 	assert.match(codeEditorWidget, /observableCodeEditor\(this\)/u);
-	assert.match(placeholder, /observableCodeEditor\(context\.editor\)/u);
+	assert.match(placeholder, /observableCodeEditor\(editor\)/u);
 	assert.match(textModel, /countEOL\(edit\.text\)/u);
 	assert.match(textModelSearch, /getMapForWordSeparators/u);
 });
@@ -498,26 +505,27 @@ test('Editor production files are entrypoints or have a production caller', () =
 		resolve(editorRoot, 'common/services/languageCompletionWorkerMain.ts'),
 		resolve(editorRoot, 'common/services/syntaxWorkerMain.ts'),
 	].map(architecturePathKey));
-	for (const file of editorProductionFiles) {
+	const unreferenced = editorProductionFiles.filter(file => {
 		const key = architecturePathKey(file);
-		if (productionIncoming.get(key)! > 0 || explicitEntrypoints.has(key)) continue;
-		assert.ok(testIncoming.get(key)! > 0, `${relative(editorRoot, file)} has neither a production caller nor a direct test`);
-	}
+		return productionIncoming.get(key) === 0 && testIncoming.get(key) === 0 && !explicitEntrypoints.has(key);
+	}).map(file => relative(editorRoot, file));
+	assert.deepEqual(unreferenced, [], 'Editor files without a production caller or direct test');
 });
 
 function architecturePathKey(path: string): string {
 	return process.platform === 'win32' ? path.toLowerCase() : path;
 }
 
-test("Editor browser owns upstream contracts while configured code editor owns local composition", () => {
+test("Editor contracts and Widget composition stay separate from Workbench panes", () => {
 	const editorBrowser = readFileSync(join(editorRoot, "browser/editorBrowser.ts"), "utf8");
-	const configuredCodeEditor = readFileSync(join(editorRoot, "browser/configuredCodeEditor.ts"), "utf8");
+	const codeEditorWidget = readFileSync(join(editorRoot, "browser/widget/codeEditor/codeEditorWidget.ts"), "utf8");
 	assert.equal(statSafe(join(editorRoot, "browser/editorPart.ts")), false, "editor-layer EditorPart");
 	assert.equal(statSafe(join(workbenchRoot, "browser/parts/editor/editorPart.ts")), true, "Workbench EditorPart");
 	assert.match(editorBrowser, /export interface IContentWidget/u);
 	assert.match(editorBrowser, /export interface IOverlayWidget/u);
 	assert.doesNotMatch(editorBrowser, /export class ConfiguredCodeEditor/u);
-	assert.match(configuredCodeEditor, /export class ConfiguredCodeEditor/u);
+	assert.match(codeEditorWidget, /export class CodeEditorWidget/u);
+	assert.equal(statSafe(join(editorRoot, "browser/configuredCodeEditor.ts")), false);
 	assert.doesNotMatch(editorBrowser, /export class EditorPart/u);
 });
 
@@ -533,10 +541,16 @@ test("ViewLine owns text rows while overlays own their row DOM", () => {
 	assert.doesNotMatch(currentLineHighlight, /new ViewPartRows/u);
 	for (const part of ["decorations/decorations", "indentGuides/indentGuides", "linesDecorations/linesDecorations", "marginDecorations/marginDecorations", "selections/selections", "lineNumbers/lineNumbers"]) {
 		const source = readFileSync(join(editorRoot, `browser/viewParts/${part}.ts`), "utf8");
-		assert.match(source, /renderViewPartRows/u, part);
+		assert.match(source, /extends (?:DynamicViewOverlay|DedupOverlay)/u, part);
+		assert.match(source, /render\(startLineNumber: number, lineNumber: number\): string/u, part);
+		assert.doesNotMatch(source, /new ViewPartRows/u, part);
 	}
 	const viewCursors = readFileSync(join(editorRoot, "browser/viewParts/viewCursors/viewCursors.ts"), "utf8");
-	assert.match(viewCursors, /new ViewPartRows/u);
+	assert.match(viewCursors, /extends ViewPart/u);
+	assert.match(viewCursors, /new ViewCursor\(/u);
+	assert.doesNotMatch(viewCursors, /new ViewPartRows/u);
+	const glyphMargin = readFileSync(join(editorRoot, 'browser/viewParts/glyphMargin/glyphMargin.ts'), 'utf8');
+	assert.match(glyphMargin, /class DedupOverlay extends DynamicViewOverlay/u);
 	const symbolIcons = readFileSync(join(editorRoot, "contrib/symbolIcons/browser/symbolIcons.ts"), "utf8");
 	assert.match(symbolIcons, /linesDecorationsClassName/u);
 	assert.doesNotMatch(symbolIcons, /DecorationPresentation|DecorationSource/u);
@@ -670,7 +684,7 @@ test("Code services are installed by mode-selected service registrations rather 
 	for (const contribution of ["tasks", "testing", "debug"]) assert.doesNotMatch(readFileSync(join(workbenchRoot, `contrib/${contribution}/browser/${contribution}.contribution.ts`), "utf8"), /registerWorkbenchServiceContribution/u);
 });
 
-test("Debug transport stays host-ready for mode reload but is projected by Code renderers only", () => {
+test("Code renderers select App Server debug transport without Electron debug IPC", () => {
 	const browserCode = readFileSync(resolve(editorRoot, "../code/browser/workbench/modes/code.ts"), "utf8");
 	const browserAcademic = readFileSync(resolve(editorRoot, "../code/browser/workbench/modes/academic.ts"), "utf8");
 	const electronCode = readFileSync(resolve(editorRoot, "../code/electron-browser/workbench/modes/code.ts"), "utf8");
@@ -680,16 +694,19 @@ test("Debug transport stays host-ready for mode reload but is projected by Code 
 	const sharedDisconnectedRenderer = readFileSync(resolve(editorRoot, "../platform/app-server/browser/rendererApi.ts"), "utf8");
 	const sharedConnectedRenderer = readFileSync(resolve(editorRoot, "../platform/app-server/browser/webRendererApi.ts"), "utf8");
 	const sharedElectronMain = readFileSync(resolve(editorRoot, "../code/electron-main/app.ts"), "utf8");
-	assert.match(browserCode, /createViteDevDebugAdapterCapability/u);
+	assert.match(browserCode, /createAppServerDebugAdapterCapability/u);
 	assert.doesNotMatch(browserAcademic, /DebugAdapter|debugAdapter/u);
-	assert.match(electronCode, /createElectronDebugAdapterCapability/u);
+	assert.match(electronCode, /createAppServerDebugAdapterCapability/u);
 	assert.doesNotMatch(electronAcademic, /DebugAdapter|debugAdapter/u);
-	assert.match(main, /debugAdapterIpcRoutes/u);
+	assert.doesNotMatch(main, /debugAdapterIpcRoutes/u);
+	const debugAdapter = readFileSync(resolve(editorRoot, "../platform/debug/browser/appServerDebugAdapterProcessService.ts"), "utf8");
+	assert.match(debugAdapter, /implements IDebugAdapterProcessService/u);
+	assert.match(debugAdapter, /appServerRequest/u);
 	for (const sharedHost of [sharedElectronRenderer, sharedDisconnectedRenderer, sharedConnectedRenderer, sharedElectronMain]) assert.doesNotMatch(sharedHost, /new (?:Electron|Disconnected|ViteDev)DebugAdapterProcessService|debugAdapterIpcRoutes/u);
 });
 
 test("Editor engines delegate optional feature composition to mode bundles", () => {
-	const textHost = readFileSync(join(editorRoot, "browser/configuredCodeEditor.ts"), "utf8");
+	const textHost = readFileSync(join(editorRoot, "browser/widget/codeEditor/codeEditorWidget.ts"), "utf8");
 	const coreCommands = readFileSync(join(editorRoot, "browser/coreCommands.ts"), "utf8");
 	const findContribution = readFileSync(join(editorRoot, "contrib/find/browser/find.contribution.ts"), "utf8");
 	const quickAccessContribution = readFileSync(join(editorRoot, "contrib/quickAccess/browser/quickAccessController.ts"), "utf8");
@@ -708,7 +725,7 @@ test("Editor engines delegate optional feature composition to mode bundles", () 
 	assert.doesNotMatch(textHost, /EditorBrowserRuntime|IEditorBrowserRuntime/u);
 	assert.doesNotMatch(textHost, /registerEditorBrowserFactory|EditorBrowserFactory/u);
 	assert.match(textHost, /getTextEditorCapabilityContributions/u);
-	assert.match(textHost, /codeEditor\.contributions\.add/u);
+	assert.match(textHost, /this\.contributions\.initialize/u);
 	assert.match(codeEditorContributions, /runWhenWindowIdle/u);
 	assert.doesNotMatch(textHost, optionalControllerPattern);
 	assert.doesNotMatch(textHost, /EditingCommandController/u);
@@ -718,17 +735,20 @@ test("Editor engines delegate optional feature composition to mode bundles", () 
 	const viewController = readFileSync(join(editorRoot, "browser/view/viewController.ts"), "utf8");
 	const codeEditorWidget = readFileSync(join(editorRoot, "browser/widget/codeEditor/codeEditorWidget.ts"), "utf8");
 	assert.doesNotMatch(viewController, /from\s+["'][^"']*\/contrib\//u);
-	assert.doesNotMatch(viewController, /from\s+["'][^"']*base\/browser\/dom(?:\.js)?["']/u);
+	assert.match(viewController, /this\._register\(addDisposableListener/u);
 	assert.doesNotMatch(codeEditorWidget, /from\s+["'][^"']*\/contrib\//u);
 	assert.doesNotMatch(editorExtensionRegistry, /from\s+["'][^"']*\/contrib\//u);
 	assert.match(findContribution, /registerTextEditorCapabilityContribution/u);
 	assert.match(quickAccessContribution, /registerTextEditorCapabilityContribution/u);
 	assert.match(standardBundle, /find\/browser\/find\.contribution/u);
 	assert.match(standardBundle, /quickAccess\/browser\/quickAccessController/u);
-	for (const contribution of ["bracketMatching", "clipboard", "codeAction", "comment", "folding", "gotoSymbol", "hover", "languageAnalysis", "multicursor", "placeholderText", "suggest", "tokenization", "unicodeHighlighter", "wordHighlighter"]) {
+	for (const contribution of ["bracketMatching", "codeAction", "comment", "gotoSymbol", "hover", "languageAnalysis", "multicursor", "placeholderText", "suggest", "tokenization", "unicodeHighlighter", "wordHighlighter"]) {
 		assert.match(standardBundle, new RegExp(`contrib/${contribution}/browser/[^"']+\\.contribution`, "u"), contribution);
 	}
-	for (const contribution of ["dropOrPasteInto", "format", "quickAccess", "rename"]) assert.match(standardBundle, new RegExp(`contrib/${contribution}/browser/[^"']+Controller`, "u"), contribution);
+	for (const contribution of ["format", "quickAccess", "rename"]) assert.match(standardBundle, new RegExp(`contrib/${contribution}/browser/[^"']+Controller`, "u"), contribution);
+	assert.match(standardBundle, /contrib\/dropOrPasteInto\/browser\/dropIntoEditorContribution/u);
+	assert.match(standardBundle, /contrib\/clipboard\/browser\/clipboard\.js/u);
+	assert.match(standardBundle, /contrib\/folding\/browser\/folding\.js/u);
 	assert.doesNotMatch(codeBundle, /contrib\//u);
 	assert.match(academicBundle, /documentEditor\.contribution/u);
 	assert.doesNotMatch(codePaneContribution, /codeEditorPart\.contribution/u);
@@ -765,9 +785,10 @@ test("Multi-diff keeps generic projection in Editor and product integration in W
 	assert.match(sharedWorkbench, /contrib\/multiDiffEditor/u);
 });
 
-test("Standard profile avoids mechanical contribution wrappers", () => {
-	for (const feature of ["anchorSelect", "codelens", "colorPicker", "contextmenu", "cursorUndo", "dropOrPasteInto", "editorState", "fontZoom", "format", "inlayHints", "inlineCompletions", "inlineProgress", "inPlaceReplace", "lineSelection", "linkedEditing", "links", "message", "middleScroll", "parameterHints", "quickAccess", "readOnlyMessage", "rename", "smartSelect", "toggleTabFocusMode", "transpose", "wordWrap"]) {
-		assert.deepEqual(collectFiles(join(editorRoot, "contrib", feature)).filter(file => file.endsWith(".contribution.ts")), [], feature);
+test("Contribution entrypoints own registration rather than forwarding modules", () => {
+	for (const file of collectFiles(join(editorRoot, 'contrib')).filter(file => file.endsWith('.contribution.ts'))) {
+		const source = readFileSync(file, 'utf8');
+		assert.match(source, /register(?:EditorContribution|EditorAction|TextEditorCapabilityContribution|Action2)\(/u, relative(editorRoot, file));
 	}
 });
 

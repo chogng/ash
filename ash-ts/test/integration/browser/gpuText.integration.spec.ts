@@ -159,3 +159,25 @@ async function gpuFrameLayeringState(page: Page): Promise<GpuFrameLayeringState>
 		};
 	});
 }
+
+
+test('GPU rejection markers follow renderer capability changes and use the active theme', async ({ page }) => {
+	await page.goto('/gpuText.html');
+	await expect(page.locator('.stanza-editor-gpu-canvas')).toBeVisible();
+	await page.evaluate(() => window.ashGpuTextIntegration.setFontLigatures(true));
+	const marker = page.locator('.margin-view-overlays .gpu-mark').first();
+	await expect(marker).toBeVisible();
+	await expect(marker).toHaveAttribute('title', /font ligatures/);
+	await expect(marker).toHaveAttribute('aria-hidden', 'true');
+	const themed = await marker.evaluate(element => {
+		const expected = document.createElement('span');
+		expected.style.color = 'var(--ash-warning-foreground)';
+		element.append(expected);
+		const matches = getComputedStyle(element).backgroundColor === getComputedStyle(expected).color;
+		expected.remove();
+		return matches;
+	});
+	expect(themed).toBe(true);
+	await page.evaluate(() => window.ashGpuTextIntegration.setFontLigatures(false));
+	await expect(page.locator('.gpu-mark[title*="font ligatures"]')).toHaveCount(0);
+});
