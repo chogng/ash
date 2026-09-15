@@ -8,7 +8,6 @@ import { type Position } from './core/position.js';
 import { type IRange, Range } from './core/range.js';
 import { type TextSnapshot } from './core/textChange.js';
 import { type LanguageId } from './encodedTokenAttributes.js';
-import { type LanguageFeatureRequest } from './languages/languageFeatureRequest.js';
 import { type LanguageSelector } from './languageSelector.js';
 import * as model from './model.js';
 import { type TextModel } from './model/textModel.js';
@@ -104,15 +103,9 @@ export interface LanguageFormattingOptions extends Readonly<FormattingOptions> {
 	readonly trimTrailingWhitespace?: boolean;
 }
 
-export interface LanguageFormattingRequest extends LanguageFeatureRequest {
-	readonly resource?: URI;
-	readonly options: LanguageFormattingOptions;
-	readonly position?: Position;
-	readonly ch?: string;
-}
-
-export interface LanguageFormattingProvider {
-	provideOnTypeFormattingEdits?(request: LanguageFormattingRequest, signal: AbortSignal): readonly TextEdit[] | Promise<readonly TextEdit[]>;
+export interface OnTypeFormattingEditProvider {
+	autoFormatTriggerCharacters: string[];
+	provideOnTypeFormattingEdits(model: model.ITextModel, position: Position, ch: string, options: FormattingOptions, token: CancellationToken): ProviderResult<TextEdit[]>;
 }
 
 /** @internal */

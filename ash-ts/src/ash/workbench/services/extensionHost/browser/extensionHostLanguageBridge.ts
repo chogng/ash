@@ -2,7 +2,7 @@ import { encodeHex, VSBuffer } from "../../../../base/common/buffer.js";
 import { type CancellationToken } from '../../../../base/common/cancellation.js';
 import { Position } from "../../../../editor/common/core/position.js";
 import { Range } from "../../../../editor/common/core/range.js";
-import type { LinkedEditingRangeProvider, LinkedEditingRanges, TextEdit, DocumentFormattingEditProvider, DocumentRangeFormattingEditProvider, LanguageFormattingOptions, LanguageFormattingProvider, LanguageFormattingRequest } from "../../../../editor/common/languages.js";
+import type { LinkedEditingRangeProvider, LinkedEditingRanges, TextEdit, DocumentFormattingEditProvider, DocumentRangeFormattingEditProvider, LanguageFormattingOptions } from "../../../../editor/common/languages.js";
 import { type ITextModel } from '../../../../editor/common/model.js';
 import { type TextSnapshot } from "../../../../editor/common/core/textChange.js";
 import { type LanguageCompletionProvider, type LanguageCompletionProviderItem, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from "../../../../editor/common/languages/completion/languageCompletionProviders.js";
@@ -54,7 +54,7 @@ function hoverProvider(invoke: ExtensionHostProviderInvoker): LanguageHoverProvi
 	});
 }
 
-function formattingProvider(invoke: ExtensionHostProviderInvoker): DocumentFormattingEditProvider & DocumentRangeFormattingEditProvider & LanguageFormattingProvider {
+function formattingProvider(invoke: ExtensionHostProviderInvoker): DocumentFormattingEditProvider & DocumentRangeFormattingEditProvider {
 	return Object.freeze({
 		provideDocumentFormattingEdits: async (model: ITextModel, options: LanguageFormattingOptions, token: CancellationToken): Promise<TextEdit[]> => {
 			const request = modelRequest(model);
@@ -66,7 +66,6 @@ function formattingProvider(invoke: ExtensionHostProviderInvoker): DocumentForma
 			const value = await withAbortSignal(token, signal => invoke('formatting', featurePayload(request, { kind: 'range', range: rangeValue(range), options: formattingOptionsValue(options) }), signal));
 			return [...normalizeFormattingResult(value, request.snapshot)];
 		},
-		provideOnTypeFormattingEdits: async (request: LanguageFormattingRequest, signal: AbortSignal): Promise<readonly TextEdit[]> => normalizeFormattingResult(await invoke('formatting', formattingPayload(request), signal), request.snapshot),
 	});
 }
 
@@ -101,15 +100,6 @@ function completionPayload(request: LanguageCompletionProviderRequest): JsonValu
 		requestId: request.requestId,
 		position: positionValue(request.position),
 		context: request.context.kind === "triggerCharacter" ? { kind: request.context.kind, triggerCharacter: request.context.triggerCharacter } : { kind: request.context.kind },
-	});
-}
-
-function formattingPayload(request: LanguageFormattingRequest): JsonValue {
-	return featurePayload(request, {
-		kind: 'onType',
-		options: formattingOptionsValue(request.options),
-		...(request.position ? { position: positionValue(request.position) } : {}),
-		...(request.ch === undefined ? {} : { ch: request.ch }),
 	});
 }
 

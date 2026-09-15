@@ -3,7 +3,7 @@ import { createServiceIdentifier } from '../../../platform/instantiation/common/
 import type { LanguageFeatureRegistry } from '../languageFeatureRegistry.js';
 import type { LanguageSelector } from '../languageSelector.js';
 import type { LanguageCompletionProvider, LanguageCompletionProviderRegistry } from '../languages/completion/languageCompletionProviders.js';
-import type { CodeLensProvider, DocumentHighlightProvider, LinkedEditingRangeProvider, MultiDocumentHighlightProvider, DocumentFormattingEditProvider, DocumentRangeFormattingEditProvider, LanguageFormattingProvider, LanguageSemanticTokensProvider } from '../languages.js';
+import type { CodeLensProvider, DocumentHighlightProvider, LinkedEditingRangeProvider, MultiDocumentHighlightProvider, DocumentFormattingEditProvider, DocumentRangeFormattingEditProvider, OnTypeFormattingEditProvider, LanguageSemanticTokensProvider } from '../languages.js';
 import type { SyntaxProviderRegistry } from '../languages/syntax/syntaxProviders.js';
 import type { LanguageWorkspaceSymbolProvider } from '../languages/workspaceSymbols.js';
 import type { LanguageCallHierarchyProvider, LanguageTypeHierarchyProvider } from '../../contrib/callHierarchy/common/languageHierarchy.js';
@@ -30,7 +30,7 @@ export interface ILanguageFeaturesService extends IDisposable {
 	readonly documentSymbolProvider: LanguageFeatureRegistry<LanguageDocumentSymbolProvider>;
 	readonly documentFormattingEditProvider: LanguageFeatureRegistry<DocumentFormattingEditProvider>;
 	readonly documentRangeFormattingEditProvider: LanguageFeatureRegistry<DocumentRangeFormattingEditProvider>;
-	readonly onTypeFormattingEditProvider: LanguageFeatureRegistry<LanguageFormattingProvider>;
+	readonly onTypeFormattingEditProvider: LanguageFeatureRegistry<OnTypeFormattingEditProvider>;
 	readonly hoverProvider: LanguageFeatureRegistry<LanguageHoverProvider>;
 	readonly inlayHintsProvider: LanguageFeatureRegistry<LanguageInlayHintsProvider>;
 	readonly inlineCompletionsProvider: LanguageFeatureRegistry<LanguageInlineCompletionsProvider>;
@@ -67,7 +67,7 @@ export interface LanguageProviderBatchEntry<TProvider> {
 export interface LanguageProviderBatch {
 	readonly completions?: readonly LanguageCompletionProvider[];
 	readonly hovers?: readonly LanguageProviderBatchEntry<LanguageHoverProvider>[];
-	readonly formatting?: readonly LanguageProviderBatchEntry<LanguageFormattingProvider & Partial<DocumentFormattingEditProvider & DocumentRangeFormattingEditProvider>>[];
+	readonly formatting?: readonly LanguageProviderBatchEntry<DocumentFormattingEditProvider | DocumentRangeFormattingEditProvider | OnTypeFormattingEditProvider>[];
 	readonly inlayHints?: readonly LanguageProviderBatchEntry<LanguageInlayHintsProvider>[];
 	readonly linkedEditing?: readonly LanguageProviderBatchEntry<LinkedEditingRangeProvider>[];
 	readonly parameterHints?: readonly LanguageProviderBatchEntry<LanguageParameterHintsProvider>[];

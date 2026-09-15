@@ -63,6 +63,7 @@ test('document formatting bridge captures model metadata and releases its cancel
 	});
 	using registration = languages.registerProviderBatch(batch);
 	const provider = languages.documentFormattingEditProvider.ordered(model)[0]!;
+	assert.deepEqual(languages.onTypeFormattingEditProvider.ordered(model), []);
 	assert.deepEqual(await provider.provideDocumentFormattingEdits(model, { tabSize: 2, insertSpaces: true }, source.token), []);
 	assert.deepEqual(payload, { languageId: 'typescript', version: model.getVersionId(), text: 'alpha', resource: model.uri.toString(), kind: 'document', options: { tabSize: 2, insertSpaces: true } });
 	assert.ok(signal);

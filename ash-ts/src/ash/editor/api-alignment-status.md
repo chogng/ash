@@ -4,6 +4,10 @@
 
 ## 当前结论
 
+- 2026-09-15 输入格式化 provider 契约：新增 `OnTypeFormattingEditProvider`，参数为模型、位置、触发字符、选项和取消令牌，提供者必须声明 `autoFormatTriggerCharacters`。旧 `LanguageFormattingProvider/Request` 退出，三类格式化 registry 与批量注册统一使用独立公共契约；Standalone 测试覆盖触发字符、参数和注册释放。扩展协议未提供触发字符，移除扩展桥接中不完整的输入格式化注册，保留文档与范围格式化。此批未接通 `formatOnType` 自动触发链，选区格式化命令与完整上游调度仍待处理；80/41 声明计数不变。
+
+- 输入格式化契约批次验证：31 项定向单测、103 项浏览器回归、对齐检查、类型检查、Stanza 和桌面 Renderer 构建通过。批量注册的可调用方法检查调整后，31 项定向单测再次通过。保留既有 7 份 CSS 债务和终端颜色环境提示，构建无新增警告。
+
 - 2026-09-15 范围格式化 provider 契约：`DocumentRangeFormattingEditProvider` 归 `common/languages.ts`，registry、Standalone、App Server 和扩展桥接统一使用 `ITextModel + Range + FormattingOptions + CancellationToken`。旧 `provideRangeFormattingEdits` 及范围格式化的独立请求包装退出；App Server 从模型创建快照并拒绝模型变化后的迟到结果。移除 App Server 没有实现却注册的输入格式化 provider，批量注册测试覆盖范围专用 provider 的替换与释放。输入格式化仍保留原有契约，选区格式化命令和完整上游调度语义未在本批实现，80/41 声明计数不变。
 
 - 范围格式化批次验证：26 项定向单测、103 项浏览器回归、对齐与类型检查、Stanza 和桌面 Renderer 构建通过。覆盖范围及选项传递、请求快照、取消、迟到结果和 provider 注册/替换/释放；未新增选区格式化 UI。保留既有 7 份 CSS 债务与颜色环境提示，构建无新增警告。

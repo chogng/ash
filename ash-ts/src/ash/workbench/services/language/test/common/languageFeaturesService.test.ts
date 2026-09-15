@@ -12,7 +12,6 @@ import { TestLanguageConfigurationService } from '../../../../../editor/test/com
 import { LanguageFeaturesService } from '../../../../../editor/common/services/languageFeaturesService.js';
 import { LanguageService } from '../../../../../editor/common/services/languageService.js';
 import { LanguageHoverService } from '../../../../../editor/contrib/hover/common/hover.js';
-import { createLanguageFeatureRequest } from '../../../../../editor/common/languages/languageFeatureRequest.js';
 import { WorkbenchLanguageFeatures } from '../../browser/workbenchLanguageFeatures.js';
 
 test('Workbench installs product languages while Editor owns provider registries', async () => {
@@ -50,8 +49,7 @@ test('Language features service keeps document, range, and on-type formatting re
 	using languageConfigurations = new TestLanguageConfigurationService();
 	using languageFeatures = new LanguageFeaturesService(languageConfigurations);
 	using model = new TextModel('answer', { languageId: 'typescript' });
-	const signal = new AbortController().signal;
-	const request = { ...createLanguageFeatureRequest(model, 'typescript', signal), options: { tabSize: 4, insertSpaces: true } };
+	const formattingOptions = { tabSize: 4, insertSpaces: true };
 	const range = new Range(1, 1, 1, 7);
 	const registration = languageFeatures.registerProviderBatch({
 		formatting: [{
@@ -59,21 +57,29 @@ test('Language features service keeps document, range, and on-type formatting re
 			provider: {
 				provideDocumentFormattingEdits: () => [{ range, text: 'document' }],
 				provideDocumentRangeFormattingEdits: () => [{ range, text: 'range' }],
-				provideOnTypeFormattingEdits: () => [{ range, text: 'onType' }],
+				autoFormatTriggerCharacters: [';'],
+				provideOnTypeFormattingEdits(receivedModel, position, ch, options, token) {
+					assert.equal(receivedModel, model);
+					assert.deepEqual(position, new Position(1, 7));
+					assert.equal(ch, ';');
+					assert.deepEqual(options, formattingOptions);
+					assert.equal(token, CancellationToken.None);
+					return [{ range, text: 'onType' }];
+				},
 			},
 		}],
 	});
 
 	assert.equal(
-		(await languageFeatures.documentFormattingEditProvider.ordered(model)[0]?.provideDocumentFormattingEdits(model, request.options, CancellationToken.None))?.[0]?.text,
+		(await languageFeatures.documentFormattingEditProvider.ordered(model)[0]?.provideDocumentFormattingEdits(model, formattingOptions, CancellationToken.None))?.[0]?.text,
 		'document',
 	);
 	assert.equal(
-		(await languageFeatures.documentRangeFormattingEditProvider.ordered(model)[0]?.provideDocumentRangeFormattingEdits(model, range, request.options, CancellationToken.None))?.[0]?.text,
+		(await languageFeatures.documentRangeFormattingEditProvider.ordered(model)[0]?.provideDocumentRangeFormattingEdits(model, range, formattingOptions, CancellationToken.None))?.[0]?.text,
 		'range',
 	);
 	assert.equal(
-		(await languageFeatures.onTypeFormattingEditProvider.ordered(model)[0]?.provideOnTypeFormattingEdits?.({ ...request, position: new Position(1, 7), ch: ';' }, signal))?.[0]?.text,
+		(await languageFeatures.onTypeFormattingEditProvider.ordered(model)[0]?.provideOnTypeFormattingEdits(model, new Position(1, 7), ';', formattingOptions, CancellationToken.None))?.[0]?.text,
 		'onType',
 	);
 
@@ -86,7 +92,7 @@ test('Language features service keeps document, range, and on-type formatting re
 		}],
 	});
 	assert.equal(
-		(await languageFeatures.documentFormattingEditProvider.ordered(model)[0]?.provideDocumentFormattingEdits(model, request.options, CancellationToken.None))?.[0]?.text,
+		(await languageFeatures.documentFormattingEditProvider.ordered(model)[0]?.provideDocumentFormattingEdits(model, formattingOptions, CancellationToken.None))?.[0]?.text,
 		'replacement',
 	);
 	assert.deepEqual(languageFeatures.documentRangeFormattingEditProvider.ordered(model), []);
@@ -99,7 +105,7 @@ test('Language features service keeps document, range, and on-type formatting re
 				provideDocumentRangeFormattingEdits(receivedModel, receivedRange, options, token) {
 					assert.equal(receivedModel, model);
 					assert.equal(receivedRange, range);
-					assert.deepEqual(options, request.options);
+					assert.deepEqual(options, formattingOptions);
 					assert.equal(token, CancellationToken.None);
 					return [{ range, text: 'range only' }];
 				},
@@ -108,7 +114,7 @@ test('Language features service keeps document, range, and on-type formatting re
 	});
 	assert.deepEqual(languageFeatures.documentFormattingEditProvider.ordered(model), []);
 	assert.deepEqual(languageFeatures.onTypeFormattingEditProvider.ordered(model), []);
-	assert.deepEqual(await languageFeatures.documentRangeFormattingEditProvider.ordered(model)[0]!.provideDocumentRangeFormattingEdits(model, range, request.options, CancellationToken.None), [{ range, text: 'range only' }]);
+	assert.deepEqual(await languageFeatures.documentRangeFormattingEditProvider.ordered(model)[0]!.provideDocumentRangeFormattingEdits(model, range, formattingOptions, CancellationToken.None), [{ range, text: 'range only' }]);
 
 	registration.dispose();
 	assert.deepEqual(languageFeatures.documentFormattingEditProvider.ordered(model), []);

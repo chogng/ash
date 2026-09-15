@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { URI } from "../../../base/common/uri.js";
+import { type OnTypeFormattingEditProvider } from '../../common/languages.js';
+import { CancellationTokenSource } from '../../../base/common/cancellation.js';
 import { AbstractDisposable } from '../../../base/common/lifecycle.js';
 import { lightColorTheme } from "../../../platform/theme/common/colorTheme.js";
 import { ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
@@ -52,6 +54,7 @@ for (const [name, value] of Object.entries({
 })) Object.defineProperty(globalThis, name, { configurable: true, value });
 
 const stanza = await import("../../editor.main.js");
+
 
 suiteTeardown(() => browserEnvironment.window.close());
 
@@ -104,6 +107,31 @@ test("standalone languages API exposes provider value types", () => {
 	assert.equal(stanza.languages.DocumentHighlightKind, stanza.DocumentHighlightKind);
 	assert.equal(stanza.languages.RGBA8, stanza.RGBA8);
 	assert.deepEqual(new stanza.languages.RGBA8(300, -1, 64, 255), new stanza.RGBA8(255, 0, 64, 255));
+});
+
+test('standalone on-type providers retain triggers, model arguments, and registration lifetime', async () => {
+	using model = stanza.editor.createModel('alpha;', 'plaintext', URI.parse('inmemory://on-type/model'));
+	using source = new CancellationTokenSource();
+	const position = new stanza.Position(1, 7);
+	const options = { tabSize: 2, insertSpaces: true };
+	const provider: OnTypeFormattingEditProvider = {
+		autoFormatTriggerCharacters: [';', '}'],
+		provideOnTypeFormattingEdits(receivedModel, receivedPosition, ch, receivedOptions, token) {
+			assert.equal(receivedModel, model);
+			assert.equal(receivedPosition, position);
+			assert.equal(ch, ';');
+			assert.deepEqual(receivedOptions, options);
+			assert.equal(token, source.token);
+			return [{ range: new stanza.Range(1, 1, 1, 7), text: 'ALPHA;' }];
+		},
+	};
+	using registration = stanza.languages.registerOnTypeFormattingEditProvider('plaintext', provider);
+	const registry = StandaloneServices.get().languageFeaturesService.onTypeFormattingEditProvider;
+	assert.deepEqual(registry.ordered(model), [provider]);
+	assert.deepEqual(provider.autoFormatTriggerCharacters, [';', '}']);
+	assert.deepEqual(await registry.ordered(model)[0]!.provideOnTypeFormattingEdits(model, position, ';', options, source.token), [{ range: new stanza.Range(1, 1, 1, 7), text: 'ALPHA;' }]);
+	registration.dispose();
+	assert.deepEqual(registry.ordered(model), []);
 });
 
 test('standalone languages API replaces one language generation without stale registrations', () => {
