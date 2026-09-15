@@ -1,11 +1,11 @@
 use super::CommandExecutionAuthority;
 use super::CommandExecutionOutcome;
-use super::CommandExecutor;
 use super::CommandInput;
 use super::CommandOutput;
 use super::CommandRequest;
 use super::ExecutionError;
 use super::ProcessExecutionOutput;
+use super::ProcessExecutor;
 use super::ProcessExitStatus;
 use super::SandboxDenialOutput;
 use super::SandboxDenialTiming;
@@ -13,6 +13,12 @@ use super::SandboxProcessExitStatus;
 use super::SandboxScope;
 use super::StartResult;
 use super::StartedCommand;
+use ash_async_utils::CancellationToken;
+use ash_async_utils::Notify;
+use ash_async_utils::WaitOutcome;
+use ash_async_utils::wait_until;
+use ash_sandboxing::SandboxBackend;
+use ash_utils_pty::TerminalSize;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::fmt;
@@ -26,12 +32,6 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
-use ash_async_utils::CancellationToken;
-use ash_async_utils::Notify;
-use ash_async_utils::WaitOutcome;
-use ash_async_utils::wait_until;
-use ash_sandboxing::SandboxBackend;
-use ash_utils_pty::TerminalSize;
 
 const MAX_ACTIVE_SESSIONS: usize = 64;
 const CONTROL_NONE: u8 = 0;
@@ -64,23 +64,12 @@ impl fmt::Display for CommandSessionId {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct CommandSessionOwner {
-    caller: String,
-    thread: String,
-    environment: String,
-}
+pub struct ProcessSessionOwner(String);
 
-impl CommandSessionOwner {
-    pub fn new(
-        caller: impl Into<String>,
-        thread: impl Into<String>,
-        environment: impl Into<String>,
-    ) -> Self {
-        Self {
-            caller: caller.into(),
-            thread: thread.into(),
-            environment: environment.into(),
-        }
+impl ProcessSessionOwner {
+    /// An opaque ownership key supplied by the caller; contains no tool or conversation semantics.
+    pub fn new(key: impl Into<String>) -> Self {
+        Self(key.into())
     }
 }
 
@@ -145,7 +134,8 @@ impl Drop for CommandSessions {
 }
 
 struct SessionRecord {
-    owner: CommandSessionOwner,
+    io: ash_sandboxing::ProcessIo,
+    owner: ProcessSessionOwner,
     input: Arc<Mutex<Option<mpsc::SyncSender<InputRequest>>>>,
     process: Arc<Mutex<ash_sandboxing::ProcessHandle>>,
     control: Arc<AtomicU8>,
@@ -227,17 +217,20 @@ impl StreamBuffer {
     }
 }
 
-impl<P: super::ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
-    pub fn start_session_scoped_with_network(
+impl<B: SandboxBackend> ProcessExecutor<B> {
+    fn launch_session(
         &self,
         mut request: CommandRequest,
         authority: CommandExecutionAuthority,
         cancellation: &CancellationToken,
         scope: Option<&SandboxScope>,
         network_policy: Option<&network_proxy::NetworkPolicyHandle>,
-        owner: CommandSessionOwner,
+        owner: ProcessSessionOwner,
         options: CommandSessionOptions,
-    ) -> Result<CommandSessionStart, ExecutionError> {
+    ) -> Result<
+        Result<(CommandSessionId, Arc<SessionRecord>), CommandExecutionOutcome>,
+        ExecutionError,
+    > {
         if options.execution_timeout < Duration::from_millis(1)
             || options.execution_timeout > Duration::from_secs(12 * 60 * 60)
         {
@@ -261,7 +254,7 @@ impl<P: super::ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
             let StartResult::Finished(outcome) = started else {
                 unreachable!()
             };
-            return Ok(CommandSessionStart::Completed(outcome));
+            return Ok(Err(outcome));
         };
         let id = new_session_id()?;
         let record = start_record(
@@ -271,6 +264,10 @@ impl<P: super::ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
             cancellation.clone(),
             options.execution_timeout,
             self.limits.max_output_bytes,
+            options.terminal.map_or(
+                ash_sandboxing::ProcessIo::Pipes,
+                ash_sandboxing::ProcessIo::Pty,
+            ),
         )?;
         {
             let mut records = self
@@ -278,15 +275,51 @@ impl<P: super::ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
                 .records
                 .lock()
                 .map_err(|_| session_error("command session registry is unavailable"))?;
-            records.retain(|_, record| record.is_running());
-            if records.len() >= MAX_ACTIVE_SESSIONS {
+            if records
+                .values()
+                .filter(|record| record.is_running())
+                .count()
+                >= MAX_ACTIVE_SESSIONS
+            {
                 record.terminate();
                 return Err(session_error("too many active command sessions"));
             }
             records.insert(id.clone(), Arc::clone(&record));
         }
+        Ok(Ok((id, record)))
+    }
+    pub fn start_session_scoped_with_network(
+        &self,
+        request: CommandRequest,
+        authority: CommandExecutionAuthority,
+        cancellation: &CancellationToken,
+        scope: Option<&SandboxScope>,
+        network_policy: Option<&network_proxy::NetworkPolicyHandle>,
+        owner: ProcessSessionOwner,
+        options: CommandSessionOptions,
+    ) -> Result<CommandSessionStart, ExecutionError> {
+        // Tool-style observation retires earlier completed sessions when a new command starts.
+        // Retained RPC sessions use start_retained_session and are released by their owner.
+        self.sessions
+            .records
+            .lock()
+            .map_err(|_| session_error("session registry unavailable"))?
+            .retain(|_, record| record.is_running());
+        let wait_budget = options.wait_budget;
+        let (id, record) = match self.launch_session(
+            request,
+            authority,
+            cancellation,
+            scope,
+            network_policy,
+            owner,
+            options,
+        )? {
+            Ok(id) => id,
+            Err(outcome) => return Ok(CommandSessionStart::Completed(outcome)),
+        };
         let (update, final_state) =
-            record.read(&id, CommandSessionCursor::default(), options.wait_budget)?;
+            record.read(&id, CommandSessionCursor::default(), wait_budget)?;
         match final_state {
             Some(SessionFinal::Outcome(outcome)) => {
                 self.remove_record(&id);
@@ -316,9 +349,33 @@ impl<P: super::ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
         }
     }
 
+    /// Starts a session whose output and terminal result remain available until explicitly released.
+    pub fn start_retained_session(
+        &self,
+        request: CommandRequest,
+        authority: CommandExecutionAuthority,
+        cancellation: &CancellationToken,
+        scope: Option<&SandboxScope>,
+        network_policy: Option<&network_proxy::NetworkPolicyHandle>,
+        owner: ProcessSessionOwner,
+        options: CommandSessionOptions,
+    ) -> Result<CommandSessionId, ExecutionError> {
+        match self.launch_session(
+            request,
+            authority,
+            cancellation,
+            scope,
+            network_policy,
+            owner,
+            options,
+        )? {
+            Ok((id, _)) => Ok(id),
+            Err(_) => Err(session_error("sandbox denied process before launch")),
+        }
+    }
     pub fn read_session(
         &self,
-        owner: &CommandSessionOwner,
+        owner: &ProcessSessionOwner,
         id: &CommandSessionId,
         cursor: CommandSessionCursor,
         wait_budget: Duration,
@@ -333,7 +390,7 @@ impl<P: super::ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
     /// Cancellation/expiry ends this observation, not the owner-bound process.
     pub async fn wait_session(
         &self,
-        owner: &CommandSessionOwner,
+        owner: &ProcessSessionOwner,
         id: &CommandSessionId,
         cursor: CommandSessionCursor,
         wait_budget: Duration,
@@ -374,7 +431,7 @@ impl<P: super::ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
 
     pub fn write_session(
         &self,
-        owner: &CommandSessionOwner,
+        owner: &ProcessSessionOwner,
         id: &CommandSessionId,
         bytes: Vec<u8>,
     ) -> Result<(), ExecutionError> {
@@ -396,10 +453,13 @@ impl<P: super::ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
 
     pub fn close_session_input(
         &self,
-        owner: &CommandSessionOwner,
+        owner: &ProcessSessionOwner,
         id: &CommandSessionId,
     ) -> Result<(), ExecutionError> {
         let record = self.record(owner, id)?;
+        if matches!(record.io, ash_sandboxing::ProcessIo::Pty(_)) {
+            return Err(session_error("terminal input cannot be half-closed"));
+        }
         let sender = record
             .input
             .lock()
@@ -413,7 +473,7 @@ impl<P: super::ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
 
     pub fn interrupt_session(
         &self,
-        owner: &CommandSessionOwner,
+        owner: &ProcessSessionOwner,
         id: &CommandSessionId,
     ) -> Result<(), ExecutionError> {
         let record = self.record(owner, id)?;
@@ -427,7 +487,7 @@ impl<P: super::ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
 
     pub fn resize_session(
         &self,
-        owner: &CommandSessionOwner,
+        owner: &ProcessSessionOwner,
         id: &CommandSessionId,
         size: TerminalSize,
     ) -> Result<(), ExecutionError> {
@@ -442,7 +502,7 @@ impl<P: super::ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
 
     pub fn terminate_session(
         &self,
-        owner: &CommandSessionOwner,
+        owner: &ProcessSessionOwner,
         id: &CommandSessionId,
     ) -> Result<(), ExecutionError> {
         self.record(owner, id)?.terminate();
@@ -451,7 +511,7 @@ impl<P: super::ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
 
     pub fn release_session(
         &self,
-        owner: &CommandSessionOwner,
+        owner: &ProcessSessionOwner,
         id: &CommandSessionId,
     ) -> Result<(), ExecutionError> {
         let record = self.record(owner, id)?;
@@ -462,7 +522,7 @@ impl<P: super::ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
 
     fn record(
         &self,
-        owner: &CommandSessionOwner,
+        owner: &ProcessSessionOwner,
         id: &CommandSessionId,
     ) -> Result<Arc<SessionRecord>, ExecutionError> {
         let record = self
@@ -488,11 +548,12 @@ impl<P: super::ApprovalPolicy, B: SandboxBackend> CommandExecutor<P, B> {
 
 fn start_record(
     _: CommandSessionId,
-    owner: CommandSessionOwner,
+    owner: ProcessSessionOwner,
     started: StartedCommand,
     cancellation: CancellationToken,
     hard_timeout: Duration,
     output_capacity: usize,
+    io: ash_sandboxing::ProcessIo,
 ) -> Result<Arc<SessionRecord>, ExecutionError> {
     let StartedCommand {
         mut child,
@@ -523,6 +584,7 @@ fn start_record(
     let (input_tx, input_rx) = mpsc::sync_channel(16);
     let input = Arc::new(Mutex::new(Some(input_tx)));
     let record = Arc::new(SessionRecord {
+        io,
         owner,
         input: Arc::clone(&input),
         process: Arc::clone(&process),

@@ -546,3 +546,17 @@ fn interrupting_a_restricted_terminal_stops_the_workload() {
     );
     assert_ne!(snapshot.state, ProcessState::Exited { code: Some(0) });
 }
+
+#[test]
+fn completed_output_remains_available_after_another_process_starts() {
+    let host = Host::start();
+    let client = host.client();
+    client.request(Request::ProcessStart(command("first", "printf first"))).unwrap();
+    let first = finish(&client, "first");
+    client.request(Request::ProcessStart(command("second", "printf second"))).unwrap();
+    let second = finish(&client, "second");
+    assert_eq!(second.stdout.text, "second");
+    let retained = read(&client, "first");
+    assert_eq!(retained.state, first.state);
+    assert_eq!(retained.stdout, first.stdout);
+}

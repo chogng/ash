@@ -26,12 +26,11 @@ pub(super) fn prepare(
     request: mxc_sdk::SandboxRequest,
     scope: &SandboxScope,
     size: TerminalSize,
+    executable: PathBuf,
 ) -> Result<PreparedCommand, SandboxError> {
     if size.rows == 0 || size.cols == 0 {
         return Err(crate::unavailable("invalid terminal size"));
     }
-    let executable = std::env::current_exe()
-        .map_err(|_| crate::unavailable("cannot locate PTY helper executable"))?;
     Ok(PreparedCommand::sandboxed(
         command,
         Launch {

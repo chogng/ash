@@ -1,9 +1,14 @@
 use super::*;
+use ash_async_utils::CancellationSource;
+use ash_protocol::ProcessExitStatus;
+use ash_sandboxing::SandboxProcessExitStatus;
+use ash_sandboxing::{FileSystemAccess, NetworkAccess, SandboxCommand, SandboxPolicy};
+use ash_sandboxing::{PreparedCommand, SandboxError, SandboxKind};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use ash_async_utils::CancellationSource;
-use ash_sandboxing::{PreparedCommand, SandboxError, SandboxKind};
+#[cfg(target_os = "macos")]
+use std::thread;
 
 struct AllowAll;
 
@@ -856,7 +861,7 @@ fn command_wait_ignores_output_and_preserves_process_on_expiry_and_cancellation(
     .unwrap();
     assert_eq!(
         completed.status,
-        CommandSessionStatus::Exited(super::ProcessExitStatus::Code(0))
+        CommandSessionStatus::Exited(ProcessExitStatus::Code(0))
     );
     assert!(completed.stdout.text.contains("progress"));
     assert!(completed.stdout.text.contains("done:accepted"));
@@ -869,4 +874,69 @@ fn command_wait_ignores_output_and_preserves_process_on_expiry_and_cancellation(
     ))
     .unwrap();
     assert_eq!(repeated, completed);
+}
+
+#[test]
+fn approval_rejection_never_reaches_process_preparation() {
+    struct Gate(ApprovalRequirement);
+    impl ApprovalPolicy for Gate {
+        fn requirement_for(&self, _: &str) -> ApprovalRequirement {
+            self.0
+        }
+    }
+    struct MustNotPrepare;
+    impl SandboxBackend for MustNotPrepare {
+        fn kind(&self) -> SandboxKind {
+            SandboxKind::Restricted
+        }
+        fn prepare(
+            &self,
+            _: &SandboxCommand,
+            _: SandboxPolicy,
+            _: &Dir,
+        ) -> Result<PreparedCommand, SandboxError> {
+            panic!("unapproved action reached execution service")
+        }
+    }
+    let dir = TestDir::new();
+    for requirement in [ApprovalRequirement::Required, ApprovalRequirement::Denied] {
+        let executor =
+            CommandExecutor::new(dir.root(), MustNotPrepare, Gate(requirement), test_limits());
+        let cancellation = CancellationSource::new();
+        let request = CommandRequest {
+            program: "must-not-start".into(),
+            arguments: vec![],
+            working_directory: dir.path.clone(),
+            input: CommandInput::Closed,
+        };
+        let authority = CommandExecutionAuthority::Sandboxed(SandboxPolicy::new(
+            FileSystemAccess::ReadOnly,
+            NetworkAccess::Denied,
+        ));
+        let single = executor.execute(request.clone(), authority, &cancellation.token());
+        let session = executor.start_session_scoped_with_network(
+            request,
+            authority,
+            &cancellation.token(),
+            None,
+            None,
+            CommandSessionOwner::new("caller", "thread", "environment"),
+            CommandSessionOptions {
+                execution_timeout: Duration::from_secs(1),
+                wait_budget: Duration::ZERO,
+                terminal: None,
+            },
+        );
+        match requirement {
+            ApprovalRequirement::Required => {
+                assert!(matches!(single, Err(ExecutionError::ApprovalRequired)));
+                assert!(matches!(session, Err(ExecutionError::ApprovalRequired)));
+            }
+            ApprovalRequirement::Denied => {
+                assert!(matches!(single, Err(ExecutionError::Denied)));
+                assert!(matches!(session, Err(ExecutionError::Denied)));
+            }
+            _ => unreachable!(),
+        }
+    }
 }

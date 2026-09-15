@@ -19,9 +19,11 @@ tokio = { workspace = true, features = ["rt-multi-thread", "sync", "time", "sign
 ash-file-access = { workspace = true }
 ash-file-system = { workspace = true }
 ash-utils-pty = { workspace = true }
-ash-tool-executor = { workspace = true }
 ash-sandboxing = { workspace = true }
-ash-async-utils = { workspace = true }
+ash-async-utils = { workspace = true, features = ["wait"] }
+network-proxy = { workspace = true, features = ["server"] }
+pollster = { workspace = true }
+tempfile = { workspace = true }
 ash-protocol = { workspace = true }
 ash-package-store = { workspace = true }
 ash-install-context = { workspace = true }
@@ -30,7 +32,6 @@ arg0 = { workspace = true }
 process-hardening = { workspace = true }
 
 [dev-dependencies]
-tempfile = { workspace = true }
 
 [lints]
 workspace = true

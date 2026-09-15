@@ -2,6 +2,7 @@
 
 mod client;
 mod environment;
+pub mod execution;
 mod process;
 pub mod terminal;
 mod transport;

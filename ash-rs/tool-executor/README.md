@@ -1,13 +1,13 @@
 # `ash-tool-executor`
 
-> 本 README 是 Ash 单进程执行边界的实现契约。Tool ownership 见
-> [`docs/tools.md`](../../docs/tools.md)，平台 enforcement 见
-> [`docs/sandboxing.md`](../../docs/sandboxing.md)。完整 Agent 的无界面运行由
-> [`ash-exec`](../exec/README.md) 拥有。
+- 根据上层审批结果决定命令是否可以进入执行服务。
+- 将调用方、Thread、Environment 身份绑定为不可混用的进程访问凭据。
+- 委托 `exec-server::execution::ProcessExecutor` 管理进程、输出、取消、超时和沙箱资源。
+- 不保存进程表、输出缓存或第二份运行状态；不决定 Core policy，也不自动重跑。
 
-本 crate 在 approval、目录边界、sandbox backend、timeout、cancellation 和 output budget
-都已固定后启动一个显式进程。它不解析 shell，不决定 Core policy，也不把普通 non-zero exit
-自动分类为 sandbox denial。
+Tool ownership 见 [`docs/tools.md`](../../docs/tools.md)，进程实现见
+[`exec-server`](../exec-server/README.md)，隔离契约见
+[`docs/sandboxing.md`](../../docs/sandboxing.md)。
 
 ## 公共契约
 
@@ -17,7 +17,7 @@
 | `CommandExecutionAuthority` | 显式区分 sandboxed 与 unrestricted execution |
 | `ExecutionLimits` | 固定 wall-clock timeout 与 stdout/stderr 总 byte budget |
 | `CommandInput` | 显式选择关闭 stdin 或写入调用方已经限制的 bytes |
-| `CommandExecutor::execute` | prepare、spawn、监督、capture 与 backend denial classification |
+| `CommandExecutor::execute` | 检查审批后委托执行服务 |
 | `CommandExecutionOutcome` | completed output 或 structured sandbox denial |
 | `ExecutionError` | start 前拒绝、spawn failure、取消、timeout 或 sandbox setup failure |
 | `CommandSessionOptions` | 分别指定进程运行期限、初次输出等待期限与终端选项 |
@@ -62,14 +62,13 @@ stdout 与 stderr reader 各自最多读取总 budget，最终合并时 stdout �
 byte 数；截断跨 UTF-8 code point 时使用 lossy decoding，调用方不能把 retained string 当作完整
 输出。
 
-## 内部接口与漂移检查
+## 实现归属
 
-`check_cancellation_before_start` 固定 pre-spawn semantics；`terminate` 统一 kill/wait/join 全部 I/O
-worker；`drain_stream` 只负责 bounded capture。若 Tool schema、Core approval、自动 retry 或 Thread
-mutation 进入本 crate，说明 ownership 已漂移。
+进程创建、capture、会话表和资源清理由 `exec-server/src/execution.rs` 与 `session.rs` 拥有。
+本 crate 只保留审批及工具身份适配。上述输入、输出和取消语义由执行服务实施。
 
 ```bash
-cargo test -p ash-tool-executor
-cargo clippy -p ash-tool-executor --all-targets --no-deps -- -D warnings
+just test ash-tool-executor
+just rust-warnings ash-tool-executor
 bazel test //ash-rs/tool-executor:tool-executor-unit-tests
 ```

@@ -194,6 +194,7 @@ pub(crate) struct EnvRuntimeControl {
     local_tool_config: Arc<RwLock<LocalToolConfig>>,
     env_state: EnvStateMode,
     fast_regex_worker_command: Option<ash_fast_regex_search::FastRegexWorkerCommand>,
+    pty_helper: Option<std::path::PathBuf>,
     codebase_models: Option<CodebaseModels>,
     semantic_model_provider: Option<Arc<dyn SemanticModelProvider>>,
     extension_hosts: Option<super::extension_host_runtime::ExtensionHostRuntime>,
@@ -261,6 +262,7 @@ impl EnvRuntimeControl {
             agent_grep,
             self.env_state.runtime(),
             self.fast_regex_worker_command.as_ref(),
+            self.pty_helper.as_ref(),
         )
         .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
         if let Some(codebase) = codebase {
@@ -436,6 +438,7 @@ impl EnvRuntimeControl {
                 .clone(),
             self.env_state.runtime(),
             self.fast_regex_worker_command.as_ref(),
+            self.pty_helper.as_ref(),
         )
         .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
         let action_policy_revision = local.action_policy_revision().clone();
@@ -1236,6 +1239,7 @@ impl AppServer {
             local_tool_config: Arc::clone(&self.local_tool_config),
             env_state: self.env_state.clone(),
             fast_regex_worker_command: self.fast_regex_worker_command.clone(),
+            pty_helper: self.pty_helper.clone(),
             codebase_models: self.codebase_models.clone(),
             semantic_model_provider: self.semantic_model_provider.clone(),
             extension_hosts: self.extension_hosts.clone(),
@@ -1849,6 +1853,7 @@ impl AppServer {
                 None,
                 self.env_state.runtime(),
                 self.fast_regex_worker_command.as_ref(),
+                self.pty_helper.as_ref(),
             )
             .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
             self.commit_full_env_runtime(authorization, local, host)

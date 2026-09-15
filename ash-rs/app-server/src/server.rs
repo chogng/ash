@@ -228,6 +228,7 @@ pub struct AppServer {
     browser_tool_port: crate::tool_composition::ToolPort,
     env_state: EnvStateMode,
     fast_regex_worker_command: Option<ash_fast_regex_search::FastRegexWorkerCommand>,
+    pty_helper: Option<std::path::PathBuf>,
     codebase_models: Option<CodebaseModels>,
     provider_runtime: Option<Arc<ash_model_provider::ModelProviderRuntime>>,
     semantic_model_provider: Option<Arc<dyn ash_model_provider::SemanticModelProvider>>,
@@ -560,6 +561,7 @@ impl AppServer {
             browser_tool_port,
             env_state: EnvStateMode::Unconfigured,
             fast_regex_worker_command: None,
+            pty_helper: None,
             codebase_models: None,
             provider_runtime: None,
             semantic_model_provider: None,
@@ -1294,6 +1296,12 @@ impl AppServer {
     /// Selects process-local directory indexes for hosts that intentionally do not persist them.
     pub fn with_ephemeral_env_state(mut self) -> Self {
         self.env_state = EnvStateMode::Ephemeral;
+        self
+    }
+
+    /// Configures the executable that dispatches the internal sandbox PTY role.
+    pub(crate) fn with_pty_helper(mut self, executable: std::path::PathBuf) -> Self {
+        self.pty_helper = Some(executable);
         self
     }
 

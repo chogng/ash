@@ -8,7 +8,7 @@
 ## 实际调用链
 
 ```text
-Core / action-policy → tool-executor → sandboxing
+Core / action-policy → tool-executor → exec-server → sandboxing
                                          ↓ 注入
                                     mxc-sandbox
                                          ↓
@@ -23,7 +23,7 @@ Core / action-policy → tool-executor → sandboxing
 正常结束、取消和超时均调用 SDK 的终止与等待，随后关闭 Ash 的代理。
 
 动作授权属于 `action-policy` / Core。代理按同一授权检查真实目标。
-执行环境、输入输出预算和超时属于 `tool-executor`。Ash 的 `SandboxBackends` 在执行前选择后端；MXC 负责自身实现的进程创建和资源清理。
+`tool-executor` 提交已确定的执行预算；进程、输出和超时实施属于 `exec-server`。Ash 的 `SandboxBackends` 在执行前选择后端；MXC 负责自身实现的进程创建和资源清理。
 
 ## 权限与支持范围
 
@@ -45,7 +45,7 @@ SDK 的 ACL 正常关闭清理不等于宿主崩溃后的恢复保证；Windows 
 
 ## PTY 启动
 
-- `utils-pty` 分配 PTY，并启动当前宿主程序的 `--ash-mxc-pty` 内部角色；宿主必须在产品入口前调用 `arg0::dispatch`。
+- 宿主通过 `with_pty_helper` 明确提供启动器路径；`utils-pty` 分配 PTY 后启动该程序的 `--ash-mxc-pty` 内部角色。启动器必须在产品入口前调用 `arg0::dispatch`；适配器不自行解析当前可执行文件，未配置时拒绝受限 PTY。
 - 受信启动交接保存完整权限、固定执行路径和准备阶段的文件身份；普通 MXC 配置仍不能反序列化这些授权字段。
 - 启动参数仅由宿主生成，通过有界环境项交给内部角色；序列化上限 16 KiB，超限在启动前拒绝。
 - 工作负载环境与启动器环境分开，MXC 在应用约束后设置工作负载环境。

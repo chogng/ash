@@ -21,12 +21,21 @@ use std::path::PathBuf;
 /// MXC-backed execution. The SDK owns backend selection, process creation and OS resource cleanup.
 pub struct MxcSandbox {
     runtime: InstallContext,
+    pty_helper: Option<PathBuf>,
 }
 
 impl MxcSandbox {
     /// Captures runtime locations; the SDK checks the capabilities of each execution request.
     pub fn new(context: InstallContext) -> Self {
-        Self { runtime: context }
+        Self {
+            runtime: context,
+            pty_helper: None,
+        }
+    }
+    /// Supplies the host executable whose entrypoint dispatches the internal PTY role.
+    pub fn with_pty_helper(mut self, executable: PathBuf) -> Self {
+        self.pty_helper = Some(executable);
+        self
     }
 }
 
@@ -103,7 +112,11 @@ impl SandboxBackend for MxcSandbox {
             }
         })?;
         if let ash_sandboxing::ProcessIo::Pty(size) = command.io() {
-            return pty::prepare(command, request, scope, size);
+            let executable = self
+                .pty_helper
+                .as_ref()
+                .ok_or_else(|| unavailable("PTY helper is not configured by this host"))?;
+            return pty::prepare(command, request, scope, size, executable.clone());
         }
         Ok(PreparedCommand::sandboxed(
             command,

@@ -1183,13 +1183,14 @@ dependencies = [
  "ash-file-system",
  "ash-install-context",
  "ash-mxc-sandbox",
+ "ash-network-proxy",
  "ash-package-store",
  "ash-process-hardening",
  "ash-protocol",
  "ash-sandboxing",
- "ash-tool-executor",
  "ash-utils-pty",
  "getrandom 0.2.17",
+ "pollster 1.0.1",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -2370,6 +2371,7 @@ name = "ash-tool-executor"
 version = "0.1.0"
 dependencies = [
  "ash-async-utils",
+ "ash-exec-server",
  "ash-file-access",
  "ash-install-context",
  "ash-mxc-sandbox",
@@ -2377,9 +2379,7 @@ dependencies = [
  "ash-protocol",
  "ash-sandboxing",
  "ash-utils-pty",
- "getrandom 0.2.17",
  "pollster 1.0.1",
- "tempfile",
 ]
 
 [[package]]

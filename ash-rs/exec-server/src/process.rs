@@ -1,24 +1,23 @@
+//! RPC operation identity and retention over the shared process session owner.
+use crate::execution::CommandExecutionAuthority;
+use crate::execution::CommandInput;
+use crate::execution::CommandRequest;
+use crate::execution::CommandSessionCursor;
+use crate::execution::CommandSessionId;
+use crate::execution::CommandSessionOptions;
+use crate::execution::CommandSessionOutput;
+use crate::execution::CommandSessionStatus;
+use crate::execution::CommandTerminalSize;
+use crate::execution::ExecutionError;
+use crate::execution::ExecutionLimits;
+use crate::execution::ProcessExecutor;
+use crate::execution::ProcessSessionOwner;
 use ash_async_utils::CancellationSource;
 use ash_file_access::Grant;
 use ash_file_access::Permission;
-use ash_protocol::ProcessExitStatus;
 use ash_sandboxing::SandboxBackend;
 use ash_sandboxing::SandboxBackends;
 use ash_sandboxing::SandboxPolicy;
-use ash_tool_executor::ApprovalPolicy;
-use ash_tool_executor::ApprovalRequirement;
-use ash_tool_executor::CommandExecutionAuthority;
-use ash_tool_executor::CommandExecutionOutcome;
-use ash_tool_executor::CommandExecutor;
-use ash_tool_executor::CommandInput;
-use ash_tool_executor::CommandRequest;
-use ash_tool_executor::CommandSessionCursor;
-use ash_tool_executor::CommandSessionOptions;
-use ash_tool_executor::CommandSessionOwner;
-use ash_tool_executor::CommandSessionStart;
-use ash_tool_executor::CommandSessionStatus;
-use ash_tool_executor::ExecutionError;
-use ash_tool_executor::ExecutionLimits;
 use exec_server_protocol::ExecError;
 use exec_server_protocol::FileAccess;
 use exec_server_protocol::NetworkAccess;
@@ -41,81 +40,23 @@ const RETENTION: Duration = Duration::from_secs(3600);
 pub(crate) struct Processes {
     grant: Grant,
     policy: SandboxPolicy,
-    backend: Arc<dyn SandboxBackend>,
+    executor: Arc<ProcessExecutor<SandboxBackends>>,
     records: Mutex<HashMap<String, Arc<Record>>>,
     workers: Mutex<Vec<thread::JoinHandle<()>>>,
 }
-
 struct Record {
     request: ProcessStart,
     cancellation: CancellationSource,
-    data: Mutex<Data>,
-    session: Mutex<Option<Session>>,
+    state: Mutex<LaunchState>,
+    finished: Mutex<Option<Instant>>,
 }
-
-struct Session {
-    executor: Arc<CommandExecutor<HostAuthorized, SandboxBackends>>,
-    owner: CommandSessionOwner,
-    id: ash_tool_executor::CommandSessionId,
+// Only preparation failures lack a process session. Running and completed process data live
+// exclusively in ProcessExecutor; this table owns RPC idempotency and expiration.
+enum LaunchState {
+    Starting,
+    Session(CommandSessionId),
+    Rejected(ProcessState),
 }
-
-struct Data {
-    state: ProcessState,
-    stdout: Buffer,
-    stderr: Buffer,
-    finished: Option<Instant>,
-}
-
-#[derive(Default)]
-struct Buffer {
-    text: String,
-    end: u64,
-    truncated: bool,
-}
-impl Buffer {
-    fn append(&mut self, text: &str) {
-        self.end += text.len() as u64;
-        self.text.push_str(text);
-        let mut remove = self
-            .text
-            .len()
-            .saturating_sub(exec_server_protocol::MAX_OUTPUT_BYTES);
-        while !self.text.is_char_boundary(remove) {
-            remove += 1;
-        }
-        self.text.drain(..remove);
-    }
-    fn update(&mut self, output: &ash_tool_executor::CommandSessionOutput) {
-        if output.gap {
-            self.text.clear();
-        }
-        self.append(&output.text);
-        self.end = output.next_cursor;
-    }
-    fn read(&self, cursor: u64) -> Result<Output, ExecError> {
-        if cursor > self.end {
-            return Err(ExecError::InvalidInput);
-        }
-        let begin = self.end - self.text.len() as u64;
-        let offset = cursor.saturating_sub(begin) as usize;
-        if !self.text.is_char_boundary(offset) {
-            return Err(ExecError::InvalidInput);
-        }
-        Ok(Output {
-            text: self.text[offset..].into(),
-            next_cursor: self.end,
-            gap: cursor < begin || (cursor == 0 && self.truncated),
-        })
-    }
-}
-
-struct HostAuthorized;
-impl ApprovalPolicy for HostAuthorized {
-    fn requirement_for(&self, _: &str) -> ApprovalRequirement {
-        ApprovalRequirement::NotRequired
-    }
-}
-
 impl Processes {
     pub fn new(
         grant: Grant,
@@ -123,24 +64,32 @@ impl Processes {
         network: NetworkAccess,
         backend: Arc<dyn SandboxBackend>,
     ) -> Self {
+        let policy = SandboxPolicy::new(
+            match access {
+                FileAccess::ReadOnly => ash_sandboxing::FileSystemAccess::ReadOnly,
+                FileAccess::ReadWrite => ash_sandboxing::FileSystemAccess::DirectoryWrite,
+            },
+            match network {
+                NetworkAccess::Denied => ash_sandboxing::NetworkAccess::Denied,
+                NetworkAccess::Allowed => ash_sandboxing::NetworkAccess::Allowed,
+            },
+        );
+        let executor = Arc::new(ProcessExecutor::new(
+            grant.dir().clone(),
+            SandboxBackends::new(vec![("host", backend)]),
+            ExecutionLimits {
+                timeout: Duration::from_secs(60),
+                max_output_bytes: exec_server_protocol::MAX_OUTPUT_BYTES,
+            },
+        ));
         Self {
             grant,
-            policy: SandboxPolicy::new(
-                match access {
-                    FileAccess::ReadOnly => ash_sandboxing::FileSystemAccess::ReadOnly,
-                    FileAccess::ReadWrite => ash_sandboxing::FileSystemAccess::DirectoryWrite,
-                },
-                match network {
-                    NetworkAccess::Denied => ash_sandboxing::NetworkAccess::Denied,
-                    NetworkAccess::Allowed => ash_sandboxing::NetworkAccess::Allowed,
-                },
-            ),
-            backend,
+            policy,
+            executor,
             records: Mutex::new(HashMap::new()),
             workers: Mutex::new(Vec::new()),
         }
     }
-
     pub fn start(&self, request: ProcessStart) -> Result<ProcessSnapshot, ExecError> {
         request.validate()?;
         let authorization = self
@@ -149,48 +98,41 @@ impl Processes {
             .map_err(|_| ExecError::PermissionDenied)?;
         let mut records = self.records.lock().map_err(|_| ExecError::Busy)?;
         records.retain(|_, record| {
-            record
-                .data
+            let expired = record
+                .finished
                 .lock()
-                .map(|data| data.finished.is_none_or(|at| at.elapsed() < RETENTION))
-                .unwrap_or(true)
+                .map(|at| at.is_some_and(|at| at.elapsed() >= RETENTION))
+                .unwrap_or(false);
+            if expired && let Ok(LaunchState::Session(id)) = record.state.lock().as_deref() {
+                let _ = self.executor.release_session(&record.owner(), id);
+            }
+            !expired
         });
         if let Some(record) = records.get(&request.operation_id) {
             if record.request != request {
                 return Err(ExecError::Conflict);
             }
-            return record.snapshot(0, 0);
+            return self.snapshot(record, 0, 0);
         }
         if records.len() >= MAX_RECORDS
             || records
                 .values()
-                .filter(|record| {
-                    record
-                        .data
-                        .lock()
-                        .map(|data| data.finished.is_none())
-                        .unwrap_or(true)
-                })
+                .filter(|r| r.finished.lock().map(|at| at.is_none()).unwrap_or(true))
                 .count()
                 >= MAX_ACTIVE
         {
             return Err(ExecError::Busy);
         }
         let record = Arc::new(Record {
-            session: Mutex::new(None),
             request: request.clone(),
             cancellation: CancellationSource::new(),
-            data: Mutex::new(Data {
-                state: ProcessState::Running,
-                stdout: Buffer::default(),
-                stderr: Buffer::default(),
-                finished: None,
-            }),
+            state: Mutex::new(LaunchState::Starting),
+            finished: Mutex::new(None),
         });
-        records.insert(request.operation_id.clone(), record.clone());
-        let backend = SandboxBackends::new(vec![("host", self.backend.clone())]);
-        let policy = self.policy;
+        records.insert(request.operation_id, record.clone());
         let worker = record.clone();
+        let executor = self.executor.clone();
+        let policy = self.policy;
         let handle = thread::Builder::new()
             .name("exec-process".into())
             .spawn(move || {
@@ -198,54 +140,102 @@ impl Processes {
                     authorization.subject(),
                     authorization.dir(),
                     Permission::ExecuteCommands,
-                    || run(&worker, authorization.dir(), backend, policy),
+                    || run(&worker, &executor, policy),
                 );
                 if result.is_err() {
-                    worker.finish(ProcessState::Failed {
-                        message: "execution permission revoked".into(),
-                    });
+                    worker.reject("execution permission revoked".into());
                 }
             });
         match handle {
             Ok(handle) => {
-                let mut workers = self
-                    .workers
-                    .lock()
-                    .unwrap_or_else(|error| error.into_inner());
-                let mut index = 0;
-                while index < workers.len() {
-                    if workers[index].is_finished() {
-                        let _ = workers.swap_remove(index).join();
+                let mut workers = self.workers.lock().unwrap_or_else(|e| e.into_inner());
+                let mut i = 0;
+                while i < workers.len() {
+                    if workers[i].is_finished() {
+                        let _ = workers.swap_remove(i).join();
                     } else {
-                        index += 1;
+                        i += 1;
                     }
                 }
                 workers.push(handle);
             }
-            Err(_) => record.finish(ProcessState::Failed {
-                message: "could not start execution worker".into(),
-            }),
+            Err(_) => record.reject("could not start execution worker".into()),
         }
-        record.snapshot(0, 0)
+        self.snapshot(&record, 0, 0)
     }
-
+    fn snapshot(
+        &self,
+        record: &Record,
+        stdout: u64,
+        stderr: u64,
+    ) -> Result<ProcessSnapshot, ExecError> {
+        let state = record.state.lock().map_err(|_| ExecError::Busy)?;
+        let (state, out, err) = match &*state {
+            LaunchState::Session(id) => {
+                let update = self
+                    .executor
+                    .read_session(
+                        &record.owner(),
+                        id,
+                        CommandSessionCursor { stdout, stderr },
+                        Duration::ZERO,
+                    )
+                    .map_err(|_| ExecError::InvalidInput)?;
+                (
+                    process_state(update.status),
+                    output(update.stdout),
+                    output(update.stderr),
+                )
+            }
+            state => {
+                if stdout != 0 || stderr != 0 {
+                    return Err(ExecError::InvalidInput);
+                }
+                let state = match state {
+                    LaunchState::Starting => ProcessState::Running,
+                    LaunchState::Rejected(state) => state.clone(),
+                    _ => unreachable!(),
+                };
+                (
+                    state,
+                    Output {
+                        text: String::new(),
+                        next_cursor: 0,
+                        gap: false,
+                    },
+                    Output {
+                        text: String::new(),
+                        next_cursor: 0,
+                        gap: false,
+                    },
+                )
+            }
+        };
+        Ok(ProcessSnapshot {
+            operation_id: record.request.operation_id.clone(),
+            state,
+            stdout: out,
+            stderr: err,
+        })
+    }
     pub fn read(&self, request: &ProcessRead) -> Result<ProcessSnapshot, ExecError> {
-        self.record(&request.operation_id)?
-            .snapshot(request.stdout_cursor, request.stderr_cursor)
+        self.snapshot(
+            self.record(&request.operation_id)?.as_ref(),
+            request.stdout_cursor,
+            request.stderr_cursor,
+        )
     }
     pub fn cancel(&self, id: &str) -> Result<ProcessSnapshot, ExecError> {
         let record = self.record(id)?;
         record.cancellation.cancel();
-        record.snapshot(0, 0)
+        self.snapshot(&record, 0, 0)
     }
     pub fn write(&self, id: &str, bytes: Vec<u8>) -> Result<(), ExecError> {
         if bytes.len() > exec_server_protocol::MAX_OUTPUT_BYTES {
             return Err(ExecError::InvalidInput);
         }
-        self.control(id, |session| {
-            session
-                .executor
-                .write_session(&session.owner, &session.id, bytes)
+        self.control(id, |owner, id| {
+            self.executor.write_session(owner, id, bytes)
         })
     }
     pub fn close_input(&self, id: &str) -> Result<(), ExecError> {
@@ -255,40 +245,39 @@ impl Processes {
         ) {
             return Err(ExecError::InvalidInput);
         }
-        self.control(id, |session| {
-            session
-                .executor
-                .close_session_input(&session.owner, &session.id)
-        })
+        self.control(id, |owner, id| self.executor.close_session_input(owner, id))
     }
     pub fn resize(&self, id: &str, rows: u16, cols: u16) -> Result<(), ExecError> {
         if rows == 0 || cols == 0 {
             return Err(ExecError::InvalidInput);
         }
-        self.control(id, |session| {
-            session.executor.resize_session(
-                &session.owner,
-                &session.id,
-                ash_tool_executor::CommandTerminalSize { rows, cols },
-            )
+        self.control(id, |owner, id| {
+            self.executor
+                .resize_session(owner, id, CommandTerminalSize { rows, cols })
         })
     }
     pub fn interrupt(&self, id: &str) -> Result<(), ExecError> {
-        self.control(id, |session| {
-            session
-                .executor
-                .interrupt_session(&session.owner, &session.id)
-        })
+        self.control(id, |owner, id| self.executor.interrupt_session(owner, id))
     }
     fn control(
         &self,
         id: &str,
-        operation: impl FnOnce(&Session) -> Result<(), ExecutionError>,
+        operation: impl FnOnce(&ProcessSessionOwner, &CommandSessionId) -> Result<(), ExecutionError>,
     ) -> Result<(), ExecError> {
         let record = self.record(id)?;
-        let session = record.session.lock().map_err(|_| ExecError::Busy)?;
-        let session = session.as_ref().ok_or(ExecError::Conflict)?;
-        operation(session).map_err(|_| ExecError::Conflict)
+        let state = record.state.lock().map_err(|_| ExecError::Busy)?;
+        let LaunchState::Session(id) = &*state else {
+            return Err(ExecError::Conflict);
+        };
+        let owner = record.owner();
+        let update = self
+            .executor
+            .read_session(&owner, id, CommandSessionCursor::default(), Duration::ZERO)
+            .map_err(|_| ExecError::Conflict)?;
+        if update.status != CommandSessionStatus::Running {
+            return Err(ExecError::Conflict);
+        }
+        operation(&owner, id).map_err(|_| ExecError::Conflict)
     }
     fn record(&self, id: &str) -> Result<Arc<Record>, ExecError> {
         self.records
@@ -299,7 +288,6 @@ impl Processes {
             .ok_or(ExecError::NotFound)
     }
 }
-
 impl Drop for Processes {
     fn drop(&mut self) {
         if let Ok(records) = self.records.lock() {
@@ -314,57 +302,36 @@ impl Drop for Processes {
         }
     }
 }
-
 impl Record {
-    fn snapshot(&self, stdout: u64, stderr: u64) -> Result<ProcessSnapshot, ExecError> {
-        let data = self.data.lock().map_err(|_| ExecError::Busy)?;
-        Ok(ProcessSnapshot {
-            operation_id: self.request.operation_id.clone(),
-            state: data.state.clone(),
-            stdout: data.stdout.read(stdout)?,
-            stderr: data.stderr.read(stderr)?,
-        })
+    fn owner(&self) -> ProcessSessionOwner {
+        ProcessSessionOwner::new(self.request.operation_id.clone())
     }
-    fn finish(&self, state: ProcessState) {
-        if let Ok(mut data) = self.data.lock() {
-            data.state = state;
-            data.finished = Some(Instant::now());
+    fn reject(&self, message: String) {
+        if let Ok(mut state) = self.state.lock() {
+            *state = LaunchState::Rejected(ProcessState::Failed { message });
+        }
+        self.finish();
+    }
+    fn finish(&self) {
+        if let Ok(mut at) = self.finished.lock() {
+            *at = Some(Instant::now());
         }
     }
 }
-
-fn run(
-    record: &Record,
-    dir: &ash_file_access::Dir,
-    backend: SandboxBackends,
-    policy: SandboxPolicy,
-) {
-    let executor = Arc::new(CommandExecutor::new(
-        dir.clone(),
-        backend,
-        HostAuthorized,
-        ExecutionLimits {
-            timeout: Duration::from_millis(record.request.timeout_millis),
-            max_output_bytes: exec_server_protocol::MAX_OUTPUT_BYTES,
-        },
-    ));
-    let owner = CommandSessionOwner::new("exec-server", &record.request.operation_id, "host");
+fn run(record: &Record, executor: &ProcessExecutor<SandboxBackends>, policy: SandboxPolicy) {
     let terminal = match record.request.input {
         exec_server_protocol::ProcessInput::Terminal { rows, cols } => {
-            Some(ash_tool_executor::CommandTerminalSize { rows, cols })
+            Some(CommandTerminalSize { rows, cols })
         }
         _ => None,
     };
-    let input = match record.request.input {
-        exec_server_protocol::ProcessInput::Closed => CommandInput::Closed,
-        _ => CommandInput::Open,
-    };
-    let result = executor.start_session_scoped_with_network(
+    let owner = record.owner();
+    let result = executor.start_retained_session(
         CommandRequest {
             program: record.request.program.clone(),
             arguments: record.request.arguments.clone(),
             working_directory: record.request.cwd.clone().into(),
-            input,
+            input: CommandInput::Open,
         },
         CommandExecutionAuthority::Sandboxed(policy),
         &record.cancellation.token(),
@@ -377,97 +344,67 @@ fn run(
             terminal,
         },
     );
-    let state = match result {
-        Ok(CommandSessionStart::Completed(CommandExecutionOutcome::Completed(output))) => {
-            if let Ok(mut data) = record.data.lock() {
-                data.stdout.truncated = output.stdout_truncated;
-                data.stderr.truncated = output.stderr_truncated;
-                data.stdout.append(&output.stdout);
-                data.stderr.append(&output.stderr);
-            }
-            ProcessState::Exited {
-                code: output.exit_code,
-            }
-        }
-        Ok(CommandSessionStart::Completed(CommandExecutionOutcome::SandboxDenied(_))) => {
-            ProcessState::Failed {
-                message: "sandbox denied process".into(),
-            }
-        }
-        Ok(CommandSessionStart::Running(mut update)) => {
-            let id = update.session_id.clone();
-            if matches!(
-                record.request.input,
-                exec_server_protocol::ProcessInput::Closed
-            ) {
-                let _ = executor.close_session_input(&owner, &id);
-            }
-            if let Ok(mut session) = record.session.lock() {
-                *session = Some(Session {
-                    executor: executor.clone(),
-                    owner: owner.clone(),
-                    id: id.clone(),
-                });
-            }
-            let final_state = loop {
-                if let Ok(mut data) = record.data.lock() {
-                    data.stdout.update(&update.stdout);
-                    data.stderr.update(&update.stderr);
-                }
-                let state = match update.status {
-                    CommandSessionStatus::Running => None,
-                    CommandSessionStatus::Exited(status) => Some(ProcessState::Exited {
-                        code: match status {
-                            ProcessExitStatus::Code(code) => Some(code),
-                            ProcessExitStatus::Terminated => None,
-                        },
-                    }),
-                    CommandSessionStatus::Cancelled | CommandSessionStatus::Terminated => {
-                        Some(ProcessState::Cancelled)
-                    }
-                    CommandSessionStatus::TimedOut => Some(ProcessState::TimedOut),
-                    CommandSessionStatus::SandboxDenied => Some(ProcessState::Failed {
-                        message: "sandbox denied process".into(),
-                    }),
-                    CommandSessionStatus::Failed(_) => Some(ProcessState::Failed {
-                        message: "process supervision failed".into(),
-                    }),
-                };
-                if let Some(state) = state {
-                    break state;
-                }
-                match executor.read_session(
-                    &owner,
-                    &id,
-                    CommandSessionCursor {
-                        stdout: update.stdout.next_cursor,
-                        stderr: update.stderr.next_cursor,
-                    },
-                    Duration::from_millis(25),
-                ) {
-                    Ok(next) => update = next,
-                    Err(error) => break execution_error(error),
-                }
+    let id = match result {
+        Ok(id) => id,
+        Err(error) => {
+            let state = match error {
+                ExecutionError::CancelledBeforeStart(_)
+                | ExecutionError::CancelledAfterStart(_) => ProcessState::Cancelled,
+                ExecutionError::TimedOut => ProcessState::TimedOut,
+                error => ProcessState::Failed {
+                    message: format!("{error:?}"),
+                },
             };
-            if let Ok(mut session) = record.session.lock() {
-                *session = None;
+            if let Ok(mut launch) = record.state.lock() {
+                *launch = LaunchState::Rejected(state);
             }
-            let _ = executor.release_session(&owner, &id);
-            final_state
+            record.finish();
+            return;
         }
-        Err(error) => execution_error(error),
     };
-    record.finish(state);
+    if matches!(
+        record.request.input,
+        exec_server_protocol::ProcessInput::Closed
+    ) {
+        let _ = executor.close_session_input(&owner, &id);
+    }
+    if let Ok(mut state) = record.state.lock() {
+        *state = LaunchState::Session(id.clone());
+    }
+    // Observe completion without copying output or maintaining a second process state machine.
+    let observation = CancellationSource::new();
+    let _ = pollster::block_on(executor.wait_session(
+        &owner,
+        &id,
+        CommandSessionCursor::default(),
+        Duration::from_secs(12 * 60 * 60 + 60),
+        &observation.token(),
+    ));
+    record.finish();
 }
-
-fn execution_error(error: ExecutionError) -> ProcessState {
-    match error {
-        ExecutionError::CancelledBeforeStart(_) | ExecutionError::CancelledAfterStart(_) => {
+fn output(value: CommandSessionOutput) -> Output {
+    Output {
+        text: value.text,
+        next_cursor: value.next_cursor,
+        gap: value.gap,
+    }
+}
+fn process_state(status: CommandSessionStatus) -> ProcessState {
+    match status {
+        CommandSessionStatus::Running => ProcessState::Running,
+        CommandSessionStatus::Exited(status) => ProcessState::Exited {
+            code: match status {
+                ash_protocol::ProcessExitStatus::Code(code) => Some(code),
+                ash_protocol::ProcessExitStatus::Terminated => None,
+            },
+        },
+        CommandSessionStatus::Cancelled | CommandSessionStatus::Terminated => {
             ProcessState::Cancelled
         }
-        ExecutionError::TimedOut => ProcessState::TimedOut,
-        error => ProcessState::Failed {
-            message: format!("{error:?}"),
+        CommandSessionStatus::TimedOut => ProcessState::TimedOut,
+        CommandSessionStatus::SandboxDenied => ProcessState::Failed {
+            message: "sandbox denied process".into(),
         },
+        CommandSessionStatus::Failed(message) => ProcessState::Failed { message },
     }
 }

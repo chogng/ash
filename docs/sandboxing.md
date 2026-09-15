@@ -6,7 +6,8 @@ Ash 的 `sandboxing` 拥有统一权限契约和执行前的后端选择。请�
 
 ```mermaid
 flowchart TD
-    core["Core / action-policy：授权与审批"] --> executor["tool-executor：执行作用域与预算"]
+    core["Core / action-policy：授权与审批"] --> tools["tool-executor：工具审批与身份"]
+    tools --> executor["exec-server：进程、输出与资源"]
     executor --> contract["sandboxing：统一契约与 SandboxBackends"]
     contract --> adapter["mxc-sandbox：MXC 适配"]
     contract --> account["windows-sandbox：Windows 账户隔离"]
@@ -24,7 +25,8 @@ flowchart TD
 | --- | --- |
 | `action-policy` / Core | 操作及网络授权、审查、持久审批、重试决定 |
 | `sandboxing` | 策略、目录范围、候选选择、准备与进程契约 |
-| `tool-executor` | 命令及持续执行会话、输入输出、环境、预算、超时、取消和代理作用域 |
+| `tool-executor` | 工具审批检查与任务身份适配 |
+| `exec-server` | 进程及持续执行会话、输入输出、环境、预算、超时、取消和代理作用域 |
 | `utils/pty` | PTY、管道、尺寸、信号与已有进程驱动；不负责授权和后端选择 |
 | `network-proxy` | 检查真实连接目标，执行授权结果并转发 |
 | `mxc-sandbox` | 请求、错误和进程句柄的机械转换 |
@@ -92,9 +94,9 @@ flowchart TD
 
 ## 持续执行与终端目标
 
-当前 `tool-executor` 是等待单次命令结束的入口，`sandboxing::SandboxProcess` 提供管道、等待和关闭。`utils/pty` 已有 PTY、resize 与外部驱动能力，但它们还未完整接入这条沙箱链。
+`tool-executor` 检查审批后调用 `exec-server`；`sandboxing::SandboxProcess` 提供管道、PTY、等待和关闭。受限 PTY 通过宿主明确配置的内部启动器接入 MXC；macOS 已有真实进程覆盖，Windows/Linux 仍需实机验收。
 
-- `tool-executor` 拥有持续执行的进程记录、输出游标、等待预算、硬超时、输入和终止；同步执行是同一生命周期上的等待操作，不维护第二条创建路径。
+- `exec-server` 拥有持续执行的进程记录、输出游标、等待预算、硬超时、输入和终止；工具层和远程接口不复制这些状态。
 - 后端在准备阶段检查管道或 PTY 能力，创建时一并施加隔离。`utils/pty` 适配已被沙箱创建的进程；不能另开一个普通 shell 来实现交互。
 - 会话标识绑定调用方、Thread、Environment 和不可变授权快照；后续输入/读取不能跨任务或扩大权限。等待返回不关闭仍在运行的进程，硬超时、显式终止及所属任务销毁才回收资源。
 - 输入关闭、前台中断和整个进程树终止分别表达。输出需要有界缓存及明确的截断/缺口信息；PTY 的 stdout/stderr 合并，管道保持分离。终态在回收进程树及排空尾部输出后确定。
@@ -164,7 +166,7 @@ WindowsAccount 在执行前检查工作目录、Grant、临时目录、用户目
 | PSEC 受管代理与 Windows UI 策略 | UI 请求已显式配置但待 PSEC 实机验证；无法保持默认禁止入站的 PSEC Managed 组合会在准备阶段拒绝，正式代理身份仍未完成 |
 | MXC 与 Windows 账户后端的组合选择 | 已接线；两个隔离模型的真实组合验证待补 |
 | 路径级规则、最小读取基线、受控 IPC | 对齐目标；现有目录作用域及全禁 Unix socket 策略不足以覆盖 |
-| 沙箱内 PTY、持续输入与会话管理 | 尚未完整接线；已有 `utils/pty` 不能代替沙箱链验收 |
+| 沙箱内 PTY、持续输入与会话管理 | 已接线并有 macOS 真实进程测试；Windows/Linux 交叉编译不代表实机验收 |
 | macOS MXC 执行、目录与代理隔离 | 保留真实进程回归入口 |
 | Linux MXC 受管网络 | 保留实机入口；依赖相应内核与隔离工具 |
 | Windows MXC PSEC | 当前 23H2 本机不具备相应能力，不能据此宣布端到端通过 |

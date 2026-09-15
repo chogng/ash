@@ -73,9 +73,10 @@ fn run() -> Result<(), String> {
             Path::new(root),
             access,
             NetworkAccess::Denied,
-            Arc::new(mxc_sandbox::MxcSandbox::new(
-                ash_install_context::InstallContext::current(),
-            )),
+            Arc::new(
+                mxc_sandbox::MxcSandbox::new(ash_install_context::InstallContext::current())
+                    .with_pty_helper(std::env::current_exe().map_err(|error| error.to_string())?),
+            ),
         )
         .map_err(|error| error.to_string())?,
     );

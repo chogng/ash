@@ -7,7 +7,15 @@
 - 按宿主目录授权读写文件，覆盖写入必须匹配当前版本。
 - 管理桌面交互式 PTY、输出字节缓存、连接释放与重连租约。
 - 不保存 Session、Thread、Turn、Agent、模型和审批状态。
-- 依赖方向：App Server → exec-server → tool-executor/file-system/utils-pty；协议独立于实现。
+- 依赖方向：App Server/tool-executor → exec-server → sandboxing/file-system/utils-pty；协议独立于实现。
+
+## 进程所有权
+
+- `execution::ProcessExecutor` 拥有执行准备、进程会话、输出游标、终态、超时及资源清理。
+- `process.rs` 只维护远程操作 ID、请求去重、宿主授权及保留期；直接读取执行器中的输出和状态。
+- `ProcessSessionOwner` 是调用方提供的不透明凭据；执行服务不解释 Thread 或审批语义。
+- `tool-executor` 在调用本 crate 前实施审批，并把工具身份映射为凭据。
+- 普通观察接口返回已结束结果后释放本次会话；远程保留接口一直保存结果，直到保留期清理或明确释放。
 
 ## 启动与连接
 
@@ -41,6 +49,7 @@ Rust 宿主也可以通过 `LocalAppServerOptions::with_execution_environments` 
 
 - `terminal::TerminalService` 承接原 terminal-service 的完整桌面 PTY 生命周期。
 - TCP 进程接口支持管道与受限 PTY；`processStart.input` 选择 `terminal` 并提供行列数，后续可写入、调整尺寸、中断或取消。
+- 宿主通过 `MxcSandbox::with_pty_helper` 提供内部启动器；App Server 嵌入方使用 `LocalAppServerOptions::with_pty_helper`。未配置时拒绝受限 PTY。
 - PTY 由执行宿主分配，内部启动器继承终端后交给 MXC；目录、网络及文件身份约束保持有效。
 - PTY 标准错误合并到标准输出；半关闭输入不适用于 PTY，调用方应发送终端 EOF 字符或取消进程。
 - 桌面 Terminal API 继续通过目录授权调用；不将桌面交互式终端作为远程沙箱命令的替代执行路径。

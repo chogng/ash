@@ -150,6 +150,7 @@ pub(crate) fn compose_local_tools_with_config(
     existing_agent_grep: Option<Arc<AgentGrepService>>,
     state_runtime: Option<Arc<ash_state::StateRuntime>>,
     fast_regex_worker_command: Option<&ash_fast_regex_search::FastRegexWorkerCommand>,
+    pty_helper: Option<&std::path::PathBuf>,
 ) -> Result<LocalToolComposition, LocalToolError> {
     let authorization = grant
         .authorize(DirPermission::ExecuteCommands)
@@ -159,7 +160,13 @@ pub(crate) fn compose_local_tools_with_config(
         ash_sandboxing::SandboxBackends::new(vec![
             (
                 "mxc",
-                Arc::new(mxc_sandbox::MxcSandbox::new(install_context.clone())),
+                Arc::new({
+                    let backend = mxc_sandbox::MxcSandbox::new(install_context.clone());
+                    match pty_helper {
+                        Some(executable) => backend.with_pty_helper(executable.clone()),
+                        None => backend,
+                    }
+                }),
             ),
             #[cfg(windows)]
             (

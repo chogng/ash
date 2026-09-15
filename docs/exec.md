@@ -29,14 +29,14 @@ local CLI / remote scheduler
          ash-core
             │ tool execution port
             ▼
- ash-exec-server → ash-tool-executor
+ ash-tool-executor → ash-exec-server
 ```
 
 长期必须区分：
 
 - `ash-exec`：运行完整的 headless Agent Job；
-- `ash-tool-executor`：在本机执行一个经过 approval/sandbox 的 process；
-- `ash-exec-server`：把 process/filesystem execution 暴露给宿主配置的远程环境；
+- `ash-tool-executor`：检查工具审批和任务身份，委托执行服务；
+- `ash-exec-server`：管理进程与文件执行能力，提供进程内调用和远程环境访问；
 - scheduler protocol：提交、租约、取消和观察远程 Agent Job。
 
 这四者不能共享一个含义含糊的 `exec` API。
@@ -93,8 +93,8 @@ current ash-rs/exec
   → headless Agent runner
 ```
 
-`ash-tool-executor` 继续拥有 `CommandRequest`、process capture、timeout、sandbox 与 approval start
-gate；`ash-exec` 当前拥有 new/resume/fork、Turn start/interrupt、事件输出与终态映射。Sandbox 的
+`ash-tool-executor` 拥有 approval start gate 和工具身份适配；`ash-exec-server` 拥有进程准备、capture、timeout 和会话资源。
+`ash-exec` 当前拥有 new/resume/fork、Turn start/interrupt、事件输出与终态映射。Sandbox 的
 共享 policy、进程生命周期与 MXC 三平台适配边界见
 [`sandboxing.md`](sandboxing.md)。
 

@@ -11,17 +11,16 @@ name = "ash_tool_executor"
 path = "src/lib.rs"
 
 [dependencies]
-getrandom = { workspace = true }
-network-proxy = { workspace = true, features = ["server"] }
-tempfile = { workspace = true }
-ash-async-utils = { workspace = true, features = ["wait"] }
-pollster = { workspace = true }
-ash-protocol = { workspace = true }
+exec-server = { workspace = true }
+network-proxy = { workspace = true }
+ash-async-utils = { workspace = true }
 ash-sandboxing = { workspace = true }
 ash-file-access = { workspace = true }
 ash-utils-pty = { workspace = true }
 
 [dev-dependencies]
+ash-protocol = { workspace = true }
+pollster = { workspace = true }
 mxc-sandbox = { workspace = true }
 ash-install-context = { workspace = true }
 

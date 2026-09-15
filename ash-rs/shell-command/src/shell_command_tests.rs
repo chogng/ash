@@ -81,6 +81,16 @@ impl SandboxBackend for UnavailableBackend {
 }
 
 impl SandboxBackend for RecordingBackend {
+    fn prepare_scoped(
+        &self,
+        command: &SandboxCommand,
+        policy: SandboxPolicy,
+        scope: &ash_sandboxing::SandboxScope,
+    ) -> Result<PreparedCommand, SandboxError> {
+        // This fixture records policy delivery; OS isolation has separate real-backend tests.
+        self.prepare(command, policy, scope.command_dir())
+    }
+
     fn kind(&self) -> SandboxKind {
         SandboxKind::Unrestricted
     }
@@ -196,7 +206,7 @@ fn each_invocation_authority_reaches_the_process_backend() {
     )));
 
     let ToolExecutionOutcome::Returned(output) = outcome else {
-        panic!("sandboxed command should return its backend-prepared output");
+        panic!("sandboxed command should return its backend-prepared output: {outcome:?}");
     };
     assert_eq!(output.status(), ToolOutputStatus::Success);
     assert!(format!("{:?}", output.content()).contains("sandbox-authority-reached-executor"));

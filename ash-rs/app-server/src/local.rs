@@ -119,6 +119,7 @@ pub struct LocalAppServerOptions {
     product_services: Option<crate::LocalProductServicesConfig>,
     profile_runtime: Option<Arc<LocalProfileRuntime>>,
     fast_regex_worker_command: Option<ash_fast_regex_search::FastRegexWorkerCommand>,
+    pty_helper: Option<std::path::PathBuf>,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -176,6 +177,7 @@ impl LocalAppServerOptions {
             product_services: None,
             profile_runtime: None,
             fast_regex_worker_command: None,
+            pty_helper: None,
         }
     }
 
@@ -242,6 +244,12 @@ impl LocalAppServerOptions {
     }
 
     /// Runs Fast Regex indexing and mmap-backed search in a private long-lived process.
+    /// Configures the executable that dispatches the internal sandbox PTY role.
+    pub fn with_pty_helper(mut self, executable: std::path::PathBuf) -> Self {
+        self.pty_helper = Some(executable);
+        self
+    }
+
     pub fn with_fast_regex_worker_command(
         mut self,
         command: ash_fast_regex_search::FastRegexWorkerCommand,
@@ -487,6 +495,7 @@ impl PartialEq for LocalAppServerOptions {
                 .ptr_eq(&other.language_server_providers)
             && self.product_services == other.product_services
             && self.fast_regex_worker_command == other.fast_regex_worker_command
+            && self.pty_helper == other.pty_helper
     }
 }
 
@@ -978,6 +987,7 @@ pub fn open_local_app_server_with_codebase_providers(
 ) -> Result<AppServer, OpenAppServerError> {
     let product_services = options.product_services.take();
     let fast_regex_worker_command = options.fast_regex_worker_command.take();
+    let pty_helper = options.pty_helper.take();
     if options.plugin_package_service.is_none()
         && let Some(sources) = product_services
             .as_ref()
@@ -1416,6 +1426,9 @@ pub fn open_local_app_server_with_codebase_providers(
         .map_err(OpenAppServerError)?;
     if let Some(profile) = &profile_runtime {
         server = server.with_automation_store(profile.automation_store());
+    }
+    if let Some(executable) = pty_helper {
+        server = server.with_pty_helper(executable);
     }
     if let Some(command) = fast_regex_worker_command {
         server = server.with_fast_regex_worker_command(command);

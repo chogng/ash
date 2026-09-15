@@ -541,3 +541,19 @@ mod execution {
         );
     }
 }
+
+#[cfg(target_os = "macos")]
+#[test]
+fn restricted_pty_requires_an_explicit_host_helper() {
+    let temp = tempfile::tempdir().unwrap();
+    let dir = Dir::open_local(temp.path()).unwrap();
+    let backend = MxcSandbox::new(InstallContext::current());
+    let command = SandboxCommand::new("/bin/sh", ["-c", "exit 0"], dir.canonical_path())
+        .with_pty(ash_utils_pty::TerminalSize { rows: 24, cols: 80 });
+    let policy = SandboxPolicy::new(FileSystemAccess::ReadOnly, NetworkAccess::Denied);
+    let error = backend.prepare(&command, policy, &dir).unwrap_err();
+    assert!(
+        error.to_string().contains("PTY helper is not configured"),
+        "{error}"
+    );
+}
