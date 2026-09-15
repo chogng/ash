@@ -1,3 +1,6 @@
+import { registerEditorContribution } from '../../../browser/editorExtensions.js';
+import { MultiCursorController } from './multiCursorController.js';
+import { OccurrenceSelectionController } from './occurrenceSelectionController.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { type Selection } from '../../../common/core/selection.js';
@@ -116,3 +119,28 @@ function rangesIntersect(model: TextModel, left: Range, right: Range): boolean {
 	const rightEnd = model.offsetAt(right.getEndPosition());
 	return leftStart < rightEnd && rightStart < leftEnd;
 }
+
+registerEditorContribution({ id: "editor.contrib.multicursor", install: context => {
+	if (context.kind !== "text") return;
+	context.register(new MultiCursorController(context.controller.element, context.view, context.viewModel));
+	context.register(new OccurrenceSelectionController(context.controller.element, context.view, context.viewModel));
+} });
+
+registerEditorContribution({ id: SelectionHighlighter.ID, install: context => {
+	if (context.kind !== "text") return;
+	const decorations = context.register(new TextDecorationCollection<boolean>(context.model));
+	if (!context.model.largeFile.tooLargeForTokenization) {
+		return new SelectionHighlighter(
+			context.editor,
+			decorations,
+			{
+				languageId: context.languageId,
+				languageFeaturesService: context.languageFeaturesService,
+				enabled: context.options.selectionHighlight,
+				multiline: context.options.selectionHighlightMultiline,
+				maxLength: context.options.selectionHighlightMaxLength,
+				occurrenceHighlights: context.options.occurrencesHighlight !== "off",
+			},
+		);
+	}
+} });

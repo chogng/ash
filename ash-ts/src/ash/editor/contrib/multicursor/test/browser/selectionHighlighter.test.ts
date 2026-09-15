@@ -79,6 +79,7 @@ function createHarness(text: string, languages: TestLanguageFeaturesService, ini
 	const editor = createTestCodeEditor({
 		container,
 		model,
+		contributions: [],
 		input: { resource: URI.parse('file:///selection-highlighter.ts') },
 		languageId: 'typescript',
 		lineHeight: 20,

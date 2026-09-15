@@ -4,6 +4,8 @@
 
 ## 当前结论
 
+- 诊断导航与多光标注册分别回收到 `gotoError.ts`、`multicursor.ts`，两个独立注册文件退出。诊断装饰、多光标输入和选区高亮继续由原对象承担，注册顺序不变。Suggest 的独立注册入口暂保留：聊天输入框直接导入并手动创建 SuggestController，合并前须先解决自动装配与手动装配的边界，避免出现第二份控制器。
+
 - 批量迁移 Code Action、Hover、Sticky Scroll 的注册入口至上游对应路径 `codeActionContributions.ts`、`hoverContribution.ts`、`stickyScrollContribution.ts`。旧路径退出，bundle 保持原来的注册顺序与创建条件；控制器行为和生命周期未改。此项仅完成注册文件落位，不代表三个功能的全部公开 API 已对齐。Middle Scroll 与 Placeholder 的 `.contribution.ts` 是双方已有入口，继续保留。
 
 - 格式化职责回收：按用户指定删除 `contrib/format/browser/formatController.ts`。请求编排、交叠处理和取消归回 `format.ts`；命令、现有键盘入口与保存钩子归回 `formatActions.ts`；`formattingEdit.ts` 继续提交编辑。贡献只注册触发入口，不再返回控制器。Widget 将原本拥有的 `IVersionedEditorWorkerClient` 注册到模型作用域，Action 通过容器取得同一实例，模型解绑时仍由 Widget 释放。`formatEditor` 是当前模型绑定的调用入口，不冒充完整上游调度 API；资源级 worker 缺口仍保留。

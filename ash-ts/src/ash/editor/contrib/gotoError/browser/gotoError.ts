@@ -1,3 +1,5 @@
+import { registerEditorContribution } from '../../../browser/editorExtensions.js';
+import { TextEditorCapability } from '../../textEditorCapabilities.js';
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
@@ -55,3 +57,13 @@ function findPreviousDiagnostic(diagnostics: readonly { readonly range: Range }[
 	}
 	return -1;
 }
+
+registerEditorContribution({ id: "editor.contrib.gotoError", install: context => {
+	if (context.kind !== "text") return;
+	return new DiagnosticNavigationController(
+		context.controller.element,
+		context.view,
+		context.viewModel,
+		context.getService(TextEditorCapability.diagnosticDecorations),
+	);
+} });

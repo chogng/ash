@@ -88,6 +88,7 @@ interface StandaloneHarness {
 	prepareLineComment(options?: { insertSpace?: boolean; ignoreEmptyLines?: boolean; readOnly?: boolean; languageId?: string; value?: string }): void;
 	prepareLineCopy(emptyTail?: boolean): void;
 	prepareBrackets(value: string, columns: number[], readOnly?: boolean): void;
+	prepareMulticursor(): void;
 	runLineAction(id: string): Promise<void>;
 	readLineCopy(): { value: string; selections: string[] };
 	prepareReferencePreview(): void;
@@ -460,6 +461,11 @@ window.ashStandaloneIntegration = {
 		callerModel.setLanguage('typescript');
 		callerEditor.setSelections(columns.map(column => new stanza.Selection(1, column, 1, column)));
 		callerEditor.updateOptions({ readOnly });
+		callerEditor.focus();
+	},
+	prepareMulticursor: () => {
+		callerEditor.setValue('alpha\nbeta');
+		callerEditor.setSelection(new stanza.Selection(1, 1, 2, 5));
 		callerEditor.focus();
 	},
 	runLineAction: async id => {

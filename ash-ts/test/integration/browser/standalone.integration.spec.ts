@@ -1,5 +1,16 @@
 import { expect, test } from '@playwright/test';
 
+test('multicursor registration handles line-end cursors and one undoable edit', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareMulticursor());
+	await page.keyboard.press('Alt+Shift+i');
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).toEqual(['[1,6 -> 1,6]', '[2,5 -> 2,5]']);
+	await page.keyboard.type('X');
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('alphaX\nbetaX');
+	await page.keyboard.press('ControlOrMeta+z');
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('alpha\nbeta');
+});
+
 test('bracket navigation shares the controller with its action for multiple cursors', async ({ page }) => {
 	await page.goto('/standalone.html');
 	await page.evaluate(() => window.ashStandaloneIntegration.prepareBrackets('(one) [two]', [1, 7]));
