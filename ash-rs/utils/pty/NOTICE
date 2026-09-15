@@ -4,5 +4,8 @@ dependency.
 The PTY integration layer was copied and adapted from OpenAI Codex revision
 bdd3118c71a29f26b9df3a47f91efea38a0d58bd (2026-07-21), licensed Apache-2.0.
 
+Unix asynchronous PTY I/O and lifecycle regression scenarios were adapted
+from OpenAI Codex revision 954fa9057bf3a4521ea34dbd010ff291d5b39763.
+
 The Windows ConPTY files under src/win/ are derived from WezTerm and remain
 licensed under MIT. See ../../../third_party/wezterm/LICENSE.

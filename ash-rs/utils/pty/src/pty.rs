@@ -18,6 +18,7 @@ use std::process::Stdio;
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
 use std::sync::atomic::AtomicBool;
+#[cfg(not(unix))]
 use std::time::Duration;
 
 use anyhow::Result;
@@ -35,6 +36,7 @@ use crate::process::PtyHandles;
 use crate::process::PtyMasterHandle;
 use crate::process::SpawnedProcess;
 use crate::process::TerminalSize;
+use crate::process::WaitTask;
 #[cfg(unix)]
 use crate::process::exit_code_from_status;
 
@@ -159,6 +161,12 @@ async fn spawn_process_portable(
 ) -> Result<SpawnedProcess> {
     let pty_system = platform_native_pty_system();
     let pair = pty_system.openpty(size.into())?;
+    #[cfg(unix)]
+    let io = crate::unix_io::PtyIo::new(
+        pair.master
+            .as_raw_fd()
+            .ok_or_else(|| anyhow::anyhow!("PTY master has no file descriptor"))?,
+    )?;
 
     let mut command_builder = CommandBuilder::new(arg0.as_ref().unwrap_or(&program.to_string()));
     command_builder.cwd(cwd);
@@ -178,45 +186,56 @@ async fn spawn_process_portable(
     let process_group_id = child.process_id();
     let killer = child.clone_killer();
 
-    let (writer_tx, mut writer_rx) = mpsc::channel::<Vec<u8>>(128);
+    let (writer_tx, writer_rx) = mpsc::channel::<Vec<u8>>(128);
     let (stdout_tx, stdout_rx) = mpsc::channel::<Vec<u8>>(128);
     let (_stderr_tx, stderr_rx) = mpsc::channel::<Vec<u8>>(1);
-    let mut reader = pair.master.try_clone_reader()?;
-    let reader_handle: JoinHandle<()> = tokio::task::spawn_blocking(move || {
-        let mut buf = [0u8; 8_192];
-        loop {
-            match reader.read(&mut buf) {
-                Ok(0) => break,
-                Ok(n) => {
-                    let _ = stdout_tx.blocking_send(buf[..n].to_vec());
+    #[cfg(unix)]
+    let (reader_handle, writer_handle) = io.spawn(
+        stdout_tx,
+        writer_rx,
+        crate::unix_io::StdinCloseBehavior::SendEof,
+    );
+    #[cfg(not(unix))]
+    let (reader_handle, writer_handle) = {
+        let mut reader = pair.master.try_clone_reader()?;
+        let reader_handle: JoinHandle<()> = tokio::task::spawn_blocking(move || {
+            let mut buf = [0u8; 8_192];
+            loop {
+                match reader.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        let _ = stdout_tx.blocking_send(buf[..n].to_vec());
+                    }
+                    Err(ref e) if e.kind() == ErrorKind::Interrupted => continue,
+                    Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
+                        std::thread::sleep(Duration::from_millis(5));
+                        continue;
+                    }
+                    Err(_) => break,
                 }
-                Err(ref e) if e.kind() == ErrorKind::Interrupted => continue,
-                Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
-                    std::thread::sleep(Duration::from_millis(5));
-                    continue;
-                }
-                Err(_) => break,
             }
-        }
-    });
+        });
 
-    let writer = pair.master.take_writer()?;
-    let writer = Arc::new(tokio::sync::Mutex::new(writer));
-    let writer_handle: JoinHandle<()> = tokio::spawn({
-        let writer = Arc::clone(&writer);
-        async move {
-            #[cfg(windows)]
-            let mut windows_input = crate::WindowsTtyInputNormalizer::default();
-            while let Some(bytes) = writer_rx.recv().await {
+        let mut writer_rx = writer_rx;
+        let writer = pair.master.take_writer()?;
+        let writer = Arc::new(tokio::sync::Mutex::new(writer));
+        let writer_handle: JoinHandle<()> = tokio::spawn({
+            let writer = Arc::clone(&writer);
+            async move {
                 #[cfg(windows)]
-                let bytes = windows_input.normalize(&bytes);
-                let mut guard = writer.lock().await;
-                use std::io::Write;
-                let _ = guard.write_all(&bytes);
-                let _ = guard.flush();
+                let mut windows_input = crate::WindowsTtyInputNormalizer::default();
+                while let Some(bytes) = writer_rx.recv().await {
+                    #[cfg(windows)]
+                    let bytes = windows_input.normalize(&bytes);
+                    let mut guard = writer.lock().await;
+                    use std::io::Write;
+                    let _ = guard.write_all(&bytes);
+                    let _ = guard.flush();
+                }
             }
-        }
-    });
+        });
+        (reader_handle, writer_handle)
+    };
 
     let (exit_tx, exit_rx) = oneshot::channel::<i32>();
     let exit_status = Arc::new(AtomicBool::new(false));
@@ -254,7 +273,7 @@ async fn spawn_process_portable(
         reader_handle,
         Vec::new(),
         writer_handle,
-        wait_handle,
+        WaitTask::Child(wait_handle),
         exit_status,
         exit_code,
         Some(handles),
@@ -280,6 +299,7 @@ async fn spawn_process_preserving_fds(
     inherited_fds: &[RawFd],
 ) -> Result<SpawnedProcess> {
     let (master, slave) = open_unix_pty(size)?;
+    let io = crate::unix_io::PtyIo::new(master.as_raw_fd())?;
     let mut command = StdCommand::new(program);
     if let Some(arg0) = arg0 {
         command.arg0(arg0);
@@ -333,7 +353,7 @@ async fn spawn_process_preserving_fds(
                     return Err(std::io::Error::last_os_error());
                 }
 
-                close_inherited_fds_except(&inherited_fds);
+                close_inherited_fds_except(&inherited_fds)?;
                 Ok(())
             });
     }
@@ -342,40 +362,14 @@ async fn spawn_process_preserving_fds(
     drop(slave);
     let process_group_id = child.id();
 
-    let (writer_tx, mut writer_rx) = mpsc::channel::<Vec<u8>>(128);
+    let (writer_tx, writer_rx) = mpsc::channel::<Vec<u8>>(128);
     let (stdout_tx, stdout_rx) = mpsc::channel::<Vec<u8>>(128);
     let (_stderr_tx, stderr_rx) = mpsc::channel::<Vec<u8>>(1);
-    let mut reader = master.try_clone()?;
-    let reader_handle: JoinHandle<()> = tokio::task::spawn_blocking(move || {
-        let mut buf = [0u8; 8_192];
-        loop {
-            match std::io::Read::read(&mut reader, &mut buf) {
-                Ok(0) => break,
-                Ok(n) => {
-                    let _ = stdout_tx.blocking_send(buf[..n].to_vec());
-                }
-                Err(ref e) if e.kind() == ErrorKind::Interrupted => continue,
-                Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
-                    std::thread::sleep(Duration::from_millis(5));
-                    continue;
-                }
-                Err(_) => break,
-            }
-        }
-    });
-
-    let writer = Arc::new(tokio::sync::Mutex::new(master.try_clone()?));
-    let writer_handle: JoinHandle<()> = tokio::spawn({
-        let writer = Arc::clone(&writer);
-        async move {
-            while let Some(bytes) = writer_rx.recv().await {
-                let mut guard = writer.lock().await;
-                use std::io::Write;
-                let _ = guard.write_all(&bytes);
-                let _ = guard.flush();
-            }
-        }
-    });
+    let (reader_handle, writer_handle) = io.spawn(
+        stdout_tx,
+        writer_rx,
+        crate::unix_io::StdinCloseBehavior::NoEof,
+    );
 
     let (exit_tx, exit_rx) = oneshot::channel::<i32>();
     let exit_status = Arc::new(AtomicBool::new(false));
@@ -408,7 +402,7 @@ async fn spawn_process_preserving_fds(
         reader_handle,
         Vec::new(),
         writer_handle,
-        wait_handle,
+        WaitTask::Child(wait_handle),
         exit_status,
         exit_code,
         Some(handles),
@@ -467,8 +461,50 @@ fn set_cloexec(fd: RawFd) -> std::io::Result<()> {
     Ok(())
 }
 
-#[cfg(unix)]
-pub(crate) fn close_inherited_fds_except(preserved_fds: &[RawFd]) {
+// The child has a private descriptor table after fork. Darwin's size query reports
+// the table capacity, so this also covers sparse descriptors above a lowered rlimit.
+// Only stack values and system calls are used here; no allocator or directory locks.
+// See xnu/bsd/kern/proc_info.c::proc_pidfdlist (the null-buffer branch).
+#[cfg(target_os = "macos")]
+pub(crate) fn close_inherited_fds_except(preserved_fds: &[RawFd]) -> std::io::Result<()> {
+    // SAFETY: a null buffer requests the kernel's descriptor-table size.
+    let bytes = unsafe {
+        libc::proc_pidinfo(
+            libc::getpid(),
+            libc::PROC_PIDLISTFDS,
+            0,
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+    if bytes <= 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    let limit = bytes as usize / std::mem::size_of::<libc::proc_fdinfo>();
+    for fd in libc::STDERR_FILENO + 1..limit as RawFd {
+        if preserved_fds.contains(&fd) {
+            continue;
+        }
+        // Keep std::process's CLOEXEC error pipe open until exec, so spawn failures
+        // still reach the parent. All other unselected descriptors close here.
+        // SAFETY: this single-threaded child exclusively owns its descriptor table.
+        let flags = unsafe { libc::fcntl(fd, libc::F_GETFD) };
+        if flags == -1 {
+            let error = std::io::Error::last_os_error();
+            if error.raw_os_error() == Some(libc::EBADF) {
+                continue;
+            }
+            return Err(error);
+        }
+        if flags & libc::FD_CLOEXEC == 0 && unsafe { libc::close(fd) } == -1 {
+            return Err(std::io::Error::last_os_error());
+        }
+    }
+    Ok(())
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+pub(crate) fn close_inherited_fds_except(preserved_fds: &[RawFd]) -> std::io::Result<()> {
     if let Ok(dir) = std::fs::read_dir("/dev/fd") {
         let mut fds = Vec::new();
         for entry in dir {
@@ -496,4 +532,5 @@ pub(crate) fn close_inherited_fds_except(preserved_fds: &[RawFd]) {
             }
         }
     }
+    Ok(())
 }

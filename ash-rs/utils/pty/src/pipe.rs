@@ -21,6 +21,7 @@ use crate::process::ChildTerminator;
 use crate::process::ProcessHandle;
 use crate::process::ProcessSignal;
 use crate::process::SpawnedProcess;
+use crate::process::WaitTask;
 use crate::process::exit_code_from_status;
 
 #[cfg(target_os = "linux")]
@@ -123,7 +124,7 @@ async fn spawn_process_with_stdin_mode(
             crate::process_group::detach_from_tty()?;
             #[cfg(target_os = "linux")]
             crate::process_group::set_parent_death_signal(parent_pid)?;
-            crate::pty::close_inherited_fds_except(&inherited_fds);
+            crate::pty::close_inherited_fds_except(&inherited_fds)?;
             Ok(())
         });
     }
@@ -245,7 +246,7 @@ async fn spawn_process_with_stdin_mode(
         reader_handle,
         reader_abort_handles,
         writer_handle,
-        wait_handle,
+        WaitTask::Child(wait_handle),
         exit_status,
         exit_code,
         /*pty_handles*/ None,

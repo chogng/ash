@@ -12,6 +12,9 @@ use crate::spawn_pipe_process;
 use crate::spawn_pipe_process_no_stdin;
 use crate::spawn_pty_process;
 
+#[path = "lifecycle_tests.rs"]
+mod lifecycle_tests;
+
 #[cfg(windows)]
 #[path = "windows_tests.rs"]
 mod windows_tests;

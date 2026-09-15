@@ -114,7 +114,7 @@ pub struct ProcessHandle {
     reader_handle: StdMutex<Option<JoinHandle<()>>>,
     reader_abort_handles: StdMutex<Vec<AbortHandle>>,
     writer_handle: StdMutex<Option<JoinHandle<()>>>,
-    wait_handle: StdMutex<Option<JoinHandle<()>>>,
+    wait_handle: StdMutex<Option<WaitTask>>,
     exit_status: Arc<AtomicBool>,
     exit_code: Arc<StdMutex<Option<i32>>>,
     // PtyHandles must be preserved because the process will receive Control+C if the
@@ -123,6 +123,12 @@ pub struct ProcessHandle {
     // Optional resize hook for driver-backed sessions that proxy PTY control to
     // another backend instead of owning local PTY handles.
     resizer: StdMutex<Option<ResizeFn>>,
+}
+
+/// Child waiters own reaping; driver waiters only forward an external exit notification.
+pub(crate) enum WaitTask {
+    Child(JoinHandle<()>),
+    Driver(JoinHandle<()>),
 }
 
 impl fmt::Debug for ProcessHandle {
@@ -139,7 +145,7 @@ impl ProcessHandle {
         reader_handle: JoinHandle<()>,
         reader_abort_handles: Vec<AbortHandle>,
         writer_handle: JoinHandle<()>,
-        wait_handle: JoinHandle<()>,
+        wait_handle: WaitTask,
         exit_status: Arc<AtomicBool>,
         exit_code: Arc<StdMutex<Option<i32>>>,
         pty_handles: Option<PtyHandles>,
@@ -252,7 +258,7 @@ impl ProcessHandle {
         killer.signal(signal)
     }
 
-    /// Attempts to kill the child and abort helper tasks.
+    /// Kills the child and cancels I/O while its waiter completes reaping and reports exit.
     pub fn terminate(&self) {
         self.request_terminate();
 
@@ -274,7 +280,11 @@ impl ProcessHandle {
         if let Ok(mut h) = self.wait_handle.lock()
             && let Some(handle) = h.take()
         {
-            handle.abort();
+            match handle {
+                // A queued blocking waiter must still run to reap the terminated child.
+                WaitTask::Child(handle) => drop(handle),
+                WaitTask::Driver(handle) => handle.abort(),
+            }
         }
     }
 }
@@ -455,7 +465,7 @@ pub fn spawn_from_driver(driver: ProcessDriver) -> SpawnedProcess {
             .into_iter()
             .collect(),
         writer_handle,
-        wait_handle,
+        WaitTask::Driver(wait_handle),
         exit_status,
         exit_code,
         /*pty_handles*/ None,
