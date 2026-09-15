@@ -669,7 +669,13 @@ class ViewModelCoordinatesConverter implements ICoordinatesConverter {
 
 	public convertModelPositionToViewPosition(modelPosition: Position, affinity: PositionAffinity = PositionAffinity.None): Position {
 		const position = this.model.validatePosition(modelPosition);
-		return this.lines.ensureCurrent().convertModelPositionToViewPosition(position, affinity);
+		const projection = this.lines.ensureCurrent();
+		const viewLineIndex = projection.firstVisualLineIndex(position.lineNumber - 1);
+		if (projection.lineAt(viewLineIndex)!.logicalLineIndex !== position.lineNumber - 1) {
+			const viewLineNumber = viewLineIndex + 1;
+			return new Position(viewLineNumber, projection.getViewLineData(this.model, viewLineNumber).maxColumn);
+		}
+		return projection.convertModelPositionToViewPosition(position, affinity);
 	}
 
 	public convertModelRangeToViewRange(modelRange: Range, affinity: PositionAffinity = PositionAffinity.None): Range {

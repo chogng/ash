@@ -114,6 +114,7 @@ interface StandaloneHarness {
 	editWrappedText(value: string): WrappedLayoutState;
 	readWrappedLayout(): WrappedLayoutState;
 	prepareViewZone(unit: 'pixels' | 'lines'): ViewZoneState;
+	prepareFoldedViewZone(): number;
 	resizeViewZone(height: number, afterLineNumber: number): ViewZoneState;
 	removeViewZone(): ViewZoneState;
 	prepareVisibleRows(): { readonly lineCount: number; readonly version: number };
@@ -520,6 +521,17 @@ window.ashStandaloneIntegration = {
 		}
 		callerEditor.changeViewZones(accessor => { viewZoneId = accessor.addZone(viewZone!); });
 		return readViewZone();
+	},
+	prepareFoldedViewZone: () => {
+		callerEditor.updateOptions({ lineHeight: 20, padding: { top: 0, bottom: 0 }, wordWrap: 'wordWrapColumn', wordWrapColumn: 10, wrappingIndent: 'none', showFoldingControls: 'always', scrollBeyondLastLine: false });
+		callerEditor.setValue(['abcdefghijklmnopqrstuvwxy', '  x', '  y', ...Array.from({ length: 30 }, () => 'tail')].join('\n'));
+		callerEditor.setPosition(new stanza.Position(1, 1));
+		const domNode = document.createElement('div');
+		domNode.className = 'ash-folded-zone-probe';
+		const marginDomNode = document.createElement('div');
+		marginDomNode.className = 'ash-folded-zone-margin-probe';
+		callerEditor.changeViewZones(accessor => accessor.addZone({ afterLineNumber: 2, heightInPx: 40, showInHiddenAreas: true, domNode, marginDomNode }));
+		return callerModel.getVersionId();
 	},
 	resizeViewZone: (height, afterLineNumber) => {
 		if (!viewZone) throw new Error('View zone has not been created');

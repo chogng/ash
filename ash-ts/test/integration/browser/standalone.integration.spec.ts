@@ -1181,3 +1181,34 @@ test('minimap repaints token colors when the registry palette changes', async ({
 	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readMinimapPixel().slice(0, 3))).toEqual([0, 0, 255]);
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 });
+
+test('standalone view zones stay after the wrapped fold header while folded and scrolled', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/standalone.html');
+	const version = await page.evaluate(() => window.ashStandaloneIntegration.prepareFoldedViewZone());
+	const zone = page.locator('#caller .ash-folded-zone-probe');
+	const margin = page.locator('#caller .ash-folded-zone-margin-probe');
+	await expect(zone).toHaveCSS('top', '80px');
+	const node = await zone.elementHandle();
+	await page.locator('#caller .ash-icon-folding-expanded').first().click();
+	await expect(page.locator('#caller .ash-icon-folding-collapsed').first()).toBeVisible();
+	await expect(zone).toHaveCSS('top', '60px');
+	await expect(margin).toHaveCSS('top', '60px');
+	await page.evaluate(() => window.ashStandaloneIntegration.scrollVisibleRows(40));
+	await expect(zone).toBeVisible();
+	await expect.poll(async () => {
+		const bounds = await zone.boundingBox();
+		const root = await page.locator('#caller .stanza-editor').boundingBox();
+		return bounds && root ? Math.round(bounds.y - root.y) : null;
+	}).toBe(20);
+	await page.evaluate(() => window.ashStandaloneIntegration.scrollVisibleRows(0));
+	await page.locator('#caller .ash-icon-folding-collapsed').first().click();
+	await expect(zone).toHaveCSS('top', '80px');
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.getCallerVersion())).toBe(version);
+	expect(await node!.evaluate(element => element === document.querySelector('#caller .ash-folded-zone-probe'))).toBe(true);
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	expect(await node!.evaluate(element => element.isConnected)).toBe(false);
+	await node!.dispose();
+	expect(errors).toEqual([]);
+});

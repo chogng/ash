@@ -69,6 +69,30 @@ test("View-model lines keep the wrapping projection path when no visibility filt
 	assert.equal(projection.projection.visualLineCount, 2);
 });
 
+for (const wrapWidth of [20, 200]) {
+	test(`Hidden positions resolve to the fold header end at wrap width ${wrapWidth}`, () => {
+		using model = new TextModel("header\nx\nlong hidden body\nlast");
+		using folding = new EditorFoldingModel(model);
+		using hiddenRanges = new EditorHiddenRangeModel(model, folding);
+		using lines = createViewModelLines(model, {
+			wrapping: EditorLineWrapping.On,
+			wrapWidth,
+			visibilitySource: hiddenRanges,
+		});
+		const converter = lines.createCoordinatesConverter();
+		folding.setRanges([{ startLineIndex: 0, endLineIndex: 2, collapsed: true }]);
+		const headerEnd = converter.convertModelPositionToViewPosition(new Position(1, 7));
+		for (const lineNumber of [2, 3]) {
+			for (let column = 1; column <= model.getLineMaxColumn(lineNumber); column++) {
+				assert.deepEqual(converter.convertModelPositionToViewPosition(new Position(lineNumber, column)), headerEnd);
+			}
+		}
+		folding.setAllCollapsed(false);
+		const position = new Position(3, 8);
+		assert.deepEqual(converter.convertViewPositionToModelPosition(converter.convertModelPositionToViewPosition(position)), position);
+	});
+}
+
 class FixedTextMeasurer implements TextMeasurer {
 	readonly horizontalPadding = 0;
 	readonly contentLeftPadding = 0;
