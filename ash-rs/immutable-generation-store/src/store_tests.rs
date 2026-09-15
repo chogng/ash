@@ -21,6 +21,135 @@ const CHILD_ROOT_ENV: &str = "ASH_IMMUTABLE_STORE_CHILD_ROOT";
 const CHILD_START_ENV: &str = "ASH_IMMUTABLE_STORE_CHILD_START";
 
 #[test]
+fn changed_file_input_is_rejected_before_staged_data_can_commit() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = ImmutableGenerationStore::open(directory.path()).unwrap();
+    let source = tempfile::NamedTempFile::new().unwrap();
+    fs::write(source.path(), b"original bytes").unwrap();
+    let files = [GenerationFile::from_file("base", source.as_file())];
+    let next = super::Manifest {
+        snapshot: 1,
+        base: 1,
+        previous: None,
+        content_digest: super::publication_digest(
+            super::PublicationKind::Base,
+            ExpectedCurrent::Empty,
+            1,
+            1,
+            &files,
+            &[],
+        )
+        .unwrap(),
+    };
+    fs::write(source.path(), b"modified bytes").unwrap();
+    let base = store
+        .write_generation_directory(store.pending_base(1), &files)
+        .unwrap();
+    let layer = store
+        .write_generation_directory(store.pending_layer(1), &[])
+        .unwrap();
+    let error = super::verify_staged_digest(
+        super::PublicationKind::Base,
+        ExpectedCurrent::Empty,
+        next,
+        &base,
+        &layer,
+        &files,
+        &[],
+    )
+    .unwrap_err();
+    assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+}
+
+#[test]
+fn file_sources_publish_with_the_same_digest_as_bytes_and_keep_their_cursor() {
+    use std::io::Seek;
+    use std::io::SeekFrom;
+    let directory = tempfile::tempdir().unwrap();
+    let source = tempfile::tempdir().unwrap();
+    let contents = (0..700_000).map(|i| (i % 251) as u8).collect::<Vec<_>>();
+    let path = source.path().join("prepared");
+    fs::write(&path, &contents).unwrap();
+    let mut file = fs::File::open(&path).unwrap();
+    file.seek(SeekFrom::Start(73)).unwrap();
+    let store = ImmutableGenerationStore::open(directory.path()).unwrap();
+    store
+        .publish_base(
+            ExpectedCurrent::Empty,
+            1,
+            &[GenerationFile::from_file("base", &file)],
+            &[GenerationFile::new("delta", b"initial")],
+        )
+        .unwrap();
+    assert_eq!(file.stream_position().unwrap(), 73);
+    assert_eq!(
+        store
+            .open_current()
+            .unwrap()
+            .unwrap()
+            .read_base("base")
+            .unwrap(),
+        contents
+    );
+    let retry = store
+        .publish_base(
+            ExpectedCurrent::Empty,
+            1,
+            &[GenerationFile::new("base", &contents)],
+            &[GenerationFile::new("delta", b"initial")],
+        )
+        .unwrap();
+    assert!(matches!(retry.outcome, PublishOutcome::AlreadyPublished));
+    store
+        .publish_layer(
+            ExpectedCurrent::Snapshot(1),
+            2,
+            &[GenerationFile::from_file("delta", &file)],
+        )
+        .unwrap();
+    assert_eq!(
+        store
+            .open_current()
+            .unwrap()
+            .unwrap()
+            .read_layer("delta")
+            .unwrap(),
+        contents
+    );
+}
+
+#[test]
+fn unreadable_file_source_does_not_advance_the_generation() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = ImmutableGenerationStore::open(directory.path()).unwrap();
+    store
+        .publish_base(
+            ExpectedCurrent::Empty,
+            1,
+            &[GenerationFile::new("base", b"old")],
+            &[],
+        )
+        .unwrap();
+    let source = tempfile::NamedTempFile::new().unwrap();
+    let write_only = fs::OpenOptions::new()
+        .write(true)
+        .open(source.path())
+        .unwrap();
+    fs::write(source.path(), b"cannot read through this handle").unwrap();
+    assert!(
+        store
+            .publish_base(
+                ExpectedCurrent::Snapshot(1),
+                2,
+                &[GenerationFile::from_file("base", &write_only)],
+                &[]
+            )
+            .is_err()
+    );
+    assert_eq!(store.open_current().unwrap().unwrap().generation(), 1);
+}
+
+#[test]
 fn publishes_and_reads_a_consistent_base_and_layer_snapshot() {
     let directory = tempfile::tempdir().expect("store directory");
     let store = ImmutableGenerationStore::open(directory.path()).expect("store");

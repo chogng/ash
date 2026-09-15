@@ -1280,6 +1280,7 @@ dependencies = [
  "ash-immutable-generation-store",
  "ash-test-binary-support",
  "ash-uds",
+ "fs2",
  "globset",
  "ignore",
  "memmap2",

@@ -1,7 +1,9 @@
 use super::BIGRAM_FREQUENCY_ORDER;
 use super::BIGRAM_PAIR_COUNT;
 use super::BIGRAM_RANKS;
+use super::MAX_NGRAM_BYTES;
 use super::covering_ngrams;
+use super::hash_bytes;
 use super::pair_index;
 use super::pair_weight;
 use super::sparse_ngrams;
@@ -10,6 +12,10 @@ use sha2::Sha256;
 
 #[test]
 fn version_one_frequency_order_has_the_reviewed_digest() {
+    assert_eq!(
+        super::bigram_frequency_digest(),
+        <[u8; 32]>::from(Sha256::digest(BIGRAM_FREQUENCY_ORDER))
+    );
     assert_eq!(
         format!("{:x}", Sha256::digest(BIGRAM_FREQUENCY_ORDER)),
         "97c07c74fb0947242a253597db342e1e3e0734dc3a7dde351a0a56fb53686919"
@@ -84,6 +90,46 @@ fn covering_grams_never_create_false_negatives_for_any_embedded_slice() {
             assert!(
                 covering.iter().all(|gram| indexed.contains(gram)),
                 "missing gram for byte range {start}..{end}"
+            );
+        }
+    }
+}
+
+#[test]
+fn extraction_matches_exhaustive_boundary_definition() {
+    // Independently enumerate every eligible span, including equal-ranked and
+    // non-ASCII boundaries. The optimized visitor must emit exactly this set.
+    let mut random = 0x9713_aa04_u64;
+    for length in [0, 1, 2, 3, 31, 32, 33, 128, 1024] {
+        for alphabet in [b" \nabcABC_".as_slice(), &[0, 1, 127, 128, 195, 255]] {
+            let bytes = (0..length)
+                .map(|_| {
+                    random ^= random << 13;
+                    random ^= random >> 7;
+                    random ^= random << 17;
+                    alphabet[random as usize % alphabet.len()]
+                })
+                .collect::<Vec<_>>();
+            let mut expected = std::collections::BTreeSet::new();
+            for start in 0..bytes.len() {
+                for end in start + 3..=bytes.len().min(start + MAX_NGRAM_BYTES) {
+                    let weights = bytes[start..end]
+                        .windows(2)
+                        .map(|p| pair_weight(p[0], p[1]))
+                        .collect::<Vec<_>>();
+                    let middle = weights[1..weights.len() - 1]
+                        .iter()
+                        .copied()
+                        .max()
+                        .unwrap_or(0);
+                    if weights[0] > middle && weights[weights.len() - 1] > middle {
+                        expected.insert(hash_bytes(&bytes[start..end]));
+                    }
+                }
+            }
+            assert_eq!(
+                sparse_ngrams(&bytes),
+                expected.into_iter().collect::<Vec<_>>()
             );
         }
     }

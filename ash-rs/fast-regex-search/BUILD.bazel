@@ -3,5 +3,4 @@ load("//:defs.bzl", "ash_rust_crate")
 ash_rust_crate(
     name = "fast-regex-search",
     crate_name = "ash_fast_regex_search",
-    data = ["data/ascii-bigram-frequency-order-v1.bin"],
 )

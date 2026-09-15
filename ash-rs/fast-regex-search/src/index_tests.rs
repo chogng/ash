@@ -1,5 +1,14 @@
+use super::search::collect_matches;
+use super::update::DELTA_COMPACTION_MIN_PATHS;
 use super::*;
+use crate::FastRegexCaseSensitivity;
+use crate::FastRegexMatch;
+use crate::FastRegexPattern;
+use crate::FastRegexQuery;
+use crate::FastRegexRange;
+use crate::FastRegexUpdateOutcome;
 use crate::dir_files::take_source_read_count;
+use regex::RegexBuilder;
 use std::fs;
 use tempfile::TempDir;
 
@@ -54,7 +63,7 @@ fn manifest_file(storage: &TempDir, generation: u64) -> PathBuf {
 }
 
 #[test]
-fn sparse_candidates_are_verified_by_the_regex_engine() {
+fn indexed_candidates_are_verified_by_the_regex_engine() {
     let directory = dir();
     fs::write(
         directory.path().join("auth.rs"),
@@ -83,6 +92,22 @@ fn sparse_candidates_are_verified_by_the_regex_engine() {
             end_byte: 32
         }]
     );
+}
+
+#[test]
+fn utf8_bom_does_not_change_first_line_matching_or_preview_ranges() {
+    let directory = dir();
+    let content = "\u{feff}fn bom_marker() {}\ninside\u{feff}marker\n";
+    fs::write(directory.path().join("bom.rs"), content).unwrap();
+    let index = search(&directory, FastRegexSearchStorage::Memory);
+    assert_eq!(index.rebuild().unwrap().indexed_source_bytes, content.len());
+    let first = index.search(&query("^fn bom_marker")).unwrap();
+    assert_eq!(first.matches.len(), 1);
+    assert_eq!(first.matches[0].preview, "fn bom_marker() {}");
+    assert_eq!(first.matches[0].ranges[0].start_byte, 0);
+    let interior = index.search(&query("\u{feff}")).unwrap();
+    assert_eq!(interior.matches.len(), 1);
+    assert_eq!(interior.matches[0].line_number, 2);
 }
 
 #[test]
@@ -1400,25 +1425,27 @@ fn parallel_verification_keeps_order_ranges_and_the_global_line_limit() {
 
 #[test]
 fn older_index_format_is_rebuilt_before_searching_the_full_directory() {
-    let directory = dir();
-    fs::write(directory.path().join("a.txt"), "original_marker\n").unwrap();
-    let storage = tempfile::tempdir().unwrap();
-    let mode = FastRegexSearchStorage::Persistent(storage.path().into());
-    let index = search(&directory, mode.clone());
-    let built = index.rebuild().unwrap();
-    drop(index);
-    let path = base_file(&storage, built.generation, "format.bin");
-    let mut format = fs::read(&path).unwrap();
-    format[..crate::storage::STORE_VERSION.len()].copy_from_slice(b"ash-fast-regex-v5\0");
-    fs::write(path, format).unwrap();
-    fs::write(directory.path().join("z.txt"), "new_marker\n").unwrap();
-    let reopened = search(&directory, mode);
-    assert!(reopened.snapshot().generation > built.generation);
-    assert_eq!(reopened.snapshot().indexed_file_count, 2);
-    assert_eq!(
-        reopened.search(&query("new_marker")).unwrap().matches.len(),
-        1
-    );
+    for old_version in [b"ash-fast-regex-v5\0", b"ash-fast-regex-v7\0"] {
+        let directory = dir();
+        fs::write(directory.path().join("a.txt"), "original_marker\n").unwrap();
+        let storage = tempfile::tempdir().unwrap();
+        let mode = FastRegexSearchStorage::Persistent(storage.path().into());
+        let index = search(&directory, mode.clone());
+        let built = index.rebuild().unwrap();
+        drop(index);
+        let path = base_file(&storage, built.generation, "format.bin");
+        let mut format = fs::read(&path).unwrap();
+        format[..crate::storage::STORE_VERSION.len()].copy_from_slice(old_version);
+        fs::write(path, format).unwrap();
+        fs::write(directory.path().join("z.txt"), "new_marker\n").unwrap();
+        let reopened = search(&directory, mode);
+        assert!(reopened.snapshot().generation > built.generation);
+        assert_eq!(reopened.snapshot().indexed_file_count, 2);
+        assert_eq!(
+            reopened.search(&query("new_marker")).unwrap().matches.len(),
+            1
+        );
+    }
 }
 
 #[test]

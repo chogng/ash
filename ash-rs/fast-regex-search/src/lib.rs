@@ -1,4 +1,4 @@
-//! Local sparse n-gram acceleration for exact directory text and regular-expression search.
+//! Local trigram acceleration for exact directory text and regular-expression search.
 
 #![deny(unsafe_code)]
 
@@ -7,10 +7,10 @@ mod dir_files;
 mod disk_index;
 mod file_stamp;
 mod index;
-mod ngram;
 mod path_codec;
 mod query;
 mod storage;
+mod trigram;
 mod types;
 mod worker;
 

@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 const MAX_NGRAM_BYTES: usize = 32;
 const BIGRAM_PAIR_COUNT: usize = 1 << 16;
 const BIGRAM_FREQUENCY_ORDER: &[u8; 53_000] =
-    include_bytes!("../data/ascii-bigram-frequency-order-v1.bin");
+    include_bytes!("../../data/ascii-bigram-frequency-order-v1.bin");
 static BIGRAM_RANKS: [u16; BIGRAM_PAIR_COUNT] = expand_bigram_frequency_order();
 
 pub(crate) fn bigram_frequency_digest() -> [u8; 32] {
@@ -39,10 +39,11 @@ const fn expand_bigram_frequency_order() -> [u16; BIGRAM_PAIR_COUNT] {
 }
 
 pub(crate) fn sparse_ngrams(bytes: &[u8]) -> Vec<u64> {
-    sparse_gram_spans(bytes)
-        .into_iter()
-        .map(|gram| gram.hash)
-        .collect()
+    let mut grams = Vec::with_capacity(bytes.len());
+    visit_grams(bytes, |gram| grams.push(gram.hash));
+    grams.sort_unstable();
+    grams.dedup();
+    grams
 }
 
 /// Returns a small set of sparse grams whose byte ranges cover the required literal.
@@ -79,33 +80,44 @@ struct SparseGram {
 }
 
 fn sparse_gram_spans(bytes: &[u8]) -> Vec<SparseGram> {
+    let mut grams = Vec::new();
+    visit_grams(bytes, |gram| grams.push(gram));
+    grams.sort_by_key(|gram| gram.hash);
+    grams.dedup_by_key(|gram| gram.hash);
+    grams
+}
+
+fn visit_grams(bytes: &[u8], mut visit: impl FnMut(SparseGram)) {
     if bytes.len() < 3 {
-        return Vec::new();
+        return;
     }
     let pair_weights = bytes
         .windows(2)
         .map(|pair| pair_weight(pair[0], pair[1]))
         .collect::<Vec<_>>();
-    let mut grams = Vec::new();
     for left in 0..pair_weights.len().saturating_sub(1) {
         let mut internal_max = 0u64;
+        let mut hash = hash_bytes(&bytes[left..left + 2]);
         let right_limit = (left + MAX_NGRAM_BYTES - 2).min(pair_weights.len() - 1);
         for right in left + 1..=right_limit {
             if right > left + 1 {
                 internal_max = internal_max.max(pair_weights[right - 1]);
             }
-            if pair_weights[left] > internal_max && pair_weights[right] > internal_max {
-                grams.push(SparseGram {
+            // Once the left boundary is no longer a maximum, extending this
+            // span cannot restore it. Stop instead of checking every length.
+            if pair_weights[left] <= internal_max {
+                break;
+            }
+            hash = (hash ^ u64::from(bytes[right + 1])).wrapping_mul(0x100000001b3);
+            if pair_weights[right] > internal_max {
+                visit(SparseGram {
                     start: left,
                     end: right + 2,
-                    hash: hash_bytes(&bytes[left..right + 2]),
+                    hash,
                 });
             }
         }
     }
-    grams.sort_by_key(|gram| gram.hash);
-    grams.dedup_by_key(|gram| gram.hash);
-    grams
 }
 
 pub(crate) fn hash_bytes(bytes: &[u8]) -> u64 {
@@ -129,7 +141,3 @@ fn pair_weight(left: u8, right: u8) -> u64 {
         (pair as u64) << 16
     }
 }
-
-#[cfg(test)]
-#[path = "ngram_tests.rs"]
-mod tests;

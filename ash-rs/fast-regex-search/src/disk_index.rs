@@ -1,11 +1,12 @@
 use crate::FastRegexError;
-use crate::ngram::bigram_frequency_digest;
 use crate::storage::STORE_VERSION;
 use crate::storage::corrupt;
 use crate::storage::header_length;
 use crate::storage::io_error;
 use crate::storage::read_u32;
 use crate::storage::read_u64;
+use crate::trigram;
+use crate::trigram::format_digest;
 use ash_immutable_generation_store::OpenGenerationFile;
 use ash_immutable_generation_store::PublishedSnapshot;
 use memmap2::Mmap;
@@ -58,18 +59,18 @@ impl DiskBaseIndex {
     ) -> Result<BTreeSet<PathBuf>, FastRegexError> {
         let mut spans = Vec::with_capacity(grams.len());
         for gram in grams {
-            let Some(span) = self.posting_span(*gram) else {
+            let Some((start, count)) = self.posting_span(trigram::key(*gram)) else {
                 return Ok(BTreeSet::new());
             };
-            spans.push(span);
+            spans.push((start, count, trigram::mask(*gram)));
         }
-        spans.sort_by_key(|(_, count)| *count);
-        let Some((first_start, first_count)) = spans.first().copied() else {
+        spans.sort_by_key(|(_, count, _)| *count);
+        let Some((first_start, first_count, first_mask)) = spans.first().copied() else {
             return Ok(BTreeSet::new());
         };
-        let mut ids = self.read_posting(first_start, first_count)?;
-        for (start, count) in spans.into_iter().skip(1) {
-            let posting = self.read_posting(start, count)?;
+        let mut ids = self.read_posting(first_start, first_count, first_mask)?;
+        for (start, count, mask) in spans.into_iter().skip(1) {
+            let posting = self.read_posting(start, count, mask)?;
             ids.retain(|id| posting.binary_search(id).is_ok());
             if ids.is_empty() {
                 break;
@@ -107,9 +108,14 @@ impl DiskBaseIndex {
         None
     }
 
-    fn read_posting(&self, start: u64, expected_count: usize) -> Result<Vec<u32>, FastRegexError> {
+    fn read_posting(
+        &self,
+        start: u64,
+        expected_count: usize,
+        mask: u8,
+    ) -> Result<Vec<u32>, FastRegexError> {
         let ids_bytes = expected_count
-            .checked_mul(4)
+            .checked_mul(5)
             .ok_or_else(|| corrupt(&self.postings_path))?;
         let byte_count = ids_bytes
             .checked_add(4)
@@ -128,13 +134,16 @@ impl DiskBaseIndex {
             return Err(corrupt(&self.postings_path));
         }
         let mut ids = Vec::with_capacity(expected_count);
+        let mut previous = None;
         for index in 0..expected_count {
-            let id = read_u32(&bytes, 4 + index * 4).ok_or_else(|| corrupt(&self.postings_path))?;
-            if id as usize >= self.paths.len() || ids.last().is_some_and(|previous| *previous >= id)
-            {
+            let id = read_u32(&bytes, 4 + index * 5).ok_or_else(|| corrupt(&self.postings_path))?;
+            if id as usize >= self.paths.len() || previous.is_some_and(|previous| previous >= id) {
                 return Err(corrupt(&self.postings_path));
             }
-            ids.push(id);
+            previous = Some(id);
+            if bytes[4 + index * 5 + 4] & mask == mask {
+                ids.push(id);
+            }
         }
         Ok(ids)
     }
@@ -157,7 +166,7 @@ fn validate_disk_lookup(
     for index in 0..entry_count {
         let offset = entries_offset + index * 20;
         let key = read_u64(lookup, offset).ok_or_else(|| corrupt(path))?;
-        if previous.is_some_and(|previous| previous >= key) {
+        if key > 0x00ff_ffff || previous.is_some_and(|previous| previous >= key) {
             return Err(corrupt(path));
         }
         previous = Some(key);
@@ -168,7 +177,7 @@ fn validate_disk_lookup(
             .ok_or_else(|| corrupt(path))?;
         let posting_end = posting_start
             .checked_add(4)
-            .and_then(|end| end.checked_add(expected_count.checked_mul(4)?))
+            .and_then(|end| end.checked_add(expected_count.checked_mul(5)?))
             .ok_or_else(|| corrupt(path))?;
         if posting_end > postings_len {
             return Err(corrupt(path));
@@ -222,7 +231,7 @@ fn validate_generation_header(
 ) -> Result<(), FastRegexError> {
     if bytes.len() < header_length()
         || &bytes[..STORE_VERSION.len()] != STORE_VERSION
-        || bytes[STORE_VERSION.len()..STORE_VERSION.len() + 32] != bigram_frequency_digest()
+        || bytes[STORE_VERSION.len()..STORE_VERSION.len() + 32] != format_digest()
         || read_u64(bytes, STORE_VERSION.len() + 32) != Some(generation)
     {
         return Err(corrupt(path));

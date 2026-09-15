@@ -93,7 +93,15 @@ impl<'a> Reader<'a> {
         }
         let mut grams = Vec::with_capacity(count);
         for _ in 0..count {
-            grams.push(self.u64()?);
+            let gram = self.u64()?;
+            if gram > u64::from(u32::MAX)
+                || grams.last().is_some_and(|previous| {
+                    crate::trigram::key(*previous) >= crate::trigram::key(gram)
+                })
+            {
+                return Err(corrupt(self.path));
+            }
+            grams.push(gram);
         }
         Ok(grams)
     }

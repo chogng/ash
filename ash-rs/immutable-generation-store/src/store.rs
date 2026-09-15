@@ -1,5 +1,6 @@
 use crate::generation_file::GenerationLease;
 use crate::generation_file::OpenGenerationFile;
+use crate::generation_file::read_exact_at;
 use crate::layout::generation_name;
 use crate::layout::parse_generation_name;
 use crate::layout::parse_manifest_name;
@@ -29,12 +30,56 @@ const MANIFEST_VERSION: &[u8] = b"ash-immutable-generation-v3\0";
 #[derive(Clone, Copy)]
 pub struct GenerationFile<'a> {
     name: &'a str,
-    contents: &'a [u8],
+    contents: FileContents<'a>,
+}
+
+#[derive(Clone, Copy)]
+enum FileContents<'a> {
+    Bytes(&'a [u8]),
+    File(&'a fs::File),
 }
 
 impl<'a> GenerationFile<'a> {
     pub fn new(name: &'a str, contents: &'a [u8]) -> Self {
-        Self { name, contents }
+        Self {
+            name,
+            contents: FileContents::Bytes(contents),
+        }
+    }
+
+    /// Streams a prepared file into the publication without loading it into heap.
+    /// The source must remain unchanged until publication returns. The staged
+    /// bytes are checked against the publication digest before committing.
+    pub fn from_file(name: &'a str, file: &'a fs::File) -> Self {
+        Self {
+            name,
+            contents: FileContents::File(file),
+        }
+    }
+
+    fn length(&self) -> io::Result<u64> {
+        match self.contents {
+            FileContents::Bytes(bytes) => Ok(bytes.len() as u64),
+            FileContents::File(file) => file.metadata().map(|m| m.len()),
+        }
+    }
+
+    fn visit(&self, mut visit: impl FnMut(&[u8]) -> io::Result<()>) -> io::Result<()> {
+        match self.contents {
+            FileContents::Bytes(bytes) => visit(bytes),
+            FileContents::File(file) => {
+                let length = file.metadata()?.len();
+                let mut buffer = vec![0u8; 256 * 1024];
+                let mut offset = 0u64;
+                while offset < length {
+                    let count = (length - offset).min(buffer.len() as u64) as usize;
+                    read_exact_at(file, offset, &mut buffer[..count])?;
+                    visit(&buffer[..count])?;
+                    offset += count as u64;
+                }
+                Ok(())
+            }
+        }
     }
 }
 
@@ -165,7 +210,8 @@ impl ImmutableGenerationStore {
                 snapshot,
                 base_files,
                 layer_files,
-            ),
+            )
+            .map_err(before_commit)?,
         };
         let current = self.latest_manifest().map_err(before_commit)?;
         if let Some(report) = self.resolve_existing_or_conflict(expected_current, current, next)? {
@@ -179,6 +225,15 @@ impl ImmutableGenerationStore {
             let base = self.write_generation_directory(self.pending_base(snapshot), base_files)?;
             let layer =
                 self.write_generation_directory(self.pending_layer(snapshot), layer_files)?;
+            verify_staged_digest(
+                PublicationKind::Base,
+                expected_current,
+                next,
+                &base,
+                &layer,
+                base_files,
+                layer_files,
+            )?;
             reached_publish_stage(PublishStage::GenerationWritten);
             sync_directory(&base)?;
             sync_directory(&layer)?;
@@ -221,7 +276,8 @@ impl ImmutableGenerationStore {
                 current_manifest.base,
                 &[],
                 layer_files,
-            ),
+            )
+            .map_err(before_commit)?,
         };
         if let Some(report) = self.resolve_existing_or_conflict(expected_current, current, next)? {
             return Ok(report);
@@ -232,6 +288,15 @@ impl ImmutableGenerationStore {
             self.remove_unpublished_generation(&self.layer_directory(snapshot))?;
             let layer =
                 self.write_generation_directory(self.pending_layer(snapshot), layer_files)?;
+            verify_staged_digest(
+                PublicationKind::Layer,
+                expected_current,
+                next,
+                &layer,
+                &layer,
+                &[],
+                layer_files,
+            )?;
             reached_publish_stage(PublishStage::GenerationWritten);
             sync_directory(&layer)?;
             reached_publish_stage(PublishStage::GenerationSynced);
@@ -331,7 +396,12 @@ impl ImmutableGenerationStore {
         fs::create_dir(&directory)?;
         write_synced_file(&directory.join(LEASE_FILE), &[])?;
         for file in files {
-            write_synced_file(&directory.join(file.name), file.contents)?;
+            let mut output = fs::OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .open(directory.join(file.name))?;
+            file.visit(|bytes| output.write_all(bytes))?;
+            output.sync_all()?;
         }
         Ok(directory)
     }
@@ -667,7 +737,7 @@ fn publication_digest(
     base: u64,
     base_files: &[GenerationFile<'_>],
     layer_files: &[GenerationFile<'_>],
-) -> [u8; 32] {
+) -> io::Result<[u8; 32]> {
     let mut digest = Sha256::new();
     digest.update(MANIFEST_VERSION);
     digest.update([kind as u8]);
@@ -680,12 +750,16 @@ fn publication_digest(
     );
     digest.update(snapshot.to_le_bytes());
     digest.update(base.to_le_bytes());
-    update_files_digest(&mut digest, 1, base_files);
-    update_files_digest(&mut digest, 2, layer_files);
-    digest.finalize().into()
+    update_files_digest(&mut digest, 1, base_files)?;
+    update_files_digest(&mut digest, 2, layer_files)?;
+    Ok(digest.finalize().into())
 }
 
-fn update_files_digest(digest: &mut Sha256, role: u8, files: &[GenerationFile<'_>]) {
+fn update_files_digest(
+    digest: &mut Sha256,
+    role: u8,
+    files: &[GenerationFile<'_>],
+) -> io::Result<()> {
     let mut files = files.iter().collect::<Vec<_>>();
     files.sort_unstable_by_key(|file| file.name);
     digest.update([role]);
@@ -693,9 +767,64 @@ fn update_files_digest(digest: &mut Sha256, role: u8, files: &[GenerationFile<'_
     for file in files {
         digest.update((file.name.len() as u64).to_le_bytes());
         digest.update(file.name.as_bytes());
-        digest.update((file.contents.len() as u64).to_le_bytes());
-        digest.update(file.contents);
+        digest.update(file.length()?.to_le_bytes());
+        file.visit(|bytes| {
+            digest.update(bytes);
+            Ok(())
+        })?;
     }
+    Ok(())
+}
+
+fn verify_staged_digest(
+    kind: PublicationKind,
+    expected: ExpectedCurrent,
+    next: Manifest,
+    base: &Path,
+    layer: &Path,
+    base_files: &[GenerationFile<'_>],
+    layer_files: &[GenerationFile<'_>],
+) -> io::Result<()> {
+    if !base_files
+        .iter()
+        .chain(layer_files)
+        .any(|f| matches!(f.contents, FileContents::File(_)))
+    {
+        return Ok(());
+    }
+    let open = |root: &Path, files: &[GenerationFile<'_>]| {
+        files
+            .iter()
+            .map(|f| fs::File::open(root.join(f.name)))
+            .collect::<io::Result<Vec<_>>>()
+    };
+    let base_handles = open(base, base_files)?;
+    let layer_handles = open(layer, layer_files)?;
+    let staged_base = base_files
+        .iter()
+        .zip(&base_handles)
+        .map(|(f, h)| GenerationFile::from_file(f.name, h))
+        .collect::<Vec<_>>();
+    let staged_layer = layer_files
+        .iter()
+        .zip(&layer_handles)
+        .map(|(f, h)| GenerationFile::from_file(f.name, h))
+        .collect::<Vec<_>>();
+    let actual = publication_digest(
+        kind,
+        expected,
+        next.snapshot,
+        next.base,
+        &staged_base,
+        &staged_layer,
+    )?;
+    if actual != next.content_digest {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "generation input changed while being published",
+        ));
+    }
+    Ok(())
 }
 
 fn before_commit(source: io::Error) -> PublishError {

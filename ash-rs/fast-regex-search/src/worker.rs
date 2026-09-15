@@ -99,6 +99,9 @@ impl FastRegexWorkerClient {
             requests: RwLock::new(()),
         };
         client.start_worker()?;
+        // The endpoint startup deadline covers spawning and binding only. Loading
+        // an existing index can reconcile hundreds of thousands of files.
+        client.snapshot()?;
         Ok(client)
     }
 
@@ -350,7 +353,10 @@ impl FastRegexWorkerClient {
             .expect("live worker owns its directory")
             .remove_socket(Path::new("worker.sock"))
             .map_err(|error| worker_io("remove socket", error))?;
-        self.start_worker()
+        self.start_worker()?;
+        // This method already owns the exclusive request gate.
+        self.request_without_gate(WorkerRequest::Snapshot)
+            .map(|_| ())
     }
 }
 
@@ -391,11 +397,6 @@ pub fn serve_worker_from_environment() -> Result<(), FastRegexError> {
             serde_json::from_str(&value).map_err(|error| protocol_error(error.to_string()))
         })?;
     let root = Dir::open_local(root).map_err(|error| protocol_error(error.to_string()))?;
-    let search = Arc::new(FastRegexSearch::open(
-        root,
-        FastRegexSearchStorage::Persistent(storage),
-        limits,
-    )?);
     let directory = SocketDirectory::open(
         endpoint
             .parent()
@@ -413,6 +414,14 @@ pub fn serve_worker_from_environment() -> Result<(), FastRegexError> {
     let listener = directory
         .bind(name)
         .map_err(|error| worker_io("bind", error))?;
+    // Bind promptly so slow index validation is not mistaken for a dead process.
+    // Requests queue in the listener until loading and reconciliation complete;
+    // client open/restart waits for an actual snapshot response before returning.
+    let search = Arc::new(FastRegexSearch::open(
+        root,
+        FastRegexSearchStorage::Persistent(storage),
+        limits,
+    )?);
     let directory = Arc::new(directory);
     let stopping = Arc::new(AtomicBool::new(false));
     while !stopping.load(Ordering::Acquire) {

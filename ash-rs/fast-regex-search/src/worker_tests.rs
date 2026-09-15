@@ -176,3 +176,42 @@ fn query_paths_use_compact_text_and_preserve_non_unicode_paths() {
         query
     );
 }
+
+#[test]
+fn loading_an_existing_index_can_outlive_the_endpoint_startup_deadline() {
+    let dir = tempfile::tempdir().unwrap();
+    let storage = tempfile::tempdir().unwrap();
+    fs::write(dir.path().join("source.txt"), "ready marker\n").unwrap();
+    let root = Dir::open_local(dir.path()).unwrap();
+    let index = FastRegexSearch::open(
+        root.clone(),
+        FastRegexSearchStorage::Persistent(storage.path().into()),
+        FastRegexSearchLimits::default(),
+    )
+    .unwrap();
+    index.rebuild().unwrap();
+    drop(index);
+    // A real store lease deterministically stalls initialization past the old
+    // deadline without slowing or modifying production initialization code.
+    let lock = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(storage.path().join("store.lock"))
+        .unwrap();
+    fs2::FileExt::lock_exclusive(&lock).unwrap();
+    let binary = worker_binary();
+    let command = FastRegexWorkerCommand::new(binary.executable(), binary.arguments());
+    let storage_path = storage.path().to_path_buf();
+    let opened = thread::spawn(move || {
+        FastRegexWorkerClient::open(
+            command,
+            &root,
+            storage_path,
+            FastRegexSearchLimits::default(),
+        )
+    });
+    thread::sleep(STARTUP_TIMEOUT + Duration::from_secs(1));
+    drop(lock);
+    let client = opened.join().unwrap().unwrap();
+    assert_eq!(client.snapshot().unwrap().indexed_file_count, 1);
+}

@@ -12,6 +12,7 @@ path = "src/lib.rs"
 
 [dependencies]
 globset = { workspace = true }
+fs2 = { workspace = true }
 ignore = { workspace = true }
 memmap2 = { workspace = true }
 regex = { workspace = true }
@@ -19,16 +20,20 @@ regex-syntax = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
+tempfile = { workspace = true }
 ash-file-access = { workspace = true }
 ash-immutable-generation-store = { workspace = true }
 ash-uds = { workspace = true }
 
 [dev-dependencies]
 test-binary-support = { workspace = true }
-tempfile = { workspace = true }
 
 [[bench]]
 name = "fast_regex_vs_rg"
+harness = false
+
+[[bench]]
+name = "algorithms"
 harness = false
 
 [lints.rust]

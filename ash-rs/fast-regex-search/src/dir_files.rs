@@ -12,10 +12,11 @@ use std::path::PathBuf;
 pub(crate) fn scan_dir(
     root: &Dir,
     limits: &FastRegexSearchLimits,
-) -> Result<Vec<(PathBuf, String, FileStamp)>, FastRegexError> {
+    mut visit: impl FnMut(PathBuf, String, FileStamp) -> Result<(), FastRegexError>,
+) -> Result<(), FastRegexError> {
     let paths = dir_paths(root)?;
     let mut source_bytes = 0usize;
-    let mut documents = Vec::new();
+    let mut documents = 0usize;
     for path in paths {
         let absolute = root.canonical_path().join(&path);
         let Some((content, stamp)) = read_text_file_with_stamp(&absolute, limits.max_file_bytes)?
@@ -23,10 +24,11 @@ pub(crate) fn scan_dir(
             continue;
         };
         source_bytes = source_bytes.saturating_add(content.len());
-        limits.check_capacity(documents.len() + 1, source_bytes)?;
-        documents.push((path, content, stamp));
+        documents += 1;
+        limits.check_capacity(documents, source_bytes)?;
+        visit(path, content, stamp)?;
     }
-    Ok(documents)
+    Ok(())
 }
 
 pub(crate) fn scan_dir_stamps(

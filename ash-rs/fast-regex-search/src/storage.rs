@@ -8,7 +8,9 @@ use crate::disk_index::DiskBaseIndex;
 use crate::file_stamp::FileStamp;
 use crate::index::IndexState;
 use crate::index::IndexedDocument;
-use crate::ngram::bigram_frequency_digest;
+use crate::index::SortedPostings;
+use crate::trigram;
+use crate::trigram::format_digest;
 use ash_immutable_generation_store::ExpectedCurrent;
 use ash_immutable_generation_store::GenerationFile;
 use ash_immutable_generation_store::ImmutableGenerationStore;
@@ -18,11 +20,17 @@ use ash_immutable_generation_store::PublishReport;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
+use std::fs;
+use std::io;
+use std::io::BufWriter;
+use std::io::Seek;
+use std::io::SeekFrom;
+use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-pub(crate) const STORE_VERSION: &[u8] = b"ash-fast-regex-v7\0";
+pub(crate) const STORE_VERSION: &[u8] = b"ash-fast-regex-v8\0";
 const DELTA_FILE: &str = "delta.bin";
 const DOCUMENTS_FILE: &str = "documents.bin";
 const FORMAT_FILE: &str = "format.bin";
@@ -81,20 +89,16 @@ pub(crate) fn load(storage: &FastRegexSearchStorage) -> Result<Option<IndexState
     Ok(Some(state))
 }
 
-pub(crate) fn persist(
-    storage: &FastRegexSearchStorage,
+pub(crate) fn persist_sorted(
+    directory: &Path,
     state: &IndexState,
     expected_generation: u64,
+    mut sorted: SortedPostings,
 ) -> Result<Option<FastRegexError>, FastRegexError> {
-    let FastRegexSearchStorage::Persistent(directory) = storage else {
-        return Ok(None);
-    };
-    let mut ids = BTreeMap::new();
     let mut documents = generation_header(state.generation);
     documents.extend_from_slice(&(state.source_bytes as u64).to_le_bytes());
     documents.extend_from_slice(&(state.documents.len() as u64).to_le_bytes());
-    for (id, (path, document)) in state.documents.iter().enumerate() {
-        ids.insert(document.id, id as u32);
+    for (path, document) in &state.documents {
         write_path(&mut documents, path);
         documents.extend_from_slice(&(document.source_bytes as u64).to_le_bytes());
         documents.extend_from_slice(&document.stamp.length.to_le_bytes());
@@ -103,11 +107,8 @@ pub(crate) fn persist(
         write_bytes(&mut documents, document.revision.as_bytes());
     }
 
-    let mut postings = generation_header(state.generation);
-    let mut lookup = generation_header(state.generation);
-    let folded = sorted_postings(&state.postings);
-    lookup.extend_from_slice(&(folded.len() as u64).to_le_bytes());
-    write_posting_entries(&mut lookup, &mut postings, &ids, folded);
+    let (lookup, postings) = write_sorted_files(&mut sorted, state.generation)
+        .map_err(|source| io_error(directory, source))?;
 
     let delta = delta_header(state.generation, state.generation, 0);
     open_store(directory)?
@@ -117,8 +118,8 @@ pub(crate) fn persist(
             &[
                 GenerationFile::new(DOCUMENTS_FILE, &documents),
                 GenerationFile::new(FORMAT_FILE, &generation_header(state.generation)),
-                GenerationFile::new(POSTINGS_FILE, &postings),
-                GenerationFile::new(LOOKUP_FILE, &lookup),
+                GenerationFile::from_file(POSTINGS_FILE, &postings),
+                GenerationFile::from_file(LOOKUP_FILE, &lookup),
             ],
             &[GenerationFile::new(DELTA_FILE, &delta)],
         )
@@ -165,9 +166,7 @@ pub(crate) fn persist_delta(
 
 fn apply_delta(path: &Path, bytes: &[u8], state: &mut IndexState) -> Result<(), FastRegexError> {
     let mut reader = Reader::new(path, bytes);
-    if !reader.take(STORE_VERSION.len())?.eq(STORE_VERSION)
-        || reader.take(32)? != bigram_frequency_digest()
-    {
+    if !reader.take(STORE_VERSION.len())?.eq(STORE_VERSION) || reader.take(32)? != format_digest() {
         return Err(corrupt(path));
     }
     let base_generation = reader.u64()?;
@@ -219,12 +218,16 @@ fn remove_stored_document(state: &mut IndexState, path: &Path) {
     remove_stored_postings(&mut state.postings, document.id, &document.grams);
 }
 
-fn remove_stored_postings(postings: &mut HashMap<u64, BTreeSet<u32>>, id: u32, grams: &[u64]) {
+fn remove_stored_postings(postings: &mut HashMap<u64, Vec<u64>>, id: u32, grams: &[u64]) {
     for gram in grams {
-        if let Some(ids) = postings.get_mut(gram) {
-            ids.remove(&id);
+        if let Some(ids) = postings.get_mut(&trigram::key(*gram)) {
+            if let Ok(position) =
+                ids.binary_search_by_key(&id, |entry| trigram::document_id(*entry))
+            {
+                ids.remove(position);
+            }
             if ids.is_empty() {
-                postings.remove(gram);
+                postings.remove(&trigram::key(*gram));
             }
         }
     }
@@ -235,35 +238,69 @@ fn insert_stored_document(state: &mut IndexState, path: PathBuf, mut document: I
     state.next_document_id = state.next_document_id.saturating_add(1);
     document.id = id;
     for gram in &document.grams {
-        state.postings.entry(*gram).or_default().insert(id);
+        state
+            .postings
+            .entry(trigram::key(*gram))
+            .or_default()
+            .push(trigram::posting(id, trigram::mask(*gram)));
     }
     state.source_bytes = state.source_bytes.saturating_add(document.source_bytes);
     state.document_paths.insert(id, path.clone());
     state.documents.insert(path, document);
 }
 
-fn sorted_postings(postings: &HashMap<u64, BTreeSet<u32>>) -> Vec<(&u64, &BTreeSet<u32>)> {
-    let mut entries = postings.iter().collect::<Vec<_>>();
-    entries.sort_by_key(|(gram, _)| **gram);
-    entries
+fn write_sorted_files(
+    sorted: &mut SortedPostings,
+    generation: u64,
+) -> io::Result<(fs::File, fs::File)> {
+    let lookup_path = sorted.directory().join(LOOKUP_FILE);
+    let postings_path = sorted.directory().join(POSTINGS_FILE);
+    let mut lookup = BufWriter::with_capacity(256 * 1024, fs::File::create(&lookup_path)?);
+    let mut postings = BufWriter::with_capacity(256 * 1024, fs::File::create(&postings_path)?);
+    lookup.write_all(&generation_header(generation))?;
+    lookup.write_all(&0u64.to_le_bytes())?;
+    postings.write_all(&generation_header(generation))?;
+    let mut current = None;
+    let mut ids = Vec::new();
+    let mut offset = 0u64;
+    let mut entries = 0u64;
+    for entry in sorted.by_ref() {
+        let (gram, id) = entry?;
+        if current.is_some_and(|previous| previous != gram) {
+            write_posting_entry(&mut lookup, &mut postings, current.unwrap(), offset, &ids)?;
+            offset += 4 + ids.len() as u64 * 5;
+            entries += 1;
+            ids.clear();
+        }
+        current = Some(gram);
+        ids.push(id);
+    }
+    if let Some(gram) = current {
+        write_posting_entry(&mut lookup, &mut postings, gram, offset, &ids)?;
+        entries += 1;
+    }
+    lookup.seek(SeekFrom::Start(header_length() as u64))?;
+    lookup.write_all(&entries.to_le_bytes())?;
+    lookup.flush()?;
+    postings.flush()?;
+    Ok((fs::File::open(lookup_path)?, fs::File::open(postings_path)?))
 }
 
-fn write_posting_entries(
-    lookup: &mut Vec<u8>,
-    postings: &mut Vec<u8>,
-    ids: &BTreeMap<u32, u32>,
-    entries: Vec<(&u64, &BTreeSet<u32>)>,
-) {
-    for (gram, document_ids) in entries {
-        let offset = (postings.len() - header_length()) as u64;
-        postings.extend_from_slice(&(document_ids.len() as u32).to_le_bytes());
-        for document_id in document_ids {
-            postings.extend_from_slice(&ids[document_id].to_le_bytes());
-        }
-        lookup.extend_from_slice(&gram.to_le_bytes());
-        lookup.extend_from_slice(&offset.to_le_bytes());
-        lookup.extend_from_slice(&(document_ids.len() as u32).to_le_bytes());
+fn write_posting_entry(
+    lookup: &mut impl Write,
+    postings: &mut impl Write,
+    gram: u64,
+    offset: u64,
+    ids: &[u64],
+) -> io::Result<()> {
+    postings.write_all(&(ids.len() as u32).to_le_bytes())?;
+    for entry in ids {
+        postings.write_all(&trigram::document_id(*entry).to_le_bytes())?;
+        postings.write_all(&[trigram::mask(*entry)])?;
     }
+    lookup.write_all(&gram.to_le_bytes())?;
+    lookup.write_all(&offset.to_le_bytes())?;
+    lookup.write_all(&(ids.len() as u32).to_le_bytes())
 }
 
 type LoadedDocuments = (
@@ -348,7 +385,7 @@ fn read_generation_bytes<'a>(
 ) -> Result<&'a [u8], FastRegexError> {
     if bytes.len() < header_length()
         || &bytes[..STORE_VERSION.len()] != STORE_VERSION
-        || bytes[STORE_VERSION.len()..STORE_VERSION.len() + 32] != bigram_frequency_digest()
+        || bytes[STORE_VERSION.len()..STORE_VERSION.len() + 32] != format_digest()
         || read_u64(bytes, STORE_VERSION.len() + 32) != Some(generation)
     {
         return Err(corrupt(path));
@@ -367,7 +404,7 @@ fn format_is_compatible(
     if bytes.len() != header_length() {
         return Err(corrupt(path));
     }
-    if bytes[STORE_VERSION.len()..STORE_VERSION.len() + 32] != bigram_frequency_digest() {
+    if bytes[STORE_VERSION.len()..STORE_VERSION.len() + 32] != format_digest() {
         return Ok(false);
     }
     if read_u64(bytes, STORE_VERSION.len() + 32) != Some(generation) {
@@ -379,7 +416,7 @@ fn format_is_compatible(
 fn generation_header(generation: u64) -> Vec<u8> {
     let mut bytes = Vec::with_capacity(header_length());
     bytes.extend_from_slice(STORE_VERSION);
-    bytes.extend_from_slice(&bigram_frequency_digest());
+    bytes.extend_from_slice(&format_digest());
     bytes.extend_from_slice(&generation.to_le_bytes());
     bytes
 }
@@ -387,7 +424,7 @@ fn generation_header(generation: u64) -> Vec<u8> {
 fn delta_header(base_generation: u64, generation: u64, changed_count: usize) -> Vec<u8> {
     let mut bytes = Vec::with_capacity(STORE_VERSION.len() + 32 + 24);
     bytes.extend_from_slice(STORE_VERSION);
-    bytes.extend_from_slice(&bigram_frequency_digest());
+    bytes.extend_from_slice(&format_digest());
     bytes.extend_from_slice(&base_generation.to_le_bytes());
     bytes.extend_from_slice(&generation.to_le_bytes());
     bytes.extend_from_slice(&(changed_count as u64).to_le_bytes());
