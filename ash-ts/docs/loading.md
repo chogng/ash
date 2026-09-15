@@ -82,6 +82,14 @@ macOS arm64，Chromium 149.0.7827.55，三次测量。以下为中位数，体�
 - 8 个终端 Playwright 集成测试通过，覆盖隐藏与视图切换、重复激活、隐藏/销毁竞态、焦点、早期输出和首次输入；正式产物加载测试三次通过。
 - Renderer 类型检查、浏览器测试编译及正式 Web 构建通过。验证未覆盖 Electron；测试日志仍有环境同时设置 `NO_COLOR` 和 `FORCE_COLOR` 的提示，不影响上述结果。
 
+## 终端可见性与焦点契约
+
+- 终端视图位于 `src/ash/workbench/contrib/terminal/browser/terminalView.ts`，与 VS Code 对应文件一致；注册入口和测试使用此路径。
+- `ViewPane` 提供 `isBodyVisible()`、`onDidChangeBodyVisibility` 和 `setExpanded()`；内容区可见性由宿主可见状态及展开状态共同决定。
+- `CompositePart` 将布局可见状态传给活动视图容器。终端消费 ViewPane 的事件，不再单独组合面板与视图状态。
+- 仅显示终端保留编辑器焦点。明确调用 `focus()` 或新建终端时才请求聚焦；等待期间隐藏、销毁或移走焦点会取消该请求。
+- 上述签名及行为依据本地 VS Code 源码核对；这不代表整个终端服务 API 已对齐，也未执行 VS Code 与 Ash 的双端运行比较。
+
 ## 接线整改范围
 
 代码编辑器 Pane 的文本模型、语言功能、语言配置和实例化服务改为构造注入；语言服务不再

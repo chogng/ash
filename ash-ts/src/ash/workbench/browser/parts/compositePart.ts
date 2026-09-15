@@ -42,7 +42,12 @@ export abstract class CompositePart extends WorkbenchPart {
 		}
 		this.activeComposite = composite;
 		this.contentDomNode.append(composite.element);
-		composite.setVisible(true);
+		composite.setVisible(!this.domNode.hidden);
+	}
+
+	override setVisible(visible: boolean): void {
+		super.setVisible(visible);
+		this.activeComposite?.setVisible(visible);
 	}
 
 	get activeCompositeId(): string | undefined {

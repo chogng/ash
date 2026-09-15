@@ -60,7 +60,7 @@ declare global {
 if (new URLSearchParams(location.search).has('pane')) {
 	widget.dispose();
 	const [{ TerminalViewPane }, { ContextKeyService }, { MenuService }, { ServiceContainer }, { CommandService }, { URI }] = await Promise.all([
-		import('../../../src/ash/workbench/contrib/terminal/browser/view/terminalViewPane.js'),
+		import('../../../src/ash/workbench/contrib/terminal/browser/terminalView.js'),
 		import('../../../src/ash/platform/contextkey/common/contextkey.js'),
 		import('../../../src/ash/platform/actions/common/menuService.js'),
 		import('../../../src/ash/platform/instantiation/common/instantiation.js'),
@@ -74,6 +74,7 @@ if (new URLSearchParams(location.search).has('pane')) {
 	const commands = new CommandService(new ServiceContainer());
 	const menu = new MenuService(commands, context);
 	let visible = false;
+	let selected = true;
 	let profiles = 0;
 	let creates = 0;
 	let release: (() => void) | undefined;
@@ -83,6 +84,7 @@ if (new URLSearchParams(location.search).has('pane')) {
 	const setPanel = (value: boolean): void => {
 		visible = value;
 		visibility.fire({ partId: 'panel', visible });
+		pane.setVisible(visible && selected);
 	};
 	const pane = store.add(new TerminalViewPane(document.querySelector<HTMLElement>('#terminal')!, { id: 'terminal', title: 'Terminal' }, {
 		...Disposable.None,
@@ -121,7 +123,9 @@ if (new URLSearchParams(location.search).has('pane')) {
 	window.ashTerminalPaneIntegration = {
 		counts: () => ({ profiles, creates }),
 		panel: setPanel,
-		view: value => pane.setVisible(value),
+		view: value => { selected = value; pane.setVisible(visible && selected); },
+		expand: value => pane.setExpanded(value),
+		focus: () => pane.focus(),
 		workspace: () => workspaceChanged.fire({ previous: workspace, workspace }),
 		hold: () => { pending = new Promise<void>(resolve => { release = resolve; }); },
 		release: () => release?.(),
@@ -134,6 +138,8 @@ declare global {
 			counts(): { profiles: number; creates: number };
 			panel(visible: boolean): void;
 			view(visible: boolean): void;
+			expand(expanded: boolean): boolean;
+			focus(): void;
 			workspace(): void;
 			hold(): void;
 			release(): void;

@@ -8,7 +8,7 @@ import { ViewContainerLocation, WorkbenchViewContainerId, type WorkbenchViewRegi
 import { IWorkbenchLayoutService } from "../../../services/layout/browser/layoutService.js";
 import { ITerminalService } from "../../../services/terminal/common/terminal.js";
 import { TERMINAL_VIEW_ID } from "../common/terminal.js";
-import { TerminalViewPane } from "./view/terminalViewPane.js";
+import { TerminalViewPane } from "./terminalView.js";
 
 export { TERMINAL_VIEW_ID } from "../common/terminal.js";
 

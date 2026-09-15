@@ -95,6 +95,7 @@ for (const action of ['hide', 'dispose', 'move focus'] as const) {
 			window.ashTerminalPaneIntegration.workspace();
 			window.ashTerminalPaneIntegration.panel(false);
 			window.ashTerminalPaneIntegration.panel(true);
+			window.ashTerminalPaneIntegration.focus();
 		});
 		expect(await page.evaluate(() => window.ashTerminalPaneIntegration.counts())).toEqual({ profiles: 1, creates: 0 });
 		if (action === 'hide') await page.evaluate(() => window.ashTerminalPaneIntegration.panel(false));
@@ -126,5 +127,35 @@ test('existing hidden terminal retains output without loading xterm until reveal
 	await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
 	await expect(page.locator('.xterm-rows')).toHaveText(/hidden output/u);
 	expect(await page.evaluate(() => window.ashTerminalPaneIntegration.counts().creates)).toBe(0);
+	await page.evaluate(() => window.ashTerminalIntegration.dispose());
+});
+
+for (const requestFocus of [false, true]) {
+	test(`terminal activation ${requestFocus ? 'honors explicit focus' : 'preserves editor focus'}`, async ({ page }) => {
+		await page.goto('/terminal.html?pane');
+		await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
+		await page.locator('#outside').focus();
+		await page.evaluate(focus => {
+			window.ashTerminalPaneIntegration.panel(true);
+			if (focus) window.ashTerminalPaneIntegration.focus();
+		}, requestFocus);
+		await expect(page.locator('.xterm')).toHaveCount(1);
+		await expect(page.locator(requestFocus ? '.xterm-helper-textarea' : '#outside')).toBeFocused();
+		await page.evaluate(() => window.ashTerminalIntegration.dispose());
+	});
+}
+
+test('collapsed terminal defers initialization until expanded', async ({ page }) => {
+	await page.goto('/terminal.html?pane');
+	await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
+	await page.evaluate(async () => {
+		window.ashTerminalPaneIntegration.expand(false);
+		window.ashTerminalPaneIntegration.panel(true);
+		window.ashTerminalPaneIntegration.workspace();
+		await new Promise(requestAnimationFrame);
+	});
+	expect(await page.evaluate(() => window.ashTerminalPaneIntegration.counts())).toEqual({ profiles: 0, creates: 0 });
+	await page.evaluate(() => window.ashTerminalPaneIntegration.expand(true));
+	await expect(page.locator('.xterm')).toHaveCount(1);
 	await page.evaluate(() => window.ashTerminalIntegration.dispose());
 });

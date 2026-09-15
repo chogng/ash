@@ -1,22 +1,22 @@
-import { TabList, type TabListDropPosition } from "../../../../../base/browser/ui/tablist/tabList.js";
-import { Disposable } from "../../../../../base/common/lifecycle.js";
-import { lxiconsLibrary } from "../../../../../base/common/lxiconsLibrary.js";
-import type { IMenuService } from "../../../../../platform/actions/common/menuService.js";
-import type { IContextKeyService } from "../../../../../platform/contextkey/common/contextkey.js";
-import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
-import type { IThemeService } from "../../../../../platform/theme/common/themeService.js";
-import { AppServerRemoteError } from "../../../../../platform/app-server/common/appServerError.js";
-import type { IWorkspaceContextService } from "../../../../../platform/workspace/common/workspace.js";
-import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../../browser/parts/views/viewPane.js";
-import type { IWorkbenchLayoutService } from "../../../../services/layout/browser/layoutService.js";
-import type { ITerminalDimensions, ITerminalInstance, ITerminalService } from "../../../../services/terminal/common/terminal.js";
-import { TerminalInstanceWidget } from "../instance/terminalInstanceWidget.js";
-import { TerminalTabsLayout } from "./terminalTabsLayout.js";
-import { terminalProfileIcon } from "./terminalProfileIcon.js";
-import { TerminalTitleActions } from "./terminalTitleActions.js";
-import "./media/terminal.css";
-import { h } from "../../../../../base/browser/dom.js";
-import { observeResize } from "../../../../../base/browser/observer.js";
+import { TabList, type TabListDropPosition } from "../../../../base/browser/ui/tablist/tabList.js";
+import { Disposable } from "../../../../base/common/lifecycle.js";
+import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
+import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
+import type { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
+import type { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
+import type { IThemeService } from "../../../../platform/theme/common/themeService.js";
+import { AppServerRemoteError } from "../../../../platform/app-server/common/appServerError.js";
+import type { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
+import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../browser/parts/views/viewPane.js";
+import type { IWorkbenchLayoutService } from "../../../services/layout/browser/layoutService.js";
+import type { ITerminalDimensions, ITerminalInstance, ITerminalService } from "../../../services/terminal/common/terminal.js";
+import { TerminalInstanceWidget } from "./instance/terminalInstanceWidget.js";
+import { TerminalTabsLayout } from "./view/terminalTabsLayout.js";
+import { terminalProfileIcon } from "./view/terminalProfileIcon.js";
+import { TerminalTitleActions } from "./view/terminalTitleActions.js";
+import "./view/media/terminal.css";
+import { h } from "../../../../base/browser/dom.js";
+import { observeResize } from "../../../../base/browser/observer.js";
 
 const DEFAULT_DIMENSIONS: ITerminalDimensions = { rows: 24, cols: 80 };
 
@@ -33,6 +33,7 @@ export class TerminalViewPane extends ViewPane {
 	private draggedTerminal: ITerminalInstance | undefined;
 	private creating = false;
 	private initializing = false;
+	private focusSource: Element | null | undefined;
 
 	constructor(container: HTMLElement, options: IViewPaneOptions, terminalService: ITerminalService, themeService: IThemeService, menuService: IMenuService, contextMenuService: IContextMenuService, contextKeyService: IContextKeyService, private readonly layoutService: IWorkbenchLayoutService, private readonly workspaceContext: IWorkspaceContextService) {
 		super(container, options);
@@ -44,7 +45,10 @@ export class TerminalViewPane extends ViewPane {
 			menuService,
 			contextMenuService,
 			contextKeyService,
-			createTerminal: (profileId) => this.createTerminal(profileId),
+			createTerminal: (profileId) => {
+				this.focusSource = this.element.ownerDocument.activeElement;
+				return this.createTerminal(profileId);
+			},
 			focusActive: () => this.focus(),
 			relaunchActive: () => this.relaunchActive(),
 			killActive: () => this.killActive(),
@@ -99,10 +103,16 @@ export class TerminalViewPane extends ViewPane {
 		}));
 		this._register(terminalService.onDidChangeActiveInstance(() => this.updateInstances()));
 		this._register(terminalService.onDidChangeInstances(() => this.updateInstances()));
-		this._register(layoutService.onDidChangePartVisibility(({ partId, visible }) => {
-			if (partId !== "panel") return;
-			this.updateInstances();
-			if (visible) void this.initialize();
+		this._register(this.onDidChangeBodyVisibility(visible => {
+			if (visible) {
+				queueMicrotask(() => {
+					this.updateInstances();
+					void this.initialize();
+				});
+			} else {
+				this.focusSource = undefined;
+				this.updateInstances();
+			}
 		}));
 		this._register(workspaceContext.onDidChangeWorkspace(({ workspace }) => {
 			if (workspace.folders.length > 0 && this.terminalService.instances.length === 0) void this.initialize();
@@ -120,24 +130,13 @@ export class TerminalViewPane extends ViewPane {
 		});
 	}
 
-	override setVisible(visible: boolean): void {
-		super.setVisible(visible);
-		if (visible) {
-			queueMicrotask(() => {
-				this.updateInstances();
-				void this.initialize();
-			});
-		} else {
-			this.updateInstances();
-		}
-	}
-
-	private isTerminalVisible(): boolean {
-		return !this.isDisposed && this.isVisible() && this.layoutService.isPartVisible("panel");
-	}
-
 	override focus(): void {
-		if (this.isTerminalVisible()) this.activeItem()?.widget.focus();
+		if (!this.isVisible() || this.isDisposed) return;
+		this.setExpanded(true);
+		super.focus();
+		this.focusSource = this.element.ownerDocument.activeElement;
+		this.updateInstances();
+		void this.initialize();
 	}
 
 	override get partTitleProjection(): PartTitleProjection {
@@ -145,13 +144,12 @@ export class TerminalViewPane extends ViewPane {
 	}
 
 	private async initialize(): Promise<void> {
-		if (!this.isTerminalVisible() || this.initializing) return;
+		if (!this.isBodyVisible() || this.isDisposed || this.initializing) return;
 		if (!this.hasWorkspaceFolder()) {
 			this.titleActions.setProfiles([]);
 			this.setStatus("Open a folder to use the terminal.");
 			return;
 		}
-		const focusSource = this.element.ownerDocument.activeElement;
 		this.initializing = true;
 		try {
 			const profiles = await this.terminalService.getProfiles();
@@ -163,10 +161,10 @@ export class TerminalViewPane extends ViewPane {
 		} finally {
 			this.initializing = false;
 		}
-		if (this.isTerminalVisible() && this.terminalService.instances.length === 0) await this.createTerminal(undefined, focusSource);
+		if (this.isBodyVisible() && !this.isDisposed && this.terminalService.instances.length === 0) await this.createTerminal();
 	}
 
-	private async createTerminal(profileId?: string, focusSource = this.element.ownerDocument.activeElement): Promise<void> {
+	private async createTerminal(profileId?: string): Promise<void> {
 		if (this.creating || this.isDisposed) return;
 		if (!this.hasWorkspaceFolder()) {
 			this.setStatus("Open a folder to use the terminal.");
@@ -180,14 +178,17 @@ export class TerminalViewPane extends ViewPane {
 				dimensions: this.activeItem()?.widget.dimensions() ?? DEFAULT_DIMENSIONS,
 				profile: profileId ? { type: "profile", profileId } : { type: "default" },
 			});
-			if (this.isTerminalVisible() && this.element.ownerDocument.activeElement === focusSource) this.focus();
 		} catch (error) {
 			if (!this.isDisposed) {
+				this.focusSource = undefined;
 				this.setStatus(terminalErrorMessage(error, "Terminal is unavailable"));
 			}
 		} finally {
 			this.creating = false;
-			if (!this.isDisposed) this.titleActions.setCreating(false);
+			if (!this.isDisposed) {
+				this.titleActions.setCreating(false);
+				this.updateInstances();
+			}
 		}
 	}
 
@@ -230,9 +231,13 @@ export class TerminalViewPane extends ViewPane {
 
 	private updateInstances(): void {
 		this.render();
-		if (!this.isTerminalVisible()) return;
+		if (!this.isBodyVisible() || this.isDisposed) return;
 		const item = this.activeItem();
 		if (!item) return;
+		if (!this.creating && this.focusSource !== undefined) {
+			if (this.element.ownerDocument.activeElement === this.focusSource) item.widget.focus();
+			this.focusSource = undefined;
+		}
 		void item.widget.initialize().catch(error => {
 			if (this.isDisposed || this.items.get(item.instance) !== item) return;
 			this.removeInstance(item.instance);
@@ -254,7 +259,7 @@ export class TerminalViewPane extends ViewPane {
 		this.titleActions.setActiveInstance(active, instanceSwitcherPlacement);
 		this.tabsLayout.setInstanceListPresentation(instanceSwitcherPlacement === "list" ? "visible" : "hidden");
 		for (const [instance, item] of this.items) {
-			item.widget.setVisible(this.isTerminalVisible() && instance === active);
+			item.widget.setVisible(this.isBodyVisible() && !this.isDisposed && instance === active);
 		}
 		this.renderTabs();
 	}

@@ -19,6 +19,13 @@ test("ViewPane title chevron tracks collapsed state", async () => {
 			collapsed: true,
 		});
 
+		const visibility: boolean[] = [];
+		using listener = pane.onDidChangeBodyVisibility(value => visibility.push(value));
+		assert.equal(pane.isVisible(), false);
+		assert.equal(pane.isBodyVisible(), false);
+		pane.setVisible(true);
+		assert.deepEqual(visibility, []);
+
 		const title = pane.element.querySelector(".ash-pane-view-header-title");
 		const button = pane.element.querySelector<HTMLButtonElement>(".ash-pane-view-header-button");
 		const content = pane.element.querySelector<HTMLElement>(".ash-pane-view-content");
@@ -36,6 +43,17 @@ test("ViewPane title chevron tracks collapsed state", async () => {
 		assert.equal(button?.classList.contains("expanded"), true);
 		assert.equal(pane.element.classList.contains("collapsed"), false);
 		assert.equal(content?.hidden, false);
+
+		assert.equal(pane.isBodyVisible(), true);
+		assert.deepEqual(visibility, [true]);
+		assert.equal(pane.setExpanded(true), false);
+		pane.setVisible(false);
+		assert.equal(pane.isBodyVisible(), false);
+		assert.equal(pane.setExpanded(false), true);
+		assert.equal(pane.setExpanded(true), true);
+		assert.equal(pane.isBodyVisible(), false);
+		pane.setVisible(true);
+		assert.deepEqual(visibility, [true, false, false, true, true]);
 
 		pane.setTitle("Renamed Pane");
 		assert.equal(title?.textContent, "Renamed Pane");
