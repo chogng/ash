@@ -1072,7 +1072,7 @@ Kimi 订阅登录使用 device-code flow，没有本地 callback listener：App 
 修改契约后执行：
 
 ```bash
-corepack pnpm run generate:protocol
+pnpm run generate:protocol
 ```
 
 生成产物、Rust contract tests 和 Desktop TypeScript 编译必须同时通过。

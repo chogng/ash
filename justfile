@@ -35,7 +35,7 @@ build: build-desktop build-rust
 
 # Build the Electron Desktop product.
 build-desktop:
-    corepack pnpm --dir ash-ts build
+    pnpm --dir ash-ts build
 
 # Build the root Rust workspace with the locked V8 inputs when required.
 build-rust *args:
@@ -69,7 +69,7 @@ generate-config-schema:
 # Refresh the checked-in App Server protocol fixtures and generated TypeScript client.
 generate-protocol:
     cargo run --quiet -p ash-app-server-protocol --bin generate_protocol -- fixtures
-    corepack pnpm --dir ash-ts run protocol:generate
+    pnpm --dir ash-ts run protocol:generate
 
 # Launch the ash code TUI product from the current source tree.
 ash *args:
@@ -89,7 +89,7 @@ ash-package-run *args:
 
 # Launch the ash Electron Desktop product.
 ash-desktop:
-    corepack pnpm --dir ash-ts dev
+    pnpm --dir ash-ts dev
 
 # Launch the pure-Rust app Desktop product.
 app:

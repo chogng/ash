@@ -110,11 +110,11 @@ architecture drift.
 Run:
 
 ```text
-corepack pnpm --dir ash-ts test:extensions
-corepack pnpm --dir ash-ts typecheck:extensions
-corepack pnpm --dir ash-ts test:unit
-corepack pnpm --dir ash-ts typecheck:renderer
-corepack pnpm --dir ash-ts test:build-tools
+pnpm --dir ash-ts test:extensions
+pnpm --dir ash-ts typecheck:extensions
+pnpm --dir ash-ts test:unit
+pnpm --dir ash-ts typecheck:renderer
+pnpm --dir ash-ts test:build-tools
 ```
 
 Tests cover strict manifest/resource normalization, all supported contribution shapes, language

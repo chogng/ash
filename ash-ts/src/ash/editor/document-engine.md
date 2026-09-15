@@ -184,7 +184,7 @@ Invalid schema、selection、step、plugin state 或 line snapshot 在 commit �
 
 ## 验证与修改影响
 
-- 修改 line identity、store validation、transaction、selection、history、plugin 或 serialization：运行 `corepack pnpm --dir ash-ts run test:editor:unit`。
-- 修改 `RichTextEditorWidget`、clipboard、IME、atom view 或 pane integration：运行 unit suite 和 `corepack pnpm --dir ash-ts run test:editor:browser`。
+- 修改 line identity、store validation、transaction、selection、history、plugin 或 serialization：运行 `pnpm --dir ash-ts run test:editor:unit`。
+- 修改 `RichTextEditorWidget`、clipboard、IME、atom view 或 pane integration：运行 unit suite 和 `pnpm --dir ash-ts run test:editor:browser`。
 - 修改 dependency direction、profile composition 或 codec boundary：运行 editor architecture tests、Renderer typecheck 和 stale-reference scan。
 - 所有改动运行 `git diff --check`。

@@ -129,8 +129,8 @@ function runTypecheck() {
 	}
 	process.stdout.write(`repository script: ${command}\n`);
 	const result = process.platform === 'win32'
-		? run(process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', 'corepack pnpm --dir ash-ts run typecheck:stanza'])
-		: run('corepack', ['pnpm', '--dir', 'ash-ts', 'run', 'typecheck:stanza']);
+		? run(process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', 'pnpm --dir ash-ts run typecheck:stanza'])
+		: run('pnpm', ['--dir', 'ash-ts', 'run', 'typecheck:stanza']);
 	if (result.stdout) process.stdout.write(result.stdout);
 	if (result.stderr) process.stderr.write(result.stderr);
 	if (result.status !== 0) process.stderr.write(`[typecheck:stanza] FAILED with exit code ${result.status}\n`);
@@ -145,8 +145,8 @@ function runBehaviorTests() {
 	}[testMode];
 	process.stdout.write(`\n[behavior tests: ${testMode}]\n`);
 	const result = process.platform === 'win32'
-		? run(process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', `corepack pnpm --dir ash-ts run ${script}`])
-		: run('corepack', ['pnpm', '--dir', 'ash-ts', 'run', script]);
+		? run(process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', `pnpm --dir ash-ts run ${script}`])
+		: run('pnpm', ['--dir', 'ash-ts', 'run', script]);
 	if (result.stdout) process.stdout.write(result.stdout);
 	if (result.stderr) process.stderr.write(result.stderr);
 	if (result.status !== 0) process.stderr.write(`[behavior tests: ${testMode}] FAILED with exit code ${result.status}\n`);

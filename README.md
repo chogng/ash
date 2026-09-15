@@ -25,11 +25,17 @@ On macOS or Linux, install Rust. Cargo supplies the input classifier's
 build-time Protocol Buffers compiler; no system `protoc` installation is
 required.
 
-For Electron or Browser Workbench development, install the pinned pnpm workspace:
+For Electron or Browser Workbench development, first install the Node version in
+`.nvmrc`. From the repository root, install the pnpm version declared by
+`package.json`, then install workspace dependencies:
 
 ```bash
-corepack pnpm install
+npm install -g "$(node -p 'require("./package.json").packageManager')"
+pnpm install
 ```
+
+These commands work in PowerShell and Bash. Build and test commands invoke pnpm
+directly; the install check requires the exact declared pnpm version.
 
 Build definitions live in [`build/`](build), while reproducible local artifacts are collected under the ignored `.build/` root. See [`docs/build.md`](docs/build.md) for the command and output layout.
 
@@ -39,7 +45,7 @@ Build all three product lines through the repository-level command:
 just build
 ```
 
-`corepack pnpm build` builds only the Electron and Browser workspace.
+`pnpm build` builds only the Electron and Browser workspace.
 
 ### `ash code`
 
@@ -60,7 +66,7 @@ cargo run -p ash-cli --bin ash
 ```bash
 just ash-desktop
 # or:
-corepack pnpm dev:desktop
+pnpm dev:desktop
 ```
 
 The Desktop command is shared by both Workbench build modes. The default mode is `code`; build
@@ -69,8 +75,8 @@ matrix checks can set `ASH_WORKBENCH_MODE=academic` without changing the command
 ### Browser Workbench
 
 ```bash
-corepack pnpm dev:web       # disconnected UI at http://127.0.0.1:5173/
-corepack pnpm dev:web:full # Rust-backed UI at http://127.0.0.1:5174/
+pnpm dev:web       # disconnected UI at http://127.0.0.1:5173/
+pnpm dev:web:full # Rust-backed UI at http://127.0.0.1:5174/
 ```
 
 The full Web mode is a local development integration, not a deployable Web service.
@@ -80,7 +86,7 @@ The full Web mode is a local development integration, not a deployable Web servi
 只调试 Stanza 编辑器本身时运行：
 
 ```bash
-corepack pnpm dev:stanza
+pnpm dev:stanza
 ```
 
 然后打开 `http://127.0.0.1:5199/build/vite/stanza/index.html`。在 VS Code 中也可以直接选择

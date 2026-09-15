@@ -10,17 +10,17 @@ Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保
 | --- | --- | --- | --- |
 | `build/` | 产物构建、生成、下载、监听、打包、签名及其共享实现 | 是 | 否 |
 | `scripts/` | Cargo 环境、格式化、测试、诊断和维护等仓库操作 | 是 | 否 |
-| `.build/` | Cargo、Desktop、测试和 Bazel 本地产物 | 否 | 是，运行 `corepack pnpm clean` |
+| `.build/` | Cargo、Desktop、测试和 Bazel 本地产物 | 否 | 是，运行 `pnpm clean` |
 | `ash-ts/generated/` | 协议和图标生成后参与编译的源码 | 部分文件按生成规则管理 | 否，必须由对应同步命令更新 |
 | `ash-ts/docs/`、`ash-ts/licenses/` | Desktop 的文档和打包输入 | 是 | 否 |
-| `node_modules/` | pnpm workspace 的依赖链接和虚拟依赖树；内容寻址 store 使用用户级默认缓存 | 否 | 可通过 `corepack pnpm install` 重新安装 |
+| `node_modules/` | pnpm workspace 的依赖链接和虚拟依赖树；内容寻址 store 使用用户级默认缓存 | 否 | 可通过 `pnpm install` 重新安装 |
 | `.ash/` | 当前目录的 Ash 配置或运行状态 | 按目录用途决定 | 不应由构建清理 |
 
 ## 构建入口
 
 根 `Justfile` 是三个产品和根 Rust workspace 的统一入口。根 `package.json` 只提供 pnpm workspace 与 Electron、Browser、Stanza 等 Node 构建入口，不编排 Rust workspace。
 
-Node 工具与 Desktop 单测使用仓库根 `.nvmrc` 固定的 Node 25.2.1。运行 `nvm use` 后再执行 `corepack pnpm install`、构建或测试；Node 22 已不受支持，安装和单测入口会明确拒绝它。
+Node 工具与 Desktop 单测使用仓库根 `.nvmrc` 固定的 Node 25.2.1。切换到该版本后，按 [README 初始化步骤](../README.md#quick-start) 安装根 `package.json` 声明的 pnpm，再执行 `pnpm install`、构建或测试。所有入口直接调用 pnpm，安装检查要求 pnpm 版本与声明完全一致；Node 22 已不受支持。
 
 | 命令 | 结果 |
 | --- | --- |
@@ -34,16 +34,16 @@ Node 工具与 Desktop 单测使用仓库根 `.nvmrc` 固定的 Node 25.2.1。�
 | `just test-python [scripts|ash-code|build|release]` | 使用锁定的 Python 工具环境运行全部单元测试，或只运行指定 owner 的测试 |
 | `just dependencies` | 检查 Rust 依赖声明、间接依赖边界、已审查的多版本集合和无用依赖 |
 | `just bench-build <package> [--profile dev]` | 记录一个 Cargo package 的构建耗时、RSS 和产物大小 |
-| `corepack pnpm build` | 构建 Electron Main、Preload 和当前 `ASH_PRODUCT` Renderer |
-| `corepack pnpm build:desktop` | 构建 Electron Main、Preload 和当前 `ASH_PRODUCT` Renderer |
-| `corepack pnpm test:build` | 运行构建工具自身的单元测试 |
-| `corepack pnpm test` | 直接运行构建工具检查和 Desktop 单元测试 |
-| `corepack pnpm test:integration` | 直接运行 Editor 浏览器集成测试 |
-| `corepack pnpm test:web-integration` | 直接运行带 App Server 的完整 Web 集成测试 |
-| `corepack pnpm test:desktop:smoke` | 直接运行 Electron Desktop smoke tests |
-| `corepack pnpm typecheck:build` | 严格检查整个 `build/` 中的 TypeScript 构建代码 |
-| `corepack pnpm --dir ash-ts typecheck:test-unit` | 检查 Desktop 单测入口及其辅助代码 |
-| `corepack pnpm clean` | 删除 `.build/` 和已知旧输出，不删除依赖、目录状态或源码生成物 |
+| `pnpm build` | 构建 Electron Main、Preload 和当前 `ASH_PRODUCT` Renderer |
+| `pnpm build:desktop` | 构建 Electron Main、Preload 和当前 `ASH_PRODUCT` Renderer |
+| `pnpm test:build` | 运行构建工具自身的单元测试 |
+| `pnpm test` | 直接运行构建工具检查和 Desktop 单元测试 |
+| `pnpm test:integration` | 直接运行 Editor 浏览器集成测试 |
+| `pnpm test:web-integration` | 直接运行带 App Server 的完整 Web 集成测试 |
+| `pnpm test:desktop:smoke` | 直接运行 Electron Desktop smoke tests |
+| `pnpm typecheck:build` | 严格检查整个 `build/` 中的 TypeScript 构建代码 |
+| `pnpm --dir ash-ts typecheck:test-unit` | 检查 Desktop 单测入口及其辅助代码 |
+| `pnpm clean` | 删除 `.build/` 和已知旧输出，不删除依赖、目录状态或源码生成物 |
 
 Desktop 的 `code` 与 `academic` 仍通过同一个 `build:desktop` 入口构建；`ASH_PRODUCT` 只选择矩阵项，不创建另一套命令。
 

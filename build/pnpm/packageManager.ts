@@ -15,6 +15,6 @@ export function validatePackageManager(userAgent: string | undefined, expected: 
   const actual = userAgent?.split(" ", 1)[0];
   const required = `${expected.name}/${expected.version}`;
   if (actual !== required) {
-    throw new Error(`Use ${expected.name}@${expected.version} through Corepack; received ${actual ?? "no package manager"}.`);
+    throw new Error(`Use ${expected.name}@${expected.version}; received ${actual ?? "no package manager"}. Install it with npm install -g ${expected.name}@${expected.version}.`);
   }
 }

@@ -47,8 +47,8 @@ distance；Files pane rows consume `FILES` for branches and `FILE_TEXT` for leaf
 新增、删除或重命名 SVG 后运行：
 
 ```bash
-corepack pnpm icons:generate
-corepack pnpm icons:check
+pnpm icons:generate
+pnpm icons:check
 cargo test --manifest-path Cargo.toml -p ash-icons
 ```
 

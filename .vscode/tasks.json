@@ -23,7 +23,7 @@
 		{
 			"label": "Launch Stanza Vite",
 			"type": "shell",
-			"command": "corepack pnpm run dev:stanza",
+			"command": "pnpm run dev:stanza",
 			"isBackground": true,
 			"problemMatcher": {
 				"owner": "vite",

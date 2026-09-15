@@ -407,8 +407,8 @@ identity、lease 和 disconnect 语义。
 cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
-corepack pnpm --dir ash-ts test:main
-corepack pnpm --dir ash-ts typecheck:renderer
+pnpm --dir ash-ts test:main
+pnpm --dir ash-ts typecheck:renderer
 ```
 
 协议变更还必须重新生成并提交 JSON Schema、TypeScript 与 Desktop 同步产物。

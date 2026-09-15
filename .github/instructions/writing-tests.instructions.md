@@ -17,11 +17,11 @@ Canonical reference: https://github.com/microsoft/vscode/wiki/Writing-Tests
 
 ## Running Tests
 
-- **Unit tests:** `corepack pnpm --dir ash-ts test:unit`
+- **Unit tests:** `pnpm --dir ash-ts test:unit`
   - Filter: `--grep <pattern>`
   - File: `--run src/ash/<owner>/test/<runtime>/myFile.test.ts`
   - Glob: `--runGlob '**/myFile.test.js'`
-- **Editor browser integration:** `corepack pnpm --dir ash-ts test:editor:browser`
+- **Editor browser integration:** `pnpm --dir ash-ts test:editor:browser`
 - **Browser and Electron UI:** use the owning `test:smoke:*` Playwright project.
 
 ## Writing Unit Tests

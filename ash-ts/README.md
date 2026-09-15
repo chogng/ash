@@ -11,19 +11,19 @@
 首次运行时，先在仓库根目录 `ash` 下安装依赖：
 
 ```bash
-corepack pnpm install
+pnpm install
 ```
 
 安装完成后，在仓库根目录执行下面的命令启动桌面端：
 
 ```bash
-corepack pnpm dev:desktop
+pnpm dev:desktop
 ```
 
 只开发桌面界面、但需要检查 Electron 特有的窗口、标题栏、菜单和原生交互时，运行：
 
 ```bash
-corepack pnpm dev:desktop:ui
+pnpm dev:desktop:ui
 ```
 
 该命令只同步前端生成资源，并启动 Vite、Electron 主进程、预加载脚本和 Electron 窗口；不会构建 Rust 开发包，也不会启动 App Server。窗口中的 App Server 状态会保持为已停止，依赖后端的聊天、文件、Git、终端和搜索操作会明确不可用；选择文件夹仅更新界面的工作区上下文，方便检查前端布局和状态。可以在 Settings 的 Workbench Mode 中切换并重载当前窗口；需要覆盖启动初始模式时设置 `ASH_WORKBENCH_MODE` 环境变量。
@@ -31,7 +31,7 @@ corepack pnpm dev:desktop:ui
 只开发 Browser Workbench 界面时，在仓库根目录运行：
 
 ```bash
-corepack pnpm dev:web
+pnpm dev:web
 ```
 
 该命令只同步生成资源并启动监听 `127.0.0.1:5173` 的 Vite 开发服务器；打开
@@ -42,7 +42,7 @@ Terminal 等依赖后端的操作会明确报告不可用。
 只调试 Stanza 编辑器和它的 standalone services 时，在仓库根目录运行：
 
 ```bash
-corepack pnpm dev:stanza
+pnpm dev:stanza
 ```
 
 打开 `http://127.0.0.1:5199/build/vite/stanza/index.html`。VS Code 的
@@ -53,7 +53,7 @@ corepack pnpm dev:stanza
 需要真实 App Server 能力时运行完整 Web 开发模式：
 
 ```bash
-corepack pnpm dev:web:full
+pnpm dev:web:full
 ```
 
 完整模式监听 `127.0.0.1:5174`，根地址同样会进入当前产品版本。Browser 通过 Vite 已认证的 HMR WebSocket 连接本地开发
@@ -99,20 +99,20 @@ Server supervisor 停止旧连接并启动新 generation。构建失败时当前
 executable 路径，不依赖默认 target layout；generation 以 executable 内容摘要命名，内容未变化时不会重复发布，只保留当前版本
 和一个回滚版本。Watcher 只接受 `ash-rs` 源文件与根 `Cargo.toml`、`Cargo.lock`，明确忽略默认
 `.build/cargo` 以及解析后的自定义 `CARGO_TARGET_DIR` 内生成的 Rust 文件，避免一次构建再次触发自己。可以单独运行
-`corepack pnpm dev:rust` 启动同一 watcher；`dev:ui` 和
+`pnpm dev:rust` 启动同一 watcher；`dev:ui` 和
 不启动 Rust 的 disconnected Web 模式不会监听后端。
 
 不带项目路径启动时，Ash 使用空窗口上下文。构建完成后，可以通过启动参数打开一个项目目录：
 
 ```powershell
-corepack pnpm --dir ash-ts start -- C:\path\to\project
+pnpm --dir ash-ts start -- C:\path\to\project
 ```
 
 也可以显式声明目标类型：
 
 ```powershell
-corepack pnpm --dir ash-ts start -- --folder C:\path\to\project
-corepack pnpm --dir ash-ts start -- --workspace C:\path\to\team.ash-workspace
+pnpm --dir ash-ts start -- --folder C:\path\to\project
+pnpm --dir ash-ts start -- --workspace C:\path\to\team.ash-workspace
 ```
 
 单目录启动时，当前版本会把目录作为 App Server 的 canonical `Dir`，并通过
@@ -189,7 +189,7 @@ origin policy 和远程部署尚未实现，因此静态 Browser 构建不能描
 只在 composition root 消费它生成的 `AshElectronRendererApi`，再注册按领域划分的 Workbench Service；
 contrib 不直接持有聚合 Renderer Host。Electron Main 的 `registerTrustedIpcRoutes()`
 继续负责 sender、main frame、入口 URL 和参数验证。若修改 preload、频道或 API 组装，必须同时
-运行 `corepack pnpm --dir ash-ts build` 与 `corepack pnpm --dir ash-ts test:main`。跨进程
+运行 `pnpm --dir ash-ts build` 与 `pnpm --dir ash-ts test:main`。跨进程
 所有权与安全取舍以 [`docs/ash-desktop-architecture.md`](../docs/ash-desktop-architecture.md)
 为准。
 
@@ -264,8 +264,8 @@ JPEG、GIF 与 WebP。语法高亮、Markdown 插件、Mermaid、KaTeX 和工作
 ```powershell
 Remove-Item -LiteralPath .\node_modules -Recurse -Force
 Remove-Item -LiteralPath .\ash-ts\node_modules -Recurse -Force
-corepack pnpm install
-corepack pnpm dev:desktop
+pnpm install
+pnpm dev:desktop
 ```
 
 这里只会删除 pnpm 生成的依赖目录，不会删除源码或 `pnpm-lock.yaml`。如果仍然失败，请暂时关闭占用 Electron 文件的杀毒软件实时扫描后重试。
@@ -276,18 +276,18 @@ corepack pnpm dev:desktop
 
 ```bash
 # 构建桌面端
-corepack pnpm build:desktop
+pnpm build:desktop
 
 # 运行默认 Code 模式的 Electron 应用测试
-corepack pnpm test:desktop:app
+pnpm test:desktop:app
 # 以 Academic 作为测试启动模式
-ASH_WORKBENCH_MODE=academic corepack pnpm test:desktop:app
+ASH_WORKBENCH_MODE=academic pnpm test:desktop:app
 
 # 只运行桌面端主进程测试
-corepack pnpm --dir ash-ts test:main
+pnpm --dir ash-ts test:main
 
 # 检查 renderer 类型
-corepack pnpm --dir ash-ts typecheck:renderer
+pnpm --dir ash-ts typecheck:renderer
 ```
 
 如果 Electron 的依赖安装被 pnpm 拦截，请确认安装提示中的 `electron` 构建脚本已被允许。

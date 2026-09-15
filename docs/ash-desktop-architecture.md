@@ -243,7 +243,7 @@ Main 必须：
 Main 不把 `ipcRenderer`、`fs`、`child_process`、`webContents` 或任意 JSON-RPC method
 直接暴露给 Renderer。
 
-当前 `ChildProcessJsonlTransport` 将子进程 stream lifecycle 与 JSON-RPC pairing 分开。它在积累无限 buffer 前按原始 byte 拒绝超过 1 MiB 的 frame，只接受严格 LF 和有效 UTF-8；outbound write 同时等待 callback 与 drain，并限制 pending write 数。child/stdio 任一错误都会关闭 transport；stderr 只保留 64 KiB ring，诊断读取时脱敏 credential。`close()` 异步、幂等，并在 graceful deadline 后强制终止。`corepack pnpm --dir ash-ts run test:main` 覆盖分片 UTF-8、超限 frame、非法 framing、backpressure、stderr 和 close。
+当前 `ChildProcessJsonlTransport` 将子进程 stream lifecycle 与 JSON-RPC pairing 分开。它在积累无限 buffer 前按原始 byte 拒绝超过 1 MiB 的 frame，只接受严格 LF 和有效 UTF-8；outbound write 同时等待 callback 与 drain，并限制 pending write 数。child/stdio 任一错误都会关闭 transport；stderr 只保留 64 KiB ring，诊断读取时脱敏 credential。`close()` 异步、幂等，并在 graceful deadline 后强制终止。`pnpm --dir ash-ts run test:main` 覆盖分片 UTF-8、超限 frame、非法 framing、backpressure、stderr 和 close。
 
 `JsonRpcPeer` 在 transport 之上负责双向 JSON-RPC envelope、request ID pairing、remote
 error、timeout/abort、late/unknown/duplicate response、入站 handler cancellation、pending

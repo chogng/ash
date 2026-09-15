@@ -72,8 +72,8 @@ Native shell 从 `ash-icons::icons` 选择语义 icon，再交给 component；ti
 ## 5. 修改路径
 
 ```bash
-corepack pnpm icons:generate
-corepack pnpm icons:check
+pnpm icons:generate
+pnpm icons:check
 cargo test --manifest-path Cargo.toml -p ash-icons -p ash-ui-components
 ```
 

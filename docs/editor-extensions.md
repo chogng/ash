@@ -348,10 +348,10 @@ cargo test --manifest-path Cargo.toml -p ash-extensions
 cargo test --manifest-path Cargo.toml -p ash-plugin
 cargo test --manifest-path Cargo.toml -p ash-core-plugins
 powershell -NoProfile -ExecutionPolicy Bypass -File ash-rs/editor-extension-host/check-standalone.ps1
-corepack pnpm --dir ash-ts test:extensions
-corepack pnpm --dir ash-ts typecheck:extensions
-corepack pnpm --dir ash-ts test:unit
-corepack pnpm --dir ash-ts test:build-tools
+pnpm --dir ash-ts test:extensions
+pnpm --dir ash-ts typecheck:extensions
+pnpm --dir ash-ts test:unit
+pnpm --dir ash-ts test:build-tools
 ```
 
 `test:extensions` 与 `typecheck:extensions` 覆盖静态链、Host transport/domain projection 与 Workbench provider seams。App Server runtime 当前由 sibling Rust tests 和 Host standalone suite 封住；根 workspace 仍需在缺失的本地 crate 恢复后补跑完整 `ash-app-server` package test。

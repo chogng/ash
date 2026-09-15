@@ -10,7 +10,7 @@ Read `testing.instructions.md` first. This file adds TypeScript-specific command
 ## Validation
 
 - Run the smallest owning `typecheck:*`, `test:*`, or `build:*` script that covers the changed source. A unit test pass does not replace the affected TypeScript compilation or production build.
-- Use repository package scripts through `corepack pnpm`; do not invent a parallel compiler or test entrypoint when an owning script exists.
+- Use repository package scripts through `pnpm`; do not invent a parallel compiler or test entrypoint when an owning script exists.
 - For web, Electron UI, and Electron end-to-end behavior, use the repository Playwright projects. Diagnose failures from state, logs, traces, and DOM evidence rather than treating screenshots as the test oracle.
 - When the full test compilation is blocked by an unrelated failure, compile and run the affected test directly using the same compiler options and report both results. Do not describe the full suite as passing.
 

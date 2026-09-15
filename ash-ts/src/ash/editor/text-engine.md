@@ -260,8 +260,8 @@ Editor contract 使用领域类型；generated DTO 和 transport error 在 runti
 
 ## 验证与修改影响
 
-- 修改 model、cursor、history 或 composition：运行 `corepack pnpm --dir ash-ts run test:editor:unit`。
-- 修改 viewport、Part、DOM、input 或 accessibility：运行 unit suite 和 `corepack pnpm --dir ash-ts run test:editor:browser`。
+- 修改 model、cursor、history 或 composition：运行 `pnpm --dir ash-ts run test:editor:unit`。
+- 修改 viewport、Part、DOM、input 或 accessibility：运行 unit suite 和 `pnpm --dir ash-ts run test:editor:browser`。
 - 修改依赖方向或 product composition：运行 editor architecture tests、Renderer typecheck 和 stale-reference scan。
 - 所有改动运行 `git diff --check`。
 

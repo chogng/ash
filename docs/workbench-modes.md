@@ -87,18 +87,18 @@ Browser 与 Electron 各自只有一个 `workbench.ts` 入口。入口读取 Mai
 日常开发和构建只使用统一命令；一次 Renderer 构建包含两个模式和 Code Sessions 入口。
 
 ```bash
-corepack pnpm build:desktop
-corepack pnpm dev:desktop
-corepack pnpm dev:web
-corepack pnpm dev:web:full
-corepack pnpm test:desktop:app
+pnpm build:desktop
+pnpm dev:desktop
+pnpm dev:web
+pnpm dev:web:full
+pnpm test:desktop:app
 ```
 
 `ASH_WORKBENCH_MODE` 只覆盖非打包开发或测试进程的初始模式，不选择发布包内容或输出目录：
 
 ```bash
-ASH_WORKBENCH_MODE=code corepack pnpm dev:desktop
-ASH_WORKBENCH_MODE=academic corepack pnpm dev:desktop
+ASH_WORKBENCH_MODE=code pnpm dev:desktop
+ASH_WORKBENCH_MODE=academic pnpm dev:desktop
 ```
 
 每次构建必须产生共享命名的 Browser 与 Electron `workbench.html`、Code Sessions HTML，以及能够从运行时入口到达的 Code 和 Academic chunk。发布包只收录统一的 `renderer/ash` 目录；Main 在创建窗口前验证 Workbench 与 Code Sessions 入口完整。
