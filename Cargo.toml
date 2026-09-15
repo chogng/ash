@@ -22,6 +22,7 @@ members = [
     "ash-rs/config-schema",
     "ash-rs/process-hardening",
     "ash-rs/build-info",
+    "ash-rs/realtime-webrtc",
     "ash-rs/agent-environment",
     "ash-rs/agent-graph-store",
     "ash-rs/github",

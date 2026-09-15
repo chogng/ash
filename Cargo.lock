@@ -2039,6 +2039,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "ash-realtime-webrtc"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ash-build-info",
+ "ash-install-context",
+ "ash-utils-pty",
+ "futures",
+ "libtest-mimic",
+ "pretty_assertions",
+ "rustix 1.1.4",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "ash-remote"
 version = "0.1.0"
 
