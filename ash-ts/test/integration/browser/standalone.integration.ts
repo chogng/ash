@@ -1,3 +1,4 @@
+import { CopyPasteController } from '../../../src/ash/editor/contrib/dropOrPasteInto/browser/copyPasteController.js';
 import { formatEditor, FormattingConflicts, FormattingKind, FormattingMode } from '../../../src/ash/editor/contrib/format/browser/format.js';
 import { type CancellationToken } from '../../../src/ash/base/common/cancellation.js';
 import { scheduleAtNextAnimationFrame } from '../../../src/ash/base/browser/scheduler.js';
@@ -89,6 +90,7 @@ interface StandaloneHarness {
 	prepareLineCopy(emptyTail?: boolean): void;
 	prepareBrackets(value: string, columns: number[], readOnly?: boolean): void;
 	prepareMulticursor(): void;
+	runDeferredPaste(change: 'none' | 'writableAgain' | 'selection' | 'composition' | 'escape'): Promise<{ value: string; handled: boolean; finishedBeforeDecode: boolean }>;
 	runDeferredDrop(change: 'none' | 'readonly' | 'writableAgain'): Promise<{ value: string; selectionUnchanged: boolean; handled: boolean }>;
 	runLineAction(id: string): Promise<void>;
 	readLineCopy(): { value: string; selections: string[] };
@@ -468,6 +470,41 @@ window.ashStandaloneIntegration = {
 		callerEditor.setValue('alpha\nbeta');
 		callerEditor.setSelection(new stanza.Selection(1, 1, 2, 5));
 		callerEditor.focus();
+	},
+	runDeferredPaste: async change => {
+		callerEditor.setValue('alpha');
+		callerEditor.setPosition(new stanza.Position(1, 6));
+		callerEditor.focus();
+		let resolveFile!: (text: string) => void;
+		const pending = new Promise<string>(resolve => { resolveFile = resolve; });
+		const file = new File(['pending'], 'snippet.txt', { type: 'text/plain' });
+		Object.defineProperty(file, 'text', { value: () => pending });
+		const clipboardData = new DataTransfer();
+		clipboardData.items.add(file);
+		const input = document.activeElement!;
+		const event = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData });
+		input.dispatchEvent(event);
+		let finished = false;
+		const completion = CopyPasteController.get(callerEditor)!.finishedPaste().then(() => { finished = true; });
+		if (change === 'writableAgain') {
+			callerEditor.updateOptions({ readOnly: true });
+			callerEditor.updateOptions({ readOnly: false });
+		} else if (change === 'selection') {
+			callerEditor.setPosition(new stanza.Position(1, 1));
+			callerEditor.setPosition(new stanza.Position(1, 6));
+		} else if (change === 'composition') {
+			const target = input instanceof HTMLTextAreaElement ? input : (input as HTMLElement & { editContext?: EventTarget }).editContext;
+			if (!target) throw new Error('Composition target is unavailable');
+			target.dispatchEvent(new CompositionEvent('compositionstart', { data: '' }));
+			target.dispatchEvent(new CompositionEvent('compositionend', { data: '' }));
+		} else if (change === 'escape') {
+			input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+		}
+		await new Promise(resolve => setTimeout(resolve, 0));
+		const finishedBeforeDecode = finished;
+		resolveFile(' file');
+		await completion;
+		return { value: callerEditor.getValue(), handled: event.defaultPrevented, finishedBeforeDecode };
 	},
 	runDeferredDrop: async change => {
 		callerEditor.setValue('alpha');

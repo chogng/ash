@@ -1,5 +1,25 @@
 import { expect, test } from '@playwright/test';
 
+for (const inputKind of ['editContext', 'textarea'] as const) {
+	for (const change of ['none', 'writableAgain', 'selection', 'composition', 'escape'] as const) {
+		test(`${inputKind} deferred file paste respects ${change} state before committing`, async ({ page }) => {
+			if (inputKind === 'textarea') {
+				await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+			}
+			await page.goto('/standalone.html');
+			expect(await page.evaluate(change => window.ashStandaloneIntegration.runDeferredPaste(change), change)).toEqual({
+				value: change === 'none' ? 'alpha file' : 'alpha',
+				handled: true,
+				finishedBeforeDecode: change !== 'none',
+			});
+			if (change === 'none') {
+				await page.keyboard.press('ControlOrMeta+z');
+				expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('alpha');
+			}
+		});
+	}
+}
+
 for (const change of ['none', 'readonly', 'writableAgain'] as const) {
 	test(`deferred file drop respects ${change} state before committing`, async ({ page }) => {
 		await page.goto('/standalone.html');

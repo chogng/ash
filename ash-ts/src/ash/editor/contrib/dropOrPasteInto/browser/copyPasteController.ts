@@ -1,11 +1,12 @@
 import { UriList } from '../../../../base/common/dataTransfer.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { raceCancellation } from '../../../../base/common/async.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type IClipboardPasteEvent } from '../../../browser/controller/editContext/clipboardUtils.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
-import { type Selection } from '../../../common/core/selection.js';
 import { Handler, type IEditorContribution } from '../../../common/editorCommon.js';
-import { TEXT_FILE_TRANSFER_MAX_BYTES, selectTextFileTransfer } from './textFileTransfer.js';
+import { CodeEditorStateFlag, EditorStateCancellationTokenSource } from '../../editorState/browser/editorState.js';
+import { TEXT_FILE_TRANSFER_MAX_BYTES, selectTextFileTransfer, type TextFileTransfer } from './textFileTransfer.js';
 
 export class CopyPasteController extends Disposable implements IEditorContribution {
 	public static readonly ID = 'editor.contrib.copyPasteActionController';
@@ -14,13 +15,12 @@ export class CopyPasteController extends Disposable implements IEditorContributi
 		return editor.getContribution<CopyPasteController>(CopyPasteController.ID);
 	}
 
-	private pasteRequest = 0;
+	private readonly pendingPaste = this._register(new MutableDisposable<DisposableStore>());
 	private currentPasteOperation: Promise<void> | undefined;
 
 	constructor(private readonly editor: ICodeEditor) {
 		super();
 		this._register(editor.onDidPaste(event => this.handlePaste(event)));
-		this._register(toDisposable(() => { this.pasteRequest += 1; }));
 	}
 
 	public async finishedPaste(): Promise<void> {
@@ -28,11 +28,12 @@ export class CopyPasteController extends Disposable implements IEditorContributi
 	}
 
 	private handlePaste(event: IClipboardPasteEvent): void {
+		this.pendingPaste.clear();
 		if (event.isHandled || this.editor.inComposition || this.editor.getOption(EditorOption.readOnly) || !this.editor.hasModel()) return;
 		const file = selectTextFileTransfer(event.clipboardData.files);
 		if (file) {
 			event.setHandled();
-			this.readTextFile(file);
+			this.currentPasteOperation = this.readTextFile(file);
 			return;
 		}
 		if (event.clipboardData.getData('text/plain').length > 0) return;
@@ -47,36 +48,34 @@ export class CopyPasteController extends Disposable implements IEditorContributi
 		});
 	}
 
-	private readTextFile(file: { readonly text: () => Promise<string> }): void {
-		const model = this.editor.getModel();
-		const selections = this.editor.getSelections();
-		if (!model || !selections) return;
-		const expectedVersion = model.getVersionId();
-		const expectedSelections = [...selections];
-		const request = ++this.pasteRequest;
-		this.currentPasteOperation = file.text().then(text => {
-			if (
-				this.isDisposed
-				|| request !== this.pasteRequest
-				|| this.editor.inComposition
-				|| text.length > TEXT_FILE_TRANSFER_MAX_BYTES
-				|| model.getVersionId() !== expectedVersion
-				|| !sameSelections(this.editor.getSelections(), expectedSelections)
-			) return;
+	private async readTextFile(file: TextFileTransfer): Promise<void> {
+		const resources = new DisposableStore();
+		this.pendingPaste.value = resources;
+		const request = new EditorStateCancellationTokenSource(this.editor, CodeEditorStateFlag.Value | CodeEditorStateFlag.Selection);
+		resources.add(toDisposable(() => request.dispose(true)));
+		resources.add(this.editor.onDidCompositionStart(() => request.cancel()));
+		resources.add(this.editor.onDidChangeConfiguration(event => {
+			if (event.hasChanged(EditorOption.readOnly) && this.editor.getOption(EditorOption.readOnly)) {
+				request.cancel();
+			}
+		}));
+		try {
+			const text = await raceCancellation(file.text(), request.token);
+			if (request.token.isCancellationRequested || text === undefined || text.length > TEXT_FILE_TRANSFER_MAX_BYTES) {
+				return;
+			}
 			this.editor.trigger('paste', Handler.Paste, {
 				text,
 				pasteOnNewLine: false,
 				multicursorText: null,
 				mode: null,
 			});
-		}).catch(() => {
+		} catch {
 			// A supplied text file that cannot be decoded leaves the model unchanged.
-		});
+		} finally {
+			if (this.pendingPaste.value === resources) {
+				this.pendingPaste.clear();
+			}
+		}
 	}
-}
-
-function sameSelections(current: readonly Selection[] | null, expected: readonly Selection[]): boolean {
-	return current !== null
-		&& current.length === expected.length
-		&& current.every((selection, index) => selection.equalsSelection(expected[index]!));
 }

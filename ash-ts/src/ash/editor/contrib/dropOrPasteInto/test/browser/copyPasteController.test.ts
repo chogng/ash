@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Selection } from '../../../../common/core/selection.js';
+import { TEXT_FILE_TRANSFER_MAX_BYTES } from '../../browser/textFileTransfer.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 
 const environment = new JSDOM('<!doctype html><body></body>');
@@ -57,6 +58,108 @@ test('CopyPasteController owns URI-list and bounded text-file paste extensions',
 	assert.equal(model.getText(), 'const x = 1;');
 	dom.window.close();
 });
+
+for (const change of ['writableAgain', 'selection', 'composition', 'content', 'model', 'dispose', 'escape', 'paste'] as const) {
+	test(`Pending file paste is cancelled by ${change} before decoding finishes`, async () => {
+		const dom = new JSDOM('<!doctype html><body><main></main></body>');
+		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+		try {
+			using model = new TextModel('alpha');
+			using editor = createTestCodeEditor({
+				container: dom.window.document.querySelector<HTMLElement>('main')!,
+				model,
+				input: { resource: model.uri },
+				languageId: model.getLanguageId(),
+				lineHeight: 20,
+			});
+			editor.setPosition({ lineNumber: 1, column: 6 });
+			const input = editor.controller.editContext.domNode.domNode;
+			input.focus();
+			let resolveFile!: (text: string) => void;
+			const pending = new Promise<string>(resolve => { resolveFile = resolve; });
+			const file = { name: 'snippet.txt', size: 5, type: 'text/plain', text: () => pending };
+			input.dispatchEvent(clipboardEvent(dom.window, new TestClipboardData([file as unknown as File])));
+			const controller = CopyPasteController.get(editor)!;
+			let finished = false;
+			const completion = controller.finishedPaste().then(() => { finished = true; });
+			let expectedValue = 'alpha';
+			switch (change) {
+				case 'writableAgain':
+					editor.updateOptions({ readOnly: true });
+					editor.updateOptions({ readOnly: false });
+					break;
+				case 'selection':
+					editor.setPosition({ lineNumber: 1, column: 1 });
+					editor.setPosition({ lineNumber: 1, column: 6 });
+					break;
+				case 'composition':
+					input.dispatchEvent(new dom.window.CompositionEvent('compositionstart', { bubbles: true }));
+					input.dispatchEvent(new dom.window.CompositionEvent('compositionend', { bubbles: true }));
+					break;
+				case 'content':
+					expectedValue = 'changed';
+					editor.setValue(expectedValue);
+					break;
+				case 'model': editor.setModel(null); break;
+				case 'dispose': editor.dispose(); break;
+				case 'escape': input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })); break;
+				case 'paste': {
+					expectedValue = 'alpha new';
+					const nextFile = { ...file, text: async () => ' new' };
+					input.dispatchEvent(clipboardEvent(dom.window, new TestClipboardData([nextFile as unknown as File])));
+					await controller.finishedPaste();
+					break;
+				}
+			}
+			await new Promise(resolve => setTimeout(resolve, 0));
+			assert.equal(finished, true, 'Cancellation must settle finishedPaste without waiting for file decoding');
+			resolveFile(' stale');
+			await completion;
+			await new Promise(resolve => setTimeout(resolve, 0));
+			assert.equal(model.getText(), expectedValue);
+		} finally {
+			dom.window.close();
+		}
+	});
+}
+
+for (const failure of ['throw', 'reject', 'oversize'] as const) {
+	test(`File paste leaves content unchanged after ${failure} and accepts the next paste`, async () => {
+		const dom = new JSDOM('<!doctype html><body><main></main></body>');
+		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+		try {
+			using model = new TextModel('alpha');
+			using editor = createTestCodeEditor({
+				container: dom.window.document.querySelector<HTMLElement>('main')!,
+				model,
+				input: { resource: model.uri },
+				languageId: model.getLanguageId(),
+				lineHeight: 20,
+			});
+			editor.setPosition({ lineNumber: 1, column: 6 });
+			const input = editor.controller.editContext.domNode.domNode;
+			input.focus();
+			const file = {
+				name: 'snippet.txt', size: 5, type: 'text/plain',
+				text: (): Promise<string> => {
+					if (failure === 'throw') throw new Error('Unable to read file');
+					if (failure === 'reject') return Promise.reject(new Error('Unable to decode file'));
+					return Promise.resolve('x'.repeat(TEXT_FILE_TRANSFER_MAX_BYTES + 1));
+				},
+			};
+			const controller = CopyPasteController.get(editor)!;
+			input.dispatchEvent(clipboardEvent(dom.window, new TestClipboardData([file as unknown as File])));
+			await controller.finishedPaste();
+			assert.equal(model.getText(), 'alpha');
+			const nextFile = { ...file, text: async () => ' next' };
+			input.dispatchEvent(clipboardEvent(dom.window, new TestClipboardData([nextFile as unknown as File])));
+			await controller.finishedPaste();
+			assert.equal(model.getText(), 'alpha next');
+		} finally {
+			dom.window.close();
+		}
+	});
+}
 
 class TestClipboardData {
 	private readonly values = new Map<string, string>();
