@@ -203,6 +203,11 @@ export class TerminalViewPane extends ViewPane {
 			() => this.render(),
 		));
 		this.items.set(instance, item);
+		void item.widget.initialize().catch(error => {
+			if (this.isDisposed || this.items.get(instance) !== item) return;
+			this.removeInstance(instance);
+			this.setStatus(terminalErrorMessage(error, "Terminal renderer could not be loaded"));
+		});
 	}
 
 	private removeInstance(instance: ITerminalInstance): void {

@@ -624,7 +624,9 @@ output cursor。
 Terminal 当前只在单根 workspace composition 中可用；空窗口会显示 terminal service
 unavailable。PTY
 不跨 App Server crash 恢复。每个实例拥有独立 xterm widget，Tab 切换或 Panel 隐藏不会丢失
-窗口生命周期内的 scrollback 与 ANSI parser 状态；Profile picker 只提交 App Server 已列出的
+窗口生命周期内的 scrollback 与 ANSI parser 状态。xterm、尺寸适配器和样式在创建终端实例时按需加载；
+组件先订阅输出，再加载渲染器，加载期间的输出、命令状态和退出消息按顺序保留。加载完成前关闭
+组件会清理订阅和待显示内容；焦点已移到其他控件时不再抢回。Profile picker 只提交 App Server 已列出的
 稳定 ID。Supervisor 离开 ready 后，运行实例进入 `disconnected`；恢复 ready 后用户可以显式
 Relaunch，新 PTY 使用原 Profile，但不会重放未确认输入或冒充旧进程。当前尚无 shell
 integration、跨进程 reconnection attach 或跨应用重启的持久 scrollback。
