@@ -7,6 +7,6 @@ registerEditorContribution({
 	install: context => {
 		if (context.kind !== "text") return;
 		const decorations = context.register(new TextDecorationCollection<void>(context.model));
-		context.register(new FindController(context.controller.element, context.editor, context.view, decorations, context.options.find));
+		return new FindController(context.controller.element, context.editor, context.view, decorations, context.options.find);
 	},
 });

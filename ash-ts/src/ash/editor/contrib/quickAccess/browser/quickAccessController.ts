@@ -138,7 +138,7 @@ registerEditorContribution({
 	id: "editor.contrib.quickAccess",
 	install: context => {
 		if (context.kind !== "text") return;
-		context.register(new GotoLineController(context.controller.element, context.view, context.viewModel));
+		return new GotoLineController(context.controller.element, context.view, context.viewModel);
 	},
 });
 

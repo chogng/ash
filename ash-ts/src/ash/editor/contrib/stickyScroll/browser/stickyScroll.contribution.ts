@@ -4,5 +4,5 @@ import { TextEditorCapability } from "../../textEditorCapabilities.js";
 
 registerEditorContribution({ id: "editor.contrib.stickyScroll", install: context => {
 	if (context.kind !== "text" || context.options.stickyScroll?.enabled === false || context.model.largeFile.tooLargeForTokenization) return;
-	context.register(new StickyScrollController(context.view, context.getService(TextEditorCapability.folding)));
+	return new StickyScrollController(context.view, context.getService(TextEditorCapability.folding));
 } });

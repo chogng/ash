@@ -5,7 +5,7 @@ import { LanguageHierarchyService } from '../common/languageHierarchy.js';
 registerEditorContribution({ id: "editor.contrib.languageHierarchy", install: context => {
 	if (context.kind !== "text") return;
 	const service = context.register(new LanguageHierarchyService(context.model, context.options.input.resource, context.languageFeaturesService.callHierarchyProvider, context.languageFeaturesService.typeHierarchyProvider));
-	context.register(new LanguageHierarchyController(
+	return new LanguageHierarchyController(
 		context.controller.element,
 		context.editor,
 		context.view,
@@ -14,5 +14,5 @@ registerEditorContribution({ id: "editor.contrib.languageHierarchy", install: co
 		context.languageId,
 		context.options.onOpenLocation,
 		context.onLanguageError,
-	));
+	);
 } });

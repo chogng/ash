@@ -26,5 +26,5 @@ export class WordWrapController extends Disposable {
 
 registerEditorContribution({ id: "editor.contrib.wordWrap", install: context => {
 	if (context.kind !== "text") return;
-	context.register(new WordWrapController(context.controller.element, context.view));
+	return new WordWrapController(context.controller.element, context.view);
 } });

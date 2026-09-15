@@ -58,5 +58,5 @@ export class InlayHintsController extends Disposable {
 registerEditorContribution({ id: "editor.contrib.inlayHints", install: context => {
 	if (context.kind !== "text" || context.options.inlayHints?.enabled === 'off' || context.model.largeFile.tooLargeForTokenization) return;
 	const service = context.register(new InlayHintsService(context.model, context.languageFeaturesService.inlayHintsProvider, context.options.input.resource));
-	context.register(new InlayHintsController(context.view, service, context.languageId, context.onLanguageError));
+	return new InlayHintsController(context.view, service, context.languageId, context.onLanguageError);
 } });

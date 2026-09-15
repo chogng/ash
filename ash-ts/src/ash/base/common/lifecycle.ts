@@ -398,6 +398,10 @@ export class DisposableStore extends AbstractDisposable {
 		return owned;
 	}
 
+	public has(resource: IDisposable): boolean {
+		return this.resources.has(resource);
+	}
+
 	/** Removes a resource without disposing it, transferring ownership to the caller. */
 	public delete(resource: IDisposable): boolean {
 		if (this.isDisposed || !this.resources.delete(resource)) return false;

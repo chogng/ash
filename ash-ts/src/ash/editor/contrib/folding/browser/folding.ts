@@ -45,7 +45,7 @@ registerEditorContribution({
 		decorations.showFoldingControls = context.options.showFoldingControls ?? 'mouseover';
 		decorations.showFoldingHighlights = context.options.foldingHighlight ?? true;
 		context.register(new FoldingDecorationPresenter(context.getService(TextEditorCapability.folding), decorations));
-		context.register(new FoldingController(context.editor, context.view, context.getService(TextEditorCapability.folding)));
+		return new FoldingController(context.editor, context.view, context.getService(TextEditorCapability.folding));
 	},
 });
 

@@ -184,7 +184,7 @@ registerEditorContribution({
 	id: LinkedEditingContribution.ID,
 	install: context => {
 		if (context.kind !== 'text') return;
-		context.register(new LinkedEditingContribution(
+		return new LinkedEditingContribution(
 			context.controller,
 			context.editor,
 			context.controller.element,
@@ -192,6 +192,6 @@ registerEditorContribution({
 			context.languageFeaturesService.linkedEditingRangeProvider,
 			() => context.configurations.getLanguageConfiguration(context.languageId).getWordDefinition(),
 			context.onLanguageError,
-		));
+		);
 	},
 });

@@ -11,7 +11,7 @@ registerEditorContribution({ id: "editor.contrib.languageNavigation", install: c
 		typeDefinitions: context.languageFeaturesService.typeDefinitionProvider,
 		references: context.languageFeaturesService.referenceProvider,
 	}));
-	context.register(context.instantiationService.createInstance(LanguageNavigationController,
+	return context.instantiationService.createInstance(LanguageNavigationController,
 		context.controller.element,
 		context.editor,
 		context.view,
@@ -20,5 +20,5 @@ registerEditorContribution({ id: "editor.contrib.languageNavigation", install: c
 		context.languageId,
 		context.options.onOpenLocation,
 		context.onLanguageError,
-	));
+	);
 } });

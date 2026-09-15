@@ -1990,3 +1990,110 @@ test('content events follow the attached model and retain edit, undo, redo, and 
 	assert.equal(editor.saveViewState(), null);
 	assert.equal(events.length, 4);
 });
+
+test('Contribution selection distinguishes defaults, an empty list, and an explicit subset', async () => {
+	const { EditorExtensionsRegistry } = await import('../../../browser/editorExtensions.js');
+	const { FindController } = await import('../../../contrib/find/browser/findController.js');
+	await import('../../../contrib/find/browser/find.contribution.js');
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('alpha');
+	try {
+		for (const contributions of [undefined, [], EditorExtensionsRegistry.getSomeEditorContributions([FindController.ID])]) {
+			using editor = new CodeEditorWidget({
+				container: requiredElement(dom.window.document, 'main'),
+				model, input: { resource: model.uri }, languageId: model.getLanguageId(), contributions,
+			});
+			const find = editor.getContribution(FindController.ID);
+			if (contributions?.length === 0) {
+				assert.equal(find, null);
+				assert.equal(editor.getContribution(PlaceholderTextContribution.ID), null);
+				assert.equal(dom.window.document.querySelector('.stanza-editor-find-widget'), null);
+				continue;
+			}
+			assert.ok(find instanceof FindController);
+			assert.equal(editor.getContribution(FindController.ID), find);
+			find.open();
+			assert.equal(find.visible, true);
+			find.close();
+			assert.equal(find.visible, false);
+			assert.equal(editor.getContribution(PlaceholderTextContribution.ID) !== null, contributions === undefined);
+			editor.setModel(null);
+			assert.equal(find.isDisposed, true);
+			assert.equal(editor.getContribution(FindController.ID), null);
+			editor.setModel(model);
+			assert.ok(editor.getContribution(FindController.ID) instanceof FindController);
+			assert.notEqual(editor.getContribution(FindController.ID), find);
+		}
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('Disabled and configuration-only contributions do not expose placeholder instances', async () => {
+	const { EditorExtensionsRegistry } = await import('../../../browser/editorExtensions.js');
+	await import('../../../contrib/unicodeHighlighter/browser/unicodeHighlighter.contribution.js');
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('alpha');
+	const events: string[] = [];
+	try {
+		using editor = new CodeEditorWidget({
+			container: requiredElement(dom.window.document, 'main'),
+			model, input: { resource: model.uri }, languageId: model.getLanguageId(), showUnicodeHighlights: false,
+			contributions: [
+				...EditorExtensionsRegistry.getSomeEditorContributions(['editor.contrib.unicodeHighlighter']),
+				{
+					id: 'test.modelConfiguration',
+					configure: context => {
+						events.push('configure');
+						context.register(toDisposable(() => events.push('dispose')));
+					},
+				},
+			],
+		});
+		assert.equal(editor.getContribution('editor.contrib.unicodeHighlighter'), null);
+		assert.equal(editor.getContribution('test.modelConfiguration'), null);
+		assert.deepEqual(events, ['configure']);
+		editor.setModel(null);
+		assert.deepEqual(events, ['configure', 'dispose']);
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('Returning an already registered controller preserves dependent listener cleanup order', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('alpha');
+	const events: string[] = [];
+	class Controller extends Disposable {
+		constructor() {
+			super();
+			this._register(toDisposable(() => events.push('controller')));
+		}
+	}
+	try {
+		using editor = new CodeEditorWidget({
+			container: requiredElement(dom.window.document, 'main'),
+			model, input: { resource: model.uri }, languageId: model.getLanguageId(),
+			contributions: [{
+				id: 'test.registeredController',
+				install: context => {
+					if (context.kind !== 'text') return;
+					const controller = context.register(new Controller());
+					context.register(toDisposable(() => {
+						assert.equal(controller.isDisposed, false);
+						events.push('listener');
+					}));
+					return controller;
+				},
+			}],
+		});
+		assert.ok(editor.getContribution('test.registeredController') instanceof Controller);
+		editor.setModel(null);
+		assert.deepEqual(events, ['listener', 'controller']);
+	} finally {
+		dom.window.close();
+	}
+});

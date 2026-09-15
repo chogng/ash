@@ -269,7 +269,7 @@ registerEditorContribution({
 			},
 			context.onLanguageError,
 		));
-		context.register(new ColorPickerController(
+		return new ColorPickerController(
 			context.controller.element,
 			context.editor,
 			context.view,
@@ -279,6 +279,6 @@ registerEditorContribution({
 			context.options.colorDecoratorsActivatedOn ?? 'clickAndHover',
 			context.options.input.readOnly === true,
 			context.onLanguageError,
-		));
+		);
 	},
 });

@@ -87,13 +87,13 @@ registerEditorContribution({
 	install: context => {
 		if (context.kind !== "text") return;
 		const selectionRanges = context.register(new SelectionRangeService(context.model, context.languageFeaturesService.selectionRangeProvider, context.options.input.resource));
-		context.register(new SmartSelectController(
+		return new SmartSelectController(
 			context.controller.element,
 			context.editor,
 			context.view,
 			context.languageId,
 			selectionRanges,
 			context.onLanguageError,
-		));
+		);
 	},
 });

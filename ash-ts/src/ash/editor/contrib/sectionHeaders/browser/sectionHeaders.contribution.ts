@@ -5,7 +5,7 @@ import { TextEditorCapability } from "../../textEditorCapabilities.js";
 registerEditorContribution({ id: "editor.contrib.sectionHeaders", install: context => {
 	if (context.kind !== "text" || context.model.largeFile.tooLargeForTokenization || context.options.sectionHeaders === false) return;
 	const options = context.options.sectionHeaders || {};
-	context.register(new SectionHeadersController(
+	return new SectionHeadersController(
 		context.view,
 		context.model,
 		context.languageId,
@@ -16,5 +16,5 @@ registerEditorContribution({ id: "editor.contrib.sectionHeaders", install: conte
 			findMarkSectionHeaders: options.showMarkSectionHeaders ?? true,
 			markSectionHeaderRegex: options.markSectionHeaderRegex ?? "\\bMARK:\\s*(?<separator>-?)\\s*(?<label>.*)$",
 		},
-	));
+	);
 } });

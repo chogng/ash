@@ -252,13 +252,13 @@ registerEditorContribution({
 	id: CodeLensContribution.ID,
 	install: context => {
 		if (context.kind !== 'text' || context.options.codeLens === false || context.model.largeFile.tooLargeForTokenization) return;
-		context.register(new CodeLensContribution(
+		return new CodeLensContribution(
 			context.editor,
 			context.view,
 			context.languageFeaturesService.codeLensProvider,
 			context.options.input.resource,
 			context.options.onExecuteEditorCommand,
 			context.onLanguageError,
-		));
+		);
 	},
 });

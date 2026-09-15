@@ -424,13 +424,13 @@ registerEditorContribution({
 		if (context.kind !== 'text' || context.model.largeFile.tooLargeForTokenization) return;
 		const decorations = context.register(new TextDecorationCollection<DocumentHighlightKind | undefined>(context.model));
 		context.register(new TextualMultiDocumentHighlightFeature(context.languageFeaturesService));
-		context.register(new WordHighlighterContribution(context.controller, context.selectionController, decorations, {
+		return new WordHighlighterContribution(context.controller, context.selectionController, decorations, {
 			resource: context.options.input.resource,
 			languageId: context.languageId,
 			languageFeaturesService: context.languageFeaturesService,
 			mode: context.options.occurrencesHighlight,
 			delay: context.options.occurrencesHighlightDelay,
 			onError: context.onLanguageError,
-		}));
+		});
 	},
 });

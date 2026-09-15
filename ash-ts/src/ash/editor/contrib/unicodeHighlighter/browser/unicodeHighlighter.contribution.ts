@@ -6,5 +6,5 @@ import { type UnicodeHighlight } from "../common/unicodeHighlights.js";
 registerEditorContribution({ id: "editor.contrib.unicodeHighlighter", install: context => {
 	if (context.kind !== "text" || context.options.showUnicodeHighlights === false || context.model.largeFile.tooLargeForTokenization) return;
 	const decorations = context.register(new TextDecorationCollection<UnicodeHighlight>(context.model));
-	context.register(new UnicodeHighlighterController(context.model, decorations, context.editorWorker, context.onLanguageError));
+	return new UnicodeHighlighterController(context.model, decorations, context.editorWorker, context.onLanguageError);
 } });

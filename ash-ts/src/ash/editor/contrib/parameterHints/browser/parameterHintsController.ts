@@ -114,12 +114,12 @@ registerEditorContribution({ id: "editor.contrib.parameterHints", install: conte
 		context.languageFeaturesService.signatureHelpProvider,
 		context.options.input.resource,
 	));
-	context.register(new ParameterHintsController(
+	return new ParameterHintsController(
 		context.controller.element,
 		context.editor,
 		context.view,
 		service,
 		context.languageId,
 		context.onLanguageError,
-	));
+	);
 } });

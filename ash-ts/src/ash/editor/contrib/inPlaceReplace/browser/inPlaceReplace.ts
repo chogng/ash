@@ -50,13 +50,13 @@ registerEditorContribution({
 	id: 'editor.contrib.inPlaceReplace',
 	install: context => {
 		if (context.kind !== 'text') return;
-		context.register(new InPlaceReplaceController(
+		return new InPlaceReplaceController(
 			context.controller.element,
 			context.editor,
 			context.view,
 			context.editorWorker,
 			() => context.configurations.getLanguageConfiguration(context.languageId).getWordDefinition(),
 			context.onLanguageError,
-		));
+		);
 	},
 });

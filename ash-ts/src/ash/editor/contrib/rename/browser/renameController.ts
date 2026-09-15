@@ -139,7 +139,7 @@ export class RenameController extends Disposable {
 registerEditorContribution({ id: "editor.contrib.rename", commands: [{ id: RenameCommandId, canTriggerInlineEdits: true }], install: context => {
 	if (context.kind !== "text") return;
 	const service = context.register(new RenameService(context.model, context.options.input.resource, context.languageFeaturesService.renameProvider));
-	context.register(new RenameController(
+	return new RenameController(
 		context.controller.element,
 		context.editor,
 		context.view,
@@ -149,5 +149,5 @@ registerEditorContribution({ id: "editor.contrib.rename", commands: [{ id: Renam
 		context.options.onApplyWorkspaceEdit,
 		context.onLanguageError,
 		context.executeCommand,
-	));
+	);
 } });

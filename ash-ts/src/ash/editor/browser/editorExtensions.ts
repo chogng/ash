@@ -515,7 +515,6 @@ export type EditorCommandExecutor = <T>(commandId: string, operation: () => T) =
 
 interface SharedTextContext {
 	readonly kind: 'text';
-	readonly options: ICodeEditorWidgetOptions;
 	readonly model: TextModel;
 	readonly editorWorker: IVersionedEditorWorkerClient;
 	readonly languageId: string;
@@ -528,6 +527,15 @@ interface SharedTextContext {
 }
 
 export interface TextEditorContributionConfigurationContext extends SharedTextContext {
+	readonly options: Pick<ICodeEditorWidgetOptions,
+		| 'bracketPairColorization'
+		| 'folding'
+		| 'guides'
+		| 'indentation'
+		| 'input'
+		| 'languageDiagnosticsService'
+		| 'showSymbolIcons'
+	>;
 	readonly renderDiagnosticDecorations: boolean;
 	readonly viewModel: IViewModel;
 	readonly selectionController: CursorsController;
@@ -539,6 +547,38 @@ export interface TextEditorContributionConfigurationContext extends SharedTextCo
 }
 
 export interface TextEditorContributionContext extends SharedTextContext {
+	readonly options: Pick<ICodeEditorWidgetOptions,
+		| 'codeLens'
+		| 'colorDecorators'
+		| 'colorDecoratorsActivatedOn'
+		| 'colorDecoratorsLimit'
+		| 'completionWorkerFactory'
+		| 'defaultColorDecorators'
+		| 'find'
+		| 'folding'
+		| 'foldingHighlight'
+		| 'formatOnSave'
+		| 'indentation'
+		| 'inlayHints'
+		| 'inlineCompletions'
+		| 'input'
+		| 'matchBrackets'
+		| 'occurrencesHighlight'
+		| 'occurrencesHighlightDelay'
+		| 'onApplyWorkspaceEdit'
+		| 'onExecuteEditorCommand'
+		| 'onOpenLink'
+		| 'onOpenLocation'
+		| 'parameterHints'
+		| 'sectionHeaders'
+		| 'selectionHighlight'
+		| 'selectionHighlightMaxLength'
+		| 'selectionHighlightMultiline'
+		| 'showFoldingControls'
+		| 'showUnicodeHighlights'
+		| 'stickyScroll'
+		| 'suggestions'
+	>;
 	readonly editor: ICodeEditor;
 	readonly instantiationService: IInstantiationService;
 	readonly controller: ViewController;
@@ -600,6 +640,7 @@ export interface EditorContributionHooks {
 	readonly id: string;
 	readonly commands?: readonly EditorCommandMetadata[];
 	configure?(context: TextEditorContributionConfigurationContext): void;
+	/** Return the public controller; configuration and effects-only hooks return no instance. */
 	install?(context: EditorContributionContext): IEditorContribution | void;
 	readonly instantiation?: EditorContributionInstantiation;
 }

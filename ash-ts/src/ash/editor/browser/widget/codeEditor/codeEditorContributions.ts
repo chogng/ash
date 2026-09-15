@@ -7,7 +7,7 @@ import { EditorContributionInstantiation, type EditorContributionRegistration, t
 
 interface PendingCodeEditorContribution {
 	readonly id: string;
-	readonly create: () => IEditorContribution;
+	readonly create: () => IEditorContribution | void;
 	readonly instantiation: EditorContributionInstantiation;
 }
 
@@ -62,6 +62,7 @@ export class CodeEditorContributions extends Disposable {
 				});
 				continue;
 			}
+			if (!description.install) continue;
 			const resources = this.resources.get(description.id)!;
 			const contributionContext = { ...context, register: <T extends IDisposable>(value: T): T => resources.add(value) };
 			this.pending.set(description.id, {
@@ -69,7 +70,7 @@ export class CodeEditorContributions extends Disposable {
 				instantiation: description.instantiation ?? EditorContributionInstantiation.Eager,
 				create: () => {
 					try {
-						return description.install?.(contributionContext) ?? resources;
+						return description.install?.(contributionContext);
 					} catch (error) {
 						resources.dispose();
 						throw error;
@@ -140,9 +141,11 @@ export class CodeEditorContributions extends Disposable {
 		this.pending.delete(id);
 		try {
 			const instance = pending.create();
+			if (instance === undefined) return;
 			if (!instance || typeof instance.dispose !== 'function') throw new TypeError(`Code editor contribution '${id}' did not return a disposable`);
 			const resources = this.resources.get(id)!;
-			if (instance !== resources) resources.add(instance);
+			// Preserve the installation order when the controller is already owned.
+			if (!resources.has(instance)) resources.add(instance);
 			this.instances.set(id, instance);
 			if (pending.instantiation !== EditorContributionInstantiation.Eager && (typeof instance.saveViewState === 'function' || typeof instance.restoreViewState === 'function')) {
 				console.warn(`Editor contribution '${id}' should be eager because it owns view state.`);

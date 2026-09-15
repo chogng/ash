@@ -14,7 +14,7 @@ registerEditorContribution({ id: SelectionHighlighter.ID, install: context => {
 	if (context.kind !== "text") return;
 	const decorations = context.register(new TextDecorationCollection<boolean>(context.model));
 	if (!context.model.largeFile.tooLargeForTokenization) {
-		context.register(new SelectionHighlighter(
+		return new SelectionHighlighter(
 			context.editor,
 			decorations,
 			{
@@ -25,6 +25,6 @@ registerEditorContribution({ id: SelectionHighlighter.ID, install: context => {
 				maxLength: context.options.selectionHighlightMaxLength,
 				occurrenceHighlights: context.options.occurrencesHighlight !== "off",
 			},
-		));
+		);
 	}
 } });

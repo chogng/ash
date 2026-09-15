@@ -73,4 +73,5 @@ registerEditorContribution({ id: "editor.contrib.format", install: context => {
 		},
 	));
 	if (context.options.formatOnSave && context.registerBeforeSave) context.register(context.registerBeforeSave(() => controller.formatDocument()));
+	return controller;
 } });

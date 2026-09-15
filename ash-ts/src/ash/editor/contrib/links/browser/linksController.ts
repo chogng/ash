@@ -75,5 +75,5 @@ export class LinksController extends Disposable {
 registerEditorContribution({ id: "editor.contrib.links", install: context => {
 	if (context.kind !== "text" || !context.options.onOpenLink) return;
 	const service = context.register(new LinkService(context.model, context.languageFeaturesService.linkProvider, context.options.input.resource));
-	context.register(new LinksController(context.view, service, context.languageId, context.options.onOpenLink, context.onLanguageError));
+	return new LinksController(context.view, service, context.languageId, context.options.onOpenLink, context.onLanguageError);
 } });

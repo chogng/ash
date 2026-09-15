@@ -94,6 +94,7 @@ export interface ICodeEditorWidgetOptions extends IEditorConstructionOptions {
 	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit) => void | Promise<void>;
 	readonly registerBeforeSave?: (hook: () => void | Promise<void>) => IDisposable;
 	readonly onContributionError?: (error: unknown) => void;
+	/** Omit to use the registered set; an array selects exactly those contributions. */
 	readonly contributions?: readonly EditorContributionRegistration[];
 	readonly sectionHeaders?: EditorSectionHeaderOptions | false;
 	readonly suggestions?: CompletionsEnablement;
@@ -410,11 +411,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			let semanticTokenSource: SemanticTokenSource | undefined;
 			let bracketColorizationSource: BracketColorizationSource | undefined;
 			let languageLexicalContext: LanguageLexicalContextSource | undefined;
-			const registeredContributions = EditorExtensionsRegistry.getEditorContributions();
-			const customContributions = options.contributions;
-			const selectedContributions = customContributions
-				? [...registeredContributions.filter(description => !('ctor' in description) && !customContributions.some(value => value.id === description.id)), ...customContributions]
-				: registeredContributions;
+			const selectedContributions = options.contributions ?? EditorExtensionsRegistry.getEditorContributions();
 			this.contributions = modelStore.add(this.instantiationService.createInstance(CodeEditorContributions));
 			this.contributions.configure(selectedContributions, {
 				kind: 'text',

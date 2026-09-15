@@ -20,14 +20,14 @@ registerEditorContribution({
 			onDidAccept: item => completions.executeCompletionCommand(context.languageId, item, new AbortController().signal),
 			snippetVariables: createSnippetVariables(context.options.input),
 		}));
-		context.register(new SuggestController(
+		return new SuggestController(
 			context.controller,
 			context.selectionController,
 			completions,
 			session,
 			context.languageId,
 			{ onRequestError: context.onLanguageError },
-		));
+		);
 	},
 });
 
