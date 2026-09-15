@@ -10,7 +10,7 @@ import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind } from "
 import { LanguageCompletionTriggerKind, type LanguageCompletionProvider, type LanguageCompletionProviderCommandRequest, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResolveRequest } from "../../../../editor/common/languages/completion/languageCompletionProviders.js";
 import { type LanguageHoverProvider, type LanguageHoverRequest } from "../../../../editor/contrib/hover/common/hover.js";
 import { type LanguageDeclarationProvider, type LanguageDefinitionProvider, type LanguageImplementationProvider, type LanguageLocationRequest, type LanguageReferenceProvider, type LanguageReferenceRequest, type LanguageTypeDefinitionProvider } from "../../../../editor/contrib/gotoSymbol/common/languageNavigation.js";
-import type { LanguageLocation, LanguageFormattingProvider, LanguageFormattingRequest, CodeLens, CodeLensList, CodeLensProvider, LanguageSemanticTokensProvider, LanguageSemanticTokensRequest, LinkedEditingRangeProvider, LinkedEditingRanges } from "../../../../editor/common/languages.js";
+import type { LanguageLocation, DocumentFormattingEditProvider, LanguageFormattingOptions, TextEdit, LanguageFormattingProvider, LanguageFormattingRequest, CodeLens, CodeLensList, CodeLensProvider, LanguageSemanticTokensProvider, LanguageSemanticTokensRequest, LinkedEditingRangeProvider, LinkedEditingRanges } from "../../../../editor/common/languages.js";
 import { type LanguageCallHierarchyEntry, type LanguageCallHierarchyProvider, type LanguageHierarchyFollowupRequest, type LanguageHierarchyItem, type LanguageHierarchyRequest, type LanguageTypeHierarchyProvider } from "../../../../editor/contrib/callHierarchy/common/languageHierarchy.js";
 import { type LanguageCompletionItemKindDto, type LanguageHierarchyItemDto } from "../../../../../../generated/app-server/index.js";
 import { type LanguageWorkspaceSymbol, type LanguageWorkspaceSymbolProvider } from "../../../../editor/common/languages/workspaceSymbols.js";
@@ -125,7 +125,7 @@ export interface AppServerLanguageProvidersOptions {
 	readonly events?: IServerEventApi;
 }
 
-class AppServerLanguageProvider implements LanguageCompletionProvider, LanguageHoverProvider, LanguageDeclarationProvider, LanguageDefinitionProvider, LanguageImplementationProvider, LanguageTypeDefinitionProvider, LanguageReferenceProvider, LanguageCallHierarchyProvider, LanguageTypeHierarchyProvider, LanguageRenameProvider, LanguageCodeActionProvider, LanguageFormattingProvider, LanguageParameterHintsProvider, LanguageInlayHintsProvider, LinkedEditingRangeProvider, LanguageSemanticTokensProvider, LanguageDocumentSymbolProvider, CodeLensProvider, LanguageLinkProvider, LanguageColorProvider, LanguageFoldingRangeProvider {
+class AppServerLanguageProvider implements LanguageCompletionProvider, LanguageHoverProvider, LanguageDeclarationProvider, LanguageDefinitionProvider, LanguageImplementationProvider, LanguageTypeDefinitionProvider, LanguageReferenceProvider, LanguageCallHierarchyProvider, LanguageTypeHierarchyProvider, LanguageRenameProvider, LanguageCodeActionProvider, DocumentFormattingEditProvider, LanguageFormattingProvider, LanguageParameterHintsProvider, LanguageInlayHintsProvider, LinkedEditingRangeProvider, LanguageSemanticTokensProvider, LanguageDocumentSymbolProvider, CodeLensProvider, LanguageLinkProvider, LanguageColorProvider, LanguageFoldingRangeProvider {
 	readonly languageIds = APP_SERVER_LANGUAGE_IDS;
 	readonly id = "ash.appServer.completions";
 	readonly triggerCharacters = Object.freeze([".", ":", "<", "\"", "'", "/", "@", "#"]);
@@ -228,12 +228,11 @@ class AppServerLanguageProvider implements LanguageCompletionProvider, LanguageH
 		const document = languageDocument(root, request);
 		return document ? codeAction(root, await this.api.resolveCodeAction({ document, providerData: action.data }, { signal })) : action;
 	}
-	async provideDocumentFormattingEdits(request: LanguageFormattingRequest, signal: AbortSignal) {
-		const root = workspaceRootForResource(this.workspace, request.resource);
-		const document = languageFormattingDocument(root, request);
-		if (!document) return Object.freeze([]);
-		const result = await this.api.formatDocument({ document, options: formattingOptions(request) }, { signal });
-		return result.revision === request.snapshot.version ? formattingEdits(result.edits) : Object.freeze([]);
+	async provideDocumentFormattingEdits(model: ITextModel, options: LanguageFormattingOptions, token: CancellationToken): Promise<TextEdit[]> {
+		const document = this.documentForModel(model);
+		if (!document) return [];
+		const result = await withAbortSignal(token, signal => this.api.formatDocument({ document, options: { tabSize: options.tabSize, insertSpaces: options.insertSpaces, trimTrailingWhitespace: options.trimTrailingWhitespace ?? null } }, { signal }));
+		return !model.isDisposed() && result.revision === document.revision && model.getVersionId() === document.revision ? [...formattingEdits(result.edits)] : [];
 	}
 	async provideRangeFormattingEdits(request: LanguageFormattingRequest, signal: AbortSignal) {
 		if (!request.range) return Object.freeze([]);

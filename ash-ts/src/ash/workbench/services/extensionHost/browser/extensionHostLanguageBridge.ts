@@ -2,7 +2,7 @@ import { encodeHex, VSBuffer } from "../../../../base/common/buffer.js";
 import { type CancellationToken } from '../../../../base/common/cancellation.js';
 import { Position } from "../../../../editor/common/core/position.js";
 import { Range } from "../../../../editor/common/core/range.js";
-import type { LinkedEditingRangeProvider, LinkedEditingRanges, TextEdit, LanguageFormattingOptions, LanguageFormattingProvider, LanguageFormattingRequest } from "../../../../editor/common/languages.js";
+import type { LinkedEditingRangeProvider, LinkedEditingRanges, TextEdit, DocumentFormattingEditProvider, LanguageFormattingOptions, LanguageFormattingProvider, LanguageFormattingRequest } from "../../../../editor/common/languages.js";
 import { type ITextModel } from '../../../../editor/common/model.js';
 import { type TextSnapshot } from "../../../../editor/common/core/textChange.js";
 import { type LanguageCompletionProvider, type LanguageCompletionProviderItem, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from "../../../../editor/common/languages/completion/languageCompletionProviders.js";
@@ -54,10 +54,14 @@ function hoverProvider(invoke: ExtensionHostProviderInvoker): LanguageHoverProvi
 	});
 }
 
-function formattingProvider(invoke: ExtensionHostProviderInvoker): LanguageFormattingProvider {
+function formattingProvider(invoke: ExtensionHostProviderInvoker): DocumentFormattingEditProvider & LanguageFormattingProvider {
 	const call = async (kind: "document" | "range" | "onType", request: LanguageFormattingRequest, signal: AbortSignal): Promise<readonly TextEdit[]> => normalizeFormattingResult(await invoke("formatting", formattingPayload(kind, request), signal), request.snapshot);
 	return Object.freeze({
-		provideDocumentFormattingEdits: (request: LanguageFormattingRequest, signal: AbortSignal) => call("document", request, signal),
+		provideDocumentFormattingEdits: async (model: ITextModel, options: LanguageFormattingOptions, token: CancellationToken): Promise<TextEdit[]> => {
+			const request = modelRequest(model);
+			const value = await withAbortSignal(token, signal => invoke('formatting', featurePayload(request, { kind: 'document', options: formattingOptionsValue(options) }), signal));
+			return [...normalizeFormattingResult(value, request.snapshot)];
+		},
 		provideRangeFormattingEdits: (request: LanguageFormattingRequest, signal: AbortSignal) => call("range", request, signal),
 		provideOnTypeFormattingEdits: (request: LanguageFormattingRequest, signal: AbortSignal) => call("onType", request, signal),
 	});

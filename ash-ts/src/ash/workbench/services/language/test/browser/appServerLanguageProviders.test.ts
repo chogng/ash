@@ -156,17 +156,17 @@ test("App Server formatting providers preserve snapshot, options, range, and edi
 	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
-	using model = new TextModel("value", { languageId: "typescript" });
+	using model = new TextModel("value", { languageId: "typescript", resource: URI.file("C:\\project\\main.ts") });
 	const signal = new AbortController().signal;
 	const request = { ...createLanguageFeatureRequest(model, 'typescript', signal), resource: URI.file('C:\\project\\main.ts') };
 
-	const documentEdits = await languages.documentFormattingEditProvider.ordered(model)[0]!.provideDocumentFormattingEdits!({ ...request, options: { tabSize: 2, insertSpaces: true } }, signal);
+	const documentEdits = await languages.documentFormattingEditProvider.ordered(model)[0]!.provideDocumentFormattingEdits(model, { tabSize: 2, insertSpaces: true }, CancellationToken.None);
 	const rangeEdits = await languages.documentRangeFormattingEditProvider.ordered(model)[0]!.provideRangeFormattingEdits!({ ...request, range: new Range(1, 1, 1, 6), options: { tabSize: 4, insertSpaces: false, trimTrailingWhitespace: true } }, signal);
 
 	assert.equal(api.documentFormattingRequests[0]!.document.path, "main.ts");
 	assert.deepEqual(api.documentFormattingRequests[0]!.options, { tabSize: 2, insertSpaces: true, trimTrailingWhitespace: null });
 	assert.deepEqual(api.rangeFormattingRequests[0]!.range, DTO_RANGE);
-	assert.equal(documentEdits[0]!.text, "formatted");
+	assert.equal(documentEdits?.[0]!.text, "formatted");
 	assert.equal(Range.lift(rangeEdits[0]!.range).getEndPosition().column, 6);
 });
 

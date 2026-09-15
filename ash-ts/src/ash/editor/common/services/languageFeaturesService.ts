@@ -4,7 +4,7 @@ import { LanguageFeatureRegistry, type NotebookInfo, type NotebookInfoResolver }
 import { type URI } from '../../../base/common/uri.js';
 import { LanguageCompletionProviderRegistry, type LanguageCompletionProviderRegistration } from '../languages/completion/languageCompletionProviders.js';
 import { createLanguageWordCompletionProvider } from '../languages/completion/languageWordCompletionProvider.js';
-import type { CodeLensProvider, DocumentHighlightProvider, LinkedEditingRangeProvider, MultiDocumentHighlightProvider, LanguageFormattingProvider, LanguageSemanticTokensProvider } from '../languages.js';
+import type { CodeLensProvider, DocumentHighlightProvider, LinkedEditingRangeProvider, MultiDocumentHighlightProvider, DocumentFormattingEditProvider, LanguageFormattingProvider, LanguageSemanticTokensProvider } from '../languages.js';
 import { createLanguageLexicalSyntaxProvider } from '../languages/languageLexicalSyntaxProvider.js';
 import type { ILanguageConfigurationService } from '../languages/languageConfigurationRegistry.js';
 import { SyntaxProviderRegistry } from '../languages/syntax/syntaxProviders.js';
@@ -32,7 +32,7 @@ export class LanguageFeaturesService extends Disposable implements ILanguageFeat
 	public readonly codeActionProvider: LanguageFeatureRegistry<LanguageCodeActionProvider>;
 	public readonly codeLensProvider: LanguageFeatureRegistry<CodeLensProvider>;
 	public readonly documentSymbolProvider: LanguageFeatureRegistry<LanguageDocumentSymbolProvider>;
-	public readonly documentFormattingEditProvider: LanguageFeatureRegistry<LanguageFormattingProvider>;
+	public readonly documentFormattingEditProvider: LanguageFeatureRegistry<DocumentFormattingEditProvider>;
 	public readonly documentRangeFormattingEditProvider: LanguageFeatureRegistry<LanguageFormattingProvider>;
 	public readonly onTypeFormattingEditProvider: LanguageFeatureRegistry<LanguageFormattingProvider>;
 	public readonly hoverProvider: LanguageFeatureRegistry<LanguageHoverProvider>;
@@ -104,10 +104,7 @@ export class LanguageFeaturesService extends Disposable implements ILanguageFeat
 	public registerProviderBatch(providers: LanguageProviderBatch): LanguageProviderBatchRegistration {
 		const completions = this.completionProvider.registerGroup([]);
 		const hovers = new LanguageFeatureBatchRegistration(this.hoverProvider);
-		const documentFormatting = new LanguageFeatureBatchRegistration(
-			this.documentFormattingEditProvider,
-			provider => typeof provider.provideDocumentFormattingEdits === 'function',
-		);
+		const documentFormatting = new LanguageFeatureBatchRegistration(this.documentFormattingEditProvider);
 		const documentRangeFormatting = new LanguageFeatureBatchRegistration(
 			this.documentRangeFormattingEditProvider,
 			provider => typeof provider.provideRangeFormattingEdits === 'function',
@@ -171,7 +168,7 @@ export class LanguageFeaturesService extends Disposable implements ILanguageFeat
 interface LanguageProviderRegistrations {
 	readonly completions: LanguageCompletionProviderRegistration;
 	readonly hovers: LanguageFeatureBatchRegistration<LanguageHoverProvider>;
-	readonly documentFormatting: LanguageFeatureBatchRegistration<LanguageFormattingProvider>;
+	readonly documentFormatting: LanguageFeatureBatchRegistration<DocumentFormattingEditProvider>;
 	readonly documentRangeFormatting: LanguageFeatureBatchRegistration<LanguageFormattingProvider>;
 	readonly onTypeFormatting: LanguageFeatureBatchRegistration<LanguageFormattingProvider>;
 	readonly inlayHints: LanguageFeatureBatchRegistration<LanguageInlayHintsProvider>;
@@ -223,7 +220,7 @@ function disposeRegistrations(registrations: readonly IDisposable[]): void {
 function replaceProviderRegistrations(registrations: LanguageProviderRegistrations, providers: Required<LanguageProviderBatch>): void {
 	registrations.completions.replace(providers.completions);
 	registrations.hovers.replace(providers.hovers);
-	registrations.documentFormatting.replace(providers.formatting);
+	registrations.documentFormatting.replace(providers.formatting.filter((entry): entry is LanguageProviderBatchEntry<DocumentFormattingEditProvider> => typeof entry.provider.provideDocumentFormattingEdits === 'function'));
 	registrations.documentRangeFormatting.replace(providers.formatting);
 	registrations.onTypeFormatting.replace(providers.formatting);
 	registrations.inlayHints.replace(providers.inlayHints);

@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
+import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
+import { URI } from '../../../../../base/common/uri.js';
 import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import { CommandRegistry } from "../../../../../platform/commands/common/commands.js";
 import type { ServicesAccessor } from "../../../../../platform/instantiation/common/instantiation.js";
@@ -13,9 +15,52 @@ import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../..
 import type { ITaskService, TaskProvider, TaskProviderRegistration } from "../../../tasks/common/taskService.js";
 import type { ITestingService, TestProfileProvider, TestProfileProviderRegistration } from "../../../testing/common/testingService.js";
 import { AppServerExtensionHostService } from "../../browser/appServerExtensionHostService.js";
+import { createExtensionHostLanguageProviderBatch } from '../../browser/extensionHostLanguageBridge.js';
 import { OutputService } from "../../../output/browser/outputService.js";
 
 const DIGEST = `sha256:${"b".repeat(64)}`;
+
+test('document formatting bridge captures model metadata and releases its cancellation listener', async () => {
+	using languages = new LanguageFeaturesService();
+	using model = new TextModel('alpha', { languageId: 'typescript', resource: URI.file('/project/main.ts') });
+	using source = new CancellationTokenSource();
+	let payload: JsonValue | undefined;
+	let signal: AbortSignal | undefined;
+	const batch = createExtensionHostLanguageProviderBatch({ kind: 'languageProvider', registrationId: 'format', languageIds: ['typescript'], operations: ['formatting'] }, 'formatter', async (operation, value, cancellation) => {
+		assert.equal(operation, 'formatting');
+		payload = value;
+		signal = cancellation;
+		return { edits: [] };
+	});
+	using registration = languages.registerProviderBatch(batch);
+	const provider = languages.documentFormattingEditProvider.ordered(model)[0]!;
+	assert.deepEqual(await provider.provideDocumentFormattingEdits(model, { tabSize: 2, insertSpaces: true }, source.token), []);
+	assert.deepEqual(payload, { languageId: 'typescript', version: model.getVersionId(), text: 'alpha', resource: model.uri.toString(), kind: 'document', options: { tabSize: 2, insertSpaces: true } });
+	assert.ok(signal);
+	source.cancel();
+	assert.equal(signal.aborted, false);
+});
+
+test('document formatting bridge forwards cancellation while transport is pending', async () => {
+	using languages = new LanguageFeaturesService();
+	using model = new TextModel('alpha', { languageId: 'typescript' });
+	using source = new CancellationTokenSource();
+	let signal: AbortSignal | undefined;
+	let release!: () => void;
+	const pending = new Promise<void>(resolve => { release = resolve; });
+	const batch = createExtensionHostLanguageProviderBatch({ kind: 'languageProvider', registrationId: 'format', languageIds: ['typescript'], operations: ['formatting'] }, 'formatter', async (_operation, _payload, cancellation) => {
+		signal = cancellation;
+		await pending;
+		return { edits: [] };
+	});
+	using registration = languages.registerProviderBatch(batch);
+	const result = languages.documentFormattingEditProvider.ordered(model)[0]!.provideDocumentFormattingEdits(model, { tabSize: 4, insertSpaces: true }, source.token);
+	source.cancel();
+	assert.ok(signal);
+	assert.equal(signal.aborted, true);
+	release();
+	await result;
+});
 
 test("keeps last-good contributions while refreshing and revokes them synchronously on disconnect", async () => {
 	const api = new FakeExtensionHostApi(snapshot(1, "acme.old"));

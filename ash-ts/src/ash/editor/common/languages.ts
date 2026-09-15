@@ -89,6 +89,11 @@ export interface FormattingOptions {
 	insertSpaces: boolean;
 }
 
+export interface DocumentFormattingEditProvider {
+	readonly displayName?: string;
+	provideDocumentFormattingEdits(model: model.ITextModel, options: FormattingOptions, token: CancellationToken): ProviderResult<TextEdit[]>;
+}
+
 export interface LanguageFormattingOptions extends Readonly<FormattingOptions> {
 	readonly trimTrailingWhitespace?: boolean;
 }
@@ -102,7 +107,6 @@ export interface LanguageFormattingRequest extends LanguageFeatureRequest {
 }
 
 export interface LanguageFormattingProvider {
-	provideDocumentFormattingEdits?(request: LanguageFormattingRequest, signal: AbortSignal): readonly TextEdit[] | Promise<readonly TextEdit[]>;
 	provideRangeFormattingEdits?(request: LanguageFormattingRequest, signal: AbortSignal): readonly TextEdit[] | Promise<readonly TextEdit[]>;
 	provideOnTypeFormattingEdits?(request: LanguageFormattingRequest, signal: AbortSignal): readonly TextEdit[] | Promise<readonly TextEdit[]>;
 }

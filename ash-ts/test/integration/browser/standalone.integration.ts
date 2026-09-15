@@ -1,3 +1,4 @@
+import { type CancellationToken } from '../../../src/ash/base/common/cancellation.js';
 import { EndOfLineSequence } from '../../../src/ash/editor/common/model.js';
 import type { FormatController } from '../../../src/ash/editor/contrib/format/browser/formatController.js';
 import { StandaloneServices } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
@@ -261,7 +262,7 @@ function readViewZone(): ViewZoneState {
 	};
 }
 
-let deferredFormatting: { signal: AbortSignal; resolve: () => void }[] = [];
+let deferredFormatting: { token: CancellationToken; resolve: () => void }[] = [];
 let formattingProvider: { dispose(): void } | undefined;
 
 window.ashStandaloneIntegration = {
@@ -272,13 +273,13 @@ window.ashStandaloneIntegration = {
 		callerEditor.setPosition(new stanza.Position(1, 1));
 		callerEditor.focus();
 		formattingProvider = stanza.languages.registerDocumentFormattingEditProvider('*', {
-			provideDocumentFormattingEdits: async (_request, signal) => {
-				await new Promise<void>(resolve => deferredFormatting.push({ signal, resolve }));
+			provideDocumentFormattingEdits: async (_model, _options, token) => {
+				await new Promise<void>(resolve => deferredFormatting.push({ token, resolve }));
 				return [{ range: new stanza.Range(1, 1, 1, 6), text: 'ALPHA' }];
 			},
 		});
 	},
-	readDeferredFormatting: () => ({ aborted: deferredFormatting.map(request => request.signal.aborted), value: callerEditor.getValue() }),
+	readDeferredFormatting: () => ({ aborted: deferredFormatting.map(request => request.token.isCancellationRequested), value: callerEditor.getValue() }),
 	finishDeferredFormatting: () => { for (const request of deferredFormatting) request.resolve(); },
 	readEOL: () => callerEditor.getModel()!.getEOL(),
 	runFormatting: async change => {

@@ -1,10 +1,13 @@
+import { type CancellationToken } from '../../../../base/common/cancellation.js';
+import { CancellationError } from '../../../../base/common/errors.js';
+import { type ITextModel } from '../../../../editor/common/model.js';
 import { applyEdits } from '../../../../base/common/jsonEdit.js';
-import { format, type FormattingOptions } from '../../../../base/common/jsonFormatter.js';
+import { format, type FormattingOptions as JsonFormattingOptions } from '../../../../base/common/jsonFormatter.js';
 import { getJsonNodePath, parseJsonDocument, JsonTokenKind, type JsonDocument, type JsonObjectNode, type JsonPropertyNode, type JsonValueNode } from '../../../../base/common/json.js';
 import { jsonSchemaAtPath, type JsonSchema } from '../../../../base/common/jsonSchema.js';
 import { Position } from '../../../../editor/common/core/position.js';
 import { Range } from '../../../../editor/common/core/range.js';
-import type { TextEdit, LanguageFormattingProvider, LanguageFormattingRequest } from '../../../../editor/common/languages.js';
+import type { TextEdit, DocumentFormattingEditProvider, FormattingOptions } from '../../../../editor/common/languages.js';
 import { LanguageCompletionItemKind } from '../../../../editor/common/languages/completion/languageCompletions.js';
 import type { LanguageCompletionProvider, LanguageCompletionProviderItem, LanguageCompletionProviderRequest, LanguageCompletionProviderResult } from '../../../../editor/common/languages/completion/languageCompletionProviders.js';
 import type { LanguageHover, LanguageHoverProvider, LanguageHoverRequest } from '../../../../editor/contrib/hover/common/hover.js';
@@ -65,21 +68,21 @@ export function createJsonHoverProvider(registry: JsonSchemaRegistry = JsonSchem
 }
 
 /** Creates one comment-preserving formatter shared by JSON and JSONC resources. */
-export function createJsonFormattingProvider(): LanguageFormattingProvider {
+export function createJsonFormattingProvider(): DocumentFormattingEditProvider {
 	return Object.freeze({
-		provideDocumentFormattingEdits(request: LanguageFormattingRequest, signal: AbortSignal): readonly TextEdit[] {
-			signal.throwIfAborted();
-			const source = request.snapshot.getText();
-			if (parseJsonDocument(source, jsonParseOptions(request.languageId)).errors.length > 0) return Object.freeze([]);
+		provideDocumentFormattingEdits(model: ITextModel, options: FormattingOptions, token: CancellationToken): TextEdit[] {
+			if (token.isCancellationRequested) throw new CancellationError();
+			const source = model.getValue();
+			if (parseJsonDocument(source, jsonParseOptions(model.getLanguageId())).errors.length > 0) return [];
 			let formatted: string;
 			try {
-				const formattingEdits = format(source, undefined, request.options as FormattingOptions);
+				const formattingEdits = format(source, undefined, options as JsonFormattingOptions);
 				formatted = applyEdits(source, formattingEdits);
 			} catch {
-				return Object.freeze([]);
+				return [];
 			}
-			if (formatted === source) return Object.freeze([]);
-			return Object.freeze([{ range: rangeFromOffsets(source, 0, source.length), text: formatted }]);
+			if (formatted === source) return [];
+			return [{ range: rangeFromOffsets(source, 0, source.length), text: formatted }];
 		},
 	});
 }

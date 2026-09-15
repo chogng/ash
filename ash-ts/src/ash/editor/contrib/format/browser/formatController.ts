@@ -4,17 +4,15 @@ import { Disposable, DisposableStore, MutableDisposable, toDisposable } from "..
 import { type View } from "../../../browser/view.js";
 import { type IVersionedEditorWorkerClient } from "../../../browser/services/editorWorkerService.js";
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
-import { type LanguageFormattingOptions, type LanguageFormattingProvider } from '../../../common/languages.js';
+import { type LanguageFormattingOptions, type DocumentFormattingEditProvider } from '../../../common/languages.js';
 import { type LanguageFeatureRegistry } from '../../../common/languageFeatureRegistry.js';
 import { type TextModel } from '../../../common/model/textModel.js';
-import { type URI } from '../../../../base/common/uri.js';
 import { getDocumentFormattingEditsUntilResult } from './format.js';
 import { CodeEditorStateFlag, EditorStateCancellationTokenSource } from '../../editorState/browser/editorState.js';
 import { FormattingEdit } from './formattingEdit.js';
 
 export interface FormatControllerOptions {
 	readonly formattingOptions?: LanguageFormattingOptions;
-	readonly resource?: URI;
 	readonly onError?: (error: unknown) => void;
 }
 
@@ -23,22 +21,19 @@ export class FormatController extends Disposable {
 	private readonly request = this._register(new MutableDisposable<DisposableStore>());
 	private readonly options: LanguageFormattingOptions;
 	private readonly onError: (error: unknown) => void;
-	private readonly resource: URI | undefined;
 	private readonly model: TextModel;
 
 	constructor(
 		private readonly editor: ICodeEditor,
 		viewport: View,
-		private readonly providers: LanguageFeatureRegistry<LanguageFormattingProvider>,
+		private readonly providers: LanguageFeatureRegistry<DocumentFormattingEditProvider>,
 		private readonly editorWorker: IVersionedEditorWorkerClient,
-		private readonly languageId: string,
 		options: FormatControllerOptions = {},
 	) {
 		super();
 		if (viewport.textModel !== editor.getModel()) throw new TypeError("Stanza format dependencies must share one text model");
 		this.model = viewport.textModel;
 		this.options = options.formattingOptions ?? { tabSize: 4, insertSpaces: true };
-		this.resource = options.resource;
 		this.onError = options.onError ?? (error => console.error("Stanza formatting failed", error));
 		this._register(editor.onKeyDown(event => {
 			if (event.browserEvent.defaultPrevented || event.isComposing || event.altKey || (!event.ctrlKey && !event.metaKey) || !event.shiftKey || event.key.toLowerCase() !== 'i') return;
@@ -62,7 +57,7 @@ export class FormatController extends Disposable {
 			if (this.editor.getOption(EditorOption.readOnly)) source.cancel();
 		}));
 		try {
-			const edits = await getDocumentFormattingEditsUntilResult(this.providers, this.model, this.languageId, this.options, abort.signal, this.resource);
+			const edits = await getDocumentFormattingEditsUntilResult(this.providers, this.model, this.options, source.token);
 			if (this.isDisposed || abort.signal.aborted || edits.length === 0) {
 				return;
 			}
@@ -99,10 +94,8 @@ registerEditorContribution({ id: "editor.contrib.format", install: context => {
 		context.view,
 		context.languageFeaturesService.documentFormattingEditProvider,
 		context.editorWorker,
-		context.languageId,
 		{
 			formattingOptions: { tabSize: context.options.indentation?.tabSize ?? 4, insertSpaces: context.options.indentation?.kind !== "tabs" },
-			resource: context.options.input.resource,
 			onError: context.onLanguageError,
 		},
 	));

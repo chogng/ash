@@ -1,3 +1,4 @@
+import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { parseJsonc } from '../../../../../base/common/jsonc.js';
@@ -62,26 +63,15 @@ test('generic JSON language features resolve nested schema completion, hover, an
 	}, signal);
 	assert.deepEqual(hover?.contents, ['Enabled', 'Controls the editor.', 'Default: true']);
 
-	const edits = await createJsonFormattingProvider().provideDocumentFormattingEdits!({
-		model: validModel,
-		snapshot: validModel.createVersionedSnapshot(),
-		languageId: 'jsonc',
-		signal,
-		resource,
-		options: { tabSize: 2, insertSpaces: true },
-	}, signal);
+	validModel.setLanguage('jsonc');
+	const edits = await createJsonFormattingProvider().provideDocumentFormattingEdits(validModel, { tabSize: 2, insertSpaces: true }, CancellationToken.None);
+	assert.ok(edits);
 	assert.equal(edits.length, 1);
 	assert.match(edits[0]!.text, /\/\/ note/u);
 	assert.deepEqual(parseJsonc(edits[0]!.text, 'formatted document'), { editor: { enabled: true } });
 
-	const strictJsonEdits = await createJsonFormattingProvider().provideDocumentFormattingEdits!({
-		model: validModel,
-		snapshot: validModel.createVersionedSnapshot(),
-		languageId: 'json',
-		signal,
-		resource,
-		options: { tabSize: 2, insertSpaces: true },
-	}, signal);
+	validModel.setLanguage('json');
+	const strictJsonEdits = await createJsonFormattingProvider().provideDocumentFormattingEdits(validModel, { tabSize: 2, insertSpaces: true }, CancellationToken.None);
 	assert.deepEqual(strictJsonEdits, []);
 });
 

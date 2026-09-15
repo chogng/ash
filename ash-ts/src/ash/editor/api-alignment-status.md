@@ -4,6 +4,8 @@
 
 ## 当前结论
 
+- 2026-09-15 文档格式化 provider 契约：新增 `common/languages.ts` 的 `DocumentFormattingEditProvider`，文档格式化 registry、Standalone、JSON、App Server 和扩展桥接统一使用 `ITextModel + FormattingOptions + CancellationToken`，结果接受标准 `ProviderResult<TextEdit[]>`。文档格式化不再使用 `LanguageFormattingRequest` 或独立传入的资源/语言 ID，适配器从模型创建传输快照；控制器直接传递当前请求令牌。范围与输入格式化仍使用原有契约，`LanguageFormattingProvider` 已移除文档格式化方法。26 项定向单测、103 项浏览器回归、对齐与类型检查、Stanza 和桌面 Renderer 构建通过；新增覆盖空结果、扩展请求取消及监听释放。完整上游调度签名、范围/输入格式化接口及其他贡献依赖仍待处理，80/41 声明计数不变；保留既有 7 份 CSS 债务与颜色环境提示，构建无新增警告。
+
 - 2026-09-15 格式化职责迁移：公共 `LanguageFormattingOptions/Request/Provider` 迁入 `common/languages.ts`，registry、Standalone、公开导出和 JSON/App Server/扩展适配器同步改用公共 owner。删除 `contrib/format/common/formatCommands.ts` 和 `FormatService`；文档格式化调度由 `contrib/format/browser/format.ts` 的函数承担，取消与结果提交仍由 `FormatController` 负责。原 common 测试迁至 `test/browser/format.test.ts`，宿主测试直接验证提供者与 registry。生产文件为 599 个，同路径 401、仅 Ash 198、仅上游 332，大小写差异为 0。此批完成职责迁移，保留现有 request/AbortSignal 契约；三类标准 provider 签名、范围与输入格式化的编辑器入口及完整上游调度语义仍待处理，80/41 声明计数不变。其他 contribution 的类型反向依赖尚未迁移。
 
 - 本次职责迁移验证：18 项定向单测、103 项浏览器回归、Editor 对齐检查与类型检查、Stanza 和桌面 Renderer 生产构建通过。定向测试覆盖取消、模型释放与版本变化、提供者顺序、请求参数、registry 替换、JSON 和 App Server 适配。既有 7 份 CSS 债务及终端颜色环境提示仍保留；本批未改 CSS，构建无新增警告。

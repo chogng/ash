@@ -1,5 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'mocha';
+import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { Position } from '../../../../../editor/common/core/position.js';
 import { Range } from '../../../../../editor/common/core/range.js';
@@ -64,7 +65,7 @@ test('Language features service keeps document, range, and on-type formatting re
 	});
 
 	assert.equal(
-		(await languageFeatures.documentFormattingEditProvider.ordered(model)[0]?.provideDocumentFormattingEdits?.(request, signal))?.[0]?.text,
+		(await languageFeatures.documentFormattingEditProvider.ordered(model)[0]?.provideDocumentFormattingEdits(model, request.options, CancellationToken.None))?.[0]?.text,
 		'document',
 	);
 	assert.equal(
@@ -85,7 +86,7 @@ test('Language features service keeps document, range, and on-type formatting re
 		}],
 	});
 	assert.equal(
-		(await languageFeatures.documentFormattingEditProvider.ordered(model)[0]?.provideDocumentFormattingEdits?.(request, signal))?.[0]?.text,
+		(await languageFeatures.documentFormattingEditProvider.ordered(model)[0]?.provideDocumentFormattingEdits(model, request.options, CancellationToken.None))?.[0]?.text,
 		'replacement',
 	);
 	assert.deepEqual(languageFeatures.documentRangeFormattingEditProvider.ordered(model), []);
