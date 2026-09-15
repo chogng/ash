@@ -2,9 +2,13 @@
 
 use std::io;
 
-// Loader variables are removed before Rust main or the test harness starts threads.
+// Release builds sanitize inherited loader configuration before threads start.
+// Development builds preserve debugger and toolchain configuration.
 #[ctor::ctor]
 fn clean_environment() {
+    if cfg!(debug_assertions) {
+        return;
+    }
     let keys: Vec<_> = std::env::vars_os()
         .map(|(key, _)| key)
         .filter(|key| dangerous_key(key))
@@ -20,11 +24,12 @@ fn dangerous_key(key: &std::ffi::OsStr) -> bool {
     bytes.starts_with(b"LD_") || bytes.starts_with(b"DYLD_")
 }
 
-/// Protects the process against dumps and debugger attachment.
+/// Release builds disable dumps and debugger attachment; development builds preserve them.
+/// Windows DLL search protection applies in both modes.
 /// Call as the first operation in each executable, before loading secrets or starting threads.
 /// Failure must stop startup. Clearing loader variables cannot undo libraries loaded at exec.
 pub fn initialize() -> io::Result<()> {
-    #[cfg(unix)]
+    #[cfg(all(unix, not(debug_assertions)))]
     {
         let limit = libc::rlimit {
             rlim_cur: 0,
@@ -35,12 +40,12 @@ pub fn initialize() -> io::Result<()> {
             return Err(io::Error::last_os_error());
         }
     }
-    #[cfg(any(target_os = "linux", target_os = "android"))]
+    #[cfg(all(not(debug_assertions), any(target_os = "linux", target_os = "android")))]
     // SAFETY: PR_SET_DUMPABLE accepts this integer value and no pointer arguments.
     if unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0) } != 0 {
         return Err(io::Error::last_os_error());
     }
-    #[cfg(target_os = "macos")]
+    #[cfg(all(target_os = "macos", not(debug_assertions)))]
     // SAFETY: PT_DENY_ATTACH uses no address or process identity argument.
     if unsafe { libc::ptrace(libc::PT_DENY_ATTACH, 0, std::ptr::null_mut(), 0) } == -1 {
         return Err(io::Error::last_os_error());
