@@ -56,6 +56,7 @@ export class MouseHandler extends ViewEventHandler {
 	private readonly topBottomDragScrolling: TopBottomDragScrolling;
 	private readonly leftRightDragScrolling: LeftRightDragScrolling;
 	private gesture: PointerGesture | undefined;
+	private suppressNextMouseUp = false;
 
 	constructor(context: ViewContext, viewController: ViewController, viewHelper: IPointerHandlerHelper) {
 		super();
@@ -117,6 +118,7 @@ export class MouseHandler extends ViewEventHandler {
 	}
 
 	protected _onMouseDown(event: EditorMouseEvent, pointerId: number): void {
+		this.suppressNextMouseUp = false;
 		const target = this._createMouseTarget(event, true);
 		const editorEvent = this.toEditorMouseEvent(event, target);
 		const suppressedViewZone = isViewZone(target) && this.viewHelper.shouldSuppressMouseDownOnViewZone(target.detail.viewZoneId);
@@ -169,7 +171,14 @@ export class MouseHandler extends ViewEventHandler {
 	}
 
 	protected _onMouseUp(event: EditorMouseEvent): void {
-		if (this.gesture) return;
+		if (this.suppressNextMouseUp) {
+			this.suppressNextMouseUp = false;
+			return;
+		}
+		if (this.gesture) {
+			this.finishSelectionAt(event);
+			return;
+		}
 		this.viewController.emitMouseUp(this.toEditorMouseEvent(event, this._createMouseTarget(event, true)));
 	}
 
@@ -198,12 +207,20 @@ export class MouseHandler extends ViewEventHandler {
 
 	private finishPointerSelection(event: EditorMouseEvent): void {
 		if (!this.accepts(event)) return;
-		const target = this.findMousePosition(event, false);
-		if (target) {
-			this.dispatchTarget(target, true, NavigationCommandRevealType.None);
-			this.viewController.emitMouseUp(this.toEditorMouseEvent(event, target));
+		this.suppressNextMouseUp = true;
+		this.finishSelectionAt(event);
+	}
+
+	private finishSelectionAt(event: EditorMouseEvent): void {
+		try {
+			const target = this.findMousePosition(event, false);
+			if (target) {
+				this.dispatchTarget(target, true, NavigationCommandRevealType.None);
+				this.viewController.emitMouseUp(this.toEditorMouseEvent(event, target));
+			}
+		} finally {
+			this.stopPointerSelection();
 		}
-		this.stopPointerSelection();
 	}
 
 	private findMousePosition(event: EditorMouseEvent, testEventTarget: boolean): IMouseTarget | null {

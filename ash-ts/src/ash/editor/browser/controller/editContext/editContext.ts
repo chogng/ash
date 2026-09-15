@@ -248,6 +248,10 @@ export abstract class AbstractEditContext extends ViewPart {
 
 	private routeBeforeInput(event: InputEvent, viewController: EditContextViewController, compositionController: CompositionController): void {
 		if (event.defaultPrevented || (event.isComposing && compositionController.composing)) return;
+		if (!this.isFocused()) {
+			event.preventDefault();
+			return;
+		}
 		this.willBeforeInputEmitter.fire(event);
 		if (event.defaultPrevented) return;
 
@@ -317,9 +321,9 @@ export abstract class AbstractEditContext extends ViewPart {
 
 	private routeKeydown(event: IKeyboardEvent, viewController: EditContextViewController): void {
 		const browserEvent = event.browserEvent;
-		if (browserEvent.defaultPrevented) return;
-		viewController.emitKeyDown(event);
+		if (browserEvent.defaultPrevented || !this.isFocused()) return;
 		this.willKeydownEmitter.fire(browserEvent);
+		viewController.emitKeyDown(event);
 		if (browserEvent.defaultPrevented) return;
 		if (!event.isComposing && !event.altGraphKey) {
 			if (isUndoKeybinding(browserEvent)) {
@@ -469,6 +473,7 @@ export class CompositionController extends Disposable {
 	private handleCompositionStart(): void {
 		if (this.activeComposition) return;
 		if (
+			!this.input.isFocused() ||
 			!IME.enabled ||
 			this.viewport.cursorConfig.readOnly ||
 			this.viewModel.getSelections().length !== 1

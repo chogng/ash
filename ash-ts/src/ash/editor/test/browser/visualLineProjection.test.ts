@@ -71,6 +71,29 @@ test("browser visual-line projection applies wrapping indent modes to continuati
 	assert.equal(projection.projection.lines[1]?.wrappedTextIndentWidth, 40);
 });
 
+test('DOM soft wrapping prefers word boundaries and honors keepAll for CJK text', () => {
+	const fontInfo = new FontInfo({ ...TEST_FONT_INFO, fontFamily: 'sans-serif', isMonospace: false }, true);
+	using words = new TextModel('abc defgh');
+	using wordLines = new ViewModelLinesFromProjectedModel(words, createFactory(new FixedTextMeasurer()), fontInfo, 4, {
+		wrapping: EditorLineWrapping.On,
+		wrapWidth: 60,
+		wrappingIndent: WrappingIndent.None,
+	});
+	assert.deepEqual(Array.from({ length: wordLines.getLineCount() }, (_, index) => wordLines.getLineContent(index + 1)), ['abc ', 'defgh']);
+
+	using cjk = new TextModel('a 中文测试');
+	using cjkLines = new ViewModelLinesFromProjectedModel(cjk, createFactory(new FixedTextMeasurer()), fontInfo, 4, {
+		wrapping: EditorLineWrapping.On,
+		wrapWidth: 40,
+		wrappingIndent: WrappingIndent.None,
+	});
+	assert.deepEqual(Array.from({ length: cjkLines.getLineCount() }, (_, index) => cjkLines.getLineContent(index + 1)), ['a 中文', '测试']);
+	cjkLines.setWrappingSettings(fontInfo, 'advanced', 4, WrappingIndent.None, 'keepAll');
+	assert.deepEqual(Array.from({ length: cjkLines.getLineCount() }, (_, index) => cjkLines.getLineContent(index + 1)), ['a ', '中文测试']);
+	cjk.setValue('a 中文测试很多');
+	assert.deepEqual(Array.from({ length: cjkLines.getLineCount() }, (_, index) => cjkLines.getLineContent(index + 1)), ['a ', '中文测试', '很多']);
+});
+
 test("view-model lines expose wrapped cursor rows and convert positions through the same projection", () => {
 	using model = new TextModel("abcdef\nxy");
 	using lines = createViewModelLines(model, new FixedTextMeasurer(), {

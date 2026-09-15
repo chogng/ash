@@ -68,6 +68,7 @@ test('Code bundle activates text editor contributions and releases their UI', as
 	await page.goto('/textModel.html');
 	const ids = await page.evaluate(() => window.ashTextModelIntegration.getBundleIds());
 	expect(ids).toContain('editor.contrib.clipboard');
+	expect(await page.evaluate(() => window.ashTextModelIntegration.hasClipboardContribution())).toBe(true);
 	expect(ids).toContain('editor.contrib.findController');
 	expect(ids).not.toContain('editor.contrib.documentFormatting');
 	expect(ids).not.toContain('editor.contrib.collaboration');

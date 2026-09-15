@@ -31,7 +31,6 @@ test("Code bundle explicitly registers independently selectable editor capabilit
 	const ids = new Set(getTextEditorCapabilityContributions().map(contribution => contribution.id));
 	for (const id of [
 		"editor.contrib.bracketMatching",
-		"editor.contrib.clipboard",
 		"editor.contrib.codeAction",
 		"editor.contrib.comment",
 		"editor.contrib.folding",
@@ -47,6 +46,7 @@ test("Code bundle explicitly registers independently selectable editor capabilit
 	}
 	const contributionIds = new Set(EditorExtensionsRegistry.getEditorContributions().map(contribution => contribution.id));
 	for (const id of [
+		'editor.contrib.clipboard',
 		'editor.contrib.cursorUndoRedoController',
 		'editor.contrib.dropIntoEditorController',
 		'editor.contrib.messageController',

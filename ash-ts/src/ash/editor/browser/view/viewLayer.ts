@@ -1,5 +1,5 @@
 import '../viewParts/viewLines/viewLines.css';
-import { h, reset, fragment as createFragment } from '../../../base/browser/dom.js';
+import { h } from '../../../base/browser/dom.js';
 import { FastDomNode } from '../../../base/browser/fastDomNode.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { type EditorVisualLine, type EditorVisualLineProjection } from '../../common/viewModel/modelLineProjection.js';
@@ -73,7 +73,7 @@ export class ViewLayer<TLine> extends Disposable {
 			lineRangesEqual(this.renderedRange, renderRange)
 		) return;
 
-		const fragment = createFragment(this.domNode.ownerDocument);
+		const ordered: HTMLElement[] = [];
 		const next = new Map<number, TLine>();
 		for (let visualLineIndex = renderRange.startLineIndex; visualLineIndex < renderRange.endLineIndexExclusive; visualLineIndex += 1) {
 			const visualLine = visualProjection.lineAt(visualLineIndex);
@@ -86,9 +86,9 @@ export class ViewLayer<TLine> extends Disposable {
 			const domNode = this.lineRenderer.getDomNode(line);
 			domNode.style.top = `${viewportData.relativeVerticalOffset[visualLineIndex - renderRange.startLineIndex]}px`;
 			next.set(visualLineIndex, line);
-			fragment.append(domNode);
+			ordered.push(domNode);
 		}
-		reset(this.domNode, fragment);
+		reconcileChildren(this.domNode, ordered);
 		this.lines = next;
 		this.renderedRange = renderRange;
 		this.renderedModelVersion = visualProjection.modelVersion;
@@ -127,7 +127,7 @@ export class ViewPartRows extends Disposable {
 	}
 
 	public render(context: RestrictedRenderingContext): ReadonlyMap<number, HTMLElement> {
-		const fragment = createFragment(this.domNode.domNode.ownerDocument);
+		const ordered: HTMLElement[] = [];
 		const next = new Map<number, FastDomNode<HTMLDivElement>>();
 		const projected = new Map<number, HTMLElement>();
 		this.domNode.setTop(context.bigNumbersDelta);
@@ -146,11 +146,26 @@ export class ViewPartRows extends Disposable {
 			row.setTop(context.viewportData.relativeVerticalOffset[lineNumber - context.viewportData.startLineNumber]!);
 			next.set(lineIndex, row);
 			projected.set(lineIndex, row.domNode);
-			fragment.append(row.domNode);
+			ordered.push(row.domNode);
 		}
-		reset(this.domNode.domNode, fragment);
+		reconcileChildren(this.domNode.domNode, ordered);
 		this.rows = next;
 		return projected;
+	}
+}
+
+function reconcileChildren(parent: HTMLElement, ordered: readonly HTMLElement[]): void {
+	const retained = new Set<Node>(ordered);
+	for (const child of [...parent.childNodes]) {
+		if (!retained.has(child)) child.remove();
+	}
+	let next = parent.firstChild;
+	for (const child of ordered) {
+		if (child === next) {
+			next = next.nextSibling;
+		} else {
+			parent.insertBefore(child, next);
+		}
 	}
 }
 

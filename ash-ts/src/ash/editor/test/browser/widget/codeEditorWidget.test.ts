@@ -152,6 +152,24 @@ test('textarea system-caret movement returns through TextAreaInput and stops aft
 	textArea.setSelectionRange(0, 1, 'forward');
 	dom.window.document.dispatchEvent(new dom.window.Event('selectionchange'));
 	assert.deepEqual(editor.getSelections(), [new Selection(1, 2, 1, 4)]);
+	const lateInput = new dom.window.InputEvent('beforeinput', {
+		bubbles: true,
+		cancelable: true,
+		inputType: 'insertText',
+		data: 'X',
+	});
+	textArea.dispatchEvent(lateInput);
+	assert.deepEqual({ prevented: lateInput.defaultPrevented, value: model.getValue(), version: model.getVersionId() }, {
+		prevented: true,
+		value: 'alpha',
+		version: 1,
+	});
+	textArea.dispatchEvent(new dom.window.InputEvent('beforeinput', {
+		bubbles: true,
+		inputType: 'insertText',
+		data: 'Y',
+	}));
+	assert.deepEqual({ value: model.getValue(), version: model.getVersionId() }, { value: 'alpha', version: 1 });
 	dom.window.close();
 });
 
@@ -224,6 +242,7 @@ test('EditContext owns default copy, paste, and cut behavior without a clipboard
 	});
 	const input = editor.view.editContext.domNode.domNode;
 	assert.ok(editor.view.editContext instanceof TextAreaEditContext);
+	input.focus();
 	const textAreaInput = editor.view.editContext.textAreaInput;
 	let willCopyCount = 0;
 	let cutCount = 0;
@@ -271,6 +290,7 @@ test('EditContext rejects cut and paste while composition owns the edit transact
 	});
 	editor.setSelection(new Selection(1, 6, 1, 6));
 	const input = editor.view.editContext.domNode.domNode;
+	input.focus();
 	input.dispatchEvent(new dom.window.CompositionEvent('compositionstart', { data: '' }));
 	assert.equal(editor.inComposition, true);
 	const pasteData = new TestClipboardData();
@@ -310,6 +330,7 @@ test('EditContext routes word deletion through standard WordOperations ranges', 
 	});
 	const input = editor.view.editContext.domNode.domNode;
 	editor.setPosition(new Position(1, 11));
+	input.focus();
 	const backward = new dom.window.InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'deleteWordBackward' });
 	input.dispatchEvent(backward);
 	assert.equal(backward.defaultPrevented, true);
@@ -530,6 +551,7 @@ test('browser EditContext reattaches its editing object after DOM ownership chan
 	assert.ok((editContext.nativeContext as TestEditContext).controlBounds);
 	const input = editContext.domNode.domNode as HTMLElement & { editContext?: unknown };
 	assert.strictEqual(input.editContext, editContext.nativeContext);
+	editContext.focus();
 	let receivedKeyDown: IKeyboardEvent | undefined;
 	let receivedKeyUp: IKeyboardEvent | undefined;
 	using keyDownListener = editor.onKeyDown(event => receivedKeyDown = event);
@@ -542,7 +564,6 @@ test('browser EditContext reattaches its editing object after DOM ownership chan
 	assert.ok(receivedKeyUp instanceof StandardKeyboardEvent);
 	assert.strictEqual(receivedKeyDown.browserEvent, keyDown);
 	assert.strictEqual(receivedKeyUp.browserEvent, keyUp);
-	editContext.focus();
 	editContext.writeScreenReaderContent('test');
 	const simpleContent = requiredElement<HTMLElement>(input, '.stanza-native-screen-reader-content');
 	assert.equal(simpleContent.textContent, 'alpha');
@@ -569,6 +590,25 @@ test('browser EditContext reattaches its editing object after DOM ownership chan
 	assert.equal(editor.inComposition, false);
 	model.undo();
 	assert.equal(model.getText(), 'alpha');
+	input.blur();
+	assert.equal(editContext.isFocused(), false);
+	const versionBeforeLateInput = model.getVersionId();
+	const lateCompositionStart = new dom.window.CompositionEvent('compositionstart', { cancelable: true });
+	nativeComposition.dispatchEvent(lateCompositionStart);
+	assert.equal(lateCompositionStart.defaultPrevented, true);
+	assert.equal(editor.inComposition, false);
+	nativeComposition.dispatchEvent(Object.assign(new dom.window.Event('textupdate'), {
+		text: 'late',
+		updateRangeStart: 0,
+		updateRangeEnd: 0,
+		selectionStart: 4,
+		selectionEnd: 4,
+	}));
+	assert.deepEqual({ text: model.getText(), version: model.getVersionId(), browserText: nativeComposition.text }, {
+		text: 'alpha',
+		version: versionBeforeLateInput,
+		browserText: 'alpha',
+	});
 
 	const adoptedDom = new JSDOM('<!doctype html><body></body>');
 	input.editContext = undefined;
@@ -835,6 +875,8 @@ test('pointer selection uses outside-editor targets to scroll both axes and stop
 	});
 	editor.layout({ width: 120, height: 60 });
 	editor.getDomNode().getBoundingClientRect = () => ({ x: 0, y: 0, left: 0, top: 0, right: 120, bottom: 60, width: 120, height: 60, toJSON: () => ({}) });
+	let mouseUpEvents = 0;
+	using mouseUpListener = editor.onMouseUp(() => { mouseUpEvents += 1; });
 
 	editor.getDomNode().dispatchEvent(pointerEvent(dom, 'pointerdown', 17, 1, editor.getLayoutInfo().contentLeft + 8, 10));
 	dom.window.dispatchEvent(pointerEvent(dom, 'pointermove', 17, 1, editor.getLayoutInfo().contentLeft + 8, 120));
@@ -846,9 +888,14 @@ test('pointer selection uses outside-editor targets to scroll both axes and stop
 	await delay(dom.window, 45);
 	assert.ok(editor.getScrollLeft() > 0);
 	dom.window.dispatchEvent(pointerEvent(dom, 'pointerup', 17, 0, 260, 20));
+	editor.getDomNode().dispatchEvent(new dom.window.MouseEvent('mouseup', { bubbles: true, button: 0, clientX: 260, clientY: 20 }));
+	assert.equal(mouseUpEvents, 1);
 	const releasedScroll = { left: editor.getScrollLeft(), top: editor.getScrollTop() };
 	await delay(dom.window, 35);
 	assert.deepEqual({ left: editor.getScrollLeft(), top: editor.getScrollTop() }, releasedScroll);
+	editor.getDomNode().dispatchEvent(pointerEvent(dom, 'pointerdown', 18, 1, editor.getLayoutInfo().contentLeft + 8, 10));
+	editor.getDomNode().dispatchEvent(new dom.window.MouseEvent('mouseup', { bubbles: true, button: 0, clientX: editor.getLayoutInfo().contentLeft + 8, clientY: 10 }));
+	assert.equal(mouseUpEvents, 2);
 	dom.window.close();
 });
 
@@ -1468,6 +1515,7 @@ test('CodeEditorWidget keyboard navigation uses standard cursor movement state',
 	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
 	editor.setSelection(Selection.fromPositions(new Position(1, 5)));
 	const input = editor.view.editContext.domNode.domNode;
+	input.focus();
 
 	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }));
 	assert.deepEqual(editor.getPosition(), new Position(2, 2));
@@ -1479,6 +1527,44 @@ test('CodeEditorWidget keyboard navigation uses standard cursor movement state',
 	assert.equal(prevented.defaultPrevented, true);
 	assert.deepEqual(editor.getPosition(), new Position(3, 5));
 
+	dom.window.close();
+});
+
+test('CodeEditorWidget offers keys to input consumers before cursor navigation', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('first\nsecond');
+	using editor = new CodeEditorWidget({
+		container,
+		model,
+		input: { resource: model.uri },
+		languageId: model.getLanguageId(),
+		lineHeight: 20,
+	});
+	editor.setPosition(new Position(1, 3));
+	const order: string[] = [];
+	using inputConsumer = editor.view.onWillKeydown(event => {
+		order.push('consumer');
+		if (event.key === 'ArrowDown') event.preventDefault();
+	});
+	using publicEvent = editor.onKeyDown(event => {
+		order.push(event.browserEvent.defaultPrevented ? 'public:handled' : 'public:available');
+	});
+	const input = editor.view.editContext.domNode.domNode;
+	input.focus();
+	const down = new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' });
+	input.dispatchEvent(down);
+
+	assert.deepEqual({
+		position: editor.getPosition(),
+		prevented: down.defaultPrevented,
+		order,
+	}, {
+		position: new Position(1, 3),
+		prevented: true,
+		order: ['consumer', 'public:handled'],
+	});
 	dom.window.close();
 });
 

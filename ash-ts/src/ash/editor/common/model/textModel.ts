@@ -1,6 +1,6 @@
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Color } from '../../../base/common/color.js';
-import { onUnexpectedError } from '../../../base/common/errors.js';
+import { BugIndicatingError, onUnexpectedError } from '../../../base/common/errors.js';
 import { StringSHA1 } from '../../../base/common/hash.js';
 import type { IMarkdownString } from '../../../base/common/htmlContent.js';
 import { DisposableStore, MutableDisposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
@@ -126,6 +126,7 @@ export interface TextModelOptions {
 	readonly insertSpaces?: boolean;
 	readonly defaultEOL?: DefaultEndOfLine;
 	readonly trimAutoWhitespace?: boolean;
+	readonly largeFileOptimizations?: boolean;
 	readonly bracketPairColorizationOptions?: BracketPairColorizationOptions;
 	readonly languageConfigurationService?: ILanguageConfigurationService;
 	readonly tokenization?: TokenizationTextModelPartOptions;
@@ -274,7 +275,11 @@ export class TextModel implements ITextModel {
 		} else {
 			this.lineMetadata = Object.freeze({});
 		}
-		this.largeFile = classifyTextModelSize(this.buffer.getLength(), this.buffer.getLineCount());
+		this.largeFile = classifyTextModelSize(
+			this.buffer.getLength(),
+			this.buffer.getLineCount(),
+			options.largeFileOptimizations ?? EDITOR_MODEL_DEFAULTS.largeFileOptimizations,
+		);
 		this.blockState = options.blocks && blockDocument ? this._register(new TextModelBlockState(
 			options.blocks.schema,
 			blockDocument,
@@ -523,8 +528,7 @@ export class TextModel implements ITextModel {
 	}
 
 	getText(): string {
-		this.assertNotDisposed();
-		return this.buffer.createSnapshot().getText();
+		return this.getValue();
 	}
 
 	onBeforeAttached(): IAttachedView {
@@ -728,6 +732,8 @@ export class TextModel implements ITextModel {
 	}
 
 	getValue(eol = EndOfLinePreference.TextDefined, preserveBOM = false): string {
+		this.assertNotDisposed();
+		if (this.isTooLargeForHeapOperation()) throw new BugIndicatingError('Operation would exceed heap memory limits');
 		const value = this.getValueInRange(this.getFullModelRange(), eol);
 		return preserveBOM ? this.buffer.getBOM() + value : value;
 	}
@@ -808,6 +814,7 @@ export class TextModel implements ITextModel {
 
 	getLinesContent(): string[] {
 		this.assertNotDisposed();
+		if (this.isTooLargeForHeapOperation()) throw new BugIndicatingError('Operation would exceed heap memory limits');
 		return this.buffer.getLinesContent();
 	}
 

@@ -26,6 +26,7 @@ suiteTeardown(() => environment.window.close());
 
 test('middle click opens a scroll session and keyboard input closes it', () => {
 	const container = environment.window.document.createElement('main');
+	environment.window.document.body.append(container);
 	using model = new TextModel('one\ntwo\nthree');
 	using editor = new CodeEditorWidget({
 		container,
@@ -36,6 +37,7 @@ test('middle click opens a scroll session and keyboard input closes it', () => {
 		scrollOnMiddleClick: true,
 	});
 	editor.layout({ width: 300, height: 60 });
+	editor.focus();
 	const pointer = new environment.window.Event('pointerdown', { bubbles: true, cancelable: true });
 	Object.defineProperties(pointer, {
 		button: { value: 1 },
@@ -54,6 +56,7 @@ test('middle click opens a scroll session and keyboard input closes it', () => {
 	editor.view.element.dispatchEvent(new environment.window.KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
 	assert.equal(editor.viewport.domNode.domNode.classList.contains('scroll-editor-on-middle-click-editor'), false);
 	assert.equal(editor.viewport.domNode.domNode.querySelector('.scroll-editor-on-middle-click-dot'), null);
+	container.remove();
 });
 
 test('disabled middle-click scrolling does not create a scroll session', () => {

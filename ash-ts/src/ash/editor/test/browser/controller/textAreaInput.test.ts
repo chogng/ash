@@ -76,6 +76,7 @@ test('textarea input publishes insertText through the standard type event', () =
 		data: 'x',
 		inputType: 'insertText',
 	});
+	element.focus();
 	element.dispatchEvent(browserEvent);
 	assert.equal(browserEvent.defaultPrevented, true);
 	assert.deepEqual(order, ['beforeinput', 'type']);
@@ -98,6 +99,7 @@ test('textarea input publishes normalized composition state', () => {
 	input.onCompositionUpdate(event => composition = event);
 	input.onType(event => types.push(event));
 	input.onCompositionEnd(() => ended += 1);
+	element.focus();
 	element.dispatchEvent(new dom.window.CompositionEvent('compositionstart'));
 	input.setValue('composition', 'first\nsecond');
 	input.setSelectionRange('composition', 5, 5);
@@ -119,9 +121,14 @@ test('textarea input releases composition ownership on blur', () => {
 	const element = dom.window.document.querySelector('textarea')!;
 	const screenReaderState = new TextAreaState('ready', 0, 0, new Selection(1, 1, 1, 1), 0);
 	using input = new TextAreaInput(createHost(() => screenReaderState), element);
+	let compositionStarts = 0;
+	input.onCompositionStart(() => compositionStarts += 1);
 	input.focusTextArea();
 	element.dispatchEvent(new dom.window.CompositionEvent('compositionstart'));
 	element.blur();
+	const lateStart = new dom.window.CompositionEvent('compositionstart', { cancelable: true });
+	element.dispatchEvent(lateStart);
+	assert.deepEqual({ prevented: lateStart.defaultPrevented, compositionStarts }, { prevented: true, compositionStarts: 1 });
 	input.focusTextArea();
 	input.writeNativeTextAreaContent('refocus');
 	assert.equal(element.value, 'ready');

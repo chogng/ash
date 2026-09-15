@@ -65,6 +65,7 @@ export class ModelService extends Disposable implements IModelService {
 			insertSpaces: creationOptions.insertSpaces,
 			defaultEOL: creationOptions.defaultEOL,
 			trimAutoWhitespace: creationOptions.trimAutoWhitespace,
+			largeFileOptimizations: creationOptions.largeFileOptimizations,
 			bracketPairColorizationOptions: creationOptions.bracketPairColorizationOptions,
 			languageConfigurationService: this._languageConfigurationService,
 			...(this._languageService && this._languageFeaturesService ? {

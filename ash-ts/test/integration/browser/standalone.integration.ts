@@ -36,6 +36,20 @@ interface LineIdentityState {
 	readonly longLineEnd: readonly [number, number];
 }
 
+interface KeyboardEditingState {
+	readonly value: string;
+	readonly version: number;
+	readonly selection: string | null;
+	readonly focused: boolean;
+}
+
+interface WrappedLayoutState {
+	readonly value: string;
+	readonly version: number;
+	readonly modelLineCount: number;
+	readonly contentHeight: number;
+}
+
 interface StandaloneHarness {
 	readonly events: readonly CreationEvent[];
 	state(kind: 'caller' | 'owned'): EditorState;
@@ -43,6 +57,7 @@ interface StandaloneHarness {
 	detachOwned(): { readonly modelIsNull: boolean; readonly value: string; readonly rootMounted: boolean; readonly inputCount: number };
 	reattachOwned(): void;
 	getOwnedValue(): string;
+	getCallerVersion(): number;
 	tryOverlappingSurrogateEdits(): { readonly rejected: boolean; readonly value: string; readonly versionUnchanged: boolean };
 	applySurrogateEdit(): string;
 	resetSameValue(): {
@@ -59,6 +74,34 @@ interface StandaloneHarness {
 	prepareLineIdentity(): LineIdentityState;
 	splitLineIdentity(): LineIdentityState;
 	readLineIdentity(): LineIdentityState;
+	openLargeModel(): {
+		readonly textUnits: number;
+		readonly lineCount: number;
+		readonly tooLargeForTokenization: boolean;
+		readonly tooLargeForSynchronization: boolean;
+		readonly attachedEditors: number;
+		readonly firstChunkPrefix: string;
+	};
+	enableCompletionNavigation(): void;
+	getCallerPosition(): { readonly lineNumber: number; readonly column: number } | null;
+	prepareKeyboardEditing(): KeyboardEditingState;
+	readKeyboardEditing(): KeyboardEditingState;
+	prepareClipboard(): KeyboardEditingState;
+	prepareWrappedLayout(): WrappedLayoutState;
+	prepareProportionalWrap(): WrappedLayoutState;
+	resizeWrappedLayout(width: number): WrappedLayoutState;
+	editWrappedText(value: string): WrappedLayoutState;
+	readWrappedLayout(): WrappedLayoutState;
+	prepareVisibleRows(): { readonly lineCount: number; readonly version: number };
+	scrollVisibleRows(top: number): number;
+	editVisibleRow(lineIndex: number): string;
+	prepareCursorGutter(): { readonly version: number; readonly modelLineCount: number };
+	moveGutterCaret(lineNumber: number, column: number): void;
+	shortenGutterLine(): number;
+	preparePointerSelection(): void;
+	readPointerSelection(): { readonly value: string; readonly version: number; readonly selection: string | null; readonly ownedSelection: string | null; readonly focused: boolean; readonly mouseUpEvents: number };
+	prepareMultiCursor(): void;
+	readMultiCursor(): { readonly value: string; readonly version: number; readonly selections: readonly string[]; readonly ownedSelections: readonly string[]; readonly focused: boolean };
 	releaseCaller(): void;
 	releaseOwned(): void;
 	dispose(): void;
@@ -94,8 +137,12 @@ callerEditor.layout({ width: callerContainer.clientWidth, height: callerContaine
 ownedEditor.layout({ width: ownedContainer.clientWidth, height: ownedContainer.clientHeight });
 const ownedModel = ownedEditor.getModel();
 if (!ownedModel) throw new Error('Owned standalone editor has no model');
+let pointerMouseUpEvents = 0;
+const pointerMouseUpListener = callerEditor.onMouseUp(() => { pointerMouseUpEvents += 1; });
 let codeActionRegistration: ReturnType<typeof stanza.languages.registerCodeActionProvider> | undefined;
+let completionRegistration: ReturnType<typeof stanza.languages.registerCompletionItemProvider> | undefined;
 let longLineId: string | undefined;
+let largeModel: ReturnType<typeof stanza.editor.createModel> | undefined;
 
 function state(kind: 'caller' | 'owned'): EditorState {
 	const editor = kind === 'caller' ? callerEditor : ownedEditor;
@@ -144,6 +191,24 @@ function readLineIdentity(): LineIdentityState {
 	};
 }
 
+function readKeyboardEditing(): KeyboardEditingState {
+	return {
+		value: callerModel.getValue(),
+		version: callerModel.getVersionId(),
+		selection: callerEditor.getSelection()?.toString() ?? null,
+		focused: callerEditor.hasTextFocus(),
+	};
+}
+
+function readWrappedLayout(): WrappedLayoutState {
+	return {
+		value: callerModel.getValue(),
+		version: callerModel.getVersionId(),
+		modelLineCount: callerModel.getLineCount(),
+		contentHeight: callerEditor.getContentHeight(),
+	};
+}
+
 window.ashStandaloneIntegration = {
 	events,
 	state,
@@ -169,6 +234,7 @@ window.ashStandaloneIntegration = {
 	},
 	reattachOwned: () => ownedEditor.setModel(callerModel),
 	getOwnedValue: () => ownedEditor.getValue(),
+	getCallerVersion: () => callerModel.getVersionId(),
 	tryOverlappingSurrogateEdits: () => {
 		callerEditor.setValue('a📚b');
 		const version = callerModel.getVersionId();
@@ -246,6 +312,140 @@ window.ashStandaloneIntegration = {
 		return readLineIdentity();
 	},
 	readLineIdentity,
+	openLargeModel: () => {
+		const value = Array(20_500).fill('x'.repeat(1_024)).join('\n');
+		largeModel = stanza.editor.createModel(value, 'plaintext', stanza.URI.parse('inmemory://stanza/large.txt'));
+		const snapshot = largeModel.createSnapshot();
+		callerEditor.setModel(largeModel);
+		ownedEditor.setModel(largeModel);
+		return {
+			textUnits: largeModel.getValueLength(),
+			lineCount: largeModel.getLineCount(),
+			tooLargeForTokenization: largeModel.isTooLargeForTokenization(),
+			tooLargeForSynchronization: largeModel.isTooLargeForSyncing(),
+			attachedEditors: largeModel.getAttachedEditorCount(),
+			firstChunkPrefix: snapshot.read()?.slice(0, 32) ?? '',
+		};
+	},
+	enableCompletionNavigation: () => {
+		completionRegistration?.dispose();
+		completionRegistration = stanza.languages.registerCompletionItemProvider('plaintext', {
+			id: 'standalone.keyboard-navigation',
+			provideCompletions: request => ({
+				items: ['constant', 'console'].map(label => ({
+					id: label,
+					label,
+					kind: stanza.languages.LanguageCompletionItemKind.Text,
+					range: stanza.Range.fromPositions(request.position),
+					insertText: label,
+					insertTextFormat: stanza.languages.LanguageCompletionInsertTextFormat.PlainText,
+				})),
+				isIncomplete: false,
+			}),
+		});
+		callerEditor.setValue('con');
+		callerEditor.setPosition(new stanza.Position(1, 4));
+	},
+	getCallerPosition: () => {
+		const position = callerEditor.getPosition();
+		return position ? { lineNumber: position.lineNumber, column: position.column } : null;
+	},
+	prepareKeyboardEditing: () => {
+		callerEditor.setValue('first\nsecond');
+		callerEditor.setPosition(new stanza.Position(1, 3));
+		return readKeyboardEditing();
+	},
+	readKeyboardEditing,
+	prepareClipboard: () => {
+		callerEditor.setValue('alpha beta');
+		callerEditor.setSelection(new stanza.Selection(1, 1, 1, 6));
+		return readKeyboardEditing();
+	},
+	prepareWrappedLayout: () => {
+		callerContainer.style.width = '120px';
+		callerContainer.style.height = '80px';
+		callerEditor.layout({ width: 120, height: 80 });
+		callerEditor.updateOptions({ wordWrap: 'on', wrappingIndent: 'none' });
+		callerEditor.setValue('abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ');
+		callerEditor.setPosition(new stanza.Position(1, 1));
+		return readWrappedLayout();
+	},
+	prepareProportionalWrap: () => {
+		callerContainer.style.width = '320px';
+		callerContainer.style.height = '80px';
+		callerEditor.layout({ width: 320, height: 80 });
+		callerEditor.updateOptions({ fontFamily: 'Arial', wordWrap: 'wordWrapColumn', wordWrapColumn: 6, wrappingIndent: 'none' });
+		callerEditor.setValue('abc defgh');
+		return readWrappedLayout();
+	},
+	resizeWrappedLayout: width => {
+		callerContainer.style.width = `${width}px`;
+		callerEditor.layout({ width, height: 80 });
+		return readWrappedLayout();
+	},
+	editWrappedText: value => {
+		callerEditor.executeEdits('wrap', [{ range: new stanza.Range(1, 1, 1, callerModel.getLineMaxColumn(1)), text: value }]);
+		return readWrappedLayout();
+	},
+	readWrappedLayout,
+	prepareVisibleRows: () => {
+		callerContainer.style.height = '80px';
+		callerEditor.layout({ width: callerContainer.clientWidth, height: 80 });
+		callerEditor.setValue(Array.from({ length: 80 }, (_, index) => `line-${String(index).padStart(2, '0')}`).join('\n'));
+		return { lineCount: callerModel.getLineCount(), version: callerModel.getVersionId() };
+	},
+	scrollVisibleRows: top => {
+		callerEditor.setScrollTop(top);
+		return callerEditor.getScrollTop();
+	},
+	editVisibleRow: lineIndex => {
+		const lineNumber = lineIndex + 1;
+		callerEditor.executeEdits('visible-row', [{
+			range: new stanza.Range(lineNumber, 1, lineNumber, callerModel.getLineMaxColumn(lineNumber)),
+			text: `changed-${lineIndex}`,
+		}]);
+		return callerModel.getLineContent(lineNumber);
+	},
+	prepareCursorGutter: () => {
+		callerContainer.style.width = '220px';
+		callerContainer.style.height = '320px';
+		callerEditor.layout({ width: 220, height: 320 });
+		callerEditor.updateOptions({ wordWrap: 'on', lineNumbers: 'relative', glyphMargin: true, cursorBlinking: 'solid' });
+		callerEditor.setValue('abcdefghijklmnopqrstuvwxyz0123456789\nnext');
+		callerEditor.setPosition(new stanza.Position(1, callerModel.getLineMaxColumn(1)));
+		callerEditor.createDecorationsCollection([{
+			range: new stanza.Range(1, 1, 1, 1),
+			options: { description: 'gutter integration marker', glyphMarginClassName: 'ash-gutter-probe' },
+		}]);
+		return { version: callerModel.getVersionId(), modelLineCount: callerModel.getLineCount() };
+	},
+	moveGutterCaret: (lineNumber, column) => callerEditor.setPosition(new stanza.Position(lineNumber, column)),
+	shortenGutterLine: () => {
+		callerEditor.executeEdits('gutter', [{ range: new stanza.Range(1, 1, 1, callerModel.getLineMaxColumn(1)), text: 'short' }]);
+		return callerModel.getVersionId();
+	},
+	preparePointerSelection: () => {
+		pointerMouseUpEvents = 0;
+		callerEditor.setValue('alpha beta\nsecond line');
+	},
+	readPointerSelection: () => ({
+		value: callerModel.getValue(),
+		version: callerModel.getVersionId(),
+		selection: callerEditor.getSelection()?.toString() ?? null,
+		ownedSelection: ownedEditor.getSelection()?.toString() ?? null,
+		focused: callerEditor.hasTextFocus(),
+		mouseUpEvents: pointerMouseUpEvents,
+	}),
+	prepareMultiCursor: () => {
+		callerEditor.setValue('abcd\nefgh');
+	},
+	readMultiCursor: () => ({
+		value: callerModel.getValue(),
+		version: callerModel.getVersionId(),
+		selections: callerEditor.getSelections()?.map(selection => selection.toString()) ?? [],
+		ownedSelections: ownedEditor.getSelections()?.map(selection => selection.toString()) ?? [],
+		focused: callerEditor.hasTextFocus(),
+	}),
 	releaseCaller: () => {
 		callerEditor.dispose();
 		callerModel.setValue('changed after editor disposal');
@@ -253,9 +453,12 @@ window.ashStandaloneIntegration = {
 	releaseOwned: () => ownedEditor.dispose(),
 	dispose: () => {
 		codeActionRegistration?.dispose();
+		completionRegistration?.dispose();
 		ownedEditor.dispose();
 		callerEditor.dispose();
+		largeModel?.dispose();
 		callerModel.dispose();
+		pointerMouseUpListener.dispose();
 		listener.dispose();
 	},
 };

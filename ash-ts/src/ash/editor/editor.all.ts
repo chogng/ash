@@ -9,7 +9,6 @@ import "./contrib/callHierarchy/browser/languageHierarchy.contribution.js";
 import './contrib/dropOrPasteInto/browser/copyPasteContribution.js';
 import './contrib/dropOrPasteInto/browser/dropIntoEditorContribution.js';
 import "./contrib/clipboard/browser/clipboard.js";
-import "./contrib/clipboard/browser/clipboard.contribution.js";
 import "./contrib/codeAction/browser/codeAction.contribution.js";
 import "./contrib/codelens/browser/codelensController.js";
 import "./contrib/colorPicker/browser/colorPickerController.js";

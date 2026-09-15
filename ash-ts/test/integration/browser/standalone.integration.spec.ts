@@ -249,3 +249,805 @@ test('shared editors retain line identities through split, undo, and redo', asyn
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	expect(errors).toEqual([]);
 });
+
+test('large standalone models keep both editors readable within the tokenization budget', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.stack ?? error.message));
+	await page.goto('/standalone.html');
+	const state = await page.evaluate(() => window.ashStandaloneIntegration.openLargeModel());
+	expect(state).toEqual({
+		textUnits: 20_500 * 1_024 + 20_499,
+		lineCount: 20_500,
+		tooLargeForTokenization: true,
+		tooLargeForSynchronization: false,
+		attachedEditors: 2,
+		firstChunkPrefix: 'x'.repeat(32),
+	});
+	await expect(page.locator('#caller .view-line').first()).toContainText('x'.repeat(32));
+	await expect(page.locator('#owned .view-line').first()).toContainText('x'.repeat(32));
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	expect(errors).toEqual([]);
+});
+
+test('completion arrow keys select a suggestion before editor navigation', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.stack ?? error.message));
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.enableCompletionNavigation());
+	const input = page.locator('#caller .stanza-editor-input');
+	await input.focus();
+	await page.keyboard.press('Control+Space');
+	const options = page.locator('#caller .stanza-editor-completion-option');
+	await expect(options).toHaveCount(2);
+	await expect(options.nth(0)).toHaveAttribute('aria-selected', 'true');
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.getCallerPosition())).toEqual({ lineNumber: 1, column: 4 });
+
+	await page.keyboard.press('ArrowDown');
+	await expect(options.nth(1)).toHaveAttribute('aria-selected', 'true');
+	const optionId = await options.nth(1).getAttribute('id');
+	expect(optionId).toBeTruthy();
+	await expect(input).toHaveAttribute('aria-activedescendant', optionId!);
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.getCallerPosition())).toEqual({ lineNumber: 1, column: 4 });
+	await page.keyboard.press('Enter');
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('conconsole');
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	expect(errors).toEqual([]);
+});
+
+test('keyboard selection, deletion, undo, and typing share one edit path', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.stack ?? error.message));
+	await page.goto('/standalone.html');
+	const initial = await page.evaluate(() => window.ashStandaloneIntegration.prepareKeyboardEditing());
+	const input = page.locator('#caller .stanza-editor-input');
+	await input.focus();
+	await page.keyboard.press('Shift+ArrowDown');
+	const selected = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
+	expect({ value: selected.value, version: selected.version, selection: selected.selection }).toEqual({
+		value: 'first\nsecond',
+		version: initial.version,
+		selection: '[1,3 -> 2,3]',
+	});
+
+	await page.keyboard.press('Backspace');
+	const deleted = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
+	expect({ value: deleted.value, version: deleted.version, selection: deleted.selection }).toEqual({
+		value: 'ficond',
+		version: initial.version + 1,
+		selection: '[1,3 -> 1,3]',
+	});
+	await page.keyboard.press('ControlOrMeta+z');
+	const undone = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
+	expect({ value: undone.value, version: undone.version, selection: undone.selection }).toEqual({
+		value: 'first\nsecond',
+		version: deleted.version + 1,
+		selection: '[1,3 -> 2,3]',
+	});
+
+	await page.keyboard.press('ArrowLeft');
+	await page.keyboard.press('ArrowRight');
+	await page.keyboard.type('X');
+	const typed = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
+	expect({ value: typed.value, version: typed.version, selection: typed.selection, focused: typed.focused }).toEqual({
+		value: 'firXst\nsecond',
+		version: undone.version + 1,
+		selection: '[1,5 -> 1,5]',
+		focused: true,
+	});
+	await expect(page.locator('#caller .view-line').first()).toContainText('firXst');
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	expect(errors).toEqual([]);
+});
+
+test('double-clicking editor text selects the whole word', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.stack ?? error.message));
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.preparePointerSelection());
+	const before = await page.evaluate(() => window.ashStandaloneIntegration.readPointerSelection());
+	const character = await page.evaluate(() => {
+		const spans = [...document.querySelectorAll('#caller .view-line > span > span')];
+		const box = spans[0]?.getBoundingClientRect();
+		return { text: spans.map(span => span.textContent).join(''), box: box && { x: box.x, y: box.y, width: box.width, height: box.height } };
+	});
+	expect(character.text.startsWith('alpha beta')).toBe(true);
+	expect(character.box).toBeTruthy();
+	await page.mouse.dblclick(character.box!.x + character.box!.width / 4, character.box!.y + character.box!.height / 2);
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readPointerSelection())).toEqual({
+		value: 'alpha beta\nsecond line',
+		version: before.version,
+		selection: '[1,1 -> 1,6]',
+		ownedSelection: before.ownedSelection,
+		focused: true,
+		mouseUpEvents: 2,
+	});
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	expect(errors).toEqual([]);
+});
+
+test('pointer drag extends one editor selection and stops on release', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.stack ?? error.message));
+	await page.goto('/standalone.html');
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.switchOwnedToCaller())).currentModelIsCaller).toBe(true);
+	await page.evaluate(() => window.ashStandaloneIntegration.preparePointerSelection());
+	const before = await page.evaluate(() => window.ashStandaloneIntegration.readPointerSelection());
+	const lines = await page.evaluate(() => [...document.querySelectorAll('#caller .view-line > span > span')].map(span => {
+		const box = span.getBoundingClientRect();
+		return { text: span.textContent, x: box.x, y: box.y, width: box.width, height: box.height };
+	}));
+	expect(lines.map(line => line.text)).toEqual(['alpha beta', 'second line']);
+	await page.mouse.move(lines[0]!.x + lines[0]!.width * 0.3, lines[0]!.y + lines[0]!.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(lines[1]!.x + lines[1]!.width * 0.7, lines[1]!.y + lines[1]!.height / 2, { steps: 5 });
+	await page.mouse.up();
+	const selected = await page.evaluate(() => window.ashStandaloneIntegration.readPointerSelection());
+	expect(selected.selection).toMatch(/^\[1,\d+ -> 2,\d+\]$/u);
+	expect({ value: selected.value, version: selected.version, ownedSelection: selected.ownedSelection, focused: selected.focused, mouseUpEvents: selected.mouseUpEvents }).toEqual({
+		value: before.value,
+		version: before.version,
+		ownedSelection: before.ownedSelection,
+		focused: true,
+		mouseUpEvents: 1,
+	});
+	await page.mouse.move(lines[0]!.x + lines[0]!.width * 0.8, lines[0]!.y + lines[0]!.height / 2);
+	const released = await page.evaluate(() => window.ashStandaloneIntegration.readPointerSelection());
+	expect({ selection: released.selection, mouseUpEvents: released.mouseUpEvents }).toEqual({ selection: selected.selection, mouseUpEvents: 1 });
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	expect(errors).toEqual([]);
+});
+
+test('Alt-click toggles editor-local cursors and one typing transaction edits both lines', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.stack ?? error.message));
+	await page.goto('/standalone.html');
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.switchOwnedToCaller())).currentModelIsCaller).toBe(true);
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareMultiCursor());
+	const lines = await page.evaluate(() => [...document.querySelectorAll('#caller .view-line > span > span')].map(span => {
+		const box = span.getBoundingClientRect();
+		return { text: span.textContent, x: box.x, y: box.y, width: box.width, height: box.height };
+	}));
+	expect(lines.map(line => line.text)).toEqual(['abcd', 'efgh']);
+	const first = { x: lines[0]!.x + lines[0]!.width * 0.4, y: lines[0]!.y + lines[0]!.height / 2 };
+	const second = { x: lines[1]!.x + lines[1]!.width * 0.4, y: lines[1]!.y + lines[1]!.height / 2 };
+	await page.mouse.click(first.x, first.y);
+	const initial = await page.evaluate(() => window.ashStandaloneIntegration.readMultiCursor());
+	await page.keyboard.down('Alt');
+	await page.mouse.click(second.x, second.y);
+	await page.keyboard.up('Alt');
+	const added = await page.evaluate(() => window.ashStandaloneIntegration.readMultiCursor());
+	expect(added.selections).toHaveLength(2);
+	expect(added.selections.map(selection => Number(selection.match(/^\[(\d+),/u)?.[1])).sort()).toEqual([1, 2]);
+	expect({ value: added.value, version: added.version, ownedSelections: added.ownedSelections }).toEqual({
+		value: initial.value,
+		version: initial.version,
+		ownedSelections: initial.ownedSelections,
+	});
+
+	await page.keyboard.down('Alt');
+	await page.mouse.click(second.x, second.y);
+	await page.keyboard.up('Alt');
+	const removed = await page.evaluate(() => window.ashStandaloneIntegration.readMultiCursor());
+	expect(removed.selections).toHaveLength(1);
+	expect(removed.selections[0]).toMatch(/^\[1,/u);
+	await page.keyboard.down('Alt');
+	await page.mouse.click(second.x, second.y);
+	await page.keyboard.up('Alt');
+	await page.keyboard.type('X');
+	const typed = await page.evaluate(() => window.ashStandaloneIntegration.readMultiCursor());
+	expect(typed.value.split('\n').map(line => (line.match(/X/gu) ?? []).length)).toEqual([1, 1]);
+	expect(typed.version).toBe(initial.version + 1);
+	expect(typed.ownedSelections).toHaveLength(1);
+	await page.keyboard.press('ControlOrMeta+z');
+	const undone = await page.evaluate(() => window.ashStandaloneIntegration.readMultiCursor());
+	expect(undone.value).toBe('abcd\nefgh');
+	expect(undone.version).toBe(typed.version + 1);
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	expect(errors).toEqual([]);
+});
+
+for (const inputKind of ['EditContext', 'textarea'] as const) {
+	test(`${inputKind} commits one Enter edit and restores its selection on undo`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.stack ?? error.message));
+		if (inputKind === 'textarea') {
+			await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+		}
+		await page.goto('/standalone.html');
+		const initial = await page.evaluate(() => window.ashStandaloneIntegration.prepareKeyboardEditing());
+		const input = page.locator('#caller .stanza-editor-input');
+		expect(await input.evaluate(element => element.tagName)).toBe(inputKind === 'textarea' ? 'TEXTAREA' : 'DIV');
+		await input.focus();
+		await page.keyboard.press('Enter');
+		const entered = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
+		expect({ value: entered.value, version: entered.version, selection: entered.selection, focused: entered.focused }).toEqual({
+			value: 'fi\nrst\nsecond',
+			version: initial.version + 1,
+			selection: '[2,1 -> 2,1]',
+			focused: true,
+		});
+		await page.keyboard.press('ControlOrMeta+z');
+		const undone = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
+		expect({ value: undone.value, version: undone.version, selection: undone.selection }).toEqual({
+			value: initial.value,
+			version: entered.version + 1,
+			selection: '[1,3 -> 1,3]',
+		});
+		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+		expect(errors).toEqual([]);
+	});
+
+	test(`${inputKind} ignores input delivered after focus leaves the editor`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.stack ?? error.message));
+		if (inputKind === 'textarea') {
+			await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+		}
+		await page.goto('/standalone.html');
+		const caller = page.locator('#caller .stanza-editor-input');
+		const owned = page.locator('#owned .stanza-editor-input');
+		await caller.focus();
+		await page.keyboard.type('X');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('Xcaller');
+		await owned.focus();
+		await expect(owned).toBeFocused();
+		const before = await page.evaluate(() => ({
+			value: window.ashStandaloneIntegration.state('caller').value,
+			version: window.ashStandaloneIntegration.getCallerVersion(),
+		}));
+		await page.evaluate(kind => {
+			const input = document.querySelector<HTMLElement>('#caller .stanza-editor-input');
+			if (!input) throw new Error('Caller input is unavailable');
+			if (kind === 'textarea') {
+				input.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: 'X' }));
+				return;
+			}
+			const context = (input as HTMLElement & { editContext?: EventTarget }).editContext;
+			if (!context) throw new Error('Browser EditContext is unavailable');
+			context.dispatchEvent(Object.assign(new Event('textupdate'), {
+				text: 'X', updateRangeStart: 0, updateRangeEnd: 0, selectionStart: 1, selectionEnd: 1,
+			}));
+		}, inputKind);
+		await caller.evaluate(input => {
+			input.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'z', ctrlKey: true }));
+		});
+		expect(await page.evaluate(() => ({
+			value: window.ashStandaloneIntegration.state('caller').value,
+			version: window.ashStandaloneIntegration.getCallerVersion(),
+		}))).toEqual(before);
+		await expect(owned).toBeFocused();
+		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+		expect(errors).toEqual([]);
+	});
+
+	test(`${inputKind} commits revised IME text as one undo step`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.stack ?? error.message));
+		if (inputKind === 'textarea') {
+			await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+		}
+		await page.goto('/standalone.html');
+		const initial = await page.evaluate(() => window.ashStandaloneIntegration.prepareKeyboardEditing());
+		const caller = page.locator('#caller .stanza-editor-input');
+		await caller.focus();
+		await page.evaluate(kind => {
+			const input = document.querySelector<HTMLElement>('#caller .stanza-editor-input');
+			if (!input) throw new Error('Caller input is unavailable');
+			const target = kind === 'textarea' ? input : (input as HTMLElement & { editContext?: EventTarget }).editContext;
+			if (!target) throw new Error('Composition target is unavailable');
+			target.dispatchEvent(new CompositionEvent('compositionstart', { data: '' }));
+			if (kind === 'textarea') {
+				const textArea = input as HTMLTextAreaElement;
+				textArea.value = '你';
+				textArea.setSelectionRange(1, 1);
+				target.dispatchEvent(new CompositionEvent('compositionupdate', { data: '你' }));
+				textArea.value = '你好';
+				textArea.setSelectionRange(2, 2);
+				target.dispatchEvent(new CompositionEvent('compositionupdate', { data: '你好' }));
+			} else {
+				target.dispatchEvent(Object.assign(new Event('textupdate'), {
+					text: '你',
+					updateRangeStart: 2,
+					updateRangeEnd: 2,
+					selectionStart: 3,
+					selectionEnd: 3,
+				}));
+				target.dispatchEvent(Object.assign(new Event('textupdate'), {
+					text: '你好',
+					updateRangeStart: 2,
+					updateRangeEnd: 3,
+					selectionStart: 4,
+					selectionEnd: 4,
+				}));
+			}
+			target.dispatchEvent(new CompositionEvent('compositionend', { data: '你好' }));
+		}, inputKind);
+		const committed = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
+		expect(committed).toEqual({
+			value: 'fi你好rst\nsecond',
+			version: initial.version + 2,
+			selection: '[1,5 -> 1,5]',
+			focused: true,
+		});
+		await expect(page.locator('#caller .stanza-editor')).not.toHaveClass(/\bcomposing\b/u);
+		await page.keyboard.press('ControlOrMeta+z');
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).toEqual({
+			...initial,
+			version: committed.version + 1,
+			focused: true,
+		});
+		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+		expect(errors).toEqual([]);
+	});
+
+	test(`${inputKind} cancels IME text with Escape without leaving an undo step`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.stack ?? error.message));
+		if (inputKind === 'textarea') {
+			await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+		}
+		await page.goto('/standalone.html');
+		const initial = await page.evaluate(() => window.ashStandaloneIntegration.prepareKeyboardEditing());
+		const caller = page.locator('#caller .stanza-editor-input');
+		await caller.focus();
+		await page.evaluate(kind => {
+			const input = document.querySelector<HTMLElement>('#caller .stanza-editor-input');
+			if (!input) throw new Error('Caller input is unavailable');
+			const target = kind === 'textarea' ? input : (input as HTMLElement & { editContext?: EventTarget }).editContext;
+			if (!target) throw new Error('Composition target is unavailable');
+			target.dispatchEvent(new CompositionEvent('compositionstart', { data: '' }));
+			if (kind === 'textarea') {
+				const textArea = input as HTMLTextAreaElement;
+				textArea.value = '你';
+				textArea.setSelectionRange(1, 1);
+				target.dispatchEvent(new CompositionEvent('compositionupdate', { data: '你' }));
+			} else {
+				target.dispatchEvent(Object.assign(new Event('textupdate'), {
+					text: '你',
+					updateRangeStart: 2,
+					updateRangeEnd: 2,
+					selectionStart: 3,
+					selectionEnd: 3,
+				}));
+			}
+			input.dispatchEvent(new KeyboardEvent('keydown', {
+				bubbles: true,
+				cancelable: true,
+				isComposing: true,
+				key: 'Escape',
+			}));
+			target.dispatchEvent(new CompositionEvent('compositionend', { data: '' }));
+		}, inputKind);
+		const canceled = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
+		expect(canceled).toEqual({
+			value: initial.value,
+			version: initial.version + 2,
+			selection: initial.selection,
+			focused: true,
+		});
+		await expect(page.locator('#caller .stanza-editor')).not.toHaveClass(/\bcomposing\b/u);
+		await page.keyboard.type('X');
+		const typed = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
+		expect(typed.value).toBe('fiXrst\nsecond');
+		await page.keyboard.press('ControlOrMeta+z');
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).value).toBe(initial.value);
+		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+		expect(errors).toEqual([]);
+	});
+
+	test(`${inputKind} cancels provisional IME text on blur and rejects late composition`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.stack ?? error.message));
+		if (inputKind === 'textarea') {
+			await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+		}
+		await page.goto('/standalone.html');
+		const initial = await page.evaluate(() => window.ashStandaloneIntegration.prepareKeyboardEditing());
+		const caller = page.locator('#caller .stanza-editor-input');
+		const owned = page.locator('#owned .stanza-editor-input');
+		await caller.focus();
+		await page.evaluate(kind => {
+			const input = document.querySelector<HTMLElement>('#caller .stanza-editor-input');
+			if (!input) throw new Error('Caller input is unavailable');
+			const target = kind === 'textarea' ? input : (input as HTMLElement & { editContext?: EventTarget }).editContext;
+			if (!target) throw new Error('Composition target is unavailable');
+			target.dispatchEvent(new CompositionEvent('compositionstart', { data: '' }));
+			if (kind === 'textarea') {
+				const textArea = input as HTMLTextAreaElement;
+				textArea.value = '你';
+				textArea.setSelectionRange(1, 1);
+				target.dispatchEvent(new CompositionEvent('compositionupdate', { data: '你' }));
+			} else {
+				target.dispatchEvent(Object.assign(new Event('textupdate'), {
+					text: '你',
+					updateRangeStart: 2,
+					updateRangeEnd: 2,
+					selectionStart: 3,
+					selectionEnd: 3,
+				}));
+			}
+		}, inputKind);
+		const provisional = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
+		expect({ value: provisional.value, version: provisional.version, selection: provisional.selection }).toEqual({
+			value: 'fi你rst\nsecond',
+			version: initial.version + 1,
+			selection: '[1,4 -> 1,4]',
+		});
+		await expect(page.locator('#caller .stanza-editor')).toHaveClass(/\bcomposing\b/u);
+
+		await owned.focus();
+		await expect(owned).toBeFocused();
+		const canceled = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
+		expect({ value: canceled.value, version: canceled.version, selection: canceled.selection, focused: canceled.focused }).toEqual({
+			value: initial.value,
+			version: provisional.version + 1,
+			selection: initial.selection,
+			focused: false,
+		});
+		await expect(page.locator('#caller .stanza-editor')).not.toHaveClass(/\bcomposing\b/u);
+		const lateStart = await page.evaluate(kind => {
+			const input = document.querySelector<HTMLElement>('#caller .stanza-editor-input');
+			if (!input) throw new Error('Caller input is unavailable');
+			const target = kind === 'textarea' ? input : (input as HTMLElement & { editContext?: EventTarget }).editContext;
+			if (!target) throw new Error('Composition target is unavailable');
+			target.dispatchEvent(new CompositionEvent('compositionend', { data: '你' }));
+			target.dispatchEvent(new CompositionEvent('compositionstart', { data: '' }));
+			return document.querySelector('#caller .stanza-editor')?.classList.contains('composing');
+		}, inputKind);
+		expect(lateStart).toBe(false);
+		await page.evaluate(kind => {
+			const input = document.querySelector<HTMLElement>('#caller .stanza-editor-input');
+			if (!input) throw new Error('Caller input is unavailable');
+			const target = kind === 'textarea' ? input : (input as HTMLElement & { editContext?: EventTarget }).editContext;
+			if (!target) throw new Error('Composition target is unavailable');
+			if (kind === 'textarea') {
+				const textArea = input as HTMLTextAreaElement;
+				textArea.value = '迟';
+				textArea.setSelectionRange(1, 1);
+				target.dispatchEvent(new CompositionEvent('compositionupdate', { data: '迟' }));
+			} else {
+				target.dispatchEvent(Object.assign(new Event('textupdate'), {
+					text: '迟',
+					updateRangeStart: 2,
+					updateRangeEnd: 2,
+					selectionStart: 3,
+					selectionEnd: 3,
+				}));
+			}
+			target.dispatchEvent(new CompositionEvent('compositionend', { data: '迟' }));
+		}, inputKind);
+		await expect(owned).toBeFocused();
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).toEqual(canceled);
+		await expect(page.locator('#caller .stanza-editor')).not.toHaveClass(/\bcomposing\b/u);
+		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+		expect(errors).toEqual([]);
+	});
+
+	test(`${inputKind} copies, cuts, pastes and undoes through its clipboard events`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.stack ?? error.message));
+		if (inputKind === 'textarea') {
+			await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+		}
+		await page.goto('/standalone.html');
+		const initial = await page.evaluate(() => window.ashStandaloneIntegration.prepareClipboard());
+		const caller = page.locator('#caller .stanza-editor-input');
+		await caller.focus();
+		const copied = await caller.evaluate(input => {
+			const clipboardData = new DataTransfer();
+			const event = new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData });
+			input.dispatchEvent(event);
+			return {
+				prevented: event.defaultPrevented,
+				text: clipboardData.getData('text/plain'),
+				metadata: clipboardData.getData('vscode-editor-data'),
+			};
+		});
+		expect({ prevented: copied.prevented, text: copied.text }).toEqual({ prevented: true, text: 'alpha' });
+		expect(JSON.parse(copied.metadata)).toMatchObject({ version: 1, isFromEmptySelection: false });
+		const cutPrevented = await caller.evaluate(input => {
+			const event = new ClipboardEvent('cut', { bubbles: true, cancelable: true, clipboardData: new DataTransfer() });
+			input.dispatchEvent(event);
+			return event.defaultPrevented;
+		});
+		expect(cutPrevented).toBe(true);
+		const cut = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
+		expect({ value: cut.value, version: cut.version, selection: cut.selection }).toEqual({
+			value: ' beta',
+			version: initial.version + 1,
+			selection: '[1,1 -> 1,1]',
+		});
+		await page.keyboard.press('ControlOrMeta+z');
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).value).toBe(initial.value);
+		await page.keyboard.press('ArrowRight');
+		const pastePrevented = await caller.evaluate((input, data) => {
+			const clipboardData = new DataTransfer();
+			clipboardData.setData('text/plain', data.text);
+			clipboardData.setData('vscode-editor-data', data.metadata);
+			const event = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData });
+			input.dispatchEvent(event);
+			return event.defaultPrevented;
+		}, copied);
+		expect(pastePrevented).toBe(true);
+		const pasted = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
+		expect({ value: pasted.value, version: pasted.version, selection: pasted.selection }).toEqual({
+			value: 'alphaalpha beta',
+			version: cut.version + 2,
+			selection: '[1,11 -> 1,11]',
+		});
+		await page.keyboard.press('ControlOrMeta+z');
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).value).toBe(initial.value);
+		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+		expect(errors).toEqual([]);
+	});
+
+	test(`${inputKind} ignores clipboard events delivered after focus leaves the editor`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.stack ?? error.message));
+		if (inputKind === 'textarea') {
+			await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+		}
+		await page.goto('/standalone.html');
+		const initial = await page.evaluate(() => window.ashStandaloneIntegration.prepareClipboard());
+		const caller = page.locator('#caller .stanza-editor-input');
+		const owned = page.locator('#owned .stanza-editor-input');
+		await caller.focus();
+		await owned.focus();
+		const late = await caller.evaluate(input => {
+			const copyData = new DataTransfer();
+			input.dispatchEvent(new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: copyData }));
+			const cut = new ClipboardEvent('cut', { bubbles: true, cancelable: true, clipboardData: new DataTransfer() });
+			input.dispatchEvent(cut);
+			const pasteData = new DataTransfer();
+			pasteData.setData('text/plain', 'X');
+			const paste = new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: pasteData });
+			input.dispatchEvent(paste);
+			return { copiedText: copyData.getData('text/plain'), cutPrevented: cut.defaultPrevented, pastePrevented: paste.defaultPrevented };
+		});
+		expect(late).toEqual({ copiedText: '', cutPrevented: true, pastePrevented: true });
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).toEqual(initial);
+		await expect(owned).toBeFocused();
+		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+		expect(errors).toEqual([]);
+	});
+
+	test(`${inputKind} uses the browser clipboard for keyboard copy, cut and paste`, async ({ page, context }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.stack ?? error.message));
+		await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+		if (inputKind === 'textarea') {
+			await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+		}
+		await page.goto('/standalone.html');
+		const initial = await page.evaluate(() => window.ashStandaloneIntegration.prepareClipboard());
+		const caller = page.locator('#caller .stanza-editor-input');
+		await caller.focus();
+		await page.keyboard.press('ControlOrMeta+c');
+		expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('alpha');
+		await page.keyboard.press('ControlOrMeta+x');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe(' beta');
+		await page.keyboard.press('ControlOrMeta+z');
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).value).toBe(initial.value);
+		await page.keyboard.press('ArrowRight');
+		await page.keyboard.press('ControlOrMeta+v');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing().value)).toBe('alphaalpha beta');
+		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+		expect(errors).toEqual([]);
+	});
+}
+
+test('soft wrapping keeps layout, model coordinates and pointer selection in sync after resize and edit', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.stack ?? error.message));
+	await page.goto('/standalone.html');
+	const initial = await page.evaluate(() => window.ashStandaloneIntegration.prepareWrappedLayout());
+	expect(initial.modelLineCount).toBe(1);
+	expect(initial.contentHeight).toBeGreaterThan(80);
+	const rows = page.locator('#caller .view-line');
+	const initialRows = await rows.count();
+	expect(initialRows).toBeGreaterThan(1);
+	const firstText = (await rows.first().textContent()) ?? '';
+	const second = await rows.nth(1).boundingBox();
+	expect(second).not.toBeNull();
+	await page.mouse.click(second!.x + 8, second!.y + second!.height / 2);
+	const selected = await page.evaluate(() => window.ashStandaloneIntegration.getCallerPosition());
+	expect(selected?.lineNumber).toBe(1);
+	expect(selected?.column).toBeGreaterThan(firstText.length);
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readWrappedLayout())).toEqual(initial);
+
+	const wider = await page.evaluate(() => window.ashStandaloneIntegration.resizeWrappedLayout(320));
+	expect({ value: wider.value, version: wider.version, modelLineCount: wider.modelLineCount }).toEqual({
+		value: initial.value,
+		version: initial.version,
+		modelLineCount: 1,
+	});
+	expect(wider.contentHeight).toBeLessThan(initial.contentHeight);
+	await expect.poll(() => rows.count()).toBeLessThan(initialRows);
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.getCallerPosition())).toEqual(selected);
+
+	const short = await page.evaluate(() => window.ashStandaloneIntegration.editWrappedText('short'));
+	expect(short).toEqual({ value: 'short', version: initial.version + 1, modelLineCount: 1, contentHeight: 80 });
+	await expect(rows).toHaveCount(1);
+	await expect(rows.first()).toContainText('short');
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	expect(errors).toEqual([]);
+});
+
+test('proportional-font soft wrapping keeps a word together at the available width', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.stack ?? error.message));
+	await page.goto('/standalone.html');
+	const state = await page.evaluate(() => window.ashStandaloneIntegration.prepareProportionalWrap());
+	expect({ value: state.value, modelLineCount: state.modelLineCount }).toEqual({ value: 'abc defgh', modelLineCount: 1 });
+	const rows = page.locator('#caller .view-line');
+	await expect(rows).toHaveCount(2);
+	expect(await rows.allTextContents()).toEqual(['abc ', 'defgh']);
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	expect(errors).toEqual([]);
+});
+
+test('scrolling keeps overlapping visible rows attached and releases rows that leave the viewport', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.stack ?? error.message));
+	await page.goto('/standalone.html');
+	const initial = await page.evaluate(() => window.ashStandaloneIntegration.prepareVisibleRows());
+	expect(initial.lineCount).toBe(80);
+	const result = await page.evaluate(async () => {
+		const layers = [...document.querySelectorAll<HTMLElement>('#caller .view-lines, #caller .stanza-editor-row-layer.view-overlays')];
+		const tracked = layers.map(layer => {
+			const before = new Map<number, HTMLElement>();
+			for (const child of layer.children) {
+				const row = child as HTMLElement;
+				before.set(Number(row.dataset.lineIndex), row);
+			}
+			const removed = new Set<Node>();
+			const observer = new MutationObserver(records => {
+				for (const record of records) {
+					for (const node of record.removedNodes) {
+						removed.add(node);
+					}
+				}
+			});
+			observer.observe(layer, { childList: true });
+			return { layer, before, removed, observer };
+		});
+		let scrollTop = 0;
+		try {
+			scrollTop = window.ashStandaloneIntegration.scrollVisibleRows(60);
+			await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+			await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+		} finally {
+			for (const entry of tracked) {
+				entry.observer.disconnect();
+			}
+		}
+		const snapshots = tracked.map(({ layer, before, removed }) => {
+			const after = new Map<number, HTMLElement>();
+			for (const child of layer.children) {
+				const row = child as HTMLElement;
+				after.set(Number(row.dataset.lineIndex), row);
+			}
+			const overlap = [...before.keys()].filter(index => after.has(index));
+			return {
+				kind: layer.classList.contains('view-lines') ? 'text' : 'overlay',
+				beforeCount: before.size,
+				afterCount: after.size,
+				firstBefore: Math.min(...before.keys()),
+				firstAfter: Math.min(...after.keys()),
+				firstText: after.values().next().value?.textContent ?? '',
+				overlap: overlap.length,
+				stable: overlap.every(index => before.get(index) === after.get(index)),
+				removedOverlap: overlap.filter(index => removed.has(before.get(index)!)).length,
+				staleDetached: [...before].filter(([index]) => !after.has(index)).every(([, row]) => !row.isConnected),
+			};
+		});
+		return { scrollTop, snapshots };
+	});
+	expect(result.scrollTop).toBe(60);
+	expect(result.snapshots.length).toBeGreaterThanOrEqual(2);
+	for (const layer of result.snapshots) {
+		expect(layer.beforeCount).toBeGreaterThan(0);
+		expect(layer.afterCount).toBeLessThan(20);
+		expect(layer.firstAfter).toBeGreaterThan(layer.firstBefore);
+		expect(layer.overlap).toBeGreaterThan(0);
+		expect(layer.stable).toBe(true);
+		expect(layer.removedOverlap).toBe(0);
+		expect(layer.staleDetached).toBe(true);
+	}
+	const textLayer = result.snapshots.find(layer => layer.kind === 'text');
+	if (!textLayer) throw new Error('Visible text layer is unavailable');
+	expect(textLayer.firstText).toContain(`line-${String(textLayer.firstAfter).padStart(2, '0')}`);
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.getCallerVersion())).toBe(initial.version);
+	const updated = await page.evaluate(async lineIndex => {
+		const selector = `#caller .view-line[data-line-index="${lineIndex}"]`;
+		const row = document.querySelector<HTMLElement>(selector);
+		const layer = document.querySelector<HTMLElement>('#caller .view-lines');
+		if (!row || !layer) throw new Error('Visible text row is unavailable');
+		let removed = false;
+		const observer = new MutationObserver(records => {
+			for (const record of records) {
+				for (const node of record.removedNodes) {
+					if (node === row) removed = true;
+				}
+			}
+		});
+		observer.observe(layer, { childList: true });
+		try {
+			const value = window.ashStandaloneIntegration.editVisibleRow(lineIndex);
+			await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+			return { value, sameNode: document.querySelector(selector) === row, connected: row.isConnected, removed, text: row.textContent };
+		} finally {
+			observer.disconnect();
+		}
+	}, textLayer.firstAfter);
+	expect(updated).toEqual({
+		value: `changed-${textLayer.firstAfter}`,
+		sameNode: true,
+		connected: true,
+		removed: false,
+		text: `changed-${textLayer.firstAfter}`,
+	});
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.getCallerVersion())).toBe(initial.version + 1);
+	const released = await page.evaluate(() => {
+		const rows = [...document.querySelectorAll('#caller .view-line')];
+		window.ashStandaloneIntegration.dispose();
+		return { detached: rows.every(row => !row.isConnected), roots: document.querySelectorAll('#caller .view-lines').length };
+	});
+	expect(released).toEqual({ detached: true, roots: 0 });
+	expect(errors).toEqual([]);
+});
+
+test('wrapped cursor and gutter markers stay on their model lines through navigation and editing', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.stack ?? error.message));
+	await page.goto('/standalone.html');
+	const initial = await page.evaluate(() => window.ashStandaloneIntegration.prepareCursorGutter());
+	expect(initial.modelLineCount).toBe(2);
+	await page.locator('#caller .stanza-editor-input').focus();
+	const readGeometry = async () => page.evaluate(() => {
+		const firstRows = [...document.querySelectorAll<HTMLElement>('#caller .view-line[data-logical-line-index="0"]')];
+		const secondRow = document.querySelector<HTMLElement>('#caller .view-line[data-logical-line-index="1"]');
+		const caret = document.querySelector<HTMLElement>('#caller .stanza-editor-caret.primary');
+		const glyphs = [...document.querySelectorAll<HTMLElement>('#caller .ash-gutter-probe')];
+		const numberRows = [...document.querySelectorAll<HTMLElement>('#caller .margin-view-overlays .view-overlay-line')];
+		if (!firstRows.length || !secondRow || !caret) {
+			throw new Error(`Cursor and gutter rows are unavailable: first=${firstRows.length}, second=${Boolean(secondRow)}, caret=${Boolean(caret)}`);
+		}
+		return {
+			wrappedRows: firstRows.length,
+			firstTop: firstRows[0]!.getBoundingClientRect().top,
+			lastTop: firstRows.at(-1)!.getBoundingClientRect().top,
+			secondTop: secondRow.getBoundingClientRect().top,
+			caretTop: caret.getBoundingClientRect().top,
+			glyphTops: glyphs.map(glyph => glyph.getBoundingClientRect().top),
+			numbers: numberRows.map(row => row.querySelector('.line-numbers')?.textContent ?? ''),
+		};
+	});
+	const wrapped = await readGeometry();
+	expect(wrapped.wrappedRows).toBeGreaterThan(1);
+	expect(wrapped.numbers[0]).toBe('1');
+	expect(wrapped.numbers.slice(1, wrapped.wrappedRows)).toEqual(Array(wrapped.wrappedRows - 1).fill(''));
+	expect(wrapped.numbers[wrapped.wrappedRows]).toBe('1');
+	expect(wrapped.glyphTops).toEqual([wrapped.firstTop]);
+	expect(wrapped.caretTop).toBe(wrapped.lastTop);
+
+	await page.evaluate(() => window.ashStandaloneIntegration.moveGutterCaret(2, 1));
+	const moved = await readGeometry();
+	expect(moved.caretTop).toBe(moved.secondTop);
+	expect(moved.glyphTops).toEqual([moved.firstTop]);
+	expect(moved.numbers[0]).toBe('1');
+	expect(moved.numbers[moved.wrappedRows]).toBe('2');
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.getCallerVersion())).toBe(initial.version);
+
+	const editedVersion = await page.evaluate(() => window.ashStandaloneIntegration.shortenGutterLine());
+	expect(editedVersion).toBe(initial.version + 1);
+	const shortened = await readGeometry();
+	expect(shortened.secondTop).toBeLessThan(moved.secondTop);
+	expect(shortened.caretTop).toBe(shortened.secondTop);
+	expect(shortened.glyphTops).toEqual([shortened.firstTop]);
+	expect(shortened.numbers[0]).toBe('1');
+	expect(shortened.numbers[shortened.wrappedRows]).toBe('2');
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	await expect(page.locator('#caller .ash-gutter-probe')).toHaveCount(0);
+	expect(errors).toEqual([]);
+});

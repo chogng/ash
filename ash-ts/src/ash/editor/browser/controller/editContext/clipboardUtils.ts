@@ -31,6 +31,7 @@ export interface ClipboardStoredMetadata {
 export const CopyOptions = {
 	forceCopyWithSyntaxHighlighting: false,
 	electronBugWorkaroundCopyEventHasFired: false,
+	cutEventHasFired: false,
 };
 
 export function generateDataToCopyAndStoreInMemory(viewModel: IViewModel, id: string | undefined, useFirefoxLineEndings: boolean): { dataToCopy: ClipboardDataToCopy; metadata: ClipboardStoredMetadata } {

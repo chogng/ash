@@ -251,6 +251,10 @@ export class TextAreaInput extends Disposable implements ITextAreaWrapper {
 	}
 
 	private handleBeforeInput(event: InputEvent): void {
+		if (!this.focused) {
+			event.preventDefault();
+			return;
+		}
 		this.beforeInputEmitter.fire(event);
 		if (event.defaultPrevented || event.isComposing) return;
 		if (
@@ -268,6 +272,10 @@ export class TextAreaInput extends Disposable implements ITextAreaWrapper {
 
 	private handleCompositionStart(event: CompositionEvent): void {
 		if (event.defaultPrevented) return;
+		if (!this.focused) {
+			event.preventDefault();
+			return;
+		}
 		if (
 			this.element.readOnly ||
 			this.host.context.viewModel.getSelections().length !== 1
@@ -328,6 +336,10 @@ export class TextAreaInput extends Disposable implements ITextAreaWrapper {
 	}
 
 	private handleCopy(browserEvent: ClipboardEvent): void {
+		if (!this.focused) {
+			browserEvent.preventDefault();
+			return;
+		}
 		CopyOptions.electronBugWorkaroundCopyEventHasFired = true;
 		const event = createClipboardCopyEvent(browserEvent, false, this.host.context, undefined, isFirefox);
 		this.willCopyEmitter.fire(event);
@@ -335,6 +347,11 @@ export class TextAreaInput extends Disposable implements ITextAreaWrapper {
 	}
 
 	private handleCut(browserEvent: ClipboardEvent): void {
+		if (!this.focused) {
+			browserEvent.preventDefault();
+			return;
+		}
+		CopyOptions.cutEventHasFired = true;
 		const event = createClipboardCopyEvent(browserEvent, true, this.host.context, undefined, isFirefox);
 		this.willCutEmitter.fire(event);
 		if (event.isHandled) return;
@@ -348,6 +365,10 @@ export class TextAreaInput extends Disposable implements ITextAreaWrapper {
 	}
 
 	private handlePaste(browserEvent: ClipboardEvent): void {
+		if (!this.focused) {
+			browserEvent.preventDefault();
+			return;
+		}
 		const event = createClipboardPasteEvent(browserEvent);
 		this.willPasteEmitter.fire(event);
 		if (event.isHandled) return;

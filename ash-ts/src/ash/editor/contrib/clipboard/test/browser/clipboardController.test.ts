@@ -132,6 +132,7 @@ function attachClipboard(
 	options: ClipboardControllerOptions = {},
 	clipboardService: IClipboardService = inertClipboardService,
 ): InstanceType<typeof ClipboardController> {
+	input.element.focus();
 	return new ClipboardController(input.editContext, viewport, selections, input, clipboardService, {
 		...options,
 		isEditingAllowed: () => !input.compositionController.composing && (options.isEditingAllowed?.() ?? true),

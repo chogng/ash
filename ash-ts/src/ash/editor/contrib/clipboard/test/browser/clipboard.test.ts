@@ -72,6 +72,135 @@ test('clipboard actions use the focused code editor and platform clipboard servi
 	dom.window.close();
 });
 
+test('paste command drops a delayed clipboard read after focus, selection, or model changes', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main><aside></aside></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using firstModel = new TextModel('alpha');
+	using secondModel = new TextModel('bravo');
+	using services = new ServiceContainer();
+	using contextKeys = new ContextKeyService();
+	const browserServices = createEditorBrowserServices();
+	const clipboard = new DeferredClipboardService();
+	services.registerInstance(IContextKeyService, contextKeys);
+	services.registerInstance(ILogService, new NullLoggerService());
+	services.registerInstance(IClipboardService, clipboard);
+	services.registerInstance(ICodeEditorService, browserServices.codeEditorService);
+	using first = new CodeEditorWidget({
+		container: dom.window.document.querySelector<HTMLElement>('main')!,
+		model: firstModel,
+		input: { resource: firstModel.uri },
+		languageId: firstModel.getLanguageId(),
+		lineHeight: 20,
+		instantiationService: services,
+		codeEditorService: browserServices.codeEditorService,
+	});
+	using second = new CodeEditorWidget({
+		container: dom.window.document.querySelector<HTMLElement>('aside')!,
+		model: secondModel,
+		input: { resource: secondModel.uri },
+		languageId: secondModel.getLanguageId(),
+		lineHeight: 20,
+		instantiationService: services,
+		codeEditorService: browserServices.codeEditorService,
+	});
+
+	first.focus();
+	first.setSelection(new Selection(1, 6, 1, 6));
+	const afterFocus = PasteAction.runCommand(services, undefined);
+	assert.equal(clipboard.readRequestCount, 1);
+	second.focus();
+	clipboard.resolveRead(0, 'X');
+	await afterFocus;
+	assert.deepEqual([firstModel.getText(), secondModel.getText()], ['alpha', 'bravo']);
+
+	first.focus();
+	const afterSelection = PasteAction.runCommand(services, undefined);
+	first.setSelection(new Selection(1, 1, 1, 1));
+	clipboard.resolveRead(1, 'Y');
+	await afterSelection;
+	assert.equal(firstModel.getText(), 'alpha');
+
+	first.setSelection(new Selection(1, 6, 1, 6));
+	const afterModelChange = PasteAction.runCommand(services, undefined);
+	firstModel.setValue('changed');
+	clipboard.resolveRead(2, 'Z');
+	await afterModelChange;
+	assert.equal(firstModel.getText(), 'changed');
+
+	first.setSelection(new Selection(1, 8, 1, 8));
+	const validPaste = PasteAction.runCommand(services, undefined);
+	clipboard.resolveRead(3, '!');
+	await validPaste;
+	assert.equal(firstModel.getText(), 'changed!');
+
+	using replacement = new TextModel('replacement');
+	const afterModelSwitch = PasteAction.runCommand(services, undefined);
+	first.setModel(replacement);
+	assert.equal(first.hasTextFocus(), true);
+	clipboard.resolveRead(4, '?');
+	await afterModelSwitch;
+	assert.deepEqual([firstModel.getText(), replacement.getText()], ['changed!', 'replacement']);
+	dom.window.close();
+});
+
+test('cut command keeps text when clipboard writing completes after selection or focus changes', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main><aside></aside></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	dom.window.document.execCommand = () => true;
+	using firstModel = new TextModel('alpha beta');
+	using secondModel = new TextModel('bravo');
+	using services = new ServiceContainer();
+	using contextKeys = new ContextKeyService();
+	const browserServices = createEditorBrowserServices();
+	const clipboard = new DeferredClipboardService();
+	services.registerInstance(IContextKeyService, contextKeys);
+	services.registerInstance(ILogService, new NullLoggerService());
+	services.registerInstance(IClipboardService, clipboard);
+	services.registerInstance(ICodeEditorService, browserServices.codeEditorService);
+	using first = new CodeEditorWidget({
+		container: dom.window.document.querySelector<HTMLElement>('main')!,
+		model: firstModel,
+		input: { resource: firstModel.uri },
+		languageId: firstModel.getLanguageId(),
+		lineHeight: 20,
+		instantiationService: services,
+		codeEditorService: browserServices.codeEditorService,
+	});
+	using second = new CodeEditorWidget({
+		container: dom.window.document.querySelector<HTMLElement>('aside')!,
+		model: secondModel,
+		input: { resource: secondModel.uri },
+		languageId: secondModel.getLanguageId(),
+		lineHeight: 20,
+		instantiationService: services,
+		codeEditorService: browserServices.codeEditorService,
+	});
+
+	first.focus();
+	first.setSelection(new Selection(1, 1, 1, 6));
+	const afterSelection = CutAction.runCommand(services, undefined);
+	assert.equal(clipboard.writtenTexts[0], 'alpha');
+	first.setSelection(new Selection(1, 7, 1, 11));
+	clipboard.resolveWrite(0);
+	await afterSelection;
+	assert.equal(firstModel.getText(), 'alpha beta');
+
+	first.setSelection(new Selection(1, 1, 1, 6));
+	const afterFocus = CutAction.runCommand(services, undefined);
+	second.focus();
+	clipboard.resolveWrite(1);
+	await afterFocus;
+	assert.deepEqual([firstModel.getText(), secondModel.getText()], ['alpha beta', 'bravo']);
+
+	first.focus();
+	first.setSelection(new Selection(1, 1, 1, 6));
+	const validCut = CutAction.runCommand(services, undefined);
+	clipboard.resolveWrite(2);
+	await validCut;
+	assert.equal(firstModel.getText(), ' beta');
+	dom.window.close();
+});
+
 test('clipboard actions contribute the standard editor and simple-editor menu commands', () => {
 	for (const menuId of [MenuId.EditorContext, MenuId.SimpleEditorContext]) {
 		const commandIds = MenusRegistry.getMenuItems(menuId)
@@ -87,4 +216,29 @@ class MemoryClipboardService implements IClipboardServiceContract {
 	text = '';
 	async readText(): Promise<string> { return this.text; }
 	async writeText(value: string): Promise<void> { this.text = value; }
+}
+
+class DeferredClipboardService implements IClipboardServiceContract {
+	private readonly reads: Array<(text: string) => void> = [];
+	private readonly writes: Array<() => void> = [];
+	readonly writtenTexts: string[] = [];
+
+	get readRequestCount(): number { return this.reads.length; }
+
+	readText(): Promise<string> {
+		return new Promise(resolve => this.reads.push(resolve));
+	}
+
+	writeText(text: string): Promise<void> {
+		this.writtenTexts.push(text);
+		return new Promise(resolve => this.writes.push(resolve));
+	}
+
+	resolveRead(index: number, text: string): void {
+		this.reads[index]?.(text);
+	}
+
+	resolveWrite(index: number): void {
+		this.writes[index]?.();
+	}
 }

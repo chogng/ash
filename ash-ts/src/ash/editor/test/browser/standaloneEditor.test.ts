@@ -180,6 +180,7 @@ test("standalone completion providers execute in a live editor", async () => {
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	const editor = stanza.editor.create(container, { language: "stanza-completion-test" });
 
+	editor.focus();
 	editor.view.element.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
 		bubbles: true,
 		cancelable: true,

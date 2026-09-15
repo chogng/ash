@@ -1,6 +1,9 @@
 import { isFirefox } from '../../../../base/browser/browser.js';
 import { getActiveDocument } from '../../../../base/browser/dom.js';
+import { type IKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
+import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
 import { isNative } from '../../../../base/common/platform.js';
 import * as nls from '../../../../nls.js';
 import { MenuId, MenusRegistry } from '../../../../platform/actions/common/actions.js';
@@ -9,11 +12,13 @@ import { KeybindingWeight } from '../../../../platform/keybinding/common/keybind
 import { CopyOptions, generateDataToCopyAndStoreInMemory, InMemoryClipboardMetadataManager } from '../../../browser/controller/editContext/clipboardUtils.js';
 import { NativeEditContextRegistry } from '../../../browser/controller/editContext/native/nativeEditContextRegistry.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
-import { EditorAction, MultiCommand, registerEditorAction, type Command, type ServicesAccessor } from '../../../browser/editorExtensions.js';
+import { EditorAction, EditorContributionInstantiation, MultiCommand, registerEditorAction, registerEditorContribution, type Command, type ServicesAccessor } from '../../../browser/editorExtensions.js';
 import { ICodeEditorService } from '../../../browser/services/codeEditorService.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
-import { Handler } from '../../../common/editorCommon.js';
+import { Selection } from '../../../common/core/selection.js';
+import { Handler, type IEditorContribution } from '../../../common/editorCommon.js';
 import { EditorContextKeys } from '../../../common/editorContextKeys.js';
+import { type ITextModel } from '../../../common/model.js';
 
 const CLIPBOARD_CONTEXT_MENU_GROUP = '9_cutcopypaste';
 const supportsCut = isNative || supportsDocumentCommand('cut');
@@ -88,9 +93,13 @@ if (PasteAction) {
 
 async function pasteIntoEditor(editor: ICodeEditor, clipboardService: IClipboardService): Promise<void> {
 	if (editor.inComposition) return;
+	const model = editor.getModel();
+	const selections = editor.getSelections();
+	if (!model || !selections) return;
+	const version = model.getVersionId();
 	NativeEditContextRegistry.get(editor.getId())?.handleWillPaste();
 	const text = await clipboardService.readText();
-	if (!text || editor.inComposition) return;
+	if (!text || !canApplyClipboardEdit(editor, model, version, selections)) return;
 	const metadata = InMemoryClipboardMetadataManager.INSTANCE.get(text);
 	editor.trigger('keyboard', Handler.Paste, {
 		text,
@@ -174,10 +183,25 @@ async function executeEditorClipboardCommand(editor: ICodeEditor, clipboardServi
 		return;
 	}
 	if (editor.inComposition) return;
+	const model = editor.getModel();
+	const selections = editor.getSelections();
+	if (!model || !selections) return;
+	const version = model.getVersionId();
 	const document = editor.getContainerDomNode().ownerDocument;
-	if (typeof document.execCommand === 'function' && document.execCommand('cut')) return;
+	CopyOptions.cutEventHasFired = false;
+	if (typeof document.execCommand === 'function') document.execCommand('cut');
+	if (CopyOptions.cutEventHasFired) return;
 	await writeEditorText(editor, clipboardService);
+	if (!canApplyClipboardEdit(editor, model, version, selections)) return;
 	editor.trigger('keyboard', Handler.Cut, undefined);
+}
+
+function canApplyClipboardEdit(editor: ICodeEditor, model: ITextModel, version: number, selections: Selection[]): boolean {
+	return editor.getModel() === model
+		&& editor.hasTextFocus()
+		&& !editor.inComposition
+		&& model.getVersionId() === version
+		&& Selection.selectionsArrEqual(selections, editor.getSelections() ?? []);
 }
 
 async function executeEditorCopy(editor: ICodeEditor, clipboardService: IClipboardService): Promise<void> {
@@ -204,3 +228,28 @@ function supportsDocumentCommand(command: 'cut' | 'copy' | 'paste'): boolean {
 		&& typeof document.queryCommandSupported === 'function'
 		&& document.queryCommandSupported(command);
 }
+
+class ClipboardKeybindings extends Disposable implements IEditorContribution {
+	constructor(private readonly editor: ICodeEditor) {
+		super();
+		this._register(editor.onKeyDown(event => this.onKeyDown(event)));
+	}
+
+	private onKeyDown(event: IKeyboardEvent): void {
+		if (isNative || event.browserEvent.defaultPrevented || event.isComposing || !this.editor.hasTextFocus()) return;
+		if (!NativeEditContextRegistry.get(this.editor.getId())) return;
+		if (event.altKey || event.shiftKey || event.ctrlKey === event.metaKey) return;
+		const key = event.key.toLowerCase();
+		if ((key === 'c' && !CopyAction) || (key === 'x' && !CutAction) || (key === 'v' && !PasteAction)) return;
+		if (key !== 'c' && key !== 'x' && key !== 'v') return;
+		if (key !== 'v' && !this.editor.getOption(EditorOption.emptySelectionClipboard) && this.editor.getSelection()?.isEmpty()) return;
+		event.stop();
+		const clipboardService = this.editor.invokeWithinContext(accessor => accessor.get(IClipboardService));
+		const operation = key === 'v'
+			? pasteIntoEditor(this.editor, clipboardService)
+			: executeEditorClipboardCommand(this.editor, clipboardService, key === 'c' ? 'copy' : 'cut');
+		void operation.catch(onUnexpectedError);
+	}
+}
+
+registerEditorContribution('editor.contrib.clipboard', ClipboardKeybindings, EditorContributionInstantiation.Eager);

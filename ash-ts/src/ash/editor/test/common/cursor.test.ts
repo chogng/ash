@@ -91,6 +91,29 @@ test('CursorsController executes canonical ICommand edits with undoable selectio
 	});
 });
 
+test('CursorsController types at two cursors in one model transaction', () => {
+	using model = new TextModel('abcd\nefgh');
+	const before = [new Selection(1, 3, 1, 3), new Selection(2, 3, 2, 3)];
+	using controller = createTestCursorsController(model, before);
+	const versions: number[] = [];
+	using listener = model.onDidChangeContent(change => versions.push(change.version));
+
+	controller.type(new ViewModelEventsCollector(), 'X', 'keyboard');
+	assert.deepEqual({
+		text: model.getText(),
+		version: model.getVersionId(),
+		selections: controller.getSelections(),
+		versions,
+	}, {
+		text: 'abXcd\nefXgh',
+		version: 2,
+		selections: [new Selection(1, 4, 1, 4), new Selection(2, 4, 2, 4)],
+		versions: [2],
+	});
+	model.undo();
+	assert.deepEqual({ text: model.getText(), selections: controller.getSelections() }, { text: 'abcd\nefgh', selections: before });
+});
+
 test('CursorsController setStates enforces the configured cursor limit and emits canonical events', () => {
 	using model = new TextModel('abcdef');
 	using controller = createTestCursorsController(model, single(0, 0), { multiCursorLimit: 2 });

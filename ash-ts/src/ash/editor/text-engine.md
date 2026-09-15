@@ -78,6 +78,8 @@ flowchart LR
 
 逻辑行 ID 的投影和新身份校验发生在 TextBuffer 写入前；提交成功后才公布新行序列。行点转换先通过 ID 定位物理行，再用该行的一基缓冲区长度检查零基 UTF-16 offset。生成身份失败时文本、版本、历史和内容事件保持原状；结构文档的行身份由同一个模型的 schema 事务投影，不另设行状态 owner。
 
+大文件分级只在模型创建时确定：`editor.largeFileOptimizations` 通过 `ModelService` 进入模型，仅控制分词和堆操作门槛；同步大小上限不受该设置影响。超过堆预算时，`getValue`、`getText` 和 `getLinesContent` 拒绝整份物化，`createSnapshot().read()` 仍提供顺序分块读取。设置改变后，已有模型沿用创建时的分级，新模型读取最新设置。
+
 `ModelService` 通过 `platform/configuration` 读取模型创建选项，通过 `ITextResourcePropertiesService` 决定资源 EOL。语言、资源或相关配置变化会清空 creation-options cache 并更新已打开模型；关闭文件的 undo/redo 只有在 URI 策略允许、内容 SHA-1 一致且内存预算允许时才恢复。
 
 ### Selection、command 和 composition
@@ -85,6 +87,8 @@ flowchart LR
 一个 `TextModel` 可以由多个编辑器共享，但 selection、cursor 和 composition 状态属于各自的 `ViewModelImpl`。目标生产链固定为 `ViewModelImpl → CursorsController → CursorCollection → CommandExecutor`；模型只保存文本、装饰和 undo/redo 数据，不保存某个编辑器的 cursor 状态。
 
 共享模型的编辑器各自持有选区；一个编辑器的输入、撤销和重做不能让未聚焦的另一个编辑器接管焦点或选区。
+
+Alt 点选通过当前 `ViewModelImpl` 增删光标，不把光标列表写入共享模型；`CursorsController` 将所有光标的一次输入合成同一个 `TextModel` 事务，撤销也以这次事务为边界。
 
 当前生产构造已经是 `ViewModelImpl → CursorsController → CursorCollection → Cursor`，`CodeEditorWidget` 只通过内部入口取得同一个 controller，不再创建第二份 selection owner。模型内容事件由 ViewModel 的 collector 进入 `CursorsController.onModelContentChanged`，flush 会重建 collection 和 tracked marker；同一状态变化不会再由 collector 与 controller 事件重复投影。Contribution context 分别暴露真实 `IViewModel` 和同一份 `selectionController`，不再用选择 owner 冒充视图模型。键盘、行选择和上下添加多光标通过 `CursorMoveCommands` 的标准模型/视图状态 API；删除、输入、转置和行操作使用 `MoveOperations` 的标准位置 API。剩余缺口是 contribution 仍直接调用若干仅本地 controller 入口，需继续迁回 `IViewModel` / `ICodeEditor` 的标准公共边界。
 
@@ -123,6 +127,12 @@ flowchart LR
 - `ContentViewOverlays` 和 `MarginViewOverlays` 分别持有一份可见行 DOM；`DynamicViewOverlay` 只准备数据并按行返回内容。
 - 光标与块装饰持有跨行稳定 DOM，因此作为独立 `ViewPart`；旧的 `EditorViewPartCollection` 和各覆盖层独立行容器已经移除。
 
+`ViewModelLinesFromProjectedModel` 持有模型行到视图行的版本化映射，`ViewLayout` 以同一视图行数计算高度和可见范围，`ViewLines` 只渲染其行 DOM。等宽与非等宽字体分别使用自己的测量实现；非等宽路径在空白处优先断行，`keepAll` 不在连续 CJK 文本内部选择优先断点，超宽内容仍按字素边界分段。宽度和文本变化都从投影 owner 更新布局与光标坐标，不改变 `TextModel` 的逻辑行。
+
+`ViewLayer` 和覆盖行的 `ViewPartRows` 按当前视口对齐子节点：重叠行保持连接并保留身份，只移除离开视口的行、插入新行。模型内容变化会在原行根上重绘；整个层随 `ViewPart` 释放，避免滚动时把所有重叠行反复移出再挂回。
+
+`ViewCursors`、`LineNumbersOverlay` 与 `GlyphMarginWidgets` 读取同一模型到视图行映射和纵向布局：软换行续行不重复行号，相对行号按模型行计数，glyph 锚点跟随模型行，光标则落在具体视图行。模型行长度变化后由各 Part 重新投影，状态仍归当前编辑器选区和模型装饰 owner。
+
 ### 渲染上下文与输入 Part
 
 `RestrictedRenderingContext` 只发布一次渲染所需的滚动、视口、纵向坐标与装饰查询；`RenderingContext` 在此基础上合并 DOM/GPU `IViewLines` 几何。特性状态由各 Part 显式接收，不再通过共享元数据容器查找。组合输入的临时范围也进入同一 decoration 查询，不再由光标 Part 接收额外状态。
@@ -155,12 +165,20 @@ flowchart LR
 
 Browser controller 的职责是把一个 DOM event 解析成一个 editor intent，然后调用 common command 或 selection transition。它不得重新实现事务、range mapping 或 model history。
 
+`AbstractEditContext` 把 `keydown` 先交给补全等输入消费者，再发布公共按键事件；公共监听仍能看到已处理状态，`KeyboardNavigationController` 只处理未被消费的导航键。补全选项的 `aria-selected` 与输入节点的 active descendant 同步更新，不通过移动编辑器光标来选择菜单项。
+
+Textarea 和 EditContext 都把 Enter、删除及文本变化送到同一个 `ViewController`，由当前编辑器的 `ViewModelImpl` 提交唯一事务。焦点离开后，旧输入 owner 拒绝迟到的文本与键盘命令；textarea 在发出 type 前检查焦点，EditContext 在改变自己的文本窗口前检查焦点并恢复浏览器状态。
+
+两个输入 owner 都只在拥有焦点时启动 composition，候选文本经 `CompositionController` 进入当前 `TextModel` 的受保护历史修订。连续候选改写在结束后只占一个撤销步骤；Escape 和失焦取消临时文本并恢复选区。失焦后迟到的组合事件不能再启动修订或改变旧模型。
+
+复制、剪切和粘贴的 DOM 事件由当前聚焦的 TextArea 或 EditContext owner 消费；失焦节点不读取旧选区，也不提交编辑。Web EditContext 的键盘快捷键由 `clipboard.ts` 的编辑器贡献送入同一组剪贴板操作；浏览器未发出剪切事件时，命令先完成系统剪贴板写入再删除选区。命令式剪切和粘贴跨越异步边界后核对焦点、模型身份、版本和选区，只有原编辑意图仍对应当前编辑器状态时才提交。
+
 - `EditorInputContext`：browser input contract；`BrowserEditContext` 使用浏览器 EditContext，`EditorTextAreaInputContext` 是 textarea 实现；每个具体 edit context 拥有自己的 DOM、focus/ARIA、screen-reader support、`CompositionController` 和 browser event 路由，`ViewController` 选择并暴露这份契约、执行 common command，suggest widget 通过 `ViewController.setAriaOptions` 管理 completion 的 active descendant；language-aware typing 通过显式 `EditorLanguageEditingAdapter` 注入。
 - `CompositionController`：浏览器 composition sequence 与 common composition session 的适配。
 - `KeyboardNavigationController`：把平台 chord 转成 `CursorMoveCommands` 使用的无 DOM 移动参数，并保留连续垂直移动的期望列。
 - `editorDom.ts`：页面、客户区、编辑器相对坐标和可释放 mouse/pointer 事件工厂的 browser owner。
 - `MouseTargetFactory`：使用 `ViewContext + IPointerHandlerHelper` 直接生成标准 `IMouseTarget`，不保留第二套 target 类型。
-- `MouseHandler`：持有 pointer capture、单次拖动会话、公开鼠标事件和 `ViewController.dispatchMouse` 入口；`PointerHandler` 与 `GlobalEditorPointerMoveMonitor` 负责可释放的浏览器监听。越界拖动统一生成 `IMouseTargetOutsideEditor`，由 `TopBottomDragScrolling` 或 `LeftRightDragScrolling` 按轴滚动、同步渲染并从视口边缘继续扩选；返回、释放、取消、失焦、布局变化和 owner 释放都会停止 operation 与后续动画帧。
+- `MouseHandler`：持有 pointer capture、单次拖动会话、公开鼠标事件和 `ViewController.dispatchMouse` 入口；`PointerHandler` 用鼠标 `pointerdown` 保留 ID、用 `mousedown` 确定点击次数，触控和笔直接使用 `pointerdown`。`GlobalEditorPointerMoveMonitor` 持有可释放的跨窗口跟踪；`pointerup` 与兼容 `mouseup` 只结束一次手势，后者也能补齐前者丢失的释放。越界拖动统一生成 `IMouseTargetOutsideEditor`，由 `TopBottomDragScrolling` 或 `LeftRightDragScrolling` 按轴滚动、同步渲染并从视口边缘继续扩选；返回、释放、取消、失焦、布局变化和 owner 释放都会停止 operation 与后续动画帧。
 - Clipboard/drop controller：浏览器 MIME 与异步读取；提交前再次检查 model version 和 selection snapshot。
 
 Controller 遇到未知、已处理、AltGraph 或不属于自身的事件时应返回，不抢占其他 owner。

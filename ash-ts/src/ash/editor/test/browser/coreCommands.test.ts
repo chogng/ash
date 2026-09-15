@@ -90,6 +90,7 @@ test('keyboard word navigation consumes standard WordOperations boundaries', () 
 		operatingSystem: OperatingSystem.Macintosh,
 	});
 
+	viewport.controller.element.focus();
 	viewport.controller.element.dispatchEvent(keyboardEvent(dom.window, 'ArrowLeft', { altKey: true }));
 	assert.deepEqual(viewport.testSelectionController.getSelections()[0]!.getPosition(), new Position(1, 7));
 	viewport.controller.element.dispatchEvent(keyboardEvent(dom.window, 'ArrowRight', { altKey: true }));

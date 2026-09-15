@@ -292,6 +292,10 @@ export class NativeEditContext extends AbstractEditContext {
 			this.domNode.domNode,
 			"copy",
 			event => {
+				if (!this.isFocused()) {
+					event.preventDefault();
+					return;
+				}
 				CopyOptions.electronBugWorkaroundCopyEventHasFired = true;
 				const copyEvent = this.fireWillCopy(event, false);
 				if (!copyEvent.isHandled) copyEvent.ensureClipboardGetsEditorData();
@@ -301,6 +305,11 @@ export class NativeEditContext extends AbstractEditContext {
 			this.domNode.domNode,
 			"cut",
 			event => {
+				if (!this.isFocused()) {
+					event.preventDefault();
+					return;
+				}
+				CopyOptions.cutEventHasFired = true;
 				const cutEvent = this.fireWillCopy(event, true);
 				if (cutEvent.isHandled) return;
 				if (this.compositionController.composing) {
@@ -316,6 +325,10 @@ export class NativeEditContext extends AbstractEditContext {
 			this.domNode.domNode,
 			"paste",
 			event => {
+				if (!this.isFocused()) {
+					event.preventDefault();
+					return;
+				}
 				const pasteEvent = this.fireWillPaste(event);
 				if (pasteEvent.isHandled) {
 					event.preventDefault();
@@ -613,6 +626,11 @@ export class NativeEditContext extends AbstractEditContext {
 
 	private handleTextUpdate(event: NativeTextUpdateEvent): void {
 		if (!isNativeTextUpdateEvent(event)) return;
+		if (!this.isFocused()) {
+			this.pendingHighSurrogate = undefined;
+			this.restoreNativeState();
+			return;
+		}
 		const text = normalizeTextLineEndings(event.text);
 		if (text.length === 1 && isHighSurrogate(text.charCodeAt(0))) {
 			this.pendingHighSurrogate = event;
@@ -686,6 +704,11 @@ export class NativeEditContext extends AbstractEditContext {
 	}
 
 	private handleCompositionStart(event: CompositionEvent): void {
+		if (!this.isFocused()) {
+			event.preventDefault();
+			this.restoreNativeState();
+			return;
+		}
 		if (
 			this.composing ||
 			this.readOnlyState ||

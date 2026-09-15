@@ -6,6 +6,7 @@ import { URI } from '../../../base/common/uri.js';
 import { DefaultEndOfLine } from '../../common/model.js';
 import { ModelService } from '../../common/services/modelService.js';
 import { createPieceTreeTextBuffer } from '../../common/model/textBufferFactory.js';
+import { TEXT_MODEL_LARGE_FILE_LIMITS } from '../../common/model/textModelLargeFile.js';
 import { EditSources } from '../../common/textModelEditSource.js';
 import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
 import type { ITextResourcePropertiesService } from '../../common/services/textResourceConfiguration.js';
@@ -46,6 +47,24 @@ test('ModelService owns model creation options and applies indentation detection
 	assert.equal(model.getOptions().indentSize, 2);
 	assert.equal(model.getOptions().insertSpaces, true);
 	assert.equal(model.isForSimpleWidget, true);
+});
+
+test('ModelService applies large-file optimizations only when creating a model', async () => {
+	using configuration = new TestResourceConfigurationService();
+	using service = new ModelService(configuration, new TestTextResourcePropertiesService(configuration));
+	await configuration.updateValue('editor.detectIndentation', false);
+	await configuration.updateValue('editor.largeFileOptimizations', false);
+	const text = 'x'.repeat(TEXT_MODEL_LARGE_FILE_LIMITS.tokenizationTextUnits + 1);
+	using unrestricted = service.createModel(text, null, URI.parse('inmemory://model-service/large-unrestricted.txt'));
+	assert.equal(unrestricted.isTooLargeForTokenization(), false);
+
+	await configuration.updateValue('editor.largeFileOptimizations', true);
+	using optimized = service.createModel(text, null, URI.parse('inmemory://model-service/large-optimized.txt'));
+	assert.deepEqual({
+		unrestricted: unrestricted.isTooLargeForTokenization(),
+		optimized: optimized.isTooLargeForTokenization(),
+		optimizedSync: optimized.isTooLargeForSyncing(),
+	}, { unrestricted: false, optimized: true, optimizedSync: false });
 });
 
 test('ModelService consumes ITextBufferFactory values and releases factory ownership', () => {

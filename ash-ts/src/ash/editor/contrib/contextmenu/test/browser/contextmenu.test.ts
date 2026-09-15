@@ -54,6 +54,7 @@ test('ContextMenuController opens the host menu at the active cursor from Shift+
 	});
 	editor.layout({ width: 400, height: 100 });
 	editor.setSelection(Selection.fromPositions(new Position(2, 3)));
+	editor.focus();
 	const event = new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'F10', shiftKey: true });
 	editor.view.element.dispatchEvent(event);
 

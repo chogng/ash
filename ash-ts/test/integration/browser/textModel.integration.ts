@@ -21,7 +21,7 @@ import { TextModel } from "../../../src/ash/editor/editor.api.js";
 import "../../../src/ash/editor/editor.code.all.js";
 import { MemoryTextFiles } from "./memoryTextFiles.js";
 import { AccessibilitySupport, type IAccessibilityService } from '../../../src/ash/platform/accessibility/common/accessibility.js';
-import { getTextEditorCapabilityContributions } from '../../../src/ash/editor/browser/editorExtensions.js';
+import { EditorExtensionsRegistry, getTextEditorCapabilityContributions } from '../../../src/ash/editor/browser/editorExtensions.js';
 
 interface WorkbenchSwitchResult {
 	readonly oldEditorDisposed: boolean;
@@ -39,6 +39,7 @@ interface IntegrationHarness {
 	getSavedText(): string;
 	getSyntaxAnalysisCount(): number;
 	getBundleIds(): readonly string[];
+	hasClipboardContribution(): boolean;
 	hasPlaceholderContribution(): boolean;
 	switchToOther(): Promise<WorkbenchSwitchResult>;
 	getSelection(): { readonly startLineIndex: number; readonly startColumnIndex: number; readonly endLineIndex: number; readonly endColumnIndex: number };
@@ -142,7 +143,11 @@ window.ashTextModelIntegration = {
 	save: () => pane.save(),
 	getSavedText: () => files.read(resource),
 	getSyntaxAnalysisCount: () => syntaxAnalysisCount,
-	getBundleIds: () => getTextEditorCapabilityContributions().map(contribution => contribution.id),
+	getBundleIds: () => [
+		...getTextEditorCapabilityContributions().map(contribution => contribution.id),
+		...EditorExtensionsRegistry.getEditorContributions().map(contribution => contribution.id),
+	],
+	hasClipboardContribution: () => requiredEditorPart().getContribution('editor.contrib.clipboard') !== null,
 	hasPlaceholderContribution: () => requiredEditorPart().getContribution('editor.contrib.placeholderText') !== null,
 	switchToOther: async () => {
 		const oldEditor = requiredEditorPart();
