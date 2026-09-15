@@ -4,10 +4,9 @@ import { getJsonNodePath, parseJsonDocument, JsonTokenKind, type JsonDocument, t
 import { jsonSchemaAtPath, type JsonSchema } from '../../../../base/common/jsonSchema.js';
 import { Position } from '../../../../editor/common/core/position.js';
 import { Range } from '../../../../editor/common/core/range.js';
-import { type TextEdit } from '../../../../editor/common/languages.js';
+import type { TextEdit, LanguageFormattingProvider, LanguageFormattingRequest } from '../../../../editor/common/languages.js';
 import { LanguageCompletionItemKind } from '../../../../editor/common/languages/completion/languageCompletions.js';
 import type { LanguageCompletionProvider, LanguageCompletionProviderItem, LanguageCompletionProviderRequest, LanguageCompletionProviderResult } from '../../../../editor/common/languages/completion/languageCompletionProviders.js';
-import type { LanguageFormattingProvider, LanguageFormattingRequest } from '../../../../editor/contrib/format/common/formatCommands.js';
 import type { LanguageHover, LanguageHoverProvider, LanguageHoverRequest } from '../../../../editor/contrib/hover/common/hover.js';
 import { JsonSchemasRegistry, type JsonSchemaRegistry } from '../../../../platform/jsonschemas/common/jsonSchemaRegistry.js';
 

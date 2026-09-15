@@ -10,16 +10,14 @@ import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind } from "
 import { LanguageCompletionTriggerKind, type LanguageCompletionProvider, type LanguageCompletionProviderCommandRequest, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResolveRequest } from "../../../../editor/common/languages/completion/languageCompletionProviders.js";
 import { type LanguageHoverProvider, type LanguageHoverRequest } from "../../../../editor/contrib/hover/common/hover.js";
 import { type LanguageDeclarationProvider, type LanguageDefinitionProvider, type LanguageImplementationProvider, type LanguageLocationRequest, type LanguageReferenceProvider, type LanguageReferenceRequest, type LanguageTypeDefinitionProvider } from "../../../../editor/contrib/gotoSymbol/common/languageNavigation.js";
-import { type LanguageLocation } from "../../../../editor/common/languages.js";
+import type { LanguageLocation, LanguageFormattingProvider, LanguageFormattingRequest, CodeLens, CodeLensList, CodeLensProvider, LanguageSemanticTokensProvider, LanguageSemanticTokensRequest, LinkedEditingRangeProvider, LinkedEditingRanges } from "../../../../editor/common/languages.js";
 import { type LanguageCallHierarchyEntry, type LanguageCallHierarchyProvider, type LanguageHierarchyFollowupRequest, type LanguageHierarchyItem, type LanguageHierarchyRequest, type LanguageTypeHierarchyProvider } from "../../../../editor/contrib/callHierarchy/common/languageHierarchy.js";
 import { type LanguageCompletionItemKindDto, type LanguageHierarchyItemDto } from "../../../../../../generated/app-server/index.js";
 import { type LanguageWorkspaceSymbol, type LanguageWorkspaceSymbolProvider } from "../../../../editor/common/languages/workspaceSymbols.js";
 import { type LanguageRenameProvider, type LanguageRenameRequest } from "../../../../editor/contrib/rename/common/languageRename.js";
 import { type LanguageCodeAction, type LanguageCodeActionProvider, type LanguageCodeActionRequest } from "../../../../editor/contrib/codeAction/common/languageCodeActions.js";
-import { type LanguageFormattingProvider, type LanguageFormattingRequest } from "../../../../editor/contrib/format/common/formatCommands.js";
 import { type LanguageParameterHintsProvider, type LanguageParameterHintsRequest } from "../../../../editor/contrib/parameterHints/common/languageParameterHints.js";
 import { type LanguageInlayHintsProvider, type LanguageInlayHintsRequest } from "../../../../editor/contrib/inlayHints/common/languageInlayHints.js";
-import { type CodeLens, type CodeLensList, type CodeLensProvider, type LanguageSemanticTokensProvider, type LanguageSemanticTokensRequest, type LinkedEditingRangeProvider, type LinkedEditingRanges } from "../../../../editor/common/languages.js";
 import { type LanguageDocumentSymbol, type LanguageDocumentSymbolProvider, type LanguageDocumentSymbolRequest } from "../../../../editor/contrib/documentSymbols/common/languageDocumentSymbols.js";
 import { type LanguageLink, type LanguageLinkProvider, type LanguageLinkRequest } from "../../../../editor/contrib/links/common/languageLinks.js";
 import { type LanguageColorProvider, type LanguageColorPresentationRequest, type LanguageColorRequest } from "../../../../editor/contrib/colorPicker/common/languageColors.js";

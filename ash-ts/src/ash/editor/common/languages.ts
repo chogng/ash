@@ -8,6 +8,7 @@ import { type Position } from './core/position.js';
 import { type IRange, Range } from './core/range.js';
 import { type TextSnapshot } from './core/textChange.js';
 import { type LanguageId } from './encodedTokenAttributes.js';
+import { type LanguageFeatureRequest } from './languages/languageFeatureRequest.js';
 import { type LanguageSelector } from './languageSelector.js';
 import * as model from './model.js';
 import { type TextModel } from './model/textModel.js';
@@ -86,6 +87,24 @@ export interface TextEdit {
 export interface FormattingOptions {
 	tabSize: number;
 	insertSpaces: boolean;
+}
+
+export interface LanguageFormattingOptions extends Readonly<FormattingOptions> {
+	readonly trimTrailingWhitespace?: boolean;
+}
+
+export interface LanguageFormattingRequest extends LanguageFeatureRequest {
+	readonly resource?: URI;
+	readonly range?: Range;
+	readonly options: LanguageFormattingOptions;
+	readonly position?: Position;
+	readonly ch?: string;
+}
+
+export interface LanguageFormattingProvider {
+	provideDocumentFormattingEdits?(request: LanguageFormattingRequest, signal: AbortSignal): readonly TextEdit[] | Promise<readonly TextEdit[]>;
+	provideRangeFormattingEdits?(request: LanguageFormattingRequest, signal: AbortSignal): readonly TextEdit[] | Promise<readonly TextEdit[]>;
+	provideOnTypeFormattingEdits?(request: LanguageFormattingRequest, signal: AbortSignal): readonly TextEdit[] | Promise<readonly TextEdit[]>;
 }
 
 /** @internal */

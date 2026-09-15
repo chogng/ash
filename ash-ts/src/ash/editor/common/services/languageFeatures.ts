@@ -3,7 +3,7 @@ import { createServiceIdentifier } from '../../../platform/instantiation/common/
 import type { LanguageFeatureRegistry } from '../languageFeatureRegistry.js';
 import type { LanguageSelector } from '../languageSelector.js';
 import type { LanguageCompletionProvider, LanguageCompletionProviderRegistry } from '../languages/completion/languageCompletionProviders.js';
-import type { CodeLensProvider, DocumentHighlightProvider, LinkedEditingRangeProvider, MultiDocumentHighlightProvider } from '../languages.js';
+import type { CodeLensProvider, DocumentHighlightProvider, LinkedEditingRangeProvider, MultiDocumentHighlightProvider, LanguageFormattingProvider, LanguageSemanticTokensProvider } from '../languages.js';
 import type { SyntaxProviderRegistry } from '../languages/syntax/syntaxProviders.js';
 import type { LanguageWorkspaceSymbolProvider } from '../languages/workspaceSymbols.js';
 import type { LanguageCallHierarchyProvider, LanguageTypeHierarchyProvider } from '../../contrib/callHierarchy/common/languageHierarchy.js';
@@ -11,7 +11,6 @@ import type { LanguageCodeActionProvider } from '../../contrib/codeAction/common
 import type { LanguageColorProvider } from '../../contrib/colorPicker/common/languageColors.js';
 import type { LanguageDocumentSymbolProvider } from '../../contrib/documentSymbols/common/languageDocumentSymbols.js';
 import type { LanguageFoldingRangeProvider } from '../../contrib/folding/common/languageFoldingRanges.js';
-import type { LanguageFormattingProvider } from '../../contrib/format/common/formatCommands.js';
 import type { LanguageDeclarationProvider, LanguageDefinitionProvider, LanguageImplementationProvider, LanguageReferenceProvider, LanguageTypeDefinitionProvider } from '../../contrib/gotoSymbol/common/languageNavigation.js';
 import type { LanguageHoverProvider } from '../../contrib/hover/common/hover.js';
 import type { LanguageInlayHintsProvider } from '../../contrib/inlayHints/common/languageInlayHints.js';
@@ -20,7 +19,6 @@ import type { LanguageLinkProvider } from '../../contrib/links/common/languageLi
 import type { LanguageParameterHintsProvider } from '../../contrib/parameterHints/common/languageParameterHints.js';
 import type { LanguageRenameProvider } from '../../contrib/rename/common/languageRename.js';
 import type { LanguageSelectionRangeProvider } from '../../contrib/smartSelect/common/selectionRanges.js';
-import type { LanguageSemanticTokensProvider } from '../languages.js';
 
 /** Provider registries shared by standalone callers and Workbench adapters. */
 export interface ILanguageFeaturesService extends IDisposable {

@@ -10,7 +10,7 @@ import { TextModel } from "../../../../../editor/common/model/textModel.js";
 import { LanguageCompletionService } from '../../../../../editor/common/languages/completion/languageCompletionService.js';
 import { WorkspaceSymbolService } from '../../../../../editor/common/languages/workspaceSymbols.js';
 import { CodeActionService } from '../../../../../editor/contrib/codeAction/common/languageCodeActions.js';
-import { FormatService } from '../../../../../editor/contrib/format/common/formatCommands.js';
+import { createLanguageFeatureRequest } from '../../../../../editor/common/languages/languageFeatureRequest.js';
 import { LanguageNavigationService } from '../../../../../editor/contrib/gotoSymbol/common/languageNavigation.js';
 import { LanguageHoverService } from '../../../../../editor/contrib/hover/common/hover.js';
 import { InlayHintsService } from '../../../../../editor/contrib/inlayHints/common/languageInlayHints.js';
@@ -157,16 +157,11 @@ test("App Server formatting providers preserve snapshot, options, range, and edi
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
 	using model = new TextModel("value", { languageId: "typescript" });
-	using formatting = new FormatService(
-		model,
-		languages.documentFormattingEditProvider,
-		languages.documentRangeFormattingEditProvider,
-		languages.onTypeFormattingEditProvider,
-		URI.file("C:\\project\\main.ts"),
-	);
+	const signal = new AbortController().signal;
+	const request = { ...createLanguageFeatureRequest(model, 'typescript', signal), resource: URI.file('C:\\project\\main.ts') };
 
-	const documentEdits = await formatting.provideDocumentFormattingEdits("typescript", { tabSize: 2, insertSpaces: true });
-	const rangeEdits = await formatting.provideRangeFormattingEdits("typescript", Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)), { tabSize: 4, insertSpaces: false, trimTrailingWhitespace: true });
+	const documentEdits = await languages.documentFormattingEditProvider.ordered(model)[0]!.provideDocumentFormattingEdits!({ ...request, options: { tabSize: 2, insertSpaces: true } }, signal);
+	const rangeEdits = await languages.documentRangeFormattingEditProvider.ordered(model)[0]!.provideRangeFormattingEdits!({ ...request, range: new Range(1, 1, 1, 6), options: { tabSize: 4, insertSpaces: false, trimTrailingWhitespace: true } }, signal);
 
 	assert.equal(api.documentFormattingRequests[0]!.document.path, "main.ts");
 	assert.deepEqual(api.documentFormattingRequests[0]!.options, { tabSize: 2, insertSpaces: true, trimTrailingWhitespace: null });

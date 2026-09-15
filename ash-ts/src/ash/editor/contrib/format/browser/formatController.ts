@@ -4,32 +4,41 @@ import { Disposable, DisposableStore, MutableDisposable, toDisposable } from "..
 import { type View } from "../../../browser/view.js";
 import { type IVersionedEditorWorkerClient } from "../../../browser/services/editorWorkerService.js";
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
-import { FormatService, type LanguageFormattingOptions } from "../common/formatCommands.js";
+import { type LanguageFormattingOptions, type LanguageFormattingProvider } from '../../../common/languages.js';
+import { type LanguageFeatureRegistry } from '../../../common/languageFeatureRegistry.js';
+import { type TextModel } from '../../../common/model/textModel.js';
+import { type URI } from '../../../../base/common/uri.js';
+import { getDocumentFormattingEditsUntilResult } from './format.js';
 import { CodeEditorStateFlag, EditorStateCancellationTokenSource } from '../../editorState/browser/editorState.js';
 import { FormattingEdit } from './formattingEdit.js';
 
 export interface FormatControllerOptions {
 	readonly formattingOptions?: LanguageFormattingOptions;
+	readonly resource?: URI;
 	readonly onError?: (error: unknown) => void;
 }
 
-/** Routes the editor format shortcut into the Stanza formatting service and command layer. */
+/** Owns the editor formatting request and applies its result through FormattingEdit. */
 export class FormatController extends Disposable {
 	private readonly request = this._register(new MutableDisposable<DisposableStore>());
 	private readonly options: LanguageFormattingOptions;
 	private readonly onError: (error: unknown) => void;
+	private readonly resource: URI | undefined;
+	private readonly model: TextModel;
 
 	constructor(
 		private readonly editor: ICodeEditor,
 		viewport: View,
-		private readonly service: FormatService,
+		private readonly providers: LanguageFeatureRegistry<LanguageFormattingProvider>,
 		private readonly editorWorker: IVersionedEditorWorkerClient,
 		private readonly languageId: string,
 		options: FormatControllerOptions = {},
 	) {
 		super();
 		if (viewport.textModel !== editor.getModel()) throw new TypeError("Stanza format dependencies must share one text model");
+		this.model = viewport.textModel;
 		this.options = options.formattingOptions ?? { tabSize: 4, insertSpaces: true };
+		this.resource = options.resource;
 		this.onError = options.onError ?? (error => console.error("Stanza formatting failed", error));
 		this._register(editor.onKeyDown(event => {
 			if (event.browserEvent.defaultPrevented || event.isComposing || event.altKey || (!event.ctrlKey && !event.metaKey) || !event.shiftKey || event.key.toLowerCase() !== 'i') return;
@@ -39,7 +48,7 @@ export class FormatController extends Disposable {
 	}
 
 	async formatDocument(onError = this.onError): Promise<void> {
-		if (this.isDisposed || !this.editor.hasModel() || this.editor.getOption(EditorOption.readOnly)) return;
+		if (this.isDisposed || this.editor.getModel() !== this.model || this.editor.getOption(EditorOption.readOnly)) return;
 		const resources = new DisposableStore();
 		this.request.value = resources;
 		const source = new EditorStateCancellationTokenSource(this.editor, CodeEditorStateFlag.Value | CodeEditorStateFlag.Position);
@@ -53,7 +62,7 @@ export class FormatController extends Disposable {
 			if (this.editor.getOption(EditorOption.readOnly)) source.cancel();
 		}));
 		try {
-			const edits = await this.service.provideDocumentFormattingEdits(this.languageId, this.options, abort.signal);
+			const edits = await getDocumentFormattingEditsUntilResult(this.providers, this.model, this.languageId, this.options, abort.signal, this.resource);
 			if (this.isDisposed || abort.signal.aborted || edits.length === 0) {
 				return;
 			}
@@ -85,21 +94,15 @@ export class FormatController extends Disposable {
 
 registerEditorContribution({ id: "editor.contrib.format", install: context => {
 	if (context.kind !== "text") return;
-	const service = context.register(new FormatService(
-		context.model,
-		context.languageFeaturesService.documentFormattingEditProvider,
-		context.languageFeaturesService.documentRangeFormattingEditProvider,
-		context.languageFeaturesService.onTypeFormattingEditProvider,
-		context.options.input.resource,
-	));
 	const controller = context.register(new FormatController(
 		context.editor,
 		context.view,
-		service,
+		context.languageFeaturesService.documentFormattingEditProvider,
 		context.editorWorker,
 		context.languageId,
 		{
 			formattingOptions: { tabSize: context.options.indentation?.tabSize ?? 4, insertSpaces: context.options.indentation?.kind !== "tabs" },
+			resource: context.options.input.resource,
 			onError: context.onLanguageError,
 		},
 	));

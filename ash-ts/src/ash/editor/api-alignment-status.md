@@ -4,7 +4,11 @@
 
 ## 当前结论
 
-- 2026-09-15 文档方向修正：移除“每个 contribution 从 common 文件暴露 API”、`common/services → contrib/*/common` 和“每个功能构造 model-level service”的要求；区分职责归属与运行环境限制，并在对齐技能中加入公共 registry 的类型依赖检查。本批只修改 10 份文档，代码迁移尚未开始：`formatCommands.ts` 仍混合 provider 契约与调度，`ILanguageFeaturesService` 仍导入 contribution 类型。此前格式化行为测试通过不代表这些职责已对齐，声明计数保持 80/41。后续按公共契约、registry、功能编排与调用方的顺序修正，不按缺失文件数扩大实现。
+- 2026-09-15 格式化职责迁移：公共 `LanguageFormattingOptions/Request/Provider` 迁入 `common/languages.ts`，registry、Standalone、公开导出和 JSON/App Server/扩展适配器同步改用公共 owner。删除 `contrib/format/common/formatCommands.ts` 和 `FormatService`；文档格式化调度由 `contrib/format/browser/format.ts` 的函数承担，取消与结果提交仍由 `FormatController` 负责。原 common 测试迁至 `test/browser/format.test.ts`，宿主测试直接验证提供者与 registry。生产文件为 599 个，同路径 401、仅 Ash 198、仅上游 332，大小写差异为 0。此批完成职责迁移，保留现有 request/AbortSignal 契约；三类标准 provider 签名、范围与输入格式化的编辑器入口及完整上游调度语义仍待处理，80/41 声明计数不变。其他 contribution 的类型反向依赖尚未迁移。
+
+- 本次职责迁移验证：18 项定向单测、103 项浏览器回归、Editor 对齐检查与类型检查、Stanza 和桌面 Renderer 生产构建通过。定向测试覆盖取消、模型释放与版本变化、提供者顺序、请求参数、registry 替换、JSON 和 App Server 适配。既有 7 份 CSS 债务及终端颜色环境提示仍保留；本批未改 CSS，构建无新增警告。
+
+- 2026-09-15 文档方向修正：移除“每个 contribution 从 common 文件暴露 API”、`common/services → contrib/*/common` 和“每个功能构造 model-level service”的要求；区分职责归属与运行环境限制，并在对齐技能中加入公共 registry 的类型依赖检查。当时只修改 10 份文档，代码尚未迁移：`formatCommands.ts` 混合 provider 契约与调度，`ILanguageFeaturesService` 导入 contribution 类型。此前格式化行为测试通过不代表这些职责已对齐，声明计数保持 80/41。后续按公共契约、registry、功能编排与调用方的顺序修正，不按缺失文件数扩大实现。
 
 - 2026-09-15 格式化取消与命令入口：本批修改 11 个文件，新增上游同路径 `contrib/editorState/browser/keybindingCancellation.ts` 和 `contrib/format/browser/formatActions.ts`，并在现有 `editorState.ts` 补齐 `EditorStateCancellationTokenSource`。格式化请求在光标移动、模型变化、只读切换、Escape、重复请求和释放时传递取消信号；提供者忽略信号时，调用方也能结束等待。既有快捷键与标准 `editor.action.formatDocument` Action 共用同一控制器；bundle 显式加载 Action 和贡献注册。文本、光标和滚动仍由既有 owner 管理，无 DOM 或 CSS 改动。10 项定向单测、103 项完整浏览器回归、对齐与类型检查、Stanza 构建及 diff 检查通过；保留既有颜色环境提示和 7 份 CSS 债务。全目录为 599 个生产文件、400 个同路径、199 个仅 Ash、333 个仅上游，大小写差异为 0。完整格式化提供者调度、选区格式化及 `TextModelCancellationTokenSource` 仍未补齐，121 组声明的 80/41 计数不变。
 

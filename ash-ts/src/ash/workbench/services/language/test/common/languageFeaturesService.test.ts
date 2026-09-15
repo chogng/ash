@@ -11,7 +11,7 @@ import { TestLanguageConfigurationService } from '../../../../../editor/test/com
 import { LanguageFeaturesService } from '../../../../../editor/common/services/languageFeaturesService.js';
 import { LanguageService } from '../../../../../editor/common/services/languageService.js';
 import { LanguageHoverService } from '../../../../../editor/contrib/hover/common/hover.js';
-import { FormatService } from '../../../../../editor/contrib/format/common/formatCommands.js';
+import { createLanguageFeatureRequest } from '../../../../../editor/common/languages/languageFeatureRequest.js';
 import { WorkbenchLanguageFeatures } from '../../browser/workbenchLanguageFeatures.js';
 
 test('Workbench installs product languages while Editor owns provider registries', async () => {
@@ -49,12 +49,8 @@ test('Language features service keeps document, range, and on-type formatting re
 	using languageConfigurations = new TestLanguageConfigurationService();
 	using languageFeatures = new LanguageFeaturesService(languageConfigurations);
 	using model = new TextModel('answer', { languageId: 'typescript' });
-	using formatting = new FormatService(
-		model,
-		languageFeatures.documentFormattingEditProvider,
-		languageFeatures.documentRangeFormattingEditProvider,
-		languageFeatures.onTypeFormattingEditProvider,
-	);
+	const signal = new AbortController().signal;
+	const request = { ...createLanguageFeatureRequest(model, 'typescript', signal), options: { tabSize: 4, insertSpaces: true } };
 	const range = new Range(1, 1, 1, 7);
 	const registration = languageFeatures.registerProviderBatch({
 		formatting: [{
@@ -68,15 +64,15 @@ test('Language features service keeps document, range, and on-type formatting re
 	});
 
 	assert.equal(
-		(await formatting.provideDocumentFormattingEdits('typescript', { tabSize: 4, insertSpaces: true }))[0]?.text,
+		(await languageFeatures.documentFormattingEditProvider.ordered(model)[0]?.provideDocumentFormattingEdits?.(request, signal))?.[0]?.text,
 		'document',
 	);
 	assert.equal(
-		(await formatting.provideRangeFormattingEdits('typescript', range, { tabSize: 4, insertSpaces: true }))[0]?.text,
+		(await languageFeatures.documentRangeFormattingEditProvider.ordered(model)[0]?.provideRangeFormattingEdits?.({ ...request, range }, signal))?.[0]?.text,
 		'range',
 	);
 	assert.equal(
-		(await formatting.provideOnTypeFormattingEdits('typescript', new Position(1, 7), ';', { tabSize: 4, insertSpaces: true }))[0]?.text,
+		(await languageFeatures.onTypeFormattingEditProvider.ordered(model)[0]?.provideOnTypeFormattingEdits?.({ ...request, position: new Position(1, 7), ch: ';' }, signal))?.[0]?.text,
 		'onType',
 	);
 
@@ -89,12 +85,12 @@ test('Language features service keeps document, range, and on-type formatting re
 		}],
 	});
 	assert.equal(
-		(await formatting.provideDocumentFormattingEdits('typescript', { tabSize: 4, insertSpaces: true }))[0]?.text,
+		(await languageFeatures.documentFormattingEditProvider.ordered(model)[0]?.provideDocumentFormattingEdits?.(request, signal))?.[0]?.text,
 		'replacement',
 	);
-	assert.deepEqual(await formatting.provideRangeFormattingEdits('typescript', range, { tabSize: 4, insertSpaces: true }), []);
-	assert.deepEqual(await formatting.provideOnTypeFormattingEdits('typescript', new Position(1, 7), ';', { tabSize: 4, insertSpaces: true }), []);
+	assert.deepEqual(languageFeatures.documentRangeFormattingEditProvider.ordered(model), []);
+	assert.deepEqual(languageFeatures.onTypeFormattingEditProvider.ordered(model), []);
 
 	registration.dispose();
-	assert.deepEqual(await formatting.provideDocumentFormattingEdits('typescript', { tabSize: 4, insertSpaces: true }), []);
+	assert.deepEqual(languageFeatures.documentFormattingEditProvider.ordered(model), []);
 });
