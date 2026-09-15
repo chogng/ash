@@ -1,4 +1,3 @@
-import { addDisposableListener } from '../../base/browser/dom.js';
 import { type Event, Emitter } from '../../base/common/event.js';
 import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
 import {
@@ -186,11 +185,10 @@ export class ObservableCodeEditor extends Disposable {
 		})));
 		this._register(editor.onDidCompositionStart(() => this.runInTransaction(transaction => this.compositionState.set(true, transaction))));
 		this._register(editor.onDidCompositionEnd(() => this.runInTransaction(transaction => this.compositionState.set(false, transaction))));
-		const domNode = editor.getDomNode();
-		if (domNode) {
-			this._register(addDisposableListener(domNode, 'focusin', () => this.refreshFocusState()));
-			this._register(addDisposableListener(domNode, 'focusout', () => this.refreshFocusState()));
-		}
+		this._register(editor.onDidFocusEditorText(() => this.refreshFocusState()));
+		this._register(editor.onDidBlurEditorText(() => this.refreshFocusState()));
+		this._register(editor.onDidFocusEditorWidget(() => this.refreshFocusState()));
+		this._register(editor.onDidBlurEditorWidget(() => this.refreshFocusState()));
 		this._register(editor.onDidDispose(() => this.dispose()));
 	}
 

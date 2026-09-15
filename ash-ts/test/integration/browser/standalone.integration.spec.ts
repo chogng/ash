@@ -1,6 +1,78 @@
 import { expect, test } from '@playwright/test';
 
 for (const inputKind of ['editContext', 'textarea'] as const) {
+	for (const useAlias of [false, true]) {
+		test(`${inputKind} ${useAlias ? 'aliased' : 'public'} history commands respect focus and dynamic readonly state`, async ({ page }) => {
+			if (inputKind === 'textarea') {
+				await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+			}
+			await page.goto('/standalone.html');
+			expect(await page.evaluate(useAlias => window.ashStandaloneIntegration.runHistoryCommands(useAlias), useAlias)).toEqual([
+				'alpha|bravo', 'alpha|bravo', 'alpha!|bravo', 'alpha!|bravo', 'alpha!|bravo', 'alpha|bravo',
+			]);
+		});
+	}
+
+	test(`${inputKind} editor focus stays coherent across find, replace, and external commands`, async ({ page }) => {
+		if (inputKind === 'textarea') {
+			await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+		}
+		await page.goto('/standalone.html');
+		const result = await page.evaluate(() => window.ashStandaloneIntegration.runFocusRouting());
+		expect(result).toEqual({
+			states: [
+				{ stage: 'text', text: true, widget: true, observedText: true, observedWidget: true, contextText: true, contextWidget: true, widgetEvents: 'focus' },
+				{ stage: 'find', text: false, widget: true, observedText: false, observedWidget: true, contextText: false, contextWidget: true, widgetEvents: 'focus' },
+				{ stage: 'replace', text: false, widget: true, observedText: false, observedWidget: true, contextText: false, contextWidget: true, widgetEvents: 'focus' },
+				{ stage: 'outside', text: false, widget: false, observedText: false, observedWidget: false, contextText: false, contextWidget: false, widgetEvents: 'focus,blur' },
+			],
+			events: ['focus', 'blur'],
+			activeAfterBlur: true,
+			values: ['alpha\nalpha', 'bravo'],
+			activeAfterDispose: true,
+		});
+	});
+
+	test(`${inputKind} active editor follows use across creation, model switches, and removal`, async ({ page }) => {
+		if (inputKind === 'textarea') {
+			await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+		}
+		await page.goto('/standalone.html');
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.runEditorActivity())).toEqual([true, true, true, true]);
+	});
+
+	for (const fail of [false, true]) {
+		test(`${inputKind} ordinary copy stays plain during a rich copy that ${fail ? 'fails' : 'succeeds'}`, async ({ page }) => {
+			if (inputKind === 'textarea') {
+				await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+			}
+			await page.goto('/standalone.html');
+			expect(await page.evaluate(fail => window.ashStandaloneIntegration.runDeferredRichCopy(fail), fail)).toEqual({
+				pendingHtml: '', finishedHtml: '', rejected: fail, writtenText: 'const',
+			});
+		});
+	}
+
+	for (const command of ['cut', 'paste'] as const) {
+		for (const change of ['none', 'selection', 'focus', 'readonly', 'composition', 'escape', 'model', 'dispose'] as const) {
+			test(`${inputKind} delayed clipboard ${command} respects ${change}`, async ({ page }) => {
+				if (inputKind === 'textarea') {
+					await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+				}
+				await page.goto('/standalone.html');
+				const result = await page.evaluate(({ command, change }) => window.ashStandaloneIntegration.runDeferredClipboard(command, change), { command, change });
+				expect(result).toEqual({
+					value: change === 'none' ? (command === 'cut' ? '' : 'omega') : 'alpha',
+					finishedBeforeTransfer: change !== 'none',
+				});
+				if (change === 'none') {
+					await page.keyboard.press('ControlOrMeta+z');
+					expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('alpha');
+				}
+			});
+		}
+	}
+
 	for (const change of ['none', 'writableAgain', 'selection', 'composition', 'escape'] as const) {
 		test(`${inputKind} deferred file paste respects ${change} state before committing`, async ({ page }) => {
 			if (inputKind === 'textarea') {
@@ -1107,6 +1179,32 @@ for (const inputKind of ['EditContext', 'textarea'] as const) {
 			return { text: await navigator.clipboard.readText(), hasHtml: items.some(item => item.types.includes('text/html')) };
 		})).toEqual({ text: 'const', hasHtml: false });
 	});
+
+	for (const scenario of [
+		{ name: 'consecutive breaks', html: '<div>one<br><br><br>two</div>', text: 'one\n\n\ntwo' },
+		{ name: 'boundary breaks', html: '<br>one<br>', text: '\none\n' },
+		{ name: 'code whitespace', html: '<pre><code>\n  one\n\n\n\ttwo\n</code></pre>', text: '\n  one\n\n\n\ttwo\n' },
+		{ name: 'adjacent code blocks', html: '<pre>one</pre><pre>two</pre>', text: 'one\ntwo' },
+		{ name: 'nested blocks', html: '<div><div>one</div><div>two</div></div>', text: 'one\ntwo' },
+	]) {
+		test(`${inputKind} HTML clipboard preserves ${scenario.name}`, async ({ page }) => {
+			if (inputKind === 'textarea') {
+				await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+			}
+			await page.goto('/standalone.html');
+			await page.evaluate(() => window.ashStandaloneIntegration.prepareBrackets('alpha', [6]));
+			const input = page.locator('#caller .stanza-editor-input');
+			await input.focus();
+			await input.evaluate((input, html) => {
+				const clipboardData = new DataTransfer();
+				clipboardData.setData('text/html', html);
+				input.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+			}, scenario.html);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('alpha' + scenario.text);
+			await page.keyboard.press('ControlOrMeta+z');
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('alpha');
+		});
+	}
 
 	for (const mode of ['html', 'plain', 'readonly'] as const) {
 		test(`${inputKind} HTML clipboard paste respects ${mode} and remains undoable`, async ({ page }) => {

@@ -1,10 +1,7 @@
-import { FormattingConflicts } from './contrib/format/browser/format.js';
 /** Stable Stanza API for standalone editors and programmatic document consumers. */
 import { createEditorBaseApi } from './common/services/editorBaseApi.js';
 import { createStandaloneEditorApi } from "./standalone/browser/standaloneEditor.js";
 import { createStandaloneLanguagesApi } from './standalone/browser/standaloneLanguages.js';
-
-FormattingConflicts.setFormatterSelector(async formatters => formatters[0]);
 
 const baseApi = createEditorBaseApi();
 export const editor = createStandaloneEditorApi();

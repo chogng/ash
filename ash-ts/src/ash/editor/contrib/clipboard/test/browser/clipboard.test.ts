@@ -128,9 +128,31 @@ test('paste command drops a delayed clipboard read after focus, selection, or mo
 	await afterModelChange;
 	assert.equal(firstModel.getText(), 'changed');
 
+	for (const change of ['selection', 'focus', 'readonly', 'escape'] as const) {
+		first.focus();
+		first.setSelection(new Selection(1, 1, 1, 1));
+		const request = clipboard.readRequestCount;
+		const pending = PasteAction.runCommand(services, undefined);
+		if (change === 'selection') {
+			first.setSelection(new Selection(1, 3, 1, 3));
+			first.setSelection(new Selection(1, 1, 1, 1));
+		} else if (change === 'focus') {
+			second.focus();
+			first.focus();
+		} else if (change === 'readonly') {
+			first.updateOptions({ readOnly: true });
+			first.updateOptions({ readOnly: false });
+		} else {
+			first.getContainerDomNode().querySelector('.stanza-editor-input')!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+		}
+		clipboard.resolveRead(request, 'stale');
+		await pending;
+		assert.equal(firstModel.getText(), 'changed', change);
+	}
+
 	first.setSelection(new Selection(1, 8, 1, 8));
 	const validPaste = PasteAction.runCommand(services, undefined);
-	clipboard.resolveRead(3, '!');
+	clipboard.resolveRead(clipboard.readRequestCount - 1, '!');
 	await validPaste;
 	assert.equal(firstModel.getText(), 'changed!');
 
@@ -138,7 +160,7 @@ test('paste command drops a delayed clipboard read after focus, selection, or mo
 	const afterModelSwitch = PasteAction.runCommand(services, undefined);
 	first.setModel(replacement);
 	assert.equal(first.hasTextFocus(), true);
-	clipboard.resolveRead(4, '?');
+	clipboard.resolveRead(clipboard.readRequestCount - 1, '?');
 	await afterModelSwitch;
 	assert.deepEqual([firstModel.getText(), replacement.getText()], ['changed!', 'replacement']);
 	dom.window.close();
@@ -193,10 +215,31 @@ test('cut command keeps text when clipboard writing completes after selection or
 	await afterFocus;
 	assert.deepEqual([firstModel.getText(), secondModel.getText()], ['alpha beta', 'bravo']);
 
+	for (const change of ['selection', 'focus', 'readonly', 'escape'] as const) {
+		first.focus();
+		first.setSelection(new Selection(1, 1, 1, 6));
+		const pending = CutAction.runCommand(services, undefined);
+		if (change === 'selection') {
+			first.setSelection(new Selection(1, 7, 1, 11));
+			first.setSelection(new Selection(1, 1, 1, 6));
+		} else if (change === 'focus') {
+			second.focus();
+			first.focus();
+		} else if (change === 'readonly') {
+			first.updateOptions({ readOnly: true });
+			first.updateOptions({ readOnly: false });
+		} else {
+			first.getContainerDomNode().querySelector('.stanza-editor-input')!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+		}
+		clipboard.resolveWrite(clipboard.writtenTexts.length - 1);
+		await pending;
+		assert.equal(firstModel.getText(), 'alpha beta', change);
+	}
+
 	first.focus();
 	first.setSelection(new Selection(1, 1, 1, 6));
 	const validCut = CutAction.runCommand(services, undefined);
-	clipboard.resolveWrite(2);
+	clipboard.resolveWrite(clipboard.writtenTexts.length - 1);
 	await validCut;
 	assert.equal(firstModel.getText(), ' beta');
 	dom.window.close();

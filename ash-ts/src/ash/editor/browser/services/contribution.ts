@@ -1,4 +1,6 @@
 import { AbstractCodeEditorService } from './abstractCodeEditorService.js';
+import { DisposableMap, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
+import { type ICodeEditor } from '../editorBrowser.js';
 import { BrowserWorkerClientPort } from '../../../platform/webWorker/browser/browserWorkerClientPort.js';
 import { LanguageCompletionCatalogWorkerClient } from '../../common/languages/completion/languageCompletionCatalogWire.js';
 import { type LanguageCompletionWorkerFactory } from '../../common/languages/completion/languageCompletionService.js';
@@ -14,20 +16,35 @@ export function registerEditorBrowserContributions(): void {
 }
 
 class BrowserCodeEditorService extends AbstractCodeEditorService {
-	private activeEditor: import('../editorBrowser.js').ICodeEditor | null = null;
+	private readonly recentEditors: ICodeEditor[] = [];
+	private readonly focusListeners = this._register(new DisposableMap<ICodeEditor, DisposableStore>());
 
 	constructor() {
 		super();
-		this._register(this.onCodeEditorAdd(editor => this.activeEditor = editor));
+		this._register(toDisposable(() => { this.recentEditors.length = 0; }));
+		this._register(this.onCodeEditorAdd(editor => {
+			if (!this.recentEditors.includes(editor)) this.recentEditors.unshift(editor);
+			const listeners = new DisposableStore();
+			this.focusListeners.set(editor, listeners);
+			listeners.add(editor.onDidFocusEditorText(() => this.markActive(editor)));
+			listeners.add(editor.onDidFocusEditorWidget(() => this.markActive(editor)));
+			if (editor.hasWidgetFocus()) this.markActive(editor);
+		}));
 		this._register(this.onCodeEditorRemove(editor => {
-			if (this.activeEditor === editor) {
-				this.activeEditor = this.listCodeEditors().at(-1) ?? null;
-			}
+			this.focusListeners.deleteAndDispose(editor);
+			const index = this.recentEditors.indexOf(editor);
+			if (index >= 0) this.recentEditors.splice(index, 1);
 		}));
 	}
 
 	getActiveCodeEditor(): import('../editorBrowser.js').ICodeEditor | null {
-		return this.getFocusedCodeEditor() ?? this.activeEditor;
+		return this.getFocusedCodeEditor() ?? this.recentEditors.at(-1) ?? null;
+	}
+
+	private markActive(editor: ICodeEditor): void {
+		const index = this.recentEditors.indexOf(editor);
+		if (index >= 0) this.recentEditors.splice(index, 1);
+		this.recentEditors.push(editor);
 	}
 }
 

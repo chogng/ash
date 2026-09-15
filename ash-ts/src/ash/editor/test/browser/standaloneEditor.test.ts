@@ -1,3 +1,6 @@
+import { FormattingConflicts, FormattingKind, FormattingMode } from '../../contrib/format/browser/format.js';
+import { type DocumentFormattingEditProvider } from '../../common/languages.js';
+import { TextModel } from '../../common/model/textModel.js';
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
@@ -69,6 +72,19 @@ test("standalone service collection honors explicit first-scope overrides", () =
 	assert.equal(languages.isDisposed, false);
 	languages.dispose();
 	languageConfigurations.dispose();
+});
+
+test('standalone services own and release their default formatter selection', async () => {
+	using model = new TextModel('alpha');
+	const first: DocumentFormattingEditProvider = { provideDocumentFormattingEdits: () => [] };
+	const second: DocumentFormattingEditProvider = { provideDocumentFormattingEdits: () => [] };
+	const providers = [first, second];
+	using host = FormattingConflicts.setFormatterSelector(async choices => choices[1]);
+	assert.strictEqual(await FormattingConflicts.select(providers, model, FormattingMode.Explicit, FormattingKind.File), second);
+	using services = new StandaloneServiceCollection({});
+	assert.strictEqual(await FormattingConflicts.select(providers, model, FormattingMode.Explicit, FormattingKind.File), first);
+	services.dispose();
+	assert.strictEqual(await FormattingConflicts.select(providers, model, FormattingMode.Explicit, FormattingKind.File), second);
 });
 
 test("standalone theme APIs register, select, and project a named theme", () => {

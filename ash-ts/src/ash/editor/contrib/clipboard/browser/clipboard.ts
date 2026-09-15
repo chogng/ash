@@ -1,9 +1,11 @@
 import { isFirefox } from '../../../../base/browser/browser.js';
 import { addDisposableListener, getActiveDocument } from '../../../../base/browser/dom.js';
 import { type IKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
+import { raceCancellation } from '../../../../base/common/async.js';
+import { type CancellationToken } from '../../../../base/common/cancellation.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
-import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { isNative } from '../../../../base/common/platform.js';
 import * as nls from '../../../../nls.js';
 import { MenuId, MenusRegistry } from '../../../../platform/actions/common/actions.js';
@@ -15,10 +17,9 @@ import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { EditorAction, EditorContributionInstantiation, MultiCommand, registerEditorAction, registerEditorContribution, type Command, type ServicesAccessor } from '../../../browser/editorExtensions.js';
 import { ICodeEditorService } from '../../../browser/services/codeEditorService.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
-import { Selection } from '../../../common/core/selection.js';
 import { Handler, type IEditorContribution } from '../../../common/editorCommon.js';
 import { EditorContextKeys } from '../../../common/editorContextKeys.js';
-import { type ITextModel } from '../../../common/model.js';
+import { CodeEditorStateFlag, EditorStateCancellationTokenSource } from '../../editorState/browser/editorState.js';
 
 const CLIPBOARD_CONTEXT_MENU_GROUP = '9_cutcopypaste';
 const supportsCut = isNative || supportsDocumentCommand('cut');
@@ -92,14 +93,12 @@ if (PasteAction) {
 }
 
 async function pasteIntoEditor(editor: ICodeEditor, clipboardService: IClipboardService): Promise<void> {
-	if (editor.inComposition) return;
-	const model = editor.getModel();
-	const selections = editor.getSelections();
-	if (!model || !selections) return;
-	const version = model.getVersionId();
+	if (editor.inComposition || editor.getOption(EditorOption.readOnly) || !editor.hasModel()) return;
+	using resources = new DisposableStore();
+	const token = createClipboardCancellation(editor, resources);
 	NativeEditContextRegistry.get(editor.getId())?.handleWillPaste();
-	const text = await clipboardService.readText();
-	if (!text || !canApplyClipboardEdit(editor, model, version, selections)) return;
+	const text = await raceCancellation(clipboardService.readText(), token);
+	if (!text || token.isCancellationRequested) return;
 	const metadata = InMemoryClipboardMetadataManager.INSTANCE.get(text);
 	editor.trigger('keyboard', Handler.Paste, {
 		text,
@@ -126,12 +125,14 @@ class ExecCommandCopyWithSyntaxHighlightingAction extends EditorAction {
 	public async run(accessor: ServicesAccessor, editor: ICodeEditor): Promise<void> {
 		if (!editor.hasModel()) return;
 		if (!editor.getOption(EditorOption.emptySelectionClipboard) && editor.getSelection()?.isEmpty()) return;
+		const previous = CopyOptions.forceCopyWithSyntaxHighlighting;
 		CopyOptions.forceCopyWithSyntaxHighlighting = true;
 		try {
 			editor.focus();
-			await executeEditorCopy(editor, accessor.get(IClipboardService));
+			// Restore the option before waiting for the asynchronous clipboard write.
+			return executeEditorCopy(editor, accessor.get(IClipboardService));
 		} finally {
-			CopyOptions.forceCopyWithSyntaxHighlighting = false;
+			CopyOptions.forceCopyWithSyntaxHighlighting = previous;
 		}
 	}
 }
@@ -182,26 +183,30 @@ async function executeEditorClipboardCommand(editor: ICodeEditor, clipboardServi
 		await executeEditorCopy(editor, clipboardService);
 		return;
 	}
-	if (editor.inComposition) return;
-	const model = editor.getModel();
-	const selections = editor.getSelections();
-	if (!model || !selections) return;
-	const version = model.getVersionId();
+	if (editor.inComposition || editor.getOption(EditorOption.readOnly) || !editor.hasModel()) return;
+	using resources = new DisposableStore();
+	const token = createClipboardCancellation(editor, resources);
 	const document = editor.getContainerDomNode().ownerDocument;
 	CopyOptions.cutEventHasFired = false;
 	if (typeof document.execCommand === 'function') document.execCommand('cut');
 	if (CopyOptions.cutEventHasFired) return;
-	await writeEditorText(editor, clipboardService);
-	if (!canApplyClipboardEdit(editor, model, version, selections)) return;
+	if (token.isCancellationRequested) return;
+	await raceCancellation(writeEditorText(editor, clipboardService), token);
+	if (token.isCancellationRequested) return;
 	editor.trigger('keyboard', Handler.Cut, undefined);
 }
 
-function canApplyClipboardEdit(editor: ICodeEditor, model: ITextModel, version: number, selections: Selection[]): boolean {
-	return editor.getModel() === model
-		&& editor.hasTextFocus()
-		&& !editor.inComposition
-		&& model.getVersionId() === version
-		&& Selection.selectionsArrEqual(selections, editor.getSelections() ?? []);
+function createClipboardCancellation(editor: ICodeEditor, resources: DisposableStore): CancellationToken {
+	const request = new EditorStateCancellationTokenSource(editor, CodeEditorStateFlag.Value | CodeEditorStateFlag.Selection);
+	resources.add(toDisposable(() => request.dispose(true)));
+	resources.add(editor.onDidBlurEditorText(() => request.cancel()));
+	resources.add(editor.onDidCompositionStart(() => request.cancel()));
+	resources.add(editor.onDidChangeConfiguration(event => {
+		if (event.hasChanged(EditorOption.readOnly) && editor.getOption(EditorOption.readOnly)) {
+			request.cancel();
+		}
+	}));
+	return request.token;
 }
 
 async function executeEditorCopy(editor: ICodeEditor, clipboardService: IClipboardService): Promise<void> {

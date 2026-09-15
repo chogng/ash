@@ -2,6 +2,7 @@ import { MarkerDecorationsContribution } from '../../services/markerDecorations.
 import { IMarkerDecorationsService } from '../../../common/services/markerDecorations.js';
 import { getClientArea, h, isHTMLElement, scheduleAtNextAnimationFrame } from "../../../../base/browser/dom.js";
 import { type IKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
+import { trackFocus, type IFocusTracker } from '../../../../base/browser/focus.js';
 import { type IMouseWheelEvent } from '../../../../base/browser/mouseEvent.js';
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
@@ -208,6 +209,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	private readonly glyphWidgets = new Map<string, IGlyphMarginWidget>();
 	private observableInitialized = false;
 	private readonly rootDomNode!: HTMLDivElement;
+	private readonly widgetFocus!: IFocusTracker;
 	private readonly constructionOptions!: Omit<CodeEditorWidgetOptions, 'model'>;
 	private readonly onLanguageError!: (error: unknown) => void;
 	private readonly configuration: EditorConfiguration;
@@ -300,6 +302,9 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			this.rootDomNode = h(options.container.ownerDocument, 'div');
 			options.container.append(this.rootDomNode);
 			this._register(toDisposable(() => this.rootDomNode.remove()));
+			this.widgetFocus = this._register(trackFocus(this.rootDomNode));
+			this._register(this.widgetFocus.onDidFocus(() => this.focusEditorWidgetEmitter.fire()));
+			this._register(this.widgetFocus.onDidBlur(() => this.blurEditorWidgetEmitter.fire()));
 			this.attachModel(initialModel);
 			if (options.codeEditorService) {
 				this._register(toDisposable(() => options.codeEditorService?.removeCodeEditor(this)));
@@ -456,11 +461,9 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			modelStore.add(this.view.onWillPaste(event => this.willPasteEmitter.fire(event)));
 			modelStore.add(this.controller.editContext.onDidFocus(() => {
 				this.focusEditorTextEmitter.fire();
-				this.focusEditorWidgetEmitter.fire();
 			}));
 			modelStore.add(this.controller.editContext.onDidBlur(() => {
 				this.blurEditorTextEmitter.fire();
-				this.blurEditorWidgetEmitter.fire();
 			}));
 			this.userInputEvents = this.controller.userInputEvents;
 			const inputEvents = this.userInputEvents;
@@ -770,7 +773,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	}
 
 	hasWidgetFocus(): boolean {
-		return this.currentModel !== null && this.view.isWidgetFocused();
+		return this.currentModel !== null && this.widgetFocus.hasFocus;
 	}
 
 	getModel(): TextModel | null {
@@ -1025,6 +1028,8 @@ class EditorContextKeysManager extends Disposable {
 		this._register(editor.onDidChangeCursorSelection(() => this.updateSelection()));
 		this._register(editor.onDidFocusEditorText(() => this.updateFocus()));
 		this._register(editor.onDidBlurEditorText(() => this.updateFocus()));
+		this._register(editor.onDidFocusEditorWidget(() => this.updateFocus()));
+		this._register(editor.onDidBlurEditorWidget(() => this.updateFocus()));
 		this._register(editor.onDidCompositionStart(() => this.isComposing.set(true)));
 		this._register(editor.onDidCompositionEnd(() => this.isComposing.set(false)));
 		this.editorSimpleInput.set(editor.isSimpleWidget);

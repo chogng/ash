@@ -1,10 +1,11 @@
-import { addDisposableListener, stopEvent } from "../../base/browser/dom.js";
+import { addDisposableListener, getActiveElement, isEditableElement, stopEvent } from "../../base/browser/dom.js";
 import { type IDisposable } from "../../base/common/lifecycle.js";
 import { type TextModel } from "../common/model/textModel.js";
 import { CursorMoveCommands } from '../common/cursor/cursorMoveCommands.js';
 import { CursorChangeReason } from '../common/cursorEvents.js';
 import { type IViewModel } from '../common/viewModel.js';
-import { registerEditorContribution, SelectAllCommand } from "./editorExtensions.js";
+import { registerEditorContribution, SelectAllCommand, UndoCommand, RedoCommand } from "./editorExtensions.js";
+import { EditorOption } from '../common/config/editorOptions.js';
 import { ICodeEditorService } from './services/codeEditorService.js';
 import { type View } from "./view.js";
 
@@ -20,6 +21,23 @@ SelectAllCommand.addImplementation(100, 'code-editor', accessor => {
 	editor.setSelection(range, 'keyboard');
 	return true;
 });
+
+for (const [command, operation] of [[UndoCommand, 'undo'], [RedoCommand, 'redo']] as const) {
+	command.addImplementation(100, 'code-editor', accessor => {
+		const editors = accessor.get(ICodeEditorService);
+		const editor = editors.getFocusedCodeEditor() ?? editors.getActiveCodeEditor();
+		const model = editor?.getModel();
+		if (!editor || !model) { return false; }
+		const activeElement = getActiveElement();
+		if (!editor.hasTextFocus() && activeElement && isEditableElement(activeElement)) { return false; }
+		if (!editor.getOption(EditorOption.readOnly)) {
+			model[operation]();
+			const selection = editor.getSelection();
+			if (selection) { editor.revealRange(selection); }
+		}
+		return true;
+	});
+}
 
 export const enum NavigationCommandRevealType {
 	Regular = 0,

@@ -241,12 +241,26 @@ export function readEditorClipboardText(clipboardData: IReadableClipboardData, o
 export function readEditorHtmlText(html: string, ownerDocument: Document): string {
 	if (html.length === 0) return '';
 	const fragment = sanitizeHtmlToFragment(html, { ownerDocument, config: {} });
-	const parts: string[] = [];
+	// Block boundaries separate content; explicit breaks and text whitespace are retained.
+	const parts: Array<string | null> = [];
 	appendHtmlClipboardText(fragment, parts);
-	return parts.join('').replaceAll('\u00a0', ' ').replace(/\n{3,}/g, '\n\n').replace(/^\n|\n$/g, '');
+	let text = '';
+	let blockBoundary = false;
+	for (const part of parts) {
+		if (part === null) {
+			blockBoundary = true;
+		} else if (part.length > 0) {
+			if (blockBoundary && text.length > 0 && !text.endsWith('\n')) {
+				text += '\n';
+			}
+			text += part;
+			blockBoundary = false;
+		}
+	}
+	return text.replaceAll('\u00a0', ' ');
 }
 
-function appendHtmlClipboardText(node: Node, parts: string[]): void {
+function appendHtmlClipboardText(node: Node, parts: Array<string | null>): void {
 	if (node.nodeType === node.TEXT_NODE) {
 		parts.push(node.textContent ?? '');
 		return;
@@ -255,21 +269,17 @@ function appendHtmlClipboardText(node: Node, parts: string[]): void {
 	const element = node.nodeType === node.ELEMENT_NODE ? node as HTMLElement : undefined;
 	if (element && (element.localName === 'script' || element.localName === 'style' || element.localName === 'noscript')) return;
 	if (element?.localName === 'br') {
-		appendLineBreak(parts);
+		parts.push('\n');
 		return;
 	}
 	const block = element !== undefined && HTML_CLIPBOARD_BLOCK_ELEMENTS.has(element.localName);
-	if (block) appendLineBreak(parts);
+	if (block) parts.push(null);
 	for (const child of node.childNodes) appendHtmlClipboardText(child, parts);
-	if (block) appendLineBreak(parts);
-}
-
-function appendLineBreak(parts: string[]): void {
-	if (parts.length === 0 || parts.at(-1) !== '\n') parts.push('\n');
+	if (block) parts.push(null);
 }
 
 const HTML_CLIPBOARD_BLOCK_ELEMENTS = new Set([
 	'address', 'article', 'aside', 'blockquote', 'div', 'dl', 'dt', 'dd', 'fieldset', 'figcaption',
 	'figure', 'footer', 'form', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'hr', 'li',
-	'main', 'nav', 'ol', 'p', 'section', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr', 'ul',
+	'main', 'nav', 'ol', 'p', 'pre', 'section', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr', 'ul',
 ]);

@@ -1,3 +1,11 @@
+import { CommandsRegistry } from '../../../src/ash/platform/commands/common/commands.js';
+import { IContextKeyService } from '../../../src/ash/platform/contextkey/common/contextkey.js';
+import { ICodeEditorService } from '../../../src/ash/editor/browser/services/codeEditorService.js';
+import { observableCodeEditor } from '../../../src/ash/editor/browser/observableCodeEditor.js';
+import { FindController } from '../../../src/ash/editor/contrib/find/browser/findController.js';
+import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
+import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
+import { CutAction, PasteAction } from '../../../src/ash/editor/contrib/clipboard/browser/clipboard.js';
 import { FontStyle, MetadataConsts } from '../../../src/ash/editor/common/encodedTokenAttributes.js';
 import { SparseMultilineTokens } from '../../../src/ash/editor/common/tokens/sparseMultilineTokens.js';
 import { CopyPasteController } from '../../../src/ash/editor/contrib/dropOrPasteInto/browser/copyPasteController.js';
@@ -76,6 +84,16 @@ interface ViewZoneState {
 }
 
 interface StandaloneHarness {
+	runEditorActivity(): Promise<boolean[]>;
+	runHistoryCommands(useAlias: boolean): Promise<string[]>;
+	runFocusRouting(): Promise<{
+		states: { stage: string; text: boolean; widget: boolean; observedText: boolean; observedWidget: boolean; contextText: boolean; contextWidget: boolean; widgetEvents: string }[];
+		events: string[];
+		activeAfterBlur: boolean;
+		values: string[];
+		activeAfterDispose: boolean;
+	}>;
+
 	runFormatterChoice(outcome: 'second' | 'empty' | 'decline' | 'error' | 'cancel' | 'silent' | 'languageChoice' | 'languageResult'): Promise<{ value: string; calls: string[]; modes: number[]; errors: string[] }>;
 
 	runOverlappingFormatting(cancel: boolean): Promise<{ value: string; ranges: string[]; cancelled: boolean }>;
@@ -92,6 +110,8 @@ interface StandaloneHarness {
 	prepareLineCopy(emptyTail?: boolean): void;
 	prepareBrackets(value: string, columns: number[], readOnly?: boolean): void;
 	prepareMulticursor(): void;
+	runDeferredRichCopy(fail: boolean): Promise<{ pendingHtml: string; finishedHtml: string; rejected: boolean; writtenText: string }>;
+	runDeferredClipboard(command: 'cut' | 'paste', change: 'none' | 'selection' | 'focus' | 'readonly' | 'composition' | 'escape' | 'model' | 'dispose'): Promise<{ value: string; finishedBeforeTransfer: boolean }>;
 	runDeferredPaste(change: 'none' | 'writableAgain' | 'selection' | 'composition' | 'escape'): Promise<{ value: string; handled: boolean; finishedBeforeDecode: boolean }>;
 	runDeferredDrop(change: 'none' | 'readonly' | 'writableAgain'): Promise<{ value: string; selectionUnchanged: boolean; handled: boolean }>;
 	runLineAction(id: string): Promise<void>;
@@ -473,6 +493,215 @@ window.ashStandaloneIntegration = {
 		callerEditor.setValue('alpha\nbeta');
 		callerEditor.setSelection(new stanza.Selection(1, 1, 2, 5));
 		callerEditor.focus();
+	},
+	runEditorActivity: async () => {
+		const editors = StandaloneServices.get().instantiationService.get(ICodeEditorService);
+		const outside = document.createElement('button');
+		const container = document.createElement('div');
+		document.body.append(outside, container);
+		callerEditor.focus();
+		ownedEditor.focus();
+		callerEditor.focus();
+		const third = stanza.editor.create(container, { value: 'third' });
+		try {
+			outside.focus();
+			await new Promise(resolve => setTimeout(resolve, 0));
+			const creationPreservesActive = editors.getActiveCodeEditor() === callerEditor;
+			callerEditor.setModel(null);
+			callerEditor.setModel(callerModel);
+			callerEditor.focus();
+			outside.focus();
+			await new Promise(resolve => setTimeout(resolve, 0));
+			const switchPreservesActive = editors.getActiveCodeEditor() === callerEditor;
+			callerEditor.dispose();
+			const removalRestoresRecent = editors.getActiveCodeEditor() === ownedEditor;
+			editors.removeCodeEditor(ownedEditor);
+			ownedEditor.focus();
+			const removedEditorIgnored = editors.getActiveCodeEditor() === third;
+			return [creationPreservesActive, switchPreservesActive, removalRestoresRecent, removedEditorIgnored];
+		} finally {
+			third.dispose();
+			container.remove();
+			outside.remove();
+		}
+	},
+	runHistoryCommands: async useAlias => {
+		const services = StandaloneServices.get().instantiationService;
+		const outside = document.createElement('button');
+		document.body.append(outside);
+		callerEditor.setValue('alpha');
+		ownedEditor.setValue('bravo');
+		callerEditor.focus();
+		callerEditor.executeEdits('test', [{ range: new stanza.Range(1, 6, 1, 6), text: '!' }]);
+		callerEditor.pushUndoStop();
+		const values: string[] = [];
+		const run = async (operation: 'undo' | 'redo'): Promise<void> => {
+			const command = CommandsRegistry.getCommand(useAlias ? `default:${operation}` : operation)!;
+			await services.invokeFunction(accessor => command(accessor));
+			values.push(`${callerEditor.getValue()}|${ownedEditor.getValue()}`);
+		};
+		try {
+			await run('undo');
+			callerEditor.updateOptions({ readOnly: true });
+			await run('redo');
+			callerEditor.updateOptions({ readOnly: false });
+			outside.focus();
+			await new Promise(resolve => setTimeout(resolve, 0));
+			await run('redo');
+			callerEditor.updateOptions({ readOnly: true });
+			await run('undo');
+			callerEditor.updateOptions({ readOnly: false });
+			callerEditor.getContribution<FindController>(FindController.ID)!.open({ showReplace: true });
+			callerEditor.getDomNode()!.querySelector<HTMLInputElement>('input[aria-label="Find"]')!.focus();
+			await run('undo');
+			callerEditor.focus();
+			await run('undo');
+			return values;
+		} finally {
+			callerEditor.updateOptions({ readOnly: false });
+			outside.remove();
+		}
+	},
+	runFocusRouting: async () => {
+		callerEditor.setValue('alpha');
+		ownedEditor.setValue('bravo');
+		const outside = document.createElement('button');
+		outside.textContent = 'Editor action';
+		document.body.append(outside);
+		outside.focus();
+		await new Promise(resolve => setTimeout(resolve, 0));
+		using listeners = new DisposableStore();
+		const events: string[] = [];
+		listeners.add(callerEditor.onDidFocusEditorWidget(() => events.push('focus')));
+		listeners.add(callerEditor.onDidBlurEditorWidget(() => events.push('blur')));
+		const observed = observableCodeEditor(callerEditor);
+		const states: { stage: string; text: boolean; widget: boolean; observedText: boolean; observedWidget: boolean; contextText: boolean; contextWidget: boolean; widgetEvents: string }[] = [];
+		const read = (stage: string): void => {
+			const context = callerEditor.invokeWithinContext(accessor => accessor.get(IContextKeyService));
+			states.push({
+				stage, text: callerEditor.hasTextFocus(), widget: callerEditor.hasWidgetFocus(),
+				observedText: observed.isTextFocused.get(), observedWidget: observed.isFocused.get(),
+				contextText: context.getValue<boolean>('editorTextFocus') ?? false,
+				contextWidget: context.getValue<boolean>('editorFocus') ?? false,
+				widgetEvents: events.join(','),
+			});
+		};
+		try {
+			callerEditor.focus();
+			read('text');
+			callerEditor.getContribution<FindController>(FindController.ID)!.open({ showReplace: true });
+			await new Promise(resolve => setTimeout(resolve, 0));
+			read('find');
+			callerEditor.getDomNode()!.querySelector<HTMLInputElement>('input[aria-label="Replace"]')!.focus();
+			await new Promise(resolve => setTimeout(resolve, 0));
+			read('replace');
+			outside.focus();
+			await new Promise(resolve => setTimeout(resolve, 0));
+			read('outside');
+			const services = StandaloneServices.get().instantiationService;
+			const editors = services.get(ICodeEditorService);
+			const activeAfterBlur = editors.getActiveCodeEditor() === callerEditor;
+			const action = [...EditorExtensionsRegistry.getEditorActions()].find(action => action.id === 'editor.action.copyLinesDownAction');
+			if (!action) throw new Error('Copy line action is unavailable');
+			await services.invokeFunction(accessor => action.runCommand(accessor, undefined));
+			const values = [callerEditor.getValue(), ownedEditor.getValue()];
+			callerEditor.dispose();
+			await new Promise(resolve => setTimeout(resolve, 0));
+			return { states, events, activeAfterBlur, values, activeAfterDispose: editors.getActiveCodeEditor() === ownedEditor };
+		} finally {
+			outside.remove();
+		}
+	},
+	runDeferredRichCopy: async fail => {
+		callerEditor.setValue('const value = 1;');
+		callerEditor.setSelection(new stanza.Selection(1, 1, 1, 6));
+		callerEditor.updateOptions({ copyWithSyntaxHighlighting: false });
+		callerEditor.focus();
+		const clipboard = callerEditor.invokeWithinContext(accessor => accessor.get(IClipboardService));
+		const writeText = clipboard.writeText;
+		const execCommand = document.execCommand;
+		let finishTransfer!: () => void;
+		const transfer = new Promise<void>(resolve => { finishTransfer = resolve; });
+		let writtenText = '';
+		clipboard.writeText = async text => {
+			writtenText = text;
+			await transfer;
+			if (fail) throw new Error('Clipboard write rejected');
+		};
+		document.execCommand = () => false;
+		try {
+			const action = [...EditorExtensionsRegistry.getEditorActions()].find(action => action.id === 'editor.action.clipboardCopyWithSyntaxHighlightingAction');
+			if (!action) throw new Error('Rich copy action is unavailable');
+			const completion = Promise.resolve(callerEditor.invokeWithinContext(accessor => action.runEditorCommand(accessor, callerEditor, {}))).then(() => false, () => true);
+			const input = document.activeElement!;
+			const pendingData = new DataTransfer();
+			input.dispatchEvent(new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: pendingData }));
+			finishTransfer();
+			const rejected = await completion;
+			const finishedData = new DataTransfer();
+			input.dispatchEvent(new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: finishedData }));
+			return { pendingHtml: pendingData.getData('text/html'), finishedHtml: finishedData.getData('text/html'), rejected, writtenText };
+		} finally {
+			finishTransfer();
+			clipboard.writeText = writeText;
+			document.execCommand = execCommand;
+		}
+	},
+	runDeferredClipboard: async (command, change) => {
+		callerEditor.setValue('alpha');
+		callerEditor.setSelection(new stanza.Selection(1, 1, 1, 6));
+		callerEditor.focus();
+		const clipboard = callerEditor.invokeWithinContext(accessor => accessor.get(IClipboardService));
+		const readText = clipboard.readText;
+		const writeText = clipboard.writeText;
+		const execCommand = document.execCommand;
+		let finishTransfer!: () => void;
+		const transfer = new Promise<void>(resolve => { finishTransfer = resolve; });
+		clipboard.readText = async () => { await transfer; return 'omega'; };
+		clipboard.writeText = async () => { await transfer; };
+		if (command === 'cut') {
+			document.execCommand = () => false;
+		}
+		try {
+			const action = command === 'cut' ? CutAction : PasteAction;
+			if (!action) throw new Error('Clipboard command is unavailable');
+			let finished = false;
+			const completion = Promise.resolve(callerEditor.invokeWithinContext(accessor => action.runCommand(accessor, undefined))).then(() => { finished = true; });
+			const input = document.activeElement!;
+			if (change === 'selection') {
+				callerEditor.setPosition(new stanza.Position(1, 3));
+				callerEditor.setSelection(new stanza.Selection(1, 1, 1, 6));
+			} else if (change === 'focus') {
+				ownedEditor.focus();
+				callerEditor.focus();
+			} else if (change === 'readonly') {
+				callerEditor.updateOptions({ readOnly: true });
+				callerEditor.updateOptions({ readOnly: false });
+			} else if (change === 'composition') {
+				const target = input instanceof HTMLTextAreaElement ? input : (input as HTMLElement & { editContext?: EventTarget }).editContext;
+				if (!target) throw new Error('Composition target is unavailable');
+				target.dispatchEvent(new CompositionEvent('compositionstart', { data: '' }));
+				target.dispatchEvent(new CompositionEvent('compositionend', { data: '' }));
+			} else if (change === 'escape') {
+				input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+			} else if (change === 'model') {
+				callerEditor.setModel(null);
+				callerEditor.setModel(callerModel);
+				callerEditor.setSelection(new stanza.Selection(1, 1, 1, 6));
+			} else if (change === 'dispose') {
+				callerEditor.dispose();
+			}
+			await new Promise(resolve => setTimeout(resolve, 0));
+			const finishedBeforeTransfer = finished;
+			finishTransfer();
+			await completion;
+			return { value: callerModel.getValue(), finishedBeforeTransfer };
+		} finally {
+			finishTransfer();
+			clipboard.readText = readText;
+			clipboard.writeText = writeText;
+			document.execCommand = execCommand;
+		}
 	},
 	runDeferredPaste: async change => {
 		callerEditor.setValue('alpha');

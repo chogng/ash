@@ -30,6 +30,8 @@ import { type IWorkspaceFolder } from '../../../platform/workspace/common/worksp
 import { ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
 import { BrowserClipboardService } from '../../../platform/clipboard/browser/browserClipboardService.js';
 import { IClipboardService } from '../../../platform/clipboard/common/clipboardService.js';
+import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/common/contextkey.js';
+import { FormattingConflicts } from '../../contrib/format/browser/format.js';
 
 export interface StandaloneServiceOverrides {
 	readonly languageService?: IAshLanguageService;
@@ -57,6 +59,7 @@ export class StandaloneServiceCollection extends Disposable {
 		super();
 		const instantiationService = this.instantiationService = this._register(new ServiceContainer());
 		instantiationService.registerInstance(ILogService, new NullLoggerService());
+		instantiationService.registerSingleton(IContextKeyService, () => new ContextKeyService());
 		instantiationService.registerSingleton(IMarkerService, () => new MarkerService());
 		instantiationService.registerSingleton(IMarkerDecorationsService, () => instantiationService.createInstance(MarkerDecorationsService));
 		instantiationService.registerInstance(IClipboardService, new BrowserClipboardService(window.navigator.clipboard));
@@ -97,6 +100,7 @@ export class StandaloneServiceCollection extends Disposable {
 		this.languageFeaturesService = instantiationService.get(ILanguageFeaturesService);
 		if (!overrides.languageService) this._register(registerBuiltinLanguageDescriptions(this.languageService.languages));
 		if (!overrides.languageConfigurationService) this._register(registerBuiltinLanguageConfigurations(this.languageConfigurationService));
+		this._register(FormattingConflicts.setFormatterSelector(async formatters => formatters[0]));
 	}
 }
 
