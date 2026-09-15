@@ -20,11 +20,24 @@ Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保
 
 ### Windows 开发环境
 
-- 默认运行 `powershell -ExecutionPolicy Bypass -File scripts/ash-rs/setup-windows.ps1` 只检查工具、Node/pnpm 固定版本、Rust 编译器和 Visual Studio 组件；缺项汇总输出，退出码非零。检查通过不代表产品已经编译通过。
-- 只有显式传入 `-Install` 才调用 winget、Visual Studio Installer 和 rustup 安装 Rust 构建依赖；Node/pnpm 按根 README 准备。初始化不构建 workspace，不安装 `cargo-insta` 等测试维护工具。
-- Windows 本机拥有 MSVC、Windows SDK 和桌面运行环境。安装后使用对应目标架构的 Visual Studio Developer PowerShell 构建；安装脚本不修改全局 `CC`、`CXX`、`LIBCLANG_PATH`，也不承诺把子进程环境传回原终端。LLVM 的 `bin` 目录需在构建终端 PATH 中；使用自定义 LLVM 路径时，在该终端设置 `LIBCLANG_PATH` 指向含 `libclang.dll` 的目录。
+- 开发者根据下表自行安装并确认工具版本；`cargo-insta` 等测试维护工具按任务需要另行准备。项目依赖安装入口保留 Node、pnpm 版本校验，编译器和 SDK 缺项由构建工具报告。
+- Windows 本机拥有 MSVC、Windows SDK 和桌面运行环境。安装后使用对应目标架构的 Visual Studio Developer PowerShell 构建。LLVM 的 `bin` 目录需在构建终端 PATH 中；使用自定义 LLVM 路径时，在该终端设置 `LIBCLANG_PATH` 指向含 `libclang.dll` 的目录。无需全局设置 `CC`、`CXX`。
 - 普通构建和启动入口只准备项目依赖与产物，不调用系统工具安装器。分别用 `just ash`、`just ash-desktop`、`just app` 启动产品。
 - 当前未提供 Dev Container。后续如提供，它只拥有容器内的 Linux 开发工具与依赖；Windows 桌面构建、调试和平台验证仍在 Windows 上完成。
+
+| 工具 | 版本要求与来源 | 安装来源或组件 |
+| --- | --- | --- |
+| Node.js | [`.nvmrc`](../.nvmrc) 声明的版本 | Node.js 官方发行包或 fnm |
+| pnpm | 根 [`package.json`](../package.json) 的 `packageManager` | npm；操作见根 README |
+| Rust | [`rust-toolchain.toml`](../rust-toolchain.toml) 的工具链与组件 | rustup |
+| Python | [`scripts/pyproject.toml`](../scripts/pyproject.toml) 的 `requires-python`；建议 3.12 | python.org 或 winget `Python.Python.3.12`；确保 `python` 指向真实解释器 |
+| Visual Studio Build Tools | 2022 / MSVC v143，匹配目标架构 | Visual Studio Installer 的“使用 C++ 的桌面开发” |
+| Windows SDK | 提供目标架构头文件和库；未固定补丁版本 | Visual Studio Installer 的 Windows SDK 组件 |
+| Git | 未固定版本，命令需在 PATH 中可用 | git-scm.com 或 winget `Git.Git` |
+| ripgrep | 开发工具未固定版本；产品使用独立锁定产物 | winget `BurntSushi.ripgrep.MSVC` |
+| just | 未固定版本，命令需在 PATH 中可用 | winget `Casey.Just` |
+| CMake | 未固定版本，命令需在 PATH 中可用 | cmake.org 或 winget `Kitware.CMake` |
+| LLVM/Clang | 未固定版本；需要 Clang 和 libclang | LLVM 官方发行包或 winget `LLVM.LLVM` |
 
 ### 项目命令
 
@@ -168,11 +181,9 @@ just bench-build ash-keybinding --jobs 4 --compare .build/build-health/<run>/rep
 
 `scripts/` 根目录保存跨产品仓库工具：`just-shell.py` 提供 Just 的跨平台 shell，`cargo.py` 为整个 Cargo workspace 准备锁定的构建输入，`format.py` 统一已有格式化器，`test-python.py` 按 `scripts`、`ash-code`、`build`、`release` 分别运行 Python 测试并在不指定范围时聚合执行。
 
-Desktop 的 Node、Browser 和 Playwright 测试入口与 loader 归 `ash-ts/test/`，根 `package.json` 直接调用 `ash-ts` 的公开测试命令。`scripts/ash-code/` 保存 Code TUI 的源码运行和完整开发包运行入口；`scripts/ash-rs/` 保存共享 Rust 后端的开发环境操作。`app` 当前没有独立脚本，因此不创建空占位文件。
+Desktop 的 Node、Browser 和 Playwright 测试入口与 loader 归 `ash-ts/test/`，根 `package.json` 直接调用 `ash-ts` 的公开测试命令。`scripts/ash-code/` 保存 Code TUI 的源码运行和完整开发包运行入口。`app` 当前没有独立脚本，因此不创建空占位文件。
 
 `scripts/ash-code/run.py` 用一次 Cargo 调用构建 Code TUI、本地 daemon 和当前平台沙箱程序，再把这些可执行文件放入按内容区分的 `.build/ash-development/` 目录后启动；这个小目录避免 Windows 上仍在运行的程序阻塞下一次构建，不是产品包。技能、扩展和产品服务直接读取源码。`scripts/ash-code/run_package.py` 只服务于显式的完整开发包运行。只有形成真实、可运行的操作契约时才新增入口；当前没有独立的远端 SSH 端到端测试，因此不提供空入口。
-
-`scripts/ash-rs/setup-windows.ps1` 是 Windows 开发环境检查和显式安装入口，具体边界见下文。产品包仍从锁文件组装自身的 `rg.exe`。
 
 完整开发包仍由 `build/ash-package/prepareDevPackage.ts` 拥有。它在一次 Cargo 调用中构建全部第一方程序，然后复制并校验受管资源、计算整包摘要，最后通过 Package Store 发布不可变代次。日常 `just ash` 不执行这些组装与发布步骤；只有验证包布局、跨产品交付、回滚或远端运行时边界时才使用 `just ash-package` 或 `just ash-package-run`。Cargo 并发由 Cargo 自己决定；开发者仍可按需显式设置 `CARGO_BUILD_JOBS`。
 
