@@ -45,7 +45,7 @@ import "./contrib/sectionHeaders/browser/sectionHeaders.contribution.js";
 import "./contrib/smartSelect/browser/smartSelectController.js";
 import "./contrib/stickyScroll/browser/stickyScrollContribution.js";
 import "./contrib/symbolIcons/browser/symbolIcons.contribution.js";
-import "./contrib/suggest/browser/suggest.contribution.js";
+import "./contrib/suggest/browser/suggestController.js";
 import './contrib/toggleTabFocusMode/browser/toggleTabFocusMode.js';
 import "./contrib/tokenization/browser/tokenization.contribution.js";
 import "./contrib/unicodeHighlighter/browser/unicodeHighlighter.contribution.js";

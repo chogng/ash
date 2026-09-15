@@ -8,6 +8,7 @@ test('Chat input resizes with wrapped text and retains keyboard focus', async ({
 	const editor = host.locator('.ash-chat-input-editor');
 	const input = editor.locator('.stanza-editor-input');
 	await expect(editor).toBeVisible();
+	await expect(editor.locator('.stanza-editor-completion')).toHaveCount(1);
 	await host.evaluate(element => element.style.width = '180px');
 	await input.focus();
 	await page.keyboard.insertText('word '.repeat(80));

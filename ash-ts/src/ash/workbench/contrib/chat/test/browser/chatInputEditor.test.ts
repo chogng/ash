@@ -48,6 +48,7 @@ test('Chat registers its focused editor for global commands and removes it on di
 	editor.value = 'message';
 	editor.focus();
 	assert.equal(editors.listCodeEditors().length, 1);
+	assert.equal(editor.element.querySelectorAll('.stanza-editor-completion').length, 1);
 	assert.strictEqual(editors.getFocusedCodeEditor(), editors.listCodeEditors()[0]);
 	await services.invokeFunction(accessor => SelectAllCommand.runCommand(accessor, undefined));
 	assert.deepEqual(editors.getFocusedCodeEditor()?.getSelection(), new Selection(1, 1, 1, 8));

@@ -1885,6 +1885,22 @@ test('DropIntoEditorController inserts one decoded text file at the captured pos
 	dom.window.close();
 });
 
+test('Suggest registration follows editor enablement and model disposal', async () => {
+	await import('../../../contrib/suggest/browser/suggestController.js');
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	using cleanup = { [Symbol.dispose]: () => dom.window.close() };
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const container = requiredElement(dom.window.document, 'main');
+	for (const enabled of [false, true]) {
+		using model = new TextModel('alpha');
+		using editor = createTestCodeEditor({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), suggestions: enabled });
+		assert.equal(editor.getContribution('editor.contrib.suggest') !== null, enabled);
+		assert.equal(container.querySelectorAll('.stanza-editor-completion').length, enabled ? 1 : 0);
+		editor.setModel(null);
+		assert.equal(container.querySelectorAll('.stanza-editor-completion').length, 0);
+	}
+});
+
 function textDropEvent(targetWindow: typeof browserEnvironment.window, text: string, clientX = 0, clientY = 0): DragEvent {
 	return transferDropEvent(targetWindow, {
 		types: ['text/plain'],

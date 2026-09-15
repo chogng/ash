@@ -4,7 +4,7 @@
 
 ## 当前结论
 
-- 诊断导航与多光标注册分别回收到 `gotoError.ts`、`multicursor.ts`，两个独立注册文件退出。诊断装饰、多光标输入和选区高亮继续由原对象承担，注册顺序不变。Suggest 的独立注册入口暂保留：聊天输入框直接导入并手动创建 SuggestController，合并前须先解决自动装配与手动装配的边界，避免出现第二份控制器。
+- 诊断导航与多光标注册分别回收到 `gotoError.ts`、`multicursor.ts`，两个独立注册文件退出。诊断装饰、多光标输入和选区高亮继续由原对象承担，注册顺序不变。Suggest 注册现已回收到 `suggestController.ts`，旧注册文件退出；聊天输入框使用已有的 `suggestions: false` 关闭普通补全的自动装配，继续由聊天宿主创建专用控制器。回归测试先复现了聊天框出现两个补全组件，再验证修复后只有一个；此项不代表 Suggest 的全部上游契约已对齐。
 
 - 批量迁移 Code Action、Hover、Sticky Scroll 的注册入口至上游对应路径 `codeActionContributions.ts`、`hoverContribution.ts`、`stickyScrollContribution.ts`。旧路径退出，bundle 保持原来的注册顺序与创建条件；控制器行为和生命周期未改。此项仅完成注册文件落位，不代表三个功能的全部公开 API 已对齐。Middle Scroll 与 Placeholder 的 `.contribution.ts` 是双方已有入口，继续保留。
 
