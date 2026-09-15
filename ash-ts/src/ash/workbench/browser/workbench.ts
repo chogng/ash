@@ -670,8 +670,6 @@ export class Workbench extends Disposable {
 			fileService,
 			textFileService,
 			textMateService,
-			languageFeaturesService,
-			languageConfigurationService,
 			languageResolver: languageService,
 			diffService,
 			instantiationService,

@@ -9,8 +9,9 @@ import { assertDefined } from "../../../../base/common/types.js";
 import * as strings from '../../../../base/common/strings.js';
 import type { URI } from "../../../../base/common/uri.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
-import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
-import type { ILanguageConfigurationService } from '../../../../editor/common/languages/languageConfigurationRegistry.js';
+import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
+import { ILanguageConfigurationService } from '../../../../editor/common/languages/languageConfigurationRegistry.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { type EditorInput } from "../../../browser/parts/editor/editorInput.js";
 import { type IEditorPane } from "../../../browser/parts/editor/editorPane.js";
 import { EditorPaneVisibility } from "../../../browser/parts/editor/editorPane.js";
@@ -18,7 +19,7 @@ import { CODE_EDITOR_ID } from "./codeEditorInput.js";
 import { type ITextResourceStore } from "../../../../editor/common/services/textResourceStore.js";
 import { CodeEditorWidget, type CodeEditorWidgetOptions } from '../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
 import { type ICodeEditorViewState } from '../../../../editor/common/editorCommon.js';
-import { type ITextModelResourceService, type TextModelReference } from "../../../../editor/common/services/textModelResourceService.js";
+import { ITextModelResourceService, type TextModelReference } from "../../../../editor/common/services/textModelResourceService.js";
 import { type EditorTextDirection } from "../../../../editor/browser/view.js";
 import { type EditorLineWrapping } from "../../../../editor/common/config/editorOptions.js";
 import { type IWorkingCopy, type IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
@@ -49,22 +50,18 @@ export interface EditorPanePart extends IDisposable {
 
 export interface EditorPanePartOptions extends CodeEditorWidgetOptions {
 	readonly textMateService?: ITextMateService;
-	readonly languageFeaturesService?: ILanguageFeaturesService;
-	readonly languageConfigurationService?: ILanguageConfigurationService;
+	readonly languageFeaturesService: ILanguageFeaturesService;
+	readonly languageConfigurationService: ILanguageConfigurationService;
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
-	readonly instantiationService?: CodeEditorWidgetOptions["instantiationService"];
+	readonly instantiationService: IInstantiationService;
 	readonly accessibilityService?: IAccessibilityService;
 }
 
 export interface EditorPaneOptions {
-	readonly modelService: ITextModelResourceService;
 	readonly workingCopyService?: IWorkingCopyService;
 	readonly createPart?: (options: EditorPanePartOptions) => EditorPanePart;
 	readonly textMateService?: ITextMateService;
-	readonly languageFeaturesService?: ILanguageFeaturesService;
-	readonly languageConfigurationService?: ILanguageConfigurationService;
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
-	readonly instantiationService?: CodeEditorWidgetOptions["instantiationService"];
 	readonly accessibilityService?: IAccessibilityService;
 	readonly lineWrapping?: EditorLineWrapping;
 	readonly wrappingIndent?: CodeEditorWidgetOptions['wrappingIndent'];
@@ -121,7 +118,6 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 	private readonly part = this._register(new MutableDisposable<EditorPanePart>());
 	private readonly statusListener = this._register(new MutableDisposable<IDisposable>());
 	private readonly statusChangeEmitter = this._register(new Emitter<void>());
-	private readonly modelService: ITextModelResourceService;
 	private readonly createPart: (options: EditorPanePartOptions) => EditorPanePart;
 	private container: HTMLDivElement | undefined;
 	private dimension: IDimension = { width: 0, height: 0 };
@@ -134,17 +130,19 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 		return this.workingCopySlot.value;
 	}
 
-	constructor(private readonly resourceStore: ITextResourceStore, private readonly options: EditorPaneOptions) {
+	constructor(
+		private readonly resourceStore: ITextResourceStore,
+		private readonly options: EditorPaneOptions,
+		@ITextModelResourceService private readonly modelService: ITextModelResourceService,
+		@ILanguageFeaturesService private readonly languageFeaturesService: ILanguageFeaturesService,
+		@ILanguageConfigurationService private readonly languageConfigurationService: ILanguageConfigurationService,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
+	) {
 		super();
 		if (!resourceStore || typeof resourceStore.resolve !== "function" || typeof resourceStore.save !== "function" || typeof resourceStore.onDidChange !== "function") {
 			this.dispose();
 			throw new TypeError("Code editor pane requires a text resource store");
 		}
-		if (!options || !options.modelService || typeof options.modelService.acquire !== "function") {
-			this.dispose();
-			throw new TypeError("Code editor pane requires a text model service");
-		}
-		this.modelService = options.modelService;
 		this.createPart = options.createPart ?? (partOptions => new CodeEditorWidget(partOptions));
 	}
 
@@ -177,10 +175,10 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 				languageId,
 				model: modelReference.model,
 				textMateService: this.options.textMateService,
-				languageFeaturesService: this.options.languageFeaturesService,
-				languageConfigurationService: this.options.languageConfigurationService,
+				languageFeaturesService: this.languageFeaturesService,
+				languageConfigurationService: this.languageConfigurationService,
 				languageDiagnosticsService: this.options.languageDiagnosticsService,
-				instantiationService: this.options.instantiationService,
+				instantiationService: this.instantiationService,
 				accessibilityService: this.options.accessibilityService,
 				lineWrapping: this.options.lineWrapping,
 				wrappingIndent: this.options.wrappingIndent,

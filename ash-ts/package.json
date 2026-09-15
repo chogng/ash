@@ -55,6 +55,7 @@
     "test:smoke:browser:debug": "corepack pnpm run pretest:smoke:browser && cross-env ASH_PLAYWRIGHT_SERVER=disconnected playwright test --project=browser-ui --debug",
     "pretest:smoke:browser:full": "corepack pnpm run typecheck:renderer && tsc -p test/automation/tsconfig.json",
     "test:smoke:browser:full": "node test/smoke/browser.ts full",
+    "test:loading": "cross-env ASH_LOADING_BASELINE=1 corepack pnpm run test:smoke:browser:full --grep 'production loading baseline' --repeat-each=3",
     "pretest:smoke:desktop": "corepack pnpm run build && node ../build/ash-package/prepareDevPackage.ts && tsc -p test/automation/tsconfig.json",
     "test:smoke:desktop": "playwright test --project=electron-app-server",
     "test:smoke:desktop:debug": "corepack pnpm run pretest:smoke:desktop && playwright test --project=electron-app-server --debug",

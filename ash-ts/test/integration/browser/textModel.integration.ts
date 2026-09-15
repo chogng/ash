@@ -2,8 +2,12 @@ import { URI } from "../../../src/ash/base/common/uri.js";
 import { DisposableStore, toDisposable } from "../../../src/ash/base/common/lifecycle.js";
 import { Event } from "../../../src/ash/base/common/event.js";
 import { createBrowserEditorPart, editorBrowserServices } from "../../../src/ash/workbench/contrib/codeEditor/browser/browserEditorPart.js";
-import { CodeEditorPane } from "../../../src/ash/workbench/contrib/codeEditor/browser/codeEditorPane.js";
-import { LanguageConfigurationService } from "../../../src/ash/editor/common/languages/languageConfigurationRegistry.js";
+import { CodeEditorPane, type EditorPaneOptions } from "../../../src/ash/workbench/contrib/codeEditor/browser/codeEditorPane.js";
+import { ILanguageConfigurationService, LanguageConfigurationService } from "../../../src/ash/editor/common/languages/languageConfigurationRegistry.js";
+import { ILanguageFeaturesService } from '../../../src/ash/editor/common/services/languageFeatures.js';
+import { ITextModelResourceService } from '../../../src/ash/editor/common/services/textModelResourceService.js';
+import { ServiceContainer } from '../../../src/ash/platform/instantiation/common/instantiation.js';
+import { ILogService, NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
 import { LanguageFeaturesService } from "../../../src/ash/editor/common/services/languageFeaturesService.js";
 import { LanguageService } from "../../../src/ash/editor/common/services/languageService.js";
 import { Position } from "../../../src/ash/editor/common/core/position.js";
@@ -119,17 +123,19 @@ let glyphWidget: IGlyphMarginWidget | undefined;
 let glyphWidgetLineNumber = 1;
 let glyphDecorations: IEditorDecorationsCollection | undefined;
 let modelDecorations: IEditorDecorationsCollection | undefined;
-const pane = disposables.add(new CodeEditorPane(resourceStore, {
-	modelService: models,
+const services = disposables.add(new ServiceContainer());
+services.registerInstance(ITextModelResourceService, models);
+services.registerInstance(ILanguageFeaturesService, languageFeaturesService);
+services.registerInstance(ILanguageConfigurationService, languageConfigurationService);
+services.registerInstance(ILogService, new NullLoggerService());
+const pane = disposables.add(services.createInstance(CodeEditorPane, resourceStore, {
 	createPart: options => {
 		editorPart = createBrowserEditorPart(options);
 		return editorPart;
 	},
-	languageConfigurationService,
-	languageFeaturesService,
 	accessibilityService,
 	cursorSmoothCaretAnimation: "explicit",
-}));
+} satisfies EditorPaneOptions));
 const apiModel = disposables.add(new TextModel("editor-api"));
 
 pane.create(root);

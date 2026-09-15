@@ -14,7 +14,12 @@ import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import { type ILanguageDiagnosticsService, type LanguageDiagnosticsPublisher, type LanguageDiagnosticSnapshot } from "../../../../../editor/common/services/languageDiagnosticsService.js";
 import { type TextModel } from "../../../../../editor/common/model/textModel.js";
 import { EDITOR_FONT_DEFAULTS } from "../../../../../editor/common/config/fontInfo.js";
-import type { EditorPanePartOptions } from "../../browser/codeEditorPane.js";
+import type { EditorPaneOptions, EditorPanePartOptions } from "../../browser/codeEditorPane.js";
+import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { ITextModelResourceService } from '../../../../../editor/common/services/textModelResourceService.js';
+import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
+import { ILanguageConfigurationService } from '../../../../../editor/common/languages/languageConfigurationRegistry.js';
+import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -54,7 +59,8 @@ test("Stanza editor pane loads, lays out, focuses, hides, and clears one editor 
 	using languageService = new LanguageService();
 	using builtinLanguages = registerBuiltinLanguageDescriptions(languageService.languages);
 	using models = new BrowserTextModelService(resourceStore, { languageService });
-	const pane = new EditorPane(resourceStore, { modelService: models, textDirection: EditorTextDirection.RightToLeft, fontFamily: "Fira Code, monospace", fontSize: 16 });
+	using services = paneServices(models);
+	const pane = createPane(services, resourceStore, { textDirection: EditorTextDirection.RightToLeft, fontFamily: "Fira Code, monospace", fontSize: 16 });
 	pane.create(parent);
 	pane.layout({ width: 640, height: 480 });
 	await pane.setInput({
@@ -95,9 +101,9 @@ test('Stanza editor pane switches files without leaving the old model, DOM, or k
 	const parent = dom.window.document.querySelector<HTMLElement>('main')!;
 	const resourceStore = new BrowserTextResourceStore(new ImmediateTextFiles('first file'));
 	using models = new BrowserTextModelService(resourceStore);
+	using services = paneServices(models);
 	const parts: InstanceType<typeof CodeEditorWidget>[] = [];
-	const pane = new EditorPane(resourceStore, {
-		modelService: models,
+	const pane = createPane(services, resourceStore, {
 		createPart: options => {
 			const part = new CodeEditorWidget(options);
 			parts.push(part);
@@ -171,8 +177,9 @@ test("Stanza editor pane acquires the Workbench language service for its detecte
 	using builtinLanguages = registerBuiltinLanguageDescriptions(languageService.languages);
 	using languages = new LanguageFeaturesService();
 	using models = new BrowserTextModelService(resourceStore, { languageService, languageFeaturesService: languages });
+	using services = paneServices(models, languages);
 	const diagnostics = new RecordingLanguageDiagnosticsService();
-	const pane = new EditorPane(resourceStore, { modelService: models, languageFeaturesService: languages, languageConfigurationService: languages.languageConfigurationService, languageDiagnosticsService: diagnostics });
+	const pane = createPane(services, resourceStore, { languageDiagnosticsService: diagnostics });
 	pane.create(parent);
 	const resource = URI.file("C:\\project\\main.ts");
 
@@ -208,7 +215,8 @@ test("Stanza editor pane releases a load cancelled before content resolution", a
 	const textFiles = { onDidChangeFiles: inertFileChanges, resolve: () => pending.promise, save: async () => ({ revision: undefined }) };
 	const resourceStore = new BrowserTextResourceStore(textFiles);
 	using models = new BrowserTextModelService(resourceStore);
-	const pane = new EditorPane(resourceStore, { modelService: models });
+	using services = paneServices(models);
+	const pane = createPane(services, resourceStore, {});
 	pane.create(parent);
 	const controller = new AbortController();
 	const opening = pane.setInput({ resource: URI.file("C:\\project\\slow.ts") }, controller.signal);
@@ -234,9 +242,10 @@ test("Stanza editor pane saves and reverts its shared model reference", async ()
 	const textFiles = new ImmediateTextFiles("from disk");
 	const resourceStore = new BrowserTextResourceStore(textFiles);
 	using models = new BrowserTextModelService(resourceStore);
+	using services = paneServices(models);
 	const resource = URI.file("C:\\project\\main.ts");
 	const reference = await models.acquire({ resource }, new AbortController().signal);
-	const pane = new EditorPane(resourceStore, { modelService: models });
+	const pane = createPane(services, resourceStore, {});
 	pane.create(parent);
 	await pane.setInput({ resource, label: "main.ts" }, new AbortController().signal);
 
@@ -269,8 +278,8 @@ test("Stanza editor pane trims trailing whitespace before saving", async () => {
 	const textFiles = new ImmediateTextFiles("alpha  \n beta\t\n");
 	const resourceStore = new BrowserTextResourceStore(textFiles);
 	using models = new BrowserTextModelService(resourceStore);
-	const pane = new EditorPane(resourceStore, {
-		modelService: models,
+	using services = paneServices(models);
+	const pane = createPane(services, resourceStore, {
 		trimTrailingWhitespace: true,
 		createPart: () => ({ layout: () => {}, focus: () => {}, getValue: () => "", dispose: () => {}, [Symbol.dispose]: () => {} }),
 	});
@@ -290,8 +299,8 @@ test("Stanza editor pane inserts the configured final newline before saving", as
 	const textFiles = new ImmediateTextFiles("alpha");
 	const resourceStore = new BrowserTextResourceStore(textFiles);
 	using models = new BrowserTextModelService(resourceStore);
-	const pane = new EditorPane(resourceStore, {
-		modelService: models,
+	using services = paneServices(models);
+	const pane = createPane(services, resourceStore, {
 		insertFinalNewLine: true,
 		createPart: () => ({ layout: () => {}, focus: () => {}, getValue: () => "", dispose: () => {}, [Symbol.dispose]: () => {} }),
 	});
@@ -314,11 +323,9 @@ test("Stanza editor pane resolves extension first-line languages after loading a
 	using languages = new LanguageFeaturesService();
 	using registration = languageService.registerLanguage({ id: "demo", firstLine: "#!.*\\bdemo" }, { priority: 100 });
 	using models = new BrowserTextModelService(resourceStore, { languageService, languageFeaturesService: languages });
+	using services = paneServices(models, languages);
 	let languageId: string | undefined;
-	const pane = new EditorPane(resourceStore, {
-		modelService: models,
-		languageFeaturesService: languages,
-		languageConfigurationService: languages.languageConfigurationService,
+	const pane = createPane(services, resourceStore, {
 		createPart: options => {
 			languageId = options.languageId;
 			return { layout: () => {}, focus: () => {}, getValue: () => "", dispose: () => {}, [Symbol.dispose]: () => {} };
@@ -339,9 +346,9 @@ test("Stanza editor pane forwards Workbench editor preferences to each created p
 	const textFiles = new ImmediateTextFiles("const value = 1;");
 	const resourceStore = new BrowserTextResourceStore(textFiles);
 	using models = new BrowserTextModelService(resourceStore);
+	using services = paneServices(models);
 	let received: EditorPanePartOptions | undefined;
-	const pane = new EditorPane(resourceStore, {
-		modelService: models,
+	const pane = createPane(services, resourceStore, {
 		fontFamily: "Fira Code, monospace",
 		fontSize: 16,
 		lineHeight: 26,
@@ -434,8 +441,9 @@ test("Workbench owns the code editor save shortcut and reports failures", async 
 	const textFiles = new ImmediateTextFiles("alpha");
 	const resourceStore = new BrowserTextResourceStore(textFiles);
 	using models = new BrowserTextModelService(resourceStore);
+	using services = paneServices(models);
 	const errors: unknown[] = [];
-	const pane = new EditorPane(resourceStore, { modelService: models, onSaveError: error => errors.push(error) });
+	const pane = createPane(services, resourceStore, { onSaveError: error => errors.push(error) });
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file("C:\\project\\save.ts") }, new AbortController().signal);
 
@@ -519,7 +527,8 @@ test('Workbench status follows cursor movement through public editor events', as
 	const parent = dom.window.document.querySelector<HTMLElement>('main')!;
 	const resourceStore = new BrowserTextResourceStore(new ImmediateTextFiles('alpha'));
 	using models = new BrowserTextModelService(resourceStore);
-	using pane = new EditorPane(resourceStore, { modelService: models });
+	using services = paneServices(models);
+	using pane = createPane(services, resourceStore, {});
 	pane.create(parent);
 	await pane.setInput({ resource: URI.file('/project/status.ts') }, new AbortController().signal);
 	const columns: (number | undefined)[] = [];
@@ -529,4 +538,32 @@ test('Workbench status follows cursor movement through public editor events', as
 	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowRight' }));
 	assert.equal(pane.getStatus().columnNumber, 2);
 	assert.ok(columns.includes(2));
+});
+
+function paneServices(models: ITextModelResourceService, languages?: LanguageFeaturesService): ServiceContainer {
+	const services = new ServiceContainer();
+	services.registerInstance(ITextModelResourceService, models);
+	services.registerInstance(ILogService, new NullLoggerService());
+	if (languages) {
+		services.registerInstance(ILanguageFeaturesService, languages);
+		services.registerInstance(ILanguageConfigurationService, languages.languageConfigurationService);
+	} else {
+		services.registerSingleton(ILanguageFeaturesService, () => new LanguageFeaturesService());
+		services.registerSingleton(ILanguageConfigurationService, accessor => (accessor.get(ILanguageFeaturesService) as LanguageFeaturesService).languageConfigurationService);
+	}
+	return services;
+}
+
+function createPane(services: ServiceContainer, resourceStore: ConstructorParameters<typeof EditorPane>[0], options: EditorPaneOptions): InstanceType<typeof EditorPane> {
+	return services.createInstance(EditorPane, resourceStore, options);
+}
+
+test('code editor creation rejects a missing language configuration registration', () => {
+	const resourceStore = new BrowserTextResourceStore(new ImmediateTextFiles('text'));
+	using models = new BrowserTextModelService(resourceStore);
+	using languages = new LanguageFeaturesService();
+	using services = new ServiceContainer();
+	services.registerInstance(ITextModelResourceService, models);
+	services.registerInstance(ILanguageFeaturesService, languages);
+	assert.throws(() => createPane(services, resourceStore, {}), /languageConfigurationService/);
 });

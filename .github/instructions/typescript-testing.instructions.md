@@ -21,6 +21,8 @@ Read `testing.instructions.md` first. This file adds TypeScript-specific command
 - Do not export production helpers solely for tests.
 - Prefer state, events, DOM semantics, accessibility, and geometry over screenshots.
 - Register and dispose real listeners, timers, transports, models, and other owned resources through the same lifecycle used by production code.
+- Service assembly regressions must exercise the production creation path and reject missing required registrations. Command coverage must execute the command and assert its effect, not just its presence in a registry.
+- Loading baselines must run against production artifacts and identify cache conditions, readiness criteria, resource bytes, and measurement boundaries. Measure entry totals and first-use costs before choosing split boundaries; a smaller individual chunk is not evidence of faster startup.
 
 ## Generated contracts
 

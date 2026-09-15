@@ -1,22 +1,23 @@
 import { CodeEditorWidget, type CodeEditorWidgetOptions } from '../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
 import { createEditorBrowserServices } from '../../../../editor/browser/services/contribution.js';
-import { ServiceContainer } from '../../../../platform/instantiation/common/instantiation.js';
-import { ILogService, NullLoggerService } from '../../../../platform/log/common/log.js';
+import type { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
+import type { ILanguageConfigurationService } from '../../../../editor/common/languages/languageConfigurationRegistry.js';
 
-export type BrowserEditorPartOptions = CodeEditorWidgetOptions;
+export type BrowserEditorPartOptions = CodeEditorWidgetOptions & {
+	readonly instantiationService: IInstantiationService;
+	readonly languageFeaturesService: ILanguageFeaturesService;
+	readonly languageConfigurationService: ILanguageConfigurationService;
+};
 
 export const editorBrowserServices = createEditorBrowserServices();
-const editorBrowserServiceContainer = new ServiceContainer();
-editorBrowserServiceContainer.registerInstance(ILogService, new NullLoggerService());
 
 /** Creates a browser editor for a model whose language state is already model-owned. */
 export function createBrowserEditorPart(options: BrowserEditorPartOptions): CodeEditorWidget {
 	const editorWorkers = editorBrowserServices.workers;
 	return new CodeEditorWidget({
 		...options,
-		instantiationService: options.instantiationService ?? editorBrowserServiceContainer,
 		codeEditorService: editorBrowserServices.codeEditorService,
 		editorWorkerFactory: editorWorkers.editorWorkerFactory,
-		...(options.languageFeaturesService ? {} : { completionWorkerFactory: editorWorkers.completionWorkerFactory }),
 	});
 }

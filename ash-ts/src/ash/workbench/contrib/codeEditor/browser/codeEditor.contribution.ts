@@ -3,7 +3,7 @@ import { registerEditorPane } from "../../../browser/parts/editor/editorRegistry
 import { getBrowserTextResourceStore } from "./browserTextResourceStore.js";
 import { createBrowserEditorPart, editorBrowserServices } from "./browserEditorPart.js";
 import { CODE_EDITOR_ID, matchCodeEditor } from "./codeEditorInput.js";
-import { CodeEditorPane } from "./codeEditorPane.js";
+import { CodeEditorPane, type EditorPaneOptions } from "./codeEditorPane.js";
 import { DIFF_EDITOR_ID, matchDiffEditor } from "./diffEditorInput.js";
 import { DiffEditorPane } from "./diffEditorPane.js";
 import { bindCodeLensCacheStorage } from "../../../../editor/contrib/codelens/browser/codeLensCache.js";
@@ -21,14 +21,11 @@ registerEditorPane({
 		if (!options.textFileService) throw new Error("Stanza Code requires the Workbench text file service");
 		const resourceStore = getBrowserTextResourceStore(options.textFileService);
 		const configuration = options.configurationService;
-		return new CodeEditorPane(resourceStore, {
-			modelService: getBrowserTextModelService(resourceStore),
+		if (!options.instantiationService) throw new Error('Stanza Code requires the Workbench instantiation service');
+		return options.instantiationService.createInstance(CodeEditorPane, resourceStore, {
 			createPart: createBrowserEditorPart,
 			textMateService: options.textMateService,
-			languageFeaturesService: options.languageFeaturesService,
-			languageConfigurationService: options.languageConfigurationService,
 			languageDiagnosticsService: options.languageDiagnosticsService,
-			instantiationService: options.instantiationService,
 			accessibilityService: options.accessibilityService,
 			workingCopyService: options.workingCopyService,
 			fontFamily: configuration?.getValue(CodeEditorConfiguration.fontFamily) || undefined,
@@ -83,7 +80,7 @@ registerEditorPane({
 			onSave: options.onSave,
 			onOpenLocation: options.onOpenLocation,
 			onApplyWorkspaceEdit: options.onApplyWorkspaceEdit,
-		});
+		} satisfies EditorPaneOptions);
 	},
 });
 

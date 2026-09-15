@@ -11,8 +11,6 @@ import type { IConfigurationService } from "../../../../platform/configuration/c
 import { TextFileBinaryError, type ITextFileService } from "../../../services/textfile/common/textFileService.js";
 import type { IFileService } from "../../../../platform/files/common/files.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
-import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
-import type { ILanguageConfigurationService } from '../../../../editor/common/languages/languageConfigurationRegistry.js';
 import type { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
 import type { IDiffService } from "../../../services/diff/common/diffService.js";
 import type { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
@@ -89,8 +87,6 @@ export interface EditorGroupOptions {
 	readonly fileService?: IFileService;
 	readonly textFileService?: ITextFileService;
 	readonly textMateService?: ITextMateService;
-	readonly languageFeaturesService?: ILanguageFeaturesService;
-	readonly languageConfigurationService?: ILanguageConfigurationService;
 	readonly languageResolver?: TextResourceLanguageResolver;
 	readonly diffService?: IDiffService;
 	readonly instantiationService?: IInstantiationService;
@@ -139,8 +135,6 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 	private readonly fileService: IFileService | undefined;
 	private readonly textFileService: ITextFileService | undefined;
 	private readonly textMateService: ITextMateService | undefined;
-	private readonly languageFeaturesService: ILanguageFeaturesService | undefined;
-	private readonly languageConfigurationService: ILanguageConfigurationService | undefined;
 	private readonly languageResolver: TextResourceLanguageResolver | undefined;
 	private readonly diffService: IDiffService | undefined;
 	private readonly instantiationService: IInstantiationService | undefined;
@@ -181,8 +175,6 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 		this.fileService = options.fileService;
 		this.textFileService = options.textFileService;
 		this.textMateService = options.textMateService;
-		this.languageFeaturesService = options.languageFeaturesService;
-		this.languageConfigurationService = options.languageConfigurationService;
 		this.languageResolver = options.languageResolver;
 		this.diffService = options.diffService;
 		this.instantiationService = options.instantiationService;
@@ -388,8 +380,6 @@ export class EditorGroup extends Disposable implements IEditorGroup {
 				fileService: this.fileService,
 				textFileService: this.textFileService,
 				textMateService: this.textMateService,
-				languageFeaturesService: this.languageFeaturesService,
-				languageConfigurationService: this.languageConfigurationService,
 				languageResolver: this.languageResolver,
 				diffService: this.diffService,
 				instantiationService: this.instantiationService,
