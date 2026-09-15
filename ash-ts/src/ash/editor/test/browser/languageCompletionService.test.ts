@@ -23,7 +23,7 @@ for (const [name, value] of Object.entries({
 	globals.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
-const { createTestCodeEditor } = await import('../browser/testCodeEditor.js');
+const { createTestCodeEditor } = await import('./testCodeEditor.js');
 suiteTeardown(() => {
 	browserEnvironment.window.close();
 	for (const [name, descriptor] of globals) {

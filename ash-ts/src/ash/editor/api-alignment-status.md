@@ -4,6 +4,8 @@
 
 ## 当前结论
 
+- 2026-09-15 Editor 文件命名复查：扫描全部 594 个生产文件，395 个与 VS Code 同路径、199 个仅 Ash 存在，大小写不一致为 0。仅 Ash 文件数量不作为命名错误数量。确认 `test/common/languageCompletionService.test.ts` 创建 JSDOM 与真实 CodeEditor，`test/common/cursorInsertion.test.ts` 创建 JSDOM 与 TestView，已按用户确认迁入 `test/browser/`，同步调整浏览器测试工具的相对导入；两个旧路径退出，测试断言保持不变。`test/common/viewport.test.ts` 实测 common ViewLayout，保留 common。`contrib/format` 负责代码格式化，`contrib/formatting` 负责富文档工具栏，两者不能按近似名字合并；后者命名可在工具栏职责范围内另行整理。`common/languages/completion/` 的长前缀文件和 Peek/ColorPicker 的 Editor 前缀需结合公开契约与调用方逐项处理，不作批量字符串改名。本批只迁移两份测试，未改生产代码。验证：9 项定向测试、243/243 个 Editor 单测文件、结构与类型检查及 Stanza 构建通过；既有 JSDOM Canvas 提示仍存在，未新增此类提示。
+
 - 2026-09-15 命名整理（用户已确认）：`contrib/snippet/common/languageCompletionSnippetParser.ts` 改为 `contrib/snippet/common/snippetParser.ts`，作为 Ash 的纯解析模块继续供 common 层使用；导出统一为 `parseSnippet`、`Snippet`、`SnippetOptions`、`SnippetVariableResolver` 等名称，转换函数同步使用 `createSnippetTransform` / `applySnippetTransform`。`contrib/suggest/test/common/suggestModel.test.ts` 移至 `contrib/suggest/test/browser/suggestModel.test.ts`，对应真实 Widget 测试环境。两个旧路径退出，生产调用与测试同步迁移；本次不代表完整 VS Code Snippet API 对齐。验证：243/243 个 Editor 单测文件、86 项浏览器回归、2 个扩展调用方测试文件、结构与类型检查及 Stanza 构建通过。
 
 - 2026-09-15 前置镜像与嵌套选项修复：普通 `$1` 镜像在完整声明解析后读取默认值，选项列表在嵌套合并与前置引用中保持完整；最终输出继续只包含实际存在的选项字段。13 项解析单测、全量 243/243 个 Editor 单测文件、86 项浏览器回归（含 3 项选项切换/撤销/重做测试）、结构与类型检查及 Stanza 构建通过。完整 Suggest/Snippet API 仍待验收。

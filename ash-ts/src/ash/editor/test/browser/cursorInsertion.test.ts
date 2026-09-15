@@ -17,7 +17,7 @@ for (const [name, value] of Object.entries({
 	ResizeObserver: TestResizeObserver,
 })) Object.defineProperty(globalThis, name, { configurable: true, value });
 
-const { TestView } = await import('../browser/viewModel/testViewModel.js');
+const { TestView } = await import('./viewModel/testViewModel.js');
 
 test('Adjacent cursor insertion adds clamped carets and preserves existing selection state', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
