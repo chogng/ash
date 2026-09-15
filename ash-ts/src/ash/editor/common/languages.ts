@@ -94,20 +94,24 @@ export interface DocumentFormattingEditProvider {
 	provideDocumentFormattingEdits(model: model.ITextModel, options: FormattingOptions, token: CancellationToken): ProviderResult<TextEdit[]>;
 }
 
+export interface DocumentRangeFormattingEditProvider {
+	readonly displayName?: string;
+	provideDocumentRangeFormattingEdits(model: model.ITextModel, range: Range, options: FormattingOptions, token: CancellationToken): ProviderResult<TextEdit[]>;
+	provideDocumentRangesFormattingEdits?(model: model.ITextModel, ranges: Range[], options: FormattingOptions, token: CancellationToken): ProviderResult<TextEdit[]>;
+}
+
 export interface LanguageFormattingOptions extends Readonly<FormattingOptions> {
 	readonly trimTrailingWhitespace?: boolean;
 }
 
 export interface LanguageFormattingRequest extends LanguageFeatureRequest {
 	readonly resource?: URI;
-	readonly range?: Range;
 	readonly options: LanguageFormattingOptions;
 	readonly position?: Position;
 	readonly ch?: string;
 }
 
 export interface LanguageFormattingProvider {
-	provideRangeFormattingEdits?(request: LanguageFormattingRequest, signal: AbortSignal): readonly TextEdit[] | Promise<readonly TextEdit[]>;
 	provideOnTypeFormattingEdits?(request: LanguageFormattingRequest, signal: AbortSignal): readonly TextEdit[] | Promise<readonly TextEdit[]>;
 }
 

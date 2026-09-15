@@ -4,7 +4,7 @@ import type { TextResourceLanguageInput } from '../../../platform/language/commo
 import { RGBA8 } from '../../common/core/misc/rgba.js';
 import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind } from '../../common/languages/completion/languageCompletions.js';
 import { LanguageCompletionTriggerKind, type LanguageCompletionProvider } from '../../common/languages/completion/languageCompletionProviders.js';
-import { DocumentHighlightKind, type CodeLensProvider, type LinkedEditingRangeProvider, type MultiDocumentHighlightProvider, type DocumentFormattingEditProvider, type LanguageFormattingProvider, type LanguageSemanticTokensProvider } from '../../common/languages.js';
+import { DocumentHighlightKind, type CodeLensProvider, type LinkedEditingRangeProvider, type MultiDocumentHighlightProvider, type DocumentFormattingEditProvider, type DocumentRangeFormattingEditProvider, type LanguageFormattingProvider, type LanguageSemanticTokensProvider } from '../../common/languages.js';
 import * as languages from '../../common/languages.js';
 import { selectLanguageIds, type LanguageSelector } from '../../common/languageSelector.js';
 import { type LanguageConfiguration } from '../../common/languages/languageConfiguration.js';
@@ -117,7 +117,7 @@ export function registerDocumentFormattingEditProvider(
 
 export function registerDocumentRangeFormattingEditProvider(
 	languageSelector: LanguageSelector,
-	provider: LanguageFormattingProvider,
+	provider: DocumentRangeFormattingEditProvider,
 ): IDisposable {
 	return StandaloneServices.get().languageFeaturesService.documentRangeFormattingEditProvider.register(languageSelector, provider);
 }

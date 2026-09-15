@@ -58,7 +58,7 @@ test('Language features service keeps document, range, and on-type formatting re
 			selector: 'typescript',
 			provider: {
 				provideDocumentFormattingEdits: () => [{ range, text: 'document' }],
-				provideRangeFormattingEdits: () => [{ range, text: 'range' }],
+				provideDocumentRangeFormattingEdits: () => [{ range, text: 'range' }],
 				provideOnTypeFormattingEdits: () => [{ range, text: 'onType' }],
 			},
 		}],
@@ -69,7 +69,7 @@ test('Language features service keeps document, range, and on-type formatting re
 		'document',
 	);
 	assert.equal(
-		(await languageFeatures.documentRangeFormattingEditProvider.ordered(model)[0]?.provideRangeFormattingEdits?.({ ...request, range }, signal))?.[0]?.text,
+		(await languageFeatures.documentRangeFormattingEditProvider.ordered(model)[0]?.provideDocumentRangeFormattingEdits(model, range, request.options, CancellationToken.None))?.[0]?.text,
 		'range',
 	);
 	assert.equal(
@@ -92,6 +92,25 @@ test('Language features service keeps document, range, and on-type formatting re
 	assert.deepEqual(languageFeatures.documentRangeFormattingEditProvider.ordered(model), []);
 	assert.deepEqual(languageFeatures.onTypeFormattingEditProvider.ordered(model), []);
 
+	registration.replace({
+		formatting: [{
+			selector: 'typescript',
+			provider: {
+				provideDocumentRangeFormattingEdits(receivedModel, receivedRange, options, token) {
+					assert.equal(receivedModel, model);
+					assert.equal(receivedRange, range);
+					assert.deepEqual(options, request.options);
+					assert.equal(token, CancellationToken.None);
+					return [{ range, text: 'range only' }];
+				},
+			},
+		}],
+	});
+	assert.deepEqual(languageFeatures.documentFormattingEditProvider.ordered(model), []);
+	assert.deepEqual(languageFeatures.onTypeFormattingEditProvider.ordered(model), []);
+	assert.deepEqual(await languageFeatures.documentRangeFormattingEditProvider.ordered(model)[0]!.provideDocumentRangeFormattingEdits(model, range, request.options, CancellationToken.None), [{ range, text: 'range only' }]);
+
 	registration.dispose();
 	assert.deepEqual(languageFeatures.documentFormattingEditProvider.ordered(model), []);
+	assert.deepEqual(languageFeatures.documentRangeFormattingEditProvider.ordered(model), []);
 });

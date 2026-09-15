@@ -4,6 +4,10 @@
 
 ## 当前结论
 
+- 2026-09-15 范围格式化 provider 契约：`DocumentRangeFormattingEditProvider` 归 `common/languages.ts`，registry、Standalone、App Server 和扩展桥接统一使用 `ITextModel + Range + FormattingOptions + CancellationToken`。旧 `provideRangeFormattingEdits` 及范围格式化的独立请求包装退出；App Server 从模型创建快照并拒绝模型变化后的迟到结果。移除 App Server 没有实现却注册的输入格式化 provider，批量注册测试覆盖范围专用 provider 的替换与释放。输入格式化仍保留原有契约，选区格式化命令和完整上游调度语义未在本批实现，80/41 声明计数不变。
+
+- 范围格式化批次验证：26 项定向单测、103 项浏览器回归、对齐与类型检查、Stanza 和桌面 Renderer 构建通过。覆盖范围及选项传递、请求快照、取消、迟到结果和 provider 注册/替换/释放；未新增选区格式化 UI。保留既有 7 份 CSS 债务与颜色环境提示，构建无新增警告。
+
 - 2026-09-15 文档格式化 provider 契约：新增 `common/languages.ts` 的 `DocumentFormattingEditProvider`，文档格式化 registry、Standalone、JSON、App Server 和扩展桥接统一使用 `ITextModel + FormattingOptions + CancellationToken`，结果接受标准 `ProviderResult<TextEdit[]>`。文档格式化不再使用 `LanguageFormattingRequest` 或独立传入的资源/语言 ID，适配器从模型创建传输快照；控制器直接传递当前请求令牌。范围与输入格式化仍使用原有契约，`LanguageFormattingProvider` 已移除文档格式化方法。26 项定向单测、103 项浏览器回归、对齐与类型检查、Stanza 和桌面 Renderer 构建通过；新增覆盖空结果、扩展请求取消及监听释放。完整上游调度签名、范围/输入格式化接口及其他贡献依赖仍待处理，80/41 声明计数不变；保留既有 7 份 CSS 债务与颜色环境提示，构建无新增警告。
 
 - 2026-09-15 格式化职责迁移：公共 `LanguageFormattingOptions/Request/Provider` 迁入 `common/languages.ts`，registry、Standalone、公开导出和 JSON/App Server/扩展适配器同步改用公共 owner。删除 `contrib/format/common/formatCommands.ts` 和 `FormatService`；文档格式化调度由 `contrib/format/browser/format.ts` 的函数承担，取消与结果提交仍由 `FormatController` 负责。原 common 测试迁至 `test/browser/format.test.ts`，宿主测试直接验证提供者与 registry。生产文件为 599 个，同路径 401、仅 Ash 198、仅上游 332，大小写差异为 0。此批完成职责迁移，保留现有 request/AbortSignal 契约；三类标准 provider 签名、范围与输入格式化的编辑器入口及完整上游调度语义仍待处理，80/41 声明计数不变。其他 contribution 的类型反向依赖尚未迁移。

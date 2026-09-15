@@ -10,7 +10,6 @@ import { TextModel } from "../../../../../editor/common/model/textModel.js";
 import { LanguageCompletionService } from '../../../../../editor/common/languages/completion/languageCompletionService.js';
 import { WorkspaceSymbolService } from '../../../../../editor/common/languages/workspaceSymbols.js';
 import { CodeActionService } from '../../../../../editor/contrib/codeAction/common/languageCodeActions.js';
-import { createLanguageFeatureRequest } from '../../../../../editor/common/languages/languageFeatureRequest.js';
 import { LanguageNavigationService } from '../../../../../editor/contrib/gotoSymbol/common/languageNavigation.js';
 import { LanguageHoverService } from '../../../../../editor/contrib/hover/common/hover.js';
 import { InlayHintsService } from '../../../../../editor/contrib/inlayHints/common/languageInlayHints.js';
@@ -157,17 +156,36 @@ test("App Server formatting providers preserve snapshot, options, range, and edi
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
 	using model = new TextModel("value", { languageId: "typescript", resource: URI.file("C:\\project\\main.ts") });
-	const signal = new AbortController().signal;
-	const request = { ...createLanguageFeatureRequest(model, 'typescript', signal), resource: URI.file('C:\\project\\main.ts') };
+	const options = { tabSize: 4, insertSpaces: false, trimTrailingWhitespace: true };
+	assert.deepEqual(languages.onTypeFormattingEditProvider.ordered(model), []);
 
 	const documentEdits = await languages.documentFormattingEditProvider.ordered(model)[0]!.provideDocumentFormattingEdits(model, { tabSize: 2, insertSpaces: true }, CancellationToken.None);
-	const rangeEdits = await languages.documentRangeFormattingEditProvider.ordered(model)[0]!.provideRangeFormattingEdits!({ ...request, range: new Range(1, 1, 1, 6), options: { tabSize: 4, insertSpaces: false, trimTrailingWhitespace: true } }, signal);
+	const rangeEdits = await languages.documentRangeFormattingEditProvider.ordered(model)[0]!.provideDocumentRangeFormattingEdits(model, new Range(1, 1, 1, 6), options, CancellationToken.None);
 
 	assert.equal(api.documentFormattingRequests[0]!.document.path, "main.ts");
 	assert.deepEqual(api.documentFormattingRequests[0]!.options, { tabSize: 2, insertSpaces: true, trimTrailingWhitespace: null });
 	assert.deepEqual(api.rangeFormattingRequests[0]!.range, DTO_RANGE);
+	assert.deepEqual(api.rangeFormattingRequests[0]!.options, options);
 	assert.equal(documentEdits?.[0]!.text, "formatted");
-	assert.equal(Range.lift(rangeEdits[0]!.range).getEndPosition().column, 6);
+	assert.equal(Range.lift(rangeEdits![0]!.range).getEndPosition().column, 6);
+});
+
+test('App Server range formatting discards a response after the model changes', async () => {
+	using languages = new LanguageFeaturesService();
+	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/project') });
+	const api = new FakeLanguageApi();
+	let release!: () => void;
+	const pending = new Promise<void>(resolve => { release = resolve; });
+	api.formatRange = async params => {
+		await pending;
+		return { revision: params.document.revision, edits: [{ range: DTO_RANGE, newText: 'formatted' }] };
+	};
+	using providers = new AppServerLanguageProviders(languages, api, workspace);
+	using model = new TextModel('value', { languageId: 'typescript', resource: URI.file('/project/main.ts') });
+	const result = languages.documentRangeFormattingEditProvider.ordered(model)[0]!.provideDocumentRangeFormattingEdits(model, new Range(1, 1, 1, 6), { tabSize: 4, insertSpaces: true }, CancellationToken.None);
+	model.setValue('changed');
+	release();
+	assert.deepEqual(await result, []);
 });
 
 test("App Server language providers do not send documents above their transport limit", async () => {

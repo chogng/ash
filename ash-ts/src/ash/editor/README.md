@@ -92,7 +92,7 @@ editor.main.ts ────────────→ editor.all.ts + editor.ap
 standalone/{common,browser} ─→ window services + model/editor/language/theme registries; never Workbench persistence
 ```
 
-`LanguageService` 只管理语言 ID 与文件关联，`ComposableLanguageConfigurationService` 只管理括号、注释、缩进等编辑规则，`LanguageFeaturesService` 只管理能力 provider registry。Standalone 的 `languages` API 和 Workbench 的 App Server、TextMate、扩展适配器都写入这组共享 registry；具体 Hover、补全、折叠等 contribution 消费 registry 并拥有自身请求与展示流程，不要求额外创建 model-level service。公共 provider 契约归 `common/languages.ts`，Editor 不读取服务器 DTO。格式化契约已迁入该公共文件；文档格式化使用 `DocumentFormattingEditProvider`，从 `ITextModel` 读取资源和语言，通过 `CancellationToken` 接收取消。范围与输入格式化仍待签名迁移。文档格式化调度由 `contrib/format/browser/format.ts` 承担，控制器拥有取消与编辑提交。其他功能的 registry 仍从贡献导入部分类型，这是待修正的依赖，不是允许其他能力沿用的模式。
+`LanguageService` 只管理语言 ID 与文件关联，`ComposableLanguageConfigurationService` 只管理括号、注释、缩进等编辑规则，`LanguageFeaturesService` 只管理能力 provider registry。Standalone 的 `languages` API 和 Workbench 的 App Server、TextMate、扩展适配器都写入这组共享 registry；具体 Hover、补全、折叠等 contribution 消费 registry 并拥有自身请求与展示流程，不要求额外创建 model-level service。公共 provider 契约归 `common/languages.ts`，Editor 不读取服务器 DTO。格式化契约已迁入该公共文件；文档格式化使用 `DocumentFormattingEditProvider`，从 `ITextModel` 读取资源和语言，通过 `CancellationToken` 接收取消。范围格式化使用 `DocumentRangeFormattingEditProvider`，范围作为独立参数传入；输入格式化仍待签名迁移。文档格式化调度由 `contrib/format/browser/format.ts` 承担，控制器拥有取消与编辑提交。其他功能的 registry 仍从贡献导入部分类型，这是待修正的依赖，不是允许其他能力沿用的模式。
 
 Workbench 模式 contribution 是唯一能力选择点。Code 与 Academic 各自加载一个功能实现 bundle，并与对应 Workbench contribution 配对；Academic 不以 `editor.all.ts` 为基底。共享入口在窗口启动时只加载一个 bundle；切换模式通过 reload 创建新的 Renderer 生命周期。新增模式必须先登记 `WorkbenchModeId` 并补齐 Browser/Electron 的穷尽 loader 映射；不得在共享 Workbench、widget 或 model 内增加模式分支。
 

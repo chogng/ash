@@ -9,6 +9,7 @@ import type { AppServerConnectionState } from "../../../../../platform/app-serve
 import type { ExtensionHostFleetSnapshot, ExtensionHostInvocationRequest, ExtensionHostOutputEvent, ExtensionHostReconcileMode, IExtensionHostApi, JsonValue } from "../../../../../platform/extensionHost/common/extensionHostApi.js";
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
 import { Position } from "../../../../../editor/common/core/position.js";
+import { Range } from '../../../../../editor/common/core/range.js';
 import { LanguageHoverService } from "../../../../../editor/contrib/hover/common/hover.js";
 import { ParameterHintsService } from "../../../../../editor/contrib/parameterHints/common/languageParameterHints.js";
 import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
@@ -19,6 +20,34 @@ import { createExtensionHostLanguageProviderBatch } from '../../browser/extensio
 import { OutputService } from "../../../output/browser/outputService.js";
 
 const DIGEST = `sha256:${"b".repeat(64)}`;
+
+test('range formatting bridge preserves the request snapshot and forwards cancellation', async () => {
+	using languages = new LanguageFeaturesService();
+	using model = new TextModel('alpha', { languageId: 'typescript', resource: URI.file('/project/main.ts') });
+	using source = new CancellationTokenSource();
+	const version = model.getVersionId();
+	let payload: JsonValue | undefined;
+	let signal: AbortSignal | undefined;
+	let release!: () => void;
+	const pending = new Promise<void>(resolve => { release = resolve; });
+	const range = { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 5 } };
+	const batch = createExtensionHostLanguageProviderBatch({ kind: 'languageProvider', registrationId: 'format', languageIds: ['typescript'], operations: ['formatting'] }, 'formatter', async (operation, value, cancellation) => {
+		assert.equal(operation, 'formatting');
+		payload = value;
+		signal = cancellation;
+		await pending;
+		return { edits: [{ range, text: 'ALPHA' }] };
+	});
+	using registration = languages.registerProviderBatch(batch);
+	const result = languages.documentRangeFormattingEditProvider.ordered(model)[0]!.provideDocumentRangeFormattingEdits(model, new Range(1, 1, 1, 6), { tabSize: 2, insertSpaces: false }, source.token);
+	assert.deepEqual(payload, { languageId: 'typescript', version, text: 'alpha', resource: model.uri.toString(), kind: 'range', range, options: { tabSize: 2, insertSpaces: false } });
+	model.setValue('x');
+	source.cancel();
+	assert.ok(signal);
+	assert.equal(signal.aborted, true);
+	release();
+	assert.deepEqual(await result, [{ range: new Range(1, 1, 1, 6), text: 'ALPHA' }]);
+});
 
 test('document formatting bridge captures model metadata and releases its cancellation listener', async () => {
 	using languages = new LanguageFeaturesService();
