@@ -2001,7 +2001,7 @@ test('content events follow the attached model and retain edit, undo, redo, and 
 test('Contribution selection distinguishes defaults, an empty list, and an explicit subset', async () => {
 	const { EditorExtensionsRegistry } = await import('../../../browser/editorExtensions.js');
 	const { FindController } = await import('../../../contrib/find/browser/findController.js');
-	await import('../../../contrib/find/browser/find.contribution.js');
+	await import('../../../contrib/find/browser/findController.js');
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha');

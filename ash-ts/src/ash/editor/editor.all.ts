@@ -16,7 +16,7 @@ import "./contrib/comment/browser/comment.js";
 import './contrib/contextmenu/browser/contextmenu.js';
 import './contrib/cursorUndo/browser/cursorUndo.js';
 import "./contrib/editorState/browser/editorStateController.js";
-import "./contrib/find/browser/find.contribution.js";
+import "./contrib/find/browser/findController.js";
 import './contrib/fontZoom/browser/fontZoom.js';
 import './contrib/folding/browser/folding.js';
 import "./contrib/format/browser/formatActions.js";

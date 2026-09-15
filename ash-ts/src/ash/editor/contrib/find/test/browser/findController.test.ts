@@ -182,6 +182,7 @@ function createFixture(text: string, anchor = new Position((0) + 1, (0) + 1), ac
 	const editor = createTestCodeEditor({
 		container,
 		model,
+		contributions: [],
 		lineHeight: 20,
 		input: { resource: model.uri },
 		languageId: model.getLanguageId(),

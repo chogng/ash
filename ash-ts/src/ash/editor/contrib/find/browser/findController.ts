@@ -3,7 +3,8 @@ import { addDisposableListener, stopEvent, h } from "../../../../base/browser/do
 import { Disposable, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { rot } from "../../../../base/common/numbers.js";
 import { type ICodeEditor } from "../../../browser/editorBrowser.js";
-import { type TextDecorationCollection } from "../../../common/model/decorationCollection.js";
+import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
+import { registerEditorContribution } from '../../../browser/editorExtensions.js';
 import { Selection } from "../../../common/core/selection.js";
 import { Range } from "../../../common/core/range.js";
 import { type TextModel } from "../../../common/model/textModel.js";
@@ -463,3 +464,12 @@ function validateFindControllerOptions(options: FindControllerOptions): void {
 		if (typeof value !== "boolean") throw new TypeError(`Stanza Find option '${name}' must be boolean`);
 	}
 }
+
+registerEditorContribution({
+	id: FindController.ID,
+	install: context => {
+		if (context.kind !== 'text') return;
+		const decorations = context.register(new TextDecorationCollection<void>(context.model));
+		return new FindController(context.controller.element, context.editor, context.view, decorations, context.options.find);
+	},
+});

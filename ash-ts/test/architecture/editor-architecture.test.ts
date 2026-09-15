@@ -708,7 +708,7 @@ test("Code renderers select App Server debug transport without Electron debug IP
 test("Editor engines delegate optional feature composition to mode bundles", () => {
 	const textHost = readFileSync(join(editorRoot, "browser/widget/codeEditor/codeEditorWidget.ts"), "utf8");
 	const coreCommands = readFileSync(join(editorRoot, "browser/coreCommands.ts"), "utf8");
-	const findContribution = readFileSync(join(editorRoot, "contrib/find/browser/find.contribution.ts"), "utf8");
+	const findContribution = readFileSync(join(editorRoot, "contrib/find/browser/findController.ts"), "utf8");
 	const quickAccessContribution = readFileSync(join(editorRoot, "contrib/quickAccess/browser/quickAccessController.ts"), "utf8");
 	const documentHost = readFileSync(join(editorRoot, "browser/widget/richTextEditor/richTextEditorWidget.ts"), "utf8");
 	const documentContribution = readFileSync(join(editorRoot, "contrib/documentEditor.contribution.ts"), "utf8");
@@ -740,12 +740,14 @@ test("Editor engines delegate optional feature composition to mode bundles", () 
 	assert.doesNotMatch(editorExtensionRegistry, /from\s+["'][^"']*\/contrib\//u);
 	assert.match(findContribution, /registerEditorContribution/u);
 	assert.match(quickAccessContribution, /registerEditorContribution/u);
-	assert.match(standardBundle, /find\/browser\/find\.contribution/u);
+	assert.match(standardBundle, /find\/browser\/findController/u);
 	assert.match(standardBundle, /quickAccess\/browser\/quickAccessController/u);
-	for (const contribution of ["bracketMatching", "codeAction", "comment", "gotoSymbol", "hover", "languageAnalysis", "multicursor", "placeholderText", "suggest", "tokenization", "unicodeHighlighter", "wordHighlighter"]) {
+	for (const contribution of ["bracketMatching", "codeAction", "gotoSymbol", "hover", "languageAnalysis", "multicursor", "placeholderText", "suggest", "tokenization", "unicodeHighlighter", "wordHighlighter"]) {
 		assert.match(standardBundle, new RegExp(`contrib/${contribution}/browser/[^"']+\\.contribution`, "u"), contribution);
 	}
-	for (const contribution of ["format", "quickAccess", "rename"]) assert.match(standardBundle, new RegExp(`contrib/${contribution}/browser/[^"']+Controller`, "u"), contribution);
+	assert.match(standardBundle, /contrib\/comment\/browser\/comment\.js/u);
+	assert.match(standardBundle, /contrib\/format\/browser\/formatActions\.js/u);
+	for (const contribution of ["quickAccess", "rename"]) assert.match(standardBundle, new RegExp(`contrib/${contribution}/browser/[^"']+Controller`, "u"), contribution);
 	assert.match(standardBundle, /contrib\/dropOrPasteInto\/browser\/dropIntoEditorContribution/u);
 	assert.match(standardBundle, /contrib\/clipboard\/browser\/clipboard\.js/u);
 	assert.match(standardBundle, /contrib\/folding\/browser\/folding\.js/u);

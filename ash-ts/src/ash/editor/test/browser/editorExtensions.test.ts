@@ -15,7 +15,7 @@ test("editor contributions retain bundle registration order and stable identity"
 	const before = EditorExtensionsRegistry.getEditorContributions().map(contribution => contribution.id);
 	assert.equal(before.includes("editor.contrib.findController"), false);
 
-	await import("../../contrib/find/browser/find.contribution.js");
+	await import("../../contrib/find/browser/findController.js");
 	const after = EditorExtensionsRegistry.getEditorContributions().map(contribution => contribution.id);
 	assert.deepEqual(after, [...before, "editor.contrib.findController"]);
 	const contribution = EditorExtensionsRegistry.getEditorContributions().find(candidate => candidate.id === "editor.contrib.findController");
