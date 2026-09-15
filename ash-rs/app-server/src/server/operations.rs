@@ -1,24 +1,9 @@
-use core_api::AgentRuntime;
-use core_api::ThreadView;
-use core_api::CreateBranchRequest;
-use core_api::ForkThreadRequest;
-use core_api::InterruptTurnRequest;
-use core_api::ResolveTurnInteractionRequest;
-use core_api::RewindThreadRequest;
-use core_api::SequenceExpectation;
-use core_api::ShellTurnInvocation;
-use core_api::SteerTurnRequest;
-use ash_protocol::TurnStatus;
 use super::AppServer;
 use super::ConnectionState;
 use super::RpcError;
 use super::core_error;
 use super::decode;
 use super::result;
-use base64::Engine;
-use serde_json::Value;
-use std::collections::BTreeMap;
-use std::time::Duration;
 use ash_app_server_protocol::protocol::common::SchemaHash;
 use ash_app_server_protocol::protocol::common::ServerInfo;
 use ash_app_server_protocol::protocol::document::TypstCompileParams;
@@ -77,12 +62,27 @@ use ash_protocol::SessionThread;
 use ash_protocol::ThreadArchiveReason;
 use ash_protocol::ThreadItem;
 use ash_protocol::ThreadStatus;
+use ash_protocol::TurnStatus;
 use ash_protocol::UserInput;
 use ash_thread_store::ThreadCatalogRecord;
 use ash_typst::TypstCompileError;
 use ash_typst::TypstCompileOutcome;
 use ash_typst::TypstDiagnostic;
 use ash_typst::TypstDiagnosticSeverity;
+use base64::Engine;
+use core_api::AgentRuntime;
+use core_api::CreateBranchRequest;
+use core_api::ForkThreadRequest;
+use core_api::InterruptTurnRequest;
+use core_api::ResolveTurnInteractionRequest;
+use core_api::RewindThreadRequest;
+use core_api::SequenceExpectation;
+use core_api::ShellTurnInvocation;
+use core_api::SteerTurnRequest;
+use core_api::ThreadView;
+use serde_json::Value;
+use std::collections::BTreeMap;
+use std::time::Duration;
 
 pub(super) enum TurnInstructionSelection {
     Agent,
@@ -378,9 +378,14 @@ impl AppServer {
                     title,
                 )?,
             )),
-            SessionRequest::ForkSession { parent_thread_id, title } => result(
-                &SessionRequestResult::Thread(self.fork_session_request(mutation, parent_thread_id, title)?),
-            ),
+            SessionRequest::ForkSession {
+                parent_thread_id,
+                title,
+            } => result(&SessionRequestResult::Thread(self.fork_session_request(
+                mutation,
+                parent_thread_id,
+                title,
+            )?)),
             SessionRequest::ForkThread {
                 parent_thread_id,
                 title,
@@ -1430,7 +1435,10 @@ impl AppServer {
         &self,
         session_id: &ash_protocol::SessionId,
     ) -> Result<ash_app_server_protocol::protocol::session::SessionResult, RpcError> {
-        let view = self.agent_runtime().read_session(session_id).map_err(core_error)?;
+        let view = self
+            .agent_runtime()
+            .read_session(session_id)
+            .map_err(core_error)?;
         let mut snapshots = view.threads;
         if snapshots.is_empty() {
             return Err(core_error(core_api::CoreError::NotFound(
@@ -1541,11 +1549,9 @@ fn provider_models_failure_code(
 
 fn session_from_catalog(mut records: Vec<ThreadCatalogRecord>) -> Result<Session, RpcError> {
     records.sort_by(|left, right| left.thread.thread_id.cmp(&right.thread.thread_id));
-    let first = records.first().ok_or_else(|| {
-        core_error(core_api::CoreError::Journal(
-            "empty Session catalog".into(),
-        ))
-    })?;
+    let first = records
+        .first()
+        .ok_or_else(|| core_error(core_api::CoreError::Journal("empty Session catalog".into())))?;
     let session_id = first.session_id.clone();
     let root = records
         .iter()
@@ -1824,11 +1830,17 @@ impl AppServer {
                     }
                     InputItem::Text { text } => UserInput::Text { text },
                     InputItem::Context { name, content } => UserInput::Context { name, content },
+                    InputItem::AudioAttachment { attachment } => {
+                        UserInput::AudioAttachment { attachment }
+                    }
+                    InputItem::Audio { url } => UserInput::Audio { url },
                     InputItem::ImageAttachment { attachment } => {
                         UserInput::ImageAttachment { attachment }
                     }
                     InputItem::Image { url } => UserInput::Image { url },
-                    InputItem::Instruction { path } => self.attach_instruction(session_id, &path)?,
+                    InputItem::Instruction { path } => {
+                        self.attach_instruction(session_id, &path)?
+                    }
                     InputItem::Skill { skill } => UserInput::Skill { skill },
                 })
             })

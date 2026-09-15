@@ -3165,7 +3165,9 @@ impl ModelService for BlockingFirstModel {
                 InputItem::Message(message) => {
                     message.content.iter().find_map(|content| match content {
                         ContentPart::Text(text) => Some(text.as_str()),
-                        ContentPart::ImageAttachment { .. } => None,
+                        ContentPart::ImageAttachment { .. }
+                        | ContentPart::AudioAttachment { .. }
+                        | ContentPart::AudioUrl { .. } => None,
                         ContentPart::ImageUrl { .. } => None,
                     })
                 }

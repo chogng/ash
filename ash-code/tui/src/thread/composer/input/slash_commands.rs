@@ -2,12 +2,12 @@
 
 use super::state::ChatInputItem;
 use super::state::ChatSubmission;
-use strum::IntoEnumIterator;
-use strum_macros::{AsRefStr, EnumIter, EnumString, IntoStaticStr};
 use ash_slash_commands::SlashCommandArgumentMode;
 use ash_slash_commands::SlashCommandDefinition;
 use ash_slash_commands::SlashCommandInvocation as ParsedSlashCommand;
 use ash_slash_commands::SlashCommandOrigin;
+use strum::IntoEnumIterator;
+use strum_macros::{AsRefStr, EnumIter, EnumString, IntoStaticStr};
 
 #[cfg(test)]
 use ash_slash_commands::SlashCommandCatalog;
@@ -53,7 +53,9 @@ impl TuiSlashCommandAction {
     ) -> crate::thread::transcript::LocalCommandCompletion {
         use crate::thread::transcript::LocalCommandCompletion;
         match self {
-            Self::New | Self::Branch | Self::Fork | Self::Archive => LocalCommandCompletion::Deferred,
+            Self::New | Self::Branch | Self::Fork | Self::Archive => {
+                LocalCommandCompletion::Deferred
+            }
             Self::Theme | Self::AddDir | Self::Cd | Self::Resume | Self::Rewind
                 if !arguments.is_empty() =>
             {
@@ -88,7 +90,9 @@ impl TuiSlashCommandAction {
             Self::AddDir => "add or manage a session directory",
             Self::Cd => "move this session to a new working directory",
             Self::Branch => "copy this conversation and switch to the new branch",
-            Self::Fork => "copy to an independent session; optionally run a prompt in the background",
+            Self::Fork => {
+                "copy to an independent session; optionally run a prompt in the background"
+            }
             Self::Help => "show shortcuts and commands",
             Self::Shortcuts => "browse and customize terminal shortcuts",
             Self::Export => "export this conversation as Markdown",
@@ -188,6 +192,8 @@ impl SlashCommandInvocation {
             }
             Some(ChatInputItem::Image { .. })
             | Some(ChatInputItem::Attachment(_))
+            | Some(ChatInputItem::Audio { .. })
+            | Some(ChatInputItem::AudioAttachment(_))
             | Some(ChatInputItem::Context { .. })
             | Some(ChatInputItem::Skill { .. })
             | None => {

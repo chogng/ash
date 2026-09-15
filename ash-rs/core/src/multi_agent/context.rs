@@ -123,6 +123,12 @@ fn materialized_content_text(content: &AgentContextContent) -> String {
     match content {
         AgentContextContent::UserText { text } => format!("User: {text}"),
         AgentContextContent::UserImage { url } => format!("User image: {url}"),
+        AgentContextContent::UserAudioAttachment { attachment } => {
+            format!(
+                "User audio attachment: {} ({} ms)",
+                attachment.content_digest, attachment.duration_ms
+            )
+        }
         AgentContextContent::UserImageAttachment { attachment } => {
             format!("User image attachment: {}", attachment.content_digest)
         }

@@ -48,3 +48,12 @@
 用户目标由当前 App Server 配置的 Ash home 决定，客户端不能指定任意发布目录；根文件写入 `ASH.md`，规则写入 `instructions/*.md`。预览返回 `targetDirectory`，目标路径相对此目录。摘要同时绑定 scope、来源目录和目标目录，切换 home 或 scope 必须重新预览。
 
 来源目录需要 ReadFiles/BrowseFiles；目标 Ash home 独立需要 ReadFiles/BrowseFiles，发布还需要 WriteFiles。每次调用重新检查现有目录授权，不自动扩大授权。导入后由 AshHome 刷新用户 catalog，后续模型请求沿现有用户指令路径读取。未配置 home 或目录授权不足时不发布。
+
+## 图片与音频附件
+
+- `attachment/upload/start` 接受图片的 `mediaType`、`encodedBytes`、`detail`，或音频的 `mediaType`、`encodedBytes`。音频格式为 `wav`、`mp3`、`m4a`、`webM`、`ogg`。
+- `attachment/upload/write` 按 `offset` 顺序上传 base64 分块；上传 ID 只允许创建它的连接使用。
+- `attachment/upload/finish` 完成内容校验和存储，返回 `attachment`：图片含尺寸，音频含 `durationMs`，两者均含摘要、媒体类型和字节数。取消使用 `attachment/upload/cancel`。
+- Turn 输入使用 `audioAttachment` 加已上传引用，或 `audio` 加 base64 data URL；后端先校验并保存引用，再接受 Turn。普通音频附件与实时语音是独立接口。
+- 持久记录使用 `userAudioAttachment`；订阅、读取和恢复均不返回音频正文。模型调用时才读取字节。
+- Chat Completions 用户消息编码 WAV/MP3，格式遵循 [OpenAI 音频输入文档](https://developers.openai.com/api/docs/guides/audio-chat-completions)；ChatGPT Responses 使用音频 data URL。编码器不支持的端点或角色会明确拒绝；模型是否具备音频能力仍由提供商决定。

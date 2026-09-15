@@ -1,7 +1,6 @@
 use crate::SkillRuntime;
 use crate::catalog_prompt::catalog_prompt;
 use crate::tool::SkillToolContributor;
-use std::sync::Arc;
 use ash_extension_api::ExtensionError;
 use ash_extension_api::ExtensionRegistryBuilder;
 use ash_extension_api::PromptFragment;
@@ -15,6 +14,7 @@ use ash_extension_api::TurnInputContributor;
 use ash_protocol::FrozenSkillActivation;
 use ash_protocol::SkillActivationReason;
 use ash_protocol::UserInput;
+use std::sync::Arc;
 
 /// Installs one Skill runtime into the generic agent extension registry.
 pub fn install(builder: &mut ExtensionRegistryBuilder, runtime: Arc<SkillRuntime>) {
@@ -39,6 +39,8 @@ impl SkillActivationContributor for SkillRuntime {
                 UserInput::Text { .. }
                 | UserInput::Context { .. }
                 | UserInput::ImageAttachment { .. }
+                | UserInput::AudioAttachment { .. }
+                | UserInput::Audio { .. }
                 | UserInput::Image { .. }
                 | UserInput::LocalImage { .. }
                 | UserInput::Mention { .. } => None,

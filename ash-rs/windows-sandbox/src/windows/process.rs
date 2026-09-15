@@ -319,15 +319,20 @@ pub(super) fn spawn(
                 Some(Box::new(stderr) as Box<dyn std::io::Read + Send>),
             )
         }
-        (None, Some(terminal)) => (
+        (None, Some(terminal)) => {
             terminal
-                .take_writer()
-                .ok_or("ConPTY input has already been taken")?,
-            terminal
-                .take_reader()
-                .ok_or("ConPTY output has already been taken")?,
-            None,
-        ),
+                .client_attached()
+                .map_err(|error| error.to_string())?;
+            (
+                terminal
+                    .take_writer()
+                    .ok_or("ConPTY input has already been taken")?,
+                terminal
+                    .take_reader()
+                    .ok_or("ConPTY output has already been taken")?,
+                None,
+            )
+        }
         _ => return Err("process stdio must use either pipes or ConPTY".into()),
     };
     Ok(Child {

@@ -7,9 +7,6 @@ use super::history_cell::LocalCommandCell;
 use crate::thread::presentation::present_turn_error;
 use crate::thread::transcript::CommandStatus;
 use crate::thread::transcript::MessageRole;
-use std::borrow::Cow;
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use ash_app_server_protocol::protocol::transcript::ThreadTranscriptChange;
 use ash_app_server_protocol::protocol::transcript::ThreadTranscriptEntry;
 use ash_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
@@ -19,6 +16,9 @@ use ash_protocol::PlanUpdate;
 use ash_protocol::ThreadItem;
 use ash_protocol::ToolCallId;
 use ash_protocol::TurnId;
+use std::borrow::Cow;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub(crate) struct TranscriptCellId(String);
@@ -764,6 +764,15 @@ fn cell_from_entry(entry: &ThreadTranscriptEntry, render_revision: u64) -> Trans
                 TranscriptCellBody::Content(ContentCell {
                     role: MessageRole::User,
                     text: "[Image]".into(),
+                })
+            }
+            ThreadItem::UserAudioAttachment { attachment, .. } => {
+                TranscriptCellBody::Content(ContentCell {
+                    role: MessageRole::User,
+                    text: format!(
+                        "[Audio · {} seconds]",
+                        attachment.duration_ms.div_ceil(1000)
+                    ),
                 })
             }
             ThreadItem::AgentMessage { text, .. } => TranscriptCellBody::Content(ContentCell {

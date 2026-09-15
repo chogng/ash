@@ -85,6 +85,11 @@ impl PreparedConPty {
         self.con.raw_handle().cast()
     }
 
+    /// Releases creation resources after the delegated launcher has attached its client.
+    pub fn client_attached(&mut self) -> anyhow::Result<()> {
+        self.con.client_attached()
+    }
+
     pub fn take_writer(&mut self) -> Option<Box<dyn std::io::Write + Send>> {
         self.input_write
             .take()
@@ -227,7 +232,7 @@ impl MasterPty for ConPtyMasterPty {
 
 impl SlavePty for ConPtySlavePty {
     fn spawn_command(&self, cmd: CommandBuilder) -> anyhow::Result<Box<dyn Child + Send + Sync>> {
-        let inner = self.inner.lock().unwrap();
+        let mut inner = self.inner.lock().unwrap();
         let child = inner.con.spawn_command(cmd)?;
         Ok(Box::new(child))
     }

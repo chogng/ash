@@ -64,7 +64,7 @@ async fn exposes_mutation_clear_and_guard_operations() {
         inner.put("first", 1);
     });
     assert_eq!(cache.get(&"first"), Some(1));
-    drop(cache.blocking_lock().expect("multi-thread runtime guard"));
+    drop(cache.blocking_lock());
     cache.clear();
     assert_eq!(cache.get(&"first"), None);
 }
@@ -76,34 +76,68 @@ fn zero_capacity_disables_construction() {
 }
 
 #[test]
-fn operations_do_not_persist_without_a_runtime() {
-    let cache = BlockingLruCache::new(NonZeroUsize::new(2).expect("non-zero capacity"));
+fn ordinary_threads_reuse_and_mutate_the_same_cache() {
+    let cache = BlockingLruCache::new(NonZeroUsize::MIN);
     cache.insert("first", 1);
-    assert_eq!(cache.get(&"first"), None);
-
-    assert_eq!(cache.get_or_insert_with("first", || 2), 2);
-    assert_eq!(cache.get(&"first"), None);
-    assert_eq!(cache.remove(&"first"), None);
-    cache.clear();
-
-    let result = cache.with_mut(|inner| {
-        inner.put("temporary", 3);
-        inner.get(&"temporary").copied()
+    assert_eq!(
+        cache.get_or_insert_with("first", || panic!("cached value must be reused")),
+        1
+    );
+    cache.with_mut(|inner| {
+        inner.put("second", 2);
     });
-    assert_eq!(result, Some(3));
-    assert_eq!(cache.get(&"temporary"), None);
-    assert!(cache.blocking_lock().is_none());
+    assert_eq!(cache.get(&"first"), None);
+    assert_eq!(cache.blocking_lock().get(&"second"), Some(&2));
+    assert_eq!(cache.remove(&"second"), Some(2));
+    cache.clear();
+    assert_eq!(cache.get(&"second"), None);
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn operations_do_not_panic_on_a_current_thread_runtime() {
-    let cache = BlockingLruCache::new(NonZeroUsize::new(1).expect("non-zero capacity"));
-
+async fn current_thread_runtime_reuses_cached_values() {
+    let cache = BlockingLruCache::new(NonZeroUsize::MIN);
     cache.insert("key", 1);
-
+    assert_eq!(cache.get(&"key"), Some(1));
+    assert_eq!(
+        cache.get_or_insert_with("key", || panic!("cached value must be reused")),
+        1
+    );
+    cache.clear();
     assert_eq!(cache.get(&"key"), None);
-    assert_eq!(cache.get_or_insert_with("key", || 2), 2);
-    assert!(cache.blocking_lock().is_none());
+}
+
+#[test]
+fn concurrent_factories_compute_a_shared_key_once() {
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
+    let cache = BlockingLruCache::new(NonZeroUsize::MIN);
+    let calls = AtomicUsize::new(0);
+    let ready = std::sync::Barrier::new(8);
+    std::thread::scope(|scope| {
+        for _ in 0..8 {
+            scope.spawn(|| {
+                ready.wait();
+                assert_eq!(
+                    cache.get_or_insert_with("key", || calls.fetch_add(1, Ordering::SeqCst)),
+                    0
+                );
+            });
+        }
+    });
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn panicking_factory_does_not_disable_the_cache() {
+    let cache = BlockingLruCache::new(NonZeroUsize::MIN);
+    assert!(
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            cache.get_or_insert_with("key", || panic!("factory failed"))
+        }))
+        .is_err()
+    );
+    assert_eq!(cache.get_or_insert_with("key", || 42), 42);
+    assert_eq!(cache.get(&"key"), Some(42));
 }
 
 #[test]

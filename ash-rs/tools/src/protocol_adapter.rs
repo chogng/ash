@@ -55,6 +55,7 @@ pub fn to_protocol_tool_result(
         .iter()
         .map(|content| match content {
             ToolContent::Text(text) => ContentPart::Text(text.clone()),
+            ToolContent::Audio { url } => ContentPart::AudioUrl { url: url.clone() },
             ToolContent::Image { url, detail } => ContentPart::ImageUrl {
                 url: url.clone(),
                 detail: *detail,

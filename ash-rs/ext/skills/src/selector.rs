@@ -88,6 +88,8 @@ fn selector_text(input: &[UserInput]) -> String {
         UserInput::Text { text } => Some(text.as_str()),
         UserInput::Context { .. }
         | UserInput::ImageAttachment { .. }
+        | UserInput::AudioAttachment { .. }
+        | UserInput::Audio { .. }
         | UserInput::Image { .. }
         | UserInput::LocalImage { .. }
         | UserInput::Skill { .. }

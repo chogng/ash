@@ -16,7 +16,7 @@ import { IQuickInputService } from "../../../../../platform/quickinput/common/qu
 import { CommandService } from "../../../../../workbench/services/commands/common/commandService.js";
 import type { ViewPaneContainer } from "../../../../../workbench/browser/parts/views/viewPaneContainer.js";
 import { ViewContainerLocation, WorkbenchViewRegistry } from "../../../../../workbench/common/views.js";
-import { chatTurnErrorListItem, type ChatTurnErrorAction } from "../../../../../workbench/contrib/chat/browser/list/chatListItems.js";
+import { chatListItem, chatTurnErrorListItem, type ChatTurnErrorAction } from "../../../../../workbench/contrib/chat/browser/list/chatListItems.js";
 import { ChatPaneModel } from "../../../../../workbench/contrib/chat/browser/pane/chatPaneModel.js";
 import { CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, NEW_CHAT_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, TOGGLE_SESSION_INSPECTOR_COMMAND_ID } from "../../../../../workbench/contrib/chat/common/chat.js";
 import { IPreferencesService, type IPreferencesService as PreferencesService } from "../../../../../workbench/services/preferences/common/preferences.js";
@@ -1854,3 +1854,15 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 	}
 	assert.fail("Timed out waiting for Chat view state");
 }
+
+
+test("Audio history identifies the sender and recording duration", () => {
+	const dom = new JSDOM("<!doctype html><body></body>");
+	using list = new ChatListWidget(dom.window.document.body);
+	list.render([chatListItem({
+		type: "userAudioAttachment", itemId: "audio", turnId: "turn",
+		attachment: { contentDigest: "sha256:audio", mediaType: "wav", encodedBytes: 32044, durationMs: 1001 },
+	})]);
+	assert.equal(list.element.textContent, "YouAudio (2 seconds)");
+	dom.window.close();
+});

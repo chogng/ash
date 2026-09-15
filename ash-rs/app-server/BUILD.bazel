@@ -3,5 +3,5 @@ load("//:defs.bzl", "ash_rust_crate")
 ash_rust_crate(
     name = "app-server",
     crate_name = "ash_app_server",
-    data = glob(["templates/**"]),
+    data = glob(["templates/**"]) + ["//ash-rs/utils/audio:tests/fixtures/tone.wav"],
 )

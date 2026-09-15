@@ -7,11 +7,11 @@ use crate::ContentPart;
 use crate::InputItem;
 use crate::ModelRequest;
 use crate::{ApiEndpoint, ApiError};
-use serde_json::Value;
 use ash_async_utils::CancellationToken;
 use ash_client::{ClientRequest, OperationClient, ResolvedApiTarget};
 use ash_protocol::ModelId;
 use ash_protocol::ModelResponseBilling;
+use serde_json::Value;
 
 pub(crate) fn parse_response_billing(
     response: &Value,
@@ -108,22 +108,26 @@ pub(crate) fn response_error(response: &ash_client::ClientResponse) -> ApiError 
 /// Enforces the attachment authority boundary before a provider codec examines content.
 ///
 /// Durable references are intentionally not provider wire values. Core must resolve and validate
-/// them into ephemeral image URLs before any public API endpoint can encode a request.
-pub(crate) fn require_materialized_images(request: &ModelRequest) -> Result<(), ApiError> {
+/// them into ephemeral media URLs before any public API endpoint can encode a request.
+pub(crate) fn require_materialized_attachments(request: &ModelRequest) -> Result<(), ApiError> {
     for content in request.input.iter().flat_map(|item| match item {
         InputItem::Message(message) => message.content.as_slice(),
         InputItem::ToolResult(result) => result.content.as_slice(),
     }) {
         match content {
-            ContentPart::ImageAttachment { .. } => {
+            ContentPart::ImageAttachment { .. } | ContentPart::AudioAttachment { .. } => {
                 return Err(ApiError::InvalidRequest(
-                    "durable image attachments must be materialized before API encoding".into(),
+                    "durable attachments must be materialized before API encoding".into(),
                 ));
             }
             ContentPart::ImageUrl { url, .. } if !is_provider_image_url(url) => {
                 return Err(ApiError::InvalidRequest(
                     "image input must be an inline data URL or an HTTP(S) URL".into(),
                 ));
+            }
+            ContentPart::AudioUrl { url } => {
+                audio::load_data_url(url)
+                    .map_err(|error| ApiError::InvalidRequest(error.to_string()))?;
             }
             ContentPart::Text(_) | ContentPart::ImageUrl { .. } => {}
         }

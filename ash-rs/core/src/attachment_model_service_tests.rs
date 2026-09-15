@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use ash_async_utils::CancellationSource;
-use ash_attachments::ImageAttachments;
+use ash_attachments::Attachments;
 use ash_protocol::ContentPart;
 use ash_protocol::ImageDetail;
 use ash_protocol::InputItem;
@@ -13,14 +13,14 @@ use ash_protocol::StopReason;
 
 use super::AttachmentModelService;
 use crate::CoreError;
-use core_api::ModelImageInputLimits;
 use crate::ModelImageInputPolicy;
 use crate::ModelSelection;
 use crate::ModelService;
+use core_api::ModelImageInputLimits;
 
 #[test]
 fn provider_receives_ephemeral_data_url_instead_of_durable_attachment_reference() {
-    let attachments = Arc::new(ImageAttachments::in_memory());
+    let attachments = Arc::new(Attachments::in_memory());
     let attachment = attachments
         .import_data_url(
             &crate::test_image::one_pixel_png_data_url(),
@@ -63,8 +63,44 @@ fn provider_receives_ephemeral_data_url_instead_of_durable_attachment_reference(
 }
 
 #[test]
+fn audio_is_materialized_only_in_the_provider_request() {
+    let attachments = Arc::new(Attachments::in_memory());
+    let attachment = attachments
+        .import_audio_bytes(
+            include_bytes!("../../utils/audio/tests/fixtures/tone.wav").to_vec(),
+            ash_protocol::AudioMediaType::Wav,
+        )
+        .unwrap();
+    let mut request = ModelRequest::text("describe the recording");
+    let InputItem::Message(message) = &mut request.input[0] else {
+        panic!("expected message")
+    };
+    message
+        .content
+        .push(ContentPart::AudioAttachment { attachment });
+    let original = request.clone();
+    let provider = Arc::new(RecordingModel::default());
+    let service = AttachmentModelService::new(provider.clone(), attachments);
+    service
+        .invoke(
+            ModelSelection::ConfiguredDefault,
+            &request,
+            &CancellationSource::new().token(),
+        )
+        .unwrap();
+    assert_eq!(request, original);
+    let captured = provider.request.lock().unwrap();
+    let InputItem::Message(message) = &captured.as_ref().unwrap().input[0] else {
+        panic!("expected message")
+    };
+    assert!(
+        matches!(&message.content[1], ContentPart::AudioUrl { url } if url.starts_with("data:audio/wav;base64,"))
+    );
+}
+
+#[test]
 fn selected_model_policy_downsamples_only_the_provider_request_clone() {
-    let attachments = Arc::new(ImageAttachments::in_memory());
+    let attachments = Arc::new(Attachments::in_memory());
     let attachment = attachments
         .import_bytes(test_png(2_400, 1_200), ImageDetail::Auto)
         .unwrap();
@@ -128,8 +164,7 @@ fn legacy_inline_data_urls_use_the_same_ephemeral_provider_policy() {
     let provider = Arc::new(RecordingModel::with_policy(ModelImageInputPolicy::new(
         limited, limited, limited, limited,
     )));
-    let service =
-        AttachmentModelService::new(provider.clone(), Arc::new(ImageAttachments::in_memory()));
+    let service = AttachmentModelService::new(provider.clone(), Arc::new(Attachments::in_memory()));
 
     service
         .invoke(

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use ash_async_utils::CancellationToken;
-use ash_attachments::ImageAttachments;
+use ash_attachments::Attachments;
 use ash_protocol::ContentPart;
 use ash_protocol::InputItem;
 use ash_protocol::ModelRequest;
@@ -18,11 +18,11 @@ use crate::ModelStreamSink;
 
 pub(crate) struct AttachmentModelService {
     inner: Arc<dyn ModelService>,
-    attachments: Arc<ImageAttachments>,
+    attachments: Arc<Attachments>,
 }
 
 impl AttachmentModelService {
-    pub(crate) fn new(inner: Arc<dyn ModelService>, attachments: Arc<ImageAttachments>) -> Self {
+    pub(crate) fn new(inner: Arc<dyn ModelService>, attachments: Arc<Attachments>) -> Self {
         Self { inner, attachments }
     }
 
@@ -40,6 +40,24 @@ impl AttachmentModelService {
             };
             for part in content {
                 let replacement = match part {
+                    ContentPart::AudioAttachment { attachment } => Some(ContentPart::AudioUrl {
+                        url: self
+                            .attachments
+                            .materialize_audio_data_url(attachment)
+                            .map_err(|error| CoreError::Context(error.to_string()))?,
+                    }),
+                    ContentPart::AudioUrl { url } => {
+                        let attachment = self
+                            .attachments
+                            .import_audio_data_url(url)
+                            .map_err(|error| CoreError::Context(error.to_string()))?;
+                        Some(ContentPart::AudioUrl {
+                            url: self
+                                .attachments
+                                .materialize_audio_data_url(&attachment)
+                                .map_err(|error| CoreError::Context(error.to_string()))?,
+                        })
+                    }
                     ContentPart::ImageAttachment { attachment, detail } => {
                         let limits = policy.limits_for(*detail);
                         let data_url = self

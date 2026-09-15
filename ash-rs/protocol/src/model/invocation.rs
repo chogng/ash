@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 
+use crate::AudioAttachmentRef;
 use crate::ImageAttachmentRef;
 use crate::ModelId;
 use crate::ReasoningEffort;
@@ -68,7 +69,9 @@ fn sanitize_content(
             ContentPart::ImageUrl { detail, .. } | ContentPart::ImageAttachment { detail, .. } => {
                 detail
             }
-            ContentPart::Text(_) => continue,
+            ContentPart::Text(_)
+            | ContentPart::AudioAttachment { .. }
+            | ContentPart::AudioUrl { .. } => continue,
         };
         let requested = *detail;
         let (effective, reason) = if requested == ImageDetail::Original && !supports_original {
@@ -146,6 +149,12 @@ pub enum MessageRole {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ContentPart {
     Text(String),
+    AudioAttachment {
+        attachment: AudioAttachmentRef,
+    },
+    AudioUrl {
+        url: String,
+    },
     ImageAttachment {
         attachment: ImageAttachmentRef,
         detail: ImageDetail,
@@ -163,6 +172,12 @@ pub enum ContentPart {
     rename_all_fields = "camelCase"
 )]
 enum ContentPartWire {
+    AudioAttachment {
+        attachment: AudioAttachmentRef,
+    },
+    AudioUrl {
+        url: String,
+    },
     Text {
         text: String,
     },
@@ -183,6 +198,12 @@ enum ContentPartWire {
     rename_all_fields = "camelCase"
 )]
 enum ContentPartRef<'a> {
+    AudioAttachment {
+        attachment: &'a AudioAttachmentRef,
+    },
+    AudioUrl {
+        url: &'a str,
+    },
     Text {
         text: &'a str,
     },
@@ -203,6 +224,10 @@ impl Serialize for ContentPart {
     {
         match self {
             Self::Text(text) => ContentPartRef::Text { text }.serialize(serializer),
+            Self::AudioAttachment { attachment } => {
+                ContentPartRef::AudioAttachment { attachment }.serialize(serializer)
+            }
+            Self::AudioUrl { url } => ContentPartRef::AudioUrl { url }.serialize(serializer),
             Self::ImageAttachment { attachment, detail } => ContentPartRef::ImageAttachment {
                 attachment,
                 detail: *detail,
@@ -230,6 +255,8 @@ impl From<ContentPartWire> for ContentPart {
     fn from(part: ContentPartWire) -> Self {
         match part {
             ContentPartWire::Text { text } => Self::Text(text),
+            ContentPartWire::AudioAttachment { attachment } => Self::AudioAttachment { attachment },
+            ContentPartWire::AudioUrl { url } => Self::AudioUrl { url },
             ContentPartWire::ImageAttachment { attachment, detail } => {
                 Self::ImageAttachment { attachment, detail }
             }
@@ -260,10 +287,11 @@ impl TS for ContentPart {
 
     fn inline(cfg: &ts_rs::Config) -> String {
         format!(
-            "{{ \"type\": \"text\", text: string, }} | {{ \"type\": \"imageAttachment\", attachment: {}, detail: {}, }} | {{ \"type\": \"imageUrl\", url: string, detail: {}, }}",
+            "{{ \"type\": \"text\", text: string, }} | {{ \"type\": \"imageAttachment\", attachment: {}, detail: {}, }} | {{ \"type\": \"imageUrl\", url: string, detail: {}, }} | {{ \"type\": \"audioAttachment\", attachment: {}, }} | {{ \"type\": \"audioUrl\", url: string, }}",
             ImageAttachmentRef::name(cfg),
             ImageDetail::name(cfg),
             ImageDetail::name(cfg),
+            AudioAttachmentRef::name(cfg),
         )
     }
 
@@ -280,6 +308,7 @@ impl TS for ContentPart {
         Self: 'static,
     {
         visitor.visit::<ImageAttachmentRef>();
+        visitor.visit::<AudioAttachmentRef>();
         visitor.visit::<ImageDetail>();
     }
 }

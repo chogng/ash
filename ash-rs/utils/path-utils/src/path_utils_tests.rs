@@ -139,18 +139,12 @@ fn relative_symlink_write_target_is_resolved() {
     let alias = directory.path().join("alias");
     symlink("target", &alias).expect("relative symlink");
 
-    assert_eq!(
-        resolve_symlink_write_paths(&alias),
-        SymlinkWritePaths {
-            read_path: Some(target.clone()),
-            write_path: target,
-        }
-    );
+    assert_eq!(resolve_symlink_write_path(&alias).unwrap(), target);
 }
 
 #[cfg(unix)]
 #[test]
-fn symlink_cycles_fall_back_to_the_original_write_path() {
+fn symlink_cycles_are_errors() {
     use std::os::unix::fs::symlink;
 
     let directory = tempfile::tempdir().expect("temporary directory");
@@ -160,11 +154,14 @@ fn symlink_cycles_fall_back_to_the_original_write_path() {
     symlink(&first, &second).expect("second symlink");
 
     assert_eq!(
-        resolve_symlink_write_paths(&first),
-        SymlinkWritePaths {
-            read_path: None,
-            write_path: first,
-        }
+        resolve_symlink_write_path(&first).unwrap_err().kind(),
+        std::io::ErrorKind::InvalidInput
+    );
+    assert!(
+        std::fs::symlink_metadata(&first)
+            .unwrap()
+            .file_type()
+            .is_symlink()
     );
 }
 
@@ -198,5 +195,33 @@ fn wsl_drive_mounts_are_ascii_lowercased() {
     assert_eq!(
         comparison::normalize_for_wsl_on(PathBuf::from("/home/Dev"), true),
         PathBuf::from("/home/Dev")
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn spelling_expanding_symlink_cycles_are_bounded() {
+    let directory = tempfile::tempdir().unwrap();
+    let link = directory.path().join("cycle");
+    std::os::unix::fs::symlink("./cycle", &link).unwrap();
+    assert_eq!(
+        resolve_symlink_write_path(&link).unwrap_err().kind(),
+        std::io::ErrorKind::InvalidInput
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn atomic_replacement_preserves_existing_permissions() {
+    use std::os::unix::fs::PermissionsExt;
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("script");
+    std::fs::write(&path, "old").unwrap();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o751)).unwrap();
+    write_text_atomically(&path, "new").unwrap();
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "new");
+    assert_eq!(
+        std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+        0o751
     );
 }

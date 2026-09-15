@@ -30,7 +30,7 @@ impl ThreadController {
                 "Turn steering cannot change the frozen Skill selection".into(),
             ));
         }
-        let input = user_input::normalize_images(&request.input, &self.image_attachments)?;
+        let input = user_input::normalize_attachments(&request.input, &self.attachments)?;
         let validated = user_input::validate(&input, &[])?;
         let command = ThreadCommand::SteerTurn {
             turn_id: request.turn_id.clone(),

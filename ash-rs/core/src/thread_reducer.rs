@@ -4,10 +4,6 @@ use crate::context::next_context_calibrations;
 use crate::multi_agent::validate_context_seed_digest;
 use crate::multi_agent::validate_delegation_result_digest;
 use crate::state::transition_turn_status;
-use sha2::Digest;
-use sha2::Sha256;
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use ash_history::StoredEvent;
 use ash_history::ThreadCommandReceipt;
 use ash_history::supports_stored_event_schema_version;
@@ -59,6 +55,10 @@ use ash_protocol::TurnInstructions;
 use ash_protocol::TurnInteraction;
 use ash_protocol::TurnKind;
 use ash_protocol::TurnStatus;
+use sha2::Digest;
+use sha2::Sha256;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 #[path = "thread_reducer_approval.rs"]
 mod approval;
@@ -1269,6 +1269,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                 | ThreadItem::UserContext { .. }
                 | ThreadItem::UserImage { .. }
                 | ThreadItem::UserImageAttachment { .. }
+                | ThreadItem::UserAudioAttachment { .. }
                 | ThreadItem::AgentMessage { .. }
                 | ThreadItem::Reasoning { .. }
                 | ThreadItem::Plan { .. } => {}
@@ -2052,6 +2053,8 @@ fn turn_skill_activations_match(
         ash_protocol::UserInput::Text { .. }
         | ash_protocol::UserInput::Context { .. }
         | ash_protocol::UserInput::ImageAttachment { .. }
+        | ash_protocol::UserInput::AudioAttachment { .. }
+        | ash_protocol::UserInput::Audio { .. }
         | ash_protocol::UserInput::Image { .. }
         | ash_protocol::UserInput::LocalImage { .. }
         | ash_protocol::UserInput::Mention { .. } => None,
@@ -2123,6 +2126,12 @@ fn validate_steered_items(
                     text: item_text, ..
                 },
             ) => input_text == item_text,
+            (
+                ash_protocol::UserInput::AudioAttachment { attachment: input },
+                ThreadItem::UserAudioAttachment {
+                    attachment: item, ..
+                },
+            ) => input == item,
             (
                 ash_protocol::UserInput::ImageAttachment {
                     attachment: input_attachment,
@@ -2254,6 +2263,7 @@ fn import_history(
                 | ThreadItem::UserContext { .. }
                 | ThreadItem::UserImage { .. }
                 | ThreadItem::UserImageAttachment { .. }
+                | ThreadItem::UserAudioAttachment { .. }
                 | ThreadItem::AgentMessage { .. }
                 | ThreadItem::Reasoning { .. }
                 | ThreadItem::Plan { .. } => {}
@@ -2361,6 +2371,7 @@ fn append_imported_turn(
             | ThreadItem::UserContext { .. }
             | ThreadItem::UserImage { .. }
             | ThreadItem::UserImageAttachment { .. }
+            | ThreadItem::UserAudioAttachment { .. }
             | ThreadItem::AgentMessage { .. }
             | ThreadItem::Reasoning { .. }
             | ThreadItem::Plan { .. } => {}

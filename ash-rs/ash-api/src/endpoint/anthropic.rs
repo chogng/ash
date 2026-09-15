@@ -16,7 +16,6 @@ use crate::ToolCallId;
 use crate::ToolChoice;
 use crate::ToolDefinition;
 use crate::ToolName;
-use serde_json::{Map, Value, json};
 use ash_async_utils::CancellationToken;
 use ash_client::ClientError;
 use ash_client::ClientRequest;
@@ -24,6 +23,7 @@ use ash_client::OperationClient;
 use ash_client::OperationStreamSink;
 use ash_client::ResolvedApiTarget;
 use ash_client::SseDecoder;
+use serde_json::{Map, Value, json};
 
 const MAX_STREAM_EVENT_BYTES: usize = 1024 * 1024;
 const EPHEMERAL_CACHE_CONTROL: &str = "ephemeral";
@@ -178,7 +178,21 @@ fn build_count_request(model: &str, request: &ModelRequest) -> Result<Value, Api
 }
 
 fn build_request(model: &str, request: &ModelRequest) -> Result<Value, ApiError> {
-    crate::requests::require_materialized_images(request)?;
+    crate::requests::require_materialized_attachments(request)?;
+    for item in &request.input {
+        let content = match item {
+            InputItem::Message(message) => &message.content,
+            InputItem::ToolResult(result) => &result.content,
+        };
+        if content
+            .iter()
+            .any(|part| matches!(part, ContentPart::AudioUrl { .. }))
+        {
+            return Err(ApiError::InvalidRequest(
+                "Anthropic Messages does not support audio attachments".into(),
+            ));
+        }
+    }
     let mut messages = Vec::new();
     for item in &request.input {
         match item {
@@ -295,6 +309,11 @@ fn convert_message(message: &Message) -> Result<Value, ApiError> {
 fn convert_content(content: &ContentPart) -> Result<Value, ApiError> {
     match content {
         ContentPart::Text(text) => Ok(json!({"type": "text", "text": text})),
+        ContentPart::AudioAttachment { .. } | ContentPart::AudioUrl { .. } => {
+            Err(ApiError::InvalidRequest(
+                "Anthropic Messages does not support audio attachments".into(),
+            ))
+        }
         ContentPart::ImageAttachment { .. } => {
             unreachable!("durable image attachments must be materialized before API encoding")
         }
@@ -472,7 +491,9 @@ fn content_text(content: &[ContentPart]) -> String {
         .iter()
         .filter_map(|part| match part {
             ContentPart::Text(text) => Some(text.as_str()),
-            ContentPart::ImageAttachment { .. } => None,
+            ContentPart::ImageAttachment { .. }
+            | ContentPart::AudioAttachment { .. }
+            | ContentPart::AudioUrl { .. } => None,
             ContentPart::ImageUrl { .. } => None,
         })
         .collect::<Vec<_>>()

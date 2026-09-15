@@ -2,16 +2,18 @@ use std::path::PathBuf;
 
 use thiserror::Error;
 
-/// Stable failures produced while admitting, storing, or resolving an image attachment.
+/// Stable failures produced while admitting, storing, or resolving an attachment.
 #[derive(Debug, Error)]
 pub enum AttachmentError {
     #[error("invalid image attachment: {0}")]
     InvalidImage(String),
-    #[error("image attachment is too large")]
+    #[error("invalid audio attachment: {0}")]
+    InvalidAudio(String),
+    #[error("attachment is too large")]
     TooLarge,
-    #[error("image attachment was not found")]
+    #[error("attachment was not found")]
     NotFound,
-    #[error("image attachment content is corrupt")]
+    #[error("attachment content is corrupt")]
     Corrupt,
     #[error("remote image import is unavailable")]
     RemoteUnavailable,

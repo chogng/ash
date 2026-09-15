@@ -29,7 +29,7 @@ fn rejects_image_result_that_cannot_fit_the_byte_limit() {
 
     assert!(matches!(
         error,
-        McpCallError::InvalidResult(message) if message.contains("image byte limit")
+        McpCallError::InvalidResult(message) if message.contains("media byte limit")
     ));
 }
 
@@ -41,4 +41,49 @@ fn preserves_remote_tool_error_as_output_status() {
     let output = project_tool_result(result, 1024).expect("project remote error");
 
     assert_eq!(output.status(), ToolOutputStatus::Error);
+}
+
+#[test]
+fn audio_results_preserve_validated_bytes_and_obey_the_media_budget() {
+    let audio = audio::load_bytes(
+        include_bytes!("../../utils/audio/tests/fixtures/tone.wav")
+            .as_slice()
+            .into(),
+        audio::AudioFormat::Wav,
+    )
+    .unwrap();
+    let url = audio.data_url();
+    let block: ContentBlock = serde_json::from_value(serde_json::json!({
+        "type":"audio", "data":url.split_once(',').unwrap().1, "mimeType":"audio/x-wav"
+    }))
+    .unwrap();
+    let output = project_tool_result(
+        CallToolResult::success(vec![
+            ContentBlock::text("before"),
+            block.clone(),
+            ContentBlock::text("after"),
+        ]),
+        url.len() + 100,
+    )
+    .unwrap();
+    assert_eq!(
+        output.content(),
+        &[
+            ToolContent::Text("before".into()),
+            ToolContent::Audio { url: url.clone() },
+            ToolContent::Text("after".into())
+        ]
+    );
+    assert!(matches!(
+        project_tool_result(CallToolResult::success(vec![block]), url.len() - 1),
+        Err(McpCallError::InvalidResult(_))
+    ));
+    let invalid: ContentBlock = serde_json::from_value(
+        serde_json::json!({"type":"audio","data":"AA==","mimeType":"audio/wav"}),
+    )
+    .unwrap();
+    assert!(matches!(
+        project_tool_result(CallToolResult::success(vec![invalid]), 1024),
+        Err(McpCallError::InvalidResult(_))
+    ));
 }

@@ -5,12 +5,11 @@ use std::num::NonZeroUsize;
 use lru::LruCache;
 use sha1::Digest;
 use sha1::Sha1;
-use tokio::runtime::RuntimeFlavor;
-use tokio::sync::Mutex;
-use tokio::sync::MutexGuard;
+use std::sync::Mutex;
+use std::sync::MutexGuard;
 
-/// A minimal LRU cache protected by a Tokio mutex.
-/// Calls outside a Tokio multi-thread runtime are no-ops.
+/// A bounded synchronous LRU cache shared by ordinary threads and async runtimes.
+/// Factories run under the cache lock and must not re-enter this cache or await work.
 pub struct BlockingLruCache<K, V> {
     inner: Mutex<LruCache<K, V>>,
 }
@@ -32,15 +31,13 @@ where
     where
         V: Clone,
     {
-        if let Some(mut guard) = lock_if_runtime(&self.inner) {
-            if let Some(value) = guard.get(&key) {
-                return value.clone();
-            }
-            let value = value();
-            guard.put(key, value.clone());
-            return value;
+        let mut guard = self.blocking_lock();
+        if let Some(value) = guard.get(&key) {
+            return value.clone();
         }
-        value()
+        let value = value();
+        guard.put(key, value.clone());
+        value
     }
 
     /// Like `get_or_insert_with`, but the value factory may fail.
@@ -52,15 +49,13 @@ where
     where
         V: Clone,
     {
-        if let Some(mut guard) = lock_if_runtime(&self.inner) {
-            if let Some(value) = guard.get(&key) {
-                return Ok(value.clone());
-            }
-            let value = value()?;
-            guard.put(key, value.clone());
-            return Ok(value);
+        let mut guard = self.blocking_lock();
+        if let Some(value) = guard.get(&key) {
+            return Ok(value.clone());
         }
-        value()
+        let value = value()?;
+        guard.put(key, value.clone());
+        Ok(value)
     }
 
     /// Builds a cache if `capacity` is non-zero, returning `None` otherwise.
@@ -76,13 +71,13 @@ where
         Q: Hash + Eq + ?Sized,
         V: Clone,
     {
-        let mut guard = lock_if_runtime(&self.inner)?;
+        let mut guard = self.blocking_lock();
         guard.get(key).cloned()
     }
 
     /// Inserts `value` for `key`, returning the previous entry if it existed.
     pub fn insert(&self, key: K, value: V) -> Option<V> {
-        let mut guard = lock_if_runtime(&self.inner)?;
+        let mut guard = self.blocking_lock();
         guard.put(key, value)
     }
 
@@ -92,42 +87,26 @@ where
         K: Borrow<Q>,
         Q: Hash + Eq + ?Sized,
     {
-        let mut guard = lock_if_runtime(&self.inner)?;
+        let mut guard = self.blocking_lock();
         guard.pop(key)
     }
 
     /// Clears all entries from the cache.
     pub fn clear(&self) {
-        if let Some(mut guard) = lock_if_runtime(&self.inner) {
-            guard.clear();
-        }
+        self.blocking_lock().clear();
     }
 
-    /// Executes `callback` with a mutable reference to the underlying cache.
+    /// Executes a synchronous callback under the cache lock.
     pub fn with_mut<R>(&self, callback: impl FnOnce(&mut LruCache<K, V>) -> R) -> R {
-        if let Some(mut guard) = lock_if_runtime(&self.inner) {
-            callback(&mut guard)
-        } else {
-            let mut disabled = LruCache::unbounded();
-            callback(&mut disabled)
-        }
+        callback(&mut self.blocking_lock())
     }
 
-    /// Provides direct access to the cache guard when a Tokio runtime is available.
-    pub fn blocking_lock(&self) -> Option<MutexGuard<'_, LruCache<K, V>>> {
-        lock_if_runtime(&self.inner)
+    /// Borrows the cache under its synchronous lock. Do not hold this guard across async work.
+    pub fn blocking_lock(&self) -> MutexGuard<'_, LruCache<K, V>> {
+        self.inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
-}
-
-fn lock_if_runtime<K, V>(mutex: &Mutex<LruCache<K, V>>) -> Option<MutexGuard<'_, LruCache<K, V>>>
-where
-    K: Eq + Hash,
-{
-    let runtime = tokio::runtime::Handle::try_current().ok()?;
-    if runtime.runtime_flavor() != RuntimeFlavor::MultiThread {
-        return None;
-    }
-    Some(tokio::task::block_in_place(|| mutex.blocking_lock()))
 }
 
 /// Computes the SHA-1 digest of `bytes`.

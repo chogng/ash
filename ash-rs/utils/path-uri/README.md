@@ -18,7 +18,9 @@ remote execution boundary 上传递文件位置的 contract，不替代当前 Ap
 | `from_absolute_path` / `to_host_path` | 在 `AbsolutePathBuf` 与当前 host URI 之间 lossless round trip | 不接受未先建立绝对路径不变量的 `PathBuf`，也不把 foreign Windows path 映射成 POSIX path，反之亦然 |
 | `from_native_path` | 按显式 `PathConvention` 解析 POSIX、drive 或 UNC path | 不访问文件系统 |
 | `basename` / `parent` / `ancestors` / `join` | 跨 host lexical path operations | 不解析 symlink、case alias 或 Unicode filesystem normalization |
-| `starts_with` / `relative_path_from` | 按 authority 与 URI segment 做 containment | encoded `/` 或 Windows `\` fail closed |
+| `starts_with` / `relative_path_from` / `overlaps` | 按路径语法、authority 和解码后的完整段判断包含与交叠 | 编码后的分隔符不参与判断；大小写仍敏感 |
+| `lexical_depth` / `decoded_path_bytes` / `is_opaque` | 检查路径层级、无损读取路径字节和识别不透明路径 | 不访问文件系统 |
+| `join_descendant` | 拼接相对子路径，拒绝父目录、绝对路径及 Windows 流组件 | 不替代文件系统授权与符号链接检查 |
 | `PathConvention` | 显式选择 POSIX/Windows grammar | 不代表一台具体机器或授权环境 |
 
 Serde 和 `TS` 将 `PathUri` 表示为 canonical URI string。Windows drive letter 统一为大写，
@@ -67,12 +69,12 @@ PathUri::starts_with / relative_path_from
 ## 测试与修改影响
 
 ```text
-cargo test -p ash-utils-path-uri
+just test ash-utils-path-uri
 bazel test //ash-rs/utils/path-uri:path-uri-unit-tests
 ```
 
 `path_uri_tests.rs` 覆盖 wire canonicalization、POSIX/Windows/UNC、serde、parent/join、
-containment、encoded separator、host round trip 与 non-UTF-8 fallback。修改 URI string
+containment、编码分隔符拒绝、路径语法隔离、受限拼接和非 UTF-8 字节往返。修改 URI string
 spelling、normalization 或 serde 时，必须同步检查 Desktop `URI` fixtures 和未来 protocol
 schema；修改 containment 时还要检查 sandbox/file-system consumer 的领域测试。
 

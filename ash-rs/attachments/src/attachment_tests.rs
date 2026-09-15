@@ -2,8 +2,6 @@ use std::io::Cursor;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use image::DynamicImage;
-use image::ImageFormat;
 use ash_http_client::HttpClient;
 use ash_http_client::HttpClientError;
 use ash_http_client::HttpHeader;
@@ -14,24 +12,22 @@ use ash_utils_image::PromptImageMode;
 use ash_utils_image::PromptImagePolicy;
 use ash_utils_image::PromptImageResizeLimits;
 use ash_utils_image::load_data_url_for_prompt;
+use image::DynamicImage;
+use image::ImageFormat;
 
-use crate::FileImageAttachmentStore;
-use crate::ImageAttachments;
+use crate::Attachments;
+use crate::FileAttachmentStore;
 use crate::SafeRemoteImageFetcher;
 
 #[test]
 fn file_store_round_trips_across_service_instances() {
     let root = tempfile::tempdir().unwrap();
-    let first = ImageAttachments::new(Arc::new(
-        FileImageAttachmentStore::open(root.path()).unwrap(),
-    ));
+    let first = Attachments::new(Arc::new(FileAttachmentStore::open(root.path()).unwrap()));
     let reference = first
         .import_bytes(test_png(4, 3), ImageDetail::Auto)
         .unwrap();
 
-    let reopened = ImageAttachments::new(Arc::new(
-        FileImageAttachmentStore::open(root.path()).unwrap(),
-    ));
+    let reopened = Attachments::new(Arc::new(FileAttachmentStore::open(root.path()).unwrap()));
     let data_url = reopened.materialize_data_url(&reference).unwrap();
 
     assert!(data_url.starts_with("data:image/png;base64,"));
@@ -41,7 +37,7 @@ fn file_store_round_trips_across_service_instances() {
 
 #[test]
 fn duplicate_content_reuses_the_same_reference() {
-    let service = ImageAttachments::in_memory();
+    let service = Attachments::in_memory();
     let bytes = test_png(2, 2);
 
     let first = service
@@ -53,8 +49,45 @@ fn duplicate_content_reuses_the_same_reference() {
 }
 
 #[test]
+fn audio_survives_reopen_and_rejects_forged_duration_and_corrupt_bytes() {
+    let root = tempfile::tempdir().unwrap();
+    let first = Attachments::new(Arc::new(FileAttachmentStore::open(root.path()).unwrap()));
+    let bytes = include_bytes!("../../utils/audio/tests/fixtures/tone.wav");
+    let reference = first
+        .import_audio_bytes(bytes.to_vec(), ash_protocol::AudioMediaType::Wav)
+        .unwrap();
+    assert_eq!(reference.duration_ms, 1000);
+    let original_url = first.materialize_audio_data_url(&reference).unwrap();
+    drop(first);
+
+    let reopened = Attachments::new(Arc::new(FileAttachmentStore::open(root.path()).unwrap()));
+    assert_eq!(
+        reopened.materialize_audio_data_url(&reference).unwrap(),
+        original_url
+    );
+    assert_eq!(
+        reopened.import_audio_data_url(&original_url).unwrap(),
+        reference
+    );
+    let mut forged = reference.clone();
+    forged.duration_ms += 1;
+    assert!(reopened.verify_audio(&forged).is_err());
+    let hex = reference
+        .content_digest
+        .as_str()
+        .strip_prefix("sha256:")
+        .unwrap();
+    std::fs::write(
+        root.path().join("sha256").join(&hex[..2]).join(hex),
+        b"corrupt",
+    )
+    .unwrap();
+    assert!(reopened.verify_audio(&reference).is_err());
+}
+
+#[test]
 fn provider_materialization_downsamples_an_ephemeral_clone_and_keeps_the_stored_image() {
-    let service = ImageAttachments::in_memory();
+    let service = Attachments::in_memory();
     let reference = service
         .import_bytes(test_png(2_400, 1_200), ImageDetail::Auto)
         .unwrap();
@@ -82,7 +115,7 @@ fn provider_materialization_downsamples_an_ephemeral_clone_and_keeps_the_stored_
 
 #[test]
 fn forged_reference_metadata_is_rejected_on_read() {
-    let service = ImageAttachments::in_memory();
+    let service = Attachments::in_memory();
     let mut reference = service
         .import_bytes(test_png(2, 2), ImageDetail::Auto)
         .unwrap();
@@ -94,9 +127,7 @@ fn forged_reference_metadata_is_rejected_on_read() {
 #[test]
 fn corrupted_file_store_objects_are_rejected_on_read() {
     let root = tempfile::tempdir().unwrap();
-    let service = ImageAttachments::new(Arc::new(
-        FileImageAttachmentStore::open(root.path()).unwrap(),
-    ));
+    let service = Attachments::new(Arc::new(FileAttachmentStore::open(root.path()).unwrap()));
     let reference = service
         .import_bytes(test_png(2, 2), ImageDetail::Auto)
         .unwrap();
@@ -118,9 +149,7 @@ fn file_store_rejects_a_symlinked_digest_directory() {
 
     let root = tempfile::tempdir().unwrap();
     let outside = tempfile::tempdir().unwrap();
-    let service = ImageAttachments::new(Arc::new(
-        FileImageAttachmentStore::open(root.path()).unwrap(),
-    ));
+    let service = Attachments::new(Arc::new(FileAttachmentStore::open(root.path()).unwrap()));
     let first = service
         .import_bytes(test_png(2, 2), ImageDetail::Auto)
         .unwrap();
@@ -143,9 +172,7 @@ fn file_store_rejects_a_symlinked_attachment_object() {
 
     let root = tempfile::tempdir().unwrap();
     let outside = tempfile::tempdir().unwrap();
-    let service = ImageAttachments::new(Arc::new(
-        FileImageAttachmentStore::open(root.path()).unwrap(),
-    ));
+    let service = Attachments::new(Arc::new(FileAttachmentStore::open(root.path()).unwrap()));
     let reference = service
         .import_bytes(test_png(2, 2), ImageDetail::Auto)
         .unwrap();

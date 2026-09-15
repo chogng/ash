@@ -4,6 +4,7 @@ pub use plan::PlanStep;
 pub use plan::PlanStepStatus;
 pub use plan::PlanUpdate;
 
+use crate::AudioAttachmentRef;
 use crate::ContentPart;
 use crate::ImageAttachmentRef;
 use crate::ItemId;
@@ -24,6 +25,11 @@ use ts_rs::TS;
     rename_all_fields = "camelCase"
 )]
 pub enum ThreadItem {
+    UserAudioAttachment {
+        item_id: ItemId,
+        turn_id: TurnId,
+        attachment: AudioAttachmentRef,
+    },
     UserMessage {
         item_id: ItemId,
         turn_id: TurnId,
@@ -87,6 +93,7 @@ impl ThreadItem {
             | Self::UserContext { item_id, .. }
             | Self::UserImage { item_id, .. }
             | Self::UserImageAttachment { item_id, .. }
+            | Self::UserAudioAttachment { item_id, .. }
             | Self::AgentMessage { item_id, .. }
             | Self::Reasoning { item_id, .. }
             | Self::Plan { item_id, .. }
@@ -101,6 +108,7 @@ impl ThreadItem {
             | Self::UserContext { turn_id, .. }
             | Self::UserImage { turn_id, .. }
             | Self::UserImageAttachment { turn_id, .. }
+            | Self::UserAudioAttachment { turn_id, .. }
             | Self::AgentMessage { turn_id, .. }
             | Self::Reasoning { turn_id, .. }
             | Self::Plan { turn_id, .. }

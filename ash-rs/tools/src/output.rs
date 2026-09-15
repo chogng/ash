@@ -17,6 +17,7 @@ pub enum ToolOutputStatus {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ToolContent {
     Text(String),
+    Audio { url: String },
     Image { url: String, detail: ImageDetail },
 }
 
@@ -96,7 +97,7 @@ fn truncate_tool_content(
         .iter()
         .filter_map(|content| match content {
             ToolContent::Text(text) => Some(text.as_str()),
-            ToolContent::Image { .. } => None,
+            ToolContent::Image { .. } | ToolContent::Audio { .. } => None,
         })
         .collect::<Vec<_>>();
 
@@ -121,7 +122,7 @@ fn truncate_tool_content(
     ))];
     truncated.extend(content.iter().filter_map(|content| match content {
         ToolContent::Text(_) => None,
-        ToolContent::Image { .. } => Some(content.clone()),
+        ToolContent::Image { .. } | ToolContent::Audio { .. } => Some(content.clone()),
     }));
     truncated
 }

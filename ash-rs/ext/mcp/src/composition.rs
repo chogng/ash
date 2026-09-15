@@ -2,11 +2,6 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 
-use connectors::ConnectorAuthority;
-use connectors::ConnectorConnectionGeneration;
-use connectors::ConnectorDefinitionDigest;
-use connectors::ConnectorId;
-use serde_json::json;
 use ash_action_policy::{
     ActionDigest, ActionKind, ActionPolicyRevision, ActionProvenance, ActionReviewPhase,
     ActionReviewRequest, ActionSource, ApprovalRequest, Capability, CapabilityKind, CapabilitySet,
@@ -17,8 +12,6 @@ use ash_config::{
     ConfigGeneration, McpCredentialBinding, McpServerEnablement, McpServerId, McpTransportConfig,
     ResolvedConfig,
 };
-use core_api::ActionPolicyService;
-use core_api::CoreError;
 use ash_core::ToolAuthorization;
 use ash_core::ToolService;
 use ash_mcp::{
@@ -32,6 +25,13 @@ use ash_rmcp_client::{BearerToken, StdioServerCommand, StreamableHttpServer};
 use ash_secrets::SecretKey;
 use ash_secrets::SecretStore;
 use ash_tools::{ToolContent, ToolOutput, ToolOutputStatus};
+use connectors::ConnectorAuthority;
+use connectors::ConnectorConnectionGeneration;
+use connectors::ConnectorDefinitionDigest;
+use connectors::ConnectorId;
+use core_api::ActionPolicyService;
+use core_api::CoreError;
+use serde_json::json;
 
 use crate::auth::project_runtime_credential;
 use crate::connector::ConnectorMcpRuntimeProvider;
@@ -767,6 +767,7 @@ fn protocol_execution_output(output: ToolOutput) -> Result<ToolExecutionOutput, 
         .iter()
         .map(|content| match content {
             ToolContent::Text(text) => ContentPart::Text(text.clone()),
+            ToolContent::Audio { url } => ContentPart::AudioUrl { url: url.clone() },
             ToolContent::Image { url, detail } => ContentPart::ImageUrl {
                 url: url.clone(),
                 detail: *detail,

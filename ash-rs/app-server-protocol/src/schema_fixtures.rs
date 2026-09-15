@@ -456,7 +456,7 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(!typescript.contains(r#""turn/start": { method: "turn/start" }"#));
     assert!(!typescript.contains(r#""turn/shell/start": { method: "turn/shell/start" }"#));
     assert!(typescript.contains(
-        r#"export type InputItem = { "type": "issue", number: number, } | { "type": "text", text: string, } | { "type": "context", name: string, content: string, } | { "type": "imageAttachment", attachment: ImageAttachmentRef, } | { "type": "image", url: string, } | { "type": "instruction", path: string, } | { "type": "skill", skill: SkillRef, };"#
+        r#"export type InputItem = { "type": "issue", number: number, } | { "type": "text", text: string, } | { "type": "context", name: string, content: string, } | { "type": "audioAttachment", attachment: AudioAttachmentRef, } | { "type": "audio", url: string, } | { "type": "imageAttachment", attachment: ImageAttachmentRef, } | { "type": "image", url: string, } | { "type": "instruction", path: string, } | { "type": "skill", skill: SkillRef, };"#
     ));
     assert!(!typescript.contains("InputItemKind"));
     assert!(typescript.contains(r#"{ "type": "userImage""#));
@@ -907,4 +907,40 @@ fn fork_session_request_round_trips_source_and_title() {
         crate::protocol::session::SessionRequest::ForkSession { .. }
     ));
     assert_eq!(serde_json::to_value(request).unwrap(), value);
+}
+
+#[test]
+fn audio_upload_and_turn_input_round_trip_without_image_fields() {
+    use crate::protocol::attachments::AttachmentUploadStartParams;
+    let upload = serde_json::json!({"mediaType":"wav","encodedBytes":32044});
+    let params: AttachmentUploadStartParams = serde_json::from_value(upload.clone()).unwrap();
+    assert!(matches!(params, AttachmentUploadStartParams::Audio { .. }));
+    assert_eq!(serde_json::to_value(params).unwrap(), upload);
+    assert!(
+        serde_json::from_value::<AttachmentUploadStartParams>(
+            serde_json::json!({"mediaType":"wav","encodedBytes":32044,"detail":"auto"})
+        )
+        .is_err()
+    );
+    let attachment = ash_protocol::AudioAttachmentRef {
+        content_digest: ash_protocol::ContentDigest::sha256(b"recording"),
+        media_type: ash_protocol::AudioMediaType::Wav,
+        encoded_bytes: 32044,
+        duration_ms: 1000,
+    };
+    let input = InputItem::AudioAttachment {
+        attachment: attachment.clone(),
+    };
+    assert_eq!(
+        serde_json::from_value::<InputItem>(serde_json::to_value(&input).unwrap()).unwrap(),
+        input
+    );
+    let content = ash_protocol::ContentPart::AudioAttachment { attachment };
+    assert_eq!(
+        serde_json::from_value::<ash_protocol::ContentPart>(
+            serde_json::to_value(&content).unwrap()
+        )
+        .unwrap(),
+        content
+    );
 }

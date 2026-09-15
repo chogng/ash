@@ -1,14 +1,14 @@
 use crate::LocalStateError;
 use crate::lease::LeaseDirectory;
+use ash_attachments::Attachments;
+use ash_attachments::FileAttachmentStore;
+use ash_core::ThreadController;
+use ash_core::ThreadStore;
+use ash_state::{SqliteThreadStore, StateRuntime};
+use core_api::WriterLease;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use ash_attachments::FileImageAttachmentStore;
-use ash_attachments::ImageAttachments;
-use ash_core::ThreadController;
-use ash_core::ThreadStore;
-use core_api::WriterLease;
-use ash_state::{SqliteThreadStore, StateRuntime};
 
 /// Opens and recovers local authoritative Thread state under one profile root.
 ///
@@ -19,19 +19,19 @@ pub struct LocalStateRepository {
     database_path: PathBuf,
     thread_store: Arc<SqliteThreadStore>,
     writer_lease: Arc<LeaseDirectory>,
-    image_attachments: Arc<ImageAttachments>,
+    attachments: Arc<Attachments>,
 }
 
 impl LocalStateRepository {
     pub fn open(state: &StateRuntime) -> Result<Self, LocalStateError> {
         let root = state.profile_root();
         let database_path = state.database_path().to_path_buf();
-        let image_store = FileImageAttachmentStore::open(root.join("attachments"))
+        let image_store = FileAttachmentStore::open(root.join("attachments"))
             .map_err(|error| core_api::CoreError::Journal(error.to_string()))?;
         Ok(Self {
             thread_store: Arc::new(SqliteThreadStore::open(&database_path)?),
             writer_lease: Arc::new(LeaseDirectory::open(state.writer_leases_root())?),
-            image_attachments: Arc::new(ImageAttachments::new(Arc::new(image_store))),
+            attachments: Arc::new(Attachments::new(Arc::new(image_store))),
             database_path,
         })
     }
@@ -48,20 +48,20 @@ impl LocalStateRepository {
 
     /// Recovers the Core Thread authority from this repository's durable history.
     pub fn recover_threads(&self) -> Result<Arc<ThreadController>, LocalStateError> {
-        self.recover_threads_with_image_attachments(Arc::clone(&self.image_attachments))
+        self.recover_threads_with_attachments(Arc::clone(&self.attachments))
     }
 
     /// Opens Thread state, upgrades missing catalog rows, and recovers only resumable work.
-    pub fn recover_threads_with_image_attachments(
+    pub fn recover_threads_with_attachments(
         &self,
-        image_attachments: Arc<ImageAttachments>,
+        attachments: Arc<Attachments>,
     ) -> Result<Arc<ThreadController>, LocalStateError> {
         let thread_store: Arc<dyn ThreadStore> = self.thread_store.clone();
         let thread_lease: Arc<dyn WriterLease<ash_protocol::ThreadId>> = self.writer_lease.clone();
-        let threads = Arc::new(ThreadController::with_store_lease_and_image_attachments(
+        let threads = Arc::new(ThreadController::with_store_lease_and_attachments(
             thread_store,
             thread_lease,
-            image_attachments,
+            attachments,
         ));
         let catalog = self.thread_store.list_catalog()?;
         let catalog_ids = catalog

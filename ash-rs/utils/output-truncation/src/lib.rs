@@ -41,7 +41,7 @@ pub const fn approx_bytes_for_tokens(tokens: usize) -> usize {
 
 /// Estimates tokens from a byte count using the shared four-bytes-per-token rule.
 pub const fn approx_tokens_from_byte_count(bytes: usize) -> usize {
-    bytes.saturating_add(APPROX_BYTES_PER_TOKEN.saturating_sub(1)) / APPROX_BYTES_PER_TOKEN
+    bytes.div_ceil(APPROX_BYTES_PER_TOKEN)
 }
 
 /// Adds a model-visible warning to text that was truncated from the middle.

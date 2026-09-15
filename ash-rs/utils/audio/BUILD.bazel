@@ -1,0 +1,9 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "audio",
+    crate_name = "ash_utils_audio",
+    data = glob(["tests/fixtures/**"]),
+)
+
+exports_files(glob(["tests/fixtures/*"]), visibility = ["//visibility:public"])

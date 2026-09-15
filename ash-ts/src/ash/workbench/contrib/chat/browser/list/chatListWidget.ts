@@ -121,6 +121,7 @@ function itemLabel(item: IChatListItem): string {
 		case "userContext":
 		case "userImage":
 		case "userImageAttachment":
+		case "userAudioAttachment":
 			return "You";
 		case "agentMessage":
 			return "Ash";

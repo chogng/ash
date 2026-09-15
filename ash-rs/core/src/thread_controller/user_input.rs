@@ -1,5 +1,5 @@
-use std::sync::Arc;
-use ash_attachments::ImageAttachments;
+use ash_attachments::Attachments;
+use ash_protocol::AudioAttachmentRef;
 use ash_protocol::FrozenSkillActivation;
 use ash_protocol::ImageAttachmentRef;
 use ash_protocol::ItemId;
@@ -8,21 +8,33 @@ use ash_protocol::SkillVersionSelector;
 use ash_protocol::ThreadItem;
 use ash_protocol::TurnId;
 use ash_protocol::UserInput;
+use std::sync::Arc;
 
 use crate::CoreError;
 pub(super) enum ValidatedUserInput<'a> {
     Text(&'a str),
     Context { name: &'a str, content: &'a str },
     Image(&'a ImageAttachmentRef),
+    Audio(&'a AudioAttachmentRef),
 }
 
-pub(super) fn normalize_images(
+pub(super) fn normalize_attachments(
     input: &[UserInput],
-    attachments: &Arc<ImageAttachments>,
+    attachments: &Arc<Attachments>,
 ) -> Result<Vec<UserInput>, CoreError> {
     input
         .iter()
         .map(|input| match input {
+            UserInput::AudioAttachment { attachment } => {
+                attachments
+                    .verify_audio(attachment)
+                    .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
+                Ok(input.clone())
+            }
+            UserInput::Audio { url } => attachments
+                .import_audio_data_url(url)
+                .map(|attachment| UserInput::AudioAttachment { attachment })
+                .map_err(|error| CoreError::InvalidInput(error.to_string())),
             UserInput::ImageAttachment { attachment } => {
                 attachments
                     .verify(attachment)
@@ -76,6 +88,8 @@ pub(super) fn validate<'a>(
             UserInput::Context { .. } => Some(Err(CoreError::InvalidInput(
                 "Turn context input must have a non-empty name and content".into(),
             ))),
+            UserInput::AudioAttachment { attachment } => Some(Ok(ValidatedUserInput::Audio(attachment))),
+            UserInput::Audio { .. } => Some(Err(CoreError::InvalidInput("audio input must be normalized before validation".into()))),
             UserInput::ImageAttachment { attachment } => {
                 Some(Ok(ValidatedUserInput::Image(attachment)))
             }
@@ -85,7 +99,7 @@ pub(super) fn validate<'a>(
             UserInput::Skill { .. } => None,
             UserInput::LocalImage { .. } | UserInput::Mention { .. } => {
                 Some(Err(CoreError::InvalidInput(
-                    "this Thread controller currently accepts text and normalized image URLs only"
+                    "this Thread controller currently accepts text, context, and validated attachments"
                         .into(),
                 )))
             }
@@ -94,7 +108,7 @@ pub(super) fn validate<'a>(
     validate_skill_activations(input, activated_skills)?;
     if validated.is_empty() {
         return Err(CoreError::InvalidInput(
-            "Turn input must include text or an image in addition to any Skill selection".into(),
+            "Turn input must include text, context, or an attachment in addition to any Skill selection".into(),
         ));
     }
     Ok(validated)
@@ -111,6 +125,8 @@ fn validate_skill_activations(
             UserInput::Text { .. }
             | UserInput::Context { .. }
             | UserInput::ImageAttachment { .. }
+            | UserInput::AudioAttachment { .. }
+            | UserInput::Audio { .. }
             | UserInput::Image { .. }
             | UserInput::LocalImage { .. }
             | UserInput::Mention { .. } => None,
@@ -160,6 +176,11 @@ pub(super) fn thread_items(
                 turn_id: turn_id.clone(),
                 name: (*name).to_owned(),
                 content: (*content).to_owned(),
+            },
+            ValidatedUserInput::Audio(attachment) => ThreadItem::UserAudioAttachment {
+                item_id: next_item_id(),
+                turn_id: turn_id.clone(),
+                attachment: (*attachment).clone(),
             },
             ValidatedUserInput::Image(attachment) => ThreadItem::UserImageAttachment {
                 item_id: next_item_id(),

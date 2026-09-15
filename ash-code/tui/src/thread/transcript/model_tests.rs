@@ -4,7 +4,6 @@ use super::TranscriptModel;
 use crate::thread::transcript::CommandStatus;
 use crate::thread::transcript::LocalCommandCompletion;
 use crate::thread::transcript::MessageRole;
-use std::collections::BTreeSet;
 use ash_app_server_protocol::protocol::transcript::ThreadTranscriptEntry;
 use ash_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
 use ash_protocol::ItemId;
@@ -15,6 +14,7 @@ use ash_protocol::ToolCallId;
 use ash_protocol::ToolName;
 use ash_protocol::ToolOutputStream;
 use ash_protocol::TurnId;
+use std::collections::BTreeSet;
 
 #[test]
 fn tool_call_output_and_result_form_one_exec_cell() {
@@ -380,4 +380,29 @@ fn session_id(value: &str) -> SessionId {
 
 fn thread_id(value: &str) -> ThreadId {
     ThreadId::new(value).expect("the test Thread ID is valid")
+}
+
+#[test]
+fn audio_history_is_a_user_message_with_a_visible_duration() {
+    let mut model = TranscriptModel::default();
+    model.replace(snapshot(vec![ThreadTranscriptEntry::Item {
+        entry_id: "audio-entry".into(),
+        turn_id: turn_id("turn"),
+        transient: false,
+        item: ThreadItem::UserAudioAttachment {
+            item_id: item_id("audio"),
+            turn_id: turn_id("turn"),
+            attachment: ash_protocol::AudioAttachmentRef {
+                content_digest: ash_protocol::ContentDigest::sha256(b"recording"),
+                media_type: ash_protocol::AudioMediaType::Wav,
+                encoded_bytes: 32044,
+                duration_ms: 1001,
+            },
+        },
+    }]));
+    let expanded = BTreeSet::new();
+    let views = model.views(&expanded, None);
+    assert_eq!(views.len(), 1);
+    assert_eq!(model.cells()[0].lifecycle(), CellLifecycle::Final);
+    insta::assert_snapshot!(views[0].text(), @"[Audio · 2 seconds]");
 }

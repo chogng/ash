@@ -1,6 +1,7 @@
 use crate::AgentConfiguration;
 use crate::AgentJoinId;
 use crate::AgentMessageId;
+use crate::AudioAttachmentRef;
 use crate::ContentDigest;
 use crate::ContextCheckpointId;
 use crate::DelegationId;
@@ -153,6 +154,9 @@ pub enum AgentContextContent {
     },
     UserImage {
         url: String,
+    },
+    UserAudioAttachment {
+        attachment: AudioAttachmentRef,
     },
     UserImageAttachment {
         attachment: ImageAttachmentRef,

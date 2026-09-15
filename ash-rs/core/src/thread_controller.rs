@@ -22,17 +22,7 @@ use crate::ThreadWorktreeBindingRequest;
 use crate::WriterLease;
 
 use crate::thread_reducer::validate_agent_request;
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::sync::RwLock;
-use std::sync::Weak;
-use std::sync::atomic::AtomicU64;
-use std::sync::atomic::Ordering;
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
-use ash_attachments::ImageAttachments;
+use ash_attachments::Attachments;
 use ash_history::CURRENT_STORED_EVENT_SCHEMA_VERSION;
 use ash_history::EventId;
 use ash_history::StoredEvent;
@@ -81,6 +71,16 @@ use ash_thread_store::AppendBatchResult;
 use ash_thread_store::ThreadCatalogRecord;
 use ash_thread_store::ThreadStoreError;
 use ash_thread_store::validate_append_batch;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::RwLock;
+use std::sync::Weak;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 mod agent;
 mod context;
@@ -381,7 +381,7 @@ pub struct ThreadController {
     execution_mailboxes: mailbox::ThreadExecutionMailboxes,
     pub(crate) live_interactions: live_interaction::LiveInteractionWaiters,
     extensions: RwLock<ExtensionRegistries>,
-    image_attachments: Arc<ImageAttachments>,
+    attachments: Arc<Attachments>,
     next_id: AtomicU64,
 }
 
@@ -448,13 +448,13 @@ impl ThreadController {
         Ok(())
     }
     pub fn with_store(store: Arc<dyn ThreadStore>) -> Self {
-        Self::with_store_and_image_attachments(store, Arc::new(ImageAttachments::in_memory()))
+        Self::with_store_and_attachments(store, Arc::new(Attachments::in_memory()))
     }
 
     /// Builds a manager with the canonical image attachment service used before durable writes.
-    pub fn with_store_and_image_attachments(
+    pub fn with_store_and_attachments(
         store: Arc<dyn ThreadStore>,
-        image_attachments: Arc<ImageAttachments>,
+        attachments: Arc<Attachments>,
     ) -> Self {
         let loaded_threads = Arc::new(loaded_thread::LoadedThreads::new(store.clone()));
         Self {
@@ -465,7 +465,7 @@ impl ThreadController {
             execution_mailboxes: mailbox::ThreadExecutionMailboxes::new(loaded_threads.clone()),
             live_interactions: live_interaction::LiveInteractionWaiters::default(),
             extensions: RwLock::new(ExtensionRegistries::default()),
-            image_attachments,
+            attachments,
             loaded_threads,
             agent_spawn_gates: Mutex::new(BTreeMap::new()),
             next_id: AtomicU64::new(1),
@@ -478,18 +478,18 @@ impl ThreadController {
         store: Arc<dyn ThreadStore>,
         writer_lease: Arc<dyn WriterLease<ThreadId>>,
     ) -> Self {
-        Self::with_store_lease_and_image_attachments(
+        Self::with_store_lease_and_attachments(
             store,
             writer_lease,
-            Arc::new(ImageAttachments::in_memory()),
+            Arc::new(Attachments::in_memory()),
         )
     }
 
     /// Builds a leased manager with the attachment service shared by RPC admission and models.
-    pub fn with_store_lease_and_image_attachments(
+    pub fn with_store_lease_and_attachments(
         store: Arc<dyn ThreadStore>,
         writer_lease: Arc<dyn WriterLease<ThreadId>>,
-        image_attachments: Arc<ImageAttachments>,
+        attachments: Arc<Attachments>,
     ) -> Self {
         let loaded_threads = Arc::new(loaded_thread::LoadedThreads::new(store.clone()));
         Self {
@@ -500,7 +500,7 @@ impl ThreadController {
             execution_mailboxes: mailbox::ThreadExecutionMailboxes::new(loaded_threads.clone()),
             live_interactions: live_interaction::LiveInteractionWaiters::default(),
             extensions: RwLock::new(ExtensionRegistries::default()),
-            image_attachments,
+            attachments,
             loaded_threads,
             agent_spawn_gates: Mutex::new(BTreeMap::new()),
             next_id: AtomicU64::new(1),
@@ -508,8 +508,8 @@ impl ThreadController {
     }
 
     /// Returns the canonical service used by this Thread authority and its model executors.
-    pub fn image_attachments(&self) -> Arc<ImageAttachments> {
-        Arc::clone(&self.image_attachments)
+    pub fn attachments(&self) -> Arc<Attachments> {
+        Arc::clone(&self.attachments)
     }
 
     /// Installs the shared agent extension registry before product Turns are accepted.
@@ -894,7 +894,7 @@ impl ThreadController {
             ));
         }
         let normalized_input =
-            user_input::normalize_images(&request.input, &self.image_attachments)?;
+            user_input::normalize_attachments(&request.input, &self.attachments)?;
         let thread = self.read_thread(thread_id)?;
         let session_id = thread.session_id.clone();
         let agent_skill_ceiling = thread
@@ -1768,17 +1768,17 @@ impl ThreadController {
             ToolCallOutput::Success(text) => (text, None, false),
             ToolCallOutput::Failure(text) => (text, None, true),
             ToolCallOutput::SuccessContent(mut content) => {
-                crate::image_preparation::prepare_tool_content(
+                crate::attachment_preparation::prepare_tool_content(
                     &mut content,
-                    &self.image_attachments,
-                );
+                    &self.attachments,
+                )?;
                 (tool_content_preview(&content), Some(content), false)
             }
             ToolCallOutput::FailureContent(mut content) => {
-                crate::image_preparation::prepare_tool_content(
+                crate::attachment_preparation::prepare_tool_content(
                     &mut content,
-                    &self.image_attachments,
-                );
+                    &self.attachments,
+                )?;
                 (tool_content_preview(&content), Some(content), true)
             }
         };
@@ -2642,6 +2642,7 @@ fn tool_content_preview(content: &[ContentPart]) -> String {
         .map(|part| match part {
             ContentPart::Text(text) => text.as_str(),
             ContentPart::ImageAttachment { .. } => "[image]",
+            ContentPart::AudioAttachment { .. } | ContentPart::AudioUrl { .. } => "[audio]",
             ContentPart::ImageUrl { .. } => "[image]",
         })
         .collect::<Vec<_>>()
@@ -2826,8 +2827,7 @@ fn thread_manager_info(snapshot: &ThreadSnapshot) -> SessionManagerInfo {
             .map(|turn| turn.status_changed_at_unix_ms)
             .unwrap_or(archived_at);
         return SessionManagerInfo {
-            status: if snapshot.archive_reason == Some(ash_protocol::ThreadArchiveReason::Stopped)
-            {
+            status: if snapshot.archive_reason == Some(ash_protocol::ThreadArchiveReason::Stopped) {
                 SessionManagerStatus::Stopped
             } else {
                 SessionManagerStatus::Completed

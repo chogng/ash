@@ -560,6 +560,22 @@
         {
           "properties": {
             "attachment": {
+              "$ref": "#/$defs/AudioAttachmentRef"
+            },
+            "type": {
+              "const": "userAudioAttachment",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "attachment"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "attachment": {
               "$ref": "#/$defs/ImageAttachmentRef"
             },
             "type": {
@@ -1853,13 +1869,24 @@
     "AttachmentMaterializeResult": {
       "properties": {
         "attachment": {
-          "$ref": "#/$defs/ImageAttachmentRef"
+          "$ref": "#/$defs/AttachmentRef"
         }
       },
       "required": [
         "attachment"
       ],
       "type": "object"
+    },
+    "AttachmentRef": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ImageAttachmentRef"
+        },
+        {
+          "$ref": "#/$defs/AudioAttachmentRef"
+        }
+      ],
+      "description": "A durable attachment returned by the shared upload pipeline."
     },
     "AttachmentUploadCancelParams": {
       "properties": {
@@ -1886,25 +1913,48 @@
       "type": "object"
     },
     "AttachmentUploadStartParams": {
-      "properties": {
-        "detail": {
-          "$ref": "#/$defs/ImageDetail"
+      "anyOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "detail": {
+              "$ref": "#/$defs/ImageDetail"
+            },
+            "encodedBytes": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "mediaType": {
+              "$ref": "#/$defs/ImageMediaType"
+            }
+          },
+          "required": [
+            "mediaType",
+            "encodedBytes",
+            "detail"
+          ],
+          "type": "object"
         },
-        "encodedBytes": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "mediaType": {
-          "$ref": "#/$defs/ImageMediaType"
+        {
+          "additionalProperties": false,
+          "properties": {
+            "encodedBytes": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "mediaType": {
+              "$ref": "#/$defs/AudioMediaType"
+            }
+          },
+          "required": [
+            "mediaType",
+            "encodedBytes"
+          ],
+          "type": "object"
         }
-      },
-      "required": [
-        "mediaType",
-        "encodedBytes",
-        "detail"
-      ],
-      "type": "object"
+      ]
     },
     "AttachmentUploadStartResult": {
       "properties": {
@@ -1957,6 +2007,45 @@
         "nextOffset"
       ],
       "type": "object"
+    },
+    "AudioAttachmentRef": {
+      "description": "Identifies immutable audio bytes and their verified playback duration.",
+      "properties": {
+        "contentDigest": {
+          "$ref": "#/$defs/ContentDigest"
+        },
+        "durationMs": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "encodedBytes": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mediaType": {
+          "$ref": "#/$defs/AudioMediaType"
+        }
+      },
+      "required": [
+        "contentDigest",
+        "mediaType",
+        "encodedBytes",
+        "durationMs"
+      ],
+      "type": "object"
+    },
+    "AudioMediaType": {
+      "description": "Encoded audio formats accepted by the durable attachment service.",
+      "enum": [
+        "wav",
+        "mp3",
+        "m4a",
+        "webM",
+        "ogg"
+      ],
+      "type": "string"
     },
     "AuthHeader": {
       "description": "Only names of recognized authentication headers are retained, never their values.",
@@ -12844,6 +12933,38 @@
       "oneOf": [
         {
           "properties": {
+            "attachment": {
+              "$ref": "#/$defs/AudioAttachmentRef"
+            },
+            "type": {
+              "const": "audioAttachment",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "attachment"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "audioUrl",
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "url"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
             "text": {
               "type": "string"
             },
@@ -18130,6 +18251,38 @@
             "type",
             "name",
             "content"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "attachment": {
+              "$ref": "#/$defs/AudioAttachmentRef"
+            },
+            "type": {
+              "const": "audioAttachment",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "attachment"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "audio",
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "url"
           ],
           "type": "object"
         },
@@ -31913,6 +32066,30 @@
       "oneOf": [
         {
           "properties": {
+            "attachment": {
+              "$ref": "#/$defs/AudioAttachmentRef"
+            },
+            "itemId": {
+              "$ref": "#/$defs/ItemId"
+            },
+            "turnId": {
+              "$ref": "#/$defs/TurnId"
+            },
+            "type": {
+              "const": "userAudioAttachment",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "itemId",
+            "turnId",
+            "attachment"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
             "itemId": {
               "$ref": "#/$defs/ItemId"
             },
@@ -34365,6 +34542,39 @@
     "UserInput": {
       "description": "A provider-independent input supplied by the user for one turn.",
       "oneOf": [
+        {
+          "properties": {
+            "attachment": {
+              "$ref": "#/$defs/AudioAttachmentRef"
+            },
+            "type": {
+              "const": "audioAttachment",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "attachment"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Inline audio is validated and stored before turn admission.",
+          "properties": {
+            "type": {
+              "const": "audio",
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "url"
+          ],
+          "type": "object"
+        },
         {
           "properties": {
             "text": {

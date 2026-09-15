@@ -3,12 +3,12 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
-use serde_json::Value;
 use ash_protocol::PlanStepStatus;
 use ash_protocol::ThreadItem;
 use ash_protocol::ToolCallId;
 use ash_protocol::ToolOutputStream;
 use ash_thread_transcript::ThreadTranscriptEntry;
+use serde_json::Value;
 use zui::ui::{
     Component, ComponentElement, Edges, Element, FontFamily, FontWeight, PaintRect, Point, Rect,
     Size, TextBlock, TextStyle, UiScene,
@@ -220,6 +220,18 @@ fn build_lines(transcript: &TranscriptState) -> Vec<TimelineLine> {
                             attachment.media_type.mime_type(),
                             attachment.width,
                             attachment.height
+                        ),
+                        TimelineLineKind::UserMessage,
+                    );
+                }
+                ThreadItem::UserAudioAttachment { attachment, .. } => {
+                    push_section(&mut lines, "You · Audio", TimelineLineKind::UserLabel);
+                    push_text(
+                        &mut lines,
+                        &format!(
+                            "{} · {} seconds",
+                            attachment.media_type.mime_type(),
+                            attachment.duration_ms.div_ceil(1000)
                         ),
                         TimelineLineKind::UserMessage,
                     );

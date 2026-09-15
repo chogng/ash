@@ -738,6 +738,9 @@ use ash_protocol::AgentTreeNodeProjection;
 use ash_protocol::AgentTreeProjection;
 use ash_protocol::AgentTreeWaitingReason;
 use ash_protocol::ApprovalMode;
+use ash_protocol::AttachmentRef;
+use ash_protocol::AudioAttachmentRef;
+use ash_protocol::AudioMediaType;
 use ash_protocol::Automation;
 use ash_protocol::AutomationDefinition;
 use ash_protocol::AutomationRun;
@@ -864,14 +867,6 @@ use build_info::BuildInfo;
 use diagnostics::Activity;
 use diagnostics::ActivitySummary;
 use diagnostics::DiagnosticSnapshot;
-use response_debug_context::AuthHeader;
-use response_debug_context::AuthRecovery;
-use response_debug_context::DiagnosticOutcome;
-use response_debug_context::RequestAttempt;
-use response_debug_context::RequestOutcome;
-use response_debug_context::ResponseDebugContext;
-use response_debug_context::ResponseDiagnostic;
-use response_debug_context::ResponseOperation;
 use diagnostics::Observation;
 use diagnostics::Outcome;
 use extension_items::ExtensionItem;
@@ -887,6 +882,14 @@ use queue::QueueInput;
 use queue::QueueMove;
 use queue::QueueStatus;
 use queue::QueuedMessage;
+use response_debug_context::AuthHeader;
+use response_debug_context::AuthRecovery;
+use response_debug_context::DiagnosticOutcome;
+use response_debug_context::RequestAttempt;
+use response_debug_context::RequestOutcome;
+use response_debug_context::ResponseDebugContext;
+use response_debug_context::ResponseDiagnostic;
+use response_debug_context::ResponseOperation;
 use schemars::JsonSchema;
 use ts_rs::Config;
 use ts_rs::TS;
@@ -3211,6 +3214,9 @@ typescript_bindings! {
     ToolCallCaller,
     ContentPart,
     ImageAttachmentRef,
+    AttachmentRef,
+    AudioAttachmentRef,
+    AudioMediaType,
     ImageMediaType,
     ImageDetail,
     ModelContextUsageSource,

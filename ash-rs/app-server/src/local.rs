@@ -27,13 +27,7 @@ use ash_core::ContextCompactionLimit;
 use ash_core::ContextTokenCount;
 use ash_core::ContextTokenMeasurementCapability;
 use ash_core::ContextTokenMeasurementOutcome;
-use core_api::CoreError;
 use ash_core::InMemoryThreadStore;
-use core_api::ModelImageInputLimits;
-use core_api::ModelImageInputPolicy;
-use core_api::ModelSelection;
-use core_api::ModelService;
-use core_api::ModelStreamSink as CoreModelStreamSink;
 use ash_core::ResolvedContextBudget;
 use ash_core::ThreadController;
 use ash_core_plugins::PluginActivationAuthority;
@@ -82,6 +76,12 @@ use ash_secrets::FileSecretStore;
 use ash_secrets::SecretStore;
 use ash_skills_extension::BuiltInSkillSource;
 use ash_skills_extension::SkillConfigSnapshotProvider;
+use core_api::CoreError;
+use core_api::ModelImageInputLimits;
+use core_api::ModelImageInputPolicy;
+use core_api::ModelSelection;
+use core_api::ModelService;
+use core_api::ModelStreamSink as CoreModelStreamSink;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::Path;
@@ -804,11 +804,11 @@ impl LocalProfileRuntime {
         std::fs::create_dir_all(&requested_root).map_err(open_error)?;
         let profile_root = std::fs::canonicalize(&requested_root).map_err(open_error)?;
         let state = Arc::new(ash_state::StateRuntime::open(&profile_root).map_err(open_error)?);
-        let image_attachments = open_image_attachments(state.profile_root())?;
+        let attachments = open_attachments(state.profile_root())?;
         let repository = LocalStateRepository::open(&state).map_err(open_error)?;
         let database_path = state.database_path().to_path_buf();
         let threads = repository
-            .recover_threads_with_image_attachments(image_attachments)
+            .recover_threads_with_attachments(attachments)
             .map_err(open_error)?;
         let config = Arc::new(
             ConfigStore::open_with_paths(database_path.clone(), profile_root.join("config.toml"))
@@ -1032,11 +1032,11 @@ pub fn open_local_app_server_with_codebase_providers(
         ),
         (Some(_), SessionStateMode::Ephemeral) => unreachable!("validated above"),
         (None, SessionStateMode::Durable) => {
-            let image_attachments = open_image_attachments(&options.profile_root)?;
+            let attachments = open_attachments(&options.profile_root)?;
             let repository = LocalStateRepository::open(&state_runtime).map_err(open_error)?;
             let database_path = state_runtime.database_path().to_path_buf();
             let threads = repository
-                .recover_threads_with_image_attachments(image_attachments)
+                .recover_threads_with_attachments(attachments)
                 .map_err(open_error)?;
             let config = Arc::new(
                 ConfigStore::open_with_paths(
@@ -1048,10 +1048,10 @@ pub fn open_local_app_server_with_codebase_providers(
             (database_path, threads, config)
         }
         (None, SessionStateMode::Ephemeral) => {
-            let image_attachments = open_image_attachments(&options.profile_root)?;
-            let threads = Arc::new(ThreadController::with_store_and_image_attachments(
+            let attachments = open_attachments(&options.profile_root)?;
+            let threads = Arc::new(ThreadController::with_store_and_attachments(
                 Arc::new(InMemoryThreadStore::default()),
-                image_attachments,
+                attachments,
             ));
             let database_path = state_runtime.database_path().to_path_buf();
             let config = Arc::new(
@@ -1567,16 +1567,15 @@ fn default_dir_config(
     ))
 }
 
-fn open_image_attachments(
+fn open_attachments(
     profile_root: &Path,
-) -> Result<Arc<ash_attachments::ImageAttachments>, OpenAppServerError> {
-    let image_store =
-        ash_attachments::FileImageAttachmentStore::open(profile_root.join("attachments"))
-            .map_err(|error| OpenAppServerError(error.to_string()))?;
+) -> Result<Arc<ash_attachments::Attachments>, OpenAppServerError> {
+    let image_store = ash_attachments::FileAttachmentStore::open(profile_root.join("attachments"))
+        .map_err(|error| OpenAppServerError(error.to_string()))?;
     let remote_images = ash_attachments::SafeRemoteImageFetcher::production()
         .map_err(|error| OpenAppServerError(error.to_string()))?;
     Ok(Arc::new(
-        ash_attachments::ImageAttachments::new(Arc::new(image_store))
+        ash_attachments::Attachments::new(Arc::new(image_store))
             .with_remote_fetcher(Arc::new(remote_images)),
     ))
 }

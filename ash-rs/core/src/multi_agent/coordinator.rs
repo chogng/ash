@@ -9,12 +9,6 @@ use crate::StartTurnRequest;
 use crate::ThreadController;
 use crate::ThreadSnapshot;
 use crate::thread_reducer::satisfied_agent_join;
-use serde::Serialize;
-use sha2::Digest;
-use sha2::Sha256;
-use std::collections::BTreeSet;
-use std::sync::Arc;
-use std::sync::RwLock;
 use ash_protocol::AgentCapabilityScope;
 use ash_protocol::AgentContextContent;
 use ash_protocol::AgentContextMode;
@@ -46,6 +40,12 @@ use ash_protocol::ThreadSequenceRange;
 use ash_protocol::TurnId;
 use ash_protocol::TurnStatus;
 use ash_protocol::UserInput;
+use serde::Serialize;
+use sha2::Digest;
+use sha2::Sha256;
+use std::collections::BTreeSet;
+use std::sync::Arc;
+use std::sync::RwLock;
 
 const MAX_TASK_BYTES: usize = 256 * 1024;
 const MAX_ROLE_BYTES: usize = 64 * 1024;
@@ -994,6 +994,11 @@ fn materialize_item(
         }
         ash_protocol::ThreadItem::UserImage { url, .. } => {
             AgentContextContent::UserImage { url: url.clone() }
+        }
+        ash_protocol::ThreadItem::UserAudioAttachment { attachment, .. } => {
+            AgentContextContent::UserAudioAttachment {
+                attachment: attachment.clone(),
+            }
         }
         ash_protocol::ThreadItem::UserImageAttachment { attachment, .. } => {
             AgentContextContent::UserImageAttachment {

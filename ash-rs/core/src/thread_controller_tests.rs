@@ -1,16 +1,6 @@
 use super::*;
 use crate::thread_controller::CommitContextCheckpointRequest;
 use crate::thread_controller::live_interaction;
-use std::collections::BTreeMap;
-use std::sync::Arc;
-use std::sync::Condvar;
-use std::sync::Mutex;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::AtomicU64;
-use std::sync::atomic::Ordering;
-use std::sync::mpsc;
-use std::thread;
-use std::time::Duration;
 use ash_async_utils::CancellationSource;
 use ash_history::StoredEvent;
 use ash_protocol::ActionApprovalCapability;
@@ -47,6 +37,16 @@ use ash_protocol::ToolName;
 use ash_protocol::TurnId;
 use ash_protocol::UserInput;
 use ash_protocol::UserInputQuestion;
+use std::collections::BTreeMap;
+use std::sync::Arc;
+use std::sync::Condvar;
+use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
 
 struct OneShotActivation {
     calls: Arc<AtomicU64>,
@@ -710,9 +710,7 @@ impl ThreadStore for ToggleStore {
         Ok(Vec::new())
     }
 
-    fn list_catalog(
-        &self,
-    ) -> Result<Vec<ash_thread_store::ThreadCatalogRecord>, ThreadStoreError> {
+    fn list_catalog(&self) -> Result<Vec<ash_thread_store::ThreadCatalogRecord>, ThreadStoreError> {
         Ok(Vec::new())
     }
 
@@ -1185,9 +1183,7 @@ impl ThreadStore for PerThreadBlockingStore {
         self.inner.load(thread_id)
     }
 
-    fn list_catalog(
-        &self,
-    ) -> Result<Vec<ash_thread_store::ThreadCatalogRecord>, ThreadStoreError> {
+    fn list_catalog(&self) -> Result<Vec<ash_thread_store::ThreadCatalogRecord>, ThreadStoreError> {
         self.inner.list_catalog()
     }
 
@@ -2183,7 +2179,7 @@ fn tool_image_content_is_prepared_before_it_becomes_durable() {
                 output: ToolCallOutput::SuccessContent(vec![
                     ash_protocol::ContentPart::Text("before".into()),
                     ash_protocol::ContentPart::ImageUrl {
-                        url: "data:image/png;base64,AA==".into(),
+                        url: crate::test_image::one_pixel_png_data_url(),
                         detail: ash_protocol::ImageDetail::High,
                     },
                 ]),
@@ -2199,12 +2195,10 @@ fn tool_image_content_is_prepared_before_it_becomes_durable() {
         ThreadItem::ToolResult {
             content: Some(content),
             ..
-        } if content == &vec![
-            ash_protocol::ContentPart::Text("before".into()),
-            ash_protocol::ContentPart::Text(
-                crate::image_preparation::IMAGE_PROCESSING_ERROR_PLACEHOLDER.into(),
-            ),
-        ]
+        } if matches!(content.as_slice(), [
+            ash_protocol::ContentPart::Text(text),
+            ash_protocol::ContentPart::ImageAttachment { .. },
+        ] if text == "before")
     ));
 }
 
@@ -2250,7 +2244,7 @@ fn start_turn_persists_ordered_text_and_normalized_image_attachment_items() {
         &snapshot.items[1],
         ThreadItem::UserImageAttachment { turn_id, attachment, .. }
             if turn_id == &result.turn_id
-                && threads.image_attachments().verify(attachment).is_ok()
+                && threads.attachments().verify(attachment).is_ok()
     ));
     assert!(matches!(
         &snapshot.commands[0].receipt.command,
@@ -2360,5 +2354,128 @@ fn agent_bindings_cannot_change_through_catalog_backfill() {
         agent_graph_store::AgentGraphStore::read_agent(store.as_ref(), &changed.binding.agent_id)
             .unwrap()
             .is_none()
+    );
+}
+
+#[test]
+fn audio_admission_is_durable_recoverable_and_rejects_forged_metadata_before_commit() {
+    let root = tempfile::tempdir().unwrap();
+    let open = || {
+        Arc::new(ash_attachments::Attachments::new(Arc::new(
+            ash_attachments::FileAttachmentStore::open(root.path()).unwrap(),
+        )))
+    };
+    let attachments = open();
+    let store = Arc::new(InMemoryThreadStore::default());
+    let threads = ThreadController::with_store_and_attachments(store.clone(), attachments.clone());
+    let thread = create_thread(&threads, "audio");
+    let audio = audio::load_bytes(
+        include_bytes!("../../utils/audio/tests/fixtures/tone.wav")
+            .as_slice()
+            .into(),
+        audio::AudioFormat::Wav,
+    )
+    .unwrap();
+    let mut request = start_request("audio");
+    request.input = vec![UserInput::Audio {
+        url: audio.data_url(),
+    }];
+    let started = threads.start_turn(&thread, request).unwrap();
+    threads
+        .complete_turn(&thread, &started.turn_id, "heard".into())
+        .unwrap();
+    let original = threads.read_thread(&thread).unwrap();
+    let attachment = original
+        .items
+        .iter()
+        .find_map(|item| match item {
+            ThreadItem::UserAudioAttachment { attachment, .. } => Some(attachment.clone()),
+            _ => None,
+        })
+        .unwrap();
+    assert!(
+        !serde_json::to_string(&original.public_thread())
+            .unwrap()
+            .contains("data:audio")
+    );
+    drop(threads);
+    drop(attachments);
+    let recovered = ThreadController::with_store_and_attachments(store, open());
+    let snapshot = recovered.recover_thread(&thread).unwrap();
+    assert_eq!(snapshot.items, original.items);
+    assert!(
+        recovered
+            .attachments()
+            .materialize_audio_data_url(&attachment)
+            .unwrap()
+            .starts_with("data:audio/wav;base64,")
+    );
+    let before = recovered.read_thread(&thread).unwrap().sequence;
+    let mut forged = attachment;
+    forged.duration_ms += 1;
+    let mut invalid = start_request("forged-audio");
+    invalid.input = vec![UserInput::AudioAttachment { attachment: forged }];
+    assert!(recovered.start_turn(&thread, invalid).is_err());
+    assert_eq!(recovered.read_thread(&thread).unwrap().sequence, before);
+}
+
+#[test]
+fn invalid_tool_audio_does_not_commit_a_result_and_the_call_can_still_finish() {
+    let threads = ThreadController::with_store(Arc::new(InMemoryThreadStore::default()));
+    let thread = create_thread(&threads, "tool audio");
+    let turn = start_turn(&threads, &thread, "tool-audio");
+    let call = threads
+        .record_tool_call(
+            &thread,
+            &turn,
+            RecordToolCallRequest {
+                tool_call_id: Some(ToolCallId::new("audio-call").unwrap()),
+                name: ToolName::new("audio-tool").unwrap(),
+                arguments_json: "{}".into(),
+                binding: None,
+            },
+        )
+        .unwrap();
+    let before = threads.read_thread(&thread).unwrap().sequence;
+    assert!(
+        threads
+            .record_tool_result(
+                &thread,
+                &turn,
+                RecordToolResultRequest {
+                    tool_call_id: call.tool_call_id.clone(),
+                    output: ToolCallOutput::SuccessContent(vec![
+                        ash_protocol::ContentPart::AudioUrl {
+                            url: "data:audio/wav;base64,AA==".into()
+                        }
+                    ]),
+                }
+            )
+            .is_err()
+    );
+    assert_eq!(threads.read_thread(&thread).unwrap().sequence, before);
+    let url = audio::load_bytes(
+        include_bytes!("../../utils/audio/tests/fixtures/tone.wav")
+            .as_slice()
+            .into(),
+        audio::AudioFormat::Wav,
+    )
+    .unwrap()
+    .data_url();
+    threads
+        .record_tool_result(
+            &thread,
+            &turn,
+            RecordToolResultRequest {
+                tool_call_id: call.tool_call_id,
+                output: ToolCallOutput::SuccessContent(vec![ash_protocol::ContentPart::AudioUrl {
+                    url,
+                }]),
+            },
+        )
+        .unwrap();
+    let snapshot = threads.read_thread(&thread).unwrap();
+    assert!(
+        matches!(&snapshot.items[2], ThreadItem::ToolResult { content: Some(content), .. } if matches!(content.as_slice(), [ash_protocol::ContentPart::AudioAttachment { .. }]))
     );
 }

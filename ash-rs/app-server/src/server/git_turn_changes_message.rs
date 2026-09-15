@@ -1,13 +1,13 @@
 use super::git_turn_changes_runtime::publish_records;
 use super::update_broker::UpdateBroker;
-use git_turn_changes::{MessageState, TurnChangeSet, TurnChangeStore};
-use std::sync::Arc;
 use ash_config::ConfigStore;
-use core_api::ModelSelection;
-use core_api::ModelService;
 use ash_core::ThreadController;
 use ash_file_access::DirId;
 use ash_state::SqliteTurnChangeStore;
+use core_api::ModelSelection;
+use core_api::ModelService;
+use git_turn_changes::{MessageState, TurnChangeSet, TurnChangeStore};
+use std::sync::Arc;
 
 pub(super) fn spawn_message_job(
     store: Arc<SqliteTurnChangeStore>,
@@ -185,6 +185,12 @@ fn commit_message_prompt(
                     context.push(format!(
                         "User context ({name}): {}",
                         redact_sensitive_text(&content)
+                    ));
+                }
+                ash_protocol::ThreadItem::UserAudioAttachment { attachment, .. } => {
+                    context.push(format!(
+                        "User attached audio ({} ms).",
+                        attachment.duration_ms
                     ));
                 }
                 ash_protocol::ThreadItem::UserImage { .. }

@@ -50,6 +50,7 @@ impl PathUri {
         if decode_opaque_path_uri(&self.0).is_some()
             || decode_opaque_path_uri(&base.0).is_some()
             || self.0.host_str() != base.0.host_str()
+            || self.infer_path_convention() != base.infer_path_convention()
         {
             return false;
         }
@@ -67,7 +68,27 @@ impl PathUri {
         ) else {
             return false;
         };
-        path_segments.starts_with(&base_segments)
+        segments_start_with(&path_segments, &base_segments)
+    }
+
+    /// Counts unambiguous lexical segments, including a drive or share anchor.
+    /// Opaque paths and encoded separators have no lexical depth.
+    pub fn lexical_depth(&self) -> Option<usize> {
+        if self.is_opaque() {
+            return None;
+        }
+        containment_segments(&self.0, self.infer_path_convention()?).map(|segments| segments.len())
+    }
+
+    /// Reports whether the two lexical subtrees overlap, or `None` for ambiguous paths.
+    /// Equal values always overlap, including opaque values.
+    pub fn overlaps(&self, other: &Self) -> Option<bool> {
+        if self == other {
+            return Some(true);
+        }
+        self.lexical_depth()?;
+        other.lexical_depth()?;
+        Some(self.starts_with(other) || other.starts_with(self))
     }
 
     /// Returns the decoded native relative path from `base` to this URI.
@@ -85,7 +106,10 @@ impl PathUri {
         let convention = self.infer_path_convention()?;
         let path = containment_segments(&self.0, convention)?;
         let base = containment_segments(&base.0, convention)?;
-        let relative = path.strip_prefix(base.as_slice())?;
+        if !segments_start_with(&path, &base) {
+            return None;
+        }
+        let relative = &path[base.len()..];
         let separator = match convention {
             PathConvention::Posix => "/",
             PathConvention::Windows => "\\",
@@ -175,6 +199,35 @@ impl PathUri {
         }
         Self::try_from(url)
     }
+
+    /// Joins non-empty relative path text without parent, root, drive or stream components.
+    /// This establishes lexical containment only; the host still owns filesystem authorization.
+    pub fn join_descendant(&self, path: &str) -> Result<Self, PathUriParseError> {
+        let windows = self.infer_path_convention() == Some(PathConvention::Windows);
+        if path.is_empty()
+            || path.starts_with('/')
+            || windows && (path.starts_with('\\') || path.contains(':'))
+            || path
+                .split(|character| character == '/' || windows && character == '\\')
+                .any(|segment| segment == "..")
+            || self.lexical_depth().is_none()
+        {
+            return Err(PathUriParseError::InvalidFileUriPath { path: path.into() });
+        }
+        let joined = self.join(path)?;
+        if !joined.starts_with(self) {
+            return Err(PathUriParseError::InvalidFileUriPath { path: path.into() });
+        }
+        Ok(joined)
+    }
+}
+
+fn segments_start_with(path: &[&str], base: &[&str]) -> bool {
+    path.len() >= base.len()
+        && path.iter().zip(base).all(|(path, base)| {
+            urlencoding::decode_binary(path.as_bytes())
+                == urlencoding::decode_binary(base.as_bytes())
+        })
 }
 
 fn containment_segments(url: &Url, convention: PathConvention) -> Option<Vec<&str>> {

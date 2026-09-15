@@ -383,6 +383,16 @@ fn submission(input: &[ash_protocol::UserInput]) -> Result<ChatSubmission, Strin
                 ));
                 display.push("[Image]".into());
             }
+            ash_protocol::UserInput::AudioAttachment { attachment } => {
+                values.push(crate::thread::composer::ChatInputItem::AudioAttachment(
+                    attachment.clone(),
+                ));
+                display.push("[Audio]".into());
+            }
+            ash_protocol::UserInput::Audio { url } => {
+                values.push(crate::thread::composer::ChatInputItem::Audio { url: url.clone() });
+                display.push("[Audio]".into());
+            }
             ash_protocol::UserInput::Skill { skill } => {
                 values.push(crate::thread::composer::ChatInputItem::Skill {
                     skill: skill.clone(),

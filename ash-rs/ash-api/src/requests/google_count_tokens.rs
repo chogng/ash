@@ -7,12 +7,12 @@ use crate::MessageRole;
 use crate::ModelRequest;
 use crate::ToolChoice;
 use crate::ToolDefinition;
-use serde_json::Map;
-use serde_json::Value;
-use serde_json::json;
 use ash_async_utils::CancellationToken;
 use ash_client::OperationClient;
 use ash_client::ResolvedApiTarget;
+use serde_json::Map;
+use serde_json::Value;
+use serde_json::json;
 
 pub(crate) fn count_input_tokens(
     target: &ResolvedApiTarget,
@@ -54,7 +54,22 @@ fn normalized_model(model: &str) -> Result<&str, ApiError> {
 }
 
 fn build_request(model: &str, request: &ModelRequest) -> Result<Value, ApiError> {
-    crate::requests::require_materialized_images(request)?;
+    crate::requests::require_materialized_attachments(request)?;
+    for item in &request.input {
+        let (content, user_message) = match item {
+            InputItem::Message(message) => (&message.content, message.role == MessageRole::User),
+            InputItem::ToolResult(result) => (&result.content, false),
+        };
+        if !user_message
+            && content
+                .iter()
+                .any(|part| matches!(part, ContentPart::AudioUrl { .. }))
+        {
+            return Err(ApiError::InvalidRequest(
+                "Gemini countTokens accepts audio in user messages only".into(),
+            ));
+        }
+    }
     let mut system_parts = request
         .instructions
         .iter()
@@ -143,6 +158,18 @@ fn convert_parts(parts: &[ContentPart]) -> Result<Vec<Value>, ApiError> {
         .iter()
         .map(|part| match part {
             ContentPart::Text(text) => Ok(json!({"text": text})),
+            ContentPart::AudioAttachment { .. } => {
+                unreachable!("durable audio must be materialized before encoding")
+            }
+            ContentPart::AudioUrl { url } => {
+                let audio = audio::load_data_url(url)
+                    .map_err(|error| ApiError::InvalidRequest(error.to_string()))?;
+                let data = audio.data_url();
+                let (_, payload) = data
+                    .split_once(',')
+                    .expect("validated audio URL has a payload");
+                Ok(json!({"inlineData": {"mimeType": audio.format().mime_type(), "data": payload}}))
+            }
             ContentPart::ImageAttachment { .. } => {
                 unreachable!("durable image attachments must be materialized before API encoding")
             }
@@ -211,7 +238,9 @@ fn content_text(content: &[ContentPart]) -> String {
         .iter()
         .filter_map(|part| match part {
             ContentPart::Text(text) => Some(text.as_str()),
-            ContentPart::ImageAttachment { .. } => None,
+            ContentPart::ImageAttachment { .. }
+            | ContentPart::AudioAttachment { .. }
+            | ContentPart::AudioUrl { .. } => None,
             ContentPart::ImageUrl { .. } => None,
         })
         .collect::<Vec<_>>()

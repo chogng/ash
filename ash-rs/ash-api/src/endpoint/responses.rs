@@ -20,7 +20,6 @@ use crate::ToolCallId;
 use crate::ToolChoice;
 use crate::ToolDefinition;
 use crate::ToolName;
-use serde_json::{Map, Value, json};
 use ash_async_utils::CancellationToken;
 use ash_client::ClientError;
 use ash_client::ClientRequest;
@@ -28,6 +27,7 @@ use ash_client::OperationClient;
 use ash_client::OperationStreamSink;
 use ash_client::ResolvedApiTarget;
 use ash_client::SseDecoder;
+use serde_json::{Map, Value, json};
 
 const MAX_STREAM_EVENT_BYTES: usize = 1024 * 1024;
 
@@ -219,7 +219,20 @@ pub(super) fn build_request(
     request: &ModelRequest,
 ) -> Result<Value, ApiError> {
     crate::requests::openai_tools::validate_tools(&request.tools)?;
-    crate::requests::require_materialized_images(request)?;
+    crate::requests::require_materialized_attachments(request)?;
+    for item in &request.input {
+        let (content, allowed_role) = match item {
+            InputItem::Message(message) => (&message.content, message.role == MessageRole::User),
+            InputItem::ToolResult(result) => (&result.content, true),
+        };
+        if content
+            .iter()
+            .any(|part| matches!(part, ContentPart::AudioUrl { .. }))
+            && (endpoint != ApiEndpoint::ChatGptResponses || !allowed_role)
+        {
+            return Err(ApiError::InvalidRequest("audio in Responses requires the ChatGPT audio input contract and a user message or tool result; use Chat Completions for API audio models".into()));
+        }
+    }
     let mut body = Map::from_iter([
         ("model".into(), Value::String(model.into())),
         (
@@ -324,7 +337,12 @@ fn convert_input(
                 }));
             }
             InputItem::ToolResult(result) => {
-                let output = if cache == CacheSupport::Breakpoints {
+                let output = if cache == CacheSupport::Breakpoints
+                    || result
+                        .content
+                        .iter()
+                        .any(|part| !matches!(part, ContentPart::Text(_)))
+                {
                     if !result.content.is_empty() {
                         candidates.push((
                             index,
@@ -381,9 +399,10 @@ fn convert_content(role: MessageRole, part: &ContentPart) -> Value {
             },
             "text": text,
         }),
-        ContentPart::ImageAttachment { .. } => {
+        ContentPart::ImageAttachment { .. } | ContentPart::AudioAttachment { .. } => {
             unreachable!("durable image attachments must be materialized before API encoding")
         }
+        ContentPart::AudioUrl { url } => json!({"type": "input_audio", "audio_url": url}),
         ContentPart::ImageUrl { url, detail } => json!({
             "type": "input_image",
             "image_url": url,
@@ -547,7 +566,9 @@ fn content_text(content: &[ContentPart]) -> String {
         .iter()
         .filter_map(|part| match part {
             ContentPart::Text(text) => Some(text.as_str()),
-            ContentPart::ImageAttachment { .. } => None,
+            ContentPart::ImageAttachment { .. }
+            | ContentPart::AudioAttachment { .. }
+            | ContentPart::AudioUrl { .. } => None,
             ContentPart::ImageUrl { .. } => None,
         })
         .collect::<Vec<_>>()

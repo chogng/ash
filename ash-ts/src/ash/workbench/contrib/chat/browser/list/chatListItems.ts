@@ -176,6 +176,13 @@ export function chatListItem(item: ThreadItem, transient = false): IChatListItem
 				text: "Image",
 				transient,
 			};
+		case "userAudioAttachment":
+			return {
+				id: item.itemId,
+				type: item.type,
+				text: `Audio (${Math.ceil(item.attachment.durationMs / 1000)} seconds)`,
+				transient,
+			};
 		case "toolCall":
 			return {
 				id: item.itemId,

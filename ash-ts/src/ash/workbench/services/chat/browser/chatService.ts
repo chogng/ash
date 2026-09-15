@@ -306,7 +306,7 @@ function toThread(thread: ThreadDto): Thread {
 				cacheWriteInputTokens: { ...turn.usage.cacheWriteInputTokens },
 				reasoningTokens: { ...turn.usage.reasoningTokens },
 			},
-			items: turn.items.map((item) => ({ ...item })),
+			items: turn.items.map(toThreadItem),
 			error: turn.error ? { ...turn.error } : turn.error,
 		})),
 	};
@@ -372,6 +372,7 @@ function toThreadItem(item: ThreadItemDto): ThreadItem {
 		case "userContext": return { type: item.type, itemId: item.itemId, turnId: item.turnId, name: item.name, content: item.content };
 		case "userImage": return { type: item.type, itemId: item.itemId, turnId: item.turnId, url: item.url };
 		case "userImageAttachment": return { type: item.type, itemId: item.itemId, turnId: item.turnId, attachment: { ...item.attachment } };
+		case "userAudioAttachment": return { type: item.type, itemId: item.itemId, turnId: item.turnId, attachment: { ...item.attachment } };
 		case "agentMessage":
 		case "reasoning":
 		case "plan": return { type: item.type, itemId: item.itemId, turnId: item.turnId, text: item.text };

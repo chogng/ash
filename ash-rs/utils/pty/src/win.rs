@@ -50,6 +50,7 @@ pub use conpty::ConPtySystem;
 pub use job::JobObject;
 pub use psuedocon::PsuedoCon;
 pub use psuedocon::conpty_supported;
+pub(crate) use psuedocon::supports_client_lifetime;
 
 #[derive(Debug)]
 pub struct WinChild {

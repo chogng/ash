@@ -40,3 +40,46 @@ pub struct ImageAttachmentRef {
     pub width: u32,
     pub height: u32,
 }
+
+/// Encoded audio formats accepted by the durable attachment service.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum AudioMediaType {
+    Wav,
+    Mp3,
+    M4a,
+    WebM,
+    Ogg,
+}
+
+impl AudioMediaType {
+    pub const fn mime_type(self) -> &'static str {
+        match self {
+            Self::Wav => "audio/wav",
+            Self::Mp3 => "audio/mpeg",
+            Self::M4a => "audio/mp4",
+            Self::WebM => "audio/webm",
+            Self::Ogg => "audio/ogg",
+        }
+    }
+}
+
+/// Identifies immutable audio bytes and their verified playback duration.
+#[derive(Clone, Debug, Deserialize, Eq, Hash, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct AudioAttachmentRef {
+    pub content_digest: ContentDigest,
+    pub media_type: AudioMediaType,
+    #[ts(type = "number")]
+    pub encoded_bytes: u64,
+    #[ts(type = "number")]
+    pub duration_ms: u64,
+}
+
+/// A durable attachment returned by the shared upload pipeline.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(untagged)]
+pub enum AttachmentRef {
+    Image(ImageAttachmentRef),
+    Audio(AudioAttachmentRef),
+}

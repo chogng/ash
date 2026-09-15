@@ -85,20 +85,22 @@ shared_library!(Ntdll,
     ) -> NTSTATUS,
 );
 
-fn load_conpty() -> ConPtyFuncs {
-    let kernel = ConPtyFuncs::open(Path::new("kernel32.dll")).expect(
-        "this system does not support conpty.  Windows 10 October 2018 or newer is required",
-    );
-
-    if let Ok(sideloaded) = ConPtyFuncs::open(Path::new("conpty.dll")) {
-        sideloaded
-    } else {
-        kernel
-    }
-}
+shared_library!(ConPtyReleaseFuncs,
+    pub fn ReleasePseudoConsole(hpc: HPCON) -> HRESULT,
+);
 
 lazy_static! {
-    static ref CONPTY: ConPtyFuncs = load_conpty();
+    static ref CONPTY: ConPtyFuncs = ConPtyFuncs::open(Path::new("kernel32.dll")).expect(
+        "this system does not support conpty.  Windows 10 October 2018 or newer is required",
+    );
+    // Available starting with Windows 11 24H2. All console functions must come
+    // from the same system implementation because HPCON is opaque.
+    static ref CONPTY_RELEASE: Option<ConPtyReleaseFuncs> =
+        ConPtyReleaseFuncs::open(Path::new("kernel32.dll")).ok();
+}
+
+pub(crate) fn supports_client_lifetime() -> bool {
+    CONPTY_RELEASE.is_some()
 }
 
 pub fn conpty_supported() -> bool {
@@ -119,10 +121,9 @@ fn windows_build_number() -> Option<u32> {
 
 pub struct PsuedoCon {
     con: HPCON,
-    // CreatePseudoConsole borrows these pipe handles for the lifetime of the
-    // pseudoconsole, so we must keep owning them until ClosePseudoConsole.
-    _input: FileDescriptor,
-    _output: FileDescriptor,
+    // Retain these only until a client attaches. Keeping the output writer
+    // afterward prevents the reader from observing the console's EOF.
+    creation_handles: Option<(FileDescriptor, FileDescriptor)>,
 }
 
 unsafe impl Send for PsuedoCon {}
@@ -156,9 +157,25 @@ impl PsuedoCon {
         );
         Ok(Self {
             con,
-            _input: input,
-            _output: output,
+            creation_handles: Some((input, output)),
         })
+    }
+
+    /// Completes attachment after a client was successfully created with this console.
+    /// The console keeps running until its last client exits on supported Windows versions.
+    pub fn client_attached(&mut self) -> Result<(), Error> {
+        if self.creation_handles.is_none() {
+            return Ok(());
+        }
+        if let Some(release) = CONPTY_RELEASE.as_ref() {
+            let result = unsafe { (release.ReleasePseudoConsole)(self.con) };
+            ensure!(
+                result == S_OK,
+                "failed to release pseudoconsole ownership: HRESULT {result}"
+            );
+        }
+        self.creation_handles.take();
+        Ok(())
     }
 
     pub fn resize(&self, size: COORD) -> Result<(), Error> {
@@ -173,7 +190,7 @@ impl PsuedoCon {
         Ok(())
     }
 
-    pub fn spawn_command(&self, cmd: CommandBuilder) -> anyhow::Result<WinChild> {
+    pub fn spawn_command(&mut self, cmd: CommandBuilder) -> anyhow::Result<WinChild> {
         let job = Arc::new(JobObject::create()?);
         let mut si: STARTUPINFOEXW = unsafe { mem::zeroed() };
         si.StartupInfo.cb = mem::size_of::<STARTUPINFOEXW>() as u32;
@@ -224,6 +241,7 @@ impl PsuedoCon {
         let _main_thread = unsafe { OwnedHandle::from_raw_handle(pi.hThread as _) };
         let proc = unsafe { OwnedHandle::from_raw_handle(pi.hProcess as _) };
 
+        self.client_attached()?;
         Ok(WinChild::new(proc, job))
     }
 }
@@ -364,15 +382,5 @@ fn append_quoted(arg: &OsStr, cmdline: &mut Vec<u16>) {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::MIN_CONPTY_BUILD;
-    use super::windows_build_number;
-
-    #[test]
-    fn windows_build_number_returns_value() {
-        // We can't stably check the version of the GH workers, but we can
-        // at least check that this.
-        let version = windows_build_number().unwrap();
-        assert!(version > MIN_CONPTY_BUILD);
-    }
-}
+#[path = "psuedocon_tests.rs"]
+mod tests;

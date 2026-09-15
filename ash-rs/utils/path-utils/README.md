@@ -18,8 +18,8 @@
 | `CanonicalPathRoot::new` / `canonicalize_within` | 缓存 canonical root，并验证 existing candidate 的真实 host path containment | candidate 不可用与 canonical path 逃出 root 分别返回 `Unavailable` / `OutsideRoot` |
 | `CanonicalPathRoot::inspect_without_symlinks` | 从 canonical root 到 candidate 逐级读取 metadata，不跟随任何 symlink | 区分 existing、missing、越界、symlink 与 metadata failure；不执行删除或写入 |
 | `normalize_for_native_workdir` | Windows 上移除 verbatim path 语法 | 不访问文件系统 |
-| `resolve_symlink_write_paths` | 跟随相对或绝对 symlink chain | cycle/metadata failure 返回原始 `write_path`，且 `read_path = None` |
-| `write_atomically` / `write_text_atomically` | 同目录临时文件写入、flush、rename、目录 sync | rename 前失败保留旧 destination；rename 后目录 sync 失败会在新内容已可见时返回错误 |
+| `resolve_symlink_write_path` | 跟随相对或绝对 symlink chain | 循环、超过 40 层或 metadata 失败返回错误，禁止替换成原始链接路径 |
+| `write_atomically` / `write_text_atomically` | 同目录临时文件写入、保留已有权限、flush、rename、目录 sync | rename 前失败保留旧 destination；rename 后目录 sync 失败会在新内容已可见时返回错误 |
 
 `paths_match_after_normalization` 适合 Resume cwd 或本地 session filter，但本 crate 不决定何时
 恢复会话或提示用户。`write_atomically` 也不拥有上层配置 schema、revision 或 locking。
@@ -32,7 +32,6 @@
 | `comparison.rs::is_wsl_case_insensitive_path` | 精确识别 Windows drive mount，不把普通 Linux path 当成 case-insensitive |
 | `canonical_root.rs::CanonicalPathRoot::comparison_path` | root 的 host-aware comparison identity，不改变返回给 caller 的 canonical path |
 | `environment.rs::is_wsl` | 环境变量与 `/proc/version` detection |
-| `persistence.rs::unresolved` | symlink resolution 的 conservative fallback |
 | `persistence.rs::sync_parent` | rename 后 durability checkpoint |
 
 ```text
@@ -51,9 +50,9 @@ CanonicalPathRoot::inspect_without_symlinks
   → symlink_metadata(root..candidate)
   → Existing | Missing | OutsideRoot | Symlink | Unavailable
 
-resolve_symlink_write_paths
+resolve_symlink_write_path
   → symlink_metadata/read_link loop
-  → resolved target | unresolved fallback
+  → resolved target | io::Error
 
 write_atomically
   → create parent

@@ -139,6 +139,7 @@ members = [
     "ash-rs/uds",
     "ash-code/tui",
     "ash-rs/utils/absolute-path",
+    "ash-rs/utils/audio",
     "ash-rs/utils/cache",
     "ash-rs/utils/elapsed",
     "ash-rs/utils/home-dir",
@@ -196,6 +197,8 @@ publish = false
 version = "0.1.0"
 
 [workspace.dependencies]
+symphonia = { version = "0.6.0", default-features = false }
+audio = { package = "ash-utils-audio", path = "ash-rs/utils/audio" }
 test-binary-support = { package = "ash-test-binary-support", path = "ash-rs/test-binary-support" }
 libtest-mimic = "0.8.2"
 exec-server = { package = "ash-exec-server", path = "ash-rs/exec-server", default-features = false }

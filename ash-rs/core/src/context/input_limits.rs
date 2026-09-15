@@ -1,11 +1,11 @@
 use std::collections::BTreeMap;
 
-use serde_json::Value;
 use ash_protocol::ContentPart;
 use ash_protocol::ThreadItem;
 use ash_protocol::ToolCallBinding;
 use ash_protocol::ToolCallId;
 use ash_protocol::ToolSourceProvenance;
+use serde_json::Value;
 
 const SHELL_RESULT_MAX_BYTES: usize = 30 * 1024;
 const MCP_RESULT_MAX_BYTES: usize = 25 * 1024;
@@ -164,7 +164,10 @@ fn limit_content(
         .iter()
         .filter_map(|part| match part {
             ContentPart::Text(text) => Some(text.as_str()),
-            ContentPart::ImageAttachment { .. } | ContentPart::ImageUrl { .. } => None,
+            ContentPart::ImageAttachment { .. }
+            | ContentPart::ImageUrl { .. }
+            | ContentPart::AudioAttachment { .. }
+            | ContentPart::AudioUrl { .. } => None,
         })
         .collect::<Vec<_>>()
         .join("\n");
@@ -176,7 +179,10 @@ fn limit_content(
     limited.extend(content.into_iter().filter(|part| {
         matches!(
             part,
-            ContentPart::ImageAttachment { .. } | ContentPart::ImageUrl { .. }
+            ContentPart::ImageAttachment { .. }
+                | ContentPart::ImageUrl { .. }
+                | ContentPart::AudioAttachment { .. }
+                | ContentPart::AudioUrl { .. }
         )
     }));
     limited
@@ -475,7 +481,10 @@ mod tests {
             .iter()
             .filter_map(|part| match part {
                 ContentPart::Text(text) => Some(text.as_str()),
-                ContentPart::ImageAttachment { .. } | ContentPart::ImageUrl { .. } => None,
+                ContentPart::ImageAttachment { .. }
+                | ContentPart::ImageUrl { .. }
+                | ContentPart::AudioAttachment { .. }
+                | ContentPart::AudioUrl { .. } => None,
             })
             .collect::<String>();
 

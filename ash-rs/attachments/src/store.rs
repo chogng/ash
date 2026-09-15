@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::fs;
+use std::io::Read;
 use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
@@ -7,64 +8,67 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use ash_protocol::ContentDigest;
-use ash_protocol::ImageAttachmentRef;
-use ash_utils_image::EncodedImage;
 use ash_utils_path::CanonicalPathRoot;
 use ash_utils_path::NoSymlinkPathError;
 use ash_utils_path::NoSymlinkPathStatus;
 
 use crate::AttachmentError;
-use crate::service::reference_for_image;
-use crate::service::verify_reference_bytes;
+use crate::MAX_ATTACHMENT_BYTES;
 
-/// Stores and resolves immutable image bytes by their exact content digest.
-///
-/// Implementations must commit bytes before returning their reference and must verify untrusted
-/// reference metadata rather than using it to select arbitrary filesystem paths.
-pub trait ImageAttachmentStore: Send + Sync {
-    /// Commits validated encoded bytes before returning their canonical durable reference.
-    fn put(&self, image: &EncodedImage) -> Result<ImageAttachmentRef, AttachmentError>;
-
-    /// Resolves and verifies the bytes identified by an untrusted attachment reference.
-    fn read(&self, reference: &ImageAttachmentRef) -> Result<Arc<[u8]>, AttachmentError>;
+/// Commits immutable attachment bytes before returning their digest.
+/// Implementations verify content identity and size on every read; media validation belongs
+/// to the attachment service. Untrusted metadata never selects arbitrary filesystem paths.
+pub trait AttachmentStore: Send + Sync {
+    fn put(&self, bytes: Arc<[u8]>) -> Result<ContentDigest, AttachmentError>;
+    fn read(
+        &self,
+        digest: &ContentDigest,
+        encoded_bytes: u64,
+    ) -> Result<Arc<[u8]>, AttachmentError>;
 }
 
-/// Process-local store used by tests and explicitly ephemeral products.
+/// Process-local store for explicitly ephemeral products and tests.
 #[derive(Default)]
-pub struct MemoryImageAttachmentStore {
+pub struct MemoryAttachmentStore {
     bytes: Mutex<BTreeMap<ContentDigest, Arc<[u8]>>>,
 }
 
-impl ImageAttachmentStore for MemoryImageAttachmentStore {
-    fn put(&self, image: &EncodedImage) -> Result<ImageAttachmentRef, AttachmentError> {
-        let reference = reference_for_image(image)?;
+impl AttachmentStore for MemoryAttachmentStore {
+    fn put(&self, bytes: Arc<[u8]>) -> Result<ContentDigest, AttachmentError> {
+        validate_size(bytes.len() as u64)?;
+        let digest = ContentDigest::sha256(&bytes);
         self.bytes
             .lock()
             .map_err(|_| AttachmentError::Corrupt)?
-            .insert(reference.content_digest.clone(), Arc::clone(&image.bytes));
-        Ok(reference)
+            .insert(digest.clone(), bytes);
+        Ok(digest)
     }
 
-    fn read(&self, reference: &ImageAttachmentRef) -> Result<Arc<[u8]>, AttachmentError> {
+    fn read(
+        &self,
+        digest: &ContentDigest,
+        encoded_bytes: u64,
+    ) -> Result<Arc<[u8]>, AttachmentError> {
+        validate_size(encoded_bytes)?;
         let bytes = self
             .bytes
             .lock()
             .map_err(|_| AttachmentError::Corrupt)?
-            .get(&reference.content_digest)
+            .get(digest)
             .cloned()
             .ok_or(AttachmentError::NotFound)?;
-        verify_reference_bytes(reference, &bytes)?;
+        verify_bytes(digest, encoded_bytes, &bytes)?;
         Ok(bytes)
     }
 }
 
 /// Crash-safe content-addressed store rooted under one application profile.
-pub struct FileImageAttachmentStore {
+pub struct FileAttachmentStore {
     root: PathBuf,
     boundary: CanonicalPathRoot,
 }
 
-impl FileImageAttachmentStore {
+impl FileAttachmentStore {
     pub fn open(root: impl Into<PathBuf>) -> Result<Self, AttachmentError> {
         let root = std::path::absolute(root.into())
             .map_err(|source| AttachmentError::storage("attachments", source))?;
@@ -79,23 +83,21 @@ impl FileImageAttachmentStore {
         let hex = digest
             .as_str()
             .strip_prefix("sha256:")
-            .expect("ContentDigest always validates its algorithm prefix");
+            .expect("ContentDigest validates its algorithm prefix");
         self.root.join("sha256").join(&hex[..2]).join(hex)
     }
 }
 
-impl ImageAttachmentStore for FileImageAttachmentStore {
-    fn put(&self, image: &EncodedImage) -> Result<ImageAttachmentRef, AttachmentError> {
-        let reference = reference_for_image(image)?;
-        let path = self.path_for(&reference.content_digest);
+impl AttachmentStore for FileAttachmentStore {
+    fn put(&self, bytes: Arc<[u8]>) -> Result<ContentDigest, AttachmentError> {
+        validate_size(bytes.len() as u64)?;
+        let digest = ContentDigest::sha256(&bytes);
+        let path = self.path_for(&digest);
         if inspect_path(&self.boundary, &path)? == NoSymlinkPathStatus::Existing {
-            let bytes = read_regular_file(&path)?;
-            verify_reference_bytes(&reference, &bytes)?;
-            return Ok(reference);
+            self.read(&digest, bytes.len() as u64)?;
+            return Ok(digest);
         }
-        let parent = path
-            .parent()
-            .expect("attachment paths always have a parent");
+        let parent = path.parent().expect("attachment paths have a parent");
         ensure_directory_without_symlinks(&self.boundary, parent)?;
         let mut temporary = tempfile::Builder::new()
             .prefix(".attachment-")
@@ -103,7 +105,7 @@ impl ImageAttachmentStore for FileImageAttachmentStore {
             .map_err(|source| AttachmentError::storage(parent, source))?;
         set_private_file_permissions(temporary.as_file(), temporary.path())?;
         temporary
-            .write_all(&image.bytes)
+            .write_all(&bytes)
             .map_err(|source| AttachmentError::storage(temporary.path(), source))?;
         temporary
             .as_file()
@@ -112,37 +114,55 @@ impl ImageAttachmentStore for FileImageAttachmentStore {
         match temporary.persist_noclobber(&path) {
             Ok(_) => sync_directory(parent)?,
             Err(error) if error.error.kind() == std::io::ErrorKind::AlreadyExists => {
-                let bytes = read_regular_file(&path)?;
-                verify_reference_bytes(&reference, &bytes)?;
+                self.read(&digest, bytes.len() as u64)?;
             }
             Err(error) => return Err(AttachmentError::storage(&path, error.error)),
         }
-        Ok(reference)
+        Ok(digest)
     }
 
-    fn read(&self, reference: &ImageAttachmentRef) -> Result<Arc<[u8]>, AttachmentError> {
-        let path = self.path_for(&reference.content_digest);
+    fn read(
+        &self,
+        digest: &ContentDigest,
+        encoded_bytes: u64,
+    ) -> Result<Arc<[u8]>, AttachmentError> {
+        validate_size(encoded_bytes)?;
+        let path = self.path_for(digest);
         if inspect_path(&self.boundary, &path)? == NoSymlinkPathStatus::Missing {
             return Err(AttachmentError::NotFound);
         }
-        let bytes = read_regular_file(&path)?;
-        verify_reference_bytes(reference, &bytes)?;
+        let metadata = fs::symlink_metadata(&path)
+            .map_err(|source| AttachmentError::storage(&path, source))?;
+        if !metadata.file_type().is_file() || metadata.len() != encoded_bytes {
+            return Err(AttachmentError::Corrupt);
+        }
+        let file =
+            fs::File::open(&path).map_err(|source| AttachmentError::storage(&path, source))?;
+        let mut bytes = Vec::with_capacity(encoded_bytes as usize);
+        file.take(encoded_bytes + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|source| AttachmentError::storage(&path, source))?;
+        verify_bytes(digest, encoded_bytes, &bytes)?;
         Ok(bytes.into())
     }
 }
 
-fn read_regular_file(path: &Path) -> Result<Vec<u8>, AttachmentError> {
-    let metadata = fs::symlink_metadata(path).map_err(|source| {
-        if source.kind() == std::io::ErrorKind::NotFound {
-            AttachmentError::NotFound
-        } else {
-            AttachmentError::storage(path, source)
-        }
-    })?;
-    if !metadata.file_type().is_file() || metadata.file_type().is_symlink() {
+fn validate_size(size: u64) -> Result<(), AttachmentError> {
+    if size == 0 || size > MAX_ATTACHMENT_BYTES as u64 {
+        return Err(AttachmentError::TooLarge);
+    }
+    Ok(())
+}
+
+fn verify_bytes(
+    digest: &ContentDigest,
+    encoded_bytes: u64,
+    bytes: &[u8],
+) -> Result<(), AttachmentError> {
+    if bytes.len() as u64 != encoded_bytes || ContentDigest::sha256(bytes) != *digest {
         return Err(AttachmentError::Corrupt);
     }
-    fs::read(path).map_err(|source| AttachmentError::storage(path, source))
+    Ok(())
 }
 
 fn create_private_directory(path: &Path) -> Result<(), AttachmentError> {

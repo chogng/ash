@@ -1,3 +1,6 @@
+#[path = "audio_tests.rs"]
+mod audio_tests;
+
 use super::*;
 
 #[cfg(target_os = "macos")]
@@ -33,10 +36,7 @@ use ash_app_server_protocol::protocol::slash_commands::SlashCommandArgumentModeD
 use ash_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
 use ash_async_utils::CancellationToken;
 use ash_config::ConfigStore;
-use core_api::ActionPolicyService;
-use core_api::CoreError;
 use ash_core::InMemoryThreadStore;
-use core_api::ModelService;
 use ash_core::RequestTurnInteraction;
 use ash_core::StartTurnRequest;
 use ash_core::ThreadController;
@@ -93,6 +93,9 @@ use ash_secrets::MemorySecretStore;
 use ash_secrets::SecretStore;
 use ash_uds::UnixStream;
 use base64::Engine;
+use core_api::ActionPolicyService;
+use core_api::CoreError;
+use core_api::ModelService;
 use std::io::Cursor;
 use std::io::Write;
 use std::net::Shutdown;
@@ -1145,7 +1148,10 @@ fn terminal_rpc_drives_a_dir_rooted_pty_to_exit() {
     assert_eq!(exit_code, 0);
     assert!(String::from_utf8_lossy(&output).contains("ash-terminal-ready"));
     #[cfg(not(windows))]
-    assert!(output.contains(&0xff), "RPC must preserve non-UTF-8 PTY bytes");
+    assert!(
+        output.contains(&0xff),
+        "RPC must preserve non-UTF-8 PTY bytes"
+    );
     #[cfg(windows)]
     {
         assert!(command_statuses.iter().any(|status| status == "running"));
@@ -2587,13 +2593,20 @@ fn completed_turn_replays_without_invoking_the_model_twice() {
     // Committed state becomes visible before its asynchronous notification is published.
     let deadline = Instant::now() + Duration::from_secs(2);
     loop {
-        if server.drain_notifications(&mut connection).iter().any(|notification| {
-            notification.contains("\"method\":\"session/thread/update\"")
-                && notification.contains("\"agentMessage\"")
-        }) {
+        if server
+            .drain_notifications(&mut connection)
+            .iter()
+            .any(|notification| {
+                notification.contains("\"method\":\"session/thread/update\"")
+                    && notification.contains("\"agentMessage\"")
+            })
+        {
             break;
         }
-        assert!(Instant::now() < deadline, "completed Turn notification was not delivered");
+        assert!(
+            Instant::now() < deadline,
+            "completed Turn notification was not delivered"
+        );
         thread::sleep(Duration::from_millis(1));
     }
 }

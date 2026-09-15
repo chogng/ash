@@ -190,12 +190,17 @@ impl ProcessHandle {
 
     /// Releases parent-held PTY handles after the child has authoritatively exited.
     ///
-    /// Windows keeps these handles during execution so closing the caller's
-    /// session does not inject Control+C. Once `has_exited` is true, releasing
-    /// them closes the pseudoconsole and allows the output reader to observe
-    /// EOF after all final bytes.
+    /// Windows with `ReleasePseudoConsole` closes output after its last client exits,
+    /// so the console handle remains owned by this session until disposal. On older
+    /// Windows, releasing the console after root exit lets readers drain and observe EOF.
     pub fn release_pty_handles_after_exit(&self) {
         if !self.has_exited() {
+            return;
+        }
+        // Newer Windows closes output when the last console client exits.
+        // Closing HPCON on root exit would terminate surviving descendants.
+        #[cfg(windows)]
+        if crate::win::supports_client_lifetime() {
             return;
         }
         if let Ok(mut handles) = self._pty_handles.lock() {

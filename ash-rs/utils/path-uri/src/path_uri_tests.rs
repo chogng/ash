@@ -129,6 +129,82 @@ fn containment_rejects_encoded_native_separators() {
 
     assert!(!encoded_posix.starts_with(&root));
     assert!(!encoded_windows.starts_with(&windows_root));
+    assert_eq!(encoded_posix.lexical_depth(), None);
+    assert_eq!(encoded_windows.lexical_depth(), None);
+    assert_eq!(encoded_posix.overlaps(&root), None);
+    assert_eq!(encoded_windows.overlaps(&windows_root), None);
+}
+
+#[test]
+fn containment_decodes_segments_without_crossing_path_conventions() {
+    let root = PathUri::parse("file:///work").unwrap();
+    let encoded = PathUri::parse("file:///w%6Frk/src/%FF.rs").unwrap();
+    let windows = PathUri::parse("file:///C:/work").unwrap();
+    let posix_root = PathUri::parse("file:///").unwrap();
+
+    assert!(encoded.starts_with(&root));
+    assert_eq!(
+        encoded.relative_path_from(&root).as_deref(),
+        Some("src/%FF.rs")
+    );
+    assert_eq!(encoded.decoded_path_bytes().as_ref(), b"/work/src/\xFF.rs");
+    assert_eq!(encoded.lexical_depth(), Some(3));
+    assert_eq!(root.overlaps(&encoded), Some(true));
+    assert_eq!(posix_root.lexical_depth(), Some(0));
+    assert!(!windows.starts_with(&posix_root));
+    assert_eq!(windows.relative_path_from(&posix_root), None);
+    assert_eq!(windows.overlaps(&posix_root), Some(false));
+    assert!(
+        !PathUri::parse("file:///Work/src")
+            .unwrap()
+            .starts_with(&root)
+    );
+}
+
+#[test]
+fn descendant_join_rejects_escape_and_ambiguous_components() {
+    let posix = PathUri::parse("file:///work").unwrap();
+    let windows = PathUri::parse("file:///C:/work").unwrap();
+    for invalid in ["", "../secret", "src/../secret", "/absolute", "bad\0name"] {
+        assert!(posix.join_descendant(invalid).is_err(), "{invalid:?}");
+        assert!(windows.join_descendant(invalid).is_err(), "{invalid:?}");
+    }
+    for invalid in [
+        r"\absolute",
+        r"D:\absolute",
+        "D:relative",
+        "file:stream",
+        r"src\..\secret",
+    ] {
+        assert!(windows.join_descendant(invalid).is_err(), "{invalid:?}");
+    }
+    assert_eq!(
+        posix.join_descendant("./src/file").unwrap().to_string(),
+        "file:///work/src/file"
+    );
+    assert_eq!(
+        windows.join_descendant(r"src\file").unwrap().to_string(),
+        "file:///C:/work/src/file"
+    );
+    assert_eq!(
+        posix.join_descendant("%2F").unwrap().basename().as_deref(),
+        Some("%2F")
+    );
+    assert!(
+        PathUri::parse("file:///work%2Fsecret")
+            .unwrap()
+            .join_descendant("file")
+            .is_err()
+    );
+}
+
+#[test]
+fn host_conversion_rejects_encoded_separators() {
+    #[cfg(unix)]
+    let uri = PathUri::parse("file:///work/src%2Fsecret").unwrap();
+    #[cfg(windows)]
+    let uri = PathUri::parse("file:///C:/work/src%5Csecret").unwrap();
+    assert!(uri.to_host_path().is_err());
 }
 
 #[test]

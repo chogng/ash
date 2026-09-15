@@ -19,7 +19,7 @@ mod lifecycle_tests;
 #[path = "windows_tests.rs"]
 mod windows_tests;
 
-fn find_python() -> Option<String> {
+pub(crate) fn find_python() -> Option<String> {
     for candidate in ["python3", "python"] {
         if let Ok(output) = std::process::Command::new(candidate)
             .arg("--version")

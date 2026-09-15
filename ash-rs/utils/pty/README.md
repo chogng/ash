@@ -50,7 +50,7 @@ Unix PTY 要求 Tokio runtime 启用 I/O driver；缺少 driver 时在创建子�
 | `ProcessHandle::request_terminate` | kill child、保留 I/O tasks 以 drain EOF | killer 只消费一次 |
 | `ProcessHandle::terminate` | kill child 并取消 reader/writer；child waiter 继续回收，driver waiter 取消 | 不保证剩余 output drain；真实子进程仍报告 exit |
 | `ProcessHandle::{has_exited,exit_code}` | non-blocking observed exit state | `exit_rx` 是 authoritative completion notification |
-| `ProcessHandle::release_pty_handles_after_exit` | authoritative exit 后释放 parent-held PTY/ConPTY handles | 运行中调用是 no-op；允许 reader 在 final bytes 后观察 EOF |
+| `ProcessHandle::release_pty_handles_after_exit` | authoritative exit 后处理 parent-held PTY/ConPTY handles | 新版 Windows 保留 console 至 session 结束；旧版释放后排空输出 |
 
 `ExecCommandSession` 与 `SpawnedPty` 是 backward-compatible type aliases。新增代码应优先使用
 `ProcessHandle` 与 `SpawnedProcess` 的真实名称。
@@ -148,11 +148,13 @@ Unix reader/writer 共享非阻塞 master FD；读、写及输出队列等待都
 Windows portable writer 在写入 ConPTY 前经过 `WindowsTtyInputNormalizer`。Normalizer 维护
 `previous_was_cr`，所以 CR 和下一 chunk 的 LF 也只生成一个 carriage return。
 
-Windows portable path 在 child 运行期间保留 slave/master pseudoconsole handles，避免过早关闭
-改变前台输入语义。消费 `exit_rx` 后，owner 应调用
-`ProcessHandle::release_pty_handles_after_exit`；该方法先检查 `has_exited`，再释放 parent-held
-handles，使 reader 在排空 ConPTY tail 后收到 EOF。只观察 exit code 而不释放 handles，会让
-依赖 output-close 的上层 terminal lifecycle 无法收束。
+Windows 使用系统 ConPTY，不从进程目录加载 `conpty.dll`。客户端创建成功后释放 console 创建阶段的
+输入/输出句柄；系统提供 [`ReleasePseudoConsole`](https://learn.microsoft.com/en-us/windows/console/releasepseudoconsole) 时同时交还 console 生命周期控制，使最后一个客户端
+退出后自然关闭输出。根进程退出而后代仍运行时，`release_pty_handles_after_exit` 保留 console，
+后代仍可读写。最终 session disposal 仍负责关闭 console。
+
+没有该系统 API 的 Windows 版本在根进程退出后由 `release_pty_handles_after_exit` 关闭 console，
+允许 reader 排空后收到 EOF。支持新 API 的生命周期测试只能在对应 Windows 系统上执行。
 
 ## 驱动与输出生命周期
 

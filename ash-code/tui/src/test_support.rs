@@ -1,7 +1,3 @@
-use std::collections::BTreeMap;
-use std::fmt::Display;
-use std::sync::Mutex;
-use std::sync::MutexGuard;
 use ash_app_server_protocol::protocol::config::AgentGrepBackendDto;
 use ash_app_server_protocol::protocol::config::ApprovalReviewModelSelectionDto;
 use ash_app_server_protocol::protocol::config::CodebaseAutomaticContextDto;
@@ -11,6 +7,10 @@ use ash_app_server_protocol::protocol::config::FrontendConfigDto;
 use ash_app_server_protocol::protocol::config::ToolSearchConfigDto;
 use ash_app_server_protocol::protocol::config::ToolSearchEmbeddingStatusDto;
 use ash_app_server_protocol::protocol::config::ToolSearchModeDto;
+use std::collections::BTreeMap;
+use std::fmt::Display;
+use std::sync::Mutex;
+use std::sync::MutexGuard;
 
 static IN_PROCESS_TEST_LOCK: Mutex<()> = Mutex::new(());
 
@@ -94,6 +94,12 @@ pub(crate) fn queued_message(command: crate::app::AppCommand) -> ::queue::Queued
             }
             crate::thread::composer::ChatInputItem::Attachment(attachment) => {
                 ash_protocol::UserInput::ImageAttachment { attachment }
+            }
+            crate::thread::composer::ChatInputItem::AudioAttachment(attachment) => {
+                ash_protocol::UserInput::AudioAttachment { attachment }
+            }
+            crate::thread::composer::ChatInputItem::Audio { url } => {
+                ash_protocol::UserInput::Audio { url }
             }
             crate::thread::composer::ChatInputItem::Skill { skill } => {
                 ash_protocol::UserInput::Skill { skill }

@@ -1,3 +1,4 @@
+use crate::AudioAttachmentRef;
 use crate::ImageAttachmentRef;
 use crate::SkillRef;
 use schemars::JsonSchema;
@@ -13,6 +14,13 @@ use ts_rs::TS;
     rename_all_fields = "camelCase"
 )]
 pub enum UserInput {
+    AudioAttachment {
+        attachment: AudioAttachmentRef,
+    },
+    /// Inline audio is validated and stored before turn admission.
+    Audio {
+        url: String,
+    },
     Text {
         text: String,
     },

@@ -17,9 +17,6 @@ use crate::ToolCallId;
 use crate::ToolChoice;
 use crate::ToolDefinition;
 use crate::ToolName;
-use serde_json::Map;
-use serde_json::Value;
-use serde_json::json;
 use ash_async_utils::CancellationToken;
 use ash_client::ClientError;
 use ash_client::ClientRequest;
@@ -27,6 +24,9 @@ use ash_client::OperationClient;
 use ash_client::OperationStreamSink;
 use ash_client::ResolvedApiTarget;
 use ash_client::SseDecoder;
+use serde_json::Map;
+use serde_json::Value;
+use serde_json::json;
 
 const MAX_STREAM_EVENT_BYTES: usize = 1024 * 1024;
 
@@ -132,7 +132,29 @@ impl OpenAiChatCompletionsBodySink<'_> {
 
 pub(crate) fn build_request(model: &str, request: &ModelRequest) -> Result<Value, ApiError> {
     crate::requests::openai_tools::validate_tools(&request.tools)?;
-    crate::requests::require_materialized_images(request)?;
+    crate::requests::require_materialized_attachments(request)?;
+    for item in &request.input {
+        let (content, user_message) = match item {
+            InputItem::Message(message) => (&message.content, message.role == MessageRole::User),
+            InputItem::ToolResult(result) => (&result.content, false),
+        };
+        for part in content {
+            if let ContentPart::AudioUrl { url } = part {
+                let audio = audio::load_data_url(url)
+                    .map_err(|error| ApiError::InvalidRequest(error.to_string()))?;
+                if !user_message
+                    || !matches!(
+                        audio.format(),
+                        audio::AudioFormat::Wav | audio::AudioFormat::Mp3
+                    )
+                {
+                    return Err(ApiError::InvalidRequest(
+                        "Chat Completions accepts WAV or MP3 audio in user messages only".into(),
+                    ));
+                }
+            }
+        }
+    }
     let mut messages = Vec::new();
     if let Some(instructions) = &request.instructions {
         messages.push(json!({"role": "system", "content": instructions}));
@@ -221,10 +243,21 @@ fn convert_content(content: &[ContentPart]) -> Value {
             .iter()
             .map(|part| match part {
                 ContentPart::Text(text) => json!({"type": "text", "text": text}),
-                ContentPart::ImageAttachment { .. } => {
+                ContentPart::ImageAttachment { .. } | ContentPart::AudioAttachment { .. } => {
                     unreachable!(
                         "durable image attachments must be materialized before API encoding"
                     )
+                }
+                ContentPart::AudioUrl { url } => {
+                    let (metadata, data) = url.split_once(',').expect("audio data URL was validated");
+                    let mime = metadata.strip_prefix("data:").and_then(|value| value.strip_suffix(";base64"))
+                        .expect("audio data URL metadata was validated");
+                    let format = match audio::AudioFormat::from_mime_type(mime).expect("audio format was validated") {
+                        audio::AudioFormat::Wav => "wav",
+                        audio::AudioFormat::Mp3 => "mp3",
+                        _ => unreachable!("Chat Completions audio format was validated"),
+                    };
+                    json!({"type": "input_audio", "input_audio": { "data": data, "format": format }})
                 }
                 ContentPart::ImageUrl { url, detail } => json!({
                     "type": "image_url",
@@ -401,7 +434,9 @@ fn content_text(content: &[ContentPart]) -> String {
         .iter()
         .filter_map(|part| match part {
             ContentPart::Text(text) => Some(text.as_str()),
-            ContentPart::ImageAttachment { .. } => None,
+            ContentPart::ImageAttachment { .. }
+            | ContentPart::AudioAttachment { .. }
+            | ContentPart::AudioUrl { .. } => None,
             ContentPart::ImageUrl { .. } => None,
         })
         .collect::<Vec<_>>()

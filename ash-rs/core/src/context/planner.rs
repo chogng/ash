@@ -590,6 +590,7 @@ fn validate_items(items: &[ThreadItem]) -> Result<(), ContextPreparationError> {
             | ThreadItem::UserContext { .. }
             | ThreadItem::UserImage { .. }
             | ThreadItem::UserImageAttachment { .. }
+            | ThreadItem::UserAudioAttachment { .. }
             | ThreadItem::AgentMessage { .. }
             | ThreadItem::Reasoning { .. }
             | ThreadItem::Plan { .. } => {}
@@ -824,6 +825,9 @@ fn estimate_item(item: &ThreadItem) -> ContextTokenCount {
         ThreadItem::UserImage { url, .. } => ContextTokenCount::new(
             IMAGE_TOKEN_ESTIMATE.saturating_add(estimate_bytes(url.len(), 0).get()),
         ),
+        ThreadItem::UserAudioAttachment { attachment, .. } => {
+            estimate_audio(attachment.duration_ms)
+        }
         ThreadItem::UserImageAttachment { .. } => ContextTokenCount::new(IMAGE_TOKEN_ESTIMATE),
         ThreadItem::ToolCall {
             name,
@@ -847,6 +851,11 @@ fn estimate_content(content: &[ContentPart]) -> ContextTokenCount {
         .fold(ContextTokenCount::new(TOOL_ITEM_OVERHEAD), |total, part| {
             let tokens = match part {
                 ContentPart::Text(text) => estimate_bytes(text.len(), 0),
+                ContentPart::AudioAttachment { attachment } => {
+                    estimate_audio(attachment.duration_ms)
+                }
+                // Inline audio must be admitted before planning; it cannot bypass the budget.
+                ContentPart::AudioUrl { .. } => ContextTokenCount::new(u32::MAX),
                 ContentPart::ImageAttachment { .. } => ContextTokenCount::new(IMAGE_TOKEN_ESTIMATE),
                 ContentPart::ImageUrl { url, .. } => ContextTokenCount::new(
                     IMAGE_TOKEN_ESTIMATE.saturating_add(estimate_bytes(url.len(), 0).get()),
@@ -854,6 +863,12 @@ fn estimate_content(content: &[ContentPart]) -> ContextTokenCount {
             };
             total.saturating_add(tokens)
         })
+}
+
+fn estimate_audio(duration_ms: u64) -> ContextTokenCount {
+    ContextTokenCount::new(
+        u32::try_from(audio::approximate_tokens(duration_ms)).unwrap_or(u32::MAX),
+    )
 }
 
 fn estimate_bytes(bytes: usize, overhead: u32) -> ContextTokenCount {

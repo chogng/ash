@@ -2,8 +2,6 @@ use super::ThreadRequestScope;
 use super::steer_prompt;
 use crate::thread::composer::ChatInputItem;
 use crate::thread::composer::ChatSubmission;
-use std::sync::Arc;
-use std::sync::Mutex;
 use ash_app_server_client::AppServerClient;
 use ash_app_server_client::ClientError;
 use ash_app_server_client::JsonRpcTransport;
@@ -12,6 +10,8 @@ use ash_app_server_protocol::protocol::turn::TurnSteerResult;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use ash_protocol::TurnId;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 struct RecordingTransport {
     request: Arc<Mutex<Option<String>>>,
@@ -84,5 +84,44 @@ fn steer_prompt_uses_the_active_turn_typed_request() {
     assert_eq!(
         request["params"]["request"]["input"][0]["text"],
         "change direction"
+    );
+}
+
+#[test]
+fn audio_steering_preserves_the_uploaded_attachment_reference() {
+    let recorded = Arc::new(Mutex::new(None));
+    let result = SessionRequestResult::TurnSteer(TurnSteerResult {
+        turn_id: TurnId::new("turn").unwrap(),
+        sequence: 8,
+    });
+    let mut client = AppServerClient::new(RecordingTransport {
+        request: recorded.clone(),
+        response: serde_json::json!({"jsonrpc":"2.0","id":1,"result":result}).to_string(),
+    });
+    let attachment = ash_protocol::AudioAttachmentRef {
+        content_digest: ash_protocol::ContentDigest::sha256(b"recording"),
+        media_type: ash_protocol::AudioMediaType::Wav,
+        encoded_bytes: 32044,
+        duration_ms: 1000,
+    };
+    steer_prompt(
+        &mut client,
+        ThreadRequestScope::new(
+            &SessionId::new("session").unwrap(),
+            &ThreadId::new("thread").unwrap(),
+            7,
+        ),
+        TurnId::new("turn").unwrap(),
+        ChatSubmission {
+            display_text: "[Audio]".into(),
+            input: vec![ChatInputItem::AudioAttachment(attachment.clone())],
+        },
+    )
+    .unwrap();
+    let request: serde_json::Value =
+        serde_json::from_str(recorded.lock().unwrap().as_ref().unwrap()).unwrap();
+    assert_eq!(
+        request["params"]["request"]["input"],
+        serde_json::json!([{"type":"audioAttachment","attachment":attachment}])
     );
 }

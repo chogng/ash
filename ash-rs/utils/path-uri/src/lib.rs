@@ -4,6 +4,7 @@ mod native;
 mod operations;
 mod validation;
 
+use ash_utils_absolute_path::AbsolutePathBuf;
 use base64::Engine;
 use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -15,7 +16,6 @@ use std::str::FromStr;
 use thiserror::Error;
 use ts_rs::TS;
 use url::Url;
-use ash_utils_absolute_path::AbsolutePathBuf;
 
 pub const FILE_SCHEME: &str = "file";
 const OPAQUE_PATH_PREFIX: &str = "file:///%00/ash/opaque-path/";
@@ -67,6 +67,16 @@ impl PathUri {
         self.0.path()
     }
 
+    /// Returns the decoded URI path bytes without imposing UTF-8 on file names.
+    pub fn decoded_path_bytes(&self) -> std::borrow::Cow<'_, [u8]> {
+        urlencoding::decode_binary(self.encoded_path().as_bytes())
+    }
+
+    /// Whether this value stores a path in the reserved opaque representation.
+    pub fn is_opaque(&self) -> bool {
+        self.opaque_path_bytes().is_some()
+    }
+
     /// Infers whether the URI represents POSIX or Windows path syntax.
     pub fn infer_path_convention(&self) -> Option<PathConvention> {
         native::infer_path_convention(self)
@@ -96,6 +106,9 @@ impl PathUri {
             {
                 return Ok(path);
             }
+            return Err(invalid_host_path(self));
+        }
+        if self.lexical_depth().is_none() {
             return Err(invalid_host_path(self));
         }
         let path = self

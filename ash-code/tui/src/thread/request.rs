@@ -1,8 +1,6 @@
 use crate::client::new_command_id;
 use crate::thread::composer::ChatInputItem;
 use crate::thread::composer::ChatSubmission;
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD;
 use ash_app_server_client::AppServerClient;
 use ash_app_server_client::ClientError;
 use ash_app_server_client::JsonRpcTransport;
@@ -33,6 +31,8 @@ use ash_protocol::SessionId;
 use ash_protocol::Thread;
 use ash_protocol::ThreadId;
 use ash_protocol::TurnId;
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ThreadRequestKind {
@@ -193,6 +193,8 @@ where
             ChatInputItem::Context { name, content } => InputItem::Context { name, content },
             ChatInputItem::Attachment(attachment) => InputItem::ImageAttachment { attachment },
             ChatInputItem::Text(text) => InputItem::Text { text },
+            ChatInputItem::AudioAttachment(attachment) => InputItem::AudioAttachment { attachment },
+            ChatInputItem::Audio { url } => InputItem::Audio { url },
             ChatInputItem::Image { url } => InputItem::ImageAttachment {
                 attachment: materialize_image(client, &url)?,
             },
@@ -215,10 +217,15 @@ where
                 url: url.to_owned(),
                 detail: ImageDetail::Auto,
             })
-            .map(|result| result.attachment);
+            .and_then(|result| match result.attachment {
+                ash_protocol::AttachmentRef::Image(attachment) => Ok(attachment),
+                ash_protocol::AttachmentRef::Audio(_) => Err(ClientError::Protocol(
+                    "image upload returned an audio attachment".into(),
+                )),
+            });
     }
     let (media_type, bytes) = decode_image_data_url(url)?;
-    let started = client.start_attachment_upload(AttachmentUploadStartParams {
+    let started = client.start_attachment_upload(AttachmentUploadStartParams::Image {
         media_type,
         encoded_bytes: bytes.len() as u64,
         detail: ImageDetail::Auto,
@@ -240,7 +247,12 @@ where
             .finish_attachment_upload(AttachmentUploadFinishParams {
                 upload_id: upload_id.clone(),
             })
-            .map(|result| result.attachment)
+            .and_then(|result| match result.attachment {
+                ash_protocol::AttachmentRef::Image(attachment) => Ok(attachment),
+                ash_protocol::AttachmentRef::Audio(_) => Err(ClientError::Protocol(
+                    "image upload returned an audio attachment".into(),
+                )),
+            })
     })();
     if upload_result.is_err() {
         let _ = client.cancel_attachment_upload(AttachmentUploadCancelParams { upload_id });

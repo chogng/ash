@@ -1,6 +1,3 @@
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD;
-use serde_json::Value;
 use ash_app_server_protocol::protocol::attachments::AttachmentImportRemoteParams;
 use ash_app_server_protocol::protocol::attachments::AttachmentMaterializeResult;
 use ash_app_server_protocol::protocol::attachments::AttachmentUploadCancelParams;
@@ -10,14 +7,19 @@ use ash_app_server_protocol::protocol::attachments::AttachmentUploadStartResult;
 use ash_app_server_protocol::protocol::attachments::AttachmentUploadWriteParams;
 use ash_app_server_protocol::protocol::attachments::AttachmentUploadWriteResult;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
+use serde_json::Value;
 
 use super::AppServer;
 use super::ConnectionState;
 use super::RpcError;
 use super::decode;
 use super::result;
+use crate::attachment_upload_store::AttachmentUploadContent;
 use crate::attachment_upload_store::AttachmentUploadError;
 use crate::attachment_upload_store::MAX_ATTACHMENT_UPLOAD_CHUNK_BYTES;
+use ash_protocol::AttachmentRef;
 
 impl AppServer {
     pub(super) fn attachment_upload_start(
@@ -26,18 +28,27 @@ impl AppServer {
         params: &Value,
     ) -> Result<Value, RpcError> {
         let params: AttachmentUploadStartParams = decode(params)?;
+        let (content, encoded_bytes) = match params {
+            AttachmentUploadStartParams::Image {
+                media_type,
+                detail,
+                encoded_bytes,
+            } => (
+                AttachmentUploadContent::Image { media_type, detail },
+                encoded_bytes,
+            ),
+            AttachmentUploadStartParams::Audio {
+                media_type,
+                encoded_bytes,
+            } => (AttachmentUploadContent::Audio { media_type }, encoded_bytes),
+        };
         let expected_bytes =
-            usize::try_from(params.encoded_bytes).map_err(|_| invalid_attachment_params())?;
+            usize::try_from(encoded_bytes).map_err(|_| invalid_attachment_params())?;
         let upload_id = self
             .attachment_uploads
             .lock()
             .map_err(|_| internal_attachment_error())?
-            .start(
-                connection.connection_id,
-                params.media_type,
-                params.detail,
-                expected_bytes,
-            )
+            .start(connection.connection_id, content, expected_bytes)
             .map_err(upload_error)?;
         result(&AttachmentUploadStartResult {
             upload_id,
@@ -81,14 +92,24 @@ impl AppServer {
             .map_err(|_| internal_attachment_error())?
             .finish(connection.connection_id, &params.upload_id)
             .map_err(upload_error)?;
-        if ash_attachments::image_media_type(&upload.bytes) != Some(upload.media_type) {
-            return Err(invalid_attachment_params());
-        }
-        let attachment = self
-            .threads
-            .image_attachments()
-            .import_bytes(upload.bytes, upload.detail)
-            .map_err(|_| invalid_attachment_params())?;
+        let attachments = self.threads.attachments();
+        let attachment = match upload.content {
+            AttachmentUploadContent::Image { media_type, detail } => {
+                if ash_attachments::image_media_type(&upload.bytes) != Some(media_type) {
+                    return Err(invalid_attachment_params());
+                }
+                AttachmentRef::Image(
+                    attachments
+                        .import_bytes(upload.bytes, detail)
+                        .map_err(|_| invalid_attachment_params())?,
+                )
+            }
+            AttachmentUploadContent::Audio { media_type } => AttachmentRef::Audio(
+                attachments
+                    .import_audio_bytes(upload.bytes, media_type)
+                    .map_err(|_| invalid_attachment_params())?,
+            ),
+        };
         result(&AttachmentMaterializeResult { attachment })
     }
 
@@ -110,10 +131,12 @@ impl AppServer {
         let params: AttachmentImportRemoteParams = decode(params)?;
         let attachment = self
             .threads
-            .image_attachments()
+            .attachments()
             .import_remote_url(&params.url, params.detail)
             .map_err(|_| invalid_attachment_params())?;
-        result(&AttachmentMaterializeResult { attachment })
+        result(&AttachmentMaterializeResult {
+            attachment: AttachmentRef::Image(attachment),
+        })
     }
 }
 

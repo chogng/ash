@@ -11,6 +11,7 @@ name = "ash_mcp"
 path = "src/lib.rs"
 
 [dependencies]
+audio = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }

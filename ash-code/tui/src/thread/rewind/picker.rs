@@ -5,10 +5,10 @@ use crate::widgets::list_selection::ListSelectionItemId;
 use crate::widgets::list_selection::ListSelectionModel;
 use crate::widgets::list_selection::ListSelectionSpec;
 use crate::widgets::search_box::SearchBoxModel;
-use std::collections::BTreeMap;
 use ash_protocol::Thread;
 use ash_protocol::ThreadItem;
 use ash_protocol::TurnId;
+use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum RewindSelectionAction {
@@ -107,6 +107,7 @@ fn message_label(item: &ThreadItem) -> String {
         ThreadItem::UserImage { .. } | ThreadItem::UserImageAttachment { .. } => {
             ("user", "[Image]")
         }
+        ThreadItem::UserAudioAttachment { .. } => ("user", "[Audio]"),
         ThreadItem::AgentMessage { text, .. } => ("assistant", text.as_str()),
         ThreadItem::Reasoning { text, .. } => ("reasoning", text.as_str()),
         ThreadItem::Plan { text, .. } => ("plan", text.as_str()),
@@ -125,6 +126,7 @@ fn checkpoint_text(items: &[ThreadItem]) -> Option<String> {
             ThreadItem::UserImage { .. } | ThreadItem::UserImageAttachment { .. } => {
                 Some("[Image]")
             }
+            ThreadItem::UserAudioAttachment { .. } => Some("[Audio]"),
             ThreadItem::AgentMessage { .. }
             | ThreadItem::Reasoning { .. }
             | ThreadItem::Plan { .. }

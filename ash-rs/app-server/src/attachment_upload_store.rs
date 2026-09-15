@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 use std::time::Instant;
 
+use ash_protocol::AudioMediaType;
 use ash_protocol::ImageDetail;
 use ash_protocol::ImageMediaType;
 
@@ -18,17 +19,26 @@ pub struct AttachmentUploadStore {
     uploads: BTreeMap<String, AttachmentUpload>,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum AttachmentUploadContent {
+    Image {
+        media_type: ImageMediaType,
+        detail: ImageDetail,
+    },
+    Audio {
+        media_type: AudioMediaType,
+    },
+}
+
 #[derive(Debug)]
 pub struct CompletedAttachmentUpload {
-    pub media_type: ImageMediaType,
-    pub detail: ImageDetail,
+    pub content: AttachmentUploadContent,
     pub bytes: Vec<u8>,
 }
 
 struct AttachmentUpload {
     owner_connection_id: u64,
-    media_type: ImageMediaType,
-    detail: ImageDetail,
+    content: AttachmentUploadContent,
     expected_bytes: usize,
     bytes: Vec<u8>,
     last_activity: Instant,
@@ -38,12 +48,11 @@ impl AttachmentUploadStore {
     pub fn start(
         &mut self,
         owner_connection_id: u64,
-        media_type: ImageMediaType,
-        detail: ImageDetail,
+        content: AttachmentUploadContent,
         expected_bytes: usize,
     ) -> Result<String, AttachmentUploadError> {
         self.expire_stale();
-        if expected_bytes == 0 || expected_bytes > ash_attachments::MAX_IMAGE_ATTACHMENT_BYTES {
+        if expected_bytes == 0 || expected_bytes > ash_attachments::MAX_ATTACHMENT_BYTES {
             return Err(AttachmentUploadError::InvalidSize);
         }
         if self.uploads.len() >= MAX_CONCURRENT_ATTACHMENT_UPLOADS
@@ -62,8 +71,7 @@ impl AttachmentUploadStore {
             upload_id.clone(),
             AttachmentUpload {
                 owner_connection_id,
-                media_type,
-                detail,
+                content,
                 expected_bytes,
                 bytes: Vec::new(),
                 last_activity: Instant::now(),
@@ -126,8 +134,7 @@ impl AttachmentUploadStore {
             .remove(upload_id)
             .expect("an upload validated immediately before removal exists");
         Ok(CompletedAttachmentUpload {
-            media_type: upload.media_type,
-            detail: upload.detail,
+            content: upload.content,
             bytes: upload.bytes,
         })
     }

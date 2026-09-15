@@ -19,9 +19,9 @@ use ash_utils_image::load_data_url_for_prompt;
 use ash_utils_image::load_for_prompt_bytes;
 
 use crate::AttachmentError;
-use crate::ImageAttachmentStore;
+use crate::AttachmentStore;
 use crate::MAX_IMAGE_ATTACHMENT_BYTES;
-use crate::MemoryImageAttachmentStore;
+use crate::MemoryAttachmentStore;
 use crate::RemoteImageFetcher;
 
 const MAX_PRODUCT_IMAGE_DIMENSION: u32 = 32_768;
@@ -30,13 +30,13 @@ const MAX_PRODUCT_IMAGE_DECODED_BYTES: u64 = 256 * 1024 * 1024;
 const MAX_PRODUCT_IMAGE_FRAMES: u32 = 32;
 
 /// Canonical service that validates untrusted images before they enter durable storage.
-pub struct ImageAttachments {
-    store: Arc<dyn ImageAttachmentStore>,
+pub struct Attachments {
+    pub(super) store: Arc<dyn AttachmentStore>,
     remote: Option<Arc<dyn RemoteImageFetcher>>,
 }
 
-impl ImageAttachments {
-    pub fn new(store: Arc<dyn ImageAttachmentStore>) -> Self {
+impl Attachments {
+    pub fn new(store: Arc<dyn AttachmentStore>) -> Self {
         Self {
             store,
             remote: None,
@@ -44,7 +44,7 @@ impl ImageAttachments {
     }
 
     pub fn in_memory() -> Self {
-        Self::new(Arc::new(MemoryImageAttachmentStore::default()))
+        Self::new(Arc::new(MemoryAttachmentStore::default()))
     }
 
     pub fn with_remote_fetcher(mut self, remote: Arc<dyn RemoteImageFetcher>) -> Self {
@@ -59,7 +59,9 @@ impl ImageAttachments {
     ) -> Result<ImageAttachmentRef, AttachmentError> {
         let image = load_data_url_for_prompt(data_url, storage_policy())
             .map_err(|error| AttachmentError::InvalidImage(error.to_string()))?;
-        self.store.put(&image)
+        let reference = reference_for_image(&image)?;
+        self.store.put(Arc::clone(&image.bytes))?;
+        Ok(reference)
     }
 
     pub fn import_bytes(
@@ -70,7 +72,9 @@ impl ImageAttachments {
         let image =
             load_for_prompt_bytes(Path::new("<attachment-upload>"), bytes, storage_policy())
                 .map_err(|error| AttachmentError::InvalidImage(error.to_string()))?;
-        self.store.put(&image)
+        let reference = reference_for_image(&image)?;
+        self.store.put(Arc::clone(&image.bytes))?;
+        Ok(reference)
     }
 
     pub fn import_remote_url(
@@ -133,7 +137,11 @@ impl ImageAttachments {
 
     fn read_verified(&self, reference: &ImageAttachmentRef) -> Result<Arc<[u8]>, AttachmentError> {
         validate_reference_shape(reference)?;
-        self.store.read(reference)
+        let bytes = self
+            .store
+            .read(&reference.content_digest, reference.encoded_bytes)?;
+        verify_reference_bytes(reference, &bytes)?;
+        Ok(bytes)
     }
 }
 

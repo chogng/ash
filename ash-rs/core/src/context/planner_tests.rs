@@ -737,3 +737,36 @@ fn a_maximum_sized_checkpoint_fits_the_reserved_continuation_space() {
         matches!(item, ash_protocol::InputItem::Message(message) if message.content.iter().any(|content| matches!(content, ash_protocol::ContentPart::Text(text) if text.contains("context_checkpoint"))))
     }));
 }
+
+#[test]
+fn audio_budget_uses_duration_instead_of_encoded_byte_size() {
+    let current = id::<TurnId>("current");
+    let audio = |duration_ms| ThreadItem::UserAudioAttachment {
+        item_id: id::<ItemId>("audio"),
+        turn_id: current.clone(),
+        attachment: ash_protocol::AudioAttachmentRef {
+            content_digest: ash_protocol::ContentDigest::sha256(b"audio"),
+            media_type: ash_protocol::AudioMediaType::Wav,
+            encoded_bytes: 16 * 1024 * 1024,
+            duration_ms,
+        },
+    };
+    let short = snapshot(current.clone(), vec![audio(1000)]);
+    let input = ContextInput::new(
+        &short,
+        current.clone(),
+        Vec::new(),
+        Vec::new(),
+        budget(1000),
+    );
+    assert!(matches!(
+        ContextPlanner::prepare(&input),
+        Ok(ContextPreparation::Ready(_))
+    ));
+    let long = snapshot(current.clone(), vec![audio(3_600_000)]);
+    let input = ContextInput::new(&long, current, Vec::new(), Vec::new(), budget(1000));
+    assert!(!matches!(
+        ContextPlanner::prepare(&input),
+        Ok(ContextPreparation::Ready(_))
+    ));
+}

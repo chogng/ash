@@ -1,4 +1,5 @@
 use crate::protocol::common::TurnId;
+use ash_protocol::AudioAttachmentRef;
 use ash_protocol::ImageAttachmentRef;
 use ash_protocol::SkillRef;
 use schemars::JsonSchema;
@@ -24,6 +25,12 @@ pub enum InputItem {
     Context {
         name: String,
         content: String,
+    },
+    AudioAttachment {
+        attachment: AudioAttachmentRef,
+    },
+    Audio {
+        url: String,
     },
     ImageAttachment {
         attachment: ImageAttachmentRef,

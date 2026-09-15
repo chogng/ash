@@ -100,6 +100,20 @@ impl ContextAssembler {
                         },
                     );
                 }
+                ThreadItem::UserAudioAttachment {
+                    turn_id,
+                    attachment,
+                    ..
+                } => {
+                    append_user_content(
+                        &mut input,
+                        &mut active_user_turn,
+                        turn_id,
+                        ContentPart::AudioAttachment {
+                            attachment: attachment.clone(),
+                        },
+                    );
+                }
                 ThreadItem::UserImageAttachment {
                     turn_id,
                     attachment,

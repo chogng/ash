@@ -1,18 +1,26 @@
+use ash_protocol::AttachmentRef;
+use ash_protocol::AudioMediaType;
+use ash_protocol::ImageDetail;
+use ash_protocol::ImageMediaType;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use ts_rs::TS;
-use ash_protocol::ImageAttachmentRef;
-use ash_protocol::ImageDetail;
-use ash_protocol::ImageMediaType;
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct AttachmentUploadStartParams {
-    pub media_type: ImageMediaType,
-    #[ts(type = "number")]
-    pub encoded_bytes: u64,
-    pub detail: ImageDetail,
+#[serde(untagged, deny_unknown_fields, rename_all_fields = "camelCase")]
+pub enum AttachmentUploadStartParams {
+    Image {
+        media_type: ImageMediaType,
+        #[ts(type = "number")]
+        encoded_bytes: u64,
+        detail: ImageDetail,
+    },
+    Audio {
+        media_type: AudioMediaType,
+        #[ts(type = "number")]
+        encoded_bytes: u64,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -64,5 +72,5 @@ pub struct AttachmentImportRemoteParams {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct AttachmentMaterializeResult {
-    pub attachment: ImageAttachmentRef,
+    pub attachment: AttachmentRef,
 }

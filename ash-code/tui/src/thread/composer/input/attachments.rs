@@ -1,13 +1,13 @@
-//! Image attachment recognition, encoding, and chat_input placeholder bookkeeping.
+//! Image admission and bookkeeping for image and audio attachment placeholders.
 
+use ash_utils_image::SupportedImageFormat;
+use ash_utils_image::data_url_from_bytes;
+use ash_utils_image::detect_image_format;
 use std::fs::File;
 use std::io::Read;
 use std::io::Seek;
 use std::path::Path;
 use std::path::PathBuf;
-use ash_utils_image::SupportedImageFormat;
-use ash_utils_image::data_url_from_bytes;
-use ash_utils_image::detect_image_format;
 
 use super::editor::TextArea;
 use super::editor::TextElementId;
@@ -15,7 +15,7 @@ use super::editor::TextElementId;
 const MAX_LOCAL_IMAGE_BYTES: u64 = 16 * 1024 * 1024;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct AttachedImage {
+struct AttachedItem {
     element_id: TextElementId,
     placeholder: String,
     item: super::state::ChatInputItem,
@@ -23,7 +23,7 @@ struct AttachedImage {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(super) struct Attachments {
-    images: Vec<AttachedImage>,
+    items: Vec<AttachedItem>,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -70,10 +70,10 @@ impl Attachments {
     }
 
     fn insert_image(&mut self, textarea: &mut TextArea, image: LoadedImage) {
-        let placeholder = image_placeholder(self.images.len() + 1);
+        let placeholder = image_placeholder(self.items.len() + 1);
         let element_id = textarea.insert_element(&placeholder);
         textarea.insert_text(" ");
-        self.images.push(AttachedImage {
+        self.items.push(AttachedItem {
             element_id,
             placeholder,
             item: super::state::ChatInputItem::Image {
@@ -83,10 +83,10 @@ impl Attachments {
     }
 
     pub(super) fn reconcile(&mut self, textarea: &mut TextArea) {
-        self.images
+        self.items
             .retain(|image| textarea.has_element(image.element_id));
-        for (index, image) in self.images.iter_mut().enumerate() {
-            let next_placeholder = image_placeholder(index + 1);
+        for (index, image) in self.items.iter_mut().enumerate() {
+            let next_placeholder = attachment_placeholder(index + 1, &image.item);
             if image.placeholder != next_placeholder {
                 textarea.replace_element(image.element_id, &next_placeholder);
                 image.placeholder = next_placeholder;
@@ -94,11 +94,11 @@ impl Attachments {
         }
     }
 
-    pub(super) fn image_item(
+    pub(super) fn attachment_item(
         &self,
         element_id: TextElementId,
     ) -> Option<&super::state::ChatInputItem> {
-        self.images
+        self.items
             .iter()
             .find(|image| image.element_id == element_id)
             .map(|image| &image.item)
@@ -109,10 +109,10 @@ impl Attachments {
         textarea: &mut TextArea,
         item: super::state::ChatInputItem,
     ) {
-        let placeholder = image_placeholder(self.images.len() + 1);
+        let placeholder = attachment_placeholder(self.items.len() + 1, &item);
         let element_id = textarea.insert_element(&placeholder);
         textarea.insert_text(" ");
-        self.images.push(AttachedImage {
+        self.items.push(AttachedItem {
             element_id,
             placeholder,
             item,
@@ -120,7 +120,7 @@ impl Attachments {
     }
 
     pub(super) fn clear(&mut self) {
-        self.images.clear();
+        self.items.clear();
     }
 }
 
@@ -237,3 +237,11 @@ fn image_placeholder(number: usize) -> String {
 #[cfg(test)]
 #[path = "attachments_tests.rs"]
 mod tests;
+
+fn attachment_placeholder(index: usize, item: &super::state::ChatInputItem) -> String {
+    match item {
+        super::state::ChatInputItem::Audio { .. }
+        | super::state::ChatInputItem::AudioAttachment(_) => format!("[Audio #{index}]"),
+        _ => image_placeholder(index),
+    }
+}

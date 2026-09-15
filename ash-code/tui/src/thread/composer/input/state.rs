@@ -12,6 +12,8 @@ use super::vim::ChatInputMode;
 use super::vim::VimOutcome;
 use super::vim::VimState;
 use super::wrap::wrap_input;
+use ash_protocol::SkillRef;
+use ash_slash_commands::SlashCommandOrigin;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -19,8 +21,6 @@ use message_history::MessageHistory;
 use message_history::MessageHistoryKind as InputKind;
 use message_history::MessageHistoryRecall as HistoryRecall;
 use message_history::MessageHistoryRecallEffect as RecallEffect;
-use ash_protocol::SkillRef;
-use ash_slash_commands::SlashCommandOrigin;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ChatInputOutcome {
@@ -42,6 +42,8 @@ pub(crate) enum ChatInputItem {
     Text(String),
     Image { url: String },
     Attachment(ash_protocol::ImageAttachmentRef),
+    Audio { url: String },
+    AudioAttachment(ash_protocol::AudioAttachmentRef),
     Context { name: String, content: String },
     Skill { skill: SkillRef },
 }
@@ -107,7 +109,10 @@ impl QueuedChatInput {
                         remaining = &remaining[offset + selector.len()..];
                     }
                 }
-                ChatInputItem::Image { .. } | ChatInputItem::Attachment(_) => input
+                ChatInputItem::Image { .. }
+                | ChatInputItem::Attachment(_)
+                | ChatInputItem::Audio { .. }
+                | ChatInputItem::AudioAttachment(_) => input
                     .attachments
                     .insert_item(&mut input.textarea, item.clone()),
                 ChatInputItem::Context { name, content } => {
@@ -463,7 +468,7 @@ impl ChatInput {
                     name: name.clone(),
                     content: content.clone(),
                 });
-            } else if let Some(image) = self.attachments.image_item(element_id) {
+            } else if let Some(image) = self.attachments.attachment_item(element_id) {
                 push_text_input(&mut input, &mut text);
                 input.push(image.clone());
             } else {

@@ -8,10 +8,18 @@ pub(crate) fn project_tool_result(
     maximum_bytes: usize,
 ) -> Result<ToolOutput, McpCallError> {
     let mut content = Vec::new();
-    let mut image_bytes = 0usize;
+    let mut media_bytes = 0usize;
     for block in result.content {
         let projected = match block {
             ContentBlock::Text(text) => ToolContent::Text(text.text),
+            ContentBlock::Audio(audio) => {
+                let url = format!("data:{};base64,{}", audio.mime_type, audio.data);
+                let audio = audio::load_data_url(&url)
+                    .map_err(|error| McpCallError::InvalidResult(error.to_string()))?;
+                ToolContent::Audio {
+                    url: audio.data_url(),
+                }
+            }
             ContentBlock::Image(image) if valid_image_mime(&image.mime_type) => {
                 ToolContent::Image {
                     url: format!("data:{};base64,{}", image.mime_type, image.data),
@@ -23,8 +31,8 @@ pub(crate) fn project_tool_result(
                     .map_err(|error| McpCallError::InvalidResult(error.to_string()))?,
             ),
         };
-        if let ToolContent::Image { url, .. } = &projected {
-            image_bytes = image_bytes
+        if let ToolContent::Image { url, .. } | ToolContent::Audio { url } = &projected {
+            media_bytes = media_bytes
                 .checked_add(url.len())
                 .ok_or_else(|| McpCallError::InvalidResult("output byte count overflow".into()))?;
         }
@@ -36,9 +44,9 @@ pub(crate) fn project_tool_result(
         content.push(ToolContent::Text(structured));
     }
 
-    if image_bytes > maximum_bytes {
+    if media_bytes > maximum_bytes {
         return Err(McpCallError::InvalidResult(
-            "tool output image byte limit exceeded".into(),
+            "tool output media byte limit exceeded".into(),
         ));
     }
     let output = if result.is_error.unwrap_or(false) {
@@ -46,7 +54,7 @@ pub(crate) fn project_tool_result(
     } else {
         ToolOutput::success(content)
     };
-    let text_budget = maximum_bytes.saturating_sub(image_bytes);
+    let text_budget = maximum_bytes.saturating_sub(media_bytes);
     Ok(output.truncate_text(ToolOutputTruncationPolicy::Bytes(text_budget)))
 }
 

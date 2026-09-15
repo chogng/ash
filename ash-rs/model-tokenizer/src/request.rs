@@ -1,6 +1,3 @@
-use hf_chat_template::Message as TemplateMessage;
-use hf_chat_template::RenderInput;
-use serde_json::json;
 use ash_protocol::ContentPart;
 use ash_protocol::InputItem;
 use ash_protocol::Message;
@@ -8,6 +5,9 @@ use ash_protocol::MessageRole;
 use ash_protocol::ModelRequest;
 use ash_protocol::ToolDefinition;
 use ash_protocol::ToolResult;
+use hf_chat_template::Message as TemplateMessage;
+use hf_chat_template::RenderInput;
+use serde_json::json;
 
 pub(crate) fn render_input(
     request: &ModelRequest,
@@ -79,7 +79,9 @@ fn text_content(content: &[ContentPart]) -> Option<String> {
     for part in content {
         match part {
             ContentPart::Text(part) => text.push_str(part),
-            ContentPart::ImageAttachment { .. } => return None,
+            ContentPart::ImageAttachment { .. }
+            | ContentPart::AudioAttachment { .. }
+            | ContentPart::AudioUrl { .. } => return None,
             ContentPart::ImageUrl { .. } => return None,
         }
     }

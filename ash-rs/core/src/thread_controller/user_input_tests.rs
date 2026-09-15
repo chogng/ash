@@ -1,14 +1,14 @@
 use std::sync::Arc;
 
 use super::*;
-use ash_attachments::ImageAttachments;
+use ash_attachments::Attachments;
 
 #[test]
 fn normalizes_supported_image_data_to_a_durable_reference() {
     let png = crate::test_image::one_pixel_png_data_url();
-    let attachments = Arc::new(ImageAttachments::in_memory());
+    let attachments = Arc::new(Attachments::in_memory());
 
-    let normalized = normalize_images(&[UserInput::Image { url: png }], &attachments).unwrap();
+    let normalized = normalize_attachments(&[UserInput::Image { url: png }], &attachments).unwrap();
     assert!(matches!(
         &normalized[0],
         UserInput::ImageAttachment { attachment } if attachments.verify(attachment).is_ok()
@@ -17,12 +17,12 @@ fn normalizes_supported_image_data_to_a_durable_reference() {
 
 #[test]
 fn rejects_mismatched_image_mime_type() {
-    let attachments = Arc::new(ImageAttachments::in_memory());
+    let attachments = Arc::new(Attachments::in_memory());
     let jpeg_with_png_data =
         crate::test_image::one_pixel_png_data_url().replacen("image/png", "image/jpeg", 1);
 
     assert!(matches!(
-        normalize_images(
+        normalize_attachments(
             &[UserInput::Image {
                 url: jpeg_with_png_data,
             }],
@@ -34,14 +34,14 @@ fn rejects_mismatched_image_mime_type() {
 
 #[test]
 fn rejects_bytes_that_only_imitate_a_supported_signature() {
-    let attachments = Arc::new(ImageAttachments::in_memory());
+    let attachments = Arc::new(Attachments::in_memory());
     let fake_png = ash_utils_image::data_url_from_bytes(
         "image/png",
         b"\x89PNG\r\n\x1a\nnot-a-decodable-image",
     );
 
     assert!(matches!(
-        normalize_images(&[UserInput::Image { url: fake_png }], &attachments),
+        normalize_attachments(&[UserInput::Image { url: fake_png }], &attachments),
         Err(CoreError::InvalidInput(_))
     ));
 }

@@ -1,9 +1,9 @@
-use std::sync::Arc;
-use std::sync::Weak;
 use ash_core::ThreadController;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadItem;
+use std::sync::Arc;
+use std::sync::Weak;
 
 pub(crate) struct ThreadImageReferences(Weak<ThreadController>);
 impl ThreadImageReferences {
@@ -58,7 +58,7 @@ impl image_generation::ImageReferenceSource for ThreadImageReferences {
             })
             .ok_or("image attachment is not part of this Thread")?;
         threads
-            .image_attachments()
+            .attachments()
             .materialize_data_url(attachment)
             .map_err(|e| e.to_string())
     }

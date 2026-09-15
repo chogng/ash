@@ -47,6 +47,13 @@ fn timeline_groups_shell_result_under_its_tool_call() {
                     name: "README selection".to_owned(),
                     content: "selected content".to_owned(),
                 },
+                ThreadItem::UserAudioAttachment {
+                    item_id: ItemId::new("audio").unwrap(), turn_id: TurnId::new("turn").unwrap(),
+                    attachment: ash_protocol::AudioAttachmentRef {
+                        content_digest: ash_protocol::ContentDigest::sha256(b"recording"),
+                        media_type: ash_protocol::AudioMediaType::Wav, encoded_bytes: 32044, duration_ms: 1001,
+                    },
+                },
                 ThreadItem::ToolCall {
                     item_id: ItemId::new("call-item").unwrap(),
                     turn_id: TurnId::new("turn").unwrap(),
@@ -90,6 +97,8 @@ fn timeline_groups_shell_result_under_its_tool_call() {
             "run the tests",
             "You · Context",
             "README selection",
+            "You · Audio",
+            "audio/wav · 2 seconds",
             "Tool · shell-command",
             "$ cargo test",
             "42 passed",

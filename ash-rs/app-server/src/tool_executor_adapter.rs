@@ -6,7 +6,6 @@ use std::sync::Mutex;
 use ash_action_policy::ActionReviewRequest;
 use ash_action_policy::ReviewEvidence;
 use ash_async_utils::CancellationToken;
-use core_api::CoreError;
 use ash_core::ToolAuthorization;
 use ash_core::ToolExecutionFacts;
 use ash_core::ToolOutputSink;
@@ -30,6 +29,7 @@ use ash_tools::ToolOutputStatus;
 use ash_tools::ToolOutputTruncationPolicy;
 use ash_tools::ToolPayload;
 use ash_tools::ToolRuntimeAuthority;
+use core_api::CoreError;
 
 /// Materializes the security review owned by one executable tool contribution.
 ///
@@ -374,6 +374,7 @@ fn returned_output_with_policy(
                 sink.emit(ToolOutputStream::Stdout, text.clone())?;
                 Ok(ContentPart::Text(text.clone()))
             }
+            ToolContent::Audio { url } => Ok(ContentPart::AudioUrl { url: url.clone() }),
             ToolContent::Image { url, detail } => Ok(ContentPart::ImageUrl {
                 url: url.clone(),
                 detail: *detail,

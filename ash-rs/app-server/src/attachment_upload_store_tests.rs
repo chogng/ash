@@ -1,8 +1,9 @@
-use std::time::Duration;
-use std::time::Instant;
 use ash_protocol::ImageDetail;
 use ash_protocol::ImageMediaType;
+use std::time::Duration;
+use std::time::Instant;
 
+use super::AttachmentUploadContent;
 use super::AttachmentUploadError;
 use super::AttachmentUploadStore;
 use super::MAX_ATTACHMENT_UPLOADS_PER_CONNECTION;
@@ -11,7 +12,14 @@ use super::MAX_ATTACHMENT_UPLOADS_PER_CONNECTION;
 fn uploads_are_sequential_connection_owned_and_exact_length() {
     let mut uploads = AttachmentUploadStore::default();
     let upload_id = uploads
-        .start(7, ImageMediaType::Png, ImageDetail::Auto, 4)
+        .start(
+            7,
+            AttachmentUploadContent::Image {
+                media_type: ImageMediaType::Png,
+                detail: ImageDetail::Auto,
+            },
+            4,
+        )
         .unwrap();
 
     assert_eq!(
@@ -31,7 +39,14 @@ fn uploads_are_sequential_connection_owned_and_exact_length() {
 fn closing_an_owner_discards_partial_uploads() {
     let mut uploads = AttachmentUploadStore::default();
     let upload_id = uploads
-        .start(7, ImageMediaType::Png, ImageDetail::Auto, 4)
+        .start(
+            7,
+            AttachmentUploadContent::Image {
+                media_type: ImageMediaType::Png,
+                detail: ImageDetail::Auto,
+            },
+            4,
+        )
         .unwrap();
     uploads.release_owner(7);
 
@@ -46,7 +61,14 @@ fn one_connection_cannot_create_unbounded_upload_sessions() {
     let mut uploads = AttachmentUploadStore::default();
     for _ in 0..MAX_ATTACHMENT_UPLOADS_PER_CONNECTION {
         uploads
-            .start(7, ImageMediaType::Png, ImageDetail::Auto, 16 * 1024 * 1024)
+            .start(
+                7,
+                AttachmentUploadContent::Image {
+                    media_type: ImageMediaType::Png,
+                    detail: ImageDetail::Auto,
+                },
+                16 * 1024 * 1024,
+            )
             .unwrap();
     }
     assert!(
@@ -58,7 +80,14 @@ fn one_connection_cannot_create_unbounded_upload_sessions() {
 
     assert_eq!(
         uploads
-            .start(7, ImageMediaType::Png, ImageDetail::Auto, 1)
+            .start(
+                7,
+                AttachmentUploadContent::Image {
+                    media_type: ImageMediaType::Png,
+                    detail: ImageDetail::Auto
+                },
+                1
+            )
             .unwrap_err(),
         AttachmentUploadError::ResourceLimit
     );
@@ -68,7 +97,14 @@ fn one_connection_cannot_create_unbounded_upload_sessions() {
 fn idle_uploads_expire_before_the_next_operation() {
     let mut uploads = AttachmentUploadStore::default();
     let upload_id = uploads
-        .start(7, ImageMediaType::Png, ImageDetail::Auto, 1)
+        .start(
+            7,
+            AttachmentUploadContent::Image {
+                media_type: ImageMediaType::Png,
+                detail: ImageDetail::Auto,
+            },
+            1,
+        )
         .unwrap();
     uploads.uploads.get_mut(&upload_id).unwrap().last_activity =
         Instant::now() - Duration::from_secs(11 * 60);

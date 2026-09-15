@@ -27,7 +27,6 @@ use crate::TurnExecutionKind;
 use crate::TurnExecutionObserver;
 use crate::TurnExecutionStarted;
 use crate::TurnExecutionTerminalState;
-use crate::turn_policy::UnavailableActionPolicyService;
 use crate::context::CONTEXT_CALIBRATION_REVISION;
 use crate::context::CONTEXT_ESTIMATOR_REVISION;
 use crate::context::ContextMeasurementDisposition;
@@ -42,12 +41,7 @@ use crate::thread_controller::CommitModelInvocationItemsResult;
 use crate::thread_controller::CompleteModelInvocationResult;
 use crate::thread_controller::PrepareModelInvocationRequest;
 use crate::turn::TurnExecutionBackend;
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-use std::sync::Arc;
-use std::time::Duration;
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
+use crate::turn_policy::UnavailableActionPolicyService;
 use ash_async_utils::Cancellation;
 use ash_async_utils::CancellationReason;
 use ash_async_utils::CancellationToken;
@@ -72,6 +66,12 @@ use ash_protocol::TurnStatus;
 use ash_utils_stream_parser::AssistantTextMode;
 use ash_utils_stream_parser::AssistantTextStreamParser;
 use ash_utils_stream_parser::strip_citations;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::sync::Arc;
+use std::time::Duration;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 /// Executes provider-independent model and tool steps for one already-started Turn.
 ///
@@ -215,7 +215,7 @@ impl TurnExecutor {
         let model: Arc<dyn ModelService> = Arc::new(
             crate::attachment_model_service::AttachmentModelService::new(
                 model,
-                threads.image_attachments(),
+                threads.attachments(),
             ),
         );
         let compaction = Arc::new(ModelContextCompactionService::new(model.clone()));

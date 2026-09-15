@@ -15,6 +15,13 @@ export interface ChatImageAttachment {
 	readonly height: number;
 }
 
+export interface ChatAudioAttachment {
+	readonly contentDigest: string;
+	readonly mediaType: "wav" | "mp3" | "m4a" | "webM" | "ogg";
+	readonly encodedBytes: number;
+	readonly durationMs: number;
+}
+
 export interface SlashCommandDefinition {
 	readonly name: string;
 	readonly description: string;
@@ -34,6 +41,7 @@ export type ThreadItem =
 	| { readonly type: "userContext"; readonly itemId: string; readonly turnId: string; readonly name: string; readonly content: string }
 	| { readonly type: "userImage"; readonly itemId: string; readonly turnId: string; readonly url: string }
 	| { readonly type: "userImageAttachment"; readonly itemId: string; readonly turnId: string; readonly attachment: ChatImageAttachment }
+	| { readonly type: "userAudioAttachment"; readonly itemId: string; readonly turnId: string; readonly attachment: ChatAudioAttachment }
 	| { readonly type: "agentMessage"; readonly itemId: string; readonly turnId: string; readonly text: string }
 	| { readonly type: "reasoning"; readonly itemId: string; readonly turnId: string; readonly text: string }
 	| { readonly type: "plan"; readonly itemId: string; readonly turnId: string; readonly text: string }

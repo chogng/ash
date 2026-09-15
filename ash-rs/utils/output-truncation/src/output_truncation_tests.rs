@@ -32,6 +32,10 @@ fn approximate_token_policy_uses_the_shared_four_byte_estimate() {
     assert_eq!(approx_token_count("12345"), 2);
     assert_eq!(approx_bytes_for_tokens(3), 12);
     assert_eq!(approx_tokens_from_byte_count(9), 3);
+    assert_eq!(
+        approx_tokens_from_byte_count(usize::MAX),
+        usize::MAX / 4 + 1
+    );
 
     let content = "long output ".repeat(100);
     let policy = ToolOutputTruncationPolicy::ApproximateTokens(32);
