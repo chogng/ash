@@ -4,16 +4,51 @@ import hashlib
 import json
 import os
 import platform
+import stat
 import subprocess
 import tarfile
 import tempfile
 import unittest
 import zipfile
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Iterator
 from unittest.mock import patch
 
 
 from build.release.code import archive as archive_builder
+
+
+@contextmanager
+def posix_executable(path: Path) -> Iterator[None]:
+    # Windows chmod cannot supply POSIX execute bits for an archive fixture.
+    original_stat = os.stat
+    original_lstat = os.lstat
+
+    def metadata(function, candidate, *args, **kwargs):
+        result = function(candidate, *args, **kwargs)
+        if candidate == path or candidate == str(path):
+            mode = stat.S_IFMT(result.st_mode) | 0o755
+            return os.stat_result((mode, *result[1:]))
+        return result
+
+    with (
+        patch.object(
+            os,
+            "stat",
+            side_effect=lambda *args, **kwargs: metadata(
+                original_stat, *args, **kwargs
+            ),
+        ),
+        patch.object(
+            os,
+            "lstat",
+            side_effect=lambda *args, **kwargs: metadata(
+                original_lstat, *args, **kwargs
+            ),
+        ),
+    ):
+        yield
 
 
 class AshCodeArchiveTests(unittest.TestCase):
@@ -24,7 +59,6 @@ class AshCodeArchiveTests(unittest.TestCase):
             executable = package / "bin/ash"
             executable.parent.mkdir(parents=True)
             executable.write_bytes(b"ash")
-            executable.chmod(0o755)
             (package / "ash-package.json").write_text(
                 json.dumps(
                     {
@@ -38,7 +72,10 @@ class AshCodeArchiveTests(unittest.TestCase):
             first = root / "first/ash-code-aarch64-unknown-linux-gnu.tar.gz"
             second = root / "second/ash-code-aarch64-unknown-linux-gnu.tar.gz"
 
-            with patch.object(archive_builder, "validate_package_directory"):
+            with (
+                posix_executable(executable),
+                patch.object(archive_builder, "validate_package_directory"),
+            ):
                 checksum = archive_builder.create_archive(package, first)
                 for path in package.rglob("*"):
                     os.utime(path, (86400, 86400))
@@ -68,7 +105,6 @@ class AshCodeArchiveTests(unittest.TestCase):
             executable = package / "bin/ash"
             executable.parent.mkdir(parents=True)
             executable.write_bytes(b"ash")
-            executable.chmod(0o755)
             (package / "ash-package.json").write_text(
                 json.dumps(
                     {
@@ -83,6 +119,7 @@ class AshCodeArchiveTests(unittest.TestCase):
             second = root / "second/ash-code-aarch64-apple-darwin.zip"
 
             with (
+                posix_executable(executable),
                 patch.object(archive_builder, "validate_package_directory"),
                 patch.object(archive_builder, "require_verified_system_signing"),
             ):
@@ -93,6 +130,12 @@ class AshCodeArchiveTests(unittest.TestCase):
             with zipfile.ZipFile(first) as archive:
                 self.assertEqual(
                     archive.namelist(), ["ash-package.json", "bin/", "bin/ash"]
+                )
+                self.assertEqual(
+                    archive.getinfo("bin/ash").external_attr >> 16, 0o100755
+                )
+                self.assertEqual(
+                    archive.getinfo("ash-package.json").external_attr >> 16, 0o100644
                 )
 
     def test_archive_requires_cli_package_identity_and_new_output(self) -> None:
