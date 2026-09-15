@@ -4,6 +4,16 @@
 
 ## 当前结论
 
+- 2026-09-15 选区格式化入口：本批修改 10 个已有文件。`formatActions.ts` 注册 `editor.action.formatSelection` 与 Ctrl/Cmd+K、Ctrl/Cmd+F；`FormatController` 复用现有取消、worker 和编辑提交流程，使用最高优先级范围提供者，空选区按当前行处理，多选区支持批量接口与逐范围查询。选区起点变化也取消请求，所有结果一次提交并可一次撤销。`editorContextKeys.ts` 的两种格式化可用状态由 `CodeEditorWidget` 按提供者注册、注销和模型语言更新。本批没有新建服务或修改 worker 消息协议；现有 worker 实例只绑定一个模型，不能将协议没有资源字段视为当前已存在的跨模型混用缺陷。
+
+- 本批验证：68 项定向单测、109 项浏览器测试、Editor 对齐与类型检查、Stanza 和 Renderer 生产构建、diff 检查通过。覆盖范围批量与逐条调用、空选区按行处理、只读、选区起点变化取消、一次撤销及提供者状态更新。单测仍有既有 JSDOM Canvas 提示，浏览器仍有颜色环境提示；保留未触及的 7 份 CSS 债务，生产构建无新增警告。
+
+- 对齐边界：本批完成命令 ID、快捷键、可用状态与范围提供者调用链；尚未实现提供者冲突选择、返回编辑交叠后的合并重新查询，也未补齐资源级 `IEditorWorkerService` 与格式化调度函数的完整签名。`formatOnType` 自动触发仍待处理，80/41 声明计数不变。
+
+- 2026-09-15 格式化查询与 worker 职责：三类 provider 补齐 `extensionId`，扩展桥接传递运行时扩展身份。新增上游同路径 `ExtensionIdentifier` 和同签名 `getRealAndSyntheticDocumentFormattersOrdered`，按整文优先、范围补充、扩展 ID 忽略大小写去重的规则查询提供者；范围提供者接收完整模型范围。提供者异常报告后继续查询，取消仍结束等待。worker 的消息编码与最小编辑计算保留最后一个 EOL 指令，控制器移除重复补回逻辑。`getDocumentFormattingEditsUntilResult` 返回值已改为 `TextEdit[] | undefined`，但参数仍缺 `IEditorWorkerService`，最小化仍由控制器调用模型绑定 client；该函数不能标为完整对齐。Ash 尚无完整资源级 worker-service 契约与实现，禁止创建同名子集服务掩盖此缺口。整体 80/41 声明计数不变。
+
+- 格式化查询批次验证：23 项定向单测、104 项浏览器回归、对齐与类型检查、Stanza 和桌面 Renderer 构建通过。覆盖扩展去重、提供者失败后继续查询、范围提供者执行整文格式化与撤销、worker 消息往返、纯换行符和混合文本/EOL 编辑。保留既有 7 份 CSS 债务与终端颜色环境提示，构建无新增警告。
+
 - 2026-09-15 输入格式化 provider 契约：新增 `OnTypeFormattingEditProvider`，参数为模型、位置、触发字符、选项和取消令牌，提供者必须声明 `autoFormatTriggerCharacters`。旧 `LanguageFormattingProvider/Request` 退出，三类格式化 registry 与批量注册统一使用独立公共契约；Standalone 测试覆盖触发字符、参数和注册释放。扩展协议未提供触发字符，移除扩展桥接中不完整的输入格式化注册，保留文档与范围格式化。此批未接通 `formatOnType` 自动触发链，选区格式化命令与完整上游调度仍待处理；80/41 声明计数不变。
 
 - 输入格式化契约批次验证：31 项定向单测、103 项浏览器回归、对齐检查、类型检查、Stanza 和桌面 Renderer 构建通过。批量注册的可调用方法检查调整后，31 项定向单测再次通过。保留既有 7 份 CSS 债务和终端颜色环境提示，构建无新增警告。

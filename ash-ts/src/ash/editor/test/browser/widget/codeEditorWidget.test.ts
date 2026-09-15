@@ -2158,3 +2158,37 @@ test('CodeEditorWidget shares host language services across contributions and mo
 	assert.equal(first.isDisposed(), false);
 	assert.equal(second.isDisposed(), false);
 });
+
+test('formatting context keys follow registration, language changes, and model replacement', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('alpha', { languageId: 'plaintext' });
+	using next = new TextModel('beta', { languageId: 'typescript' });
+	using services = new ServiceContainer();
+	using rootContextKeys = new ContextKeyService();
+	services.registerInstance(IContextKeyService, rootContextKeys);
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		input: { resource: model.uri },
+		languageId: model.getLanguageId(),
+		instantiationService: services,
+	});
+	const features = editor.invokeWithinContext(accessor => accessor.get(ILanguageFeaturesService));
+	const read = () => editor.invokeWithinContext(accessor => {
+		const context = accessor.get(IContextKeyService);
+		return [context.getValue('editorHasDocumentFormattingProvider'), context.getValue('editorHasDocumentSelectionFormattingProvider')];
+	});
+	assert.deepEqual(read(), [false, false]);
+	using registration = features.documentRangeFormattingEditProvider.register('typescript', { provideDocumentRangeFormattingEdits: () => [] });
+	assert.deepEqual(read(), [false, false]);
+	model.setLanguage('typescript');
+	assert.deepEqual(read(), [true, true]);
+	model.setLanguage('plaintext');
+	assert.deepEqual(read(), [false, false]);
+	editor.setModel(next);
+	assert.deepEqual(read(), [true, true]);
+	registration.dispose();
+	assert.deepEqual(read(), [false, false]);
+	dom.window.close();
+});

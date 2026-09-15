@@ -467,7 +467,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			if (parentContextKeyService) {
 				const scopedContextKeyService = modelStore.add(parentContextKeyService.createScoped(this.view.domNode.domNode));
 				services.registerInstance(IContextKeyService, scopedContextKeyService);
-				modelStore.add(new EditorContextKeysManager(this, scopedContextKeyService));
+				modelStore.add(new EditorContextKeysManager(this, scopedContextKeyService, languageFeaturesService));
 			}
 			const handleKeyDown = (event: IKeyboardEvent): void => this.keyDownEmitter.fire(event);
 			const handleKeyUp = (event: IKeyboardEvent): void => this.keyUpEmitter.fire(event);
@@ -1008,7 +1008,7 @@ class EditorContextKeysManager extends Disposable {
 	private readonly isComposing: IContextKey<boolean>;
 	private readonly languageId: IContextKey<string>;
 
-	constructor(private readonly editor: CodeEditorWidget, contextKeyService: IContextKeyService) {
+	constructor(private readonly editor: CodeEditorWidget, contextKeyService: IContextKeyService, languageFeaturesService: ILanguageFeaturesService) {
 		super();
 		contextKeyService.createKey('editorId', editor.getId());
 		this.editorSimpleInput = EditorContextKeys.editorSimpleInput.bindTo(contextKeyService);
@@ -1029,7 +1029,18 @@ class EditorContextKeysManager extends Disposable {
 		this.editorSimpleInput.set(editor.isSimpleWidget);
 		const model = editor.getModel();
 		if (!model) throw new ReferenceError('Editor context keys require a text model');
-		this.languageId.set(model.getLanguageId());
+		const documentFormatting = EditorContextKeys.hasDocumentFormattingProvider.bindTo(contextKeyService);
+		const selectionFormatting = EditorContextKeys.hasDocumentSelectionFormattingProvider.bindTo(contextKeyService);
+		const updateFormatting = () => {
+			const hasRangeProvider = languageFeaturesService.documentRangeFormattingEditProvider.has(model);
+			selectionFormatting.set(hasRangeProvider);
+			documentFormatting.set(hasRangeProvider || languageFeaturesService.documentFormattingEditProvider.has(model));
+			this.languageId.set(model.getLanguageId());
+		};
+		this._register(languageFeaturesService.documentFormattingEditProvider.onDidChange(updateFormatting));
+		this._register(languageFeaturesService.documentRangeFormattingEditProvider.onDidChange(updateFormatting));
+		this._register(model.onDidChangeLanguage(updateFormatting));
+		updateFormatting();
 		this.updateConfiguration();
 		this.updateSelection();
 		this.updateFocus();

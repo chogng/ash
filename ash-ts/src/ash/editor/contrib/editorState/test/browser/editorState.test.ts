@@ -5,6 +5,7 @@ import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { Position } from '../../../../common/core/position.js';
+import { Selection } from '../../../../common/core/selection.js';
 import { Range } from '../../../../common/core/range.js';
 import { CodeEditorStateFlag, EditorStateCancellationTokenSource } from '../../browser/editorState.js';
 import { EditorKeybindingCancellationTokenSource } from '../../browser/keybindingCancellation.js';
@@ -107,5 +108,14 @@ test('scroll cancellation observes the editor layout owner', () => {
 	editor.layout({ width: 400, height: 100 });
 	using source = new EditorStateCancellationTokenSource(editor, CodeEditorStateFlag.Scroll);
 	editor.setScrollTop(150);
+	assert.equal(source.token.isCancellationRequested, true);
+});
+
+test('selection cancellation observes an anchor change without a caret move', () => {
+	using model = new TextModel('alpha');
+	using editor = createEditor(model);
+	editor.setSelection(new Selection(1, 1, 1, 6));
+	using source = new EditorStateCancellationTokenSource(editor, CodeEditorStateFlag.Selection);
+	editor.setSelection(new Selection(1, 2, 1, 6));
 	assert.equal(source.token.isCancellationRequested, true);
 });

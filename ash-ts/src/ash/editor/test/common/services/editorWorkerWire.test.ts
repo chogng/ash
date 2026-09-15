@@ -9,6 +9,16 @@ import { TextModel } from '../../../common/model/textModel.js';
 import { VersionedEditorWorkerClient } from '../../../browser/services/editorWorkerService.js';
 import { EditorWorkerRequestExecutor } from '../../../common/services/editorWorkerRequestExecutor.js';
 import { editorWorkerWireCodec } from '../../../common/services/editorWorkerWire.js';
+import { EndOfLineSequence } from '../../../common/model.js';
+
+test('worker wire preserves EOL-only edits after text minimization', async () => {
+	using model = new TextModel('alpha');
+	const [clientPort, serverPort] = createPortPair();
+	using server = new LanguageWorkerWireServer(serverPort, editorWorkerWireCodec, new EditorWorkerRequestExecutor());
+	using client = new VersionedEditorWorkerClient(model, () => new LanguageWorkerWireClient(clientPort, editorWorkerWireCodec));
+	const result = await client.computeMoreMinimalEdits([{ range: model.getFullModelRange(), text: 'alpha', eol: EndOfLineSequence.CRLF }]);
+	assert.deepEqual(result, [{ range: new Range(1, 1, 1, 1), text: '', eol: EndOfLineSequence.CRLF }]);
+});
 
 test('Editor worker client synchronizes model versions across the structured-clone boundary', async () => {
 	const [clientPort, serverPort] = createPortPair();

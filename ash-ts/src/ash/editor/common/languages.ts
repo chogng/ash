@@ -3,6 +3,7 @@ import { type Color } from '../../base/common/color.js';
 import { type Event } from '../../base/common/event.js';
 import { Disposable, type IDisposable } from '../../base/common/lifecycle.js';
 import { type URI } from '../../base/common/uri.js';
+import { type ExtensionIdentifier } from '../../platform/extensions/common/extensions.js';
 import { EditOperation, type ISingleEditOperation } from './core/editOperation.js';
 import { type Position } from './core/position.js';
 import { type IRange, Range } from './core/range.js';
@@ -89,11 +90,13 @@ export interface FormattingOptions {
 }
 
 export interface DocumentFormattingEditProvider {
+	readonly extensionId?: ExtensionIdentifier;
 	readonly displayName?: string;
 	provideDocumentFormattingEdits(model: model.ITextModel, options: FormattingOptions, token: CancellationToken): ProviderResult<TextEdit[]>;
 }
 
 export interface DocumentRangeFormattingEditProvider {
+	readonly extensionId?: ExtensionIdentifier;
 	readonly displayName?: string;
 	provideDocumentRangeFormattingEdits(model: model.ITextModel, range: Range, options: FormattingOptions, token: CancellationToken): ProviderResult<TextEdit[]>;
 	provideDocumentRangesFormattingEdits?(model: model.ITextModel, ranges: Range[], options: FormattingOptions, token: CancellationToken): ProviderResult<TextEdit[]>;
@@ -104,6 +107,7 @@ export interface LanguageFormattingOptions extends Readonly<FormattingOptions> {
 }
 
 export interface OnTypeFormattingEditProvider {
+	readonly extensionId?: ExtensionIdentifier;
 	autoFormatTriggerCharacters: string[];
 	provideOnTypeFormattingEdits(model: model.ITextModel, position: Position, ch: string, options: FormattingOptions, token: CancellationToken): ProviderResult<TextEdit[]>;
 }

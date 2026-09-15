@@ -31,7 +31,7 @@ test('range formatting bridge preserves the request snapshot and forwards cancel
 	let release!: () => void;
 	const pending = new Promise<void>(resolve => { release = resolve; });
 	const range = { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 5 } };
-	const batch = createExtensionHostLanguageProviderBatch({ kind: 'languageProvider', registrationId: 'format', languageIds: ['typescript'], operations: ['formatting'] }, 'formatter', async (operation, value, cancellation) => {
+	const batch = createExtensionHostLanguageProviderBatch({ kind: 'languageProvider', registrationId: 'format', languageIds: ['typescript'], operations: ['formatting'] }, 'acme.formatter', 'formatter', async (operation, value, cancellation) => {
 		assert.equal(operation, 'formatting');
 		payload = value;
 		signal = cancellation;
@@ -55,7 +55,7 @@ test('document formatting bridge captures model metadata and releases its cancel
 	using source = new CancellationTokenSource();
 	let payload: JsonValue | undefined;
 	let signal: AbortSignal | undefined;
-	const batch = createExtensionHostLanguageProviderBatch({ kind: 'languageProvider', registrationId: 'format', languageIds: ['typescript'], operations: ['formatting'] }, 'formatter', async (operation, value, cancellation) => {
+	const batch = createExtensionHostLanguageProviderBatch({ kind: 'languageProvider', registrationId: 'format', languageIds: ['typescript'], operations: ['formatting'] }, 'acme.formatter', 'formatter', async (operation, value, cancellation) => {
 		assert.equal(operation, 'formatting');
 		payload = value;
 		signal = cancellation;
@@ -63,6 +63,7 @@ test('document formatting bridge captures model metadata and releases its cancel
 	});
 	using registration = languages.registerProviderBatch(batch);
 	const provider = languages.documentFormattingEditProvider.ordered(model)[0]!;
+	assert.equal(provider.extensionId?.value, 'acme.formatter');
 	assert.deepEqual(languages.onTypeFormattingEditProvider.ordered(model), []);
 	assert.deepEqual(await provider.provideDocumentFormattingEdits(model, { tabSize: 2, insertSpaces: true }, source.token), []);
 	assert.deepEqual(payload, { languageId: 'typescript', version: model.getVersionId(), text: 'alpha', resource: model.uri.toString(), kind: 'document', options: { tabSize: 2, insertSpaces: true } });
@@ -78,7 +79,7 @@ test('document formatting bridge forwards cancellation while transport is pendin
 	let signal: AbortSignal | undefined;
 	let release!: () => void;
 	const pending = new Promise<void>(resolve => { release = resolve; });
-	const batch = createExtensionHostLanguageProviderBatch({ kind: 'languageProvider', registrationId: 'format', languageIds: ['typescript'], operations: ['formatting'] }, 'formatter', async (_operation, _payload, cancellation) => {
+	const batch = createExtensionHostLanguageProviderBatch({ kind: 'languageProvider', registrationId: 'format', languageIds: ['typescript'], operations: ['formatting'] }, 'acme.formatter', 'formatter', async (_operation, _payload, cancellation) => {
 		signal = cancellation;
 		await pending;
 		return { edits: [] };

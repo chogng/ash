@@ -81,12 +81,15 @@ export const editorWorkerWireCodec: LanguageWorkerWireCodec<EditorWorkerLane, Ed
 });
 
 function encodeEdit(edit: TextEdit): unknown {
-	return Object.freeze({ range: encodeRange(edit.range), text: edit.text });
+	return Object.freeze({ range: encodeRange(edit.range), text: edit.text, ...(edit.eol === undefined ? {} : { eol: edit.eol }) });
 }
 
 function decodeEdit(value: unknown, snapshot: TextSnapshot): TextEdit {
 	assertRecord(value, 'Editor worker edit');
-	return Object.freeze({ range: decodeRange(value.range, snapshot), text: decodeString(value.text, 'Editor worker edit text') });
+	if (value.eol !== undefined && value.eol !== 0 && value.eol !== 1) {
+		throw new TypeError('Editor worker edit EOL must be LF or CRLF');
+	}
+	return Object.freeze({ range: decodeRange(value.range, snapshot), text: decodeString(value.text, 'Editor worker edit text'), ...(value.eol === undefined ? {} : { eol: value.eol }) });
 }
 
 function encodeRange(range: IRange): unknown {

@@ -1,5 +1,12 @@
 import { expect, test } from '@playwright/test';
 
+test('document formatting uses a range-only provider and remains undoable', async ({ page }) => {
+	await page.goto('/standalone.html');
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.runFormatting('range'))).toBe('ALPHA');
+	await page.keyboard.press('ControlOrMeta+z');
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readDeferredFormatting().value)).toBe('alpha');
+});
+
 test('line comments preserve the primary selection below a secondary caret', async ({ page }) => {
 	await page.goto('/standalone.html');
 	await page.evaluate(() => window.ashStandaloneIntegration.prepareLineComment());
@@ -1464,5 +1471,23 @@ for (const cancel of ['escape', 'supersede'] as const) {
 		await page.evaluate(() => window.ashStandaloneIntegration.finishDeferredFormatting());
 		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readDeferredFormatting().value)).toBe(cancel === 'escape' ? 'alpha' : 'ALPHA');
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	});
+}
+
+for (const mode of ['ranges', 'single', 'empty', 'cancel', 'readonly'] as const) {
+	test(`selection formatting handles ${mode} through the registered action`, async ({ page }) => {
+		await page.goto('/standalone.html');
+		const result = await page.evaluate(mode => window.ashStandaloneIntegration.runSelectionFormatting(mode), mode);
+		const original = 'alpha\nbeta\ngamma';
+		if (mode === 'cancel' || mode === 'readonly') {
+			expect(result.value).toBe(original);
+			if (mode === 'cancel') expect(result.cancelled).toBe(true);
+			if (mode === 'readonly') expect(result.ranges).toEqual([]);
+		} else {
+			expect(result.value).toBe(mode === 'empty' ? 'alpha\nBETA\ngamma' : 'ALPHA\nbeta\nGAMMA');
+			expect(result.ranges).toEqual(mode === 'empty' ? ['[2,1 -> 2,5]'] : ['[1,1 -> 1,6]', '[3,1 -> 3,6]']);
+			await page.keyboard.press('ControlOrMeta+z');
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy().value)).toBe(original);
+		}
 	});
 }

@@ -273,7 +273,7 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 					continue;
 				}
 				if (registration.kind === "languageProvider") {
-					appendLanguageBatch(languages, createExtensionHostLanguageProviderBatch(registration, extensionHostLanguageProviderId(runtime.id, registration.registrationId), invoke));
+					appendLanguageBatch(languages, createExtensionHostLanguageProviderBatch(registration, runtime.id, extensionHostLanguageProviderId(runtime.id, registration.registrationId), invoke));
 					const unsupported = unsupportedExtensionHostLanguageOperations(registration);
 					if (unsupported.length > 0) issues.push(unsupportedLanguageIssue(runtime, registration, unsupported));
 					continue;

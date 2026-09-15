@@ -1,3 +1,4 @@
+import { ExtensionIdentifier } from '../../../../platform/extensions/common/extensions.js';
 import { encodeHex, VSBuffer } from "../../../../base/common/buffer.js";
 import { type CancellationToken } from '../../../../base/common/cancellation.js';
 import { Position } from "../../../../editor/common/core/position.js";
@@ -18,13 +19,13 @@ export const SUPPORTED_EXTENSION_HOST_LANGUAGE_OPERATIONS = Object.freeze(["comp
 export type ExtensionHostProviderInvoker = (operation: string, payload: JsonValue, signal: AbortSignal) => Promise<JsonValue>;
 
 /** Projects one all-or-nothing Host registration into the canonical language provider batch. */
-export function createExtensionHostLanguageProviderBatch(registration: ExtensionHostLanguageRegistration, providerId: string, invoke: ExtensionHostProviderInvoker): LanguageProviderBatch {
+export function createExtensionHostLanguageProviderBatch(registration: ExtensionHostLanguageRegistration, extensionId: string, providerId: string, invoke: ExtensionHostProviderInvoker): LanguageProviderBatch {
 	const operations = new Set(registration.operations);
 	const languageIds = registration.languageIds;
 	return Object.freeze({
 		completions: Object.freeze(operations.has("completion") ? [completionProvider(providerId, languageIds, invoke)] : []),
 		hovers: Object.freeze(operations.has("hover") ? [Object.freeze({ selector: languageIds, provider: hoverProvider(invoke) })] : []),
-		formatting: Object.freeze(operations.has("formatting") ? [Object.freeze({ selector: languageIds, provider: formattingProvider(invoke) })] : []),
+		formatting: Object.freeze(operations.has("formatting") ? [Object.freeze({ selector: languageIds, provider: formattingProvider(new ExtensionIdentifier(extensionId), invoke) })] : []),
 		inlayHints: Object.freeze(operations.has("inlayHints") ? [Object.freeze({ selector: languageIds, provider: inlayHintsProvider(invoke) })] : []),
 		linkedEditing: Object.freeze(operations.has("linkedEditing") ? [Object.freeze({ selector: languageIds, provider: linkedEditingProvider(invoke) })] : []),
 		parameterHints: Object.freeze(operations.has("parameterHints") ? [Object.freeze({ selector: languageIds, provider: parameterHintsProvider(invoke) })] : []),
@@ -54,8 +55,9 @@ function hoverProvider(invoke: ExtensionHostProviderInvoker): LanguageHoverProvi
 	});
 }
 
-function formattingProvider(invoke: ExtensionHostProviderInvoker): DocumentFormattingEditProvider & DocumentRangeFormattingEditProvider {
+function formattingProvider(extensionId: ExtensionIdentifier, invoke: ExtensionHostProviderInvoker): DocumentFormattingEditProvider & DocumentRangeFormattingEditProvider {
 	return Object.freeze({
+		extensionId,
 		provideDocumentFormattingEdits: async (model: ITextModel, options: LanguageFormattingOptions, token: CancellationToken): Promise<TextEdit[]> => {
 			const request = modelRequest(model);
 			const value = await withAbortSignal(token, signal => invoke('formatting', featurePayload(request, { kind: 'document', options: formattingOptionsValue(options) }), signal));

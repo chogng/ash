@@ -36,6 +36,7 @@ function computeMoreMinimalEdits(snapshot: TextSnapshot, request: EditorWorkerMi
 	const document = new StringText(snapshot.getText());
 	const edits = mergeAdjacentEdits(request.edits);
 	const result: TextEdit[] = [];
+	const eol = [...request.edits].reverse().find(edit => edit.eol !== undefined)?.eol;
 	for (const edit of edits) {
 		signal.throwIfAborted();
 		const text = normalizeTextLineEndings(edit.text);
@@ -48,6 +49,13 @@ function computeMoreMinimalEdits(snapshot: TextSnapshot, request: EditorWorkerMi
 		}
 		const replacement = new TextReplacement(range, text).removeCommonPrefixAndSuffix(document);
 		if (!replacement.isEmpty) result.push(Object.freeze({ range: replacement.range, text: replacement.text }));
+	}
+	if (eol !== undefined) {
+		if (result.length > 0) {
+			result[result.length - 1] = { ...result[result.length - 1], eol };
+		} else {
+			result.push({ range: new Range(1, 1, 1, 1), text: '', eol });
+		}
 	}
 	return Object.freeze(result);
 }

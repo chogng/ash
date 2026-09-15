@@ -6,6 +6,22 @@ import { DEFAULT_WORD_REGEXP } from '../../../common/core/wordHelper.js';
 import { EDITOR_WORKER_MINIMAL_EDITS_LANE, EDITOR_WORKER_NAVIGATE_VALUE_LANE, EDITOR_WORKER_UNICODE_HIGHLIGHTS_LANE, type EditorWorkerLane, type EditorWorkerRequest } from '../../../common/services/editorWorkerProtocol.js';
 import { EditorWorkerRequestExecutor } from '../../../common/services/editorWorkerRequestExecutor.js';
 import { TextModel } from '../../../common/model/textModel.js';
+import { EndOfLineSequence } from '../../../common/model.js';
+
+test('minimal formatting edits retain the last requested EOL with text changes', async () => {
+	using model = new TextModel('abc');
+	using worker = new EditorWorkerRequestExecutor();
+	const result = await run(worker, model, 1, EDITOR_WORKER_MINIMAL_EDITS_LANE, {
+		edits: [
+			{ range: new Range(1, 1, 1, 2), text: 'A', eol: EndOfLineSequence.CRLF },
+			{ range: new Range(1, 3, 1, 4), text: 'C', eol: EndOfLineSequence.LF },
+		],
+	});
+	assert.deepEqual(result, [
+		{ range: new Range(1, 1, 1, 2), text: 'A' },
+		{ range: new Range(1, 3, 1, 4), text: 'C', eol: EndOfLineSequence.LF },
+	]);
+});
 
 test('Editor worker computes Unicode highlights from the captured model version', async () => {
 	using model = new TextModel('const a = 1;\u200b\nconst \u0430 = 2;\u202e');

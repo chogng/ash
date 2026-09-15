@@ -1,7 +1,8 @@
 import { type CancellationToken } from '../../../src/ash/base/common/cancellation.js';
 import { scheduleAtNextAnimationFrame } from '../../../src/ash/base/browser/scheduler.js';
 import { h } from '../../../src/ash/base/browser/dom.js';
-import { EndOfLineSequence } from '../../../src/ash/editor/common/model.js';
+import { type Range } from '../../../src/ash/editor/common/core/range.js';
+import { EndOfLineSequence, type ITextModel } from '../../../src/ash/editor/common/model.js';
 import type { FormatController } from '../../../src/ash/editor/contrib/format/browser/formatController.js';
 import { StandaloneServices } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
 import { IMarkerService, MarkerSeverity } from '../../../src/ash/platform/markers/common/markers.js';
@@ -70,11 +71,13 @@ interface ViewZoneState {
 }
 
 interface StandaloneHarness {
+	runSelectionFormatting(mode: 'ranges' | 'single' | 'empty' | 'cancel' | 'readonly'): Promise<{ value: string; ranges: string[]; cancelled: boolean }>;
+
 	prepareDeferredFormatting(): void;
 	readDeferredFormatting(): { aborted: boolean[]; value: string };
 	finishDeferredFormatting(): void;
 	readEOL(): string;
-	runFormatting(change: 'none' | 'position' | 'model' | 'readonly' | 'eol' | 'returnPosition'): Promise<string>;
+	runFormatting(change: 'none' | 'position' | 'model' | 'readonly' | 'eol' | 'returnPosition' | 'range'): Promise<string>;
 
 	prepareLineComment(): void;
 	prepareLineCopy(emptyTail?: boolean): void;
@@ -268,6 +271,43 @@ let deferredFormatting: { token: CancellationToken; resolve: () => void }[] = []
 let formattingProvider: { dispose(): void } | undefined;
 
 window.ashStandaloneIntegration = {
+	runSelectionFormatting: async mode => {
+		callerEditor.setValue('alpha\nbeta\ngamma');
+		callerEditor.setSelections(mode === 'empty'
+			? [new stanza.Selection(2, 3, 2, 3)]
+			: [new stanza.Selection(1, 1, 1, 6), new stanza.Selection(3, 1, 3, 6)]);
+		callerEditor.focus();
+		const ranges: string[] = [];
+		let token: CancellationToken | undefined;
+		let release!: () => void;
+		const ready = new Promise<void>(resolve => { release = resolve; });
+		const provide = async (selected: Range[], receivedToken: CancellationToken) => {
+			token = receivedToken;
+			ranges.push(...selected.map(range => range.toString()));
+			if (mode === 'cancel') await ready;
+			return selected.map(range => ({ range, text: callerModel.getValueInRange(range).toUpperCase() }));
+		};
+		const provider = stanza.languages.registerDocumentRangeFormattingEditProvider('*', {
+			provideDocumentRangeFormattingEdits: (_model, range, _options, token) => provide([range], token),
+			...(mode === 'single' ? {} : {
+				provideDocumentRangesFormattingEdits: (_model: ITextModel, ranges: Range[], _options: { tabSize: number; insertSpaces: boolean }, token: CancellationToken) => provide(ranges, token),
+			}),
+		});
+		try {
+			if (mode === 'readonly') callerEditor.updateOptions({ readOnly: true });
+			const request = window.ashStandaloneIntegration.runLineAction('editor.action.formatSelection');
+			if (mode === 'cancel') {
+				// Change the anchor while keeping the primary caret at the same position.
+				callerEditor.setSelection(new stanza.Selection(1, 2, 1, 6));
+			}
+			release();
+			await request;
+			return { value: callerEditor.getValue(), ranges, cancelled: token?.isCancellationRequested ?? false };
+		} finally {
+			provider.dispose();
+			callerEditor.updateOptions({ readOnly: false });
+		}
+	},
 	prepareDeferredFormatting: () => {
 		formattingProvider?.dispose();
 		deferredFormatting = [];
@@ -290,12 +330,13 @@ window.ashStandaloneIntegration = {
 		callerEditor.focus();
 		let release!: () => void;
 		const ready = new Promise<void>(resolve => { release = resolve; });
-		const provider = stanza.languages.registerDocumentFormattingEditProvider('*', {
-			provideDocumentFormattingEdits: async () => {
-				await ready;
-				return [{ range: new stanza.Range(1, 1, 1, 6), text: change === 'eol' ? 'alpha' : 'ALPHA', ...(change === 'eol' ? { eol: EndOfLineSequence.CRLF } : {}) }];
-			},
-		});
+		const provideEdits = async () => {
+			await ready;
+			return [{ range: new stanza.Range(1, 1, 1, 6), text: change === 'eol' ? 'alpha' : 'ALPHA', ...(change === 'eol' ? { eol: EndOfLineSequence.CRLF } : {}) }];
+		};
+		const provider = change === 'range'
+			? stanza.languages.registerDocumentRangeFormattingEditProvider('*', { provideDocumentRangeFormattingEdits: provideEdits })
+			: stanza.languages.registerDocumentFormattingEditProvider('*', { provideDocumentFormattingEdits: provideEdits });
 		try {
 			const controller = callerEditor.getContribution<FormatController>('editor.contrib.format');
 			if (!controller) throw new Error('Formatting contribution is missing');

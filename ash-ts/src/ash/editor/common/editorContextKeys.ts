@@ -1,6 +1,8 @@
 import { ContextKeyExpr, RawContextKey } from '../../platform/contextkey/common/contextkey.js';
 
 export namespace EditorContextKeys {
+	export const hasDocumentFormattingProvider = new RawContextKey<boolean>('editorHasDocumentFormattingProvider', false);
+	export const hasDocumentSelectionFormattingProvider = new RawContextKey<boolean>('editorHasDocumentSelectionFormattingProvider', false);
 	export const editorSimpleInput = new RawContextKey<boolean>('editorSimpleInput', false);
 	export const editorTextFocus = new RawContextKey<boolean>('editorTextFocus', false);
 	export const focus = new RawContextKey<boolean>('editorFocus', false);
