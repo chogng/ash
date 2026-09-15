@@ -1,18 +1,14 @@
 import assert from "node:assert/strict";
-import { test } from "mocha";
+import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
-import { type TextMeasurer } from "../../../../common/viewModel/textMeasurer.js";
-import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { LanguageCompletionSessionController } from "../../common/languageCompletionSessionController.js";
 import { LanguageCompletionService } from "../../../../common/languages/completion/languageCompletionService.js";
 import { LanguageCompletionProviderRegistry, LanguageCompletionTriggerKind, type LanguageCompletionProvider, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from "../../../../common/languages/completion/languageCompletionProviders.js";
 import { LanguageCompletionItemKind } from "../../../../common/languages/completion/languageCompletions.js";
-import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { SuggestController } from "../../browser/suggestController.js";
-import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -24,6 +20,7 @@ for (const [name, value] of Object.entries({
 	Event: browserEnvironment.window.Event,
 	InputEvent: browserEnvironment.window.InputEvent,
 	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
+	ResizeObserver: class { observe(): void {} unobserve(): void {} disconnect(): void {} },
 })) {
 	Object.defineProperty(globalThis, name, {
 		configurable: true,
@@ -31,7 +28,8 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { TestView: View } = await import("../../../../test/browser/viewModel/testViewModel.js");
+const { createTestCodeEditor } = await import("../../../../test/browser/testCodeEditor.js");
+suiteTeardown(() => browserEnvironment.window.close());
 const { ViewController } = await import('../../../../browser/view/viewController.js');
 test("Ctrl+Space requests providers through the completion service", async () => {
 	const requests: LanguageCompletionProviderRequest[] = [];
@@ -162,19 +160,23 @@ test("Completion request wiring rejects a same-model session from another servic
 	using model = new TextModel("con");
 	using firstService = new LanguageCompletionService(model, registry);
 	using secondService = new LanguageCompletionService(model, registry);
-	using selections = controllerAt(model, new Position((0) + 1, (3) + 1));
-	using session = new LanguageCompletionSessionController(firstService.results, selections);
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
-	using viewport = new View({
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using editor = createTestCodeEditor({
 		container: requiredElement<HTMLElement>(dom.window.document, "main"),
 		model,
 		lineHeight: 20,
-		textMeasurer: new FixedTextMeasurer(),
-		selectionController: selections,
+		input: { resource: model.uri },
+		languageId: "typescript",
+		contributions: [],
 	});
+	const viewport = editor.view;
+	const selections = editor.selections;
+	editor.setPosition(new Position((0) + 1, (3) + 1));
+	using session = new LanguageCompletionSessionController(firstService.results, selections);
 
 	const input = viewport.controller;
-	assert.throws(() => new SuggestController(input, selections, secondService, session, "typescript"), /must share one text model and completion result store/);
+	assert.throws(() => new SuggestController(editor, input, secondService, session, "typescript"), /must share one text model and completion result store/);
 	dom.window.close();
 });
 
@@ -189,22 +191,26 @@ interface TriggerFixture extends Disposable {
 
 function createFixture(provider: LanguageCompletionProvider, text = "con"): TriggerFixture {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const registry = new LanguageCompletionProviderRegistry();
 	const registration = registry.register(provider);
 	const model = new TextModel(text);
 	const service = new LanguageCompletionService(model, registry);
-	const viewport = new View({
+	const editor = createTestCodeEditor({
 		container: requiredElement<HTMLElement>(dom.window.document, "main"),
 		model,
 		lineHeight: 20,
-		textMeasurer: new FixedTextMeasurer(),
+		input: { resource: model.uri },
+		languageId: "typescript",
+		contributions: [],
 	});
-	const selections = viewport.testSelectionController;
-	selections.setSelections([Selection.fromPositions(new Position((0) + 1, (text.length) + 1))]);
+	const viewport = editor.view;
+	const selections = editor.selections;
+	editor.setPosition(new Position((0) + 1, (text.length) + 1));
 	const session = new LanguageCompletionSessionController(service.results, selections);
 	viewport.layout({ width: 300, height: 40 });
 	const input = viewport.controller;
-	const suggest = new SuggestController(input, selections, service, session, "typescript");
+	const suggest = new SuggestController(editor, input, service, session, "typescript");
 	viewport.focus();
 	return {
 		dom,
@@ -215,9 +221,8 @@ function createFixture(provider: LanguageCompletionProvider, text = "con"): Trig
 		suggest,
 		[Symbol.dispose](): void {
 			suggest.dispose();
-			viewport.dispose();
+			editor.dispose();
 			session.dispose();
-			selections.dispose();
 			service.dispose();
 			model.dispose();
 			registration.dispose();
@@ -243,12 +248,6 @@ function completionResult(request: LanguageCompletionProviderRequest, label: str
 	};
 }
 
-function controllerAt(model: TextModel, position: Position): CursorsController {
-	return createTestCursorsController(
-		model,
-		[Selection.fromPositions(position)],
-	);
-}
 
 interface KeyOptions {
 	readonly ctrlKey?: boolean;
@@ -284,17 +283,4 @@ function requiredElement<T extends Element = HTMLElement>(root: ParentNode, sele
 	const element = root.querySelector<T>(selector);
 	assert.ok(element);
 	return element;
-}
-
-class FixedTextMeasurer implements TextMeasurer {
-	readonly horizontalPadding = 24;
-	readonly contentLeftPadding = 12;
-
-	refresh(): boolean {
-		return false;
-	}
-
-	measureLineWidth(text: string): number {
-		return text.length * 10;
-	}
 }

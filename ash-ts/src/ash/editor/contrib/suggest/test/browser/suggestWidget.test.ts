@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
-import { test } from "mocha";
+import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
-import { type TextMeasurer } from "../../../../common/viewModel/textMeasurer.js";
 import { CursorsController } from "../../../../common/cursor/cursor.js";
 import { LanguageCompletionDetailsStatus, LanguageCompletionSessionController, type LanguageCompletionSessionOptions } from "../../common/languageCompletionSessionController.js";
 import { LanguageResultAcceptance } from "../../../../common/languages/languageResultStore.js";
@@ -25,6 +24,7 @@ for (const [name, value] of Object.entries({
 	Event: browserEnvironment.window.Event,
 	MouseEvent: browserEnvironment.window.MouseEvent,
 	KeyboardEvent: browserEnvironment.window.KeyboardEvent,
+	ResizeObserver: class { observe(): void {} unobserve(): void {} disconnect(): void {} },
 })) {
 	Object.defineProperty(globalThis, name, {
 		configurable: true,
@@ -32,30 +32,35 @@ for (const [name, value] of Object.entries({
 	});
 }
 
-const { EditorTextDirection } = await import("../../../../browser/view.js");
-const { TestView: View } = await import("../../../../test/browser/viewModel/testViewModel.js");
+const { EditorTextDirection, View } = await import("../../../../browser/view.js");
+const { createTestCodeEditor } = await import("../../../../test/browser/testCodeEditor.js");
+suiteTeardown(() => browserEnvironment.window.close());
 const { ViewController } = await import('../../../../browser/view/viewController.js');
 
 test("Completion widget projects named options, focus, ARIA, and content coordinates", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	using model = new TextModel("con");
-	using selections = controllerAt(model, new Position((0) + 1, (3) + 1));
 	using registry = new LanguageCompletionProviderRegistry();
 	using service = new LanguageCompletionService(model, registry);
-	using session = new LanguageCompletionSessionController(service.results, selections);
-	using viewport = new View({
+	using editor = createTestCodeEditor({
 		container,
 		model,
 		glyphMargin: false,
 		textDirection: EditorTextDirection.LeftToRight,
 		lineHeight: 20,
-		textMeasurer: new FixedTextMeasurer(),
-		selectionController: selections,
+		input: { resource: model.uri },
+		languageId: "plaintext",
+		contributions: [],
 	});
+	const viewport = editor.view;
+	const selections = editor.selections;
+	editor.setPosition(new Position((0) + 1, (3) + 1));
+	using session = new LanguageCompletionSessionController(service.results, selections);
 	viewport.layout({ width: 300, height: 40 });
 	const input = viewport.controller;
-	using suggest = new SuggestController(input, selections, service, session, "plaintext");
+	using suggest = new SuggestController(editor, input, service, session, "plaintext");
 	viewport.focus();
 	accept(service.results, model, 1, [
 		completion("constant", "const", LanguageCompletionItemKind.Keyword, "declaration"),
@@ -66,8 +71,9 @@ test("Completion widget projects named options, focus, ARIA, and content coordin
 
 	assert.equal(widget.visible, true);
 	assert.equal(widget.element.hidden, false);
-	assert.equal(widget.element.style.left, "76px");
-	assert.equal(widget.element.style.top, "20px");
+	const coordinates = viewport.getPositionContentCoordinates(editor.getPosition()!);
+	assert.equal(widget.element.style.left, `${coordinates.left}px`);
+	assert.equal(widget.element.style.top, `${coordinates.top + coordinates.height}px`);
 	assert.equal(input.element.getAttribute("aria-autocomplete"), "list");
 	assert.equal(input.element.getAttribute("aria-haspopup"), "true");
 	assert.equal(input.element.getAttribute("aria-controls"), null);
@@ -104,12 +110,12 @@ test("Completion keyboard navigation accepts one item before ordinary input rout
 	fixture.input.element.dispatchEvent(enter);
 	assert.equal(enter.defaultPrevented, true);
 	assert.equal(fixture.model.getText(), "console");
-	assert.equal(Position.compare(fixture.selections.getSelections()[0]!.getPosition(), new Position((0) + 1, (7) + 1)), 0);
+	assert.equal(Position.compare(fixture.editor.getPosition()!, new Position((0) + 1, (7) + 1)), 0);
 	assert.equal(fixture.suggest.widget.visible, false);
 	assert.equal(fixture.input.element.getAttribute("aria-autocomplete"), "both");
 	assert.equal(fixture.dom.window.document.activeElement, fixture.input.element);
 
-	fixture.selections.context.model.undo();
+	fixture.model.undo();
 	assert.equal(fixture.model.getText(), "con");
 });
 
@@ -126,16 +132,16 @@ test("Typing a declared completion commit character accepts it atomically before
 
 	assert.equal(commit.defaultPrevented, true);
 	assert.equal(fixture.model.getText(), "console.");
-	assert.equal(Position.compare(fixture.selections.getSelections()[0]!.getPosition(), new Position((0) + 1, (8) + 1)), 0);
+	assert.equal(Position.compare(fixture.editor.getPosition()!, new Position((0) + 1, (8) + 1)), 0);
 	assert.equal(fixture.suggest.widget.visible, false);
-	fixture.selections.context.model.undo();
+	fixture.model.undo();
 	assert.equal(fixture.model.getText(), "con");
 });
 
 test("Completion snippets route Tab, Shift+Tab, and Escape through Stanza placeholder navigation", () => {
 	const fixture = createFixture("fn");
 	using resources = fixture;
-	fixture.selections.setSelections([Selection.fromPositions(new Position((0) + 1, (2) + 1))]);
+	fixture.editor.setSelections([Selection.fromPositions(new Position((0) + 1, (2) + 1))]);
 	assert.equal(fixture.store.accept({
 		requestId: 1,
 		textModel: fixture.model,
@@ -157,11 +163,11 @@ test("Completion snippets route Tab, Shift+Tab, and Escape through Stanza placeh
 	const next = keyboardEvent(fixture.dom.window, "Tab");
 	fixture.input.element.dispatchEvent(next);
 	assert.equal(next.defaultPrevented, true);
-	assert.deepEqual(fixture.selections.getSelections()[0]!, Selection.fromPositions(new Position((0) + 1, (14) + 1), new Position((0) + 1, (19) + 1)));
+	assert.deepEqual(fixture.editor.getSelection()!, Selection.fromPositions(new Position((0) + 1, (14) + 1), new Position((0) + 1, (19) + 1)));
 	const previous = keyboardEvent(fixture.dom.window, "Tab", true);
 	fixture.input.element.dispatchEvent(previous);
 	assert.equal(previous.defaultPrevented, true);
-	assert.deepEqual(fixture.selections.getSelections()[0]!, Selection.fromPositions(new Position((0) + 1, (9) + 1), new Position((0) + 1, (13) + 1)));
+	assert.deepEqual(fixture.editor.getSelection()!, Selection.fromPositions(new Position((0) + 1, (9) + 1), new Position((0) + 1, (13) + 1)));
 	const escape = keyboardEvent(fixture.dom.window, "Escape");
 	fixture.input.element.dispatchEvent(escape);
 	assert.equal(escape.defaultPrevented, true);
@@ -220,27 +226,31 @@ test("Escape cancels locally while clicking accepts the selected option", () => 
 
 test("Completion widget validates ownership and clears its active descendant on disposal", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	using model = new TextModel("con");
 	using otherModel = new TextModel("other");
-	using selections = controllerAt(model, new Position((0) + 1, (3) + 1));
 	using otherSelections = controllerAt(otherModel, new Position((0) + 1, (5) + 1));
 	using registry = new LanguageCompletionProviderRegistry();
 	using otherRegistry = new LanguageCompletionProviderRegistry();
 	using service = new LanguageCompletionService(model, registry);
 	using otherService = new LanguageCompletionService(otherModel, otherRegistry);
-	using session = new LanguageCompletionSessionController(service.results, selections);
 	using otherSession = new LanguageCompletionSessionController(otherService.results, otherSelections);
-	using viewport = new View({
+	using editor = createTestCodeEditor({
 		container,
 		model,
 		lineHeight: 20,
-		textMeasurer: new FixedTextMeasurer(),
-		selectionController: selections,
+		input: { resource: model.uri },
+		languageId: "plaintext",
+		contributions: [],
 	});
+	const viewport = editor.view;
+	const selections = editor.selections;
+	editor.setPosition(new Position((0) + 1, (3) + 1));
+	using session = new LanguageCompletionSessionController(service.results, selections);
 	const input = viewport.controller;
-	assert.throws(() => new SuggestController(input, selections, service, otherSession, "plaintext"), /must share one text model/);
-	using suggest = new SuggestController(input, selections, service, session, "plaintext");
+	assert.throws(() => new SuggestController(editor, input, service, otherSession, "plaintext"), /must share one text model/);
+	using suggest = new SuggestController(editor, input, service, session, "plaintext");
 	assert.equal(input.element.getAttribute("aria-autocomplete"), "both");
 	suggest.dispose();
 	assert.equal(input.element.getAttribute("aria-autocomplete"), "both");
@@ -265,9 +275,12 @@ test("Disposing the common session immediately hides a surviving widget", () => 
 
 	assert.equal(fixture.suggest.widget.visible, false);
 	assert.equal(fixture.input.element.getAttribute("aria-autocomplete"), "both");
+	fixture.model.setValue("con\nnext");
+	fixture.editor.setPosition(new Position(1, 2));
 	const down = keyboardEvent(fixture.dom.window, "ArrowDown");
 	fixture.input.element.dispatchEvent(down);
-	assert.equal(down.defaultPrevented, false);
+	assert.equal(down.defaultPrevented, true);
+	assert.deepEqual(fixture.editor.getPosition(), new Position(2, 2));
 });
 
 test("Completion widget projects resolved details only for the focused option", async () => {
@@ -306,7 +319,7 @@ test("Completion widget projects resolved details only for the focused option", 
 interface CompletionFixture extends Disposable {
 	readonly dom: JSDOM;
 	readonly model: TextModel;
-	readonly selections: CursorsController;
+	readonly editor: ReturnType<typeof createTestCodeEditor>;
 	readonly store: ReturnType<typeof createLanguageCompletionStore>;
 	readonly session: LanguageCompletionSessionController;
 	readonly viewport: InstanceType<typeof View>;
@@ -316,26 +329,30 @@ interface CompletionFixture extends Disposable {
 
 function createFixture(text: string, sessionOptions: LanguageCompletionSessionOptions = {}): CompletionFixture {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const model = new TextModel(text);
-	const selections = controllerAt(model, new Position((0) + 1, (text.length) + 1));
 	const registry = new LanguageCompletionProviderRegistry();
 	const service = new LanguageCompletionService(model, registry);
-	const session = new LanguageCompletionSessionController(service.results, selections, sessionOptions);
-	const viewport = new View({
+	const editor = createTestCodeEditor({
 		container: requiredElement<HTMLElement>(dom.window.document, "main"),
 		model,
 		lineHeight: 20,
-		textMeasurer: new FixedTextMeasurer(),
-		selectionController: selections,
+		input: { resource: model.uri },
+		languageId: "plaintext",
+		contributions: [],
 	});
+	const viewport = editor.view;
+	const selections = editor.selections;
+	editor.setPosition(new Position((0) + 1, (text.length) + 1));
+	const session = new LanguageCompletionSessionController(service.results, selections, sessionOptions);
 	viewport.layout({ width: 300, height: 40 });
 	const input = viewport.controller;
-	const suggest = new SuggestController(input, selections, service, session, "plaintext");
+	const suggest = new SuggestController(editor, input, service, session, "plaintext");
 	viewport.focus();
 	return {
 		dom,
 		model,
-		selections,
+		editor,
 		store: service.results,
 		session,
 		viewport,
@@ -343,10 +360,9 @@ function createFixture(text: string, sessionOptions: LanguageCompletionSessionOp
 		suggest,
 		[Symbol.dispose](): void {
 			suggest.dispose();
-			viewport.dispose();
+			editor.dispose();
 			session.dispose();
 			service.dispose();
-			selections.dispose();
 			model.dispose();
 			registry.dispose();
 			dom.window.close();
@@ -423,17 +439,4 @@ function requiredElement<T extends Element = HTMLElement>(root: ParentNode, sele
 	const element = root.querySelector<T>(selector);
 	assert.ok(element);
 	return element;
-}
-
-class FixedTextMeasurer implements TextMeasurer {
-	readonly horizontalPadding = 24;
-	readonly contentLeftPadding = 12;
-
-	refresh(): boolean {
-		return false;
-	}
-
-	measureLineWidth(text: string): number {
-		return text.length * 10;
-	}
 }

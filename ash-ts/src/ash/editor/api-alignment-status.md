@@ -4,6 +4,8 @@
 
 ## 当前结论
 
+- 2026-09-15 补全浏览器依赖批次：`SuggestController` 与 `CompletionWidget` 改为通过 `ICodeEditor.getModel/getSelections/getPosition` 读取编辑器状态，普通 contribution 与聊天输入同步传递编辑器对象。两个浏览器类不再引用内部 `CursorsController`；请求刷新重新读取当前选区并处理无模型状态。补全测试改用容器装配的真实 Widget，覆盖触发字符、提交字符、片段导航、撤销与关闭后的普通方向键导航。20 项补全/聊天定向测试、81 项浏览器测试、Electron 打开/编辑/保存 1 项、类型检查与 Stanza/桌面构建通过。common 补全会话与片段仍直接依赖内部光标控制器，View 定位及完整 Suggest API 尚未对齐，80/39 台账计数不变。
+
 - 2026-09-15 输入装配清理：删除从未参与输入执行的语言编辑适配器、Widget 创建链与 contribution 词法上下文注入钩子。输入和回车继续由 `IViewModel.type` 进入 common cursor，`ViewController` 不再直接引用 `CursorsController`；语言分析服务仍由贡献持有并供括号匹配与章节标题使用。新增无贡献 Widget 回归覆盖补括号、成对删除、回车和撤销；全量单测 243/243 个文件、浏览器 81 项、Electron 打开/编辑/保存 1 项、Stanza 与桌面构建通过。结构台账仍为 80/39，贡献上下文其余直接内部依赖尚未完成。
 
 - 2026-09-15 服务装配批次：`CodeEditorWidget` 通过构造注入取得主题、语言配置和语言功能服务，删除 options 中的对应服务字段、自建共享服务分支和空的 Widget 子作用域。Workbench 文件、聊天、提交信息、Embedded 与 Standalone 创建链改用宿主容器；模型挂载作用域继续拥有贡献和局部资源。`CodeEditorPane` 不再转传语言服务，Standalone 同时注入模型与编辑器服务。新增测试验证缺失服务在 Widget 创建前失败、构造器贡献与安装钩子使用同一宿主服务，以及换模型和销毁不释放共享服务。全量 Editor 单测 243/243 个文件、浏览器 81 项、聊天输入 5 项与桌面构建通过；贡献上下文、内部光标接口和其余 Widget API 仍待处理，80/39 台账计数不变。

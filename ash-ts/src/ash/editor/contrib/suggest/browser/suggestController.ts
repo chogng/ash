@@ -1,7 +1,7 @@
 import { Position } from "../../../common/core/position.js";
 import { stopEvent } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { type CursorsController } from '../../../common/cursor/cursor.js';
+import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { createLanguageCompletionIncompleteRefreshContext, createLanguageCompletionInvokeContext, type LanguageCompletionContext } from '../../../common/languages/completion/languageCompletionProviders.js';
 import { type LanguageCompletionService } from '../../../common/languages/completion/languageCompletionService.js';
 import { type EditorViewDidEditEvent, type EditorViewTextUpdateEvent, type ViewController } from '../../../browser/view/viewController.js';
@@ -29,8 +29,8 @@ export class SuggestController extends Disposable {
 	private completionIsIncomplete = false;
 
 	constructor(
+		private readonly editor: ICodeEditor,
 		private readonly view: ViewController,
-		private readonly selectionController: CursorsController,
 		private readonly service: LanguageCompletionService,
 		private readonly session: LanguageCompletionSessionController,
 		private readonly languageId: string,
@@ -39,7 +39,7 @@ export class SuggestController extends Disposable {
 		super();
 		try {
 			if (
-				view.viewport.textModel !== selectionController.context.model ||
+				view.viewport.textModel !== editor.getModel() ||
 				view.viewport.textModel !== service.textModel ||
 				view.viewport.textModel !== session.textModel ||
 				service.results !== session.resultStore
@@ -56,9 +56,9 @@ export class SuggestController extends Disposable {
 				if (change.result) this.completionIsIncomplete = change.result.value.isIncomplete;
 			}));
 			this.widget = this._register(new CompletionWidget(
+				editor,
 				view,
 				view.viewport,
-				selectionController,
 				session,
 				options.widgetContainer,
 			));
@@ -78,7 +78,8 @@ export class SuggestController extends Disposable {
 		if (!this.session.acceptSelectedWithCommitCharacter(event.data)) return;
 		stopEvent(event);
 		this.view.clearInput();
-		this.view.revealPosition(this.selectionController.getSelections()[0]!.getPosition());
+		const position = this.editor.getPosition();
+		if (position) this.view.revealPosition(Position.lift(position));
 		this.requestAfterInsert(event.data, false);
 	}
 
@@ -86,7 +87,8 @@ export class SuggestController extends Disposable {
 		if (event.defaultPrevented || !event.text || !this.session.acceptSelectedWithCommitCharacter(event.text)) return;
 		event.preventDefault();
 		this.view.clearInput();
-		this.view.revealPosition(this.selectionController.getSelections()[0]!.getPosition());
+		const position = this.editor.getPosition();
+		if (position) this.view.revealPosition(Position.lift(position));
 		this.requestAfterInsert(event.text, false);
 	}
 
@@ -178,7 +180,8 @@ export class SuggestController extends Disposable {
 
 	private acceptSelected(): void {
 		if (!this.session.acceptSelected()) return;
-		this.view.revealPosition(this.selectionController.getSelections()[0]!.getPosition());
+		const position = this.editor.getPosition();
+		if (position) this.view.revealPosition(Position.lift(position));
 		this.view.viewport.focus();
 	}
 
@@ -214,8 +217,8 @@ export class SuggestController extends Disposable {
 
 	private requestAfterInsert(insertedText: string, refreshIncomplete: boolean): void {
 		if ([...insertedText].length === 1) {
-			const selections = this.selectionController.getSelections();
-			if (selections.length !== 1 || !selections[0]!.isEmpty()) {
+			const selections = this.editor.getSelections();
+			if (!selections || selections.length !== 1 || !selections[0]!.isEmpty()) {
 				this.session.cancel();
 				return;
 			}
@@ -228,14 +231,15 @@ export class SuggestController extends Disposable {
 				insertedText,
 				{ signal: request.signal },
 			).then(outcome => {
+				const selections = this.editor.getSelections();
 				if (
 					!request.signal.aborted &&
 					outcome === undefined &&
 					refreshIncomplete &&
 					this.view.viewport.textModel.version === modelVersion &&
-					this.selectionController.getSelections().length === 1 &&
-					this.selectionController.getSelections()[0]!.isEmpty() &&
-					Position.compare(this.selectionController.getSelections()[0]!.getPosition(), position) === 0
+					selections?.length === 1 &&
+					selections[0]!.isEmpty() &&
+					Position.compare(selections[0]!.getPosition(), position) === 0
 				) {
 					this.requestCompletion(createLanguageCompletionIncompleteRefreshContext());
 				}
@@ -248,8 +252,8 @@ export class SuggestController extends Disposable {
 	}
 
 	private requestCompletion(context: LanguageCompletionContext): void {
-		const selections = this.selectionController.getSelections();
-		if (selections.length !== 1 || !selections[0]!.isEmpty()) {
+		const selections = this.editor.getSelections();
+		if (!selections || selections.length !== 1 || !selections[0]!.isEmpty()) {
 			this.session.cancel();
 			return;
 		}

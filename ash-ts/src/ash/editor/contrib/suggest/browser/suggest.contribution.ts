@@ -21,8 +21,8 @@ registerEditorContribution({
 			snippetVariables: createSnippetVariables(context.options.input),
 		}));
 		return new SuggestController(
+			context.editor,
 			context.controller,
-			context.selectionController,
 			completions,
 			session,
 			context.languageId,

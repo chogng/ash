@@ -1,7 +1,8 @@
 import "./media/suggest.css";
+import { Position } from "../../../common/core/position.js";
 import { addDisposableListener, fragment as createFragment, h, isElement, reset, stopEvent } from "../../../../base/browser/dom.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { type CursorsController } from "../../../common/cursor/cursor.js";
+import { type ICodeEditor } from "../../../browser/editorBrowser.js";
 import { LanguageCompletionDetailsStatus, type LanguageCompletionSessionState, LanguageCompletionSessionController } from "../common/languageCompletionSessionController.js";
 import { LanguageCompletionItemKind } from "../../../common/languages/completion/languageCompletions.js";
 import { type ViewController } from '../../../browser/view/viewController.js';
@@ -15,16 +16,16 @@ export class CompletionWidget extends Disposable {
 	private readonly widgetId: string;
 
 	constructor(
+		private readonly editor: ICodeEditor,
 		private readonly view: ViewController,
 		private readonly viewport: View,
-		private readonly selectionController: CursorsController,
 		private readonly session: LanguageCompletionSessionController,
 		container: HTMLElement | undefined = undefined,
 	) {
 		super();
 		try {
 			if (
-				viewport.textModel !== selectionController.context.model ||
+				viewport.textModel !== editor.getModel() ||
 				viewport.textModel !== session.textModel
 			) {
 				throw new TypeError("Stanza completion widget dependencies must share one text model");
@@ -103,7 +104,8 @@ export class CompletionWidget extends Disposable {
 
 	private accept(): void {
 		if (!this.session.acceptSelected()) return;
-		this.viewport.revealPosition(this.selectionController.getSelections()[0]!.getPosition());
+		const position = this.editor.getPosition();
+		if (position) this.viewport.revealPosition(Position.lift(position));
 		this.viewport.focus();
 	}
 

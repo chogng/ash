@@ -62,8 +62,8 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 		const completions = this._register(new LanguageCompletionService(this.model, providers));
 		const completionSession = this._register(new LanguageCompletionSessionController(completions.results, this.selections, { resolver: completions }));
 		this._register(new SuggestController(
+			this.editor,
 			this.editor.controller,
-			this.selections,
 			completions,
 			completionSession,
 			CHAT_INPUT_LANGUAGE_ID,
