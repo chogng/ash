@@ -92,18 +92,58 @@ interface SnippetTabstopValue {
 	readonly choices?: readonly string[];
 }
 
+class SnippetText {
+	private readonly parts: SnippetTabstopValue[] = [];
+	private readonly offsets: number[] = [0];
+
+	public append(value: string | (() => string)): void {
+		let text: string | undefined = typeof value === "string" ? value : undefined;
+		let resolving = false;
+		this.parts.push({
+			get text(): string {
+				// A recursive default has no value at its own reference point.
+				if (resolving) return "";
+				if (text === undefined) {
+					resolving = true;
+					try {
+						text = (value as () => string)();
+					} finally {
+						resolving = false;
+					}
+				}
+				return text;
+			},
+		});
+	}
+
+	public get text(): string {
+		return this.parts.map(part => part.text).join("");
+	}
+
+	public position(): () => number {
+		const count = this.parts.length;
+		return () => {
+			while (this.offsets.length <= count) {
+				const index = this.offsets.length - 1;
+				this.offsets.push(this.offsets[index]! + this.parts[index]!.text.length);
+			}
+			return this.offsets[count]!;
+		};
+	}
+}
+
 function parseSegment(source: string, startOffset: number, stopsAtClosingBrace: boolean, tabstopValues: Map<number, SnippetTabstopValue>, variables: LanguageCompletionSnippetVariableResolver | undefined, allowUnresolvedVariables: boolean): ParsedSegment {
-	let text = "";
+	const text = new SnippetText();
 	let offset = startOffset;
 	const placeholders = new Map<number, LanguageCompletionSnippetPlaceholder[]>();
 	const transforms: LanguageCompletionSnippetTransformOccurrence[] = [];
 	while (offset < source.length) {
 		const character = source[offset]!;
 		if (character === "}" && stopsAtClosingBrace) {
-			return { text, placeholders, transforms, nextOffset: offset + 1 };
+			return { get text() { return text.text; }, placeholders, transforms, nextOffset: offset + 1 };
 		}
 		if (character === "}") {
-			text += character;
+			text.append(character);
 			offset += 1;
 			continue;
 		}
@@ -113,36 +153,38 @@ function parseSegment(source: string, startOffset: number, stopsAtClosingBrace: 
 			if (escaped !== "$" && escaped !== "}" && escaped !== "\\") {
 				throw new SyntaxError("Language completion snippets may escape only dollar sign, closing brace, and backslash");
 			}
-			text += escaped;
+			text.append(escaped);
 			offset += 2;
 			continue;
 		}
 	 if (character !== "$") {
-		 text += character;
+		 text.append(character);
 		 offset += 1;
 		 continue;
 	 }
 		if (source[offset + 1] === "$") {
-			text += "$$";
+			text.append("$$");
 			offset += 2;
 			continue;
 		}
 		const next = source[offset + 1];
 		if (next === undefined || (next !== "{" && !isDigit(next) && !isVariableNameStart(next))) {
-			text += "$";
+			text.append("$");
 			offset += 1;
 			continue;
 		}
-		const placeholderStart = text.length;
+		const placeholderStart = text.position();
 		const token = readSnippetToken(source, offset, tabstopValues, variables, allowUnresolvedVariables);
 		if (token.kind === "variable") {
 			const value = variables?.resolveVariable(token.name);
 			if (value !== undefined && typeof value !== "string") {
 				throw new TypeError(`Language completion snippet variable '${token.name}' must resolve to text`);
 			}
-			const resolvedText = value ?? token.defaultText?.text;
-			if (resolvedText !== undefined) {
-				text += token.transform ? applyLanguageCompletionSnippetTransform(resolvedText, token.transform) : resolvedText;
+			if (value !== undefined || token.defaultText !== undefined) {
+				text.append(() => {
+					const resolvedText = value ?? token.defaultText!.text;
+					return token.transform ? applyLanguageCompletionSnippetTransform(resolvedText, token.transform) : resolvedText;
+				});
 				if (value === undefined && token.defaultText && !token.transform) {
 					mergePlaceholders(placeholders, token.defaultText.placeholders, placeholderStart);
 					mergeTransforms(transforms, token.defaultText.transforms, placeholderStart);
@@ -154,13 +196,13 @@ function parseSegment(source: string, startOffset: number, stopsAtClosingBrace: 
 			continue;
 		}
 		if (token.transform) {
-			const sourceValue = tabstopValues.get(token.index)?.text ?? "";
-			const transformStart = text.length;
-			text += applyLanguageCompletionSnippetTransform(sourceValue, token.transform);
+			const transform = token.transform;
+			text.append(() => applyLanguageCompletionSnippetTransform(tabstopValues.get(token.index)?.text ?? "", transform));
+			const transformEnd = text.position();
 			transforms.push(Object.freeze({
 				index: token.index,
-				startOffset: transformStart,
-				endOffset: text.length,
+				get startOffset() { return placeholderStart(); },
+				get endOffset() { return transformEnd(); },
 				transform: token.transform,
 			}));
 			offset = token.nextOffset;
@@ -168,10 +210,10 @@ function parseSegment(source: string, startOffset: number, stopsAtClosingBrace: 
 		}
 		let value: SnippetTabstopValue;
 		if (token.defaultText !== undefined) {
-			text += token.defaultText.text;
+			text.append(() => token.defaultText!.text);
 			mergePlaceholders(placeholders, token.defaultText.placeholders, placeholderStart);
 			mergeTransforms(transforms, token.defaultText.transforms, placeholderStart);
-			value = { text: token.defaultText.text };
+			value = { get text() { return token.defaultText!.text; } };
 			if (!tabstopValues.has(token.index)) tabstopValues.set(token.index, value);
 		} else if (token.choices) {
 			value = tabstopValues.get(token.index) ?? Object.freeze({
@@ -179,24 +221,24 @@ function parseSegment(source: string, startOffset: number, stopsAtClosingBrace: 
 				choices: token.choices,
 			});
 			if (!tabstopValues.has(token.index)) tabstopValues.set(token.index, value);
-			text += value.text;
+			text.append(() => value.text);
 		} else {
 			value = tabstopValues.get(token.index) ?? { text: "" };
-			text += value.text;
+			text.append(() => value.text);
 		}
-		const placeholderEnd = text.length;
+		const placeholderEnd = text.position();
 		const occurrences = placeholders.get(token.index) ?? [];
 		const choices = tabstopValues.get(token.index)?.choices;
 		occurrences.push({
-			startOffset: placeholderStart,
-			endOffset: placeholderEnd,
+			get startOffset() { return placeholderStart(); },
+			get endOffset() { return placeholderEnd(); },
 			...(choices ? { choices } : {}),
 		});
 		placeholders.set(token.index, occurrences);
 		offset = token.nextOffset;
 	}
 	if (stopsAtClosingBrace) throw new SyntaxError("Unclosed tabstop in language completion snippet");
-	return { text, placeholders, transforms, nextOffset: offset };
+	return { get text() { return text.text; }, placeholders, transforms, nextOffset: offset };
 }
 
 function readSnippetToken(source: string, offset: number, tabstopValues: Map<number, SnippetTabstopValue>, variables: LanguageCompletionSnippetVariableResolver | undefined, allowUnresolvedVariables: boolean): SnippetToken {
@@ -345,22 +387,23 @@ function readChoice(source: string, startOffset: number): { readonly values: rea
 	throw new SyntaxError("Unclosed choice in language completion snippet");
 }
 
-function mergePlaceholders(target: Map<number, LanguageCompletionSnippetPlaceholder[]>, source: Map<number, LanguageCompletionSnippetPlaceholder[]>, offset: number): void {
+function mergePlaceholders(target: Map<number, LanguageCompletionSnippetPlaceholder[]>, source: Map<number, LanguageCompletionSnippetPlaceholder[]>, offset: () => number): void {
 	for (const [index, placeholders] of source) {
 		const targetPlaceholders = target.get(index) ?? [];
 		targetPlaceholders.push(...placeholders.map(placeholder => ({
-			startOffset: placeholder.startOffset + offset,
-			endOffset: placeholder.endOffset + offset,
+			get startOffset() { return placeholder.startOffset + offset(); },
+			get endOffset() { return placeholder.endOffset + offset(); },
 		})));
 		target.set(index, targetPlaceholders);
 	}
 }
 
-function mergeTransforms(target: LanguageCompletionSnippetTransformOccurrence[], source: readonly LanguageCompletionSnippetTransformOccurrence[], offset: number): void {
+function mergeTransforms(target: LanguageCompletionSnippetTransformOccurrence[], source: readonly LanguageCompletionSnippetTransformOccurrence[], offset: () => number): void {
 	target.push(...source.map(transform => Object.freeze({
-		...transform,
-		startOffset: transform.startOffset + offset,
-		endOffset: transform.endOffset + offset,
+		index: transform.index,
+		transform: transform.transform,
+		get startOffset() { return transform.startOffset + offset(); },
+		get endOffset() { return transform.endOffset + offset(); },
 	})));
 }
 

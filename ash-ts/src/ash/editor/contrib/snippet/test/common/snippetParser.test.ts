@@ -93,3 +93,49 @@ test("Completion snippets reject malformed transform syntax before acceptance", 
 		}));
 	}
 });
+
+for (const declaration of ["${1:ab}", "${1|ab,long|}"]) {
+	test(`Completion snippets resolve a transform before its source ${declaration}`, () => {
+		const snippet = parseLanguageCompletionSnippet("$0${1/(.*)/${1:/upcase}/}" + declaration + "$1");
+		assert.equal(snippet.text, "ABabab");
+		assert.deepEqual(snippet.placeholderGroups.map(group => ({
+			index: group.index,
+			ranges: group.placeholders.map(({ startOffset, endOffset }) => [startOffset, endOffset]),
+		})), [
+			{ index: 1, ranges: [[2, 4], [4, 6]] },
+			{ index: 0, ranges: [[0, 0]] },
+		]);
+		assert.deepEqual(snippet.transforms, [{
+			index: 1, startOffset: 0, endOffset: 2,
+			transform: { pattern: "(.*)", format: "${1:/upcase}", options: "" },
+		}]);
+	});
+}
+
+test("Completion snippets resolve nested forward transforms and their final ranges", () => {
+	const snippet = parseLanguageCompletionSnippet("${1/(.*)/${1:/upcase}/}|${1:${2/(.*)/${1:/upcase}/}}|${2:ab}$0");
+	assert.equal(snippet.text, "AB|AB|ab");
+	assert.deepEqual(snippet.placeholderGroups, [
+		{ index: 1, placeholders: [{ startOffset: 3, endOffset: 5 }] },
+		{ index: 2, placeholders: [{ startOffset: 6, endOffset: 8 }] },
+		{ index: 0, placeholders: [{ startOffset: 8, endOffset: 8 }] },
+	]);
+	assert.deepEqual(snippet.transforms?.map(({ index, startOffset, endOffset }) => ({ index, startOffset, endOffset })), [
+		{ index: 1, startOffset: 0, endOffset: 2 },
+		{ index: 2, startOffset: 3, endOffset: 5 },
+	]);
+});
+
+test("Completion snippets resolve source variables once and preserve empty transform positions", () => {
+	let calls = 0;
+	const snippet = parseLanguageCompletionSnippet("${1/(.*)/${1:/upcase}/}${1:$VALUE}${2/(.*)/${1:/upcase}/}${2:}$0", {
+		variables: { resolveVariable: () => { calls++; return "ab"; } },
+	});
+	assert.equal(snippet.text, "ABab");
+	assert.equal(calls, 1);
+	assert.deepEqual(snippet.transforms?.map(({ startOffset, endOffset }) => [startOffset, endOffset]), [[0, 2], [4, 4]]);
+});
+
+test("Completion snippets terminate recursive transformed defaults", () => {
+	assert.equal(parseLanguageCompletionSnippet("${1:${1/(.*)/x/}}$0").text, "x");
+});

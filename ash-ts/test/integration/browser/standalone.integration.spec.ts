@@ -313,34 +313,39 @@ test('completion snippets navigate and undo through the mounted editor', async (
 	expect(errors).toEqual([]);
 });
 
-test('snippet choices keep interleaved transforms and mirrors together through undo and redo', async ({ page }) => {
-	const errors: string[] = [];
-	page.on('pageerror', error => errors.push(error.message));
-	await page.goto('/standalone.html');
-	await page.evaluate(() => window.ashStandaloneIntegration.enableCompletionNavigation('${1|a,long|} => ${1/(.*)/${1:/upcase}/} $1$0'));
-	await page.locator('#caller .stanza-editor-input').focus();
-	await page.keyboard.press('Control+Space');
-	await expect(page.locator('#caller .stanza-editor-completion-option')).toHaveCount(2);
-	await page.keyboard.press('Enter');
-	const line = page.locator('#caller .view-line').first();
-	await expect(line).toContainText('cona => A a');
-	const version = await page.evaluate(() => window.ashStandaloneIntegration.getCallerVersion());
-	await page.keyboard.press('Alt+ArrowDown');
-	await expect(line).toContainText('conlong => LONG long');
-	expect(await page.evaluate(() => window.ashStandaloneIntegration.getCallerVersion())).toBe(version + 1);
-	await page.keyboard.press('ControlOrMeta+z');
-	await expect(line).toContainText('cona => A a');
-	await page.keyboard.press('Alt+ArrowDown');
-	await expect(line).toContainText('conlong => LONG long');
-	await page.keyboard.press('ControlOrMeta+z');
-	await expect(line).toContainText('cona => A a');
-	await page.keyboard.press('ControlOrMeta+Shift+z');
-	await expect(line).toContainText('conlong => LONG long');
-	await page.keyboard.press('Alt+ArrowUp');
-	await expect(line).toContainText('cona => A a');
-	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
-	expect(errors).toEqual([]);
-});
+for (const { placement, snippet, initial, expanded } of [
+	{ placement: 'interleaved', snippet: '${1|a,long|} => ${1/(.*)/${1:/upcase}/} $1$0', initial: 'cona => A a', expanded: 'conlong => LONG long' },
+	{ placement: 'forward', snippet: '${1/(.*)/${1:/upcase}/} ${1|a,long|}-$1$0', initial: 'conA a-a', expanded: 'conLONG long-long' },
+]) {
+	test(`snippet choices keep ${placement} transforms and mirrors together through undo and redo`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto('/standalone.html');
+		await page.evaluate(snippet => window.ashStandaloneIntegration.enableCompletionNavigation(snippet), snippet);
+		await page.locator('#caller .stanza-editor-input').focus();
+		await page.keyboard.press('Control+Space');
+		await expect(page.locator('#caller .stanza-editor-completion-option')).toHaveCount(2);
+		await page.keyboard.press('Enter');
+		const line = page.locator('#caller .view-line').first();
+		await expect(line).toContainText(initial);
+		const version = await page.evaluate(() => window.ashStandaloneIntegration.getCallerVersion());
+		await page.keyboard.press('Alt+ArrowDown');
+		await expect(line).toContainText(expanded);
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.getCallerVersion())).toBe(version + 1);
+		await page.keyboard.press('ControlOrMeta+z');
+		await expect(line).toContainText(initial);
+		await page.keyboard.press('Alt+ArrowDown');
+		await expect(line).toContainText(expanded);
+		await page.keyboard.press('ControlOrMeta+z');
+		await expect(line).toContainText(initial);
+		await page.keyboard.press('ControlOrMeta+Shift+z');
+		await expect(line).toContainText(expanded);
+		await page.keyboard.press('Alt+ArrowUp');
+		await expect(line).toContainText(initial);
+		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+		expect(errors).toEqual([]);
+	});
+}
 
 test('completion arrow keys select a suggestion before editor navigation', async ({ page }) => {
 	const errors: string[] = [];
