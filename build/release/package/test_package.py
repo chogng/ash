@@ -46,6 +46,32 @@ PRODUCTION_BUBBLEWRAP_SOURCE = REPOSITORY_ROOT / "ash-rs" / "vendor" / "bubblewr
 
 
 class PackageTests(unittest.TestCase):
+    def test_reads_only_the_workspace_package_version(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            manifest = Path(temporary) / "Cargo.toml"
+            manifest.write_text(
+                "[package]\nversion = '9.9.9'\n"
+                "[workspace.package]\nversion = '1.2.3' # release version\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(read_workspace_version(manifest), "1.2.3")
+
+    def test_rejects_missing_or_invalid_workspace_versions(self) -> None:
+        manifests = (
+            "[workspace.package]\nlicense = 'MIT'\n[package]\nversion = '9.9.9'\n",
+            "[package]\nversion = '9.9.9'\n",
+            "workspace = 'invalid'\n",
+            "[workspace.package]\nversion = 123\n",
+            "[workspace.package]\nversion = ''\n",
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            manifest = Path(temporary) / "Cargo.toml"
+            for source in manifests:
+                with self.subTest(source=source):
+                    manifest.write_text(source, encoding="utf-8")
+                    with self.assertRaisesRegex(RuntimeError, "workspace.package"):
+                        read_workspace_version(manifest)
+
     def test_build_command_stages_all_cargo_reported_binaries(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
@@ -306,9 +332,7 @@ class PackageTests(unittest.TestCase):
             for name in ("LICENSE-APACHE", "NOTICE"):
                 self.assertEqual(
                     (REPOSITORY_ROOT / "ash-rs" / "uds" / name).read_bytes(),
-                    (
-                        output / "ash-resources" / "licenses" / "uds" / name
-                    ).read_bytes(),
+                    (output / "ash-resources" / "licenses" / "uds" / name).read_bytes(),
                 )
             self.assertEqual(
                 b"node",
@@ -695,7 +719,9 @@ class PackageTests(unittest.TestCase):
                 code_mode_host_binary,
                 ripgrep,
                 node,
-                windows_sandbox_binary=executable_file(root / "sandbox-source.exe", b"sandbox"),
+                windows_sandbox_binary=executable_file(
+                    root / "sandbox-source.exe", b"sandbox"
+                ),
             )
 
             resources = output / "ash-resources"

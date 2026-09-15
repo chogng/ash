@@ -24,10 +24,10 @@ from build.release.remote.bundle import RemoteRuntimeBundle
 from build.release.remote.bundle import validate_remote_runtime_bundle
 from build.release.package.cargo import cargo_environment
 from build.release.package.cargo import resolve_windows_sandbox_binary
-from build.release.package.cargo_paths import cargo_artifact_executable
-from build.release.package.cargo_paths import cargo_rendered_diagnostic
-from build.release.package.cargo_paths import parse_cargo_message
-from build.release.package.cargo_paths import resolve_cargo_target_directory
+from build.lib.ash_build.cargo import cargo_artifact_executable
+from build.lib.ash_build.cargo import cargo_rendered_diagnostic
+from build.lib.ash_build.cargo import parse_cargo_message
+from build.lib.ash_build.cargo import resolve_cargo_target_directory
 from build.release.package.layout import copy_uds_notices
 from build.release.package.layout import copy_windows_sandbox_notices
 
@@ -190,7 +190,9 @@ def build_package(
 ) -> None:
     spec = target_spec(target)
     if spec.is_windows != (windows_sandbox_binary is not None):
-        raise RuntimeError("Windows app packages require their sandbox executable; other targets must omit it")
+        raise RuntimeError(
+            "Windows app packages require their sandbox executable; other targets must omit it"
+        )
     if output.exists():
         raise RuntimeError(f"refusing to replace existing package directory: {output}")
     if (
@@ -236,7 +238,9 @@ def build_package(
         staged_binary.parent.mkdir(parents=True)
         shutil.copy2(binary, staged_binary)
         if windows_sandbox_binary is not None:
-            shutil.copy2(windows_sandbox_binary, staging / "bin/ash-windows-sandbox.exe")
+            shutil.copy2(
+                windows_sandbox_binary, staging / "bin/ash-windows-sandbox.exe"
+            )
             copy_windows_sandbox_notices(REPOSITORY_ROOT, staging / "licenses")
         copy_uds_notices(REPOSITORY_ROOT, staging / "licenses")
         mxc_license = staging / "licenses" / "mxc"
@@ -285,7 +289,10 @@ def build_package(
                 "trustBinding": "compiledIntoSignedBinary",
             }
         if windows_sandbox_binary is not None:
-            metadata["windowsSandbox"] = {"path": "bin/ash-windows-sandbox.exe", "sha256": sha256(staging / "bin/ash-windows-sandbox.exe")}
+            metadata["windowsSandbox"] = {
+                "path": "bin/ash-windows-sandbox.exe",
+                "sha256": sha256(staging / "bin/ash-windows-sandbox.exe"),
+            }
         (staging / "app-package.json").write_text(json.dumps(metadata, indent=2) + "\n")
         staging.rename(output)
     except BaseException:
@@ -345,7 +352,13 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         args.cargo_profile,
         remote_runtime_bundle,
         remote_runtime_release,
-        windows_sandbox_binary=resolve_windows_sandbox_binary(REPOSITORY_ROOT, target_spec(target), args.windows_sandbox_bin, args.cargo, args.cargo_profile),
+        windows_sandbox_binary=resolve_windows_sandbox_binary(
+            REPOSITORY_ROOT,
+            target_spec(target),
+            args.windows_sandbox_bin,
+            args.cargo,
+            args.cargo_profile,
+        ),
     )
     print(f"Built app {target} package at {output}")
     return 0

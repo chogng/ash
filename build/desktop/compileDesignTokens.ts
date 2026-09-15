@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 import path from "node:path";
 
 const repositoryRoot = path.resolve(import.meta.dirname, "../..");
@@ -14,12 +14,5 @@ if (compilation.status !== 0) {
 }
 
 const moduleUrl = pathToFileURL(path.join(repositoryRoot, ".build/desktop/token-compiler/build/desktop/resources/designTokenCompiler.js"));
-const { runDesignTokenCompiler } = await import(`${moduleUrl.href}?v=${Date.now()}`);
-
-export async function compileDesignTokens(check = false) {
-  await runDesignTokenCompiler(check, path.join(repositoryRoot, "resources/design-tokens"));
-}
-
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  await compileDesignTokens(process.argv.includes("--check"));
-}
+const { runDesignTokenCompiler } = await import(moduleUrl.href);
+await runDesignTokenCompiler(process.argv.includes("--check"), path.join(repositoryRoot, "resources/design-tokens"));

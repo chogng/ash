@@ -7,10 +7,10 @@ import sys
 from pathlib import Path
 from typing import Dict, Mapping, Optional
 
-from .cargo_paths import cargo_artifact_executable
-from .cargo_paths import cargo_rendered_diagnostic
-from .cargo_paths import parse_cargo_message
-from .cargo_paths import resolve_cargo_target_directory
+from build.lib.ash_build.cargo import cargo_artifact_executable
+from build.lib.ash_build.cargo import cargo_rendered_diagnostic
+from build.lib.ash_build.cargo import parse_cargo_message
+from build.lib.ash_build.cargo import resolve_cargo_target_directory
 from build.lib.ash_build.targets import TargetSpec
 from build.lib.ash_build.v8 import resolve_v8_cargo_env
 

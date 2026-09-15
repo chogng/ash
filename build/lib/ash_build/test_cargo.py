@@ -1,17 +1,17 @@
-"""Tests for shared Cargo output-path resolution."""
+"""Tests for shared Cargo output paths and compiler messages."""
 
 import tempfile
 import unittest
 from pathlib import Path
 
-from build.release.package.cargo_paths import cargo_profile_directory
-from build.release.package.cargo_paths import cargo_artifact_executable
-from build.release.package.cargo_paths import cargo_rendered_diagnostic
-from build.release.package.cargo_paths import parse_cargo_message
-from build.release.package.cargo_paths import resolve_cargo_target_directory
+from build.lib.ash_build.cargo import cargo_profile_directory
+from build.lib.ash_build.cargo import cargo_artifact_executable
+from build.lib.ash_build.cargo import cargo_rendered_diagnostic
+from build.lib.ash_build.cargo import parse_cargo_message
+from build.lib.ash_build.cargo import resolve_cargo_target_directory
 
 
-class CargoPathsTests(unittest.TestCase):
+class CargoTests(unittest.TestCase):
     def test_uses_canonical_build_directory_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / "workspace" / "ash"

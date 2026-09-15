@@ -1,4 +1,4 @@
-"""Shared Cargo target-directory resolution for package builders."""
+"""Shared Cargo output paths, executable artifacts, and compiler diagnostics."""
 
 import json
 import os

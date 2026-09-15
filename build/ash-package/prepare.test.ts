@@ -7,11 +7,10 @@ import test from "node:test";
 
 import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH } from "../../ash-ts/generated/app-server/protocol.ts";
 import { cargoTargetDirectory } from "../lib/cargo.ts";
-import { developmentAshPackagePath } from "./store.ts";
+import { developmentAshPackagePath, developmentHostTarget } from "./store.ts";
 import {
   assemblePackage,
   copyBuiltinExtensions,
-  hostTarget,
   parseJavaScriptRuntime,
   parsePackageOptions,
   selectNodeArtifact,
@@ -83,10 +82,10 @@ test("parses only a complete credential-free network Remote runtime release", ()
 });
 
 test("maps supported development hosts to Rust targets", () => {
-  assert.equal(hostTarget("win32", "x64"), "x86_64-pc-windows-msvc");
-  assert.equal(hostTarget("darwin", "arm64"), "aarch64-apple-darwin");
-  assert.equal(hostTarget("linux", "x64"), "x86_64-unknown-linux-gnu");
-  assert.throws(() => hostTarget("freebsd", "x64"), /Unsupported/);
+  assert.equal(developmentHostTarget("win32", "x64"), "x86_64-pc-windows-msvc");
+  assert.equal(developmentHostTarget("darwin", "arm64"), "aarch64-apple-darwin");
+  assert.equal(developmentHostTarget("linux", "x64"), "x86_64-unknown-linux-gnu");
+  assert.throws(() => developmentHostTarget("freebsd", "x64"), /Unsupported/);
 });
 
 test("selects the target-specific locked ripgrep artifact", () => {

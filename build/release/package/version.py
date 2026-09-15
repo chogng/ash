@@ -1,19 +1,20 @@
-"""Read the Ash workspace package version without third-party TOML dependencies."""
+"""Read the Ash workspace package version from its Cargo manifest."""
 
-import re
+import tomllib
 from pathlib import Path
 
 
-WORKSPACE_PACKAGE = re.compile(
-    r"^\[workspace\.package\]\s*$.*?^version\s*=\s*\"([^\"]+)\"\s*$",
-    re.MULTILINE | re.DOTALL,
-)
-
-
 def read_workspace_version(manifest_path: Path) -> str:
-    match = WORKSPACE_PACKAGE.search(manifest_path.read_text(encoding="utf-8"))
-    if match is None:
+    with manifest_path.open("rb") as manifest:
+        data = tomllib.load(manifest)
+    try:
+        version = data["workspace"]["package"]["version"]
+    except (KeyError, TypeError) as error:
         raise RuntimeError(
-            "Could not find [workspace.package].version in {}".format(manifest_path)
+            f"Could not find [workspace.package].version in {manifest_path}"
+        ) from error
+    if not isinstance(version, str) or not version.strip():
+        raise RuntimeError(
+            f"[workspace.package].version must be a nonempty string in {manifest_path}"
         )
-    return match.group(1)
+    return version

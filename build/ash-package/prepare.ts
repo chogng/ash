@@ -195,10 +195,6 @@ function validateRemoteRuntimeCatalogUrl(value: string): void {
   }
 }
 
-export function hostTarget(platform: NodeJS.Platform = process.platform, architecture: string = process.arch): string {
-  return developmentHostTarget(platform, architecture);
-}
-
 export function selectV8ArtifactPair(lock: V8RuntimeLock, target: string): ResolvedV8ArtifactPair {
   if (lock.schemaVersion !== 1 || lock.runtime !== "rusty-v8" || lock.profile !== "ptrcomp_sandbox_release") {
     throw new Error("Unsupported rusty_v8 runtime lock");
@@ -511,7 +507,7 @@ function cargoBuild(binaryArgs: readonly string[], expectedTargets: readonly str
 }
 
 async function buildFirstPartyExecutables(platform: NodeJS.Platform): Promise<FirstPartyExecutables> {
-  const cargoEnvironment = await v8CargoEnvironment(hostTarget(platform));
+  const cargoEnvironment = await v8CargoEnvironment(developmentHostTarget(platform));
   const binaryArgs = [
     "--bin", "ash-package-store",
     "--bin", "ash-app-server",
@@ -1007,7 +1003,7 @@ export async function prepareDevelopmentPackage(
   if (!javascriptRuntimeKinds.has(javascriptRuntime)) {
     throw new Error(`Unsupported JavaScript runtime package mode: ${javascriptRuntime}`);
   }
-  const target = hostTarget();
+  const target = developmentHostTarget();
   const isWindows = process.platform === "win32";
   const outputDirectory = ashPackageBuildPath(repositoryRoot, "dev", "store-v1", target, javascriptRuntime, developmentBuildProfile);
   const executables = await buildFirstPartyExecutables(process.platform);

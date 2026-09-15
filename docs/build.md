@@ -153,7 +153,7 @@ just bench-build ash-keybinding --jobs 4 --compare .build/build-health/<run>/rep
 | 路径 | 单一职责 |
 | --- | --- |
 | `build/lib/` | 通用构建路径、Cargo 输出解析等共享基础设施 |
-| `build/lib/ash_build/` | Cargo 依赖选择、目标识别和校验下载 V8 输入等共享 Python 构建能力 |
+| `build/lib/ash_build/` | Cargo 输出解析、依赖选择、目标识别和校验下载 V8 输入等共享 Python 构建能力 |
 | `build/lib/watch/` | Electron TypeScript 与 Rust Server Host 的增量监听和重启协调 |
 | `build/pnpm/` | pnpm 版本约束、安装入口和单锁文件 workspace 校验 |
 | `build/desktop/` | Desktop 输出准备、资源生成、Electron 启动和打包校验 |
