@@ -126,6 +126,7 @@ ash-typst = { workspace = true }
 worktree = { workspace = true }
 
 [dev-dependencies]
+test-binary-support = { workspace = true }
 ash-app-server-client = { workspace = true }
 tokio-tungstenite = { workspace = true }
 futures = { workspace = true }

@@ -1,5 +1,7 @@
 # `ash-fast-regex-search`
 
+Worker 进程测试通过仅供测试依赖的 [`test-binary-support`](../test-binary-support/README.md) 启动当前测试程序，并直接运行本 crate 的 worker 入口；无需构建产品宿主。真实产品的入口分派由各宿主集成测试验证。
+
 Worker 端点由 [`ash-uds`](../uds/README.md) 的私有目录对象保护。服务端读取请求前、客户端发送请求前均要求同用户与同提权上下文。权限或身份错误直接失败；仅连接不存在或监听者退出时重新启动 worker。退出后先释放目录句柄，再移除端点目录。
 
 > Agent `grep` 的执行选择与配置由 [`ash-rs/app-server/README.md`](../app-server/README.md) 维护；编辑器工作区搜索的独立契约见 [`docs/search.md`](../../docs/search.md)。

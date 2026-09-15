@@ -4,5 +4,6 @@ exports_files(["README.md"])
 
 exports_files([
     "module_dot_bazel_version.patch",
+    "rust_macos_rtlib.patch",
     "windows_gnullvm_exec_triples.patch",
 ])

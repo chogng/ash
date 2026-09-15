@@ -51,6 +51,7 @@ SDK 的 ACL 正常关闭清理不等于宿主崩溃后的恢复保证；Windows 
 - 工作负载环境与启动器环境分开，MXC 在应用约束后设置工作负载环境。
 - Seatbelt、Bubblewrap 和 Windows PSEC 继承终端；Windows 不进入其他实现。
 - PTY 输入输出、尺寸、信号和进程树关闭归 Ash 执行句柄管理。
+- `tests/pty.rs` 是仅用于测试的最小宿主，直接调用本 crate 的 PTY 入口；通过 `test-binary-support` 在测试运行器启动前分派，独立验证终端输入、尺寸、权限、退出与回收。
 - macOS 真实进程测试覆盖断连输入、resize、只读拒绝和取消回收；Linux/Windows 交叉编译通过不代表实机验收。
 
 ## SDK 依赖
@@ -67,6 +68,7 @@ SDK 的 ACL 正常关闭清理不等于宿主崩溃后的恢复保证；Windows 
 
 ```sh
 just test ash-mxc-sandbox
+just test ash-mxc-sandbox --test pty
 just test ash-tool-executor
 just check ash-mxc-sandbox --target x86_64-pc-windows-msvc --tests
 just check ash-mxc-sandbox --target aarch64-unknown-linux-gnu --tests

@@ -22,6 +22,8 @@ ash-file-access = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 [dev-dependencies]
+test-binary-support = { workspace = true }
+libtest-mimic = { workspace = true }
 ash-protocol = { workspace = true }
 ash-tool-executor = { workspace = true }
 ash-async-utils = { workspace = true }
@@ -30,3 +32,7 @@ tempfile = { workspace = true }
 
 [lints]
 workspace = true
+
+[[test]]
+name = "pty"
+harness = false

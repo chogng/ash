@@ -1,7 +1,7 @@
 use super::*;
-use std::ffi::OsString;
 use std::fs;
 use std::sync::Arc;
+use test_binary_support::TestBinary;
 
 fn dir_fixture() -> (tempfile::TempDir, Dir, ResolvedFilePath) {
     let directory = tempfile::tempdir().unwrap();
@@ -78,14 +78,8 @@ fn fast_regex_backend_uses_the_private_worker_client() {
     let storage = tempfile::tempdir().unwrap();
     fs::write(directory.path().join("source.rs"), "worker_marker\n").unwrap();
     let ripgrep = RipgrepExecutable::from_path(std::env::current_exe().unwrap()).unwrap();
-    let command = FastRegexWorkerCommand::new(
-        std::env::current_exe().unwrap(),
-        [
-            OsString::from("--exact"),
-            OsString::from("local_tools::agent_grep::tests::fast_regex_worker_child"),
-            OsString::from("--nocapture"),
-        ],
-    );
+    let binary = worker_binary();
+    let command = FastRegexWorkerCommand::new(binary.executable(), binary.arguments());
     let service = AgentGrepService::new_with_worker(
         AgentGrepBackend::FastRegex,
         ripgrep,
@@ -150,12 +144,14 @@ fn disabling_fast_regex_releases_but_preserves_its_project_index() {
     );
 }
 
+fn worker_binary() -> TestBinary {
+    TestBinary::test(module_path!(), "fast_regex_worker_child").unwrap()
+}
+
 #[test]
+#[ignore = "started by the worker-backed Agent grep test"]
 fn fast_regex_worker_child() {
-    if std::env::var_os("ASH_FAST_REGEX_WORKER_ENDPOINT").is_none() {
-        return;
-    }
-    ash_fast_regex_search::serve_worker_from_environment().expect("serve worker");
+    worker_binary().dispatch(|| ash_fast_regex_search::serve_worker_from_environment().map(|()| 0));
 }
 
 #[test]

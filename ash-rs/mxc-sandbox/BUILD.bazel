@@ -1,6 +1,20 @@
+load("@crates//:defs.bzl", "all_crate_deps")
+load("@rules_rust//rust:defs.bzl", "rust_test")
 load("//:defs.bzl", "ash_rust_crate")
 
 ash_rust_crate(
     name = "mxc-sandbox",
     crate_name = "mxc_sandbox",
+)
+
+rust_test(
+    name = "pty-tests",
+    crate_name = "pty",
+    crate_root = "tests/pty.rs",
+    srcs = ["tests/pty.rs", "tests/pty/cases.rs"],
+    edition = "2024",
+    use_libtest_harness = False,
+    # Seatbelt must be initialized by the test's helper, outside Bazel's own sandbox.
+    tags = ["no-sandbox"],
+    deps = all_crate_deps(normal = True, normal_dev = True) + [":mxc-sandbox"],
 )

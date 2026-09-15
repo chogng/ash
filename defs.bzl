@@ -22,7 +22,7 @@ def _crate_aliases(include_dev = False):
     result["//conditions:default"] = {label: alias for label, alias in aliases.items() if label in common}
     return select(result)
 
-def ash_rust_crate(name, crate_name, data = [], crate_features = [], test_env_inherit = [], test_env = {}):
+def ash_rust_crate(name, crate_name, data = [], crate_features = [], test_env_inherit = [], test_env = {}, testonly = False):
     """Defines a Cargo library crate and its unit-test target.
 
     The crate's dependencies come from the workspace Cargo.lock through the
@@ -36,6 +36,7 @@ def ash_rust_crate(name, crate_name, data = [], crate_features = [], test_env_in
 
     rust_library(
         name = name,
+        testonly = testonly,
         aliases = _crate_aliases(),
         crate_name = crate_name,
         crate_features = crate_features,

@@ -15,6 +15,20 @@ The repository pins `rules_rs 0.0.96` through the archive override in the root
   change reruns the crate extension. Remove the patch when `rules_rs` can select
   the Windows execution ABI and assemble its runtime DLLs from platform constraints.
 
+The `rules_rust.patch` extension separately applies `rust_macos_rtlib.patch` to
+the pinned `rules_rust` archive. It removes the C/C++ toolchain's redundant
+`-rtlib=compiler-rt` selector from macOS Rust linker arguments. Rust disables
+automatic default libraries, and Darwin already defaults to compiler-rt; the
+explicit runtime archive remains linked. C/C++ actions and other target platforms
+retain their existing arguments. Remove this patch when upstream filters the
+selector at the Rust link boundary.
+
+Verify this patch with:
+
+```bash
+bazel test //ash-rs/test-binary-support:test-binary-support-unit-tests //ash-rs/test-binary-support:roles-tests //ash-rs/mxc-sandbox:pty-tests
+```
+
 The Cargo graph intentionally has one root workspace. `rules_rs` therefore sees
 `app`, its direct child crates, and `ash-rs/*` in one `cargo metadata` result. App-owned
 and shared crates resolve to the same `@crates` hub; no cross-workspace metadata

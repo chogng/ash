@@ -1,0 +1,19 @@
+load("@crates//:defs.bzl", "all_crate_deps")
+load("@rules_rust//rust:defs.bzl", "rust_test")
+load("//:defs.bzl", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "test-binary-support",
+    crate_name = "test_binary_support",
+    testonly = True,
+)
+
+rust_test(
+    name = "roles-tests",
+    crate_name = "roles",
+    crate_root = "tests/roles.rs",
+    srcs = ["tests/roles.rs"],
+    edition = "2024",
+    use_libtest_harness = False,
+    deps = all_crate_deps(normal = True, normal_dev = True) + [":test-binary-support"],
+)

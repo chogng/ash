@@ -574,6 +574,7 @@ dependencies = [
  "ash-sleep",
  "ash-state",
  "ash-syntax",
+ "ash-test-binary-support",
  "ash-thread-store",
  "ash-thread-transcript",
  "ash-tools",
@@ -1272,6 +1273,7 @@ version = "0.1.0"
 dependencies = [
  "ash-file-access",
  "ash-immutable-generation-store",
+ "ash-test-binary-support",
  "ash-uds",
  "globset",
  "ignore",
@@ -1882,9 +1884,11 @@ dependencies = [
  "ash-network-proxy",
  "ash-protocol",
  "ash-sandboxing",
+ "ash-test-binary-support",
  "ash-tool-executor",
  "ash-utils-pty",
  "dunce",
+ "libtest-mimic",
  "log",
  "mxc-sdk",
  "mxc_engine",
@@ -2366,6 +2370,14 @@ dependencies = [
  "tokio",
  "unicode-width 0.2.0",
  "zui",
+]
+
+[[package]]
+name = "ash-test-binary-support"
+version = "0.1.0"
+dependencies = [
+ "libtest-mimic",
+ "tempfile",
 ]
 
 [[package]]
@@ -4786,6 +4798,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d817e038c30374a4bcb22f94d0a8a0e216958d4c3dcde369b1439fec4bdda6e6"
 
 [[package]]
+name = "escape8259"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5692dd7b5a1978a5aeb0ce83b7655c58ca8efdcb79d21036ea249da95afec2c6"
+
+[[package]]
 name = "etagere"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7104,6 +7122,18 @@ dependencies = [
  "cc",
  "pkg-config",
  "vcpkg",
+]
+
+[[package]]
+name = "libtest-mimic"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "14e6ba06f0ade6e504aff834d7c34298e5155c6baca353cc6a4aaff2f9fd7f33"
+dependencies = [
+ "anstream",
+ "anstyle",
+ "clap",
+ "escape8259",
 ]
 
 [[package]]
