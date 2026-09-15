@@ -18,6 +18,16 @@ Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保
 
 ## 构建入口
 
+### Windows 开发环境
+
+- 默认运行 `powershell -ExecutionPolicy Bypass -File scripts/ash-rs/setup-windows.ps1` 只检查工具、Node/pnpm 固定版本、Rust 编译器和 Visual Studio 组件；缺项汇总输出，退出码非零。检查通过不代表产品已经编译通过。
+- 只有显式传入 `-Install` 才调用 winget、Visual Studio Installer 和 rustup 安装 Rust 构建依赖；Node/pnpm 按根 README 准备。初始化不构建 workspace，不安装 `cargo-insta` 等测试维护工具。
+- Windows 本机拥有 MSVC、Windows SDK 和桌面运行环境。安装后使用对应目标架构的 Visual Studio Developer PowerShell 构建；安装脚本不修改全局 `CC`、`CXX`、`LIBCLANG_PATH`，也不承诺把子进程环境传回原终端。LLVM 的 `bin` 目录需在构建终端 PATH 中；使用自定义 LLVM 路径时，在该终端设置 `LIBCLANG_PATH` 指向含 `libclang.dll` 的目录。
+- 普通构建和启动入口只准备项目依赖与产物，不调用系统工具安装器。分别用 `just ash`、`just ash-desktop`、`just app` 启动产品。
+- 当前未提供 Dev Container。后续如提供，它只拥有容器内的 Linux 开发工具与依赖；Windows 桌面构建、调试和平台验证仍在 Windows 上完成。
+
+### 项目命令
+
 根 `Justfile` 是三个产品和根 Rust workspace 的统一入口。根 `package.json` 只提供 pnpm workspace 与 Electron、Browser、Stanza 等 Node 构建入口，不编排 Rust workspace。
 
 Node 工具与 Desktop 单测使用仓库根 `.nvmrc` 固定的 Node 25.2.1。切换到该版本后，按 [README 初始化步骤](../README.md#quick-start) 安装根 `package.json` 声明的 pnpm，再执行 `pnpm install`、构建或测试。所有入口直接调用 pnpm，安装检查要求 pnpm 版本与声明完全一致；Node 22 已不受支持。
@@ -162,7 +172,7 @@ Desktop 的 Node、Browser 和 Playwright 测试入口与 loader 归 `ash-ts/tes
 
 `scripts/ash-code/run.py` 用一次 Cargo 调用构建 Code TUI、本地 daemon 和当前平台沙箱程序，再把这些可执行文件放入按内容区分的 `.build/ash-development/` 目录后启动；这个小目录避免 Windows 上仍在运行的程序阻塞下一次构建，不是产品包。技能、扩展和产品服务直接读取源码。`scripts/ash-code/run_package.py` 只服务于显式的完整开发包运行。只有形成真实、可运行的操作契约时才新增入口；当前没有独立的远端 SSH 端到端测试，因此不提供空入口。
 
-`scripts/ash-rs/setup-windows.ps1` 是 Windows Rust 开发环境的独立初始化入口。它可以在 `just` 可用前直接运行，因此不依赖根 `Justfile`；它安装源码开发所需的 `rg`，产品包仍从锁文件组装自身的 `rg.exe`。
+`scripts/ash-rs/setup-windows.ps1` 是 Windows 开发环境检查和显式安装入口，具体边界见下文。产品包仍从锁文件组装自身的 `rg.exe`。
 
 完整开发包仍由 `build/ash-package/prepareDevPackage.ts` 拥有。它在一次 Cargo 调用中构建全部第一方程序，然后复制并校验受管资源、计算整包摘要，最后通过 Package Store 发布不可变代次。日常 `just ash` 不执行这些组装与发布步骤；只有验证包布局、跨产品交付、回滚或远端运行时边界时才使用 `just ash-package` 或 `just ash-package-run`。Cargo 并发由 Cargo 自己决定；开发者仍可按需显式设置 `CARGO_BUILD_JOBS`。
 

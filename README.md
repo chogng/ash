@@ -15,11 +15,23 @@ Ash is a Rust-first agent workspace with three product lines sharing one App Ser
 
 ## Quick start
 
-On Windows, initialize the Rust development environment with the repository setup script. It installs the toolchain declared by `rust-toolchain.toml` together with MSVC, the Windows SDK, Git, ripgrep, just, CMake, LLVM, Python 3.12, and cargo-insta:
+On Windows, check the development environment first. The script reports missing
+tools and version mismatches without installing anything or starting a build:
 
 ~~~powershell
 powershell -ExecutionPolicy Bypass -File scripts/ash-rs/setup-windows.ps1
 ~~~
+
+Install missing tools using the reported commands. To explicitly install the
+Windows Rust prerequisites through the script, run it with `-Install`. This
+installs Rust, MSVC, the Windows SDK, Git, ripgrep, just, CMake, LLVM and Python;
+Node and pnpm are prepared below. Test maintenance tools such as `cargo-insta`
+are installed separately when needed. Neither mode builds the workspace.
+
+After installation, open Visual Studio Developer PowerShell for the target
+architecture and run the check again. Use that shell for the product commands
+below so MSVC and Windows SDK environment variables reach the build processes.
+See [Windows environment responsibilities](docs/build.md#windows-开发环境).
 
 On macOS or Linux, install Rust. Cargo supplies the input classifier's
 build-time Protocol Buffers compiler; no system `protoc` installation is

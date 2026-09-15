@@ -8,22 +8,22 @@ script = ""
 [[actions]]
 name = "web-code"
 icon = "debug"
-command = "pnpm dev:web:code"
+command = "pnpm --dir ash-ts exec cross-env ASH_WORKBENCH_MODE=code pnpm run dev:web"
 
 [[actions]]
 name = "web-aca"
 icon = "debug"
-command = "pnpm dev:web:academic"
+command = "pnpm --dir ash-ts exec cross-env ASH_WORKBENCH_MODE=academic pnpm run dev:web"
 
 [[actions]]
 name = "web-code-app-server"
 icon = "debug"
-command = "pnpm dev:web:full:code"
+command = "pnpm --dir ash-ts exec cross-env ASH_WORKBENCH_MODE=code pnpm run dev:web:full"
 
 [[actions]]
 name = "web-aca-app-server"
 icon = "debug"
-command = "pnpm dev:web:full:academic"
+command = "pnpm --dir ash-ts exec cross-env ASH_WORKBENCH_MODE=academic pnpm run dev:web:full"
 
 [[actions]]
 name = "app"
@@ -33,9 +33,9 @@ command = "just app"
 [[actions]]
 name = "electron-code"
 icon = "debug"
-command = "pnpm --dir ash-ts dev:code"
+command = "pnpm --dir ash-ts exec cross-env ASH_WORKBENCH_MODE=code pnpm run dev"
 
 [[actions]]
 name = "electron-aca"
 icon = "debug"
-command = "pnpm --dir ash-ts dev:aca"
+command = "pnpm --dir ash-ts exec cross-env ASH_WORKBENCH_MODE=academic pnpm run dev"

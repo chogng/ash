@@ -1,10 +1,11 @@
 <#
   Set up the Windows toolchain used to build the Ash Rust workspace.
 
-  This script installs:
+  By default, this script checks the environment without installing tools or building.
+  Pass -Install to install:
   - Visual Studio 2022 Build Tools with MSVC and the Windows SDK
   - The Rust toolchain declared by rust-toolchain.toml
-  - Git, ripgrep, just, CMake, LLVM/Clang, Python, and cargo-insta
+  - Git, ripgrep, just, CMake, LLVM/Clang, and Python
 
   Usage from the repository root:
     powershell -ExecutionPolicy Bypass -File scripts/ash-rs/setup-windows.ps1
@@ -13,7 +14,7 @@
 #>
 
 param(
-  [switch] $SkipBuild
+  [switch] $Install
 )
 
 Set-StrictMode -Version Latest
@@ -103,8 +104,8 @@ function Assert-Python {
   catch {
     throw "Python returned an invalid version: $VersionText"
   }
-  if ($Version -lt [version]'3.10') {
-    throw "Python 3.10 or newer is required; found $Version"
+  if ($Version -lt [version]'3.11') {
+    throw "Python 3.11 or newer is required; found $Version"
   }
 }
 
@@ -139,121 +140,140 @@ function Install-VisualStudioComponents([string[]] $Components) {
   Assert-InstallerExitCode 'Visual Studio component installation'
 }
 
-function Enter-VisualStudioEnvironment {
-  $VsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-  $InstallationPath = & $VsWhere -latest -products '*' -requires Microsoft.VisualStudio.Workload.VCTools -property installationPath
-  if (-not $InstallationPath) {
-    throw 'Visual Studio installation with VC Tools was not found'
-  }
-
-  $DeveloperCommand = Join-Path $InstallationPath 'Common7\Tools\VsDevCmd.bat'
-  if (-not (Test-Path -LiteralPath $DeveloperCommand -PathType Leaf)) {
-    throw "Visual Studio developer command is missing: $DeveloperCommand"
-  }
-
-  $Architecture = Get-HostArchitecture
-  $Command = '"{0}" -no_logo -arch={1} -host_arch={1} & set' -f (
-    $DeveloperCommand,
-    $Architecture
-  )
-  $EnvironmentLines = & cmd.exe /c $Command
-  Assert-ExitCode 'Visual Studio developer environment setup'
-
-  foreach ($Line in $EnvironmentLines) {
-    if ($Line -match '^(.*?)=(.*)$') {
-      [Environment]::SetEnvironmentVariable(
-        $Matches[1],
-        $Matches[2],
-        'Process'
-      )
-    }
-  }
-}
-
-if (-not (Test-Command 'winget')) {
-  throw 'winget is required. Install App Installer from Microsoft Store and rerun this script.'
-}
-
-Write-Host '==> Installing Windows build prerequisites' -ForegroundColor Cyan
-
-Install-WingetPackage -Id 'Microsoft.VisualStudio.2022.BuildTools' -Description 'Visual Studio 2022 Build Tools'
-
-$VisualStudioComponents = @(
-  'Microsoft.VisualStudio.Workload.VCTools',
-  'Microsoft.VisualStudio.Component.Windows11SDK.22000'
-)
-if ((Get-HostArchitecture) -eq 'arm64') {
-  $VisualStudioComponents += @(
-    'Microsoft.VisualStudio.Component.VC.Tools.ARM64',
-    'Microsoft.VisualStudio.Component.VC.Tools.ARM64EC'
-  )
-}
-Install-VisualStudioComponents $VisualStudioComponents
-
-Install-WingetPackage -Id 'Rustlang.Rustup' -Description 'rustup'
-Install-WingetPackage -Id 'Git.Git' -Description 'Git'
-Install-WingetPackage -Id 'BurntSushi.ripgrep.MSVC' -Description 'ripgrep'
-Install-WingetPackage -Id 'Casey.Just' -Description 'just'
-Install-WingetPackage -Id 'Kitware.CMake' -Description 'CMake'
-Install-WingetPackage -Id 'LLVM.LLVM' -Description 'LLVM and Clang'
-Install-WingetPackage -Id 'Python.Python.3.12' -Description 'Python 3.12'
-
-Refresh-ProcessPath
-Add-ProcessPath (Join-Path $env:USERPROFILE '.cargo\bin')
-
-$LlvmBin = 'C:\Program Files\LLVM\bin'
-if (-not (Test-Path -LiteralPath $LlvmBin -PathType Container)) {
-  throw "LLVM installation directory is missing: $LlvmBin"
-}
-Add-ProcessPath $LlvmBin
-$env:LIBCLANG_PATH = $LlvmBin
-$env:CC = Join-Path $LlvmBin 'clang.exe'
-$env:CXX = Join-Path $LlvmBin 'clang++.exe'
-
-foreach ($Command in @('cargo', 'git', 'rg', 'just', 'cmake', 'clang')) {
-  if (-not (Test-Command $Command)) {
-    throw "$Command was not found on PATH after prerequisite installation"
-  }
-}
-Assert-Python
-
 $ToolchainDocument = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'rust-toolchain.toml') -Raw
-$ToolchainMatch = [regex]::Match(
-  $ToolchainDocument,
-  '(?m)^\s*channel\s*=\s*"([^"]+)"\s*$'
-)
+$ToolchainMatch = [regex]::Match($ToolchainDocument, '(?m)^\s*channel\s*=\s*"([^"]+)"\s*$')
 if (-not $ToolchainMatch.Success) {
   throw 'rust-toolchain.toml does not declare a channel'
 }
 $Toolchain = $ToolchainMatch.Groups[1].Value
 
-Write-Host "==> Installing Rust toolchain $Toolchain" -ForegroundColor Cyan
-& rustup toolchain install $Toolchain --profile minimal | Out-Host
-Assert-ExitCode "rustup toolchain install $Toolchain"
-& rustup component add clippy rustfmt rust-src --toolchain $Toolchain | Out-Host
-Assert-ExitCode "rustup component add for $Toolchain"
+function Test-Environment {
+  $Problems = [Collections.Generic.List[string]]::new()
+  foreach ($Entry in @(
+    @('git', 'Git.Git'),
+    @('rg', 'BurntSushi.ripgrep.MSVC'),
+    @('just', 'Casey.Just'),
+    @('cmake', 'Kitware.CMake'),
+    @('clang', 'LLVM.LLVM')
+  )) {
+    $Command = $Entry[0]
+    try {
+      if (-not (Test-Command $Command)) { throw 'not found on PATH' }
+      & $Command --version | Out-Null
+      Assert-ExitCode "$Command version check"
+      Write-Host "OK: $Command"
+    }
+    catch {
+      $Problems.Add("${Command}: $_. Install: winget install --exact --id $($Entry[1])")
+    }
+  }
+  try {
+    Assert-Python
+    Write-Host 'OK: Python'
+  }
+  catch {
+    $Problems.Add("Python: $_. Install: winget install --exact --id Python.Python.3.12")
+  }
 
-Enter-VisualStudioEnvironment
-if (-not (Test-Command 'cargo-insta')) {
-  Write-Host '-- Installing cargo-insta' -ForegroundColor DarkCyan
-  & cargo install cargo-insta --locked | Out-Host
-  Assert-ExitCode 'cargo install cargo-insta'
+  try {
+    if (-not (Test-Command 'rustup')) { throw 'rustup not found on PATH' }
+    $Installed = & rustup toolchain list
+    Assert-ExitCode 'Rust toolchain list'
+    if (-not ($Installed | Where-Object { $_ -match "^$([regex]::Escape($Toolchain))(-|\s|$)" })) {
+      throw "toolchain $Toolchain is not installed"
+    }
+    & rustup run $Toolchain rustc --version | Out-Host
+    Assert-ExitCode 'Rust compiler check'
+    & rustup run $Toolchain cargo --version | Out-Host
+    Assert-ExitCode 'Cargo check'
+  }
+  catch {
+    $Problems.Add("Rust: $_. Install rustup, then run: rustup toolchain install $Toolchain --profile minimal --component clippy --component rustfmt")
+  }
+
+  $VsWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+  try {
+    if (-not (Test-Path -LiteralPath $VsWhere -PathType Leaf)) { throw 'vswhere not found' }
+    $Architecture = Get-HostArchitecture
+    $Tools = if ($Architecture -eq 'arm64') { 'Microsoft.VisualStudio.Component.VC.Tools.ARM64' } else { 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64' }
+    $VisualStudio = & $VsWhere -latest -products '*' -version '[17.0,18.0)' -requires $Tools -property installationPath
+    Assert-ExitCode 'Visual Studio check'
+    if (-not $VisualStudio) { throw 'MSVC tools were not found' }
+    $KitsRoot = (Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows Kits\Installed Roots' -Name KitsRoot10).KitsRoot10
+    $Sdk = Get-ChildItem -LiteralPath (Join-Path $KitsRoot 'Include') -Directory | Where-Object {
+      (Test-Path -LiteralPath (Join-Path $_.FullName 'um\Windows.h')) -and
+      (Test-Path -LiteralPath (Join-Path $KitsRoot "Lib\$($_.Name)\um\$Architecture\kernel32.lib"))
+    } | Select-Object -First 1
+    if (-not $Sdk) { throw "Windows SDK headers and $Architecture libraries were not found" }
+    Write-Host "OK: Visual Studio at $VisualStudio"
+  }
+  catch {
+    $Problems.Add("Visual Studio: $_. Use Visual Studio Installer to add the C++ build tools and Windows SDK, or run this script with -Install.")
+  }
+
+  # Run pnpm outside the repository so its version manager cannot install the project pin.
+  Push-Location ([IO.Path]::GetTempPath())
+  try {
+    $NodeVersion = (Get-Content -LiteralPath (Join-Path $RepositoryRoot '.nvmrc') -Raw).Trim()
+    $PackageManager = (Get-Content -LiteralPath (Join-Path $RepositoryRoot 'package.json') -Raw | ConvertFrom-Json).packageManager
+    foreach ($Entry in @(@('node', "v$NodeVersion"), @('pnpm', ($PackageManager -split '@')[-1]))) {
+      try {
+        if (-not (Test-Command $Entry[0])) { throw 'not found on PATH' }
+        $Actual = & $Entry[0] --version
+        Assert-ExitCode "$($Entry[0]) version check"
+        if ($Actual -ne $Entry[1]) { throw "expected $($Entry[1]), found $Actual" }
+        Write-Host "OK: $($Entry[0]) $Actual"
+      }
+      catch {
+        $Problems.Add("$($Entry[0]): $_. See README.md Quick start (Node $NodeVersion; npm install -g $PackageManager).")
+      }
+    }
+  }
+  finally { Pop-Location }
+
+  if ($Problems.Count -gt 0) {
+    foreach ($Problem in $Problems) { Write-Host "MISSING: $Problem" }
+    throw "Environment check failed: $($Problems.Count) issue(s). No build was started."
+  }
+  Write-Host 'Environment checks passed. Run builds from a Visual Studio Developer PowerShell matching the target architecture.' -ForegroundColor Green
+  Write-Host 'Start a product explicitly: just ash, just ash-desktop, or just app.'
 }
 
-if ($SkipBuild) {
-  Write-Host '==> Setup complete; workspace build skipped' -ForegroundColor Green
-  exit 0
+if ($Install) {
+  if (-not (Test-Command 'winget')) {
+    throw 'winget is required. Install App Installer from Microsoft Store and rerun this script.'
+  }
+
+  Write-Host '==> Installing Windows build prerequisites' -ForegroundColor Cyan
+
+  Install-WingetPackage -Id 'Microsoft.VisualStudio.2022.BuildTools' -Description 'Visual Studio 2022 Build Tools'
+
+  $VisualStudioComponents = @(
+    'Microsoft.VisualStudio.Workload.VCTools',
+    'Microsoft.VisualStudio.Component.Windows11SDK.22000'
+  )
+  if ((Get-HostArchitecture) -eq 'arm64') {
+    $VisualStudioComponents += @(
+      'Microsoft.VisualStudio.Component.VC.Tools.ARM64',
+      'Microsoft.VisualStudio.Component.VC.Tools.ARM64EC'
+    )
+  }
+  Install-VisualStudioComponents $VisualStudioComponents
+
+  Install-WingetPackage -Id 'Rustlang.Rustup' -Description 'rustup'
+  Install-WingetPackage -Id 'Git.Git' -Description 'Git'
+  Install-WingetPackage -Id 'BurntSushi.ripgrep.MSVC' -Description 'ripgrep'
+  Install-WingetPackage -Id 'Casey.Just' -Description 'just'
+  Install-WingetPackage -Id 'Kitware.CMake' -Description 'CMake'
+  Install-WingetPackage -Id 'LLVM.LLVM' -Description 'LLVM and Clang'
+  Install-WingetPackage -Id 'Python.Python.3.12' -Description 'Python 3.12'
+
+  Refresh-ProcessPath
+  Add-ProcessPath (Join-Path $env:USERPROFILE '.cargo\bin')
+  & rustup toolchain install $Toolchain --profile minimal | Out-Host
+  Assert-ExitCode "rustup toolchain install $Toolchain"
+  & rustup component add clippy rustfmt --toolchain $Toolchain | Out-Host
+  Assert-ExitCode "rustup component add for $Toolchain"
 }
 
-Write-Host '==> Building the Ash Rust workspace' -ForegroundColor Cyan
-Push-Location $RepositoryRoot
-try {
-  $env:RUSTFLAGS = ''
-  & python -B scripts/cargo.py build --workspace
-  Assert-ExitCode 'Ash Rust workspace build'
-}
-finally {
-  Pop-Location
-}
-
-Write-Host '==> Windows Rust setup complete' -ForegroundColor Green
+Test-Environment
