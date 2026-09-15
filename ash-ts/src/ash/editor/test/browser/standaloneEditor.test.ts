@@ -181,7 +181,7 @@ test("standalone completion providers execute in a live editor", async () => {
 	const editor = stanza.editor.create(container, { language: "stanza-completion-test" });
 
 	editor.focus();
-	editor.view.element.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
+	container.querySelector<HTMLElement>(".stanza-editor-input")!.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
 		bubbles: true,
 		cancelable: true,
 		ctrlKey: true,
@@ -310,7 +310,7 @@ test('standalone creation listener can release an implicit model and editor imme
 	});
 	const editor = stanza.editor.create(container, { value: 'owned', resource });
 
-	assert.equal(editor.isDisposed, true);
+	assert.equal(editor.getModel(), null);
 	assert.equal(observedModel?.isDisposed(), true);
 	assert.equal(stanza.editor.getModel(resource), null);
 	assert.equal(stanza.editor.getEditors().includes(editor), false);

@@ -1,4 +1,6 @@
 import * as stanza from '../../../src/ash/editor/editor.main.js';
+import { EditorOption } from '../../../src/ash/editor/common/config/editorOptions.js';
+import { ScrollType } from '../../../src/ash/editor/common/editorCommon.js';
 
 interface EditorState {
 	readonly value: string | null;
@@ -58,6 +60,7 @@ interface ViewZoneState {
 }
 
 interface StandaloneHarness {
+	checkContracts(): Promise<{ wrapping: string; wrapped: boolean; animated: boolean; settled: boolean; top: number; interrupted: boolean; detached: boolean; eventTexts: string[] }>;
 	readonly events: readonly CreationEvent[];
 	state(kind: 'caller' | 'owned'): EditorState;
 	switchOwnedToCaller(): { readonly ownedModelDisposed: boolean; readonly ownedModelRegistered: boolean; readonly rootRetained: boolean; readonly editorCount: number; readonly currentModelIsCaller: boolean };
@@ -233,6 +236,41 @@ function readViewZone(): ViewZoneState {
 }
 
 window.ashStandaloneIntegration = {
+	checkContracts: async () => {
+		const host = document.createElement('div');
+		document.body.append(host);
+		const instance = stanza.editor.create(host, { value: 'long text '.repeat(100) + '\n' + 'line\n'.repeat(100), wordWrap: 'on', smoothScrolling: true });
+		const eventTexts: string[] = [];
+		const listener = instance.onDidChangeModelContent(event => eventTexts.push(...event.changes.map(change => change.text)));
+		try {
+			instance.layout({ width: 260, height: 100 });
+			const wrapping = instance.getOption(EditorOption.wordWrap);
+			const wrapped = instance.getTopForLineNumber(2) > instance.getOption(EditorOption.lineHeight);
+			instance.setScrollTop(600, ScrollType.Smooth);
+			const animated = instance.hasPendingScrollAnimation();
+			const deadline = performance.now() + 2000;
+			while (instance.hasPendingScrollAnimation() && performance.now() < deadline) {
+				await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+			}
+			const settled = !instance.hasPendingScrollAnimation();
+			const top = instance.getScrollTop();
+			instance.setScrollTop(900, ScrollType.Smooth);
+			const root = instance.getDomNode()!;
+			root.scrollTop = 200;
+			root.dispatchEvent(new Event('scroll'));
+			const interrupted = !instance.hasPendingScrollAnimation() && instance.getScrollTop() === 200;
+			instance.executeEdits('test', [{ range: new stanza.Range(1, 1, 1, 1), text: 'X' }]);
+			instance.setModel(null);
+			instance.changeViewZones(() => { throw new Error('Detached callback must not run'); });
+			instance.restoreViewState(null);
+			const detached = instance.saveViewState() === null && !instance.hasPendingScrollAnimation();
+			return { wrapping, wrapped, animated, settled, top, interrupted, detached, eventTexts };
+		} finally {
+			listener.dispose();
+			instance.dispose();
+			host.remove();
+		}
+	},
 	events,
 	state,
 	switchOwnedToCaller: () => {

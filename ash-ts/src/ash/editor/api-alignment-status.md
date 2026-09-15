@@ -4,6 +4,8 @@
 
 ## 当前结论
 
+- 公开接口修复批次保留创建时的 `wordWrap`，把滚动参数和动画查询接到现有 ViewLayout；View 区分自身同步 DOM 位置产生的通知与外部滚动，修复动画被中途取消的问题。`onDidChangeModelContent` 直接使用 ViewModel 的完整事件，旧无参数事件退出；空模型的视图状态与 View Zone 操作遵循空状态契约。Standalone 接口不再继承 Widget 实现类，Workbench 的状态与保存处理改用公开选区接口。73 项相关单测、62 项浏览器测试、结构检查、类型检查及 Renderer 构建通过；强化后的换行几何和外部滚动中断场景单独复验通过。功能上下文及服务装配的整体收拢尚未完成，声明完成计数不变。
+
 - `setSelection` 参数批次补齐 `Range / IRange` 输入，并保留 `Selection / ISelection` 方向、显式事件来源和默认 `api` 来源。Find 的命中导航直接传入范围；测试改用真实 `CodeEditorWidget`，不再用假 Editor 绕过参数入口。Widget 与 Find 共 48 项单测、61 项 Editor 浏览器测试、Stanza 类型检查、结构检查及 Renderer 构建通过。新增回归覆盖范围输入、次光标清理、坐标约束、方向、无效参数、模型分离、键盘替换和撤销；本批未改变整体声明完成计数。
 - 2026-09-13 按相对路径扫描非测试 `.ts`、`.tsx`、`.js`、`.css` 生产文件：Ash Editor 597 个，VS Code Editor 733 个；392 个同路径，205 个仅本地，341 个仅上游。
 - 首次重扫发现 49 个目录大小写错误，全部来自工作区实际目录 `browser/viewparts` 与上游 `browser/viewParts` 不一致；已做两步大小写重命名，当前大小写错误为 0。

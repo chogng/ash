@@ -1,6 +1,9 @@
 import { URI } from '../../../base/common/uri.js';
-import { toDisposable } from '../../../base/common/lifecycle.js';
+import { toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { bindColorTheme } from '../../../platform/theme/browser/themeStyles.js';
+import type { ICodeEditor } from '../../browser/editorBrowser.js';
+import type { IDimension } from '../../common/core/2d/dimension.js';
+import type { ICodeEditorViewState } from '../../common/editorCommon.js';
 import type { ICodeEditorService } from '../../browser/services/codeEditorService.js';
 import { CodeEditorWidget, type CodeEditorWidgetOptions } from '../../browser/widget/codeEditor/codeEditorWidget.js';
 import type { ILanguageSelection, ILanguageService } from '../../common/languages/language.js';
@@ -8,8 +11,13 @@ import type { ITextModel } from '../../common/model.js';
 import { TextModel } from '../../common/model/textModel.js';
 import type { IModelService } from '../../common/services/model.js';
 
-export interface IStandaloneCodeEditor extends CodeEditorWidget {
+export interface IStandaloneCodeEditor extends ICodeEditor, IDisposable {
 	getModel(): TextModel | null;
+	getValue(): string;
+	setValue(value: string): void;
+	layout(dimension?: IDimension): void;
+	saveViewState(): ICodeEditorViewState | null;
+	restoreViewState(state: ICodeEditorViewState | null): void;
 }
 
 /** Standalone editor owner whose identity is shared by create(), editor events, and the editor registry. */

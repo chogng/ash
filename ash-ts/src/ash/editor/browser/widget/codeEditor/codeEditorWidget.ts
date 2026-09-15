@@ -10,7 +10,7 @@ import { Position } from "../../../common/core/position.js";
 import { Range, type IRange } from "../../../common/core/range.js";
 import { TextModel } from "../../../common/model/textModel.js";
 import { type ICursorStateComputer, type IIdentifiedSingleEditOperation, type IModelDecoration, type IModelDecorationsChangeAccessor, type IModelDeltaDecoration, type ITextModel } from '../../../common/model.js';
-import { type IModelDecorationsChangedEvent } from '../../../common/textModelEvents.js';
+import { type IModelContentChangedEvent, type IModelDecorationsChangedEvent } from '../../../common/textModelEvents.js';
 import { Handler, ScrollType, type CompositionTypePayload, type ICommand, type ICodeEditorViewState, type IEditorDecorationsCollection, type IModelChangedEvent, type INewScrollPosition, type ReplacePreviousCharPayload, type TypePayload } from '../../../common/editorCommon.js';
 import { VerticalRevealType } from '../../../common/viewEvents.js';
 import type { ICodeEditor, IContentWidget, IEditorMouseEvent, IGlyphMarginWidget, IOverlayWidget, IOverviewRuler, IPartialEditorMouseEvent, PastePayload, IViewZoneChangeAccessor } from '../../editorBrowser.js';
@@ -156,7 +156,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	private readonly mouseDropCanceledEmitter = this._register(new Emitter<void>());
 	private readonly dropIntoEditorEmitter = this._register(new Emitter<{ readonly position: Position; readonly event: DragEvent }>());
 	private readonly mouseWheelEmitter = this._register(new Emitter<IMouseWheelEvent>());
-	private readonly changeEmitter = this._register(new Emitter<void>());
+	private readonly changeEmitter = this._register(new Emitter<IModelContentChangedEvent>());
 	private readonly modelWillChangeEmitter = this._register(new Emitter<IModelChangedEvent>());
 	private readonly modelChangeEmitter = this._register(new Emitter<IModelChangedEvent>());
 	private readonly modelDecorationsEmitter = this._register(new Emitter<IModelDecorationsChangedEvent>());
@@ -173,7 +173,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	private readonly willPasteEmitter = this._register(new Emitter<IClipboardPasteEvent>());
 	readonly onDidDispose = this.disposeEmitter.event;
 	readonly onDidChangeConfiguration: Event<ConfigurationChangedEvent>;
-	readonly onDidChange = this.changeEmitter.event;
+	readonly onDidChangeModelContent = this.changeEmitter.event;
 	readonly onWillChangeModel = this.modelWillChangeEmitter.event;
 	readonly onDidChangeModel = this.modelChangeEmitter.event;
 	readonly onDidChangeModelDecorations = this.modelDecorationsEmitter.event;
@@ -311,7 +311,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 					indentation: options.guides?.indentation ?? options.presentation !== 'embedded',
 				},
 				renderLineHighlight: options.renderLineHighlight ?? (options.presentation === 'embedded' ? 'none' : undefined),
-				wordWrap: options.lineWrapping === EditorLineWrapping.On ? 'on' : 'off',
+				wordWrap: options.wordWrap ?? (options.lineWrapping === EditorLineWrapping.On ? 'on' : 'off'),
 				padding: options.padding === undefined ? undefined : {
 					top: options.padding.top ?? 0,
 					bottom: options.padding.bottom ?? 0,
@@ -359,7 +359,6 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				? options.editorWorkerFactory(model)
 				: new VersionedEditorWorkerClient(model, () => new EditorWorkerRequestExecutor()));
 			this.configuration.setModelLineCount(model.lineCount);
-			modelStore.add(model.onDidChangeContent(() => this.changeEmitter.fire()));
 			modelStore.add(model.onDidChangeDecorations(event => this.modelDecorationsEmitter.fire(event)));
 			modelStore.add(model.onWillDispose(() => this.setModel(null)));
 			const attachedView = options.model.onBeforeAttached();
@@ -380,6 +379,10 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			));
 			this.selections = getViewModelCursorController(this.viewModel);
 			modelStore.add(this.viewModel.onEvent(event => {
+				if (event.kind === OutgoingViewModelEventKind.ModelContentChanged) {
+					this.changeEmitter.fire(event.event);
+					return;
+				}
 				if (event.kind === OutgoingViewModelEventKind.ReadOnlyEditAttempt) {
 					this.readOnlyEditEmitter.fire();
 					return;
@@ -803,7 +806,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	}
 
 	changeViewZones(callback: (accessor: IViewZoneChangeAccessor) => void): void {
-		this.viewport.changeViewZones(callback);
+		if (this.currentModel) this.viewport.changeViewZones(callback);
 	}
 
 	announceAccessibilityStatus(message: string): void {
@@ -826,7 +829,8 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		this.viewModel.revealRange('api', true, range, VerticalRevealType.Simple, scrollType);
 	}
 
-	saveViewState(): CodeEditorViewState {
+	saveViewState(): CodeEditorViewState | null {
+		if (!this.currentModel) return null;
 		return Object.freeze({
 			cursorState: this.viewModel.saveCursorState(),
 			viewState: this.viewModel.saveState(),
@@ -834,7 +838,8 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		});
 	}
 
-	restoreViewState(state: CodeEditorViewState): void {
+	restoreViewState(state: CodeEditorViewState | null): void {
+		if (!this.currentModel || !state) return;
 		this.viewModel.restoreCursorState(state.cursorState);
 		const scroll = this.viewModel.reduceRestoreState(state.viewState);
 		this.viewport.scrollTo({ left: scroll.scrollLeft, top: scroll.scrollTop });
@@ -886,7 +891,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	}
 
 	hasPendingScrollAnimation(): boolean {
-		return false;
+		return this.currentModel !== null && this.viewModel.viewLayout.hasPendingScrollAnimation();
 	}
 
 	getVisibleRanges(): Range[] {
@@ -911,25 +916,17 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		return coordinates.top + coordinates.height;
 	}
 
-	setScrollTop(newScrollTop: number, _scrollType?: ScrollType): void {
-		if (!this.currentModel) return;
-		const layout = this.viewport.currentLayout;
-		this.viewport.scrollTo({ left: layout.scrollPosition.left, top: newScrollTop });
+	setScrollTop(newScrollTop: number, scrollType: ScrollType = ScrollType.Immediate): void {
+		this.setScrollPosition({ scrollTop: newScrollTop }, scrollType);
 	}
 
-	setScrollLeft(newScrollLeft: number, _scrollType?: ScrollType): void {
-		if (!this.currentModel) return;
-		const layout = this.viewport.currentLayout;
-		this.viewport.scrollTo({ left: newScrollLeft, top: layout.scrollPosition.top });
+	setScrollLeft(newScrollLeft: number, scrollType: ScrollType = ScrollType.Immediate): void {
+		this.setScrollPosition({ scrollLeft: newScrollLeft }, scrollType);
 	}
 
-	setScrollPosition(position: INewScrollPosition, _scrollType?: ScrollType): void {
+	setScrollPosition(position: INewScrollPosition, scrollType: ScrollType = ScrollType.Immediate): void {
 		if (!this.currentModel) return;
-		const layout = this.viewport.currentLayout;
-		this.viewport.scrollTo({
-			left: position.scrollLeft ?? layout.scrollPosition.left,
-			top: position.scrollTop ?? layout.scrollPosition.top,
-		});
+		this.viewModel.viewLayout.setScrollPosition(position, scrollType);
 	}
 
 	getSelection(): Selection | null {

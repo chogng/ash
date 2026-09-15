@@ -1023,7 +1023,7 @@ test('CodeEditorWidget switches models without replacing its identity or retaini
 			focusedAtChange.push(editor.hasTextFocus());
 		});
 		let contentChanges = 0;
-		using contentListener = editor.onDidChange(() => { contentChanges += 1; });
+		using contentListener = editor.onDidChangeModelContent(() => { contentChanges += 1; });
 		editor.setModel(first);
 		assert.deepEqual(modelEvents, []);
 		editor.focus();
@@ -1540,6 +1540,7 @@ test("CodeEditorWidget stages and owns per-instance contributions", () => {
 
 	assert.deepEqual(events, ["eager:create"]);
 	const saved = editor.saveViewState();
+	assert.ok(saved);
 	assert.deepEqual(saved.contributionsState, { 'test.eager': { marker: 'saved' } });
 	editor.restoreViewState({ ...saved, contributionsState: { 'test.eager': { marker: 'restored' } } });
 	assert.deepEqual(restoredState, { marker: 'restored' });
@@ -1815,3 +1816,32 @@ function testClipboardEvent(targetWindow: typeof browserEnvironment.window, type
 	Object.defineProperty(event, 'clipboardData', { configurable: true, value: clipboardData });
 	return event as unknown as ClipboardEvent;
 }
+
+test('content events follow the attached model and retain edit, undo, redo, and reset details', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using closeWindow = toDisposable(() => dom.window.close());
+	using first = new TextModel('alpha');
+	using second = new TextModel('beta');
+	using editor = new CodeEditorWidget({ container: requiredElement(dom.window.document, 'main'), model: first, input: { resource: first.uri }, languageId: first.getLanguageId() });
+	const events: { text: string; undo: boolean; redo: boolean; flush: boolean; version: number }[] = [];
+	using listener = editor.onDidChangeModelContent(event => events.push({ text: event.changes.map(change => change.text).join(''), undo: event.isUndoing, redo: event.isRedoing, flush: event.isFlush, version: event.versionId }));
+	editor.pushUndoStop();
+	editor.executeEdits('test', [{ range: new Range(1, 1, 1, 6), text: 'one' }]);
+	editor.pushUndoStop();
+	first.undo();
+	first.redo();
+	editor.setModel(second);
+	first.setValue('detached');
+	editor.setValue('two');
+	assert.deepEqual(events, [
+		{ text: 'one', undo: false, redo: false, flush: false, version: 2 },
+		{ text: 'alpha', undo: true, redo: false, flush: false, version: 3 },
+		{ text: 'one', undo: false, redo: true, flush: false, version: 4 },
+		{ text: 'two', undo: false, redo: false, flush: true, version: 2 },
+	]);
+	editor.setModel(null);
+	second.setValue('detached too');
+	assert.equal(editor.saveViewState(), null);
+	assert.equal(events.length, 4);
+});

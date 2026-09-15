@@ -266,3 +266,11 @@ Editor contract 使用领域类型；generated DTO 和 transport error 在 runti
 - 所有改动运行 `git diff --check`。
 
 修改 model 时检查 transaction、version、history、tracked range 和 async result invalidation；修改 view model 时检查 wrapping、folding、geometry、hit test 和 navigation；修改 Part 时检查 DOM ownership、render order、version gate、disposal 和 browser tests；修改 Contribution 时检查 common contract、controller、registration、CSS owner 和对应测试。
+
+## 公开编辑器接口边界
+
+- Standalone 接口显式声明可调用能力，不继承 `CodeEditorWidget` 实现类；内部光标、View 和布局对象不属于 Standalone 接口。
+- 创建配置保留显式 `wordWrap`。滚动接口把 `ScrollType` 交给同一 ViewLayout，动画查询读取其实际状态；View 忽略自身同步 DOM 位置产生的滚动通知，外部滚动仍能中断动画。
+- `onDidChangeModelContent` 复用 ViewModel 已产生的完整事件；旧模型分离后不再向当前编辑器发布内容事件。Workbench 使用该事件和公开选区事件更新状态。
+- 未挂载模型时，`saveViewState` 返回 `null`，`restoreViewState` 和 `changeViewZones` 不执行操作。
+- 功能上下文的内部依赖与 Widget 服务构造仍需继续收拢；本批仅迁移 Workbench 的内容事件和选区访问，没有完成整体服务装配重构。

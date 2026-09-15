@@ -1128,3 +1128,14 @@ for (const unit of ['pixels', 'lines'] as const) {
 		expect(errors).toEqual([]);
 	});
 }
+
+test('public editor contracts honor initial wrapping, animated scrolling, content events, and detachment', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/standalone.html');
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.checkContracts())).toEqual({
+		wrapping: 'on', wrapped: true, animated: true, settled: true, top: 600, interrupted: true, detached: true, eventTexts: ['X'],
+	});
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	expect(errors).toEqual([]);
+});

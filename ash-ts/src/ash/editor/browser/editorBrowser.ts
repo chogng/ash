@@ -7,7 +7,7 @@ import { type IRange, type Range } from '../common/core/range.js';
 import { type ISelection, type Selection } from '../common/core/selection.js';
 import { type GlyphMarginLane, type ICursorStateComputer, type IIdentifiedSingleEditOperation, type IModelDecorationsChangeAccessor, type PositionAffinity } from '../common/model.js';
 import { type IModelDeltaDecoration } from '../common/model.js';
-import { type IModelDecorationsChangedEvent } from '../common/textModelEvents.js';
+import { type IModelContentChangedEvent, type IModelDecorationsChangedEvent } from '../common/textModelEvents.js';
 import { type InjectedText } from '../common/modelLineProjectionData.js';
 import { type ConfigurationChangedEvent, type EditorLayoutInfo, type EditorOption, type FindComputedEditorOptionValueById, type IComputedEditorOptions, type IEditorOptions, type OverviewRulerPosition } from '../common/config/editorOptions.js';
 import { type ICommand, type IEditorContribution, type IEditorDecorationsCollection, type IModelChangedEvent, type INewScrollPosition, type ScrollType } from '../common/editorCommon.js';
@@ -165,6 +165,7 @@ export interface ICodeEditor {
 	readonly onDidDispose: Event<void>;
 	readonly onWillChangeModel: Event<IModelChangedEvent>;
 	readonly onDidChangeModel: Event<IModelChangedEvent>;
+	readonly onDidChangeModelContent: Event<IModelContentChangedEvent>;
 	readonly onDidChangeModelDecorations: Event<IModelDecorationsChangedEvent>;
 	readonly onDidChangeConfiguration: Event<ConfigurationChangedEvent>;
 	readonly onDidAttemptReadOnlyEdit: Event<void>;

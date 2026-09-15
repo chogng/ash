@@ -209,6 +209,8 @@ export class View extends ViewEventHandler {
 	private readonly pixelRatio: IPixelRatioMonitor;
 	private changingLayout = false;
 	private softWrapping: boolean;
+	private syncedScrollLeft = 0;
+	private syncedScrollTop = 0;
 	private projectionRevision = 0;
 	private projectionScheduled = false;
 
@@ -479,6 +481,7 @@ export class View extends ViewEventHandler {
 			this.scheduleProjection();
 		}));
 		this._register(addDisposableListener(this.domNode.domNode, "scroll", () => {
+			if (this.domNode.domNode.scrollLeft === this.syncedScrollLeft && this.domNode.domNode.scrollTop === this.syncedScrollTop) return;
 			viewport.setScrollPosition({
 				scrollLeft: this.domNode.domNode.scrollLeft,
 				scrollTop: this.domNode.domNode.scrollTop,
@@ -1108,6 +1111,8 @@ export class View extends ViewEventHandler {
 		if (this.domNode.domNode.scrollTop !== layout.scrollPosition.top) {
 			this.domNode.domNode.scrollTop = layout.scrollPosition.top;
 		}
+		this.syncedScrollLeft = this.domNode.domNode.scrollLeft;
+		this.syncedScrollTop = this.domNode.domNode.scrollTop;
 	}
 
 	public override handleEvents(events: viewEvents.ViewEvent[]): void {

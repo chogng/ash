@@ -1,3 +1,4 @@
+import type { IModelContentChangedEvent } from '../../../../editor/common/textModelEvents.js';
 import "./media/editorPane.css";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { type IDimension } from "../../../../base/browser/dom.js";
@@ -25,7 +26,8 @@ import { type Range } from "../../../../editor/common/core/range.js";
 import { type LanguageLocation } from "../../../../editor/common/languages.js";
 import { type LanguageWorkspaceEdit } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
 import { type ILanguageDiagnosticsService } from "../../../../editor/common/services/languageDiagnosticsService.js";
-import type { CursorsController } from "../../../../editor/common/cursor/cursor.js";
+import type { Selection } from "../../../../editor/common/core/selection.js";
+import type { ICursorSelectionChangedEvent } from "../../../../editor/common/cursorEvents.js";
 import type { EditorPaneStatus } from "../../../browser/parts/editor/editorPane.js";
 import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
 import { trimTrailingWhitespace } from "../../../../editor/common/commands/trimTrailingWhitespaceCommand.js";
@@ -33,13 +35,14 @@ import { EditOperation } from '../../../../editor/common/core/editOperation.js';
 import { Position } from '../../../../editor/common/core/position.js';
 
 export interface EditorPanePart extends IDisposable {
-	readonly onDidChange?: Event<void>;
-	readonly selections?: CursorsController;
+	readonly onDidChangeModelContent?: Event<IModelContentChangedEvent>;
+	readonly onDidChangeCursorSelection?: Event<ICursorSelectionChangedEvent>;
+	getSelections?(): Selection[] | null;
 	layout(dimension: IDimension): void;
 	focus(): void;
 	getValue(): string;
 	revealRange?(range: Range): void;
-	saveViewState?(): ICodeEditorViewState;
+	saveViewState?(): ICodeEditorViewState | null;
 	restoreViewState?(state: ICodeEditorViewState): void;
 	announceAccessibilityStatus?(message: string): void;
 }
@@ -228,7 +231,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 			});
 			if (this.options.trimTrailingWhitespace) {
 				beforeSaveHooks.unshift(() => {
-					const selections = [...(part?.selections?.getSelections() ?? [])];
+					const selections = [...(part?.getSelections?.() ?? [])];
 					const operations = trimTrailingWhitespace(modelReference.model, [], this.options.trimTrailingWhitespaceInRegexAndStrings ?? true);
 					if (operations.length > 0) modelReference.model.pushEditOperations(selections, operations, () => selections);
 				});
@@ -238,7 +241,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 					const model = modelReference.model;
 					const lineCount = model.getLineCount();
 					if (!lineCount || strings.lastNonWhitespaceIndex(model.getLineContent(lineCount)) === -1) return;
-					const selections = [...(part?.selections?.getSelections() ?? [])];
+					const selections = [...(part?.getSelections?.() ?? [])];
 					const operations = [EditOperation.insert(new Position(lineCount, model.getLineMaxColumn(lineCount)), model.getEOL())];
 					model.pushEditOperations(selections, operations, () => selections);
 				});
@@ -264,7 +267,8 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 		this.workingCopySlot.value = workingCopy;
 		this.languageId = modelReference.model.getLanguageId();
 		const statusListeners = new DisposableStore();
-		if (part.onDidChange) statusListeners.add(part.onDidChange(() => this.statusChangeEmitter.fire()));
+		if (part.onDidChangeCursorSelection) statusListeners.add(part.onDidChangeCursorSelection(() => this.statusChangeEmitter.fire()));
+		if (part.onDidChangeModelContent) statusListeners.add(part.onDidChangeModelContent(() => this.statusChangeEmitter.fire()));
 		statusListeners.add(modelReference.onDidChangeExternalChange(() => {
 			if (modelReference.hasExternalChange) part.announceAccessibilityStatus?.("File changed on disk. Local edits are preserved.");
 			this.statusChangeEmitter.fire();
@@ -350,7 +354,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 	}
 
 	getStatus(): EditorPaneStatus {
-		const selections = this.part.value?.selections?.getSelections();
+		const selections = this.part.value?.getSelections?.();
 		const active = selections?.[0]?.getPosition();
 		return Object.freeze({
 			...(active ? { lineNumber: active.lineNumber, columnNumber: active.column } : {}),

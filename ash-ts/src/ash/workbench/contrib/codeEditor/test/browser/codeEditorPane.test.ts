@@ -511,3 +511,22 @@ function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value
 	});
 	return { promise, resolve };
 }
+
+test('Workbench status follows cursor movement through public editor events', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using closeWindow = toDisposable(() => dom.window.close());
+	const parent = dom.window.document.querySelector<HTMLElement>('main')!;
+	const resourceStore = new BrowserTextResourceStore(new ImmediateTextFiles('alpha'));
+	using models = new BrowserTextModelService(resourceStore);
+	using pane = new EditorPane(resourceStore, { modelService: models });
+	pane.create(parent);
+	await pane.setInput({ resource: URI.file('/project/status.ts') }, new AbortController().signal);
+	const columns: (number | undefined)[] = [];
+	using listener = pane.onDidChangeStatus(() => columns.push(pane.getStatus().columnNumber));
+	const input = parent.querySelector<HTMLTextAreaElement>('.stanza-editor-input')!;
+	input.focus();
+	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowRight' }));
+	assert.equal(pane.getStatus().columnNumber, 2);
+	assert.ok(columns.includes(2));
+});
