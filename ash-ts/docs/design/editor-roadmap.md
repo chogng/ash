@@ -137,6 +137,8 @@ Code 模式入口加载行式编辑贡献，Academic 模式入口只加载文档
 
 2026-09-15 补全会话与片段导航已迁入浏览器层并通过 `ICodeEditor` 操作。Tab/Shift+Tab 切换占位符结束当前输入的撤销组，真实 Chromium 验证两个占位符编辑、离开片段及撤销。只读接受、选项修改与模型切换后迟到结果由真实 Widget 单测覆盖；完整 Suggest/Snippet API 仍在对齐台账中待验收。
 
+片段选项切换将所有镜像和转换结果作为一次编辑提交，撤销、重做后按当前文本继续切换。真实 Chromium 覆盖转换结果位于两个镜像之间的键盘操作；初次插入时向后引用源占位符的转换解析仍待处理，见 API 对齐台账。
+
 ## 2.2 指针与拖动（已验收）
 
 鼠标手势由 `pointerdown` 保留 pointer ID，再用 `mousedown.detail` 判断单击、双击和三击；触控与笔仍从 `pointerdown` 进入同一选择链。真实双击选中完整单词，跨行拖动只改变当前编辑器选区，不修改共享模型或另一个编辑器的选区。`pointerup` 结束指针会话后，兼容 `mouseup` 不再重复发布公开事件；若缺少 `pointerup`，`mouseup` 仍结束手势。松开后移动指针不会继续扩选。PointerHandler、Widget owner 测试和 Chromium 用例覆盖这些行为。

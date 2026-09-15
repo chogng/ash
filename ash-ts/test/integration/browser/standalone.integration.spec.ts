@@ -293,7 +293,7 @@ test('completion snippets navigate and undo through the mounted editor', async (
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/standalone.html');
-	await page.evaluate(() => window.ashStandaloneIntegration.enableCompletionNavigation(true));
+	await page.evaluate(() => window.ashStandaloneIntegration.enableCompletionNavigation('${1:name}(${2:value})$0'));
 	const input = page.locator('#caller .stanza-editor-input');
 	await input.focus();
 	await page.keyboard.press('Control+Space');
@@ -309,6 +309,35 @@ test('completion snippets navigate and undo through the mounted editor', async (
 	await page.keyboard.press('Escape');
 	await page.keyboard.press('ControlOrMeta+z');
 	await expect(page.locator('#caller .view-line').first()).toContainText('confn(arg)');
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	expect(errors).toEqual([]);
+});
+
+test('snippet choices keep interleaved transforms and mirrors together through undo and redo', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.enableCompletionNavigation('${1|a,long|} => ${1/(.*)/${1:/upcase}/} $1$0'));
+	await page.locator('#caller .stanza-editor-input').focus();
+	await page.keyboard.press('Control+Space');
+	await expect(page.locator('#caller .stanza-editor-completion-option')).toHaveCount(2);
+	await page.keyboard.press('Enter');
+	const line = page.locator('#caller .view-line').first();
+	await expect(line).toContainText('cona => A a');
+	const version = await page.evaluate(() => window.ashStandaloneIntegration.getCallerVersion());
+	await page.keyboard.press('Alt+ArrowDown');
+	await expect(line).toContainText('conlong => LONG long');
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.getCallerVersion())).toBe(version + 1);
+	await page.keyboard.press('ControlOrMeta+z');
+	await expect(line).toContainText('cona => A a');
+	await page.keyboard.press('Alt+ArrowDown');
+	await expect(line).toContainText('conlong => LONG long');
+	await page.keyboard.press('ControlOrMeta+z');
+	await expect(line).toContainText('cona => A a');
+	await page.keyboard.press('ControlOrMeta+Shift+z');
+	await expect(line).toContainText('conlong => LONG long');
+	await page.keyboard.press('Alt+ArrowUp');
+	await expect(line).toContainText('cona => A a');
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	expect(errors).toEqual([]);
 });

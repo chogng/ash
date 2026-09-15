@@ -1,6 +1,5 @@
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { rot } from "../../../../base/common/numbers.js";
-import { ReplaceCommandThatSelectsText } from "../../../common/commands/replaceCommand.js";
 import { type ICodeEditor } from "../../../browser/editorBrowser.js";
 import { type LanguageCompletionSnippet } from "../common/languageCompletionSnippetParser.js";
 import { applyLanguageCompletionSnippetTransform, type LanguageCompletionSnippetTransform } from "../common/snippetTransform.js";
@@ -8,7 +7,7 @@ import { Selection } from "../../../common/core/selection.js";
 import { Range } from "../../../common/core/range.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type TrackedRange } from "../../../common/model/trackedRange.js";
-import { TrackedRangeStickiness } from '../../../common/model.js';
+import { TrackedRangeStickiness, type IIdentifiedSingleEditOperation } from '../../../common/model.js';
 
 /**
  * Owns one accepted completion snippet's tabstop navigation.
@@ -20,7 +19,6 @@ import { TrackedRangeStickiness } from '../../../common/model.js';
 export class SnippetSession extends Disposable {
 	private readonly groups: readonly SnippetTrackedGroup[];
 	private readonly transforms: readonly SnippetTrackedTransform[];
-	private readonly choiceIndexes = new Map<number, number>();
 	private readonly finalRange: TrackedRange;
 	private currentGroupIndex = 0;
 
@@ -158,12 +156,12 @@ export class SnippetSession extends Disposable {
 		this.assertNotDisposed();
 		const group = this.groups[this.currentGroupIndex];
 		if (!group?.choices || group.choices.length === 0) return false;
-		const current = this.choiceIndexes.get(this.currentGroupIndex) ?? 0;
+		let current = group.choices.indexOf(this.model.getTextInRange(group.ranges[0]!.range));
+		if (current < 0) {
+			current = delta > 0 ? -1 : 0;
+		}
 		const next = rot(current + delta, group.choices.length);
-		if (!this.replaceChoice(group, group.choices[next]!)) return false;
-		this.choiceIndexes.set(this.currentGroupIndex, next);
-		this.synchronizeTransforms(group);
-		return true;
+		return this.replaceChoice(group, group.choices[next]!);
 	}
 
 	private replaceChoice(group: SnippetTrackedGroup, text: string): boolean {
@@ -178,9 +176,24 @@ export class SnippetSession extends Disposable {
 			const current = ranges[index]!;
 			if (current.startOffset < previous.endOffset) return false;
 		}
+		const edits: IIdentifiedSingleEditOperation[] = group.ranges.map((range, index) => ({
+			range: range.range,
+			text,
+			identifier: { major: 0, minor: index },
+		}));
+		for (const transform of this.transforms) {
+			if (transform.index !== group.index) continue;
+			const transformed = applyLanguageCompletionSnippetTransform(text, transform.transform);
+			if (model.getTextInRange(transform.range.range) !== transformed) {
+				edits.push({ range: transform.range.range, text: transformed });
+			}
+		}
 		const version = model.version;
 		if (!this.editor.pushUndoStop()) return false;
-		this.editor.executeCommands("snippet.choice", group.ranges.map(range => new ReplaceCommandThatSelectsText(range.range, text)));
+		this.editor.executeEdits("snippet.choice", edits, inverseEdits => inverseEdits
+			.filter(edit => edit.identifier?.major === 0)
+			.sort((left, right) => left.identifier!.minor - right.identifier!.minor)
+			.map(edit => Selection.fromPositions(edit.range.getStartPosition(), edit.range.getEndPosition())));
 		this.editor.pushUndoStop();
 		return model.version !== version;
 	}

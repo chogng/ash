@@ -4,6 +4,8 @@
 
 ## 当前结论
 
+- 2026-09-15 片段选项修复：选项、镜像与转换结果通过一次 `ICodeEditor.executeEdits` 同步修改，一次撤销即可整体恢复；当前选项从模型文本读取，撤销或重做后继续切换不会使用旧索引。17 项补全会话单测、84 项完整浏览器回归（含 2 项片段键盘测试）、结构检查、类型检查及 Stanza 构建通过。完整 Suggest/Snippet API 仍待验收；另观察到转换表达式出现在其源占位符之前时，初次插入的转换结果为空，该解析行为尚未修复。
+
 - 2026-09-15 补全会话与 View Zone 修复：用户确认将 `contrib/suggest/common/languageCompletionSessionController.ts` 迁入 `contrib/suggest/browser/suggestModel.ts`，将 `contrib/snippet/common/languageCompletionSnippetSession.ts` 迁入 `contrib/snippet/browser/snippetSession.ts`，并删除两个旧文件。生产贡献与聊天输入统一使用 `ICodeEditor`，两个会话不再导入内部光标控制器；模型切换和编辑器释放会取消请求并释放会话。只读补全不再报告接受成功或执行后续命令，片段选项与转换遵守编辑器只读边界，Tab/Shift+Tab 结束前一个占位符的撤销组。View Zone 回调保留区域对象作为 `this`，覆盖折叠隐藏、展开恢复与滚动通知。两个恢复同路径的声明加入待处理表；这批完成依赖迁移与行为修复，不代表完整 Suggest/Snippet API 已对齐。 验证：Editor 全量单测 243/243 个文件通过；模型切换通知修正后，补全会话、聊天输入与架构共 47 项复验通过，最终浏览器 83/83 项、Electron 文件打开/编辑/保存 1 项、聊天输入 1 项、Stanza 与桌面构建通过。完整结构与浏览器检查入口通过；既有 7 份品牌替换式 CSS 仍作为债务记录，本批未改 CSS。
 
 - 2026-09-15 命名与聊天输入评审：移除聊天实现、CSS、命令/技能补全、测试与构建配置文件名中的引擎前缀；注册表单独命名为 `chatInputEditorRegistry.ts`，实现使用 `chatInputEditor.ts`。聊天高度按编辑器末行实际底部计算，并在内容或容器尺寸变化后统一调度布局；命令补全替换完整命令词并保留参数。聊天宿主通过注入的 `ICodeEditorService` 登记/移除编辑器，恢复全局全选。`ObservableCodeEditor` 改接编辑器内容事件，布局通知只更新布局状态，避免清空折行文本时先通知内容、后更新光标导致的渲染越界。验证通过：16 项定向单测、Editor 全量 243/243 个测试文件、81 项浏览器回归、聊天尺寸/全选 Web 与 Electron 各 1 项、Electron 文件打开/编辑/保存 1 项、Stanza 与桌面构建。台账整体仍为 80/39；补全 common 会话及片段的内部光标依赖未在本批迁移。

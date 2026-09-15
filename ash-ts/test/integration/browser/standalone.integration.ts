@@ -103,7 +103,7 @@ interface StandaloneHarness {
 		readonly attachedEditors: number;
 		readonly firstChunkPrefix: string;
 	};
-	enableCompletionNavigation(snippet?: boolean): void;
+	enableCompletionNavigation(snippet?: string): void;
 	getCallerPosition(): { readonly lineNumber: number; readonly column: number } | null;
 	prepareKeyboardEditing(): KeyboardEditingState;
 	readKeyboardEditing(): KeyboardEditingState;
@@ -450,8 +450,8 @@ window.ashStandaloneIntegration = {
 					label,
 					kind: stanza.languages.LanguageCompletionItemKind.Text,
 					range: stanza.Range.fromPositions(request.position),
-					insertText: snippet ? '${1:name}(${2:value})$0' : label,
-					insertTextFormat: snippet ? stanza.languages.LanguageCompletionInsertTextFormat.Snippet : stanza.languages.LanguageCompletionInsertTextFormat.PlainText,
+					insertText: snippet ?? label,
+					insertTextFormat: snippet !== undefined ? stanza.languages.LanguageCompletionInsertTextFormat.Snippet : stanza.languages.LanguageCompletionInsertTextFormat.PlainText,
 				})),
 				isIncomplete: false,
 			}),

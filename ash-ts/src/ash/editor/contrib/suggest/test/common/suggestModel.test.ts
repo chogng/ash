@@ -210,45 +210,63 @@ test("Completion snippets select grouped tabstops and leave them without changin
 	assert.equal(model.getText(), "function name(value) {  }");
 });
 
-test("Completion snippets cycle choice tabstops and replace every mirror atomically", () => {
-	using model = new TextModel("x");
-	using editor = editorAt(model, new Position((0) + 1, (1) + 1));
-	using store = createLanguageCompletionStore(model);
-	using session = new SuggestModel(store, editor);
-	assert.equal(store.accept({
-		requestId: 1,
-		textModel: model,
-		modelVersion: model.version,
-		value: {
-			position: new Position((0) + 1, (1) + 1),
-			items: [{
-				...completion("choice", "choice", false, Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (1) + 1))),
-				insertText: "${1|a,long|}-$1$0",
-				insertTextFormat: LanguageCompletionInsertTextFormat.Snippet,
-			}],
-			isIncomplete: false,
-		},
-	}), LanguageResultAcceptance.Applied);
+for (const transform of [false, true]) {
+	test(`Completion snippet choices and mirrors undo atomically ${transform ? 'with' : 'without'} transforms`, () => {
+		using model = new TextModel("x");
+		using editor = editorAt(model, new Position((0) + 1, (1) + 1));
+		using store = createLanguageCompletionStore(model);
+		using session = new SuggestModel(store, editor);
+		assert.equal(store.accept({
+			requestId: 1,
+			textModel: model,
+			modelVersion: model.version,
+			value: {
+				position: new Position((0) + 1, (1) + 1),
+				items: [{
+					...completion("choice", "choice", false, Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (1) + 1))),
+					insertText: transform ? "${1|a,long|}-$1 => ${1/(.*)/${1:/upcase}/}$0" : "${1|a,long|}-$1$0",
+					insertTextFormat: LanguageCompletionInsertTextFormat.Snippet,
+				}],
+				isIncomplete: false,
+			},
+		}), LanguageResultAcceptance.Applied);
 
-	assert.equal(session.acceptSelected(), true);
-	assert.equal(model.getText(), "a-a");
-	editor.updateOptions({ readOnly: true });
-	assert.equal(session.selectNextSnippetChoice(), false);
-	assert.equal(model.getText(), "a-a");
-	editor.updateOptions({ readOnly: false });
-	assert.equal(session.selectNextSnippetChoice(), true);
-	assert.equal(model.getText(), "long-long");
-	assert.deepEqual(editor.getSelections(), primaryFirst([
-		Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (4) + 1)),
-		Selection.fromPositions(new Position((0) + 1, (5) + 1), new Position((0) + 1, (9) + 1)),
-	], 0));
-	assert.equal(session.selectPreviousSnippetChoice(), true);
-	assert.equal(model.getText(), "a-a");
-	model.undo();
-	assert.equal(model.getText(), "long-long");
-	model.undo();
-	assert.equal(model.getText(), "a-a");
-});
+		assert.equal(session.acceptSelected(), true);
+		const initial = transform ? 'a-a => A' : 'a-a';
+		const expanded = transform ? 'long-long => LONG' : 'long-long';
+		assert.equal(model.getText(), initial);
+		editor.updateOptions({ readOnly: true });
+		assert.equal(session.selectNextSnippetChoice(), false);
+		assert.equal(model.getText(), initial);
+		editor.updateOptions({ readOnly: false });
+		const changes: string[] = [];
+		using listener = model.onDidChangeContent(() => changes.push(model.getText()));
+		assert.equal(session.selectNextSnippetChoice(), true);
+		assert.deepEqual(changes, [expanded]);
+		assert.deepEqual(editor.getSelections(), primaryFirst([
+			Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (4) + 1)),
+			Selection.fromPositions(new Position((0) + 1, (5) + 1), new Position((0) + 1, (9) + 1)),
+		], 0));
+		model.undo();
+		assert.equal(model.getText(), initial);
+		assert.equal(session.selectNextSnippetChoice(), true);
+		assert.equal(model.getText(), expanded);
+		assert.equal(session.selectPreviousSnippetChoice(), true);
+		assert.equal(model.getText(), initial);
+		model.undo();
+		assert.equal(model.getText(), expanded);
+		model.undo();
+		assert.equal(model.getText(), initial);
+		assert.equal(session.selectNextSnippetChoice(), true);
+		assert.equal(model.getText(), expanded);
+		model.undo();
+		assert.equal(model.getText(), initial);
+		model.redo();
+		assert.equal(model.getText(), expanded);
+		assert.equal(session.selectPreviousSnippetChoice(), true);
+		assert.equal(model.getText(), initial);
+	});
+}
 
 test("Completion snippets refresh tabstop transforms when navigation leaves a source group", () => {
 	using model = new TextModel("x");
