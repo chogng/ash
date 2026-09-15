@@ -1,4 +1,4 @@
-import { parseLanguageCompletionSnippet } from "../../../../editor/contrib/snippet/common/languageCompletionSnippetParser.js";
+import { parseSnippet } from "../../../../editor/contrib/snippet/common/snippetParser.js";
 import { LanguageCompletionItemKind, LanguageCompletionInsertTextFormat } from "../../../../editor/common/languages/completion/languageCompletions.js";
 import type { LanguageCompletionProvider, LanguageCompletionProviderRequest, LanguageCompletionProviderResult } from "../../../../editor/common/languages/completion/languageCompletionProviders.js";
 import { Position } from "../../../../editor/common/core/position.js";
@@ -16,7 +16,7 @@ export interface ExtensionSnippetDefinition {
 /** Expands one file-template snippet to the initial text of an untitled editor. */
 export function materializeExtensionFileTemplate(snippet: ExtensionSnippetDefinition): string {
 	if (!snippet.isFileTemplate) throw new TypeError("Extension file template must declare isFileTemplate");
-	return parseLanguageCompletionSnippet(snippet.body, { allowUnresolvedVariables: true }).text;
+	return parseSnippet(snippet.body, { allowUnresolvedVariables: true }).text;
 }
 
 /** Parses the VS Code declarative snippet-file shape without executing extension code. */
@@ -30,7 +30,7 @@ export function parseExtensionSnippetFile(value: unknown, owner: string): readon
 			? snippet.body
 			: parseBody(snippet.body, `${owner}.${name}.body`);
 		if (body.length > 1024 * 1024) throw new RangeError(`${owner}.${name}.body is too large`);
-		parseLanguageCompletionSnippet(body, { allowUnresolvedVariables: true });
+		parseSnippet(body, { allowUnresolvedVariables: true });
 		const description = snippet.description === undefined ? undefined : boundedText(snippet.description, `${owner}.${name}.description`, 512);
 		const scopes = snippet.scope === undefined ? undefined : parseScopes(snippet.scope, `${owner}.${name}.scope`);
 		return Object.freeze({

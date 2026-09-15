@@ -1,5 +1,5 @@
 /** One immutable regular-expression transform declared by a completion snippet. */
-export interface LanguageCompletionSnippetTransform {
+export interface SnippetTransform {
 	readonly pattern: string;
 	readonly format: string;
 	readonly options: string;
@@ -9,7 +9,7 @@ export interface LanguageCompletionSnippetTransform {
  * Validates a completion-snippet regular-expression transform without making
  * browser DOM or editor-model state part of the snippet grammar.
  */
-export function createLanguageCompletionSnippetTransform(pattern: string, format: string, options: string): LanguageCompletionSnippetTransform {
+export function createSnippetTransform(pattern: string, format: string, options: string): SnippetTransform {
 	if (typeof pattern !== "string" || typeof format !== "string" || typeof options !== "string") {
 		throw new TypeError("Language completion snippet transforms require string pattern, format, and options");
 	}
@@ -25,7 +25,7 @@ export function createLanguageCompletionSnippetTransform(pattern: string, format
 }
 
 /** Applies one validated completion-snippet transform to an expanded value. */
-export function applyLanguageCompletionSnippetTransform(value: string, transform: LanguageCompletionSnippetTransform): string {
+export function applySnippetTransform(value: string, transform: SnippetTransform): string {
 	if (typeof value !== "string") throw new TypeError("Language completion snippet transform value must be a string");
 	return value.replace(new RegExp(transform.pattern, transform.options), (...arguments_: unknown[]) => {
 		const trailingArgumentCount = typeof arguments_.at(-1) === "object" ? 3 : 2;

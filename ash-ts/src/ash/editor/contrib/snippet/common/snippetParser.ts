@@ -1,7 +1,7 @@
-import { applyLanguageCompletionSnippetTransform, createLanguageCompletionSnippetTransform, type LanguageCompletionSnippetTransform } from "./snippetTransform.js";
+import { applySnippetTransform, createSnippetTransform, type SnippetTransform } from "./snippetTransform.js";
 
 /** One occurrence of a snippet tabstop within its expanded insertion text. */
-export interface LanguageCompletionSnippetPlaceholder {
+export interface SnippetPlaceholder {
 	readonly startOffset: number;
 	readonly endOffset: number;
 	/** Available values for a choice tabstop; omitted for ordinary tabstops. */
@@ -9,36 +9,36 @@ export interface LanguageCompletionSnippetPlaceholder {
 }
 
 /** One logical tabstop and every mirrored occurrence it owns. */
-export interface LanguageCompletionSnippetPlaceholderGroup {
+export interface SnippetPlaceholderGroup {
 	readonly index: number;
-	readonly placeholders: readonly LanguageCompletionSnippetPlaceholder[];
+	readonly placeholders: readonly SnippetPlaceholder[];
 	/** The shared choice list when this tabstop was declared as `${1|a,b|}`. */
 	readonly choices?: readonly string[];
 }
 
 /** One read-only transform result that derives its text from a tabstop group. */
-export interface LanguageCompletionSnippetTransformOccurrence {
+export interface SnippetTransformOccurrence {
 	readonly index: number;
 	readonly startOffset: number;
 	readonly endOffset: number;
-	readonly transform: LanguageCompletionSnippetTransform;
+	readonly transform: SnippetTransform;
 }
 
 /** Immutable expansion of Stanza's supported completion snippet grammar. */
-export interface LanguageCompletionSnippet {
+export interface Snippet {
 	readonly text: string;
-	readonly placeholderGroups: readonly LanguageCompletionSnippetPlaceholderGroup[];
+	readonly placeholderGroups: readonly SnippetPlaceholderGroup[];
 	/** Omitted when the snippet has no tabstop-derived transform result. */
-	readonly transforms?: readonly LanguageCompletionSnippetTransformOccurrence[];
+	readonly transforms?: readonly SnippetTransformOccurrence[];
 }
 
 /** Resolves one snippet variable from the caller-owned editor context. */
-export interface LanguageCompletionSnippetVariableResolver {
+export interface SnippetVariableResolver {
 	resolveVariable(name: string): string | undefined;
 }
 
-export interface LanguageCompletionSnippetOptions {
-	readonly variables?: LanguageCompletionSnippetVariableResolver;
+export interface SnippetOptions {
+	readonly variables?: SnippetVariableResolver;
 	/** Permits syntax-only validation before an editor context is available. */
 	readonly allowUnresolvedVariables?: boolean;
 }
@@ -50,7 +50,7 @@ export interface LanguageCompletionSnippetOptions {
  * resolves caller-provided variables, and applies regular-expression
  * transforms without introducing browser or model dependencies.
  */
-export function parseLanguageCompletionSnippet(source: string, options: LanguageCompletionSnippetOptions = {}): LanguageCompletionSnippet {
+export function parseSnippet(source: string, options: SnippetOptions = {}): Snippet {
 	if (typeof source !== "string") throw new TypeError("Language completion snippet must be a string");
 	if (options.variables !== undefined && typeof options.variables.resolveVariable !== "function") {
 		throw new TypeError("Language completion snippet variables require a resolver");
@@ -83,8 +83,8 @@ export function parseLanguageCompletionSnippet(source: string, options: Language
 
 interface ParsedSegment {
 	readonly text: string;
-	readonly placeholders: Map<number, LanguageCompletionSnippetPlaceholder[]>;
-	readonly transforms: readonly LanguageCompletionSnippetTransformOccurrence[];
+	readonly placeholders: Map<number, SnippetPlaceholder[]>;
+	readonly transforms: readonly SnippetTransformOccurrence[];
 	readonly nextOffset: number;
 }
 
@@ -133,11 +133,11 @@ class SnippetText {
 	}
 }
 
-function parseSegment(source: string, startOffset: number, stopsAtClosingBrace: boolean, tabstopValues: Map<number, SnippetTabstopValue>, variables: LanguageCompletionSnippetVariableResolver | undefined, allowUnresolvedVariables: boolean): ParsedSegment {
+function parseSegment(source: string, startOffset: number, stopsAtClosingBrace: boolean, tabstopValues: Map<number, SnippetTabstopValue>, variables: SnippetVariableResolver | undefined, allowUnresolvedVariables: boolean): ParsedSegment {
 	const text = new SnippetText();
 	let offset = startOffset;
-	const placeholders = new Map<number, LanguageCompletionSnippetPlaceholder[]>();
-	const transforms: LanguageCompletionSnippetTransformOccurrence[] = [];
+	const placeholders = new Map<number, SnippetPlaceholder[]>();
+	const transforms: SnippetTransformOccurrence[] = [];
 	while (offset < source.length) {
 		const character = source[offset]!;
 		if (character === "}" && stopsAtClosingBrace) {
@@ -184,7 +184,7 @@ function parseSegment(source: string, startOffset: number, stopsAtClosingBrace: 
 			if (value !== undefined || token.defaultText !== undefined) {
 				text.append(() => {
 					const resolvedText = value ?? token.defaultText!.text;
-					return token.transform ? applyLanguageCompletionSnippetTransform(resolvedText, token.transform) : resolvedText;
+					return token.transform ? applySnippetTransform(resolvedText, token.transform) : resolvedText;
 				});
 				if (value === undefined && token.defaultText && !token.transform) {
 					mergePlaceholders(placeholders, token.defaultText.placeholders, placeholderStart);
@@ -198,7 +198,7 @@ function parseSegment(source: string, startOffset: number, stopsAtClosingBrace: 
 		}
 		if (token.transform) {
 			const transform = token.transform;
-			text.append(() => applyLanguageCompletionSnippetTransform(tabstopValues.get(token.index)?.text ?? "", transform));
+			text.append(() => applySnippetTransform(tabstopValues.get(token.index)?.text ?? "", transform));
 			const transformEnd = text.position();
 			transforms.push(Object.freeze({
 				index: token.index,
@@ -240,7 +240,7 @@ function parseSegment(source: string, startOffset: number, stopsAtClosingBrace: 
 	return { get text() { return text.text; }, placeholders, transforms, nextOffset: offset };
 }
 
-function readSnippetToken(source: string, offset: number, tabstopValues: Map<number, SnippetTabstopValue>, variables: LanguageCompletionSnippetVariableResolver | undefined, allowUnresolvedVariables: boolean): SnippetToken {
+function readSnippetToken(source: string, offset: number, tabstopValues: Map<number, SnippetTabstopValue>, variables: SnippetVariableResolver | undefined, allowUnresolvedVariables: boolean): SnippetToken {
 	const next = source[offset + 1];
 	if (next === undefined) throw new SyntaxError("Language completion snippet must not end with $");
 	if (isDigit(next)) {
@@ -267,7 +267,7 @@ function readSnippetToken(source: string, offset: number, tabstopValues: Map<num
 	return { kind: "tabstop", index, defaultText, nextOffset: defaultText.nextOffset };
 }
 
-function readVariable(source: string, nameStartOffset: number, braced: boolean, tabstopValues: Map<number, SnippetTabstopValue>, variables: LanguageCompletionSnippetVariableResolver | undefined, allowUnresolvedVariables: boolean): SnippetVariableToken {
+function readVariable(source: string, nameStartOffset: number, braced: boolean, tabstopValues: Map<number, SnippetTabstopValue>, variables: SnippetVariableResolver | undefined, allowUnresolvedVariables: boolean): SnippetVariableToken {
 	const nameEndOffset = readVariableNameEnd(source, nameStartOffset);
 	if (nameEndOffset === nameStartOffset) throw new SyntaxError("Language completion snippet variable must have a name");
 	const name = source.slice(nameStartOffset, nameEndOffset);
@@ -288,7 +288,7 @@ interface SnippetTabstopToken {
 	readonly index: number;
 	readonly defaultText?: ParsedSegment;
 	readonly choices?: readonly string[];
-	readonly transform?: LanguageCompletionSnippetTransform;
+	readonly transform?: SnippetTransform;
 	readonly nextOffset: number;
 }
 
@@ -296,13 +296,13 @@ interface SnippetVariableToken {
 	readonly kind: "variable";
 	readonly name: string;
 	readonly defaultText?: ParsedSegment;
-	readonly transform?: LanguageCompletionSnippetTransform;
+	readonly transform?: SnippetTransform;
 	readonly nextOffset: number;
 }
 
 type SnippetToken = SnippetTabstopToken | SnippetVariableToken;
 
-function readTransform(source: string, slashOffset: number): { readonly transform: LanguageCompletionSnippetTransform; readonly nextOffset: number } {
+function readTransform(source: string, slashOffset: number): { readonly transform: SnippetTransform; readonly nextOffset: number } {
 	const pattern = readTransformPart(source, slashOffset + 1, false);
 	const format = readTransformPart(source, pattern.nextOffset, true);
 	let options = "";
@@ -315,7 +315,7 @@ function readTransform(source: string, slashOffset: number): { readonly transfor
 	}
 	if (source[offset] !== "}") throw new SyntaxError("Unclosed language completion snippet transform");
 	return Object.freeze({
-		transform: createLanguageCompletionSnippetTransform(pattern.text, format.text, options),
+		transform: createSnippetTransform(pattern.text, format.text, options),
 		nextOffset: offset + 1,
 	});
 }
@@ -386,7 +386,7 @@ function readChoice(source: string, startOffset: number): { readonly values: rea
 	throw new SyntaxError("Unclosed choice in language completion snippet");
 }
 
-function mergePlaceholders(target: Map<number, LanguageCompletionSnippetPlaceholder[]>, source: Map<number, LanguageCompletionSnippetPlaceholder[]>, offset: () => number): void {
+function mergePlaceholders(target: Map<number, SnippetPlaceholder[]>, source: Map<number, SnippetPlaceholder[]>, offset: () => number): void {
 	for (const [index, placeholders] of source) {
 		const targetPlaceholders = target.get(index) ?? [];
 		targetPlaceholders.push(...placeholders.map(placeholder => ({
@@ -398,7 +398,7 @@ function mergePlaceholders(target: Map<number, LanguageCompletionSnippetPlacehol
 	}
 }
 
-function mergeTransforms(target: LanguageCompletionSnippetTransformOccurrence[], source: readonly LanguageCompletionSnippetTransformOccurrence[], offset: () => number): void {
+function mergeTransforms(target: SnippetTransformOccurrence[], source: readonly SnippetTransformOccurrence[], offset: () => number): void {
 	target.push(...source.map(transform => Object.freeze({
 		index: transform.index,
 		transform: transform.transform,

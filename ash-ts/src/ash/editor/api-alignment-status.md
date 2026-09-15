@@ -4,9 +4,11 @@
 
 ## 当前结论
 
+- 2026-09-15 命名整理（用户已确认）：`contrib/snippet/common/languageCompletionSnippetParser.ts` 改为 `contrib/snippet/common/snippetParser.ts`，作为 Ash 的纯解析模块继续供 common 层使用；导出统一为 `parseSnippet`、`Snippet`、`SnippetOptions`、`SnippetVariableResolver` 等名称，转换函数同步使用 `createSnippetTransform` / `applySnippetTransform`。`contrib/suggest/test/common/suggestModel.test.ts` 移至 `contrib/suggest/test/browser/suggestModel.test.ts`，对应真实 Widget 测试环境。两个旧路径退出，生产调用与测试同步迁移；本次不代表完整 VS Code Snippet API 对齐。验证：243/243 个 Editor 单测文件、86 项浏览器回归、2 个扩展调用方测试文件、结构与类型检查及 Stanza 构建通过。
+
 - 2026-09-15 前置镜像与嵌套选项修复：普通 `$1` 镜像在完整声明解析后读取默认值，选项列表在嵌套合并与前置引用中保持完整；最终输出继续只包含实际存在的选项字段。13 项解析单测、全量 243/243 个 Editor 单测文件、86 项浏览器回归（含 3 项选项切换/撤销/重做测试）、结构与类型检查及 Stanza 构建通过。完整 Suggest/Snippet API 仍待验收。
 
-- 2026-09-15 片段选项修复：选项、镜像与转换结果通过一次 `ICodeEditor.executeEdits` 同步修改，一次撤销即可整体恢复；当前选项从模型文本读取，撤销或重做后继续切换不会使用旧索引。17 项补全会话单测、84 项完整浏览器回归（含 2 项片段键盘测试）、结构检查、类型检查及 Stanza 构建通过。完整 Suggest/Snippet API 仍待验收；后续已按用户的修复请求，在现有 `contrib/snippet/common/languageCompletionSnippetParser.ts` 中修复前置转换的首次展开：解析完声明后计算转换文本和最终范围，保持现有解析入口与调用方。11 项解析单测、Editor 全量 243/243 个单测文件、85 项浏览器回归、结构与类型检查及 Stanza 构建通过；该修复不改变完整 API 对齐状态。
+- 2026-09-15 片段选项修复：选项、镜像与转换结果通过一次 `ICodeEditor.executeEdits` 同步修改，一次撤销即可整体恢复；当前选项从模型文本读取，撤销或重做后继续切换不会使用旧索引。17 项补全会话单测、84 项完整浏览器回归（含 2 项片段键盘测试）、结构检查、类型检查及 Stanza 构建通过。完整 Suggest/Snippet API 仍待验收；后续已按用户的修复请求，在现有 `contrib/snippet/common/snippetParser.ts` 中修复前置转换的首次展开：解析完声明后计算转换文本和最终范围，保持现有解析入口与调用方。11 项解析单测、Editor 全量 243/243 个单测文件、85 项浏览器回归、结构与类型检查及 Stanza 构建通过；该修复不改变完整 API 对齐状态。
 
 - 2026-09-15 补全会话与 View Zone 修复：用户确认将 `contrib/suggest/common/languageCompletionSessionController.ts` 迁入 `contrib/suggest/browser/suggestModel.ts`，将 `contrib/snippet/common/languageCompletionSnippetSession.ts` 迁入 `contrib/snippet/browser/snippetSession.ts`，并删除两个旧文件。生产贡献与聊天输入统一使用 `ICodeEditor`，两个会话不再导入内部光标控制器；模型切换和编辑器释放会取消请求并释放会话。只读补全不再报告接受成功或执行后续命令，片段选项与转换遵守编辑器只读边界，Tab/Shift+Tab 结束前一个占位符的撤销组。View Zone 回调保留区域对象作为 `this`，覆盖折叠隐藏、展开恢复与滚动通知。两个恢复同路径的声明加入待处理表；这批完成依赖迁移与行为修复，不代表完整 Suggest/Snippet API 已对齐。 验证：Editor 全量单测 243/243 个文件通过；模型切换通知修正后，补全会话、聊天输入与架构共 47 项复验通过，最终浏览器 83/83 项、Electron 文件打开/编辑/保存 1 项、聊天输入 1 项、Stanza 与桌面构建通过。完整结构与浏览器检查入口通过；既有 7 份品牌替换式 CSS 仍作为债务记录，本批未改 CSS。
 

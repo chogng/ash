@@ -1,8 +1,8 @@
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { rot } from "../../../../base/common/numbers.js";
 import { type ICodeEditor } from "../../../browser/editorBrowser.js";
-import { type LanguageCompletionSnippet } from "../common/languageCompletionSnippetParser.js";
-import { applyLanguageCompletionSnippetTransform, type LanguageCompletionSnippetTransform } from "../common/snippetTransform.js";
+import { type Snippet } from "../common/snippetParser.js";
+import { applySnippetTransform, type SnippetTransform } from "../common/snippetTransform.js";
 import { Selection } from "../../../common/core/selection.js";
 import { Range } from "../../../common/core/range.js";
 import { type TextModel } from "../../../common/model/textModel.js";
@@ -26,7 +26,7 @@ export class SnippetSession extends Disposable {
 		private readonly model: TextModel,
 		private readonly editor: ICodeEditor,
 		insertionStartOffset: number,
-		snippet: LanguageCompletionSnippet,
+		snippet: Snippet,
 		finalOffsetWithinInsertion = snippet.text.length,
 	) {
 		super();
@@ -183,7 +183,7 @@ export class SnippetSession extends Disposable {
 		}));
 		for (const transform of this.transforms) {
 			if (transform.index !== group.index) continue;
-			const transformed = applyLanguageCompletionSnippetTransform(text, transform.transform);
+			const transformed = applySnippetTransform(text, transform.transform);
 			if (model.getTextInRange(transform.range.range) !== transformed) {
 				edits.push({ range: transform.range.range, text: transformed });
 			}
@@ -206,7 +206,7 @@ export class SnippetSession extends Disposable {
 		const model = this.model;
 		const sourceText = model.getTextInRange(sourceRange.range);
 		const edits = transforms.flatMap(transform => {
-			const text = applyLanguageCompletionSnippetTransform(sourceText, transform.transform);
+			const text = applySnippetTransform(sourceText, transform.transform);
 			return model.getTextInRange(transform.range.range) === text ? [] : [{ range: transform.range.range, text }];
 		});
 		if (edits.length > 0) this.editor.executeEdits("snippet.transform", edits);
@@ -222,6 +222,6 @@ interface SnippetTrackedGroup {
 
 interface SnippetTrackedTransform {
 	readonly index: number;
-	readonly transform: LanguageCompletionSnippetTransform;
+	readonly transform: SnippetTransform;
 	readonly range: TrackedRange;
 }

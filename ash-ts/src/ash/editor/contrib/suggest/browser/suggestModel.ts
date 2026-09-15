@@ -6,7 +6,7 @@ import { EditorOption } from "../../../common/config/editorOptions.js";
 import { type VersionedLanguageResult } from "../../../common/languages/languageRequestCoordinator.js";
 import { type VersionedLanguageResultStore } from "../../../common/languages/languageResultStore.js";
 import { assertLanguageCompletionCommitCharacter, LanguageCompletionInsertTextFormat, normalizeLanguageCompletionItemDetails, type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionItemResolver, type LanguageCompletionResolveRequest, type LanguageCompletionResult } from "../../../common/languages/completion/languageCompletions.js";
-import { parseLanguageCompletionSnippet, type LanguageCompletionSnippet, type LanguageCompletionSnippetVariableResolver } from "../../snippet/common/languageCompletionSnippetParser.js";
+import { parseSnippet, type Snippet, type SnippetVariableResolver } from "../../snippet/common/snippetParser.js";
 import { SnippetSession } from "../../snippet/browser/snippetSession.js";
 import { Position } from "../../../common/core/position.js";
 import { Selection } from "../../../common/core/selection.js";
@@ -53,7 +53,7 @@ export interface LanguageCompletionSessionOptions {
 	readonly onResolveError?: (error: unknown) => void;
 	readonly onDidAccept?: (item: LanguageCompletionItem) => void | Promise<void>;
 	/** Editor-context variables made available to accepted completion snippets. */
-	readonly snippetVariables?: LanguageCompletionSnippetVariableResolver;
+	readonly snippetVariables?: SnippetVariableResolver;
 }
 
 /**
@@ -67,7 +67,7 @@ export class SuggestModel extends Disposable {
 	private readonly resolver: LanguageCompletionItemResolver | undefined;
 	private readonly onResolveError: (error: unknown) => void;
 	private readonly onDidAccept: ((item: LanguageCompletionItem) => void | Promise<void>) | undefined;
-	private readonly snippetVariables: LanguageCompletionSnippetVariableResolver | undefined;
+	private readonly snippetVariables: SnippetVariableResolver | undefined;
 	private resolveController: AbortController | undefined;
 	private snippetSession: SnippetSession | undefined;
 	private accepting = false;
@@ -359,7 +359,7 @@ export class SuggestModel extends Disposable {
 	}
 }
 
-function createLanguageCompletionAcceptCommand(model: TextModel, editor: ICodeEditor, item: LanguageCompletionItem, commitCharacter?: string, snippetVariables?: LanguageCompletionSnippetVariableResolver): ICommand {
+function createLanguageCompletionAcceptCommand(model: TextModel, editor: ICodeEditor, item: LanguageCompletionItem, commitCharacter?: string, snippetVariables?: SnippetVariableResolver): ICommand {
 	if (model !== editor.getModel()) {
 		throw new TypeError("Language completion command and editor must share one text model");
 	}
@@ -407,13 +407,13 @@ class LanguageCompletionAcceptCommand implements ICommand {
 
 interface LanguageCompletionInsertion {
 	readonly text: string;
-	readonly snippet: LanguageCompletionSnippet | undefined;
+	readonly snippet: Snippet | undefined;
 	readonly resultStartOffset: number;
 }
 
-function resolveLanguageCompletionInsertion(item: LanguageCompletionItem, commitCharacter: string | undefined, model?: TextModel, snippetVariables?: LanguageCompletionSnippetVariableResolver): LanguageCompletionInsertion {
+function resolveLanguageCompletionInsertion(item: LanguageCompletionItem, commitCharacter: string | undefined, model?: TextModel, snippetVariables?: SnippetVariableResolver): LanguageCompletionInsertion {
 	const snippet = item.insertTextFormat === LanguageCompletionInsertTextFormat.Snippet
-		? parseLanguageCompletionSnippet(normalizeTextLineEndings(item.insertText), { variables: snippetVariables })
+		? parseSnippet(normalizeTextLineEndings(item.insertText), { variables: snippetVariables })
 		: undefined;
 	const text = (snippet?.text ?? normalizeTextLineEndings(item.insertText)) + (commitCharacter ?? "");
 	const primaryStartOffset = model?.offsetAt(item.range.getStartPosition()) ?? 0;
