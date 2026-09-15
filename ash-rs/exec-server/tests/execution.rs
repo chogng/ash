@@ -86,6 +86,7 @@ fn command(id: &str, script: &str) -> ProcessStart {
 fn read(client: &ExecClient, id: &str) -> ProcessSnapshot {
     match client
         .request(Request::ProcessRead(ProcessRead {
+            wait_millis: 0,
             operation_id: id.into(),
             stdout_cursor: 0,
             stderr_cursor: 0,
@@ -551,12 +552,109 @@ fn interrupting_a_restricted_terminal_stops_the_workload() {
 fn completed_output_remains_available_after_another_process_starts() {
     let host = Host::start();
     let client = host.client();
-    client.request(Request::ProcessStart(command("first", "printf first"))).unwrap();
+    client
+        .request(Request::ProcessStart(command("first", "printf first")))
+        .unwrap();
     let first = finish(&client, "first");
-    client.request(Request::ProcessStart(command("second", "printf second"))).unwrap();
+    client
+        .request(Request::ProcessStart(command("second", "printf second")))
+        .unwrap();
     let second = finish(&client, "second");
     assert_eq!(second.stdout.text, "second");
     let retained = read(&client, "first");
     assert_eq!(retained.state, first.state);
     assert_eq!(retained.stdout, first.stdout);
+}
+
+#[test]
+fn persistent_connection_preserves_buffered_request_frames() {
+    use std::io::Write;
+    let host = Host::start();
+    let mut stream = std::net::TcpStream::connect(host.address).unwrap();
+    stream
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .unwrap();
+    let mut frame = serde_json::to_vec(&exec_server_protocol::Message {
+        version: exec_server_protocol::VERSION,
+        token: "a1".repeat(32),
+        incarnation: None,
+        request: Request::EnvironmentInfo,
+    })
+    .unwrap();
+    frame.push(b'\n');
+    // Both frames can arrive in the first buffered read. Neither may be discarded.
+    stream
+        .write_all(&[frame.as_slice(), frame.as_slice()].concat())
+        .unwrap();
+    let mut reader = BufReader::new(stream);
+    for _ in 0..2 {
+        let mut line = String::new();
+        reader.read_line(&mut line).unwrap();
+        assert!(matches!(
+            serde_json::from_str::<Response>(&line).unwrap(),
+            Response::Environment(_)
+        ));
+    }
+}
+
+#[test]
+fn process_read_waits_for_output_and_limits_the_wait_budget() {
+    let host = Host::start();
+    let client = host.client();
+    let mut start = command("wait", "printf ready; read answer; printf '%s' \"$answer\"");
+    start.input = exec_server_protocol::ProcessInput::Open;
+    client.request(Request::ProcessStart(start)).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let ready = loop {
+        let snapshot = read(&client, "wait");
+        if snapshot.stdout.text == "ready" {
+            break snapshot;
+        }
+        assert!(Instant::now() < deadline);
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    let request = ProcessRead {
+        operation_id: "wait".into(),
+        stdout_cursor: ready.stdout.next_cursor,
+        stderr_cursor: ready.stderr.next_cursor,
+        wait_millis: 200,
+    };
+    let started = Instant::now();
+    let Response::Process(snapshot) = client
+        .request(Request::ProcessRead(request.clone()))
+        .unwrap()
+    else {
+        panic!("expected snapshot");
+    };
+    assert!(started.elapsed() >= Duration::from_millis(150));
+    assert_eq!(snapshot.state, ProcessState::Running);
+    assert!(snapshot.stdout.text.is_empty());
+    let writer = client.clone();
+    let write = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(50));
+        writer
+            .request(Request::ProcessWrite {
+                operation_id: "wait".into(),
+                bytes: b"done\n".to_vec(),
+            })
+            .unwrap();
+    });
+    let Response::Process(snapshot) = client
+        .request(Request::ProcessRead(ProcessRead {
+            wait_millis: 1000,
+            ..request.clone()
+        }))
+        .unwrap()
+    else {
+        panic!("expected snapshot");
+    };
+    write.join().unwrap();
+    assert_eq!(snapshot.stdout.text, "done");
+    assert!(matches!(
+        client.request(Request::ProcessRead(ProcessRead {
+            wait_millis: exec_server_protocol::MAX_READ_WAIT_MILLIS + 1,
+            ..request
+        })),
+        Err(exec_server::Error::Remote(ExecError::InvalidInput))
+    ));
 }

@@ -10,6 +10,7 @@ use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Read;
 use std::io::Write;
+use std::net::Shutdown;
 use std::net::SocketAddr;
 use std::net::TcpListener;
 use std::net::TcpStream;
@@ -58,6 +59,9 @@ impl ExecListener {
                                 drop(stream);
                                 continue;
                             }
+                            let Ok(shutdown) = stream.try_clone() else {
+                                continue;
+                            };
                             active.fetch_add(1, Ordering::AcqRel);
                             let active_count = active.clone();
                             let environment = environment.clone();
@@ -67,7 +71,7 @@ impl ExecListener {
                                     active_count.fetch_sub(1, Ordering::AcqRel);
                                 },
                             ) {
-                                Ok(worker) => workers.push(worker),
+                                Ok(worker) => workers.push((worker, shutdown)),
                                 Err(_) => {
                                     active.fetch_sub(1, Ordering::AcqRel);
                                 }
@@ -80,14 +84,17 @@ impl ExecListener {
                     }
                     let mut index = 0;
                     while index < workers.len() {
-                        if workers[index].is_finished() {
-                            let _ = workers.swap_remove(index).join();
+                        if workers[index].0.is_finished() {
+                            let _ = workers.swap_remove(index).0.join();
                         } else {
                             index += 1;
                         }
                     }
                 }
-                for worker in workers {
+                for (_, socket) in &workers {
+                    let _ = socket.shutdown(Shutdown::Both);
+                }
+                for (worker, _) in workers {
                     let _ = worker.join();
                 }
             })?;
@@ -114,47 +121,55 @@ pub(crate) fn valid_token(token: &str) -> bool {
     token.len() == 64 && token.bytes().all(|c| c.is_ascii_hexdigit())
 }
 
-fn serve(
-    mut stream: TcpStream,
-    hash: [u8; 32],
-    environment: &LocalEnvironment,
-) -> Result<(), Error> {
+fn serve(stream: TcpStream, hash: [u8; 32], environment: &LocalEnvironment) -> Result<(), Error> {
     configure(&stream)?;
-    let message: Message = read_frame(&mut stream)?;
-    let supplied: [u8; 32] = Sha256::digest(message.token.as_bytes()).into();
-    let matches = hash
-        .iter()
-        .zip(supplied)
-        .fold(0u8, |diff, (left, right)| diff | (*left ^ right))
-        == 0;
-    let response = if !matches {
-        Response::Error(ExecError::Unauthorized)
-    } else if message.version != exec_server_protocol::VERSION {
-        Response::Error(ExecError::IncompatibleVersion)
-    } else if !matches!(message.request, Request::EnvironmentInfo)
-        && message.incarnation.as_deref() != Some(environment.info().incarnation.as_str())
-    {
-        Response::Error(ExecError::StaleEnvironment)
-    } else {
-        environment.request(message.request)
-    };
-    write_frame(&mut stream, &response)
+    let mut reader = BufReader::new(stream);
+    loop {
+        let message: Message = read_frame(&mut reader)?;
+        let supplied: [u8; 32] = Sha256::digest(message.token.as_bytes()).into();
+        let matches = hash
+            .iter()
+            .zip(supplied)
+            .fold(0u8, |diff, (left, right)| diff | (*left ^ right))
+            == 0;
+        let response = if !matches {
+            Response::Error(ExecError::Unauthorized)
+        } else if message.version != exec_server_protocol::VERSION {
+            Response::Error(ExecError::IncompatibleVersion)
+        } else if !matches!(message.request, Request::EnvironmentInfo)
+            && message.incarnation.as_deref() != Some(environment.info().incarnation.as_str())
+        {
+            Response::Error(ExecError::StaleEnvironment)
+        } else {
+            environment.request(message.request)
+        };
+        write_frame(reader.get_mut(), &response)?;
+    }
 }
 
 pub(crate) fn configure(stream: &TcpStream) -> Result<(), Error> {
+    // Accepted sockets can inherit the listener's nonblocking mode (notably on macOS).
+    stream.set_nonblocking(false)?;
     stream.set_read_timeout(Some(TIMEOUT))?;
     stream.set_write_timeout(Some(TIMEOUT))?;
     stream.set_nodelay(true)?;
     Ok(())
 }
 pub(crate) fn read_frame<T: serde::de::DeserializeOwned>(
-    stream: &mut TcpStream,
+    reader: &mut impl BufRead,
 ) -> Result<T, Error> {
     let mut bytes = Vec::new();
-    BufReader::new(stream.take((exec_server_protocol::MAX_FRAME_BYTES + 1) as u64))
+    reader
+        .take((exec_server_protocol::MAX_FRAME_BYTES + 1) as u64)
         .read_until(b'\n', &mut bytes)?;
-    if bytes.len() > exec_server_protocol::MAX_FRAME_BYTES || bytes.last() != Some(&b'\n') {
+    if bytes.is_empty() {
+        return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof).into());
+    }
+    if bytes.len() > exec_server_protocol::MAX_FRAME_BYTES {
         return Err(Error::Protocol);
+    }
+    if bytes.last() != Some(&b'\n') {
+        return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof).into());
     }
     serde_json::from_slice(&bytes).map_err(|_| Error::Protocol)
 }

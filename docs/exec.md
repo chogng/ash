@@ -106,8 +106,13 @@ ash-tool-executor
   → local backend of ash-exec-server
 
 ash-exec-server-protocol
-  → process / PTY / filesystem / HTTP execution contract
+  → process / PTY / filesystem execution contract
 ```
+
+执行库、本地调用和独立服务共享进程资源所有者。Workspace 的索引、搜索、Git 与监听仍贴近
+代码运行；App Server 在内部区分 Workspace 资源、交互式执行资源与 Agent 装配。执行协议的
+连接复用、等待上限和恢复语义由上述 crate README 维护。当前 Remote 仍运行完整 App Server，
+不将内部职责分组描述为已经完成跨宿主的 Agent 与 Workspace 部署分离。
 
 不能直接把当前 `ToolExecutor` 扩张为远程 Agent scheduler，否则 scheduler job、Agent lifecycle、
 process lifecycle 和 sandbox authority 会混在同一 crate。

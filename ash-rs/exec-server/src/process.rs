@@ -28,6 +28,7 @@ use exec_server_protocol::ProcessStart;
 use exec_server_protocol::ProcessState;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::Condvar;
 use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
@@ -48,10 +49,12 @@ struct Record {
     request: ProcessStart,
     cancellation: CancellationSource,
     state: Mutex<LaunchState>,
+    launched: Condvar,
     finished: Mutex<Option<Instant>>,
 }
 // Only preparation failures lack a process session. Running and completed process data live
 // exclusively in ProcessExecutor; this table owns RPC idempotency and expiration.
+#[derive(Clone)]
 enum LaunchState {
     Starting,
     Session(CommandSessionId),
@@ -112,7 +115,7 @@ impl Processes {
             if record.request != request {
                 return Err(ExecError::Conflict);
             }
-            return self.snapshot(record, 0, 0);
+            return self.snapshot(record, 0, 0, Duration::ZERO);
         }
         if records.len() >= MAX_RECORDS
             || records
@@ -127,6 +130,7 @@ impl Processes {
             request: request.clone(),
             cancellation: CancellationSource::new(),
             state: Mutex::new(LaunchState::Starting),
+            launched: Condvar::new(),
             finished: Mutex::new(None),
         });
         records.insert(request.operation_id, record.clone());
@@ -161,24 +165,32 @@ impl Processes {
             }
             Err(_) => record.reject("could not start execution worker".into()),
         }
-        self.snapshot(&record, 0, 0)
+        self.snapshot(&record, 0, 0, Duration::ZERO)
     }
     fn snapshot(
         &self,
         record: &Record,
         stdout: u64,
         stderr: u64,
+        wait: Duration,
     ) -> Result<ProcessSnapshot, ExecError> {
+        let deadline = Instant::now() + wait;
         let state = record.state.lock().map_err(|_| ExecError::Busy)?;
-        let (state, out, err) = match &*state {
+        let (state, _) = record
+            .launched
+            .wait_timeout_while(state, wait, |state| matches!(state, LaunchState::Starting))
+            .map_err(|_| ExecError::Busy)?;
+        let launch = state.clone();
+        drop(state);
+        let (state, out, err) = match launch {
             LaunchState::Session(id) => {
                 let update = self
                     .executor
                     .read_session(
                         &record.owner(),
-                        id,
+                        &id,
                         CommandSessionCursor { stdout, stderr },
-                        Duration::ZERO,
+                        deadline.saturating_duration_since(Instant::now()),
                     )
                     .map_err(|_| ExecError::InvalidInput)?;
                 (
@@ -193,7 +205,7 @@ impl Processes {
                 }
                 let state = match state {
                     LaunchState::Starting => ProcessState::Running,
-                    LaunchState::Rejected(state) => state.clone(),
+                    LaunchState::Rejected(state) => state,
                     _ => unreachable!(),
                 };
                 (
@@ -219,16 +231,20 @@ impl Processes {
         })
     }
     pub fn read(&self, request: &ProcessRead) -> Result<ProcessSnapshot, ExecError> {
+        if request.wait_millis > exec_server_protocol::MAX_READ_WAIT_MILLIS {
+            return Err(ExecError::InvalidInput);
+        }
         self.snapshot(
             self.record(&request.operation_id)?.as_ref(),
             request.stdout_cursor,
             request.stderr_cursor,
+            Duration::from_millis(request.wait_millis),
         )
     }
     pub fn cancel(&self, id: &str) -> Result<ProcessSnapshot, ExecError> {
         let record = self.record(id)?;
         record.cancellation.cancel();
-        self.snapshot(&record, 0, 0)
+        self.snapshot(&record, 0, 0, Duration::ZERO)
     }
     pub fn write(&self, id: &str, bytes: Vec<u8>) -> Result<(), ExecError> {
         if bytes.len() > exec_server_protocol::MAX_OUTPUT_BYTES {
@@ -310,6 +326,7 @@ impl Record {
         if let Ok(mut state) = self.state.lock() {
             *state = LaunchState::Rejected(ProcessState::Failed { message });
         }
+        self.launched.notify_all();
         self.finish();
     }
     fn finish(&self) {
@@ -358,6 +375,7 @@ fn run(record: &Record, executor: &ProcessExecutor<SandboxBackends>, policy: San
             if let Ok(mut launch) = record.state.lock() {
                 *launch = LaunchState::Rejected(state);
             }
+            record.launched.notify_all();
             record.finish();
             return;
         }
@@ -371,6 +389,7 @@ fn run(record: &Record, executor: &ProcessExecutor<SandboxBackends>, policy: San
     if let Ok(mut state) = record.state.lock() {
         *state = LaunchState::Session(id.clone());
     }
+    record.launched.notify_all();
     // Observe completion without copying output or maintaining a second process state machine.
     let observation = CancellationSource::new();
     let _ = pollster::block_on(executor.wait_session(

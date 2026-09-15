@@ -5,10 +5,11 @@ pub mod terminal;
 use serde::Deserialize;
 use serde::Serialize;
 
-pub const VERSION: u32 = 1;
+pub const VERSION: u32 = 2;
 pub const MAX_FRAME_BYTES: usize = 2 * 1024 * 1024;
 pub const MAX_FILE_BYTES: usize = 256 * 1024;
 pub const MAX_OUTPUT_BYTES: usize = 64 * 1024;
+pub const MAX_READ_WAIT_MILLIS: u64 = 1000;
 
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -127,6 +128,8 @@ pub struct ProcessRead {
     pub operation_id: String,
     pub stdout_cursor: u64,
     pub stderr_cursor: u64,
+    /// Wait for new output or a terminal state; zero returns the current snapshot immediately.
+    pub wait_millis: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]

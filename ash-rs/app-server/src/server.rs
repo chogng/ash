@@ -1358,7 +1358,7 @@ impl AppServer {
         dir: ash_file_access::Dir,
     ) -> Result<Self, fs_watcher::FileSystemWatcherError> {
         let watcher = fs_watcher::FileSystemWatcher::start(dir, Arc::clone(&self.updates))?;
-        self.env_runtime_mut()._file_system_watcher = Some(watcher);
+        self.env_runtime_mut().workspace._file_system_watcher = Some(watcher);
         Ok(self)
     }
 
@@ -1406,8 +1406,8 @@ impl AppServer {
     ) -> Result<Self, git_runtime::GitRuntimeError> {
         let runtime = git_runtime::GitRuntime::new(authorization, Arc::clone(&self.updates))?;
         let state = self.env_runtime_mut();
-        state._git_watcher = Some(runtime.start_watching());
-        state.git = Some(runtime);
+        state.workspace._git_watcher = Some(runtime.start_watching());
+        state.workspace.git = Some(runtime);
         Ok(self)
     }
 
@@ -1418,7 +1418,7 @@ impl AppServer {
         ripgrep: ash_shell_command::RipgrepExecutable,
     ) -> Self {
         let search = Arc::new(ash_content_search::ContentSearchService::new(dir, ripgrep));
-        self.env_runtime_mut().content_search = Some(search);
+        self.env_runtime_mut().workspace.content_search = Some(search);
         self
     }
 
@@ -1429,7 +1429,7 @@ impl AppServer {
         authorization: ash_file_access::Authorization,
     ) -> Result<Self, exec_server::terminal::TerminalError> {
         let terminals = Arc::new(exec_server::terminal::TerminalService::new(authorization)?);
-        self.env_runtime_mut().terminals = Some(terminals);
+        self.env_runtime_mut().execution.terminals = Some(terminals);
         Ok(self)
     }
 
@@ -1445,7 +1445,7 @@ impl AppServer {
             process_execution,
             exec_server::terminal::safe_process_environment(),
         )?);
-        self.env_runtime_mut().debug_adapters = Some(service);
+        self.env_runtime_mut().execution.debug_adapters = Some(service);
         Ok(self)
     }
 

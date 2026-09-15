@@ -9,6 +9,13 @@
 - 不保存 Session、Thread、Turn、Agent、模型和审批状态。
 - 依赖方向：App Server/tool-executor → exec-server → sandboxing/file-system/utils-pty；协议独立于实现。
 
+## 构建边界
+
+- 工作区消费者关闭默认 feature，使用执行库、客户端和 PTY 服务。
+- `server` feature 启用独立可执行入口及其安装、包租约、内部启动器和进程加固依赖。
+- 直接构建本包默认启用 `server`；现有开发与发布打包入口继续构建 `ash-exec-server`。
+- 本地调用直接进入处理器；Workspace 索引、搜索与 Git 不进入执行协议。
+
 ## 进程所有权
 
 - `execution::ProcessExecutor` 拥有执行准备、进程会话、输出游标、终态、超时及资源清理。
@@ -32,6 +39,8 @@ ash-exec-server --listen 127.0.0.1:9001 --root /work/project --environment worke
 - SIGTERM/SIGINT 关闭连接处理器并取消、回收活动进程。
 - 文件 API 的路径相对宿主授权根目录，不能使用客户端本机路径。
 - 客户端固定服务实例 ID；服务重启后拒绝旧实例上的操作。
+- 客户端复用连接，最多保留四条空闲连接；并发请求独立借用连接，长等待不占用连接池锁。
+- 空闲连接在下次调用时按两秒期限淘汰；服务读写超时为五秒，停止服务时主动关闭连接并回收处理线程。
 - 进程记录不依赖 TCP 连接；终态及输出保留一小时，最多 1024 条记录、32 个活动进程。
 - 保留期内相同操作 ID 与参数返回原执行；不同参数返回冲突。客户端不重发启动或写入，响应丢失后只查询；无法确认时报告结果未知。
 
@@ -44,6 +53,11 @@ App Server 设置 `ASH_EXEC_ENVIRONMENTS` 指向配置文件：
 `address` 是本机隧道入口；token 文件属于宿主配置。Core 的 `environment` 工具显式选择环境，
 经过原有审批后执行命令或文件操作，结果写回原 Thread。进程 ID 包含 Session/Thread/Turn/工具调用身份。
 Rust 宿主也可以通过 `LocalAppServerOptions::with_execution_environments` 装配本地或远程环境。
+
+App Server 每次观察最多等待 500 毫秒，输出变化或进程结束时提前返回。读取连接失败后，
+允许在五秒恢复窗口内发起新的观察；单次网络调用仍受传输超时限制。恢复保持原实例、操作 ID
+和输出游标，不重发启动、文件写入或控制请求。取消后继续查询终态，未确认终态则报告结果未知。
+这不提供服务重启后的进程恢复，也不改变远端 App Server 的部署方式。
 
 ## PTY 边界
 
@@ -58,5 +72,6 @@ Rust 宿主也可以通过 `LocalAppServerOptions::with_execution_environments` 
 
 ```sh
 just test ash-exec-server
+just check ash-exec-server --no-default-features --lib
 just rust-warnings ash-exec-server
 ```

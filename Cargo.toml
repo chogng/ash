@@ -193,7 +193,7 @@ publish = false
 version = "0.1.0"
 
 [workspace.dependencies]
-exec-server = { package = "ash-exec-server", path = "ash-rs/exec-server" }
+exec-server = { package = "ash-exec-server", path = "ash-rs/exec-server", default-features = false }
 exec-server-protocol = { package = "ash-exec-server-protocol", path = "ash-rs/exec-server-protocol" }
 cap-std = "4.0.3"
 winapi-util = "0.1.11"

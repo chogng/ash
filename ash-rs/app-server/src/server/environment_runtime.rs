@@ -86,6 +86,16 @@ pub(super) struct EnvRuntime {
     pub(super) selected_file_system: Option<Arc<dyn FileSystem>>,
     pub(super) dirs: BTreeMap<String, Grant>,
     pub(super) dir_file_systems: BTreeMap<String, Arc<dyn FileSystem>>,
+    pub(super) _dir_contributions: Option<Arc<DirContributions>>,
+    pub(super) dir_grants: Arc<DirGrants>,
+    pub(super) turn_executor: TurnExecutor,
+    pub(super) workspace: WorkspaceRuntime,
+    pub(super) execution: ExecutionRuntime,
+}
+
+/// Code-local analysis and watcher resources; never delegated to an execution target.
+#[derive(Default)]
+pub(super) struct WorkspaceRuntime {
     pub(super) _file_system_watcher: Option<FileSystemWatcher>,
     pub(super) _dir_file_system_watchers: Vec<FileSystemWatcher>,
     pub(super) session_dir_watchers: BTreeMap<(SessionId, PathBuf), SessionDirEntryWatcher>,
@@ -101,13 +111,15 @@ pub(super) struct EnvRuntime {
     pub(super) codebase_semantic: Option<Arc<CodebaseSemanticService>>,
     pub(super) codebase_semantic_job: Option<Arc<SemanticIndexJobController>>,
     pub(super) cloud_codebase: Option<Arc<CloudCodebaseController>>,
-    pub(super) _dir_contributions: Option<Arc<DirContributions>>,
+}
+
+/// Interactive execution resources bound to the selected directory authorization.
+#[derive(Default)]
+pub(super) struct ExecutionRuntime {
     pub(super) terminals: Option<Arc<exec_server::terminal::TerminalService>>,
     pub(super) dir_terminals: BTreeMap<String, Arc<exec_server::terminal::TerminalService>>,
     pub(super) debug_adapters: Option<Arc<crate::debug_service::DebugAdapterService>>,
     pub(super) dir_debug_adapters: BTreeMap<String, Arc<crate::debug_service::DebugAdapterService>>,
-    pub(super) dir_grants: Arc<DirGrants>,
-    pub(super) turn_executor: TurnExecutor,
 }
 
 pub(super) struct SessionDirEntryWatcher {
@@ -133,28 +145,11 @@ impl EnvRuntime {
             selected_file_system: None,
             dirs: BTreeMap::new(),
             dir_file_systems: BTreeMap::new(),
-            _file_system_watcher: None,
-            _dir_file_system_watchers: Vec::new(),
-            session_dir_watchers: BTreeMap::new(),
-            _git_watcher: None,
-            git: None,
-            content_search: None,
-            dir_content_search: BTreeMap::new(),
-            session_dir_search: BTreeMap::new(),
-            ripgrep: None,
-            agent_grep: None,
-            codebase: None,
-            symbol_index: None,
-            codebase_semantic: None,
-            codebase_semantic_job: None,
-            cloud_codebase: None,
             _dir_contributions: None,
-            terminals: None,
-            dir_terminals: BTreeMap::new(),
-            debug_adapters: None,
-            dir_debug_adapters: BTreeMap::new(),
             dir_grants: Arc::new(DirGrants::default()),
             turn_executor,
+            workspace: WorkspaceRuntime::default(),
+            execution: ExecutionRuntime::default(),
         }
     }
 }
@@ -226,13 +221,13 @@ impl EnvRuntimeControl {
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             (
                 runtime.selected_grant.clone(),
-                runtime.codebase.clone(),
-                runtime.symbol_index.clone(),
-                runtime.codebase_semantic.clone(),
-                runtime.cloud_codebase.clone(),
+                runtime.workspace.codebase.clone(),
+                runtime.workspace.symbol_index.clone(),
+                runtime.workspace.codebase_semantic.clone(),
+                runtime.workspace.cloud_codebase.clone(),
                 runtime._dir_contributions.clone(),
                 Arc::clone(&runtime.dir_grants),
-                runtime.agent_grep.clone(),
+                runtime.workspace.agent_grep.clone(),
             )
         };
         let Some(authorization) = authorization else {
@@ -297,6 +292,7 @@ impl EnvRuntimeControl {
         self.runtime
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .workspace
             .agent_grep = Some(agent_grep);
         *self
             .local_tool_config
@@ -372,23 +368,23 @@ impl EnvRuntimeControl {
             {
                 return Ok(());
             }
-            let Some(codebase) = runtime.codebase.clone() else {
+            let Some(codebase) = runtime.workspace.codebase.clone() else {
                 return Ok(());
             };
-            let Some(symbol_index) = runtime.symbol_index.clone() else {
+            let Some(symbol_index) = runtime.workspace.symbol_index.clone() else {
                 return Ok(());
             };
             let Some(customizations) = runtime._dir_contributions.clone() else {
                 return Ok(());
             };
-            let previous_watcher = runtime._file_system_watcher.take();
-            let previous_job = runtime.codebase_semantic_job.take();
-            runtime.codebase_semantic = None;
+            let previous_watcher = runtime.workspace._file_system_watcher.take();
+            let previous_job = runtime.workspace.codebase_semantic_job.take();
+            runtime.workspace.codebase_semantic = None;
             (
                 authorization,
                 codebase,
                 symbol_index,
-                runtime.cloud_codebase.clone(),
+                runtime.workspace.cloud_codebase.clone(),
                 customizations,
                 previous_watcher,
                 previous_job,
@@ -434,6 +430,7 @@ impl EnvRuntimeControl {
             self.runtime
                 .read()
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .workspace
                 .agent_grep
                 .clone(),
             self.env_state.runtime(),
@@ -493,9 +490,9 @@ impl EnvRuntimeControl {
             .runtime
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        runtime.codebase_semantic = semantic;
-        runtime.codebase_semantic_job = semantic_job;
-        runtime._file_system_watcher = Some(watcher);
+        runtime.workspace.codebase_semantic = semantic;
+        runtime.workspace.codebase_semantic_job = semantic_job;
+        runtime.workspace._file_system_watcher = Some(watcher);
         runtime.turn_executor = runtime
             .turn_executor
             .clone()
@@ -547,26 +544,27 @@ impl EnvRuntimeControl {
         self.hooks.unbind_dir();
         let dir_grants = std::mem::take(&mut runtime.dirs);
         runtime.dir_file_systems.clear();
-        let dir_content_search = std::mem::take(&mut runtime.dir_content_search);
-        let dir_terminals = std::mem::take(&mut runtime.dir_terminals);
-        let dir_debug_adapters = std::mem::take(&mut runtime.dir_debug_adapters);
-        let cloud_codebase = runtime.cloud_codebase.clone();
-        let old_file_system_watcher = runtime._file_system_watcher.take();
-        let old_dir_file_system_watchers = std::mem::take(&mut runtime._dir_file_system_watchers);
-        let codebase = runtime.codebase.clone();
-        let symbol_index = runtime.symbol_index.clone();
+        let dir_content_search = std::mem::take(&mut runtime.workspace.dir_content_search);
+        let dir_terminals = std::mem::take(&mut runtime.execution.dir_terminals);
+        let dir_debug_adapters = std::mem::take(&mut runtime.execution.dir_debug_adapters);
+        let cloud_codebase = runtime.workspace.cloud_codebase.clone();
+        let old_file_system_watcher = runtime.workspace._file_system_watcher.take();
+        let old_dir_file_system_watchers =
+            std::mem::take(&mut runtime.workspace._dir_file_system_watchers);
+        let codebase = runtime.workspace.codebase.clone();
+        let symbol_index = runtime.workspace.symbol_index.clone();
         let customizations = runtime._dir_contributions.clone();
-        let terminals = runtime.terminals.take();
-        let debug_adapters = runtime.debug_adapters.take();
-        let search = runtime.content_search.take();
-        let git = runtime.git.take();
-        let git_watcher = runtime._git_watcher.take();
-        runtime.cloud_codebase = None;
-        runtime.codebase_semantic = None;
-        runtime.codebase_semantic_job = None;
+        let terminals = runtime.execution.terminals.take();
+        let debug_adapters = runtime.execution.debug_adapters.take();
+        let search = runtime.workspace.content_search.take();
+        let git = runtime.workspace.git.take();
+        let git_watcher = runtime.workspace._git_watcher.take();
+        runtime.workspace.cloud_codebase = None;
+        runtime.workspace.codebase_semantic = None;
+        runtime.workspace.codebase_semantic_job = None;
         runtime.selected_file_system = Some(Arc::new(LocalFileSystem::new(replacement.clone())));
         runtime.selected_grant = Some(replacement);
-        runtime.git = inspection_git;
+        runtime.workspace.git = inspection_git;
         drop(runtime);
 
         for (_, authorization) in dir_grants {
@@ -608,6 +606,7 @@ impl EnvRuntimeControl {
         self.runtime
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .workspace
             ._file_system_watcher = watcher;
 
         let tool_result = self.tools.replace_executable(None, false);
@@ -1414,11 +1413,11 @@ impl AppServer {
                 .read()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             (
-                runtime.ripgrep.clone(),
-                runtime.agent_grep.clone(),
-                runtime.content_search.clone(),
-                runtime.terminals.clone(),
-                runtime.debug_adapters.clone(),
+                runtime.workspace.ripgrep.clone(),
+                runtime.workspace.agent_grep.clone(),
+                runtime.workspace.content_search.clone(),
+                runtime.execution.terminals.clone(),
+                runtime.execution.debug_adapters.clone(),
             )
         };
         let dir_file_system_watchers = dirs
@@ -1522,16 +1521,17 @@ impl AppServer {
                 .env_runtime
                 .write()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
-            let previous_watcher = runtime._git_watcher.take();
-            let previous_dir_watchers = std::mem::take(&mut runtime._dir_file_system_watchers);
+            let previous_watcher = runtime.workspace._git_watcher.take();
+            let previous_dir_watchers =
+                std::mem::take(&mut runtime.workspace._dir_file_system_watchers);
             runtime.dirs = dirs.clone();
             runtime.dir_file_systems = dir_file_systems;
-            runtime._dir_file_system_watchers = dir_file_system_watchers;
-            runtime.dir_content_search = dir_content_search;
-            runtime.dir_terminals = dir_terminals;
-            runtime.dir_debug_adapters = dir_debug_adapters;
-            runtime.git = Some(git);
-            runtime._git_watcher = Some(watcher);
+            runtime.workspace._dir_file_system_watchers = dir_file_system_watchers;
+            runtime.workspace.dir_content_search = dir_content_search;
+            runtime.execution.dir_terminals = dir_terminals;
+            runtime.execution.dir_debug_adapters = dir_debug_adapters;
+            runtime.workspace.git = Some(git);
+            runtime.workspace._git_watcher = Some(watcher);
             (previous_watcher, previous_dir_watchers)
         };
         drop(previous_watcher);
@@ -1748,11 +1748,13 @@ impl AppServer {
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         runtime
+            .workspace
             .session_dir_watchers
             .retain(|(candidate_session, root), _| {
                 candidate_session != session_id || desired.contains_key(root)
             });
         runtime
+            .workspace
             .session_dir_search
             .retain(|(candidate_session, root), _| {
                 if candidate_session != session_id {
@@ -1764,13 +1766,13 @@ impl AppServer {
                     .flatten()
                     .is_some()
             });
-        let agent_grep = runtime.agent_grep.clone();
+        let agent_grep = runtime.workspace.agent_grep.clone();
         let Some(customizations) = customizations else {
             return Ok(());
         };
         for (root, dir) in desired {
             let key = (session_id.clone(), root);
-            if let Some(existing) = runtime.session_dir_watchers.get_mut(&key) {
+            if let Some(existing) = runtime.workspace.session_dir_watchers.get_mut(&key) {
                 existing.authorization = dir;
                 continue;
             }
@@ -1784,7 +1786,7 @@ impl AppServer {
             .map_err(|error| {
                 EnvRuntimeError::Failed(format!("failed to initialize directory watcher: {error}"))
             })?;
-            runtime.session_dir_watchers.insert(
+            runtime.workspace.session_dir_watchers.insert(
                 key,
                 SessionDirEntryWatcher {
                     authorization: dir,
@@ -1806,9 +1808,11 @@ impl AppServer {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         runtime.dir_grants.clear_session(session_id);
         runtime
+            .workspace
             .session_dir_watchers
             .retain(|(candidate, _), _| candidate != session_id);
         runtime
+            .workspace
             .session_dir_search
             .retain(|(candidate, _), _| candidate != session_id);
         if let Some(customizations) = &runtime._dir_contributions {
@@ -1931,32 +1935,36 @@ impl AppServer {
             selected_file_system: Some(file_system),
             dirs: BTreeMap::new(),
             dir_file_systems: BTreeMap::new(),
-            _file_system_watcher: Some(file_system_watcher),
-            _dir_file_system_watchers: Vec::new(),
-            session_dir_watchers: BTreeMap::new(),
-            _git_watcher: None,
-            git: Some(Arc::clone(&git)),
-            content_search: None,
-            dir_content_search: BTreeMap::new(),
-            session_dir_search: BTreeMap::new(),
-            ripgrep: None,
-            agent_grep: None,
-            codebase: Some(codebase),
-            symbol_index: Some(symbol_index),
-            codebase_semantic: None,
-            codebase_semantic_job: None,
-            cloud_codebase: None,
             _dir_contributions: Some(Arc::clone(&customizations)),
-            terminals: None,
-            dir_terminals: BTreeMap::new(),
-            debug_adapters: None,
-            dir_debug_adapters: BTreeMap::new(),
             dir_grants: Arc::clone(&current.dir_grants),
             turn_executor: current
                 .turn_executor
                 .clone()
                 .with_harness_context_provider(customizations)
                 .without_context_source("codebase"),
+            workspace: WorkspaceRuntime {
+                _file_system_watcher: Some(file_system_watcher),
+                _dir_file_system_watchers: Vec::new(),
+                session_dir_watchers: BTreeMap::new(),
+                _git_watcher: None,
+                git: Some(Arc::clone(&git)),
+                content_search: None,
+                dir_content_search: BTreeMap::new(),
+                session_dir_search: BTreeMap::new(),
+                ripgrep: None,
+                agent_grep: None,
+                codebase: Some(codebase),
+                symbol_index: Some(symbol_index),
+                codebase_semantic: None,
+                codebase_semantic_job: None,
+                cloud_codebase: None,
+            },
+            execution: ExecutionRuntime {
+                terminals: None,
+                dir_terminals: BTreeMap::new(),
+                debug_adapters: None,
+                dir_debug_adapters: BTreeMap::new(),
+            },
         };
         let previous = std::mem::replace(&mut *current, next);
         drop(current);
@@ -2055,7 +2063,10 @@ impl AppServer {
                 .env_runtime
                 .read()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
-            (current.content_search.clone(), current.terminals.clone())
+            (
+                current.workspace.content_search.clone(),
+                current.execution.terminals.clone(),
+            )
         };
         let content_search = existing_search.unwrap_or_else(|| {
             Arc::new(ContentSearchService::new(
@@ -2127,32 +2138,36 @@ impl AppServer {
             selected_file_system: Some(file_system),
             dirs: BTreeMap::new(),
             dir_file_systems: BTreeMap::new(),
-            _file_system_watcher: Some(file_system_watcher),
-            _dir_file_system_watchers: Vec::new(),
-            session_dir_watchers: BTreeMap::new(),
-            _git_watcher: None,
-            git: Some(Arc::clone(&git)),
-            content_search: Some(Arc::clone(&content_search)),
-            dir_content_search: BTreeMap::new(),
-            session_dir_search: BTreeMap::new(),
-            ripgrep: Some(ripgrep),
-            agent_grep: Some(agent_grep),
-            codebase: Some(codebase),
-            symbol_index: Some(symbol_index),
-            codebase_semantic,
-            codebase_semantic_job,
-            cloud_codebase,
             _dir_contributions: Some(Arc::clone(&customizations)),
-            terminals: Some(Arc::clone(&terminals)),
-            dir_terminals: BTreeMap::new(),
-            debug_adapters: Some(Arc::clone(&debug_adapters)),
-            dir_debug_adapters: BTreeMap::new(),
             dir_grants: Arc::clone(&current.dir_grants),
             turn_executor: current
                 .turn_executor
                 .clone()
                 .with_harness_context_provider(customizations)
                 .with_context_source("codebase", context_source),
+            workspace: WorkspaceRuntime {
+                _file_system_watcher: Some(file_system_watcher),
+                _dir_file_system_watchers: Vec::new(),
+                session_dir_watchers: BTreeMap::new(),
+                _git_watcher: None,
+                git: Some(Arc::clone(&git)),
+                content_search: Some(Arc::clone(&content_search)),
+                dir_content_search: BTreeMap::new(),
+                session_dir_search: BTreeMap::new(),
+                ripgrep: Some(ripgrep),
+                agent_grep: Some(agent_grep),
+                codebase: Some(codebase),
+                symbol_index: Some(symbol_index),
+                codebase_semantic,
+                codebase_semantic_job,
+                cloud_codebase,
+            },
+            execution: ExecutionRuntime {
+                terminals: Some(Arc::clone(&terminals)),
+                dir_terminals: BTreeMap::new(),
+                debug_adapters: Some(Arc::clone(&debug_adapters)),
+                dir_debug_adapters: BTreeMap::new(),
+            },
         };
         let previous = std::mem::replace(&mut *current, next);
         drop(current);
@@ -2172,7 +2187,7 @@ impl AppServer {
             .env_runtime
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        runtime._git_watcher = Some(git_watcher);
+        runtime.workspace._git_watcher = Some(git_watcher);
         Ok(canonical_root)
     }
 
@@ -2220,13 +2235,13 @@ impl AppServer {
         let switchable = self.local_env_host.is_some();
         (
             switchable || runtime.selected_file_system.is_some(),
-            switchable || runtime.git.is_some(),
-            switchable || runtime.content_search.is_some(),
-            switchable || runtime.codebase.is_some(),
+            switchable || runtime.workspace.git.is_some(),
+            switchable || runtime.workspace.content_search.is_some(),
+            switchable || runtime.workspace.codebase.is_some(),
             (switchable && !self.cloud_codebase_providers.is_empty())
-                || runtime.cloud_codebase.is_some(),
-            switchable || runtime.terminals.is_some(),
-            switchable || runtime.debug_adapters.is_some(),
+                || runtime.workspace.cloud_codebase.is_some(),
+            switchable || runtime.execution.terminals.is_some(),
+            switchable || runtime.execution.debug_adapters.is_some(),
         )
     }
 
@@ -2263,6 +2278,7 @@ impl AppServer {
         self.env_runtime
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .workspace
             .codebase
             .clone()
             .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodebaseUnavailable))
@@ -2281,6 +2297,7 @@ impl AppServer {
             .map(|authorization| authorization.dir().clone())
             .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodebaseUnavailable))?;
         let service = runtime
+            .workspace
             .agent_grep
             .clone()
             .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodebaseUnavailable))?;
@@ -2300,6 +2317,7 @@ impl AppServer {
         self.env_runtime
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .workspace
             .symbol_index
             .clone()
             .ok_or_else(|| RpcError::new(-32092, AppServerErrorName::CodebaseSymbolsUnavailable))
@@ -2321,6 +2339,7 @@ impl AppServer {
         self.env_runtime
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .workspace
             .codebase_semantic
             .clone()
     }
@@ -2329,6 +2348,7 @@ impl AppServer {
         self.env_runtime
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .workspace
             .codebase_semantic_job
             .clone()
     }
@@ -2377,7 +2397,7 @@ impl AppServer {
             if let Some(authorization) = runtime.selected_grant.as_ref() {
                 authorization.revoke();
             }
-            runtime.cloud_codebase.take()
+            runtime.workspace.cloud_codebase.take()
         } else {
             None
         };
@@ -2402,6 +2422,7 @@ impl AppServer {
         self.env_runtime
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .workspace
             .cloud_codebase
             .clone()
             .ok_or_else(|| RpcError::new(-32093, AppServerErrorName::CloudCodebaseUnavailable))
@@ -2484,6 +2505,7 @@ impl AppServer {
         self.env_runtime
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .workspace
             .git
             .clone()
             .ok_or_else(|| RpcError::new(-32060, AppServerErrorName::GitUnavailable))
@@ -2499,12 +2521,14 @@ impl AppServer {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         if let Some(dir_id) = dir_id {
             return runtime
+                .workspace
                 .dir_content_search
                 .get(dir_id)
                 .cloned()
                 .ok_or_else(|| RpcError::new(-32050, AppServerErrorName::SearchUnavailable));
         }
         runtime
+            .workspace
             .content_search
             .clone()
             .ok_or_else(|| RpcError::new(-32050, AppServerErrorName::SearchUnavailable))
@@ -2527,10 +2551,11 @@ impl AppServer {
             .env_runtime
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if let Some(search) = runtime.session_dir_search.get(&key) {
+        if let Some(search) = runtime.workspace.session_dir_search.get(&key) {
             return Ok(Arc::clone(search));
         }
         let ripgrep = runtime
+            .workspace
             .ripgrep
             .clone()
             .ok_or_else(|| RpcError::new(-32050, AppServerErrorName::SearchUnavailable))?;
@@ -2538,7 +2563,10 @@ impl AppServer {
             ContentSearchService::new_authorized(dir, ripgrep)
                 .map_err(|_| RpcError::new(-32043, AppServerErrorName::PermissionRequired))?,
         );
-        runtime.session_dir_search.insert(key, Arc::clone(&search));
+        runtime
+            .workspace
+            .session_dir_search
+            .insert(key, Arc::clone(&search));
         Ok(search)
     }
 
@@ -2589,12 +2617,14 @@ impl AppServer {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         if let Some(dir_id) = dir_id {
             return runtime
+                .execution
                 .dir_terminals
                 .get(dir_id)
                 .cloned()
                 .ok_or_else(|| RpcError::new(-32060, AppServerErrorName::TerminalUnavailable));
         }
         runtime
+            .execution
             .terminals
             .clone()
             .ok_or_else(|| RpcError::new(-32060, AppServerErrorName::TerminalUnavailable))
@@ -2608,10 +2638,10 @@ impl AppServer {
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         let mut services = Vec::new();
-        if let Some(primary) = &runtime.terminals {
+        if let Some(primary) = &runtime.execution.terminals {
             services.push(Arc::clone(primary));
         }
-        for service in runtime.dir_terminals.values() {
+        for service in runtime.execution.dir_terminals.values() {
             if !services
                 .iter()
                 .any(|existing| Arc::ptr_eq(existing, service))
@@ -2632,12 +2662,14 @@ impl AppServer {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         if let Some(dir_id) = dir_id {
             return runtime
+                .execution
                 .dir_debug_adapters
                 .get(dir_id)
                 .cloned()
                 .ok_or_else(|| RpcError::new(-32070, AppServerErrorName::DebugAdapterUnavailable));
         }
         runtime
+            .execution
             .debug_adapters
             .clone()
             .ok_or_else(|| RpcError::new(-32070, AppServerErrorName::DebugAdapterUnavailable))
@@ -2651,10 +2683,10 @@ impl AppServer {
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         let mut services = Vec::new();
-        if let Some(primary) = &runtime.debug_adapters {
+        if let Some(primary) = &runtime.execution.debug_adapters {
             services.push(Arc::clone(primary));
         }
-        for service in runtime.dir_debug_adapters.values() {
+        for service in runtime.execution.dir_debug_adapters.values() {
             if !services
                 .iter()
                 .any(|existing| Arc::ptr_eq(existing, service))
@@ -2911,17 +2943,17 @@ fn retire_env_runtime(
     retained_terminals: Option<&Arc<exec_server::terminal::TerminalService>>,
     retained_debug_adapters: Option<&Arc<crate::debug_service::DebugAdapterService>>,
 ) {
-    for (_, search) in std::mem::take(&mut runtime.dir_content_search) {
+    for (_, search) in std::mem::take(&mut runtime.workspace.dir_content_search) {
         if !retained_search.is_some_and(|retained| Arc::ptr_eq(retained, &search)) {
             search.cancel_all();
         }
     }
-    for (_, terminals) in std::mem::take(&mut runtime.dir_terminals) {
+    for (_, terminals) in std::mem::take(&mut runtime.execution.dir_terminals) {
         if !retained_terminals.is_some_and(|retained| Arc::ptr_eq(retained, &terminals)) {
             terminals.terminate_all();
         }
     }
-    for (_, debug_adapters) in std::mem::take(&mut runtime.dir_debug_adapters) {
+    for (_, debug_adapters) in std::mem::take(&mut runtime.execution.dir_debug_adapters) {
         if !retained_debug_adapters.is_some_and(|retained| Arc::ptr_eq(retained, &debug_adapters)) {
             debug_adapters.terminate_all();
         }
@@ -2932,17 +2964,17 @@ fn retire_env_runtime(
     if let Some(authorization) = runtime.selected_grant.take() {
         authorization.revoke();
     }
-    if let Some(terminals) = runtime.terminals.take()
+    if let Some(terminals) = runtime.execution.terminals.take()
         && !retained_terminals.is_some_and(|retained| Arc::ptr_eq(retained, &terminals))
     {
         terminals.terminate_all();
     }
-    if let Some(debug_adapters) = runtime.debug_adapters.take()
+    if let Some(debug_adapters) = runtime.execution.debug_adapters.take()
         && !retained_debug_adapters.is_some_and(|retained| Arc::ptr_eq(retained, &debug_adapters))
     {
         debug_adapters.terminate_all();
     }
-    if let Some(search) = runtime.content_search.take()
+    if let Some(search) = runtime.workspace.content_search.take()
         && !retained_search.is_some_and(|retained| Arc::ptr_eq(retained, &search))
     {
         search.cancel_all();

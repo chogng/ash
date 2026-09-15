@@ -61,3 +61,17 @@ fn terminal_start_and_control_round_trip_without_extra_authority() {
         assert_eq!(serde_json::to_value(decoded).unwrap(), value);
     }
 }
+
+#[test]
+fn process_read_requires_an_explicit_wait_budget() {
+    let mut value = serde_json::json!({"method":"processRead", "params":{
+        "operationId":"process", "stdoutCursor":0, "stderrCursor":0, "waitMillis":500
+    }});
+    let request: Request = serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(serde_json::to_value(request).unwrap(), value);
+    value["params"]
+        .as_object_mut()
+        .unwrap()
+        .remove("waitMillis");
+    assert!(serde_json::from_value::<Request>(value).is_err());
+}

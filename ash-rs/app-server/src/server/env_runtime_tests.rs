@@ -668,7 +668,7 @@ fn dir_permissions_are_revision_bound_and_filter_capability_snapshots() {
             .env_runtime
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        assert_eq!(runtime.session_dir_watchers.len(), 1);
+        assert_eq!(runtime.workspace.session_dir_watchers.len(), 1);
         assert_eq!(
             runtime
                 .dir_grants
@@ -729,6 +729,7 @@ fn dir_permissions_are_revision_bound_and_filter_capability_snapshots() {
             .env_runtime
             .read()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .workspace
             .session_dir_watchers
             .is_empty()
     );

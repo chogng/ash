@@ -42,6 +42,8 @@ use std::time::Duration;
 use std::time::Instant;
 
 const REVISION: &str = "execution-environments-v1";
+const READ_WAIT_MILLIS: u64 = 500;
+const RECOVERY_BUDGET: Duration = Duration::from_secs(5);
 
 pub(crate) struct EnvironmentTools {
     environments: BTreeMap<String, ExecutionEnvironment>,
@@ -335,10 +337,11 @@ fn run_command(
     let mut stderr_cursor = 0;
     let mut cancelled = false;
     let mut cancel_deadline = None;
+    let mut recovery_deadline = None;
     loop {
         if cancellation.check().is_err() && !cancelled {
             cancelled = true;
-            cancel_deadline = Some(Instant::now() + Duration::from_secs(5));
+            cancel_deadline = Some(Instant::now() + RECOVERY_BUDGET);
             let _ = environment.request(Request::ProcessCancel {
                 operation_id: id.clone(),
             });
@@ -347,8 +350,10 @@ fn run_command(
             operation_id: id.clone(),
             stdout_cursor,
             stderr_cursor,
+            wait_millis: READ_WAIT_MILLIS,
         })) {
             Ok(Response::Process(mut snapshot)) => {
+                recovery_deadline = None;
                 stdout_gap |= snapshot.stdout.gap;
                 stderr_gap |= snapshot.stderr.gap;
                 stdout_cursor = snapshot.stdout.next_cursor;
@@ -386,6 +391,18 @@ fn run_command(
                 }
             }
             Ok(_) => return Err(CoreError::Execution("unexpected process response".into())),
+            Err(exec_server::Error::Transport(error)) => {
+                let until =
+                    *recovery_deadline.get_or_insert_with(|| Instant::now() + RECOVERY_BUDGET);
+                if Instant::now() >= until {
+                    return Ok(ToolExecutionOutput::OutcomeUnknown(format!(
+                        "operation {id}: {error}"
+                    )));
+                }
+                // Reconnect only to observe the same operation and incarnation. Never repeat
+                // start, write, or control requests whose response may have been lost.
+                std::thread::sleep(Duration::from_millis(100));
+            }
             Err(error) => {
                 return Ok(ToolExecutionOutput::OutcomeUnknown(format!(
                     "operation {id}: {error}"
@@ -399,7 +416,6 @@ fn run_command(
                 "operation {id}: final state unavailable"
             )));
         }
-        std::thread::sleep(Duration::from_millis(25));
     }
 }
 

@@ -9,13 +9,26 @@ publish.workspace = true
 name = "exec_server"
 doctest = false
 
+[[bin]]
+name = "ash-exec-server"
+path = "src/main.rs"
+required-features = ["server"]
+
+[[test]]
+name = "execution"
+required-features = ["server"]
+
+[features]
+default = ["server"]
+server = ["dep:ash-package-store", "dep:ash-install-context", "dep:mxc-sandbox", "dep:arg0", "dep:process-hardening", "tokio/signal", "tokio/macros"]
+
 [dependencies]
 exec-server-protocol = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 getrandom = { workspace = true }
-tokio = { workspace = true, features = ["rt-multi-thread", "sync", "time", "signal", "macros"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "sync", "time"] }
 ash-file-access = { workspace = true }
 ash-file-system = { workspace = true }
 ash-utils-pty = { workspace = true }
@@ -25,11 +38,11 @@ network-proxy = { workspace = true, features = ["server"] }
 pollster = { workspace = true }
 tempfile = { workspace = true }
 ash-protocol = { workspace = true }
-ash-package-store = { workspace = true }
-ash-install-context = { workspace = true }
-mxc-sandbox = { workspace = true }
-arg0 = { workspace = true }
-process-hardening = { workspace = true }
+ash-package-store = { workspace = true, optional = true }
+ash-install-context = { workspace = true, optional = true }
+mxc-sandbox = { workspace = true, optional = true }
+arg0 = { workspace = true, optional = true }
+process-hardening = { workspace = true, optional = true }
 
 [dev-dependencies]
 
