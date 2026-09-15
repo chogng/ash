@@ -1,0 +1,7 @@
+{
+  "extends": "../../../ash-ts/tsconfig.renderer.json",
+  "compilerOptions": {
+    "typeRoots": ["../../../ash-ts/node_modules/@types", "../../../ash-ts/node_modules"]
+  },
+  "include": ["index.ts"]
+}

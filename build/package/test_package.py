@@ -12,10 +12,9 @@ import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPOSITORY_ROOT))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from build.lib.ash_build.targets import TARGETS
+from build.lib.targets import TARGETS
 from build.package.build import generate_protocol_metadata
 from build.package.build import main as build_main
 from build.package.bubblewrap import load_vendored_source, resolve_bubblewrap
@@ -36,6 +35,8 @@ from build.package.node import (
 )
 from build.package.ripgrep import load_lock, resolve_ripgrep
 from build.package.version import read_workspace_version
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 
 PRODUCTION_LOCK = REPOSITORY_ROOT / "third_party" / "ripgrep" / "runtime-lock.json"

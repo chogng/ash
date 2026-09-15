@@ -13,7 +13,7 @@ from build.download.artifacts import (
     extract_member,
     sha256,
 )
-from build.lib.ash_build.targets import TargetSpec
+from build.lib.targets import TargetSpec
 
 
 @dataclass(frozen=True)

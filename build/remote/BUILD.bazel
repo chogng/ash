@@ -4,7 +4,7 @@ filegroup(
     name = "python_sources",
     srcs = glob(["*.py"], exclude = ["test_*.py"]) + [
         "//build/lib:archive_sources",
-        "//build/lib/ash_build:python_sources",
+        "//build/lib:python_sources",
     ],
 )
 

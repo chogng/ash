@@ -2,15 +2,15 @@ import sys
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from build.lib.ash_build.targets import CpuArchitecture  # noqa: E402
-from build.lib.ash_build.targets import LinuxLibc  # noqa: E402
-from build.lib.ash_build.targets import OperatingSystem  # noqa: E402
-from build.lib.ash_build.targets import TARGETS  # noqa: E402
-from build.lib.ash_build.targets import TargetSpec  # noqa: E402
-from build.lib.ash_build.targets import WindowsAbi  # noqa: E402
-from build.lib.ash_build.targets import target_spec  # noqa: E402
+from build.lib.targets import CpuArchitecture  # noqa: E402
+from build.lib.targets import LinuxLibc  # noqa: E402
+from build.lib.targets import OperatingSystem  # noqa: E402
+from build.lib.targets import TARGETS  # noqa: E402
+from build.lib.targets import TargetSpec  # noqa: E402
+from build.lib.targets import WindowsAbi  # noqa: E402
+from build.lib.targets import target_spec  # noqa: E402
 
 
 class TargetSpecTests(unittest.TestCase):

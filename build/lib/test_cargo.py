@@ -4,11 +4,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from build.lib.ash_build.cargo import cargo_profile_directory
-from build.lib.ash_build.cargo import cargo_artifact_executable
-from build.lib.ash_build.cargo import cargo_rendered_diagnostic
-from build.lib.ash_build.cargo import parse_cargo_message
-from build.lib.ash_build.cargo import resolve_cargo_target_directory
+from build.lib.cargo import cargo_profile_directory
+from build.lib.cargo import cargo_artifact_executable
+from build.lib.cargo import cargo_rendered_diagnostic
+from build.lib.cargo import parse_cargo_message
+from build.lib.cargo import resolve_cargo_target_directory
 
 
 class CargoTests(unittest.TestCase):

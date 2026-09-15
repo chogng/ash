@@ -14,7 +14,7 @@ from typing import Dict, Optional
 from .bubblewrap import BubblewrapResolution
 from .node import NodeResolution
 from .ripgrep import RipgrepResolution
-from build.lib.ash_build.targets import TargetSpec
+from build.lib.targets import TargetSpec
 
 
 LAYOUT = json.loads(Path(__file__).with_suffix(".json").read_text(encoding="utf-8"))

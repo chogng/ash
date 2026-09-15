@@ -32,7 +32,7 @@ python3 -B scripts/cargo.py test -p ash-code-mode-runtime
 验证入口：
 
 ```sh
-python3 -B -m unittest build.lib.ash_build.test_v8
+python3 -B -m unittest build.lib.test_v8
 node --test build/package/prepareDevPackage.test.ts
 python3 -B scripts/cargo.py test -p ash-v8-poc --features sandbox
 bazel test //ash-rs/v8-poc:v8-poc-unit-tests

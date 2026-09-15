@@ -7,17 +7,17 @@ import unittest
 from pathlib import Path
 
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from build.lib.ash_build.targets import TARGETS  # noqa: E402
-from build.lib.ash_build.v8 import (  # noqa: E402
+from build.lib.targets import TARGETS  # noqa: E402
+from build.lib.v8 import (  # noqa: E402
     DEFAULT_LOCK,
     LockedFile,
     load_v8_lock,
     materialize,
 )
-from build.lib.ash_build.v8 import resolve_v8_cargo_env  # noqa: E402
+from build.lib.v8 import resolve_v8_cargo_env  # noqa: E402
 
 
 class V8ArtifactTests(unittest.TestCase):

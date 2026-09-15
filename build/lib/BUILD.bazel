@@ -15,3 +15,16 @@ filegroup(
         "//build/win32:python_sources",
     ],
 )
+
+filegroup(
+    name = "python_sources",
+    srcs = [
+        "__init__.py",
+        "cargo.py",
+        "cargo_selection.py",
+        "targets.py",
+        "v8.py",
+        "//:build/__init__.py",
+        "//build/download:python_sources",
+    ],
+)

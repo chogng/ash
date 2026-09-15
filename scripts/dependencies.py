@@ -157,7 +157,9 @@ def agent_handler_errors(root: Path) -> list[str]:
     for name in AGENT_HANDLERS:
         path = root / "ash-rs/app-server/src/server" / name
         if not path.is_file():
-            errors.append(f"{path.relative_to(root)}: missing Agent handler; update its boundary rule")
+            errors.append(
+                f"{path.relative_to(root)}: missing Agent handler; update its boundary rule"
+            )
             continue
         match = implementation.search(path.read_text())
         if match:

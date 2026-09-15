@@ -68,7 +68,7 @@
     "test:icons": "node --test ../build/resources/icons/generate.test.ts",
     "typecheck:renderer": "tsc -p tsconfig.renderer.json --noEmit",
     "typecheck:test-unit": "tsc -p test/unit/tsconfig.json",
-    "typecheck:stanza": "tsc -p tsconfig.stanza.json --noEmit",
+    "typecheck:stanza": "tsc -p ../build/vite/stanza/tsconfig.json --noEmit",
     "typecheck:build": "pnpm --dir ../build typecheck",
     "typecheck:extensions": "tsc -p tsconfig.extensions-check.json --noEmit",
     "dev": "tsc -p tsconfig.main.json && tsc -p tsconfig.preload.json && node ../build/desktop/verifySandboxPreload.ts && concurrently -k -n renderer,electron-host,app-server \"vite --config ../build/vite/vite.config.ts\" \"wait-on tcp:127.0.0.1:5173 && cross-env ASH_DEV_APP_SERVER_RELOAD=1 ASH_RENDERER_URL=http://127.0.0.1:5173 node ../build/desktop/watch/electron.ts\" \"node ../build/desktop/watch/appServer.ts --skip-initial\"",

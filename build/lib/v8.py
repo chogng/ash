@@ -13,7 +13,7 @@ from .targets import TARGETS, TargetSpec
 from build.download.artifacts import download_and_verify, sha256
 
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_LOCK = REPOSITORY_ROOT / "third_party" / "v8" / "runtime-lock.json"
 DEFAULT_CACHE = REPOSITORY_ROOT / "third_party" / ".cache" / "v8"
 DOWNLOAD_TIMEOUT_SECONDS = 120

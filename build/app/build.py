@@ -15,21 +15,22 @@ from pathlib import Path
 from typing import Optional, Sequence
 from urllib.parse import urlsplit
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPOSITORY_ROOT))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from build.lib.ash_build.targets import TARGETS
-from build.lib.ash_build.targets import target_spec
+from build.lib.targets import TARGETS
+from build.lib.targets import target_spec
 from build.remote.bundle import RemoteRuntimeBundle
 from build.remote.bundle import validate_remote_runtime_bundle
 from build.package.cargo import cargo_environment
 from build.package.cargo import resolve_windows_sandbox_binary
-from build.lib.ash_build.cargo import cargo_artifact_executable
-from build.lib.ash_build.cargo import cargo_rendered_diagnostic
-from build.lib.ash_build.cargo import parse_cargo_message
-from build.lib.ash_build.cargo import resolve_cargo_target_directory
+from build.lib.cargo import cargo_artifact_executable
+from build.lib.cargo import cargo_rendered_diagnostic
+from build.lib.cargo import parse_cargo_message
+from build.lib.cargo import resolve_cargo_target_directory
 from build.package.layout import copy_uds_notices
 from build.package.layout import copy_windows_sandbox_notices
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 APP_ROOT = REPOSITORY_ROOT / "app"
 

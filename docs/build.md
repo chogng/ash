@@ -101,7 +101,7 @@ Node 工具、发布包组装与 Desktop 单测使用 Node 24 LTS，具体版本
 | `pnpm test:desktop:smoke` | 直接运行 Electron Desktop smoke tests |
 | `pnpm typecheck:build` | 严格检查整个 `build/` 中的 TypeScript 构建代码 |
 | `pnpm --dir ash-ts typecheck:test-unit` | 检查 Desktop 单测入口及其辅助代码 |
-| `pnpm clean` | 删除 `.build/` 和已知旧输出，不删除依赖、目录状态或源码生成物 |
+| `pnpm clean` | 删除 `.build/` 和 `build/`、`scripts/` 内的 Python 缓存；缓存扫描跳过依赖目录，不跟随链接 |
 
 Desktop 的 `code` 与 `academic` 通过同一个 `build:desktop` 入口构建；`ASH_PRODUCT` 选择产品。
 
@@ -208,8 +208,7 @@ just bench-build ash-keybinding --jobs 4 --compare .build/build-health/<run>/rep
 
 | 路径 | 单一职责 |
 | --- | --- |
-| `build/lib/` | 通用路径、归档、签名执行和 Cargo 输出解析 |
-| `build/lib/ash_build/` | 共享 Python Cargo、目标识别和 V8 构建输入 |
+| `build/lib/` | 通用路径、归档、签名、Cargo、目标识别和 V8 构建输入 |
 | `build/desktop/watch/` | Electron TypeScript 与 Rust Server Host 的增量监听和重启协调 |
 | `build/pnpm/` | pnpm 版本约束、安装入口和单锁文件 workspace 校验 |
 | `build/desktop/` | Desktop 输出准备、Electron 启动和打包校验 |
@@ -246,7 +245,7 @@ Desktop 的 Node、Browser 和 Playwright 测试入口与 loader 归 `ash-ts/tes
 
 完整开发包仍由 `build/package/prepare.ts` 拥有。它在一次 Cargo 调用中构建全部第一方程序，然后复制并校验受管资源、计算整包摘要，最后通过 Package Store 发布不可变代次。日常 `just ash` 不执行这些组装与发布步骤；只有验证包布局、跨产品交付、回滚或远端运行时边界时才使用 `just ash-package` 或 `just ash-package-run`。Cargo 并发由 Cargo 自己决定；开发者仍可按需显式设置 `CARGO_BUILD_JOBS`。
 
-`scripts/` 可以调用 `build/` 公开的构建准备能力，`build/` 不得依赖或调用 `scripts/`。包组装由 `build/package/` 拥有；共享目标识别和 V8 输入解析由 `build/lib/ash_build/` 拥有，日常 Cargo 命令与发布构建器都依赖这一层。测试内容和 fixture 仍归对应产品目录拥有，仓库脚本只负责入口、进程编排和临时测试输出生命周期。
+`scripts/` 可以调用 `build/` 公开的构建准备能力，`build/` 不得依赖或调用 `scripts/`。包组装由 `build/package/` 拥有；共享目标识别和 V8 输入解析由 `build/lib/` 拥有，日常 Cargo 命令与发布构建器都依赖这一层。测试内容和 fixture 仍归对应产品目录拥有，仓库脚本只负责入口、进程编排和临时测试输出生命周期。
 
 ### 根配置与工具语言
 
@@ -254,7 +253,7 @@ Desktop 的 Node、Browser 和 Playwright 测试入口与 loader 归 `ash-ts/tes
 
 同理，`.bazelrc`、根 `BUILD.bazel`、`.cargo/config.toml` 和 `tsconfig.base.json` 是对应工具从仓库根发现的协议文件，不能为了让 `build/` 看起来更大而移动。文档站框架配置、内容生成、打包和验收全部归独立的 `ash-docs` 仓库。
 
-Node 构建工具和测试编排使用可擦除语法范围内的 TypeScript（`.ts`），由当前 Node.js 直接执行，不生成中间 JavaScript。跨语言仓库命令、归档和下载流程可以使用 Python；平台发布工具要求 Shell 时保留 Shell。语言由操作依赖决定，不由所在目录强制统一。`build/tsconfig.json` 检查构建工具，`ash-ts/test/unit/tsconfig.json` 检查 Desktop 单测入口；`scripts/pyproject.toml` 和 `scripts/uv.lock` 锁定 Python 仓库工具，`just install` 通过 uv 准备它们。
+Node 构建工具和测试编排使用可擦除语法范围内的 TypeScript（`.ts`），由当前 Node.js 直接执行，不生成中间 JavaScript。跨语言仓库命令、归档和下载流程可以使用 Python；平台发布工具要求 Shell 时保留 Shell。语言由操作依赖决定，不由所在目录强制统一。`build/tsconfig.json` 检查 Node 构建工具，`build/vite/stanza/tsconfig.json` 检查浏览器中的 Stanza 开发入口，`ash-ts/test/unit/tsconfig.json` 检查 Desktop 单测入口；`scripts/pyproject.toml` 和 `scripts/uv.lock` 锁定 Python 仓库工具，`just install` 通过 uv 准备它们。
 
 `ash-ts/` 只保存产品源码、测试内容和产品清单；构建、资源生成、下载与发布逻辑由根 `build/` 拥有，跨产品测试和维护编排由根 `scripts/` 拥有。Renderer、Workbench 和平台服务不得拥有构建工具配置或仓库操作入口。
 

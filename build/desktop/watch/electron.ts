@@ -186,6 +186,5 @@ function stopChild(child: ChildProcess): Promise<void> {
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
-  if (process.argv.includes("--validate-startup")) new ElectronCompileGate(projects.map(project => project.name));
-  else start();
+  start();
 }

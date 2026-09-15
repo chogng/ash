@@ -17,11 +17,12 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Dict, List, Sequence, Tuple
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPOSITORY_ROOT))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from build.lib.ash_build.targets import TARGETS
+from build.lib.targets import TARGETS
 from build.lib.archive import open_tar_gz
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 CATALOG_FILE = "catalog.json"
 CATALOG_FORMAT_VERSION = 1

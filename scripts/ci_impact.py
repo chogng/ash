@@ -74,7 +74,7 @@ def tui_affected(changed_files: list[str], metadata: dict, root: Path) -> bool:
             return True
         if path in GLOBAL_INPUTS or path.parts[:1] == (".cargo",):
             return True
-        if path.parts[:3] == ("build", "lib", "ash_build"):
+        if path.parts[:2] == ("build", "lib"):
             return True
         if path.suffix == ".md":
             continue

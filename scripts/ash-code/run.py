@@ -100,9 +100,7 @@ def runtime_environment(
     environment: dict[str, str], executables: dict[str, Path]
 ) -> dict[str, str]:
     runtime = environment.copy()
-    runtime["ASH_APP_SERVER_PATH"] = str(
-        executables["ash-app-server"].resolve()
-    )
+    runtime["ASH_APP_SERVER_PATH"] = str(executables["ash-app-server"].resolve())
     runtime["ASH_PRODUCT_SERVICES_PATH"] = str(
         (REPOSITORY_ROOT / "resources/product-services/product-services.json").resolve()
     )

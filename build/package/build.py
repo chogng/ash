@@ -8,10 +8,9 @@ import tempfile
 from pathlib import Path
 from typing import Dict, Optional, Sequence
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPOSITORY_ROOT))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from build.lib.ash_build.targets import TARGETS, default_target
+from build.lib.targets import TARGETS, default_target
 
 from build.package.bubblewrap import resolve_bubblewrap
 from build.package.cargo import build_binaries, validate_input_binary
@@ -19,6 +18,8 @@ from build.package.layout import build_package_directory, load_protocol_metadata
 from build.package.node import resolve_node
 from build.package.ripgrep import resolve_ripgrep
 from build.package.version import read_workspace_version
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 
 DEFAULT_LOCK = REPOSITORY_ROOT / "third_party" / "ripgrep" / "runtime-lock.json"

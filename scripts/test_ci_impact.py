@@ -60,7 +60,7 @@ class CiImpactTests(unittest.TestCase):
             "Cargo.lock",
             ".cargo/config.toml",
             "scripts/cargo.py",
-            "build/lib/ash_build/targets.py",
+            "build/lib/targets.py",
             "third_party/ripgrep/runtime-lock.json",
             "ash-rs/deleted/src/lib.rs",
             "scripts/ash-code/run.py",

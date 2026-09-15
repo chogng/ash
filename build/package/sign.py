@@ -12,7 +12,7 @@ from pathlib import Path
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from build.lib.ash_build.targets import TARGETS, target_spec  # noqa: E402
+from build.lib.targets import TARGETS, target_spec  # noqa: E402
 from build.lib.signing import run_command  # noqa: E402
 from build.lib.signing import sha256  # noqa: E402
 from build.lib.signing import sign_and_verify  # noqa: E402

@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from build.lib.ash_build.targets import TARGETS
+from build.lib.targets import TARGETS
 from build.package.cargo import build_binaries
 from build.package.cargo import resolve_windows_sandbox_binary
 

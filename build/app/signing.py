@@ -11,11 +11,10 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, Sequence
 from urllib.parse import urlsplit
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPOSITORY_ROOT))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from build.lib.ash_build.targets import TargetSpec
-from build.lib.ash_build.targets import target_spec
+from build.lib.targets import TargetSpec
+from build.lib.targets import target_spec
 from build.remote.bundle import RemoteRuntimeBundle
 from build.remote.bundle import validate_remote_runtime_bundle
 from build.linux import signing as linux
@@ -23,6 +22,8 @@ from build.lib.signing import run_command
 from build.lib.signing import sha256
 from build.lib.signing import sign_command as system_sign_command
 from build.lib.signing import verify_command as system_verify_command
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 
 CommandRunner = Callable[[Sequence[str]], None]

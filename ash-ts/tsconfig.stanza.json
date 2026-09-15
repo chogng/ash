@@ -1,4 +1,0 @@
-{
-  "extends": "./tsconfig.renderer.json",
-  "include": ["../build/vite/stanza/index.ts"]
-}

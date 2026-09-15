@@ -5,7 +5,7 @@ filegroup(
     srcs = glob(["*.py"], exclude = ["test_*.py"]) + [
         ":assembly_sources",
         "//build/lib:signing_sources",
-        "//build/lib/ash_build:python_sources",
+        "//build/lib:python_sources",
         "//build/download:python_sources",
     ],
 )

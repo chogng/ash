@@ -9,9 +9,9 @@ from pathlib import PurePosixPath
 from typing import Any, Dict, List, Optional
 
 from .cargo import validate_input_binary
-from build.lib.ash_build.cargo import cargo_profile_directory
-from build.lib.ash_build.cargo import resolve_cargo_target_directory
-from build.lib.ash_build.targets import TargetSpec
+from build.lib.cargo import cargo_profile_directory
+from build.lib.cargo import resolve_cargo_target_directory
+from build.lib.targets import TargetSpec
 
 
 REQUIRED_SOURCE_FILES = (
