@@ -2,6 +2,7 @@ use super::AppServer;
 use super::RpcError;
 use super::decode;
 use super::result;
+use ash_app_server_protocol::protocol::environment::SessionDirSelector;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::instructions::InstructionDiagnosticDto;
 use ash_app_server_protocol::protocol::instructions::InstructionImportItem;
@@ -11,6 +12,7 @@ use ash_app_server_protocol::protocol::instructions::InstructionImportPreviewRes
 use ash_app_server_protocol::protocol::instructions::InstructionImportResult;
 use ash_app_server_protocol::protocol::instructions::InstructionImportSource;
 use ash_app_server_protocol::protocol::instructions::InstructionImportStatus;
+use ash_app_server_protocol::protocol::instructions::InstructionScopeDto;
 use ash_file_access::Permission;
 use ash_file_system::FileSystem;
 use ash_file_system::FileSystemError;
@@ -46,35 +48,64 @@ impl AppServer {
             &params.directory.path,
             Permission::ReadFiles,
         )?;
-        let browsing = self.file_system_service_for_session_directory(
+        let _source_browsing = self.file_system_service_for_session_directory(
             &params.directory,
             Permission::BrowseFiles,
         )?;
+        let target_directory = match params.scope {
+            InstructionScopeDto::Directory => params.directory.clone(),
+            InstructionScopeDto::User => SessionDirSelector {
+                session_id: params.directory.session_id.clone(),
+                path: self.home.as_ref().ok_or_else(invalid)?.root().to_path_buf(),
+            },
+        };
+        let target_authorization = self.session_dir_authorization(
+            &target_directory.session_id,
+            &target_directory.path,
+            Permission::ReadFiles,
+        )?;
+        let target_root = target_authorization.dir().canonical_path();
+        let browsing = self.file_system_service_for_session_directory(
+            &target_directory,
+            Permission::BrowseFiles,
+        )?;
+        let rules = match params.scope {
+            InstructionScopeDto::Directory => ".ash/instructions",
+            InstructionScopeDto::User => "instructions",
+        };
         let root = authorization.dir().canonical_path();
+        let location = match (params.scope, params.source) {
+            (InstructionScopeDto::User, InstructionImportSource::Claude) => {
+                AgentImportLocation::claude_user(root)
+            }
+            (InstructionScopeDto::User, InstructionImportSource::Codex) => {
+                AgentImportLocation::codex_user(root)
+            }
+            (InstructionScopeDto::User, _) => return Err(invalid()),
+            (InstructionScopeDto::Directory, InstructionImportSource::Copilot) => {
+                AgentImportLocation::copilot_project(root)
+            }
+            (InstructionScopeDto::Directory, InstructionImportSource::Claude) => {
+                AgentImportLocation::claude_project(root)
+            }
+            (InstructionScopeDto::Directory, InstructionImportSource::Codex) => {
+                AgentImportLocation::codex_project(root)
+            }
+            (InstructionScopeDto::Directory, InstructionImportSource::Cursor) => {
+                AgentImportLocation::cursor_project(root)
+            }
+        };
         let plan = authorization
             .execute(
                 authorization.subject(),
                 authorization.dir(),
                 Permission::ReadFiles,
-                || {
-                    external_agent_migration::detect_instruction_plan(match params.source {
-                        InstructionImportSource::Copilot => {
-                            AgentImportLocation::copilot_project(root)
-                        }
-                        InstructionImportSource::Claude => {
-                            AgentImportLocation::claude_project(root)
-                        }
-                        InstructionImportSource::Codex => AgentImportLocation::codex_project(root),
-                        InstructionImportSource::Cursor => {
-                            AgentImportLocation::cursor_project(root)
-                        }
-                    })
-                },
+                || external_agent_migration::detect_instruction_plan(location),
             )
             .map_err(|_| invalid())?
             .map_err(|_| invalid())?;
         let files = self
-            .file_system_service_for_session_directory(&params.directory, Permission::ReadFiles)?;
+            .file_system_service_for_session_directory(&target_directory, Permission::ReadFiles)?;
         let requested: BTreeSet<_> = params.sources.iter().cloned().collect();
         if requested.len() != params.sources.len() {
             return Err(invalid());
@@ -95,7 +126,7 @@ impl AppServer {
             }
             let target = match &document.kind {
                 ExternalInstructionKind::Root => "ASH.md".to_owned(),
-                ExternalInstructionKind::Rule { name } => format!(".ash/instructions/{name}.md"),
+                ExternalInstructionKind::Rule { name } => format!("{rules}/{name}.md"),
             };
             mappings.insert(PathBuf::from(&source), PathBuf::from(&target));
             documents.push((source, target, document));
@@ -106,10 +137,10 @@ impl AppServer {
         if documents.len() > 128 {
             return Err(invalid());
         }
-        let existing = match browsing.read_directory(Path::new(".ash/instructions")) {
+        let existing = match browsing.read_directory(Path::new(rules)) {
             Ok(entries) => entries
                 .into_iter()
-                .map(|entry| format!(".ash/instructions/{}", entry.name))
+                .map(|entry| format!("{rules}/{}", entry.name))
                 .collect::<BTreeSet<_>>(),
             Err(FileSystemError::NotFound(_)) => BTreeSet::new(),
             Err(_) => return Err(invalid()),
@@ -120,18 +151,22 @@ impl AppServer {
             .chain(
                 mappings
                     .values()
-                    .filter(|path| path.starts_with(".ash/instructions"))
+                    .filter(|path| path.starts_with(rules))
                     .map(|path| path.to_string_lossy().into_owned()),
             )
             .collect::<BTreeSet<_>>();
+        let link_mappings = mappings
+            .iter()
+            .map(|(source, target)| (root.join(source), target_root.join(target)))
+            .collect();
         let mut items = Vec::new();
         let mut revisions = Vec::new();
         for (source, target, document) in documents {
             let body = rewrite_links(
                 &document.body,
-                Path::new(&source),
-                Path::new(&target),
-                &mappings,
+                &root.join(&source),
+                &target_root.join(&target),
+                &link_mappings,
             );
             let content = render(document, &body).map_err(|_| invalid())?;
             revisions.push((
@@ -153,10 +188,15 @@ impl AppServer {
             let (status, message) = match validation {
                 Err(message) => (InstructionImportStatus::Unsupported, Some(message.into())),
                 Ok(())
-                    if !authorization
-                        .dir()
-                        .resolve_for_write(Path::new(&target))
-                        .is_ok_and(|resolved| resolved == root.join(&target)) =>
+                    if !Path::new(&target)
+                        .ancestors()
+                        .filter(|path| !path.as_os_str().is_empty())
+                        .all(|path| {
+                            target_authorization
+                                .dir()
+                                .resolve_for_write(path)
+                                .is_ok_and(|resolved| resolved == target_root.join(path))
+                        }) =>
                 {
                     (
                         InstructionImportStatus::Conflict,
@@ -192,10 +232,18 @@ impl AppServer {
         // Bind approval to this directory, source bytes, selected files and converted output.
         // Target status is excluded so a retry can recognize already published identical files.
         let digest = ash_file_system::file_revision(
-            &serde_json::to_vec(&("instructions-v2", params.source, root, revisions))
-                .map_err(|_| invalid())?,
+            &serde_json::to_vec(&(
+                "instructions-v3",
+                params.scope,
+                params.source,
+                root,
+                target_root,
+                revisions,
+            ))
+            .map_err(|_| invalid())?,
         );
         Ok(InstructionImportPreviewResult {
+            target_directory: target_root.to_path_buf(),
             digest,
             items,
             diagnostics,
@@ -205,6 +253,7 @@ impl AppServer {
     pub(super) fn instruction_import(&self, params: &Value) -> Result<Value, RpcError> {
         let params: InstructionImportParams = decode(params)?;
         let mut preview = self.prepare_instruction_import(InstructionImportPreviewParams {
+            scope: params.scope,
             source: params.source,
             directory: params.directory.clone(),
             sources: params.sources,
@@ -225,8 +274,13 @@ impl AppServer {
                 items: preview.items,
             });
         }
-        let files = self
-            .file_system_service_for_session_directory(&params.directory, Permission::WriteFiles)?;
+        let files = self.file_system_service_for_session_directory(
+            &SessionDirSelector {
+                session_id: params.directory.session_id,
+                path: preview.target_directory.clone(),
+            },
+            Permission::WriteFiles,
+        )?;
         for item in &mut preview.items {
             if item.status == InstructionImportStatus::Unchanged {
                 continue;
@@ -421,12 +475,18 @@ fn rebase(
                 }
             }
             Component::CurDir => {}
-            _ => return None,
+            Component::RootDir | Component::Prefix(_) => resolved.push(component.as_os_str()),
         }
     }
     let resolved = mappings.get(&resolved).unwrap_or(&resolved);
     let base = target.parent()?.components().collect::<Vec<_>>();
     let parts = resolved.components().collect::<Vec<_>>();
+    if target.is_absolute() && resolved.is_absolute() && base.first() != parts.first() {
+        return Some(format!(
+            "{}{suffix}",
+            resolved.to_string_lossy().replace('\\', "/")
+        ));
+    }
     let common = base.iter().zip(&parts).take_while(|(a, b)| a == b).count();
     let mut relative = PathBuf::new();
     for _ in common..base.len() {

@@ -644,8 +644,8 @@ fn diagnostic(
 #[path = "catalog_tests.rs"]
 mod tests;
 
-/// Validates a proposed project instruction using the same rules as catalog discovery.
-/// Only ASH.md and direct .ash/instructions entries are publishable; AGENTS.md is shared.
+/// Validates a proposed user or project instruction using the same rules as catalog discovery.
+/// Only ASH.md and direct user/directory instruction entries are publishable; AGENTS.md is shared.
 pub fn validate_instruction(path: &Path, text: &str) -> Result<(), &'static str> {
     if text.len() > MAX_FILE_BYTES || text.trim().is_empty() {
         return Err("Instruction must contain 1–32768 bytes");
@@ -653,11 +653,12 @@ pub fn validate_instruction(path: &Path, text: &str) -> Result<(), &'static str>
     if path == Path::new("ASH.md") {
         return Ok(());
     }
-    if path.parent() != Some(Path::new(DIRECTORY_INSTRUCTIONS))
+    if ![Path::new(DIRECTORY_INSTRUCTIONS), Path::new("instructions")]
+        .contains(&path.parent().unwrap_or(Path::new("")))
         || path.extension().and_then(|value| value.to_str()) != Some("md")
     {
         return Err(
-            "Instruction target must be ASH.md or a direct .ash/instructions Markdown file",
+            "Instruction target must be ASH.md or a direct instructions/.ash/instructions Markdown file",
         );
     }
     let name = path

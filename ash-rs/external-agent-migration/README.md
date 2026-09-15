@@ -272,7 +272,7 @@ commit。
 | `McpServers` | `UpsertMcpServer` | Config command 已有；导入时默认不连接，credential 必须剥离并单独绑定 |
 | Settings 内的 Plugin request | `UpsertPluginRequest` | Config command 已有；只接受可解析的 exact package/version request，不代表安装或激活 |
 | Settings 内的 Hook | `UpsertHook` | Config command 已有；导入后保持 disabled，执行仍需 trust、policy、approval 与 sandbox |
-| `Instructions`、`InstructionRules` | Ash Instruction authority | 四种来源的项目指令已接入转换与发布；用户级 apply 尚未完成，不能把原始文件塞入普通 Config |
+| `Instructions`、`InstructionRules` | Ash Instruction authority | 四种来源的项目指令及 Claude/Codex 用户指令已接入转换与发布，不能把原始文件塞入普通 Config |
 | `Agents` | Ash Agent definition authority | 目标模型尚未完成 |
 | `Settings` 其他字段 | 对应 Ash typed field-by-field mapping | 不支持项必须显示为 skipped/unsupported，禁止 raw passthrough |
 | `ExecutionRules` | Policy migration review | 不能生成长期 approval，也不能自动转换为 Hook |
@@ -280,7 +280,7 @@ commit。
 一次 Import 可能同时修改 Skill、MCP、Plugin 与 Hook section，因此 apply 必须先构造完整 plan。
 Config 子批次使用 expected-revision 约束：
 重新校验 source identity/digest，验证全部 typed mutation，成功时一次推进 Config revision，任一项
-失败则不提交任何 Config 项。项目 Instructions 使用独立逐文件发布；用户级 Instructions 与 Agents 等非 Config target 尚未完成。在对应
+失败则不提交任何 Config 项。项目和已支持的用户 Instructions 使用独立逐文件发布；Agents 等非 Config target 尚未完成。在对应
 authority 可以 prepare/publish 前，它们必须保持 unsupported，不能伪装成同一 Config transaction。
 当前 Config 只有逐 command mutation；atomic import batch、跨 authority prepare/publish、持久 import
 receipt、provenance 与 remove/rollback contract 尚未实现。
@@ -394,6 +394,14 @@ failure fixture；当前测试尚未覆盖所有 `AgentImportError` 分支，这
 - 请求必须指定 `source`。发布前重读来源，校验绑定来源生态、目录、选中条目、来源文本与转换结果的摘要；仅写入缺失或空目标。相同内容返回 unchanged，不同内容返回 conflict。
 - Markdown 链接按新位置重定位，代码不改写。共享 `AGENTS.md` 不修改，其中的外部引用提示审查。
 - 导入不是持续同步，不触发 Agent 整理正文。所有已导入规则由相同 catalog 和 Core 路径提供给主、子 Agent。
-- 当前只提供项目级后端接口；用户级发布、跨领域事务和 Desktop 导入界面尚未完成。逐文件结果与权限契约见 [App Server 协议](../app-server-protocol/README.md#指令导入)。
+- 项目及 Claude/Codex 用户级后端接口已实现；跨领域事务和 Desktop 导入界面尚未完成。逐文件结果与权限契约见 [App Server 协议](../app-server-protocol/README.md#指令导入)。
 
 来源格式参考 [Copilot 指令文档](https://code.visualstudio.com/docs/agent-customization/custom-instructions)、[Claude memory 文档](https://code.claude.com/docs/en/memory) 和 [Cursor rules 文档](https://prod.cursor.com/docs/rules)。
+
+### 用户级指令
+
+- `claude_user` 读取选定外部用户 home 下的 `.claude/CLAUDE.md` 和 `.claude/rules/**/*.md`。
+- `codex_user` 读取 `.codex/AGENTS.override.md`；它缺失或为空时读取 `.codex/AGENTS.md`，不同时导入两份。
+- App Server 将用户根文件发布到配置的 Ash home 的 `ASH.md`，细分规则发布到 `instructions/`；来源目录和目标目录分别授权，摘要绑定两者及作用范围。
+- 相对链接按两个目录重定位，导入规则间的链接指向目标规则；来源原文件不修改。
+- 用户规则复用 AshHome catalog 和主、子 Agent 的用户指令加载流程。Copilot/Cursor 用户布局及自定义外部配置目录尚未支持。

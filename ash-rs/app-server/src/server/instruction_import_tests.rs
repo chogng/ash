@@ -98,12 +98,11 @@ fn instruction_import_rpc_publishes_reviewed_files_and_retries_without_overwriti
     );
     let preview = rpc(
         "instructions/importPreview",
-        json!({"source":"copilot","directory":directory,"sources":[]}),
+        json!({"scope":"directory","source":"copilot","directory":directory,"sources":[]}),
     );
     assert_eq!(preview["items"].as_array().unwrap().len(), 2);
     assert!(!root.path().join("ASH.md").exists());
-    let params =
-        json!({"source":"copilot","directory":directory,"sources":[],"digest":preview["digest"]});
+    let params = json!({"scope":"directory","source":"copilot","directory":directory,"sources":[],"digest":preview["digest"]});
     let applied = rpc("instructions/import", params.clone());
     assert!(
         applied["items"]
@@ -159,10 +158,11 @@ fn instruction_import_rejects_stale_sources_and_revoked_write_permission() {
     fixture(root.path());
     let (server, directory) = setup(root.path());
     let preview = server
-        .instruction_import_preview(&json!({"source":"copilot","directory":directory,"sources":[]}))
+        .instruction_import_preview(
+            &json!({"scope":"directory","source":"copilot","directory":directory,"sources":[]}),
+        )
         .unwrap();
-    let params =
-        json!({"source":"copilot","directory":directory,"sources":[],"digest":preview["digest"]});
+    let params = json!({"scope":"directory","source":"copilot","directory":directory,"sources":[],"digest":preview["digest"]});
     std::fs::write(
         root.path().join(".github/copilot-instructions.md"),
         "Changed since preview",
@@ -171,7 +171,9 @@ fn instruction_import_rejects_stale_sources_and_revoked_write_permission() {
     assert!(server.instruction_import(&params).is_err());
     assert!(!root.path().join("ASH.md").exists());
     let preview = server
-        .instruction_import_preview(&json!({"source":"copilot","directory":directory,"sources":[]}))
+        .instruction_import_preview(
+            &json!({"scope":"directory","source":"copilot","directory":directory,"sources":[]}),
+        )
         .unwrap();
     let session = serde_json::from_value(directory["sessionId"].clone()).unwrap();
     let runtime = server.env_runtime.read().unwrap();
@@ -189,7 +191,7 @@ fn instruction_import_rejects_stale_sources_and_revoked_write_permission() {
     assert!(
         server
             .instruction_import(
-                &json!({"source":"copilot","directory":directory,"sources":[],"digest":preview["digest"]})
+                &json!({"scope":"directory","source":"copilot","directory":directory,"sources":[],"digest":preview["digest"]})
             )
             .is_err()
     );
@@ -237,7 +239,9 @@ fn instruction_import_preserves_manual_selection_and_rejects_invalid_targets() {
     .unwrap();
     let (server, directory) = setup(root.path());
     let preview = server
-        .instruction_import_preview(&json!({"source":"copilot","directory":directory,"sources":[]}))
+        .instruction_import_preview(
+            &json!({"scope":"directory","source":"copilot","directory":directory,"sources":[]}),
+        )
         .unwrap();
     assert!(
         preview["items"]
@@ -249,12 +253,12 @@ fn instruction_import_preserves_manual_selection_and_rejects_invalid_targets() {
     let selected = vec![".github/instructions/manual.instructions.md"];
     let preview = server
         .instruction_import_preview(
-            &json!({"source":"copilot","directory":directory,"sources":selected}),
+            &json!({"scope":"directory","source":"copilot","directory":directory,"sources":selected}),
         )
         .unwrap();
     server
         .instruction_import(
-            &json!({"source":"copilot","directory":directory,"sources":selected,"digest":preview["digest"]}),
+            &json!({"scope":"directory","source":"copilot","directory":directory,"sources":selected,"digest":preview["digest"]}),
         )
         .unwrap();
     let snapshot = ash_instructions::InstructionCatalog::discover(root.path()).snapshot();
@@ -265,7 +269,7 @@ fn instruction_import_preserves_manual_selection_and_rejects_invalid_targets() {
     assert!(
         server
             .instruction_import_preview(
-                &json!({"source":"copilot","directory":directory,"sources":["AGENTS.md"]})
+                &json!({"scope":"directory","source":"copilot","directory":directory,"sources":["AGENTS.md"]})
             )
             .is_err()
     );
@@ -280,11 +284,13 @@ fn instruction_import_refuses_symlink_targets_even_within_the_project() {
     std::os::unix::fs::symlink("existing.md", root.path().join("ASH.md")).unwrap();
     let (server, directory) = setup(root.path());
     let preview = server
-        .instruction_import_preview(&json!({"source":"copilot","directory":directory,"sources":[]}))
+        .instruction_import_preview(
+            &json!({"scope":"directory","source":"copilot","directory":directory,"sources":[]}),
+        )
         .unwrap();
     assert_eq!(preview["items"][0]["status"], "conflict");
     server
-        .instruction_import(&json!({"source":"copilot","directory":directory,"sources":[],"digest":preview["digest"]}))
+        .instruction_import(&json!({"scope":"directory","source":"copilot","directory":directory,"sources":[],"digest":preview["digest"]}))
         .unwrap();
     assert_eq!(
         std::fs::read_to_string(root.path().join("existing.md")).unwrap(),
@@ -313,7 +319,9 @@ fn instruction_import_does_not_publish_rules_that_exceed_catalog_capacity() {
     }
     let (server, directory) = setup(root.path());
     let preview = server
-        .instruction_import_preview(&json!({"source":"copilot","directory":directory,"sources":[]}))
+        .instruction_import_preview(
+            &json!({"scope":"directory","source":"copilot","directory":directory,"sources":[]}),
+        )
         .unwrap();
     assert!(
         preview["items"]
@@ -323,7 +331,7 @@ fn instruction_import_does_not_publish_rules_that_exceed_catalog_capacity() {
             .all(|item| item["status"] == "unsupported")
     );
     server
-        .instruction_import(&json!({"source":"copilot","directory":directory,"sources":[],"digest":preview["digest"]}))
+        .instruction_import(&json!({"scope":"directory","source":"copilot","directory":directory,"sources":[],"digest":preview["digest"]}))
         .unwrap();
     assert!(!root.path().join("ASH.md").exists());
 }
@@ -360,12 +368,12 @@ fn instruction_import_uses_one_pipeline_for_claude_codex_and_cursor() {
         let (server, directory) = setup(root.path());
         let preview = server
             .instruction_import_preview(
-                &json!({"source":source,"directory":directory,"sources":[]}),
+                &json!({"scope":"directory","source":source,"directory":directory,"sources":[]}),
             )
             .unwrap();
         assert_eq!(preview["items"][0]["target"], target);
         assert_eq!(preview["items"][0]["status"], "ready", "{preview}");
-        let result = server.instruction_import(&json!({"source":source,"directory":directory,"sources":[],"digest":preview["digest"]})).unwrap();
+        let result = server.instruction_import(&json!({"scope":"directory","source":source,"directory":directory,"sources":[],"digest":preview["digest"]})).unwrap();
         assert_eq!(result["items"][0]["status"], "imported", "{result}");
         let catalog = ash_instructions::InstructionCatalog::discover(root.path()).snapshot();
         assert!(catalog.diagnostics().is_empty());
@@ -392,12 +400,16 @@ fn instruction_import_binds_source_identity_and_reports_colliding_rule_names() {
     std::fs::write(root.path().join("CLAUDE.md"), "Other source").unwrap();
     let (server, directory) = setup(root.path());
     let preview = server
-        .instruction_import_preview(&json!({"source":"copilot","directory":directory,"sources":[]}))
+        .instruction_import_preview(
+            &json!({"scope":"directory","source":"copilot","directory":directory,"sources":[]}),
+        )
         .unwrap();
-    assert!(server.instruction_import(&json!({"source":"claude","directory":directory,"sources":[],"digest":preview["digest"]})).is_err());
+    assert!(server.instruction_import(&json!({"scope":"directory","source":"claude","directory":directory,"sources":[],"digest":preview["digest"]})).is_err());
     assert!(
         server
-            .instruction_import_preview(&json!({"directory":directory,"sources":[]}))
+            .instruction_import_preview(
+                &json!({"scope":"directory","directory":directory,"sources":[]})
+            )
             .is_err()
     );
     assert!(!root.path().join("ASH.md").exists());
@@ -406,7 +418,9 @@ fn instruction_import_binds_source_identity_and_reports_colliding_rule_names() {
         std::fs::write(root.path().join(path), "Rule").unwrap();
     }
     let preview = server
-        .instruction_import_preview(&json!({"source":"claude","directory":directory,"sources":[]}))
+        .instruction_import_preview(
+            &json!({"scope":"directory","source":"claude","directory":directory,"sources":[]}),
+        )
         .unwrap();
     assert_eq!(
         preview["items"]
@@ -417,6 +431,268 @@ fn instruction_import_binds_source_identity_and_reports_colliding_rule_names() {
             .count(),
         2
     );
-    server.instruction_import(&json!({"source":"claude","directory":directory,"sources":[],"digest":preview["digest"]})).unwrap();
+    server.instruction_import(&json!({"scope":"directory","source":"claude","directory":directory,"sources":[],"digest":preview["digest"]})).unwrap();
     assert!(!root.path().join("ASH.md").exists());
+}
+
+fn grant_target(server: &AppServer, directory: &Value, root: &Path, permissions: Permissions) {
+    let session: ash_protocol::SessionId =
+        serde_json::from_value(directory["sessionId"].clone()).unwrap();
+    server
+        .env_runtime
+        .read()
+        .unwrap()
+        .dir_grants
+        .add_dir(
+            session.clone(),
+            Grant::for_session_tree(
+                session,
+                Dir::open_local(root).unwrap(),
+                GrantSource::HostConfiguration,
+                permissions,
+            ),
+        )
+        .unwrap();
+}
+
+#[test]
+fn instruction_import_user_rpc_publishes_to_selected_home_and_refreshes_user_catalog() {
+    let source = tempfile::tempdir().unwrap();
+    let target = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(source.path().join(".claude/rules")).unwrap();
+    std::fs::write(
+        source.path().join(".claude/CLAUDE.md"),
+        "User root [rule](rules/global.md) [notes](notes.md)",
+    )
+    .unwrap();
+    std::fs::write(
+        source.path().join(".claude/rules/global.md"),
+        "User global rule",
+    )
+    .unwrap();
+    std::fs::write(
+        source.path().join(".claude/rules/rust.md"),
+        "---\npaths: ['**/*.rs']\n---\nUser Rust rule",
+    )
+    .unwrap();
+    std::fs::write(source.path().join(".claude/notes.md"), "Linked notes").unwrap();
+    let (server, directory) = setup(source.path());
+    let home = Arc::new(ash_home::AshHome::new(
+        ash_utils_absolute_path::AbsolutePathBuf::from_absolute(target.path()).unwrap(),
+    ));
+    let server = server.with_home(home.clone());
+    grant_target(
+        &server,
+        &directory,
+        target.path(),
+        Permissions::new([
+            Permission::ReadFiles,
+            Permission::BrowseFiles,
+            Permission::WriteFiles,
+        ]),
+    );
+    let mut connection = server.connection();
+    let mut id = 0;
+    let mut rpc = |method: &str, params: Value| {
+        id += 1;
+        let response: Value = serde_json::from_str(&server.handle_json(
+            &mut connection,
+            &json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}).to_string(),
+        ))
+        .unwrap();
+        assert!(response.get("error").is_none(), "{response}");
+        response["result"].clone()
+    };
+    rpc(
+        "initialize",
+        json!({"clientInfo":{"name":"test","version":"1"},"capabilities":{}}),
+    );
+    let preview = rpc(
+        "instructions/importPreview",
+        json!({"scope":"user","source":"claude","directory":directory,"sources":[]}),
+    );
+    assert_eq!(
+        PathBuf::from(preview["targetDirectory"].as_str().unwrap()),
+        dunce::canonicalize(target.path()).unwrap()
+    );
+    assert_eq!(preview["items"].as_array().unwrap().len(), 3);
+    assert!(
+        preview["items"][0]["content"]
+            .as_str()
+            .unwrap()
+            .contains("(instructions/claude-global.md)")
+    );
+    let content = preview["items"][0]["content"].as_str().unwrap();
+    let notes_link = pulldown_cmark::Parser::new(content)
+        .find_map(|event| match event {
+            pulldown_cmark::Event::Start(pulldown_cmark::Tag::Link { dest_url, .. })
+                if dest_url.ends_with("notes.md") =>
+            {
+                Some(dest_url.into_string())
+            }
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(
+        dunce::canonicalize(target.path().join(notes_link)).unwrap(),
+        dunce::canonicalize(source.path().join(".claude/notes.md")).unwrap()
+    );
+    let params = json!({"scope":"user","source":"claude","directory":directory,"sources":[],"digest":preview["digest"]});
+    let applied = rpc("instructions/import", params.clone());
+    assert!(
+        applied["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|item| item["status"] == "imported")
+    );
+    assert!(!source.path().join("ASH.md").exists());
+    assert!(!target.path().join(".ash").exists());
+    let catalog = home.instructions();
+    assert!(catalog.diagnostics().is_empty());
+    let body = catalog
+        .automatic_content(&[PathBuf::from("src/main.rs")])
+        .unwrap();
+    assert!(
+        body.contains("User root")
+            && body.contains("User global rule")
+            && body.contains("User Rust rule")
+    );
+    assert!(
+        !catalog
+            .automatic_content(&[PathBuf::from("src/main.ts")])
+            .unwrap()
+            .contains("User Rust rule")
+    );
+    let listing = rpc(
+        "instructions/list",
+        json!({"sessionId":directory["sessionId"]}),
+    );
+    assert!(
+        listing["instructions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|item| item["scope"] == "user")
+    );
+    assert_eq!(listing["instructions"].as_array().unwrap().len(), 3);
+    let retry = rpc("instructions/import", params.clone());
+    assert!(
+        retry["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|item| item["status"] == "unchanged")
+    );
+    std::fs::write(target.path().join("ASH.md"), "User edits").unwrap();
+    let conflict = rpc("instructions/import", params);
+    assert_eq!(conflict["items"][0]["status"], "conflict");
+    assert_eq!(
+        std::fs::read_to_string(target.path().join("ASH.md")).unwrap(),
+        "User edits"
+    );
+}
+
+#[test]
+fn instruction_import_user_checks_separate_target_permissions_scope_and_home_identity() {
+    let source = tempfile::tempdir().unwrap();
+    let target = tempfile::tempdir().unwrap();
+    let other = tempfile::tempdir().unwrap();
+    std::fs::create_dir(source.path().join(".codex")).unwrap();
+    std::fs::write(source.path().join(".codex/AGENTS.md"), "Ordinary").unwrap();
+    std::fs::write(source.path().join(".codex/AGENTS.override.md"), "Override").unwrap();
+    let (server, directory) = setup(source.path());
+    let request = json!({"scope":"user","source":"codex","directory":directory,"sources":[]});
+    assert!(server.instruction_import_preview(&request).is_err());
+    let mut server = server.with_home(Arc::new(ash_home::AshHome::new(
+        ash_utils_absolute_path::AbsolutePathBuf::from_absolute(target.path()).unwrap(),
+    )));
+    assert!(server.instruction_import_preview(&request).is_err());
+    grant_target(
+        &server,
+        &directory,
+        target.path(),
+        Permissions::new([Permission::ReadFiles, Permission::BrowseFiles]),
+    );
+    let preview = server.instruction_import_preview(&request).unwrap();
+    assert_eq!(preview["items"][0]["content"], "Override");
+    assert_eq!(preview["items"].as_array().unwrap().len(), 1);
+    let apply = json!({"scope":"user","source":"codex","directory":directory,"sources":[],"digest":preview["digest"]});
+    assert!(server.instruction_import(&apply).is_err());
+    let session = serde_json::from_value(directory["sessionId"].clone()).unwrap();
+    let runtime = server.env_runtime.read().unwrap();
+    runtime
+        .dir_grants
+        .set_permissions(
+            &session,
+            target.path(),
+            runtime.dir_grants.revision(&session),
+            Permissions::new([
+                Permission::ReadFiles,
+                Permission::BrowseFiles,
+                Permission::WriteFiles,
+            ]),
+        )
+        .unwrap();
+    drop(runtime);
+    let mut wrong_scope = apply.clone();
+    wrong_scope["scope"] = json!("directory");
+    assert!(server.instruction_import(&wrong_scope).is_err());
+    grant_target(
+        &server,
+        &directory,
+        other.path(),
+        Permissions::new([
+            Permission::ReadFiles,
+            Permission::BrowseFiles,
+            Permission::WriteFiles,
+        ]),
+    );
+    server.home = Some(Arc::new(ash_home::AshHome::new(
+        ash_utils_absolute_path::AbsolutePathBuf::from_absolute(other.path()).unwrap(),
+    )));
+    assert!(server.instruction_import(&apply).is_err());
+    assert!(!other.path().join("ASH.md").exists());
+    server.home = Some(Arc::new(ash_home::AshHome::new(
+        ash_utils_absolute_path::AbsolutePathBuf::from_absolute(target.path()).unwrap(),
+    )));
+    std::fs::write(source.path().join(".codex/AGENTS.override.md"), "Changed").unwrap();
+    assert!(server.instruction_import(&apply).is_err());
+    assert!(!target.path().join("ASH.md").exists());
+    for unsupported in ["cursor", "copilot"] {
+        let mut request = request.clone();
+        request["source"] = json!(unsupported);
+        assert!(server.instruction_import_preview(&request).is_err());
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn instruction_import_user_rejects_symlink_rule_directory() {
+    let source = tempfile::tempdir().unwrap();
+    let target = tempfile::tempdir().unwrap();
+    let actual = target.path().join("actual");
+    std::fs::create_dir(&actual).unwrap();
+    std::fs::create_dir_all(source.path().join(".claude/rules")).unwrap();
+    std::fs::write(source.path().join(".claude/rules/global.md"), "User rule").unwrap();
+    std::os::unix::fs::symlink(&actual, target.path().join("instructions")).unwrap();
+    let (server, directory) = setup(source.path());
+    let server = server.with_home(Arc::new(ash_home::AshHome::new(
+        ash_utils_absolute_path::AbsolutePathBuf::from_absolute(target.path()).unwrap(),
+    )));
+    grant_target(
+        &server,
+        &directory,
+        target.path(),
+        Permissions::new([
+            Permission::ReadFiles,
+            Permission::BrowseFiles,
+            Permission::WriteFiles,
+        ]),
+    );
+    let request = json!({"scope":"user","source":"claude","directory":directory,"sources":[]});
+    let preview = server.instruction_import_preview(&request).unwrap();
+    assert_eq!(preview["items"][0]["status"], "conflict");
+    server.instruction_import(&json!({"scope":"user","source":"claude","directory":directory,"sources":[],"digest":preview["digest"]})).unwrap();
+    assert!(!actual.join("claude-global.md").exists());
 }

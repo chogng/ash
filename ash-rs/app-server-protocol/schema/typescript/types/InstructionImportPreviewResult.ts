@@ -2,4 +2,8 @@
 import type { InstructionDiagnosticDto } from './InstructionDiagnosticDto.js';
 import type { InstructionImportItem } from './InstructionImportItem.js';
 
-export type InstructionImportPreviewResult = { digest: string, items: Array<InstructionImportItem>, diagnostics: Array<InstructionDiagnosticDto>, };
+export type InstructionImportPreviewResult = {
+/**
+ * Canonical destination root; item targets are relative to this directory.
+ */
+targetDirectory: string, digest: string, items: Array<InstructionImportItem>, diagnostics: Array<InstructionDiagnosticDto>, };

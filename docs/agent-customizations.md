@@ -281,4 +281,4 @@ Copilot、Claude、Codex、Cursor 项目指令已具备后端预览与发布接�
 [external-agent-migration](../ash-rs/external-agent-migration/README.md#多来源项目指令导入)
 和 [App Server 协议](../ash-rs/app-server-protocol/README.md#指令导入) 维护。
 导入后由 Ash 指令目录独立管理，复用主、子 Agent 的 catalog 与 Core 路径；不注册持续外部来源。
-用户级指令发布、跨领域事务和 Desktop 导入界面仍未完成。
+Claude/Codex 用户级指令也已接入同一接口，写入当前 Ash home，并分别校验来源与目标目录权限。跨领域事务和 Desktop 导入界面仍未完成。

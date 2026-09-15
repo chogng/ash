@@ -212,21 +212,43 @@ impl ash_core::ActionPolicyService for AllowCoordination {
 
 #[test]
 fn built_in_model_guidance_reaches_rpc_roots_and_default_workers_through_tool_execution() {
-    for (provider, name, import_source, instruction_path) in [
+    for (provider, name, import_source, instruction_path, scope) in [
         (
             "openai",
             "gpt-6-astra",
             "copilot",
             ".github/copilot-instructions.md",
+            "directory",
         ),
         (
             "anthropic",
             "claude-sonnet-4-20250514",
             "claude",
             "CLAUDE.md",
+            "directory",
         ),
-        ("google", "gemini-3.6-flash", "codex", "AGENTS.override.md"),
-        ("deepseek", "deepseek-v4-pro", "cursor", ".cursorrules"),
+        (
+            "google",
+            "gemini-3.6-flash",
+            "codex",
+            "AGENTS.override.md",
+            "directory",
+        ),
+        (
+            "deepseek",
+            "deepseek-v4-pro",
+            "cursor",
+            ".cursorrules",
+            "directory",
+        ),
+        ("openai", "gpt-6-astra", "codex", ".codex/AGENTS.md", "user"),
+        (
+            "anthropic",
+            "claude-sonnet-4-20250514",
+            "claude",
+            ".claude/CLAUDE.md",
+            "user",
+        ),
     ] {
         let model = ash_protocol::ModelRef::new(
             ash_protocol::ProviderId::new(provider).unwrap(),
@@ -259,6 +281,11 @@ fn built_in_model_guidance_reaches_rpc_roots_and_default_workers_through_tool_ex
         )
         .with_model_instructions(server.model_instructions.clone());
         let mut server = server.with_tool_service(Arc::new(service), Arc::new(AllowCoordination));
+        let user_root = tempfile::tempdir().unwrap();
+        let home = Arc::new(ash_home::AshHome::new(
+            ash_utils_absolute_path::AbsolutePathBuf::from_absolute(user_root.path()).unwrap(),
+        ));
+        server = server.with_home(home.clone());
         let authorization = ash_file_access::Grant::for_environment(
             ash_file_access::Dir::open_local(root.path()).unwrap(),
             ash_file_access::GrantSource::HostConfiguration,
@@ -271,7 +298,7 @@ fn built_in_model_guidance_reaches_rpc_roots_and_default_workers_through_tool_ex
             root.path(),
             runtime.dir_grants.clone(),
             Some(authorization),
-            None,
+            Some(home),
         )
         .unwrap();
         runtime._dir_contributions = Some(contributions.clone());
@@ -324,13 +351,32 @@ fn built_in_model_guidance_reaches_rpc_roots_and_default_workers_through_tool_ex
                 ),
             )
             .unwrap();
+        server
+            .env_runtime
+            .read()
+            .unwrap()
+            .dir_grants
+            .add_dir(
+                ash_protocol::SessionId::new(session).unwrap(),
+                ash_file_access::Grant::for_session_tree(
+                    ash_protocol::SessionId::new(session).unwrap(),
+                    ash_file_access::Dir::open_local(user_root.path()).unwrap(),
+                    ash_file_access::GrantSource::HostConfiguration,
+                    ash_file_access::Permissions::new([
+                        ash_file_access::Permission::ReadFiles,
+                        ash_file_access::Permission::BrowseFiles,
+                        ash_file_access::Permission::WriteFiles,
+                    ]),
+                ),
+            )
+            .unwrap();
         let preview = call(
             "instructions/importPreview",
-            json!({"source":import_source,"directory":{"sessionId":session,"path":root.path()},"sources":[]}),
+            json!({"scope":scope,"source":import_source,"directory":{"sessionId":session,"path":root.path()},"sources":[]}),
         );
         let imported = call(
             "instructions/import",
-            json!({"source":import_source,"directory":{"sessionId":session,"path":root.path()},"sources":[],"digest":preview["digest"]}),
+            json!({"scope":scope,"source":import_source,"directory":{"sessionId":session,"path":root.path()},"sources":[],"digest":preview["digest"]}),
         );
         assert_eq!(imported["items"][0]["status"], "imported");
         call(

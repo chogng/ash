@@ -29,10 +29,10 @@
 
 | Method | 参数与结果 | 行为 |
 | --- | --- | --- |
-| `instructions/importPreview` | `source`、`directory: {sessionId, path}`、`sources: string[]` → digest、items、diagnostics | 预览选定生态的项目指令，sources 为空时发现全部；非空时只接受准确的已发现相对路径。需要目录 ReadFiles 与 BrowseFiles。 |
-| `instructions/import` | 同一 source、directory、sources 与已审阅 digest → items | 重读来源并检查摘要；需要 WriteFiles，逐文件有条件发布。 |
+| `instructions/importPreview` | `scope`、`source`、`directory: {sessionId, path}`、`sources: string[]` → digest、items、diagnostics | 预览选定生态和作用范围的指令，sources 为空时发现全部；非空时只接受准确的已发现相对路径。需要目录 ReadFiles 与 BrowseFiles。 |
+| `instructions/import` | 同一 scope、source、directory、sources 与已审阅 digest → items | 重读来源并检查摘要；需要 WriteFiles，逐文件有条件发布。 |
 
-`source` 必填，值为 `copilot`、`claude`、`codex` 或 `cursor`，无默认来源。摘要绑定该来源，不能跨来源复用。
+`scope` 必填，值为 `directory` 或 `user`，不隐式选择作用范围。`source` 必填，值为 `copilot`、`claude`、`codex` 或 `cursor`，无默认来源。摘要绑定该来源，不能跨来源复用。
 
 预览项包含 source、target、转换后的 content、status 和可选 message。状态为 ready、unchanged、conflict 或 unsupported。
 来源变化返回 `FileSystemRevisionConflict`，写入前失败。任一选中项预览为 conflict/unsupported 时整批不开始写入。
@@ -40,5 +40,11 @@
 发布期间的错误返回逐项 failed/conflict，已发布文件不会回滚；消费者必须检查每项状态，不能将 RPC 成功当作整批成功。
 重试会重新检查当前权限、来源和目标，相同内容返回 unchanged。该接口没有持续资源或跨请求后台任务，关闭连接不回滚已经发布的文件。
 
-目标为 `ASH.md` 和 `.ash/instructions/*.md`。共享 `AGENTS.md` 不复制、不修改；其中指向外部规则的引用以诊断提示审查。
+项目级目标为 `ASH.md` 和 `.ash/instructions/*.md`。共享 `AGENTS.md` 不复制、不修改；其中指向外部规则的引用以诊断提示审查。
 导入后通过原有目录文件刷新进入指令 catalog；不创建 Agent Turn，也不授予 LoadInstructions 或其他权限。
+
+用户级导入使用同一组接口：`scope: "user"` 时，`directory.path` 是经授权的外部用户 home；支持 Claude 的 `.claude/CLAUDE.md`、`.claude/rules/**/*.md` 和 Codex 的 `.codex/AGENTS.override.md` / `.codex/AGENTS.md`（非空 override 优先）。Copilot/Cursor 尚无用户文件布局导入，返回 InvalidParams。
+
+用户目标由当前 App Server 配置的 Ash home 决定，客户端不能指定任意发布目录；根文件写入 `ASH.md`，规则写入 `instructions/*.md`。预览返回 `targetDirectory`，目标路径相对此目录。摘要同时绑定 scope、来源目录和目标目录，切换 home 或 scope 必须重新预览。
+
+来源目录需要 ReadFiles/BrowseFiles；目标 Ash home 独立需要 ReadFiles/BrowseFiles，发布还需要 WriteFiles。每次调用重新检查现有目录授权，不自动扩大授权。导入后由 AshHome 刷新用户 catalog，后续模型请求沿现有用户指令路径读取。未配置 home 或目录授权不足时不发布。

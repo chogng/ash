@@ -55,7 +55,10 @@ pub struct InstructionListResult {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct InstructionImportPreviewParams {
+    /// Selects both source layout and destination ownership; never inferred from a path.
+    pub scope: InstructionScopeDto,
     pub source: InstructionImportSource,
+    /// Authorized source root: project directory or external user home.
     pub directory: crate::protocol::environment::SessionDirSelector,
     pub sources: Vec<String>,
 }
@@ -84,6 +87,8 @@ pub struct InstructionImportItem {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct InstructionImportPreviewResult {
+    /// Canonical destination root; item targets are relative to this directory.
+    pub target_directory: std::path::PathBuf,
     pub digest: String,
     pub items: Vec<InstructionImportItem>,
     pub diagnostics: Vec<InstructionDiagnosticDto>,
@@ -93,7 +98,10 @@ pub struct InstructionImportPreviewResult {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct InstructionImportParams {
+    /// Selects both source layout and destination ownership; never inferred from a path.
+    pub scope: InstructionScopeDto,
     pub source: InstructionImportSource,
+    /// Authorized source root: project directory or external user home.
     pub directory: crate::protocol::environment::SessionDirSelector,
     pub sources: Vec<String>,
     pub digest: String,
@@ -106,7 +114,7 @@ pub struct InstructionImportResult {
     pub items: Vec<InstructionImportItem>,
 }
 
-/// External project instruction format. No implicit default or runtime source registration.
+/// External instruction format. No implicit default or runtime source registration.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum InstructionImportSource {

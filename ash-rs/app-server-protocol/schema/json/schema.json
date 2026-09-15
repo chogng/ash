@@ -18254,7 +18254,12 @@
           "type": "string"
         },
         "directory": {
-          "$ref": "#/$defs/SessionDirSelector"
+          "$ref": "#/$defs/SessionDirSelector",
+          "description": "Authorized source root: project directory or external user home."
+        },
+        "scope": {
+          "$ref": "#/$defs/InstructionScopeDto",
+          "description": "Selects both source layout and destination ownership; never inferred from a path."
         },
         "source": {
           "$ref": "#/$defs/InstructionImportSource"
@@ -18267,6 +18272,7 @@
         }
       },
       "required": [
+        "scope",
         "source",
         "directory",
         "sources",
@@ -18279,7 +18285,12 @@
       "description": "Empty sources previews all discovered instructions from the selected source; otherwise select exact relative paths.",
       "properties": {
         "directory": {
-          "$ref": "#/$defs/SessionDirSelector"
+          "$ref": "#/$defs/SessionDirSelector",
+          "description": "Authorized source root: project directory or external user home."
+        },
+        "scope": {
+          "$ref": "#/$defs/InstructionScopeDto",
+          "description": "Selects both source layout and destination ownership; never inferred from a path."
         },
         "source": {
           "$ref": "#/$defs/InstructionImportSource"
@@ -18292,6 +18303,7 @@
         }
       },
       "required": [
+        "scope",
         "source",
         "directory",
         "sources"
@@ -18314,9 +18326,14 @@
             "$ref": "#/$defs/InstructionImportItem"
           },
           "type": "array"
+        },
+        "targetDirectory": {
+          "description": "Canonical destination root; item targets are relative to this directory.",
+          "type": "string"
         }
       },
       "required": [
+        "targetDirectory",
         "digest",
         "items",
         "diagnostics"
@@ -18339,7 +18356,7 @@
       "type": "object"
     },
     "InstructionImportSource": {
-      "description": "External project instruction format. No implicit default or runtime source registration.",
+      "description": "External instruction format. No implicit default or runtime source registration.",
       "enum": [
         "copilot",
         "claude",
