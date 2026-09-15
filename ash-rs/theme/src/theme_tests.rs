@@ -5,7 +5,6 @@ use serde::Deserialize;
 use crate::ColorScheme;
 use crate::Rgba;
 use crate::ThemeCatalog;
-use crate::ThemeChoiceKind;
 use crate::ThemeDocument;
 use crate::ThemeLoadOptions;
 use crate::ThemeLoader;
@@ -19,6 +18,11 @@ fn device_preferences_use_ash_home_unless_explicitly_overridden() {
         let actual = crate::default_device_root();
         if expected.is_empty() {
             assert!(actual.is_err());
+        } else if expected == "system-home" {
+            assert_eq!(
+                actual.unwrap(),
+                ash_utils_home_dir::find_ash_home().unwrap()
+            );
         } else {
             assert_eq!(actual.unwrap(), std::path::PathBuf::from(expected));
         }
@@ -30,23 +34,44 @@ fn device_preferences_use_ash_home_unless_explicitly_overridden() {
     let selected = root.join("selected");
     let device = root.join("device");
     for (configured, override_root, expected) in [
-        (None, None, root.join(".ash")),
+        (None, None, "system-home".into()),
         (Some(selected.as_path()), None, selected.clone()),
-        (Some(selected.as_path()), Some(device.as_path()), device.clone()),
-        (Some(selected.as_path()), Some(std::path::Path::new("relative")), "".into()),
+        (
+            Some(selected.as_path()),
+            Some(device.as_path()),
+            device.clone(),
+        ),
+        (
+            Some(selected.as_path()),
+            Some(std::path::Path::new("relative")),
+            "".into(),
+        ),
     ] {
         let mut child = std::process::Command::new(std::env::current_exe().unwrap());
-        child.args(["--exact", "tests::device_preferences_use_ash_home_unless_explicitly_overridden"])
+        child
+            .args([
+                "--exact",
+                "tests::device_preferences_use_ash_home_unless_explicitly_overridden",
+            ])
             .env("HOME", &root)
             .env("USERPROFILE", &root)
             .env(EXPECTED, expected)
             .env_remove("ASH_HOME")
             .env_remove("ASH_DEVICE_ROOT")
             .env_remove("ASH_PROFILE_ROOT");
-        if let Some(path) = configured { child.env("ASH_HOME", path); }
-        if let Some(path) = override_root { child.env("ASH_DEVICE_ROOT", path); }
+        if let Some(path) = configured {
+            child.env("ASH_HOME", path);
+        }
+        if let Some(path) = override_root {
+            child.env("ASH_DEVICE_ROOT", path);
+        }
         let output = child.output().unwrap();
-        assert!(output.status.success(), "{}\n{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
+        assert!(
+            output.status.success(),
+            "{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
     fs::remove_dir(root).unwrap();
 }
@@ -74,7 +99,7 @@ fn embedded_catalog_preserves_aliases_when_a_dependency_is_overridden() {
 }
 
 #[test]
-fn embedded_entries_keep_one_token_contract_and_select_graphical_product_defaults() {
+fn embedded_entries_preserve_rust_gui_defaults() {
     let catalog = ThemeCatalog::embedded().unwrap();
     let ash = catalog.built_in_entry("ash", ColorScheme::Light).unwrap();
     let app = catalog.built_in_entry("app", ColorScheme::Light).unwrap();
@@ -103,7 +128,7 @@ fn embedded_entries_keep_one_token_contract_and_select_graphical_product_default
 }
 
 #[test]
-fn embedded_snapshots_expose_typed_shared_size_tokens() {
+fn embedded_snapshots_expose_typed_size_tokens() {
     let snapshot = ThemeCatalog::embedded()
         .unwrap()
         .built_in(ColorScheme::Light)
@@ -160,7 +185,11 @@ fn loader_uses_the_host_entry_when_device_preference_follows_system() {
 
     let loaded = ThemeLoader::embedded()
         .unwrap()
-        .load(ThemeLoadOptions::new(&root, ColorScheme::Light).with_default_entry("app"));
+        .preview(
+            ThemeLoadOptions::new(&root, ColorScheme::Light).with_default_entry("app"),
+            "system",
+        )
+        .unwrap();
 
     assert_eq!(loaded.snapshot.id(), "app-light");
     assert!(loaded.follows_system);
@@ -169,11 +198,11 @@ fn loader_uses_the_host_entry_when_device_preference_follows_system() {
 }
 
 #[test]
-fn user_theme_transforms_and_legacy_editor_tokens_match_the_shared_contract() {
+fn user_theme_resolves_transforms_and_legacy_editor_tokens() {
     let catalog = ThemeCatalog::embedded().unwrap();
     let document = ThemeDocument::parse(
         r##"{
-            "$schema": "https://ash.dev/schemas/color-theme.schema.json",
+            "$schema": "https://ash.dev/schemas/app/color-theme.schema.json",
             "version": 1,
             "id": "transform-test",
             "label": "Transform Test",
@@ -204,25 +233,29 @@ fn user_theme_transforms_and_legacy_editor_tokens_match_the_shared_contract() {
 }
 
 #[test]
-fn graphical_theme_consumes_workbench_preference_and_isolates_broken_files() {
+fn gui_theme_uses_explicit_preference_and_isolates_broken_files() {
     let root = std::env::temp_dir().join(format!("ash-theme-{}", std::process::id()));
     let _ = fs::remove_dir_all(&root);
-    fs::create_dir_all(root.join("themes")).unwrap();
+    fs::create_dir_all(root.join("app/themes")).unwrap();
     fs::write(
         root.join("configuration.json"),
         r#"{"version":1,"values":{"workbench.colorTheme":"graphical-test"}}"#,
     )
     .unwrap();
-    fs::write(root.join("themes/broken.json"), "{").unwrap();
+    fs::write(root.join("app/themes/broken.json"), "{").unwrap();
     fs::write(
-        root.join("themes/graphical-test.json"),
+        root.join("app/themes/graphical-test.json"),
         r##"{"version":1,"id":"graphical-test","label":"Graphical Test","colorScheme":"dark","colors":{"accent.foreground":"#abcdef"}}"##,
     )
     .unwrap();
 
     let loaded = ThemeLoader::embedded()
         .unwrap()
-        .load(ThemeLoadOptions::new(&root, ColorScheme::Dark).with_default_entry("app"));
+        .preview(
+            ThemeLoadOptions::new(&root, ColorScheme::Dark).with_default_entry("app"),
+            "graphical-test",
+        )
+        .unwrap();
 
     assert_eq!(loaded.snapshot.id(), "graphical-test");
     assert!(!loaded.follows_system);
@@ -238,38 +271,6 @@ fn graphical_theme_consumes_workbench_preference_and_isolates_broken_files() {
 }
 
 #[test]
-fn graphical_theme_selection_is_immediate_and_preserves_other_device_values() {
-    let root = std::env::temp_dir().join(format!("ash-theme-selection-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&root);
-    fs::create_dir_all(&root).unwrap();
-    fs::write(
-        root.join("configuration.json"),
-        r#"{"version":1,"values":{"workbench.colorTheme":"ash-light","window.zoomLevel":2}}"#,
-    )
-    .unwrap();
-    let loader = ThemeLoader::embedded().unwrap();
-
-    let selected = loader
-        .select(ThemeLoadOptions::new(&root, ColorScheme::Dark), "ash-dark")
-        .unwrap();
-
-    assert_eq!(selected.snapshot.id(), "ash-dark");
-    let persisted: serde_json::Value =
-        serde_json::from_str(&fs::read_to_string(root.join("configuration.json")).unwrap())
-            .unwrap();
-    assert_eq!(persisted["values"]["workbench.colorTheme"], "ash-dark");
-    assert_eq!(persisted["values"]["window.zoomLevel"], 2);
-    assert_eq!(
-        loader
-            .load(ThemeLoadOptions::new(&root, ColorScheme::Dark))
-            .snapshot
-            .id(),
-        "ash-dark"
-    );
-    fs::remove_dir_all(root).unwrap();
-}
-
-#[test]
 fn theme_preview_resolves_without_persisting_the_candidate() {
     let root = std::env::temp_dir().join(format!("ash-theme-preview-{}", std::process::id()));
     let _ = fs::remove_dir_all(&root);
@@ -281,43 +282,9 @@ fn theme_preview_resolves_without_persisting_the_candidate() {
 
     assert_eq!(preview.snapshot.id(), "app-light");
     assert!(!root.join("configuration.json").exists());
-    assert_eq!(loader.load(options).snapshot.id(), "app-dark");
-    fs::remove_dir_all(root).unwrap();
-}
-
-#[test]
-fn theme_choices_include_system_builtins_and_valid_user_themes() {
-    let root = std::env::temp_dir().join(format!("ash-theme-choices-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&root);
-    fs::create_dir_all(root.join("themes")).unwrap();
-    fs::write(
-        root.join("themes/aurora.json"),
-        r##"{"version":1,"id":"aurora","label":"Aurora","colorScheme":"dark","colors":{"accent.foreground":"#abcdef"}}"##,
-    )
-    .unwrap();
-
-    let choices = ThemeLoader::embedded()
-        .unwrap()
-        .choices(ThemeLoadOptions::new(&root, ColorScheme::Dark));
-
-    assert_eq!(choices.selected, "system");
-    assert!(
-        choices
-            .themes
-            .iter()
-            .any(|theme| { theme.id == "system" && theme.kind == ThemeChoiceKind::System })
-    );
-    assert!(
-        choices
-            .themes
-            .iter()
-            .any(|theme| { theme.id == "ash-dark" && theme.kind == ThemeChoiceKind::BuiltIn })
-    );
-    assert!(
-        choices
-            .themes
-            .iter()
-            .any(|theme| { theme.id == "aurora" && theme.kind == ThemeChoiceKind::User })
+    assert_eq!(
+        loader.preview(options, "system").unwrap().snapshot.id(),
+        "app-dark"
     );
     fs::remove_dir_all(root).unwrap();
 }
@@ -332,7 +299,7 @@ fn unavailable_theme_selection_does_not_rewrite_device_configuration() {
 
     let error = ThemeLoader::embedded()
         .unwrap()
-        .select(
+        .preview(
             ThemeLoadOptions::new(&root, ColorScheme::Dark),
             "missing-theme",
         )
@@ -353,11 +320,9 @@ struct ConformanceFixture {
 }
 
 #[test]
-fn rust_resolver_matches_the_shared_cross_runtime_conformance_fixture() {
-    let fixture: ConformanceFixture = serde_json::from_str(include_str!(
-        "../../../resources/design-tokens/theme-conformance.json"
-    ))
-    .unwrap();
+fn rust_resolver_preserves_alias_and_transform_results() {
+    let fixture: ConformanceFixture =
+        serde_json::from_str(include_str!("fixtures/resolver.json")).unwrap();
     let document = ThemeDocument::parse(&fixture.theme.to_string()).unwrap();
     let snapshot = ThemeCatalog::embedded()
         .unwrap()
@@ -374,7 +339,7 @@ fn rust_resolver_matches_the_shared_cross_runtime_conformance_fixture() {
 }
 
 #[test]
-fn user_theme_document_rejects_values_outside_the_shared_json_schema() {
+fn user_theme_document_rejects_invalid_color_values() {
     for source in [
         r#"{"version":1,"id":"invalid","label":"Invalid","colorScheme":"dark","colors":{"foreground":null}}"#,
         r#"{"version":1,"id":"invalid","label":"Invalid","colorScheme":"dark","colors":{"foreground":"not a token"}}"#,
@@ -382,4 +347,63 @@ fn user_theme_document_rejects_values_outside_the_shared_json_schema() {
     ] {
         assert!(ThemeDocument::parse(source).is_err(), "{source}");
     }
+}
+
+#[test]
+fn rust_gui_owns_its_theme_template_and_schema() {
+    let source = include_str!("../resources/color-theme.template.json");
+    let document = ThemeDocument::parse(source).unwrap();
+    let snapshot = ThemeCatalog::embedded()
+        .unwrap()
+        .resolve_document(&document)
+        .unwrap();
+    assert_eq!(snapshot.id(), "my-custom-theme");
+    let desktop = source.replace(
+        "https://ash.dev/schemas/app/color-theme.schema.json",
+        "https://ash.dev/schemas/color-theme.schema.json",
+    );
+    assert!(matches!(
+        ThemeDocument::parse(&desktop),
+        Err(crate::ThemeError::InvalidSchema)
+    ));
+}
+
+#[test]
+fn rust_gui_does_not_discover_desktop_themes_or_change_desktop_settings() {
+    let root = std::env::temp_dir().join(format!("ash-theme-isolation-{}", std::process::id()));
+    fs::create_dir_all(root.join("themes")).unwrap();
+    let source = include_str!("../resources/color-theme.template.json");
+    let configuration = r#"{"version":1,"values":{"workbench.colorTheme":"my-custom-theme"}}"#;
+    fs::write(root.join("themes/custom.json"), source).unwrap();
+    fs::write(root.join("configuration.json"), configuration).unwrap();
+    let loader = ThemeLoader::embedded().unwrap();
+    let options = ThemeLoadOptions::new(&root, ColorScheme::Dark).with_default_entry("app");
+
+    assert!(matches!(
+        loader.preview(options, "my-custom-theme"),
+        Err(crate::ThemeSelectionError::Unavailable(_))
+    ));
+    assert_eq!(
+        loader.preview(options, "system").unwrap().snapshot.id(),
+        "app-dark"
+    );
+    fs::create_dir_all(root.join("app/themes")).unwrap();
+    fs::write(root.join("app/themes/custom.json"), source).unwrap();
+    assert_eq!(
+        loader
+            .preview(options, "my-custom-theme")
+            .unwrap()
+            .snapshot
+            .id(),
+        "my-custom-theme"
+    );
+    assert_eq!(
+        fs::read_to_string(root.join("configuration.json")).unwrap(),
+        configuration
+    );
+    assert_eq!(
+        fs::read_to_string(root.join("themes/custom.json")).unwrap(),
+        source
+    );
+    fs::remove_dir_all(root).unwrap();
 }

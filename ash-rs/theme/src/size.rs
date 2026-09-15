@@ -1,6 +1,6 @@
 use std::fmt;
 
-/// Unit carried by a scalar value in the shared design-token manifest.
+/// Unit carried by a scalar value in the Rust GUI catalog.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum ThemeSizeUnit {
     Pixels,
@@ -19,7 +19,7 @@ impl fmt::Display for ThemeSizeUnit {
     }
 }
 
-/// A validated scalar size from the shared design-token manifest.
+/// A validated scalar size from the Rust GUI catalog.
 ///
 /// The manifest currently uses logical pixels, unitless values, and milliseconds.
 #[derive(Clone, Copy, Debug, PartialEq)]

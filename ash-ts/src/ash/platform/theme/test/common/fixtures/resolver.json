@@ -2,8 +2,8 @@
   "theme": {
     "$schema": "https://ash.dev/schemas/color-theme.schema.json",
     "version": 1,
-    "id": "shared-conformance",
-    "label": "Shared Conformance",
+    "id": "resolver-test",
+    "label": "Resolver Test",
     "colorScheme": "dark",
     "colors": {
       "sideBar.background": "#123456",

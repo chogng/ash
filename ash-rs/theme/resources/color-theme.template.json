@@ -1,0 +1,31 @@
+{
+  "$schema": "https://ash.dev/schemas/app/color-theme.schema.json",
+  "version": 1,
+  "id": "my-custom-theme",
+  "label": "My Custom Theme",
+  "colorScheme": "dark",
+  "colors": {
+    "workbench.background": "#0b1020",
+    "editor.background": "#0b1020",
+    "editor.foreground": "#dbe7ff",
+    "sideBar.background": "#10172a",
+    "auxiliaryBar.background": "sideBar.background",
+    "panel.background": "sideBar.background",
+    "titleBar.background": "#080d18",
+    "titleBar.foreground": "#edf4ff",
+    "titleBar.actionForeground": "#dbe7ff",
+    "input.background": "#18223a",
+    "input.border": "#31446d",
+    "focusBorder": "#7aa2f7",
+    "accent.foreground": "#89b4fa",
+    "button.primaryBackground": "#4169a8",
+    "button.primaryHoverBackground": "#527bbd",
+    "selection.background": "#29466f",
+    "list.activeSelectionBackground": "#29466f",
+    "toolbar.hoverBackground": {
+      "op": "transparent",
+      "value": "#ffffff",
+      "factor": 0.2
+    }
+  }
+}

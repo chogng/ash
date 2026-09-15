@@ -1,0 +1,30 @@
+{
+  "theme": {
+    "$schema": "https://ash.dev/schemas/app/color-theme.schema.json",
+    "version": 1,
+    "id": "resolver-test",
+    "label": "Resolver Test",
+    "colorScheme": "dark",
+    "colors": {
+      "sideBar.background": "#123456",
+      "toolbar.hoverBackground": {
+        "op": "transparent",
+        "value": "#ffffff",
+        "factor": 0.2
+      },
+      "search.matchBackground": {
+        "op": "mix",
+        "value": "#000000",
+        "other": "#ffffff",
+        "factor": 0.5
+      },
+      "editor.semanticToken.functionForeground": "#ff8800"
+    }
+  },
+  "expected": {
+    "panel.background": "#123456",
+    "toolbar.hoverBackground": "#ffffff33",
+    "search.matchBackground": "#808080",
+    "editor.token.functionForeground": "#ff8800"
+  }
+}

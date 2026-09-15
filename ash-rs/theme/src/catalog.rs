@@ -10,14 +10,13 @@ use crate::document::{
 use crate::size::{ThemeSize, ThemeSizeUnit};
 use crate::snapshot::ThemeSnapshot;
 
-const EMBEDDED_MANIFEST: &str = include_str!("../../../resources/design-tokens/design-tokens.json");
-const EMBEDDED_THEME_ENTRIES: &str =
-    include_str!("../../../resources/design-tokens/theme-entries.json");
+const EMBEDDED_MANIFEST: &str = include_str!("../resources/catalog.json");
+const EMBEDDED_THEME_ENTRIES: &str = include_str!("../resources/entries.json");
 const LEGACY_EDITOR_TOKEN_PREFIX: &str = "editor.semanticToken.";
 const EDITOR_TOKEN_PREFIX: &str = "editor.token.";
 const DEFAULT_THEME_ENTRY: &str = "ash";
 
-/// Versioned catalog compiled from the shared design-token manifest.
+/// Rust GUI color and size definitions, independent of the Desktop registry.
 pub struct ThemeCatalog {
     colors: BTreeMap<String, ColorContribution>,
     sizes: BTreeMap<String, ThemeSize>,
@@ -151,20 +150,6 @@ impl ThemeCatalog {
             }
         }
         Ok(None)
-    }
-
-    pub(crate) fn built_in_themes(&self) -> Vec<ThemeSnapshot> {
-        self.entries
-            .keys()
-            .flat_map(|entry_id| {
-                [ColorScheme::Dark, ColorScheme::Light]
-                    .into_iter()
-                    .map(|scheme| {
-                        self.built_in_entry(entry_id, scheme)
-                            .expect("embedded theme entries are validated at catalog construction")
-                    })
-            })
-            .collect()
     }
 
     pub(crate) fn is_reserved_theme_id(&self, theme_id: &str) -> bool {
@@ -423,9 +408,9 @@ pub enum ThemeError {
     MissingDefault(String),
     #[error("resolved theme is missing required color '{0}'")]
     MissingResolvedColor(String),
-    #[error("duplicate token '{0}' in the shared catalog")]
+    #[error("duplicate token '{0}' in the Rust GUI catalog")]
     DuplicateToken(String),
-    #[error("invalid shared size token '{token}' value '{value}'")]
+    #[error("invalid size token '{token}' value '{value}'")]
     InvalidSizeValue { token: String, value: String },
     #[error("resolved theme is missing required size '{0}'")]
     MissingResolvedSize(String),

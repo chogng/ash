@@ -1,5 +1,0 @@
-filegroup(
-    name = "artifacts",
-    srcs = glob(["*"]),
-    visibility = ["//visibility:public"],
-)

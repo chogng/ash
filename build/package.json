@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test *.test.ts desktop/**/*.test.ts lib/watch/*.test.ts pnpm/*.test.ts resources/**/*.test.ts vite/*.test.ts ash-package/*.test.ts",
-    "typecheck": "tsc -p tsconfig.json && tsc -p ../ash-ts/tsconfig.tokens.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

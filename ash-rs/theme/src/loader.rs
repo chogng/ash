@@ -8,12 +8,10 @@ use crate::ColorScheme;
 use crate::ThemeCatalog;
 use crate::ThemeDocument;
 use crate::ThemeSnapshot;
-use crate::preference::ThemeSelectionError;
-use crate::preference::read_preference;
-use crate::preference::write_preference;
+use thiserror::Error;
 
 const MAX_THEME_FILES: usize = 128;
-const MAX_DEVICE_DOCUMENT_BYTES: u64 = 1_048_576;
+const MAX_THEME_DOCUMENT_BYTES: u64 = 1_048_576;
 
 /// Resolves the host-local UI preference root without consulting Agent configuration.
 pub fn default_device_root() -> std::io::Result<PathBuf> {
@@ -62,31 +60,22 @@ pub struct LoadedTheme {
     pub follows_system: bool,
 }
 
-/// Origin of one theme exposed to a graphical theme picker.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ThemeChoiceKind {
-    System,
-    BuiltIn,
-    User,
+/// Failure to resolve a Rust GUI theme selection.
+#[derive(Debug, Error)]
+pub enum ThemeSelectionError {
+    #[error("invalid theme preference '{0}'")]
+    InvalidPreference(String),
+    #[error("theme '{0}' is unavailable")]
+    Unavailable(String),
+    #[error("theme '{preference}' is invalid: {source}")]
+    InvalidTheme {
+        preference: String,
+        #[source]
+        source: crate::ThemeError,
+    },
 }
 
-/// One valid theme preference available to a graphical host.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ThemeChoice {
-    pub id: String,
-    pub label: String,
-    pub color_scheme: ColorScheme,
-    pub kind: ThemeChoiceKind,
-}
-
-/// Available theme preferences and the effective device-local selection.
-pub struct ThemeChoices {
-    pub selected: String,
-    pub themes: Vec<ThemeChoice>,
-    pub diagnostics: Vec<ThemeDiagnostic>,
-}
-
-/// Bounded loader for shared device preferences and user theme JSON files.
+/// Bounded loader for Rust GUI user themes; the GUI owns the selected preference.
 pub struct ThemeLoader {
     catalog: ThemeCatalog,
 }
@@ -96,84 +85,6 @@ impl ThemeLoader {
         Ok(Self {
             catalog: ThemeCatalog::embedded()?,
         })
-    }
-
-    pub fn load(&self, options: ThemeLoadOptions<'_>) -> LoadedTheme {
-        let mut diagnostics = Vec::new();
-        let preference = read_preference(&options, &mut diagnostics);
-        match self.resolve_preference(&options, &preference, &mut diagnostics) {
-            Ok((snapshot, follows_system)) => LoadedTheme {
-                snapshot,
-                diagnostics,
-                follows_system,
-            },
-            Err(error) => {
-                diagnostics.push(ThemeDiagnostic {
-                    file: None,
-                    message: format!("{error}; using default theme entry"),
-                });
-                LoadedTheme {
-                    snapshot: self.default_snapshot(&options, &mut diagnostics),
-                    diagnostics,
-                    follows_system: true,
-                }
-            }
-        }
-    }
-
-    /// Lists valid built-in and user theme preferences for one graphical host.
-    pub fn choices(&self, options: ThemeLoadOptions<'_>) -> ThemeChoices {
-        let mut diagnostics = Vec::new();
-        let selected = read_preference(&options, &mut diagnostics);
-        let system = self.default_snapshot(&options, &mut diagnostics);
-        let mut themes = vec![ThemeChoice {
-            id: "system".into(),
-            label: format!("System ({})", system.label()),
-            color_scheme: system.color_scheme(),
-            kind: ThemeChoiceKind::System,
-        }];
-        themes.extend(
-            self.catalog
-                .built_in_themes()
-                .into_iter()
-                .map(|snapshot| ThemeChoice {
-                    id: snapshot.id().to_owned(),
-                    label: snapshot.label().to_owned(),
-                    color_scheme: snapshot.color_scheme(),
-                    kind: ThemeChoiceKind::BuiltIn,
-                }),
-        );
-        let documents = read_theme_documents(options.device_root, &self.catalog, &mut diagnostics);
-        for document in documents.values() {
-            match self.catalog.resolve_document(document) {
-                Ok(snapshot) => themes.push(ThemeChoice {
-                    id: snapshot.id().to_owned(),
-                    label: snapshot.label().to_owned(),
-                    color_scheme: snapshot.color_scheme(),
-                    kind: ThemeChoiceKind::User,
-                }),
-                Err(error) => diagnostics.push(ThemeDiagnostic {
-                    file: None,
-                    message: format!("user theme '{}' is invalid: {error}", document.id()),
-                }),
-            }
-        }
-        ThemeChoices {
-            selected,
-            themes,
-            diagnostics,
-        }
-    }
-
-    /// Validates, persists, and resolves one graphical theme preference.
-    pub fn select(
-        &self,
-        options: ThemeLoadOptions<'_>,
-        preference: &str,
-    ) -> Result<LoadedTheme, ThemeSelectionError> {
-        let loaded = self.preview(options, preference)?;
-        write_preference(options.device_root, preference)?;
-        Ok(loaded)
     }
 
     /// Resolves one theme preference without changing the device configuration.
@@ -257,7 +168,7 @@ fn read_theme_documents(
     catalog: &ThemeCatalog,
     diagnostics: &mut Vec<ThemeDiagnostic>,
 ) -> BTreeMap<String, ThemeDocument> {
-    let directory = device_root.join("themes");
+    let directory = device_root.join("app").join("themes");
     let entries = match fs::read_dir(&directory) {
         Ok(entries) => entries,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return BTreeMap::new(),
@@ -318,12 +229,12 @@ fn read_theme_documents(
     documents
 }
 
-pub(crate) fn read_bounded_text(path: &Path) -> std::io::Result<String> {
+fn read_bounded_text(path: &Path) -> std::io::Result<String> {
     let mut bytes = Vec::new();
     fs::File::open(path)?
-        .take(MAX_DEVICE_DOCUMENT_BYTES + 1)
+        .take(MAX_THEME_DOCUMENT_BYTES + 1)
         .read_to_end(&mut bytes)?;
-    if bytes.len() as u64 > MAX_DEVICE_DOCUMENT_BYTES {
+    if bytes.len() as u64 > MAX_THEME_DOCUMENT_BYTES {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
             "document exceeds the 1 MiB limit",

@@ -1,85 +1,39 @@
-# Design Token：图形界面主题系统边界
+# Design Token：各界面的主题边界
 
-> 本文是 Desktop 与 Rust 桌面端主题、design token 和用户主题格式的 canonical 文档。完整 token 清单由构建器生成在 [`resources/design-tokens/design-tokens.md`](../resources/design-tokens/design-tokens.md)，用户主题写法见 [`theme-authoring-template.md`](theme-authoring-template.md)。Ash Code 终端主题由 [`ash-code/tui/README.md`](../ash-code/tui/README.md) 独立说明，不属于本文的共享契约。
-
-## 快速理解
-
-Desktop TypeScript registry 是图形界面 token 的唯一声明目录。构建器把保留别名和默认值依赖的 manifest、Schema 与模板生成到 `resources/design-tokens/`；Desktop 与 `ash-theme` 分别读取同一契约，生成不可变主题快照并交给各自的图形组件。Ash Code TUI 不读取 TypeScript registry、生成物或 `ash-theme`。
-
-| 想改变什么 | 应该修改哪里 | 不应该怎么做 |
-| --- | --- | --- |
-| Desktop 或 Rust 桌面端组件的语义颜色 | 修改组件所有者注册的 token | 在组件中复制十六进制颜色 |
-| 图形界面的整套主题外观 | 切换主题入口或覆盖公开 token | 重写组件选择器 |
-| 编辑器语法颜色 | 覆盖 `editor.token.*Foreground` | 让解析器携带固定 RGB |
-| 编辑器折叠状态 | 覆盖 `editor.foldBackground`、`editor.foldPlaceholderForeground`、`editorGutter.foldingControlForeground` | 在组件或 `[gui]` 中硬编码折叠颜色 |
-| Ash Code TUI 外观 | 修改 `ash-code/tui/src/render/palette.rs` 或 TUI 用户主题 JSON | 在 `ash-ts` 注册 `tui.*` token |
-| 跟随操作系统明暗模式 | 选择 `system` | 维护第四套 system 主题值 |
+Desktop、Rust GUI 与 Ash Code TUI 分别拥有主题实现。配色理念与视觉规范可以互相参考；注册表、默认值、用户主题文件和校验规则由使用它们的界面维护。
 
 ## 所有权
 
-| 边界 | Owner | 职责 |
+| 内容 | Desktop TypeScript | Rust GUI |
 | --- | --- | --- |
-| 通用 RGBA 运算 | `src/ash/base/common/color.ts` | 解析、混合、透明度和字符串化；不感知主题或 Workbench |
-| token 定义与依赖解析 | `ash-ts/src/ash/platform/theme/common` | 注册颜色和尺寸，拒绝重复 ID，解析别名与变换 |
-| 语言中立契约 | `resources/design-tokens/` | 保存版本化 manifest、图形界面主题入口、用户主题 Schema、模板和跨运行时 fixture |
-| Desktop 快照 | `colorTheme.ts` | 将明暗方案、覆盖值和注册目录编译为只读颜色与尺寸表 |
-| Rust 桌面端快照与加载 | `ash-rs/theme` | 嵌入同一 manifest，严格解析图形界面用户主题，并解析 GUI 交给它的主题选择 |
-| GUI 主题偏好 | profile `config.toml` 的 `[gui].theme` | GUI 负责默认值与校验；配置后端只保存 `[gui]` 键值表 |
-| 图形界面用户主题 | profile root 的 `themes/*.json` | 保存符合共享 Schema 的主题文档 |
-| Ash Code TUI 主题 | `ash-code/tui/src/theme`、`ash-code/tui/src/render/palette.rs` | 拥有内置调色板、终端色彩降级、TUI 用户主题及 `[tui].theme` 的解释与校验 |
-| 离线治理 | `tokenCompiler.ts` 与 `build/desktop/compileDesignTokens.ts` | 校验所有明暗方案并生成共享图形界面契约 |
+| 颜色与尺寸声明 | [theme/common](../ash-ts/src/ash/platform/theme/common/colorTheme.ts) 的注册表 | [catalog.json](../ash-rs/theme/resources/catalog.json) |
+| 内置主题 | TypeScript 注册表和主题快照 | [entries.json](../ash-rs/theme/resources/entries.json) 和 Rust 解析器 |
+| 用户主题校验 | [userColorTheme.ts](../ash-ts/src/ash/platform/theme/common/userColorTheme.ts) | [document.rs](../ash-rs/theme/src/document.rs) 与 [catalog.rs](../ash-rs/theme/src/catalog.rs) |
+| 用户主题 Schema 与模板 | [ash-ts/resources/theme](../ash-ts/resources/theme/color-theme.schema.json) | [ash-rs/theme/resources](../ash-rs/theme/resources/color-theme.schema.json) |
+| 用户主题目录 | profile root 的 `themes/*.json` | profile root 的 `app/themes/*.json` |
+| 主题选择 | `workbench.colorTheme`，由 Desktop 配置服务保存 | `config.toml` 的 `[gui].theme`，由 GUI 解释 |
+| 组件消费 | CSS 变量与编辑器、终端颜色表 | `ThemeSnapshot → UiTheme` 与各组件的类型化样式 |
 
-`src/ash/base` 不引用主题平台或 Workbench。TUI 也不反向引用 TypeScript 前端或图形界面主题 crate。
+Ash Code TUI 的调色板、用户主题和 `[tui].theme` 由 [ash-code/tui](../ash-code/tui/README.md) 独立拥有。
 
-## 端到端模型
+## 构建边界
 
-```mermaid
-flowchart LR
-  A["Domain registerColor / registerSize"] --> B["TypeScript registries"]
-  B --> C["Build-time compiler"]
-  C --> D["Versioned manifest + Schema"]
-  B --> E["Desktop resolver"]
-  D --> F["ash-theme resolver"]
-  G["Desktop workbench.colorTheme"] --> E
-  M["config.toml [gui].theme"] --> F
-  H["Graphical user theme JSON"] --> E
-  H --> F
-  E --> I["Desktop CSS / editor / terminal"]
-  F --> J["Rust desktop component palettes"]
-```
+- Desktop 直接使用运行时 TypeScript 注册表，不导出给 Rust，也不生成 token manifest。
+- Rust 在编译时嵌入自己维护的 JSON 声明；修改 Rust 主题不需要 Node、pnpm 或 TypeScript。
+- 没有跨端 token 编译器、生成命令或生成物新旧检查。主题 Schema 和模板是各端自有资源，随所属解析器维护。
+- JSON Schema 描述文档结构；加载时由各端注册表校验 token 是否存在、引用能否解析、变换是否合法。
+- 同名 token 不构成跨端兼容承诺。两端可以独立增删 token、调整默认值和演进文档格式。
 
-注册表保留声明顺序，因此生成物稳定。颜色引用可以指向另一颜色 token，也可以使用透明、明暗、混合和不透明化变换。未知引用、未知覆盖、重复 ID、循环依赖或透明度契约不满足都会失败，不做猜测。
+## 使用与验证
 
-Ash Code 走完全独立的主题内容路径：配置后端原样保存 `<profile>/config.toml` 的 `[tui]` 表，TUI 解释其中的 `theme`；`ThemeResource` 只读取 `<profile>/ash-code/themes/*.json`，`ThemePalette` 形成完整 TUI 调色板，`RenderTheme` 再按 TrueColor、ANSI-256、ANSI-16 或 Monochrome 能力转换为终端颜色。这条路径不共享图形界面 manifest、主题文件或外观字段。
+- 新颜色语义在使用它的界面注册，组件通过语义 token 取值。
+- 每端只解析自己的用户主题目录和 Schema；选择主题不写入另一端的配置。
+- 解析器负责未知 token、循环引用、变换深度与透明度校验；组件消费完整快照。
+- 两端各自保留别名、变换、主题模板及默认值测试，不使用跨端一致性 fixture。
+- 用户主题安装和旧主题处理见 [主题模板](theme-authoring-template.md)；Rust crate 接口见 [ash-theme](../ash-rs/theme/README.md)。
 
-## 调用方契约
+## 当前边界
 
-- 图形界面新语义必须注册新 ID；组件不能通过复制某个十六进制值表达“看起来一样”。
-- 一个 token 只有一个 owner。owner 负责默认值、描述、弃用路径和视觉回归。
-- 图形界面主题是已解析快照，消费层不能修改快照或自行解释别名与变换。
-- 编辑器解析器只发布 `CodeEditorTokenRole`；颜色在绘制时由当前 `CodeEditorStyle` 决定。
-- 图形界面注册或默认值变更后运行 `pnpm tokens:generate`，提交 `resources/design-tokens/` 生成物。
-- TUI 语义颜色只在 TUI 调色板和 TUI 用户主题字段中增加，不进入 `ColorId`、共享 Schema、`ash-theme::tokens` 或 `theme-entries.json`。
+拆分保留各端已有颜色、尺寸、别名和内置主题 ID，不改变既有组件外观。Rust GUI 只接收宿主传入的主题选择，不读写 Desktop 的 `configuration.json`。
 
-## 当前状态
-
-- 图形界面支持 `light`、`dark` 与跟随操作系统的 `system` 偏好；`theme-entries.json` 只包含 `ash` 和 `app` 图形界面入口。
-- Desktop 从 profile `configuration.json` 读取 `workbench.colorTheme`；Rust GUI 解释 `config.toml` 的 `[gui].theme`。两者都从 profile root 的 `themes/*.json` 加载图形界面用户主题。
-- 不可变颜色对象、注册贡献、主题快照、生成产物和跨运行时 conformance fixture 已实现。
-- Ash Code 的内置 dark、light、colorblind、ANSI 调色板及用户主题由 TUI 自己维护；TUI 的 `/theme` 更新 `config.toml` 根级 `[tui]` 表中的 `theme`。
-
-## 当前限制
-
-- 图形界面的高对比度默认值仍继承对应明暗方案。
-- Desktop 保存和预览可即时更新；Rust 桌面端在进程启动时加载外部用户主题文件。
-- Rust GUI 的界面字体族与基础字号、编辑器字体族、字号和行高由 `[gui]` 管理；主题 token 定义界面字体角色之间的字号比例与 regular、medium、semiBold 强调层级。
-- 图形界面用户主题只能覆盖已注册 token，不能在 JSON 中注册新的产品语义。
-- TUI 用户主题使用独立、较小且严格的字段集合，不兼容图形界面主题 JSON；需要分别安装。
-
-## 长期不变量
-
-- base 层保持领域无关且不存在反向依赖。
-- 图形界面的 token ID、CSS 名称和 owner 变更属于兼容性变更。
-- TypeScript registry 是图形界面声明 authority，生成 manifest 是 Desktop 与 Rust 桌面端之间的契约。
-- Ash Code TUI 的主题是产品自有能力；不得从 TS registry、`resources/design-tokens`、`ash-theme` 或 `configuration.json` 恢复依赖。
-- 未知、循环或不完整数据必须快速失败；不存在“缺失时猜一个颜色”的恢复语义。
+Desktop 的设置内保存和预览即时生效；Rust GUI 的外部主题文件在加载时读取。高对比度默认值由各端单独维护，当前未单独定义的值继承对应明暗方案。

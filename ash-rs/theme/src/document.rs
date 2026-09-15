@@ -2,7 +2,8 @@ use std::collections::BTreeMap;
 
 use serde::Deserialize;
 
-pub(crate) const USER_THEME_SCHEMA_URL: &str = "https://ash.dev/schemas/color-theme.schema.json";
+pub(crate) const USER_THEME_SCHEMA_URL: &str =
+    "https://ash.dev/schemas/app/color-theme.schema.json";
 
 /// Color scheme selected before one theme document is resolved.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
@@ -44,7 +45,7 @@ impl ColorScheme {
     }
 }
 
-/// Strict, versioned user color-theme document shared by graphical hosts.
+/// Strict, versioned user color-theme document owned by the Rust GUI.
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ThemeDocument {

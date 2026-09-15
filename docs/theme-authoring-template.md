@@ -1,10 +1,10 @@
 # 用户主题 JSON 模板
 
-> 本文是 Desktop 与 Rust 桌面端可安装用户主题的 canonical 说明。可以直接复制并修改 [`color-theme.template.json`](../resources/design-tokens/color-theme.template.json)；架构与可靠性边界见 [`design-tokens.md`](design-tokens.md)，可用 token 见[生成目录](../resources/design-tokens/design-tokens.md)，格式 Schema 见 [`color-theme.schema.json`](../resources/design-tokens/color-theme.schema.json)。Ash Code TUI 使用自己的主题格式，见 [`ash-code/tui/README.md`](../ash-code/tui/README.md)。
+> 本文分别说明 Desktop 与 Rust GUI 的用户主题。Desktop 使用 [自己的模板](../ash-ts/resources/theme/color-theme.template.json) 和 [Schema](../ash-ts/resources/theme/color-theme.schema.json)；Rust GUI 使用 [自己的模板](../ash-rs/theme/resources/color-theme.template.json) 和 [Schema](../ash-rs/theme/resources/color-theme.schema.json)。两端 token 由各自主题实现维护，架构见 [主题边界](design-tokens.md)。Ash Code TUI 使用 [独立格式](../ash-code/tui/README.md)。
 
 ## 快速理解
 
-创建主题最简单的方法是在 Settings → Appearance 中从当前主题另存一份，再只修改需要变化的
+以下设置页面操作描述 Desktop。创建主题最简单的方法是在 Settings → Appearance 中从当前主题另存一份，再只修改需要变化的
 语义颜色。主题文件不需要复制完整颜色表；未覆盖的颜色会继续使用所选明暗方案的默认值。
 
 | 想做什么 | 推荐方式 | 生效方式 |
@@ -29,9 +29,9 @@
 
 ## 文件安装与卸载
 
-Ash 宿主读取 profile root 的 `themes` 目录中的常规 `*.json` 文件。默认 profile root 在 macOS 为 `/Users/<user>/.ash`，Linux 为 `/home/<user>/.ash`，Windows 为 `C:\Users\<user>\.ash`。`ASH_HOME` 可整体覆盖 profile；测试主题加载器时还可用优先级更高的 `ASH_DEVICE_ROOT` 仅覆盖 device resource root。Desktop 中的实际绝对路径会显示在 Settings → Appearance 底部。
+Desktop 读取 profile root 的 `themes/*.json`；Rust GUI 读取 `app/themes/*.json`。默认 profile root 在 macOS 为 `/Users/<user>/.ash`，Linux 为 `/home/<user>/.ash`，Windows 为 `C:\Users\<user>\.ash`。`ASH_HOME` 可整体覆盖 profile；测试主题加载器时还可用优先级更高的 `ASH_DEVICE_ROOT` 仅覆盖 device resource root。Desktop 中的实际绝对路径会显示在 Settings → Appearance 底部。
 
-- 外部安装：把 [`color-theme.template.json`](../resources/design-tokens/color-theme.template.json) 复制到该目录，修改 `id`、`label` 和颜色后保存，完全重启 Ash。
+- 外部安装：把 [`color-theme.template.json`](../ash-ts/resources/theme/color-theme.template.json) 复制到该目录，修改 `id`、`label` 和颜色后保存，完全重启 Ash。
 - 外部更新：替换同名文件，完全重启 Ash。
 - 卸载：删除对应文件，完全重启 Ash。
 - 恢复：如果已选择的主题不存在或加载失败，配置验证会回退到 System，内置 Light/Dark 始终可用。
@@ -40,7 +40,9 @@ Ash 宿主读取 profile root 的 `themes` 目录中的常规 `*.json` 文件。
 
 ## 可复制模板
 
-保存为 `aurora.json`：
+以下是 Desktop 模板。Rust GUI 请使用上方的独立模板，其 `$schema` 为 `https://ash.dev/schemas/app/color-theme.schema.json`。
+
+保存为 `ash-aurora.json`：
 
 ```json
 {
@@ -151,7 +153,7 @@ Ash 宿主读取 profile root 的 `themes` 目录中的常规 `*.json` 文件。
 一个成功注册的用户主题会自动出现在 Settings → Appearance，并使用实际快照生成预览。选择后以下消费者使用同一快照：
 
 - Workbench CSS custom properties 与 Stanza editor token 颜色；
-- Native shell、composer CodeEditor、multi-diff editor、terminal ANSI palette 与 scrollbar；
+- composer CodeEditor、multi-diff editor、terminal ANSI palette 与 scrollbar；
 - Desktop Terminal 前景、背景、光标、选择色和完整 ANSI palette；
 - Windows/Linux 原生标题栏按钮区域；
 - 状态栏、菜单、输入框、列表和其他语义组件。
@@ -168,7 +170,7 @@ editorFontSize = 13
 editorLineHeight = 20
 ```
 
-Desktop 的选择值保存在 profile `configuration.json`；图形界面主题文档本身始终位于 profile root 的 `themes/*.json`：
+Desktop 的选择值保存在 profile `configuration.json`，对应主题文档位于 `themes/*.json`；Rust GUI 的主题文档位于 `app/themes/*.json`：
 
 ```json
 {
@@ -183,14 +185,25 @@ Desktop 的选择值保存在 profile `configuration.json`；图形界面主题�
 
 ## 开发与验证
 
-修改 Loader、Schema 或 token 后，在 `ash-ts` 目录运行：
+修改 Desktop Loader、Schema 或 token 后，在 `ash-ts` 目录运行：
 
 ```text
-pnpm tokens:generate
-pnpm tokens:check
 pnpm test:main
 pnpm typecheck:renderer
 pnpm build
 ```
 
+Rust GUI 的解析器或资源变更运行 `just check ash-theme`、`just test ash-theme` 和 `just rust-warnings ash-theme`。不再运行跨端生成命令。
+
 只修改用户主题 JSON 不需要重新构建 App。
+
+## 已有共享主题
+
+Desktop 的现有主题和路径保持有效。以前同时用于 Rust GUI 的主题需要单独安装：
+
+1. 保留 `themes/<id>.json` 给 Desktop 使用。
+2. 将需要用于 Rust GUI 的文件复制到 `app/themes/<id>.json`；已有同名文件时先比较内容，不能直接覆盖。
+3. 把副本的 `$schema` 改为 `https://ash.dev/schemas/app/color-theme.schema.json`，按 Rust 自有目录核对 token。
+4. 在 `[gui].theme` 中选择该 ID，重新启动 GUI 并检查加载诊断。
+
+两份文件独立维护。程序不会自动读取 Desktop 目录、覆盖用户文件或猜测跨端 token 对应关系。

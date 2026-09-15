@@ -2,14 +2,10 @@ import { strict as assert } from "node:assert";
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { test } from "mocha";
-import { compileDesignTokenArtifacts } from "../../../../platform/theme/common/tokenCompiler.js";
+import { colorCssVariable, colorIdentifiers, sizeCssVariable, sizeIdentifiers } from "../../common/colorTheme.js";
 
 test("CSS consumes registered design tokens and isolates intentional color samples", async () => {
-	const manifest = JSON.parse(compileDesignTokenArtifacts().manifest) as {
-		colors: Array<{ cssVariable: string }>;
-		sizes: Array<{ cssVariable: string }>;
-	};
-	const registered = new Set([...manifest.colors, ...manifest.sizes].map(({ cssVariable }) => cssVariable));
+	const registered = new Set([...colorIdentifiers.map(colorCssVariable), ...sizeIdentifiers.map(sizeCssVariable)]);
 	const platformVariables = new Set(["--ash-font-family", "--ash-font-family-monospace", "--ash-context-view-layer", "--ash-z-index-context-view", "--ash-z-index-quick-input", "--ash-z-index-sash"]);
 	const componentPresentationVariables = new Set([
 		"--ash-icon-label-text-overflow",

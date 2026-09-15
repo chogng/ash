@@ -39,7 +39,7 @@ flowchart LR
 
 本文适用于 `app/zui` 的 backend-neutral UI contract、`app/ui-components` 的可复用 Native 组件，以及 `app` 和领域 crate 的产品 presentation adapter。
 
-本文不定义浏览器 Renderer 的 CSS；浏览器 DOM、CSS selector 和 Workbench Part 样式仍由 [`ui-styling-ownership.md`](../../docs/ui-styling-ownership.md) 拥有。共享 design token 的跨宿主规则由 [`design-tokens.md`](../../docs/design-tokens.md) 拥有。
+本文不定义浏览器 Renderer 的 CSS；浏览器 DOM、CSS selector 和 Workbench Part 样式仍由 [`ui-styling-ownership.md`](../../docs/ui-styling-ownership.md) 拥有。Rust GUI 与 Desktop 分别维护主题目录和默认值，边界见 [`design-tokens.md`](../../docs/design-tokens.md)。
 
 Native UI 当前明确不提供以下能力：
 
@@ -208,7 +208,7 @@ ash-theme token
   → UiScene primitives
 ```
 
-Native 组件新增颜色或标准尺寸时，先检查共享 token 是否已有准确语义；没有时在实际消费语义的 domain 注册 token，再让 Native host 投影到 palette 或 style。不要在 component paint 中复制十六进制颜色，也不要把组件状态判断塞进 token resolver。
+Rust 组件新增颜色或标准尺寸时，先检查 `ash-theme` 自有目录是否已有准确语义；没有时增加 Rust token，再通过 `ash-ui-theme` 转换为组件样式。不要在 component paint 中复制十六进制颜色，也不要把组件状态判断塞进 token resolver。
 
 当前 Rust UI 主题投影由 `ash-ui-theme` 将 `ThemeSnapshot` 原子转换成 `UiTheme`；Workbench、Session、Settings、Files、SCM 等能力 crate 再把它转换为自己拥有的 typed style。基础输入框、搜索框和滚动条样式由 `ash-ui-theme` 提供；实现证据见 [`app/theme`](../theme/README.md) 和 [`design-tokens.md`](../../docs/design-tokens.md)。
 
@@ -279,7 +279,7 @@ Native UI 的 authoring contract 不只决定颜色和布局，还决定一帧�
 | --- | --- |
 | Element、computed layout、scene、inspection、renderer-neutral primitive | [`zui` README](../zui/README.md) |
 | Button、List、Tab、ScrollView、InputBox 等通用组件 | [`ash-ui-components` README](../ui-components/README.md) |
-| 主题 token、alias、snapshot 和跨宿主值 | [`Design Token 文档`](../../docs/design-tokens.md) |
+| 各端主题 token、alias、snapshot 的所有权 | [`Design Token 文档`](../../docs/design-tokens.md) |
 | Native host 的 pane/product composition | [`app` 文档导航](README.md) 与对应 domain crate README |
 | GPU、surface、atlas、shader 和 present | [`rendering-architecture.md`](rendering-architecture.md) |
 

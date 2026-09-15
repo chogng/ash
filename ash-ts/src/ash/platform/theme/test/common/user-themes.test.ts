@@ -36,6 +36,23 @@ test("user theme JSON compiles aliases and transforms into a complete snapshot",
 	assert.equal(theme.getColorCss(ColorId.foreground), "#cccccc");
 });
 
+test("Desktop owns its theme template and resolver examples", async () => {
+	const template = await readFile(join(process.cwd(), "resources/theme/color-theme.template.json"), "utf8");
+	assert.equal(parseUserColorTheme(template).id, "my-custom-theme");
+	const fixture = JSON.parse(await readFile(join(process.cwd(), "src/ash/platform/theme/test/common/fixtures/resolver.json"), "utf8")) as { theme: unknown; expected: Record<string, string> };
+	const theme = parseUserColorTheme(JSON.stringify(fixture.theme));
+	for (const [token, expected] of Object.entries(fixture.expected)) {
+		assert.equal(theme.getColorCss(token), expected, token);
+	}
+});
+
+test("Desktop rejects a Rust GUI theme schema", () => {
+	assert.throws(() => parseUserColorTheme(JSON.stringify({
+		...validTheme,
+		$schema: "https://ash.dev/schemas/app/color-theme.schema.json",
+	})), /User theme \$schema must be/);
+});
+
 test("resolved Light themes become complete editable user theme drafts", () => {
 	const source = serializeUserColorThemeDraft(lightColorTheme, "test-light-copy", "Test Light Copy");
 	const document = JSON.parse(source) as { colorScheme: string; colors: Record<string, string> };

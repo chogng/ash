@@ -10,9 +10,6 @@
 /ash-rs/input-classifier/models/*.onnx -text
 /ash-rs/input-classifier/dictionaries/*.txt text eol=lf
 
-# Keep generated design-token artifacts byte-stable across platforms.
-/resources/design-tokens/* text eol=lf
-
 # Keep product icon sources canonical across platforms.
 /resources/icons/*.svg text eol=lf
 /resources/icons/manifest.json text eol=lf

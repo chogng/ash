@@ -1,0 +1,2017 @@
+{
+  "version": 1,
+  "colors": [
+    {
+      "id": "foreground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#cccccc",
+        "light": "#3b3b3b",
+        "high-contrast-dark": "#cccccc",
+        "high-contrast-light": "#3b3b3b"
+      }
+    },
+    {
+      "id": "description.foreground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#b8b8b8",
+        "light": "#616161",
+        "high-contrast-dark": "#b8b8b8",
+        "high-contrast-light": "#616161"
+      }
+    },
+    {
+      "id": "muted.foreground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#8f8f8f",
+        "light": "#767676",
+        "high-contrast-dark": "#8f8f8f",
+        "high-contrast-light": "#767676"
+      }
+    },
+    {
+      "id": "accent.foreground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#4daafc",
+        "light": "#005fb8",
+        "high-contrast-dark": "#4daafc",
+        "high-contrast-light": "#005fb8"
+      }
+    },
+    {
+      "id": "accent.background",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#328eb9",
+        "light": "#328eb9",
+        "high-contrast-dark": "#328eb9",
+        "high-contrast-light": "#328eb9"
+      }
+    },
+    {
+      "id": "error.foreground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#f48771",
+        "light": "#a1260d",
+        "high-contrast-dark": "#f48771",
+        "high-contrast-light": "#a1260d"
+      }
+    },
+    {
+      "id": "warning.foreground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#cca700",
+        "light": "#895503",
+        "high-contrast-dark": "#cca700",
+        "high-contrast-light": "#895503"
+      }
+    },
+    {
+      "id": "success.foreground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#89d185",
+        "light": "#107c10",
+        "high-contrast-dark": "#89d185",
+        "high-contrast-light": "#107c10"
+      }
+    },
+    {
+      "id": "focusBorder",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#007fd4",
+        "light": "#0078d4",
+        "high-contrast-dark": "#007fd4",
+        "high-contrast-light": "#0078d4"
+      }
+    },
+    {
+      "id": "border",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#2b2b2b",
+        "light": "#e5e5e5",
+        "high-contrast-dark": "#2b2b2b",
+        "high-contrast-light": "#e5e5e5"
+      }
+    },
+    {
+      "id": "widget.border",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#454545",
+        "light": "#d4d4d4",
+        "high-contrast-dark": "#454545",
+        "high-contrast-light": "#d4d4d4"
+      }
+    },
+    {
+      "id": "widget.shadow",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#00000066",
+        "light": "#00000029",
+        "high-contrast-dark": "#00000066",
+        "high-contrast-light": "#00000029"
+      }
+    },
+    {
+      "id": "chat.tabBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#EEEEEE",
+        "light": "#EEEEEE",
+        "high-contrast-dark": "#EEEEEE",
+        "high-contrast-light": "#EEEEEE"
+      }
+    },
+    {
+      "id": "collaboration.selection0Background",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#3584e4",
+        "light": "#3584e4",
+        "high-contrast-dark": "#3584e4",
+        "high-contrast-light": "#3584e4"
+      }
+    },
+    {
+      "id": "collaboration.selection1Background",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#9141ac",
+        "light": "#9141ac",
+        "high-contrast-dark": "#9141ac",
+        "high-contrast-light": "#9141ac"
+      }
+    },
+    {
+      "id": "collaboration.selection2Background",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#26a269",
+        "light": "#26a269",
+        "high-contrast-dark": "#26a269",
+        "high-contrast-light": "#26a269"
+      }
+    },
+    {
+      "id": "collaboration.selection3Background",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#c64600",
+        "light": "#c64600",
+        "high-contrast-dark": "#c64600",
+        "high-contrast-light": "#c64600"
+      }
+    },
+    {
+      "id": "input.foreground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "foreground",
+        "light": "foreground",
+        "high-contrast-dark": "foreground",
+        "high-contrast-light": "foreground"
+      }
+    },
+    {
+      "id": "input.background",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#313131",
+        "light": "#ffffff",
+        "high-contrast-dark": "#313131",
+        "high-contrast-light": "#ffffff"
+      }
+    },
+    {
+      "id": "input.border",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#3c3c3c",
+        "light": "#cecece",
+        "high-contrast-dark": "#3c3c3c",
+        "high-contrast-light": "#cecece"
+      }
+    },
+    {
+      "id": "input.placeholderForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "muted.foreground",
+        "light": "muted.foreground",
+        "high-contrast-dark": "muted.foreground",
+        "high-contrast-light": "muted.foreground"
+      }
+    },
+    {
+      "id": "selection.foreground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#ffffff",
+        "light": "#000000",
+        "high-contrast-dark": "#ffffff",
+        "high-contrast-light": "#000000"
+      }
+    },
+    {
+      "id": "selection.background",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#264f78",
+        "light": "#add6ff",
+        "high-contrast-dark": "#264f78",
+        "high-contrast-light": "#add6ff"
+      }
+    },
+    {
+      "id": "hover.foreground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#f5f5f7",
+        "light": "#f5f5f7",
+        "high-contrast-dark": "#f5f5f7",
+        "high-contrast-light": "#f5f5f7"
+      }
+    },
+    {
+      "id": "hover.background",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#2d2e33",
+        "light": "#2d2e33",
+        "high-contrast-dark": "#2d2e33",
+        "high-contrast-light": "#2d2e33"
+      }
+    },
+    {
+      "id": "hover.border",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#ffffff18",
+        "light": "#ffffff18",
+        "high-contrast-dark": "#ffffff18",
+        "high-contrast-light": "#ffffff18"
+      }
+    },
+    {
+      "id": "hover.shadow",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#00000030",
+        "light": "#00000030",
+        "high-contrast-dark": "#00000030",
+        "high-contrast-light": "#00000030"
+      }
+    },
+    {
+      "id": "list.hoverBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#2a2d2e",
+        "light": "#e8e8e8",
+        "high-contrast-dark": "#2a2d2e",
+        "high-contrast-light": "#e8e8e8"
+      }
+    },
+    {
+      "id": "list.activeSelectionForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#ffffff",
+        "light": "#ffffff",
+        "high-contrast-dark": "#ffffff",
+        "high-contrast-light": "#ffffff"
+      }
+    },
+    {
+      "id": "list.activeSelectionBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#04395e",
+        "light": "#0060c0",
+        "high-contrast-dark": "#04395e",
+        "high-contrast-light": "#0060c0"
+      }
+    },
+    {
+      "id": "tree.indentGuidesStroke",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#585858",
+        "light": "#a9a9a9",
+        "high-contrast-dark": "#585858",
+        "high-contrast-light": "#a9a9a9"
+      }
+    },
+    {
+      "id": "menu.foreground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#cccccc",
+        "light": "#000000",
+        "high-contrast-dark": "#cccccc",
+        "high-contrast-light": "#000000"
+      }
+    },
+    {
+      "id": "menu.selectionForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "foreground",
+        "light": "foreground",
+        "high-contrast-dark": "foreground",
+        "high-contrast-light": "foreground"
+      }
+    },
+    {
+      "id": "menu.selectionBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "list.hoverBackground",
+        "light": "list.hoverBackground",
+        "high-contrast-dark": "list.hoverBackground",
+        "high-contrast-light": "list.hoverBackground"
+      }
+    },
+    {
+      "id": "menu.background",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#252526",
+        "light": "#ffffff",
+        "high-contrast-dark": "#252526",
+        "high-contrast-light": "#ffffff"
+      }
+    },
+    {
+      "id": "menu.hoverBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#45454b",
+        "light": "#e2e2e4",
+        "high-contrast-dark": "#45454b",
+        "high-contrast-light": "#e2e2e4"
+      }
+    },
+    {
+      "id": "button.foreground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "foreground",
+        "light": "foreground",
+        "high-contrast-dark": "foreground",
+        "high-contrast-light": "foreground"
+      }
+    },
+    {
+      "id": "button.border",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "foreground",
+        "light": "foreground",
+        "high-contrast-dark": "foreground",
+        "high-contrast-light": "foreground"
+      }
+    },
+    {
+      "id": "button.background",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#0e639c",
+        "light": "#0078d4",
+        "high-contrast-dark": "#0e639c",
+        "high-contrast-light": "#0078d4"
+      }
+    },
+    {
+      "id": "button.hoverBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "list.hoverBackground",
+        "light": "list.hoverBackground",
+        "high-contrast-dark": "list.hoverBackground",
+        "high-contrast-light": "list.hoverBackground"
+      }
+    },
+    {
+      "id": "button.activeBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#37373d",
+        "light": "#dcdcdc",
+        "high-contrast-dark": "#37373d",
+        "high-contrast-light": "#dcdcdc"
+      }
+    },
+    {
+      "id": "actionBar.background",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#313136",
+        "light": "#f5f5f6",
+        "high-contrast-dark": "#313136",
+        "high-contrast-light": "#f5f5f6"
+      }
+    },
+    {
+      "id": "actionBar.toggledBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#37373d",
+        "light": "#E4E6F2",
+        "high-contrast-dark": "#37373d",
+        "high-contrast-light": "#E4E6F2"
+      }
+    },
+    {
+      "id": "tabList.hoverBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#45454b",
+        "light": "#e2e2e4",
+        "high-contrast-dark": "#45454b",
+        "high-contrast-light": "#e2e2e4"
+      }
+    },
+    {
+      "id": "tabList.activeBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "list.activeSelectionBackground",
+        "light": "list.activeSelectionBackground",
+        "high-contrast-dark": "list.activeSelectionBackground",
+        "high-contrast-light": "list.activeSelectionBackground"
+      }
+    },
+    {
+      "id": "button.secondaryBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#3a3d41",
+        "light": "#e5e5e5",
+        "high-contrast-dark": "#3a3d41",
+        "high-contrast-light": "#e5e5e5"
+      }
+    },
+    {
+      "id": "button.primaryForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#ffffff",
+        "light": "#ffffff",
+        "high-contrast-dark": "#ffffff",
+        "high-contrast-light": "#ffffff"
+      }
+    },
+    {
+      "id": "button.primaryBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "button.background",
+        "light": "button.background",
+        "high-contrast-dark": "button.background",
+        "high-contrast-light": "button.background"
+      }
+    },
+    {
+      "id": "button.primaryHoverBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#1177bb",
+        "light": "#006cbe",
+        "high-contrast-dark": "#1177bb",
+        "high-contrast-light": "#006cbe"
+      }
+    },
+    {
+      "id": "toolbar.hoverBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#5a5d5e50",
+        "light": "#5a5d5e29",
+        "high-contrast-dark": "#5a5d5e50",
+        "high-contrast-light": "#5a5d5e29"
+      }
+    },
+    {
+      "id": "keybindingLabel.foreground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#cccccc",
+        "light": "#555555",
+        "high-contrast-dark": "#cccccc",
+        "high-contrast-light": "#555555"
+      }
+    },
+    {
+      "id": "keybindingLabel.background",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#8080802b",
+        "light": "#dddddd66",
+        "high-contrast-dark": "#8080802b",
+        "high-contrast-light": "#dddddd66"
+      }
+    },
+    {
+      "id": "keybindingLabel.border",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#80808033",
+        "light": "#cccccc66",
+        "high-contrast-dark": "#80808033",
+        "high-contrast-light": "#cccccc66"
+      }
+    },
+    {
+      "id": "keybindingLabel.bottomBorder",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#6b6b6b",
+        "light": "#b0b0b0",
+        "high-contrast-dark": "#6b6b6b",
+        "high-contrast-light": "#b0b0b0"
+      }
+    },
+    {
+      "id": "scrollbar.shadow",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#000000",
+        "light": "#dddddd",
+        "high-contrast-dark": "#000000",
+        "high-contrast-light": "#dddddd"
+      }
+    },
+    {
+      "id": "scrollbar.sliderBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#79797966",
+        "light": "#64646433",
+        "high-contrast-dark": "#79797966",
+        "high-contrast-light": "#64646433"
+      }
+    },
+    {
+      "id": "scrollbar.sliderHoverBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#646464b3",
+        "light": "#64646459",
+        "high-contrast-dark": "#646464b3",
+        "high-contrast-light": "#64646459"
+      }
+    },
+    {
+      "id": "scrollbar.sliderActiveBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#bfbfbf66",
+        "light": "#00000033",
+        "high-contrast-dark": "#bfbfbf66",
+        "high-contrast-light": "#00000033"
+      }
+    },
+    {
+      "id": "dialog.background",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#252526",
+        "light": "#ffffff",
+        "high-contrast-dark": "#252526",
+        "high-contrast-light": "#ffffff"
+      }
+    },
+    {
+      "id": "dialog.border",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "widget.border",
+        "light": "widget.border",
+        "high-contrast-dark": "widget.border",
+        "high-contrast-light": "widget.border"
+      }
+    },
+    {
+      "id": "dialog.backdropBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#00000073",
+        "light": "#00000059",
+        "high-contrast-dark": "#00000073",
+        "high-contrast-light": "#00000059"
+      }
+    },
+    {
+      "id": "dialog.shadow",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#00000073",
+        "light": "#0000003d",
+        "high-contrast-dark": "#00000073",
+        "high-contrast-light": "#0000003d"
+      }
+    },
+    {
+      "id": "quickInput.background",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#252526",
+        "light": "#f8f8f8",
+        "high-contrast-dark": "#252526",
+        "high-contrast-light": "#f8f8f8"
+      }
+    },
+    {
+      "id": "quickInput.backdropBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#00000026",
+        "light": "#0000001f",
+        "high-contrast-dark": "#00000026",
+        "high-contrast-light": "#0000001f"
+      }
+    },
+    {
+      "id": "textLink.activeForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#4e94ce",
+        "light": "#006ab1",
+        "high-contrast-dark": "#4e94ce",
+        "high-contrast-light": "#006ab1"
+      }
+    },
+    {
+      "id": "text.codeBlockBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#0f0f0f",
+        "light": "#f2f2f2",
+        "high-contrast-dark": "#0f0f0f",
+        "high-contrast-light": "#f2f2f2"
+      }
+    },
+    {
+      "id": "search.matchBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#f9c74f8c",
+        "light": "#f9c74f8c",
+        "high-contrast-dark": "#f9c74f8c",
+        "high-contrast-light": "#f9c74f8c"
+      }
+    },
+    {
+      "id": "sectionHeader.foreground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "description.foreground",
+        "light": "description.foreground",
+        "high-contrast-dark": "description.foreground",
+        "high-contrast-light": "description.foreground"
+      }
+    },
+    {
+      "id": "workbench.background",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#1e1e1e",
+        "light": "#ffffff",
+        "high-contrast-dark": "#1e1e1e",
+        "high-contrast-light": "#ffffff"
+      }
+    },
+    {
+      "id": "editor.background",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#1e1e1e",
+        "light": "#ffffff",
+        "high-contrast-dark": "#1e1e1e",
+        "high-contrast-light": "#ffffff"
+      }
+    },
+    {
+      "id": "editor.foreground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#d4d4d4",
+        "light": "#333333",
+        "high-contrast-dark": "#d4d4d4",
+        "high-contrast-light": "#333333"
+      }
+    },
+    {
+      "id": "editor.tabBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#EEEEEE",
+        "light": "#EEEEEE",
+        "high-contrast-dark": "#EEEEEE",
+        "high-contrast-light": "#EEEEEE"
+      }
+    },
+    {
+      "id": "titleBar.background",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#FFFFFF",
+        "light": "#FFFFFF",
+        "high-contrast-dark": "#FFFFFF",
+        "high-contrast-light": "#FFFFFF"
+      }
+    },
+    {
+      "id": "titleBar.foreground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#1f1f1f",
+        "light": "#1f1f1f",
+        "high-contrast-dark": "#1f1f1f",
+        "high-contrast-light": "#1f1f1f"
+      }
+    },
+    {
+      "id": "titleBar.actionForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#424242",
+        "light": "#424242",
+        "high-contrast-dark": "#424242",
+        "high-contrast-light": "#424242"
+      }
+    },
+    {
+      "id": "titleBar.hoverBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#e5e5e5",
+        "light": "#e5e5e5",
+        "high-contrast-dark": "#e5e5e5",
+        "high-contrast-light": "#e5e5e5"
+      }
+    },
+    {
+      "id": "sideBar.background",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#F8F8F8",
+        "light": "#F8F8F8",
+        "high-contrast-dark": "#F8F8F8",
+        "high-contrast-light": "#F8F8F8"
+      }
+    },
+    {
+      "id": "auxiliaryBar.background",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "sideBar.background",
+        "light": "sideBar.background",
+        "high-contrast-dark": "sideBar.background",
+        "high-contrast-light": "sideBar.background"
+      }
+    },
+    {
+      "id": "panel.background",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "sideBar.background",
+        "light": "sideBar.background",
+        "high-contrast-dark": "sideBar.background",
+        "high-contrast-light": "sideBar.background"
+      }
+    },
+    {
+      "id": "compositeBar.foreground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#ffffff",
+        "light": "#1f1f1f",
+        "high-contrast-dark": "#ffffff",
+        "high-contrast-light": "#1f1f1f"
+      }
+    },
+    {
+      "id": "compositeBar.inactiveForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#858585",
+        "light": "#616161",
+        "high-contrast-dark": "#858585",
+        "high-contrast-light": "#616161"
+      }
+    },
+    {
+      "id": "statusBar.foreground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#1f1f1f",
+        "light": "#1f1f1f",
+        "high-contrast-dark": "#1f1f1f",
+        "high-contrast-light": "#1f1f1f"
+      }
+    },
+    {
+      "id": "statusBar.background",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#FFFFFF",
+        "light": "#FFFFFF",
+        "high-contrast-dark": "#FFFFFF",
+        "high-contrast-light": "#FFFFFF"
+      }
+    },
+    {
+      "id": "statusBarItem.hoverForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "statusBar.foreground",
+        "light": "statusBar.foreground",
+        "high-contrast-dark": "statusBar.foreground",
+        "high-contrast-light": "statusBar.foreground"
+      }
+    },
+    {
+      "id": "statusBarItem.hoverBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#5a5d5e50",
+        "light": "#5a5d5e29",
+        "high-contrast-dark": "#5a5d5e50",
+        "high-contrast-light": "#5a5d5e29"
+      }
+    },
+    {
+      "id": "statusBarItem.compactHoverBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "statusBarItem.hoverBackground",
+        "light": "statusBarItem.hoverBackground",
+        "high-contrast-dark": "statusBarItem.hoverBackground",
+        "high-contrast-light": "statusBarItem.hoverBackground"
+      }
+    },
+    {
+      "id": "statusBarItem.activeBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#37373d",
+        "light": "#dcdcdc",
+        "high-contrast-dark": "#37373d",
+        "high-contrast-light": "#dcdcdc"
+      }
+    },
+    {
+      "id": "statusBarItem.remoteForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#FFFFFF",
+        "light": "#FFFFFF",
+        "high-contrast-dark": "#FFFFFF",
+        "high-contrast-light": "#FFFFFF"
+      }
+    },
+    {
+      "id": "statusBarItem.remoteBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "accent.background",
+        "light": "accent.background",
+        "high-contrast-dark": "accent.background",
+        "high-contrast-light": "accent.background"
+      }
+    },
+    {
+      "id": "statusBarItem.remoteHoverForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "statusBarItem.hoverForeground",
+        "light": "statusBarItem.hoverForeground",
+        "high-contrast-dark": "statusBarItem.hoverForeground",
+        "high-contrast-light": "statusBarItem.hoverForeground"
+      }
+    },
+    {
+      "id": "statusBarItem.remoteHoverBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "statusBarItem.hoverBackground",
+        "light": "statusBarItem.hoverBackground",
+        "high-contrast-dark": "statusBarItem.hoverBackground",
+        "high-contrast-light": "statusBarItem.hoverBackground"
+      }
+    },
+    {
+      "id": "sash.hoverBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#007acc",
+        "light": "#007acc",
+        "high-contrast-dark": "#007acc",
+        "high-contrast-light": "#007acc"
+      }
+    },
+    {
+      "id": "editor.token.commentForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#6a9955",
+        "light": "#008000",
+        "high-contrast-dark": "#6a9955",
+        "high-contrast-light": "#008000"
+      }
+    },
+    {
+      "id": "editor.token.keywordForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#c586c0",
+        "light": "#af00db",
+        "high-contrast-dark": "#c586c0",
+        "high-contrast-light": "#af00db"
+      }
+    },
+    {
+      "id": "editor.token.stringForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#ce9178",
+        "light": "#a31515",
+        "high-contrast-dark": "#ce9178",
+        "high-contrast-light": "#a31515"
+      }
+    },
+    {
+      "id": "editor.token.numberForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#b5cea8",
+        "light": "#098658",
+        "high-contrast-dark": "#b5cea8",
+        "high-contrast-light": "#098658"
+      }
+    },
+    {
+      "id": "editor.token.regexpForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#d16969",
+        "light": "#811f3f",
+        "high-contrast-dark": "#d16969",
+        "high-contrast-light": "#811f3f"
+      }
+    },
+    {
+      "id": "editor.token.typeForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#4ec9b0",
+        "light": "#267f99",
+        "high-contrast-dark": "#4ec9b0",
+        "high-contrast-light": "#267f99"
+      }
+    },
+    {
+      "id": "editor.token.functionForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#dcdcaa",
+        "light": "#795e26",
+        "high-contrast-dark": "#dcdcaa",
+        "high-contrast-light": "#795e26"
+      }
+    },
+    {
+      "id": "editor.token.variableForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "foreground",
+        "light": "foreground",
+        "high-contrast-dark": "foreground",
+        "high-contrast-light": "foreground"
+      }
+    },
+    {
+      "id": "editor.token.operatorForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "foreground",
+        "light": "foreground",
+        "high-contrast-dark": "foreground",
+        "high-contrast-light": "foreground"
+      }
+    },
+    {
+      "id": "editor.token.attributeForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "editor.token.variableForeground",
+        "light": "editor.token.variableForeground",
+        "high-contrast-dark": "editor.token.variableForeground",
+        "high-contrast-light": "editor.token.variableForeground"
+      }
+    },
+    {
+      "id": "editor.token.constantForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "editor.token.numberForeground",
+        "light": "editor.token.numberForeground",
+        "high-contrast-dark": "editor.token.numberForeground",
+        "high-contrast-light": "editor.token.numberForeground"
+      }
+    },
+    {
+      "id": "editor.token.constructorForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "editor.token.typeForeground",
+        "light": "editor.token.typeForeground",
+        "high-contrast-dark": "editor.token.typeForeground",
+        "high-contrast-light": "editor.token.typeForeground"
+      }
+    },
+    {
+      "id": "editor.token.embeddedForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "foreground",
+        "light": "foreground",
+        "high-contrast-dark": "foreground",
+        "high-contrast-light": "foreground"
+      }
+    },
+    {
+      "id": "editor.token.labelForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "editor.token.keywordForeground",
+        "light": "editor.token.keywordForeground",
+        "high-contrast-dark": "editor.token.keywordForeground",
+        "high-contrast-light": "editor.token.keywordForeground"
+      }
+    },
+    {
+      "id": "editor.token.moduleForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "editor.token.typeForeground",
+        "light": "editor.token.typeForeground",
+        "high-contrast-dark": "editor.token.typeForeground",
+        "high-contrast-light": "editor.token.typeForeground"
+      }
+    },
+    {
+      "id": "editor.token.propertyForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "editor.token.variableForeground",
+        "light": "editor.token.variableForeground",
+        "high-contrast-dark": "editor.token.variableForeground",
+        "high-contrast-light": "editor.token.variableForeground"
+      }
+    },
+    {
+      "id": "editor.token.punctuationForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "editor.token.operatorForeground",
+        "light": "editor.token.operatorForeground",
+        "high-contrast-dark": "editor.token.operatorForeground",
+        "high-contrast-light": "editor.token.operatorForeground"
+      }
+    },
+    {
+      "id": "editor.border",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "border",
+        "light": "border",
+        "high-contrast-dark": "border",
+        "high-contrast-light": "border"
+      }
+    },
+    {
+      "id": "editor.widgetBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#252526",
+        "light": "#f3f3f3",
+        "high-contrast-dark": "#252526",
+        "high-contrast-light": "#f3f3f3"
+      }
+    },
+    {
+      "id": "editor.widgetBorder",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "widget.border",
+        "light": "widget.border",
+        "high-contrast-dark": "widget.border",
+        "high-contrast-light": "widget.border"
+      }
+    },
+    {
+      "id": "editor.widgetShadow",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "widget.shadow",
+        "light": "widget.shadow",
+        "high-contrast-dark": "widget.shadow",
+        "high-contrast-light": "widget.shadow"
+      }
+    },
+    {
+      "id": "editor.inputBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "input.background",
+        "light": "input.background",
+        "high-contrast-dark": "input.background",
+        "high-contrast-light": "input.background"
+      }
+    },
+    {
+      "id": "editor.listHoverBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "list.hoverBackground",
+        "light": "list.hoverBackground",
+        "high-contrast-dark": "list.hoverBackground",
+        "high-contrast-light": "list.hoverBackground"
+      }
+    },
+    {
+      "id": "editor.descriptionForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "description.foreground",
+        "light": "description.foreground",
+        "high-contrast-dark": "description.foreground",
+        "high-contrast-light": "description.foreground"
+      }
+    },
+    {
+      "id": "editor.hoverForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "hover.foreground",
+        "light": "hover.foreground",
+        "high-contrast-dark": "hover.foreground",
+        "high-contrast-light": "hover.foreground"
+      }
+    },
+    {
+      "id": "editor.hoverBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "hover.background",
+        "light": "hover.background",
+        "high-contrast-dark": "hover.background",
+        "high-contrast-light": "hover.background"
+      }
+    },
+    {
+      "id": "editor.hoverBorder",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "hover.border",
+        "light": "hover.border",
+        "high-contrast-dark": "hover.border",
+        "high-contrast-light": "hover.border"
+      }
+    },
+    {
+      "id": "editor.inlayHintForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "muted.foreground",
+        "light": "muted.foreground",
+        "high-contrast-dark": "muted.foreground",
+        "high-contrast-light": "muted.foreground"
+      }
+    },
+    {
+      "id": "editor.inlineCompletionForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "muted.foreground",
+        "light": "muted.foreground",
+        "high-contrast-dark": "muted.foreground",
+        "high-contrast-light": "muted.foreground"
+      }
+    },
+    {
+      "id": "editor.compositionBorder",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#a0a0a0",
+        "light": "#a0a0a0",
+        "high-contrast-dark": "#a0a0a0",
+        "high-contrast-light": "#a0a0a0"
+      }
+    },
+    {
+      "id": "editor.foldBackground",
+      "needsTransparency": true,
+      "defaults": {
+        "dark": {
+          "op": "transparent",
+          "value": "selection.background",
+          "factor": 0.3
+        },
+        "light": {
+          "op": "transparent",
+          "value": "selection.background",
+          "factor": 0.3
+        },
+        "high-contrast-dark": {
+          "op": "transparent",
+          "value": "selection.background",
+          "factor": 0.3
+        },
+        "high-contrast-light": {
+          "op": "transparent",
+          "value": "selection.background",
+          "factor": 0.3
+        }
+      }
+    },
+    {
+      "id": "editor.foldPlaceholderForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#808080",
+        "light": "#808080",
+        "high-contrast-dark": "#808080",
+        "high-contrast-light": "#808080"
+      }
+    },
+    {
+      "id": "editorGutter.foldingControlForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "foreground",
+        "light": "foreground",
+        "high-contrast-dark": "foreground",
+        "high-contrast-light": "foreground"
+      }
+    },
+    {
+      "id": "editorCursor.foreground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#aeafad",
+        "light": "#000000",
+        "high-contrast-dark": "#ffffff",
+        "high-contrast-light": "#0f4a85"
+      }
+    },
+    {
+      "id": "editorCursor.background",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "editor.background",
+        "light": "editor.background",
+        "high-contrast-dark": "editor.background",
+        "high-contrast-light": "editor.background"
+      }
+    },
+    {
+      "id": "editorMultiCursor.primary.foreground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "editorCursor.foreground",
+        "light": "editorCursor.foreground",
+        "high-contrast-dark": "editorCursor.foreground",
+        "high-contrast-light": "editorCursor.foreground"
+      }
+    },
+    {
+      "id": "editorMultiCursor.primary.background",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "editorCursor.background",
+        "light": "editorCursor.background",
+        "high-contrast-dark": "editorCursor.background",
+        "high-contrast-light": "editorCursor.background"
+      }
+    },
+    {
+      "id": "editorMultiCursor.secondary.foreground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "editorCursor.foreground",
+        "light": "editorCursor.foreground",
+        "high-contrast-dark": "editorCursor.foreground",
+        "high-contrast-light": "editorCursor.foreground"
+      }
+    },
+    {
+      "id": "editorMultiCursor.secondary.background",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "editorCursor.background",
+        "light": "editorCursor.background",
+        "high-contrast-dark": "editorCursor.background",
+        "high-contrast-light": "editorCursor.background"
+      }
+    },
+    {
+      "id": "editorOverviewRuler.border",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#7f7f7f4d",
+        "light": "#7f7f7f4d",
+        "high-contrast-dark": "#7f7f7f4d",
+        "high-contrast-light": "#666666"
+      }
+    },
+    {
+      "id": "editorOverviewRuler.background",
+      "needsTransparency": true,
+      "defaults": {
+        "dark": {
+          "op": "transparent",
+          "value": "editor.background",
+          "factor": 0
+        },
+        "light": {
+          "op": "transparent",
+          "value": "editor.background",
+          "factor": 0
+        },
+        "high-contrast-dark": {
+          "op": "transparent",
+          "value": "editor.background",
+          "factor": 0
+        },
+        "high-contrast-light": {
+          "op": "transparent",
+          "value": "editor.background",
+          "factor": 0
+        }
+      }
+    },
+    {
+      "id": "editor.lineHighlightBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#00000000",
+        "light": "#00000000",
+        "high-contrast-dark": "#00000000",
+        "high-contrast-light": "#00000000"
+      }
+    },
+    {
+      "id": "editor.inactiveLineHighlightBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "editor.lineHighlightBackground",
+        "light": "editor.lineHighlightBackground",
+        "high-contrast-dark": "editor.lineHighlightBackground",
+        "high-contrast-light": "editor.lineHighlightBackground"
+      }
+    },
+    {
+      "id": "editor.lineHighlightBorder",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#282828",
+        "light": "#eeeeee",
+        "high-contrast-dark": "#f38518",
+        "high-contrast-light": "#0f4a85"
+      }
+    },
+    {
+      "id": "editorRuler.foreground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#5a5a5a",
+        "light": "#d3d3d3",
+        "high-contrast-dark": "#ffffff",
+        "high-contrast-light": "#292929"
+      }
+    },
+    {
+      "id": "diffEditor.removedLineBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#4b1818",
+        "light": "#ffebe9",
+        "high-contrast-dark": "#4b1818",
+        "high-contrast-light": "#ffebe9"
+      }
+    },
+    {
+      "id": "diffEditor.insertedLineBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#173d24",
+        "light": "#dafbe1",
+        "high-contrast-dark": "#173d24",
+        "high-contrast-light": "#dafbe1"
+      }
+    },
+    {
+      "id": "diffEditor.removedTextBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#7d2020",
+        "light": "#ffc6c2",
+        "high-contrast-dark": "#7d2020",
+        "high-contrast-light": "#ffc6c2"
+      }
+    },
+    {
+      "id": "diffEditor.insertedTextBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#1f6f35",
+        "light": "#a6ebb7",
+        "high-contrast-dark": "#1f6f35",
+        "high-contrast-light": "#a6ebb7"
+      }
+    },
+    {
+      "id": "diffEditor.missingLineBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#202020",
+        "light": "#f8f8f9",
+        "high-contrast-dark": "#202020",
+        "high-contrast-light": "#f8f8f9"
+      }
+    },
+    {
+      "id": "diffEditor.unchangedRegionBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#1f2933",
+        "light": "#f1f6fc",
+        "high-contrast-dark": "#1f2933",
+        "high-contrast-light": "#f1f6fc"
+      }
+    },
+    {
+      "id": "diffEditor.unchangedRegionForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "muted.foreground",
+        "light": "muted.foreground",
+        "high-contrast-dark": "muted.foreground",
+        "high-contrast-light": "muted.foreground"
+      }
+    },
+    {
+      "id": "diffEditor.removedLineMarker",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "error.foreground",
+        "light": "error.foreground",
+        "high-contrast-dark": "error.foreground",
+        "high-contrast-light": "error.foreground"
+      }
+    },
+    {
+      "id": "diffEditor.insertedLineMarker",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "success.foreground",
+        "light": "success.foreground",
+        "high-contrast-dark": "success.foreground",
+        "high-contrast-light": "success.foreground"
+      }
+    },
+    {
+      "id": "editor.semanticToken.commentForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "editor.token.commentForeground",
+        "light": "editor.token.commentForeground",
+        "high-contrast-dark": "editor.token.commentForeground",
+        "high-contrast-light": "editor.token.commentForeground"
+      }
+    },
+    {
+      "id": "editor.semanticToken.keywordForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "editor.token.keywordForeground",
+        "light": "editor.token.keywordForeground",
+        "high-contrast-dark": "editor.token.keywordForeground",
+        "high-contrast-light": "editor.token.keywordForeground"
+      }
+    },
+    {
+      "id": "editor.semanticToken.stringForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "editor.token.stringForeground",
+        "light": "editor.token.stringForeground",
+        "high-contrast-dark": "editor.token.stringForeground",
+        "high-contrast-light": "editor.token.stringForeground"
+      }
+    },
+    {
+      "id": "editor.semanticToken.numberForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "editor.token.numberForeground",
+        "light": "editor.token.numberForeground",
+        "high-contrast-dark": "editor.token.numberForeground",
+        "high-contrast-light": "editor.token.numberForeground"
+      }
+    },
+    {
+      "id": "editor.semanticToken.regexpForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "editor.token.regexpForeground",
+        "light": "editor.token.regexpForeground",
+        "high-contrast-dark": "editor.token.regexpForeground",
+        "high-contrast-light": "editor.token.regexpForeground"
+      }
+    },
+    {
+      "id": "editor.semanticToken.typeForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "editor.token.typeForeground",
+        "light": "editor.token.typeForeground",
+        "high-contrast-dark": "editor.token.typeForeground",
+        "high-contrast-light": "editor.token.typeForeground"
+      }
+    },
+    {
+      "id": "editor.semanticToken.functionForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "editor.token.functionForeground",
+        "light": "editor.token.functionForeground",
+        "high-contrast-dark": "editor.token.functionForeground",
+        "high-contrast-light": "editor.token.functionForeground"
+      }
+    },
+    {
+      "id": "editor.semanticToken.variableForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "editor.token.variableForeground",
+        "light": "editor.token.variableForeground",
+        "high-contrast-dark": "editor.token.variableForeground",
+        "high-contrast-light": "editor.token.variableForeground"
+      }
+    },
+    {
+      "id": "editor.semanticToken.operatorForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "editor.token.operatorForeground",
+        "light": "editor.token.operatorForeground",
+        "high-contrast-dark": "editor.token.operatorForeground",
+        "high-contrast-light": "editor.token.operatorForeground"
+      }
+    },
+    {
+      "id": "files.emptyExplorerOpenFolderBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "accent.background",
+        "light": "accent.background",
+        "high-contrast-dark": "accent.background",
+        "high-contrast-light": "accent.background"
+      }
+    },
+    {
+      "id": "files.emptyExplorerOpenFolderHoverBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "files.emptyExplorerOpenFolderBackground",
+        "light": "files.emptyExplorerOpenFolderBackground",
+        "high-contrast-dark": "files.emptyExplorerOpenFolderBackground",
+        "high-contrast-light": "files.emptyExplorerOpenFolderBackground"
+      }
+    },
+    {
+      "id": "settings.itemBackground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#252526",
+        "light": "#f3f3f3",
+        "high-contrast-dark": "#252526",
+        "high-contrast-light": "#f3f3f3"
+      }
+    },
+    {
+      "id": "settings.itemSeparator",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#383838",
+        "light": "#e0e0e0",
+        "high-contrast-dark": "#383838",
+        "high-contrast-light": "#e0e0e0"
+      }
+    },
+    {
+      "id": "settings.headerForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "foreground",
+        "light": "foreground",
+        "high-contrast-dark": "foreground",
+        "high-contrast-light": "foreground"
+      }
+    },
+    {
+      "id": "settings.headerBorder",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "widget.border",
+        "light": "widget.border",
+        "high-contrast-dark": "widget.border",
+        "high-contrast-light": "widget.border"
+      }
+    },
+    {
+      "id": "settings.modifiedItemIndicator",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#0c7d9d",
+        "light": "#2f7ead",
+        "high-contrast-dark": "#0c7d9d",
+        "high-contrast-light": "#2f7ead"
+      }
+    },
+    {
+      "id": "settings.focusedRowBackground",
+      "needsTransparency": true,
+      "defaults": {
+        "dark": {
+          "op": "transparent",
+          "value": "list.hoverBackground",
+          "factor": 0.6
+        },
+        "light": {
+          "op": "transparent",
+          "value": "list.hoverBackground",
+          "factor": 0.6
+        },
+        "high-contrast-dark": {
+          "op": "transparent",
+          "value": "list.hoverBackground",
+          "factor": 0.6
+        },
+        "high-contrast-light": {
+          "op": "transparent",
+          "value": "list.hoverBackground",
+          "factor": 0.6
+        }
+      }
+    },
+    {
+      "id": "settings.rowHoverBackground",
+      "needsTransparency": true,
+      "defaults": {
+        "dark": {
+          "op": "transparent",
+          "value": "list.hoverBackground",
+          "factor": 0.3
+        },
+        "light": {
+          "op": "transparent",
+          "value": "list.hoverBackground",
+          "factor": 0.3
+        },
+        "high-contrast-dark": {
+          "op": "transparent",
+          "value": "list.hoverBackground",
+          "factor": 0.3
+        },
+        "high-contrast-light": {
+          "op": "transparent",
+          "value": "list.hoverBackground",
+          "factor": 0.3
+        }
+      }
+    },
+    {
+      "id": "terminal.background",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "editor.background",
+        "light": "editor.background",
+        "high-contrast-dark": "editor.background",
+        "high-contrast-light": "editor.background"
+      }
+    },
+    {
+      "id": "terminal.foreground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "editor.foreground",
+        "light": "editor.foreground",
+        "high-contrast-dark": "editor.foreground",
+        "high-contrast-light": "editor.foreground"
+      }
+    },
+    {
+      "id": "terminal.cursorForeground",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "foreground",
+        "light": "foreground",
+        "high-contrast-dark": "foreground",
+        "high-contrast-light": "foreground"
+      }
+    },
+    {
+      "id": "terminal.ansiBlack",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#24292f",
+        "light": "#24292f",
+        "high-contrast-dark": "#24292f",
+        "high-contrast-light": "#24292f"
+      }
+    },
+    {
+      "id": "terminal.ansiRed",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#cf222e",
+        "light": "#cf222e",
+        "high-contrast-dark": "#cf222e",
+        "high-contrast-light": "#cf222e"
+      }
+    },
+    {
+      "id": "terminal.ansiGreen",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#116329",
+        "light": "#116329",
+        "high-contrast-dark": "#116329",
+        "high-contrast-light": "#116329"
+      }
+    },
+    {
+      "id": "terminal.ansiYellow",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#9a6700",
+        "light": "#9a6700",
+        "high-contrast-dark": "#9a6700",
+        "high-contrast-light": "#9a6700"
+      }
+    },
+    {
+      "id": "terminal.ansiBlue",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#0969da",
+        "light": "#0969da",
+        "high-contrast-dark": "#0969da",
+        "high-contrast-light": "#0969da"
+      }
+    },
+    {
+      "id": "terminal.ansiMagenta",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#8250df",
+        "light": "#8250df",
+        "high-contrast-dark": "#8250df",
+        "high-contrast-light": "#8250df"
+      }
+    },
+    {
+      "id": "terminal.ansiCyan",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#1b7c83",
+        "light": "#1b7c83",
+        "high-contrast-dark": "#1b7c83",
+        "high-contrast-light": "#1b7c83"
+      }
+    },
+    {
+      "id": "terminal.ansiWhite",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "terminal.foreground",
+        "light": "terminal.foreground",
+        "high-contrast-dark": "terminal.foreground",
+        "high-contrast-light": "terminal.foreground"
+      }
+    },
+    {
+      "id": "terminal.ansiBrightBlack",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#6e7781",
+        "light": "#6e7781",
+        "high-contrast-dark": "#6e7781",
+        "high-contrast-light": "#6e7781"
+      }
+    },
+    {
+      "id": "terminal.ansiBrightRed",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#a40e26",
+        "light": "#a40e26",
+        "high-contrast-dark": "#a40e26",
+        "high-contrast-light": "#a40e26"
+      }
+    },
+    {
+      "id": "terminal.ansiBrightGreen",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#1a7f37",
+        "light": "#1a7f37",
+        "high-contrast-dark": "#1a7f37",
+        "high-contrast-light": "#1a7f37"
+      }
+    },
+    {
+      "id": "terminal.ansiBrightYellow",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#bf8700",
+        "light": "#bf8700",
+        "high-contrast-dark": "#bf8700",
+        "high-contrast-light": "#bf8700"
+      }
+    },
+    {
+      "id": "terminal.ansiBrightBlue",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#218bff",
+        "light": "#218bff",
+        "high-contrast-dark": "#218bff",
+        "high-contrast-light": "#218bff"
+      }
+    },
+    {
+      "id": "terminal.ansiBrightMagenta",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#a475f9",
+        "light": "#a475f9",
+        "high-contrast-dark": "#a475f9",
+        "high-contrast-light": "#a475f9"
+      }
+    },
+    {
+      "id": "terminal.ansiBrightCyan",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#3192aa",
+        "light": "#3192aa",
+        "high-contrast-dark": "#3192aa",
+        "high-contrast-light": "#3192aa"
+      }
+    },
+    {
+      "id": "terminal.ansiBrightWhite",
+      "needsTransparency": false,
+      "defaults": {
+        "dark": "#8c959f",
+        "light": "#8c959f",
+        "high-contrast-dark": "#8c959f",
+        "high-contrast-light": "#8c959f"
+      }
+    }
+  ],
+  "sizes": [
+    {
+      "id": "fontSize.heading1",
+      "value": "26px"
+    },
+    {
+      "id": "fontSize.heading2",
+      "value": "18px"
+    },
+    {
+      "id": "fontSize.heading3",
+      "value": "13px"
+    },
+    {
+      "id": "fontSize.body1",
+      "value": "13px"
+    },
+    {
+      "id": "fontSize.body2",
+      "value": "11px"
+    },
+    {
+      "id": "fontSize.label1",
+      "value": "12px"
+    },
+    {
+      "id": "fontSize.label2",
+      "value": "11px"
+    },
+    {
+      "id": "fontSize.label3",
+      "value": "10px"
+    },
+    {
+      "id": "fontWeight.regular",
+      "value": "400"
+    },
+    {
+      "id": "fontWeight.medium",
+      "value": "500"
+    },
+    {
+      "id": "fontWeight.semiBold",
+      "value": "600"
+    },
+    {
+      "id": "strokeThickness",
+      "value": "1px"
+    },
+    {
+      "id": "animation.durationFast",
+      "value": "120ms"
+    },
+    {
+      "id": "animation.durationNormal",
+      "value": "200ms"
+    },
+    {
+      "id": "animation.durationSlow",
+      "value": "350ms"
+    },
+    {
+      "id": "tab.height",
+      "value": "24px"
+    },
+    {
+      "id": "tabList.contentInset",
+      "value": "4px"
+    },
+    {
+      "id": "tabList.itemContentInset",
+      "value": "6px"
+    },
+    {
+      "id": "compositeBar.contentInset",
+      "value": "4px"
+    },
+    {
+      "id": "pane.titleHeight",
+      "value": "32px"
+    },
+    {
+      "id": "actionBar.gap",
+      "value": "2px"
+    },
+    {
+      "id": "toolbar.itemGap",
+      "value": "2px"
+    },
+    {
+      "id": "toolbar.actionSize",
+      "value": "22px"
+    },
+    {
+      "id": "scrollbar.size",
+      "value": "10px"
+    },
+    {
+      "id": "tree.indent",
+      "value": "14px"
+    },
+    {
+      "id": "sash.dragAreaSize",
+      "value": "4px"
+    },
+    {
+      "id": "sash.hoverFeedbackSize",
+      "value": "1px"
+    },
+    {
+      "id": "modalEditor.width",
+      "value": "960px"
+    },
+    {
+      "id": "modalEditor.height",
+      "value": "720px"
+    }
+  ]
+}

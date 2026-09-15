@@ -15,7 +15,6 @@ ash-utils-home-dir = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-ash-utils-path = { workspace = true }
 
 [lints]
 workspace = true

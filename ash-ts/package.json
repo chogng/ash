@@ -9,10 +9,8 @@
   "scripts": {
     "icons:generate": "node ../build/resources/icons/generate.ts",
     "icons:check": "node ../build/resources/icons/generate.ts --check",
-    "tokens:generate": "node ../build/desktop/compileDesignTokens.ts",
-    "tokens:check": "node ../build/desktop/compileDesignTokens.ts --check",
     "protocol:generate": "cargo run --quiet --manifest-path ../Cargo.toml -p ash-app-server-protocol --bin generate_protocol -- typescript --out generated/app-server",
-    "prepare:generated": "pnpm run protocol:generate && pnpm run tokens:check && pnpm run icons:check",
+    "prepare:generated": "pnpm run protocol:generate && pnpm run icons:check",
     "rebuild:native": "electron-rebuild -f -w native-keymap",
     "prepare:output": "node ../build/desktop/prepare.ts",
     "prebuild": "pnpm run rebuild:native && pnpm run prepare:output && pnpm run prepare:generated",

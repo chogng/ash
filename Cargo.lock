@@ -2390,7 +2390,6 @@ name = "ash-theme"
 version = "0.1.0"
 dependencies = [
  "ash-utils-home-dir",
- "ash-utils-path",
  "serde",
  "serde_json",
  "thiserror 2.0.19",
