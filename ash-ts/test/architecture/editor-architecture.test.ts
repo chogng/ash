@@ -731,7 +731,7 @@ test("Editor engines delegate optional feature composition to mode bundles", () 
 	assert.doesNotMatch(textHost, /EditingCommandController/u);
 	assert.match(coreCommands, /editor\.action\.selectAll/u);
 	assert.match(coreCommands, /registerEditorContribution/u);
-	assert.doesNotMatch(textHost, /LanguageCompletionSessionController|RustSyntaxFactsService|LanguageDiagnosticDecorationBridge|TokenizationTextModelPart|TextDecorationCollection|LanguageBracketMatcher/u);
+	assert.doesNotMatch(textHost, /SuggestModel|RustSyntaxFactsService|LanguageDiagnosticDecorationBridge|TokenizationTextModelPart|TextDecorationCollection|LanguageBracketMatcher/u);
 	const viewController = readFileSync(join(editorRoot, "browser/view/viewController.ts"), "utf8");
 	const codeEditorWidget = readFileSync(join(editorRoot, "browser/widget/codeEditor/codeEditorWidget.ts"), "utf8");
 	assert.doesNotMatch(viewController, /from\s+["'][^"']*\/contrib\//u);

@@ -1,9 +1,9 @@
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { rot } from "../../../../base/common/numbers.js";
 import { ReplaceCommandThatSelectsText } from "../../../common/commands/replaceCommand.js";
-import { type CursorsController } from "../../../common/cursor/cursor.js";
-import { type LanguageCompletionSnippet } from "./languageCompletionSnippetParser.js";
-import { applyLanguageCompletionSnippetTransform, type LanguageCompletionSnippetTransform } from "./snippetTransform.js";
+import { type ICodeEditor } from "../../../browser/editorBrowser.js";
+import { type LanguageCompletionSnippet } from "../common/languageCompletionSnippetParser.js";
+import { applyLanguageCompletionSnippetTransform, type LanguageCompletionSnippetTransform } from "../common/snippetTransform.js";
 import { Selection } from "../../../common/core/selection.js";
 import { Range } from "../../../common/core/range.js";
 import { type TextModel } from "../../../common/model/textModel.js";
@@ -14,10 +14,10 @@ import { TrackedRangeStickiness } from '../../../common/model.js';
  * Owns one accepted completion snippet's tabstop navigation.
  *
  * Every tabstop occurrence is tracked through later model transactions. The
- * session owns neither the model nor the editor selection controller, and may
+ * session owns neither the model nor the editor, and may
  * be disposed without changing inserted text.
  */
-export class LanguageCompletionSnippetSession extends Disposable {
+export class SnippetSession extends Disposable {
 	private readonly groups: readonly SnippetTrackedGroup[];
 	private readonly transforms: readonly SnippetTrackedTransform[];
 	private readonly choiceIndexes = new Map<number, number>();
@@ -26,13 +26,13 @@ export class LanguageCompletionSnippetSession extends Disposable {
 
 	constructor(
 		private readonly model: TextModel,
-		private readonly selections: CursorsController,
+		private readonly editor: ICodeEditor,
 		insertionStartOffset: number,
 		snippet: LanguageCompletionSnippet,
 		finalOffsetWithinInsertion = snippet.text.length,
 	) {
 		super();
-		if (model !== selections.context.model) {
+		if (model !== editor.getModel()) {
 			this.dispose();
 			throw new TypeError("Language completion snippet session must share its editor text model");
 		}
@@ -99,14 +99,16 @@ export class LanguageCompletionSnippetSession extends Disposable {
 		this.assertNotDisposed();
 		if (this.currentGroupIndex + 1 < this.groups.length) {
 			this.synchronizeTransforms(this.groups[this.currentGroupIndex]!);
+			this.editor.pushUndoStop();
 			this.currentGroupIndex += 1;
 			this.selectGroup(this.currentGroupIndex);
 			return true;
 		}
 		if (this.currentGroupIndex === this.groups.length - 1) {
 			this.synchronizeTransforms(this.groups[this.currentGroupIndex]!);
+			this.editor.pushUndoStop();
 			this.currentGroupIndex += 1;
-			this.selections.setSelections([Selection.fromPositions(this.finalRange.range.getEndPosition())]);
+			this.editor.setSelections([Selection.fromPositions(this.finalRange.range.getEndPosition())]);
 			return true;
 		}
 		this.dispose();
@@ -117,12 +119,14 @@ export class LanguageCompletionSnippetSession extends Disposable {
 	selectPrevious(): boolean {
 		this.assertNotDisposed();
 		if (this.currentGroupIndex === this.groups.length) {
+			this.editor.pushUndoStop();
 			this.currentGroupIndex -= 1;
 			this.selectGroup(this.currentGroupIndex);
 			return true;
 		}
 		if (this.currentGroupIndex === 0) return false;
 		this.synchronizeTransforms(this.groups[this.currentGroupIndex]!);
+		this.editor.pushUndoStop();
 		this.currentGroupIndex -= 1;
 		this.selectGroup(this.currentGroupIndex);
 		return true;
@@ -147,7 +151,7 @@ export class LanguageCompletionSnippetSession extends Disposable {
 	private selectGroup(index: number): void {
 		const group = this.groups[index];
 		if (!group) throw new RangeError("Language completion snippet tabstop index is outside its session");
-		this.selections.setSelections(group.ranges.map(range => Selection.fromPositions(range.range.getStartPosition(), range.range.getEndPosition())));
+		this.editor.setSelections(group.ranges.map(range => Selection.fromPositions(range.range.getStartPosition(), range.range.getEndPosition())));
 	}
 
 	private selectRelativeChoice(delta: number): boolean {
@@ -175,9 +179,9 @@ export class LanguageCompletionSnippetSession extends Disposable {
 			if (current.startOffset < previous.endOffset) return false;
 		}
 		const version = model.version;
-		this.selections.pushUndoStop();
-		this.selections.executeCommands(group.ranges.map(range => new ReplaceCommandThatSelectsText(range.range, text)), "snippet.choice");
-		this.selections.pushUndoStop();
+		if (!this.editor.pushUndoStop()) return false;
+		this.editor.executeCommands("snippet.choice", group.ranges.map(range => new ReplaceCommandThatSelectsText(range.range, text)));
+		this.editor.pushUndoStop();
 		return model.version !== version;
 	}
 
@@ -192,7 +196,7 @@ export class LanguageCompletionSnippetSession extends Disposable {
 			const text = applyLanguageCompletionSnippetTransform(sourceText, transform.transform);
 			return model.getTextInRange(transform.range.range) === text ? [] : [{ range: transform.range.range, text }];
 		});
-		if (edits.length > 0) model.applyEdits(edits);
+		if (edits.length > 0) this.editor.executeEdits("snippet.transform", edits);
 	}
 
 }

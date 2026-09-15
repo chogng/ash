@@ -1,12 +1,13 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { rot } from "../../../../base/common/numbers.js";
-import { type CursorsController } from "../../../common/cursor/cursor.js";
+import { type ICodeEditor } from "../../../browser/editorBrowser.js";
+import { EditorOption } from "../../../common/config/editorOptions.js";
 import { type VersionedLanguageResult } from "../../../common/languages/languageRequestCoordinator.js";
 import { type VersionedLanguageResultStore } from "../../../common/languages/languageResultStore.js";
 import { assertLanguageCompletionCommitCharacter, LanguageCompletionInsertTextFormat, normalizeLanguageCompletionItemDetails, type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionItemResolver, type LanguageCompletionResolveRequest, type LanguageCompletionResult } from "../../../common/languages/completion/languageCompletions.js";
 import { parseLanguageCompletionSnippet, type LanguageCompletionSnippet, type LanguageCompletionSnippetVariableResolver } from "../../snippet/common/languageCompletionSnippetParser.js";
-import { LanguageCompletionSnippetSession } from "../../snippet/common/languageCompletionSnippetSession.js";
+import { SnippetSession } from "../../snippet/browser/snippetSession.js";
 import { Position } from "../../../common/core/position.js";
 import { Selection } from "../../../common/core/selection.js";
 import { normalizeTextLineEndings } from "../../../common/core/textChange.js";
@@ -58,10 +59,9 @@ export interface LanguageCompletionSessionOptions {
 /**
  * Owns one editor instance's completion focus and acceptance lifecycle.
  *
- * The controller observes but does not own its result store, selection
- * controller, or text model.
+ * The controller observes but does not own its result store, editor, or text model.
  */
-export class LanguageCompletionSessionController extends Disposable {
+export class SuggestModel extends Disposable {
 	private readonly changeEmitter = this._register(new Emitter<LanguageCompletionSessionChange>());
 	private currentState: LanguageCompletionSessionState | undefined;
 	private readonly resolver: LanguageCompletionItemResolver | undefined;
@@ -69,20 +69,20 @@ export class LanguageCompletionSessionController extends Disposable {
 	private readonly onDidAccept: ((item: LanguageCompletionItem) => void | Promise<void>) | undefined;
 	private readonly snippetVariables: LanguageCompletionSnippetVariableResolver | undefined;
 	private resolveController: AbortController | undefined;
-	private snippetSession: LanguageCompletionSnippetSession | undefined;
+	private snippetSession: SnippetSession | undefined;
 	private accepting = false;
 
 	readonly onDidChange: Event<LanguageCompletionSessionChange> = this.changeEmitter.event;
 
 	constructor(
 		private readonly store: VersionedLanguageResultStore<LanguageCompletionResult>,
-		private readonly selectionController: CursorsController,
+		private readonly editor: ICodeEditor,
 		options: LanguageCompletionSessionOptions = {},
 	) {
 		super();
 		try {
-			if (store.textModel !== selectionController.context.model) {
-				throw new TypeError("Language completion store and selection controller must share one text model");
+			if (store.textModel !== editor.getModel()) {
+				throw new TypeError("Language completion store and editor must share one text model");
 			}
 			if (options.resolver !== undefined && typeof options.resolver.resolveCompletionItem !== "function") {
 				throw new TypeError("Language completion session resolver must implement resolveCompletionItem");
@@ -102,9 +102,15 @@ export class LanguageCompletionSessionController extends Disposable {
 			this._register(store.onDidChange(change => {
 				if (!this.accepting) this.replaceState(change.result, LanguageCompletionSessionChangeReason.Store);
 			}));
-			this._register(selectionController.onDidChange(() => {
+			this._register(editor.onDidChangeCursorSelection(() => {
 				if (!this.accepting) this.close(LanguageCompletionSessionChangeReason.Selection);
 			}));
+			this._register(editor.onDidChangeModel(() => {
+				if (editor.getModel() !== store.textModel) {
+					this.dispose();
+				}
+			}));
+			this._register(editor.onDidDispose(() => this.dispose()));
 			this._register(toDisposable(() => {
 				this.cancelResolution("sessionDisposed");
 				this.snippetSession?.dispose();
@@ -171,7 +177,7 @@ export class LanguageCompletionSessionController extends Disposable {
 	acceptSelectedWithCommitCharacter(commitCharacter?: string): boolean {
 		this.assertNotDisposed();
 		const state = this.currentState;
-		if (!state || !this.selectionMatches(state.position)) return false;
+		if (!state || !this.selectionMatches(state.position) || this.editor.getOption(EditorOption.readOnly)) return false;
 		if (commitCharacter !== undefined) {
 			assertLanguageCompletionCommitCharacter(commitCharacter);
 			if (!state.selectedItem.commitCharacters?.includes(commitCharacter)) return false;
@@ -179,21 +185,21 @@ export class LanguageCompletionSessionController extends Disposable {
 		const insertion = resolveLanguageCompletionInsertion(state.selectedItem, commitCharacter, this.textModel, this.snippetVariables);
 		const command = createLanguageCompletionAcceptCommand(
 			this.textModel,
-			this.selectionController,
+			this.editor,
 			state.selectedItem,
 			commitCharacter,
 			this.snippetVariables,
 		);
 		this.accepting = true;
 		try {
-			this.selectionController.pushUndoStop();
-			this.selectionController.executeCommand(command, "suggest.accept");
-			this.selectionController.pushUndoStop();
+			this.editor.pushUndoStop();
+			this.editor.executeCommand("suggest.accept", command);
+			this.editor.pushUndoStop();
 			if (insertion.snippet && insertion.snippet.placeholderGroups.length > 0) {
 				this.snippetSession?.dispose();
-				this.snippetSession = new LanguageCompletionSnippetSession(
+				this.snippetSession = new SnippetSession(
 					this.textModel,
-					this.selectionController,
+					this.editor,
 					insertion.resultStartOffset,
 					insertion.snippet,
 					insertion.text.length,
@@ -293,8 +299,9 @@ export class LanguageCompletionSessionController extends Disposable {
 	}
 
 	private selectionMatches(position: Position): boolean {
-		const selections = this.selectionController.getSelections();
-		return selections.length === 1 &&
+		if (this.editor.getModel() !== this.store.textModel) return false;
+		const selections = this.editor.getSelections();
+		return selections?.length === 1 &&
 			selections[0]!.isEmpty() &&
 			Position.compare(selections[0]!.getPosition(), position) === 0;
 	}
@@ -352,12 +359,12 @@ export class LanguageCompletionSessionController extends Disposable {
 	}
 }
 
-export function createLanguageCompletionAcceptCommand(model: TextModel, selectionController: CursorsController, item: LanguageCompletionItem, commitCharacter?: string, snippetVariables?: LanguageCompletionSnippetVariableResolver): ICommand {
-	if (model !== selectionController.context.model) {
-		throw new TypeError("Language completion command and selection controller must share one text model");
+function createLanguageCompletionAcceptCommand(model: TextModel, editor: ICodeEditor, item: LanguageCompletionItem, commitCharacter?: string, snippetVariables?: LanguageCompletionSnippetVariableResolver): ICommand {
+	if (model !== editor.getModel()) {
+		throw new TypeError("Language completion command and editor must share one text model");
 	}
-	const selections = selectionController.getSelections();
-	if (selections.length !== 1 || !selections[0]!.isEmpty()) {
+	const selections = editor.getSelections();
+	if (selections?.length !== 1 || !selections[0]!.isEmpty()) {
 		throw new Error("Language completion acceptance requires one collapsed selection");
 	}
 	const position = selections[0]!.getPosition();

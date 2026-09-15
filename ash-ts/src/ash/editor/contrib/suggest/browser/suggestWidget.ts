@@ -3,14 +3,14 @@ import { Position } from "../../../common/core/position.js";
 import { addDisposableListener, fragment as createFragment, h, isElement, reset, stopEvent } from "../../../../base/browser/dom.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type ICodeEditor } from "../../../browser/editorBrowser.js";
-import { LanguageCompletionDetailsStatus, type LanguageCompletionSessionState, LanguageCompletionSessionController } from "../common/languageCompletionSessionController.js";
+import { LanguageCompletionDetailsStatus, type LanguageCompletionSessionState, SuggestModel } from "./suggestModel.js";
 import { LanguageCompletionItemKind } from "../../../common/languages/completion/languageCompletions.js";
 import { type ViewController } from '../../../browser/view/viewController.js';
 import { type View } from "../../../browser/view.js";
 
 let nextCompletionWidgetId = 1;
 
-/** Projects one common completion session into Stanza-owned browser UI. */
+/** Displays one completion session in Stanza-owned browser UI. */
 export class CompletionWidget extends Disposable {
 	readonly element: HTMLDivElement;
 	private readonly widgetId: string;
@@ -19,7 +19,7 @@ export class CompletionWidget extends Disposable {
 		private readonly editor: ICodeEditor,
 		private readonly view: ViewController,
 		private readonly viewport: View,
-		private readonly session: LanguageCompletionSessionController,
+		private readonly session: SuggestModel,
 		container: HTMLElement | undefined = undefined,
 	) {
 		super();

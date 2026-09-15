@@ -1,15 +1,39 @@
 import { strict as assert } from "node:assert";
-import { test } from "mocha";
-import { LanguageCompletionSessionController } from "../../contrib/suggest/common/languageCompletionSessionController.js";
+import { test, suiteTeardown } from "mocha";
+import { JSDOM } from "jsdom";
+import { SuggestModel } from "../../contrib/suggest/browser/suggestModel.js";
 import { LanguageCompletionService } from "../../common/languages/completion/languageCompletionService.js";
 import { LanguageCompletionProviderRegistry, LanguageCompletionTriggerKind, createLanguageCompletionIncompleteRefreshContext, createLanguageCompletionInvokeContext, createLanguageCompletionTriggerCharacterContext, type LanguageCompletionContext, type LanguageCompletionProvider, type LanguageCompletionProviderItem, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from "../../common/languages/completion/languageCompletionProviders.js";
 import { LanguageRequestCancellationReason, LanguageRequestStatus } from "../../common/languages/languageRequestCoordinator.js";
 import { LanguageCompletionItemKind } from "../../common/languages/completion/languageCompletions.js";
-import { Selection } from "../../common/core/selection.js";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
-import { createTestCursorsController } from './testCursorConfiguration.js';
+const browserEnvironment = new JSDOM('<!doctype html><body></body>');
+browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
+const globals = new Map<string, PropertyDescriptor | undefined>();
+for (const [name, value] of Object.entries({
+	window: browserEnvironment.window,
+	document: browserEnvironment.window.document,
+	Node: browserEnvironment.window.Node,
+	Element: browserEnvironment.window.Element,
+	HTMLElement: browserEnvironment.window.HTMLElement,
+	Event: browserEnvironment.window.Event,
+})) {
+	globals.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
+	Object.defineProperty(globalThis, name, { configurable: true, value });
+}
+const { createTestCodeEditor } = await import('../browser/testCodeEditor.js');
+suiteTeardown(() => {
+	browserEnvironment.window.close();
+	for (const [name, descriptor] of globals) {
+		if (descriptor) {
+			Object.defineProperty(globalThis, name, descriptor);
+		} else {
+			Reflect.deleteProperty(globalThis, name);
+		}
+	}
+});
 
 test("Completion service runs providers concurrently and merges deterministically", async () => {
 	using registry = new LanguageCompletionProviderRegistry();
@@ -178,11 +202,9 @@ test("Provider request flows through store, session, acceptance, and undo", asyn
 	}));
 	using model = new TextModel("con");
 	using service = new LanguageCompletionService(model, registry);
-	using selections = createTestCursorsController(
-		model,
-		[Selection.fromPositions(new Position((0) + 1, (3) + 1))],
-	);
-	using session = new LanguageCompletionSessionController(service.results, selections);
+	using editor = createTestCodeEditor({ container: document.createElement('div'), model, input: { resource: model.uri }, languageId: 'plaintext', contributions: [] });
+	editor.setPosition(new Position(1, 4));
+	using session = new SuggestModel(service.results, editor);
 
 	await service.request("typescript", new Position((0) + 1, (3) + 1), createLanguageCompletionInvokeContext());
 	assert.equal(session.state!.selectedItem.providerId, "typescript");
@@ -190,9 +212,9 @@ test("Provider request flows through store, session, acceptance, and undo", asyn
 	assert.equal(model.getText(), "console");
 	assert.equal(session.state, undefined);
 
-	selections.context.model.undo();
+	model.undo();
 	assert.equal(model.getText(), "con");
-	assert.equal(Position.compare(selections.getSelections()[0]!.getPosition(), new Position((0) + 1, (3) + 1)), 0);
+	assert.equal(Position.compare(editor.getSelections()![0]!.getPosition(), new Position((0) + 1, (3) + 1)), 0);
 });
 
 test("Completion service disposal owns neither registry nor model", () => {

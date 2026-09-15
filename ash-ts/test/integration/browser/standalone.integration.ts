@@ -103,7 +103,7 @@ interface StandaloneHarness {
 		readonly attachedEditors: number;
 		readonly firstChunkPrefix: string;
 	};
-	enableCompletionNavigation(): void;
+	enableCompletionNavigation(snippet?: boolean): void;
 	getCallerPosition(): { readonly lineNumber: number; readonly column: number } | null;
 	prepareKeyboardEditing(): KeyboardEditingState;
 	readKeyboardEditing(): KeyboardEditingState;
@@ -115,7 +115,7 @@ interface StandaloneHarness {
 	editWrappedText(value: string): WrappedLayoutState;
 	readWrappedLayout(): WrappedLayoutState;
 	prepareViewZone(unit: 'pixels' | 'lines'): ViewZoneState;
-	prepareFoldedViewZone(): number;
+	prepareFoldedViewZone(showInHiddenAreas: boolean): number;
 	resizeViewZone(height: number, afterLineNumber: number): ViewZoneState;
 	removeViewZone(): ViewZoneState;
 	prepareVisibleRows(): { readonly lineCount: number; readonly version: number };
@@ -440,7 +440,7 @@ window.ashStandaloneIntegration = {
 			firstChunkPrefix: snapshot.read()?.slice(0, 32) ?? '',
 		};
 	},
-	enableCompletionNavigation: () => {
+	enableCompletionNavigation: snippet => {
 		completionRegistration?.dispose();
 		completionRegistration = stanza.languages.registerCompletionItemProvider('plaintext', {
 			id: 'standalone.keyboard-navigation',
@@ -450,8 +450,8 @@ window.ashStandaloneIntegration = {
 					label,
 					kind: stanza.languages.LanguageCompletionItemKind.Text,
 					range: stanza.Range.fromPositions(request.position),
-					insertText: label,
-					insertTextFormat: stanza.languages.LanguageCompletionInsertTextFormat.PlainText,
+					insertText: snippet ? '${1:name}(${2:value})$0' : label,
+					insertTextFormat: snippet ? stanza.languages.LanguageCompletionInsertTextFormat.Snippet : stanza.languages.LanguageCompletionInsertTextFormat.PlainText,
 				})),
 				isIncomplete: false,
 			}),
@@ -522,7 +522,13 @@ window.ashStandaloneIntegration = {
 			domNode,
 			marginDomNode,
 			suppressMouseDown: true,
-			onComputedHeight: height => computedZoneHeights.push(height),
+			onComputedHeight(height) {
+				computedZoneHeights.push(height);
+				this.domNode.dataset.computedHeight = String(height);
+			},
+			onDomNodeTop(top) {
+				this.domNode.dataset.top = String(top);
+			},
 		};
 		if (unit === 'pixels') {
 			viewZone.heightInPx = 0;
@@ -532,7 +538,7 @@ window.ashStandaloneIntegration = {
 		callerEditor.changeViewZones(accessor => { viewZoneId = accessor.addZone(viewZone!); });
 		return readViewZone();
 	},
-	prepareFoldedViewZone: () => {
+	prepareFoldedViewZone: showInHiddenAreas => {
 		callerEditor.updateOptions({ lineHeight: 20, padding: { top: 0, bottom: 0 }, wordWrap: 'wordWrapColumn', wordWrapColumn: 10, wrappingIndent: 'none', showFoldingControls: 'always', scrollBeyondLastLine: false });
 		callerEditor.setValue(['abcdefghijklmnopqrstuvwxy', '  x', '  y', ...Array.from({ length: 30 }, () => 'tail')].join('\n'));
 		callerEditor.setPosition(new stanza.Position(1, 1));
@@ -540,7 +546,19 @@ window.ashStandaloneIntegration = {
 		domNode.className = 'ash-folded-zone-probe';
 		const marginDomNode = document.createElement('div');
 		marginDomNode.className = 'ash-folded-zone-margin-probe';
-		callerEditor.changeViewZones(accessor => accessor.addZone({ afterLineNumber: 2, heightInPx: 40, showInHiddenAreas: true, domNode, marginDomNode }));
+		callerEditor.changeViewZones(accessor => accessor.addZone({
+			afterLineNumber: 2,
+			heightInPx: 40,
+			showInHiddenAreas,
+			domNode,
+			marginDomNode,
+			onComputedHeight(height) {
+				this.domNode.dataset.computedHeight = String(height);
+			},
+			onDomNodeTop(top) {
+				this.domNode.dataset.top = String(top);
+			},
+		}));
 		return callerModel.getVersionId();
 	},
 	resizeViewZone: (height, afterLineNumber) => {

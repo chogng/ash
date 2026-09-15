@@ -2,7 +2,7 @@ import { registerEditorContribution } from "../../../browser/editorExtensions.js
 import { type ICodeEditorWidgetOptions } from '../../../browser/widget/codeEditor/codeEditorWidget.js';
 import { LanguageCompletionService } from "../../../common/languages/completion/languageCompletionService.js";
 import { isCompletionsEnabledFromObject } from "../../../common/services/completionsEnablement.js";
-import { LanguageCompletionSessionController } from "../common/languageCompletionSessionController.js";
+import { SuggestModel } from "./suggestModel.js";
 import { SuggestController } from "./suggestController.js";
 
 registerEditorContribution({
@@ -14,7 +14,7 @@ registerEditorContribution({
 			resource: context.options.input.resource,
 			...(context.options.completionWorkerFactory ? { workerFactory: context.options.completionWorkerFactory } : {}),
 		}));
-		const session = context.register(new LanguageCompletionSessionController(completions.results, context.selectionController, {
+		const session = context.register(new SuggestModel(completions.results, context.editor, {
 			resolver: completions,
 			onResolveError: context.onLanguageError,
 			onDidAccept: item => completions.executeCompletionCommand(context.languageId, item, new AbortController().signal),

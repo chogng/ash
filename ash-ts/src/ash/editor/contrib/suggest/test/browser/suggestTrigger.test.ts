@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
-import { LanguageCompletionSessionController } from "../../common/languageCompletionSessionController.js";
+import { SuggestModel } from "../../browser/suggestModel.js";
 import { LanguageCompletionService } from "../../../../common/languages/completion/languageCompletionService.js";
 import { LanguageCompletionProviderRegistry, LanguageCompletionTriggerKind, type LanguageCompletionProvider, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from "../../../../common/languages/completion/languageCompletionProviders.js";
 import { LanguageCompletionItemKind } from "../../../../common/languages/completion/languageCompletions.js";
@@ -171,9 +171,8 @@ test("Completion request wiring rejects a same-model session from another servic
 		contributions: [],
 	});
 	const viewport = editor.view;
-	const selections = editor.selections;
 	editor.setPosition(new Position((0) + 1, (3) + 1));
-	using session = new LanguageCompletionSessionController(firstService.results, selections);
+	using session = new SuggestModel(firstService.results, editor);
 
 	const input = viewport.controller;
 	assert.throws(() => new SuggestController(editor, input, secondService, session, "typescript"), /must share one text model and completion result store/);
@@ -184,7 +183,7 @@ interface TriggerFixture extends Disposable {
 	readonly dom: JSDOM;
 	readonly model: TextModel;
 	readonly service: LanguageCompletionService;
-	readonly session: LanguageCompletionSessionController;
+	readonly session: SuggestModel;
 	readonly input: InstanceType<typeof ViewController>;
 	readonly suggest: SuggestController;
 }
@@ -205,9 +204,8 @@ function createFixture(provider: LanguageCompletionProvider, text = "con"): Trig
 		contributions: [],
 	});
 	const viewport = editor.view;
-	const selections = editor.selections;
 	editor.setPosition(new Position((0) + 1, (text.length) + 1));
-	const session = new LanguageCompletionSessionController(service.results, selections);
+	const session = new SuggestModel(service.results, editor);
 	viewport.layout({ width: 300, height: 40 });
 	const input = viewport.controller;
 	const suggest = new SuggestController(editor, input, service, session, "typescript");

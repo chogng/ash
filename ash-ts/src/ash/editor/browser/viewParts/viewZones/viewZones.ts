@@ -156,7 +156,7 @@ export class ViewZones extends ViewPart {
 					zone.marginDomNode.setHeight(0);
 					zone.marginDomNode.setDisplay('none');
 				}
-				this.safeInvoke(zone.delegate.onDomNodeTop, context.getScrolledTopFromAbsoluteTop(-1_000_000));
+				this.safeInvoke(zone.delegate, zone.delegate.onDomNodeTop, context.getScrolledTopFromAbsoluteTop(-1_000_000));
 				continue;
 			}
 			hasVisibleZone = true;
@@ -174,7 +174,7 @@ export class ViewZones extends ViewPart {
 				zone.marginDomNode.setHeight(height);
 			}
 			zone.isVisible = true;
-			this.safeInvoke(zone.delegate.onDomNodeTop, context.getScrolledTopFromAbsoluteTop(absoluteTop));
+			this.safeInvoke(zone.delegate, zone.delegate.onDomNodeTop, context.getScrolledTopFromAbsoluteTop(absoluteTop));
 		}
 		if (hasVisibleZone) {
 			this.domNode.setLeft(this.contentLeft);
@@ -204,7 +204,7 @@ export class ViewZones extends ViewPart {
 			this.marginDomNode.appendChild(marginDomNode);
 		}
 		this.zones.set(id, { delegate: zone, domNode, marginDomNode, isInHiddenArea: properties.isInHiddenArea, isVisible: false });
-		this.safeInvoke(zone.onComputedHeight, properties.heightInPixels);
+		this.safeInvoke(zone, zone.onComputedHeight, properties.heightInPixels);
 		return id;
 	}
 
@@ -215,7 +215,7 @@ export class ViewZones extends ViewPart {
 		const properties = this.computeZoneProperties(zone.delegate);
 		zone.isInHiddenArea = properties.isInHiddenArea;
 		whitespaceAccessor.changeOneWhitespace(id, properties.afterViewLineNumber, properties.heightInPixels);
-		this.safeInvoke(zone.delegate.onComputedHeight, properties.heightInPixels);
+		this.safeInvoke(zone.delegate, zone.delegate.onComputedHeight, properties.heightInPixels);
 		return true;
 	}
 
@@ -239,7 +239,7 @@ export class ViewZones extends ViewPart {
 				const whitespace = existing.get(id);
 				if (!whitespace || whitespace.afterLineNumber === properties.afterViewLineNumber && whitespace.height === properties.heightInPixels) continue;
 				accessor.changeOneWhitespace(id, properties.afterViewLineNumber, properties.heightInPixels);
-				this.safeInvoke(zone.delegate.onComputedHeight, properties.heightInPixels);
+				this.safeInvoke(zone.delegate, zone.delegate.onComputedHeight, properties.heightInPixels);
 				changed = true;
 			}
 		});
@@ -292,10 +292,10 @@ export class ViewZones extends ViewPart {
 		return { afterViewLineNumber: viewPosition.lineNumber, heightInPixels: isVisible ? heightInPixels : 0, minWidthInPixels, isInHiddenArea: !isVisible };
 	}
 
-	private safeInvoke(callback: ((value: number) => void) | undefined, value: number): void {
+	private safeInvoke(zone: IViewZone, callback: ((value: number) => void) | undefined, value: number): void {
 		if (!callback) return;
 		try {
-			callback(value);
+			callback.call(zone, value);
 		} catch (error) {
 			onUnexpectedError(error);
 		}

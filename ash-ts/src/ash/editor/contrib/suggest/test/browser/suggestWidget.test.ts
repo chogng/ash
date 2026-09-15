@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
-import { CursorsController } from "../../../../common/cursor/cursor.js";
-import { LanguageCompletionDetailsStatus, LanguageCompletionSessionController, type LanguageCompletionSessionOptions } from "../../common/languageCompletionSessionController.js";
+import { LanguageCompletionDetailsStatus, SuggestModel, type LanguageCompletionSessionOptions } from "../../browser/suggestModel.js";
 import { LanguageResultAcceptance } from "../../../../common/languages/languageResultStore.js";
 import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind, createLanguageCompletionStore, type LanguageCompletionItem } from "../../../../common/languages/completion/languageCompletions.js";
 import { LanguageCompletionProviderRegistry } from "../../../../common/languages/completion/languageCompletionProviders.js";
@@ -12,7 +11,6 @@ import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { SuggestController } from "../../browser/suggestController.js";
-import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({
@@ -55,9 +53,8 @@ test("Completion widget projects named options, focus, ARIA, and content coordin
 		contributions: [],
 	});
 	const viewport = editor.view;
-	const selections = editor.selections;
 	editor.setPosition(new Position((0) + 1, (3) + 1));
-	using session = new LanguageCompletionSessionController(service.results, selections);
+	using session = new SuggestModel(service.results, editor);
 	viewport.layout({ width: 300, height: 40 });
 	const input = viewport.controller;
 	using suggest = new SuggestController(editor, input, service, session, "plaintext");
@@ -230,12 +227,12 @@ test("Completion widget validates ownership and clears its active descendant on 
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	using model = new TextModel("con");
 	using otherModel = new TextModel("other");
-	using otherSelections = controllerAt(otherModel, new Position((0) + 1, (5) + 1));
+	using otherEditor = editorAt(otherModel, new Position((0) + 1, (5) + 1));
 	using registry = new LanguageCompletionProviderRegistry();
 	using otherRegistry = new LanguageCompletionProviderRegistry();
 	using service = new LanguageCompletionService(model, registry);
 	using otherService = new LanguageCompletionService(otherModel, otherRegistry);
-	using otherSession = new LanguageCompletionSessionController(otherService.results, otherSelections);
+	using otherSession = new SuggestModel(otherService.results, otherEditor);
 	using editor = createTestCodeEditor({
 		container,
 		model,
@@ -245,9 +242,8 @@ test("Completion widget validates ownership and clears its active descendant on 
 		contributions: [],
 	});
 	const viewport = editor.view;
-	const selections = editor.selections;
 	editor.setPosition(new Position((0) + 1, (3) + 1));
-	using session = new LanguageCompletionSessionController(service.results, selections);
+	using session = new SuggestModel(service.results, editor);
 	const input = viewport.controller;
 	assert.throws(() => new SuggestController(editor, input, service, otherSession, "plaintext"), /must share one text model/);
 	using suggest = new SuggestController(editor, input, service, session, "plaintext");
@@ -321,7 +317,7 @@ interface CompletionFixture extends Disposable {
 	readonly model: TextModel;
 	readonly editor: ReturnType<typeof createTestCodeEditor>;
 	readonly store: ReturnType<typeof createLanguageCompletionStore>;
-	readonly session: LanguageCompletionSessionController;
+	readonly session: SuggestModel;
 	readonly viewport: InstanceType<typeof View>;
 	readonly input: InstanceType<typeof ViewController>;
 	readonly suggest: SuggestController;
@@ -342,9 +338,8 @@ function createFixture(text: string, sessionOptions: LanguageCompletionSessionOp
 		contributions: [],
 	});
 	const viewport = editor.view;
-	const selections = editor.selections;
 	editor.setPosition(new Position((0) + 1, (text.length) + 1));
-	const session = new LanguageCompletionSessionController(service.results, selections, sessionOptions);
+	const session = new SuggestModel(service.results, editor, sessionOptions);
 	viewport.layout({ width: 300, height: 40 });
 	const input = viewport.controller;
 	const suggest = new SuggestController(editor, input, service, session, "plaintext");
@@ -401,11 +396,10 @@ function completion(id: string, label: string, kind: LanguageCompletionItemKind,
 	};
 }
 
-function controllerAt(model: TextModel, position: Position): CursorsController {
-	return createTestCursorsController(
-		model,
-		[Selection.fromPositions(position)],
-	);
+function editorAt(model: TextModel, position: Position): ReturnType<typeof createTestCodeEditor> {
+	const editor = createTestCodeEditor({ container: document.createElement('div'), model, input: { resource: model.uri }, languageId: 'plaintext', contributions: [] });
+	editor.setPosition(position);
+	return editor;
 }
 
 function keyboardEvent(targetWindow: typeof browserEnvironment.window, key: string, shiftKey = false, options: KeyboardEventInit = {}): KeyboardEvent {

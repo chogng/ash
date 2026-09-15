@@ -4,6 +4,8 @@
 
 ## 当前结论
 
+- 2026-09-15 补全会话与 View Zone 修复：用户确认将 `contrib/suggest/common/languageCompletionSessionController.ts` 迁入 `contrib/suggest/browser/suggestModel.ts`，将 `contrib/snippet/common/languageCompletionSnippetSession.ts` 迁入 `contrib/snippet/browser/snippetSession.ts`，并删除两个旧文件。生产贡献与聊天输入统一使用 `ICodeEditor`，两个会话不再导入内部光标控制器；模型切换和编辑器释放会取消请求并释放会话。只读补全不再报告接受成功或执行后续命令，片段选项与转换遵守编辑器只读边界，Tab/Shift+Tab 结束前一个占位符的撤销组。View Zone 回调保留区域对象作为 `this`，覆盖折叠隐藏、展开恢复与滚动通知。两个恢复同路径的声明加入待处理表；这批完成依赖迁移与行为修复，不代表完整 Suggest/Snippet API 已对齐。 验证：Editor 全量单测 243/243 个文件通过；模型切换通知修正后，补全会话、聊天输入与架构共 47 项复验通过，最终浏览器 83/83 项、Electron 文件打开/编辑/保存 1 项、聊天输入 1 项、Stanza 与桌面构建通过。完整结构与浏览器检查入口通过；既有 7 份品牌替换式 CSS 仍作为债务记录，本批未改 CSS。
+
 - 2026-09-15 命名与聊天输入评审：移除聊天实现、CSS、命令/技能补全、测试与构建配置文件名中的引擎前缀；注册表单独命名为 `chatInputEditorRegistry.ts`，实现使用 `chatInputEditor.ts`。聊天高度按编辑器末行实际底部计算，并在内容或容器尺寸变化后统一调度布局；命令补全替换完整命令词并保留参数。聊天宿主通过注入的 `ICodeEditorService` 登记/移除编辑器，恢复全局全选。`ObservableCodeEditor` 改接编辑器内容事件，布局通知只更新布局状态，避免清空折行文本时先通知内容、后更新光标导致的渲染越界。验证通过：16 项定向单测、Editor 全量 243/243 个测试文件、81 项浏览器回归、聊天尺寸/全选 Web 与 Electron 各 1 项、Electron 文件打开/编辑/保存 1 项、Stanza 与桌面构建。台账整体仍为 80/39；补全 common 会话及片段的内部光标依赖未在本批迁移。
 
 - 2026-09-15 补全浏览器依赖批次：`SuggestController` 与 `CompletionWidget` 改为通过 `ICodeEditor.getModel/getSelections/getPosition` 读取编辑器状态，普通 contribution 与聊天输入同步传递编辑器对象。两个浏览器类不再引用内部 `CursorsController`；请求刷新重新读取当前选区并处理无模型状态。补全测试改用容器装配的真实 Widget，覆盖触发字符、提交字符、片段导航、撤销与关闭后的普通方向键导航。20 项补全/聊天定向测试、81 项浏览器测试、Electron 打开/编辑/保存 1 项、类型检查与 Stanza/桌面构建通过。common 补全会话与片段仍直接依赖内部光标控制器，View 定位及完整 Suggest API 尚未对齐，80/39 台账计数不变。
@@ -17,7 +19,7 @@
 - `setSelection` 参数批次补齐 `Range / IRange` 输入，并保留 `Selection / ISelection` 方向、显式事件来源和默认 `api` 来源。Find 的命中导航直接传入范围；测试改用真实 `CodeEditorWidget`，不再用假 Editor 绕过参数入口。Widget 与 Find 共 48 项单测、61 项 Editor 浏览器测试、Stanza 类型检查、结构检查及 Renderer 构建通过。新增回归覆盖范围输入、次光标清理、坐标约束、方向、无效参数、模型分离、键盘替换和撤销；本批未改变整体声明完成计数。
 - 2026-09-13 按相对路径扫描非测试 `.ts`、`.tsx`、`.js`、`.css` 生产文件：Ash Editor 597 个，VS Code Editor 733 个；392 个同路径，205 个仅本地，341 个仅上游。
 - 首次重扫发现 49 个目录大小写错误，全部来自工作区实际目录 `browser/viewparts` 与上游 `browser/viewParts` 不一致；已做两步大小写重命名，当前大小写错误为 0。
-- 账目摘要：当前表格记录 119 组同名声明结构差异，已处理 80 组，剩余 39 组。只有通过文件集合、import owner、生产调用链和生命周期复核的声明才计入已处理；调试工具需明确证明其不进入生产创建链是职责本身。
+- 账目摘要：当前表格记录 121 组同名声明结构差异，已处理 80 组，剩余 41 组。只有通过文件集合、import owner、生产调用链和生命周期复核的声明才计入已处理；调试工具需明确证明其不进入生产创建链是职责本身。
 - 205 个仅本地文件正在逐项分类为“错误承载，迁移并删除”或“Ash 专有”。分类完成前，不再声称不存在 import owner、重复 owner 或错放文件问题。上游存在而本地缺失的文件按原相对路径直接建立，先恢复 API 名称并独立实现逻辑，再把现有 import 迁入该 owner；同路径文件只原地修改。
 - 用户已确认仅本地项的处理原则：架构文档明确归属的 Ash 专属能力按既有职责保留；与 VS Code 重叠的职责迁回对应路径。文件删除仍需在每批执行前按准确路径、原因、剩余调用方和 Git 可恢复性单独确认。
 - import 集合不同不单独判错：缺少上游能力会自然缺少对应 import，本地真实扩展也会增加 import。只有同一符号从错误 owner 导入才属于路径错误。
@@ -179,9 +181,12 @@
 | --- | --- | --- |
 | `browser/view.ts` | `View` | 根节点已从仅本地 `element` 迁为标准 `domNode`，40 余个 Editor/Workbench 调用方全部改接；焦点、Widget 焦点、ARIA、辅助阅读器、强制渲染、行宽缓存与 `onWillCopy` / `onWillCut` / `onWillPaste` 已回到该 owner。输入实例当前仍由 Controller 构造回调建立，需继续迁回 `View` 后再计为完成 |
 | `browser/widget/codeEditor/codeEditorWidget.ts` | `CodeEditorWidget` | 已接通标准 editor contribution 注册表与滚动、配置 API；`setModel`、`onWillChangeModel`、`onDidChangeModel` 和模型装饰事件沿同一 Widget 的可替换模型资源生效，根 DOM、注册身份、外部 Widget 与装饰集合句柄保持稳定，旧 View/worker/贡献/监听释放。`setValue` 直接进入模型重置，同值写入也发布新版本；Standalone 处理隐式模型所有权，单测及 Chromium 验证共享模型、输入、焦点、事件、空模型、错误恢复与释放。Widget 仍有其他公开成员差异，按对应行为分部继续处理 |
-| `common/cursor/cursor.ts` | `CursorsController` | 已恢复上游公开名；文档 undo/redo 已回到 `TextModel`，标准 Cursor Undo 已改走 `ICodeEditor` 事件，自动闭合和组合输入结果已改为内部会话状态，仅测试调用的 `beginComposition` / `CompositionSession` 平行入口已移除。多光标 Alt 点选、同位取消及一次键入两个位置由 owner 与 Chromium 验证，模型只提交一个版本，另一编辑器选区隔离。成员差异由 12 项降至 8 项；View、EditContext、ScreenReaderSupport、Anchor Select、In-place Replace、Line Selection、Selection Highlighter 和 14 个只读写选区的 contribution controller 已改走 `IViewModel` 或 `ICodeEditor`。Editor 内仍有 14 个外部生产调用方，剩余链涉及编辑事务、光标历史、只读事件、仅 Ash 文件和装配契约，不能按成员差异直接删除或包一层转发 |
+| `common/cursor/cursor.ts` | `CursorsController` | 已恢复上游公开名；文档 undo/redo 已回到 `TextModel`，标准 Cursor Undo 已改走 `ICodeEditor` 事件，自动闭合和组合输入结果已改为内部会话状态，仅测试调用的 `beginComposition` / `CompositionSession` 平行入口已移除。多光标 Alt 点选、同位取消及一次键入两个位置由 owner 与 Chromium 验证，模型只提交一个版本，另一编辑器选区隔离。成员差异由 12 项降至 8 项；View、EditContext、ScreenReaderSupport、Anchor Select、In-place Replace、Line Selection、Selection Highlighter 和 14 个只读写选区的 contribution controller 已改走 `IViewModel` 或 `ICodeEditor`。Editor 内仍有 9 个外部生产调用方，剩余链涉及编辑事务、光标历史、只读事件、仅 Ash 文件和装配契约，不能按成员差异直接删除或包一层转发 |
 | `common/cursor/cursorDeleteOperations.ts` | `DeleteOperations` | 4 个公开入口的成员边界比较为 0，已恢复 `CursorConfiguration`、`Selection[]`、`ICommand`、`EditOperationResult` 和自动闭合范围语义；浏览器删除、语言成对删除与剪贴板剪切均通过 `CursorsController.executeCommands` 进入模型事务，连续同向删除由 `pushUndoStop` 和 `EditOperationType` 控制撤销边界 |
 | `common/model/textModel.ts` | `TextModel` | 1.1–1.5 已验收：编辑范围按 UTF-16 边界约束，失败不留半次提交；同值重置推进版本，快照可读，undo/redo 恢复选区；行 ID 预检和普通、结构文档映射已覆盖。创建时的大文件分级尊重设置，整份读取受堆预算限制而快照可继续读取。其余公开成员与私有 owner 仍待随其他分部核对 |
+
+| `contrib/suggest/browser/suggestModel.ts` | `SuggestModel` | 补全会话迁入浏览器层并消费 `ICodeEditor`；模型切换取消请求，只读接受无副作用。完整触发、请求调度与公开事件契约仍需按补全部分验收 |
+| `contrib/snippet/browser/snippetSession.ts` | `SnippetSession` | 片段导航、选项和转换经 `ICodeEditor` 执行，Tab/Shift+Tab 保持独立撤销边界；完整片段合并、插入选项与公开契约仍待验收 |
 
 ## 当前已验证能力
 
@@ -207,8 +212,8 @@
 
 ## 验证状态
 
-- 文件集合审计：392 个同路径、0 个大小写错误、205 个仅本地、341 个仅上游；Ash 597 个生产文件，VS Code 733 个。该结果只说明路径集合，不说明同路径文件的职责和 API 已一致。
-- 119 项账本：80 项已处理、39 项待处理、总计 119 个唯一声明。
+- 文件集合审计：395 个同路径、0 个大小写错误、199 个仅本地、338 个仅上游；Ash 594 个生产文件，VS Code 733 个。该结果只说明路径集合，不说明同路径文件的职责和 API 已一致。
+- 121 项账本：80 项已处理、41 项待处理、总计 121 个唯一声明。
 - `tsconfig.test.json` 编译通过；`MoveOperations` 的 17 个标准入口通过 12 项定向行为测试，真实 `CodeEditorWidget` 连续向下移动测试证明短行后的可视列余量能够恢复。`tsconfig.json --noEmit` 仍只报既有 Electron、Embedded Editor、BrowserView、Workbench 与 TextMate 基线错误，本批文件无新增类型错误。
 - Editor 浏览器测试 TypeScript 已编译通过；GPU Chromium 用例通过，证明 WGSL pipeline、Rectangle clear pass、ViewLinesGpu load pass、编辑与 undo 的真实帧链可用。本批 Widget、pointer、decoration 与 CodeEditorWidget 相关 40 项单测全部通过；Decoration owner 本批另有 25 项聚焦单测通过，真实 Chromium 验证标准 inline、whole-line、collapsed decoration 的非零几何和删除重绘。View Zone 场景精确验证 4 行 × 18px + 500px 空白区高度、1200px 最小宽度及移除后恢复，Widget 场景验证 Content Widget 非零几何、Glyph Widget 跨行迁移、模型 decoration z-index winner 和释放。全量浏览器入口仍有既有 Academic 多行键入、旧 token/语法分析断言和旧 minimap slider 断言，不通过兼容文件恢复退场 API。
 - Editor 完整单测运行到 882 项时为 845 项通过、11 项失败；`codeEditorPane.test.js` 挂起约 4 分钟后终止，后续 26 项被取消。失败覆盖 Cursor Undo/Redo、Folding、Join Lines、输入事件次数、占位符几何、字体配置和换行符等既有基线，本批 4 个定向用例均通过。

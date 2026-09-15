@@ -289,6 +289,30 @@ test('large standalone models keep both editors readable within the tokenization
 	expect(errors).toEqual([]);
 });
 
+test('completion snippets navigate and undo through the mounted editor', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.enableCompletionNavigation(true));
+	const input = page.locator('#caller .stanza-editor-input');
+	await input.focus();
+	await page.keyboard.press('Control+Space');
+	await expect(page.locator('#caller .stanza-editor-completion-option')).toHaveCount(2);
+	await page.keyboard.press('Enter');
+	await expect(page.locator('#caller .view-line').first()).toContainText('conname(value)');
+	await page.keyboard.type('fn');
+	await page.keyboard.press('Tab');
+	await page.keyboard.type('arg');
+	await page.keyboard.press('Tab');
+	await page.keyboard.type(';');
+	await expect(page.locator('#caller .view-line').first()).toContainText('confn(arg);');
+	await page.keyboard.press('Escape');
+	await page.keyboard.press('ControlOrMeta+z');
+	await expect(page.locator('#caller .view-line').first()).toContainText('confn(arg)');
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	expect(errors).toEqual([]);
+});
+
 test('completion arrow keys select a suggestion before editor navigation', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.stack ?? error.message));
@@ -1085,6 +1109,7 @@ for (const unit of ['pixels', 'lines'] as const) {
 		const caret = page.locator('#caller .stanza-editor-caret.primary');
 		await page.locator('#caller .stanza-editor-input').focus();
 		await expect(zone).toHaveCount(1);
+		await expect(zone).toHaveAttribute('data-computed-height', '0');
 		await expect(zone).toBeHidden();
 		await expect(margin).toBeHidden();
 		const originalBlock = await block.boundingBox();
@@ -1102,6 +1127,8 @@ for (const unit of ['pixels', 'lines'] as const) {
 		});
 		await expect(zone).toBeVisible();
 		await expect(zone).toHaveCSS('height', '40px');
+		await expect(zone).toHaveAttribute('data-computed-height', '40');
+		await expect(zone).toHaveAttribute('data-top', '20');
 		await expect(margin).toHaveCSS('height', '40px');
 		await expect.poll(async () => (await block.boundingBox())?.height).toBe(originalBlock!.height + 40);
 		await expect.poll(async () => (await caret.boundingBox())?.y).toBe(originalCaret!.y + 40);
@@ -1186,7 +1213,7 @@ test('standalone view zones stay after the wrapped fold header while folded and 
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/standalone.html');
-	const version = await page.evaluate(() => window.ashStandaloneIntegration.prepareFoldedViewZone());
+	const version = await page.evaluate(() => window.ashStandaloneIntegration.prepareFoldedViewZone(true));
 	const zone = page.locator('#caller .ash-folded-zone-probe');
 	const margin = page.locator('#caller .ash-folded-zone-margin-probe');
 	await expect(zone).toHaveCSS('top', '80px');
@@ -1194,9 +1221,12 @@ test('standalone view zones stay after the wrapped fold header while folded and 
 	await page.locator('#caller .ash-icon-folding-expanded').first().click();
 	await expect(page.locator('#caller .ash-icon-folding-collapsed').first()).toBeVisible();
 	await expect(zone).toHaveCSS('top', '60px');
+	await expect(zone).toHaveAttribute('data-computed-height', '40');
+	await expect(zone).toHaveAttribute('data-top', '60');
 	await expect(margin).toHaveCSS('top', '60px');
 	await page.evaluate(() => window.ashStandaloneIntegration.scrollVisibleRows(40));
 	await expect(zone).toBeVisible();
+	await expect(zone).toHaveAttribute('data-top', '20');
 	await expect.poll(async () => {
 		const bounds = await zone.boundingBox();
 		const root = await page.locator('#caller .stanza-editor').boundingBox();
@@ -1205,6 +1235,38 @@ test('standalone view zones stay after the wrapped fold header while folded and 
 	await page.evaluate(() => window.ashStandaloneIntegration.scrollVisibleRows(0));
 	await page.locator('#caller .ash-icon-folding-collapsed').first().click();
 	await expect(zone).toHaveCSS('top', '80px');
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.getCallerVersion())).toBe(version);
+	expect(await node!.evaluate(element => element === document.querySelector('#caller .ash-folded-zone-probe'))).toBe(true);
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	expect(await node!.evaluate(element => element.isConnected)).toBe(false);
+	await node!.dispose();
+	expect(errors).toEqual([]);
+});
+
+
+test('folding hides view zones and restores their layout callbacks after scrolling and unfolding', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/standalone.html');
+	const version = await page.evaluate(() => window.ashStandaloneIntegration.prepareFoldedViewZone(false));
+	const zone = page.locator('#caller .ash-folded-zone-probe');
+	const margin = page.locator('#caller .ash-folded-zone-margin-probe');
+	await expect(zone).toHaveAttribute('data-computed-height', '40');
+	await expect(zone).toHaveAttribute('data-top', '80');
+	const node = await zone.elementHandle();
+	await page.locator('#caller .ash-icon-folding-expanded').first().click();
+	await expect(zone).toBeHidden();
+	await expect(margin).toBeHidden();
+	await expect(zone).toHaveAttribute('data-computed-height', '0');
+	await page.evaluate(() => window.ashStandaloneIntegration.scrollVisibleRows(40));
+	await expect(zone).toBeHidden();
+	await expect.poll(() => zone.getAttribute('data-top').then(Number)).toBeLessThan(0);
+	await page.evaluate(() => window.ashStandaloneIntegration.scrollVisibleRows(0));
+	await page.locator('#caller .ash-icon-folding-collapsed').first().click();
+	await expect(zone).toBeVisible();
+	await expect(margin).toBeVisible();
+	await expect(zone).toHaveAttribute('data-computed-height', '40');
+	await expect(zone).toHaveAttribute('data-top', '80');
 	expect(await page.evaluate(() => window.ashStandaloneIntegration.getCallerVersion())).toBe(version);
 	expect(await node!.evaluate(element => element === document.querySelector('#caller .ash-folded-zone-probe'))).toBe(true);
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());

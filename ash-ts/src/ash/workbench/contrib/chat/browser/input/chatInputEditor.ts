@@ -9,7 +9,7 @@ import { CodeEditorWidget } from "../../../../../editor/browser/widget/codeEdito
 import { ICodeEditorService } from "../../../../../editor/browser/services/codeEditorService.js";
 import { LanguageCompletionService } from "../../../../../editor/common/languages/completion/languageCompletionService.js";
 import { LanguageCompletionProviderRegistry } from "../../../../../editor/common/languages/completion/languageCompletionProviders.js";
-import { LanguageCompletionSessionController } from "../../../../../editor/contrib/suggest/common/languageCompletionSessionController.js";
+import { SuggestModel } from "../../../../../editor/contrib/suggest/browser/suggestModel.js";
 import { SuggestController } from "../../../../../editor/contrib/suggest/browser/suggestController.js";
 import "../../../../../editor/contrib/placeholderText/browser/placeholderText.contribution.js";
 import "../../../../../editor/browser/coreCommands.js";
@@ -59,7 +59,7 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 		this._register(providers.register(createChatCommandCompletionProvider(options.slashCommands)));
 		this._register(providers.register(createChatSkillCompletionProvider(options.skills)));
 		const completions = this._register(new LanguageCompletionService(this.model, providers));
-		const completionSession = this._register(new LanguageCompletionSessionController(completions.results, this.editor.selections, { resolver: completions }));
+		const completionSession = this._register(new SuggestModel(completions.results, this.editor, { resolver: completions }));
 		this._register(new SuggestController(
 			this.editor,
 			this.editor.controller,

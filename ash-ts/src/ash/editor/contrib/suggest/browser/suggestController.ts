@@ -5,7 +5,7 @@ import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { createLanguageCompletionIncompleteRefreshContext, createLanguageCompletionInvokeContext, type LanguageCompletionContext } from '../../../common/languages/completion/languageCompletionProviders.js';
 import { type LanguageCompletionService } from '../../../common/languages/completion/languageCompletionService.js';
 import { type EditorViewDidEditEvent, type EditorViewTextUpdateEvent, type ViewController } from '../../../browser/view/viewController.js';
-import { LanguageCompletionSessionController, type LanguageCompletionSessionState } from '../common/languageCompletionSessionController.js';
+import { SuggestModel, type LanguageCompletionSessionState } from './suggestModel.js';
 import { CompletionWidget } from './suggestWidget.js';
 
 export interface SuggestControllerOptions {
@@ -32,7 +32,7 @@ export class SuggestController extends Disposable {
 		private readonly editor: ICodeEditor,
 		private readonly view: ViewController,
 		private readonly service: LanguageCompletionService,
-		private readonly session: LanguageCompletionSessionController,
+		private readonly session: SuggestModel,
 		private readonly languageId: string,
 		options: SuggestControllerOptions = {},
 	) {
