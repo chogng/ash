@@ -17,7 +17,8 @@ formats, and update delivery belong to their respective owners.
 │   ├── ash-app-server-daemon[.exe]
 │   ├── ash-app-server[.exe]
 │   ├── ash-remote[.exe]
-│   └── ash-remote-server[.exe]
+│   ├── ash-remote-server[.exe]
+│   └── ash-exec-server[.exe]
 ├── ash-path/
 │   └── rg[.exe]
 └── ash-resources/
@@ -117,7 +118,7 @@ python3 -B build/release/package/build.py \
 ```
 
 Release jobs that already built or signed binaries should use `--server-bin` and
-`--app-server-daemon-bin`, `--remote-bin`, `--remote-server-bin`, and
+`--app-server-daemon-bin`, `--remote-bin`, `--remote-server-bin`, `--exec-server-bin`, and
 optionally `--rg-bin` or, for the `packaged-node` variant, `--node-bin`; those overrides are copied verbatim and their binary
 digest is recorded in `ash-package.json`. `buildId` covers the sorted digest manifest of every package file together with all identity metadata except `buildId` and the file manifest itself; it is not a mutable release selector. Linux jobs can likewise pass
 `--bwrap-bin`. Signing and archive serialization must happen after this staging

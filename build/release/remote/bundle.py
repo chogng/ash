@@ -38,6 +38,7 @@ REQUIRED_RUNTIME_FILES = {
     "bin/ash-app-server-daemon",
     "bin/ash-app-server",
     "bin/ash-remote-server",
+    "bin/ash-exec-server",
     "ash-path/rg",
     "ash-resources/node/bin/node",
 }
@@ -45,6 +46,7 @@ EXECUTABLE_RUNTIME_FILES = {
     "bin/ash-app-server-daemon",
     "bin/ash-app-server",
     "bin/ash-remote-server",
+    "bin/ash-exec-server",
     "ash-path/rg",
     "ash-resources/node/bin/node",
 }

@@ -1,6 +1,6 @@
-use crate::TerminalProfile;
-use crate::TerminalProfileSelection;
-use crate::environment::TerminalEnvironment;
+use crate::terminal::TerminalProfile;
+use crate::terminal::TerminalProfileSelection;
+use crate::terminal::environment::TerminalEnvironment;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::Path;

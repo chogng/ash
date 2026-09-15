@@ -7,14 +7,6 @@ use crate::server::DirGrantPolicy;
 use crate::server::EnvToolPorts;
 use crate::server::update_broker::UpdateBroker;
 use crate::tool_composition::ToolPort;
-use std::collections::BTreeMap;
-use std::fmt;
-use std::path::Path;
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::thread::JoinHandle;
-use std::time::Duration;
 use ash_async_utils::CancellationToken;
 use ash_chatgpt::ChatGptOAuth;
 use ash_client::OperationClient;
@@ -90,6 +82,14 @@ use ash_secrets::FileSecretStore;
 use ash_secrets::SecretStore;
 use ash_skills_extension::BuiltInSkillSource;
 use ash_skills_extension::SkillConfigSnapshotProvider;
+use std::collections::BTreeMap;
+use std::fmt;
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::thread::JoinHandle;
+use std::time::Duration;
 
 const DEFAULT_MODEL_OUTPUT_RESERVATION_TOKENS: u32 = 4_096;
 const MODEL_CONTEXT_SAFETY_MARGIN_TOKENS: u32 = 1_024;
@@ -97,6 +97,7 @@ const MODEL_CONTEXT_SAFETY_MARGIN_TOKENS: u32 = 1_024;
 /// Filesystem and runtime inputs needed to open one local App Server.
 #[derive(Clone)]
 pub struct LocalAppServerOptions {
+    execution_environments: Vec<exec_server::ExecutionEnvironment>,
     pub profile_root: PathBuf,
     codex_home: Option<PathBuf>,
     pub dir_config: Option<LocalDirConfigOptions>,
@@ -128,6 +129,14 @@ enum InitialDirPermissions {
 }
 
 impl LocalAppServerOptions {
+    pub fn with_execution_environments(
+        mut self,
+        environments: Vec<exec_server::ExecutionEnvironment>,
+    ) -> Self {
+        self.execution_environments = environments;
+        self
+    }
+
     pub fn with_image_generation_backend(
         mut self,
         backend: Arc<dyn image_generation::ImageGenerationBackend>,
@@ -146,6 +155,7 @@ impl LocalAppServerOptions {
     pub fn new(profile_root: impl Into<PathBuf>) -> Self {
         Self {
             profile_root: profile_root.into(),
+            execution_environments: Vec::new(),
             codex_home: None,
             dir_config: None,
             slash_commands: SlashCommandCatalog::default(),
@@ -348,6 +358,14 @@ impl fmt::Debug for LocalAppServerOptions {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("LocalAppServerOptions")
+            .field(
+                "execution_environments",
+                &self
+                    .execution_environments
+                    .iter()
+                    .map(|environment| environment.info())
+                    .collect::<Vec<_>>(),
+            )
             .field("profile_root", &self.profile_root)
             .field("codex_home", &self.codex_home)
             .field("dir_config", &self.dir_config)
@@ -401,7 +419,11 @@ impl fmt::Debug for LocalAppServerOptions {
 
 impl PartialEq for LocalAppServerOptions {
     fn eq(&self, other: &Self) -> bool {
-        self.profile_root == other.profile_root
+        self.execution_environments
+            .iter()
+            .map(|env| env.info())
+            .eq(other.execution_environments.iter().map(|env| env.info()))
+            && self.profile_root == other.profile_root
             && self.codex_home == other.codex_home
             && self.dir_config == other.dir_config
             && self.slash_commands == other.slash_commands
@@ -990,9 +1012,7 @@ pub fn open_local_app_server_with_codebase_providers(
     }
     let state_runtime = match &profile_runtime {
         Some(runtime) => runtime.state_runtime(),
-        None => {
-            Arc::new(ash_state::StateRuntime::open(&options.profile_root).map_err(open_error)?)
-        }
+        None => Arc::new(ash_state::StateRuntime::open(&options.profile_root).map_err(open_error)?),
     };
     let (database_path, threads, config) = match (&profile_runtime, options.session_state_mode) {
         (Some(runtime), SessionStateMode::Durable) => (
@@ -1215,9 +1235,7 @@ pub fn open_local_app_server_with_codebase_providers(
     let model_operation_client = Some(model_client);
     let codex_home = match options.codex_home.take() {
         Some(home) => home,
-        None => {
-            ash_chatgpt::codex_home().map_err(|error| OpenAppServerError(error.to_string()))?
-        }
+        None => ash_chatgpt::codex_home().map_err(|error| OpenAppServerError(error.to_string()))?,
     };
     let chatgpt_oauth = match &model_operation_client {
         Some(client) => ChatGptOAuth::with_client(
@@ -1467,6 +1485,9 @@ pub fn open_local_app_server_with_codebase_providers(
             server = server.with_connector_device_oauth_service(Arc::clone(oauth));
         }
     }
+    server = server
+        .with_execution_environments(options.execution_environments)
+        .map_err(OpenAppServerError)?;
     server = server
         .with_local_tool_config(crate::local_tools::LocalToolConfig::from_resolved(
             &runtime_config,

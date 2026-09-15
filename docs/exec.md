@@ -1,7 +1,7 @@
 # 无界面 Agent 执行
 
 > 目标物理位置：`ash-rs/exec/`  
-> 当前状态：阶段 1–2 已实现；可靠自动化、远程 worker 与远程执行环境仍是 Proposed
+> 当前状态：阶段 1–2 已实现；远程执行环境的进程/文件通路已实现，可靠自动化与远程 Agent worker 仍是 Proposed
 > 当前 crate 实现契约：[`ash-rs/exec/README.md`](../ash-rs/exec/README.md)
 > App Server Client：[`app-server-client.md`](app-server-client.md)  
 > App Server contract：[`ash-app-server-api.md`](ash-app-server-api.md)  
@@ -29,14 +29,14 @@ local CLI / remote scheduler
          ash-core
             │ tool execution port
             ▼
- ash-tool-executor / future ash-exec-server
+ ash-exec-server → ash-tool-executor
 ```
 
 长期必须区分：
 
 - `ash-exec`：运行完整的 headless Agent Job；
 - `ash-tool-executor`：在本机执行一个经过 approval/sandbox 的 process；
-- `ash-exec-server`：未来把 process/filesystem execution 暴露给远程环境；
+- `ash-exec-server`：把 process/filesystem execution 暴露给宿主配置的远程环境；
 - scheduler protocol：提交、租约、取消和观察远程 Agent Job。
 
 这四者不能共享一个含义含糊的 `exec` API。
@@ -45,7 +45,7 @@ local CLI / remote scheduler
 | --- | --- | --- |
 | 无交互地运行完整 Agent 任务 | `ash-exec` | 本地 run-once 已实现 |
 | 执行一次已经批准的本地命令 | `ash-tool-executor` | 已实现并与 Agent runner 分离 |
-| 在远程机器执行进程或文件操作 | 远程执行服务 | 潜在方向 |
+| 在远程机器执行进程或文件操作 | `ash-exec-server` | 已接入 Core 审批与结果记录 |
 | 排队、租约和取消远程 Agent 任务 | 调度协议 | 潜在方向 |
 
 ## 2. Codex 参考与 Ash 取舍
@@ -98,7 +98,8 @@ gate；`ash-exec` 当前拥有 new/resume/fork、Turn start/interrupt、事件�
 共享 policy、进程生命周期与 MXC 三平台适配边界见
 [`sandboxing.md`](sandboxing.md)。
 
-若后续需要远程 process/filesystem execution：
+当前远程 process/filesystem execution 的实现契约见
+[`ash-exec-server`](../ash-rs/exec-server/README.md)。桌面 PTY 已归该 crate；远程受限 PTY 受 MXC 能力限制，尚未提供。
 
 ```text
 ash-tool-executor

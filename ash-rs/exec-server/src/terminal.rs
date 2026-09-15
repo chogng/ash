@@ -3,11 +3,10 @@
 mod command_status;
 mod environment;
 mod profiles;
-mod types;
 
-use crate::command_status::ParsedTerminalOutput;
-use crate::command_status::TerminalCommandStatusTracker;
-use crate::profiles::TerminalProfileCatalog;
+use crate::terminal::command_status::ParsedTerminalOutput;
+use crate::terminal::command_status::TerminalCommandStatusTracker;
+use crate::terminal::profiles::TerminalProfileCatalog;
 use ash_file_access::Authorization;
 use ash_file_access::Permission;
 use ash_utils_pty::ProcessHandle;
@@ -15,6 +14,21 @@ use ash_utils_pty::SpawnedProcess;
 use ash_utils_pty::TerminalSize;
 use ash_utils_pty::spawn_pty_process;
 pub use environment::safe_process_environment;
+pub use exec_server_protocol::terminal::TerminalAttachRequest;
+pub use exec_server_protocol::terminal::TerminalAttachResult;
+pub use exec_server_protocol::terminal::TerminalCommandStatus;
+pub use exec_server_protocol::terminal::TerminalCommandStatusEvent;
+pub use exec_server_protocol::terminal::TerminalCreateRequest;
+pub use exec_server_protocol::terminal::TerminalCreateResult;
+pub use exec_server_protocol::terminal::TerminalLifecycle;
+pub use exec_server_protocol::terminal::TerminalOutputChunk;
+pub use exec_server_protocol::terminal::TerminalProfile;
+pub use exec_server_protocol::terminal::TerminalProfileSelection;
+pub use exec_server_protocol::terminal::TerminalReadRequest;
+pub use exec_server_protocol::terminal::TerminalReadResult;
+pub use exec_server_protocol::terminal::TerminalReconnectLease;
+pub use exec_server_protocol::terminal::TerminalResizeRequest;
+pub use exec_server_protocol::terminal::TerminalWriteRequest;
 use getrandom::getrandom;
 use std::collections::HashMap;
 use std::collections::VecDeque;
@@ -26,21 +40,6 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 use tokio::runtime::Runtime;
-pub use types::TerminalAttachRequest;
-pub use types::TerminalAttachResult;
-pub use types::TerminalCommandStatus;
-pub use types::TerminalCommandStatusEvent;
-pub use types::TerminalCreateRequest;
-pub use types::TerminalCreateResult;
-pub use types::TerminalLifecycle;
-pub use types::TerminalOutputChunk;
-pub use types::TerminalProfile;
-pub use types::TerminalProfileSelection;
-pub use types::TerminalReadRequest;
-pub use types::TerminalReadResult;
-pub use types::TerminalReconnectLease;
-pub use types::TerminalResizeRequest;
-pub use types::TerminalWriteRequest;
 
 const MAX_ACTIVE_TERMINALS: usize = 16;
 const MAX_OUTPUT_BYTES: usize = 1024 * 1024;
@@ -629,5 +628,5 @@ pub enum TerminalError {
 }
 
 #[cfg(test)]
-#[path = "service_tests.rs"]
+#[path = "terminal/service_tests.rs"]
 mod tests;

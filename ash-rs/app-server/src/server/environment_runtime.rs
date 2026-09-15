@@ -102,8 +102,8 @@ pub(super) struct EnvRuntime {
     pub(super) codebase_semantic_job: Option<Arc<SemanticIndexJobController>>,
     pub(super) cloud_codebase: Option<Arc<CloudCodebaseController>>,
     pub(super) _dir_contributions: Option<Arc<DirContributions>>,
-    pub(super) terminals: Option<Arc<terminal::TerminalService>>,
-    pub(super) dir_terminals: BTreeMap<String, Arc<terminal::TerminalService>>,
+    pub(super) terminals: Option<Arc<exec_server::terminal::TerminalService>>,
+    pub(super) dir_terminals: BTreeMap<String, Arc<exec_server::terminal::TerminalService>>,
     pub(super) debug_adapters: Option<Arc<crate::debug_service::DebugAdapterService>>,
     pub(super) dir_debug_adapters: BTreeMap<String, Arc<crate::debug_service::DebugAdapterService>>,
     pub(super) dir_grants: Arc<DirGrants>,
@@ -748,6 +748,7 @@ fn host_dir_permissions() -> Permissions {
 }
 
 struct EnvToolPortState {
+    environment: Option<ToolPort>,
     dynamic: Option<ToolPort>,
     executables_enabled: bool,
     extension: Option<ToolPort>,
@@ -775,6 +776,7 @@ impl EnvToolPorts {
 
     fn new(
         host: ToolPort,
+        environment: Option<ToolPort>,
         mcp: Option<ToolPort>,
         dynamic: Option<ToolPort>,
         extension: Option<ToolPort>,
@@ -787,6 +789,7 @@ impl EnvToolPorts {
         let registry_generation = ToolRegistryGeneration::new(1);
         let ports = extension
             .iter()
+            .chain(environment.iter())
             .chain(dynamic.iter())
             .chain(mcp.iter())
             .cloned()
@@ -799,6 +802,7 @@ impl EnvToolPorts {
         .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
         Ok(Arc::new(Self {
             state: Mutex::new(EnvToolPortState {
+                environment,
                 dynamic,
                 executables_enabled: false,
                 extension,
@@ -891,6 +895,7 @@ impl EnvToolPorts {
             .lock()
             .map_err(|_| EnvRuntimeError::Failed("Directory tool state poisoned".into()))?;
         let mut next = EnvToolPortState {
+            environment: state.environment.clone(),
             dynamic: state.dynamic.clone(),
             executables_enabled: state.executables_enabled,
             extension: state.extension.clone(),
@@ -916,6 +921,7 @@ impl EnvToolPorts {
         let ports = next
             .extension
             .iter()
+            .chain(next.environment.iter())
             .chain(next.dynamic.iter())
             .chain(next.host.iter())
             .chain(next.local.iter())
@@ -974,6 +980,46 @@ impl fmt::Display for EnvRuntimeError {
 impl std::error::Error for EnvRuntimeError {}
 
 impl AppServer {
+    /// Installs explicit execution targets without coupling them to the selected local directory.
+    pub fn with_execution_environments(
+        mut self,
+        environments: Vec<exec_server::ExecutionEnvironment>,
+    ) -> Result<Self, String> {
+        if self.execution_tool_port.is_some() {
+            return Err("execution environments are already installed".into());
+        }
+        if environments.is_empty() {
+            return Ok(self);
+        }
+        let port = crate::execution_environments::port(environments)?;
+        if let Some(host) = &self.local_env_host {
+            host.tools
+                .replace(|state| {
+                    state.environment = Some(port.clone());
+                    Ok(())
+                })
+                .map_err(|error| error.to_string())?;
+        } else {
+            let ports = self
+                .extension_tool_port
+                .iter()
+                .chain(self.dynamic_tool_port.iter())
+                .cloned()
+                .chain(std::iter::once(port.clone()))
+                .collect();
+            let combined = combine_tool_ports_at_generation_with_search(
+                ports,
+                ToolRegistryGeneration::new(1),
+                ToolSearchOptions::default(),
+            )
+            .map_err(|error| error.to_string())?
+            .expect("environment port is present");
+            self = self.with_tool_service(combined.tools, combined.policy);
+        }
+        self.execution_tool_port = Some(port);
+        Ok(self)
+    }
+
     pub(crate) fn with_extension_tool_port(
         mut self,
         extension: Option<ToolPort>,
@@ -990,6 +1036,7 @@ impl AppServer {
         } else {
             let ports = std::iter::once(extension.clone())
                 .chain(self.dynamic_tool_port.iter().cloned())
+                .chain(self.execution_tool_port.iter().cloned())
                 .collect();
             let combined = combine_tool_ports_at_generation_with_search(
                 ports,
@@ -1036,6 +1083,7 @@ impl AppServer {
                 .extension_tool_port
                 .iter()
                 .cloned()
+                .chain(self.execution_tool_port.iter().cloned())
                 .chain(std::iter::once(port.clone()))
                 .collect();
             let combined = combine_tool_ports_at_generation_with_search(
@@ -1108,6 +1156,7 @@ impl AppServer {
         };
         let tools = EnvToolPorts::new(
             self.browser_tool_port.clone(),
+            self.execution_tool_port.clone(),
             mcp,
             self.dynamic_tool_port.clone(),
             self.extension_tool_port.clone(),
@@ -1306,12 +1355,16 @@ impl AppServer {
                 .write()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             current.dir_grants.clear();
-            let executor = current.turn_executor.clone().without_context_source("codebase");
+            let executor = current
+                .turn_executor
+                .clone()
+                .without_context_source("codebase");
             let executor = match &self.home {
                 Some(home) => executor
                     .with_harness_context_provider(Arc::new(HomeContext::new(Arc::clone(home)))),
-                None => executor
-                    .with_instructions(Arc::new(ash_core::HarnessInstructions::default())),
+                None => {
+                    executor.with_instructions(Arc::new(ash_core::HarnessInstructions::default()))
+                }
             };
             let mut next = EnvRuntime::empty(executor);
             next.cwd = current.cwd.clone();
@@ -1416,7 +1469,7 @@ impl AppServer {
                     .authorize(Permission::ExecuteCommands)
                     .map_err(|_| EnvRuntimeError::PermissionRequired)?;
                 Some(Arc::new(
-                    terminal::TerminalService::new(capability).map_err(|_| {
+                    exec_server::terminal::TerminalService::new(capability).map_err(|_| {
                         EnvRuntimeError::Failed(
                             "failed to initialize dir folder terminal runtime".into(),
                         )
@@ -1447,7 +1500,7 @@ impl AppServer {
                         authorization
                             .authorize(Permission::ExecuteCommands)
                             .map_err(|_| EnvRuntimeError::PermissionRequired)?,
-                        terminal::safe_process_environment(),
+                        exec_server::terminal::safe_process_environment(),
                     )
                     .map_err(|_| {
                         EnvRuntimeError::Failed(
@@ -2020,9 +2073,9 @@ impl AppServer {
                 terminals
             }
             None => Arc::new(
-                terminal::TerminalService::new(terminal_capability).map_err(
-                    |_| EnvRuntimeError::Failed("failed to initialize terminal runtime".into()),
-                )?,
+                exec_server::terminal::TerminalService::new(terminal_capability).map_err(|_| {
+                    EnvRuntimeError::Failed("failed to initialize terminal runtime".into())
+                })?,
             ),
         };
         let debug_adapters = Arc::new(
@@ -2033,7 +2086,7 @@ impl AppServer {
                 authorization
                     .authorize(Permission::ExecuteCommands)
                     .map_err(|_| EnvRuntimeError::PermissionRequired)?,
-                terminal::safe_process_environment(),
+                exec_server::terminal::safe_process_environment(),
             )
             .map_err(|_| {
                 EnvRuntimeError::Failed("failed to initialize debug adapter runtime".into())
@@ -2486,7 +2539,7 @@ impl AppServer {
 
     pub(super) fn terminal_service(
         &self,
-    ) -> Result<Arc<terminal::TerminalService>, RpcError> {
+    ) -> Result<Arc<exec_server::terminal::TerminalService>, RpcError> {
         self.terminal_service_for(None)
     }
 
@@ -2524,7 +2577,7 @@ impl AppServer {
     pub(super) fn terminal_service_for(
         &self,
         dir_id: Option<&str>,
-    ) -> Result<Arc<terminal::TerminalService>, RpcError> {
+    ) -> Result<Arc<exec_server::terminal::TerminalService>, RpcError> {
         let runtime = self
             .env_runtime
             .read()
@@ -2544,7 +2597,7 @@ impl AppServer {
 
     pub(super) fn configured_terminal_services(
         &self,
-    ) -> Vec<Arc<terminal::TerminalService>> {
+    ) -> Vec<Arc<exec_server::terminal::TerminalService>> {
         let runtime = self
             .env_runtime
             .read()
@@ -2850,7 +2903,7 @@ fn resolve_semantic_model_invokers(
 fn retire_env_runtime(
     mut runtime: EnvRuntime,
     retained_search: Option<&Arc<ContentSearchService>>,
-    retained_terminals: Option<&Arc<terminal::TerminalService>>,
+    retained_terminals: Option<&Arc<exec_server::terminal::TerminalService>>,
     retained_debug_adapters: Option<&Arc<crate::debug_service::DebugAdapterService>>,
 ) {
     for (_, search) in std::mem::take(&mut runtime.dir_content_search) {

@@ -22,7 +22,9 @@ const DIR_GRANT_SOURCE: &str = "ASH_DIR_GRANT_SOURCE";
 pub fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
     let arguments = arguments.into_iter().collect::<Vec<_>>();
     if arguments.as_slice() == [ash_app_server_daemon::MANAGED_PROCESS_ARGUMENT] {
-        return crate::managed::run(ash_utils_home_dir::find_ash_home().map_err(|error| error.to_string())?);
+        return crate::managed::run(
+            ash_utils_home_dir::find_ash_home().map_err(|error| error.to_string())?,
+        );
     }
     if arguments.as_slice() == ["--version"] {
         println!(
@@ -248,6 +250,11 @@ pub(super) fn open_server(host: &StartupOptions) -> Result<AppServer, String> {
         options = options.with_product_services(
             LocalProductServicesConfig::load(path, host.profile_root())
                 .map_err(|error| error.to_string())?,
+        );
+    }
+    if let Some(path) = env::var_os("ASH_EXEC_ENVIRONMENTS") {
+        options = options.with_execution_environments(
+            crate::execution_environments::load_environments(Path::new(&path))?,
         );
     }
     open_local_app_server(options).map_err(|error| error.to_string())

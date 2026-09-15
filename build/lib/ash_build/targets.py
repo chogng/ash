@@ -82,6 +82,10 @@ class TargetSpec:
         return "ash-remote-server" + self.executable_suffix
 
     @property
+    def exec_server_name(self) -> str:
+        return "ash-exec-server" + self.executable_suffix
+
+    @property
     def server_name(self) -> str:
         return "ash-app-server" + self.executable_suffix
 

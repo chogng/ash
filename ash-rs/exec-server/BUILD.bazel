@@ -1,0 +1,13 @@
+load("//:defs.bzl", "ash_rust_crate", "ash_rust_binary")
+
+ash_rust_crate(
+    name = "exec-server",
+    crate_name = "exec_server",
+)
+
+ash_rust_binary(
+    name = "ash-exec-server",
+    crate_name = "ash_exec_server",
+    crate_root = "src/main.rs",
+    deps = [":exec-server"],
+)

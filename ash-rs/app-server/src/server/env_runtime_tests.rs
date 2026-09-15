@@ -197,6 +197,7 @@ fn unavailable_hybrid_tool_search_remains_gated_and_reports_status() {
         None,
         None,
         None,
+        None,
         &ToolSearchConfig::default(),
         &Default::default(),
         None,

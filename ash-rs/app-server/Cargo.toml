@@ -15,7 +15,8 @@ name = "ash_app_server"
 path = "src/lib.rs"
 
 [dependencies]
-terminal = { workspace = true }
+exec-server = { workspace = true }
+exec-server-protocol = { workspace = true }
 external-agent-migration = { workspace = true }
 serde_yaml = { workspace = true }
 pulldown-cmark = { workspace = true }

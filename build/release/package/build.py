@@ -65,6 +65,7 @@ def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Names
     )
     parser.add_argument("--remote-bin", type=Path, help="Prebuilt local Remote management executable.")
     parser.add_argument("--remote-server-bin", type=Path, help="Prebuilt remote runtime executable.")
+    parser.add_argument("--exec-server-bin", type=Path, help="Prebuilt execution service executable.")
     parser.add_argument("--windows-sandbox-bin", type=Path, help="Prebuilt Windows sandbox installation and execution helper.")
     parser.add_argument(
         "--target",
@@ -187,6 +188,7 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         "ash-code-mode-host": args.code_mode_host_bin,
         "ash-remote": args.remote_bin,
         "ash-remote-server": args.remote_server_bin,
+        "ash-exec-server": args.exec_server_bin,
     }
     if spec.is_windows:
         inputs["ash-windows-sandbox"] = args.windows_sandbox_bin
@@ -236,6 +238,7 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         binaries["ash-app-server"],
         binaries["ash-remote"],
         binaries["ash-remote-server"],
+        binaries["ash-exec-server"],
         binaries["ash-app-server-daemon"],
         binaries["ash-code-mode-host"],
         ripgrep,

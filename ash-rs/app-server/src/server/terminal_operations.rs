@@ -62,7 +62,7 @@ impl AppServer {
             .terminal_service()?
             .create_in_dir(
                 connection.connection_id,
-                terminal::TerminalCreateRequest {
+                exec_server::terminal::TerminalCreateRequest {
                     rows: params.rows,
                     cols: params.cols,
                     profile: profile_selection(params.profile),
@@ -87,7 +87,7 @@ impl AppServer {
         self.terminal_service_for(params.dir_id.as_deref())?
             .write(
                 connection.connection_id,
-                terminal::TerminalWriteRequest {
+                exec_server::terminal::TerminalWriteRequest {
                     terminal_id: params.terminal_id,
                     data: params.data,
                 },
@@ -106,7 +106,7 @@ impl AppServer {
             .terminal_service_for(params.dir_id.as_deref())?
             .attach(
                 connection.connection_id,
-                terminal::TerminalAttachRequest {
+                exec_server::terminal::TerminalAttachRequest {
                     terminal_id: params.terminal_id,
                     reconnect_token: params.reconnect_token,
                     rows: params.rows,
@@ -129,7 +129,7 @@ impl AppServer {
         self.terminal_service_for(params.dir_id.as_deref())?
             .resize(
                 connection.connection_id,
-                terminal::TerminalResizeRequest {
+                exec_server::terminal::TerminalResizeRequest {
                     terminal_id: params.terminal_id,
                     rows: params.rows,
                     cols: params.cols,
@@ -149,7 +149,7 @@ impl AppServer {
             .terminal_service_for(params.dir_id.as_deref())?
             .read(
                 connection.connection_id,
-                terminal::TerminalReadRequest {
+                exec_server::terminal::TerminalReadRequest {
                     terminal_id: params.terminal_id,
                     after_sequence: params.after_sequence,
                     after_command_sequence: params.after_command_sequence,
@@ -173,8 +173,8 @@ impl AppServer {
     }
 }
 
-fn terminal_error(error: terminal::TerminalError) -> RpcError {
-    use terminal::TerminalError;
+fn terminal_error(error: exec_server::terminal::TerminalError) -> RpcError {
+    use exec_server::terminal::TerminalError;
     match error {
         TerminalError::InvalidInput => RpcError::new(-32602, AppServerErrorName::InvalidParams),
         TerminalError::NotFound => RpcError::new(-32061, AppServerErrorName::TerminalNotFound),
@@ -189,8 +189,8 @@ fn terminal_error(error: terminal::TerminalError) -> RpcError {
     }
 }
 
-fn create_request(params: TerminalCreateParams) -> terminal::TerminalCreateRequest {
-    terminal::TerminalCreateRequest {
+fn create_request(params: TerminalCreateParams) -> exec_server::terminal::TerminalCreateRequest {
+    exec_server::terminal::TerminalCreateRequest {
         rows: params.rows,
         cols: params.cols,
         profile: profile_selection(params.profile),
@@ -198,23 +198,23 @@ fn create_request(params: TerminalCreateParams) -> terminal::TerminalCreateReque
     }
 }
 
-fn profile_selection(value: wire::TerminalProfileSelection) -> terminal::TerminalProfileSelection {
+fn profile_selection(value: wire::TerminalProfileSelection) -> exec_server::terminal::TerminalProfileSelection {
     match value {
-        wire::TerminalProfileSelection::Default => terminal::TerminalProfileSelection::Default,
+        wire::TerminalProfileSelection::Default => exec_server::terminal::TerminalProfileSelection::Default,
         wire::TerminalProfileSelection::Profile { profile_id } => {
-            terminal::TerminalProfileSelection::Profile { profile_id }
+            exec_server::terminal::TerminalProfileSelection::Profile { profile_id }
         }
     }
 }
 
-fn lifecycle(value: wire::TerminalLifecycle) -> terminal::TerminalLifecycle {
+fn lifecycle(value: wire::TerminalLifecycle) -> exec_server::terminal::TerminalLifecycle {
     match value {
-        wire::TerminalLifecycle::ConnectionOwned => terminal::TerminalLifecycle::ConnectionOwned,
-        wire::TerminalLifecycle::Reconnectable => terminal::TerminalLifecycle::Reconnectable,
+        wire::TerminalLifecycle::ConnectionOwned => exec_server::terminal::TerminalLifecycle::ConnectionOwned,
+        wire::TerminalLifecycle::Reconnectable => exec_server::terminal::TerminalLifecycle::Reconnectable,
     }
 }
 
-fn profile_to_dto(value: terminal::TerminalProfile) -> wire::TerminalProfile {
+fn profile_to_dto(value: exec_server::terminal::TerminalProfile) -> wire::TerminalProfile {
     wire::TerminalProfile {
         profile_id: value.profile_id,
         title: value.title,
@@ -222,14 +222,14 @@ fn profile_to_dto(value: terminal::TerminalProfile) -> wire::TerminalProfile {
     }
 }
 
-fn lease_to_dto(value: terminal::TerminalReconnectLease) -> wire::TerminalReconnectLease {
+fn lease_to_dto(value: exec_server::terminal::TerminalReconnectLease) -> wire::TerminalReconnectLease {
     wire::TerminalReconnectLease {
         reconnect_token: value.reconnect_token,
         reconnect_grace_period_millis: value.reconnect_grace_period_millis,
     }
 }
 
-fn read_to_dto(value: terminal::TerminalReadResult) -> wire::TerminalReadResult {
+fn read_to_dto(value: exec_server::terminal::TerminalReadResult) -> wire::TerminalReadResult {
     wire::TerminalReadResult {
         terminal_id: value.terminal_id,
         chunks: value
@@ -249,17 +249,17 @@ fn read_to_dto(value: terminal::TerminalReadResult) -> wire::TerminalReadResult 
                 sequence: event.sequence,
                 command_id: event.command_id,
                 status: match event.status {
-                    terminal::TerminalCommandStatus::Running => {
+                    exec_server::terminal::TerminalCommandStatus::Running => {
                         wire::TerminalCommandStatus::Running
                     }
-                    terminal::TerminalCommandStatus::Completed => {
+                    exec_server::terminal::TerminalCommandStatus::Completed => {
                         wire::TerminalCommandStatus::Completed
                     }
-                    terminal::TerminalCommandStatus::Succeeded => {
+                    exec_server::terminal::TerminalCommandStatus::Succeeded => {
                         wire::TerminalCommandStatus::Succeeded
                     }
-                    terminal::TerminalCommandStatus::Failed => wire::TerminalCommandStatus::Failed,
-                    terminal::TerminalCommandStatus::Canceled => {
+                    exec_server::terminal::TerminalCommandStatus::Failed => wire::TerminalCommandStatus::Failed,
+                    exec_server::terminal::TerminalCommandStatus::Canceled => {
                         wire::TerminalCommandStatus::Canceled
                     }
                 },

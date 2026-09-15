@@ -6061,3 +6061,6 @@ fn instruction_list_and_explicit_attachment_use_current_authorized_files() {
     );
     assert_eq!(rejected["error"]["code"], -32602, "{rejected}");
 }
+
+#[path = "execution_environment_tests.rs"]
+mod execution_environment_tests;

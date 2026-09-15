@@ -222,6 +222,7 @@ pub struct AppServer {
     turn_backend: Arc<turn_backend_router::TurnBackendHandle>,
     local_env_host: Option<LocalEnvHost>,
     dynamic_tool_port: Option<crate::tool_composition::ToolPort>,
+    execution_tool_port: Option<crate::tool_composition::ToolPort>,
     extension_tool_port: Option<crate::tool_composition::ToolPort>,
     browser_host: Arc<BrowserHost>,
     browser_tool_port: crate::tool_composition::ToolPort,
@@ -553,6 +554,7 @@ impl AppServer {
             turn_backend,
             local_env_host: None,
             dynamic_tool_port: None,
+            execution_tool_port: None,
             extension_tool_port: None,
             browser_host,
             browser_tool_port,
@@ -1417,8 +1419,8 @@ impl AppServer {
     pub(crate) fn with_terminal_root(
         mut self,
         authorization: ash_file_access::Authorization,
-    ) -> Result<Self, terminal::TerminalError> {
-        let terminals = Arc::new(terminal::TerminalService::new(authorization)?);
+    ) -> Result<Self, exec_server::terminal::TerminalError> {
+        let terminals = Arc::new(exec_server::terminal::TerminalService::new(authorization)?);
         self.env_runtime_mut().terminals = Some(terminals);
         Ok(self)
     }
@@ -1433,7 +1435,7 @@ impl AppServer {
         let service = Arc::new(crate::debug_service::DebugAdapterService::new(
             executable_configuration,
             process_execution,
-            terminal::safe_process_environment(),
+            exec_server::terminal::safe_process_environment(),
         )?);
         self.env_runtime_mut().debug_adapters = Some(service);
         Ok(self)

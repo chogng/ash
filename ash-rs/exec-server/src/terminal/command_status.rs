@@ -1,5 +1,5 @@
-use crate::TerminalCommandStatus;
-use crate::TerminalCommandStatusEvent;
+use crate::terminal::TerminalCommandStatus;
+use crate::terminal::TerminalCommandStatusEvent;
 use std::collections::VecDeque;
 
 const OSC_633_PREFIX: &[u8] = b"\x1b]633;";

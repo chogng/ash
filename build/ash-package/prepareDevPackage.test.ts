@@ -152,6 +152,7 @@ test("assembles and validates the canonical Windows development layout", async (
     appServer: join(root, "ash-app-server.exe"),
     remote: join(root, "ash-remote.exe"),
     remoteServer: join(root, "ash-remote-server.exe"),
+    execServer: join(root, "ash-exec-server.exe"),
   };
   const ripgrepExecutable = join(root, "rg.exe");
   const nodeExecutable = join(root, "node.exe");
@@ -166,6 +167,7 @@ test("assembles and validates the canonical Windows development layout", async (
       writeFile(executables.appServer, "ash-app-server"),
       writeFile(executables.remote, "ash-remote"),
       writeFile(executables.remoteServer, "ash-remote-server"),
+      writeFile(executables.execServer, "ash-exec-server"),
       writeFile(ripgrepExecutable, "ripgrep"),
       writeFile(nodeExecutable, "node"),
       writeFile(nodeLicense, "node license"),
@@ -278,6 +280,7 @@ test("host-provided runtime package omits the standalone Node payload", async ()
     appServer: join(root, "ash-app-server.exe"),
     remote: join(root, "ash-remote.exe"),
     remoteServer: join(root, "ash-remote-server.exe"),
+    execServer: join(root, "ash-exec-server.exe"),
   };
   const ripgrepExecutable = join(root, "rg.exe");
   try {
@@ -288,6 +291,7 @@ test("host-provided runtime package omits the standalone Node payload", async ()
       writeFile(executables.appServer, "ash-app-server"),
       writeFile(executables.remote, "ash-remote"),
       writeFile(executables.remoteServer, "ash-remote-server"),
+      writeFile(executables.execServer, "ash-exec-server"),
       writeFile(ripgrepExecutable, "ripgrep"),
     ]);
     await assemblePackage(
@@ -326,11 +330,12 @@ test("host-provided runtime package omits the standalone Node payload", async ()
 test("Linux development packages retain Bubblewrap without a Ash namespace helper", async () => {
   const root = await mkdtemp(join(tmpdir(), "ash-linux-network-package-"));
   try {
-    const names = ["ash-remote", "ash-remote-server", "ash-app-server", "ash-app-server-daemon", "ash-code-mode-host", "bwrap", "COPYING", "rg"];
+    const names = ["ash-remote", "ash-remote-server", "ash-exec-server", "ash-app-server", "ash-app-server-daemon", "ash-code-mode-host", "bwrap", "COPYING", "rg"];
     await Promise.all(names.map((name) => writeFile(join(root, name), name)));
     const staging = join(root, "package");
     await assemblePackage(staging, "x86_64-unknown-linux-gnu", "linux", {
       remote: join(root, "ash-remote"), remoteServer: join(root, "ash-remote-server"),
+      execServer: join(root, "ash-exec-server"),
       appServer: join(root, "ash-app-server"), appServerDaemon: join(root, "ash-app-server-daemon"),
       codeModeHost: join(root, "ash-code-mode-host"), packageStore: join(root, "unused-store"),
       bubblewrap: { binary: join(root, "bwrap"), license: join(root, "COPYING"), version: "0.11.2", archive: "bwrap.tar", archiveSha256: "a".repeat(64) },

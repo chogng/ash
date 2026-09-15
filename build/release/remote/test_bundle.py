@@ -74,6 +74,7 @@ def create_package(path: Path) -> Path:
         "bin/ash-app-server-daemon": b"daemon",
         "bin/ash-app-server": b"ash",
         "bin/ash-remote-server": b"remote",
+        "bin/ash-exec-server": b"remote",
         "ash-path/rg": b"ripgrep",
         "ash-resources/node/bin/node": b"node",
     }

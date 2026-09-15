@@ -55,6 +55,7 @@ class PackageTests(unittest.TestCase):
                 "ash-code-mode-host",
                 "ash-remote",
                 "ash-remote-server",
+                "ash-exec-server",
             )
             artifacts = [
                 json.dumps(
@@ -280,6 +281,7 @@ class PackageTests(unittest.TestCase):
                 server_binary,
                 executable_file(root / "remote-source", b"remote"),
                 executable_file(root / "remote-server-source", b"remote-server"),
+                executable_file(root / "exec-server-source", b"exec-server"),
                 daemon_binary,
                 code_mode_host_binary,
                 ripgrep,
@@ -443,6 +445,7 @@ class PackageTests(unittest.TestCase):
                     server_binary,
                     executable_file(root / "remote-source", b"remote"),
                     executable_file(root / "remote-server-source", b"remote-server"),
+                    executable_file(root / "exec-server-source", b"exec-server"),
                     daemon_binary,
                     code_mode_host_binary,
                     ripgrep,
@@ -459,6 +462,7 @@ class PackageTests(unittest.TestCase):
                     server_binary,
                     executable_file(root / "remote-source", b"remote"),
                     executable_file(root / "remote-server-source", b"remote-server"),
+                    executable_file(root / "exec-server-source", b"exec-server"),
                     daemon_binary,
                     code_mode_host_binary,
                     ripgrep,
@@ -483,6 +487,7 @@ class PackageTests(unittest.TestCase):
                 executable_file(root / "ash-source", b"ash-app-server"),
                 executable_file(root / "remote-source", b"remote"),
                 executable_file(root / "remote-server-source", b"remote-server"),
+                executable_file(root / "exec-server-source", b"exec-server"),
                 executable_file(root / "daemon-source", b"ash-app-server-daemon"),
                 executable_file(root / "code-mode-host-source", b"ash-code-mode-host"),
                 resolve_ripgrep(
@@ -627,6 +632,7 @@ class PackageTests(unittest.TestCase):
                 server_binary,
                 executable_file(root / "remote-source", b"remote"),
                 executable_file(root / "remote-server-source", b"remote-server"),
+                executable_file(root / "exec-server-source", b"exec-server"),
                 daemon_binary,
                 code_mode_host_binary,
                 ripgrep,
@@ -684,6 +690,7 @@ class PackageTests(unittest.TestCase):
                 server_binary,
                 executable_file(root / "remote-source", b"remote"),
                 executable_file(root / "remote-server-source", b"remote-server"),
+                executable_file(root / "exec-server-source", b"exec-server"),
                 daemon_binary,
                 code_mode_host_binary,
                 ripgrep,

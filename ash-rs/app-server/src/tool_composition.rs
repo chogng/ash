@@ -209,6 +209,7 @@ impl Default for ToolSearchOptions {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ToolPortKind {
+    Environment,
     Dynamic,
     Extension,
     Host,
@@ -219,6 +220,7 @@ enum ToolPortKind {
 impl ToolPortKind {
     fn runtime_namespace(self) -> &'static str {
         match self {
+            Self::Environment => "environment",
             Self::Dynamic => "dynamic",
             Self::Extension => "extension",
             Self::Host => "host",
@@ -229,6 +231,7 @@ impl ToolPortKind {
 
     fn search_label(self) -> &'static str {
         match self {
+            Self::Environment => "execution environment",
             Self::Dynamic => "client-hosted dynamic tool",
             Self::Extension => "host-installed extension tool",
             Self::Host => "product-hosted capability",
@@ -239,6 +242,9 @@ impl ToolPortKind {
 
     fn source_provenance(self, name: &ToolName) -> ToolSourceProvenance {
         match self {
+            Self::Environment => ToolSourceProvenance::Product {
+                component: "ash-app-server/execution-environment".into(),
+            },
             Self::Dynamic => ToolSourceProvenance::Dynamic {
                 name: name.to_string(),
             },
@@ -269,6 +275,18 @@ pub(crate) struct ToolPort {
 }
 
 impl ToolPort {
+    pub(crate) fn environment(
+        tools: Arc<dyn ToolService>,
+        policy: Arc<dyn ActionPolicyService>,
+    ) -> Self {
+        Self::from_service(
+            ToolPortKind::Environment,
+            ToolExposure::Direct,
+            tools,
+            policy,
+        )
+    }
+
     pub(crate) fn host(tools: Arc<dyn ToolService>, policy: Arc<dyn ActionPolicyService>) -> Self {
         Self::from_service(ToolPortKind::Host, ToolExposure::Direct, tools, policy)
     }
@@ -966,6 +984,7 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
     let mut dynamic_policy = None;
     let mut extension_policy = None;
     let mut host_policy = None;
+    let mut environment_policy = None;
     for (service_index, port) in ports.into_iter().enumerate() {
         for contribution in port.contributions {
             if !names.insert(contribution.definition.name.clone()) {
@@ -981,6 +1000,14 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
             });
         }
         match port.kind {
+            ToolPortKind::Environment if environment_policy.is_none() => {
+                environment_policy = Some(Arc::clone(&port.policy));
+            }
+            ToolPortKind::Environment => {
+                return Err(ToolCompositionError(
+                    "multiple execution environment ports".into(),
+                ));
+            }
             ToolPortKind::Dynamic if dynamic_policy.is_none() => {
                 dynamic_policy = Some(Arc::clone(&port.policy));
             }
@@ -1043,6 +1070,7 @@ pub(crate) fn combine_tool_ports_at_generation_with_search(
             dynamic: dynamic_policy,
             extension: extension_policy,
             host: host_policy,
+            environment: environment_policy,
             local: local_policy,
             mcp: mcp_policy,
             search_enabled,
@@ -1494,6 +1522,7 @@ impl ToolOutputSink for NoopToolOutputSink {
 }
 
 struct CompositeActionPolicyService {
+    environment: Option<Arc<dyn ActionPolicyService>>,
     dynamic: Option<Arc<dyn ActionPolicyService>>,
     extension: Option<Arc<dyn ActionPolicyService>>,
     host: Option<Arc<dyn ActionPolicyService>>,
@@ -1505,7 +1534,10 @@ struct CompositeActionPolicyService {
 impl ActionPolicyService for CompositeActionPolicyService {
     fn revision(&self) -> String {
         format!(
-            "composite-policy-v1:dynamic={}:extension={}:host={}:local={}:mcp={}:tool-search={}",
+            "composite-policy-v1:environment={}:dynamic={}:extension={}:host={}:local={}:mcp={}:tool-search={}",
+            self.environment
+                .as_ref()
+                .map_or_else(|| "none".into(), |policy| policy.revision()),
             self.dynamic
                 .as_ref()
                 .map_or_else(|| "none".into(), |policy| policy.revision()),
@@ -1547,6 +1579,9 @@ impl ActionPolicyService for CompositeActionPolicyService {
                 if request.provenance().source_id().starts_with("browser_") =>
             {
                 self.host.as_ref()
+            }
+            ActionSource::BuiltInTool if request.provenance().source_id() == "environment" => {
+                self.environment.as_ref()
             }
             ActionSource::BuiltInTool => self.local.as_ref(),
             ActionSource::McpServer => self.mcp.as_ref(),

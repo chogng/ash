@@ -518,6 +518,8 @@ dependencies = [
  "ash-diagnostics",
  "ash-diff",
  "ash-editor-extension-host",
+ "ash-exec-server",
+ "ash-exec-server-protocol",
  "ash-execpolicy",
  "ash-extension-api",
  "ash-extensions",
@@ -570,7 +572,6 @@ dependencies = [
  "ash-sleep",
  "ash-state",
  "ash-syntax",
- "ash-terminal-service",
  "ash-thread-store",
  "ash-thread-transcript",
  "ash-tools",
@@ -1168,6 +1169,39 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.19",
+]
+
+[[package]]
+name = "ash-exec-server"
+version = "0.1.0"
+dependencies = [
+ "ash-arg0",
+ "ash-async-utils",
+ "ash-exec-server-protocol",
+ "ash-file-access",
+ "ash-file-system",
+ "ash-install-context",
+ "ash-mxc-sandbox",
+ "ash-package-store",
+ "ash-process-hardening",
+ "ash-protocol",
+ "ash-sandboxing",
+ "ash-tool-executor",
+ "ash-utils-pty",
+ "getrandom 0.2.17",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
+name = "ash-exec-server-protocol"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2290,17 +2324,6 @@ dependencies = [
  "tokio",
  "unicode-width 0.2.0",
  "zui",
-]
-
-[[package]]
-name = "ash-terminal-service"
-version = "0.1.0"
-dependencies = [
- "ash-file-access",
- "ash-utils-pty",
- "getrandom 0.2.17",
- "tempfile",
- "tokio",
 ]
 
 [[package]]

@@ -21,6 +21,7 @@ _BINARIES = {
     "ash-code-mode-host": ("ash-code-mode-host", "--code-mode-host-bin"),
     "ash-remote": ("ash-remote-connections", "--remote-bin"),
     "ash-remote-server": ("ash-remote-server", "--remote-server-bin"),
+    "ash-exec-server": ("ash-exec-server", "--exec-server-bin"),
     "ash-windows-sandbox": ("ash-windows-sandbox", "--windows-sandbox-bin"),
 }
 

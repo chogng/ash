@@ -119,6 +119,7 @@ interface FirstPartyExecutables {
   readonly appServer: string;
   readonly remote: string;
   readonly remoteServer: string;
+  readonly execServer: string;
   readonly codeModeHost: string;
   readonly windowsSandbox?: string;
 }
@@ -515,10 +516,11 @@ async function buildFirstPartyExecutables(platform: NodeJS.Platform): Promise<Fi
     "--bin", "ash-app-server",
     "--bin", "ash-remote",
     "--bin", "ash-remote-server",
+    "--bin", "ash-exec-server",
     "--bin", "ash-app-server-daemon",
     "--bin", "ash-code-mode-host",
   ];
-  const expectedTargets = ["ash-package-store", "ash-app-server", "ash-remote", "ash-remote-server", "ash-app-server-daemon", "ash-code-mode-host"];
+  const expectedTargets = ["ash-package-store", "ash-app-server", "ash-remote", "ash-remote-server", "ash-exec-server", "ash-app-server-daemon", "ash-code-mode-host"];
   if (platform === "win32") {
     binaryArgs.push("--bin", "ash-windows-sandbox");
     expectedTargets.push("ash-windows-sandbox");
@@ -535,6 +537,7 @@ async function buildFirstPartyExecutables(platform: NodeJS.Platform): Promise<Fi
     appServer: string;
     remote: string;
     remoteServer: string;
+    execServer: string;
     codeModeHost: string;
     windowsSandbox?: string;
   } = {
@@ -544,6 +547,7 @@ async function buildFirstPartyExecutables(platform: NodeJS.Platform): Promise<Fi
     appServer: requiredExecutable(artifacts, "ash-app-server"),
     remote: requiredExecutable(artifacts, "ash-remote"),
     remoteServer: requiredExecutable(artifacts, "ash-remote-server"),
+    execServer: requiredExecutable(artifacts, "ash-exec-server"),
   };
   if (platform === "win32") {
     executables.windowsSandbox = requiredExecutable(artifacts, "ash-windows-sandbox");
@@ -721,6 +725,7 @@ export async function assemblePackage(
   await copyExecutable(executables.appServer, join(binDirectory, appServerName), isWindows);
   await copyExecutable(executables.remote, join(binDirectory, isWindows ? "ash-remote.exe" : "ash-remote"), isWindows);
   await copyExecutable(executables.remoteServer, join(binDirectory, isWindows ? "ash-remote-server.exe" : "ash-remote-server"), isWindows);
+  await copyExecutable(executables.execServer, join(binDirectory, isWindows ? "ash-exec-server.exe" : "ash-exec-server"), isWindows);
   await copyExecutable(executables.appServerDaemon, join(binDirectory, appServerDaemonName), isWindows);
   await copyExecutable(executables.codeModeHost, join(binDirectory, codeModeHostName), isWindows);
   if (isWindows) {
@@ -766,6 +771,7 @@ export async function assemblePackage(
     },
     remote: { binarySha256: await sha256(join(binDirectory, isWindows ? "ash-remote.exe" : "ash-remote")), source: "cargo-build" },
     remoteServer: { binarySha256: await sha256(join(binDirectory, isWindows ? "ash-remote-server.exe" : "ash-remote-server")), source: "cargo-build" },
+    execServer: { binarySha256: await sha256(join(binDirectory, isWindows ? "ash-exec-server.exe" : "ash-exec-server")), source: "cargo-build" },
     appServer: {
       binarySha256: await sha256(join(binDirectory, appServerName)),
       source: "cargo-build",
@@ -865,6 +871,7 @@ async function validatePackage(packageRoot: string, platform: NodeJS.Platform): 
   await requireFile(join(packageRoot, "bin", isWindows ? "ash-app-server.exe" : "ash-app-server"));
   await requireComponentDigest(metadata, "remote", join(packageRoot, "bin", isWindows ? "ash-remote.exe" : "ash-remote"));
   await requireComponentDigest(metadata, "remoteServer", join(packageRoot, "bin", isWindows ? "ash-remote-server.exe" : "ash-remote-server"));
+  await requireComponentDigest(metadata, "execServer", join(packageRoot, "bin", isWindows ? "ash-exec-server.exe" : "ash-exec-server"));
   await requireFile(join(packageRoot, "bin", isWindows ? "ash-app-server-daemon.exe" : "ash-app-server-daemon"));
   await requireFile(join(packageRoot, "bin", isWindows ? "ash-code-mode-host.exe" : "ash-code-mode-host"));
   await requireComponentDigest(metadata, "appServer", join(packageRoot, "bin", isWindows ? "ash-app-server.exe" : "ash-app-server"));

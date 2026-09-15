@@ -9,6 +9,7 @@ mod debug_service;
 mod dir_grants;
 mod dynamic_tools;
 mod extension_tools;
+mod execution_environments;
 mod git_service;
 mod local;
 mod local_tools;
