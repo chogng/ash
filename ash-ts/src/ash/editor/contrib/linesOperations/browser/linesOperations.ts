@@ -38,7 +38,9 @@ abstract class CopyLinesAction extends EditorAction {
 
 	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
 		const selections = editor.getSelections() ?? [];
+		editor.pushUndoStop();
 		editor.executeCommands(this.id, selections.map(selection => new CopyLinesCommand(selection, this.down)));
+		editor.pushUndoStop();
 	}
 }
 
@@ -69,7 +71,9 @@ export class DuplicateSelectionAction extends EditorAction {
 				Selection.fromPositions(selection.getEndPosition()),
 				model.getValueInRange(selection),
 			));
+		editor.pushUndoStop();
 		editor.executeCommands(this.id, commands);
+		editor.pushUndoStop();
 	}
 }
 
@@ -86,7 +90,9 @@ abstract class MoveLinesAction extends EditorAction {
 			EditorAutoIndentStrategy.None,
 			configurations,
 		));
+		editor.pushUndoStop();
 		editor.executeCommands(this.id, commands);
+		editor.pushUndoStop();
 	}
 }
 
@@ -115,7 +121,9 @@ export abstract class AbstractSortLinesAction extends EditorAction {
 			selections = [new Selection(1, 1, model.getLineCount(), model.getLineMaxColumn(model.getLineCount()))];
 		}
 		if (!selections.every(selection => SortLinesCommand.canRun(model, selection, this.descending))) return;
+		editor.pushUndoStop();
 		editor.executeCommands(this.id, selections.map(selection => new SortLinesCommand(selection, this.descending)));
+		editor.pushUndoStop();
 	}
 }
 

@@ -1,5 +1,48 @@
 import { expect, test } from '@playwright/test';
 
+for (const direction of ['Up', 'Down']) {
+	test(`copy lines ${direction} retains multiple cursors and separates undo from typing`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareLineCopy());
+		await page.keyboard.type('X');
+		const before = await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy());
+		await page.evaluate(id => window.ashStandaloneIntegration.runLineAction(id), `editor.action.copyLines${direction}Action`);
+		const copied = await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy());
+		const delta = direction === 'Down' ? 1 : 0;
+		expect(copied).toEqual({ value: 'aXlpha\naXlpha\nbeta\ngXma\ngXma', selections: [`[${4 + delta},3 -> ${4 + delta},3]`, `[${1 + delta},3 -> ${1 + delta},3]`] });
+		await page.keyboard.type('!');
+		await page.keyboard.press('ControlOrMeta+z');
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual(copied);
+		await page.keyboard.press('ControlOrMeta+z');
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual(before);
+		await page.keyboard.press('ControlOrMeta+z');
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('alpha\nbeta\ngamma');
+		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+		expect(errors).toEqual([]);
+	});
+}
+
+for (const id of ['editor.action.duplicateSelection', 'editor.action.moveLinesDownAction', 'editor.action.sortLinesDescending']) {
+	test(`${id} has its own undo step between typing operations`, async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareKeyboardEditing());
+		await page.locator('#caller .stanza-editor-input').focus();
+		await page.keyboard.type('Z');
+		const before = await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy());
+		await page.evaluate(id => window.ashStandaloneIntegration.runLineAction(id), id);
+		const edited = await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy());
+		expect(edited.value).not.toBe(before.value);
+		await page.keyboard.type('!');
+		await page.keyboard.press('ControlOrMeta+z');
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual(edited);
+		await page.keyboard.press('ControlOrMeta+z');
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual(before);
+		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	});
+}
+
 test('public range selection replaces the selected text through keyboard input and undo', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));

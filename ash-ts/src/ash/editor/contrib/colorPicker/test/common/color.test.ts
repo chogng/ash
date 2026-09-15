@@ -4,7 +4,8 @@ import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { LanguageFeatureRegistry } from '../../../../common/languageFeatureRegistry.js';
-import { ColorService, type LanguageColorProvider } from '../../common/languageColors.js';
+import { ColorService, DefaultDocumentColorProvider, type LanguageColorProvider } from '../../common/languageColors.js';
+import { createLanguageFeatureRequest } from '../../../../common/languages/languageFeatureRequest.js';
 
 test('default document colors parse CSS hex, RGB, HSL, alpha, and presentations', async () => {
 	using model = new TextModel('a:#f00; b:rgba(0, 128, 255, .5); c:hsl(120, 100%, 25%); d:#11223344; invalid:rgb(1, 2, 3, 4, 5);');
@@ -50,4 +51,21 @@ test('explicit providers suppress the default provider in auto mode and retain p
 	assert.equal(auto.length, 1);
 	assert.equal(always.length, 2);
 	assert.deepEqual((await service.provideColorPresentations('typescript', auto[0]!, auto[0]!.information.color, signal)).map(value => value.label), ['provider-color']);
+});
+
+test('default color coordinates belong to the request snapshot after the model changes', () => {
+	using model = new TextModel('😀\ncolor: #abcdef;');
+	const signal = new AbortController().signal;
+	const request = createLanguageFeatureRequest(model, 'css', signal);
+	model.setValue('short');
+	const colors = new DefaultDocumentColorProvider().provideDocumentColors(request, signal);
+	assert.deepEqual(colors.map(color => color.range), [new Range(2, 8, 2, 15)]);
+});
+
+test('an aborted default color request rejects even when there are no literals', () => {
+	using model = new TextModel('plain text');
+	const controller = new AbortController();
+	const request = createLanguageFeatureRequest(model, 'plaintext', controller.signal);
+	controller.abort();
+	assert.throws(() => new DefaultDocumentColorProvider().provideDocumentColors(request, controller.signal), { name: 'AbortError' });
 });

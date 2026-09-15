@@ -5,6 +5,7 @@ import { TokenizationRegistry } from '../../../src/ash/editor/common/languages.j
 import * as stanza from '../../../src/ash/editor/editor.main.js';
 import { EditorOption } from '../../../src/ash/editor/common/config/editorOptions.js';
 import { ScrollType } from '../../../src/ash/editor/common/editorCommon.js';
+import { EditorExtensionsRegistry } from '../../../src/ash/editor/browser/editorExtensions.js';
 
 interface EditorState {
 	readonly value: string | null;
@@ -64,6 +65,9 @@ interface ViewZoneState {
 }
 
 interface StandaloneHarness {
+	prepareLineCopy(): void;
+	runLineAction(id: string): Promise<void>;
+	readLineCopy(): { value: string; selections: string[] };
 	prepareReferencePreview(): void;
 	setParentFontSize(): void;
 	updateRenderingOptions(enabled: boolean): number;
@@ -249,6 +253,17 @@ function readViewZone(): ViewZoneState {
 }
 
 window.ashStandaloneIntegration = {
+	prepareLineCopy: () => {
+		callerEditor.setValue('alpha\nbeta\ngamma');
+		callerEditor.setSelections([new stanza.Selection(3, 4, 3, 2), new stanza.Selection(1, 2, 1, 2)]);
+		callerEditor.focus();
+	},
+	runLineAction: async id => {
+		const action = [...EditorExtensionsRegistry.getEditorActions()].find(action => action.id === id);
+		if (!action) throw new Error(`Missing editor action: ${id}`);
+		await callerEditor.invokeWithinContext(accessor => action.runEditorCommand(accessor, callerEditor, {}));
+	},
+	readLineCopy: () => ({ value: callerEditor.getValue(), selections: (callerEditor.getSelections() ?? []).map(selection => selection.toString()) }),
 	updateRenderingOptions: enabled => {
 		callerEditor.updateOptions({
 			minimap: { enabled, side: 'left', showSlider: 'always' },

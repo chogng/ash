@@ -96,6 +96,22 @@ test("CopyLinesCommand construction does not mutate the model", () => {
 	assert.equal(model.getText(), "alpha");
 });
 
+for (const down of [false, true]) {
+	test(`Copy lines ${down ? 'down' : 'up'} keeps every cursor on its own copy`, () => {
+		using model = new TextModel('alpha\nbeta\ngamma');
+		const original = [new Selection(3, 4, 3, 2), new Selection(1, 2, 1, 2)];
+		using cursors = createTestCursorsController(model, original);
+		cursors.executeCommands(cursors.getSelections().map(selection => new CopyLinesCommand(selection, down)));
+		const delta = down ? 1 : 0;
+		assert.deepEqual({ text: model.getValue(), selections: cursors.getSelections() }, {
+			text: 'alpha\nalpha\nbeta\ngamma\ngamma',
+			selections: [new Selection(4 + delta, 4, 4 + delta, 2), new Selection(1 + delta, 2, 1 + delta, 2)],
+		});
+		model.undo();
+		assert.deepEqual({ text: model.getValue(), selections: cursors.getSelections() }, { text: 'alpha\nbeta\ngamma', selections: original });
+	});
+}
+
 test("Move lines swaps selected groups with their neighboring rows and keeps directional selections", () => {
 	using model = new TextModel("zero\none\ntwo\nthree\nfour");
 	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((2) + 1, (3) + 1), new Position((1) + 1, (1) + 1))]);
