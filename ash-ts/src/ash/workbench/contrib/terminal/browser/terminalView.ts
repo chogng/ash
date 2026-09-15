@@ -1,5 +1,5 @@
 import { TabList, type TabListDropPosition } from "../../../../base/browser/ui/tablist/tabList.js";
-import { Disposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, DisposableMap } from "../../../../base/common/lifecycle.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
 import type { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
@@ -29,7 +29,7 @@ export class TerminalViewPane extends ViewPane {
 	private readonly tabList: TabList<ITerminalInstance>;
 	private readonly tabsLayout: TerminalTabsLayout;
 	private readonly widgetsElement: HTMLDivElement;
-	private readonly items = new Map<ITerminalInstance, TerminalViewItem>();
+	private readonly items = this._register(new DisposableMap<ITerminalInstance, TerminalViewItem>());
 	private draggedTerminal: ITerminalInstance | undefined;
 	private creating = false;
 	private initializing = false;
@@ -224,11 +224,11 @@ export class TerminalViewPane extends ViewPane {
 
 	private addInstance(instance: ITerminalInstance): void {
 		if (this.items.has(instance)) return;
-		const item = this._register(new TerminalViewItem(
+		const item = new TerminalViewItem(
 			instance,
 			new TerminalInstanceWidget(this.widgetsElement, instance, this.themeService),
 			() => this.updateInstances(),
-		));
+		);
 		this.items.set(instance, item);
 	}
 
@@ -249,10 +249,7 @@ export class TerminalViewPane extends ViewPane {
 	}
 
 	private removeInstance(instance: ITerminalInstance): void {
-		const item = this.items.get(instance);
-		if (!item) return;
-		this.items.delete(instance);
-		item.dispose();
+		this.items.deleteAndDispose(instance);
 	}
 
 	private render(): void {

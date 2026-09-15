@@ -140,15 +140,18 @@ test("DisposableMap replaces, removes, leaks, and disposes keyed resources", () 
 	const released: string[] = [];
 	const resources = new DisposableMap<string>();
 	resources.set("first", toDisposable(() => released.push("first:old")));
-	resources.set("first", toDisposable(() => released.push("first:new")));
+	const replacement = resources.set("first", toDisposable(() => released.push("first:new")));
+	assert.equal(resources.get("first"), replacement);
 	resources.set("second", toDisposable(() => released.push("second")));
 	resources.set("third", toDisposable(() => released.push("third")));
 
 	assert.deepEqual(released, ["first:old"]);
 	assert.equal(resources.deleteAndDispose("first"), true);
+	assert.equal(resources.get("first"), undefined);
 	assert.equal(resources.deleteAndDispose("missing"), false);
 	const leaked = resources.set("leaked", toDisposable(() => released.push("leaked")));
 	assert.equal(resources.deleteAndLeak("leaked"), leaked);
+	assert.equal(resources.get("leaked"), undefined);
 	resources.dispose();
 	resources.dispose();
 	assert.deepEqual(released, ["first:old", "first:new", "third", "second"]);

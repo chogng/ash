@@ -45,16 +45,20 @@ export const test = base.extend<PlaywrightFixtures>({
 		}
 
 		const userDataDirectory = await mkdtemp(join(tmpdir(), "ash-playwright-"));
-		const { application, driver } = await launchElectron({
-			appServerMode: target.appServerMode,
-			workbenchMode: target.workbenchMode,
-			userDataDirectory,
-			workspaceDirectory: testWorkspace.directory,
-		});
 		try {
-			await use(driver);
+			const { application, driver } = await launchElectron({
+				appServerMode: target.appServerMode,
+				workbenchMode: target.workbenchMode,
+				userDataDirectory,
+				workspaceDirectory: testWorkspace.directory,
+				workspacePermissions: testWorkspace.removeOnDispose ? "development" : undefined,
+			});
+			try {
+				await use(driver);
+			} finally {
+				await application.close().catch(() => undefined);
+			}
 		} finally {
-			await application.close().catch(() => undefined);
 			await rm(userDataDirectory, { force: true, recursive: true });
 		}
 	},

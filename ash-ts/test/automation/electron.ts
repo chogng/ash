@@ -9,6 +9,7 @@ export interface ElectronLaunchOptions {
 	readonly appServerMode: AppServerTestMode;
 	readonly userDataDirectory: string;
 	readonly workspaceDirectory?: string;
+	readonly workspacePermissions?: "development";
 	readonly workbenchMode?: DesktopWorkbenchMode;
 }
 

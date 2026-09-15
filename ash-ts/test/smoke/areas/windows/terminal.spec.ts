@@ -21,4 +21,9 @@ test('terminal panel preserves focus, accepts input and retains instances when r
 	await page.getByRole('button', { name: 'New Terminal', exact: true }).click();
 	await expect(page.locator('.ash-terminal-instance')).toHaveCount(2);
 	await expect(terminal.locator('.xterm-helper-textarea')).toBeFocused();
+	await page.getByRole('button', { name: 'Kill Terminal', exact: true }).click();
+	await showPanel.click();
+	await expect(page.locator('.ash-terminal-instance')).toHaveCount(1);
+	await expect(page.locator('.xterm')).toHaveCount(1);
+	await expect(terminal.locator('.xterm-rows')).toContainText('ash-terminal-ready');
 });

@@ -549,6 +549,10 @@ export class MutableDisposable<T extends IDisposable> extends AbstractDisposable
 export class DisposableMap<K, V extends IDisposable = IDisposable> extends AbstractDisposable implements Iterable<[K, V]> {
 	private readonly resources = new Map<K, V>();
 
+	public get(key: K): V | undefined {
+		return this.resources.get(key);
+	}
+
 	public has(key: K): boolean {
 		return this.resources.has(key);
 	}
