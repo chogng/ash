@@ -79,3 +79,28 @@ test('Toggle Line Comment leaves languages without a line comment token unchange
 	assert.equal(model.getText(), 'alpha');
 	dom.window.close();
 });
+
+test('Toggle Line Comment retains a primary selection below a secondary caret', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	try {
+		using model = new TextModel('alpha\nbeta\ngamma', { languageId: 'typescript' });
+		using configurations = new TestLanguageConfigurationService();
+		using registration = configurations.register('typescript', { comments: { lineComment: '//' } });
+		using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, input: { resource: model.uri }, languageId: model.getLanguageId(), languageConfigurationService: configurations });
+		const initial = [new Selection(3, 4, 3, 2), new Selection(1, 2, 1, 2)];
+		editor.setSelections(initial);
+		const action = [...EditorExtensionsRegistry.getEditorActions()].find(candidate => candidate.id === 'editor.action.commentLine');
+		assert.ok(action);
+		editor.invokeWithinContext(accessor => action.run(accessor, editor, {}));
+		assert.deepEqual({ value: model.getValue(), selections: editor.getSelections() }, {
+			value: '// alpha\nbeta\n// gamma', selections: [new Selection(3, 7, 3, 5), new Selection(1, 5, 1, 5)],
+		});
+		editor.invokeWithinContext(accessor => action.run(accessor, editor, {}));
+		assert.deepEqual({ value: model.getValue(), selections: editor.getSelections() }, { value: 'alpha\nbeta\ngamma', selections: initial });
+		model.undo();
+		assert.deepEqual(editor.getSelections(), [new Selection(3, 7, 3, 5), new Selection(1, 5, 1, 5)]);
+	} finally {
+		dom.window.close();
+	}
+});

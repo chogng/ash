@@ -65,6 +65,7 @@ interface ViewZoneState {
 }
 
 interface StandaloneHarness {
+	prepareLineComment(): void;
 	prepareLineCopy(emptyTail?: boolean): void;
 	runLineAction(id: string): Promise<void>;
 	readLineCopy(): { value: string; selections: string[] };
@@ -253,6 +254,10 @@ function readViewZone(): ViewZoneState {
 }
 
 window.ashStandaloneIntegration = {
+	prepareLineComment: () => {
+		window.ashStandaloneIntegration.prepareLineCopy();
+		callerModel.setLanguage('typescript');
+	},
 	prepareLineCopy: emptyTail => {
 		callerEditor.setValue(emptyTail ? 'head\ntail\n' : 'alpha\nbeta\ngamma');
 		callerEditor.setSelections(emptyTail

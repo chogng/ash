@@ -1,5 +1,38 @@
 import { expect, test } from '@playwright/test';
 
+test('line comments preserve the primary selection below a secondary caret', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareLineComment());
+	const before = await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy());
+	await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.commentLine'));
+	const commented = { value: '// alpha\nbeta\n// gamma', selections: ['[3,7 -> 3,5]', '[1,5 -> 1,5]'] };
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual(commented);
+	await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.commentLine'));
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual(before);
+	await page.keyboard.press('ControlOrMeta+z');
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual(commented);
+	await page.keyboard.press('ControlOrMeta+z');
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual(before);
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+test('transpose letters keeps a selected primary range while editing a secondary caret', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareLineCopy());
+	const before = await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy());
+	await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.transposeLetters'));
+	const after = { value: 'lapha\nbeta\ngamma', selections: ['[3,4 -> 3,2]', '[1,3 -> 1,3]'] };
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual(after);
+	await page.keyboard.press('ControlOrMeta+z');
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual(before);
+	await page.keyboard.press('ControlOrMeta+Shift+z');
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual(after);
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	expect(errors).toEqual([]);
+});
+
 for (const direction of ['Up', 'Down']) {
 	test(`copy final lines ${direction} includes the empty last line and restores selections on undo`, async ({ page }) => {
 		await page.goto('/standalone.html');

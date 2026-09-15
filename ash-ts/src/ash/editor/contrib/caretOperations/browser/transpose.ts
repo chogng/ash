@@ -25,14 +25,20 @@ class TransposeLettersAction extends EditorAction {
 	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
 		const model = editor.getModel();
 		if (!model) return;
-		const commands: ICommand[] = [];
+		const commands: (ICommand | null)[] = [];
 		for (const selection of editor.getSelections() ?? []) {
-			if (!selection.isEmpty()) continue;
+			if (!selection.isEmpty()) {
+				commands.push(null);
+				continue;
+			}
 
 			const lineNumber = selection.startLineNumber;
 			const column = selection.startColumn;
 			const lastColumn = model.getLineMaxColumn(lineNumber);
-			if (lineNumber === 1 && (column === 1 || (column === 2 && lastColumn === 2))) continue;
+			if (lineNumber === 1 && (column === 1 || (column === 2 && lastColumn === 2))) {
+				commands.push(null);
+				continue;
+			}
 
 			const endPosition = column === lastColumn
 				? selection.getPosition()
@@ -44,7 +50,7 @@ class TransposeLettersAction extends EditorAction {
 			commands.push(new ReplaceCommand(Range.fromPositions(beginPosition, endPosition), rightChar + leftChar));
 		}
 
-		if (commands.length > 0) {
+		if (commands.some(command => command !== null)) {
 			editor.pushUndoStop();
 			editor.executeCommands(this.id, commands);
 			editor.pushUndoStop();

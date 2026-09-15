@@ -32,7 +32,7 @@ abstract class CommentLineAction extends EditorAction {
 			if (previous.index < current.index) current.ignoreFirstLine = true;
 			else previous.ignoreFirstLine = true;
 		}
-		const commands = ordered.map<ICommand>(entry => new LineCommentCommand(
+		const commands = ordered.sort((left, right) => left.index - right.index).map<ICommand>(entry => new LineCommentCommand(
 			configuration,
 			entry.selection,
 			modelOptions.indentSize,

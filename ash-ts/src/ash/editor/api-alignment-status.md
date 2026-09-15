@@ -4,6 +4,8 @@
 
 ## 当前结论
 
+- 2026-09-15 多光标命令身份修复：交换字符在跳过非空选区或文件起点光标时保留对应命令位置，防止主选区被后续命令覆盖；行注释完成重叠行判断后恢复原选区顺序，防止主光标被换到较早的行。两个问题均先由真实 Widget 与 Chromium 用例复现，再验证选区方向、注释切换和撤销/重做。交换字符批次通过 243/243 个 Editor 单测文件；随后行注释及交换字符共 10 项定向单测、最终 95 项 Chromium 浏览器测试、结构与类型检查及 Stanza 构建通过。此前因生成协议过期导致的聊天类型编译阻塞已解除；文件和 API 台账计数不变。
+
 - 2026-09-15 空末行复制修复：同时向下复制倒数第二行和空末行时，两条命令原先在同一点插入，导致其中一条被冲突检查舍弃。`CopyLinesCommand` 统一在源行起点插入，根据实际插入范围和复制方向恢复选区，不再保存末尾换行状态。12 项定向单测、93 项 Chromium 浏览器测试、结构与类型检查及 Stanza 构建通过；新增浏览器用例先复现少复制一行，再验证选区方向、撤销与重做。完整单测编译被 `workbench/services/chat/browser/chatService.ts` 的 `userAudioAttachment` 类型错误阻塞；定向单测继承仓库原编译选项单独编译并执行通过，不将完整单测记为通过。文件和 API 台账计数不变。
 
 - 2026-09-15 颜色扫描与行命令评审：补齐 `common/languages/defaultDocumentColorsComputer.ts` 的 `IDocumentColorComputerTarget` / `computeDefaultDocumentColors`，将 `languageColors.ts` 中既有 Ash 字面量解析迁入该路径。生产链为 ColorPicker → ColorDetector → ColorService → DefaultDocumentColorProvider → 扫描函数；服务继续负责提供者与请求版本，扫描只消费调用方的文本和坐标。默认提供者改从请求快照计算坐标，并在无匹配时也拒绝已取消请求。复制行改用模型返回的实际插入范围恢复多光标选区；复制、重复选区、移动、排序动作分别隔开撤销记录。全目录现为 595 个生产文件、396 个同路径、199 个仅 Ash、337 个仅上游，大小写差异为 0；121 组声明的 80/41 状态不变，整体 Editor 对齐仍未完成。 验证：16 项定向测试、243/243 个 Editor 单测文件、91 项 Chromium 浏览器测试、完整结构与类型检查、Stanza 生产构建通过；保留既有 JSDOM Canvas 与终端颜色变量提示，生产构建无新增警告。
