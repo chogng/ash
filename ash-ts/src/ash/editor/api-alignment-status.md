@@ -4,6 +4,8 @@
 
 ## 当前结论
 
+- 文件拖放的异步提交改由编辑器状态取消机制守护。等待文件解码期间变为只读、文本变化、换模型、销毁或启动新拖放，旧请求均失效；切回可写不会恢复旧请求。进度提示与同一请求一起结束，正常文件拖放仍作为一个可撤销编辑提交。Widget 回归先复现了只读及切回可写后的过期结果问题。
+
 - 修复多光标与 Linked Editing 的快捷键冲突：Linked Editing 使用 Ctrl/Cmd+Shift+F2，不再在捕获阶段吞掉 Ctrl/Cmd+Shift+L。浏览器测试覆盖键盘与 Action 混用、选区变化、同时输入和撤销；Linked Editing 测试覆盖 Escape 退出、F2 重新激活及不拦截匹配选择快捷键。
 
 - 多光标输入按整条行为链收敛：上/下添加光标、选中行末添加光标、下一个匹配和全部匹配共用 `multicursor.ts` 的五个 Action。键盘入口直接运行相同 Action，两个仅转发事件的 Controller 退出；光标状态仍由现有 ViewModel 管理，选区高亮保留独立生命周期。匹配辅助操作改用 `ITextModel.findMatches/getOffsetAt/getValueInRange`，不再依赖具体模型实现。未实现的查找会话联动与其他多光标命令不计为完成。

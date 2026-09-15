@@ -89,6 +89,7 @@ interface StandaloneHarness {
 	prepareLineCopy(emptyTail?: boolean): void;
 	prepareBrackets(value: string, columns: number[], readOnly?: boolean): void;
 	prepareMulticursor(): void;
+	runDeferredDrop(change: 'none' | 'readonly' | 'writableAgain'): Promise<{ value: string; selectionUnchanged: boolean; handled: boolean }>;
 	runLineAction(id: string): Promise<void>;
 	readLineCopy(): { value: string; selections: string[] };
 	prepareReferencePreview(): void;
@@ -467,6 +468,32 @@ window.ashStandaloneIntegration = {
 		callerEditor.setValue('alpha\nbeta');
 		callerEditor.setSelection(new stanza.Selection(1, 1, 2, 5));
 		callerEditor.focus();
+	},
+	runDeferredDrop: async change => {
+		callerEditor.setValue('alpha');
+		callerEditor.setPosition(new stanza.Position(1, 1));
+		callerEditor.focus();
+		const before = callerEditor.getSelection()!.toString();
+		let resolveFile!: (text: string) => void;
+		const pending = new Promise<string>(resolve => { resolveFile = resolve; });
+		const file = new File(['pending'], 'snippet.txt', { type: 'text/plain' });
+		Object.defineProperty(file, 'text', { value: () => pending });
+		const dataTransfer = new DataTransfer();
+		dataTransfer.items.add(file);
+		const node = callerEditor.getDomNode()!;
+		const bounds = node.getBoundingClientRect();
+		const position = callerEditor.getScrolledVisiblePosition(new stanza.Position(1, 6))!;
+		const event = new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer, clientX: bounds.left + callerEditor.getLayoutInfo().contentLeft + position.left, clientY: bounds.top + position.top + position.height / 2 });
+		node.dispatchEvent(event);
+		try {
+			if (change !== 'none') callerEditor.updateOptions({ readOnly: true });
+			if (change === 'writableAgain') callerEditor.updateOptions({ readOnly: false });
+			resolveFile(' file');
+			await new Promise(resolve => setTimeout(resolve, 0));
+			return { value: callerEditor.getValue(), selectionUnchanged: callerEditor.getSelection()!.toString() === before, handled: event.defaultPrevented };
+		} finally {
+			callerEditor.updateOptions({ readOnly: false });
+		}
 	},
 	runLineAction: async id => {
 		const action = [...EditorExtensionsRegistry.getEditorActions()].find(action => action.id === id);

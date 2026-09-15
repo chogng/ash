@@ -1,5 +1,20 @@
 import { expect, test } from '@playwright/test';
 
+for (const change of ['none', 'readonly', 'writableAgain'] as const) {
+	test(`deferred file drop respects ${change} state before committing`, async ({ page }) => {
+		await page.goto('/standalone.html');
+		expect(await page.evaluate(change => window.ashStandaloneIntegration.runDeferredDrop(change), change)).toEqual({
+			value: change === 'none' ? 'alpha file' : 'alpha',
+			selectionUnchanged: change !== 'none',
+			handled: true,
+		});
+		if (change === 'none') {
+			await page.keyboard.press('ControlOrMeta+z');
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('alpha');
+		}
+	});
+}
+
 test('occurrence shortcuts and actions share the same selections and edit transaction', async ({ page }) => {
 	await page.goto('/standalone.html');
 	await page.evaluate(() => window.ashStandaloneIntegration.prepareBrackets('echo echo echo', [2]));

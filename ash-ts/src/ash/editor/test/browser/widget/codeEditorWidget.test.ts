@@ -1885,6 +1885,33 @@ test('DropIntoEditorController inserts one decoded text file at the captured pos
 	dom.window.close();
 });
 
+for (const change of ['readonly', 'writableAgain', 'model', 'content', 'dispose'] as const) {
+	test(`A pending file drop is cancelled after ${change}`, async () => {
+		await import('../../../contrib/dropOrPasteInto/browser/dropIntoEditorContribution.js');
+		const dom = new JSDOM('<!doctype html><body><main></main></body>');
+		using cleanup = { [Symbol.dispose]: () => dom.window.close() };
+		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+		using model = new TextModel('alpha');
+		using other = new TextModel('other');
+		using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, input: { resource: model.uri }, languageId: model.getLanguageId() });
+		editor.layout({ width: 240, height: 40 });
+		editor.getDomNode().getBoundingClientRect = () => editorRectangle(240, 40);
+		const file = new DeferredTextFile('snippet.rs');
+		editor.getDomNode().dispatchEvent(transferDropEvent(dom.window, { types: ['Files'], files: [file as unknown as File], getData: () => '' }));
+		if (change === 'readonly' || change === 'writableAgain') editor.updateOptions({ readOnly: true });
+		if (change === 'writableAgain') editor.updateOptions({ readOnly: false });
+		if (change === 'model') editor.setModel(other);
+		if (change === 'content') model.setValue('changed');
+		if (change === 'dispose') editor.dispose();
+		const selection = change === 'dispose' ? null : editor.getSelection();
+		file.resolve(' stale');
+		await new Promise(resolve => setTimeout(resolve, 0));
+		assert.equal(model.getText(), change === 'content' ? 'changed' : 'alpha');
+		assert.equal(other.getText(), 'other');
+		if (change !== 'dispose') assert.deepEqual(editor.getSelection(), selection);
+	});
+}
+
 test('Suggest registration follows editor enablement and model disposal', async () => {
 	await import('../../../contrib/suggest/browser/suggestController.js');
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
