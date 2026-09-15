@@ -14,7 +14,7 @@ on:
       - "scripts/just-shell.py"
       - "scripts/ci_impact.py"
       - "build/lib/ash_build/**"
-      - "build/release/package/ripgrep.py"
+      - "build/package/ripgrep.py"
       - "third_party/ripgrep/runtime-lock.json"
       - ".github/workflows/rust-warnings.yml"
   pull_request:
@@ -29,7 +29,7 @@ on:
       - "scripts/just-shell.py"
       - "scripts/ci_impact.py"
       - "build/lib/ash_build/**"
-      - "build/release/package/ripgrep.py"
+      - "build/package/ripgrep.py"
       - "third_party/ripgrep/runtime-lock.json"
       - ".github/workflows/rust-warnings.yml"
   workflow_dispatch:
@@ -150,7 +150,7 @@ jobs:
           import subprocess
           from pathlib import Path
           from build.lib.ash_build.targets import TARGETS
-          from build.release.package.ripgrep import resolve_ripgrep
+          from build.package.ripgrep import resolve_ripgrep
 
           root = Path.cwd()
           ripgrep = resolve_ripgrep(
@@ -202,7 +202,7 @@ jobs:
           import subprocess
           from pathlib import Path
           from build.lib.ash_build.targets import TARGETS, default_target
-          from build.release.package.ripgrep import resolve_ripgrep
+          from build.package.ripgrep import resolve_ripgrep
 
           root = Path.cwd()
           ripgrep = resolve_ripgrep(

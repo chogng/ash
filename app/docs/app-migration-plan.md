@@ -120,8 +120,8 @@ hub 消费 rules_rs 生成的 package deps。`bazel build //app:app` 已在当�
       单一 root workspace 已消除跨 workspace path dependency bridge；
 - [x] 在 CI 入口中通过完整 `//app:app` build 验证平台 toolchain；本机已通过同一 target，
       `//app:app_ci` 继续验证 boundary/package/signing contract。
-- [x] 提供平台签名与验证入口；`build/release/app/build.py` 负责 Build → Stage，
-      `build/release/app/signing.py` 负责 Sign → Verify；平台任务绑定签名工具和凭据，只发布
+- [x] 提供平台签名与验证入口；`build/app/build.py` 负责 Build → Stage，
+      `build/app/signing.py` 负责 Sign → Verify；平台任务绑定签名工具和凭据，只发布
       `verified` artifact；
 - [x] `ash-ts` 构建不拉入 Native UI/GPU 依赖；desktop 侧只保留自身的 platform adapter，边界检查未发现
       对 app UI/GPU crate 的依赖。
@@ -203,7 +203,7 @@ just --dry-run app
 `just app`。根 workspace 的 app package 与 shared backend 已通过 workspace check 和 targeted
 check/test 验证；Bazel graph 的完整入口是 `bazel build //app:app`，发布 contract 入口是
 `bazel test //app:app_ci`，package staging 使用 `just app-package`，
-签名和验证使用 `build/release/app/signing.py`，发布细节见
+签名和验证使用 `build/app/signing.py`，发布细节见
 [`app-release-graph.md`](app-release-graph.md)。
 
 并满足以下结构检查：

@@ -14,8 +14,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 TEST_SUITES = {
     "scripts": "scripts",
     "ash-code": "scripts/ash-code",
-    "build": "build/lib/ash_build",
-    "release": "build/release",
+    "build": "build",
 }
 
 
@@ -49,7 +48,7 @@ def main(arguments: list[str] | None = None) -> int:
                 test_root,
                 "-p",
                 "test_*.py",
-                *(["-t", str(REPOSITORY_ROOT)] if suite == "release" else []),
+                *(["-t", str(REPOSITORY_ROOT)] if suite == "build" else []),
             ],
             cwd=REPOSITORY_ROOT,
             env=environment,

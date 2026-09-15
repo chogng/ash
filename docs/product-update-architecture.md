@@ -114,8 +114,8 @@ Idle
 
 | 检查 | 用户机器相信什么 | 实现位置 |
 | --- | --- | --- |
-| macOS / Windows 系统签名 | “这个可执行文件确实由 Ash 发布，且签名证书有效” | `build/release/system_signing.py` |
-| macOS 公证 | “Apple 已扫描并接受这个最终发布包” | `build/release/notarize.py` |
+| macOS / Windows 系统签名 | “这个可执行文件确实由 Ash 发布，且签名证书有效” | `build/lib/signing.py` |
+| macOS 公证 | “Apple 已扫描并接受这个最终发布包” | `build/darwin/notarize.py` |
 | Ed25519 更新描述签名 | “更新器拿到的版本、通道、下载地址和 SHA-256 没被替换” | `ash-product-update` 与 `ash-update-sign` |
 
 发布顺序固定为：构建可执行文件 → 组包 → 系统签名并验证所有可执行文件 → 重算包内摘要与
@@ -242,7 +242,7 @@ Remote runtime 的下载、兼容握手、安装与回滚继续由 `ash-remote-c
 | Ash Code 更新 | CLI 已改用共享策略与签名验证；调度、下载、诊断和安装仍在 `ash-code/cli/src/update.rs` | 保留 CLI 安装 adapter，继续迁出通用调度、下载和诊断 |
 | Rust Desktop 更新 | `app/zui/src/services/update.rs` 已改用共享签名描述；HTTP staging 与安装 facade 仍在 `zui` | 继续迁出通用下载，`zui` 只保留 facade |
 | Electron Desktop 更新 | 尚无完整产品更新调用链 | 增加 update host、Main adapter、Renderer service 与 UI |
-| 系统签名 | App 与 Ash Code 已共用 `build/release/system_signing.py`；Ash Code macOS/Windows 发布会签完并验证每个可执行文件，macOS 压缩包还会公证 | Electron 打包和三端最终安装器接入同一入口；Desktop `.pkg` / `.dmg` 公证后附加票据，Windows 安装器再次签名 |
+| 系统签名 | App 与 Ash Code 已共用 `build/lib/signing.py`；Ash Code macOS/Windows 发布会签完并验证每个可执行文件，macOS 压缩包还会公证 | Electron 打包和三端最终安装器接入同一入口；Desktop `.pkg` / `.dmg` 公证后附加票据，Windows 安装器再次签名 |
 | 更新描述签名 | `ash-code/update-sign` 已直接消费共享发布描述与 canonical encoding | 保留密钥输入和 release artifact adapter |
 | 发布工作流 | Ash Code 已有系统签名、macOS 公证、最新版本描述签名和稳定版本晋升工作流 | 扩展为按 product/target 发布 Electron 与 Rust Desktop 产物 |
 | 共享更新 crate | `ash-rs/product-update` 已拥有策略、product/target/package 描述、签名与验证 | 继续迁入通用下载、调度、状态与错误 |

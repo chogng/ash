@@ -54,7 +54,7 @@ class PackageRunnerTests(unittest.TestCase):
             subprocess_run.assert_has_calls(
                 [
                     call(
-                        ["node", "build/ash-package/prepare.ts"],
+                        ["node", "build/package/prepare.ts"],
                         cwd=run_package.run.REPOSITORY_ROOT,
                         env=environment,
                         check=False,

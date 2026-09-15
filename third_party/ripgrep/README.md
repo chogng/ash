@@ -6,7 +6,7 @@ executable, not a Ash Rust crate and not a second Tool API.
 
 [`runtime-lock.json`](runtime-lock.json) is the release authority for the
 upstream version, package-target mapping, archive size, SHA-256 digest, format,
-and executable member. [`build/release/package/build.py`](../../build/release/package/build.py)
+and executable member. [`build/package/build.py`](../../build/package/build.py)
 downloads and validates one artifact, extracts only the named executable, and
 places it at `ash-path/rg[.exe]`.
 

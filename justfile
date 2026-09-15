@@ -18,7 +18,7 @@ fmt:
 fmt-check:
     {{ python }} -B scripts/format.py --check
 
-# Run repository-owned Python tests, optionally selecting ash-code, build, or release.
+# Run repository-owned Python tests, optionally selecting scripts, ash-code, or build.
 test-python *args:
     uv run --frozen --project scripts python -B scripts/test-python.py {args}
 
@@ -81,7 +81,7 @@ pet *args:
 
 # Assemble the complete immutable development package shared by Ash products.
 ash-package *args:
-    node build/ash-package/prepare.ts {args}
+    node build/package/prepare.ts {args}
 
 # Assemble the complete development package and launch Ash Code against it.
 ash-package-run *args:
@@ -106,11 +106,11 @@ app-test:
 
 # Stage an unsigned app package; release CI signs and verifies the staged binary.
 app-package *args:
-    {{ python }} -B build/release/app/build.py {args}
+    {{ python }} -B build/app/build.py {args}
 
 # Build a canonical Ash package; pass normal package builder flags.
 package *args:
-    {{ python }} -B build/release/package/build.py {args}
+    {{ python }} -B build/package/build.py {args}
 
 [unix]
 install:

@@ -39,7 +39,7 @@ approval、sandbox capability probe、下载、更新或安装 mutation。
 只有 executable 位于 `bin/`，且 package root 同时存在普通文件 `ash-package.json`、
 `ash-path/` 与 `ash-resources/` 时，才识别为 `InstallMethod::Package`；其他启动方式统一为
 `Other`。metadata 的生成和 package 内容校验由
-[`build/release/package`](../../build/release/package/README.md) 拥有，本 crate 只以其存在作为
+[`build/package`](../../build/package/README.md) 拥有，本 crate 只以其存在作为
 layout marker，不解析或信任其中的字段。
 
 `InstallContext::executable_candidates(ManagedExecutable::Ripgrep)` 返回互斥分支：

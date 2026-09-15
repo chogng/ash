@@ -10,7 +10,7 @@ test("repository build orchestration and developer scripts have separate root ow
     const path = join(repositoryRoot, directory);
     assert.equal(existsSync(path), false, `${directory} must not own repository tooling`);
   }
-  for (const category of ["desktop", "download", "lib", "pnpm", "release", "resources", "vite", "ash-package"]) {
+  for (const category of ["desktop", "download", "lib", "pnpm", "app", "code", "remote", "darwin", "win32", "linux", "resources", "vite", "package"]) {
     assert.equal(existsSync(join(import.meta.dirname, category)), true, category);
   }
   for (const entry of ["cargo.py", "format.py", "just-shell.py", "test-python.py"]) {
@@ -28,14 +28,9 @@ test("Node build and repository command sources do not use runtime JavaScript", 
   assert.deepEqual(files.filter((path) => javaScriptExtensions.has(extname(path))), []);
 });
 
-test("general repository commands do not depend on release package internals", () => {
-  const files = [
-    ...walk(join(repositoryRoot, "scripts")),
-    ...walk(import.meta.dirname).filter((path) => !path.startsWith(join(import.meta.dirname, "release"))),
-  ].filter((path) => extname(path) === ".py");
-
-  for (const path of files) {
-    assert.doesNotMatch(readFileSync(path, "utf8"), /ash_package\./, path);
+test("build tools do not import repository command implementations", () => {
+  for (const path of walk(import.meta.dirname).filter((path) => extname(path) === ".py")) {
+    assert.doesNotMatch(readFileSync(path, "utf8"), /^\s*(?:from scripts(?:\.|\s)|import scripts(?:\.|\s|$))/m, path);
   }
 });
 

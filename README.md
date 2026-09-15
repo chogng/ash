@@ -123,7 +123,7 @@ python3 -B scripts/cargo.py run -p app
 - [Electron Desktop architecture](docs/ash-desktop-architecture.md)
 - [Shared Rust architecture](docs/ash-rs-architecture.md)
 - [Remote development](docs/remote-development.md)
-- [Packaging](build/release/package/README.md)
+- [Packaging](build/package/README.md)
 - [`app` release graph](app/docs/app-release-graph.md)
 
 Crate-level implementation details live in the `README.md` next to each crate.

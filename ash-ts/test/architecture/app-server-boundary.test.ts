@@ -11,7 +11,7 @@ function source(path: string): string {
 }
 
 test("Desktop packages the shared backend host instead of the Ash Code CLI", () => {
-	const packageScript = source("../build/ash-package/prepare.ts");
+	const packageScript = source("../build/package/prepare.ts");
 	const packageManifest = source("package.json");
 	const watcher = source("../build/lib/watch/appServer.ts");
 	const electronMain = source("src/ash/code/electron-main/app.ts");
@@ -24,7 +24,7 @@ test("Desktop packages the shared backend host instead of the Ash Code CLI", () 
 	}
 	assert.match(packageScript, /"--bin", "ash-app-server"/u);
 	assert.match(packageScript, /"--bin", "ash-app-server-daemon"/u);
-	assert.match(packageManifest, /build\/ash-package\/prepare\.ts/u);
+	assert.match(packageManifest, /build\/package\/prepare\.ts/u);
 	assert.match(packageScript, /"--profile",\s*"dev-small"/u);
 	assert.match(watcher, /"--profile", "dev-small"/u);
 	assert.doesNotMatch(packageScript, /"--target",/u);

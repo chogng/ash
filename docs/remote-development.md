@@ -402,14 +402,14 @@ target、非规范/符号链接路径、大小或 SHA-256 不匹配，并在远�
 开发/发布包可选择离线 bundle：
 
 ```text
-node build/ash-package/prepare.ts \
+node build/package/prepare.ts \
   --remote-runtime-bundle <bundle-directory>
 ```
 
 也可生成只绑定网络发布目录的轻量产品包；URL 与摘要随后由平台应用签名认证：
 
 ```text
-node build/ash-package/prepare.ts \
+node build/package/prepare.ts \
   --remote-runtime-catalog-url https://releases.example/ash/<version>/catalog.json \
   --remote-runtime-catalog-sha256 <catalog-digest>
 ```
@@ -420,9 +420,9 @@ Desktop Main 仍可通过一组 all-or-nothing 的受信环境覆盖接入单个
 `ASH_REMOTE_RUNTIME_SHA256`，可选 `ASH_REMOTE_RUNTIME_INSTALL_ROOT`。这是显式 host override，
 不是签名或 updater；SHA-256 只证明内容身份，publisher provenance 仍须由本机发布层认证。
 
-standalone app 的发布路径不使用该 Desktop override。`build/release/remote/bundle.py` 把多个
+standalone app 的发布路径不使用该 Desktop override。`build/remote/bundle.py` 把多个
 canonical package directory 序列化成确定性 rootless archives 与 `catalog.json`；
-`build/release/app/build.py --remote-runtime-bundle` 将 catalog SHA-256 编译进 app binary，并把 bundle
+`build/app/build.py --remote-runtime-bundle` 将 catalog SHA-256 编译进 app binary，并把 bundle
 放到 package 资源中。网络包改用 `--remote-runtime-catalog-url` 与
 `--remote-runtime-catalog-sha256`，把 URL 和摘要同时编译进 binary，不需要附带 archive。staging/signing
 会检查 binary 中确实存在所选 binding，signature record 再记录 catalog digest。运行时先验证 catalog
@@ -540,8 +540,8 @@ canonical package directory 序列化成确定性 rootless archives 与 `catalog
 - app pre-window CLI launch progress protocol：`app/src/features/remote/launch_progress.rs`
 - app foreground loopback Tunnel CLI：`app/src/features/remote/remote_connection_tunnel.rs`；readiness gate 与恢复 supervisor：`ash-rs/remote-host`
 - app Tunnel adapter/manager：状态与界面由 `app/settings/remote/remote_tunnel_manager.rs`、`app/settings/remote/remote_tunnel_manager_view.rs` 持有；进程和产品输入接线位于 `app/src/features/remote/remote_tunnel_process.rs`、`app/src/features/remote/remote_tunnel_manager_input.rs`
-- app Remote bundle/build trust chain：`build/release/remote/bundle.py`、
-  `build/release/app/build.py`
+- app Remote bundle/build trust chain：`build/remote/bundle.py`、
+  `build/app/build.py`
 - Optional headless Remote runtime：`ash-rs/remote-server`
 - Remote Terminal lease/attach：`ash-rs/exec-server/src/terminal.rs`、
   `app/src/features/terminal/terminal_session/remote.rs`

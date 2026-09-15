@@ -1,0 +1,10 @@
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "python_sources",
+    srcs = glob(["*.py"], exclude = ["test_*.py"]) + [
+        "//build/darwin:python_sources",
+        "//build/win32:python_sources",
+        "//build/lib/ash_build:python_sources",
+    ],
+)

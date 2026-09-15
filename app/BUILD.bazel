@@ -53,7 +53,7 @@ filegroup(
 filegroup(
     name = "app_package_tool",
     srcs = [
-        "//build/release:app_sources",
+        "//build/app:python_sources",
     ],
 )
 
@@ -68,8 +68,8 @@ filegroup(
 
 py_test(
     name = "app_boundary_test",
-    srcs = ["//build/release:app/check_boundary.py"],
-    main = "//build/release:app/check_boundary.py",
+    srcs = ["//build/app:check_boundary.py"],
+    main = "//build/app:check_boundary.py",
     args = [
         "$(location //:Cargo.toml)",
         "$(location Cargo.toml)",
@@ -80,7 +80,7 @@ py_test(
         "//:Cargo.lock",
         "//:Cargo.toml",
         "Cargo.toml",
-        "//build/release:app/check_boundary.py",
+        "//build/app:check_boundary.py",
     ],
     size = "small",
 )
@@ -88,11 +88,11 @@ py_test(
 py_test(
     name = "app_package_test",
     srcs = [
-        "//build/release:app_sources",
-        "//build/release:app/test_package.py",
-        "//build/release:remote/test_bundle.py",
+        "//build/app:python_sources",
+        "//build/app:test_package.py",
+        "//build/remote:test_bundle.py",
     ],
-    main = "//build/release:app/test_package.py",
+    main = "//build/app:test_package.py",
     data = [
         "//app:app_package_contract",
         "Cargo.toml",
@@ -103,17 +103,17 @@ py_test(
 py_test(
     name = "remote_runtime_bundle_test",
     srcs = [
-        "//build/release:remote_sources",
-        "//build/release:remote/test_bundle.py",
+        "//build/remote:python_sources",
+        "//build/remote:test_bundle.py",
     ],
-    main = "//build/release:remote/test_bundle.py",
+    main = "//build/remote:test_bundle.py",
     size = "small",
 )
 
 py_test(
     name = "app_release_contract_test",
-    srcs = ["//build/release:app/check_contract.py"],
-    main = "//build/release:app/check_contract.py",
+    srcs = ["//build/app:check_contract.py"],
+    main = "//build/app:check_contract.py",
     args = [
         "$(location packaging/app-package-contract.json)",
         "$(location packaging/app-signing-policy.json)",
@@ -121,7 +121,7 @@ py_test(
     data = [
         "packaging/app-package-contract.json",
         "packaging/app-signing-policy.json",
-        "//build/release:app/check_contract.py",
+        "//build/app:check_contract.py",
     ],
     size = "small",
 )
@@ -129,11 +129,11 @@ py_test(
 py_test(
     name = "app_signing_test",
     srcs = [
-        "//build/release:app_sources",
-        "//build/release:app/test_signing.py",
-        "//build/release:remote/test_bundle.py",
+        "//build/app:python_sources",
+        "//build/app:test_signing.py",
+        "//build/remote:test_bundle.py",
     ],
-    main = "//build/release:app/test_signing.py",
+    main = "//build/app:test_signing.py",
     data = [
         "//app:app_package_contract",
         "Cargo.toml",

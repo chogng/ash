@@ -309,7 +309,7 @@ just test ash-plugin
 just test ash-core-plugins
 just test ash-app-server marketplace
 just check ash-app-server
-node --test build/ash-package/prepare.test.ts
-node --test build/ash-package/productServices.test.ts
-just test-python release
+node --test build/package/prepare.test.ts
+node --test build/package/productServices.test.ts
+just test-python build
 ```

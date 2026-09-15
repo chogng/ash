@@ -12,7 +12,7 @@ if (mode !== 'disconnected' && mode !== 'full') {
 
 if (mode === 'full') {
 	const preparation = await run(process.execPath, [
-		'../build/ash-package/prepare.ts',
+		'../build/package/prepare.ts',
 		'--javascript-runtime',
 		'packaged-node',
 	], process.env);

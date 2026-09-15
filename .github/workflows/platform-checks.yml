@@ -105,7 +105,7 @@ jobs:
       - name: Test release tooling
         if: matrix.checks != false
         shell: bash
-        run: ${{ matrix.python }} -B scripts/test-python.py release
+        run: ${{ matrix.python }} -B scripts/test-python.py build
 
       - name: Verify App Server protocol artifacts
         if: matrix.checks != false
@@ -135,13 +135,13 @@ jobs:
         env:
           ASH_UPDATE_PUBLIC_KEY: ${{ vars.ASH_UPDATE_PUBLIC_KEY }}
         run: |
-          version="$(${{ matrix.python }} -c 'from build.release.package.version import read_workspace_version; from pathlib import Path; print(read_workspace_version(Path("Cargo.toml")))')"
+          version="$(${{ matrix.python }} -c 'from build.package.version import read_workspace_version; from pathlib import Path; print(read_workspace_version(Path("Cargo.toml")))')"
           test "${GITHUB_REF_NAME}" = "v${version}"
           test "${#ASH_UPDATE_PUBLIC_KEY}" = 64
           ${{ matrix.python }} -B scripts/cargo.py build --package ash-cli --bin ash --profile release --target "${{ matrix.target }}"
           cli=".build/cargo/${{ matrix.target }}/release/ash${{ runner.os == 'Windows' && '.exe' || '' }}"
           package=".build/releases/ash-code-${{ matrix.target }}"
-          ${{ matrix.python }} -B build/release/package/build.py \
+          ${{ matrix.python }} -B build/package/build.py \
             --target "${{ matrix.target }}" \
             --cli-bin "$cli" \
             --update-public-key "$ASH_UPDATE_PUBLIC_KEY" \
@@ -209,7 +209,7 @@ jobs:
         env:
           ASH_MACOS_SIGNING_IDENTITY: ${{ vars.ASH_MACOS_SIGNING_IDENTITY }}
         run: |
-          ${{ matrix.python }} -B build/release/package/sign.py \
+          ${{ matrix.python }} -B build/package/sign.py \
             --package-dir ".build/releases/ash-code-${{ matrix.target }}" \
             --target "${{ matrix.target }}"
 
@@ -220,7 +220,7 @@ jobs:
           $signTool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1
           if (-not $signTool) { throw "signtool.exe is not installed" }
           $env:ASH_WINDOWS_SIGNTOOL = $signTool.FullName
-          ${{ matrix.python }} -B build/release/package/sign.py `
+          ${{ matrix.python }} -B build/package/sign.py `
             --package-dir ".build/releases/ash-code-${{ matrix.target }}" `
             --target "${{ matrix.target }}" `
             --verify-only
@@ -229,7 +229,7 @@ jobs:
         if: github.event_name == 'release' && matrix.release_package != false
         shell: bash
         run: |
-          ${{ matrix.python }} -B build/release/code/archive.py \
+          ${{ matrix.python }} -B build/code/archive.py \
             --package-dir ".build/releases/ash-code-${{ matrix.target }}" \
             --output ".build/releases/ash-code-${{ matrix.target }}.${{ matrix.archive }}"
 
@@ -237,7 +237,7 @@ jobs:
         if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'macOS'
         shell: bash
         run: |
-          ${{ matrix.python }} -B build/release/notarize.py \
+          ${{ matrix.python }} -B build/darwin/notarize.py \
             ".build/releases/ash-code-${{ matrix.target }}.${{ matrix.archive }}"
 
       - name: Sign Ash Code update

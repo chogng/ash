@@ -80,7 +80,7 @@ def current_package() -> Path:
 def main(arguments: list[str] | None = None) -> int:
     environment = os.environ.copy()
     prepared = subprocess.run(
-        ["node", "build/ash-package/prepare.ts"],
+        ["node", "build/package/prepare.ts"],
         cwd=run.REPOSITORY_ROOT,
         env=environment,
         check=False,

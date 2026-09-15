@@ -309,7 +309,7 @@ RAII 与 failure contract 由
 `ash-path/`、Ash executable 同目录、host `PATH` 的顺序生成 `rg` candidates，再由
 `ash-shell-command` 验证并冻结 canonical executable identity；未找到时启用本地工具的
 composition 直接失败。canonical release package 由
-[`build/release/package/build.py`](../build/release/package/build.py) 按
+[`build/package/build.py`](../build/package/build.py) 按
 [`third_party/ripgrep/runtime-lock.json`](../third_party/ripgrep/runtime-lock.json) 下载并校验
 target-specific ripgrep archive，把 executable 放到 `ash-path/rg[.exe]`；源码开发启动仍可使用
 `ASH_RG_PATH` 或 host `PATH`。
