@@ -6,6 +6,7 @@ import { Position } from '../../common/core/position.js';
 import { Range } from '../../common/core/range.js';
 import { Selection } from '../../common/core/selection.js';
 import { TextModel } from '../../common/model/textModel.js';
+import { EditorLineWrapping } from '../../common/config/editorOptions.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 class TestResizeObserver {
@@ -32,6 +33,25 @@ const { CodeEditorWidget } = await import('../../browser/widget/codeEditor/codeE
 const { createTestCodeEditor } = await import('./testCodeEditor.js');
 
 suiteTeardown(() => browserEnvironment.window.close());
+
+test('observable content notifications expose the updated cursor and view', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	using domCleanup = { [Symbol.dispose]: () => dom.window.close() };
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('long content '.repeat(40));
+	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineWrapping: EditorLineWrapping.On });
+	editor.layout({ width: 180, height: 100 });
+	editor.setPosition(model.positionAt(model.length));
+	using observableEditor = observableCodeEditor(editor);
+	const positions: (Position | null)[] = [];
+	using listener = observableEditor.valueIsEmpty.onDidChange(() => {
+		positions.push(editor.getPosition());
+		editor.view.render(true, true);
+	});
+
+	model.applyEdits([{ range: model.getFullModelRange(), text: '' }]);
+	assert.deepEqual(positions, [new Position(1, 1)]);
+});
 
 test('observable code editor tracks canonical model, selections, and layout', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');

@@ -18,23 +18,48 @@ for (const [name, value] of Object.entries({
 }
 
 const { createCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
-const { ChatInputEditor } = await import("../../browser/input/stanzaChatInputEditor.js");
-const { createStanzaChatCommandCompletionProvider } = await import("../../browser/input/stanzaChatCommandCompletion.js");
-const { createStanzaChatSkillCompletionProvider } = await import("../../browser/input/stanzaChatSkillCompletion.js");
+const { ChatInputEditor } = await import("../../browser/input/chatInputEditor.js");
+const { createChatCommandCompletionProvider } = await import("../../browser/input/chatCommandCompletion.js");
+const { createChatSkillCompletionProvider } = await import("../../browser/input/chatSkillCompletion.js");
 const { DesktopSlashCommands, SlashCommandCatalog } = await import("../../common/slashCommands.js");
 const { SkillSelectorCatalog } = await import('../../common/skillSelectors.js');
 const { Position } = await import("../../../../../editor/common/core/position.js");
 const { Range } = await import("../../../../../editor/common/core/range.js");
 const { LanguageCompletionTriggerKind } = await import("../../../../../editor/common/languages/completion/languageCompletionProviders.js");
 const { TextModel } = await import("../../../../../editor/common/model/textModel.js");
+const { ICodeEditorService } = await import("../../../../../editor/browser/services/codeEditorService.js");
+const { Selection } = await import('../../../../../editor/common/core/selection.js');
+const { IContextKeyService, ContextKeyService } = await import('../../../../../platform/contextkey/common/contextkey.js');
+const { ILogService, NullLoggerService } = await import('../../../../../platform/log/common/log.js');
+const { SelectAllCommand } = await import("../../../../../editor/browser/editorExtensions.js");
 
 suiteTeardown(() => browserEnvironment.window.close());
+
+test('Chat registers its focused editor for global commands and removes it on disposal', async () => {
+	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	using domCleanup = { [Symbol.dispose]: () => dom.window.close() };
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using editorServices = new DisposableStore();
+	const services = createCodeEditorServices(editorServices);
+	services.registerInstance(IContextKeyService, editorServices.add(new ContextKeyService()));
+	services.registerInstance(ILogService, new NullLoggerService());
+	const editors = services.get(ICodeEditorService);
+	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, "main"), placeholder: "Ask Ash", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
+	editor.value = 'message';
+	editor.focus();
+	assert.equal(editors.listCodeEditors().length, 1);
+	assert.strictEqual(editors.getFocusedCodeEditor(), editors.listCodeEditors()[0]);
+	await services.invokeFunction(accessor => SelectAllCommand.runCommand(accessor, undefined));
+	assert.deepEqual(editors.getFocusedCodeEditor()?.getSelection(), new Selection(1, 1, 1, 8));
+	editor.dispose();
+	assert.equal(editors.listCodeEditors().length, 0);
+});
 
 test("Chat completion providers use one-based editor positions and ranges", async () => {
 	const slashCommands = new SlashCommandCatalog(DesktopSlashCommands, []);
 	using slashModel = new TextModel("/ne");
 	const slashPosition = new Position(1, 4);
-	const slashResult = await createStanzaChatCommandCompletionProvider(slashCommands).provideCompletions({
+	const slashResult = await createChatCommandCompletionProvider(slashCommands).provideCompletions({
 		requestId: 1,
 		languageId: "ash-chat-input",
 		position: slashPosition,
@@ -52,7 +77,7 @@ test("Chat completion providers use one-based editor positions and ranges", asyn
 	}]);
 	using skillModel = new TextModel("first line\nuse $com here");
 	const skillPosition = new Position(2, 9);
-	const skillResult = await createStanzaChatSkillCompletionProvider(skills).provideCompletions({
+	const skillResult = await createChatSkillCompletionProvider(skills).provideCompletions({
 		requestId: 2,
 		languageId: "ash-chat-input",
 		position: skillPosition,
@@ -62,7 +87,7 @@ test("Chat completion providers use one-based editor positions and ranges", asyn
 	assert.deepEqual(skillResult?.items[0]?.range, new Range(2, 5, 2, 9));
 });
 
-test("Stanza Chat input completes slash commands before submitting", async () => {
+test("Chat input completes slash commands before submitting", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
@@ -98,7 +123,7 @@ test("Stanza Chat input completes slash commands before submitting", async () =>
 	dom.window.close();
 });
 
-test('Stanza Chat input discovers Skills only through the `$` selector', async () => {
+test('Chat input discovers Skills only through the `$` selector', async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
@@ -126,7 +151,30 @@ test('Stanza Chat input discovers Skills only through the `$` selector', async (
 	dom.window.close();
 });
 
-test("Stanza Chat input restores message behavior when the slash is deleted", async () => {
+test('Chat command completion replaces the whole command and preserves arguments', async () => {
+	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	using domCleanup = { [Symbol.dispose]: () => dom.window.close() };
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const container = requiredElement<HTMLElement>(dom.window.document, "main");
+	using editorServices = new DisposableStore();
+	using editor = createCodeEditorServices(editorServices).createInstance(ChatInputEditor, { container, placeholder: "Ask Ash", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
+	Object.defineProperty(editor.element, 'clientWidth', { value: 480 });
+	editor.layout();
+	editor.value = '/history argument';
+	editor.focus();
+	const input = requiredElement<HTMLElement>(editor.element, '.stanza-editor-input');
+	input.dispatchEvent(keyboardEvent(dom.window, 'Home'));
+	for (let index = 0; index < 3; index++) {
+		input.dispatchEvent(keyboardEvent(dom.window, 'ArrowRight'));
+	}
+	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: ' ', ctrlKey: true, bubbles: true, cancelable: true }));
+	await waitFor(() => completionLabels(editor.element).length === 1);
+	assert.deepEqual(completionLabels(editor.element), ['/history']);
+	input.dispatchEvent(keyboardEvent(dom.window, 'Enter'));
+	assert.equal(editor.value, '/history argument');
+});
+
+test("Chat input restores message behavior when the slash is deleted", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
@@ -156,17 +204,43 @@ test("Stanza Chat input restores message behavior when the slash is deleted", as
 	dom.window.close();
 });
 
-test("Stanza Chat input starts at the InputPart default height and still grows with content", () => {
+test("Chat input starts at the InputPart default height and still grows with content", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	using editorServices = new DisposableStore();
 	using editor = createCodeEditorServices(editorServices).createInstance(ChatInputEditor, { container, placeholder: "Ask Ash", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
+	Object.defineProperty(editor.element, 'clientWidth', { value: 480 });
+	editor.layout();
 
 	assert.equal(editor.element.style.height, "106px");
 	editor.value = Array.from({ length: 12 }, (_, index) => `Line ${index + 1}`).join("\n");
-	assert.equal(editor.element.style.height, "240px");
+	await waitFor(() => editor.element.style.height === "240px");
 	dom.window.close();
+});
+
+test("Chat input grows for wrapped text and shrinks when widened or cleared", async () => {
+	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	using domCleanup = { [Symbol.dispose]: () => dom.window.close() };
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const container = requiredElement<HTMLElement>(dom.window.document, "main");
+	using editorServices = new DisposableStore();
+	using editor = createCodeEditorServices(editorServices).createInstance(ChatInputEditor, { container, placeholder: "Ask Ash", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
+	let width = 180;
+	Object.defineProperty(editor.element, 'clientWidth', { get: () => width });
+	editor.layout();
+	editor.value = 'word '.repeat(80);
+	await waitFor(() => editor.element.style.height === '320px');
+
+	width = 1000;
+	editor.layout();
+	assert.equal(editor.element.style.height, '106px');
+
+	width = 180;
+	editor.layout();
+	assert.equal(editor.element.style.height, '320px');
+	editor.value = '';
+	await waitFor(() => editor.element.style.height === '106px');
 });
 
 function completionLabels(root: ParentNode): string[] {
@@ -186,7 +260,7 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 		if (predicate()) return;
 		await new Promise<void>(resolve => setTimeout(resolve, 0));
 	}
-	assert.fail("Timed out waiting for Stanza Chat input state");
+	assert.fail("Timed out waiting for Chat input state");
 }
 
 function requiredElement<T extends Element = HTMLElement>(root: ParentNode, selector: string): T {

@@ -3,6 +3,8 @@ import { IInstantiationService, ServiceContainer } from '../../../platform/insta
 import { darkColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import { IThemeService, ThemeService } from '../../../platform/theme/common/themeService.js';
 import { CodeEditorWidget, type CodeEditorWidgetOptions } from '../../browser/widget/codeEditor/codeEditorWidget.js';
+import { ICodeEditorService } from '../../browser/services/codeEditorService.js';
+import { createEditorBrowserServices } from '../../browser/services/contribution.js';
 import { createBuiltinLanguageConfigurationService } from '../../common/languages/languageBuiltinConfigurations.js';
 import { ILanguageConfigurationService } from '../../common/languages/languageConfigurationRegistry.js';
 import { ILanguageFeaturesService } from '../../common/services/languageFeatures.js';
@@ -16,6 +18,9 @@ interface TestCodeEditorOptions extends CodeEditorWidgetOptions {
 
 export function createCodeEditorServices(disposables: Pick<DisposableStore, 'add'>, parent?: IInstantiationService): ServiceContainer {
 	const services = disposables.add(parent ? parent.createChild() : new ServiceContainer());
+	if (!services.has(ICodeEditorService)) {
+		services.registerSingleton(ICodeEditorService, () => createEditorBrowserServices().codeEditorService);
+	}
 	if (!services.has(IThemeService)) {
 		services.registerSingleton(IThemeService, () => new ThemeService(darkColorTheme));
 	}

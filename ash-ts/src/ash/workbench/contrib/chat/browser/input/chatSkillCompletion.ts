@@ -3,10 +3,10 @@ import { Range } from "../../../../../editor/common/core/range.js";
 import { LanguageCompletionItemKind } from "../../../../../editor/common/languages/completion/languageCompletions.js";
 import { type LanguageCompletionProvider, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from "../../../../../editor/common/languages/completion/languageCompletionProviders.js";
 import type { SkillSelectorCatalog } from "../../common/skillSelectors.js";
-import { CHAT_INPUT_LANGUAGE_ID } from "./stanzaChatCommandCompletion.js";
+import { CHAT_INPUT_LANGUAGE_ID } from "./chatCommandCompletion.js";
 
 /** Adapts the Chat Skill catalog to the `$skill` completion contract. */
-export function createStanzaChatSkillCompletionProvider(catalog: SkillSelectorCatalog): LanguageCompletionProvider {
+export function createChatSkillCompletionProvider(catalog: SkillSelectorCatalog): LanguageCompletionProvider {
 	return Object.freeze({
 		id: "ash.chat.skills",
 		languageIds: Object.freeze([CHAT_INPUT_LANGUAGE_ID]),

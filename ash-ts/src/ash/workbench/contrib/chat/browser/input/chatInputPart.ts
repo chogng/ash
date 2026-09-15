@@ -20,7 +20,7 @@ import type { ModelRef } from "../../../../../sessions/services/sessions/common/
 import { DesktopSlashCommands, parseSlashCommandInput, SlashCommandCatalog } from "../../common/slashCommands.js";
 import { SkillSelectorCatalog } from "../../common/skillSelectors.js";
 import type { ChatInputDelegate, ChatInputState } from "./chatInput.js";
-import { ChatInputEditors, type IChatInputEditor } from "./chatInputEditor.js";
+import { ChatInputEditors, type IChatInputEditor } from "./chatInputEditorRegistry.js";
 
 type ChatInputMode = "agent" | "plan" | "debug" | "multitask" | "ask";
 type ChatInputToolbarPresentation = "mode" | "model" | "attachment" | "send" | "interrupt";

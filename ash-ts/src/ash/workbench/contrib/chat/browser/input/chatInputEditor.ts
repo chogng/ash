@@ -1,114 +1,121 @@
-import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
+import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+import "./chatInputEditor.css";
+import { addDisposableListener, stopEvent, h } from "../../../../../base/browser/dom.js";
 import { Emitter, type Event } from "../../../../../base/common/event.js";
-import { Disposable, type IDisposable, toDisposable } from "../../../../../base/common/lifecycle.js";
-import type { SlashCommandCatalog } from "../../common/slashCommands.js";
-import type { SkillSelectorCatalog } from '../../common/skillSelectors.js';
+import { RunOnceScheduler } from "../../../../../base/common/async.js";
+import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
+import { EditorLineWrapping } from "../../../../../editor/common/config/editorOptions.js";
+import { CodeEditorWidget } from "../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js";
+import { ICodeEditorService } from "../../../../../editor/browser/services/codeEditorService.js";
+import { LanguageCompletionService } from "../../../../../editor/common/languages/completion/languageCompletionService.js";
+import { LanguageCompletionProviderRegistry } from "../../../../../editor/common/languages/completion/languageCompletionProviders.js";
+import { LanguageCompletionSessionController } from "../../../../../editor/contrib/suggest/common/languageCompletionSessionController.js";
+import { SuggestController } from "../../../../../editor/contrib/suggest/browser/suggestController.js";
+import "../../../../../editor/contrib/placeholderText/browser/placeholderText.contribution.js";
+import "../../../../../editor/browser/coreCommands.js";
+import { Position } from "../../../../../editor/common/core/position.js";
+import { Range } from "../../../../../editor/common/core/range.js";
+import { TextModel } from "../../../../../editor/common/model/textModel.js";
+import { type ChatInputEditorOptions, type IChatInputEditor } from "./chatInputEditorRegistry.js";
+import { CHAT_INPUT_LANGUAGE_ID, createChatCommandCompletionProvider } from "./chatCommandCompletion.js";
+import { createChatSkillCompletionProvider } from "./chatSkillCompletion.js";
 
-/** Construction inputs shared by Chat input editor implementations. */
-export interface ChatInputEditorOptions {
-	readonly container: HTMLElement;
-	readonly placeholder: string;
-	readonly ariaLabel: string;
-	readonly slashCommands: SlashCommandCatalog;
-	readonly skills: SkillSelectorCatalog;
-}
+const CHAT_INPUT_LINE_HEIGHT = 20;
+const CHAT_INPUT_EDITOR_PADDING = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
+const CHAT_INPUT_MIN_HEIGHT = 106;
+const CHAT_INPUT_MAX_HEIGHT = 320;
 
-/** Text editing contract consumed by the Chat composer. */
-export interface IChatInputEditor extends IDisposable {
-	readonly element: HTMLElement;
-	readonly onDidChange: Event<string>;
-	readonly onDidSubmit: Event<void>;
-	value: string;
-	focus(): void;
-	layout(): void;
-}
-
-/** Product-selected implementation of the Chat text editing surface. */
-export interface IChatInputEditorProvider {
-	readonly id: string;
-	create(options: ChatInputEditorOptions): IChatInputEditor;
-}
-
-/** Selects one optional rich Chat editor while retaining a textarea fallback. */
-export class ChatInputEditorRegistry {
-	private provider: IChatInputEditorProvider | undefined;
-
-	register(provider: IChatInputEditorProvider): IDisposable {
-		this.add(provider);
-		return toDisposable(() => {
-			if (this.provider === provider) this.provider = undefined;
-		});
-	}
-
-	/** Registers a provider that intentionally lives for the module realm. */
-	registerStatic(provider: IChatInputEditorProvider): void {
-		this.add(provider);
-	}
-
-	create(options: ChatInputEditorOptions): IChatInputEditor {
-		return this.provider?.create(options) ?? new TextareaChatInputEditor(options);
-	}
-
-	get activeProviderId(): string {
-		return this.provider?.id ?? "textarea";
-	}
-
-	private add(provider: IChatInputEditorProvider): void {
-		validateProvider(provider);
-		if (this.provider) {
-			throw new Error(`Chat input editor is already registered: ${this.provider.id}`);
-		}
-		this.provider = provider;
-	}
-}
-
-/** Realm-scoped Chat input editor selected by the active product graph. */
-export const ChatInputEditors = new ChatInputEditorRegistry();
-
-class TextareaChatInputEditor extends Disposable implements IChatInputEditor {
-	readonly element: HTMLTextAreaElement;
+/** Stanza-backed embedded editor hosted by the Chat input part. */
+export class ChatInputEditor extends Disposable implements IChatInputEditor {
+	readonly element: HTMLDivElement;
+	private readonly model = this._register(new TextModel());
+	private readonly editor: CodeEditorWidget;
 	private readonly _onDidChange = this._register(new Emitter<string>());
 	private readonly _onDidSubmit = this._register(new Emitter<void>());
-	readonly onDidChange = this._onDidChange.event;
-	readonly onDidSubmit = this._onDidSubmit.event;
+	readonly onDidChange: Event<string> = this._onDidChange.event;
+	readonly onDidSubmit: Event<void> = this._onDidSubmit.event;
+	private height = CHAT_INPUT_MIN_HEIGHT;
 
-	constructor(options: ChatInputEditorOptions) {
+	constructor(options: ChatInputEditorOptions, @IInstantiationService instantiationService: IInstantiationService, @ICodeEditorService codeEditorService: ICodeEditorService) {
 		super();
-		this.element = h(options.container.ownerDocument, "textarea");
-		this.element.className = "ash-chat-textarea-input";
-		this.element.rows = 3;
-		this.element.placeholder = options.placeholder;
-		this.element.setAttribute("aria-label", options.ariaLabel);
+		this.element = h(options.container.ownerDocument, "div");
+		this.element.className = "ash-chat-input-editor";
+		this.element.style.height = `${this.height}px`;
 		options.container.append(this.element);
-		this._register(addDisposableListener(this.element, "input", () => this._onDidChange.fire(this.value)));
-		this._register(addDisposableListener(this.element, "keydown", (event) => {
-			if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
-			event.preventDefault();
-			event.stopPropagation();
+		codeEditorService.willCreateCodeEditor();
+		this.editor = this._register(instantiationService.createInstance(CodeEditorWidget, {
+			container: this.element,
+			model: this.model,
+			input: { resource: this.model.uri },
+			languageId: CHAT_INPUT_LANGUAGE_ID,
+			lineHeight: CHAT_INPUT_LINE_HEIGHT,
+			ariaLabel: options.ariaLabel,
+			placeholder: options.placeholder,
+			presentation: "embedded",
+			padding: CHAT_INPUT_EDITOR_PADDING,
+			lineWrapping: EditorLineWrapping.On,
+		}));
+		const providers = this._register(new LanguageCompletionProviderRegistry());
+		this._register(providers.register(createChatCommandCompletionProvider(options.slashCommands)));
+		this._register(providers.register(createChatSkillCompletionProvider(options.skills)));
+		const completions = this._register(new LanguageCompletionService(this.model, providers));
+		const completionSession = this._register(new LanguageCompletionSessionController(completions.results, this.editor.selections, { resolver: completions }));
+		this._register(new SuggestController(
+			this.editor,
+			this.editor.controller,
+			completions,
+			completionSession,
+			CHAT_INPUT_LANGUAGE_ID,
+			{ widgetContainer: this.element },
+		));
+		const layout = this._register(new RunOnceScheduler(() => this.layout(), 0));
+		this._register(this.model.onDidChangeContent(() => {
+			layout.schedule();
+			this._onDidChange.fire(this.value);
+		}));
+		this._register(addDisposableListener(this.editor.controller.element, "keydown", event => {
+			if (event.defaultPrevented || event.isComposing || event.key !== "Enter" || event.shiftKey) return;
+			stopEvent(event);
 			this._onDidSubmit.fire();
 		}));
 		this._register(toDisposable(() => this.element.remove()));
+		const observer = new ResizeObserver(() => layout.schedule());
+		this._register(toDisposable(() => observer.disconnect()));
+		observer.observe(this.element);
+		layout.schedule();
+		this._register(toDisposable(() => codeEditorService.removeCodeEditor(this.editor)));
+		codeEditorService.addCodeEditor(this.editor);
 	}
 
 	get value(): string {
-		return this.element.value;
+		return this.model.getText();
 	}
 
 	set value(value: string) {
-		if (this.element.value === value) return;
-		this.element.value = value;
-		this._onDidChange.fire(value);
+		if (this.model.getText() === value) return;
+		const range = Range.fromPositions(new Position((0) + 1, (0) + 1), this.model.positionAt(this.model.length));
+		this.model.applyEdits([{ range, text: value }]);
+		this.editor.setPosition(this.model.positionAt(this.model.length));
 	}
 
 	focus(): void {
-		this.element.focus();
+		this.editor.focus();
 	}
 
-	layout(): void {}
-}
+	layout(): void {
+		const width = this.element.clientWidth;
+		if (width <= 0) return;
+		this.editor.layout({ width, height: this.height });
+		this.syncHeight();
+	}
 
-function validateProvider(provider: IChatInputEditorProvider): void {
-	if (!/^[A-Za-z][A-Za-z0-9._-]{0,127}$/.test(provider.id)) {
-		throw new TypeError(`Invalid Chat input editor ID: ${provider.id}`);
+	private syncHeight(): void {
+		if (this.element.clientWidth <= 0) return;
+		const contentHeight = this.editor.getBottomForLineNumber(this.model.lineCount) + CHAT_INPUT_EDITOR_PADDING.bottom;
+		const height = Math.min(CHAT_INPUT_MAX_HEIGHT, Math.max(CHAT_INPUT_MIN_HEIGHT, contentHeight));
+		if (height === this.height) return;
+		this.height = height;
+		this.element.style.height = `${height}px`;
+		this.layout();
 	}
 }
