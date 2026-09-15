@@ -1,3 +1,7 @@
+use core_api::AgentRuntime;
+use ash_protocol::SessionId;
+use core_api::CoreError;
+use core_api::ModelService;
 use crate::SlashCommandCatalog;
 use crate::attachment_upload_store::AttachmentUploadStore;
 use crate::browser_host::BrowserHost;
@@ -25,14 +29,10 @@ use ash_config::ConfigStore;
 use core_api::ActionPolicyService;
 use ash_core::AgentTreeLimits;
 use ash_core::ApprovalModeActionPolicyService;
-use ash_core::CancelTurnInteractionRequest;
-use core_api::CoreError;
-use core_api::ModelService;
 use ash_core::MultiAgentCoordinator;
 use ash_core::ThreadController;
 use core_api::ThreadUpdateSink;
 use ash_core::ToolService;
-use ash_core::TurnExecutionBackend;
 use ash_core::TurnExecutor;
 use ash_extension_api::ExtensionRegistry;
 use ash_extensions::ExtensionCatalog;
@@ -143,7 +143,6 @@ mod search_operations;
 mod semantic_index_job;
 mod session_operations;
 mod skill_operations;
-mod start_turn;
 mod symbol_index_operations;
 mod symbol_index_runtime;
 mod syntax_operations;
@@ -892,43 +891,13 @@ impl AppServer {
             let Ok(_mutation) = self.env_runtime_gate.lock() else {
                 return;
             };
-            let Ok(snapshot) = self.threads.read_thread(&request.thread_id) else {
-                continue;
-            };
-            let still_pending = snapshot
-                .turns
-                .iter()
-                .find(|turn| turn.turn_id == request.turn_id)
-                .and_then(|turn| turn.pending_interaction.as_ref())
-                .is_some_and(|interaction| {
-                    interaction.request_id == request.interaction.request_id
-                });
-            if !still_pending {
-                continue;
-            }
-            let before_sequence = snapshot.sequence;
-            let cancelled = if let Ok(cancelled) = self.threads.cancel_turn_interaction(
+            if let Err(error) = self.agent_runtime().cancel_interaction(
                 &request.thread_id,
-                CancelTurnInteractionRequest {
-                    turn_id: request.turn_id.clone(),
-                    request_id: request.interaction.request_id.clone(),
-                    reason: InteractionCancelReason::OwnerDisconnected,
-                },
+                &request.turn_id,
+                &request.interaction.request_id,
+                InteractionCancelReason::OwnerDisconnected,
             ) {
-                cancelled
-            } else {
-                continue;
-            };
-            if let Ok(updates) = self
-                .threads
-                .thread_updates_after(&request.thread_id, before_sequence)
-            {
-                self.updates.publish_thread(&request.thread_id, &updates);
-            }
-            if !cancelled.live_execution_woken {
-                let _ = self
-                    .turn_backend
-                    .resume(&request.thread_id, &request.turn_id);
+                log::warn!("Agent interaction cancellation failed: {error}");
             }
         }
     }
@@ -1377,7 +1346,10 @@ impl AppServer {
 
     /// Installs a synthetic backend for App Server unit tests.
     #[cfg(test)]
-    pub(crate) fn with_turn_backend(self, backend: Arc<dyn TurnExecutionBackend>) -> Self {
+    pub(crate) fn with_turn_backend(
+        self,
+        backend: Arc<dyn ash_core::TurnExecutionBackend>,
+    ) -> Self {
         self.turn_backend.replace_for_test(backend);
         self
     }
@@ -1388,7 +1360,7 @@ impl AppServer {
     }
 
     #[cfg(test)]
-    pub(crate) fn turn_executor_backend(&self) -> Arc<dyn TurnExecutionBackend> {
+    pub(crate) fn turn_executor_backend(&self) -> Arc<dyn ash_core::TurnExecutionBackend> {
         Arc::new(
             self.env_runtime
                 .read()
@@ -1496,7 +1468,7 @@ impl AppServer {
     /// The profile-wide Thread controller must not retain a mutable environment binder.
     pub fn start_thread(
         &self,
-        request: ash_core::StartThreadRequest,
+        request: core_api::StartThreadRequest,
     ) -> Result<ash_core::ThreadSnapshot, core_api::CoreError> {
         self.threads
             .start_thread(self.thread_worktree_binder.as_ref(), request)
@@ -1516,6 +1488,62 @@ impl AppServer {
         Ok(self)
     }
 
+    pub(super) fn agent_runtime(&self) -> impl core_api::AgentRuntime + '_ {
+        ash_core::Runtime::new(
+            self.threads.as_ref(),
+            self.multi_agent.as_ref(),
+            self.turn_executor_snapshot(),
+            self.turn_backend.as_ref(),
+            self.thread_worktree_binder.as_ref(),
+            Arc::new(AppServerThreadUpdates {
+                threads: Arc::clone(&self.threads),
+                updates: Arc::clone(&self.updates),
+            }),
+        )
+    }
+
+    pub(super) fn bind_session_runtime(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<(), core_api::CoreError> {
+        self.threads
+            .install_session_extensions(session_id.clone(), Arc::clone(&self.agent_extensions))?;
+        self.updates.bind_session_scope(session_id.clone());
+        Ok(())
+    }
+
+    pub(super) fn collect_message_checkpoints(
+        &self,
+        source: &dyn core_api::MessageCheckpointSource,
+    ) -> Result<(), CoreError> {
+        self.threads.collect_message_checkpoints(source)
+    }
+
+    pub(crate) fn with_queue_store(
+        mut self,
+        store: Arc<queue::QueueStore>,
+        directory: Option<String>,
+    ) -> Result<Self, String> {
+        let mut builder =
+            ash_extension_api::ExtensionRegistryBuilder::from_registry(&self.agent_extensions);
+        queue::install(&mut builder, store.clone());
+        self.agent_extensions = Arc::new(builder.build());
+        self.threads
+            .install_extensions(self.agent_extensions.clone())
+            .map_err(|error| error.to_string())?;
+        let executor = self
+            .env_runtime_mut()
+            .turn_executor
+            .clone()
+            .with_extensions(self.agent_extensions.clone());
+        self.turn_backend.install_executor(executor.clone());
+        self.env_runtime_mut().turn_executor = executor;
+        self.restart_extension_config_watcher();
+        self.queue = Some(store);
+        self.queue_directory = directory;
+        Ok(self)
+    }
+
     pub fn threads(&self) -> &Arc<ThreadController> {
         &self.threads
     }
@@ -1529,26 +1557,17 @@ impl AppServer {
 
     /// Reconciles durable Agent spawn/delivery sagas and starts newly materialized child Turns.
     pub fn resume_recovered_agent_coordinations(&self) -> Result<usize, CoreError> {
-        agent::recover(
-            &self.multi_agent,
-            &self.threads,
-            self.turn_backend.as_ref(),
-            &self.loaded_session_ids()?,
-        )
+        self.agent_runtime().recover_agents()
     }
 
     /// Re-enqueues durable running Tool continuations after host services are installed.
     pub fn resume_recovered_tool_continuations(&self) -> Result<usize, CoreError> {
-        let session_ids = self.loaded_session_ids()?;
-        self.turn_executor_snapshot()
-            .resume_recovered_tool_continuations_in_sessions(&session_ids)
+        self.agent_runtime().recover_tools()
     }
 
     /// Restarts extension-owned work after the local runtime has been restored.
     pub fn resume_recovered_extension_turns(&self) -> Result<usize, CoreError> {
-        let session_ids = self.loaded_session_ids()?;
-        self.turn_executor_snapshot()
-            .resume_recovered_extension_turns_in_sessions(&session_ids)
+        self.agent_runtime().recover_extensions()
     }
 
     fn session_ids(&self) -> Result<BTreeSet<ash_protocol::SessionId>, CoreError> {
@@ -1557,15 +1576,6 @@ impl AppServer {
             .list_thread_catalog()?
             .into_iter()
             .map(|record| record.session_id)
-            .collect())
-    }
-
-    fn loaded_session_ids(&self) -> Result<BTreeSet<ash_protocol::SessionId>, CoreError> {
-        Ok(self
-            .threads
-            .list_loaded_threads()?
-            .into_iter()
-            .map(|thread| thread.session_id)
             .collect())
     }
 

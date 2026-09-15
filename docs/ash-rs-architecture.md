@@ -16,7 +16,7 @@
 | Desktop、`ash-code` 和其他 Agent 客户端如何调用？ | 统一经过 App Server API，不链接 Core、Store 或 Provider | [对外接口](#8-app-server) |
 | protocol、history、Core 和 storage 有什么区别？ | 分别拥有共享事实、持久化记录形状、状态协调和物理读写 | [Protocol 边界](#3-protocol-边界)、[存储](#5-存储端口与物理存储) |
 | 为什么有这么多 crate？ | 按可独立验证的责任拆分，不按功能名称堆成通用 service | [crate 边界](#2-crate-边界) |
-| 具体函数和修改路径在哪里？ | 进入对应 crate README，系统文档不复制私有实现 | [文档规范](documentation-guidelines.md) |
+| 具体函数和修改路径在哪里？ | 进入对应 crate README，系统文档不复制私有实现 | [文档规范](../.github/instructions/documentation.instructions.md) |
 
 ## 1. 共享后端职责
 
@@ -66,7 +66,7 @@ ash-rs/
 ├── context-engine/       # provider-neutral context budget、token measurement 与边界判定
 ├── memories/             # 用户控制的长期 Memory、作用域、读写、引用和存储 port
 ├── core/                 # reducers, coordinators, execution policy and recovery
-├── core-api/             # model, Hooks, policy and host contracts without Core execution
+├── core-api/             # Agent operations, read views and host contracts without Core execution
 ├── rollout/              # local state repository + recovery composition（crate 名待清理）
 ├── rollout-trace/        # read-only export, diagnostics and evaluation artifact
 ├── app-server-protocol/  # external RPC wire contract + generators
@@ -356,7 +356,7 @@ Registry/generator 实现见
 - connection subscription cursor；
 - `session/changed` / `session/thread/update`；前者只提示重新读取派生树，不携带 durable sequence；
 - Resource ownership；
-- Core error 到 stable RPC error 的映射。
+- 通过 `core-api::AgentRuntime` 调用 Agent 操作，并把 Core error 映射为稳定 RPC error。
 
 它不重建旧事件、不运行 reducer、不推断领域状态，也不拥有持久化模型。
 当前 dispatch、broker、resource 与 local composition 见

@@ -2,10 +2,10 @@ use crate::SqliteThreadStore;
 use agent_graph_store::AgentGraphStore;
 use std::sync::Arc;
 use ash_core::CreateThreadRequest;
-use ash_core::ForkThreadRequest;
+use core_api::ForkThreadRequest;
 use ash_core::NoThreadWorktreeBinder;
-use ash_core::ReplaceThreadRequest;
-use ash_core::StartThreadRequest;
+use core_api::ReplaceThreadRequest;
+use core_api::StartThreadRequest;
 use ash_core::ThreadController;
 use ash_protocol::AgentId;
 use ash_protocol::CommandId;
@@ -279,7 +279,7 @@ fn delegation_queries_keep_breadth_first_order_and_exclude_forks() {
             &root.thread_id,
             ash_core::StartTurnRequest {
                 command_id: CommandId::new("start").unwrap(),
-                expected_sequence: ash_core::SequenceExpectation::Any,
+                expected_sequence: core_api::SequenceExpectation::Any,
                 model: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: instructions.clone(),

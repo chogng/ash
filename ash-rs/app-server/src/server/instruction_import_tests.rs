@@ -1,6 +1,6 @@
 use super::*;
 use ash_core::InMemoryThreadStore;
-use ash_core::StartThreadRequest;
+use core_api::StartThreadRequest;
 use ash_core::ThreadController;
 use ash_file_access::Dir;
 use ash_file_access::Grant;

@@ -1,4 +1,5 @@
 //! Session creation, discovery, subscriptions, and lifecycle mutations.
+use core_api::AgentRuntime;
 
 use super::AppServer;
 use super::ConnectionState;
@@ -7,8 +8,6 @@ use super::core_error;
 use super::decode;
 use super::operations::SessionMutation;
 use super::result;
-use serde_json::Value;
-use std::sync::Arc;
 use ash_app_server_protocol::protocol::session::SessionCreateParams;
 use ash_app_server_protocol::protocol::session::SessionListResult;
 use ash_app_server_protocol::protocol::session::SessionReadParams;
@@ -17,8 +16,9 @@ use ash_app_server_protocol::protocol::session::SessionSubscribeParams;
 use ash_app_server_protocol::protocol::session::SessionSubscribeResult;
 use ash_app_server_protocol::protocol::session::SessionThreadProjection;
 use ash_app_server_protocol::protocol::session::SessionUnsubscribeParams;
-use ash_core::StartThreadRequest;
 use ash_protocol::SessionId;
+use core_api::StartThreadRequest;
+use serde_json::Value;
 
 impl AppServer {
     pub(super) fn agent_read(&self, params: &Value) -> Result<Value, RpcError> {
@@ -27,11 +27,11 @@ impl AppServer {
         use ash_app_server_protocol::protocol::agent::AgentThread;
         let params: AgentReadParams = decode(params)?;
         let agent = self
-            .threads
+            .agent_runtime()
             .read_agent(&params.agent_id)
             .map_err(core_error)?;
         let threads = self
-            .threads
+            .agent_runtime()
             .list_agent_threads(&params.agent_id)
             .map_err(core_error)?
             .into_iter()
@@ -55,7 +55,7 @@ impl AppServer {
     ) -> Result<Value, RpcError> {
         let params: SessionCreateParams = decode(params)?;
         let created = if let Some(existing) = self
-            .threads
+            .agent_runtime()
             .read_started_thread(&params.command_id)
             .map_err(core_error)?
         {
@@ -91,28 +91,19 @@ impl AppServer {
                 }
                 response
             })?;
-            self.start_thread(StartThreadRequest {
-                agent_id: params.agent_id,
-                command_id: params.command_id,
-                title: params.title,
-                agent,
-            })
-            .map_err(core_error)?
+            self.agent_runtime()
+                .start_thread(StartThreadRequest {
+                    agent_id: params.agent_id,
+                    command_id: params.command_id,
+                    title: params.title,
+                    agent,
+                })
+                .map_err(core_error)?
         };
         self.bind_session_runtime(&created.session_id).map_err(core_error)?;
         self.updates
             .subscribe_session(connection.connection_id, created.session_id.clone());
         result(&self.session_result(&created.session_id)?)
-    }
-
-    pub(super) fn bind_session_runtime(
-        &self,
-        session_id: &SessionId,
-    ) -> Result<(), core_api::CoreError> {
-        self.threads
-            .install_session_extensions(session_id.clone(), Arc::clone(&self.agent_extensions))?;
-        self.updates.bind_session_scope(session_id.clone());
-        Ok(())
     }
 
     pub(super) fn fork_session_request(
@@ -123,15 +114,12 @@ impl AppServer {
     ) -> Result<ash_app_server_protocol::protocol::session::SessionThreadResult, RpcError> {
         self.read_session_thread_snapshot(&mutation.session_id, &parent_thread_id)?;
         let forked = self
-            .threads
-            .fork_session(
-                self.thread_worktree_binder.as_ref(),
-                ash_core::ForkThreadRequest {
-                    command_id: mutation.command_id,
-                    source_thread_id: parent_thread_id,
-                    title,
-                },
-            )
+            .agent_runtime()
+            .fork_session(core_api::ForkThreadRequest {
+                command_id: mutation.command_id,
+                source_thread_id: parent_thread_id,
+                title,
+            })
             .map_err(core_error)?;
         self.bind_session_runtime(&forked.session_id)
             .map_err(core_error)?;
@@ -162,16 +150,14 @@ impl AppServer {
     ) -> Result<Value, RpcError> {
         let params: SessionSubscribeParams = decode(params)?;
         let session = self.session_view(&params.session_id)?;
-        let thread_snapshots = self
-            .threads
-            .list_session_threads(&params.session_id)
-            .map_err(core_error)?;
+        let view = self.agent_runtime().read_session(&params.session_id).map_err(core_error)?;
+        let thread_snapshots = view.threads;
         let thread_projections = thread_snapshots
             .iter()
             .map(|thread| {
                 let thread = thread.public_thread();
                 let updates = self
-                    .threads
+                    .agent_runtime()
                     .thread_updates_after(&thread.thread_id, 0)
                     .map_err(core_error)?;
                 Ok(SessionThreadProjection {
@@ -195,7 +181,7 @@ impl AppServer {
             self.offer_pending_interactions(snapshot);
         }
         result(&SessionSubscribeResult {
-            agent_tree: ash_core::project_agent_tree(&thread_snapshots),
+            agent_tree: view.agent_tree,
             session,
             thread_projections,
         })
@@ -229,7 +215,7 @@ impl AppServer {
         mutation: SessionMutation,
     ) -> Result<SessionResult, RpcError> {
         let restored = self
-            .threads
+            .agent_runtime()
             .restore_session(&mutation.session_id)
             .map_err(core_error)?;
         self.notify_thread_updates(&restored.thread_id, restored.sequence.saturating_sub(1))?;
@@ -241,29 +227,14 @@ impl AppServer {
         &self,
         mutation: SessionMutation,
     ) -> Result<SessionResult, RpcError> {
-        let thread_sequences = self
-            .threads
-            .list_session_threads(&mutation.session_id)
-            .map_err(core_error)?
-            .into_iter()
-            .map(|thread| (thread.thread_id, thread.sequence))
-            .collect::<Vec<_>>();
-        self.threads
-            .archive_session_threads(
+        self.agent_runtime()
+            .archive_session(
                 &mutation.session_id,
                 &mutation.command_id,
                 ash_protocol::ThreadArchiveReason::Stopped,
             )
             .map_err(core_error)?;
         self.clear_session_dirs(&mutation.session_id);
-        for (thread_id, _) in &thread_sequences {
-            self.multi_agent
-                .cancel_descendants(thread_id)
-                .map_err(core_error)?;
-        }
-        for (thread_id, sequence) in thread_sequences {
-            self.notify_thread_updates(&thread_id, sequence)?;
-        }
         self.updates.publish_session_changed(&mutation.session_id);
         self.enforce_turn_changes_cleanup();
         self.session_result(&mutation.session_id)
@@ -274,25 +245,13 @@ impl AppServer {
         mutation: SessionMutation,
     ) -> Result<SessionId, RpcError> {
         let session_id = mutation.session_id.clone();
-        let thread_ids = self
-            .threads
-            .list_session_threads(&session_id)
-            .map_err(core_error)?
-            .into_iter()
-            .map(|thread| thread.thread_id)
-            .collect::<Vec<_>>();
-        self.threads
-            .archive_session_threads(
+        self.agent_runtime()
+            .archive_session(
                 &session_id,
                 &mutation.command_id,
                 ash_protocol::ThreadArchiveReason::Stopped,
             )
             .map_err(core_error)?;
-        for thread_id in &thread_ids {
-            self.multi_agent
-                .cancel_descendants(thread_id)
-                .map_err(core_error)?;
-        }
         if let Some(queue) = &self.queue {
             queue.delete_session(&session_id).map_err(|_| {
                 RpcError::new(
@@ -312,11 +271,11 @@ impl AppServer {
             .remove(&ash_extension_api::ExtensionScope::Session(
                 session_id.clone(),
             ));
-        self.threads
+        self.agent_runtime()
             .delete_session_threads(&session_id)
             .map_err(core_error)?;
         if let Some(runtime) = &self.git_turn_changes {
-            if let Err(error) = self.threads.collect_message_checkpoints(runtime.as_ref()) {
+            if let Err(error) = self.collect_message_checkpoints(runtime.as_ref()) {
                 log::warn!("message checkpoint cleanup remains pending: {error}");
             }
         }
@@ -328,8 +287,8 @@ impl AppServer {
     }
 
     fn lifecycle_request(&self, mutation: SessionMutation) -> Result<SessionResult, RpcError> {
-        self.threads
-            .archive_session_threads(
+        self.agent_runtime()
+            .archive_session(
                 &mutation.session_id,
                 &mutation.command_id,
                 ash_protocol::ThreadArchiveReason::Completed,

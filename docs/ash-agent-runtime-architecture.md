@@ -93,7 +93,7 @@
 | per-Thread loaded projection + FIFO mutation gate + incarnation + idle eviction | 已实现 | `core/src/thread_controller/loaded_thread.rs` |
 | 有界执行邮箱（OS 线程 lane，容量 8，30s 空闲回收） | 已实现 | `core/src/thread_controller/mailbox.rs` |
 | TurnExecutor 顺序 model → tool → model 循环 | 已实现 | `core/src/turn/executor.rs` |
-| same-Turn steering + delivery marker | 已实现 | `core/src/thread_controller/steering.rs`、`app-server/src/server/operations.rs` |
+| same-Turn steering + delivery marker | 已实现 | `core/src/runtime.rs`、`core/src/thread_controller/steering.rs` |
 | ToolScheduler：durable one-time approval、sandbox escalation、rejection/repeated-failure circuit breaker | 已实现 | `core/src/turn/tool_scheduler.rs`、`core/src/tool_repetition.rs` |
 | Tool unknown-outcome 基线（start marker / escalation marker，不自动重放） | 已实现 | `core/src/turn/tool_scheduler.rs`、`thread_reducer.rs` |
 | 模型选择冻结（`TurnAccepted` 携带 model） | 已实现 | `core/src/thread_controller.rs` |
@@ -133,6 +133,10 @@ Versioned App Server
   connection gate / dispatcher / subscriptions / outbound queue
              │
              ▼
+core-api::AgentRuntime → Core Runtime
+  retry / execution handoff / interaction resume / failure recording
+             │
+             ▼
 ThreadController (ash-core, one logical writer per loaded Thread)
   session_id grouping / lineage / durable commit / recovery / execution mailbox
              │
@@ -150,11 +154,12 @@ ThreadController  ─── append ──► ThreadStore ──► rollout
       └─────────────────────────► ThreadUpdateSink ──► subscription hub
 ```
 
-依赖规则（禁止项详见 [`core.md`](core.md) §6）：
+依赖规则（详见 [`core.md`](core.md#7-依赖边界)）：
 
 - `ash-core` 不依赖 JSON-RPC DTO、provider HTTP wire 类型、concrete adapter、storage 或
   rollout；
-- composition root（App Server）构造 adapter 并注入 Core 端口，依赖不反向；
+- App Server 请求通过 `core-api::AgentRuntime` 调用完整操作；装配代码构造 Core 和 adapter，
+  请求层不读取命令日志或单独接续执行；
 - `app-server-protocol` 只复用经过审核的 canonical public view；Core-private aggregate、
   loaded state、mailbox、incarnation 永不进入 wire；
 - Tool adapter 不直接修改 Thread projection。
@@ -164,8 +169,8 @@ Session 的不同语义必须区分（详见 [`protocol.md`](protocol.md)）：�
 `BrowserSession` / `TerminalSession` 是具体服务连接。
 （capability 生命周期）。三者不得混用命名或状态。
 
-提交顺序、安全点与取消语义由 [`core.md`](core.md) §7 权威定义，本文不重复。工具执行生命
-周期、approval 与 escalation 由 [`core.md`](core.md) §11 权威定义。
+提交顺序与恢复由 [`core.md`](core.md#4-提交与恢复) 维护。工具执行生命周期与授权由
+[`tools.md`](tools.md) 维护。
 
 ## 4. 修订决策详细设计
 

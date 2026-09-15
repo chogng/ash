@@ -2,9 +2,13 @@
 
 `ash-app-server` 组合一个环境中的服务并实现 App Server 协议，具体职责如下：
 
-1. 在每条已建立的连接上执行类型化协议分发，并编排请求取消、Thread、Turn、Project 与通知生命周期；连接建立、鉴权和消息队列由 `ash-app-server-transport` 负责。
-2. 在文件、搜索、Git、Terminal、语言服务和目录贡献入口检查对应 Permission，并只把有效 `Authorization` 交给执行服务。
-3. 组合 profile 级配置与产品服务；Project 只保存弱关联，目录配置、Instructions、Hooks、Skills、MCP 和 Plugins 只有在获得对应 Permission 与 Grant 后才能生效。
+1. 分发类型化协议，管理请求取消、产品会话组织和通知订阅。
+2. 通过 `core-api::AgentRuntime` 调用 Agent 操作；Core 负责执行、重试、取消和恢复。
+3. 在文件、搜索、Git、Terminal、语言服务和目录贡献入口校验 Permission，传递有效授权。
+4. 组合 profile 配置、环境服务与 Core 实现；目录贡献只在获得对应授权后生效。
+
+连接建立、鉴权和消息队列由 `ash-app-server-transport` 负责。Core 契约和装配边界见
+[`Core 架构`](../../docs/core.md#7-依赖边界)。
 
 交互式 PTY、输出缓存和重连租约由 [`ash-exec-server`](../exec-server/README.md) 管理；
 `src/server/terminal_operations.rs` 负责协议转换和调用，环境装配负责传入有效授权。

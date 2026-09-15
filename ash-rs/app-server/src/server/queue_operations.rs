@@ -1,3 +1,4 @@
+use core_api::AgentRuntime;
 use super::AppServer;
 use super::RpcError;
 use super::decode;
@@ -14,21 +15,21 @@ use ash_app_server_protocol::protocol::queue::QueueCancelParams;
 use ash_app_server_protocol::protocol::queue::QueueEnqueueParams;
 use ash_app_server_protocol::protocol::queue::QueueListParams;
 use ash_app_server_protocol::protocol::queue::QueueListResult;
-use ash_core::ThreadCommandResult;
-use ash_core::TurnExecutionBackend;
 use ash_protocol::TurnStatus;
 
 impl AppServer {
     pub fn queued_message_ready(&self, message: &QueuedMessage) -> Result<bool, String> {
         let snapshot = self
-            .threads
+            .agent_runtime()
             .read_thread(&message.request.thread_id)
             .map_err(|error| error.to_string())?;
         Ok(message.request.steer_turn.is_some()
-            || snapshot
-                .commands
-                .iter()
-                .any(|entry| entry.receipt.command_id == message.request.command_id)
+            || accepted(&self.agent_runtime(), &message.request)
+                .map(|result| result.is_some())
+                .or_else(|error| match error {
+                    core_api::CoreError::CommandConflict => Ok(true),
+                    error => Err(error.to_string()),
+                })?
             || !snapshot.turns.iter().any(|turn| active(turn.status)))
     }
 
@@ -80,31 +81,6 @@ impl AppServer {
         result(&ash_app_server_protocol::protocol::extension_items::ExtensionItemsResult { items })
     }
 
-    pub(crate) fn with_queue_store(
-        mut self,
-        store: Arc<queue::QueueStore>,
-        directory: Option<String>,
-    ) -> Result<Self, String> {
-        let mut builder =
-            ash_extension_api::ExtensionRegistryBuilder::from_registry(&self.agent_extensions);
-        queue::install(&mut builder, store.clone());
-        self.agent_extensions = Arc::new(builder.build());
-        self.threads
-            .install_extensions(self.agent_extensions.clone())
-            .map_err(|error| error.to_string())?;
-        let executor = self
-            .env_runtime_mut()
-            .turn_executor
-            .clone()
-            .with_extensions(self.agent_extensions.clone());
-        self.turn_backend.install_executor(executor.clone());
-        self.env_runtime_mut().turn_executor = executor;
-        self.restart_extension_config_watcher();
-        self.queue = Some(store);
-        self.queue_directory = directory;
-        Ok(self)
-    }
-
     pub fn start_queue(self: &Arc<Self>) -> Result<Option<queue::QueueRuntime>, String> {
         self.queue
             .as_ref()
@@ -124,11 +100,9 @@ impl AppServer {
             .map_err(|error| error.to_string())?
             .unwrap_or(false);
         let active = self
-            .threads
-            .list_loaded_threads()
-            .map_err(|error| error.to_string())?
-            .iter()
-            .any(|thread| thread.turns.iter().any(|turn| active(turn.status)));
+            .agent_runtime()
+            .has_active_turns()
+            .map_err(|error| error.to_string())?;
         Ok(pending || active)
     }
 
@@ -213,15 +187,18 @@ impl AppServer {
             return Err("queue execution directory does not match the selected environment".into());
         }
         let snapshot = self
-            .threads
+            .agent_runtime()
             .read_thread(&request.thread_id)
             .map_err(|error| error.to_string())?;
         if snapshot.session_id != request.session_id {
             return Ok(Delivery::Rejected("sessionMismatch".into()));
         }
-        match accepted(&snapshot, request) {
+        match accepted(&self.agent_runtime(), request) {
             Ok(Some(turn)) => return Ok(Delivery::Started(turn)),
-            Err(()) => return Ok(Delivery::Rejected("commandConflict".into())),
+            Err(core_api::CoreError::CommandConflict) => {
+                return Ok(Delivery::Rejected("commandConflict".into()));
+            }
+            Err(error) => return Err(error.to_string()),
             Ok(None) => {}
         }
         if snapshot.status != ash_protocol::ThreadStatus::Active {
@@ -232,26 +209,16 @@ impl AppServer {
             if !current_turn.is_some_and(|turn| active(turn.status)) {
                 return Ok(Delivery::Rejected("steerTargetFinished".into()));
             }
-            let result = self.threads.steer_turn(
+            let result = self.agent_runtime().steer_turn(
                 &request.thread_id,
-                ash_core::SteerTurnRequest {
+                core_api::SteerTurnRequest {
                     command_id: request.command_id.clone(),
-                    expected_sequence: ash_core::SequenceExpectation::Exact(snapshot.sequence),
+                    expected_sequence: core_api::SequenceExpectation::Exact(snapshot.sequence),
                     turn_id: turn_id.clone(),
                     input: request.input.clone(),
                 },
             );
             if result.is_ok() {
-                self.turn_backend
-                    .steer(
-                        &request.thread_id,
-                        turn_id,
-                        &request.command_id,
-                        &request.input,
-                    )
-                    .map_err(|error| error.to_string())?;
-                self.notify_thread_updates(&request.thread_id, snapshot.sequence)
-                    .map_err(|error| format!("{:?}", error.message))?;
                 return Ok(Delivery::Started(turn_id.clone()));
             }
             return Ok(Delivery::Rejected("steeringRejected".into()));
@@ -277,12 +244,15 @@ impl AppServer {
             selection,
         );
         let current = self
-            .threads
+            .agent_runtime()
             .read_thread(&request.thread_id)
             .map_err(|error| error.to_string())?;
-        match accepted(&current, request) {
+        match accepted(&self.agent_runtime(), request) {
             Ok(Some(turn)) => return Ok(Delivery::Started(turn)),
-            Err(()) => return Ok(Delivery::Rejected("commandConflict".into())),
+            Err(core_api::CoreError::CommandConflict) => {
+                return Ok(Delivery::Rejected("commandConflict".into()));
+            }
+            Err(error) => return Err(error.to_string()),
             Ok(None) => {}
         }
         if current.turns.iter().any(|turn| active(turn.status))
@@ -321,42 +291,23 @@ fn active(status: TurnStatus) -> bool {
     )
 }
 fn accepted(
-    snapshot: &ash_core::ThreadSnapshot,
+    runtime: &impl AgentRuntime,
     request: &queue::QueueInput,
-) -> Result<Option<ash_protocol::TurnId>, ()> {
-    let Some(entry) = snapshot
-        .commands
-        .iter()
-        .find(|entry| entry.receipt.command_id == request.command_id)
-    else {
-        return Ok(None);
+) -> Result<Option<ash_protocol::TurnId>, core_api::CoreError> {
+    let command = match request.steer_turn.as_ref() {
+        Some(turn_id) => core_api::AcceptedCommand::Steer {
+            input: &request.input,
+            turn_id,
+        },
+        None => core_api::AcceptedCommand::Turn {
+            input: &request.input,
+            tool_mode: request.tool_mode,
+            approval_mode: request.approval_mode,
+        },
     };
-    let matches = match &entry.receipt.command {
-        ash_protocol::ThreadCommand::StartTurn {
-            input,
-            tool_mode,
-            approval_mode,
-            ..
-        } => {
-            request.steer_turn.is_none()
-                && input == &request.input
-                && tool_mode == &request.tool_mode
-                && approval_mode == &request.approval_mode
-        }
-        ash_protocol::ThreadCommand::SteerTurn { turn_id, input } => {
-            request.steer_turn.as_ref() == Some(turn_id) && input == &request.input
-        }
-        _ => false,
-    };
-    if !matches {
-        return Err(());
-    }
-    match &entry.result {
-        ThreadCommandResult::TurnAccepted { turn_id }
-        | ThreadCommandResult::TurnSteered { turn_id, .. } => Ok(Some(turn_id.clone())),
-        _ => Err(()),
-    }
+    runtime.accepted_command(&request.thread_id, &request.command_id, command)
 }
+
 fn error(error: QueueError) -> RpcError {
     match error {
         QueueError::Invalid(_) => RpcError::new(-32602, AppServerErrorName::InvalidParams),

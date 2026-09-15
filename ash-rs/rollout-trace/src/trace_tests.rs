@@ -55,7 +55,7 @@ fn trace_contains_the_complete_nested_history_prefix_closure() {
     let first = threads
         .start_thread(
             &ash_core::NoThreadWorktreeBinder,
-            ash_core::StartThreadRequest {
+            core_api::StartThreadRequest {
                 agent_id: None,
                 agent: None,
                 command_id: ash_protocol::CommandId::new("root").unwrap(),
@@ -68,7 +68,7 @@ fn trace_contains_the_complete_nested_history_prefix_closure() {
         source = threads
             .fork_thread(
                 &ash_core::NoThreadWorktreeBinder,
-                ash_core::ForkThreadRequest {
+                core_api::ForkThreadRequest {
                     command_id: ash_protocol::CommandId::new(id).unwrap(),
                     source_thread_id: source,
                     title: id.into(),

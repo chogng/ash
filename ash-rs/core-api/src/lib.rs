@@ -1,15 +1,18 @@
-//! Contracts implemented by Core hosts without depending on the execution runtime.
+//! Agent operation and host contracts, independent of the Core implementation.
 
 #![deny(private_bounds, private_interfaces, unreachable_pub)]
 
 mod browser;
 mod checkpoint;
+mod commands;
 mod error;
 mod hooks;
 mod model;
 mod observer;
 mod policy;
+mod runtime;
 mod thread;
+mod view;
 mod worktree;
 
 pub use browser::BrowserAction;
@@ -26,6 +29,19 @@ pub use browser::MediaResource;
 pub use browser::TextInputTarget;
 pub use checkpoint::CheckpointCapture;
 pub use checkpoint::MessageCheckpointSource;
+pub use commands::CreateBranchRequest;
+pub use commands::ForkThreadRequest;
+pub use commands::InterruptTurnRequest;
+pub use commands::ReplaceThreadRequest;
+pub use commands::ResolveTurnInteractionRequest;
+pub use commands::RestoreMessageRequest;
+pub use commands::RewindThreadRequest;
+pub use commands::SequenceExpectation;
+pub use commands::SetGoalRequest;
+pub use commands::SetGoalResult;
+pub use commands::ShellTurnInvocation;
+pub use commands::StartThreadRequest;
+pub use commands::SteerTurnRequest;
 pub use error::CoreError;
 pub use hooks::AfterToolHookRequest;
 pub use hooks::BeforeToolHookDecision;
@@ -49,8 +65,19 @@ pub use observer::TurnExecutionTerminalState;
 pub use observer::TurnToolExecutionFinished;
 pub use observer::TurnToolExecutionStarted;
 pub use policy::ActionPolicyService;
+pub use runtime::AcceptedCommand;
+pub use runtime::AgentRuntime;
+pub use runtime::CompactThreadRequest;
+pub use runtime::InteractionLifecycle;
+pub use runtime::SubmitShellRequest;
+pub use runtime::SubmitTurnRequest;
+pub use runtime::SubmittedCommand;
+pub use runtime::TurnReceipt;
 pub use thread::LeaseGuard;
 pub use thread::ThreadUpdateSink;
 pub use thread::WriterLease;
+pub use view::SessionView;
+pub use view::ThreadView;
+pub use view::TurnState;
 pub use worktree::ThreadWorktreeBinder;
 pub use worktree::ThreadWorktreeBindingRequest;

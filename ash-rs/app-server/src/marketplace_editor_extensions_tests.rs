@@ -190,9 +190,9 @@ impl Payload {
                 id: "marketplace.demo-plugin".into(),
                 version: "1.0.0".into(),
                 digest: package_digest(&[
+                    ("ash/editor-extensions.json", PRODUCT_MANIFEST),
                     ("bin/demo", EXECUTABLE),
                     ("mcp/package.json", MCP),
-                    ("ash/editor-extensions.json", PRODUCT_MANIFEST),
                 ]),
             },
             capabilities: vec![

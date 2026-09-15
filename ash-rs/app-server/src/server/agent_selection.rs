@@ -1,3 +1,4 @@
+use core_api::AgentRuntime;
 use core_api::CoreError;
 
 impl super::AppServer {
@@ -25,9 +26,7 @@ impl super::AppServer {
         agent::resolve_root_agent(
             selection,
             self.model_catalog.configured_default()?,
-            self.turn_executor_snapshot()
-                .tool_profile_snapshot()?
-                .tool_names,
+            self.agent_runtime().tool_profile()?.tool_names,
             &roles,
             &instructions,
             self.skills.as_deref(),

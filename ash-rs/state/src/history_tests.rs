@@ -77,7 +77,7 @@ fn root(threads: &ThreadController) -> ash_core::ThreadSnapshot {
     threads
         .start_thread(
             &NoThreadWorktreeBinder,
-            ash_core::StartThreadRequest {
+            core_api::StartThreadRequest {
                 agent: None,
                 agent_id: None,
                 command_id: CommandId::new("root").unwrap(),
@@ -94,7 +94,7 @@ fn start(
         thread,
         ash_core::StartTurnRequest {
             command_id: CommandId::new("turn").unwrap(),
-            expected_sequence: ash_core::SequenceExpectation::Any,
+            expected_sequence: core_api::SequenceExpectation::Any,
             model: None,
             kind: Default::default(),
             instructions: ash_protocol::TurnInstructions::new(
@@ -145,7 +145,7 @@ fn retained_prefixes_share_original_records_and_survive_source_removal() {
             threads
                 .fork_thread(
                     &NoThreadWorktreeBinder,
-                    ash_core::ForkThreadRequest {
+                    core_api::ForkThreadRequest {
                         command_id: CommandId::new(id).unwrap(),
                         source_thread_id: root.thread_id.clone(),
                         title: id.into(),
@@ -185,7 +185,7 @@ fn retained_prefixes_share_original_records_and_survive_source_removal() {
     let restored = reopened
         .restore_message(
             &NoThreadWorktreeBinder,
-            ash_core::RestoreMessageRequest {
+            core_api::RestoreMessageRequest {
                 command_id: CommandId::new("restore").unwrap(),
                 source_thread_id: branches[0].thread_id.clone(),
                 item_id: point.item_id,
@@ -240,7 +240,7 @@ fn corrupted_shared_record_fails_recovery_instead_of_reading_the_live_parent() {
     let branch = threads
         .fork_thread(
             &NoThreadWorktreeBinder,
-            ash_core::ForkThreadRequest {
+            core_api::ForkThreadRequest {
                 command_id: CommandId::new("fork").unwrap(),
                 source_thread_id: root.thread_id.clone(),
                 title: "fork".into(),

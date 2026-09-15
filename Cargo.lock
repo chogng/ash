@@ -2109,6 +2109,7 @@ name = "ash-rollout-trace"
 version = "0.1.0"
 dependencies = [
  "ash-core",
+ "ash-core-api",
  "ash-history",
  "ash-protocol",
  "ash-rollout",

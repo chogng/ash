@@ -1,3 +1,4 @@
+use core_api::InteractionLifecycle;
 use super::update_broker::UpdateBroker;
 use super::update_broker::unix_time_millis;
 use std::sync::Arc;
@@ -5,10 +6,6 @@ use std::sync::Mutex;
 use std::sync::mpsc;
 use std::thread::JoinHandle;
 use std::time::Duration;
-use ash_core::CancelTurnInteractionRequest;
-use ash_core::ThreadController;
-use ash_protocol::InteractionCancelReason;
-use ash_protocol::StableTurnError;
 
 const DEADLINE_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
@@ -20,7 +17,7 @@ pub(super) struct InteractionDeadlineWatcher {
 
 impl InteractionDeadlineWatcher {
     pub(super) fn start(
-        threads: Arc<ThreadController>,
+        threads: Arc<dyn InteractionLifecycle>,
         updates: Arc<UpdateBroker>,
         mutation_gate: Arc<Mutex<()>>,
     ) -> Self {
@@ -32,7 +29,7 @@ impl InteractionDeadlineWatcher {
                     match shutdown_receiver.recv_timeout(DEADLINE_POLL_INTERVAL) {
                         Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
                         Err(mpsc::RecvTimeoutError::Timeout) => {
-                            expire_deadlines(&threads, &updates, &mutation_gate);
+                            expire_deadlines(threads.as_ref(), &updates, &mutation_gate);
                         }
                     }
                 }
@@ -56,47 +53,27 @@ impl Drop for InteractionDeadlineWatcher {
     }
 }
 
-fn expire_deadlines(threads: &ThreadController, updates: &UpdateBroker, mutation_gate: &Mutex<()>) {
+fn expire_deadlines(
+    runtime: &dyn InteractionLifecycle,
+    updates: &UpdateBroker,
+    mutation_gate: &Mutex<()>,
+) {
     for request in updates.expired_agent_requests(unix_time_millis()) {
         let Ok(_mutation) = mutation_gate.lock() else {
             return;
         };
-        let Ok(snapshot) = threads.read_thread(&request.thread_id) else {
-            continue;
-        };
-        let still_expired = snapshot
-            .turns
-            .iter()
-            .find(|turn| turn.turn_id == request.turn_id)
-            .and_then(|turn| turn.pending_interaction.as_ref())
-            .filter(|interaction| interaction.request_id == request.interaction.request_id)
-            .and_then(|interaction| interaction.deadline)
-            .is_some_and(|deadline| deadline.expires_at_unix_ms <= unix_time_millis());
-        if !still_expired {
-            continue;
-        }
-        let before_sequence = snapshot.sequence;
-        if threads
-            .cancel_turn_interaction(
-                &request.thread_id,
-                CancelTurnInteractionRequest {
-                    turn_id: request.turn_id.clone(),
-                    request_id: request.interaction.request_id.clone(),
-                    reason: InteractionCancelReason::DeadlineElapsed,
-                },
-            )
-            .is_err()
-        {
-            continue;
-        }
-        updates.retire_agent_request(&request.interaction.request_id);
-        let _ = threads.fail_turn(
+        match runtime.expire_interaction(
             &request.thread_id,
             &request.turn_id,
-            StableTurnError::interaction_deadline_elapsed(),
-        );
-        if let Ok(published) = threads.thread_updates_after(&request.thread_id, before_sequence) {
-            updates.publish_thread(&request.thread_id, &published);
+            &request.interaction.request_id,
+            unix_time_millis(),
+        ) {
+            Ok(Some(published)) => {
+                updates.retire_agent_request(&request.interaction.request_id);
+                updates.publish_thread(&request.thread_id, &published);
+            }
+            Ok(None) => {}
+            Err(error) => log::warn!("Agent interaction expiry failed: {error}"),
         }
     }
 }

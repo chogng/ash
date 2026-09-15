@@ -12,8 +12,8 @@ use core_api::CoreError;
 use ash_core::InMemoryThreadStore;
 use core_api::ModelSelection;
 use core_api::ModelService;
-use ash_core::SequenceExpectation;
-use ash_core::StartThreadRequest;
+use core_api::SequenceExpectation;
+use core_api::StartThreadRequest;
 use ash_core::StartTurnRequest;
 use ash_core::ThreadController;
 use ash_core::TurnExecutor;
@@ -108,7 +108,7 @@ fn runtime_wait_resumes_model_once_and_cancelled_wait_never_resumes_it() {
                 threads
                     .interrupt_turn(
                         &parent.thread_id,
-                        ash_core::InterruptTurnRequest {
+                        core_api::InterruptTurnRequest {
                             command_id: CommandId::new("cancel").unwrap(),
                             expected_sequence: SequenceExpectation::Any,
                             turn_id: turn.turn_id.clone(),

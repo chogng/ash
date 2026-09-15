@@ -4,7 +4,7 @@ use crate::local::ProviderModelService;
 use std::str::FromStr;
 use std::sync::Arc;
 use ash_core::InMemoryThreadStore;
-use ash_core::StartThreadRequest;
+use core_api::StartThreadRequest;
 use ash_core::ThreadController;
 use ash_file_access::Dir;
 use ash_file_access::DirId;

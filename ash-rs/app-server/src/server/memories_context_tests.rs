@@ -277,7 +277,7 @@ fn memories_are_recollected_after_preflight_compaction_and_revocation() {
     let thread = threads
         .start_thread(
             &ash_core::NoThreadWorktreeBinder,
-            ash_core::StartThreadRequest {
+            core_api::StartThreadRequest {
                 command_id: CommandId::new("thread").unwrap(),
                 title: "Memory preparation test".into(),
                 agent_id: None,
@@ -291,7 +291,7 @@ fn memories_are_recollected_after_preflight_compaction_and_revocation() {
                 &thread.thread_id,
                 ash_core::StartTurnRequest {
                     command_id: CommandId::new(id).unwrap(),
-                    expected_sequence: ash_core::SequenceExpectation::Any,
+                    expected_sequence: core_api::SequenceExpectation::Any,
                     model: None,
                     kind: Default::default(),
                     instructions: ash_protocol::TurnInstructions::new(

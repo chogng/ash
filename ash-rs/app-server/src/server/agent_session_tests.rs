@@ -343,7 +343,7 @@ fn fork_session_binds_extensions_and_delivers_approval_after_subscription() {
             &thread_id,
             ash_core::StartTurnRequest {
                 command_id: CommandId::new("copy-turn").unwrap(),
-                expected_sequence: ash_core::SequenceExpectation::Exact(snapshot.sequence),
+                expected_sequence: core_api::SequenceExpectation::Exact(snapshot.sequence),
                 model: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
@@ -382,7 +382,7 @@ fn fork_session_binds_extensions_and_delivers_approval_after_subscription() {
             },
         )
         .unwrap();
-    server.offer_pending_interactions(&threads.read_thread(&thread_id).unwrap());
+    server.offer_pending_interactions(&threads.read_thread(&thread_id).unwrap().into());
     assert!(
         !server
             .drain_notifications(&mut connection)

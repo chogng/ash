@@ -25,7 +25,7 @@ use ash_core::CreateThreadRequest;
 use ash_core::InMemoryThreadStore;
 use core_api::ModelSelection;
 use core_api::ModelService;
-use ash_core::SequenceExpectation;
+use core_api::SequenceExpectation;
 use ash_core::StartGoalTurnRequest;
 use ash_core::StartTurnRequest;
 use ash_core::ThreadController;

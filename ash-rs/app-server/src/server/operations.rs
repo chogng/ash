@@ -1,3 +1,14 @@
+use core_api::AgentRuntime;
+use core_api::ThreadView;
+use core_api::CreateBranchRequest;
+use core_api::ForkThreadRequest;
+use core_api::InterruptTurnRequest;
+use core_api::ResolveTurnInteractionRequest;
+use core_api::RewindThreadRequest;
+use core_api::SequenceExpectation;
+use core_api::ShellTurnInvocation;
+use core_api::SteerTurnRequest;
+use ash_protocol::TurnStatus;
 use super::AppServer;
 use super::ConnectionState;
 use super::RpcError;
@@ -54,22 +65,6 @@ use ash_app_server_protocol::protocol::turn::TurnInterruptResult;
 use ash_app_server_protocol::protocol::turn::TurnStartResult;
 use ash_app_server_protocol::protocol::turn::TurnSteerResult;
 use ash_app_server_protocol::schema_hash;
-use ash_core::CreateBranchRequest;
-use ash_core::ForkThreadRequest;
-use ash_core::InterruptTurnRequest;
-use ash_core::ResolveTurnInteractionRequest;
-use ash_core::RewindThreadRequest;
-use ash_core::SequenceExpectation;
-use ash_core::ShellTurnInvocation;
-use ash_core::StartContextCompactionRequest;
-use ash_core::StartShellTurnRequest;
-use ash_core::StartTurnDisposition;
-use ash_core::StartTurnRequest;
-use ash_core::SteerTurnDisposition;
-use ash_core::SteerTurnRequest;
-use ash_core::ThreadSnapshot;
-use ash_core::TurnExecutionBackend;
-use ash_core::TurnStatus;
 use ash_protocol::AgentRequest;
 use ash_protocol::AgentRequestEnvelope;
 use ash_protocol::ModelAccess;
@@ -79,7 +74,6 @@ use ash_protocol::SessionManagerInfo;
 use ash_protocol::SessionManagerStatus;
 use ash_protocol::SessionStatus;
 use ash_protocol::SessionThread;
-use ash_protocol::StableTurnError;
 use ash_protocol::ThreadArchiveReason;
 use ash_protocol::ThreadItem;
 use ash_protocol::ThreadStatus;
@@ -525,16 +519,13 @@ impl AppServer {
         title: String,
     ) -> Result<SessionThreadResult, RpcError> {
         let created = self
-            .threads
-            .create_branch(
-                self.thread_worktree_binder.as_ref(),
-                CreateBranchRequest {
-                    agent_id,
-                    command_id: mutation.command_id,
-                    session_id: mutation.session_id.clone(),
-                    title,
-                },
-            )
+            .agent_runtime()
+            .create_branch(CreateBranchRequest {
+                agent_id,
+                command_id: mutation.command_id,
+                session_id: mutation.session_id.clone(),
+                title,
+            })
             .map_err(core_error)?;
         self.updates.subscribe_session_thread(
             connection_id,
@@ -559,15 +550,12 @@ impl AppServer {
     ) -> Result<SessionThreadResult, RpcError> {
         self.read_session_thread_snapshot(&mutation.session_id, &source_thread_id)?;
         let replaced = self
-            .threads
-            .replace_thread(
-                self.thread_worktree_binder.as_ref(),
-                ash_core::ReplaceThreadRequest {
-                    command_id: mutation.command_id,
-                    source_thread_id,
-                    title,
-                },
-            )
+            .agent_runtime()
+            .replace_thread(core_api::ReplaceThreadRequest {
+                command_id: mutation.command_id,
+                source_thread_id,
+                title,
+            })
             .map_err(core_error)?;
         self.updates.subscribe_session_thread(
             connection_id,
@@ -590,7 +578,7 @@ impl AppServer {
         result(
             &ash_app_server_protocol::protocol::session::MessageCheckpointsResult {
                 checkpoints: self
-                    .threads
+                    .agent_runtime()
                     .message_checkpoints(&params.thread_id)
                     .map_err(core_error)?,
             },
@@ -608,63 +596,15 @@ impl AppServer {
     ) -> Result<SessionThreadResult, RpcError> {
         self.read_session_thread_snapshot(&mutation.session_id, &thread_id)?;
         let restored = self
-            .threads
-            .restore_message(
-                self.thread_worktree_binder.as_ref(),
-                ash_core::RestoreMessageRequest {
-                    command_id: mutation.command_id.clone(),
-                    source_thread_id: thread_id.clone(),
-                    item_id,
-                    boundary,
-                    title,
-                },
-            )
+            .agent_runtime()
+            .restore_message(core_api::RestoreMessageRequest {
+                command_id: mutation.command_id.clone(),
+                source_thread_id: thread_id.clone(),
+                item_id,
+                boundary,
+                title,
+            })
             .map_err(core_error)?;
-        let ash_protocol::ThreadOrigin::Message {
-            parent_sequence, ..
-        } = restored.origin
-        else {
-            return Err(core_error(core_api::CoreError::Journal(
-                "restoration origin is missing".into(),
-            )));
-        };
-        let source = self
-            .threads
-            .read_thread_at_sequence(&thread_id, parent_sequence)
-            .map_err(core_error)?;
-        for turn in source.turns.iter().filter(|turn| {
-            !matches!(
-                turn.status,
-                TurnStatus::Completed | TurnStatus::Failed | TurnStatus::Interrupted
-            )
-        }) {
-            let current = self.threads.read_thread(&thread_id).map_err(core_error)?;
-            if current.turns.iter().any(|candidate| {
-                candidate.turn_id == turn.turn_id
-                    && !matches!(
-                        candidate.status,
-                        TurnStatus::Completed | TurnStatus::Failed | TurnStatus::Interrupted
-                    )
-            }) {
-                self.interrupt_turn_request(
-                    thread_mutation(
-                        SessionMutation {
-                            session_id: mutation.session_id.clone(),
-                            command_id: ash_protocol::CommandId::new(format!(
-                                "restore-interrupt:{}:{}",
-                                mutation.command_id, turn.turn_id
-                            ))
-                            .map_err(|error| {
-                                core_error(core_api::CoreError::InvalidInput(error.to_string()))
-                            })?,
-                        },
-                        current.sequence,
-                    ),
-                    thread_id.clone(),
-                    turn.turn_id.clone(),
-                )?;
-            }
-        }
         self.updates.subscribe_session_thread(
             connection_id,
             mutation.session_id.clone(),
@@ -688,15 +628,12 @@ impl AppServer {
     ) -> Result<SessionThreadResult, RpcError> {
         self.read_session_thread_snapshot(&mutation.session_id, &parent_thread_id)?;
         let forked = self
-            .threads
-            .fork_thread(
-                self.thread_worktree_binder.as_ref(),
-                ForkThreadRequest {
-                    command_id: mutation.command_id,
-                    source_thread_id: parent_thread_id,
-                    title,
-                },
-            )
+            .agent_runtime()
+            .fork_thread(ForkThreadRequest {
+                command_id: mutation.command_id,
+                source_thread_id: parent_thread_id,
+                title,
+            })
             .map_err(core_error)?;
         self.updates.subscribe_session_thread(
             connection_id,
@@ -722,16 +659,13 @@ impl AppServer {
     ) -> Result<SessionThreadResult, RpcError> {
         self.read_session_thread_snapshot(&mutation.session_id, &parent_thread_id)?;
         let rewound = self
-            .threads
-            .rewind_thread(
-                self.thread_worktree_binder.as_ref(),
-                RewindThreadRequest {
-                    command_id: mutation.command_id,
-                    source_thread_id: parent_thread_id,
-                    before_turn_id,
-                    title,
-                },
-            )
+            .agent_runtime()
+            .rewind_thread(RewindThreadRequest {
+                command_id: mutation.command_id,
+                source_thread_id: parent_thread_id,
+                before_turn_id,
+                title,
+            })
             .map_err(core_error)?;
         self.updates.subscribe_session_thread(
             connection_id,
@@ -755,29 +689,32 @@ impl AppServer {
     ) -> Result<SessionRewriteResult, RpcError> {
         let normalized_input = self.normalize_input(&mutation.session_id, rewrite.input.clone())?;
         let rewound = self
-            .threads
-            .rewind_thread(
-                self.thread_worktree_binder.as_ref(),
-                RewindThreadRequest {
-                    command_id: rewrite_phase_command_id(
-                        &mutation.command_id,
-                        RewritePhase::Rewind,
-                    )?,
-                    source_thread_id: rewrite.parent_thread_id,
-                    before_turn_id: rewrite.before_turn_id,
-                    title: rewrite.title,
-                },
-            )
+            .agent_runtime()
+            .rewind_thread(RewindThreadRequest {
+                command_id: rewrite_phase_command_id(&mutation.command_id, RewritePhase::Rewind)?,
+                source_thread_id: rewrite.parent_thread_id,
+                before_turn_id: rewrite.before_turn_id,
+                title: rewrite.title,
+            })
             .map_err(core_error)?;
         let thread_id = rewound.thread_id;
-        let thread_before = self.threads.read_thread(&thread_id).map_err(core_error)?;
+        let thread_before = self
+            .agent_runtime()
+            .read_thread(&thread_id)
+            .map_err(core_error)?;
         let start_command_id = rewrite_phase_command_id(&mutation.command_id, RewritePhase::Start)?;
-        let turn = match super::start_turn::replayed_rewrite_result(
-            &thread_before,
-            &start_command_id,
-            &normalized_input,
-        )? {
-            Some(replayed) => replayed,
+        let turn = match self
+            .agent_runtime()
+            .replay_turn(
+                &thread_id,
+                &start_command_id,
+                core_api::SubmittedCommand::Input {
+                    input: &normalized_input,
+                },
+            )
+            .map_err(core_error)?
+        {
+            Some(replayed) => turn_start_result(replayed),
             None => self.start_turn_request(
                 ThreadMutation {
                     command_id: start_command_id,
@@ -833,10 +770,10 @@ impl AppServer {
         let params: ThreadGoalSetParams = decode(params)?;
         self.read_goal_thread(&params.thread_id)?;
         let result_goal = self
-            .threads
+            .agent_runtime()
             .set_goal(
                 &params.thread_id,
-                ash_core::SetGoalRequest {
+                core_api::SetGoalRequest {
                     objective: params.objective,
                     status: params.status,
                     token_budget: params.token_budget,
@@ -851,11 +788,6 @@ impl AppServer {
                     goal: result_goal.goal.clone(),
                 },
             );
-            if result_goal.goal.status == ash_protocol::ThreadGoalStatus::Active {
-                self.turn_executor_snapshot()
-                    .resume_extension_continuation(&params.thread_id)
-                    .map_err(core_error)?;
-            }
         }
         result(&ThreadGoalSetResponse {
             goal: result_goal.goal,
@@ -866,7 +798,7 @@ impl AppServer {
         let params: ThreadGoalClearParams = decode(params)?;
         self.read_goal_thread(&params.thread_id)?;
         let cleared = self
-            .threads
+            .agent_runtime()
             .clear_goal(&params.thread_id)
             .map_err(core_error)?;
         if cleared {
@@ -924,7 +856,7 @@ impl AppServer {
             params.after_sequence
         };
         let updates = self
-            .threads
+            .agent_runtime()
             .thread_updates_after(&params.thread_id, replay_after)
             .map_err(core_error)?;
         self.updates.subscribe_session_thread(
@@ -970,8 +902,11 @@ impl AppServer {
         &self,
         session_id: &ash_protocol::SessionId,
         thread_id: &ash_protocol::ThreadId,
-    ) -> Result<ThreadSnapshot, RpcError> {
-        let thread = self.threads.read_thread(thread_id).map_err(core_error)?;
+    ) -> Result<ThreadView, RpcError> {
+        let thread = self
+            .agent_runtime()
+            .read_thread(thread_id)
+            .map_err(core_error)?;
         if thread.session_id != *session_id {
             return Err(RpcError::new(
                 -32010,
@@ -981,15 +916,15 @@ impl AppServer {
         Ok(thread)
     }
 
-    fn read_goal_thread(
-        &self,
-        thread_id: &ash_protocol::ThreadId,
-    ) -> Result<ThreadSnapshot, RpcError> {
-        let thread = self.threads.read_thread(thread_id).map_err(core_error)?;
+    fn read_goal_thread(&self, thread_id: &ash_protocol::ThreadId) -> Result<ThreadView, RpcError> {
+        let thread = self
+            .agent_runtime()
+            .read_thread(thread_id)
+            .map_err(core_error)?;
         Ok(thread)
     }
 
-    pub(super) fn offer_pending_interactions(&self, thread: &ThreadSnapshot) {
+    pub(super) fn offer_pending_interactions(&self, thread: &ThreadView) {
         for turn in &thread.turns {
             if let Some(interaction) = &turn.pending_interaction {
                 self.updates.offer_agent_request(AgentRequestEnvelope {
@@ -1073,7 +1008,10 @@ impl AppServer {
         kind: ash_protocol::TurnKind,
         selection: TurnInstructionSelection,
     ) -> Result<TurnStartResult, RpcError> {
-        let thread_before = self.threads.read_thread(&thread_id).map_err(core_error)?;
+        let thread_before = self
+            .agent_runtime()
+            .read_thread(&thread_id)
+            .map_err(core_error)?;
         if thread_before.session_id != mutation.session_id {
             return Err(RpcError::new(
                 -32010,
@@ -1099,13 +1037,19 @@ impl AppServer {
                 None => ash_protocol::ToolMode::Direct,
             },
         };
-        if let Some(replayed) = super::start_turn::replayed_result(
-            &thread_before,
-            &mutation.command_id,
-            tool_mode,
-            &input,
-        )? {
-            return Ok(replayed);
+        if let Some(replayed) = self
+            .agent_runtime()
+            .replay_turn(
+                &thread_id,
+                &mutation.command_id,
+                core_api::SubmittedCommand::Turn {
+                    tool_mode,
+                    input: &input,
+                },
+            )
+            .map_err(core_error)?
+        {
+            return Ok(turn_start_result(replayed));
         }
         if tool_mode != ash_protocol::ToolMode::Direct
             && let Some(config) = &self.config
@@ -1152,50 +1096,24 @@ impl AppServer {
             .env_runtime_gate
             .lock()
             .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?;
-        let turn_executor = self.turn_executor_snapshot();
-        let policy_revision = turn_executor.policy_revision();
-        let tool_profile = turn_executor.tool_profile_snapshot().map_err(core_error)?;
-        let command_id = mutation.command_id.clone();
-        let replay_input = input.clone();
-        let start = self
-            .threads
-            .start_turn(
+        let receipt = self
+            .agent_runtime()
+            .submit_turn(
                 &thread_id,
-                StartTurnRequest {
+                core_api::SubmitTurnRequest {
                     command_id: mutation.command_id,
                     expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
                     model,
                     kind,
                     instructions,
-                    policy_revision,
                     approval_mode,
                     tool_mode,
-                    tool_profile: Some(tool_profile),
                     activated_skills,
                     input,
                 },
             )
             .map_err(core_error)?;
-        let turn_id = start.turn_id;
-        if start.disposition == StartTurnDisposition::Replayed {
-            let snapshot = self.threads.read_thread(&thread_id).map_err(core_error)?;
-            return super::start_turn::replayed_result(
-                &snapshot,
-                &command_id,
-                tool_mode,
-                &replay_input,
-            )?
-            .ok_or_else(|| RpcError::new(-32000, AppServerErrorName::InternalError));
-        }
-        self.notify_thread_updates(&thread_id, mutation.expected_sequence)?;
-        self.turn_backend
-            .start(&thread_id, &turn_id)
-            .map_err(core_error)?;
-
-        Ok(TurnStartResult {
-            turn_id,
-            sequence: start.sequence,
-        })
+        Ok(turn_start_result(receipt))
     }
 
     fn start_shell_turn_request(
@@ -1213,36 +1131,15 @@ impl AppServer {
                 AppServerErrorName::CoreOperationFailed,
             ));
         }
-        let turn_executor = self.turn_executor_snapshot();
-        let policy_revision = turn_executor.policy_revision();
-        let tool_call_id =
-            ash_protocol::ToolCallId::new(format!("shell-turn-{}", mutation.command_id))
-                .expect("validated command identity produces a valid Tool Call ID");
         let (program, arguments) = self.terminal_service()?.default_shell_command(&command);
-        let shell_call = ash_protocol::ToolCall {
-            id: tool_call_id.clone(),
-            name: ash_protocol::ToolName::new("shell-command")
-                .expect("static shell-command name is valid"),
-            arguments: serde_json::json!({
-                "program": program,
-                "arguments": arguments,
-                "working_directory": working_directory,
-            }),
-        };
-        let binding = turn_executor
-            .bind_tool_call(&shell_call, ash_protocol::ToolCallCaller::Direct)
-            .map_err(core_error)?;
-        let start = self
-            .threads
-            .start_shell_turn(
+        let receipt = self
+            .agent_runtime()
+            .submit_shell(
                 &thread_id,
-                StartShellTurnRequest {
+                core_api::SubmitShellRequest {
                     command_id: mutation.command_id,
                     expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
-                    policy_revision,
                     approval_mode,
-                    tool_call_id,
-                    binding,
                     invocation: ShellTurnInvocation {
                         command,
                         program,
@@ -1252,40 +1149,7 @@ impl AppServer {
                 },
             )
             .map_err(core_error)?;
-        let turn_id = start.turn_id;
-        if start.disposition == StartTurnDisposition::Replayed {
-            let turn = thread_before
-                .turns
-                .iter()
-                .find(|turn| turn.turn_id == turn_id)
-                .ok_or_else(|| RpcError::new(-32000, AppServerErrorName::InternalError))?;
-            return match turn.status {
-                TurnStatus::Created
-                | TurnStatus::Running
-                | TurnStatus::WaitingForApproval
-                | TurnStatus::WaitingForUserInput
-                | TurnStatus::WaitingForCapability
-                | TurnStatus::Completed => Ok(TurnStartResult {
-                    turn_id,
-                    sequence: start.sequence,
-                }),
-                TurnStatus::Failed | TurnStatus::Interrupted => Err(RpcError::new(
-                    -32010,
-                    AppServerErrorName::CoreOperationFailed,
-                )),
-                TurnStatus::Cancelling => {
-                    Err(RpcError::new(-32000, AppServerErrorName::ServerOverloaded))
-                }
-            };
-        }
-        self.notify_thread_updates(&thread_id, mutation.expected_sequence)?;
-        turn_executor
-            .start_shell(&thread_id, &turn_id)
-            .map_err(core_error)?;
-        Ok(TurnStartResult {
-            turn_id,
-            sequence: start.sequence,
-        })
+        Ok(turn_start_result(receipt))
     }
 
     fn start_context_compaction_request(
@@ -1305,34 +1169,19 @@ impl AppServer {
             .model_catalog
             .configured_default()
             .map_err(core_error)?;
-        let turn_executor = self.turn_executor_snapshot();
-        let start = self
-            .threads
-            .start_context_compaction(
+        let receipt = self
+            .agent_runtime()
+            .compact_thread(
                 &thread_id,
-                StartContextCompactionRequest {
+                core_api::CompactThreadRequest {
                     command_id: mutation.command_id,
                     expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
                     model,
-                    policy_revision: turn_executor.policy_revision(),
                     retention_prompt,
                 },
             )
             .map_err(core_error)?;
-        if start.disposition == StartTurnDisposition::Replayed {
-            return Ok(TurnStartResult {
-                turn_id: start.turn_id,
-                sequence: start.sequence,
-            });
-        }
-        self.notify_thread_updates(&thread_id, thread.sequence)?;
-        self.turn_backend
-            .start(&thread_id, &start.turn_id)
-            .map_err(core_error)?;
-        Ok(TurnStartResult {
-            turn_id: start.turn_id,
-            sequence: start.sequence,
-        })
+        Ok(turn_start_result(receipt))
     }
 
     pub(super) fn interrupt_turn_request(
@@ -1342,16 +1191,8 @@ impl AppServer {
         turn_id: ash_protocol::TurnId,
     ) -> Result<TurnInterruptResult, RpcError> {
         self.read_session_thread(&mutation.session_id, &thread_id)?;
-        let descendant_sequences = self
-            .threads
-            .list_session_threads(&mutation.session_id)
-            .map_err(core_error)?
-            .into_iter()
-            .filter(|descendant| descendant.thread_id != thread_id)
-            .map(|descendant| (descendant.thread_id, descendant.sequence))
-            .collect::<Vec<_>>();
-        let interrupted = self
-            .threads
+        let sequence = self
+            .agent_runtime()
             .interrupt_turn(
                 &thread_id,
                 InterruptTurnRequest {
@@ -1361,16 +1202,7 @@ impl AppServer {
                 },
             )
             .map_err(core_error)?;
-        self.multi_agent
-            .cancel_descendants(&thread_id)
-            .map_err(core_error)?;
-        self.notify_thread_updates(&thread_id, mutation.expected_sequence)?;
-        for (descendant_id, sequence) in descendant_sequences {
-            self.notify_thread_updates(&descendant_id, sequence)?;
-        }
-        Ok(TurnInterruptResult {
-            sequence: interrupted.sequence,
-        })
+        Ok(TurnInterruptResult { sequence })
     }
 
     fn steer_turn_request(
@@ -1404,48 +1236,22 @@ impl AppServer {
             ));
         }
         let input = self.normalize_input(&mutation.session_id, input)?;
-        let command_id = mutation.command_id.clone();
-        let steered = self
-            .threads
+        let receipt = self
+            .agent_runtime()
             .steer_turn(
                 &thread_id,
                 SteerTurnRequest {
                     command_id: mutation.command_id,
                     expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
-                    turn_id: turn_id.clone(),
-                    input: input.clone(),
+                    turn_id,
+                    input,
                 },
             )
             .map_err(core_error)?;
-        let sequence = match steered.disposition {
-            SteerTurnDisposition::Steered => {
-                if let Err(error) =
-                    self.turn_backend
-                        .steer(&thread_id, &turn_id, &command_id, &input)
-                {
-                    let _ = self.threads.fail_turn(
-                        &thread_id,
-                        &turn_id,
-                        StableTurnError::model_invocation_failed(),
-                    );
-                    let _ = self.notify_thread_updates(&thread_id, mutation.expected_sequence);
-                    return Err(core_error(error));
-                }
-                self.threads
-                    .mark_turn_steer_delivered(&thread_id, &turn_id, &command_id)
-                    .map_err(core_error)?
-            }
-            SteerTurnDisposition::Replayed => self
-                .threads
-                .read_thread(&thread_id)
-                .map_err(core_error)?
-                .steer_deliveries
-                .get(&command_id)
-                .copied()
-                .ok_or_else(|| RpcError::new(-32010, AppServerErrorName::CoreOperationFailed))?,
-        };
-        self.notify_thread_updates(&thread_id, mutation.expected_sequence)?;
-        Ok(TurnSteerResult { turn_id, sequence })
+        Ok(TurnSteerResult {
+            turn_id: receipt.turn_id,
+            sequence: receipt.sequence,
+        })
     }
 
     fn resolve_turn_interaction_request(
@@ -1479,17 +1285,19 @@ impl AppServer {
                 AppServerErrorName::AgentInteractionExpired,
             ));
         }
-        let before = self.threads.read_thread(&thread_id).map_err(core_error)?;
+        let before = self
+            .agent_runtime()
+            .read_thread(&thread_id)
+            .map_err(core_error)?;
         if before.session_id != mutation.session_id {
             return Err(RpcError::new(
                 -32010,
                 AppServerErrorName::CoreOperationFailed,
             ));
         }
-        let turn_id_for_resume = turn_id.clone();
-        let resolved = self
-            .threads
-            .resolve_turn_interaction(
+        let sequence = self
+            .agent_runtime()
+            .resolve_interaction(
                 &thread_id,
                 ResolveTurnInteractionRequest {
                     command_id: mutation.command_id,
@@ -1500,17 +1308,7 @@ impl AppServer {
                 },
             )
             .map_err(core_error)?;
-        if resolved.disposition == ash_core::ResolveTurnInteractionDisposition::Resolved
-            && !resolved.live_execution_woken
-        {
-            self.turn_backend
-                .resume(&thread_id, &turn_id_for_resume)
-                .map_err(core_error)?;
-        }
-        self.notify_thread_updates(&thread_id, before.sequence)?;
-        Ok(TurnInteractionResolveResult {
-            sequence: resolved.sequence,
-        })
+        Ok(TurnInteractionResolveResult { sequence })
     }
 
     pub(super) fn resource_metadata(
@@ -1632,10 +1430,8 @@ impl AppServer {
         &self,
         session_id: &ash_protocol::SessionId,
     ) -> Result<ash_app_server_protocol::protocol::session::SessionResult, RpcError> {
-        let mut snapshots = self
-            .threads
-            .list_session_threads(session_id)
-            .map_err(core_error)?;
+        let view = self.agent_runtime().read_session(session_id).map_err(core_error)?;
+        let mut snapshots = view.threads;
         if snapshots.is_empty() {
             return Err(core_error(core_api::CoreError::NotFound(
                 session_id.to_string(),
@@ -1655,7 +1451,7 @@ impl AppServer {
             SessionStatus::Active
         };
         let manager = session_manager_info(&snapshots, root.created_at_unix_ms, status);
-        let agent_tree = ash_core::project_agent_tree(&snapshots);
+        let agent_tree = view.agent_tree;
         let session = Session {
             session_id: session_id.clone(),
             title: root.title.clone(),
@@ -1684,7 +1480,11 @@ impl AppServer {
 
     pub(super) fn session_views(&self) -> Result<Vec<Session>, RpcError> {
         let mut records = BTreeMap::<ash_protocol::SessionId, Vec<ThreadCatalogRecord>>::new();
-        for record in self.threads.list_thread_catalog().map_err(core_error)? {
+        for record in self
+            .agent_runtime()
+            .list_thread_catalog()
+            .map_err(core_error)?
+        {
             records
                 .entry(record.session_id.clone())
                 .or_default()
@@ -1702,7 +1502,7 @@ impl AppServer {
         after_sequence: u64,
     ) -> Result<(), RpcError> {
         let updates = self
-            .threads
+            .agent_runtime()
             .thread_updates_after(thread_id, after_sequence)
             .map_err(core_error)?;
         self.updates.publish_thread(thread_id, &updates);
@@ -1826,7 +1626,7 @@ fn catalog_session_manager(
 }
 
 fn session_manager_info(
-    threads: &[ThreadSnapshot],
+    threads: &[ThreadView],
     created_at_unix_ms: u64,
     lifecycle: SessionStatus,
 ) -> SessionManagerInfo {
@@ -1931,9 +1731,9 @@ fn session_manager_info(
 }
 
 fn latest_turn(
-    threads: &[ThreadSnapshot],
+    threads: &[ThreadView],
     accepts: impl Fn(TurnStatus) -> bool,
-) -> Option<(&ThreadSnapshot, &ash_core::TurnSnapshot)> {
+) -> Option<(&ThreadView, &core_api::TurnState)> {
     threads
         .iter()
         .flat_map(|thread| thread.turns.iter().map(move |turn| (thread, turn)))
@@ -1954,8 +1754,8 @@ fn interaction_question(request: &AgentRequest) -> String {
 }
 
 fn working_operation(
-    thread: &ThreadSnapshot,
-    turn: &ash_core::TurnSnapshot,
+    thread: &ThreadView,
+    turn: &core_api::TurnState,
 ) -> Option<SessionManagerActivity> {
     let unresolved_tool = thread.items.iter().rev().find_map(|item| {
         let ThreadItem::ToolCall {
@@ -2118,5 +1918,12 @@ fn typst_diagnostic_dto(diagnostic: TypstDiagnostic) -> TypstDiagnosticDto {
             start: range.start,
             end: range.end,
         }),
+    }
+}
+
+fn turn_start_result(receipt: core_api::TurnReceipt) -> TurnStartResult {
+    TurnStartResult {
+        turn_id: receipt.turn_id,
+        sequence: receipt.sequence,
     }
 }

@@ -17,6 +17,7 @@ ash-protocol = { workspace = true }
 ash-thread-store = { workspace = true }
 
 [dev-dependencies]
+core-api = { workspace = true }
 ash-core = { workspace = true }
 ash-rollout = { workspace = true }
 ash-state = { workspace = true }

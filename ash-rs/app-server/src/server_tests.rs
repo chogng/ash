@@ -2580,11 +2580,18 @@ fn completed_turn_replays_without_invoking_the_model_twice() {
     );
     wait_for_latest_turn(&server, thread_id, TurnStatus::Completed);
     assert_eq!(model.calls.load(Ordering::Relaxed), 1);
-    let notifications = server.drain_notifications(&mut connection);
-    assert!(notifications.iter().any(|notification| {
-        notification.contains("\"method\":\"session/thread/update\"")
-            && notification.contains("\"agentMessage\"")
-    }));
+    // Committed state becomes visible before its asynchronous notification is published.
+    let deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        if server.drain_notifications(&mut connection).iter().any(|notification| {
+            notification.contains("\"method\":\"session/thread/update\"")
+                && notification.contains("\"agentMessage\"")
+        }) {
+            break;
+        }
+        assert!(Instant::now() < deadline, "completed Turn notification was not delivered");
+        thread::sleep(Duration::from_millis(1));
+    }
 }
 
 #[derive(Default)]
@@ -3097,6 +3104,93 @@ fn session_request_steers_a_running_turn_retry_safely_and_replans() {
         item,
         ash_protocol::ThreadItem::AgentMessage { text, .. } if text == "response-0"
     )));
+}
+
+#[derive(Default)]
+struct FailingStartBackend {
+    starts: AtomicUsize,
+}
+
+impl ash_core::TurnExecutionBackend for FailingStartBackend {
+    fn start(&self, _: &ash_protocol::ThreadId, _: &ash_protocol::TurnId) -> Result<(), CoreError> {
+        self.starts.fetch_add(1, Ordering::Relaxed);
+        Err(CoreError::Execution("backend start failed".into()))
+    }
+
+    fn resume(
+        &self,
+        _: &ash_protocol::ThreadId,
+        _: &ash_protocol::TurnId,
+    ) -> Result<(), CoreError> {
+        panic!("a failed start must not resume")
+    }
+}
+
+#[test]
+fn failed_backend_start_publishes_terminal_state_and_does_not_repeat_on_rpc_retry() {
+    let backend = Arc::new(FailingStartBackend::default());
+    let server = server().with_turn_backend(backend.clone());
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let session = create_session(&server, &mut connection, 2, "failed-start-session");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let thread = create_thread(
+        &server,
+        &mut connection,
+        3,
+        "failed-start-thread",
+        session_id,
+        1,
+    );
+    let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
+    call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":4, "method":"session/thread/subscribe",
+            "params":{"sessionId":session_id,"threadId":thread_id,"afterSequence":1}
+        }),
+    );
+    server.drain_notifications(&mut connection);
+    let request = |id| {
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":id, "method":"session/request",
+            "params":{
+                "commandId":"failed-start", "sessionId":session_id,
+                "request":{"type":"startTurn","expectedSequence":1,"threadId":thread_id,"input":[{"type":"text","text":"hello"}]}
+            }
+        })
+    };
+    assert_eq!(
+        call(&server, &mut connection, request(5))["error"]["message"],
+        "CoreOperationFailed"
+    );
+    assert_eq!(
+        call(&server, &mut connection, request(6))["error"]["message"],
+        "CoreOperationFailed"
+    );
+    assert_eq!(backend.starts.load(Ordering::Relaxed), 1);
+    let read = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":7, "method":"session/thread/read",
+            "params":{"sessionId":session_id,"threadId":thread_id}
+        }),
+    );
+    assert_eq!(
+        read["result"]["thread"]["turns"][0]["status"], "failed",
+        "{read}"
+    );
+    assert!(
+        server
+            .drain_notifications(&mut connection)
+            .iter()
+            .any(|notification| {
+                notification.contains("\"method\":\"session/thread/update\"")
+                    && notification.contains("\"turnFailed\"")
+            })
+    );
 }
 
 #[test]
@@ -4062,7 +4156,7 @@ fn interaction_resolution_uses_the_durable_identity_and_resumes_the_turn() {
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("agent-turn").unwrap(),
-                expected_sequence: ash_core::SequenceExpectation::Exact(1),
+                expected_sequence: core_api::SequenceExpectation::Exact(1),
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: ash_protocol::ApprovalMode::AskPermissions,
@@ -4422,7 +4516,7 @@ fn expired_interaction_is_cancelled_and_fails_the_turn() {
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("deadline-turn").unwrap(),
-                expected_sequence: ash_core::SequenceExpectation::Exact(1),
+                expected_sequence: core_api::SequenceExpectation::Exact(1),
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: ash_protocol::ApprovalMode::AskPermissions,
@@ -4513,7 +4607,7 @@ fn approval_interaction_resolves_through_the_typed_app_server_contract() {
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("approval-turn").unwrap(),
-                expected_sequence: ash_core::SequenceExpectation::Exact(1),
+                expected_sequence: core_api::SequenceExpectation::Exact(1),
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: ash_protocol::ApprovalMode::AskPermissions,
@@ -4627,7 +4721,7 @@ fn interaction_response_is_rejected_from_a_capable_non_owner_connection() {
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("approval-turn-owner-check").unwrap(),
-                expected_sequence: ash_core::SequenceExpectation::Exact(1),
+                expected_sequence: core_api::SequenceExpectation::Exact(1),
                 model: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: ash_protocol::ApprovalMode::AskPermissions,
@@ -5849,7 +5943,7 @@ fn message_restore_interrupts_the_source_and_replays_without_interrupting_later_
                 &source,
                 StartTurnRequest {
                     command_id: ash_protocol::CommandId::new(command).unwrap(),
-                    expected_sequence: ash_core::SequenceExpectation::Any,
+                    expected_sequence: core_api::SequenceExpectation::Any,
                     model: None,
                     kind: Default::default(),
                     instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),

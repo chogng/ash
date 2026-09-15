@@ -8,8 +8,8 @@ use protocol::UserInput;
 use ash_core::AgentTreeLimits;
 use core_api::CoreError;
 use ash_core::InMemoryThreadStore;
-use ash_core::SequenceExpectation;
-use ash_core::StartThreadRequest;
+use core_api::SequenceExpectation;
+use core_api::StartThreadRequest;
 use ash_core::StartTurnRequest;
 use ash_core::ThreadController;
 use ash_core::TurnExecutionBackend;
@@ -294,7 +294,7 @@ fn wait_timeout_returns_a_durable_waiting_join_without_losing_the_delegation() {
     threads
         .resolve_turn_interaction(
             &spawned.child_thread_id,
-            ash_core::ResolveTurnInteractionRequest {
+            core_api::ResolveTurnInteractionRequest {
                 command_id: CommandId::new("answer-child").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 turn_id: spawned.child_turn_id.clone(),

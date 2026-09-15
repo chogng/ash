@@ -16,6 +16,14 @@ import tomllib
 ROOT = Path(__file__).resolve().parents[1]
 SHEAR_VERSION = "1.13.4"
 SECTIONS = ("dependencies", "build-dependencies", "dev-dependencies")
+AGENT_HANDLERS = (
+    "operations.rs",
+    "session_operations.rs",
+    "queue_operations.rs",
+    "automation_execution.rs",
+    "agent_selection.rs",
+    "interaction_runtime.rs",
+)
 
 
 def read_toml(path: Path) -> dict:
@@ -139,6 +147,27 @@ def boundary_errors(root: Path, metadata: dict) -> list[str]:
     return errors
 
 
+def agent_handler_errors(root: Path) -> list[str]:
+    """Keep Agent handlers on the contract while server assembly selects Core owners."""
+    errors = []
+    implementation = re.compile(
+        r"\bash_core\b|\bself\s*\.\s*"
+        r"(?:threads|multi_agent|turn_backend|turn_executor_snapshot)\b"
+    )
+    for name in AGENT_HANDLERS:
+        path = root / "ash-rs/app-server/src/server" / name
+        if not path.is_file():
+            errors.append(f"{path.relative_to(root)}: missing Agent handler; update its boundary rule")
+            continue
+        match = implementation.search(path.read_text())
+        if match:
+            errors.append(
+                f"{path.relative_to(root)}: Agent handlers must use core-api operations; "
+                f"Core implementation access {match.group()!r} belongs in server assembly"
+            )
+    return errors
+
+
 def duplicate_versions(lock: dict) -> dict[str, set[str]]:
     versions = defaultdict(set)
     for package in lock["package"]:
@@ -239,6 +268,7 @@ def main(arguments: list[str] | None = None) -> int:
         duplicates = duplicate_versions(read_toml(ROOT / "Cargo.lock"))
         errors = declaration_errors(ROOT, metadata)
         errors += boundary_errors(ROOT, metadata)
+        errors += agent_handler_errors(ROOT)
         errors += version_errors(
             duplicates, read_toml(ROOT / ".cargo/dependencies.toml")
         )

@@ -18,7 +18,7 @@ use serde_json::Value;
 use serde_json::json;
 use std::sync::Arc;
 use core_api::CoreError;
-use ash_core::SetGoalRequest;
+use core_api::SetGoalRequest;
 use ash_core::ThreadController;
 use ash_core::ToolAuthorization;
 use ash_core::ToolExecutionFacts;

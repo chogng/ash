@@ -199,6 +199,31 @@ class DependencyTests(unittest.TestCase):
             )[0],
         )
 
+    def test_agent_handlers_use_contracts_and_allow_core_in_server_assembly(self):
+        server = self.root / "ash-rs/app-server/src/server"
+        server.mkdir(parents=True)
+        server.with_suffix(".rs").write_text("use ash_core::ThreadController;\n")
+        for name in dependencies.AGENT_HANDLERS:
+            (server / name).write_text("use core_api::AgentRuntime;\n")
+        self.assertEqual(dependencies.agent_handler_errors(self.root), [])
+        for source in (
+            "use ash_core as runtime;",
+            "self\n    .threads.read_thread(id)",
+            "self.turn_backend.start(id)",
+            "self.multi_agent.cancel_descendants(id)",
+            "self.turn_executor_snapshot()",
+        ):
+            with self.subTest(source=source):
+                (server / "operations.rs").write_text(source)
+                errors = dependencies.agent_handler_errors(self.root)
+                self.assertEqual(len(errors), 1)
+                self.assertIn("must use core-api", errors[0])
+
+    def test_missing_agent_handler_requires_updating_the_boundary_rule(self):
+        errors = dependencies.agent_handler_errors(self.root)
+        self.assertEqual(len(errors), len(dependencies.AGENT_HANDLERS))
+        self.assertIn("missing Agent handler", errors[0])
+
     def test_version_policy_rejects_growth_changes_and_stale_entries(self):
         policy = {
             "multiple_versions": [

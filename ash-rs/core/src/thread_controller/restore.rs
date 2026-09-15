@@ -1,3 +1,4 @@
+use crate::RestoreMessageRequest;
 use super::CreateThreadRequest;
 use super::ThreadController;
 use super::command_thread_id;
@@ -8,22 +9,12 @@ use crate::ThreadWorktreeBinder;
 use crate::ThreadWorktreeBindingRequest;
 use ash_history::HistoryPrefix;
 use ash_history::StoredEvent;
-use ash_protocol::CommandId;
-use ash_protocol::ItemId;
 use ash_protocol::MessageBoundary;
 use ash_protocol::MessageCheckpoint;
 use ash_protocol::ThreadEvent;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadOrigin;
 use ash_protocol::WorkspaceCheckpoint;
-
-pub struct RestoreMessageRequest {
-    pub command_id: CommandId,
-    pub source_thread_id: ThreadId,
-    pub item_id: ItemId,
-    pub boundary: MessageBoundary,
-    pub title: String,
-}
 
 impl ThreadController {
     pub fn message_checkpoints(

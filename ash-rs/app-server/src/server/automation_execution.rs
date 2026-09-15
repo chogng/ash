@@ -1,9 +1,8 @@
+use core_api::AgentRuntime;
+use core_api::StartThreadRequest;
 use super::AppServer;
 use super::operations::ThreadMutation;
 use ash_app_server_protocol::protocol::turn::InputItem;
-use ash_core::StartThreadRequest;
-use ash_core::ThreadCommandResult;
-use ash_core::ThreadSnapshot;
 use ash_protocol::AutomationRun;
 use ash_protocol::AutomationRunStatus;
 use ash_protocol::AutomationSession;
@@ -24,12 +23,12 @@ impl AppServer {
         observed.message = None;
         let command = command_id("start", &run.id)?;
         let snapshot = match &run.thread_id {
-            Some(id) => self.threads.read_thread(id),
+            Some(id) => self.agent_runtime().read_thread(id),
             None => match &run.definition.session {
                 AutomationSession::New => {
                     let session_command = command_id("session", &run.id)?;
                     match self
-                        .threads
+                        .agent_runtime()
                         .read_started_thread(&session_command)
                         .map_err(|error| error.to_string())?
                     {
@@ -39,7 +38,7 @@ impl AppServer {
                             observed.finished_at = Some(now);
                             return Ok(observed);
                         }
-                        None => match self.start_thread(StartThreadRequest {
+                        None => match self.agent_runtime().start_thread(StartThreadRequest {
                             agent_id: None,
                             agent: None,
                             command_id: session_command.clone(),
@@ -50,7 +49,7 @@ impl AppServer {
                                 // Session creation does not dispatch a Turn. Check durable creation
                                 // before classifying a rejected provision as a terminal failure.
                                 match self
-                                    .threads
+                                    .agent_runtime()
                                     .read_started_thread(&session_command)
                                     .map_err(|error| error.to_string())?
                                 {
@@ -68,7 +67,7 @@ impl AppServer {
                     }
                 }
                 AutomationSession::Continue { thread_id, .. } => {
-                    self.threads.read_thread(thread_id)
+                    self.agent_runtime().read_thread(thread_id)
                 }
             },
         }
@@ -80,7 +79,10 @@ impl AppServer {
         }
         observed.session_id = Some(snapshot.session_id.clone());
         observed.thread_id = Some(snapshot.thread_id.clone());
-        let accepted = accepted_turn(&snapshot, &command);
+        let accepted = self
+            .agent_runtime()
+            .accepted_turn(&snapshot.thread_id, &command)
+            .map_err(|error| error.to_string())?;
         if accepted.is_none() && run.status == AutomationRunStatus::Stopping {
             observed.status = AutomationRunStatus::Stopped;
             observed.finished_at = Some(now);
@@ -103,10 +105,15 @@ impl AppServer {
                 }],
             );
             let current = self
-                .threads
+                .agent_runtime()
                 .read_thread(&snapshot.thread_id)
                 .map_err(|error| error.to_string())?;
-            if accepted_turn(&current, &command).is_none() {
+            if self
+                .agent_runtime()
+                .accepted_turn(&current.thread_id, &command)
+                .map_err(|error| error.to_string())?
+                .is_none()
+            {
                 if let Err(error) = start {
                     observed.status = AutomationRunStatus::Failed;
                     observed.finished_at = Some(now);
@@ -119,8 +126,11 @@ impl AppServer {
         } else {
             snapshot
         };
-        let turn_id =
-            accepted_turn(&snapshot, &command).ok_or("Automation command receipt is missing")?;
+        let turn_id = self
+            .agent_runtime()
+            .accepted_turn(&snapshot.thread_id, &command)
+            .map_err(|error| error.to_string())?
+            .ok_or("Automation command receipt is missing")?;
         let turn = snapshot
             .turns
             .iter()
@@ -170,18 +180,4 @@ fn command_id(action: &str, run_id: &str) -> Result<CommandId, String> {
         .to_string()
         .replace(':', "-");
     CommandId::new(format!("automation-{action}-{digest}")).map_err(|error| error.to_string())
-}
-
-fn accepted_turn(
-    snapshot: &ThreadSnapshot,
-    command_id: &CommandId,
-) -> Option<ash_protocol::TurnId> {
-    snapshot
-        .commands
-        .iter()
-        .find(|command| &command.receipt.command_id == command_id)
-        .and_then(|command| match &command.result {
-            ThreadCommandResult::TurnAccepted { turn_id } => Some(turn_id.clone()),
-            _ => None,
-        })
 }

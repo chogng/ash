@@ -1,6 +1,18 @@
 use crate::ContextBudget;
 use crate::CoreError;
+use crate::CreateBranchRequest;
+use crate::ForkThreadRequest;
 use crate::HarnessContext;
+use crate::InterruptTurnRequest;
+use crate::ReplaceThreadRequest;
+use crate::ResolveTurnInteractionRequest;
+use crate::RewindThreadRequest;
+use crate::SequenceExpectation;
+use crate::SetGoalRequest;
+use crate::SetGoalResult;
+use crate::ShellTurnInvocation;
+use crate::StartThreadRequest;
+use crate::SteerTurnRequest;
 use crate::ThreadCommandResult;
 use crate::ThreadEventBatch;
 use crate::ThreadSnapshot;
@@ -75,22 +87,15 @@ mod context;
 mod execution;
 mod graph;
 mod identity;
-mod restore;
-pub use restore::RestoreMessageRequest;
 pub(crate) mod live_interaction;
 mod loaded_thread;
 mod mailbox;
+mod restore;
 mod steering;
 mod user_input;
 
 pub use agent::CreateAgentThreadRequest;
 pub use mailbox::ThreadExecutionContext;
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SequenceExpectation {
-    Any,
-    Exact(u64),
-}
 
 pub struct StartTurnRequest {
     pub command_id: CommandId,
@@ -144,14 +149,6 @@ pub(crate) struct PrepareModelInvocationRequest<'a> {
     pub budget: ContextBudget,
 }
 
-/// Concrete host invocation used to execute one explicit Shell Turn.
-pub struct ShellTurnInvocation {
-    pub command: String,
-    pub program: String,
-    pub arguments: Vec<String>,
-    pub working_directory: String,
-}
-
 /// Client command that starts a model-free Turn containing one durable shell Tool Call.
 pub struct StartShellTurnRequest {
     pub command_id: CommandId,
@@ -181,43 +178,9 @@ pub struct CreateThreadRequest {
     pub title: String,
 }
 
-pub struct StartThreadRequest {
-    pub agent_id: Option<ash_protocol::AgentId>,
-    pub agent: Option<ash_protocol::AgentConfiguration>,
-    pub command_id: CommandId,
-    pub title: String,
-}
-
-pub struct CreateBranchRequest {
-    pub agent_id: Option<ash_protocol::AgentId>,
-    pub command_id: CommandId,
-    pub session_id: SessionId,
-    pub title: String,
-}
-
 enum ForkDestination {
     CurrentSession,
     NewSession,
-}
-
-pub struct ForkThreadRequest {
-    pub command_id: CommandId,
-    pub source_thread_id: ThreadId,
-    pub title: String,
-}
-
-/// Replaces an archived execution with a fresh branch of the same Agent.
-pub struct ReplaceThreadRequest {
-    pub command_id: CommandId,
-    pub source_thread_id: ThreadId,
-    pub title: String,
-}
-
-pub struct RewindThreadRequest {
-    pub command_id: CommandId,
-    pub source_thread_id: ThreadId,
-    pub before_turn_id: TurnId,
-    pub title: String,
 }
 
 pub struct CreateRewoundThreadRequest {
@@ -234,22 +197,6 @@ pub struct CreateForkedThreadRequest {
     pub title: String,
     pub source_thread_id: ThreadId,
     pub source_sequence: u64,
-}
-
-/// Fields controlled by the Thread Goal API. `token_budget` is a double option so callers can
-/// distinguish "leave unchanged" from "clear the budget".
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct SetGoalRequest {
-    pub objective: Option<String>,
-    pub status: Option<ThreadGoalStatus>,
-    pub token_budget: Option<Option<u64>>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct SetGoalResult {
-    pub goal: ThreadGoal,
-    pub changed: bool,
-    pub created: bool,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -270,23 +217,9 @@ pub enum InterruptTurnDisposition {
     Replayed,
 }
 
-pub struct InterruptTurnRequest {
-    pub command_id: CommandId,
-    pub expected_sequence: SequenceExpectation,
-    pub turn_id: TurnId,
-}
-
 pub struct InterruptTurnResult {
     pub sequence: u64,
     pub disposition: InterruptTurnDisposition,
-}
-
-/// Retry-safe client command that appends user input to one active Turn.
-pub struct SteerTurnRequest {
-    pub command_id: CommandId,
-    pub expected_sequence: SequenceExpectation,
-    pub turn_id: TurnId,
-    pub input: Vec<UserInput>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -311,15 +244,6 @@ pub struct RequestTurnInteraction {
 pub struct RequestedTurnInteraction {
     pub interaction: TurnInteraction,
     pub sequence: u64,
-}
-
-/// Client command to resolve exactly one outstanding Turn interaction.
-pub struct ResolveTurnInteractionRequest {
-    pub command_id: CommandId,
-    pub expected_sequence: SequenceExpectation,
-    pub turn_id: TurnId,
-    pub request_id: RequestId,
-    pub response: AgentResponse,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

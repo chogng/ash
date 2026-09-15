@@ -112,7 +112,7 @@ fn run(
             thread,
             ash_core::StartTurnRequest {
                 command_id: CommandId::new(label).unwrap(),
-                expected_sequence: ash_core::SequenceExpectation::Any,
+                expected_sequence: core_api::SequenceExpectation::Any,
                 model: Some(model_ref()),
                 kind: Default::default(),
                 instructions: ash_protocol::TurnInstructions::new(
@@ -159,9 +159,9 @@ fn run(
             threads
                 .interrupt_turn(
                     thread,
-                    ash_core::InterruptTurnRequest {
+                    core_api::InterruptTurnRequest {
                         command_id: CommandId::new(format!("cancel-{label}")).unwrap(),
-                        expected_sequence: ash_core::SequenceExpectation::Any,
+                        expected_sequence: core_api::SequenceExpectation::Any,
                         turn_id: turn.turn_id.clone(),
                     },
                 )
@@ -211,7 +211,7 @@ fn luna_cache_survives_fork_and_message_restore_after_restart() {
     let root = threads
         .start_thread(
             &NoThreadWorktreeBinder,
-            ash_core::StartThreadRequest {
+            core_api::StartThreadRequest {
                 agent_id: None,
                 agent: None,
                 command_id: CommandId::new(format!("luna-cache-{nonce}")).unwrap(),
@@ -235,7 +235,7 @@ fn luna_cache_survives_fork_and_message_restore_after_restart() {
     let fork = threads
         .fork_thread(
             &NoThreadWorktreeBinder,
-            ash_core::ForkThreadRequest {
+            core_api::ForkThreadRequest {
                 command_id: CommandId::new("fork").unwrap(),
                 source_thread_id: root.thread_id.clone(),
                 title: "Fork".into(),
@@ -270,7 +270,7 @@ fn luna_cache_survives_fork_and_message_restore_after_restart() {
         let restored = threads
             .restore_message(
                 &NoThreadWorktreeBinder,
-                ash_core::RestoreMessageRequest {
+                core_api::RestoreMessageRequest {
                     command_id: CommandId::new(label).unwrap(),
                     source_thread_id: fork.thread_id.clone(),
                     item_id: point.item_id.clone(),
