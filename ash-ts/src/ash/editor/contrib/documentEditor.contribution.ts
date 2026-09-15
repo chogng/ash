@@ -1,8 +1,8 @@
-import { registerTextEditorCapabilityContribution } from "../browser/editorExtensions.js";
+import { registerEditorContribution } from "../browser/editorExtensions.js";
 import { CollaborationContribution } from "./collaboration/browser/collaborationContribution.js";
 import { FormattingContribution } from "./formatting/browser/formattingContribution.js";
 
-registerTextEditorCapabilityContribution({
+registerEditorContribution({
 	id: "editor.contrib.documentFormatting",
 	install: context => {
 		if (context.kind !== "document") return;
@@ -16,7 +16,7 @@ registerTextEditorCapabilityContribution({
 	},
 });
 
-registerTextEditorCapabilityContribution({
+registerEditorContribution({
 	id: "editor.contrib.collaboration",
 	install: context => {
 		if (context.kind !== "document") return;

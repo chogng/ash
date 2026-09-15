@@ -1,5 +1,5 @@
 import "./renameWidget.css";
-import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
@@ -136,7 +136,7 @@ export class RenameController extends Disposable {
 	}
 }
 
-registerTextEditorCapabilityContribution({ id: "editor.contrib.rename", commands: [{ id: RenameCommandId, canTriggerInlineEdits: true }], install: context => {
+registerEditorContribution({ id: "editor.contrib.rename", commands: [{ id: RenameCommandId, canTriggerInlineEdits: true }], install: context => {
 	if (context.kind !== "text") return;
 	const service = context.register(new RenameService(context.model, context.options.input.resource, context.languageFeaturesService.renameProvider));
 	context.register(new RenameController(

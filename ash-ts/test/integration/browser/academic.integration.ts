@@ -22,7 +22,7 @@ import type { DocumentCollaborationEnvelope } from "../../../src/ash/editor/cont
 import type { DocumentCollaborationSubmitOutcome } from "../../../src/ash/editor/common/services/documentCollaborationService.js";
 import type { IDocumentCollaborationService } from "../../../src/ash/editor/common/services/documentCollaborationService.js";
 import { MemoryTextFiles } from "./memoryTextFiles.js";
-import { getTextEditorCapabilityContributions } from '../../../src/ash/editor/browser/editorExtensions.js';
+import { EditorExtensionsRegistry } from '../../../src/ash/editor/browser/editorExtensions.js';
 
 interface AcademicIntegrationHarness {
 	readonly apiDocumentType: string;
@@ -133,7 +133,7 @@ await structuredPane.setInput({ resource: structuredResource, label: "paper" }, 
 
 window.ashAcademicIntegration = {
 	apiDocumentType: apiModel.document.type,
-	getBundleIds: () => getTextEditorCapabilityContributions().map(contribution => contribution.id),
+	getBundleIds: () => EditorExtensionsRegistry.getEditorContributions().map(contribution => contribution.id),
 	getCodeBlockText: () => codeBlockPane.getDocument().content[0]?.content[0]?.text,
 	getStructuredBlockTexts: () => structuredPane.getDocument().content.map(block => block.content.find(child => child.text !== undefined)?.text ?? ""),
 	getStructuredFirstTextMarks: () => structuredPane.getDocument().content[0]?.content[0]?.marks ?? [],

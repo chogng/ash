@@ -1,9 +1,9 @@
-import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { SymbolIconsController } from "./symbolIcons.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 import { DocumentSymbolService } from '../../documentSymbols/common/languageDocumentSymbols.js';
 
-registerTextEditorCapabilityContribution({
+registerEditorContribution({
 	id: "editor.contrib.symbolIcons",
 	configure: context => {
 		if (context.options.showSymbolIcons === false || context.model.largeFile.tooLargeForTokenization) return;

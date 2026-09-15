@@ -724,13 +724,13 @@ test("Editor engines delegate optional feature composition to mode bundles", () 
 	assert.doesNotMatch(textHost, /from\s+["'][^"']*\/contrib\/(?:find|folding|hover|format|rename|codeAction|collaboration|formatting)\//u);
 	assert.doesNotMatch(textHost, /EditorBrowserRuntime|IEditorBrowserRuntime/u);
 	assert.doesNotMatch(textHost, /registerEditorBrowserFactory|EditorBrowserFactory/u);
-	assert.match(textHost, /getTextEditorCapabilityContributions/u);
+	assert.match(textHost, /getEditorContributions/u);
 	assert.match(textHost, /this\.contributions\.initialize/u);
 	assert.match(codeEditorContributions, /runWhenWindowIdle/u);
 	assert.doesNotMatch(textHost, optionalControllerPattern);
 	assert.doesNotMatch(textHost, /EditingCommandController/u);
 	assert.match(coreCommands, /editor\.action\.selectAll/u);
-	assert.match(coreCommands, /registerTextEditorCapabilityContribution/u);
+	assert.match(coreCommands, /registerEditorContribution/u);
 	assert.doesNotMatch(textHost, /LanguageCompletionSessionController|RustSyntaxFactsService|LanguageDiagnosticDecorationBridge|TokenizationTextModelPart|TextDecorationCollection|LanguageBracketMatcher/u);
 	const viewController = readFileSync(join(editorRoot, "browser/view/viewController.ts"), "utf8");
 	const codeEditorWidget = readFileSync(join(editorRoot, "browser/widget/codeEditor/codeEditorWidget.ts"), "utf8");
@@ -738,8 +738,8 @@ test("Editor engines delegate optional feature composition to mode bundles", () 
 	assert.match(viewController, /this\._register\(addDisposableListener/u);
 	assert.doesNotMatch(codeEditorWidget, /from\s+["'][^"']*\/contrib\//u);
 	assert.doesNotMatch(editorExtensionRegistry, /from\s+["'][^"']*\/contrib\//u);
-	assert.match(findContribution, /registerTextEditorCapabilityContribution/u);
-	assert.match(quickAccessContribution, /registerTextEditorCapabilityContribution/u);
+	assert.match(findContribution, /registerEditorContribution/u);
+	assert.match(quickAccessContribution, /registerEditorContribution/u);
 	assert.match(standardBundle, /find\/browser\/find\.contribution/u);
 	assert.match(standardBundle, /quickAccess\/browser\/quickAccessController/u);
 	for (const contribution of ["bracketMatching", "codeAction", "comment", "gotoSymbol", "hover", "languageAnalysis", "multicursor", "placeholderText", "suggest", "tokenization", "unicodeHighlighter", "wordHighlighter"]) {
@@ -753,9 +753,9 @@ test("Editor engines delegate optional feature composition to mode bundles", () 
 	assert.match(academicBundle, /documentEditor\.contribution/u);
 	assert.doesNotMatch(codePaneContribution, /codeEditorPart\.contribution/u);
 	assert.doesNotMatch(documentHost, /from\s+["'][^"']*\/contrib\/(?:formatting|collaboration)\/browser\//u);
-	assert.match(documentHost, /getTextEditorCapabilityContributions/u);
+	assert.match(documentHost, /getEditorContributions/u);
 	assert.doesNotMatch(documentHost, /registerDocumentEditorContributionFactory/u);
-	assert.match(documentContribution, /registerTextEditorCapabilityContribution/u);
+	assert.match(documentContribution, /registerEditorContribution/u);
 	assert.match(documentContribution, /FormattingContribution/u);
 	assert.match(documentContribution, /CollaborationContribution/u);
 	assert.doesNotMatch(academicPaneContribution, /codeEditorPart\.contribution/u);
@@ -788,7 +788,7 @@ test("Multi-diff keeps generic projection in Editor and product integration in W
 test("Contribution entrypoints own registration rather than forwarding modules", () => {
 	for (const file of collectFiles(join(editorRoot, 'contrib')).filter(file => file.endsWith('.contribution.ts'))) {
 		const source = readFileSync(file, 'utf8');
-		assert.match(source, /register(?:EditorContribution|EditorAction|TextEditorCapabilityContribution|Action2)\(/u, relative(editorRoot, file));
+		assert.match(source, /register(?:EditorContribution|EditorAction|Action2)\(/u, relative(editorRoot, file));
 	}
 });
 

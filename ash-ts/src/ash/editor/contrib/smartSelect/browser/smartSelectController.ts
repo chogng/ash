@@ -1,6 +1,6 @@
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { isCancellationError } from "../../../../base/common/errors.js";
-import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Selection } from "../../../common/core/selection.js";
 import { type Range } from "../../../common/core/range.js";
@@ -83,7 +83,7 @@ export class SmartSelectController extends Disposable {
 	}
 }
 
-registerTextEditorCapabilityContribution({
+registerEditorContribution({
 	id: "editor.contrib.smartSelect",
 	install: context => {
 		if (context.kind !== "text") return;

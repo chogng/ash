@@ -1,5 +1,5 @@
 import "./media/gotoLineWidget.css";
-import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
@@ -134,7 +134,7 @@ export class GotoLineController extends Disposable {
 	}
 }
 
-registerTextEditorCapabilityContribution({
+registerEditorContribution({
 	id: "editor.contrib.quickAccess",
 	install: context => {
 		if (context.kind !== "text") return;

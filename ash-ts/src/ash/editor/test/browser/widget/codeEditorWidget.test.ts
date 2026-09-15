@@ -23,7 +23,8 @@ import { AccessibilitySupport, type IAccessibilityService } from '../../../../pl
 import { CursorChangeReason } from '../../../common/cursorEvents.js';
 import { ViewContext } from '../../../common/viewModel/viewContext.js';
 import { darkColorTheme } from '../../../../platform/theme/common/colorTheme.js';
-import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { type TextEditorContributionContext } from '../../../browser/editorExtensions.js';
+import { IInstantiationService, ServiceConstructionDescriptor } from '../../../../platform/instantiation/common/instantiation.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 class TestResizeObserver {
@@ -1550,6 +1551,89 @@ test("CodeEditorWidget stages and owns per-instance contributions", () => {
 	editor.dispose();
 	assert.deepEqual(events, ["eager:create", "lazy:create", "lazy:dispose", "eager:dispose"]);
 	dom.window.close();
+});
+
+test('CodeEditorWidget owns configured resources and deferred controllers across model switches', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('alpha');
+	const events: string[] = [];
+	class Controller extends Disposable {
+		constructor(context: TextEditorContributionContext, services: IInstantiationService) {
+			super();
+			assert.equal(services, context.instantiationService);
+			assert.equal(context.editor.getModel(), model);
+			assert.equal(context.view.domNode.domNode.isConnected, true);
+			events.push('create');
+			this._register(toDisposable(() => events.push('dispose controller')));
+		}
+	}
+	try {
+		using editor = new CodeEditorWidget({
+			container: requiredElement(dom.window.document, 'main'),
+			model, input: { resource: model.uri }, languageId: model.getLanguageId(),
+			contributions: [{
+				id: 'test.deferred',
+				configure: context => {
+					events.push('configure');
+					context.register(toDisposable(() => events.push('dispose configuration')));
+				},
+				install: context => {
+					if (context.kind !== 'text') return;
+					events.push('install');
+					context.register(toDisposable(() => events.push('dispose installation')));
+				},
+				runtime: {
+					descriptor: new ServiceConstructionDescriptor(Controller, { serviceDependencies: [IInstantiationService] }),
+					instantiation: EditorContributionInstantiation.Lazy,
+				},
+			}],
+		});
+		assert.deepEqual(events, ['configure']);
+		editor.setModel(null);
+		assert.deepEqual(events, ['configure', 'dispose configuration']);
+		editor.setModel(model);
+		const controller = editor.getContribution('test.deferred');
+		assert.ok(controller instanceof Controller);
+		assert.equal(editor.getContribution('test.deferred'), controller);
+		assert.deepEqual(events.slice(2), ['configure', 'install', 'create']);
+		editor.setModel(null);
+		assert.deepEqual(events.slice(5), ['dispose controller', 'dispose installation', 'dispose configuration']);
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('CodeEditorWidget cleans partially installed hooks and reports the failure once', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('alpha');
+	const events: string[] = [];
+	const failure = new Error('installation failed');
+	const errors: unknown[] = [];
+	try {
+		using editor = new CodeEditorWidget({
+			container: requiredElement(dom.window.document, 'main'),
+			model, input: { resource: model.uri }, languageId: model.getLanguageId(),
+			onContributionError: error => errors.push(error),
+			contributions: [{
+				id: 'test.failedHook',
+				configure: context => { context.register(toDisposable(() => events.push('configuration'))); },
+				install: context => {
+					if (context.kind !== 'text') return;
+					context.register(toDisposable(() => events.push('installation')));
+					throw failure;
+				},
+			}],
+		});
+		assert.equal(editor.getContribution('test.failedHook'), null);
+		assert.deepEqual(errors, [failure]);
+		assert.deepEqual(events, ['installation', 'configuration']);
+		editor.dispose();
+		assert.deepEqual(events, ['installation', 'configuration']);
+	} finally {
+		dom.window.close();
+	}
 });
 
 test('CodeEditorWidget injects scoped services into contributions and releases them on model detach', () => {

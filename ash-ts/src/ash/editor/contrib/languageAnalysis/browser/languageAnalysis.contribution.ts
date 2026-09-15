@@ -1,9 +1,9 @@
-import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { LanguageDiagnosticDecorationBridge, LanguageDiagnosticPublisherBridge } from "../../gotoError/common/diagnosticDecorations.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 import { LanguageLexicalContextIndex, TokenAwareLanguageLexicalContext } from '../../../common/languages/languageLexicalContext.js';
 
-registerTextEditorCapabilityContribution({
+registerEditorContribution({
 	id: "editor.contrib.languageAnalysis",
 	configure: context => {
 		const syntax = context.model.tokenization.syntaxService;

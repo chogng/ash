@@ -1,7 +1,7 @@
-import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 
-registerTextEditorCapabilityContribution({ id: "editor.contrib.tokenization", configure: context => {
+registerEditorContribution({ id: "editor.contrib.tokenization", configure: context => {
 	const styling = context.resolvedSemanticTokensService;
 	const lexicalSource = styling.createSource(context.model.tokenization.languageTokens);
 	const semanticTokens = context.model.tokenization.semanticTokens;

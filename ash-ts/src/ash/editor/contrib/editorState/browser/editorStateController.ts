@@ -1,5 +1,5 @@
 import { addDisposableListener } from "../../../../base/browser/dom.js";
-import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { EditorInteractionStateStore } from "../common/editorInteractionState.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type CursorsController } from "../../../common/cursor/cursor.js";
@@ -16,7 +16,7 @@ export class EditorStateController extends Disposable {
 	}
 }
 
-registerTextEditorCapabilityContribution({ id: "editor.contrib.editorState", install: context => {
+registerEditorContribution({ id: "editor.contrib.editorState", install: context => {
 	if (context.kind !== "text") return;
 	const state = context.register(new EditorInteractionStateStore(context.model, context.selectionController.getSelections()));
 	context.register(new EditorStateController(context.controller.element, context.view, context.selectionController, state));

@@ -105,7 +105,8 @@ Workbench 模式 contribution 是唯一能力选择点。Code 与 Academic 各�
 | `StandaloneServices` | standalone 窗口级 model/language-identity/language-configuration/language-features/theme/worker 服务；服务与 worker 只允许首次初始化覆盖，theme 始终由 `NamedEditorThemeService` 拥有 | `editor.api.ts`、standalone 生命周期测试、调试入口 |
 | `StandaloneEditor` | `standaloneCodeEditor.ts` 的独立编辑器 owner；绑定主题、决定 model 所有权，并让 `create`、创建事件与 editor registry 共享同一对象身份 | `standaloneEditor.ts`、model/editor 生命周期测试 |
 | `NamedEditorThemeService` | 命名主题注册、默认 Light、活动主题切换与系统高对比度投影；不读取 Workbench 配置 | `editor.create` 的 `theme`/`autoDetectHighContrast`、`editor.defineNamedTheme/setTheme`、主题服务测试 |
-| `registerEditorContribution` | 所有 Stanza capability 的进程级静态注册 | `editor.*.all.ts`、text/document 挂载点和 contribution 顺序 |
+| `CodeEditorContributions` | 每次模型挂载的贡献创建、延迟调度与释放；Quick Diff 也走同一创建路径 | 模型切换、首次交互、安装失败、显式获取贡献 |
+| `registerEditorContribution` | 编辑器贡献的统一注册；构造器、视图前配置、视图后安装共用 ID 和注册顺序 | `editor.*.all.ts`、text/document 挂载点和 contribution 顺序 |
 | `RichTextEditorWidget` | 结构化节点、marks、selection 与 node-view lifecycle | schema profile、clipboard、collaboration decoration |
 | `EditorProfile` | schema、empty document、node view、toolbar、plugin 和 collaboration schema ID 的稳定组合 | Academic bundle、持久格式兼容性、协作房间兼容性 |
 | Workbench `registerEditorPane` | Workbench pane descriptor 注册 | 模式入口、editor ID 唯一性、pane matching 顺序；不得从 `editor` bundle 调用 |

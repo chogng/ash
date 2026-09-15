@@ -1,9 +1,9 @@
-import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { FindController } from "./findController.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
 
-registerTextEditorCapabilityContribution({
+registerEditorContribution({
 	id: FindController.ID,
 	configure: context => {
 		const decorations = context.register(new TextDecorationCollection<void>(context.model));

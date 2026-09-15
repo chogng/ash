@@ -1,6 +1,6 @@
 import { Position } from "../../../../common/core/position.js";
 import "../media/inlineCompletions.css";
-import { registerTextEditorCapabilityContribution } from "../../../../browser/editorExtensions.js";
+import { registerEditorContribution } from "../../../../browser/editorExtensions.js";
 import { addDisposableListener, stopEvent, h } from "../../../../../base/browser/dom.js";
 import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { Range } from "../../../../common/core/range.js";
@@ -130,7 +130,7 @@ class AcceptInlineCompletionCommand implements ICommand {
 	}
 }
 
-registerTextEditorCapabilityContribution({ id: "editor.contrib.inlineCompletions", configure: context => {
+registerEditorContribution({ id: "editor.contrib.inlineCompletions", configure: context => {
 	if (context.kind !== 'text') return;
 	context.provideCapability(InlineCompletionsServiceCapability, context.register(new InlineCompletionsService()));
 }, install: context => {

@@ -1,51 +1,86 @@
 import { addDisposableListener, getWindow, runWhenWindowIdle } from '../../../../base/browser/dom.js';
-import { DisposableMap, Disposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableMap, DisposableStore, Disposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { type IEditorContribution } from '../../../common/editorCommon.js';
 import { type ICodeEditor } from '../../editorBrowser.js';
-import { EditorContributionInstantiation, type IEditorContributionDescription } from '../../editorExtensions.js';
+import { EditorContributionInstantiation, type EditorContributionRegistration, type TextEditorContributionConfigurationContext, type TextEditorContributionContext } from '../../editorExtensions.js';
 
 interface PendingCodeEditorContribution {
 	readonly id: string;
-	readonly ctor: IEditorContributionDescription['ctor'];
+	readonly create: () => IEditorContribution;
 	readonly instantiation: EditorContributionInstantiation;
 }
 
 /** Owns one CodeEditorWidget's contribution instances and their staged creation. */
 export class CodeEditorContributions extends Disposable {
 	private editor: ICodeEditor | null = null;
-	private readonly instances = this._register(new DisposableMap<string, IEditorContribution>());
+	private descriptions: readonly EditorContributionRegistration[] | undefined;
+	private readonly instances = new Map<string, IEditorContribution>();
+	private readonly configurations = new Map<string, DisposableStore>();
+	private readonly resources = this._register(new DisposableMap<string, DisposableStore>());
 	private readonly pending = new Map<string, PendingCodeEditorContribution>();
 	private readonly completedInstantiation = new Set<EditorContributionInstantiation>();
 	private onError: (error: unknown) => void = reportContributionError;
 
 	constructor(@IInstantiationService private readonly instantiationService: IInstantiationService) {
 		super();
-		this._register(toDisposable(() => this.pending.clear()));
+		this._register(toDisposable(() => { this.pending.clear(); this.instances.clear(); this.descriptions = undefined; this.configurations.clear(); }));
+	}
+
+	/** Configure model services before the View is constructed. */
+	configure(descriptions: readonly EditorContributionRegistration[], context: TextEditorContributionConfigurationContext): void {
+		this.assertNotDisposed();
+		if (this.descriptions) throw new Error('Code editor contributions have already been configured');
+		validateDescriptions(descriptions);
+		this.descriptions = descriptions.slice();
+		for (const description of this.descriptions) {
+			const resources = new DisposableStore();
+			this.resources.set(description.id, resources);
+			if (!('ctor' in description) && description.configure) {
+				// Model sources must outlive the View; installation resources end before it.
+				const configuration = context.register(new DisposableStore());
+				this.configurations.set(description.id, configuration);
+				description.configure({ ...context, register: value => configuration.add(value) });
+			}
+		}
 	}
 
 	initialize(
 		editor: ICodeEditor,
-		descriptions: readonly IEditorContributionDescription[],
+		context: TextEditorContributionContext,
 		onError?: (error: unknown) => void,
 	): void {
 		this.assertNotDisposed();
 		if (this.editor) throw new Error('Code editor contributions have already been initialized');
 		if (typeof onError === 'function') this.onError = onError;
 		this.editor = editor;
-		const incomingIds = new Set<string>();
-		for (const description of descriptions) {
-			if (!isValidDescription(description)) throw new TypeError('Code editor contribution is invalid');
-			if (incomingIds.has(description.id)) {
-				throw new RangeError(`Duplicate code editor contribution '${description.id}'`);
+		if (!this.descriptions) throw new ReferenceError('Code editor contributions have not been configured');
+		for (const description of this.descriptions) {
+			if ('ctor' in description) {
+				this.pending.set(description.id, {
+					id: description.id,
+					create: () => this.instantiationService.createInstance(description.ctor, editor),
+					instantiation: description.instantiation,
+				});
+				continue;
 			}
-			incomingIds.add(description.id);
-		}
-		for (const description of descriptions) {
+			const resources = this.resources.get(description.id)!;
+			const contributionContext = { ...context, register: <T extends IDisposable>(value: T): T => resources.add(value) };
 			this.pending.set(description.id, {
 				id: description.id,
-				ctor: description.ctor,
-				instantiation: description.instantiation,
+				instantiation: description.runtime?.instantiation ?? EditorContributionInstantiation.Eager,
+				create: () => {
+					try {
+						description.install?.(contributionContext);
+						return description.runtime
+							? this.instantiationService.createInstance(description.runtime.descriptor, contributionContext)
+							: resources;
+					} catch (error) {
+						resources.dispose();
+						this.configurations.get(description.id)?.dispose();
+						throw error;
+					}
+				},
 			});
 		}
 		this.instantiateSome(EditorContributionInstantiation.Eager);
@@ -76,14 +111,14 @@ export class CodeEditorContributions extends Disposable {
 
 	get(id: string): IEditorContribution | null {
 		this.instantiateById(id);
-		for (const [contributionId, instance] of this.instances) {
-			if (contributionId === id) return instance;
-		}
-		return null;
+		return this.instances.get(id) ?? null;
 	}
 
 	set(id: string, value: IEditorContribution): void {
 		this.pending.delete(id);
+		const resources = new DisposableStore();
+		resources.add(value);
+		this.resources.set(id, resources);
 		this.instances.set(id, value);
 	}
 
@@ -110,8 +145,10 @@ export class CodeEditorContributions extends Disposable {
 		if (!pending) return;
 		this.pending.delete(id);
 		try {
-			const instance = this.instantiationService.createInstance(pending.ctor, this.editor);
+			const instance = pending.create();
 			if (!instance || typeof instance.dispose !== 'function') throw new TypeError(`Code editor contribution '${id}' did not return a disposable`);
+			const resources = this.resources.get(id)!;
+			if (instance !== resources) resources.add(instance);
 			this.instances.set(id, instance);
 			if (pending.instantiation !== EditorContributionInstantiation.Eager && (typeof instance.saveViewState === 'function' || typeof instance.restoreViewState === 'function')) {
 				console.warn(`Editor contribution '${id}' should be eager because it owns view state.`);
@@ -122,14 +159,17 @@ export class CodeEditorContributions extends Disposable {
 	}
 }
 
-function isValidDescription(description: IEditorContributionDescription): boolean {
-	return Boolean(
-		description
-			&& typeof description.id === 'string'
-			&& description.id.trim().length > 0
-			&& description.ctor
-			&& isInstantiation(description.instantiation),
-	);
+function validateDescriptions(descriptions: readonly EditorContributionRegistration[]): void {
+	const ids = new Set<string>();
+	for (const description of descriptions) {
+		if (!description?.id?.trim() || ('ctor' in description
+			? !description.ctor || !isInstantiation(description.instantiation)
+			: !(description.configure || description.install || description.runtime) || (description.runtime && !isInstantiation(description.runtime.instantiation)))) {
+			throw new TypeError('Code editor contribution is invalid');
+		}
+		if (ids.has(description.id)) throw new RangeError(`Duplicate code editor contribution '${description.id}'`);
+		ids.add(description.id);
+	}
 }
 
 function isInstantiation(value: EditorContributionInstantiation): boolean {

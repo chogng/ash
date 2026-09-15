@@ -3,7 +3,7 @@ import { addDisposableListener, stopEvent } from '../../../../base/browser/dom.j
 import { disposableWindowTimeout } from '../../../../base/browser/scheduler.js';
 import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
-import { type EditorCapability, registerTextEditorCapabilityContribution } from '../../../browser/editorExtensions.js';
+import { type EditorCapability, registerEditorContribution } from '../../../browser/editorExtensions.js';
 import { type View } from '../../../browser/view.js';
 import { Selection } from '../../../common/core/selection.js';
 import { Position } from '../../../common/core/position.js';
@@ -119,7 +119,7 @@ export class SelectionAnchorController extends Disposable {
 	}
 }
 
-registerTextEditorCapabilityContribution({
+registerEditorContribution({
 	id: 'editor.contrib.selectionAnchorController',
 	configure: context => {
 		const decorations = context.register(new TextDecorationCollection<void>(context.model));

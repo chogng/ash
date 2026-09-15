@@ -1,8 +1,8 @@
-import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { SectionHeadersController } from "./sectionHeadersController.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 
-registerTextEditorCapabilityContribution({ id: "editor.contrib.sectionHeaders", install: context => {
+registerEditorContribution({ id: "editor.contrib.sectionHeaders", install: context => {
 	if (context.kind !== "text" || context.model.largeFile.tooLargeForTokenization || context.options.sectionHeaders === false) return;
 	const options = context.options.sectionHeaders || {};
 	context.register(new SectionHeadersController(

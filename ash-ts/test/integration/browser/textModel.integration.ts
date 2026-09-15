@@ -25,7 +25,7 @@ import { TextModel } from "../../../src/ash/editor/editor.api.js";
 import "../../../src/ash/editor/editor.code.all.js";
 import { MemoryTextFiles } from "./memoryTextFiles.js";
 import { AccessibilitySupport, type IAccessibilityService } from '../../../src/ash/platform/accessibility/common/accessibility.js';
-import { EditorExtensionsRegistry, getTextEditorCapabilityContributions } from '../../../src/ash/editor/browser/editorExtensions.js';
+import { EditorExtensionsRegistry } from '../../../src/ash/editor/browser/editorExtensions.js';
 
 interface WorkbenchSwitchResult {
 	readonly oldEditorDisposed: boolean;
@@ -150,7 +150,6 @@ window.ashTextModelIntegration = {
 	getSavedText: () => files.read(resource),
 	getSyntaxAnalysisCount: () => syntaxAnalysisCount,
 	getBundleIds: () => [
-		...getTextEditorCapabilityContributions().map(contribution => contribution.id),
 		...EditorExtensionsRegistry.getEditorContributions().map(contribution => contribution.id),
 	],
 	hasClipboardContribution: () => requiredEditorPart().getContribution('editor.contrib.clipboard') !== null,

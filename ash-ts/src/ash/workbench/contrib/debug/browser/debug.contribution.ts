@@ -8,7 +8,7 @@ import { BREAKPOINT_EDITOR_CONTRIBUTION_ID, DEBUG_CONSOLE_VIEW_ID, DEBUG_VIEW_ID
 import { DebugViewPane } from "./debugViewPane.js";
 import { DebugConsoleViewPane } from "./debugConsoleViewPane.js";
 import { BreakpointEditorContribution } from "./breakpointEditorContribution.js";
-import { EditorContributionInstantiation, registerTextEditorCapabilityContribution } from "../../../../editor/browser/editorExtensions.js";
+import { EditorContributionInstantiation, registerEditorContribution } from "../../../../editor/browser/editorExtensions.js";
 import "./debugActions.js";
 import "./media/debug.css";
 
@@ -20,7 +20,7 @@ export function registerDebugView(registry: WorkbenchViewRegistry = ViewsRegistr
 }
 
 registerDebugView();
-registerTextEditorCapabilityContribution({
+registerEditorContribution({
 	id: BREAKPOINT_EDITOR_CONTRIBUTION_ID,
 	runtime: {
 		descriptor: new ServiceConstructionDescriptor(BreakpointEditorContribution, { serviceDependencies: [IDebugService] }),

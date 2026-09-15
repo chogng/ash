@@ -23,7 +23,7 @@ import { CodeEditorContributions } from "./codeEditorContributions.js";
 import { observableCodeEditor } from '../../observableCodeEditor.js';
 import { EditorConfiguration, type IEditorConstructionOptions } from '../../config/editorConfiguration.js';
 import { migrateOptions } from '../../config/migrateOptions.js';
-import { EditorExtensionsRegistry, getTextEditorCapabilityContributions, type EditorCapability, type EditorCommandEvent, type IEditorContributionDescription, type TextEditorContributionContext } from '../../editorExtensions.js';
+import { EditorExtensionsRegistry, type EditorCapability, type EditorCommandEvent, type EditorContributionRegistration, type TextEditorContributionContext } from '../../editorExtensions.js';
 import { VersionedEditorWorkerClient, type VersionedEditorWorkerFactory } from '../../services/editorWorkerService.js';
 import { EditorWorkerRequestExecutor } from '../../../common/services/editorWorkerRequestExecutor.js';
 import { createBuiltinLanguageConfigurationService } from '../../../common/languages/languageBuiltinConfigurations.js';
@@ -94,7 +94,7 @@ export interface ICodeEditorWidgetOptions extends IEditorConstructionOptions {
 	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit) => void | Promise<void>;
 	readonly registerBeforeSave?: (hook: () => void | Promise<void>) => IDisposable;
 	readonly onContributionError?: (error: unknown) => void;
-	readonly contributions?: readonly IEditorContributionDescription[];
+	readonly contributions?: readonly EditorContributionRegistration[];
 	readonly sectionHeaders?: EditorSectionHeaderOptions | false;
 	readonly suggestions?: CompletionsEnablement;
 	readonly inlineCompletions?: CompletionsEnablement;
@@ -417,39 +417,42 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			let semanticTokenSource: SemanticTokenSource | undefined;
 			let bracketColorizationSource: BracketColorizationSource | undefined;
 			let languageLexicalContext: LanguageLexicalContextSource | undefined;
-			const selectedContributions = getTextEditorCapabilityContributions();
-			for (const contribution of selectedContributions) {
-				contribution.configure?.({
-					kind: 'text',
-					renderDiagnosticDecorations: !services.has(IMarkerDecorationsService),
-					options,
-					model: options.model,
-					viewModel: this.viewModel,
-					selectionController: this.selections,
-					editorWorker,
-					languageId: options.languageId,
-					languageFeaturesService,
-					resolvedSemanticTokensService,
-					configurations: languageConfigurationService,
-					onLanguageError,
-					getCapability,
-					getOptionalCapability,
-					provideCapability,
-					setSemanticTokenSource: source => {
-						if (semanticTokenSource) throw new Error('Text editor semantic-token source is already configured');
-						semanticTokenSource = source;
-					},
-					setBracketColorizationSource: source => {
-						if (bracketColorizationSource) throw new Error('Text editor bracket-colorization source is already configured');
-						bracketColorizationSource = source;
-					},
-					setLanguageLexicalContext: source => {
-						if (languageLexicalContext) throw new Error('Text editor lexical context is already configured');
-						languageLexicalContext = source;
-					},
-					register: value => modelStore.add(value),
-				});
-			}
+			const registeredContributions = EditorExtensionsRegistry.getEditorContributions();
+			const customContributions = options.contributions;
+			const selectedContributions = customContributions
+				? [...registeredContributions.filter(description => !('ctor' in description) && !customContributions.some(value => value.id === description.id)), ...customContributions]
+				: registeredContributions;
+			this.contributions = modelStore.add(this.instantiationService.createInstance(CodeEditorContributions));
+			this.contributions.configure(selectedContributions, {
+				kind: 'text',
+				renderDiagnosticDecorations: !services.has(IMarkerDecorationsService),
+				options,
+				model: options.model,
+				viewModel: this.viewModel,
+				selectionController: this.selections,
+				editorWorker,
+				languageId: options.languageId,
+				languageFeaturesService,
+				resolvedSemanticTokensService,
+				configurations: languageConfigurationService,
+				onLanguageError,
+				getCapability,
+				getOptionalCapability,
+				provideCapability,
+				setSemanticTokenSource: source => {
+					if (semanticTokenSource) throw new Error('Text editor semantic-token source is already configured');
+					semanticTokenSource = source;
+				},
+				setBracketColorizationSource: source => {
+					if (bracketColorizationSource) throw new Error('Text editor bracket-colorization source is already configured');
+					bracketColorizationSource = source;
+				},
+				setLanguageLexicalContext: source => {
+					if (languageLexicalContext) throw new Error('Text editor lexical context is already configured');
+					languageLexicalContext = source;
+				},
+				register: value => modelStore.add(value),
+			});
 			const languageEditing = modelStore.add(new LanguageEditingAdapter(
 				options.model,
 				this.selections,
@@ -558,7 +561,9 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				this._register(observableCodeEditor(this));
 				this.observableInitialized = true;
 			}
-			this.contributions = modelStore.add(this.instantiationService.createInstance(CodeEditorContributions));
+			// Release contribution controllers before the View, including on later attach failures.
+			modelStore.delete(this.contributions);
+			modelStore.add(this.contributions);
 			modelStore.add(new KeyboardNavigationController(this.view, this.viewModel, this.userInputEvents));
 			const installContext: TextEditorContributionContext = {
 				kind: 'text',
@@ -582,10 +587,9 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				registerBeforeSave: options.registerBeforeSave,
 				register: value => modelStore.add(value),
 			};
-			for (const contribution of selectedContributions) contribution.install?.(installContext);
 			this.contributions.initialize(
 				this,
-				options.contributions ?? EditorExtensionsRegistry.getEditorContributions(),
+				installContext,
 				options.onContributionError,
 			);
 			if (services.has(IMarkerDecorationsService)) {

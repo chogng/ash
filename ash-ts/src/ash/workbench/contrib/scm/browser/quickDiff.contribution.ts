@@ -3,7 +3,7 @@ import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ServiceConstructionDescriptor, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import { EditorContributionInstantiation, registerTextEditorCapabilityContribution } from '../../../../editor/browser/editorExtensions.js';
+import { EditorContributionInstantiation, registerEditorContribution } from '../../../../editor/browser/editorExtensions.js';
 import { registerWorkbenchServiceContribution } from '../../../browser/workbenchServiceContributions.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { ActiveEditorContext } from '../../../common/contextkeys.js';
@@ -41,7 +41,7 @@ registerWorkbenchContribution('workbench.contrib.gitQuickDiffProvider', Workbenc
 	return resources;
 });
 
-registerTextEditorCapabilityContribution({
+registerEditorContribution({
 	id: 'workbench.contrib.quickDiffEditorController',
 	runtime: {
 		descriptor: new ServiceConstructionDescriptor(QuickDiffEditorController, {

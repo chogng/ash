@@ -9,7 +9,7 @@ import { Selection } from "../../../common/core/selection.js";
 import { type View } from "../../../browser/view.js";
 import { type TextEditorContributionConfigurationContext, type TextEditorContributionContext } from "../../../browser/editorExtensions.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
-import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { EditorHiddenRangeModel } from "./hiddenRangeModel.js";
 import { computeEditorIndentFoldingRanges } from "./indentRangeProvider.js";
 import { computeEditorLanguageFoldingRanges, mergeEditorFoldingRanges } from "./syntaxRangeProvider.js";
@@ -19,7 +19,7 @@ import type { IDecorationProvider } from './foldingModel.js';
 import { Range } from '../../../common/core/range.js';
 import './folding.css';
 
-registerTextEditorCapabilityContribution({
+registerEditorContribution({
 	id: "editor.contrib.folding",
 	configure: context => {
 		const folding = context.register(new EditorFoldingModel(context.model));

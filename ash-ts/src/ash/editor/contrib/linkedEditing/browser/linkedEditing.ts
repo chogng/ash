@@ -1,7 +1,7 @@
 import { addDisposableListener, stopEvent } from '../../../../base/browser/dom.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
-import { registerTextEditorCapabilityContribution } from '../../../browser/editorExtensions.js';
+import { registerEditorContribution } from '../../../browser/editorExtensions.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { type View } from '../../../browser/view.js';
 import { type ViewController } from '../../../browser/view/viewController.js';
@@ -180,7 +180,7 @@ function matchesEntirePattern(pattern: RegExp, value: string): boolean {
 	return match?.index === 0 && match[0].length === value.length;
 }
 
-registerTextEditorCapabilityContribution({
+registerEditorContribution({
 	id: LinkedEditingContribution.ID,
 	install: context => {
 		if (context.kind !== 'text') return;

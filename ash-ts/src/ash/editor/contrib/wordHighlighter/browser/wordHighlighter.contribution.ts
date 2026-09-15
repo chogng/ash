@@ -3,7 +3,7 @@ import { RunOnceScheduler, TimeoutTimer } from '../../../../base/common/async.js
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type URI } from '../../../../base/common/uri.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../base/common/cancellation.js';
-import { type EditorCapability, registerTextEditorCapabilityContribution } from '../../../browser/editorExtensions.js';
+import { type EditorCapability, registerEditorContribution } from '../../../browser/editorExtensions.js';
 import { type ViewController } from '../../../browser/view/viewController.js';
 import { Selection } from '../../../common/core/selection.js';
 import { Position } from '../../../common/core/position.js';
@@ -420,7 +420,7 @@ function reportHighlightError(error: unknown): void {
 
 const occurrenceDecorations: EditorCapability<TextDecorationCollection<DocumentHighlightKind | undefined>> = Object.freeze({ id: 'editor.capability.occurrenceDecorations' });
 
-registerTextEditorCapabilityContribution({
+registerEditorContribution({
 	id: WordHighlighterContribution.ID,
 	configure: context => {
 		const decorations = context.register(new TextDecorationCollection<DocumentHighlightKind | undefined>(context.model));

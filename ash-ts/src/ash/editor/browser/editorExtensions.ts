@@ -609,7 +609,7 @@ export interface TextEditorRuntimeContributionRegistration {
 	readonly instantiation: EditorContributionInstantiation;
 }
 
-export interface TextEditorCapabilityContribution {
+export interface EditorContributionHooks {
 	readonly id: string;
 	readonly commands?: readonly EditorCommandMetadata[];
 	configure?(context: TextEditorContributionConfigurationContext): void;
@@ -617,32 +617,8 @@ export interface TextEditorCapabilityContribution {
 	readonly runtime?: TextEditorRuntimeContributionRegistration;
 }
 
-const capabilityContributions: TextEditorCapabilityContribution[] = [];
-const capabilityContributionIds = new Set<string>();
-
-export function registerTextEditorCapabilityContribution(contribution: TextEditorCapabilityContribution): void {
-	const valid = contribution?.id?.trim() && (contribution.configure || contribution.install || contribution.runtime);
-	if (!valid) {
-		throw new TypeError('Editor contribution is invalid');
-	}
-	if (capabilityContributionIds.has(contribution.id)) {
-		throw new Error(`Duplicate editor contribution '${contribution.id}'`);
-	}
-	for (const command of contribution.commands ?? []) {
-		if (!command.id.trim()) {
-			throw new TypeError('Editor command ID is required');
-		}
-		if (command.canTriggerInlineEdits) {
-			TriggerInlineEditCommandsRegistry.registerCommand(command.id);
-		}
-	}
-	capabilityContributionIds.add(contribution.id);
-	capabilityContributions.push(Object.freeze(contribution));
-}
-
-export function getTextEditorCapabilityContributions(): readonly TextEditorCapabilityContribution[] {
-	return capabilityContributions;
-}
+/** One registry contains constructor contributions and features with pre-view configuration. */
+export type EditorContributionRegistration = IEditorContributionDescription | EditorContributionHooks;
 
 // --- Registration of commands and actions
 
@@ -701,8 +677,13 @@ export function registerInstantiatedEditorAction(editorAction: EditorAction): vo
  * Registers an editor contribution. Editor contributions have a lifecycle which is bound
  * to a specific code editor instance.
  */
-export function registerEditorContribution<Services extends EditorService[]>(id: string, ctor: { new(editor: ICodeEditor, ...services: Services): IEditorContribution }, instantiation: EditorContributionInstantiation): void {
-	EditorContributionRegistry.INSTANCE.registerEditorContribution(id, ctor, instantiation);
+export function registerEditorContribution(contribution: EditorContributionHooks): void;
+export function registerEditorContribution<Services extends EditorService[]>(id: string, ctor: { new(editor: ICodeEditor, ...services: Services): IEditorContribution }, instantiation: EditorContributionInstantiation): void;
+export function registerEditorContribution(idOrContribution: string | EditorContributionHooks, ctor?: EditorContributionCtor, instantiation?: EditorContributionInstantiation): void {
+	const contribution = typeof idOrContribution === 'string'
+		? { id: idOrContribution, ctor: ctor!, instantiation: instantiation! }
+		: idOrContribution;
+	EditorContributionRegistry.INSTANCE.registerEditorContribution(contribution);
 }
 
 /**
@@ -723,11 +704,11 @@ export namespace EditorExtensionsRegistry {
 		return EditorContributionRegistry.INSTANCE.getEditorActions();
 	}
 
-	export function getEditorContributions(): IEditorContributionDescription[] {
+	export function getEditorContributions(): EditorContributionRegistration[] {
 		return EditorContributionRegistry.INSTANCE.getEditorContributions();
 	}
 
-	export function getSomeEditorContributions(ids: string[]): IEditorContributionDescription[] {
+	export function getSomeEditorContributions(ids: string[]): EditorContributionRegistration[] {
 		return EditorContributionRegistry.INSTANCE.getEditorContributions().filter(c => ids.indexOf(c.id) >= 0);
 	}
 
@@ -745,7 +726,7 @@ class EditorContributionRegistry {
 
 	public static readonly INSTANCE = new EditorContributionRegistry();
 
-	private readonly editorContributions: IEditorContributionDescription[] = [];
+	private readonly editorContributions: EditorContributionRegistration[] = [];
 	private readonly diffEditorContributions: IDiffEditorContributionDescription[] = [];
 	private readonly editorActions: EditorAction[] = [];
 	private readonly editorCommands: { [commandId: string]: EditorCommand } = Object.create(null);
@@ -753,11 +734,25 @@ class EditorContributionRegistry {
 	constructor() {
 	}
 
-	public registerEditorContribution<Services extends EditorService[]>(id: string, ctor: { new(editor: ICodeEditor, ...services: Services): IEditorContribution }, instantiation: EditorContributionInstantiation): void {
-		this.editorContributions.push({ id, ctor: ctor as EditorContributionCtor, instantiation });
+	public registerEditorContribution(contribution: EditorContributionRegistration): void {
+		if (!contribution?.id?.trim() || !('ctor' in contribution ? contribution.ctor : contribution.configure || contribution.install || contribution.runtime)) {
+			throw new TypeError('Editor contribution is invalid');
+		}
+		if (this.editorContributions.some(value => value.id === contribution.id)) {
+			throw new Error(`Duplicate editor contribution '${contribution.id}'`);
+		}
+		if (!('ctor' in contribution)) {
+			for (const command of contribution.commands ?? []) {
+				if (!command.id.trim()) throw new TypeError('Editor command ID is required');
+			}
+			for (const command of contribution.commands ?? []) {
+				if (command.canTriggerInlineEdits) TriggerInlineEditCommandsRegistry.registerCommand(command.id);
+			}
+		}
+		this.editorContributions.push(Object.freeze({ ...contribution }));
 	}
 
-	public getEditorContributions(): IEditorContributionDescription[] {
+	public getEditorContributions(): EditorContributionRegistration[] {
 		return this.editorContributions.slice(0);
 	}
 

@@ -1,5 +1,5 @@
 import "./parameterHints.css";
-import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { ParameterHintsService, type LanguageParameterHints, type LanguageParameterHintsContext } from "../common/languageParameterHints.js";
@@ -107,7 +107,7 @@ export class ParameterHintsController extends Disposable {
 	}
 }
 
-registerTextEditorCapabilityContribution({ id: "editor.contrib.parameterHints", install: context => {
+registerEditorContribution({ id: "editor.contrib.parameterHints", install: context => {
 	if (context.kind !== "text" || !EditorOptions.parameterHints.validate(context.options.parameterHints).enabled) return;
 	const service = context.register(new ParameterHintsService(
 		context.model,

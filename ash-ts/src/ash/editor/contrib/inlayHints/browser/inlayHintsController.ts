@@ -1,5 +1,5 @@
 import "./media/inlayHints.css";
-import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
@@ -55,7 +55,7 @@ export class InlayHintsController extends Disposable {
 	}
 }
 
-registerTextEditorCapabilityContribution({ id: "editor.contrib.inlayHints", install: context => {
+registerEditorContribution({ id: "editor.contrib.inlayHints", install: context => {
 	if (context.kind !== "text" || context.options.inlayHints?.enabled === 'off' || context.model.largeFile.tooLargeForTokenization) return;
 	const service = context.register(new InlayHintsService(context.model, context.languageFeaturesService.inlayHintsProvider, context.options.input.resource));
 	context.register(new InlayHintsController(context.view, service, context.languageId, context.onLanguageError));

@@ -1,4 +1,4 @@
-import { registerTextEditorCapabilityContribution, type EditorCapability } from "../../../browser/editorExtensions.js";
+import { registerEditorContribution, type EditorCapability } from "../../../browser/editorExtensions.js";
 import { type ICodeEditorWidgetOptions } from '../../../browser/widget/codeEditor/codeEditorWidget.js';
 import { LanguageCompletionService } from "../../../common/languages/completion/languageCompletionService.js";
 import { isCompletionsEnabledFromObject } from "../../../common/services/completionsEnablement.js";
@@ -14,7 +14,7 @@ const suggestState: EditorCapability<SuggestContributionState> = {
 	id: "editor.suggest.state",
 };
 
-registerTextEditorCapabilityContribution({
+registerEditorContribution({
 	id: "editor.contrib.suggest",
 	configure: context => {
 		if (context.options.suggestions !== undefined && !isCompletionsEnabledFromObject(context.options.suggestions, context.languageId)) return;

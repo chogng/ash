@@ -21,7 +21,7 @@ import { DOCUMENT_FRAGMENT_CLIPBOARD_MIME, deserializeDocumentFragment, serializ
 import { allSelection, nodeSelection, textSelection, type DocumentSelection, type DocumentTextSelection } from '../../../common/core/documentSelection.js';
 import { DocumentTransaction } from '../../../common/model/documentTransaction.js';
 import { EditorDom } from '../../editorDom.js';
-import { getTextEditorCapabilityContributions, type DocumentCollaborationContribution, type DocumentCollaborationStartResult, type DocumentFormattingContribution } from '../../editorExtensions.js';
+import { EditorExtensionsRegistry, type DocumentCollaborationContribution, type DocumentCollaborationStartResult, type DocumentFormattingContribution } from '../../editorExtensions.js';
 import { DocumentOutlineNavigator } from '../documentOutlineNavigator.js';
 import { DocumentCollaborationController } from '../../../contrib/collaboration/common/controller.js';
 import { createDocumentFragmentFromHtml } from './htmlDocumentFragment.js';
@@ -163,7 +163,8 @@ export class RichTextEditorWidget extends Disposable {
 		if (this.container) throw new ReferenceError("Document editor has already been created");
 		let formattingContribution: DocumentFormattingContribution | undefined;
 		let collaborationContribution: DocumentCollaborationContribution | undefined;
-		for (const contribution of getTextEditorCapabilityContributions()) {
+		for (const contribution of EditorExtensionsRegistry.getEditorContributions()) {
+			if ('ctor' in contribution) continue;
 			contribution.install?.({
 				kind: "document",
 				container: parent,

@@ -1,7 +1,7 @@
 import { addDisposableListener, stopEvent } from '../../../../base/browser/dom.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
-import { registerTextEditorCapabilityContribution } from '../../../browser/editorExtensions.js';
+import { registerEditorContribution } from '../../../browser/editorExtensions.js';
 import { type IVersionedEditorWorkerClient } from '../../../browser/services/editorWorkerService.js';
 import { type View } from '../../../browser/view.js';
 import { ReplaceCommandThatPreservesSelection } from '../../../common/commands/replaceCommand.js';
@@ -46,7 +46,7 @@ class InPlaceReplaceController extends Disposable {
 	}
 }
 
-registerTextEditorCapabilityContribution({
+registerEditorContribution({
 	id: 'editor.contrib.inPlaceReplace',
 	install: context => {
 		if (context.kind !== 'text') return;

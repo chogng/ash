@@ -1,4 +1,4 @@
-import { registerTextEditorCapabilityContribution } from '../../../browser/editorExtensions.js';
+import { registerEditorContribution } from '../../../browser/editorExtensions.js';
 import { LanguageBracketPairs } from '../../../common/languages/languageBracketPairs.js';
 import { TextDecorationCollection } from '../../../common/model/decorationCollection.js';
 import { TextEditorCapability } from '../../textEditorCapabilities.js';
@@ -7,7 +7,7 @@ import { BracketEditingController, RemoveBracketsCommandId } from './bracketEdit
 import { BracketMatchController } from './bracketMatchController.js';
 import { BracketNavigationController } from './bracketNavigationController.js';
 
-registerTextEditorCapabilityContribution({
+registerEditorContribution({
 	id: 'editor.contrib.bracketMatching',
 	commands: [{ id: RemoveBracketsCommandId, canTriggerInlineEdits: true }],
 	configure: context => {

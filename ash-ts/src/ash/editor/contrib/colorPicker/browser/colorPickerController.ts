@@ -9,7 +9,7 @@ import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { type IColor } from '../../../common/languages.js';
 import { type View } from '../../../browser/view.js';
-import { type EditorCapability, registerTextEditorCapabilityContribution } from '../../../browser/editorExtensions.js';
+import { type EditorCapability, registerEditorContribution } from '../../../browser/editorExtensions.js';
 import { ColorService, type ColorData } from '../common/languageColors.js';
 import { ColorDecorationInjectedTextMarker, ColorDetector } from './colorDetector.js';
 import { ColorPickerModel } from './colorPickerModel.js';
@@ -254,7 +254,7 @@ function colorSwatch(target: EventTarget | null): HTMLElement | undefined {
 		: undefined;
 }
 
-registerTextEditorCapabilityContribution({
+registerEditorContribution({
 	id: 'editor.contrib.colorPicker',
 	configure: context => {
 		const service = new ColorService(context.model, context.languageFeaturesService.colorProvider, context.options.input.resource, context.onLanguageError);

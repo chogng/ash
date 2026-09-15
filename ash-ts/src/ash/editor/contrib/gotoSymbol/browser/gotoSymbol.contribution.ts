@@ -1,10 +1,10 @@
-import { registerTextEditorCapabilityContribution } from "../../../browser/editorExtensions.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { GotoSymbolController } from "./gotoSymbolController.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 import { DocumentSymbolService } from '../../documentSymbols/common/languageDocumentSymbols.js';
 import { GotoSymbolService } from '../common/languageDocumentSymbolSearch.js';
 
-registerTextEditorCapabilityContribution({ id: "editor.contrib.gotoSymbol", install: context => {
+registerEditorContribution({ id: "editor.contrib.gotoSymbol", install: context => {
 	if (context.kind !== "text") return;
 	const symbols = new DocumentSymbolService(context.model, context.languageFeaturesService.documentSymbolProvider, { resource: context.options.input.resource });
 	const service = context.register(new GotoSymbolService(symbols));

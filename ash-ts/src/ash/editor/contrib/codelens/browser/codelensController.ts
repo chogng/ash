@@ -1,4 +1,4 @@
-import { registerTextEditorCapabilityContribution } from '../../../browser/editorExtensions.js';
+import { registerEditorContribution } from '../../../browser/editorExtensions.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { type View } from '../../../browser/view.js';
 import { StableEditorScrollState } from '../../../browser/stableEditorScroll.js';
@@ -248,7 +248,7 @@ function groupCodeLensItems(items: readonly CodeLensItem[]): ReadonlyMap<number,
 	return groups;
 }
 
-registerTextEditorCapabilityContribution({
+registerEditorContribution({
 	id: CodeLensContribution.ID,
 	install: context => {
 		if (context.kind !== 'text' || context.options.codeLens === false || context.model.largeFile.tooLargeForTokenization) return;

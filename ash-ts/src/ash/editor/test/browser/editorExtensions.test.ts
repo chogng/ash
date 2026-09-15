@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
-import { EditorExtensionsRegistry, registerTextEditorCapabilityContribution } from "../../browser/editorExtensions.js";
-import { getTextEditorCapabilityContributions } from "../../browser/editorExtensions.js";
+import { Disposable } from '../../../base/common/lifecycle.js';
+import { EditorContributionInstantiation, EditorExtensionsRegistry, registerEditorContribution } from "../../browser/editorExtensions.js";
 import { TriggerInlineEditCommandsRegistry } from '../../browser/triggerInlineEditCommandsRegistry.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
@@ -12,23 +12,34 @@ Object.defineProperty(globalThis, "document", { configurable: true, value: brows
 suiteTeardown(() => browserEnvironment.window.close());
 
 test("editor contributions retain bundle registration order and stable identity", async () => {
-	const before = getTextEditorCapabilityContributions().map(contribution => contribution.id);
+	const before = EditorExtensionsRegistry.getEditorContributions().map(contribution => contribution.id);
 	assert.equal(before.includes("editor.contrib.findController"), false);
 
 	await import("../../contrib/find/browser/find.contribution.js");
-	const after = getTextEditorCapabilityContributions().map(contribution => contribution.id);
+	const after = EditorExtensionsRegistry.getEditorContributions().map(contribution => contribution.id);
 	assert.deepEqual(after, [...before, "editor.contrib.findController"]);
-	const contribution = getTextEditorCapabilityContributions().find(candidate => candidate.id === "editor.contrib.findController");
-	assert.ok(contribution);
+	const contribution = EditorExtensionsRegistry.getEditorContributions().find(candidate => candidate.id === "editor.contrib.findController");
+	assert.ok(contribution && !('ctor' in contribution));
 	assert.doesNotThrow(() => contribution.install?.({ kind: "document" } as never));
 
-	assert.throws(() => registerTextEditorCapabilityContribution({ id: "editor.contrib.findController", install() {} }), /Duplicate editor contribution/);
-	assert.deepEqual(getTextEditorCapabilityContributions().map(contribution => contribution.id), after);
+	assert.throws(() => registerEditorContribution({ id: "editor.contrib.findController", install() {} }), /Duplicate editor contribution/);
+	assert.deepEqual(EditorExtensionsRegistry.getEditorContributions().map(contribution => contribution.id), after);
+});
+
+test('Constructor and hook contributions reject duplicate IDs in either registration order', () => {
+	class Contribution extends Disposable {}
+	registerEditorContribution('test.registry.constructor', Contribution, EditorContributionInstantiation.Lazy);
+	assert.throws(() => registerEditorContribution({ id: 'test.registry.constructor', install() {} }), /Duplicate editor contribution/);
+	registerEditorContribution({ id: 'test.registry.hook', install() {} });
+	assert.throws(() => registerEditorContribution('test.registry.hook', Contribution, EditorContributionInstantiation.Eager), /Duplicate editor contribution/);
+	const snapshot = EditorExtensionsRegistry.getEditorContributions();
+	snapshot.length = 0;
+	assert.equal(EditorExtensionsRegistry.getSomeEditorContributions(['test.registry.constructor', 'test.registry.hook']).length, 2);
 });
 
 test("Code bundle explicitly registers independently selectable editor capabilities", async () => {
 	await import("../../editor.code.all.js");
-	const ids = new Set(getTextEditorCapabilityContributions().map(contribution => contribution.id));
+	const ids = new Set(EditorExtensionsRegistry.getEditorContributions().map(contribution => contribution.id));
 	for (const id of [
 		"editor.contrib.bracketMatching",
 		"editor.contrib.codeAction",

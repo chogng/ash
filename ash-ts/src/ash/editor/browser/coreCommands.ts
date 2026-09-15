@@ -4,7 +4,7 @@ import { type TextModel } from "../common/model/textModel.js";
 import { CursorMoveCommands } from '../common/cursor/cursorMoveCommands.js';
 import { CursorChangeReason } from '../common/cursorEvents.js';
 import { type IViewModel } from '../common/viewModel.js';
-import { registerTextEditorCapabilityContribution, SelectAllCommand } from "./editorExtensions.js";
+import { registerEditorContribution, SelectAllCommand } from "./editorExtensions.js";
 import { ICodeEditorService } from './services/codeEditorService.js';
 import { type View } from "./view.js";
 
@@ -62,7 +62,7 @@ export function installCoreTextEditorCommands(
 	});
 }
 
-registerTextEditorCapabilityContribution({
+registerEditorContribution({
 	id: EditorCoreCommandId.selectAll,
 	install: context => {
 		if (context.kind !== "text") return;

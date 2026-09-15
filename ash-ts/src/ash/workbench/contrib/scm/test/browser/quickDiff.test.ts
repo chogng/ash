@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { IQuickDiffEditorControllerService, IQuickDiffModelService } from '../../common/quickDiff.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
@@ -31,7 +35,7 @@ test('Quick Diff shares one resource model and projects configurable editor targ
 	using quickDiffService = new WorkbenchQuickDiffService();
 	using providerRegistration = quickDiffService.addProvider(provider);
 	using modelService = new QuickDiffModelService(quickDiffService, new AppServerDiffService(fixture.diffApi));
-	using model = new TextModel('same\nnew\nlast');
+	using model = new TextModel('same\nnew\nlast', { resource: URI.file('/workspace/src/file.ts') });
 	const firstReference = modelService.createModelReference(URI.file('/workspace/src/file.ts'), model);
 	const secondReference = modelService.createModelReference(URI.file('/workspace/src/file.ts'), model);
 	assert.equal(firstReference.object, secondReference.object);
@@ -52,6 +56,65 @@ test('Quick Diff shares one resource model and projects configurable editor targ
 
 	secondReference.dispose();
 	fixture.dispose();
+});
+
+test('Registered Quick Diff creates after first render and releases decorations on model detach', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	const globals = new Map<string, PropertyDescriptor | undefined>();
+	for (const [name, value] of Object.entries({ window: dom.window, document: dom.window.document, Node: dom.window.Node, Element: dom.window.Element, HTMLElement: dom.window.HTMLElement })) {
+		globals.set(name, Object.getOwnPropertyDescriptor(globalThis, name));
+		Object.defineProperty(globalThis, name, { configurable: true, value });
+	}
+	try {
+		const { CodeEditorWidget } = await import('../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js');
+		const { QuickDiffEditorController, QuickDiffEditorControllerService } = await import('../../browser/quickDiffEditorController.js');
+		await import('../../browser/quickDiff.contribution.js');
+		const fixture = gitFixture();
+		using provider = new GitQuickDiffProvider(fixture.gitService);
+		using quickDiffService = new WorkbenchQuickDiffService();
+		using providerRegistration = quickDiffService.addProvider(provider);
+		using modelService = new QuickDiffModelService(quickDiffService, new AppServerDiffService(fixture.diffApi));
+		using controllers = new QuickDiffEditorControllerService();
+		using configuration = new InMemoryConfigurationService();
+		await configuration.updateValue(ScmConfiguration.diffDecorations, 'all');
+		using services = new ServiceContainer();
+		services.registerInstance(IConfigurationService, configuration);
+		services.registerInstance(IQuickDiffModelService, modelService);
+		services.registerInstance(IQuickDiffEditorControllerService, controllers);
+		using model = new TextModel('same\nnew\nlast', { resource: URI.file('/workspace/src/file.ts') });
+		const errors: unknown[] = [];
+		using editor = new CodeEditorWidget({
+			container: dom.window.document.querySelector('main')!, model,
+			input: { resource: URI.file('/workspace/src/file.ts') }, languageId: model.getLanguageId(),
+			instantiationService: services, onContributionError: error => errors.push(error),
+		});
+		assert.deepEqual(fixture.requests, [], 'deferred construction must not fetch during attach');
+		await waitFor(() => errors.length > 0 || model.getAllDecorations().some(decoration => decoration.options.linesDecorationsClassName?.includes('ash-quick-diff-gutter')));
+		assert.deepEqual(errors, []);
+		const controller = editor.getContribution('workbench.contrib.quickDiffEditorController');
+		assert.ok(controller instanceof QuickDiffEditorController);
+		editor.getDomNode().dispatchEvent(new dom.window.FocusEvent('focusin'));
+		assert.equal(controllers.activeController, controller);
+		assert.deepEqual(errors, []);
+		editor.setModel(null);
+		assert.equal(controller.isDisposed, true);
+		assert.equal(controllers.activeController, undefined);
+		assert.equal(model.getAllDecorations().length, 0);
+		const requestCount = fixture.requests.length;
+		editor.setModel(model);
+		editor.setModel(null);
+		await new Promise(resolve => setTimeout(resolve, 80));
+		assert.equal(fixture.requests.length, requestCount, 'detach cancels pending first-render construction');
+		assert.deepEqual(errors, []);
+		fixture.dispose();
+	} finally {
+		for (const [name, descriptor] of globals) {
+			if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+			else Reflect.deleteProperty(globalThis, name);
+		}
+		dom.window.close();
+	}
 });
 
 function gitFixture(): { readonly gitService: IGitService; readonly diffApi: IDiffApi; readonly requests: Array<{ readonly path: string; readonly comparison: string }>; dispose(): void } {
