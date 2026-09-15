@@ -3,13 +3,12 @@ import { LanguageBracketPairs } from '../../../common/languages/languageBracketP
 import { TextDecorationCollection } from '../../../common/model/decorationCollection.js';
 import { TextEditorCapability } from '../../textEditorCapabilities.js';
 import { LanguageBracketColorizationSource } from './bracketColorizationPresentation.js';
-import { BracketEditingController, RemoveBracketsCommandId } from './bracketEditingController.js';
-import { BracketMatchController } from './bracketMatchController.js';
-import { BracketNavigationController } from './bracketNavigationController.js';
+import { BracketMatchingController } from './bracketMatching.js';
+import { EditorOption } from '../../../common/config/editorOptions.js';
+import { KeyCode } from '../../../../base/common/keyCodes.js';
 
 registerEditorContribution({
-	id: 'editor.contrib.bracketMatching',
-	commands: [{ id: RemoveBracketsCommandId, canTriggerInlineEdits: true }],
+	id: BracketMatchingController.ID,
 	configure: context => {
 		const lexicalContext = context.getService(TextEditorCapability.languageLexicalContext);
 		const largeFile = context.model.largeFile.tooLargeForTokenization;
@@ -24,18 +23,26 @@ registerEditorContribution({
 	install: context => {
 		if (context.kind !== 'text') return;
 		const bracketPairs = context.getService(TextEditorCapability.bracketPairs);
-		context.register(new BracketMatchController(
+		const controller = new BracketMatchingController(
 			context.editor,
 			bracketPairs,
 			context.register(new TextDecorationCollection<void>(context.model)),
 			context.options.matchBrackets ?? 'always',
-		));
-		context.register(new BracketNavigationController(
-			context.controller.element,
-			context.view,
-			context.viewModel,
-			bracketPairs,
-		));
-		context.register(new BracketEditingController(context.controller.element, context.view, context.selectionController, bracketPairs, context.executeCommand));
+		);
+		context.register(controller);
+		context.register(context.editor.onKeyDown(event => {
+			if (event.browserEvent.defaultPrevented || event.isComposing || event.browserEvent.getModifierState('AltGraph') || (!event.ctrlKey && !event.metaKey)) return;
+			if (event.shiftKey && !event.altKey && event.keyCode === KeyCode.Backslash) {
+				event.stop();
+				controller.jumpToBracket();
+			} else if (event.altKey && !event.shiftKey && event.key === 'Backspace') {
+				if (context.editor.getOption(EditorOption.readOnly)) return;
+				const selections = context.editor.getSelections() ?? [];
+				if (!selections.some(selection => selection.isEmpty() && (bracketPairs.matchBracket(selection.getPosition()) || bracketPairs.findEnclosingBrackets(selection.getPosition())))) return;
+				event.stop();
+				context.executeCommand('editor.action.removeBrackets', () => controller.removeBrackets('editor.action.removeBrackets'));
+			}
+		}));
+		return controller;
 	},
 });

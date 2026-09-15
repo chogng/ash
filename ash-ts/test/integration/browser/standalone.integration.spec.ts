@@ -1,5 +1,36 @@
 import { expect, test } from '@playwright/test';
 
+test('bracket navigation shares the controller with its action for multiple cursors', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareBrackets('(one) [two]', [1, 7]));
+	await page.keyboard.press('ControlOrMeta+Shift+Backslash');
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).toEqual(['[1,5 -> 1,5]', '[1,11 -> 1,11]']);
+	await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.jumpToBracket'));
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).toEqual(['[1,1 -> 1,1]', '[1,7 -> 1,7]']);
+});
+
+for (const entry of ['shortcut', 'action'] as const) {
+	test(`bracket removal via ${entry} is one undo step`, async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareBrackets('(one) [two]', [1, 7]));
+		if (entry === 'shortcut') await page.keyboard.press('ControlOrMeta+Alt+Backspace');
+		else await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.removeBrackets'));
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('one two');
+		await page.keyboard.press('ControlOrMeta+z');
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({ value: '(one) [two]', selections: ['[1,1 -> 1,1]', '[1,7 -> 1,7]'] });
+	});
+}
+
+test('bracket removal respects read-only state while navigation remains available', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareBrackets('(one)', [1], true));
+	await page.keyboard.press('ControlOrMeta+Alt+Backspace');
+	await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.removeBrackets'));
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('(one)');
+	await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.jumpToBracket'));
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).toEqual(['[1,5 -> 1,5]']);
+});
+
 test('document formatting uses a range-only provider and remains undoable', async ({ page }) => {
 	await page.goto('/standalone.html');
 	expect(await page.evaluate(() => window.ashStandaloneIntegration.runFormatting('range'))).toBe('ALPHA');

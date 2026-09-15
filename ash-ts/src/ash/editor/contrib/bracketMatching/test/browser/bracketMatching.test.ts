@@ -26,7 +26,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { TestView: View } = await import("../../../../test/browser/viewModel/testViewModel.js");
-const { BracketMatchController } = await import("../../browser/bracketMatchController.js");
+const { BracketMatchingController } = await import("../../browser/bracketMatching.js");
 
 test("Bracket match controller stores standard decoration options and clears them for a range selection", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -48,7 +48,7 @@ test("Bracket match controller stores standard decoration options and clears the
 		textMeasurer: new FixedTextMeasurer(),
 		selectionController: selections,
 	});
-	using controller = new BracketMatchController(editorFor(model, selections), bracketPairs, decorations, "always");
+	using controller = new BracketMatchingController(editorFor(model, selections), bracketPairs, decorations, "always");
 	viewport.layout({ width: 240, height: 40 });
 
 	assert.deepEqual(model.getAllDecorations().map(decoration => ({
@@ -77,15 +77,15 @@ test("Bracket match controller distinguishes near, always, and never modes", () 
 	const editor = editorFor(model, selections);
 
 	using nearDecorations = new TextDecorationCollection<void>(model);
-	using near = new BracketMatchController(editor, bracketPairs, nearDecorations, "near");
+	using near = new BracketMatchingController(editor, bracketPairs, nearDecorations, "near");
 	assert.equal(nearDecorations.size, 0);
 
 	using alwaysDecorations = new TextDecorationCollection<void>(model);
-	using always = new BracketMatchController(editor, bracketPairs, alwaysDecorations, "always");
+	using always = new BracketMatchingController(editor, bracketPairs, alwaysDecorations, "always");
 	assert.equal(alwaysDecorations.size, 2);
 
 	using neverDecorations = new TextDecorationCollection<void>(model);
-	using never = new BracketMatchController(editor, bracketPairs, neverDecorations, "never");
+	using never = new BracketMatchingController(editor, bracketPairs, neverDecorations, "never");
 	assert.equal(neverDecorations.size, 0);
 });
 
