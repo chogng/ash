@@ -50,7 +50,7 @@
 | 0 | 入口与装配 | `editor.api.ts`、`editor.*.all.ts`、`CodeEditorWidget` | 创建、挂载、切换模型、激活贡献、释放 | 0.1–0.4 行为已验收；完整 Widget API 仍待随各分部核对 |
 | 1 | 文本与文档内核 | `common/model`、`common/core` | 编辑、撤销、快照、结构事务、超大文件 | 1.1–1.5 已验收；完整公开 API 仍待随其他分部核对 |
 | 2 | 选区与输入 | `common/cursor`、`browser/controller` | 键盘和指针编辑、多光标、IME、剪贴板 | 2.1–2.4、2.6 已验收；2.5 浏览器事件链已验收，平台输入法待验收 |
-| 3 | 视图与几何 | `common/viewModel`、`common/viewLayout`、`browser/view*` | 换行、滚动、命中、装饰、控件、DOM/GPU 绘制 | 3.1–3.3 已验收；其余待逐项验收 |
+| 3 | 视图与几何 | `common/viewModel`、`common/viewLayout`、`browser/view*` | 换行、滚动、命中、装饰、控件、DOM/GPU 绘制 | 3.1–3.3 已验收；3.4 已验证区域收起与块装饰联动，其余待逐项验收 |
 | 4 | 语言与异步结果 | `common/languages`、`common/services`、语言贡献 | 配置、分词、诊断、折叠、符号、过期结果拒绝 | 部分具备 |
 | 5 | Code 编辑功能 | `contrib/<feature>` | 查找、补全、悬停、导航、重命名、代码操作等 | 部分具备 |
 | 6 | Academic 富文档 | `common/model` 的文档语义、`RichTextEditorWidget`、Academic 贡献 | 结构编辑、代码区域、格式、协作 | 部分具备 |
@@ -166,5 +166,9 @@ Textarea 与 EditContext 都由当前输入节点处理复制、剪切和粘贴�
 ## 3.3 光标与 gutter（已验收）
 
 一个模型行折成多条视图行时，行号只在首行出现，glyph marker 固定于对应模型行的起点，光标按当前模型列落在正确续行。相对行号以模型行而非视图行计算；光标移到下一模型行或首行内容缩短后，光标、行号和 marker 沿同一纵向布局更新，单纯移动光标不改变模型版本。Chromium 用例与既有光标、行号、glyph owner 测试覆盖这条链，本项不需要修改三个 Part 的生产实现。下一项是装饰与 View Zone。
+
+## 3.4 装饰与 View Zone（进行中）
+
+2026-09-15 修复 View Zone 拒绝零高度的问题：`heightInPx: 0` 和 `heightInLines: 0` 都允许创建收起的区域，并通过 `layoutZone` 展开、移动和再次收起。区域沿用同一 DOM 节点，margin 同步隐藏与展开；空白区变化不修改文本版本。块装饰包含相邻区域的空白，区域展开时块装饰增高、文本光标下移，区域移到当前行之后时光标回到原位置。两个 Standalone Chromium 回归用例覆盖这条链及删除后的节点退出。软换行、隐藏行与滚动交叉场景仍待继续验收，不能把本次修复视为 3.4 全部完成。
 
 整个 Editor 的最终验收还要求上述各部分的真实入口、单测、浏览器/Electron 行为、Renderer 构建和相关架构测试全部闭合。当前已通过的套件不能代替仍未覆盖的平台、屏幕阅读器或未接线能力。

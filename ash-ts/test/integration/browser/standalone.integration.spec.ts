@@ -1051,3 +1051,60 @@ test('wrapped cursor and gutter markers stay on their model lines through naviga
 	await expect(page.locator('#caller .ash-gutter-probe')).toHaveCount(0);
 	expect(errors).toEqual([]);
 });
+
+for (const unit of ['pixels', 'lines'] as const) {
+	test(`standalone view zones collapse and expand in ${unit} without changing text or decoration anchors`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto('/standalone.html');
+		const initial = await page.evaluate(value => window.ashStandaloneIntegration.prepareViewZone(value), unit);
+		expect(initial.computedHeights).toEqual([0]);
+		const zone = page.locator('#caller .ash-zone-probe');
+		const margin = page.locator('#caller .ash-zone-margin-probe');
+		const block = page.locator('#caller .ash-zone-block-probe');
+		const caret = page.locator('#caller .stanza-editor-caret.primary');
+		await page.locator('#caller .stanza-editor-input').focus();
+		await expect(zone).toHaveCount(1);
+		await expect(zone).toBeHidden();
+		await expect(margin).toBeHidden();
+		const originalBlock = await block.boundingBox();
+		expect(originalBlock).not.toBeNull();
+		const originalCaret = await caret.boundingBox();
+		expect(originalCaret).not.toBeNull();
+		const node = await zone.elementHandle();
+		const height = unit === 'pixels' ? 40 : 2;
+		const expanded = await page.evaluate(value => window.ashStandaloneIntegration.resizeViewZone(value, 1), height);
+		expect(expanded).toEqual({
+			version: initial.version,
+			lineTop: initial.lineTop + 40,
+			contentHeight: initial.contentHeight + 40,
+			computedHeights: [0, 40],
+		});
+		await expect(zone).toBeVisible();
+		await expect(zone).toHaveCSS('height', '40px');
+		await expect(margin).toHaveCSS('height', '40px');
+		await expect.poll(async () => (await block.boundingBox())?.height).toBe(originalBlock!.height + 40);
+		await expect.poll(async () => (await caret.boundingBox())?.y).toBe(originalCaret!.y + 40);
+		expect(await node!.evaluate(element => element === document.querySelector('#caller .ash-zone-probe'))).toBe(true);
+
+		const moved = await page.evaluate(value => window.ashStandaloneIntegration.resizeViewZone(value, 2), height);
+		expect(moved.lineTop).toBe(initial.lineTop);
+		await expect.poll(async () => (await caret.boundingBox())?.y).toBe(originalCaret!.y);
+		await expect.poll(async () => (await block.boundingBox())?.y).toBe(originalBlock!.y);
+		const collapsed = await page.evaluate(() => window.ashStandaloneIntegration.resizeViewZone(0, 1));
+		expect(collapsed).toEqual({ ...initial, computedHeights: [0, 40, 40, 0] });
+		await expect.poll(async () => (await block.boundingBox())?.height).toBe(originalBlock!.height);
+		await expect(zone).toBeHidden();
+		await expect(margin).toBeHidden();
+		await page.evaluate(value => window.ashStandaloneIntegration.resizeViewZone(value, 1), height);
+		await expect(zone).toBeVisible();
+		await page.evaluate(() => window.ashStandaloneIntegration.removeViewZone());
+		await expect(zone).toHaveCount(0);
+		await expect(margin).toHaveCount(0);
+		await expect.poll(async () => (await block.boundingBox())?.y).toBe(originalBlock!.y);
+		expect(await node!.evaluate(element => element.isConnected)).toBe(false);
+		await node!.dispose();
+		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+		expect(errors).toEqual([]);
+	});
+}

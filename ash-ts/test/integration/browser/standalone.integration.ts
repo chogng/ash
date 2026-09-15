@@ -50,6 +50,13 @@ interface WrappedLayoutState {
 	readonly contentHeight: number;
 }
 
+interface ViewZoneState {
+	readonly version: number;
+	readonly lineTop: number;
+	readonly contentHeight: number;
+	readonly computedHeights: readonly number[];
+}
+
 interface StandaloneHarness {
 	readonly events: readonly CreationEvent[];
 	state(kind: 'caller' | 'owned'): EditorState;
@@ -92,6 +99,9 @@ interface StandaloneHarness {
 	resizeWrappedLayout(width: number): WrappedLayoutState;
 	editWrappedText(value: string): WrappedLayoutState;
 	readWrappedLayout(): WrappedLayoutState;
+	prepareViewZone(unit: 'pixels' | 'lines'): ViewZoneState;
+	resizeViewZone(height: number, afterLineNumber: number): ViewZoneState;
+	removeViewZone(): ViewZoneState;
 	prepareVisibleRows(): { readonly lineCount: number; readonly version: number };
 	scrollVisibleRows(top: number): number;
 	editVisibleRow(lineIndex: number): string;
@@ -141,6 +151,9 @@ let pointerMouseUpEvents = 0;
 const pointerMouseUpListener = callerEditor.onMouseUp(() => { pointerMouseUpEvents += 1; });
 let codeActionRegistration: ReturnType<typeof stanza.languages.registerCodeActionProvider> | undefined;
 let completionRegistration: ReturnType<typeof stanza.languages.registerCompletionItemProvider> | undefined;
+let viewZone: stanza.IViewZone | undefined;
+let viewZoneId = '';
+const computedZoneHeights: number[] = [];
 let longLineId: string | undefined;
 let largeModel: ReturnType<typeof stanza.editor.createModel> | undefined;
 
@@ -206,6 +219,15 @@ function readWrappedLayout(): WrappedLayoutState {
 		version: callerModel.getVersionId(),
 		modelLineCount: callerModel.getLineCount(),
 		contentHeight: callerEditor.getContentHeight(),
+	};
+}
+
+function readViewZone(): ViewZoneState {
+	return {
+		version: callerModel.getVersionId(),
+		lineTop: callerEditor.getTopForLineNumber(2),
+		contentHeight: callerEditor.getContentHeight(),
+		computedHeights: [...computedZoneHeights],
 	};
 }
 
@@ -388,6 +410,48 @@ window.ashStandaloneIntegration = {
 		return readWrappedLayout();
 	},
 	readWrappedLayout,
+	prepareViewZone: unit => {
+		callerEditor.updateOptions({ lineHeight: 20, padding: { top: 0, bottom: 0 }, scrollBeyondLastLine: false });
+		callerEditor.setValue(['first', 'second', ...Array.from({ length: 10 }, (_, index) => `line-${index + 3}`)].join('\n'));
+		callerEditor.setPosition(new stanza.Position(2, 1));
+		callerEditor.createDecorationsCollection([{
+			range: new stanza.Range(2, 1, 2, 7),
+			options: { description: 'view zone geometry', blockClassName: 'ash-zone-block-probe' },
+		}]);
+		const domNode = document.createElement('div');
+		domNode.className = 'ash-zone-probe';
+		const marginDomNode = document.createElement('div');
+		marginDomNode.className = 'ash-zone-margin-probe';
+		viewZone = {
+			afterLineNumber: 1,
+			domNode,
+			marginDomNode,
+			suppressMouseDown: true,
+			onComputedHeight: height => computedZoneHeights.push(height),
+		};
+		if (unit === 'pixels') {
+			viewZone.heightInPx = 0;
+		} else {
+			viewZone.heightInLines = 0;
+		}
+		callerEditor.changeViewZones(accessor => { viewZoneId = accessor.addZone(viewZone!); });
+		return readViewZone();
+	},
+	resizeViewZone: (height, afterLineNumber) => {
+		if (!viewZone) throw new Error('View zone has not been created');
+		if (viewZone.heightInPx !== undefined) {
+			viewZone.heightInPx = height;
+		} else {
+			viewZone.heightInLines = height;
+		}
+		viewZone.afterLineNumber = afterLineNumber;
+		callerEditor.changeViewZones(accessor => accessor.layoutZone(viewZoneId));
+		return readViewZone();
+	},
+	removeViewZone: () => {
+		callerEditor.changeViewZones(accessor => accessor.removeZone(viewZoneId));
+		return readViewZone();
+	},
 	prepareVisibleRows: () => {
 		callerContainer.style.height = '80px';
 		callerEditor.layout({ width: callerContainer.clientWidth, height: 80 });

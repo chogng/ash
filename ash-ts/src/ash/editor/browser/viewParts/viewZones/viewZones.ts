@@ -253,11 +253,11 @@ export class ViewZones extends ViewPart {
 		if (!Number.isSafeInteger(zone.afterLineNumber) || zone.afterLineNumber < 0) {
 			throw new RangeError('Editor view zone line number must be a non-negative safe integer');
 		}
-		if (zone.heightInPx !== undefined && (!isFiniteNumber(zone.heightInPx) || zone.heightInPx <= 0)) {
-			throw new RangeError('Editor view zone height must be finite and positive');
+		if (zone.heightInPx !== undefined && (!isFiniteNumber(zone.heightInPx) || zone.heightInPx < 0)) {
+			throw new RangeError('Editor view zone height must be finite and non-negative');
 		}
-		if (zone.heightInPx === undefined && zone.heightInLines !== undefined && (!isFiniteNumber(zone.heightInLines) || zone.heightInLines <= 0)) {
-			throw new RangeError('Editor view zone line height must be finite and positive');
+		if (zone.heightInPx === undefined && zone.heightInLines !== undefined && (!isFiniteNumber(zone.heightInLines) || zone.heightInLines < 0)) {
+			throw new RangeError('Editor view zone line height must be finite and non-negative');
 		}
 		if (zone.ordinal !== undefined && !isFiniteNumber(zone.ordinal)) {
 			throw new RangeError('Editor view zone ordinal must be finite');
