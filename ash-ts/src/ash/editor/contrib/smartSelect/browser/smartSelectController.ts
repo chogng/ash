@@ -89,9 +89,9 @@ registerTextEditorCapabilityContribution({
 		if (context.kind !== "text") return;
 		const selectionRanges = context.register(new SelectionRangeService(context.model, context.languageFeaturesService.selectionRangeProvider, context.options.input.resource));
 		context.register(new SmartSelectController(
-			context.view.element,
+			context.controller.element,
 			context.editor,
-			context.viewport,
+			context.view,
 			context.languageId,
 			selectionRanges,
 			context.onLanguageError,

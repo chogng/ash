@@ -3,7 +3,7 @@ import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle
 import { darkColorTheme } from '../../../../platform/theme/common/colorTheme.js';
 import { ThemeService } from '../../../../platform/theme/common/themeService.js';
 import { type EditorViewportOptions, View } from '../../../browser/view.js';
-import { EditorLineWrapping, type IEditorOptions, WrappingIndent } from '../../../common/config/editorOptions.js';
+import { EditorLineWrapping, editorOptionsRegistry, type IEditorOptions, WrappingIndent } from '../../../common/config/editorOptions.js';
 import { type CursorsController } from '../../../common/cursor/cursor.js';
 import { CursorState } from '../../../common/cursorCommon.js';
 import { CursorChangeReason } from '../../../common/cursorEvents.js';
@@ -13,7 +13,11 @@ import { getViewModelCursorController, ViewModel } from '../../../common/viewMod
 import { TestLanguageConfigurationService } from '../../common/modes/testLanguageConfigurationService.js';
 import { createTestConfiguration } from '../config/testConfiguration.js';
 
-export type TestViewOptions = Omit<EditorViewportOptions, 'configuration' | 'theme' | 'viewModel'> & {
+export type TestViewOptions = Omit<EditorViewportOptions, 'configuration' | 'theme' | 'viewModel' | 'padding'> & Omit<IEditorOptions, 'padding' | 'wrappingIndent'> & {
+	readonly lineWrapping?: EditorLineWrapping;
+	readonly wrappingIndent?: WrappingIndent;
+	readonly cursorOptions?: IEditorOptions;
+	readonly padding?: { readonly top: number; readonly bottom: number; readonly left: number; readonly right: number };
 	readonly model: TextModel;
 	readonly selectionController?: CursorsController;
 };
@@ -60,6 +64,7 @@ function createViewModel(options: TestViewOptions): {
 	if (!ownerWindow) throw new ReferenceError('Test editor requires a browser window');
 	const store = new DisposableStore();
 	const editorOptions: IEditorOptions = {
+		...Object.fromEntries(editorOptionsRegistry.map(option => [option.name, options[option.name as keyof TestViewOptions]])),
 		...options.cursorOptions,
 		ariaLabel: options.ariaLabel,
 		automaticLayout: options.automaticLayout,
@@ -74,7 +79,7 @@ function createViewModel(options: TestViewOptions): {
 			...options.guides,
 			indentation: options.guides?.indentation ?? options.presentation !== 'embedded',
 		},
-		minimap: options.minimap ? { ...options.minimap } : undefined,
+		minimap: { ...options.minimap, enabled: options.minimap?.enabled ?? options.presentation !== 'embedded' },
 		renderWhitespace: options.renderWhitespace,
 		padding: options.padding ? { top: options.padding.top, bottom: options.padding.bottom } : undefined,
 		wordWrap: options.lineWrapping === EditorLineWrapping.On ? 'on' : 'off',

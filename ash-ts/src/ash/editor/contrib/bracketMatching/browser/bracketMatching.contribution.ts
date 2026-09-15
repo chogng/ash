@@ -33,11 +33,11 @@ registerTextEditorCapabilityContribution({
 			context.options.matchBrackets ?? 'always',
 		));
 		context.register(new BracketNavigationController(
-			context.view.element,
-			context.viewport,
+			context.controller.element,
+			context.view,
 			context.viewModel,
 			bracketPairs,
 		));
-		context.register(new BracketEditingController(context.view.element, context.viewport, context.selectionController, bracketPairs, context.executeCommand));
+		context.register(new BracketEditingController(context.controller.element, context.view, context.selectionController, bracketPairs, context.executeCommand));
 	},
 });

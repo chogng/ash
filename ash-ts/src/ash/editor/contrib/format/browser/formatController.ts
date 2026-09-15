@@ -61,9 +61,9 @@ registerTextEditorCapabilityContribution({ id: "editor.contrib.format", install:
 		context.options.input.resource,
 	));
 	const controller = context.register(new FormatController(
-		context.view.element,
+		context.controller.element,
 		context.editor,
-		context.viewport,
+		context.view,
 		service,
 		context.editorWorker,
 		context.languageId,

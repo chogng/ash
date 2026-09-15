@@ -140,9 +140,9 @@ registerTextEditorCapabilityContribution({ id: "editor.contrib.rename", commands
 	if (context.kind !== "text") return;
 	const service = context.register(new RenameService(context.model, context.options.input.resource, context.languageFeaturesService.renameProvider));
 	context.register(new RenameController(
-		context.view.element,
+		context.controller.element,
 		context.editor,
-		context.viewport,
+		context.view,
 		service,
 		context.languageId,
 		context.options.input.resource,

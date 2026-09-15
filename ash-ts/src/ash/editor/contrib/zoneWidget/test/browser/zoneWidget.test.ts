@@ -38,7 +38,7 @@ test('ZoneWidget reserves editor space, tracks its anchor, updates layout, and r
 		lineHeight: 20,
 	});
 	editor.layout({ width: 200, height: 100 });
-	const viewport = editor.viewport;
+	const viewport = editor.view;
 	using widget = new TestZoneWidget(editor, {
 		className: 'peek-widget test-widget',
 		frameWidth: 2,
@@ -132,7 +132,7 @@ test('ZoneWidget preserves selection on request and exposes an enabled resize sa
 		lineHeight: 20,
 	});
 	editor.layout({ width: 200, height: 40 });
-	const viewport = editor.viewport;
+	const viewport = editor.view;
 	const initialSelection = Selection.fromPositions(new Position(2, 2));
 	editor.setSelection(initialSelection);
 	using widget = new TestZoneWidget(editor, {
@@ -182,7 +182,7 @@ test('ZoneWidget places an anchor after its wrapped visual line', () => {
 		lineHeight: 20,
 	});
 	editor.layout({ width: 100, height: 500 });
-	const viewport = editor.viewport;
+	const viewport = editor.view;
 	viewport.setLineWrapping(EditorLineWrapping.On);
 	const anchor = new Position((0) + 1, (18) + 1);
 	const visualLineIndex = viewport.getVisualLineProjection().visualLineIndexAt(anchor);

@@ -462,9 +462,9 @@ test('Required editor view parts are connected to their production owners', () =
 	assert.match(editorBrowser, /interface IOverlayWidget[\s\S]*getId\(\)[\s\S]*getDomNode\(\)[\s\S]*getPosition\(\)/u);
 	assert.match(editorBrowser, /interface IViewZoneChangeAccessor[\s\S]*addZone[\s\S]*removeZone[\s\S]*layoutZone/u);
 	for (const operation of ['addOverlayWidget', 'layoutOverlayWidget', 'removeOverlayWidget']) {
-		assert.match(codeEditorWidget, new RegExp(`viewport(?:\\?\\.)?\\.?${operation}\\(`, 'u'));
+		assert.match(codeEditorWidget, new RegExp(`view(?:\\?\\.)?\\.?${operation}\\(`, 'u'));
 	}
-	assert.match(codeEditorWidget, /viewport\.changeViewZones/u);
+	assert.match(codeEditorWidget, /view\.changeViewZones/u);
 	assert.match(view, /new ViewOverlayWidgets/u);
 	assert.match(view, /new RulersGpu/u);
 	assert.match(view, /new ViewGpuContext/u);

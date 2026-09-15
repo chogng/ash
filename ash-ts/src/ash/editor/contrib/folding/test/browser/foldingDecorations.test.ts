@@ -90,7 +90,7 @@ test('Folding contribution projects model ranges through FoldingDecorationProvid
 		key: '[',
 		...(operatingSystem === OperatingSystem.Macintosh ? { metaKey: true, altKey: true } : { ctrlKey: true, shiftKey: true }),
 	}) as unknown as KeyboardEvent;
-	editor.view.element.dispatchEvent(collapse);
+	editor.controller.element.dispatchEvent(collapse);
 	assert.equal(collapse.defaultPrevented, true);
 	const collapsed = model.getAllDecorations().find(decoration => decoration.options.description === 'folding-collapsed');
 	assert.equal(collapsed?.options.afterContentClassName, 'inline-folded');

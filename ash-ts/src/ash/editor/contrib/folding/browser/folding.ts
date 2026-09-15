@@ -25,7 +25,9 @@ registerTextEditorCapabilityContribution({
 		const folding = context.register(new EditorFoldingModel(context.model));
 		const hidden = context.register(new EditorHiddenRangeModel(context.model, folding));
 		context.provideCapability(TextEditorCapability.folding, folding);
-		context.setLineProjection({ visibilitySource: hidden });
+		const syncHiddenAreas = (): void => context.viewModel.setHiddenAreas(hidden.hiddenRanges);
+		syncHiddenAreas();
+		context.register(hidden.onDidChange(syncHiddenAreas));
 		if (context.options.folding === false || context.model.largeFile.tooLargeForTokenization) return;
 		const service = context.register(new FoldingRangeService(context.model, context.languageFeaturesService.foldingRangeProvider, context.options.input.resource));
 		context.register(new FoldingRangeSource(context, folding, service));
@@ -139,7 +141,7 @@ export class FoldingController extends Disposable {
 		options: FoldingControllerOptions = {},
 	) {
 		super();
-		this.viewport = context.viewport;
+		this.viewport = context.view;
 		this.editor = context.editor;
 		this.folding = context.getCapability(TextEditorCapability.folding);
 		try {
@@ -148,7 +150,7 @@ export class FoldingController extends Disposable {
 				throw new TypeError("Stanza folding dependencies must share one text model");
 			}
 			if (context.model.largeFile.tooLargeForTokenization) return;
-			this._register(addDisposableListener(context.view.element, "keydown", event => this.handleKeydown(event)));
+			this._register(addDisposableListener(context.controller.element, "keydown", event => this.handleKeydown(event)));
 			this._register(this.editor.onMouseDown(event => this.handleGutterPointerDown(event)));
 		} catch (error) {
 			this.dispose();

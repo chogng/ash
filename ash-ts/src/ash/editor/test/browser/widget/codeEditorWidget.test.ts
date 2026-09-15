@@ -104,14 +104,14 @@ test("CodeEditorWidget owns one canonical browser editing surface", () => {
 
 	assert.equal(editor.getDomNode().parentElement, container);
 	assert.equal(editor.getDomNode().getAttribute("aria-label"), "Code");
-	assert.equal(editor.view.element.getAttribute("aria-label"), "Code");
+	assert.equal(editor.controller.element.getAttribute("aria-label"), "Code");
 	const margin = requiredElement<HTMLElement>(editor.getDomNode(), '.margin');
 	assert.equal(margin.getAttribute('role'), 'presentation');
 	assert.equal(margin.getAttribute('aria-hidden'), 'true');
 	assert.equal(margin.firstElementChild?.className, 'glyph-margin');
-	assert.ok(editor.view.editContext instanceof ViewPart);
-	assert.strictEqual(TextAreaEditContextRegistry.get(editor.getId()), editor.view.editContext);
-	assert.deepEqual(editor.viewport.viewportLayout.viewportSize, { width: 320, height: 80 });
+	assert.ok(editor.controller.editContext instanceof ViewPart);
+	assert.strictEqual(TextAreaEditContextRegistry.get(editor.getId()), editor.controller.editContext);
+	assert.deepEqual(editor.view.viewportLayout.viewportSize, { width: 320, height: 80 });
 	assert.equal(fontTarget.style.fontFamily, editor.getDomNode().style.fontFamily);
 	assert.equal(fontTarget.style.fontFeatureSettings, editor.getDomNode().style.fontFeatureSettings);
 
@@ -138,8 +138,8 @@ test('textarea system-caret movement returns through TextAreaInput and stops aft
 		accessibilityService: enabledAccessibilityService,
 	});
 	editor.layout({ width: 320, height: 80 });
-	assert.ok(editor.view.editContext instanceof TextAreaEditContext);
-	const editContext = editor.view.editContext as InstanceType<typeof TextAreaEditContext>;
+	assert.ok(editor.controller.editContext instanceof TextAreaEditContext);
+	const editContext = editor.controller.editContext as InstanceType<typeof TextAreaEditContext>;
 	const textArea = editContext.getTextAreaDomNode();
 	editContext.focus();
 	editContext.writeScreenReaderContent('test');
@@ -187,8 +187,8 @@ test('textarea system-caret movement maps LF screen-reader content back to a CRL
 		accessibilityService: enabledAccessibilityService,
 	});
 	editor.layout({ width: 320, height: 80 });
-	assert.ok(editor.view.editContext instanceof TextAreaEditContext);
-	const editContext = editor.view.editContext as InstanceType<typeof TextAreaEditContext>;
+	assert.ok(editor.controller.editContext instanceof TextAreaEditContext);
+	const editContext = editor.controller.editContext as InstanceType<typeof TextAreaEditContext>;
 	const textArea = editContext.getTextAreaDomNode();
 	editContext.focus();
 	editContext.writeScreenReaderContent('test');
@@ -241,10 +241,10 @@ test('EditContext owns default copy, paste, and cut behavior without a clipboard
 		languageId: model.getLanguageId(),
 		lineHeight: 20,
 	});
-	const input = editor.view.editContext.domNode.domNode;
-	assert.ok(editor.view.editContext instanceof TextAreaEditContext);
+	const input = editor.controller.editContext.domNode.domNode;
+	assert.ok(editor.controller.editContext instanceof TextAreaEditContext);
 	input.focus();
-	const textAreaInput = editor.view.editContext.textAreaInput;
+	const textAreaInput = editor.controller.editContext.textAreaInput;
 	let willCopyCount = 0;
 	let cutCount = 0;
 	let pasteCount = 0;
@@ -290,7 +290,7 @@ test('EditContext rejects cut and paste while composition owns the edit transact
 		lineHeight: 20,
 	});
 	editor.setSelection(new Selection(1, 6, 1, 6));
-	const input = editor.view.editContext.domNode.domNode;
+	const input = editor.controller.editContext.domNode.domNode;
 	input.focus();
 	input.dispatchEvent(new dom.window.CompositionEvent('compositionstart', { data: '' }));
 	assert.equal(editor.inComposition, true);
@@ -329,7 +329,7 @@ test('EditContext routes word deletion through standard WordOperations ranges', 
 		languageId: model.getLanguageId(),
 		lineHeight: 20,
 	});
-	const input = editor.view.editContext.domNode.domNode;
+	const input = editor.controller.editContext.domNode.domNode;
 	editor.setPosition(new Position(1, 11));
 	input.focus();
 	const backward = new dom.window.InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'deleteWordBackward' });
@@ -337,7 +337,7 @@ test('EditContext routes word deletion through standard WordOperations ranges', 
 	assert.equal(backward.defaultPrevented, true);
 	assert.equal(model.getText(), 'alpha ');
 
-	editor.view.undo();
+	editor.controller.undo();
 	editor.setPosition(new Position(1, 1));
 	const forward = new dom.window.InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'deleteWordForward' });
 	input.dispatchEvent(forward);
@@ -550,7 +550,7 @@ test('editor focus updates the view overlay presentation', () => {
 	assert.equal(editor.getDomNode().querySelector('.view-overlays .current-line'), null);
 	assert.ok(editor.getDomNode().querySelector('.margin-view-overlays .current-line-margin'));
 	editor.setSelection(Selection.fromPositions(new Position(1, 1)));
-	editor.view.editContext.domNode.domNode.blur();
+	editor.controller.editContext.domNode.domNode.blur();
 	assert.equal(overlays.classList.contains('focused'), false);
 	assert.equal(editor.getDomNode().querySelector('.view-overlays .current-line'), null);
 	assert.equal(editor.getDomNode().querySelector('.margin-view-overlays .current-line-margin'), null);
@@ -596,8 +596,8 @@ test('browser EditContext reattaches its editing object after DOM ownership chan
 		accessibilityService: enabledAccessibilityService,
 	});
 	const ownerId = editor.getId();
-	assert.ok(editor.view.editContext instanceof NativeEditContext);
-	const editContext = editor.view.editContext as InstanceType<typeof NativeEditContext>;
+	assert.ok(editor.controller.editContext instanceof NativeEditContext);
+	const editContext = editor.controller.editContext as InstanceType<typeof NativeEditContext>;
 	editor.layout({ width: 320, height: 80 });
 	assert.strictEqual(NativeEditContextRegistry.get(ownerId), editContext);
 	assert.ok(editContext.nativeContext.updateSelectionBounds);
@@ -849,7 +849,7 @@ test('ViewUserInputEvents converts view targets once and CodeEditorWidget publis
 		clientY: 10,
 	});
 	requiredElement<HTMLElement>(editor.getDomNode(), '.view-line .stanza-editor-line-text > span').dispatchEvent(browserEvent);
-	editor.view.textArea!.dispatchEvent(new dom.window.KeyboardEvent('keyup', { bubbles: true, key: 'a' }));
+	editor.controller.textArea!.dispatchEvent(new dom.window.KeyboardEvent('keyup', { bubbles: true, key: 'a' }));
 	editor.getDomNode().dispatchEvent(new dom.window.MouseEvent('drop', { bubbles: true, clientX: 80, clientY: 10 }) as unknown as DragEvent);
 
 	assert.ok(received);
@@ -881,7 +881,7 @@ test('ViewController owns mouse selection policy for pointer dispatch', () => {
 	dom.window.dispatchEvent(new dom.window.MouseEvent('pointerup', { bubbles: true, button: 0, clientX: 80, clientY: 25 }));
 	assert.equal(editor.getPosition()?.lineNumber, 2);
 
-	const dispatch = (position: Position, options: { count?: number; selecting?: boolean; altKey?: boolean; lineNumbers?: boolean } = {}) => editor.view.dispatchMouse({
+	const dispatch = (position: Position, options: { count?: number; selecting?: boolean; altKey?: boolean; lineNumbers?: boolean } = {}) => editor.controller.dispatchMouse({
 		position,
 		mouseColumn: position.column,
 		revealType: NavigationCommandRevealType.None,
@@ -1359,12 +1359,12 @@ test('CodeEditorWidget runs in-place replacement through the registered contribu
 	editor.setSelection(Selection.fromPositions(new Position(1, 7), new Position(1, 8)));
 
 	const next = new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: '.', ctrlKey: true, shiftKey: true }) as unknown as KeyboardEvent;
-	editor.view.element.dispatchEvent(next);
+	editor.controller.element.dispatchEvent(next);
 	assert.equal(next.defaultPrevented, true);
 	await waitForText(model, 'value 2');
 
 	const previous = new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: ',', ctrlKey: true, shiftKey: true }) as unknown as KeyboardEvent;
-	editor.view.element.dispatchEvent(previous);
+	editor.controller.element.dispatchEvent(previous);
 	assert.equal(previous.defaultPrevented, true);
 	await waitForText(model, 'value 1');
 	dom.window.close();
@@ -1396,7 +1396,7 @@ test("CodeEditorWidget owns padding, placeholder, and current-line presentation 
 	assert.equal(editor.getDomNode().style.getPropertyValue("--stanza-editor-padding-left"), "12px");
 	assert.equal(editor.getDomNode().style.getPropertyValue("--stanza-editor-padding-right"), "12px");
 	assert.equal(requiredElement<HTMLElement>(editor.getDomNode(), ".stanza-editor-placeholder-text").style.top, "20px");
-	assert.equal(editor.viewport.viewportLayout.contentSize.height, 60);
+	assert.equal(editor.view.viewportLayout.contentSize.height, 60);
 	dom.window.close();
 });
 
@@ -1436,7 +1436,7 @@ test('ViewCursors follows view positions, configuration, focus, composition, and
 	assert.ok(layer.querySelector('.cursor-primary'));
 	assert.ok(layer.querySelector('.cursor-secondary'));
 
-	editor.view.textArea!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'Insert' }));
+	editor.controller.textArea!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'Insert' }));
 	assert.equal(editor.getDomNode().classList.contains('overtype'), true);
 	assert.equal(layer.classList.contains('cursor-block-style'), true);
 
@@ -1444,7 +1444,7 @@ test('ViewCursors follows view positions, configuration, focus, composition, and
 	assert.equal(primary.style.visibility, 'hidden');
 	editor._getViewModel()!.onCompositionEnd();
 	assert.equal(primary.style.visibility, 'inherit');
-	editor.view.textArea!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'Insert' }));
+	editor.controller.textArea!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'Insert' }));
 	assert.equal(editor.getDomNode().classList.contains('overtype'), false);
 	assert.equal(layer.classList.contains('cursor-line-style'), true);
 
@@ -1607,7 +1607,7 @@ test('CodeEditorWidget keyboard navigation uses standard cursor movement state',
 	using model = new TextModel('12345\n1\n12345');
 	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
 	editor.setSelection(Selection.fromPositions(new Position(1, 5)));
-	const input = editor.view.editContext.domNode.domNode;
+	const input = editor.controller.editContext.domNode.domNode;
 	input.focus();
 
 	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' }));
@@ -1637,14 +1637,14 @@ test('CodeEditorWidget offers keys to input consumers before cursor navigation',
 	});
 	editor.setPosition(new Position(1, 3));
 	const order: string[] = [];
-	using inputConsumer = editor.view.onWillKeydown(event => {
+	using inputConsumer = editor.controller.onWillKeydown(event => {
 		order.push('consumer');
 		if (event.key === 'ArrowDown') event.preventDefault();
 	});
 	using publicEvent = editor.onKeyDown(event => {
 		order.push(event.browserEvent.defaultPrevented ? 'public:handled' : 'public:available');
 	});
-	const input = editor.view.editContext.domNode.domNode;
+	const input = editor.controller.editContext.domNode.domNode;
 	input.focus();
 	const down = new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'ArrowDown' });
 	input.dispatchEvent(down);

@@ -115,9 +115,9 @@ registerTextEditorCapabilityContribution({ id: "editor.contrib.parameterHints", 
 		context.options.input.resource,
 	));
 	context.register(new ParameterHintsController(
-		context.view.element,
+		context.controller.element,
 		context.editor,
-		context.viewport,
+		context.view,
 		service,
 		context.languageId,
 		context.onLanguageError,

@@ -33,7 +33,7 @@ test('line actions are registered while the host owns their shortcuts', () => {
 		key(dom.window, 'k', { ctrlKey: true, shiftKey: true }),
 		key(dom.window, 'Enter', { ctrlKey: true }),
 	]) {
-		editor.view.element.dispatchEvent(event);
+		editor.controller.element.dispatchEvent(event);
 		assert.equal(event.defaultPrevented, false);
 		assert.equal(model.getText(), 'zero\none\ntwo');
 	}

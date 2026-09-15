@@ -35,7 +35,7 @@ registerTextEditorCapabilityContribution({
 		const state = context.getOptionalCapability(suggestState);
 		if (!state) return;
 		context.register(new SuggestController(
-			context.view,
+			context.controller,
 			context.selectionController,
 			state.service,
 			state.session,

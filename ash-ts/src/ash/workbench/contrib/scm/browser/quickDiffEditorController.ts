@@ -22,10 +22,10 @@ export class QuickDiffEditorController extends Disposable implements TextEditorR
 		this.modelReference = this._register(modelService.createModelReference(context.options.input.resource, context.model));
 		this._register(new QuickDiffDecorator(context.model, this.modelReference, configurationService));
 		this._register(controllerService.register(this));
-		this._register(addDisposableListener<FocusEvent>(context.viewport.domNode.domNode, 'focusin', () => controllerService.activate(this)));
-		if (context.viewport.domNode.domNode.contains(context.viewport.domNode.domNode.ownerDocument.activeElement)) controllerService.activate(this);
-		this._register(addDisposableListener<PointerEvent>(context.viewport.domNode.domNode, 'pointerdown', event => this.handlePointerDown(event), { capture: true }));
-		this._register(addDisposableListener<KeyboardEvent>(context.viewport.domNode.domNode, 'keydown', event => this.handleKeyDown(event), { capture: true }));
+		this._register(addDisposableListener<FocusEvent>(context.view.domNode.domNode, 'focusin', () => controllerService.activate(this)));
+		if (context.view.domNode.domNode.contains(context.view.domNode.domNode.ownerDocument.activeElement)) controllerService.activate(this);
+		this._register(addDisposableListener<PointerEvent>(context.view.domNode.domNode, 'pointerdown', event => this.handlePointerDown(event), { capture: true }));
+		this._register(addDisposableListener<KeyboardEvent>(context.view.domNode.domNode, 'keydown', event => this.handleKeyDown(event), { capture: true }));
 		this._register(this.modelReference.object.onDidChange(() => this.handleModelChange()));
 	}
 
@@ -35,7 +35,7 @@ export class QuickDiffEditorController extends Disposable implements TextEditorR
 		const lineIndex = this.currentChange?.lineIndex ?? this.context.selectionController.getSelections()[0]!.getPosition().lineNumber - 1;
 		const change = this.currentChange ? model.findNextChange(lineIndex) : model.findNextChange(lineIndex, true);
 		if (change) this.showChange(change);
-		else this.context.viewport.announceAccessibilityStatus('No Quick Diff changes');
+		else this.context.view.announceAccessibilityStatus('No Quick Diff changes');
 	}
 
 	showPreviousChange(): void {
@@ -44,7 +44,7 @@ export class QuickDiffEditorController extends Disposable implements TextEditorR
 		const lineIndex = this.currentChange?.lineIndex ?? this.context.selectionController.getSelections()[0]!.getPosition().lineNumber - 1;
 		const change = this.currentChange ? model.findPreviousChange(lineIndex) : model.findPreviousChange(lineIndex, true);
 		if (change) this.showChange(change);
-		else this.context.viewport.announceAccessibilityStatus('No Quick Diff changes');
+		else this.context.view.announceAccessibilityStatus('No Quick Diff changes');
 	}
 
 	close(): void {
@@ -55,7 +55,7 @@ export class QuickDiffEditorController extends Disposable implements TextEditorR
 	private handlePointerDown(event: PointerEvent): void {
 		if (event.button !== 0 || this.configurationService.getValue(ScmConfiguration.diffDecorationsGutterAction) !== 'diff') return;
 		if (!isHTMLElement(event.target) || !event.target.closest('.ash-quick-diff-gutter')) return;
-		const target = this.context.viewport.getNearestTargetAtClientPoint({ clientX: event.clientX, clientY: event.clientY });
+		const target = this.context.view.getNearestTargetAtClientPoint({ clientX: event.clientX, clientY: event.clientY });
 		if (!target) return;
 		const change = this.modelReference?.object.findChangeAtLine(target.position.lineNumber - 1);
 		if (!change) return;
@@ -84,7 +84,7 @@ export class QuickDiffEditorController extends Disposable implements TextEditorR
 		const model = this.modelReference?.object;
 		if (!model) return;
 		this.currentChange = change;
-		this.context.viewport.revealPosition(new Position((change.lineIndex) + 1, (0) + 1));
+		this.context.view.revealPosition(new Position((change.lineIndex) + 1, (0) + 1));
 		const index = model.state.changes.indexOf(change);
 		this.view.value = new QuickDiffPeekView(
 			this.context,
@@ -95,7 +95,7 @@ export class QuickDiffEditorController extends Disposable implements TextEditorR
 			() => this.showNextChange(),
 			() => this.close(),
 		);
-		this.context.viewport.announceAccessibilityStatus(`Quick Diff change ${Math.max(0, index) + 1} of ${model.state.changes.length}`);
+		this.context.view.announceAccessibilityStatus(`Quick Diff change ${Math.max(0, index) + 1} of ${model.state.changes.length}`);
 	}
 }
 
@@ -136,7 +136,7 @@ export class QuickDiffEditorControllerService extends Disposable implements IQui
 class QuickDiffPeekView extends Disposable {
 	constructor(context: TextEditorContributionContext, change: QuickDiffChange, index: number, count: number, showPrevious: () => void, showNext: () => void, close: () => void) {
 		super();
-		const document = context.viewport.domNode.domNode.ownerDocument;
+		const document = context.view.domNode.domNode.ownerDocument;
 		const kind = change.kind === LineDiffKind.Added ? 'Added' : change.kind === LineDiffKind.Removed ? 'Deleted' : 'Modified';
 		const peek = this._register(new EditorPeekViewWidget(context.editor, new Position((change.lineIndex) + 1, (0) + 1), `${change.comparison.original.label} — ${kind} — ${index} of ${count}`));
 		peek.element.classList.add('ash-quick-diff-peek');

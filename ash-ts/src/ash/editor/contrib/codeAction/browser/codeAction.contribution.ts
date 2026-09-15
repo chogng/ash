@@ -9,5 +9,5 @@ registerTextEditorCapabilityContribution({ id: "editor.contrib.codeAction", inst
 	if (context.kind !== "text") return;
 	const service = context.register(new CodeActionService(context.model, context.options.input.resource, context.languageFeaturesService.codeActionProvider));
 	const diagnostics = context.getOptionalCapability(TextEditorCapability.diagnosticDecorations) ?? context.register(new TextDecorationCollection<LanguageDiagnostic>(context.model));
-	context.register(new CodeActionController(context.view.element, context.editor, context.viewport, service, diagnostics, context.languageId, context.options.input.resource, context.options.onApplyWorkspaceEdit, context.onLanguageError));
+	context.register(new CodeActionController(context.controller.element, context.editor, context.view, service, diagnostics, context.languageId, context.options.input.resource, context.options.onApplyWorkspaceEdit, context.onLanguageError));
 } });

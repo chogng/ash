@@ -90,7 +90,7 @@ registerTextEditorCapabilityContribution({
 	install: context => {
 		if (context.kind !== 'text') return;
 		const progress = context.register(new InlineProgressManager('dropIntoEditor', context.editor, context.instantiationService));
-		context.register(new TextDropController(context.viewport, context.selectionController, progress));
+		context.register(new TextDropController(context.view, context.selectionController, progress));
 	},
 });
 

@@ -254,7 +254,7 @@ registerTextEditorCapabilityContribution({
 		if (context.kind !== 'text' || context.options.codeLens === false || context.model.largeFile.tooLargeForTokenization) return;
 		context.register(new CodeLensContribution(
 			context.editor,
-			context.viewport,
+			context.view,
 			context.languageFeaturesService.codeLensProvider,
 			context.options.input.resource,
 			context.options.onExecuteEditorCommand,

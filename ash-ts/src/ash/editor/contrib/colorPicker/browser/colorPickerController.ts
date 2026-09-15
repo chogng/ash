@@ -263,7 +263,7 @@ registerTextEditorCapabilityContribution({
 	install: context => {
 		if (context.kind !== 'text') return;
 		const capability = context.getCapability(ColorPickerCapability);
-		const targetWindow = context.view.element.ownerDocument.defaultView;
+		const targetWindow = context.controller.element.ownerDocument.defaultView;
 		if (!targetWindow) throw new Error('Color picker requires an attached browser window');
 		const detector = context.register(new ColorDetector(
 			context.editor,
@@ -279,9 +279,9 @@ registerTextEditorCapabilityContribution({
 			context.onLanguageError,
 		));
 		context.register(new ColorPickerController(
-			context.view.element,
+			context.controller.element,
 			context.editor,
-			context.viewport,
+			context.view,
 			capability.service,
 			detector,
 			context.languageId,

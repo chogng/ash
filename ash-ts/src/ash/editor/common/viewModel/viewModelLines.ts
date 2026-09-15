@@ -17,12 +17,6 @@ import { ViewLineData } from '../viewModel.js';
 import { type EditorViewportLineSource } from './editorViewportContracts.js';
 import { EditorVisualLineProjection, type EditorVisualLine } from './modelLineProjection.js';
 
-/** Supplies logical-line visibility without importing a browser feature. */
-export interface EditorLineVisibilitySource {
-	readonly onDidChange: Event<void>;
-	isLineVisible(lineIndex: number): boolean;
-}
-
 export interface IViewModelLines extends IDisposable {
 	createCoordinatesConverter(): ICoordinatesConverter;
 	setWrappingSettings(fontInfo: FontInfo, wrappingStrategy: 'simple' | 'advanced', wrappingColumn: number, wrappingIndent: WrappingIndent, wordBreak: 'normal' | 'keepAll'): boolean;
@@ -61,8 +55,6 @@ interface ProjectedLinesOptions {
 	 * one-row-per-logical-line projection until the complete result is ready.
 	 */
 	readonly initialWrappingMeasurement?: InitialMeasurementOptions;
-	/** Optional logical-line visibility supplied by folding or another feature. */
-	readonly visibilitySource?: EditorLineVisibilitySource;
 }
 
 /** Schedules a later, cancellable slice of initial visual-line measurement. */
@@ -93,7 +85,6 @@ export class ViewModelLinesFromProjectedModel extends Disposable implements ICur
 	private readonly lineCountChangeEmitter = this._register(new Emitter<void>());
 	private readonly initialMeasurement: ResolvedInitialMeasurement | undefined;
 	private readonly pendingMeasurement = this._register(new MutableDisposable<IDisposable>());
-	private readonly visibilitySource: EditorLineVisibilitySource | undefined;
 	private readonly editorId: number;
 	private hiddenAreas: Range[] = [];
 	private wrapping: EditorLineWrapping;
@@ -124,7 +115,6 @@ export class ViewModelLinesFromProjectedModel extends Disposable implements ICur
 		}
 		if (!fontInfo || !isFiniteNumber(fontInfo.typicalHalfwidthCharacterWidth) || fontInfo.typicalHalfwidthCharacterWidth <= 0) throw new TypeError('Editor view-model lines require measured font information');
 		if (!Number.isSafeInteger(tabSize) || tabSize < 1) throw new RangeError('Editor view-model tab size must be a positive safe integer');
-		this.visibilitySource = options.visibilitySource;
 		this.editorId = options.editorId ?? 0;
 		this.wrapping = readWrapping(options.wrapping);
 		this.wrapWidth = readWrapWidth(options.wrapWidth);
@@ -143,7 +133,6 @@ export class ViewModelLinesFromProjectedModel extends Disposable implements ICur
 		});
 		if (this.usesInitialMeasurement()) this.startInitialMeasurement();
 		this._register(this.model.onDidChangeContent(() => this.refresh()));
-		if (this.visibilitySource) this._register(this.visibilitySource.onDidChange(() => this.rebuildVisibleProjection()));
 	}
 
 	get textModel(): TextModel {
@@ -480,7 +469,7 @@ export class ViewModelLinesFromProjectedModel extends Disposable implements ICur
 	}
 
 	private createVisibleProjection(source: EditorVisualLineProjection): EditorVisualLineProjection {
-		if (!this.visibilitySource && this.hiddenAreas.length === 0) return source;
+		if (this.hiddenAreas.length === 0) return source;
 		const visibleLogicalLines = Object.freeze(Array.from(
 			{ length: source.logicalLineCount },
 			(_, lineIndex) => this.isLogicalLineVisible(lineIndex),
@@ -491,7 +480,6 @@ export class ViewModelLinesFromProjectedModel extends Disposable implements ICur
 	}
 
 	private isLogicalLineVisible(lineIndex: number): boolean {
-		if (this.visibilitySource && !this.visibilitySource.isLineVisible(lineIndex)) return false;
 		const lineNumber = lineIndex + 1;
 		return !this.hiddenAreas.some(range => range.startLineNumber <= lineNumber && lineNumber <= range.endLineNumber);
 	}

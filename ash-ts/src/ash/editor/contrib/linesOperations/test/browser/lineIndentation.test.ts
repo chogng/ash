@@ -18,11 +18,11 @@ test('selected-line Tab remains available to the host keybinding', () => {
 	editor.setSelection(Selection.fromPositions(new Position(1, 1), new Position(3, 6)));
 
 	const indent = key(dom.window, 'Tab');
-	editor.view.element.dispatchEvent(indent);
+	editor.controller.element.dispatchEvent(indent);
 	assert.equal(indent.defaultPrevented, false);
 	assert.equal(model.getText(), 'one\n  two\nthree');
 	const outdent = key(dom.window, 'Tab', { shiftKey: true });
-	editor.view.element.dispatchEvent(outdent);
+	editor.controller.element.dispatchEvent(outdent);
 	assert.equal(outdent.defaultPrevented, false);
 	assert.equal(model.getText(), 'one\n  two\nthree');
 	dom.window.close();

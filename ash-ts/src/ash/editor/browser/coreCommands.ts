@@ -66,6 +66,6 @@ registerTextEditorCapabilityContribution({
 	id: EditorCoreCommandId.selectAll,
 	install: context => {
 		if (context.kind !== "text") return;
-		context.register(installCoreTextEditorCommands(context.view.element, context.viewport, context.viewModel));
+		context.register(installCoreTextEditorCommands(context.controller.element, context.view, context.viewModel));
 	},
 });

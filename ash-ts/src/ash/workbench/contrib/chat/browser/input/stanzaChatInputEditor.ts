@@ -63,7 +63,7 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 		const completions = this._register(new LanguageCompletionService(this.model, providers));
 		const completionSession = this._register(new LanguageCompletionSessionController(completions.results, this.selections, { resolver: completions }));
 		this._register(new SuggestController(
-			this.editor.view,
+			this.editor.controller,
 			this.selections,
 			completions,
 			completionSession,
@@ -74,7 +74,7 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 			this.syncHeight();
 			this._onDidChange.fire(this.value);
 		}));
-		this._register(addDisposableListener(this.editor.view.element, "keydown", event => {
+		this._register(addDisposableListener(this.editor.controller.element, "keydown", event => {
 			if (event.defaultPrevented || event.isComposing || event.key !== "Enter" || event.shiftKey) return;
 			stopEvent(event);
 			this._onDidSubmit.fire();

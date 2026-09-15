@@ -88,14 +88,14 @@ test("line selection remains an independent editor extension", () => {
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("one\ntwo\nthree");
 	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
-	editor.viewport.layout({ width: 400, height: 100 });
+	editor.view.layout({ width: 400, height: 100 });
 	editor.setSelection(Selection.fromPositions(new Position((0) + 1, (1) + 1)));
 
 	const first = keyboardEvent(dom.window, "l", { ctrlKey: true });
-	editor.view.element.dispatchEvent(first);
+	editor.controller.element.dispatchEvent(first);
 	assert.equal(first.defaultPrevented, true);
 	assert.deepEqual(editor.selections.getSelections()[0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((1) + 1, (0) + 1)));
-	editor.view.element.dispatchEvent(keyboardEvent(dom.window, "l", { ctrlKey: true }));
+	editor.controller.element.dispatchEvent(keyboardEvent(dom.window, "l", { ctrlKey: true }));
 	assert.deepEqual(editor.selections.getSelections()[0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((2) + 1, (0) + 1)));
 
 	dom.window.close();

@@ -18,7 +18,6 @@ test("Visible visual-line projection removes hidden bodies while preserving wrap
 	using projection = createViewModelLines(model, {
 		wrapping: EditorLineWrapping.On,
 		wrapWidth: 20,
-		visibilitySource: hiddenRanges,
 	});
 
 	assert.deepEqual(projection.projection.lines.map(line => ({ logical: line.logicalLineIndex, start: line.startColumn, end: line.endColumn })), [
@@ -34,6 +33,7 @@ test("Visible visual-line projection removes hidden bodies while preserving wrap
 		{ logical: 3, start: 2, end: 4 },
 	]);
 
+	using listener = hiddenRanges.onDidChange(() => projection.setHiddenAreas(hiddenRanges.hiddenRanges));
 	folding.setRanges([{ startLineIndex: 0, endLineIndex: 2, collapsed: true }]);
 	assert.deepEqual(projection.projection.lines.map(line => line.logicalLineIndex), [0, 0, 0, 3, 3]);
 	assert.equal(projection.lineSource.lineCount, 5);
@@ -46,8 +46,8 @@ test("Visible visual-line projection refreshes the source before collapsed range
 	using folding = new EditorFoldingModel(model);
 	using hiddenRanges = new EditorHiddenRangeModel(model, folding);
 	using projection = createViewModelLines(model, {
-		visibilitySource: hiddenRanges,
 	});
+	using listener = hiddenRanges.onDidChange(() => projection.setHiddenAreas(hiddenRanges.hiddenRanges));
 	folding.setRanges([{ startLineIndex: 0, endLineIndex: 2, collapsed: true }]);
 
 	assert.doesNotThrow(() => model.applyEdits([{
@@ -77,9 +77,9 @@ for (const wrapWidth of [20, 200]) {
 		using lines = createViewModelLines(model, {
 			wrapping: EditorLineWrapping.On,
 			wrapWidth,
-			visibilitySource: hiddenRanges,
 		});
 		const converter = lines.createCoordinatesConverter();
+		using listener = hiddenRanges.onDidChange(() => lines.setHiddenAreas(hiddenRanges.hiddenRanges));
 		folding.setRanges([{ startLineIndex: 0, endLineIndex: 2, collapsed: true }]);
 		const headerEnd = converter.convertModelPositionToViewPosition(new Position(1, 7));
 		for (const lineNumber of [2, 3]) {

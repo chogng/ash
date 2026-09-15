@@ -23,7 +23,7 @@ test('the host owns the join shortcut and the registered action joins lines', ()
 		key: 'j',
 		...(operatingSystem === OperatingSystem.Macintosh ? { metaKey: true } : { ctrlKey: true }),
 	});
-	editor.view.element.dispatchEvent(event);
+	editor.controller.element.dispatchEvent(event);
 	assert.equal(event.defaultPrevented, false);
 	assert.equal(model.getText(), 'first\n  second');
 	new JoinLinesAction().run({} as never, editor);

@@ -16,7 +16,7 @@ import { type IModelContentChangedEvent, type IModelDecorationsChangedEvent } fr
 import { Handler, ScrollType, type CompositionTypePayload, type ICommand, type ICodeEditorViewState, type IEditorDecorationsCollection, type IModelChangedEvent, type INewScrollPosition, type ReplacePreviousCharPayload, type TypePayload } from '../../../common/editorCommon.js';
 import { VerticalRevealType } from '../../../common/viewEvents.js';
 import type { ICodeEditor, IContentWidget, IEditorMouseEvent, IGlyphMarginWidget, IOverlayWidget, IOverviewRuler, IPartialEditorMouseEvent, PastePayload, IViewZoneChangeAccessor } from '../../editorBrowser.js';
-import { View, type EditorViewportOptions } from "../../view.js";
+import { View } from "../../view.js";
 import { KeyboardNavigationController, ViewController } from "../../view/viewController.js";
 import { ServiceContainer, type IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import { CodeEditorContributions } from "./codeEditorContributions.js";
@@ -39,7 +39,6 @@ import { type ILanguageDiagnosticsService } from '../../../common/services/langu
 import { isCompletionsEnablement, type CompletionsEnablement } from '../../../common/services/completionsEnablement.js';
 import { type LanguageLocation } from '../../../common/languages.js';
 import { type LanguageWorkspaceEdit } from '../../../common/languages/languageWorkspaceEdit.js';
-import { type EditorLineVisibilitySource } from '../../../common/viewModel/viewModelLines.js';
 import { type LanguageLexicalContextSource } from '../../../common/languages/languageLexicalContext.js';
 import { type BracketColorizationSource, type SemanticTokenSource } from '../../viewParts/viewLines/viewLine.js';
 import { type EditorTextDirection, type EditorViewportPresentation } from '../../view.js';
@@ -60,8 +59,6 @@ import { MenuId } from '../../../../platform/actions/common/actions.js';
 import { IContextKeyService, type IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { EditorContextKeys } from '../../../common/editorContextKeys.js';
 import { type ICursorPositionChangedEvent, type ICursorSelectionChangedEvent } from '../../../common/cursorEvents.js';
-
-export type CodeEditorWidgetViewportOptions = Omit<EditorViewportOptions, 'container' | 'rootDomNode' | 'viewModel' | 'configuration' | 'lineHeight' | 'ariaLabel'>;
 
 export interface EditorSectionHeaderOptions {
 	readonly showRegionSectionHeaders?: boolean;
@@ -126,8 +123,7 @@ let decorationOwnerPool = 0;
 
 interface CodeEditorModelState {
 	selections: CursorsController;
-	view: ViewController;
-	viewport: View;
+	view: View;
 	userInputEvents: ViewController['userInputEvents'];
 	contributions: CodeEditorContributions;
 	viewModel: ViewModel;
@@ -244,17 +240,14 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	private set selections(value: CursorsController) {
 		this.activeState.selections = value;
 	}
-	public get view(): ViewController {
+	public get controller(): ViewController {
+		return this.view.controller;
+	}
+	public get view(): View {
 		return this.readModelResource('view');
 	}
-	private set view(value: ViewController) {
+	private set view(value: View) {
 		this.activeState.view = value;
-	}
-	public get viewport(): View {
-		return this.readModelResource('viewport');
-	}
-	private set viewport(value: View) {
-		this.activeState.viewport = value;
 	}
 	private get userInputEvents(): ViewController['userInputEvents'] {
 		return this.readModelResource('userInputEvents');
@@ -308,6 +301,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				...constructionOptions,
 				readOnly: options.input.readOnly,
 				lineNumbers: options.lineNumbers ?? (options.presentation === 'embedded' ? 'off' : undefined),
+				minimap: { ...options.minimap, enabled: options.minimap?.enabled ?? options.presentation !== 'embedded' },
 				guides: {
 					...options.guides,
 					indentation: options.guides?.indentation ?? options.presentation !== 'embedded',
@@ -420,7 +414,6 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				if (capabilities.has(capability.id)) throw new RangeError(`Text editor capability '${capability.id}' is already provided`);
 				capabilities.set(capability.id, value);
 			};
-			let lineProjection: { readonly visibilitySource: EditorLineVisibilitySource } | undefined;
 			let semanticTokenSource: SemanticTokenSource | undefined;
 			let bracketColorizationSource: BracketColorizationSource | undefined;
 			let languageLexicalContext: LanguageLexicalContextSource | undefined;
@@ -442,10 +435,6 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 					getCapability,
 					getOptionalCapability,
 					provideCapability,
-					setLineProjection: projection => {
-						if (lineProjection) throw new Error('Text editor line projection is already configured');
-						lineProjection = projection;
-					},
 					setSemanticTokenSource: source => {
 						if (semanticTokenSource) throw new Error('Text editor semantic-token source is already configured');
 						semanticTokenSource = source;
@@ -461,11 +450,6 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 					register: value => modelStore.add(value),
 				});
 			}
-			if (lineProjection) {
-				const syncHiddenAreas = (): void => this.viewModel.setHiddenAreas(readHiddenAreas(options.model, lineProjection!.visibilitySource));
-				syncHiddenAreas();
-				modelStore.add(lineProjection.visibilitySource.onDidChange(syncHiddenAreas));
-			}
 			const languageEditing = modelStore.add(new LanguageEditingAdapter(
 				options.model,
 				this.selections,
@@ -474,90 +458,57 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				languageLexicalContext,
 				options.indentation,
 			));
-			this.viewport = modelStore.add(new View({
+			this.view = modelStore.add(new View({
 				container: options.container,
 				rootDomNode: this.rootDomNode,
 				viewModel: this.viewModel,
 				configuration: this.configuration,
 				theme: themeService.getColorTheme(),
-				lineHeight: options.lineHeight,
 				ariaLabel: options.ariaLabel ?? editorLabel(options.input),
 				dimension: options.dimension,
-					automaticLayout: options.automaticLayout,
-					cursorOptions: { readOnly: options.input.readOnly, stickyTabStops: options.stickyTabStops },
-					languageId: options.languageId,
+				semanticTokenSource,
+				bracketColorizationSource,
+				textDirection: options.textDirection,
+				presentation: options.presentation,
+				indentation: options.indentation,
+				controller: {
+					ownerId: this.ownerId ?? options.ownerId,
+					...(logService ? { logService } : {}),
+					ariaLabel: options.ariaLabel ?? editorLabel(options.input),
+					accessibilityService: options.accessibilityService,
 					semanticTokenSource,
 					bracketColorizationSource,
-					lineWrapping: options.lineWrapping,
-					wrappingIndent: resolveWrappingIndent(options.wrappingIndent),
-					fontFamily: options.fontFamily,
-					fontSize: options.fontSize,
-					fontLigatures: options.fontLigatures === true,
-					lineNumbers: options.lineNumbers,
-					glyphMargin: options.glyphMargin,
-					guides: options.guides,
-					minimap: options.minimap,
-					renderLineHighlight: options.renderLineHighlight,
-					renderLineHighlightOnlyWhenFocus: options.renderLineHighlightOnlyWhenFocus,
-					textDirection: options.textDirection,
-					experimentalGpuAcceleration: options.experimentalGpuAcceleration,
-					renderWhitespace: options.renderWhitespace,
-					mouseStyle: options.mouseStyle,
-					cursorStyle: options.cursorStyle,
-					overtypeCursorStyle: options.overtypeCursorStyle,
-					cursorBlinking: options.cursorBlinking,
-					cursorSmoothCaretAnimation: options.cursorSmoothCaretAnimation,
-					cursorWidth: options.cursorWidth,
-					cursorHeight: options.cursorHeight,
-					allowOverflow: options.allowOverflow,
-					fixedOverflowWidgets: options.fixedOverflowWidgets,
-					presentation: options.presentation,
-					padding: options.padding === undefined ? undefined : {
-						top: options.padding.top ?? 0,
-						right: 12,
-						bottom: options.padding.bottom ?? 0,
-						left: 12,
-					},
-					indentation: options.indentation,
-					controller: {
-						ownerId: this.ownerId ?? options.ownerId,
-						...(logService ? { logService } : {}),
-						ariaLabel: options.ariaLabel ?? editorLabel(options.input),
-						accessibilityService: options.accessibilityService,
-						semanticTokenSource,
-						bracketColorizationSource,
-						languageEditing,
-					},
+					languageEditing,
+				},
 			}));
-			modelStore.add(this.viewport.onDidChangeLayout(() => this.layoutChangeEmitter.fire(this.getLayoutInfo())));
-			this.view = this.viewport.controller;
-			this.ownerId = this.view.ownerId;
+			modelStore.add(this.view.onDidChangeLayout(() => this.layoutChangeEmitter.fire(this.getLayoutInfo())));
+			this.ownerId = this.controller.ownerId;
 			this.currentModel = model;
-			for (const widget of this.contentWidgets.values()) this.viewport.addContentWidget(widget);
-			for (const widget of this.overlayWidgets.values()) this.viewport.addOverlayWidget(widget);
-			for (const widget of this.glyphWidgets.values()) this.viewport.addGlyphMarginWidget(widget);
-			modelStore.add(this.view.editContext.onDidCompositionStart(() => this.compositionStartEmitter.fire()));
-			modelStore.add(this.view.editContext.onDidCompositionEnd(() => this.compositionEndEmitter.fire()));
-			modelStore.add(this.view.onDidEdit(event => {
+			for (const widget of this.contentWidgets.values()) this.view.addContentWidget(widget);
+			for (const widget of this.overlayWidgets.values()) this.view.addOverlayWidget(widget);
+			for (const widget of this.glyphWidgets.values()) this.view.addGlyphMarginWidget(widget);
+			modelStore.add(this.controller.editContext.onDidCompositionStart(() => this.compositionStartEmitter.fire()));
+			modelStore.add(this.controller.editContext.onDidCompositionEnd(() => this.compositionEndEmitter.fire()));
+			modelStore.add(this.controller.onDidEdit(event => {
 				if (event.insertedText !== undefined) this.typeEmitter.fire(event.insertedText);
 			}));
-			modelStore.add(this.view.editContext.onWillPaste(event => this.pasteEmitter.fire(event)));
-			modelStore.add(this.viewport.onWillCopy(event => this.willCopyEmitter.fire(event)));
-			modelStore.add(this.viewport.onWillCut(event => this.willCutEmitter.fire(event)));
-			modelStore.add(this.viewport.onWillPaste(event => this.willPasteEmitter.fire(event)));
-			modelStore.add(this.view.editContext.onDidFocus(() => {
+			modelStore.add(this.controller.editContext.onWillPaste(event => this.pasteEmitter.fire(event)));
+			modelStore.add(this.view.onWillCopy(event => this.willCopyEmitter.fire(event)));
+			modelStore.add(this.view.onWillCut(event => this.willCutEmitter.fire(event)));
+			modelStore.add(this.view.onWillPaste(event => this.willPasteEmitter.fire(event)));
+			modelStore.add(this.controller.editContext.onDidFocus(() => {
 				this.focusEditorTextEmitter.fire();
 				this.focusEditorWidgetEmitter.fire();
 			}));
-			modelStore.add(this.view.editContext.onDidBlur(() => {
+			modelStore.add(this.controller.editContext.onDidBlur(() => {
 				this.blurEditorTextEmitter.fire();
 				this.blurEditorWidgetEmitter.fire();
 			}));
-			this.userInputEvents = this.view.userInputEvents;
+			this.userInputEvents = this.controller.userInputEvents;
 			const inputEvents = this.userInputEvents;
 			const parentContextKeyService = services.getOptional(IContextKeyService);
 			if (parentContextKeyService) {
-				const scopedContextKeyService = modelStore.add(parentContextKeyService.createScoped(this.viewport.domNode.domNode));
+				const scopedContextKeyService = modelStore.add(parentContextKeyService.createScoped(this.view.domNode.domNode));
 				services.registerInstance(IContextKeyService, scopedContextKeyService);
 				modelStore.add(new EditorContextKeysManager(this, scopedContextKeyService));
 			}
@@ -608,7 +559,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				this.observableInitialized = true;
 			}
 			this.contributions = modelStore.add(this.instantiationService.createInstance(CodeEditorContributions));
-			modelStore.add(new KeyboardNavigationController(this.viewport, this.viewModel, this.userInputEvents));
+			modelStore.add(new KeyboardNavigationController(this.view, this.viewModel, this.userInputEvents));
 			const installContext: TextEditorContributionContext = {
 				kind: 'text',
 				editor: this,
@@ -619,8 +570,8 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				languageId: options.languageId,
 				languageFeaturesService,
 				configurations: languageConfigurationService,
+				controller: this.controller,
 				view: this.view,
-				viewport: this.viewport,
 				viewModel: this.viewModel,
 				selectionController: this.selections,
 				onLanguageError,
@@ -664,7 +615,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			oldModelUrl: previousModel?.uri ?? null,
 			newModelUrl: model?.uri ?? null,
 		};
-		const hadTextFocus = previousModel !== null && this.viewport.isFocused();
+		const hadTextFocus = previousModel !== null && this.view.isFocused();
 		this.modelWillChangeEmitter.fire(event);
 		if (this.isDisposed) {
 			return;
@@ -706,7 +657,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	}
 
 	get inComposition(): boolean {
-		return this.currentModel !== null && this.view.compositionController.composing;
+		return this.currentModel !== null && this.controller.compositionController.composing;
 	}
 
 	layout(dimension: IDimension = getClientArea(this.element)): void {
@@ -715,17 +666,17 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			this.rootDomNode.style.height = `${Math.max(0, dimension.height)}px`;
 			return;
 		}
-		this.viewport.layout({ width: Math.max(0, dimension.width), height: Math.max(0, dimension.height) });
+		this.view.layout({ width: Math.max(0, dimension.width), height: Math.max(0, dimension.height) });
 	}
 
 	focus(): void {
-		if (this.currentModel) this.viewport.focus();
+		if (this.currentModel) this.view.focus();
 		else this.rootDomNode.focus();
 	}
 
 	addContentWidget(widget: IContentWidget): void {
 		this.assertNotDisposed();
-		if (this.currentModel) this.viewport.addContentWidget(widget);
+		if (this.currentModel) this.view.addContentWidget(widget);
 		this.contentWidgets.set(widget.getId(), widget);
 	}
 
@@ -734,7 +685,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	}
 
 	createOverviewRuler(cssClassName: string): IOverviewRuler {
-		return this.viewport.createOverviewRuler(cssClassName);
+		return this.view.createOverviewRuler(cssClassName);
 	}
 
 	updateOptions(newOptions: Readonly<IEditorOptions> | undefined): void {
@@ -755,15 +706,15 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 
 	getScrolledVisiblePosition(position: Position): { top: number; left: number; height: number } | null {
 		if (!this.currentModel) return null;
-		this.viewport.textModel.offsetAt(position);
-		const coordinates = this.viewport.getPositionContentCoordinates(position);
-		const scroll = this.viewport.currentLayout.scrollPosition;
+		this.view.textModel.offsetAt(position);
+		const coordinates = this.view.getPositionContentCoordinates(position);
+		const scroll = this.view.currentLayout.scrollPosition;
 		return { top: coordinates.top - scroll.top, left: coordinates.left - scroll.left, height: coordinates.height };
 	}
 
 	getWidthOfLine(lineNumber: number): number {
 		if (!this.currentModel) return 0;
-		return this.viewport.measureTextWidth(this.viewport.textModel.getLineContent(lineNumber));
+		return this.view.measureTextWidth(this.view.textModel.getLineContent(lineNumber));
 	}
 
 	createDecorationsCollection(decorations: IModelDeltaDecoration[] = []): IEditorDecorationsCollection {
@@ -772,50 +723,50 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	}
 
 	layoutContentWidget(widget: IContentWidget): void {
-		if (this.currentModel) this.viewport.layoutContentWidget(widget);
+		if (this.currentModel) this.view.layoutContentWidget(widget);
 	}
 
 	removeContentWidget(widget: IContentWidget): void {
 		this.contentWidgets.delete(widget.getId());
-		this.modelState?.viewport?.removeContentWidget(widget);
+		this.modelState?.view?.removeContentWidget(widget);
 	}
 
 	addOverlayWidget(widget: IOverlayWidget): void {
 		this.assertNotDisposed();
-		if (this.currentModel) this.viewport.addOverlayWidget(widget);
+		if (this.currentModel) this.view.addOverlayWidget(widget);
 		this.overlayWidgets.set(widget.getId(), widget);
 	}
 
 	layoutOverlayWidget(widget: IOverlayWidget): void {
-		if (this.currentModel) this.viewport.layoutOverlayWidget(widget);
+		if (this.currentModel) this.view.layoutOverlayWidget(widget);
 	}
 
 	removeOverlayWidget(widget: IOverlayWidget): void {
 		this.overlayWidgets.delete(widget.getId());
-		this.modelState?.viewport?.removeOverlayWidget(widget);
+		this.modelState?.view?.removeOverlayWidget(widget);
 	}
 
 	addGlyphMarginWidget(widget: IGlyphMarginWidget): void {
 		this.assertNotDisposed();
-		if (this.currentModel) this.viewport.addGlyphMarginWidget(widget);
+		if (this.currentModel) this.view.addGlyphMarginWidget(widget);
 		this.glyphWidgets.set(widget.getId(), widget);
 	}
 
 	layoutGlyphMarginWidget(widget: IGlyphMarginWidget): void {
-		if (this.currentModel) this.viewport.layoutGlyphMarginWidget(widget);
+		if (this.currentModel) this.view.layoutGlyphMarginWidget(widget);
 	}
 
 	removeGlyphMarginWidget(widget: IGlyphMarginWidget): void {
 		this.glyphWidgets.delete(widget.getId());
-		this.modelState?.viewport?.removeGlyphMarginWidget(widget);
+		this.modelState?.view?.removeGlyphMarginWidget(widget);
 	}
 
 	changeViewZones(callback: (accessor: IViewZoneChangeAccessor) => void): void {
-		if (this.currentModel) this.viewport.changeViewZones(callback);
+		if (this.currentModel) this.view.changeViewZones(callback);
 	}
 
 	announceAccessibilityStatus(message: string): void {
-		this.viewport.announceAccessibilityStatus(message);
+		this.view.announceAccessibilityStatus(message);
 	}
 
 	getValue(): string {
@@ -829,8 +780,8 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 
 	revealRange(range: Range, scrollType: ScrollType = ScrollType.Smooth): void {
 		if (!this.currentModel) return;
-		this.viewport.textModel.offsetAt(range.getStartPosition());
-		this.viewport.textModel.offsetAt(range.getEndPosition());
+		this.view.textModel.offsetAt(range.getStartPosition());
+		this.view.textModel.offsetAt(range.getEndPosition());
 		this.viewModel.revealRange('api', true, range, VerticalRevealType.Simple, scrollType);
 	}
 
@@ -847,7 +798,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		if (!this.currentModel || !state) return;
 		this.viewModel.restoreCursorState(state.cursorState);
 		const scroll = this.viewModel.reduceRestoreState(state.viewState);
-		this.viewport.scrollTo({ left: scroll.scrollLeft, top: scroll.scrollTop });
+		this.view.scrollTo({ left: scroll.scrollLeft, top: scroll.scrollTop });
 		this.contributions.restoreViewState(state.contributionsState ?? {});
 	}
 
@@ -856,11 +807,11 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	}
 
 	hasTextFocus(): boolean {
-		return this.currentModel !== null && this.viewport.isFocused();
+		return this.currentModel !== null && this.view.isFocused();
 	}
 
 	hasWidgetFocus(): boolean {
-		return this.currentModel !== null && this.viewport.isWidgetFocused();
+		return this.currentModel !== null && this.view.isWidgetFocused();
 	}
 
 	getModel(): TextModel | null {
@@ -880,19 +831,19 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	}
 
 	getScrollTop(): number {
-		return this.currentModel ? this.viewport.currentLayout.scrollPosition.top : 0;
+		return this.currentModel ? this.view.currentLayout.scrollPosition.top : 0;
 	}
 
 	getScrollLeft(): number {
-		return this.currentModel ? this.viewport.currentLayout.scrollPosition.left : 0;
+		return this.currentModel ? this.view.currentLayout.scrollPosition.left : 0;
 	}
 
 	getContentHeight(): number {
-		return this.currentModel ? this.viewport.currentLayout.contentSize.height : 0;
+		return this.currentModel ? this.view.currentLayout.contentSize.height : 0;
 	}
 
 	getContentWidth(): number {
-		return this.currentModel ? this.viewport.currentLayout.contentSize.width : 0;
+		return this.currentModel ? this.view.currentLayout.contentSize.width : 0;
 	}
 
 	hasPendingScrollAnimation(): boolean {
@@ -905,8 +856,8 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 
 	getTopForPosition(lineNumber: number, column: number): number {
 		if (!this.currentModel) return 0;
-		const position = this.viewport.textModel.validatePosition(new Position(lineNumber, column));
-		return this.viewport.getPositionContentCoordinates(position).top;
+		const position = this.view.textModel.validatePosition(new Position(lineNumber, column));
+		return this.view.getPositionContentCoordinates(position).top;
 	}
 
 	getTopForLineNumber(lineNumber: number): number {
@@ -915,9 +866,9 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 
 	getBottomForLineNumber(lineNumber: number): number {
 		if (!this.currentModel) return 0;
-		const model = this.viewport.textModel;
+		const model = this.view.textModel;
 		const position = model.validatePosition(new Position(lineNumber, model.getLineMaxColumn(lineNumber)));
-		const coordinates = this.viewport.getPositionContentCoordinates(position);
+		const coordinates = this.view.getPositionContentCoordinates(position);
 		return coordinates.top + coordinates.height;
 	}
 
@@ -995,7 +946,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	pushUndoStop(): boolean {
 		if (!this.currentModel) return false;
 		if (this.configuration.options.get(EditorOption.readOnly)) return false;
-		this.viewport.textModel.pushStackElement();
+		this.view.textModel.pushStackElement();
 		return true;
 	}
 
@@ -1004,31 +955,31 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		const args = (payload ?? {}) as Record<string, unknown>;
 		switch (handlerId) {
 			case Handler.CompositionStart:
-				this.view.compositionStart();
+				this.controller.compositionStart();
 				return;
 			case Handler.CompositionEnd:
-				this.view.compositionEnd();
+				this.controller.compositionEnd();
 				return;
 			case Handler.Type:
-				this.view.type((args as Partial<TypePayload>).text ?? '');
+				this.controller.type((args as Partial<TypePayload>).text ?? '');
 				return;
 			case Handler.ReplacePreviousChar: {
 				const replacement = args as Partial<ReplacePreviousCharPayload>;
-				this.view.compositionType(replacement.text ?? '', replacement.replaceCharCnt ?? 0, 0, 0);
+				this.controller.compositionType(replacement.text ?? '', replacement.replaceCharCnt ?? 0, 0, 0);
 				return;
 			}
 			case Handler.CompositionType: {
 				const composition = args as Partial<CompositionTypePayload>;
-				this.view.compositionType(composition.text ?? '', composition.replacePrevCharCnt ?? 0, composition.replaceNextCharCnt ?? 0, composition.positionDelta ?? 0);
+				this.controller.compositionType(composition.text ?? '', composition.replacePrevCharCnt ?? 0, composition.replaceNextCharCnt ?? 0, composition.positionDelta ?? 0);
 				return;
 			}
 			case Handler.Paste: {
 				const paste = args as Partial<PastePayload>;
-				this.view.paste(paste.text ?? '', paste.pasteOnNewLine ?? false, paste.multicursorText ?? null, paste.mode ?? null);
+				this.controller.paste(paste.text ?? '', paste.pasteOnNewLine ?? false, paste.multicursorText ?? null, paste.mode ?? null);
 				return;
 			}
 			case Handler.Cut:
-				this.view.cut();
+				this.controller.cut();
 				return;
 		}
 		void source;
@@ -1086,23 +1037,6 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	public getContribution<T extends import('../../../common/editorCommon.js').IEditorContribution>(id: string): T | null {
 		return this.currentModel ? this.contributions.get(id) as T | undefined ?? null : null;
 	}
-}
-
-function readHiddenAreas(model: TextModel, source: EditorLineVisibilitySource): Range[] {
-	const ranges: Range[] = [];
-	let startLineNumber: number | undefined;
-	for (let lineIndex = 0; lineIndex < model.lineCount; lineIndex += 1) {
-		if (!source.isLineVisible(lineIndex)) {
-			startLineNumber ??= lineIndex + 1;
-			continue;
-		}
-		if (startLineNumber === undefined) continue;
-		const endLineNumber = lineIndex;
-		ranges.push(new Range(startLineNumber, 1, endLineNumber, model.getLineMaxColumn(endLineNumber)));
-		startLineNumber = undefined;
-	}
-	if (startLineNumber !== undefined) ranges.push(new Range(startLineNumber, 1, model.lineCount, model.getLineMaxColumn(model.lineCount)));
-	return ranges;
 }
 
 class EditorContextKeysManager extends Disposable {
@@ -1268,15 +1202,6 @@ function editorLabel(input: ICodeEditorWidgetOptions['input']): string {
 	return path.slice(path.lastIndexOf('/') + 1) || 'Text editor';
 }
 
-function resolveWrappingIndent(value: IEditorConstructionOptions['wrappingIndent']): WrappingIndent | undefined {
-	switch (value) {
-		case 'none': return WrappingIndent.None;
-		case 'same': return WrappingIndent.Same;
-		case 'indent': return WrappingIndent.Indent;
-		case 'deepIndent': return WrappingIndent.DeepIndent;
-		default: return undefined;
-	}
-}
 
 function reportLanguageError(error: unknown): void {
 	console.error('Editor language request failed', error);

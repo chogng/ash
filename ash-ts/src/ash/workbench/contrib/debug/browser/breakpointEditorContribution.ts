@@ -26,7 +26,7 @@ export class BreakpointEditorContribution extends Disposable {
 			if (target.type !== MouseTargetType.GUTTER_GLYPH_MARGIN || target.detail.glyphMarginLane !== GlyphMarginLane.Left || !target.position) return;
 			event.event.preventDefault();
 			event.event.stopPropagation();
-			context.viewport.domNode.domNode.focus({ preventScroll: true });
+			context.view.domNode.domNode.focus({ preventScroll: true });
 			this.debugService.toggleBreakpoint(resource, target.position.lineNumber);
 		}));
 	}

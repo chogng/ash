@@ -168,7 +168,7 @@ interface Fixture extends Disposable {
 	readonly model: TextModel;
 	readonly selections: CursorsController;
 	readonly decorations: TextDecorationCollection<void>;
-	readonly viewport: InstanceType<typeof CodeEditorWidget>["viewport"];
+	readonly viewport: InstanceType<typeof CodeEditorWidget>["view"];
 	readonly editorInput: HTMLTextAreaElement;
 	readonly find: InstanceType<typeof FindController>;
 }
@@ -187,16 +187,16 @@ function createFixture(text: string, anchor = new Position((0) + 1, (0) + 1), ac
 	});
 	editor.layout({ width: 600, height: 120 });
 	editor.setSelection(Selection.fromPositions(anchor, active));
-	const { viewport, selections } = editor;
+	const { view, selections } = editor;
 	const decorations = new TextDecorationCollection<void>(model);
 	const editorInput = requiredElement<HTMLTextAreaElement>(container, ".stanza-editor-input");
-	const find = new FindController(editorInput, editor, viewport, decorations, options);
+	const find = new FindController(editorInput, editor, view, decorations, options);
 	return {
 		dom,
 		model,
 		selections,
 		decorations,
-		viewport,
+		viewport: view,
 		editorInput,
 		find,
 		[Symbol.dispose](): void {

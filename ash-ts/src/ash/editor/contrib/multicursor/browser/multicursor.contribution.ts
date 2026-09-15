@@ -8,8 +8,8 @@ const selectionHighlightDecorations: EditorCapability<TextDecorationCollection<b
 
 registerTextEditorCapabilityContribution({ id: "editor.contrib.multicursor", install: context => {
 	if (context.kind !== "text") return;
-	context.register(new MultiCursorController(context.view.element, context.viewport, context.viewModel));
-	context.register(new OccurrenceSelectionController(context.view.element, context.viewport, context.viewModel));
+	context.register(new MultiCursorController(context.controller.element, context.view, context.viewModel));
+	context.register(new OccurrenceSelectionController(context.controller.element, context.view, context.viewModel));
 } });
 
 registerTextEditorCapabilityContribution({ id: SelectionHighlighter.ID, configure: context => {

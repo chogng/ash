@@ -1,14 +1,13 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { type EditorLineVisibilitySource } from "../../../common/viewModel/viewModelLines.js";
+import { Range } from "../../../common/core/range.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { EditorFoldingModel } from "./foldingModel.js";
 
 /** Derives hidden physical lines from collapsed folding regions for visual consumers. */
-export class EditorHiddenRangeModel extends Disposable implements EditorLineVisibilitySource {
+export class EditorHiddenRangeModel extends Disposable {
 	private readonly changeEmitter = this._register(new Emitter<void>());
-	private hiddenLines: readonly boolean[] = Object.freeze([]);
-	private visibleLineIndexes: readonly number[] = Object.freeze([]);
+	private ranges: readonly Range[] = [];
 
 	readonly onDidChange: Event<void> = this.changeEmitter.event;
 
@@ -20,45 +19,26 @@ export class EditorHiddenRangeModel extends Disposable implements EditorLineVisi
 		this._register(textModel.onDidChangeContent(() => this.rebuild()));
 	}
 
-	get model(): TextModel {
-		return this.textModel;
-	}
-
-	get lineCount(): number {
-		return this.textModel.lineCount;
-	}
-
-	isLineVisible(lineIndex: number): boolean {
-		validateLineIndex(this.textModel, lineIndex);
-		return !this.hiddenLines[lineIndex];
-	}
-
-	isLineHidden(lineIndex: number): boolean {
-		return !this.isLineVisible(lineIndex);
-	}
-
-	getVisibleLineIndexes(): readonly number[] {
-		return this.visibleLineIndexes;
+	get hiddenRanges(): readonly Range[] {
+		return this.ranges;
 	}
 
 	private rebuild(): void {
-		const hiddenLines = Array.from({ length: this.textModel.lineCount }, () => false);
+		const ranges: Range[] = [];
 		for (const region of this.folding.regions) {
 			if (!region.collapsed) continue;
-			for (let lineIndex = region.startLineIndex + 1; lineIndex <= region.endLineIndex; lineIndex += 1) hiddenLines[lineIndex] = true;
+			const start = region.startLineIndex + 2;
+			const end = Math.min(region.endLineIndex + 1, this.textModel.lineCount);
+			if (start > end) continue;
+			const previous = ranges[ranges.length - 1];
+			if (previous && start <= previous.endLineNumber + 1) {
+				ranges[ranges.length - 1] = new Range(previous.startLineNumber, 1, Math.max(previous.endLineNumber, end), 1);
+			} else {
+				ranges.push(new Range(start, 1, end, 1));
+			}
 		}
-		const visibleLineIndexes = hiddenLines.flatMap((hidden, lineIndex) => hidden ? [] : [lineIndex]);
-		if (sameBooleanArray(this.hiddenLines, hiddenLines)) return;
-		this.hiddenLines = Object.freeze(hiddenLines);
-		this.visibleLineIndexes = Object.freeze(visibleLineIndexes);
+		if (ranges.length === this.ranges.length && ranges.every((range, index) => range.equalsRange(this.ranges[index]))) return;
+		this.ranges = ranges;
 		this.changeEmitter.fire();
 	}
-}
-
-function sameBooleanArray(left: readonly boolean[], right: readonly boolean[]): boolean {
-	return left.length === right.length && left.every((value, index) => value === right[index]);
-}
-
-function validateLineIndex(model: TextModel, lineIndex: number): void {
-	if (!Number.isSafeInteger(lineIndex) || lineIndex < 0 || lineIndex >= model.lineCount) throw new RangeError("Hidden line index is outside the text model");
 }

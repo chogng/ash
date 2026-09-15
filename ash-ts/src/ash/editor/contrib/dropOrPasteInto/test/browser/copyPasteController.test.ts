@@ -36,7 +36,7 @@ test('CopyPasteController owns URI-list and bounded text-file paste extensions',
 		lineHeight: 20,
 	});
 	editor.setSelection(new Selection(1, 1, 1, 8));
-	const input = editor.view.editContext.domNode.domNode;
+	const input = editor.controller.editContext.domNode.domNode;
 	input.focus();
 	const uriData = new TestClipboardData();
 	uriData.setData('text/uri-list', '# resources\nfile:///workspace/one.rs\nhttps://example.test/two');

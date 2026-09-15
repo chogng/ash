@@ -51,9 +51,9 @@ registerTextEditorCapabilityContribution({
 	install: context => {
 		if (context.kind !== 'text') return;
 		context.register(new InPlaceReplaceController(
-			context.view.element,
+			context.controller.element,
 			context.editor,
-			context.viewport,
+			context.view,
 			context.editorWorker,
 			() => context.configurations.getLanguageConfiguration(context.languageId).getWordDefinition(),
 			context.onLanguageError,

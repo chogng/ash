@@ -16,9 +16,8 @@ import { ViewEventHandler } from '../common/viewEventHandler.js';
 import * as viewEvents from '../common/viewEvents.js';
 import { EditorVisualLineProjection } from '../common/viewModel/modelLineProjection.js';
 import { type EditorScrollPosition } from '../common/viewModel/editorViewportContracts.js';
-import { ComputeOptionsMemory, EditorFontLigatures, EditorLayoutInfoComputer, EditorLineWrapping, EditorOption, EditorOptions, type EditorLayoutInfo, type EditorMinimapLayoutInfo, type EditorMinimapOptions, type FindComputedEditorOptionValueById, type IEditorMinimapOptions, type IEditorOptions, RenderLineNumbersType, isWrappingIndent, WrappingIndent } from '../common/config/editorOptions.js';
+import { ComputeOptionsMemory, EditorLayoutInfoComputer, EditorLineWrapping, EditorOption, EditorOptions, type EditorLayoutInfo, type EditorMinimapLayoutInfo, type EditorMinimapOptions, type FindComputedEditorOptionValueById, RenderLineNumbersType, isWrappingIndent, WrappingIndent } from '../common/config/editorOptions.js';
 import { type FontInfo } from '../common/config/fontInfo.js';
-import { createBareFontInfoFromRawSettings } from '../common/config/fontInfoFromSettings.js';
 import { type TextMeasurer } from '../common/viewModel/textMeasurer.js';
 import { type EditorViewportChange, type EditorViewportLayout, ViewLayout } from '../common/viewLayout/viewLayout.js';
 import { type ClientPoint, type EditorHitTarget, EditorHitTargetKind, hitTestStanzaVisualEditorPoint } from '../common/viewModel/pointerHitTest.js';
@@ -99,9 +98,7 @@ export type EditorFocusOutlineOwner = "editor" | "host";
 
 /** Space reserved around the editor's projected text rows. */
 export interface EditorViewportPadding {
-	readonly top: number;
 	readonly right: number;
-	readonly bottom: number;
 	readonly left: number;
 }
 
@@ -113,9 +110,7 @@ export interface EditorViewportOptions {
 	readonly controller?: ViewControllerOptions;
 	readonly configuration: EditorConfiguration;
 	readonly theme: IColorTheme;
-	readonly lineHeight?: number;
 	readonly dimension?: IDimension;
-	readonly automaticLayout?: boolean;
 	readonly padding?: EditorViewportPadding;
 	readonly ariaLabel?: string;
 	readonly textMeasurer?: TextMeasurer & { refresh?(): boolean };
@@ -124,33 +119,9 @@ export interface EditorViewportOptions {
 	readonly presentation?: EditorViewportPresentation;
 	/** `host` delegates the visible focus outline to the viewport's direct host. */
 	readonly focusOutlineOwner?: EditorFocusOutlineOwner;
-	readonly renderLineHighlight?: IEditorOptions['renderLineHighlight'];
-	readonly renderLineHighlightOnlyWhenFocus?: IEditorOptions['renderLineHighlightOnlyWhenFocus'];
-	readonly lineWrapping?: EditorLineWrapping;
-	readonly wrappingIndent?: WrappingIndent;
-	readonly fontFamily?: string;
-	readonly fontSize?: number;
-	readonly fontLigatures?: boolean;
-	readonly lineNumbers?: IEditorOptions['lineNumbers'];
-	readonly glyphMargin?: boolean;
-	readonly guides?: IEditorOptions['guides'];
-	readonly minimap?: IEditorMinimapOptions;
 	readonly indentation?: EditorIndentationOptions;
 	/** Browser text-direction input; automatic direction is the default. */
 	readonly textDirection?: EditorTextDirection;
-	readonly experimentalGpuAcceleration?: IEditorOptions['experimentalGpuAcceleration'];
-	readonly renderWhitespace?: IEditorOptions['renderWhitespace'];
-	readonly mouseStyle?: IEditorOptions['mouseStyle'];
-	readonly cursorStyle?: IEditorOptions['cursorStyle'];
-	readonly overtypeCursorStyle?: IEditorOptions['overtypeCursorStyle'];
-	readonly cursorBlinking?: IEditorOptions['cursorBlinking'];
-	readonly cursorSmoothCaretAnimation?: IEditorOptions['cursorSmoothCaretAnimation'];
-	readonly cursorWidth?: IEditorOptions['cursorWidth'];
-	readonly cursorHeight?: IEditorOptions['cursorHeight'];
-	readonly allowOverflow?: IEditorOptions['allowOverflow'];
-	readonly fixedOverflowWidgets?: IEditorOptions['fixedOverflowWidgets'];
-	readonly cursorOptions?: IEditorOptions;
-	readonly languageId?: string;
 }
 
 export interface EditorContentPosition {
@@ -201,16 +172,13 @@ export class View extends ViewEventHandler {
 	readonly cursorConfig: IViewModel['cursorConfig'];
 	private readonly presentation: EditorViewportPresentation;
 	private readonly focusOutlineOwner: EditorFocusOutlineOwner;
-	private readonly showGlyphMargin: boolean;
 	private readonly padding: EditorViewportPadding;
 	private readonly indentation: ResolvedEditorIndentationOptions;
-	private readonly minimap: EditorMinimapOptions;
 	private readonly minimapLayoutMemory = new ComputeOptionsMemory();
 	private readonly textDirection: EditorTextDirection;
 	private readonly editorConfiguration: EditorConfiguration;
 	private readonly pixelRatio: IPixelRatioMonitor;
 	private changingLayout = false;
-	private softWrapping: boolean;
 	private syncedScrollLeft = 0;
 	private syncedScrollTop = 0;
 	private projectionRevision = 0;
@@ -239,15 +207,6 @@ export class View extends ViewEventHandler {
 		const ownerWindow = ownerDocument.defaultView;
 		if (!ownerWindow) throw new ReferenceError('Editor viewport requires a browser window');
 		this.pixelRatio = PixelRatio.getInstance(ownerWindow);
-		const bareFontInfo = createBareFontInfoFromRawSettings({
-			fontFamily: options.fontFamily ?? options.cursorOptions?.fontFamily,
-			fontWeight: options.cursorOptions?.fontWeight,
-			fontSize: options.fontSize ?? options.cursorOptions?.fontSize,
-			fontLigatures: options.fontLigatures ?? options.cursorOptions?.fontLigatures,
-			fontVariations: options.cursorOptions?.fontVariations,
-			lineHeight: options.lineHeight,
-			letterSpacing: options.cursorOptions?.letterSpacing,
-		}, this.pixelRatio.value, true);
 		if (!(options.viewModel.model instanceof TextModel)) throw new TypeError('Editor view requires the editor text model implementation');
 		const viewport = options.viewModel.viewLayout;
 		if (!(viewport instanceof ViewLayout)) throw new TypeError('Editor view requires the editor view layout implementation');
@@ -263,14 +222,9 @@ export class View extends ViewEventHandler {
 		this.accessibilityStatusElement = h(ownerDocument, "div");
 		this.presentation = options.presentation ?? "document";
 		this.focusOutlineOwner = options.focusOutlineOwner ?? "editor";
-		const mouseStyle = EditorOptions.mouseStyle.validate(options.mouseStyle);
-		this.showGlyphMargin = this.presentation !== 'embedded' && (options.glyphMargin ?? true);
+		this.editorConfiguration = options.configuration;
+		const mouseStyle = this.editorConfiguration.options.get(EditorOption.mouseStyle);
 		this.padding = resolveEditorViewportPadding(options.padding);
-		this.minimap = EditorOptions.minimap.validate({
-			...options.minimap,
-			enabled: options.minimap?.enabled ?? this.presentation === 'document',
-		}) as EditorMinimapOptions;
-		this.softWrapping = options.lineWrapping === EditorLineWrapping.On;
 		this.indentation = resolveEditorIndentationOptions(options.indentation);
 		this.textDirection = options.textDirection ?? EditorTextDirection.Auto;
 		this.domNode.domNode.className = "stanza-editor";
@@ -279,7 +233,6 @@ export class View extends ViewEventHandler {
 		this.domNode.domNode.classList.add(`stanza-editor-direction-${this.textDirection}`);
 		this.domNode.domNode.classList.add(`stanza-editor-mouse-${mouseStyle}`);
 		this.domNode.domNode.classList.toggle("hide-line-numbers", options.configuration.options.get(EditorOption.lineNumbers).renderType === RenderLineNumbersType.Off);
-		applyFontInfo(this.domNode.domNode, bareFontInfo);
 		this.domNode.domNode.style.tabSize = String(this.indentation.tabSize);
 		this.domNode.domNode.style.setProperty("--stanza-editor-padding-left", `${this.padding.left}px`);
 		this.domNode.domNode.style.setProperty("--stanza-editor-padding-right", `${this.padding.right}px`);
@@ -309,7 +262,6 @@ export class View extends ViewEventHandler {
 		this.textMeasurer =
 			options.textMeasurer ??
 			new BrowserTextMeasurer(this.textMetricsElement);
-		this.editorConfiguration = options.configuration;
 		this._fontInfo = this.editorConfiguration.options.get(EditorOption.fontInfo);
 		applyFontInfo(this.domNode.domNode, this.fontInfo);
 		const spaceWidth = this.fontInfo.spaceWidth;
@@ -440,11 +392,7 @@ export class View extends ViewEventHandler {
 		const minimapPart = this.registerViewPart(new Minimap(this.viewContext, {
 			host: this.domNode.domNode,
 			model: this.model,
-			options: this.minimap,
 			semanticTokenSource: options.semanticTokenSource,
-			tabSize: this.indentation.tabSize,
-			paddingTop: this.padding.top,
-			paddingBottom: this.padding.bottom,
 			readLayout: () => this.viewport.layout,
 			readMinimapLayout: () => this.computeMinimapLayout(this.viewport.layout.viewportSize.width, this.viewport.layout.viewportSize.height),
 			readVisualProjection: () => this.visualProjection,
@@ -514,9 +462,13 @@ export class View extends ViewEventHandler {
 		}
 
 		this._register(this.editorConfiguration.onDidChange(event => {
+			if (event.hasChanged(EditorOption.mouseStyle)) {
+				for (const style of ['text', 'default', 'copy']) {
+					this.domNode.domNode.classList.toggle(`stanza-editor-mouse-${style}`, style === this.editorConfiguration.options.get(EditorOption.mouseStyle));
+				}
+			}
 			if (event.hasChanged(EditorOption.fontInfo)) this.applyFontConfiguration();
 			if (event.hasChanged(EditorOption.wrappingInfo)) {
-				this.softWrapping = this.editorConfiguration.options.get(EditorOption.wrappingInfo).wrappingColumn > 0;
 				this.domNode.domNode.classList.toggle("word-wrapped", this.softWrapping);
 			}
 			if (!this.changingLayout && event.hasChanged(EditorOption.layoutInfo)) {
@@ -531,6 +483,14 @@ export class View extends ViewEventHandler {
 		this._register(toDisposable(() => this.viewModel.removeViewEventHandler(this)));
 		this.layout(options.dimension ?? getClientArea(this.domNode.domNode));
 		this.onDidRender();
+	}
+
+	private get softWrapping(): boolean {
+		return this.editorConfiguration.options.get(EditorOption.wrappingInfo).wrappingColumn > 0;
+	}
+
+	private get minimap(): EditorMinimapOptions {
+		return this.editorConfiguration.options.get(EditorOption.minimap);
 	}
 
 	get viewportLayout(): EditorViewportLayout {
@@ -563,7 +523,6 @@ export class View extends ViewEventHandler {
 		}
 		const nextSoftWrapping = lineWrapping === EditorLineWrapping.On;
 		if (nextSoftWrapping === this.softWrapping) return this.viewport.layout;
-		this.softWrapping = nextSoftWrapping;
 		this.editorConfiguration.updateOptions({ wordWrap: nextSoftWrapping ? 'on' : 'off' });
 		this.domNode.domNode.classList.toggle("word-wrapped", nextSoftWrapping);
 		this.viewport.setMaxLineWidth(this.measuredContentWidth);
@@ -889,7 +848,7 @@ export class View extends ViewEventHandler {
 			{
 				gutterWidth: this.gutterWidth,
 				textLeft: this.textLeft,
-				paddingTop: this.padding.top,
+				paddingTop: this.editorConfiguration.options.get(EditorOption.padding).top,
 				getLineIndexAtVerticalOffset: offset => this.viewport.getLineIndexAtVerticalOffset(offset),
 			},
 			this.textMeasurer,
@@ -963,8 +922,8 @@ export class View extends ViewEventHandler {
 			typicalHalfwidthCharacterWidth: Math.max(1, this.textMeasurer.measureLineWidth('n')),
 			pixelRatio: this.pixelRatio.value,
 			scrollBeyondLastLine: false,
-			paddingTop: this.padding.top,
-			paddingBottom: this.padding.bottom,
+			paddingTop: this.editorConfiguration.options.get(EditorOption.padding).top,
+			paddingBottom: this.editorConfiguration.options.get(EditorOption.padding).bottom,
 			minimap: this.minimap,
 			verticalScrollbarWidth: DEFAULT_EDITOR_SCROLLBAR.verticalScrollbarSize,
 			viewLineCount: this.visualProjection.visualLineCount,
@@ -1166,15 +1125,8 @@ function validateEditorViewportOptions(options: EditorViewportOptions): void {
 	resolveEditorIndentationOptions(options.indentation);
 	const textDirection = options.textDirection ?? EditorTextDirection.Auto;
 	if (!Object.values(EditorTextDirection).includes(textDirection)) throw new TypeError('Unknown Stanza editor text direction');
-	if (options.experimentalGpuAcceleration !== undefined && options.experimentalGpuAcceleration !== 'on' && options.experimentalGpuAcceleration !== 'off') {
-		throw new TypeError('Unknown Stanza editor GPU acceleration mode');
-	}
 	const focusOutlineOwner = options.focusOutlineOwner ?? 'editor';
 	if (focusOutlineOwner !== 'editor' && focusOutlineOwner !== 'host') throw new TypeError('Unknown Stanza editor focus outline owner');
-	const presentation = options.presentation ?? 'document';
-	const renderLineHighlight = options.renderLineHighlight ?? (presentation === 'embedded' ? 'none' : 'line');
-	if (!['none', 'gutter', 'line', 'all'].includes(renderLineHighlight)) throw new TypeError('Unknown Stanza editor line highlight mode');
-	if (typeof (options.renderLineHighlightOnlyWhenFocus ?? false) !== 'boolean') throw new TypeError('Stanza editor line highlight focus option must be boolean');
 	if (options.semanticTokenSource && options.semanticTokenSource.textModel !== options.viewModel.model) {
 		throw new TypeError('Stanza viewport and semantic token source must share one text model');
 	}
@@ -1325,9 +1277,7 @@ function validateClientPoint(point: ClientPoint): void {
 
 function resolveEditorViewportPadding(padding: EditorViewportPadding | undefined): EditorViewportPadding {
 	return Object.freeze({
-		top: nonNegativePaddingValue(padding?.top ?? 0, "top"),
 		right: nonNegativePaddingValue(padding?.right ?? 12, "right"),
-		bottom: nonNegativePaddingValue(padding?.bottom ?? 0, "bottom"),
 		left: nonNegativePaddingValue(padding?.left ?? 12, "left"),
 	});
 }

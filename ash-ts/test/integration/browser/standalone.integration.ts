@@ -66,6 +66,7 @@ interface ViewZoneState {
 interface StandaloneHarness {
 	prepareReferencePreview(): void;
 	setParentFontSize(): void;
+	updateRenderingOptions(enabled: boolean): number;
 	setTestMarkers(enabled: boolean): void;
 	setMinimapColor(color: string): void;
 	readMinimapPixel(): number[];
@@ -248,6 +249,15 @@ function readViewZone(): ViewZoneState {
 }
 
 window.ashStandaloneIntegration = {
+	updateRenderingOptions: enabled => {
+		callerEditor.updateOptions({
+			minimap: { enabled, side: 'left', showSlider: 'always' },
+			mouseStyle: enabled ? 'copy' : 'default',
+			fontSize: enabled ? 18 : 14,
+			wordWrap: enabled ? 'on' : 'off',
+		});
+		return callerModel.getVersionId();
+	},
 	prepareReferencePreview: () => {
 		callerEditor.setValue('alpha beta\nalpha gamma');
 		callerEditor.setPosition(new stanza.Position(1, 2));

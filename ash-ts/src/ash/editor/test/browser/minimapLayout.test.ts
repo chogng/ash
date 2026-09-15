@@ -13,10 +13,6 @@ test('Minimap owns one canvas and removes its DOM node on disposal', () => {
 	const minimap = new Minimap(testViewContext(), {
 		host,
 		model,
-		options: { enabled: true } as never,
-		tabSize: 4,
-		paddingTop: 0,
-		paddingBottom: 0,
 		readLayout: () => { throw new Error('not rendered'); },
 		readMinimapLayout: () => { throw new Error('not rendered'); },
 		readVisualProjection: () => { throw new Error('not rendered'); },

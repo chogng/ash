@@ -1212,3 +1212,30 @@ test('standalone view zones stay after the wrapped fold header while folded and 
 	await node!.dispose();
 	expect(errors).toEqual([]);
 });
+
+
+test('editor rendering follows updated configuration without replacing the view', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/standalone.html');
+	const root = page.locator('#caller .stanza-editor');
+	const minimap = page.locator('#caller .minimap');
+	const node = await root.elementHandle();
+	const version = await page.evaluate(() => window.ashStandaloneIntegration.getCallerVersion());
+	for (const enabled of [false, true, false]) {
+		expect(await page.evaluate(value => window.ashStandaloneIntegration.updateRenderingOptions(value), enabled)).toBe(version);
+		await expect(minimap).toBeVisible({ visible: enabled });
+		await expect(root).toHaveCSS('font-size', enabled ? '18px' : '14px');
+		await expect(root).toHaveClass(enabled ? /stanza-editor-mouse-copy/ : /stanza-editor-mouse-default/);
+		if (enabled) {
+			await expect(root).toHaveClass(/word-wrapped/);
+			await expect(minimap).toHaveCSS('left', '0px');
+		} else {
+			await expect(root).not.toHaveClass(/word-wrapped/);
+		}
+	}
+	expect(await node!.evaluate(element => element === document.querySelector('#caller .stanza-editor'))).toBe(true);
+	await node!.dispose();
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	expect(errors).toEqual([]);
+});

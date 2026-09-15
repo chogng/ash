@@ -9,6 +9,6 @@ registerTextEditorCapabilityContribution({ id: "editor.contrib.comment", command
 ], install: context => {
 	if (context.kind !== "text") return;
 	const options = { languageId: context.languageId, configurations: context.configurations, lexicalContext: context.getOptionalCapability(TextEditorCapability.languageLexicalContext) };
-	context.register(new LineCommentController(context.view.element, context.viewport, context.selectionController, options, context.executeCommand));
-	context.register(new BlockCommentController(context.view.element, context.viewport, context.selectionController, options, context.executeCommand));
+	context.register(new LineCommentController(context.controller.element, context.view, context.selectionController, options, context.executeCommand));
+	context.register(new BlockCommentController(context.controller.element, context.view, context.selectionController, options, context.executeCommand));
 } });

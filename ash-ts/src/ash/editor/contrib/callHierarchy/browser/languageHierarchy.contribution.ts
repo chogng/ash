@@ -6,9 +6,9 @@ registerTextEditorCapabilityContribution({ id: "editor.contrib.languageHierarchy
 	if (context.kind !== "text") return;
 	const service = context.register(new LanguageHierarchyService(context.model, context.options.input.resource, context.languageFeaturesService.callHierarchyProvider, context.languageFeaturesService.typeHierarchyProvider));
 	context.register(new LanguageHierarchyController(
-		context.view.element,
+		context.controller.element,
 		context.editor,
-		context.viewport,
+		context.view,
 		service,
 		context.options.input.resource,
 		context.languageId,

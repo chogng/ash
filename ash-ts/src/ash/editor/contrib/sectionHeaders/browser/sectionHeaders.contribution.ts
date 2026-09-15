@@ -6,7 +6,7 @@ registerTextEditorCapabilityContribution({ id: "editor.contrib.sectionHeaders", 
 	if (context.kind !== "text" || context.model.largeFile.tooLargeForTokenization || context.options.sectionHeaders === false) return;
 	const options = context.options.sectionHeaders || {};
 	context.register(new SectionHeadersController(
-		context.viewport,
+		context.view,
 		context.model,
 		context.languageId,
 		context.configurations,

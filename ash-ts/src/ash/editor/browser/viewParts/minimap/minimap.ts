@@ -6,7 +6,7 @@ import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { clamp } from '../../../../base/common/numbers.js';
-import { type EditorMinimapLayoutInfo, type EditorMinimapOptions, RenderMinimap } from '../../../common/config/editorOptions.js';
+import { type EditorMinimapLayoutInfo, EditorOption, RenderMinimap } from '../../../common/config/editorOptions.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type SemanticTokenSource } from '../../../common/services/resolvedSemanticTokens.js';
 import { type EditorScrollPosition } from '../../../common/viewModel/editorViewportContracts.js';
@@ -20,11 +20,7 @@ import { Range } from '../../../common/core/range.js';
 export interface MinimapOptions {
 	readonly host: HTMLElement;
 	readonly model: TextModel;
-	readonly options: EditorMinimapOptions;
 	readonly semanticTokenSource?: SemanticTokenSource;
-	readonly tabSize: number;
-	readonly paddingTop: number;
-	readonly paddingBottom: number;
 	readonly readLayout: () => EditorViewportLayout;
 	readonly readMinimapLayout: () => EditorMinimapLayoutInfo;
 	readonly readVisualProjection: () => EditorVisualLineProjection;
@@ -92,22 +88,28 @@ export class Minimap extends ViewPart {
 		return this.root;
 	}
 
+	public override onConfigurationChanged(): boolean {
+		return true;
+	}
+
 	render(context: RestrictedRenderingContext): void {
 		const geometry = this.source.readMinimapLayout();
-		const visible = this.source.options.enabled && geometry.renderMinimap !== RenderMinimap.None && geometry.minimapWidth > 0 && context.viewportHeight > 0;
+		const minimap = this._context.configuration.options.get(EditorOption.minimap);
+		const padding = this._context.configuration.options.get(EditorOption.padding);
+		const visible = minimap.enabled && geometry.renderMinimap !== RenderMinimap.None && geometry.minimapWidth > 0 && context.viewportHeight > 0;
 		this.domNode.style.display = visible ? '' : 'none';
 		this.slider.hidden = !visible;
 		if (!visible) return;
 
 		const projection = this.source.readVisualProjection();
 		const lineHeight = Math.max(1, this.source.readLayout().lineHeight);
-		const rows = projection.visualLineCount + (this.source.paddingTop + this.source.paddingBottom) / lineHeight;
+		const rows = projection.visualLineCount + (padding.top + padding.bottom) / lineHeight;
 		const pixelRatio = geometry.minimapCanvasInnerHeight / Math.max(1, geometry.minimapCanvasOuterHeight);
 		this.contentHeight = Math.min(context.viewportHeight, Math.max(0, rows * geometry.minimapLineHeight / Math.max(1, pixelRatio)));
 		this.sliderHeight = Math.min(this.contentHeight, Math.max(8, this.contentHeight * context.viewportHeight / Math.max(1, context.scrollHeight)));
 		const scrollRange = Math.max(0, context.scrollHeight - context.viewportHeight);
 		this.sliderTop = scrollRange > 0 ? context.scrollTop / scrollRange * (this.contentHeight - this.sliderHeight) : 0;
-		this.domNode.classList.toggle('stanza-editor-minimap-hover-slider', this.source.options.showSlider === 'mouseover');
+		this.domNode.classList.toggle('stanza-editor-minimap-hover-slider', minimap.showSlider === 'mouseover');
 		this.domNode.style.left = `${context.scrollLeft + geometry.minimapLeft}px`;
 		this.domNode.style.top = `${context.scrollTop}px`;
 		this.domNode.style.width = `${geometry.minimapWidth}px`;
@@ -124,13 +126,15 @@ export class Minimap extends ViewPart {
 	private paint(context: RestrictedRenderingContext, geometry: EditorMinimapLayoutInfo): void {
 		const painter = this.canvas.getContext('2d');
 		if (!painter) return;
+		const padding = this._context.configuration.options.get(EditorOption.padding);
+		const tabSize = this.source.model.getOptions().tabSize;
 		const width = this.canvas.width;
 		const height = this.canvas.height;
 		painter.clearRect(0, 0, width, height);
 		const projection = this.source.readVisualProjection();
 		const lineHeight = Math.max(1, this.source.readLayout().lineHeight);
-		const paddingRows = this.source.paddingTop / lineHeight;
-		const scaleY = this.contentHeight * height / context.viewportHeight / Math.max(1, projection.visualLineCount + (this.source.paddingTop + this.source.paddingBottom) / lineHeight);
+		const paddingRows = padding.top / lineHeight;
+		const scaleY = this.contentHeight * height / context.viewportHeight / Math.max(1, projection.visualLineCount + (padding.top + padding.bottom) / lineHeight);
 		const rowHeight = Math.max(1, scaleY);
 		const charWidth = Math.max(1, geometry.minimapScale);
 		const foreground = this.source.host.ownerDocument.defaultView!.getComputedStyle(this.source.host).color;
@@ -139,7 +143,7 @@ export class Minimap extends ViewPart {
 		painter.globalAlpha = 0.55;
 		for (const line of projection.lines) {
 			const text = this.source.model.getLineContent(line.logicalLineIndex + 1).slice(line.startColumn, line.endColumn);
-			const indentation = leadingWidth(text, this.source.tabSize);
+			const indentation = leadingWidth(text, tabSize);
 			const visibleWidth = Math.max(1, Math.min(width - indentation * charWidth, (text.length - indentation) * charWidth));
 			const y = Math.floor((line.visualLineIndex + paddingRows) * scaleY);
 			if (!hasTokenColors) {
@@ -156,8 +160,8 @@ export class Minimap extends ViewPart {
 				if (end <= start) continue;
 				const color = colors.getColor(tokens.getForeground(index));
 				painter.fillStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${color.a / 255})`;
-				const left = displayWidth(text.slice(0, start - line.startColumn), this.source.tabSize) * charWidth;
-				const right = displayWidth(text.slice(0, end - line.startColumn), this.source.tabSize) * charWidth;
+				const left = displayWidth(text.slice(0, start - line.startColumn), tabSize) * charWidth;
+				const right = displayWidth(text.slice(0, end - line.startColumn), tabSize) * charWidth;
 				painter.fillRect(left, y, Math.max(0, Math.min(width, right) - left), rowHeight);
 			}
 		}

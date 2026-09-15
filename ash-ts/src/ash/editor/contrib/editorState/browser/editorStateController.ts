@@ -19,5 +19,5 @@ export class EditorStateController extends Disposable {
 registerTextEditorCapabilityContribution({ id: "editor.contrib.editorState", install: context => {
 	if (context.kind !== "text") return;
 	const state = context.register(new EditorInteractionStateStore(context.model, context.selectionController.getSelections()));
-	context.register(new EditorStateController(context.view.element, context.viewport, context.selectionController, state));
+	context.register(new EditorStateController(context.controller.element, context.view, context.selectionController, state));
 } });

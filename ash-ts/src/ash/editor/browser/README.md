@@ -55,6 +55,12 @@ support; `EditorView` selects one implementation and exposes that contract, whil
 
 `RestrictedRenderingContext` publishes only the viewport and vertical-layout data shared by all Parts. `RenderingContext` adds line geometry through the DOM/GPU `IViewLines` implementations. Feature state, document access, text measurement, and visual-line mapping are explicit Part dependencies rather than fields on a shared metadata object.
 
+The widget exposes its browser `View` as `view` and derives `controller` from that View. Contributions use the same names. Model attachment stores the View once; controller access does not introduce another resource slot.
+
+`EditorConfiguration` is the single source for font, wrapping, mouse style, minimap, and vertical padding. `View` receives that configuration directly; its construction options carry DOM ownership, measurement inputs, horizontal insets, and feature dependencies. `Minimap` reads current settings from its existing `ViewContext`, including after configuration updates. Embedded defaults are selected when the widget creates its configuration.
+
+Folding sends hidden line ranges directly to `ViewModel.setHiddenAreas`. The folding range model merges overlapping collapsed regions; the view-model line collection consumes one range list. The widget does not scan line visibility or translate a separate visibility source.
+
 The browser configuration seam is intentionally small. `editorConfiguration.ts` resolves the font and line-height values that affect initial geometry, `domFontInfo.ts` applies the same font vocabulary to viewport and diff roots, `elementSizeObserver.ts` coalesces initial and `ResizeObserver` dimensions, `tabFocus.ts` owns host-injectable Tab-focus state, and `fontMeasurements.ts`/`charWidthReader.ts` own font-environment reads. The `toggleTabFocusMode` contribution consumes that state for keybindings, DOM state, and announcements. `migrateOptions.ts` is the single compatibility boundary for the legacy option spellings that the public editor constructor still accepts; callers and view parts consume only the normalized options.
 
 Standalone language-feature registration follows the public `(LanguageSelector, provider)` boundary. `standaloneLanguages.ts` translates the selector once into the internal provider registry's ownership metadata; feature providers do not carry `languageIds` as part of their public contract.
