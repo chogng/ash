@@ -25,7 +25,6 @@ use crate::TurnToolExecutionStarted;
 use crate::action_policy_service::durable_sandbox_escalation_approval_request;
 use crate::thread_controller::RecordToolExecutionEscalation;
 use crate::thread_controller::RecordToolExecutionStart;
-use std::sync::Arc;
 use ash_action_policy::ActionReviewRequest;
 use ash_action_policy::CapabilityKind;
 use ash_action_policy::ExecutionDecision;
@@ -47,6 +46,7 @@ use ash_protocol::ToolExecutionAuthority;
 use ash_protocol::ToolExecutionAuthority::Sandboxed;
 use ash_protocol::ToolOutputStream;
 use ash_protocol::TurnId;
+use std::sync::Arc;
 
 const MAX_DENIAL_REASON_CHARS: usize = 500;
 const MAX_DENIAL_OUTPUT_CHARS: usize = 2_000;
@@ -495,7 +495,8 @@ impl ToolExecutionOrchestrator {
                 denial_reason.clone(),
                 denial_output,
             ));
-        let decision = match self.policy.decide_for_turn_with_approval_mode(
+        let decision = match crate::decide_turn_action(
+            self.policy.as_ref(),
             context.frozen_policy_revision,
             context.approval_mode,
             &second_review,
@@ -701,7 +702,8 @@ impl ToolInteractionService for CoreToolInteractions {
                     .into(),
             ));
         }
-        let decision = self.policy.decide_for_turn_with_approval_mode(
+        let decision = crate::decide_turn_action(
+            self.policy.as_ref(),
             &self.frozen_policy_revision,
             self.approval_mode,
             request,

@@ -14,6 +14,8 @@
 
 App Server 的 Agent 请求处理依赖 `AgentRuntime`，装配代码创建 Core `Runtime`。
 Thread 状态、恢复、执行循环、工具授权构造和调用时机由 `ash-core` 拥有。
+策略版本检查与批准模式处理由 Core 的 `decide_turn_action` 统一执行；
+策略契约只提供权威决策和可选自动审查能力，不实现权限规则或具体引擎适配。
 `ToolService` 与其授权、执行事实仍由 Core 管理；`ThreadStore` 保持在
 `ash-thread-store`。产品客户端继续使用 App Server。
 

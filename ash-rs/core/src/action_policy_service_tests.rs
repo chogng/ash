@@ -1,9 +1,8 @@
-use ash_action_policy::ActionClassifier;
-use ash_action_policy::ActionPolicyEngine;
 use super::*;
-use std::fmt;
+use ash_action_policy::ActionClassifier;
 use ash_action_policy::ActionDigest;
 use ash_action_policy::ActionKind;
+use ash_action_policy::ActionPolicyEngine;
 use ash_action_policy::ActionPolicyRevision;
 use ash_action_policy::ActionProvenance;
 use ash_action_policy::ActionSource;
@@ -17,6 +16,7 @@ use ash_action_policy::ResolvedAction;
 use ash_action_policy::SandboxCompatibility;
 use ash_async_utils::CancellationSource;
 use ash_protocol::ApprovalMode;
+use std::fmt;
 
 #[derive(Debug)]
 struct ClassifierError;
@@ -75,6 +75,7 @@ fn action_policy_service_keeps_ask_user_non_authoritative_and_builds_bound_paylo
         AskClassifier,
         ash_action_policy::ReviewFailurePolicy::Block,
     );
+    let engine = EnginePolicy(engine);
     let service: &dyn ActionPolicyService = &engine;
     let decision = service
         .decide(&request, &CancellationSource::new().token())
@@ -119,16 +120,17 @@ fn permission_bypass_replaces_only_a_bound_ask_user_decision() {
         AskClassifier,
         ash_action_policy::ReviewFailurePolicy::Block,
     );
+    let engine = EnginePolicy(engine);
     let service: &dyn ActionPolicyService = &engine;
 
-    let decision = service
-        .decide_for_turn_with_approval_mode(
-            "policy-1",
-            ApprovalMode::BypassPermissions,
-            &request,
-            &CancellationSource::new().token(),
-        )
-        .unwrap();
+    let decision = crate::decide_turn_action(
+        service,
+        "policy-1",
+        ApprovalMode::BypassPermissions,
+        &request,
+        &CancellationSource::new().token(),
+    )
+    .unwrap();
     let ExecutionDecision::RunWithPermissionBypass(grant) = decision else {
         panic!("permission bypass should replace the interactive approval");
     };
@@ -147,17 +149,37 @@ fn ask_permissions_keeps_the_same_action_interactive() {
         AskClassifier,
         ash_action_policy::ReviewFailurePolicy::Block,
     );
+    let engine = EnginePolicy(engine);
     let service: &dyn ActionPolicyService = &engine;
 
     assert!(matches!(
-        service
-            .decide_for_turn_with_approval_mode(
-                "policy-1",
-                ApprovalMode::AskPermissions,
-                &request,
-                &CancellationSource::new().token(),
-            )
-            .unwrap(),
+        crate::decide_turn_action(
+            service,
+            "policy-1",
+            ApprovalMode::AskPermissions,
+            &request,
+            &CancellationSource::new().token(),
+        )
+        .unwrap(),
         ExecutionDecision::AskUser(_)
     ));
+}
+
+/// Adapts the policy engine for Core's execution tests.
+pub(crate) struct EnginePolicy<C>(pub(crate) ActionPolicyEngine<C>);
+
+impl<C: ActionClassifier> ActionPolicyService for EnginePolicy<C> {
+    fn revision(&self) -> String {
+        self.0.revision().as_str().to_owned()
+    }
+
+    fn decide(
+        &self,
+        request: &ActionReviewRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<ExecutionDecision, CoreError> {
+        self.0
+            .decide(request, cancellation)
+            .map_err(|error| CoreError::Policy(error.to_string()))
+    }
 }

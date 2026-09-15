@@ -15,6 +15,8 @@ use action_policy::ResolvedAction;
 use action_policy::ReviewContext;
 use action_policy::SandboxCompatibility;
 use async_utils::CancellationSource;
+use core_api::ActionPolicyService;
+use core_api::CoreError;
 use guardian_reviewer::AutoReviewError;
 use guardian_reviewer::LlmActionClassifier;
 use model_provider::ModelProviderError;
@@ -34,8 +36,6 @@ use protocol::ModelResponse;
 use protocol::StopReason;
 use std::collections::BTreeMap;
 use std::sync::Mutex;
-use core_api::ActionPolicyService;
-use core_api::CoreError;
 
 struct RecordingProvider {
     selected: Arc<Mutex<Vec<ModelRef>>>,
@@ -276,36 +276,36 @@ fn approval_mode_policy_runs_the_reviewer_only_for_auto_review() {
     let request = review_request();
 
     assert!(matches!(
-        policy
-            .decide_for_turn_with_approval_mode(
-                &revision,
-                ApprovalMode::AskPermissions,
-                &request,
-                &CancellationSource::new().token(),
-            )
-            .unwrap(),
+        ash_core::decide_turn_action(
+            &policy,
+            &revision,
+            ApprovalMode::AskPermissions,
+            &request,
+            &CancellationSource::new().token(),
+        )
+        .unwrap(),
         ExecutionDecision::AskUser(_)
     ));
     assert!(matches!(
-        policy
-            .decide_for_turn_with_approval_mode(
-                &revision,
-                ApprovalMode::AutoReview,
-                &request,
-                &CancellationSource::new().token(),
-            )
-            .unwrap(),
+        ash_core::decide_turn_action(
+            &policy,
+            &revision,
+            ApprovalMode::AutoReview,
+            &request,
+            &CancellationSource::new().token(),
+        )
+        .unwrap(),
         ExecutionDecision::Block(_)
     ));
     assert!(matches!(
-        policy
-            .decide_for_turn_with_approval_mode(
-                &revision,
-                ApprovalMode::BypassPermissions,
-                &request,
-                &CancellationSource::new().token(),
-            )
-            .unwrap(),
+        ash_core::decide_turn_action(
+            &policy,
+            &revision,
+            ApprovalMode::BypassPermissions,
+            &request,
+            &CancellationSource::new().token(),
+        )
+        .unwrap(),
         ExecutionDecision::RunWithPermissionBypass(_)
     ));
 }

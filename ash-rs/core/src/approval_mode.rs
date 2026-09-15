@@ -1,7 +1,6 @@
 //! Per-Turn approval-mode enforcement; extensions provide advice, never grants.
 use crate::ActionPolicyService;
 use crate::CoreError;
-use std::sync::Arc;
 use ash_action_policy::ActionPolicyEngine;
 use ash_action_policy::ActionReviewRequest;
 use ash_action_policy::ExecutionDecision;
@@ -9,11 +8,11 @@ use ash_action_policy::PermissionBypassGrant;
 use ash_action_policy::ReviewFailurePolicy;
 use ash_async_utils::CancellationToken;
 use ash_protocol::ApprovalMode;
-/// Adds per-Turn approval-mode semantics around one authoritative Tool policy.
+use std::sync::Arc;
+/// Combines one authoritative Tool policy with the configured automatic reviewer.
 ///
-/// The base policy always evaluates first. Automatic review and permission bypass may replace
-/// only an `AskUser` result, so deterministic denial and all request/revision validation stay
-/// owned by the underlying policy.
+/// Core calls the reviewer only after an interactive decision in automatic review mode.
+/// This adapter also owns the isolated Code Mode control policy.
 pub struct ApprovalModeActionPolicyService {
     base: Arc<dyn ActionPolicyService>,
     reviewer: ash_extension_api::ApprovalReviewer,
@@ -80,52 +79,63 @@ impl ActionPolicyService for ApprovalModeActionPolicyService {
         self.base.decide(request, cancellation)
     }
 
-    fn decide_for_turn_with_approval_mode(
+    fn review_approval(
         &self,
-        frozen_revision: &str,
-        approval_mode: ApprovalMode,
         request: &ActionReviewRequest,
         cancellation: &CancellationToken,
-    ) -> Result<ExecutionDecision, CoreError> {
-        let current_revision = self.revision();
-        if current_revision != frozen_revision {
-            return Err(CoreError::Policy(format!(
-                "Turn policy revision changed from {frozen_revision} to {current_revision}; continuation requires explicit authorization"
-            )));
-        }
-        let decision = self.decide(request, cancellation)?;
-        if !matches!(decision, ExecutionDecision::AskUser(_)) {
-            return Ok(decision);
-        }
-        match approval_mode {
-            ApprovalMode::AskPermissions => Ok(decision),
-            ApprovalMode::BypassPermissions => Ok(ExecutionDecision::RunWithPermissionBypass(
-                PermissionBypassGrant::new(
-                    request.action().digest().clone(),
-                    request.action().required_capabilities().clone(),
-                    request.action_policy_revision().clone(),
-                ),
-            )),
-            ApprovalMode::AutoReview => {
-                let ash_extension_api::ApprovalReviewer::Configured { registry, .. } =
-                    &self.reviewer
-                else {
-                    return Ok(decision);
-                };
-                let engine = ActionPolicyEngine::with_no_exec_rules(
-                    request.action_policy_revision().clone(),
-                    RegistryReviewer(registry.clone()),
-                    ReviewFailurePolicy::AskUser,
-                );
-                let reviewed = engine
-                    .review_after_authoritative_ask_user(request, cancellation)
-                    .map_err(|error| CoreError::Policy(error.to_string()))?;
-                cancellation
-                    .check()
-                    .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
-                Ok(reviewed)
-            }
-        }
+    ) -> Result<Option<ExecutionDecision>, CoreError> {
+        let ash_extension_api::ApprovalReviewer::Configured { registry, .. } = &self.reviewer
+        else {
+            return Ok(None);
+        };
+        let engine = ActionPolicyEngine::with_no_exec_rules(
+            request.action_policy_revision().clone(),
+            RegistryReviewer(registry.clone()),
+            ReviewFailurePolicy::AskUser,
+        );
+        let reviewed = engine
+            .review_after_authoritative_ask_user(request, cancellation)
+            .map_err(|error| CoreError::Policy(error.to_string()))?;
+        cancellation
+            .check()
+            .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
+        Ok(Some(reviewed))
+    }
+}
+
+/// Evaluates an action under the Turn's frozen policy revision and approval mode.
+///
+/// Every execution path uses this operation before constructing Tool authorization. Host policies
+/// cannot override the revision check or apply automatic review to a deterministic decision.
+pub fn decide_turn_action(
+    policy: &dyn ActionPolicyService,
+    frozen_revision: &str,
+    approval_mode: ApprovalMode,
+    request: &ActionReviewRequest,
+    cancellation: &CancellationToken,
+) -> Result<ExecutionDecision, CoreError> {
+    let current_revision = policy.revision();
+    if current_revision != frozen_revision {
+        return Err(CoreError::Policy(format!(
+            "Turn policy revision changed from {frozen_revision} to {current_revision}; continuation requires explicit authorization"
+        )));
+    }
+    let decision = policy.decide(request, cancellation)?;
+    if !matches!(decision, ExecutionDecision::AskUser(_)) {
+        return Ok(decision);
+    }
+    match approval_mode {
+        ApprovalMode::AskPermissions => Ok(decision),
+        ApprovalMode::BypassPermissions => Ok(ExecutionDecision::RunWithPermissionBypass(
+            PermissionBypassGrant::new(
+                request.action().digest().clone(),
+                request.action().required_capabilities().clone(),
+                request.action_policy_revision().clone(),
+            ),
+        )),
+        ApprovalMode::AutoReview => Ok(policy
+            .review_approval(request, cancellation)?
+            .unwrap_or(decision)),
     }
 }
 

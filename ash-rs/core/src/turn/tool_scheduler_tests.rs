@@ -9,10 +9,6 @@ use crate::SequenceExpectation;
 use crate::StartTurnRequest;
 use crate::ToolAuthorization;
 use crate::ToolExecutionOutput;
-use serde_json::json;
-use std::collections::VecDeque;
-use std::sync::Arc;
-use std::sync::Mutex;
 use ash_action_policy::ActionClassifier;
 use ash_action_policy::ActionDigest;
 use ash_action_policy::ActionKind;
@@ -67,6 +63,10 @@ use ash_protocol::UserInput;
 use ash_sandboxing::FileSystemAccess;
 use ash_sandboxing::NetworkAccess;
 use ash_sandboxing::SandboxPolicy;
+use serde_json::json;
+use std::collections::VecDeque;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 struct DenyBeforeToolHooks;
 
@@ -350,6 +350,121 @@ fn permission_bypass_executes_with_exact_durable_authority_without_an_interactio
 }
 
 #[test]
+fn scheduler_invokes_automatic_review_only_for_interactive_auto_review() {
+    use ash_protocol::ApprovalMode;
+    use std::sync::atomic::Ordering;
+
+    for mode in [
+        ApprovalMode::AskPermissions,
+        ApprovalMode::AutoReview,
+        ApprovalMode::BypassPermissions,
+    ] {
+        let policy = Arc::new(ReviewingPolicy {
+            base: Arc::new(AskPolicy),
+            reviews: Default::default(),
+        });
+        let fixture =
+            fixture_with_approval_mode(Arc::new(ReviewTool::default()), policy.clone(), mode);
+        let progress = fixture
+            .scheduler
+            .run_pending(
+                &fixture.thread_id,
+                &fixture.turn_id,
+                &CancellationSource::new().token(),
+            )
+            .unwrap();
+        let snapshot = fixture.threads.read_thread(&fixture.thread_id).unwrap();
+        assert_eq!(
+            policy.reviews.load(Ordering::SeqCst),
+            usize::from(mode == ApprovalMode::AutoReview)
+        );
+        match mode {
+            ApprovalMode::AskPermissions => {
+                assert_eq!(progress, ToolSchedulingProgress::WaitingForApproval);
+                assert!(snapshot.turns.last().unwrap().pending_interaction.is_some());
+                assert!(fixture.tools.authorizations.lock().unwrap().is_empty());
+            }
+            ApprovalMode::AutoReview => {
+                assert_eq!(progress, ToolSchedulingProgress::Complete);
+                assert!(snapshot.turns.last().unwrap().pending_interaction.is_none());
+                assert!(fixture.tools.authorizations.lock().unwrap().is_empty());
+                assert!(snapshot.items.iter().any(|item| matches!(
+                    item, ThreadItem::ToolResult { is_error: true, text, .. }
+                        if text.contains("review denied")
+                )));
+            }
+            ApprovalMode::BypassPermissions => {
+                assert_eq!(progress, ToolSchedulingProgress::Complete);
+                assert!(matches!(
+                    fixture.tools.authorizations.lock().unwrap().as_slice(),
+                    [ToolAuthorization::PermissionBypassed(_)]
+                ));
+            }
+        }
+    }
+}
+
+#[test]
+fn scheduler_preserves_deterministic_decisions_without_automatic_review() {
+    let policy = Arc::new(ReviewingPolicy {
+        base: Arc::new(ExecAllowPolicy::new()),
+        reviews: Default::default(),
+    });
+    let fixture = fixture_with_approval_mode(
+        Arc::new(ReviewTool::default()),
+        policy.clone(),
+        ash_protocol::ApprovalMode::AutoReview,
+    );
+    fixture
+        .scheduler
+        .run_pending(
+            &fixture.thread_id,
+            &fixture.turn_id,
+            &CancellationSource::new().token(),
+        )
+        .unwrap();
+    assert_eq!(policy.reviews.load(std::sync::atomic::Ordering::SeqCst), 0);
+    assert!(matches!(
+        fixture.tools.authorizations.lock().unwrap().as_slice(),
+        [ToolAuthorization::ExecPolicyGranted(_)]
+    ));
+}
+
+struct ReviewingPolicy {
+    base: Arc<dyn ActionPolicyService>,
+    reviews: std::sync::atomic::AtomicUsize,
+}
+
+impl ActionPolicyService for ReviewingPolicy {
+    fn revision(&self) -> String {
+        self.base.revision()
+    }
+
+    fn decide(
+        &self,
+        request: &ActionReviewRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<ExecutionDecision, CoreError> {
+        self.base.decide(request, cancellation)
+    }
+
+    fn review_approval(
+        &self,
+        _: &ActionReviewRequest,
+        _: &CancellationToken,
+    ) -> Result<Option<ExecutionDecision>, CoreError> {
+        self.reviews
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(Some(ExecutionDecision::Block(
+            ash_action_policy::BlockReason::ReviewerDenied {
+                assessment_id: AssessmentId::new("test-review"),
+                reason: "review denied".into(),
+            },
+        )))
+    }
+}
+
+#[test]
 fn exec_policy_grant_is_exactly_bound_and_recorded_before_execution() {
     let fixture = fixture_with(
         Arc::new(ReviewTool::default()),
@@ -454,7 +569,10 @@ fn reviewer_approval_executes_with_bound_authority_and_user_context() {
         },
         ReviewFailurePolicy::Block,
     );
-    let fixture = fixture_with(tools, Arc::new(engine));
+    let fixture = fixture_with(
+        tools,
+        Arc::new(crate::action_policy_service::tests::EnginePolicy(engine)),
+    );
 
     assert!(matches!(
         fixture.scheduler.run_pending(
@@ -504,7 +622,10 @@ fn safe_sandbox_denial_is_reviewed_and_retried_once() {
         },
         ReviewFailurePolicy::Block,
     );
-    let fixture = fixture_with(tools, Arc::new(engine));
+    let fixture = fixture_with(
+        tools,
+        Arc::new(crate::action_policy_service::tests::EnginePolicy(engine)),
+    );
 
     fixture
         .scheduler
@@ -571,7 +692,10 @@ fn safe_sandbox_denial_waits_for_one_time_approval_and_resumes_after_recovery() 
         DenialAskingClassifier,
         ReviewFailurePolicy::Block,
     );
-    let fixture = fixture_with(tools, Arc::new(engine));
+    let fixture = fixture_with(
+        tools,
+        Arc::new(crate::action_policy_service::tests::EnginePolicy(engine)),
+    );
 
     assert!(matches!(
         fixture.scheduler.run_pending(
@@ -643,7 +767,10 @@ fn declining_sandbox_escalation_does_not_retry_the_tool() {
         DenialAskingClassifier,
         ReviewFailurePolicy::Block,
     );
-    let fixture = fixture_with(tools, Arc::new(engine));
+    let fixture = fixture_with(
+        tools,
+        Arc::new(crate::action_policy_service::tests::EnginePolicy(engine)),
+    );
 
     assert!(matches!(
         fixture.scheduler.run_pending(
@@ -691,7 +818,10 @@ fn interrupted_approved_sandbox_escalation_is_not_retried() {
         DenialAskingClassifier,
         ReviewFailurePolicy::Block,
     );
-    let fixture = fixture_with(tools, Arc::new(engine));
+    let fixture = fixture_with(
+        tools,
+        Arc::new(crate::action_policy_service::tests::EnginePolicy(engine)),
+    );
     fixture
         .scheduler
         .run_pending(
@@ -797,7 +927,10 @@ fn sandbox_denial_with_possible_side_effects_is_not_retried() {
         },
         ReviewFailurePolicy::Block,
     );
-    let fixture = fixture_with(tools, Arc::new(engine));
+    let fixture = fixture_with(
+        tools,
+        Arc::new(crate::action_policy_service::tests::EnginePolicy(engine)),
+    );
 
     fixture
         .scheduler
@@ -839,7 +972,10 @@ fn reviewer_revision_returns_structured_safer_path_feedback() {
         RevisingClassifier,
         ReviewFailurePolicy::Block,
     );
-    let fixture = fixture_with(tools, Arc::new(engine));
+    let fixture = fixture_with(
+        tools,
+        Arc::new(crate::action_policy_service::tests::EnginePolicy(engine)),
+    );
 
     fixture
         .scheduler

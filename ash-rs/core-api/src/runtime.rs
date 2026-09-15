@@ -95,7 +95,8 @@ pub enum AcceptedCommand<'a> {
 ///
 /// Implementations own command replay, durable mutation, execution handoff and failure recording.
 /// Callers authorize the connection and resolve product-owned inputs; they never dispatch a Turn
-/// separately or inspect command receipts to decide whether an operation should execute again.
+/// separately or inspect internal command receipts. Read-only command queries may avoid repeated
+/// product input resolution; submission operations must enforce replay safety independently.
 pub trait AgentRuntime {
     fn read_thread(&self, thread_id: &ThreadId) -> Result<ThreadView, CoreError>;
     fn read_started_thread(&self, command_id: &CommandId) -> Result<Option<ThreadView>, CoreError>;
@@ -132,12 +133,15 @@ pub trait AgentRuntime {
         thread_id: &ThreadId,
         request: CompactThreadRequest,
     ) -> Result<TurnReceipt, CoreError>;
+    /// Reads the existing result for matching input without dispatching execution.
+    /// `None` is not permission to dispatch; callers still submit through the complete operation.
     fn replay_turn(
         &self,
         thread_id: &ThreadId,
         command_id: &CommandId,
         command: SubmittedCommand<'_>,
     ) -> Result<Option<TurnReceipt>, CoreError>;
+    /// Checks durable acceptance for queue coordination, independently of execution success.
     fn accepted_command(
         &self,
         thread_id: &ThreadId,

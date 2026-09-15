@@ -7,8 +7,8 @@ mod context;
 mod context_manager;
 mod history;
 mod hooks;
-mod message_checkpoint;
 mod image_preparation;
+mod message_checkpoint;
 mod multi_agent;
 mod runtime;
 mod runtime_view;
@@ -25,7 +25,6 @@ mod turn;
 mod turn_execution_observer;
 
 pub use action_policy_service::durable_approval_request;
-pub use runtime::Runtime;
 pub use ash_prompts::PromptArtifact;
 pub(crate) use context::ContextAssembler;
 pub use context::ContextBudget;
@@ -53,6 +52,7 @@ pub use multi_agent::SendAgentMessageRequest;
 pub use multi_agent::SpawnAgentRequest;
 pub use multi_agent::SpawnedAgent;
 pub use multi_agent::project_agent_tree;
+pub use runtime::Runtime;
 pub use services::AutoReviewedToolGrant;
 pub use services::ContextEvidence;
 pub use services::ContextSource;
@@ -146,6 +146,7 @@ pub use capabilities::UnsupportedBrowserCapability;
 
 mod approval_mode;
 pub use approval_mode::ApprovalModeActionPolicyService;
+pub use approval_mode::decide_turn_action;
 pub use context::TimeContextProvider;
 
 #[cfg(test)]

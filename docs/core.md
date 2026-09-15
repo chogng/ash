@@ -113,8 +113,9 @@ Thread owner 和当前执行器，不创建第二份状态，也不增加进程�
 
 `ash-core-api` 还定义模型调用、Hooks、策略评估、浏览器操作、执行观察、写租约、工作树绑定、
 消息 checkpoint 和 Thread 更新契约，以及跨接口使用的 `CoreError`。能力实现直接导入
-`core_api`，Core 不提供旧路径转发。策略接口保留版本检查与批准模式的默认语义；对
-`ActionPolicyEngine` 的接口适配也由该契约 crate 承担。
+`core_api`，Core 不提供旧路径转发。策略接口仅提供版本、权威决策与可选自动审查能力。Core 的 `decide_turn_action`
+统一检查 Turn 冻结版本并应用批准模式；能力实现不能覆盖这些执行规则。
+`ActionPolicyEngine` 的调用和适配由使用它的实现方负责。
 
 `ThreadController`、`TurnExecutor`、归约与恢复仍在 Core。`ToolService`、工具授权凭据及
 执行事实继续留在 Core，避免为了拆 crate 而公开原本受限的授权构造方法。

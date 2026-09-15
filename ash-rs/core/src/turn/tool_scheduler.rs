@@ -372,7 +372,8 @@ impl ToolScheduler {
             else {
                 continue;
             };
-            match self.policy.decide_for_turn_with_approval_mode(
+            match crate::decide_turn_action(
+                self.policy.as_ref(),
                 frozen_policy_revision,
                 approval_mode,
                 &reviewed,

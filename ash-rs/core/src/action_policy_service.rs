@@ -1,4 +1,3 @@
-use core_api::ActionPolicyService;
 use crate::CoreError;
 use ash_action_policy::ActionReviewRequest;
 use ash_action_policy::ApprovalRequest;
@@ -10,6 +9,7 @@ use ash_protocol::ActionApprovalCapabilityKind;
 use ash_protocol::ActionApprovalRequest;
 use ash_protocol::SandboxDenialOutput;
 use ash_protocol::ToolReplaySafety;
+use core_api::ActionPolicyService;
 
 pub(crate) struct UnavailableActionPolicyService;
 
@@ -132,4 +132,4 @@ fn protocol_capability(capability: &ash_action_policy::Capability) -> ActionAppr
 
 #[cfg(test)]
 #[path = "action_policy_service_tests.rs"]
-mod tests;
+pub(crate) mod tests;
