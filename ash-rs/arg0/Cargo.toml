@@ -11,7 +11,6 @@ doctest = false
 
 [dependencies]
 mxc-sandbox = { workspace = true }
-ash-fast-regex-search = { workspace = true }
 
 [lints]
 workspace = true

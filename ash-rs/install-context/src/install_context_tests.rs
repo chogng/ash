@@ -216,3 +216,40 @@ impl Drop for TestDirectory {
         let _ = fs::remove_dir_all(&self.path);
     }
 }
+
+#[test]
+fn tgrep_uses_only_the_package_or_an_explicit_override() {
+    let directory = TestDirectory::new();
+    let package = directory.path().join("package");
+    fs::create_dir_all(package.join("bin")).unwrap();
+    fs::create_dir(package.join("ash-path")).unwrap();
+    fs::create_dir(package.join("ash-resources")).unwrap();
+    fs::write(package.join(PACKAGE_METADATA_FILE), b"{}").unwrap();
+    let binary = package.join("bin/ash-app-server");
+    let mut context = InstallContext::detect(
+        Some(&binary),
+        None,
+        None,
+        Some(OsString::from("untrusted-path")),
+    );
+    assert_eq!(
+        context.executable_candidates(ManagedExecutable::Tgrep),
+        ExecutableCandidates::SearchPaths(vec![
+            package.join("ash-resources/tgrep").join(if cfg!(windows) {
+                "tgrep.exe"
+            } else {
+                "tgrep"
+            })
+        ])
+    );
+    context.tgrep_override = Some(OsString::from("missing-tgrep"));
+    assert!(
+        matches!(context.executable_candidates(ManagedExecutable::Tgrep), ExecutableCandidates::ExplicitOverride(value) if value.path() == Path::new("missing-tgrep"))
+    );
+    let unpackaged =
+        InstallContext::detect(None, None, None, Some(OsString::from("untrusted-path")));
+    assert_eq!(
+        unpackaged.executable_candidates(ManagedExecutable::Tgrep),
+        ExecutableCandidates::SearchPaths(vec![])
+    );
+}

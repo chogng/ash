@@ -1,29 +1,20 @@
 use super::suite::ResolvedFilePath;
 use super::suite::limit_matches;
+use ash_async_utils::CancellationSource;
 use ash_async_utils::CancellationToken;
 use ash_config::AgentGrepBackend;
 use ash_core::ToolExecutionOutput;
-use ash_fast_regex_search::FastRegexCaseSensitivity;
-use ash_fast_regex_search::FastRegexError;
-use ash_fast_regex_search::FastRegexPattern;
-use ash_fast_regex_search::FastRegexQuery;
-use ash_fast_regex_search::FastRegexSearch;
-use ash_fast_regex_search::FastRegexSearchLimits;
-use ash_fast_regex_search::FastRegexSearchResult;
-use ash_fast_regex_search::FastRegexSearchSnapshot;
-use ash_fast_regex_search::FastRegexSearchStorage;
-use ash_fast_regex_search::FastRegexUpdateOutcome;
-use ash_fast_regex_search::FastRegexWorkerClient;
-use ash_fast_regex_search::FastRegexWorkerCommand;
 use ash_file_access::Dir;
 use ash_file_access::DirId;
 use ash_file_watcher::FileWatcherEvent;
+use ash_install_context::InstallContext;
 use ash_shell_command::RipgrepExecutable;
 use ash_state::DirIndexKind;
 use ash_state::DirIndexLease;
 use ash_state::StateRuntime;
 use core_api::CoreError;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::process::Command;
 use std::process::Output;
@@ -36,84 +27,56 @@ use std::time::Duration;
 use std::time::Instant;
 
 const SEARCH_TIMEOUT: Duration = Duration::from_secs(30);
-const MAX_AGENT_MATCHES: usize = 100;
 const MAX_RESULT_LINE_CHARS: usize = 500;
 
-/// Selects and owns the implementation used only by the Agent `grep` Tool.
-///
-/// Content Search is implemented by `ash-content-search`; this service has its own Agent grep
-/// execution path and may select `ash-fast-regex-search`.
+/// Agent grep backend and owned workspace search sessions. Editor search remains independent.
 pub(crate) struct AgentGrepService {
     backend: AgentGrepBackend,
     ripgrep: RipgrepExecutable,
-    indexes: Arc<FastRegexIndexes>,
+    indexes: Arc<TgrepIndexes>,
 }
-
-struct FastRegexIndexes {
+struct TgrepIndexes {
     enabled: AtomicBool,
+    executable: tgrep::Executable,
     storage: Option<Arc<StateRuntime>>,
-    worker_command: Option<FastRegexWorkerCommand>,
-    indexes: Mutex<BTreeMap<DirId, Arc<ManagedFastRegexSearch>>>,
+    indexes: Mutex<BTreeMap<DirId, Arc<ManagedTgrep>>>,
+    changed_paths: Mutex<BTreeMap<DirId, BTreeSet<PathBuf>>>,
 }
-
-struct ManagedFastRegexSearch {
-    search: FastRegexSearchHandle,
+struct ManagedTgrep {
+    search: tgrep::Session,
     _lease: Option<DirIndexLease>,
+    _temporary: Option<tempfile::TempDir>,
 }
-
-enum FastRegexSearchHandle {
-    InProcess(Box<FastRegexSearch>),
-    Worker(FastRegexWorkerClient),
-}
-
 impl AgentGrepService {
     pub(crate) fn new(
         backend: AgentGrepBackend,
         ripgrep: RipgrepExecutable,
         storage: Option<Arc<StateRuntime>>,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, tgrep::Error> {
+        let executable = tgrep::Executable::resolve(&InstallContext::current())?;
+        Ok(Self {
             backend,
             ripgrep,
-            indexes: Arc::new(FastRegexIndexes {
-                enabled: AtomicBool::new(backend == AgentGrepBackend::FastRegex),
+            indexes: Arc::new(TgrepIndexes {
+                enabled: AtomicBool::new(backend == AgentGrepBackend::Tgrep),
+                executable,
                 storage,
-                worker_command: None,
                 indexes: Mutex::new(BTreeMap::new()),
+                changed_paths: Mutex::new(BTreeMap::new()),
             }),
-        }
+        })
     }
-
-    pub(crate) fn new_with_worker(
-        backend: AgentGrepBackend,
-        ripgrep: RipgrepExecutable,
-        storage: Arc<StateRuntime>,
-        worker_command: FastRegexWorkerCommand,
-    ) -> Self {
-        Self {
-            backend,
-            ripgrep,
-            indexes: Arc::new(FastRegexIndexes {
-                enabled: AtomicBool::new(backend == AgentGrepBackend::FastRegex),
-                storage: Some(storage),
-                worker_command: Some(worker_command),
-                indexes: Mutex::new(BTreeMap::new()),
-            }),
-        }
-    }
-
     pub(crate) fn reconfigured(
         &self,
         backend: AgentGrepBackend,
         ripgrep: RipgrepExecutable,
     ) -> Self {
-        let enabled = backend == AgentGrepBackend::FastRegex;
-        let was_enabled = self.indexes.enabled.swap(enabled, Ordering::AcqRel);
-        if enabled != was_enabled {
+        let enabled = backend == AgentGrepBackend::Tgrep;
+        if self.indexes.enabled.swap(enabled, Ordering::AcqRel) != enabled {
             self.indexes
                 .indexes
                 .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .unwrap_or_else(|e| e.into_inner())
                 .clear();
         }
         Self {
@@ -122,7 +85,6 @@ impl AgentGrepService {
             indexes: Arc::clone(&self.indexes),
         }
     }
-
     pub(super) fn execute(
         &self,
         pattern: String,
@@ -135,81 +97,162 @@ impl AgentGrepService {
             AgentGrepBackend::Ripgrep => {
                 self.execute_ripgrep(pattern, path, glob, case_insensitive, cancellation)
             }
-            AgentGrepBackend::FastRegex => {
-                self.execute_fast_regex(pattern, path, glob, case_insensitive, cancellation)
+            AgentGrepBackend::Tgrep => {
+                self.execute_tgrep(pattern, path, glob, case_insensitive, cancellation)
             }
         }
     }
-
     pub(crate) fn apply_watcher_event(&self, root: &Dir, event: &FileWatcherEvent) {
-        if !self.indexes.enabled.load(Ordering::Acquire) {
-            return;
-        }
-        let index = self
-            .indexes
-            .indexes
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .get(&root.id())
-            .cloned();
-        let Some(index) = index else {
-            return;
-        };
-        let update = match event {
-            FileWatcherEvent::PathsChanged { paths } => index.refresh_observed_paths(paths),
-            FileWatcherEvent::RescanRequired { .. } => index.reconcile_dir(),
-        };
-        if let Err(error) = update {
-            log::warn!("fast regex index refresh failed: {error}");
-            self.invalidate_index(root);
+        // Called synchronously after an Ash edit. Filesystem watching belongs to tgrep.
+        if let FileWatcherEvent::PathsChanged { paths } = event {
+            let indexes = self
+                .indexes
+                .indexes
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            if let Some(index) = indexes.get(&root.id()) {
+                index.search.paths_changed(paths);
+            }
+            self.indexes
+                .changed_paths
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .entry(root.id())
+                .or_default()
+                .extend(paths.iter().cloned());
         }
     }
-
-    pub(crate) fn watches_fast_regex(&self) -> bool {
+    pub(crate) fn tgrep_enabled(&self) -> bool {
         self.indexes.enabled.load(Ordering::Acquire)
     }
-
-    pub(crate) fn fast_regex_snapshot(
-        &self,
-        root: &Dir,
-    ) -> Result<Option<FastRegexSearchSnapshot>, FastRegexError> {
+    pub(crate) fn tgrep_snapshot(&self, root: &Dir) -> Result<Option<tgrep::Status>, tgrep::Error> {
         let index = self
             .indexes
             .indexes
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .unwrap_or_else(|e| e.into_inner())
             .get(&root.id())
             .cloned();
-        index.map(|index| index.snapshot()).transpose()
+        index
+            .map(|index| index.search.status(&CancellationSource::new().token()))
+            .transpose()
     }
-
-    pub(crate) fn rebuild_fast_regex(
+    pub(crate) fn rebuild_tgrep(&self, root: &Dir) -> Result<tgrep::Status, tgrep::Error> {
+        let cancellation = CancellationSource::new();
+        self.index_for(root, &cancellation.token())?
+            .search
+            .rebuild(&cancellation.token())
+    }
+    fn index_for(
         &self,
         root: &Dir,
-    ) -> Result<FastRegexSearchSnapshot, FastRegexError> {
-        if !self.watches_fast_regex() {
-            return Err(FastRegexError::NotReady);
+        cancellation: &CancellationToken,
+    ) -> Result<Arc<ManagedTgrep>, tgrep::Error> {
+        if !self.tgrep_enabled() {
+            return Err(tgrep::Error::Failed("tgrep is disabled".into()));
         }
-        self.index_for(root)?.rebuild()
-    }
-
-    #[cfg(test)]
-    pub(crate) fn has_active_index(&self, root: &Dir) -> bool {
-        self.indexes
+        let mut indexes = self
+            .indexes
             .indexes
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .contains_key(&root.id())
-    }
-
-    pub(crate) fn invalidate_index(&self, root: &Dir) {
-        self.indexes
+            .unwrap_or_else(|e| e.into_inner());
+        if let Some(index) = indexes.get(&root.id()) {
+            return Ok(Arc::clone(index));
+        }
+        let lease = self
             .indexes
+            .storage
+            .as_ref()
+            .map(|s| s.acquire(&root.id(), DirIndexKind::AgentGrep))
+            .transpose()?;
+        let temporary = if lease.is_none() {
+            Some(tempfile::tempdir()?)
+        } else {
+            None
+        };
+        let base = lease
+            .as_ref()
+            .map(|l| l.directory())
+            .or_else(|| temporary.as_ref().map(|t| t.path()))
+            .expect("index storage");
+        let search = tgrep::Session::open(
+            self.indexes.executable.clone(),
+            root.canonical_path(),
+            &base.join("tgrep-1.0.8"),
+            cancellation,
+        )?;
+        if let Some(paths) = self
+            .indexes
+            .changed_paths
             .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .remove(&root.id());
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&root.id())
+        {
+            search.paths_changed(&paths.iter().cloned().collect::<Vec<_>>());
+        }
+        let index = Arc::new(ManagedTgrep {
+            search,
+            _lease: lease,
+            _temporary: temporary,
+        });
+        indexes.insert(root.id(), Arc::clone(&index));
+        Ok(index)
     }
-
+    fn execute_tgrep(
+        &self,
+        pattern: String,
+        path: &ResolvedFilePath,
+        glob: Option<String>,
+        case_insensitive: bool,
+        cancellation: &CancellationToken,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        let run = || {
+            let index = self.index_for(&path.root, cancellation)?;
+            index.search.search(
+                &tgrep::Query {
+                    pattern: &pattern,
+                    scope: &path.relative,
+                    case_insensitive,
+                    include: glob.as_deref(),
+                    exclude: super::LOCAL_DENIED_GLOBS,
+                },
+                cancellation,
+            )
+        };
+        let result = match run() {
+            Ok(result) => result,
+            Err(tgrep::Error::Cancelled(reason)) => return Err(CoreError::Cancelled(reason)),
+            Err(error) => return Ok(ToolExecutionOutput::Failure(error.to_string())),
+        };
+        if result.matches.is_empty() {
+            return Ok(ToolExecutionOutput::Success(
+                if result.indexed {
+                    "no matches in indexed files (filesystem updates are applied asynchronously)"
+                } else {
+                    "no matches"
+                }
+                .into(),
+            ));
+        }
+        let text = result
+            .matches
+            .into_iter()
+            .map(|found| {
+                format!(
+                    "{}:{}:{}",
+                    path.root.canonical_path().join(found.path).display(),
+                    found.line_number,
+                    found.content
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let mut output = limit_matches(&text, MAX_RESULT_LINE_CHARS);
+        if result.limit_hit {
+            output.push_str("\n[more than 100 matches, showing first 100]");
+        }
+        Ok(ToolExecutionOutput::Success(output))
+    }
     fn execute_ripgrep(
         &self,
         pattern: String,
@@ -248,179 +291,6 @@ impl AgentGrepService {
             &String::from_utf8_lossy(&output.stdout),
             MAX_RESULT_LINE_CHARS,
         )))
-    }
-
-    fn execute_fast_regex(
-        &self,
-        pattern: String,
-        path: &ResolvedFilePath,
-        glob: Option<String>,
-        case_insensitive: bool,
-        cancellation: &CancellationToken,
-    ) -> Result<ToolExecutionOutput, CoreError> {
-        cancellation
-            .check()
-            .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
-        let index = match self.index_for(&path.root) {
-            Ok(index) => index,
-            Err(error) => return Ok(ToolExecutionOutput::Failure(error.to_string())),
-        };
-        let query = FastRegexQuery {
-            query: pattern,
-            pattern: FastRegexPattern::Regex,
-            case_sensitivity: if case_insensitive {
-                FastRegexCaseSensitivity::Insensitive
-            } else {
-                FastRegexCaseSensitivity::Sensitive
-            },
-            scope: path.relative.clone(),
-            include_patterns: glob.into_iter().collect(),
-            exclude_patterns: super::LOCAL_DENIED_GLOBS
-                .iter()
-                .map(|pattern| (*pattern).to_owned())
-                .collect(),
-            max_results: MAX_AGENT_MATCHES,
-        };
-        let result = match index.search(&query) {
-            Ok(result) => result,
-            Err(FastRegexError::StaleSource(stale)) => {
-                let absolute = path.root.canonical_path().join(stale);
-                if let Err(error) = index.refresh_observed_paths(&[absolute]) {
-                    return Ok(ToolExecutionOutput::Failure(error.to_string()));
-                }
-                match index.search(&query) {
-                    Ok(result) => result,
-                    Err(error) => return Ok(ToolExecutionOutput::Failure(error.to_string())),
-                }
-            }
-            Err(error) => return Ok(ToolExecutionOutput::Failure(error.to_string())),
-        };
-        cancellation
-            .check()
-            .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
-        if result.matches.is_empty() {
-            return Ok(ToolExecutionOutput::Success(format!(
-                "no matches in indexed files (generation {}; filesystem updates are applied asynchronously)",
-                result.statistics.generation,
-            )));
-        }
-        let limit_hit = result.limit_hit;
-        let output = result
-            .matches
-            .into_iter()
-            .map(|found| {
-                format!(
-                    "{}:{}:{}",
-                    path.root.canonical_path().join(found.path).display(),
-                    found.line_number,
-                    found.preview
-                )
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-        let mut output = limit_matches(&output, MAX_RESULT_LINE_CHARS);
-        if limit_hit {
-            output.push_str("\n[more than 100 matches, showing first 100]");
-        }
-        Ok(ToolExecutionOutput::Success(output))
-    }
-
-    fn index_for(&self, root: &Dir) -> Result<Arc<ManagedFastRegexSearch>, FastRegexError> {
-        let dir_id = root.id();
-        let mut indexes = self
-            .indexes
-            .indexes
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        if let Some(index) = indexes.get(&dir_id) {
-            return Ok(Arc::clone(index));
-        }
-        let lease = self
-            .indexes
-            .storage
-            .as_ref()
-            .map(|storage| {
-                storage
-                    .acquire(&dir_id, DirIndexKind::AgentGrep)
-                    .map_err(|source| FastRegexError::Io {
-                        path: storage.index_directory(&dir_id, DirIndexKind::AgentGrep),
-                        source,
-                    })
-            })
-            .transpose()?;
-        let search_storage = lease
-            .as_ref()
-            .map_or(FastRegexSearchStorage::Memory, |lease| {
-                FastRegexSearchStorage::Persistent(lease.directory().to_path_buf())
-            });
-        let search =
-            match (&self.indexes.worker_command, search_storage) {
-                (Some(command), FastRegexSearchStorage::Persistent(storage)) => {
-                    FastRegexSearchHandle::Worker(FastRegexWorkerClient::open(
-                        command.clone(),
-                        root,
-                        storage,
-                        FastRegexSearchLimits::default(),
-                    )?)
-                }
-                (Some(_), FastRegexSearchStorage::Memory) => {
-                    return Err(FastRegexError::Worker(
-                        "worker-backed search requires persistent storage".to_owned(),
-                    ));
-                }
-                (None, storage) => FastRegexSearchHandle::InProcess(Box::new(
-                    FastRegexSearch::open(root.clone(), storage, FastRegexSearchLimits::default())?,
-                )),
-            };
-        let index = Arc::new(ManagedFastRegexSearch {
-            search,
-            _lease: lease,
-        });
-        if index.snapshot()?.generation == 0 {
-            index.rebuild()?;
-        }
-        indexes.insert(dir_id, Arc::clone(&index));
-        Ok(index)
-    }
-}
-
-impl ManagedFastRegexSearch {
-    fn snapshot(&self) -> Result<FastRegexSearchSnapshot, FastRegexError> {
-        match &self.search {
-            FastRegexSearchHandle::InProcess(search) => Ok(search.snapshot()),
-            FastRegexSearchHandle::Worker(search) => search.snapshot(),
-        }
-    }
-
-    fn rebuild(&self) -> Result<FastRegexSearchSnapshot, FastRegexError> {
-        match &self.search {
-            FastRegexSearchHandle::InProcess(search) => search.rebuild(),
-            FastRegexSearchHandle::Worker(search) => search.rebuild(),
-        }
-    }
-
-    fn refresh_observed_paths(
-        &self,
-        paths: &[PathBuf],
-    ) -> Result<FastRegexUpdateOutcome, FastRegexError> {
-        match &self.search {
-            FastRegexSearchHandle::InProcess(search) => search.refresh_observed_paths(paths),
-            FastRegexSearchHandle::Worker(search) => search.refresh_observed_paths(paths),
-        }
-    }
-
-    fn reconcile_dir(&self) -> Result<FastRegexUpdateOutcome, FastRegexError> {
-        match &self.search {
-            FastRegexSearchHandle::InProcess(search) => search.reconcile_dir(),
-            FastRegexSearchHandle::Worker(search) => search.reconcile_dir(),
-        }
-    }
-
-    fn search(&self, query: &FastRegexQuery) -> Result<FastRegexSearchResult, FastRegexError> {
-        match &self.search {
-            FastRegexSearchHandle::InProcess(search) => search.search(query),
-            FastRegexSearchHandle::Worker(search) => search.search(query),
-        }
     }
 }
 

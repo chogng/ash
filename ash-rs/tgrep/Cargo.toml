@@ -1,0 +1,25 @@
+[package]
+name = "ash-tgrep"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+name = "tgrep"
+doctest = false
+
+[dependencies]
+ash-async-utils = { workspace = true }
+ash-install-context = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+regex = { workspace = true }
+ignore = { workspace = true }
+process-hardening = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

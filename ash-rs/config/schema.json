@@ -22,7 +22,7 @@
         },
         "grepBackend": {
           "$ref": "#/$defs/AgentGrepBackend",
-          "default": "ripgrep"
+          "default": "tgrep"
         },
         "model": {
           "anyOf": [
@@ -61,7 +61,7 @@
       "description": "Selects the implementation behind the Agent-only `grep` Tool.",
       "enum": [
         "ripgrep",
-        "fastRegex"
+        "tgrep"
       ],
       "type": "string"
     },
@@ -1264,7 +1264,7 @@
         "approvalReviewModel": {
           "type": "automatic"
         },
-        "grepBackend": "ripgrep",
+        "grepBackend": "tgrep",
         "timeContext": {
           "mode": "date"
         },
@@ -1356,7 +1356,7 @@
       "type": "object"
     },
     "schemaVersion": {
-      "const": 3,
+      "const": 4,
       "type": "integer"
     },
     "skills": {

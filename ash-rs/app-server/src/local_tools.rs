@@ -149,7 +149,6 @@ pub(crate) fn compose_local_tools_with_config(
     dir_grants: Arc<DirGrants>,
     existing_agent_grep: Option<Arc<AgentGrepService>>,
     state_runtime: Option<Arc<ash_state::StateRuntime>>,
-    fast_regex_worker_command: Option<&ash_fast_regex_search::FastRegexWorkerCommand>,
     pty_helper: Option<&std::path::PathBuf>,
 ) -> Result<LocalToolComposition, LocalToolError> {
     let authorization = grant
@@ -227,15 +226,8 @@ pub(crate) fn compose_local_tools_with_config(
     )?;
     let agent_grep = Arc::new(match existing_agent_grep {
         Some(existing) => existing.reconfigured(config.agent_grep_backend, ripgrep.clone()),
-        None => match (&state_runtime, fast_regex_worker_command) {
-            (Some(storage), Some(worker_command)) => AgentGrepService::new_with_worker(
-                config.agent_grep_backend,
-                ripgrep.clone(),
-                Arc::clone(storage),
-                worker_command.clone(),
-            ),
-            _ => AgentGrepService::new(config.agent_grep_backend, ripgrep.clone(), state_runtime),
-        },
+        None => AgentGrepService::new(config.agent_grep_backend, ripgrep.clone(), state_runtime)
+            .map_err(|error| LocalToolError::definition(error.to_string()))?,
     });
     let service = LocalToolSuite::new(
         shell,
@@ -272,11 +264,9 @@ impl LocalToolComposition {
         policy: Arc<dyn ActionPolicyService>,
         ripgrep: RipgrepExecutable,
     ) -> Self {
-        let agent_grep = Arc::new(AgentGrepService::new(
-            AgentGrepBackend::Ripgrep,
-            ripgrep.clone(),
-            None,
-        ));
+        let agent_grep = Arc::new(
+            AgentGrepService::new(AgentGrepBackend::Ripgrep, ripgrep.clone(), None).unwrap(),
+        );
         Self {
             tools,
             policy,

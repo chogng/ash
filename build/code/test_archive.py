@@ -22,6 +22,7 @@ from build.code import archive as archive_builder
 @contextmanager
 def posix_executable(path: Path) -> Iterator[None]:
     # Windows chmod cannot supply POSIX execute bits for an archive fixture.
+    path = path.resolve()
     original_stat = os.stat
     original_lstat = os.lstat
 

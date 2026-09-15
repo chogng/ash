@@ -99,11 +99,8 @@ pub fn serve_stdio(options: RemoteServerOptions) -> Result<(), RemoteServerError
 }
 
 pub(crate) fn open_server(options: &RemoteServerOptions) -> Result<AppServer, RemoteServerError> {
-    let mut local_options = LocalAppServerOptions::new(options.profile_root.clone())
-        .with_dir_root(&options.dir_root)
-        .with_fast_regex_worker_command(arg0::fast_regex_worker_command(
-            std::env::current_exe().map_err(RemoteServerError::from_io)?,
-        ));
+    let mut local_options =
+        LocalAppServerOptions::new(options.profile_root.clone()).with_dir_root(&options.dir_root);
     if let Some(path) = &options.product_services_path {
         let services = LocalProductServicesConfig::load(path, &options.profile_root)
             .map_err(|error| RemoteServerError::new(error.to_string()))?;

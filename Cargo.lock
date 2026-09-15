@@ -572,7 +572,6 @@ dependencies = [
  "ash-execpolicy",
  "ash-extension-api",
  "ash-extensions",
- "ash-fast-regex-search",
  "ash-features",
  "ash-feedback",
  "ash-file-access",
@@ -621,7 +620,7 @@ dependencies = [
  "ash-sleep",
  "ash-state",
  "ash-syntax",
- "ash-test-binary-support",
+ "ash-tgrep",
  "ash-thread-store",
  "ash-thread-transcript",
  "ash-tools",
@@ -760,7 +759,6 @@ dependencies = [
 name = "ash-arg0"
 version = "0.1.0"
 dependencies = [
- "ash-fast-regex-search",
  "ash-mxc-sandbox",
 ]
 
@@ -856,8 +854,6 @@ dependencies = [
  "ash-arg0",
  "ash-build-info",
  "ash-exec",
- "ash-fast-regex-search",
- "ash-file-access",
  "ash-install-context",
  "ash-process-hardening",
  "ash-product-update",
@@ -1313,26 +1309,6 @@ name = "ash-extensions"
 version = "0.1.0"
 dependencies = [
  "ash-file-identity",
- "serde_json",
- "sha2 0.10.9",
- "tempfile",
-]
-
-[[package]]
-name = "ash-fast-regex-search"
-version = "0.1.0"
-dependencies = [
- "ash-file-access",
- "ash-immutable-generation-store",
- "ash-test-binary-support",
- "ash-uds",
- "fs2",
- "globset",
- "ignore",
- "memmap2",
- "regex",
- "regex-syntax",
- "serde",
  "serde_json",
  "sha2 0.10.9",
  "tempfile",
@@ -2142,8 +2118,6 @@ dependencies = [
  "ash-app-server-transport",
  "ash-arg0",
  "ash-build-info",
- "ash-fast-regex-search",
- "ash-file-access",
  "ash-install-context",
  "ash-package-store",
  "ash-process-hardening",
@@ -2449,6 +2423,20 @@ dependencies = [
 [[package]]
 name = "ash-text-file"
 version = "0.1.0"
+
+[[package]]
+name = "ash-tgrep"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-install-context",
+ "ash-process-hardening",
+ "ignore",
+ "regex",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
 
 [[package]]
 name = "ash-thread-store"

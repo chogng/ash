@@ -391,6 +391,7 @@ fn package_artifact(root: &Path, variant: PackageVariant) -> RemoteRuntimeArtifa
     unpacked_size += append_file(&mut builder, "bin/ash-app-server-daemon", b"daemon", 0o755);
     unpacked_size += append_file(&mut builder, "bin/ash-app-server", b"daemon", 0o755);
     unpacked_size += append_file(&mut builder, "ash-path/rg", b"ripgrep", 0o755);
+    unpacked_size += append_file(&mut builder, "ash-resources/tgrep/tgrep", b"tgrep", 0o755);
     if !matches!(variant, PackageVariant::HostProvidedNode) {
         unpacked_size += append_file(&mut builder, "ash-resources/node/bin/node", b"node", 0o755);
     }

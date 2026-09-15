@@ -237,10 +237,7 @@ pub(super) enum GrantSource {
 
 pub(super) fn open_server(host: &StartupOptions) -> Result<AppServer, String> {
     let mut options = LocalAppServerOptions::new(host.profile_root())
-        .with_pty_helper(env::current_exe().map_err(|error| error.to_string())?)
-        .with_fast_regex_worker_command(arg0::fast_regex_worker_command(
-            env::current_exe().map_err(|error| error.to_string())?,
-        ));
+        .with_pty_helper(env::current_exe().map_err(|error| error.to_string())?);
     if let Some(dir_root) = host.dir_root() {
         options = match host.dir_grant_source() {
             GrantSource::UserConfig => options.with_user_config_dir_root(dir_root),

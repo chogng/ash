@@ -26,8 +26,9 @@ test("aggregate and standalone unit commands prepare inputs once and stop on pre
   `);
   const pnpm = process.env.npm_execpath;
   assert.ok(pnpm, "Run through the owning pnpm test script");
-  const executable = pnpm.endsWith(".exe") ? pnpm : process.execPath;
-  const prefix = pnpm.endsWith(".exe") ? [] : [pnpm];
+  const script = /\.[cm]?js$/.test(pnpm);
+  const executable = script ? process.execPath : pnpm;
+  const prefix = script ? [pnpm] : [];
   for (const [command, expected, failure] of [
     ["test:main", ["tools", "output", "protocol", "icons", "unit"], ""],
     ["test:unit", ["output", "protocol", "icons", "unit"], ""],

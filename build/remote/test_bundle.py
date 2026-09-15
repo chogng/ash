@@ -76,6 +76,7 @@ def create_package(path: Path) -> Path:
         "bin/ash-remote-server": b"remote",
         "bin/ash-exec-server": b"remote",
         "ash-path/rg": b"ripgrep",
+        "ash-resources/tgrep/tgrep": b"tgrep",
         "ash-resources/node/bin/node": b"node",
     }
     metadata = {

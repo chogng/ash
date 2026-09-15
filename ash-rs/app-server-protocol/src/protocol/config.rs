@@ -22,9 +22,9 @@ pub struct TimeContextConfigDto {
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum AgentGrepBackendDto {
-    #[default]
     Ripgrep,
-    FastRegex,
+    #[default]
+    Tgrep,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "runtime": "tgrep",
+  "version": "1.0.8",
+  "source": {
+    "repository": "https://github.com/microsoft/tgrep",
+    "release": "v1.0.8",
+    "commit": "b1d0fc2f6245cc78f1943e5864ceeab812452404"
+  },
+  "packageTargets": {
+    "aarch64-apple-darwin": "aarch64-apple-darwin",
+    "aarch64-pc-windows-msvc": "aarch64-pc-windows-msvc",
+    "aarch64-unknown-linux-gnu": "aarch64-unknown-linux-musl",
+    "aarch64-unknown-linux-musl": "aarch64-unknown-linux-musl",
+    "x86_64-apple-darwin": "x86_64-apple-darwin",
+    "x86_64-pc-windows-msvc": "x86_64-pc-windows-msvc",
+    "x86_64-unknown-linux-gnu": "x86_64-unknown-linux-musl",
+    "x86_64-unknown-linux-musl": "x86_64-unknown-linux-musl"
+  },
+  "artifacts": {
+    "aarch64-apple-darwin": {
+      "archive": "tgrep-v1.0.8-aarch64-apple-darwin.tar.gz",
+      "size": 2397391,
+      "sha256": "b3a352060c329913750f9481c8f01de7e9b8ac33f533fd8c715b92542571659e",
+      "format": "tar.gz",
+      "executable": "./tgrep"
+    },
+    "aarch64-pc-windows-msvc": {
+      "archive": "tgrep-v1.0.8-aarch64-pc-windows-msvc.zip",
+      "size": 2275207,
+      "sha256": "2021f95537887e299b01127e5403981dcebd0be771bcd24a70ccd0210c76b04b",
+      "format": "zip",
+      "executable": "tgrep.exe"
+    },
+    "aarch64-unknown-linux-musl": {
+      "archive": "tgrep-v1.0.8-aarch64-unknown-linux-musl.tar.gz",
+      "size": 2704143,
+      "sha256": "618e1b80a7e95b47cb91a6ececd07294c397b34ffb00e25d78600c74eb87566e",
+      "format": "tar.gz",
+      "executable": "./tgrep"
+    },
+    "x86_64-apple-darwin": {
+      "archive": "tgrep-v1.0.8-x86_64-apple-darwin.tar.gz",
+      "size": 2534543,
+      "sha256": "62a1c4448aac4413363f1dedd4f73b35fb2999c46b9971fed8b8e2f2a9967aad",
+      "format": "tar.gz",
+      "executable": "./tgrep"
+    },
+    "x86_64-pc-windows-msvc": {
+      "archive": "tgrep-v1.0.8-x86_64-pc-windows-msvc.zip",
+      "size": 2439042,
+      "sha256": "e29165914e56bba0296d369d1d4ab4c62074711c90bcafaf8d3567f2811515c0",
+      "format": "zip",
+      "executable": "tgrep.exe"
+    },
+    "x86_64-unknown-linux-musl": {
+      "archive": "tgrep-v1.0.8-x86_64-unknown-linux-musl.tar.gz",
+      "size": 2881307,
+      "sha256": "2e3de5b7735eb84aa150d3a48e8cff8f27c05795bfccb8b52c9bd8881f7225ce",
+      "format": "tar.gz",
+      "executable": "./tgrep"
+    }
+  }
+}

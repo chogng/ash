@@ -4,9 +4,9 @@ use super::decode;
 use super::extension_config_operations::hook_config_dto;
 use super::extension_config_operations::plugin_request_dto;
 use super::result;
-use ash_app_server_protocol::protocol::codebase::FastRegexDisableAndDeleteParams;
-use ash_app_server_protocol::protocol::codebase::FastRegexDisableAndDeleteResult;
 use ash_app_server_protocol::protocol::codebase::LocalIndexClearOutcomeDto;
+use ash_app_server_protocol::protocol::codebase::TgrepDisableAndDeleteParams;
+use ash_app_server_protocol::protocol::codebase::TgrepDisableAndDeleteResult;
 use ash_app_server_protocol::protocol::config::AgentGrepBackendDto;
 use ash_app_server_protocol::protocol::config::ApprovalReviewModelSelectionDto;
 use ash_app_server_protocol::protocol::config::CodebaseAutomaticContextDto;
@@ -199,8 +199,8 @@ impl AppServer {
         result(&config_command_result(outcome))
     }
 
-    pub(super) fn fast_regex_disable_and_delete(&self, params: &Value) -> Result<Value, RpcError> {
-        let params: FastRegexDisableAndDeleteParams = decode(params)?;
+    pub(super) fn tgrep_disable_and_delete(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: TgrepDisableAndDeleteParams = decode(params)?;
         let dir = self
             .active_dir_id()
             .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodebaseUnavailable))?;
@@ -243,7 +243,7 @@ impl AppServer {
                 ));
             }
         };
-        result(&FastRegexDisableAndDeleteResult {
+        result(&TgrepDisableAndDeleteResult {
             config: config_command_result(outcome),
             deletion: match deletion {
                 ClearOutcome::Cleared => LocalIndexClearOutcomeDto::Cleared,
@@ -699,14 +699,14 @@ fn config_read_result(
 fn agent_grep_backend_dto(backend: AgentGrepBackend) -> AgentGrepBackendDto {
     match backend {
         AgentGrepBackend::Ripgrep => AgentGrepBackendDto::Ripgrep,
-        AgentGrepBackend::FastRegex => AgentGrepBackendDto::FastRegex,
+        AgentGrepBackend::Tgrep => AgentGrepBackendDto::Tgrep,
     }
 }
 
 fn agent_grep_backend_from_dto(backend: AgentGrepBackendDto) -> AgentGrepBackend {
     match backend {
         AgentGrepBackendDto::Ripgrep => AgentGrepBackend::Ripgrep,
-        AgentGrepBackendDto::FastRegex => AgentGrepBackend::FastRegex,
+        AgentGrepBackendDto::Tgrep => AgentGrepBackend::Tgrep,
     }
 }
 

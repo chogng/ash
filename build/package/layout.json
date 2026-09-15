@@ -35,6 +35,10 @@
     {
       "source": "ash-rs/uds/NOTICE",
       "destination": "ash-resources/licenses/uds/NOTICE"
+    },
+    {
+      "source": "third_party/tgrep/LICENSE",
+      "destination": "ash-resources/licenses/tgrep/LICENSE"
     }
   ]
 }

@@ -282,7 +282,7 @@ fn issue_execution_settings_are_removed_once_from_versioned_configuration() {
     ] {
         assert!(!encoded.contains(removed));
     }
-    assert!(encoded.contains("schemaVersion = 3"));
+    assert!(encoded.contains("schemaVersion = 4"));
     assert!(
         !crate::document_migration::decode(&encoded)
             .unwrap()
@@ -324,7 +324,7 @@ fn model_settings_are_migrated_once_from_version_two() {
         document.agent.model_reasoning_effort
     );
     let persisted = std::fs::read_to_string(&config_path).unwrap();
-    assert!(persisted.contains("schemaVersion = 3"));
+    assert!(persisted.contains("schemaVersion = 4"));
     assert!(!persisted.contains("preferredModel"));
     assert!(!persisted.contains("preferredReasoningEffort"));
     drop(store);
@@ -516,7 +516,7 @@ type = "disabled"
     );
 
     let persisted = persisted_config_document(&database_path);
-    assert!(persisted.contains("schemaVersion = 3"));
+    assert!(persisted.contains("schemaVersion = 4"));
     assert!(persisted.contains("[codebase]"));
     assert!(persisted.contains("[dirPermissions.entries]"));
     assert!(!persisted.contains("semanticCodeIndex"));
@@ -629,11 +629,11 @@ fn versioned_config_keeps_unknown_fields_strict() {
 #[test]
 fn newer_file_schema_is_rejected_explicitly() {
     let database_path = config_path("newer-file-schema");
-    std::fs::write(database_path.with_extension("toml"), "schemaVersion = 4\n").unwrap();
+    std::fs::write(database_path.with_extension("toml"), "schemaVersion = 5\n").unwrap();
 
     let error = ConfigStore::open(&database_path).err().unwrap();
 
-    assert!(error.0.contains("newer than supported version 3"));
+    assert!(error.0.contains("newer than supported version 4"));
     remove_config_files(&database_path);
 }
 
@@ -743,7 +743,7 @@ fn tool_mode_defaults_to_direct_and_updates_durably() {
     );
     assert_eq!(
         store.read_snapshot().unwrap().values.agent_grep_backend,
-        AgentGrepBackend::Ripgrep
+        AgentGrepBackend::Tgrep
     );
 
     store
@@ -758,7 +758,7 @@ fn tool_mode_defaults_to_direct_and_updates_durably() {
                 approval_review_model: Patch::Missing,
                 commit_message_model: Patch::Missing,
                 tool_mode: Patch::Value(ash_protocol::ToolMode::CodeModeOnly),
-                grep_backend: Patch::Value(AgentGrepBackend::FastRegex),
+                grep_backend: Patch::Value(AgentGrepBackend::Tgrep),
                 gui: Patch::Missing,
                 tui: Patch::Missing,
             }),
@@ -771,7 +771,7 @@ fn tool_mode_defaults_to_direct_and_updates_durably() {
     );
     assert_eq!(
         store.read_snapshot().unwrap().values.agent_grep_backend,
-        AgentGrepBackend::FastRegex
+        AgentGrepBackend::Tgrep
     );
     let persisted = persisted_config_document(&database_path);
     assert!(!persisted.contains("[gui]"));
@@ -2270,4 +2270,17 @@ fn time_context_policy_validates_persists_and_resets_without_changing_model_pref
     );
     drop(store);
     remove_config_files(&path);
+}
+
+#[test]
+fn retired_search_backend_is_rewritten_to_tgrep_in_existing_configuration() {
+    let decoded = crate::document_migration::decode(
+        "schemaVersion = 3\n[agent]\ngrepBackend = 'fastRegex'\n",
+    )
+    .unwrap();
+    assert!(decoded.rewrite_required);
+    assert_eq!(decoded.document.agent.grep_backend, AgentGrepBackend::Tgrep);
+    let persisted = crate::document_migration::encode(&decoded.document).unwrap();
+    assert!(persisted.contains("grepBackend = \"tgrep\""));
+    assert!(!persisted.contains("fastRegex"));
 }

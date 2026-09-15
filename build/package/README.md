@@ -24,6 +24,7 @@ formats, and update delivery belong to their respective owners.
 ├── ash-path/
 │   └── rg[.exe]
 └── ash-resources/
+    ├── tgrep/tgrep[.exe]              # Agent grep runtime
     ├── bwrap                         # Linux only
     ├── node/                           # packaged-node variant only
     │   └── bin/
@@ -40,6 +41,7 @@ formats, and update delivery belong to their respective owners.
     └── licenses/
         ├── bubblewrap/COPYING        # Linux only
         ├── node/LICENSE                # packaged-node variant only
+        ├── tgrep/LICENSE
         ├── ripgrep/
         │   ├── LICENSE-MIT
         │   └── UNLICENSE
@@ -193,3 +195,14 @@ and atomic replacement behavior are covered by:
 ```sh
 node --test build/package/prepare.test.ts
 ```
+
+## Agent grep runtime
+
+`tgrep.py` and development `prepare.ts` resolve the same pinned 1.0.8 archives from
+[`third_party/tgrep/runtime-lock.json`](../../third_party/tgrep/runtime-lock.json).
+All products and Remote runtimes include `ash-resources/tgrep/tgrep[.exe]` and its
+MIT license. The component digest and complete file manifest include tgrep; signing
+also covers this executable. `--tgrep-bin` is a build-time override, and
+`ASH_TGREP_PATH` is an explicit development runtime override. Query execution never
+downloads an executable. Adding the component preserves layout version 2 so existing
+Ash Code updaters can install the new release.

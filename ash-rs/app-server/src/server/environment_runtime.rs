@@ -188,7 +188,6 @@ pub(crate) struct EnvRuntimeControl {
     config: Option<Arc<ConfigStore>>,
     local_tool_config: Arc<RwLock<LocalToolConfig>>,
     env_state: EnvStateMode,
-    fast_regex_worker_command: Option<ash_fast_regex_search::FastRegexWorkerCommand>,
     pty_helper: Option<std::path::PathBuf>,
     codebase_models: Option<CodebaseModels>,
     semantic_model_provider: Option<Arc<dyn SemanticModelProvider>>,
@@ -256,7 +255,6 @@ impl EnvRuntimeControl {
             dir_grants,
             agent_grep,
             self.env_state.runtime(),
-            self.fast_regex_worker_command.as_ref(),
             self.pty_helper.as_ref(),
         )
         .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
@@ -434,7 +432,6 @@ impl EnvRuntimeControl {
                 .agent_grep
                 .clone(),
             self.env_state.runtime(),
-            self.fast_regex_worker_command.as_ref(),
             self.pty_helper.as_ref(),
         )
         .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
@@ -468,7 +465,6 @@ impl EnvRuntimeControl {
             Arc::clone(&symbol_index),
             semantic_job.clone(),
             customizations,
-            Some(Arc::clone(&local.agent_grep)),
         )
         .map_err(|error| {
             EnvRuntimeError::Failed(format!(
@@ -595,7 +591,6 @@ impl EnvRuntimeControl {
                     symbol_index,
                     None,
                     customizations,
-                    None,
                 ) {
                     Ok(watcher) => (Some(watcher), None),
                     Err(error) => (None, Some(error)),
@@ -1237,7 +1232,6 @@ impl AppServer {
             config: self.config.clone(),
             local_tool_config: Arc::clone(&self.local_tool_config),
             env_state: self.env_state.clone(),
-            fast_regex_worker_command: self.fast_regex_worker_command.clone(),
             pty_helper: self.pty_helper.clone(),
             codebase_models: self.codebase_models.clone(),
             semantic_model_provider: self.semantic_model_provider.clone(),
@@ -1407,14 +1401,13 @@ impl AppServer {
             })
             .collect::<BTreeMap<_, _>>();
         self.activate_dir_runtime(primary.clone(), host)?;
-        let (ripgrep, agent_grep, primary_search, primary_terminals, primary_debug_adapters) = {
+        let (ripgrep, primary_search, primary_terminals, primary_debug_adapters) = {
             let runtime = self
                 .env_runtime
                 .read()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             (
                 runtime.workspace.ripgrep.clone(),
-                runtime.workspace.agent_grep.clone(),
                 runtime.workspace.content_search.clone(),
                 runtime.execution.terminals.clone(),
                 runtime.execution.debug_adapters.clone(),
@@ -1428,7 +1421,6 @@ impl AppServer {
                     authorization.dir().clone(),
                     Arc::clone(&self.updates),
                     id.clone(),
-                    agent_grep.clone(),
                 )
                 .map_err(|error| {
                     EnvRuntimeError::Failed(format!(
@@ -1766,7 +1758,6 @@ impl AppServer {
                     .flatten()
                     .is_some()
             });
-        let agent_grep = runtime.workspace.agent_grep.clone();
         let Some(customizations) = customizations else {
             return Ok(());
         };
@@ -1781,7 +1772,6 @@ impl AppServer {
                 Arc::clone(&self.updates),
                 session_id.clone(),
                 customizations.clone(),
-                agent_grep.clone(),
             )
             .map_err(|error| {
                 EnvRuntimeError::Failed(format!("failed to initialize directory watcher: {error}"))
@@ -1856,7 +1846,6 @@ impl AppServer {
                 dir_grants,
                 None,
                 self.env_state.runtime(),
-                self.fast_regex_worker_command.as_ref(),
                 self.pty_helper.as_ref(),
             )
             .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
@@ -1912,7 +1901,6 @@ impl AppServer {
             Arc::clone(&symbol_index),
             None,
             customizations.clone(),
-            None,
         )
         .map_err(|error| {
             EnvRuntimeError::Failed(format!("failed to initialize filesystem watcher: {error}"))
@@ -2024,7 +2012,6 @@ impl AppServer {
             Arc::clone(&symbol_index),
             codebase_semantic_job.clone(),
             customizations.clone(),
-            Some(Arc::clone(&agent_grep)),
         )
         .map_err(|error| {
             EnvRuntimeError::Failed(format!("failed to initialize filesystem watcher: {error}"))

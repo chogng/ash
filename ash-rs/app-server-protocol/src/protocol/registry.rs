@@ -62,10 +62,10 @@ use crate::protocol::codebase::CodebaseSearchParams;
 use crate::protocol::codebase::CodebaseSearchResult;
 use crate::protocol::codebase::CodebaseStateDto;
 use crate::protocol::codebase::CodebaseStatusResult;
-use crate::protocol::codebase::FastRegexDisableAndDeleteParams;
-use crate::protocol::codebase::FastRegexDisableAndDeleteResult;
-use crate::protocol::codebase::FastRegexIndexStatusResult;
 use crate::protocol::codebase::LocalIndexClearOutcomeDto;
+use crate::protocol::codebase::TgrepDisableAndDeleteParams;
+use crate::protocol::codebase::TgrepDisableAndDeleteResult;
+use crate::protocol::codebase::TgrepIndexStatusResult;
 use crate::protocol::codebase_symbols::CodebaseSymbolsSearchHitDto;
 use crate::protocol::codebase_symbols::CodebaseSymbolsSearchParams;
 use crate::protocol::codebase_symbols::CodebaseSymbolsSearchResult;
@@ -2390,19 +2390,19 @@ client_methods! {
         response: CodebaseStatusResult,
         serialization: GlobalExclusive,
     },
-    FastRegexIndexStatus => "agentGrep/fastRegex/status" {
+    TgrepIndexStatus => "agentGrep/tgrep/status" {
         params: EmptyParams,
-        response: FastRegexIndexStatusResult,
+        response: TgrepIndexStatusResult,
         serialization: GlobalSharedRead,
     },
-    FastRegexIndexRebuild => "agentGrep/fastRegex/rebuild" {
+    TgrepIndexRebuild => "agentGrep/tgrep/rebuild" {
         params: EmptyParams,
-        response: FastRegexIndexStatusResult,
+        response: TgrepIndexStatusResult,
         serialization: GlobalExclusive,
     },
-    FastRegexDisableAndDelete => "agentGrep/fastRegex/disableAndDelete" {
-        params: FastRegexDisableAndDeleteParams,
-        response: FastRegexDisableAndDeleteResult,
+    TgrepDisableAndDelete => "agentGrep/tgrep/disableAndDelete" {
+        params: TgrepDisableAndDeleteParams,
+        response: TgrepDisableAndDeleteResult,
         serialization: GlobalExclusive,
     },
     CloudCodebaseStatus => "codebase/cloud/status" {
@@ -3620,9 +3620,9 @@ typescript_bindings! {
     ContentSearchCancelParams,
     CodebaseStateDto,
     CodebaseStatusResult,
-    FastRegexIndexStatusResult,
-    FastRegexDisableAndDeleteParams,
-    FastRegexDisableAndDeleteResult,
+    TgrepIndexStatusResult,
+    TgrepDisableAndDeleteParams,
+    TgrepDisableAndDeleteResult,
     LocalIndexClearOutcomeDto,
     CodebaseSearchParams,
     CodebaseChunkSpanDto,

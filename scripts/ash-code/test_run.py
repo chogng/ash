@@ -16,8 +16,10 @@ class SourceRunnerTests(unittest.TestCase):
             patch.dict(run.os.environ, {"PATH": "tools"}, clear=True),
             patch.object(run, "build_binaries", return_value=(0, built)) as build,
             patch.object(run, "stage_runtime", return_value=staged),
+            patch.object(run, "resolve_tgrep") as tgrep,
             patch.object(run.subprocess, "run") as subprocess_run,
         ):
+            tgrep.return_value.executable = built["tgrep"]
             subprocess_run.return_value = run.subprocess.CompletedProcess([], 0)
 
             self.assertEqual(run.main(["--help"]), 0)
@@ -27,6 +29,8 @@ class SourceRunnerTests(unittest.TestCase):
         )
         runtime = run.runtime_environment({"PATH": "tools"}, staged)
         self.assertNotIn("ASH_RG_PATH", runtime)
+        self.assertEqual(runtime["ASH_TGREP_PATH"], str(staged["tgrep"].resolve()))
+        tgrep.assert_called_once()
         subprocess_run.assert_called_once_with(
             [str(staged["ash"]), "--help"],
             cwd=run.REPOSITORY_ROOT,
@@ -119,6 +123,7 @@ class SourceRunnerTests(unittest.TestCase):
         return {
             "ash": root / "ash.exe",
             "ash-app-server": root / "ash-app-server.exe",
+            "tgrep": root / "tgrep.exe",
         }
 
 

@@ -273,6 +273,7 @@ fn package_archive(root: &Path) -> PackageArchive {
     unpacked_size += append_file(&mut builder, "bin/ash-app-server-daemon", b"daemon", 0o755);
     unpacked_size += append_file(&mut builder, "bin/ash-app-server", b"daemon", 0o755);
     unpacked_size += append_file(&mut builder, "ash-path/rg", b"rg", 0o755);
+    unpacked_size += append_file(&mut builder, "ash-resources/tgrep/tgrep", b"tgrep", 0o755);
     unpacked_size += append_file(&mut builder, "ash-resources/node/bin/node", b"node", 0o755);
     builder.into_inner().unwrap().finish().unwrap();
     let bytes = fs::read(&path).unwrap();

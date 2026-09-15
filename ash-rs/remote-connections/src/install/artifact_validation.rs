@@ -152,6 +152,7 @@ fn validate_package_archive(
         "bin/ash-remote-server",
         "bin/ash-app-server",
         "ash-path/rg",
+        "ash-resources/tgrep/tgrep",
         "ash-resources/node/bin/node",
     ] {
         if !paths.contains(Path::new(required)) {

@@ -322,7 +322,7 @@ local replacement.
 
 | | |
 | --- | --- |
-| 状态 | 已实现；`LocalToolSuite` 委托 `AgentGrepService`，由 `agent.grepBackend` 选择 `ripgrep` 或 `fastRegex` |
+| 状态 | 已实现；`LocalToolSuite` 委托 `AgentGrepService`，由 `agent.grepBackend` 选择 `ripgrep` 或 `tgrep` |
 | 限幅 | 100 条，按修改时间降序 |
 
 **description：**
@@ -405,7 +405,7 @@ Searches file contents with a regular expression.
 }
 ```
 
-**执行选择：**`ripgrep` 直接运行冻结的 `rg`；`fastRegex` 从正则提取必需文字，交叉稀疏 n-gram posting 后读取当前候选文件执行精确验证。开关只影响 Agent `grep`，不影响 `glob` 或编辑器 Search；一次 Tool generation 内不会根据查询内容暗中切换执行方式。无法提取至少三字节必需文字时，`fastRegex` 精确扫描全部已索引文件；性能基准把这种全量扫描也列为必须快于等价 `rg` 输出的底线。
+**执行选择：**默认 `tgrep` 使用包内 executable 与按 Directory 常驻的索引服务；`ripgrep` 显式选择冻结的 `rg`。开关只影响 Agent `grep`。Ash 对 tgrep 结果按路径排序并限制 100 行，刚由 Ash 文件工具编辑的路径直接读取；其他修改由 tgrep 异步监听更新。初始索引未就绪、单文件及正向 glob 查询由 tgrep 扫描磁盘，具体边界见 [`ash-tgrep`](../ash-rs/tgrep/README.md)。
 
 **错误文案：**正则非法 → 返回所选执行方式的稳定错误；无命中 → 正常结果 `no matches`。两种方式都遵守目录 ignore 规则。
 

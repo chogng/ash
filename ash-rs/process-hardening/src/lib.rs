@@ -2,6 +2,9 @@
 
 use std::io;
 
+mod exit_cleanup;
+pub use exit_cleanup::register_exit_cleanup;
+
 // Release builds sanitize inherited loader configuration before threads start.
 // Development builds preserve debugger and toolchain configuration.
 #[ctor::ctor]

@@ -101,9 +101,9 @@ impl ConfigGeneration {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum AgentGrepBackend {
-    #[default]
     Ripgrep,
-    FastRegex,
+    #[default]
+    Tgrep,
 }
 
 /// Agent defaults that may be resolved into future model invocations.

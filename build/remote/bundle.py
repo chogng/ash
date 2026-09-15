@@ -41,6 +41,7 @@ REQUIRED_RUNTIME_FILES = {
     "bin/ash-remote-server",
     "bin/ash-exec-server",
     "ash-path/rg",
+    "ash-resources/tgrep/tgrep",
     "ash-resources/node/bin/node",
 }
 EXECUTABLE_RUNTIME_FILES = {
@@ -49,6 +50,7 @@ EXECUTABLE_RUNTIME_FILES = {
     "bin/ash-remote-server",
     "bin/ash-exec-server",
     "ash-path/rg",
+    "ash-resources/tgrep/tgrep",
     "ash-resources/node/bin/node",
 }
 

@@ -286,19 +286,16 @@ containment；调用方仍拥有项目根语义和搜索边界。实现与错误
 
 | Surface | 所有权 | 模型可见 |
 | --- | --- | --- |
-| App Server `LocalToolSuite::grep` | Agent 内容搜索；由 `agent.grepBackend` 在冻结 `rg` 与 `ash-fast-regex-search` 间选择 | `grep` Tool |
+| App Server `LocalToolSuite::grep` | Agent 内容搜索；由 `agent.grepBackend` 在包内 `tgrep`（默认）与冻结 `rg` 间选择 | `grep` Tool |
 | `ash-content-search` + `rg` | 编辑器工作区内容搜索、分页和取消；不读取 Agent grep 配置 | 否 |
 | `ash-file-search` | ignore-aware 路径索引、fuzzy matching、`PathSearchHandle` 和 CLI | 否 |
 | `ash-file-watcher` | 多订阅者路径失效提示、missing-path fallback、throttle/debounce 与 overflow rescan hint | 否 |
 
-模型侧注册独立 `grep` 和 `glob` Tool。`grep` 默认执行冻结的 `rg`；选择 `fastRegex` 后只把 `grep` 切换到本地稀疏 n-gram 索引，`glob` 与编辑器 Search 继续执行 `rg`。交互式路径搜索契约由 [`ash-rs/file-search/README.md`](../ash-rs/file-search/README.md) 维护；TUI 直接持有 `PathSearchHandle`，不启动 CLI，Core 也不把路径搜索注册成 Tool。
+模型侧注册独立 `grep` 和 `glob` Tool。`grep` 默认使用包内 tgrep；配置 `agent.grepBackend = "ripgrep"` 可显式选择 `rg`。`glob` 与编辑器 Search 继续执行 `rg`。交互式路径搜索契约由 [`ash-rs/file-search/README.md`](../ash-rs/file-search/README.md) 维护。
 
-`fastRegex` 必须先用覆盖 n-gram 和 posting 交集缩小候选，再读取当前文件做精确验证。产品 App Server 通过私有 UDS 调用按 Directory 常驻的 Fast Regex 子进程，lookup 的 mmap、posting 读取和完整查询都留在子进程，主进程只接收有上限的最终结果。短查询、纯字符类和其他没有必需文字的正则仍会扫描全部已索引文件，但它们也进入与 `rg --line-number` 等价输出的性能底线；稀有、无命中和全量扫描用例任一不快于 `rg`，基准就失败。执行方式在 Tool generation 冻结后不会按单次查询暗中切换。基准入口和当前存储契约由 [`ash-fast-regex-search`](../ash-rs/fast-regex-search/README.md) 维护。
+[`ash-tgrep`](../ash-rs/tgrep/README.md) 按 Directory 启动并持有 `tgrep serve` 子进程，通过其本机 TCP JSON-RPC 查询。tgrep 自己维护 trigram 索引和文件监听。Ash 按路径排序，最多返回 100 个匹配行；Ash 文件工具刚写入的路径由同一 tgrep executable 直接读取，避免监听延迟。外部编辑仍遵循 tgrep 异步索引语义；初始索引未就绪、单文件和正向 glob 搜索使用 tgrep 全量扫描。
 
-普通文件变化直接写 delta；`.gitignore`、`.ignore`、`.git/info/exclude` 变化或 watcher overflow 会重新核对
-当前可索引文件集合，只发布实际增删改。只有 delta 需要压缩、格式不兼容、索引损坏或无法可靠计算差异时
-才重建 base。手动重建期间旧 generation 继续服务；普通“关闭”切回 `rg` 并保留磁盘数据，“关闭并删除”
-在配置提交后释放 worker，再通过跨进程独占锁删除。
+运行时版本与下载校验值由 [`third_party/tgrep/runtime-lock.json`](../third_party/tgrep/runtime-lock.json) 固定。开发准备与发布构建下载校验后的目标平台 executable，统一放入 `ash-resources/tgrep/`；搜索期间不下载。普通关闭切回 `rg` 并保留磁盘索引；关闭并删除在配置提交后释放服务，再通过 State Runtime 的独占租约删除。旧 `fastRegex` 配置迁移为 `tgrep`，旧索引不读取，新索引使用版本目录。
 
 `ash-file-watcher` 同样不是搜索或读取接口。它只把 OS mutation/error 转成
 `PathsChanged`/`RescanRequired`；consumer 必须重新扫描并校验 own state。其 ref-count、路径匹配、

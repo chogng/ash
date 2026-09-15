@@ -208,15 +208,15 @@ fn rpc_reports_generation_and_returns_revision_bound_local_chunks() {
 }
 
 #[test]
-fn fast_regex_rpc_rebuilds_then_disables_and_deletes_the_project_index() {
+fn tgrep_rpc_rebuilds_then_disables_and_deletes_the_project_index() {
     let dir = tempfile::tempdir().unwrap();
     let profile = tempfile::tempdir().unwrap();
     std::fs::create_dir(dir.path().join(".git")).unwrap();
-    std::fs::write(dir.path().join("source.rs"), "fast_regex_rpc_marker\n").unwrap();
+    std::fs::write(dir.path().join("source.rs"), "tgrep_rpc_marker\n").unwrap();
     let config = Arc::new(ConfigStore::open(profile.path().join("config.sqlite3")).unwrap());
     let index_storage = Arc::new(ash_state::StateRuntime::open(profile.path()).unwrap());
     let resolved = ResolvedConfig {
-        agent_grep_backend: AgentGrepBackend::FastRegex,
+        agent_grep_backend: AgentGrepBackend::Tgrep,
         ..ResolvedConfig::default()
     };
     let server = server()
@@ -252,18 +252,18 @@ fn fast_regex_rpc_rebuilds_then_disables_and_deletes_the_project_index() {
         2,
         "config/update",
         serde_json::json!({
-            "commandId": "enable-fast-regex",
+            "commandId": "enable-tgrep",
             "expectedRevision": 0,
-            "agentGrepBackend": "fastRegex"
+            "agentGrepBackend": "tgrep"
         }),
     );
-    assert_eq!(enabled["result"]["revision"], 1);
+    assert_eq!(enabled["result"]["revision"], 0);
 
     let initial = call(
         &server,
         &mut connection,
         3,
-        "agentGrep/fastRegex/status",
+        "agentGrep/tgrep/status",
         serde_json::json!({}),
     );
     assert_eq!(initial["result"]["enabled"], true);
@@ -273,27 +273,28 @@ fn fast_regex_rpc_rebuilds_then_disables_and_deletes_the_project_index() {
         &server,
         &mut connection,
         4,
-        "agentGrep/fastRegex/rebuild",
+        "agentGrep/tgrep/rebuild",
         serde_json::json!({}),
     );
     assert_eq!(
         rebuilt["result"]["active"], true,
         "unexpected rebuild response: {rebuilt}"
     );
-    assert!(rebuilt["result"]["generation"].as_u64().unwrap() >= 1);
-    assert!(index_directory.join("manifests").is_dir());
+    assert_eq!(rebuilt["result"]["ready"], true);
+    assert!(rebuilt["result"]["indexedFileCount"].as_u64().unwrap() >= 1);
+    assert!(index_directory.join("tgrep-1.0.8").is_dir());
 
     let deleted = call(
         &server,
         &mut connection,
         5,
-        "agentGrep/fastRegex/disableAndDelete",
+        "agentGrep/tgrep/disableAndDelete",
         serde_json::json!({
-            "commandId": "disable-delete-fast-regex",
-            "expectedRevision": 1
+            "commandId": "disable-delete-tgrep",
+            "expectedRevision": 0
         }),
     );
-    assert_eq!(deleted["result"]["config"]["revision"], 2);
+    assert_eq!(deleted["result"]["config"]["revision"], 1);
     assert_eq!(deleted["result"]["deletion"], "cleared");
     assert!(!index_directory.exists());
 
@@ -301,7 +302,7 @@ fn fast_regex_rpc_rebuilds_then_disables_and_deletes_the_project_index() {
         &server,
         &mut connection,
         6,
-        "agentGrep/fastRegex/status",
+        "agentGrep/tgrep/status",
         serde_json::json!({}),
     );
     assert_eq!(disabled["result"]["enabled"], false);

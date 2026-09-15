@@ -35,22 +35,22 @@ pub struct CodebaseStatusResult {
     pub source_bytes_limit_hit: bool,
 }
 
-/// Current state of the optional Fast Regex index used by Agent grep.
+/// Current state of the optional tgrep index used by Agent grep.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct FastRegexIndexStatusResult {
+pub struct TgrepIndexStatusResult {
     pub enabled: bool,
     pub active: bool,
-    #[ts(type = "number | null")]
-    pub generation: Option<u64>,
+    pub indexing: bool,
+    pub ready: bool,
     pub indexed_file_count: usize,
-    pub indexed_source_bytes: usize,
+    pub watcher_active: bool,
 }
 
 /// Starts the durable “disable and delete” Agent grep operation.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct FastRegexDisableAndDeleteParams {
+pub struct TgrepDisableAndDeleteParams {
     pub command_id: CommandId,
     #[schemars(range(min = 0))]
     #[ts(type = "number")]
@@ -69,7 +69,7 @@ pub enum LocalIndexClearOutcomeDto {
 /// Confirms the configuration commit separately from deletion of rebuildable data.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct FastRegexDisableAndDeleteResult {
+pub struct TgrepDisableAndDeleteResult {
     pub config: ConfigCommandResult,
     pub deletion: LocalIndexClearOutcomeDto,
 }

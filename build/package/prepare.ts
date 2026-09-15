@@ -8,12 +8,10 @@ import { extractMember, materialize, sha256 } from "../download/artifacts.ts";
 import { cargoArtifactExecutable, cargoRenderedDiagnostic, cargoTargetDirectory, parseCargoMessage } from "../lib/cargo.ts";
 import { ashPackageBuildPath } from "../lib/paths.ts";
 import { developmentHostTarget } from "./store.ts";
-import { assemblePackage, type RemoteRuntimeRelease, type ResolvedRipgrep, type ResolvedNode, type ResolvedBubblewrap, type FirstPartyExecutables } from "./layout.ts";
+import { assemblePackage, type RemoteRuntimeRelease, type ResolvedExecutable, type ResolvedNode, type ResolvedBubblewrap, type FirstPartyExecutables } from "./layout.ts";
 
 const repositoryRoot = resolve(import.meta.dirname, "..", "..");
 const cargoWorkspace = repositoryRoot;
-const ripgrepLockPath = join(repositoryRoot, "third_party", "ripgrep", "runtime-lock.json");
-const ripgrepCacheRoot = join(repositoryRoot, "third_party", ".cache", "ripgrep");
 const nodeLockPath = join(repositoryRoot, "third_party", "node", "runtime-lock.json");
 const nodeCacheRoot = join(repositoryRoot, "third_party", ".cache", "node");
 const bubblewrapSourceDirectory = join(repositoryRoot, "ash-rs", "vendor", "bubblewrap");
@@ -176,26 +174,36 @@ export function selectV8ArtifactPair(lock: V8RuntimeLock, target: string): Resol
 }
 
 export function selectRipgrepArtifact(lock: RuntimeLock, target: string): ResolvedArchiveArtifact {
-  if (lock.schemaVersion !== 1 || lock.runtime !== "ripgrep") {
-    throw new Error("Unsupported ripgrep runtime lock");
+  return selectExecutableArtifact(lock, target, "ripgrep");
+}
+
+export function selectTgrepArtifact(lock: RuntimeLock, target: string): ResolvedArchiveArtifact {
+  return selectExecutableArtifact(lock, target, "tgrep");
+}
+
+function selectExecutableArtifact(lock: RuntimeLock, target: string, runtime: "ripgrep" | "tgrep"): ResolvedArchiveArtifact {
+  if (lock.schemaVersion !== 1 || lock.runtime !== runtime) {
+    throw new Error(`Unsupported ${runtime} runtime lock`);
   }
   const artifactKey = lock.packageTargets?.[target];
   const artifact = artifactKey ? lock.artifacts?.[artifactKey] : undefined;
   if (!artifactKey || !artifact) {
-    throw new Error(`No locked ripgrep artifact for ${target}`);
+    throw new Error(`No locked ${runtime} artifact for ${target}`);
   }
   for (const field of ["archive", "sha256", "format", "executable"] as const) {
     if (typeof artifact[field] !== "string" || artifact[field].length === 0) {
-      throw new Error(`Invalid ripgrep artifact field ${field} for ${target}`);
+      throw new Error(`Invalid ${runtime} artifact field ${field} for ${target}`);
     }
   }
   if (!Number.isSafeInteger(artifact.size) || artifact.size <= 0) {
-    throw new Error(`Invalid ripgrep artifact size for ${target}`);
+    throw new Error(`Invalid ${runtime} artifact size for ${target}`);
   }
+  if (!/^[a-f0-9]{64}$/.test(artifact.sha256)) throw new Error(`Invalid ${runtime} SHA-256`);
+  if (!["tar.gz", "zip"].includes(artifact.format)) throw new Error(`Invalid ${runtime} archive format`);
   const repository = lock.source?.repository;
   const release = lock.source?.release;
   if (typeof repository !== "string" || typeof release !== "string") {
-    throw new Error("Ripgrep lock is missing its upstream release");
+    throw new Error(`${runtime} lock is missing its upstream release`);
   }
   return {
     ...artifact,
@@ -245,12 +253,12 @@ async function materializeArchive(artifact: ResolvedArchiveArtifact, cacheDirect
   return materialize(artifact, join(cacheDirectory, artifact.archive), artifact.size);
 }
 
-async function resolveRipgrep(target: string, isWindows: boolean): Promise<ResolvedRipgrep> {
-  const lock = JSON.parse(await readFile(ripgrepLockPath, "utf8")) as RuntimeLock;
-  const artifact = selectRipgrepArtifact(lock, target);
-  const cacheDirectory = join(ripgrepCacheRoot, artifact.version, artifact.key);
+async function resolveExecutable(runtime: "ripgrep" | "tgrep", target: string, isWindows: boolean): Promise<ResolvedExecutable> {
+  const lock = JSON.parse(await readFile(join(repositoryRoot, "third_party", runtime, "runtime-lock.json"), "utf8")) as RuntimeLock;
+  const artifact = selectExecutableArtifact(lock, target, runtime);
+  const cacheDirectory = join(repositoryRoot, "third_party", ".cache", runtime, artifact.version, artifact.key);
   const archive = await materializeArchive(artifact, cacheDirectory);
-  const executable = join(cacheDirectory, isWindows ? "rg.exe" : "rg");
+  const executable = join(cacheDirectory, (runtime === "ripgrep" ? "rg" : "tgrep") + (isWindows ? ".exe" : ""));
   await extractMember(archive, artifact.executable, executable, archiveBufferLimit);
   if (!isWindows) await chmod(executable, 0o755);
   return {
@@ -494,7 +502,8 @@ export async function prepareDevelopmentPackage(
   const isWindows = process.platform === "win32";
   const outputDirectory = ashPackageBuildPath(repositoryRoot, "dev", "store-v1", target, javascriptRuntime, developmentBuildProfile);
   const executables = await buildFirstPartyExecutables(process.platform);
-  const ripgrep = await resolveRipgrep(target, isWindows);
+  const ripgrep = await resolveExecutable("ripgrep", target, isWindows);
+  const tgrep = await resolveExecutable("tgrep", target, isWindows);
   const node = javascriptRuntime === "packaged-node" ? await resolveNode(target, isWindows) : undefined;
   const packageRoot = await publishDevelopmentPackage(outputDirectory, executables.packageStore, (staging) => assemblePackage(
     staging,
@@ -503,6 +512,7 @@ export async function prepareDevelopmentPackage(
     protocol,
     executables,
     ripgrep,
+    tgrep,
     node,
     remoteRuntimeBundle,
     remoteRuntimeRelease,

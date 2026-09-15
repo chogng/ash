@@ -226,7 +226,6 @@ pub struct AppServer {
     browser_host: Arc<BrowserHost>,
     browser_tool_port: crate::tool_composition::ToolPort,
     env_state: EnvStateMode,
-    fast_regex_worker_command: Option<ash_fast_regex_search::FastRegexWorkerCommand>,
     pty_helper: Option<std::path::PathBuf>,
     codebase_models: Option<CodebaseModels>,
     provider_runtime: Option<Arc<ash_model_provider::ModelProviderRuntime>>,
@@ -560,7 +559,6 @@ impl AppServer {
             browser_host,
             browser_tool_port,
             env_state: EnvStateMode::Unconfigured,
-            fast_regex_worker_command: None,
             pty_helper: None,
             codebase_models: None,
             provider_runtime: None,
@@ -1272,14 +1270,6 @@ impl AppServer {
     /// Configures the executable that dispatches the internal sandbox PTY role.
     pub(crate) fn with_pty_helper(mut self, executable: std::path::PathBuf) -> Self {
         self.pty_helper = Some(executable);
-        self
-    }
-
-    pub(crate) fn with_fast_regex_worker_command(
-        mut self,
-        command: ash_fast_regex_search::FastRegexWorkerCommand,
-    ) -> Self {
-        self.fast_regex_worker_command = Some(command);
         self
     }
 
@@ -2412,14 +2402,10 @@ impl AppServer {
             }
             Some(ClientMethod::CodebaseRetrieve) => self.code_retrieve(&request.params),
             Some(ClientMethod::CodebaseRebuild) => self.codebase_rebuild(&request.params),
-            Some(ClientMethod::FastRegexIndexStatus) => {
-                self.fast_regex_index_status(&request.params)
-            }
-            Some(ClientMethod::FastRegexIndexRebuild) => {
-                self.fast_regex_index_rebuild(&request.params)
-            }
-            Some(ClientMethod::FastRegexDisableAndDelete) => {
-                self.fast_regex_disable_and_delete(&request.params)
+            Some(ClientMethod::TgrepIndexStatus) => self.tgrep_index_status(&request.params),
+            Some(ClientMethod::TgrepIndexRebuild) => self.tgrep_index_rebuild(&request.params),
+            Some(ClientMethod::TgrepDisableAndDelete) => {
+                self.tgrep_disable_and_delete(&request.params)
             }
             Some(ClientMethod::CloudCodebaseStatus) => self.cloud_codebase_status(&request.params),
             Some(ClientMethod::CloudCodebasePreview) => {

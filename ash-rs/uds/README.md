@@ -7,8 +7,8 @@
 - 目录对象在 Windows 上阻止目录删除和替换，最后一个克隆释放时关闭句柄。监听者存活期间须保留对象，清理空目录前须释放所有克隆。Unix 依靠私有目录权限，父目录应由宿主信任；打开句柄不阻止同用户移动目录。
 - `peer_identity` 从操作系统查询对端身份，返回是否同用户、是否同 Windows 提权上下文。Unix 不存在 UAC，`same_elevation` 为真。此函数不决定连接是否被允许。
 
-App Server transport 和搜索 worker 各自要求同用户、同提权上下文，且在交换应用数据前检查。
-daemon 保留目录对象管理端点；worker 在退出后释放对象再清理目录。
+App Server transport 要求同用户、同提权上下文，且在交换应用数据前检查。
+daemon 保留目录对象管理端点。
 
 已有 Windows runtime 目录若只有继承 ACL，启动会返回权限错误；该目录中可能已有外部打开的句柄，修改 ACL 不能撤销这些句柄。
 
@@ -20,6 +20,5 @@ Windows 安全辅助代码的来源和许可见 [NOTICE](NOTICE) 与 [LICENSE-AP
 just check ash-uds
 just test ash-uds
 just test ash-app-server-transport --lib local_socket
-just test ash-fast-regex-search --lib worker
 just test ash-app-server-daemon --lib endpoint
 ```

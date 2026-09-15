@@ -53,7 +53,13 @@ def cargo_command_uses_v8(
     cargo_arguments: list[str],
     repository_root: Path,
 ) -> bool:
-    """Return whether the packages selected by a Cargo command depend on V8."""
+    return cargo_command_uses_package(cargo, cargo_arguments, repository_root, "v8")
+
+
+def cargo_command_uses_package(
+    cargo: str, cargo_arguments: list[str], repository_root: Path, package: str
+) -> bool:
+    """Inspect the selected dependency graph for a build/runtime input owner."""
 
     if not cargo_arguments or cargo_arguments[0] not in DEPENDENCY_COMMANDS:
         return False
@@ -76,7 +82,7 @@ def cargo_command_uses_v8(
         stdout=subprocess.PIPE,
         text=True,
     )
-    return any(line.partition(" ")[0] == "v8" for line in result.stdout.splitlines())
+    return any(line.partition(" ")[0] == package for line in result.stdout.splitlines())
 
 
 def cargo_tree_selection_arguments(arguments: list[str]) -> list[str]:

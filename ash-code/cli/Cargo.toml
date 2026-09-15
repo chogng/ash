@@ -37,8 +37,6 @@ arg0 = { workspace = true }
 ash-tui = { workspace = true }
 
 [dev-dependencies]
-ash-fast-regex-search = { workspace = true }
-ash-file-access = { workspace = true }
 ed25519-dalek = { workspace = true }
 insta = { workspace = true }
 portable-pty = { workspace = true }
@@ -50,5 +48,3 @@ ash-product-update = { workspace = true, features = ["signing"] }
 workspace = true
 
 [package.metadata.cargo-shear]
-# tests/worker.rs imports ../../../ash-rs/arg0/tests/support/worker.rs, which uses both crates.
-ignored = ["ash-fast-regex-search", "ash-file-access"]

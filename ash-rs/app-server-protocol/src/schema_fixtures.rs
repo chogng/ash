@@ -616,7 +616,7 @@ fn config_patch_fixture_round_trips_the_provider_scoped_model() {
                 "model": "codex-auto-review"
             }
         },
-        "agentGrepBackend": "fastRegex"
+        "agentGrepBackend": "tgrep"
     });
     let params: ConfigUpdateParams = serde_json::from_value(fixture.clone()).unwrap();
 
@@ -636,7 +636,7 @@ fn config_patch_fixture_round_trips_the_provider_scoped_model() {
     assert_eq!(params.expected_revision, 4);
     assert_eq!(
         params.agent_grep_backend,
-        Patch::Value(AgentGrepBackendDto::FastRegex)
+        Patch::Value(AgentGrepBackendDto::Tgrep)
     );
     assert_eq!(serde_json::to_value(params).unwrap(), fixture);
 }

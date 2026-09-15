@@ -31,7 +31,7 @@ import {{ assemblePackage }} from {json.dumps((ROOT / "build/package/layout.ts")
 let text = '';
 for await (const block of process.stdin) text += block;
 const args = JSON.parse(text);
-await assemblePackage(args.output, args.target, args.platform, args.protocol, args.executables, args.ripgrep, args.node);
+await assemblePackage(args.output, args.target, args.platform, args.protocol, args.executables, args.ripgrep, args.tgrep, args.node);
 """
         for target, platform in [
             ("x86_64-pc-windows-msvc", "win32"),
@@ -43,7 +43,7 @@ await assemblePackage(args.output, args.target, args.platform, args.protocol, ar
                     self.subTest(target=target, packaged_node=packaged_node),
                     tempfile.TemporaryDirectory() as directory,
                 ):
-                    root = Path(directory)
+                    root = Path(directory).resolve()
 
                     def binary(name):
                         path = root / name
@@ -121,6 +121,7 @@ await assemblePackage(args.output, args.target, args.platform, args.protocol, ar
                             executables["appServerDaemon"],
                             executables["codeModeHost"],
                             ripgrep,
+                            ripgrep,
                             node,
                             bubblewrap,
                             protocol_metadata=load_protocol_metadata(ROOT),
@@ -145,6 +146,14 @@ await assemblePackage(args.output, args.target, args.platform, args.protocol, ar
                         "platform": platform,
                         "protocol": load_protocol_metadata(ROOT),
                         "executables": inputs,
+                        "tgrep": {
+                            "executable": str(rg),
+                            "version": "test",
+                            "source": "upstream-release",
+                            "binarySha256": hashlib.sha256(rg.read_bytes()).hexdigest(),
+                            "archive": "rg.zip",
+                            "archiveSha256": "a" * 64,
+                        },
                         "ripgrep": {
                             "executable": str(rg),
                             "version": "test",

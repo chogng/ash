@@ -55,7 +55,7 @@ just test ash-app-server
 
 ## Agent grep
 
-- `AgentGrepBackend::FastRegex` 使用 [`fast-regex-search`](../fast-regex-search/README.md) 的目录索引与私有 worker，最多返回 100 个匹配行；编辑器搜索独立使用 Content Search。
+- `AgentGrepBackend::Tgrep` 使用 [`tgrep`](../tgrep/README.md) 管理的包内搜索服务与目录索引，最多返回 100 个匹配行；编辑器搜索独立使用 Content Search。
 - 目录 watcher 的路径事件发布增量，重扫事件核对文件集合；查询只覆盖已处理更新的索引版本。空结果标明异步更新边界，不能当作最新磁盘内容不存在的证明。
 - 索引容量不足或遍历失败返回工具失败；不会把未覆盖的文件默认为无匹配。候选内容变更触发一次更新重试。
 - 验证命令：`just test ash-app-server --lib agent_grep`。

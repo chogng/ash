@@ -563,11 +563,9 @@ fn local_tool_port_exposes_one_canonical_coding_tool_surface() {
     let shell =
         LocalShellToolService::new(authorization.clone(), ripgrep.clone(), PassThroughBackend)
             .unwrap();
-    let agent_grep = Arc::new(AgentGrepService::new(
-        ash_config::AgentGrepBackend::FastRegex,
-        ripgrep.clone(),
-        None,
-    ));
+    let agent_grep = Arc::new(
+        AgentGrepService::new(ash_config::AgentGrepBackend::Tgrep, ripgrep.clone(), None).unwrap(),
+    );
     let composition = LocalToolComposition {
         tools: Arc::new(LocalToolSuite::new(
             shell,
@@ -641,7 +639,7 @@ fn local_tool_port_exposes_one_canonical_coding_tool_surface() {
 }
 
 #[test]
-fn agent_edit_refreshes_an_existing_fast_regex_generation_before_returning() {
+fn agent_edit_refreshes_an_existing_tgrep_generation_before_returning() {
     let dir = TestDir::new();
     fs::create_dir_all(dir.path().join("src")).unwrap();
     let path = dir.path().join("src/current.rs");
@@ -650,11 +648,9 @@ fn agent_edit_refreshes_an_existing_fast_regex_generation_before_returning() {
     let shell =
         LocalShellToolService::new(dir.authorization(), ripgrep.clone(), PassThroughBackend)
             .unwrap();
-    let agent_grep = Arc::new(AgentGrepService::new(
-        ash_config::AgentGrepBackend::FastRegex,
-        ripgrep.clone(),
-        None,
-    ));
+    let agent_grep = Arc::new(
+        AgentGrepService::new(ash_config::AgentGrepBackend::Tgrep, ripgrep.clone(), None).unwrap(),
+    );
     let suite = LocalToolSuite::new(
         shell,
         ripgrep,
@@ -724,11 +720,10 @@ fn local_suite_reads_and_edits_with_spec_errors() {
     let shell =
         LocalShellToolService::new(dir.authorization(), ripgrep.clone(), PassThroughBackend)
             .unwrap();
-    let agent_grep = Arc::new(AgentGrepService::new(
-        ash_config::AgentGrepBackend::Ripgrep,
-        ripgrep.clone(),
-        None,
-    ));
+    let agent_grep = Arc::new(
+        AgentGrepService::new(ash_config::AgentGrepBackend::Ripgrep, ripgrep.clone(), None)
+            .unwrap(),
+    );
     let suite = LocalToolSuite::new(
         shell,
         ripgrep,

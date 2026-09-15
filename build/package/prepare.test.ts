@@ -13,6 +13,7 @@ import {
   parsePackageOptions,
   selectNodeArtifact,
   selectRipgrepArtifact,
+  selectTgrepArtifact,
   selectV8ArtifactPair,
 } from "./prepare.ts";
 
@@ -215,6 +216,7 @@ test("assembles and validates the canonical Windows development layout", async (
         source: "upstream-release",
         version: "1.0.0",
       },
+      await tgrepFixture(root),
       {
         archive: "node.zip",
         archiveSha256: "c".repeat(64),
@@ -228,6 +230,9 @@ test("assembles and validates the canonical Windows development layout", async (
     );
     const metadata = JSON.parse(await readFile(join(staging, "ash-package.json"), "utf8"));
     assert.equal(metadata.layoutVersion, 2);
+    assert.equal(metadata.components.tgrep.version, "1.0.8");
+    assert.equal(metadata.files["ash-resources/tgrep/tgrep.exe"], createHash("sha256").update("tgrep").digest("hex"));
+    assert.equal(await readFile(join(staging, "ash-resources/tgrep/tgrep.exe"), "utf8"), "tgrep");
     assert.equal(metadata.buildProfile, "dev-small");
     assert.equal(metadata.files["bin/ash-app-server.exe"], createHash("sha256").update("ash-app-server").digest("hex"));
     assert.deepEqual(metadata.javascriptRuntime, { kind: "packagedNode" });
@@ -332,6 +337,7 @@ test("host-provided runtime package omits the standalone Node payload", async ()
         source: "upstream-release",
         version: "1.0.0",
       },
+      await tgrepFixture(root),
       undefined,
       undefined,
       { url: "https://releases.example/ash/catalog.json", sha256: "e".repeat(64) },
@@ -364,7 +370,8 @@ test("Linux development packages retain Bubblewrap without a Ash namespace helpe
       appServer: join(root, "ash-app-server"), appServerDaemon: join(root, "ash-app-server-daemon"),
       codeModeHost: join(root, "ash-code-mode-host"),
       bubblewrap: { binary: join(root, "bwrap"), license: join(root, "COPYING"), version: "0.11.2", archive: "bwrap.tar", archiveSha256: "a".repeat(64) },
-    }, { executable: join(root, "rg"), archive: "rg.tar", archiveSha256: "b".repeat(64), binarySha256: "c".repeat(64), source: "upstream-release", version: "1" }, undefined);
+    }, { executable: join(root, "rg"), archive: "rg.tar", archiveSha256: "b".repeat(64), binarySha256: "c".repeat(64), source: "upstream-release", version: "1" },
+      await tgrepFixture(root), undefined);
     assert.equal(await readFile(join(staging, "ash-resources", "bwrap"), "utf8"), "bwrap");
     assert.equal((await readdir(join(staging, "ash-resources"))).includes("ash-linux-sandbox"), false);
     const metadata = JSON.parse(await readFile(join(staging, "ash-package.json"), "utf8"));
@@ -432,6 +439,7 @@ async function copyBuiltinExtensions(destination: string, source: string): Promi
     appServer: "unused", appServerDaemon: "unused", codeModeHost: "unused",
     remote: "unused", remoteServer: "unused", execServer: "unused",
   }, { executable: "unused", binarySha256: "", source: "local-override", version: "1" },
+      { executable: "unused", binarySha256: "", source: "local-override", version: "1.0.8" },
   undefined, undefined, undefined, { sourceRoot: root });
 }
 
@@ -446,6 +454,28 @@ test("assembly rejects linked Skill assets", async () => {
       appServer: "unused", appServerDaemon: "unused", codeModeHost: "unused",
       remote: "unused", remoteServer: "unused", execServer: "unused",
     }, { executable: "unused", binarySha256: "", source: "local-override", version: "1" },
+      { executable: "unused", binarySha256: "", source: "local-override", version: "1.0.8" },
     undefined, undefined, undefined, { sourceRoot: root }), /symbolic link/);
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+async function tgrepFixture(root: string) {
+  const executable = join(root, "tgrep-input");
+  await writeFile(executable, "tgrep");
+  return { executable, binarySha256:createHash("sha256").update("tgrep").digest("hex"), source:"local-override" as const, version:"1.0.8" };
+}
+
+
+test("selects every locked tgrep platform and rejects invalid artifacts", async () => {
+  const lock = JSON.parse(await readFile(new URL("../../third_party/tgrep/runtime-lock.json", import.meta.url), "utf8"));
+  for (const target of Object.keys(lock.packageTargets)) {
+    const artifact = selectTgrepArtifact(lock, target);
+    assert.match(artifact.sha256, /^[a-f0-9]{64}$/);
+    assert.match(artifact.url, /releases\/download\/v1\.0\.8\//);
+    assert.ok(artifact.executable.endsWith(target.includes("windows") ? "tgrep.exe" : "tgrep"));
+  }
+  assert.equal(Object.keys(lock.packageTargets).length, 8);
+  assert.throws(() => selectTgrepArtifact(lock, "unsupported"), /No locked tgrep artifact/);
+  lock.artifacts[lock.packageTargets["aarch64-apple-darwin"]].sha256 = "invalid";
+  assert.throws(() => selectTgrepArtifact(lock, "aarch64-apple-darwin"), /SHA-256/);
 });

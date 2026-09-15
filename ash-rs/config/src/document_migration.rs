@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
 
-pub(crate) const CURRENT_FILE_SCHEMA_VERSION: i64 = 3;
+pub(crate) const CURRENT_FILE_SCHEMA_VERSION: i64 = 4;
 // Raise this only when the product support window no longer includes the removed versions.
 const MIN_SUPPORTED_FILE_SCHEMA_VERSION: i64 = 1;
 
@@ -78,6 +78,7 @@ pub(crate) fn decode(source: &str) -> Result<DecodedDocument, ConfigError> {
             migrate_unversioned(root)?;
             remove_issue_workflow(root);
             migrate_agent_model_names(root)?;
+            migrate_grep_backend(root);
             true
         }
         Some(toml::Value::Integer(version)) => {
@@ -87,6 +88,9 @@ pub(crate) fn decode(source: &str) -> Result<DecodedDocument, ConfigError> {
             }
             if version < 3 {
                 migrate_agent_model_names(root)?;
+            }
+            if version < 4 {
+                migrate_grep_backend(root);
             }
             version != CURRENT_FILE_SCHEMA_VERSION
         }
@@ -120,6 +124,18 @@ pub(crate) fn encode(document: &UserConfigDocument) -> Result<String, ConfigErro
     root.extend(fields.clone());
     toml::to_string_pretty(&toml::Value::Table(root))
         .map_err(|error| ConfigError(error.to_string()))
+}
+
+fn migrate_grep_backend(root: &mut toml::map::Map<String, toml::Value>) {
+    if let Some(value) = root
+        .get_mut("agent")
+        .and_then(toml::Value::as_table_mut)
+        .and_then(|a| a.get_mut("grepBackend"))
+    {
+        if value.as_str() == Some("fastRegex") {
+            *value = toml::Value::String("tgrep".into());
+        }
+    }
 }
 
 fn validate_version(version: i64) -> Result<(), ConfigError> {
@@ -369,6 +385,14 @@ pub(crate) fn decode_legacy_json(source: &str) -> Result<UserConfigDocument, Con
     {
         for field in REMOVED_ISSUE_FIELDS {
             issues.remove(*field);
+        }
+    }
+    if let Some(backend) = value
+        .get_mut("agent")
+        .and_then(|agent| agent.get_mut("grepBackend"))
+    {
+        if backend.as_str() == Some("fastRegex") {
+            *backend = serde_json::Value::String("tgrep".into());
         }
     }
     serde_json::from_value(value)

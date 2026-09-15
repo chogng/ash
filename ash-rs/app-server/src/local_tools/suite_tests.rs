@@ -72,11 +72,10 @@ fn dir_resolution_is_bound_to_the_exact_session_and_grant() {
         super::super::shell_sandbox(),
     )
     .unwrap();
-    let agent_grep = Arc::new(AgentGrepService::new(
-        ash_config::AgentGrepBackend::Ripgrep,
-        ripgrep.clone(),
-        None,
-    ));
+    let agent_grep = Arc::new(
+        AgentGrepService::new(ash_config::AgentGrepBackend::Ripgrep, ripgrep.clone(), None)
+            .unwrap(),
+    );
     let suite = LocalToolSuite::new(shell, ripgrep, agent_grep, Arc::clone(&access), cwd_grant);
 
     let resolved = suite
@@ -209,11 +208,10 @@ fn shell_session_tool_returns_early_then_drives_the_same_process() {
         super::super::shell_sandbox(),
     )
     .unwrap();
-    let agent_grep = Arc::new(AgentGrepService::new(
-        ash_config::AgentGrepBackend::Ripgrep,
-        ripgrep.clone(),
-        None,
-    ));
+    let agent_grep = Arc::new(
+        AgentGrepService::new(ash_config::AgentGrepBackend::Ripgrep, ripgrep.clone(), None)
+            .unwrap(),
+    );
     let suite = LocalToolSuite::new(
         shell,
         ripgrep,

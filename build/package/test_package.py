@@ -34,6 +34,7 @@ from build.package.node import (
     resolve_node,
 )
 from build.package.ripgrep import load_lock, resolve_ripgrep
+from build.package.executable import ExecutableResolution
 from build.package.version import read_workspace_version
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -316,6 +317,7 @@ class PackageTests(unittest.TestCase):
                 daemon_binary,
                 code_mode_host_binary,
                 ripgrep,
+                test_tgrep_resolution(root),
                 node,
                 cli_binary=cli_binary,
                 update_public_key="11" * 32,
@@ -478,6 +480,7 @@ class PackageTests(unittest.TestCase):
                     daemon_binary,
                     code_mode_host_binary,
                     ripgrep,
+                    test_tgrep_resolution(root),
                     node,
                     cli_binary=cli_binary,
                 )
@@ -495,6 +498,7 @@ class PackageTests(unittest.TestCase):
                     daemon_binary,
                     code_mode_host_binary,
                     ripgrep,
+                    test_tgrep_resolution(root),
                     node,
                 )
 
@@ -525,6 +529,7 @@ class PackageTests(unittest.TestCase):
                     root / "cache",
                     explicit_binary=executable_file(root / "rg-source", b"ripgrep"),
                 ),
+                test_tgrep_resolution(root),
                 None,
                 protocol_metadata=generated_protocol,
             )
@@ -665,6 +670,7 @@ class PackageTests(unittest.TestCase):
                 daemon_binary,
                 code_mode_host_binary,
                 ripgrep,
+                test_tgrep_resolution(root),
                 node,
                 bubblewrap,
             )
@@ -723,6 +729,7 @@ class PackageTests(unittest.TestCase):
                 daemon_binary,
                 code_mode_host_binary,
                 ripgrep,
+                test_tgrep_resolution(root),
                 node,
                 windows_sandbox_binary=executable_file(
                     root / "sandbox-source.exe", b"sandbox"
@@ -1036,6 +1043,13 @@ def test_node_resolution(root: Path, spec) -> NodeResolution:
         binary_sha256=hashlib.sha256(b"node").hexdigest(),
         archive="node-test.zip",
         archive_sha256="a" * 64,
+    )
+
+
+def test_tgrep_resolution(root):
+    executable = executable_file(root / "tgrep-source", b"tgrep")
+    return ExecutableResolution(
+        executable, "1.0.8", "local-override", hashlib.sha256(b"tgrep").hexdigest()
     )
 
 

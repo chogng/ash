@@ -19,6 +19,7 @@ const PACKAGE_BIN_DIRECTORY: &str = "bin";
 const PACKAGE_PATH_DIRECTORY: &str = "ash-path";
 const PACKAGE_RESOURCES_DIRECTORY: &str = "ash-resources";
 const PACKAGE_METADATA_FILE: &str = "ash-package.json";
+const TGREP_OVERRIDE: &str = "ASH_TGREP_PATH";
 const RIPGREP_OVERRIDE: &str = "ASH_RG_PATH";
 const BUBBLEWRAP_OVERRIDE: &str = "ASH_BWRAP_PATH";
 const WINDOWS_SANDBOX_OVERRIDE: &str = "ASH_WINDOWS_SANDBOX_BIN";
@@ -68,6 +69,7 @@ impl PackageLayout {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ManagedExecutable {
     Ripgrep,
+    Tgrep,
     Bubblewrap,
     WindowsSandbox,
 }
@@ -143,6 +145,7 @@ pub struct InstallContext {
     package_layout: Option<PackageLayout>,
     executable_directory: Option<PathBuf>,
     ripgrep_override: Option<OsString>,
+    tgrep_override: Option<OsString>,
     bubblewrap_override: Option<OsString>,
     windows_sandbox_override: Option<OsString>,
     search_path: Option<OsString>,
@@ -163,6 +166,7 @@ impl InstallContext {
                     env::var_os(BUBBLEWRAP_OVERRIDE),
                     env::var_os("PATH"),
                 );
+                context.tgrep_override = env::var_os(TGREP_OVERRIDE);
                 context.windows_sandbox_override = env::var_os(WINDOWS_SANDBOX_OVERRIDE);
                 context
             })
@@ -208,6 +212,7 @@ impl InstallContext {
     pub fn executable_candidates(&self, executable: ManagedExecutable) -> ExecutableCandidates {
         let (override_variable, explicit_override) = match executable {
             ManagedExecutable::Ripgrep => (RIPGREP_OVERRIDE, self.ripgrep_override.as_ref()),
+            ManagedExecutable::Tgrep => (TGREP_OVERRIDE, self.tgrep_override.as_ref()),
             ManagedExecutable::Bubblewrap => {
                 (BUBBLEWRAP_OVERRIDE, self.bubblewrap_override.as_ref())
             }
@@ -222,10 +227,25 @@ impl InstallContext {
                 path: PathBuf::from(path),
             });
         }
+        if executable == ManagedExecutable::Tgrep {
+            return ExecutableCandidates::SearchPaths(
+                self.package_layout
+                    .as_ref()
+                    .map(|layout| {
+                        layout
+                            .resources_directory
+                            .join("tgrep")
+                            .join(if cfg!(windows) { "tgrep.exe" } else { "tgrep" })
+                    })
+                    .into_iter()
+                    .collect(),
+            );
+        }
         let mut paths = Vec::new();
         if let Some(layout) = &self.package_layout {
             let directory = match executable {
                 ManagedExecutable::Ripgrep => &layout.path_directory,
+                ManagedExecutable::Tgrep => unreachable!("handled as a packaged resource"),
                 ManagedExecutable::Bubblewrap => &layout.resources_directory,
                 ManagedExecutable::WindowsSandbox => &layout.binary_directory,
             };
@@ -283,6 +303,7 @@ impl InstallContext {
             package_layout,
             executable_directory,
             ripgrep_override,
+            tgrep_override: None,
             bubblewrap_override,
             windows_sandbox_override: None,
             search_path,
@@ -334,6 +355,8 @@ fn executable_names(executable: ManagedExecutable) -> &'static [&'static str] {
         ManagedExecutable::Ripgrep if cfg!(windows) => &["rg.exe", "rg"],
         ManagedExecutable::Ripgrep => &["rg"],
         ManagedExecutable::Bubblewrap => &["bwrap"],
+        ManagedExecutable::Tgrep if cfg!(windows) => &["tgrep.exe"],
+        ManagedExecutable::Tgrep => &["tgrep"],
         ManagedExecutable::WindowsSandbox => &["ash-windows-sandbox.exe"],
     }
 }

@@ -890,7 +890,7 @@
       "description": "Selects the implementation behind the Agent-only `grep` Tool.",
       "enum": [
         "ripgrep",
-        "fastRegex"
+        "tgrep"
       ],
       "type": "string"
     },
@@ -6758,7 +6758,7 @@
         {
           "properties": {
             "method": {
-              "const": "agentGrep/fastRegex/status",
+              "const": "agentGrep/tgrep/status",
               "type": "string"
             },
             "params": {
@@ -6774,7 +6774,7 @@
         {
           "properties": {
             "method": {
-              "const": "agentGrep/fastRegex/rebuild",
+              "const": "agentGrep/tgrep/rebuild",
               "type": "string"
             },
             "params": {
@@ -6790,11 +6790,11 @@
         {
           "properties": {
             "method": {
-              "const": "agentGrep/fastRegex/disableAndDelete",
+              "const": "agentGrep/tgrep/disableAndDelete",
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/FastRegexDisableAndDeleteParams"
+              "$ref": "#/$defs/TgrepDisableAndDeleteParams"
             }
           },
           "required": [
@@ -10890,11 +10890,11 @@
         {
           "properties": {
             "method": {
-              "const": "agentGrep/fastRegex/status",
+              "const": "agentGrep/tgrep/status",
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/FastRegexIndexStatusResult"
+              "$ref": "#/$defs/TgrepIndexStatusResult"
             }
           },
           "required": [
@@ -10906,11 +10906,11 @@
         {
           "properties": {
             "method": {
-              "const": "agentGrep/fastRegex/rebuild",
+              "const": "agentGrep/tgrep/rebuild",
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/FastRegexIndexStatusResult"
+              "$ref": "#/$defs/TgrepIndexStatusResult"
             }
           },
           "required": [
@@ -10922,11 +10922,11 @@
         {
           "properties": {
             "method": {
-              "const": "agentGrep/fastRegex/disableAndDelete",
+              "const": "agentGrep/tgrep/disableAndDelete",
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/FastRegexDisableAndDeleteResult"
+              "$ref": "#/$defs/TgrepDisableAndDeleteResult"
             }
           },
           "required": [
@@ -16190,76 +16190,6 @@
         "user"
       ],
       "type": "string"
-    },
-    "FastRegexDisableAndDeleteParams": {
-      "description": "Starts the durable “disable and delete” Agent grep operation.",
-      "properties": {
-        "commandId": {
-          "$ref": "#/$defs/CommandId"
-        },
-        "expectedRevision": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "commandId",
-        "expectedRevision"
-      ],
-      "type": "object"
-    },
-    "FastRegexDisableAndDeleteResult": {
-      "description": "Confirms the configuration commit separately from deletion of rebuildable data.",
-      "properties": {
-        "config": {
-          "$ref": "#/$defs/ConfigCommandResult"
-        },
-        "deletion": {
-          "$ref": "#/$defs/LocalIndexClearOutcomeDto"
-        }
-      },
-      "required": [
-        "config",
-        "deletion"
-      ],
-      "type": "object"
-    },
-    "FastRegexIndexStatusResult": {
-      "description": "Current state of the optional Fast Regex index used by Agent grep.",
-      "properties": {
-        "active": {
-          "type": "boolean"
-        },
-        "enabled": {
-          "type": "boolean"
-        },
-        "generation": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "indexedFileCount": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "indexedSourceBytes": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "enabled",
-        "active",
-        "indexedFileCount",
-        "indexedSourceBytes"
-      ],
-      "type": "object"
     },
     "Feature": {
       "enum": [
@@ -30555,6 +30485,74 @@
       "required": [
         "terminalId",
         "data"
+      ],
+      "type": "object"
+    },
+    "TgrepDisableAndDeleteParams": {
+      "description": "Starts the durable “disable and delete” Agent grep operation.",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision"
+      ],
+      "type": "object"
+    },
+    "TgrepDisableAndDeleteResult": {
+      "description": "Confirms the configuration commit separately from deletion of rebuildable data.",
+      "properties": {
+        "config": {
+          "$ref": "#/$defs/ConfigCommandResult"
+        },
+        "deletion": {
+          "$ref": "#/$defs/LocalIndexClearOutcomeDto"
+        }
+      },
+      "required": [
+        "config",
+        "deletion"
+      ],
+      "type": "object"
+    },
+    "TgrepIndexStatusResult": {
+      "description": "Current state of the optional tgrep index used by Agent grep.",
+      "properties": {
+        "active": {
+          "type": "boolean"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "indexedFileCount": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "indexing": {
+          "type": "boolean"
+        },
+        "ready": {
+          "type": "boolean"
+        },
+        "watcherActive": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "enabled",
+        "active",
+        "indexing",
+        "ready",
+        "indexedFileCount",
+        "watcherActive"
       ],
       "type": "object"
     },

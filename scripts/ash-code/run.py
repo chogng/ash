@@ -12,6 +12,11 @@ from pathlib import Path
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPOSITORY_ROOT))
+
+from build.lib.targets import TARGETS, default_target  # noqa: E402
+from build.package.tgrep import resolve_tgrep  # noqa: E402
+
 DEVELOPMENT_PROFILE = "dev-small"
 DEVELOPMENT_RUNTIME_ROOT = REPOSITORY_ROOT / ".build" / "ash-development"
 
@@ -104,6 +109,8 @@ def runtime_environment(
     runtime["ASH_PRODUCT_SERVICES_PATH"] = str(
         (REPOSITORY_ROOT / "resources/product-services/product-services.json").resolve()
     )
+    if tgrep := executables.get("tgrep"):
+        runtime.setdefault("ASH_TGREP_PATH", str(tgrep.resolve()))
     if bubblewrap := executables.get("bwrap"):
         runtime["ASH_BWRAP_PATH"] = str(bubblewrap.resolve())
     if code_mode_host := executables.get("ash-code-mode-host"):
@@ -117,6 +124,12 @@ def main(arguments: list[str] | None = None) -> int:
     returncode, built = build_binaries(binaries, environment)
     if returncode != 0:
         return returncode
+    if "ASH_TGREP_PATH" not in environment:
+        built["tgrep"] = resolve_tgrep(
+            TARGETS[default_target()],
+            REPOSITORY_ROOT / "third_party/tgrep/runtime-lock.json",
+            REPOSITORY_ROOT / "third_party/.cache/tgrep",
+        ).executable
     executables = stage_runtime(built)
     environment = runtime_environment(environment, executables)
     return subprocess.run(

@@ -14,6 +14,7 @@ from typing import Dict, Optional
 from .bubblewrap import BubblewrapResolution
 from .node import NodeResolution
 from .ripgrep import RipgrepResolution
+from .executable import ExecutableResolution
 from build.lib.targets import TargetSpec
 
 
@@ -52,6 +53,7 @@ def build_package_directory(
     app_server_daemon_binary: Path,
     code_mode_host_binary: Path,
     ripgrep: RipgrepResolution,
+    tgrep: ExecutableResolution,
     node: Optional[NodeResolution],
     bubblewrap: Optional[BubblewrapResolution] = None,
     protocol_metadata: Optional[Dict[str, object]] = None,
@@ -110,6 +112,18 @@ def build_package_directory(
             "platform": "win32" if spec.is_windows else spec.operating_system.value,
             "executables": executables,
             "ripgrep": runtime,
+            "tgrep": {
+                "executable": str(tgrep.executable),
+                "version": tgrep.version,
+                "source": tgrep.source,
+                "binarySha256": tgrep.binary_sha256,
+                **({"archive": tgrep.archive} if tgrep.archive is not None else {}),
+                **(
+                    {"archiveSha256": tgrep.archive_sha256}
+                    if tgrep.archive_sha256 is not None
+                    else {}
+                ),
+            },
             "node": {
                 "executable": str(node.executable),
                 "license": str(node.license_file),
@@ -184,6 +198,9 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
         for relative in LAYOUT["binaries"].values()
     ]
     executables.append(package / LAYOUT["pathDir"] / spec.ripgrep_name)
+    executables.append(
+        package / "ash-resources/tgrep" / ("tgrep" + spec.executable_suffix)
+    )
     components = metadata.get("components")
     if not isinstance(components, dict):
         raise RuntimeError("Invalid package component metadata")
@@ -191,6 +208,9 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
         component: package / relative.format(exe=".exe" if spec.is_windows else "")
         for component, relative in LAYOUT["binaries"].items()
     }
+    first_party_artifacts["tgrep"] = (
+        package / "ash-resources/tgrep" / ("tgrep" + spec.executable_suffix)
+    )
     if spec.is_windows:
         first_party_artifacts["windowsSandbox"] = (
             package / "bin/ash-windows-sandbox.exe"
@@ -288,6 +308,7 @@ def system_signing_artifacts(package: Path, spec: TargetSpec) -> Dict[str, Path]
         "appServerDaemon": package / "bin" / spec.app_server_daemon_name,
         "codeModeHost": package / "bin" / spec.code_mode_host_name,
         "ripgrep": package / "ash-path" / spec.ripgrep_name,
+        "tgrep": package / "ash-resources/tgrep" / ("tgrep" + spec.executable_suffix),
         "appServer": package / "bin" / spec.server_name,
         "remote": package / "bin" / spec.remote_name,
         "remoteServer": package / "bin" / spec.remote_server_name,
@@ -347,6 +368,7 @@ def record_system_signing(
             "codeModeHost",
             "node",
             "ripgrep",
+            "tgrep",
             "appServer",
             "remote",
             "remoteServer",

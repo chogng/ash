@@ -11,7 +11,7 @@ use ash_app_server_protocol::protocol::codebase::CodebaseSearchParams;
 use ash_app_server_protocol::protocol::codebase::CodebaseSearchResult;
 use ash_app_server_protocol::protocol::codebase::CodebaseStateDto;
 use ash_app_server_protocol::protocol::codebase::CodebaseStatusResult;
-use ash_app_server_protocol::protocol::codebase::FastRegexIndexStatusResult;
+use ash_app_server_protocol::protocol::codebase::TgrepIndexStatusResult;
 use ash_app_server_protocol::protocol::common::EmptyParams;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_codebase::CodebaseError;
@@ -74,25 +74,22 @@ impl AppServer {
         result(&self.project_codebase_status(&runtime))
     }
 
-    pub(super) fn fast_regex_index_status(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn tgrep_index_status(&self, params: &Value) -> Result<Value, RpcError> {
         let _: EmptyParams = decode(params)?;
         let (service, root) = self.agent_grep_index_context()?;
         let snapshot = service
-            .fast_regex_snapshot(&root)
+            .tgrep_snapshot(&root)
             .map_err(|_| RpcError::new(-32092, AppServerErrorName::CodebaseOperationFailed))?;
-        result(&project_fast_regex_status(
-            service.watches_fast_regex(),
-            snapshot,
-        ))
+        result(&project_tgrep_status(service.tgrep_enabled(), snapshot))
     }
 
-    pub(super) fn fast_regex_index_rebuild(&self, params: &Value) -> Result<Value, RpcError> {
+    pub(super) fn tgrep_index_rebuild(&self, params: &Value) -> Result<Value, RpcError> {
         let _: EmptyParams = decode(params)?;
         let (service, root) = self.agent_grep_index_context()?;
         let snapshot = service
-            .rebuild_fast_regex(&root)
+            .rebuild_tgrep(&root)
             .map_err(|_| RpcError::new(-32092, AppServerErrorName::CodebaseOperationFailed))?;
-        result(&project_fast_regex_status(true, Some(snapshot)))
+        result(&project_tgrep_status(true, Some(snapshot)))
     }
 
     pub(super) fn project_codebase_status(
@@ -120,20 +117,14 @@ impl AppServer {
     }
 }
 
-fn project_fast_regex_status(
-    enabled: bool,
-    snapshot: Option<ash_fast_regex_search::FastRegexSearchSnapshot>,
-) -> FastRegexIndexStatusResult {
-    FastRegexIndexStatusResult {
+fn project_tgrep_status(enabled: bool, snapshot: Option<tgrep::Status>) -> TgrepIndexStatusResult {
+    TgrepIndexStatusResult {
         enabled,
         active: snapshot.is_some(),
-        generation: snapshot.as_ref().map(|snapshot| snapshot.generation),
-        indexed_file_count: snapshot
-            .as_ref()
-            .map_or(0, |snapshot| snapshot.indexed_file_count),
-        indexed_source_bytes: snapshot
-            .as_ref()
-            .map_or(0, |snapshot| snapshot.indexed_source_bytes),
+        indexing: snapshot.as_ref().is_some_and(|s| s.indexing),
+        ready: snapshot.as_ref().is_some_and(|s| s.hidden_complete),
+        indexed_file_count: snapshot.as_ref().map_or(0, |s| s.indexed_file_count),
+        watcher_active: snapshot.as_ref().is_some_and(|s| s.watcher_active),
     }
 }
 

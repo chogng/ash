@@ -78,7 +78,7 @@ members = [
     "ash-rs/tool-executor",
     "ash-rs/file-identity",
     "ash-rs/file-search",
-    "ash-rs/fast-regex-search",
+    "ash-rs/tgrep",
     "ash-rs/immutable-generation-store",
     "ash-rs/package-store",
     "ash-rs/file-system",
@@ -309,7 +309,6 @@ keyring = { version = "3.6", default-features = false }
 log = "0.4"
 lru = "0.18.2"
 lsp-types = "0.97"
-memmap2 = "0.9.11"
 hf-chat-template = { version = "1.0.0", features = ["strftime"] }
 # Recursive workspace watches must use FSEvents on macOS; kqueue holds one file
 # descriptor per watched entry and exhausts the process limit on large workspaces.
@@ -334,7 +333,6 @@ ratex-svg = { version = "0.1.14", features = ["embed-fonts"] }
 ratex-types = "0.1.14"
 ratatui = "0.29.0"
 regex = "1"
-regex-syntax = "0.8"
 rust-stemmers = "1"
 resvg = { version = "0.47", default-features = false }
 schemars = "1.2.1"
@@ -453,7 +451,7 @@ ash-file-identity = { path = "ash-rs/file-identity" }
 ash-file-search = { path = "ash-rs/file-search" }
 ash-file-system = { path = "ash-rs/file-system" }
 ash-file-system-tool = { path = "ash-rs/file-system-tool" }
-ash-fast-regex-search = { path = "ash-rs/fast-regex-search" }
+tgrep = { package = "ash-tgrep", path = "ash-rs/tgrep" }
 ash-immutable-generation-store = { path = "ash-rs/immutable-generation-store" }
 ash-package-store = { path = "ash-rs/package-store" }
 ash-file-watcher = { path = "ash-rs/file-watcher" }

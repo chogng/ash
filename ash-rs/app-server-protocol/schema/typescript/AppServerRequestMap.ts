@@ -109,9 +109,6 @@ import type { ExtensionListParams } from './types/ExtensionListParams.js';
 import type { ExtensionListResult } from './types/ExtensionListResult.js';
 import type { ExtensionResourceOpenParams } from './types/ExtensionResourceOpenParams.js';
 import type { ExtensionResourceOpenResult } from './types/ExtensionResourceOpenResult.js';
-import type { FastRegexDisableAndDeleteParams } from './types/FastRegexDisableAndDeleteParams.js';
-import type { FastRegexDisableAndDeleteResult } from './types/FastRegexDisableAndDeleteResult.js';
-import type { FastRegexIndexStatusResult } from './types/FastRegexIndexStatusResult.js';
 import type { FeedbackPrepareParams } from './types/FeedbackPrepareParams.js';
 import type { FeedbackUploadParams } from './types/FeedbackUploadParams.js';
 import type { FsCreateFileParams } from './types/FsCreateFileParams.js';
@@ -351,6 +348,9 @@ import type { TerminalReadParams } from './types/TerminalReadParams.js';
 import type { TerminalReadResult } from './types/TerminalReadResult.js';
 import type { TerminalResizeParams } from './types/TerminalResizeParams.js';
 import type { TerminalWriteParams } from './types/TerminalWriteParams.js';
+import type { TgrepDisableAndDeleteParams } from './types/TgrepDisableAndDeleteParams.js';
+import type { TgrepDisableAndDeleteResult } from './types/TgrepDisableAndDeleteResult.js';
+import type { TgrepIndexStatusResult } from './types/TgrepIndexStatusResult.js';
 import type { ThreadGoalClearParams } from './types/ThreadGoalClearParams.js';
 import type { ThreadGoalClearResponse } from './types/ThreadGoalClearResponse.js';
 import type { ThreadGoalGetParams } from './types/ThreadGoalGetParams.js';
@@ -612,9 +612,9 @@ export interface AppServerRequestMap {
   "codeIntelligence/document/close": { params: DocumentOverlayCloseParams; response: DocumentOverlayStatusResult };
   "codebase/retrieve": { params: CodebaseRetrievalParams; response: CodebaseRetrievalResult };
   "codebase/rebuild": { params: Record<string, never>; response: CodebaseStatusResult };
-  "agentGrep/fastRegex/status": { params: Record<string, never>; response: FastRegexIndexStatusResult };
-  "agentGrep/fastRegex/rebuild": { params: Record<string, never>; response: FastRegexIndexStatusResult };
-  "agentGrep/fastRegex/disableAndDelete": { params: FastRegexDisableAndDeleteParams; response: FastRegexDisableAndDeleteResult };
+  "agentGrep/tgrep/status": { params: Record<string, never>; response: TgrepIndexStatusResult };
+  "agentGrep/tgrep/rebuild": { params: Record<string, never>; response: TgrepIndexStatusResult };
+  "agentGrep/tgrep/disableAndDelete": { params: TgrepDisableAndDeleteParams; response: TgrepDisableAndDeleteResult };
   "codebase/cloud/status": { params: Record<string, never>; response: CloudCodebaseStatusResult };
   "codebase/cloud/preview": { params: CloudCodebasePreviewParams; response: CloudCodebasePreviewResult };
   "codebase/cloud/authorize": { params: CloudCodebaseAuthorizeParams; response: CloudCodebaseStatusResult };
@@ -882,9 +882,9 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "codeIntelligence/document/close": { method: "codeIntelligence/document/close" },
   "codebase/retrieve": { method: "codebase/retrieve" },
   "codebase/rebuild": { method: "codebase/rebuild" },
-  "agentGrep/fastRegex/status": { method: "agentGrep/fastRegex/status" },
-  "agentGrep/fastRegex/rebuild": { method: "agentGrep/fastRegex/rebuild" },
-  "agentGrep/fastRegex/disableAndDelete": { method: "agentGrep/fastRegex/disableAndDelete" },
+  "agentGrep/tgrep/status": { method: "agentGrep/tgrep/status" },
+  "agentGrep/tgrep/rebuild": { method: "agentGrep/tgrep/rebuild" },
+  "agentGrep/tgrep/disableAndDelete": { method: "agentGrep/tgrep/disableAndDelete" },
   "codebase/cloud/status": { method: "codebase/cloud/status" },
   "codebase/cloud/preview": { method: "codebase/cloud/preview" },
   "codebase/cloud/authorize": { method: "codebase/cloud/authorize" },

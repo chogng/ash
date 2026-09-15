@@ -323,6 +323,8 @@ Desktop 当前实现和 Playwright 后续边界见
 | `codeIntelligence/document/synchronize` / `close` | directory + editor document | 发布或释放 ephemeral dirty snapshot；不持久化 overlay |
 | `codebase/retrieve` | directory | 融合已启用召回源，返回复核、去重、受预算约束的 excerpts |
 | `codebase/rebuild` | directory | 同步执行一次 full reconcile |
+| `agentGrep/tgrep/status` / `rebuild` | directory | 查询包内 tgrep 服务状态或同步重建；ready 表示索引覆盖完整，不保证最新编辑已被监听处理 |
+| `agentGrep/tgrep/disableAndDelete` | directory + config revision | 显式切回 ripgrep，停止索引服务并删除 Agent grep 索引 |
 | `codebase/cloud/status` | directory | 读取 selected deployment、grant 与 local/remote generation state |
 | `codebase/cloud/preview` | directory | 本地计算 proposed scope 的 chunk 外发单位与 bytes，不授权、不触网 |
 | `codebase/cloud/authorize` | directory | 持久化 root-bound destination/scope/byte grant |

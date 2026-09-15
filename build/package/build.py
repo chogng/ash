@@ -17,6 +17,7 @@ from build.package.cargo import build_binaries, validate_input_binary
 from build.package.layout import build_package_directory, load_protocol_metadata
 from build.package.node import resolve_node
 from build.package.ripgrep import resolve_ripgrep
+from build.package.tgrep import resolve_tgrep
 from build.package.version import read_workspace_version
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -178,6 +179,17 @@ def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Names
         default=DEFAULT_NODE_CACHE,
         help="Verified Node.js download and extraction cache.",
     )
+    parser.add_argument("--tgrep-bin", type=Path)
+    parser.add_argument(
+        "--tgrep-lock",
+        type=Path,
+        default=REPOSITORY_ROOT / "third_party/tgrep/runtime-lock.json",
+    )
+    parser.add_argument(
+        "--tgrep-cache-root",
+        type=Path,
+        default=REPOSITORY_ROOT / "third_party/.cache/tgrep",
+    )
     return parser.parse_args(arguments)
 
 
@@ -222,6 +234,7 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         raise RuntimeError(
             "--node-bin cannot be used with --javascript-runtime host-provided-node"
         )
+    tgrep = resolve_tgrep(spec, args.tgrep_lock, args.tgrep_cache_root, args.tgrep_bin)
     node = (
         resolve_node(
             spec,
@@ -253,6 +266,7 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         binaries["ash-app-server-daemon"],
         binaries["ash-code-mode-host"],
         ripgrep,
+        tgrep,
         node,
         bubblewrap,
         protocol_metadata=protocol_metadata,

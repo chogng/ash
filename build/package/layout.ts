@@ -24,7 +24,7 @@ export interface RemoteRuntimeRelease {
   readonly url: string;
 }
 
-export interface ResolvedRipgrep {
+export interface ResolvedExecutable {
   readonly archive?: string;
   readonly archiveSha256?: string;
   readonly binarySha256: string;
@@ -33,7 +33,7 @@ export interface ResolvedRipgrep {
   readonly version: string;
 }
 
-export interface ResolvedNode extends ResolvedRipgrep {
+export interface ResolvedNode extends ResolvedExecutable {
   readonly license: string;
 }
 
@@ -195,7 +195,8 @@ export async function assemblePackage(
   platform: NodeJS.Platform,
   protocol: PackageIdentityMetadata["protocol"],
   executables: Omit<FirstPartyExecutables, "packageStore">,
-  ripgrep: ResolvedRipgrep,
+  ripgrep: ResolvedExecutable,
+  tgrep: ResolvedExecutable,
   node?: ResolvedNode,
   remoteRuntimeBundle?: string,
   remoteRuntimeRelease?: RemoteRuntimeRelease,
@@ -228,6 +229,9 @@ export async function assemblePackage(
     }
   }
   await copyExecutable(ripgrep.executable, join(pathDirectory, rgName), isWindows);
+  const tgrepDirectory = join(resourcesDirectory, "tgrep");
+  await mkdir(tgrepDirectory, { recursive: true });
+  await copyExecutable(tgrep.executable, join(tgrepDirectory, isWindows ? "tgrep.exe" : "tgrep"), isWindows);
   if (node) {
     const nodeDirectory = join(resourcesDirectory, "node", "bin");
     const nodeLicenseDirectory = join(resourcesDirectory, "licenses", "node");
@@ -243,6 +247,13 @@ export async function assemblePackage(
   }
 
   const components: Record<string, unknown> & { node?: unknown } = {
+    tgrep: {
+      ...(tgrep.archive !== undefined ? { archive: tgrep.archive } : {}),
+      ...(tgrep.archiveSha256 !== undefined ? { archiveSha256: tgrep.archiveSha256 } : {}),
+      binarySha256: tgrep.binarySha256,
+      source: tgrep.source,
+      version: tgrep.version,
+    },
     ripgrep: {
       ...(ripgrep.archive !== undefined ? { archive: ripgrep.archive } : {}),
       ...(ripgrep.archiveSha256 !== undefined ? { archiveSha256: ripgrep.archiveSha256 } : {}),
@@ -372,6 +383,7 @@ async function validatePackage(packageRoot: string, platform: NodeJS.Platform): 
     throw new Error("Package build identity does not match its complete file manifest");
   }
   await requireFile(join(packageRoot, "ash-path", isWindows ? "rg.exe" : "rg"));
+  await requireComponentDigest(metadata, "tgrep", join(packageRoot, "ash-resources", "tgrep", isWindows ? "tgrep.exe" : "tgrep"));
   if (metadata.javascriptRuntime?.kind === "packagedNode") {
     if (typeof metadata.components.node !== "object" || metadata.components.node === null) {
       throw new Error("Packaged Node runtime metadata is missing");
@@ -487,6 +499,6 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   let input = "";
   for await (const block of process.stdin) input += block;
   const args = JSON.parse(input);
-  await assemblePackage(args.staging, args.target, args.platform, args.options.protocol, args.executables, args.ripgrep,
+  await assemblePackage(args.staging, args.target, args.platform, args.options.protocol, args.executables, args.ripgrep, args.tgrep,
     args.node ?? undefined, undefined, undefined, args.options);
 }

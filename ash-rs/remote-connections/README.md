@@ -57,7 +57,7 @@ Internet，拒绝重定向、URL 凭据、query、fragment 和私网解析；cat
 
 SSH 启动前，`open_and_validate_artifact` 检查本机精确大小和摘要，拒绝绝对路径、非规范路径、重复
 entry、链接和特殊文件，并验证声明的展开大小。制品必须采用 layout version 2，包含 `bin/ash-app-server`、`bin/ash-remote-server`、`bin/ash-app-server-daemon`、
-`ash-path/rg` 和 packaged Node。远端脚本在解压前再次检查压缩大小和 SHA-256，在最终目录的同级
+`ash-path/rg`、`ash-resources/tgrep/tgrep` 和 packaged Node。远端脚本在解压前再次检查压缩大小和 SHA-256，在最终目录的同级
 staging 中工作，可恢复陈旧 PID 锁，最后提交到：
 
 ```text

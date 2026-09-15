@@ -12,7 +12,7 @@ from pathlib import Path
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from build.lib.cargo_selection import cargo_command_uses_v8  # noqa: E402
+from build.lib.cargo_selection import cargo_command_uses_package, cargo_command_uses_v8  # noqa: E402
 from build.lib.targets import TARGETS, default_target  # noqa: E402
 from build.lib.v8 import (  # noqa: E402
     DEFAULT_CACHE,
@@ -64,6 +64,21 @@ def main(arguments: list[str] | None = None) -> int:
                 cache_root=args.v8_cache_root.expanduser().resolve(),
             )
         )
+    if (
+        cargo_arguments[0] in {"test", "run"}
+        and "ASH_TGREP_PATH" not in environment
+        and cargo_command_uses_package(
+            args.cargo, cargo_arguments, REPOSITORY_ROOT, "ash-tgrep"
+        )
+    ):
+        from build.package.tgrep import resolve_tgrep
+
+        executable = resolve_tgrep(
+            TARGETS[target],
+            REPOSITORY_ROOT / "third_party/tgrep/runtime-lock.json",
+            REPOSITORY_ROOT / "third_party/.cache/tgrep",
+        )
+        environment["ASH_TGREP_PATH"] = str(executable.executable)
     return subprocess.run(
         [args.cargo, *cargo_arguments], cwd=REPOSITORY_ROOT, env=environment
     ).returncode

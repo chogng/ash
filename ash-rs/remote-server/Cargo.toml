@@ -30,8 +30,6 @@ ash-app-server-protocol = { workspace = true }
 ash-app-server-transport = { workspace = true }
 
 [dev-dependencies]
-ash-fast-regex-search = { workspace = true }
-ash-file-access = { workspace = true }
 base64 = { workspace = true }
 tempfile = { workspace = true }
 ash-app-server-client = { workspace = true }
@@ -40,5 +38,3 @@ ash-app-server-client = { workspace = true }
 workspace = true
 
 [package.metadata.cargo-shear]
-# tests/worker.rs imports ../../arg0/tests/support/worker.rs, which uses both crates.
-ignored = ["ash-fast-regex-search", "ash-file-access"]

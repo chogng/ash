@@ -15,6 +15,7 @@ name = "ash_app_server"
 path = "src/lib.rs"
 
 [dependencies]
+tempfile = { workspace = true }
 sleep_inhibitor.workspace = true
 core-api = { workspace = true }
 exec-server = { workspace = true }
@@ -84,7 +85,7 @@ ash-extension-api = { workspace = true }
 ash-mcp-extension = { workspace = true }
 ash-file-system = { workspace = true }
 ash-file-watcher = { workspace = true }
-ash-fast-regex-search = { workspace = true }
+tgrep = { workspace = true }
 ash-git = { workspace = true }
 github = { workspace = true }
 ash-http-client = { workspace = true }
@@ -127,13 +128,11 @@ ash-typst = { workspace = true }
 worktree = { workspace = true }
 
 [dev-dependencies]
-test-binary-support = { workspace = true }
 ash-app-server-client = { workspace = true }
 tokio-tungstenite = { workspace = true }
 futures = { workspace = true }
 ash-context-engine = { workspace = true }
 image = { workspace = true, features = ["png"] }
-tempfile = { workspace = true }
 ash-uds = { workspace = true }
 
 [lints]
