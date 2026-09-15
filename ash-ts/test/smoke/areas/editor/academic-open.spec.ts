@@ -3,7 +3,7 @@ import { expect, test } from "../../../automation/test.js";
 
 test("Academic opens the document engine and saves its structured document through the Workbench", async ({ target, testWorkspace, workbench }) => {
 	test.skip(
-		target.kind !== "electron" || target.appServerMode !== "required" || target.product !== "academic",
+		target.kind !== "electron" || target.appServerMode !== "required" || target.workbenchMode !== "academic",
 		"This scenario requires the Academic Electron App Server product",
 	);
 

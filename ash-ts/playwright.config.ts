@@ -28,16 +28,16 @@ export default defineConfig({
 		? undefined
 		: browserServerMode === "disconnected"
 		? {
-				command: "corepack pnpm run dev:web",
+				command: "corepack pnpm run build:renderer && node ../build/desktop/serveWeb.ts ../.build/desktop/renderer/ash 5173",
 				url: "http://127.0.0.1:5173/",
-				reuseExistingServer: !process.env.CI,
+				reuseExistingServer: false,
 				timeout: 120_000,
 			}
 		: browserServerMode === "full"
 			? {
-					command: "corepack pnpm run dev:web:full",
+					command: "corepack pnpm run build:web && corepack pnpm run start:web",
 					url: "http://127.0.0.1:5174/",
-					reuseExistingServer: !process.env.CI,
+					reuseExistingServer: false,
 					timeout: 120_000,
 				}
 			: undefined,

@@ -4,11 +4,21 @@ import { type TextModel } from "../common/model/textModel.js";
 import { CursorMoveCommands } from '../common/cursor/cursorMoveCommands.js';
 import { CursorChangeReason } from '../common/cursorEvents.js';
 import { type IViewModel } from '../common/viewModel.js';
-import { registerTextEditorCapabilityContribution } from "./editorExtensions.js";
+import { registerTextEditorCapabilityContribution, SelectAllCommand } from "./editorExtensions.js";
+import { ICodeEditorService } from './services/codeEditorService.js';
 import { type View } from "./view.js";
 
 export const EditorCoreCommandId = Object.freeze({
 	selectAll: "editor.action.selectAll",
+});
+
+SelectAllCommand.addImplementation(100, 'code-editor', accessor => {
+	const editor = accessor.get(ICodeEditorService).getFocusedCodeEditor();
+	const model = editor?.getModel();
+	if (!editor || !model || !editor.hasTextFocus()) { return false; }
+	const range = model.getFullModelRange();
+	editor.setSelection(range, 'keyboard');
+	return true;
 });
 
 export const enum NavigationCommandRevealType {

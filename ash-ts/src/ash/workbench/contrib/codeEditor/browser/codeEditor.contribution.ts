@@ -26,6 +26,7 @@ registerEditorPane({
 			createPart: createBrowserEditorPart,
 			textMateService: options.textMateService,
 			languageFeaturesService: options.languageFeaturesService,
+			languageConfigurationService: options.languageConfigurationService,
 			languageDiagnosticsService: options.languageDiagnosticsService,
 			instantiationService: options.instantiationService,
 			accessibilityService: options.accessibilityService,

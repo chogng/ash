@@ -1,15 +1,16 @@
 import type { Locator } from "@playwright/test";
 import { expect, test } from "../../../automation/test.js";
 
-test("empty editor keeps its title, content, and watermark inside the editor part", async ({ workbench }) => {
+test("empty editor distinguishes an empty window from an open workspace", async ({ target, workbench }) => {
 	const editors = workbench.editors;
 	const group = editors.groupAt(0);
+	const welcomeVisible = target.kind === 'browser' && target.appServerMode === 'disabled';
 
 	await expect(editors.element).toBeVisible();
 	await expect(group.element).toBeVisible();
 	await expect(group.title).toBeVisible();
 	await expect(group.content).toBeVisible();
-	await expect(group.watermark).toBeVisible();
+	await expect(group.watermark).toBeVisible({ visible: welcomeVisible });
 	await expect(group.tabs).toHaveCount(0);
 
 	await expect.poll(async () => editorGeometry(editors.element, group.element, group.title, group.content, group.watermark)).toEqual({
@@ -17,14 +18,15 @@ test("empty editor keeps its title, content, and watermark inside the editor par
 		titleAboveContent: true,
 		titleHasHeight: true,
 		contentHasArea: true,
-		watermarkInsideContent: true,
+		watermarkInsideContent: welcomeVisible ? true : null,
 	});
 });
 
-test("editor layout remains valid across workbench window sizes", async ({ driver, workbench }) => {
+test("editor layout remains valid across workbench window sizes", async ({ target, driver, workbench }) => {
 	const editors = workbench.editors;
 	const group = editors.groupAt(0);
 	const observedSizes = new Set<string>();
+	const welcomeVisible = target.kind === 'browser' && target.appServerMode === 'disabled';
 
 	for (const size of [{ width: 900, height: 700 }, { width: 1200, height: 800 }, { width: 1494, height: 1104 }]) {
 		const actualSize = await driver.setWindowSize(size);
@@ -34,7 +36,7 @@ test("editor layout remains valid across workbench window sizes", async ({ drive
 			titleAboveContent: true,
 			titleHasHeight: true,
 			contentHasArea: true,
-			watermarkInsideContent: true,
+			watermarkInsideContent: welcomeVisible ? true : null,
 		});
 	}
 
@@ -58,7 +60,7 @@ async function editorGeometry(editor: Locator, group: Locator, title: Locator, c
 		content.boundingBox(),
 		watermark.boundingBox(),
 	]);
-	if (!editorBox || !groupBox || !titleBox || !contentBox || !watermarkBox) {
+	if (!editorBox || !groupBox || !titleBox || !contentBox) {
 		return null;
 	}
 	const tolerance = 1;
@@ -70,7 +72,7 @@ async function editorGeometry(editor: Locator, group: Locator, title: Locator, c
 		titleAboveContent: titleBox.y + titleBox.height <= contentBox.y + tolerance,
 		titleHasHeight: titleBox.height > 0,
 		contentHasArea: contentBox.width > 0 && contentBox.height > 0,
-		watermarkInsideContent: contains(contentBox, watermarkBox, tolerance),
+		watermarkInsideContent: watermarkBox ? contains(contentBox, watermarkBox, tolerance) : null,
 	};
 }
 

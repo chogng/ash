@@ -33,6 +33,7 @@ export function resolveElectronConfiguration(options: ElectronLaunchOptions): El
 	environment.ASH_HOME = resolve(options.userDataDirectory, "profile");
 	delete environment.ASH_PROFILE_ROOT;
 	delete environment.ELECTRON_RUN_AS_NODE;
+	delete environment.ASH_RENDERER_URL;
 
 	return {
 		executablePath: electronExecutablePath,

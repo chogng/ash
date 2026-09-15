@@ -577,12 +577,18 @@ waitingForApproval 或 waitingForUserInput 时，普通文本 Send 调用 `sessi
 由于 session 列表当前没有最近活动时间，启动时只能按服务端顺序选择首个活动 thread；
 Browser 入口没有 App Server 连接时会明确显示不可用状态。`dev:web` 是不构建 Rust 的独立
 前端开发入口，使用同一 disconnected API 保持 UI 可检查，但不声称拥有后端能力。当前本地
-`dev:web:full` 是已实现的开发例外：Vite host 为每个 HMR WebSocket client 启动一个 stdio
-App Server，并把 transport-neutral JSON-RPC 帧投影成同一份 `IRendererHost`。该 bridge 只监听
-loopback、复用 Vite WebSocket
-token 与同源检查，client 断开后回收其子进程；它不构成生产远程 Web transport。静态 Browser
-构建仍使用 disconnected API，生产 HTTP/WebSocket listener、认证、origin policy 和部署服务
-仍是当前限制。
+`dev:web:full` 与 `build:web` / `start:web` 使用同一条独立 WebSocket `/ash/app-server`，
+业务通信不依赖 Vite HMR。每个浏览器通过独立 connection carrier 连接 profile 共享 daemon
+管理的 App Server；浏览器断开只回收自己的连接。连接入口仅接受同源 loopback 请求。
+`build/desktop/serveWeb.ts` 提供正式静态产物的本地 HTTP 服务，复用开发入口的连接实现。
+普通 `build:renderer` 保留 disconnected 模式；`build:web` 显式启用后端连接。
+Web renderer 初始化完成后通过 `env/dirs/set` 注册宿主提供的目录 ID 和路径，完成后才启动
+Workbench；文件请求与后端使用同一目录 ID。授权沿用本地启动目录的 host 权限范围。
+公网远程部署的认证、TLS 和访问策略不属于这个本地服务的能力。
+
+Renderer 与 Stanza 共用 `build/vite/output.ts` 的分包规则，保留模块执行顺序，避免贡献注册
+顺序改变。构建对超过 500 kB 的 JavaScript chunk 直接报错；`build-metrics.json` 另外记录
+每个入口的静态 JavaScript 总量。分包不等于减少总下载量，worker 资源不计入此 chunk 限额。
 
 ### 6.6 集成终端
 

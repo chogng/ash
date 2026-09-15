@@ -4,7 +4,7 @@ import { isCancellationError } from "../../../../base/common/errors.js";
 import { isRecord } from "../../../../base/common/types.js";
 import { AppServerRemoteError } from "../../../../platform/app-server/common/appServerError.js";
 import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS, APP_SERVER_CAPABILITY_VERSION, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH, type InitializeResult, type ServerNotification } from "../../../../../../generated/app-server/index.js";
-import { connectViteDevRendererApi } from "../../../../platform/app-server/browser/webRendererApi.js";
+import { connectWebRendererApi } from "../../../../platform/app-server/browser/webRendererApi.js";
 import { AppServerProtocolClient, WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION, type AppServerTransport } from "../../../../platform/app-server/browser/appServerProtocolClient.js";
 
 const connectorHostServices = {
@@ -12,7 +12,7 @@ const connectorHostServices = {
 	clipboardService: { readText: async () => '', writeText: async () => undefined },
 };
 
-class FakeHotContext implements AppServerTransport {
+class FakeTransport implements AppServerTransport {
 	private readonly listeners = new Map<string, Set<(payload: unknown) => void>>();
 	readonly requests: Array<Record<string, unknown>> = [];
 	readonly sentEvents: string[] = [];
@@ -82,6 +82,8 @@ class FakeHotContext implements AppServerTransport {
 				},
 				slashCommands: [],
 			} satisfies InitializeResult);
+		} else if (request.method === "env/dirs/set") {
+			this.respond(request, { dirs: [] });
 		} else if (request.method === "session/list") {
 			this.respond(request, { sessions: [] });
 		} else if (request.method === "syntax/analyze") {
@@ -120,21 +122,22 @@ class FakeHotContext implements AppServerTransport {
 	}
 }
 
-test("connects, initializes, maps renderer requests, and disposes the Vite bridge", async () => {
-	const hot = new FakeHotContext();
-	const connected = await connectViteDevRendererApi(hot, connectorHostServices);
+test("connects, initializes, maps renderer requests, and disposes the Web connection", async () => {
+	const hot = new FakeTransport();
+	const connected = await connectWebRendererApi(hot, connectorHostServices);
 	assert.deepEqual(connected.metadata, { workspaceId: "web-dev:test", workspaceRoot: "C:\\workspace" });
 	assert.equal(await connected.api.appServer.getConnectionState(), "ready");
 	assert.deepEqual(await connected.api.appServer.getSlashCommands(), []);
 	assert.deepEqual(await connected.api.session.list(), { sessions: [] });
-	assert.deepEqual(hot.requests.map((request) => request.method), ["initialize", "session/list"]);
+	assert.deepEqual(hot.requests.map((request) => request.method), ["initialize", "env/dirs/set", "session/list"]);
+	assert.deepEqual(hot.requests[1]?.params, { dirs: [{ id: 'web-dev:test', path: 'C:\\workspace', grant: { type: 'host', permissions: ['readFiles', 'writeFiles', 'executeCommands', 'watchFiles', 'browseFiles', 'searchFiles', 'loadInstructions', 'loadConfig', 'discoverSkills', 'discoverMcp', 'useLanguageServices', 'discoverHooks', 'discoverPlugins', 'inspectRepository', 'mutateRepository'] } }] });
 	connected.dispose();
 	assert.equal(hot.sentEvents.at(-1), WEB_APP_SERVER_DISCONNECT_EVENT);
 });
 
 test("delivers App Server notifications and reports bridge closure", async () => {
-	const hot = new FakeHotContext();
-	const connected = await connectViteDevRendererApi(hot, connectorHostServices);
+	const hot = new FakeTransport();
+	const connected = await connectWebRendererApi(hot, connectorHostServices);
 	const notifications: ServerNotification[] = [];
 	const states: string[] = [];
 	connected.api.events.subscribe((notification) => notifications.push(notification));
@@ -149,8 +152,8 @@ test("delivers App Server notifications and reports bridge closure", async () =>
 });
 
 test("routes bounded syntax analysis through the connected renderer host", async () => {
-	const hot = new FakeHotContext();
-	const connected = await connectViteDevRendererApi(hot, connectorHostServices);
+	const hot = new FakeTransport();
+	const connected = await connectWebRendererApi(hot, connectorHostServices);
 
 	const result = await connected.api.syntax.analyze({
 		language: "rust",
@@ -167,8 +170,8 @@ test("routes bounded syntax analysis through the connected renderer host", async
 });
 
 test("uses a stable operation ID to cancel a language request", async () => {
-	const hot = new FakeHotContext();
-	const connected = await connectViteDevRendererApi(hot, connectorHostServices);
+	const hot = new FakeTransport();
+	const connected = await connectWebRendererApi(hot, connectorHostServices);
 	const cancellation = new AbortController();
 	const pending = connected.api.language.hover({
 		document: { path: "src/main.rs", languageId: "rust", revision: 1, text: "fn main() {}" },
@@ -195,8 +198,8 @@ test("uses a stable operation ID to cancel a language request", async () => {
 });
 
 test("keeps the language result when completion wins the cancel race", async () => {
-	const hot = new FakeHotContext();
-	const connected = await connectViteDevRendererApi(hot, connectorHostServices);
+	const hot = new FakeTransport();
+	const connected = await connectWebRendererApi(hot, connectorHostServices);
 	const cancellation = new AbortController();
 	const pending = connected.api.language.hover({
 		document: { path: "src/main.rs", languageId: "rust", revision: 1, text: "fn main() {}" },
@@ -212,8 +215,8 @@ test("keeps the language result when completion wins the cancel race", async () 
 });
 
 test("keeps the language failure when completion wins the cancel race", async () => {
-	const hot = new FakeHotContext();
-	const connected = await connectViteDevRendererApi(hot, connectorHostServices);
+	const hot = new FakeTransport();
+	const connected = await connectWebRendererApi(hot, connectorHostServices);
 	const cancellation = new AbortController();
 	const pending = connected.api.language.hover({
 		document: { path: "src/main.rs", languageId: "rust", revision: 1, text: "fn main() {}" },
@@ -229,7 +232,7 @@ test("keeps the language failure when completion wins the cancel race", async ()
 });
 
 test('renderer dispatches host requests and rejects late results after disconnect', async () => {
-	const hot = new FakeHotContext();
+	const hot = new FakeTransport();
 	const client = new AppServerProtocolClient(hot);
 	let signal: AbortSignal | undefined;
 	let finish!: (value: { targetId: string }) => void;
@@ -253,7 +256,7 @@ test('renderer dispatches host requests and rejects late results after disconnec
 });
 
 test('invalid response rejects its pending request and unknown host methods receive method-not-found', async () => {
-	const hot = new FakeHotContext();
+	const hot = new FakeTransport();
 	const client = new AppServerProtocolClient(hot);
 	await client.connect();
 	hot.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: 'unknown-1', method: 'host/unknown', params: {} }) });

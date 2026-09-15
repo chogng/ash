@@ -3,10 +3,12 @@ import { resolve } from 'node:path';
 
 const desktopDirectory = resolve(import.meta.dirname, '../../..');
 const serverUrl = 'http://127.0.0.1:5185/textModel.html';
+const build = await run(process.execPath, ['node_modules/vite/bin/vite.js', 'build', '--config', 'test/integration/browser/vite.config.ts'], process.env);
+if (build !== 0) process.exit(build);
 const server = spawn(process.execPath, [
-	'node_modules/vite/bin/vite.js',
-	'--config',
-	'test/integration/browser/vite.config.ts',
+	'../build/desktop/serveWeb.ts',
+	'../.build/desktop/editor-browser',
+	'5185',
 ], {
 	cwd: desktopDirectory,
 	stdio: 'inherit',

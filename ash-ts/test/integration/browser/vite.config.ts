@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
+import { rendererOutput } from '../../../../build/vite/output.js';
 
 export default defineConfig({
 	root: resolve(import.meta.dirname),
@@ -7,8 +8,10 @@ export default defineConfig({
 	build: {
 		outDir: resolve(import.meta.dirname, "../../../../.build/desktop/editor-browser"),
 		emptyOutDir: true,
-		rollupOptions: {
+		rolldownOptions: {
+			output: rendererOutput,
 			input: {
+				webTransport: resolve(import.meta.dirname, 'webTransport.html'),
 				dialog: resolve(import.meta.dirname, "dialog.html"),
 				terminal: resolve(import.meta.dirname, "terminal.html"),
 				textModel: resolve(import.meta.dirname, "textModel.html"),

@@ -2,7 +2,7 @@ import { expect, test } from "../../../automation/test.js";
 
 test("Academic stays in its Workbench without a dedicated Sessions surface", async ({ application, target, workbench }) => {
 	test.skip(
-		target.kind !== "electron" || target.product !== "academic",
+		target.kind !== "electron" || target.workbenchMode !== "academic",
 		"This scenario verifies the Academic Electron Workbench.",
 	);
 	if (target.kind !== "electron") {

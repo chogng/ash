@@ -3,6 +3,8 @@ import { defineConfig } from "vite";
 import { AshRendererDirectory } from "../../ash-ts/src/ash/code/common/application.js";
 import { WorkbenchModeRegistry } from "../../ash-ts/src/ash/workbench/common/workbenchMode.js";
 import { desktopBuildPath } from "../lib/paths.ts";
+import { buildMetricsPlugin } from './buildMetricsPlugin.ts';
+import { rendererOutput } from './output.ts';
 import { hotReloadPlugin } from "./hotReloadPlugin.ts";
 import { productIconsPlugin } from "./productIconsPlugin.ts";
 import { webAppServerVitePlugin } from "./webAppServerPlugin.ts";
@@ -34,7 +36,7 @@ export default defineConfig(() => {
       __ASH_WORKBENCH_MODE__: JSON.stringify(workbenchModeId),
       __ASH_WEB_APP_SERVER__: JSON.stringify(webAppServerEnabled),
     },
-    plugins: [hotReloadPlugin({ desktopRoot }), workbenchEntryPlugin(), productIconsPlugin(), ...(webAppServerEnabled ? [webAppServerVitePlugin()] : [])],
+    plugins: [buildMetricsPlugin(), hotReloadPlugin({ desktopRoot }), workbenchEntryPlugin(), productIconsPlugin(), ...(webAppServerEnabled ? [webAppServerVitePlugin()] : [])],
     optimizeDeps: {
       include: ["vscode-oniguruma"],
     },
@@ -46,7 +48,8 @@ export default defineConfig(() => {
     build: {
       outDir: desktopBuildPath(repositoryRoot, "renderer", AshRendererDirectory),
       emptyOutDir: true,
-      rollupOptions: {
+      rolldownOptions: {
+		output: rendererOutput,
         input: {
           [browserEntry]: resolve(sourceRoot, `${browserEntry}.html`),
           [electronEntry]: resolve(sourceRoot, `${electronEntry}.html`),

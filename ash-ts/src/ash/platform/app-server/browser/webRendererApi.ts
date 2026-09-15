@@ -27,6 +27,7 @@ import { createAppServerDirPermissionsApi } from "../../dirPermissions/browser/d
 import { createAppServerAccountApi } from "../../accounts/browser/accountApi.js";
 import { createAppServerTurnChangesApi } from "../../turnChanges/browser/turnChangesApi.js";
 import { AppServerAutomationService } from '../../automation/browser/appServerAutomationService.js';
+import { APP_SERVER_METHODS } from '../../../../../generated/app-server/index.js';
 
 export type RendererCapabilityContribution = (connection: AppServerProtocolClient, appServer: IRendererHost["appServer"]) => RendererHostCapabilities;
 
@@ -36,11 +37,17 @@ export interface ConnectedWebRendererApi {
 	dispose(): void;
 }
 
-/** Connects a browser Renderer host to the loopback Vite development bridge. */
-export async function connectViteDevRendererApi(hot: AppServerTransport, connectorHostServices: BrowserConnectorHostServices, options: AppServerProtocolClientOptions = {}, contributions: readonly RendererCapabilityContribution[] = []): Promise<ConnectedWebRendererApi> {
-	const connection = new AppServerProtocolClient(hot, { ...options, capabilities: { ...options.capabilities, dirPermissionsHost: { version: 1 } } });
+/** Connects a browser Renderer host through its transport. */
+export async function connectWebRendererApi(transport: AppServerTransport, connectorHostServices: BrowserConnectorHostServices, options: AppServerProtocolClientOptions = {}, contributions: readonly RendererCapabilityContribution[] = []): Promise<ConnectedWebRendererApi> {
+	const connection = new AppServerProtocolClient(transport, { ...options, capabilities: { ...options.capabilities, dirPermissionsHost: { version: 1 } } });
 	try {
 		const metadata = await connection.connect();
+		await connection.request(APP_SERVER_METHODS['env/dirs/set'], {
+			dirs: [{ id: metadata.workspaceId, path: metadata.workspaceRoot, grant: {
+				type: 'host',
+				permissions: ['readFiles', 'writeFiles', 'executeCommands', 'watchFiles', 'browseFiles', 'searchFiles', 'loadInstructions', 'loadConfig', 'discoverSkills', 'discoverMcp', 'useLanguageServices', 'discoverHooks', 'discoverPlugins', 'inspectRepository', 'mutateRepository'],
+			} }],
+		});
 		const instanceId = generateUuid();
 		const memoryDiagnostics = connection.capabilities?.contracts.memoryDiagnostics?.version === 1 ? new AppServerMemoryDiagnosticsService(connection, 'browser', async () => [{ instanceId, processId: null, role: 'renderer', phase: 'unknown', metrics: [{ kind: 'domNodes', value: document.getElementsByTagName('*').length, unavailable: null }, { kind: 'javaScriptHeapBytes', value: null, unavailable: 'unsupported' }, { kind: 'residentBytes', value: null, unavailable: 'unsupported' }] }]) : undefined;
 		const memories = connection.capabilities?.memories ? new AppServerMemoriesService(connection) : undefined;

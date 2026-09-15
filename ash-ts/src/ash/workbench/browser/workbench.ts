@@ -165,6 +165,8 @@ import { IExtensionService } from "../services/extensions/common/extensionServic
 import { AppServerRemoteAgentService } from "../services/remote/browser/appServerRemoteAgentService.js";
 import { IRemoteAgentService } from "../services/remote/common/remoteAgentService.js";
 import { ILanguageFeaturesService } from '../../editor/common/services/languageFeatures.js';
+import { ICodeEditorService } from '../../editor/browser/services/codeEditorService.js';
+import { editorBrowserServices } from '../contrib/codeEditor/browser/browserEditorPart.js';
 import { LanguageFeaturesService } from '../../editor/common/services/languageFeaturesService.js';
 import { ILanguageService } from '../../editor/common/languages/language.js';
 import { LanguageService } from '../../editor/common/services/languageService.js';
@@ -410,6 +412,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(ILanguageConfigurationService, languageConfigurationService);
 		const languageFeaturesService = this._register(new LanguageFeaturesService(languageConfigurationService));
 		services.registerInstance(ILanguageFeaturesService, languageFeaturesService);
+		services.registerInstance(ICodeEditorService, editorBrowserServices.codeEditorService);
 		const textMateService = this._register(new BrowserTextMateService());
 		services.registerInstance(ITextMateService, textMateService);
 		const textResourceStore = getBrowserTextResourceStore(textFileService);

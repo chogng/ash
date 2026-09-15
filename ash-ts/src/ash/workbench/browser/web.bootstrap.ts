@@ -1,6 +1,7 @@
 import { URI } from "../../base/common/uri.js";
 import { WorkbenchModeRegistry, type WorkbenchModeId } from "../common/workbenchMode.js";
-import { connectViteDevRendererApi, type RendererCapabilityContribution } from "../../platform/app-server/browser/webRendererApi.js";
+import { connectWebRendererApi, type RendererCapabilityContribution } from "../../platform/app-server/browser/webRendererApi.js";
+import { AppServerWebSocketTransport } from '../../platform/app-server/browser/appServerWebSocketTransport.js';
 import { BrowserClipboardService } from "../../platform/clipboard/browser/browserClipboardService.js";
 import { BrowserOpenerService } from "../../platform/opener/browser/browserOpenerService.js";
 import { startWebWorkbench } from "./web.factory.js";
@@ -20,14 +21,12 @@ async function startBrowserWorkbenchAsync(modeId: WorkbenchModeId, rendererCapab
 		startWebWorkbench(modeId);
 		return;
 	}
-	const hot = import.meta.hot;
-	if (!hot) {
-		showStartupError(new Error("Ash Web App Server development mode requires the Vite hot channel"));
-		return;
-	}
+	const endpoint = new URL('/ash/app-server', window.location.href);
+	endpoint.protocol = endpoint.protocol === 'https:' ? 'wss:' : 'ws:';
+	const transport = new AppServerWebSocketTransport(endpoint);
 	let connectedHost: IDisposable | undefined;
 	try {
-		const connected = await connectViteDevRendererApi(hot, {
+		const connected = await connectWebRendererApi(transport, {
 			openerService: new BrowserOpenerService(window),
 			clipboardService: new BrowserClipboardService(window.navigator.clipboard),
 		}, {}, rendererCapabilities);
@@ -38,8 +37,9 @@ async function startBrowserWorkbenchAsync(modeId: WorkbenchModeId, rendererCapab
 				uri: URI.file(connected.metadata.workspaceRoot),
 			}),
 		};
-		connectedHost = toDisposable(() => connected.dispose());
+		connectedHost = toDisposable(() => { connected.dispose(); transport.dispose(); });
 	} catch (error) {
+		transport.dispose();
 		showStartupError(error);
 		return;
 	}

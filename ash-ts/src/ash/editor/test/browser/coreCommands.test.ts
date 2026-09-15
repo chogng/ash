@@ -9,8 +9,13 @@ import { h } from "../../../base/browser/dom.js";
 import { CursorState } from '../../common/cursorCommon.js';
 import { CursorChangeReason } from '../../common/cursorEvents.js';
 import { OperatingSystem } from '../../../base/common/platform.js';
+import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/common/contextkey.js';
+import { ServiceContainer } from '../../../platform/instantiation/common/instantiation.js';
+import { ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
+import { ICodeEditorService } from '../../browser/services/codeEditorService.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
 	document: browserEnvironment.window.document,
@@ -28,8 +33,31 @@ const { installCoreTextEditorCommands } = await import("../../browser/coreComman
 const { KeyboardNavigationController } = await import('../../browser/view/viewController.js');
 await import('../../contrib/lineSelection/browser/lineSelection.js');
 const { CodeEditorWidget } = await import('../../browser/widget/codeEditor/codeEditorWidget.js');
+const { SelectAllCommand } = await import('../../browser/editorExtensions.js');
+const { createEditorBrowserServices } = await import('../../browser/services/contribution.js');
 
 suiteTeardown(() => browserEnvironment.window.close());
+
+test('workbench select-all command selects the focused editor model', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main><button>Outside</button></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('one\ntwo');
+	using services = new ServiceContainer();
+	using contextKeys = new ContextKeyService();
+	const browserServices = createEditorBrowserServices();
+	services.registerInstance(IContextKeyService, contextKeys);
+	services.registerInstance(ILogService, new NullLoggerService());
+	services.registerInstance(ICodeEditorService, browserServices.codeEditorService);
+	using editor = new CodeEditorWidget({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, input: { resource: model.uri }, languageId: model.getLanguageId(), instantiationService: services, codeEditorService: browserServices.codeEditorService });
+	editor.focus();
+	await SelectAllCommand.runCommand(services, undefined);
+	assert.deepEqual(editor.getSelection(), new Selection(1, 1, 2, 4));
+	editor.setSelection(new Selection(1, 1, 1, 1));
+	dom.window.document.querySelector('button')!.focus();
+	await SelectAllCommand.runCommand(services, undefined);
+	assert.deepEqual(editor.getSelection(), new Selection(1, 1, 1, 1));
+	dom.window.close();
+});
 
 test("core commands select all", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");

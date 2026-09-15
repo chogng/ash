@@ -2,7 +2,7 @@ import { expect, test } from "../../../automation/test.js";
 
 test("Code opens Sessions in a dedicated Electron window and returns to Workbench", async ({ application, target, workbench }) => {
 	test.skip(
-		target.kind !== "electron" || target.product !== "code",
+		target.kind !== "electron" || target.workbenchMode !== "code",
 		"This scenario verifies the Code Electron Sessions window.",
 	);
 	if (target.kind !== "electron") {

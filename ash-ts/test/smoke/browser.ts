@@ -22,6 +22,9 @@ if (mode === 'full') {
 	}
 }
 
+const build = await run(process.execPath, ['node_modules/vite/bin/vite.js', 'build', '--config', '../build/vite/vite.config.ts'], { ...process.env, ASH_WEB_APP_SERVER: mode === 'full' ? '1' : '0' });
+if (build !== 0) process.exit(build);
+
 const port = mode === 'full' ? 5174 : 5173;
 const serverUrl = `http://127.0.0.1:${port}/`;
 const workspaceDirectory = mode === 'full'
@@ -71,10 +74,9 @@ const serverEnvironment = mode === 'full' ? {
 	...(productServicesPath ? { ASH_PRODUCT_SERVICES_PATH: productServicesPath } : {}),
 } : testEnvironment;
 const server = spawn(process.execPath, [
-	'node_modules/vite/bin/vite.js',
-	'--config',
-	'../build/vite/vite.config.ts',
-	'--force',
+	'../build/desktop/serveWeb.ts',
+	'../.build/desktop/renderer/ash',
+	String(port),
 ], {
 	cwd: desktopDirectory,
 	env: serverEnvironment,

@@ -2,9 +2,14 @@ import { readFile } from "node:fs/promises";
 import type { Page } from "@playwright/test";
 import { expect, test } from "../../../automation/test.js";
 
+test.beforeEach(async ({ workbench }) => {
+	const showSidebar = workbench.page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
+	if (await showSidebar.isVisible()) { await showSidebar.click(); }
+});
+
 test("App Server workspace files open in Stanza and save through the editor region", async ({ target, testWorkspace, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || target.product !== "code",
+		target.appServerMode !== "required" || target.workbenchMode !== "code",
 		"This scenario requires the Code App Server product",
 	);
 
@@ -19,12 +24,14 @@ test("App Server workspace files open in Stanza and save through the editor regi
 	const group = workbench.editors.groupAt(0);
 	await expect(group.tabs).toHaveCount(1);
 	await expect(group.tabs.first()).toContainText("main.ts");
-	await expect(group.tabs.first()).toHaveClass(/preview/);
-	await expect(explorer.locator(".ash-tree")).toBeFocused();
+	const tab = group.title.locator('.ash-tab').first();
+	await expect(tab).toHaveClass(/preview/);
+	await expect(explorer.locator('.ash-explorer-error')).toHaveCount(0);
+	await expect(explorer.locator('.ash-tree')).toBeFocused();
 	await expect(group.content.locator(".stanza-editor")).toBeVisible();
 
 	await fileRow.dblclick();
-	await expect(group.tabs.first()).not.toHaveClass(/preview/);
+	await expect(tab).not.toHaveClass(/preview/);
 
 	const input = group.content.locator(".stanza-editor-input");
 	await expect(input).toBeAttached();
@@ -41,7 +48,7 @@ test("App Server workspace files open in Stanza and save through the editor regi
 
 test("Code consumes App Server Rust syntax facts in Stanza", async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || target.product !== "code",
+		target.appServerMode !== "required" || target.workbenchMode !== "code",
 		"This scenario requires the Code App Server product",
 	);
 
@@ -63,7 +70,7 @@ test("Code consumes App Server Rust syntax facts in Stanza", async ({ target, wo
 
 test("Code finds local workspace symbols when the language server has no workspace-symbol provider", async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || target.product !== "code" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
+		target.appServerMode !== "required" || target.workbenchMode !== "code" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
 		"This scenario requires Code with the smoke-test language server",
 	);
 	test.setTimeout(120_000);
@@ -87,7 +94,7 @@ test("Code finds local workspace symbols when the language server has no workspa
 
 test("Code searches and opens a workspace symbol from unsaved editor content", async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || target.product !== "code",
+		target.appServerMode !== "required" || target.workbenchMode !== "code",
 		"This scenario requires the Code App Server product",
 	);
 	test.setTimeout(120_000);
@@ -121,7 +128,7 @@ test("Code searches and opens a workspace symbol from unsaved editor content", a
 
 test("Code expands and shrinks Smart Select through semantic editor state", async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || target.product !== "code",
+		target.appServerMode !== "required" || target.workbenchMode !== "code",
 		"This scenario requires the Code App Server product",
 	);
 	test.setTimeout(120_000);
@@ -150,7 +157,7 @@ test("Code expands and shrinks Smart Select through semantic editor state", asyn
 
 test("Code shows App Server LSP completions in Stanza", async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || target.product !== "code" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
+		target.appServerMode !== "required" || target.workbenchMode !== "code" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
 		"This scenario requires Code with the smoke-test language server",
 	);
 	test.setTimeout(120_000);
@@ -176,7 +183,7 @@ test("Code shows App Server LSP completions in Stanza", async ({ target, workben
 
 test("Code streams current App Server LSP diagnostics into Stanza", async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || target.product !== "code" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
+		target.appServerMode !== "required" || target.workbenchMode !== "code" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
 		"This scenario requires Code with the smoke-test language server",
 	);
 	test.setTimeout(120_000);
@@ -200,7 +207,7 @@ test("Code streams current App Server LSP diagnostics into Stanza", async ({ tar
 
 test("Code applies and undoes App Server LSP document formatting in Stanza", async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || target.product !== "code" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
+		target.appServerMode !== "required" || target.workbenchMode !== "code" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
 		"This scenario requires Code with the smoke-test language server",
 	);
 	test.setTimeout(120_000);
@@ -223,7 +230,7 @@ test("Code applies and undoes App Server LSP document formatting in Stanza", asy
 
 test("Code shows App Server LSP parameter hints in Stanza", async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || target.product !== "code" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
+		target.appServerMode !== "required" || target.workbenchMode !== "code" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
 		"This scenario requires Code with the smoke-test language server",
 	);
 	test.setTimeout(120_000);
@@ -247,7 +254,7 @@ test("Code shows App Server LSP parameter hints in Stanza", async ({ target, wor
 
 test("Code shows App Server LSP inlay hints in Stanza", async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || target.product !== "code" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
+		target.appServerMode !== "required" || target.workbenchMode !== "code" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
 		"This scenario requires Code with the smoke-test language server",
 	);
 	test.setTimeout(120_000);
@@ -264,7 +271,7 @@ test("Code shows App Server LSP inlay hints in Stanza", async ({ target, workben
 
 test("Code keeps App Server LSP linked edits in one undo step", async ({ target, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || target.product !== "code" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
+		target.appServerMode !== "required" || target.workbenchMode !== "code" || !process.env.ASH_PLAYWRIGHT_LANGUAGE_SERVER,
 		"This scenario requires Code with the smoke-test language server",
 	);
 	test.setTimeout(120_000);
@@ -294,7 +301,7 @@ test("Code keeps App Server LSP linked edits in one undo step", async ({ target,
 
 test("Code renders workspace PDFs and persists review annotations", async ({ target, testWorkspace, workbench }) => {
 	test.skip(
-		target.appServerMode !== "required" || target.product !== "code",
+		target.appServerMode !== "required" || target.workbenchMode !== "code",
 		"This scenario requires the Code App Server product",
 	);
 
@@ -340,7 +347,7 @@ test.describe("large files", () => {
 
 	test("Code keeps a 300,001-line file editable and saveable without background tokenization", async ({ target, testWorkspace, workbench }) => {
 		test.skip(
-			target.appServerMode !== "required" || target.product !== "code",
+			target.appServerMode !== "required" || target.workbenchMode !== "code",
 			"This scenario requires the Code App Server product",
 		);
 		test.setTimeout(120_000);
@@ -383,7 +390,7 @@ async function hasIndexedSymbol(page: Page, name: string): Promise<boolean> {
 
 test("Code restores unsaved editor content after a browser reload", async ({ target, testWorkspace, workbench }) => {
 	test.skip(
-		target.kind !== "browser" || target.appServerMode !== "required" || target.product !== "code",
+		target.kind !== "browser" || target.appServerMode !== "required" || target.workbenchMode !== "code",
 		"This scenario requires the browser-hosted Code App Server product",
 	);
 
