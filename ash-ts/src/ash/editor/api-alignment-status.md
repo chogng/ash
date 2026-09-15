@@ -4,6 +4,8 @@
 
 ## 当前结论
 
+- 2026-09-15 服务装配批次：`CodeEditorWidget` 通过构造注入取得主题、语言配置和语言功能服务，删除 options 中的对应服务字段、自建共享服务分支和空的 Widget 子作用域。Workbench 文件、聊天、提交信息、Embedded 与 Standalone 创建链改用宿主容器；模型挂载作用域继续拥有贡献和局部资源。`CodeEditorPane` 不再转传语言服务，Standalone 同时注入模型与编辑器服务。新增测试验证缺失服务在 Widget 创建前失败、构造器贡献与安装钩子使用同一宿主服务，以及换模型和销毁不释放共享服务。全量 Editor 单测 243/243 个文件、浏览器 81 项、聊天输入 5 项与桌面构建通过；贡献上下文、内部光标接口和其余 Widget API 仍待处理，80/39 台账计数不变。
+
 - 公开接口修复批次保留创建时的 `wordWrap`，把滚动参数和动画查询接到现有 ViewLayout；View 区分自身同步 DOM 位置产生的通知与外部滚动，修复动画被中途取消的问题。`onDidChangeModelContent` 直接使用 ViewModel 的完整事件，旧无参数事件退出；空模型的视图状态与 View Zone 操作遵循空状态契约。Standalone 接口不再继承 Widget 实现类，Workbench 的状态与保存处理改用公开选区接口。73 项相关单测、62 项浏览器测试、结构检查、类型检查及 Renderer 构建通过；强化后的换行几何和外部滚动中断场景单独复验通过。功能上下文及服务装配的整体收拢尚未完成，声明完成计数不变。
 
 - `setSelection` 参数批次补齐 `Range / IRange` 输入，并保留 `Selection / ISelection` 方向、显式事件来源和默认 `api` 来源。Find 的命中导航直接传入范围；测试改用真实 `CodeEditorWidget`，不再用假 Editor 绕过参数入口。Widget 与 Find 共 48 项单测、61 项 Editor 浏览器测试、Stanza 类型检查、结构检查及 Renderer 构建通过。新增回归覆盖范围输入、次光标清理、坐标约束、方向、无效参数、模型分离、键盘替换和撤销；本批未改变整体声明完成计数。

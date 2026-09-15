@@ -25,6 +25,7 @@ for (const [name, value] of Object.entries({
 })) Object.defineProperty(globalThis, name, { configurable: true, value });
 
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
+const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { ContextMenuController } = await import('../../browser/contextmenu.js');
 const { IContextMenuService } = await import('../../../../../platform/contextview/browser/contextView.js');
 
@@ -44,7 +45,7 @@ test('ContextMenuController opens the host menu at the active cursor from Shift+
 	};
 	using services = new ServiceContainer();
 	services.registerInstance(IContextMenuService, contextMenuService);
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container,
 		model,
 		input: { resource: model.uri },

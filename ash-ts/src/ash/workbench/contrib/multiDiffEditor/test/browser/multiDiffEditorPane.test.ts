@@ -1,3 +1,5 @@
+import type { MultiDiffEditorPaneOptions } from '../../browser/multiDiffEditorPane.js';
+import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -27,6 +29,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
+const { createCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
 const { BrowserTextModelService } = await import('../../../../services/textmodelResolver/browser/browserTextModelService.js');
 const { BrowserTextResourceStore } = await import('../../../codeEditor/browser/browserTextResourceStore.js');
 const { createMultiDiffEditorInput } = await import('../../browser/multiDiffEditorInput.js');
@@ -97,7 +100,8 @@ test('Stanza multi-diff pane resolves every comparison and releases the complete
 		dependencies: [], externalDependencyPaths: [], warnings: [], conflictPaths: [], revision: 1,
 	} satisfies TurnChangeSetSummary;
 	Object.defineProperty(dom.window, 'confirm', { configurable: true, value: () => true });
-	const pane = new MultiDiffEditorPane({
+	using editorServices = new DisposableStore();
+	const pane = createCodeEditorServices(editorServices).createInstance(MultiDiffEditorPane, {
 		modelService: models,
 		createComputationService: () => new PaneTestDiffComputationService(),
 		lineHeight: 24,
@@ -122,7 +126,7 @@ test('Stanza multi-diff pane resolves every comparison and releases the complete
 			contextMenuProvider: { showContextMenu(options) { contextMenus.push(options.getActions().map(action => action.label)); } },
 			contextKeyService: contexts,
 		},
-	});
+	} satisfies MultiDiffEditorPaneOptions);
 	pane.create(parent);
 	pane.layout({ width: 640, height: 480 });
 	await pane.setInput(createMultiDiffEditorInput(URI.parse('ash-multi-diff:/test'), [

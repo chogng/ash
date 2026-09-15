@@ -26,6 +26,7 @@ for (const [name, value] of Object.entries({
 })) Object.defineProperty(globalThis, name, { configurable: true, value });
 
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
+const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { createEditorBrowserServices } = await import('../../../../browser/services/contribution.js');
 const { CopyAction, CutAction, PasteAction } = await import('../../browser/clipboard.js');
 assert.ok(CopyAction);
@@ -47,7 +48,7 @@ test('clipboard actions use the focused code editor and platform clipboard servi
 	services.registerInstance(ILogService, new NullLoggerService());
 	services.registerInstance(IClipboardService, clipboard);
 	services.registerInstance(ICodeEditorService, browserServices.codeEditorService);
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container,
 		model,
 		input: { resource: model.uri },
@@ -85,7 +86,7 @@ test('paste command drops a delayed clipboard read after focus, selection, or mo
 	services.registerInstance(ILogService, new NullLoggerService());
 	services.registerInstance(IClipboardService, clipboard);
 	services.registerInstance(ICodeEditorService, browserServices.codeEditorService);
-	using first = new CodeEditorWidget({
+	using first = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>('main')!,
 		model: firstModel,
 		input: { resource: firstModel.uri },
@@ -94,7 +95,7 @@ test('paste command drops a delayed clipboard read after focus, selection, or mo
 		instantiationService: services,
 		codeEditorService: browserServices.codeEditorService,
 	});
-	using second = new CodeEditorWidget({
+	using second = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>('aside')!,
 		model: secondModel,
 		input: { resource: secondModel.uri },
@@ -157,7 +158,7 @@ test('cut command keeps text when clipboard writing completes after selection or
 	services.registerInstance(ILogService, new NullLoggerService());
 	services.registerInstance(IClipboardService, clipboard);
 	services.registerInstance(ICodeEditorService, browserServices.codeEditorService);
-	using first = new CodeEditorWidget({
+	using first = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>('main')!,
 		model: firstModel,
 		input: { resource: firstModel.uri },
@@ -166,7 +167,7 @@ test('cut command keeps text when clipboard writing completes after selection or
 		instantiationService: services,
 		codeEditorService: browserServices.codeEditorService,
 	});
-	using second = new CodeEditorWidget({
+	using second = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>('aside')!,
 		model: secondModel,
 		input: { resource: secondModel.uri },

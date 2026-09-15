@@ -1,4 +1,4 @@
-import type { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import "./stanzaChatInputEditor.css";
 import { addDisposableListener, stopEvent, h } from "../../../../../base/browser/dom.js";
 import { Emitter, type Event } from "../../../../../base/common/event.js";
@@ -37,15 +37,14 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 	private height = CHAT_INPUT_MIN_HEIGHT;
 	private closed = false;
 
-	constructor(options: ChatInputEditorOptions & { readonly instantiationService?: IInstantiationService }) {
+	constructor(options: ChatInputEditorOptions, @IInstantiationService instantiationService: IInstantiationService) {
 		super();
 		this.element = h(options.container.ownerDocument, "div");
 		this.element.className = "ash-chat-input-editor";
 		this.element.style.height = `${this.height}px`;
 		options.container.append(this.element);
-		this.editor = this._register(new CodeEditorWidget({
+		this.editor = this._register(instantiationService.createInstance(CodeEditorWidget, {
 			container: this.element,
-			instantiationService: options.instantiationService,
 			model: this.model,
 			input: { resource: this.model.uri },
 			languageId: CHAT_INPUT_LANGUAGE_ID,

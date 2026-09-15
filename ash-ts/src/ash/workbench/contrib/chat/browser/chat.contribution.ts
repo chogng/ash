@@ -21,7 +21,7 @@ import { IContextKeyService } from "../../../../platform/contextkey/common/conte
 
 registerWorkbenchContribution('workbench.contrib.chatInputEditor', WorkbenchPhase.BlockStartup, accessor => {
 	const instantiationService = accessor.get(IInstantiationService);
-	return ChatInputEditors.register({ id: 'stanza', create: options => new ChatInputEditor({ ...options, instantiationService }) });
+	return ChatInputEditors.register({ id: 'stanza', create: options => instantiationService.createInstance(ChatInputEditor, options) });
 });
 
 /** Registers the fixed Chat view. */

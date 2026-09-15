@@ -58,6 +58,8 @@ Stanza 是整个编辑器的名称，但 Code 与 Academic 是两套独立的 fe
 
 `TextModel` 是文本、分行、版本、transaction、undo/redo、tracked range 和 snapshot 的唯一同步权威。`CodeEditorWidget` 使用它，但不拥有共享 model；Widget 保持根 DOM 和编辑器身份，View 通过 `onBeforeAttached` / `onBeforeDetached` 报告每次模型挂载。`browser/editorBrowser.ts` 只拥有与 VS Code 同路径的浏览器编辑器契约；`browser/widget/codeEditor/codeEditorWidget.ts` 负责编辑器装配、操作、模型切换和 view state，`codeEditorContributions.ts` 统一拥有每次挂接的 contribution 实例化阶段与生命周期。`BrowserTextModelService` 管理普通文件的 model reference、dirty/conflict 和保存语义；Workbench 的 working copy 持有 reference，并拥有保存前处理、保存、回退、快捷键、结果呈现和 Pane 生命周期。Standalone 则由 `standalone/browser` 管理 URI/language identity；外部传入 model 时 editor 不拥有 model，使用 `value` 隐式创建时 editor 拥有 model，并在切走它时释放。
 
+`CodeEditorWidget` 的主题、语言配置和语言功能服务通过构造参数注入，Widget 不创建这些共享服务。Workbench 与 Standalone 拥有服务注册；每次模型挂载只创建一个子作用域，持有本次贡献和局部服务，拆除时不释放宿主共享服务。测试通过 `test/browser/testCodeEditor.ts` 显式装配依赖。
+
 ### 富文档 engine
 
 Academic 使用与 Code 相同的 `TextModel`、`TextBuffer`、`LineSequence` 和版本号，并用 schema 定义允许的 mark、atom、facet、region、relation、selection、transaction history、plugin state 与 serialization。`TextModel.lineDocument` 给出当前不可变语义快照；字符和逻辑行始终由 TextModel 唯一保存。Workbench-owned `DocumentEditorTextModelService` 负责 reference、working copy 和保存边界。

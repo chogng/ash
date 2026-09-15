@@ -9,8 +9,8 @@ import { createTextModel, StandaloneEditor, type IStandaloneCodeEditor } from '.
 import { StandaloneServices, type StandaloneServiceOverrides } from "./standaloneServices.js";
 
 type StandaloneCodeEditorOptions = Omit<CodeEditorWidgetOptions,
-	"container" | "input" | "languageId" | "model" | "languageFeaturesService" |
-	"languageConfigurationService" | "editorWorkerFactory" | "completionWorkerFactory" | "instantiationService" | "codeEditorService" |
+	"container" | "input" | "languageId" | "model" |
+	"editorWorkerFactory" | "completionWorkerFactory" | "codeEditorService" |
 	"registerBeforeSave" | "formatOnSave"
 >;
 
@@ -108,15 +108,10 @@ export function create(
 			input: { resource: model.uri, label, readOnly },
 			languageId: model.getLanguageId(),
 			model,
-			languageFeaturesService: services.languageFeaturesService,
-			languageConfigurationService: services.languageConfigurationService,
 			editorWorkerFactory: services.editorWorkerFactory,
-			instantiationService: services.instantiationService,
+			completionWorkerFactory: services.completionWorkerFactory,
 		};
-		const editor = services.completionWorkerFactory
-			? new StandaloneEditor({ ...editorOptions, completionWorkerFactory: services.completionWorkerFactory }, model, ownsModel, services.themeService, services.codeEditorService, services.modelService)
-			: new StandaloneEditor(editorOptions, model, ownsModel, services.themeService, services.codeEditorService, services.modelService);
-		return editor;
+		return services.instantiationService.createInstance(StandaloneEditor, editorOptions, model, ownsModel);
 	} catch (error) {
 		if (ownsModel) model.dispose();
 		throw error;

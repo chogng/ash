@@ -8,6 +8,7 @@ import { operatingSystem, OperatingSystem } from '../../../../../base/common/pla
 
 installDom(new JSDOM('<!doctype html><body></body>'));
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
+const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { JoinLinesAction } = await import('../../browser/linesOperations.js');
 
 test('the host owns the join shortcut and the registered action joins lines', () => {
@@ -15,7 +16,7 @@ test('the host owns the join shortcut and the registered action joins lines', ()
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using model = new TextModel('first\n  second');
-	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
+	using editor = createTestCodeEditor({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
 	editor.setSelection(Selection.fromPositions(new Position(1, 3)));
 	const event = new dom.window.KeyboardEvent('keydown', {
 		bubbles: true,

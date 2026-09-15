@@ -21,9 +21,10 @@ registerEditorPane({
 		if (!options.textFileService) throw new Error("Stanza Code requires the Workbench text file service");
 		const resourceStore = getBrowserTextResourceStore(options.textFileService);
 		const configuration = options.configurationService;
-		if (!options.instantiationService) throw new Error('Stanza Code requires the Workbench instantiation service');
-		return options.instantiationService.createInstance(CodeEditorPane, resourceStore, {
-			createPart: createBrowserEditorPart,
+		const instantiationService = options.instantiationService;
+		if (!instantiationService) throw new Error('Stanza Code requires the Workbench instantiation service');
+		return instantiationService.createInstance(CodeEditorPane, resourceStore, {
+			createPart: partOptions => createBrowserEditorPart(instantiationService, partOptions),
 			textMateService: options.textMateService,
 			languageDiagnosticsService: options.languageDiagnosticsService,
 			accessibilityService: options.accessibilityService,

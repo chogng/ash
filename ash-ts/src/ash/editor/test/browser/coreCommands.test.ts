@@ -33,6 +33,7 @@ const { installCoreTextEditorCommands } = await import("../../browser/coreComman
 const { KeyboardNavigationController } = await import('../../browser/view/viewController.js');
 await import('../../contrib/lineSelection/browser/lineSelection.js');
 const { CodeEditorWidget } = await import('../../browser/widget/codeEditor/codeEditorWidget.js');
+const { createTestCodeEditor } = await import('./testCodeEditor.js');
 const { SelectAllCommand } = await import('../../browser/editorExtensions.js');
 const { createEditorBrowserServices } = await import('../../browser/services/contribution.js');
 
@@ -48,7 +49,7 @@ test('workbench select-all command selects the focused editor model', async () =
 	services.registerInstance(IContextKeyService, contextKeys);
 	services.registerInstance(ILogService, new NullLoggerService());
 	services.registerInstance(ICodeEditorService, browserServices.codeEditorService);
-	using editor = new CodeEditorWidget({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, input: { resource: model.uri }, languageId: model.getLanguageId(), instantiationService: services, codeEditorService: browserServices.codeEditorService });
+	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, input: { resource: model.uri }, languageId: model.getLanguageId(), instantiationService: services, codeEditorService: browserServices.codeEditorService });
 	editor.focus();
 	await SelectAllCommand.runCommand(services, undefined);
 	assert.deepEqual(editor.getSelection(), new Selection(1, 1, 2, 4));
@@ -87,7 +88,7 @@ test("line selection remains an independent editor extension", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("one\ntwo\nthree");
-	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
+	using editor = createTestCodeEditor({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
 	editor.view.layout({ width: 400, height: 100 });
 	editor.setSelection(Selection.fromPositions(new Position((0) + 1, (1) + 1)));
 

@@ -18,7 +18,7 @@ import { VerticalRevealType } from '../../../common/viewEvents.js';
 import type { ICodeEditor, IContentWidget, IEditorMouseEvent, IGlyphMarginWidget, IOverlayWidget, IOverviewRuler, IPartialEditorMouseEvent, PastePayload, IViewZoneChangeAccessor } from '../../editorBrowser.js';
 import { View } from "../../view.js";
 import { KeyboardNavigationController, ViewController } from "../../view/viewController.js";
-import { ServiceContainer, type IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
+import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import { CodeEditorContributions } from "./codeEditorContributions.js";
 import { observableCodeEditor } from '../../observableCodeEditor.js';
 import { EditorConfiguration, type IEditorConstructionOptions } from '../../config/editorConfiguration.js';
@@ -26,10 +26,8 @@ import { migrateOptions } from '../../config/migrateOptions.js';
 import { EditorExtensionsRegistry, type EditorCommandEvent, type EditorContributionRegistration, type TextEditorContributionContext } from '../../editorExtensions.js';
 import { VersionedEditorWorkerClient, type VersionedEditorWorkerFactory } from '../../services/editorWorkerService.js';
 import { EditorWorkerRequestExecutor } from '../../../common/services/editorWorkerRequestExecutor.js';
-import { createBuiltinLanguageConfigurationService } from '../../../common/languages/languageBuiltinConfigurations.js';
 import { ILanguageConfigurationService } from '../../../common/languages/languageConfigurationRegistry.js';
-import type { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
-import { LanguageFeaturesService } from '../../../common/services/languageFeaturesService.js';
+import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { ResolvedSemanticTokensService } from '../../../common/services/resolvedSemanticTokensService.js';
 import { LanguageEditingAdapter } from '../../view/viewController.js';
 import { type EditorIndentationOptions } from '../../../common/core/misc/indentation.js';
@@ -51,8 +49,7 @@ import { DOMLineBreaksComputerFactory } from '../../view/domLineBreaksComputer.j
 import { MonospaceLineBreaksComputerFactory } from '../../../common/viewModel/monospaceLineBreaksComputer.js';
 import { getViewModelCursorController, ViewModel } from '../../../common/viewModel/viewModelImpl.js';
 import { OutgoingViewModelEventKind } from '../../../common/viewModelEventDispatcher.js';
-import { IThemeService, ThemeService } from '../../../../platform/theme/common/themeService.js';
-import { darkColorTheme } from '../../../../platform/theme/common/colorTheme.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { EditSources, TextModelEditSource } from '../../../common/textModelEditSource.js';
 import { MenuId } from '../../../../platform/actions/common/actions.js';
@@ -79,9 +76,6 @@ export interface ICodeEditorWidgetOptions extends IEditorConstructionOptions {
 	readonly languageId: string;
 	readonly model: TextModel;
 	readonly ownerId?: string;
-	readonly languageFeaturesService?: ILanguageFeaturesService;
-	readonly languageConfigurationService?: ILanguageConfigurationService;
-	readonly instantiationService?: IInstantiationService;
 	readonly codeEditorService?: ICodeEditorService;
 	readonly accessibilityService?: IAccessibilityService;
 	readonly editorWorkerFactory?: VersionedEditorWorkerFactory;
@@ -217,10 +211,6 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	private observableInitialized = false;
 	private readonly rootDomNode!: HTMLDivElement;
 	private readonly constructionOptions!: Omit<CodeEditorWidgetOptions, 'model'>;
-	private readonly rootServices!: IInstantiationService;
-	private readonly themeService!: IThemeService;
-	private readonly languageConfigurationService!: ILanguageConfigurationService;
-	private readonly languageFeaturesService!: ILanguageFeaturesService;
 	private readonly onLanguageError!: (error: unknown) => void;
 	private readonly configuration: EditorConfiguration;
 	private readonly decorationOwnerId = ++decorationOwnerPool;
@@ -269,7 +259,13 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		this.activeState.viewModel = value;
 	}
 
-	constructor(options: CodeEditorWidgetOptions) {
+	constructor(
+		options: CodeEditorWidgetOptions,
+		@IInstantiationService private readonly rootServices: IInstantiationService,
+		@IThemeService private readonly themeService: IThemeService,
+		@ILanguageConfigurationService private readonly languageConfigurationService: ILanguageConfigurationService,
+		@ILanguageFeaturesService private readonly languageFeaturesService: ILanguageFeaturesService,
+	) {
 		super();
 		options.codeEditorService?.willCreateCodeEditor();
 		try {
@@ -277,24 +273,8 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			migrateOptions(options);
 			const { model: initialModel, ...constructionOptions } = options;
 			this.constructionOptions = constructionOptions;
-			const services = this._register(options.instantiationService?.createChild() ?? new ServiceContainer());
-			this.rootServices = services;
-			this.instantiationService = services;
-			const inheritedThemeService = services.getOptional(IThemeService);
-			this.themeService = inheritedThemeService ?? this._register(new ThemeService(darkColorTheme));
-			if (!inheritedThemeService) services.registerInstance(IThemeService, this.themeService);
+			this.instantiationService = this.rootServices;
 			this.onLanguageError = options.onLanguageError ?? options.onContributionError ?? reportLanguageError;
-			if (options.languageFeaturesService && !options.languageConfigurationService) {
-				throw new TypeError('Editor language features require their language configuration service');
-			}
-			const inheritedLanguageConfigurationService = services.getOptional(ILanguageConfigurationService);
-			this.languageConfigurationService = options.languageConfigurationService
-				?? inheritedLanguageConfigurationService
-				?? this._register(createBuiltinLanguageConfigurationService());
-			if (this.languageConfigurationService !== inheritedLanguageConfigurationService) {
-				services.registerInstance(ILanguageConfigurationService, this.languageConfigurationService);
-			}
-			this.languageFeaturesService = options.languageFeaturesService ?? this._register(new LanguageFeaturesService(this.languageConfigurationService));
 			this.configuration = this._register(new EditorConfiguration(
 				options.isSimpleWidget ?? false,
 				options.contextMenuId ?? (options.isSimpleWidget ? MenuId.SimpleEditorContext : MenuId.EditorContext),
@@ -1157,9 +1137,6 @@ class EditorDecorationsCollection implements IEditorDecorationsCollection {
 function validateOptions(options: CodeEditorWidgetOptions): void {
 	if (!options || typeof options !== "object" || !isHTMLElement(options.container) || !options.model || !options.input || !options.languageId) {
 		throw new TypeError("Code editor widget requires a container, input, language, and text model");
-	}
-	if (options.instantiationService !== undefined && typeof options.instantiationService.createInstance !== "function") {
-		throw new TypeError("Code editor instantiation service must create instances");
 	}
 	if (options.onContributionError !== undefined && typeof options.onContributionError !== "function") {
 		throw new TypeError("Code editor contribution error handler must be a function");

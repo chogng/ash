@@ -1,3 +1,5 @@
+import { IThemeService, ThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
+import { darkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { URI } from "../../../src/ash/base/common/uri.js";
 import { DisposableStore, toDisposable } from "../../../src/ash/base/common/lifecycle.js";
 import { Event } from "../../../src/ash/base/common/event.js";
@@ -125,12 +127,13 @@ let glyphDecorations: IEditorDecorationsCollection | undefined;
 let modelDecorations: IEditorDecorationsCollection | undefined;
 const services = disposables.add(new ServiceContainer());
 services.registerInstance(ITextModelResourceService, models);
+services.registerSingleton(IThemeService, () => new ThemeService(darkColorTheme));
 services.registerInstance(ILanguageFeaturesService, languageFeaturesService);
 services.registerInstance(ILanguageConfigurationService, languageConfigurationService);
 services.registerInstance(ILogService, new NullLoggerService());
 const pane = disposables.add(services.createInstance(CodeEditorPane, resourceStore, {
 	createPart: options => {
-		editorPart = createBrowserEditorPart(options);
+		editorPart = createBrowserEditorPart(services, options);
 		return editorPart;
 	},
 	accessibilityService,

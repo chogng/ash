@@ -21,6 +21,7 @@ for (const [name, value] of Object.entries({
 })) Object.defineProperty(globalThis, name, { configurable: true, value });
 
 const { CodeEditorWidget } = await import('../../browser/widget/codeEditor/codeEditorWidget.js');
+const { createTestCodeEditor } = await import('./testCodeEditor.js');
 
 suiteTeardown(() => browserEnvironment.window.close());
 
@@ -31,7 +32,7 @@ test("minimal text editor assembly creates only the engine surface", () => {
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("const value = (1);");
 	const resource = URI.file("C:\\project\\minimal.ts");
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container,
 		input: { resource, label: "minimal.ts" },
 		languageId: "typescript",

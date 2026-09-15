@@ -23,6 +23,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
+const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { EditorLineWrapping } = await import('../../../../common/config/editorOptions.js');
 const { ZoneWidget } = await import('../../browser/zoneWidget.js');
 
@@ -30,7 +31,7 @@ test('ZoneWidget reserves editor space, tracks its anchor, updates layout, and r
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha\nbeta\ngamma');
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
 		model,
 		input: { resource: model.uri },
@@ -124,7 +125,7 @@ test('ZoneWidget preserves selection on request and exposes an enabled resize sa
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha\nbeta');
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
 		model,
 		input: { resource: model.uri },
@@ -174,7 +175,7 @@ test('ZoneWidget places an anchor after its wrapped visual line', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('abcdefghijklmnopqrst');
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
 		model,
 		input: { resource: model.uri },
