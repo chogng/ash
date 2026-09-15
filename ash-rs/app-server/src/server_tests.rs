@@ -1076,7 +1076,7 @@ fn terminal_rpc_drives_a_dir_rooted_pty_to_exit() {
     #[cfg(windows)]
     let input = "echo ash-terminal-ready\r\nexit\r\n";
     #[cfg(not(windows))]
-    let input = "printf 'ash-terminal-ready\\n'\nexit\n";
+    let input = "printf 'ash-terminal-ready\\n\\377'\nexit\n";
     let written = call(
         &server,
         &mut connection,
@@ -1140,6 +1140,8 @@ fn terminal_rpc_drives_a_dir_rooted_pty_to_exit() {
 
     assert_eq!(exit_code, 0);
     assert!(String::from_utf8_lossy(&output).contains("ash-terminal-ready"));
+    #[cfg(not(windows))]
+    assert!(output.contains(&0xff), "RPC must preserve non-UTF-8 PTY bytes");
     #[cfg(windows)]
     {
         assert!(command_statuses.iter().any(|status| status == "running"));

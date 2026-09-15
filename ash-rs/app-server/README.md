@@ -6,6 +6,9 @@
 2. 在文件、搜索、Git、Terminal、语言服务和目录贡献入口检查对应 Permission，并只把有效 `Authorization` 交给执行服务。
 3. 组合 profile 级配置与产品服务；Project 只保存弱关联，目录配置、Instructions、Hooks、Skills、MCP 和 Plugins 只有在获得对应 Permission 与 Grant 后才能生效。
 
+交互式 PTY、输出缓存和重连租约由 [`ash-terminal-service`](../terminal-service/README.md) 管理；
+`src/server/terminal_operations.rs` 负责协议转换和调用，环境装配负责传入有效授权。
+
 环境和目录授权语义见 [`docs/environment-access.md`](../../docs/environment-access.md)，wire contract 见
 [`docs/ash-app-server-api.md`](../../docs/ash-app-server-api.md)。
 

@@ -15,6 +15,7 @@ name = "ash_app_server"
 path = "src/lib.rs"
 
 [dependencies]
+terminal = { workspace = true }
 external-agent-migration = { workspace = true }
 serde_yaml = { workspace = true }
 pulldown-cmark = { workspace = true }
@@ -120,7 +121,6 @@ git-turn-changes = { workspace = true }
 ash-tools = { workspace = true }
 ash-web-search-extension = { workspace = true }
 ash-typst = { workspace = true }
-ash-utils-pty = { workspace = true }
 worktree = { workspace = true }
 
 [dev-dependencies]

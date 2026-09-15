@@ -1,6 +1,6 @@
+use crate::TerminalCommandStatus;
+use crate::TerminalCommandStatusEvent;
 use std::collections::VecDeque;
-use ash_app_server_protocol::protocol::terminal::TerminalCommandStatus;
-use ash_app_server_protocol::protocol::terminal::TerminalCommandStatusEvent;
 
 const OSC_633_PREFIX: &[u8] = b"\x1b]633;";
 const MAX_COMMAND_EVENTS: usize = 1_024;
@@ -212,5 +212,5 @@ fn command_finished_payload(payload: &[u8]) -> Option<Option<i32>> {
 }
 
 #[cfg(test)]
-#[path = "terminal_command_status_tests.rs"]
+#[path = "command_status_tests.rs"]
 mod tests;

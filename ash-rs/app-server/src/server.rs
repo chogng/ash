@@ -1417,10 +1417,8 @@ impl AppServer {
     pub(crate) fn with_terminal_root(
         mut self,
         authorization: ash_file_access::Authorization,
-    ) -> Result<Self, crate::terminal_service::TerminalError> {
-        let terminals = Arc::new(crate::terminal_service::TerminalService::new(
-            authorization,
-        )?);
+    ) -> Result<Self, terminal::TerminalError> {
+        let terminals = Arc::new(terminal::TerminalService::new(authorization)?);
         self.env_runtime_mut().terminals = Some(terminals);
         Ok(self)
     }
@@ -1435,7 +1433,7 @@ impl AppServer {
         let service = Arc::new(crate::debug_service::DebugAdapterService::new(
             executable_configuration,
             process_execution,
-            crate::terminal_environment::safe_process_environment(),
+            terminal::safe_process_environment(),
         )?);
         self.env_runtime_mut().debug_adapters = Some(service);
         Ok(self)

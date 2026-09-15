@@ -1,6 +1,7 @@
 [workspace]
 exclude = ["ash-rs/vendor/mxc"]
 members = [
+    "ash-rs/terminal-service",
     "ash-rs/ext/sleep",
     "ash-rs/ext/git-attribution",
     "ash-rs/ext/image-generation",
@@ -191,6 +192,7 @@ publish = false
 version = "0.1.0"
 
 [workspace.dependencies]
+terminal = { package = "ash-terminal-service", path = "ash-rs/terminal-service" }
 cap-std = "4.0.3"
 winapi-util = "0.1.11"
 core-foundation = { version = "0.10" }

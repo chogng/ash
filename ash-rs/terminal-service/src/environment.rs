@@ -40,7 +40,7 @@ impl TerminalEnvironment {
     }
 }
 
-pub(crate) fn safe_process_environment() -> HashMap<String, String> {
+pub fn safe_process_environment() -> HashMap<String, String> {
     TerminalEnvironment::from_process().variables
 }
 
@@ -115,5 +115,5 @@ fn is_valid_environment_value(value: &str) -> bool {
 }
 
 #[cfg(test)]
-#[path = "terminal_environment_tests.rs"]
+#[path = "environment_tests.rs"]
 mod tests;

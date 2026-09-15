@@ -543,7 +543,7 @@ canonical package directory 序列化成确定性 rootless archives 与 `catalog
 - app Remote bundle/build trust chain：`build/release/remote/bundle.py`、
   `build/release/app/build.py`
 - Optional headless Remote runtime：`ash-rs/remote-server`
-- Remote Terminal lease/attach：`ash-rs/app-server/src/terminal_service.rs`、
+- Remote Terminal lease/attach：`ash-rs/terminal-service/src/lib.rs`、
   `app/src/features/terminal/terminal_session/remote.rs`
 - Desktop Main Tunnel coordinator：`ash-ts/src/ash/platform/remote/electron-main/sshRemoteTunnelService.ts`
 - Desktop Main Tunnel listener readiness/recovery 测试：

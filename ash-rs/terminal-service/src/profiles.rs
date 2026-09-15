@@ -1,10 +1,10 @@
-use crate::terminal_environment::TerminalEnvironment;
+use crate::TerminalProfile;
+use crate::TerminalProfileSelection;
+use crate::environment::TerminalEnvironment;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::Path;
 use std::path::PathBuf;
-use ash_app_server_protocol::protocol::terminal::TerminalProfile;
-use ash_app_server_protocol::protocol::terminal::TerminalProfileSelection;
 
 /// Frozen trusted shell catalog used by one local Terminal service.
 pub(crate) struct TerminalProfileCatalog {
@@ -27,7 +27,10 @@ impl TerminalProfileCatalog {
     }
 
     pub(crate) fn list(&self) -> Vec<TerminalProfile> {
-        self.profiles.iter().map(TerminalProfileSpec::dto).collect()
+        self.profiles
+            .iter()
+            .map(TerminalProfileSpec::profile)
+            .collect()
     }
 
     pub(crate) fn resolve(
@@ -62,7 +65,7 @@ pub(crate) struct TerminalProfileSpec {
 }
 
 impl TerminalProfileSpec {
-    pub(crate) fn dto(&self) -> TerminalProfile {
+    pub(crate) fn profile(&self) -> TerminalProfile {
         TerminalProfile {
             profile_id: self.profile_id.clone(),
             title: self.title.clone(),
@@ -270,5 +273,5 @@ fn default_shell(environment: &HashMap<String, String>) -> String {
 }
 
 #[cfg(test)]
-#[path = "terminal_profiles_tests.rs"]
+#[path = "profiles_tests.rs"]
 mod tests;

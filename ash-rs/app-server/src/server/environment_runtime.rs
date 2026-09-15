@@ -102,8 +102,8 @@ pub(super) struct EnvRuntime {
     pub(super) codebase_semantic_job: Option<Arc<SemanticIndexJobController>>,
     pub(super) cloud_codebase: Option<Arc<CloudCodebaseController>>,
     pub(super) _dir_contributions: Option<Arc<DirContributions>>,
-    pub(super) terminals: Option<Arc<crate::terminal_service::TerminalService>>,
-    pub(super) dir_terminals: BTreeMap<String, Arc<crate::terminal_service::TerminalService>>,
+    pub(super) terminals: Option<Arc<terminal::TerminalService>>,
+    pub(super) dir_terminals: BTreeMap<String, Arc<terminal::TerminalService>>,
     pub(super) debug_adapters: Option<Arc<crate::debug_service::DebugAdapterService>>,
     pub(super) dir_debug_adapters: BTreeMap<String, Arc<crate::debug_service::DebugAdapterService>>,
     pub(super) dir_grants: Arc<DirGrants>,
@@ -1416,7 +1416,7 @@ impl AppServer {
                     .authorize(Permission::ExecuteCommands)
                     .map_err(|_| EnvRuntimeError::PermissionRequired)?;
                 Some(Arc::new(
-                    crate::terminal_service::TerminalService::new(capability).map_err(|_| {
+                    terminal::TerminalService::new(capability).map_err(|_| {
                         EnvRuntimeError::Failed(
                             "failed to initialize dir folder terminal runtime".into(),
                         )
@@ -1447,7 +1447,7 @@ impl AppServer {
                         authorization
                             .authorize(Permission::ExecuteCommands)
                             .map_err(|_| EnvRuntimeError::PermissionRequired)?,
-                        crate::terminal_environment::safe_process_environment(),
+                        terminal::safe_process_environment(),
                     )
                     .map_err(|_| {
                         EnvRuntimeError::Failed(
@@ -2020,7 +2020,7 @@ impl AppServer {
                 terminals
             }
             None => Arc::new(
-                crate::terminal_service::TerminalService::new(terminal_capability).map_err(
+                terminal::TerminalService::new(terminal_capability).map_err(
                     |_| EnvRuntimeError::Failed("failed to initialize terminal runtime".into()),
                 )?,
             ),
@@ -2033,7 +2033,7 @@ impl AppServer {
                 authorization
                     .authorize(Permission::ExecuteCommands)
                     .map_err(|_| EnvRuntimeError::PermissionRequired)?,
-                crate::terminal_environment::safe_process_environment(),
+                terminal::safe_process_environment(),
             )
             .map_err(|_| {
                 EnvRuntimeError::Failed("failed to initialize debug adapter runtime".into())
@@ -2486,7 +2486,7 @@ impl AppServer {
 
     pub(super) fn terminal_service(
         &self,
-    ) -> Result<Arc<crate::terminal_service::TerminalService>, RpcError> {
+    ) -> Result<Arc<terminal::TerminalService>, RpcError> {
         self.terminal_service_for(None)
     }
 
@@ -2524,7 +2524,7 @@ impl AppServer {
     pub(super) fn terminal_service_for(
         &self,
         dir_id: Option<&str>,
-    ) -> Result<Arc<crate::terminal_service::TerminalService>, RpcError> {
+    ) -> Result<Arc<terminal::TerminalService>, RpcError> {
         let runtime = self
             .env_runtime
             .read()
@@ -2544,7 +2544,7 @@ impl AppServer {
 
     pub(super) fn configured_terminal_services(
         &self,
-    ) -> Vec<Arc<crate::terminal_service::TerminalService>> {
+    ) -> Vec<Arc<terminal::TerminalService>> {
         let runtime = self
             .env_runtime
             .read()
@@ -2850,7 +2850,7 @@ fn resolve_semantic_model_invokers(
 fn retire_env_runtime(
     mut runtime: EnvRuntime,
     retained_search: Option<&Arc<ContentSearchService>>,
-    retained_terminals: Option<&Arc<crate::terminal_service::TerminalService>>,
+    retained_terminals: Option<&Arc<terminal::TerminalService>>,
     retained_debug_adapters: Option<&Arc<crate::debug_service::DebugAdapterService>>,
 ) {
     for (_, search) in std::mem::take(&mut runtime.dir_content_search) {

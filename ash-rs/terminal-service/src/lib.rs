@@ -1,7 +1,20 @@
-use crate::terminal_command_status::ParsedTerminalOutput;
-use crate::terminal_command_status::TerminalCommandStatusTracker;
-use crate::terminal_profiles::TerminalProfileCatalog;
-use base64::Engine;
+//! Authorized interactive PTY sessions, bounded output, and reconnect leases.
+
+mod command_status;
+mod environment;
+mod profiles;
+mod types;
+
+use crate::command_status::ParsedTerminalOutput;
+use crate::command_status::TerminalCommandStatusTracker;
+use crate::profiles::TerminalProfileCatalog;
+use ash_file_access::Authorization;
+use ash_file_access::Permission;
+use ash_utils_pty::ProcessHandle;
+use ash_utils_pty::SpawnedProcess;
+use ash_utils_pty::TerminalSize;
+use ash_utils_pty::spawn_pty_process;
+pub use environment::safe_process_environment;
 use getrandom::getrandom;
 use std::collections::HashMap;
 use std::collections::VecDeque;
@@ -13,24 +26,21 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 use tokio::runtime::Runtime;
-use ash_app_server_protocol::protocol::terminal::TerminalAttachParams;
-use ash_app_server_protocol::protocol::terminal::TerminalAttachResult;
-use ash_app_server_protocol::protocol::terminal::TerminalCreateParams;
-use ash_app_server_protocol::protocol::terminal::TerminalCreateResult;
-use ash_app_server_protocol::protocol::terminal::TerminalLifecycle;
-use ash_app_server_protocol::protocol::terminal::TerminalOutputChunk;
-use ash_app_server_protocol::protocol::terminal::TerminalProfile;
-use ash_app_server_protocol::protocol::terminal::TerminalReadParams;
-use ash_app_server_protocol::protocol::terminal::TerminalReadResult;
-use ash_app_server_protocol::protocol::terminal::TerminalReconnectLease;
-use ash_app_server_protocol::protocol::terminal::TerminalResizeParams;
-use ash_app_server_protocol::protocol::terminal::TerminalWriteParams;
-use ash_file_access::Authorization;
-use ash_file_access::Permission;
-use ash_utils_pty::ProcessHandle;
-use ash_utils_pty::SpawnedProcess;
-use ash_utils_pty::TerminalSize;
-use ash_utils_pty::spawn_pty_process;
+pub use types::TerminalAttachRequest;
+pub use types::TerminalAttachResult;
+pub use types::TerminalCommandStatus;
+pub use types::TerminalCommandStatusEvent;
+pub use types::TerminalCreateRequest;
+pub use types::TerminalCreateResult;
+pub use types::TerminalLifecycle;
+pub use types::TerminalOutputChunk;
+pub use types::TerminalProfile;
+pub use types::TerminalProfileSelection;
+pub use types::TerminalReadRequest;
+pub use types::TerminalReadResult;
+pub use types::TerminalReconnectLease;
+pub use types::TerminalResizeRequest;
+pub use types::TerminalWriteRequest;
 
 const MAX_ACTIVE_TERMINALS: usize = 16;
 const MAX_OUTPUT_BYTES: usize = 1024 * 1024;
@@ -42,7 +52,7 @@ const RECONNECT_TOKEN_BYTES: usize = 32;
 
 /// Owns connection-scoped and briefly reconnectable PTY processes under one
 /// `ExecuteCommands` authorization.
-pub(crate) struct TerminalService {
+pub struct TerminalService {
     authorization: RwLock<Authorization>,
     next_terminal_id: AtomicU64,
     sessions: Arc<Mutex<HashMap<String, TerminalSession>>>,
@@ -51,7 +61,7 @@ pub(crate) struct TerminalService {
 }
 
 impl TerminalService {
-    pub(crate) fn new(authorization: Authorization) -> Result<Self, TerminalError> {
+    pub fn new(authorization: Authorization) -> Result<Self, TerminalError> {
         validate_authorization(&authorization)?;
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
@@ -70,7 +80,7 @@ impl TerminalService {
         })
     }
 
-    pub(crate) fn set_dir(&self, authorization: Authorization) -> Result<(), TerminalError> {
+    pub fn set_dir(&self, authorization: Authorization) -> Result<(), TerminalError> {
         validate_authorization(&authorization)?;
         *self
             .authorization
@@ -79,18 +89,18 @@ impl TerminalService {
         Ok(())
     }
 
-    pub(crate) fn profiles(&self) -> Vec<TerminalProfile> {
+    pub fn profiles(&self) -> Vec<TerminalProfile> {
         self.profiles.list()
     }
 
-    pub(crate) fn default_shell_command(&self, command: &str) -> (String, Vec<String>) {
+    pub fn default_shell_command(&self, command: &str) -> (String, Vec<String>) {
         self.profiles.default_command(command)
     }
 
-    pub(crate) fn create(
+    pub fn create(
         &self,
         owner_connection_id: u64,
-        params: TerminalCreateParams,
+        params: TerminalCreateRequest,
     ) -> Result<TerminalCreateResult, TerminalError> {
         self.ensure_active()?;
         let authorization = self
@@ -101,10 +111,10 @@ impl TerminalService {
         self.create_in_dir(owner_connection_id, params, authorization)
     }
 
-    pub(crate) fn create_in_dir(
+    pub fn create_in_dir(
         &self,
         owner_connection_id: u64,
-        params: TerminalCreateParams,
+        params: TerminalCreateRequest,
         authorization: Authorization,
     ) -> Result<TerminalCreateResult, TerminalError> {
         validate_authorization(&authorization)?;
@@ -159,15 +169,15 @@ impl TerminalService {
         );
         Ok(TerminalCreateResult {
             terminal_id,
-            profile: profile.dto(),
+            profile: profile.profile(),
             reconnect,
         })
     }
 
-    pub(crate) fn attach(
+    pub fn attach(
         &self,
         owner_connection_id: u64,
-        params: TerminalAttachParams,
+        params: TerminalAttachRequest,
     ) -> Result<TerminalAttachResult, TerminalError> {
         self.ensure_active()?;
         validate_size(params.rows, params.cols)?;
@@ -203,10 +213,10 @@ impl TerminalService {
         })
     }
 
-    pub(crate) fn write(
+    pub fn write(
         &self,
         owner_connection_id: u64,
-        params: TerminalWriteParams,
+        params: TerminalWriteRequest,
     ) -> Result<(), TerminalError> {
         self.ensure_active()?;
         if params.data.is_empty() || params.data.len() > MAX_INPUT_BYTES {
@@ -231,10 +241,10 @@ impl TerminalService {
             .map_err(|_| TerminalError::OperationFailed)
     }
 
-    pub(crate) fn resize(
+    pub fn resize(
         &self,
         owner_connection_id: u64,
-        params: TerminalResizeParams,
+        params: TerminalResizeRequest,
     ) -> Result<(), TerminalError> {
         self.ensure_active()?;
         validate_size(params.rows, params.cols)?;
@@ -250,10 +260,10 @@ impl TerminalService {
             .map_err(|_| TerminalError::OperationFailed)
     }
 
-    pub(crate) fn read(
+    pub fn read(
         &self,
         owner_connection_id: u64,
-        params: TerminalReadParams,
+        params: TerminalReadRequest,
     ) -> Result<TerminalReadResult, TerminalError> {
         self.ensure_active()?;
         if params.max_chunks == 0 || params.max_chunks > 128 {
@@ -276,11 +286,7 @@ impl TerminalService {
         Ok(read_state(&params, &state))
     }
 
-    pub(crate) fn close(
-        &self,
-        owner_connection_id: u64,
-        terminal_id: &str,
-    ) -> Result<(), TerminalError> {
+    pub fn close(&self, owner_connection_id: u64, terminal_id: &str) -> Result<(), TerminalError> {
         let mut sessions = self.sessions.lock().map_err(|_| TerminalError::Busy)?;
         let session = sessions.get(terminal_id).ok_or(TerminalError::NotFound)?;
         if session.owner != TerminalOwner::Attached(owner_connection_id) {
@@ -298,7 +304,7 @@ impl TerminalService {
         Ok(())
     }
 
-    pub(crate) fn close_owner(&self, owner_connection_id: u64) {
+    pub fn close_owner(&self, owner_connection_id: u64) {
         let Ok(mut sessions) = self.sessions.lock() else {
             return;
         };
@@ -318,7 +324,7 @@ impl TerminalService {
         });
     }
 
-    pub(crate) fn active_count(&self) -> usize {
+    pub fn active_count(&self) -> usize {
         let Ok(mut sessions) = self.sessions.lock() else {
             return MAX_ACTIVE_TERMINALS;
         };
@@ -326,7 +332,7 @@ impl TerminalService {
         sessions.len()
     }
 
-    pub(crate) fn terminate_all(&self) {
+    pub fn terminate_all(&self) {
         let Ok(mut sessions) = self.sessions.lock() else {
             return;
         };
@@ -335,7 +341,7 @@ impl TerminalService {
         }
     }
 
-    pub(crate) fn terminate_revoked_dirs(&self) {
+    pub fn terminate_revoked_dirs(&self) {
         let Ok(mut sessions) = self.sessions.lock() else {
             return;
         };
@@ -503,7 +509,7 @@ fn push_output(state: &mut TerminalState, bytes: Vec<u8>) {
     }
 }
 
-fn read_state(params: &TerminalReadParams, state: &TerminalState) -> TerminalReadResult {
+fn read_state(params: &TerminalReadRequest, state: &TerminalState) -> TerminalReadResult {
     let oldest_sequence = state
         .chunks
         .front()
@@ -524,7 +530,7 @@ fn read_state(params: &TerminalReadParams, state: &TerminalState) -> TerminalRea
         .take(params.max_chunks)
         .map(|chunk| TerminalOutputChunk {
             sequence: chunk.sequence,
-            data_base64: base64::engine::general_purpose::STANDARD.encode(&chunk.bytes),
+            data: chunk.bytes.clone(),
         })
         .collect::<Vec<_>>();
     let next_sequence = chunks.last().map_or_else(
@@ -613,7 +619,7 @@ fn remove_expired_sessions(sessions: &mut HashMap<String, TerminalSession>, now:
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum TerminalError {
+pub enum TerminalError {
     InvalidInput,
     NotFound,
     NotOwner,
@@ -623,5 +629,5 @@ pub(crate) enum TerminalError {
 }
 
 #[cfg(test)]
-#[path = "terminal_service_tests.rs"]
+#[path = "service_tests.rs"]
 mod tests;

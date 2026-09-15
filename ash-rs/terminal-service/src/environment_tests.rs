@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn terminal_environment_keeps_safe_values_and_excludes_secrets() {
+fn environment_keeps_safe_values_and_excludes_secrets() {
     let environment = TerminalEnvironment::from_variables([
         ("HOME".into(), "/home/ash".into()),
         ("LANG".into(), "en_US.UTF-8".into()),
@@ -28,7 +28,7 @@ fn terminal_environment_keeps_safe_values_and_excludes_secrets() {
 }
 
 #[test]
-fn terminal_environment_owns_terminal_identity_values() {
+fn environment_owns_terminal_identity_values() {
     let environment = TerminalEnvironment::from_variables([
         ("TERM".into(), "host-term".into()),
         ("COLORTERM".into(), "host-color".into()),
@@ -41,7 +41,7 @@ fn terminal_environment_owns_terminal_identity_values() {
 }
 
 #[test]
-fn terminal_environment_rejects_invalid_names_and_values() {
+fn environment_rejects_invalid_names_and_values() {
     let environment = TerminalEnvironment::from_variables([
         ("BAD=NAME".into(), "value".into()),
         ("HOME".into(), "bad\0value".into()),
@@ -55,7 +55,7 @@ fn terminal_environment_rejects_invalid_names_and_values() {
 
 #[cfg(not(windows))]
 #[test]
-fn posix_terminal_environment_keeps_variable_names_case_sensitive() {
+fn posix_environment_keeps_variable_names_case_sensitive() {
     let environment = TerminalEnvironment::from_variables([
         ("PATH".into(), "/usr/bin".into()),
         ("Path".into(), "/untrusted".into()),
@@ -67,7 +67,7 @@ fn posix_terminal_environment_keeps_variable_names_case_sensitive() {
 
 #[cfg(windows)]
 #[test]
-fn windows_terminal_environment_canonicalizes_variable_names() {
+fn windows_environment_canonicalizes_variable_names() {
     let environment = TerminalEnvironment::from_variables([
         ("Path".into(), r"C:\Windows\System32".into()),
         ("SystemRoot".into(), r"C:\Windows".into()),
