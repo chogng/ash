@@ -6,6 +6,7 @@ import os
 import re
 import shutil
 import stat
+import subprocess
 import tempfile
 from pathlib import Path
 from typing import Dict, Optional
@@ -16,7 +17,8 @@ from .ripgrep import RipgrepResolution
 from build.lib.ash_build.targets import TargetSpec
 
 
-LAYOUT_VERSION = 2
+LAYOUT = json.loads(Path(__file__).with_suffix(".json").read_text(encoding="utf-8"))
+LAYOUT_VERSION = LAYOUT["layoutVersion"]
 METADATA_FILE = "ash-package.json"
 SKILL_NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
@@ -72,232 +74,73 @@ def build_package_directory(
         tempfile.mkdtemp(prefix="." + output.name + ".partial-", dir=str(output.parent))
     )
     try:
-        binary_directory = staging / "bin"
-        path_directory = staging / "ash-path"
-        skills_directory = staging / "ash-resources" / "skills"
-        extensions_directory = staging / "ash-resources" / "extensions"
-        product_services_directory = staging / "ash-resources" / "product-services"
-        license_directory = staging / "ash-resources" / "licenses" / "ripgrep"
-        vscode_license_directory = staging / "ash-resources" / "licenses" / "vscode"
-        binary_directory.mkdir()
+        executables = {
+            "appServer": str(server_binary),
+            "remote": str(remote_binary),
+            "remoteServer": str(remote_server_binary),
+            "execServer": str(exec_server_binary),
+            "appServerDaemon": str(app_server_daemon_binary),
+            "codeModeHost": str(code_mode_host_binary),
+        }
         if windows_sandbox_binary is not None:
-            copy_executable(
-                windows_sandbox_binary,
-                binary_directory / "ash-windows-sandbox.exe",
-                is_windows=True,
-            )
-            copy_windows_sandbox_notices(
-                repository_root, staging / "ash-resources" / "licenses"
-            )
-        path_directory.mkdir()
-        license_directory.mkdir(parents=True)
-        vscode_license_directory.mkdir()
-        copy_builtin_skills(
-            repository_root / "ash-rs" / "skills" / "assets",
-            skills_directory,
-        )
-        copy_builtin_extensions(
-            repository_root / "extensions",
-            extensions_directory,
-        )
-        copy_regular_tree(
-            repository_root / "resources" / "product-services",
-            product_services_directory,
-            "product services",
-        )
-
-        copy_executable(
-            server_binary,
-            binary_directory / spec.server_name,
-            is_windows=spec.is_windows,
-        )
-        copy_executable(
-            remote_binary,
-            binary_directory / spec.remote_name,
-            is_windows=spec.is_windows,
-        )
-        copy_executable(
-            remote_server_binary,
-            binary_directory / spec.remote_server_name,
-            is_windows=spec.is_windows,
-        )
-        copy_executable(
-            exec_server_binary,
-            binary_directory / spec.exec_server_name,
-            is_windows=spec.is_windows,
-        )
-        if cli_binary is not None:
-            copy_executable(
-                cli_binary,
-                binary_directory / spec.cli_name,
-                is_windows=spec.is_windows,
-            )
-        copy_executable(
-            app_server_daemon_binary,
-            binary_directory / spec.app_server_daemon_name,
-            is_windows=spec.is_windows,
-        )
-        copy_executable(
-            code_mode_host_binary,
-            binary_directory / spec.code_mode_host_name,
-            is_windows=spec.is_windows,
-        )
-        copy_executable(
-            ripgrep.executable,
-            path_directory / spec.ripgrep_name,
-            is_windows=spec.is_windows,
-        )
-        if node is not None:
-            node_directory = staging / "ash-resources" / "node" / "bin"
-            node_license_directory = staging / "ash-resources" / "licenses" / "node"
-            node_directory.mkdir(parents=True)
-            node_license_directory.mkdir(parents=True)
-            copy_executable(
-                node.executable,
-                node_directory / spec.node_name,
-                is_windows=spec.is_windows,
-            )
-            shutil.copyfile(node.license_file, node_license_directory / "LICENSE")
-        mxc_license_directory = staging / "ash-resources" / "licenses" / "mxc"
-        mxc_license_directory.mkdir()
-        shutil.copyfile(
-            repository_root / "ash-rs" / "vendor" / "mxc" / "LICENSE.md",
-            mxc_license_directory / "LICENSE.md",
-        )
-        copy_uds_notices(repository_root, staging / "ash-resources" / "licenses")
-        for name in ("LICENSE-MIT", "UNLICENSE"):
-            shutil.copyfile(
-                repository_root / "third_party" / "ripgrep" / name,
-                license_directory / name,
-            )
-        shutil.copyfile(
-            repository_root / "third_party" / "vscode" / "LICENSE.txt",
-            vscode_license_directory / "LICENSE.txt",
-        )
-
-        bubblewrap_metadata = None
+            executables["windowsSandbox"] = str(windows_sandbox_binary)
         if bubblewrap is not None:
-            copy_executable(
-                bubblewrap.executable,
-                staging / "ash-resources" / "bwrap",
-                is_windows=False,
-            )
-            bubblewrap_license_directory = (
-                staging / "ash-resources" / "licenses" / "bubblewrap"
-            )
-            bubblewrap_license_directory.mkdir()
-            for license_file in bubblewrap.license_files:
-                shutil.copyfile(
-                    license_file,
-                    bubblewrap_license_directory / license_file.name,
-                )
-            bubblewrap_metadata = {
+            executables["bubblewrap"] = {
+                "binary": str(bubblewrap.executable),
+                "license": str(bubblewrap.license_files[0]),
+                "licenses": [str(path) for path in bubblewrap.license_files],
                 "version": bubblewrap.version,
                 "source": bubblewrap.source,
-                "binarySha256": bubblewrap.binary_sha256,
-                "sourceArchive": bubblewrap.source_archive,
-                "sourceArchiveSha256": bubblewrap.source_archive_sha256,
+                "archive": bubblewrap.source_archive,
+                "archiveSha256": bubblewrap.source_archive_sha256,
             }
-
-        ripgrep_metadata = {
+        runtime = {
+            "executable": str(ripgrep.executable),
             "version": ripgrep.version,
             "source": ripgrep.source,
             "binarySha256": ripgrep.binary_sha256,
         }
         if ripgrep.archive is not None:
-            ripgrep_metadata["archive"] = ripgrep.archive
+            runtime["archive"] = ripgrep.archive
         if ripgrep.archive_sha256 is not None:
-            ripgrep_metadata["archiveSha256"] = ripgrep.archive_sha256
-        components = {
-            "appServerDaemon": {
-                "source": "cargo-build",
-                "binarySha256": file_sha256(
-                    binary_directory / spec.app_server_daemon_name
-                ),
-            },
-            "codeModeHost": {
-                "source": "cargo-build",
-                "binarySha256": file_sha256(
-                    binary_directory / spec.code_mode_host_name
-                ),
-            },
-            "ripgrep": ripgrep_metadata,
-            "remote": {
-                "source": "cargo-build",
-                "binarySha256": file_sha256(binary_directory / spec.remote_name),
-            },
-            "remoteServer": {
-                "source": "cargo-build",
-                "binarySha256": file_sha256(binary_directory / spec.remote_server_name),
-            },
-            "execServer": {
-                "source": "cargo-build",
-                "binarySha256": file_sha256(binary_directory / spec.exec_server_name),
-            },
-            "appServer": {
-                "source": "cargo-build",
-                "binarySha256": file_sha256(binary_directory / spec.server_name),
-            },
-        }
-        if cli_binary is not None:
-            if (
-                not isinstance(update_public_key, str)
-                or re.fullmatch(r"[a-f0-9]{64}", update_public_key) is None
-            ):
-                raise RuntimeError(
-                    "Ash Code packages require a 32-byte hexadecimal update public key"
-                )
-            components["cli"] = {
-                "source": "cargo-build",
-                "binarySha256": file_sha256(binary_directory / spec.cli_name),
-                "updatePublicKey": update_public_key,
-            }
-        elif update_public_key is not None:
-            raise RuntimeError("--update-public-key requires --cli-bin")
-        if node is not None:
-            components["node"] = {
+            runtime["archiveSha256"] = ripgrep.archive_sha256
+        inputs = {
+            "staging": str(staging),
+            "target": spec.target,
+            "platform": "win32" if spec.is_windows else spec.operating_system.value,
+            "executables": executables,
+            "ripgrep": runtime,
+            "node": {
+                "executable": str(node.executable),
+                "license": str(node.license_file),
                 "version": node.version,
                 "source": node.source,
                 "binarySha256": node.binary_sha256,
                 "archive": node.archive,
                 "archiveSha256": node.archive_sha256,
             }
-        if bubblewrap_metadata is not None:
-            components["bubblewrap"] = bubblewrap_metadata
-        if windows_sandbox_binary is not None:
-            components["windowsSandbox"] = {
-                "source": "cargo-build",
-                "binarySha256": file_sha256(
-                    binary_directory / "ash-windows-sandbox.exe"
-                ),
-            }
-        protocol = (
-            protocol_metadata
-            if protocol_metadata is not None
-            else load_protocol_metadata(repository_root)
-        )
-        files = package_files(staging)
-        runtime_kind = "packagedNode" if node is not None else "hostProvidedNode"
-        identity = {
-            "buildProfile": build_profile,
-            "layoutVersion": LAYOUT_VERSION,
-            "version": version,
-            "target": spec.target,
-            "entrypoint": "bin/" + spec.server_name,
-            "pathDir": "ash-path",
-            "resourcesDir": "ash-resources",
-            "javascriptRuntime": {
-                "kind": runtime_kind,
+            if node is not None
+            else None,
+            "options": {
+                "sourceRoot": str(repository_root),
+                "version": version,
+                "buildProfile": build_profile,
+                "protocol": protocol_metadata
+                if protocol_metadata is not None
+                else load_protocol_metadata(repository_root),
+                "cliBinary": str(cli_binary) if cli_binary is not None else None,
+                "updatePublicKey": update_public_key,
             },
-            "components": components,
-            "protocol": protocol,
         }
-        metadata = {
-            **identity,
-            "buildId": package_build_id(identity, files),
-            "files": files,
-        }
-        write_json(staging / METADATA_FILE, metadata)
+        result = subprocess.run(
+            ["node", str(Path(__file__).with_suffix(".ts"))],
+            input=json.dumps(inputs),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"Package assembly failed: {result.stderr.strip()}")
         validate_package_directory(staging, spec)
         staging.rename(output)
     except Exception:
@@ -322,9 +165,11 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
     expected = {
         "layoutVersion": LAYOUT_VERSION,
         "target": spec.target,
-        "entrypoint": "bin/" + spec.server_name,
-        "pathDir": "ash-path",
-        "resourcesDir": "ash-resources",
+        "entrypoint": LAYOUT["entrypoint"].format(
+            exe=".exe" if spec.is_windows else ""
+        ),
+        "pathDir": LAYOUT["pathDir"],
+        "resourcesDir": LAYOUT["resourcesDir"],
     }
     for key, expected_value in expected.items():
         if metadata.get(key) != expected_value:
@@ -335,24 +180,16 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
             )
 
     executables = [
-        package / "bin" / spec.server_name,
-        package / "bin" / spec.remote_name,
-        package / "bin" / spec.remote_server_name,
-        package / "bin" / spec.exec_server_name,
-        package / "bin" / spec.app_server_daemon_name,
-        package / "bin" / spec.code_mode_host_name,
-        package / "ash-path" / spec.ripgrep_name,
+        package / relative.format(exe=spec.executable_suffix)
+        for relative in LAYOUT["binaries"].values()
     ]
+    executables.append(package / LAYOUT["pathDir"] / spec.ripgrep_name)
     components = metadata.get("components")
     if not isinstance(components, dict):
         raise RuntimeError("Invalid package component metadata")
     first_party_artifacts = {
-        "appServerDaemon": package / "bin" / spec.app_server_daemon_name,
-        "codeModeHost": package / "bin" / spec.code_mode_host_name,
-        "appServer": package / "bin" / spec.server_name,
-        "remote": package / "bin" / spec.remote_name,
-        "remoteServer": package / "bin" / spec.remote_server_name,
-        "execServer": package / "bin" / spec.exec_server_name,
+        component: package / relative.format(exe=".exe" if spec.is_windows else "")
+        for component, relative in LAYOUT["binaries"].items()
     }
     if spec.is_windows:
         first_party_artifacts["windowsSandbox"] = (
@@ -414,22 +251,10 @@ def validate_package_directory(package: Path, spec: TargetSpec) -> None:
             raise RuntimeError("Missing package executable: {}".format(executable))
         if not spec.is_windows and not is_executable(executable):
             raise RuntimeError("Package file is not executable: {}".format(executable))
-    for license_name in ("LICENSE-MIT", "UNLICENSE"):
-        license_path = package / "ash-resources" / "licenses" / "ripgrep" / license_name
-        if not license_path.is_file():
-            raise RuntimeError("Missing ripgrep license: {}".format(license_path))
-    for name in ("LICENSE-APACHE", "NOTICE"):
-        notice = package / "ash-resources" / "licenses" / "uds" / name
-        if notice.is_symlink() or not notice.is_file():
-            raise RuntimeError("Missing UDS notice: {}".format(notice))
-    mxc_license = package / "ash-resources" / "licenses" / "mxc" / "LICENSE.md"
-    if mxc_license.is_symlink() or not mxc_license.is_file():
-        raise RuntimeError("Missing MXC license")
-    vscode_license = package / "ash-resources" / "licenses" / "vscode" / "LICENSE.txt"
-    if vscode_license.is_symlink() or not vscode_license.is_file():
-        raise RuntimeError(
-            "Missing VS Code extension license: {}".format(vscode_license)
-        )
+    for license in LAYOUT["licenses"]:
+        path = package / license["destination"]
+        if path.is_symlink() or not path.is_file():
+            raise RuntimeError(f"Missing package license: {path}")
     if javascript_runtime == {"kind": "packagedNode"}:
         node_license = package / "ash-resources" / "licenses" / "node" / "LICENSE"
         if node_license.is_symlink() or not node_license.is_file():
@@ -582,92 +407,6 @@ def require_verified_system_signing(package: Path, spec: TargetSpec) -> None:
         raise RuntimeError("System signing record is incomplete")
 
 
-def copy_builtin_skills(source: Path, destination: Path) -> None:
-    if source.is_symlink() or not source.is_dir():
-        raise RuntimeError(
-            "Built-in Skill source is not a real directory: {}".format(source)
-        )
-    skill_directories = [
-        child
-        for child in sorted(source.iterdir(), key=lambda path: path.name)
-        if child.name != "BUILD.bazel"
-    ]
-    if not skill_directories:
-        raise RuntimeError("Built-in Skill source is empty: {}".format(source))
-    destination.mkdir(parents=True)
-    for skill_directory in skill_directories:
-        if (
-            skill_directory.is_symlink()
-            or not skill_directory.is_dir()
-            or SKILL_NAME.fullmatch(skill_directory.name) is None
-        ):
-            raise RuntimeError(
-                "Invalid built-in Skill directory: {}".format(skill_directory)
-            )
-        if not (skill_directory / "SKILL.md").is_file():
-            raise RuntimeError(
-                "Built-in Skill is missing SKILL.md: {}".format(skill_directory)
-            )
-        copy_regular_tree(skill_directory, destination / skill_directory.name)
-
-
-def copy_builtin_extensions(source: Path, destination: Path) -> None:
-    if source.is_symlink() or not source.is_dir():
-        raise RuntimeError(
-            "Built-in extension source is not a real directory: {}".format(source)
-        )
-    extension_entries = [
-        child
-        for child in sorted(source.iterdir(), key=lambda path: path.name)
-        if child.name not in ("README.md", "BUILD.bazel")
-    ]
-    if not extension_entries:
-        raise RuntimeError("Built-in extension source is empty: {}".format(source))
-    destination.mkdir(parents=True)
-    for extension_directory in extension_entries:
-        if extension_directory.is_symlink() or not extension_directory.is_dir():
-            raise RuntimeError(
-                "Invalid built-in extension package: {}".format(extension_directory)
-            )
-        manifest = extension_directory / "package.json"
-        if manifest.is_symlink() or not manifest.is_file():
-            raise RuntimeError(
-                "Built-in extension is missing package.json: {}".format(
-                    extension_directory
-                )
-            )
-        copy_regular_tree(
-            extension_directory,
-            destination / extension_directory.name,
-            "extension package",
-        )
-
-
-def copy_regular_tree(source: Path, destination: Path, kind: str = "Skill") -> None:
-    destination.mkdir()
-    for child in sorted(source.iterdir(), key=lambda path: path.name):
-        metadata = child.lstat()
-        target = destination / child.name
-        if child.is_symlink():
-            raise RuntimeError(
-                "Built-in {} asset is a symbolic link: {}".format(kind, child)
-            )
-        if stat.S_ISDIR(metadata.st_mode):
-            copy_regular_tree(child, target, kind)
-        elif stat.S_ISREG(metadata.st_mode):
-            if metadata.st_nlink > 1:
-                raise RuntimeError(
-                    "Built-in {} asset is a hard link: {}".format(kind, child)
-                )
-            shutil.copyfile(child, target)
-        else:
-            raise RuntimeError(
-                "Built-in {} asset is not a regular file or directory: {}".format(
-                    kind, child
-                )
-            )
-
-
 def validate_builtin_skills(skills_directory: Path) -> None:
     if skills_directory.is_symlink() or not skills_directory.is_dir():
         raise RuntimeError("Package is missing built-in Skills")
@@ -772,13 +511,6 @@ def validate_product_services(product_services_directory: Path) -> None:
         raise RuntimeError(
             "Package product services does not pin the Ash Marketplace root"
         )
-
-
-def copy_executable(source: Path, destination: Path, is_windows: bool) -> None:
-    shutil.copyfile(source, destination)
-    if not is_windows:
-        mode = destination.stat().st_mode
-        destination.chmod(mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 
 def is_executable(path: Path) -> bool:

@@ -1,16 +1,15 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
 
 import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH } from "../../ash-ts/generated/app-server/protocol.ts";
+import { assemblePackage } from "./layout.ts";
 import { cargoTargetDirectory } from "../lib/cargo.ts";
 import { developmentAshPackagePath, developmentHostTarget } from "./store.ts";
 import {
-  assemblePackage,
-  copyBuiltinExtensions,
   parseJavaScriptRuntime,
   parsePackageOptions,
   selectNodeArtifact,
@@ -422,4 +421,32 @@ test("rejects a symbolic built-in extension package directory", async () => {
   } finally {
     await rm(root, { force: true, recursive: true });
   }
+});
+
+// Exercise invalid resource inputs through the production assembly boundary.
+async function copyBuiltinExtensions(destination: string, source: string): Promise<void> {
+  const root = join(destination, "sources");
+  await mkdir(join(root, "ash-rs", "skills", "assets", "review"), { recursive: true });
+  await writeFile(join(root, "ash-rs", "skills", "assets", "review", "SKILL.md"), "review");
+  await rename(source, join(root, "extensions"));
+  await assemblePackage(join(destination, "package"), "aarch64-apple-darwin", "darwin", {
+    appServer: "unused", appServerDaemon: "unused", codeModeHost: "unused",
+    remote: "unused", remoteServer: "unused", execServer: "unused",
+  }, { executable: "unused", binarySha256: "", source: "local-override", version: "1" },
+  undefined, undefined, undefined, { sourceRoot: root });
+}
+
+test("assembly rejects linked Skill assets", async () => {
+  const root = await mkdtemp(join(tmpdir(), "ash-skill-link-"));
+  try {
+    const skill = join(root, "ash-rs", "skills", "assets", "review");
+    await mkdir(skill, { recursive: true });
+    await writeFile(join(skill, "SKILL.md"), "review");
+    await symlink(skill, join(skill, "linked"), process.platform === "win32" ? "junction" : "dir");
+    await assert.rejects(assemblePackage(join(root, "output"), "aarch64-apple-darwin", "darwin", {
+      appServer: "unused", appServerDaemon: "unused", codeModeHost: "unused",
+      remote: "unused", remoteServer: "unused", execServer: "unused",
+    }, { executable: "unused", binarySha256: "", source: "local-override", version: "1" },
+    undefined, undefined, undefined, { sourceRoot: root }), /symbolic link/);
+  } finally { await rm(root, { recursive: true, force: true }); }
 });

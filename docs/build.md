@@ -43,7 +43,7 @@ Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保
 
 根 `Justfile` 是三个产品和根 Rust workspace 的统一入口。根 `package.json` 只提供 pnpm workspace 与 Electron、Browser、Stanza 等 Node 构建入口，不编排 Rust workspace。
 
-Node 工具与 Desktop 单测使用 Node 24 LTS，具体版本由仓库根 `.nvmrc` 固定。切换到该版本后，按 [README 初始化步骤](../README.md#quick-start) 安装根 `package.json` 声明的 pnpm，再执行 `pnpm install`、构建或测试。所有入口直接调用 pnpm，安装检查要求 pnpm 版本与声明完全一致；其他 Node 主版本不受支持。
+Node 工具、发布包组装与 Desktop 单测使用 Node 24 LTS，具体版本由仓库根 `.nvmrc` 固定。切换到该版本后，按 [README 初始化步骤](../README.md#quick-start) 安装根 `package.json` 声明的 pnpm，再执行 `pnpm install`、构建或测试。所有入口直接调用 pnpm，安装检查要求 pnpm 版本与声明完全一致；其他 Node 主版本不受支持。
 
 | 命令 | 结果 |
 | --- | --- |
@@ -154,7 +154,7 @@ just bench-build ash-keybinding --jobs 4 --compare .build/build-health/<run>/rep
 | --- | --- |
 | `build/lib/` | 通用路径、归档、签名执行和 Cargo 输出解析 |
 | `build/lib/ash_build/` | 共享 Python Cargo、目标识别和 V8 构建输入 |
-| `build/lib/watch/` | Electron TypeScript 与 Rust Server Host 的增量监听和重启协调 |
+| `build/desktop/watch/` | Electron TypeScript 与 Rust Server Host 的增量监听和重启协调 |
 | `build/pnpm/` | pnpm 版本约束、安装入口和单锁文件 workspace 校验 |
 | `build/desktop/` | Desktop 输出准备、Electron 启动和打包校验 |
 | `build/package/` | 共享包布局、资源、开发包组装与存储、发布包组装与签名记录 |
@@ -167,6 +167,10 @@ just bench-build ash-keybinding --jobs 4 --compare .build/build-health/<run>/rep
 | `build/resources/` | 共享资源生成 |
 | `build/clean.ts` | 根清理入口 |
 | `build/package.json`、`build/tsconfig.json` | 构建工具的依赖、测试和类型检查 |
+
+开发入口 `build/package/prepare.ts` 与 Python 发布入口共用 `build/package/layout.ts` 组装包，布局与许可证清单由 `layout.json` 声明。发布入口通过标准输入传入解析后的程序、资源和协议版本，因此发布环境也需要仓库固定的 Node 24；Desktop 开发入口不调用 Python。
+
+下载与解压由 `build/download/artifacts.ts` 和 `artifacts.py` 按调用语言提供。Node、ripgrep、V8 下载都采用流式校验和独立临时文件，通过大小及摘要检查后才发布缓存；失败只清理本次临时文件。
 
 打包脚本按实际产物分目录；文件名只写操作，共享能力保留单一实现：
 

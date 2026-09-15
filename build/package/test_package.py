@@ -21,8 +21,6 @@ from build.package.build import main as build_main
 from build.package.bubblewrap import load_vendored_source, resolve_bubblewrap
 from build.package.layout import (
     build_package_directory,
-    copy_builtin_extensions,
-    copy_builtin_skills,
     file_sha256,
     load_protocol_metadata,
     validate_product_services,
@@ -95,6 +93,13 @@ class PackageTests(unittest.TestCase):
             ]
             rg = executable_file(root / "rg", b"ripgrep")
             output = root / "package"
+            real_run = subprocess.run
+
+            def run_command(command, **kwargs):
+                if command[0] == "node":
+                    return real_run(command, **kwargs)
+                return subprocess.CompletedProcess(command, 0, "\n".join(artifacts))
+
             with (
                 patch(
                     "build.package.build.generate_protocol_metadata",
@@ -103,9 +108,7 @@ class PackageTests(unittest.TestCase):
                 patch("build.package.cargo.cargo_environment", return_value={}),
                 patch(
                     "build.package.cargo.subprocess.run",
-                    return_value=subprocess.CompletedProcess(
-                        ["cargo"], 0, "\n".join(artifacts)
-                    ),
+                    side_effect=run_command,
                 ) as run,
             ):
                 self.assertEqual(
@@ -123,8 +126,9 @@ class PackageTests(unittest.TestCase):
                         ]
                     ),
                 )
-            run.assert_called_once()
-            command = run.call_args.args[0]
+            command = next(
+                call.args[0] for call in run.call_args_list if call.args[0][0] != "node"
+            )
             self.assertEqual(
                 set(names),
                 {command[i + 1] for i, value in enumerate(command) if value == "--bin"},
@@ -748,77 +752,6 @@ class PackageTests(unittest.TestCase):
                 }
             record_system_signing(output, spec, signed)
             require_verified_system_signing(output, spec)
-
-    @unittest.skipIf(
-        os.name == "nt", "creating symbolic links may require Windows privilege"
-    )
-    def test_builtin_skill_copy_rejects_symbolic_links(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            source = root / "source"
-            skill = source / "review"
-            skill.mkdir(parents=True)
-            (skill / "SKILL.md").write_text(
-                "---\nname: review\ndescription: Reviews code when requested.\n---\n",
-                encoding="utf-8",
-            )
-            (skill / "linked.md").symlink_to(skill / "SKILL.md")
-
-            with self.assertRaisesRegex(RuntimeError, "symbolic link"):
-                copy_builtin_skills(source, root / "destination")
-
-    def test_builtin_extension_copy_rejects_an_empty_source(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            source = root / "source"
-            source.mkdir()
-
-            with self.assertRaisesRegex(RuntimeError, "source is empty"):
-                copy_builtin_extensions(source, root / "destination")
-
-    def test_builtin_extension_copy_rejects_an_empty_package_directory(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            source = root / "source"
-            (source / "demo").mkdir(parents=True)
-
-            with self.assertRaisesRegex(RuntimeError, "missing package.json"):
-                copy_builtin_extensions(source, root / "destination")
-
-    @unittest.skipIf(
-        os.name == "nt", "creating symbolic links may require Windows privilege"
-    )
-    def test_builtin_extension_copy_rejects_a_symbolic_source_directory(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            target = root / "source-target"
-            target.mkdir()
-            source = root / "source"
-            source.symlink_to(target, target_is_directory=True)
-
-            with self.assertRaisesRegex(RuntimeError, "source is not a real directory"):
-                copy_builtin_extensions(source, root / "destination")
-
-    @unittest.skipIf(
-        os.name == "nt", "creating symbolic links may require Windows privilege"
-    )
-    def test_builtin_extension_copy_rejects_a_symbolic_package_directory(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            source = root / "source"
-            source.mkdir()
-            extension = root / "demo-target"
-            extension.mkdir()
-            (extension / "package.json").write_text(
-                '{"name":"demo","publisher":"ash","version":"1.0.0"}',
-                encoding="utf-8",
-            )
-            (source / "demo").symlink_to(extension, target_is_directory=True)
-
-            with self.assertRaisesRegex(
-                RuntimeError, "Invalid built-in extension package"
-            ):
-                copy_builtin_extensions(source, root / "destination")
 
     def test_bubblewrap_metadata_rejects_invalid_source_digest(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

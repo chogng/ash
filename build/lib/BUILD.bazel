@@ -1,10 +1,17 @@
 package(default_visibility = ["//visibility:public"])
 
 filegroup(
-    name = "python_sources",
-    srcs = glob(["*.py"], exclude = ["test_*.py"]) + [
+    name = "archive_sources",
+    srcs = ["__init__.py", "archive.py", "//:build/__init__.py"],
+)
+
+filegroup(
+    name = "signing_sources",
+    srcs = [
+        "__init__.py",
+        "signing.py",
+        "//:build/__init__.py",
         "//build/darwin:python_sources",
         "//build/win32:python_sources",
-        "//build/lib/ash_build:python_sources",
     ],
 )

@@ -13,7 +13,7 @@ function source(path: string): string {
 test("Desktop packages the shared backend host instead of the Ash Code CLI", () => {
 	const packageScript = source("../build/package/prepare.ts");
 	const packageManifest = source("package.json");
-	const watcher = source("../build/lib/watch/appServer.ts");
+	const watcher = source("../build/desktop/watch/appServer.ts");
 	const electronMain = source("src/ash/code/electron-main/app.ts");
 	const forbiddenProductCrate = ["ash", "cli"].join("-");
 	const forbiddenProductPath = ["ash", "code", "cli"].join("/");

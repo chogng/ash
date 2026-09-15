@@ -2,9 +2,10 @@
 
 This directory owns the shared Ash package for development and release:
 
-- `prepare.ts` assembles development packages; `store.ts` reads published selections.
-- `build.py` resolves binaries and resources, then stages the canonical layout.
-- `layout.py` validates package contents and owns the file digests and `buildId`.
+- `prepare.ts` resolves development inputs and publishes packages; `store.ts` reads published selections.
+- `build.py` resolves release binaries and resources.
+- `layout.ts` assembles both development and release packages using `layout.json`.
+- `layout.py` invokes the shared assembler and validates release contents and signing records.
 - `sign.py` signs or verifies staged executables and refreshes package metadata.
 
 Runtime discovery, Tool policy, sandbox enforcement, notarization, installer
@@ -57,11 +58,14 @@ maps the package target through `third_party/ripgrep/runtime-lock.json`,
 validates archive size and SHA-256 on every use, extracts only the locked
 member, and rejects non-regular archive members. `node.py` applies the same
 locked size/SHA-256 gate to the shared Node.js runtime, extracts only `node[.exe]`
-and its license, and never resolves Node from the host `PATH`. Official Node.js
+and its license, and never resolves the packaged runtime from the host `PATH`.
+Both Python resolvers share `build/download/artifacts.py`; development inputs use
+`build/download/artifacts.ts`. Downloads hash bounded streams and publish only verified
+files from unique temporary paths, so failed requests cannot remove a concurrent result. Official Node.js
 releases do not contain musl builds, so musl release jobs must supply an exact
 `--node-bin`; the lock still supplies the verified upstream license. For Linux, `bubblewrap.py` validates [`ash-rs/vendor/bubblewrap`](../../ash-rs/vendor/bubblewrap/README.md), then builds the `ash-bwrap` binary with the target C compiler and `libcap`; `--bwrap-bin` accepts an already built or signed helper. Microsoft MXC is linked into the Rust runtime. No Ash sandbox helper executables or machine service are packaged. The SDK license is copied to `ash-resources/licenses/mxc/LICENSE.md`.
 Repository-owned built-in Skills come from
-`ash-rs/skills/assets/`; `layout.py` rejects linked or malformed Skill trees,
+`ash-rs/skills/assets/`; `layout.ts` rejects linked or malformed Skill trees,
 stages them under `ash-resources/skills/`, validates the complete package in a
 sibling temporary directory, and renames it into place. It never replaces an
 existing output directory. Repository-owned declarative Editor Extensions come from the root
@@ -71,8 +75,8 @@ unlinked-tree restriction. Their canonical upstream license copy is
 once to `ash-resources/licenses/vscode/LICENSE.txt`. Runtime discovery and contribution semantics remain owned by
 [`ash-extensions`](../../ash-rs/extensions/README.md) and
 [`docs/editor-extensions.md`](../../docs/editor-extensions.md), not by the package builder.
-Product service inputs come from `resources/product-services/`; both assemblers copy the regular
-tree and validate the schema-v2 source list, unique names, the official pin, and every source's
+Product service inputs come from `resources/product-services/`; the shared assembler copies the regular
+tree and validates the schema-v2 source list, unique names, the official pin, and every source's
 bounded, contained, regular trust-root file before completing a package. The runtime parser owns
 endpoint and publisher policy validation and TUF verification.
 
@@ -87,7 +91,7 @@ package layout version 2 under `javascriptRuntime.kind`; validators reject a
 payload whose files and declared runtime kind disagree.
 
 Desktop development uses the same locks and canonical layout through the Node
-assembler at `build/package/prepare.ts`. It defaults to the
+entry at `build/package/prepare.ts`. It defaults to the
 host-provided runtime variant for Electron; Browser full mode passes
 `--javascript-runtime packaged-node`. The assembler builds first-party
 executables with Cargo's compact `dev-small` profile, verifies and extracts the required
@@ -98,7 +102,8 @@ reads the exact executable path from Cargo's JSON artifact messages instead of
 guessing a `target` layout. Normal compact host builds, the development
 assembler, and the Rust watcher therefore reuse one compilation cache without
 creating a second target-triple tree. It neither installs nor invokes Python.
-This Python package remains the release builder, also honors `CARGO_TARGET_DIR`,
+The Python release builder invokes `layout.ts` with resolved inputs and therefore requires
+the repository-pinned Node 24 on `PATH`. It also honors `CARGO_TARGET_DIR`,
 and retains its refusal to replace an explicit output directory.
 
 Windows development and release both call the MXC SDK directly. Linux proxy networking additionally requires the SDK's host dependencies: slirp4netns, util-linux and iptables with the required namespace/kernel support.

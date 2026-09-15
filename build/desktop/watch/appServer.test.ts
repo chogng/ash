@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { cargoArtifactExecutable, cargoRenderedDiagnostic, parseCargoMessage } from "../cargo.ts";
+import { cargoArtifactExecutable, cargoRenderedDiagnostic, parseCargoMessage } from "../../lib/cargo.ts";
 import { publishAppServerGeneration, relativeWatchedDirectory, shouldRebuildAppServer, shouldRebuildWorkspaceManifest } from "./appServer.ts";
 
 test("reads executable paths and diagnostics from Cargo JSON messages", () => {

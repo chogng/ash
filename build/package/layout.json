@@ -1,0 +1,40 @@
+{
+  "layoutVersion": 2,
+  "entrypoint": "bin/ash-app-server{exe}",
+  "pathDir": "ash-path",
+  "resourcesDir": "ash-resources",
+  "binaries": {
+    "appServer": "bin/ash-app-server{exe}",
+    "remote": "bin/ash-remote{exe}",
+    "remoteServer": "bin/ash-remote-server{exe}",
+    "execServer": "bin/ash-exec-server{exe}",
+    "appServerDaemon": "bin/ash-app-server-daemon{exe}",
+    "codeModeHost": "bin/ash-code-mode-host{exe}"
+  },
+  "licenses": [
+    {
+      "source": "third_party/ripgrep/LICENSE-MIT",
+      "destination": "ash-resources/licenses/ripgrep/LICENSE-MIT"
+    },
+    {
+      "source": "third_party/ripgrep/UNLICENSE",
+      "destination": "ash-resources/licenses/ripgrep/UNLICENSE"
+    },
+    {
+      "source": "third_party/vscode/LICENSE.txt",
+      "destination": "ash-resources/licenses/vscode/LICENSE.txt"
+    },
+    {
+      "source": "ash-rs/vendor/mxc/LICENSE.md",
+      "destination": "ash-resources/licenses/mxc/LICENSE.md"
+    },
+    {
+      "source": "ash-rs/uds/LICENSE-APACHE",
+      "destination": "ash-resources/licenses/uds/LICENSE-APACHE"
+    },
+    {
+      "source": "ash-rs/uds/NOTICE",
+      "destination": "ash-resources/licenses/uds/NOTICE"
+    }
+  ]
+}

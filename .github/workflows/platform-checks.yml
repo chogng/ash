@@ -97,12 +97,12 @@ jobs:
         shell: bash
         run: ${{ matrix.python }} -B scripts/test-python.py ash-code
 
-      - name: Test build tooling
-        if: matrix.checks != false
-        shell: bash
-        run: ${{ matrix.python }} -B scripts/test-python.py build
+      - name: Set up Node for package contract tests
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
 
-      - name: Test release tooling
+      - name: Test build tooling
         if: matrix.checks != false
         shell: bash
         run: ${{ matrix.python }} -B scripts/test-python.py build

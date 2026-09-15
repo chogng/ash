@@ -11,8 +11,15 @@
     "noUnusedParameters": true,
     "useUnknownInCatchVariables": false,
     "verbatimModuleSyntax": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
-  "include": ["*.ts", "desktop/**/*.ts", "docs/**/*.ts", "download/**/*.ts", "lib/**/*.ts", "vite/**/*.ts", "app/**/*.ts", "package/**/*.ts", "pnpm/**/*.ts", "resources/**/*.ts"],
-  "exclude": ["vite/stanza/**/*.ts"]
+  "include": [
+    "**/*.ts"
+  ],
+  "exclude": [
+    "node_modules/**",
+    "vite/stanza/**/*.ts"
+  ]
 }

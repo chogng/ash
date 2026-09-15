@@ -82,6 +82,7 @@ alias(
 )
 
 exports_files([
+    "ash-ts/generated/app-server/protocol.ts",
     "Cargo.lock",
     "Cargo.toml",
     "build/__init__.py",

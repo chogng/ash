@@ -6,8 +6,8 @@ import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 
-import { cargoArtifactExecutable, cargoRenderedDiagnostic, cargoTargetDirectory, parseCargoMessage } from "../cargo.ts";
-import { desktopBuildPath } from "../paths.ts";
+import { cargoArtifactExecutable, cargoRenderedDiagnostic, cargoTargetDirectory, parseCargoMessage } from "../../lib/cargo.ts";
+import { desktopBuildPath } from "../../lib/paths.ts";
 
 const desktopRoot = resolve(import.meta.dirname, "../../../ash-ts");
 const repositoryRoot = resolve(desktopRoot, "..");

@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
-import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
-from urllib.request import Request, urlopen
 
 from .targets import TARGETS, TargetSpec
+from build.download.artifacts import download_and_verify, sha256
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -27,6 +25,7 @@ class LockedFile:
     name: str
     sha256: str
     url: str
+    size: int | None = None
 
 
 @dataclass(frozen=True)
@@ -147,46 +146,19 @@ def materialize(artifact: LockedFile, cache_directory: Path) -> Path:
     if has_checksum(destination, artifact.sha256):
         return destination
 
-    destination.unlink(missing_ok=True)
-    cache_directory.mkdir(parents=True, exist_ok=True)
-    file_descriptor, temporary_name = tempfile.mkstemp(
-        prefix=f".{artifact.name}.", dir=cache_directory
+    download_and_verify(
+        artifact,
+        destination,
+        max_bytes=MAX_ARTIFACT_BYTES,
+        timeout=DOWNLOAD_TIMEOUT_SECONDS,
     )
-    os.close(file_descriptor)
-    temporary = Path(temporary_name)
-    try:
-        request = Request(
-            artifact.url,
-            headers={"User-Agent": "ash-v8-artifact-resolver"},
-        )
-        with urlopen(request, timeout=DOWNLOAD_TIMEOUT_SECONDS) as response:
-            with temporary.open("wb") as output:
-                total = 0
-                while chunk := response.read(1024 * 1024):
-                    total += len(chunk)
-                    if total > MAX_ARTIFACT_BYTES:
-                        raise RuntimeError(
-                            f"rusty_v8 artifact exceeds the {MAX_ARTIFACT_BYTES}-byte limit: {artifact.name}"
-                        )
-                    output.write(chunk)
-        if not has_checksum(temporary, artifact.sha256):
-            raise RuntimeError(
-                f"Downloaded rusty_v8 artifact failed SHA-256 validation: {artifact.name}"
-            )
-        temporary.replace(destination)
-        return destination
-    finally:
-        temporary.unlink(missing_ok=True)
+    return destination
 
 
 def has_checksum(path: Path, expected: str) -> bool:
     if not path.is_file():
         return False
-    digest = hashlib.sha256()
-    with path.open("rb") as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest() == expected
+    return sha256(path) == expected
 
 
 def required_string(document: dict[object, object], key: str, path: Path) -> str:

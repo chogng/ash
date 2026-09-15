@@ -1,5 +1,5 @@
 filegroup(
     name = "python_sources",
-    srcs = glob(["*.py"], exclude = ["test_*.py"]) + ["//:build/__init__.py"],
+    srcs = glob(["*.py"], exclude = ["test_*.py"]) + ["//:build/__init__.py", "//build/download:python_sources"],
     visibility = ["//visibility:public"],
 )

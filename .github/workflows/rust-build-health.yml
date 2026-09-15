@@ -10,7 +10,7 @@ on:
       - ".cargo/**"
       - "rust-toolchain.toml"
       - "scripts/*.py"
-      - "build/lib/ash_build/**"
+      - "build/**"
       - "scripts/pyproject.toml"
       - "scripts/uv.lock"
       - "justfile"
@@ -23,7 +23,7 @@ on:
       - ".cargo/**"
       - "rust-toolchain.toml"
       - "scripts/*.py"
-      - "build/lib/ash_build/**"
+      - "build/**"
       - "scripts/pyproject.toml"
       - "scripts/uv.lock"
       - "justfile"
@@ -58,6 +58,11 @@ jobs:
         uses: taiki-e/install-action@a6b2e2dcd845ddd7f509ce4f3ed3d922b80cc5d9
         with:
           tool: cargo-shear@1.13.4
+      - name: Set up Node for package contract tests
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+
       - name: Test dependency and measurement checks
         run: python3 -B scripts/test-python.py scripts build
       - name: Check dependency declarations, versions, ownership, and unused entries

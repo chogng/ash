@@ -3,6 +3,20 @@ package(default_visibility = ["//visibility:public"])
 filegroup(
     name = "python_sources",
     srcs = glob(["*.py"], exclude = ["test_*.py"]) + [
-        "//build/lib:python_sources",
+        ":assembly_sources",
+        "//build/lib:signing_sources",
+        "//build/lib/ash_build:python_sources",
+        "//build/download:python_sources",
+    ],
+)
+
+filegroup(
+    name = "assembly_sources",
+    srcs = [
+        "layout.ts",
+        "layout.json",
+        "productServices.ts",
+        "//build/download:artifacts.ts",
+        "//:ash-ts/generated/app-server/protocol.ts",
     ],
 )

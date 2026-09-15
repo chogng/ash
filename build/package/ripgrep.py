@@ -1,22 +1,19 @@
 """Fetch and verify the pinned ripgrep executable used by Ash packages."""
 
-import hashlib
 import json
-import os
-import shutil
 import stat
-import tarfile
-import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional
-from urllib.request import Request, urlopen
 
 from .cargo import validate_input_binary
+from build.download.artifacts import (
+    archive_is_valid,
+    download_and_verify,
+    extract_member,
+    sha256,
+)
 from build.lib.ash_build.targets import TargetSpec
-
-
-DOWNLOAD_TIMEOUT_SECONDS = 60
 
 
 @dataclass(frozen=True)
@@ -64,11 +61,12 @@ def resolve_ripgrep(
     artifact_cache = cache_root / version / artifact.key
     archive_path = artifact_cache / artifact.archive
     if not archive_is_valid(archive_path, artifact):
-        archive_path.unlink(missing_ok=True)
         download_and_verify(artifact, archive_path)
 
     executable = artifact_cache / spec.ripgrep_name
-    extract_executable(archive_path, artifact, executable)
+    extract_member(
+        archive_path, artifact.archive_format, artifact.executable_member, executable
+    )
     if not spec.is_windows:
         mode = executable.stat().st_mode
         executable.chmod(mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
@@ -137,118 +135,6 @@ def artifact_for_target(lock: Dict[str, Any], target: str) -> LockedArtifact:
         executable_member=required_string(value, "executable"),
         url=url,
     )
-
-
-def archive_is_valid(path: Path, artifact: LockedArtifact) -> bool:
-    if not path.is_file():
-        return False
-    try:
-        verify_archive(path, artifact)
-    except RuntimeError:
-        return False
-    return True
-
-
-def download_and_verify(artifact: LockedArtifact, destination: Path) -> None:
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_name(destination.name + ".partial")
-    temporary.unlink(missing_ok=True)
-    request = Request(artifact.url, headers={"User-Agent": "ash-package-builder"})
-    try:
-        with urlopen(request, timeout=DOWNLOAD_TIMEOUT_SECONDS) as response:
-            with open(temporary, "wb") as output:
-                shutil.copyfileobj(response, output)
-        verify_archive(temporary, artifact)
-        os.replace(str(temporary), str(destination))
-    except Exception:
-        temporary.unlink(missing_ok=True)
-        destination.unlink(missing_ok=True)
-        raise
-
-
-def verify_archive(path: Path, artifact: LockedArtifact) -> None:
-    actual_size = path.stat().st_size
-    if actual_size != artifact.size:
-        raise RuntimeError(
-            "ripgrep archive {} has size {}, expected {}".format(
-                path, actual_size, artifact.size
-            )
-        )
-    actual_digest = sha256(path)
-    if actual_digest != artifact.sha256:
-        raise RuntimeError(
-            "ripgrep archive {} has SHA-256 {}, expected {}".format(
-                path, actual_digest, artifact.sha256
-            )
-        )
-
-
-def extract_executable(
-    archive_path: Path, artifact: LockedArtifact, destination: Path
-) -> None:
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_name(destination.name + ".partial")
-    temporary.unlink(missing_ok=True)
-    try:
-        if artifact.archive_format == "tar.gz":
-            extract_tar_member(archive_path, artifact.executable_member, temporary)
-        elif artifact.archive_format == "zip":
-            extract_zip_member(archive_path, artifact.executable_member, temporary)
-        else:
-            raise RuntimeError(
-                "Unsupported ripgrep archive format {!r}".format(
-                    artifact.archive_format
-                )
-            )
-        os.replace(str(temporary), str(destination))
-    finally:
-        temporary.unlink(missing_ok=True)
-
-
-def extract_tar_member(archive_path: Path, member_name: str, destination: Path) -> None:
-    with tarfile.open(str(archive_path), "r:gz") as archive:
-        try:
-            member = archive.getmember(member_name)
-        except KeyError as error:
-            raise RuntimeError(
-                "ripgrep archive {} is missing {!r}".format(archive_path, member_name)
-            ) from error
-        if not member.isfile():
-            raise RuntimeError(
-                "ripgrep archive member {!r} is not a regular file".format(member_name)
-            )
-        extracted = archive.extractfile(member)
-        if extracted is None:
-            raise RuntimeError(
-                "Could not read ripgrep archive member {!r}".format(member_name)
-            )
-        with extracted, open(destination, "wb") as output:
-            shutil.copyfileobj(extracted, output)
-
-
-def extract_zip_member(archive_path: Path, member_name: str, destination: Path) -> None:
-    with zipfile.ZipFile(str(archive_path)) as archive:
-        try:
-            member = archive.getinfo(member_name)
-        except KeyError as error:
-            raise RuntimeError(
-                "ripgrep archive {} is missing {!r}".format(archive_path, member_name)
-            ) from error
-        file_type = (member.external_attr >> 16) & 0o170000
-        if member.is_dir() or file_type == stat.S_IFLNK:
-            raise RuntimeError(
-                "ripgrep archive member {!r} is not a regular file".format(member_name)
-            )
-        with archive.open(member) as extracted, open(destination, "wb") as output:
-            shutil.copyfileobj(extracted, output)
-
-
-def sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with open(path, "rb") as contents:
-        for chunk in iter(lambda: contents.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def required_string(value: Any, key: str) -> str:

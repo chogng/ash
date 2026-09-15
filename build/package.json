@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test *.test.ts desktop/**/*.test.ts lib/watch/*.test.ts pnpm/*.test.ts resources/**/*.test.ts vite/*.test.ts package/*.test.ts",
+    "test": "node --test \"**/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.json"
   },
   "devDependencies": {

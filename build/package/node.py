@@ -1,22 +1,19 @@
 """Fetch and verify the pinned Node.js runtime shared by language servers."""
 
-import hashlib
 import json
-import os
-import shutil
 import stat
-import tarfile
-import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional
-from urllib.request import Request, urlopen
 
 from .cargo import validate_input_binary
+from build.download.artifacts import (
+    archive_is_valid,
+    download_and_verify,
+    extract_member,
+    sha256,
+)
 from build.lib.ash_build.targets import TargetSpec
-
-
-DOWNLOAD_TIMEOUT_SECONDS = 60
 
 
 @dataclass(frozen=True)
@@ -56,14 +53,20 @@ def resolve_node(
     artifact_cache = cache_root / version / artifact.key
     archive_path = artifact_cache / artifact.archive
     if not archive_is_valid(archive_path, artifact):
-        archive_path.unlink(missing_ok=True)
         download_and_verify(artifact, archive_path)
 
     license_file = artifact_cache / "LICENSE"
-    extract_member(archive_path, artifact, artifact.license_member, license_file)
+    extract_member(
+        archive_path, artifact.archive_format, artifact.license_member, license_file
+    )
     if explicit_binary is None:
         executable = artifact_cache / spec.node_name
-        extract_member(archive_path, artifact, artifact.executable_member, executable)
+        extract_member(
+            archive_path,
+            artifact.archive_format,
+            artifact.executable_member,
+            executable,
+        )
         source = "upstream-release"
     else:
         executable = validate_input_binary(
@@ -153,91 +156,6 @@ def artifact_for_target(
         license_member=required_string(value, "license"),
         url="{}/{}".format(base_url.rstrip("/"), archive),
     )
-
-
-def archive_is_valid(path: Path, artifact: LockedNodeArtifact) -> bool:
-    if not path.is_file():
-        return False
-    try:
-        verify_archive(path, artifact)
-    except RuntimeError:
-        return False
-    return True
-
-
-def download_and_verify(artifact: LockedNodeArtifact, destination: Path) -> None:
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_name(destination.name + ".partial")
-    temporary.unlink(missing_ok=True)
-    request = Request(artifact.url, headers={"User-Agent": "ash-package-builder"})
-    try:
-        with urlopen(request, timeout=DOWNLOAD_TIMEOUT_SECONDS) as response:
-            with open(temporary, "wb") as output:
-                shutil.copyfileobj(response, output)
-        verify_archive(temporary, artifact)
-        os.replace(str(temporary), str(destination))
-    except Exception:
-        temporary.unlink(missing_ok=True)
-        destination.unlink(missing_ok=True)
-        raise
-
-
-def verify_archive(path: Path, artifact: LockedNodeArtifact) -> None:
-    if path.stat().st_size != artifact.size or sha256(path) != artifact.sha256:
-        raise RuntimeError(
-            "Node.js archive failed locked size or SHA-256 validation: {}".format(path)
-        )
-
-
-def extract_member(
-    archive_path: Path,
-    artifact: LockedNodeArtifact,
-    member_name: str,
-    destination: Path,
-) -> None:
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_name(destination.name + ".partial")
-    temporary.unlink(missing_ok=True)
-    try:
-        if artifact.archive_format == "tar.xz":
-            with tarfile.open(str(archive_path), "r:xz") as archive:
-                member = archive.getmember(member_name)
-                if not member.isfile():
-                    raise RuntimeError(
-                        "Node.js archive member {!r} is not a regular file".format(
-                            member_name
-                        )
-                    )
-                extracted = archive.extractfile(member)
-                if extracted is None:
-                    raise RuntimeError(
-                        "Could not read Node.js archive member {!r}".format(member_name)
-                    )
-                with extracted, open(temporary, "wb") as output:
-                    shutil.copyfileobj(extracted, output)
-        else:
-            with zipfile.ZipFile(str(archive_path)) as archive:
-                member = archive.getinfo(member_name)
-                file_type = (member.external_attr >> 16) & 0o170000
-                if member.is_dir() or file_type == stat.S_IFLNK:
-                    raise RuntimeError(
-                        "Node.js archive member {!r} is not a regular file".format(
-                            member_name
-                        )
-                    )
-                with archive.open(member) as extracted, open(temporary, "wb") as output:
-                    shutil.copyfileobj(extracted, output)
-        os.replace(str(temporary), str(destination))
-    finally:
-        temporary.unlink(missing_ok=True)
-
-
-def sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with open(path, "rb") as contents:
-        for chunk in iter(lambda: contents.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def required_string(value: Any, key: str) -> str:
