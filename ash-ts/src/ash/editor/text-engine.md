@@ -55,7 +55,7 @@ flowchart LR
 | `common/cursor`、`common/commands` | editor-local selection 和 DOM-free edit intent | 键盘监听、DOM、Workbench command registry |
 | `common/viewModel` | logical line → visual line、geometry、hit-test 所需纯投影 | DOM 测量、CSS、feature controller |
 | `common/viewLayout` | viewport size、content extent、scroll clamp、visible/render ranges | DOM scroll node、model mutation |
-| `common/languages`、`common/tokens` | provider contract、request freshness、versioned result、token index | parser transport、DOM presentation、Workbench service |
+| `common/languages.ts`、`common/languages`、`common/tokens` | 公共 provider contract、语言配置、token 状态与索引 | contribution 请求编排、parser transport、DOM presentation、Workbench service |
 | `browser` | DOM、测量、输入适配、view host、view parts、runtime adapter | 文本权威、文件生命周期、产品 pane |
 | `contrib/<feature>` | 可移除 feature 的 command、state、controller 和 presentation | 第二套 model、产品 ID、隐式宿主依赖 |
 | Workbench | pane/input、文件和 working-copy、产品组合、transport adapter | 文本事务、selection、viewport |
@@ -202,7 +202,7 @@ contrib/<feature>/
 - `common` 不读取 DOM、Workbench service 或 transport DTO。
 - 简单 feature 在 browser 主文件中注册；只有 configure phase、能力注入或多对象编排才使用独立 `.contribution.ts`。
 - 共享模型数据使用当前模型的服务作用域；私有服务、装饰和会话在功能安装函数内创建。长期控制器显式接收实际依赖，不能持有完整装配上下文或 import 模式 bundle。
-- Provider contract 与 DOM presentation 分离；没有 browser UI 时，common contract 仍应可独立测试。
+- Provider contract 与功能请求编排、DOM presentation 分离；公共契约归属遵循 [Editor README](./README.md)，不能为独立测试把整个功能调度类放入 `common`。
 - 弹出菜单关闭时仅在菜单内部拥有焦点的情况下恢复所属输入节点；共享模型的其他编辑器改动内容不能抢走当前焦点。
 - 不创建空目录、barrel 或 placeholder controller 来表示尚未实现的能力。
 
@@ -214,7 +214,8 @@ contrib/<feature>/
 | --- | --- | --- |
 | Live text model reference、dirty、baseline、conflict | Editor `ITextModelService` contract / Workbench `BrowserTextModelService` | Workbench 提供 resource store 与 working-copy registration |
 | 原始资源读写和 expected revision | editor-owned `ITextResourceStore` contract | Workbench/file service/App Server adapter |
-| Language provider registry 和 version gate | `IEditorLanguageFeaturesService` 与 editor common stores | TextMate、Worker、Rust 或 LSP adapter |
+| Language provider registry | `ILanguageFeaturesService`，消费 editor 公共 provider 契约 | TextMate、Worker、Rust 或 LSP adapter |
+| Language 请求失效与结果提交 | 发起请求的 contribution 校验模型身份、版本和取消状态；模型拥有版本与编辑事务 | Adapter 传递取消与结果，不拥有编辑器请求状态 |
 | Diff request/result 和 `DiffModel` | `common/diff` | Workbench `IDiffService` / `AppServerDiffComputationService` |
 | Pane、tab、save command、notification | 无 | Workbench |
 

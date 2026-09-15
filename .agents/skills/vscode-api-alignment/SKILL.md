@@ -45,6 +45,7 @@ Rust 文件不使用本 skill，也不以 VS Code 为参照。普通 TypeScript 
 - 生产调用方真实存在，不是测试、示例、类型引用或上游调用方；
 - 文件存在关系已分类，缺失文件会落到准确同路径，已有文件会保留未涉及代码并原地修改；
 - 所需下层依赖已经就绪，链上没有尚未取得用户决定的仅 Ash 载体；
+- 下层公共契约和 registry 不反向导入 contribution，`import type` 也计入依赖检查；文件无 DOM 或已有文档描述都不能证明职责正确。文档与依赖规则冲突时先修正原文，并把代码现状记为待迁移；用户已明确确认的专属能力仍按其确认范围处理，不能据此扩大通用职责；
 - 旧入口、旧 import 或重复 owner 能在同批退出，不需要临时桥、别名或新旧 API 并存；
 - 由注入容器创建的长期对象遵守 [TypeScript Frontend Architecture](../../../.github/instructions/frontend-architecture.instructions.md) 的构造注入规则。对齐的是“创建 owner、依赖可见性、作用域和失败语义”，不是只补 `@I...Service` 语法；若 Ash 的实例化底座尚不能根据参数装饰器解析依赖，必须先闭合该下层缺口，不得用 options、service locator、手写空依赖描述或对象内部的替代容器模仿上游外形；
 - 实现方案来自 Ash 当前 owner、状态和生命周期，不复刻上游私有类图、DOM 层级或控制流；

@@ -67,8 +67,11 @@ interface ViewZoneState {
 }
 
 interface StandaloneHarness {
+	prepareDeferredFormatting(): void;
+	readDeferredFormatting(): { aborted: boolean[]; value: string };
+	finishDeferredFormatting(): void;
 	readEOL(): string;
-	runFormatting(change: 'none' | 'position' | 'model' | 'readonly' | 'eol'): Promise<string>;
+	runFormatting(change: 'none' | 'position' | 'model' | 'readonly' | 'eol' | 'returnPosition'): Promise<string>;
 
 	prepareLineComment(): void;
 	prepareLineCopy(emptyTail?: boolean): void;
@@ -258,7 +261,25 @@ function readViewZone(): ViewZoneState {
 	};
 }
 
+let deferredFormatting: { signal: AbortSignal; resolve: () => void }[] = [];
+let formattingProvider: { dispose(): void } | undefined;
+
 window.ashStandaloneIntegration = {
+	prepareDeferredFormatting: () => {
+		formattingProvider?.dispose();
+		deferredFormatting = [];
+		callerEditor.setValue('alpha');
+		callerEditor.setPosition(new stanza.Position(1, 1));
+		callerEditor.focus();
+		formattingProvider = stanza.languages.registerDocumentFormattingEditProvider('*', {
+			provideDocumentFormattingEdits: async (_request, signal) => {
+				await new Promise<void>(resolve => deferredFormatting.push({ signal, resolve }));
+				return [{ range: new stanza.Range(1, 1, 1, 6), text: 'ALPHA' }];
+			},
+		});
+	},
+	readDeferredFormatting: () => ({ aborted: deferredFormatting.map(request => request.signal.aborted), value: callerEditor.getValue() }),
+	finishDeferredFormatting: () => { for (const request of deferredFormatting) request.resolve(); },
 	readEOL: () => callerEditor.getModel()!.getEOL(),
 	runFormatting: async change => {
 		callerEditor.setValue('alpha');
@@ -276,7 +297,8 @@ window.ashStandaloneIntegration = {
 			const controller = callerEditor.getContribution<FormatController>('editor.contrib.format');
 			if (!controller) throw new Error('Formatting contribution is missing');
 			const formatting = controller.formatDocument(error => { throw error; });
-			if (change === 'position') callerEditor.setPosition(new stanza.Position(1, 3));
+			if (change === 'position' || change === 'returnPosition') callerEditor.setPosition(new stanza.Position(1, 3));
+			if (change === 'returnPosition') callerEditor.setPosition(new stanza.Position(1, 1));
 			if (change === 'model') callerEditor.setModel(ownedModel);
 			if (change === 'readonly') callerEditor.updateOptions({ readOnly: true });
 			release();
@@ -696,6 +718,8 @@ window.ashStandaloneIntegration = {
 	},
 	releaseOwned: () => ownedEditor.dispose(),
 	dispose: () => {
+		formattingProvider?.dispose();
+		for (const request of deferredFormatting) request.resolve();
 		referenceRegistration?.dispose();
 		TokenizationRegistry.setColorMap([]);
 		codeActionRegistration?.dispose();

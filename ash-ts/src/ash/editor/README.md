@@ -4,7 +4,7 @@
 
 ## 快速理解
 
-Stanza 采用与 VS Code `src/vs/editor` 一致的扁平职责分区：`common` 保存 DOM-free 模型与算法，`browser` 保存 DOM 投影和宿主适配，`contrib` 保存可装配能力，`test` 保存内核级回归测试。Stanza 只有一个源码域、一套公开入口和一个同步权威：按行存储的 `TextModel`。Code 与 Academic 是建立在同一模型上的两套功能实现。
+Stanza 以 VS Code `src/vs/editor` 为职责参照：`common` 拥有编辑器公共契约与内核，`browser` 拥有浏览器编辑器实现，`contrib` 拥有可装配功能，`test` 保存内核级回归测试。运行环境不代替职责判断：功能自己的纯算法可以留在其 `browser` 目录，不要求每个 contribution 建立 `common`。当前代码的归属缺口见[对齐台账](./api-alignment-status.md)。Stanza 只有一个源码域、一套公开入口和一个同步权威：按行存储的 `TextModel`。Code 与 Academic 是建立在同一模型上的两套功能实现。
 
 | 产品或调用方式 | 加载入口 | 得到的能力 |
 | --- | --- | --- |
@@ -34,7 +34,7 @@ Editor 维护以下核心入口。实现 README 可以补充局部细节，但�
 | --- | --- | --- | --- |
 | `common/core` | `base/common` | 文本坐标、文档坐标、selection、纯变换算法 | DOM、Workbench service、App Server DTO |
 | `common/model` | `common/core`、`base/common` | `TextModel`、`ITextBuffer`、有序逻辑行、LineId、mark/atom/facet/region/relation、history、schema、transaction、serialization | 文件传输、浏览器 focus、产品 profile |
-| `common/services` | `common/languages`、`contrib/*/common`、`platform` | 语言身份、语言配置和 provider registry 的独立服务契约，以及公开 API 的基础值对象组合 | App Server DTO、产品 provider、Workbench adapter |
+| `common/services` | `common/languages`、编辑器公共契约、`base/common`、`platform/common` | 语言身份、语言配置和 provider registry 的独立服务契约，以及公开 API 的基础值对象组合 | contribution-owned 契约或实现、App Server DTO、产品 provider、Workbench adapter |
 | `common/cursor`、`common/viewModel`、`common/viewLayout` | 文本内核与 `base/common` | 行式编辑器实例状态和纯布局投影 | DOM 和产品判断 |
 | `browser` | `common`、`base/browser` 和显式前端 service contract | code/document/diff/multi-diff widget、输入、viewport、contribution registry 与 editor-facing runtime adapter | Workbench pane/input、文件/working-copy 生命周期、Workbench 模式选择 |
 | `standalone/common`、`standalone/browser` | `editor/browser`、`editor/common`、`platform` | 单窗口 services、命名主题、URI/language model registry、`editor.create/createModel` 生命周期 | 用户主题持久化、文件 dirty/save/revert、Workbench service 或 pane |
@@ -42,7 +42,7 @@ Editor 维护以下核心入口。实现 README 可以补充局部细节，但�
 | `editor.*.all.ts` | contribution entry | 静态 editor 能力装配 | Workbench pane/input 注册、模型或功能实现 |
 | `workbench/contrib/{codeEditor,multiDiffEditor,documentEditor,academic}` | Editor 与 Workbench contract | pane/input、产品 profile、factory 注入和服务接线 | 编辑事务、selection、viewport 或 feature controller |
 
-顶层依赖遵循 VS Code 的 [Source Code Organization](https://github.com/microsoft/vscode/wiki/Source-Code-Organization)：`workbench → editor → platform → base`。因此 Editor 可以依赖 Base 和 Platform；反向依赖禁止。Editor 内部再保持 `contrib/browser → common → base`，其中 `common` 不使用 DOM，`browser` 才能使用 DOM。每个 `TextModel` 原生拥有有序逻辑行和稳定 `LineId`；Code 使用只有行与文档 metadata 的受限 profile，Academic 额外使用 mark、atom、facet、region 与 relation。浏览器投影和 Workbench 不得为代码区域或其他语义对象再创建隐藏模型。
+顶层依赖遵循[代码组织规范](../../../../.github/instructions/source-code-organization.instructions.md)：`workbench → editor → platform → base`。因此 Editor 可以依赖 Base 和 Platform；反向依赖禁止。Editor 内部由贡献消费公共契约，公共契约与 registry 不反向依赖贡献，即使只是类型导入。`common` 不使用 DOM 是运行环境限制，不是文件归属标准。每个 `TextModel` 原生拥有有序逻辑行和稳定 `LineId`；Code 使用只有行与文档 metadata 的受限 profile，Academic 额外使用 mark、atom、facet、region 与 relation。浏览器投影和 Workbench 不得为代码区域或其他语义对象再创建隐藏模型。
 
 内容主轴只有 `TextModel → LineSequence → ModelLine`。持久语义通过互相正交的 `RangeStore`、`PointStore`、`LineFacetStore`、`RegionStore` 与 `RelationStore` 引用 `LineId`；字符仍由 TextModel 私有拥有的 `ITextBuffer` 保存。buffer 当前由 Builder 构建的红黑树 `PieceTreeTextBuffer` 实现，PieceTree 不属于公开模型拓扑。
 
@@ -92,7 +92,7 @@ editor.main.ts ────────────→ editor.all.ts + editor.ap
 standalone/{common,browser} ─→ window services + model/editor/language/theme registries; never Workbench persistence
 ```
 
-`LanguageService` 只管理语言 ID 与文件关联，`ComposableLanguageConfigurationService` 只管理括号、注释、缩进等编辑规则，`EditorLanguageFeaturesService` 只管理能力 provider registry。Standalone 的 `languages` API 和 Workbench 的 App Server、TextMate、扩展适配器都写入这组共享 registry；具体 Hover、补全、折叠等 contribution 从 registry 构造自己的 model-level service，Editor 不读取服务器 DTO。
+`LanguageService` 只管理语言 ID 与文件关联，`ComposableLanguageConfigurationService` 只管理括号、注释、缩进等编辑规则，`LanguageFeaturesService` 只管理能力 provider registry。Standalone 的 `languages` API 和 Workbench 的 App Server、TextMate、扩展适配器都写入这组共享 registry；具体 Hover、补全、折叠等 contribution 消费 registry 并拥有自身请求与展示流程，不要求额外创建 model-level service。公共 provider 契约归 `common/languages.ts`，Editor 不读取服务器 DTO。当前 registry 仍从贡献导入部分类型，这是待修正的依赖，不是允许其他能力沿用的模式。
 
 Workbench 模式 contribution 是唯一能力选择点。Code 与 Academic 各自加载一个功能实现 bundle，并与对应 Workbench contribution 配对；Academic 不以 `editor.all.ts` 为基底。共享入口在窗口启动时只加载一个 bundle；切换模式通过 reload 创建新的 Renderer 生命周期。新增模式必须先登记 `WorkbenchModeId` 并补齐 Browser/Electron 的穷尽 loader 映射；不得在共享 Workbench、widget 或 model 内增加模式分支。
 

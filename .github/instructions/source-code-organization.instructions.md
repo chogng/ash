@@ -1,6 +1,6 @@
 ---
 description: Ash source code organization — layers, target environments, dependency injection, and folder structure conventions. Reference when adding new modules, services, or contributions.
-applyTo: src/ash/**
+applyTo: "**/src/ash/**"
 ---
 
 # Source Code Organization
@@ -21,7 +21,7 @@ The `src/ash/` core is partitioned into ordered layers — each may only import 
 
 ## Target Environments
 
-Within each layer, code is organized by runtime environment:
+Choose the owning layer and feature first, then its runtime environment. The table limits available APIs; it does not require every function without DOM access to live in `common`. A browser feature may keep pure helpers beside its orchestration. Extract shared code only for a concrete independent responsibility and consumer.
 
 | Folder | APIs Available | May Use |
 |--------|---------------|---------|
@@ -41,10 +41,10 @@ Within each layer, code is organized by runtime environment:
 
 ### Contribution Rules
 
-- No dependency from outside `contrib/` into `contrib/`
-- Each contribution has a single `.contribution.ts` entry point
-- Contributions expose internal API from a single common file
-- Cross-contribution dependencies use that common API — never reach into internals
+- Workbench core and shared services must not depend on contribution-owned contracts or implementations. This includes type-only imports. Entry points may import contributions to assemble features.
+- Workbench contributions use a `.contribution.ts` registration entry point. Editor contributions follow their editor bundle and registration contracts; this convention does not require an extra editor entry file.
+- Cross-contribution consumers use the owning feature's public API, never its private implementation. There is no requirement to create a `common` API file for every contribution.
+- Contracts consumed by shared registries belong to the lower shared owner; contributions implement or consume them. Do not place those contracts inside a contribution and import them back into the shared registry.
 
 ## Entry Points
 

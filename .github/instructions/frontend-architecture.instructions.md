@@ -15,7 +15,8 @@ Prefer an existing canonical context or service over options and callbacks that 
 
 ## Frontend services
 
-- Put a frontend domain service contract in a `common/*Service.ts` file and name its public interface and service identifier `I<Capability>Service`.
+- For a domain service managed by dependency injection and shared across runtimes, put its contract in the owning domain's `common` layer and name its public interface and service identifier `I<Capability>Service`. Preserve an established VS Code counterpart's contract filename when aligning APIs.
+- Provider interfaces, request orchestration, and pure helpers do not automatically need a service class or a `common/*Service.ts` file. Choose their owner using [source code organization](source-code-organization.instructions.md); multiple callers or asynchronous work alone do not justify a new service.
 - Name each runtime implementation file after its exported class, including a meaningful runtime qualifier: `appServerSyntaxAnalysisService.ts` exports `AppServerSyntaxAnalysisService`.
 - Align capability names, operation semantics, lifecycle, and error categories across the frontend service, transport protocol, and backend service so adapters remain thin and mechanical.
 - Name adapters and tests after the contract or implementation they exercise.

@@ -7,7 +7,7 @@
 - 本地根目录：`ash-ts/src/ash/editor`
 - 上游根目录：`../vscode/src/vs/editor`
 - 目标：VS Code 已有而 Ash 缺失的生产文件和公开 API 持续补齐；Ash 已有而 VS Code 没有的文件和公开 API 交由用户决定；对应实现承担相同公开契约、职责、状态所有权、生命周期和调用链。CSS 参与文件集合和可观察行为核对，但由 Ash DOM、品牌 class 与主题系统独立实现。
-- `editor` 可以依赖 `base`、`platform` 和自身更低运行环境的模块，不为“自包含”复制这些能力。`common` 只使用基础 JavaScript，DOM 进入 `browser`。
+- `editor` 可以依赖 `base`、`platform` 和自身更低运行环境的模块，不为“自包含”复制这些能力。运行环境与职责归属按[代码组织规范](../../../../.github/instructions/source-code-organization.instructions.md)分别判断；`common` 不使用 DOM，不代表所有无 DOM 代码都归 `common`。
 
 ## 批量调查示例
 
@@ -35,6 +35,17 @@ VS Code 有而 Ash 缺失的文件在调用链到达时直接按同路径创建�
 批量要求用于方向已证明后的调用方迁移，不用于同时探索十个 owner。一个端口的最小行为测试通过后，可以一次迁移十个以上同类调用方；若其中任何调用方暴露新的状态 owner、DOM owner 或未确认的仅 Ash 文件，就把该分支留在台账，继续完成已闭合部分。
 
 ### Editor 端口反例
+
+`contrib/format/common/formatCommands.ts` 同时承载 provider 类型和请求调度时，不能因为它没有 DOM 就认可整个文件的归属，也不能把整个文件移入 `browser`，使公共 registry 和宿主适配器反向依赖浏览器功能。应按以下职责核对本地与上游：
+
+| 职责 | 对应 owner |
+| --- | --- |
+| 格式化选项、文档/范围/输入格式化 provider 契约 | `editor/common/languages.ts` |
+| 共享 provider registry | `editor/common/services/languageFeatures.ts` |
+| provider 选择与格式化请求编排 | `editor/contrib/format/browser/format.ts` |
+| 命令注册与编辑提交 | `formatActions.ts`、`formattingEdit.ts` |
+
+先沿注册入口和实际请求核对公共契约，再迁移贡献与适配器调用方、测试和旧入口。只补 `formatActions.ts` 等同路径文件，却让公共 registry 继续从贡献导入 provider 类型，不能算职责对齐。此表是迁移目标，不代表 Ash 已完成这些迁移；代码现状见[对齐台账](../../../../ash-ts/src/ash/editor/api-alignment-status.md)。独立的 schema、序列化或协作算法仍按其实际职责判断，不按上游是否存在 `common` 目录一律搬迁。
 
 `editor/common/commands/editorEditCommand.ts` 在 VS Code 没有同路径文件，因此不能为了集中 selection、history 或 edit helper 自行创建，再让标准 Editor 命令反向依赖它。除非用户明确确认它是 Ash 专属 owner，否则应把公开契约和实现收敛到真实存在的标准命令、cursor 或 model owner，并让这个仅 Ash 文件保持不存在。
 

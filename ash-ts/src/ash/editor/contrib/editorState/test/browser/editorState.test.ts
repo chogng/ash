@@ -1,0 +1,111 @@
+import assert from 'node:assert/strict';
+import { suiteTeardown, test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { CancellationToken } from '../../../../../base/common/cancellation.js';
+import { URI } from '../../../../../base/common/uri.js';
+import { TextModel } from '../../../../common/model/textModel.js';
+import { Position } from '../../../../common/core/position.js';
+import { Range } from '../../../../common/core/range.js';
+import { CodeEditorStateFlag, EditorStateCancellationTokenSource } from '../../browser/editorState.js';
+import { EditorKeybindingCancellationTokenSource } from '../../browser/keybindingCancellation.js';
+
+const environment = new JSDOM('<!doctype html><body></body>');
+for (const [name, value] of Object.entries({
+	window: environment.window,
+	document: environment.window.document,
+	Node: environment.window.Node,
+	Element: environment.window.Element,
+	HTMLElement: environment.window.HTMLElement,
+	Event: environment.window.Event,
+})) Object.defineProperty(globalThis, name, { configurable: true, value });
+environment.window.HTMLCanvasElement.prototype.getContext = () => null;
+const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
+suiteTeardown(() => environment.window.close());
+
+function createEditor(model: TextModel): ReturnType<typeof createTestCodeEditor> {
+	const container = environment.window.document.createElement('div');
+	environment.window.document.body.append(container);
+	const editor = createTestCodeEditor({
+		container,
+		model,
+		languageId: 'plaintext',
+		input: { resource: URI.file('/state.txt') },
+		contributions: [],
+	});
+	editor.onDidDispose(() => container.remove());
+	return editor;
+}
+
+test('position cancellation remains cancelled after returning to the starting position', () => {
+	using model = new TextModel('alpha');
+	using editor = createEditor(model);
+	using source = new EditorStateCancellationTokenSource(editor, CodeEditorStateFlag.Position);
+	editor.setPosition(new Position(1, 3));
+	editor.setPosition(new Position(1, 1));
+	assert.equal(source.token.isCancellationRequested, true);
+});
+
+test('allowed range keeps an operation alive until the caret leaves it', () => {
+	using model = new TextModel('alpha');
+	using editor = createEditor(model);
+	using source = new EditorStateCancellationTokenSource(editor, CodeEditorStateFlag.Position, new Range(1, 1, 1, 3));
+	editor.setPosition(new Position(1, 3));
+	assert.equal(source.token.isCancellationRequested, false);
+	editor.setPosition(new Position(1, 4));
+	assert.equal(source.token.isCancellationRequested, true);
+});
+
+test('model replacement cancels even when the text and version match', () => {
+	using model = new TextModel('alpha');
+	using next = new TextModel('alpha');
+	using editor = createEditor(model);
+	using source = new EditorStateCancellationTokenSource(editor, CodeEditorStateFlag.Value);
+	editor.setModel(next);
+	assert.equal(source.token.isCancellationRequested, true);
+});
+
+test('disposing a source removes state listeners without cancelling its token', () => {
+	using model = new TextModel('alpha');
+	using editor = createEditor(model);
+	const source = new EditorStateCancellationTokenSource(editor, CodeEditorStateFlag.Position);
+	const token = source.token;
+	source.dispose();
+	editor.setPosition(new Position(1, 3));
+	assert.equal(token.isCancellationRequested, false);
+});
+
+test('editor disposal and an already cancelled parent cancel pending operations', () => {
+	using model = new TextModel('alpha');
+	using editor = createEditor(model);
+	using pending = new EditorKeybindingCancellationTokenSource(editor);
+	using cancelled = new EditorStateCancellationTokenSource(editor, CodeEditorStateFlag.Value, undefined, CancellationToken.Cancelled);
+	editor.dispose();
+	assert.deepEqual([pending.token.isCancellationRequested, cancelled.token.isCancellationRequested], [true, true]);
+});
+
+test('Escape cancels nested operations one at a time and releases its handler', () => {
+	using model = new TextModel('alpha');
+	using editor = createEditor(model);
+	editor.focus();
+	using outer = new EditorKeybindingCancellationTokenSource(editor);
+	using inner = new EditorKeybindingCancellationTokenSource(editor);
+	const escape = (): boolean => {
+		const event = new environment.window.KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true });
+		editor.controller.element.dispatchEvent(event);
+		return event.defaultPrevented;
+	};
+	assert.equal(escape(), true);
+	assert.deepEqual([outer.token.isCancellationRequested, inner.token.isCancellationRequested], [false, true]);
+	assert.equal(escape(), true);
+	assert.equal(outer.token.isCancellationRequested, true);
+	assert.equal(escape(), false);
+});
+
+test('scroll cancellation observes the editor layout owner', () => {
+	using model = new TextModel(Array.from({ length: 100 }, () => 'alpha').join('\n'));
+	using editor = createEditor(model);
+	editor.layout({ width: 400, height: 100 });
+	using source = new EditorStateCancellationTokenSource(editor, CodeEditorStateFlag.Scroll);
+	editor.setScrollTop(150);
+	assert.equal(source.token.isCancellationRequested, true);
+});

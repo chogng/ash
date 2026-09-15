@@ -4,7 +4,7 @@
 
 This directory owns Stanza's native browser projection of contracts from `../common/`. It may import `base/common`, `base/browser`, and editor common contracts. Neither `editor/common` nor `base` may import this layer.
 
-Language presentation is an optional consumer of this layer and lives in `./view`, `./controller`, and feature-owned `../contrib/*/browser` directories. `CodeEditorWidget` installs the selected contributions through separate language-configuration and language-feature services; each contribution builds its model-level service from the relevant provider registry. The text model does not import language providers, grammars, diagnostics, or completion services.
+Language presentation is an optional consumer of this layer and lives in `./view`, `./controller`, and feature-owned `../contrib/*/browser` directories. `CodeEditorWidget` installs the selected contributions through separate language-configuration and language-feature services. Contributions consume the relevant provider registry and own their request lifecycle and presentation; they do not require a separate model-level service. Pure helpers may remain beside browser feature orchestration. Shared provider contracts follow the ownership rules in the [Editor README](../README.md), independently of where a feature displays its results. The text model does not import language providers, grammars, diagnostics, or completion services.
 
 Browser-owned responsibilities include:
 

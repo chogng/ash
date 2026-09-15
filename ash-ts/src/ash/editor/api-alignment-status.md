@@ -4,6 +4,10 @@
 
 ## 当前结论
 
+- 2026-09-15 文档方向修正：移除“每个 contribution 从 common 文件暴露 API”、`common/services → contrib/*/common` 和“每个功能构造 model-level service”的要求；区分职责归属与运行环境限制，并在对齐技能中加入公共 registry 的类型依赖检查。本批只修改 10 份文档，代码迁移尚未开始：`formatCommands.ts` 仍混合 provider 契约与调度，`ILanguageFeaturesService` 仍导入 contribution 类型。此前格式化行为测试通过不代表这些职责已对齐，声明计数保持 80/41。后续按公共契约、registry、功能编排与调用方的顺序修正，不按缺失文件数扩大实现。
+
+- 2026-09-15 格式化取消与命令入口：本批修改 11 个文件，新增上游同路径 `contrib/editorState/browser/keybindingCancellation.ts` 和 `contrib/format/browser/formatActions.ts`，并在现有 `editorState.ts` 补齐 `EditorStateCancellationTokenSource`。格式化请求在光标移动、模型变化、只读切换、Escape、重复请求和释放时传递取消信号；提供者忽略信号时，调用方也能结束等待。既有快捷键与标准 `editor.action.formatDocument` Action 共用同一控制器；bundle 显式加载 Action 和贡献注册。文本、光标和滚动仍由既有 owner 管理，无 DOM 或 CSS 改动。10 项定向单测、103 项完整浏览器回归、对齐与类型检查、Stanza 构建及 diff 检查通过；保留既有颜色环境提示和 7 份 CSS 债务。全目录为 599 个生产文件、400 个同路径、199 个仅 Ash、333 个仅上游，大小写差异为 0。完整格式化提供者调度、选区格式化及 `TextModelCancellationTokenSource` 仍未补齐，121 组声明的 80/41 计数不变。
+
 - 本次格式化批次最终验证：100 项完整浏览器测试、Editor 对齐检查（含 Stanza 类型检查）、Stanza 生产构建和 `git diff --check` 通过。验证直接使用真实 Standalone Widget、贡献装配和 Worker；未新增单测。保留既有终端颜色环境提示与 7 份未触及的 CSS 债务，无新增生产构建警告。
 
 - 2026-09-15 格式化调用链补齐：新增上游同路径 `contrib/editorState/browser/editorState.ts` 的 `EditorState` / `CodeEditorStateFlag`，以及 `contrib/format/browser/formattingEdit.ts` 的 `FormattingEdit`。现有 `FormatController` 在提供者和 Worker 返回后核对模型身份、版本与光标，释放后不提交；格式化编辑统一处理只读、撤销边界、滚动恢复及换行符。仅换行符变化也保留，避免被最小编辑计算丢弃。生产文本和选区仍由 TextModel / Widget 持有；未新增 DOM 或 CSS。5 项 Chromium 定向回归覆盖正常格式化、移动光标、切换模型、只读和仅换行符变更，并验证文本及换行符撤销/重做。全目录为 597 个生产文件、398 个同路径、199 个仅 Ash、335 个仅上游，大小写差异为 0；既有 121 组声明的 80/41 计数不变。EditorState 的取消令牌类与完整格式化提供者调度仍未补齐，不能据此宣称整个文件 API 或 Editor 对齐完成。

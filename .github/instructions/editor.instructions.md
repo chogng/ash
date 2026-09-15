@@ -50,7 +50,8 @@ See [`src/ash/editor/README.md`](../../ash-ts/src/ash/editor/README.md), [`text-
 
 ## Public API and performance
 
-- Keep common editor contracts independent of browser and Workbench services.
+- Keep common editor contracts independent of browser, contribution-owned modules, and Workbench services, including type-only dependencies. Language provider contracts belong to `editor/common/languages.ts`; shared registries consume those contracts and contributions consume the registries.
+- Keep feature request selection, cancellation, and result application with the corresponding contribution owner. A helper without DOM access may remain in that feature's `browser` directory; do not create a contribution `common` service solely to make it independently testable.
 - Require explicit invalidation for every cache or retained projection.
 - Measure before adding per-Part DOM write caches.
 

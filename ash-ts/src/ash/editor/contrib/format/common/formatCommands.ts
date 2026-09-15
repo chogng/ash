@@ -1,3 +1,4 @@
+import { raceCancellationError } from '../../../../base/common/async.js';
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type Position } from "../../../common/core/position.js";
 import { type Range } from "../../../common/core/range.js";
@@ -59,12 +60,15 @@ export class FormatService extends Disposable {
 		method: "provideDocumentFormattingEdits" | "provideRangeFormattingEdits" | "provideOnTypeFormattingEdits",
 		signal = new AbortController().signal,
 	): Promise<readonly TextEdit[]> {
+		this.assertNotDisposed();
+		signal.throwIfAborted();
 		const request = { ...createLanguageFeatureRequest(this.model, languageId, signal), ...(this.resource ? { resource: this.resource } : {}), ...fields } as LanguageFormattingRequest;
 		for (const provider of providers.ordered(this.model)) {
 			const provide = provider[method];
-			if (!provide || !isLanguageFeatureRequestCurrent(request)) continue;
-			const edits = await provide.call(provider, request, signal);
-			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
+			if (this.isDisposed || !isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
+			if (!provide) continue;
+			const edits = await raceCancellationError(Promise.resolve(provide.call(provider, request, signal)), signal);
+			if (this.isDisposed || !isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
 			if (edits.length > 0) return Object.freeze([...edits]);
 		}
 		return Object.freeze([]);

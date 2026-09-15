@@ -1,11 +1,11 @@
-import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
+import { EditorOption } from '../../../common/config/editorOptions.js';
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
-import { Disposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type View } from "../../../browser/view.js";
 import { type IVersionedEditorWorkerClient } from "../../../browser/services/editorWorkerService.js";
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { FormatService, type LanguageFormattingOptions } from "../common/formatCommands.js";
-import { CodeEditorStateFlag, EditorState } from '../../editorState/browser/editorState.js';
+import { CodeEditorStateFlag, EditorStateCancellationTokenSource } from '../../editorState/browser/editorState.js';
 import { FormattingEdit } from './formattingEdit.js';
 
 export interface FormatControllerOptions {
@@ -15,11 +15,11 @@ export interface FormatControllerOptions {
 
 /** Routes the editor format shortcut into the Stanza formatting service and command layer. */
 export class FormatController extends Disposable {
+	private readonly request = this._register(new MutableDisposable<DisposableStore>());
 	private readonly options: LanguageFormattingOptions;
 	private readonly onError: (error: unknown) => void;
 
 	constructor(
-		private readonly input: HTMLElement,
 		private readonly editor: ICodeEditor,
 		viewport: View,
 		private readonly service: FormatService,
@@ -31,22 +31,34 @@ export class FormatController extends Disposable {
 		if (viewport.textModel !== editor.getModel()) throw new TypeError("Stanza format dependencies must share one text model");
 		this.options = options.formattingOptions ?? { tabSize: 4, insertSpaces: true };
 		this.onError = options.onError ?? (error => console.error("Stanza formatting failed", error));
-		this._register(addDisposableListener(input, "keydown", event => {
-			if (event.defaultPrevented || event.isComposing || event.altKey || (!event.ctrlKey && !event.metaKey) || !event.shiftKey || event.key.toLowerCase() !== "i") return;
-			stopEvent(event);
+		this._register(editor.onKeyDown(event => {
+			if (event.browserEvent.defaultPrevented || event.isComposing || event.altKey || (!event.ctrlKey && !event.metaKey) || !event.shiftKey || event.key.toLowerCase() !== 'i') return;
+			event.stop();
 			void this.formatDocument();
 		}));
 	}
 
 	async formatDocument(onError = this.onError): Promise<void> {
+		if (this.isDisposed || !this.editor.hasModel() || this.editor.getOption(EditorOption.readOnly)) return;
+		const resources = new DisposableStore();
+		this.request.value = resources;
+		const source = new EditorStateCancellationTokenSource(this.editor, CodeEditorStateFlag.Value | CodeEditorStateFlag.Position);
+		const abort = new AbortController();
+		resources.add(toDisposable(() => {
+			abort.abort();
+			source.dispose(true);
+		}));
+		resources.add(source.token.onCancellationRequested(() => abort.abort()));
+		resources.add(this.editor.onDidChangeConfiguration(() => {
+			if (this.editor.getOption(EditorOption.readOnly)) source.cancel();
+		}));
 		try {
-			const state = new EditorState(this.editor, CodeEditorStateFlag.Value | CodeEditorStateFlag.Position);
-			const edits = await this.service.provideDocumentFormattingEdits(this.languageId, this.options);
-			if (this.isDisposed || !state.validate(this.editor) || edits.length === 0) {
+			const edits = await this.service.provideDocumentFormattingEdits(this.languageId, this.options, abort.signal);
+			if (this.isDisposed || abort.signal.aborted || edits.length === 0) {
 				return;
 			}
-			const minimalEdits = await this.editorWorker.computeMoreMinimalEdits(edits);
-			if (this.isDisposed || !state.validate(this.editor) || !minimalEdits) {
+			const minimalEdits = await this.editorWorker.computeMoreMinimalEdits(edits, abort.signal);
+			if (this.isDisposed || abort.signal.aborted || !minimalEdits) {
 				return;
 			}
 			const result = [...minimalEdits];
@@ -64,7 +76,9 @@ export class FormatController extends Disposable {
 			}
 			FormattingEdit.execute(this.editor, result, true);
 		} catch (error) {
-			onError(error);
+			if (!abort.signal.aborted) onError(error);
+		} finally {
+			if (this.request.value === resources) this.request.clear();
 		}
 	}
 }
@@ -79,7 +93,6 @@ registerEditorContribution({ id: "editor.contrib.format", install: context => {
 		context.options.input.resource,
 	));
 	const controller = context.register(new FormatController(
-		context.controller.element,
 		context.editor,
 		context.view,
 		service,

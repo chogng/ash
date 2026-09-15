@@ -1428,7 +1428,7 @@ test('editor rendering follows updated configuration without replacing the view'
 	expect(errors).toEqual([]);
 });
 
-for (const change of ['none', 'position', 'model', 'readonly', 'eol'] as const) {
+for (const change of ['none', 'position', 'model', 'readonly', 'eol', 'returnPosition'] as const) {
 	test(`formatting validates ${change} state before applying delayed edits`, async ({ page }) => {
 		await page.goto('/standalone.html');
 		const value = await page.evaluate(change => window.ashStandaloneIntegration.runFormatting(change), change);
@@ -1445,6 +1445,24 @@ for (const change of ['none', 'position', 'model', 'readonly', 'eol'] as const) 
 			await page.keyboard.press('ControlOrMeta+Shift+z');
 			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('ALPHA');
 		}
+		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	});
+}
+
+for (const cancel of ['escape', 'supersede'] as const) {
+	test(`format action cancels pending provider on ${cancel}`, async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareDeferredFormatting());
+		await page.keyboard.press('ControlOrMeta+Shift+i');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readDeferredFormatting())).toEqual({ aborted: [false], value: 'alpha' });
+		if (cancel === 'escape') {
+			await page.keyboard.press('Escape');
+		} else {
+			await page.evaluate(() => { void window.ashStandaloneIntegration.runLineAction('editor.action.formatDocument'); });
+		}
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readDeferredFormatting())).toEqual({ aborted: cancel === 'escape' ? [true] : [true, false], value: 'alpha' });
+		await page.evaluate(() => window.ashStandaloneIntegration.finishDeferredFormatting());
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readDeferredFormatting().value)).toBe(cancel === 'escape' ? 'alpha' : 'ALPHA');
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
 }
