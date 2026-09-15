@@ -1,8 +1,12 @@
 //! Local connection lifecycle and bounded message transport for the App Server.
 
+mod browser;
 mod deadline_stream;
 mod local_socket;
 mod websocket;
+pub use browser::BrowserListener;
+pub use browser::BrowserOptions;
+pub use browser::start_browser_listener;
 
 pub use deadline_stream::DeadlineStream;
 pub use local_socket::LocalConnectionGuard;

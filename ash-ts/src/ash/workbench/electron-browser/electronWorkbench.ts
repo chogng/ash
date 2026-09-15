@@ -50,6 +50,7 @@ export async function startElectronWorkbench(
 	const workbench = startWorkbench({
 		modeId,
 		api,
+		browserViewApi: api.browserView,
 		container: document.querySelector<HTMLElement>("#app") ?? document.body,
 		workspace: parseWorkspace(await api.workspace.getWorkspace()),
 		configurationApi: api.configuration,

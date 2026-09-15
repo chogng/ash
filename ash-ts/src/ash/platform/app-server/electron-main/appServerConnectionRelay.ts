@@ -131,7 +131,7 @@ export class AppServerConnectionRelay extends Disposable {
 		});
 		const ended = transport.onClose(error => {
 			if (closed) { return; }
-			port1.postMessage({ closed: error.message });
+			port1.postMessage({ closed: [error.message, transport.diagnostics()].filter(Boolean).join('\n') });
 			this.setState('crashed');
 			close();
 		});

@@ -59,7 +59,10 @@ export class BrowserAutomationMainService {
 					const domSnapshot = params.includeDomSnapshot
 						? boundedJson(await debuggerClient.sendCommand("DOMSnapshot.captureSnapshot", { computedStyles: [] }), "DOM snapshot")
 						: undefined;
-					return { accessibilityTree, domSnapshot };
+					return {
+						...(accessibilityTree === undefined ? {} : { accessibilityTree }),
+						...(domSnapshot === undefined ? {} : { domSnapshot }),
+					};
 				})
 			: {};
 		throwIfAborted(context.signal);
@@ -70,7 +73,7 @@ export class BrowserAutomationMainService {
 			title: state.title,
 			loading: state.loading,
 			...snapshots,
-			screenshot,
+			...(screenshot === undefined ? {} : { screenshot }),
 		};
 	}
 

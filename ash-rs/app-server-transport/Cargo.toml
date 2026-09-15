@@ -11,14 +11,22 @@ name = "ash_app_server_transport"
 path = "src/lib.rs"
 
 [dependencies]
+bytes = { workspace = true }
+getrandom = { workspace = true }
+http-body-util = { workspace = true }
+hyper = { workspace = true, features = ["server", "http1"] }
+hyper-util = { workspace = true, features = ["tokio"] }
+url = { workspace = true }
+urlencoding = { workspace = true }
 futures = { workspace = true }
 rustix = { workspace = true, features = ["event"] }
 sha2 = { workspace = true }
-tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
+tokio = { workspace = true, features = ["fs", "macros", "net", "rt-multi-thread", "sync", "time"] }
 tokio-tungstenite = { workspace = true }
 ash-uds = { workspace = true }
 
 [dev-dependencies]
+serde_json = { workspace = true }
 tempfile = { workspace = true }
 
 [lints]

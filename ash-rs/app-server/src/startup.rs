@@ -34,6 +34,12 @@ pub fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
         );
         return Ok(());
     }
+    if arguments
+        .first()
+        .is_some_and(|argument| argument == "--web")
+    {
+        return launch_web(&arguments[1..]);
+    }
     let (command, product_services) = parse_arguments(&arguments)?;
     let options = StartupOptions::from_environment(
         product_services.or_else(discovered_product_services_path),
@@ -46,6 +52,48 @@ pub fn run(arguments: impl IntoIterator<Item = String>) -> Result<(), String> {
         }
         Command::WebSocket(websocket) => serve_websocket(open_server(&options)?, websocket),
     }
+}
+
+fn launch_web(arguments: &[String]) -> Result<(), String> {
+    let mut web = ash_app_server_protocol::WebLaunchOptions {
+        port: 0,
+        assets: None,
+        origin: None,
+    };
+    let mut product_services = None;
+    let mut seen = std::collections::BTreeSet::new();
+    for pair in arguments.chunks(2) {
+        let [flag, value] = pair else {
+            return Err("Web launch options require values".into());
+        };
+        if !seen.insert(flag) {
+            return Err(format!("Duplicate Web launch option: {flag}"));
+        }
+        match flag.as_str() {
+            "--port" => web.port = value.parse().map_err(|_| "Invalid Web port")?,
+            "--assets" => web.assets = Some(PathBuf::from(value)),
+            "--origin" => web.origin = Some(value.clone()),
+            "--product-services" => product_services = Some(PathBuf::from(value)),
+            _ => return Err(format!("Unknown Web launch option: {flag}")),
+        }
+    }
+    let options = StartupOptions::from_environment(
+        product_services.or_else(discovered_product_services_path),
+    )?;
+    let dir_root = options
+        .dir_root
+        .ok_or("Web launch requires ASH_WORKSPACE_ROOT")?;
+    let connection = ash_app_server_daemon::ConnectionOptions::new(
+        options.profile_root,
+        Some(dir_root),
+        ash_app_server_daemon::GrantSource::HostConfiguration,
+        options.product_services,
+    );
+    ash_app_server_daemon::launch_web(
+        connection,
+        web,
+        &std::env::current_exe().map_err(|error| error.to_string())?,
+    )
 }
 
 fn parse_arguments(arguments: &[String]) -> Result<(Command, Option<PathBuf>), String> {
@@ -72,7 +120,7 @@ fn parse_arguments(arguments: &[String]) -> Result<(Command, Option<PathBuf>), S
 }
 
 fn usage() -> &'static str {
-    "usage: ash-app-server (--listen stdio:// | --listen ws://127.0.0.1:0 --ws-auth capability-token --ws-token-sha256 HEX --emit-listen-info stdout-json) [--product-services PATH]"
+    "usage: ash-app-server (--listen stdio:// | --listen ws://127.0.0.1:0 --ws-auth capability-token --ws-token-sha256 HEX --emit-listen-info stdout-json) [--product-services PATH]; ash-app-server --web [--port PORT] [--assets PATH] [--origin ORIGIN] [--product-services PATH] (requires ASH_WORKSPACE_ROOT)"
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

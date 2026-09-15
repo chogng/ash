@@ -119,6 +119,7 @@ pub(super) struct SessionMutation {
 }
 
 pub(super) struct ThreadMutation {
+    pub(super) connection_id: Option<u64>,
     pub(super) command_id: ash_protocol::CommandId,
     pub(super) session_id: ash_protocol::SessionId,
     pub(super) expected_sequence: u64,
@@ -436,7 +437,7 @@ impl AppServer {
                 tool_mode,
                 input,
             } => result(&SessionRequestResult::Turn(self.start_turn_request(
-                thread_mutation(mutation, expected_sequence),
+                thread_mutation(mutation, expected_sequence, connection.connection_id),
                 thread_id,
                 approval_mode,
                 tool_mode,
@@ -447,7 +448,7 @@ impl AppServer {
                 expected_sequence,
                 target,
             } => result(&SessionRequestResult::Turn(self.start_review_request(
-                thread_mutation(mutation, expected_sequence),
+                thread_mutation(mutation, expected_sequence, connection.connection_id),
                 thread_id,
                 target,
             )?)),
@@ -458,7 +459,7 @@ impl AppServer {
                 command,
                 working_directory,
             } => result(&SessionRequestResult::Turn(self.start_shell_turn_request(
-                thread_mutation(mutation, expected_sequence),
+                thread_mutation(mutation, expected_sequence, connection.connection_id),
                 thread_id,
                 approval_mode,
                 command,
@@ -470,7 +471,7 @@ impl AppServer {
                 retention_prompt,
             } => result(&SessionRequestResult::Turn(
                 self.start_context_compaction_request(
-                    thread_mutation(mutation, expected_sequence),
+                    thread_mutation(mutation, expected_sequence, connection.connection_id),
                     thread_id,
                     retention_prompt,
                 )?,
@@ -481,7 +482,7 @@ impl AppServer {
                 turn_id,
                 input,
             } => result(&SessionRequestResult::TurnSteer(self.steer_turn_request(
-                thread_mutation(mutation, expected_sequence),
+                thread_mutation(mutation, expected_sequence, connection.connection_id),
                 thread_id,
                 turn_id,
                 input,
@@ -492,7 +493,7 @@ impl AppServer {
                 turn_id,
             } => result(&SessionRequestResult::TurnInterrupt(
                 self.interrupt_turn_request(
-                    thread_mutation(mutation, expected_sequence),
+                    thread_mutation(mutation, expected_sequence, connection.connection_id),
                     thread_id,
                     turn_id,
                 )?,
@@ -506,7 +507,7 @@ impl AppServer {
             } => result(&SessionRequestResult::Interaction(
                 self.resolve_turn_interaction_request(
                     connection.connection_id,
-                    thread_mutation(mutation, expected_sequence),
+                    thread_mutation(mutation, expected_sequence, connection.connection_id),
                     thread_id,
                     turn_id,
                     request_id,
@@ -722,6 +723,7 @@ impl AppServer {
             Some(replayed) => turn_start_result(replayed),
             None => self.start_turn_request(
                 ThreadMutation {
+                    connection_id: Some(connection_id),
                     command_id: start_command_id,
                     session_id: mutation.session_id.clone(),
                     expected_sequence: thread_before.sequence,
@@ -1102,21 +1104,23 @@ impl AppServer {
             .lock()
             .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?;
         let receipt = self
-            .agent_runtime()
-            .submit_turn(
-                &thread_id,
-                core_api::SubmitTurnRequest {
-                    command_id: mutation.command_id,
-                    expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
-                    model,
-                    kind,
-                    instructions,
-                    approval_mode,
-                    tool_mode,
-                    activated_skills,
-                    input,
-                },
-            )
+            .browser_host
+            .submit_turn(&thread_id, mutation.connection_id, || {
+                self.agent_runtime().submit_turn(
+                    &thread_id,
+                    core_api::SubmitTurnRequest {
+                        command_id: mutation.command_id,
+                        expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
+                        model,
+                        kind,
+                        instructions,
+                        approval_mode,
+                        tool_mode,
+                        activated_skills,
+                        input,
+                    },
+                )
+            })
             .map_err(core_error)?;
         Ok(turn_start_result(receipt))
     }
@@ -1799,8 +1803,13 @@ fn working_operation(
     Some(SessionManagerActivity::Operation { text })
 }
 
-fn thread_mutation(mutation: SessionMutation, expected_sequence: u64) -> ThreadMutation {
+fn thread_mutation(
+    mutation: SessionMutation,
+    expected_sequence: u64,
+    connection_id: u64,
+) -> ThreadMutation {
     ThreadMutation {
+        connection_id: Some(connection_id),
         command_id: mutation.command_id,
         session_id: mutation.session_id,
         expected_sequence,

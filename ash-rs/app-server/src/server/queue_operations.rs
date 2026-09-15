@@ -232,6 +232,7 @@ impl AppServer {
         let selection = self.turn_instruction_selection(&mut input);
         let start = self.start_agent_turn_request(
             ThreadMutation {
+                connection_id: None,
                 command_id: request.command_id.clone(),
                 session_id: request.session_id.clone(),
                 expected_sequence: snapshot.sequence,

@@ -34751,6 +34751,50 @@
       ],
       "type": "object"
     },
+    "WebListenInfo": {
+      "additionalProperties": false,
+      "description": "Private launcher output. The ticket is exchanged once, never sent in a URL query.",
+      "properties": {
+        "endpoint": {
+          "type": "string"
+        },
+        "pid": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ticket": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "endpoint",
+        "ticket",
+        "pid"
+      ],
+      "type": "object"
+    },
+    "WebSessionInfo": {
+      "additionalProperties": false,
+      "description": "Authenticated browser session and its server-selected workspace.",
+      "properties": {
+        "token": {
+          "type": "string"
+        },
+        "workspaceId": {
+          "type": "string"
+        },
+        "workspaceRoot": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "token",
+        "workspaceId",
+        "workspaceRoot"
+      ],
+      "type": "object"
+    },
     "WorkspaceCheckpoint": {
       "description": "File restoration evidence. Missing coverage is explicit and cannot restore current files.",
       "oneOf": [
@@ -34830,10 +34874,18 @@
     },
     "serverNotification": {
       "$ref": "#/$defs/JsonRpcNotification"
+    },
+    "webListenInfo": {
+      "$ref": "#/$defs/WebListenInfo"
+    },
+    "webSessionInfo": {
+      "$ref": "#/$defs/WebSessionInfo"
     }
   },
   "required": [
     "listenInfo",
+    "webListenInfo",
+    "webSessionInfo",
     "clientRequest",
     "clientResponse",
     "hostRequest",

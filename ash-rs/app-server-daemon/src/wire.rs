@@ -25,6 +25,8 @@ pub(crate) struct ConnectionPrelude {
     pub(crate) dir_root: Option<PathBuf>,
     pub(crate) dir_grant_source: ConnectionGrantSource,
     pub(crate) product_services: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) web: Option<ash_app_server_protocol::WebLaunchOptions>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -44,6 +46,7 @@ impl ConnectionPrelude {
                 GrantSource::UserConfig => ConnectionGrantSource::UserConfig,
             },
             product_services: options.product_services().map(Path::to_path_buf),
+            web: None,
         }
     }
 

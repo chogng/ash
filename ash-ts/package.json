@@ -34,7 +34,6 @@
     "build:host": "node ../build/compile.ts main preload",
     "build:main": "node ../build/compile.ts main",
     "build:preload": "node ../build/compile.ts preload",
-    "build:node": "node ../build/compile.ts node",
     "build:renderer": "node ../build/compile.ts renderer",
     "build:stanza": "pnpm run typecheck:stanza && vite build --config ../build/vite/editor.vite.config.ts",
     "test:main": "pnpm run test:build-tools && pnpm run test:unit",
@@ -51,7 +50,7 @@
     "pretest:smoke:browser": "pnpm run typecheck:renderer && tsc -p test/automation/tsconfig.json",
     "test:smoke:browser": "node test/smoke/browser.ts disconnected",
     "test:smoke:browser:debug": "pnpm run pretest:smoke:browser && cross-env ASH_PLAYWRIGHT_SERVER=disconnected playwright test --project=browser-ui --debug",
-    "pretest:smoke:browser:full": "pnpm run typecheck:renderer && tsc -p test/automation/tsconfig.json",
+    "pretest:smoke:browser:full": "pnpm run build:host && pnpm run typecheck:renderer && tsc -p test/automation/tsconfig.json",
     "test:smoke:browser:full": "node test/smoke/browser.ts full",
     "test:loading": "cross-env ASH_LOADING_BASELINE=1 pnpm run test:smoke:browser:full --grep 'production loading baseline' --repeat-each=3",
     "pretest:smoke:desktop": "pnpm run build && node ../build/package/prepare.ts && tsc -p test/automation/tsconfig.json",
@@ -93,7 +92,6 @@
     "@types/markdown-it": "^14.1.2",
     "@types/mocha": "10.0.10",
     "@types/node": "^24.0.0",
-    "@types/ws": "^8.18.1",
     "@webgpu/types": "0.1.66",
     "axe-playwright": "2.1.0",
     "concurrently": "^10.0.4",
@@ -114,8 +112,7 @@
     "marked": "^18.0.7",
     "pdfjs-dist": "6.1.200",
     "vscode-oniguruma": "1.7.0",
-    "vscode-textmate": "9.3.2",
-    "ws": "^8.21.3"
+    "vscode-textmate": "9.3.2"
   },
   "optionalDependencies": {
     "native-keymap": "3.3.9"

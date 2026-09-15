@@ -748,7 +748,7 @@ test("EditorPart persists JSON-safe pane view state in working sets", async () =
 		return pane;
 	}));
 	const editor = new EditorPart(dom.window.document.body, { registry });
-	const resourceInput = input("C:\\project\\view-state.ts");
+	const resourceInput = { ...input("C:\\project\\view-state.ts"), showBreadcrumbs: false };
 	await editor.openEditor(resourceInput);
 	panes[0]!.viewState = { cursorLine: 42, scrollTop: 320 };
 	const saved = editor.saveWorkingSet("view-state");
@@ -760,6 +760,8 @@ test("EditorPart persists JSON-safe pane view state in working sets", async () =
 	await editor.applyWorkingSet("empty", { preserveFocus: true });
 	await editor.applyWorkingSet(saved, { preserveFocus: true });
 	assert.deepEqual(panes[1]!.restoredViewState, { cursorLine: 42, scrollTop: 320 });
+	assert.equal(editor.activeInput?.showBreadcrumbs, false);
+	assert.equal(editor.domNode.querySelector<HTMLElement>('.ash-editor-breadcrumbs')?.hidden, true);
 
 	editor.dispose();
 	dom.window.close();

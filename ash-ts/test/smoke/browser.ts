@@ -2,6 +2,8 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { createInterface } from 'node:readline';
+import { decodeWebListenInfo, decodeWebSessionInfo } from '../../generated/app-server/WebProtocolDecoder.ts';
 import { developmentAshPackagePath } from '../../../build/package/store.ts';
 
 const desktopDirectory = resolve(import.meta.dirname, '../..');
@@ -12,6 +14,8 @@ if (mode !== 'disconnected' && mode !== 'full') {
 }
 
 if (mode === 'full') {
+	const desktopPreparation = await run(process.execPath, ['../build/package/prepare.ts'], process.env);
+	if (desktopPreparation !== 0) { process.exit(desktopPreparation); }
 	const preparation = await run(process.execPath, [
 		'../build/package/prepare.ts',
 		'--javascript-runtime',
@@ -66,6 +70,8 @@ if (productServicesPath) {
 const testEnvironment = workspaceDirectory ? {
 	...process.env,
 	ASH_PLAYWRIGHT_WORKSPACE: workspaceDirectory,
+	ASH_PLAYWRIGHT_PROFILE: profileDirectory,
+	...(productServicesPath ? { ASH_PRODUCT_SERVICES_PATH: productServicesPath } : {}),
 	...(languageServerExecutable ? { ASH_PLAYWRIGHT_LANGUAGE_SERVER: languageServerExecutable } : {}),
 } : process.env;
 const serverEnvironment = mode === 'full' ? {
@@ -82,11 +88,27 @@ const server = spawn(process.execPath, [
 ], {
 	cwd: desktopDirectory,
 	env: serverEnvironment,
-	stdio: 'inherit',
+	stdio: ['ignore', 'pipe', 'inherit'],
 });
+
+const webSession = mode === 'full' ? new Promise<string>((resolveSession, reject) => {
+	const lines = createInterface({ input: server.stdout! });
+	const timeout = setTimeout(() => { lines.close(); reject(new Error('Missing Web launch record')); }, 35_000);
+	lines.once('line', line => {
+		clearTimeout(timeout); lines.close();
+		void (async () => {
+			const info = decodeWebListenInfo(JSON.parse(line));
+			const response = await fetch(new URL('/ash/session', info.endpoint), { method: 'POST', headers: { Origin: new URL(info.endpoint).origin }, body: info.ticket, signal: AbortSignal.timeout(10_000) });
+			if (!response.ok) { throw new Error('Web test authentication failed'); }
+			return JSON.stringify({ endpoint: info.endpoint, session: decodeWebSessionInfo(await response.json()) });
+		})().then(resolveSession, reject);
+	});
+	server.once('error', reject);
+}) : Promise.resolve(undefined);
 
 let exitCode = 1;
 try {
+	const session = await webSession;
 	await waitForServer(serverUrl, server);
 	const project = mode === 'full' ? 'browser-app-server' : 'browser-ui';
 	exitCode = await run(process.execPath, [
@@ -99,6 +121,7 @@ try {
 		...testEnvironment,
 		ASH_PLAYWRIGHT_SERVER: mode,
 		ASH_SMOKE_BROWSER_EXTERNAL_SERVER: '1',
+		...(session ? { ASH_PLAYWRIGHT_WEB_SESSION: session } : {}),
 	});
 } finally {
 	await stop(server);

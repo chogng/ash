@@ -312,3 +312,83 @@ fn failed_initialize_cleans_the_published_backend_before_retry() {
     assert_eq!(started.status, LifecycleStatus::Started);
     drop(cleanup);
 }
+
+#[test]
+fn web_launch_reuses_the_managed_process_and_releases_its_listener() {
+    use std::io::Read;
+    use std::process::Command;
+    use std::process::Stdio;
+    let root = tempfile::tempdir().unwrap();
+    let profile = root.path().join("p");
+    let dir = root.path().join("d");
+    std::fs::create_dir(&profile).unwrap();
+    std::fs::create_dir(&dir).unwrap();
+    let options = ConnectionOptions::new(
+        &profile,
+        Some(dir.clone()),
+        GrantSource::HostConfiguration,
+        None,
+    );
+    let executable = Path::new(env!("CARGO_BIN_EXE_ash-app-server"));
+    let _cleanup = StopOnDrop {
+        options: options.clone(),
+        executable,
+    };
+    let started = run_lifecycle(LifecycleCommand::Start, options.clone(), executable).unwrap();
+    struct Launcher(std::process::Child);
+    impl Drop for Launcher {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+    let mut launch = Launcher(
+        Command::new(executable)
+            .args(["--web", "--port", "0"])
+            .env("ASH_HOME", &profile)
+            .env("ASH_WORKSPACE_ROOT", &dir)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .unwrap(),
+    );
+    let stdout = launch.0.stdout.take().unwrap();
+    let (sender, receiver) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let mut line = String::new();
+        let result = BufReader::new(stdout).read_line(&mut line).map(|_| line);
+        let _ = sender.send(result);
+    });
+    let line = receiver
+        .recv_timeout(Duration::from_secs(20))
+        .unwrap()
+        .unwrap();
+    let info: ash_app_server_protocol::WebListenInfo = serde_json::from_str(&line).unwrap();
+    assert_eq!(Some(info.pid), started.pid);
+    let authority = info
+        .endpoint
+        .trim_start_matches("http://")
+        .trim_end_matches('/');
+    let mut http = std::net::TcpStream::connect(authority).unwrap();
+    http.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+    write!(http, "POST /ash/session HTTP/1.1\r\nHost: {authority}\r\nOrigin: http://{authority}\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{}", info.ticket.len(), info.ticket).unwrap();
+    let mut response = String::new();
+    http.read_to_string(&mut response).unwrap();
+    assert!(response.starts_with("HTTP/1.1 200"), "{response}");
+    let session: ash_app_server_protocol::WebSessionInfo =
+        serde_json::from_str(response.split_once("\r\n\r\n").unwrap().1).unwrap();
+    assert!(session.workspace_id.starts_with("sha256:"));
+    drop(launch.0.stdin.take());
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while launch.0.try_wait().unwrap().is_none() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "Web launcher did not exit after stdin closed"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert!(std::net::TcpStream::connect(authority).is_err());
+    let still_running = run_lifecycle(LifecycleCommand::Version, options, executable).unwrap();
+    assert_eq!(still_running.pid, started.pid);
+}

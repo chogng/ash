@@ -145,6 +145,16 @@ pub fn connect(options: ConnectionOptions, backend_executable: &Path) -> Result<
     client::connect(options, backend_executable)
 }
 
+/// Requests a browser listener from the existing managed process and leases it until stdin closes.
+#[cfg(any(unix, windows))]
+pub fn launch_web(
+    options: ConnectionOptions,
+    web: ash_app_server_protocol::WebLaunchOptions,
+    backend_executable: &Path,
+) -> Result<(), String> {
+    client::launch_web(options, web, backend_executable)
+}
+
 /// Returns the profile-scoped daemon endpoint path used for diagnostics and integration tests.
 #[cfg(any(unix, windows))]
 pub fn daemon_endpoint_path(profile_root: &Path) -> Result<PathBuf, String> {

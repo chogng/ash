@@ -17,6 +17,15 @@ export async function launchBrowser(options: BrowserLaunchOptions): Promise<Brow
 	const browser = await chromium.launch();
 	const context = await browser.newContext();
 	const page = await context.newPage();
+	if (options.appServerMode === 'required') {
+		const serialized = process.env.ASH_PLAYWRIGHT_WEB_SESSION;
+		if (!serialized) { throw new Error('Run the browser App Server suite through test:smoke:browser:full'); }
+		const { endpoint, session } = JSON.parse(serialized) as { endpoint: string; session: { token: string } };
+		await page.addInitScript(({ endpoint, token }) => {
+			sessionStorage.setItem('ash.appServer.endpoint', endpoint);
+			sessionStorage.setItem(`ash.appServer.session:${new URL(endpoint).origin}`, token);
+		}, { endpoint, token: session.token });
+	}
 	const consoleErrors: string[] = [];
 	page.on("console", message => {
 		if (message.type() === "error") consoleErrors.push(message.text());

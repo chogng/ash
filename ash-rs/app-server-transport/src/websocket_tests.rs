@@ -98,7 +98,7 @@ fn listener_authenticates_and_isolates_connections() {
 }
 
 #[test]
-fn an_overloaded_connection_does_not_block_another_connection() {
+fn a_backpressured_connection_preserves_frames_and_does_not_block_another_connection() {
     runtime().block_on(async {
         let listener = start_websocket_acceptor(
             SocketAddr::from((Ipv4Addr::LOCALHOST, 0)),
@@ -134,13 +134,11 @@ fn an_overloaded_connection_does_not_block_another_connection() {
             healthy.next().await.unwrap().unwrap().into_text().unwrap(),
             "healthy"
         );
-        let closed = tokio::time::timeout(std::time::Duration::from_secs(1), slow.next())
+        slow.send(Message::Text("resumed".into())).await.unwrap();
+        let resumed = tokio::time::timeout(std::time::Duration::from_secs(2), slow.next())
             .await
-            .expect("overloaded connection did not close");
-        assert!(matches!(
-            closed,
-            None | Some(Ok(Message::Close(_))) | Some(Err(_))
-        ));
+            .expect("backpressured connection did not resume");
+        assert_eq!(resumed.unwrap().unwrap().into_text().unwrap(), "resumed");
 
         listener.shutdown().await.unwrap();
     });

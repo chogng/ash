@@ -43,6 +43,8 @@ pub const GENERATED_TYPESCRIPT_HEADER: &str =
 #[serde(rename_all = "camelCase")]
 struct ProtocolSchema {
     listen_info: AppServerListenInfo,
+    web_listen_info: crate::WebListenInfo,
+    web_session_info: crate::WebSessionInfo,
     client_request: JsonRpcRequest<ClientRequestSchema>,
     client_response: JsonRpcResponse<ClientResultSchema, AppServerError>,
     host_request: JsonRpcRequest<HostRequestSchema>,
@@ -237,6 +239,10 @@ pub fn typescript_files() -> Vec<(PathBuf, String)> {
             PathBuf::from("AppServerListenInfo.ts"),
             generated_listen_info(),
         ),
+        (
+            PathBuf::from("WebProtocolDecoder.ts"),
+            include_str!("typescript_web.template.ts").into(),
+        ),
         (PathBuf::from("types/index.ts"), generated_types_index()),
         (PathBuf::from("index.ts"), generated_index()),
     ];
@@ -247,6 +253,20 @@ pub fn typescript_files() -> Vec<(PathBuf, String)> {
             generated_binding(binding),
         ));
     }
+    files.push((
+        PathBuf::from("WebListenInfo.ts"),
+        format!(
+            "{GENERATED_TYPESCRIPT_HEADER}export {}\n",
+            <crate::WebListenInfo as ts_rs::TS>::decl(&ts_rs::Config::default())
+        ),
+    ));
+    files.push((
+        PathBuf::from("WebSessionInfo.ts"),
+        format!(
+            "{GENERATED_TYPESCRIPT_HEADER}export {}\n",
+            <crate::WebSessionInfo as ts_rs::TS>::decl(&ts_rs::Config::default())
+        ),
+    ));
     files.sort_by(|left, right| left.0.cmp(&right.0));
     files
 }
@@ -300,6 +320,8 @@ fn generated_index() -> String {
          export {{ APP_SERVER_CAPABILITY_VERSION, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH }} from './protocol.js';\n\
          export type {{ JsonRpcError, JsonRpcFailure, JsonRpcId, JsonRpcNotification, JsonRpcRequest, JsonRpcResponse, JsonRpcSuccess, JsonRpcVersion }} from './protocol.js';\n\
          export type {{ AppServerListenInfo }} from './AppServerListenInfo.js';\n\
+         export type {{ WebListenInfo }} from './WebListenInfo.js';\n\
+         export type {{ WebSessionInfo }} from './WebSessionInfo.js';\n\
          export {{ APP_SERVER_METHODS }} from './AppServerRequestMap.js';\n\
          export type {{ AppServerMethod, AppServerMethodDefinition, AppServerRequest, AppServerRequestMap, AppServerResponse, MethodParams, MethodResult }} from './AppServerRequestMap.js';\n\
          export {{ APP_SERVER_NOTIFICATIONS }} from './AppServerNotificationMap.js';\n\

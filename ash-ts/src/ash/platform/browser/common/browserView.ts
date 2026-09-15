@@ -1,3 +1,6 @@
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
+
+export const IBrowserViewApi = createServiceIdentifier<IBrowserViewApi>('browserViewApi');
 export const BROWSER_VIEW_CREATE_CHANNEL = "ash:browser-view:create";
 export const BROWSER_VIEW_STATE_CHANNEL = "ash:browser-view:state";
 export const BROWSER_VIEW_LAYOUT_CHANNEL = "ash:browser-view:layout";
@@ -11,6 +14,7 @@ export const BROWSER_VIEW_GO_FORWARD_CHANNEL =
 	"ash:browser-view:go-forward";
 export const BROWSER_VIEW_RELOAD_CHANNEL = "ash:browser-view:reload";
 export const BROWSER_VIEW_STOP_CHANNEL = "ash:browser-view:stop";
+export const BROWSER_VIEW_FOCUS_CHANNEL = "ash:browser-view:focus";
 export const BROWSER_VIEW_CLOSE_CHANNEL = "ash:browser-view:close";
 export const BROWSER_VIEW_EVENT_CHANNEL = "ash:browser-view:event";
 
@@ -58,6 +62,8 @@ export interface IBrowserViewState {
 }
 
 export type BrowserViewEvent =
+	| { readonly type: "created"; readonly state: IBrowserViewState }
+	| { readonly type: "focusAddress"; readonly targetId: BrowserViewTargetId }
 	| {
 		readonly type: "stateChanged";
 		readonly state: IBrowserViewState;
@@ -106,6 +112,7 @@ export interface IBrowserViewApi {
 	goForward(request: IBrowserViewTargetRequest): Promise<void>;
 	reload(request: IBrowserViewTargetRequest): Promise<void>;
 	stop(request: IBrowserViewTargetRequest): Promise<void>;
+	focus(request: IBrowserViewTargetRequest): Promise<void>;
 	close(request: IBrowserViewTargetRequest): Promise<void>;
 	onDidEvent(
 		listener: (event: BrowserViewEvent) => void,

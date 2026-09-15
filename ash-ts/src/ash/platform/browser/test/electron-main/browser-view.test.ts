@@ -113,6 +113,7 @@ test("browser view IPC routes delegate only validated commands", async () => {
 		goForward: () => calls.push("forward"),
 		reload: () => calls.push("reload"),
 		stop: () => calls.push("stop"),
+		focus: () => calls.push("focus"),
 		close: () => calls.push("close"),
 	};
 	const routes = browserViewIpcRoutes(service);

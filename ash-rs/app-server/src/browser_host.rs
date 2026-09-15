@@ -89,16 +89,63 @@ struct PendingRequest {
 
 /// Routes semantic Core browser requests to the exact capable client connection and target owner.
 pub(crate) struct BrowserHost {
-    state: Mutex<BrowserHostState>,
+    state: Arc<Mutex<BrowserHostState>>,
     resources: Arc<Mutex<ResourceStore>>,
+    turns: Arc<Mutex<BTreeMap<(ash_protocol::ThreadId, ash_protocol::TurnId), u64>>>,
+    owner: Option<u64>,
 }
 
 impl BrowserHost {
     pub(crate) fn new(resources: Arc<Mutex<ResourceStore>>) -> Self {
         Self {
-            state: Mutex::new(BrowserHostState::default()),
+            state: Arc::new(Mutex::new(BrowserHostState::default())),
             resources,
+            turns: Arc::new(Mutex::new(BTreeMap::new())),
+            owner: None,
         }
+    }
+
+    /// Hold the binding gate until submission returns its durable Turn identity.
+    /// Tool workers cannot race ahead of the originating connection binding.
+    pub(crate) fn submit_turn(
+        &self,
+        thread: &ash_protocol::ThreadId,
+        connection: Option<u64>,
+        submit: impl FnOnce() -> Result<core_api::TurnReceipt, core_api::CoreError>,
+    ) -> Result<core_api::TurnReceipt, core_api::CoreError> {
+        let mut turns = self
+            .turns
+            .lock()
+            .map_err(|_| core_api::CoreError::Execution("browser binding lock poisoned".into()))?;
+        let receipt = submit()?;
+        if let Some(connection) = connection {
+            turns
+                .entry((thread.clone(), receipt.turn_id.clone()))
+                .or_insert(connection);
+        }
+        Ok(receipt)
+    }
+
+    pub(crate) fn for_turn(
+        &self,
+        thread: &ash_protocol::ThreadId,
+        turn: &ash_protocol::TurnId,
+    ) -> Result<Self, BrowserError> {
+        let owner = self
+            .turns
+            .lock()
+            .map_err(|_| BrowserError::CapabilityUnavailable)?
+            .get(&(thread.clone(), turn.clone()))
+            .copied()
+            .ok_or(BrowserError::CapabilityUnavailable)?;
+        let scoped = Self {
+            state: Arc::clone(&self.state),
+            resources: Arc::clone(&self.resources),
+            turns: Arc::clone(&self.turns),
+            owner: Some(owner),
+        };
+        scoped.create_owner()?;
+        Ok(scoped)
     }
 
     pub(crate) fn register(
@@ -123,6 +170,10 @@ impl BrowserHost {
     }
 
     pub(crate) fn unregister(&self, connection_id: u64) {
+        self.turns
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .retain(|_, owner| *owner != connection_id);
         let pending = {
             let mut state = self
                 .state
@@ -307,15 +358,16 @@ impl BrowserHost {
     }
 
     fn create_owner(&self) -> Result<u64, BrowserError> {
+        let selected = self.owner.ok_or(BrowserError::CapabilityUnavailable)?;
         self.state
             .lock()
             .map_err(|_| BrowserError::Failed("browser host state lock poisoned".into()))?
             .owners
-            .iter()
-            .find(|(_, owner)| {
+            .get(&selected)
+            .filter(|owner| {
                 owner.capability.version == 1 && owner.capability.observe && owner.capability.input
             })
-            .map(|(connection_id, _)| *connection_id)
+            .map(|_| selected)
             .ok_or(BrowserError::CapabilityUnavailable)
     }
 
@@ -337,6 +389,9 @@ impl BrowserHost {
             .owners
             .get(&owner_id)
             .ok_or(BrowserError::CapabilityUnavailable)?;
+        if self.owner != Some(owner_id) {
+            return Err(BrowserError::CapabilityUnavailable);
+        }
         let supported = match required {
             BrowserHostOperation::Observe => owner.capability.observe,
             BrowserHostOperation::Input => owner.capability.input,

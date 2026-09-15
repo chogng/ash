@@ -105,6 +105,7 @@ export class BrowserViewMainService extends Disposable
 			this.window.contentView.addChildView(view);
 			this.configureSecurity(target);
 			this.listen(target);
+			this.emit({ type: "created", state: this.state(target) });
 			void view.webContents.loadURL(navigation.loadUrl).catch(() => {
 				// did-fail-load publishes the structured failure event.
 			});
@@ -121,7 +122,9 @@ export class BrowserViewMainService extends Disposable
 
 	layout(request: IBrowserViewLayoutRequest): void {
 		const target = this.target(request.targetId);
-		target.view.setBounds(request.bounds);
+		const scale = this.window.webContents.getZoomFactor();
+		const { x, y, width, height } = request.bounds;
+		target.view.setBounds({ x: Math.round(x * scale), y: Math.round(y * scale), width: Math.round(width * scale), height: Math.round(height * scale) });
 		target.laidOut = true;
 	}
 
@@ -157,6 +160,11 @@ export class BrowserViewMainService extends Disposable
 
 	stop(targetId: string): void {
 		this.target(targetId).view.webContents.stop();
+	}
+
+	focus(targetId: string): void {
+		const target = this.target(targetId);
+		if (target.visible) { target.view.webContents.focus(); }
 	}
 
 	close(targetId: string): void {
@@ -195,6 +203,13 @@ export class BrowserViewMainService extends Disposable
 
 	private listen(target: BrowserTarget): void {
 		const contents = target.view.webContents;
+		this.on(contents, target, "before-input-event", (event: ElectronEvent, input: Electron.Input) => {
+			if (input.type === 'keyDown' && (input.key === 'F6' || ((input.control || input.meta) && input.key.toLowerCase() === 'l'))) {
+				event.preventDefault();
+				this.window.webContents.focus();
+				this.emit({ type: 'focusAddress', targetId: target.id });
+			}
+		});
 		this.on(contents, target, "did-start-loading", () =>
 			this.emitState(target));
 		this.on(contents, target, "did-stop-loading", () =>

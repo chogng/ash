@@ -82,6 +82,21 @@ pub(crate) fn connect(options: ConnectionOptions, backend_executable: &Path) -> 
     proxy_stdio(stream, &options).map_err(|error| error.to_string())
 }
 
+pub(crate) fn launch_web(
+    options: ConnectionOptions,
+    web: ash_app_server_protocol::WebLaunchOptions,
+    backend_executable: &Path,
+) -> Result<(), String> {
+    run_lifecycle(LifecycleCommand::Start, options.clone(), backend_executable)?;
+    let endpoint = EndpointPaths::prepare(options.profile_root())?;
+    let mut stream = connect_existing(&endpoint.socket)?
+        .ok_or_else(|| "Managed App Server exited before Web launch".to_string())?;
+    let mut prelude = ConnectionPrelude::from_options(&options);
+    prelude.web = Some(web);
+    write_json_line(&mut stream, &prelude).map_err(io_error)?;
+    relay_stdio(stream).map_err(io_error)
+}
+
 fn start_unlocked(
     endpoint: &EndpointPaths,
     options: &ConnectionOptions,
@@ -406,6 +421,10 @@ fn probe_app_server(
 
 fn proxy_stdio(mut stream: UnixStream, options: &ConnectionOptions) -> io::Result<()> {
     write_json_line(&mut stream, &ConnectionPrelude::from_options(options))?;
+    relay_stdio(stream)
+}
+
+fn relay_stdio(stream: UnixStream) -> io::Result<()> {
     let mut socket_writer = stream.try_clone()?;
     let input = thread::Builder::new()
         .name("ash-local-app-server-stdin".into())
@@ -416,9 +435,14 @@ fn proxy_stdio(mut stream: UnixStream, options: &ConnectionOptions) -> io::Resul
         })?;
     let mut output = io::stdout().lock();
     relay_output(&mut BufReader::new(stream), &mut output)?;
-    input
-        .join()
-        .map_err(|_| io::Error::other("Local App Server stdin proxy panicked"))??;
+    // The command must exit when the daemon closes its side, even while the
+    // launcher keeps stdin open. A blocking process-stdin read cannot be joined
+    // here; the command process owns and terminates that reader thread.
+    if input.is_finished() {
+        input
+            .join()
+            .map_err(|_| io::Error::other("Local App Server stdin proxy panicked"))??;
+    }
     Ok(())
 }
 

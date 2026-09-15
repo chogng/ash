@@ -56,16 +56,16 @@ pnpm dev:stanza
 pnpm dev:web:full
 ```
 
-完整模式监听 `127.0.0.1:5174`，根地址同样会进入当前产品版本。Browser 通过 Vite 已认证的 HMR WebSocket 连接本地开发
-桥接器；桥接器为每个浏览器连接启动 `ash-app-server-daemon connect`
-子进程，浏览器连接关闭时对应子进程也会被回收。Electron 产品改用 `app-server connect`，与
-TUI、app 连接同一 profile-scoped local App Server。Browser 命令同样通过设置或 URL 参数选择内置模式；`ASH_WORKBENCH_MODE` 只覆盖开发进程的初始模式，不维护模式后缀命令。
+完整模式由 Vite 在 `127.0.0.1:5174` 提供前端资源。打开终端输出的认证链接后，Browser
+直接连接受管理 Rust App Server 的独立端口；Vite HMR 只负责前端热更新。退出开发服务会释放
+对应浏览器监听，不终止其他客户端使用的后端。Browser 命令通过设置或 URL 参数选择内置模式；
+`ASH_WORKBENCH_MODE` 只覆盖开发进程的初始模式，不维护模式后缀命令。
 
-`dev:desktop` 与 `dev:web:full` 会先通过 Node 开发组装器生成
+`dev` 与 `dev:web:full` 会先通过 Node 开发组装器生成
 `.build/ash-package/dev/store-v1/<target>/<javascript-runtime>/dev-small/packages/<version>/<build-id>`；其中包含 product-neutral `ash-app-server` backend host、锁定版本的
 ripgrep 与平台 sandbox helper。编号清单选择当前包，进程租约保护正在运行的包，存储固定保留当前与回滚包。Electron 默认生成 `hostProvidedNode` variant，
-不再下载或复制 standalone Node；`dev:web:full` 显式生成 `packagedNode` variant，因为 Browser bridge
-没有 Electron runtime。开发态和发布态 Electron 都从相同的
+不再下载或复制 standalone Node；`dev:web:full` 使用 `packagedNode` variant，为后端能力提供独立 JavaScript runtime。
+开发态和发布态 Electron 都从相同的
 `<package>/bin/ash-app-server-daemon[.exe] connect` 入口连接共享 App Server，区别仅在编译 profile 和 package root。
 准备流程只使用仓库已要求的 Node、Rust 和 host archive utility，不安装或调用
 Python。`dev:desktop` 随后启动 Vite、主进程、预加载脚本和 Electron；`dev:web:full` 只启动
@@ -163,22 +163,17 @@ Command、MenuId、Context Key 与菜单型 Toolbar 的 canonical 组合规范�
 
 普通 `dev:web`、`dev:renderer` 和静态 Browser 构建未配置 host 时由
 `platform/app-server/browser/rendererApi.ts` 提供 disconnected API：UI 正常启动，状态栏显示
-App Server 不可用，产品操作明确失败。`dev:web:full` 则由 `build/vite/webAppServerPlugin.ts`、
-`ViteDevAppServerConnection` 与 `connectViteDevRendererApi()` 组成仅限本机开发的 host，并在
-Workbench 启动前注入同一份 `IRendererHost` contract。嵌入方若已实现受认证的远程 transport，必须在产品入口
-执行前注入：
+App Server 不可用，产品操作明确失败。`dev:web:full` 使用 Vite 提供前端资源，
+由 `scripts/lib/web.ts` 启动受管理 App Server 的认证浏览器入口。`build:web` / `start:web`
+使用 Rust HTTP 入口提供编译产物；浏览器通过 WebSocket 直接交换 JSON-RPC。
 
-```ts
-globalThis.ashWebWorkbenchHost = {
-  api: authenticatedRendererApi,
-  workspace,
-};
-```
+打开启动器给出的完整链接：URL fragment 中的一次性票据兑换为当前页签的会话，随后从地址栏移除。
+工作区由可信启动入口绑定，浏览器不能声明目录权限宿主。刷新时复用 `sessionStorage` 中的会话；
+退出启动器、停止后端或会话过期后，需要重新启动并使用新链接。
 
-该对象是进程内 capability，不是可直接从不可信 JSON 反序列化的配置。Rust local host 支持
-`app-server connect` broker 与 `--listen stdio://` direct mode。`dev:web:full` 的 WebSocket 只属于 loopback Vite
-开发宿主，不是 Rust listener，也不是可部署服务；生产级 HTTP/WebSocket listener、认证、
-origin policy 和远程部署尚未实现，因此静态 Browser 构建不能描述为已连接的 Web 客户端。
+嵌入方仍可在产品入口执行前设置 `globalThis.ashWebWorkbenchHost = { api, workspace }`。
+这个对象是进程内能力，不接受不可信 JSON。认证、职责与验收记录见
+[前端连接与浏览器能力](docs/design/app-server-connection.md)。当前入口限于本机单用户，未提供公网认证及 TLS。
 
 ## Electron sandbox 边界
 
@@ -196,10 +191,10 @@ contrib 不直接持有聚合 Renderer Host。Electron Main 的 `registerTrusted
 
 ## 嵌入式浏览器边界
 
-`platform/browser` 提供当前窗口的 `WebContentsView` 平台能力。Workbench 只能通过
-`AshElectronRendererApi.browserView` 创建、布局、导航、隐藏和关闭目标；Electron Main 中的
+`platform/browser` 提供当前窗口的 `WebContentsView` 平台能力。Workbench 通过组合入口注入的
+`IBrowserViewApi` 创建、布局、导航、隐藏和关闭目标；Electron Main 中的
 `BrowserViewMainService` 持有真实 `WebContentsView`，`browserViewIpcRoutes()` 对每条命令做
-exact-shape validation。第三方页面使用独立的临时 partition，默认拒绝权限、下载和 popup，
+exact-shape validation。第三方页面使用独立的临时 partition，默认拒绝权限和下载；弹窗请求交由 Workbench 打开新的页签，
 并且不会加载主窗口的 Ash preload。
 
 Agent 浏览器能力复用同一目标权威源：Desktop 在 App Server initialize 中声明 browser host，
@@ -209,8 +204,10 @@ Electron Main 只执行有界语义 CDP 动作。实现直接使用 Electron 的
 sidecar、不开放调试端口，也不接受任意 CDP method。App Server 连接退出时只回收通过宿主能力
 创建的目标，不影响 Renderer 自己持有的目标。
 
-浏览器编辑器、地址栏、标签页、DOM 容器自动布局绑定、Playwright 进程内代理和高级 locator
-尚未实现。跨进程所有权与后续演进以
+`workbench/contrib/browserView/electron-browser` 提供浏览器页签、地址栏、前进后退、停止与重新加载，
+并同步可见性和页面尺寸。命令入口为 `Browser: Open Browser`；网页内按 F6 或 Ctrl+L 返回地址栏。
+Agent 创建的页面也打开为可见页签。任务只能使用发起该轮任务的连接所提供的宿主。
+Playwright 进程内代理、高级 locator、登录持久化和权限交互尚未提供。跨进程所有权以
 [`docs/ash-desktop-architecture.md`](../docs/ash-desktop-architecture.md) 的 Browser
 Capability 章节为准。
 

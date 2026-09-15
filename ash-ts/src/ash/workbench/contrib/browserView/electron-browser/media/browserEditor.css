@@ -1,0 +1,37 @@
+.ash-browser-editor {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--ash-editor-foreground);
+  background: var(--ash-editor-background);
+}
+.ash-browser-toolbar {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 4px;
+  padding: 4px;
+  border-bottom: 1px solid var(--ash-border);
+}
+.ash-browser-toolbar input { flex: 1; min-width: 0; }
+.ash-browser-toolbar button, .ash-browser-toolbar input {
+  color: var(--ash-editor-foreground);
+  background: var(--ash-editor-background);
+  border: 1px solid var(--ash-border);
+  font: inherit;
+}
+.ash-browser-toolbar :focus-visible { outline: 1px solid var(--ash-focus-border); outline-offset: -1px; }
+.ash-browser-toolbar button:disabled { color: var(--ash-description-foreground); }
+.ash-browser-status {
+  flex: 0 0 auto;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--ash-font-size-body2);
+  color: var(--ash-description-foreground);
+}
+.ash-browser-viewport { flex: 1; min-width: 0; min-height: 0; }

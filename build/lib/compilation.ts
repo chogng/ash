@@ -10,12 +10,12 @@ const outputRoot = desktopBuildPath(repositoryRoot);
 const typescript = join(sourceRoot, 'node_modules/typescript/bin/tsc');
 const preloadPath = join(outputRoot, 'preload/src/ash/base/parts/sandbox/electron-browser/preload.cjs');
 
-export type CompilationTarget = 'main' | 'preload' | 'renderer' | 'node';
+export type CompilationTarget = 'main' | 'preload' | 'renderer';
 
 export function compilationTargets(args: readonly string[]): readonly CompilationTarget[] {
   if (args.length === 0) return ['main', 'preload'];
   for (const arg of args) {
-    if (!['main', 'preload', 'renderer', 'node'].includes(arg)) throw new Error(`Unknown compilation target: ${arg}`);
+    if (!['main', 'preload', 'renderer'].includes(arg)) throw new Error(`Unknown compilation target: ${arg}`);
   }
   return [...new Set(args)] as CompilationTarget[];
 }

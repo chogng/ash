@@ -29,6 +29,7 @@ import { IDebugAdapterProcessService } from "../../platform/debug/common/debugAd
 import { IExtensionHostApi } from "../../platform/extensionHost/common/extensionHostApi.js";
 import { ISyntaxApi } from "../../platform/syntax/common/syntaxApi.js";
 import type { IRendererHost } from "../../platform/renderer/common/rendererHost.js";
+import { IBrowserViewApi } from '../../platform/browser/common/browserView.js';
 import { IRemoteConnectionService } from "../../platform/remote/common/remoteConnectionService.js";
 import { UnavailableRemoteConnectionService } from "../../platform/remote/common/remoteConnectionService.js";
 import { IRemoteTunnelService } from "../../platform/remote/common/remoteTunnelService.js";
@@ -258,6 +259,7 @@ export interface IStartWorkbenchOptions {
 	readonly modeId: WorkbenchModeId;
 	readonly defaultLayout?: WorkbenchDefaultLayout;
 	readonly api: IRendererHost;
+	readonly browserViewApi?: IBrowserViewApi;
 	readonly container: HTMLElement;
 	readonly workspace: IWorkspace;
 	readonly configurationApi?: IConfigurationApi;
@@ -287,6 +289,7 @@ export function startWorkbench({
 	createContextMenuService,
 	createTitlebarPart,
 	switchWorkbenchMode,
+	browserViewApi,
 }: IStartWorkbenchOptions): Workbench {
 	return new Workbench(
 		modeId,
@@ -303,6 +306,7 @@ export function startWorkbench({
 		createContextMenuService,
 		createTitlebarPart,
 		switchWorkbenchMode,
+		browserViewApi,
 	);
 }
 
@@ -339,11 +343,13 @@ export class Workbench extends Disposable {
 		createContextMenuService: WorkbenchContextMenuServiceFactory,
 		createTitlebarPart: TitlebarPartFactory,
 		switchWorkbenchMode: (modeId: WorkbenchModeId) => Promise<void>,
+		browserViewApi?: IBrowserViewApi,
 	) {
 		super();
 		this._register(FormattingConflicts.setFormatterSelector(async formatters => formatters[0]));
 		const mode = WorkbenchModeRegistry.get(modeId);
 		const services = this._register(new ServiceContainer());
+		if (browserViewApi) { services.registerInstance(IBrowserViewApi, browserViewApi); }
 		registerTreeViewsDnDService(services);
 		const instantiationService = services;
 		const logService = this._register(new LogService({ sinks: [new ConsoleLogSink()] }));

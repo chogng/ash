@@ -11,6 +11,7 @@ import {
 	BROWSER_VIEW_RELOAD_CHANNEL,
 	BROWSER_VIEW_STATE_CHANNEL,
 	BROWSER_VIEW_STOP_CHANNEL,
+	BROWSER_VIEW_FOCUS_CHANNEL,
 	BROWSER_VIEW_VISIBILITY_CHANNEL,
 	type IBrowserViewCreateRequest,
 	type IBrowserViewLayoutRequest,
@@ -36,6 +37,7 @@ export interface IBrowserViewMainService {
 	goForward(targetId: string): void;
 	reload(targetId: string): void;
 	stop(targetId: string): void;
+	focus(targetId: string): void;
 	close(targetId: string): void;
 }
 
@@ -82,6 +84,7 @@ export function browserViewIpcRoutes(
 			service.reload(targetId)),
 		targetRoute(BROWSER_VIEW_STOP_CHANNEL, (targetId) =>
 			service.stop(targetId)),
+		targetRoute(BROWSER_VIEW_FOCUS_CHANNEL, targetId => service.focus(targetId)),
 		targetRoute(BROWSER_VIEW_CLOSE_CHANNEL, (targetId) =>
 			service.close(targetId)),
 	];

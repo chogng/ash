@@ -735,12 +735,20 @@ name = "ash-app-server-transport"
 version = "0.1.0"
 dependencies = [
  "ash-uds",
+ "bytes",
  "futures",
+ "getrandom 0.2.17",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
  "rustix 1.1.4",
+ "serde_json",
  "sha2 0.10.9",
  "tempfile",
  "tokio",
  "tokio-tungstenite",
+ "url",
+ "urlencoding",
 ]
 
 [[package]]

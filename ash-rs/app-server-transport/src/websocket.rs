@@ -275,18 +275,32 @@ async fn run_connection<H>(
     stream: TcpStream,
     token_sha256: CapabilityTokenSha256,
     handler: Arc<H>,
-    mut shutdown: watch::Receiver<bool>,
+    shutdown: watch::Receiver<bool>,
 ) where
     H: Fn(WebSocketReader, WebSocketWriter) + Send + Sync + 'static,
 {
     let callback = move |request: &Request, response: UpgradeResponse| {
         authorize_upgrade(request, response, token_sha256)
     };
-    let Ok(Ok(mut websocket)) =
+    let Ok(Ok(websocket)) =
         tokio::time::timeout(HANDSHAKE_TIMEOUT, accept_hdr_async(stream, callback)).await
     else {
         return;
     };
+    serve_websocket(websocket, handler, shutdown).await;
+}
+
+pub(crate) async fn serve_websocket<S, H>(
+    mut websocket: tokio_tungstenite::WebSocketStream<S>,
+    handler: Arc<H>,
+    mut shutdown: watch::Receiver<bool>,
+) where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+    H: Fn(WebSocketReader, WebSocketWriter) + Send + Sync + 'static,
+{
+    if *shutdown.borrow() {
+        return;
+    }
     let (inbound_sender, inbound_receiver) = mpsc::channel(INBOUND_QUEUE_CAPACITY);
     let (outbound_sender, mut outbound_receiver) = mpsc::channel(OUTBOUND_QUEUE_CAPACITY);
     let (done_sender, mut done_receiver) = oneshot::channel();
@@ -311,6 +325,7 @@ async fn run_connection<H>(
         return;
     }
 
+    let mut pending = None;
     loop {
         tokio::select! {
             changed = shutdown.changed() => {
@@ -323,15 +338,18 @@ async fn run_connection<H>(
                 let _ = websocket.close(None).await;
                 break;
             }
-            incoming = websocket.next() => {
+            permit = inbound_sender.reserve(), if pending.is_some() => {
+                let Ok(permit) = permit else { break; };
+                permit.send(pending.take().expect("pending frame owns a reserved queue slot"));
+            }
+            incoming = websocket.next(), if pending.is_none() => {
                 match incoming {
                     Some(Ok(Message::Text(text)))
                         if text.len() <= DEFAULT_MAX_MESSAGE_BYTES =>
                     {
-                        if inbound_sender.try_send(text.to_string()).is_err() {
-                            let _ = websocket.close(None).await;
-                            break;
-                        }
+                        // Apply socket backpressure while keeping outbound responses
+                        // and shutdown live. Ordinary startup bursts are not errors.
+                        pending = Some(text.to_string());
                     }
                     Some(Ok(Message::Ping(payload))) => {
                         if websocket.send(Message::Pong(payload)).await.is_err() {

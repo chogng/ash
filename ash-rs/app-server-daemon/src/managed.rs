@@ -30,6 +30,7 @@ use crate::wire::write_json_line;
 /// One validated local connection, preserving any buffered protocol bytes after its prelude.
 pub struct ManagedConnection {
     pub options: ConnectionOptions,
+    pub web: Option<ash_app_server_protocol::WebLaunchOptions>,
     pub reader: BufReader<DeadlineStream>,
     pub writer: DeadlineStream,
 }
@@ -159,6 +160,7 @@ impl ManagedEndpoint {
                 );
                 Ok(Some(ManagedConnection {
                     options,
+                    web: connection.web,
                     reader,
                     writer,
                 }))

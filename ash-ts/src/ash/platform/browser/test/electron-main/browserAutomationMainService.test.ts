@@ -4,6 +4,7 @@ import { BrowserAutomationMainService } from "../../../../platform/browser/elect
 import type { IBrowserViewMainService } from "../../../../platform/browser/electron-main/browserViewIpc.js";
 import { BrowserTargetRegistry, type BrowserTargetView } from "../../../../platform/browser/electron-main/browserTargetRegistry.js";
 import type { IDisposable } from "../../../../base/common/lifecycle.js";
+import { decodeAppServerServerRequestResult } from '../../../../../../generated/app-server/AppServerProtocolDecoder.js';
 
 const targetId = "browser_target_123e4567-e89b-12d3-a456-426614174000";
 
@@ -51,6 +52,9 @@ test("browser automation observes and operates the registered WebContents target
 	assert.match(observed.accessibilityTree ?? "", /backendDOMNodeId/);
 	assert.equal(observed.screenshot?.dataBase64, Buffer.from("png").toString("base64"));
 	assert.equal(attached, false);
+	const summary = await service.observe({ targetId, includeAccessibilityTree: false, includeDomSnapshot: false, includeScreenshot: false }, requestContext());
+	assert.deepEqual(decodeAppServerServerRequestResult('browser/observe', summary), summary);
+	assert.equal(Object.hasOwn(summary, 'screenshot'), false);
 
 	await service.perform({ action: { type: "click", targetId, target: { nodeId: "42" } } }, { signal: new AbortController().signal });
 	assert.deepEqual(commands.filter(command => command.method === "Input.dispatchMouseEvent").map(command => (command.params as { type: string }).type), ["mousePressed", "mouseReleased"]);
@@ -155,6 +159,7 @@ function browserViewService(overrides: Partial<IBrowserViewMainService> = {}): I
 		goForward: () => {},
 		reload: () => {},
 		stop: () => {},
+		focus: () => {},
 		close: () => {},
 		...overrides,
 	};

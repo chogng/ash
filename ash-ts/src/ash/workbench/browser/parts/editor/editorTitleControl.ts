@@ -111,7 +111,7 @@ export class EditorTitleControl extends Disposable {
 	}
 
 	get height(): number {
-		return EditorTitleControl.HEIGHT + (this.breadcrumbsEnabled && this.activeInput ? 22 : 0);
+		return EditorTitleControl.HEIGHT + (this.breadcrumbsEnabled && this.activeInput && this.activeInput.showBreadcrumbs !== false ? 22 : 0);
 	}
 
 	setEditors(
@@ -150,7 +150,7 @@ export class EditorTitleControl extends Disposable {
 
 	private updateBreadcrumbVisibility(): void {
 		const wasVisible = this.domNode.classList.contains("ash-editor-title-with-breadcrumbs");
-		this.breadcrumbs.domNode.hidden = !this.breadcrumbsEnabled || !this.activeInput;
+		this.breadcrumbs.domNode.hidden = !this.breadcrumbsEnabled || !this.activeInput || this.activeInput.showBreadcrumbs === false;
 		const visible = !this.breadcrumbs.domNode.hidden;
 		this.domNode.classList.toggle("ash-editor-title-with-breadcrumbs", visible);
 		if (visible !== wasVisible) this.heightEmitter.fire();

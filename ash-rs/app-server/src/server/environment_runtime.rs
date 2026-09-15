@@ -1328,9 +1328,47 @@ impl AppServer {
         }
     }
 
+    /// Resolve the trusted launch directory to a service identifier without
+    /// allowing the browser to supply or widen directory grants.
+    pub(crate) fn browser_workspace_id(
+        &self,
+        root: &std::path::Path,
+    ) -> Result<String, EnvRuntimeError> {
+        let dir =
+            Dir::open_local(root).map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
+        let (id, dirs) = {
+            let runtime = self
+                .env_runtime
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            if let Some((id, _)) = runtime
+                .dirs
+                .iter()
+                .find(|(_, grant)| grant.dir().id() == dir.id())
+            {
+                return Ok(id.clone());
+            }
+            let grant = runtime
+                .selected_grant
+                .as_ref()
+                .filter(|grant| grant.dir().id() == dir.id())
+                .ok_or(EnvRuntimeError::PermissionRequired)?;
+            let id = dir.id().to_string();
+            let mut dirs = runtime
+                .dirs
+                .iter()
+                .map(|(id, grant)| (id.clone(), grant.clone()))
+                .collect::<Vec<_>>();
+            dirs.push((id.clone(), grant.clone()));
+            (id, dirs)
+        };
+        self.activate_local_dirs(dirs)?;
+        Ok(id)
+    }
+
     pub(crate) fn activate_local_dirs(
         &self,
-        dirs: Vec<(String, Grant)>,
+        mut dirs: Vec<(String, Grant)>,
     ) -> Result<Vec<(String, PathBuf, Permissions)>, EnvRuntimeError> {
         let host = self
             .local_env_host
@@ -1371,6 +1409,28 @@ impl AppServer {
             retire_env_runtime(previous, None, None, None);
             self.reset_language_env_runtimes();
             return Ok(Vec::new());
+        }
+        // Existing windows retain their identifiers while another window binds
+        // the same authorized directory under its own workspace identifier.
+        // A removed directory or changed permission set never retains an alias.
+        {
+            let runtime = self
+                .env_runtime
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let aliases = runtime
+                .dirs
+                .iter()
+                .filter(|(id, grant)| {
+                    !dirs.iter().any(|(next_id, _)| next_id == *id)
+                        && dirs.iter().any(|(_, next)| {
+                            next.dir().id() == grant.dir().id()
+                                && next.permissions() == grant.permissions()
+                        })
+                })
+                .map(|(id, grant)| (id.clone(), grant.clone()))
+                .collect::<Vec<_>>();
+            dirs.extend(aliases);
         }
         let Some((_, primary)) = dirs.first() else {
             unreachable!("empty directory sets are handled above");

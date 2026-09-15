@@ -1,82 +1,99 @@
 import { AbstractDisposable } from '../../../base/common/lifecycle.js';
-import { type AppServerTransport, WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CONNECTED_EVENT } from '../common/appServerTransport.js';
+import { isRecord } from '../../../base/common/types.js';
+import { decodeWebSessionInfo } from '../../../../../generated/app-server/WebProtocolDecoder.js';
+import type { WebSessionInfo } from '../../../../../generated/app-server/index.js';
+import { type AppServerTransport, WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION } from '../common/appServerTransport.js';
 
 const maxBufferedBytes = 320 * 1024 * 1024;
 
-/** Carries connection events independently of the frontend development server. */
+export async function authenticateWebAppServer(endpoint: URL, storage: Storage, ticket: string | null): Promise<AppServerWebSocketTransport> {
+	if (endpoint.protocol !== 'http:' || endpoint.hostname !== '127.0.0.1' || !endpoint.port || endpoint.username || endpoint.password || endpoint.search || endpoint.hash || endpoint.pathname !== '/') {
+		throw new Error('Expected a loopback App Server endpoint');
+	}
+	const key = `ash.appServer.session:${endpoint.origin}`;
+	const token = ticket ? undefined : storage.getItem(key);
+	if (!ticket && !token) { throw new Error('Open the authenticated Web URL provided by the Ash launcher.'); }
+	const response = await fetch(new URL('/ash/session', endpoint), {
+		method: 'POST', credentials: 'omit', cache: 'no-store', signal: AbortSignal.timeout(15_000),
+		headers: token ? { Authorization: `Bearer ${token}` } : {}, body: ticket ?? '',
+	});
+	if (!response.ok) { storage.removeItem(key); throw new Error('The Web session expired. Open a new URL from the Ash launcher.'); }
+	const session = decodeWebSessionInfo(await response.json());
+	storage.setItem(key, session.token);
+	storage.setItem('ash.appServer.endpoint', endpoint.href);
+	return new AppServerWebSocketTransport(endpoint, session);
+}
+
+/** Carries raw JSON-RPC frames over one authenticated browser connection. */
 export class AppServerWebSocketTransport extends AbstractDisposable implements AppServerTransport {
 	private readonly listeners = new Map<string, Set<(payload: unknown) => void>>();
-	private readonly socket: WebSocket;
-	private closed = false;
-	private readonly pending: string[] = [];
-	private pendingBytes = 0;
+	private socket: WebSocket | undefined;
+	private closed = true;
 
-	constructor(url: URL) {
-		super();
-		this.socket = new WebSocket(url);
-		this.socket.addEventListener('open', this.handleOpen);
-		this.socket.addEventListener('message', this.handleMessage);
-		this.socket.addEventListener('close', this.handleClose);
-		this.socket.addEventListener('error', this.handleClose);
-	}
+	constructor(private readonly endpoint: URL, private readonly session: WebSessionInfo) { super(); }
 
 	public on(event: string, listener: (payload: unknown) => void): void {
 		let listeners = this.listeners.get(event);
-		if (!listeners) this.listeners.set(event, listeners = new Set());
+		if (!listeners) { this.listeners.set(event, listeners = new Set()); }
 		listeners.add(listener);
 	}
 
-	public off(event: string, listener: (payload: unknown) => void): void {
-		this.listeners.get(event)?.delete(listener);
-	}
+	public off(event: string, listener: (payload: unknown) => void): void { this.listeners.get(event)?.delete(listener); }
 
 	public send(event: string, payload?: unknown): void {
-		if (this.closed || this.isDisposed) return;
-		const message = JSON.stringify({ event, payload });
-		const bytes = new TextEncoder().encode(message).byteLength;
-		if (this.pending.length >= 128 || this.pendingBytes + this.socket.bufferedAmount + bytes > maxBufferedBytes) {
-			this.handleClose();
+		if (this.isDisposed) { return; }
+		if (event === WEB_APP_SERVER_CONNECT_EVENT) {
+			if (!this.closed) { return; }
+			this.releaseSocket();
+			const url = new URL('/ash/app-server', this.endpoint);
+			url.protocol = 'ws:';
+			this.closed = false;
+			this.socket = new WebSocket(url, `ash-session.${this.session.token}`);
+			this.socket.addEventListener('open', this.handleOpen);
+			this.socket.addEventListener('message', this.handleMessage);
+			this.socket.addEventListener('close', this.handleClose);
+			this.socket.addEventListener('error', this.handleClose);
 			return;
 		}
-		if (this.socket.readyState === WebSocket.OPEN) this.socket.send(message);
-		else {
-			this.pending.push(message);
-			this.pendingBytes += bytes;
+		if (event === WEB_APP_SERVER_DISCONNECT_EVENT) { this.handleClose(); return; }
+		if (event !== WEB_APP_SERVER_FRAME_EVENT || this.closed) { return; }
+		if (!isRecord(payload) || typeof payload.frame !== 'string' || !this.socket || this.socket.readyState !== WebSocket.OPEN
+			|| this.socket.bufferedAmount + new TextEncoder().encode(payload.frame).byteLength > maxBufferedBytes) {
+			this.handleClose(); return;
 		}
+		this.socket.send(payload.frame);
 	}
 
 	private readonly handleOpen = (): void => {
-		for (const message of this.pending) this.socket.send(message);
-		this.pending.length = 0;
-		this.pendingBytes = 0;
+		this.emit(WEB_APP_SERVER_CONNECTED_EVENT, { protocolVersion: WEB_APP_SERVER_PROTOCOL_VERSION, workspaceId: this.session.workspaceId, workspaceRoot: this.session.workspaceRoot });
 	};
 
 	private readonly handleMessage = (event: MessageEvent): void => {
-		try {
-			if (typeof event.data !== 'string' || new TextEncoder().encode(event.data).byteLength > maxBufferedBytes) throw new Error('Invalid transport message');
-			const message: unknown = JSON.parse(event.data);
-			if (!message || typeof message !== 'object' || !('event' in message) || !('payload' in message) || typeof message.event !== 'string' || ![WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CLOSED_EVENT].includes(message.event)) throw new Error('Invalid transport event');
-			for (const listener of this.listeners.get(message.event) ?? []) listener(message.payload);
-		} catch {
-			this.handleClose();
-		}
+		if (typeof event.data !== 'string' || new TextEncoder().encode(event.data).byteLength > maxBufferedBytes) { this.handleClose(); return; }
+		this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: event.data });
 	};
 
 	private readonly handleClose = (): void => {
-		if (this.closed) return;
+		if (this.closed) { return; }
 		this.closed = true;
-		this.pending.length = 0;
-		this.pendingBytes = 0;
-		this.socket.close();
-		for (const listener of this.listeners.get(WEB_APP_SERVER_CLOSED_EVENT) ?? []) listener({ message: 'Web App Server connection closed' });
+		this.releaseSocket();
+		this.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'Web App Server connection closed' });
 	};
 
-	protected override disposeCore(): void {
-		this.socket.removeEventListener('open', this.handleOpen);
-		this.socket.removeEventListener('message', this.handleMessage);
-		this.socket.removeEventListener('close', this.handleClose);
-		this.socket.removeEventListener('error', this.handleClose);
-		this.handleClose();
-		this.listeners.clear();
+	private emit(event: string, payload: unknown): void {
+		for (const listener of this.listeners.get(event) ?? []) { listener(payload); }
 	}
+
+	private releaseSocket(): void {
+		const socket = this.socket;
+		this.socket = undefined;
+		if (!socket) { return; }
+		socket.removeEventListener('open', this.handleOpen);
+		socket.removeEventListener('message', this.handleMessage);
+		socket.removeEventListener('close', this.handleClose);
+		socket.removeEventListener('error', this.handleClose);
+		socket.close();
+	}
+
+	protected override disposeCore(): void { this.handleClose(); this.listeners.clear(); }
 }

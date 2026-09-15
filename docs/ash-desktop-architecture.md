@@ -577,15 +577,14 @@ waitingForApproval 或 waitingForUserInput 时，普通文本 Send 调用 `sessi
 由于 session 列表当前没有最近活动时间，启动时只能按服务端顺序选择首个活动 thread；
 Browser 入口没有 App Server 连接时会明确显示不可用状态。`dev:web` 是不构建 Rust 的独立
 前端开发入口，使用同一 disconnected API 保持 UI 可检查，但不声称拥有后端能力。当前本地
-`dev:web:full` 与 `build:web` / `start:web` 使用同一条独立 WebSocket `/ash/app-server`，
-业务通信不依赖 Vite HMR。每个浏览器通过独立 connection carrier 连接 profile 共享 daemon
-管理的 App Server；浏览器断开只回收自己的连接。连接入口仅接受同源 loopback 请求。
-`scripts/web.ts` 提供正式静态产物的本地 HTTP 服务。它与 Vite 开发入口共同加载
-`ash-ts/src/ash/platform/app-server/node/webAppServer.ts` 的编译产物，并传入运行路径；
-连接模块复用同目录的 JSONL 进程传输和 `common` 中的环境变量规则。
+`dev:web:full` 与 `build:web` / `start:web` 使用受管理 Rust App Server 的认证
+HTTP/WebSocket 浏览器入口。每个浏览器页签独立交换 JSON-RPC，服务仍由 profile registry 管理。
+`scripts/lib/web.ts` 只持有启动租约、读取启动信息和收尾；不转发业务消息。
+Vite 提供开发资源，发布资源由 Rust HTTP 入口读取可信配置中的目录。
 普通 `build:renderer` 保留 disconnected 模式；`build:web` 显式启用后端连接。
-Web renderer 初始化完成后通过 `env/dirs/set` 注册宿主提供的目录 ID 和路径，完成后才启动
-Workbench；文件请求与后端使用同一目录 ID。授权沿用本地启动目录的 host 权限范围。
+可信启动入口绑定工作区和允许的 Origin；一次性票据兑换后，浏览器通过会话凭证连接，
+不声明目录授权宿主，也不调用 `env/dirs/set` 扩大权限。具体契约和验证见
+[前端连接与浏览器能力](../ash-ts/docs/design/app-server-connection.md)。
 公网远程部署的认证、TLS 和访问策略不属于这个本地服务的能力。
 
 Renderer 与 Stanza 共用 `build/vite/rendererOutput.ts` 的分包规则，保留模块执行顺序，避免贡献注册
@@ -709,8 +708,9 @@ Electron Main 直接使用 Electron 自带的 Node runtime 和 `webContents.debu
 Input CDP 命令，不接受任意 CDP method。accessibility tree 与 DOM snapshot 各限制为 8 MiB，PNG
 限制为 16 MiB；Debugger 操作按目标串行，并在每个可安全停止的边界观察取消。
 
-Rust `BrowserHost` 使用独立的字符串 request ID 复用现有 JSONL 连接，把新目标绑定到实际响应的
-Desktop connection。后续观察、动作和关闭只路由给这一 owner；非 owner 响应、目标身份变化和
+Rust `BrowserHost` 使用独立的字符串 request ID 复用现有 JSONL 连接；任务提交时绑定发起任务的
+Desktop connection，新建目标、后续观察、动作和关闭只路由给这一 owner。Web 或未绑定宿主的任务
+不能借用其他桌面连接。非 owner 响应、目标身份变化和
 重复响应均失败。请求在 30 秒后超时，取消或超时会发送 `$/cancelRequest`，安全忽略已放弃请求的
 晚到终态。截图经 Base64 长度、PNG MIME/signature 校验后进入 5 分钟 TTL 的 connection-owned
 `ResourceStore`。
@@ -727,7 +727,8 @@ Desktop connection。后续观察、动作和关闭只路由给这一 owner；�
 
 当前限制：
 
-- 尚无浏览器编辑器、地址栏、标签页或 DOM 容器自动布局绑定；
+- Workbench 已提供浏览器编辑器、地址栏、标签页及容器布局；Agent 创建和关闭页面同步到页签。
+  `F6` 或 `Ctrl+L` 返回地址栏，`Alt+F1` 打开帮助；同一页面在多个编辑器组显示尚未验证；
 - 尚未实现持久 BrowserSession、下载 UI、权限提示、证书信任或 PDF 导出；
 - 当前观察结果是有界的原始 CDP JSON，还没有 Playwright locator、ARIA snapshot、trace、console
   或 network inspection；

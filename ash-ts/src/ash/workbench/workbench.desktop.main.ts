@@ -6,3 +6,4 @@
  */
 import "./workbench.common.main.js";
 import "./electron-browser/desktop.contribution.js";
+import "./contrib/browserView/electron-browser/browserView.contribution.js";

@@ -8,6 +8,7 @@ const electronExecutablePath = createRequire(import.meta.url)("electron") as str
 export interface ElectronLaunchOptions {
 	readonly appServerMode: AppServerTestMode;
 	readonly userDataDirectory: string;
+	readonly profileDirectory?: string;
 	readonly workspaceDirectory?: string;
 	readonly workspacePermissions?: "development";
 	readonly workbenchMode?: DesktopWorkbenchMode;
@@ -31,7 +32,7 @@ export function resolveElectronConfiguration(options: ElectronLaunchOptions): El
 		delete environment.ASH_DESKTOP_UI_ONLY;
 	}
 	environment.ASH_WORKBENCH_MODE = options.workbenchMode ?? "code";
-	environment.ASH_HOME = resolve(options.userDataDirectory, "profile");
+	environment.ASH_HOME = options.profileDirectory ?? resolve(options.userDataDirectory, "profile");
 	delete environment.ASH_PROFILE_ROOT;
 	delete environment.ELECTRON_RUN_AS_NODE;
 	delete environment.ASH_RENDERER_URL;

@@ -2,6 +2,8 @@
 export { APP_SERVER_CAPABILITY_VERSION, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH } from './protocol.js';
 export type { JsonRpcError, JsonRpcFailure, JsonRpcId, JsonRpcNotification, JsonRpcRequest, JsonRpcResponse, JsonRpcSuccess, JsonRpcVersion } from './protocol.js';
 export type { AppServerListenInfo } from './AppServerListenInfo.js';
+export type { WebListenInfo } from './WebListenInfo.js';
+export type { WebSessionInfo } from './WebSessionInfo.js';
 export { APP_SERVER_METHODS } from './AppServerRequestMap.js';
 export type { AppServerMethod, AppServerMethodDefinition, AppServerRequest, AppServerRequestMap, AppServerResponse, MethodParams, MethodResult } from './AppServerRequestMap.js';
 export { APP_SERVER_NOTIFICATIONS } from './AppServerNotificationMap.js';

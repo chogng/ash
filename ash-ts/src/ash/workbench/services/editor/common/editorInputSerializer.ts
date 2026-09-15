@@ -65,6 +65,7 @@ function serializeBaseEditorInput(input: EditorInput): unknown {
 		...(input.languageId === undefined ? {} : { languageId: input.languageId }),
 		...(input.label === undefined ? {} : { label: input.label }),
 		...(input.readOnly === undefined ? {} : { readOnly: input.readOnly }),
+		...(input.showBreadcrumbs === undefined ? {} : { showBreadcrumbs: input.showBreadcrumbs }),
 		...(input.initialText === undefined ? {} : { initialText: input.initialText }),
 	});
 }
@@ -76,6 +77,7 @@ function deserializeBaseEditorInput(value: unknown): EditorInput {
 	const languageId = optionalString(record.languageId, 'serialized editor language ID');
 	const label = optionalString(record.label, 'serialized editor label');
 	const readOnly = optionalBoolean(record.readOnly, 'serialized editor read-only state');
+	const showBreadcrumbs = optionalBoolean(record.showBreadcrumbs, 'serialized editor breadcrumbs');
 	const initialText = optionalString(record.initialText, 'serialized editor initial text');
 	return Object.freeze({
 		resource: URI.parse(resource),
@@ -83,6 +85,7 @@ function deserializeBaseEditorInput(value: unknown): EditorInput {
 		...(languageId === undefined ? {} : { languageId }),
 		...(label === undefined ? {} : { label }),
 		...(readOnly === undefined ? {} : { readOnly }),
+		...(showBreadcrumbs === undefined ? {} : { showBreadcrumbs }),
 		...(initialText === undefined ? {} : { initialText }),
 	});
 }

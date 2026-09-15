@@ -14,7 +14,9 @@ use std::thread;
 #[test]
 fn browser_requests_bind_targets_and_resources_to_the_exact_connection() {
     let resources = Arc::new(Mutex::new(ResourceStore::default()));
-    let host = Arc::new(BrowserHost::new(Arc::clone(&resources)));
+    let mut host = BrowserHost::new(Arc::clone(&resources));
+    host.owner = Some(7);
+    let host = Arc::new(host);
     let outbound = NotificationQueue::default();
     host.register(
         7,
@@ -133,7 +135,9 @@ fn browser_requests_bind_targets_and_resources_to_the_exact_connection() {
 #[test]
 fn disconnect_fails_pending_requests_and_forgets_target_ownership() {
     let resources = Arc::new(Mutex::new(ResourceStore::default()));
-    let host = Arc::new(BrowserHost::new(resources));
+    let mut host = BrowserHost::new(resources);
+    host.owner = Some(3);
+    let host = Arc::new(host);
     let outbound = NotificationQueue::default();
     host.register(
         3,
@@ -164,7 +168,9 @@ fn disconnect_fails_pending_requests_and_forgets_target_ownership() {
 #[test]
 fn cancellation_retires_the_request_and_accepts_its_late_terminal_response() {
     let resources = Arc::new(Mutex::new(ResourceStore::default()));
-    let host = Arc::new(BrowserHost::new(resources));
+    let mut host = BrowserHost::new(resources);
+    host.owner = Some(11);
+    let host = Arc::new(host);
     let outbound = NotificationQueue::default();
     host.register(
         11,
@@ -214,4 +220,65 @@ fn next_request(outbound: &NotificationQueue) -> Value {
     let listener = outbound.listener();
     assert!(listener.wait());
     listener.drain().into_iter().next().unwrap()
+}
+
+#[test]
+fn task_binding_never_borrows_another_window_or_a_replayed_command() {
+    let host = BrowserHost::new(Arc::new(Mutex::new(ResourceStore::default())));
+    for owner in [1, 2] {
+        host.register(
+            owner,
+            ClientBrowserCapability {
+                version: 1,
+                observe: true,
+                input: true,
+            },
+            NotificationQueue::default(),
+        );
+    }
+    let thread = ash_protocol::ThreadId::new("browser-thread").unwrap();
+    let turn = ash_protocol::TurnId::new("browser-turn").unwrap();
+    let receipt = || {
+        Ok(core_api::TurnReceipt {
+            turn_id: turn.clone(),
+            sequence: 1,
+        })
+    };
+    host.submit_turn(&thread, Some(2), receipt).unwrap();
+    assert_eq!(host.for_turn(&thread, &turn).unwrap().create_owner(), Ok(2));
+    host.submit_turn(&thread, Some(1), receipt).unwrap();
+    assert_eq!(host.for_turn(&thread, &turn).unwrap().create_owner(), Ok(2));
+    assert_eq!(
+        host.create_owner(),
+        Err(BrowserError::CapabilityUnavailable)
+    );
+    let other_turn = ash_protocol::TurnId::new("web-turn").unwrap();
+    host.submit_turn(&thread, None, || {
+        Ok(core_api::TurnReceipt {
+            turn_id: other_turn.clone(),
+            sequence: 2,
+        })
+    })
+    .unwrap();
+    assert!(matches!(
+        host.for_turn(&thread, &other_turn),
+        Err(BrowserError::CapabilityUnavailable)
+    ));
+    host.state
+        .lock()
+        .unwrap()
+        .target_owners
+        .insert("other-window".into(), 1);
+    assert_eq!(
+        host.for_turn(&thread, &turn).unwrap().target_owner(
+            &BrowserTargetId("other-window".into()),
+            BrowserHostOperation::Observe
+        ),
+        Err(BrowserError::CapabilityUnavailable)
+    );
+    host.unregister(2);
+    assert!(matches!(
+        host.for_turn(&thread, &turn),
+        Err(BrowserError::CapabilityUnavailable)
+    ));
 }

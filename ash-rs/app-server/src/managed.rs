@@ -1,6 +1,7 @@
 //! Profile-wide service runtime executed by `ash-app-server --managed`.
 
 mod registry;
+mod web;
 
 use ash_app_server_daemon::ConnectionOptions;
 use ash_app_server_daemon::GrantSource;
@@ -59,9 +60,9 @@ pub(crate) fn run(profile_root: PathBuf) -> Result<(), String> {
             thread::sleep(IDLE_POLL_INTERVAL);
             continue;
         }
-        if let Some(connection) = endpoint.poll_connection()? {
+        if let Some(mut connection) = endpoint.poll_connection()? {
             idle_since = None;
-            let server = match registry.server_for(connection.options) {
+            let server = match registry.server_for(connection.options.clone()) {
                 Ok(server) => server,
                 Err(error) => {
                     eprintln!("managed App Server directory runtime failed: {error}");
@@ -79,6 +80,12 @@ pub(crate) fn run(profile_root: PathBuf) -> Result<(), String> {
                 .name("ash-local-app-server-connection".into())
                 .spawn(move || {
                     let _registration = registration;
+                    if let Some(options) = connection.web.take() {
+                        if let Err(error) = web::serve(server, connection, options) {
+                            eprintln!("Managed Web listener failed: {error}");
+                        }
+                        return;
+                    }
                     if let Err(error) =
                         server.serve_product_host_jsonl(connection.reader, connection.writer)
                         && !is_peer_disconnect(&error)

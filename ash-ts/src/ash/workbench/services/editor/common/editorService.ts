@@ -11,6 +11,8 @@ export interface EditorInput {
 	readonly languageId?: string;
 	readonly label?: string;
 	readonly readOnly?: boolean;
+	/** Whether the resource path is meaningful to show as breadcrumbs. */
+	readonly showBreadcrumbs?: boolean;
 	readonly initialText?: string;
 }
 

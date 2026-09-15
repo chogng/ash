@@ -1,6 +1,9 @@
 import { defineConfig } from "@playwright/test";
 
 const browserServerMode = process.env.ASH_PLAYWRIGHT_SERVER;
+if (browserServerMode === 'full' && !process.env.ASH_SMOKE_BROWSER_EXTERNAL_SERVER) {
+	throw new Error('Run pnpm run test:smoke:browser:full to create an authenticated Web session.');
+}
 const workbenchMode = process.env.ASH_WORKBENCH_MODE === "academic" ? "academic" : "code";
 const browserProjects = browserServerMode === "disconnected"
 	? [{ name: "browser-ui", use: { baseURL: "http://127.0.0.1:5173" } }]
@@ -33,14 +36,7 @@ export default defineConfig({
 				reuseExistingServer: false,
 				timeout: 120_000,
 			}
-		: browserServerMode === "full"
-			? {
-					command: "pnpm run build:web && pnpm run start:web",
-					url: "http://127.0.0.1:5174/",
-					reuseExistingServer: false,
-					timeout: 120_000,
-				}
-			: undefined,
+		: undefined,
 	timeout: 45_000,
 	expect: {
 		timeout: 10_000,

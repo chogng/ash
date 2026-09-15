@@ -1,12 +1,16 @@
 use super::*;
+use crate::browser_host::BrowserHost;
+use crate::resource_store::ResourceStore;
 use ash_async_utils::CancellationSource;
-use ash_core::UnsupportedBrowserCapability;
 use ash_protocol::ToolCallId;
 use serde_json::json;
+use std::sync::Mutex;
 
 #[test]
 fn browser_tools_are_complete_strict_and_require_one_time_approval() {
-    let service = BrowserToolService::new(Arc::new(UnsupportedBrowserCapability));
+    let service = BrowserToolService::new(Arc::new(BrowserHost::new(Arc::new(Mutex::new(
+        ResourceStore::default(),
+    )))));
     let definitions = service.definitions();
     assert_eq!(definitions.len(), 10);
     assert!(definitions.iter().all(|definition| definition.strict));
@@ -37,7 +41,9 @@ fn browser_tools_are_complete_strict_and_require_one_time_approval() {
 
 #[test]
 fn browser_tools_reject_privileged_urls_and_ambiguous_element_ids() {
-    let service = BrowserToolService::new(Arc::new(UnsupportedBrowserCapability));
+    let service = BrowserToolService::new(Arc::new(BrowserHost::new(Arc::new(Mutex::new(
+        ResourceStore::default(),
+    )))));
     for url in [
         "http://example.test/",
         "file:///etc/passwd",

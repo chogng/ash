@@ -19,6 +19,9 @@ export async function launchElectron(options: ElectronLaunchOptions): Promise<El
 		executablePath: configuration.executablePath,
 		timeout: 30_000,
 	});
+	let processErrors = '';
+	const onProcessError = (chunk: Buffer): void => { processErrors = (processErrors + chunk.toString()).slice(-16_384); };
+	application.process().stderr?.on('data', onProcessError);
 	try {
 		if (options.appServerMode === 'required' && options.workspaceDirectory && options.workspacePermissions === 'development') {
 			const workspacePaths = [options.workspaceDirectory, await realpath(options.workspaceDirectory)];
@@ -61,12 +64,13 @@ export async function launchElectron(options: ElectronLaunchOptions): Promise<El
 				...failedRequests,
 				...[...pendingRequests].map(request => `Pending: ${request.url()}`),
 			].join('\n');
-			throw new Error(`Workbench startup failed at ${page.url()}:\n${text}\n${details}`, { cause: error });
+			throw new Error(`Workbench startup failed at ${page.url()}:\n${text}\n${details}\n${processErrors}`, { cause: error });
 		} finally {
 			page.off('pageerror', onPageError);
 			page.off('request', onRequest);
 			page.off('requestfinished', onRequestFinished);
 			page.off('requestfailed', onRequestFailed);
+			application.process().stderr?.off('data', onProcessError);
 		}
 		return { application, driver };
 	} catch (error) {

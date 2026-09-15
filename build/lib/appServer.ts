@@ -7,7 +7,6 @@ import { createInterface } from "node:readline";
 
 import { cargoArtifactExecutable, cargoRenderedDiagnostic, cargoTargetDirectory, parseCargoMessage } from "./cargo.ts";
 import { desktopBuildPath } from "./paths.ts";
-import { developmentAshPackagePath } from '../package/store.ts';
 
 const desktopRoot = resolve(import.meta.dirname, "../../ash-ts");
 const repositoryRoot = resolve(desktopRoot, "..");
@@ -19,20 +18,6 @@ const generationDirectory = desktopBuildPath(repositoryRoot, "dev", "app-server"
 const generationFile = join(generationDirectory, "current.json");
 const debounceMs = 250;
 const retainedPreviousGenerations = 1;
-
-export function webAppServerOptions(): { workspaceRoot: string; profileRoot: string; executable: string; appServer: string; ripgrep: string; productServices?: string } {
-  const packageRoot = developmentAshPackagePath(repositoryRoot, 'packaged-node');
-  const suffix = process.platform === 'win32' ? '.exe' : '';
-  const options: ReturnType<typeof webAppServerOptions> = {
-    workspaceRoot: resolve(process.env.ASH_WORKSPACE_ROOT ?? repositoryRoot),
-    profileRoot: resolve(process.env.ASH_WEB_APP_SERVER_PROFILE ?? desktopBuildPath(repositoryRoot, 'dev', 'web-profile')),
-    executable: join(packageRoot, 'bin', `ash-app-server-daemon${suffix}`),
-    appServer: join(packageRoot, 'bin', `ash-app-server${suffix}`),
-    ripgrep: resolve(process.env.ASH_RG_PATH ?? join(packageRoot, 'ash-path', `rg${suffix}`)),
-  };
-  if (process.env.ASH_PRODUCT_SERVICES_PATH) options.productServices = process.env.ASH_PRODUCT_SERVICES_PATH;
-  return options;
-}
 
 export function shouldRebuildAppServer(file: string | null, ignoredDirectory?: string): boolean {
   if (typeof file !== "string") return false;

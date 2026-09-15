@@ -1,23 +1,21 @@
 import type { Plugin } from 'vite';
-import { resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
-import { webAppServerOptions } from '../lib/appServer.ts';
-import { compile } from '../lib/compilation.ts';
+import { authenticatedWebUrl, startWeb } from '../../scripts/lib/web.ts';
 
 export function webAppServerVitePlugin(): Plugin {
-	let closeConnections: (() => Promise<void>) | undefined;
+	let close: (() => Promise<void>) | undefined;
 	return {
 		name: 'ash-web-app-server',
 		apply: 'serve',
 		async configureServer(server) {
-			if (!server.httpServer) throw new Error('Web App Server requires an HTTP server');
-			await compile(['node']);
-			const entry = resolve(import.meta.dirname, '../../.build/desktop/node/src/ash/platform/app-server/node/webAppServer.js');
-			const { attachWebAppServer } = await import(pathToFileURL(entry).href);
-			closeConnections = attachWebAppServer(server.httpServer, webAppServerOptions());
+			if (!server.httpServer) { throw new Error('Web App Server requires an HTTP server'); }
+			server.config.server.host = '127.0.0.1';
+			server.config.server.strictPort = true;
+			const origin = `http://127.0.0.1:${server.config.server.port ?? 5173}`;
+			const launch = await startWeb({ port: 0, origin });
+			close = launch.close;
+			server.httpServer.once('listening', () => console.info(`Open Ash: ${authenticatedWebUrl(launch.info, origin)}`));
+			server.httpServer.once('close', () => void launch.close());
 		},
-		closeBundle() {
-			return closeConnections?.();
-		},
+		closeBundle() { return close?.(); },
 	};
 }

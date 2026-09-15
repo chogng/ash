@@ -45,13 +45,13 @@ const TYPE_SCHEMA: &str = r#"{"type":"object","properties":{"target_id":{"type":
 const SCROLL_SCHEMA: &str = r#"{"type":"object","properties":{"target_id":{"type":"string"},"delta_x":{"type":"number"},"delta_y":{"type":"number"}},"required":["target_id","delta_x","delta_y"],"additionalProperties":false}"#;
 const TARGET_SCHEMA: &str = r#"{"type":"object","properties":{"target_id":{"type":"string"}},"required":["target_id"],"additionalProperties":false}"#;
 
-pub(crate) struct BrowserToolService<B> {
-    browser: Arc<B>,
+pub(crate) struct BrowserToolService {
+    browser: Arc<crate::browser_host::BrowserHost>,
     definitions: Vec<ToolDefinition>,
 }
 
-impl<B> BrowserToolService<B> {
-    pub(crate) fn new(browser: Arc<B>) -> Self {
+impl BrowserToolService {
+    pub(crate) fn new(browser: Arc<crate::browser_host::BrowserHost>) -> Self {
         Self {
             browser,
             definitions: vec![
@@ -216,7 +216,7 @@ impl<B> BrowserToolService<B> {
     }
 }
 
-impl<B: BrowserCapability> ToolService for BrowserToolService<B> {
+impl ToolService for BrowserToolService {
     fn definitions(&self) -> Vec<ToolDefinition> {
         self.definitions.clone()
     }
@@ -228,14 +228,68 @@ impl<B: BrowserCapability> ToolService for BrowserToolService<B> {
 
     fn execute(
         &self,
+        _: &ToolCall,
+        _: &ToolAuthorization,
+        _: &CancellationToken,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        Err(CoreError::Execution(
+            "Browser tools require an originating task and browser host".into(),
+        ))
+    }
+
+    fn prepare_with_facts(
+        &self,
+        call: &ToolCall,
+        facts: &ash_core::ToolExecutionFacts,
+    ) -> Result<ActionReviewRequest, CoreError> {
+        self.browser_for(facts)?;
+        self.prepare(call)
+    }
+
+    fn execute_with_facts(
+        &self,
         call: &ToolCall,
         _: &ToolAuthorization,
         cancellation: &CancellationToken,
+        facts: &ash_core::ToolExecutionFacts,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        self.execute_request(call, cancellation, &self.browser_for(facts)?)
+    }
+
+    fn execute_streaming_with_facts(
+        &self,
+        call: &ToolCall,
+        authorization: &ToolAuthorization,
+        cancellation: &CancellationToken,
+        facts: &ash_core::ToolExecutionFacts,
+        _: &mut dyn ash_core::ToolOutputSink,
+    ) -> Result<ToolExecutionOutput, CoreError> {
+        self.execute_with_facts(call, authorization, cancellation, facts)
+    }
+}
+
+impl BrowserToolService {
+    fn browser_for(
+        &self,
+        facts: &ash_core::ToolExecutionFacts,
+    ) -> Result<crate::browser_host::BrowserHost, CoreError> {
+        let identity = facts
+            .execution_identity()
+            .ok_or_else(|| CoreError::Execution("Browser tools require a task identity".into()))?;
+        self.browser
+            .for_turn(identity.thread_id(), identity.turn_id())
+            .map_err(browser_error)
+    }
+
+    fn execute_request(
+        &self,
+        call: &ToolCall,
+        cancellation: &CancellationToken,
+        browser: &dyn BrowserCapability,
     ) -> Result<ToolExecutionOutput, CoreError> {
         let output = match self.materialize(call)? {
             BrowserToolRequest::Open { url } => {
-                let created = self
-                    .browser
+                let created = browser
                     .create_target(CreateBrowserTargetRequest { url }, cancellation)
                     .map_err(browser_error)?;
                 json!({ "target_id": created.target_id.0 })
@@ -245,7 +299,7 @@ impl<B: BrowserCapability> ToolService for BrowserToolService<B> {
                 include_dom_snapshot,
                 include_screenshot,
             } => observation_json(
-                self.browser
+                browser
                     .observe(
                         BrowserObserveRequest {
                             target_id,
@@ -258,7 +312,7 @@ impl<B: BrowserCapability> ToolService for BrowserToolService<B> {
                     .map_err(browser_error)?,
             ),
             BrowserToolRequest::Screenshot { target_id } => observation_json(
-                self.browser
+                browser
                     .observe(
                         BrowserObserveRequest {
                             target_id,
@@ -271,12 +325,12 @@ impl<B: BrowserCapability> ToolService for BrowserToolService<B> {
                     .map_err(browser_error)?,
             ),
             BrowserToolRequest::Navigate { target_id, url } => action_json(
-                self.browser
+                browser
                     .perform(BrowserAction::Navigate { target_id, url }, cancellation)
                     .map_err(browser_error)?,
             ),
             BrowserToolRequest::Click { target_id, target } => action_json(
-                self.browser
+                browser
                     .perform(BrowserAction::Click { target_id, target }, cancellation)
                     .map_err(browser_error)?,
             ),
@@ -285,7 +339,7 @@ impl<B: BrowserCapability> ToolService for BrowserToolService<B> {
                 target,
                 text,
             } => action_json(
-                self.browser
+                browser
                     .perform(
                         BrowserAction::TypeText {
                             target_id,
@@ -301,7 +355,7 @@ impl<B: BrowserCapability> ToolService for BrowserToolService<B> {
                 delta_x,
                 delta_y,
             } => action_json(
-                self.browser
+                browser
                     .perform(
                         BrowserAction::Scroll {
                             target_id,
@@ -313,17 +367,17 @@ impl<B: BrowserCapability> ToolService for BrowserToolService<B> {
                     .map_err(browser_error)?,
             ),
             BrowserToolRequest::GoBack { target_id } => action_json(
-                self.browser
+                browser
                     .perform(BrowserAction::GoBack { target_id }, cancellation)
                     .map_err(browser_error)?,
             ),
             BrowserToolRequest::Reload { target_id } => action_json(
-                self.browser
+                browser
                     .perform(BrowserAction::Reload { target_id }, cancellation)
                     .map_err(browser_error)?,
             ),
             BrowserToolRequest::Close { target_id } => {
-                self.browser
+                browser
                     .close_target(target_id.clone(), cancellation)
                     .map_err(browser_error)?;
                 json!({ "target_id": target_id.0, "closed": true })

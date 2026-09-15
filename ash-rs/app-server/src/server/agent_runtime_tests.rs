@@ -453,3 +453,148 @@ impl TurnExecutionBackend for NoopTurnBackend {
         Ok(())
     }
 }
+
+struct BrowserModel;
+impl ModelService for BrowserModel {
+    fn invoke(
+        &self,
+        _: ModelSelection<'_>,
+        request: &ModelRequest,
+        _: &CancellationToken,
+    ) -> Result<ModelResponse, CoreError> {
+        let output = if request
+            .input
+            .iter()
+            .any(|item| matches!(item, InputItem::ToolResult(_)))
+        {
+            ResponseItem::Text("done".into())
+        } else {
+            ResponseItem::ToolCall(ToolCall {
+                id: ToolCallId::new("open-browser").unwrap(),
+                name: ToolName::new("browser_open").unwrap(),
+                arguments: json!({"url":"https://example.test/"}),
+            })
+        };
+        Ok(ModelResponse {
+            output: vec![output],
+            usage: None,
+            billing: None,
+            stop_reason: StopReason::Completed,
+        })
+    }
+}
+
+struct ApproveBrowser;
+impl core_api::ActionPolicyService for ApproveBrowser {
+    fn revision(&self) -> String {
+        local_policy_revision().as_str().to_owned()
+    }
+    fn decide(
+        &self,
+        request: &ActionReviewRequest,
+        _: &CancellationToken,
+    ) -> Result<ash_action_policy::ExecutionDecision, CoreError> {
+        assert_eq!(request.provenance().source_id(), "browser_open");
+        Ok(ash_action_policy::ExecutionDecision::RunUnsandboxed {
+            grant_id: ash_action_policy::GrantId::new("test-browser-approval"),
+        })
+    }
+}
+
+#[test]
+fn rpc_turn_executes_browser_tool_only_on_its_originating_window() {
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        InMemoryThreadStore::default(),
+    )));
+    let server = crate::AppServer::new(threads.clone(), Arc::new(BrowserModel));
+    let tools = Arc::new(crate::browser_tool::BrowserToolService::new(
+        server.browser_host.clone(),
+    ));
+    let mut server = server.with_tool_service(tools, Arc::new(ApproveBrowser));
+    server.model_catalog = Arc::new(SelectedModel(ash_protocol::ModelRef::new(
+        ash_protocol::ProviderId::new("openai").unwrap(),
+        ash_protocol::ModelId::new("gpt-6-astra").unwrap(),
+    )));
+    let next_id = std::cell::Cell::new(0);
+    let call = |connection: &mut super::ConnectionState, method: &str, params: Value| -> Value {
+        next_id.set(next_id.get() + 1);
+        let response: Value = serde_json::from_str(
+            &server.handle_json(
+                connection,
+                &json!({"jsonrpc":"2.0","id":next_id.get(),"method":method,"params":params})
+                    .to_string(),
+            ),
+        )
+        .unwrap();
+        assert!(response.get("error").is_none(), "{response}");
+        response["result"].clone()
+    };
+    let mut first = server.connection();
+    let mut second = server.connection();
+    let mut web = server.connection();
+    for connection in [&mut first, &mut second] {
+        call(
+            connection,
+            "initialize",
+            json!({"clientInfo":{"name":"desktop-test","version":"1"},"capabilities":{"browser":{"version":1,"observe":true,"input":true}}}),
+        );
+    }
+    call(
+        &mut web,
+        "initialize",
+        json!({"clientInfo":{"name":"web-test","version":"1"},"capabilities":{}}),
+    );
+    for (index, connection) in [&mut second, &mut web].into_iter().enumerate() {
+        let created = call(
+            connection,
+            "session/create",
+            json!({"commandId":format!("browser-session-{index}"),"title":"Browser task","agent":{"type":"default"}}),
+        );
+        let session = created["session"]["sessionId"].as_str().unwrap();
+        call(
+            connection,
+            "session/request",
+            json!({"commandId":format!("browser-turn-{index}"),"sessionId":session,"request":{"type":"startTurn","threadId":session,"expectedSequence":1,"input":[{"type":"text","text":"open a page"}]}}),
+        );
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut created_page = false;
+        loop {
+            for request in connection.outbound_notifications.drain() {
+                if request["method"] == "browser/create" {
+                    assert_eq!(index, 0, "a Web task must not borrow a desktop browser");
+                    assert!(!created_page);
+                    created_page = true;
+                    assert!(server.browser_host.handle_response(connection.connection_id, json!({"jsonrpc":"2.0","id":request["id"],"result":{"targetId":"browser_target_test"}})).unwrap());
+                }
+            }
+            assert!(
+                !first
+                    .outbound_notifications
+                    .drain()
+                    .iter()
+                    .any(|value| value["method"] == "browser/create")
+            );
+            let snapshot = threads
+                .read_thread(&ThreadId::new(session).unwrap())
+                .unwrap();
+            let expected_status = if index == 0 {
+                TurnStatus::Completed
+            } else {
+                TurnStatus::Failed
+            };
+            if snapshot.turns[0].status == expected_status {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "browser turn did not finish: {:?}",
+                snapshot.turns[0].status
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(created_page, index == 0);
+    }
+    server.close_connection(first);
+    server.close_connection(second);
+    server.close_connection(web);
+}
