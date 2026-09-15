@@ -14,6 +14,8 @@ Stanza 以 VS Code `src/vs/editor` 为职责参照：`common` 拥有编辑器公
 | 程序化调用 | `editor.api.ts` | `editor.create/createModel`、`languages.register/registerLanguages/registerProviderBatch/registerLanguage*Provider`、命名主题、standalone model registry、`TextModel`、schema、transaction 和坐标值对象；不注册 pane |
 | 完整 standalone 入口 | `editor.main.ts` | 先加载 `editor.all.ts` 的完整行式 contribution，再导出 `editor.api.ts` |
 
+Code Action、Hover、Sticky Scroll 分别通过 `codeActionContributions.ts`、`hoverContribution.ts`、`stickyScrollContribution.ts` 注册。注册入口负责装配；控制器继续拥有请求、界面状态和释放逻辑。独立注册文件是否保留取决于对应职责，不统一套用 `.contribution.ts` 后缀。
+
 ## 核心文档
 
 Editor 维护以下核心入口。实现 README 可以补充局部细节，但不得复制核心规范。

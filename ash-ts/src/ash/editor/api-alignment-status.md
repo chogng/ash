@@ -4,6 +4,8 @@
 
 ## 当前结论
 
+- 批量迁移 Code Action、Hover、Sticky Scroll 的注册入口至上游对应路径 `codeActionContributions.ts`、`hoverContribution.ts`、`stickyScrollContribution.ts`。旧路径退出，bundle 保持原来的注册顺序与创建条件；控制器行为和生命周期未改。此项仅完成注册文件落位，不代表三个功能的全部公开 API 已对齐。Middle Scroll 与 Placeholder 的 `.contribution.ts` 是双方已有入口，继续保留。
+
 - 格式化职责回收：按用户指定删除 `contrib/format/browser/formatController.ts`。请求编排、交叠处理和取消归回 `format.ts`；命令、现有键盘入口与保存钩子归回 `formatActions.ts`；`formattingEdit.ts` 继续提交编辑。贡献只注册触发入口，不再返回控制器。Widget 将原本拥有的 `IVersionedEditorWorkerClient` 注册到模型作用域，Action 通过容器取得同一实例，模型解绑时仍由 Widget 释放。`formatEditor` 是当前模型绑定的调用入口，不冒充完整上游调度 API；资源级 worker 缺口仍保留。
 
 - 职责回收验证：旧控制器的 TypeScript 引用清零；62 项定向单测、119 项浏览器回归、Editor 对齐与类型检查、Stanza 和 Renderer 构建通过。覆盖保存模式、当前模型格式化选项、worker 实例复用与解绑释放、无模型命令、快捷键、重复请求取消、语言与模型切换、交叠处理和撤销。保留既有 JSDOM Canvas、颜色环境提示及未触及 CSS 债务。

@@ -742,10 +742,13 @@ test("Editor engines delegate optional feature composition to mode bundles", () 
 	assert.match(quickAccessContribution, /registerEditorContribution/u);
 	assert.match(standardBundle, /find\/browser\/findController/u);
 	assert.match(standardBundle, /quickAccess\/browser\/quickAccessController/u);
-	for (const contribution of ["bracketMatching", "codeAction", "gotoSymbol", "hover", "languageAnalysis", "multicursor", "placeholderText", "suggest", "tokenization", "unicodeHighlighter", "wordHighlighter"]) {
+	for (const contribution of ["bracketMatching", "gotoSymbol", "languageAnalysis", "multicursor", "placeholderText", "suggest", "tokenization", "unicodeHighlighter", "wordHighlighter"]) {
 		assert.match(standardBundle, new RegExp(`contrib/${contribution}/browser/[^"']+\\.contribution`, "u"), contribution);
 	}
 	assert.match(standardBundle, /contrib\/comment\/browser\/comment\.js/u);
+	assert.match(standardBundle, /contrib\/codeAction\/browser\/codeActionContributions\.js/u);
+	assert.match(standardBundle, /contrib\/hover\/browser\/hoverContribution\.js/u);
+	assert.match(standardBundle, /contrib\/stickyScroll\/browser\/stickyScrollContribution\.js/u);
 	assert.match(standardBundle, /contrib\/format\/browser\/formatActions\.js/u);
 	for (const contribution of ["quickAccess", "rename"]) assert.match(standardBundle, new RegExp(`contrib/${contribution}/browser/[^"']+Controller`, "u"), contribution);
 	assert.match(standardBundle, /contrib\/dropOrPasteInto\/browser\/dropIntoEditorContribution/u);
