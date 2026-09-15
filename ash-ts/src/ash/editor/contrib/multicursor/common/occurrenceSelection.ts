@@ -1,6 +1,5 @@
 import { Selection } from "../../../common/core/selection.js";
-import { type TextModel } from "../../../common/model/textModel.js";
-import { findTextMatches, type TextSearchMatch } from "../../../common/model/textModelSearch.js";
+import { type ITextModel, type FindMatch } from "../../../common/model.js";
 
 const MAX_OCCURRENCE_SELECTIONS = 100_000;
 
@@ -16,7 +15,7 @@ export enum EditorOccurrenceDirection {
  * A collapsed primary cursor first selects its current word-like segment. The
  * model remains unchanged; callers own the resulting live selection state.
  */
-export function addOccurrenceSelection(model: TextModel, selections: readonly Selection[], direction: EditorOccurrenceDirection): readonly Selection[] {
+export function addOccurrenceSelection(model: ITextModel, selections: readonly Selection[], direction: EditorOccurrenceDirection): readonly Selection[] {
 	if (!Object.values(EditorOccurrenceDirection).includes(direction)) {
 		throw new TypeError("Unknown editor occurrence direction");
 	}
@@ -27,8 +26,8 @@ export function addOccurrenceSelection(model: TextModel, selections: readonly Se
 	const matches = findOccurrences(model, source);
 	const selectedRanges = new Set(selections.map(selection => rangeKey(model, selection)));
 	const startOffset = direction === EditorOccurrenceDirection.Next
-		? model.offsetAt(source.getEndPosition())
-		: model.offsetAt(source.getStartPosition());
+		? model.getOffsetAt(source.getEndPosition())
+		: model.getOffsetAt(source.getStartPosition());
 	const candidate = orderedCandidates(model, matches, startOffset, direction)
 		.find(match => !selectedRanges.has(rangeKey(model, Selection.fromPositions(match.range.getStartPosition(), match.range.getEndPosition()))));
 	if (!candidate) return selections;
@@ -39,7 +38,7 @@ export function addOccurrenceSelection(model: TextModel, selections: readonly Se
 }
 
 /** Selects every exact occurrence of the primary selection or cursor word. */
-export function selectAllOccurrences(model: TextModel, selections: readonly Selection[]): readonly Selection[] {
+export function selectAllOccurrences(model: ITextModel, selections: readonly Selection[]): readonly Selection[] {
 	const source = sourceSelection(model, selections);
 	if (!source) return selections;
 	const matches = findOccurrences(model, source);
@@ -50,30 +49,25 @@ export function selectAllOccurrences(model: TextModel, selections: readonly Sele
 	return primaryFirst(nextSelections, primaryIndex < 0 ? 0 : primaryIndex);
 }
 
-function sourceSelection(model: TextModel, selections: readonly Selection[]): Selection | undefined {
+function sourceSelection(model: ITextModel, selections: readonly Selection[]): Selection | undefined {
 	const primary = selections[0]!;
 	if (!primary.isEmpty()) return primary;
 	const word = model.getWordAtPosition(primary.getPosition());
 	return word ? new Selection(primary.positionLineNumber, word.startColumn, primary.positionLineNumber, word.endColumn) : undefined;
 }
 
-function findOccurrences(model: TextModel, source: Selection): readonly TextSearchMatch[] {
-	return findTextMatches(model, {
-		pattern: model.getTextInRange(source),
-		matchCase: true,
-	}, {
-		resultLimit: MAX_OCCURRENCE_SELECTIONS,
-	});
+function findOccurrences(model: ITextModel, source: Selection): readonly FindMatch[] {
+	return model.findMatches(model.getValueInRange(source), false, false, true, null, false, MAX_OCCURRENCE_SELECTIONS);
 }
 
-function orderedCandidates(model: TextModel, matches: readonly TextSearchMatch[], startOffset: number, direction: EditorOccurrenceDirection): readonly TextSearchMatch[] {
+function orderedCandidates(model: ITextModel, matches: readonly FindMatch[], startOffset: number, direction: EditorOccurrenceDirection): readonly FindMatch[] {
 	const ordered = direction === EditorOccurrenceDirection.Next ? matches : [...matches].reverse();
 	const beforeWrap = ordered.filter(match => direction === EditorOccurrenceDirection.Next
-		? model.offsetAt(match.range.getStartPosition()) >= startOffset
-		: model.offsetAt(match.range.getEndPosition()) <= startOffset);
+		? model.getOffsetAt(match.range.getStartPosition()) >= startOffset
+		: model.getOffsetAt(match.range.getEndPosition()) <= startOffset);
 	const afterWrap = ordered.filter(match => direction === EditorOccurrenceDirection.Next
-		? model.offsetAt(match.range.getStartPosition()) < startOffset
-		: model.offsetAt(match.range.getEndPosition()) > startOffset);
+		? model.getOffsetAt(match.range.getStartPosition()) < startOffset
+		: model.getOffsetAt(match.range.getEndPosition()) > startOffset);
 	return Object.freeze([...beforeWrap, ...afterWrap]);
 }
 
@@ -87,6 +81,6 @@ function primaryFirst(selections: readonly Selection[], primaryIndex: number): r
 	return Object.freeze([selections[primaryIndex]!, ...selections.slice(0, primaryIndex), ...selections.slice(primaryIndex + 1)]);
 }
 
-function rangeKey(model: TextModel, selection: Selection): string {
-	return `${model.offsetAt(selection.getStartPosition())}:${model.offsetAt(selection.getEndPosition())}`;
+function rangeKey(model: ITextModel, selection: Selection): string {
+	return `${model.getOffsetAt(selection.getStartPosition())}:${model.getOffsetAt(selection.getEndPosition())}`;
 }

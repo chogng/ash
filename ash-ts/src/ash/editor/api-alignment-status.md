@@ -4,6 +4,10 @@
 
 ## 当前结论
 
+- 修复多光标与 Linked Editing 的快捷键冲突：Linked Editing 使用 Ctrl/Cmd+Shift+F2，不再在捕获阶段吞掉 Ctrl/Cmd+Shift+L。浏览器测试覆盖键盘与 Action 混用、选区变化、同时输入和撤销；Linked Editing 测试覆盖 Escape 退出、F2 重新激活及不拦截匹配选择快捷键。
+
+- 多光标输入按整条行为链收敛：上/下添加光标、选中行末添加光标、下一个匹配和全部匹配共用 `multicursor.ts` 的五个 Action。键盘入口直接运行相同 Action，两个仅转发事件的 Controller 退出；光标状态仍由现有 ViewModel 管理，选区高亮保留独立生命周期。匹配辅助操作改用 `ITextModel.findMatches/getOffsetAt/getValueInRange`，不再依赖具体模型实现。未实现的查找会话联动与其他多光标命令不计为完成。
+
 - 诊断导航与多光标注册分别回收到 `gotoError.ts`、`multicursor.ts`，两个独立注册文件退出。诊断装饰、多光标输入和选区高亮继续由原对象承担，注册顺序不变。Suggest 注册现已回收到 `suggestController.ts`，旧注册文件退出；聊天输入框使用已有的 `suggestions: false` 关闭普通补全的自动装配，继续由聊天宿主创建专用控制器。回归测试先复现了聊天框出现两个补全组件，再验证修复后只有一个；此项不代表 Suggest 的全部上游契约已对齐。
 
 - 批量迁移 Code Action、Hover、Sticky Scroll 的注册入口至上游对应路径 `codeActionContributions.ts`、`hoverContribution.ts`、`stickyScrollContribution.ts`。旧路径退出，bundle 保持原来的注册顺序与创建条件；控制器行为和生命周期未改。此项仅完成注册文件落位，不代表三个功能的全部公开 API 已对齐。Middle Scroll 与 Placeholder 的 `.contribution.ts` 是双方已有入口，继续保留。
@@ -148,7 +152,7 @@
 | `contrib/wordHighlighter/browser/textualHighlightProvider.ts` | `TextualMultiDocumentHighlightFeature` | 由语言能力服务统一注册单文档与多文档文本高亮 provider；多编辑器共享同一服务时按引用计数持有注册，不再维护重复的模型 target 表，provider 直接使用 `ITextModel.uri` 返回跨文档结果，Word/Selection Highlighter 7 项测试覆盖 Unicode、语义优先、多文件、取消和导航 |
 | `common/cursor/cursorColumnSelection.ts` | `ColumnSelection` | 同路径实现与上游归一化文本一致；生产鼠标列选经过 `MouseHandler`、`CursorConfiguration`、视觉行模型和坐标转换，直接测试覆盖方向与短行行为 |
 | `common/cursor/cursorMoveOperations.ts` | `MoveOperations` | 公开成员差异归零；17 个标准移动入口直接使用 `CursorConfiguration`、`ICursorSimpleModel` 与 `SingleCursorState`，旧 `navigate` 总入口及全部调用已移除。键盘控制器按命令调用标准入口，删除、输入、转置与行操作使用标准位置 API；定向测试覆盖水平、垂直、可视列余量、原子缩进、空行、行/文档边界以及真实 Widget 连续键盘导航 |
-| `common/cursor/cursorMoveCommands.ts` | `CursorMoveCommands`、`CursorMove` | 15 个标准命令入口、参数元数据、方向、单位和解析契约的公开差异归零；实现直接使用真实 `IViewModel`、模型/视图光标状态及坐标转换。键盘、行选择和多光标生产调用统一进入该 owner，指针选区合并与行尾多光标辅助逻辑分别回到 `ViewController` 和 `MultiCursorController`；契约测试锁定公开面，真实 Widget 与 contribution 测试覆盖连续垂直移动、重复 caret 归一化和行选择 |
+| `common/cursor/cursorMoveCommands.ts` | `CursorMoveCommands`、`CursorMove` | 15 个标准命令入口、参数元数据、方向、单位和解析契约的公开差异归零；实现直接使用真实 `IViewModel`、模型/视图光标状态及坐标转换。键盘、行选择和多光标生产调用统一进入该 owner，指针选区合并与行尾多光标辅助逻辑分别回到 `ViewController` 和 `multicursor.ts`；契约测试锁定公开面，真实 Widget 与 contribution 测试覆盖连续垂直移动、重复 caret 归一化和行选择 |
 | `common/cursor/cursorWordOperations.ts` | `WordOperations` | 公开成员差异归零；标准 classifier、移动、删除、词内删除、词段、选词和 `getWordAtPosition` 由同路径 common owner 实现，并同时导出标准 `WordPartOperations`。浏览器双击/拖选、平台词移动和 `beforeinput deleteWord*` 均改接该 API；旧 `getWordSelectionRange`、`getTextWordRanges` 及浏览器自算词边界已移除，common 与真实 Widget 聚焦测试覆盖调用链 |
 | `common/cursor/cursorCollection.ts` | `CursorCollection` | 公开成员、primary-first 状态、last-added cursor、tracked marker 生命周期、重叠归一化和 model/view selection 投影与上游职责一致；生产由 `ViewModelImpl → CursorsController` 直接构造并持有，模型 flush 重建 collection，单命令执行先移除 secondary cursors，定向测试覆盖归一化、位置 tie、flush 与释放 |
 | `common/cursor/oneCursor.ts` | `Cursor` | 公开成员、model/view 双状态、tracked selection 与折行坐标转换进入 `CursorCollection` 的生产生命周期；marker 缺失或停止跟踪时明确失败，不再返回可能过期的 selection，定向测试覆盖 marker 恢复与释放 |

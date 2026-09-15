@@ -43,7 +43,7 @@ export class LinkedEditingContribution extends Disposable {
 		super();
 		if (viewport.textModel !== editor.getModel()) throw new TypeError('Linked editing dependencies must share a text model');
 		this._register(addDisposableListener(input, 'keydown', event => {
-			if (event.defaultPrevented || event.isComposing || !event.shiftKey || (!event.ctrlKey && !event.metaKey) || event.altKey || event.key.toLowerCase() !== 'l') return;
+			if (event.defaultPrevented || event.isComposing || !event.shiftKey || (!event.ctrlKey && !event.metaKey) || event.altKey || event.key !== 'F2') return;
 			stopEvent(event);
 			void this.activate();
 		}, true));

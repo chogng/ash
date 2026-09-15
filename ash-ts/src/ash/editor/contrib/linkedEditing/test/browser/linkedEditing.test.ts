@@ -79,6 +79,21 @@ test('linked editing cancels stale and disposed provider requests', async () => 
 	assert.equal(tokens[1]!.isCancellationRequested, true);
 });
 
+test('linked editing uses F2 without consuming select-all-occurrences', async () => {
+	using fixture = createFixture({ provideLinkedEditingRanges: () => ({ ranges: [new Range(1, 1, 1, 4), new Range(1, 5, 1, 8)] }) });
+	const active = () => fixture.viewport.domNode.domNode.classList.contains('linked-editing-active');
+	await waitFor(active);
+	fixture.input.element.dispatchEvent(new fixture.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+	assert.equal(active(), false);
+	const occurrences = new fixture.dom.window.KeyboardEvent('keydown', { key: 'L', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true });
+	fixture.input.element.dispatchEvent(occurrences);
+	assert.equal(occurrences.defaultPrevented, false);
+	const linked = new fixture.dom.window.KeyboardEvent('keydown', { key: 'F2', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true });
+	fixture.input.element.dispatchEvent(linked);
+	assert.equal(linked.defaultPrevented, true);
+	await waitFor(active);
+});
+
 interface Fixture {
 	readonly dom: JSDOM;
 	readonly model: TextModel;
