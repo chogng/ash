@@ -316,6 +316,7 @@ test('completion snippets navigate and undo through the mounted editor', async (
 for (const { placement, snippet, initial, expanded } of [
 	{ placement: 'interleaved', snippet: '${1|a,long|} => ${1/(.*)/${1:/upcase}/} $1$0', initial: 'cona => A a', expanded: 'conlong => LONG long' },
 	{ placement: 'forward', snippet: '${1/(.*)/${1:/upcase}/} ${1|a,long|}-$1$0', initial: 'conA a-a', expanded: 'conLONG long-long' },
+	{ placement: 'nested forward mirror', snippet: '${2:$1-${1|a,long|}} => ${1/(.*)/${1:/upcase}/}$0', initial: 'cona-a => A', expanded: 'conlong-long => LONG' },
 ]) {
 	test(`snippet choices keep ${placement} transforms and mirrors together through undo and redo`, async ({ page }) => {
 		const errors: string[] = [];

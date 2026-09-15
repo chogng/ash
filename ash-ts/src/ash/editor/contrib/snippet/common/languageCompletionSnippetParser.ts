@@ -67,7 +67,8 @@ export function parseLanguageCompletionSnippet(source: string, options: Language
 			return Object.freeze({
 				index,
 				placeholders: Object.freeze(placeholders.map(placeholder => Object.freeze({
-					...placeholder,
+					startOffset: placeholder.startOffset,
+					endOffset: placeholder.endOffset,
 					...(placeholder.choices ? { choices: Object.freeze([...placeholder.choices]) } : {}),
 				}))),
 				...(choices ? { choices: Object.freeze([...choices]) } : {}),
@@ -223,16 +224,14 @@ function parseSegment(source: string, startOffset: number, stopsAtClosingBrace: 
 			if (!tabstopValues.has(token.index)) tabstopValues.set(token.index, value);
 			text.append(() => value.text);
 		} else {
-			value = tabstopValues.get(token.index) ?? { text: "" };
-			text.append(() => value.text);
+			text.append(() => tabstopValues.get(token.index)?.text ?? "");
 		}
 		const placeholderEnd = text.position();
 		const occurrences = placeholders.get(token.index) ?? [];
-		const choices = tabstopValues.get(token.index)?.choices;
 		occurrences.push({
 			get startOffset() { return placeholderStart(); },
 			get endOffset() { return placeholderEnd(); },
-			...(choices ? { choices } : {}),
+			get choices() { return tabstopValues.get(token.index)?.choices; },
 		});
 		placeholders.set(token.index, occurrences);
 		offset = token.nextOffset;
@@ -393,6 +392,7 @@ function mergePlaceholders(target: Map<number, LanguageCompletionSnippetPlacehol
 		targetPlaceholders.push(...placeholders.map(placeholder => ({
 			get startOffset() { return placeholder.startOffset + offset(); },
 			get endOffset() { return placeholder.endOffset + offset(); },
+			get choices() { return placeholder.choices; },
 		})));
 		target.set(index, targetPlaceholders);
 	}

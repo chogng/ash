@@ -139,3 +139,27 @@ test("Completion snippets resolve source variables once and preserve empty trans
 test("Completion snippets terminate recursive transformed defaults", () => {
 	assert.equal(parseLanguageCompletionSnippet("${1:${1/(.*)/x/}}$0").text, "x");
 });
+
+test("Completion snippets expand mirrors before the default declaration", () => {
+	assert.deepEqual(parseLanguageCompletionSnippet("$1-${1:hello}-$1$0"), {
+		text: "hello-hello-hello",
+		placeholderGroups: [
+			{ index: 1, placeholders: [{ startOffset: 0, endOffset: 5 }, { startOffset: 6, endOffset: 11 }, { startOffset: 12, endOffset: 17 }] },
+			{ index: 0, placeholders: [{ startOffset: 17, endOffset: 17 }] },
+		],
+	});
+});
+
+test("Completion snippets retain choices for forward and nested mirrors", () => {
+	const snippet = parseLanguageCompletionSnippet("${2:$1-${1|a,long|}}-$1$0");
+	assert.equal(snippet.text, "a-a-a");
+	assert.deepEqual(snippet.placeholderGroups[0], {
+		index: 1,
+		choices: ["a", "long"],
+		placeholders: [
+			{ startOffset: 0, endOffset: 1, choices: ["a", "long"] },
+			{ startOffset: 2, endOffset: 3, choices: ["a", "long"] },
+			{ startOffset: 4, endOffset: 5, choices: ["a", "long"] },
+		],
+	});
+});
