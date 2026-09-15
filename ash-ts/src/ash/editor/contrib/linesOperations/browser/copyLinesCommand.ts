@@ -6,8 +6,6 @@ import { type ITextModel } from '../../../common/model.js';
 
 /** Duplicates the physical lines covered by one selection. */
 export class CopyLinesCommand implements ICommand {
-	private startsAfterNewline = false;
-
 	constructor(
 		private readonly selection: Selection,
 		private readonly isCopyingDown: boolean,
@@ -15,22 +13,10 @@ export class CopyLinesCommand implements ICommand {
 	) {}
 
 	getEditOperations(model: ITextModel, builder: IEditOperationBuilder): void {
-		this.startsAfterNewline = false;
 		if (this.noop) return;
 		const { startLineNumber, endLineNumber } = selectedLines(this.selection);
 		const lines = lineText(model, startLineNumber, endLineNumber);
 		const eol = model.getEOL();
-		if (this.isCopyingDown) {
-			if (endLineNumber < model.getLineCount()) {
-				const position = new Position(endLineNumber + 1, 1);
-				builder.addTrackedEditOperation(Range.fromPositions(position), `${lines}${eol}`);
-			} else {
-				const position = new Position(endLineNumber, model.getLineMaxColumn(endLineNumber));
-				this.startsAfterNewline = true;
-				builder.addTrackedEditOperation(Range.fromPositions(position), `${eol}${lines}`);
-			}
-			return;
-		}
 		const position = new Position(startLineNumber, 1);
 		builder.addTrackedEditOperation(Range.fromPositions(position), `${lines}${eol}`);
 	}
@@ -38,7 +24,7 @@ export class CopyLinesCommand implements ICommand {
 	computeCursorState(_model: ITextModel, helper: ICursorStateComputerData): Selection {
 		if (this.noop) return this.selection;
 		const inserted = helper.getInverseEditOperations()[0]!.range;
-		const firstLine = inserted.startLineNumber + (this.startsAfterNewline ? 1 : 0);
+		const firstLine = this.isCopyingDown ? inserted.endLineNumber : inserted.startLineNumber;
 		return shiftSelection(this.selection, firstLine - this.selection.startLineNumber);
 	}
 }

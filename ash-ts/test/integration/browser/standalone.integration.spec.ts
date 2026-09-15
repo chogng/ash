@@ -1,6 +1,21 @@
 import { expect, test } from '@playwright/test';
 
 for (const direction of ['Up', 'Down']) {
+	test(`copy final lines ${direction} includes the empty last line and restores selections on undo`, async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareLineCopy(true));
+		const before = await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy());
+		await page.evaluate(id => window.ashStandaloneIntegration.runLineAction(id), `editor.action.copyLines${direction}Action`);
+		const delta = direction === 'Down' ? 1 : 0;
+		const copied = { value: 'head\ntail\ntail\n\n', selections: [`[${4 + delta},1 -> ${4 + delta},1]`, `[${2 + delta},3 -> ${2 + delta},1]`] };
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual(copied);
+		await page.keyboard.press('ControlOrMeta+z');
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual(before);
+		await page.keyboard.press('ControlOrMeta+Shift+z');
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual(copied);
+		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	});
+
 	test(`copy lines ${direction} retains multiple cursors and separates undo from typing`, async ({ page }) => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.message));

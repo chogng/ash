@@ -4,6 +4,8 @@
 
 ## 当前结论
 
+- 2026-09-15 空末行复制修复：同时向下复制倒数第二行和空末行时，两条命令原先在同一点插入，导致其中一条被冲突检查舍弃。`CopyLinesCommand` 统一在源行起点插入，根据实际插入范围和复制方向恢复选区，不再保存末尾换行状态。12 项定向单测、93 项 Chromium 浏览器测试、结构与类型检查及 Stanza 构建通过；新增浏览器用例先复现少复制一行，再验证选区方向、撤销与重做。完整单测编译被 `workbench/services/chat/browser/chatService.ts` 的 `userAudioAttachment` 类型错误阻塞；定向单测继承仓库原编译选项单独编译并执行通过，不将完整单测记为通过。文件和 API 台账计数不变。
+
 - 2026-09-15 颜色扫描与行命令评审：补齐 `common/languages/defaultDocumentColorsComputer.ts` 的 `IDocumentColorComputerTarget` / `computeDefaultDocumentColors`，将 `languageColors.ts` 中既有 Ash 字面量解析迁入该路径。生产链为 ColorPicker → ColorDetector → ColorService → DefaultDocumentColorProvider → 扫描函数；服务继续负责提供者与请求版本，扫描只消费调用方的文本和坐标。默认提供者改从请求快照计算坐标，并在无匹配时也拒绝已取消请求。复制行改用模型返回的实际插入范围恢复多光标选区；复制、重复选区、移动、排序动作分别隔开撤销记录。全目录现为 595 个生产文件、396 个同路径、199 个仅 Ash、337 个仅上游，大小写差异为 0；121 组声明的 80/41 状态不变，整体 Editor 对齐仍未完成。 验证：16 项定向测试、243/243 个 Editor 单测文件、91 项 Chromium 浏览器测试、完整结构与类型检查、Stanza 生产构建通过；保留既有 JSDOM Canvas 与终端颜色变量提示，生产构建无新增警告。
 
 - 2026-09-15 Editor 文件命名复查：扫描全部 594 个生产文件，395 个与 VS Code 同路径、199 个仅 Ash 存在，大小写不一致为 0。仅 Ash 文件数量不作为命名错误数量。确认 `test/common/languageCompletionService.test.ts` 创建 JSDOM 与真实 CodeEditor，`test/common/cursorInsertion.test.ts` 创建 JSDOM 与 TestView，已按用户确认迁入 `test/browser/`，同步调整浏览器测试工具的相对导入；两个旧路径退出，测试断言保持不变。`test/common/viewport.test.ts` 实测 common ViewLayout，保留 common。`contrib/format` 负责代码格式化，`contrib/formatting` 负责富文档工具栏，两者不能按近似名字合并；后者命名可在工具栏职责范围内另行整理。`common/languages/completion/` 的长前缀文件和 Peek/ColorPicker 的 Editor 前缀需结合公开契约与调用方逐项处理，不作批量字符串改名。本批只迁移两份测试，未改生产代码。验证：9 项定向测试、243/243 个 Editor 单测文件、结构与类型检查及 Stanza 构建通过；既有 JSDOM Canvas 提示仍存在，未新增此类提示。

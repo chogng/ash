@@ -97,6 +97,20 @@ test("CopyLinesCommand construction does not mutate the model", () => {
 });
 
 for (const down of [false, true]) {
+	test(`Copy adjacent final lines ${down ? 'down' : 'up'} includes the empty last line`, () => {
+		using model = new TextModel('head\ntail\n');
+		const original = [new Selection(3, 1, 3, 1), new Selection(2, 3, 2, 1)];
+		using cursors = createTestCursorsController(model, original);
+		cursors.executeCommands(cursors.getSelections().map(selection => new CopyLinesCommand(selection, down)));
+		const delta = down ? 1 : 0;
+		assert.deepEqual({ text: model.getValue(), selections: cursors.getSelections() }, {
+			text: 'head\ntail\ntail\n\n',
+			selections: [new Selection(4 + delta, 1, 4 + delta, 1), new Selection(2 + delta, 3, 2 + delta, 1)],
+		});
+		model.undo();
+		assert.deepEqual({ text: model.getValue(), selections: cursors.getSelections() }, { text: 'head\ntail\n', selections: original });
+	});
+
 	test(`Copy lines ${down ? 'down' : 'up'} keeps every cursor on its own copy`, () => {
 		using model = new TextModel('alpha\nbeta\ngamma');
 		const original = [new Selection(3, 4, 3, 2), new Selection(1, 2, 1, 2)];

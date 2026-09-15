@@ -65,7 +65,7 @@ interface ViewZoneState {
 }
 
 interface StandaloneHarness {
-	prepareLineCopy(): void;
+	prepareLineCopy(emptyTail?: boolean): void;
 	runLineAction(id: string): Promise<void>;
 	readLineCopy(): { value: string; selections: string[] };
 	prepareReferencePreview(): void;
@@ -253,9 +253,11 @@ function readViewZone(): ViewZoneState {
 }
 
 window.ashStandaloneIntegration = {
-	prepareLineCopy: () => {
-		callerEditor.setValue('alpha\nbeta\ngamma');
-		callerEditor.setSelections([new stanza.Selection(3, 4, 3, 2), new stanza.Selection(1, 2, 1, 2)]);
+	prepareLineCopy: emptyTail => {
+		callerEditor.setValue(emptyTail ? 'head\ntail\n' : 'alpha\nbeta\ngamma');
+		callerEditor.setSelections(emptyTail
+			? [new stanza.Selection(3, 1, 3, 1), new stanza.Selection(2, 3, 2, 1)]
+			: [new stanza.Selection(3, 4, 3, 2), new stanza.Selection(1, 2, 1, 2)]);
 		callerEditor.focus();
 	},
 	runLineAction: async id => {
