@@ -32,6 +32,7 @@ export class TerminalViewPane extends ViewPane {
 	private readonly items = new Map<ITerminalInstance, TerminalViewItem>();
 	private draggedTerminal: ITerminalInstance | undefined;
 	private creating = false;
+	private initializing = false;
 
 	constructor(container: HTMLElement, options: IViewPaneOptions, terminalService: ITerminalService, themeService: IThemeService, menuService: IMenuService, contextMenuService: IContextMenuService, contextKeyService: IContextKeyService, private readonly layoutService: IWorkbenchLayoutService, private readonly workspaceContext: IWorkspaceContextService) {
 		super(container, options);
@@ -90,18 +91,18 @@ export class TerminalViewPane extends ViewPane {
 		for (const instance of terminalService.instances) this.addInstance(instance);
 		this._register(terminalService.onDidCreateInstance((instance) => {
 			this.addInstance(instance);
-			this.render();
+			this.updateInstances();
 		}));
 		this._register(terminalService.onDidDisposeInstance((instance) => {
 			this.removeInstance(instance);
-			this.render();
+			this.updateInstances();
 		}));
-		this._register(terminalService.onDidChangeActiveInstance(() => this.render()));
-		this._register(terminalService.onDidChangeInstances(() => this.render()));
+		this._register(terminalService.onDidChangeActiveInstance(() => this.updateInstances()));
+		this._register(terminalService.onDidChangeInstances(() => this.updateInstances()));
 		this._register(layoutService.onDidChangePartVisibility(({ partId, visible }) => {
-			if (partId === "panel" && visible && this.terminalService.instances.length === 0) {
-				void this.createTerminal();
-			}
+			if (partId !== "panel") return;
+			this.updateInstances();
+			if (visible) void this.initialize();
 		}));
 		this._register(workspaceContext.onDidChangeWorkspace(({ workspace }) => {
 			if (workspace.folders.length > 0 && this.terminalService.instances.length === 0) void this.initialize();
@@ -114,12 +115,29 @@ export class TerminalViewPane extends ViewPane {
 		}));
 		this.render();
 		queueMicrotask(() => {
-			if (!this.isDisposed) void this.initialize();
+			this.updateInstances();
+			void this.initialize();
 		});
 	}
 
+	override setVisible(visible: boolean): void {
+		super.setVisible(visible);
+		if (visible) {
+			queueMicrotask(() => {
+				this.updateInstances();
+				void this.initialize();
+			});
+		} else {
+			this.updateInstances();
+		}
+	}
+
+	private isTerminalVisible(): boolean {
+		return !this.isDisposed && this.isVisible() && this.layoutService.isPartVisible("panel");
+	}
+
 	override focus(): void {
-		this.activeItem()?.widget.focus();
+		if (this.isTerminalVisible()) this.activeItem()?.widget.focus();
 	}
 
 	override get partTitleProjection(): PartTitleProjection {
@@ -127,11 +145,14 @@ export class TerminalViewPane extends ViewPane {
 	}
 
 	private async initialize(): Promise<void> {
+		if (!this.isTerminalVisible() || this.initializing) return;
 		if (!this.hasWorkspaceFolder()) {
 			this.titleActions.setProfiles([]);
 			this.setStatus("Open a folder to use the terminal.");
 			return;
 		}
+		const focusSource = this.element.ownerDocument.activeElement;
+		this.initializing = true;
 		try {
 			const profiles = await this.terminalService.getProfiles();
 			if (this.isDisposed) return;
@@ -139,11 +160,13 @@ export class TerminalViewPane extends ViewPane {
 		} catch {
 			if (this.isDisposed) return;
 			this.titleActions.setProfiles([]);
+		} finally {
+			this.initializing = false;
 		}
-		if (!this.terminalService.activeInstance) await this.createTerminal();
+		if (this.isTerminalVisible() && this.terminalService.instances.length === 0) await this.createTerminal(undefined, focusSource);
 	}
 
-	private async createTerminal(profileId?: string): Promise<void> {
+	private async createTerminal(profileId?: string, focusSource = this.element.ownerDocument.activeElement): Promise<void> {
 		if (this.creating || this.isDisposed) return;
 		if (!this.hasWorkspaceFolder()) {
 			this.setStatus("Open a folder to use the terminal.");
@@ -157,7 +180,7 @@ export class TerminalViewPane extends ViewPane {
 				dimensions: this.activeItem()?.widget.dimensions() ?? DEFAULT_DIMENSIONS,
 				profile: profileId ? { type: "profile", profileId } : { type: "default" },
 			});
-			if (!this.isDisposed) this.focus();
+			if (this.isTerminalVisible() && this.element.ownerDocument.activeElement === focusSource) this.focus();
 		} catch (error) {
 			if (!this.isDisposed) {
 				this.setStatus(terminalErrorMessage(error, "Terminal is unavailable"));
@@ -200,12 +223,19 @@ export class TerminalViewPane extends ViewPane {
 		const item = this._register(new TerminalViewItem(
 			instance,
 			new TerminalInstanceWidget(this.widgetsElement, instance, this.themeService),
-			() => this.render(),
+			() => this.updateInstances(),
 		));
 		this.items.set(instance, item);
+	}
+
+	private updateInstances(): void {
+		this.render();
+		if (!this.isTerminalVisible()) return;
+		const item = this.activeItem();
+		if (!item) return;
 		void item.widget.initialize().catch(error => {
-			if (this.isDisposed || this.items.get(instance) !== item) return;
-			this.removeInstance(instance);
+			if (this.isDisposed || this.items.get(item.instance) !== item) return;
+			this.removeInstance(item.instance);
 			this.setStatus(terminalErrorMessage(error, "Terminal renderer could not be loaded"));
 		});
 	}
@@ -224,7 +254,7 @@ export class TerminalViewPane extends ViewPane {
 		this.titleActions.setActiveInstance(active, instanceSwitcherPlacement);
 		this.tabsLayout.setInstanceListPresentation(instanceSwitcherPlacement === "list" ? "visible" : "hidden");
 		for (const [instance, item] of this.items) {
-			item.widget.setVisible(instance === active);
+			item.widget.setVisible(this.isTerminalVisible() && instance === active);
 		}
 		this.renderTabs();
 	}

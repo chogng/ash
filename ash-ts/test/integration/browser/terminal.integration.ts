@@ -55,3 +55,88 @@ declare global {
 		};
 	}
 }
+
+// Exercise the production pane with controlled process and workspace boundaries.
+if (new URLSearchParams(location.search).has('pane')) {
+	widget.dispose();
+	const [{ TerminalViewPane }, { ContextKeyService }, { MenuService }, { ServiceContainer }, { CommandService }, { URI }] = await Promise.all([
+		import('../../../src/ash/workbench/contrib/terminal/browser/view/terminalViewPane.js'),
+		import('../../../src/ash/platform/contextkey/common/contextkey.js'),
+		import('../../../src/ash/platform/actions/common/menuService.js'),
+		import('../../../src/ash/platform/instantiation/common/instantiation.js'),
+		import('../../../src/ash/workbench/services/commands/common/commandService.js'),
+		import('../../../src/ash/base/common/uri.js'),
+	]);
+	const visibility = store.add(new Emitter<import('../../../src/ash/workbench/services/layout/common/workbenchLayoutService.js').WorkbenchPartVisibilityChangeEvent>());
+	const workspaceChanged = store.add(new Emitter<import('../../../src/ash/platform/workspace/common/workspace.js').IWorkspaceChangeEvent>());
+	const created = store.add(new Emitter<ITerminalInstance>());
+	const context = store.add(new ContextKeyService());
+	const commands = new CommandService(new ServiceContainer());
+	const menu = new MenuService(commands, context);
+	let visible = false;
+	let profiles = 0;
+	let creates = 0;
+	let release: (() => void) | undefined;
+	let pending: Promise<void> = Promise.resolve();
+	const instances: ITerminalInstance[] = new URLSearchParams(location.search).has('existing') ? [instance] : [];
+	const workspace = { id: 'workspace', folders: [{ id: 'folder', uri: URI.file('/workspace'), name: 'Workspace', index: 0 }] };
+	const setPanel = (value: boolean): void => {
+		visible = value;
+		visibility.fire({ partId: 'panel', visible });
+	};
+	const pane = store.add(new TerminalViewPane(document.querySelector<HTMLElement>('#terminal')!, { id: 'terminal', title: 'Terminal' }, {
+		...Disposable.None,
+		instances,
+		get activeInstance() { return instances[0]; },
+		onDidCreateInstance: created.event,
+		onDidDisposeInstance: Event.None,
+		onDidChangeInstances: Event.None,
+		onDidChangeActiveInstance: Event.None,
+		getProfiles: async () => { profiles++; await pending; return [instance.profile]; },
+		createTerminal: async () => { creates++; instances.push(instance); created.fire(instance); return instance; },
+		relaunchTerminal: async () => {},
+		setActiveInstance: () => {},
+		moveTerminal: () => {},
+		closeTerminal: async () => {},
+	}, theme, menu, {
+		onDidShowContextMenu: Event.None,
+		onDidHideContextMenu: Event.None,
+		showContextMenu: () => {},
+		hideContextMenu: () => {},
+	}, context, {
+		onDidChangePartVisibility: visibility.event,
+		isPartVisible: () => visible,
+		isPanelMaximized: () => false,
+		showPart: () => setPanel(true),
+		showParts: () => setPanel(true),
+		hidePart: () => setPanel(false),
+		hideParts: () => setPanel(false),
+		getPartSize: () => ({ width: 800, height: 400 }),
+		resizePart: () => {},
+	}, {
+		onDidChangeWorkspace: workspaceChanged.event,
+		getWorkspace: () => workspace,
+		getWorkbenchState: () => 2,
+	}));
+	window.ashTerminalPaneIntegration = {
+		counts: () => ({ profiles, creates }),
+		panel: setPanel,
+		view: value => pane.setVisible(value),
+		workspace: () => workspaceChanged.fire({ previous: workspace, workspace }),
+		hold: () => { pending = new Promise<void>(resolve => { release = resolve; }); },
+		release: () => release?.(),
+	};
+}
+
+declare global {
+	interface Window {
+		ashTerminalPaneIntegration: {
+			counts(): { profiles: number; creates: number };
+			panel(visible: boolean): void;
+			view(visible: boolean): void;
+			workspace(): void;
+			hold(): void;
+			release(): void;
+		};
+	}
+}

@@ -44,6 +44,8 @@ test('production loading baseline', async ({ target, workbench }, testInfo) => {
 			await page.waitForFunction(() => globalThis.ashWebWorkbenchHost !== undefined);
 			await workbench.waitForReady();
 		});
+		expect([...requests.values()].filter(request => /\/xterm-[^/]+\.js/u.test(request.url))).toEqual([]);
+		await expect(page.locator('.xterm')).toHaveCount(0);
 		await measure('code', async () => {
 			await page.getByRole('button', { name: 'Show Primary Side Bar', exact: true }).click();
 			await openFile(page, 'main.ts');
@@ -60,6 +62,7 @@ test('production loading baseline', async ({ target, workbench }, testInfo) => {
 			await expect(page.locator('.ash-terminal-instance .xterm')).toBeVisible();
 			await expect(page.locator('.ash-terminal-instance:visible')).toHaveAttribute('data-state', 'running');
 		});
+		expect([...requests.values()].some(request => request.stage === 'terminal' && /\/xterm-[^/]+\.js/u.test(request.url))).toBe(true);
 	} finally {
 		const path = testInfo.outputPath('loading-baseline.json');
 		await writeFile(path, JSON.stringify({ schemaVersion: 1, repeat: testInfo.repeatEachIndex, environment: { platform: process.platform, arch: process.arch, browser: page.context().browser()?.version(), cache: 'HTTP cache disabled; existing browser process; sequential first-use scenarios', transport: 'loopback HTTP, uncompressed static artifacts', cpu: 'CDP main-renderer ScriptDuration and TaskDuration; excludes worker CPU', timing: 'Playwright action to DOM readiness plus two animation frames; includes automation overhead', network: 'CDP page target; bytes include response overhead; null means completion not observed on this target, not zero bytes; worker-internal requests excluded' }, samples }, null, 2));
