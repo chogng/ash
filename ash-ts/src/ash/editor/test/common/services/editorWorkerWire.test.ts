@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Emitter, type Event } from '../../../../base/common/event.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { LanguageWorkerWireClient, LanguageWorkerWireServer, type LanguageWorkerWireClientPort } from '../../../common/languages/languageWorkerWire.js';
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
@@ -81,3 +81,22 @@ class MemoryWirePort extends Disposable implements LanguageWorkerWireClientPort 
 		});
 	}
 }
+
+test('formatting can run again after an overlapping response fails across the worker wire', async () => {
+	using model = new TextModel('alpha');
+	using servers = new DisposableStore();
+	let starts = 0;
+	using client = new VersionedEditorWorkerClient(model, () => {
+		starts++;
+		const [clientPort, serverPort] = createPortPair();
+		servers.add(new LanguageWorkerWireServer(serverPort, editorWorkerWireCodec, new EditorWorkerRequestExecutor()));
+		return new LanguageWorkerWireClient(clientPort, editorWorkerWireCodec);
+	});
+	await assert.rejects(client.computeMoreMinimalEdits([
+		{ range: new Range(1, 1, 1, 4), text: 'ALP' },
+		{ range: new Range(1, 3, 1, 6), text: 'PHA' },
+	]), /must not overlap/);
+	const edits = await client.computeMoreMinimalEdits([{ range: model.getFullModelRange(), text: 'ALPHA' }]);
+	assert.deepEqual(edits, [{ range: model.getFullModelRange(), text: 'ALPHA' }]);
+	assert.equal(starts, 2);
+});

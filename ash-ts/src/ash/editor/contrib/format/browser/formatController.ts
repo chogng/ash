@@ -76,19 +76,33 @@ export class FormatController extends Disposable {
 			if (provider.provideDocumentRangesFormattingEdits) {
 				return provider.provideDocumentRangesFormattingEdits(this.model, ranges, this.options, token);
 			}
-			const edits: TextEdit[] = [];
-			for (const range of ranges) {
+			const pending = [...ranges];
+			const completed: { range: Range; edits: TextEdit[] }[] = [];
+			while (pending.length > 0) {
 				if (token.isCancellationRequested) {
 					return undefined;
 				}
-				const result = await raceCancellationError(Promise.resolve(
+				let range = pending.shift()!;
+				const edits = await raceCancellationError(Promise.resolve(
 					provider.provideDocumentRangeFormattingEdits(this.model, range, this.options, token),
-				), token);
-				if (result) {
-					edits.push(...result);
+				), token) ?? [];
+				let merged = false;
+				for (let index = completed.length - 1; index >= 0; index--) {
+					const previous = completed[index];
+					if (edits.some(edit => previous.edits.some(other => Range.areIntersectingOrTouching(edit.range, other.range)))) {
+						range = range.plusRange(previous.range);
+						completed.splice(index, 1);
+						merged = true;
+					}
+				}
+				if (merged) {
+					// Query the union; conflicting results must never reach the model.
+					pending.unshift(range);
+				} else {
+					completed.push({ range, edits });
 				}
 			}
-			return edits;
+			return completed.sort((left, right) => Range.compareRangesUsingStarts(left.range, right.range)).flatMap(result => result.edits);
 		}, this.onError);
 	}
 

@@ -71,6 +71,8 @@ interface ViewZoneState {
 }
 
 interface StandaloneHarness {
+	runOverlappingFormatting(cancel: boolean): Promise<{ value: string; ranges: string[]; cancelled: boolean }>;
+
 	runSelectionFormatting(mode: 'ranges' | 'single' | 'empty' | 'cancel' | 'readonly'): Promise<{ value: string; ranges: string[]; cancelled: boolean }>;
 
 	prepareDeferredFormatting(): void;
@@ -271,6 +273,33 @@ let deferredFormatting: { token: CancellationToken; resolve: () => void }[] = []
 let formattingProvider: { dispose(): void } | undefined;
 
 window.ashStandaloneIntegration = {
+	runOverlappingFormatting: async cancel => {
+		callerEditor.setValue('alpha\nbeta\ngamma');
+		callerEditor.setSelections([new stanza.Selection(1, 1, 1, 6), new stanza.Selection(3, 1, 3, 6)]);
+		callerEditor.focus();
+		const ranges: string[] = [];
+		let cancelled = false;
+		const provider = stanza.languages.registerDocumentRangeFormattingEditProvider('*', {
+			provideDocumentRangeFormattingEdits: (model, range, _options, token) => {
+				ranges.push(range.toString());
+				if (range.startLineNumber !== range.endLineNumber) {
+					if (cancel) {
+						callerEditor.setSelections([new stanza.Selection(1, 1, 1, 6), new stanza.Selection(3, 2, 3, 6)]);
+						cancelled = token.isCancellationRequested;
+						return new Promise(() => {});
+					}
+					return [{ range, text: model.getValueInRange(range).toUpperCase() }];
+				}
+				return [{ range: model.getFullModelRange(), text: 'discard me', eol: EndOfLineSequence.CRLF }];
+			},
+		});
+		try {
+			await window.ashStandaloneIntegration.runLineAction('editor.action.formatSelection');
+			return { value: callerEditor.getValue(), ranges, cancelled };
+		} finally {
+			provider.dispose();
+		}
+	},
 	runSelectionFormatting: async mode => {
 		callerEditor.setValue('alpha\nbeta\ngamma');
 		callerEditor.setSelections(mode === 'empty'

@@ -1491,3 +1491,20 @@ for (const mode of ['ranges', 'single', 'empty', 'cancel', 'readonly'] as const)
 		}
 	});
 }
+
+for (const cancel of [false, true]) {
+	test(`overlapping formatting re-queries the combined range${cancel ? ' and cancels' : ' before one undoable edit'}`, async ({ page }) => {
+		await page.goto('/standalone.html');
+		const result = await page.evaluate(cancel => window.ashStandaloneIntegration.runOverlappingFormatting(cancel), cancel);
+		expect(result).toEqual({
+			value: cancel ? 'alpha\nbeta\ngamma' : 'ALPHA\nBETA\nGAMMA',
+			ranges: ['[1,1 -> 1,6]', '[3,1 -> 3,6]', '[1,1 -> 3,6]'],
+			cancelled: cancel,
+		});
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readEOL())).toBe('\n');
+		if (!cancel) {
+			await page.keyboard.press('ControlOrMeta+z');
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy().value)).toBe('alpha\nbeta\ngamma');
+		}
+	});
+}

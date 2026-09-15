@@ -119,3 +119,13 @@ test('selection cancellation observes an anchor change without a caret move', ()
 	editor.setSelection(new Selection(1, 2, 1, 6));
 	assert.equal(source.token.isCancellationRequested, true);
 });
+
+test('selection cancellation observes a secondary selection while the primary stays unchanged', () => {
+	using model = new TextModel('alpha\nbeta');
+	using editor = createEditor(model);
+	const primary = new Selection(1, 1, 1, 6);
+	editor.setSelections([primary, new Selection(2, 1, 2, 5)]);
+	using source = new EditorStateCancellationTokenSource(editor, CodeEditorStateFlag.Selection);
+	editor.setSelections([primary, new Selection(2, 2, 2, 5)]);
+	assert.equal(source.token.isCancellationRequested, true);
+});

@@ -2192,3 +2192,35 @@ test('formatting context keys follow registration, language changes, and model r
 	assert.deepEqual(read(), [false, false]);
 	dom.window.close();
 });
+
+test('selection formatting merges expanded edits repeatedly before one undoable commit', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('alpha\nbeta\ngamma');
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		input: { resource: model.uri },
+		languageId: model.getLanguageId(),
+		contributions: [],
+	});
+	const { FormatController } = await import('../../../contrib/format/browser/formatController.js');
+	const features = editor.invokeWithinContext(accessor => accessor.get(ILanguageFeaturesService));
+	const queried: string[] = [];
+	using provider = features.documentRangeFormattingEditProvider.register('*', {
+		provideDocumentRangeFormattingEdits(receivedModel, range) {
+			assert.equal(receivedModel.getValue(), 'alpha\nbeta\ngamma');
+			queried.push(range.toString());
+			return [{ range: receivedModel.getFullModelRange(), text: range.endLineNumber === 3 ? 'ALPHA\nBETA\nGAMMA' : 'discard me' }];
+		},
+	});
+	using worker = new VersionedEditorWorkerClient(model, () => new EditorWorkerRequestExecutor());
+	using controller = new FormatController(editor, editor.view, features, worker, { onError: error => { throw error; } });
+	editor.setSelections([new Selection(1, 1, 1, 6), new Selection(2, 1, 2, 5), new Selection(3, 1, 3, 6)]);
+	await controller.formatSelection();
+	assert.equal(model.getValue(), 'ALPHA\nBETA\nGAMMA');
+	assert.deepEqual(queried, ['[1,1 -> 1,6]', '[2,1 -> 2,5]', '[1,1 -> 2,5]', '[3,1 -> 3,6]', '[1,1 -> 3,6]']);
+	model.undo();
+	assert.equal(model.getValue(), 'alpha\nbeta\ngamma');
+	dom.window.close();
+});

@@ -80,3 +80,15 @@ test('Editor worker navigates an explicitly selected number without a matching w
 function run(worker: EditorWorkerRequestExecutor, model: TextModel, requestId: number, lane: EditorWorkerLane, payload: EditorWorkerRequest): ReturnType<EditorWorkerRequestExecutor['run']> {
 	return worker.run(Object.freeze({ requestId, lane, payload, snapshot: model.createVersionedSnapshot() }), new AbortController().signal);
 }
+
+test('a single formatting response with overlapping edits is rejected without changing the model', async () => {
+	using model = new TextModel('alpha');
+	using worker = new EditorWorkerRequestExecutor();
+	await assert.rejects(run(worker, model, 1, EDITOR_WORKER_MINIMAL_EDITS_LANE, {
+		edits: [
+			{ range: new Range(1, 1, 1, 4), text: 'ALP', eol: EndOfLineSequence.CRLF },
+			{ range: new Range(1, 3, 1, 6), text: 'PHA' },
+		],
+	}), /must not overlap/);
+	assert.deepEqual([model.getValue(), model.getEOL()], ['alpha', '\n']);
+});
