@@ -216,10 +216,11 @@ impl Server {
 /// from growing with repository size; reaching the global row limit reaps the CLI child.
 pub(super) fn scan(
     command: Command,
+    limit: usize,
     cancellation: &CancellationToken,
     deadline: Instant,
 ) -> Result<Vec<Value>, Error> {
-    let lines = capture(command, cancellation, deadline, 101)?;
+    let lines = capture(command, cancellation, deadline, limit)?;
     lines
         .into_iter()
         .map(|line| serde_json::from_str(&line).map_err(Into::into))
@@ -279,11 +280,16 @@ fn capture(
         });
         let result = (|| {
             let mut output = Vec::new();
+            let mut output_bytes = 0usize;
             loop {
                 check(cancellation, deadline)?;
                 match receiver.recv_timeout(POLL) {
                     Ok(line) => {
                         let line = line?;
+                        output_bytes = output_bytes.saturating_add(line.len());
+                        if output_bytes > MAX_RESPONSE {
+                            return Err(failed("tgrep output exceeds 64 MiB"));
+                        }
                         let line = line.trim_end_matches(['\r', '\n']).to_owned();
                         if limit == 1
                             || serde_json::from_str::<Value>(&line)

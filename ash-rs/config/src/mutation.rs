@@ -301,8 +301,8 @@ fn apply_preferences(document: &mut UserConfigDocument, update: &PreferencesUpda
     }
     match &update.grep_backend {
         Patch::Missing => {}
-        Patch::Null => document.agent.grep_backend = crate::AgentGrepBackend::Ripgrep,
-        Patch::Value(backend) => document.agent.grep_backend = *backend,
+        Patch::Null => document.grep.backend = crate::GrepBackend::default(),
+        Patch::Value(backend) => document.grep.backend = *backend,
     }
     match &update.time_context {
         Patch::Missing => {}

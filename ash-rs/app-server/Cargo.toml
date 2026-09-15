@@ -15,6 +15,7 @@ name = "ash_app_server"
 path = "src/lib.rs"
 
 [dependencies]
+file-search = { package = "ash-file-search", path = "../file-search" }
 tempfile = { workspace = true }
 sleep_inhibitor.workspace = true
 core-api = { workspace = true }
@@ -85,7 +86,6 @@ ash-extension-api = { workspace = true }
 ash-mcp-extension = { workspace = true }
 ash-file-system = { workspace = true }
 ash-file-watcher = { workspace = true }
-tgrep = { workspace = true }
 ash-git = { workspace = true }
 github = { workspace = true }
 ash-http-client = { workspace = true }
@@ -112,7 +112,7 @@ ash-rollout = { workspace = true }
 ash-state = { workspace = true }
 ash-sandboxing = { workspace = true }
 ash-file-access = { workspace = true }
-ash-content-search = { workspace = true }
+grep = { workspace = true }
 ash-secrets = { workspace = true }
 ash-shell-command = { workspace = true }
 ash-slash-commands = { workspace = true }

@@ -178,7 +178,7 @@ impl Codebase {
     /// Searches indexed path and chunk text using a literal FTS query.
     pub fn search(&self, query: &CodebaseQuery) -> Result<Vec<SearchHit>, CodebaseError> {
         let expression = literal_fts_expression(query.text(), self.limits.max_query_bytes)?;
-        let result_limit = query.result_limit().get().min(self.limits.max_results);
+        let result_limit = self.search_limit(query);
         let dirty_paths = self.overlay.dirty_paths();
         let mut hits = self.overlay.search(query.text(), result_limit);
         hits.extend(
@@ -193,8 +193,21 @@ impl Codebase {
                 .total_cmp(&left.score)
                 .then_with(|| left.reference.cmp(&right.reference))
         });
+        let mut seen = std::collections::BTreeSet::new();
+        hits.retain(|hit| seen.insert(hit.reference.clone()));
         hits.truncate(result_limit);
         Ok(hits)
+    }
+
+    pub(crate) fn search_limit(&self, query: &CodebaseQuery) -> usize {
+        query.result_limit().get().min(self.limits.max_results)
+    }
+
+    pub(crate) fn chunks_at_lines(
+        &self,
+        lines: &[(PathBuf, usize)],
+    ) -> Result<Vec<SearchHit>, CodebaseError> {
+        self.store.chunks_at_lines(&self.root_id, lines)
     }
 
     /// Publishes the latest editor snapshot without mutating the persistent disk projection.

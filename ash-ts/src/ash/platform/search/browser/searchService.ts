@@ -48,6 +48,7 @@ export class BrowserContentSearchService implements IContentSearchService {
 			...(folder ? { dirId: folder.id } : {}),
 			query: query.text,
 			patternKind: query.patternKind,
+			freshness: query.freshness ?? "current",
 			caseSensitivity: query.caseSensitivity,
 			includePatterns: [...query.includePatterns],
 			excludePatterns: [...query.excludePatterns],

@@ -476,7 +476,7 @@ impl WorkbenchApplication {
                     approval_review_model: Patch::Missing,
                     commit_message_model: Patch::Missing,
                     tool_mode: Patch::Missing,
-                    agent_grep_backend: Patch::Missing,
+                    grep_backend: Patch::Missing,
                     gui: Patch::Value(gui),
                     tui: Patch::Missing,
                 })

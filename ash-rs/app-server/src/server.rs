@@ -195,7 +195,8 @@ pub struct AppServer {
     pub(super) config: Option<Arc<ConfigStore>>,
     home: Option<Arc<ash_home::AshHome>>,
     pub(super) provider_credentials: Option<Arc<ProviderCredentialService>>,
-    pub(super) local_tool_config: Arc<RwLock<crate::local_tools::LocalToolConfig>>,
+    pub(super) file_search: Arc<file_search::Service>,
+    env_config: Arc<RwLock<environment_runtime::EnvRuntimeConfig>>,
     pub(super) connectors: Option<Arc<connectors::ConnectorCredentialService>>,
     pub(super) connector_oauth: Option<Arc<connectors::ConnectorOAuthService>>,
     pub(super) connector_device_oauth: Option<Arc<connectors::ConnectorDeviceOAuthService>>,
@@ -523,9 +524,8 @@ impl AppServer {
             config: None,
             home: None,
             provider_credentials: None,
-            local_tool_config: Arc::new(
-                RwLock::new(crate::local_tools::LocalToolConfig::default()),
-            ),
+            file_search: Arc::new(file_search::Service),
+            env_config: Arc::new(RwLock::new(environment_runtime::EnvRuntimeConfig::default())),
             connectors: None,
             connector_oauth: None,
             connector_device_oauth: None,
@@ -1374,13 +1374,10 @@ impl AppServer {
         Ok(self)
     }
 
-    /// Enables connection-owned directory content search using one frozen ripgrep executable.
-    pub fn with_content_search(
-        mut self,
-        dir: ash_file_access::Dir,
-        ripgrep: ash_shell_command::RipgrepExecutable,
-    ) -> Self {
-        let search = Arc::new(ash_content_search::ContentSearchService::new(dir, ripgrep));
+    /// Enables connection-owned directory search using a shared grep capability.
+    pub fn with_grep(mut self, dir: ash_file_access::Dir, grep: Arc<grep::Service>) -> Self {
+        let search = Arc::new(grep::Jobs::new(dir, grep.clone()));
+        self.env_runtime_mut().workspace.grep = Some(grep);
         self.env_runtime_mut().workspace.content_search = Some(search);
         self
     }
@@ -2402,10 +2399,10 @@ impl AppServer {
             }
             Some(ClientMethod::CodebaseRetrieve) => self.code_retrieve(&request.params),
             Some(ClientMethod::CodebaseRebuild) => self.codebase_rebuild(&request.params),
-            Some(ClientMethod::TgrepIndexStatus) => self.tgrep_index_status(&request.params),
-            Some(ClientMethod::TgrepIndexRebuild) => self.tgrep_index_rebuild(&request.params),
-            Some(ClientMethod::TgrepDisableAndDelete) => {
-                self.tgrep_disable_and_delete(&request.params)
+            Some(ClientMethod::GrepIndexStatus) => self.grep_index_status(&request.params),
+            Some(ClientMethod::GrepIndexRebuild) => self.grep_index_rebuild(&request.params),
+            Some(ClientMethod::GrepIndexDisableAndDelete) => {
+                self.grep_index_disable_and_delete(&request.params)
             }
             Some(ClientMethod::CloudCodebaseStatus) => self.cloud_codebase_status(&request.params),
             Some(ClientMethod::CloudCodebasePreview) => {

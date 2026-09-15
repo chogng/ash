@@ -28,6 +28,7 @@ const RRF_RANK_CONSTANT: f64 = 60.0;
 const CANDIDATE_MULTIPLIER: usize = 4;
 const MAX_CANDIDATES_PER_SOURCE: usize = 100;
 
+#[derive(Clone)]
 enum RetrievalDeployment {
     LocalOnly,
     LocalSemantic(Arc<CodebaseSemanticService>),
@@ -35,7 +36,9 @@ enum RetrievalDeployment {
 }
 
 /// Directory-scoped local/cloud candidate coordinator.
+#[derive(Clone)]
 pub struct CodebaseRetrievalService {
+    grep: Option<Arc<dyn grep::Search>>,
     index: Arc<Codebase>,
     symbol_index: Option<Arc<SymbolIndex>>,
     deployment: RetrievalDeployment,
@@ -46,6 +49,7 @@ impl CodebaseRetrievalService {
     /// Creates a service that never invokes a cloud provider.
     pub fn local(index: Arc<Codebase>) -> Self {
         Self {
+            grep: None,
             index,
             symbol_index: None,
             deployment: RetrievalDeployment::LocalOnly,
@@ -59,31 +63,47 @@ impl CodebaseRetrievalService {
         index: Arc<Codebase>,
         enhancement: Arc<dyn CodebaseEnhancement>,
     ) -> Result<Self, CodebaseRetrievalError> {
-        if index.root_id() != enhancement.root_id() {
-            return Err(CodebaseRetrievalError::RootMismatch);
-        }
-        Ok(Self {
-            index,
-            symbol_index: None,
-            deployment: RetrievalDeployment::Enhanced(enhancement),
-            budget: CodebaseRetrievalBudget::default(),
-        })
+        Self::local(index).with_enhancement(enhancement)
     }
 
-    /// Creates a local-first service that fuses lexical and local semantic candidates.
+    /// Creates a service with local semantic candidates.
     pub fn local_semantic(
         index: Arc<Codebase>,
         semantic: Arc<CodebaseSemanticService>,
     ) -> Result<Self, CodebaseRetrievalError> {
-        if index.root_id() != semantic.root_id() {
+        Self::local(index).with_semantic(semantic)
+    }
+
+    /// Adds shared content search without changing source ownership.
+    pub fn with_grep(mut self, search: Arc<dyn grep::Search>) -> Self {
+        self.grep = Some(search);
+        self
+    }
+
+    pub fn with_enhancement(
+        mut self,
+        enhancement: Arc<dyn CodebaseEnhancement>,
+    ) -> Result<Self, CodebaseRetrievalError> {
+        if self.index.root_id() != enhancement.root_id() {
             return Err(CodebaseRetrievalError::RootMismatch);
         }
-        Ok(Self {
-            index,
-            symbol_index: None,
-            deployment: RetrievalDeployment::LocalSemantic(semantic),
-            budget: CodebaseRetrievalBudget::default(),
-        })
+        self.deployment = RetrievalDeployment::Enhanced(enhancement);
+        Ok(self)
+    }
+
+    pub fn with_semantic(
+        mut self,
+        semantic: Arc<CodebaseSemanticService>,
+    ) -> Result<Self, CodebaseRetrievalError> {
+        if self.index.root_id() != semantic.root_id() {
+            return Err(CodebaseRetrievalError::RootMismatch);
+        }
+        self.deployment = RetrievalDeployment::LocalSemantic(semantic);
+        Ok(self)
+    }
+
+    pub fn root_id(&self) -> &crate::IndexRootId {
+        self.index.root_id()
     }
 
     pub fn with_budget(mut self, budget: CodebaseRetrievalBudget) -> Self {
@@ -101,6 +121,87 @@ impl CodebaseRetrievalService {
         }
         self.symbol_index = Some(symbol_index);
         Ok(self)
+    }
+
+    /// Combines indexed lexical and shared grep candidates, preserving current source identity.
+    pub fn search(
+        &self,
+        query: &CodebaseQuery,
+        cancellation: &CancellationToken,
+    ) -> Result<Vec<crate::SearchHit>, CodebaseRetrievalError> {
+        check_cancelled(cancellation)?;
+        let result_limit = self.index.search_limit(query);
+        let dirty_paths = self.index.dirty_overlay_paths();
+        let mut hits = self.index.search(query)?;
+        if let Some(search) = &self.grep {
+            let result = search
+                .search(
+                    self.index.root(),
+                    &grep::Query {
+                        query: query
+                            .text()
+                            .split_whitespace()
+                            .collect::<Vec<_>>()
+                            .join(" "),
+                        pattern: grep::Pattern::Literal,
+                        case_sensitivity: grep::CaseSensitivity::Insensitive,
+                        scope: std::path::PathBuf::new(),
+                        include_patterns: Vec::new(),
+                        exclude_patterns: vec![
+                            ".git".into(),
+                            ".ash".into(),
+                            "node_modules".into(),
+                            "target".into(),
+                        ],
+                        max_results: result_limit.min(5000),
+                        freshness: grep::Freshness::Indexed,
+                    },
+                    cancellation,
+                )
+                .map_err(|error| match error {
+                    grep::Error::Cancelled(reason) => CodebaseRetrievalError::Cancelled(reason),
+                    other => CodebaseRetrievalError::Grep(other),
+                })?;
+            let lines = result
+                .matches
+                .iter()
+                .filter(|m| !dirty_paths.contains(&m.path))
+                .map(|m| (m.path.clone(), m.line_number))
+                .collect::<Vec<_>>();
+            for hit in self.index.chunks_at_lines(&lines)? {
+                // The engine supplies locations, never source identity. Recheck the actual
+                // current chunk and literal before accepting an asynchronous index candidate.
+                if let Ok(current) = self.index.materialize(&hit.reference) {
+                    let still_matches = result
+                        .matches
+                        .iter()
+                        .filter(|m| m.path == hit.reference.relative_path)
+                        .flat_map(|m| {
+                            m.ranges
+                                .iter()
+                                .filter_map(|range| m.content.get(range.start..range.end))
+                        })
+                        .any(|text| !text.is_empty() && current.content.contains(text));
+                    if still_matches {
+                        hits.push(crate::SearchHit {
+                            content: current.content,
+                            ..hit
+                        });
+                    }
+                }
+            }
+        }
+        check_cancelled(cancellation)?;
+        hits.sort_by(|left, right| {
+            right
+                .score
+                .total_cmp(&left.score)
+                .then_with(|| left.reference.cmp(&right.reference))
+        });
+        let mut seen = std::collections::BTreeSet::new();
+        hits.retain(|hit| seen.insert(hit.reference.clone()));
+        hits.truncate(result_limit);
+        Ok(hits)
     }
 
     /// Retrieves, fuses, verifies, deduplicates, and bounds code excerpts for Agent context.
@@ -127,7 +228,7 @@ impl CodebaseRetrievalService {
             .expect("a non-zero result limit produces a non-zero candidate limit");
         let local_query = CodebaseQuery::new(query.text()).with_result_limit(candidate_limit);
         let dirty_paths = self.index.dirty_overlay_paths();
-        let local = self.index.search(&local_query)?;
+        let local = self.search(&local_query, cancellation)?;
         let mut fused = BTreeMap::<SourceExcerptReference, FusedCandidate>::new();
         add_ranked(
             &mut fused,

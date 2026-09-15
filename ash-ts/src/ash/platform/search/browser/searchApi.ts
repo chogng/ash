@@ -13,8 +13,8 @@ export function createDisconnectedContentSearchApi(unavailable: UnavailableOpera
 
 export function createAppServerContentSearchApi(connection: AppServerProtocolClient): IContentSearchApi {
 	return {
-		start: (params) => appServerRequest(connection, "content/search/start", params),
-		read: (params) => appServerRequest(connection, "content/search/read", params),
-		cancel: (params) => voidResult(appServerRequest(connection, "content/search/cancel", params)),
+		start: (params) => appServerRequest(connection, "grep/search/start", params),
+		read: (params) => appServerRequest(connection, "grep/search/read", params),
+		cancel: (params) => voidResult(appServerRequest(connection, "grep/search/cancel", params)),
 	};
 }

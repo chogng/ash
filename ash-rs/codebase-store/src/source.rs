@@ -287,6 +287,50 @@ impl CodebaseIndexStore for SqliteCodebaseIndexStore {
         SqliteCodebaseIndexStore::has_descendants(self, relative_path).map_err(Into::into)
     }
 
+    fn chunks_at_lines(
+        &self,
+        root_id: &IndexRootId,
+        lines: &[(PathBuf, usize)],
+    ) -> Result<Vec<SearchHit>, CodebaseError> {
+        let connection = self.connection.lock().expect("codebase store poisoned");
+        let mut statement = connection.prepare_cached(
+            "SELECT path, source_revision, chunk_key, content_hash, language, start_byte, end_byte, start_line, end_line_exclusive, content FROM codebase_chunks WHERE path = ?1 AND start_line <= ?2 AND end_line_exclusive > ?2 ORDER BY ordinal"
+        ).map_err(CodebaseError::storage)?;
+        let mut hits = std::collections::BTreeMap::new();
+        for (path, line) in lines {
+            if *line == 0 {
+                continue;
+            }
+            let rows = statement
+                .query_map(params![storage_path(path), to_i64(line - 1)], |row| {
+                    Ok(SearchHit {
+                        reference: ChunkReference {
+                            root_id: root_id.clone(),
+                            relative_path: PathBuf::from(row.get::<_, String>(0)?),
+                            source_revision: SourceRevision::new(row.get(1)?),
+                            key: ChunkKey::new(row.get(2)?),
+                            content_hash: ChunkContentHash::new(row.get(3)?),
+                            span: ChunkSpan {
+                                start_byte: to_usize(row.get::<_, i64>(5)?),
+                                end_byte: to_usize(row.get::<_, i64>(6)?),
+                                start_line: to_usize(row.get::<_, i64>(7)?),
+                                end_line_exclusive: to_usize(row.get::<_, i64>(8)?),
+                            },
+                        },
+                        language: IndexedLanguage::from_id(&row.get::<_, String>(4)?),
+                        content: row.get(9)?,
+                        score: 1.0,
+                    })
+                })
+                .map_err(CodebaseError::storage)?;
+            for hit in rows {
+                let hit = hit.map_err(CodebaseError::storage)?;
+                hits.insert(hit.reference.clone(), hit);
+            }
+        }
+        Ok(hits.into_values().collect())
+    }
+
     fn search(
         &self,
         root_id: &IndexRootId,

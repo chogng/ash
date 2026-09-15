@@ -13,6 +13,7 @@ use ash_sandboxing::SandboxCommand;
 use ash_sandboxing::SandboxError;
 use ash_sandboxing::SandboxKind;
 use ash_sandboxing::SandboxPolicy;
+use ash_shell_command::RipgrepExecutable;
 
 struct PassThroughBackend;
 
@@ -72,11 +73,14 @@ fn dir_resolution_is_bound_to_the_exact_session_and_grant() {
         super::super::shell_sandbox(),
     )
     .unwrap();
-    let agent_grep = Arc::new(
-        AgentGrepService::new(ash_config::AgentGrepBackend::Ripgrep, ripgrep.clone(), None)
-            .unwrap(),
+    let grep = Arc::new(grep::Service::new(grep::Backend::Ripgrep, ripgrep.clone(), None).unwrap());
+    let suite = LocalToolSuite::new(
+        shell,
+        grep,
+        Arc::new(file_search::Service),
+        Arc::clone(&access),
+        cwd_grant,
     );
-    let suite = LocalToolSuite::new(shell, ripgrep, agent_grep, Arc::clone(&access), cwd_grant);
 
     let resolved = suite
         .resolve(
@@ -208,14 +212,11 @@ fn shell_session_tool_returns_early_then_drives_the_same_process() {
         super::super::shell_sandbox(),
     )
     .unwrap();
-    let agent_grep = Arc::new(
-        AgentGrepService::new(ash_config::AgentGrepBackend::Ripgrep, ripgrep.clone(), None)
-            .unwrap(),
-    );
+    let grep = Arc::new(grep::Service::new(grep::Backend::Ripgrep, ripgrep.clone(), None).unwrap());
     let suite = LocalToolSuite::new(
         shell,
-        ripgrep,
-        agent_grep,
+        grep,
+        Arc::new(file_search::Service),
         access,
         authorization(cwd_dir.path()),
     );

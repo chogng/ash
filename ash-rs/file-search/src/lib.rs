@@ -103,12 +103,17 @@ impl fmt::Debug for PathSearchHandle {
     }
 }
 
-impl PathSearchHandle {
+/// Public file-path search capability. Each fuzzy request owns its worker handle.
+#[derive(Debug, Default)]
+pub struct Service;
+
+impl Service {
     /// Starts a background path search rooted at an existing directory.
     pub fn start(
+        &self,
         root: PathBuf,
         options: PathSearchOptions,
-    ) -> std::io::Result<(Self, Receiver<PathSearchSnapshot>)> {
+    ) -> std::io::Result<(PathSearchHandle, Receiver<PathSearchSnapshot>)> {
         if !root.metadata()?.is_dir() {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
@@ -144,9 +149,11 @@ impl PathSearchHandle {
         let walker_inner = Arc::clone(&inner);
         thread::spawn(move || walker_worker(walker_inner, injector));
 
-        Ok((Self { inner }, snapshot_rx))
+        Ok((PathSearchHandle { inner }, snapshot_rx))
     }
+}
 
+impl PathSearchHandle {
     /// Replaces the active fuzzy pattern without restarting the directory walk.
     ///
     /// The returned revision is copied into every snapshot produced for this
@@ -363,3 +370,8 @@ fn build_snapshot(
 #[cfg(test)]
 #[path = "file_search_tests.rs"]
 mod tests;
+
+mod glob;
+pub use glob::Error;
+pub use glob::GlobQuery;
+pub use glob::GlobResult;

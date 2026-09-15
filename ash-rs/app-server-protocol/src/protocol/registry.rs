@@ -62,10 +62,6 @@ use crate::protocol::codebase::CodebaseSearchParams;
 use crate::protocol::codebase::CodebaseSearchResult;
 use crate::protocol::codebase::CodebaseStateDto;
 use crate::protocol::codebase::CodebaseStatusResult;
-use crate::protocol::codebase::LocalIndexClearOutcomeDto;
-use crate::protocol::codebase::TgrepDisableAndDeleteParams;
-use crate::protocol::codebase::TgrepDisableAndDeleteResult;
-use crate::protocol::codebase::TgrepIndexStatusResult;
 use crate::protocol::codebase_symbols::CodebaseSymbolsSearchHitDto;
 use crate::protocol::codebase_symbols::CodebaseSymbolsSearchParams;
 use crate::protocol::codebase_symbols::CodebaseSymbolsSearchResult;
@@ -102,7 +98,6 @@ use crate::protocol::common::ThreadId;
 use crate::protocol::common::ToolCallId;
 use crate::protocol::common::ToolName;
 use crate::protocol::common::TurnId;
-use crate::protocol::config::AgentGrepBackendDto;
 use crate::protocol::config::ApprovalReviewModelSelectionDto;
 use crate::protocol::config::CodebaseAutomaticContextDto;
 use crate::protocol::config::CodebaseConfigDto;
@@ -127,6 +122,7 @@ use crate::protocol::config::ExecPolicyScopeMatcherDto;
 use crate::protocol::config::ExecPolicySelectorDto;
 use crate::protocol::config::ExecPolicyTokenDto;
 use crate::protocol::config::FrontendConfigDto;
+use crate::protocol::config::GrepBackendDto;
 use crate::protocol::config::HookActionDto;
 use crate::protocol::config::HookConfigDto;
 use crate::protocol::config::HookEnablementDto;
@@ -575,6 +571,7 @@ use crate::protocol::resources::ResourceReadResult;
 use crate::protocol::resources::ResourceReleaseParams;
 use crate::protocol::search::ContentSearchCancelParams;
 use crate::protocol::search::ContentSearchCaseSensitivity;
+use crate::protocol::search::ContentSearchFreshness;
 use crate::protocol::search::ContentSearchMatch;
 use crate::protocol::search::ContentSearchMatchRange;
 use crate::protocol::search::ContentSearchPatternKind;
@@ -582,6 +579,10 @@ use crate::protocol::search::ContentSearchReadParams;
 use crate::protocol::search::ContentSearchReadResult;
 use crate::protocol::search::ContentSearchStartParams;
 use crate::protocol::search::ContentSearchStartResult;
+use crate::protocol::search::GrepIndexDisableAndDeleteParams;
+use crate::protocol::search::GrepIndexDisableAndDeleteResult;
+use crate::protocol::search::GrepIndexStatusResult;
+use crate::protocol::search::LocalIndexClearOutcomeDto;
 use crate::protocol::session::MessageCheckpointsParams;
 use crate::protocol::session::MessageCheckpointsResult;
 use crate::protocol::session::SessionChanged;
@@ -2335,17 +2336,17 @@ client_methods! {
         response: GitOperationResult,
         serialization: GlobalExclusive,
     },
-    ContentSearchStart => "content/search/start" {
+    ContentSearchStart => "grep/search/start" {
         params: ContentSearchStartParams,
         response: ContentSearchStartResult,
         serialization: None,
     },
-    ContentSearchRead => "content/search/read" {
+    ContentSearchRead => "grep/search/read" {
         params: ContentSearchReadParams,
         response: ContentSearchReadResult,
         serialization: None,
     },
-    ContentSearchCancel => "content/search/cancel" {
+    ContentSearchCancel => "grep/search/cancel" {
         params: ContentSearchCancelParams,
         response: (),
         serialization: None,
@@ -2390,19 +2391,19 @@ client_methods! {
         response: CodebaseStatusResult,
         serialization: GlobalExclusive,
     },
-    TgrepIndexStatus => "agentGrep/tgrep/status" {
+    GrepIndexStatus => "grep/index/status" {
         params: EmptyParams,
-        response: TgrepIndexStatusResult,
+        response: GrepIndexStatusResult,
         serialization: GlobalSharedRead,
     },
-    TgrepIndexRebuild => "agentGrep/tgrep/rebuild" {
+    GrepIndexRebuild => "grep/index/rebuild" {
         params: EmptyParams,
-        response: TgrepIndexStatusResult,
+        response: GrepIndexStatusResult,
         serialization: GlobalExclusive,
     },
-    TgrepDisableAndDelete => "agentGrep/tgrep/disableAndDelete" {
-        params: TgrepDisableAndDeleteParams,
-        response: TgrepDisableAndDeleteResult,
+    GrepIndexDisableAndDelete => "grep/index/disableAndDelete" {
+        params: GrepIndexDisableAndDeleteParams,
+        response: GrepIndexDisableAndDeleteResult,
         serialization: GlobalExclusive,
     },
     CloudCodebaseStatus => "codebase/cloud/status" {
@@ -2921,7 +2922,7 @@ typescript_bindings! {
     CodebaseAutomaticContextDto,
     CodebaseConfigDto,
     ApprovalReviewModelSelectionDto,
-    AgentGrepBackendDto,
+    GrepBackendDto,
     ModelContextConfigDto,
     CustomProviderConfigDto,
     CustomProviderProtocolDto,
@@ -3611,6 +3612,7 @@ typescript_bindings! {
     GitCommitResult,
     ContentSearchPatternKind,
     ContentSearchCaseSensitivity,
+    ContentSearchFreshness,
     ContentSearchStartParams,
     ContentSearchStartResult,
     ContentSearchReadParams,
@@ -3620,9 +3622,9 @@ typescript_bindings! {
     ContentSearchCancelParams,
     CodebaseStateDto,
     CodebaseStatusResult,
-    TgrepIndexStatusResult,
-    TgrepDisableAndDeleteParams,
-    TgrepDisableAndDeleteResult,
+    GrepIndexStatusResult,
+    GrepIndexDisableAndDeleteParams,
+    GrepIndexDisableAndDeleteResult,
     LocalIndexClearOutcomeDto,
     CodebaseSearchParams,
     CodebaseChunkSpanDto,

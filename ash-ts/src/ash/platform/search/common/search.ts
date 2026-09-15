@@ -1,6 +1,7 @@
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 
 export type ContentSearchPatternKind = "literal" | "regex";
+export type ContentSearchFreshness = "indexed" | "current";
 export type ContentSearchCaseSensitivity = "smart" | "sensitive" | "insensitive";
 
 export interface ContentSearchMatchRange {
@@ -25,6 +26,7 @@ export interface IContentSearchQuery {
 	readonly includePatterns: readonly string[];
 	readonly excludePatterns: readonly string[];
 	readonly maxResults?: number;
+	readonly freshness?: ContentSearchFreshness;
 }
 
 /** Terminal metadata returned after all available result batches are consumed. */

@@ -17,6 +17,7 @@ fn search_revalidates_content_and_marks_a_lagging_projection_stale() {
     let runtime = CodebaseRuntime::open(
         Dir::open_local(directory.path()).expect("root"),
         Arc::new(CodebaseStore::memory()),
+        None,
     )
     .expect("runtime");
     runtime.rebuild().expect("rebuild");
@@ -43,6 +44,7 @@ fn reopened_index_remains_stale_until_the_dir_is_reconciled() {
     let runtime = CodebaseRuntime::open(
         root.clone(),
         Arc::new(CodebaseStore::open(&state, &root.id()).expect("store")),
+        None,
     )
     .expect("runtime");
     runtime.rebuild().expect("rebuild");
@@ -51,6 +53,7 @@ fn reopened_index_remains_stale_until_the_dir_is_reconciled() {
     let reopened = CodebaseRuntime::open(
         root.clone(),
         Arc::new(CodebaseStore::open(&state, &root.id()).expect("reopen store")),
+        None,
     )
     .expect("reopen");
     assert!(matches!(reopened.state(), CodebaseRuntimeState::Stale(_)));
@@ -68,6 +71,7 @@ fn irrelevant_watcher_hint_returns_runtime_to_ready_without_a_generation_change(
     let runtime = CodebaseRuntime::open(
         Dir::open_local(directory.path()).expect("root"),
         Arc::new(CodebaseStore::memory()),
+        None,
     )
     .expect("runtime");
     let before = runtime.rebuild().expect("rebuild");
@@ -95,6 +99,7 @@ fn irrelevant_watcher_hint_does_not_clear_a_stale_projection() {
     let runtime = CodebaseRuntime::open(
         root.clone(),
         Arc::new(CodebaseStore::open(&state, &root.id()).expect("store")),
+        None,
     )
     .expect("runtime");
     runtime.rebuild().expect("rebuild");
@@ -103,6 +108,7 @@ fn irrelevant_watcher_hint_does_not_clear_a_stale_projection() {
     let reopened = CodebaseRuntime::open(
         root.clone(),
         Arc::new(CodebaseStore::open(&state, &root.id()).expect("reopen store")),
+        None,
     )
     .expect("reopen");
     reopened.apply_watcher_event(&FileWatcherEvent::PathsChanged {

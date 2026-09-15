@@ -96,14 +96,23 @@ impl ConfigGeneration {
     }
 }
 
-/// Selects the implementation behind the Agent-only `grep` Tool.
+/// Selects the implementation used by the shared grep capability.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
-pub enum AgentGrepBackend {
+pub enum GrepBackend {
     Ripgrep,
     #[default]
     Tgrep,
+}
+
+/// Directory content search defaults shared by every consumer.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GrepConfig {
+    #[serde(default)]
+    pub backend: GrepBackend,
 }
 
 /// Agent defaults that may be resolved into future model invocations.
@@ -123,8 +132,6 @@ pub struct AgentConfig {
     pub commit_message_model: Option<ModelRef>,
     #[serde(default)]
     pub tool_mode: ash_protocol::ToolMode,
-    #[serde(default)]
-    pub grep_backend: AgentGrepBackend,
 }
 
 /// Durable, non-secret user intent for ordinary Ash configuration.
@@ -141,6 +148,8 @@ pub struct UserConfigDocument {
     pub issues: crate::IssueConfig,
     #[serde(default)]
     pub agent: AgentConfig,
+    #[serde(default)]
+    pub grep: GrepConfig,
     #[serde(default)]
     pub providers: BTreeMap<ProviderId, ModelProviderConfig>,
     #[serde(default)]
@@ -278,7 +287,7 @@ pub struct ResolvedConfig {
     pub approval_review_model: ApprovalReviewModelSelection,
     pub commit_message_model: Option<ModelRef>,
     pub tool_mode: ash_protocol::ToolMode,
-    pub agent_grep_backend: AgentGrepBackend,
+    pub grep_backend: GrepBackend,
     pub providers: BTreeMap<ProviderId, ModelProviderConfig>,
     pub mcp: McpConfig,
     pub skills: SkillsConfig,
@@ -364,7 +373,7 @@ impl From<&UserConfigDocument> for ResolvedConfig {
             approval_review_model: document.agent.approval_review_model.clone(),
             commit_message_model: document.agent.commit_message_model.clone(),
             tool_mode: document.agent.tool_mode,
-            agent_grep_backend: document.agent.grep_backend,
+            grep_backend: document.grep.backend,
             providers: document.providers.clone(),
             mcp: document.mcp.clone(),
             skills: document.skills.clone(),

@@ -10,8 +10,8 @@ use std::collections::BTreeMap;
 use std::fmt;
 use ts_rs::TS;
 
-pub const APP_SERVER_PROTOCOL_MAJOR: u32 = 6;
-pub const APP_SERVER_PROTOCOL_REVISION: u32 = 0;
+pub const APP_SERVER_PROTOCOL_MAJOR: u32 = 7;
+pub const APP_SERVER_PROTOCOL_REVISION: u32 = 1;
 // Version 5 includes profile time-context policy and immutable input/model time facts.
 pub const APP_SERVER_CAPABILITY_VERSION: u32 = 5;
 

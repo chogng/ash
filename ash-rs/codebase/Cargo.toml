@@ -11,6 +11,7 @@ name = "ash_codebase"
 path = "src/lib.rs"
 
 [dependencies]
+grep = { workspace = true }
 ignore = { workspace = true }
 nucleo = { workspace = true }
 sha2 = { workspace = true }

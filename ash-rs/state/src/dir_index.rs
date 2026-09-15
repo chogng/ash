@@ -19,23 +19,23 @@ const GLOBAL_LOCK_FILE: &str = "indexes.lock";
 /// One rebuildable index owned by a Directory.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum DirIndexKind {
-    AgentGrep,
+    Grep,
     Codebase,
 }
 
 impl DirIndexKind {
-    pub const ALL: [Self; 2] = [Self::AgentGrep, Self::Codebase];
+    pub const ALL: [Self; 2] = [Self::Grep, Self::Codebase];
 
     pub const fn directory_name(self) -> &'static str {
         match self {
-            Self::AgentGrep => "agent-grep",
+            Self::Grep => "grep",
             Self::Codebase => "codebase",
         }
     }
 
     fn lock_file_name(self) -> &'static str {
         match self {
-            Self::AgentGrep => "agent-grep.lock",
+            Self::Grep => "grep.lock",
             Self::Codebase => "codebase.lock",
         }
     }

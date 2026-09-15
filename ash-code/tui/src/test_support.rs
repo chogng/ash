@@ -1,9 +1,9 @@
-use ash_app_server_protocol::protocol::config::AgentGrepBackendDto;
 use ash_app_server_protocol::protocol::config::ApprovalReviewModelSelectionDto;
 use ash_app_server_protocol::protocol::config::CodebaseAutomaticContextDto;
 use ash_app_server_protocol::protocol::config::CodebaseConfigDto;
 use ash_app_server_protocol::protocol::config::ConfigReadResult;
 use ash_app_server_protocol::protocol::config::FrontendConfigDto;
+use ash_app_server_protocol::protocol::config::GrepBackendDto;
 use ash_app_server_protocol::protocol::config::ToolSearchConfigDto;
 use ash_app_server_protocol::protocol::config::ToolSearchEmbeddingStatusDto;
 use ash_app_server_protocol::protocol::config::ToolSearchModeDto;
@@ -50,7 +50,7 @@ pub(crate) fn empty_config_snapshot() -> ConfigReadResult {
             auto_refresh_minutes: 10,
         },
         tool_mode: ash_protocol::ToolMode::Direct,
-        agent_grep_backend: AgentGrepBackendDto::Ripgrep,
+        grep_backend: GrepBackendDto::Ripgrep,
         gui: FrontendConfigDto::default(),
         providers: BTreeMap::new(),
         mcp_servers: BTreeMap::new(),

@@ -143,6 +143,9 @@ import type { GitRepositoriesResult } from './types/GitRepositoriesResult.js';
 import type { GitRepositoryParams } from './types/GitRepositoryParams.js';
 import type { GitStatusResult } from './types/GitStatusResult.js';
 import type { GitTextDiffResult } from './types/GitTextDiffResult.js';
+import type { GrepIndexDisableAndDeleteParams } from './types/GrepIndexDisableAndDeleteParams.js';
+import type { GrepIndexDisableAndDeleteResult } from './types/GrepIndexDisableAndDeleteResult.js';
+import type { GrepIndexStatusResult } from './types/GrepIndexStatusResult.js';
 import type { HookRemoveParams } from './types/HookRemoveParams.js';
 import type { HookSetEnablementParams } from './types/HookSetEnablementParams.js';
 import type { HookUpsertParams } from './types/HookUpsertParams.js';
@@ -348,9 +351,6 @@ import type { TerminalReadParams } from './types/TerminalReadParams.js';
 import type { TerminalReadResult } from './types/TerminalReadResult.js';
 import type { TerminalResizeParams } from './types/TerminalResizeParams.js';
 import type { TerminalWriteParams } from './types/TerminalWriteParams.js';
-import type { TgrepDisableAndDeleteParams } from './types/TgrepDisableAndDeleteParams.js';
-import type { TgrepDisableAndDeleteResult } from './types/TgrepDisableAndDeleteResult.js';
-import type { TgrepIndexStatusResult } from './types/TgrepIndexStatusResult.js';
 import type { ThreadGoalClearParams } from './types/ThreadGoalClearParams.js';
 import type { ThreadGoalClearResponse } from './types/ThreadGoalClearResponse.js';
 import type { ThreadGoalGetParams } from './types/ThreadGoalGetParams.js';
@@ -601,9 +601,9 @@ export interface AppServerRequestMap {
   "git/fetch": { params: GitRepositoryParams; response: GitOperationResult };
   "git/pull": { params: GitRepositoryParams; response: GitOperationResult };
   "git/push": { params: GitRepositoryParams; response: GitOperationResult };
-  "content/search/start": { params: ContentSearchStartParams; response: ContentSearchStartResult };
-  "content/search/read": { params: ContentSearchReadParams; response: ContentSearchReadResult };
-  "content/search/cancel": { params: ContentSearchCancelParams; response: null };
+  "grep/search/start": { params: ContentSearchStartParams; response: ContentSearchStartResult };
+  "grep/search/read": { params: ContentSearchReadParams; response: ContentSearchReadResult };
+  "grep/search/cancel": { params: ContentSearchCancelParams; response: null };
   "codebase/status": { params: Record<string, never>; response: CodebaseStatusResult };
   "codebase/search": { params: CodebaseSearchParams; response: CodebaseSearchResult };
   "codebase/symbols/status": { params: Record<string, never>; response: CodebaseSymbolsStatusResult };
@@ -612,9 +612,9 @@ export interface AppServerRequestMap {
   "codeIntelligence/document/close": { params: DocumentOverlayCloseParams; response: DocumentOverlayStatusResult };
   "codebase/retrieve": { params: CodebaseRetrievalParams; response: CodebaseRetrievalResult };
   "codebase/rebuild": { params: Record<string, never>; response: CodebaseStatusResult };
-  "agentGrep/tgrep/status": { params: Record<string, never>; response: TgrepIndexStatusResult };
-  "agentGrep/tgrep/rebuild": { params: Record<string, never>; response: TgrepIndexStatusResult };
-  "agentGrep/tgrep/disableAndDelete": { params: TgrepDisableAndDeleteParams; response: TgrepDisableAndDeleteResult };
+  "grep/index/status": { params: Record<string, never>; response: GrepIndexStatusResult };
+  "grep/index/rebuild": { params: Record<string, never>; response: GrepIndexStatusResult };
+  "grep/index/disableAndDelete": { params: GrepIndexDisableAndDeleteParams; response: GrepIndexDisableAndDeleteResult };
   "codebase/cloud/status": { params: Record<string, never>; response: CloudCodebaseStatusResult };
   "codebase/cloud/preview": { params: CloudCodebasePreviewParams; response: CloudCodebasePreviewResult };
   "codebase/cloud/authorize": { params: CloudCodebaseAuthorizeParams; response: CloudCodebaseStatusResult };
@@ -871,9 +871,9 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "git/fetch": { method: "git/fetch" },
   "git/pull": { method: "git/pull" },
   "git/push": { method: "git/push" },
-  "content/search/start": { method: "content/search/start" },
-  "content/search/read": { method: "content/search/read" },
-  "content/search/cancel": { method: "content/search/cancel" },
+  "grep/search/start": { method: "grep/search/start" },
+  "grep/search/read": { method: "grep/search/read" },
+  "grep/search/cancel": { method: "grep/search/cancel" },
   "codebase/status": { method: "codebase/status" },
   "codebase/search": { method: "codebase/search" },
   "codebase/symbols/status": { method: "codebase/symbols/status" },
@@ -882,9 +882,9 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "codeIntelligence/document/close": { method: "codeIntelligence/document/close" },
   "codebase/retrieve": { method: "codebase/retrieve" },
   "codebase/rebuild": { method: "codebase/rebuild" },
-  "agentGrep/tgrep/status": { method: "agentGrep/tgrep/status" },
-  "agentGrep/tgrep/rebuild": { method: "agentGrep/tgrep/rebuild" },
-  "agentGrep/tgrep/disableAndDelete": { method: "agentGrep/tgrep/disableAndDelete" },
+  "grep/index/status": { method: "grep/index/status" },
+  "grep/index/rebuild": { method: "grep/index/rebuild" },
+  "grep/index/disableAndDelete": { method: "grep/index/disableAndDelete" },
   "codebase/cloud/status": { method: "codebase/cloud/status" },
   "codebase/cloud/preview": { method: "codebase/cloud/preview" },
   "codebase/cloud/authorize": { method: "codebase/cloud/authorize" },

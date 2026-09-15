@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::path::PathBuf;
 use std::sync::RwLock;
 
 use crate::{
@@ -123,6 +124,46 @@ impl CodebaseIndexStore for InMemoryCodebaseIndexStore {
             .files
             .keys()
             .any(|path| path.starts_with(relative_path)))
+    }
+
+    fn chunks_at_lines(
+        &self,
+        root_id: &IndexRootId,
+        lines: &[(PathBuf, usize)],
+    ) -> Result<Vec<SearchHit>, CodebaseError> {
+        let state = self.state.read().unwrap_or_else(|e| e.into_inner());
+        let mut hits = BTreeMap::new();
+        for (path, line) in lines {
+            let Some(file) = state.files.get(path) else {
+                continue;
+            };
+            for chunk in &file.chunks {
+                if *line == 0
+                    || *line - 1 < chunk.span.start_line
+                    || *line - 1 >= chunk.span.end_line_exclusive
+                {
+                    continue;
+                }
+                let reference = ChunkReference {
+                    root_id: root_id.clone(),
+                    relative_path: path.clone(),
+                    source_revision: file.source_revision.clone(),
+                    key: chunk.key.clone(),
+                    content_hash: chunk.content_hash.clone(),
+                    span: chunk.span.clone(),
+                };
+                hits.insert(
+                    reference.clone(),
+                    SearchHit {
+                        reference,
+                        language: file.language,
+                        content: chunk.content.clone(),
+                        score: 1.0,
+                    },
+                );
+            }
+        }
+        Ok(hits.into_values().collect())
     }
 
     fn search(

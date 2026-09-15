@@ -282,7 +282,7 @@ fn issue_execution_settings_are_removed_once_from_versioned_configuration() {
     ] {
         assert!(!encoded.contains(removed));
     }
-    assert!(encoded.contains("schemaVersion = 4"));
+    assert!(encoded.contains("schemaVersion = 5"));
     assert!(
         !crate::document_migration::decode(&encoded)
             .unwrap()
@@ -324,7 +324,7 @@ fn model_settings_are_migrated_once_from_version_two() {
         document.agent.model_reasoning_effort
     );
     let persisted = std::fs::read_to_string(&config_path).unwrap();
-    assert!(persisted.contains("schemaVersion = 4"));
+    assert!(persisted.contains("schemaVersion = 5"));
     assert!(!persisted.contains("preferredModel"));
     assert!(!persisted.contains("preferredReasoningEffort"));
     drop(store);
@@ -516,7 +516,7 @@ type = "disabled"
     );
 
     let persisted = persisted_config_document(&database_path);
-    assert!(persisted.contains("schemaVersion = 4"));
+    assert!(persisted.contains("schemaVersion = 5"));
     assert!(persisted.contains("[codebase]"));
     assert!(persisted.contains("[dirPermissions.entries]"));
     assert!(!persisted.contains("semanticCodeIndex"));
@@ -629,11 +629,11 @@ fn versioned_config_keeps_unknown_fields_strict() {
 #[test]
 fn newer_file_schema_is_rejected_explicitly() {
     let database_path = config_path("newer-file-schema");
-    std::fs::write(database_path.with_extension("toml"), "schemaVersion = 5\n").unwrap();
+    std::fs::write(database_path.with_extension("toml"), "schemaVersion = 6\n").unwrap();
 
     let error = ConfigStore::open(&database_path).err().unwrap();
 
-    assert!(error.0.contains("newer than supported version 4"));
+    assert!(error.0.contains("newer than supported version 5"));
     remove_config_files(&database_path);
 }
 
@@ -742,8 +742,8 @@ fn tool_mode_defaults_to_direct_and_updates_durably() {
         ash_protocol::ToolMode::Direct
     );
     assert_eq!(
-        store.read_snapshot().unwrap().values.agent_grep_backend,
-        AgentGrepBackend::Tgrep
+        store.read_snapshot().unwrap().values.grep_backend,
+        GrepBackend::Tgrep
     );
 
     store
@@ -758,7 +758,7 @@ fn tool_mode_defaults_to_direct_and_updates_durably() {
                 approval_review_model: Patch::Missing,
                 commit_message_model: Patch::Missing,
                 tool_mode: Patch::Value(ash_protocol::ToolMode::CodeModeOnly),
-                grep_backend: Patch::Value(AgentGrepBackend::Tgrep),
+                grep_backend: Patch::Value(GrepBackend::Tgrep),
                 gui: Patch::Missing,
                 tui: Patch::Missing,
             }),
@@ -770,8 +770,8 @@ fn tool_mode_defaults_to_direct_and_updates_durably() {
         ash_protocol::ToolMode::CodeModeOnly
     );
     assert_eq!(
-        store.read_snapshot().unwrap().values.agent_grep_backend,
-        AgentGrepBackend::Tgrep
+        store.read_snapshot().unwrap().values.grep_backend,
+        GrepBackend::Tgrep
     );
     let persisted = persisted_config_document(&database_path);
     assert!(!persisted.contains("[gui]"));
@@ -2279,8 +2279,30 @@ fn retired_search_backend_is_rewritten_to_tgrep_in_existing_configuration() {
     )
     .unwrap();
     assert!(decoded.rewrite_required);
-    assert_eq!(decoded.document.agent.grep_backend, AgentGrepBackend::Tgrep);
+    assert_eq!(decoded.document.grep.backend, GrepBackend::Tgrep);
     let persisted = crate::document_migration::encode(&decoded.document).unwrap();
-    assert!(persisted.contains("grepBackend = \"tgrep\""));
+    assert!(persisted.contains("backend = \"tgrep\""));
     assert!(!persisted.contains("fastRegex"));
+}
+
+#[test]
+fn grep_configuration_moves_out_of_agent_and_rejects_conflicting_owners() {
+    let decoded =
+        crate::document_migration::decode("schemaVersion = 4\n[agent]\ngrepBackend = 'ripgrep'\n")
+            .unwrap();
+    assert_eq!(decoded.document.grep.backend, GrepBackend::Ripgrep);
+    assert!(decoded.rewrite_required);
+    let encoded = crate::document_migration::encode(&decoded.document).unwrap();
+    assert!(encoded.contains("[grep]"));
+    assert!(!encoded.contains("grepBackend"));
+    assert!(
+        crate::document_migration::decode(
+            "schemaVersion = 4\n[agent]\ngrepBackend = 'ripgrep'\n[grep]\nbackend = 'tgrep'\n"
+        )
+        .is_err()
+    );
+    let legacy =
+        crate::document_migration::decode_legacy_json(r#"{"agent":{"grepBackend":"fastRegex"}}"#)
+            .unwrap();
+    assert_eq!(legacy.grep.backend, GrepBackend::Tgrep);
 }

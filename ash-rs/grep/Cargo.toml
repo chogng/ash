@@ -1,5 +1,5 @@
 [package]
-name = "ash-content-search"
+name = "ash-grep"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
@@ -7,13 +7,18 @@ publish.workspace = true
 
 [lib]
 doctest = false
-name = "ash_content_search"
+name = "grep"
 path = "src/lib.rs"
 
 [dependencies]
 serde_json = { workspace = true }
 ash-async-utils = { workspace = true }
 ash-shell-command = { workspace = true }
+ash-install-context = { workspace = true }
+ash-state = { workspace = true }
+tgrep = { workspace = true }
+regex = { workspace = true }
+tempfile = { workspace = true }
 ash-file-access = { workspace = true }
 
 [lints]

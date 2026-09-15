@@ -18,7 +18,7 @@ fn uses_one_cache_directory_per_dir() {
     let storage = StateRuntime::open(profile.path()).unwrap();
     let dir = dir_id('a');
 
-    let lease = storage.acquire(&dir, DirIndexKind::AgentGrep).unwrap();
+    let lease = storage.acquire(&dir, DirIndexKind::Grep).unwrap();
 
     assert_eq!(
         lease.directory(),
@@ -26,7 +26,7 @@ fn uses_one_cache_directory_per_dir() {
             .profile_root()
             .join("cache/dirs")
             .join("a".repeat(64))
-            .join("indexes/agent-grep")
+            .join("indexes/grep")
     );
     assert!(
         storage
@@ -39,7 +39,7 @@ fn uses_one_cache_directory_per_dir() {
             .profile_root()
             .join("cache/locks/dirs")
             .join("a".repeat(64))
-            .join("agent-grep.lock")
+            .join("grep.lock")
             .is_file()
     );
 }
@@ -73,7 +73,7 @@ fn clear_dir_is_atomic_across_index_kinds() {
     let storage = StateRuntime::open(profile.path()).unwrap();
     let dir = dir_id('c');
     let lexical = storage.acquire(&dir, DirIndexKind::Codebase).unwrap();
-    let symbols = storage.acquire(&dir, DirIndexKind::AgentGrep).unwrap();
+    let symbols = storage.acquire(&dir, DirIndexKind::Grep).unwrap();
     fs::write(lexical.directory().join("index.sqlite3"), b"lexical").unwrap();
     fs::write(symbols.directory().join("index.sqlite3"), b"symbols").unwrap();
 
@@ -118,7 +118,7 @@ fn a_cross_process_lease_blocks_explicit_deletion() {
     let storage = StateRuntime::open(profile.path()).unwrap();
     assert_eq!(
         storage
-            .clear_index(&dir_id('f'), DirIndexKind::AgentGrep)
+            .clear_index(&dir_id('f'), DirIndexKind::Grep)
             .unwrap(),
         ClearOutcome::InUse
     );
@@ -127,7 +127,7 @@ fn a_cross_process_lease_blocks_explicit_deletion() {
     assert!(child.wait().unwrap().success());
     assert_eq!(
         storage
-            .clear_index(&dir_id('f'), DirIndexKind::AgentGrep)
+            .clear_index(&dir_id('f'), DirIndexKind::Grep)
             .unwrap(),
         ClearOutcome::Cleared
     );
@@ -139,9 +139,7 @@ fn cross_process_lease_child() {
         return;
     };
     let storage = StateRuntime::open(profile).unwrap();
-    let _lease = storage
-        .acquire(&dir_id('f'), DirIndexKind::AgentGrep)
-        .unwrap();
+    let _lease = storage.acquire(&dir_id('f'), DirIndexKind::Grep).unwrap();
     fs::write(std::env::var_os("ASH_INDEX_LOCK_TEST_READY").unwrap(), []).unwrap();
     let release =
         std::path::PathBuf::from(std::env::var_os("ASH_INDEX_LOCK_TEST_RELEASE").unwrap());
@@ -167,13 +165,11 @@ fn refuses_to_follow_a_symlink_during_clear() {
     let outside = TempDir::new().unwrap();
     let storage = StateRuntime::open(profile.path()).unwrap();
     let dir = dir_id('e');
-    let index_directory = storage.index_directory(&dir, DirIndexKind::AgentGrep);
+    let index_directory = storage.index_directory(&dir, DirIndexKind::Grep);
     fs::create_dir_all(index_directory.parent().unwrap()).unwrap();
     symlink(outside.path(), &index_directory).unwrap();
 
-    let error = storage
-        .clear_index(&dir, DirIndexKind::AgentGrep)
-        .unwrap_err();
+    let error = storage.clear_index(&dir, DirIndexKind::Grep).unwrap_err();
     assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
     assert!(outside.path().is_dir());
 }
@@ -189,16 +185,11 @@ fn refuses_to_follow_an_ancestor_symlink_during_clear() {
     let dir = dir_id('9');
     fs::remove_dir(&storage.dirs_root).unwrap();
     symlink(outside.path(), &storage.dirs_root).unwrap();
-    let outside_index = outside
-        .path()
-        .join("9".repeat(64))
-        .join("indexes/agent-grep");
+    let outside_index = outside.path().join("9".repeat(64)).join("indexes/grep");
     fs::create_dir_all(&outside_index).unwrap();
     fs::write(outside_index.join("sentinel"), b"outside").unwrap();
 
-    let error = storage
-        .clear_index(&dir, DirIndexKind::AgentGrep)
-        .unwrap_err();
+    let error = storage.clear_index(&dir, DirIndexKind::Grep).unwrap_err();
 
     assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
     assert_eq!(

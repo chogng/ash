@@ -20,7 +20,6 @@ use ash_action_policy::SandboxCompatibility;
 use ash_apply_patch::ApplyPatchLimits;
 use ash_apply_patch::ApplyPatchTool;
 use ash_async_utils::CancellationToken;
-use ash_config::AgentGrepBackend;
 use ash_config::DirExecPolicyConfig;
 use ash_config::DirId;
 use ash_config::ResolvedConfig;
@@ -86,10 +85,9 @@ use crate::tool_composition::ToolPort;
 use crate::tool_executor_adapter::PreparedToolExecution;
 use crate::tool_executor_adapter::ToolExecutorReviewer;
 
-mod agent_grep;
+mod grep_output;
 mod suite;
 
-pub(crate) use agent_grep::AgentGrepService;
 pub(crate) use suite::LocalToolSuite;
 
 const LOCAL_GRANT_SNAPSHOT_REVISION: &str = "local-static-grants-v1";
@@ -100,8 +98,6 @@ const DEFAULT_OUTPUT_BYTES: usize = 256 * 1024;
 pub(crate) struct LocalToolComposition {
     pub(crate) tools: Arc<dyn ToolService>,
     pub(crate) policy: Arc<dyn ActionPolicyService>,
-    pub(crate) ripgrep: RipgrepExecutable,
-    pub(crate) agent_grep: Arc<AgentGrepService>,
     action_policy_revision: ActionPolicyRevision,
     executors: Vec<LocalExecutorContribution>,
 }
@@ -111,7 +107,6 @@ pub(crate) struct LocalToolComposition {
 pub(crate) struct LocalToolConfig {
     user: UserExecPolicyConfig,
     dir_config: Option<(DirId, DirExecPolicyConfig)>,
-    agent_grep_backend: AgentGrepBackend,
 }
 
 impl LocalToolConfig {
@@ -122,7 +117,6 @@ impl LocalToolConfig {
                 .dir_config
                 .as_ref()
                 .map(|dir| (dir.dir_id.clone(), dir.exec_policy.clone())),
-            agent_grep_backend: config.agent_grep_backend,
         }
     }
 
@@ -147,8 +141,8 @@ pub(crate) fn compose_local_tools_with_config(
     grant: ash_file_access::Grant,
     config: &LocalToolConfig,
     dir_grants: Arc<DirGrants>,
-    existing_agent_grep: Option<Arc<AgentGrepService>>,
-    state_runtime: Option<Arc<ash_state::StateRuntime>>,
+    grep: Arc<grep::Service>,
+    file_search: Arc<file_search::Service>,
     pty_helper: Option<&std::path::PathBuf>,
 ) -> Result<LocalToolComposition, LocalToolError> {
     let authorization = grant
@@ -224,23 +218,10 @@ pub(crate) fn compose_local_tools_with_config(
         action_policy_revision.clone(),
         shell_policy,
     )?;
-    let agent_grep = Arc::new(match existing_agent_grep {
-        Some(existing) => existing.reconfigured(config.agent_grep_backend, ripgrep.clone()),
-        None => AgentGrepService::new(config.agent_grep_backend, ripgrep.clone(), state_runtime)
-            .map_err(|error| LocalToolError::definition(error.to_string()))?,
-    });
-    let service = LocalToolSuite::new(
-        shell,
-        ripgrep.clone(),
-        Arc::clone(&agent_grep),
-        dir_grants,
-        grant,
-    );
+    let service = LocalToolSuite::new(shell, grep, file_search, dir_grants, grant);
     Ok(LocalToolComposition {
         tools: Arc::new(service),
         policy: Arc::new(policy),
-        ripgrep,
-        agent_grep,
         action_policy_revision,
         executors: vec![
             LocalExecutorContribution {
@@ -262,16 +243,10 @@ impl LocalToolComposition {
     pub(crate) fn without_executors(
         tools: Arc<dyn ToolService>,
         policy: Arc<dyn ActionPolicyService>,
-        ripgrep: RipgrepExecutable,
     ) -> Self {
-        let agent_grep = Arc::new(
-            AgentGrepService::new(AgentGrepBackend::Ripgrep, ripgrep.clone(), None).unwrap(),
-        );
         Self {
             tools,
             policy,
-            ripgrep,
-            agent_grep,
             action_policy_revision: local_policy_revision(),
             executors: Vec::new(),
         }
@@ -313,8 +288,6 @@ pub(crate) fn append_local_tool(
             extension: tool,
         }),
         policy: composition.policy,
-        ripgrep: composition.ripgrep,
-        agent_grep: composition.agent_grep,
         action_policy_revision: composition.action_policy_revision,
         executors: composition.executors,
     }
@@ -1312,19 +1285,19 @@ static LOCAL_EXEC_POLICY_HOST_LAYER: LazyLock<ExecPolicyLayer> = LazyLock::new(|
         local_rule(
             "local-read-file",
             "read_file",
-            ExecPolicyActionKind::LocalProcess,
+            ExecPolicyActionKind::SystemOperation,
             ExecPolicyEffect::Continue,
         ),
         local_rule(
             "local-grep",
             "grep",
-            ExecPolicyActionKind::LocalProcess,
+            ExecPolicyActionKind::SystemOperation,
             ExecPolicyEffect::Continue,
         ),
         local_rule(
             "local-glob",
             "glob",
-            ExecPolicyActionKind::LocalProcess,
+            ExecPolicyActionKind::SystemOperation,
             ExecPolicyEffect::Continue,
         ),
         local_rule(

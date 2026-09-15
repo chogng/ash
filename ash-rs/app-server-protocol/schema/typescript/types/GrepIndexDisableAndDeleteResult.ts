@@ -2,4 +2,4 @@
 import type { ConfigCommandResult } from './ConfigCommandResult.js';
 import type { LocalIndexClearOutcomeDto } from './LocalIndexClearOutcomeDto.js';
 
-export type TgrepDisableAndDeleteResult = { config: ConfigCommandResult, deletion: LocalIndexClearOutcomeDto, };
+export type GrepIndexDisableAndDeleteResult = { config: ConfigCommandResult, deletion: LocalIndexClearOutcomeDto, };

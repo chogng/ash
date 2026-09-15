@@ -13,8 +13,9 @@ fn handle_streams_scored_paths_and_highlight_indices() {
     directory.write("docs/src-notes.md");
     directory.write("tests/s_r_c.rs");
     directory.write("src/lib.rs");
-    let (handle, snapshots) =
-        PathSearchHandle::start(directory.path.clone(), PathSearchOptions::default()).unwrap();
+    let (handle, snapshots) = crate::Service
+        .start(directory.path.clone(), PathSearchOptions::default())
+        .unwrap();
 
     let revision = handle.update_query("src");
     let snapshot = wait_for_snapshot(&snapshots, "src", |snapshot| snapshot.search_complete);
@@ -49,8 +50,9 @@ fn query_updates_reuse_the_handle_and_publish_the_latest_query() {
     let directory = TestWorkspace::new();
     directory.write("src/alpha.rs");
     directory.write("src/beta.rs");
-    let (handle, snapshots) =
-        PathSearchHandle::start(directory.path.clone(), PathSearchOptions::default()).unwrap();
+    let (handle, snapshots) = crate::Service
+        .start(directory.path.clone(), PathSearchOptions::default())
+        .unwrap();
 
     let first_revision = handle.update_query("alpha");
     let first = wait_for_snapshot(&snapshots, "alpha", |snapshot| snapshot.search_complete);
@@ -73,8 +75,9 @@ fn walker_respects_gitignore_and_skips_generated_directories() {
     directory.write("ignored.rs");
     directory.write("target/debug/ash");
     directory.write("node_modules/package/index.js");
-    let (handle, snapshots) =
-        PathSearchHandle::start(directory.path.clone(), PathSearchOptions::default()).unwrap();
+    let (handle, snapshots) = crate::Service
+        .start(directory.path.clone(), PathSearchOptions::default())
+        .unwrap();
 
     handle.update_query("");
     let snapshot = wait_for_snapshot(&snapshots, "", |snapshot| snapshot.search_complete);

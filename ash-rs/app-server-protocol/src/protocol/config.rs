@@ -18,10 +18,10 @@ pub struct TimeContextConfigDto {
     pub time_zone: Option<String>,
 }
 
-/// Selects the implementation behind the Agent-only `grep` Tool.
+/// Selects the implementation behind the shared grep capability.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub enum AgentGrepBackendDto {
+pub enum GrepBackendDto {
     Ripgrep,
     #[default]
     Tgrep,
@@ -442,7 +442,7 @@ pub struct ConfigReadResult {
     pub commit_message_model: Option<ModelRefDto>,
     pub commit_message_active_dir_authorized: bool,
     pub tool_mode: ToolMode,
-    pub agent_grep_backend: AgentGrepBackendDto,
+    pub grep_backend: GrepBackendDto,
     pub gui: FrontendConfigDto,
     pub providers: BTreeMap<String, ProviderConfigDto>,
     pub mcp_servers: BTreeMap<String, McpServerConfigDto>,
@@ -593,9 +593,9 @@ pub struct ConfigUpdateParams {
     #[ts(as = "Option<ToolMode>", optional = nullable)]
     pub tool_mode: Patch<ToolMode>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
-    #[schemars(with = "Option<AgentGrepBackendDto>")]
-    #[ts(as = "Option<AgentGrepBackendDto>", optional = nullable)]
-    pub agent_grep_backend: Patch<AgentGrepBackendDto>,
+    #[schemars(with = "Option<GrepBackendDto>")]
+    #[ts(as = "Option<GrepBackendDto>", optional = nullable)]
+    pub grep_backend: Patch<GrepBackendDto>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     #[schemars(with = "Option<FrontendConfigDto>")]
     #[ts(as = "Option<FrontendConfigDto>", optional = nullable)]

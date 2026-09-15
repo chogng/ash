@@ -1,4 +1,6 @@
+use crate::protocol::config::ConfigCommandResult;
 use crate::protocol::environment::SessionDirSelector;
+use ash_protocol::CommandId;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
@@ -22,6 +24,15 @@ pub enum ContentSearchCaseSensitivity {
     Insensitive,
 }
 
+/// Selects asynchronous indexed results or a current disk scan.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ContentSearchFreshness {
+    Indexed,
+    #[default]
+    Current,
+}
+
 /// Starts one bounded, connection-owned directory content search.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -35,6 +46,10 @@ pub struct ContentSearchStartParams {
     #[schemars(length(min = 1, max = 16384))]
     pub query: String,
     pub pattern_kind: ContentSearchPatternKind,
+    /// Defaults to current disk contents when omitted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub freshness: Option<ContentSearchFreshness>,
     pub case_sensitivity: ContentSearchCaseSensitivity,
     #[schemars(length(max = 64))]
     pub include_patterns: Vec<String>,
@@ -96,6 +111,10 @@ pub struct ContentSearchReadResult {
     pub completed: bool,
     pub limit_hit: bool,
     pub error: Option<String>,
+    /// Actual execution mode, available after a successful search.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub freshness: Option<ContentSearchFreshness>,
 }
 
 /// Cancels and releases one connection-owned directory search.
@@ -110,4 +129,43 @@ pub struct ContentSearchCancelParams {
     pub session_directory: Option<SessionDirSelector>,
     #[schemars(length(min = 1))]
     pub search_id: String,
+}
+
+/// Current state of the shared directory grep index; readiness is not freshness.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GrepIndexStatusResult {
+    pub enabled: bool,
+    pub active: bool,
+    pub indexing: bool,
+    pub ready: bool,
+    pub indexed_file_count: usize,
+    pub watcher_active: bool,
+}
+
+/// Starts the durable “disable and delete” shared grep operation.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GrepIndexDisableAndDeleteParams {
+    pub command_id: CommandId,
+    #[schemars(range(min = 0))]
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+}
+
+/// Result of an explicit local-index deletion request.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum LocalIndexClearOutcomeDto {
+    Cleared,
+    AlreadyAbsent,
+    InUse,
+}
+
+/// Confirms the configuration commit separately from deletion of rebuildable data.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GrepIndexDisableAndDeleteResult {
+    pub config: ConfigCommandResult,
+    pub deletion: LocalIndexClearOutcomeDto,
 }

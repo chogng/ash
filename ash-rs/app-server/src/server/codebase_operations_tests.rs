@@ -2,8 +2,8 @@ use super::*;
 use crate::CodebaseModels;
 use crate::local::ProviderModelService;
 use crate::server::DirGrantPolicy;
-use ash_config::AgentGrepBackend;
 use ash_config::ConfigStore;
+use ash_config::GrepBackend;
 use ash_config::ResolvedConfig;
 use ash_core::InMemoryThreadStore;
 use ash_core::ThreadController;
@@ -208,7 +208,7 @@ fn rpc_reports_generation_and_returns_revision_bound_local_chunks() {
 }
 
 #[test]
-fn tgrep_rpc_rebuilds_then_disables_and_deletes_the_project_index() {
+fn grep_rpc_shares_search_with_codebase_and_editor_then_releases_the_index() {
     let dir = tempfile::tempdir().unwrap();
     let profile = tempfile::tempdir().unwrap();
     std::fs::create_dir(dir.path().join(".git")).unwrap();
@@ -216,15 +216,13 @@ fn tgrep_rpc_rebuilds_then_disables_and_deletes_the_project_index() {
     let config = Arc::new(ConfigStore::open(profile.path().join("config.sqlite3")).unwrap());
     let index_storage = Arc::new(ash_state::StateRuntime::open(profile.path()).unwrap());
     let resolved = ResolvedConfig {
-        agent_grep_backend: AgentGrepBackend::Tgrep,
+        grep_backend: GrepBackend::Tgrep,
         ..ResolvedConfig::default()
     };
     let server = server()
         .with_config_store(config)
         .with_state_runtime(Arc::clone(&index_storage))
-        .with_local_tool_config(crate::local_tools::LocalToolConfig::from_resolved(
-            &resolved,
-        ))
+        .with_env_config(&resolved)
         .with_local_env_host(
             None,
             DirGrantPolicy::HostSelectedDirs(GrantSource::HostConfiguration),
@@ -234,7 +232,7 @@ fn tgrep_rpc_rebuilds_then_disables_and_deletes_the_project_index() {
         .switch_local_dir_root(dir.path().to_path_buf())
         .unwrap();
     let dir_id = server.active_dir_id().unwrap();
-    let index_directory = index_storage.index_directory(&dir_id, DirIndexKind::AgentGrep);
+    let index_directory = index_storage.index_directory(&dir_id, DirIndexKind::Grep);
     let mut connection = server.connection();
     call(
         &server,
@@ -254,7 +252,7 @@ fn tgrep_rpc_rebuilds_then_disables_and_deletes_the_project_index() {
         serde_json::json!({
             "commandId": "enable-tgrep",
             "expectedRevision": 0,
-            "agentGrepBackend": "tgrep"
+            "grepBackend": "tgrep"
         }),
     );
     assert_eq!(enabled["result"]["revision"], 0);
@@ -263,7 +261,7 @@ fn tgrep_rpc_rebuilds_then_disables_and_deletes_the_project_index() {
         &server,
         &mut connection,
         3,
-        "agentGrep/tgrep/status",
+        "grep/index/status",
         serde_json::json!({}),
     );
     assert_eq!(initial["result"]["enabled"], true);
@@ -273,7 +271,7 @@ fn tgrep_rpc_rebuilds_then_disables_and_deletes_the_project_index() {
         &server,
         &mut connection,
         4,
-        "agentGrep/tgrep/rebuild",
+        "grep/index/rebuild",
         serde_json::json!({}),
     );
     assert_eq!(
@@ -284,11 +282,77 @@ fn tgrep_rpc_rebuilds_then_disables_and_deletes_the_project_index() {
     assert!(rebuilt["result"]["indexedFileCount"].as_u64().unwrap() >= 1);
     assert!(index_directory.join("tgrep-1.0.8").is_dir());
 
+    // A substring inside an FTS token must be supplied by the shared grep capability.
+    server.codebase_service().unwrap().rebuild().unwrap();
+    let codebase = call(
+        &server,
+        &mut connection,
+        10,
+        "codebase/search",
+        serde_json::json!({"query": "grep_rpc_mark", "maxResults": 10}),
+    );
+    assert_eq!(
+        codebase["result"]["hits"].as_array().unwrap().len(),
+        1,
+        "{codebase}"
+    );
+    let retrieval = call(
+        &server,
+        &mut connection,
+        12,
+        "codebase/retrieve",
+        serde_json::json!({"query": "grep_rpc_mark", "maxResults": 10}),
+    );
+    assert_eq!(
+        retrieval["result"]["hits"].as_array().unwrap().len(),
+        1,
+        "{retrieval}"
+    );
+    let started = call(
+        &server,
+        &mut connection,
+        11,
+        "grep/search/start",
+        serde_json::json!({
+            "query": "grep_rpc_mark", "patternKind": "literal", "caseSensitivity": "sensitive", "freshness": "indexed",
+            "includePatterns": [], "excludePatterns": [], "maxResults": 200
+        }),
+    );
+    let search_id = started["result"]["searchId"].as_str().unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let mut read_id = 100;
+    loop {
+        let page = call(
+            &server,
+            &mut connection,
+            read_id,
+            "grep/search/read",
+            serde_json::json!({"searchId": search_id, "afterMatch": 0, "maxMatches": 100}),
+        );
+        read_id += 1;
+        assert!(page.get("error").is_none(), "{page}");
+        if page["result"]["completed"] == true {
+            assert!(page["result"]["error"].is_null(), "{page}");
+            assert_eq!(page["result"]["matches"].as_array().unwrap().len(), 1);
+            assert_eq!(page["result"]["freshness"], "indexed");
+            break;
+        }
+        assert!(std::time::Instant::now() < deadline);
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    call(
+        &server,
+        &mut connection,
+        13,
+        "grep/search/cancel",
+        serde_json::json!({"searchId": search_id}),
+    );
+
     let deleted = call(
         &server,
         &mut connection,
         5,
-        "agentGrep/tgrep/disableAndDelete",
+        "grep/index/disableAndDelete",
         serde_json::json!({
             "commandId": "disable-delete-tgrep",
             "expectedRevision": 0
@@ -302,11 +366,27 @@ fn tgrep_rpc_rebuilds_then_disables_and_deletes_the_project_index() {
         &server,
         &mut connection,
         6,
-        "agentGrep/tgrep/status",
+        "grep/index/status",
         serde_json::json!({}),
     );
     assert_eq!(disabled["result"]["enabled"], false);
     assert_eq!(disabled["result"]["active"], false);
+    let codebase = call(
+        &server,
+        &mut connection,
+        14,
+        "codebase/search",
+        serde_json::json!({"query": "grep_rpc_mark", "maxResults": 10}),
+    );
+    assert_eq!(
+        codebase["result"]["hits"].as_array().unwrap().len(),
+        1,
+        "{codebase}"
+    );
+    assert!(
+        !index_directory.exists(),
+        "Codebase must share the updated backend selection"
+    );
 }
 
 #[test]

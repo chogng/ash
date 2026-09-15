@@ -15,10 +15,15 @@ name = "ash-file-search"
 path = "src/main.rs"
 
 [dependencies]
+ash-file-access = { workspace = true }
+ash-async-utils = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 ignore = { workspace = true }
 nucleo = { workspace = true }
 serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

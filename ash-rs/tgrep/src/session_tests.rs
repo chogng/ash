@@ -23,7 +23,9 @@ fn search(session: &Session, pattern: &str) -> SearchResult {
                 pattern,
                 scope: Path::new(""),
                 case_insensitive: false,
-                include: None,
+                include: &[],
+                max_results: 100,
+                current: false,
                 exclude: &["**/.env"],
             },
             &CancellationSource::new().token(),
@@ -53,7 +55,9 @@ fn real_server_searches_in_path_order_with_one_global_limit_and_scope() {
                 pattern: "needle",
                 scope: Path::new("src"),
                 case_insensitive: false,
-                include: None,
+                include: &[],
+                max_results: 100,
+                current: false,
                 exclude: &["**/.env"],
             },
             &CancellationSource::new().token(),
@@ -94,7 +98,9 @@ fn scanning_honors_globs_unicode_denials_and_literal_file_paths() {
         pattern: "ünicode",
         scope: Path::new(""),
         case_insensitive: true,
-        include: Some("*.rs"),
+        include: &["*.rs"],
+        max_results: 100,
+        current: false,
         exclude: &["**/.env"],
     };
     let result = session
@@ -113,7 +119,9 @@ fn scanning_honors_globs_unicode_denials_and_literal_file_paths() {
         .search(
             &Query {
                 scope: Path::new("normal.txt"),
-                include: None,
+                include: &[],
+                max_results: 100,
+                current: false,
                 ..request
             },
             &CancellationSource::new().token(),
@@ -131,7 +139,9 @@ fn cancellation_invalid_regex_and_outside_paths_fail_explicitly() {
         pattern: "x",
         scope: Path::new(""),
         case_insensitive: false,
-        include: None,
+        include: &[],
+        max_results: 100,
+        current: false,
         exclude: &[],
     };
     assert!(matches!(
@@ -199,7 +209,9 @@ fn edited_paths_still_obey_ignore_rules_and_denials() {
                 pattern: "edited_marker",
                 scope: Path::new(""),
                 case_insensitive: false,
-                include: None,
+                include: &[],
+                max_results: 100,
+                current: false,
                 exclude: &["private.rs"],
             },
             &CancellationSource::new().token(),
@@ -225,7 +237,9 @@ fn indexed_case_insensitive_search_preserves_unicode_folding() {
         pattern: ".*kelvin.*",
         scope: Path::new(""),
         case_insensitive: true,
-        include: None,
+        include: &[],
+        max_results: 100,
+        current: false,
         exclude: &[],
     };
     let result = session

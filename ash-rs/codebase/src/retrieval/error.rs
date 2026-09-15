@@ -9,6 +9,8 @@ pub enum CodebaseRetrievalError {
     RootMismatch,
     #[error("local codebase retrieval failed: {0}")]
     LocalIndex(#[from] crate::CodebaseError),
+    #[error("codebase text search failed: {0}")]
+    Grep(grep::Error),
     #[error("code retrieval was cancelled: {0}")]
     Cancelled(String),
 }

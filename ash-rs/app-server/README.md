@@ -53,9 +53,10 @@ just test ash-app-server
 - 先取得 profile 端点，再启动后台工作，避免并发启动重复运行任务。
 - daemon crate 提供进程管理和控制端点机制，App Server 依赖它；依赖方向保持单向。
 
-## Agent grep
+## grep
 
-- `AgentGrepBackend::Tgrep` 使用 [`tgrep`](../tgrep/README.md) 管理的包内搜索服务与目录索引，最多返回 100 个匹配行；编辑器搜索独立使用 Content Search。
-- 目录 watcher 的路径事件发布增量，重扫事件核对文件集合；查询只覆盖已处理更新的索引版本。空结果标明异步更新边界，不能当作最新磁盘内容不存在的证明。
-- 索引容量不足或遍历失败返回工具失败；不会把未覆盖的文件默认为无匹配。候选内容变更触发一次更新重试。
-- 验证命令：`just test ash-app-server --lib agent_grep`。
+- 宿主持有公共搜索配置并创建 [`grep`](../grep/README.md) 与 [`file-search`](../file-search/README.md)，分别注入使用者；依赖关系见[搜索架构](../../docs/search.md#目标依赖关系)。
+- Agent 工具只负责授权和模型输出（100 行、每行 500 字符）；编辑器使用分页任务与 UTF-16 高亮适配。
+- Codebase 检索服务消费文字匹配候选；源码与 chunk 管理不持有搜索引擎。
+- 搜索及索引管理使用 `grep/search/*`、`grep/index/*`；查询支持索引或当前磁盘模式，分页返回实际模式。
+- 验证命令：`just test ash-app-server --lib grep`。

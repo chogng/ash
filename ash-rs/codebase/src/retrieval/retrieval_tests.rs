@@ -9,6 +9,7 @@ use crate::CodebaseEnhancement;
 use crate::CodebaseEnhancementError;
 use crate::CodebaseLimits;
 use crate::CodebaseOverlayDocument;
+use crate::CodebaseQuery;
 use crate::CodebaseSemanticService;
 use crate::CodebaseVectorStore;
 use crate::EmbeddingIndexKey;
@@ -344,4 +345,80 @@ fn semantic_service(index: Arc<Codebase>) -> Arc<CodebaseSemanticService> {
 
 fn query(text: &str) -> CodebaseRetrievalQuery {
     CodebaseRetrievalQuery::new(text, NonZeroUsize::new(10).expect("result limit")).expect("query")
+}
+
+#[test]
+fn grep_candidates_use_owned_current_chunks_and_reject_backend_content() {
+    struct Candidates(std::sync::atomic::AtomicUsize);
+    impl grep::Search for Candidates {
+        fn search(
+            &self,
+            _: &ash_file_access::Dir,
+            query: &grep::Query,
+            _: &ash_async_utils::CancellationToken,
+        ) -> Result<grep::SearchResult, grep::Error> {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            assert_eq!(query.pattern, grep::Pattern::Literal);
+            Ok(grep::SearchResult {
+                matches: vec![grep::Match {
+                    path: "source.rs".into(),
+                    line_number: 1,
+                    content: "untrusted backend text".into(),
+                    ranges: Vec::new(),
+                }],
+                limit_hit: false,
+                freshness: grep::Freshness::Indexed,
+            })
+        }
+    }
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("source.rs"), "fn prefixneedlepost() {}\n").unwrap();
+    let search = std::sync::Arc::new(Candidates(std::sync::atomic::AtomicUsize::new(0)));
+    let index = Codebase::open_memory(
+        ash_file_access::Dir::open_local(dir.path()).unwrap(),
+        CodebaseLimits::default(),
+    )
+    .unwrap();
+    let index = std::sync::Arc::new(index);
+    let retrieval = CodebaseRetrievalService::local(index.clone()).with_grep(search.clone());
+    let cancellation = ash_async_utils::CancellationSource::new();
+    index.rebuild().unwrap();
+    let hits = retrieval
+        .search(&CodebaseQuery::new("needle"), &cancellation.token())
+        .unwrap();
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0].content, "fn prefixneedlepost() {}\n");
+    assert_eq!(search.0.load(std::sync::atomic::Ordering::SeqCst), 1);
+    index
+        .synchronize_overlay(CodebaseOverlayDocument {
+            relative_path: "source.rs".into(),
+            editor_revision: 1,
+            language: crate::IndexedLanguage::Rust,
+            content: "fn unsaved_only() {}\n".into(),
+        })
+        .unwrap();
+    assert!(
+        retrieval
+            .search(&CodebaseQuery::new("needle"), &cancellation.token())
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        retrieval
+            .search(&CodebaseQuery::new("unsaved_only"), &cancellation.token())
+            .unwrap()
+            .len(),
+        1
+    );
+    index
+        .close_overlay(std::path::Path::new("source.rs"))
+        .unwrap();
+    std::fs::write(dir.path().join("source.rs"), "fn replaced() {}\n").unwrap();
+    index.rebuild().unwrap();
+    assert!(
+        retrieval
+            .search(&CodebaseQuery::new("needle"), &cancellation.token())
+            .unwrap()
+            .is_empty()
+    );
 }

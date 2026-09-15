@@ -351,7 +351,6 @@ fn durable_user_and_dir_exec_rules_drive_local_authorization() {
             rules: vec![user_rule],
         },
         dir_config: None,
-        agent_grep_backend: ash_config::AgentGrepBackend::Ripgrep,
     };
     let exec_policy = policy_config.snapshot().unwrap();
     let action_policy_revision = ActionPolicyRevision::from_components(
@@ -400,7 +399,6 @@ fn durable_user_and_dir_exec_rules_drive_local_authorization() {
                 )],
             },
         )),
-        agent_grep_backend: ash_config::AgentGrepBackend::Ripgrep,
     };
     let exec_policy = restrictive_config.snapshot().unwrap();
     let action_policy_revision = ActionPolicyRevision::from_components(
@@ -563,20 +561,16 @@ fn local_tool_port_exposes_one_canonical_coding_tool_surface() {
     let shell =
         LocalShellToolService::new(authorization.clone(), ripgrep.clone(), PassThroughBackend)
             .unwrap();
-    let agent_grep = Arc::new(
-        AgentGrepService::new(ash_config::AgentGrepBackend::Tgrep, ripgrep.clone(), None).unwrap(),
-    );
+    let grep = Arc::new(grep::Service::new(grep::Backend::Tgrep, ripgrep.clone(), None).unwrap());
     let composition = LocalToolComposition {
         tools: Arc::new(LocalToolSuite::new(
             shell,
-            ripgrep.clone(),
-            Arc::clone(&agent_grep),
+            Arc::clone(&grep),
+            Arc::new(file_search::Service),
             Arc::new(crate::dir_grants::DirGrants::default()),
             dir.grant(),
         )),
         policy: Arc::new(LocalShellPolicy::default()),
-        ripgrep,
-        agent_grep,
         action_policy_revision: local_policy_revision(),
         executors: vec![
             LocalExecutorContribution {
@@ -648,13 +642,11 @@ fn agent_edit_refreshes_an_existing_tgrep_generation_before_returning() {
     let shell =
         LocalShellToolService::new(dir.authorization(), ripgrep.clone(), PassThroughBackend)
             .unwrap();
-    let agent_grep = Arc::new(
-        AgentGrepService::new(ash_config::AgentGrepBackend::Tgrep, ripgrep.clone(), None).unwrap(),
-    );
+    let grep = Arc::new(grep::Service::new(grep::Backend::Tgrep, ripgrep.clone(), None).unwrap());
     let suite = LocalToolSuite::new(
         shell,
-        ripgrep,
-        agent_grep,
+        grep,
+        Arc::new(file_search::Service),
         Arc::new(crate::dir_grants::DirGrants::default()),
         dir.grant(),
     );
@@ -711,6 +703,11 @@ fn agent_edit_refreshes_an_existing_tgrep_generation_before_returning() {
             .unwrap(),
         ToolExecutionOutput::Success(text) if text.contains("after_immediate_marker")
     ));
+    let mut excluded = grep("after_immediate_marker");
+    excluded.arguments["glob"] = json!("!*.rs");
+    assert!(
+        matches!(suite.execute(&excluded, &authorization, &cancellation).unwrap(), ToolExecutionOutput::Success(text) if text.starts_with("no matches"))
+    );
 }
 
 #[test]
@@ -720,14 +717,11 @@ fn local_suite_reads_and_edits_with_spec_errors() {
     let shell =
         LocalShellToolService::new(dir.authorization(), ripgrep.clone(), PassThroughBackend)
             .unwrap();
-    let agent_grep = Arc::new(
-        AgentGrepService::new(ash_config::AgentGrepBackend::Ripgrep, ripgrep.clone(), None)
-            .unwrap(),
-    );
+    let grep = Arc::new(grep::Service::new(grep::Backend::Ripgrep, ripgrep.clone(), None).unwrap());
     let suite = LocalToolSuite::new(
         shell,
-        ripgrep,
-        agent_grep,
+        grep,
+        Arc::new(file_search::Service),
         Arc::new(crate::dir_grants::DirGrants::default()),
         dir.grant(),
     );
@@ -878,4 +872,62 @@ impl Drop for TestDir {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(self.path());
     }
+}
+
+#[test]
+fn agent_glob_uses_public_path_search_and_honors_exclusions_and_cancellation() {
+    let dir = TestDir::new();
+    fs::create_dir_all(dir.path().join("src")).unwrap();
+    fs::write(dir.path().join("src/visible.rs"), "marker").unwrap();
+    fs::write(dir.path().join("src/.env"), "marker").unwrap();
+    // This rg fixture only echoes arguments; successful paths must come from file-search.
+    let ripgrep = RipgrepExecutable::from_path(dir.ripgrep()).unwrap();
+    let shell =
+        LocalShellToolService::new(dir.authorization(), ripgrep.clone(), PassThroughBackend)
+            .unwrap();
+    let grep = Arc::new(grep::Service::new(grep::Backend::Ripgrep, ripgrep.clone(), None).unwrap());
+    let suite = LocalToolSuite::new(
+        shell,
+        grep,
+        Arc::new(file_search::Service),
+        Arc::new(crate::dir_grants::DirGrants::default()),
+        dir.grant(),
+    );
+    let call = ToolCall {
+        id: ToolCallId::new("glob-public").unwrap(),
+        name: ToolName::new("glob").unwrap(),
+        arguments: json!({"pattern": "src/**", "path": null}),
+    };
+    let cancellation = CancellationSource::new();
+    let authorization = ToolAuthorization::Sandboxed(read_only_sandbox());
+    let review = suite.prepare(&call).unwrap();
+    assert_eq!(review.action().kind(), &ActionKind::SystemOperation);
+    assert_eq!(
+        review
+            .action()
+            .required_capabilities()
+            .iter()
+            .map(|capability| capability.kind())
+            .collect::<Vec<_>>(),
+        vec![&CapabilityKind::FileRead]
+    );
+    assert_eq!(
+        LocalShellPolicy::default()
+            .decide(&review, &cancellation.token())
+            .unwrap(),
+        ExecutionDecision::RunSandboxed(read_only_sandbox())
+    );
+    let result = suite
+        .execute(&call, &authorization, &cancellation.token())
+        .unwrap();
+    assert!(
+        matches!(result, ToolExecutionOutput::Success(ref text)
+        if text == &dir.root().canonical_path().join("src/visible.rs").display().to_string()),
+        "{result:?}"
+    );
+    cancellation.cancel();
+    assert!(matches!(
+        suite.execute(&call, &authorization, &cancellation.token()),
+        Err(CoreError::Cancelled(_))
+    ));
 }

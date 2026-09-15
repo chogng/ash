@@ -886,14 +886,6 @@
       ],
       "type": "string"
     },
-    "AgentGrepBackendDto": {
-      "description": "Selects the implementation behind the Agent-only `grep` Tool.",
-      "enum": [
-        "ripgrep",
-        "tgrep"
-      ],
-      "type": "string"
-    },
     "AgentId": {
       "description": "Persistent Agent identity shared by its independent execution branches.",
       "minLength": 1,
@@ -6582,7 +6574,7 @@
         {
           "properties": {
             "method": {
-              "const": "content/search/start",
+              "const": "grep/search/start",
               "type": "string"
             },
             "params": {
@@ -6598,7 +6590,7 @@
         {
           "properties": {
             "method": {
-              "const": "content/search/read",
+              "const": "grep/search/read",
               "type": "string"
             },
             "params": {
@@ -6614,7 +6606,7 @@
         {
           "properties": {
             "method": {
-              "const": "content/search/cancel",
+              "const": "grep/search/cancel",
               "type": "string"
             },
             "params": {
@@ -6758,7 +6750,7 @@
         {
           "properties": {
             "method": {
-              "const": "agentGrep/tgrep/status",
+              "const": "grep/index/status",
               "type": "string"
             },
             "params": {
@@ -6774,7 +6766,7 @@
         {
           "properties": {
             "method": {
-              "const": "agentGrep/tgrep/rebuild",
+              "const": "grep/index/rebuild",
               "type": "string"
             },
             "params": {
@@ -6790,11 +6782,11 @@
         {
           "properties": {
             "method": {
-              "const": "agentGrep/tgrep/disableAndDelete",
+              "const": "grep/index/disableAndDelete",
               "type": "string"
             },
             "params": {
-              "$ref": "#/$defs/TgrepDisableAndDeleteParams"
+              "$ref": "#/$defs/GrepIndexDisableAndDeleteParams"
             }
           },
           "required": [
@@ -10714,7 +10706,7 @@
         {
           "properties": {
             "method": {
-              "const": "content/search/start",
+              "const": "grep/search/start",
               "type": "string"
             },
             "result": {
@@ -10730,7 +10722,7 @@
         {
           "properties": {
             "method": {
-              "const": "content/search/read",
+              "const": "grep/search/read",
               "type": "string"
             },
             "result": {
@@ -10746,7 +10738,7 @@
         {
           "properties": {
             "method": {
-              "const": "content/search/cancel",
+              "const": "grep/search/cancel",
               "type": "string"
             },
             "result": {
@@ -10890,11 +10882,11 @@
         {
           "properties": {
             "method": {
-              "const": "agentGrep/tgrep/status",
+              "const": "grep/index/status",
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/TgrepIndexStatusResult"
+              "$ref": "#/$defs/GrepIndexStatusResult"
             }
           },
           "required": [
@@ -10906,11 +10898,11 @@
         {
           "properties": {
             "method": {
-              "const": "agentGrep/tgrep/rebuild",
+              "const": "grep/index/rebuild",
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/TgrepIndexStatusResult"
+              "$ref": "#/$defs/GrepIndexStatusResult"
             }
           },
           "required": [
@@ -10922,11 +10914,11 @@
         {
           "properties": {
             "method": {
-              "const": "agentGrep/tgrep/disableAndDelete",
+              "const": "grep/index/disableAndDelete",
               "type": "string"
             },
             "result": {
-              "$ref": "#/$defs/TgrepDisableAndDeleteResult"
+              "$ref": "#/$defs/GrepIndexDisableAndDeleteResult"
             }
           },
           "required": [
@@ -12115,9 +12107,6 @@
     "ConfigReadResult": {
       "description": "Current user configuration snapshot returned by `config/read`.",
       "properties": {
-        "agentGrepBackend": {
-          "$ref": "#/$defs/AgentGrepBackendDto"
-        },
         "approvalReviewModel": {
           "$ref": "#/$defs/ApprovalReviewModelSelectionDto"
         },
@@ -12153,6 +12142,9 @@
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
+        },
+        "grepBackend": {
+          "$ref": "#/$defs/GrepBackendDto"
         },
         "gui": {
           "$ref": "#/$defs/FrontendConfigDto"
@@ -12243,7 +12235,7 @@
         "approvalReviewModel",
         "commitMessageActiveDirAuthorized",
         "toolMode",
-        "agentGrepBackend",
+        "grepBackend",
         "gui",
         "providers",
         "mcpServers",
@@ -12262,16 +12254,6 @@
       "additionalProperties": false,
       "description": "Patch for user preferences at one expected Config revision.",
       "properties": {
-        "agentGrepBackend": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/AgentGrepBackendDto"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "approvalReviewModel": {
           "anyOf": [
             {
@@ -12316,6 +12298,16 @@
           "type": [
             "object",
             "null"
+          ]
+        },
+        "grepBackend": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GrepBackendDto"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "gui": {
@@ -13059,6 +13051,14 @@
       ],
       "type": "string"
     },
+    "ContentSearchFreshness": {
+      "description": "Selects asynchronous indexed results or a current disk scan.",
+      "enum": [
+        "indexed",
+        "current"
+      ],
+      "type": "string"
+    },
     "ContentSearchMatch": {
       "description": "One line containing one or more matches in a directory-relative file.",
       "properties": {
@@ -13170,6 +13170,17 @@
             "null"
           ]
         },
+        "freshness": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ContentSearchFreshness"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Actual execution mode, available after a successful search."
+        },
         "limitHit": {
           "type": "boolean"
         },
@@ -13215,6 +13226,17 @@
           },
           "maxItems": 64,
           "type": "array"
+        },
+        "freshness": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ContentSearchFreshness"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Defaults to current disk contents when omitted."
         },
         "includePatterns": {
           "items": {
@@ -17702,6 +17724,82 @@
         "name",
         "ahead",
         "behind"
+      ],
+      "type": "object"
+    },
+    "GrepBackendDto": {
+      "description": "Selects the implementation behind the shared grep capability.",
+      "enum": [
+        "ripgrep",
+        "tgrep"
+      ],
+      "type": "string"
+    },
+    "GrepIndexDisableAndDeleteParams": {
+      "description": "Starts the durable “disable and delete” shared grep operation.",
+      "properties": {
+        "commandId": {
+          "$ref": "#/$defs/CommandId"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "commandId",
+        "expectedRevision"
+      ],
+      "type": "object"
+    },
+    "GrepIndexDisableAndDeleteResult": {
+      "description": "Confirms the configuration commit separately from deletion of rebuildable data.",
+      "properties": {
+        "config": {
+          "$ref": "#/$defs/ConfigCommandResult"
+        },
+        "deletion": {
+          "$ref": "#/$defs/LocalIndexClearOutcomeDto"
+        }
+      },
+      "required": [
+        "config",
+        "deletion"
+      ],
+      "type": "object"
+    },
+    "GrepIndexStatusResult": {
+      "description": "Current state of the shared directory grep index; readiness is not freshness.",
+      "properties": {
+        "active": {
+          "type": "boolean"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "indexedFileCount": {
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "indexing": {
+          "type": "boolean"
+        },
+        "ready": {
+          "type": "boolean"
+        },
+        "watcherActive": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "enabled",
+        "active",
+        "indexing",
+        "ready",
+        "indexedFileCount",
+        "watcherActive"
       ],
       "type": "object"
     },
@@ -30485,74 +30583,6 @@
       "required": [
         "terminalId",
         "data"
-      ],
-      "type": "object"
-    },
-    "TgrepDisableAndDeleteParams": {
-      "description": "Starts the durable “disable and delete” Agent grep operation.",
-      "properties": {
-        "commandId": {
-          "$ref": "#/$defs/CommandId"
-        },
-        "expectedRevision": {
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "commandId",
-        "expectedRevision"
-      ],
-      "type": "object"
-    },
-    "TgrepDisableAndDeleteResult": {
-      "description": "Confirms the configuration commit separately from deletion of rebuildable data.",
-      "properties": {
-        "config": {
-          "$ref": "#/$defs/ConfigCommandResult"
-        },
-        "deletion": {
-          "$ref": "#/$defs/LocalIndexClearOutcomeDto"
-        }
-      },
-      "required": [
-        "config",
-        "deletion"
-      ],
-      "type": "object"
-    },
-    "TgrepIndexStatusResult": {
-      "description": "Current state of the optional tgrep index used by Agent grep.",
-      "properties": {
-        "active": {
-          "type": "boolean"
-        },
-        "enabled": {
-          "type": "boolean"
-        },
-        "indexedFileCount": {
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "indexing": {
-          "type": "boolean"
-        },
-        "ready": {
-          "type": "boolean"
-        },
-        "watcherActive": {
-          "type": "boolean"
-        }
-      },
-      "required": [
-        "enabled",
-        "active",
-        "indexing",
-        "ready",
-        "indexedFileCount",
-        "watcherActive"
       ],
       "type": "object"
     },

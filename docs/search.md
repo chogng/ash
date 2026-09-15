@@ -1,8 +1,73 @@
-# 内容搜索
+# 搜索架构与内容搜索
 
-> 本文拥有跨文件内容搜索的产品边界。实现分别见
-> [`ash-content-search`](../ash-rs/content-search/README.md) 与
+> 本文维护搜索能力的目标依赖关系、实现状态和跨文件内容搜索的产品边界。实现分别见
+> [`ash-grep`](../ash-rs/grep/README.md) 与
 > [`ash-app-server`](../ash-rs/app-server/README.md)。
+
+## 目标依赖关系
+
+Agent 和编辑器消费公共搜索能力；Codebase 的检索模块组合文字、符号、全文和语义候选。
+箭头表示调用或依赖：前端通过 RPC，Rust 内部直接调用能力接口。图中的节点表示职责，
+不要求每个节点拆成独立 crate。
+
+```mermaid
+flowchart TD
+    A[Agent / 编辑器] --> G[grep]
+    A --> F[file-search]
+    A --> C[Codebase 检索]
+    C --> G
+    C --> S[源码与 chunk 管理]
+    C --> I[符号 / 全文 / 语义索引]
+    I --> S
+    G --> T[tgrep 适配实现]
+    G --> R[ripgrep 适配实现]
+```
+
+| 能力 | 职责与依赖边界 |
+| --- | --- |
+| `grep` | 文件内容查询；依赖目录访问、索引存储和引擎适配，不依赖使用者 |
+| `file-search` | 文件枚举、路径匹配和模糊搜索；与 grep 并列，各自封装实现 |
+| Codebase 检索 | 调用 grep 获取文字候选，组合其他候选，再通过源码管理复核、去重和限额 |
+| 源码与 chunk 管理 | 扫描、分块、版本与未保存内容管理；不依赖 grep |
+| 符号、全文和语义索引 | 消费已授权、已复核的源码与 chunk，维护各自查询所需的数据 |
+| Agent / 编辑器 | 选择所需能力，负责请求转换、权限衔接、结果预算和呈现 |
+
+文件名、文字、符号和向量索引分别由对应能力管理。grep 返回匹配位置；Codebase 保留
+源码与 chunk 身份的所有权，使用当前源码复核候选。
+
+### 宿主组装与资源所有权
+
+```text
+宿主
+ ├─ 创建 grep 共享服务
+ ├─ 创建 file-search 服务
+ ├─ 创建 Codebase，并向检索模块注入 grep 接口
+ └─ 给 Agent、编辑器接入相应能力
+```
+
+- 宿主读取公共配置，创建服务并注入使用者；公共服务不经 Agent 工具组合向其他使用者提供。
+- grep 按目录复用索引会话，管理引擎进程与缓存生命周期；调用方只持有能力接口。
+- 请求的权限、取消、分页游标与结果预算分别管理；共享索引不扩大任何调用方的授权范围。
+- 调用入口核验权限，能力内部约束目录范围；未保存内容由持有源码视图的上层合并。
+- 查询契约表达文字/正则、大小写、范围、过滤、上限和新鲜度；引擎命令行参数留在适配实现内部。
+- `Indexed` 允许外部修改短暂滞后，`Current` 搜索当前磁盘；索引就绪只表示覆盖完整。
+
+## 实现状态
+
+当前实现按上面的职责关系组装；各入口保留自己的权限、结果预算和展示方式。
+
+| 项目 | 实现 | 边界 |
+| --- | --- | --- |
+| 公共内容搜索 | Agent、编辑器和 Codebase 检索使用公共 grep 服务 | 共享目录索引，分别管理请求 |
+| 配置与组装 | 宿主持有 `EnvRuntimeConfig`、grep 与 file-search；分别注入使用者 | `LocalToolConfig` 只保留工具执行策略，工具组合不向宿主提供公共服务 |
+| Codebase 职责 | `CodebaseRetrievalService` 组合 FTS、grep、符号和语义候选 | `Codebase` 的源码、chunk 与版本管理不引用 grep |
+| 文件路径搜索 | `file-search::Service` 提供 glob / 枚举与模糊搜索入口；Agent、CLI 和 TUI 调用公共能力 | glob 读当前路径并按修改时间排序；模糊搜索复用请求内的路径索引 |
+| 查询新鲜度 | Rust API 与 RPC 均支持 `Indexed` / `Current`，RPC 成功结果返回实际模式 | 编辑器默认保持当前磁盘搜索；Agent 和 Codebase 使用索引候选 |
+
+实现入口：[宿主组装](../ash-rs/app-server/src/server/environment_runtime.rs)、
+[检索组合](../ash-rs/codebase/src/retrieval/service.rs)、
+[文件路径搜索](../ash-rs/file-search/README.md)、
+[搜索协议适配](../ash-rs/app-server/src/server/search_operations.rs)。下文描述当前内容搜索行为。
 
 ## 结论
 
@@ -13,9 +78,9 @@
 Search UI
   → IContentSearchService
   → ash:content-search:*
-  → content/search/*
+  → grep/search/*
   → DirId + Authorization<SearchFiles>
-  → ash-content-search
+  → ash-grep
 ```
 
 桌面端可以把多个窗口文件夹聚合成一次用户操作，但它必须逐个目录发起搜索并保留目录身份。
@@ -28,17 +93,18 @@ Search UI
 | 查询表单、结果分组、高亮和取消时机 | Renderer |
 | IPC 参数形状和输入上限 | Electron Main |
 | 目录选择、`SearchFiles` 检查和连接级任务路由 | App Server |
-| `rg` 执行、解析、分页和取消 | `ash-content-search` |
+| 引擎选择、执行、结构化结果、目录索引、分页和取消 | `ash-grep` |
 | 文件名模糊查找 | `ash-file-search` |
-| Agent 的 `grep` 工具 | Agent Tool 与 Policy；不复用产品搜索任务 |
+| Agent 的 `grep` 工具 | Tool 授权、100 行预算和模型文本格式；调用公共 grep API |
+| Codebase 文字候选 | 调用公共 grep API，将命中映射为自己的 chunk，再复核当前内容 |
 
 ## 协议
 
 协议提供三个有界 pull RPC：
 
-- `content/search/start` 冻结目录、查询和上限，返回 `searchId`。
-- `content/search/read` 使用游标读取下一批匹配项。
-- `content/search/cancel` 终止并释放任务。
+- `grep/search/start` 冻结目录、查询和上限，返回 `searchId`。
+- `grep/search/read` 使用游标读取下一批匹配项；`completed` 仅在查询结束且当前游标已读完结果时为真。
+- `grep/search/cancel` 终止并释放任务。
 
 IPC 通道使用 `ash:content-search:*`。公开接口使用完整的 `ContentSearch*`，因为它跨越
 Renderer、Electron Main 和 App Server；搜索模块内部的私有函数只使用 `start`、`read`、`cancel`
@@ -50,8 +116,21 @@ Renderer、Electron Main 和 App Server；搜索模块内部的私有函数只�
 - glob 必须相对所选目录，绝对路径、`..`、前导 `!` 和 NUL 会被拒绝。
 - 单次任务最多返回 5,000 条结果，读取批次最多 200 条。
 - 任务绑定创建它的 App Server connection，其他连接不能读取或取消。
-- `rg` 通过参数数组启动，不经过 shell；stderr 经过稳定错误映射后才返回前端。
-- 结果 range 在 Rust 中转换为 UTF-16 offset，前端不重新解释 byte offset。
+- 引擎由公共 `[grep].backend` 配置选择；命令通过参数数组启动，不经过 shell。
+- RPC 的 `freshness` 可选 `indexed` / `current`，省略时为 `current`；成功查询的读取结果返回实际模式。
+- 编辑器默认请求 `Current`，直接搜索磁盘；Agent 和 Codebase 文字候选使用 `Indexed`。
+- 公共结果保留 UTF-8 byte ranges，App Server 协议适配器转换为 UTF-16；前端不重新解释。
+
+## 公共能力
+
+Agent、Codebase 和编辑器共用 `grep::Search`，并注入同一 `grep::Service`。索引按目录复用，
+没有 Agent 专属后端或索引目录。配置切换更新同一个服务，现有使用者不保留旧引擎。
+
+- `grep/index/status` 返回公共索引状态；`ready` 只表示覆盖完整。
+- `grep/index/rebuild` 重建活动目录的索引。
+- `grep/index/disableAndDelete` 提交公共配置、释放服务，再删除活动目录的缓存。
+
+原 `[agent].grepBackend` 自动迁移到 `[grep].backend`；公共协议使用 `grepBackend`。
 
 ## 与其他能力的关系
 

@@ -228,14 +228,14 @@ fn unavailable_hybrid_tool_search_remains_gated_and_reports_status() {
 }
 
 #[test]
-fn env_runtime_replaces_authority_without_replacing_connection_owned_services() {
+fn env_runtime_replaces_directory_services_and_retains_connection_terminals() {
     let first = TestDir::new("first", "first.txt");
     let second = TestDir::new("second", "second.txt");
     let server = server().with_local_env_host(None, host_policy()).unwrap();
     let host = server.local_env_host.as_ref().unwrap();
 
     server
-        .commit_full_env_runtime(first.authorization(), test_local_tools(), host)
+        .commit_full_env_runtime(first.authorization(), test_local_tools(), test_grep(), host)
         .unwrap();
     let tool_names = host
         .tools
@@ -276,7 +276,12 @@ fn env_runtime_replaces_authority_without_replacing_connection_owned_services() 
     };
 
     server
-        .commit_full_env_runtime(second.authorization(), test_local_tools(), host)
+        .commit_full_env_runtime(
+            second.authorization(),
+            test_local_tools(),
+            test_grep(),
+            host,
+        )
         .unwrap();
     let Ok(second_file_system) = server.file_system_service_for(None) else {
         panic!("second file system should be installed");
@@ -302,7 +307,11 @@ fn env_runtime_replaces_authority_without_replacing_connection_owned_services() 
         panic!("second Git runtime should be installed");
     };
 
-    assert!(Arc::ptr_eq(&first_search, &second_search));
+    assert!(!Arc::ptr_eq(&first_search, &second_search));
+    assert_eq!(
+        first_search.read(grep::Owner::new(1), "retired-search", 0, 1),
+        Err(grep::JobError::Unavailable)
+    );
     assert!(Arc::ptr_eq(&first_terminals, &second_terminals));
     assert!(!Arc::ptr_eq(&first_git, &second_git));
 }
@@ -423,7 +432,12 @@ fn dirs_are_session_scoped_and_removable() {
     let server = server().with_local_env_host(None, host_policy()).unwrap();
     let host = server.local_env_host.as_ref().unwrap();
     server
-        .commit_full_env_runtime(primary.authorization(), test_local_tools(), host)
+        .commit_full_env_runtime(
+            primary.authorization(),
+            test_local_tools(),
+            test_grep(),
+            host,
+        )
         .unwrap();
     let first = server
         .start_thread(StartThreadRequest {
@@ -479,7 +493,12 @@ fn cwd_directory_can_be_added_explicitly() {
     let server = server().with_local_env_host(None, host_policy()).unwrap();
     let host = server.local_env_host.as_ref().unwrap();
     server
-        .commit_full_env_runtime(primary.authorization(), test_local_tools(), host)
+        .commit_full_env_runtime(
+            primary.authorization(),
+            test_local_tools(),
+            test_grep(),
+            host,
+        )
         .unwrap();
     let session = server
         .start_thread(StartThreadRequest {
@@ -510,7 +529,12 @@ fn dir_mutation_requires_a_dir_permissions_host_connection() {
     let server = server().with_local_env_host(None, host_policy()).unwrap();
     let host = server.local_env_host.as_ref().unwrap();
     server
-        .commit_full_env_runtime(primary.authorization(), test_local_tools(), host)
+        .commit_full_env_runtime(
+            primary.authorization(),
+            test_local_tools(),
+            test_grep(),
+            host,
+        )
         .unwrap();
     let session = server
         .start_thread(StartThreadRequest {
@@ -562,7 +586,12 @@ fn dir_permissions_are_revision_bound_and_filter_capability_snapshots() {
     let server = server().with_local_env_host(None, host_policy()).unwrap();
     let host = server.local_env_host.as_ref().unwrap();
     server
-        .commit_full_env_runtime(primary.authorization(), test_local_tools(), host)
+        .commit_full_env_runtime(
+            primary.authorization(),
+            test_local_tools(),
+            test_grep(),
+            host,
+        )
         .unwrap();
     let session = server
         .start_thread(StartThreadRequest {
@@ -837,7 +866,7 @@ fn restricted_dir_installs_only_non_executable_services() {
     assert!(server.codebase_service().is_ok());
     assert!(server.cloud_codebase_service().is_err());
     assert!(server.git_runtime_service().is_ok());
-    assert!(server.content_search_service_for(None).is_err());
+    assert!(server.content_search_service_for(None).is_ok());
     assert!(server.terminal_service().is_err());
     server
         .local_env_host
@@ -1027,7 +1056,7 @@ fn user_config_permissions_reactivate_an_active_restricted_dir() {
         .unwrap();
     server.switch_local_dir_root(dir.path.clone()).unwrap();
     assert!(server.terminal_service().is_err());
-    assert!(server.content_search_service_for(None).is_err());
+    assert!(server.content_search_service_for(None).is_ok());
 
     let trusted = config
         .apply(ConfigCommandRequest {
@@ -1329,7 +1358,7 @@ fn active_turn_blocks_env_cwd_set_without_changing_authority() {
     let server = server().with_local_env_host(None, host_policy()).unwrap();
     let host = server.local_env_host.as_ref().unwrap();
     server
-        .commit_full_env_runtime(first.authorization(), test_local_tools(), host)
+        .commit_full_env_runtime(first.authorization(), test_local_tools(), test_grep(), host)
         .unwrap();
     let thread = server
         .start_thread(StartThreadRequest {
@@ -1386,7 +1415,12 @@ fn active_turn_accepts_session_access_changes_and_revokes_old_snapshots() {
     let server = server().with_local_env_host(None, host_policy()).unwrap();
     let host = server.local_env_host.as_ref().unwrap();
     server
-        .commit_full_env_runtime(primary.authorization(), test_local_tools(), host)
+        .commit_full_env_runtime(
+            primary.authorization(),
+            test_local_tools(),
+            test_grep(),
+            host,
+        )
         .unwrap();
     let thread = server
         .start_thread(StartThreadRequest {
@@ -1468,10 +1502,17 @@ fn server() -> AppServer {
 }
 
 fn test_local_tools() -> LocalToolComposition {
-    LocalToolComposition::without_executors(
-        Arc::new(NoTools),
-        Arc::new(RejectPolicy),
-        RipgrepExecutable::from_path(std::env::current_exe().unwrap()).unwrap(),
+    LocalToolComposition::without_executors(Arc::new(NoTools), Arc::new(RejectPolicy))
+}
+
+fn test_grep() -> Arc<grep::Service> {
+    Arc::new(
+        grep::Service::new(
+            grep::Backend::Ripgrep,
+            RipgrepExecutable::from_path(std::env::current_exe().unwrap()).unwrap(),
+            None,
+        )
+        .unwrap(),
     )
 }
 
@@ -1571,23 +1612,22 @@ impl ActionPolicyService for RejectPolicy {
     }
 }
 
-static NEXT_DIR: AtomicUsize = AtomicUsize::new(0);
-
 struct TestDir {
     path: PathBuf,
+    _temporary: tempfile::TempDir,
 }
 
 impl TestDir {
     fn new(label: &str, file: &str) -> Self {
-        let sequence = NEXT_DIR.fetch_add(1, Ordering::Relaxed);
-        let path = std::env::current_dir()
-            .unwrap()
-            .join("target")
-            .join("dir-runtime-tests")
-            .join(format!("{}-{label}-{sequence}", std::process::id()));
-        std::fs::create_dir_all(&path).unwrap();
+        // Keep environment fixtures outside the source checkout so Git discovery and
+        // watchers cannot attach to the developer's repository.
+        let temporary = tempfile::Builder::new().prefix(label).tempdir().unwrap();
+        let path = temporary.path().canonicalize().unwrap();
         std::fs::write(path.join(file), label).unwrap();
-        Self { path }
+        Self {
+            path,
+            _temporary: temporary,
+        }
     }
 
     fn root(&self) -> Dir {
@@ -1603,8 +1643,53 @@ impl TestDir {
     }
 }
 
-impl Drop for TestDir {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.path);
-    }
+#[test]
+fn directory_search_and_backend_configuration_do_not_require_agent_execution() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("source.rs"), "search_without_agent\n").unwrap();
+    let server = server().with_local_env_host(None, host_policy()).unwrap();
+    let grant = Grant::for_environment(
+        Dir::open_local(dir.path()).unwrap(),
+        GrantSource::HostConfiguration,
+        Permissions::new([
+            Permission::ReadFiles,
+            Permission::BrowseFiles,
+            Permission::InspectRepository,
+            Permission::WatchFiles,
+            Permission::SearchFiles,
+        ]),
+    );
+    server
+        .commit_limited_dir_runtime(grant, server.local_env_host.as_ref().unwrap())
+        .unwrap();
+    let (grep, root) = server.grep_index_context().unwrap();
+    let token = ash_async_utils::CancellationSource::new().token();
+    let query = grep::Query {
+        query: "search_without_agent".into(),
+        pattern: grep::Pattern::Literal,
+        case_sensitivity: grep::CaseSensitivity::Sensitive,
+        scope: Default::default(),
+        include_patterns: Vec::new(),
+        exclude_patterns: Vec::new(),
+        max_results: 10,
+        freshness: grep::Freshness::Current,
+    };
+    assert_eq!(
+        grep::Search::search(grep.as_ref(), &root, &query, &token)
+            .unwrap()
+            .matches
+            .len(),
+        1
+    );
+    assert!(server.content_search_service_for(None).is_ok());
+    server
+        .env_runtime_control()
+        .unwrap()
+        .reconcile_env_config(&ash_config::ResolvedConfig {
+            grep_backend: ash_config::GrepBackend::Ripgrep,
+            ..Default::default()
+        })
+        .unwrap();
+    assert!(!grep.index_status(&root, &token).unwrap().enabled);
+    assert!(Arc::ptr_eq(&grep, &server.grep_index_context().unwrap().0));
 }

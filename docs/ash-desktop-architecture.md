@@ -311,7 +311,7 @@ contribution 不得通过该服务直接访问文件系统。单根 Folder 启�
 配置给 App Server；Renderer 的 `BrowserFileService` 只把 workspace URI 映射成根相对路径，
 目录枚举、metadata、有界原子写入、filesystem invalidation 与最终边界授权由 Rust / App Server
 完成。Workspace 内容搜索通过独立的
-`content/search/start|read|cancel` contract 接入；其 ownership 与限制见
+`grep/search/start|read|cancel` contract 接入；其 ownership 与限制见
 [`search.md`](search.md)。Desktop 的保存命令、dirty state、watcher 消费、多根 Workspace 与
 搜索结果打开仍未实现。
 

@@ -24,7 +24,6 @@ use ash_file_access::Permission as DirPermission;
 use ash_file_system::FileSystem;
 use ash_file_system::FileWriteCondition;
 use ash_file_system::LocalFileSystem;
-use ash_file_watcher::FileWatcherEvent;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use ash_protocol::ToolCall;
@@ -39,7 +38,6 @@ use ash_shell_command::CommandSessionOwner;
 use ash_shell_command::CommandSessionStart;
 use ash_shell_command::CommandSessionStatus;
 use ash_shell_command::CommandTerminalSize;
-use ash_shell_command::RipgrepExecutable;
 use core_api::CoreError;
 use serde_json::Value;
 use serde_json::json;
@@ -48,15 +46,9 @@ use sha2::Sha256;
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::PathBuf;
-use std::process::Command;
-use std::process::Output;
-use std::process::Stdio;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
-use std::time::Instant;
-
-use super::AgentGrepService;
 
 const READ_DESCRIPTION: &str = r#"Reads a file from an authorized directory and returns its content with line numbers.
 
@@ -136,13 +128,12 @@ const GLOB_SCHEMA: &str = r#"{"type":"object","properties":{"pattern":{"type":"s
 const SHELL_SESSION_SCHEMA: &str = r#"{"type":"object","properties":{"action":{"type":"string","enum":["start","read","wait","write","close_input","interrupt","resize","terminate"]},"session_id":{"type":["string","null"]},"program":{"type":["string","null"]},"arguments":{"type":["array","null"],"items":{"type":"string"}},"working_directory":{"type":["string","null"]},"input":{"type":["string","null"]},"stdout_cursor":{"type":["integer","null"],"minimum":0},"stderr_cursor":{"type":["integer","null"],"minimum":0},"timeout_ms":{"type":["integer","null"],"minimum":1,"maximum":43200000},"wait_ms":{"type":["integer","null"],"minimum":0,"maximum":43200000},"terminal_rows":{"type":["integer","null"],"minimum":1,"maximum":1000},"terminal_cols":{"type":["integer","null"],"minimum":1,"maximum":1000}},"required":["action","session_id","program","arguments","working_directory","input","stdout_cursor","stderr_cursor","timeout_ms","wait_ms","terminal_rows","terminal_cols"],"additionalProperties":false}"#;
 const MAX_READ_FILE_BYTES: u64 = 10 * 1024 * 1024;
 const MAX_WRITE_FILE_BYTES: usize = 10 * 1024 * 1024;
-const SEARCH_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// The fixed local coding-tool suite and its path-scoped execution state.
 pub(crate) struct LocalToolSuite<B> {
     shell: LocalShellToolService<B>,
-    ripgrep: RipgrepExecutable,
-    agent_grep: Arc<AgentGrepService>,
+    grep: Arc<grep::Service>,
+    file_search: Arc<file_search::Service>,
     authorization: Authorization,
     grant: ash_file_access::Grant,
     dir_grants: Arc<DirGrants>,
@@ -161,8 +152,8 @@ pub(super) struct ResolvedFilePath {
 impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
     pub(super) fn new(
         shell: LocalShellToolService<B>,
-        ripgrep: RipgrepExecutable,
-        agent_grep: Arc<AgentGrepService>,
+        grep: Arc<grep::Service>,
+        file_search: Arc<file_search::Service>,
         dir_grants: Arc<DirGrants>,
         grant: ash_file_access::Grant,
     ) -> Self {
@@ -182,8 +173,8 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
         ];
         Self {
             shell,
-            ripgrep,
-            agent_grep,
+            grep,
+            file_search,
             authorization,
             grant,
             dir_grants,
@@ -330,30 +321,24 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
             &json!({"tool": source_id, "path": resolved.absolute, "arguments": call.arguments}),
         )
         .map_err(|error| CoreError::Policy(error.to_string()))?;
-        let capabilities = CapabilitySet::new([
-            Capability::new(
-                CapabilityKind::FileRead,
-                resolved.root.canonical_path().display().to_string(),
-            ),
-            if write {
-                Capability::new(
-                    CapabilityKind::FileWrite,
-                    resolved.absolute.display().to_string(),
-                )
-            } else {
-                Capability::new(
-                    CapabilityKind::ProcessSpawn,
-                    self.ripgrep.path().display().to_string(),
-                )
-            },
-        ]);
+        let mut capabilities = vec![Capability::new(
+            CapabilityKind::FileRead,
+            resolved.root.canonical_path().display().to_string(),
+        )];
+        if write {
+            capabilities.push(Capability::new(
+                CapabilityKind::FileWrite,
+                resolved.absolute.display().to_string(),
+            ));
+        }
+        let capabilities = CapabilitySet::new(capabilities);
         Ok(ActionReviewRequest::new(
             ResolvedAction::new(
                 ActionDigest::from_canonical_bytes(canonical),
                 if write {
                     ActionKind::FileSystemMutation
                 } else {
-                    ActionKind::LocalProcess(ProcessInvocationKind::Direct)
+                    ActionKind::SystemOperation
                 },
                 format!("{} {}", source_id, resolved.absolute.display()),
                 capabilities,
@@ -523,12 +508,8 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 (scope.into(), resolved.absolute.clone()),
                 format!("{:x}", Sha256::digest(content.as_bytes())),
             );
-        self.agent_grep.apply_watcher_event(
-            &resolved.root,
-            &FileWatcherEvent::PathsChanged {
-                paths: vec![resolved.absolute],
-            },
-        );
+        self.grep
+            .paths_changed(&resolved.root, &[resolved.absolute]);
         Ok(ToolExecutionOutput::Success(format!("wrote {path}")))
     }
 
@@ -632,12 +613,8 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 (scope.into(), resolved.absolute.clone()),
                 format!("{:x}", Sha256::digest(replaced.as_bytes())),
             );
-        self.agent_grep.apply_watcher_event(
-            &resolved.root,
-            &FileWatcherEvent::PathsChanged {
-                paths: vec![resolved.absolute],
-            },
-        );
+        self.grep
+            .paths_changed(&resolved.root, &[resolved.absolute]);
         let lines = replaced.lines().collect::<Vec<_>>();
         let excerpt_start = replacement_line.saturating_sub(5);
         let excerpt_end = excerpt_start.saturating_add(9).min(lines.len());
@@ -676,8 +653,14 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
             .map_err(CoreError::Execution)?;
         let glob = nullable_string(&call.arguments, "glob")?;
         let insensitive = nullable_bool(&call.arguments, "case_insensitive")?.unwrap_or(false);
-        self.agent_grep
-            .execute(pattern, &resolved, glob, insensitive, cancellation)
+        super::grep_output::execute(
+            self.grep.as_ref(),
+            pattern,
+            &resolved,
+            glob,
+            insensitive,
+            cancellation,
+        )
     }
 
     fn glob(
@@ -704,41 +687,35 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 DirPermission::InspectRepository,
             )
             .map_err(CoreError::Execution)?;
-        let mut command = Command::new(self.ripgrep.path());
-        command.args(["--no-config", "--files", "--glob", &pattern]);
-        for denied in super::LOCAL_DENIED_GLOBS {
-            command.args(["--glob", &format!("!{denied}")]);
-        }
-        command.arg(resolved.absolute);
-        let output = match run_search(command, cancellation) {
-            Ok(output) => output,
-            Err(SearchError::Cancelled(error)) => return Err(error),
-            Err(SearchError::Failed(message)) => return Ok(ToolExecutionOutput::Failure(message)),
-        };
-        if !output.status.success() {
-            let reason = String::from_utf8_lossy(&output.stderr).trim().to_owned();
-            if reason.is_empty() {
-                return Ok(ToolExecutionOutput::Success(format!(
-                    "no files match {pattern}"
-                )));
-            }
-            return Ok(ToolExecutionOutput::Failure(format!(
-                "invalid glob pattern: {reason}"
-            )));
-        }
-        let mut paths = String::from_utf8_lossy(&output.stdout)
-            .lines()
-            .map(PathBuf::from)
+        let mut include_patterns = Vec::new();
+        let mut exclude_patterns = super::LOCAL_DENIED_GLOBS
+            .iter()
+            .map(|s| (*s).to_owned())
             .collect::<Vec<_>>();
-        paths.sort_by_key(|path| {
-            std::cmp::Reverse(
-                fs::metadata(path)
-                    .and_then(|metadata| metadata.modified())
-                    .ok(),
-            )
-        });
-        let total = paths.len();
-        paths.truncate(100);
+        match pattern.strip_prefix('!') {
+            Some(exclude) => exclude_patterns.push(exclude.to_owned()),
+            None => include_patterns.push(pattern.clone()),
+        }
+        let result = match self.file_search.glob(
+            &resolved.root,
+            &file_search::GlobQuery {
+                scope: resolved.relative,
+                include_patterns,
+                exclude_patterns,
+                max_results: 100,
+            },
+            cancellation,
+        ) {
+            Ok(result) => result,
+            Err(file_search::Error::Cancelled(reason)) => return Err(CoreError::Cancelled(reason)),
+            Err(error) => return Ok(ToolExecutionOutput::Failure(error.to_string())),
+        };
+        let total = result.total_matches;
+        let paths = result
+            .paths
+            .into_iter()
+            .map(|path| resolved.root.canonical_path().join(path))
+            .collect::<Vec<_>>();
         let mut text = paths
             .iter()
             .map(|path| path.display().to_string())
@@ -1278,61 +1255,9 @@ impl ToolOutputSink for NoopToolOutputSink {
     }
 }
 
-enum SearchError {
-    Cancelled(CoreError),
-    Failed(String),
-}
-
 #[cfg(test)]
 #[path = "suite_tests.rs"]
 mod tests;
-
-fn run_search(
-    mut command: Command,
-    cancellation: &CancellationToken,
-) -> Result<Output, SearchError> {
-    command.stdout(Stdio::piped()).stderr(Stdio::piped());
-    let mut child = command
-        .spawn()
-        .map_err(|error| SearchError::Failed(format!("could not execute search: {error}")))?;
-    let started = Instant::now();
-    loop {
-        cancellation.check().map_err(|signal| {
-            SearchError::Cancelled(CoreError::Cancelled(signal.reason().to_string()))
-        })?;
-        match child.try_wait() {
-            Ok(Some(_)) => {
-                return child
-                    .wait_with_output()
-                    .map_err(|error| SearchError::Failed(error.to_string()));
-            }
-            Ok(None) => {}
-            Err(error) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(SearchError::Failed(format!(
-                    "could not wait for search: {error}"
-                )));
-            }
-        }
-        if started.elapsed() >= SEARCH_TIMEOUT {
-            let _ = child.kill();
-            let output = child
-                .wait_with_output()
-                .map_err(|error| SearchError::Failed(error.to_string()))?;
-            let partial = format!(
-                "{}{}",
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr)
-            );
-            return Err(SearchError::Failed(format!(
-                "search timed out after 30000 ms. Partial output:\n{}",
-                partial
-            )));
-        }
-        std::thread::sleep(Duration::from_millis(50));
-    }
-}
 
 fn command_session_owner(session_id: &SessionId, thread_id: &ThreadId) -> CommandSessionOwner {
     CommandSessionOwner::new(session_id.to_string(), thread_id.to_string(), "local")

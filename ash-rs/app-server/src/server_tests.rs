@@ -937,7 +937,7 @@ fn content_search_requires_an_installed_backend() {
         serde_json::json!({
             "jsonrpc":"2.0",
             "id":2,
-            "method":"content/search/start",
+            "method":"grep/search/start",
             "params":{
                 "query":"needle",
                 "patternKind":"literal",

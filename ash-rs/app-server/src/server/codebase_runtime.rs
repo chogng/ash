@@ -28,15 +28,25 @@ pub(super) enum CodebaseRuntimeState {
 
 pub(super) struct CodebaseRuntime {
     index: Arc<Codebase>,
+    retrieval: ash_codebase::CodebaseRetrievalService,
     operation: Mutex<()>,
     state: RwLock<CodebaseRuntimeState>,
     store: Arc<CodebaseStore>,
 }
 
 impl CodebaseRuntime {
-    pub fn open(dir: Dir, store: Arc<CodebaseStore>) -> Result<Arc<Self>, CodebaseError> {
+    pub fn open(
+        dir: Dir,
+        store: Arc<CodebaseStore>,
+        search: Option<Arc<dyn grep::Search>>,
+    ) -> Result<Arc<Self>, CodebaseError> {
         let index = store.open_codebase(dir, CodebaseLimits::default())?;
         let index = Arc::new(index);
+        let retrieval = ash_codebase::CodebaseRetrievalService::local(Arc::clone(&index));
+        let retrieval = match search {
+            Some(search) => retrieval.with_grep(search),
+            None => retrieval,
+        };
         let snapshot = index.snapshot()?;
         let state = if snapshot.generation == 0 {
             CodebaseRuntimeState::Empty
@@ -45,6 +55,7 @@ impl CodebaseRuntime {
         };
         Ok(Arc::new(Self {
             index,
+            retrieval,
             operation: Mutex::new(()),
             state: RwLock::new(state),
             store,
@@ -61,6 +72,10 @@ impl CodebaseRuntime {
 
     pub fn index(&self) -> Arc<Codebase> {
         Arc::clone(&self.index)
+    }
+
+    pub fn retrieval(&self) -> ash_codebase::CodebaseRetrievalService {
+        self.retrieval.clone()
     }
 
     pub fn state(&self) -> CodebaseRuntimeState {
@@ -132,9 +147,9 @@ impl CodebaseRuntime {
 
     fn search_ready(&self, query: &CodebaseQuery) -> Result<Vec<SearchHit>, CodebaseRuntimeError> {
         let hits = self
-            .index
-            .search(query)
-            .map_err(CodebaseRuntimeError::Index)?;
+            .retrieval
+            .search(query, &ash_async_utils::CancellationSource::new().token())
+            .map_err(CodebaseRuntimeError::Retrieval)?;
         hits.into_iter()
             .map(|mut hit| {
                 let materialized = self.index.materialize(&hit.reference).map_err(|error| {
@@ -210,6 +225,7 @@ impl CodebaseRuntime {
 pub(super) enum CodebaseRuntimeError {
     NotReady,
     Index(CodebaseError),
+    Retrieval(ash_codebase::CodebaseRetrievalError),
 }
 
 fn ready_snapshot(state: &CodebaseRuntimeState) -> Option<CodebaseSnapshot> {

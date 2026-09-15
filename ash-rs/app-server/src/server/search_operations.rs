@@ -3,9 +3,11 @@ use super::ConnectionState;
 use super::RpcError;
 use super::decode;
 use super::result;
+use ash_app_server_protocol::protocol::common::EmptyParams;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::search::ContentSearchCancelParams;
 use ash_app_server_protocol::protocol::search::ContentSearchCaseSensitivity as ContentSearchProtocolCaseSensitivity;
+use ash_app_server_protocol::protocol::search::ContentSearchFreshness;
 use ash_app_server_protocol::protocol::search::ContentSearchMatch as ContentSearchProtocolMatch;
 use ash_app_server_protocol::protocol::search::ContentSearchMatchRange as ContentSearchProtocolMatchRange;
 use ash_app_server_protocol::protocol::search::ContentSearchPatternKind;
@@ -13,15 +15,33 @@ use ash_app_server_protocol::protocol::search::ContentSearchReadParams;
 use ash_app_server_protocol::protocol::search::ContentSearchReadResult;
 use ash_app_server_protocol::protocol::search::ContentSearchStartParams;
 use ash_app_server_protocol::protocol::search::ContentSearchStartResult;
-use ash_content_search::ContentSearchCaseSensitivity;
-use ash_content_search::ContentSearchError;
-use ash_content_search::ContentSearchOwner;
-use ash_content_search::ContentSearchPage;
-use ash_content_search::ContentSearchPattern;
-use ash_content_search::ContentSearchQuery;
+use grep::CaseSensitivity as ContentSearchCaseSensitivity;
+use grep::JobError as ContentSearchError;
+use grep::Owner as ContentSearchOwner;
+use grep::Page as ContentSearchPage;
+use grep::Pattern as ContentSearchPattern;
+use grep::Query as ContentSearchQuery;
 use serde_json::Value;
 
 impl AppServer {
+    pub(super) fn grep_index_status(&self, params: &Value) -> Result<Value, RpcError> {
+        let _: EmptyParams = decode(params)?;
+        let (service, root) = self.grep_index_context()?;
+        let snapshot = service
+            .index_status(&root, &ash_async_utils::CancellationSource::new().token())
+            .map_err(|_| RpcError::new(-32050, AppServerErrorName::SearchUnavailable))?;
+        result(&grep_status(snapshot))
+    }
+
+    pub(super) fn grep_index_rebuild(&self, params: &Value) -> Result<Value, RpcError> {
+        let _: EmptyParams = decode(params)?;
+        let (service, root) = self.grep_index_context()?;
+        let snapshot = service
+            .rebuild_index(&root, &ash_async_utils::CancellationSource::new().token())
+            .map_err(|_| RpcError::new(-32050, AppServerErrorName::SearchUnavailable))?;
+        result(&grep_status(snapshot))
+    }
+
     pub(super) fn content_search_start(
         &self,
         connection: &ConnectionState,
@@ -79,7 +99,7 @@ impl AppServer {
         session_directory: Option<
             &ash_app_server_protocol::protocol::environment::SessionDirSelector,
         >,
-    ) -> Result<std::sync::Arc<ash_content_search::ContentSearchService>, RpcError> {
+    ) -> Result<std::sync::Arc<grep::Jobs>, RpcError> {
         match (dir_id, session_directory) {
             (Some(_), Some(_)) => Err(RpcError::new(-32602, AppServerErrorName::InvalidParams)),
             (_, Some(selector)) => self.content_search_service_for_session_directory(selector),
@@ -111,6 +131,11 @@ fn search_query(params: ContentSearchStartParams) -> ContentSearchQuery {
         include_patterns: params.include_patterns,
         exclude_patterns: params.exclude_patterns,
         max_results: params.max_results,
+        scope: Default::default(),
+        freshness: match params.freshness.unwrap_or_default() {
+            ContentSearchFreshness::Indexed => grep::Freshness::Indexed,
+            ContentSearchFreshness::Current => grep::Freshness::Current,
+        },
     }
 }
 
@@ -123,13 +148,13 @@ fn search_page(search_id: String, page: ContentSearchPage) -> ContentSearchReadR
             .map(|search_match| ContentSearchProtocolMatch {
                 path: search_match.path,
                 line_number: search_match.line_number,
-                preview: search_match.preview,
+                preview: search_match.content.clone(),
                 ranges: search_match
                     .ranges
                     .into_iter()
                     .map(|range| ContentSearchProtocolMatchRange {
-                        start: range.start,
-                        end: range.end,
+                        start: search_match.content[..range.start].encode_utf16().count(),
+                        end: search_match.content[..range.end].encode_utf16().count(),
                     })
                     .collect(),
             })
@@ -138,6 +163,10 @@ fn search_page(search_id: String, page: ContentSearchPage) -> ContentSearchReadR
         completed: page.completed,
         limit_hit: page.limit_hit,
         error: page.error,
+        freshness: page.freshness.map(|freshness| match freshness {
+            grep::Freshness::Indexed => ContentSearchFreshness::Indexed,
+            grep::Freshness::Current => ContentSearchFreshness::Current,
+        }),
     }
 }
 
@@ -158,3 +187,16 @@ fn search_error(error: ContentSearchError) -> RpcError {
 #[cfg(test)]
 #[path = "search_operations_tests.rs"]
 mod tests;
+
+fn grep_status(
+    status: grep::IndexStatus,
+) -> ash_app_server_protocol::protocol::search::GrepIndexStatusResult {
+    ash_app_server_protocol::protocol::search::GrepIndexStatusResult {
+        enabled: status.enabled,
+        active: status.active,
+        indexing: status.indexing,
+        ready: status.ready,
+        indexed_file_count: status.indexed_file_count,
+        watcher_active: status.watcher_active,
+    }
+}

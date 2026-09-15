@@ -176,7 +176,7 @@ where
         commit_message_model: Patch::Missing,
         approval_review_model: Patch::Missing,
         tool_mode: Patch::Missing,
-        agent_grep_backend: Patch::Missing,
+        grep_backend: Patch::Missing,
         gui: Patch::Missing,
         tui: Patch::Missing,
     })?;
@@ -243,7 +243,7 @@ fn write_pins<T: JsonRpcTransport>(
         commit_message_model: Patch::Missing,
         approval_review_model: Patch::Missing,
         tool_mode: Patch::Missing,
-        agent_grep_backend: Patch::Missing,
+        grep_backend: Patch::Missing,
         gui: Patch::Missing,
         tui: Patch::Value(tui),
     })?;

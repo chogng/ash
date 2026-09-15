@@ -4,10 +4,6 @@ use super::decode;
 use super::extension_config_operations::hook_config_dto;
 use super::extension_config_operations::plugin_request_dto;
 use super::result;
-use ash_app_server_protocol::protocol::codebase::LocalIndexClearOutcomeDto;
-use ash_app_server_protocol::protocol::codebase::TgrepDisableAndDeleteParams;
-use ash_app_server_protocol::protocol::codebase::TgrepDisableAndDeleteResult;
-use ash_app_server_protocol::protocol::config::AgentGrepBackendDto;
 use ash_app_server_protocol::protocol::config::ApprovalReviewModelSelectionDto;
 use ash_app_server_protocol::protocol::config::CodebaseAutomaticContextDto;
 use ash_app_server_protocol::protocol::config::CodebaseConfigDto;
@@ -20,6 +16,7 @@ use ash_app_server_protocol::protocol::config::ConfigCommandResult;
 use ash_app_server_protocol::protocol::config::ConfigReadResult;
 use ash_app_server_protocol::protocol::config::ConfigUpdateParams;
 use ash_app_server_protocol::protocol::config::FrontendConfigDto;
+use ash_app_server_protocol::protocol::config::GrepBackendDto;
 use ash_app_server_protocol::protocol::config::LanguageServerConfigDto;
 use ash_app_server_protocol::protocol::config::LanguageServerConfigureParams;
 use ash_app_server_protocol::protocol::config::LanguageServerModeDto;
@@ -46,7 +43,9 @@ use ash_app_server_protocol::protocol::config::ToolSearchConfigureParams;
 use ash_app_server_protocol::protocol::config::ToolSearchEmbeddingStatusDto;
 use ash_app_server_protocol::protocol::config::ToolSearchModeDto;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
-use ash_config::AgentGrepBackend;
+use ash_app_server_protocol::protocol::search::GrepIndexDisableAndDeleteParams;
+use ash_app_server_protocol::protocol::search::GrepIndexDisableAndDeleteResult;
+use ash_app_server_protocol::protocol::search::LocalIndexClearOutcomeDto;
 use ash_config::ApprovalReviewModelSelection;
 use ash_config::CodebaseAutomaticContext;
 use ash_config::CodebaseModelSelection;
@@ -54,6 +53,7 @@ use ash_config::ConfigCommandDisposition;
 use ash_config::ConfigCommandError;
 use ash_config::ConfigCommandRequest;
 use ash_config::ConfigRevision;
+use ash_config::GrepBackend;
 use ash_config::LanguageServerConfig;
 use ash_config::LanguageServerId;
 use ash_config::LanguageServerModeConfig;
@@ -190,7 +190,7 @@ impl AppServer {
                     )?,
                     commit_message_model: model_ref_update_from_dto(params.commit_message_model)?,
                     tool_mode: params.tool_mode,
-                    grep_backend: params.agent_grep_backend.map(agent_grep_backend_from_dto),
+                    grep_backend: params.grep_backend.map(grep_backend_from_dto),
                     gui: params.gui.map(|config| config.0),
                     tui: params.tui.map(|config| config.0),
                 }),
@@ -199,11 +199,11 @@ impl AppServer {
         result(&config_command_result(outcome))
     }
 
-    pub(super) fn tgrep_disable_and_delete(&self, params: &Value) -> Result<Value, RpcError> {
-        let params: TgrepDisableAndDeleteParams = decode(params)?;
+    pub(super) fn grep_index_disable_and_delete(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: GrepIndexDisableAndDeleteParams = decode(params)?;
         let dir = self
             .active_dir_id()
-            .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodebaseUnavailable))?;
+            .ok_or_else(|| RpcError::new(-32050, AppServerErrorName::SearchUnavailable))?;
         let store = self
             .config
             .clone()
@@ -220,7 +220,7 @@ impl AppServer {
                     approval_review_model: Patch::Missing,
                     commit_message_model: Patch::Missing,
                     tool_mode: Patch::Missing,
-                    grep_backend: Patch::Value(AgentGrepBackend::Ripgrep),
+                    grep_backend: Patch::Value(GrepBackend::Ripgrep),
                     gui: Patch::Missing,
                     tui: Patch::Missing,
                 }),
@@ -228,22 +228,20 @@ impl AppServer {
             .map_err(config_operation_error)?;
         let snapshot = store.read_snapshot().map_err(config_error)?;
         self.env_runtime_control()
-            .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodebaseUnavailable))?
-            .reconcile_local_tool_config(&snapshot.values)
-            .map_err(|_| RpcError::new(-32092, AppServerErrorName::CodebaseOperationFailed))?;
-        let deletion = match &self.env_state {
-            super::EnvStateMode::Persistent(state) => state
-                .clear_index(&dir, DirIndexKind::AgentGrep)
-                .map_err(|_| RpcError::new(-32092, AppServerErrorName::CodebaseOperationFailed))?,
-            super::EnvStateMode::Ephemeral => ClearOutcome::AlreadyAbsent,
-            super::EnvStateMode::Unconfigured => {
-                return Err(RpcError::new(
-                    -32090,
-                    AppServerErrorName::CodebaseUnavailable,
-                ));
-            }
-        };
-        result(&TgrepDisableAndDeleteResult {
+            .ok_or_else(|| RpcError::new(-32050, AppServerErrorName::SearchUnavailable))?
+            .reconcile_env_config(&snapshot.values)
+            .map_err(|_| RpcError::new(-32050, AppServerErrorName::SearchUnavailable))?;
+        let deletion =
+            match &self.env_state {
+                super::EnvStateMode::Persistent(state) => state
+                    .clear_index(&dir, DirIndexKind::Grep)
+                    .map_err(|_| RpcError::new(-32050, AppServerErrorName::SearchUnavailable))?,
+                super::EnvStateMode::Ephemeral => ClearOutcome::AlreadyAbsent,
+                super::EnvStateMode::Unconfigured => {
+                    return Err(RpcError::new(-32050, AppServerErrorName::SearchUnavailable));
+                }
+            };
+        result(&GrepIndexDisableAndDeleteResult {
             config: config_command_result(outcome),
             deletion: match deletion {
                 ClearOutcome::Cleared => LocalIndexClearOutcomeDto::Cleared,
@@ -640,7 +638,7 @@ fn config_read_result(
         commit_message_model: snapshot.values.commit_message_model.map(model_ref_dto),
         commit_message_active_dir_authorized,
         tool_mode: snapshot.values.tool_mode,
-        agent_grep_backend: agent_grep_backend_dto(snapshot.values.agent_grep_backend),
+        grep_backend: grep_backend_dto(snapshot.values.grep_backend),
         gui: FrontendConfigDto(snapshot.values.gui),
         providers: snapshot
             .values
@@ -696,17 +694,17 @@ fn config_read_result(
     }
 }
 
-fn agent_grep_backend_dto(backend: AgentGrepBackend) -> AgentGrepBackendDto {
+fn grep_backend_dto(backend: GrepBackend) -> GrepBackendDto {
     match backend {
-        AgentGrepBackend::Ripgrep => AgentGrepBackendDto::Ripgrep,
-        AgentGrepBackend::Tgrep => AgentGrepBackendDto::Tgrep,
+        GrepBackend::Ripgrep => GrepBackendDto::Ripgrep,
+        GrepBackend::Tgrep => GrepBackendDto::Tgrep,
     }
 }
 
-fn agent_grep_backend_from_dto(backend: AgentGrepBackendDto) -> AgentGrepBackend {
+fn grep_backend_from_dto(backend: GrepBackendDto) -> GrepBackend {
     match backend {
-        AgentGrepBackendDto::Ripgrep => AgentGrepBackend::Ripgrep,
-        AgentGrepBackendDto::Tgrep => AgentGrepBackend::Tgrep,
+        GrepBackendDto::Ripgrep => GrepBackend::Ripgrep,
+        GrepBackendDto::Tgrep => GrepBackend::Tgrep,
     }
 }
 

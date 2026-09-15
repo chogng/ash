@@ -8,6 +8,8 @@ pub fn generate() -> String {
         "type": "integer", "const": config::CONFIG_FILE_SCHEMA_VERSION
     });
     schema["required"] = serde_json::json!(["schemaVersion"]);
+    // Keep the canonical file stable when another selected package enables preserve_order.
+    schema.sort_all_objects();
     format!("{}\n", serde_json::to_string_pretty(&schema).unwrap())
 }
 

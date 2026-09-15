@@ -17,7 +17,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
 
-pub(crate) const CURRENT_FILE_SCHEMA_VERSION: i64 = 4;
+pub(crate) const CURRENT_FILE_SCHEMA_VERSION: i64 = 5;
 // Raise this only when the product support window no longer includes the removed versions.
 const MIN_SUPPORTED_FILE_SCHEMA_VERSION: i64 = 1;
 
@@ -79,6 +79,7 @@ pub(crate) fn decode(source: &str) -> Result<DecodedDocument, ConfigError> {
             remove_issue_workflow(root);
             migrate_agent_model_names(root)?;
             migrate_grep_backend(root);
+            migrate_grep_owner(root)?;
             true
         }
         Some(toml::Value::Integer(version)) => {
@@ -91,6 +92,9 @@ pub(crate) fn decode(source: &str) -> Result<DecodedDocument, ConfigError> {
             }
             if version < 4 {
                 migrate_grep_backend(root);
+            }
+            if version < 5 {
+                migrate_grep_owner(root)?;
             }
             version != CURRENT_FILE_SCHEMA_VERSION
         }
@@ -136,6 +140,24 @@ fn migrate_grep_backend(root: &mut toml::map::Map<String, toml::Value>) {
             *value = toml::Value::String("tgrep".into());
         }
     }
+}
+
+fn migrate_grep_owner(root: &mut toml::map::Map<String, toml::Value>) -> Result<(), ConfigError> {
+    let old = root
+        .get_mut("agent")
+        .and_then(toml::Value::as_table_mut)
+        .and_then(|a| a.remove("grepBackend"));
+    if let Some(backend) = old {
+        if root.contains_key("grep") {
+            return Err(ConfigError(
+                "configuration contains both agent.grepBackend and grep".into(),
+            ));
+        }
+        let mut grep = toml::map::Map::new();
+        grep.insert("backend".into(), backend);
+        root.insert("grep".into(), toml::Value::Table(grep));
+    }
+    Ok(())
 }
 
 fn validate_version(version: i64) -> Result<(), ConfigError> {
@@ -394,6 +416,21 @@ pub(crate) fn decode_legacy_json(source: &str) -> Result<UserConfigDocument, Con
         if backend.as_str() == Some("fastRegex") {
             *backend = serde_json::Value::String("tgrep".into());
         }
+    }
+    let old = value
+        .get_mut("agent")
+        .and_then(serde_json::Value::as_object_mut)
+        .and_then(|agent| agent.remove("grepBackend"));
+    if let Some(backend) = old {
+        let root = value
+            .as_object_mut()
+            .ok_or_else(|| ConfigError("invalid legacy configuration".into()))?;
+        if root.contains_key("grep") {
+            return Err(ConfigError(
+                "configuration contains both agent.grepBackend and grep".into(),
+            ));
+        }
+        root.insert("grep".into(), serde_json::json!({"backend": backend}));
     }
     serde_json::from_value(value)
         .map_err(|error| ConfigError(format!("invalid legacy config document: {error}")))

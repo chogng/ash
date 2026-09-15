@@ -10,6 +10,7 @@ use std::sync::mpsc::TryRecvError;
 #[derive(Debug)]
 pub(crate) struct FileSearchManager {
     search_root: PathBuf,
+    service: ash_file_search::Service,
     latest_query: Option<String>,
     latest_query_revision: Option<u64>,
     handle: Option<PathSearchHandle>,
@@ -21,6 +22,7 @@ impl FileSearchManager {
     pub(crate) fn new(search_root: PathBuf) -> Self {
         Self {
             search_root,
+            service: ash_file_search::Service,
             latest_query: None,
             latest_query_revision: None,
             handle: None,
@@ -34,10 +36,10 @@ impl FileSearchManager {
             return;
         }
         if self.handle.is_none() {
-            let (handle, snapshots) = match PathSearchHandle::start(
-                self.search_root.clone(),
-                PathSearchOptions::default(),
-            ) {
+            let (handle, snapshots) = match self
+                .service
+                .start(self.search_root.clone(), PathSearchOptions::default())
+            {
                 Ok(started) => started,
                 Err(_) => {
                     self.latest_query = Some(query.to_owned());

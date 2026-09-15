@@ -2,7 +2,7 @@ use crate::CodebaseAutomaticContext;
 use crate::CodebaseModelSelection;
 use crate::ToolSearchConfig;
 use crate::{
-    AgentGrepBackend, ApprovalReviewModelSelection, ConfigGeneration, ConfigRevision, HookConfig,
+    ApprovalReviewModelSelection, ConfigGeneration, ConfigRevision, GrepBackend, HookConfig,
     HookEnablement, HookId, LanguageServerConfig, LanguageServerId, McpServerConfig,
     McpServerEnablement, McpServerId, ModelRef, PluginPackageId, PluginRequest,
     PluginRequestEnablement, SkillEnablement, SkillId, SkillSourceConfig, SkillSourceEnablement,
@@ -41,7 +41,7 @@ pub struct PreferencesUpdate {
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     pub tool_mode: Patch<ToolMode>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
-    pub grep_backend: Patch<AgentGrepBackend>,
+    pub grep_backend: Patch<GrepBackend>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     pub gui: Patch<BTreeMap<String, serde_json::Value>>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]

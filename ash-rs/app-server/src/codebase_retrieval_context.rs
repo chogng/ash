@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use ash_async_utils::CancellationToken;
 use ash_cloud_codebase::CloudCodebaseController;
-use ash_codebase::Codebase;
 use ash_codebase::CodebaseRetrievalBudget;
 use ash_codebase::CodebaseRetrievalOrigin;
 use ash_codebase::CodebaseRetrievalQuery;
@@ -23,7 +22,7 @@ const MAX_EVIDENCE_TOTAL_BYTES: usize = 48 * 1024;
 
 /// Adapts current-source-verified code retrieval into Core's generic evidence contract.
 pub(crate) struct CodebaseRetrievalContextSource {
-    index: Arc<Codebase>,
+    retrieval: CodebaseRetrievalService,
     symbol_index: Option<Arc<SymbolIndex>>,
     semantic: Option<Arc<CodebaseSemanticService>>,
     cloud: Option<Arc<CloudCodebaseController>>,
@@ -32,14 +31,14 @@ pub(crate) struct CodebaseRetrievalContextSource {
 
 impl CodebaseRetrievalContextSource {
     pub(crate) fn new(
-        index: Arc<Codebase>,
+        retrieval: CodebaseRetrievalService,
         symbol_index: Option<Arc<SymbolIndex>>,
         semantic: Option<Arc<CodebaseSemanticService>>,
         cloud: Option<Arc<CloudCodebaseController>>,
         config: Option<Arc<ConfigStore>>,
     ) -> Self {
         Self {
-            index,
+            retrieval,
             symbol_index,
             semantic,
             cloud,
@@ -59,15 +58,12 @@ impl CodebaseRetrievalContextSource {
 
     fn service(&self) -> Result<CodebaseRetrievalService, CoreError> {
         let service = match (&self.semantic, &self.cloud) {
-            (_, Some(cloud)) => CodebaseRetrievalService::enhanced(
-                Arc::clone(&self.index),
-                Arc::clone(cloud) as Arc<dyn ash_codebase::CodebaseEnhancement>,
-            ),
-            (Some(semantic), None) => CodebaseRetrievalService::local_semantic(
-                Arc::clone(&self.index),
-                Arc::clone(semantic),
-            ),
-            (None, None) => Ok(CodebaseRetrievalService::local(Arc::clone(&self.index))),
+            (_, Some(cloud)) => self
+                .retrieval
+                .clone()
+                .with_enhancement(Arc::clone(cloud) as Arc<dyn ash_codebase::CodebaseEnhancement>),
+            (Some(semantic), None) => self.retrieval.clone().with_semantic(Arc::clone(semantic)),
+            (None, None) => Ok(self.retrieval.clone()),
         }
         .map_err(|error| CoreError::Context(error.to_string()))?;
         let service = match &self.symbol_index {

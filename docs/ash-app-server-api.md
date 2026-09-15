@@ -314,17 +314,17 @@ Desktop 当前实现和 Playwright 后续边界见
 | `git/fetch` | repository | non-interactive fetch all remotes 并 prune |
 | `git/pull` | repository | non-interactive fast-forward-only pull |
 | `git/push` | repository | 按当前 Git upstream/default 配置 push |
-| `content/search/start` | connection + directory | 启动有界内容搜索 |
-| `content/search/read` | connection + search job | 按游标读取最多 200 条结果 |
-| `content/search/cancel` | connection + search job | 取消并释放搜索 |
+| `grep/search/start` | connection + directory | 启动有界内容搜索 |
+| `grep/search/read` | connection + search job | 按游标读取最多 200 条结果 |
+| `grep/search/cancel` | connection + search job | 取消并释放搜索 |
 | `codebase/status` | directory | 读取本地 index lifecycle 与 generation counters |
 | `codebase/search` | directory | 返回有界、revision-bound 的本地 lexical chunks |
 | `codebase/symbols/status` / `search` | directory | 读取 declaration projection 状态并执行有界 local fuzzy symbol query |
 | `codeIntelligence/document/synchronize` / `close` | directory + editor document | 发布或释放 ephemeral dirty snapshot；不持久化 overlay |
 | `codebase/retrieve` | directory | 融合已启用召回源，返回复核、去重、受预算约束的 excerpts |
 | `codebase/rebuild` | directory | 同步执行一次 full reconcile |
-| `agentGrep/tgrep/status` / `rebuild` | directory | 查询包内 tgrep 服务状态或同步重建；ready 表示索引覆盖完整，不保证最新编辑已被监听处理 |
-| `agentGrep/tgrep/disableAndDelete` | directory + config revision | 显式切回 ripgrep，停止索引服务并删除 Agent grep 索引 |
+| `grep/index/status` / `rebuild` | directory | 查询公共 grep 索引状态或同步重建；ready 表示索引覆盖完整，不保证最新编辑已被监听处理 |
+| `grep/index/disableAndDelete` | directory + config revision | 显式切回 ripgrep，停止索引服务并删除公共 grep 索引 |
 | `codebase/cloud/status` | directory | 读取 selected deployment、grant 与 local/remote generation state |
 | `codebase/cloud/preview` | directory | 本地计算 proposed scope 的 chunk 外发单位与 bytes，不授权、不触网 |
 | `codebase/cloud/authorize` | directory | 持久化 root-bound destination/scope/byte grant |
@@ -558,15 +558,17 @@ tracked working tree，不删除 untracked 文件。Operation 在单 directory r
 ### Directory 搜索
 
 `initialize.capabilities.directorySearch` 表示 server 已安装 directory 内容搜索 backend。
-客户端通过 `content/search/start` 获得 connection-owned `searchId`，用
-`content/search/read` 的 `afterMatch` cursor 分批读取结果，最后调用
-`content/search/cancel` 释放作业。每个结果包含 directory-relative path、1-based line
+客户端通过 `grep/search/start` 获得 connection-owned `searchId`，用
+`grep/search/read` 的 `afterMatch` cursor 分批读取结果，最后调用
+`grep/search/cancel` 释放作业。每个结果包含 directory-relative path、1-based line
 number、单行 preview 和 UTF-16 match ranges。
 
 查询、glob、batch 和总结果都有协议上限；Rust backend 重新校验 directory 边界并直接启动
-冻结的 ripgrep executable。未知 ID、跨 connection 访问和并发超限使用稳定的
+公共 grep 服务。`freshness` 可选 `indexed` 或 `current`，省略时搜索当前磁盘；成功读取结果返回实际执行模式。
+`completed` 只有在执行结束且本页已读完全部结果时为真，客户端应继续推进 cursor 直到完成。
+未知 ID、跨 connection 访问和并发超限使用稳定的
 `SearchNotFound`、`SearchNotOwner` 与 `SearchBusy` error name。执行失败作为 terminal
-read result 的脱敏 `error` 返回。完整 ownership 与当前 UI 限制见
+read result 的 `error` 返回。完整 ownership 与当前 UI 限制见
 [`search.md`](search.md)。
 
 ### Directory 代码索引

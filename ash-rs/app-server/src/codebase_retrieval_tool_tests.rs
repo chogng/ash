@@ -1,5 +1,6 @@
 use super::*;
 use ash_action_policy::GrantId;
+use ash_codebase::Codebase;
 use ash_codebase::CodebaseLimits;
 use ash_file_access::Dir;
 use ash_file_access::Grant;
@@ -28,7 +29,13 @@ fn explicit_search_code_tool_requires_its_exact_read_only_grant_and_returns_loca
     .unwrap();
     let index = Arc::new(Codebase::open_memory(root, CodebaseLimits::default()).unwrap());
     index.rebuild().unwrap();
-    let tool = CodebaseRetrievalTool::new(authorization, index, None, None, None);
+    let tool = CodebaseRetrievalTool::new(
+        authorization,
+        ash_codebase::CodebaseRetrievalService::local(index),
+        None,
+        None,
+        None,
+    );
     let call = ToolCall {
         id: ToolCallId::new("search-code-test").unwrap(),
         name: ToolName::new(CODE_RETRIEVAL_TOOL_NAME).unwrap(),

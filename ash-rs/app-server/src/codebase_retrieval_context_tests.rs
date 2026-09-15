@@ -63,7 +63,7 @@ fn automatic_context_requires_explicit_opt_in() {
     let config =
         Arc::new(ConfigStore::open(profile.path().join("config.sqlite3")).expect("config"));
     let source = CodebaseRetrievalContextSource::new(
-        Arc::clone(&index),
+        ash_codebase::CodebaseRetrievalService::local(Arc::clone(&index)),
         None,
         Some(semantic),
         None,

@@ -558,7 +558,6 @@ dependencies = [
  "ash-collaboration",
  "ash-config",
  "ash-connectors-extension",
- "ash-content-search",
  "ash-context-engine",
  "ash-core",
  "ash-core-api",
@@ -575,12 +574,14 @@ dependencies = [
  "ash-features",
  "ash-feedback",
  "ash-file-access",
+ "ash-file-search",
  "ash-file-system",
  "ash-file-watcher",
  "ash-git",
  "ash-git-attribution",
  "ash-github",
  "ash-goal",
+ "ash-grep",
  "ash-guardian-v2",
  "ash-history-notes",
  "ash-home",
@@ -620,7 +621,6 @@ dependencies = [
  "ash-sleep",
  "ash-state",
  "ash-syntax",
- "ash-tgrep",
  "ash-thread-store",
  "ash-thread-transcript",
  "ash-tools",
@@ -957,6 +957,7 @@ dependencies = [
  "ash-api",
  "ash-async-utils",
  "ash-file-access",
+ "ash-grep",
  "ash-model-provider",
  "ash-syntax",
  "ignore",
@@ -1057,16 +1058,6 @@ dependencies = [
  "tempfile",
  "url",
  "zeroize",
-]
-
-[[package]]
-name = "ash-content-search"
-version = "0.1.0"
-dependencies = [
- "ash-async-utils",
- "ash-file-access",
- "ash-shell-command",
- "serde_json",
 ]
 
 [[package]]
@@ -1373,10 +1364,13 @@ dependencies = [
 name = "ash-file-search"
 version = "0.1.0"
 dependencies = [
+ "ash-async-utils",
+ "ash-file-access",
  "clap",
  "ignore",
  "nucleo",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]
@@ -1472,6 +1466,21 @@ dependencies = [
  "ash-utils-template",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "ash-grep"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-file-access",
+ "ash-install-context",
+ "ash-shell-command",
+ "ash-state",
+ "ash-tgrep",
+ "regex",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]

@@ -11,7 +11,6 @@ use ash_app_server_protocol::protocol::codebase::CodebaseSearchParams;
 use ash_app_server_protocol::protocol::codebase::CodebaseSearchResult;
 use ash_app_server_protocol::protocol::codebase::CodebaseStateDto;
 use ash_app_server_protocol::protocol::codebase::CodebaseStatusResult;
-use ash_app_server_protocol::protocol::codebase::TgrepIndexStatusResult;
 use ash_app_server_protocol::protocol::common::EmptyParams;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_codebase::CodebaseError;
@@ -74,24 +73,6 @@ impl AppServer {
         result(&self.project_codebase_status(&runtime))
     }
 
-    pub(super) fn tgrep_index_status(&self, params: &Value) -> Result<Value, RpcError> {
-        let _: EmptyParams = decode(params)?;
-        let (service, root) = self.agent_grep_index_context()?;
-        let snapshot = service
-            .tgrep_snapshot(&root)
-            .map_err(|_| RpcError::new(-32092, AppServerErrorName::CodebaseOperationFailed))?;
-        result(&project_tgrep_status(service.tgrep_enabled(), snapshot))
-    }
-
-    pub(super) fn tgrep_index_rebuild(&self, params: &Value) -> Result<Value, RpcError> {
-        let _: EmptyParams = decode(params)?;
-        let (service, root) = self.agent_grep_index_context()?;
-        let snapshot = service
-            .rebuild_tgrep(&root)
-            .map_err(|_| RpcError::new(-32092, AppServerErrorName::CodebaseOperationFailed))?;
-        result(&project_tgrep_status(true, Some(snapshot)))
-    }
-
     pub(super) fn project_codebase_status(
         &self,
         runtime: &CodebaseRuntime,
@@ -114,17 +95,6 @@ impl AppServer {
             };
         }
         status
-    }
-}
-
-fn project_tgrep_status(enabled: bool, snapshot: Option<tgrep::Status>) -> TgrepIndexStatusResult {
-    TgrepIndexStatusResult {
-        enabled,
-        active: snapshot.is_some(),
-        indexing: snapshot.as_ref().is_some_and(|s| s.indexing),
-        ready: snapshot.as_ref().is_some_and(|s| s.hidden_complete),
-        indexed_file_count: snapshot.as_ref().map_or(0, |s| s.indexed_file_count),
-        watcher_active: snapshot.as_ref().is_some_and(|s| s.watcher_active),
     }
 }
 
@@ -182,6 +152,10 @@ fn codebase_runtime_error(error: CodebaseRuntimeError) -> RpcError {
             RpcError::new(-32091, AppServerErrorName::CodebaseNotReady)
         }
         CodebaseRuntimeError::Index(error) => codebase_error(error),
+        CodebaseRuntimeError::Retrieval(error) => match error {
+            ash_codebase::CodebaseRetrievalError::LocalIndex(error) => codebase_error(error),
+            _ => RpcError::new(-32096, AppServerErrorName::CodebaseRetrievalOperationFailed),
+        },
     }
 }
 

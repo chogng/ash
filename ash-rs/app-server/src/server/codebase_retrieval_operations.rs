@@ -11,7 +11,6 @@ use ash_codebase::CodebaseRetrievalDegradation;
 use ash_codebase::CodebaseRetrievalError;
 use ash_codebase::CodebaseRetrievalHit;
 use ash_codebase::CodebaseRetrievalQuery;
-use ash_codebase::CodebaseRetrievalService;
 use serde_json::Value;
 
 use super::AppServer;
@@ -34,7 +33,7 @@ impl AppServer {
         runtime
             .ensure_searchable()
             .map_err(codebase_runtime_error)?;
-        let index = runtime.index();
+        let retrieval = runtime.retrieval();
         let semantic = self.codebase_semantic_service();
         let cloud = self
             .cloud_codebase_service()
@@ -44,11 +43,13 @@ impl AppServer {
                 Ok(_) | Err(_) => Some(cloud),
             });
         let service = match (semantic, cloud) {
-            (_, Some(cloud)) => CodebaseRetrievalService::enhanced(index, cloud)
+            (_, Some(cloud)) => retrieval
+                .with_enhancement(cloud)
                 .map_err(codebase_retrieval_error)?,
-            (Some(semantic), None) => CodebaseRetrievalService::local_semantic(index, semantic)
+            (Some(semantic), None) => retrieval
+                .with_semantic(semantic)
                 .map_err(codebase_retrieval_error)?,
-            (None, None) => CodebaseRetrievalService::local(index),
+            (None, None) => retrieval,
         };
         let service = match self.symbol_index_service() {
             Ok(symbol_index) => service
@@ -113,7 +114,7 @@ fn codebase_runtime_error(error: CodebaseRuntimeError) -> RpcError {
         CodebaseRuntimeError::NotReady => {
             RpcError::new(-32091, AppServerErrorName::CodebaseNotReady)
         }
-        CodebaseRuntimeError::Index(_) => {
+        CodebaseRuntimeError::Index(_) | CodebaseRuntimeError::Retrieval(_) => {
             RpcError::new(-32096, AppServerErrorName::CodebaseRetrievalOperationFailed)
         }
     }
@@ -126,6 +127,7 @@ fn codebase_retrieval_error(error: CodebaseRetrievalError) -> RpcError {
         }
         CodebaseRetrievalError::RootMismatch
         | CodebaseRetrievalError::LocalIndex(_)
+        | CodebaseRetrievalError::Grep(_)
         | CodebaseRetrievalError::Cancelled(_) => {
             RpcError::new(-32096, AppServerErrorName::CodebaseRetrievalOperationFailed)
         }

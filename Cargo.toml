@@ -158,7 +158,7 @@ members = [
     "ash-rs/utils/typst",
     "ash-rs/file-access",
     "ash-rs/worktree",
-    "ash-rs/content-search",
+    "ash-rs/grep",
     "ash-rs/arg0",
     "ash-rs/test-binary-support",
     "ash-rs/user-verification",
@@ -499,7 +499,7 @@ ash-rollout-trace = { path = "ash-rs/rollout-trace" }
 ash-rmcp-client = { path = "ash-rs/rmcp-client" }
 ash-sandboxing = { path = "ash-rs/sandboxing" }
 ash-scm = { path = "app/scm" }
-ash-content-search = { path = "ash-rs/content-search" }
+grep = { package = "ash-grep", path = "ash-rs/grep" }
 arg0 = { package = "ash-arg0", path = "ash-rs/arg0" }
 ash-secrets = { path = "ash-rs/secrets" }
 ash-session = { path = "app/session" }

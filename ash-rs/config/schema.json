@@ -20,10 +20,6 @@
             }
           ]
         },
-        "grepBackend": {
-          "$ref": "#/$defs/AgentGrepBackend",
-          "default": "tgrep"
-        },
         "model": {
           "anyOf": [
             {
@@ -56,14 +52,6 @@
         }
       },
       "type": "object"
-    },
-    "AgentGrepBackend": {
-      "description": "Selects the implementation behind the Agent-only `grep` Tool.",
-      "enum": [
-        "ripgrep",
-        "tgrep"
-      ],
-      "type": "string"
     },
     "ApprovalReviewModelSelection": {
       "description": "User-selected model source for automatic approval review.\n\n`Automatic` follows the active Agent model's provider and delegates the exact model choice to\nthat provider's definition. `Explicit` binds review to one configured provider/model without\nchanging the main Agent model.",
@@ -563,6 +551,25 @@
           "type": "object"
         }
       ]
+    },
+    "GrepBackend": {
+      "description": "Selects the implementation used by the shared grep capability.",
+      "enum": [
+        "ripgrep",
+        "tgrep"
+      ],
+      "type": "string"
+    },
+    "GrepConfig": {
+      "additionalProperties": false,
+      "description": "Directory content search defaults shared by every consumer.",
+      "properties": {
+        "backend": {
+          "$ref": "#/$defs/GrepBackend",
+          "default": "tgrep"
+        }
+      },
+      "type": "object"
     },
     "HookAction": {
       "description": "Declarative Hook action. Runtime execution still requires policy and sandbox approval.",
@@ -1264,7 +1271,6 @@
         "approvalReviewModel": {
           "type": "automatic"
         },
-        "grepBackend": "tgrep",
         "timeContext": {
           "mode": "date"
         },
@@ -1314,6 +1320,12 @@
       },
       "type": "object"
     },
+    "grep": {
+      "$ref": "#/$defs/GrepConfig",
+      "default": {
+        "backend": "tgrep"
+      }
+    },
     "gui": {
       "additionalProperties": true,
       "type": "object"
@@ -1356,7 +1368,7 @@
       "type": "object"
     },
     "schemaVersion": {
-      "const": 4,
+      "const": 5,
       "type": "integer"
     },
     "skills": {

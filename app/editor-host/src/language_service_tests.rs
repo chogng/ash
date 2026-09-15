@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use ash_app_server_protocol::protocol::config::{
-    AgentGrepBackendDto, ApprovalReviewModelSelectionDto, CodebaseAutomaticContextDto,
-    CodebaseConfigDto, ConfigReadResult, FrontendConfigDto, LanguageServerConfigDto,
+    ApprovalReviewModelSelectionDto, CodebaseAutomaticContextDto, CodebaseConfigDto,
+    ConfigReadResult, FrontendConfigDto, GrepBackendDto, LanguageServerConfigDto,
     LanguageServerModeDto, ToolSearchConfigDto, ToolSearchEmbeddingStatusDto, ToolSearchModeDto,
 };
 use ash_lsp_server_provider::{LanguageServerCatalogState, LanguageServerExecutionPolicy};
@@ -59,7 +59,7 @@ fn desktop_configuration_maps_persisted_mode_into_catalog_policy() {
             auto_refresh_minutes: 10,
         },
         tool_mode: Default::default(),
-        agent_grep_backend: AgentGrepBackendDto::Ripgrep,
+        grep_backend: GrepBackendDto::Ripgrep,
         gui: FrontendConfigDto::default(),
         providers: BTreeMap::new(),
         mcp_servers: BTreeMap::new(),
@@ -112,7 +112,7 @@ fn desktop_configuration_does_not_start_unconfigured_language_servers() {
             auto_refresh_minutes: 10,
         },
         tool_mode: Default::default(),
-        agent_grep_backend: AgentGrepBackendDto::Ripgrep,
+        grep_backend: GrepBackendDto::Ripgrep,
         gui: FrontendConfigDto::default(),
         providers: BTreeMap::new(),
         mcp_servers: BTreeMap::new(),

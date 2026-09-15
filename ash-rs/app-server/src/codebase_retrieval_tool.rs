@@ -15,7 +15,6 @@ use ash_action_policy::SandboxCompatibility;
 use ash_async_utils::CancellationToken;
 use ash_cloud_codebase::CloudCodebaseController;
 use ash_cloud_codebase::CodebaseDeploymentMode;
-use ash_codebase::Codebase;
 use ash_codebase::CodebaseRetrievalQuery;
 use ash_codebase::CodebaseRetrievalService;
 use ash_codebase::CodebaseSemanticService;
@@ -42,7 +41,7 @@ struct SearchCodeArguments {
 /// Agent-facing read-only tool backed by Ash's canonical codebase-retrieval coordinator.
 pub(crate) struct CodebaseRetrievalTool {
     authorization: Authorization,
-    index: Arc<Codebase>,
+    retrieval: CodebaseRetrievalService,
     symbol_index: Option<Arc<SymbolIndex>>,
     semantic: Option<Arc<CodebaseSemanticService>>,
     cloud: Option<Arc<CloudCodebaseController>>,
@@ -53,14 +52,14 @@ pub(crate) struct CodebaseRetrievalTool {
 impl CodebaseRetrievalTool {
     pub(crate) fn new(
         authorization: Authorization,
-        index: Arc<Codebase>,
+        retrieval: CodebaseRetrievalService,
         symbol_index: Option<Arc<SymbolIndex>>,
         semantic: Option<Arc<CodebaseSemanticService>>,
         cloud: Option<Arc<CloudCodebaseController>>,
     ) -> Self {
         Self {
             authorization,
-            index,
+            retrieval,
             symbol_index,
             semantic,
             cloud,
@@ -125,15 +124,12 @@ impl CodebaseRetrievalTool {
             )
         });
         let service = match (&self.semantic, cloud) {
-            (_, Some(cloud)) => CodebaseRetrievalService::enhanced(
-                Arc::clone(&self.index),
-                Arc::clone(cloud) as Arc<dyn ash_codebase::CodebaseEnhancement>,
-            ),
-            (Some(semantic), None) => CodebaseRetrievalService::local_semantic(
-                Arc::clone(&self.index),
-                Arc::clone(semantic),
-            ),
-            (None, None) => Ok(CodebaseRetrievalService::local(Arc::clone(&self.index))),
+            (_, Some(cloud)) => self
+                .retrieval
+                .clone()
+                .with_enhancement(Arc::clone(cloud) as Arc<dyn ash_codebase::CodebaseEnhancement>),
+            (Some(semantic), None) => self.retrieval.clone().with_semantic(Arc::clone(semantic)),
+            (None, None) => Ok(self.retrieval.clone()),
         }
         .map_err(|error| CoreError::Execution(error.to_string()))?;
         match &self.symbol_index {
@@ -153,7 +149,7 @@ impl ToolService for CodebaseRetrievalTool {
     fn prepare(&self, call: &ToolCall) -> Result<ActionReviewRequest, CoreError> {
         let query = self.query(call)?;
         let canonical = serde_json::to_vec(&json!({
-            "root": self.index.root_id().as_str(),
+            "root": self.retrieval.root_id().as_str(),
             "query": query.text(),
             "max_results": query.result_limit().get(),
         }))
@@ -205,8 +201,13 @@ impl ToolService for CodebaseRetrievalTool {
             .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
         let result = self
             .service()?
-            .retrieve(&self.query(call)?)
-            .map_err(|error| CoreError::Execution(error.to_string()))?;
+            .retrieve_with_cancellation(&self.query(call)?, cancellation)
+            .map_err(|error| match error {
+                ash_codebase::CodebaseRetrievalError::Cancelled(reason) => {
+                    CoreError::Cancelled(reason)
+                }
+                other => CoreError::Execution(other.to_string()),
+            })?;
         let hits = result
             .hits
             .into_iter()

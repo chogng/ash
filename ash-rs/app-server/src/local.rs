@@ -1484,9 +1484,7 @@ pub fn open_local_app_server_with_codebase_providers(
         .with_execution_environments(options.execution_environments)
         .map_err(OpenAppServerError)?;
     server = server
-        .with_local_tool_config(crate::local_tools::LocalToolConfig::from_resolved(
-            &runtime_config,
-        ))
+        .with_env_config(&runtime_config)
         .with_local_env_host(mcp, DirGrantPolicy::UserConfig(Arc::clone(&config)))
         .map_err(|error| OpenAppServerError(error.to_string()))?;
     let local_dir_root = options.dir_root.clone();
@@ -1720,8 +1718,7 @@ impl ToolConfigWatcher {
                                     continue;
                                 }
                             };
-                        if let Err(error) = env_runtime.reconcile_local_tool_config(&runtime_config)
-                        {
+                        if let Err(error) = env_runtime.reconcile_env_config(&runtime_config) {
                             env_tools.record_reconcile_failure(error.to_string());
                             continue;
                         }

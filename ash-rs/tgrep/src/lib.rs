@@ -20,7 +20,6 @@ use std::time::Instant;
 
 pub const VERSION: &str = "1.0.8";
 const TIMEOUT: Duration = Duration::from_secs(30);
-const LIMIT: usize = 100;
 
 #[derive(Debug)]
 pub enum Error {
@@ -92,7 +91,9 @@ pub struct Query<'a> {
     pub pattern: &'a str,
     pub scope: &'a Path,
     pub case_insensitive: bool,
-    pub include: Option<&'a str>,
+    pub include: &'a [&'a str],
+    pub max_results: usize,
+    pub current: bool,
     pub exclude: &'a [&'a str],
 }
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
@@ -181,9 +182,13 @@ impl Session {
         cancellation: &CancellationToken,
     ) -> Result<SearchResult, Error> {
         let deadline = Instant::now() + TIMEOUT;
+        let limit = query.max_results;
+        if limit == 0 || limit > 5000 {
+            return Err(failed("invalid result limit"));
+        }
         check(cancellation, deadline)?;
-        if query.pattern.is_empty() || query.pattern.len() > 8192 {
-            return Err(failed("search pattern must contain 1 to 8192 bytes"));
+        if query.pattern.is_empty() || query.pattern.len() > 65536 {
+            return Err(failed("search pattern must contain 1 to 65536 bytes"));
         }
         regex::Regex::new(query.pattern).map_err(|e| failed(e.to_string()))?;
         validate_relative(query.scope)?;
@@ -195,12 +200,10 @@ impl Session {
         let status = self.status(cancellation)?;
         // Single files and explicit glob overrides use tgrep's scanning semantics, including
         // ignored files deliberately included by the caller. Index readiness is never freshness.
-        if scope.is_file()
-            || !status.hidden_complete
-            || query.include.is_some_and(|g| !g.starts_with('!'))
+        if query.current || scope.is_file() || !status.hidden_complete || !query.include.is_empty()
         {
             let mut result = self.scan(query, &[scope], cancellation, deadline)?;
-            result.matches.truncate(LIMIT);
+            result.matches.truncate(limit);
             return Ok(result);
         }
         let changed = self
@@ -208,7 +211,7 @@ impl Session {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .clone();
-        let mut globs: Vec<String> = query.include.into_iter().map(str::to_owned).collect();
+        let mut globs: Vec<String> = query.include.iter().map(|s| (*s).to_owned()).collect();
         globs.extend(query.exclude.iter().map(|g| format!("!{g}")));
         // In 1.0.8 the external case-insensitive flag folds the trigram prefilter as ASCII,
         // losing Unicode equivalents such as K/K. Inline flags use the regex's Unicode-aware
@@ -221,7 +224,7 @@ impl Session {
         let params = json!({"pattern":pattern,"case_insensitive":false,
             "scope":portable(query.scope)?,"glob":globs,"files_only":true,"detail":false,"positions":false});
         // One row per matching file bounds broad queries before asking for content. The server
-        // has only a per-file max_count; it does not implement Ash's global 100-line limit.
+        // has only a per-file max_count; the adapter enforces the caller's global limit.
         let files = self
             .process
             .rpc("search", params.clone(), cancellation, deadline)?;
@@ -251,15 +254,15 @@ impl Session {
         let paths: Vec<_> = paths.into_iter().collect();
         for chunk in paths.chunks(8) {
             check(cancellation, deadline)?;
-            if matches.len() > LIMIT {
+            if matches.len() > limit {
                 order(&mut matches);
-                if matches[LIMIT].path < chunk[0] {
+                if matches[limit].path < chunk[0] {
                     break;
                 }
             }
             let mut request = params.clone();
             request["files_only"] = json!(false);
-            request["max_count"] = json!(LIMIT + 1);
+            request["max_count"] = json!(limit + 1);
             request["glob"] = json!(
                 chunk
                     .iter()
@@ -284,11 +287,11 @@ impl Session {
                 matches.push(found);
             }
             order(&mut matches);
-            matches.truncate(LIMIT + 1);
+            matches.truncate(limit + 1);
         }
         order(&mut matches);
-        let limit_hit = matches.len() > LIMIT;
-        matches.truncate(LIMIT);
+        let limit_hit = matches.len() > limit;
+        matches.truncate(limit);
         Ok(SearchResult {
             matches,
             limit_hit,
@@ -343,21 +346,22 @@ impl Session {
             "--json",
             "--sort",
             "path",
-            "--max-count",
-            "101",
         ]);
+        command
+            .arg("--max-count")
+            .arg((query.max_results + 1).to_string());
         command.arg("--index-path").arg(self.process.index());
         if query.case_insensitive {
             command.arg("--ignore-case");
         }
-        if let Some(glob) = query.include {
+        for glob in query.include {
             command.arg("--glob").arg(glob);
         }
         for glob in query.exclude {
             command.arg("--glob").arg(format!("!{glob}"));
         }
         command.arg("--").arg(query.pattern).args(paths);
-        let records = process::scan(command, cancellation, deadline)?;
+        let records = process::scan(command, query.max_results + 1, cancellation, deadline)?;
         let mut matches = Vec::new();
         for record in records {
             if record.get("type").and_then(Value::as_str) != Some("match") {
@@ -389,8 +393,8 @@ impl Session {
             });
         }
         order(&mut matches);
-        // Keep the 101st row for the caller merging changed files and indexed matches.
-        let limit_hit = matches.len() > LIMIT;
+        // Retain an extra row when merging changed files with indexed matches.
+        let limit_hit = matches.len() > query.max_results;
         Ok(SearchResult {
             matches,
             limit_hit,

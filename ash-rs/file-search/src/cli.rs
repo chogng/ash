@@ -1,5 +1,5 @@
 use ash_file_search::PathMatch;
-use ash_file_search::PathSearchHandle;
+
 use ash_file_search::PathSearchOptions;
 use ash_file_search::PathSearchSnapshot;
 use clap::Parser;
@@ -72,7 +72,8 @@ fn execute(
     let options = PathSearchOptions::default()
         .with_result_limit(cli.limit)
         .with_worker_threads(cli.threads);
-    let (handle, snapshots) = PathSearchHandle::start(root, options)
+    let (handle, snapshots) = ash_file_search::Service
+        .start(root, options)
         .map_err(|error| format!("could not start path search: {error}"))?;
     let query = cli.pattern.unwrap_or_default();
     let query_revision = handle.update_query(&query);

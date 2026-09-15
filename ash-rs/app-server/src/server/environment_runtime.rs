@@ -18,7 +18,6 @@ use crate::codebase_retrieval_tool::CodebaseRetrievalTool;
 use crate::dir_grants::DirGrants;
 use crate::dynamic_tools::DynamicToolCompositionError;
 use crate::dynamic_tools::compose_dynamic_tools;
-use crate::local_tools::AgentGrepService;
 use crate::local_tools::LocalToolConfig;
 use crate::local_tools::append_local_tool;
 use crate::local_tools::compose_local_tools_with_config;
@@ -41,7 +40,6 @@ use ash_config::ConfigStore;
 use ash_config::DirConfigScope;
 use ash_config::DirConfigStore;
 use ash_config::ToolSearchConfig;
-use ash_content_search::ContentSearchService;
 use ash_core::MultiAgentCoordinator;
 use ash_core::ThreadController;
 use ash_core::TurnActionPolicy;
@@ -68,11 +66,11 @@ use ash_protocol::CommandId;
 use ash_protocol::ProviderId;
 use ash_protocol::SessionId;
 use ash_protocol::TurnStatus;
-use ash_shell_command::RipgrepExecutable;
 use ash_tools::ToolRegistryGeneration;
 use core_api::InterruptTurnRequest;
 use core_api::SequenceExpectation;
 use goal::GoalToolService;
+use grep::Jobs as ContentSearchService;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::PathBuf;
@@ -104,8 +102,7 @@ pub(super) struct WorkspaceRuntime {
     pub(super) content_search: Option<Arc<ContentSearchService>>,
     pub(super) dir_content_search: BTreeMap<String, Arc<ContentSearchService>>,
     pub(super) session_dir_search: BTreeMap<(SessionId, PathBuf), Arc<ContentSearchService>>,
-    pub(super) ripgrep: Option<RipgrepExecutable>,
-    pub(super) agent_grep: Option<Arc<AgentGrepService>>,
+    pub(super) grep: Option<Arc<grep::Service>>,
     pub(super) codebase: Option<Arc<CodebaseRuntime>>,
     pub(super) symbol_index: Option<Arc<SymbolIndexRuntime>>,
     pub(super) codebase_semantic: Option<Arc<CodebaseSemanticService>>,
@@ -173,6 +170,31 @@ impl LocalEnvHost {
     }
 }
 
+/// Host-owned configuration for independently composed environment capabilities.
+#[derive(Clone)]
+pub(super) struct EnvRuntimeConfig {
+    tools: LocalToolConfig,
+    grep_backend: grep::Backend,
+}
+
+impl EnvRuntimeConfig {
+    fn from_resolved(config: &ash_config::ResolvedConfig) -> Self {
+        Self {
+            tools: LocalToolConfig::from_resolved(config),
+            grep_backend: match config.grep_backend {
+                ash_config::GrepBackend::Ripgrep => grep::Backend::Ripgrep,
+                ash_config::GrepBackend::Tgrep => grep::Backend::Tgrep,
+            },
+        }
+    }
+}
+
+impl Default for EnvRuntimeConfig {
+    fn default() -> Self {
+        Self::from_resolved(&ash_config::ResolvedConfig::default())
+    }
+}
+
 #[derive(Clone)]
 pub(crate) struct EnvRuntimeControl {
     authority_gate: Arc<Mutex<()>>,
@@ -186,8 +208,8 @@ pub(crate) struct EnvRuntimeControl {
     hooks: Arc<DeclarativeHookRuntime>,
     mcp_status: Arc<RwLock<ash_mcp_extension::McpRuntimeStatusSnapshot>>,
     config: Option<Arc<ConfigStore>>,
-    local_tool_config: Arc<RwLock<LocalToolConfig>>,
-    env_state: EnvStateMode,
+    env_config: Arc<RwLock<EnvRuntimeConfig>>,
+    file_search: Arc<file_search::Service>,
     pty_helper: Option<std::path::PathBuf>,
     codebase_models: Option<CodebaseModels>,
     semantic_model_provider: Option<Arc<dyn SemanticModelProvider>>,
@@ -195,7 +217,7 @@ pub(crate) struct EnvRuntimeControl {
 }
 
 impl EnvRuntimeControl {
-    pub(crate) fn reconcile_local_tool_config(
+    pub(crate) fn reconcile_env_config(
         &self,
         config: &ash_config::ResolvedConfig,
     ) -> Result<(), EnvRuntimeError> {
@@ -203,7 +225,7 @@ impl EnvRuntimeControl {
             .authority_gate
             .lock()
             .map_err(|_| EnvRuntimeError::Failed("Environment runtime gate poisoned".into()))?;
-        let local_tool_config = LocalToolConfig::from_resolved(config);
+        let env_config = EnvRuntimeConfig::from_resolved(config);
         let (
             authorization,
             codebase,
@@ -212,7 +234,7 @@ impl EnvRuntimeControl {
             cloud,
             customizations,
             dir_grants,
-            agent_grep,
+            grep,
         ) = {
             let runtime = self
                 .runtime
@@ -226,14 +248,18 @@ impl EnvRuntimeControl {
                 runtime.workspace.cloud_codebase.clone(),
                 runtime._dir_contributions.clone(),
                 Arc::clone(&runtime.dir_grants),
-                runtime.workspace.agent_grep.clone(),
+                runtime.workspace.grep.clone(),
             )
         };
+        if let Some(grep) = &grep {
+            grep.configure(env_config.grep_backend)
+                .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
+        }
         let Some(authorization) = authorization else {
             *self
-                .local_tool_config
+                .env_config
                 .write()
-                .unwrap_or_else(|poisoned| poisoned.into_inner()) = local_tool_config;
+                .unwrap_or_else(|poisoned| poisoned.into_inner()) = env_config;
             return Ok(());
         };
         if !authorization
@@ -241,9 +267,9 @@ impl EnvRuntimeControl {
             .allows(Permission::ExecuteCommands)
         {
             *self
-                .local_tool_config
+                .env_config
                 .write()
-                .unwrap_or_else(|poisoned| poisoned.into_inner()) = local_tool_config;
+                .unwrap_or_else(|poisoned| poisoned.into_inner()) = env_config;
             return Ok(());
         }
         let execution = authorization
@@ -251,10 +277,10 @@ impl EnvRuntimeControl {
             .map_err(|_| EnvRuntimeError::PermissionRequired)?;
         let mut local = compose_local_tools_with_config(
             authorization.clone(),
-            &local_tool_config,
+            &env_config.tools,
             dir_grants,
-            agent_grep,
-            self.env_state.runtime(),
+            grep.ok_or_else(|| EnvRuntimeError::Failed("grep capability is unavailable".into()))?,
+            Arc::clone(&self.file_search),
             self.pty_helper.as_ref(),
         )
         .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
@@ -265,7 +291,7 @@ impl EnvRuntimeControl {
                 Arc::new(
                     CodebaseRetrievalTool::new(
                         execution,
-                        codebase.index(),
+                        codebase.retrieval(),
                         symbol_index.map(|runtime| runtime.index()),
                         semantic,
                         cloud,
@@ -282,20 +308,14 @@ impl EnvRuntimeControl {
             &self.turn_backend,
             customizations.as_ref(),
         )?;
-        let agent_grep = Arc::clone(&local.agent_grep);
         let local_port = local
             .tool_port()
             .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
         self.tools.replace_local(Some(local_port))?;
-        self.runtime
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .workspace
-            .agent_grep = Some(agent_grep);
         *self
-            .local_tool_config
+            .env_config
             .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) = local_tool_config;
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = env_config;
         Ok(())
     }
 
@@ -410,8 +430,8 @@ impl EnvRuntimeControl {
         let execution = authorization
             .authorize(Permission::ExecuteCommands)
             .map_err(|_| EnvRuntimeError::PermissionRequired)?;
-        let local_tool_config = self
-            .local_tool_config
+        let env_config = self
+            .env_config
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .clone();
@@ -423,15 +443,16 @@ impl EnvRuntimeControl {
             .clone();
         let local = compose_local_tools_with_config(
             authorization.clone(),
-            &local_tool_config,
+            &env_config.tools,
             dir_grants,
             self.runtime
                 .read()
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .workspace
-                .agent_grep
-                .clone(),
-            self.env_state.runtime(),
+                .grep
+                .clone()
+                .ok_or_else(|| EnvRuntimeError::Failed("grep capability is unavailable".into()))?,
+            Arc::clone(&self.file_search),
             self.pty_helper.as_ref(),
         )
         .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
@@ -441,7 +462,7 @@ impl EnvRuntimeControl {
             Arc::new(
                 CodebaseRetrievalTool::new(
                     execution,
-                    codebase.index(),
+                    codebase.retrieval(),
                     Some(symbol_index.index()),
                     semantic.clone(),
                     cloud.clone(),
@@ -476,7 +497,7 @@ impl EnvRuntimeControl {
             .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
         self.tools.replace_local(Some(local_port))?;
         let context_source = Arc::new(CodebaseRetrievalContextSource::new(
-            codebase.index(),
+            codebase.retrieval(),
             Some(symbol_index.index()),
             semantic.clone(),
             cloud.clone(),
@@ -1197,11 +1218,12 @@ impl AppServer {
         Ok(self)
     }
 
-    pub(crate) fn with_local_tool_config(self, config: LocalToolConfig) -> Self {
+    pub(crate) fn with_env_config(self, config: &ash_config::ResolvedConfig) -> Self {
         *self
-            .local_tool_config
+            .env_config
             .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) = config;
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) =
+            EnvRuntimeConfig::from_resolved(config);
         self
     }
 
@@ -1230,8 +1252,8 @@ impl AppServer {
             hooks: Arc::clone(&host.hooks),
             mcp_status: Arc::clone(&self.mcp_status),
             config: self.config.clone(),
-            local_tool_config: Arc::clone(&self.local_tool_config),
-            env_state: self.env_state.clone(),
+            env_config: Arc::clone(&self.env_config),
+            file_search: Arc::clone(&self.file_search),
             pty_helper: self.pty_helper.clone(),
             codebase_models: self.codebase_models.clone(),
             semantic_model_provider: self.semantic_model_provider.clone(),
@@ -1461,13 +1483,13 @@ impl AppServer {
             })
             .collect::<BTreeMap<_, _>>();
         self.activate_dir_runtime(primary.clone(), host)?;
-        let (ripgrep, primary_search, primary_terminals, primary_debug_adapters) = {
+        let (grep, primary_search, primary_terminals, primary_debug_adapters) = {
             let runtime = self
                 .env_runtime
                 .read()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
             (
-                runtime.workspace.ripgrep.clone(),
+                runtime.workspace.grep.clone(),
                 runtime.workspace.content_search.clone(),
                 runtime.execution.terminals.clone(),
                 runtime.execution.debug_adapters.clone(),
@@ -1499,11 +1521,11 @@ impl AppServer {
                 let service = if index == 0 {
                     primary_search.clone()
                 } else {
-                    ripgrep.as_ref().map(|ripgrep| {
-                        Arc::new(ContentSearchService::new(
-                            authorization.dir().clone(),
-                            ripgrep.clone(),
-                        ))
+                    grep.as_ref().and_then(|grep| {
+                        let permission = authorization.authorize(Permission::SearchFiles).ok()?;
+                        ContentSearchService::new_authorized(permission, grep.clone())
+                            .ok()
+                            .map(Arc::new)
                     })
                 }?;
                 Some((id.clone(), service))
@@ -1889,8 +1911,8 @@ impl AppServer {
         {
             self.commit_limited_dir_runtime(authorization, host)
         } else {
-            let local_tool_config = self
-                .local_tool_config
+            let env_config = self
+                .env_config
                 .read()
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .clone();
@@ -1900,16 +1922,17 @@ impl AppServer {
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .dir_grants
                 .clone();
+            let grep = self.open_grep()?;
             let local = compose_local_tools_with_config(
                 authorization.clone(),
-                &local_tool_config,
+                &env_config.tools,
                 dir_grants,
-                None,
-                self.env_state.runtime(),
+                Arc::clone(&grep),
+                Arc::clone(&self.file_search),
                 self.pty_helper.as_ref(),
             )
             .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
-            self.commit_full_env_runtime(authorization, local, host)
+            self.commit_full_env_runtime(authorization, local, grep, host)
         };
         if result.is_ok() {
             self.reset_language_env_runtimes();
@@ -1933,7 +1956,26 @@ impl AppServer {
         self.revoke_cloud_index_for_dir(&dir);
         let file_system: Arc<dyn FileSystem> =
             Arc::new(LocalFileSystem::new(authorization.clone()));
-        let codebase = self.open_codebase_runtime(dir.clone())?;
+        let grep = if authorization.permissions().allows(Permission::SearchFiles) {
+            Some(self.open_grep()?)
+        } else {
+            None
+        };
+        let content_search = grep
+            .as_ref()
+            .map(|grep| {
+                let permission = authorization
+                    .authorize(Permission::SearchFiles)
+                    .map_err(|_| EnvRuntimeError::PermissionRequired)?;
+                ContentSearchService::new_authorized(permission, grep.clone())
+                    .map(Arc::new)
+                    .map_err(|error| EnvRuntimeError::Failed(error.to_string()))
+            })
+            .transpose()?;
+        let codebase = self.open_codebase_runtime(
+            dir.clone(),
+            grep.clone().map(|s| s as Arc<dyn grep::Search>),
+        )?;
         let symbol_index = self.open_symbol_index_runtime(&codebase)?;
         self.retry_persisted_cloud_index_deletion(&codebase);
         let repository_inspection = authorization
@@ -1996,11 +2038,10 @@ impl AppServer {
                 session_dir_watchers: BTreeMap::new(),
                 _git_watcher: None,
                 git: Some(Arc::clone(&git)),
-                content_search: None,
+                content_search,
                 dir_content_search: BTreeMap::new(),
                 session_dir_search: BTreeMap::new(),
-                ripgrep: None,
-                agent_grep: None,
+                grep,
                 codebase: Some(codebase),
                 symbol_index: Some(symbol_index),
                 codebase_semantic: None,
@@ -2024,12 +2065,13 @@ impl AppServer {
         &self,
         authorization: Grant,
         local: crate::local_tools::LocalToolComposition,
+        grep: Arc<grep::Service>,
         host: &LocalEnvHost,
     ) -> Result<PathBuf, EnvRuntimeError> {
         let dir = authorization.dir().clone();
         let file_system: Arc<dyn FileSystem> =
             Arc::new(LocalFileSystem::new(authorization.clone()));
-        let codebase = self.open_codebase_runtime(dir.clone())?;
+        let codebase = self.open_codebase_runtime(dir.clone(), Some(grep.clone()))?;
         let symbol_index = self.open_symbol_index_runtime(&codebase)?;
         let codebase_semantic = self.open_codebase_semantic(&codebase)?;
         let codebase_semantic_job =
@@ -2064,7 +2106,6 @@ impl AppServer {
             .map_err(|_| EnvRuntimeError::PermissionRequired)?;
         let git = GitRuntime::new(repository_mutation, Arc::clone(&self.updates))
             .map_err(|_| EnvRuntimeError::Failed("failed to initialize Git runtime".into()))?;
-        let agent_grep = Arc::clone(&local.agent_grep);
         let file_system_watcher = FileSystemWatcher::start_with_observers(
             dir.clone(),
             Arc::clone(&self.updates),
@@ -2085,7 +2126,7 @@ impl AppServer {
             Arc::new(
                 CodebaseRetrievalTool::new(
                     retrieval_authorization,
-                    codebase.index(),
+                    codebase.retrieval(),
                     Some(symbol_index.index()),
                     codebase_semantic.clone(),
                     cloud_codebase.clone(),
@@ -2115,15 +2156,18 @@ impl AppServer {
                 current.execution.terminals.clone(),
             )
         };
-        let content_search = existing_search.unwrap_or_else(|| {
-            Arc::new(ContentSearchService::new(
-                dir.clone(),
-                local.ripgrep.clone(),
-            ))
-        });
-        let ripgrep = local.ripgrep.clone();
-        content_search.cancel_all();
-        content_search.set_dir(dir.clone());
+        if let Some(search) = existing_search {
+            search.cancel_all();
+        }
+        let content_search = Arc::new(
+            ContentSearchService::new_authorized(
+                authorization
+                    .authorize(Permission::SearchFiles)
+                    .map_err(|_| EnvRuntimeError::PermissionRequired)?,
+                grep.clone(),
+            )
+            .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?,
+        );
         let terminal_capability = authorization
             .authorize(Permission::ExecuteCommands)
             .map_err(|_| EnvRuntimeError::PermissionRequired)?;
@@ -2162,7 +2206,7 @@ impl AppServer {
         host.tools.replace_executable(Some(local_port), true)?;
         self.bind_dir_skills(&canonical_root)?;
         let context_source = Arc::new(CodebaseRetrievalContextSource::new(
-            codebase.index(),
+            codebase.retrieval(),
             Some(symbol_index.index()),
             codebase_semantic.clone(),
             cloud_codebase.clone(),
@@ -2201,8 +2245,7 @@ impl AppServer {
                 content_search: Some(Arc::clone(&content_search)),
                 dir_content_search: BTreeMap::new(),
                 session_dir_search: BTreeMap::new(),
-                ripgrep: Some(ripgrep),
-                agent_grep: Some(agent_grep),
+                grep: Some(grep),
                 codebase: Some(codebase),
                 symbol_index: Some(symbol_index),
                 codebase_semantic,
@@ -2302,7 +2345,22 @@ impl AppServer {
             .ok()
     }
 
-    fn open_codebase_runtime(&self, dir: Dir) -> Result<Arc<CodebaseRuntime>, EnvRuntimeError> {
+    fn open_grep(&self) -> Result<Arc<grep::Service>, EnvRuntimeError> {
+        let backend = self
+            .env_config
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .grep_backend;
+        grep::Service::installed(backend, self.env_state.runtime())
+            .map(Arc::new)
+            .map_err(|error| EnvRuntimeError::Failed(error.to_string()))
+    }
+
+    fn open_codebase_runtime(
+        &self,
+        dir: Dir,
+        search: Option<Arc<dyn grep::Search>>,
+    ) -> Result<Arc<CodebaseRuntime>, EnvRuntimeError> {
         let dir_id = dir.id();
         let store = match &self.env_state {
             EnvStateMode::Persistent(state) => {
@@ -2317,7 +2375,7 @@ impl AppServer {
                 ));
             }
         };
-        CodebaseRuntime::open(dir, Arc::new(store))
+        CodebaseRuntime::open(dir, Arc::new(store), search)
             .map_err(|error| EnvRuntimeError::Failed(format!("failed to open Codebase: {error}")))
     }
 
@@ -2331,9 +2389,7 @@ impl AppServer {
             .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodebaseUnavailable))
     }
 
-    pub(super) fn agent_grep_index_context(
-        &self,
-    ) -> Result<(Arc<AgentGrepService>, Dir), RpcError> {
+    pub(super) fn grep_index_context(&self) -> Result<(Arc<grep::Service>, Dir), RpcError> {
         let runtime = self
             .env_runtime
             .read()
@@ -2342,12 +2398,12 @@ impl AppServer {
             .selected_grant
             .as_ref()
             .map(|authorization| authorization.dir().clone())
-            .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodebaseUnavailable))?;
+            .ok_or_else(|| RpcError::new(-32050, AppServerErrorName::SearchUnavailable))?;
         let service = runtime
             .workspace
-            .agent_grep
+            .grep
             .clone()
-            .ok_or_else(|| RpcError::new(-32090, AppServerErrorName::CodebaseUnavailable))?;
+            .ok_or_else(|| RpcError::new(-32050, AppServerErrorName::SearchUnavailable))?;
         Ok((service, root))
     }
 
@@ -2601,13 +2657,13 @@ impl AppServer {
         if let Some(search) = runtime.workspace.session_dir_search.get(&key) {
             return Ok(Arc::clone(search));
         }
-        let ripgrep = runtime
+        let grep = runtime
             .workspace
-            .ripgrep
+            .grep
             .clone()
             .ok_or_else(|| RpcError::new(-32050, AppServerErrorName::SearchUnavailable))?;
         let search = Arc::new(
-            ContentSearchService::new_authorized(dir, ripgrep)
+            ContentSearchService::new_authorized(dir, grep)
                 .map_err(|_| RpcError::new(-32043, AppServerErrorName::PermissionRequired))?,
         );
         runtime

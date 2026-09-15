@@ -1,8 +1,8 @@
 use super::*;
-use crate::protocol::config::AgentGrepBackendDto;
 use crate::protocol::config::ApprovalReviewModelSelectionDto;
 use crate::protocol::config::ConfigUpdateParams;
 use crate::protocol::config::ExecPolicyRuleUpsertParams;
+use crate::protocol::config::GrepBackendDto;
 use crate::protocol::config::LanguageServerModeDto;
 use crate::protocol::config::McpServerUpsertParams;
 use crate::protocol::config::SkillSourceAddParams;
@@ -119,9 +119,9 @@ fn registry_method_and_notification_names_are_unique() {
     assert!(methods.contains("git/fetch"));
     assert!(methods.contains("git/pull"));
     assert!(methods.contains("git/push"));
-    assert!(methods.contains("content/search/start"));
-    assert!(methods.contains("content/search/read"));
-    assert!(methods.contains("content/search/cancel"));
+    assert!(methods.contains("grep/search/start"));
+    assert!(methods.contains("grep/search/read"));
+    assert!(methods.contains("grep/search/cancel"));
     assert!(methods.contains("codebase/status"));
     assert!(methods.contains("codebase/search"));
     assert!(methods.contains("codebase/retrieve"));
@@ -476,7 +476,7 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(typescript.contains("export type SessionDirSelector ="));
     assert!(typescript.contains("export type DirContributionsDto ="));
     assert!(typescript.contains(r#""fs/changed": { method: "fs/changed" }"#));
-    assert!(typescript.contains(r#""content/search/start": { method: "content/search/start" }"#));
+    assert!(typescript.contains(r#""grep/search/start": { method: "grep/search/start" }"#));
     assert!(typescript.contains(r#""codebase/search": { method: "codebase/search" }"#));
     assert!(typescript.contains(r#""codebase/retrieve": { method: "codebase/retrieve" }"#));
     assert!(typescript.contains(r#""codebase/cloud/status": { method: "codebase/cloud/status" }"#));
@@ -616,7 +616,7 @@ fn config_patch_fixture_round_trips_the_provider_scoped_model() {
                 "model": "codex-auto-review"
             }
         },
-        "agentGrepBackend": "tgrep"
+        "grepBackend": "tgrep"
     });
     let params: ConfigUpdateParams = serde_json::from_value(fixture.clone()).unwrap();
 
@@ -634,10 +634,7 @@ fn config_patch_fixture_round_trips_the_provider_scoped_model() {
             if model.model == "codex-auto-review"
     ));
     assert_eq!(params.expected_revision, 4);
-    assert_eq!(
-        params.agent_grep_backend,
-        Patch::Value(AgentGrepBackendDto::Tgrep)
-    );
+    assert_eq!(params.grep_backend, Patch::Value(GrepBackendDto::Tgrep));
     assert_eq!(serde_json::to_value(params).unwrap(), fixture);
 }
 
@@ -653,7 +650,7 @@ fn config_patch_distinguishes_missing_null_and_value() {
         "expectedRevision": 3,
         "model": null,
         "approvalReviewModel": null,
-        "agentGrepBackend": null,
+        "grepBackend": null,
         "gui": null,
         "tui": null
     }))
@@ -661,13 +658,13 @@ fn config_patch_distinguishes_missing_null_and_value() {
 
     assert_eq!(missing.model, Patch::Missing);
     assert_eq!(missing.approval_review_model, Patch::Missing);
-    assert_eq!(missing.agent_grep_backend, Patch::Missing);
+    assert_eq!(missing.grep_backend, Patch::Missing);
     assert_eq!(missing.gui, Patch::Missing);
     assert_eq!(missing.tui, Patch::Missing);
     assert_eq!(missing.expected_revision, 0);
     assert_eq!(null.model, Patch::Null);
     assert_eq!(null.approval_review_model, Patch::Null);
-    assert_eq!(null.agent_grep_backend, Patch::Null);
+    assert_eq!(null.grep_backend, Patch::Null);
     assert_eq!(null.gui, Patch::Null);
     assert_eq!(null.tui, Patch::Null);
     assert_eq!(
@@ -681,7 +678,7 @@ fn config_patch_distinguishes_missing_null_and_value() {
             "expectedRevision": 3,
             "model": null,
             "approvalReviewModel": null,
-            "agentGrepBackend": null,
+            "grepBackend": null,
             "gui": null,
             "tui": null
         })

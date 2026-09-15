@@ -1,11 +1,8 @@
-use ash_protocol::CommandId;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::path::PathBuf;
 use ts_rs::TS;
-
-use crate::protocol::config::ConfigCommandResult;
 
 /// Lifecycle state of the directory-side codebase projection.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -33,45 +30,6 @@ pub struct CodebaseStatusResult {
     pub truncated_file_count: usize,
     pub file_limit_hit: bool,
     pub source_bytes_limit_hit: bool,
-}
-
-/// Current state of the optional tgrep index used by Agent grep.
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct TgrepIndexStatusResult {
-    pub enabled: bool,
-    pub active: bool,
-    pub indexing: bool,
-    pub ready: bool,
-    pub indexed_file_count: usize,
-    pub watcher_active: bool,
-}
-
-/// Starts the durable “disable and delete” Agent grep operation.
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct TgrepDisableAndDeleteParams {
-    pub command_id: CommandId,
-    #[schemars(range(min = 0))]
-    #[ts(type = "number")]
-    pub expected_revision: u64,
-}
-
-/// Result of an explicit local-index deletion request.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub enum LocalIndexClearOutcomeDto {
-    Cleared,
-    AlreadyAbsent,
-    InUse,
-}
-
-/// Confirms the configuration commit separately from deletion of rebuildable data.
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct TgrepDisableAndDeleteResult {
-    pub config: ConfigCommandResult,
-    pub deletion: LocalIndexClearOutcomeDto,
 }
 
 /// Performs one bounded lookup against the active Codebase.

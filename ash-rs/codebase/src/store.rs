@@ -35,6 +35,13 @@ pub trait CodebaseIndexStore: Send + Sync {
     fn manifest(&self, root_id: &IndexRootId) -> Result<CodebaseManifest, CodebaseError>;
     fn source(&self, relative_path: &Path) -> Result<Option<StoredSource>, CodebaseError>;
     fn has_descendants(&self, relative_path: &Path) -> Result<bool, CodebaseError>;
+    /// Maps one-based grep line hits to existing revision-bound chunks.
+    fn chunks_at_lines(
+        &self,
+        root_id: &IndexRootId,
+        lines: &[(PathBuf, usize)],
+    ) -> Result<Vec<SearchHit>, CodebaseError>;
+
     fn search(
         &self,
         root_id: &IndexRootId,
