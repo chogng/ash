@@ -103,3 +103,10 @@ just rust-warnings ash-instructions
 
 `$create-instructions` 是内置 Skill，复用通用技能选择和文件工具。`/init` 仍负责初始化 `ASH.md`。
 创建 Skill 不负责指令匹配、授权或执行检查。
+
+## 外部指令发布
+
+`validate_instruction` 用 catalog 相同的正文、frontmatter、命名、大小和模式校验规则检查待发布内容。
+只接受项目 `ASH.md` 或直接 `.ash/instructions/*.md` 目标，不允许导入流程改写共享 `AGENTS.md`。
+外部格式解析属于 `external-agent-migration`；App Server 转换选中片段，并通过有授权的文件服务发布。
+发布后的文件进入现有 catalog refresh，主 Agent 与子 Agent 使用同一加载路径。

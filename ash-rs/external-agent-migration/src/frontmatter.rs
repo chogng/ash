@@ -269,3 +269,25 @@ impl<'de> Visitor<'de> for BoundedYaml<'_> {
 #[cfg(test)]
 #[path = "frontmatter_tests.rs"]
 mod tests;
+
+/// Strict, bounded header parsing for instruction source formats.
+pub(crate) fn instruction_header(
+    content: &str,
+) -> Result<(YamlValue, String), AgentImportDiagnosticCode> {
+    let Some(rest) = content
+        .strip_prefix("---\n")
+        .or_else(|| content.strip_prefix("---\r\n"))
+    else {
+        return Ok((YamlValue::Mapping(Default::default()), content.into()));
+    };
+    let (end, body_start) =
+        frontmatter_end(rest).ok_or(AgentImportDiagnosticCode::InvalidContent)?;
+    let raw = &rest[..end];
+    validate_yaml(raw)?;
+    let header: YamlValue =
+        serde_yaml::from_str(raw).map_err(|_| AgentImportDiagnosticCode::InvalidContent)?;
+    if !header.is_mapping() {
+        return Err(AgentImportDiagnosticCode::InvalidContent);
+    }
+    Ok((header, rest[body_start..].into()))
+}

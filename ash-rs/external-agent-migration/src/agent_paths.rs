@@ -156,12 +156,42 @@ const CLAUDE_PROJECT: &[AgentPath] = &[
     ),
 ];
 
+const COPILOT_PROJECT: &[AgentPath] = &[
+    file(
+        ".github/copilot-instructions.md",
+        ImportItemKind::Instructions,
+        ImportReviewCategory::Content,
+    ),
+    directory(
+        ".github/instructions",
+        ImportItemKind::InstructionRules,
+        ImportReviewCategory::Content,
+    ),
+];
+
+const CURSOR_PROJECT: &[AgentPath] = &[
+    file(
+        ".cursorrules",
+        ImportItemKind::Instructions,
+        ImportReviewCategory::Content,
+    ),
+    directory(
+        ".cursor/rules",
+        ImportItemKind::InstructionRules,
+        ImportReviewCategory::Content,
+    ),
+];
+
 pub(super) fn paths_for(agent: ExternalAgent, scope: ImportScope) -> &'static [AgentPath] {
     match (agent, scope) {
         (ExternalAgent::Codex, ImportScope::User) => CODEX_USER,
         (ExternalAgent::Codex, ImportScope::Project) => CODEX_PROJECT,
         (ExternalAgent::Claude, ImportScope::User) => CLAUDE_USER,
         (ExternalAgent::Claude, ImportScope::Project) => CLAUDE_PROJECT,
+        (ExternalAgent::Copilot, ImportScope::Project) => COPILOT_PROJECT,
+        (ExternalAgent::Copilot, ImportScope::User) => &[],
+        (ExternalAgent::Cursor, ImportScope::Project) => CURSOR_PROJECT,
+        (ExternalAgent::Cursor, ImportScope::User) => &[],
     }
 }
 

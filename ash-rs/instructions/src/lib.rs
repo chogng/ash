@@ -23,3 +23,5 @@ pub const STARTER_ALWAYS_ON_TEMPLATE: &str = include_str!("../assets/always-on.m
 
 pub use model::InstructionSelection;
 pub use model::SelectedInstruction;
+
+pub use catalog::validate_instruction;

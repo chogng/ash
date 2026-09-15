@@ -12,6 +12,7 @@ name = "external_agent_migration"
 path = "src/lib.rs"
 
 [dependencies]
+pulldown-cmark = { workspace = true }
 ash-utils-path = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

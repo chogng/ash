@@ -38,7 +38,7 @@ pub struct MigrationPlanItem {
     scope: ImportScope,
     kind: ImportItemKind,
     source_paths: Vec<PathBuf>,
-    detail: MigrationItemDetail,
+    pub(crate) detail: MigrationItemDetail,
 }
 
 impl MigrationPlanItem {
@@ -83,8 +83,10 @@ impl MigrationPlanItem {
 /// Typed source-format fragment backing one [`MigrationPlanItem`].
 #[derive(Clone, PartialEq)]
 pub enum MigrationItemDetail {
-    /// Instruction documents in precedence order, first entry wins.
-    Instructions { sources: Vec<PathBuf> },
+    /// Parsed instruction with source loading semantics, without an Ash target schema.
+    Instruction {
+        document: crate::ExternalInstruction,
+    },
     /// Parsed settings or configuration document in the external format.
     Settings { document: ExternalDocument },
     /// Skill directory names declared by the source layout.
@@ -231,10 +233,7 @@ impl fmt::Debug for MigrationItemDetail {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         // Canonical host paths, settings documents, and environment values stay out of Debug.
         match self {
-            Self::Instructions { sources } => formatter
-                .debug_struct("Instructions")
-                .field("sources", &sources.len())
-                .finish(),
+            Self::Instruction { .. } => formatter.write_str("Instruction(<redacted>)"),
             Self::Settings { .. } => formatter
                 .debug_struct("Settings")
                 .field("document", &"<redacted>")

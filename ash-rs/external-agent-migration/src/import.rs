@@ -6,6 +6,8 @@ use std::path::{Path, PathBuf};
 pub enum ExternalAgent {
     Codex,
     Claude,
+    Copilot,
+    Cursor,
 }
 
 /// User or project ownership of one external configuration source.
@@ -44,6 +46,16 @@ impl AgentImportLocation {
     /// Uses documented Claude locations below one project root.
     pub fn claude_project(project_root: impl Into<PathBuf>) -> Self {
         Self::new(ExternalAgent::Claude, ImportScope::Project, project_root)
+    }
+
+    /// Uses Copilot's repository instruction layout below a selected project root.
+    pub fn copilot_project(project_root: impl Into<PathBuf>) -> Self {
+        Self::new(ExternalAgent::Copilot, ImportScope::Project, project_root)
+    }
+
+    /// Uses Cursor's project rule layout below a selected project root.
+    pub fn cursor_project(project_root: impl Into<PathBuf>) -> Self {
+        Self::new(ExternalAgent::Cursor, ImportScope::Project, project_root)
     }
 
     pub fn agent(&self) -> ExternalAgent {

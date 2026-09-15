@@ -11,7 +11,7 @@
 >
 > 上游对照：本 crate 对应 codex 仓库的 `codex-rs/external-agent-migration`，名称一致。
 
-`external-agent-migration` 识别 Codex 和 Claude 已知的用户级、项目级配置位置，产出两层只读结果：
+`external-agent-migration` 识别 Codex、Claude、Copilot 和 Cursor 已知的用户级、项目级配置位置，产出两层只读结果：
 `AgentPathInspection`（已知路径的元数据检查）和 `MigrationPlan`（读取有界源格式后的类型化迁移
 计划，覆盖 instructions、settings、skills、commands、agents、rules、MCP servers、hooks、plugins
 与 memory 文件）。本 crate 不递归扫描未知目录、不修改 Ash 配置，也不导入认证、会话、日志或
@@ -48,7 +48,7 @@ directory `tempfile`。它不得反向依赖
 
 | Symbol | 当前职责 | 不承担 |
 | --- | --- | --- |
-| `ExternalAgent` | 区分 `Codex` 与 `Claude` 布局 | 动态 provider registry |
+| `ExternalAgent` | 区分 `Codex`、`Claude`、`Copilot` 与 `Cursor` 布局 | 动态 provider registry |
 | `ImportScope` | 区分 `User` 与 `Project` 来源 | directory capability 或配置优先级 |
 | `AgentImportLocation::{codex_user,codex_project,claude_user,claude_project}` | 将来源、作用范围和调用方选择的根目录绑定为一个发现输入 | 环境变量解析、文件访问授权 |
 | `inspect_agent_paths` | 校验所有输入根并检查已知相对位置 | 转换内容或应用配置 |
@@ -91,6 +91,8 @@ let plan = detect_migration_plan(
 | --- | --- | --- |
 | Codex | `~/.codex/{AGENTS.md,AGENTS.override.md,config.toml,agents/,rules/}`、`~/.agents/skills/` | `{AGENTS.md,AGENTS.override.md}`、`.codex/{config.toml,agents/,rules/}`、`.agents/skills/` |
 | Claude | `~/.claude/{CLAUDE.md,settings.json,settings.local.json,skills/,commands/,agents/,rules/}`、`~/.claude.json`（MCP 声明）、`~/.claude/projects/*/memory/` | `{CLAUDE.md,CLAUDE.local.md,.mcp.json}`、`.claude/{CLAUDE.md,settings.json,settings.local.json,skills/,commands/,agents/,rules/}`、`~/.claude.json` 对应项目条目（MCP 声明） |
+| Cursor | 尚未支持用户级布局 | `.cursorrules`、`.cursor/rules/**/*.mdc` |
+| Copilot | 尚未支持用户级布局 | `.github/copilot-instructions.md`、`.github/instructions/*.instructions.md`（直接文件） |
 
 路径映射依据 Codex 的
 [导入说明](https://learn.chatgpt.com/docs/import)和
@@ -126,6 +128,8 @@ MCP 声明；整个文件不进入候选，也不交给 Desktop、模型或普�
 | `detect.rs::detect_migration_plan` | 按 agent/scope 编排 discovery 与解析，排序去重 plan item 与 diagnostic | 新条目类型、排序契约 |
 | `source.rs` | 读取前路径校验、有界文件读取和目录枚举、按来源诊断 | 软链接、大小与深度上限、失败隔离 |
 | `settings.rs` | JSON/TOML 解析、Claude 两份设置的合并与来源记录 | 源格式变化、失败语义 |
+| `instruction.rs` | 四种来源的共享指令结构、专用发现入口及 Claude/Codex/Cursor 解析 | 加载方式、作用域、来源语义与诊断 |
+| `copilot.rs` | Copilot 固定指令布局、正文和加载语义解析 | applyTo、未知字段、来源限制与诊断 |
 | `frontmatter.rs` | Markdown frontmatter 拆分与标量提取 | agent/命令 frontmatter 字段 |
 | `mcp.rs` | 外部 MCP 声明收集、`${VAR}` 语义、stdio/http 归一化与 unsupported 标记 | transport 类型、placeholder 规则 |
 | `hooks.rs` | Claude hooks 组发现与可转换组计数 | hook 字段白名单 |
@@ -241,7 +245,7 @@ Desktop/App Server 接入时必须：
 6. 对读取与应用之间的文件变化重新校验 identity/digest，不能把 preview 当作冻结内容；
 7. 认证、凭据、连接批准和执行批准继续走各自 authority。
 
-当前没有 App Server DTO 或 inspection identity。任何 wire contract 都应传 source-qualified identity
+通用迁移尚无 App Server DTO 或 inspection identity；四种来源的项目指令已提供独立摘要预览接口。wire contract 应传 source-qualified identity
 和受控相对路径，不应直接把 `source_path()` 序列化给 Renderer。
 
 ### 7.1 应用到目标权威
@@ -268,7 +272,7 @@ commit。
 | `McpServers` | `UpsertMcpServer` | Config command 已有；导入时默认不连接，credential 必须剥离并单独绑定 |
 | Settings 内的 Plugin request | `UpsertPluginRequest` | Config command 已有；只接受可解析的 exact package/version request，不代表安装或激活 |
 | Settings 内的 Hook | `UpsertHook` | Config command 已有；导入后保持 disabled，执行仍需 trust、policy、approval 与 sandbox |
-| `Instructions`、`InstructionRules` | Ash Instruction authority | 目标模型尚未完成，不能把原始文件塞入普通 Config |
+| `Instructions`、`InstructionRules` | Ash Instruction authority | 四种来源的项目指令已接入转换与发布；用户级 apply 尚未完成，不能把原始文件塞入普通 Config |
 | `Agents` | Ash Agent definition authority | 目标模型尚未完成 |
 | `Settings` 其他字段 | 对应 Ash typed field-by-field mapping | 不支持项必须显示为 skipped/unsupported，禁止 raw passthrough |
 | `ExecutionRules` | Policy migration review | 不能生成长期 approval，也不能自动转换为 Hook |
@@ -276,9 +280,9 @@ commit。
 一次 Import 可能同时修改 Skill、MCP、Plugin 与 Hook section，因此 apply 必须先构造完整 plan。
 Config 子批次使用 expected-revision 约束：
 重新校验 source identity/digest，验证全部 typed mutation，成功时一次推进 Config revision，任一项
-失败则不提交任何 Config 项。`Instructions` 与 `Agents` 等非 Config target 尚未完成；在对应
+失败则不提交任何 Config 项。项目 Instructions 使用独立逐文件发布；用户级 Instructions 与 Agents 等非 Config target 尚未完成。在对应
 authority 可以 prepare/publish 前，它们必须保持 unsupported，不能伪装成同一 Config transaction。
-当前 Config 只有逐 command mutation；atomic import batch、跨 authority prepare/publish、import
+当前 Config 只有逐 command mutation；atomic import batch、跨 authority prepare/publish、持久 import
 receipt、provenance 与 remove/rollback contract 尚未实现。
 
 共享的项目 `AGENTS.md` 已由 Ash Instruction authority 直接读取，不能再导入成第二份。
@@ -286,7 +290,7 @@ receipt、provenance 与 remove/rollback contract 尚未实现。
 导入应由 App Server 协调受信文件读写：选定来源、重新校验、仅在目标缺失或为空时直接复制正文；
 已有非空 `ASH.md` 应报告冲突，不由 Agent 合并或覆盖。
 全程不调用 Agent，也不把来源正文放进 `/init` 的模型上下文。`/init` 只负责让 Agent 根据
-项目事实生成或更新 Ash 自己的 `ASH.md`。目前只有发现与预览，写入目标的 apply 尚未实现。
+项目事实生成或更新 Ash 自己的 `ASH.md`。四种来源的项目指令导入已接入 App Server，契约见下节。
 
 `ash-file-access` 与 Import workflow 是两条不同路径。前者保存目录 Grant，并按明确的来源能力开放 Skills、Agent definitions 或 Plugin declaration；后者让用户预览、选择并迁移外部 Agent 配置，不授予持续文件访问。两条路径可以复用来源检查和解析，但不能复用授权生命周期或应用决定；本 crate 不依赖 `ash-file-access`，由 App Server 根据 Authorization 调用。
 
@@ -359,8 +363,8 @@ failure fixture；当前测试尚未覆盖所有 `AgentImportError` 分支，这
   sessions、认证与历史导入明确不在本 crate 范围。
 - **Current limitation**：user constructor 只识别默认 home layout；自定义 `CODEX_HOME`、
   `CLAUDE_CONFIG_DIR` 或独立外部 source root 尚无公共构造契约。
-- **Current limitation**：没有 stable inspection identity、TOCTOU revalidation 或 App Server wire
-  contract。
+- **Current limitation**：通用配置迁移没有 stable inspection identity、TOCTOU revalidation 或 App Server wire
+  contract；项目指令已有来源摘要校验与协议接口。
 - **Current limitation**：没有 Config batch adapter、import receipt 或 source-qualified rollback
   contract。
 - **Proposed**：App Server 组合 `MigrationPlan` fragment 并调用各 authority；Desktop 只提交用户
@@ -370,3 +374,26 @@ failure fixture；当前测试尚未覆盖所有 `AgentImportError` 分支，这
 
 无论后续实现如何演进，以下不变量保持不变：不扫描整个 home、不导入认证状态、不把 preview
 当作执行授权、不让 Desktop 或本 crate 绕过目标领域的最终校验。
+
+## 多来源项目指令导入
+
+`detect_instruction_plan` 只读取选定生态的指令，不读取 settings、MCP、hooks 等其他配置。
+所有来源输出同一个 `ExternalInstruction`，包含 Root/Rule 类型、加载方式、正文和原始文本；Debug 隐藏正文。
+
+| 来源 | 项目文件 | 转换方式 |
+| --- | --- | --- |
+| Copilot | `.github/copilot-instructions.md`、`.github/instructions/*.instructions.md` | 根文件进入 `ASH.md`；`applyTo` 转为文件匹配，无模式规则保留按需加载 |
+| Claude | `CLAUDE.md`、`.claude/CLAUDE.md`、`.claude/rules/**/*.md` | 根文件进入 `ASH.md`；其他规则保留全局或 `paths` 文件匹配 |
+| Codex | `AGENTS.override.md` | 非空内容进入 `ASH.md`；共享 `AGENTS.md` 已直接加载，不重复复制 |
+| Cursor | `.cursorrules`、`.cursor/rules/**/*.mdc` | 根文件进入 `ASH.md`；规则按 `alwaysApply`、`globs` 或显式选择转换 |
+
+- 细分规则写入 `.ash/instructions/<source>-<name>.md`，嵌套目录合并为文件名；重名报告 unsupported。遍历遵守文件数、深度与字节限制。
+- Claude 的私有 `CLAUDE.local.md` 暂不发布到项目规则；Claude/Cursor 正文中的有效 `@` 引用暂不转换，报告 unsupported。行内代码和代码块里的 `@` 保留普通文本语义。
+- Codex override 与非空共享 `AGENTS.md` 共存时报告 unsupported，避免把替换语义变成追加。空 override 不遮蔽普通用户指令。
+- 未知字段、非法 frontmatter、空模式等产生诊断；不能因此扩大为全局规则。转换后由 `ash-instructions::validate_instruction` 校验。
+- 请求必须指定 `source`。发布前重读来源，校验绑定来源生态、目录、选中条目、来源文本与转换结果的摘要；仅写入缺失或空目标。相同内容返回 unchanged，不同内容返回 conflict。
+- Markdown 链接按新位置重定位，代码不改写。共享 `AGENTS.md` 不修改，其中的外部引用提示审查。
+- 导入不是持续同步，不触发 Agent 整理正文。所有已导入规则由相同 catalog 和 Core 路径提供给主、子 Agent。
+- 当前只提供项目级后端接口；用户级发布、跨领域事务和 Desktop 导入界面尚未完成。逐文件结果与权限契约见 [App Server 协议](../app-server-protocol/README.md#指令导入)。
+
+来源格式参考 [Copilot 指令文档](https://code.visualstudio.com/docs/agent-customization/custom-instructions)、[Claude memory 文档](https://code.claude.com/docs/en/memory) 和 [Cursor rules 文档](https://prod.cursor.com/docs/rules)。

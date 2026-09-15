@@ -7,21 +7,6 @@ use crate::model_catalog::ModelCatalog;
 use crate::model_catalog::unavailable_model_catalog;
 use crate::resource_store::ResourceError;
 use crate::resource_store::ResourceStore;
-use guardian_v2::ProviderReviewModel;
-use serde::Deserialize;
-use serde_json::Value;
-use std::collections::BTreeSet;
-use std::io::BufRead;
-use std::io::BufReader;
-use std::io::Write;
-use std::sync::Arc;
-use std::sync::Condvar;
-use std::sync::Mutex;
-use std::sync::RwLock;
-use std::sync::mpsc;
-use std::thread;
-use std::time::Duration;
-use zeroize::Zeroize;
 use ash_app_server_protocol::protocol::error::AppServerError;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::registry::ClientMethod;
@@ -60,6 +45,21 @@ use ash_skills_extension::SkillConfigSnapshotProvider;
 use ash_skills_extension::SkillRuntime;
 use ash_skills_extension::SkillWatcher;
 use ash_typst::TypstCompiler;
+use guardian_v2::ProviderReviewModel;
+use serde::Deserialize;
+use serde_json::Value;
+use std::collections::BTreeSet;
+use std::io::BufRead;
+use std::io::BufReader;
+use std::io::Write;
+use std::sync::Arc;
+use std::sync::Condvar;
+use std::sync::Mutex;
+use std::sync::RwLock;
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
+use zeroize::Zeroize;
 
 mod account_operations;
 mod agent_environment_source;
@@ -99,6 +99,8 @@ mod git_turn_changes_observer;
 mod git_turn_changes_operations;
 mod git_turn_changes_runtime;
 mod home_context;
+mod instruction_import;
+mod instruction_operations;
 mod interaction_runtime;
 mod issue_operations;
 mod issue_runtime;
@@ -141,7 +143,6 @@ mod search_operations;
 mod semantic_index_job;
 mod session_operations;
 mod skill_operations;
-mod instruction_operations;
 mod start_turn;
 mod symbol_index_operations;
 mod symbol_index_runtime;
@@ -691,8 +692,7 @@ impl AppServer {
         database_path: &std::path::Path,
     ) -> Result<Self, String> {
         let store: Arc<dyn memories::MemoryStore> = Arc::new(
-            ash_state::SqliteMemoryStore::open(database_path)
-                .map_err(|error| error.to_string())?,
+            ash_state::SqliteMemoryStore::open(database_path).map_err(|error| error.to_string())?,
         );
         self.memories = Some(Arc::new(memories::Memories::new(store)));
         self.with_memory_extension()
@@ -2205,6 +2205,10 @@ impl AppServer {
             Some(ClientMethod::HookUpsert) => self.hook_upsert(&request.params),
             Some(ClientMethod::HookRemove) => self.hook_remove(&request.params),
             Some(ClientMethod::HookSetEnablement) => self.hook_set_enablement(&request.params),
+            Some(ClientMethod::InstructionImportPreview) => {
+                self.instruction_import_preview(&request.params)
+            }
+            Some(ClientMethod::InstructionImport) => self.instruction_import(&request.params),
             Some(ClientMethod::InstructionList) => self.instruction_list(&request.params),
             Some(ClientMethod::SkillList) => self.skill_list(&request.params),
             Some(ClientMethod::SkillSetEnablement) => self.skill_set_enablement(&request.params),
@@ -2449,22 +2453,20 @@ impl ThreadUpdateSink for AppServerThreadUpdates {
         let goal_notification = match &update.update {
             ash_protocol::ThreadUpdate::Committed { event } => match event {
                 ash_protocol::ThreadEvent::GoalCreated { goal, .. }
-                | ash_protocol::ThreadEvent::GoalUpdated { goal, .. } => Some(
-                    GoalNotification::Updated(
+                | ash_protocol::ThreadEvent::GoalUpdated { goal, .. } => {
+                    Some(GoalNotification::Updated(
                         ash_app_server_protocol::protocol::goal::ThreadGoalUpdatedNotification {
                             thread_id: update.thread_id.clone(),
                             turn_id: None,
                             goal: goal.clone(),
                         },
-                    ),
-                ),
-                ash_protocol::ThreadEvent::GoalCleared { .. } => Some(
-                    GoalNotification::Cleared(
-                        ash_app_server_protocol::protocol::goal::ThreadGoalClearedNotification {
-                            thread_id: update.thread_id.clone(),
-                        },
-                    ),
-                ),
+                    ))
+                }
+                ash_protocol::ThreadEvent::GoalCleared { .. } => Some(GoalNotification::Cleared(
+                    ash_app_server_protocol::protocol::goal::ThreadGoalClearedNotification {
+                        thread_id: update.thread_id.clone(),
+                    },
+                )),
                 ash_protocol::ThreadEvent::ModelUsageRecorded { turn_id, .. }
                 | ash_protocol::ThreadEvent::ModelInvocationRecorded { turn_id, .. }
                 | ash_protocol::ThreadEvent::TurnFailed { turn_id, .. } => self

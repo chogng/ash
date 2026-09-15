@@ -1,11 +1,6 @@
 use crate::local_tools::local_policy_revision;
 use agent::MultiAgentToolService;
 use agent::SPAWN_AGENT_TOOL_NAME;
-use serde_json::Value;
-use serde_json::json;
-use std::sync::Arc;
-use std::time::Duration;
-use std::time::Instant;
 use ash_action_policy::ActionReviewRequest;
 use ash_async_utils::CancellationToken;
 use ash_core::CoreError;
@@ -37,6 +32,11 @@ use ash_protocol::ToolCallId;
 use ash_protocol::ToolName;
 use ash_protocol::TurnStatus;
 use ash_protocol::UserInput;
+use serde_json::Value;
+use serde_json::json;
+use std::sync::Arc;
+use std::time::Duration;
+use std::time::Instant;
 
 #[test]
 fn recovered_spawn_starts_a_new_child_turn_once() {
@@ -212,11 +212,21 @@ impl ash_core::ActionPolicyService for AllowCoordination {
 
 #[test]
 fn built_in_model_guidance_reaches_rpc_roots_and_default_workers_through_tool_execution() {
-    for (provider, name) in [
-        ("openai", "gpt-6-astra"),
-        ("anthropic", "claude-sonnet-4-20250514"),
-        ("google", "gemini-3.6-flash"),
-        ("deepseek", "deepseek-v4-pro"),
+    for (provider, name, import_source, instruction_path) in [
+        (
+            "openai",
+            "gpt-6-astra",
+            "copilot",
+            ".github/copilot-instructions.md",
+        ),
+        (
+            "anthropic",
+            "claude-sonnet-4-20250514",
+            "claude",
+            "CLAUDE.md",
+        ),
+        ("google", "gemini-3.6-flash", "codex", "AGENTS.override.md"),
+        ("deepseek", "deepseek-v4-pro", "cursor", ".cursorrules"),
     ] {
         let model = ash_protocol::ModelRef::new(
             ash_protocol::ProviderId::new(provider).unwrap(),
@@ -232,6 +242,13 @@ fn built_in_model_guidance_reaches_rpc_roots_and_default_workers_through_tool_ex
             InMemoryThreadStore::default(),
         )));
         let (sender, receiver) = std::sync::mpsc::channel();
+        let root = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(root.path().join(instruction_path).parent().unwrap()).unwrap();
+        std::fs::write(
+            root.path().join(instruction_path),
+            "Shared imported instruction for every worker.",
+        )
+        .unwrap();
         let server = crate::AppServer::new(threads.clone(), Arc::new(GuidanceModel(sender)));
         // Defer only child scheduling so this test can inspect the durable spawn before running it.
         let service = MultiAgentToolService::new(
@@ -242,6 +259,28 @@ fn built_in_model_guidance_reaches_rpc_roots_and_default_workers_through_tool_ex
         )
         .with_model_instructions(server.model_instructions.clone());
         let mut server = server.with_tool_service(Arc::new(service), Arc::new(AllowCoordination));
+        let authorization = ash_file_access::Grant::for_environment(
+            ash_file_access::Dir::open_local(root.path()).unwrap(),
+            ash_file_access::GrantSource::HostConfiguration,
+            ash_file_access::Permissions::new([ash_file_access::Permission::LoadInstructions]),
+        )
+        .authorize(ash_file_access::Permission::LoadInstructions)
+        .unwrap();
+        let runtime = server.env_runtime_mut();
+        let contributions = super::dir_contributions::DirContributions::discover(
+            root.path(),
+            runtime.dir_grants.clone(),
+            Some(authorization),
+            None,
+        )
+        .unwrap();
+        runtime._dir_contributions = Some(contributions.clone());
+        runtime.turn_executor = runtime
+            .turn_executor
+            .clone()
+            .with_harness_context_provider(contributions);
+        let executor = runtime.turn_executor.clone();
+        server.turn_backend.install_executor(executor);
         server.model_catalog = Arc::new(SelectedModel(model.clone()));
         let mut connection = server.connection();
         let mut id = 0;
@@ -264,6 +303,36 @@ fn built_in_model_guidance_reaches_rpc_roots_and_default_workers_through_tool_ex
             json!({"commandId":"initial-guidance-root", "title":"guided root", "agent":{"type":"default"}}),
         );
         let session = created["session"]["sessionId"].as_str().unwrap();
+        let session_id = ash_protocol::SessionId::new(session).unwrap();
+        server
+            .env_runtime
+            .read()
+            .unwrap()
+            .dir_grants
+            .add_dir(
+                session_id.clone(),
+                ash_file_access::Grant::for_session_tree(
+                    session_id,
+                    ash_file_access::Dir::open_local(root.path()).unwrap(),
+                    ash_file_access::GrantSource::HostConfiguration,
+                    ash_file_access::Permissions::new([
+                        ash_file_access::Permission::BrowseFiles,
+                        ash_file_access::Permission::ReadFiles,
+                        ash_file_access::Permission::WriteFiles,
+                        ash_file_access::Permission::LoadInstructions,
+                    ]),
+                ),
+            )
+            .unwrap();
+        let preview = call(
+            "instructions/importPreview",
+            json!({"source":import_source,"directory":{"sessionId":session,"path":root.path()},"sources":[]}),
+        );
+        let imported = call(
+            "instructions/import",
+            json!({"source":import_source,"directory":{"sessionId":session,"path":root.path()},"sources":[],"digest":preview["digest"]}),
+        );
+        assert_eq!(imported["items"][0]["status"], "imported");
         call(
             "session/request",
             json!({"commandId":"initial-guidance-turn", "sessionId":session, "request":{"type":"startTurn", "threadId":session, "expectedSequence":1, "input":[{"type":"text", "text":"start a worker"}]}}),
@@ -299,6 +368,14 @@ fn built_in_model_guidance_reaches_rpc_roots_and_default_workers_through_tool_ex
             .unwrap();
         let worker = receiver.recv_timeout(Duration::from_secs(5)).unwrap();
         for request in [first, continued, worker] {
+            let context = serde_json::to_string(&request.input).unwrap();
+            assert_eq!(
+                context
+                    .matches("Shared imported instruction for every worker.")
+                    .count(),
+                1,
+                "{context}"
+            );
             let body = request.instructions.unwrap();
             assert_eq!(body.matches(instructions.body.trim()).count(), 1);
             assert_eq!(body.matches("## Shared working rules").count(), 1);
@@ -318,11 +395,7 @@ fn built_in_model_guidance_reaches_rpc_roots_and_default_workers_through_tool_ex
 struct NoopTurnBackend;
 
 impl TurnExecutionBackend for NoopTurnBackend {
-    fn start(
-        &self,
-        _: &ash_protocol::ThreadId,
-        _: &ash_protocol::TurnId,
-    ) -> Result<(), CoreError> {
+    fn start(&self, _: &ash_protocol::ThreadId, _: &ash_protocol::TurnId) -> Result<(), CoreError> {
         Ok(())
     }
 

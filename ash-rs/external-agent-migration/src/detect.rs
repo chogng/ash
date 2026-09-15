@@ -55,7 +55,11 @@ pub fn detect_migration_plan(
         match detection.source.location.agent() {
             ExternalAgent::Claude => detection.detect_claude(home.as_mut()),
             ExternalAgent::Codex => detection.detect_codex(),
+            ExternalAgent::Copilot | ExternalAgent::Cursor => {}
         }
+        detection
+            .items
+            .extend(crate::instruction::detect(&mut detection.source));
         items.extend(detection.items);
         diagnostics.extend(detection.source.diagnostics);
         if let Some(home) = home {
@@ -98,7 +102,6 @@ impl Detection {
                 },
             );
         }
-        self.detect_instructions(&claude_instruction_candidates(self.source.location.scope()));
         self.detect_names(
             ".claude/skills",
             ImportItemKind::Skills,
@@ -110,11 +113,6 @@ impl Detection {
             NameSource::Files("md"),
         );
         self.detect_agents(".claude/agents", "md");
-        self.detect_names(
-            ".claude/rules",
-            ImportItemKind::InstructionRules,
-            NameSource::Files("md"),
-        );
         let collected = mcp::collect_mcp_servers(&mut self.source, home);
         let (enabled, disabled) = settings
             .as_ref()
@@ -152,7 +150,6 @@ impl Detection {
     }
 
     fn detect_codex(&mut self) {
-        self.detect_instructions(&codex_instruction_candidates(self.source.location.scope()));
         if let Some(config) = self.source.read(
             Path::new(".codex/config.toml"),
             ImportItemKind::Settings,
@@ -185,27 +182,6 @@ impl Detection {
             ImportItemKind::ExecutionRules,
             NameSource::Files("rules"),
         );
-    }
-
-    fn detect_instructions(&mut self, candidates: &[PathBuf]) {
-        for relative in candidates {
-            if let Some(document) =
-                self.source
-                    .read(relative, ImportItemKind::Instructions, |text| {
-                        Ok(!text.trim().is_empty())
-                    })
-                && document.value
-            {
-                self.add(
-                    ImportItemKind::Instructions,
-                    vec![document.path.clone()],
-                    MigrationItemDetail::Instructions {
-                        sources: vec![document.path],
-                    },
-                );
-                return;
-            }
-        }
     }
 
     fn detect_names(&mut self, relative: &str, kind: ImportItemKind, names: NameSource) {
@@ -397,31 +373,6 @@ fn matches_extension(path: &Path, extension: &str) -> bool {
         .and_then(|value| value.to_str())
         .is_some_and(|value| value.eq_ignore_ascii_case(extension))
         && path.file_stem().and_then(|stem| stem.to_str()) != Some("README")
-}
-
-fn claude_instruction_candidates(scope: ImportScope) -> Vec<PathBuf> {
-    match scope {
-        ImportScope::Project => vec![
-            PathBuf::from("CLAUDE.md"),
-            PathBuf::from(".claude").join("CLAUDE.md"),
-        ],
-        ImportScope::User => vec![PathBuf::from(".claude").join("CLAUDE.md")],
-    }
-}
-
-fn codex_instruction_candidates(scope: ImportScope) -> Vec<PathBuf> {
-    match scope {
-        ImportScope::Project => vec![
-            PathBuf::from("AGENTS.override.md"),
-            PathBuf::from("AGENTS.md"),
-            PathBuf::from(".codex").join("AGENTS.override.md"),
-            PathBuf::from(".codex").join("AGENTS.md"),
-        ],
-        ImportScope::User => vec![
-            PathBuf::from(".codex").join("AGENTS.override.md"),
-            PathBuf::from(".codex").join("AGENTS.md"),
-        ],
-    }
 }
 
 fn mcp_enablement(document: &JsonValue) -> (Vec<String>, BTreeSet<String>) {

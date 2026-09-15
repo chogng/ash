@@ -344,6 +344,13 @@ use crate::protocol::initialize::ProtocolVersion;
 use crate::protocol::initialize::ServerCapabilities;
 use crate::protocol::instructions::InstructionDiagnosticDto;
 use crate::protocol::instructions::InstructionDto;
+use crate::protocol::instructions::InstructionImportItem;
+use crate::protocol::instructions::InstructionImportParams;
+use crate::protocol::instructions::InstructionImportPreviewParams;
+use crate::protocol::instructions::InstructionImportPreviewResult;
+use crate::protocol::instructions::InstructionImportResult;
+use crate::protocol::instructions::InstructionImportSource;
+use crate::protocol::instructions::InstructionImportStatus;
 use crate::protocol::instructions::InstructionListParams;
 use crate::protocol::instructions::InstructionListResult;
 use crate::protocol::instructions::InstructionLoadDto;
@@ -1876,6 +1883,16 @@ client_methods! {
         response: ConfigCommandResult,
         serialization: GlobalExclusive,
     },
+    InstructionImportPreview => "instructions/importPreview" {
+        params: InstructionImportPreviewParams,
+        response: InstructionImportPreviewResult,
+        serialization: GlobalSharedRead,
+    },
+    InstructionImport => "instructions/import" {
+        params: InstructionImportParams,
+        response: InstructionImportResult,
+        serialization: GlobalExclusive,
+    },
     InstructionList => "instructions/list" {
         params: InstructionListParams,
         response: InstructionListResult,
@@ -2999,6 +3016,13 @@ typescript_bindings! {
     SkillDto,
     SkillDiagnosticCodeDto,
     SkillDiagnosticDto,
+    InstructionImportPreviewParams,
+    InstructionImportPreviewResult,
+    InstructionImportParams,
+    InstructionImportResult,
+    InstructionImportItem,
+    InstructionImportStatus,
+    InstructionImportSource,
     InstructionListParams,
     InstructionListResult,
     InstructionDto,

@@ -1,11 +1,17 @@
 //! Read-only discovery of importable configuration from supported external coding agents.
 //!
-//! This crate recognizes documented Codex and Claude configuration locations and produces an
+//! This crate recognizes documented Codex, Claude, Copilot, and Cursor configuration locations and produces an
 //! immutable [`AgentPathInspection`] for a caller to preview, and reads their bounded source
 //! formats into a migration [`MigrationPlan`]. It does not mutate Ash configuration, import
 //! credentials, grant permissions, or own Desktop UI.
 
 mod agent_paths;
+mod copilot;
+mod instruction;
+pub use instruction::ExternalInstruction;
+pub use instruction::ExternalInstructionKind;
+pub use instruction::ExternalInstructionLoad;
+pub use instruction::detect_instruction_plan;
 mod detect;
 mod error;
 mod frontmatter;

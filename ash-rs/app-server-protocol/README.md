@@ -24,3 +24,21 @@
 | `memoryDiagnostics/start` / `read` / `submit` / `stop` / `export` | 诊断 Session → report/resource | 进程内存诊断，不读取长期 Memory |
 
 `memory/changed` 只向产品 host 发布作用域和新 catalog revision；客户端随后重新读取。`queue/changed` 是无内容的失效通知。Config 的 Feature 来源由 `ash-features` 解释。反馈待审阅包在 connection 关闭时释放，持久队列由 profile 后台调度器恢复。
+
+## 指令导入
+
+| Method | 参数与结果 | 行为 |
+| --- | --- | --- |
+| `instructions/importPreview` | `source`、`directory: {sessionId, path}`、`sources: string[]` → digest、items、diagnostics | 预览选定生态的项目指令，sources 为空时发现全部；非空时只接受准确的已发现相对路径。需要目录 ReadFiles 与 BrowseFiles。 |
+| `instructions/import` | 同一 source、directory、sources 与已审阅 digest → items | 重读来源并检查摘要；需要 WriteFiles，逐文件有条件发布。 |
+
+`source` 必填，值为 `copilot`、`claude`、`codex` 或 `cursor`，无默认来源。摘要绑定该来源，不能跨来源复用。
+
+预览项包含 source、target、转换后的 content、status 和可选 message。状态为 ready、unchanged、conflict 或 unsupported。
+来源变化返回 `FileSystemRevisionConflict`，写入前失败。任一选中项预览为 conflict/unsupported 时整批不开始写入。
+发布只创建缺失或填充空文件，不覆盖不同的已有正文；每个文件原子发布，成功状态为 imported。
+发布期间的错误返回逐项 failed/conflict，已发布文件不会回滚；消费者必须检查每项状态，不能将 RPC 成功当作整批成功。
+重试会重新检查当前权限、来源和目标，相同内容返回 unchanged。该接口没有持续资源或跨请求后台任务，关闭连接不回滚已经发布的文件。
+
+目标为 `ASH.md` 和 `.ash/instructions/*.md`。共享 `AGENTS.md` 不复制、不修改；其中指向外部规则的引用以诊断提示审查。
+导入后通过原有目录文件刷新进入指令 catalog；不创建 Agent Turn，也不授予 LoadInstructions 或其他权限。

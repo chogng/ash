@@ -151,6 +151,10 @@ import type { HookSetEnablementParams } from './types/HookSetEnablementParams.js
 import type { HookUpsertParams } from './types/HookUpsertParams.js';
 import type { InitializeParams } from './types/InitializeParams.js';
 import type { InitializeResult } from './types/InitializeResult.js';
+import type { InstructionImportParams } from './types/InstructionImportParams.js';
+import type { InstructionImportPreviewParams } from './types/InstructionImportPreviewParams.js';
+import type { InstructionImportPreviewResult } from './types/InstructionImportPreviewResult.js';
+import type { InstructionImportResult } from './types/InstructionImportResult.js';
 import type { InstructionListParams } from './types/InstructionListParams.js';
 import type { InstructionListResult } from './types/InstructionListResult.js';
 import type { IssueConfigureParams } from './types/IssueConfigureParams.js';
@@ -514,6 +518,8 @@ export interface AppServerRequestMap {
   "hook/upsert": { params: HookUpsertParams; response: ConfigCommandResult };
   "hook/remove": { params: HookRemoveParams; response: ConfigCommandResult };
   "hook/enablement/set": { params: HookSetEnablementParams; response: ConfigCommandResult };
+  "instructions/importPreview": { params: InstructionImportPreviewParams; response: InstructionImportPreviewResult };
+  "instructions/import": { params: InstructionImportParams; response: InstructionImportResult };
   "instructions/list": { params: InstructionListParams; response: InstructionListResult };
   "skills/list": { params: SkillListParams; response: SkillListResult };
   "skill/enablement/set": { params: SkillSetEnablementParams; response: ConfigCommandResult };
@@ -782,6 +788,8 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "hook/upsert": { method: "hook/upsert" },
   "hook/remove": { method: "hook/remove" },
   "hook/enablement/set": { method: "hook/enablement/set" },
+  "instructions/importPreview": { method: "instructions/importPreview" },
+  "instructions/import": { method: "instructions/import" },
   "instructions/list": { method: "instructions/list" },
   "skills/list": { method: "skills/list" },
   "skill/enablement/set": { method: "skill/enablement/set" },

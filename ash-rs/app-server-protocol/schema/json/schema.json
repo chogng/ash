@@ -5145,6 +5145,38 @@
         {
           "properties": {
             "method": {
+              "const": "instructions/importPreview",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/InstructionImportPreviewParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "instructions/import",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/InstructionImportParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "instructions/list",
               "type": "string"
             },
@@ -9234,6 +9266,38 @@
             },
             "result": {
               "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "instructions/importPreview",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/InstructionImportPreviewResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "instructions/import",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/InstructionImportResult"
             }
           },
           "required": [
@@ -18152,6 +18216,148 @@
         "patterns"
       ],
       "type": "object"
+    },
+    "InstructionImportItem": {
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "message": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/InstructionImportStatus"
+        },
+        "target": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "target",
+        "content",
+        "status"
+      ],
+      "type": "object"
+    },
+    "InstructionImportParams": {
+      "additionalProperties": false,
+      "description": "Applies exactly a reviewed selection. A stale digest is rejected before any writes.",
+      "properties": {
+        "digest": {
+          "type": "string"
+        },
+        "directory": {
+          "$ref": "#/$defs/SessionDirSelector"
+        },
+        "source": {
+          "$ref": "#/$defs/InstructionImportSource"
+        },
+        "sources": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "source",
+        "directory",
+        "sources",
+        "digest"
+      ],
+      "type": "object"
+    },
+    "InstructionImportPreviewParams": {
+      "additionalProperties": false,
+      "description": "Empty sources previews all discovered instructions from the selected source; otherwise select exact relative paths.",
+      "properties": {
+        "directory": {
+          "$ref": "#/$defs/SessionDirSelector"
+        },
+        "source": {
+          "$ref": "#/$defs/InstructionImportSource"
+        },
+        "sources": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "source",
+        "directory",
+        "sources"
+      ],
+      "type": "object"
+    },
+    "InstructionImportPreviewResult": {
+      "properties": {
+        "diagnostics": {
+          "items": {
+            "$ref": "#/$defs/InstructionDiagnosticDto"
+          },
+          "type": "array"
+        },
+        "digest": {
+          "type": "string"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/InstructionImportItem"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "digest",
+        "items",
+        "diagnostics"
+      ],
+      "type": "object"
+    },
+    "InstructionImportResult": {
+      "description": "Publication is atomic per file. Inspect every item; a failed item does not roll back earlier files.",
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/InstructionImportItem"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "type": "object"
+    },
+    "InstructionImportSource": {
+      "description": "External project instruction format. No implicit default or runtime source registration.",
+      "enum": [
+        "copilot",
+        "claude",
+        "codex",
+        "cursor"
+      ],
+      "type": "string"
+    },
+    "InstructionImportStatus": {
+      "enum": [
+        "ready",
+        "unchanged",
+        "conflict",
+        "unsupported",
+        "imported",
+        "failed"
+      ],
+      "type": "string"
     },
     "InstructionListParams": {
       "properties": {

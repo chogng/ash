@@ -507,7 +507,16 @@ fn load_entry(
             return None;
         }
     };
-    let (frontmatter, body) = match split_frontmatter(&text) {
+    parse_entry(relative_path, &text, diagnostics)
+}
+
+fn parse_entry(
+    relative_path: PathBuf,
+    text: &str,
+    diagnostics: &mut Vec<InstructionDiagnostic>,
+) -> Option<InstructionArtifact> {
+    let file_name = relative_path.file_stem()?.to_str()?;
+    let (frontmatter, body) = match split_frontmatter(text) {
         Some(parts) => parts,
         None => {
             diagnostics.push(diagnostic(
@@ -634,3 +643,36 @@ fn diagnostic(
 #[cfg(test)]
 #[path = "catalog_tests.rs"]
 mod tests;
+
+/// Validates a proposed project instruction using the same rules as catalog discovery.
+/// Only ASH.md and direct .ash/instructions entries are publishable; AGENTS.md is shared.
+pub fn validate_instruction(path: &Path, text: &str) -> Result<(), &'static str> {
+    if text.len() > MAX_FILE_BYTES || text.trim().is_empty() {
+        return Err("Instruction must contain 1–32768 bytes");
+    }
+    if path == Path::new("ASH.md") {
+        return Ok(());
+    }
+    if path.parent() != Some(Path::new(DIRECTORY_INSTRUCTIONS))
+        || path.extension().and_then(|value| value.to_str()) != Some("md")
+    {
+        return Err(
+            "Instruction target must be ASH.md or a direct .ash/instructions Markdown file",
+        );
+    }
+    let name = path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .ok_or("Invalid instruction name")?;
+    if !valid_name(name) {
+        return Err("Invalid instruction name");
+    }
+    let mut diagnostics = Vec::new();
+    parse_entry(
+        PathBuf::from(path.file_name().ok_or("Invalid instruction path")?),
+        text,
+        &mut diagnostics,
+    )
+    .map(|_| ())
+    .ok_or("Invalid instruction document")
+}

@@ -155,7 +155,7 @@ Instructions 时，目标是 Ash 专属 `ASH.md` 或相应 `instructions/` 文�
 ## 4. `external-agent-migration` 是外部反腐化层
 
 `external-agent-migration` 的“Agent”表示外部 Agent 生态，不表示它只导入 Agents artifact。它统一处理
-Codex、Claude 以及未来明确支持的其他生态中的 Instructions、Skills、Agents 和设置类内容。
+Codex、Claude、Copilot、Cursor 以及未来明确支持的其他生态中的 Instructions、Skills、Agents 和设置类内容。
 
 ```mermaid
 flowchart LR
@@ -240,7 +240,7 @@ Slash Command catalog 只包含产品和服务命令；独立 `$name` Skill sele
 | Directory Instructions authority | 部分具备 | `ash-instructions` + `DirContributions`；共享/专属 always-on、Global 与已读文件 Contextual 注入已实现 |
 | Directory Agents authority | 部分具备 | catalog/refresh、spawn 显式/自动选择、reference/capability freezing 已实现；list/picker API 未实现 |
 | `.ash/{instructions,skills,agents}` loader | 已实现 | 固定 roots、有界校验、Directory activation 与 watcher refresh |
-| External parser、preview 与 apply | 尚未完成 | typed fragments、digest、wire contract、transaction/receipt |
+| External parser、preview 与 apply | 部分具备 | 四种来源的项目指令已有 typed fragment、摘要预览和逐文件发布；其他 apply、跨领域事务与持久回执未完成 |
 | `$name` Skill selector | 已实现 | TUI/Desktop `$name` 绑定 stable `SkillRef`；`/skills` 只管理，`@` 留给文件和 Plugin 上下文 |
 
 `$create-instructions` 是创建或更新细分 Instruction 的内置 Skill，复用通用激活机制；`/init`
@@ -249,8 +249,7 @@ Slash Command catalog 只包含产品和服务命令；独立 `$name` Skill sele
 [`ash-instructions` README](../ash-rs/instructions/README.md) 维护。
 外部 `CLAUDE.md` 导入是独立的确定性文件操作：重新校验用户选中的来源，只在目标缺失或为空时
 复制到 Ash 的目标文件；已有非空目标报告冲突，不交给 Agent 合并。来源正文不进入 `/init`
-或任何用于整理导入内容的 Agent Turn。当前导入仅有
-发现与预览，尚未接通目标写入。
+或任何用于整理导入内容的 Agent Turn。四种来源的项目指令均已接通预览与目标写入。
 
 实施顺序：
 
@@ -260,8 +259,8 @@ Slash Command catalog 只包含产品和服务命令；独立 `$name` Skill sele
    和通用 context injection；已接通按需读取、显式附件与写入前规则检查；管理界面仍待接入。
 4. Agent definition catalog 已开放给 multi-agent delegation 的受限选择；下一步补 list/picker API，
    cross-authority reference 在具备明确 authority contract 前继续拒绝。
-5. `external-agent-migration` 的 bounded parsers 和 typed preview fragments 已实现；下一步是 App
-   Server adapter 只对已经具备 target authority 的条目开放 apply。
+5. `external-agent-migration` 的 bounded parsers 和 typed preview fragments 已实现；四种来源的项目指令已接入
+   App Server 预览与发布。其他条目只在具备对应 target authority 时开放 apply。
 
 ## 8. 长期不变量
 
@@ -275,3 +274,11 @@ Slash Command catalog 只包含产品和服务命令；独立 `$name` Skill sele
 - 原生 loader、Import、source registration 与 `add-dir` 保持四条不同生命周期路径。
 - ContextAssembler 只消费冻结 snapshot 并产生 `ModelRequest`，不拥有 artifact discovery。
 - Agent 定义只有一种；内置与自定义是来源差异，会话、委托与工作流是运行时启动来源。
+
+### 多来源项目指令导入实现
+
+Copilot、Claude、Codex、Cursor 项目指令已具备后端预览与发布接口，详情由
+[external-agent-migration](../ash-rs/external-agent-migration/README.md#多来源项目指令导入)
+和 [App Server 协议](../ash-rs/app-server-protocol/README.md#指令导入) 维护。
+导入后由 Ash 指令目录独立管理，复用主、子 Agent 的 catalog 与 Core 路径；不注册持续外部来源。
+用户级指令发布、跨领域事务和 Desktop 导入界面仍未完成。
