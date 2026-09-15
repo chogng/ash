@@ -6,7 +6,10 @@
 //! credentials, grant permissions, or own Desktop UI.
 
 mod agent_paths;
+mod claude;
+mod codex;
 mod copilot;
+mod cursor;
 mod instruction;
 pub use instruction::ExternalInstruction;
 pub use instruction::ExternalInstructionKind;

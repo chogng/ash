@@ -127,25 +127,41 @@ fn unsupported_imports_and_private_rules_remain_visible_without_losing_semantics
             .iter()
             .all(|document| document.unsupported.is_some())
     );
-    assert!(cursor_rule("---\nalwaysApply: sometimes\n---\nRule").is_err());
-    assert!(claude_rule("---\npaths: []\n---\nRule").is_err());
-    assert!(claude_rule("---\nunknown: true\n---\nRule").is_err());
+    for (location, path, body) in [
+        (
+            AgentImportLocation::cursor_project(root.path()),
+            ".cursor/rules/invalid.mdc",
+            "---\nalwaysApply: sometimes\n---\nRule",
+        ),
+        (
+            AgentImportLocation::claude_project(root.path()),
+            ".claude/rules/invalid.md",
+            "---\npaths: []\n---\nRule",
+        ),
+        (
+            AgentImportLocation::claude_project(root.path()),
+            ".claude/rules/invalid.md",
+            "---\nunknown: true\n---\nRule",
+        ),
+    ] {
+        write(root.path(), path, body);
+        let plan = detect_instruction_plan(location).unwrap();
+        assert!(
+            plan.diagnostics()
+                .iter()
+                .any(|diagnostic| diagnostic.relative_path() == Path::new(path))
+        );
+    }
 }
 
 #[test]
 fn instruction_reference_checks_preserve_literal_code_and_empty_codex_override_selection() {
-    assert!(
-        claude_plain("Literal `@README`\n```\n@README\n```\nNormal guidance")
-            .unwrap()
-            .unsupported
-            .is_none()
-    );
-    assert!(
-        claude_plain("Import @README")
-            .unwrap()
-            .unsupported
-            .is_some()
-    );
+    let mut literal = plain("Literal `@README`\n```\n@README\n```\nNormal guidance").unwrap();
+    reject_references(&mut literal);
+    assert!(literal.unsupported.is_none());
+    let mut reference = plain("Import @README").unwrap();
+    reject_references(&mut reference);
+    assert!(reference.unsupported.is_some());
     let root = tempfile::tempdir().unwrap();
     write(root.path(), ".codex/AGENTS.md", "Ordinary");
     write(root.path(), ".codex/AGENTS.override.md", " \n");

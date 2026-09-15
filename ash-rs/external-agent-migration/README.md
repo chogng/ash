@@ -128,7 +128,10 @@ MCP 声明；整个文件不进入候选，也不交给 Desktop、模型或普�
 | `detect.rs::detect_migration_plan` | 按 agent/scope 编排 discovery 与解析，排序去重 plan item 与 diagnostic | 新条目类型、排序契约 |
 | `source.rs` | 读取前路径校验、有界文件读取和目录枚举、按来源诊断 | 软链接、大小与深度上限、失败隔离 |
 | `settings.rs` | JSON/TOML 解析、Claude 两份设置的合并与来源记录 | 源格式变化、失败语义 |
-| `instruction.rs` | 四种来源的共享指令结构、专用发现入口及 Claude/Codex/Cursor 解析 | 加载方式、作用域、来源语义与诊断 |
+| `instruction.rs` | 共享指令结构、统一发现入口和公共读取、遍历、引用与模式处理 | 跨来源契约与共用边界 |
+| `codex.rs` | Codex 用户/项目指令布局与 override 选择 | 优先级、共享文件冲突与空 override |
+| `claude.rs` | Claude 指令布局、paths 和私有文件限制 | 全局/文件匹配与引用诊断 |
+| `cursor.rs` | Cursor 指令布局、globs 和 alwaysApply | 三态加载方式与引用诊断 |
 | `copilot.rs` | Copilot 固定指令布局、正文和加载语义解析 | applyTo、未知字段、来源限制与诊断 |
 | `frontmatter.rs` | Markdown frontmatter 拆分与标量提取 | agent/命令 frontmatter 字段 |
 | `mcp.rs` | 外部 MCP 声明收集、`${VAR}` 语义、stdio/http 归一化与 unsupported 标记 | transport 类型、placeholder 规则 |
