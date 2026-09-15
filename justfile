@@ -1,5 +1,5 @@
 set working-directory := "."
-set positional-arguments := true
+set positional-arguments
 
 export JUST_SHELL := justfile_directory() / "scripts/just-shell.py"
 

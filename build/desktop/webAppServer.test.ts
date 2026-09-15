@@ -3,46 +3,57 @@ import test from "node:test";
 import { appServerEnvironment, attachWebAppServer, JsonlFrameDecoder, isAllowedWebOrigin, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION } from "./webAppServer.ts";
 import { createServer } from 'node:http';
 import { once } from 'node:events';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebSocket } from 'ws';
 
-test('serves isolated browser connections without a Vite server and closes their sockets', { timeout: 10000 }, async () => {
-  const workspaceRoot = await mkdtemp(join(tmpdir(), 'ash-web-transport-'));
-  // Node executes this fixture when the connection carrier is launched with "connect".
-  await writeFile(join(workspaceRoot, 'connect'), 'process.stdin.pipe(process.stdout);');
-  const server = createServer();
-  const dispose = attachWebAppServer(server, { workspaceRoot, profileRoot: join(workspaceRoot, 'profile'), executable: process.execPath, ripgrep: process.execPath });
-  server.listen(0, '127.0.0.1');
-  await once(server, 'listening');
-  const address = server.address();
-  assert.ok(address && typeof address === 'object');
-  const origin = `http://127.0.0.1:${address.port}`;
-  const clients = [new WebSocket(`${origin}/ash/app-server`, { origin }), new WebSocket(`${origin}/ash/app-server`, { origin })];
-  try {
-    await Promise.all(clients.map(client => once(client, 'open')));
-    for (const [index, client] of clients.entries()) {
-      const connected = once(client, 'message');
-      client.send(JSON.stringify({ event: WEB_APP_SERVER_CONNECT_EVENT, payload: { protocolVersion: WEB_APP_SERVER_PROTOCOL_VERSION } }));
-      const [message] = await connected;
-      assert.equal(JSON.parse(message.toString()).event, WEB_APP_SERVER_CONNECTED_EVENT);
-      const echoed = once(client, 'message');
-      const frame = JSON.stringify({ id: index, method: 'fixture' });
-      client.send(JSON.stringify({ event: WEB_APP_SERVER_FRAME_EVENT, payload: { frame } }));
-      const [response] = await echoed;
-      assert.deepEqual(JSON.parse(response.toString()), { event: WEB_APP_SERVER_FRAME_EVENT, payload: { frame } });
+for (const disconnectFirst of [false, true]) {
+  test(`releases connection processes and their workspace after ${disconnectFirst ? 'browser disconnect' : 'server shutdown'}`, { timeout: 10000 }, async () => {
+    const workspaceRoot = await mkdtemp(join(tmpdir(), 'ash-web-transport-'));
+    // Node executes this fixture when the connection carrier is launched with "connect".
+    await writeFile(join(workspaceRoot, 'connect'), 'require("node:fs").writeFileSync(process.pid + ".pid", ""); process.stdin.pipe(process.stdout);');
+    const server = createServer();
+    const dispose = attachWebAppServer(server, { workspaceRoot, profileRoot: join(workspaceRoot, 'profile'), executable: process.execPath, ripgrep: process.execPath });
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    const address = server.address();
+    assert.ok(address && typeof address === 'object');
+    const origin = `http://127.0.0.1:${address.port}`;
+    const clients = [new WebSocket(`${origin}/ash/app-server`, { origin }), new WebSocket(`${origin}/ash/app-server`, { origin })];
+    try {
+      await Promise.all(clients.map(client => once(client, 'open')));
+      for (const [index, client] of clients.entries()) {
+        const connected = once(client, 'message');
+        client.send(JSON.stringify({ event: WEB_APP_SERVER_CONNECT_EVENT, payload: { protocolVersion: WEB_APP_SERVER_PROTOCOL_VERSION } }));
+        const [message] = await connected;
+        assert.equal(JSON.parse(message.toString()).event, WEB_APP_SERVER_CONNECTED_EVENT);
+        const echoed = once(client, 'message');
+        const frame = JSON.stringify({ id: index, method: 'fixture' });
+        client.send(JSON.stringify({ event: WEB_APP_SERVER_FRAME_EVENT, payload: { frame } }));
+        const [response] = await echoed;
+        assert.deepEqual(JSON.parse(response.toString()), { event: WEB_APP_SERVER_FRAME_EVENT, payload: { frame } });
+      }
+      const closed = clients.map(client => once(client, 'close'));
+      const pids = (await readdir(workspaceRoot)).filter(name => name.endsWith('.pid')).map(name => Number(name.slice(0, -4)));
+      assert.equal(pids.length, 2);
+      if (disconnectFirst) {
+        for (const client of clients) client.close();
+        await Promise.all(closed);
+      }
+      const disposal = dispose();
+      assert.equal(dispose(), disposal);
+      await disposal;
+      await Promise.all(closed);
+      for (const pid of pids) assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' });
+    } finally {
+      await dispose();
+      for (const client of clients) client.terminate();
+      await new Promise<void>(resolve => server.close(() => resolve()));
+      await rm(workspaceRoot, { recursive: true, force: true });
     }
-    const closed = clients.map(client => once(client, 'close'));
-    dispose();
-    await Promise.all(closed);
-  } finally {
-    dispose();
-    for (const client of clients) client.terminate();
-    await new Promise<void>(resolve => server.close(() => resolve()));
-    await rm(workspaceRoot, { recursive: true, force: true });
-  }
 });
+}
 
 test('rejects cross-origin upgrades before opening a backend connection', { timeout: 10000 }, async () => {
   const server = createServer();
@@ -57,7 +68,7 @@ test('rejects cross-origin upgrades before opening a backend connection', { time
     assert.match(error.message, /403/);
   } finally {
     client.terminate();
-    dispose();
+    await dispose();
     await new Promise<void>(resolve => server.close(() => resolve()));
   }
 });
@@ -83,7 +94,7 @@ test('reports startup failure and rejects malformed transport messages', { timeo
     assert.equal(code, 1008);
   } finally {
     client.terminate();
-    dispose();
+    await dispose();
     await new Promise<void>(resolve => server.close(() => resolve()));
   }
 });

@@ -20,10 +20,11 @@ server.on('upgrade', (request, socket) => {
 	if (!closeConnections || request.url !== '/ash/app-server') socket.destroy();
 });
 server.listen(port, '127.0.0.1');
-function stop(): void {
-	closeConnections?.();
+async function stop(): Promise<void> {
+	const closing = closeConnections?.();
 	server.close();
 	server.closeAllConnections();
+	await closing;
 }
 process.once('SIGTERM', stop);
 process.once('SIGINT', stop);

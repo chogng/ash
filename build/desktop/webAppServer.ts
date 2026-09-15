@@ -41,7 +41,7 @@ interface AppServerEnvironmentOptions {
 /**
  * Attaches a same-origin loopback WebSocket with one connection carrier per browser.
  */
-export function attachWebAppServer(server: Server | Http2SecureServer, options: WebAppServerOptions = {}): () => void {
+export function attachWebAppServer(server: Server | Http2SecureServer, options: WebAppServerOptions = {}): () => Promise<void> {
   const desktopRoot = resolve(options.desktopRoot ?? resolve(import.meta.dirname, "../../ash-ts"));
   const repositoryRoot = resolve(options.repositoryRoot ?? resolve(desktopRoot, ".."));
   const workspaceRoot = resolve(options.workspaceRoot ?? process.env.ASH_WORKSPACE_ROOT ?? repositoryRoot);
@@ -59,6 +59,7 @@ export function attachWebAppServer(server: Server | Http2SecureServer, options: 
     process.platform === "win32" ? "rg.exe" : "rg",
   ));
   const sessions = new Map<WebSocket, Promise<WebAppServerSession>>();
+  const terminations = new Set<Promise<void>>();
   const sockets = new WebSocketServer({ noServer: true, maxPayload: MAX_FRAME_BYTES, perMessageDeflate: false });
   const upgrade = (request: IncomingMessage, socket: Duplex, head: Buffer): void => {
     if (request.url !== '/ash/app-server') return;
@@ -108,26 +109,33 @@ export function attachWebAppServer(server: Server | Http2SecureServer, options: 
       client.on('close', () => closeClient(client, 'Browser connection closed'));
       client.on('error', () => closeClient(client, 'Browser connection failed'));
   });
-  let disposed = false;
-  const dispose = () => {
-    if (disposed) return;
-    disposed = true;
+  let disposal: Promise<void> | undefined;
+  const dispose = (): Promise<void> => {
+    if (disposal) return disposal;
     server.off('upgrade', upgrade);
     server.off('close', dispose);
+    for (const client of sessions.keys()) closeClient(client, 'Web server stopped');
     for (const client of sockets.clients) {
-      closeClient(client, 'Web server stopped');
       client.terminate();
     }
-    sockets.close();
+    disposal = Promise.all([
+      ...terminations,
+      new Promise<void>(resolve => sockets.close(() => resolve())),
+    ]).then(() => {});
+    return disposal;
   };
   server.once('close', dispose);
   return dispose;
 
   async function connectClient(client: WebSocket): Promise<WebAppServerSession> {
+    if (disposal || client.readyState !== WebSocket.OPEN) throw new Error('Browser connection is closed');
     let pending = sessions.get(client);
     if (!pending) {
       pending = createSession(client);
       sessions.set(client, pending);
+      const termination = pending.then(session => session.terminated, () => {});
+      terminations.add(termination);
+      void termination.then(() => terminations.delete(termination));
     }
     const session = await pending;
     send(client, WEB_APP_SERVER_CONNECTED_EVENT, {
@@ -146,6 +154,7 @@ export function attachWebAppServer(server: Server | Http2SecureServer, options: 
       throw new Error(`Packaged ripgrep binary is missing: ${ripgrep}`);
     }
     await mkdir(profileRoot, { recursive: true });
+    if (disposal || client.readyState !== WebSocket.OPEN) throw new Error('Browser connection is closed');
     const child = spawn(executable, ["connect"], {
       cwd: workspaceRoot,
       env: { ...appServerEnvironment({ profileRoot, ripgrep, workspaceRoot }), ASH_APP_SERVER_PATH: join(dirname(executable), process.platform === 'win32' ? 'ash-app-server.exe' : 'ash-app-server') },
@@ -167,7 +176,7 @@ export function attachWebAppServer(server: Server | Http2SecureServer, options: 
     const pending = sessions.get(client);
     if (!pending) return;
     sessions.delete(client);
-    void pending.then((session) => session.close(reason)).catch(() => {});
+    void pending.then((session) => session.close(reason), () => {});
   }
 }
 
@@ -265,10 +274,16 @@ class WebAppServerSession {
   private writeTail: Promise<void> = Promise.resolve();
   private stderr = Buffer.alloc(0);
   private closed = false;
+  public readonly terminated: Promise<void>;
+  private killTimeout: ReturnType<typeof setTimeout> | undefined;
 
   constructor(child: ChildProcessWithoutNullStreams, onFrame: (frame: string) => void, onClose: (reason: string) => void) {
     this.child = child;
     this.onClose = onClose;
+    this.terminated = new Promise(resolve => child.once("close", () => {
+      clearTimeout(this.killTimeout);
+      resolve();
+    }));
     this.decoder = new JsonlFrameDecoder(onFrame, (error) => this.fail(error.message));
     child.stdout.on("data", (chunk: Buffer) => this.decoder.accept(chunk));
     child.stdout.once("end", () => this.decoder.end());
@@ -296,19 +311,20 @@ class WebAppServerSession {
     });
   }
 
-  public close(reason: string): void {
-    if (this.closed) return;
+  public close(reason: string): Promise<void> {
+    if (this.closed) return this.terminated;
     this.finish(reason);
-    if (this.child.exitCode !== null || this.child.signalCode !== null) return;
+    if (this.child.exitCode !== null || this.child.signalCode !== null) return this.terminated;
     this.child.kill("SIGTERM");
-    const timeout = setTimeout(() => {
+    this.killTimeout = setTimeout(() => {
       if (this.child.exitCode === null && this.child.signalCode === null) this.child.kill("SIGKILL");
     }, 2_000);
-    timeout.unref();
+    this.killTimeout.unref();
+    return this.terminated;
   }
 
   public fail(reason: string): void {
-    this.close(this.diagnosticMessage(reason));
+    void this.close(this.diagnosticMessage(reason));
   }
 
   private finish(reason: string): void {

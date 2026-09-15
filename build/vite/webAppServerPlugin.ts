@@ -2,7 +2,7 @@ import type { Plugin } from 'vite';
 import { attachWebAppServer } from '../desktop/webAppServer.ts';
 
 export function webAppServerVitePlugin(): Plugin {
-	let closeConnections: (() => void) | undefined;
+	let closeConnections: (() => Promise<void>) | undefined;
 	return {
 		name: 'ash-web-app-server',
 		apply: 'serve',
@@ -11,7 +11,7 @@ export function webAppServerVitePlugin(): Plugin {
 			closeConnections = attachWebAppServer(server.httpServer);
 		},
 		closeBundle() {
-			closeConnections?.();
+			return closeConnections?.();
 		},
 	};
 }
