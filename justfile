@@ -81,7 +81,7 @@ pet *args:
 
 # Assemble the complete immutable development package shared by Ash products.
 ash-package *args:
-    node build/ash-package/prepareDevPackage.ts {args}
+    node build/ash-package/prepare.ts {args}
 
 # Assemble the complete development package and launch Ash Code against it.
 ash-package-run *args:

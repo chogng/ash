@@ -211,7 +211,7 @@ Desktop 主进程入口同步注册 Electron `ready` 监听器；异步启动链
 必须比较 initialize response，hash 不一致时不得创建业务窗口或进入 Ready。
 
 开发态与发布态共享 canonical Ash package contract。Node 开发组装器
-`build/ash-package/prepareDevPackage.ts` 按 target、JavaScript runtime 与 build profile 组装不可变 debug
+`build/ash-package/prepare.ts` 按 target、JavaScript runtime 与 build profile 组装不可变 debug
 package；Rust package store 在完整文件清单校验通过后发布编号 manifest，并用进程 lease 保护正在运行的 package。它读取 production builder
 使用的同一份 runtime lock、校验 archive digest。它不安装或调用 Python；
 Python builder 只属于显式 release packaging。`appServerExecutablePath()` 在开发态选择该

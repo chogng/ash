@@ -1,9 +1,23 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import test from "node:test";
 
 const repositoryRoot = resolve(import.meta.dirname, "../..");
+
+test("Node version declarations agree with the build runtime", () => {
+  const manifest = JSON.parse(readFileSync(join(repositoryRoot, "package.json"), "utf8"));
+  const version = readFileSync(join(repositoryRoot, ".nvmrc"), "utf8").trim();
+  assert.match(version, /^24\.\d+\.\d+$/);
+  assert.equal(manifest.engines.node, ">=24 <25");
+  const result = spawnSync(process.execPath, [join(repositoryRoot, "build/pnpm/preinstall.ts")], {
+    env: { ...process.env, npm_config_user_agent: `pnpm/${manifest.packageManager.split("@")[1]}` },
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  assert.equal(result.status, 0, result.stderr);
+});
 
 test("pnpm owns every repository Node project with one lockfile", () => {
   const rootManifest = JSON.parse(readFileSync(join(repositoryRoot, "package.json"), "utf8")) as {
@@ -12,7 +26,7 @@ test("pnpm owns every repository Node project with one lockfile", () => {
   };
   const workspace = readFileSync(join(repositoryRoot, "pnpm-workspace.yaml"), "utf8");
   const lockfile = readFileSync(join(repositoryRoot, "pnpm-lock.yaml"), "utf8");
-  assert.equal(rootManifest.packageManager, "pnpm@11.17.0");
+  assert.equal(rootManifest.packageManager, "pnpm@12.4.2");
   assert.equal(rootManifest.scripts?.preinstall, "node build/pnpm/preinstall.ts");
   const packages = [...workspace.matchAll(/^  - (.+)$/gm)].map((match) => match[1]);
   assert.deepEqual(packages, ["build", "ash-ts"]);

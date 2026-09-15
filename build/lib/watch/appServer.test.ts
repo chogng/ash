@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { cargoArtifactExecutable, cargoRenderedDiagnostic, parseCargoMessage } from "../cargo.ts";
-import { publishAppServerGeneration, relativeWatchedDirectory, shouldRebuildAppServer, shouldRebuildWorkspaceManifest } from "./watchAppServer.ts";
+import { publishAppServerGeneration, relativeWatchedDirectory, shouldRebuildAppServer, shouldRebuildWorkspaceManifest } from "./appServer.ts";
 
 test("reads executable paths and diagnostics from Cargo JSON messages", () => {
   const artifact = parseCargoMessage(JSON.stringify({

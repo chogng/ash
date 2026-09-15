@@ -43,7 +43,7 @@ Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保
 
 根 `Justfile` 是三个产品和根 Rust workspace 的统一入口。根 `package.json` 只提供 pnpm workspace 与 Electron、Browser、Stanza 等 Node 构建入口，不编排 Rust workspace。
 
-Node 工具与 Desktop 单测使用仓库根 `.nvmrc` 固定的 Node 25.2.1。切换到该版本后，按 [README 初始化步骤](../README.md#quick-start) 安装根 `package.json` 声明的 pnpm，再执行 `pnpm install`、构建或测试。所有入口直接调用 pnpm，安装检查要求 pnpm 版本与声明完全一致；Node 22 已不受支持。
+Node 工具与 Desktop 单测使用 Node 24 LTS，具体版本由仓库根 `.nvmrc` 固定。切换到该版本后，按 [README 初始化步骤](../README.md#quick-start) 安装根 `package.json` 声明的 pnpm，再执行 `pnpm install`、构建或测试。所有入口直接调用 pnpm，安装检查要求 pnpm 版本与声明完全一致；其他 Node 主版本不受支持。
 
 | 命令 | 结果 |
 | --- | --- |
@@ -152,12 +152,12 @@ just bench-build ash-keybinding --jobs 4 --compare .build/build-health/<run>/rep
 
 | 路径 | 单一职责 |
 | --- | --- |
-| `build/lib/` | 构建输出路径、Desktop 输出准备等共享基础设施 |
+| `build/lib/` | 通用构建路径、Cargo 输出解析等共享基础设施 |
 | `build/lib/ash_build/` | Cargo 依赖选择、目标识别和校验下载 V8 输入等共享 Python 构建能力 |
 | `build/lib/watch/` | Electron TypeScript 与 Rust Server Host 的增量监听和重启协调 |
 | `build/pnpm/` | pnpm 版本约束、安装入口和单锁文件 workspace 校验 |
-| `build/desktop/` | Desktop 资源生成、Electron 启动和打包校验 |
-| `build/ash-package/` | Desktop、Web 与 Code TUI 共用的完整开发包组装和代发布 |
+| `build/desktop/` | Desktop 输出准备、资源生成、Electron 启动和打包校验 |
+| `build/ash-package/` | 完整开发包组装、发布，以及已发布包清单的读取和校验 |
 | `build/vite/` | Renderer 入口、Vite 配置、开发桥接与热重载插件 |
 | `build/download/` | 受锁文件约束的第三方构建运行时下载器 |
 | `build/release/` | Python/Shell 发布打包、签名、验证以及 Bazel 入口 |
@@ -185,7 +185,7 @@ Desktop 的 Node、Browser 和 Playwright 测试入口与 loader 归 `ash-ts/tes
 
 `scripts/ash-code/run.py` 用一次 Cargo 调用构建 Code TUI、本地 daemon 和当前平台沙箱程序，再把这些可执行文件放入按内容区分的 `.build/ash-development/` 目录后启动；这个小目录避免 Windows 上仍在运行的程序阻塞下一次构建，不是产品包。技能、扩展和产品服务直接读取源码。`scripts/ash-code/run_package.py` 只服务于显式的完整开发包运行。只有形成真实、可运行的操作契约时才新增入口；当前没有独立的远端 SSH 端到端测试，因此不提供空入口。
 
-完整开发包仍由 `build/ash-package/prepareDevPackage.ts` 拥有。它在一次 Cargo 调用中构建全部第一方程序，然后复制并校验受管资源、计算整包摘要，最后通过 Package Store 发布不可变代次。日常 `just ash` 不执行这些组装与发布步骤；只有验证包布局、跨产品交付、回滚或远端运行时边界时才使用 `just ash-package` 或 `just ash-package-run`。Cargo 并发由 Cargo 自己决定；开发者仍可按需显式设置 `CARGO_BUILD_JOBS`。
+完整开发包仍由 `build/ash-package/prepare.ts` 拥有。它在一次 Cargo 调用中构建全部第一方程序，然后复制并校验受管资源、计算整包摘要，最后通过 Package Store 发布不可变代次。日常 `just ash` 不执行这些组装与发布步骤；只有验证包布局、跨产品交付、回滚或远端运行时边界时才使用 `just ash-package` 或 `just ash-package-run`。Cargo 并发由 Cargo 自己决定；开发者仍可按需显式设置 `CARGO_BUILD_JOBS`。
 
 `scripts/` 可以调用 `build/` 公开的构建准备能力，`build/` 不得依赖或调用 `scripts/`。普通构建和仓库命令不得依赖 `build/release/` 的包实现；共享目标识别和 V8 输入解析由 `build/lib/ash_build/` 拥有，日常 Cargo 命令与发布构建器都依赖这一层。测试内容和 fixture 仍归对应产品目录拥有，仓库脚本只负责入口、进程编排和临时测试输出生命周期。
 

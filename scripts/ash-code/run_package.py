@@ -70,9 +70,7 @@ def current_package() -> Path:
         or not isinstance(manifest.get("directory"), str)
         or PACKAGE_DIRECTORY_PATTERN.fullmatch(manifest["directory"]) is None
     ):
-        raise RuntimeError(
-            f"invalid Ash development package manifest: {manifest_path}"
-        )
+        raise RuntimeError(f"invalid Ash development package manifest: {manifest_path}")
     package_root = root.joinpath(*manifest["directory"].split("/"))
     if not package_root.is_dir():
         raise RuntimeError(f"Ash development package is missing: {package_root}")
@@ -82,7 +80,7 @@ def current_package() -> Path:
 def main(arguments: list[str] | None = None) -> int:
     environment = os.environ.copy()
     prepared = subprocess.run(
-        ["node", "build/ash-package/prepareDevPackage.ts"],
+        ["node", "build/ash-package/prepare.ts"],
         cwd=run.REPOSITORY_ROOT,
         env=environment,
         check=False,

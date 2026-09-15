@@ -7,7 +7,8 @@ import type { Duplex } from "node:stream";
 import { dirname, join, resolve } from "node:path";
 import type { Writable } from "node:stream";
 import { WebSocket, WebSocketServer } from "ws";
-import { desktopBuildPath, developmentAshPackagePath } from "../lib/paths.ts";
+import { desktopBuildPath } from "../lib/paths.ts";
+import { developmentAshPackagePath } from "../ash-package/store.ts";
 
 export const WEB_APP_SERVER_PROTOCOL_VERSION = 1;
 export const WEB_APP_SERVER_CONNECT_EVENT = "ash:app-server:connect";

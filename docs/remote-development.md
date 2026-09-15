@@ -402,14 +402,14 @@ target、非规范/符号链接路径、大小或 SHA-256 不匹配，并在远�
 开发/发布包可选择离线 bundle：
 
 ```text
-node build/ash-package/prepareDevPackage.ts \
+node build/ash-package/prepare.ts \
   --remote-runtime-bundle <bundle-directory>
 ```
 
 也可生成只绑定网络发布目录的轻量产品包；URL 与摘要随后由平台应用签名认证：
 
 ```text
-node build/ash-package/prepareDevPackage.ts \
+node build/ash-package/prepare.ts \
   --remote-runtime-catalog-url https://releases.example/ash/<version>/catalog.json \
   --remote-runtime-catalog-sha256 <catalog-digest>
 ```

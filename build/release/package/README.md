@@ -86,7 +86,7 @@ package layout version 2 under `javascriptRuntime.kind`; validators reject a
 payload whose files and declared runtime kind disagree.
 
 Desktop development uses the same locks and canonical layout through the Node
-assembler at `build/ash-package/prepareDevPackage.ts`. It defaults to the
+assembler at `build/ash-package/prepare.ts`. It defaults to the
 host-provided runtime variant for Electron; Browser full mode passes
 `--javascript-runtime packaged-node`. The assembler builds first-party
 executables with Cargo's compact `dev-small` profile, verifies and extracts the required
@@ -185,5 +185,5 @@ The Node development assembler's target selection, locked ripgrep/Node selection
 and atomic replacement behavior are covered by:
 
 ```sh
-node --test build/ash-package/prepareDevPackage.test.ts
+node --test build/ash-package/prepare.test.ts
 ```

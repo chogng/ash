@@ -3,10 +3,10 @@ import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import test from "node:test";
 
-import { ElectronCompileGate, parseTypeScriptWatchStatus } from "./watchElectron.ts";
+import { ElectronCompileGate, parseTypeScriptWatchStatus } from "./electron.ts";
 
 test("Electron TypeScript watcher initializes through its real CLI entry", () => {
-  const result = spawnSync(process.execPath, [resolve(import.meta.dirname, "watchElectron.ts"), "--validate-startup"], { encoding: "utf8" });
+  const result = spawnSync(process.execPath, [resolve(import.meta.dirname, "electron.ts"), "--validate-startup"], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
 });
 

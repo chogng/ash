@@ -7,6 +7,7 @@ import test from "node:test";
 
 import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH } from "../../ash-ts/generated/app-server/protocol.ts";
 import { cargoTargetDirectory } from "../lib/cargo.ts";
+import { developmentAshPackagePath } from "./store.ts";
 import {
   assemblePackage,
   copyBuiltinExtensions,
@@ -16,7 +17,34 @@ import {
   selectNodeArtifact,
   selectRipgrepArtifact,
   selectV8ArtifactPair,
-} from "./prepareDevPackage.ts";
+} from "./prepare.ts";
+
+test("selects the latest published package and rejects invalid manifests", async () => {
+  const root = await mkdtemp(join(tmpdir(), "ash-package-store-"));
+  try {
+    const store = join(root, ".build/ash-package/dev/store-v1/x86_64-pc-windows-msvc/packaged-node/dev-small");
+    const manifests = join(store, "manifests");
+    await mkdir(manifests, { recursive: true });
+    const select = () => developmentAshPackagePath(root, "packaged-node", "win32", "x64");
+    assert.throws(select, /no published manifest/);
+    await writeFile(join(manifests, "notes.json"), "{}");
+    for (const sequence of [2, 1]) {
+      await writeFile(join(manifests, `${String(sequence).padStart(20, "0")}.json`), JSON.stringify({
+        formatVersion: 1, sequence, directory: `packages/0.1.0/${String(sequence).repeat(64)}`,
+      }));
+    }
+    assert.equal(select(), join(store, "packages/0.1.0", "2".repeat(64)));
+    for (const manifest of [
+      { formatVersion: 1, sequence: 1, directory: `packages/0.1.0/${"2".repeat(64)}` },
+      { formatVersion: 1, sequence: 2, directory: "../../outside" },
+    ]) {
+      await writeFile(join(manifests, "00000000000000000002.json"), JSON.stringify(manifest));
+      assert.throws(select, /Invalid Ash development package manifest/);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test("resolves one shared Cargo target directory for host development builds", () => {
   const workspace = resolve("/workspace/ash");

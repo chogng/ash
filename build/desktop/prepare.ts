@@ -1,6 +1,6 @@
 import { lstat, mkdir, realpath, symlink, unlink, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { desktopBuildPath } from "./paths.ts";
+import { desktopBuildPath } from "../lib/paths.ts";
 
 const repositoryRoot = resolve(import.meta.dirname, "../..");
 const desktopNodeModules = join(repositoryRoot, "ash-ts", "node_modules");

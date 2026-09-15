@@ -1,7 +1,6 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, globSync } from 'node:fs';
+import { existsSync, globSync, readFileSync } from 'node:fs';
 import { resolve, sep } from 'node:path';
-import { requireNode25 } from '../../../build/lib/requireNode25.ts';
 
 interface Selection {
 	readonly runs: readonly string[];
@@ -14,7 +13,10 @@ const desktopDirectory = resolve(import.meta.dirname, '../..');
 const outputDirectory = resolve(desktopDirectory, '../.build/desktop/test');
 
 export function runUnitTests(patterns: readonly string[], editorEnvironment: boolean): void {
-	requireNode25();
+	const requiredVersion = readFileSync(resolve(desktopDirectory, '../.nvmrc'), 'utf8').trim();
+	if (process.versions.node.split('.')[0] !== requiredVersion.split('.')[0]) {
+		throw new Error(`Unit tests require the Node major version specified in .nvmrc (${requiredVersion}); found ${process.version}.`);
+	}
 	const selection = parseSelection(process.argv.slice(2));
 	let names: string[];
 	if (selection.runs.length > 0) {

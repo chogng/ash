@@ -6,7 +6,8 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { cargoArtifactExecutable, cargoRenderedDiagnostic, cargoTargetDirectory, parseCargoMessage } from "../lib/cargo.ts";
-import { developmentHostTarget, ashPackageBuildPath } from "../lib/paths.ts";
+import { ashPackageBuildPath } from "../lib/paths.ts";
+import { developmentHostTarget } from "./store.ts";
 import { validateProductServices } from "./productServices.ts";
 import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH } from "../../ash-ts/generated/app-server/protocol.ts";
 
@@ -179,7 +180,7 @@ export function parsePackageOptions(cliArguments: readonly string[]): PackageOpt
 }
 
 function packageUsage(): Error {
-  return new Error("Usage: node build/ash-package/prepareDevPackage.ts [--javascript-runtime host-provided-node|packaged-node] [--remote-runtime-bundle <bundle-directory>] [--remote-runtime-catalog-url <https-catalog.json> --remote-runtime-catalog-sha256 <digest>]");
+  return new Error("Usage: node build/ash-package/prepare.ts [--javascript-runtime host-provided-node|packaged-node] [--remote-runtime-bundle <bundle-directory>] [--remote-runtime-catalog-url <https-catalog.json> --remote-runtime-catalog-sha256 <digest>]");
 }
 
 function validateRemoteRuntimeCatalogUrl(value: string): void {
