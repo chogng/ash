@@ -1427,3 +1427,24 @@ test('editor rendering follows updated configuration without replacing the view'
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	expect(errors).toEqual([]);
 });
+
+for (const change of ['none', 'position', 'model', 'readonly', 'eol'] as const) {
+	test(`formatting validates ${change} state before applying delayed edits`, async ({ page }) => {
+		await page.goto('/standalone.html');
+		const value = await page.evaluate(change => window.ashStandaloneIntegration.runFormatting(change), change);
+		expect(value).toBe(change === 'eol' ? '\r\n' : change === 'none' ? 'ALPHA' : change === 'model' ? 'owned' : 'alpha');
+		if (change === 'eol') {
+			await page.keyboard.press('ControlOrMeta+z');
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.readEOL())).toBe('\n');
+			await page.keyboard.press('ControlOrMeta+Shift+z');
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.readEOL())).toBe('\r\n');
+		}
+		if (change === 'none') {
+			await page.keyboard.press('ControlOrMeta+z');
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('alpha');
+			await page.keyboard.press('ControlOrMeta+Shift+z');
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('ALPHA');
+		}
+		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	});
+}

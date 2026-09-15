@@ -1,3 +1,5 @@
+import { EndOfLineSequence } from '../../../src/ash/editor/common/model.js';
+import type { FormatController } from '../../../src/ash/editor/contrib/format/browser/formatController.js';
 import { StandaloneServices } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
 import { IMarkerService, MarkerSeverity } from '../../../src/ash/platform/markers/common/markers.js';
 import { Color } from '../../../src/ash/base/common/color.js';
@@ -65,6 +67,9 @@ interface ViewZoneState {
 }
 
 interface StandaloneHarness {
+	readEOL(): string;
+	runFormatting(change: 'none' | 'position' | 'model' | 'readonly' | 'eol'): Promise<string>;
+
 	prepareLineComment(): void;
 	prepareLineCopy(emptyTail?: boolean): void;
 	runLineAction(id: string): Promise<void>;
@@ -254,6 +259,35 @@ function readViewZone(): ViewZoneState {
 }
 
 window.ashStandaloneIntegration = {
+	readEOL: () => callerEditor.getModel()!.getEOL(),
+	runFormatting: async change => {
+		callerEditor.setValue('alpha');
+		callerEditor.setPosition(new stanza.Position(1, 1));
+		callerEditor.focus();
+		let release!: () => void;
+		const ready = new Promise<void>(resolve => { release = resolve; });
+		const provider = stanza.languages.registerDocumentFormattingEditProvider('*', {
+			provideDocumentFormattingEdits: async () => {
+				await ready;
+				return [{ range: new stanza.Range(1, 1, 1, 6), text: change === 'eol' ? 'alpha' : 'ALPHA', ...(change === 'eol' ? { eol: EndOfLineSequence.CRLF } : {}) }];
+			},
+		});
+		try {
+			const controller = callerEditor.getContribution<FormatController>('editor.contrib.format');
+			if (!controller) throw new Error('Formatting contribution is missing');
+			const formatting = controller.formatDocument(error => { throw error; });
+			if (change === 'position') callerEditor.setPosition(new stanza.Position(1, 3));
+			if (change === 'model') callerEditor.setModel(ownedModel);
+			if (change === 'readonly') callerEditor.updateOptions({ readOnly: true });
+			release();
+			await formatting;
+			return change === 'eol' ? callerEditor.getModel()!.getEOL() : callerEditor.getValue();
+		} finally {
+			provider.dispose();
+			callerEditor.updateOptions({ readOnly: false });
+			if (change === 'model') callerEditor.setModel(callerModel);
+		}
+	},
 	prepareLineComment: () => {
 		window.ashStandaloneIntegration.prepareLineCopy();
 		callerModel.setLanguage('typescript');

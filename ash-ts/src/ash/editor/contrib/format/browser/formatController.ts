@@ -5,6 +5,8 @@ import { type View } from "../../../browser/view.js";
 import { type IVersionedEditorWorkerClient } from "../../../browser/services/editorWorkerService.js";
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { FormatService, type LanguageFormattingOptions } from "../common/formatCommands.js";
+import { CodeEditorStateFlag, EditorState } from '../../editorState/browser/editorState.js';
+import { FormattingEdit } from './formattingEdit.js';
 
 export interface FormatControllerOptions {
 	readonly formattingOptions?: LanguageFormattingOptions;
@@ -38,13 +40,29 @@ export class FormatController extends Disposable {
 
 	async formatDocument(onError = this.onError): Promise<void> {
 		try {
+			const state = new EditorState(this.editor, CodeEditorStateFlag.Value | CodeEditorStateFlag.Position);
 			const edits = await this.service.provideDocumentFormattingEdits(this.languageId, this.options);
+			if (this.isDisposed || !state.validate(this.editor) || edits.length === 0) {
+				return;
+			}
 			const minimalEdits = await this.editorWorker.computeMoreMinimalEdits(edits);
-			if (!minimalEdits) return;
-			if (minimalEdits.length === 0) return;
-			this.editor.pushUndoStop();
-			this.editor.executeEdits('editor.action.formatDocument', [...minimalEdits]);
-			this.editor.pushUndoStop();
+			if (this.isDisposed || !state.validate(this.editor) || !minimalEdits) {
+				return;
+			}
+			const result = [...minimalEdits];
+			const eolEdit = [...edits].reverse().find(edit => edit.eol !== undefined);
+			if (eolEdit) {
+				if (result.length > 0) {
+					result[result.length - 1] = { ...result[result.length - 1], eol: eolEdit.eol };
+				} else {
+					result.push({
+						range: { startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1 },
+						text: '',
+						eol: eolEdit.eol,
+					});
+				}
+			}
+			FormattingEdit.execute(this.editor, result, true);
 		} catch (error) {
 			onError(error);
 		}
