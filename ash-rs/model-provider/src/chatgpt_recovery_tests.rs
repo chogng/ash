@@ -8,6 +8,9 @@ enum ResponseCase {
     Denied,
     StreamError,
     PartialStream,
+    RefreshFailure,
+    FollowupTransportFailure,
+    FollowupCancelled,
 }
 
 struct RecoveryClient {
@@ -21,6 +24,13 @@ impl OperationClient for RecoveryClient {
     fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
         self.calls.lock().unwrap().push(request.url().into());
         if request.url() == "https://auth.openai.com/oauth/token" {
+            if self.response == ResponseCase::RefreshFailure {
+                return Ok(ClientResponse::new(
+                    500,
+                    vec![],
+                    b"secret refresh body".to_vec(),
+                ));
+            }
             let body: Value = serde_json::from_slice(request.body()).unwrap();
             assert_eq!(body["grant_type"], "refresh_token");
             return Ok(ClientResponse::new(
@@ -33,12 +43,26 @@ impl OperationClient for RecoveryClient {
             ));
         }
         assert_luna_low(request);
-        if self.attempts.fetch_add(1, Ordering::SeqCst) == 0
-            || self.response == ResponseCase::Denied
-        {
+        let attempt = self.attempts.fetch_add(1, Ordering::SeqCst);
+        if attempt > 0 {
+            match self.response {
+                ResponseCase::FollowupTransportFailure => {
+                    return Err(ClientError::Transport("secret transport detail".into()));
+                }
+                ResponseCase::FollowupCancelled => {
+                    return Err(ClientError::Cancelled("cancelled".into()));
+                }
+                _ => {}
+            }
+        }
+        if attempt == 0 || self.response == ResponseCase::Denied {
             Ok(ClientResponse::new(
                 401,
-                Vec::new(),
+                vec![
+                    HttpHeader::new("x-request-id", format!("rejected-{attempt}")),
+                    HttpHeader::new("cf-ray", "ray-first"),
+                    HttpHeader::new("x-openai-authorization-error", "token_expired"),
+                ],
                 br#"{"error":{"code":"invalid_api_key"}}"#.to_vec(),
             ))
         } else {
@@ -71,7 +95,12 @@ impl OperationClient for RecoveryClient {
         if !response.is_success() {
             return Ok(response);
         }
-        StreamingTransport.execute_streaming(request, sink)
+        let streamed = StreamingTransport.execute_streaming(request, sink)?;
+        Ok(ClientResponse::new(
+            streamed.status(),
+            vec![HttpHeader::new("x-request-id", "followup-success")],
+            streamed.body().to_vec(),
+        ))
     }
 }
 
@@ -105,6 +134,17 @@ fn fixture(
     Arc<RecoveryClient>,
     Arc<dyn ModelInvoker>,
 ) {
+    fixture_with_diagnostics(response, None)
+}
+
+fn fixture_with_diagnostics(
+    response: ResponseCase,
+    diagnostics: Option<Arc<dyn response_debug_context::ResponseDiagnosticSink>>,
+) -> (
+    tempfile::TempDir,
+    Arc<RecoveryClient>,
+    Arc<dyn ModelInvoker>,
+) {
     let jwt = |value: Value| {
         format!(
             "e30.{}.signature",
@@ -130,12 +170,15 @@ fn fixture(
         client.clone(),
         ash_chatgpt::ChatGptAuthManagement::Ash,
     );
-    let runtime = ModelProviderRuntime::with_client_and_secrets(
+    let mut runtime = ModelProviderRuntime::with_client_and_secrets(
         ProviderConfigRegistry::builtin(),
         client.clone(),
         secrets,
     )
     .with_chatgpt_oauth(auth);
+    if let Some(diagnostics) = diagnostics {
+        runtime = runtime.with_response_diagnostics(diagnostics);
+    }
     let model = runtime
         .build_model(
             &provider_config("openai"),
@@ -219,5 +262,169 @@ fn chatgpt_stops_after_one_recovery_attempt() {
             .filter(|url| url.ends_with("/oauth/token"))
             .count(),
         1
+    );
+}
+
+#[derive(Default)]
+struct CapturedDiagnostics(Mutex<Vec<response_debug_context::ResponseDiagnostic>>);
+
+impl response_debug_context::ResponseDiagnosticSink for CapturedDiagnostics {
+    fn record_response(&self, diagnostic: response_debug_context::ResponseDiagnostic) {
+        self.0.lock().unwrap().push(diagnostic);
+    }
+}
+
+#[test]
+fn recovery_diagnostics_preserve_the_original_401_and_actual_followup() {
+    use response_debug_context::AuthHeader;
+    use response_debug_context::AuthRecovery;
+    use response_debug_context::DiagnosticOutcome;
+    use response_debug_context::RequestOutcome;
+    for streaming in [false, true] {
+        for (case, recovery, outcome, attempts, last) in [
+            (
+                ResponseCase::Recover,
+                AuthRecovery::CredentialsRecovered,
+                DiagnosticOutcome::Succeeded,
+                2,
+                RequestOutcome::Http { status: 200 },
+            ),
+            (
+                ResponseCase::Denied,
+                AuthRecovery::CredentialsRecovered,
+                DiagnosticOutcome::Failed,
+                2,
+                RequestOutcome::Http { status: 401 },
+            ),
+            (
+                ResponseCase::RefreshFailure,
+                AuthRecovery::Failed,
+                DiagnosticOutcome::Failed,
+                1,
+                RequestOutcome::Http { status: 401 },
+            ),
+            (
+                ResponseCase::FollowupTransportFailure,
+                AuthRecovery::CredentialsRecovered,
+                DiagnosticOutcome::Failed,
+                2,
+                RequestOutcome::TransportFailure,
+            ),
+            (
+                ResponseCase::FollowupCancelled,
+                AuthRecovery::CredentialsRecovered,
+                DiagnosticOutcome::Cancelled,
+                2,
+                RequestOutcome::Cancelled,
+            ),
+        ] {
+            let diagnostics = Arc::new(CapturedDiagnostics::default());
+            let (_home, _client, model) = fixture_with_diagnostics(case, Some(diagnostics.clone()));
+            let result = if streaming {
+                model.stream_with_cancellation(
+                    &request(),
+                    &CancellationSource::new().token(),
+                    &mut RecordedModelEvents::default(),
+                )
+            } else {
+                model.invoke(&request())
+            };
+            assert_eq!(result.is_ok(), outcome == DiagnosticOutcome::Succeeded);
+            let reports = diagnostics.0.lock().unwrap();
+            assert_eq!(reports.len(), 1);
+            let report = &reports[0];
+            assert_eq!(
+                (report.recovery, report.outcome, report.attempts),
+                (recovery, outcome, attempts)
+            );
+            let original = report.first_unauthorized.as_ref().unwrap();
+            assert_eq!(original.response.request_id.as_deref(), Some("rejected-0"));
+            assert_eq!(original.response.cf_ray.as_deref(), Some("ray-first"));
+            assert_eq!(original.auth_headers, vec![AuthHeader::Authorization]);
+            assert_eq!(report.first_failure.as_ref(), Some(original));
+            assert_eq!(report.latest.as_ref().unwrap().outcome, last);
+            if case == ResponseCase::Denied {
+                assert_eq!(
+                    report
+                        .latest
+                        .as_ref()
+                        .unwrap()
+                        .response
+                        .request_id
+                        .as_deref(),
+                    Some("rejected-1")
+                );
+            }
+            let encoded = serde_json::to_string(report).unwrap();
+            for secret in [
+                "secret",
+                "old-refresh",
+                "signature",
+                "hello",
+                "account-1",
+                "https://",
+            ] {
+                assert!(!encoded.contains(secret), "diagnostics leaked {secret}");
+            }
+        }
+    }
+}
+
+#[test]
+fn accepted_stream_failure_does_not_claim_http_401_or_auth_recovery() {
+    for case in [ResponseCase::StreamError, ResponseCase::PartialStream] {
+        let diagnostics = Arc::new(CapturedDiagnostics::default());
+        let (_home, client, model) = fixture_with_diagnostics(case, Some(diagnostics.clone()));
+        assert!(model.invoke(&request()).is_err());
+        let reports = diagnostics.0.lock().unwrap();
+        assert_eq!(reports.len(), 1);
+        assert_eq!(
+            reports[0].outcome,
+            response_debug_context::DiagnosticOutcome::Failed
+        );
+        assert!(reports[0].first_unauthorized.is_none());
+        assert_eq!(
+            reports[0].recovery,
+            response_debug_context::AuthRecovery::NotAttempted
+        );
+        assert_eq!(client.calls.lock().unwrap().len(), 1);
+    }
+}
+
+#[test]
+fn later_invocations_do_not_inherit_previous_unauthorized_evidence() {
+    let diagnostics = Arc::new(CapturedDiagnostics::default());
+    let (_home, _client, model) =
+        fixture_with_diagnostics(ResponseCase::Denied, Some(diagnostics.clone()));
+    assert!(model.invoke(&request()).is_err());
+    assert!(model.invoke(&request()).is_err());
+    let reports = diagnostics.0.lock().unwrap();
+    assert_eq!(reports.len(), 2);
+    assert!(reports[0].first_unauthorized.is_some());
+    assert_eq!(reports[1].attempts, 1);
+    assert_eq!(
+        reports[0]
+            .first_unauthorized
+            .as_ref()
+            .unwrap()
+            .response
+            .request_id
+            .as_deref(),
+        Some("rejected-0")
+    );
+    assert_eq!(
+        reports[1]
+            .first_unauthorized
+            .as_ref()
+            .unwrap()
+            .response
+            .request_id
+            .as_deref(),
+        Some("rejected-2")
+    );
+    assert_eq!(reports[1].latest, reports[1].first_unauthorized);
+    assert_eq!(
+        reports[1].recovery,
+        response_debug_context::AuthRecovery::Failed
     );
 }

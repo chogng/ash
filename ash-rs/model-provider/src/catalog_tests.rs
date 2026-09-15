@@ -9,6 +9,157 @@ use ash_models_manager::CatalogQuery;
 use ash_models_manager::CatalogReadPolicy;
 use ash_models_manager::CatalogReadSource;
 
+#[derive(Default)]
+struct CapturedDiagnostics(Mutex<Vec<response_debug_context::ResponseDiagnostic>>);
+
+impl response_debug_context::ResponseDiagnosticSink for CapturedDiagnostics {
+    fn record_response(&self, diagnostic: response_debug_context::ResponseDiagnostic) {
+        self.0.lock().unwrap().push(diagnostic);
+    }
+}
+
+#[test]
+fn catalog_diagnostics_retain_response_evidence_after_error_mapping() {
+    struct Rejected;
+    impl OperationClient for Rejected {
+        fn execute(&self, _: &ClientRequest) -> Result<ClientResponse, ClientError> {
+            Ok(ClientResponse::new(
+                401,
+                vec![
+                    ash_http_client::HttpHeader::new("x-oai-request-id", "catalog-rejected"),
+                    ash_http_client::HttpHeader::new("set-cookie", "secret-cookie"),
+                ],
+                b"secret-body".to_vec(),
+            ))
+        }
+    }
+    let diagnostics = Arc::new(CapturedDiagnostics::default());
+    let runtime = crate::ModelProviderRuntime::builtin_with_client(Arc::new(Rejected))
+        .with_response_diagnostics(diagnostics.clone());
+    let binding = runtime
+        .catalog_binding(&ModelProviderConfig::new(
+            ProviderId::new("openai").unwrap(),
+        ))
+        .unwrap()
+        .unwrap();
+    let result = tokio::runtime::Builder::new_current_thread()
+        .build()
+        .unwrap()
+        .block_on(
+            runtime
+                .models_manager()
+                .refresh(binding.scope().clone(), binding.source()),
+        );
+    assert!(matches!(
+        result,
+        Err(ash_models_manager::ModelsManagerError::Source { .. })
+    ));
+    let records = diagnostics.0.lock().unwrap();
+    assert_eq!(records.len(), 1);
+    let record = &records[0];
+    assert_eq!(
+        record.operation,
+        response_debug_context::ResponseOperation::ModelCatalog
+    );
+    assert_eq!(
+        record.outcome,
+        response_debug_context::DiagnosticOutcome::Failed
+    );
+    assert_eq!(
+        record
+            .first_unauthorized
+            .as_ref()
+            .unwrap()
+            .response
+            .request_id
+            .as_deref(),
+        Some("catalog-rejected")
+    );
+    assert!(record.latest.as_ref().unwrap().auth_headers.is_empty());
+    assert!(!serde_json::to_string(record).unwrap().contains("secret"));
+}
+
+#[test]
+fn cancelled_catalog_operation_retains_its_sanitized_failure() {
+    struct Cancelled;
+    impl OperationClient for Cancelled {
+        fn execute(&self, _: &ClientRequest) -> Result<ClientResponse, ClientError> {
+            Err(ClientError::Cancelled("private cancellation detail".into()))
+        }
+    }
+    let diagnostics = Arc::new(CapturedDiagnostics::default());
+    let runtime = crate::ModelProviderRuntime::builtin_with_client(Arc::new(Cancelled))
+        .with_response_diagnostics(diagnostics.clone());
+    let binding = runtime
+        .catalog_binding(&ModelProviderConfig::new(
+            ProviderId::new("openai").unwrap(),
+        ))
+        .unwrap()
+        .unwrap();
+    let result = tokio::runtime::Builder::new_current_thread()
+        .build()
+        .unwrap()
+        .block_on(
+            runtime
+                .models_manager()
+                .refresh(binding.scope().clone(), binding.source()),
+        );
+    assert!(result.is_err());
+    let records = diagnostics.0.lock().unwrap();
+    assert_eq!(records.len(), 1);
+    assert_eq!(
+        records[0].outcome,
+        response_debug_context::DiagnosticOutcome::Cancelled
+    );
+    assert_eq!(
+        records[0].latest.as_ref().unwrap().outcome,
+        response_debug_context::RequestOutcome::Cancelled
+    );
+    assert!(
+        !serde_json::to_string(&records[0])
+            .unwrap()
+            .contains("private")
+    );
+}
+
+#[test]
+fn dropping_catalog_future_records_abandonment_once() {
+    use std::future::Future;
+    struct Rejected;
+    impl OperationClient for Rejected {
+        fn execute(&self, _: &ClientRequest) -> Result<ClientResponse, ClientError> {
+            Ok(ClientResponse::new(401, vec![], vec![]))
+        }
+    }
+    let diagnostics = Arc::new(CapturedDiagnostics::default());
+    let provider = crate::ModelProviderRuntime::builtin_with_client(Arc::new(Rejected))
+        .with_response_diagnostics(diagnostics.clone());
+    let binding = provider
+        .catalog_binding(&ModelProviderConfig::new(
+            ProviderId::new("openai").unwrap(),
+        ))
+        .unwrap()
+        .unwrap();
+    let manager = provider.models_manager();
+    let executor = tokio::runtime::Builder::new_current_thread()
+        .build()
+        .unwrap();
+    let entered = executor.enter();
+    let mut future = Box::pin(manager.refresh(binding.scope().clone(), binding.source()));
+    let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+    assert!(future.as_mut().poll(&mut context).is_pending());
+    drop(future);
+    drop(entered);
+    executor.shutdown_timeout(Duration::from_secs(2));
+    let reports = diagnostics.0.lock().unwrap();
+    assert_eq!(reports.len(), 1);
+    assert_eq!(reports[0].attempts, 1);
+    assert_eq!(
+        reports[0].outcome,
+        response_debug_context::DiagnosticOutcome::Abandoned
+    );
+}
+
 struct CatalogClient {
     request: Mutex<Option<ClientRequest>>,
 }

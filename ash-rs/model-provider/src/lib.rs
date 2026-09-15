@@ -2,6 +2,7 @@
 
 mod auth;
 mod catalog;
+mod diagnostics;
 mod error;
 mod lazy_client;
 mod provider;

@@ -1,5 +1,7 @@
 //! Bounded, content-free diagnostic facts shared across product hosts.
 
+use response_debug_context::ResponseDiagnostic;
+use response_debug_context::ResponseDiagnosticSink;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
@@ -56,12 +58,14 @@ pub struct DiagnosticSnapshot {
     pub activities: BTreeMap<Activity, ActivitySummary>,
     pub recent: Vec<Observation>,
     pub usage: analytics::UsageSnapshot,
+    pub responses: Vec<ResponseDiagnostic>,
 }
 
 #[derive(Debug, Default)]
 struct State {
     summaries: BTreeMap<Activity, ActivitySummary>,
     recent: VecDeque<Observation>,
+    responses: VecDeque<ResponseDiagnostic>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -94,7 +98,18 @@ impl Diagnostics {
             activities: state.summaries.clone(),
             recent: state.recent.iter().cloned().collect(),
             usage,
+            responses: state.responses.iter().cloned().collect(),
         }
+    }
+}
+
+impl ResponseDiagnosticSink for Diagnostics {
+    fn record_response(&self, diagnostic: ResponseDiagnostic) {
+        let mut state = self.state.lock().expect("diagnostics lock poisoned");
+        if state.responses.len() == 64 {
+            state.responses.pop_front();
+        }
+        state.responses.push_back(diagnostic);
     }
 }
 

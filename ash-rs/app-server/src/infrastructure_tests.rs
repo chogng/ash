@@ -156,6 +156,89 @@ fn diagnostics_and_feedback_exclude_rpc_content_and_bind_the_owner() {
 }
 
 #[test]
+fn local_provider_diagnostics_reach_the_reviewed_feedback_bundle() {
+    struct Rejected;
+    impl ash_client::OperationClient for Rejected {
+        fn execute(
+            &self,
+            request: &ash_client::ClientRequest,
+        ) -> Result<ash_client::ClientResponse, ash_client::ClientError> {
+            assert!(
+                request
+                    .headers()
+                    .iter()
+                    .any(|header| header.name().eq_ignore_ascii_case("authorization"))
+            );
+            Ok(ash_client::ClientResponse::new(
+                401,
+                vec![
+                    ash_http_client::HttpHeader::new("x-request-id", "upstream-request"),
+                    ash_http_client::HttpHeader::new("cf-ray", "edge-request"),
+                    ash_http_client::HttpHeader::new("set-cookie", "secret-cookie"),
+                ],
+                b"secret-response-body".to_vec(),
+            ))
+        }
+    }
+    let profile = tempfile::tempdir().unwrap();
+    let server = crate::open_local_app_server(
+        crate::LocalAppServerOptions::new(profile.path())
+            .with_codex_home(profile.path().join("codex"))
+            .without_built_in_skills()
+            .with_model_operation_client(Arc::new(Rejected)),
+    )
+    .unwrap();
+    let mut connection = server.connection();
+    let initialized = call(
+        &server,
+        &mut connection,
+        json!({
+            "jsonrpc":"2.0", "id":1, "method":"initialize",
+            "params":{"clientInfo":{"name":"diagnostic-test","version":"1"},"capabilities":{}}
+        }),
+    );
+    assert!(initialized.get("result").is_some(), "{initialized}");
+    let probe = call(
+        &server,
+        &mut connection,
+        json!({
+            "jsonrpc":"2.0", "id":2, "method":"provider/probe",
+            "params":{"config":{"provider":"openai"}, "apiKey":"secret-api-key"}
+        }),
+    );
+    assert_eq!(probe["result"]["type"], "failed", "{probe}");
+    let snapshot = call(
+        &server,
+        &mut connection,
+        json!({
+            "jsonrpc":"2.0", "id":3, "method":"diagnostics/read", "params":{}
+        }),
+    );
+    let responses = &snapshot["result"]["responses"];
+    assert_eq!(responses.as_array().unwrap().len(), 1);
+    assert_eq!(
+        responses[0]["firstUnauthorized"]["response"]["requestId"],
+        "upstream-request"
+    );
+    assert_eq!(
+        responses[0]["latest"]["authHeaders"],
+        json!(["authorization"])
+    );
+    let prepared = call(
+        &server,
+        &mut connection,
+        json!({
+            "jsonrpc":"2.0", "id":4, "method":"feedback/prepare",
+            "params":{"endpoint":"https://feedback.example.test/submit"}
+        }),
+    );
+    let content = prepared["result"]["content"].as_str().unwrap();
+    assert!(!content.contains("secret"));
+    let bundle: serde_json::Value = serde_json::from_str(content).unwrap();
+    assert_eq!(&bundle["responses"], responses);
+}
+
+#[test]
 fn persistent_queue_recovers_after_backend_restart_without_duplicate_turns() {
     let profile = tempfile::tempdir().unwrap();
     let directory = tempfile::tempdir().unwrap();

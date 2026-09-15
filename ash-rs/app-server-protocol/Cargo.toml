@@ -11,6 +11,7 @@ name = "ash_app_server_protocol"
 path = "src/lib.rs"
 
 [dependencies]
+response-debug-context = { workspace = true }
 memories = { workspace = true }
 extension-items = { workspace = true }
 queue = { workspace = true }

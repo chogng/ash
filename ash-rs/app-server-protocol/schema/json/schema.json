@@ -1958,6 +1958,26 @@
       ],
       "type": "object"
     },
+    "AuthHeader": {
+      "description": "Only names of recognized authentication headers are retained, never their values.",
+      "enum": [
+        "authorization",
+        "apiKey",
+        "xApiKey",
+        "xGoogApiKey"
+      ],
+      "type": "string"
+    },
+    "AuthRecovery": {
+      "description": "Credential recovery result; a recovered credential does not imply a successful follow-up.",
+      "enum": [
+        "notAttempted",
+        "unavailable",
+        "failed",
+        "credentialsRecovered"
+      ],
+      "type": "string"
+    },
     "Automation": {
       "properties": {
         "createdAt": {
@@ -13556,6 +13576,15 @@
       ],
       "type": "string"
     },
+    "DiagnosticOutcome": {
+      "enum": [
+        "succeeded",
+        "failed",
+        "cancelled",
+        "abandoned"
+      ],
+      "type": "string"
+    },
     "DiagnosticSnapshot": {
       "properties": {
         "activities": {
@@ -13582,6 +13611,12 @@
           },
           "type": "array"
         },
+        "responses": {
+          "items": {
+            "$ref": "#/$defs/ResponseDiagnostic"
+          },
+          "type": "array"
+        },
         "usage": {
           "$ref": "#/$defs/UsageSnapshot"
         }
@@ -13590,7 +13625,8 @@
         "build",
         "activities",
         "recent",
-        "usage"
+        "usage",
+        "responses"
       ],
       "type": "object"
     },
@@ -26570,10 +26606,103 @@
       ],
       "type": "object"
     },
+    "RequestAttempt": {
+      "properties": {
+        "authHeaders": {
+          "items": {
+            "$ref": "#/$defs/AuthHeader"
+          },
+          "type": "array"
+        },
+        "outcome": {
+          "$ref": "#/$defs/RequestOutcome"
+        },
+        "response": {
+          "$ref": "#/$defs/ResponseDebugContext"
+        }
+      },
+      "required": [
+        "authHeaders",
+        "outcome",
+        "response"
+      ],
+      "type": "object"
+    },
     "RequestId": {
       "description": "Stable identity for one outstanding bidirectional Agent interaction.",
       "minLength": 1,
       "type": "string"
+    },
+    "RequestOutcome": {
+      "oneOf": [
+        {
+          "properties": {
+            "kind": {
+              "const": "http",
+              "type": "string"
+            },
+            "status": {
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "status"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "transportFailure",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "cancelled",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "invalidRequest",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "kind": {
+              "const": "invalidResponse",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "RequestUserInput": {
       "properties": {
@@ -26708,6 +26837,101 @@
         "resourceId"
       ],
       "type": "object"
+    },
+    "ResponseDebugContext": {
+      "description": "Selected upstream correlation and authentication facts. Never contains a response body.",
+      "properties": {
+        "authError": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "authErrorCode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cfRay": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "requestId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "ResponseDiagnostic": {
+      "description": "One logical operation, including its explicitly authorized authentication follow-up.",
+      "properties": {
+        "attempts": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "firstFailure": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RequestAttempt"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "firstUnauthorized": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RequestAttempt"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "latest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RequestAttempt"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "operation": {
+          "$ref": "#/$defs/ResponseOperation"
+        },
+        "outcome": {
+          "$ref": "#/$defs/DiagnosticOutcome"
+        },
+        "recovery": {
+          "$ref": "#/$defs/AuthRecovery"
+        }
+      },
+      "required": [
+        "operation",
+        "outcome",
+        "attempts",
+        "recovery"
+      ],
+      "type": "object"
+    },
+    "ResponseOperation": {
+      "enum": [
+        "model",
+        "modelCatalog",
+        "connectionProbe",
+        "inputTokenCount"
+      ],
+      "type": "string"
     },
     "ReviewTarget": {
       "description": "Selects the code change that one review Turn must inspect.",

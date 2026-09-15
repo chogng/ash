@@ -1273,6 +1273,7 @@ pub fn open_local_app_server_with_codebase_providers(
             Arc::clone(&profile_secrets),
         ),
     }
+    .with_response_diagnostics(Arc::new(diagnostics.clone()))
     .with_local_tokenizers(local_tokenizers)
     .with_chatgpt_oauth(Arc::clone(&chatgpt_oauth))
     .with_kimi_oauth(Arc::clone(&kimi_oauth));

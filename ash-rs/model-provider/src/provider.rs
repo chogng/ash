@@ -2,6 +2,10 @@
 mod websocket_session;
 pub use websocket_session::ResponsesModelSession;
 
+use crate::diagnostics::DiagnosticClient;
+use response_debug_context::AuthRecovery;
+use response_debug_context::ResponseDiagnosticSink;
+use response_debug_context::ResponseOperation;
 use crate::ModelCatalogBinding;
 use crate::ModelProviderError;
 use crate::ProviderCredentialService;
@@ -198,6 +202,7 @@ pub struct Provider {
     remote_measurement: RemoteMeasurement,
     client: Arc<dyn OperationClient>,
     local_counter: providers::measurement::LocalInputTokenCounter,
+    diagnostics: Option<Arc<dyn ResponseDiagnosticSink>>,
 }
 
 impl Provider {
@@ -250,6 +255,7 @@ impl Provider {
             remote_measurement,
             client,
             local_counter,
+            diagnostics: None,
         })
     }
 
@@ -329,56 +335,71 @@ impl Provider {
         cancellation: &CancellationToken,
         sink: &mut dyn ModelEventSink,
     ) -> Result<ModelResponse, ModelProviderError> {
-        let model = self.resolve_model(model_id)?;
-        let request = self.prepare_request(&model, request);
-        check_cancellation(cancellation)?;
-        let target = self.target.resolve()?;
-        let attempt_client = AttemptClient::new(self.client.as_ref());
-        let mut attempt = AttemptEvents {
-            sink,
-            emitted: false,
-        };
-        let response = self.execute_attempt(
-            &target,
-            model.id.as_str(),
-            &request,
-            &attempt_client,
-            cancellation,
-            &mut attempt,
+        let diagnostic = DiagnosticClient::new(
+            self.client.clone(),
+            self.diagnostics.clone(),
+            ResponseOperation::Model,
         );
-        if matches!(
-            response,
-            Err(ModelProviderError::AuthFailed(_)
-                | ModelProviderError::Api(ash_api::ApiError::HttpStatus(401)))
-        ) && !attempt.emitted
-            && attempt_client.was_unauthorized()
-        {
+        let result = (|| {
+            let model = self.resolve_model(model_id)?;
+            let request = self.prepare_request(&model, request);
             check_cancellation(cancellation)?;
-            if let Some(renewed) = self.target.recover_unauthorized(&target)? {
-                let retry_client = AttemptClient::new(self.client.as_ref());
-                let response = self.execute_attempt(
-                    &renewed,
-                    model.id.as_str(),
-                    &request,
-                    &retry_client,
-                    cancellation,
-                    &mut attempt,
-                );
-                if matches!(
-                    response,
-                    Err(ModelProviderError::AuthFailed(_)
-                        | ModelProviderError::Api(ash_api::ApiError::HttpStatus(401)))
-                ) && retry_client.was_unauthorized()
-                {
-                    self.target.note_rejected(&renewed);
-                }
+            let target = self.target.resolve()?;
+            let attempt_client = AttemptClient::new(&diagnostic);
+            let mut attempt = AttemptEvents {
+                sink,
+                emitted: false,
+            };
+            let response = self.execute_attempt(
+                &target,
+                model.id.as_str(),
+                &request,
+                &attempt_client,
+                cancellation,
+                &mut attempt,
+            );
+            if matches!(
+                response,
+                Err(ModelProviderError::AuthFailed(_)
+                    | ModelProviderError::Api(ash_api::ApiError::HttpStatus(401)))
+            ) && !attempt.emitted
+                && attempt_client.was_unauthorized()
+            {
                 check_cancellation(cancellation)?;
-                return response;
+                let recovered = self.target.recover_unauthorized(&target);
+                diagnostic.recovery(match &recovered {
+                    Ok(Some(_)) => AuthRecovery::CredentialsRecovered,
+                    Ok(None) => AuthRecovery::Unavailable,
+                    Err(_) => AuthRecovery::Failed,
+                });
+                if let Some(renewed) = recovered? {
+                    let retry_client = AttemptClient::new(&diagnostic);
+                    let response = self.execute_attempt(
+                        &renewed,
+                        model.id.as_str(),
+                        &request,
+                        &retry_client,
+                        cancellation,
+                        &mut attempt,
+                    );
+                    if matches!(
+                        response,
+                        Err(ModelProviderError::AuthFailed(_)
+                            | ModelProviderError::Api(ash_api::ApiError::HttpStatus(401)))
+                    ) && retry_client.was_unauthorized()
+                    {
+                        self.target.note_rejected(&renewed);
+                    }
+                    check_cancellation(cancellation)?;
+                    return response;
+                }
+                self.target.note_rejected(&target);
             }
-            self.target.note_rejected(&target);
-        }
-        check_cancellation(cancellation)?;
-        response
+            check_cancellation(cancellation)?;
+            response
+        })();
+        diagnostic.finish(&result);
+        result
     }
 
     fn execute_attempt(
@@ -443,13 +464,20 @@ impl Provider {
         let model = self.resolve_model(model_id)?;
         let provider = if let RemoteMeasurement::Enabled(headers) = &self.remote_measurement {
             let target = ResolvedApiTarget::new(self.config.base_url.clone(), headers.clone());
-            self.adapter.measure_input(
+            let diagnostic = DiagnosticClient::new(
+                self.client.clone(),
+                self.diagnostics.clone(),
+                ResponseOperation::InputTokenCount,
+            );
+            let result = self.adapter.measure_input(
                 &target,
                 model.id.as_str(),
                 request,
-                self.client.as_ref(),
+                &diagnostic,
                 cancellation,
-            )
+            );
+            diagnostic.finish(&result);
+            result
         } else {
             Ok(ContextTokenMeasurementOutcome::Unavailable)
         };
@@ -495,6 +523,7 @@ pub struct ModelProviderRuntime {
     local_tokenizers: Arc<dyn LocalTokenizerService>,
     chatgpt_oauth: Option<Arc<ChatGptOAuth>>,
     kimi_oauth: Option<Arc<KimiOAuth>>,
+    diagnostics: Option<Arc<dyn ResponseDiagnosticSink>>,
 }
 
 impl ModelProviderRuntime {
@@ -530,6 +559,7 @@ impl ModelProviderRuntime {
             local_tokenizers: Arc::new(LocalTokenizerRegistry::new()),
             chatgpt_oauth: None,
             kimi_oauth: None,
+            diagnostics: None,
         }
     }
 
@@ -556,6 +586,7 @@ impl ModelProviderRuntime {
             local_tokenizers: Arc::new(LocalTokenizerRegistry::new()),
             chatgpt_oauth: None,
             kimi_oauth: None,
+            diagnostics: None,
         }
     }
 
@@ -591,103 +622,120 @@ impl ModelProviderRuntime {
         api_key: Option<Vec<u8>>,
         model: Option<&str>,
     ) -> Result<Option<Vec<String>>, ModelProviderError> {
-        let runtime = self.with_configs([config])?;
-        let normalized = runtime.configs.normalize(config)?;
-        let definition = runtime
-            .configs
-            .get(&config.provider)
-            .expect("validated provider");
-        let adapter = providers::instantiate(definition.adapter, &normalized);
-        let credentials = match api_key {
-            Some(key) => {
-                let credentials = ProviderCredentialService::new(
-                    runtime.configs.clone(),
-                    Arc::new(ash_secrets::MemorySecretStore::default()),
-                );
-                credentials
-                    .set_api_key(&config.provider, key)
-                    .map_err(|error| ModelProviderError::Credential(error.to_string()))?;
-                Some(credentials)
-            }
-            None => runtime.credentials.clone(),
-        };
-        let mut headers = adapter.fixed_headers();
-        if let Some(credentials) = credentials {
-            headers.extend(
-                credentials
-                    .request_headers(&config.provider)
-                    .map_err(|error| ModelProviderError::Credential(error.to_string()))?,
-            );
-        }
-        let target = ResolvedApiTarget::new(normalized.base_url, headers);
-        let cancellation = CancellationSource::new();
-        if let Some(model) = model {
-            ModelId::new(model)
-                .map_err(|error| ModelProviderError::InvalidRequest(error.to_string()))?;
-            let mut request = ModelRequest::text("Reply with OK.");
-            request.max_output_tokens = Some(1024);
-            let endpoint = adapter.endpoint();
-            let model = adapter.model_id(model);
-            match definition.output_transport {
-                ModelOutputTransport::NativeStreaming => stream_endpoint(
-                    endpoint,
-                    &target,
-                    model,
-                    &request,
-                    self.client.as_ref(),
-                    &cancellation.token(),
-                    &mut DiscardModelEvents,
-                )?,
-                ModelOutputTransport::Unary => endpoint.complete_with_client_and_cancellation(
-                    &target,
-                    model,
-                    &request,
-                    self.client.as_ref(),
-                    &cancellation.token(),
-                )?,
+        let diagnostic = DiagnosticClient::new(
+            self.client.clone(),
+            self.diagnostics.clone(),
+            ResponseOperation::ConnectionProbe,
+        );
+        let result = (|| {
+            let runtime = self.with_configs([config])?;
+            let normalized = runtime.configs.normalize(config)?;
+            let definition = runtime
+                .configs
+                .get(&config.provider)
+                .expect("validated provider");
+            let adapter = providers::instantiate(definition.adapter, &normalized);
+            let credentials = match api_key {
+                Some(key) => {
+                    let credentials = ProviderCredentialService::new(
+                        runtime.configs.clone(),
+                        Arc::new(ash_secrets::MemorySecretStore::default()),
+                    );
+                    credentials
+                        .set_api_key(&config.provider, key)
+                        .map_err(|error| ModelProviderError::Credential(error.to_string()))?;
+                    Some(credentials)
+                }
+                None => runtime.credentials.clone(),
             };
-            return Ok(None);
-        }
-        let request = ClientRequest::new(
-            ash_http_client::HttpMethod::Get,
-            target
-                .endpoint("models")
-                .map_err(|error| ModelProviderError::InvalidRequest(error.to_string()))?,
-            target.headers,
-            Vec::new(),
-            ash_client::RetryPolicy::never(),
-        )
-        .map_err(|error| ModelProviderError::InvalidRequest(error.to_string()))?;
-        let response = self
-            .client
-            .execute_with_cancellation(&request, &cancellation.token())
-            .map_err(|error| ModelProviderError::Unavailable(error.to_string()))?;
-        if !(200..300).contains(&response.status()) {
-            return Err(ash_api::ApiError::HttpStatus(response.status()).into());
-        }
-        let value: serde_json::Value = serde_json::from_slice(response.body())
-            .map_err(|_| ModelProviderError::InvalidResponse("Invalid model list".into()))?;
-        let rows = value
-            .get("data")
-            .and_then(serde_json::Value::as_array)
-            .ok_or_else(|| {
-                ModelProviderError::InvalidResponse("Expected a model data list".into())
-            })?;
-        let mut models = Vec::new();
-        for row in rows {
-            let id = row
-                .get("id")
-                .and_then(serde_json::Value::as_str)
-                .ok_or_else(|| {
-                    ModelProviderError::InvalidResponse("Model entry has no ID".into())
-                })?;
-            ModelId::new(id)
-                .map_err(|error| ModelProviderError::InvalidResponse(error.to_string()))?;
-            if !models.iter().any(|existing| existing == id) {
-                models.push(id.to_owned());
+            let mut headers = adapter.fixed_headers();
+            if let Some(credentials) = credentials {
+                headers.extend(
+                    credentials
+                        .request_headers(&config.provider)
+                        .map_err(|error| ModelProviderError::Credential(error.to_string()))?,
+                );
             }
-        }
-        Ok(Some(models))
+            let target = ResolvedApiTarget::new(normalized.base_url, headers);
+            let cancellation = CancellationSource::new();
+            if let Some(model) = model {
+                ModelId::new(model)
+                    .map_err(|error| ModelProviderError::InvalidRequest(error.to_string()))?;
+                let mut request = ModelRequest::text("Reply with OK.");
+                request.max_output_tokens = Some(1024);
+                let endpoint = adapter.endpoint();
+                let model = adapter.model_id(model);
+                match definition.output_transport {
+                    ModelOutputTransport::NativeStreaming => stream_endpoint(
+                        endpoint,
+                        &target,
+                        model,
+                        &request,
+                        &diagnostic,
+                        &cancellation.token(),
+                        &mut DiscardModelEvents,
+                    )?,
+                    ModelOutputTransport::Unary => endpoint.complete_with_client_and_cancellation(
+                        &target,
+                        model,
+                        &request,
+                        &diagnostic,
+                        &cancellation.token(),
+                    )?,
+                };
+                return Ok(None);
+            }
+            let request = ClientRequest::new(
+                ash_http_client::HttpMethod::Get,
+                target
+                    .endpoint("models")
+                    .map_err(|error| ModelProviderError::InvalidRequest(error.to_string()))?,
+                target.headers,
+                Vec::new(),
+                ash_client::RetryPolicy::never(),
+            )
+            .map_err(|error| ModelProviderError::InvalidRequest(error.to_string()))?;
+            let response = diagnostic
+                .execute_with_cancellation(&request, &cancellation.token())
+                .map_err(|error| ModelProviderError::Unavailable(error.to_string()))?;
+            if !(200..300).contains(&response.status()) {
+                return Err(ash_api::ApiError::HttpStatus(response.status()).into());
+            }
+            let value: serde_json::Value = serde_json::from_slice(response.body())
+                .map_err(|_| ModelProviderError::InvalidResponse("Invalid model list".into()))?;
+            let rows = value
+                .get("data")
+                .and_then(serde_json::Value::as_array)
+                .ok_or_else(|| {
+                    ModelProviderError::InvalidResponse("Expected a model data list".into())
+                })?;
+            let mut models = Vec::new();
+            for row in rows {
+                let id = row
+                    .get("id")
+                    .and_then(serde_json::Value::as_str)
+                    .ok_or_else(|| {
+                        ModelProviderError::InvalidResponse("Model entry has no ID".into())
+                    })?;
+                ModelId::new(id)
+                    .map_err(|error| ModelProviderError::InvalidResponse(error.to_string()))?;
+                if !models.iter().any(|existing| existing == id) {
+                    models.push(id.to_owned());
+                }
+            }
+            Ok(Some(models))
+        })();
+        diagnostic.finish(&result);
+        result
+    }
+
+    /// Installs the product-owned bounded diagnostic destination.
+    pub fn with_response_diagnostics(
+        mut self,
+        diagnostics: Arc<dyn ResponseDiagnosticSink>,
+    ) -> Self {
+        self.diagnostics = Some(diagnostics);
+        self
     }
 
     pub fn builtin() -> Self {
@@ -728,6 +776,7 @@ impl ModelProviderRuntime {
                     &normalized,
                     headers,
                     Arc::clone(&self.client),
+                    self.diagnostics.clone(),
                 )
                 .map(Some)
             }
@@ -798,14 +847,16 @@ impl ModelProviderRuntime {
             .get(&normalized.provider)
             .expect("normalization only succeeds for registered providers")
             .clone();
-        Provider::instantiate(
+        let mut provider = Provider::instantiate(
             definition,
             normalized,
             self.models.clone(),
             self.client.clone(),
             self.local_tokenizers.clone(),
             connection,
-        )
+        )?;
+        provider.diagnostics = self.diagnostics.clone();
+        Ok(provider)
     }
 
     fn connection(

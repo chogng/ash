@@ -16,6 +16,7 @@ members = [
     "ash-rs/ext/queue",
     "ash-rs/analytics",
     "ash-rs/diagnostics",
+    "ash-rs/response-debug-context",
     "ash-rs/feedback",
     "ash-rs/features",
     "ash-rs/config-schema",
@@ -232,6 +233,7 @@ memories-extension = { package = "ash-memories-extension", path = "ash-rs/ext/me
 extension-items = { package = "ash-extension-items", path = "ash-rs/ext/items" }
 queue = { package = "ash-queue", path = "ash-rs/ext/queue" }
 analytics = { package = "ash-analytics", path = "ash-rs/analytics" }
+response-debug-context = { package = "ash-response-debug-context", path = "ash-rs/response-debug-context" }
 diagnostics = { package = "ash-diagnostics", path = "ash-rs/diagnostics" }
 feedback = { package = "ash-feedback", path = "ash-rs/feedback" }
 features = { package = "ash-features", path = "ash-rs/features" }

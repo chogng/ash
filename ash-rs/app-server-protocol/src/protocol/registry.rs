@@ -864,6 +864,14 @@ use build_info::BuildInfo;
 use diagnostics::Activity;
 use diagnostics::ActivitySummary;
 use diagnostics::DiagnosticSnapshot;
+use response_debug_context::AuthHeader;
+use response_debug_context::AuthRecovery;
+use response_debug_context::DiagnosticOutcome;
+use response_debug_context::RequestAttempt;
+use response_debug_context::RequestOutcome;
+use response_debug_context::ResponseDebugContext;
+use response_debug_context::ResponseDiagnostic;
+use response_debug_context::ResponseOperation;
 use diagnostics::Observation;
 use diagnostics::Outcome;
 use extension_items::ExtensionItem;
@@ -3312,6 +3320,14 @@ typescript_bindings! {
     FeedbackPrepareParams,
     FeedbackUploadParams,
     DiagnosticSnapshot,
+    AuthHeader,
+    AuthRecovery,
+    DiagnosticOutcome,
+    RequestAttempt,
+    RequestOutcome,
+    ResponseDebugContext,
+    ResponseDiagnostic,
+    ResponseOperation,
     Activity,
     ActivitySummary,
     Observation,

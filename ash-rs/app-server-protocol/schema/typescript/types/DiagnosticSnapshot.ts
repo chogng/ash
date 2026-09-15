@@ -3,6 +3,7 @@ import type { Activity } from './Activity.js';
 import type { ActivitySummary } from './ActivitySummary.js';
 import type { BuildInfo } from './BuildInfo.js';
 import type { Observation } from './Observation.js';
+import type { ResponseDiagnostic } from './ResponseDiagnostic.js';
 import type { UsageSnapshot } from './UsageSnapshot.js';
 
-export type DiagnosticSnapshot = { build: BuildInfo, activities: { [key in Activity]?: ActivitySummary }, recent: Array<Observation>, usage: UsageSnapshot, };
+export type DiagnosticSnapshot = { build: BuildInfo, activities: { [key in Activity]?: ActivitySummary }, recent: Array<Observation>, usage: UsageSnapshot, responses: Array<ResponseDiagnostic>, };

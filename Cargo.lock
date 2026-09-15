@@ -671,6 +671,7 @@ dependencies = [
  "ash-memory-diagnostics",
  "ash-protocol",
  "ash-queue",
+ "ash-response-debug-context",
  "ash-thread-transcript",
  "schemars",
  "serde",
@@ -1097,6 +1098,7 @@ version = "0.1.0"
 dependencies = [
  "ash-analytics",
  "ash-build-info",
+ "ash-response-debug-context",
  "schemars",
  "serde",
  "serde_json",
@@ -1823,6 +1825,7 @@ dependencies = [
  "ash-models-manager",
  "ash-ollama",
  "ash-protocol",
+ "ash-response-debug-context",
  "ash-secrets",
  "ash-websocket-client",
  "base64 0.22.1",
@@ -2081,6 +2084,17 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "tempfile",
+]
+
+[[package]]
+name = "ash-response-debug-context"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "schemars",
+ "serde",
+ "serde_json",
+ "ts-rs",
 ]
 
 [[package]]
