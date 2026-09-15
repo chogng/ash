@@ -7,7 +7,7 @@ use ash_config::HookId;
 use ash_config::HookMatcher;
 use core_api::AfterToolHookRequest;
 use core_api::BeforeToolHookRequest;
-use core_api::HookOutcome;
+use core_api::ToolExecutionOutcome;
 use core_api::TurnCompletedHookRequest;
 use ash_protocol::ThreadId;
 use ash_protocol::ToolCallId;
@@ -41,7 +41,7 @@ fn before_request(tool_name: &str) -> BeforeToolHookRequest {
     }
 }
 
-fn after_request(tool_name: &str, outcome: HookOutcome) -> AfterToolHookRequest {
+fn after_request(tool_name: &str, outcome: ToolExecutionOutcome) -> AfterToolHookRequest {
     AfterToolHookRequest {
         session_id: ash_protocol::SessionId::new("session").unwrap(),
         thread_id: ThreadId::new("thread-test").unwrap(),
@@ -66,7 +66,7 @@ fn exact_tool_matcher_applies_only_to_the_declared_tool_event() {
     ));
     assert!(!matches_event(
         &hook,
-        &HookInvocation::AfterTool(&after_request("shell-command", HookOutcome::Succeeded))
+        &HookInvocation::AfterTool(&after_request("shell-command", ToolExecutionOutcome::Succeeded))
     ));
 }
 
@@ -76,7 +76,7 @@ fn empty_matcher_matches_tool_events_but_not_another_event() {
 
     assert!(matches_event(
         &hook,
-        &HookInvocation::AfterTool(&after_request("file-system", HookOutcome::Failed))
+        &HookInvocation::AfterTool(&after_request("file-system", ToolExecutionOutcome::Failed))
     ));
     let completed = TurnCompletedHookRequest {
         session_id: ash_protocol::SessionId::new("session").unwrap(),

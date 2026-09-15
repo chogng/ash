@@ -49,13 +49,13 @@ pub struct ThreadView {
     pub usage: ModelUsageSummary,
     pub reference_cost: ModelReferenceCostSummary,
     pub goal: Option<ash_protocol::ThreadGoal>,
-    pub turns: Vec<TurnState>,
+    pub turns: Vec<TurnView>,
     pub items: Vec<ThreadItem>,
     pub agent: Option<AgentConfiguration>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct TurnState {
+pub struct TurnView {
     pub turn_id: TurnId,
     pub status: TurnStatus,
     pub status_changed_at_unix_ms: u64,

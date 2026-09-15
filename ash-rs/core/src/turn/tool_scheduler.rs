@@ -13,7 +13,7 @@ use crate::BeforeToolHookDecision;
 use crate::BeforeToolHookRequest;
 use crate::CoreError;
 use crate::ExecPolicyToolGrant;
-use crate::HookOutcome;
+use crate::ToolExecutionOutcome;
 use crate::HookService;
 use crate::NoHooks;
 use crate::NoThreadUpdates;
@@ -29,7 +29,7 @@ use crate::ToolCallOutput;
 use crate::ToolExecutionFacts;
 use crate::ToolService;
 use crate::TurnExecutionObserver;
-use crate::action_policy_service::approval_matches_review;
+use crate::approval_request::approval_matches_review;
 use crate::durable_approval_request;
 use ash_action_policy::ExecutionDecision;
 use ash_async_utils::CancellationToken;
@@ -684,13 +684,13 @@ impl ToolScheduler {
                     is_error,
                     ..
                 } if result_id == tool_call_id => Some(if *is_error {
-                    HookOutcome::Failed
+                    ToolExecutionOutcome::Failed
                 } else {
-                    HookOutcome::Succeeded
+                    ToolExecutionOutcome::Succeeded
                 }),
                 _ => None,
             })
-            .unwrap_or(HookOutcome::Failed);
+            .unwrap_or(ToolExecutionOutcome::Failed);
         self.hooks.after_tool(
             &AfterToolHookRequest {
                 session_id: context.session_id().clone(),

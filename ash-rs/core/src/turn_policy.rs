@@ -1,4 +1,4 @@
-//! Per-Turn approval-mode enforcement; extensions provide advice, never grants.
+//! Turn policy composition and approval-mode enforcement.
 use crate::ActionPolicyService;
 use crate::CoreError;
 use ash_action_policy::ActionPolicyEngine;
@@ -9,16 +9,17 @@ use ash_action_policy::ReviewFailurePolicy;
 use ash_async_utils::CancellationToken;
 use ash_protocol::ApprovalMode;
 use std::sync::Arc;
-/// Combines one authoritative Tool policy with the configured automatic reviewer.
+/// Composes the policies used by one Turn execution environment.
 ///
-/// Core calls the reviewer only after an interactive decision in automatic review mode.
-/// This adapter also owns the isolated Code Mode control policy.
-pub struct ApprovalModeActionPolicyService {
+/// Host actions use the base policy; isolated Code Mode controls use Core-owned authority.
+/// The policy revision includes the configured reviewer. Core invokes that reviewer only after
+/// an interactive decision in automatic review mode.
+pub struct TurnActionPolicy {
     base: Arc<dyn ActionPolicyService>,
     reviewer: ash_extension_api::ApprovalReviewer,
 }
 
-impl ApprovalModeActionPolicyService {
+impl TurnActionPolicy {
     pub fn new(
         base: Arc<dyn ActionPolicyService>,
         reviewer: ash_extension_api::ApprovalReviewer,
@@ -27,7 +28,7 @@ impl ApprovalModeActionPolicyService {
     }
 }
 
-impl ActionPolicyService for ApprovalModeActionPolicyService {
+impl ActionPolicyService for TurnActionPolicy {
     fn revision(&self) -> String {
         let reviewer = match &self.reviewer {
             ash_extension_api::ApprovalReviewer::Unavailable => "unavailable",
@@ -136,6 +137,24 @@ pub fn decide_turn_action(
         ApprovalMode::AutoReview => Ok(policy
             .review_approval(request, cancellation)?
             .unwrap_or(decision)),
+    }
+}
+
+pub(crate) struct UnavailableActionPolicyService;
+
+impl ActionPolicyService for UnavailableActionPolicyService {
+    fn revision(&self) -> String {
+        "unavailable-policy-v1".into()
+    }
+
+    fn decide(
+        &self,
+        _: &ActionReviewRequest,
+        _: &CancellationToken,
+    ) -> Result<ExecutionDecision, CoreError> {
+        Err(CoreError::Policy(
+            "no action policy service is configured".into(),
+        ))
     }
 }
 

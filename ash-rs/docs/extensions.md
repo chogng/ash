@@ -40,7 +40,7 @@ Agent 能力由 `ext/` 中的 crate 拥有；Core 提交 Thread/Turn 事实并�
 | `ash-rs/connectors` | `ext/connectors` |
 | `ash-rs/queue` | `ext/queue`，包括原 App Server `QueueExtension` |
 | `ash-rs/auto-review` | `ext/guardian-reviewer` |
-| `app-server/src/review.rs` | 模型适配归 `ext/guardian-v2`；授权模式判断归 `core/src/approval_mode.rs` |
+| `app-server/src/review.rs` | 模型适配归 `ext/guardian-v2`；授权模式判断归 `core/src/turn_policy.rs` |
 | `app-server/src/server/goal_tool.rs`、Core Goal 提示与续跑策略 | `ext/goal` |
 | `app-server/src/server/multi_agent_tools.rs`、角色选择逻辑 | `ext/agent`；App Server 仅获取已授权目录快照 |
 | `app-server/src/marketplace_connector_runtime.rs` | `ext/mcp/marketplace`；Connector 声明解析归 `ext/connectors/declaration.rs` |
@@ -86,5 +86,5 @@ Agent 能力由 `ext/` 中的 crate 拥有；Core 提交 Thread/Turn 事实并�
 - 默认最多四个并发审核，共享隔离的模型运行时；单次任务的等待、执行和重试合计最多 90 秒。
 - 仅明确标记为暂时性服务失败的请求重试，最多三次；无效 JSON、拒绝、权限扩大和取消不重试为批准。
 - 超时、关闭或任务释放会取消并回收审核线程；审核结果必须绑定原 action digest 和 policy revision。
-- Core 的审批模式服务和 `ActionPolicyEngine` 保留最终授权权；审核扩展只返回建议。
+- Core 的 `decide_turn_action` 和 `ActionPolicyEngine` 保留最终授权权；`TurnActionPolicy` 组合宿主策略、隔离控制策略与审核能力，审核扩展只返回建议。
 - 验证覆盖 Goal 续跑与恢复、Agent 角色选择、队列恢复、审核取消和重试、笔记重启与冲突、图片隔离和解码、真实 Turn 中的工具调用与审批，以及协议生成与客户端类型检查。

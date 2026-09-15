@@ -2,32 +2,11 @@ use crate::CoreError;
 use ash_action_policy::ActionReviewRequest;
 use ash_action_policy::ApprovalRequest;
 use ash_action_policy::CapabilityKind;
-use ash_action_policy::ExecutionDecision;
-use ash_async_utils::CancellationToken;
 use ash_protocol::ActionApprovalCapability;
 use ash_protocol::ActionApprovalCapabilityKind;
 use ash_protocol::ActionApprovalRequest;
 use ash_protocol::SandboxDenialOutput;
 use ash_protocol::ToolReplaySafety;
-use core_api::ActionPolicyService;
-
-pub(crate) struct UnavailableActionPolicyService;
-
-impl ActionPolicyService for UnavailableActionPolicyService {
-    fn revision(&self) -> String {
-        "unavailable-policy-v1".into()
-    }
-
-    fn decide(
-        &self,
-        _: &ActionReviewRequest,
-        _: &CancellationToken,
-    ) -> Result<ExecutionDecision, CoreError> {
-        Err(CoreError::Policy(
-            "no action policy service is configured".into(),
-        ))
-    }
-}
 
 /// Converts a policy `AskUser` decision into an exact durable interaction payload.
 ///
@@ -131,5 +110,5 @@ fn protocol_capability(capability: &ash_action_policy::Capability) -> ActionAppr
 }
 
 #[cfg(test)]
-#[path = "action_policy_service_tests.rs"]
+#[path = "approval_request_tests.rs"]
 pub(crate) mod tests;

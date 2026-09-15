@@ -22,7 +22,7 @@ use crate::ToolUserInputOutcome;
 use crate::TurnExecutionObserver;
 use crate::TurnToolExecutionFinished;
 use crate::TurnToolExecutionStarted;
-use crate::action_policy_service::durable_sandbox_escalation_approval_request;
+use crate::approval_request::durable_sandbox_escalation_approval_request;
 use crate::thread_controller::RecordToolExecutionEscalation;
 use crate::thread_controller::RecordToolExecutionStart;
 use ash_action_policy::ActionReviewRequest;
@@ -740,7 +740,7 @@ impl ToolInteractionService for CoreToolInteractions {
             ExecutionDecision::RunUnsandboxed { .. } => Ok(ActionApprovalDecision::ApproveOnce),
             ExecutionDecision::AskUser(approval) => {
                 let request =
-                    crate::action_policy_service::durable_approval_request(request, &approval)?;
+                    crate::approval_request::durable_approval_request(request, &approval)?;
                 match self.request_live(AgentRequest::Approval { request }, cancellation)? {
                     crate::thread_controller::live_interaction::LiveInteractionOutcome::Response(AgentResponse::Approval { response }) => Ok(response.decision),
                     crate::thread_controller::live_interaction::LiveInteractionOutcome::Cancelled(_) => Ok(ActionApprovalDecision::Decline),

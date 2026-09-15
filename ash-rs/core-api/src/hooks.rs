@@ -53,12 +53,12 @@ pub struct AfterToolHookRequest {
     pub turn_id: TurnId,
     pub tool_call_id: ToolCallId,
     pub tool_name: String,
-    pub outcome: HookOutcome,
+    pub outcome: ToolExecutionOutcome,
 }
 
 /// Terminal Tool outcome exposed to an `afterTool` Hook without raw provider output.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum HookOutcome {
+pub enum ToolExecutionOutcome {
     Succeeded,
     Failed,
 }

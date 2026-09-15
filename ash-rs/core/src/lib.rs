@@ -1,8 +1,8 @@
 //! Ash's Agent lifecycle, Turn execution, context assembly, and outbound service ports.
 
-mod action_policy_service;
+mod approval_request;
 mod attachment_model_service;
-mod capabilities;
+mod browser;
 mod context;
 mod context_manager;
 mod history;
@@ -11,20 +11,20 @@ mod image_preparation;
 mod message_checkpoint;
 mod multi_agent;
 mod runtime;
-mod runtime_view;
 mod services;
 mod state;
 #[cfg(test)]
 mod test_image;
 mod thread_controller;
 mod thread_reducer;
+mod thread_view;
 mod thread_worktree;
 mod tool_profile;
 mod tool_repetition;
 mod turn;
 mod turn_execution_observer;
 
-pub use action_policy_service::durable_approval_request;
+pub use approval_request::durable_approval_request;
 pub use ash_prompts::PromptArtifact;
 pub(crate) use context::ContextAssembler;
 pub use context::ContextBudget;
@@ -142,12 +142,12 @@ pub use ash_thread_store::validate_append_batch;
 #[cfg(test)]
 #[path = "thread_controller_tests.rs"]
 mod tests;
-pub use capabilities::UnsupportedBrowserCapability;
+pub use browser::UnsupportedBrowserCapability;
 
-mod approval_mode;
-pub use approval_mode::ApprovalModeActionPolicyService;
-pub use approval_mode::decide_turn_action;
+mod turn_policy;
 pub use context::TimeContextProvider;
+pub use turn_policy::TurnActionPolicy;
+pub use turn_policy::decide_turn_action;
 
 #[cfg(test)]
 #[path = "time_context_tests.rs"]
@@ -163,7 +163,6 @@ use core_api::BeforeToolHookDecision;
 use core_api::BeforeToolHookRequest;
 use core_api::CheckpointCapture;
 use core_api::CoreError;
-use core_api::HookOutcome;
 use core_api::HookService;
 use core_api::LeaseGuard;
 use core_api::MessageCheckpointSource;
@@ -174,6 +173,7 @@ use core_api::ModelStreamSink;
 use core_api::ThreadUpdateSink;
 use core_api::ThreadWorktreeBinder;
 use core_api::ThreadWorktreeBindingRequest;
+use core_api::ToolExecutionOutcome;
 use core_api::TurnCompletedHookRequest;
 use core_api::TurnExecutionFinished;
 use core_api::TurnExecutionKind;

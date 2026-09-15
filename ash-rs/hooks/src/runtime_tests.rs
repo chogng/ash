@@ -14,7 +14,7 @@ use ash_config::HookEnablement;
 use ash_config::HookEvent as ConfigHookEvent;
 use core_api::AfterToolHookRequest;
 use core_api::BeforeToolHookRequest;
-use core_api::HookOutcome;
+use core_api::ToolExecutionOutcome;
 use core_api::HookExecutionEvent;
 use core_api::HookExecutionObserver;
 use ash_protocol::ThreadId;
@@ -155,7 +155,7 @@ fn before_request(tool_name: &str) -> BeforeToolHookRequest {
     }
 }
 
-fn after_request(tool_name: &str, outcome: HookOutcome) -> AfterToolHookRequest {
+fn after_request(tool_name: &str, outcome: ToolExecutionOutcome) -> AfterToolHookRequest {
     AfterToolHookRequest {
         session_id: ash_protocol::SessionId::new("session").unwrap(),
         thread_id: ThreadId::new("thread-test").unwrap(),
@@ -201,7 +201,7 @@ fn runtime_matches_events_and_tool_filters_in_stable_order() {
         .expect("before Hook run");
     runtime
         .after_tool(
-            &after_request("file-system", HookOutcome::Succeeded),
+            &after_request("file-system", ToolExecutionOutcome::Succeeded),
             &source.token(),
         )
         .expect("non-matching after Hook run");

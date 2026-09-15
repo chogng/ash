@@ -28,7 +28,7 @@ use ash_async_utils::CancellationToken;
 use ash_config::ConfigStore;
 use core_api::ActionPolicyService;
 use ash_core::AgentTreeLimits;
-use ash_core::ApprovalModeActionPolicyService;
+use ash_core::TurnActionPolicy;
 use ash_core::MultiAgentCoordinator;
 use ash_core::ThreadController;
 use core_api::ThreadUpdateSink;
@@ -1427,7 +1427,7 @@ impl AppServer {
         tools: Arc<dyn ToolService>,
         policy: Arc<dyn ActionPolicyService>,
     ) -> Self {
-        let policy = Arc::new(ApprovalModeActionPolicyService::new(
+        let policy = Arc::new(TurnActionPolicy::new(
             policy,
             self.approval_review_model
                 .clone()

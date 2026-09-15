@@ -23,7 +23,7 @@ impl From<crate::ThreadSnapshot> for core_api::ThreadView {
             turns: snapshot
                 .turns
                 .into_iter()
-                .map(|turn| core_api::TurnState {
+                .map(|turn| core_api::TurnView {
                     turn_id: turn.turn_id,
                     status: turn.status,
                     status_changed_at_unix_ms: turn.status_changed_at_unix_ms,

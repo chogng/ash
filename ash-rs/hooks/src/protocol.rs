@@ -5,7 +5,7 @@ use ash_config::HookEvent as ConfigHookEvent;
 use core_api::AfterToolHookRequest;
 use core_api::BeforeToolHookRequest;
 use core_api::CoreError;
-use core_api::HookOutcome;
+use core_api::ToolExecutionOutcome;
 use core_api::TurnCompletedHookRequest;
 
 const HOOK_PROTOCOL_VERSION: u8 = 1;
@@ -119,8 +119,8 @@ pub(crate) fn encode_input(
             tool_call_id: request.tool_call_id.as_str(),
             tool_name: &request.tool_name,
             outcome: match request.outcome {
-                HookOutcome::Succeeded => HookInputOutcome::Succeeded,
-                HookOutcome::Failed => HookInputOutcome::Failed,
+                ToolExecutionOutcome::Succeeded => HookInputOutcome::Succeeded,
+                ToolExecutionOutcome::Failed => HookInputOutcome::Failed,
             },
         },
         HookInvocation::TurnCompleted(request) => HookInputEvent::TurnCompleted {

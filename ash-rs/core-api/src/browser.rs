@@ -15,7 +15,7 @@ pub struct CreateBrowserTargetResult {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ElementTarget {
+pub struct BrowserElementTarget {
     pub node_id: String,
 }
 
@@ -35,12 +35,12 @@ pub struct BrowserObservation {
     pub loading: bool,
     pub accessibility_tree: Option<String>,
     pub dom_snapshot: Option<String>,
-    pub screenshot: Option<MediaResource>,
+    pub screenshot: Option<BrowserMediaResource>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum TextInputTarget {
-    Element(ElementTarget),
+pub enum BrowserTextInputTarget {
+    Element(BrowserElementTarget),
     FocusedElement,
 }
 
@@ -52,11 +52,11 @@ pub enum BrowserAction {
     },
     Click {
         target_id: BrowserTargetId,
-        target: ElementTarget,
+        target: BrowserElementTarget,
     },
     TypeText {
         target_id: BrowserTargetId,
-        target: TextInputTarget,
+        target: BrowserTextInputTarget,
         text: String,
     },
     Scroll {
@@ -78,7 +78,7 @@ pub struct BrowserActionResult {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct MediaResource {
+pub struct BrowserMediaResource {
     pub resource_id: String,
     pub mime_type: String,
     pub size: u64,

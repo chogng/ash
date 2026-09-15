@@ -40,8 +40,8 @@ use core_api::BrowserObserveRequest;
 use core_api::BrowserTargetId;
 use core_api::CreateBrowserTargetRequest;
 use core_api::CreateBrowserTargetResult;
-use core_api::MediaResource;
-use core_api::TextInputTarget;
+use core_api::BrowserMediaResource;
+use core_api::BrowserTextInputTarget;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const CANCELLATION_POLL: Duration = Duration::from_millis(50);
@@ -399,7 +399,7 @@ impl BrowserHost {
                         ))
                     })?;
                 drop(state);
-                Ok(MediaResource {
+                Ok(BrowserMediaResource {
                     resource_id: metadata.resource_id,
                     mime_type: metadata.mime_type,
                     size: metadata.size as u64,
@@ -564,12 +564,12 @@ fn browser_action_dto(action: BrowserAction) -> BrowserPerformActionDto {
         } => BrowserPerformActionDto::TypeText {
             target_id: target_id.0,
             target: match target {
-                TextInputTarget::Element(target) => BrowserTextInputTargetDto::Element {
+                BrowserTextInputTarget::Element(target) => BrowserTextInputTargetDto::Element {
                     target: BrowserElementTargetDto {
                         node_id: target.node_id,
                     },
                 },
-                TextInputTarget::FocusedElement => BrowserTextInputTargetDto::FocusedElement,
+                BrowserTextInputTarget::FocusedElement => BrowserTextInputTargetDto::FocusedElement,
             },
             text,
         },

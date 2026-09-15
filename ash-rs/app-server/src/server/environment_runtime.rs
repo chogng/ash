@@ -42,7 +42,7 @@ use ash_config::DirConfigScope;
 use ash_config::DirConfigStore;
 use ash_config::ToolSearchConfig;
 use ash_content_search::ContentSearchService;
-use ash_core::ApprovalModeActionPolicyService;
+use ash_core::TurnActionPolicy;
 use core_api::InterruptTurnRequest;
 use ash_core::MultiAgentCoordinator;
 use core_api::SequenceExpectation;
@@ -1166,7 +1166,7 @@ impl AppServer {
             &providers,
             self.semantic_model_provider.clone(),
         )?;
-        let policy = Arc::new(ApprovalModeActionPolicyService::new(
+        let policy = Arc::new(TurnActionPolicy::new(
             tools.reloadable.policy(),
             self.approval_review_model
                 .clone()

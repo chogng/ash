@@ -11,11 +11,14 @@ use ash_action_policy::Capability;
 use ash_action_policy::CapabilitySet;
 use ash_action_policy::ClassifierAssessment;
 use ash_action_policy::ClassifierRecommendation;
+use ash_action_policy::ExecutionDecision;
 use ash_action_policy::ProcessInvocationKind;
 use ash_action_policy::ResolvedAction;
 use ash_action_policy::SandboxCompatibility;
 use ash_async_utils::CancellationSource;
+use ash_async_utils::CancellationToken;
 use ash_protocol::ApprovalMode;
+use core_api::ActionPolicyService;
 use std::fmt;
 
 #[derive(Debug)]
@@ -68,7 +71,7 @@ fn review_request() -> ActionReviewRequest {
 }
 
 #[test]
-fn action_policy_service_keeps_ask_user_non_authoritative_and_builds_bound_payload() {
+fn approval_request_keeps_ask_user_non_authoritative_and_builds_bound_payload() {
     let request = review_request();
     let engine = ActionPolicyEngine::with_no_exec_rules(
         ActionPolicyRevision::new("policy-1"),

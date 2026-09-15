@@ -1733,7 +1733,7 @@ fn session_manager_info(
 fn latest_turn(
     threads: &[ThreadView],
     accepts: impl Fn(TurnStatus) -> bool,
-) -> Option<(&ThreadView, &core_api::TurnState)> {
+) -> Option<(&ThreadView, &core_api::TurnView)> {
     threads
         .iter()
         .flat_map(|thread| thread.turns.iter().map(move |turn| (thread, turn)))
@@ -1755,7 +1755,7 @@ fn interaction_question(request: &AgentRequest) -> String {
 
 fn working_operation(
     thread: &ThreadView,
-    turn: &core_api::TurnState,
+    turn: &core_api::TurnView,
 ) -> Option<SessionManagerActivity> {
     let unresolved_tool = thread.items.iter().rev().find_map(|item| {
         let ThreadItem::ToolCall {

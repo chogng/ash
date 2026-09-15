@@ -27,7 +27,7 @@ use crate::TurnExecutionKind;
 use crate::TurnExecutionObserver;
 use crate::TurnExecutionStarted;
 use crate::TurnExecutionTerminalState;
-use crate::action_policy_service::UnavailableActionPolicyService;
+use crate::turn_policy::UnavailableActionPolicyService;
 use crate::context::CONTEXT_CALIBRATION_REVISION;
 use crate::context::CONTEXT_ESTIMATOR_REVISION;
 use crate::context::ContextMeasurementDisposition;

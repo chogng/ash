@@ -571,7 +571,7 @@ fn reviewer_approval_executes_with_bound_authority_and_user_context() {
     );
     let fixture = fixture_with(
         tools,
-        Arc::new(crate::action_policy_service::tests::EnginePolicy(engine)),
+        Arc::new(crate::approval_request::tests::EnginePolicy(engine)),
     );
 
     assert!(matches!(
@@ -624,7 +624,7 @@ fn safe_sandbox_denial_is_reviewed_and_retried_once() {
     );
     let fixture = fixture_with(
         tools,
-        Arc::new(crate::action_policy_service::tests::EnginePolicy(engine)),
+        Arc::new(crate::approval_request::tests::EnginePolicy(engine)),
     );
 
     fixture
@@ -694,7 +694,7 @@ fn safe_sandbox_denial_waits_for_one_time_approval_and_resumes_after_recovery() 
     );
     let fixture = fixture_with(
         tools,
-        Arc::new(crate::action_policy_service::tests::EnginePolicy(engine)),
+        Arc::new(crate::approval_request::tests::EnginePolicy(engine)),
     );
 
     assert!(matches!(
@@ -769,7 +769,7 @@ fn declining_sandbox_escalation_does_not_retry_the_tool() {
     );
     let fixture = fixture_with(
         tools,
-        Arc::new(crate::action_policy_service::tests::EnginePolicy(engine)),
+        Arc::new(crate::approval_request::tests::EnginePolicy(engine)),
     );
 
     assert!(matches!(
@@ -820,7 +820,7 @@ fn interrupted_approved_sandbox_escalation_is_not_retried() {
     );
     let fixture = fixture_with(
         tools,
-        Arc::new(crate::action_policy_service::tests::EnginePolicy(engine)),
+        Arc::new(crate::approval_request::tests::EnginePolicy(engine)),
     );
     fixture
         .scheduler
@@ -929,7 +929,7 @@ fn sandbox_denial_with_possible_side_effects_is_not_retried() {
     );
     let fixture = fixture_with(
         tools,
-        Arc::new(crate::action_policy_service::tests::EnginePolicy(engine)),
+        Arc::new(crate::approval_request::tests::EnginePolicy(engine)),
     );
 
     fixture
@@ -974,7 +974,7 @@ fn reviewer_revision_returns_structured_safer_path_feedback() {
     );
     let fixture = fixture_with(
         tools,
-        Arc::new(crate::action_policy_service::tests::EnginePolicy(engine)),
+        Arc::new(crate::approval_request::tests::EnginePolicy(engine)),
     );
 
     fixture

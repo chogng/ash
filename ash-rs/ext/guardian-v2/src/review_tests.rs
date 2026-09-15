@@ -268,7 +268,7 @@ fn approval_mode_policy_runs_the_reviewer_only_for_auto_review() {
             r#"{"recommendation":"deny","reason":"unsafe"}"#.into(),
         )),
     };
-    let policy = ash_core::ApprovalModeActionPolicyService::new(
+    let policy = ash_core::TurnActionPolicy::new(
         Arc::new(AskPolicy),
         crate::reviewer(review_model),
     );
@@ -312,7 +312,7 @@ fn approval_mode_policy_runs_the_reviewer_only_for_auto_review() {
 
 #[test]
 fn code_mode_control_grants_only_the_isolated_runtime_capability() {
-    let policy = ash_core::ApprovalModeActionPolicyService::new(
+    let policy = ash_core::TurnActionPolicy::new(
         Arc::new(AskPolicy),
         extension_api::ApprovalReviewer::Unavailable,
     );

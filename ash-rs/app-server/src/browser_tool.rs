@@ -25,8 +25,8 @@ use core_api::BrowserObserveRequest;
 use core_api::BrowserTargetId;
 use core_api::CoreError;
 use core_api::CreateBrowserTargetRequest;
-use core_api::ElementTarget;
-use core_api::TextInputTarget;
+use core_api::BrowserElementTarget;
+use core_api::BrowserTextInputTarget;
 use ash_core::ToolAuthorization;
 use ash_core::ToolService;
 use ash_protocol::ToolCall;
@@ -152,7 +152,7 @@ impl<B> BrowserToolService<B> {
                         .node_id
                         .map(element_target)
                         .transpose()?
-                        .map_or(TextInputTarget::FocusedElement, TextInputTarget::Element),
+                        .map_or(BrowserTextInputTarget::FocusedElement, BrowserTextInputTarget::Element),
                     text: arguments.text,
                 })
             }
@@ -396,11 +396,11 @@ enum BrowserToolRequest {
     },
     Click {
         target_id: BrowserTargetId,
-        target: ElementTarget,
+        target: BrowserElementTarget,
     },
     TypeText {
         target_id: BrowserTargetId,
-        target: TextInputTarget,
+        target: BrowserTextInputTarget,
         text: String,
     },
     Scroll {
@@ -532,7 +532,7 @@ fn target_id(value: String) -> Result<BrowserTargetId, CoreError> {
     Ok(BrowserTargetId(value))
 }
 
-fn element_target(value: String) -> Result<ElementTarget, CoreError> {
+fn element_target(value: String) -> Result<BrowserElementTarget, CoreError> {
     let bytes = value.as_bytes();
     if !bytes
         .first()
@@ -544,7 +544,7 @@ fn element_target(value: String) -> Result<ElementTarget, CoreError> {
             "browser node ID must be a positive backend DOM node ID".into(),
         ));
     }
-    Ok(ElementTarget { node_id: value })
+    Ok(BrowserElementTarget { node_id: value })
 }
 
 fn normalize_browser_url(value: &str) -> Result<String, CoreError> {
