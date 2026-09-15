@@ -408,6 +408,7 @@ dependencies = [
  "ash-agent-roles",
  "ash-async-utils",
  "ash-core",
+ "ash-core-api",
  "ash-instructions",
  "ash-models-manager",
  "ash-prompts",
@@ -513,6 +514,7 @@ dependencies = [
  "ash-content-search",
  "ash-context-engine",
  "ash-core",
+ "ash-core-api",
  "ash-core-plugins",
  "ash-debug-adapter",
  "ash-diagnostics",
@@ -615,6 +617,7 @@ dependencies = [
  "ash-async-utils",
  "ash-client",
  "ash-core",
+ "ash-core-api",
  "ash-diagnostics",
  "ash-feedback",
  "ash-memories",
@@ -1027,6 +1030,7 @@ dependencies = [
  "ash-code-mode",
  "ash-code-mode-protocol",
  "ash-context-engine",
+ "ash-core-api",
  "ash-execpolicy",
  "ash-extension-api",
  "ash-history",
@@ -1041,6 +1045,19 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+]
+
+[[package]]
+name = "ash-core-api"
+version = "0.1.0"
+dependencies = [
+ "ash-action-policy",
+ "ash-agent-graph-store",
+ "ash-async-utils",
+ "ash-context-engine",
+ "ash-protocol",
+ "ash-thread-store",
+ "serde_json",
 ]
 
 [[package]]
@@ -1408,6 +1425,7 @@ dependencies = [
  "ash-action-policy",
  "ash-async-utils",
  "ash-core",
+ "ash-core-api",
  "ash-extension-api",
  "ash-prompts",
  "ash-protocol",
@@ -1435,6 +1453,7 @@ dependencies = [
  "ash-async-utils",
  "ash-config",
  "ash-core",
+ "ash-core-api",
  "ash-extension-api",
  "ash-guardian-reviewer",
  "ash-model-provider",
@@ -1483,7 +1502,7 @@ dependencies = [
  "ash-action-policy",
  "ash-async-utils",
  "ash-config",
- "ash-core",
+ "ash-core-api",
  "ash-file-access",
  "ash-install-context",
  "ash-mxc-sandbox",
@@ -1706,6 +1725,7 @@ dependencies = [
  "ash-config",
  "ash-connectors-extension",
  "ash-core",
+ "ash-core-api",
  "ash-core-plugins",
  "ash-extension-api",
  "ash-file-access",
@@ -2078,6 +2098,7 @@ version = "0.1.0"
 dependencies = [
  "ash-attachments",
  "ash-core",
+ "ash-core-api",
  "ash-protocol",
  "ash-state",
  "ash-thread-store",
@@ -2268,6 +2289,7 @@ dependencies = [
  "ash-agent-graph-store",
  "ash-async-utils",
  "ash-core",
+ "ash-core-api",
  "ash-file-access",
  "ash-github",
  "ash-history",

@@ -32,5 +32,6 @@ workspace = true
 ash-utils-pty = { workspace = true }
 
 [dev-dependencies]
+core-api = { workspace = true }
 ash-async-utils = { workspace = true }
 ash-core = { workspace = true }

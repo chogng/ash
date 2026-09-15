@@ -4,7 +4,7 @@ use ash_config::HookEnablement;
 use ash_config::HookEvent;
 use ash_config::HookId;
 use ash_config::HookMatcher;
-use ash_core::BeforeToolHookRequest;
+use core_api::BeforeToolHookRequest;
 use ash_protocol::ThreadId;
 use ash_protocol::ToolCallId;
 use ash_protocol::TurnId;

@@ -34,8 +34,8 @@ use protocol::ModelResponse;
 use protocol::StopReason;
 use std::collections::BTreeMap;
 use std::sync::Mutex;
-use ash_core::ActionPolicyService;
-use ash_core::CoreError;
+use core_api::ActionPolicyService;
+use core_api::CoreError;
 
 struct RecordingProvider {
     selected: Arc<Mutex<Vec<ModelRef>>>,

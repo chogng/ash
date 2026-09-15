@@ -1,4 +1,4 @@
-use ash_core::CoreError;
+use core_api::CoreError;
 use ash_core::HarnessContext;
 use ash_core::HarnessContextProvider;
 use ash_core::HarnessContextRequest;

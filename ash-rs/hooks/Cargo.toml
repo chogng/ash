@@ -11,6 +11,7 @@ name = "ash_hooks"
 path = "src/lib.rs"
 
 [dependencies]
+core-api = { workspace = true }
 ash-install-context = { workspace = true }
 mxc-sandbox = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
@@ -18,7 +19,6 @@ serde_json = { workspace = true }
 ash-action-policy = { workspace = true }
 ash-async-utils = { workspace = true }
 ash-config = { workspace = true }
-ash-core = { workspace = true }
 ash-protocol = { workspace = true }
 ash-sandboxing = { workspace = true }
 ash-tool-executor = { workspace = true }

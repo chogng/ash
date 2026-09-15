@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use ash_core::CoreError;
+use core_api::CoreError;
 use ash_tool_executor::CommandOutput;
 
 #[derive(Clone, Debug, Eq, PartialEq)]

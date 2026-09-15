@@ -54,7 +54,10 @@ use ash_app_server_protocol::protocol::terminal::TerminalWriteParams;
 use ash_app_server_protocol::protocol::turn::InputItem;
 use ash_app_server_protocol::schema_hash;
 use ash_async_utils::CancellationToken;
-use ash_core::{CoreError, InMemoryThreadStore, ModelService, ThreadController};
+use core_api::CoreError;
+use ash_core::InMemoryThreadStore;
+use core_api::ModelService;
+use ash_core::ThreadController;
 use ash_protocol::SessionId;
 use ash_protocol::{
     CommandId, ContentPart, InputItem as ModelInputItem, ModelRequest, ModelResponse, ResponseItem,
@@ -83,7 +86,7 @@ struct TestModel;
 impl ModelService for TestModel {
     fn invoke(
         &self,
-        _: ash_core::ModelSelection<'_>,
+        _: core_api::ModelSelection<'_>,
         request: &ModelRequest,
         _: &CancellationToken,
     ) -> Result<ModelResponse, CoreError> {

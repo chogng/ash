@@ -98,7 +98,7 @@
 | Tool unknown-outcome 基线（start marker / escalation marker，不自动重放） | 已实现 | `core/src/turn/tool_scheduler.rs`、`thread_reducer.rs` |
 | 模型选择冻结（`TurnAccepted` 携带 model） | 已实现 | `core/src/thread_controller.rs` |
 | `ContextAssembler`（`ContextPlan` → `ModelRequest`） | 已实现 | `core/src/context/assembler.rs` |
-| `ModelService` / `ModelStreamSink` 契约 | 已实现；声明真实流式的主力 Provider 逐 chunk 产出，显式 unary Provider 使用 final-response bridge | `core/src/services.rs`、`model-provider/src/providers/` |
+| `ModelService` / `ModelStreamSink` 契约 | 已实现；声明真实流式的主力 Provider 逐 chunk 产出，显式 unary Provider 使用 final-response bridge | `core-api/src/model.rs`、`model-provider/src/providers/` |
 | 取消链路 session/request InterruptTurn → mailbox cancel → token → model/tool | 已实现 | [`core.md`](core.md) §7.3 |
 | App Server 可唤醒 outbound 通知源与独立 writer | 已实现 | `app-server/src/server.rs` |
 

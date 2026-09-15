@@ -168,11 +168,11 @@ struct RevokingModel {
     invoked: std::sync::Mutex<Vec<String>>,
 }
 
-impl ash_core::ModelService for RevokingModel {
+impl core_api::ModelService for RevokingModel {
     fn context_budget(
         &self,
-        _: ash_core::ModelSelection<'_>,
-    ) -> Result<ash_core::ContextBudget, ash_core::CoreError> {
+        _: core_api::ModelSelection<'_>,
+    ) -> Result<ash_core::ContextBudget, core_api::CoreError> {
         Ok(ash_core::ContextBudget::core_managed(
             ash_core::ContextTokenCount::new(15_000),
             ash_core::ContextTokenCount::new(200),
@@ -182,16 +182,16 @@ impl ash_core::ModelService for RevokingModel {
     }
     fn input_token_measurement_capability(
         &self,
-        _: ash_core::ModelSelection<'_>,
-    ) -> Result<ash_core::ContextTokenMeasurementCapability, ash_core::CoreError> {
+        _: core_api::ModelSelection<'_>,
+    ) -> Result<ash_core::ContextTokenMeasurementCapability, core_api::CoreError> {
         Ok(ash_core::ContextTokenMeasurementCapability::Remote)
     }
     fn measure_input(
         &self,
-        _: ash_core::ModelSelection<'_>,
+        _: core_api::ModelSelection<'_>,
         request: &ash_protocol::ModelRequest,
         _: &ash_async_utils::CancellationToken,
-    ) -> Result<ash_core::ContextTokenMeasurementOutcome, ash_core::CoreError> {
+    ) -> Result<ash_core::ContextTokenMeasurementOutcome, core_api::CoreError> {
         let mut measured = self.measured.lock().unwrap();
         measured.push(serde_json::to_string(request).unwrap());
         if measured.len() == 1 {
@@ -218,10 +218,10 @@ impl ash_core::ModelService for RevokingModel {
     }
     fn invoke(
         &self,
-        _: ash_core::ModelSelection<'_>,
+        _: core_api::ModelSelection<'_>,
         request: &ash_protocol::ModelRequest,
         _: &ash_async_utils::CancellationToken,
-    ) -> Result<ash_protocol::ModelResponse, ash_core::CoreError> {
+    ) -> Result<ash_protocol::ModelResponse, core_api::CoreError> {
         self.invoked
             .lock()
             .unwrap()

@@ -33,7 +33,7 @@ ThreadController
 | `TurnExecutor` | 模型循环、工具调度、取消、失败收口 | 持久层实现 |
 | Context 组件 | 输入选择、预算、压缩与 checkpoint | Session 级共享可变历史 |
 
-crate 的重点是行为与依赖隔离：Core 依赖端口，不依赖 App Server、SQLite、TUI 或具体产品宿主。
+crate 的重点是能力与依赖隔离：Core 依赖 `ash-core-api` 中的宿主契约，不依赖 App Server、SQLite、TUI 或具体产品宿主。
 
 ## 3. Thread 与 Session tree
 
@@ -94,15 +94,22 @@ Environment 是执行位置；`cwd`、dirs 与 grants 是该位置内的有效�
 ## 7. 依赖边界
 
 ```text
-ash-protocol / ash-history
-              ▲
-              │
-          ash-core ──► ash-thread-store (trait)
-              ▲
-              │
-              app-server
+app-server ──► ash-core ──► ash-core-api
+     │                          ▲
+     └──────► ash-hooks ─────────┘
 
+ash-core / ash-core-api ──► ash-protocol / ash-thread-store
 ash-state ── implements ──► ash-thread-store
 ```
+
+`ash-core-api` 定义模型调用、Hooks、策略评估、浏览器操作、执行观察、写租约、工作树绑定、
+消息 checkpoint 和 Thread 更新契约，以及跨接口使用的 `CoreError`。能力实现直接导入
+`core_api`，Core 不提供旧路径转发。策略接口保留版本检查与批准模式的默认语义；对
+`ActionPolicyEngine` 的接口适配也由该契约 crate 承担。
+
+`ThreadController`、`TurnExecutor`、归约与恢复仍在 Core。`ToolService`、工具授权凭据及
+执行事实继续留在 Core，避免为了拆 crate 而公开原本受限的授权构造方法。
+领域值仍由 `protocol` 拥有，存储接口仍由 `thread-store` 拥有；产品客户端继续通过
+App Server 接入。契约清单见 [`ash-core-api`](../ash-rs/core-api/README.md)。
 
 新增能力时先判断它属于 Thread 行为、Turn 执行、环境访问还是产品组织。只有 Thread 行为进入 Core；Project 归类、窗口导航和编辑器 Workspace 由产品层拥有。

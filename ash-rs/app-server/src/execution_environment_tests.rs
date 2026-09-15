@@ -7,7 +7,7 @@ struct EnvironmentModel {
 impl ModelService for EnvironmentModel {
     fn invoke(
         &self,
-        _: ash_core::ModelSelection<'_>,
+        _: core_api::ModelSelection<'_>,
         _: &ModelRequest,
         _: &CancellationToken,
     ) -> Result<ModelResponse, CoreError> {

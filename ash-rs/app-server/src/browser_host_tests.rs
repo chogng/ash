@@ -7,9 +7,9 @@ use std::sync::Mutex;
 use std::thread;
 use ash_app_server_protocol::protocol::common::BrowserCapability as ClientBrowserCapability;
 use ash_async_utils::CancellationSource;
-use ash_core::BrowserCapability;
-use ash_core::BrowserObserveRequest;
-use ash_core::CreateBrowserTargetRequest;
+use core_api::BrowserCapability;
+use core_api::BrowserObserveRequest;
+use core_api::CreateBrowserTargetRequest;
 
 #[test]
 fn browser_requests_bind_targets_and_resources_to_the_exact_connection() {

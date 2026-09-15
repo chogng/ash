@@ -18,15 +18,15 @@ use ash_action_policy::ExecutionDecision;
 use ash_action_policy::ResolvedAction;
 use ash_action_policy::SandboxCompatibility;
 use ash_async_utils::CancellationToken;
-use ash_core::ActionPolicyService;
-use ash_core::BrowserAction;
-use ash_core::BrowserCapability;
-use ash_core::BrowserObserveRequest;
-use ash_core::BrowserTargetId;
-use ash_core::CoreError;
-use ash_core::CreateBrowserTargetRequest;
-use ash_core::ElementTarget;
-use ash_core::TextInputTarget;
+use core_api::ActionPolicyService;
+use core_api::BrowserAction;
+use core_api::BrowserCapability;
+use core_api::BrowserObserveRequest;
+use core_api::BrowserTargetId;
+use core_api::CoreError;
+use core_api::CreateBrowserTargetRequest;
+use core_api::ElementTarget;
+use core_api::TextInputTarget;
 use ash_core::ToolAuthorization;
 use ash_core::ToolService;
 use ash_protocol::ToolCall;
@@ -567,11 +567,11 @@ fn normalize_browser_url(value: &str) -> Result<String, CoreError> {
     Ok(url.into())
 }
 
-fn action_json(result: ash_core::BrowserActionResult) -> Value {
+fn action_json(result: core_api::BrowserActionResult) -> Value {
     json!({ "target_id": result.target_id.0 })
 }
 
-fn observation_json(observation: ash_core::BrowserObservation) -> Value {
+fn observation_json(observation: core_api::BrowserObservation) -> Value {
     let screenshot = observation.screenshot.map(|resource| {
         json!({
             "resource_id": resource.resource_id,
@@ -591,10 +591,10 @@ fn observation_json(observation: ash_core::BrowserObservation) -> Value {
     })
 }
 
-fn browser_error(error: ash_core::BrowserError) -> CoreError {
+fn browser_error(error: core_api::BrowserError) -> CoreError {
     match error {
-        ash_core::BrowserError::PolicyDenied(reason) => CoreError::Policy(reason),
-        ash_core::BrowserError::Cancelled(reason) => CoreError::Cancelled(reason),
+        core_api::BrowserError::PolicyDenied(reason) => CoreError::Policy(reason),
+        core_api::BrowserError::Cancelled(reason) => CoreError::Cancelled(reason),
         other => CoreError::Execution(other.to_string()),
     }
 }

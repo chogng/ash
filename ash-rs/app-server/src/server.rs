@@ -22,15 +22,15 @@ use ash_app_server_transport::JsonlReader;
 use ash_app_server_transport::JsonlWriter;
 use ash_async_utils::CancellationToken;
 use ash_config::ConfigStore;
-use ash_core::ActionPolicyService;
+use core_api::ActionPolicyService;
 use ash_core::AgentTreeLimits;
 use ash_core::ApprovalModeActionPolicyService;
 use ash_core::CancelTurnInteractionRequest;
-use ash_core::CoreError;
-use ash_core::ModelService;
+use core_api::CoreError;
+use core_api::ModelService;
 use ash_core::MultiAgentCoordinator;
 use ash_core::ThreadController;
-use ash_core::ThreadUpdateSink;
+use core_api::ThreadUpdateSink;
 use ash_core::ToolService;
 use ash_core::TurnExecutionBackend;
 use ash_core::TurnExecutor;
@@ -180,7 +180,7 @@ pub struct AppServer {
     analytics: Arc<analytics::Analytics>,
     feedback: feedback::Feedback,
     pub(super) threads: Arc<ThreadController>,
-    thread_worktree_binder: Arc<dyn ash_core::ThreadWorktreeBinder>,
+    thread_worktree_binder: Arc<dyn core_api::ThreadWorktreeBinder>,
     pub(super) multi_agent: Arc<MultiAgentCoordinator>,
     model: Arc<dyn ModelService>,
     model_catalog: Arc<dyn ModelCatalog>,
@@ -599,7 +599,7 @@ impl AppServer {
         self.multi_agent
             .install_thread_worktree_binder(runtime.clone())
             .map_err(|error| error.to_string())?;
-        let observer: Arc<dyn ash_core::TurnExecutionObserver> = runtime.clone();
+        let observer: Arc<dyn core_api::TurnExecutionObserver> = runtime.clone();
         let executor = self
             .env_runtime
             .read()
@@ -1497,7 +1497,7 @@ impl AppServer {
     pub fn start_thread(
         &self,
         request: ash_core::StartThreadRequest,
-    ) -> Result<ash_core::ThreadSnapshot, ash_core::CoreError> {
+    ) -> Result<ash_core::ThreadSnapshot, core_api::CoreError> {
         self.threads
             .start_thread(self.thread_worktree_binder.as_ref(), request)
     }

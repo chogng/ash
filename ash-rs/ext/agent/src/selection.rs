@@ -15,7 +15,7 @@ use protocol::ModelRef;
 use protocol::ProviderId;
 use protocol::SkillActivationReason;
 use protocol::ToolName;
-use ash_core::CoreError;
+use core_api::CoreError;
 
 pub struct ResolvedAgentSelection {
     pub role: Option<AgentRoleSnapshot>,

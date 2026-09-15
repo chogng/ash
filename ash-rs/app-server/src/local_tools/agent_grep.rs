@@ -13,7 +13,7 @@ use std::time::Duration;
 use std::time::Instant;
 use ash_async_utils::CancellationToken;
 use ash_config::AgentGrepBackend;
-use ash_core::CoreError;
+use core_api::CoreError;
 use ash_core::ToolExecutionOutput;
 use ash_fast_regex_search::FastRegexCaseSensitivity;
 use ash_fast_regex_search::FastRegexError;

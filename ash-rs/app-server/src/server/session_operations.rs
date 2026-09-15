@@ -80,13 +80,13 @@ impl AppServer {
                 || params.title != existing.title
                 || (expected_agent_id != existing.agent_id && !legacy_creation)
             {
-                return Err(core_error(ash_core::CoreError::CommandConflict));
+                return Err(core_error(core_api::CoreError::CommandConflict));
             }
             existing
         } else {
             let agent = self.resolve_root_agent(&params.agent).map_err(|error| {
                 let mut response = core_error(error.clone());
-                if let ash_core::CoreError::InvalidInput(detail) = error {
+                if let core_api::CoreError::InvalidInput(detail) = error {
                     response.detail = Some(detail);
                 }
                 response
@@ -108,7 +108,7 @@ impl AppServer {
     pub(super) fn bind_session_runtime(
         &self,
         session_id: &SessionId,
-    ) -> Result<(), ash_core::CoreError> {
+    ) -> Result<(), core_api::CoreError> {
         self.threads
             .install_session_extensions(session_id.clone(), Arc::clone(&self.agent_extensions))?;
         self.updates.bind_session_scope(session_id.clone());
@@ -305,7 +305,7 @@ impl AppServer {
         if let Some(notes) = &self.notes {
             notes
                 .delete_session(&session_id)
-                .map_err(|error| core_error(ash_core::CoreError::Execution(error)))?;
+                .map_err(|error| core_error(core_api::CoreError::Execution(error)))?;
         }
         self.agent_extensions
             .state()

@@ -3,9 +3,9 @@ use std::fs::File;
 use std::fs::OpenOptions;
 use std::path::PathBuf;
 
-use ash_core::CoreError;
-use ash_core::LeaseGuard;
-use ash_core::WriterLease;
+use core_api::CoreError;
+use core_api::LeaseGuard;
+use core_api::WriterLease;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 

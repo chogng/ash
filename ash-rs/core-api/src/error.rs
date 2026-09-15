@@ -1,5 +1,5 @@
-use std::fmt;
 use ash_thread_store::ThreadStoreError;
+use std::fmt;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CoreError {

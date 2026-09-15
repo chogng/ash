@@ -13,7 +13,7 @@ use ash_protocol::StopReason;
 
 use super::AttachmentModelService;
 use crate::CoreError;
-use crate::ModelImageInputLimits;
+use core_api::ModelImageInputLimits;
 use crate::ModelImageInputPolicy;
 use crate::ModelSelection;
 use crate::ModelService;

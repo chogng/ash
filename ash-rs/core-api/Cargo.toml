@@ -1,0 +1,22 @@
+[package]
+name = "ash-core-api"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+name = "core_api"
+doctest = false
+
+[dependencies]
+agent-graph-store = { workspace = true }
+ash-action-policy = { workspace = true }
+ash-async-utils = { workspace = true }
+ash-context-engine = { workspace = true }
+ash-protocol = { workspace = true }
+ash-thread-store = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

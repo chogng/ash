@@ -11,13 +11,13 @@ use serde_json::json;
 use std::sync::Arc;
 
 struct Model;
-impl ash_core::ModelService for Model {
+impl core_api::ModelService for Model {
     fn invoke(
         &self,
-        _: ash_core::ModelSelection<'_>,
+        _: core_api::ModelSelection<'_>,
         _: &ash_protocol::ModelRequest,
         _: &ash_async_utils::CancellationToken,
-    ) -> Result<ash_protocol::ModelResponse, ash_core::CoreError> {
+    ) -> Result<ash_protocol::ModelResponse, core_api::CoreError> {
         unreachable!("Import must not invoke a model")
     }
 }

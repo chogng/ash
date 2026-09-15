@@ -14,6 +14,7 @@ name = "ash_core"
 path = "src/lib.rs"
 
 [dependencies]
+core-api = { workspace = true }
 agent-graph-store = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

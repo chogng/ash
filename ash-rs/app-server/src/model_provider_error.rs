@@ -1,4 +1,4 @@
-use ash_core::CoreError;
+use core_api::CoreError;
 use ash_model_provider::ApiError;
 use ash_model_provider::ModelProviderError;
 use ash_protocol::StableTurnError;

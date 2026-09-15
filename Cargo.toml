@@ -57,6 +57,7 @@ members = [
     "ash-rs/config",
     "ash-rs/context-engine",
     "ash-rs/core",
+    "ash-rs/core-api",
     "ash-rs/diff",
     "ash-rs/debug-adapter",
     "ash-rs/extensions",
@@ -412,6 +413,7 @@ ash-otel = { path = "ash-rs/otel" }
 ash-config = { path = "ash-rs/config" }
 ash-context-engine = { path = "ash-rs/context-engine" }
 ash-core = { path = "ash-rs/core" }
+core-api = { package = "ash-core-api", path = "ash-rs/core-api" }
 ash-diff = { path = "ash-rs/diff" }
 ash-debug-adapter = { path = "ash-rs/debug-adapter" }
 ash-editor = { path = "app/editor" }

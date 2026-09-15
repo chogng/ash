@@ -1,0 +1,16 @@
+# `ash-core-api`
+
+- 定义模型调用、Hooks、策略评估、浏览器操作和执行观察契约。
+- 定义写租约、工作树绑定、消息 checkpoint 和 Thread 更新接口。
+- 统一接口使用的 `CoreError`，复用现有领域值与存储错误。
+- 允许能力实现依赖契约，不引入 `ash-core` 执行代码。
+
+依赖方向为 `ash-core → ash-core-api`、`ash-hooks → ash-core-api`。消费方使用
+`core-api` dependency key 和 `core_api` Rust 路径；Core 不重新导出这些契约。
+`just dependencies` 检查接口与 Hooks 的生产、构建依赖，禁止直接或间接引入 Core 或 App Server。
+
+Thread 状态、恢复、执行循环、工具授权构造和调用时机由 `ash-core` 拥有。
+`ToolService` 与其授权、执行事实仍由 Core 管理；`ThreadStore` 保持在
+`ash-thread-store`。产品客户端继续使用 App Server。
+
+完整边界见 [Core 架构](../../docs/core.md#7-依赖边界)。

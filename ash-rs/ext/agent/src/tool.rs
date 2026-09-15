@@ -32,7 +32,7 @@ use serde_json::json;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
-use ash_core::CoreError;
+use core_api::CoreError;
 use ash_core::JoinAgentsRequest;
 use ash_core::MultiAgentCoordinator;
 use ash_core::SendAgentMessageRequest;

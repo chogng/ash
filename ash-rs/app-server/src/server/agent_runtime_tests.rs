@@ -3,10 +3,10 @@ use agent::MultiAgentToolService;
 use agent::SPAWN_AGENT_TOOL_NAME;
 use ash_action_policy::ActionReviewRequest;
 use ash_async_utils::CancellationToken;
-use ash_core::CoreError;
+use core_api::CoreError;
 use ash_core::InMemoryThreadStore;
-use ash_core::ModelSelection;
-use ash_core::ModelService;
+use core_api::ModelSelection;
+use core_api::ModelService;
 use ash_core::SequenceExpectation;
 use ash_core::SpawnAgentRequest;
 use ash_core::StartThreadRequest;
@@ -194,7 +194,7 @@ impl crate::model_catalog::ModelCatalog for SelectedModel {
 }
 
 struct AllowCoordination;
-impl ash_core::ActionPolicyService for AllowCoordination {
+impl core_api::ActionPolicyService for AllowCoordination {
     fn revision(&self) -> String {
         local_policy_revision().as_str().to_owned()
     }

@@ -19,7 +19,8 @@ use ash_app_server_protocol::protocol::turn_changes::{
     TurnChangesChanged, TurnChangesMutationResult,
 };
 use ash_config::ConfigStore;
-use ash_core::{ModelService, ThreadController};
+use core_api::ModelService;
+use ash_core::ThreadController;
 use ash_protocol::CommandId;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
@@ -72,7 +73,7 @@ impl GitTurnChangesRuntime {
             write_lifecycles: WriteLifecycleTracker::default(),
             watchers: RwLock::new(BTreeMap::new()),
         });
-        let hook_observer: Arc<dyn ash_core::HookExecutionObserver> = runtime.clone();
+        let hook_observer: Arc<dyn core_api::HookExecutionObserver> = runtime.clone();
         dirs.hooks.set_execution_observer(hook_observer);
         for (thread_id, binding) in runtime
             .dirs

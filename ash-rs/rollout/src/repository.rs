@@ -5,7 +5,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use ash_attachments::FileImageAttachmentStore;
 use ash_attachments::ImageAttachments;
-use ash_core::{ThreadController, ThreadStore, WriterLease};
+use ash_core::ThreadController;
+use ash_core::ThreadStore;
+use core_api::WriterLease;
 use ash_state::{SqliteThreadStore, StateRuntime};
 
 /// Opens and recovers local authoritative Thread state under one profile root.
@@ -25,7 +27,7 @@ impl LocalStateRepository {
         let root = state.profile_root();
         let database_path = state.database_path().to_path_buf();
         let image_store = FileImageAttachmentStore::open(root.join("attachments"))
-            .map_err(|error| ash_core::CoreError::Journal(error.to_string()))?;
+            .map_err(|error| core_api::CoreError::Journal(error.to_string()))?;
         Ok(Self {
             thread_store: Arc::new(SqliteThreadStore::open(&database_path)?),
             writer_lease: Arc::new(LeaseDirectory::open(state.writer_leases_root())?),

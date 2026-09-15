@@ -517,13 +517,13 @@ struct MemoryToolModel {
     requests: std::sync::Mutex<Vec<ash_protocol::ModelRequest>>,
 }
 
-impl ash_core::ModelService for MemoryToolModel {
+impl core_api::ModelService for MemoryToolModel {
     fn invoke(
         &self,
-        _: ash_core::ModelSelection<'_>,
+        _: core_api::ModelSelection<'_>,
         request: &ash_protocol::ModelRequest,
         _: &ash_async_utils::CancellationToken,
-    ) -> Result<ash_protocol::ModelResponse, ash_core::CoreError> {
+    ) -> Result<ash_protocol::ModelResponse, core_api::CoreError> {
         let mut requests = self.requests.lock().unwrap();
         let step = requests.len();
         requests.push(request.clone());
@@ -670,13 +670,13 @@ struct CodeMemoryModel {
     reference: String,
     calls: std::sync::atomic::AtomicUsize,
 }
-impl ash_core::ModelService for CodeMemoryModel {
+impl core_api::ModelService for CodeMemoryModel {
     fn invoke(
         &self,
-        _: ash_core::ModelSelection<'_>,
+        _: core_api::ModelSelection<'_>,
         _: &ash_protocol::ModelRequest,
         _: &ash_async_utils::CancellationToken,
-    ) -> Result<ash_protocol::ModelResponse, ash_core::CoreError> {
+    ) -> Result<ash_protocol::ModelResponse, core_api::CoreError> {
         let first = self
             .calls
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
@@ -820,13 +820,13 @@ fn memories_code_mode_calls_share_identity_policy_and_durable_results() {
 struct CapabilityModel {
     requests: std::sync::Mutex<Vec<ash_protocol::ModelRequest>>,
 }
-impl ash_core::ModelService for CapabilityModel {
+impl core_api::ModelService for CapabilityModel {
     fn invoke(
         &self,
-        _: ash_core::ModelSelection<'_>,
+        _: core_api::ModelSelection<'_>,
         request: &ash_protocol::ModelRequest,
         _: &ash_async_utils::CancellationToken,
-    ) -> Result<ash_protocol::ModelResponse, ash_core::CoreError> {
+    ) -> Result<ash_protocol::ModelResponse, core_api::CoreError> {
         let mut requests = self.requests.lock().unwrap();
         let step = requests.len();
         requests.push(request.clone());

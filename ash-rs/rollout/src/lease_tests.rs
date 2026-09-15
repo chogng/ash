@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use ash_core::WriterLease;
+use core_api::WriterLease;
 use ash_protocol::ThreadId;
 
 use super::LeaseDirectory;

@@ -2,7 +2,7 @@ use super::environment_runtime::EnvRuntime;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::sync::Weak;
-use ash_core::CoreError;
+use core_api::CoreError;
 use ash_core::TurnExecutionBackend;
 use ash_core::TurnExecutor;
 use ash_protocol::CommandId;

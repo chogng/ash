@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 use ash_config::ConfigStore;
-use ash_core::CoreError;
+use core_api::CoreError;
 use ash_core::TimeContextProvider;
 use ash_protocol::TimeContext;
 use ash_protocol::TimeContextMode;

@@ -5,7 +5,7 @@ use std::time::Duration;
 use ash_async_utils::CancellationToken;
 use ash_config::HookAction;
 use ash_config::HookConfig;
-use ash_core::CoreError;
+use core_api::CoreError;
 use ash_file_access::Dir;
 use ash_tool_executor::ApprovalPolicy;
 use ash_tool_executor::ApprovalRequirement;

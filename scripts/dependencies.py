@@ -121,6 +121,10 @@ def boundary_errors(root: Path, metadata: dict) -> list[str]:
                         and dependency == "ash-app-server"
                     )
                     or (
+                        start in {"ash-core-api", "ash-hooks"}
+                        and dependency in {"ash-core", "ash-app-server"}
+                    )
+                    or (
                         start == "ash-keybinding"
                         and dependency
                         in {"crossterm", "winit", "zui", "ash-ui-components"}

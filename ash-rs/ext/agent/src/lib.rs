@@ -28,7 +28,7 @@ pub fn recover(
     threads: &ash_core::ThreadController,
     backend: &dyn ash_core::TurnExecutionBackend,
     sessions: &std::collections::BTreeSet<protocol::SessionId>,
-) -> Result<usize, ash_core::CoreError> {
+) -> Result<usize, core_api::CoreError> {
     let mut resumed = 0;
     for session_id in sessions {
         for spawned in coordinator.recover_session(session_id)? {

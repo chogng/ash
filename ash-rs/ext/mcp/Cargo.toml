@@ -11,6 +11,7 @@ name = "ash_mcp_extension"
 path = "src/lib.rs"
 
 [dependencies]
+core-api = { workspace = true }
 extension-api = { package = "ash-extension-api", path = "../extension-api" }
 file-system = { package = "ash-file-system", path = "../../file-system" }
 file-access = { package = "ash-file-access", path = "../../file-access" }

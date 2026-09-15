@@ -148,6 +148,40 @@ class DependencyTests(unittest.TestCase):
             dependencies.boundary_errors(self.root, self.metadata(app, tui)), []
         )
 
+    def test_core_contract_consumers_cannot_reach_execution_through_an_adapter(self):
+        for name in ("ash-core-api", "ash-hooks"):
+            for target in ("ash-core", "ash-app-server"):
+                with self.subTest(consumer=name, target=target):
+                    consumer = self.package(
+                        name,
+                        f"ash-rs/{name.removeprefix('ash-')}",
+                        deps=[{"name": "adapter", "kind": None, "rename": "host"}],
+                    )
+                    adapter = self.package(
+                        "adapter",
+                        "ash-rs/adapter",
+                        deps=[{"name": target, "kind": "build"}],
+                    )
+                    runtime = self.package(target, f"ash-rs/{target}")
+                    self.assertIn(
+                        f"forbidden dependency path: {name} -> adapter -> {target}",
+                        dependencies.boundary_errors(
+                            self.root, self.metadata(consumer, adapter, runtime)
+                        ),
+                    )
+
+    def test_core_and_hooks_share_contracts_without_reverse_execution_dependency(self):
+        api = self.package("ash-core-api", "ash-rs/core-api")
+        core = self.package(
+            "ash-core", "ash-rs/core", deps=[{"name": "ash-core-api", "kind": None}]
+        )
+        hooks = self.package(
+            "ash-hooks", "ash-rs/hooks", deps=[{"name": "ash-core-api", "kind": None}]
+        )
+        self.assertEqual(
+            dependencies.boundary_errors(self.root, self.metadata(api, core, hooks)), []
+        )
+
     def test_daemon_cannot_reach_server_through_client(self):
         daemon = self.package(
             "ash-app-server-daemon",

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use ash_app_server_protocol::protocol::model::ModelCatalogEntry;
-use ash_core::CoreError;
+use core_api::CoreError;
 use ash_protocol::ModelRef;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

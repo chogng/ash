@@ -17,7 +17,7 @@ use ash_action_policy::ResolvedAction;
 use ash_action_policy::ReviewEvidence;
 use ash_action_policy::SandboxCompatibility;
 use ash_async_utils::CancellationToken;
-use ash_core::CoreError;
+use core_api::CoreError;
 use ash_core::ToolAuthorization;
 use ash_core::ToolExecutionFacts;
 use ash_core::ToolInteractionService;

@@ -9,6 +9,7 @@ publish.workspace = true
 doctest = false
 
 [dependencies]
+core-api = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 action-policy = { package = "ash-action-policy", path = "../../action-policy" }

@@ -14,7 +14,7 @@ use ash_action_policy::GrantId;
 use ash_action_policy::ResolvedAction;
 use ash_action_policy::SandboxCompatibility;
 use ash_async_utils::CancellationSource;
-use ash_core::CoreError;
+use core_api::CoreError;
 use ash_core::ToolAuthorization;
 use ash_core::ToolOutputSink;
 use ash_file_access::Dir;

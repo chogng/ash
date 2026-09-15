@@ -624,7 +624,7 @@ impl AppServer {
             parent_sequence, ..
         } = restored.origin
         else {
-            return Err(core_error(ash_core::CoreError::Journal(
+            return Err(core_error(core_api::CoreError::Journal(
                 "restoration origin is missing".into(),
             )));
         };
@@ -655,7 +655,7 @@ impl AppServer {
                                 mutation.command_id, turn.turn_id
                             ))
                             .map_err(|error| {
-                                core_error(ash_core::CoreError::InvalidInput(error.to_string()))
+                                core_error(core_api::CoreError::InvalidInput(error.to_string()))
                             })?,
                         },
                         current.sequence,
@@ -1637,7 +1637,7 @@ impl AppServer {
             .list_session_threads(session_id)
             .map_err(core_error)?;
         if snapshots.is_empty() {
-            return Err(core_error(ash_core::CoreError::NotFound(
+            return Err(core_error(core_api::CoreError::NotFound(
                 session_id.to_string(),
             )));
         }
@@ -1742,7 +1742,7 @@ fn provider_models_failure_code(
 fn session_from_catalog(mut records: Vec<ThreadCatalogRecord>) -> Result<Session, RpcError> {
     records.sort_by(|left, right| left.thread.thread_id.cmp(&right.thread.thread_id));
     let first = records.first().ok_or_else(|| {
-        core_error(ash_core::CoreError::Journal(
+        core_error(core_api::CoreError::Journal(
             "empty Session catalog".into(),
         ))
     })?;
@@ -2013,7 +2013,7 @@ impl AppServer {
                 Ok(match item {
                     InputItem::Issue { number } => {
                         if number == 0 {
-                            return Err(core_error(ash_core::CoreError::InvalidInput(
+                            return Err(core_error(core_api::CoreError::InvalidInput(
                                 "Issue number must be positive".into(),
                             )));
                         }

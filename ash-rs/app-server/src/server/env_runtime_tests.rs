@@ -24,8 +24,8 @@ use ash_config::ConfigStore;
 use ash_config::ToolSearchConfig;
 use ash_config::ToolSearchModeConfig;
 use ash_config::UserConfigCommand;
-use ash_core::ActionPolicyService;
-use ash_core::CoreError;
+use core_api::ActionPolicyService;
+use core_api::CoreError;
 use ash_core::InMemoryThreadStore;
 use ash_core::NoTools;
 use ash_core::SequenceExpectation;
@@ -62,10 +62,10 @@ struct RequestRecordingModel {
     requests: Mutex<Vec<ash_protocol::ModelRequest>>,
 }
 
-impl ash_core::ModelService for RequestRecordingModel {
+impl core_api::ModelService for RequestRecordingModel {
     fn invoke(
         &self,
-        _: ash_core::ModelSelection<'_>,
+        _: core_api::ModelSelection<'_>,
         request: &ash_protocol::ModelRequest,
         _: &CancellationToken,
     ) -> Result<ash_protocol::ModelResponse, CoreError> {

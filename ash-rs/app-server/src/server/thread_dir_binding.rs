@@ -6,7 +6,9 @@ use worktree::{
     ManagedDirBinding, ManagedDirKind, ManagedDirOwner, ManagedDirProvisionRequest,
     ManagedDirSource, ManagedDirTarget, ManagedRepositoryBinding,
 };
-use ash_core::{CoreError, ThreadWorktreeBinder, ThreadWorktreeBindingRequest};
+use core_api::CoreError;
+use core_api::ThreadWorktreeBinder;
+use core_api::ThreadWorktreeBindingRequest;
 use ash_protocol::ThreadOrigin;
 
 impl GitTurnChangesRuntime {

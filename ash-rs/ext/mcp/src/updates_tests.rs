@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use ash_core::CoreError;
+use core_api::CoreError;
 use ash_core::ToolInteractionService;
 use ash_core::ToolUserInputOutcome;
 use ash_protocol::RequestUserInput;

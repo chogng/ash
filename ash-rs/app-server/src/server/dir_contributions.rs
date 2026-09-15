@@ -7,7 +7,7 @@ use crate::dir_grants::DirGrants;
 use agent_roles::AgentRoleCatalog;
 use agent_roles::AgentRoleCatalogSnapshot;
 use ash_app_server_protocol::protocol::fs::FsChanged;
-use ash_core::CoreError;
+use core_api::CoreError;
 use ash_core::HarnessContext;
 use ash_core::HarnessContextProvider;
 use ash_core::HarnessContextRequest;

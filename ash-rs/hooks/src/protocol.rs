@@ -2,11 +2,11 @@ use serde::Serialize;
 use std::path::Path;
 use ash_config::HookConfig;
 use ash_config::HookEvent as ConfigHookEvent;
-use ash_core::AfterToolHookRequest;
-use ash_core::BeforeToolHookRequest;
-use ash_core::CoreError;
-use ash_core::HookOutcome;
-use ash_core::TurnCompletedHookRequest;
+use core_api::AfterToolHookRequest;
+use core_api::BeforeToolHookRequest;
+use core_api::CoreError;
+use core_api::HookOutcome;
+use core_api::TurnCompletedHookRequest;
 
 const HOOK_PROTOCOL_VERSION: u8 = 1;
 const HOOK_INPUT_BYTES: usize = 64 * 1024;

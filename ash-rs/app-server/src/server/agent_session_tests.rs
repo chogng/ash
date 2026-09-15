@@ -2,7 +2,7 @@ use super::*;
 use crate::model_catalog::ModelCatalog;
 use std::sync::mpsc;
 use ash_core::InMemoryThreadStore;
-use ash_core::ModelSelection;
+use core_api::ModelSelection;
 use ash_protocol::AgentRoleSelection;
 use ash_protocol::AgentRoleSource;
 use ash_protocol::CommandId;

@@ -8,7 +8,7 @@ use protocol::TurnStatus;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::Weak;
-use ash_core::CoreError;
+use core_api::CoreError;
 use ash_core::StartGoalTurnRequest;
 use ash_core::ThreadController;
 

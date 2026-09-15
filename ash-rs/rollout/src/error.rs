@@ -1,5 +1,5 @@
 use std::fmt;
-use ash_core::CoreError;
+use core_api::CoreError;
 use ash_thread_store::ThreadStoreError;
 
 /// Failure while opening or recovering the local authoritative state repository.

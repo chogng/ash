@@ -6,7 +6,7 @@ use protocol::CommandId;
 use protocol::ToolCallId;
 use protocol::UserInput;
 use ash_core::AgentTreeLimits;
-use ash_core::CoreError;
+use core_api::CoreError;
 use ash_core::InMemoryThreadStore;
 use ash_core::SequenceExpectation;
 use ash_core::StartThreadRequest;

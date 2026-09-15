@@ -29,6 +29,7 @@ ash-utils-path = { workspace = true }
 ash-file-access = { workspace = true }
 
 [dev-dependencies]
+core-api = { workspace = true }
 rusqlite = { workspace = true, features = ["hooks"] }
 ash-core = { workspace = true }
 tempfile = { workspace = true }

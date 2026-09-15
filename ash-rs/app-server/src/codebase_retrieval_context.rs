@@ -15,7 +15,7 @@ use ash_config::ConfigStore;
 use ash_core::ContextEvidence;
 use ash_core::ContextSource;
 use ash_core::ContextSourceRequest;
-use ash_core::CoreError;
+use core_api::CoreError;
 
 const MAX_EVIDENCE_ITEMS: usize = 8;
 const MAX_EVIDENCE_ITEM_BYTES: usize = 12 * 1024;

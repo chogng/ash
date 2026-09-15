@@ -12,10 +12,11 @@ use ash_config::HookAction;
 use ash_config::HookConfig;
 use ash_config::HookEnablement;
 use ash_config::HookEvent as ConfigHookEvent;
-use ash_core::AfterToolHookRequest;
-use ash_core::BeforeToolHookRequest;
-use ash_core::HookOutcome;
-use ash_core::{HookExecutionEvent, HookExecutionObserver};
+use core_api::AfterToolHookRequest;
+use core_api::BeforeToolHookRequest;
+use core_api::HookOutcome;
+use core_api::HookExecutionEvent;
+use core_api::HookExecutionObserver;
 use ash_protocol::ThreadId;
 use ash_protocol::ToolCallId;
 use ash_protocol::TurnId;
@@ -26,7 +27,7 @@ use ash_tool_executor::CommandExecutionAuthority;
 
 struct TestPolicy;
 
-impl ash_core::ActionPolicyService for TestPolicy {
+impl core_api::ActionPolicyService for TestPolicy {
     fn revision(&self) -> String {
         "hook-test-policy".into()
     }

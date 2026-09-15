@@ -66,6 +66,7 @@ ash-rs/
 ├── context-engine/       # provider-neutral context budget、token measurement 与边界判定
 ├── memories/             # 用户控制的长期 Memory、作用域、读写、引用和存储 port
 ├── core/                 # reducers, coordinators, execution policy and recovery
+├── core-api/             # model, Hooks, policy and host contracts without Core execution
 ├── rollout/              # local state repository + recovery composition（crate 名待清理）
 ├── rollout-trace/        # read-only export, diagnostics and evaluation artifact
 ├── app-server-protocol/  # external RPC wire contract + generators

@@ -3,7 +3,9 @@ use super::update_broker::UpdateBroker;
 use git_turn_changes::{MessageState, TurnChangeSet, TurnChangeStore};
 use std::sync::Arc;
 use ash_config::ConfigStore;
-use ash_core::{ModelSelection, ModelService, ThreadController};
+use core_api::ModelSelection;
+use core_api::ModelService;
+use ash_core::ThreadController;
 use ash_file_access::DirId;
 use ash_state::SqliteTurnChangeStore;
 

@@ -12,15 +12,16 @@
 
 | 责任 | Owner | 本 crate 的边界 |
 | --- | --- | --- |
-| `beforeTool`、`afterTool`、`turnCompleted` 安全点和类型化请求 | `ash-core` | 实现 `HookService`，不决定调用时机 |
+| `beforeTool`、`afterTool`、`turnCompleted` 安全点 | `ash-core` | 不决定调用时机 |
+| Hooks 类型化请求和服务接口 | `ash-core-api` | 实现 `HookService` |
 | `beforeTool` 拒绝后的模型可见工具失败 | `ash-core` | 返回 `BeforeToolHookDecision`，不直接写 Thread |
 | `HookId`、matcher、action 与 desired enablement | `ash-config` | 消费完整 `HooksConfig` 快照，不读写配置文件 |
 | 匹配、JSON codec、动作评估与沙箱进程 | `ash-hooks` | 唯一原生 Hook 运行时 owner |
 | 目录 `ExecuteProcess` capability 与 Authorization | App Server / file-access | 宿主取得 Authorization 后才能调用 `bind_dir` |
 | RPC DTO、配置 mutation 与运行状态通知 | App Server protocol / App Server | 当前只组合 runtime，尚未投影 `recent_runs` |
 
-依赖方向是 `ash-hooks → ash-core`，因为 `HookService` 是 Core 拥有的消费方端口；Core 不得反向
-依赖本 crate。`ash-hooks → ash-config` 只消费无运行时状态的声明；有界 `HookRunRecord` 只存在于
+依赖方向是 `ash-hooks → ash-core-api`；`ash-core` 消费相同契约，不得反向
+依赖本 crate。Hooks 不依赖 Core 执行实现。`ash-hooks → ash-config` 只消费无运行时状态的声明；有界 `HookRunRecord` 只存在于
 进程内，不写回 Config，也不是持久化 Thread 事实。
 
 ## 公共契约
@@ -30,7 +31,7 @@
 - 使用 `replace_config` 原子替换未来调用读取的声明快照；
 - 在取得目录执行 Authorization 后使用 `bind_dir` 安装沙箱进程执行器；
 - 使用 `unbind_dir` 立即移除进程执行能力；
-- 把 runtime 作为 `Arc<dyn ash_core::HookService>` 注入 `TurnExecutor`；
+- 把 runtime 作为 `Arc<dyn core_api::HookService>` 注入 `TurnExecutor`；
 - 使用 `recent_runs` 读取最近 128 条非持久化运行投影。
 
 `replace_config` 不改变正在执行的 invocation：`run_event` 在开始时克隆完整配置快照和当前 process
@@ -115,7 +116,8 @@ Core typed Hook safe point
 ## 验证与修改影响
 
 ```text
-cargo test -p ash-hooks -p ash-core -p ash-tool-executor
+just test ash-hooks
+just test ash-core
 bazel test //ash-rs/hooks:hooks-unit-tests
 ```
 

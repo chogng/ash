@@ -29,10 +29,10 @@ use ash_app_server_protocol::protocol::slash_commands::SlashCommandArgumentModeD
 use ash_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
 use ash_async_utils::CancellationToken;
 use ash_config::ConfigStore;
-use ash_core::ActionPolicyService;
-use ash_core::CoreError;
+use core_api::ActionPolicyService;
+use core_api::CoreError;
 use ash_core::InMemoryThreadStore;
-use ash_core::ModelService;
+use core_api::ModelService;
 use ash_core::RequestTurnInteraction;
 use ash_core::StartTurnRequest;
 use ash_core::ThreadController;
@@ -2490,7 +2490,7 @@ fn shell_turn_runs_without_a_model_and_publishes_typed_output() {
 impl ModelService for CountingModel {
     fn invoke(
         &self,
-        _: ash_core::ModelSelection<'_>,
+        _: core_api::ModelSelection<'_>,
         request: &ModelRequest,
         _: &CancellationToken,
     ) -> Result<ModelResponse, CoreError> {
@@ -2520,7 +2520,7 @@ impl ModelService for CountingModel {
 impl ModelService for AppServerSteeringModel {
     fn invoke(
         &self,
-        _: ash_core::ModelSelection<'_>,
+        _: core_api::ModelSelection<'_>,
         request: &ModelRequest,
         _: &CancellationToken,
     ) -> Result<ModelResponse, CoreError> {
@@ -2609,7 +2609,7 @@ impl ash_skills_extension::SkillConfigSnapshotProvider for EmptySkillConfig {
 impl ModelService for RecordingModel {
     fn invoke(
         &self,
-        _: ash_core::ModelSelection<'_>,
+        _: core_api::ModelSelection<'_>,
         request: &ModelRequest,
         _: &CancellationToken,
     ) -> Result<ModelResponse, CoreError> {
@@ -4154,7 +4154,7 @@ struct AppServerInteractiveModel {
 impl ModelService for AppServerInteractiveModel {
     fn invoke(
         &self,
-        _: ash_core::ModelSelection<'_>,
+        _: core_api::ModelSelection<'_>,
         _: &ModelRequest,
         _: &CancellationToken,
     ) -> Result<ModelResponse, CoreError> {

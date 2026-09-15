@@ -15,6 +15,7 @@ name = "ash_app_server"
 path = "src/lib.rs"
 
 [dependencies]
+core-api = { workspace = true }
 exec-server = { workspace = true }
 exec-server-protocol = { workspace = true }
 external-agent-migration = { workspace = true }

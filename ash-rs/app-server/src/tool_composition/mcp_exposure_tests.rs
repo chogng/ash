@@ -10,7 +10,7 @@ use ash_action_policy::CapabilitySet;
 use ash_action_policy::ResolvedAction;
 use ash_action_policy::SandboxCompatibility;
 use ash_async_utils::CancellationToken;
-use ash_core::CoreError;
+use core_api::CoreError;
 use ash_core::ToolAuthorization;
 use ash_core::ToolService;
 use ash_protocol::ToolCall;

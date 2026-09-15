@@ -9,6 +9,7 @@ publish.workspace = true
 doctest = false
 
 [dependencies]
+core-api = { workspace = true }
 skills-extension = { package = "ash-skills-extension", path = "../skills" }
 agent-roles = { workspace = true }
 serde = { workspace = true }

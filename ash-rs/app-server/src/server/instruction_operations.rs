@@ -178,9 +178,9 @@ impl ash_core::ToolService for InstructionToolService {
     fn prepare(
         &self,
         call: &ash_protocol::ToolCall,
-    ) -> Result<ash_action_policy::ActionReviewRequest, ash_core::CoreError> {
+    ) -> Result<ash_action_policy::ActionReviewRequest, core_api::CoreError> {
         if call.name.as_str() != "read_instruction" {
-            return Err(ash_core::CoreError::InvalidInput(
+            return Err(core_api::CoreError::InvalidInput(
                 "unknown instruction tool".into(),
             ));
         }
@@ -188,7 +188,7 @@ impl ash_core::ToolService for InstructionToolService {
             ash_action_policy::ResolvedAction::new(
                 ash_action_policy::ActionDigest::from_canonical_bytes(
                     serde_json::to_vec(call)
-                        .map_err(|error| ash_core::CoreError::InvalidInput(error.to_string()))?,
+                        .map_err(|error| core_api::CoreError::InvalidInput(error.to_string()))?,
                 ),
                 ash_action_policy::ActionKind::SystemOperation,
                 "read a catalog instruction",
@@ -209,8 +209,8 @@ impl ash_core::ToolService for InstructionToolService {
         _: &ash_protocol::ToolCall,
         _: &ash_core::ToolAuthorization,
         _: &ash_async_utils::CancellationToken,
-    ) -> Result<ash_protocol::ToolExecutionOutput, ash_core::CoreError> {
-        Err(ash_core::CoreError::Execution(
+    ) -> Result<ash_protocol::ToolExecutionOutput, core_api::CoreError> {
+        Err(core_api::CoreError::Execution(
             "instruction reading requires a session identity".into(),
         ))
     }
@@ -220,19 +220,19 @@ impl ash_core::ToolService for InstructionToolService {
         _: &ash_core::ToolAuthorization,
         cancellation: &ash_async_utils::CancellationToken,
         facts: &ash_core::ToolExecutionFacts,
-    ) -> Result<ash_protocol::ToolExecutionOutput, ash_core::CoreError> {
+    ) -> Result<ash_protocol::ToolExecutionOutput, core_api::CoreError> {
         cancellation
             .check()
-            .map_err(|signal| ash_core::CoreError::Cancelled(signal.reason().to_string()))?;
+            .map_err(|signal| core_api::CoreError::Cancelled(signal.reason().to_string()))?;
         let identity = facts.execution_identity().ok_or_else(|| {
-            ash_core::CoreError::Execution("instruction reading requires a session identity".into())
+            core_api::CoreError::Execution("instruction reading requires a session identity".into())
         })?;
         let path = call
             .arguments
             .get("path")
             .and_then(Value::as_str)
             .ok_or_else(|| {
-                ash_core::CoreError::InvalidInput("instruction path is required".into())
+                core_api::CoreError::InvalidInput("instruction path is required".into())
             })?;
         Ok(
             match self
@@ -253,7 +253,7 @@ impl ash_core::ToolService for InstructionToolService {
         cancellation: &ash_async_utils::CancellationToken,
         facts: &ash_core::ToolExecutionFacts,
         _: &mut dyn ash_core::ToolOutputSink,
-    ) -> Result<ash_protocol::ToolExecutionOutput, ash_core::CoreError> {
+    ) -> Result<ash_protocol::ToolExecutionOutput, core_api::CoreError> {
         self.execute_with_facts(call, authorization, cancellation, facts)
     }
 }

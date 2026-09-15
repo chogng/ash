@@ -9,7 +9,7 @@ use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 use ash_config::HookConfig;
-use ash_core::CoreError;
+use core_api::CoreError;
 
 const MAX_RECENT_RUNS: usize = 128;
 

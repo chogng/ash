@@ -22,7 +22,7 @@ use ash_codebase::CodebaseRetrievalQuery;
 use ash_codebase::CodebaseRetrievalService;
 use ash_codebase::CodebaseSemanticService;
 use ash_codebase::SymbolIndex;
-use ash_core::CoreError;
+use core_api::CoreError;
 use ash_core::ToolAuthorization;
 use ash_core::ToolService;
 use ash_file_access::Authorization;

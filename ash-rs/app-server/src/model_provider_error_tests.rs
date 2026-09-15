@@ -56,15 +56,15 @@ fn unary_provider_services_return_final_results_without_requesting_a_stream() {
         }
     }
     struct NoDeltas;
-    impl ash_core::ModelStreamSink for NoDeltas {
-        fn emit(&mut self, _: ash_protocol::ModelStreamEvent) -> Result<(), ash_core::CoreError> {
+    impl core_api::ModelStreamSink for NoDeltas {
+        fn emit(&mut self, _: ash_protocol::ModelStreamEvent) -> Result<(), core_api::CoreError> {
             panic!("a unary result must not be turned into an incremental event")
         }
     }
     let service = ProviderModelService::new(Arc::new(UnaryInvoker));
-    let response = ash_core::ModelService::stream(
+    let response = core_api::ModelService::stream(
         &service,
-        ash_core::ModelSelection::ConfiguredDefault,
+        core_api::ModelSelection::ConfiguredDefault,
         &ModelRequest::text("hello"),
         &ash_async_utils::CancellationSource::new().token(),
         &mut NoDeltas,

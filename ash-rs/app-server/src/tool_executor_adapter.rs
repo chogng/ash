@@ -6,7 +6,7 @@ use std::sync::Mutex;
 use ash_action_policy::ActionReviewRequest;
 use ash_action_policy::ReviewEvidence;
 use ash_async_utils::CancellationToken;
-use ash_core::CoreError;
+use core_api::CoreError;
 use ash_core::ToolAuthorization;
 use ash_core::ToolExecutionFacts;
 use ash_core::ToolOutputSink;

@@ -2026,7 +2026,7 @@ fn local_catalog_includes_models_installed_in_configured_ollama() {
 fn invoke_text(model: &dyn ModelService, prompt: &str) -> String {
     model
         .invoke(
-            ash_core::ModelSelection::ConfiguredDefault,
+            core_api::ModelSelection::ConfiguredDefault,
             &ModelRequest::text(prompt),
             &CancellationSource::new().token(),
         )
