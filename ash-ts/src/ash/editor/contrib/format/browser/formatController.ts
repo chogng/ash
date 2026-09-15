@@ -10,7 +10,7 @@ import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { type LanguageFormattingOptions, type TextEdit } from '../../../common/languages.js';
 import { type ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { type TextModel } from '../../../common/model/textModel.js';
-import { getDocumentFormattingEditsUntilResult } from './format.js';
+import { FormattingConflicts, FormattingKind, FormattingMode, getRealAndSyntheticDocumentFormattersOrdered } from './format.js';
 import { CodeEditorStateFlag, EditorStateCancellationTokenSource } from '../../editorState/browser/editorState.js';
 import { FormattingEdit } from './formattingEdit.js';
 
@@ -45,16 +45,23 @@ export class FormatController extends Disposable {
 		}));
 	}
 
-	async formatDocument(onError = this.onError): Promise<void> {
-		await this.format(token => getDocumentFormattingEditsUntilResult(this.languageFeaturesService, this.model, this.options, token), onError);
+	async formatDocument(onError = this.onError, mode = FormattingMode.Explicit): Promise<void> {
+		await this.format(async token => {
+			const providers = getRealAndSyntheticDocumentFormattersOrdered(
+				this.languageFeaturesService.documentFormattingEditProvider,
+				this.languageFeaturesService.documentRangeFormattingEditProvider,
+				this.model,
+			);
+			const provider = await raceCancellationError(FormattingConflicts.select(providers, this.model, mode, FormattingKind.File), token);
+			if (!provider || token.isCancellationRequested) {
+				return undefined;
+			}
+			return provider.provideDocumentFormattingEdits(this.model, this.options, token);
+		}, onError);
 	}
 
 	async formatSelection(): Promise<void> {
 		if (this.isDisposed || this.editor.getModel() !== this.model || this.editor.getOption(EditorOption.readOnly)) {
-			return;
-		}
-		const provider = this.languageFeaturesService.documentRangeFormattingEditProvider.ordered(this.model)[0];
-		if (!provider) {
 			return;
 		}
 		const ranges: Range[] = [];
@@ -73,6 +80,11 @@ export class FormatController extends Disposable {
 			return;
 		}
 		await this.format(async token => {
+			const providers = this.languageFeaturesService.documentRangeFormattingEditProvider.ordered(this.model);
+			const provider = await raceCancellationError(FormattingConflicts.select(providers, this.model, FormattingMode.Explicit, FormattingKind.Selection), token);
+			if (!provider || token.isCancellationRequested) {
+				return undefined;
+			}
 			if (provider.provideDocumentRangesFormattingEdits) {
 				return provider.provideDocumentRangesFormattingEdits(this.model, ranges, this.options, token);
 			}
@@ -153,6 +165,6 @@ registerEditorContribution({ id: "editor.contrib.format", install: context => {
 			onError: context.onLanguageError,
 		},
 	));
-	if (context.options.formatOnSave && context.registerBeforeSave) context.register(context.registerBeforeSave(() => controller.formatDocument()));
+	if (context.options.formatOnSave && context.registerBeforeSave) context.register(context.registerBeforeSave(() => controller.formatDocument(context.onLanguageError, FormattingMode.Silent)));
 	return controller;
 } });

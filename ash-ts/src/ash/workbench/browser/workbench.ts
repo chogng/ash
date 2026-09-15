@@ -1,3 +1,4 @@
+import { FormattingConflicts } from '../../editor/contrib/format/browser/format.js';
 import { MarkerDecorationsService } from '../../editor/common/services/markerDecorationsService.js';
 import { IMarkerDecorationsService } from '../../editor/common/services/markerDecorations.js';
 import { IMemoriesService } from '../../platform/memories/common/memoriesService.js';
@@ -340,6 +341,7 @@ export class Workbench extends Disposable {
 		switchWorkbenchMode: (modeId: WorkbenchModeId) => Promise<void>,
 	) {
 		super();
+		this._register(FormattingConflicts.setFormatterSelector(async formatters => formatters[0]));
 		const mode = WorkbenchModeRegistry.get(modeId);
 		const services = this._register(new ServiceContainer());
 		registerTreeViewsDnDService(services);

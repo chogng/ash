@@ -2205,6 +2205,8 @@ test('selection formatting merges expanded edits repeatedly before one undoable 
 		contributions: [],
 	});
 	const { FormatController } = await import('../../../contrib/format/browser/formatController.js');
+	const { FormattingConflicts } = await import('../../../contrib/format/browser/format.js');
+	using selector = FormattingConflicts.setFormatterSelector(async providers => providers[0]);
 	const features = editor.invokeWithinContext(accessor => accessor.get(ILanguageFeaturesService));
 	const queried: string[] = [];
 	using provider = features.documentRangeFormattingEditProvider.register('*', {

@@ -1,3 +1,4 @@
+import { FormattingConflicts, FormattingKind, FormattingMode } from '../../../src/ash/editor/contrib/format/browser/format.js';
 import { type CancellationToken } from '../../../src/ash/base/common/cancellation.js';
 import { scheduleAtNextAnimationFrame } from '../../../src/ash/base/browser/scheduler.js';
 import { h } from '../../../src/ash/base/browser/dom.js';
@@ -71,6 +72,8 @@ interface ViewZoneState {
 }
 
 interface StandaloneHarness {
+	runFormatterChoice(outcome: 'second' | 'empty' | 'decline' | 'error' | 'cancel' | 'silent'): Promise<{ value: string; calls: string[]; modes: number[]; errors: string[] }>;
+
 	runOverlappingFormatting(cancel: boolean): Promise<{ value: string; ranges: string[]; cancelled: boolean }>;
 
 	runSelectionFormatting(mode: 'ranges' | 'single' | 'empty' | 'cancel' | 'readonly'): Promise<{ value: string; ranges: string[]; cancelled: boolean }>;
@@ -273,6 +276,44 @@ let deferredFormatting: { token: CancellationToken; resolve: () => void }[] = []
 let formattingProvider: { dispose(): void } | undefined;
 
 window.ashStandaloneIntegration = {
+	runFormatterChoice: async outcome => {
+		callerEditor.setValue('alpha');
+		callerEditor.setPosition(new stanza.Position(1, 1));
+		const calls: string[] = [];
+		const modes: number[] = [];
+		const errors: string[] = [];
+		const selected = stanza.languages.registerDocumentFormattingEditProvider('*', {
+			provideDocumentFormattingEdits: model => {
+				calls.push('selected');
+				if (outcome === 'error') throw new Error('formatter failed');
+				return outcome === 'empty' ? [] : [{ range: model.getFullModelRange(), text: 'SELECTED' }];
+			},
+		});
+		const other = stanza.languages.registerDocumentFormattingEditProvider('*', {
+			provideDocumentFormattingEdits: model => { calls.push('other'); return [{ range: model.getFullModelRange(), text: 'OTHER' }]; },
+		});
+		let choosing!: () => void;
+		const started = new Promise<void>(resolve => { choosing = resolve; });
+		const selector = FormattingConflicts.setFormatterSelector(async (providers, _model, mode, kind) => {
+			if (kind !== FormattingKind.File) throw new Error('Unexpected formatting kind');
+			modes.push(mode);
+			choosing();
+			if (outcome === 'cancel') return new Promise(() => {});
+			return outcome === 'decline' ? undefined : providers[1];
+		});
+		try {
+			const controller = callerEditor.getContribution<FormatController>('editor.contrib.format')!;
+			const request = controller.formatDocument(error => errors.push((error as Error).message), outcome === 'silent' ? FormattingMode.Silent : FormattingMode.Explicit);
+			await started;
+			if (outcome === 'cancel') callerEditor.setPosition(new stanza.Position(1, 3));
+			await request;
+			return { value: callerEditor.getValue(), calls, modes, errors };
+		} finally {
+			selector.dispose();
+			other.dispose();
+			selected.dispose();
+		}
+	},
 	runOverlappingFormatting: async cancel => {
 		callerEditor.setValue('alpha\nbeta\ngamma');
 		callerEditor.setSelections([new stanza.Selection(1, 1, 1, 6), new stanza.Selection(3, 1, 3, 6)]);
@@ -310,9 +351,12 @@ window.ashStandaloneIntegration = {
 		let token: CancellationToken | undefined;
 		let release!: () => void;
 		const ready = new Promise<void>(resolve => { release = resolve; });
+		let providerStarted!: () => void;
+		const enteredProvider = new Promise<void>(resolve => { providerStarted = resolve; });
 		const provide = async (selected: Range[], receivedToken: CancellationToken) => {
 			token = receivedToken;
 			ranges.push(...selected.map(range => range.toString()));
+			providerStarted();
 			if (mode === 'cancel') await ready;
 			return selected.map(range => ({ range, text: callerModel.getValueInRange(range).toUpperCase() }));
 		};
@@ -326,6 +370,7 @@ window.ashStandaloneIntegration = {
 			if (mode === 'readonly') callerEditor.updateOptions({ readOnly: true });
 			const request = window.ashStandaloneIntegration.runLineAction('editor.action.formatSelection');
 			if (mode === 'cancel') {
+				await enteredProvider;
 				// Change the anchor while keeping the primary caret at the same position.
 				callerEditor.setSelection(new stanza.Selection(1, 2, 1, 6));
 			}
