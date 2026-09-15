@@ -22,8 +22,9 @@ export function registerDebugView(registry: WorkbenchViewRegistry = ViewsRegistr
 registerDebugView();
 registerEditorContribution({
 	id: BREAKPOINT_EDITOR_CONTRIBUTION_ID,
-	runtime: {
-		descriptor: new ServiceConstructionDescriptor(BreakpointEditorContribution, { serviceDependencies: [IDebugService] }),
-		instantiation: EditorContributionInstantiation.Eager,
+	instantiation: EditorContributionInstantiation.Eager,
+	install: context => {
+		if (context.kind !== 'text') return;
+		return context.instantiationService.createInstance(BreakpointEditorContribution, context.editor, context.model);
 	},
 });

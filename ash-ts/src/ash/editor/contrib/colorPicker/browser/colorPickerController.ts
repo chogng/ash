@@ -9,17 +9,12 @@ import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { type IColor } from '../../../common/languages.js';
 import { type View } from '../../../browser/view.js';
-import { type EditorCapability, registerEditorContribution } from '../../../browser/editorExtensions.js';
+import { registerEditorContribution } from '../../../browser/editorExtensions.js';
 import { ColorService, type ColorData } from '../common/languageColors.js';
 import { ColorDecorationInjectedTextMarker, ColorDetector } from './colorDetector.js';
 import { ColorPickerModel } from './colorPickerModel.js';
 import { EditorColorPickerDialog } from './editorColorPickerDialog.js';
 
-interface ColorPickerCapabilityValue {
-	readonly service: ColorService;
-}
-
-const ColorPickerCapability: EditorCapability<ColorPickerCapabilityValue> = Object.freeze({ id: 'editor.colorPicker' });
 
 export type ColorDecoratorsActivatedOn = 'clickAndHover' | 'click' | 'hover';
 
@@ -256,19 +251,15 @@ function colorSwatch(target: EventTarget | null): HTMLElement | undefined {
 
 registerEditorContribution({
 	id: 'editor.contrib.colorPicker',
-	configure: context => {
-		const service = new ColorService(context.model, context.languageFeaturesService.colorProvider, context.options.input.resource, context.onLanguageError);
-		context.provideCapability(ColorPickerCapability, Object.freeze({ service }));
-	},
 	install: context => {
 		if (context.kind !== 'text') return;
-		const capability = context.getCapability(ColorPickerCapability);
+		const service = new ColorService(context.model, context.languageFeaturesService.colorProvider, context.options.input.resource, context.onLanguageError);
 		const targetWindow = context.controller.element.ownerDocument.defaultView;
 		if (!targetWindow) throw new Error('Color picker requires an attached browser window');
 		const detector = context.register(new ColorDetector(
 			context.editor,
 			context.model,
-			capability.service,
+			service,
 			context.languageId,
 			targetWindow,
 			{
@@ -282,7 +273,7 @@ registerEditorContribution({
 			context.controller.element,
 			context.editor,
 			context.view,
-			capability.service,
+			service,
 			detector,
 			context.languageId,
 			context.options.colorDecoratorsActivatedOn ?? 'clickAndHover',

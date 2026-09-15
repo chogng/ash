@@ -11,12 +11,10 @@ registerEditorContribution({
 	id: 'editor.contrib.bracketMatching',
 	commands: [{ id: RemoveBracketsCommandId, canTriggerInlineEdits: true }],
 	configure: context => {
-		const lexicalContext = context.getCapability(TextEditorCapability.languageLexicalContext);
+		const lexicalContext = context.getService(TextEditorCapability.languageLexicalContext);
 		const largeFile = context.model.largeFile.tooLargeForTokenization;
 		const bracketPairs = context.register(new LanguageBracketPairs(context.model, lexicalContext));
-		const decorations = context.register(new TextDecorationCollection<void>(context.model));
-		context.provideCapability(TextEditorCapability.bracketPairs, bracketPairs);
-		context.provideCapability(TextEditorCapability.bracketDecorations, decorations);
+		context.provideService(TextEditorCapability.bracketPairs, bracketPairs);
 		const colorizeBrackets = context.options.bracketPairColorization?.enabled !== false;
 		const renderBracketGuides = context.options.guides?.bracketPairs !== undefined && context.options.guides.bracketPairs !== false;
 		if (!largeFile && (colorizeBrackets || renderBracketGuides)) {
@@ -25,11 +23,11 @@ registerEditorContribution({
 	},
 	install: context => {
 		if (context.kind !== 'text') return;
-		const bracketPairs = context.getCapability(TextEditorCapability.bracketPairs);
+		const bracketPairs = context.getService(TextEditorCapability.bracketPairs);
 		context.register(new BracketMatchController(
 			context.editor,
 			bracketPairs,
-			context.getCapability(TextEditorCapability.bracketDecorations),
+			context.register(new TextDecorationCollection<void>(context.model)),
 			context.options.matchBrackets ?? 'always',
 		));
 		context.register(new BracketNavigationController(

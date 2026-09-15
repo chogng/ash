@@ -10,7 +10,7 @@ registerEditorContribution({ id: "editor.contrib.sectionHeaders", install: conte
 		context.model,
 		context.languageId,
 		context.configurations,
-		context.getCapability(TextEditorCapability.languageLexicalContext),
+		context.getService(TextEditorCapability.languageLexicalContext),
 		{
 			findRegionSectionHeaders: options.showRegionSectionHeaders ?? true,
 			findMarkSectionHeaders: options.showMarkSectionHeaders ?? true,

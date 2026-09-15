@@ -1,6 +1,5 @@
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { SymbolIconsController } from "./symbolIcons.js";
-import { TextEditorCapability } from "../../textEditorCapabilities.js";
 import { DocumentSymbolService } from '../../documentSymbols/common/languageDocumentSymbols.js';
 
 registerEditorContribution({

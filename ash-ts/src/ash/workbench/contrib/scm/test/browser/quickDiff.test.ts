@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
+import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
+import { AbstractCodeEditorService } from '../../../../../editor/browser/services/abstractCodeEditorService.js';
 import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IQuickDiffEditorControllerService, IQuickDiffModelService } from '../../common/quickDiff.js';
@@ -79,6 +81,8 @@ test('Registered Quick Diff creates after first render and releases decorations 
 		using configuration = new InMemoryConfigurationService();
 		await configuration.updateValue(ScmConfiguration.diffDecorations, 'all');
 		using services = new ServiceContainer();
+		using codeEditors = new class extends AbstractCodeEditorService { getActiveCodeEditor() { return this.getFocusedCodeEditor(); } }();
+		services.registerInstance(ICodeEditorService, codeEditors);
 		services.registerInstance(IConfigurationService, configuration);
 		services.registerInstance(IQuickDiffModelService, modelService);
 		services.registerInstance(IQuickDiffEditorControllerService, controllers);
@@ -97,6 +101,10 @@ test('Registered Quick Diff creates after first render and releases decorations 
 		editor.getDomNode().dispatchEvent(new dom.window.FocusEvent('focusin'));
 		assert.equal(controllers.activeController, controller);
 		assert.deepEqual(errors, []);
+		controller.showNextChange();
+		assert.ok(dom.window.document.querySelector('.ash-quick-diff-peek'));
+		controller.close();
+		assert.equal(dom.window.document.querySelector('.ash-quick-diff-peek'), null);
 		editor.setModel(null);
 		assert.equal(controller.isDisposed, true);
 		assert.equal(controllers.activeController, undefined);

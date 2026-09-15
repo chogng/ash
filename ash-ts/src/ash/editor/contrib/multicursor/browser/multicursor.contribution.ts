@@ -1,10 +1,8 @@
-import { type EditorCapability, registerEditorContribution } from "../../../browser/editorExtensions.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { MultiCursorController } from "./multiCursorController.js";
 import { OccurrenceSelectionController } from "./occurrenceSelectionController.js";
 import { SelectionHighlighter } from "./multicursor.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
-
-const selectionHighlightDecorations: EditorCapability<TextDecorationCollection<boolean>> = Object.freeze({ id: "editor.capability.selectionHighlightDecorations" });
 
 registerEditorContribution({ id: "editor.contrib.multicursor", install: context => {
 	if (context.kind !== "text") return;
@@ -12,15 +10,13 @@ registerEditorContribution({ id: "editor.contrib.multicursor", install: context 
 	context.register(new OccurrenceSelectionController(context.controller.element, context.view, context.viewModel));
 } });
 
-registerEditorContribution({ id: SelectionHighlighter.ID, configure: context => {
-	const decorations = context.register(new TextDecorationCollection<boolean>(context.model));
-	context.provideCapability(selectionHighlightDecorations, decorations);
-}, install: context => {
+registerEditorContribution({ id: SelectionHighlighter.ID, install: context => {
 	if (context.kind !== "text") return;
+	const decorations = context.register(new TextDecorationCollection<boolean>(context.model));
 	if (!context.model.largeFile.tooLargeForTokenization) {
 		context.register(new SelectionHighlighter(
 			context.editor,
-			context.getCapability(selectionHighlightDecorations),
+			decorations,
 			{
 				languageId: context.languageId,
 				languageFeaturesService: context.languageFeaturesService,

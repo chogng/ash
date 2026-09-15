@@ -6,7 +6,7 @@ import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.j
 import { Range } from "../../../../common/core/range.js";
 import { Selection } from '../../../../common/core/selection.js';
 import { type ICodeEditor } from '../../../../browser/editorBrowser.js';
-import { InlineCompletionsService, InlineCompletionsServiceCapability, type IInlineCompletionsService } from '../../../../browser/services/inlineCompletionsService.js';
+import { InlineCompletionsService, type IInlineCompletionsService } from '../../../../browser/services/inlineCompletionsService.js';
 import { type LanguageInlineCompletionItem, type LanguageInlineCompletionsProvider } from "../../common/inlineCompletions.js";
 import { type View } from "../../../../browser/view.js";
 import { isCompletionsEnabledFromObject } from "../../../../common/services/completionsEnablement.js";
@@ -130,10 +130,8 @@ class AcceptInlineCompletionCommand implements ICommand {
 	}
 }
 
-registerEditorContribution({ id: "editor.contrib.inlineCompletions", configure: context => {
-	if (context.kind !== 'text') return;
-	context.provideCapability(InlineCompletionsServiceCapability, context.register(new InlineCompletionsService()));
-}, install: context => {
+registerEditorContribution({ id: "editor.contrib.inlineCompletions", install: context => {
 	if (context.kind !== "text" || (context.options.inlineCompletions !== undefined && !isCompletionsEnabledFromObject(context.options.inlineCompletions, context.languageId))) return;
-	context.register(new InlineCompletionsController(context.controller.element, context.editor, context.view, context.model, context.languageFeaturesService.inlineCompletionsProvider, context.getCapability(InlineCompletionsServiceCapability), context.languageId, context.onDidExecuteCommand, context.onLanguageError));
+	const inlineCompletionsService = context.register(new InlineCompletionsService());
+	context.register(new InlineCompletionsController(context.controller.element, context.editor, context.view, context.model, context.languageFeaturesService.inlineCompletionsProvider, inlineCompletionsService, context.languageId, context.onDidExecuteCommand, context.onLanguageError));
 } });

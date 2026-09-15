@@ -24,7 +24,7 @@ import { CursorChangeReason } from '../../../common/cursorEvents.js';
 import { ViewContext } from '../../../common/viewModel/viewContext.js';
 import { darkColorTheme } from '../../../../platform/theme/common/colorTheme.js';
 import { type TextEditorContributionContext } from '../../../browser/editorExtensions.js';
-import { IInstantiationService, ServiceConstructionDescriptor } from '../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, ServiceConstructionDescriptor, createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 class TestResizeObserver {
@@ -1558,10 +1558,12 @@ test('CodeEditorWidget owns configured resources and deferred controllers across
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha');
 	const events: string[] = [];
+	const modelService = createServiceIdentifier<TextModel>('test.editor.model');
 	class Controller extends Disposable {
-		constructor(context: TextEditorContributionContext, services: IInstantiationService) {
+		constructor(context: TextEditorContributionContext, services: IInstantiationService, providedModel: TextModel) {
 			super();
 			assert.equal(services, context.instantiationService);
+			assert.equal(providedModel, model);
 			assert.equal(context.editor.getModel(), model);
 			assert.equal(context.view.domNode.domNode.isConnected, true);
 			events.push('create');
@@ -1574,18 +1576,17 @@ test('CodeEditorWidget owns configured resources and deferred controllers across
 			model, input: { resource: model.uri }, languageId: model.getLanguageId(),
 			contributions: [{
 				id: 'test.deferred',
+				instantiation: EditorContributionInstantiation.Lazy,
 				configure: context => {
 					events.push('configure');
+					context.provideService(modelService, context.model);
 					context.register(toDisposable(() => events.push('dispose configuration')));
 				},
 				install: context => {
 					if (context.kind !== 'text') return;
 					events.push('install');
 					context.register(toDisposable(() => events.push('dispose installation')));
-				},
-				runtime: {
-					descriptor: new ServiceConstructionDescriptor(Controller, { serviceDependencies: [IInstantiationService] }),
-					instantiation: EditorContributionInstantiation.Lazy,
+					return context.instantiationService.createInstance(new ServiceConstructionDescriptor(Controller, { serviceDependencies: [IInstantiationService, modelService] }), context);
 				},
 			}],
 		});
@@ -1604,23 +1605,38 @@ test('CodeEditorWidget owns configured resources and deferred controllers across
 	}
 });
 
-test('CodeEditorWidget cleans partially installed hooks and reports the failure once', () => {
+test('CodeEditorWidget keeps model sources alive after installation fails', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha');
 	const events: string[] = [];
 	const failure = new Error('installation failed');
 	const errors: unknown[] = [];
+	let sourceDisposed = false;
+	let sourceReads = 0;
+	let view: TextEditorContributionContext['view'] | undefined;
 	try {
 		using editor = new CodeEditorWidget({
 			container: requiredElement(dom.window.document, 'main'),
 			model, input: { resource: model.uri }, languageId: model.getLanguageId(),
 			onContributionError: error => errors.push(error),
+			dimension: { width: 400, height: 100 },
 			contributions: [{
 				id: 'test.failedHook',
-				configure: context => { context.register(toDisposable(() => events.push('configuration'))); },
+				configure: context => {
+					context.register(toDisposable(() => { sourceDisposed = true; events.push('configuration'); }));
+					context.setBracketColorizationSource({
+						textModel: context.model,
+						getLineBrackets: () => {
+							assert.equal(sourceDisposed, false, 'the live View must retain its model source');
+							sourceReads += 1;
+							return [];
+						},
+					});
+				},
 				install: context => {
 					if (context.kind !== 'text') return;
+					view = context.view;
 					context.register(toDisposable(() => events.push('installation')));
 					throw failure;
 				},
@@ -1628,8 +1644,14 @@ test('CodeEditorWidget cleans partially installed hooks and reports the failure 
 		});
 		assert.equal(editor.getContribution('test.failedHook'), null);
 		assert.deepEqual(errors, [failure]);
-		assert.deepEqual(events, ['installation', 'configuration']);
-		editor.dispose();
+		assert.deepEqual(events, ['installation']);
+		sourceReads = 0;
+		editor.layout({ width: 400, height: 100 });
+		model.reset('beta');
+		assert.ok(view);
+		view.render(true, true);
+		assert.ok(sourceReads > 0);
+		editor.setModel(null);
 		assert.deepEqual(events, ['installation', 'configuration']);
 	} finally {
 		dom.window.close();

@@ -8,7 +8,7 @@ registerEditorContribution({ id: "editor.contrib.comment", commands: [
 	{ id: ToggleBlockCommentCommandId, canTriggerInlineEdits: true },
 ], install: context => {
 	if (context.kind !== "text") return;
-	const options = { languageId: context.languageId, configurations: context.configurations, lexicalContext: context.getOptionalCapability(TextEditorCapability.languageLexicalContext) };
+	const options = { languageId: context.languageId, configurations: context.configurations, lexicalContext: context.getOptionalService(TextEditorCapability.languageLexicalContext) };
 	context.register(new LineCommentController(context.controller.element, context.view, context.selectionController, options, context.executeCommand));
 	context.register(new BlockCommentController(context.controller.element, context.view, context.selectionController, options, context.executeCommand));
 } });

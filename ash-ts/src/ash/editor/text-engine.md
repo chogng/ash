@@ -201,7 +201,7 @@ contrib/<feature>/
 
 - `common` 不读取 DOM、Workbench service 或 transport DTO。
 - 简单 feature 在 browser 主文件中注册；只有 configure phase、能力注入或多对象编排才使用独立 `.contribution.ts`。
-- Contribution 通过窄 capability 或 host callback 请求外部能力，不能 import 模式 bundle。
+- 共享模型数据使用当前模型的服务作用域；私有服务、装饰和会话在功能安装函数内创建。长期控制器显式接收实际依赖，不能持有完整装配上下文或 import 模式 bundle。
 - Provider contract 与 DOM presentation 分离；没有 browser UI 时，common contract 仍应可独立测试。
 - 弹出菜单关闭时仅在菜单内部拥有焦点的情况下恢复所属输入节点；共享模型的其他编辑器改动内容不能抢走当前焦点。
 - 不创建空目录、barrel 或 placeholder controller 来表示尚未实现的能力。
@@ -256,7 +256,7 @@ Editor contract 使用领域类型；generated DTO 和 transport error 在 runti
 | `browser/view/renderingContext.ts` | 单次 render pass 的标准视口字段、纵向坐标、装饰与行几何查询 | 全部 View Parts 与 rendering-context tests |
 | `browser/viewParts/viewPart.ts` | view context、Part contract 和 collection | 全部 View Parts 与 render tests |
 | `browser/widget/codeEditor/codeEditorWidget.ts` | canonical browser editing surface | input、accessibility、contribution integration |
-| `browser/editorExtensions.ts` | feature-neutral registry/capability seam | `editor.*.all.ts` 与 contribution order |
+| `browser/editorExtensions.ts` | feature-neutral registration and model-service assembly | `editor.*.all.ts` 与 contribution order |
 
 ## 验证与修改影响
 
@@ -284,3 +284,10 @@ Editor contract 使用领域类型；generated DTO 和 transport error 在 runti
 - 标记范围和临时隐藏范围随模型编辑跟踪；标记更新、恢复显示和模型释放沿同一生命周期处理。
 - 同文件引用 Peek 使用 `EmbeddedCodeEditorWidget` 预览当前模型，继承父配置并保留只读覆盖；关闭 Peek 会释放子编辑器，不释放父模型。
 - GPU 无法绘制的行由 margin overlay 显示原因标记；minimap 读取 token 颜色表，颜色表变化由 View 触发重绘。
+
+### 贡献资源的释放顺序
+
+- 视图创建前的配置只准备视图需要的模型数据，资源由模型挂载作用域持有。
+- 安装函数内创建功能私有状态和控制器；安装失败立即释放这部分资源，并报告一次错误。
+- 安装失败不释放视图仍在使用的模型数据。模型分离时先释放功能控制器，再释放 View，最后释放配置资源。
+- 延迟创建统一使用 `instantiation`；Quick Diff 和断点通过标准构造注入取得服务，没有单独的 `runtime` 描述。

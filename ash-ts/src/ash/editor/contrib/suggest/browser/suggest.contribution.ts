@@ -1,22 +1,14 @@
-import { registerEditorContribution, type EditorCapability } from "../../../browser/editorExtensions.js";
+import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { type ICodeEditorWidgetOptions } from '../../../browser/widget/codeEditor/codeEditorWidget.js';
 import { LanguageCompletionService } from "../../../common/languages/completion/languageCompletionService.js";
 import { isCompletionsEnabledFromObject } from "../../../common/services/completionsEnablement.js";
 import { LanguageCompletionSessionController } from "../common/languageCompletionSessionController.js";
 import { SuggestController } from "./suggestController.js";
 
-interface SuggestContributionState {
-	readonly service: LanguageCompletionService;
-	readonly session: LanguageCompletionSessionController;
-}
-
-const suggestState: EditorCapability<SuggestContributionState> = {
-	id: "editor.suggest.state",
-};
-
 registerEditorContribution({
 	id: "editor.contrib.suggest",
-	configure: context => {
+	install: context => {
+		if (context.kind !== "text") return;
 		if (context.options.suggestions !== undefined && !isCompletionsEnabledFromObject(context.options.suggestions, context.languageId)) return;
 		const completions = context.register(new LanguageCompletionService(context.model, context.languageFeaturesService.completionProvider, {
 			resource: context.options.input.resource,
@@ -28,17 +20,11 @@ registerEditorContribution({
 			onDidAccept: item => completions.executeCompletionCommand(context.languageId, item, new AbortController().signal),
 			snippetVariables: createSnippetVariables(context.options.input),
 		}));
-		context.provideCapability(suggestState, { service: completions, session });
-	},
-	install: context => {
-		if (context.kind !== "text") return;
-		const state = context.getOptionalCapability(suggestState);
-		if (!state) return;
 		context.register(new SuggestController(
 			context.controller,
 			context.selectionController,
-			state.service,
-			state.session,
+			completions,
+			session,
 			context.languageId,
 			{ onRequestError: context.onLanguageError },
 		));

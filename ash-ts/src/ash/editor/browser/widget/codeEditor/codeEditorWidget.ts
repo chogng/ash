@@ -23,7 +23,7 @@ import { CodeEditorContributions } from "./codeEditorContributions.js";
 import { observableCodeEditor } from '../../observableCodeEditor.js';
 import { EditorConfiguration, type IEditorConstructionOptions } from '../../config/editorConfiguration.js';
 import { migrateOptions } from '../../config/migrateOptions.js';
-import { EditorExtensionsRegistry, type EditorCapability, type EditorCommandEvent, type EditorContributionRegistration, type TextEditorContributionContext } from '../../editorExtensions.js';
+import { EditorExtensionsRegistry, type EditorCommandEvent, type EditorContributionRegistration, type TextEditorContributionContext } from '../../editorExtensions.js';
 import { VersionedEditorWorkerClient, type VersionedEditorWorkerFactory } from '../../services/editorWorkerService.js';
 import { EditorWorkerRequestExecutor } from '../../../common/services/editorWorkerRequestExecutor.js';
 import { createBuiltinLanguageConfigurationService } from '../../../common/languages/languageBuiltinConfigurations.js';
@@ -402,18 +402,11 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 					reason: event.reason,
 				});
 			}));
-			const capabilities = new Map<string, unknown>();
 			const commandEmitter = modelStore.add(new Emitter<EditorCommandEvent>());
 			const executeCommand = <T>(commandId: string, operation: () => T): T => executeEditorCommand(commandEmitter, commandId, operation);
-			const getCapability = <T>(capability: EditorCapability<T>): T => {
-				if (!capabilities.has(capability.id)) throw new ReferenceError(`Text editor capability '${capability.id}' is unavailable`);
-				return capabilities.get(capability.id) as T;
-			};
-			const getOptionalCapability = <T>(capability: EditorCapability<T>): T | undefined => capabilities.get(capability.id) as T | undefined;
-			const provideCapability = <T>(capability: EditorCapability<T>, value: T): void => {
-				if (capabilities.has(capability.id)) throw new RangeError(`Text editor capability '${capability.id}' is already provided`);
-				capabilities.set(capability.id, value);
-			};
+			const getService = services.get.bind(services);
+			const getOptionalService = services.getOptional.bind(services);
+			const provideService = services.registerInstance.bind(services);
 			let semanticTokenSource: SemanticTokenSource | undefined;
 			let bracketColorizationSource: BracketColorizationSource | undefined;
 			let languageLexicalContext: LanguageLexicalContextSource | undefined;
@@ -436,9 +429,9 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				resolvedSemanticTokensService,
 				configurations: languageConfigurationService,
 				onLanguageError,
-				getCapability,
-				getOptionalCapability,
-				provideCapability,
+				getService,
+				getOptionalService,
+				provideService,
 				setSemanticTokenSource: source => {
 					if (semanticTokenSource) throw new Error('Text editor semantic-token source is already configured');
 					semanticTokenSource = source;
@@ -582,8 +575,8 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				onLanguageError,
 				onDidExecuteCommand: commandEmitter.event,
 				executeCommand,
-				getCapability,
-				getOptionalCapability,
+				getService,
+				getOptionalService,
 				registerBeforeSave: options.registerBeforeSave,
 				register: value => modelStore.add(value),
 			};

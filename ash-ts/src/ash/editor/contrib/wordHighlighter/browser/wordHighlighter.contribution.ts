@@ -3,7 +3,7 @@ import { RunOnceScheduler, TimeoutTimer } from '../../../../base/common/async.js
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type URI } from '../../../../base/common/uri.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../base/common/cancellation.js';
-import { type EditorCapability, registerEditorContribution } from '../../../browser/editorExtensions.js';
+import { registerEditorContribution } from '../../../browser/editorExtensions.js';
 import { type ViewController } from '../../../browser/view/viewController.js';
 import { Selection } from '../../../common/core/selection.js';
 import { Position } from '../../../common/core/position.js';
@@ -418,18 +418,13 @@ function reportHighlightError(error: unknown): void {
 	console.error('Document highlight request failed', error);
 }
 
-const occurrenceDecorations: EditorCapability<TextDecorationCollection<DocumentHighlightKind | undefined>> = Object.freeze({ id: 'editor.capability.occurrenceDecorations' });
-
 registerEditorContribution({
 	id: WordHighlighterContribution.ID,
-	configure: context => {
-		const decorations = context.register(new TextDecorationCollection<DocumentHighlightKind | undefined>(context.model));
-		context.provideCapability(occurrenceDecorations, decorations);
-		context.register(new TextualMultiDocumentHighlightFeature(context.languageFeaturesService));
-	},
 	install: context => {
 		if (context.kind !== 'text' || context.model.largeFile.tooLargeForTokenization) return;
-		context.register(new WordHighlighterContribution(context.controller, context.selectionController, context.getCapability(occurrenceDecorations), {
+		const decorations = context.register(new TextDecorationCollection<DocumentHighlightKind | undefined>(context.model));
+		context.register(new TextualMultiDocumentHighlightFeature(context.languageFeaturesService));
+		context.register(new WordHighlighterContribution(context.controller, context.selectionController, decorations, {
 			resource: context.options.input.resource,
 			languageId: context.languageId,
 			languageFeaturesService: context.languageFeaturesService,

@@ -1,7 +1,6 @@
 import { TimeoutTimer } from '../../../base/common/async.js';
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
-import { type EditorCapability } from '../editorExtensions.js';
 
 export interface IInlineCompletionsService {
 	readonly _serviceBrand: undefined;
@@ -13,10 +12,6 @@ export interface IInlineCompletionsService {
 	cancelSnooze(): void;
 	reportNewCompletion(requestUuid: string): void;
 }
-
-export const InlineCompletionsServiceCapability: EditorCapability<IInlineCompletionsService> = Object.freeze({
-	id: 'editor.service.inlineCompletions',
-});
 
 /** Owns editor-wide inline-completion snooze state and recent completion identities. */
 export class InlineCompletionsService extends Disposable implements IInlineCompletionsService {

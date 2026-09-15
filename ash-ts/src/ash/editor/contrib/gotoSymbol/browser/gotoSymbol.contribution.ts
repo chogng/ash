@@ -1,6 +1,5 @@
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { GotoSymbolController } from "./gotoSymbolController.js";
-import { TextEditorCapability } from "../../textEditorCapabilities.js";
 import { DocumentSymbolService } from '../../documentSymbols/common/languageDocumentSymbols.js';
 import { GotoSymbolService } from '../common/languageDocumentSymbolSearch.js';
 

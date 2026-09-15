@@ -121,7 +121,7 @@
 | `contrib/message/browser/messageController.ts` | `MessageController` | 公开成员差异归零并通过标准 `registerEditorContribution` 延迟创建；消息使用编辑器公开 Widget、光标、模型和鼠标事件，ARIA alert、可见 Context Key、Markdown 链接、blur timer 与释放均由同一实例持有；只读消息调用链测试覆盖显示、关闭和释放 |
 | `contrib/placeholderText/browser/placeholderTextContribution.ts` | `PlaceholderTextContribution` | 公开成员差异归零并通过标准 contribution 注册表 eager 创建；占位文本、空模型、配置、字体和布局只从 `ICodeEditor` 与 `observableCodeEditor` 读取，Overlay Widget 随 contribution 释放；真实 Widget 测试覆盖空/非空切换、padding 和 content 几何 |
 | `contrib/multicursor/browser/multicursor.ts` | `SelectionHighlighter` | `ID` 与 `dispose()` 恢复且实际拆成 `editor.contrib.selectionHighlighter` owner；释放后清空装饰并移除选区/模型监听，3 项定向测试覆盖文本匹配、策略和释放后不再更新 |
-| `browser/widget/codeEditor/codeEditorContributions.ts` | `CodeEditorContributions` | 所有贡献共用注册表、延迟调度、显式读取和释放；配置钩子在 View 创建前运行，安装与 Quick Diff 构造在对应阶段运行。Context Menu 依赖 `ICodeEditor` 和平台菜单服务，Clipboard 默认输入职责属于 EditContext；Widget 测试覆盖模型切换与安装失败清理 |
+| `browser/widget/codeEditor/codeEditorContributions.ts` | `CodeEditorContributions` | 所有贡献共用注册表、延迟调度、显式读取和释放；配置钩子在 View 创建前运行，安装与 Quick Diff 构造在对应阶段运行。Context Menu 依赖 `ICodeEditor` 和平台菜单服务，Clipboard 默认输入职责属于 EditContext；Widget 测试覆盖模型切换、安装失败后重绘和共享数据的模型作用域注入 |
 | `common/cursor/cursorTypeOperations.ts` | `TypeOperations` | 10 个公开入口的成员和签名差异归零；Tab 区分部分选区、跨行选区与纯空白行，每个光标按自身语言配置构造自动闭合命令，组合输入替换局部窗口或选区并把结束结果交回同一组合历史修订。生产调用覆盖 `CursorsController`、`ViewController` 与文本 drop，定向测试覆盖输入、粘贴、缩进、覆盖模式、组合环绕、多光标、语言配置和一次撤销 |
 
 ## 尚未补齐的同名契约

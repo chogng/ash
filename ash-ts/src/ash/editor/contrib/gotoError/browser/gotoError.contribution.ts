@@ -8,6 +8,6 @@ registerEditorContribution({ id: "editor.contrib.gotoError", install: context =>
 		context.controller.element,
 		context.view,
 		context.viewModel,
-		context.getCapability(TextEditorCapability.diagnosticDecorations),
+		context.getService(TextEditorCapability.diagnosticDecorations),
 	));
 } });

@@ -8,6 +8,6 @@ import { type LanguageDiagnostic } from "../../../common/languages/languageResul
 registerEditorContribution({ id: "editor.contrib.codeAction", install: context => {
 	if (context.kind !== "text") return;
 	const service = context.register(new CodeActionService(context.model, context.options.input.resource, context.languageFeaturesService.codeActionProvider));
-	const diagnostics = context.getOptionalCapability(TextEditorCapability.diagnosticDecorations) ?? context.register(new TextDecorationCollection<LanguageDiagnostic>(context.model));
+	const diagnostics = context.getOptionalService(TextEditorCapability.diagnosticDecorations) ?? context.register(new TextDecorationCollection<LanguageDiagnostic>(context.model));
 	context.register(new CodeActionController(context.controller.element, context.editor, context.view, service, diagnostics, context.languageId, context.options.input.resource, context.options.onApplyWorkspaceEdit, context.onLanguageError));
 } });

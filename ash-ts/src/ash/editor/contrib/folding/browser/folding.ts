@@ -7,7 +7,8 @@ import { EditorFoldingRangeSource, type EditorFoldingRegion } from "./foldingRan
 import { Position } from "../../../common/core/position.js";
 import { Selection } from "../../../common/core/selection.js";
 import { type View } from "../../../browser/view.js";
-import { type TextEditorContributionConfigurationContext, type TextEditorContributionContext } from "../../../browser/editorExtensions.js";
+import { type ILanguageConfigurationService } from "../../../common/languages/languageConfigurationRegistry.js";
+import { type ILanguageFeaturesService } from "../../../common/services/languageFeatures.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { EditorHiddenRangeModel } from "./hiddenRangeModel.js";
@@ -24,21 +25,27 @@ registerEditorContribution({
 	configure: context => {
 		const folding = context.register(new EditorFoldingModel(context.model));
 		const hidden = context.register(new EditorHiddenRangeModel(context.model, folding));
-		context.provideCapability(TextEditorCapability.folding, folding);
+		context.provideService(TextEditorCapability.folding, folding);
 		const syncHiddenAreas = (): void => context.viewModel.setHiddenAreas(hidden.hiddenRanges);
 		syncHiddenAreas();
 		context.register(hidden.onDidChange(syncHiddenAreas));
 		if (context.options.folding === false || context.model.largeFile.tooLargeForTokenization) return;
 		const service = context.register(new FoldingRangeService(context.model, context.languageFeaturesService.foldingRangeProvider, context.options.input.resource));
-		context.register(new FoldingRangeSource(context, folding, service));
+		context.register(new FoldingRangeSource(folding, service, {
+			languageId: context.languageId,
+			configurations: context.configurations,
+			providers: context.languageFeaturesService.foldingRangeProvider,
+			tabSize: context.options.indentation?.tabSize,
+			onError: context.onLanguageError,
+		}));
 	},
 	install: context => {
 		if (context.kind !== "text" || context.options.folding === false || context.model.largeFile.tooLargeForTokenization) return;
 		const decorations = new FoldingDecorationProvider(context.editor);
 		decorations.showFoldingControls = context.options.showFoldingControls ?? 'mouseover';
 		decorations.showFoldingHighlights = context.options.foldingHighlight ?? true;
-		context.register(new FoldingDecorationPresenter(context.getCapability(TextEditorCapability.folding), decorations));
-		context.register(new FoldingController(context));
+		context.register(new FoldingDecorationPresenter(context.getService(TextEditorCapability.folding), decorations));
+		context.register(new FoldingController(context.editor, context.view, context.getService(TextEditorCapability.folding)));
 	},
 });
 
@@ -83,13 +90,19 @@ class FoldingRangeSource extends Disposable {
 	private request: AbortController | undefined;
 
 	constructor(
-		private readonly context: TextEditorContributionConfigurationContext,
 		private readonly folding: EditorFoldingModel,
 		private readonly service: FoldingRangeService,
+		private readonly options: {
+			readonly languageId: string;
+			readonly configurations: ILanguageConfigurationService;
+			readonly providers: ILanguageFeaturesService['foldingRangeProvider'];
+			readonly tabSize?: number;
+			readonly onError: (error: unknown) => void;
+		},
 	) {
 		super();
-		this._register(context.model.onDidChangeContent(() => this.refresh()));
-		this._register(context.languageFeaturesService.foldingRangeProvider.onDidChange(() => this.refresh()));
+		this._register(folding.model.onDidChangeContent(() => this.refresh()));
+		this._register(options.providers.onDidChange(() => this.refresh()));
 		this._register(toDisposable(() => this.request?.abort()));
 		this.refresh();
 	}
@@ -97,17 +110,17 @@ class FoldingRangeSource extends Disposable {
 	private refresh(): void {
 		this.request?.abort();
 		const local = mergeEditorFoldingRanges(
-			computeEditorLanguageFoldingRanges(this.context.model, this.context.languageId, this.context.configurations),
-			computeEditorIndentFoldingRanges(this.context.model, { tabSize: this.context.options.indentation?.tabSize }),
+			computeEditorLanguageFoldingRanges(this.folding.model, this.options.languageId, this.options.configurations),
+			computeEditorIndentFoldingRanges(this.folding.model, { tabSize: this.options.tabSize }),
 		);
 		this.folding.setProviderRanges(local);
-		if (!this.context.languageFeaturesService.foldingRangeProvider.has(this.context.model)) return;
+		if (!this.options.providers.has(this.folding.model)) return;
 		const request = this.request = new AbortController();
-		void this.service.provideFoldingRanges(this.context.languageId, request.signal).then(ranges => {
+		void this.service.provideFoldingRanges(this.options.languageId, request.signal).then(ranges => {
 			if (request.signal.aborted || this.request !== request) return;
 			this.folding.setProviderRanges(mergeEditorFoldingRanges(local, ranges));
 		}, error => {
-			if (!request.signal.aborted) this.context.onLanguageError(error);
+			if (!request.signal.aborted) this.options.onError(error);
 		});
 	}
 }
@@ -137,20 +150,22 @@ export class FoldingController extends Disposable {
 	private awaitingChord = false;
 
 	constructor(
-		context: TextEditorContributionContext,
+		editor: ICodeEditor,
+		viewport: View,
+		folding: EditorFoldingModel,
 		options: FoldingControllerOptions = {},
 	) {
 		super();
-		this.viewport = context.view;
-		this.editor = context.editor;
-		this.folding = context.getCapability(TextEditorCapability.folding);
+		this.viewport = viewport;
+		this.editor = editor;
+		this.folding = folding;
 		try {
 			this.targetOperatingSystem = readOperatingSystem(options.operatingSystem);
 			if (this.viewport.textModel !== this.editor.getModel() || this.viewport.textModel !== this.folding.model) {
 				throw new TypeError("Stanza folding dependencies must share one text model");
 			}
-			if (context.model.largeFile.tooLargeForTokenization) return;
-			this._register(addDisposableListener(context.controller.element, "keydown", event => this.handleKeydown(event)));
+			if (folding.model.largeFile.tooLargeForTokenization) return;
+			this._register(addDisposableListener(viewport.domNode.domNode, "keydown", event => this.handleKeydown(event)));
 			this._register(this.editor.onMouseDown(event => this.handleGutterPointerDown(event)));
 		} catch (error) {
 			this.dispose();

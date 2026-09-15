@@ -16,7 +16,6 @@ export class CodeEditorContributions extends Disposable {
 	private editor: ICodeEditor | null = null;
 	private descriptions: readonly EditorContributionRegistration[] | undefined;
 	private readonly instances = new Map<string, IEditorContribution>();
-	private readonly configurations = new Map<string, DisposableStore>();
 	private readonly resources = this._register(new DisposableMap<string, DisposableStore>());
 	private readonly pending = new Map<string, PendingCodeEditorContribution>();
 	private readonly completedInstantiation = new Set<EditorContributionInstantiation>();
@@ -24,7 +23,7 @@ export class CodeEditorContributions extends Disposable {
 
 	constructor(@IInstantiationService private readonly instantiationService: IInstantiationService) {
 		super();
-		this._register(toDisposable(() => { this.pending.clear(); this.instances.clear(); this.descriptions = undefined; this.configurations.clear(); }));
+		this._register(toDisposable(() => { this.pending.clear(); this.instances.clear(); this.descriptions = undefined; }));
 	}
 
 	/** Configure model services before the View is constructed. */
@@ -39,7 +38,6 @@ export class CodeEditorContributions extends Disposable {
 			if (!('ctor' in description) && description.configure) {
 				// Model sources must outlive the View; installation resources end before it.
 				const configuration = context.register(new DisposableStore());
-				this.configurations.set(description.id, configuration);
 				description.configure({ ...context, register: value => configuration.add(value) });
 			}
 		}
@@ -68,16 +66,12 @@ export class CodeEditorContributions extends Disposable {
 			const contributionContext = { ...context, register: <T extends IDisposable>(value: T): T => resources.add(value) };
 			this.pending.set(description.id, {
 				id: description.id,
-				instantiation: description.runtime?.instantiation ?? EditorContributionInstantiation.Eager,
+				instantiation: description.instantiation ?? EditorContributionInstantiation.Eager,
 				create: () => {
 					try {
-						description.install?.(contributionContext);
-						return description.runtime
-							? this.instantiationService.createInstance(description.runtime.descriptor, contributionContext)
-							: resources;
+						return description.install?.(contributionContext) ?? resources;
 					} catch (error) {
 						resources.dispose();
-						this.configurations.get(description.id)?.dispose();
 						throw error;
 					}
 				},
@@ -164,7 +158,7 @@ function validateDescriptions(descriptions: readonly EditorContributionRegistrat
 	for (const description of descriptions) {
 		if (!description?.id?.trim() || ('ctor' in description
 			? !description.ctor || !isInstantiation(description.instantiation)
-			: !(description.configure || description.install || description.runtime) || (description.runtime && !isInstantiation(description.runtime.instantiation)))) {
+			: !(description.configure || description.install) || (description.instantiation !== undefined && !isInstantiation(description.instantiation)))) {
 			throw new TypeError('Code editor contribution is invalid');
 		}
 		if (ids.has(description.id)) throw new RangeError(`Duplicate code editor contribution '${description.id}'`);

@@ -15,7 +15,7 @@ import { ITextModelService } from '../common/services/resolverService.js';
 import { MenuId, MenusRegistry, Action2 } from '../../platform/actions/common/actions.js';
 import { CommandsRegistry, ICommandMetadata } from '../../platform/commands/common/commands.js';
 import { ContextKeyExpr, IContextKeyService, ContextKeyExpression } from '../../platform/contextkey/common/contextkey.js';
-import { ServicesAccessor as InstantiationServicesAccessor, IInstantiationService, type ServiceConstructionDescriptor } from '../../platform/instantiation/common/instantiation.js';
+import { ServicesAccessor as InstantiationServicesAccessor, IInstantiationService, type ServiceIdentifier } from '../../platform/instantiation/common/instantiation.js';
 import { KeybindingsRegistry, KeybindingWeight } from '../../platform/keybinding/common/keybindingsRegistry.js';
 import { Registry } from '../../platform/registry/common/platform.js';
 import { assertType } from '../../base/common/types.js';
@@ -513,12 +513,6 @@ export interface EditorCommandMetadata {
 
 export type EditorCommandExecutor = <T>(commandId: string, operation: () => T) => T;
 
-/** Internal typed slot shared by independently installed editor features. */
-export interface EditorCapability<T> {
-	readonly id: string;
-	readonly _value?: T;
-}
-
 interface SharedTextContext {
 	readonly kind: 'text';
 	readonly options: ICodeEditorWidgetOptions;
@@ -528,8 +522,8 @@ interface SharedTextContext {
 	readonly languageFeaturesService: ILanguageFeaturesService;
 	readonly configurations: ILanguageConfigurationService;
 	readonly onLanguageError: (error: unknown) => void;
-	readonly getCapability: <T>(capability: EditorCapability<T>) => T;
-	readonly getOptionalCapability: <T>(capability: EditorCapability<T>) => T | undefined;
+	readonly getService: <T>(capability: ServiceIdentifier<T>) => T;
+	readonly getOptionalService: <T>(capability: ServiceIdentifier<T>) => T | undefined;
 	readonly register: <T extends IDisposable>(value: T) => T;
 }
 
@@ -538,7 +532,7 @@ export interface TextEditorContributionConfigurationContext extends SharedTextCo
 	readonly viewModel: IViewModel;
 	readonly selectionController: CursorsController;
 	readonly resolvedSemanticTokensService: IResolvedSemanticTokensService;
-	readonly provideCapability: <T>(capability: EditorCapability<T>, value: T) => void;
+	readonly provideService: <T>(capability: ServiceIdentifier<T>, value: T) => void;
 	readonly setSemanticTokenSource: (source: SemanticTokenSource) => void;
 	readonly setBracketColorizationSource: (source: BracketColorizationSource) => void;
 	readonly setLanguageLexicalContext: (source: LanguageLexicalContextSource) => void;
@@ -602,19 +596,12 @@ export interface DocumentEditorContributionContext {
 
 export type EditorContributionContext = TextEditorContributionContext | DocumentEditorContributionContext;
 
-export interface TextEditorRuntimeContribution extends IDisposable {}
-
-export interface TextEditorRuntimeContributionRegistration {
-	readonly descriptor: ServiceConstructionDescriptor<TextEditorRuntimeContribution>;
-	readonly instantiation: EditorContributionInstantiation;
-}
-
 export interface EditorContributionHooks {
 	readonly id: string;
 	readonly commands?: readonly EditorCommandMetadata[];
 	configure?(context: TextEditorContributionConfigurationContext): void;
-	install?(context: EditorContributionContext): void;
-	readonly runtime?: TextEditorRuntimeContributionRegistration;
+	install?(context: EditorContributionContext): IEditorContribution | void;
+	readonly instantiation?: EditorContributionInstantiation;
 }
 
 /** One registry contains constructor contributions and features with pre-view configuration. */
@@ -735,7 +722,7 @@ class EditorContributionRegistry {
 	}
 
 	public registerEditorContribution(contribution: EditorContributionRegistration): void {
-		if (!contribution?.id?.trim() || !('ctor' in contribution ? contribution.ctor : contribution.configure || contribution.install || contribution.runtime)) {
+		if (!contribution?.id?.trim() || !('ctor' in contribution ? contribution.ctor : contribution.configure || contribution.install)) {
 			throw new TypeError('Editor contribution is invalid');
 		}
 		if (this.editorContributions.some(value => value.id === contribution.id)) {

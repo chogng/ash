@@ -19,10 +19,10 @@ test('Breakpoint editor contribution projects semantic glyph-margin decorations'
 	const editorNode = dom.window.document.querySelector<HTMLElement>('main');
 	assert.ok(editorNode);
 	const resource = URI.file('C:\\project\\main.ts');
-	using model = new TextModel('first\nsecond\nthird');
+	using model = new TextModel('first\nsecond\nthird', { resource });
 	using debug = new BreakpointDebugService(resource);
 	using mouseDown = new Emitter<IEditorMouseEvent>();
-	using contribution = new BreakpointEditorContribution(contributionContext(model, resource, editorNode, mouseDown), debug as unknown as IDebugService);
+	using contribution = new BreakpointEditorContribution({ getDomNode: () => editorNode, onMouseDown: mouseDown.event }, model, debug as unknown as IDebugService);
 
 	assert.deepEqual(decorationState(model), [{ lineNumber: 2, lane: GlyphMarginLane.Left, persistLane: true, className: 'ash-debug-breakpoint-gutter enabled verified' }]);
 
@@ -36,10 +36,10 @@ test('Debug breakpoint controller consumes the public glyph-margin mouse target'
 	const editorNode = dom.window.document.querySelector<HTMLElement>('main');
 	assert.ok(editorNode);
 	const resource = URI.file('/project/main.ts');
-	using model = new TextModel('first\nsecond');
+	using model = new TextModel('first\nsecond', { resource });
 	using debug = new BreakpointDebugService(resource);
 	using mouseDown = new Emitter<IEditorMouseEvent>();
-	using contribution = new BreakpointEditorContribution(contributionContext(model, resource, editorNode, mouseDown), debug as unknown as IDebugService);
+	using contribution = new BreakpointEditorContribution({ getDomNode: () => editorNode, onMouseDown: mouseDown.event }, model, debug as unknown as IDebugService);
 	const browserEvent = new dom.window.MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, buttons: 1 });
 	mouseDown.fire({
 		event: new StandardMouseEvent(browserEvent as unknown as MouseEvent),
@@ -63,15 +63,6 @@ function decorationState(model: TextModel): readonly unknown[] {
 		persistLane: decoration.options.glyphMargin?.persistLane,
 		className: decoration.options.glyphMarginClassName,
 	}));
-}
-
-function contributionContext(model: TextModel, resource: URI, editorNode: HTMLElement, mouseDown: Emitter<IEditorMouseEvent>) {
-	return {
-		model,
-		options: { input: { resource } },
-		editor: { onMouseDown: mouseDown.event },
-		viewport: { domNode: { domNode: editorNode } },
-	} as never;
 }
 
 class BreakpointDebugService extends Disposable {

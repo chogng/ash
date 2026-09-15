@@ -6,7 +6,6 @@ import { Selection } from "../../../common/core/selection.js";
 import { type Range } from "../../../common/core/range.js";
 import { type TextSnapshot } from "../../../common/core/textChange.js";
 import { type View } from "../../../browser/view.js";
-import { TextEditorCapability } from "../../textEditorCapabilities.js";
 import { expandSmartSelection } from "../common/smartSelectionExpansion.js";
 import { SelectionRangeService } from "../common/selectionRanges.js";
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
