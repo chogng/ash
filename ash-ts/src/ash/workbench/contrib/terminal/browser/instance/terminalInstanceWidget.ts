@@ -121,6 +121,7 @@ export class TerminalInstanceWidget extends Disposable {
 
 	fit(): void {
 		if (!this.visible || !this.fitAddon || this.isDisposed) return;
+		if (this.element.clientWidth <= 0 || this.element.clientHeight <= 0) return;
 		try {
 			this.fitAddon.fit();
 		} catch {

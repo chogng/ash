@@ -46,6 +46,7 @@ export class TerminalViewPane extends ViewPane {
 			contextMenuService,
 			contextKeyService,
 			createTerminal: (profileId) => {
+				if (this.isBodyVisible()) super.focus();
 				this.focusSource = this.element.ownerDocument.activeElement;
 				return this.createTerminal(profileId);
 			},
@@ -196,10 +197,12 @@ export class TerminalViewPane extends ViewPane {
 		const instance = this.terminalService.activeInstance;
 		const item = instance ? this.items.get(instance) : undefined;
 		if (!instance || !item || instance.state === "running" || instance.state === "reconnecting") return;
+		if (this.isBodyVisible()) super.focus();
+		const focusSource = this.element.ownerDocument.activeElement;
 		this.setStatus(undefined);
 		try {
 			await this.terminalService.relaunchTerminal(instance, item.widget.dimensions());
-			if (!this.isDisposed) item.widget.focus();
+			if (!this.isDisposed && this.activeItem() === item && this.element.ownerDocument.activeElement === focusSource) item.widget.focus();
 		} catch (error) {
 			if (!this.isDisposed) {
 				this.setStatus(terminalErrorMessage(error, "Terminal relaunch failed"));

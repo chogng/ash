@@ -99,16 +99,18 @@ export class ViewPaneContainer extends Disposable {
 		}
 	}
 
-	openView(id: string): ViewPane | undefined {
+	openView(id: string, focus?: boolean): ViewPane | undefined {
 		if (!this.model.isVisible(id)) this.model.setVisible(id, true);
-		return this._panes.get(id)?.pane;
+		const pane = this._panes.get(id)?.pane;
+		if (pane) {
+			pane.setExpanded(true);
+			if (focus) pane.focus();
+		}
+		return pane;
 	}
 
 	focusView(id: string): boolean {
-		const pane = this.openView(id);
-		if (!pane) return false;
-		pane.focus();
-		return true;
+		return this.openView(id, true) !== undefined;
 	}
 
 	focus(): void {

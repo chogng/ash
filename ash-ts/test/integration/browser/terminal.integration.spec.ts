@@ -159,3 +159,36 @@ test('collapsed terminal defers initialization until expanded', async ({ page })
 	await expect(page.locator('.xterm')).toHaveCount(1);
 	await page.evaluate(() => window.ashTerminalIntegration.dispose());
 });
+
+test('terminal relaunch preserves focus moved while the process restarts', async ({ page }) => {
+	await page.goto('/terminal.html?pane&existing&exited');
+	await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
+	await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
+	await expect(page.locator('.xterm')).toHaveCount(1);
+	await page.evaluate(() => window.ashTerminalPaneIntegration.hold());
+	await page.getByRole('button', { name: 'Relaunch Terminal', exact: true }).focus();
+	await page.keyboard.press('Enter');
+	await page.locator('#outside').focus();
+	await page.evaluate(async () => {
+		window.ashTerminalPaneIntegration.release();
+		await new Promise(requestAnimationFrame);
+	});
+	await expect(page.locator('#outside')).toBeFocused();
+	await page.evaluate(() => window.ashTerminalIntegration.dispose());
+});
+
+test('terminal does not resize the process while its host has zero dimensions', async ({ page }) => {
+	await page.goto('/terminal.html');
+	await page.waitForFunction(() => Boolean(window.ashTerminalIntegration));
+	await page.evaluate(() => window.ashTerminalIntegration.start());
+	await page.evaluate(() => window.ashTerminalIntegration.ready());
+	const sizes = await page.evaluate(async () => {
+		const before = [...window.ashTerminalIntegration.resizes];
+		document.querySelector<HTMLElement>('#terminal')!.hidden = true;
+		window.ashTerminalIntegration.fit();
+		await new Promise(requestAnimationFrame);
+		return { before, after: [...window.ashTerminalIntegration.resizes] };
+	});
+	expect(sizes.after).toEqual(sizes.before);
+	await page.evaluate(() => window.ashTerminalIntegration.dispose());
+});

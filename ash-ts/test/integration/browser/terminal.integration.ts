@@ -3,27 +3,28 @@ import { Disposable, DisposableStore } from '../../../src/ash/base/common/lifecy
 import { darkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { ThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { TerminalInstanceWidget } from '../../../src/ash/workbench/contrib/terminal/browser/instance/terminalInstanceWidget.js';
-import type { ITerminalInstance } from '../../../src/ash/workbench/services/terminal/common/terminal.js';
+import type { ITerminalDimensions, ITerminalInstance } from '../../../src/ash/workbench/services/terminal/common/terminal.js';
 
 const store = new DisposableStore();
 const output = store.add(new Emitter<Uint8Array>());
 const exit = store.add(new Emitter<number | undefined>());
 const theme = store.add(new ThemeService(darkColorTheme));
 const writes: string[] = [];
+const resizes: ITerminalDimensions[] = [];
 const instance: ITerminalInstance = {
 	...Disposable.None,
 	id: 'test-terminal',
 	dirId: 'workspace',
 	title: 'Shell',
 	profile: { profileId: 'shell', title: 'Shell', isDefault: true },
-	state: 'running',
+	state: new URLSearchParams(location.search).has('exited') ? 'exited' : 'running',
 	exitCode: undefined,
 	onDidWriteData: output.event,
 	onDidExit: exit.event,
 	onDidChangeCommandStatus: Event.None,
 	onDidChangeState: Event.None,
 	write: data => { writes.push(data); },
-	resize: () => {},
+	resize: dimensions => { resizes.push(dimensions); },
 	close: async () => {},
 };
 const widget = store.add(new TerminalInstanceWidget(document.querySelector<HTMLElement>('#terminal')!, instance, theme));
@@ -32,6 +33,8 @@ let completion: Promise<void> | undefined;
 
 window.ashTerminalIntegration = {
 	writes,
+	resizes,
+	fit: () => widget.fit(),
 	write: text => output.fire(new TextEncoder().encode(text)),
 	exit: () => exit.fire(0),
 	start: () => {
@@ -47,6 +50,8 @@ declare global {
 	interface Window {
 		ashTerminalIntegration: {
 			readonly writes: readonly string[];
+			readonly resizes: readonly ITerminalDimensions[];
+			fit(): void;
 			write(text: string): void;
 			exit(): void;
 			start(): boolean;
@@ -96,7 +101,7 @@ if (new URLSearchParams(location.search).has('pane')) {
 		onDidChangeActiveInstance: Event.None,
 		getProfiles: async () => { profiles++; await pending; return [instance.profile]; },
 		createTerminal: async () => { creates++; instances.push(instance); created.fire(instance); return instance; },
-		relaunchTerminal: async () => {},
+		relaunchTerminal: async () => { await pending; },
 		setActiveInstance: () => {},
 		moveTerminal: () => {},
 		closeTerminal: async () => {},
@@ -120,6 +125,7 @@ if (new URLSearchParams(location.search).has('pane')) {
 		getWorkspace: () => workspace,
 		getWorkbenchState: () => 2,
 	}));
+	document.querySelector<HTMLElement>('#terminal')!.append(pane.partTitleProjection.actions!);
 	window.ashTerminalPaneIntegration = {
 		counts: () => ({ profiles, creates }),
 		panel: setPanel,
