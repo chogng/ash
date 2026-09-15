@@ -8,28 +8,17 @@ publish.workspace = true
 [lib]
 name = "realtime_webrtc"
 
-[[test]]
-name = "session_actor"
-harness = false
-
 [lints]
 workspace = true
 
 [dependencies]
-build-info = { workspace = true }
-install-context = { package = "ash-install-context", path = "../install-context" }
-pty = { package = "ash-utils-pty", path = "../utils/pty" }
-anyhow = { workspace = true }
+webrtc = { workspace = true }
+rtc = { workspace = true }
+opus = { workspace = true }
+rand = { workspace = true }
 futures = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
-tracing = { workspace = true }
+tokio = { workspace = true, features = ["rt", "sync", "time", "macros"] }
+thiserror = { workspace = true }
 
 [dev-dependencies]
-libtest-mimic = { workspace = true }
-pretty_assertions = { workspace = true }
-tempfile = { workspace = true }
-
-[target.'cfg(unix)'.dev-dependencies]
-rustix = { workspace = true, features = ["process"] }
+tokio = { workspace = true, features = ["rt-multi-thread"] }

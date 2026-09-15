@@ -23,6 +23,7 @@ members = [
     "ash-rs/process-hardening",
     "ash-rs/build-info",
     "ash-rs/realtime-webrtc",
+    "ash-rs/voice-host",
     "ash-rs/agent-environment",
     "ash-rs/agent-graph-store",
     "ash-rs/github",
@@ -198,6 +199,14 @@ publish = false
 version = "0.1.0"
 
 [workspace.dependencies]
+rand = "0.9"
+rtc = "=0.20.3"
+webrtc = "=0.20.3"
+cpal = "=0.18.2"
+crossbeam-queue = "0.3.12"
+opus = "=0.4.0"
+rubato = { version = "=5.0.0", default-features = false }
+sonora = { version = "=0.2.0", default-features = false }
 symphonia = { version = "0.6.0", default-features = false }
 audio = { package = "ash-utils-audio", path = "ash-rs/utils/audio" }
 test-binary-support = { package = "ash-test-binary-support", path = "ash-rs/test-binary-support" }
