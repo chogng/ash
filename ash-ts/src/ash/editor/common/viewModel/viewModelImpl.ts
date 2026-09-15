@@ -13,6 +13,7 @@ import { Selection, type ISelection } from '../core/selection.js';
 import { type ICommand, type ICursorState, type IViewState, ScrollType } from '../editorCommon.js';
 import { EditorTheme } from '../editorTheme.js';
 import { type ILanguageConfigurationService } from '../languages/languageConfigurationRegistry.js';
+import { TokenizationRegistry } from '../languages.js';
 import { EndOfLinePreference, type IAttachedView, type ICursorStateComputer, type IIdentifiedSingleEditOperation, type ITextModel, PositionAffinity, TextDirection } from '../model.js';
 import { TextModel } from '../model/textModel.js';
 import { type ILineBreaksComputer, type ILineBreaksComputerContext, type ILineBreaksComputerFactory, type InjectedText } from '../modelLineProjectionData.js';
@@ -440,8 +441,37 @@ export class ViewModel extends Disposable implements IViewModel {
 		return { sourceRanges, sourceText: sourceText.length <= 1 ? (sourceText[0] ?? '') : sourceText };
 	}
 
-	getRichTextToCopy(_modelRanges: Range[], _emptySelectionClipboard: boolean): { html: string; mode: string } | null {
-		return null;
+	getRichTextToCopy(modelRanges: Range[], emptySelectionClipboard: boolean): { html: string; mode: string } | null {
+		const { sourceRanges, sourceText } = this.getPlainTextToCopy(modelRanges, emptySelectionClipboard, false);
+		if (sourceRanges.length === 0) return null;
+		const texts = Array.isArray(sourceText) ? sourceText : [sourceText];
+		const colorMap = TokenizationRegistry.getColorMap()?.map(color => color.toString()) ?? [];
+		const fragments = sourceRanges.map((range, index) => {
+			const lines: string[] = [];
+			for (let lineNumber = range.startLineNumber; lineNumber <= range.endLineNumber; lineNumber++) {
+				this.model.tokenization.tokenizeIfCheap(lineNumber);
+				const tokens = this.model.tokenization.getLineTokens(lineNumber);
+				const content = this.model.getLineContent(lineNumber);
+				const start = lineNumber === range.startLineNumber ? range.startColumn - 1 : 0;
+				const end = lineNumber === range.endLineNumber ? range.endColumn - 1 : content.length;
+				const spans: string[] = [];
+				for (let token = tokens.findTokenIndexAtOffset(start); token < tokens.getCount(); token++) {
+					const from = Math.max(start, tokens.getStartOffset(token));
+					const to = Math.min(end, tokens.getEndOffset(token));
+					if (from >= end) break;
+					const text = escapeClipboardHtml(content.slice(from, to));
+					const style = colorMap[tokens.getForeground(token)] ? tokens.getInlineStyle(token, colorMap) : '';
+					spans.push(style ? `<span style="${escapeClipboardHtml(style)}">${text}</span>` : text);
+				}
+				lines.push(spans.join(''));
+			}
+			const trailingText = texts[index]!.slice(this.model.getValueInRange(range).length);
+			return lines.join(this.model.getEOL()) + escapeClipboardHtml(trailingText);
+		});
+		return {
+			html: `<pre style="white-space: pre; tab-size: ${this.model.getOptions().tabSize}"><code>${fragments.join(this.model.getEOL())}</code></pre>`,
+			mode: this.model.getLanguageId(),
+		};
 	}
 
 	onDidChangeContentOrInjectedText(event: textModelEvents.InternalModelContentChangeEvent | textModelEvents.ModelInjectedTextChangedEvent): void {
@@ -702,6 +732,10 @@ export class ViewModel extends Disposable implements IViewModel {
 		const position = this.toViewSelection(selection).getPosition();
 		this.revealRange(source, true, Range.fromPositions(position), viewEvents.VerticalRevealType.Simple, ScrollType.Smooth);
 	}
+}
+
+function escapeClipboardHtml(value: string): string {
+	return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 }
 
 export interface IBatchableTarget {

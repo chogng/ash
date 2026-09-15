@@ -1037,6 +1037,161 @@ for (const inputKind of ['EditContext', 'textarea'] as const) {
 		expect(errors).toEqual([]);
 	});
 
+	for (const mode of ['full', 'partial', 'line', 'multi', 'disabled'] as const) {
+		test(`${inputKind} rich clipboard copy preserves ${mode} content and token styles`, async ({ page }) => {
+			if (inputKind === 'textarea') {
+				await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+			}
+			await page.goto('/standalone.html');
+			await page.evaluate(mode => {
+				const ranges: Record<typeof mode, [number, number, number, number][]> = {
+					full: [[1, 1, 2, 9]], partial: [[1, 3, 1, 5]], line: [[1, 3, 1, 3]],
+					multi: [[1, 3, 1, 5], [2, 2, 2, 5]], disabled: [[1, 1, 2, 9]],
+				};
+				window.ashStandaloneIntegration.prepareClipboard('const <x>&\n\t"value"', ranges[mode]);
+				window.ashStandaloneIntegration.configureClipboardTokens(mode !== 'disabled');
+			}, mode);
+			const input = page.locator('#caller .stanza-editor-input');
+			await input.focus();
+			const copied = await input.evaluate(input => {
+				const clipboardData = new DataTransfer();
+				input.dispatchEvent(new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData }));
+				const html = clipboardData.getData('text/html');
+				const content = new DOMParser().parseFromString(html, 'text/html');
+				return {
+					text: clipboardData.getData('text/plain'), html, richText: content.querySelector('code')?.textContent,
+					injected: content.querySelector('x, script') !== null,
+					styles: [...content.querySelectorAll('span')].map(span => ({ text: span.textContent, color: span.style.color, weight: span.style.fontWeight, italic: span.style.fontStyle, decoration: span.style.textDecoration })),
+				};
+			});
+			const expected = { full: 'const <x>&\n\t"value"', partial: 'ns', line: 'const <x>&\n', multi: 'ns\n"va', disabled: 'const <x>&\n\t"value"' }[mode];
+			expect(copied.text).toBe(expected);
+			if (mode === 'disabled') {
+				expect(copied.html).toBe('');
+			} else {
+				expect(copied.richText).toBe(expected);
+				expect(copied.injected).toBe(false);
+				expect(copied.styles[0]).toMatchObject({ color: 'rgb(18, 52, 86)', weight: 'bold', italic: 'italic' });
+				if (mode === 'full' || mode === 'multi') {
+					expect(copied.styles.at(-1)).toMatchObject({ color: 'rgb(101, 67, 33)', decoration: 'underline' });
+				}
+			}
+		});
+	}
+
+	test(`${inputKind} explicit rich copy writes HTML even when default highlighting is disabled`, async ({ page, context }) => {
+		await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+		if (inputKind === 'textarea') {
+			await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+		}
+		await page.goto('/standalone.html');
+		await page.evaluate(() => {
+			window.ashStandaloneIntegration.prepareClipboard('const <x>&\n\t"value"', [[1, 1, 1, 6]]);
+			window.ashStandaloneIntegration.configureClipboardTokens(false);
+		});
+		await page.locator('#caller .stanza-editor-input').focus();
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.clipboardCopyWithSyntaxHighlightingAction'));
+		const copied = await page.evaluate(async () => {
+			const items = await navigator.clipboard.read();
+			const item = items.find(item => item.types.includes('text/html'));
+			if (!item) return null;
+			const html = await (await item.getType('text/html')).text();
+			const content = new DOMParser().parseFromString(html, 'text/html');
+			const token = content.querySelector('span');
+			return { text: content.querySelector('code')?.textContent, color: token?.style.color, weight: token?.style.fontWeight };
+		});
+		expect(copied).toEqual({ text: 'const', color: 'rgb(18, 52, 86)', weight: 'bold' });
+		await page.keyboard.press('ControlOrMeta+c');
+		expect(await page.evaluate(async () => {
+			const items = await navigator.clipboard.read();
+			return { text: await navigator.clipboard.readText(), hasHtml: items.some(item => item.types.includes('text/html')) };
+		})).toEqual({ text: 'const', hasHtml: false });
+	});
+
+	for (const mode of ['html', 'plain', 'readonly'] as const) {
+		test(`${inputKind} HTML clipboard paste respects ${mode} and remains undoable`, async ({ page }) => {
+			if (inputKind === 'textarea') {
+				await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+			}
+			await page.goto('/standalone.html');
+			await page.evaluate(mode => window.ashStandaloneIntegration.prepareBrackets('alpha', [6], mode === 'readonly'), mode);
+			const input = page.locator('#caller .stanza-editor-input');
+			await input.focus();
+			await input.evaluate((input, mode) => {
+				const clipboardData = new DataTransfer();
+				clipboardData.setData('text/html', '<div>&lt;x&gt; &amp; one</div><div>two<br>three</div><script>window.clipboardScriptRan = true</script>');
+				if (mode === 'plain') clipboardData.setData('text/plain', ' plain');
+				input.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+			}, mode);
+			const expected = { html: 'alpha<x> & one\ntwo\nthree', plain: 'alpha plain', readonly: 'alpha' }[mode];
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe(expected);
+			expect(await page.evaluate(() => Reflect.get(window, 'clipboardScriptRan'))).toBeUndefined();
+			if (mode !== 'readonly') {
+				await page.keyboard.press('ControlOrMeta+z');
+				expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('alpha');
+			}
+		});
+	}
+
+	for (const mode of ['selections', 'externalLines', 'line', 'emptyDisabled'] as const) {
+		test(`${inputKind} clipboard preserves ${mode} behavior through the production input`, async ({ page }) => {
+			if (inputKind === 'textarea') {
+				await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+			}
+			await page.goto('/standalone.html');
+			await page.evaluate(mode => {
+				if (mode === 'selections') {
+					window.ashStandaloneIntegration.prepareClipboard('a b', [[1, 1, 1, 2], [1, 3, 1, 4]]);
+				} else if (mode === 'externalLines') {
+					window.ashStandaloneIntegration.prepareClipboard('a b', [[1, 1, 1, 1], [1, 3, 1, 3]]);
+				} else {
+					window.ashStandaloneIntegration.prepareClipboard('alpha\nbeta', [[1, 3, 1, 3]], mode === 'line');
+				}
+			}, mode);
+			const input = page.locator('#caller .stanza-editor-input');
+			await input.focus();
+			const result = await input.evaluate((input, mode) => {
+				const data = new DataTransfer();
+				if (mode === 'externalLines') {
+					data.setData('text/plain', 'X\r\nY');
+					data.setData('vscode-editor-data', '{invalid metadata');
+				} else {
+					input.dispatchEvent(new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData: data }));
+				}
+				const text = data.getData('text/plain');
+				const metadata = data.getData('vscode-editor-data');
+				if (mode === 'emptyDisabled') {
+					input.dispatchEvent(new ClipboardEvent('cut', { bubbles: true, cancelable: true, clipboardData: new DataTransfer() }));
+				} else {
+					if (mode === 'selections') {
+						window.ashStandaloneIntegration.prepareClipboard('x y', [[1, 1, 1, 2], [1, 3, 1, 4]]);
+					}
+					input.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: data }));
+				}
+				return { text, metadata, state: window.ashStandaloneIntegration.readLineCopy() };
+			}, mode);
+			if (mode === 'selections') {
+				expect(result.text).toBe('a\nb');
+				expect(JSON.parse(result.metadata)).toMatchObject({ isFromEmptySelection: false, multicursorText: ['a', 'b'] });
+				expect(result.state.value).toBe('a b');
+			} else if (mode === 'externalLines') {
+				expect(result.state.value).toBe('Xa Yb');
+			} else if (mode === 'line') {
+				expect(result.text).toBe('alpha\n');
+				expect(JSON.parse(result.metadata)).toMatchObject({ isFromEmptySelection: true });
+				expect(result.state).toEqual({ value: 'alpha\nalpha\nbeta', selections: ['[2,3 -> 2,3]'] });
+			} else {
+				expect(result.text).toBe('');
+				expect(result.state).toEqual({ value: 'alpha\nbeta', selections: ['[1,3 -> 1,3]'] });
+			}
+			if (mode !== 'emptyDisabled') {
+				await page.keyboard.press('ControlOrMeta+z');
+				const expected = { selections: 'x y', externalLines: 'a b', line: 'alpha\nbeta' }[mode];
+				expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe(expected);
+			}
+		});
+	}
+
 	test(`${inputKind} copies, cuts, pastes and undoes through its clipboard events`, async ({ page }) => {
 		const errors: string[] = [];
 		page.on('pageerror', error => errors.push(error.stack ?? error.message));

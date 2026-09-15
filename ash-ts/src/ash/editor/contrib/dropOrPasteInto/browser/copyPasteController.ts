@@ -1,7 +1,7 @@
 import { UriList } from '../../../../base/common/dataTransfer.js';
 import { raceCancellation } from '../../../../base/common/async.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { type IClipboardPasteEvent } from '../../../browser/controller/editContext/clipboardUtils.js';
+import { readEditorHtmlText, type IClipboardPasteEvent } from '../../../browser/controller/editContext/clipboardUtils.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { Handler, type IEditorContribution } from '../../../common/editorCommon.js';
@@ -37,11 +37,14 @@ export class CopyPasteController extends Disposable implements IEditorContributi
 			return;
 		}
 		if (event.clipboardData.getData('text/plain').length > 0) return;
-		const uriList = UriList.parse(event.clipboardData.getData('text/uri-list'));
-		if (uriList.length === 0) return;
+		const uriList = UriList.parse(event.clipboardData.getData('text/uri-list')).filter(uri => uri.trim().length > 0);
+		const text = uriList.length > 0
+			? uriList.join('\n')
+			: readEditorHtmlText(event.clipboardData.getData('text/html'), this.editor.getContainerDomNode().ownerDocument);
+		if (text.length === 0) return;
 		event.setHandled();
 		this.editor.trigger('paste', Handler.Paste, {
-			text: uriList.join('\n'),
+			text,
 			pasteOnNewLine: false,
 			multicursorText: null,
 			mode: null,

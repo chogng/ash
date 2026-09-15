@@ -1,3 +1,5 @@
+import { FontStyle, MetadataConsts } from '../../../src/ash/editor/common/encodedTokenAttributes.js';
+import { SparseMultilineTokens } from '../../../src/ash/editor/common/tokens/sparseMultilineTokens.js';
 import { CopyPasteController } from '../../../src/ash/editor/contrib/dropOrPasteInto/browser/copyPasteController.js';
 import { formatEditor, FormattingConflicts, FormattingKind, FormattingMode } from '../../../src/ash/editor/contrib/format/browser/format.js';
 import { type CancellationToken } from '../../../src/ash/base/common/cancellation.js';
@@ -138,7 +140,8 @@ interface StandaloneHarness {
 	prepareKeyboardEditing(): KeyboardEditingState;
 	readKeyboardEditing(): KeyboardEditingState;
 	selectRange(): KeyboardEditingState;
-	prepareClipboard(): KeyboardEditingState;
+	configureClipboardTokens(highlighting: boolean): void;
+	prepareClipboard(value?: string, selections?: [number, number, number, number][], emptySelectionClipboard?: boolean): KeyboardEditingState;
 	prepareWrappedLayout(): WrappedLayoutState;
 	prepareProportionalWrap(): WrappedLayoutState;
 	resizeWrappedLayout(width: number): WrappedLayoutState;
@@ -762,9 +765,20 @@ window.ashStandaloneIntegration = {
 		callerEditor.setSelection({ startLineNumber: 1, startColumn: 2, endLineNumber: 2, endColumn: 4 });
 		return readKeyboardEditing();
 	},
-	prepareClipboard: () => {
-		callerEditor.setValue('alpha beta');
-		callerEditor.setSelection(new stanza.Selection(1, 1, 1, 6));
+	configureClipboardTokens: highlighting => {
+		callerEditor.updateOptions({ copyWithSyntaxHighlighting: highlighting });
+		callerModel.setLanguage('typescript');
+		TokenizationRegistry.setColorMap(['#000000', '#222222', '#ffffff', '#123456', '#654321'].map(Color.fromHex));
+		const keyword = MetadataConsts.SEMANTIC_USE_FOREGROUND | MetadataConsts.SEMANTIC_USE_BOLD | MetadataConsts.SEMANTIC_USE_ITALIC
+			| (3 << MetadataConsts.FOREGROUND_OFFSET) | ((FontStyle.Bold | FontStyle.Italic) << MetadataConsts.FONT_STYLE_OFFSET);
+		const string = MetadataConsts.SEMANTIC_USE_FOREGROUND | MetadataConsts.SEMANTIC_USE_UNDERLINE
+			| (4 << MetadataConsts.FOREGROUND_OFFSET) | (FontStyle.Underline << MetadataConsts.FONT_STYLE_OFFSET);
+		callerModel.tokenization.setSemanticTokens([SparseMultilineTokens.create(1, new Uint32Array([0, 0, 5, keyword, 1, 1, 8, string]))], true);
+	},
+	prepareClipboard: (value = 'alpha beta', selections = [[1, 1, 1, 6]], emptySelectionClipboard = true) => {
+		callerEditor.updateOptions({ emptySelectionClipboard });
+		callerEditor.setValue(value);
+		callerEditor.setSelections(selections.map(selection => new stanza.Selection(...selection)));
 		return readKeyboardEditing();
 	},
 	prepareWrappedLayout: () => {

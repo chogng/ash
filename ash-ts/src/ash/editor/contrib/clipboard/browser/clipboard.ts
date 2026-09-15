@@ -1,5 +1,5 @@
 import { isFirefox } from '../../../../base/browser/browser.js';
-import { getActiveDocument } from '../../../../base/browser/dom.js';
+import { addDisposableListener, getActiveDocument } from '../../../../base/browser/dom.js';
 import { type IKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
@@ -207,7 +207,21 @@ function canApplyClipboardEdit(editor: ICodeEditor, model: ITextModel, version: 
 async function executeEditorCopy(editor: ICodeEditor, clipboardService: IClipboardService): Promise<void> {
 	CopyOptions.electronBugWorkaroundCopyEventHasFired = false;
 	const document = editor.getContainerDomNode().ownerDocument;
-	if (typeof document.execCommand === 'function') document.execCommand('copy');
+	if (typeof document.execCommand === 'function') {
+		// EditContext may send the command's copy event to the document body.
+		using copy = addDisposableListener<ClipboardEvent>(document, 'copy', event => {
+			if (CopyOptions.electronBugWorkaroundCopyEventHasFired || event.defaultPrevented || !editor.hasTextFocus()) return;
+			const viewModel = editor._getViewModel();
+			if (!viewModel || !event.clipboardData) return;
+			const { dataToCopy, metadata } = generateDataToCopyAndStoreInMemory(viewModel, undefined, isFirefox);
+			event.clipboardData.setData('text/plain', dataToCopy.text);
+			if (dataToCopy.html) event.clipboardData.setData('text/html', dataToCopy.html);
+			event.clipboardData.setData('vscode-editor-data', JSON.stringify(metadata));
+			event.preventDefault();
+			CopyOptions.electronBugWorkaroundCopyEventHasFired = true;
+		});
+		document.execCommand('copy');
+	}
 	if (!CopyOptions.electronBugWorkaroundCopyEventHasFired) await writeEditorText(editor, clipboardService);
 }
 
