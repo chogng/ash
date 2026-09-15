@@ -12,7 +12,7 @@ Native UI 使用 Rust 声明组件结构和布局，使用 typed style struct �
 | --- | --- | --- | --- |
 | 组件树、基础布局和方框外观 | `style!` / `ui!`，或对应的 `ElementStyle` / `Element` builder | `zui::ui::presentation` | 否；通过公开的类型化 API 表达 |
 | Button、RadioGroup、InputBox 等组件外观 | `ButtonStyle`、`RadioGroupStyle`、`InputBoxStyle` 等 typed style | `ash-ui-components` 组件 | 否；通过 style、state 或 named variant 传入 |
-| 主题颜色和标准尺寸 | `ThemeSnapshot` 到 product palette，再到组件 style | `ash-theme` 与各宿主投影 | 否；不在组件中复制主题值 |
+| 主题颜色和标准尺寸 | `ThemeSnapshot` 到 product palette，再到组件 style | `ash-ui-theme` 与各宿主投影 | 否；不在组件中复制主题值 |
 | hover、focus、selected、disabled | host 投影的 typed state | 交互/产品 host 判定，组件解释视觉 | 否；组件不自行猜测业务状态 |
 | view-local / projected state 与订阅 | `ViewState<T>`、`ComponentRuntime`、`ComponentContext::{local_state,observe_state,retain_resource}` | `zui` 管理 presentation 生命周期；host 仍拥有产品权威状态与副作用 | 否；只能通过 typed state 和稳定 component identity 连接 |
 | 任意后代 selector、继承和 cascade | 无 | 无 | 不适用；当前 Native contract 不支持 |
@@ -58,7 +58,7 @@ Native UI 当前明确不提供以下能力：
 | `zui` presentation | Element 树、基础 flow、computed geometry、paint primitive、scene、inspection，以及 view-local state/subscription 和 component mount resource | `zui::ui::{Element,Component,ComputedElement,UiScene,ViewState,ComponentRuntime}` | Button 语义、主题选择、产品 reducer、GPU 和业务 action/副作用 |
 | `ash-ui-components` component | Button、RadioGroup、ScrollView、InputBox、ContextView、Dialog 等组件的内部几何、视觉状态解释和 scene composition | `ash_ui_components::{ButtonStyle,RadioGroupStyle,ScrollViewStyle,DialogStyle,...}` | 产品 identity、业务 state、pointer capture、command、副作用 |
 | `ash-workbench` | Workbench Titlebar、Sidebar header/content、interaction identity、layout 与 presentation state | `ash_workbench::{Titlebar,SidebarView,SidebarPart,...}` | Session、Terminal、Editor 等具体内容生命周期与 UI |
-| Theme / palette projection | 将共享主题 token 解析为 immutable snapshot，再映射为宿主 palette 或组件 style | `ash_theme::ThemeSnapshot`、`ash_ui_theme::UiTheme` 及其 typed style factory | 判断组件是否 hover、selected 或 visible；创建 selector |
+| Theme / palette projection | 将共享主题 token 解析为 immutable snapshot，再映射为宿主 palette 或组件 style | `ash_ui_theme::ThemeSnapshot`、`ash_ui_theme::UiTheme` 及其 typed style factory | 判断组件是否 hover、selected 或 visible；创建 selector |
 | Product host | 选择组件、保存权威状态、投影交互状态、提供 bounds、组合 scene 和执行 action | `app`、`app/workbench/environment`、`ash-editor` 等 | 复制组件内部布局、从 primitive 反推语义、穿透修改共享组件内部状态 |
 
 这里的“组件拥有样式”表示组件拥有 style 字段的语义、状态到视觉的解释和内部绘制几何；不表示产品不能传入 palette-derived style。产品可以创建 `ButtonStyle` 的值，但不能假定 `Button` 内部的 icon、label、padding 和 state background 如何组合。
@@ -185,7 +185,7 @@ Native 中的 style struct 是组件公开的样式 contract。它可以包含�
 
 组件定义“这个字段代表什么”，主题和宿主决定“这个字段当前取什么值”。例如 `ButtonStyle::with_pressed` 的意义由 Button 定义，`palette.border` 是否适合作为 pressed color 由产品 style factory 决定。
 
-共享快照到绘制颜色和 typed style 的转换由 `ash-ui-theme` 统一拥有。组件实现不应直接依赖 `ash_theme`、产品 profile、workspace 或业务 domain，也不应自行混合主题颜色。
+共享快照到绘制颜色和 typed style 的转换由 `ash-ui-theme` 统一拥有。组件实现不应直接依赖 `ash_ui_theme`、产品 profile、workspace 或业务 domain，也不应自行混合主题颜色。
 
 ### 5.4 Retained view state 与组件生命周期
 
@@ -200,7 +200,7 @@ Native 中的 style struct 是组件公开的样式 contract。它可以包含�
 主题系统回答视觉值是什么，组件 style 回答这些值何时使用，host state 回答当前是否使用它们：
 
 ```text
-ash-theme token
+ash-ui-theme token
   → immutable ThemeSnapshot
   → host palette / domain style factory
   → typed ash-ui-components style
@@ -208,7 +208,7 @@ ash-theme token
   → UiScene primitives
 ```
 
-Rust 组件新增颜色或标准尺寸时，先检查 `ash-theme` 自有目录是否已有准确语义；没有时增加 Rust token，再通过 `ash-ui-theme` 转换为组件样式。不要在 component paint 中复制十六进制颜色，也不要把组件状态判断塞进 token resolver。
+Rust 组件新增颜色或标准尺寸时，先检查 `ash-ui-theme` 自有目录是否已有准确语义；没有时增加 Rust token，再通过 `ash-ui-theme` 转换为组件样式。不要在 component paint 中复制十六进制颜色，也不要把组件状态判断塞进 token resolver。
 
 当前 Rust UI 主题投影由 `ash-ui-theme` 将 `ThemeSnapshot` 原子转换成 `UiTheme`；Workbench、Session、Settings、Files、SCM 等能力 crate 再把它转换为自己拥有的 typed style。基础输入框、搜索框和滚动条样式由 `ash-ui-theme` 提供；实现证据见 [`app/theme`](../theme/README.md) 和 [`design-tokens.md`](../../docs/design-tokens.md)。
 

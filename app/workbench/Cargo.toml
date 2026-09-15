@@ -42,7 +42,6 @@ arg0 = { workspace = true }
 ash-terminal = { workspace = true }
 ash-terminal-runtime = { workspace = true }
 ash-text-file = { workspace = true }
-ash-theme = { workspace = true }
 ash-ui-components = { workspace = true }
 ash-ui-theme = { workspace = true }
 zui = { workspace = true, features = ["wgpu"] }

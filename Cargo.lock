@@ -2386,16 +2386,6 @@ name = "ash-text-file"
 version = "0.1.0"
 
 [[package]]
-name = "ash-theme"
-version = "0.1.0"
-dependencies = [
- "ash-utils-home-dir",
- "serde",
- "serde_json",
- "thiserror 2.0.19",
-]
-
-[[package]]
 name = "ash-thread-store"
 version = "0.1.0"
 dependencies = [
@@ -2527,8 +2517,11 @@ name = "ash-ui-theme"
 version = "0.1.0"
 dependencies = [
  "ash-icons",
- "ash-theme",
  "ash-ui-components",
+ "ash-utils-home-dir",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
  "zui",
 ]
 
@@ -2789,7 +2782,6 @@ dependencies = [
  "ash-terminal",
  "ash-terminal-runtime",
  "ash-text-file",
- "ash-theme",
  "ash-ui-components",
  "ash-ui-theme",
  "ash-utils-home-dir",

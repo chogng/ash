@@ -49,12 +49,15 @@ use ash_terminal::{BlockStatus, GridSize, ScreenBuffer};
 use ash_terminal_runtime::TerminalPaneViewState;
 use ash_terminal_runtime::TerminalPaneViews;
 use ash_terminal_runtime::{TerminalSession, TerminalSessionEvent, TerminalSessionKey};
-use ash_theme::{ColorScheme, ThemeLoadOptions, ThemeLoader, default_device_root};
 use ash_ui_components::SashOrientation;
+use ash_ui_theme::ColorScheme;
 use ash_ui_theme::DEFAULT_UI_THEME;
 use ash_ui_theme::DEFAULT_UI_TYPOGRAPHY;
+use ash_ui_theme::ThemeLoadOptions;
+use ash_ui_theme::ThemeLoader;
 use ash_ui_theme::UiTheme;
 use ash_ui_theme::UiTypography;
+use ash_ui_theme::default_device_root;
 use zui::ui::{
     CaretBlinkAdvance, CaretBlinkController, Color, FontFamily, Point, TextInputLayoutEngine,
     TextStyle,

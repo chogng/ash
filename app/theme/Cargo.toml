@@ -12,7 +12,10 @@ path = "src/lib.rs"
 
 [dependencies]
 ash-icons = { workspace = true }
-ash-theme = { workspace = true }
+ash-utils-home-dir = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
 ash-ui-components = { workspace = true }
 zui = { workspace = true, default-features = false }
 

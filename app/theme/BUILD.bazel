@@ -4,6 +4,7 @@ app_rust_library(
     name = "theme",
     crate_name = "ash_ui_theme",
     package_name = "app/theme",
-    source_files = ["README.md"],
+    data = glob(["resources/*.json", "src/fixtures/*.json"]),
+    source_files = ["README.md"] + glob(["resources/*.json", "src/fixtures/*.json"]),
     unit_tests = True,
 )

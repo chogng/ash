@@ -132,7 +132,6 @@ members = [
     "ash-rs/syntax",
     "ash-rs/terminal",
     "ash-rs/text-file",
-    "ash-rs/theme",
     "ash-rs/thread-store",
     "ash-rs/thread-transcript",
     "ash-rs/git-turn-changes",
@@ -506,7 +505,6 @@ ash-terminal = { path = "ash-rs/terminal" }
 ash-terminal-runtime = { path = "app/terminal-runtime" }
 ash-terminal-detection = { path = "ash-rs/terminal-detection" }
 ash-text-file = { path = "ash-rs/text-file" }
-ash-theme = { path = "ash-rs/theme" }
 ash-ui-theme = { path = "app/theme" }
 ash-thread-store = { path = "ash-rs/thread-store" }
 ash-thread-transcript = { path = "ash-rs/thread-transcript" }

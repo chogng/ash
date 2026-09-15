@@ -148,7 +148,7 @@ profile placement 和 RPC state。跨层隐私与云端边界见 [`codebase.md`]
 [`codebase/README.md`](../ash-rs/codebase/README.md) 与
 [`cloud-codebase/README.md`](../ash-rs/cloud-codebase/README.md)。
 
-`ash-theme` 当前嵌入 Desktop registry 生成的语言中立 manifest，严格解析图形界面用户主题 JSON、别名、变换和默认值依赖，并以 Rust GUI 从 `config.toml` 根级 `[gui]` 解释出的选择值与 `themes/*.json` 产生 Rust 桌面端快照。它不依赖 renderer、不拥有组件 geometry；Ash Code TUI 的主题由 `ash-tui` 独立拥有，只解释 `[tui]` 并读取 `ash-code/themes/*.json`，不消费该 manifest。当前 API、失败语义和 conformance contract 见 [`theme/README.md`](../ash-rs/theme/README.md)。
+Rust GUI 主题由 [`app/theme`](../app/theme/README.md) 完整拥有，包括自有颜色与尺寸目录、用户主题格式、加载、解析和组件样式转换。主题选择由 GUI 的 `[gui].theme` 管理，主题文件位于 `app/themes/*.json`。它不属于共享后端；Desktop 与 Ash Code TUI 分别维护自己的主题。
 
 `ash-editor` 当前拥有 `app` 使用的多行编辑、caret/selection、undo/redo、IME、language-aware
 syntax lifecycle/projection、普通文档结构折叠、viewport soft wrap 与 source/visual row 映射、代码视口绘制、retained `DiffEditorDocument`、复用两个 CodeEditor pane 的 side-by-side DiffEditor，以及纵向组合

@@ -360,7 +360,7 @@ pub struct WorkbenchPresentationModel<'a> {
     pub quick_access: &'a QuickAccess,
     pub settings: &'a SettingsState,
     pub keybinding_diagnostics: &'a [String],
-    pub theme_scheme: ash_theme::ColorScheme,
+    pub theme_scheme: ash_ui_theme::ColorScheme,
     pub theme_follows_system: bool,
     pub window_control_insets: WindowControlInsets,
     pub pointer_position: Option<zui::ui::Point>,
@@ -1447,8 +1447,8 @@ fn draw_settings_dialog(
         MainSurfaceKind::Terminal => "Terminal",
     };
     let theme_scheme = match model.theme_scheme {
-        ash_theme::ColorScheme::Dark | ash_theme::ColorScheme::HighContrastDark => "Dark",
-        ash_theme::ColorScheme::Light | ash_theme::ColorScheme::HighContrastLight => "Light",
+        ash_ui_theme::ColorScheme::Dark | ash_ui_theme::ColorScheme::HighContrastDark => "Dark",
+        ash_ui_theme::ColorScheme::Light | ash_ui_theme::ColorScheme::HighContrastLight => "Light",
     };
     dialog.draw_components(context, |context, bounds| {
         ash_settings::draw_settings_pane(

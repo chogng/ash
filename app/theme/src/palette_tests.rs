@@ -1,7 +1,7 @@
 use super::UiTheme;
-use ash_theme::ColorScheme;
-use ash_theme::ThemeCatalog;
-use ash_theme::ThemeDocument;
+use crate::ColorScheme;
+use crate::ThemeCatalog;
+use crate::ThemeDocument;
 use zui::ui::Color;
 use zui::ui::FontFamily;
 use zui::ui::FontWeight;

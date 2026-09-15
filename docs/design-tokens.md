@@ -6,10 +6,10 @@ Desktop、Rust GUI 与 Ash Code TUI 分别拥有主题实现。配色理念与�
 
 | 内容 | Desktop TypeScript | Rust GUI |
 | --- | --- | --- |
-| 颜色与尺寸声明 | [theme/common](../ash-ts/src/ash/platform/theme/common/colorTheme.ts) 的注册表 | [catalog.json](../ash-rs/theme/resources/catalog.json) |
-| 内置主题 | TypeScript 注册表和主题快照 | [entries.json](../ash-rs/theme/resources/entries.json) 和 Rust 解析器 |
-| 用户主题校验 | [userColorTheme.ts](../ash-ts/src/ash/platform/theme/common/userColorTheme.ts) | [document.rs](../ash-rs/theme/src/document.rs) 与 [catalog.rs](../ash-rs/theme/src/catalog.rs) |
-| 用户主题 Schema 与模板 | [ash-ts/resources/theme](../ash-ts/resources/theme/color-theme.schema.json) | [ash-rs/theme/resources](../ash-rs/theme/resources/color-theme.schema.json) |
+| 颜色与尺寸声明 | [theme/common](../ash-ts/src/ash/platform/theme/common/colorTheme.ts) 的注册表 | [catalog.json](../app/theme/resources/catalog.json) |
+| 内置主题 | TypeScript 注册表和主题快照 | [entries.json](../app/theme/resources/entries.json) 和 Rust 解析器 |
+| 用户主题校验 | [userColorTheme.ts](../ash-ts/src/ash/platform/theme/common/userColorTheme.ts) | [document.rs](../app/theme/src/document.rs) 与 [catalog.rs](../app/theme/src/catalog.rs) |
+| 用户主题 Schema 与模板 | [ash-ts/resources/theme](../ash-ts/resources/theme/color-theme.schema.json) | [app/theme/resources](../app/theme/resources/color-theme.schema.json) |
 | 用户主题目录 | profile root 的 `themes/*.json` | profile root 的 `app/themes/*.json` |
 | 主题选择 | `workbench.colorTheme`，由 Desktop 配置服务保存 | `config.toml` 的 `[gui].theme`，由 GUI 解释 |
 | 组件消费 | CSS 变量与编辑器、终端颜色表 | `ThemeSnapshot → UiTheme` 与各组件的类型化样式 |
@@ -30,7 +30,7 @@ Ash Code TUI 的调色板、用户主题和 `[tui].theme` 由 [ash-code/tui](../
 - 每端只解析自己的用户主题目录和 Schema；选择主题不写入另一端的配置。
 - 解析器负责未知 token、循环引用、变换深度与透明度校验；组件消费完整快照。
 - 两端各自保留别名、变换、主题模板及默认值测试，不使用跨端一致性 fixture。
-- 用户主题安装和旧主题处理见 [主题模板](theme-authoring-template.md)；Rust crate 接口见 [ash-theme](../ash-rs/theme/README.md)。
+- 用户主题安装和旧主题处理见 [主题模板](theme-authoring-template.md)；Rust crate 接口见 [ash-ui-theme](../app/theme/README.md)。
 
 ## 当前边界
 

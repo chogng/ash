@@ -1,7 +1,0 @@
-load("//:defs.bzl", "ash_rust_crate")
-
-ash_rust_crate(
-    name = "theme",
-    crate_name = "ash_theme",
-    data = glob(["resources/*.json", "src/fixtures/*.json"]),
-)

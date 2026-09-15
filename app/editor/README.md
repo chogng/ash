@@ -193,7 +193,7 @@ paint 与子组件放在一个宿主根下时，使用 `ComponentContext::with_c
 - 用 `caret_bounds` 同步平台 IME candidate area，并由 host 控制 caret blink；
 - 在接入异步 diff 或 LSP 结果时丢弃不再匹配当前 document revision 的结果；CodeEditor 的
   tree-sitter revision 不暴露给宿主。
-- 把 `ash-theme` 或其他主题 runtime 的 snapshot 映射成公开 palette；本 crate 不读取主题文件，
+- 把 `ash-ui-theme` 或其他主题 runtime 的 snapshot 映射成公开 palette；本 crate 不读取主题文件，
   也不依赖具体产品宿主。
 
 `app` 是当前 GPU presentation host；`ash-tui` 不依赖本 crate，而是直接消费

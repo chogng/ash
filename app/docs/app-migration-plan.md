@@ -158,7 +158,7 @@ App Server Session 的连接 worker、订阅、命令队列和重连策略已经
 | `ash-scm` | Changes Pane、变更文件状态、多文件 Diff、折叠、滚动、布局和交互 | 仓库快照转换以及 Git 请求 |
 | `ash-editor-host` | Editor Tab、文档/视口、保存冲突、查找替换、诊断、补全和自动滚动 | 文件与 LSP 请求、平台输入转发 |
 | `ash-settings` | `SettingsState`、页面与 section UI、快捷键录制、feature 展示快照和交互 action；连接列表、picker、连接管理和 Tunnel 状态/视图 | 配置与快捷键持久化和平台事件转发；SSH/runtime/子进程启动、profile 和窗口事件 |
-| `ash-ui-theme` | 共享主题快照到 UI 语义颜色、标准尺寸和基础控件样式的原子转换 | 业务组件样式、主题选择、组件状态、布局和产品 action |
+| `ash-ui-theme` | Rust GUI 自有主题目录、格式、加载、解析，以及快照到 UI 颜色、尺寸和基础控件样式的转换 | 业务组件样式、主题选择配置、组件状态、布局和产品 action |
 
 所有新 crate 都在 `app/`，不进入 `ash-rs`，也不依赖 `app` package。UI 能力通过宿主输入快照返回 typed action；`ash-session` 直接持有 Session/Thread 的 App Server 请求和 worker。`ash-ui-theme` 统一解析 UI 语义颜色，各能力 crate 把它转换成自己拥有的样式；Files、SCM 与 Workbench 分别拥有自身交互 ID，避免能力 crate 反向依赖组合根。
 

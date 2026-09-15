@@ -1,6 +1,6 @@
 # 用户主题 JSON 模板
 
-> 本文分别说明 Desktop 与 Rust GUI 的用户主题。Desktop 使用 [自己的模板](../ash-ts/resources/theme/color-theme.template.json) 和 [Schema](../ash-ts/resources/theme/color-theme.schema.json)；Rust GUI 使用 [自己的模板](../ash-rs/theme/resources/color-theme.template.json) 和 [Schema](../ash-rs/theme/resources/color-theme.schema.json)。两端 token 由各自主题实现维护，架构见 [主题边界](design-tokens.md)。Ash Code TUI 使用 [独立格式](../ash-code/tui/README.md)。
+> 本文分别说明 Desktop 与 Rust GUI 的用户主题。Desktop 使用 [自己的模板](../ash-ts/resources/theme/color-theme.template.json) 和 [Schema](../ash-ts/resources/theme/color-theme.schema.json)；Rust GUI 使用 [自己的模板](../app/theme/resources/color-theme.template.json) 和 [Schema](../app/theme/resources/color-theme.schema.json)。两端 token 由各自主题实现维护，架构见 [主题边界](design-tokens.md)。Ash Code TUI 使用 [独立格式](../ash-code/tui/README.md)。
 
 ## 快速理解
 
@@ -193,7 +193,7 @@ pnpm typecheck:renderer
 pnpm build
 ```
 
-Rust GUI 的解析器或资源变更运行 `just check ash-theme`、`just test ash-theme` 和 `just rust-warnings ash-theme`。不再运行跨端生成命令。
+Rust GUI 的解析器或资源变更运行 `just check ash-ui-theme`、`just test ash-ui-theme` 和 `just rust-warnings ash-ui-theme`。不再运行跨端生成命令。
 
 只修改用户主题 JSON 不需要重新构建 App。
 

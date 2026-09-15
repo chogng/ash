@@ -389,14 +389,11 @@ fn rust_gui_does_not_discover_desktop_themes_or_change_desktop_settings() {
     );
     fs::create_dir_all(root.join("app/themes")).unwrap();
     fs::write(root.join("app/themes/custom.json"), source).unwrap();
-    assert_eq!(
-        loader
-            .preview(options, "my-custom-theme")
-            .unwrap()
-            .snapshot
-            .id(),
-        "my-custom-theme"
-    );
+    let loaded = loader.preview(options, "my-custom-theme").unwrap();
+    let style = crate::UiTheme::from_snapshot(&loaded.snapshot).unwrap();
+    assert_eq!(loaded.snapshot.id(), "my-custom-theme");
+    assert_eq!(style.workbench_background, zui::ui::Color::rgb(11, 16, 32));
+    assert_eq!(style.editor_foreground, zui::ui::Color::rgb(219, 231, 255));
     assert_eq!(
         fs::read_to_string(root.join("configuration.json")).unwrap(),
         configuration
