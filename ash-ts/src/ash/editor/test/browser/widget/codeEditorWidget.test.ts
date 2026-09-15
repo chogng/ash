@@ -1,3 +1,8 @@
+import { IThemeService, ThemeService } from '../../../../platform/theme/common/themeService.js';
+import { ILanguageConfigurationService } from '../../../common/languages/languageConfigurationRegistry.js';
+import { createBuiltinLanguageConfigurationService } from '../../../common/languages/languageBuiltinConfigurations.js';
+import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
+import { LanguageFeaturesService } from '../../../common/services/languageFeaturesService.js';
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
@@ -47,6 +52,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { CodeEditorWidget } = await import("../../../browser/widget/codeEditor/codeEditorWidget.js");
+const { createTestCodeEditor } = await import('../testCodeEditor.js');
 const { NativeEditContext } = await import('../../../browser/controller/editContext/native/nativeEditContext.js');
 const { NativeEditContextRegistry } = await import('../../../browser/controller/editContext/native/nativeEditContextRegistry.js');
 const { ScreenReaderSupport } = await import('../../../browser/controller/editContext/native/screenReaderSupport.js');
@@ -96,7 +102,7 @@ test("CodeEditorWidget owns one canonical browser editing surface", () => {
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("alpha");
-	const editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20, ariaLabel: "Code" });
+	const editor = createTestCodeEditor({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20, ariaLabel: "Code" });
 	const ownerId = editor.getId();
 
 	editor.layout({ width: 320, height: 80 });
@@ -130,7 +136,7 @@ test('textarea system-caret movement returns through TextAreaInput and stops aft
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha');
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container: requiredElement(dom.window.document, 'main'),
 		model,
 		input: { resource: model.uri },
@@ -179,7 +185,7 @@ test('textarea system-caret movement maps LF screen-reader content back to a CRL
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('ab\r\ncd');
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container: requiredElement(dom.window.document, 'main'),
 		model,
 		input: { resource: model.uri },
@@ -209,7 +215,7 @@ test('CodeEditorWidget scopes and updates the standard editor context keys', () 
 	using services = new ServiceContainer();
 	using rootContextKeys = new ContextKeyService();
 	services.registerInstance(IContextKeyService, rootContextKeys);
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container: requiredElement(dom.window.document, 'main'),
 		model,
 		input: { resource: model.uri },
@@ -235,7 +241,7 @@ test('EditContext owns default copy, paste, and cut behavior without a clipboard
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha beta');
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container: requiredElement(dom.window.document, 'main'),
 		model,
 		input: { resource: model.uri },
@@ -283,7 +289,7 @@ test('EditContext rejects cut and paste while composition owns the edit transact
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha');
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container: requiredElement(dom.window.document, 'main'),
 		model,
 		input: { resource: model.uri },
@@ -323,7 +329,7 @@ test('EditContext routes word deletion through standard WordOperations ranges', 
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha beta');
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container: requiredElement(dom.window.document, 'main'),
 		model,
 		input: { resource: model.uri },
@@ -351,7 +357,7 @@ test('editor configuration updates rerender line-number, selection, whitespace, 
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('one\n    two\n\tthree');
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container: requiredElement(dom.window.document, 'main'),
 		model,
 		input: { resource: model.uri },
@@ -404,7 +410,7 @@ test('setSelection accepts ranges, preserves selection direction, and reports it
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using closeWindow = toDisposable(() => dom.window.close());
 	const container = requiredElement<HTMLElement>(dom.window.document, 'main');
-	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId() });
+	using editor = createTestCodeEditor({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId() });
 	const api: ICodeEditor = editor;
 	const events: { selection: string; source: string }[] = [];
 	using listener = api.onDidChangeCursorSelection(event => events.push({ selection: event.selection.toString(), source: event.source }));
@@ -435,7 +441,7 @@ test('setSelection rejects malformed input without changing selection or detache
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using closeWindow = toDisposable(() => dom.window.close());
 	const container = requiredElement<HTMLElement>(dom.window.document, 'main');
-	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId() });
+	using editor = createTestCodeEditor({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId() });
 	const selection = new Selection(1, 2, 1, 4);
 	editor.setSelection(selection);
 	let changes = 0;
@@ -455,7 +461,7 @@ test('executeEdits applies one editor transaction and its requested cursor state
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha');
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container: requiredElement(dom.window.document, 'main'),
 		model,
 		input: { resource: model.uri },
@@ -480,7 +486,7 @@ test('CodeEditorWidget publishes canonical cursor position and selection events'
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha');
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container: requiredElement(dom.window.document, 'main'),
 		model,
 		input: { resource: model.uri },
@@ -519,7 +525,7 @@ test('editor focus updates the view overlay presentation', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha '.repeat(20));
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container: requiredElement(dom.window.document, 'main'),
 		model,
 		input: { resource: model.uri },
@@ -587,7 +593,7 @@ test('browser EditContext reattaches its editing object after DOM ownership chan
 	using model = new TextModel('alpha');
 	using services = new ServiceContainer();
 	services.registerInstance(ILogService, new NullLoggerService());
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container: requiredElement(dom.window.document, 'main'),
 		model,
 		input: { resource: model.uri },
@@ -827,7 +833,7 @@ test('ViewUserInputEvents converts view targets once and CodeEditorWidget publis
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha');
-	const editor = new CodeEditorWidget({
+	const editor = createTestCodeEditor({
 		container: requiredElement(dom.window.document, 'main'),
 		model,
 		input: { resource: model.uri },
@@ -869,7 +875,7 @@ test('ViewController owns mouse selection policy for pointer dispatch', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha beta\nsecond\nthird');
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container: requiredElement(dom.window.document, 'main'),
 		model,
 		input: { resource: model.uri },
@@ -921,7 +927,7 @@ test('pointer selection uses outside-editor targets to scroll both axes and stop
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel(Array.from({ length: 40 }, (_, index) => `${index} ${'wide '.repeat(30)}`).join('\n'));
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container: requiredElement(dom.window.document, 'main'),
 		model,
 		input: { resource: model.uri },
@@ -964,7 +970,7 @@ test('CodeEditorWidget publishes service lifecycle in construction order', () =>
 	using willCreate = service.onWillCreateCodeEditor(() => events.push('will'));
 	using add = service.onCodeEditorAdd(editor => events.push(`add:${editor.getId()}`));
 	using remove = service.onCodeEditorRemove(editor => events.push(`remove:${editor.getId()}`));
-	const editor = new CodeEditorWidget({
+	const editor = createTestCodeEditor({
 		container: requiredElement(dom.window.document, 'main'),
 		model,
 		input: { resource: model.uri },
@@ -996,7 +1002,7 @@ test('CodeEditorWidget switches models without replacing its identity or retaini
 			this._register(toDisposable(() => contributionEvents.push(`dispose:${resource}`)));
 		}
 	}
-	const editor = new CodeEditorWidget({
+	const editor = createTestCodeEditor({
 		container,
 		model: first,
 		input: { resource: first.uri },
@@ -1084,7 +1090,7 @@ test('CodeEditorWidget detaches a disposed model and can attach a later model', 
 	const container = requiredElement(dom.window.document, 'main');
 	const first = new TextModel('first');
 	using second = new TextModel('second');
-	const editor = new CodeEditorWidget({ container, model: first, input: { resource: first.uri }, languageId: first.getLanguageId(), lineHeight: 20 });
+	const editor = createTestCodeEditor({ container, model: first, input: { resource: first.uri }, languageId: first.getLanguageId(), lineHeight: 20 });
 	try {
 		const root = editor.getDomNode();
 		first.dispose();
@@ -1107,7 +1113,7 @@ test('CodeEditorWidget leaves a usable empty editor when replacement setup fails
 	const container = requiredElement(dom.window.document, 'main');
 	using first = new TextModel('first');
 	using failed = new TextModel('failed');
-	const editor = new CodeEditorWidget({
+	const editor = createTestCodeEditor({
 		container,
 		model: first,
 		input: { resource: first.uri },
@@ -1140,7 +1146,7 @@ test('CodeEditorWidget stops a model switch when a will-change listener disposes
 	const container = requiredElement(dom.window.document, 'main');
 	using first = new TextModel('first');
 	using second = new TextModel('second');
-	const editor = new CodeEditorWidget({ container, model: first, input: { resource: first.uri }, languageId: first.getLanguageId(), lineHeight: 20 });
+	const editor = createTestCodeEditor({ container, model: first, input: { resource: first.uri }, languageId: first.getLanguageId(), lineHeight: 20 });
 	const root = editor.getDomNode();
 	using listener = editor.onWillChangeModel(() => editor.dispose());
 	assert.doesNotThrow(() => editor.setModel(second));
@@ -1165,7 +1171,7 @@ test('CodeEditorWidget clears its model state when contribution disposal fails d
 			throw new Error('contribution cleanup failed');
 		}
 	}
-	const editor = new CodeEditorWidget({
+	const editor = createTestCodeEditor({
 		container,
 		model: first,
 		input: { resource: first.uri },
@@ -1194,7 +1200,7 @@ test('CodeEditorWidget exposes editor-owned scroll geometry', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('one\ntwo\nthree\nfour\nfive');
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container: requiredElement(dom.window.document, 'main'),
 		model,
 		input: { resource: model.uri },
@@ -1218,14 +1224,14 @@ test('CodeEditorWidget isolates model decorations by editor lifetime', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main><aside></aside></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha');
-	const first = new CodeEditorWidget({
+	const first = createTestCodeEditor({
 		container: requiredElement(dom.window.document, 'main'),
 		model,
 		input: { resource: model.uri },
 		languageId: model.getLanguageId(),
 		lineHeight: 20,
 	});
-	const second = new CodeEditorWidget({
+	const second = createTestCodeEditor({
 		container: requiredElement(dom.window.document, 'aside'),
 		model,
 		input: { resource: model.uri },
@@ -1255,7 +1261,7 @@ test('CodeEditorWidget owns decoration collections and reveals without moving se
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('one\ntwo\nthree\nfour');
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container: requiredElement(dom.window.document, 'main'),
 		model,
 		input: { resource: model.uri },
@@ -1280,7 +1286,7 @@ test('CodeEditorWidget owns content and glyph margin widget layout through the s
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('one\ntwo\nthree');
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container: requiredElement(dom.window.document, 'main'),
 		model,
 		input: { resource: model.uri },
@@ -1330,7 +1336,7 @@ test('CodeEditorWidget reveals ranges through the ViewModel event contract', () 
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel(Array.from({ length: 20 }, (_, index) => `line ${index + 1}`).join('\n'));
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container: requiredElement(dom.window.document, 'main'),
 		model,
 		input: { resource: model.uri },
@@ -1356,7 +1362,7 @@ test('CodeEditorWidget runs in-place replacement through the registered contribu
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('value 1');
-	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
+	using editor = createTestCodeEditor({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
 	editor.setSelection(Selection.fromPositions(new Position(1, 7), new Position(1, 8)));
 
 	const next = new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: '.', ctrlKey: true, shiftKey: true }) as unknown as KeyboardEvent;
@@ -1376,7 +1382,7 @@ test("CodeEditorWidget owns padding, placeholder, and current-line presentation 
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel();
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container,
 		model,
 		input: { resource: model.uri },
@@ -1405,7 +1411,7 @@ test('ViewCursors follows view positions, configuration, focus, composition, and
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const model = new TextModel('alpha beta gamma delta epsilon');
-	const editor = new CodeEditorWidget({
+	const editor = createTestCodeEditor({
 		container: requiredElement(dom.window.document, 'main'),
 		model,
 		input: { resource: model.uri },
@@ -1460,7 +1466,7 @@ test("PlaceholderTextContribution follows model emptiness and editor layout", ()
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel();
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container,
 		model,
 		input: { resource: model.uri },
@@ -1520,7 +1526,7 @@ test("CodeEditorWidget stages and owns per-instance contributions", () => {
 			this._register(toDisposable(() => events.push('lazy:dispose')));
 		}
 	}
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container,
 		model,
 		input: { resource: model.uri },
@@ -1571,7 +1577,7 @@ test('CodeEditorWidget owns configured resources and deferred controllers across
 		}
 	}
 	try {
-		using editor = new CodeEditorWidget({
+		using editor = createTestCodeEditor({
 			container: requiredElement(dom.window.document, 'main'),
 			model, input: { resource: model.uri }, languageId: model.getLanguageId(),
 			contributions: [{
@@ -1616,7 +1622,7 @@ test('CodeEditorWidget keeps model sources alive after installation fails', () =
 	let sourceReads = 0;
 	let view: TextEditorContributionContext['view'] | undefined;
 	try {
-		using editor = new CodeEditorWidget({
+		using editor = createTestCodeEditor({
 			container: requiredElement(dom.window.document, 'main'),
 			model, input: { resource: model.uri }, languageId: model.getLanguageId(),
 			onContributionError: error => errors.push(error),
@@ -1671,7 +1677,7 @@ test('CodeEditorWidget injects scoped services into contributions and releases t
 		}
 	}
 	try {
-		using editor = new CodeEditorWidget({
+		using editor = createTestCodeEditor({
 			container: requiredElement(dom.window.document, 'main'),
 			model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20,
 			instantiationService: parent,
@@ -1701,7 +1707,7 @@ test("CodeEditorWidget creates one selection controller for its model", () => {
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("alpha");
-	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
+	using editor = createTestCodeEditor({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
 	assert.equal(editor.selections.context.model, model);
 	dom.window.close();
 });
@@ -1711,7 +1717,7 @@ test('CodeEditorWidget keyboard navigation uses standard cursor movement state',
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('12345\n1\n12345');
-	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
+	using editor = createTestCodeEditor({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
 	editor.setSelection(Selection.fromPositions(new Position(1, 5)));
 	const input = editor.controller.editContext.domNode.domNode;
 	input.focus();
@@ -1734,7 +1740,7 @@ test('CodeEditorWidget offers keys to input consumers before cursor navigation',
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('first\nsecond');
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container,
 		model,
 		input: { resource: model.uri },
@@ -1772,7 +1778,7 @@ test("CodeEditorWidget leaves text drops available to its host", () => {
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("alpha");
-	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
+	using editor = createTestCodeEditor({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
 	const drop = textDropEvent(dom.window, "dropped");
 
 	editor.getDomNode().dispatchEvent(drop);
@@ -1788,7 +1794,7 @@ test('DropIntoEditorController inserts text through the canonical editor drop ev
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('alpha');
-	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
+	using editor = createTestCodeEditor({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
 	editor.layout({ width: 240, height: 40 });
 	editor.getDomNode().getBoundingClientRect = () => ({ x: 0, y: 0, left: 0, top: 0, right: 240, bottom: 40, width: 240, height: 40, toJSON: () => ({}) });
 	const drop = textDropEvent(dom.window, ' dropped', 80, 10);
@@ -1807,7 +1813,7 @@ test('DropIntoEditorController leaves read-only and non-text drops to the host',
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement(dom.window.document, 'main');
 	using readOnlyModel = new TextModel('alpha');
-	using readOnlyEditor = new CodeEditorWidget({
+	using readOnlyEditor = createTestCodeEditor({
 		container,
 		model: readOnlyModel,
 		input: { resource: readOnlyModel.uri, readOnly: true },
@@ -1822,7 +1828,7 @@ test('DropIntoEditorController leaves read-only and non-text drops to the host',
 	assert.equal(readOnlyModel.getText(), 'alpha');
 
 	using model = new TextModel('beta');
-	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
+	using editor = createTestCodeEditor({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
 	editor.layout({ width: 240, height: 40 });
 	editor.getDomNode().getBoundingClientRect = () => editorRectangle(240, 40);
 	const binaryDrop = transferDropEvent(dom.window, {
@@ -1842,7 +1848,7 @@ test('DropIntoEditorController converts an HTML-only drop to inert text', async 
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('alpha');
-	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
+	using editor = createTestCodeEditor({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
 	editor.layout({ width: 240, height: 40 });
 	editor.getDomNode().getBoundingClientRect = () => editorRectangle(240, 40);
 	const drop = transferDropEvent(dom.window, {
@@ -1864,7 +1870,7 @@ test('DropIntoEditorController inserts one decoded text file at the captured pos
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel('alpha');
-	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
+	using editor = createTestCodeEditor({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
 	editor.layout({ width: 240, height: 40 });
 	editor.getDomNode().getBoundingClientRect = () => editorRectangle(240, 40);
 	const file = new DeferredTextFile('snippet.rs');
@@ -1968,7 +1974,7 @@ test('content events follow the attached model and retain edit, undo, redo, and 
 	using closeWindow = toDisposable(() => dom.window.close());
 	using first = new TextModel('alpha');
 	using second = new TextModel('beta');
-	using editor = new CodeEditorWidget({ container: requiredElement(dom.window.document, 'main'), model: first, input: { resource: first.uri }, languageId: first.getLanguageId() });
+	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model: first, input: { resource: first.uri }, languageId: first.getLanguageId() });
 	const events: { text: string; undo: boolean; redo: boolean; flush: boolean; version: number }[] = [];
 	using listener = editor.onDidChangeModelContent(event => events.push({ text: event.changes.map(change => change.text).join(''), undo: event.isUndoing, redo: event.isRedoing, flush: event.isFlush, version: event.versionId }));
 	editor.pushUndoStop();
@@ -2000,7 +2006,7 @@ test('Contribution selection distinguishes defaults, an empty list, and an expli
 	using model = new TextModel('alpha');
 	try {
 		for (const contributions of [undefined, [], EditorExtensionsRegistry.getSomeEditorContributions([FindController.ID])]) {
-			using editor = new CodeEditorWidget({
+			using editor = createTestCodeEditor({
 				container: requiredElement(dom.window.document, 'main'),
 				model, input: { resource: model.uri }, languageId: model.getLanguageId(), contributions,
 			});
@@ -2038,7 +2044,7 @@ test('Disabled and configuration-only contributions do not expose placeholder in
 	using model = new TextModel('alpha');
 	const events: string[] = [];
 	try {
-		using editor = new CodeEditorWidget({
+		using editor = createTestCodeEditor({
 			container: requiredElement(dom.window.document, 'main'),
 			model, input: { resource: model.uri }, languageId: model.getLanguageId(), showUnicodeHighlights: false,
 			contributions: [
@@ -2074,7 +2080,7 @@ test('Returning an already registered controller preserves dependent listener cl
 		}
 	}
 	try {
-		using editor = new CodeEditorWidget({
+		using editor = createTestCodeEditor({
 			container: requiredElement(dom.window.document, 'main'),
 			model, input: { resource: model.uri }, languageId: model.getLanguageId(),
 			contributions: [{
@@ -2096,4 +2102,58 @@ test('Returning an already registered controller preserves dependent listener cl
 	} finally {
 		dom.window.close();
 	}
+});
+
+
+test('CodeEditorWidget rejects missing shared services before creating its surface', () => {
+	using configurations = createBuiltinLanguageConfigurationService();
+	using features = new LanguageFeaturesService(configurations);
+	using theme = new ThemeService(darkColorTheme);
+	using model = new TextModel('text');
+	for (const missing of [IThemeService, ILanguageConfigurationService, ILanguageFeaturesService]) {
+		using services = new ServiceContainer();
+		if (missing !== IThemeService) services.registerInstance(IThemeService, theme);
+		if (missing !== ILanguageConfigurationService) services.registerInstance(ILanguageConfigurationService, configurations);
+		if (missing !== ILanguageFeaturesService) services.registerInstance(ILanguageFeaturesService, features);
+		const container = browserEnvironment.window.document.createElement('div');
+		assert.throws(() => services.createInstance(CodeEditorWidget, {
+			container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), contributions: [],
+		}), error => error instanceof Error && error.message.includes(missing.description));
+		assert.equal(container.childElementCount, 0);
+	}
+});
+
+test('CodeEditorWidget shares host language services across contributions and model switches', () => {
+	using configurations = createBuiltinLanguageConfigurationService();
+	using features = new LanguageFeaturesService(configurations);
+	using theme = new ThemeService(darkColorTheme);
+	using services = new ServiceContainer();
+	services.registerInstance(IThemeService, theme);
+	services.registerInstance(ILanguageConfigurationService, configurations);
+	services.registerInstance(ILanguageFeaturesService, features);
+	using first = new TextModel('first');
+	using second = new TextModel('second');
+	const seen: ILanguageFeaturesService[] = [];
+	class Contribution extends Disposable {
+		constructor(_editor: ICodeEditor, @ILanguageFeaturesService service: ILanguageFeaturesService) {
+			super();
+			seen.push(service);
+		}
+	}
+	const container = browserEnvironment.window.document.createElement('div');
+	using editor = services.createInstance(CodeEditorWidget, {
+		container, model: first, input: { resource: first.uri }, languageId: first.getLanguageId(),
+		contributions: [
+			{ id: 'test.shared.constructor', ctor: Contribution, instantiation: EditorContributionInstantiation.Eager },
+			{ id: 'test.shared.hook', install: (context: TextEditorContributionContext) => { seen.push(context.languageFeaturesService); } },
+		],
+	});
+	editor.setModel(second);
+	assert.deepEqual(seen, [features, features, features, features]);
+	editor.dispose();
+	assert.equal(features.isDisposed, false);
+	assert.equal(theme.isDisposed, false);
+	assert.equal(services.get(ILanguageConfigurationService), configurations);
+	assert.equal(first.isDisposed(), false);
+	assert.equal(second.isDisposed(), false);
 });

@@ -26,6 +26,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
+const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { EditorExtensionsRegistry } = await import('../../../../browser/editorExtensions.js');
 await import('../../browser/comment.js');
 
@@ -38,7 +39,7 @@ test('Block Comment runs through the canonical editor action', () => {
 	using model = new TextModel('alpha beta', { languageId: 'typescript' });
 	using configurations = new TestLanguageConfigurationService();
 	using registration = configurations.register('typescript', { comments: { blockComment: ['/*', '*/'] } });
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container,
 		model,
 		input: { resource: model.uri },
@@ -63,7 +64,7 @@ test('Block Comment leaves languages without a block comment pair unchanged', ()
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using model = new TextModel('alpha', { languageId: 'plaintext' });
 	using configurations = new TestLanguageConfigurationService();
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container,
 		model,
 		input: { resource: model.uri },

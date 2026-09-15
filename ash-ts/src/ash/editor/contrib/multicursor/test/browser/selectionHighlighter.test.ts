@@ -28,6 +28,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
+const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { TextualMultiDocumentHighlightFeature } = await import('../../../wordHighlighter/browser/textualHighlightProvider.js');
 const { SelectionHighlighter } = await import('../../browser/multicursor.js');
 
@@ -75,7 +76,7 @@ function createHarness(text: string, languages: TestLanguageFeaturesService, ini
 	const model = new TextModel(text);
 	const textualProvider = new TextualMultiDocumentHighlightFeature(languages);
 	const decorations = new TextDecorationCollection<boolean>(model);
-	const editor = new CodeEditorWidget({
+	const editor = createTestCodeEditor({
 		container,
 		model,
 		input: { resource: URI.parse('file:///selection-highlighter.ts') },

@@ -29,9 +29,10 @@ registerEditorPane({
 		if (!options.diffService) throw new Error('Stanza Multi Diff requires the Workbench diff service');
 		const diffService = options.diffService;
 		const instantiationService = options.instantiationService;
+		if (!instantiationService) throw new Error('Stanza Multi Diff requires the Workbench instantiation service');
 		const resourceStore = getBrowserTextResourceStore(options.textFileService);
 		const configuration = options.configurationService;
-		return new MultiDiffEditorPane({
+		return instantiationService.createInstance(MultiDiffEditorPane, {
 			modelService: getBrowserTextModelService(resourceStore),
 			createComputationService: () => diffService.createComputationService(),
 			lineHeight: configuration?.getValue(CodeEditorConfiguration.lineHeight),
@@ -41,11 +42,11 @@ registerEditorPane({
 			showLineNumbers: configuration?.getValue(CodeEditorConfiguration.diffShowLineNumbers),
 			showInlineChanges: configuration?.getValue(CodeEditorConfiguration.diffShowInlineChanges),
 			loopChanges: configuration?.getValue(CodeEditorConfiguration.diffLoopChanges),
-			gitService: instantiationService?.getOptional(IGitService),
-			chatService: instantiationService?.getOptional(IChatService),
-			sessionsService: instantiationService?.getOptional(ISessionsManagementService),
-			editorService: instantiationService?.getOptional(IEditorService),
-			viewsService: instantiationService?.getOptional(IViewsService),
+			gitService: instantiationService.getOptional(IGitService),
+			chatService: instantiationService.getOptional(IChatService),
+			sessionsService: instantiationService.getOptional(ISessionsManagementService),
+			editorService: instantiationService.getOptional(IEditorService),
+			viewsService: instantiationService.getOptional(IViewsService),
 			fileActions: options.actionServices,
 		});
 	},

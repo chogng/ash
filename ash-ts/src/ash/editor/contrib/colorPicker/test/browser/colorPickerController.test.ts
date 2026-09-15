@@ -31,6 +31,7 @@ for (const [name, value] of Object.entries({
 
 await import('../../browser/colorPickerController.js');
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
+const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 
 suiteTeardown(() => browserEnvironment.window.close());
 
@@ -41,7 +42,7 @@ test('color picker decorates, edits, and undoes a CSS color as one operation', a
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using model = new TextModel('const color = #ff000080;');
 	const errors: unknown[] = [];
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container,
 		input: { resource: URI.file('C:\\project\\colors.css'), label: 'colors.css' },
 		languageId: 'css',
@@ -78,7 +79,7 @@ test('color detector returns the tracked range before its debounced provider ref
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using model = new TextModel('#f00');
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container,
 		input: { resource: URI.file('C:\\project\\tracked.css'), label: 'tracked.css' },
 		languageId: 'css',

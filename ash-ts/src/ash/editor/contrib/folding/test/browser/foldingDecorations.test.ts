@@ -26,6 +26,7 @@ for (const [name, value] of Object.entries({
 
 await import('../../browser/folding.js');
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
+const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { FoldingDecorationProvider } = await import('../../browser/foldingDecorations.js');
 
 suiteTeardown(() => browser.window.close());
@@ -34,7 +35,7 @@ test('FoldingDecorationProvider selects controls, highlights, and editor-owned d
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('header\nbody\nend');
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>('main')!,
 		model,
 		input: { resource: model.uri },
@@ -66,7 +67,7 @@ test('Folding contribution projects model ranges through FoldingDecorationProvid
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('{\n  value\n}');
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>('main')!,
 		model,
 		input: { resource: model.uri },

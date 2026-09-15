@@ -25,6 +25,7 @@ environment.window.HTMLCanvasElement.prototype.getContext = () => null;
 setARIAContainer(environment.window.document.body);
 
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
+const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { MessageController } = await import('../../browser/messageController.js');
 const { ReadOnlyMessageController } = await import('../../../readOnlyMessage/browser/contribution.js');
 
@@ -33,7 +34,7 @@ suiteTeardown(() => environment.window.close());
 test('read-only edit attempts use MessageController and close after cursor movement', () => {
 	const container = environment.window.document.createElement('main');
 	using model = new TextModel('alpha\nbeta');
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container,
 		model,
 		input: { resource: model.uri, readOnly: true },

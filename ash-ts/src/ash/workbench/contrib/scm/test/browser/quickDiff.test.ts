@@ -70,6 +70,7 @@ test('Registered Quick Diff creates after first render and releases decorations 
 	}
 	try {
 		const { CodeEditorWidget } = await import('../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js');
+const { createTestCodeEditor } = await import('../../../../../editor/test/browser/testCodeEditor.js');
 		const { QuickDiffEditorController, QuickDiffEditorControllerService } = await import('../../browser/quickDiffEditorController.js');
 		await import('../../browser/quickDiff.contribution.js');
 		const fixture = gitFixture();
@@ -88,7 +89,7 @@ test('Registered Quick Diff creates after first render and releases decorations 
 		services.registerInstance(IQuickDiffEditorControllerService, controllers);
 		using model = new TextModel('same\nnew\nlast', { resource: URI.file('/workspace/src/file.ts') });
 		const errors: unknown[] = [];
-		using editor = new CodeEditorWidget({
+		using editor = createTestCodeEditor({
 			container: dom.window.document.querySelector('main')!, model,
 			input: { resource: URI.file('/workspace/src/file.ts') }, languageId: model.getLanguageId(),
 			instantiationService: services, onContributionError: error => errors.push(error),

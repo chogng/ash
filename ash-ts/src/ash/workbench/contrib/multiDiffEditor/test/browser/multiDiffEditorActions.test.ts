@@ -6,7 +6,7 @@ import { URI } from '../../../../../base/common/uri.js';
 import { MenuId, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { ContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
-import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
 import type { IEditorPart as IEditorPartShape } from '../../../../browser/parts/editor/editorPart.js';
 import { ActiveEditorContext } from '../../../../common/contextkeys.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
@@ -35,7 +35,7 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 		class TrackingMultiDiffEditorPane extends MultiDiffEditorPane {
 			public readonly calls: string[] = [];
 
-			constructor() {
+			constructor(@IInstantiationService instantiationService: IInstantiationService) {
 				super({
 					modelService: {
 						acquire: async () => { throw new Error('Not used'); },
@@ -47,7 +47,7 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 						dispose() {},
 						[Symbol.dispose]() {},
 					}),
-				});
+				}, instantiationService);
 			}
 
 			public override nextChange(): undefined {
@@ -75,9 +75,9 @@ test('MultiDiff Action2 contributions use active-editor context and route to the
 		registrations.add(registerAction2(MultiDiffCollapseAllAction));
 		registrations.add(registerAction2(MultiDiffExpandAllAction));
 		registrations.add(registerAction2(MultiDiffGoToFileAction));
-		const pane = new TrackingMultiDiffEditorPane();
-		registrations.add(pane);
 		const services = new ServiceContainer();
+		const pane = services.createInstance(TrackingMultiDiffEditorPane);
+		registrations.add(pane);
 		services.registerInstance(IEditorPart, { activePane: pane } as unknown as IEditorPartShape);
 		const openedInputs: EditorInput[] = [];
 		services.registerInstance(IEditorService, {

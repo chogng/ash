@@ -24,6 +24,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { CodeEditorWidget } = await import("../../../../browser/widget/codeEditor/codeEditorWidget.js");
+const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { FindController } = await import("../../browser/findController.js");
 
 suiteTeardown(() => browserEnvironment.window.close());
@@ -178,7 +179,7 @@ function createFixture(text: string, anchor = new Position((0) + 1, (0) + 1), ac
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	const model = new TextModel(text);
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	const editor = new CodeEditorWidget({
+	const editor = createTestCodeEditor({
 		container,
 		model,
 		lineHeight: 20,

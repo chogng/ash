@@ -20,6 +20,7 @@ for (const [name, value] of Object.entries({
 
 await import('../../browser/copyPasteContribution.js');
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
+const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { CopyPasteController } = await import('../../browser/copyPasteController.js');
 
 suiteTeardown(() => environment.window.close());
@@ -28,7 +29,7 @@ test('CopyPasteController owns URI-list and bounded text-file paste extensions',
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('replace');
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>('main')!,
 		model,
 		input: { resource: model.uri },

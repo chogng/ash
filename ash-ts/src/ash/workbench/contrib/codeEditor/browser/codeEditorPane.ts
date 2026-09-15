@@ -9,8 +9,6 @@ import { assertDefined } from "../../../../base/common/types.js";
 import * as strings from '../../../../base/common/strings.js';
 import type { URI } from "../../../../base/common/uri.js";
 import { type ITextMateService } from "../../../services/textMate/common/textMateService.js";
-import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
-import { ILanguageConfigurationService } from '../../../../editor/common/languages/languageConfigurationRegistry.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { type EditorInput } from "../../../browser/parts/editor/editorInput.js";
 import { type IEditorPane } from "../../../browser/parts/editor/editorPane.js";
@@ -50,10 +48,7 @@ export interface EditorPanePart extends IDisposable {
 
 export interface EditorPanePartOptions extends CodeEditorWidgetOptions {
 	readonly textMateService?: ITextMateService;
-	readonly languageFeaturesService: ILanguageFeaturesService;
-	readonly languageConfigurationService: ILanguageConfigurationService;
 	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
-	readonly instantiationService: IInstantiationService;
 	readonly accessibilityService?: IAccessibilityService;
 }
 
@@ -134,8 +129,6 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 		private readonly resourceStore: ITextResourceStore,
 		private readonly options: EditorPaneOptions,
 		@ITextModelResourceService private readonly modelService: ITextModelResourceService,
-		@ILanguageFeaturesService private readonly languageFeaturesService: ILanguageFeaturesService,
-		@ILanguageConfigurationService private readonly languageConfigurationService: ILanguageConfigurationService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super();
@@ -143,7 +136,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 			this.dispose();
 			throw new TypeError("Code editor pane requires a text resource store");
 		}
-		this.createPart = options.createPart ?? (partOptions => new CodeEditorWidget(partOptions));
+		this.createPart = options.createPart ?? (partOptions => this.instantiationService.createInstance(CodeEditorWidget, partOptions));
 	}
 
 	create(parent: HTMLElement): void {
@@ -175,10 +168,7 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 				languageId,
 				model: modelReference.model,
 				textMateService: this.options.textMateService,
-				languageFeaturesService: this.languageFeaturesService,
-				languageConfigurationService: this.languageConfigurationService,
 				languageDiagnosticsService: this.options.languageDiagnosticsService,
-				instantiationService: this.instantiationService,
 				accessibilityService: this.options.accessibilityService,
 				lineWrapping: this.options.lineWrapping,
 				wrappingIndent: this.options.wrappingIndent,

@@ -1,3 +1,5 @@
+import { IThemeService, ThemeService } from '../../../../../platform/theme/common/themeService.js';
+import { darkColorTheme } from '../../../../../platform/theme/common/colorTheme.js';
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
@@ -42,6 +44,7 @@ for (const [name, value] of Object.entries({
 await import("../../../../../editor/editor.code.all.js");
 const { CodeEditorPane: EditorPane } = await import("../../browser/codeEditorPane.js");
 const { CodeEditorWidget } = await import('../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js');
+const { createTestCodeEditor } = await import('../../../../../editor/test/browser/testCodeEditor.js');
 const { BrowserTextModelService } = await import("../../../../services/textmodelResolver/browser/browserTextModelService.js");
 const { BrowserTextResourceStore } = await import("../../browser/browserTextResourceStore.js");
 const { EditorTextDirection } = await import("../../../../../editor/browser/view.js");
@@ -105,7 +108,7 @@ test('Stanza editor pane switches files without leaving the old model, DOM, or k
 	const parts: InstanceType<typeof CodeEditorWidget>[] = [];
 	const pane = createPane(services, resourceStore, {
 		createPart: options => {
-			const part = new CodeEditorWidget(options);
+			const part = createTestCodeEditor(options);
 			parts.push(part);
 			return part;
 		},
@@ -543,6 +546,7 @@ test('Workbench status follows cursor movement through public editor events', as
 function paneServices(models: ITextModelResourceService, languages?: LanguageFeaturesService): ServiceContainer {
 	const services = new ServiceContainer();
 	services.registerInstance(ITextModelResourceService, models);
+	services.registerSingleton(IThemeService, () => new ThemeService(darkColorTheme));
 	services.registerInstance(ILogService, new NullLoggerService());
 	if (languages) {
 		services.registerInstance(ILanguageFeaturesService, languages);
@@ -558,12 +562,16 @@ function createPane(services: ServiceContainer, resourceStore: ConstructorParame
 	return services.createInstance(EditorPane, resourceStore, options);
 }
 
-test('code editor creation rejects a missing language configuration registration', () => {
+test('code editor creation rejects a missing language configuration registration', async () => {
 	const resourceStore = new BrowserTextResourceStore(new ImmediateTextFiles('text'));
 	using models = new BrowserTextModelService(resourceStore);
 	using languages = new LanguageFeaturesService();
 	using services = new ServiceContainer();
 	services.registerInstance(ITextModelResourceService, models);
+	services.registerSingleton(IThemeService, () => new ThemeService(darkColorTheme));
 	services.registerInstance(ILanguageFeaturesService, languages);
-	assert.throws(() => createPane(services, resourceStore, {}), /languageConfigurationService/);
+	using pane = createPane(services, resourceStore, {});
+	const parent = browserEnvironment.window.document.createElement('div');
+	pane.create(parent);
+	await assert.rejects(pane.setInput({ resource: URI.file('/project/missing-service.ts') }, new AbortController().signal), /languageConfigurationService/);
 });

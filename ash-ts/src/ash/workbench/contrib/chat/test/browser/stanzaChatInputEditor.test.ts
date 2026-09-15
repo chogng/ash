@@ -1,3 +1,4 @@
+import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
@@ -16,6 +17,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
+const { createCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
 const { ChatInputEditor } = await import("../../browser/input/stanzaChatInputEditor.js");
 const { createStanzaChatCommandCompletionProvider } = await import("../../browser/input/stanzaChatCommandCompletion.js");
 const { createStanzaChatSkillCompletionProvider } = await import("../../browser/input/stanzaChatSkillCompletion.js");
@@ -64,12 +66,15 @@ test("Stanza Chat input completes slash commands before submitting", async () =>
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
-	using editor = new ChatInputEditor({ container, placeholder: "Ask Ash", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
+	using editorServices = new DisposableStore();
+	using editor = createCodeEditorServices(editorServices).createInstance(ChatInputEditor, { container, placeholder: "Ask Ash", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
 	let submissions = 0;
 	using submitListener = editor.onDidSubmit(() => submissions += 1);
 	const input = requiredElement<HTMLTextAreaElement>(editor.element, ".stanza-editor-input");
+	editor.focus();
 
 	input.dispatchEvent(beforeInputEvent(dom.window, "/"));
+	assert.equal(editor.value, "/");
 	await waitFor(() => completionLabels(editor.element).length === 2);
 	assert.deepEqual(completionLabels(editor.element), ["/new", "/history"]);
 	assert.equal(editor.element.querySelector(".stanza-editor")?.classList.contains("stanza-editor-embedded"), true);
@@ -99,7 +104,8 @@ test('Stanza Chat input discovers Skills only through the `$` selector', async (
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
 	const catalog = new SlashCommandCatalog(DesktopSlashCommands, []);
 	const skills = new SkillSelectorCatalog();
-	using editor = new ChatInputEditor({ container, placeholder: "Ask Ash", ariaLabel: "Chat message", slashCommands: catalog, skills });
+	using editorServices = new DisposableStore();
+	using editor = createCodeEditorServices(editorServices).createInstance(ChatInputEditor, { container, placeholder: "Ask Ash", ariaLabel: "Chat message", slashCommands: catalog, skills });
 	skills.setSkills([{
 		name: "commit",
 		description: "Draft a commit message",
@@ -107,6 +113,7 @@ test('Stanza Chat input discovers Skills only through the `$` selector', async (
 		skill: { id: { source: "user:skill-source:test", name: "commit" }, version: { type: "pinnedDigest", digest: "sha256:commit" } },
 	}]);
 	const input = requiredElement<HTMLTextAreaElement>(editor.element, ".stanza-editor-input");
+	editor.focus();
 
 	input.dispatchEvent(beforeInputEvent(dom.window, '$'));
 	await waitFor(() => completionLabels(editor.element).length === 1);
@@ -123,12 +130,15 @@ test("Stanza Chat input restores message behavior when the slash is deleted", as
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
-	using editor = new ChatInputEditor({ container, placeholder: "Ask Ash", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
+	using editorServices = new DisposableStore();
+	using editor = createCodeEditorServices(editorServices).createInstance(ChatInputEditor, { container, placeholder: "Ask Ash", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
 	const changes: string[] = [];
 	using changeListener = editor.onDidChange(value => changes.push(value));
 	const input = requiredElement<HTMLTextAreaElement>(editor.element, ".stanza-editor-input");
+	editor.focus();
 
 	input.dispatchEvent(beforeInputEvent(dom.window, "/"));
+	assert.equal(editor.value, "/");
 	await waitFor(() => completionLabels(editor.element).length > 0);
 	input.dispatchEvent(beforeInputEvent(dom.window, "x"));
 	await waitFor(() => editor.element.querySelector(".stanza-editor-completion.visible") === null);
@@ -150,7 +160,8 @@ test("Stanza Chat input starts at the InputPart default height and still grows w
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = requiredElement<HTMLElement>(dom.window.document, "main");
-	using editor = new ChatInputEditor({ container, placeholder: "Ask Ash", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
+	using editorServices = new DisposableStore();
+	using editor = createCodeEditorServices(editorServices).createInstance(ChatInputEditor, { container, placeholder: "Ask Ash", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
 
 	assert.equal(editor.element.style.height, "106px");
 	editor.value = Array.from({ length: 12 }, (_, index) => `Line ${index + 1}`).join("\n");

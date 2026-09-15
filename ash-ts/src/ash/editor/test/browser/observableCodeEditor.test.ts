@@ -29,6 +29,7 @@ for (const [name, value] of Object.entries({
 
 const { observableCodeEditor } = await import('../../browser/observableCodeEditor.js');
 const { CodeEditorWidget } = await import('../../browser/widget/codeEditor/codeEditorWidget.js');
+const { createTestCodeEditor } = await import('./testCodeEditor.js');
 
 suiteTeardown(() => browserEnvironment.window.close());
 
@@ -37,7 +38,7 @@ test('observable code editor tracks canonical model, selections, and layout', ()
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using model = new TextModel('alpha');
-	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
+	using editor = createTestCodeEditor({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
 	using observableEditor = observableCodeEditor(editor);
 
 	assert.strictEqual(observableCodeEditor(editor), observableEditor);
@@ -74,7 +75,7 @@ test('observable code editor line APIs use one-based line numbers', () => {
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using model = new TextModel('alpha\nbeta');
-	using editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
+	using editor = createTestCodeEditor({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
 	using observableEditor = observableCodeEditor(editor);
 	editor.layout({ width: 320, height: 80 });
 
@@ -93,7 +94,7 @@ test('observable code editor owns reactive decorations and follows editor dispos
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using model = new TextModel('alpha');
-	const editor = new CodeEditorWidget({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
+	const editor = createTestCodeEditor({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
 	const observableEditor = observableCodeEditor(editor);
 	const source = observableValue('decorations', [{ range: new Range(1, 1, 1, 3), options: { description: 'observable' } }]);
 	using decorationOwner = observableEditor.setDecorations(source);
@@ -113,7 +114,7 @@ test('observable code editor follows model attachment changes without retaining 
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using first = new TextModel('first');
 	using second = new TextModel('second');
-	using editor = new CodeEditorWidget({ container, model: first, input: { resource: first.uri }, languageId: first.getLanguageId(), lineHeight: 20 });
+	using editor = createTestCodeEditor({ container, model: first, input: { resource: first.uri }, languageId: first.getLanguageId(), lineHeight: 20 });
 	using observableEditor = observableCodeEditor(editor);
 	const values: string[] = [];
 	using reaction = autorun(reader => {
@@ -142,7 +143,7 @@ test('observable decorations follow the attached model and release old ranges', 
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	using first = new TextModel('first');
 	using second = new TextModel('second');
-	using editor = new CodeEditorWidget({ container, model: first, input: { resource: first.uri }, languageId: first.getLanguageId(), lineHeight: 20 });
+	using editor = createTestCodeEditor({ container, model: first, input: { resource: first.uri }, languageId: first.getLanguageId(), lineHeight: 20 });
 	using observableEditor = observableCodeEditor(editor);
 	const source = observableValue('switch-decorations', [{ range: new Range(1, 1, 1, 2), options: { description: 'switch' } }]);
 	using owner = observableEditor.setDecorations(source);

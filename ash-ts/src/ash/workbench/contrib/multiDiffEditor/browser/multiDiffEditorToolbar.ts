@@ -1,3 +1,4 @@
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { addDisposableListener, h, stopEvent } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
@@ -41,7 +42,7 @@ export class MultiDiffEditorToolbar extends Disposable {
 	private readonly overlay = this._register(new MutableDisposable<DisposableStore>());
 	private busy = false;
 
-	constructor(private readonly options: MultiDiffEditorToolbarOptions) {
+	constructor(private readonly options: MultiDiffEditorToolbarOptions, @IInstantiationService private readonly instantiationService: IInstantiationService) {
 		super();
 		const ownerDocument = options.container.ownerDocument;
 		this.domNode = h(ownerDocument, 'div');
@@ -222,7 +223,7 @@ export class MultiDiffEditorToolbar extends Disposable {
 		headingDomNode.textContent = 'Commit changes';
 		const editorHostDomNode = h(ownerDocument, 'div');
 		editorHostDomNode.className = 'stanza-multi-diff-commit-editor';
-		const editor = store.add(new CommitMessageEditor(editorHostDomNode));
+		const editor = store.add(this.instantiationService.createInstance(CommitMessageEditor, editorHostDomNode));
 		const includeDomNode = h(ownerDocument, 'label');
 		includeDomNode.className = 'stanza-multi-diff-include-unstaged';
 		const includeInputDomNode = h(ownerDocument, 'input');
@@ -333,9 +334,9 @@ class CommitMessageEditor extends Disposable {
 	readonly model = this._register(new TextModel());
 	private readonly editor: CodeEditorWidget;
 
-	constructor(private readonly container: HTMLElement) {
+	constructor(private readonly container: HTMLElement, @IInstantiationService instantiationService: IInstantiationService) {
 		super();
-		this.editor = this._register(new CodeEditorWidget({
+		this.editor = this._register(instantiationService.createInstance(CodeEditorWidget, {
 			container,
 			model: this.model,
 			input: { resource: this.model.uri },

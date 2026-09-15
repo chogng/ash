@@ -20,6 +20,7 @@ for (const [name, value] of Object.entries({
 environment.window.HTMLCanvasElement.prototype.getContext = () => null;
 
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
+const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { MiddleScrollController } = await import('../../browser/middleScrollController.js');
 
 suiteTeardown(() => environment.window.close());
@@ -28,7 +29,7 @@ test('middle click opens a scroll session and keyboard input closes it', () => {
 	const container = environment.window.document.createElement('main');
 	environment.window.document.body.append(container);
 	using model = new TextModel('one\ntwo\nthree');
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container,
 		model,
 		input: { resource: model.uri },
@@ -62,7 +63,7 @@ test('middle click opens a scroll session and keyboard input closes it', () => {
 test('disabled middle-click scrolling does not create a scroll session', () => {
 	const container = environment.window.document.createElement('main');
 	using model = new TextModel('one\ntwo\nthree');
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container,
 		model,
 		input: { resource: model.uri },
@@ -82,7 +83,7 @@ test('disabled middle-click scrolling does not create a scroll session', () => {
 test('pointer displacement continuously scrolls and release ends an active movement', async () => {
 	const container = environment.window.document.createElement('main');
 	using model = new TextModel(Array.from({ length: 80 }, (_, index) => `${'line content '.repeat(20)}${index}`).join('\n'));
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container,
 		model,
 		input: { resource: model.uri },

@@ -1,15 +1,19 @@
+import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
+import { IThemeService } from '../../../platform/theme/common/themeService.js';
+import { ILanguageConfigurationService } from '../../common/languages/languageConfigurationRegistry.js';
+import { ILanguageFeaturesService } from '../../common/services/languageFeatures.js';
 import { URI } from '../../../base/common/uri.js';
 import { toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { bindColorTheme } from '../../../platform/theme/browser/themeStyles.js';
 import type { ICodeEditor } from '../../browser/editorBrowser.js';
 import type { IDimension } from '../../common/core/2d/dimension.js';
 import type { ICodeEditorViewState } from '../../common/editorCommon.js';
-import type { ICodeEditorService } from '../../browser/services/codeEditorService.js';
+import { ICodeEditorService } from '../../browser/services/codeEditorService.js';
 import { CodeEditorWidget, type CodeEditorWidgetOptions } from '../../browser/widget/codeEditor/codeEditorWidget.js';
 import type { ILanguageSelection, ILanguageService } from '../../common/languages/language.js';
 import type { ITextModel } from '../../common/model.js';
 import { TextModel } from '../../common/model/textModel.js';
-import type { IModelService } from '../../common/services/model.js';
+import { IModelService } from '../../common/services/model.js';
 
 export interface IStandaloneCodeEditor extends ICodeEditor, IDisposable {
 	getModel(): TextModel | null;
@@ -24,9 +28,19 @@ export interface IStandaloneCodeEditor extends ICodeEditor, IDisposable {
 export class StandaloneEditor extends CodeEditorWidget implements IStandaloneCodeEditor {
 	private modelToDispose: TextModel | null;
 
-	constructor(options: CodeEditorWidgetOptions, modelToDispose: TextModel, ownsModel: boolean, themeService: Parameters<typeof bindColorTheme>[0], codeEditorService: ICodeEditorService, private readonly modelService: IModelService) {
+	constructor(
+		options: CodeEditorWidgetOptions,
+		modelToDispose: TextModel,
+		ownsModel: boolean,
+		@IInstantiationService instantiationService: IInstantiationService,
+		@IThemeService themeService: IThemeService,
+		@ILanguageConfigurationService languageConfigurationService: ILanguageConfigurationService,
+		@ILanguageFeaturesService languageFeaturesService: ILanguageFeaturesService,
+		@ICodeEditorService codeEditorService: ICodeEditorService,
+		@IModelService private readonly modelService: IModelService,
+	) {
 		codeEditorService.willCreateCodeEditor();
-		super(options);
+		super(options, instantiationService, themeService, languageConfigurationService, languageFeaturesService);
 		this.modelToDispose = ownsModel ? modelToDispose : null;
 		try {
 			this._register(bindColorTheme(themeService, options.container));

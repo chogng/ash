@@ -20,6 +20,7 @@ for (const [name, value] of Object.entries({
 })) Object.defineProperty(globalThis, name, { configurable: true, value });
 
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
+const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { CursorUndoRedoController } = await import('../../browser/cursorUndo.js');
 
 suiteTeardown(() => environment.window.close());
@@ -28,7 +29,7 @@ test('CursorUndoRedoController records canonical same-version selection events',
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha');
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>('main')!,
 		model,
 		input: { resource: model.uri },
@@ -55,7 +56,7 @@ test('CursorUndoRedoController clears cursor history after document changes', ()
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha');
-	using editor = new CodeEditorWidget({
+	using editor = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>('main')!,
 		model,
 		input: { resource: model.uri },
