@@ -147,7 +147,12 @@ def main() -> int:
     missing_members = EXPECTED_APP_MEMBERS - members
     if missing_members:
         fail(f"root workspace is missing app members: {sorted(missing_members)}")
-    if 'default-members = ["app"]' not in root_manifest:
+    default_members = re.search(
+        r"default-members\s*=\s*\[(.*?)\]",
+        root_manifest,
+        re.DOTALL,
+    )
+    if default_members is None or '"app"' not in default_members.group(1):
         fail("root workspace must default to the app product")
 
     retired_paths = sorted(

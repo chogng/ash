@@ -23,6 +23,7 @@ Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保
 - 开发者根据下表自行安装并确认工具版本；`cargo-insta` 等测试维护工具按任务需要另行准备。项目依赖安装入口保留 Node、pnpm 版本校验，编译器和 SDK 缺项由构建工具报告。
 - Windows 本机拥有 MSVC、Windows SDK 和桌面运行环境。安装后使用对应目标架构的 Visual Studio Developer PowerShell 构建。LLVM 的 `bin` 目录需在构建终端 PATH 中；使用自定义 LLVM 路径时，在该终端设置 `LIBCLANG_PATH` 指向含 `libclang.dll` 的目录。无需全局设置 `CC`、`CXX`。
 - 普通构建和启动入口只准备项目依赖与产物，不调用系统工具安装器。分别用 `just ash`、`just ash-desktop`、`just app` 启动产品。
+- Bazel 由 Bazelisk 管理；它读取仓库根的 [`.bazelversion`](../.bazelversion)，不需要手动选择 Bazel 版本。Windows 运行测试前需让 `BAZEL_SH` 指向 Git Bash，例如 `C:\Program Files\Git\bin\bash.exe`。
 - 当前未提供 Dev Container。后续如提供，它只拥有容器内的 Linux 开发工具与依赖；Windows 桌面构建、调试和平台验证仍在 Windows 上完成。
 
 | 工具 | 版本要求与来源 | 安装来源或组件 |
@@ -38,6 +39,7 @@ Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保
 | just | 未固定版本，命令需在 PATH 中可用 | winget `Casey.Just` |
 | CMake | 未固定版本，命令需在 PATH 中可用 | cmake.org 或 winget `Kitware.CMake` |
 | LLVM/Clang | 未固定版本；需要 Clang 和 libclang | LLVM 官方发行包或 winget `LLVM.LLVM` |
+| Bazelisk | [`.bazelversion`](../.bazelversion) 固定 Bazel 版本 | winget `Bazel.Bazelisk`；CI 使用 `setup-bazel` |
 
 ### 项目命令
 
@@ -57,6 +59,12 @@ Node 工具、发布包组装与 Desktop 单测使用 Node 24 LTS，具体版本
 | `just test-python [scripts|ash-code|build]` | 使用锁定的 Python 工具环境运行全部单元测试，或只运行指定 owner 的测试 |
 | `just dependencies` | 检查 Rust 依赖声明、间接依赖边界、已审查的多版本集合和无用依赖 |
 | `just bench-build <package> [--profile dev]` | 记录一个 Cargo package 的构建耗时、RSS 和产物大小 |
+
+Bazel 边界测试使用 Bazelisk，命令会按照 `.bazelversion` 自动选择 Bazel：
+
+```sh
+bazelisk test //app:app_ci --test_output=errors
+```
 | `pnpm build` | 构建 Electron Main、Preload 和当前 `ASH_PRODUCT` Renderer |
 | `pnpm build:desktop` | 构建 Electron Main、Preload 和当前 `ASH_PRODUCT` Renderer |
 | `pnpm test:build` | 运行构建工具自身的单元测试 |

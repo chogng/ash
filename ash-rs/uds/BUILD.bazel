@@ -4,3 +4,5 @@ ash_rust_crate(
     name = "uds",
     crate_name = "ash_uds",
 )
+
+exports_files(["LICENSE-APACHE", "NOTICE"])

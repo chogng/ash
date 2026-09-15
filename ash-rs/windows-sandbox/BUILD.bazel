@@ -11,3 +11,5 @@ ash_rust_binary(
     crate_root = "src/main.rs",
     deps = [":windows-sandbox"],
 )
+
+exports_files(["LICENSE-APACHE", "NOTICE"])
