@@ -1,9 +1,4 @@
 use super::*;
-use std::fs;
-use tempfile::TempDir;
-use tokenizers::Tokenizer;
-use tokenizers::models::wordlevel::WordLevel;
-use tokenizers::pre_tokenizers::whitespace::WhitespaceSplit;
 use ash_protocol::ContentDigest;
 use ash_protocol::ContentPart;
 use ash_protocol::ImageDetail;
@@ -13,6 +8,11 @@ use ash_protocol::ModelRequest;
 use ash_protocol::ProviderId;
 use ash_protocol::ToolDefinition;
 use ash_protocol::ToolName;
+use std::fs;
+use tempfile::TempDir;
+use tokenizers::Tokenizer;
+use tokenizers::models::wordlevel::WordLevel;
+use tokenizers::pre_tokenizers::whitespace::WhitespaceSplit;
 
 #[test]
 fn registered_assets_render_the_template_and_count_the_result() {

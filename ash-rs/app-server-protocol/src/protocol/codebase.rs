@@ -1,9 +1,9 @@
+use ash_protocol::CommandId;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::path::PathBuf;
 use ts_rs::TS;
-use ash_protocol::CommandId;
 
 use crate::protocol::config::ConfigCommandResult;
 

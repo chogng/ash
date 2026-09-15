@@ -1,6 +1,7 @@
 //! Durable task notes and bounded model access to its authorized Thread history.
 mod store;
 mod tool;
+use ash_core::ThreadController;
 use extension_api::CapabilityToolContribution;
 use extension_api::CapabilityToolContributor;
 use extension_api::ExtensionError;
@@ -12,7 +13,6 @@ use std::sync::Weak;
 pub use store::Note;
 pub use store::NotesStore;
 use tools::ToolExecutor;
-use ash_core::ThreadController;
 
 struct HistoryNotes {
     threads: Weak<ThreadController>,

@@ -1,3 +1,4 @@
+import { text, h } from '../../../../../base/browser/dom.js';
 import { EditContext } from './editContextFactory.js';
 
 type DebugMarker = { readonly dispose: () => void };
@@ -194,16 +195,16 @@ export class DebugEditContext {
 		element.style.border = '1px solid black';
 		const before = this.text.slice(0, this.selectionStart);
 		const selected = this.text.slice(this.selectionStart, this.selectionEnd) || '|';
-		element.append(this.document.createTextNode(before));
-		const highlight = this.document.createElement('span');
+		element.append(text(this.document, before));
+		const highlight = h(this.document, 'span');
 		highlight.style.background = 'yellow';
 		highlight.textContent = selected;
-		element.append(highlight, this.document.createTextNode(this.text.slice(this.selectionEnd) + ' '));
+		element.append(highlight, text(this.document, this.text.slice(this.selectionEnd) + ' '));
 		return appendMarker(this.document, element);
 	}
 
 	private createMarker(): HTMLDivElement {
-		const element = this.document.createElement('div');
+		const element = h(this.document, 'div');
 		element.className = 'debug-rect-marker';
 		element.setAttribute('aria-hidden', 'true');
 		element.style.position = 'absolute';

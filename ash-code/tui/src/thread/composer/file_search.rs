@@ -1,11 +1,11 @@
 //! Background orchestration for directory-path mention searches.
 
-use std::path::PathBuf;
-use std::sync::mpsc::Receiver;
-use std::sync::mpsc::TryRecvError;
 use ash_file_search::PathSearchHandle;
 use ash_file_search::PathSearchOptions;
 use ash_file_search::PathSearchSnapshot;
+use std::path::PathBuf;
+use std::sync::mpsc::Receiver;
+use std::sync::mpsc::TryRecvError;
 
 #[derive(Debug)]
 pub(crate) struct FileSearchManager {

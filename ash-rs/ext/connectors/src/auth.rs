@@ -10,13 +10,13 @@ use crate::ConnectorCredentialRef;
 use crate::ConnectorError;
 use crate::ConnectorId;
 use crate::ConnectorSnapshotGeneration;
-use sha2::Digest;
-use sha2::Sha256;
 use ash_secrets::DeleteSecretOutcome;
 use ash_secrets::SecretKey;
 use ash_secrets::SecretStore;
 use ash_secrets::SecretStoreError;
 use ash_secrets::SecretValue;
+use sha2::Digest;
+use sha2::Sha256;
 
 use crate::ConnectorAuthority;
 use crate::ConnectorAuthorityCommand;

@@ -5,8 +5,8 @@ use crate::{
     NormalizedModelProviderConfig, ProviderConfigError, ProviderDefinition, ProviderId,
     model_catalog, providers,
 };
-use std::collections::BTreeMap;
 use ash_protocol::ModelRef;
+use std::collections::BTreeMap;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RegistryMergePolicy {

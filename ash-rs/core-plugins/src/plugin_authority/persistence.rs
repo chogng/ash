@@ -3,9 +3,9 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
+use ash_utils_path::write_atomically;
 use serde::Deserialize;
 use serde::Serialize;
-use ash_utils_path::write_atomically;
 
 use super::ActivePlugin;
 use super::InstalledKey;

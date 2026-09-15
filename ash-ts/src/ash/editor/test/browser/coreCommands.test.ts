@@ -138,7 +138,7 @@ test("core commands reject dependencies from different text models", () => {
 		textMeasurer: new FixedTextMeasurer(),
 	});
 	const input = h(dom.window.document, "textarea") as unknown as HTMLTextAreaElement;
-	using otherViewport = new View({ container: dom.window.document.createElement('div'), model: otherModel, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
+	using otherViewport = new View({ container: h(dom.window.document, 'div'), model: otherModel, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
 	assert.throws(() => installCoreTextEditorCommands(input, viewport, otherViewport.testViewModel), /must share one text model/);
 	dom.window.close();
 });

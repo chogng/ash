@@ -5,13 +5,13 @@ use super::projection::runtime_failure;
 use super::registration_allows_operation;
 use super::sessions::InvocationSessionStore;
 use super::source::stable_extension_id;
-use serde_json::json;
-use std::time::Duration;
-use std::time::Instant;
 use ash_editor_extension_host::ExtensionHostError;
 use ash_editor_extension_host::InvokeResult;
 use ash_editor_extension_host::LanguageProviderOperation;
 use ash_editor_extension_host::RegistrationKind;
+use serde_json::json;
+use std::time::Duration;
+use std::time::Instant;
 
 #[test]
 fn stable_id_combines_plugin_and_manifest_local_identity() {

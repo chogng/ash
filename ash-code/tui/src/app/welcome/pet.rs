@@ -4,14 +4,14 @@ mod asset {
     include!(concat!(env!("OUT_DIR"), "/welcome_pet.rs"));
 }
 
-use ratatui::buffer::Buffer;
-use ratatui::layout::Rect;
-use ratatui::style::Color;
-use ratatui::widgets::Widget;
 use ash_sprite::Rgb;
 use ash_sprite::TerminalSprite;
 #[cfg(test)]
 use ash_sprite::TerminalSpriteSheet;
+use ratatui::buffer::Buffer;
+use ratatui::layout::Rect;
+use ratatui::style::Color;
+use ratatui::widgets::Widget;
 
 pub(in crate::app) struct PetWidget<'a> {
     sprite: TerminalSprite<'a>,

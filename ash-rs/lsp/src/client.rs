@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::time::Duration;
 
+use ash_async_utils::CancellationToken;
 use lsp_types::notification::{
     DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument, DidSaveTextDocument, Exit,
     Initialized,
@@ -17,7 +18,6 @@ use lsp_types::{
 use tokio::io::{AsyncBufRead, AsyncReadExt, AsyncWrite, BufReader};
 use tokio::process::Child;
 use tokio::sync::Mutex;
-use ash_async_utils::CancellationToken;
 
 use crate::capability::DynamicCapabilityRegistry;
 use crate::document::OpenDocument;

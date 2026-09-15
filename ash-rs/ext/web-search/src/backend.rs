@@ -1,11 +1,11 @@
 use std::sync::Arc;
 
-use url::Url;
 use ash_async_utils::CancellationToken;
 use ash_client::ClientRequest;
 use ash_client::OperationClient;
 use ash_client::RetryPolicy;
 use ash_http_client::HttpHeader;
+use url::Url;
 
 use crate::WebSearchError;
 use crate::WebSearchRequest;

@@ -1,7 +1,5 @@
 use crate::ConfigError;
 use crate::DirId;
-use serde::Deserialize;
-use serde::Serialize;
 use ash_execpolicy::ExecPolicyDefault;
 use ash_execpolicy::ExecPolicyLayer;
 use ash_execpolicy::ExecPolicyLayerId;
@@ -9,6 +7,8 @@ use ash_execpolicy::ExecPolicyLayerKind;
 use ash_execpolicy::ExecPolicyRule;
 use ash_execpolicy::ExecPolicyRuleId;
 use ash_execpolicy::ExecPolicySnapshot;
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Durable user-owned execution-policy rules.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]

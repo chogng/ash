@@ -2,7 +2,6 @@ use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
-use serde::Deserialize;
 use ash_app_server_client::AppServerSession;
 use ash_app_server_protocol::protocol::common::ClientInfo;
 use ash_install_context::InstallContext;
@@ -18,6 +17,7 @@ use ash_remote_connections::RemoteRuntimeCatalogUpdater;
 use ash_remote_connections::RemoteRuntimeDownloadCache;
 use ash_remote_connections::SshAppServerConnectionOptions;
 use ash_remote_connections::SshRemoteRuntimeInstaller;
+use serde::Deserialize;
 
 const DEFAULT_REMOTE_RUNTIME: &str = "ash-remote-server";
 const PACKAGED_REMOTE_RUNTIME_CATALOG: &str = "ash-remote-runtimes/catalog.json";

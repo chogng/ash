@@ -1,9 +1,9 @@
-use crate::RestoreMessageRequest;
 use super::CreateThreadRequest;
 use super::ThreadController;
 use super::command_thread_id;
 use super::validate_thread_title;
 use crate::CoreError;
+use crate::RestoreMessageRequest;
 use crate::ThreadSnapshot;
 use crate::ThreadWorktreeBinder;
 use crate::ThreadWorktreeBindingRequest;

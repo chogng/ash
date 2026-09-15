@@ -2,7 +2,6 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use crate::FileEditorHost;
-use serde_json::Value;
 use ash_app_server_protocol::protocol::language::LanguageCodeActionDiagnosticDto;
 use ash_app_server_protocol::protocol::language::LanguageCommandDto;
 use ash_app_server_protocol::protocol::language::LanguageCompletionInsertTextFormatDto;
@@ -40,6 +39,7 @@ use ash_lsp_manager::LanguageRequestKind;
 use ash_lsp_manager::LanguageServiceDocument;
 use ash_lsp_manager::LanguageTextEdit;
 use ash_lsp_manager::LanguageTextRange;
+use serde_json::Value;
 
 use super::FileEditorDocumentDiagnostics;
 use super::FileEditorLanguageService;

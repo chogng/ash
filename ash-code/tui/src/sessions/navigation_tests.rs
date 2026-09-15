@@ -3,15 +3,15 @@ use super::SessionNavigation;
 use super::SessionScreen;
 use crate::sessions::Command;
 use crate::sessions::SessionsState;
-use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyEventKind;
-use crossterm::event::KeyModifiers;
 use ash_protocol::Session;
 use ash_protocol::SessionId;
 use ash_protocol::SessionManagerStatus;
 use ash_protocol::SessionStatus;
 use ash_protocol::ThreadId;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyEventKind;
+use crossterm::event::KeyModifiers;
 
 #[test]
 fn manager_is_directly_left_of_the_active_session() {

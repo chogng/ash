@@ -1,3 +1,4 @@
+import { h } from '../../../../../base/browser/dom.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -26,7 +27,7 @@ const { MiddleScrollController } = await import('../../browser/middleScrollContr
 suiteTeardown(() => environment.window.close());
 
 test('middle click opens a scroll session and keyboard input closes it', () => {
-	const container = environment.window.document.createElement('main');
+	const container = h(environment.window.document, 'main');
 	environment.window.document.body.append(container);
 	using model = new TextModel('one\ntwo\nthree');
 	using editor = createTestCodeEditor({
@@ -61,7 +62,7 @@ test('middle click opens a scroll session and keyboard input closes it', () => {
 });
 
 test('disabled middle-click scrolling does not create a scroll session', () => {
-	const container = environment.window.document.createElement('main');
+	const container = h(environment.window.document, 'main');
 	using model = new TextModel('one\ntwo\nthree');
 	using editor = createTestCodeEditor({
 		container,
@@ -81,7 +82,7 @@ test('disabled middle-click scrolling does not create a scroll session', () => {
 });
 
 test('pointer displacement continuously scrolls and release ends an active movement', async () => {
-	const container = environment.window.document.createElement('main');
+	const container = h(environment.window.document, 'main');
 	using model = new TextModel(Array.from({ length: 80 }, (_, index) => `${'line content '.repeat(20)}${index}`).join('\n'));
 	using editor = createTestCodeEditor({
 		container,

@@ -4,7 +4,6 @@ use super::config_operations::config_command_result;
 use super::config_operations::config_operation_error;
 use super::decode;
 use super::result;
-use serde_json::Value;
 use ash_app_server_protocol::protocol::config::HookActionDto;
 use ash_app_server_protocol::protocol::config::HookConfigDto;
 use ash_app_server_protocol::protocol::config::HookEnablementDto;
@@ -32,6 +31,7 @@ use ash_config::PluginRequest;
 use ash_config::PluginRequestEnablement;
 use ash_config::PluginVersion;
 use ash_config::UserConfigCommand;
+use serde_json::Value;
 
 impl AppServer {
     pub(super) fn plugin_request_upsert(&self, params: &Value) -> Result<Value, RpcError> {

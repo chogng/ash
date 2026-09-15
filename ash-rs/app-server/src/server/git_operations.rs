@@ -4,9 +4,6 @@ use super::decode;
 use super::result;
 use crate::git_service::GitServiceError;
 use crate::server::git_runtime::GitRuntimeError;
-use serde_json::Value;
-use std::num::NonZeroUsize;
-use std::path::PathBuf;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::git::GitBranchListResult;
 use ash_app_server_protocol::protocol::git::GitBranchSwitchParams;
@@ -21,6 +18,9 @@ use ash_app_server_protocol::protocol::git::GitOperationResult;
 use ash_app_server_protocol::protocol::git::GitPathsParams;
 use ash_app_server_protocol::protocol::git::GitRepositoryParams;
 use ash_git::GitError;
+use serde_json::Value;
+use std::num::NonZeroUsize;
+use std::path::PathBuf;
 
 const MAX_GIT_GRAPH_PAGE_SIZE: usize = 1000;
 

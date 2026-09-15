@@ -1,8 +1,8 @@
+use ash_collaboration_server::CollaborationServerOptions;
+use ash_collaboration_server::run;
 use std::env;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use ash_collaboration_server::CollaborationServerOptions;
-use ash_collaboration_server::run;
 
 fn main() {
     if let Err(error) = process_hardening::initialize() {

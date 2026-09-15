@@ -1,8 +1,8 @@
-use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use ash_file_access::DirId;
 use ash_model_provider_config::ModelProviderConfig;
 use ash_protocol::ModelRef;
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 /// Exact model and endpoint configuration authorized to receive one Directory's source text.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

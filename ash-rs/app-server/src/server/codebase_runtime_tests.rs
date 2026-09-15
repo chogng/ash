@@ -1,7 +1,7 @@
 use super::*;
+use ash_state::StateRuntime;
 use std::fs;
 use tempfile::TempDir;
-use ash_state::StateRuntime;
 
 fn dir_fixture() -> TempDir {
     let directory = tempfile::tempdir().expect("directory");

@@ -1,7 +1,7 @@
 use crate::LocalTokenizerError;
-use std::path::PathBuf;
 use ash_protocol::ContentDigest;
 use ash_protocol::ModelRef;
+use std::path::PathBuf;
 
 /// One immutable local tokenizer file with both upstream revision provenance and byte identity.
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -1,3 +1,4 @@
+import { h } from '../../../../../base/browser/dom.js';
 import { IThemeService, ThemeService } from '../../../../../platform/theme/common/themeService.js';
 import { darkColorTheme } from '../../../../../platform/theme/common/colorTheme.js';
 import assert from "node:assert/strict";
@@ -77,7 +78,7 @@ test("Stanza editor pane loads, lays out, focuses, hides, and clears one editor 
 	assert.equal(parent.querySelectorAll(".stanza-editor-pane").length, 1);
 	assert.equal(parent.querySelectorAll(".stanza-editor").length, 1);
 	const editor = parent.querySelector<HTMLElement>(".stanza-editor")!;
-	const expectedFont = dom.window.document.createElement("div");
+	const expectedFont = h(dom.window.document, "div");
 	expectedFont.style.fontFamily = `"Fira Code", monospace, ${EDITOR_FONT_DEFAULTS.fontFamily}`;
 	assert.equal(editor.dir, "rtl");
 	assert.equal(editor.style.fontFamily, expectedFont.style.fontFamily);
@@ -571,7 +572,7 @@ test('code editor creation rejects a missing language configuration registration
 	services.registerSingleton(IThemeService, () => new ThemeService(darkColorTheme));
 	services.registerInstance(ILanguageFeaturesService, languages);
 	using pane = createPane(services, resourceStore, {});
-	const parent = browserEnvironment.window.document.createElement('div');
+	const parent = h(browserEnvironment.window.document, 'div');
 	pane.create(parent);
 	await assert.rejects(pane.setInput({ resource: URI.file('/project/missing-service.ts') }, new AbortController().signal), /languageConfigurationService/);
 });

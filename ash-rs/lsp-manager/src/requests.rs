@@ -2,7 +2,6 @@
 
 use std::path::PathBuf;
 
-use serde_json::Value;
 use ash_lsp::lsp_types::{
     CallHierarchyIncomingCall, CallHierarchyItem, CallHierarchyOutgoingCall, CodeAction,
     CodeActionOrCommand, CompletionItem, CompletionItemKind, CompletionResponse,
@@ -13,6 +12,7 @@ use ash_lsp::lsp_types::{
     PositionEncodingKind, PrepareRenameResponse, Range, ResourceOp, SignatureHelp, SymbolKind,
     TextDocumentEdit, TextEdit, TypeHierarchyItem, Uri, WorkspaceEdit, WorkspaceSymbolResponse,
 };
+use serde_json::Value;
 
 use crate::document_features::LanguageCommand;
 use crate::projection::{byte_offset_for_position, byte_range_for_lsp_range, project_diagnostic};

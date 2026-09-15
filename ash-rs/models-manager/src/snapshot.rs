@@ -1,12 +1,12 @@
 use crate::CatalogScopeKey;
-use std::fmt;
-use std::sync::Arc;
 use ash_protocol::ModelAvailability;
 use ash_protocol::ModelCatalogFreshness;
 use ash_protocol::ModelInfo;
 use ash_protocol::ModelLifecycle;
 use ash_protocol::ModelMetadataQuality;
 use ash_protocol::ModelRef;
+use std::fmt;
+use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct CatalogGeneration(u64);

@@ -4,7 +4,6 @@ use crate::{
     CapabilityKind, CapabilitySet, GrantId, ProcessInvocationKind, ResolvedAction,
     SandboxDenialEvidence, UnsandboxedGrant, UserAllowlist,
 };
-use std::fmt;
 use ash_async_utils::{CancellationSource, CancellationToken};
 use ash_execpolicy::ExecPolicyDefault;
 use ash_execpolicy::ExecPolicyEffect;
@@ -16,6 +15,7 @@ use ash_execpolicy::ExecPolicyRuleId;
 use ash_execpolicy::ExecPolicySelector;
 use ash_execpolicy::ExecPolicySnapshot;
 use ash_sandboxing::{FileSystemAccess, NetworkAccess, SandboxPolicy};
+use std::fmt;
 
 #[derive(Clone, Debug)]
 struct TestClassifierError(&'static str);

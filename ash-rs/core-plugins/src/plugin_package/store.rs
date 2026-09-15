@@ -5,13 +5,13 @@ use crate::PluginErrorKind;
 use crate::PluginPackageDigest;
 use crate::PluginPackageSource;
 use crate::plugin_package::snapshot::create_stable_local_snapshot_with_observer;
+use ash_utils_path::CanonicalPathRoot;
+use ash_utils_path::NoSymlinkPathError;
+use ash_utils_path::NoSymlinkPathStatus;
 use std::fmt::Write as _;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
-use ash_utils_path::CanonicalPathRoot;
-use ash_utils_path::NoSymlinkPathError;
-use ash_utils_path::NoSymlinkPathStatus;
 
 /// Immutable package object selected for one Plugin activation generation.
 #[derive(Clone, Debug)]

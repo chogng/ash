@@ -91,3 +91,7 @@ private visible = false;
 - Keep short, complete algorithms together. Do not extract helpers that only rename consecutive steps.
 - Extract shared semantics, independent lifecycle, complex mechanism, or substantial duplication.
 - Judge complexity by concepts and cross-file jumps, not line count alone.
+
+## Learnings
+
+* 命名前先核对本地 VS Code 中同职责文件的路径和名称；只有职责对应时才沿用，不为统一外观改变职责、机械拆分文件或套用其他语言的命名习惯。TypeScript 实现以主要公开职责命名，单模块测试沿用模块名并加 `.test.ts`，独立场景可加明确的点分后缀。结合目录选择最短且不歧义的文件名；只有需要区分真实入口时才添加场景限定。没有上游对应名称时，明确说明是本地命名决定，不把自创名称称为 VS Code 对齐。

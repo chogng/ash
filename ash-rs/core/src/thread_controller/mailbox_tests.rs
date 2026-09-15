@@ -3,6 +3,9 @@ use crate::CreateThreadRequest;
 use crate::InMemoryThreadStore;
 use crate::ThreadController;
 use crate::ThreadSnapshot;
+use ash_protocol::SessionId;
+use ash_protocol::ThreadId;
+use ash_protocol::TurnId;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::num::NonZeroUsize;
@@ -11,9 +14,6 @@ use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 use std::time::Duration;
 use std::time::Instant;
-use ash_protocol::SessionId;
-use ash_protocol::ThreadId;
-use ash_protocol::TurnId;
 
 #[test]
 fn idle_lane_evicts_projection_and_a_later_load_gets_a_new_incarnation() {

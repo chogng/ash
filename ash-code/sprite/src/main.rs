@@ -1,13 +1,6 @@
 use anyhow::Context;
 use anyhow::Result;
 use anyhow::bail;
-use clap::Parser;
-use std::io;
-use std::io::IsTerminal;
-use std::io::Write;
-use std::path::Path;
-use std::path::PathBuf;
-use std::time::Duration;
 use ash_sprite::CompiledSpriteSheet;
 use ash_sprite::compile_sprite_sheet;
 use ash_sprite::compiler::ansi_preview;
@@ -16,6 +9,13 @@ use ash_sprite::compiler::source_dimensions;
 use ash_sprite::pack_octants_rgba;
 use ash_sprite::terminal_sprite_rust_source;
 use ash_sprite::terminal_sprite_sheet_rust_source;
+use clap::Parser;
+use std::io;
+use std::io::IsTerminal;
+use std::io::Write;
+use std::path::Path;
+use std::path::PathBuf;
+use std::time::Duration;
 
 #[derive(Debug, Parser)]
 #[command(about = "Compile terminal-cell sprite sheets or convert images into Unicode sprites")]

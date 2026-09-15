@@ -1,8 +1,8 @@
-use std::io::{self, BufReader, BufWriter};
 use ash_code_mode_protocol::{
     CODE_MODE_PROTOCOL_VERSION, CellId, ClientToHost, HostToClient, StartedCell, read_frame,
     write_frame,
 };
+use std::io::{self, BufReader, BufWriter};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut reader = BufReader::new(io::stdin().lock());

@@ -1,5 +1,5 @@
 import { createFastDomNode, type FastDomNode } from '../../../../base/browser/fastDomNode.js';
-import { getClientArea, getDomNodePagePosition } from '../../../../base/browser/dom.js';
+import { h, getClientArea, getDomNodePagePosition } from '../../../../base/browser/dom.js';
 import { Disposable, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
 import { ContentWidgetPositionPreference, type IContentWidget, type IContentWidgetPosition, type IContentWidgetRenderedCoordinate } from '../../editorBrowser.js';
 import { type IPosition, Position } from '../../../common/core/position.js';
@@ -40,13 +40,13 @@ export class ViewContentWidgets extends ViewPart {
 
 	constructor(context: ViewContext, private readonly viewDomNode: FastDomNode<HTMLElement>) {
 		super(context);
-		this.domNode = createFastDomNode(viewDomNode.domNode.ownerDocument.createElement('div'));
+		this.domNode = createFastDomNode(h(viewDomNode.domNode.ownerDocument, 'div'));
 		PartFingerprints.write(this.domNode, PartFingerprint.ContentWidgets);
 		this.domNode.setClassName('stanza-editor-content-widgets');
 		this.domNode.setPosition('absolute');
 		this.domNode.setTop(0);
 		this.domNode.setAttribute('role', 'presentation');
-		this.overflowingContentWidgetsDomNode = createFastDomNode(viewDomNode.domNode.ownerDocument.createElement('div'));
+		this.overflowingContentWidgetsDomNode = createFastDomNode(h(viewDomNode.domNode.ownerDocument, 'div'));
 		PartFingerprints.write(this.overflowingContentWidgetsDomNode, PartFingerprint.OverflowingContentWidgets);
 		this.overflowingContentWidgetsDomNode.setClassName('stanza-editor-overflowing-content-widgets');
 		this.overflowingContentWidgetsDomNode.setAttribute('role', 'presentation');

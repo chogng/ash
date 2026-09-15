@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
 import { buildMetricsPlugin } from './buildMetricsPlugin.ts';
-import { rendererOutput } from './output.ts';
+import { rendererOutput } from './rendererOutput.ts';
 import { hotReloadPlugin } from "./hotReloadPlugin.ts";
 
 const repositoryRoot = resolve(import.meta.dirname, "../..");

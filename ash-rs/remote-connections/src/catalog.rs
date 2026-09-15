@@ -5,10 +5,10 @@ use std::num::NonZeroU64;
 use std::path::Path;
 use std::path::PathBuf;
 
+use ash_remote::RemotePlatform;
 use serde::Deserialize;
 use sha2::Digest;
 use sha2::Sha256;
-use ash_remote::RemotePlatform;
 
 use crate::RemoteRuntimeArtifact;
 use crate::RemoteRuntimeArtifactIntegrity;

@@ -3,13 +3,13 @@ use crate::ThreadSnapshot;
 use crate::ThreadStore;
 use crate::context_manager::ContextManager;
 
+use ash_protocol::ThreadId;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::Condvar;
 use std::sync::Mutex;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
-use ash_protocol::ThreadId;
 
 /// Identifies one process-local load of a durable Thread.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

@@ -11,7 +11,6 @@ use crate::RemoteRuntimeInstallRoot;
 use crate::RemoteRuntimeVersion;
 use crate::SshAppServerConnectionOptions;
 use crate::SshRemoteRuntimeInstaller;
-use serde::Serialize;
 use ash_app_server_protocol::protocol::common::ClientCapabilities;
 use ash_app_server_protocol::protocol::common::ClientInfo;
 use ash_remote::RemoteDirPath;
@@ -20,6 +19,7 @@ use ash_remote::RemoteProfile;
 use ash_remote::RemoteRuntime;
 use ash_remote::SshHost;
 use ash_remote::SshTarget;
+use serde::Serialize;
 
 #[path = "command/connections.rs"]
 mod connections_command;

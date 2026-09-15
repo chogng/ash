@@ -12,7 +12,7 @@ import * as viewEvents from '../../../common/viewEvents.js';
 interface LineNumbersOverlayOptions {
 	readonly viewModel: IViewModel;
 	readonly readVisualProjection: () => EditorVisualLineProjection;
-	readonly ownerDocument: Document;
+	readonly host: HTMLElement;
 }
 
 /** Projects line numbers into virtual rows. */
@@ -23,7 +23,7 @@ export class LineNumbersOverlay extends DynamicViewOverlay {
 	private activeLineNumber: number;
 	private readonly viewModel: IViewModel;
 	private readonly readVisualProjection: () => EditorVisualLineProjection;
-	private readonly ownerDocument: Document;
+	private readonly host: HTMLElement;
 
 	constructor(private readonly context: ViewContext, options: LineNumbersOverlayOptions) {
 		super();
@@ -32,7 +32,7 @@ export class LineNumbersOverlay extends DynamicViewOverlay {
 		this.viewModel = options.viewModel;
 		this.activeLineNumber = this.viewModel.getPrimaryCursorState().modelState.position.lineNumber;
 		this.readVisualProjection = options.readVisualProjection;
-		this.ownerDocument = options.ownerDocument;
+		this.host = options.host;
 	}
 
 	public override dispose(): void {
@@ -64,7 +64,7 @@ export class LineNumbersOverlay extends DynamicViewOverlay {
 	public prepareRender(context: RenderingContext): void {
 		const visualProjection = this.readVisualProjection();
 		const activeLineIndex = this.viewModel.getPrimaryCursorState().modelState.position.lineNumber - 1;
-		this._renderResult = renderViewPartRows(context, this.ownerDocument, rows => {
+		this._renderResult = renderViewPartRows(context, this.host.ownerDocument, rows => {
 		for (const [visualLineIndex, row] of rows) {
 			const visualLine = visualProjection.lineAt(visualLineIndex);
 			if (!visualLine) continue;

@@ -1,5 +1,5 @@
-use std::fmt;
 use ash_client::ClientError;
+use std::fmt;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum OllamaError {

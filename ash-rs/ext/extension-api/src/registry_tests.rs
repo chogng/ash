@@ -7,7 +7,6 @@ use crate::PromptFragment;
 use crate::ReadOnlyToolContributor;
 use crate::SkillActivationContext;
 use crate::SkillActivationContributor;
-use std::sync::Arc;
 use ash_protocol::ContentDigest;
 use ash_protocol::FrozenSkillActivation;
 use ash_protocol::SkillActivationReason;
@@ -25,6 +24,7 @@ use ash_tools::ToolName;
 use ash_tools::ToolOutput;
 use ash_tools::ToolOutputSchema;
 use ash_tools::ToolSchemaMode;
+use std::sync::Arc;
 
 struct FixedActivationContributor {
     activation: FrozenSkillActivation,

@@ -16,10 +16,10 @@ use crate::thread::interaction::approval::ApprovalView;
 use crate::thread::interaction::query::Query;
 use crate::thread::interaction::query::QueryOutcome;
 use crate::thread::interaction::query::QueryView;
-use crossterm::event::KeyEvent;
-use std::time::Instant;
 use ash_protocol::RequestId;
 use ash_protocol::TurnId;
+use crossterm::event::KeyEvent;
+use std::time::Instant;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum InputMode {

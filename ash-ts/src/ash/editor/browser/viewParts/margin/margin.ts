@@ -1,3 +1,4 @@
+import { h } from '../../../../base/browser/dom.js';
 import "./margin.css";
 import { createFastDomNode, FastDomNode } from "../../../../base/browser/fastDomNode.js";
 import { type RenderingContext, type RestrictedRenderingContext } from "../../view/renderingContext.js";
@@ -32,12 +33,12 @@ export class Margin extends ViewPart {
 		this._lineNumbersWidth = layoutInfo.lineNumbersWidth;
 		this._decorationsLeft = layoutInfo.decorationsLeft;
 		this._decorationsWidth = layoutInfo.decorationsWidth;
-		this._domNode = createFastDomNode(document.createElement('div'));
+		this._domNode = createFastDomNode(h(document, 'div'));
 		this._domNode.setClassName(Margin.OUTER_CLASS_NAME);
 		this._domNode.setPosition('absolute');
 		this._domNode.setAttribute('role', 'presentation');
 		this._domNode.setAttribute('aria-hidden', 'true');
-		this._glyphMarginBackgroundDomNode = createFastDomNode(document.createElement('div'));
+		this._glyphMarginBackgroundDomNode = createFastDomNode(h(document, 'div'));
 		this._glyphMarginBackgroundDomNode.setClassName(Margin.CLASS_NAME);
 		this._domNode.appendChild(this._glyphMarginBackgroundDomNode);
 	}

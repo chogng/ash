@@ -13,10 +13,7 @@ fn render_replaces_placeholders_with_and_without_whitespace() {
     )
     .unwrap();
 
-    assert_eq!(
-        rendered,
-        "Hello, Ash. You are in ash-rs. Ash is repeated."
-    );
+    assert_eq!(rendered, "Hello, Ash. You are in ash-rs. Ash is repeated.");
 }
 
 #[test]

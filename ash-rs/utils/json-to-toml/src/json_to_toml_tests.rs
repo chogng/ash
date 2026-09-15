@@ -9,10 +9,7 @@ fn converts_json_scalars() {
     assert_eq!(json_to_toml(json!(123)), TomlValue::Integer(123));
     assert_eq!(json_to_toml(json!(1.25)), TomlValue::Float(1.25));
     assert_eq!(json_to_toml(json!(false)), TomlValue::Boolean(false));
-    assert_eq!(
-        json_to_toml(json!("ash")),
-        TomlValue::String("ash".into())
-    );
+    assert_eq!(json_to_toml(json!("ash")), TomlValue::String("ash".into()));
 }
 
 #[test]

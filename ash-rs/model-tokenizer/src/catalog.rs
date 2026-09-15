@@ -1,8 +1,8 @@
 use crate::LocalTokenizerError;
-use serde_json::Value;
-use std::collections::HashMap;
 use ash_protocol::ContentDigest;
 use ash_protocol::ModelRef;
+use serde_json::Value;
+use std::collections::HashMap;
 
 /// One remotely available immutable tokenizer asset.
 #[derive(Clone, Debug, Eq, PartialEq)]

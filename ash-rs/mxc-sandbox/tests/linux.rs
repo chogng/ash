@@ -1,4 +1,12 @@
 #![cfg(target_os = "linux")]
+use ash_async_utils::CancellationSource;
+use ash_file_access::Dir;
+use ash_sandboxing::FileSystemAccess;
+use ash_sandboxing::ManagedNetworkAccess;
+use ash_sandboxing::NetworkAccess;
+use ash_sandboxing::SandboxBackend;
+use ash_sandboxing::SandboxCommand;
+use ash_sandboxing::SandboxPolicy;
 use mxc_sandbox::MxcSandbox;
 use network_proxy::NetworkDecision;
 use network_proxy::NetworkPolicyHandle;
@@ -10,14 +18,6 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
-use ash_async_utils::CancellationSource;
-use ash_file_access::Dir;
-use ash_sandboxing::FileSystemAccess;
-use ash_sandboxing::ManagedNetworkAccess;
-use ash_sandboxing::NetworkAccess;
-use ash_sandboxing::SandboxBackend;
-use ash_sandboxing::SandboxCommand;
-use ash_sandboxing::SandboxPolicy;
 
 #[test]
 #[ignore = "requires Linux user namespaces, Bubblewrap and ASH_NETWORK_PROBE"]

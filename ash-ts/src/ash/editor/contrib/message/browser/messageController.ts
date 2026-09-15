@@ -1,4 +1,4 @@
-import { addDisposableListener } from '../../../../base/browser/dom.js';
+import { h, addDisposableListener } from '../../../../base/browser/dom.js';
 import { MarkdownElement } from '../../../../base/browser/markdownRenderer.js';
 import { alert } from '../../../../base/browser/ui/aria/aria.js';
 import { disposableWindowTimeout } from '../../../../base/browser/scheduler.js';
@@ -152,9 +152,9 @@ class MessageWidget extends Disposable implements IContentWidget {
 		if (contentOwner) this._register(contentOwner);
 		editor.revealRange(Range.fromPositions(Position.lift(position)));
 		const document = editor.getContainerDomNode().ownerDocument;
-		this.domNode = document.createElement('div');
+		this.domNode = h(document, 'div');
 		this.domNode.className = 'stanza-editor-overlay-message fadeIn';
-		const message = document.createElement('div');
+		const message = h(document, 'div');
 		message.className = 'message';
 		if (typeof content === 'string') message.textContent = content;
 		else message.append(content);

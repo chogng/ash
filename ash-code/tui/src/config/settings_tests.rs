@@ -1,8 +1,8 @@
 use super::KeyHintStyle;
 use super::TerminalSettings;
 use crate::nls::Language;
-use std::collections::BTreeMap;
 use ash_app_server_protocol::protocol::config::FrontendConfigDto;
+use std::collections::BTreeMap;
 
 #[test]
 fn tui_table_defaults_missing_terminal_fields() {

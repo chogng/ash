@@ -1,6 +1,9 @@
 use crate::LocalTokenizerBinding;
 use crate::LocalTokenizerError;
 use crate::request::render_input;
+use ash_protocol::ContentDigest;
+use ash_protocol::ModelRef;
+use ash_protocol::ModelRequest;
 use hf_chat_template::ChatTemplate;
 use hf_chat_template::LocalClock;
 use hf_chat_template::TokenizerConfig;
@@ -9,9 +12,6 @@ use std::collections::HashMap;
 use std::fs;
 use std::sync::Arc;
 use tokenizers::Tokenizer;
-use ash_protocol::ContentDigest;
-use ash_protocol::ModelRef;
-use ash_protocol::ModelRequest;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct LocalTokenCount {

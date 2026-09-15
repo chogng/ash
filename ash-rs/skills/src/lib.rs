@@ -16,6 +16,10 @@ mod resource;
 mod source;
 
 pub use activation::ActivatedSkill;
+pub use ash_protocol::{
+    ContentDigest, InvalidContentDigest, InvalidSkillName, InvalidSkillSourceId, SkillId,
+    SkillName, SkillSourceId,
+};
 pub use catalog::{
     SkillAvailability, SkillCatalog, SkillCatalogEntry, SkillCatalogSnapshot, SkillMetadata,
 };
@@ -27,10 +31,6 @@ pub use resource::SkillResource;
 pub use resource::SkillResourceKind;
 pub use resource::SkillResourcePath;
 pub use source::{SkillSourceKind, SkillSourceRoot, SkillSourceView};
-pub use ash_protocol::{
-    ContentDigest, InvalidContentDigest, InvalidSkillName, InvalidSkillSourceId, SkillId,
-    SkillName, SkillSourceId,
-};
 
 #[cfg(test)]
 #[path = "built_in_assets_tests.rs"]

@@ -1,6 +1,5 @@
 use std::path::PathBuf;
 
-use serde_json::Value;
 use ash_lsp::lsp_types::CodeLens;
 use ash_lsp::lsp_types::Color;
 use ash_lsp::lsp_types::ColorInformation;
@@ -16,6 +15,7 @@ use ash_lsp::lsp_types::Range;
 use ash_lsp::lsp_types::SymbolInformation;
 use ash_lsp::lsp_types::TextEdit;
 use ash_lsp::lsp_types::Uri;
+use serde_json::Value;
 
 use crate::LanguageDocumentPosition;
 use crate::LanguageDocumentRevision;

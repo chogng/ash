@@ -1,8 +1,6 @@
 use super::super::super::ThreadSnapshot;
 use crate::CoreError;
 use crate::ToolExecutionOutput;
-use std::time::Duration;
-use std::time::Instant;
 use ash_async_utils::CancellationToken;
 use ash_code_mode::CodeModeRuntime;
 use ash_code_mode_protocol::CellId;
@@ -17,6 +15,8 @@ use ash_protocol::ItemId;
 use ash_protocol::ThreadItem;
 use ash_protocol::ToolCallId;
 use ash_protocol::TurnId;
+use std::time::Duration;
+use std::time::Instant;
 
 pub(super) fn runtime_error(error: ash_code_mode::RuntimeError) -> CoreError {
     CoreError::Execution(format!("Code Mode runtime error: {error}"))

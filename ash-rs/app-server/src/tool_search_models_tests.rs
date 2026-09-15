@@ -1,6 +1,4 @@
 use super::*;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
 use ash_model_provider::EmbeddingInvoker;
 use ash_model_provider::EmbeddingRequest;
 use ash_model_provider::EmbeddingResponse;
@@ -11,6 +9,8 @@ use ash_model_provider::RerankInvoker;
 use ash_model_provider::RerankRuntimeRequest;
 use ash_model_provider::SemanticRuntimeLocation;
 use ash_protocol::ModelId;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
 struct ReadyEmbedding;
 

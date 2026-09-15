@@ -1,9 +1,9 @@
-use tempfile::tempdir;
 use ash_app_server_client::AppServerSession;
 use ash_app_server_client::ClientError;
 use ash_app_server_client::StdioAppServerCommand;
 use ash_app_server_protocol::protocol::common::ClientCapabilities;
 use ash_app_server_protocol::protocol::common::ClientInfo;
+use tempfile::tempdir;
 
 #[test]
 fn app_server_serves_an_explicit_dir_over_stdio() {

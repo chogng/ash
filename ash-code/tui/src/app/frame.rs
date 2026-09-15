@@ -1,9 +1,9 @@
 use crate::app::App;
 use crate::app::fullscreen;
 use crate::app::inline;
+use ash_memory_diagnostics::ProcessResourceDemand;
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ash_memory_diagnostics::ProcessResourceDemand;
 
 #[cfg(test)]
 pub(crate) fn draw(frame: &mut Frame<'_>, app: &App) {

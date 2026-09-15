@@ -60,7 +60,7 @@
     "src/ash/platform/app-server/electron-main/app-server-ipc.ts",
     "src/ash/platform/app-server/electron-main/app-server-session.ts",
     "src/ash/platform/app-server/electron-main/app-server-supervisor.ts",
-    "src/ash/platform/app-server/electron-main/child-process-jsonl-transport.ts",
+    "src/ash/platform/app-server/electron-main/childProcessJsonlTransport.ts",
     "src/ash/platform/app-server/electron-main/json-rpc-peer.ts",
     "src/ash/platform/files/electron-main/**/*.ts",
     "src/ash/platform/git/electron-main/**/*.ts",

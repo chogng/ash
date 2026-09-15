@@ -6,11 +6,11 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 #[cfg(unix)]
-use serde_json::json;
-#[cfg(unix)]
 use ash_app_server_protocol::protocol::initialize::{
     APP_SERVER_CAPABILITY_VERSION, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION,
 };
+#[cfg(unix)]
+use serde_json::json;
 
 #[cfg(unix)]
 pub(crate) fn initialize_response(server_schema_hash: &str) -> String {

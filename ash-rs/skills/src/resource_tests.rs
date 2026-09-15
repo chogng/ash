@@ -4,11 +4,11 @@ use crate::ContentDigest;
 use crate::SkillCatalog;
 use crate::SkillErrorKind;
 use crate::SkillSourceRoot;
-use std::fs;
 use ash_protocol::SkillId;
 use ash_protocol::SkillName;
 use ash_protocol::SkillRef;
 use ash_protocol::SkillSourceId;
+use std::fs;
 
 #[test]
 fn reads_resources_from_each_conventional_package_area() {

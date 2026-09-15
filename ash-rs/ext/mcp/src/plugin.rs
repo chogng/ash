@@ -2,10 +2,6 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use connectors::ConnectorDefinition;
-use connectors::ConnectorId;
-use serde::Deserialize;
-use url::Url;
 use ash_config::McpServerId;
 use ash_core_plugins::InstalledPluginPackage;
 use ash_core_plugins::PluginActivationAuthority;
@@ -21,6 +17,10 @@ use ash_rmcp_client::BearerToken;
 use ash_rmcp_client::StdioServerCommand;
 use ash_rmcp_client::StreamableHttpServer;
 use ash_secrets::SecretValue;
+use connectors::ConnectorDefinition;
+use connectors::ConnectorId;
+use serde::Deserialize;
+use url::Url;
 
 use crate::ConnectorMcpRuntimeError;
 use crate::ConnectorMcpRuntimeProvider;

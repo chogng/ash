@@ -5,9 +5,9 @@ use super::layout::height;
 use crate::app::App;
 use crate::terminal::TerminalSession;
 use crate::thread::transcript::CellView;
+use ash_protocol::ThreadId;
 use std::collections::BTreeSet;
 use std::io;
-use ash_protocol::ThreadId;
 
 /// Records terminal output for the currently displayed conversation, independently of redraws.
 #[derive(Default)]

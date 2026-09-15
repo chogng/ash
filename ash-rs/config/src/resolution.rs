@@ -3,8 +3,8 @@ use crate::{
     DirConfigRevision, DirConfigScope, DirId, HookId, LanguageServerId, McpServerId,
     PluginPackageId, ResolvedConfig, ResolvedConfigSnapshot, SkillSourceId, UserConfigDocument,
 };
-use std::collections::BTreeMap;
 use ash_protocol::{ModelRef, ProviderId};
+use std::collections::BTreeMap;
 
 /// Source that contributed a resolved value or pending capability request.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]

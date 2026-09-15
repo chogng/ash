@@ -1,7 +1,7 @@
 use crate::PromptArtifact;
+use ash_protocol::ReviewTarget;
 use std::error::Error;
 use std::fmt;
-use ash_protocol::ReviewTarget;
 
 const REVIEW_PROMPT_TEXT: &str = include_str!("../templates/review/rubric.md");
 

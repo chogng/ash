@@ -10,11 +10,6 @@ pub use ripgrep::{
     BuiltInRipgrepPolicy, RipgrepDiscoveryError, RipgrepExecutable, RipgrepRequestError,
 };
 
-use serde::Deserialize;
-use serde_json::json;
-use std::fmt;
-use std::future;
-use std::path::PathBuf;
 use ash_async_utils::CancellationToken;
 use ash_file_access::Dir;
 use ash_sandboxing::SandboxBackend;
@@ -27,6 +22,11 @@ use ash_tools::{
     ToolInputSchema, ToolInvocation, ToolLoading, ToolName, ToolOutput, ToolOutputSchema,
     ToolPayload, ToolRuntimeAuthority, ToolSchemaMode, ToolStartFailure,
 };
+use serde::Deserialize;
+use serde_json::json;
+use std::fmt;
+use std::future;
+use std::path::PathBuf;
 
 pub use ash_tool_executor::{
     ApprovalPolicy, ApprovalRequirement, CommandExecutionAuthority, CommandExecutionOutcome,
@@ -471,9 +471,11 @@ fn returned_error(message: impl Into<String>) -> ToolExecutionOutcome {
 
 fn returned_json(value: serde_json::Value) -> ToolExecutionOutcome {
     match serde_json::to_string_pretty(&value) {
-        Ok(text) => ToolExecutionOutcome::Returned(ToolOutput::success(vec![
-            ash_tools::ToolContent::Text(text),
-        ])),
+        Ok(text) => {
+            ToolExecutionOutcome::Returned(ToolOutput::success(vec![ash_tools::ToolContent::Text(
+                text,
+            )]))
+        }
         Err(error) => returned_error(format!("could not encode tool output: {error}")),
     }
 }

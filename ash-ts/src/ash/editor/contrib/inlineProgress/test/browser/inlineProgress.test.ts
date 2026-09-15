@@ -1,3 +1,4 @@
+import { h } from '../../../../../base/browser/dom.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -21,7 +22,7 @@ const { InlineProgressManager } = await import('../../browser/inlineProgress.js'
 suiteTeardown(() => environment.window.close());
 
 test('InlineProgressManager delays, positions, cancels, and releases its widget', async () => {
-	const container = environment.window.document.createElement('main');
+	const container = h(environment.window.document, 'main');
 	let widget: IContentWidget | undefined;
 	let removed = false;
 	let cancelled = false;

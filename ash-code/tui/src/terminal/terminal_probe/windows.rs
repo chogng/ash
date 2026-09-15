@@ -7,6 +7,7 @@ use std::io::ErrorKind;
 use std::time::Duration;
 use std::time::Instant;
 
+use ash_terminal_detection::TerminalRgb;
 use windows_sys::Win32::Foundation::HANDLE;
 use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
 use windows_sys::Win32::Foundation::WAIT_OBJECT_0;
@@ -23,7 +24,6 @@ use windows_sys::Win32::System::Console::STD_INPUT_HANDLE;
 use windows_sys::Win32::System::Console::STD_OUTPUT_HANDLE;
 use windows_sys::Win32::System::Console::WriteConsoleInputW;
 use windows_sys::Win32::System::Threading::WaitForSingleObject;
-use ash_terminal_detection::TerminalRgb;
 
 use super::osc_11_background;
 use super::osc_11_response_ranges;

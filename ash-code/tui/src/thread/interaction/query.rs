@@ -7,6 +7,12 @@ use crate::render::selection_marker;
 use crate::thread::ThreadRequestKind;
 use crate::thread::ThreadRequestResponse;
 use crate::widgets::navigation::Navigation;
+use ash_protocol::AgentResponse;
+use ash_protocol::RequestId;
+use ash_protocol::RequestUserInput;
+use ash_protocol::RequestUserInputResponse;
+use ash_protocol::TurnId;
+use ash_protocol::UserInputAnswer;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
@@ -19,12 +25,6 @@ use ratatui::text::Span;
 use ratatui::widgets::Block;
 use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
-use ash_protocol::AgentResponse;
-use ash_protocol::RequestId;
-use ash_protocol::RequestUserInput;
-use ash_protocol::RequestUserInputResponse;
-use ash_protocol::TurnId;
-use ash_protocol::UserInputAnswer;
 
 const MAX_CHOICE_ROWS: usize = 8;
 

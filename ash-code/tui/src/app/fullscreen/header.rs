@@ -1,5 +1,6 @@
 use crate::app::App;
 use crate::render::RenderContext;
+use ash_memory_diagnostics::ProcessResourceDemand;
 use ratatui::Frame;
 use ratatui::layout::Position;
 use ratatui::layout::Rect;
@@ -7,7 +8,6 @@ use ratatui::style::Modifier;
 use ratatui::style::Style;
 use ratatui::widgets::Paragraph;
 use unicode_width::UnicodeWidthStr;
-use ash_memory_diagnostics::ProcessResourceDemand;
 
 const DASHBOARD: &str = "[Dashboard]";
 
@@ -229,8 +229,8 @@ fn header_layout(area: Rect, app: &App, context: RenderContext<'_>) -> HeaderLay
     let progress =
         crate::status::context_header_line(app.status_line(), true, context, Style::default());
     let context_slot_width = ratio.width().max(progress.width()) as u16;
-    let show_context = show_dashboard
-        && right_before_dashboard.saturating_sub(area.x) >= context_slot_width + 18;
+    let show_context =
+        show_dashboard && right_before_dashboard.saturating_sub(area.x) >= context_slot_width + 18;
     let context_width = if show_context
         && (app.fullscreen.header.selected() == Some(Target::Context)
             || app.fullscreen.pointer.hovered()

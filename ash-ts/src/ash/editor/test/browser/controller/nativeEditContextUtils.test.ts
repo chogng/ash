@@ -1,3 +1,4 @@
+import { h } from '../../../../base/browser/dom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -65,7 +66,7 @@ test('focus tracker resolves the active element inside a shadow root', () => {
 	const dom = new JSDOM('<main></main>');
 	const host = dom.window.document.querySelector<HTMLElement>('main')!;
 	const shadowRoot = host.attachShadow({ mode: 'open' });
-	const input = dom.window.document.createElement('div');
+	const input = h(dom.window.document, 'div');
 	input.tabIndex = 0;
 	shadowRoot.append(input);
 	const changes: boolean[] = [];

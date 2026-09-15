@@ -19,13 +19,6 @@ use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionModel;
 use crate::widgets::search_box::SearchBoxModel;
-use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyModifiers;
-use crossterm::event::MouseButton;
-use crossterm::event::MouseEvent;
-use crossterm::event::MouseEventKind;
-use ratatui::layout::Rect;
 use ash_protocol::Session;
 use ash_protocol::SessionId;
 use ash_protocol::SessionManagerInfo;
@@ -33,6 +26,13 @@ use ash_protocol::SessionStatus;
 use ash_protocol::SessionThread;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadStatus;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyModifiers;
+use crossterm::event::MouseButton;
+use crossterm::event::MouseEvent;
+use crossterm::event::MouseEventKind;
+use ratatui::layout::Rect;
 
 #[test]
 fn clearing_fullscreen_cancels_the_drag_before_a_fresh_click_at_the_new_size() {
@@ -456,7 +456,10 @@ fn detail_overlay_captures_only_its_surface_and_releases_mouse_on_close() {
     }
     let outside = ratatui::layout::Position::new(area.x, area.y);
     assert!(!surface.contains(outside));
-    assert_eq!(activate_pointer_item(&mut app, area, outside.x, outside.y), None);
+    assert_eq!(
+        activate_pointer_item(&mut app, area, outside.x, outside.y),
+        None
+    );
     assert!(app.overlay().is_none());
     assert_base_pointer_targets(&mut app, area);
 }

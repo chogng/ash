@@ -117,10 +117,7 @@ fn live_luna_websocket_uses_two_responses_on_one_caller_owned_session() {
             assert_eq!(response.text().trim(), "ACK");
             eprintln!("LUNA_WS turn={} usage={:?}", index + 1, response.usage);
             request.input.push(ash_protocol::InputItem::Message(
-                ash_protocol::Message::text(
-                    ash_protocol::MessageRole::Assistant,
-                    response.text(),
-                ),
+                ash_protocol::Message::text(ash_protocol::MessageRole::Assistant, response.text()),
             ));
             request.input.push(ash_protocol::InputItem::Message(
                 ash_protocol::Message::text(

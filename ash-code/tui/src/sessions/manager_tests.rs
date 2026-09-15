@@ -1,9 +1,9 @@
 use super::*;
+use ash_protocol::SessionManagerInfo;
+use ash_protocol::SessionStatus;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
-use ash_protocol::SessionManagerInfo;
-use ash_protocol::SessionStatus;
 
 #[test]
 fn archived_is_a_peer_heading_and_owns_archived_sessions_even_when_pinned() {

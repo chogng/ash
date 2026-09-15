@@ -1,8 +1,3 @@
-use serde::Deserialize;
-use serde_json::Value;
-use serde_json::json;
-use std::sync::Arc;
-use url::Url;
 use ash_action_policy::ActionDigest;
 use ash_action_policy::ActionKind;
 use ash_action_policy::ActionPolicyRevision;
@@ -18,21 +13,26 @@ use ash_action_policy::ExecutionDecision;
 use ash_action_policy::ResolvedAction;
 use ash_action_policy::SandboxCompatibility;
 use ash_async_utils::CancellationToken;
-use core_api::ActionPolicyService;
-use core_api::BrowserAction;
-use core_api::BrowserCapability;
-use core_api::BrowserObserveRequest;
-use core_api::BrowserTargetId;
-use core_api::CoreError;
-use core_api::CreateBrowserTargetRequest;
-use core_api::BrowserElementTarget;
-use core_api::BrowserTextInputTarget;
 use ash_core::ToolAuthorization;
 use ash_core::ToolService;
 use ash_protocol::ToolCall;
 use ash_protocol::ToolDefinition;
 use ash_protocol::ToolExecutionOutput;
 use ash_protocol::ToolName;
+use core_api::ActionPolicyService;
+use core_api::BrowserAction;
+use core_api::BrowserCapability;
+use core_api::BrowserElementTarget;
+use core_api::BrowserObserveRequest;
+use core_api::BrowserTargetId;
+use core_api::BrowserTextInputTarget;
+use core_api::CoreError;
+use core_api::CreateBrowserTargetRequest;
+use serde::Deserialize;
+use serde_json::Value;
+use serde_json::json;
+use std::sync::Arc;
+use url::Url;
 
 const BROWSER_POLICY_REVISION: &str = "browser-host-user-approval-v1";
 const MAX_URL_LENGTH: usize = 8192;
@@ -148,11 +148,10 @@ impl<B> BrowserToolService<B> {
                 }
                 Ok(BrowserToolRequest::TypeText {
                     target_id: target_id(arguments.target_id)?,
-                    target: arguments
-                        .node_id
-                        .map(element_target)
-                        .transpose()?
-                        .map_or(BrowserTextInputTarget::FocusedElement, BrowserTextInputTarget::Element),
+                    target: arguments.node_id.map(element_target).transpose()?.map_or(
+                        BrowserTextInputTarget::FocusedElement,
+                        BrowserTextInputTarget::Element,
+                    ),
                     text: arguments.text,
                 })
             }

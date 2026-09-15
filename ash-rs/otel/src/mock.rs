@@ -2,6 +2,19 @@
 //!
 //! This module performs no network I/O and is excluded from default builds.
 
+use ash_client::ClientOperation;
+use ash_client::ClientTelemetry;
+use ash_client::ClientTelemetryEvent;
+use ash_client::ClientTelemetryOutcome;
+use ash_client::OperationClient;
+use ash_client::TelemetryOperationClient;
+use ash_http_client::HttpClient;
+use ash_http_client::HttpClientTelemetry;
+use ash_http_client::HttpClientTelemetryEvent;
+use ash_http_client::HttpMethod;
+use ash_http_client::HttpStatusClass;
+use ash_http_client::HttpTransportOutcome;
+use ash_http_client::TelemetryHttpClient;
 use opentelemetry::KeyValue;
 use opentelemetry::metrics::Counter;
 use opentelemetry::metrics::Histogram;
@@ -21,19 +34,6 @@ use std::collections::VecDeque;
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::sync::Mutex;
-use ash_client::ClientOperation;
-use ash_client::ClientTelemetry;
-use ash_client::ClientTelemetryEvent;
-use ash_client::ClientTelemetryOutcome;
-use ash_client::OperationClient;
-use ash_client::TelemetryOperationClient;
-use ash_http_client::HttpClient;
-use ash_http_client::HttpClientTelemetry;
-use ash_http_client::HttpClientTelemetryEvent;
-use ash_http_client::HttpMethod;
-use ash_http_client::HttpStatusClass;
-use ash_http_client::HttpTransportOutcome;
-use ash_http_client::TelemetryHttpClient;
 
 /// A safe, low-cardinality result classification for one operation.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize)]

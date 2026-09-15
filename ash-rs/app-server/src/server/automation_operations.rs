@@ -2,8 +2,6 @@ use super::AppServer;
 use super::RpcError;
 use super::decode;
 use super::result;
-use serde_json::Value;
-use std::sync::Arc;
 use ash_app_server_protocol::protocol::automation::AutomationDeleteParams;
 use ash_app_server_protocol::protocol::automation::AutomationListResult;
 use ash_app_server_protocol::protocol::automation::AutomationRunParams;
@@ -15,6 +13,8 @@ use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_automation::AutomationError;
 use ash_automation::AutomationStore;
 use ash_automation::AutomationWrite;
+use serde_json::Value;
+use std::sync::Arc;
 
 impl AppServer {
     pub(crate) fn with_automation_store(mut self, store: Arc<AutomationStore>) -> Self {

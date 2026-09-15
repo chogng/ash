@@ -1,5 +1,5 @@
-use serde_json::Value;
 use ash_app_server_protocol::protocol::config::FrontendConfigDto;
+use serde_json::Value;
 
 const STATUS_LINE_KEY: &str = "statusLine";
 const SHOW_GIT_CHANGES_AS_DIFF_KEY: &str = "showGitChangesAsDiff";

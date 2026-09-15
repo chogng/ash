@@ -1,7 +1,6 @@
 use std::time::Duration;
 use std::time::Instant;
 
-use serde_json::json;
 use ash_keybinding::BindingPriority;
 use ash_keybinding::BindingSet;
 use ash_keybinding::BindingSource;
@@ -10,6 +9,7 @@ use ash_keybinding::HostPlatform;
 use ash_keybinding::KeySequence;
 use ash_keybinding::KeyStroke;
 use ash_keybinding::Modifiers;
+use serde_json::json;
 
 use super::KeybindingCatalog;
 use super::KeybindingResolution;

@@ -1,3 +1,4 @@
+import { h } from '../../../src/ash/base/browser/dom.js';
 import { IThemeService, ThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { darkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { URI } from "../../../src/ash/base/common/uri.js";
@@ -190,7 +191,7 @@ window.ashTextModelIntegration = {
 	setRenderRichScreenReaderContent: enabled => requiredEditorPart().updateOptions({ renderRichScreenReaderContent: enabled }),
 	showViewZone: () => {
 		removeViewZone();
-		const domNode = document.createElement('div');
+		const domNode = h(document, 'div');
 		domNode.className = 'ash-view-zone-probe';
 		domNode.textContent = 'View zone';
 		requiredEditorPart().changeViewZones(accessor => {
@@ -200,7 +201,7 @@ window.ashTextModelIntegration = {
 	removeViewZone,
 	showWidgets: () => {
 		removeWidgets();
-		const contentDomNode = document.createElement('button');
+		const contentDomNode = h(document, 'button');
 		contentDomNode.className = 'ash-content-widget-probe';
 		contentDomNode.textContent = 'Content widget';
 		contentWidget = {
@@ -209,7 +210,7 @@ window.ashTextModelIntegration = {
 			getDomNode: () => contentDomNode,
 			getPosition: () => ({ position: new Position(2, 3), preference: [ContentWidgetPositionPreference.EXACT] }),
 		};
-		const glyphDomNode = document.createElement('button');
+		const glyphDomNode = h(document, 'button');
 		glyphDomNode.className = 'ash-glyph-widget-probe';
 		glyphDomNode.textContent = 'G';
 		glyphWidgetLineNumber = 1;

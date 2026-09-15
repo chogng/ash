@@ -6,7 +6,6 @@ use std::sync::atomic::Ordering;
 
 use crate::Codebase;
 use crate::CodebaseLimits;
-use tempfile::TempDir;
 use ash_file_access::Dir;
 use ash_model_provider::EmbeddingInvoker;
 use ash_model_provider::EmbeddingRequest;
@@ -16,6 +15,7 @@ use ash_model_provider::ModelProviderError;
 use ash_model_provider::RerankInvoker;
 use ash_model_provider::RerankRequest;
 use ash_model_provider::RerankResponse;
+use tempfile::TempDir;
 
 use super::*;
 

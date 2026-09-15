@@ -1,12 +1,12 @@
 use crate::AutomationError;
+use ash_protocol::AutomationDefinition;
+use ash_protocol::AutomationSchedule;
+use ash_protocol::UnixMillis;
 use chrono::DateTime;
 use chrono::Datelike;
 use chrono::Days;
 use chrono::TimeZone;
 use chrono_tz::Tz;
-use ash_protocol::AutomationDefinition;
-use ash_protocol::AutomationSchedule;
-use ash_protocol::UnixMillis;
 
 #[cfg(test)]
 #[path = "schedule_tests.rs"]

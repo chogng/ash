@@ -3,7 +3,6 @@ use crate::thread::composer::MentionPluginItem;
 use crate::thread::composer::SkillCompletionItem;
 use crate::thread::composer::SlashCommandCatalog;
 use crate::thread::composer::built_in_slash_command_definitions;
-use std::collections::BTreeMap;
 use ash_app_server_client::ClientError;
 use ash_app_server_protocol::protocol::plugins::PluginPackageDto;
 use ash_app_server_protocol::protocol::skills::SkillCompatibilityDto;
@@ -11,6 +10,7 @@ use ash_app_server_protocol::protocol::skills::SkillEnablementDto;
 use ash_app_server_protocol::protocol::skills::SkillListResult;
 use ash_app_server_protocol::protocol::slash_commands::SlashCommandDefinition;
 use ash_protocol::SkillRef;
+use std::collections::BTreeMap;
 
 pub(crate) fn slash_command_registry(
     definitions: &[SlashCommandDefinition],

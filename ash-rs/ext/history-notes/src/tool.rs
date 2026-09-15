@@ -1,4 +1,5 @@
 use crate::NotesStore;
+use ash_core::ThreadController;
 use serde_json::Value;
 use serde_json::json;
 use std::sync::Arc;
@@ -18,7 +19,6 @@ use tools::ToolOutputSchema;
 use tools::ToolPayload;
 use tools::ToolSchemaMode;
 use tools::ToolStartFailure;
-use ash_core::ThreadController;
 
 pub(crate) struct HistoryTool {
     name: &'static str,

@@ -1,8 +1,6 @@
 use super::*;
 use crate::model_catalog::ModelCatalog;
-use std::sync::mpsc;
 use ash_core::InMemoryThreadStore;
-use core_api::ModelSelection;
 use ash_protocol::AgentRoleSelection;
 use ash_protocol::AgentRoleSource;
 use ash_protocol::CommandId;
@@ -18,6 +16,8 @@ use ash_protocol::ThreadId;
 use ash_protocol::ToolCall;
 use ash_protocol::ToolDefinition;
 use ash_protocol::ToolName;
+use core_api::ModelSelection;
+use std::sync::mpsc;
 
 struct CaptureModel(mpsc::Sender<ModelRequest>);
 impl ModelService for CaptureModel {

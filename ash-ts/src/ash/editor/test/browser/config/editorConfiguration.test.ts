@@ -1,3 +1,4 @@
+import { h } from '../../../../base/browser/dom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -25,7 +26,7 @@ test('applyFontInfo writes the complete normalized font contract to both DOM own
 	const dom = new JSDOM('<div></div><span></span>');
 	const element = dom.window.document.querySelector<HTMLElement>('div')!;
 	const fastNode = createFastDomNode(dom.window.document.querySelector<HTMLElement>('span')!);
-	const expectedFontFamily = dom.window.document.createElement('div');
+	const expectedFontFamily = h(dom.window.document, 'div');
 	expectedFontFamily.style.fontFamily = TEST_FONT_INFO.getMassagedFontFamily();
 	applyFontInfo(element, TEST_FONT_INFO);
 	applyFontInfo(fastNode, TEST_FONT_INFO);

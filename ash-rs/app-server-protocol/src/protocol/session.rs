@@ -7,10 +7,6 @@ use crate::protocol::turn::InputItem;
 use crate::protocol::turn::TurnInteractionResolveResult;
 use crate::protocol::turn::TurnInterruptResult;
 use crate::protocol::turn::TurnStartResult;
-use schemars::JsonSchema;
-use serde::Deserialize;
-use serde::Serialize;
-use ts_rs::TS;
 use ash_protocol::AgentResponse;
 use ash_protocol::AgentTreeProjection;
 use ash_protocol::ReviewTarget;
@@ -19,6 +15,10 @@ use ash_protocol::Thread;
 use ash_protocol::ThreadUpdateEnvelope;
 use ash_protocol::ToolMode;
 use ash_thread_transcript::ThreadTranscriptSnapshot;
+use schemars::JsonSchema;
+use serde::Deserialize;
+use serde::Serialize;
+use ts_rs::TS;
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

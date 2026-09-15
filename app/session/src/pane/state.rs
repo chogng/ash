@@ -4,7 +4,6 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::Instant;
 
-use serde_json::Value;
 use ash_editor::CodeEditorCommand;
 use ash_editor::CodeEditorSelectionMode;
 use ash_editor::CodeEditorStyle;
@@ -18,6 +17,7 @@ use ash_slash_commands::SlashCommandDefinition;
 use ash_thread_transcript::ThreadTranscriptSnapshot;
 use ash_thread_transcript::ThreadTranscriptUpdateEnvelope;
 use ash_ui_components::ScrollCommand;
+use serde_json::Value;
 use zui::ui::Point;
 use zui::ui::Rect;
 use zui::ui::Size;

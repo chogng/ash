@@ -2,9 +2,6 @@ use super::*;
 use crate::CodebaseModels;
 use crate::local::ProviderModelService;
 use crate::server::DirGrantPolicy;
-use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
 use ash_config::AgentGrepBackend;
 use ash_config::ConfigStore;
 use ash_config::ResolvedConfig;
@@ -24,6 +21,9 @@ use ash_model_provider::RerankRuntimeRequest;
 use ash_model_provider::SemanticModelProvider;
 use ash_model_provider::SemanticRuntimeLocation;
 use ash_state::DirIndexKind;
+use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
 struct SemanticTestEmbedding;
 

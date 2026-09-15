@@ -6,14 +6,14 @@ use crate::thread::Event as ThreadEvent;
 use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionModel;
+use ash_protocol::SessionId;
+use ash_protocol::ThreadId;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use crossterm::event::MouseButton;
 use crossterm::event::MouseEvent;
 use crossterm::event::MouseEventKind;
-use ash_protocol::SessionId;
-use ash_protocol::ThreadId;
 
 // Run under a PTY so TerminalSession emits the actual mouse-mode protocol.
 #[test]
@@ -88,13 +88,13 @@ fn streaming_commit_deadlines_are_serviced_during_continuous_input_and_completio
     use super::RedrawScheduler;
     use super::advance_stream;
     use super::next_wait;
-    use std::time::Duration;
     use ash_app_server_protocol::protocol::transcript::ThreadTranscriptChange;
     use ash_app_server_protocol::protocol::transcript::ThreadTranscriptEntry;
     use ash_app_server_protocol::protocol::transcript::ThreadTranscriptUpdateEnvelope;
     use ash_protocol::ItemId;
     use ash_protocol::ThreadItem;
     use ash_protocol::TurnId;
+    use std::time::Duration;
 
     let mut app = App::new();
     let turn_id = TurnId::new("stream").unwrap();

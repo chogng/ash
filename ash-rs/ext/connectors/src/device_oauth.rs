@@ -8,10 +8,10 @@ use crate::ConnectorConnectionGeneration;
 use crate::ConnectorDefinition;
 use crate::ConnectorId;
 use crate::ConnectorSnapshotGeneration;
+use ash_secrets::SecretValue;
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use url::Url;
-use ash_secrets::SecretValue;
 
 use crate::ConnectorApiTokenConnectRequest;
 use crate::ConnectorCommandId;

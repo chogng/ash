@@ -23,12 +23,12 @@ use std::thread;
 #[cfg(unix)]
 use std::time::Duration;
 
+use ash_package_store::PackageLease;
+use ash_package_store::acquire_package_lease_for_executable;
 use serde::Deserialize;
 use serde::Serialize;
 use sha2::Digest;
 use sha2::Sha256;
-use ash_package_store::PackageLease;
-use ash_package_store::acquire_package_lease_for_executable;
 
 use crate::ConnectionOptions;
 use crate::MANAGED_PROCESS_ARGUMENT;

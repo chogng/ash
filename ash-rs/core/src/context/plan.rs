@@ -1,13 +1,13 @@
 use super::ContextTokenCount;
 use super::InstructionFragment;
 use crate::ContextEvidence;
-use std::collections::BTreeMap;
-use std::fmt;
 use ash_protocol::ContextCheckpoint;
 use ash_protocol::ContextSourceRange;
 use ash_protocol::ThreadItem;
 use ash_protocol::ToolDefinition;
 use ash_protocol::TurnId;
+use std::collections::BTreeMap;
+use std::fmt;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct OmittedInstruction {

@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
-use serde_json::json;
 use ash_app_server_protocol::protocol::config::FrontendConfigDto;
+use serde_json::json;
 
 use super::StatusLineItem;
 use super::StatusLineSettings;

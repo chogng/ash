@@ -6,6 +6,7 @@ use std::sync::Mutex;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
+use ash_file_access::Authorization;
 use serde_json::Value;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
@@ -14,7 +15,6 @@ use tokio::process::Child;
 use tokio::process::ChildStdin;
 use tokio::runtime::Runtime;
 use tokio::sync::Mutex as AsyncMutex;
-use ash_file_access::Authorization;
 
 use crate::framing::MAX_MESSAGE_BYTES;
 use crate::framing::encode_message;

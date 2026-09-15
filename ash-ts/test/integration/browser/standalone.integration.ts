@@ -1,4 +1,6 @@
 import { type CancellationToken } from '../../../src/ash/base/common/cancellation.js';
+import { scheduleAtNextAnimationFrame } from '../../../src/ash/base/browser/scheduler.js';
+import { h } from '../../../src/ash/base/browser/dom.js';
 import { EndOfLineSequence } from '../../../src/ash/editor/common/model.js';
 import type { FormatController } from '../../../src/ash/editor/contrib/format/browser/formatController.js';
 import { StandaloneServices } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
@@ -368,7 +370,7 @@ window.ashStandaloneIntegration = {
 		return [];
 	},
 	checkContracts: async () => {
-		const host = document.createElement('div');
+		const host = h(document, 'div');
 		document.body.append(host);
 		const instance = stanza.editor.create(host, { value: 'long text '.repeat(100) + '\n' + 'line\n'.repeat(100), wordWrap: 'on', smoothScrolling: true });
 		const eventTexts: string[] = [];
@@ -381,7 +383,7 @@ window.ashStandaloneIntegration = {
 			const animated = instance.hasPendingScrollAnimation();
 			const deadline = performance.now() + 2000;
 			while (instance.hasPendingScrollAnimation() && performance.now() < deadline) {
-				await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+				await new Promise<void>(resolve => scheduleAtNextAnimationFrame(window, () => resolve()));
 			}
 			const settled = !instance.hasPendingScrollAnimation();
 			const top = instance.getScrollTop();
@@ -592,9 +594,9 @@ window.ashStandaloneIntegration = {
 			range: new stanza.Range(2, 1, 2, 7),
 			options: { description: 'view zone geometry', blockClassName: 'ash-zone-block-probe' },
 		}]);
-		const domNode = document.createElement('div');
+		const domNode = h(document, 'div');
 		domNode.className = 'ash-zone-probe';
-		const marginDomNode = document.createElement('div');
+		const marginDomNode = h(document, 'div');
 		marginDomNode.className = 'ash-zone-margin-probe';
 		viewZone = {
 			afterLineNumber: 1,
@@ -621,9 +623,9 @@ window.ashStandaloneIntegration = {
 		callerEditor.updateOptions({ lineHeight: 20, padding: { top: 0, bottom: 0 }, wordWrap: 'wordWrapColumn', wordWrapColumn: 10, wrappingIndent: 'none', showFoldingControls: 'always', scrollBeyondLastLine: false });
 		callerEditor.setValue(['abcdefghijklmnopqrstuvwxy', '  x', '  y', ...Array.from({ length: 30 }, () => 'tail')].join('\n'));
 		callerEditor.setPosition(new stanza.Position(1, 1));
-		const domNode = document.createElement('div');
+		const domNode = h(document, 'div');
 		domNode.className = 'ash-folded-zone-probe';
-		const marginDomNode = document.createElement('div');
+		const marginDomNode = h(document, 'div');
 		marginDomNode.className = 'ash-folded-zone-margin-probe';
 		callerEditor.changeViewZones(accessor => accessor.addZone({
 			afterLineNumber: 2,

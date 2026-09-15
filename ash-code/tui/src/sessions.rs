@@ -51,7 +51,9 @@ pub(crate) enum Event {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Command {
-    Fork { prompt: String },
+    Fork {
+        prompt: String,
+    },
     Preview {
         generation: u64,
         params: SessionThreadReadParams,

@@ -14,13 +14,13 @@ pub use identity::{
     PluginVersion,
 };
 pub use manifest::{
-    AssetContribution, ConnectorContribution, ContributionKind, ContributionReference,
-    CredentialKind, CredentialSlot, DeclarativeExtensionContribution, DirectoryAccess,
-    EditorExtensionActivationEvent, EditorExtensionCapability, EditorExtensionContribution,
-    EditorExtensionRuntimeApiVersion, InvalidContributionReference, InvalidManifestLocalId,
-    InvalidNetworkHost, InvalidVersionRequirement, ManifestLocalId, McpServerContribution,
-    NetworkHost, Permission, PluginCompatibility, PluginContributions, PluginManifest,
-    SkillContribution, AshVersionRequirement,
+    AshVersionRequirement, AssetContribution, ConnectorContribution, ContributionKind,
+    ContributionReference, CredentialKind, CredentialSlot, DeclarativeExtensionContribution,
+    DirectoryAccess, EditorExtensionActivationEvent, EditorExtensionCapability,
+    EditorExtensionContribution, EditorExtensionRuntimeApiVersion, InvalidContributionReference,
+    InvalidManifestLocalId, InvalidNetworkHost, InvalidVersionRequirement, ManifestLocalId,
+    McpServerContribution, NetworkHost, Permission, PluginCompatibility, PluginContributions,
+    PluginManifest, SkillContribution,
 };
 pub use package::{
     LocalPluginCatalog, LocalPluginPackage, PackageFileStats, PluginPackageDigestAlgorithm,

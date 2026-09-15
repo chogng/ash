@@ -2,8 +2,8 @@ use crate::{
     PreparedCommand, SandboxCommand, SandboxError, SandboxKind, SandboxPolicy,
     SandboxProcessDenial, SandboxProcessExitStatus, SandboxScope,
 };
-use std::sync::Arc;
 use ash_file_access::Dir;
+use std::sync::Arc;
 
 /// Converts a validated command and policy into a platform-enforced launch command.
 ///

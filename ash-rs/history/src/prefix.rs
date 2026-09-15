@@ -1,8 +1,8 @@
 use crate::StoredEvent;
-use serde::Deserialize;
-use serde::Serialize;
 use ash_protocol::ContentDigest;
 use ash_protocol::HistoryPrefixRef;
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Retained original events. Nested prefix references remain explicit and immutable.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

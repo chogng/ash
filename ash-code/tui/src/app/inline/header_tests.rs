@@ -2,13 +2,13 @@ use super::WelcomeModel;
 use super::draw;
 use crate::models::ModelSummary;
 use crate::render::test_context;
+use ash_app_server_protocol::protocol::config::ModelRefDto;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
 use ratatui::style::Color;
 use ratatui::style::Modifier;
 use std::path::Path;
-use ash_app_server_protocol::protocol::config::ModelRefDto;
 
 #[test]
 fn wide_header_keeps_pet_and_identity_information_together() {

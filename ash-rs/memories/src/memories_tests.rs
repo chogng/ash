@@ -1,7 +1,7 @@
 use super::*;
+use ash_protocol::CommandId;
 use std::sync::Arc;
 use std::sync::Mutex;
-use ash_protocol::CommandId;
 
 #[derive(Default)]
 struct RecordingStore {

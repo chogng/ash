@@ -1,16 +1,8 @@
 use super::*;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
-use std::time::Duration;
-use std::time::Instant;
 use ash_action_policy::ExecutionDecision;
 use ash_action_policy::GrantId;
-use core_api::ActionPolicyService;
 use ash_core::CreateThreadRequest;
 use ash_core::InMemoryThreadStore;
-use core_api::ModelSelection;
-use core_api::ModelService;
-use core_api::SequenceExpectation;
 use ash_core::StartTurnRequest;
 use ash_core::ThreadController;
 use ash_core::TurnExecutor;
@@ -25,6 +17,14 @@ use ash_protocol::ThreadId;
 use ash_protocol::ToolCallId;
 use ash_protocol::TurnStatus;
 use ash_protocol::UserInput;
+use core_api::ActionPolicyService;
+use core_api::ModelSelection;
+use core_api::ModelService;
+use core_api::SequenceExpectation;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
+use std::time::Instant;
 
 #[test]
 fn definition_exposes_strict_snake_case_plan_contract() {

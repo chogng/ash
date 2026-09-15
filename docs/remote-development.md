@@ -554,7 +554,7 @@ canonical package directory 序列化成确定性 rootless archives 与 `catalog
   `ash-ts/src/ash/platform/remote/electron-main/remoteBrowserViewNavigationResolver.ts`
 - Desktop Remote Browser mapping、失败、取消、Workspace fencing 与异步 host retirement 测试：
   `ash-ts/src/ash/platform/remote/test/electron-main/remoteBrowserViewNavigationResolver.test.ts`、
-  `ash-ts/src/ash/platform/browser/test/electron-main/browser-automation.test.ts`
+  `ash-ts/src/ash/platform/browser/test/electron-main/browserAutomationMainService.test.ts`
 - Desktop Ports 面板与 Tunnel event projection：
   `ash-ts/src/ash/workbench/contrib/remote/browser/remotePortsViewPane.ts`、
   `ash-ts/src/ash/workbench/contrib/remote/test/browser/remotePortsViewPane.test.ts`

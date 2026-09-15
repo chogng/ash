@@ -18,6 +18,10 @@ fmt:
 fmt-check:
     {{ python }} -B scripts/format.py --check
 
+# Check Python build and repository tools with the pinned linter.
+lint:
+    uv run --frozen --project scripts ruff check build scripts
+
 # Run repository-owned Python tests, optionally selecting scripts, ash-code, or build.
 test-python *args:
     uv run --frozen --project scripts python -B scripts/test-python.py {args}

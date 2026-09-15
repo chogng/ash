@@ -1,8 +1,8 @@
 use crate::ExtensionError;
-use extension_items::ExtensionItem;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use ash_protocol::TurnId;
+use extension_items::ExtensionItem;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ThreadLifecycle {

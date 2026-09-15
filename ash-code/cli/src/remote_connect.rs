@@ -2,7 +2,6 @@ use std::io::IsTerminal;
 use std::path::Path;
 use std::path::PathBuf;
 
-use serde::Serialize;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use ash_remote::RemoteDirPath;
@@ -12,6 +11,7 @@ use ash_remote_connections::RemoteConnectionCatalog;
 use ash_remote_connections::RemoteConnectionName;
 use ash_remote_connections::RemoteConnectionProfileRecord;
 use ash_remote_connections::RemoteConnectionProfileStore;
+use serde::Serialize;
 
 #[path = "remote_connect_runtime.rs"]
 mod runtime;

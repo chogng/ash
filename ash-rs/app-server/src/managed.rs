@@ -2,6 +2,10 @@
 
 mod registry;
 
+use ash_app_server_daemon::ConnectionOptions;
+use ash_app_server_daemon::GrantSource;
+use ash_app_server_daemon::ManagedEndpoint;
+use ash_app_server_transport::LocalConnections;
 use std::io;
 use std::io::Write;
 use std::path::PathBuf;
@@ -9,10 +13,6 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
-use ash_app_server_daemon::ConnectionOptions;
-use ash_app_server_daemon::GrantSource;
-use ash_app_server_daemon::ManagedEndpoint;
-use ash_app_server_transport::LocalConnections;
 
 use registry::ProfileAppServerRegistry;
 

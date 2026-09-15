@@ -4,13 +4,6 @@ use crate::SkillConfigSnapshotProvider;
 use crate::SkillRuntime;
 use crate::runtime::NoSkillRuntimeEvents;
 use crate::watcher::event_affects_catalog;
-use std::fs;
-use std::path::Path;
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
 use ash_config::SkillEnablement;
 use ash_config::SkillsConfig;
 use ash_extension_api::ExtensionRegistryBuilder;
@@ -35,6 +28,13 @@ use ash_tools::ToolPayload;
 use ash_tools::ToolRegistryGeneration;
 use ash_tools::ToolRuntimeAuthority;
 use ash_tools::ToolRuntimeKey;
+use std::fs;
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 pub(crate) struct TestConfig {
     skills: Mutex<SkillsConfig>,

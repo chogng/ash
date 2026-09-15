@@ -3,11 +3,11 @@ use std::fs::File;
 use std::fs::OpenOptions;
 use std::path::PathBuf;
 
+use ash_protocol::SessionId;
+use ash_protocol::ThreadId;
 use core_api::CoreError;
 use core_api::LeaseGuard;
 use core_api::WriterLease;
-use ash_protocol::SessionId;
-use ash_protocol::ThreadId;
 
 pub(super) struct LeaseDirectory {
     root: PathBuf,

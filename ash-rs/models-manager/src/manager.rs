@@ -25,10 +25,6 @@ use crate::filter::validate_requirements;
 use crate::merge::apply_discovery;
 use crate::merge::mark_unverified;
 use crate::model_info::unlisted_entry;
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-use std::sync::Arc;
-use std::sync::RwLock;
 use ash_model_provider_config::ModelCatalogPolicy;
 use ash_model_provider_config::ProviderConfigRegistry;
 use ash_protocol::ModelCatalogFreshness;
@@ -36,6 +32,10 @@ use ash_protocol::ModelId;
 use ash_protocol::ModelMetadataQuality;
 use ash_protocol::ModelRef;
 use ash_protocol::ProviderId;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::sync::Arc;
+use std::sync::RwLock;
 
 pub enum CatalogReadSource {
     Offline,

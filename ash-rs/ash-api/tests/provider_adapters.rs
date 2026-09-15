@@ -1,5 +1,3 @@
-use serde_json::{Value, json};
-use std::sync::Mutex;
 use ash_api::{
     ApiEndpoint, ApiError, ApiProtocol, ApiStreamSink, ContentPart, ImageDetail, InputItem,
     InputTokenCountEndpoint, Message, MessageRole, ModelRequest, ModelStreamEvent, OutputItem,
@@ -12,6 +10,8 @@ use ash_client::{
     ResolvedApiTarget,
 };
 use ash_http_client::HttpHeader;
+use serde_json::{Value, json};
+use std::sync::Mutex;
 
 struct CapturingTransport {
     request: Mutex<Option<(String, Vec<HttpHeader>, Value)>>,

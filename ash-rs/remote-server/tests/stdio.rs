@@ -2,8 +2,6 @@ use std::thread;
 use std::time::Duration;
 use std::time::Instant;
 
-use base64::Engine;
-use tempfile::tempdir;
 use ash_app_server_client::AppServerEvent;
 use ash_app_server_client::AppServerSession;
 use ash_app_server_client::ConnectionCloseReason;
@@ -18,6 +16,8 @@ use ash_app_server_protocol::protocol::terminal::TerminalLifecycle;
 use ash_app_server_protocol::protocol::terminal::TerminalProfileSelection;
 use ash_app_server_protocol::protocol::terminal::TerminalReadParams;
 use ash_app_server_protocol::protocol::terminal::TerminalWriteParams;
+use base64::Engine;
+use tempfile::tempdir;
 
 #[test]
 fn remote_server_serves_a_schema_checked_stdio_session() {

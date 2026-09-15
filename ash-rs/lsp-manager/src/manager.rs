@@ -6,7 +6,6 @@ use std::sync::{Arc, mpsc as std_mpsc};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use tokio::sync::mpsc;
 use ash_async_utils::CancellationSource;
 use ash_lsp::lsp_types::{
     MessageType, NumberOrString, ProgressParamsValue, PublishDiagnosticsParams, Uri,
@@ -17,6 +16,7 @@ use ash_lsp::{
     LanguageServerDocumentRouter, LanguageServerEvent, LanguageServerHost, LanguageServerName,
     LanguageServerOptions, LanguageServerRoute,
 };
+use tokio::sync::mpsc;
 
 use crate::LanguageRequestMetric;
 use crate::LanguageRequestMetricOutcome;

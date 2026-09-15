@@ -79,10 +79,7 @@ fn session_status_icons_cover_the_terminal_manager_states() {
         (TabStatusKind::Idle, ash_icons::icons::CIRCLE_SMALL),
         (TabStatusKind::NeedsInput, ash_icons::icons::ENTER),
         (TabStatusKind::Working, ash_icons::icons::SYNC),
-        (
-            TabStatusKind::ReadyForReview,
-            ash_icons::icons::CODE_REVIEW,
-        ),
+        (TabStatusKind::ReadyForReview, ash_icons::icons::CODE_REVIEW),
         (
             TabStatusKind::Completed,
             ash_icons::icons::CIRCLE_SMALL_FILLED,

@@ -1,6 +1,6 @@
+use ash_protocol::ModelRef;
 use serde::Deserialize;
 use serde::Serialize;
-use ash_protocol::ModelRef;
 
 /// User-selected device-local models for semantic codebase indexing and query.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

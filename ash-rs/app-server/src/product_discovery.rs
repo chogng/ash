@@ -1,7 +1,7 @@
 use crate::LocalProductServicesConfig;
 use crate::OpenAppServerError;
-use std::path::Path;
 use ash_install_context::discovered_product_services_path;
+use std::path::Path;
 
 /// Loads the discovered product services document against one profile cache root.
 pub fn load_discovered_product_services(

@@ -74,6 +74,10 @@ export class ToolBar extends Disposable {
 		this.actionBar.setActions(this.withMoreActions(primary));
 	}
 
+	focus(): void {
+		this.actionBar.focus();
+	}
+
 	/** Refreshes retained action slots when their ordering and presence are unchanged. */
 	protected updateActions(
 		primaryActions: readonly IAction[],

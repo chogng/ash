@@ -2,7 +2,6 @@ use super::AppServer;
 use super::RpcError;
 use super::decode;
 use super::result;
-use serde_json::Value;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::issues::IssueComment;
 use ash_app_server_protocol::protocol::issues::IssueListParams;
@@ -11,6 +10,7 @@ use ash_app_server_protocol::protocol::issues::IssueReadParams;
 use ash_app_server_protocol::protocol::issues::IssueReadResult;
 use ash_app_server_protocol::protocol::issues::IssueRepository;
 use ash_app_server_protocol::protocol::issues::IssueSummary;
+use serde_json::Value;
 
 impl AppServer {
     pub(super) fn issue_list(&self, params: &Value) -> Result<Value, RpcError> {

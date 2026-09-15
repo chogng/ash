@@ -1,4 +1,9 @@
 use crate::v8_init::ensure_v8_initialized;
+use ash_code_mode_protocol::{
+    CellId, CellState, CodeModeLimits, CodeModeSessionId, EnabledTool, ExecuteRequest,
+    NestedToolCall, OutputItem, RuntimeNotification, RuntimeResponse, StartedCell, WaitOutcome,
+    WaitRequest,
+};
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -7,11 +12,6 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-use ash_code_mode_protocol::{
-    CellId, CellState, CodeModeLimits, CodeModeSessionId, EnabledTool, ExecuteRequest,
-    NestedToolCall, OutputItem, RuntimeNotification, RuntimeResponse, StartedCell, WaitOutcome,
-    WaitRequest,
-};
 
 mod cell;
 mod store;

@@ -4,12 +4,12 @@ use crate::WebSocketHandshake;
 use crate::WebSocketMessage;
 use crate::WebSocketRequest;
 use crate::dialer;
-use futures::SinkExt;
-use futures::StreamExt;
-use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use ash_http_client::HttpHeader;
 use ash_http_client::OutboundNetworkSnapshot;
 use ash_http_client::Timeout;
+use futures::SinkExt;
+use futures::StreamExt;
+use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 
 /// Opens WebSocket connections using one immutable outbound network policy.
 #[derive(Clone, Debug)]

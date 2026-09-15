@@ -16,6 +16,7 @@ use crate::widgets::tab_list;
 use crate::widgets::tab_list::TabListInputOutcome;
 use crate::widgets::tab_list::TabListItem;
 use crate::widgets::tab_list::TabListState;
+use ash_protocol::CommandId;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
@@ -30,7 +31,6 @@ use std::collections::BTreeSet;
 use std::sync::LazyLock;
 use std::time::Duration;
 use std::time::Instant;
-use ash_protocol::CommandId;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum IssueState {

@@ -8,8 +8,8 @@ mod codebase_retrieval_tool;
 mod debug_service;
 mod dir_grants;
 mod dynamic_tools;
-mod extension_tools;
 mod execution_environments;
+mod extension_tools;
 mod git_service;
 mod local;
 mod local_tools;
@@ -26,6 +26,10 @@ mod tool_executor_adapter;
 mod tool_search_embedding;
 mod tool_search_models;
 
+pub use ash_extensions::ExtensionRoot;
+pub use ash_extensions::ExtensionRootKind;
+pub use ash_slash_commands::SlashCommandCatalog;
+pub use ash_slash_commands::SlashCommandCatalogError;
 pub use dynamic_tools::DynamicToolCompositionError;
 pub use guardian_v2::ProviderReviewModel;
 pub use guardian_v2::ReviewModelResolutionError;
@@ -49,10 +53,6 @@ pub use server::AppServer;
 pub use server::CodebaseModels;
 pub use server::ConnectionNotifications;
 pub use server::ConnectionState;
-pub use ash_extensions::ExtensionRoot;
-pub use ash_extensions::ExtensionRootKind;
-pub use ash_slash_commands::SlashCommandCatalog;
-pub use ash_slash_commands::SlashCommandCatalogError;
 
 #[cfg(test)]
 #[path = "server_tests.rs"]

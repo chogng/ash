@@ -586,7 +586,7 @@ Web renderer 初始化完成后通过 `env/dirs/set` 注册宿主提供的目录
 Workbench；文件请求与后端使用同一目录 ID。授权沿用本地启动目录的 host 权限范围。
 公网远程部署的认证、TLS 和访问策略不属于这个本地服务的能力。
 
-Renderer 与 Stanza 共用 `build/vite/output.ts` 的分包规则，保留模块执行顺序，避免贡献注册
+Renderer 与 Stanza 共用 `build/vite/rendererOutput.ts` 的分包规则，保留模块执行顺序，避免贡献注册
 顺序改变。构建对超过 500 kB 的 JavaScript chunk 直接报错；`build-metrics.json` 另外记录
 每个入口的静态 JavaScript 总量。分包不等于减少总下载量，worker 资源不计入此 chunk 限额。
 

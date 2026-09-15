@@ -1,5 +1,6 @@
 use super::ClientEvent;
 use super::map_event;
+use ash_app_server_client::AppServerEvents;
 use std::io;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -8,7 +9,6 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
-use ash_app_server_client::AppServerEvents;
 
 const RECEIVE_INTERVAL: Duration = Duration::from_millis(25);
 

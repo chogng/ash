@@ -8,12 +8,12 @@ use std::process::Command;
 use std::sync::Arc;
 use std::sync::Barrier;
 
+use ash_file_access::Dir;
+use ash_git::GitClient;
 use pretty_assertions::assert_eq;
 use serde_json::Value;
 use serde_json::json;
 use tempfile::TempDir;
-use ash_file_access::Dir;
-use ash_git::GitClient;
 
 use crate::ManagedDirCleanupEligibility;
 use crate::ManagedDirKind;

@@ -8,7 +8,6 @@ use std::sync::atomic::Ordering;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use serde_json::Value;
 use ash_core_plugins::PluginActivationAuthority;
 use ash_core_plugins::PluginsManager;
 use ash_editor_extension_host::CancelReason;
@@ -24,6 +23,7 @@ use ash_editor_extension_host::RegistrationKind;
 use ash_editor_extension_host::RestartPolicy;
 use ash_file_access::Authorization;
 use ash_file_access::Permission;
+use serde_json::Value;
 
 use super::update_broker::UpdateBroker;
 

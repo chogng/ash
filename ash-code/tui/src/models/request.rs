@@ -3,7 +3,6 @@ use super::ModelChoices;
 use super::ModelSummary;
 use super::model_choices;
 use crate::client::new_command_id;
-use std::fmt;
 use ash_app_server_client::AppServerClient;
 use ash_app_server_client::ClientError;
 use ash_app_server_client::JsonRpcTransport;
@@ -11,6 +10,7 @@ use ash_app_server_protocol::protocol::config::ConfigUpdateParams;
 use ash_app_server_protocol::protocol::config::ModelRefDto;
 use ash_protocol::Patch;
 use ash_protocol::ReasoningEffort;
+use std::fmt;
 
 #[derive(Debug)]
 pub(crate) struct ModelUpdate {

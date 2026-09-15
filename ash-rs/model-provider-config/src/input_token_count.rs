@@ -3,11 +3,11 @@ use crate::ProviderConfigError;
 use crate::ProviderId;
 use crate::config::is_http_url;
 use crate::config::normalize_base_url;
+use ash_protocol::ModelId;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::BTreeSet;
-use ash_protocol::ModelId;
 
 /// A declarative provider preflight protocol understood by the runtime codec layer.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]

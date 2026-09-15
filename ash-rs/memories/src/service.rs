@@ -13,6 +13,7 @@ use crate::MemoryStore;
 use crate::MemoryStoreError;
 use crate::MemoryStoreListRequest;
 use crate::MemoryStoreSearchRequest;
+use ash_protocol::CommandId;
 use async_utils::CancellationToken;
 use base64::Engine;
 use serde::Deserialize;
@@ -22,7 +23,6 @@ use sha2::Sha256;
 use std::sync::Arc;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
-use ash_protocol::CommandId;
 
 const MAX_TITLE_CHARS: usize = 256;
 const MAX_BODY_BYTES: usize = 16 * 1024;

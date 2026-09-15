@@ -3,6 +3,7 @@
 //! This crate intentionally contains no runtime, Thread storage, tool scheduler, or V8 types. It
 //! is safe to use from the embedded adapter and from the standalone stdio Host alike.
 
+use ash_protocol::ToolName;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
@@ -11,7 +12,6 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::io::{self, Read, Write};
 use ts_rs::TS;
-use ash_protocol::ToolName;
 
 /// Default amount of time an `exec` or `wait` call observes a live cell.
 pub const DEFAULT_EXEC_YIELD_TIME_MS: u64 = 10_000;

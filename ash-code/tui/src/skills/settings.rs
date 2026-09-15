@@ -4,11 +4,11 @@ use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
 use crate::widgets::list_selection::ListSelectionModel;
 use crate::widgets::search_box::SearchBoxModel;
-use std::collections::BTreeMap;
 use ash_app_server_protocol::protocol::skills::{
     SkillDiagnosticDto, SkillEnablementDto, SkillListResult, SkillSourceKindDto,
 };
 use ash_protocol::SkillId;
+use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum SkillSelectionAction {

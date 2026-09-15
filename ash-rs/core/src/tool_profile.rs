@@ -1,9 +1,9 @@
 use crate::CoreError;
+use ash_protocol::ToolDefinition;
+use ash_protocol::ToolProfileSnapshot;
 use sha2::Digest;
 use sha2::Sha256;
 use std::collections::BTreeSet;
-use ash_protocol::ToolDefinition;
-use ash_protocol::ToolProfileSnapshot;
 
 pub(crate) const SELECTED_CODING_TOOL_PROFILE_ID: &str = "selected-coding";
 

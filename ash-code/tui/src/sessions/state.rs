@@ -1,10 +1,10 @@
 //! Shared session catalogue, active identity and new-session submission state.
 
-use std::collections::BTreeMap;
 use ash_protocol::Session;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadStatus;
+use std::collections::BTreeMap;
 
 #[derive(Debug)]
 pub(crate) struct SessionsState {

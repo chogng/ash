@@ -1,7 +1,3 @@
-use schemars::JsonSchema;
-use serde::Deserialize;
-use serde::Serialize;
-use ts_rs::TS;
 use ash_protocol::ContextWindow;
 use ash_protocol::ModelAccess;
 use ash_protocol::ModelCapabilities;
@@ -10,6 +6,10 @@ use ash_protocol::ModelOutputTransport;
 use ash_protocol::ModelRef;
 use ash_protocol::Personality;
 use ash_protocol::ReasoningEffort;
+use schemars::JsonSchema;
+use serde::Deserialize;
+use serde::Serialize;
+use ts_rs::TS;
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

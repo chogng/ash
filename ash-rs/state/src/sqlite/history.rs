@@ -1,12 +1,12 @@
-use rusqlite::Connection;
-use rusqlite::OptionalExtension;
-use rusqlite::params;
 use ash_history::HistoryPrefix;
 use ash_history::StoredEvent;
 use ash_protocol::ContentDigest;
 use ash_protocol::HistoryPrefixRef;
 use ash_protocol::ThreadEvent;
 use ash_thread_store::ThreadStoreError;
+use rusqlite::Connection;
+use rusqlite::OptionalExtension;
+use rusqlite::params;
 
 pub(super) fn error(error: impl std::fmt::Display) -> ThreadStoreError {
     ThreadStoreError::Storage(error.to_string())

@@ -6,12 +6,12 @@ use std::io;
 use std::path::Path;
 use std::path::PathBuf;
 
-use serde::Deserialize;
-use serde::Serialize;
 use ash_remote::RemoteDirPath;
 use ash_remote::SshHost;
 use ash_remote::SshTarget;
 use ash_utils_path::write_atomically;
+use serde::Deserialize;
+use serde::Serialize;
 
 const CATALOG_FORMAT_VERSION: u32 = 1;
 const DEFAULT_CATALOG_RESOURCE: &str = "remote/targets.json";

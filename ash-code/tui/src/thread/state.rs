@@ -8,13 +8,13 @@ use super::transcript::TranscriptCellId;
 use super::transcript::TranscriptModel;
 use crate::thread::transcript::CellView;
 use crate::thread::transcript::MessageRole;
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-use std::time::Instant;
 use ash_protocol::ApprovalMode;
 use ash_protocol::ThreadId;
 use ash_protocol::Turn;
 use ash_protocol::TurnId;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::time::Instant;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct TurnApprovalModes {

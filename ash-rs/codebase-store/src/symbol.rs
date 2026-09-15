@@ -3,10 +3,6 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use rusqlite::Connection;
-use rusqlite::OptionalExtension;
-use rusqlite::Transaction;
-use rusqlite::params;
 use ash_codebase::{
     IndexRootId, IndexedLanguage, IndexedSourceReference, IndexedSymbol, SourceRevision,
     SourceSymbols, StoredSymbolProjection, SymbolIndexError, SymbolIndexSnapshot, SymbolIndexStore,
@@ -14,6 +10,10 @@ use ash_codebase::{
 };
 use ash_state::{SqliteDurability, open_in_memory_database, open_sqlite_database};
 use ash_syntax::SYNTAX_FACTS_VERSION;
+use rusqlite::Connection;
+use rusqlite::OptionalExtension;
+use rusqlite::Transaction;
+use rusqlite::params;
 
 use crate::CodebaseStoreStorage;
 

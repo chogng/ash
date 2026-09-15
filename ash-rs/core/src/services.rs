@@ -1,4 +1,3 @@
-use core_api::ThreadUpdateSink;
 use crate::CoreError;
 use ash_action_policy::ActionReviewRequest;
 use ash_action_policy::AutoReviewGrant;
@@ -22,6 +21,7 @@ use ash_protocol::ToolExecutionOutput;
 use ash_protocol::ToolOutputStream;
 use ash_protocol::ToolSourceProvenance;
 use ash_sandboxing::SandboxPolicy;
+use core_api::ThreadUpdateSink;
 use sha2::Digest;
 use sha2::Sha256;
 use std::collections::BTreeSet;

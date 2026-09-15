@@ -3,9 +3,9 @@ use crate::MemoryDeleteResult;
 use crate::MemoryId;
 use crate::MemoryMutationResult;
 use crate::MemoryScope;
+use ash_protocol::CommandId;
 use async_utils::CancellationToken;
 use std::fmt;
-use ash_protocol::CommandId;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MemoryAddCommit {

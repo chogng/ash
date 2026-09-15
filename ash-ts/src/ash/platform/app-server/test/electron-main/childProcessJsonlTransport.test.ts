@@ -6,7 +6,7 @@ import { PassThrough, Writable } from "node:stream";
 import {
 	ChildProcessJsonlTransport,
 	type ChildProcessJsonlTransportOptions,
-} from "../../../../platform/app-server/electron-main/child-process-jsonl-transport.js";
+} from "../../../../platform/app-server/electron-main/childProcessJsonlTransport.js";
 class FakeChildProcess extends EventEmitter {
 	stdin: Writable = new PassThrough();
 	readonly stdout = new PassThrough();

@@ -1,9 +1,9 @@
 use super::*;
 use crate::SkillSourceRoot;
-use std::fs;
 use ash_protocol::SkillId;
 use ash_protocol::SkillName;
 use ash_protocol::SkillSourceId;
+use std::fs;
 
 #[test]
 fn activation_loads_exact_body_and_freezes_catalog_provenance() {

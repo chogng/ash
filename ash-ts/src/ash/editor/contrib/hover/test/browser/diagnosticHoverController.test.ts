@@ -1,3 +1,4 @@
+import { h } from '../../../../../base/browser/dom.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -45,7 +46,7 @@ test("Diagnostic hover presents current gutter-marker messages and hides on poin
 	});
 	using controller = new DiagnosticHoverController(viewport);
 	viewport.layout({ width: 160, height: 20 });
-	const marker = dom.window.document.createElement('span');
+	const marker = h(dom.window.document, 'span');
 	marker.className = 'stanza-editor-diagnostic-marker';
 	marker.dataset.diagnosticHoverText = 'Use let instead';
 	viewport.domNode.domNode.append(marker);

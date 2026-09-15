@@ -1,4 +1,3 @@
-use serde_json::Value;
 use ash_app_server_protocol::protocol::common::EmptyParams;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::marketplace::MarketplaceAcquireCapabilityParams;
@@ -30,6 +29,7 @@ use ash_core_plugins::UninstallPackageRequest;
 use ash_core_plugins::UpdatePackageRequest;
 use ash_extensions::ExtensionCatalogReload;
 use ash_skills_extension::SkillCatalogReload;
+use serde_json::Value;
 
 use super::AppServer;
 use super::ConnectionState;

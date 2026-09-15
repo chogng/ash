@@ -6,13 +6,13 @@ use crate::widgets::list_selection::ListSelectionItemId;
 use crate::widgets::list_selection::ListSelectionModel;
 use crate::widgets::list_selection::ListSelectionSpec;
 use crate::widgets::search_box::SearchBoxModel;
+use ash_protocol::Session;
+use ash_protocol::SessionStatus;
 use chrono::DateTime;
 use chrono::Local;
 use std::collections::BTreeMap;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
-use ash_protocol::Session;
-use ash_protocol::SessionStatus;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum SessionSelectionAction {

@@ -1,9 +1,5 @@
 use crate::ClientError;
 use crate::RetryPolicy;
-use std::sync::Arc;
-use std::sync::mpsc;
-use std::thread;
-use std::time::{Duration, Instant};
 use ash_async_utils::CancellationSource;
 use ash_async_utils::CancellationToken;
 use ash_http_client::HttpBodySink;
@@ -12,6 +8,10 @@ use ash_http_client::HttpClientError;
 use ash_http_client::HttpMethod;
 use ash_http_client::HttpRequest;
 use ash_http_client::HttpResponse;
+use std::sync::Arc;
+use std::sync::mpsc;
+use std::thread;
+use std::time::{Duration, Instant};
 
 const CANCELLATION_POLL_INTERVAL: Duration = Duration::from_millis(5);
 

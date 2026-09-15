@@ -1,17 +1,17 @@
 use crate::SqliteThreadStore;
-use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
-use core_api::CheckpointCapture;
-use core_api::CoreError;
-use core_api::MessageCheckpointSource;
 use ash_core::NoThreadWorktreeBinder;
 use ash_core::ThreadController;
 use ash_protocol::CommandId;
 use ash_protocol::ThreadEvent;
 use ash_protocol::WorkspaceCheckpoint;
 use ash_thread_store::ThreadStore;
+use core_api::CheckpointCapture;
+use core_api::CoreError;
+use core_api::MessageCheckpointSource;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
 #[derive(Default)]
 struct CaptureStats {

@@ -21,13 +21,14 @@ test('Rulers reads canonical configuration and reuses DOM nodes', () => {
 		{ column: 8, color: '#ff0000' },
 	], 8);
 	const rulers = new Rulers(testViewContext(state), {
-		ownerDocument: dom.window.document,
+		host: dom.window.document.querySelector('main')!,
 		readTextLeft: () => 20,
 	});
 	dom.window.document.querySelector('main')!.append(rulers.domNode.domNode);
 
 	rulers.render(renderingContext(640, 1_200));
 	const initial = [...rulers.domNode.domNode.querySelectorAll<HTMLElement>('.stanza-editor-ruler')];
+	assert.equal(rulers.domNode.domNode.ownerDocument, dom.window.document);
 	assert.equal(rulers.domNode.domNode.getAttribute('role'), 'presentation');
 	assert.equal(rulers.domNode.domNode.getAttribute('aria-hidden'), 'true');
 	assert.deepEqual(initial.map(node => node.style.left), ['52px', '84px']);

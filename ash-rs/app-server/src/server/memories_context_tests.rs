@@ -1,8 +1,4 @@
 use super::*;
-use memories::AddMemoryRequest;
-use memories::Memories;
-use memories::MemoryReadMode;
-use memories::UpdateMemoryPolicyRequest;
 use ash_async_utils::CancellationSource;
 use ash_extension_api::ContextSourceRequest;
 use ash_extension_api::ExtensionRegistryBuilder;
@@ -15,6 +11,10 @@ use ash_protocol::ProjectId;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use ash_protocol::TurnId;
+use memories::AddMemoryRequest;
+use memories::Memories;
+use memories::MemoryReadMode;
+use memories::UpdateMemoryPolicyRequest;
 
 #[test]
 fn automatic_memories_follow_session_projects_and_current_directory_grants() {

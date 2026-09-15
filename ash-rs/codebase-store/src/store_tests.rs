@@ -1,7 +1,6 @@
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 
-use tempfile::TempDir;
 use ash_codebase::{
     CodebaseLimits, CodebaseQuery, EmbeddedCodeChunk, EmbeddingIndexKey, SymbolIndexLimits,
     SymbolIndexQuery, SymbolIndexRefreshOutcome,
@@ -9,6 +8,7 @@ use ash_codebase::{
 use ash_file_access::Dir;
 use ash_model_provider::EmbeddingVector;
 use ash_state::StateRuntime;
+use tempfile::TempDir;
 
 use crate::CodebaseStore;
 

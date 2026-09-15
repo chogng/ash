@@ -1,3 +1,4 @@
+import { h } from '../../../../base/browser/dom.js';
 import { createFastDomNode, type FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { type IDisposable } from '../../../../base/common/lifecycle.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
@@ -37,7 +38,7 @@ export class DecorationsOverviewRuler extends ViewPart {
 
 	constructor(context: ViewContext) {
 		super(context);
-		this.domNode = createFastDomNode(document.createElement('canvas'));
+		this.domNode = createFastDomNode(h(document, 'canvas'));
 		this.domNode.setClassName('decorationsOverviewRuler');
 		this.domNode.setPosition('absolute');
 		this.domNode.setLayerHinting(true);

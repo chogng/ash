@@ -1,8 +1,5 @@
 use super::*;
 use crate::ChatGptOAuth;
-use base64::Engine;
-use std::collections::VecDeque;
-use std::sync::Arc;
 use ash_client::ClientError;
 use ash_client::ClientResponse;
 use ash_login::AccountStatus;
@@ -10,6 +7,9 @@ use ash_login::InteractiveLoginDriver;
 use ash_login::LoginMethod;
 use ash_login::LoginService;
 use ash_secrets::MemorySecretStore;
+use base64::Engine;
+use std::collections::VecDeque;
+use std::sync::Arc;
 
 struct Client {
     responses: Mutex<VecDeque<(u16, serde_json::Value)>>,

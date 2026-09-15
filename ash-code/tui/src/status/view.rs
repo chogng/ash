@@ -6,13 +6,13 @@ use super::model::approval_mode_display;
 use super::model::approval_mode_text;
 use crate::render::RenderContext;
 use crate::thread::TurnApprovalModes;
+use ash_protocol::ApprovalMode;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
-use ash_protocol::ApprovalMode;
 
 pub(crate) fn draw(
     frame: &mut Frame<'_>,

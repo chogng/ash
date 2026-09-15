@@ -1,8 +1,8 @@
 use super::*;
 use crate::ApiError;
-use serde_json::json;
 use ash_client::{SseEvent, SseFrame};
 use ash_protocol::ModelStreamEvent;
+use serde_json::json;
 
 fn event(event: &str, data: &str) -> SseFrame {
     SseFrame::Event(SseEvent {

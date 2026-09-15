@@ -19,7 +19,7 @@ export class SelectionsOverlay extends DynamicViewOverlay {
 		private readonly context: ViewContext,
 		private readonly viewModel: IViewModel,
 		private readonly model: TextModel,
-		private readonly ownerDocument: Document,
+		private readonly host: HTMLElement,
 		private readonly readVisualProjection: () => EditorVisualLineProjection,
 		private readonly readTextLeft: () => number,
 		private readonly textMeasurer: TextMeasurer,
@@ -45,7 +45,7 @@ export class SelectionsOverlay extends DynamicViewOverlay {
 	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean { return true; }
 
 	public prepareRender(context: RenderingContext): void {
-		this._renderResult = renderViewPartRows(context, this.ownerDocument, rows => {
+		this._renderResult = renderViewPartRows(context, this.host.ownerDocument, rows => {
 			projectStanzaSelectionOverlays(
 				context,
 				this.model,

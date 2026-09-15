@@ -4,7 +4,6 @@ use super::decode;
 use super::extension_config_operations::hook_config_dto;
 use super::extension_config_operations::plugin_request_dto;
 use super::result;
-use serde_json::Value;
 use ash_app_server_protocol::protocol::codebase::FastRegexDisableAndDeleteParams;
 use ash_app_server_protocol::protocol::codebase::FastRegexDisableAndDeleteResult;
 use ash_app_server_protocol::protocol::codebase::LocalIndexClearOutcomeDto;
@@ -79,6 +78,7 @@ use ash_model_provider_config::ModelProviderConfig;
 use ash_protocol::Patch;
 use ash_state::ClearOutcome;
 use ash_state::DirIndexKind;
+use serde_json::Value;
 
 use crate::tool_search_models::ToolSearchEmbeddingStatus;
 use crate::tool_search_models::resolve_tool_search;
@@ -176,12 +176,12 @@ impl AppServer {
                 command_id: params.command_id,
                 expected_revision: ConfigRevision::new(params.expected_revision),
                 command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
-                    time_context: params.time_context.map(|config| {
-                        ash_config::TimeContextConfig {
+                    time_context: params
+                        .time_context
+                        .map(|config| ash_config::TimeContextConfig {
                             mode: config.mode,
                             time_zone: config.time_zone,
-                        }
-                    }),
+                        }),
                     features: params.features,
                     model: model_ref_update_from_dto(params.model)?,
                     model_reasoning_effort: params.model_reasoning_effort,

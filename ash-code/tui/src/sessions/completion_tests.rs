@@ -83,7 +83,6 @@ fn switch_request_preserves_the_selected_thread() {
     ));
 }
 
-
 #[test]
 fn fork_command_preserves_selection_and_starts_only_when_prompted() {
     use super::ForkStatus;
@@ -191,7 +190,12 @@ fn fork_command_preserves_selection_and_starts_only_when_prompted() {
 
 struct OfflineModel;
 impl ash_client::OperationClient for OfflineModel {
-    fn execute(&self, _: &ash_client::ClientRequest) -> Result<ash_client::ClientResponse, ash_client::ClientError> {
-        Err(ash_client::ClientError::Transport("offline test model".into()))
+    fn execute(
+        &self,
+        _: &ash_client::ClientRequest,
+    ) -> Result<ash_client::ClientResponse, ash_client::ClientError> {
+        Err(ash_client::ClientError::Transport(
+            "offline test model".into(),
+        ))
     }
 }

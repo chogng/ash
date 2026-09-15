@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
+use ash_async_utils::CancellationToken;
 use nucleo::Config;
 use nucleo::Matcher;
 use nucleo::Nucleo;
 use nucleo::Utf32String;
 use nucleo::pattern::CaseMatching;
 use nucleo::pattern::Normalization;
-use ash_async_utils::CancellationToken;
 
 use crate::IndexedSymbol;
 use crate::SymbolIndexError;

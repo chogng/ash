@@ -6,6 +6,7 @@ use std::process::Stdio;
 use std::sync::mpsc;
 use std::time::Duration;
 
+use ash_app_server_protocol::AppServerListenInfo;
 use futures::SinkExt;
 use futures::StreamExt;
 use sha2::Digest;
@@ -16,7 +17,6 @@ use tokio_tungstenite::client_async;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::http::HeaderValue;
-use ash_app_server_protocol::AppServerListenInfo;
 
 const TOKEN: &str = "app-server-process-websocket-token";
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(10);

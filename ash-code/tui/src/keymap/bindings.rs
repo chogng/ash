@@ -4,10 +4,6 @@ use super::chords::validate_specs;
 use super::chords::validate_user_bindings;
 use super::input::normalized_key;
 use crate::widgets::key_hint::KeyHints;
-use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyModifiers;
-use std::sync::LazyLock;
 use ash_keybinding::BindingPriority;
 use ash_keybinding::BindingSet;
 use ash_keybinding::BindingSource;
@@ -21,6 +17,10 @@ use ash_keybinding::UserBindingTarget;
 use ash_keybinding::compile_user_bindings;
 use ash_keybinding::parse_key_sequence;
 use ash_keybinding::serialize_key_sequence;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyModifiers;
+use std::sync::LazyLock;
 
 /// Cross-component actions owned by the Ash Code TUI application.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

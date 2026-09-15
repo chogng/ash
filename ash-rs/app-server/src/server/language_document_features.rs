@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 use std::sync::MutexGuard;
 
-use serde_json::Value;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::language::LanguageCodeLensDto;
 use ash_app_server_protocol::protocol::language::LanguageCodeLensesResult;
@@ -35,6 +34,7 @@ use ash_lsp_manager::LanguageFoldingRangeKind;
 use ash_lsp_manager::LanguageTextEdit;
 use ash_lsp_manager::LanguageTextRange;
 use ash_lsp_manager::LspManagerRequestResult;
+use serde_json::Value;
 
 use super::AppServer;
 use super::RpcError;

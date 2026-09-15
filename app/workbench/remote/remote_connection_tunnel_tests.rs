@@ -1,5 +1,5 @@
-use tempfile::TempDir;
 use ash_remote_connections::RemoteConnectionCatalog;
+use tempfile::TempDir;
 
 use crate::remote_connection_cli::AppInvocation;
 use crate::remote_connection_cli::AppInvocationParseError;

@@ -7,9 +7,6 @@ use crate::widgets::list_selection::ListSelectionItemId;
 use crate::widgets::list_selection::ListSelectionModel;
 use crate::widgets::list_selection::ListSelectionSpec;
 use crate::widgets::search_box::SearchBoxModel;
-use std::collections::BTreeMap;
-use std::path::Path;
-use std::path::PathBuf;
 use ash_app_server_client::AppServerClient;
 use ash_app_server_client::JsonRpcTransport;
 use ash_app_server_protocol::protocol::environment::DirPermissionsReadParams;
@@ -24,6 +21,9 @@ use ash_app_server_protocol::protocol::projects::ProjectSessionMutationParams;
 use ash_app_server_protocol::protocol::projects::ProjectStatusDto;
 use ash_protocol::ProjectId;
 use ash_protocol::SessionId;
+use std::collections::BTreeMap;
+use std::path::Path;
+use std::path::PathBuf;
 
 pub(crate) type RootChoices = ListSelectionSpec<RootSelectionAction>;
 
@@ -272,10 +272,7 @@ where
     Ok(project)
 }
 
-fn dir_id<T>(
-    client: &mut AppServerClient<T>,
-    path: &Path,
-) -> Result<ash_file_access::DirId, String>
+fn dir_id<T>(client: &mut AppServerClient<T>, path: &Path) -> Result<ash_file_access::DirId, String>
 where
     T: JsonRpcTransport,
 {

@@ -2,11 +2,11 @@ use super::BranchSelectionAction;
 use super::choices;
 use crate::widgets::list_selection::ListSelection;
 use crate::widgets::list_selection::ListSelectionOutcome;
+use ash_app_server_protocol::protocol::git::GitBranchDto;
+use ash_app_server_protocol::protocol::git::GitBranchListResult;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
-use ash_app_server_protocol::protocol::git::GitBranchDto;
-use ash_app_server_protocol::protocol::git::GitBranchListResult;
 
 #[test]
 fn branch_picker_preselects_the_current_branch_and_preserves_its_identity() {

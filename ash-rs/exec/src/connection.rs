@@ -1,7 +1,4 @@
 use crate::EmbeddedAppServerOptions;
-use std::fmt;
-use std::sync::mpsc::RecvTimeoutError;
-use std::time::Duration;
 use ash_app_server_client::AppServerEvent;
 use ash_app_server_client::AppServerEvents;
 use ash_app_server_client::AppServerRequestHandle;
@@ -27,6 +24,9 @@ use ash_protocol::Thread;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadUpdateEnvelope;
 use ash_protocol::TurnId;
+use std::fmt;
+use std::sync::mpsc::RecvTimeoutError;
+use std::time::Duration;
 
 pub(crate) struct ThreadSubscription {
     pub thread: Thread,

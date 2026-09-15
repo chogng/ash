@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 
-use serde_json::Value;
 use ash_app_server_protocol::protocol::codebase_symbols::CodebaseSymbolsSearchHitDto;
 use ash_app_server_protocol::protocol::codebase_symbols::CodebaseSymbolsSearchParams;
 use ash_app_server_protocol::protocol::codebase_symbols::CodebaseSymbolsSearchResult;
@@ -25,6 +24,7 @@ use ash_codebase::SymbolIndexSnapshot;
 use ash_codebase::SymbolKind;
 use ash_codebase::SymbolRange;
 use ash_codebase::SymbolSearchHit;
+use serde_json::Value;
 
 use super::AppServer;
 use super::RpcError;

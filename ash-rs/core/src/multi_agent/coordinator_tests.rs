@@ -17,7 +17,6 @@ use crate::ToolExecutionFacts;
 use crate::context::ModelInvocationPreparation;
 use crate::project_agent_tree;
 use crate::thread_controller::PrepareModelInvocationRequest;
-use std::sync::Arc;
 use ash_protocol::AgentCapabilityScope;
 use ash_protocol::AgentContextMode;
 use ash_protocol::AgentContextSource;
@@ -51,6 +50,7 @@ use ash_protocol::ToolDefinition;
 use ash_protocol::ToolName;
 use ash_protocol::TurnId;
 use ash_protocol::UserInput;
+use std::sync::Arc;
 
 struct Fixture {
     threads: Arc<ThreadController>,

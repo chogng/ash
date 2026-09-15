@@ -1,5 +1,4 @@
 use crate::client::new_command_id;
-use std::fmt;
 use ash_app_server_client::AppServerClient;
 use ash_app_server_client::ClientError;
 use ash_app_server_client::JsonRpcTransport;
@@ -16,6 +15,7 @@ use ash_protocol::Thread;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadStatus;
 use ash_protocol::TurnId;
+use std::fmt;
 
 /// Mutable product Session/Thread selection used by one TUI conversation.
 #[derive(Clone)]
@@ -420,7 +420,9 @@ where
     ))
 }
 
-pub(super) fn expect_thread_result(result: SessionRequestResult) -> Result<SessionThreadResult, ClientError> {
+pub(super) fn expect_thread_result(
+    result: SessionRequestResult,
+) -> Result<SessionThreadResult, ClientError> {
     match result {
         SessionRequestResult::Thread(result) => Ok(result),
         other => Err(ClientError::Protocol(format!(

@@ -1,8 +1,8 @@
 use crate::ExtensionError;
-use async_utils::CancellationToken;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use ash_protocol::TurnId;
+use async_utils::CancellationToken;
 
 /// One bounded, revision-bound piece of untrusted evidence supplied to model context.
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -1,8 +1,6 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use serde_json::Value;
-use url::Url;
 use ash_config::ConfigStore;
 use ash_core::InMemoryThreadStore;
 use ash_core::ThreadController;
@@ -19,6 +17,8 @@ use ash_mcp_extension::McpOAuthTarget;
 use ash_model_provider::EchoModel;
 use ash_secrets::MemorySecretStore;
 use ash_secrets::SecretValue;
+use serde_json::Value;
+use url::Url;
 
 use super::*;
 

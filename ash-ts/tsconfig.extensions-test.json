@@ -25,7 +25,7 @@
     "src/ash/workbench/services/extensionHost/**/*.ts",
     "src/ash/workbench/services/tasks/test/browser/taskService.test.ts",
     "src/ash/workbench/services/testing/test/browser/testingService.test.ts",
-    "src/ash/workbench/services/untitled/test/common/untitled-text-editor-service.test.ts",
+    "src/ash/workbench/services/untitled/test/common/browserUntitledTextEditorService.test.ts",
     "src/ash/workbench/test/browser/appServerConnectionStateObserver.test.ts",
     "src/ash/workbench/test/browser/workbench-theme.test.ts",
     "src/ash/workbench/test/common/theme.test.ts"

@@ -1,4 +1,8 @@
 use super::git_turn_changes_runtime::GitTurnChangesRuntime;
+use ash_protocol::ThreadOrigin;
+use core_api::CoreError;
+use core_api::ThreadWorktreeBinder;
+use core_api::ThreadWorktreeBindingRequest;
 use git_turn_changes::{CommitState, TurnChangeSet, TurnChangeStore};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -6,10 +10,6 @@ use worktree::{
     ManagedDirBinding, ManagedDirKind, ManagedDirOwner, ManagedDirProvisionRequest,
     ManagedDirSource, ManagedDirTarget, ManagedRepositoryBinding,
 };
-use core_api::CoreError;
-use core_api::ThreadWorktreeBinder;
-use core_api::ThreadWorktreeBindingRequest;
-use ash_protocol::ThreadOrigin;
 
 impl GitTurnChangesRuntime {
     pub(super) fn enforce_cleanup_policy(&self) -> Result<(), String> {

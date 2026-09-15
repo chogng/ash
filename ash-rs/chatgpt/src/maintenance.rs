@@ -2,6 +2,10 @@ use crate::credential::TokenCredential;
 use crate::oauth::CLIENT_ID;
 use crate::oauth::ChatGptError;
 use crate::storage::CodexAuthStore;
+use ash_client::ClientRequest;
+use ash_client::OperationClient;
+use ash_client::RetryPolicy;
+use ash_http_client::HttpHeader;
 use serde::Deserialize;
 use serde::Serialize;
 use std::path::Path;
@@ -9,10 +13,6 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use zeroize::Zeroize;
-use ash_client::ClientRequest;
-use ash_client::OperationClient;
-use ash_client::RetryPolicy;
-use ash_http_client::HttpHeader;
 
 /// Selects who maintains shared ChatGPT credentials. Production hosts use Automatic;
 /// tests explicitly select an owner so real credentials can never be refreshed by a fixture.

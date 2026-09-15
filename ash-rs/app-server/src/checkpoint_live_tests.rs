@@ -1,12 +1,4 @@
-use std::path::Path;
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::time::Duration;
-use std::time::Instant;
 use ash_async_utils::CancellationToken;
-use core_api::CoreError;
-use core_api::ModelSelection;
-use core_api::ModelService;
 use ash_core::NoThreadWorktreeBinder;
 use ash_core::ThreadController;
 use ash_core::TurnExecutor;
@@ -22,6 +14,14 @@ use ash_protocol::ModelResponse;
 use ash_protocol::ModelUsage;
 use ash_protocol::ThreadId;
 use ash_protocol::TurnStatus;
+use core_api::CoreError;
+use core_api::ModelSelection;
+use core_api::ModelService;
+use std::path::Path;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::time::Duration;
+use std::time::Instant;
 
 struct Exchange {
     request: ModelRequest,

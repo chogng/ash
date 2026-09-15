@@ -1,11 +1,11 @@
 use crate::{CaptureState, TurnChangeLedger, TurnChangeSet, TurnChangeStore};
+use ash_file_watcher::{DebouncedWatchReceiver, FileWatcher, WatchPath};
+use ash_protocol::{ThreadId, TurnId};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::thread::JoinHandle;
 use std::time::Duration;
-use ash_file_watcher::{DebouncedWatchReceiver, FileWatcher, WatchPath};
-use ash_protocol::{ThreadId, TurnId};
 
 const WATCH_DEBOUNCE: Duration = Duration::from_millis(75);
 const WATCH_STARTUP_TIMEOUT: Duration = Duration::from_secs(15);

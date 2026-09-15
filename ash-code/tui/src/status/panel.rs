@@ -16,13 +16,13 @@ use crate::widgets::navigation::Navigation;
 use crate::widgets::tab_list;
 use crate::widgets::tab_list::TabListItem;
 use crate::widgets::tab_list::TabListState;
+use ash_protocol::ModelReferenceCostSummary;
+use ash_protocol::ModelUsageSummary;
+use ash_protocol::ModelUsageTotal;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ash_protocol::ModelReferenceCostSummary;
-use ash_protocol::ModelUsageSummary;
-use ash_protocol::ModelUsageTotal;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum StatusSection {

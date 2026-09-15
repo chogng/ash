@@ -1,6 +1,5 @@
 use std::num::NonZeroUsize;
 
-use serde_json::Value;
 use ash_app_server_protocol::protocol::codebase::CodebaseChunkSpanDto;
 use ash_app_server_protocol::protocol::codebase::CodebaseRetrievalDegradationDto;
 use ash_app_server_protocol::protocol::codebase::CodebaseRetrievalHitDto;
@@ -13,6 +12,7 @@ use ash_codebase::CodebaseRetrievalError;
 use ash_codebase::CodebaseRetrievalHit;
 use ash_codebase::CodebaseRetrievalQuery;
 use ash_codebase::CodebaseRetrievalService;
+use serde_json::Value;
 
 use super::AppServer;
 use super::RpcError;

@@ -1,8 +1,8 @@
 use std::fs;
 use std::path::Path;
 
-use tempfile::TempDir;
 use ash_lsp::LanguageServerEnvironmentPolicy;
+use tempfile::TempDir;
 
 use crate::CSS_LANGUAGE_SERVER_ID;
 use crate::CssLanguageServerProvider;

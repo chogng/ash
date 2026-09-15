@@ -59,12 +59,6 @@ mod theme;
 mod thread;
 mod widgets;
 
-use std::collections::BTreeMap;
-use std::fmt;
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::sync::mpsc;
 use ash_app_server_client::AppServerSession;
 use ash_app_server_client::ClientError;
 use ash_app_server_client::ShutdownError;
@@ -75,6 +69,12 @@ use ash_app_server_protocol::protocol::common::DirPermissionsHostCapability;
 use ash_protocol::AgentInteractionKind;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
+use std::collections::BTreeMap;
+use std::fmt;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::mpsc;
 
 pub use ash_product_update::UpdatePolicy;
 

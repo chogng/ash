@@ -549,10 +549,14 @@ test("menu toolbar retains action slots for enablement and toggle changes", asyn
 	contexts.setContext("test.toolbar.ready", true);
 	assert.equal(toolbar.element.querySelector(`[data-action-id='${actionId}']`), slot);
 	assert.equal(slot.querySelector("button")?.disabled, false);
+	toolbar.focus();
+	assert.equal(dom.window.document.activeElement, slot.querySelector("button"));
 
 	contexts.setContext("test.toolbar.active", true);
 	assert.equal(toolbar.element.querySelector(`[data-action-id='${actionId}']`), slot);
 	assert.equal(slot.querySelector("button")?.classList.contains("checked"), true);
+	toolbar.focus();
+	assert.equal(dom.window.document.activeElement, slot.querySelector("button"));
 
 	toolbar.dispose();
 	dom.window.close();

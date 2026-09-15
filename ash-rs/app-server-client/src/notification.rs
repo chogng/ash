@@ -1,8 +1,8 @@
 use crate::ClientError;
-use serde::Deserialize;
-use serde_json::Value;
 pub use ash_app_server_protocol::protocol::notification::ServerNotification;
 use ash_app_server_protocol::protocol::notification::decode_server_notification;
+use serde::Deserialize;
+use serde_json::Value;
 
 #[derive(Deserialize)]
 struct NotificationEnvelope {

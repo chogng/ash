@@ -1,8 +1,8 @@
 use std::fs;
 
-use ratatui::style::Color;
 use ash_terminal_detection::ColorLevel;
 use ash_terminal_detection::TerminalRgb;
+use ratatui::style::Color;
 
 use super::ThemeAppearance;
 use super::ThemeResource;

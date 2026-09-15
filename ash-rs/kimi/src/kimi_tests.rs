@@ -1,10 +1,10 @@
 use super::*;
-use std::collections::VecDeque;
-use std::sync::Mutex;
 use ash_client::ClientError;
 use ash_client::ClientResponse;
 use ash_http_client::HttpResponse;
 use ash_secrets::MemorySecretStore;
+use std::collections::VecDeque;
+use std::sync::Mutex;
 
 struct ScriptedClient {
     responses: Mutex<VecDeque<ClientResponse>>,

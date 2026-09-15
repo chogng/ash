@@ -50,7 +50,7 @@ export class ChatViewPane extends ViewPane {
 	private activePane: ChatPane | undefined;
 	private initialUntitledSessionId: string | undefined;
 	private viewDisposed = false;
-	private focusReturn: HTMLElement | undefined;
+	private focusReturn: (() => void) | undefined;
 
 	constructor(
 		container: HTMLElement,
@@ -354,14 +354,14 @@ export class ChatViewPane extends ViewPane {
 		if (visible) {
 			const active = this.contentElement.ownerDocument.activeElement;
 			const HTMLElement = this.contentElement.ownerDocument.defaultView?.HTMLElement;
-			this.focusReturn = HTMLElement && active instanceof HTMLElement ? active : undefined;
+			this.focusReturn = this.titleControl.captureFocus() ?? (HTMLElement && active instanceof HTMLElement ? () => active.focus() : undefined);
 		}
 		this.inspectorVisible.set(visible);
 		this.body.classList.toggle("inspector-visible", visible);
 		this.inspector.element.hidden = !visible;
 		if (visible) this.inspector.focus();
 		else {
-			this.focusReturn?.focus();
+			this.focusReturn?.();
 			this.focusReturn = undefined;
 		}
 	}

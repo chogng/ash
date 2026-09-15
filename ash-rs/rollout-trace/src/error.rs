@@ -1,6 +1,6 @@
-use std::fmt;
 use ash_protocol::{SessionId, ThreadId};
 use ash_thread_store::ThreadStoreError;
+use std::fmt;
 
 /// Failure while reading a durable rollout into a trace artifact.
 #[derive(Clone, Debug, Eq, PartialEq)]

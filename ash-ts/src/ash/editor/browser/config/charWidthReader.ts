@@ -1,3 +1,4 @@
+import { h } from '../../../base/browser/dom.js';
 import { applyFontInfo } from './domFontInfo.js';
 import { type BareFontInfo } from '../../common/config/fontInfo.js';
 
@@ -21,7 +22,7 @@ export class CharWidthRequest {
 export function readCharWidths(targetWindow: Window, fontInfo: BareFontInfo, requests: CharWidthRequest[]): void {
 	if (requests.length === 0) return;
 	const document = targetWindow.document;
-	const container = document.createElement('div');
+	const container = h(document, 'div');
 	Object.assign(container.style, {
 		position: 'absolute',
 		top: '-100000px',
@@ -32,7 +33,7 @@ export function readCharWidths(targetWindow: Window, fontInfo: BareFontInfo, req
 	});
 	const parents = new Map<CharWidthRequestType, HTMLElement>();
 	for (const type of [CharWidthRequestType.Regular, CharWidthRequestType.Italic, CharWidthRequestType.Bold]) {
-		const parent = document.createElement('div');
+		const parent = h(document, 'div');
 		applyFontInfo(parent, fontInfo);
 		if (type === CharWidthRequestType.Italic) parent.style.fontStyle = 'italic';
 		if (type === CharWidthRequestType.Bold) parent.style.fontWeight = 'bold';
@@ -40,7 +41,7 @@ export function readCharWidths(targetWindow: Window, fontInfo: BareFontInfo, req
 		parents.set(type, parent);
 	}
 	const samples = requests.map(request => {
-		const sample = document.createElement('span');
+		const sample = h(document, 'span');
 		sample.style.display = 'inline-block';
 		sample.textContent = (request.chr === ' ' ? '\u00a0' : request.chr).repeat(256);
 		parents.get(request.type)!.append(sample);

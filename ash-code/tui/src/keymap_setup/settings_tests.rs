@@ -1,10 +1,10 @@
 use std::collections::BTreeMap;
 
+use ash_app_server_protocol::protocol::config::FrontendConfigDto;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use serde_json::json;
-use ash_app_server_protocol::protocol::config::FrontendConfigDto;
 
 use super::KeymapEdit;
 use super::KeymapEditIntent;

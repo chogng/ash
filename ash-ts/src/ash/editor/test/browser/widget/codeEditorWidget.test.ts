@@ -1,3 +1,4 @@
+import { h, text } from '../../../../base/browser/dom.js';
 import { IThemeService, ThemeService } from '../../../../platform/theme/common/themeService.js';
 import { ILanguageConfigurationService } from '../../../common/languages/languageConfigurationRegistry.js';
 import { createBuiltinLanguageConfigurationService } from '../../../common/languages/languageBuiltinConfigurations.js';
@@ -106,7 +107,7 @@ test("CodeEditorWidget owns one canonical browser editing surface", () => {
 	const ownerId = editor.getId();
 
 	editor.layout({ width: 320, height: 80 });
-	const fontTarget = dom.window.document.createElement('span');
+	const fontTarget = h(dom.window.document, 'span');
 	editor.applyFontInfo(fontTarget);
 
 	assert.equal(editor.getDomNode().parentElement, container);
@@ -694,7 +695,7 @@ test('ScreenReaderSupport projects one model and screen-reader selection returns
 		lineHeight: 20,
 	});
 	viewport.layout({ width: 320, height: 80 });
-	const element = dom.window.document.createElement('div');
+	const element = h(dom.window.document, 'div');
 	container.append(element);
 	const context = new ViewContext(viewport.testConfiguration, darkColorTheme, viewport.testViewModel);
 	using support = new ScreenReaderSupport({
@@ -756,7 +757,7 @@ test('ScreenReaderSupport projects one model and screen-reader selection returns
 	support.handleFocusChange(false);
 	assert.equal(nextSimpleContent.textContent, '');
 	assert.equal(nextSimpleContent.getAttribute('aria-hidden'), 'true');
-	const outsideText = dom.window.document.createTextNode('outside');
+	const outsideText = text(dom.window.document, 'outside');
 	container.append(outsideText);
 	domSelection.setBaseAndExtent(outsideText, 0, outsideText, 4);
 	dom.window.document.dispatchEvent(new dom.window.Event('selectionchange'));
@@ -1013,7 +1014,7 @@ test('CodeEditorWidget switches models without replacing its identity or retaini
 	try {
 		const root = editor.getDomNode();
 		const oldInput = root.querySelector('.stanza-editor-input');
-		const widgetDomNode = dom.window.document.createElement('button');
+		const widgetDomNode = h(dom.window.document, 'button');
 		const widget: IContentWidget = {
 			getId: () => 'test.modelSwitchWidget',
 			getDomNode: () => widgetDomNode,
@@ -1296,7 +1297,7 @@ test('CodeEditorWidget owns content and glyph margin widget layout through the s
 	});
 	editor.layout({ width: 240, height: 60 });
 
-	const contentNode = dom.window.document.createElement('div');
+	const contentNode = h(dom.window.document, 'div');
 	const contentWidget: IContentWidget = {
 		suppressMouseDown: true,
 		getId: () => 'test.content.widget',
@@ -1310,7 +1311,7 @@ test('CodeEditorWidget owns content and glyph margin widget layout through the s
 	contentNode.dispatchEvent(pointerDown);
 	assert.equal(pointerDown.defaultPrevented, true);
 
-	const glyphNode = dom.window.document.createElement('button');
+	const glyphNode = h(dom.window.document, 'button');
 	let glyphPosition = { lane: GlyphMarginLane.Center, zIndex: 1, range: new Range(1, 1, 1, 1) };
 	const glyphWidget: IGlyphMarginWidget = {
 		getId: () => 'test.glyph.widget',
@@ -2115,7 +2116,7 @@ test('CodeEditorWidget rejects missing shared services before creating its surfa
 		if (missing !== IThemeService) services.registerInstance(IThemeService, theme);
 		if (missing !== ILanguageConfigurationService) services.registerInstance(ILanguageConfigurationService, configurations);
 		if (missing !== ILanguageFeaturesService) services.registerInstance(ILanguageFeaturesService, features);
-		const container = browserEnvironment.window.document.createElement('div');
+		const container = h(browserEnvironment.window.document, 'div');
 		assert.throws(() => services.createInstance(CodeEditorWidget, {
 			container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), contributions: [],
 		}), error => error instanceof Error && error.message.includes(missing.description));
@@ -2140,7 +2141,7 @@ test('CodeEditorWidget shares host language services across contributions and mo
 			seen.push(service);
 		}
 	}
-	const container = browserEnvironment.window.document.createElement('div');
+	const container = h(browserEnvironment.window.document, 'div');
 	using editor = services.createInstance(CodeEditorWidget, {
 		container, model: first, input: { resource: first.uri }, languageId: first.getLanguageId(),
 		contributions: [

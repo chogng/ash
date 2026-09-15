@@ -1,16 +1,6 @@
 //! Windows acceptance uses the executor → Windows account backend → restricted process chain.
 #![cfg(windows)]
 
-use network_proxy::NetworkDecision;
-use network_proxy::NetworkPolicyHandle;
-use std::io::Read;
-use std::io::Write;
-use std::net::TcpListener;
-use std::path::Path;
-use std::sync::Arc;
-use std::sync::atomic::Ordering;
-use std::time::Duration;
-use windows_sandbox::WindowsSandbox;
 use ash_async_utils::CancellationSource;
 use ash_file_access::Dir;
 use ash_sandboxing::FileSystemAccess;
@@ -30,6 +20,16 @@ use ash_tool_executor::CommandInput;
 use ash_tool_executor::CommandRequest;
 use ash_tool_executor::ExecutionError;
 use ash_tool_executor::ExecutionLimits;
+use network_proxy::NetworkDecision;
+use network_proxy::NetworkPolicyHandle;
+use std::io::Read;
+use std::io::Write;
+use std::net::TcpListener;
+use std::path::Path;
+use std::sync::Arc;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
+use windows_sandbox::WindowsSandbox;
 
 struct Approved;
 impl ApprovalPolicy for Approved {

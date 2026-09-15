@@ -1,5 +1,7 @@
 //! Short terminal-response probes run before the crossterm event reader starts.
 
+use ash_terminal_detection::HostTerminal;
+use ash_terminal_detection::TerminalRgb;
 use std::io;
 use std::io::IsTerminal;
 #[cfg(unix)]
@@ -10,8 +12,6 @@ use std::ops::Range;
 use std::time::Duration;
 #[cfg(unix)]
 use std::time::Instant;
-use ash_terminal_detection::HostTerminal;
-use ash_terminal_detection::TerminalRgb;
 
 #[cfg(windows)]
 #[path = "terminal_probe/windows.rs"]

@@ -1,9 +1,9 @@
 use crate::CatalogScopeKey;
 use crate::CatalogSourceError;
 use crate::ModelCapability;
-use std::fmt;
 use ash_protocol::ModelId;
 use ash_protocol::ProviderId;
+use std::fmt;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ModelsManagerError {

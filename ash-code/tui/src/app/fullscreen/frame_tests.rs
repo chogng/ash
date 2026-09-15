@@ -35,22 +35,6 @@ use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionModel;
 use crate::widgets::search_box::SearchBoxModel;
-use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyModifiers;
-use ratatui::Terminal;
-use ratatui::backend::TestBackend;
-use ratatui::buffer::Buffer;
-use ratatui::layout::Rect;
-use ratatui::style::Color;
-use ratatui::style::Modifier;
-use std::fs;
-use std::path::Path;
-use std::time::Duration;
-use std::time::Instant;
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
-use unicode_width::UnicodeWidthStr;
 use ash_app_server_protocol::protocol::config::ModelRefDto;
 use ash_memory_diagnostics::ProcessResourceDemand;
 use ash_memory_diagnostics::ProcessResourceMetrics;
@@ -71,6 +55,22 @@ use ash_protocol::ThreadId;
 use ash_protocol::ThreadStatus;
 use ash_slash_commands::SlashCommandArgumentMode;
 use ash_slash_commands::SlashCommandDefinition;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyModifiers;
+use ratatui::Terminal;
+use ratatui::backend::TestBackend;
+use ratatui::buffer::Buffer;
+use ratatui::layout::Rect;
+use ratatui::style::Color;
+use ratatui::style::Modifier;
+use std::fs;
+use std::path::Path;
+use std::time::Duration;
+use std::time::Instant;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
+use unicode_width::UnicodeWidthStr;
 
 #[test]
 fn input_history_search_and_cancel_preserve_the_composer() {
@@ -761,10 +761,7 @@ fn top_tip_shows_permission_modes_above_input_shortcuts() {
             ash_protocol::ApprovalMode::AskPermissions,
             "⏸ ask permissions on",
         ),
-        (
-            ash_protocol::ApprovalMode::AutoReview,
-            "⏩  auto review on",
-        ),
+        (ash_protocol::ApprovalMode::AutoReview, "⏩  auto review on"),
         (
             ash_protocol::ApprovalMode::BypassPermissions,
             "▶ bypass permissions on",

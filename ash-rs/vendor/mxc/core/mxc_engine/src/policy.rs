@@ -1510,9 +1510,9 @@ mod tests {
         assert!(request.inner.policy.network_proxy.is_enabled());
     }
 
-    use super::{build_request_with_containment, Containment, WslcSection};
     #[cfg(target_os = "windows")]
     use super::ProcessContainer;
+    use super::{build_request_with_containment, Containment, WslcSection};
     use wxc_common::models::ContainmentBackend;
 
     fn minimal_policy() -> SandboxPolicy {

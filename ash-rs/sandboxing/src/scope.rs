@@ -2,8 +2,8 @@ use crate::SandboxError;
 use crate::filesystem::HostReadScope;
 use crate::filesystem::ResolvedFileSystem;
 use crate::filesystem::SandboxPathRule;
-use std::collections::BTreeSet;
 use ash_file_access::Dir;
+use std::collections::BTreeSet;
 
 /// Filesystem authority granted to one directory inside a sandboxed process.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

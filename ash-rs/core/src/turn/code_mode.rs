@@ -30,13 +30,13 @@ mod unavailable {
     use crate::ThreadUpdateSink;
     use crate::ToolExecutionOutput;
     use crate::ToolService;
-    use std::sync::Arc;
     use ash_protocol::ThreadId;
     use ash_protocol::ToolCall;
     use ash_protocol::ToolCallBinding;
     use ash_protocol::ToolCallCaller;
     use ash_protocol::ToolMode;
     use ash_protocol::TurnId;
+    use std::sync::Arc;
 
     #[derive(Clone)]
     pub(crate) struct CodeModeBroker;

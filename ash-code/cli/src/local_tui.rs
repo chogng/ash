@@ -31,12 +31,10 @@ enum Entry {
 
 fn run_entry(dir_root: PathBuf, profile_root: PathBuf, entry: Entry) -> Result<(), String> {
     if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
-        return Err(
-            "interactive mode requires a TTY; use `ash ask` or `ash exec` instead".into(),
-        );
+        return Err("interactive mode requires a TTY; use `ash ask` or `ash exec` instead".into());
     }
-    let executable = env::current_exe()
-        .map_err(|error| format!("could not resolve ash executable: {error}"))?;
+    let executable =
+        env::current_exe().map_err(|error| format!("could not resolve ash executable: {error}"))?;
     let mut session =
         connect(&executable, &dir_root, &profile_root).map_err(|error| error.to_string())?;
     let (updater, notices) = match crate::update::AutomaticUpdater::start(session.client()) {

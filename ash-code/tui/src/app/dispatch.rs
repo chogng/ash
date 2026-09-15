@@ -12,14 +12,14 @@ use crate::status;
 use crate::thread::composer::SlashCommandInvocation;
 use crate::thread::composer::TuiSlashCommandAction;
 use crate::thread::rewind;
-use std::fmt;
-use std::path::Path;
-use std::path::PathBuf;
 use ash_app_server_client::AppServerClient;
 use ash_app_server_client::ClientError;
 use ash_app_server_client::JsonRpcTransport;
 use ash_app_server_protocol::protocol::skills::SkillCatalogReloadDto;
 use ash_protocol::TurnId;
+use std::fmt;
+use std::path::Path;
+use std::path::PathBuf;
 
 pub(crate) struct ProductCommandOutput {
     pub(crate) conversation: Option<ActiveConversation>,

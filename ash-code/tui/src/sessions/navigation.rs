@@ -7,13 +7,13 @@ use super::manager::SessionManagerState;
 use crate::keymap::bindings;
 use crate::thread::preview::ConversationPreview;
 use crate::widgets::navigation::Navigation;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyEventKind;
-use std::time::Instant;
 use ash_app_server_protocol::protocol::session::SessionThreadReadParams;
 use ash_app_server_protocol::protocol::session::SessionThreadReadResult;
 use ash_app_server_protocol::protocol::session::ThreadSnapshotHistory;
 use ash_protocol::SessionId;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyEventKind;
+use std::time::Instant;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum SessionScreen {

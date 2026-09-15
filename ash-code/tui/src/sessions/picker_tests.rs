@@ -4,15 +4,15 @@ use super::session_choices_at;
 use crate::widgets::list_selection::ListSelectionInputOutcome;
 use crate::widgets::list_selection::ListSelectionItemId;
 use crate::widgets::list_selection::ListSelectionState;
-use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyModifiers;
 use ash_protocol::Session;
 use ash_protocol::SessionId;
 use ash_protocol::SessionStatus;
 use ash_protocol::SessionThread;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadStatus;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyModifiers;
 
 #[test]
 fn resume_picker_selects_the_current_session_and_maps_enter_to_its_id() {

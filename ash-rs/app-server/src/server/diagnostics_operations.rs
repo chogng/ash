@@ -3,10 +3,10 @@ use super::ConnectionState;
 use super::RpcError;
 use super::decode;
 use super::result;
-use serde_json::Value;
 use ash_app_server_protocol::protocol::diagnostics::FeedbackPrepareParams;
 use ash_app_server_protocol::protocol::diagnostics::FeedbackUploadParams;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
+use serde_json::Value;
 
 impl AppServer {
     pub(super) fn refresh_analytics(&self) -> Result<(), RpcError> {

@@ -1,6 +1,6 @@
-use std::fmt;
-use core_api::CoreError;
 use ash_thread_store::ThreadStoreError;
+use core_api::CoreError;
+use std::fmt;
 
 /// Failure while opening or recovering the local authoritative state repository.
 #[derive(Clone, Debug, Eq, PartialEq)]

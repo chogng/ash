@@ -1,8 +1,8 @@
 use crate::nls::Language;
 use crate::thread::composer::ChatInputMode;
+use ash_app_server_protocol::protocol::config::FrontendConfigDto;
 use serde::Deserialize;
 use serde::Serialize;
-use ash_app_server_protocol::protocol::config::FrontendConfigDto;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]

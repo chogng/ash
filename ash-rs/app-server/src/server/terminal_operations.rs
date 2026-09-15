@@ -198,9 +198,13 @@ fn create_request(params: TerminalCreateParams) -> exec_server::terminal::Termin
     }
 }
 
-fn profile_selection(value: wire::TerminalProfileSelection) -> exec_server::terminal::TerminalProfileSelection {
+fn profile_selection(
+    value: wire::TerminalProfileSelection,
+) -> exec_server::terminal::TerminalProfileSelection {
     match value {
-        wire::TerminalProfileSelection::Default => exec_server::terminal::TerminalProfileSelection::Default,
+        wire::TerminalProfileSelection::Default => {
+            exec_server::terminal::TerminalProfileSelection::Default
+        }
         wire::TerminalProfileSelection::Profile { profile_id } => {
             exec_server::terminal::TerminalProfileSelection::Profile { profile_id }
         }
@@ -209,8 +213,12 @@ fn profile_selection(value: wire::TerminalProfileSelection) -> exec_server::term
 
 fn lifecycle(value: wire::TerminalLifecycle) -> exec_server::terminal::TerminalLifecycle {
     match value {
-        wire::TerminalLifecycle::ConnectionOwned => exec_server::terminal::TerminalLifecycle::ConnectionOwned,
-        wire::TerminalLifecycle::Reconnectable => exec_server::terminal::TerminalLifecycle::Reconnectable,
+        wire::TerminalLifecycle::ConnectionOwned => {
+            exec_server::terminal::TerminalLifecycle::ConnectionOwned
+        }
+        wire::TerminalLifecycle::Reconnectable => {
+            exec_server::terminal::TerminalLifecycle::Reconnectable
+        }
     }
 }
 
@@ -222,7 +230,9 @@ fn profile_to_dto(value: exec_server::terminal::TerminalProfile) -> wire::Termin
     }
 }
 
-fn lease_to_dto(value: exec_server::terminal::TerminalReconnectLease) -> wire::TerminalReconnectLease {
+fn lease_to_dto(
+    value: exec_server::terminal::TerminalReconnectLease,
+) -> wire::TerminalReconnectLease {
     wire::TerminalReconnectLease {
         reconnect_token: value.reconnect_token,
         reconnect_grace_period_millis: value.reconnect_grace_period_millis,
@@ -258,7 +268,9 @@ fn read_to_dto(value: exec_server::terminal::TerminalReadResult) -> wire::Termin
                     exec_server::terminal::TerminalCommandStatus::Succeeded => {
                         wire::TerminalCommandStatus::Succeeded
                     }
-                    exec_server::terminal::TerminalCommandStatus::Failed => wire::TerminalCommandStatus::Failed,
+                    exec_server::terminal::TerminalCommandStatus::Failed => {
+                        wire::TerminalCommandStatus::Failed
+                    }
                     exec_server::terminal::TerminalCommandStatus::Canceled => {
                         wire::TerminalCommandStatus::Canceled
                     }

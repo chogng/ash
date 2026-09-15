@@ -4,12 +4,12 @@ use crate::widgets::list_selection::ListSelectionItemId;
 use crate::widgets::list_selection::ListSelectionModel;
 use crate::widgets::list_selection::ListSelectionSpec;
 use crate::widgets::search_box::SearchBoxModel;
-use std::collections::BTreeMap;
 use ash_app_server_client::AppServerClient;
 use ash_app_server_client::JsonRpcTransport;
 use ash_app_server_protocol::protocol::git::GitBranchListResult;
 use ash_app_server_protocol::protocol::git::GitBranchSwitchParams;
 use ash_app_server_protocol::protocol::git::GitStatusResult;
+use std::collections::BTreeMap;
 
 pub(crate) type BranchChoices = ListSelectionSpec<BranchSelectionAction>;
 

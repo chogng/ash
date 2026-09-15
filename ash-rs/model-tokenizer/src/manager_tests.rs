@@ -1,4 +1,9 @@
 use super::*;
+use ash_protocol::ContentDigest;
+use ash_protocol::ModelId;
+use ash_protocol::ModelRef;
+use ash_protocol::ModelRequest;
+use ash_protocol::ProviderId;
 use std::collections::HashMap;
 use std::fs;
 use std::num::NonZeroUsize;
@@ -10,11 +15,6 @@ use tempfile::TempDir;
 use tokenizers::Tokenizer;
 use tokenizers::models::wordlevel::WordLevel;
 use tokenizers::pre_tokenizers::whitespace::WhitespaceSplit;
-use ash_protocol::ContentDigest;
-use ash_protocol::ModelId;
-use ash_protocol::ModelRef;
-use ash_protocol::ModelRequest;
-use ash_protocol::ProviderId;
 
 #[test]
 fn first_use_downloads_once_and_later_service_reuses_disk_cache() {

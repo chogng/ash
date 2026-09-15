@@ -4,8 +4,6 @@ use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
 
-use url::Url;
-use zeroize::Zeroize;
 use ash_config::McpCredentialBinding;
 use ash_config::McpServerConfig;
 use ash_config::McpServerId;
@@ -13,11 +11,14 @@ use ash_config::McpTransportConfig;
 use ash_secrets::DeleteSecretOutcome;
 use ash_secrets::SecretStore;
 use ash_secrets::SecretValue;
+use url::Url;
+use zeroize::Zeroize;
 
 mod credential;
 mod error;
 mod flow;
 
+use ash_secrets::SecretKey;
 use credential::encode_oauth_credential;
 use credential::oauth_lifecycle_credential;
 pub(crate) use credential::project_runtime_credential;
@@ -30,7 +31,6 @@ use flow::random_base64url;
 use flow::target_digest;
 use flow::validate_authorization_url;
 use flow::validate_redirect_uri;
-use ash_secrets::SecretKey;
 
 const FLOW_LIFETIME: Duration = Duration::from_secs(10 * 60);
 const MAX_PENDING_OAUTH_FLOWS: usize = 64;

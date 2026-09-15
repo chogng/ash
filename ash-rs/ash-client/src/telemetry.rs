@@ -3,9 +3,9 @@ use crate::ClientRequest;
 use crate::ClientResponse;
 use crate::OperationClient;
 use crate::OperationStreamSink;
+use ash_async_utils::CancellationToken;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use ash_async_utils::CancellationToken;
 
 /// Low-cardinality, non-sensitive operation metadata for client telemetry.
 ///

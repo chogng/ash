@@ -5,8 +5,6 @@ use super::codebase_runtime::CodebaseRuntimeError;
 use super::codebase_runtime::CodebaseRuntimeState;
 use super::decode;
 use super::result;
-use serde_json::Value;
-use std::num::NonZeroUsize;
 use ash_app_server_protocol::protocol::codebase::CodebaseChunkSpanDto;
 use ash_app_server_protocol::protocol::codebase::CodebaseSearchHitDto;
 use ash_app_server_protocol::protocol::codebase::CodebaseSearchParams;
@@ -20,6 +18,8 @@ use ash_codebase::CodebaseError;
 use ash_codebase::CodebaseQuery;
 use ash_codebase::CodebaseSnapshot;
 use ash_codebase::SearchHit;
+use serde_json::Value;
+use std::num::NonZeroUsize;
 
 const MAX_PROTOCOL_RESULTS: usize = 100;
 

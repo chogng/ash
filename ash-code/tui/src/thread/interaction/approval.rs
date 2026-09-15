@@ -2,9 +2,6 @@ use crate::keymap::bindings;
 use crate::thread::ThreadRequestKind;
 use crate::thread::ThreadRequestResponse;
 use crate::widgets::navigation::Navigation;
-use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyEventKind;
 use ash_protocol::ActionApprovalCapability;
 use ash_protocol::ActionApprovalCapabilityKind;
 use ash_protocol::ActionApprovalDecision;
@@ -13,6 +10,9 @@ use ash_protocol::ActionApprovalResponse;
 use ash_protocol::AgentResponse;
 use ash_protocol::RequestId;
 use ash_protocol::TurnId;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyEventKind;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ApprovalDecision {

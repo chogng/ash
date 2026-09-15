@@ -10,9 +10,6 @@ use super::built_in_catalog_command;
 use super::built_in_slash_command_definitions;
 use super::default_slash_command_catalog;
 use crate::thread::composer::ChatSubmission;
-use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyModifiers;
 use ash_protocol::ContentDigest;
 use ash_protocol::SkillId;
 use ash_protocol::SkillName;
@@ -21,6 +18,9 @@ use ash_protocol::SkillSourceId;
 use ash_slash_commands::{
     SlashCommandArgumentMode, SlashCommandCatalog, SlashCommandDefinition, SlashCommandOrigin,
 };
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyModifiers;
 
 fn key(code: KeyCode) -> KeyEvent {
     KeyEvent::new(code, KeyModifiers::NONE)

@@ -5,14 +5,14 @@ pub(crate) use editor::Editor;
 pub(crate) use panel::Panel;
 
 use crate::client::new_command_id;
-use memories::Memory;
-use memories::MemoryPolicy;
-use memories::MemoryScope;
-use memories::MemorySummary;
 use ash_app_server_client::AppServerClient;
 use ash_app_server_client::JsonRpcTransport;
 use ash_app_server_protocol::protocol::memory::MemoryScopeDescriptor;
 use ash_protocol::ThreadId;
+use memories::Memory;
+use memories::MemoryPolicy;
+use memories::MemoryScope;
+use memories::MemorySummary;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Command {

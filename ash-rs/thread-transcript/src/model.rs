@@ -1,7 +1,3 @@
-use schemars::JsonSchema;
-use serde::Deserialize;
-use serde::Serialize;
-use ts_rs::TS;
 use ash_protocol::PlanUpdate;
 use ash_protocol::SessionId;
 use ash_protocol::StableTurnError;
@@ -12,6 +8,10 @@ use ash_protocol::ThreadItem;
 use ash_protocol::ToolCallId;
 use ash_protocol::ToolOutputStream;
 use ash_protocol::TurnId;
+use schemars::JsonSchema;
+use serde::Deserialize;
+use serde::Serialize;
+use ts_rs::TS;
 
 /// One complete, render-neutral entry in a Thread transcript.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

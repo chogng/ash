@@ -18,6 +18,7 @@ mod restart;
 mod semantic_tokens;
 mod workspace_diagnostics;
 
+pub use ash_lsp_server_provider::LanguageServerDefinition;
 pub use capabilities::{LanguageServerCapabilities, LanguageServerFeature};
 pub use configuration::{LspManagerConfiguration, LspManagerEnablement};
 pub use diagnostics::{
@@ -59,7 +60,6 @@ pub use requests::{
 pub use restart::LanguageServerRestartPolicy;
 pub use semantic_tokens::{LanguageSemanticToken, LanguageSemanticTokens};
 pub use workspace_diagnostics::{LanguageDirectoryDiagnostic, LanguageDirectoryDiagnostics};
-pub use ash_lsp_server_provider::LanguageServerDefinition;
 
 /// Compatibility name for the pre-LSP manager configuration.
 pub type LanguageServiceConfiguration = LspManagerConfiguration;

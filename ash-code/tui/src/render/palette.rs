@@ -1,5 +1,5 @@
-use ratatui::style::Color;
 use ash_terminal_detection::ColorLevel;
+use ratatui::style::Color;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct ThemeRgb {

@@ -1,6 +1,6 @@
+use ash_protocol::ModelRef;
 use serde::Deserialize;
 use serde::Serialize;
-use ash_protocol::ModelRef;
 
 /// User-selected retrieval policy for deferred Agent tools.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]

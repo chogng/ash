@@ -1,5 +1,7 @@
 use crate::outcome::HookDecision;
 use crate::protocol::HookInvocation;
+use ash_config::HookConfig;
+use core_api::CoreError;
 use std::collections::VecDeque;
 use std::sync::RwLock;
 use std::sync::atomic::AtomicU64;
@@ -8,8 +10,6 @@ use std::time::Duration;
 use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
-use ash_config::HookConfig;
-use core_api::CoreError;
 
 const MAX_RECENT_RUNS: usize = 128;
 

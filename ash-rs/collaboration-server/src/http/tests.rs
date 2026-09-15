@@ -1,6 +1,7 @@
 use super::HttpRuntime;
 use super::serve_listener;
 use crate::CollaborationServerOptions;
+use ash_collaboration::SqliteDocumentCollaborationRooms;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::io::Read;
@@ -13,7 +14,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::thread;
 use tempfile::TempDir;
-use ash_collaboration::SqliteDocumentCollaborationRooms;
 
 const TOKEN: &str = "0123456789abcdef0123456789abcdef";
 const ORIGIN: &str = "https://desktop.ash.example";

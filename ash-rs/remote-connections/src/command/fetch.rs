@@ -4,8 +4,8 @@ use crate::RemoteRuntimeArtifact;
 use crate::RemoteRuntimeCatalogUpdater;
 use crate::RemoteRuntimeDownloadDisposition;
 use crate::RemoteRuntimeDownloadProgress;
-use serde::Serialize;
 use ash_remote::RemotePlatform;
+use serde::Serialize;
 
 use super::RemoteFetchOptions;
 use super::RemoteFetchProgressFormat;

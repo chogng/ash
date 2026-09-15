@@ -1,24 +1,12 @@
 //! Native Kimi Code OAuth, local credential persistence, and authenticated API targets.
 
-use serde::Deserialize;
-use serde::Serialize;
-use std::collections::BTreeMap;
-use std::fmt;
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::sync::Weak;
-use std::thread;
-use std::time::Duration;
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
-use zeroize::Zeroize;
 use ash_async_utils::CancellationSource;
 use ash_async_utils::CancellationToken;
+use ash_client::AshClient;
 use ash_client::ClientRequest;
 use ash_client::OperationClient;
 use ash_client::ResolvedApiTarget;
 use ash_client::RetryPolicy;
-use ash_client::AshClient;
 use ash_http_client::HttpHeader;
 use ash_http_client::UreqHttpClient;
 use ash_login::AccountRef;
@@ -39,6 +27,18 @@ use ash_login::LoginService;
 use ash_secrets::SecretKey;
 use ash_secrets::SecretStore;
 use ash_secrets::SecretValue;
+use serde::Deserialize;
+use serde::Serialize;
+use std::collections::BTreeMap;
+use std::fmt;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::Weak;
+use std::thread;
+use std::time::Duration;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
+use zeroize::Zeroize;
 
 pub const KIMI_PROVIDER_ID: &str = "kimi";
 pub const KIMI_CODE_API_BASE_URL: &str = "https://api.kimi.com/coding/v1";

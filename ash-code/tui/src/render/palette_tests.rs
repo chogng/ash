@@ -1,5 +1,5 @@
-use ratatui::style::Color;
 use ash_terminal_detection::ColorLevel;
+use ratatui::style::Color;
 
 use super::RenderTheme;
 use super::ThemePalette;

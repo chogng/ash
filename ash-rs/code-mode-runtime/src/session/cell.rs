@@ -1,6 +1,9 @@
 use super::{CellCommand, CellEvent, RuntimeState};
 use crate::globals;
 use crate::value::value_to_error_text;
+use ash_code_mode_protocol::{
+    CellId, CodeModeLimits, CodeModeSessionId, ExecuteRequest, OutputItem, RuntimeResponse,
+};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::c_void;
@@ -9,9 +12,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 use std::time::Duration;
-use ash_code_mode_protocol::{
-    CellId, CodeModeLimits, CodeModeSessionId, ExecuteRequest, OutputItem, RuntimeResponse,
-};
 
 struct HeapLimitState {
     exceeded: Arc<AtomicBool>,

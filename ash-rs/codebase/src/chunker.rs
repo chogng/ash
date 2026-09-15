@@ -1,11 +1,11 @@
 use std::path::Path;
 
-use sha2::Digest;
-use sha2::Sha256;
 use ash_syntax::AnalysisLimits;
 use ash_syntax::DocumentRevision;
 use ash_syntax::SyntaxDocument;
 use ash_syntax::SyntaxLanguage;
+use sha2::Digest;
+use sha2::Sha256;
 
 use crate::ChunkContentHash;
 use crate::ChunkKey;

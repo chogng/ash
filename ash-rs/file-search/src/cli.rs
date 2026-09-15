@@ -1,3 +1,7 @@
+use ash_file_search::PathMatch;
+use ash_file_search::PathSearchHandle;
+use ash_file_search::PathSearchOptions;
+use ash_file_search::PathSearchSnapshot;
 use clap::Parser;
 use serde_json::json;
 use std::io::IsTerminal;
@@ -5,10 +9,6 @@ use std::io::Write;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::mpsc::Receiver;
-use ash_file_search::PathMatch;
-use ash_file_search::PathSearchHandle;
-use ash_file_search::PathSearchOptions;
-use ash_file_search::PathSearchSnapshot;
 
 #[derive(Debug, Parser)]
 #[command(version, about = "Fuzzy-match file paths below a directory directory")]

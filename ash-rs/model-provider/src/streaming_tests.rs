@@ -1,6 +1,6 @@
 use super::*;
-use std::sync::atomic::AtomicUsize;
 use ash_async_utils::CancellationToken;
+use std::sync::atomic::AtomicUsize;
 
 // Existing request/credential fixtures use these wire responses for both consumption styles.
 pub(super) fn response_stream(response: &Value) -> String {

@@ -3,14 +3,14 @@ use crate::CurrencyCode;
 use crate::MoneyAmount;
 use crate::RateCardRevision;
 use crate::TokenRate;
+use ash_protocol::ModelId;
+use ash_protocol::ModelUsage;
+use ash_protocol::ProviderId;
 use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::fmt;
-use ash_protocol::ModelId;
-use ash_protocol::ModelUsage;
-use ash_protocol::ProviderId;
 
 macro_rules! string_id {
     ($name:ident, $label:literal) => {

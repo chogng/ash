@@ -9,6 +9,10 @@ mod providers;
 mod registry;
 mod static_model_spec;
 
+pub use ash_protocol::Model;
+pub use ash_protocol::ModelId;
+pub use ash_protocol::ModelOutputTransport;
+pub use ash_protocol::ProviderId;
 pub use config::CustomProviderConfig;
 pub use config::CustomProviderProtocol;
 pub use config::ModelContextConfig;
@@ -37,10 +41,6 @@ pub use registry::ProviderConfigRegistry;
 pub use registry::RegistryMergePolicy;
 pub use static_model_spec::StaticModelRuntime;
 pub use static_model_spec::StaticModelSpec;
-pub use ash_protocol::Model;
-pub use ash_protocol::ModelId;
-pub use ash_protocol::ModelOutputTransport;
-pub use ash_protocol::ProviderId;
 
 use schemars::{Schema, schema_for};
 

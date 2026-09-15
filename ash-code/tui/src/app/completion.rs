@@ -27,7 +27,6 @@ use crate::thread::ThreadRequestScope;
 use crate::thread::ThreadSubscription;
 use crate::thread::ThreadSwitch;
 use crate::thread::TurnStartCompletion;
-use std::time::Instant;
 use ash_app_server_client::AppServerRequestHandle;
 use ash_app_server_client::ClientError;
 use ash_app_server_protocol::protocol::config::ConfigReadResult;
@@ -37,6 +36,7 @@ use ash_protocol::Thread;
 #[cfg(test)]
 use ash_protocol::Turn;
 use ash_protocol::TurnId;
+use std::time::Instant;
 
 pub(super) enum Completion {
     Memory(crate::memory::Completion),
@@ -166,7 +166,10 @@ pub(super) fn apply_request_completion(
         Completion::ConfigRefreshed(Err(error)) => {
             app.update_for_panel(panel_generation, ThreadEvent::FailureReported(error));
         }
-        Completion::Sessions(SessionCompletion::Forked { command, result: Ok(result) }) => {
+        Completion::Sessions(SessionCompletion::Forked {
+            command,
+            result: Ok(result),
+        }) => {
             app.update_for_panel(panel_generation, result.into_event(command));
         }
         Completion::Sessions(SessionCompletion::Preview { generation, result }) => {
@@ -278,7 +281,10 @@ pub(super) fn apply_request_completion(
             command,
             result: Err(error),
         })
-        | Completion::Sessions(SessionCompletion::Forked { command, result: Err(error) })
+        | Completion::Sessions(SessionCompletion::Forked {
+            command,
+            result: Err(error),
+        })
         | Completion::ProductCommand {
             command,
             result: Err(error),

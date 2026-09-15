@@ -8,8 +8,6 @@ use crate::widgets::list_selection::ListSelectionItemId;
 use crate::widgets::list_selection::ListSelectionModel;
 use crate::widgets::list_selection::ListSelectionSpec;
 use crate::widgets::search_box::SearchBoxModel;
-use std::collections::BTreeMap;
-use std::path::PathBuf;
 use ash_app_server_client::AppServerClient;
 use ash_app_server_client::ClientError;
 use ash_app_server_client::JsonRpcTransport;
@@ -20,6 +18,8 @@ use ash_app_server_protocol::protocol::environment::SessionDirListParams;
 use ash_app_server_protocol::protocol::environment::SessionDirListResult;
 use ash_app_server_protocol::protocol::environment::SessionDirMutationDto;
 use ash_app_server_protocol::protocol::environment::SessionDirPermissionsSetParams;
+use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 /// A completed directory operation delivered to the TUI state owner.
 pub(crate) enum Event {

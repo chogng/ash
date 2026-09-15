@@ -674,7 +674,15 @@ fn detail_tabs_use_the_same_mouse_routing_as_list_tabs() {
         crate::app::frame::process_resource_demand(&app, area),
         ash_memory_diagnostics::ProcessResourceDemand::Disabled
     );
-    assert_eq!(super::activate(&mut app, area, tab, crate::widgets::list_selection::ListSelectionClick::Single), None);
+    assert_eq!(
+        super::activate(
+            &mut app,
+            area,
+            tab,
+            crate::widgets::list_selection::ListSelectionClick::Single
+        ),
+        None
+    );
     assert_eq!(
         crate::app::frame::process_resource_demand(&app, area),
         ash_memory_diagnostics::ProcessResourceDemand::Detailed
@@ -847,7 +855,12 @@ fn provider_mouse_input_and_parent_title_return_to_config() {
 
     let target = super::target_at(&app, area, Position::new(parent.x, parent.y));
     assert_eq!(target, Some(super::Target::Parent));
-    super::activate(&mut app, area, target.unwrap(), crate::widgets::list_selection::ListSelectionClick::Single);
+    super::activate(
+        &mut app,
+        area,
+        target.unwrap(),
+        crate::widgets::list_selection::ListSelectionClick::Single,
+    );
     assert_eq!(
         app.list_selection().unwrap().active_tab().label(),
         "Providers"

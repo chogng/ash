@@ -14,16 +14,6 @@ use crate::thread::composer::{
 };
 use crate::thread::read_thread;
 use crate::thread::transcript::MessageRole;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use std::fs;
-use std::ops::Deref;
-use std::ops::DerefMut;
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::MutexGuard;
-use std::sync::atomic::AtomicU64;
-use std::sync::atomic::Ordering;
-use std::time::{SystemTime, UNIX_EPOCH};
 use ash_app_server_client::JsonRpcTransport;
 use ash_app_server_client::{
     AppServerClient, InProcessClientOptions, InProcessTransport, start_in_process_client,
@@ -44,6 +34,16 @@ use ash_protocol::ReasoningEffort;
 use ash_protocol::SessionStatus;
 use ash_protocol::Thread;
 use ash_protocol::ThreadStatus;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use std::fs;
+use std::ops::Deref;
+use std::ops::DerefMut;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::MutexGuard;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[test]
 fn branch_persists_lineage_switches_threads_and_does_not_call_the_model() {
@@ -65,7 +65,12 @@ fn branch_persists_lineage_switches_threads_and_does_not_call_the_model() {
     assert_eq!(app.status(), &Status::Ready);
 
     let forked_thread_id = conversation.thread_id().clone();
-    let notice = app.messages().last().unwrap().text().replace(forked_thread_id.as_str(), "THREAD");
+    let notice = app
+        .messages()
+        .last()
+        .unwrap()
+        .text()
+        .replace(forked_thread_id.as_str(), "THREAD");
     insta::assert_snapshot!("branch_switch_notice", notice);
     let persisted_session = client
         .read_session(SessionReadParams {

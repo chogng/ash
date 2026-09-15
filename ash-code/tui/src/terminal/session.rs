@@ -4,6 +4,8 @@ use crate::terminal::text::ScreenSelectionRange;
 use crate::terminal::text::line_range_at;
 use crate::terminal::text::text_in_range;
 use crate::terminal::text::token_range_at;
+use ash_terminal_detection::TerminalRgb;
+use ash_terminal_detection::detect_host_terminal;
 use crossterm::ExecutableCommand;
 use crossterm::event::DisableBracketedPaste;
 use crossterm::event::DisableFocusChange;
@@ -25,8 +27,6 @@ use ratatui::layout::Rect;
 use std::io;
 use std::io::Stdout;
 use std::io::Write;
-use ash_terminal_detection::TerminalRgb;
-use ash_terminal_detection::detect_host_terminal;
 
 // Preserve the host setting while preventing wheel input from becoming arrow keys inside the TUI.
 const SAVE_ALTERNATE_SCROLL: &[u8] = b"\x1b[?1007s";

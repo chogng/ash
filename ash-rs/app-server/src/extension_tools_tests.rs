@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use super::compose_extension_tools;
 use crate::tool_composition::combine_tool_ports;
-use serde_json::json;
 use ash_action_policy::ExecutionDecision;
 use ash_async_utils::CancellationSource;
 use ash_extension_api::CapabilityToolContribution;
@@ -24,6 +23,7 @@ use ash_tools::ToolName;
 use ash_tools::ToolOutput;
 use ash_tools::ToolOutputSchema;
 use ash_tools::ToolSchemaMode;
+use serde_json::json;
 
 struct Contributor;
 

@@ -14,6 +14,7 @@ import { h } from "../../../../../base/browser/dom.js";
 export class ChatTitleControl extends Disposable {
 	private readonly tabs: ChatTabsControl;
 	private readonly actionsElement: HTMLDivElement;
+	private readonly layoutToolbar: MenuWorkbenchToolBar;
 
 	constructor(container: HTMLElement, idPrefix: string, delegate: ChatTabsDelegate, menuService: IMenuService, contextMenuService: IContextMenuService) {
 		super();
@@ -30,20 +31,25 @@ export class ChatTitleControl extends Disposable {
 			{ hoverAnchorPosition: AnchorPosition.Below },
 		));
 		toolbar.element.setAttribute("aria-label", "Chat actions");
-		const layoutToolbar = this._register(new MenuWorkbenchToolBar(
+		this.layoutToolbar = this._register(new MenuWorkbenchToolBar(
 			this.actionsElement,
 			menuService,
 			contextMenuService,
 			MenuId.ChatTitleLayout,
 			{ highlightToggledItems: true, hoverAnchorPosition: AnchorPosition.Below },
 		));
-		layoutToolbar.element.setAttribute("aria-label", "Chat layout");
-		layoutToolbar.element.classList.add("ash-chat-title-layout-actions");
+		this.layoutToolbar.element.setAttribute("aria-label", "Chat layout");
+		this.layoutToolbar.element.classList.add("ash-chat-title-layout-actions");
 		this._register(toDisposable(() => this.actionsElement.remove()));
 	}
 
 	get partTitleProjection(): PartTitleProjection {
 		return { content: this.tabs.element, actions: this.actionsElement };
+	}
+
+	captureFocus(): (() => void) | undefined {
+		if (!this.layoutToolbar.element.contains(this.actionsElement.ownerDocument.activeElement)) return undefined;
+		return () => this.layoutToolbar.focus();
 	}
 
 	setTabs(entries: readonly ChatTab[], activeTabId: string | undefined): ReadonlyMap<string, string> {

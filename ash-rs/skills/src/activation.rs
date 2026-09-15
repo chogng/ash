@@ -4,11 +4,11 @@ use crate::SkillError;
 use crate::SkillErrorKind;
 use crate::file_snapshot::FileSnapshotFailure;
 use crate::file_snapshot::read_verified_file_snapshot;
-use std::fs;
 use ash_protocol::FrozenSkillActivation;
 use ash_protocol::SkillActivationReason;
 use ash_protocol::SkillRef;
 use ash_protocol::SkillVersionSelector;
+use std::fs;
 
 const MAX_SKILL_FILE_BYTES: u64 = 1024 * 1024;
 

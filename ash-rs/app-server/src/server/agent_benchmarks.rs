@@ -1,13 +1,13 @@
 use agent::resolve_agent_selection;
 use agent_roles::AgentRoleCatalog;
-use std::hint::black_box;
-use std::time::Instant;
 use ash_protocol::AgentRoleSelection;
 use ash_protocol::AgentRoleSource;
 use ash_protocol::ModelId;
 use ash_protocol::ModelRef;
 use ash_protocol::ProviderId;
 use ash_protocol::ToolName;
+use std::hint::black_box;
+use std::time::Instant;
 
 fn measure<T>(name: &str, role_count: usize, tool_count: usize, mut operation: impl FnMut() -> T) {
     const SAMPLES: usize = 1000;

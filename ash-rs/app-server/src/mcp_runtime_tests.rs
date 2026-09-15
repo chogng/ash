@@ -1,7 +1,7 @@
 use super::McpRuntimeIntents;
-use std::sync::mpsc::TryRecvError;
 use ash_config::McpServerId;
 use ash_mcp_extension::McpServerRuntimeIntent;
+use std::sync::mpsc::TryRecvError;
 
 #[test]
 fn runtime_intents_publish_process_local_changes() {

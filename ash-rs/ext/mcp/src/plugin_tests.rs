@@ -1,8 +1,5 @@
 use std::fs;
 
-use connectors::ConnectorCatalog;
-use connectors::ConnectorDefinition;
-use tempfile::tempdir;
 use ash_core_plugins::PluginActivationAuthority;
 use ash_core_plugins::PluginActivationSnapshot;
 use ash_core_plugins::PluginAuthorityCommand;
@@ -12,6 +9,9 @@ use ash_core_plugins::PluginPackageStore;
 use ash_mcp::McpServerTransport;
 use ash_plugin::LocalPluginPackage;
 use ash_secrets::SecretValue;
+use connectors::ConnectorCatalog;
+use connectors::ConnectorDefinition;
+use tempfile::tempdir;
 
 use super::ConnectorMcpRuntimeProvider;
 use super::PluginConnectorMcpRuntimeProvider;

@@ -1,5 +1,9 @@
 use super::*;
 use crate::local::ProviderModelService;
+use ash_core::InMemoryThreadStore;
+use ash_core::ThreadController;
+use ash_model_provider::EchoModel;
+use ash_secrets::MemorySecretStore;
 use connectors::ConnectorAuthority;
 use connectors::ConnectorCredentialService;
 use connectors::ConnectorDefinition;
@@ -21,10 +25,6 @@ use connectors::ConnectorOAuthService;
 use connectors::ConnectorRuntimeBinding;
 use std::sync::Arc;
 use std::time::Duration;
-use ash_core::InMemoryThreadStore;
-use ash_core::ThreadController;
-use ash_model_provider::EchoModel;
-use ash_secrets::MemorySecretStore;
 
 fn server() -> AppServer {
     let connector = ConnectorDefinition::new(

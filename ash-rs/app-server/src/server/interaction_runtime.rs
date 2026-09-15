@@ -1,6 +1,6 @@
-use core_api::InteractionLifecycle;
 use super::update_broker::UpdateBroker;
 use super::update_broker::unix_time_millis;
+use core_api::InteractionLifecycle;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::mpsc;

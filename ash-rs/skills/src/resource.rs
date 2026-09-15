@@ -4,13 +4,13 @@ use crate::SkillError;
 use crate::SkillErrorKind;
 use crate::file_snapshot::FileSnapshotFailure;
 use crate::file_snapshot::read_verified_file_snapshot;
+use ash_protocol::SkillRef;
+use ash_protocol::SkillVersionSelector;
 use std::ffi::OsStr;
 use std::fs;
 use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
-use ash_protocol::SkillRef;
-use ash_protocol::SkillVersionSelector;
 
 const MAX_RESOURCE_PATH_BYTES: usize = 1024;
 const MAX_RESOURCE_FILE_BYTES: u64 = 256 * 1024;

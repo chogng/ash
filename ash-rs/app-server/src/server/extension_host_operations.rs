@@ -1,4 +1,3 @@
-use serde_json::Value;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::extension_host::ExtensionHostCancellationReasonDto;
 use ash_app_server_protocol::protocol::extension_host::ExtensionHostExtensionDto;
@@ -31,6 +30,7 @@ use ash_editor_extension_host::LanguageProviderOperation;
 use ash_editor_extension_host::RegistrationDescriptor;
 use ash_editor_extension_host::RegistrationKind;
 use ash_editor_extension_host::SequencedExtensionHostOutputEvent;
+use serde_json::Value;
 
 use super::AppServer;
 use super::ConnectionState;

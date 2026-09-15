@@ -43,21 +43,20 @@ impl WorkbenchApplication {
         let Some(anchor) = anchor else {
             return;
         };
-        let connections =
-            match ash_utils_home_dir::find_ash_home()
-                .map_err(|error| error.to_string())
-                .and_then(|root| {
-                    let catalog = RemoteConnectionCatalog::from_profile_root(root);
-                    catalog
-                        .connections()
-                        .map_err(|error| format!("{}: {error}", catalog.path().display()))
-                }) {
-                Ok(connections) => connections,
-                Err(error) => {
-                    eprintln!("could not load Remote connections: {error}");
-                    return;
-                }
-            };
+        let connections = match ash_utils_home_dir::find_ash_home()
+            .map_err(|error| error.to_string())
+            .and_then(|root| {
+                let catalog = RemoteConnectionCatalog::from_profile_root(root);
+                catalog
+                    .connections()
+                    .map_err(|error| format!("{}: {error}", catalog.path().display()))
+            }) {
+            Ok(connections) => connections,
+            Err(error) => {
+                eprintln!("could not load Remote connections: {error}");
+                return;
+            }
+        };
         let restore_focus = self.ui_dispatch.focused();
         self.remote_connection_picker.open(
             anchor,

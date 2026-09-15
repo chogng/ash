@@ -1,7 +1,6 @@
 use std::fs;
 use std::path::Path;
 
-use tempfile::TempDir;
 use ash_config::LanguageServerConfig;
 use ash_config::LanguageServerId;
 use ash_config::LanguageServerModeConfig;
@@ -12,6 +11,7 @@ use ash_lsp_server_provider::LanguageServerMode;
 use ash_lsp_server_provider::LspServerProviders;
 use ash_lsp_server_provider::ManagedNodeRuntime;
 use ash_lsp_server_provider::RUST_ANALYZER_SERVER_ID;
+use tempfile::TempDir;
 
 use super::configured_provider_definitions;
 use super::preference;

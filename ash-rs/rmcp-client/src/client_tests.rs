@@ -50,12 +50,11 @@ async fn initializes_lists_and_calls_tools_over_an_in_process_transport() {
             .await
             .expect("join test server")
     });
-    let options =
-        RmcpClientOptions::new("ash-rmcp-client-test", "0").with_timeouts(RmcpTimeouts {
-            initialize: Duration::from_secs(2),
-            request: Duration::from_secs(2),
-            shutdown: Duration::from_secs(2),
-        });
+    let options = RmcpClientOptions::new("ash-rmcp-client-test", "0").with_timeouts(RmcpTimeouts {
+        initialize: Duration::from_secs(2),
+        request: Duration::from_secs(2),
+        shutdown: Duration::from_secs(2),
+    });
     let client = RmcpClient::connect(client_transport, options)
         .await
         .expect("initialize client");

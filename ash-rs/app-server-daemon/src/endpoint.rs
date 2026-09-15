@@ -25,12 +25,12 @@ use std::os::unix::fs::OpenOptionsExt;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
-use sha2::Digest;
-use sha2::Sha256;
 use ash_app_server_protocol::schema_hash;
 use ash_uds::SocketDirectory;
 use ash_uds::UnixListener;
 use ash_uds::UnixStream;
+use sha2::Digest;
+use sha2::Sha256;
 
 const ENDPOINT_CONTRACT_VERSION: u32 = 2;
 const HEARTBEAT_FILE_NAME: &str = "heartbeat";

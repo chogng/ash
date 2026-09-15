@@ -4,7 +4,6 @@ use super::FrozenModelSelection;
 use crate::CoreError;
 use crate::ModelSelection;
 use crate::ModelService;
-use std::sync::Arc;
 use ash_async_utils::CancellationToken;
 use ash_prompts::COMPACTION_PROMPT;
 use ash_protocol::ContentPart;
@@ -19,6 +18,7 @@ use ash_protocol::ModelUsage;
 use ash_protocol::ResponseItem;
 use ash_protocol::ThreadItem;
 use ash_protocol::ToolChoice;
+use std::sync::Arc;
 
 const CHECKPOINT_SCHEMA_REVISION: &str = "context-checkpoint-v1";
 const CONTEXT_POLICY_REVISION: &str = "context-policy-v2";

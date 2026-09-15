@@ -2,6 +2,9 @@ use crate::{
     ContentSearchCaseSensitivity, ContentSearchError, ContentSearchMatch, ContentSearchMatchRange,
     ContentSearchOwner, ContentSearchPage, ContentSearchPattern, ContentSearchQuery,
 };
+use ash_async_utils::CancellationSource;
+use ash_file_access::{Authorization, Dir, Permission};
+use ash_shell_command::RipgrepExecutable;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read};
@@ -11,9 +14,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
-use ash_async_utils::CancellationSource;
-use ash_file_access::{Authorization, Dir, Permission};
-use ash_shell_command::RipgrepExecutable;
 
 const MAX_ACTIVE_SEARCHES: usize = 32;
 const SEARCH_RETENTION: Duration = Duration::from_secs(300);

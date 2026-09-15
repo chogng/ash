@@ -1,7 +1,7 @@
-use std::collections::HashMap;
-use std::collections::HashSet;
 use ash_app_server_protocol::protocol::transcript::ThreadTranscriptChange;
 use ash_app_server_protocol::protocol::transcript::ThreadTranscriptUpdateEnvelope;
+use std::collections::HashMap;
+use std::collections::HashSet;
 
 const MAX_BATCH_ENTRIES: usize = 256;
 const MAX_BATCH_TEXT_BYTES: usize = 1024 * 1024;

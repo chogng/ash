@@ -1,7 +1,7 @@
 use crate::ConfigError;
+use ash_protocol::{SkillId, SkillName, SkillSourceId};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use ash_protocol::{SkillId, SkillName, SkillSourceId};
 
 /// Desired enablement for one configured Skill source.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]

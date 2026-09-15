@@ -63,17 +63,6 @@ use crate::thread::transcript::MessageRole;
 use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionModel;
-use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyModifiers;
-use ratatui::layout::Rect;
-use ratatui::style::Color;
-use std::collections::BTreeMap;
-use std::fs;
-use std::path::Path;
-use std::time::Duration;
-use std::time::Instant;
-use std::time::{SystemTime, UNIX_EPOCH};
 use ash_app_server_protocol::protocol::config::FrontendConfigDto;
 use ash_app_server_protocol::protocol::config::LanguageServerConfigDto;
 use ash_app_server_protocol::protocol::config::LanguageServerModeDto;
@@ -106,6 +95,17 @@ use ash_protocol::Turn;
 use ash_protocol::TurnId;
 use ash_protocol::TurnStatus;
 use ash_terminal_detection::ColorLevel;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyModifiers;
+use ratatui::layout::Rect;
+use ratatui::style::Color;
+use std::collections::BTreeMap;
+use std::fs;
+use std::path::Path;
+use std::time::Duration;
+use std::time::Instant;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[test]
 fn skill_diagnostics_are_notices_and_are_suppressed_until_they_clear() {
@@ -2576,6 +2576,16 @@ fn fork_rejects_image_arguments_before_session_creation() {
             height: 1,
         }),
     });
-    assert_eq!(app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)), None);
-    assert!(app.messages().last().unwrap().detail().unwrap().contains("do not accept image arguments"));
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        None
+    );
+    assert!(
+        app.messages()
+            .last()
+            .unwrap()
+            .detail()
+            .unwrap()
+            .contains("do not accept image arguments")
+    );
 }

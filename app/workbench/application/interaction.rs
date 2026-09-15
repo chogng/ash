@@ -143,10 +143,9 @@ impl WorkbenchApplication {
             .composer_interaction_view()
             .map(|view| view.items().len())
             .unwrap_or(0);
-        if let Some(index) = ash_session::interaction::composer_interaction_item_index(
-            id,
-            0..interaction_item_count,
-        ) {
+        if let Some(index) =
+            ash_session::interaction::composer_interaction_item_index(id, 0..interaction_item_count)
+        {
             self.activate_composer_interaction_item(index);
             return;
         }

@@ -8,15 +8,15 @@ use std::fmt::Write as _;
 use std::path::Path;
 use std::sync::Arc;
 
-use keyring::Entry;
-use sha2::Digest;
-use sha2::Sha256;
 use ash_secrets::DeleteSecretOutcome;
 use ash_secrets::SecretKey;
 use ash_secrets::SecretStore;
 use ash_secrets::SecretStoreError;
 use ash_secrets::SecretStoreErrorKind;
 use ash_secrets::SecretValue;
+use keyring::Entry;
+use sha2::Digest;
+use sha2::Sha256;
 
 const KEYRING_SERVICE: &str = "com.ash.secret-store.v1";
 const PROFILE_NAMESPACE_DOMAIN: &[u8] = b"ash-keyring-profile-namespace-v1\0";

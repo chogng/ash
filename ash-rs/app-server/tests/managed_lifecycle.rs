@@ -7,7 +7,6 @@ use std::io::Write;
 use std::path::Path;
 use std::time::Duration;
 
-use serde_json::json;
 use ash_app_server_daemon::ConnectionOptions;
 use ash_app_server_daemon::GrantSource;
 use ash_app_server_daemon::LifecycleCommand;
@@ -15,6 +14,7 @@ use ash_app_server_daemon::LifecycleStatus;
 use ash_app_server_daemon::daemon_endpoint_path;
 use ash_app_server_daemon::run_lifecycle;
 use ash_uds::UnixStream;
+use serde_json::json;
 
 struct StopOnDrop<'a> {
     options: ConnectionOptions,
@@ -81,10 +81,7 @@ fn lifecycle_commands_are_idempotent_and_probe_initialize() {
     let restarted = run_lifecycle(LifecycleCommand::Restart, options.clone(), executable).unwrap();
     assert_eq!(restarted.status, LifecycleStatus::Restarted);
     assert_ne!(restarted.instance_id, started.instance_id);
-    assert_eq!(
-        restarted.app_server_name.as_deref(),
-        Some("ash-app-server")
-    );
+    assert_eq!(restarted.app_server_name.as_deref(), Some("ash-app-server"));
 
     let stopped = run_lifecycle(LifecycleCommand::Stop, options.clone(), executable).unwrap();
     assert_eq!(stopped.status, LifecycleStatus::Stopped);

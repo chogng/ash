@@ -2200,9 +2200,7 @@ mod tests {
             .any(|(k, v)| k == "HTTPS_PROXY" && v == &proxy_url));
         // NO_PROXY is neutralized to the empty string rather than omitted, so
         // an inherited exemption cannot survive the cooperative proxy.
-        assert!(entries
-            .iter()
-            .any(|(k, v)| k == "NO_PROXY" && v.is_empty()));
+        assert!(entries.iter().any(|(k, v)| k == "NO_PROXY" && v.is_empty()));
     }
 
     // ---- validate_runner: unsupported policy fields surface as errors. ----

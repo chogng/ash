@@ -2,9 +2,9 @@ use crate::AgentEnvironmentError;
 use crate::Dirs;
 use crate::error::absolute_path;
 use crate::error::validate_text;
+use ash_utils_absolute_path::AbsolutePathBuf;
 use std::path::Path;
 use std::path::PathBuf;
-use ash_utils_absolute_path::AbsolutePathBuf;
 
 /// Host facts captured for one environment connection.
 #[derive(Clone, Debug, Eq, PartialEq)]

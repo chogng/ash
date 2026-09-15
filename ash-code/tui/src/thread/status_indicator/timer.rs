@@ -1,6 +1,6 @@
+use ash_protocol::TurnId;
 use std::time::Duration;
 use std::time::Instant;
-use ash_protocol::TurnId;
 
 /// Presentation time survives hiding the row and includes time waiting for user input.
 #[derive(Debug, Default)]

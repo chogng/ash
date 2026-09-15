@@ -7,12 +7,13 @@ use crate::protocol::HookInvocation;
 use crate::protocol::encode_input;
 use crate::records::HookRunLog;
 use crate::records::HookRunRecord;
-use std::collections::BTreeMap;
-use std::sync::Arc;
-use std::sync::RwLock;
 use ash_async_utils::CancellationToken;
 use ash_config::HookEnablement;
 use ash_config::HooksConfig;
+use ash_file_access::Authorization;
+use ash_file_access::Dir;
+use ash_protocol::SessionId;
+use ash_protocol::ThreadId;
 use core_api::ActionPolicyService;
 use core_api::AfterToolHookRequest;
 use core_api::BeforeToolHookDecision;
@@ -23,10 +24,9 @@ use core_api::HookExecutionObserver;
 use core_api::HookService;
 use core_api::NoHookExecutionObserver;
 use core_api::TurnCompletedHookRequest;
-use ash_file_access::Authorization;
-use ash_file_access::Dir;
-use ash_protocol::SessionId;
-use ash_protocol::ThreadId;
+use std::collections::BTreeMap;
+use std::sync::Arc;
+use std::sync::RwLock;
 
 struct SessionHookBinding {
     config: HooksConfig,

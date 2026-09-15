@@ -1,11 +1,11 @@
 use super::McpSelectionAction;
 use super::mcp_choices;
 use crate::widgets::list_selection::ListSelectionState;
-use std::collections::BTreeMap;
 use ash_app_server_protocol::protocol::config::McpCredentialBindingDto;
 use ash_app_server_protocol::protocol::config::McpServerConfigDto;
 use ash_app_server_protocol::protocol::config::McpServerEnablementDto;
 use ash_app_server_protocol::protocol::config::McpTransportDto;
+use std::collections::BTreeMap;
 
 #[test]
 fn mcp_settings_filter_servers_and_maps_enter_to_the_opposite_enablement() {

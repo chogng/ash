@@ -1,5 +1,5 @@
-use std::fmt;
 use ash_protocol::ProviderId;
+use std::fmt;
 
 const STATIC_SOURCE_SCOPE: &str = "ash:provider-seed";
 

@@ -1,7 +1,5 @@
 use std::time::Instant;
 
-use serde_json::json;
-use std::collections::BTreeMap;
 use ash_app_server_protocol::protocol::config::FrontendConfigDto;
 use ash_commands::AppCommandId;
 use ash_keybinding::HostPlatform;
@@ -9,6 +7,8 @@ use ash_keybinding::KeyStroke;
 use ash_keybinding::LogicalKey;
 use ash_keybinding::Modifiers;
 use ash_keybinding::parse_key_sequence;
+use serde_json::json;
+use std::collections::BTreeMap;
 
 use super::binding_diagnostics;
 use super::compile_user_bindings;

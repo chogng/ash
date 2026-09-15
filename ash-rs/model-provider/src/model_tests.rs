@@ -2,12 +2,6 @@ use super::*;
 
 #[path = "websocket_session_tests.rs"]
 mod websocket_sessions;
-use serde_json::{Value, json};
-use std::io::{Read, Write};
-use std::net::TcpListener;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-use std::thread;
 use ash_api::{ModelRequest, ModelStreamEvent, StopReason, ToolDefinition, ToolName};
 use ash_async_utils::CancellationSource;
 use ash_chatgpt::ChatGptOAuth;
@@ -31,6 +25,12 @@ use ash_secrets::MemorySecretStore;
 use ash_secrets::SecretKey;
 use ash_secrets::SecretStore;
 use ash_secrets::SecretValue;
+use serde_json::{Value, json};
+use std::io::{Read, Write};
+use std::net::TcpListener;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::thread;
 
 #[path = "streaming_tests.rs"]
 mod streaming;

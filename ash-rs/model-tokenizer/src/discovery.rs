@@ -2,10 +2,10 @@ use crate::LocalTokenizerError;
 use crate::RemoteTokenizerAsset;
 use crate::TokenizerAssetDownloader;
 use crate::TokenizerAssetManifest;
+use ash_protocol::ModelRef;
 use serde::Deserialize;
 use serde_json::Value;
 use std::sync::Arc;
-use ash_protocol::ModelRef;
 
 /// Resolves an exact provider/model selection into one immutable asset manifest.
 ///

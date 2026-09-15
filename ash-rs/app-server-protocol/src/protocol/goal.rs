@@ -1,11 +1,11 @@
 use crate::protocol::common::ThreadId;
 use crate::protocol::common::TurnId;
+use ash_protocol::ThreadGoal;
+use ash_protocol::ThreadGoalStatus;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use ts_rs::TS;
-use ash_protocol::ThreadGoal;
-use ash_protocol::ThreadGoalStatus;
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

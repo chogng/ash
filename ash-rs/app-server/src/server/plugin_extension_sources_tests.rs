@@ -1,5 +1,4 @@
 use super::PluginExtensionSourceProvider;
-use std::fs;
 use ash_core_plugins::PluginActivationAuthority;
 use ash_core_plugins::PluginAuthorityCommand;
 use ash_core_plugins::PluginAuthorityCommandId;
@@ -7,6 +6,7 @@ use ash_core_plugins::PluginAuthorityCommandRequest;
 use ash_core_plugins::PluginPackageStore;
 use ash_extensions::DynamicExtensionSourceProvider;
 use ash_plugin::LocalPluginPackage;
+use std::fs;
 
 #[test]
 fn projects_only_effective_declarative_extension_packages() {

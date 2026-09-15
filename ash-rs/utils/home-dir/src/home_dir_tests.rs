@@ -69,7 +69,10 @@ fn missing_user_home_never_uses_the_working_directory() {
 #[test]
 fn root_relative_paths_cannot_select_the_current_drive() {
     for path in [r"\folder", "/folder", r"C:folder", r"\\server"] {
-        assert_eq!(resolve_path(Path::new(path)).unwrap_err().kind(), ErrorKind::InvalidInput);
+        assert_eq!(
+            resolve_path(Path::new(path)).unwrap_err().kind(),
+            ErrorKind::InvalidInput
+        );
     }
 }
 

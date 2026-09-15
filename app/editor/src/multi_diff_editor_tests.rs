@@ -5,9 +5,9 @@ use crate::{
     CodeEditorLanguage, DiffEditorDocument, DiffEditorLabels, DiffEditorPresentation,
     DiffEditorState,
 };
-use std::time::{Duration, Instant};
 use ash_diff::DiffDocument;
 use ash_ui_components::{ScrollAxis, ScrollCommand, ScrollDelta, ScrollState};
+use std::time::{Duration, Instant};
 use zui::ui::{
     AnimationBinding, AnimationKey, AnimationProperty, AnimationRegistry, Color, Component,
     CornerRadii, ElementId, InteractionFrame, Rect, ScalarAnimationSpec, UiFrame, UiScene,

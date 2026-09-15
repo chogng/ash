@@ -1,12 +1,12 @@
 use crate::ExtensionError;
 use crate::PromptFragment;
-use std::sync::Arc;
 use ash_protocol::FrozenSkillActivation;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use ash_protocol::TurnId;
 use ash_protocol::UserInput;
 use ash_tools::ToolExecutor;
+use std::sync::Arc;
 
 /// Immutable user input available while a new Turn's capability activations are resolved.
 pub struct SkillActivationContext<'a> {

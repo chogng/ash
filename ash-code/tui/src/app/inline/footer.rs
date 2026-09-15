@@ -5,11 +5,11 @@ use crate::status as status_line;
 use crate::thread::composer as chat_input;
 use crate::widgets::key_hint;
 use crate::widgets::key_hint::KeyHints;
+use ash_memory_diagnostics::ProcessResourceDemand;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::widgets::Paragraph;
-use ash_memory_diagnostics::ProcessResourceDemand;
 
 enum BottomContent<'a> {
     Keys(&'a KeyHints),

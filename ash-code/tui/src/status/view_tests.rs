@@ -4,8 +4,8 @@ use crate::render::RenderTheme;
 use crate::render::ThemePalette;
 use crate::render::ThemeRgb;
 use crate::status::model::StatusLineSegment;
-use ratatui::style::Color;
 use ash_terminal_detection::ColorLevel;
+use ratatui::style::Color;
 
 #[test]
 fn git_diff_statistics_use_the_theme_marker_colors() {

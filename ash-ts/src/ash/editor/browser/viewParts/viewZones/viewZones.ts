@@ -1,4 +1,4 @@
-import { getActiveDocument } from '../../../../base/browser/dom.js';
+import { h, getActiveDocument } from '../../../../base/browser/dom.js';
 import { createFastDomNode, type FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
@@ -44,13 +44,13 @@ export class ViewZones extends ViewPart {
 		this.contentWidth = layoutInfo.contentWidth;
 		this.contentLeft = layoutInfo.contentLeft;
 		const ownerDocument = getActiveDocument();
-		this.domNode = createFastDomNode(ownerDocument.createElement('div'));
+		this.domNode = createFastDomNode(h(ownerDocument, 'div'));
 		this.domNode.setClassName('stanza-editor-view-zones');
 		this.domNode.setPosition('absolute');
 		this.domNode.setTop(0);
 		this.domNode.setAttribute('role', 'presentation');
 		this.domNode.setAttribute('aria-hidden', 'true');
-		this.marginDomNode = createFastDomNode(ownerDocument.createElement('div'));
+		this.marginDomNode = createFastDomNode(h(ownerDocument, 'div'));
 		this.marginDomNode.setClassName('stanza-editor-margin-view-zones');
 		this.marginDomNode.setPosition('absolute');
 		this.marginDomNode.setTop(0);

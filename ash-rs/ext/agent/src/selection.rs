@@ -2,6 +2,7 @@ use std::collections::BTreeSet;
 
 use agent_roles::AgentRole;
 use agent_roles::AgentRoleCatalogSnapshot;
+use core_api::CoreError;
 use instructions::InstructionCatalogSnapshot;
 use protocol::AgentCapabilityScope;
 use protocol::AgentDefinitionSelectionReason;
@@ -15,7 +16,6 @@ use protocol::ModelRef;
 use protocol::ProviderId;
 use protocol::SkillActivationReason;
 use protocol::ToolName;
-use core_api::CoreError;
 
 pub struct ResolvedAgentSelection {
     pub role: Option<AgentRoleSnapshot>,

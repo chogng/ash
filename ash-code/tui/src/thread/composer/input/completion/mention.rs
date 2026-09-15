@@ -1,7 +1,7 @@
 //! Workspace-file mention query and completion state owned by `ChatInput`.
 
-use std::ops::Range;
 use ash_file_search::PathSearchSnapshot;
+use std::ops::Range;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct ActiveMention<'a> {

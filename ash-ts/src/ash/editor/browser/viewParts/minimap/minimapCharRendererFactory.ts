@@ -1,3 +1,4 @@
+import { h } from '../../../../base/browser/dom.js';
 import { MinimapCharRenderer } from './minimapCharRenderer.js';
 import { allCharCodes, Constants } from './minimapCharSheet.js';
 import { prebakedMiniMaps } from './minimapPreBaked.js';
@@ -43,7 +44,7 @@ export class MinimapCharRendererFactory {
 	 * Creates the font sample data, writing to a canvas.
 	 */
 	public static createSampleData(fontFamily: string): ImageData {
-		const canvas = document.createElement('canvas');
+		const canvas = h(document, 'canvas');
 		const ctx = canvas.getContext('2d')!;
 
 		canvas.style.height = `${Constants.SAMPLED_CHAR_HEIGHT}px`;

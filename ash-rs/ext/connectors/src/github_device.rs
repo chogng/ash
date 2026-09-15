@@ -3,14 +3,14 @@ use std::time::Duration;
 
 use crate::ConnectorAccountId;
 use crate::ConnectorDefinition;
-use serde::Deserialize;
-use serde::Serialize;
-use zeroize::Zeroize;
 use ash_http_client::HttpClient;
 use ash_http_client::HttpHeader;
 use ash_http_client::HttpMethod;
 use ash_http_client::HttpRequest;
 use ash_secrets::SecretValue;
+use serde::Deserialize;
+use serde::Serialize;
+use zeroize::Zeroize;
 
 use crate::ConnectorDeviceOAuthGrant;
 use crate::ConnectorDeviceOAuthPoll;

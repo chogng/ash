@@ -1,6 +1,3 @@
-use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyModifiers;
 use ash_keybinding::Chord;
 use ash_keybinding::KeySequence;
 use ash_keybinding::KeyStroke;
@@ -9,6 +6,9 @@ use ash_keybinding::Modifiers;
 use ash_keybinding::ShortcutModifiers;
 use ash_keybinding::parse_key_sequence;
 use ash_keybinding::serialize_key_sequence;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyModifiers;
 
 pub(crate) fn key_event_to_config_key(key: &KeyEvent) -> Result<String, String> {
     let normalized = normalized_key(key)

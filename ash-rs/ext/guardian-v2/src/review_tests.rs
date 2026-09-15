@@ -268,10 +268,8 @@ fn approval_mode_policy_runs_the_reviewer_only_for_auto_review() {
             r#"{"recommendation":"deny","reason":"unsafe"}"#.into(),
         )),
     };
-    let policy = ash_core::TurnActionPolicy::new(
-        Arc::new(AskPolicy),
-        crate::reviewer(review_model),
-    );
+    let policy =
+        ash_core::TurnActionPolicy::new(Arc::new(AskPolicy), crate::reviewer(review_model));
     let revision = policy.revision();
     let request = review_request();
 

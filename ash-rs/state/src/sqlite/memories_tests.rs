@@ -1,4 +1,5 @@
 use super::SqliteMemoryStore;
+use ash_protocol::CommandId;
 use async_utils::CancellationSource;
 use async_utils::CancellationToken;
 use memories::Memories;
@@ -11,7 +12,6 @@ use std::cell::RefCell;
 use std::sync::Arc;
 use std::sync::mpsc;
 use std::time::Duration;
-use ash_protocol::CommandId;
 
 #[derive(Clone, Copy)]
 enum Writer {

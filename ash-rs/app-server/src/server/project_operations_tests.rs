@@ -1,10 +1,7 @@
 use super::AppServer;
 use super::ConnectionState;
 use crate::local::ProviderModelService;
-use std::str::FromStr;
-use std::sync::Arc;
 use ash_core::InMemoryThreadStore;
-use core_api::StartThreadRequest;
 use ash_core::ThreadController;
 use ash_file_access::Dir;
 use ash_file_access::DirId;
@@ -15,6 +12,9 @@ use ash_file_access::Permissions;
 use ash_model_provider::EchoModel;
 use ash_protocol::CommandId;
 use ash_protocol::ContentDigest;
+use core_api::StartThreadRequest;
+use std::str::FromStr;
+use std::sync::Arc;
 
 #[test]
 fn project_rpc_keeps_catalog_associations_separate_from_directory_authority() {

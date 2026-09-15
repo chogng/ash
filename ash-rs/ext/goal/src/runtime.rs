@@ -1,3 +1,6 @@
+use ash_core::StartGoalTurnRequest;
+use ash_core::ThreadController;
+use core_api::CoreError;
 use extension_api::ExtensionTurn;
 use protocol::CommandId;
 use protocol::SessionId;
@@ -8,9 +11,6 @@ use protocol::TurnStatus;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::sync::Weak;
-use core_api::CoreError;
-use ash_core::StartGoalTurnRequest;
-use ash_core::ThreadController;
 
 pub(crate) struct GoalExtension {
     threads: Weak<ThreadController>,

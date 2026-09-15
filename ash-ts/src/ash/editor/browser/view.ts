@@ -330,11 +330,11 @@ export class View extends ViewEventHandler {
 		this.contentViewOverlays = this.registerViewPart(new ContentViewOverlays(this.viewContext, this.contentElement));
 		this.decorations = new DecorationsOverlay(this.viewContext);
 		this.contentViewOverlays.addDynamicOverlay(new CurrentLineHighlightOverlay(this.viewContext));
-		this.contentViewOverlays.addDynamicOverlay(new SelectionsOverlay(this.viewContext, this.viewModel, this.model, this.domNode.domNode.ownerDocument, () => this.visualProjection, () => this.textLeft, this.textMeasurer));
+		this.contentViewOverlays.addDynamicOverlay(new SelectionsOverlay(this.viewContext, this.viewModel, this.model, this.contentElement, () => this.visualProjection, () => this.textLeft, this.textMeasurer));
 		this.contentViewOverlays.addDynamicOverlay(new IndentGuidesOverlay(this.viewContext, {
 			bracketColorizationSource: options.bracketColorizationSource,
 			viewModel: this.viewModel,
-			ownerDocument: this.domNode.domNode.ownerDocument,
+			host: this.contentElement,
 			readVisualProjection: () => this.visualProjection,
 			readTextLeft: () => this.textLeft,
 			textMeasurer: this.textMeasurer,
@@ -344,7 +344,7 @@ export class View extends ViewEventHandler {
 			this.viewContext,
 			this.model,
 			this.viewModel,
-			this.domNode.domNode.ownerDocument,
+			this.contentElement,
 			() => this.visualProjection,
 			() => this.textLeft,
 			this.textMeasurer,
@@ -365,7 +365,7 @@ export class View extends ViewEventHandler {
 		this.marginViewOverlays.addDynamicOverlay(new LineNumbersOverlay(this.viewContext, {
 			viewModel: this.viewModel,
 			readVisualProjection: () => this.visualProjection,
-			ownerDocument: this.domNode.domNode.ownerDocument,
+			host: this.contentElement,
 		}));
 		this.glyphMarginWidgets = this.registerViewPart(new GlyphMarginWidgets(this.viewContext));
 		this.margin.getDomNode().domNode.append(this.viewZones.marginDomNode.domNode, this.marginViewOverlays.getDomNode().domNode, this.glyphMarginWidgets.domNode.domNode);
@@ -378,7 +378,7 @@ export class View extends ViewEventHandler {
 			));
 		} else {
 			rulersDomNode = this.registerViewPart(new Rulers(this.viewContext, {
-				ownerDocument: this.domNode.domNode.ownerDocument,
+				host: this.contentElement,
 				readTextLeft: () => this.textLeft,
 			})).domNode.domNode;
 		}

@@ -17,13 +17,13 @@ use crate::IndexRootId;
 use crate::IndexedLanguage;
 use crate::SymbolIndex;
 use crate::SymbolIndexLimits;
-use tempfile::TempDir;
 use ash_file_access::Dir;
 use ash_model_provider::EmbeddingInvoker;
 use ash_model_provider::EmbeddingRequest;
 use ash_model_provider::EmbeddingResponse;
 use ash_model_provider::EmbeddingVector;
 use ash_model_provider::ModelProviderError;
+use tempfile::TempDir;
 
 use crate::CodebaseRetrievalBudget;
 use crate::CodebaseRetrievalDegradation;

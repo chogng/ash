@@ -1,7 +1,7 @@
 //! `$skill` query, completion, and exact Skill binding state owned by `ChatInput`.
 
-use std::ops::Range;
 use ash_protocol::SkillRef;
+use std::ops::Range;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct SkillCompletionItem {

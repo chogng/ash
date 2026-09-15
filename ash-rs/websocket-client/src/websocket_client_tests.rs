@@ -1,4 +1,8 @@
 use super::*;
+use ash_http_client::HttpClientConfig;
+use ash_http_client::HttpHeader;
+use ash_http_client::OutboundNetworkSnapshot;
+use ash_http_client::ProxyPolicy;
 use futures::SinkExt;
 use futures::StreamExt;
 use tokio::io::AsyncReadExt;
@@ -6,10 +10,6 @@ use tokio::io::AsyncWriteExt;
 use tokio::net::TcpListener;
 use tokio::net::TcpStream;
 use tokio_tungstenite::accept_async;
-use ash_http_client::HttpClientConfig;
-use ash_http_client::HttpHeader;
-use ash_http_client::OutboundNetworkSnapshot;
-use ash_http_client::ProxyPolicy;
 
 #[test]
 fn request_rejects_http_and_url_credentials() {

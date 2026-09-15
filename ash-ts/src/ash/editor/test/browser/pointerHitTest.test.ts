@@ -1,3 +1,4 @@
+import { h } from '../../../base/browser/dom.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -153,7 +154,7 @@ test('View zones expose one accessor lifetime and stable pointer identity', () =
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
 	viewport.layout({ width: 200, height: 80 });
 	viewport.domNode.domNode.getBoundingClientRect = () => ({ x: 0, y: 0, left: 0, top: 0, right: 200, bottom: 80, width: 200, height: 80, toJSON: () => ({}) });
-	const domNode = dom.window.document.createElement('div');
+	const domNode = h(dom.window.document, 'div');
 	let accessor: IViewZoneChangeAccessor | undefined;
 	let id = '';
 	let computedHeight = 0;
@@ -181,8 +182,8 @@ test('Content widget pointer identity comes from the registered widget owner', (
 	using model = new TextModel('first');
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
 	viewport.layout({ width: 200, height: 60 });
-	const widgetNode = dom.window.document.createElement('div');
-	const nested = dom.window.document.createElement('span');
+	const widgetNode = h(dom.window.document, 'div');
+	const nested = h(dom.window.document, 'span');
 	widgetNode.append(nested);
 	const widget: IContentWidget = {
 		suppressMouseDown: true,

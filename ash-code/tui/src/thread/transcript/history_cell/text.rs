@@ -7,11 +7,11 @@ use crate::render::interaction_style;
 use crate::render::prefix_lines;
 use crate::render::push_owned_lines;
 use crate::render::styled_text_lines;
+use ash_ansi_escape::ansi_text;
 use ratatui::style::Modifier;
 use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
-use ash_ansi_escape::ansi_text;
 
 pub(in crate::thread::transcript) fn prefixed_body(
     text: &str,

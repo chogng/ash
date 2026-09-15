@@ -8,8 +8,6 @@ use super::format_compact_process_cpu;
 use super::format_compact_process_memory;
 use super::format_memory_change;
 use crate::AppServerProcess;
-use std::time::Duration;
-use std::time::Instant;
 use ash_memory_diagnostics::ObservedProcess;
 use ash_memory_diagnostics::ProcessResourceDemand;
 use ash_memory_diagnostics::ProcessResourceMetrics;
@@ -17,6 +15,8 @@ use ash_memory_diagnostics::ProcessResourceRequest;
 use ash_memory_diagnostics::ProcessResourceUsage;
 use ash_memory_diagnostics::ProcessResourcesReading;
 use ash_memory_diagnostics::ProcessTreeResourceUsage;
+use std::time::Duration;
+use std::time::Instant;
 
 const MIB: u64 = 1024 * 1024;
 

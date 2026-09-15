@@ -1,10 +1,10 @@
 use super::*;
-use std::time::Instant;
+use ash_client::AshClient;
 use ash_client::SseDecoder;
 use ash_client::SseFrame;
-use ash_client::AshClient;
 use ash_http_client::UreqHttpClient;
 use ash_protocol::ContentDigest;
+use std::time::Instant;
 
 #[derive(Clone, Copy, Debug)]
 enum Scope {

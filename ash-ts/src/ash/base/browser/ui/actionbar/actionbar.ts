@@ -156,6 +156,14 @@ export class ActionBar extends Disposable {
 		this._setTabStop(entry.item);
 	}
 
+	focus(): void {
+		const entry = this.entries.find(({ item, action }) => item === this.tabStop && action.enabled)
+			?? this.entries.find(({ action }) => action.enabled);
+		if (!entry) return;
+		this._setTabStop(entry.item);
+		entry.item.focus();
+	}
+
 	private handleNavigation(event: KeyboardEvent): void {
 		if (
 			event.defaultPrevented ||

@@ -37,6 +37,7 @@ test("frontend TypeScript creates DOM only through the canonical foundations", (
 		const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 		visit(sourceFile, node => {
 			if (!ts.isCallExpression(node)) return;
+			if (isBrowserEvaluation(node)) return;
 			const name = calledName(node.expression);
 			if (ts.isPropertyAccessExpression(node.expression) && ["createElement", "createElementNS", "createTextNode", "createDocumentFragment"].includes(name ?? "") && !allowedNativeDomFiles.has(file)) {
 				violations.push(location(file, sourceFile, node, name!));
@@ -47,6 +48,25 @@ test("frontend TypeScript creates DOM only through the canonical foundations", (
 		});
 	}
 	assert.deepEqual(violations, []);
+});
+
+test("browser evaluation callbacks use browser APIs without importing the test runner's modules", () => {
+	const sourceFile = ts.createSourceFile("test/integration/browser/example.integration.spec.ts", `
+		const host = document.createElement('main');
+		page.evaluate(() => {
+			document.createElement('span');
+			requestAnimationFrame(() => document.createTextNode('ready'));
+		});
+		const probe = () => document.createElement('div');
+		page.evaluate(probe);
+	`, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+	const checked: string[] = [];
+	visit(sourceFile, node => {
+		if (ts.isCallExpression(node) && calledName(node.expression) === "createElement" && !isBrowserEvaluation(node)) {
+			checked.push(node.getText(sourceFile));
+		}
+	});
+	assert.deepEqual(checked, ["document.createElement('main')", "document.createElement('div')"]);
 });
 
 test("DOM context queries have one canonical owner", () => {
@@ -147,6 +167,16 @@ function calledName(expression: ts.LeftHandSideExpression): string | undefined {
 	if (ts.isIdentifier(expression)) return expression.text;
 	if (ts.isPropertyAccessExpression(expression)) return expression.name.text;
 	return undefined;
+}
+
+function isBrowserEvaluation(node: ts.Node): boolean {
+	if (!/[\\/]test[\\/]integration[\\/]browser[\\/].*\.spec\.ts$/u.test(`/${node.getSourceFile().fileName}`)) return false;
+	for (let current = node.parent; current; current = current.parent) {
+		if (!ts.isArrowFunction(current) && !ts.isFunctionExpression(current)) continue;
+		const call = current.parent;
+		if (ts.isCallExpression(call) && ts.isPropertyAccessExpression(call.expression) && call.expression.name.text === "evaluate" && call.arguments[0] === current) return true;
+	}
+	return false;
 }
 
 function containingDeclarationName(node: ts.Node): string | undefined {

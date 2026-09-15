@@ -1,3 +1,4 @@
+import { h } from '../../../../../base/browser/dom.js';
 import { strict as assert } from "node:assert";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
@@ -503,7 +504,7 @@ function completion(id: string, label: string, preselect = false, range = Range.
 }
 
 function editorAt(model: TextModel, position: Position): ReturnType<typeof createTestCodeEditor> {
-	const editor = createTestCodeEditor({ container: document.createElement('div'), model, input: { resource: model.uri }, languageId: 'plaintext', contributions: [] });
+	const editor = createTestCodeEditor({ container: h(document, 'div'), model, input: { resource: model.uri }, languageId: 'plaintext', contributions: [] });
 	editor.setPosition(position);
 	return editor;
 }

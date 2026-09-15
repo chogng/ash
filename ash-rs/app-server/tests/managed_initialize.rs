@@ -9,10 +9,10 @@ use std::process::Command;
 use std::time::Duration;
 use std::time::Instant;
 
-use serde_json::Value;
-use serde_json::json;
 use ash_app_server_daemon::daemon_endpoint_path;
 use ash_uds::UnixStream;
+use serde_json::Value;
+use serde_json::json;
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 

@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
-import { rendererOutput } from '../../../../build/vite/output.js';
+import { rendererOutput } from '../../../../build/vite/rendererOutput.js';
 
 export default defineConfig({
 	root: resolve(import.meta.dirname),

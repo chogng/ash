@@ -6,10 +6,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use signal_hook::SigId;
-use signal_hook::consts::SIGINT;
-#[cfg(unix)]
-use signal_hook::consts::SIGTERM;
 use ash_remote_connections::RemoteConnectionCatalog;
 use ash_remote_connections::RemoteConnectionName;
 use ash_remote_connections::SshTunnelDiagnostics;
@@ -17,6 +13,10 @@ use ash_remote_connections::SshTunnelOptions;
 use ash_remote_connections::select_available_loopback_port;
 use ash_remote_host::RemoteTunnelStartup;
 use ash_remote_host::wait_for_remote_tunnel;
+use signal_hook::SigId;
+use signal_hook::consts::SIGINT;
+#[cfg(unix)]
+use signal_hook::consts::SIGTERM;
 
 use crate::remote_connection_cli::RemoteConnectionCommandParseError;
 use crate::remote_connection_cli::load_connection;

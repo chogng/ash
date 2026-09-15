@@ -17,12 +17,12 @@ use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+use ash_terminal::GridSize;
+use ash_terminal::TerminalCore;
 use portable_pty::CommandBuilder;
 use portable_pty::ExitStatus;
 use portable_pty::PtySize;
 use portable_pty::native_pty_system;
-use ash_terminal::GridSize;
-use ash_terminal::TerminalCore;
 
 const PROCESS_TIMEOUT: Duration = Duration::from_secs(30);
 const STATE_TIMEOUT: Duration = Duration::from_secs(30);

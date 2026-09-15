@@ -8,15 +8,15 @@ use super::KEY_CHORD_TIMEOUT;
 use super::compile_app_user_bindings;
 use super::compose_config_chord;
 use super::key_event_to_config_key;
+use ash_keybinding::HostPlatform;
+use ash_keybinding::format_key_sequence;
+use ash_keybinding::parse_key_sequence;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
 use std::time::Duration;
 use std::time::Instant;
-use ash_keybinding::HostPlatform;
-use ash_keybinding::format_key_sequence;
-use ash_keybinding::parse_key_sequence;
 
 fn context() -> AppKeymapContext {
     AppKeymapContext {

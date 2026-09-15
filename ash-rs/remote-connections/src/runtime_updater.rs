@@ -9,10 +9,6 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use sha2::Digest;
-use sha2::Sha256;
-use tempfile::NamedTempFile;
-use url::Url;
 use ash_http_client::HttpBodySink;
 use ash_http_client::HttpClient;
 use ash_http_client::HttpClientConfig;
@@ -29,6 +25,10 @@ use ash_http_client::TransportTimeouts;
 use ash_http_client::UreqHttpClient;
 use ash_remote::RemotePlatform;
 use ash_utils_path::write_atomically;
+use sha2::Digest;
+use sha2::Sha256;
+use tempfile::NamedTempFile;
+use url::Url;
 
 use crate::RemoteRuntimeArtifact;
 use crate::RemoteRuntimeArtifactIntegrity;

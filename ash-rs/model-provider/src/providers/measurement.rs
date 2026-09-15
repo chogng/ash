@@ -1,5 +1,4 @@
 use crate::ModelProviderError;
-use std::sync::Arc;
 use ash_api::InputTokenCount;
 use ash_api::InputTokenCountEndpoint;
 use ash_api::ModelRequest;
@@ -19,6 +18,7 @@ use ash_model_tokenizer::LocalTokenCount;
 use ash_model_tokenizer::LocalTokenizationOutcome;
 use ash_model_tokenizer::LocalTokenizerService;
 use ash_protocol::ModelRef;
+use std::sync::Arc;
 
 pub(crate) struct ProviderInputTokenCounter {
     endpoint: InputTokenCountEndpoint,

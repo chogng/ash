@@ -416,13 +416,7 @@ fn write_installed_metadata(package: &Path) {
 }
 
 fn signed_update(version: &str, target: &str, size: u64, sha256: &str) -> Vec<u8> {
-    signed_update_with_policy(
-        version,
-        target,
-        size,
-        sha256,
-        ash_tui::UpdatePolicy::Latest,
-    )
+    signed_update_with_policy(version, target, size, sha256, ash_tui::UpdatePolicy::Latest)
 }
 
 fn signed_update_with_policy(
@@ -461,9 +455,7 @@ fn update_public_key() -> ash_product_update::UpdatePublicKey {
 }
 
 fn archive_url(version: &str, target: &str) -> String {
-    format!(
-        "https://github.com/{REPOSITORY}/releases/download/v{version}/ash-code-{target}.tar.gz"
-    )
+    format!("https://github.com/{REPOSITORY}/releases/download/v{version}/ash-code-{target}.tar.gz")
 }
 
 fn hex(bytes: &[u8]) -> String {

@@ -2,9 +2,6 @@ use super::BatchCommand;
 use super::ThreadController;
 use crate::CoreError;
 use crate::ThreadSnapshot;
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::sync::Weak;
 use ash_protocol::AgentContextSeed;
 use ash_protocol::AgentJoin;
 use ash_protocol::AgentJoinId;
@@ -15,6 +12,9 @@ use ash_protocol::SessionId;
 use ash_protocol::ThreadEvent;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadOrigin;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::Weak;
 
 /// Creation request for a child Thread whose immutable Agent seed is committed atomically.
 pub struct CreateAgentThreadRequest {

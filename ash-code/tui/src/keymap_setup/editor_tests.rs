@@ -10,9 +10,9 @@ use crate::keymap_setup::KeymapEditIntent;
 use crate::keymap_setup::KeymapEditKind;
 use crate::render::test_context;
 use crate::widgets::list_selection::ListSelectionState;
+use ash_keybinding::HostPlatform;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
-use ash_keybinding::HostPlatform;
 
 fn copy_action() -> crate::keymap::KeymapActionSnapshot {
     AppKeymap::default()

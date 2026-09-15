@@ -3,6 +3,21 @@ use super::git_turn_changes_commit::spawn_commit_job;
 use super::git_turn_changes_message::spawn_message_job;
 use super::thread_dirs::ThreadDirs;
 use super::update_broker::UpdateBroker;
+use ash_app_server_protocol::protocol::turn_changes::{
+    ChangeSetId as ChangeSetIdDto, ThreadDirBinding, ThreadWorktreeRepositoryBindingDto,
+    TurnChangeCaptureStateDto, TurnChangeCommitStateDto, TurnChangeFileStatisticsDto,
+    TurnChangeMessageStateDto, TurnChangeSetSummary, TurnChangeTerminalStateDto,
+    TurnChangesChanged, TurnChangesMutationResult,
+};
+use ash_config::ConfigStore;
+use ash_core::ThreadController;
+use ash_protocol::CommandId;
+use ash_protocol::SessionId;
+use ash_protocol::ThreadId;
+use ash_protocol::ToolCallId;
+use ash_protocol::TurnId;
+use ash_state::{SqliteTurnChangeStore, TurnChangeCommandOutcome};
+use core_api::ModelService;
 use git_turn_changes::{
     CaptureState, CommitState, GitTurnChangeWatcher, MessageState, TerminalTurnState,
     TurnChangeLedger, TurnChangeSet, TurnChangeStore, WriteLifecycleTracker,
@@ -12,21 +27,6 @@ use std::path::Path;
 use std::sync::Arc;
 use std::sync::RwLock;
 use worktree::{ManagedDirBinding, ManagedDirKind};
-use ash_app_server_protocol::protocol::turn_changes::{
-    ChangeSetId as ChangeSetIdDto, ThreadDirBinding, ThreadWorktreeRepositoryBindingDto,
-    TurnChangeCaptureStateDto, TurnChangeCommitStateDto, TurnChangeFileStatisticsDto,
-    TurnChangeMessageStateDto, TurnChangeSetSummary, TurnChangeTerminalStateDto,
-    TurnChangesChanged, TurnChangesMutationResult,
-};
-use ash_config::ConfigStore;
-use core_api::ModelService;
-use ash_core::ThreadController;
-use ash_protocol::CommandId;
-use ash_protocol::SessionId;
-use ash_protocol::ThreadId;
-use ash_protocol::ToolCallId;
-use ash_protocol::TurnId;
-use ash_state::{SqliteTurnChangeStore, TurnChangeCommandOutcome};
 
 /// App Server adapter from Turn execution events to the Git ChangeSet domain.
 pub(super) struct GitTurnChangesRuntime {

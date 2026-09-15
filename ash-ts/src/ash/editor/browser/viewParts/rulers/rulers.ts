@@ -9,7 +9,7 @@ import { type RenderingContext, type RestrictedRenderingContext } from '../../vi
 import { ViewPart } from '../../view/viewPart.js';
 
 interface RulersOptions {
-	readonly ownerDocument: Document;
+	readonly host: HTMLElement;
 	readonly readTextLeft: () => number;
 }
 
@@ -22,7 +22,7 @@ export class Rulers extends ViewPart {
 
 	constructor(context: ViewContext, private readonly options: RulersOptions) {
 		super(context);
-		const element = h(options.ownerDocument, 'div');
+		const element = h(options.host.ownerDocument, 'div');
 		this._register(toDisposable(() => element.remove()));
 		this.domNode = new FastDomNode(element);
 		this.domNode.setClassName('stanza-editor-rulers');
@@ -69,7 +69,7 @@ export class Rulers extends ViewPart {
 
 	private ensureRulersCount(): void {
 		while (this.renderedRulers.length < this.rulers.length) {
-			const node = new FastDomNode(h(this.options.ownerDocument, 'div'));
+			const node = new FastDomNode(h(this.domNode.domNode.ownerDocument, 'div'));
 			node.setClassName('stanza-editor-ruler');
 			this.domNode.appendChild(node);
 			this.renderedRulers.push(node);

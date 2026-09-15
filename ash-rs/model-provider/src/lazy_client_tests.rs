@@ -1,12 +1,12 @@
 use super::LazyOperationClient;
-use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
 use ash_client::ClientError;
 use ash_client::ClientRequest;
 use ash_client::ClientResponse;
 use ash_client::OperationClient;
 use ash_client::RetryPolicy;
+use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
 struct FixedClient;
 

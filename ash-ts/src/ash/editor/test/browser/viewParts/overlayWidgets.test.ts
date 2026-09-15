@@ -1,3 +1,4 @@
+import { h } from '../../../../base/browser/dom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -17,7 +18,7 @@ test('ViewOverlayWidgets reports only position changes and owns widget DOM lifet
 	const configuration = { allowOverflow: true, fixedOverflowWidgets: false };
 	const layout = new Emitter<void>();
 	const initial: IOverlayWidgetPosition = { preference: OverlayWidgetPositionPreference.TOP_RIGHT_CORNER };
-	const node = dom.window.document.createElement('section');
+	const node = h(dom.window.document, 'section');
 	const widget: IOverlayWidget = {
 		allowEditorOverflow: true,
 		onDidLayout: layout.event,

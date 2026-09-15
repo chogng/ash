@@ -1,8 +1,8 @@
 use super::snapshot_tool_profile;
 use super::validate_tool_profile_definitions;
-use serde_json::json;
 use ash_protocol::ToolDefinition;
 use ash_protocol::ToolName;
+use serde_json::json;
 
 fn definition(name: &str, description: &str) -> ToolDefinition {
     ToolDefinition {

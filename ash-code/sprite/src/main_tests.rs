@@ -4,9 +4,9 @@ use super::constant_name;
 use super::raster_dimensions;
 use super::terminal_dimensions;
 use super::write_action;
+use ash_sprite::compile_sprite_sheet;
 use clap::Parser;
 use std::fs;
-use ash_sprite::compile_sprite_sheet;
 
 #[test]
 fn default_terminal_dimensions_compensate_for_tall_cells() {

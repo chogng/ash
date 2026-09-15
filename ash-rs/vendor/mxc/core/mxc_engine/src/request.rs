@@ -2,10 +2,10 @@
 // Licensed under the MIT License.
 
 //! Request construction controls used by embedding applications.
-use crate::Error;
-use crate::ErrorCode;
 use crate::policy::HostFilesystemAccess;
 use crate::policy::SandboxRequest;
+use crate::Error;
+use crate::ErrorCode;
 use std::path::Path;
 use std::path::PathBuf;
 

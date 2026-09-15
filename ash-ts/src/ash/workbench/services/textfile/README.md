@@ -50,10 +50,10 @@ exposes their common lifecycle without requiring a second editor model authority
 
 ## Tests and modification impact
 
-`test/common/text-file-service.test.ts` covers bootstrap precedence, byte delegation, cancellation, UTF-8 BOM handling, binary/invalid UTF-8 rejection, size limits, and failure propagation.
-`../../../platform/files/test/browser/file-service.test.ts` covers App Server
+`test/common/textFileService.test.ts` covers bootstrap precedence, byte delegation, cancellation, UTF-8 BOM handling, binary/invalid UTF-8 rejection, size limits, and failure propagation.
+`../../../platform/files/test/browser/fileService.test.ts` covers App Server
 invalidation projection.
-`../../contrib/files/test/browser/explorer-view.test.ts` verifies that Explorer does not read file
+`../../contrib/files/test/browser/explorerViewPane.test.ts` verifies that Explorer does not read file
 content. Stanza Text Engine model and pane tests cover shared model references, edit
 preservation, cancellation, and session disposal. The working-copy service
 test covers registration, lookup, and unregistration.

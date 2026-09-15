@@ -1,6 +1,5 @@
 use std::sync::OnceLock;
 
-use serde_json::Value;
 use ash_app_server_protocol::protocol::config::FrontendConfigDto;
 use ash_keybinding::BindingPriority;
 use ash_keybinding::BindingSet;
@@ -17,6 +16,7 @@ use ash_keybindings_host::Keybindings;
 use ash_keybindings_host::UserBinding;
 #[cfg(test)]
 use ash_keybindings_host::UserBindingTarget;
+use serde_json::Value;
 
 use ash_commands::AppCommandId;
 

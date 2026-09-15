@@ -19,7 +19,7 @@ runUnitTests([
 	'src/ash/workbench/services/language/test/common/languageFeaturesService.test.js',
 	'src/ash/workbench/services/tasks/test/browser/taskService.test.js',
 	'src/ash/workbench/services/testing/test/browser/testingService.test.js',
-	'src/ash/workbench/services/untitled/test/common/untitled-text-editor-service.test.js',
+	'src/ash/workbench/services/untitled/test/common/browserUntitledTextEditorService.test.js',
 	'src/ash/workbench/test/browser/appServerConnectionStateObserver.test.js',
 	'src/ash/workbench/test/browser/workbench-theme.test.js',
 	'src/ash/workbench/test/common/theme.test.js',

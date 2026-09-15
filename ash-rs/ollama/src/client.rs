@@ -5,10 +5,6 @@ use crate::OllamaModelInfo;
 use crate::OllamaStatus;
 use crate::PullEvent;
 use crate::PullProgressSink;
-use semver::Version;
-use serde::Deserialize;
-use std::sync::Arc;
-use url::Url;
 use ash_async_utils::CancellationToken;
 use ash_client::ClientRequest;
 use ash_client::OperationClient;
@@ -16,6 +12,10 @@ use ash_client::OperationStreamSink;
 use ash_client::RetryPolicy;
 use ash_http_client::HttpHeader;
 use ash_http_client::HttpMethod;
+use semver::Version;
+use serde::Deserialize;
+use std::sync::Arc;
+use url::Url;
 
 pub(crate) const MAX_PROGRESS_LINE_BYTES: usize = 1024 * 1024;
 

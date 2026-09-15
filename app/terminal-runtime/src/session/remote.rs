@@ -15,7 +15,6 @@ use std::time::Instant;
 use anyhow::Context;
 use anyhow::Result;
 use anyhow::anyhow;
-use base64::Engine;
 use ash_app_server_protocol::protocol::common::ClientCapabilities;
 use ash_app_server_protocol::protocol::common::ClientInfo;
 use ash_app_server_protocol::protocol::terminal::TerminalAttachParams;
@@ -29,6 +28,7 @@ use ash_app_server_protocol::protocol::terminal::TerminalResizeParams;
 use ash_app_server_protocol::protocol::terminal::TerminalWriteParams;
 use ash_remote_connections::SshAppServerConnectionOptions;
 use ash_terminal::GridSize;
+use base64::Engine;
 
 use ash_app_server_client::{AppServerRequestHandle, AppServerSession};
 

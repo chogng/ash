@@ -2,7 +2,6 @@ use super::AppServer;
 use super::RpcError;
 use super::decode;
 use super::result;
-use serde_json::Value;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::plugins::PluginCommandDispositionDto;
 use ash_app_server_protocol::protocol::plugins::PluginCommandResultDto;
@@ -20,6 +19,7 @@ use ash_plugin::PluginErrorKind;
 use ash_plugin::PluginPackageDigest;
 use ash_plugin::PluginPackageId;
 use ash_plugin::PluginVersion;
+use serde_json::Value;
 
 impl AppServer {
     pub(super) fn plugin_list(&self) -> Result<Value, RpcError> {

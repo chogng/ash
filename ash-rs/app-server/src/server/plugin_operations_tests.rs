@@ -1,14 +1,14 @@
 use super::*;
 use crate::local::ProviderModelService;
-use std::fs;
-use std::sync::Arc;
-use tempfile::tempdir;
 use ash_core::InMemoryThreadStore;
 use ash_core::ThreadController;
 use ash_core_plugins::PluginActivationAuthority;
 use ash_core_plugins::PluginAuthorityCommandId;
 use ash_model_provider::EchoModel;
 use ash_plugin::LocalPluginPackage;
+use std::fs;
+use std::sync::Arc;
+use tempfile::tempdir;
 
 #[test]
 fn app_server_projects_and_mutates_distinct_plugin_authority_layers() {

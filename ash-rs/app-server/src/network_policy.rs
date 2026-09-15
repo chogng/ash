@@ -1,11 +1,3 @@
-use network_proxy::NetworkDecision;
-use network_proxy::NetworkDecisionFuture;
-use network_proxy::NetworkPolicy;
-use network_proxy::NetworkPolicyHandle;
-use network_proxy::NetworkRequest;
-use std::sync::Arc;
-use std::sync::atomic::AtomicU64;
-use std::sync::atomic::Ordering;
 use ash_action_policy::ActionDigest;
 use ash_action_policy::ActionKind;
 use ash_action_policy::ActionReviewRequest;
@@ -17,6 +9,14 @@ use ash_action_policy::SandboxCompatibility;
 use ash_async_utils::CancellationToken;
 use ash_core::ToolInteractionService;
 use ash_protocol::ActionApprovalDecision;
+use network_proxy::NetworkDecision;
+use network_proxy::NetworkDecisionFuture;
+use network_proxy::NetworkPolicy;
+use network_proxy::NetworkPolicyHandle;
+use network_proxy::NetworkRequest;
+use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
 /// Binds the proxy's observed destination to the running Tool and Core's approval authority.
 pub(crate) fn for_execution(

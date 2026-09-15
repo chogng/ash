@@ -1,3 +1,4 @@
+import { h } from '../../../../base/browser/dom.js';
 import * as viewEvents from '../../../common/viewEvents.js';
 import { ViewContext } from '../../../common/viewModel/viewContext.js';
 import { ViewGpuContext } from '../../gpu/viewGpuContext.js';
@@ -42,7 +43,7 @@ export class GpuMarkOverlay extends DynamicViewOverlay {
 				output[lineNumber - start] = '';
 				continue;
 			}
-			const marker = this.gpuContext.canvas.domNode.ownerDocument.createElement('div');
+			const marker = h(this.gpuContext.canvas.domNode.ownerDocument, 'div');
 			marker.className = GpuMarkOverlay.CLASS_NAME;
 			marker.setAttribute('aria-hidden', 'true');
 			marker.title = `Cannot render on GPU: ${reasons.join(', ')}`;

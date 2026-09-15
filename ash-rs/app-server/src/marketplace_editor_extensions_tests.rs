@@ -2,8 +2,6 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
-use sha2::Digest;
-use sha2::Sha256;
 use ash_core_plugins::AvailableCapability;
 use ash_core_plugins::CapabilityKind;
 use ash_core_plugins::DownloadPackageRequest;
@@ -24,6 +22,8 @@ use ash_core_plugins::SearchPackagesRequest;
 use ash_core_plugins::SearchPackagesResult;
 use ash_core_plugins::UninstallMode;
 use ash_core_plugins::UninstallPackageRequest;
+use sha2::Digest;
+use sha2::Sha256;
 
 use super::MarketplaceEditorExtensionAdmission;
 use super::MarketplaceEditorExtensionAdmissionLease;

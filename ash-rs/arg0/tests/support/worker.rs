@@ -1,11 +1,11 @@
-use std::path::Path;
-use std::path::PathBuf;
 use ash_fast_regex_search::FastRegexCaseSensitivity;
 use ash_fast_regex_search::FastRegexPattern;
 use ash_fast_regex_search::FastRegexQuery;
 use ash_fast_regex_search::FastRegexSearchLimits;
 use ash_fast_regex_search::FastRegexWorkerClient;
 use ash_file_access::Dir;
+use std::path::Path;
+use std::path::PathBuf;
 
 pub fn assert_worker(executable: &Path) {
     let directory = tempfile::tempdir().unwrap();

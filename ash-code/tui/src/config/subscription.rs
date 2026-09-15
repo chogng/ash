@@ -4,7 +4,6 @@ use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
 use crate::widgets::list_selection::ListSelectionModel;
-use std::collections::BTreeMap;
 use ash_app_server_client::AppServerClient;
 use ash_app_server_client::JsonRpcTransport;
 use ash_app_server_protocol::protocol::account::AccountLoginCancelParams;
@@ -16,6 +15,7 @@ use ash_app_server_protocol::protocol::account::AccountLoginStartResult;
 use ash_app_server_protocol::protocol::account::AccountLogoutParams;
 use ash_app_server_protocol::protocol::account::AccountReadResult;
 use ash_app_server_protocol::protocol::account::AccountStatusDto;
+use std::collections::BTreeMap;
 
 const PROVIDER: &str = "openai-chatgpt";
 

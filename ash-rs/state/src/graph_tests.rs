@@ -1,17 +1,17 @@
 use crate::SqliteThreadStore;
 use agent_graph_store::AgentGraphStore;
-use std::sync::Arc;
 use ash_core::CreateThreadRequest;
-use core_api::ForkThreadRequest;
 use ash_core::NoThreadWorktreeBinder;
-use core_api::ReplaceThreadRequest;
-use core_api::StartThreadRequest;
 use ash_core::ThreadController;
 use ash_protocol::AgentId;
 use ash_protocol::CommandId;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadOrigin;
 use ash_thread_store::ThreadStore;
+use core_api::ForkThreadRequest;
+use core_api::ReplaceThreadRequest;
+use core_api::StartThreadRequest;
+use std::sync::Arc;
 
 fn start(
     threads: &ThreadController,
@@ -294,10 +294,8 @@ fn delegation_queries_keep_breadth_first_order_and_exclude_forks() {
             },
         )
         .unwrap();
-    let coordinator = ash_core::MultiAgentCoordinator::new(
-        threads.clone(),
-        ash_core::AgentTreeLimits::default(),
-    );
+    let coordinator =
+        ash_core::MultiAgentCoordinator::new(threads.clone(), ash_core::AgentTreeLimits::default());
     let spawn = |name: &str, parent: &ThreadId, turn: &ash_protocol::TurnId| {
         coordinator
             .spawn(ash_core::SpawnAgentRequest {

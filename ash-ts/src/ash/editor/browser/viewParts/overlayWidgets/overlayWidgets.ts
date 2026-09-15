@@ -1,6 +1,6 @@
 import './overlayWidgets.css';
 import { createFastDomNode, type FastDomNode } from '../../../../base/browser/fastDomNode.js';
-import { getDomNodePagePosition, type IDomNodePagePosition } from '../../../../base/browser/dom.js';
+import { h, getDomNodePagePosition, type IDomNodePagePosition } from '../../../../base/browser/dom.js';
 import { Disposable, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type IOverlayWidget, type IOverlayWidgetPosition, type IOverlayWidgetPositionCoordinates, OverlayWidgetPositionPreference } from '../../editorBrowser.js';
 import { type RestrictedRenderingContext } from '../../view/renderingContext.js';
@@ -51,13 +51,13 @@ export class ViewOverlayWidgets extends ViewPart {
 		this._horizontalScrollbarHeight = layout.horizontalScrollbarHeight;
 		this._editorHeight = layout.editorHeight;
 		this._editorWidth = layout.editorWidth;
-		this._domNode = createFastDomNode(options.viewDomNode.ownerDocument.createElement('div'));
+		this._domNode = createFastDomNode(h(options.viewDomNode.ownerDocument, 'div'));
 		PartFingerprints.write(this._domNode, PartFingerprint.OverlayWidgets);
 		this._domNode.setClassName('stanza-editor-overlay-widgets');
 		this._domNode.setPosition('absolute');
 		this._domNode.setTop(0);
 		this._domNode.setAttribute('role', 'presentation');
-		this.overflowingOverlayWidgetsDomNode = createFastDomNode(options.viewDomNode.ownerDocument.createElement('div'));
+		this.overflowingOverlayWidgetsDomNode = createFastDomNode(h(options.viewDomNode.ownerDocument, 'div'));
 		PartFingerprints.write(this.overflowingOverlayWidgetsDomNode, PartFingerprint.OverflowingOverlayWidgets);
 		this.overflowingOverlayWidgetsDomNode.setClassName('stanza-editor-overflowing-overlay-widgets');
 		this.overflowingOverlayWidgetsDomNode.setAttribute('role', 'presentation');

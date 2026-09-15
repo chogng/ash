@@ -1,5 +1,5 @@
-use core_api::CheckpointCapture;
 use ash_protocol::WorkspaceCheckpoint;
+use core_api::CheckpointCapture;
 
 pub(crate) struct NoFilesCapture(pub(crate) WorkspaceCheckpoint);
 impl CheckpointCapture for NoFilesCapture {

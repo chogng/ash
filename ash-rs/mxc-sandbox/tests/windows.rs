@@ -1,16 +1,6 @@
 //! Windows acceptance uses the executor → adapter → MXC SDK → ProcessContainer chain.
 #![cfg(windows)]
 
-use mxc_sandbox::MxcSandbox;
-use network_proxy::NetworkDecision;
-use network_proxy::NetworkPolicyHandle;
-use std::io::Read;
-use std::io::Write;
-use std::net::TcpListener;
-use std::path::Path;
-use std::sync::Arc;
-use std::sync::atomic::Ordering;
-use std::time::Duration;
 use ash_async_utils::CancellationSource;
 use ash_file_access::Dir;
 use ash_install_context::InstallContext;
@@ -31,6 +21,16 @@ use ash_tool_executor::CommandInput;
 use ash_tool_executor::CommandRequest;
 use ash_tool_executor::ExecutionError;
 use ash_tool_executor::ExecutionLimits;
+use mxc_sandbox::MxcSandbox;
+use network_proxy::NetworkDecision;
+use network_proxy::NetworkPolicyHandle;
+use std::io::Read;
+use std::io::Write;
+use std::net::TcpListener;
+use std::path::Path;
+use std::sync::Arc;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
 
 struct Approved;
 impl ApprovalPolicy for Approved {
@@ -59,8 +59,7 @@ fn executor(dir: &Dir, timeout: Duration) -> CommandExecutor<Approved, MxcSandbo
 }
 
 fn sandbox_policy(files: FileSystemAccess, network: NetworkAccess) -> SandboxPolicy {
-    SandboxPolicy::new(files, network)
-        .with_host_acl_changes(ash_sandboxing::HostAclChanges::Scoped)
+    SandboxPolicy::new(files, network).with_host_acl_changes(ash_sandboxing::HostAclChanges::Scoped)
 }
 
 fn powershell(script: String) -> CommandRequest {

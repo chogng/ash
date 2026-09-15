@@ -1,10 +1,10 @@
 use super::update_broker::UpdateBroker;
-use std::sync::Arc;
-use std::thread::JoinHandle;
-use std::time::Duration;
 use ash_core_plugins::PluginActivationAuthority;
 use ash_skills_extension::SkillCatalogReload;
 use ash_skills_extension::SkillRuntime;
+use std::sync::Arc;
+use std::thread::JoinHandle;
+use std::time::Duration;
 
 pub(super) struct PluginWatcher {
     shutdown: Option<std::sync::mpsc::Sender<()>>,

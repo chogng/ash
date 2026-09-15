@@ -57,7 +57,7 @@ def run(command: Command) -> tuple[str, int, str]:
             cwd=REPOSITORY_ROOT,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            text=True,
+            encoding="utf-8",
             check=False,
         )
     except OSError as error:

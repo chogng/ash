@@ -1,14 +1,14 @@
 use super::AgentThreadSwitcher;
 use super::draw_agent_thread_switcher;
 use crate::render::test_context;
-use ratatui::Terminal;
-use ratatui::backend::TestBackend;
 use ash_protocol::Session;
 use ash_protocol::SessionId;
 use ash_protocol::SessionStatus;
 use ash_protocol::SessionThread;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadStatus;
+use ratatui::Terminal;
+use ratatui::backend::TestBackend;
 
 #[test]
 fn completed_subagents_disappear_without_changing_stable_selection() {

@@ -5,14 +5,14 @@ pub(crate) use view::list_bounds;
 
 use crate::app_server::AppServerRequestHandle;
 use crate::workbench_event::WorkbenchEvent;
-use memories::Memory;
-use memories::MemoryPolicy;
-use memories::MemoryScope;
-use memories::MemorySummary;
 use ash_app_server_protocol::protocol::memory::*;
 use ash_editor::CodeEditorDocument;
 use ash_editor::CodeEditorViewport;
 use ash_protocol::ThreadId;
+use memories::Memory;
+use memories::MemoryPolicy;
+use memories::MemoryScope;
+use memories::MemorySummary;
 use zui::app::ApplicationHandle;
 use zui::runtime::BackgroundExecutor;
 use zui::runtime::Task;

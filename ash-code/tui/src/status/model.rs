@@ -1,7 +1,5 @@
 use crate::render::truncate_with_ellipsis;
 use crate::thread::TurnApprovalModes;
-use unicode_segmentation::UnicodeSegmentation;
-use unicode_width::UnicodeWidthStr;
 use ash_app_server_protocol::protocol::config::ModelRefDto;
 use ash_app_server_protocol::protocol::git::GitDiffStatisticsDto;
 use ash_app_server_protocol::protocol::git::GitHeadDto;
@@ -12,6 +10,8 @@ use ash_protocol::ModelMoneyAmount;
 use ash_protocol::ModelReferenceCostSummary;
 use ash_protocol::ModelUsageSummary;
 use ash_protocol::StreamInstanceId;
+use unicode_segmentation::UnicodeSegmentation;
+use unicode_width::UnicodeWidthStr;
 
 use super::StatusLineItem;
 use super::StatusLineSettings;

@@ -1,7 +1,7 @@
-use std::fmt;
 use ash_api::ApiError;
 use ash_model_provider_config::{ModelId, ProviderConfigError, ProviderId};
 use ash_secrets::SecretStoreError;
+use std::fmt;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ModelProviderError {

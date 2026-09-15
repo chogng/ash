@@ -1,17 +1,17 @@
 //! Bounded, read-only filesystem operations exposed as one model-visible tool.
 
-use serde::Deserialize;
-use serde_json::json;
-use std::fmt;
-use std::future;
-use std::path::PathBuf;
-use std::sync::Arc;
 use ash_file_system::{FileSystem, FileType};
 use ash_tools::{
     ToolConcurrency, ToolDefinition, ToolExecutionFuture, ToolExecutionOutcome, ToolExecutor,
     ToolInputSchema, ToolInvocation, ToolLoading, ToolName, ToolOutput, ToolOutputSchema,
     ToolPayload, ToolSchemaMode, ToolStartFailure,
 };
+use serde::Deserialize;
+use serde_json::json;
+use std::fmt;
+use std::future;
+use std::path::PathBuf;
+use std::sync::Arc;
 
 const DEFAULT_MAX_READ_BYTES: usize = 64 * 1024;
 const DEFAULT_MAX_LIST_ENTRIES: usize = 1_000;
@@ -285,9 +285,11 @@ fn returned_error(message: impl Into<String>) -> ToolExecutionOutcome {
 
 fn returned_json(value: serde_json::Value) -> ToolExecutionOutcome {
     match serde_json::to_string_pretty(&value) {
-        Ok(text) => ToolExecutionOutcome::Returned(ToolOutput::success(vec![
-            ash_tools::ToolContent::Text(text),
-        ])),
+        Ok(text) => {
+            ToolExecutionOutcome::Returned(ToolOutput::success(vec![ash_tools::ToolContent::Text(
+                text,
+            )]))
+        }
         Err(error) => returned_error(format!("could not encode tool output: {error}")),
     }
 }

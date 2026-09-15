@@ -5,13 +5,13 @@ use crate::ExecRunRequest;
 use crate::ExecSinkError;
 use crate::connection::EmbeddedConnection;
 use crate::connection::ExecConnection;
+use ash_async_utils::CancellationToken;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 use std::time::Instant;
 use thiserror::Error;
-use ash_async_utils::CancellationToken;
 
 /// Read-only cancellation signal polled by a synchronous headless run.
 ///

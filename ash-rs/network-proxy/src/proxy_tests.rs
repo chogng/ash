@@ -1,4 +1,5 @@
 use super::*;
+use ash_async_utils::CancellationSource;
 use std::io::Read;
 use std::io::Write;
 use std::net::TcpListener;
@@ -8,13 +9,10 @@ use std::sync::Mutex;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
-use ash_async_utils::CancellationSource;
 
 fn allow() -> NetworkPolicyHandle {
     NetworkPolicyHandle::new(
-        |_: NetworkRequest, _: ash_async_utils::CancellationToken| async {
-            NetworkDecision::Allow
-        },
+        |_: NetworkRequest, _: ash_async_utils::CancellationToken| async { NetworkDecision::Allow },
     )
 }
 
@@ -282,15 +280,14 @@ fn dropping_shared_listener_closes_incomplete_protocol_handshakes() {
 fn cancelling_an_execution_cancels_pending_authorization() {
     let (entered_tx, entered_rx) = mpsc::channel();
     let source = CancellationSource::new();
-    let policy = NetworkPolicyHandle::new(
-        move |_, cancellation: ash_async_utils::CancellationToken| {
+    let policy =
+        NetworkPolicyHandle::new(move |_, cancellation: ash_async_utils::CancellationToken| {
             entered_tx.send(cancellation.clone()).unwrap();
             async move {
                 cancellation.cancelled().await;
                 NetworkDecision::Deny("cancelled".into())
             }
-        },
-    );
+        });
     let proxy = NetworkProxy::start(policy, &source.token()).unwrap();
     let mut stream = client(proxy.http_port());
     stream

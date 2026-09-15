@@ -384,8 +384,8 @@ impl Component for RemoteTunnelManager<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::num::NonZeroU16;
     use ash_remote_host::RemoteTunnelId;
+    use std::num::NonZeroU16;
     use zui::ui::{InteractionFrame, UiFrame};
 
     #[test]

@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use tempfile::TempDir;
 use ash_async_utils::CancellationSource;
 use ash_codebase::Codebase;
 use ash_codebase::CodebaseLimits;
@@ -29,6 +28,7 @@ use ash_protocol::ProviderId;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use ash_protocol::TurnId;
+use tempfile::TempDir;
 
 use super::CodebaseRetrievalContextSource;
 

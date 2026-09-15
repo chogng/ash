@@ -1,8 +1,8 @@
-use serde_json::Map;
-use serde_json::Value;
 use ash_keybinding::HostPlatform;
 use ash_keybinding::KeySequence;
 use ash_keybinding::serialize_key_sequence;
+use serde_json::Map;
+use serde_json::Value;
 
 use crate::catalog::KeybindingCatalog;
 use crate::runtime::UserBinding;

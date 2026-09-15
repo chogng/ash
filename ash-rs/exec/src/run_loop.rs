@@ -17,12 +17,12 @@ use crate::turn_outcome::protocol_approval_mode;
 use crate::turn_outcome::required_interaction;
 use crate::turn_outcome::terminal_outcome;
 use crate::turn_outcome::unknown_outcome;
-use std::time::Instant;
 use ash_protocol::CommandId;
 use ash_protocol::SessionId;
 use ash_protocol::Thread;
 use ash_protocol::ThreadId;
 use ash_protocol::TurnId;
+use std::time::Instant;
 
 pub(crate) fn run_connected<C, S, K>(
     options: ExecRunnerOptions,

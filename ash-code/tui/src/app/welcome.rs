@@ -2,8 +2,8 @@ pub(super) mod pet;
 
 use crate::models::ModelSummary;
 use crate::models::access_label;
-use std::path::Path;
 use ash_protocol::ModelAccess;
+use std::path::Path;
 
 /// Display-only context for the Thread identity header.
 #[derive(Clone, Debug, Eq, PartialEq)]

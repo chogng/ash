@@ -23,7 +23,7 @@ export class WhitespaceOverlay extends DynamicViewOverlay {
 		private readonly context: ViewContext,
 		private readonly model: TextModel,
 		private readonly viewModel: IViewModel,
-		private readonly ownerDocument: Document,
+		private readonly host: HTMLElement,
 		private readonly readVisualProjection: () => EditorVisualLineProjection,
 		private readonly readTextLeft: () => number,
 		private readonly textMeasurer: TextMeasurer,
@@ -58,7 +58,7 @@ export class WhitespaceOverlay extends DynamicViewOverlay {
 	public prepareRender(context: RenderingContext): void {
 		const projection = this.readVisualProjection();
 		const textLeft = this.readTextLeft();
-		this._renderResult = renderViewPartRows(context, this.ownerDocument, rows => {
+		this._renderResult = renderViewPartRows(context, this.host.ownerDocument, rows => {
 		for (const [visualLineIndex, row] of rows) {
 			if (this.mode === 'none') {
 				continue;

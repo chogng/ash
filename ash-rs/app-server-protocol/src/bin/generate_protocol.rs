@@ -1,11 +1,11 @@
-use std::collections::BTreeSet;
-use std::path::Path;
-use std::path::PathBuf;
 use ash_app_server_protocol::GENERATED_TYPESCRIPT_HEADER;
 use ash_app_server_protocol::JSON_SCHEMA_FIXTURE;
 use ash_app_server_protocol::TYPESCRIPT_FIXTURE_DIRECTORY;
 use ash_app_server_protocol::json_schema;
 use ash_app_server_protocol::typescript_files;
+use std::collections::BTreeSet;
+use std::path::Path;
+use std::path::PathBuf;
 
 const USAGE: &str = "usage: generate_protocol <json|typescript> --out <directory>\n       generate_protocol fixtures";
 
@@ -172,9 +172,9 @@ mod tests {
     use super::Artifact;
     use super::Command;
     use super::write_typescript_files;
+    use ash_app_server_protocol::GENERATED_TYPESCRIPT_HEADER;
     use std::path::PathBuf;
     use std::time::SystemTime;
-    use ash_app_server_protocol::GENERATED_TYPESCRIPT_HEADER;
 
     #[test]
     fn parses_a_typescript_output_directory() {

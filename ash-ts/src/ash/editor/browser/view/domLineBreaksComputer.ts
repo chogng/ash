@@ -1,3 +1,4 @@
+import { h } from '../../../base/browser/dom.js';
 import { isFiniteNumber } from '../../../base/common/numbers.js';
 import { isWrappingIndent, WrappingIndent } from '../../common/config/editorOptions.js';
 import { type FontInfo } from '../../common/config/fontInfo.js';
@@ -144,7 +145,7 @@ function computeWrappedTextIndentLength(text: string, wrappingColumn: number, wr
 
 function measureWithCanvas(targetWindow: Window | undefined, text: string, fontInfo: FontInfo, tabSize: number): number {
 	if (!targetWindow) throw new ReferenceError('DOM line-break factory target window is no longer available');
-	const canvas = targetWindow.document.createElement('canvas');
+	const canvas = h(targetWindow.document, 'canvas');
 	const context = canvas.getContext('2d');
 	if (!context) throw new Error('DOM line-break measurement requires a 2D canvas context');
 	context.font = `${fontInfo.fontWeight} ${fontInfo.fontSize}px ${fontInfo.getMassagedFontFamily()}`;

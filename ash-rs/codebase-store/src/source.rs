@@ -2,11 +2,11 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+use ash_state::{SqliteDurability, open_in_memory_database, open_sqlite_database};
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
 use rusqlite::Transaction;
 use rusqlite::params;
-use ash_state::{SqliteDurability, open_in_memory_database, open_sqlite_database};
 
 use ash_codebase::{
     CHUNKER_VERSION, ChunkContentHash, ChunkKey, ChunkReference, ChunkSpan, CodebaseError,

@@ -1,7 +1,7 @@
-use std::sync::Arc;
 use ash_app_server_protocol::protocol::model::ModelCatalogEntry;
-use core_api::CoreError;
 use ash_protocol::ModelRef;
+use core_api::CoreError;
+use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ModelCatalogRefreshError {

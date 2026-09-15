@@ -3,11 +3,11 @@ use crate::ModelId;
 use crate::ProviderConfigError;
 use crate::ProviderId;
 use crate::config::{is_http_url, normalize_base_url};
+use ash_protocol::Model;
+use ash_protocol::ModelOutputTransport;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
-use ash_protocol::Model;
-use ash_protocol::ModelOutputTransport;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]

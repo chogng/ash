@@ -18,7 +18,12 @@ fn loads_shared_and_ash_user_instructions_and_refreshes() {
     let first = home.instructions();
     assert_eq!(first.entries().len(), 1);
     assert!(first.global_content().unwrap().contains("First version."));
-    assert!(first.global_content().unwrap().contains("Shared instructions."));
+    assert!(
+        first
+            .global_content()
+            .unwrap()
+            .contains("Shared instructions.")
+    );
 
     fs::write(
         instructions.join("global.md"),

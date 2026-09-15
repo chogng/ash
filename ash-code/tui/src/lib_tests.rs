@@ -6,10 +6,6 @@ use crate::thread::Event as ThreadEvent;
 use crate::thread::composer::chat_input_catalog_snapshot;
 use crate::thread::present_turn_error;
 use crate::thread::transcript::MessageRole;
-use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyModifiers;
-use std::path::PathBuf;
 use ash_app_server_protocol::protocol::plugins::PluginPackageDto;
 use ash_app_server_protocol::protocol::skills::SkillCompatibilityDto;
 use ash_app_server_protocol::protocol::skills::SkillDto;
@@ -33,6 +29,10 @@ use ash_protocol::ThreadStatus;
 use ash_protocol::Turn;
 use ash_protocol::TurnId;
 use ash_protocol::TurnStatus;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyModifiers;
+use std::path::PathBuf;
 
 #[test]
 fn tui_declares_the_host_authority_required_by_add_dir() {

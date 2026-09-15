@@ -19,10 +19,6 @@ use crate::connection::ConnectionError;
 use crate::connection::ConnectionEvent;
 use crate::connection::ExecConnection;
 use crate::connection::ThreadSubscription;
-use std::collections::VecDeque;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
-use std::time::Duration;
 use ash_app_server_protocol::protocol::common::ClientInfo;
 use ash_app_server_protocol::protocol::turn::InputItem;
 use ash_app_server_protocol::protocol::turn::TurnStartResult;
@@ -39,6 +35,10 @@ use ash_protocol::ThreadStatus;
 use ash_protocol::Turn;
 use ash_protocol::TurnId;
 use ash_protocol::TurnStatus;
+use std::collections::VecDeque;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
 
 #[test]
 fn completed_turn_emits_terminal_event_and_last_agent_message() {

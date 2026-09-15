@@ -8,15 +8,15 @@ use crate::ModelCatalogSnapshot;
 use crate::ModelsManagerError;
 use crate::merge::CatalogRecord;
 use crate::merge::seed_records;
+use ash_model_provider_config::ProviderDefinition;
+use ash_protocol::ModelCatalogFreshness;
+use ash_protocol::ModelId;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::Duration;
 use std::time::SystemTime;
 use tokio::sync::Mutex as AsyncMutex;
-use ash_model_provider_config::ProviderDefinition;
-use ash_protocol::ModelCatalogFreshness;
-use ash_protocol::ModelId;
 
 pub(crate) struct ManagedScope {
     pub(crate) definition: ProviderDefinition,

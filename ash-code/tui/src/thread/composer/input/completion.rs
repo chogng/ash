@@ -7,6 +7,14 @@ mod view;
 use super::slash_commands::built_in_slash_command_definitions;
 use super::state::ChatInput;
 use super::state::ChatInputOutcome;
+use ash_file_search::PathSearchSnapshot;
+use ash_protocol::SkillRef;
+use ash_slash_commands::SlashCommandCatalog;
+use ash_slash_commands::SlashCommandDefinition;
+use ash_slash_commands::SlashCommandInput;
+use ash_slash_commands::SlashCommandInvocation;
+use ash_slash_commands::SlashCommandsState;
+use ash_slash_commands::SlashCommandsView;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 pub(crate) use mention::MentionPluginItem;
@@ -18,14 +26,6 @@ pub(crate) use skill::SkillCompletionView;
 use std::ops::Range;
 pub(crate) use view::draw;
 pub(crate) use view::index_at;
-use ash_file_search::PathSearchSnapshot;
-use ash_protocol::SkillRef;
-use ash_slash_commands::SlashCommandCatalog;
-use ash_slash_commands::SlashCommandDefinition;
-use ash_slash_commands::SlashCommandInput;
-use ash_slash_commands::SlashCommandInvocation;
-use ash_slash_commands::SlashCommandsState;
-use ash_slash_commands::SlashCommandsView;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ChatInputCatalog {

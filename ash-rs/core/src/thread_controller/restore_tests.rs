@@ -1,5 +1,3 @@
-use ash_protocol::CommandId;
-use ash_protocol::ItemId;
 use super::*;
 use crate::InMemoryThreadStore;
 use crate::NoThreadWorktreeBinder;
@@ -7,13 +5,15 @@ use crate::SequenceExpectation;
 use crate::StartThreadRequest;
 use crate::StartTurnRequest;
 use crate::thread_controller::CommitContextCheckpointRequest;
-use std::sync::Arc;
+use ash_protocol::CommandId;
 use ash_protocol::ContextSourceRange;
+use ash_protocol::ItemId;
 use ash_protocol::ThreadItem;
 use ash_protocol::TurnId;
 use ash_protocol::TurnStatus;
 use ash_protocol::UserInput;
 use ash_thread_store::ThreadStore;
+use std::sync::Arc;
 
 fn fixture() -> (Arc<InMemoryThreadStore>, ThreadController, ThreadSnapshot) {
     let store = Arc::new(InMemoryThreadStore::default());

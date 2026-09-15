@@ -100,7 +100,8 @@ impl AppServer {
                 })
                 .map_err(core_error)?
         };
-        self.bind_session_runtime(&created.session_id).map_err(core_error)?;
+        self.bind_session_runtime(&created.session_id)
+            .map_err(core_error)?;
         self.updates
             .subscribe_session(connection.connection_id, created.session_id.clone());
         result(&self.session_result(&created.session_id)?)
@@ -150,7 +151,10 @@ impl AppServer {
     ) -> Result<Value, RpcError> {
         let params: SessionSubscribeParams = decode(params)?;
         let session = self.session_view(&params.session_id)?;
-        let view = self.agent_runtime().read_session(&params.session_id).map_err(core_error)?;
+        let view = self
+            .agent_runtime()
+            .read_session(&params.session_id)
+            .map_err(core_error)?;
         let thread_snapshots = view.threads;
         let thread_projections = thread_snapshots
             .iter()

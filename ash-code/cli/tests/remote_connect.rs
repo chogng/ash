@@ -13,6 +13,9 @@ use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+use ash_app_server_protocol::protocol::initialize::{
+    APP_SERVER_CAPABILITY_VERSION, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION,
+};
 use flate2::Compression;
 use flate2::write::GzEncoder;
 use serde_json::json;
@@ -21,9 +24,6 @@ use sha2::Sha256;
 use tar::Builder;
 use tar::EntryType;
 use tar::Header;
-use ash_app_server_protocol::protocol::initialize::{
-    APP_SERVER_CAPABILITY_VERSION, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION,
-};
 
 #[test]
 fn resolves_a_saved_target_and_checks_the_real_broker() {
@@ -321,8 +321,7 @@ fn create_runtime_archive(directory: &Path) -> TestRuntimeArtifact {
         "components": {},
     }))
     .unwrap();
-    let mut unpacked_size =
-        append_archive_file(&mut builder, "ash-package.json", &metadata, 0o644);
+    let mut unpacked_size = append_archive_file(&mut builder, "ash-package.json", &metadata, 0o644);
     unpacked_size += append_archive_file(&mut builder, "bin/ash-remote-server", b"ash", 0o755);
     unpacked_size +=
         append_archive_file(&mut builder, "bin/ash-app-server-daemon", b"daemon", 0o755);

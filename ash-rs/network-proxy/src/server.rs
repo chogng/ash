@@ -1,6 +1,8 @@
 use crate::NetworkDecision;
 use crate::NetworkPolicyHandle;
 use crate::NetworkRequest;
+use ash_async_utils::CancellationSource;
+use ash_async_utils::CancellationToken;
 use std::io;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
@@ -15,8 +17,6 @@ use tokio::sync::Mutex;
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 use tokio::time::timeout;
-use ash_async_utils::CancellationSource;
-use ash_async_utils::CancellationToken;
 
 pub(crate) const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(15);
 const MAX_CONNECTIONS: usize = 64;

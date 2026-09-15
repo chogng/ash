@@ -4,9 +4,9 @@ use super::MentionPluginItem;
 use super::MentionPopup;
 use super::Mentions;
 use super::active_mention;
-use std::path::PathBuf;
 use ash_file_search::PathMatch;
 use ash_file_search::PathSearchSnapshot;
+use std::path::PathBuf;
 
 #[test]
 fn active_token_resolves_at_the_cursor_without_matching_email_text() {

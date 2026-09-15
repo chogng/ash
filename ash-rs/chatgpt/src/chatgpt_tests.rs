@@ -1,12 +1,6 @@
 use super::credential::TokenResponse;
 use super::storage::CodexAuthStore;
 use super::*;
-use base64::Engine;
-use std::collections::VecDeque;
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::thread;
-use std::time::Duration;
 use ash_client::ClientError;
 use ash_client::ClientRequest;
 use ash_client::ClientResponse;
@@ -18,6 +12,12 @@ use ash_login::InteractiveLoginDriver;
 use ash_login::LoginMethod;
 use ash_login::LoginService;
 use ash_secrets::MemorySecretStore;
+use base64::Engine;
+use std::collections::VecDeque;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::thread;
+use std::time::Duration;
 
 struct ScriptedClient {
     responses: Mutex<VecDeque<ClientResponse>>,

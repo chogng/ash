@@ -7,6 +7,9 @@ mod selector;
 mod tool;
 mod watcher;
 
+pub use ash_skills::SkillCompatibility;
+pub use ash_skills::SkillDiagnosticCode;
+pub use ash_skills::SkillSourceKind;
 pub use extension::install;
 pub use runtime::BuiltInSkillSource;
 pub use runtime::DynamicSkillSourceProvider;
@@ -21,9 +24,6 @@ pub use runtime::SkillRuntimeEventSink;
 pub use runtime::SkillRuntimeSnapshot;
 pub use tool::SKILLS_READ_TOOL_NAME;
 pub use watcher::SkillWatcher;
-pub use ash_skills::SkillCompatibility;
-pub use ash_skills::SkillDiagnosticCode;
-pub use ash_skills::SkillSourceKind;
 
 #[cfg(test)]
 #[path = "runtime_tests.rs"]

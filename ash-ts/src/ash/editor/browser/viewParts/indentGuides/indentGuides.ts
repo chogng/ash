@@ -16,7 +16,7 @@ import * as viewEvents from '../../../common/viewEvents.js';
 interface IndentGuidesOptions {
 	readonly bracketColorizationSource: BracketColorizationSource | undefined;
 	readonly viewModel: IViewModel;
-	readonly ownerDocument: Document;
+	readonly host: HTMLElement;
 	readonly readVisualProjection: () => EditorVisualLineProjection;
 	readonly readTextLeft: () => number;
 	readonly textMeasurer: TextMeasurer;
@@ -30,7 +30,7 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
 	private primaryPosition: Position | undefined;
 	private readonly bracketColorizationSource: BracketColorizationSource | undefined;
 	private readonly viewModel: IViewModel;
-	private readonly ownerDocument: Document;
+	private readonly host: HTMLElement;
 	private readonly readVisualProjection: () => EditorVisualLineProjection;
 	private readonly readTextLeft: () => number;
 	private readonly textMeasurer: TextMeasurer;
@@ -42,7 +42,7 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
 		this.primaryPosition = options.viewModel.getPrimaryCursorState().modelState.position;
 		this.bracketColorizationSource = options.bracketColorizationSource;
 		this.viewModel = options.viewModel;
-		this.ownerDocument = options.ownerDocument;
+		this.host = options.host;
 		this.readVisualProjection = options.readVisualProjection;
 		this.readTextLeft = options.readTextLeft;
 		this.textMeasurer = options.textMeasurer;
@@ -84,7 +84,7 @@ export class IndentGuidesOverlay extends DynamicViewOverlay {
 		const activeIndentation = this.resolveActiveIndentation(activeBracketGuide);
 		const projection = this.readVisualProjection();
 		const textLeft = this.readTextLeft();
-		this._renderResult = renderViewPartRows(context, this.ownerDocument, rows => {
+		this._renderResult = renderViewPartRows(context, this.host.ownerDocument, rows => {
 		for (const [visualLineIndex, row] of rows) {
 			const visualLine = projection.lineAt(visualLineIndex);
 			if (!visualLine) continue;

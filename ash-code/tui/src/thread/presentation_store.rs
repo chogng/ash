@@ -5,10 +5,10 @@ use crate::thread::composer::ChatInputDraft;
 use crate::thread::composer::ChatInputMode;
 use crate::thread::composer::SlashCommandCatalog;
 use crate::thread::queue::Queue;
-use std::collections::BTreeMap;
-use std::collections::VecDeque;
 use ash_protocol::ThreadGoal;
 use ash_protocol::ThreadId;
+use std::collections::BTreeMap;
+use std::collections::VecDeque;
 
 const MAX_THREAD_PRESENTATIONS: usize = 32;
 

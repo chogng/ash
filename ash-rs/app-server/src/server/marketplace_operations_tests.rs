@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
+use ash_core_plugins::PluginPackageService;
 use serde_json::Value;
 use serde_json::json;
-use ash_core_plugins::PluginPackageService;
 
 use super::AppServer;
 use crate::local::ProviderModelService;
@@ -228,8 +228,7 @@ impl PluginPackageService for FakePluginsManager {
     fn install(
         &self,
         _: ash_core_plugins::InstallPackageRequest,
-    ) -> Result<ash_core_plugins::InstalledPackage, ash_core_plugins::MarketplaceClientError>
-    {
+    ) -> Result<ash_core_plugins::InstalledPackage, ash_core_plugins::MarketplaceClientError> {
         Ok(ash_core_plugins::InstalledPackage {
             installation_id: "ins_opaque".to_owned(),
             package: ash_core_plugins::PackageRef {
@@ -254,8 +253,7 @@ impl PluginPackageService for FakePluginsManager {
     fn update(
         &self,
         _: ash_core_plugins::UpdatePackageRequest,
-    ) -> Result<ash_core_plugins::InstalledPackage, ash_core_plugins::MarketplaceClientError>
-    {
+    ) -> Result<ash_core_plugins::InstalledPackage, ash_core_plugins::MarketplaceClientError> {
         unimplemented!()
     }
 
@@ -296,24 +294,20 @@ impl PluginPackageService for FakePluginsManager {
                 },
                 installation_id: "ins_opaque".to_owned(),
             },
-            spec: ash_core_plugins::ActivationSpec::Skill(
-                ash_core_plugins::SkillActivationSpec {
-                    contract_version: "1".to_owned(),
-                    resource: ash_core_plugins::ResourceRef {
-                        id: "res_opaque".to_owned(),
-                    },
+            spec: ash_core_plugins::ActivationSpec::Skill(ash_core_plugins::SkillActivationSpec {
+                contract_version: "1".to_owned(),
+                resource: ash_core_plugins::ResourceRef {
+                    id: "res_opaque".to_owned(),
                 },
-            ),
+            }),
         })
     }
 
     fn release_capability(
         &self,
         _: ash_core_plugins::ReleaseCapabilityRequest,
-    ) -> Result<
-        ash_core_plugins::ReleaseCapabilityOutcome,
-        ash_core_plugins::MarketplaceClientError,
-    > {
+    ) -> Result<ash_core_plugins::ReleaseCapabilityOutcome, ash_core_plugins::MarketplaceClientError>
+    {
         Ok(ash_core_plugins::ReleaseCapabilityOutcome {
             installation_changed: true,
         })

@@ -69,7 +69,7 @@ Node 工具、发布包组装与 Desktop 单测使用 Node 24 LTS，具体版本
 | `just app` | 构建 App Server 并启动 Rust Desktop |
 | `pnpm dev:web:full` | 启动带 App Server 的完整 Web 开发环境 |
 | `just build` | 构建 Electron Desktop 和根 Cargo workspace |
-| `just build-desktop` | 构建 Electron Main、Preload 和当前 `ASH_PRODUCT` Renderer |
+| `just build-desktop` | 构建 Electron Main、Preload 和包含全部 Workbench 模式的 Renderer |
 | `just build-rust` | 通过统一 Cargo 执行器构建根 Rust workspace |
 | `just ash` | 用一次 Cargo 调用构建 Code TUI、本地 daemon 和当前平台沙箱程序，然后直接从源码开发运行目录启动 |
 | `just ash-package` | 组装并发布 Desktop、Web 与 Code TUI 共用的完整不可变开发包 |
@@ -83,6 +83,7 @@ Node 工具、发布包组装与 Desktop 单测使用 Node 24 LTS，具体版本
 
 | 命令 | 结果 |
 | --- | --- |
+| `just lint` | 使用锁定的 Ruff 检查 `build/` 与 `scripts/` 的 Python 代码 |
 | `just fmt` / `just fmt-check` | 格式化或检查 Just、Rust 和第一方 Python 源码 |
 | `just test-python` / `just test-python build` | 使用锁定的 Python 工具环境运行全部单元测试，或只运行指定 owner 的测试 |
 | `just dependencies` | 检查 Rust 依赖声明、间接依赖边界、已审查的多版本集合和无用依赖 |
@@ -92,8 +93,8 @@ Node 工具、发布包组装与 Desktop 单测使用 Node 24 LTS，具体版本
 
 | 命令 | 结果 |
 | --- | --- |
-| `pnpm build` | 构建 Electron Main、Preload 和当前 `ASH_PRODUCT` Renderer |
-| `pnpm build:desktop` | 构建 Electron Main、Preload 和当前 `ASH_PRODUCT` Renderer |
+| `pnpm build` | 构建 Electron Main、Preload 和包含全部 Workbench 模式的 Renderer |
+| `pnpm build:desktop` | 构建 Electron Main、Preload 和包含全部 Workbench 模式的 Renderer |
 | `pnpm test:build` | 运行构建工具自身的单元测试 |
 | `pnpm test` | 先验证 Rust 协议，再生成前端协议并运行构建工具检查和 Desktop 单元测试 |
 | `pnpm test:integration` | 直接运行 Editor 浏览器集成测试 |
@@ -103,7 +104,7 @@ Node 工具、发布包组装与 Desktop 单测使用 Node 24 LTS，具体版本
 | `pnpm --dir ash-ts typecheck:test-unit` | 检查 Desktop 单测入口及其辅助代码 |
 | `pnpm clean` | 删除 `.build/` 和 `build/`、`scripts/` 内的 Python 缓存；缓存扫描跳过依赖目录，不跟随链接 |
 
-Desktop 的 `code` 与 `academic` 通过同一个 `build:desktop` 入口构建；`ASH_PRODUCT` 选择产品。
+Desktop 的 `code` 与 `academic` 通过同一个 `build:desktop` 入口构建，`ASH_WORKBENCH_MODE` 选择启动时的默认模式；两者共用一个 Renderer 产物。
 
 #### Bazel 边界测试
 
@@ -115,6 +116,24 @@ bazelisk test //app:app_ci --test_output=errors
 ```
 
 其他平台直接运行同一条 `bazelisk test` 命令。该目标检查 App 边界和打包契约；产品行为测试使用上面的对应入口。
+
+### 准备步骤与验证范围
+
+- `test:main` 聚合构建工具和前端单测；协议生成、图标校验和输出目录准备由 `test:unit` 的前置步骤执行一次。单独运行 `test:unit` 或 `test:editor:unit` 同样会准备输入。
+- Electron 键盘模块使用 electron-rebuild 的架构和 ABI 记录判断是否需要重新编译；需要显式重编译时运行 `pnpm --dir ash-ts rebuild:native --force`。
+- `test:smoke:ui` 构建 Electron 和 Renderer 并测试关闭 App Server 的界面；`test:smoke:desktop` 额外组装后端包并测试真实 App Server。Browser 的 `test:smoke:browser` 与 `test:smoke:browser:full` 分别覆盖这两个范围。
+- 使用上述带明确范围的 smoke 命令；不再提供 `test:e2e`、`test:smoke` 和 `test:desktop:e2e` 等重复别名。
+
+### 日常 CI
+
+| 流程 | 覆盖 | 触发 |
+| --- | --- | --- |
+| `frontend.yml` | 构建工具类型检查与测试、Stanza 构建、前端单测、生产 Browser 与 Electron UI Playwright | 相关路径的 main 提交、PR、手动 |
+| `tooling.yml` | 三个平台的 Python lint、格式、构建、包布局和签名契约测试 | 相关路径的 main 提交、PR、手动 |
+| `bazel-boundary.yml` | Bazel 下的 App 边界、发布契约、打包和签名测试 | 相关路径的 main 提交、PR、发布、手动 |
+| `platform-checks.yml` | 平台实机验证和发布包签名、上传 | 发布、手动；签名和上传只在发布时执行 |
+
+Browser 和 Electron UI 检查不启动 App Server；真实后端集成继续使用对应的本地命令和平台验证。Playwright 失败时上传报告和 trace。
 
 ## 输出布局
 

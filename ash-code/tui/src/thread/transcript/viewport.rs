@@ -3,10 +3,10 @@ use super::ChatHistoryScroll;
 use super::TranscriptCellId;
 use super::TranscriptScrollAnchor;
 use super::TranscriptScrollTarget;
+use ash_protocol::ThreadId;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::VecDeque;
-use ash_protocol::ThreadId;
 
 const MAX_VIEWPORTS: usize = 32;
 

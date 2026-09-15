@@ -1,5 +1,5 @@
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { addDisposableListener, h, stopEvent } from '../../../../base/browser/dom.js';
+import { text, addDisposableListener, h, stopEvent } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
 import type { IAction } from '../../../../base/common/actions.js';
@@ -228,7 +228,7 @@ export class MultiDiffEditorToolbar extends Disposable {
 		includeDomNode.className = 'stanza-multi-diff-include-unstaged';
 		const includeInputDomNode = h(ownerDocument, 'input');
 		includeInputDomNode.type = 'checkbox';
-		includeDomNode.append(includeInputDomNode, ownerDocument.createTextNode(' Include unstaged changes'));
+		includeDomNode.append(includeInputDomNode, text(ownerDocument, ' Include unstaged changes'));
 		const actionsDomNode = h(ownerDocument, 'div');
 		actionsDomNode.className = 'stanza-multi-diff-commit-actions';
 		const cancel = store.add(new Button(actionsDomNode, { label: 'Cancel', presentation: 'secondary', onClick: () => this.overlay.clear() }));

@@ -1,7 +1,4 @@
 use super::connection::{from_sql_integer, open, sql_error, to_sql_integer};
-use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
-use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 use ash_history::StoredEvent;
 use ash_history::supports_stored_event_schema_version;
 use ash_protocol::SessionId;
@@ -12,6 +9,9 @@ use ash_thread_store::ThreadEventBatch;
 use ash_thread_store::ThreadStore;
 use ash_thread_store::ThreadStoreError;
 use ash_thread_store::validate_append_batch;
+use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
 /// SQLite implementation of the authoritative typed Thread event store.
 pub struct SqliteThreadStore {

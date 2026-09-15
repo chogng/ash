@@ -3,6 +3,13 @@ use super::RuntimeQueue;
 use super::next_process_resource_request;
 use crate::client::ClientEvent;
 use crate::terminal::TerminalEvent;
+use ash_app_server_protocol::protocol::transcript::ThreadTranscriptUpdateEnvelope;
+use ash_memory_diagnostics::ProcessResourceDemand;
+use ash_memory_diagnostics::ProcessResourceRequest;
+use ash_memory_diagnostics::ProcessResourceUsage;
+use ash_memory_diagnostics::ProcessResourcesReading;
+use ash_protocol::SessionId;
+use ash_protocol::ThreadId;
 use crossterm::event::Event;
 use crossterm::event::KeyModifiers;
 use crossterm::event::MouseButton;
@@ -11,13 +18,6 @@ use crossterm::event::MouseEventKind;
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 use std::time::Instant;
-use ash_app_server_protocol::protocol::transcript::ThreadTranscriptUpdateEnvelope;
-use ash_memory_diagnostics::ProcessResourceDemand;
-use ash_memory_diagnostics::ProcessResourceRequest;
-use ash_memory_diagnostics::ProcessResourceUsage;
-use ash_memory_diagnostics::ProcessResourcesReading;
-use ash_protocol::SessionId;
-use ash_protocol::ThreadId;
 
 #[test]
 fn terminal_input_is_received_before_queued_client_work() {

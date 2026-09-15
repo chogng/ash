@@ -1,5 +1,4 @@
 use super::*;
-use std::sync::Mutex;
 use ash_client::ClientError;
 use ash_client::ClientRequest;
 use ash_client::ClientResponse;
@@ -8,6 +7,7 @@ use ash_model_provider_config::ProviderConfigRegistry;
 use ash_models_manager::CatalogQuery;
 use ash_models_manager::CatalogReadPolicy;
 use ash_models_manager::CatalogReadSource;
+use std::sync::Mutex;
 
 #[derive(Default)]
 struct CapturedDiagnostics(Mutex<Vec<response_debug_context::ResponseDiagnostic>>);

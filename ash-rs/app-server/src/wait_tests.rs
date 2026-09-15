@@ -1,19 +1,8 @@
 use super::compose_extension_tools;
 use crate::tool_composition::combine_tool_ports;
-use serde_json::json;
-use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
-use std::time::Duration;
-use std::time::Instant;
 use ash_async_utils::CancellationSource;
 use ash_async_utils::CancellationToken;
-use core_api::CoreError;
 use ash_core::InMemoryThreadStore;
-use core_api::ModelSelection;
-use core_api::ModelService;
-use core_api::SequenceExpectation;
-use core_api::StartThreadRequest;
 use ash_core::StartTurnRequest;
 use ash_core::ThreadController;
 use ash_core::TurnExecutor;
@@ -29,6 +18,17 @@ use ash_protocol::ToolCall;
 use ash_protocol::ToolCallId;
 use ash_protocol::ToolName;
 use ash_protocol::TurnStatus;
+use core_api::CoreError;
+use core_api::ModelSelection;
+use core_api::ModelService;
+use core_api::SequenceExpectation;
+use core_api::StartThreadRequest;
+use serde_json::json;
+use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
+use std::time::Instant;
 
 #[test]
 fn runtime_wait_resumes_model_once_and_cancelled_wait_never_resumes_it() {

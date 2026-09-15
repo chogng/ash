@@ -3,9 +3,9 @@ use agent_graph_store::AgentGraphStore;
 use agent_graph_store::AgentGraphStoreError;
 use agent_graph_store::AgentRecord;
 use agent_graph_store::ThreadBinding;
-use std::collections::BTreeSet;
 use ash_protocol::AgentId;
 use ash_protocol::ThreadId;
+use std::collections::BTreeSet;
 
 impl AgentGraphStore for InMemoryThreadStore {
     fn read_agent(&self, agent_id: &AgentId) -> Result<Option<AgentRecord>, AgentGraphStoreError> {

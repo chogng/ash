@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use serde::Deserialize;
 use ash_core_plugins::CapabilityKind;
 use ash_core_plugins::LocalCapabilitySource;
 use ash_core_plugins::PluginsManager;
@@ -9,6 +8,7 @@ use ash_lsp_server_provider::DirectPackageLanguageServerProvider;
 use ash_lsp_server_provider::LspServerProviders;
 use ash_lsp_server_provider::ManagedNodeRuntime;
 use ash_lsp_server_provider::NodePackageLanguageServerProvider;
+use serde::Deserialize;
 
 /// Composes installed Marketplace executable capabilities into language-server providers.
 pub(crate) struct MarketplaceLanguageRuntime {

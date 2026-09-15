@@ -9,7 +9,6 @@ use super::TerminalSettings;
 use super::config_choices;
 use crate::client::new_command_id;
 use crate::status::StatusLineSettings;
-use std::fmt;
 use ash_app_server_client::AppServerClient;
 use ash_app_server_client::ClientError;
 use ash_app_server_client::JsonRpcTransport;
@@ -17,6 +16,7 @@ use ash_app_server_client::ProviderApiKeySetRequest;
 use ash_app_server_protocol::protocol::config::ConfigUpdateParams;
 use ash_app_server_protocol::protocol::config::LanguageServerConfigureParams;
 use ash_protocol::Patch;
+use std::fmt;
 
 pub(crate) struct ProviderApiKeyUpdate {
     pub(crate) provider: String,

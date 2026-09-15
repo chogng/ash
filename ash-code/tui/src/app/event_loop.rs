@@ -18,12 +18,12 @@ use crate::host::Command as HostCommand;
 use crate::host::Event as HostEvent;
 use crate::terminal;
 use crate::thread::transcript::batch::TranscriptBatch;
+use ash_app_server_client::AppServerSession;
+use ash_memory_diagnostics::ProcessResourceDemand;
 use crossterm::event::Event;
 use crossterm::event::KeyEventKind;
 use std::time::Duration;
 use std::time::Instant;
-use ash_app_server_client::AppServerSession;
-use ash_memory_diagnostics::ProcessResourceDemand;
 
 pub(crate) fn run(mut session: AppServerSession, options: TuiOptions) -> Result<TuiExit, TuiError> {
     let result = run_session(&mut session, options);

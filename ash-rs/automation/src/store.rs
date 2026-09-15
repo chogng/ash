@@ -1,6 +1,13 @@
 use crate::AutomationError;
 use crate::next_occurrence;
 use crate::validate_definition;
+use ash_protocol::Automation;
+use ash_protocol::AutomationDefinition;
+use ash_protocol::AutomationRun;
+use ash_protocol::AutomationRunStatus;
+use ash_protocol::AutomationSchedule;
+use ash_protocol::AutomationStatus;
+use ash_protocol::UnixMillis;
 use rusqlite::Connection;
 use rusqlite::OptionalExtension;
 use rusqlite::TransactionBehavior;
@@ -9,13 +16,6 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::path::Path;
 use std::sync::Mutex;
-use ash_protocol::Automation;
-use ash_protocol::AutomationDefinition;
-use ash_protocol::AutomationRun;
-use ash_protocol::AutomationRunStatus;
-use ash_protocol::AutomationSchedule;
-use ash_protocol::AutomationStatus;
-use ash_protocol::UnixMillis;
 
 #[cfg(test)]
 #[path = "store_tests.rs"]

@@ -2,6 +2,7 @@ use super::connection::from_sql_integer;
 use super::connection::to_sql_integer;
 use crate::SqliteDurability;
 use crate::open_sqlite_database;
+use ash_protocol::CommandId;
 use async_utils::CancellationToken;
 use memories::Memory;
 use memories::MemoryAddCommit;
@@ -31,7 +32,6 @@ use rusqlite::params;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Mutex;
-use ash_protocol::CommandId;
 
 const MEMORIES_COMPONENT: &str = "memories";
 const MEMORIES_SCHEMA_VERSION: u32 = 3;

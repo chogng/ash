@@ -1,4 +1,4 @@
-import { addDisposableListener, getWindow } from '../../../../base/browser/dom.js';
+import { h, addDisposableListener, getWindow } from '../../../../base/browser/dom.js';
 import { scheduleAtNextAnimationFrame } from '../../../../base/browser/scheduler.js';
 import { Disposable, MutableDisposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { ICodeEditor, IEditorMouseEvent } from '../../../browser/editorBrowser.js';
@@ -51,7 +51,7 @@ export class MiddleScrollController extends Disposable implements IEditorContrib
 			return;
 		}
 		const bounds = this.domNode.getBoundingClientRect();
-		const dotDomNode = this.domNode.ownerDocument.createElement('div');
+		const dotDomNode = h(this.domNode.ownerDocument, 'div');
 		dotDomNode.className = 'scroll-editor-on-middle-click-dot';
 		dotDomNode.setAttribute('aria-hidden', 'true');
 		dotDomNode.style.left = `${event.event.clientX - bounds.left}px`;

@@ -1,12 +1,12 @@
 use crate::dir_grants::DirGrants;
-use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, RwLock};
-use worktree::{ManagedDirBinding, WorktreeManager, WorktreeSettings};
 use ash_config::ConfigStore;
 use ash_file_access::{Dir, DirId};
 use ash_hooks::DeclarativeHookRuntime;
 use ash_protocol::ThreadId;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, RwLock};
+use worktree::{ManagedDirBinding, WorktreeManager, WorktreeSettings};
 
 /// App Server composition of Thread directory bindings and their local execution services.
 pub(super) struct ThreadDirs {

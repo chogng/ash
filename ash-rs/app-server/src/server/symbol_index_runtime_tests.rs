@@ -1,12 +1,12 @@
 use std::fs;
 use std::sync::Arc;
 
-use tempfile::TempDir;
 use ash_codebase::Codebase;
 use ash_codebase::CodebaseLimits;
 use ash_codebase::SymbolIndexQuery;
 use ash_codebase_store::CodebaseStore;
 use ash_file_access::Dir;
+use tempfile::TempDir;
 
 use super::SymbolIndexRuntime;
 use super::SymbolIndexRuntimeState;

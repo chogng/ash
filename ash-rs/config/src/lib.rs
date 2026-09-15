@@ -26,6 +26,8 @@ mod store_monitor;
 mod store_schema;
 mod tool_search;
 
+pub use ash_file_access::DirId;
+pub use ash_protocol::{ModelRef, SkillId, SkillName, SkillSourceId, ToolMode};
 pub use codebase::{CodebaseAutomaticContext, CodebaseConfig, CodebaseModelSelection};
 pub use command::{
     ConfigCommandDisposition, ConfigCommandError, ConfigCommandRequest, ConfigCommandResult,
@@ -64,8 +66,6 @@ pub use skills::{SkillEnablement, SkillSourceConfig, SkillSourceEnablement, Skil
 pub use store::{ConfigChange, ConfigError, ConfigStore};
 pub use tool_search::ToolSearchConfig;
 pub use tool_search::ToolSearchModeConfig;
-pub use ash_file_access::DirId;
-pub use ash_protocol::{ModelRef, SkillId, SkillName, SkillSourceId, ToolMode};
 
 #[cfg(test)]
 #[path = "config_tests.rs"]

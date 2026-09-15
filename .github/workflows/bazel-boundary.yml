@@ -1,9 +1,44 @@
 name: Bazel app boundary
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "ash-rs/**"
+      - "build/**"
+      - "bazel/**"
+      - "**/BUILD.bazel"
+      - "**/*.bzl"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "MODULE.bazel"
+      - "MODULE.bazel.lock"
+      - ".bazelrc"
+      - ".bazelversion"
+      - ".github/workflows/bazel-boundary.yml"
+  pull_request:
+    paths:
+      - "app/**"
+      - "ash-rs/**"
+      - "build/**"
+      - "bazel/**"
+      - "**/BUILD.bazel"
+      - "**/*.bzl"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "MODULE.bazel"
+      - "MODULE.bazel.lock"
+      - ".bazelrc"
+      - ".bazelversion"
+      - ".github/workflows/bazel-boundary.yml"
   release:
     types: [published]
   workflow_dispatch:
+
+concurrency:
+  group: bazel-boundary-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read

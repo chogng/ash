@@ -415,9 +415,9 @@ mod tests {
     use std::time::Instant;
 
     #[cfg(unix)]
-    use tempfile::TempDir;
-    #[cfg(unix)]
     use ash_remote::SshHost;
+    #[cfg(unix)]
+    use tempfile::TempDir;
 
     use super::RemoteTunnelId;
     #[cfg(unix)]

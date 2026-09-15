@@ -2,15 +2,15 @@ use crate::OllamaClient;
 use crate::OllamaError;
 use crate::PullEvent;
 use crate::PullProgressSink;
-use semver::Version;
-use std::sync::Arc;
-use std::sync::Mutex;
 use ash_async_utils::CancellationSource;
 use ash_client::ClientError;
 use ash_client::ClientRequest;
 use ash_client::ClientResponse;
 use ash_client::OperationClient;
 use ash_client::OperationStreamSink;
+use semver::Version;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 struct FakeClient {
     requests: Mutex<Vec<ClientRequest>>,
@@ -189,10 +189,7 @@ fn pull_decodes_split_ndjson_progress_and_requires_success() {
     );
     let requests = transport.requests.lock().unwrap();
     assert_eq!(requests[0].url(), "http://localhost:11434/api/pull");
-    assert_eq!(
-        requests[0].retry_policy(),
-        ash_client::RetryPolicy::never()
-    );
+    assert_eq!(requests[0].retry_policy(), ash_client::RetryPolicy::never());
 }
 
 #[test]

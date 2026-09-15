@@ -2,10 +2,10 @@ use crate::ApiError;
 use crate::InputTokenCount;
 use crate::ModelRequest;
 use crate::endpoint::chat_completions as openai_chat_completions;
-use serde_json::Value;
 use ash_async_utils::CancellationToken;
 use ash_client::OperationClient;
 use ash_client::ResolvedApiTarget;
+use serde_json::Value;
 
 pub(crate) fn count_input_tokens(
     target: &ResolvedApiTarget,

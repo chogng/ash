@@ -7,11 +7,11 @@ use crate::ConnectorConnectionState;
 use crate::ConnectorDefinition;
 use crate::ConnectorId;
 use crate::ConnectorRuntimeBinding;
-use url::Url;
 use ash_secrets::MemorySecretStore;
 use ash_secrets::SecretKey;
 use ash_secrets::SecretStore;
 use ash_secrets::SecretValue;
+use url::Url;
 
 use super::*;
 use crate::ConnectorAuthority;

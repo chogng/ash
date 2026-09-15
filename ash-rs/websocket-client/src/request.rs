@@ -1,6 +1,6 @@
 use crate::WebSocketClientError;
-use std::fmt;
 use ash_http_client::HttpHeader;
+use std::fmt;
 
 /// A WebSocket handshake request with redacted header debug output.
 #[derive(Clone, Eq, PartialEq)]

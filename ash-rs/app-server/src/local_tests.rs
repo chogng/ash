@@ -1,14 +1,5 @@
 use super::*;
 use crate::ConnectionState;
-use std::collections::BTreeMap;
-use std::path::Path;
-use std::process::Command;
-use std::sync::Condvar;
-use std::sync::Mutex;
-use std::thread;
-use std::time::Duration;
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
 use ash_async_utils::CancellationSource;
 use ash_client::ClientError;
 use ash_client::ClientRequest;
@@ -56,6 +47,15 @@ use ash_web_search_extension::WebSearchBackend;
 use ash_web_search_extension::WebSearchError;
 use ash_web_search_extension::WebSearchRequest;
 use ash_web_search_extension::WebSearchResponse;
+use std::collections::BTreeMap;
+use std::path::Path;
+use std::process::Command;
+use std::sync::Condvar;
+use std::sync::Mutex;
+use std::thread;
+use std::time::Duration;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 fn config_path(label: &str) -> PathBuf {
     std::env::temp_dir().join(format!(
@@ -2246,5 +2246,8 @@ fn message_restore_points_preserve_git_versions_after_restart() {
     );
     assert!(deleted.get("error").is_none(), "{deleted}");
     let remaining = run_local_git(repo.path(), &["for-each-ref", "refs/ash/messages/"]);
-    assert!(remaining.trim().is_empty(), "message refs survived: {remaining}");
+    assert!(
+        remaining.trim().is_empty(),
+        "message refs survived: {remaining}"
+    );
 }

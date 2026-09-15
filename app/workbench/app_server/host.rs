@@ -124,8 +124,12 @@ impl AppServerHost {
                     ash_app_server_daemon::backend_executable_path()
                         .map_err(|error| anyhow!(error))?,
                 );
-                let command =
-                    local_app_server_command(executable, ash_utils_home_dir::find_ash_home()?, cwd, daemon_executable);
+                let command = local_app_server_command(
+                    executable,
+                    ash_utils_home_dir::find_ash_home()?,
+                    cwd,
+                    daemon_executable,
+                );
                 AppServerSession::start_stdio(command, client_info, local_client_capabilities())
                     .map_err(|error| anyhow!(error.to_string()))
             }

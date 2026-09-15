@@ -7,11 +7,11 @@ pub(crate) mod bindings;
 mod chords;
 mod input;
 
-use bindings::AppKeymapCondition;
-use chords::PendingChord;
 use ash_keybinding::BindingSet;
 use ash_keybinding::HostPlatform;
 use ash_keybinding::UserBinding;
+use bindings::AppKeymapCondition;
+use chords::PendingChord;
 
 #[cfg(test)]
 use bindings::AppKeybindingSpec;

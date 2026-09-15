@@ -1,4 +1,3 @@
-use serde_json::Value;
 use ash_app_server_client::AppServerClient;
 use ash_app_server_client::JsonRpcTransport;
 use ash_app_server_protocol::protocol::config::ConfigUpdateParams;
@@ -6,6 +5,7 @@ use ash_app_server_protocol::protocol::config::FrontendConfigDto;
 use ash_keybinding::HostPlatform;
 use ash_keybinding::user_binding_diagnostics;
 use ash_protocol::Patch;
+use serde_json::Value;
 
 use crate::client::new_command_id;
 use crate::keymap::AppKeymap;

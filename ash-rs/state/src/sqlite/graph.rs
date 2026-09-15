@@ -3,14 +3,14 @@ use agent_graph_store::AgentGraphStore;
 use agent_graph_store::AgentGraphStoreError;
 use agent_graph_store::AgentRecord;
 use agent_graph_store::ThreadBinding;
-use rusqlite::Connection;
-use rusqlite::OptionalExtension;
-use rusqlite::params;
 use ash_protocol::AgentId;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadOrigin;
 use ash_thread_store::ThreadCatalogRecord;
 use ash_thread_store::ThreadStoreError;
+use rusqlite::Connection;
+use rusqlite::OptionalExtension;
+use rusqlite::params;
 
 impl AgentGraphStore for SqliteThreadStore {
     fn read_agent(&self, agent_id: &AgentId) -> Result<Option<AgentRecord>, AgentGraphStoreError> {

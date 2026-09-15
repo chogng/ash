@@ -8,6 +8,9 @@ use crate::TokenizerAssetCatalog;
 use crate::TokenizerAssetDiscoverer;
 use crate::TokenizerAssetDownloader;
 use crate::registry::LoadedTokenizer;
+use ash_protocol::ContentDigest;
+use ash_protocol::ModelRef;
+use ash_protocol::ModelRequest;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -17,9 +20,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
-use ash_protocol::ContentDigest;
-use ash_protocol::ModelRef;
-use ash_protocol::ModelRequest;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct MemoryTokenizerCapacity(NonZeroUsize);

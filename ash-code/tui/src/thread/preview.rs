@@ -6,12 +6,12 @@ use super::transcript::first_scroll_target;
 use super::transcript::scroll_target;
 use super::transcript::viewport::PreviewViewport;
 use crate::render::RenderContext;
-use ratatui::layout::Rect;
-use std::collections::BTreeSet;
 use ash_app_server_protocol::protocol::session::SessionThreadReadParams;
 use ash_app_server_protocol::protocol::session::SessionThreadReadResult;
 use ash_app_server_protocol::protocol::session::ThreadHistoryBoundary;
 use ash_app_server_protocol::protocol::session::ThreadSnapshotHistory;
+use ratatui::layout::Rect;
+use std::collections::BTreeSet;
 
 /// A read-only conversation snapshot with its own history and request lifecycle.
 #[derive(Debug)]

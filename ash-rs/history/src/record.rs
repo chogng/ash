@@ -1,9 +1,9 @@
-use serde::Deserialize;
-use serde::Serialize;
 use ash_protocol::CommandId;
 use ash_protocol::ThreadCommand;
 use ash_protocol::ThreadEvent;
 use ash_protocol::ThreadId;
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Schema version written for newly persisted Thread history records.
 /// Version 18 adds immutable input-time references and model time-context audit facts.

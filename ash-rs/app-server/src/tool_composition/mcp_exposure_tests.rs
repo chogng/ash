@@ -10,13 +10,13 @@ use ash_action_policy::CapabilitySet;
 use ash_action_policy::ResolvedAction;
 use ash_action_policy::SandboxCompatibility;
 use ash_async_utils::CancellationToken;
-use core_api::CoreError;
 use ash_core::ToolAuthorization;
 use ash_core::ToolService;
 use ash_protocol::ToolCall;
 use ash_protocol::ToolDefinition;
 use ash_protocol::ToolExecutionOutput;
 use ash_protocol::ToolName;
+use core_api::CoreError;
 
 use super::MCP_CALL_TOOL_NAME;
 use super::MCP_DIRECT_TOKEN_LIMIT;
@@ -121,11 +121,8 @@ fn meta_call_requires_the_exact_search_result_binding() {
     };
     let review = meta.prepare(&search).unwrap();
     let ash_action_policy::ExecutionDecision::RunUnsandboxed { grant_id } =
-        decide_mcp_catalog_search(
-            &review,
-            &ash_async_utils::CancellationSource::new().token(),
-        )
-        .unwrap()
+        decide_mcp_catalog_search(&review, &ash_async_utils::CancellationSource::new().token())
+            .unwrap()
     else {
         panic!("search must receive an internal read-only grant");
     };

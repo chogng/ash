@@ -3,7 +3,6 @@ use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
 
-use url::Url;
 use ash_config::McpCredentialBinding;
 use ash_config::McpServerConfig;
 use ash_config::McpServerEnablement;
@@ -12,6 +11,7 @@ use ash_config::McpTransportConfig;
 use ash_secrets::MemorySecretStore;
 use ash_secrets::SecretStore;
 use ash_secrets::SecretValue;
+use url::Url;
 
 use super::*;
 

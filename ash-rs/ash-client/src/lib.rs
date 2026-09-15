@@ -12,11 +12,11 @@ mod target;
 mod telemetry;
 
 pub use error::ClientError;
+pub use operation::AshClient;
 pub use operation::ClientRequest;
 pub use operation::ClientResponse;
 pub use operation::OperationClient;
 pub use operation::OperationStreamSink;
-pub use operation::AshClient;
 pub use retry::BackoffPolicy;
 pub use retry::RetryPolicy;
 pub use retry::RetrySafety;

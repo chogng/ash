@@ -1,3 +1,4 @@
+use ash_plugin::MarketplaceName;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::fs;
@@ -5,7 +6,6 @@ use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
-use ash_plugin::MarketplaceName;
 
 use connectors::ConnectorId;
 use connectors::GitHubBrokeredOAuthConfig;

@@ -3,9 +3,6 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use rusqlite::Connection;
-use rusqlite::OptionalExtension;
-use rusqlite::params;
 use ash_codebase::ChunkContentHash;
 use ash_codebase::ChunkKey;
 use ash_codebase::ChunkReference;
@@ -16,6 +13,9 @@ use ash_codebase::MaterializedChunk;
 use ash_codebase::SourceRevision;
 use ash_model_provider::EmbeddingVector;
 use ash_state::{SqliteDurability, open_in_memory_database, open_sqlite_database};
+use rusqlite::Connection;
+use rusqlite::OptionalExtension;
+use rusqlite::params;
 
 use crate::CodebaseStoreStorage;
 use ash_codebase::CodebaseVectorStore;

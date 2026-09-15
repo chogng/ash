@@ -1,7 +1,6 @@
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 
-use url::Url;
 use ash_http_client::HttpClient;
 use ash_http_client::HttpClientConfig;
 use ash_http_client::HttpHeader;
@@ -12,6 +11,7 @@ use ash_http_client::ProxyPolicy;
 use ash_http_client::RedirectPolicy;
 use ash_http_client::ResponseBodyLimit;
 use ash_http_client::UreqHttpClient;
+use url::Url;
 
 use crate::AttachmentError;
 use crate::MAX_IMAGE_ATTACHMENT_BYTES;

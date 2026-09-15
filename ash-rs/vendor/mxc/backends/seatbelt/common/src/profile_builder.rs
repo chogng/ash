@@ -28,7 +28,7 @@
 use std::fmt::Write as _;
 
 use crate::seatbelt_policy;
-use wxc_common::filesystem_resolve::{FsIntent, resolve_path_plan};
+use wxc_common::filesystem_resolve::{resolve_path_plan, FsIntent};
 use wxc_common::host_is_canonical_loopback;
 use wxc_common::models::{ClipboardPolicy, ContainerPolicy, ExecutionRequest, ProxyAddress};
 

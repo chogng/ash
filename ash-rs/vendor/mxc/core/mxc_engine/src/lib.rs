@@ -142,7 +142,7 @@ impl SandboxProcess for ProcessWithWarnings {
     }
 }
 
-mod request;
 mod inherited;
+mod request;
 pub use inherited::encode_inherited_launch;
 pub use inherited::spawn_inherited_launch;

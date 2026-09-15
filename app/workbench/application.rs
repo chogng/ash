@@ -64,8 +64,7 @@ use zui::ui::{
 };
 use zui::ui::{SplitViewOrientation, SplitViewResizeSnapshot};
 
-type TerminalRuntime =
-    ash_terminal_runtime::TerminalRuntime<TerminalSession, TerminalSessionEvent>;
+type TerminalRuntime = ash_terminal_runtime::TerminalRuntime<TerminalSession, TerminalSessionEvent>;
 type TerminalReadyOutcome = ash_terminal_runtime::TerminalReadyOutcome<TerminalSessionEvent>;
 use zui::app::AccessibilityAction;
 use zui::app::AccessibilityActionKind;

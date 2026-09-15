@@ -1,10 +1,10 @@
+use ash_file_identity::FileInformation;
 use sha2::Digest;
 use sha2::Sha256;
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::Read;
 use std::path::Path;
-use ash_file_identity::FileInformation;
 
 use crate::resource::is_within;
 use crate::resource::validate_relative_path;

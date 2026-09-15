@@ -2,6 +2,7 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use ash_async_utils::CancellationSource;
 use lsp_types::request::HoverRequest;
 use lsp_types::{
     ConfigurationItem, HoverParams, Position, TextDocumentIdentifier, TextDocumentPositionParams,
@@ -10,7 +11,6 @@ use lsp_types::{
 use serde_json::{Value, json};
 use tokio::io::{AsyncWrite, BufReader};
 use tokio::sync::{Notify, oneshot};
-use ash_async_utils::CancellationSource;
 
 use super::*;
 use crate::protocol::{

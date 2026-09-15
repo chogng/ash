@@ -2,12 +2,12 @@ use crate::ExtensionRegistryBuilder;
 use crate::ExtensionScope;
 use crate::ThreadContext;
 use crate::ThreadLifecycle;
-use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use ash_protocol::TurnId;
+use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 #[test]
 fn registry_recomposition_shares_state_until_its_owner_retires_it() {
     let registry = ExtensionRegistryBuilder::new().build();

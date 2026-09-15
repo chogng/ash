@@ -1,4 +1,5 @@
 use crate::SqliteMemoryStore;
+use ash_protocol::CommandId;
 use memories::AddMemoryRequest;
 use memories::DeleteMemoryRequest;
 use memories::ListMemoriesRequest;
@@ -10,7 +11,6 @@ use memories::MemoryScope;
 use memories::ReadMemoryRequest;
 use memories::SearchMemoriesRequest;
 use std::sync::Arc;
-use ash_protocol::CommandId;
 
 #[test]
 fn sqlite_memories_persist_search_delete_and_retry_receipts() {

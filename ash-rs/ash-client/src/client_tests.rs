@@ -1,4 +1,6 @@
 use super::*;
+use ash_async_utils::CancellationSource;
+use ash_http_client::{HttpHeader, HttpMethod, UreqHttpClient};
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::num::NonZeroU8;
@@ -6,8 +8,6 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
-use ash_async_utils::CancellationSource;
-use ash_http_client::{HttpHeader, HttpMethod, UreqHttpClient};
 
 #[test]
 fn target_rejects_a_non_http_base_url() {

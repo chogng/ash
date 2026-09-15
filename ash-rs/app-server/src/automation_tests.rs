@@ -1,13 +1,13 @@
 use super::call;
 use super::initialize;
 use super::server;
+use ash_automation::AutomationStore;
+use ash_protocol::AutomationRun;
+use ash_protocol::AutomationRunStatus;
 use serde_json::json;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
-use ash_automation::AutomationStore;
-use ash_protocol::AutomationRun;
-use ash_protocol::AutomationRunStatus;
 
 #[test]
 fn automation_commands_are_shared_across_connections_and_reject_stale_edits() {

@@ -65,10 +65,9 @@ pub(crate) fn remote_runtime_install_command(
             "else fail 'install-root-unavailable' 73; fi"
         )
         .to_owned(),
-        RemoteRuntimeInstallLocation::Absolute(root) => format!(
-            "install_root={}",
-            quote_posix_shell_argument(root.as_str())
-        ),
+        RemoteRuntimeInstallLocation::Absolute(root) => {
+            format!("install_root={}", quote_posix_shell_argument(root.as_str()))
+        }
     };
     let target = quote_posix_shell_argument(artifact.platform.target_triple());
     let version = quote_posix_shell_argument(artifact.version.as_str());

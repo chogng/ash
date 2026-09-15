@@ -4,7 +4,7 @@ import { AshRendererDirectory } from "../../ash-ts/src/ash/code/common/applicati
 import { WorkbenchModeRegistry } from "../../ash-ts/src/ash/workbench/common/workbenchMode.js";
 import { desktopBuildPath } from "../lib/paths.ts";
 import { buildMetricsPlugin } from './buildMetricsPlugin.ts';
-import { rendererOutput } from './output.ts';
+import { rendererOutput } from './rendererOutput.ts';
 import { hotReloadPlugin } from "./hotReloadPlugin.ts";
 import { productIconsPlugin } from "./productIconsPlugin.ts";
 import { webAppServerVitePlugin } from "./webAppServerPlugin.ts";

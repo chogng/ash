@@ -1,10 +1,10 @@
 use super::report_turn_start_failure;
 use crate::app::App;
 use crate::app::Status;
+use ash_protocol::TurnId;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
-use ash_protocol::TurnId;
 
 #[test]
 fn turn_start_failure_preserves_an_active_turn_that_appeared_during_the_request() {

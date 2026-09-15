@@ -2,11 +2,11 @@ use crate::ActionDigest;
 use crate::ActionPolicyRevision;
 use crate::ActionReviewRequest;
 use crate::CapabilitySet;
+use ash_async_utils::CancellationToken;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::error::Error;
 use std::fmt;
-use ash_async_utils::CancellationToken;
 
 /// Produces advisory assessments consumed by the deterministic policy engine.
 ///

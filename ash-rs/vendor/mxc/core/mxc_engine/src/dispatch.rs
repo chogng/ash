@@ -173,7 +173,7 @@ fn spawn_process_container(
             .map_err(map_spawn_error);
     }
     use appcontainer_common::dispatcher::{
-        DispatchError, SpawnDispatchError, spawn_with_fallback_and_capture,
+        spawn_with_fallback_and_capture, DispatchError, SpawnDispatchError,
     };
     use std::fmt::Write;
     use wxc_common::sandbox_process::StdioMode;
@@ -289,7 +289,7 @@ fn spawn_wslc(
 #[cfg(test)]
 mod tests {
     use super::{ensure_host_supported, map_spawn_error, spawn_runner};
-    use crate::policy::{SandboxPolicy, build_request};
+    use crate::policy::{build_request, SandboxPolicy};
     use wxc_common::logger::{Logger, Mode};
     use wxc_common::models::ContainmentBackend;
     use wxc_common::mxc_error::MxcErrorCode;
@@ -452,25 +452,38 @@ mod tests {
 }
 
 /// Attached execution retains the backend's ordinary policy checks and process ownership.
-pub(crate) fn spawn_inherited(request: &ExecutionRequest) -> Result<Box<dyn SandboxProcess>, MxcError> {
+pub(crate) fn spawn_inherited(
+    request: &ExecutionRequest,
+) -> Result<Box<dyn SandboxProcess>, MxcError> {
     use wxc_common::sandbox_process::SandboxBackend;
     use wxc_common::sandbox_process::StdioMode;
     ensure_host_supported()?;
-    if request.dry_run { return Err(MxcError::malformed_request("dry_run cannot start an attached process")); }
+    if request.dry_run {
+        return Err(MxcError::malformed_request(
+            "dry_run cannot start an attached process",
+        ));
+    }
     let mut logger = Logger::new(wxc_common::logger::Mode::Buffer);
     match request.containment {
         #[cfg(target_os = "macos")]
-        ContainmentBackend::Seatbelt => seatbelt_common::seatbelt_runner::SeatbeltScriptRunner::new()
-            .spawn(request, &mut logger, StdioMode::Inherit).map_err(map_spawn_error),
+        ContainmentBackend::Seatbelt => {
+            seatbelt_common::seatbelt_runner::SeatbeltScriptRunner::new()
+                .spawn(request, &mut logger, StdioMode::Inherit)
+                .map_err(map_spawn_error)
+        }
         #[cfg(target_os = "linux")]
         ContainmentBackend::Bubblewrap => bwrap_common::bwrap_runner::BubblewrapScriptRunner::new()
-            .spawn(request, &mut logger, StdioMode::Inherit).map_err(map_spawn_error),
+            .spawn(request, &mut logger, StdioMode::Inherit)
+            .map_err(map_spawn_error),
         #[cfg(target_os = "windows")]
         ContainmentBackend::ProcessContainer => {
             require_windows_psec(request)?;
             appcontainer_common::base_container_runner::BaseContainerRunner::new()
-                .spawn(request, &mut logger, StdioMode::Inherit).map_err(map_spawn_error)
+                .spawn(request, &mut logger, StdioMode::Inherit)
+                .map_err(map_spawn_error)
         }
-        _ => Err(MxcError::unsupported_containment("this backend cannot inherit a terminal")),
+        _ => Err(MxcError::unsupported_containment(
+            "this backend cannot inherit a terminal",
+        )),
     }
 }

@@ -6,9 +6,9 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use ash_file_access::Dir;
 use sha2::Digest;
 use sha2::Sha256;
-use ash_file_access::Dir;
 
 use crate::ChunkContentHash;
 use crate::ChunkKey;

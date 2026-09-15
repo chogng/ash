@@ -16,7 +16,6 @@ use std::sync::mpsc::Receiver;
 use std::sync::mpsc::SyncSender;
 use std::thread;
 
-use serde_json::Value;
 use ash_app_server_protocol::protocol::common::ClientCapabilities;
 use ash_app_server_protocol::protocol::common::ClientInfo;
 use ash_app_server_protocol::protocol::initialize::InitializeParams;
@@ -28,6 +27,7 @@ use ash_app_server_protocol::rpc::JsonRpcResponse;
 use ash_app_server_transport::DEFAULT_MAX_MESSAGE_BYTES;
 use ash_app_server_transport::JsonlReader;
 use ash_app_server_transport::JsonlWriter;
+use serde_json::Value;
 
 use super::AppServerEvent;
 use super::AppServerEvents;

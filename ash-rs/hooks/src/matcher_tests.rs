@@ -1,17 +1,17 @@
 use super::*;
-use std::collections::BTreeSet;
 use ash_config::HookAction;
 use ash_config::HookEnablement;
 use ash_config::HookEvent as ConfigHookEvent;
 use ash_config::HookId;
 use ash_config::HookMatcher;
+use ash_protocol::ThreadId;
+use ash_protocol::ToolCallId;
+use ash_protocol::TurnId;
 use core_api::AfterToolHookRequest;
 use core_api::BeforeToolHookRequest;
 use core_api::ToolExecutionOutcome;
 use core_api::TurnCompletedHookRequest;
-use ash_protocol::ThreadId;
-use ash_protocol::ToolCallId;
-use ash_protocol::TurnId;
+use std::collections::BTreeSet;
 
 fn hook(event: ConfigHookEvent, tool_names: &[&str]) -> HookConfig {
     HookConfig {
@@ -66,7 +66,10 @@ fn exact_tool_matcher_applies_only_to_the_declared_tool_event() {
     ));
     assert!(!matches_event(
         &hook,
-        &HookInvocation::AfterTool(&after_request("shell-command", ToolExecutionOutcome::Succeeded))
+        &HookInvocation::AfterTool(&after_request(
+            "shell-command",
+            ToolExecutionOutcome::Succeeded
+        ))
     ));
 }
 

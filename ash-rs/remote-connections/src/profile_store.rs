@@ -6,14 +6,14 @@ use std::io;
 use std::path::Path;
 use std::path::PathBuf;
 
-use serde::Deserialize;
-use serde::Serialize;
 use ash_remote::RemoteDirPath;
 use ash_remote::RemoteProfile;
 use ash_remote::RemoteRuntime;
 use ash_remote::SshHost;
 use ash_remote::SshTarget;
 use ash_utils_path::write_atomically;
+use serde::Deserialize;
+use serde::Serialize;
 
 const PROFILE_FORMAT_VERSION: u32 = 1;
 const MAX_PROFILE_BYTES: u64 = 1024 * 1024;

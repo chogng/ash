@@ -2,13 +2,13 @@ use super::DirSelectionAction;
 use super::choices;
 use crate::widgets::list_selection::ListSelectionInputOutcome;
 use crate::widgets::list_selection::ListSelectionState;
+use ash_app_server_protocol::protocol::environment::PermissionDto;
+use ash_app_server_protocol::protocol::environment::SessionDirDto;
+use ash_app_server_protocol::protocol::environment::SessionDirListResult;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use std::path::PathBuf;
-use ash_app_server_protocol::protocol::environment::PermissionDto;
-use ash_app_server_protocol::protocol::environment::SessionDirDto;
-use ash_app_server_protocol::protocol::environment::SessionDirListResult;
 
 fn panel(paths: &[&str]) -> super::DirPanel {
     super::DirPanel::new(panel_choices(paths))
@@ -482,10 +482,10 @@ fn dir_view_maps_exact_paths_to_remove_actions() {
 
 #[test]
 fn move_session_adds_directory_and_updates_cwd() {
-    use std::sync::Arc;
     use ash_app_server_client::InProcessClientOptions;
     use ash_app_server_client::start_in_process_client;
     use ash_app_server_protocol::protocol::common::ClientInfo;
+    use std::sync::Arc;
     struct NoModel;
     impl ash_client::OperationClient for NoModel {
         fn execute(

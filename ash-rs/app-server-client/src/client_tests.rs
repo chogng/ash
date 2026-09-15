@@ -1,10 +1,4 @@
 use super::*;
-use std::collections::VecDeque;
-use std::fs;
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::thread;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use ash_app_server::AppServer;
 use ash_app_server::SlashCommandCatalog;
 use ash_app_server_protocol::protocol::common::ClientCapabilities;
@@ -54,15 +48,21 @@ use ash_app_server_protocol::protocol::terminal::TerminalWriteParams;
 use ash_app_server_protocol::protocol::turn::InputItem;
 use ash_app_server_protocol::schema_hash;
 use ash_async_utils::CancellationToken;
-use core_api::CoreError;
 use ash_core::InMemoryThreadStore;
-use core_api::ModelService;
 use ash_core::ThreadController;
 use ash_protocol::SessionId;
 use ash_protocol::{
     CommandId, ContentPart, InputItem as ModelInputItem, ModelRequest, ModelResponse, ResponseItem,
     StopReason, ThreadEvent, ThreadItem, ThreadUpdate, TurnStatus,
 };
+use core_api::CoreError;
+use core_api::ModelService;
+use std::collections::VecDeque;
+use std::fs;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::thread;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 struct MockTransport(VecDeque<String>);
 

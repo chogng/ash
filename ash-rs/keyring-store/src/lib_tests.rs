@@ -2,12 +2,12 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use tempfile::tempdir;
 use ash_secrets::DeleteSecretOutcome;
 use ash_secrets::SecretKey;
 use ash_secrets::SecretStore;
 use ash_secrets::SecretStoreErrorKind;
 use ash_secrets::SecretValue;
+use tempfile::tempdir;
 
 use super::KEYRING_SERVICE;
 use super::KeyringBackend;

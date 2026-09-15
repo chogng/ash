@@ -11,9 +11,6 @@ use crate::CoreError;
 use crate::HookService;
 use crate::RecordToolCallRequest;
 use crate::ThreadUpdateSink;
-use std::sync::Arc;
-use std::thread;
-use std::time::Duration;
 use ash_async_utils::CancellationToken;
 use ash_code_mode_protocol::CodeModeToolKind;
 use ash_code_mode_protocol::NestedToolCall;
@@ -21,6 +18,9 @@ use ash_protocol::ThreadItem;
 use ash_protocol::ToolCall;
 use ash_protocol::ToolCallCaller;
 use ash_protocol::ToolCallId;
+use std::sync::Arc;
+use std::thread;
+use std::time::Duration;
 
 impl CodeModeBrokerInner {
     pub(super) fn invoke_nested(

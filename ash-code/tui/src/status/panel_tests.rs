@@ -12,6 +12,10 @@ use crate::status::AppServerProcessResourcesView;
 use crate::status::ObservedProcessResourcesView;
 use crate::status::ProcessCpuCurrent;
 use crate::status::ProcessUsageView;
+use ash_protocol::ModelMoneyAmount;
+use ash_protocol::ModelReferenceCostSummary;
+use ash_protocol::ModelUsageSummary;
+use ash_protocol::ModelUsageTotal;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -20,10 +24,6 @@ use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::style::Modifier;
-use ash_protocol::ModelMoneyAmount;
-use ash_protocol::ModelReferenceCostSummary;
-use ash_protocol::ModelUsageSummary;
-use ash_protocol::ModelUsageTotal;
 
 #[test]
 fn mouse_scroll_keeps_the_status_tab_and_clamps_to_its_content() {

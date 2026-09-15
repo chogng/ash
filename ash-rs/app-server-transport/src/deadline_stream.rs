@@ -3,6 +3,7 @@ use std::io::Read;
 use std::io::Write;
 use std::time::Instant;
 
+use ash_uds::UnixStream;
 #[cfg(unix)]
 use rustix::event::PollFd;
 #[cfg(unix)]
@@ -11,7 +12,6 @@ use rustix::event::PollFlags;
 use rustix::event::Timespec;
 #[cfg(unix)]
 use rustix::event::poll;
-use ash_uds::UnixStream;
 
 /// Applies one request deadline without Unix socket timeout options, which macOS can reject.
 pub struct DeadlineStream {

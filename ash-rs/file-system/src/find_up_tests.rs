@@ -29,12 +29,9 @@ fn accepts_a_nested_relative_marker_path() {
     fs::create_dir_all(&nested).unwrap();
     fs::create_dir_all(dir.path.join(".config/ash")).unwrap();
 
-    let found = find_nearest_ancestor_with_markers(
-        &nested,
-        &[".config/ash"],
-        FindUpErrorPolicy::Propagate,
-    )
-    .unwrap();
+    let found =
+        find_nearest_ancestor_with_markers(&nested, &[".config/ash"], FindUpErrorPolicy::Propagate)
+            .unwrap();
 
     assert_eq!(found, Some(dir.path.clone()));
 }

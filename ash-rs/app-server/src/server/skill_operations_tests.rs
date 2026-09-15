@@ -1,10 +1,10 @@
 use super::*;
 use crate::local::ProviderModelService;
-use base64::Engine;
-use std::sync::Arc;
 use ash_core::InMemoryThreadStore;
 use ash_core::ThreadController;
 use ash_model_provider::EchoModel;
+use base64::Engine;
+use std::sync::Arc;
 
 struct EmptySkillConfig;
 

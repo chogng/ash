@@ -3,11 +3,11 @@ use super::{
     WorkbenchKeybindingResolution, WorkbenchKeybindings, WorkbenchUserBinding,
     WorkbenchUserBindingTarget,
 };
-use std::time::{Duration, Instant};
 use ash_commands::AppCommandId;
 use ash_keybinding::{
     ContextExpression, HostPlatform, KeyStroke, LogicalKey, Modifiers, parse_key_sequence,
 };
+use std::time::{Duration, Instant};
 
 #[test]
 fn text_inputs_use_portable_copy_and_paste() {

@@ -1,6 +1,5 @@
 use crate::LocalPluginCatalog;
 use crate::PluginPackageSource;
-use std::collections::BTreeSet;
 use ash_tools::CapabilityDiscoveryId;
 use ash_tools::CapabilityDiscoverySnapshot;
 use ash_tools::DiscoverableCapability;
@@ -8,6 +7,7 @@ use ash_tools::DiscoverableContributionKinds;
 use ash_tools::DiscoverablePluginInfo;
 use ash_tools::DiscoveryAction;
 use ash_tools::DiscoveryValueError;
+use std::collections::BTreeSet;
 
 /// Projects validated local Plugin packages into the catalog-only tool discovery contract.
 ///

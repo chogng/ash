@@ -1,4 +1,14 @@
+use ash_core::CreateThreadRequest;
+use ash_core::InMemoryThreadStore;
+use ash_core::StartGoalTurnRequest;
+use ash_core::StartTurnRequest;
+use ash_core::ThreadController;
+use ash_core::TurnExecutor;
 use async_utils::CancellationToken;
+use core_api::CoreError;
+use core_api::ModelSelection;
+use core_api::ModelService;
+use core_api::SequenceExpectation;
 use protocol::CommandId;
 use protocol::ContentPart;
 use protocol::InputItem;
@@ -20,16 +30,6 @@ use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
-use core_api::CoreError;
-use ash_core::CreateThreadRequest;
-use ash_core::InMemoryThreadStore;
-use core_api::ModelSelection;
-use core_api::ModelService;
-use core_api::SequenceExpectation;
-use ash_core::StartGoalTurnRequest;
-use ash_core::StartTurnRequest;
-use ash_core::ThreadController;
-use ash_core::TurnExecutor;
 struct ScriptedModel {
     responses: Mutex<VecDeque<Result<ModelResponse, CoreError>>>,
     requests: Mutex<Vec<ModelRequest>>,

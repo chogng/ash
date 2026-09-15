@@ -8,9 +8,6 @@ use crate::{
     PluginRequestEnablement, SkillEnablement, SkillId, SkillSourceConfig, SkillSourceEnablement,
     SkillSourceId,
 };
-use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
-use std::path::PathBuf;
 use ash_execpolicy::ExecPolicyRule;
 use ash_execpolicy::ExecPolicyRuleId;
 use ash_file_access::DirId;
@@ -21,6 +18,9 @@ use ash_protocol::Patch;
 use ash_protocol::ProviderId;
 use ash_protocol::ReasoningEffort;
 use ash_protocol::ToolMode;
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 /// A three-state update for user-facing preferences.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use thiserror::Error;
 use ash_file_access::DirPathError;
+use thiserror::Error;
 
 use crate::SourceRevision;
 

@@ -1,13 +1,5 @@
 use crate::server::notification_queue::NotificationQueue;
 use crate::server::notification_queue::NotificationQueueHandle;
-use serde::Serialize;
-use serde_json::Value;
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::sync::atomic::AtomicU64;
-use std::sync::atomic::Ordering;
 use ash_app_server_protocol::protocol::account::AccountLoginCompleted;
 use ash_app_server_protocol::protocol::account::AccountUpdated;
 use ash_app_server_protocol::protocol::collaboration::DocumentCollaborationPresenceSnapshot;
@@ -46,6 +38,14 @@ use ash_protocol::ThreadUpdateEnvelope;
 use ash_thread_transcript::ThreadTranscriptUpdateEnvelope;
 use ash_thread_transcript::TranscriptAccumulator;
 use ash_thread_transcript::TranscriptApplyResult;
+use serde::Serialize;
+use serde_json::Value;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
 pub(super) fn unix_time_millis() -> u64 {
     std::time::SystemTime::now()

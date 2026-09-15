@@ -1,5 +1,8 @@
 use crate::TcpNoDelay;
 use crate::WebSocketClientError;
+use ash_http_client::OutboundNetworkSnapshot;
+use ash_http_client::OutboundProxyRoute;
+use ash_http_client::Timeout;
 use base64::Engine;
 use tokio::io::AsyncRead;
 use tokio::io::AsyncReadExt;
@@ -14,9 +17,6 @@ use tokio_tungstenite::tungstenite::handshake::client::Response;
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 use url::Url;
 use zeroize::Zeroizing;
-use ash_http_client::OutboundNetworkSnapshot;
-use ash_http_client::OutboundProxyRoute;
-use ash_http_client::Timeout;
 
 pub(crate) trait AsyncIo: AsyncRead + AsyncWrite + Send + Unpin {}
 

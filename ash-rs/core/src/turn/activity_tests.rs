@@ -107,10 +107,7 @@ impl ToolService for ApprovedWeatherTool {
         authorization: &ToolAuthorization,
         _: &CancellationToken,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        assert!(matches!(
-            authorization,
-            ToolAuthorization::ApprovedOnce(_)
-        ));
+        assert!(matches!(authorization, ToolAuthorization::ApprovedOnce(_)));
         assert_eq!(call.arguments["city"], "Paris");
         Ok(ToolExecutionOutput::Success("sunny".into()))
     }

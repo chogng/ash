@@ -6,9 +6,9 @@ use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 
+use ash_app_server_transport::DeadlineStream;
 use serde::Deserialize;
 use serde::Serialize;
-use ash_app_server_transport::DeadlineStream;
 
 use crate::ConnectionOptions;
 use crate::GrantSource;

@@ -18,8 +18,6 @@ use ash_action_policy::ResolvedAction;
 use ash_action_policy::SandboxCompatibility;
 use ash_async_utils::CancellationToken;
 use ash_config::ToolSearchModeConfig;
-use core_api::ActionPolicyService;
-use core_api::CoreError;
 use ash_core::ProcessExecutionOutput;
 use ash_core::ProcessExitStatus;
 use ash_core::SandboxDenialOutput;
@@ -38,6 +36,8 @@ use ash_protocol::ToolExecutionOutput;
 use ash_protocol::ToolName;
 use ash_protocol::ToolOutputStream;
 use ash_tools::ToolExposure;
+use core_api::ActionPolicyService;
+use core_api::CoreError;
 
 use super::CombinedToolPorts;
 use super::ReloadableToolPorts;
@@ -235,10 +235,7 @@ fn large_mcp_catalog_uses_a_fixed_search_and_call_surface() {
     let review = combined.tools.prepare(&search_call).unwrap();
     let ExecutionDecision::RunUnsandboxed { grant_id } = combined
         .policy
-        .decide(
-            &review,
-            &ash_async_utils::CancellationSource::new().token(),
-        )
+        .decide(&review, &ash_async_utils::CancellationSource::new().token())
         .unwrap()
     else {
         panic!("tool search must receive the internal read-only grant");
@@ -346,10 +343,7 @@ fn try_execute_search(
     let review = combined.tools.prepare(&call).unwrap();
     let ExecutionDecision::RunUnsandboxed { grant_id } = combined
         .policy
-        .decide(
-            &review,
-            &ash_async_utils::CancellationSource::new().token(),
-        )
+        .decide(&review, &ash_async_utils::CancellationSource::new().token())
         .unwrap()
     else {
         panic!("tool search must receive a grant");
@@ -659,10 +653,7 @@ fn routes_tool_and_policy_by_frozen_definition_and_provenance() {
     assert!(matches!(
         combined
             .policy
-            .decide(
-                &review,
-                &ash_async_utils::CancellationSource::new().token()
-            )
+            .decide(&review, &ash_async_utils::CancellationSource::new().token())
             .expect("route policy"),
         ExecutionDecision::AskUser(_)
     ));

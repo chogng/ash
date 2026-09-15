@@ -2,10 +2,10 @@ mod render;
 
 use crate::thread::transcript::CommandStatus;
 use crate::thread::transcript::TranscriptCellId;
-use std::collections::BTreeSet;
 use ash_protocol::ToolCallId;
 use ash_protocol::ToolName;
 use ash_protocol::ToolOutputStream;
+use std::collections::BTreeSet;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ExecutionKind {

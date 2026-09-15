@@ -1,15 +1,15 @@
 use super::*;
 use crate::resource_store::ResourceStore;
 use crate::server::notification_queue::NotificationQueue;
-use serde_json::json;
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::thread;
 use ash_app_server_protocol::protocol::common::BrowserCapability as ClientBrowserCapability;
 use ash_async_utils::CancellationSource;
 use core_api::BrowserCapability;
 use core_api::BrowserObserveRequest;
 use core_api::CreateBrowserTargetRequest;
+use serde_json::json;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::thread;
 
 #[test]
 fn browser_requests_bind_targets_and_resources_to_the_exact_connection() {

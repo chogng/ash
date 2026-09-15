@@ -2,8 +2,6 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
-use sha2::Digest;
-use sha2::Sha256;
 use ash_core_plugins::AcquireCapabilityRequest;
 use ash_core_plugins::AvailableCapability;
 use ash_core_plugins::CapabilityKind;
@@ -28,6 +26,8 @@ use ash_core_plugins::UninstallMode;
 use ash_core_plugins::UninstallPackageRequest;
 use ash_mcp::McpServerTransport;
 use ash_secrets::SecretValue;
+use sha2::Digest;
+use sha2::Sha256;
 
 use super::MarketplaceConnectorCatalog;
 

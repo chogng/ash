@@ -1,14 +1,14 @@
 use crate::CoreError;
 use crate::ThreadSnapshot;
 use crate::thread_reducer::reduce_thread_event_with_prefix;
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-use std::sync::Arc;
 use ash_history::HistoryPrefix;
 use ash_history::StoredEvent;
 use ash_protocol::HistoryPrefixRef;
 use ash_protocol::ThreadEvent;
 use ash_thread_store::ThreadStore;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::sync::Arc;
 
 /// Resolves immutable source streams independently before importing their visible history.
 pub(crate) struct HistoryReader<'a> {

@@ -1,3 +1,4 @@
+import { h } from '../../../../base/browser/dom.js';
 import './blockDecorations.css';
 import { createFastDomNode, FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
@@ -13,7 +14,7 @@ export class BlockDecorations extends ViewPart {
 
 	constructor(context: ViewContext) {
 		super(context);
-		this.domNode = createFastDomNode(document.createElement('div'));
+		this.domNode = createFastDomNode(h(document, 'div'));
 		this.domNode.setClassName('stanza-editor-block-decorations blockDecorations-container');
 		this.domNode.setAttribute('role', 'presentation');
 		this.domNode.setAttribute('aria-hidden', 'true');
@@ -54,7 +55,7 @@ export class BlockDecorations extends ViewPart {
 			if (!decoration.options.blockClassName) continue;
 			let block = this.blocks[count];
 			if (!block) {
-				block = createFastDomNode(document.createElement('div'));
+				block = createFastDomNode(h(document, 'div'));
 				this.domNode.appendChild(block);
 				this.blocks.push(block);
 			}

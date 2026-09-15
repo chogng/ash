@@ -1,14 +1,7 @@
 use super::*;
 use crate::local::ProviderModelService;
-use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
-use std::thread;
-use std::time::Duration;
-use std::time::Instant;
 use ash_core::CreateThreadRequest;
 use ash_core::InMemoryThreadStore;
-use core_api::SequenceExpectation;
 use ash_core::StartTurnRequest;
 use ash_core::ThreadController;
 use ash_core::TurnExecutor;
@@ -24,6 +17,13 @@ use ash_protocol::StopReason;
 use ash_protocol::ThreadId;
 use ash_protocol::TurnStatus;
 use ash_protocol::UserInput;
+use core_api::SequenceExpectation;
+use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use std::thread;
+use std::time::Duration;
+use std::time::Instant;
 
 #[test]
 fn unary_provider_services_return_final_results_without_requesting_a_stream() {

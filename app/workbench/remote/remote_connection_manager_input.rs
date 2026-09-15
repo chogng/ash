@@ -47,24 +47,23 @@ impl WorkbenchApplication {
             return true;
         }
         self.dismiss_remote_tunnel_manager();
-        let connections =
-            match ash_utils_home_dir::find_ash_home()
-                .map_err(|error| error.to_string())
-                .and_then(|root| {
-                    let catalog = RemoteConnectionCatalog::from_profile_root(root);
-                    catalog
-                        .connections()
-                        .map_err(|error| format!("{}: {error}", catalog.path().display()))
-                }) {
-                Ok(connections) => connections,
-                Err(error) => {
-                    self.remote_connection_manager.open_settings(Vec::new());
-                    self.remote_connection_manager
-                        .save_failed(format!("Could not load Remote connections: {error}"));
-                    self.rebuild_and_focus_remote_connection_manager();
-                    return true;
-                }
-            };
+        let connections = match ash_utils_home_dir::find_ash_home()
+            .map_err(|error| error.to_string())
+            .and_then(|root| {
+                let catalog = RemoteConnectionCatalog::from_profile_root(root);
+                catalog
+                    .connections()
+                    .map_err(|error| format!("{}: {error}", catalog.path().display()))
+            }) {
+            Ok(connections) => connections,
+            Err(error) => {
+                self.remote_connection_manager.open_settings(Vec::new());
+                self.remote_connection_manager
+                    .save_failed(format!("Could not load Remote connections: {error}"));
+                self.rebuild_and_focus_remote_connection_manager();
+                return true;
+            }
+        };
         self.remote_connection_manager.open_settings(connections);
         self.rebuild_and_focus_remote_connection_manager();
         true
@@ -90,21 +89,20 @@ impl WorkbenchApplication {
         selected: Option<&RemoteConnectionName>,
     ) -> bool {
         self.dismiss_remote_tunnel_manager();
-        let connections =
-            match ash_utils_home_dir::find_ash_home()
-                .map_err(|error| error.to_string())
-                .and_then(|root| {
-                    let catalog = RemoteConnectionCatalog::from_profile_root(root);
-                    catalog
-                        .connections()
-                        .map_err(|error| format!("{}: {error}", catalog.path().display()))
-                }) {
-                Ok(connections) => connections,
-                Err(error) => {
-                    eprintln!("could not load Remote connections: {error}");
-                    return false;
-                }
-            };
+        let connections = match ash_utils_home_dir::find_ash_home()
+            .map_err(|error| error.to_string())
+            .and_then(|root| {
+                let catalog = RemoteConnectionCatalog::from_profile_root(root);
+                catalog
+                    .connections()
+                    .map_err(|error| format!("{}: {error}", catalog.path().display()))
+            }) {
+            Ok(connections) => connections,
+            Err(error) => {
+                eprintln!("could not load Remote connections: {error}");
+                return false;
+            }
+        };
         self.remote_connection_manager
             .open(connections, restore_focus);
         if let Some(selected) = selected {

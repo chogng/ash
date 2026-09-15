@@ -1,15 +1,15 @@
 use crate::CatalogScopeKey;
-use std::fmt;
-use std::future::Future;
-use std::pin::Pin;
-use std::time::Duration;
-use std::time::SystemTime;
 use ash_protocol::CapabilitySupport;
 use ash_protocol::ContextWindow;
 use ash_protocol::ModelId;
 use ash_protocol::ModelLifecycle;
 use ash_protocol::Personality;
 use ash_protocol::ReasoningEffort;
+use std::fmt;
+use std::future::Future;
+use std::pin::Pin;
+use std::time::Duration;
+use std::time::SystemTime;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ModelCapabilitiesPatch {

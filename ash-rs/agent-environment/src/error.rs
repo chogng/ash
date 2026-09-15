@@ -1,6 +1,6 @@
+use ash_utils_absolute_path::AbsolutePathBuf;
 use std::fmt;
 use std::path::PathBuf;
-use ash_utils_absolute_path::AbsolutePathBuf;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 /// Rejects invalid host facts before they enter a model-visible environment snapshot.

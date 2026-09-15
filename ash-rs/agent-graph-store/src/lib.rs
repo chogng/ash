@@ -1,11 +1,11 @@
 //! Persistent Agent identities and read-only Thread relationship queries.
 
-use serde::Deserialize;
-use serde::Serialize;
 use ash_protocol::AgentId;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadOrigin;
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Durable identity that survives replacement or deletion of its execution branches.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -65,7 +65,8 @@ impl ThreadBinding {
                     && self.thread_id.as_str() == self.session_id.as_str()))
         {
             return Err(AgentGraphStoreError(
-                "Thread origin must refer to another branch; only a fork may create a Session root".into(),
+                "Thread origin must refer to another branch; only a fork may create a Session root"
+                    .into(),
             ));
         }
         if self.spawn_parent().is_none() && self.agent_id != source.agent_id {

@@ -3,12 +3,12 @@ use crate::ExtensionScope;
 use crate::ExtensionState;
 use crate::ItemContributor;
 use crate::ThreadContext;
+use ash_protocol::SessionId;
+use ash_protocol::ThreadId;
 use extension_items::ExtensionItem;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
-use ash_protocol::SessionId;
-use ash_protocol::ThreadId;
 
 #[derive(Default)]
 struct ThreadItems(Mutex<VecDeque<ExtensionItem>>);

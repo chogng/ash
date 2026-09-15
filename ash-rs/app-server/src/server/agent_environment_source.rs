@@ -1,11 +1,11 @@
-use std::path::Path;
-use std::path::PathBuf;
-use std::process::Command;
 use ash_agent_environment::AgentEnvironmentError;
 use ash_agent_environment::AgentEnvironmentSnapshot;
 use ash_agent_environment::Dirs;
 use ash_agent_environment::HostEnvironment;
 use ash_agent_environment::RepositoryEnvironment;
+use std::path::Path;
+use std::path::PathBuf;
+use std::process::Command;
 
 const MAX_GIT_STATUS_LINES: usize = 40;
 

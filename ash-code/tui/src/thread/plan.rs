@@ -1,12 +1,12 @@
 //! One-row presentation state derived from the active Turn plan.
 
 use crate::render::RenderContext;
+use ash_protocol::PlanStepStatus;
+use ash_protocol::PlanUpdate;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::widgets::Paragraph;
-use ash_protocol::PlanStepStatus;
-use ash_protocol::PlanUpdate;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub(crate) struct PlanState {

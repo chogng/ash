@@ -1,8 +1,8 @@
 use super::update_broker::UpdateBroker;
+use ash_config::ConfigStore;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
-use ash_config::ConfigStore;
 
 pub(super) struct ConfigWatcher {
     shutdown: Option<std::sync::mpsc::Sender<()>>,

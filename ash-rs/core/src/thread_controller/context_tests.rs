@@ -5,7 +5,6 @@ use crate::InterruptTurnRequest;
 use crate::SequenceExpectation;
 use crate::StartTurnRequest;
 use crate::context::ContextAssembler;
-use std::sync::Arc;
 use ash_protocol::ApprovalMode;
 use ash_protocol::CommandId;
 use ash_protocol::ContextSourceRange;
@@ -15,6 +14,7 @@ use ash_protocol::StableTurnError;
 use ash_protocol::TurnKind;
 use ash_protocol::TurnStatus;
 use ash_protocol::UserInput;
+use std::sync::Arc;
 
 struct Fixture {
     store: Arc<InMemoryThreadStore>,

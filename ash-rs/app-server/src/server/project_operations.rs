@@ -4,7 +4,6 @@ use super::RpcError;
 use super::decode;
 use super::project_projection;
 use super::result;
-use serde_json::Value;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::projects::ProjectChanged;
 use ash_app_server_protocol::protocol::projects::ProjectCommandDispositionDto;
@@ -27,6 +26,7 @@ use ash_projects::ProjectCommandResult;
 use ash_projects::ProjectCoordinator;
 use ash_projects::ProjectError;
 use ash_projects::ProjectRoot;
+use serde_json::Value;
 
 impl AppServer {
     pub(super) fn project_list(

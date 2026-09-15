@@ -4,11 +4,11 @@ use crate::{
     ContentDigest, SkillCompatibility, SkillDiagnostic, SkillDiagnosticCode, SkillId, SkillName,
     SkillSourceRoot,
 };
+use ash_file_identity::FileInformation;
 use sha2::{Digest, Sha256};
 use std::fs::{self, File, Metadata};
 use std::io::Read;
 use std::path::Path;
-use ash_file_identity::FileInformation;
 
 const MAX_SOURCE_ENTRIES: usize = 1024;
 const MAX_SKILL_FILE_BYTES: u64 = 1024 * 1024;

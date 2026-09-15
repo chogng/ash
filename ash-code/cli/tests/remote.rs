@@ -6,11 +6,11 @@ use std::process::Command;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use serde_json::json;
 use ash_app_server_protocol::protocol::initialize::{
     APP_SERVER_CAPABILITY_VERSION, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION,
 };
 use ash_app_server_protocol::schema_hash;
+use serde_json::json;
 
 #[test]
 fn ash_code_cli_exposes_the_host_owned_remote_platform_probe() {

@@ -1,5 +1,7 @@
 use crate::app::App;
 use crate::app::AppCommand;
+use ash_app_server_protocol::protocol::git::GitHeadDto;
+use ash_app_server_protocol::protocol::git::GitStatusResult;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
@@ -8,8 +10,6 @@ use ratatui::backend::TestBackend;
 use ratatui::layout::Position;
 use ratatui::layout::Rect;
 use ratatui::style::Modifier;
-use ash_app_server_protocol::protocol::git::GitHeadDto;
-use ash_app_server_protocol::protocol::git::GitStatusResult;
 
 fn app_with_branch() -> App {
     let mut app = App::for_dir(std::path::Path::new("/work/ash"));
@@ -55,12 +55,7 @@ fn header_places_branch_and_path_without_repeating_them_below() {
         .map(|row| row.iter().map(|cell| cell.symbol()).collect::<String>())
         .collect::<Vec<_>>()
         .join("\n");
-    assert!(
-        text.lines()
-            .next()
-            .unwrap()
-            .starts_with("  main /work/ash")
-    );
+    assert!(text.lines().next().unwrap().starts_with("  main /work/ash"));
     assert_eq!(text.matches("main").count(), 1);
     assert_eq!(text.matches("/work/ash").count(), 1);
     assert_eq!(buffer[(2, 0)].fg, app.render_context().foreground());

@@ -1,7 +1,4 @@
 use super::*;
-use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
-use std::time::{Duration, Instant};
 use ash_app_server_protocol::protocol::common::{ClientCapabilities, ClientInfo};
 use ash_app_server_protocol::protocol::session::{
     SessionCreateParams, SessionRequest, SessionRequestParams, SessionRequestResult,
@@ -9,14 +6,17 @@ use ash_app_server_protocol::protocol::session::{
 };
 use ash_app_server_protocol::protocol::turn::InputItem;
 use ash_async_utils::CancellationToken;
-use core_api::CoreError;
 use ash_core::InMemoryThreadStore;
-use core_api::ModelService;
 use ash_core::ThreadController;
 use ash_protocol::{
     CommandId, ContentPart, InputItem as ModelInputItem, ModelRequest, ModelResponse, ResponseItem,
     StopReason, ThreadEvent, ThreadUpdate,
 };
+use core_api::CoreError;
+use core_api::ModelService;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::time::{Duration, Instant};
 
 #[test]
 fn closing_session_does_not_block_on_a_full_event_channel() {

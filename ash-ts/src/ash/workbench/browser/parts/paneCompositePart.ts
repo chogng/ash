@@ -148,10 +148,14 @@ export class PaneCompositePart extends CompositePart {
 	/** Projects one View's title content and actions into the Part's fixed slots. */
 	protected setTitleProjection(projection: PartTitleProjection | undefined): void {
 		this.hasCustomTitleContent = projection?.content !== undefined;
-		this.titleContentDomNode.replaceChildren(
-			...(projection?.content ? [projection.content] : [this.compositeBar.domNode]),
-		);
-		this.viewTitleActionsDomNode.replaceChildren(...(projection?.actions ? [projection.actions] : []));
+		const content = projection?.content ?? this.compositeBar.domNode;
+		if (this.titleContentDomNode.firstChild !== content || this.titleContentDomNode.childNodes.length !== 1) {
+			this.titleContentDomNode.replaceChildren(content);
+		}
+		const actions = projection?.actions;
+		if (this.viewTitleActionsDomNode.firstChild !== (actions ?? null) || this.viewTitleActionsDomNode.childNodes.length !== (actions ? 1 : 0)) {
+			this.viewTitleActionsDomNode.replaceChildren(...(actions ? [actions] : []));
+		}
 		this.updateTitleVisibility();
 	}
 

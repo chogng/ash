@@ -5,10 +5,6 @@ use super::super::tests::text;
 use super::Output;
 use super::tail;
 use crate::thread::Event as ThreadEvent;
-use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyModifiers;
-use ratatui::layout::Rect;
 use ash_app_server_protocol::protocol::transcript::ThreadTranscriptEntry;
 use ash_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
 use ash_protocol::ItemId;
@@ -16,6 +12,10 @@ use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadItem;
 use ash_protocol::TurnId;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyModifiers;
+use ratatui::layout::Rect;
 
 fn entry(id: &str, text: &str, transient: bool) -> ThreadTranscriptEntry {
     let turn_id = TurnId::new(id).unwrap();

@@ -3,8 +3,8 @@ use crate::{
     FreeformFormat, ImageDetail, ToolContent, ToolDefinition, ToolInputSchema, ToolLoading,
     ToolName, ToolOutput, ToolOutputSchema, ToolSchemaMode,
 };
-use serde_json::json;
 use ash_protocol::ToolCallId;
+use serde_json::json;
 
 #[test]
 fn protocol_adapter_preserves_strict_function_metadata() {

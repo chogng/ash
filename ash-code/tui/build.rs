@@ -1,10 +1,10 @@
 //! Compiles the editable Welcome pet frames and actions into the TUI binary.
 
+use ash_sprite::compile_sprite_sheet;
+use ash_sprite::terminal_sprite_sheet_rust_source;
 use std::env;
 use std::fs;
 use std::path::PathBuf;
-use ash_sprite::compile_sprite_sheet;
-use ash_sprite::terminal_sprite_sheet_rust_source;
 
 const PET_SOURCE: &str = "assets/welcome/pet.sprite";
 const PET_OUTPUT: &str = "welcome_pet.rs";

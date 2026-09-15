@@ -3,9 +3,9 @@ use std::sync::Arc;
 
 use crate::ChunkReference;
 use crate::IndexedLanguage;
-use sha2::{Digest, Sha256};
 use ash_model_provider::EmbeddingVector;
 use ash_model_provider::{EmbeddingInvoker, RerankInvoker};
+use sha2::{Digest, Sha256};
 
 use crate::CodebaseSemanticError;
 

@@ -1,5 +1,4 @@
 use super::*;
-use std::fs;
 use ash_action_policy::GrantId;
 use ash_codebase::CodebaseLimits;
 use ash_file_access::Dir;
@@ -8,6 +7,7 @@ use ash_file_access::GrantSource;
 use ash_file_access::Permission;
 use ash_file_access::Permissions;
 use ash_protocol::ToolCallId;
+use std::fs;
 
 #[test]
 fn explicit_search_code_tool_requires_its_exact_read_only_grant_and_returns_local_hits() {

@@ -1,3 +1,4 @@
+import { h } from '../../../../base/browser/dom.js';
 import './glyphMargin.css';
 import { createFastDomNode, FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { type RenderingContext, type RestrictedRenderingContext } from '../../view/renderingContext.js';
@@ -93,7 +94,7 @@ export class GlyphMarginWidgets extends ViewPart {
 		super(context);
 		const options = context.configuration.options;
 		const layoutInfo = options.get(EditorOption.layoutInfo);
-		this.domNode = createFastDomNode(document.createElement('div'));
+		this.domNode = createFastDomNode(h(document, 'div'));
 		this.domNode.setClassName('glyph-margin-widgets');
 		this.domNode.setPosition('absolute');
 		this.domNode.setTop(0);
@@ -240,7 +241,7 @@ export class GlyphMarginWidgets extends ViewPart {
 	}
 
 	private createModelDecorationNode(): FastDomNode<HTMLDivElement> {
-		const node = createFastDomNode(this.domNode.domNode.ownerDocument.createElement('div'));
+		const node = createFastDomNode(h(this.domNode.domNode.ownerDocument, 'div'));
 		node.setPosition('absolute');
 		node.setAttribute('aria-hidden', 'true');
 		this.domNode.appendChild(node);

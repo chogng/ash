@@ -84,9 +84,10 @@ impl WorkbenchApplication {
         let mut session_pane = SessionPaneState::for_working_directory(env.working_directory());
         let history_proxy = event_proxy.clone();
         let history = (|| {
-            let runtime =
-                ::state::StateRuntime::open(ash_utils_home_dir::find_ash_home().map_err(|error| error.to_string())?)
-                    .map_err(|error| error.to_string())?;
+            let runtime = ::state::StateRuntime::open(
+                ash_utils_home_dir::find_ash_home().map_err(|error| error.to_string())?,
+            )
+            .map_err(|error| error.to_string())?;
             let store = ::state::SqliteMessageHistory::open(
                 runtime.database_path(),
                 message_history::MessageHistoryRetention::default(),

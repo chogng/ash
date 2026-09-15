@@ -1,7 +1,7 @@
 use super::from_dynamic_tool_spec;
 use crate::{ToolInvocationKind, ToolLoading, ToolName};
-use serde_json::json;
 use ash_protocol::DynamicToolSpec;
+use serde_json::json;
 
 #[test]
 fn dynamic_tool_uses_the_shared_function_definition() {

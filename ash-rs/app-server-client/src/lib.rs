@@ -9,15 +9,6 @@ mod in_process;
 mod notification;
 mod session;
 
-use serde::Serialize;
-use serde::Serializer;
-use serde::ser::SerializeStruct;
-use serde_json::Value;
-use std::fmt;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, OnceLock};
-use zeroize::Zeroize;
-use zeroize::Zeroizing;
 use ash_app_server_protocol::protocol::account::AccountLoginCancelParams;
 use ash_app_server_protocol::protocol::account::AccountLoginCancelResult;
 use ash_app_server_protocol::protocol::account::AccountLoginStartParams;
@@ -152,7 +143,17 @@ use ash_app_server_protocol::protocol::turn_changes::TurnChangesMutationResult;
 use ash_app_server_protocol::protocol::turn_changes::TurnChangesReadParams;
 use ash_app_server_protocol::protocol::turn_changes::TurnChangesReadResult;
 use ash_app_server_protocol::rpc::{JsonRpcId, JsonRpcRequest, JsonRpcResponse};
+use serde::Serialize;
+use serde::Serializer;
+use serde::ser::SerializeStruct;
+use serde_json::Value;
+use std::fmt;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, OnceLock};
+use zeroize::Zeroize;
+use zeroize::Zeroizing;
 
+pub use ash_app_server::SessionStateMode;
 pub use in_process::InProcessAppServer;
 pub use in_process::InProcessClientOptions;
 pub use in_process::InProcessTransport;
@@ -163,7 +164,6 @@ pub use session::{
     AppServerEvent, AppServerEvents, AppServerRequestHandle, AppServerSession,
     ConnectionCloseReason, ShutdownError, StdioAppServerCommand, TakeEventsError,
 };
-pub use ash_app_server::SessionStateMode;
 
 /// Exchanges one complete JSON-RPC request with a connected app-server transport.
 ///
@@ -1043,8 +1043,7 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         config: ash_app_server_protocol::protocol::config::ProviderConfigDto,
         api_key: Option<String>,
         model: Option<String>,
-    ) -> Result<ash_app_server_protocol::protocol::provider::ProviderProbeResult, ClientError>
-    {
+    ) -> Result<ash_app_server_protocol::protocol::provider::ProviderProbeResult, ClientError> {
         #[derive(Serialize)]
         #[serde(rename_all = "camelCase")]
         struct Probe<'a> {

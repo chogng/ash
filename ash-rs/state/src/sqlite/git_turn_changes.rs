@@ -1,9 +1,9 @@
 use super::connection::{from_sql_integer, open, sql_error, to_sql_integer};
+use ash_protocol::ThreadId;
 use git_turn_changes::{ChangeSetId, TurnChangeSet, TurnChangeStore, TurnChangeStoreError};
 use rusqlite::{Connection, ErrorCode, OptionalExtension, TransactionBehavior, params};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use ash_protocol::ThreadId;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TurnChangeCommandOutcome {

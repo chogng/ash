@@ -23,6 +23,8 @@ use std::num::NonZeroU64;
 use std::path::Path;
 
 #[cfg(unix)]
+use ash_remote_connections::RemoteConnectionProfileStore;
+#[cfg(unix)]
 use flate2::Compression;
 #[cfg(unix)]
 use flate2::write::GzEncoder;
@@ -38,8 +40,6 @@ use tar::Builder;
 use tar::EntryType;
 #[cfg(unix)]
 use tar::Header;
-#[cfg(unix)]
-use ash_remote_connections::RemoteConnectionProfileStore;
 
 #[test]
 fn no_arguments_select_the_local_target() {
@@ -437,8 +437,7 @@ fn create_runtime_archive(directory: &Path) -> TestRuntimeArtifact {
         "components": {},
     }))
     .unwrap();
-    let mut unpacked_size =
-        append_archive_file(&mut builder, "ash-package.json", &metadata, 0o644);
+    let mut unpacked_size = append_archive_file(&mut builder, "ash-package.json", &metadata, 0o644);
     unpacked_size += append_archive_file(
         &mut builder,
         "bin/ash-remote-server",

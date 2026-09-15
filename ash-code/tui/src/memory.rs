@@ -1,13 +1,13 @@
 use crate::client::new_command_id;
-use std::sync::Arc;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
 use ash_app_server_client::AppServerRequestHandle;
 use ash_app_server_client::MemoryRecording;
 use ash_memory_diagnostics::MemoryMetric;
 use ash_memory_diagnostics::MemoryMetricKind;
 use ash_memory_diagnostics::MemoryProduct;
 use ash_memory_diagnostics::MemoryStatus;
+use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) enum Status {

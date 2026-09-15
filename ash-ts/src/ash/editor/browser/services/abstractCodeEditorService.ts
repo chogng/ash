@@ -1,3 +1,4 @@
+import { h } from '../../../base/browser/dom.js';
 import { Emitter } from '../../../base/common/event.js';
 import { AbstractDisposable, Disposable, DisposableMap, toDisposable } from '../../../base/common/lifecycle.js';
 import { LinkedList } from '../../../base/common/linkedList.js';
@@ -271,7 +272,7 @@ function createStyle(editor?: ICodeEditor): HTMLStyleElement | undefined {
 	if (typeof document === 'undefined') {
 		return undefined;
 	}
-	const style = document.createElement('style');
+	const style = h(document, 'style');
 	const root = editor?.getContainerDomNode().getRootNode();
 	if (typeof ShadowRoot !== 'undefined' && root instanceof ShadowRoot) {
 		root.appendChild(style);

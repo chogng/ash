@@ -1,5 +1,5 @@
-use unicode_width::UnicodeWidthChar;
 use ash_terminal::{ScreenBuffer, TerminalMousePosition};
+use unicode_width::UnicodeWidthChar;
 use zui::input::ElementState;
 use zui::ui::{Color, PaintRect, Rect, UiScene};
 

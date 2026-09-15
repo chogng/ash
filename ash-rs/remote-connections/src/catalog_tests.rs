@@ -1,12 +1,12 @@
 use std::fs;
 
+use ash_remote::RemoteArchitecture;
+use ash_remote::RemoteLinuxLibc;
+use ash_remote::RemotePlatform;
 use serde_json::json;
 use sha2::Digest;
 use sha2::Sha256;
 use tempfile::TempDir;
-use ash_remote::RemoteArchitecture;
-use ash_remote::RemoteLinuxLibc;
-use ash_remote::RemotePlatform;
 
 use crate::RemoteRuntimeCatalog;
 

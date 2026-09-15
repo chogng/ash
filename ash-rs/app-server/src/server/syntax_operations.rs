@@ -2,7 +2,6 @@ use super::AppServer;
 use super::RpcError;
 use super::decode;
 use super::result;
-use serde_json::Value;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::syntax::SyntaxAnalyzeParams;
 use ash_app_server_protocol::protocol::syntax::SyntaxAnalyzeResult;
@@ -28,6 +27,7 @@ use ash_syntax::SyntaxLanguage;
 use ash_syntax::SyntaxRange;
 use ash_syntax::SyntaxSnapshot;
 use ash_syntax::SyntaxTokenKind;
+use serde_json::Value;
 
 impl AppServer {
     pub(super) fn syntax_analyze(&self, params: &Value) -> Result<Value, RpcError> {

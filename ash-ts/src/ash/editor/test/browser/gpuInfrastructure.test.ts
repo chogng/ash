@@ -1,3 +1,4 @@
+import { h } from '../../../base/browser/dom.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -150,7 +151,7 @@ test('Rectangle GPU rendering draws a clear pass into the caller-owned frame', a
 				getCurrentScrollTop: () => 20,
 			},
 		} as unknown as ViewContext;
-		const canvas = browserEnvironment.window.document.createElement('canvas');
+		const canvas = h(browserEnvironment.window.document, 'canvas');
 		canvas.width = 800;
 		canvas.height = 600;
 		Object.defineProperty(canvas.ownerDocument.defaultView!.navigator, 'gpu', {

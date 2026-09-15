@@ -1,12 +1,12 @@
 use std::path::Path;
 use std::path::PathBuf;
 
-use serde::Deserialize;
 use ash_terminal_detection::BackgroundAppearance;
 use ash_terminal_detection::ColorLevel;
 use ash_terminal_detection::TerminalRgb;
 use ash_terminal_detection::detect_host_terminal;
 use ash_terminal_detection::resolve_background;
+use serde::Deserialize;
 
 mod document;
 

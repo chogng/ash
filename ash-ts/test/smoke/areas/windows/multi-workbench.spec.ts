@@ -1,6 +1,6 @@
 import type { ElectronApplication, Page } from "@playwright/test";
 import { realpath } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
+import { parseWorkspace } from "../../../../src/ash/platform/workspace/common/workspace.js";
 import { expect, test } from "../../../automation/test.js";
 import { createTestWorkspace, disposeTestWorkspace } from "../../../automation/testWorkspace.js";
 import { Workbench } from "../../../automation/workbench.js";
@@ -47,15 +47,14 @@ async function emitSecondInstance(application: ElectronApplication, workspaceDir
 }
 
 async function canonicalWorkspacePath(page: Page): Promise<string> {
-	const uri = await page.evaluate(async () => {
+	const value = await page.evaluate(async () => {
 		const bridge = (globalThis as unknown as { ash?: { ipcRenderer?: { invoke(channel: string): Promise<unknown> } } }).ash?.ipcRenderer;
 		if (!bridge) throw new Error("Ash renderer IPC bridge is unavailable");
-		const value = await bridge.invoke("ash:workspace:context:read");
-		const candidate = value as { uri?: unknown };
-		if (typeof candidate.uri !== "string") throw new Error("Workbench does not contain a folder Workspace");
-		return candidate.uri;
+		return bridge.invoke("ash:workspace:context:read");
 	});
-	return realpath(fileURLToPath(uri));
+	const workspace = parseWorkspace(value);
+	expect(workspace.folders).toHaveLength(1);
+	return realpath(workspace.folders[0]!.uri.fsPath);
 }
 
 async function focusedWindowTitle(application: ElectronApplication): Promise<string | undefined> {

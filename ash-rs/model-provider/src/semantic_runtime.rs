@@ -181,10 +181,7 @@ struct ProviderEmbeddingInvoker {
 
 impl EmbeddingInvoker for ProviderEmbeddingInvoker {
     fn embed(&self, request: &EmbeddingRequest) -> Result<EmbeddingResponse, ModelProviderError> {
-        self.embed_with_cancellation(
-            request,
-            &ash_async_utils::CancellationSource::new().token(),
-        )
+        self.embed_with_cancellation(request, &ash_async_utils::CancellationSource::new().token())
     }
 
     fn embed_with_cancellation(
@@ -215,10 +212,7 @@ struct ProviderRerankInvoker {
 
 impl RerankInvoker for ProviderRerankInvoker {
     fn rerank(&self, request: &RerankRequest) -> Result<RerankResponse, ModelProviderError> {
-        self.rerank_with_cancellation(
-            request,
-            &ash_async_utils::CancellationSource::new().token(),
-        )
+        self.rerank_with_cancellation(request, &ash_async_utils::CancellationSource::new().token())
     }
 
     fn rerank_with_cancellation(

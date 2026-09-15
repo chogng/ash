@@ -1230,6 +1230,9 @@ test("Auxiliary Bar retains its fixed View as a standard Pane Composite", () => 
 		location: ViewContainerLocation.AuxiliaryBar,
 		isDefault: true,
 	}));
+	disposables.add(registry.registerViews("ash.chat", [
+		{ id: "ash.chat.test", title: "Chat", ctorDescriptor: new ServiceConstructionDescriptor(TestPanelView) },
+	]));
 	const contextKeys = disposables.add(new ContextKeyService());
 	const viewDescriptors = disposables.add(new ViewDescriptorService({
 		contextKeyService: contextKeys,
@@ -1267,6 +1270,11 @@ test("Auxiliary Bar retains its fixed View as a standard Pane Composite", () => 
 	const compositeBar = auxiliarybar.domNode.querySelector<HTMLElement>(".ash-composite-bar");
 	assert.ok(compositeBar);
 	assert.equal(compositeBar.hidden, true);
+	const action = auxiliarybar.domNode.querySelector<HTMLButtonElement>(".ash-pane-composite-title-view-actions button");
+	assert.ok(action);
+	action.focus();
+	auxiliarybar.showComposite(descriptor.id);
+	assert.equal(dom.window.document.activeElement, action);
 
 	disposables.dispose();
 	dom.window.close();

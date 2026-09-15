@@ -6,9 +6,9 @@ use crate::render::RenderContext;
 use crate::render::RenderTheme;
 use crate::render::ThemePalette;
 use crate::render::test_context;
+use ash_terminal_detection::ColorLevel;
 use ratatui::style::Color;
 use ratatui::style::Modifier;
-use ash_terminal_detection::ColorLevel;
 
 #[test]
 fn selected_items_use_the_standard_input_marker() {

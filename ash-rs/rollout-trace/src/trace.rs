@@ -1,8 +1,8 @@
 use crate::RolloutTraceError;
-use serde::{Deserialize, Serialize};
 use ash_history::StoredEvent;
 use ash_protocol::{SessionId, ThreadEvent, ThreadId};
 use ash_thread_store::ThreadStore;
+use serde::{Deserialize, Serialize};
 
 /// Version of the self-contained trace artifact format.
 pub const ROLLOUT_TRACE_FORMAT_VERSION: u32 = 3;

@@ -5,10 +5,6 @@ use super::bindings::AppKeymapAction;
 use super::bindings::AppKeymapContext;
 use super::bindings::condition_matches;
 use super::input::normalized_key;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyEventKind;
-use std::time::Duration;
-use std::time::Instant;
 use ash_keybinding::Chord;
 use ash_keybinding::HostPlatform;
 use ash_keybinding::KeyIdentity;
@@ -18,6 +14,10 @@ use ash_keybinding::KeybindingResolver;
 use ash_keybinding::ResolveResult;
 use ash_keybinding::ShortcutModifiers;
 use ash_keybinding::format_key_sequence;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyEventKind;
+use std::time::Duration;
+use std::time::Instant;
 
 pub(super) const KEY_CHORD_TIMEOUT: Duration = Duration::from_secs(1);
 

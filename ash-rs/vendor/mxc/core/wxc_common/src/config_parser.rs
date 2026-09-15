@@ -15,8 +15,8 @@ use crate::models::{
 };
 use crate::mxc_error::MxcError;
 use crate::network_parser::{
-    NetworkSections, directional_network_version_error, host_is_any_loopback, parse_network_policy,
-    supports_directional_network,
+    directional_network_version_error, host_is_any_loopback, parse_network_policy,
+    supports_directional_network, NetworkSections,
 };
 use crate::state_aware_request::{MxcRequest, ParsedStateAwareRequest, Phase};
 use crate::wire;
@@ -2204,10 +2204,9 @@ mod tests {
         assert_eq!(masked[..start], json[..start]);
         assert_eq!(masked[end..], json[end..]);
         let span = &masked[start..end];
-        assert!(
-            span.bytes()
-                .all(|b| matches!(b, b'{' | b'}' | b' ' | b'\r' | b'\n'))
-        );
+        assert!(span
+            .bytes()
+            .all(|b| matches!(b, b'{' | b'}' | b' ' | b'\r' | b'\n')));
         assert_eq!(span.bytes().filter(|b| *b == b'{').count(), 1);
         assert_eq!(span.bytes().filter(|b| *b == b'}').count(), 1);
     }
@@ -2381,11 +2380,10 @@ mod tests {
         assert_eq!(req.script_timeout, 3000);
         assert_eq!(req.container_id, "TestProfile");
         assert!(req.policy.least_privilege_mode);
-        assert!(
-            req.policy
-                .capabilities
-                .contains(&"internetClient".to_string())
-        );
+        assert!(req
+            .policy
+            .capabilities
+            .contains(&"internetClient".to_string()));
         assert_eq!(req.policy.readwrite_paths, vec!["C:\\rw"]);
         assert_eq!(req.policy.readonly_paths, vec!["C:\\ro"]);
         assert_eq!(req.policy.denied_paths, vec!["C:\\denied"]);
@@ -2672,17 +2670,15 @@ mod tests {
         let mut logger = test_logger();
 
         let req = load_request(&encoded, &mut logger, true).unwrap();
-        assert!(
-            req.policy
-                .capabilities
-                .contains(&"learningModeLogging".to_string())
-        );
+        assert!(req
+            .policy
+            .capabilities
+            .contains(&"learningModeLogging".to_string()));
         // The boolean must NOT inject the allow-all permissive capability.
-        assert!(
-            !req.policy
-                .capabilities
-                .contains(&"permissiveLearningMode".to_string())
-        );
+        assert!(!req
+            .policy
+            .capabilities
+            .contains(&"permissiveLearningMode".to_string()));
     }
 
     #[test]
@@ -5658,16 +5654,12 @@ mod tests {
             Err(error) => error,
         };
 
-        assert!(
-            discriminator_err
-                .to_string()
-                .contains("expected a configuration object")
-        );
-        assert!(
-            wire_err
-                .to_string()
-                .contains("expected a configuration object")
-        );
+        assert!(discriminator_err
+            .to_string()
+            .contains("expected a configuration object"));
+        assert!(wire_err
+            .to_string()
+            .contains("expected a configuration object"));
     }
 
     #[test]

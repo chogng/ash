@@ -2,12 +2,12 @@ use crate::CatalogWarning;
 use crate::CatalogWarningCode;
 use crate::ModelCatalogEntry;
 use crate::ModelsManagerError;
-use std::collections::BTreeSet;
-use std::fmt;
 use ash_protocol::CapabilitySupport;
 use ash_protocol::ModelAvailability;
 use ash_protocol::ModelCapabilities;
 use ash_protocol::ModelLifecycle;
+use std::collections::BTreeSet;
+use std::fmt;
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum ModelCapability {

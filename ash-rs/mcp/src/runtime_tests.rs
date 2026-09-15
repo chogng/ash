@@ -148,8 +148,7 @@ async fn partial_startup_retains_diagnostic_and_healthy_server() {
     let runtime = McpRuntime::start_with_factory(
         vec![definition("user:mcp:docs"), definition(failed.as_str())],
         factory,
-        McpRuntimeOptions::new("ash-test", "0")
-            .with_startup_policy(McpStartupPolicy::AllowPartial),
+        McpRuntimeOptions::new("ash-test", "0").with_startup_policy(McpStartupPolicy::AllowPartial),
     )
     .await
     .expect("partial startup");

@@ -2,13 +2,13 @@ use crate::{
     CaptureState, ChangeFile, ChangeFileKind, ChangeSetId, CommitState, MessageState,
     TerminalTurnState, TurnChangeSet, TurnChangeSetDraft, TurnChangeStore, TurnChangeStoreError,
 };
+use ash_git::{GitClient, GitPrivateRef, GitTreeChange, GitTreeChangeKind, GitTreeId};
+use ash_protocol::{SessionId, ThreadId, TurnId};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread::JoinHandle;
-use ash_git::{GitClient, GitPrivateRef, GitTreeChange, GitTreeChangeKind, GitTreeId};
-use ash_protocol::{SessionId, ThreadId, TurnId};
 
 /// One repository inside the managed worktree assigned to a Thread.
 #[derive(Clone, Debug, Eq, PartialEq)]

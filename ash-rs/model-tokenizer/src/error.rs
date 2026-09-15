@@ -1,6 +1,6 @@
+use ash_protocol::ContentDigest;
 use std::fmt;
 use std::path::PathBuf;
-use ash_protocol::ContentDigest;
 
 #[derive(Debug)]
 pub enum LocalTokenizerError {

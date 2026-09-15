@@ -105,9 +105,7 @@ impl WorkbenchLayoutState {
         self.tab_container.scroll(command, metrics)
     }
 
-    pub(crate) fn tab_container_scroll_state_mut(
-        &mut self,
-    ) -> &mut ash_ui_components::ScrollState {
+    pub(crate) fn tab_container_scroll_state_mut(&mut self) -> &mut ash_ui_components::ScrollState {
         self.tab_container.scroll_state_mut()
     }
 

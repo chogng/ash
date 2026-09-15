@@ -1,10 +1,10 @@
+use ash_sprite::Rgb;
+use ash_sprite::SpriteCell;
+use ash_sprite::TerminalSprite;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
 use ratatui::widgets::Widget;
-use ash_sprite::Rgb;
-use ash_sprite::SpriteCell;
-use ash_sprite::TerminalSprite;
 
 #[test]
 fn generated_pet_cells_preserve_the_authored_terminal_instructions() {

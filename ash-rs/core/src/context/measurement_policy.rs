@@ -1,11 +1,11 @@
 use super::ContextBudget;
 use super::ContextTokenCount;
-use std::fmt;
 use ash_context_engine::ContextBudgetDecision;
 use ash_context_engine::ContextBudgetPlanner;
 use ash_context_engine::ContextTokenMeasurement;
 use ash_context_engine::ContextTokenMeasurementCapability;
 use ash_context_engine::ResolvedContextBudget;
+use std::fmt;
 
 const REMOTE_MEASUREMENT_MINIMUM_HEADROOM: ContextTokenCount = ContextTokenCount::new(4_096);
 const MAXIMUM_MEASUREMENT_REPLANS: u8 = 3;

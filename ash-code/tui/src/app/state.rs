@@ -104,16 +104,16 @@ use crate::widgets::detail_list::DetailList;
 use crate::widgets::detail_list::DetailListRow;
 use crate::widgets::list_selection::ListSelectionState;
 use crate::widgets::overlay::DetailOverlay;
-use crossterm::event::KeyEvent;
-use ratatui::layout::Rect;
-use std::path::Path;
-use std::path::PathBuf;
-use std::time::Instant;
 use ash_app_server_protocol::protocol::session::SessionThreadReadResult;
 use ash_memory_diagnostics::ProcessResourceRequest;
 use ash_protocol::ApprovalMode;
 use ash_protocol::Turn;
 use ash_protocol::TurnId;
+use crossterm::event::KeyEvent;
+use ratatui::layout::Rect;
+use std::path::Path;
+use std::path::PathBuf;
+use std::time::Instant;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Status {

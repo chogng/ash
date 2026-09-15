@@ -1,5 +1,5 @@
-use std::fmt;
 use ash_protocol::{ModelId, ProviderId};
+use std::fmt;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ProviderConfigError {

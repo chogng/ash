@@ -116,7 +116,10 @@ impl CommandRequest {
         current: Option<Conversation>,
     ) -> SessionCompletion {
         match self {
-            Self::Fork { prompt, approval_mode } => SessionCompletion::Forked {
+            Self::Fork {
+                prompt,
+                approval_mode,
+            } => SessionCompletion::Forked {
                 command: fork_command(&prompt),
                 result: current
                     .ok_or_else(|| "No active session".to_owned())
@@ -200,7 +203,10 @@ impl CommandRequest {
 
 pub(crate) fn prepare_command(approval_mode: ApprovalMode, command: Command) -> CommandRequest {
     match command {
-        Command::Fork { prompt } => CommandRequest::Fork { prompt, approval_mode },
+        Command::Fork { prompt } => CommandRequest::Fork {
+            prompt,
+            approval_mode,
+        },
         Command::Preview { generation, params } => CommandRequest::Preview { generation, params },
         Command::Restore { session_id } => CommandRequest::Restore { session_id },
         Command::Delete { session_id } => CommandRequest::Delete { session_id },
@@ -306,12 +312,20 @@ impl ForkCompletion {
     pub(crate) fn into_event(self, command: String) -> crate::thread::Event {
         let session_id = self.session_id;
         let result = match self.status {
-            ForkStatus::Waiting => format!("Copied to session {session_id}. Waiting for input. Open with /resume {session_id}."),
-            ForkStatus::Started => format!("Started session {session_id} in the background. Results stay there. Open with /resume {session_id}."),
-            ForkStatus::StartFailed(error) => return crate::thread::Event::CommandFailed {
-                command,
-                error: format!("Copied to session {session_id}, but could not start the prompt: {error}. Open with /resume {session_id}."),
-            },
+            ForkStatus::Waiting => format!(
+                "Copied to session {session_id}. Waiting for input. Open with /resume {session_id}."
+            ),
+            ForkStatus::Started => format!(
+                "Started session {session_id} in the background. Results stay there. Open with /resume {session_id}."
+            ),
+            ForkStatus::StartFailed(error) => {
+                return crate::thread::Event::CommandFailed {
+                    command,
+                    error: format!(
+                        "Copied to session {session_id}, but could not start the prompt: {error}. Open with /resume {session_id}."
+                    ),
+                };
+            }
         };
         crate::thread::Event::CommandCompleted { command, result }
     }

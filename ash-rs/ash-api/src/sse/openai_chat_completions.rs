@@ -1,9 +1,9 @@
 use crate::ApiError;
+use ash_client::SseFrame;
+use ash_protocol::ModelStreamEvent;
 use serde_json::Value;
 use serde_json::json;
 use std::collections::BTreeMap;
-use ash_client::SseFrame;
-use ash_protocol::ModelStreamEvent;
 
 /// Decodes OpenAI Chat Completions chunks and assembles one terminal choice.
 ///

@@ -1,3 +1,4 @@
+import { h } from '../../../../base/browser/dom.js';
 import { createFastDomNode, type FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { type IOverviewRuler } from '../../editorBrowser.js';
 import { EditorOption, type OverviewRulerPosition } from '../../../common/config/editorOptions.js';
@@ -15,7 +16,7 @@ export class OverviewRuler extends ViewEventHandler implements IOverviewRuler {
 		super();
 		this._context = context;
 		const options = context.configuration.options;
-		this._domNode = createFastDomNode(document.createElement('canvas'));
+		this._domNode = createFastDomNode(h(document, 'canvas'));
 		this._domNode.setClassName(cssClassName);
 		this._domNode.setPosition('absolute');
 		this._domNode.setLayerHinting(true);

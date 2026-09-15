@@ -19,22 +19,23 @@ use std::sync::Arc;
 use learning_mode_core::DenialAnalyzer;
 use learning_mode_windows::{
     CaptureSession, EtlDenialAnalyzer, LearningModeApi, LearningModeError,
-    PROCESS_SECURITY_ENVIRONMENT_FLAG_NONE, ProcessSecurityEnvironment, SecurityEnvironmentApi,
-    SecurityEnvironmentStartupInfo,
+    ProcessSecurityEnvironment, SecurityEnvironmentApi, SecurityEnvironmentStartupInfo,
+    PROCESS_SECURITY_ENVIRONMENT_FLAG_NONE,
 };
 use windows::Win32::Foundation::{
-    CloseHandle, E_NOTIMPL, ERROR_CALL_NOT_IMPLEMENTED, ERROR_NOT_SUPPORTED, GetLastError, HANDLE,
-    HANDLE_FLAG_INHERIT, SetHandleInformation, WAIT_OBJECT_0, WAIT_TIMEOUT,
+    CloseHandle, GetLastError, SetHandleInformation, ERROR_CALL_NOT_IMPLEMENTED,
+    ERROR_NOT_SUPPORTED, E_NOTIMPL, HANDLE, HANDLE_FLAG_INHERIT, WAIT_OBJECT_0, WAIT_TIMEOUT,
 };
 use windows::Win32::System::Console::{
     GetStdHandle, STD_ERROR_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE,
 };
 use windows::Win32::System::LibraryLoader::{
-    GetProcAddress, LOAD_LIBRARY_SEARCH_SYSTEM32, LoadLibraryExW,
+    GetProcAddress, LoadLibraryExW, LOAD_LIBRARY_SEARCH_SYSTEM32,
 };
 use windows::Win32::System::Threading::{
-    CreateProcessW, EXTENDED_STARTUPINFO_PRESENT, GetExitCodeProcess, PROCESS_CREATION_FLAGS,
-    PROCESS_INFORMATION, STARTF_USESTDHANDLES, STARTUPINFOW, TerminateProcess, WaitForSingleObject,
+    CreateProcessW, GetExitCodeProcess, TerminateProcess, WaitForSingleObject,
+    EXTENDED_STARTUPINFO_PRESENT, PROCESS_CREATION_FLAGS, PROCESS_INFORMATION,
+    STARTF_USESTDHANDLES, STARTUPINFOW,
 };
 use windows_core::{PCWSTR, PWSTR};
 
@@ -47,8 +48,8 @@ use crate::capture_output::{
     write_stderr_line_best_effort,
 };
 use crate::guarded_capture::{
-    GuardedCaptureFactory, GuardedCaptureSession, GuardedStop, finalize_guarded_capture,
-    validate_retain_etl_supported,
+    finalize_guarded_capture, validate_retain_etl_supported, GuardedCaptureFactory,
+    GuardedCaptureSession, GuardedStop,
 };
 use crate::job_object::UiJobObject;
 use crate::launch_diagnostics::{
@@ -70,19 +71,19 @@ use wxc_common::models::{
 use wxc_common::mxc_error::ApiFailure;
 use wxc_common::mxc_error::MxcError;
 use wxc_common::process_util::{
-    InterruptiblePipeReader, OwnedHandle, PipeReadCanceller, PipeWriter, SendOwnedHandle,
-    create_std_pipes,
+    create_std_pipes, InterruptiblePipeReader, OwnedHandle, PipeReadCanceller, PipeWriter,
+    SendOwnedHandle,
 };
 use wxc_common::sandbox_process::{
-    SandboxBackend, SandboxProcess, StdioMode, StreamCloser, boxed_closer, cancel_and_join_discard,
-    spawn_discard, take_boxed_read, take_boxed_write,
+    boxed_closer, cancel_and_join_discard, spawn_discard, take_boxed_read, take_boxed_write,
+    SandboxBackend, SandboxProcess, StdioMode, StreamCloser,
 };
 use wxc_common::script_runner::get_timeout_milliseconds;
 use wxc_common::string_util;
-use wxc_common::validator::{NetworkPolicySupport, validate_network_policy_support};
+use wxc_common::validator::{validate_network_policy_support, NetworkPolicySupport};
 
 use windows::Win32::System::Threading::{
-    CREATE_NO_WINDOW, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT, ResumeThread,
+    ResumeThread, CREATE_NO_WINDOW, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT,
 };
 
 fn build_child_env_block(
@@ -225,7 +226,8 @@ const SANDBOX_CAP_FS_DENY: u64 = 0x0000_0000_0000_0002;
 const SANDBOX_CAP_NETWORK_PROXY: u64 = 0x0000_0000_0000_0004;
 const CAPTURE_API_AVAILABLE_LOG: &str =
     "captureDenials: learning-mode trace API available (processmodel.dll)";
-const PSEC_DENIED_PATHS_UNSUPPORTED_MSG: &str = "filesystem.deniedPaths on the process-security-environment path requires \
+const PSEC_DENIED_PATHS_UNSUPPORTED_MSG: &str =
+    "filesystem.deniedPaths on the process-security-environment path requires \
      QueryProcessSecurityEnvironmentSupport to advertise PSE_SUPPORT_FS_DENY; this OS \
      build does not support that policy, and the process-security-environment path \
      cannot fall back to AppContainer or host-DACL enforcement";
@@ -1984,7 +1986,8 @@ impl BaseContainerRunner {
                     self.proxy_coordinator.stop(logger);
                 }
 
-                const JOB_SETUP_FAILED_MSG: &str = "BaseContainer sandbox could not be placed in a job object, so it \
+                const JOB_SETUP_FAILED_MSG: &str =
+                    "BaseContainer sandbox could not be placed in a job object, so it \
                      could not be reliably terminated; the launch was rejected to \
                      avoid running an uncontainable sandbox.";
                 let mut extended_error = format!("BaseContainer job-object setup failed: {e}");
@@ -3298,10 +3301,8 @@ mod tests {
             first.etl_path.extension().and_then(|ext| ext.to_str()),
             Some("etl")
         );
-        assert!(
-            wxc_common::filesystem_dacl::owner_is_self(&first.directory)
-                .expect("read managed directory owner")
-        );
+        assert!(wxc_common::filesystem_dacl::owner_is_self(&first.directory)
+            .expect("read managed directory owner"));
         drop(first);
         drop(second);
         assert!(!first_directory.exists());
@@ -3848,11 +3849,9 @@ mod tests {
         let error = BaseContainerRunner::validate_resolved_network_contract(&request, false)
             .expect_err("a late PSEC-to-SBOX transition must fail closed");
         assert_eq!(error.failure_phase, FailurePhase::BackendUnavailable);
-        assert!(
-            error
-                .error_message
-                .contains("requires process-security-environment networking")
-        );
+        assert!(error
+            .error_message
+            .contains("requires process-security-environment networking"));
     }
 
     #[test]
@@ -3898,11 +3897,10 @@ mod tests {
         let bytes = BaseContainerRunner::build_sandbox_spec(&request);
         let spec = base_container_layout::root_as_sandbox_spec(&bytes).unwrap();
         assert_eq!(spec.capabilities(), Some("privateNetworkClientServer"));
-        assert!(
-            spec.network_policy()
-                .and_then(|policy| policy.allowed_appcontainer_peer())
-                .is_none()
-        );
+        assert!(spec
+            .network_policy()
+            .and_then(|policy| policy.allowed_appcontainer_peer())
+            .is_none());
     }
 
     #[test]
@@ -4607,11 +4605,10 @@ mod tests {
         );
         assert!(egress.allow().is_none());
         assert!(egress.deny().is_none());
-        assert!(
-            spec.network_policy()
-                .and_then(|policy| policy.allowed_appcontainer_peer())
-                .is_none()
-        );
+        assert!(spec
+            .network_policy()
+            .and_then(|policy| policy.allowed_appcontainer_peer())
+            .is_none());
     }
 
     #[test]

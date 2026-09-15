@@ -8,20 +8,14 @@ struct CancellableLanguageServerClient {
 }
 
 impl CancellableLanguageServerClient {
-    fn new(
-        client: LanguageServerClient,
-        cancellation: ash_async_utils::CancellationToken,
-    ) -> Self {
+    fn new(client: LanguageServerClient, cancellation: ash_async_utils::CancellationToken) -> Self {
         Self {
             client,
             cancellation,
         }
     }
 
-    async fn request<R>(
-        &self,
-        params: R::Params,
-    ) -> Result<R::Result, ash_lsp::LanguageServerError>
+    async fn request<R>(&self, params: R::Params) -> Result<R::Result, ash_lsp::LanguageServerError>
     where
         R: ash_lsp::lsp_types::request::Request,
     {
@@ -1730,9 +1724,7 @@ fn protocol_formatting_options(options: LanguageFormattingOptions) -> Formatting
     }
 }
 
-fn completion_context(
-    trigger: LanguageCompletionTrigger,
-) -> ash_lsp::lsp_types::CompletionContext {
+fn completion_context(trigger: LanguageCompletionTrigger) -> ash_lsp::lsp_types::CompletionContext {
     match trigger {
         LanguageCompletionTrigger::Invoked => ash_lsp::lsp_types::CompletionContext {
             trigger_kind: CompletionTriggerKind::INVOKED,

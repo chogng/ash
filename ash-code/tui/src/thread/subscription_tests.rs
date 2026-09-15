@@ -2,9 +2,6 @@ use super::HISTORY_PAGE_TURNS;
 use super::ThreadSubscription;
 use super::ThreadUpdateDisposition;
 use super::TranscriptUpdateDisposition;
-use std::collections::VecDeque;
-use std::sync::Arc;
-use std::sync::Mutex;
 use ash_app_server_client::AppServerClient;
 use ash_app_server_client::ClientError;
 use ash_app_server_client::JsonRpcTransport;
@@ -25,6 +22,9 @@ use ash_protocol::ThreadUpdateEnvelope;
 use ash_protocol::Turn;
 use ash_protocol::TurnId;
 use ash_protocol::TurnStatus;
+use std::collections::VecDeque;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 #[derive(Clone)]
 struct RecordingTransport {

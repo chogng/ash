@@ -1,11 +1,11 @@
-use std::sync::Arc;
-use std::sync::OnceLock;
 use ash_async_utils::CancellationToken;
 use ash_client::ClientError;
 use ash_client::ClientRequest;
 use ash_client::ClientResponse;
 use ash_client::OperationClient;
 use ash_client::OperationStreamSink;
+use std::sync::Arc;
+use std::sync::OnceLock;
 
 type ClientFactory =
     dyn Fn() -> Result<Arc<dyn OperationClient>, ClientError> + Send + Sync + 'static;

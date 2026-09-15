@@ -1,9 +1,9 @@
 use crate::ContentDigest;
+use ash_file_identity::FileInformation;
 use std::fs;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
-use ash_file_identity::FileInformation;
 
 /// Exact bounded bytes captured from one admissible single-link regular file.
 pub(crate) struct VerifiedFileSnapshot {

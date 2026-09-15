@@ -1,11 +1,11 @@
 use super::git_turn_changes_runtime::publish_records;
 use super::update_broker::UpdateBroker;
+use ash_state::SqliteTurnChangeStore;
 use git_turn_changes::{CommitState, TurnChangeSet, TurnChangeStore};
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 use std::sync::Arc;
 use worktree::ManagedDirBinding;
-use ash_state::SqliteTurnChangeStore;
 
 pub(super) fn spawn_commit_job(
     store: Arc<SqliteTurnChangeStore>,

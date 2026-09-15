@@ -1,11 +1,11 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
+use ash_async_utils::CancellationToken;
 use lsp_types::notification::Notification;
 use lsp_types::request::Request;
 use serde_json::Value;
 use tokio::sync::{mpsc, oneshot};
-use ash_async_utils::CancellationToken;
 
 use crate::LanguageServerError;
 use crate::driver::DriverCommand;

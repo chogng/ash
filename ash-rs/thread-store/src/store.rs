@@ -1,12 +1,12 @@
 use crate::ThreadStoreError;
-use serde::Deserialize;
-use serde::Serialize;
 use ash_history::CURRENT_STORED_EVENT_SCHEMA_VERSION;
 use ash_history::StoredEvent;
 use ash_protocol::SessionId;
 use ash_protocol::SessionManagerInfo;
 use ash_protocol::SessionThread;
 use ash_protocol::ThreadId;
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Lightweight durable facts used to list Sessions without replaying Thread history.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

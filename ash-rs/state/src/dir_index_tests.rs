@@ -3,8 +3,8 @@ use std::process::Command;
 use std::str::FromStr;
 use std::time::Duration;
 
-use tempfile::TempDir;
 use ash_file_access::DirId;
+use tempfile::TempDir;
 
 use super::{ClearOutcome, DirIndexKind, StateRuntime};
 

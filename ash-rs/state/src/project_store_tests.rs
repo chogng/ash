@@ -1,6 +1,4 @@
 use super::SqliteProjectStore;
-use rusqlite::Connection;
-use std::sync::Arc;
 use ash_projects::ProjectCommand;
 use ash_projects::ProjectCommandDisposition;
 use ash_projects::ProjectCommandRequest;
@@ -8,6 +6,8 @@ use ash_projects::ProjectCoordinator;
 use ash_projects::ProjectStore;
 use ash_protocol::CommandId;
 use ash_protocol::ProjectId;
+use rusqlite::Connection;
+use std::sync::Arc;
 
 #[test]
 fn sqlite_projects_persist_records_and_original_command_results() {

@@ -6,6 +6,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::sync::LazyLock;
 
+use ash_utils_cache::BlockingLruCache;
 use image::AnimationDecoder;
 use image::ColorType;
 use image::DynamicImage;
@@ -22,7 +23,6 @@ use image::codecs::webp::WebPEncoder;
 use image::imageops::FilterType;
 use sha2::Digest;
 use sha2::Sha256;
-use ash_utils_cache::BlockingLruCache;
 
 use crate::MAX_DIMENSION;
 use crate::MAX_PROMPT_IMAGE_INPUT_BYTES;

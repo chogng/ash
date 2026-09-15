@@ -4,13 +4,13 @@ use std::path::Path;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use serde::Deserialize;
 use ash_core_plugins::CapabilityKind;
 use ash_core_plugins::LocalCapabilitySource;
 use ash_core_plugins::PluginsManager;
 use ash_extensions::DynamicExtensionPackageSource;
 use ash_extensions::DynamicExtensionSourceProvider;
 use ash_extensions::DynamicExtensionSourceSnapshot;
+use serde::Deserialize;
 
 const MAXIMUM_PORTABLE_THEME_MANIFEST_BYTES: u64 = 64 * 1024;
 const MAXIMUM_PORTABLE_THEMES: usize = 128;

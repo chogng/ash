@@ -1,8 +1,4 @@
 use super::*;
-use serde_json::Value;
-use serde_json::json;
-use std::sync::Arc;
-use std::sync::Mutex;
 use ash_client::ClientError;
 use ash_client::ClientRequest;
 use ash_client::ClientResponse;
@@ -13,6 +9,10 @@ use ash_secrets::MemorySecretStore;
 use ash_secrets::SecretKey;
 use ash_secrets::SecretStore;
 use ash_secrets::SecretValue;
+use serde_json::Value;
+use serde_json::json;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 struct SemanticTransport {
     requests: Mutex<Vec<ClientRequest>>,

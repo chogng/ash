@@ -1,4 +1,4 @@
-import { addDisposableListener, getActiveWindow } from '../../../base/browser/dom.js';
+import { h, addDisposableListener, getActiveWindow } from '../../../base/browser/dom.js';
 import { createFastDomNode, type FastDomNode } from '../../../base/browser/fastDomNode.js';
 import { PixelRatio } from '../../../base/browser/pixelRatio.js';
 import { Color } from '../../../base/common/color.js';
@@ -58,7 +58,7 @@ export class ViewGpuContext extends Disposable {
 	constructor(context: ViewContext) {
 		super();
 		const ownerWindow = getActiveWindow();
-		this.canvas = createFastDomNode(ownerWindow.document.createElement('canvas'));
+		this.canvas = createFastDomNode(h(ownerWindow.document, 'canvas'));
 		this.canvas.setClassName('stanza-editor-gpu-canvas');
 		this.canvas.setAttribute('aria-hidden', 'true');
 		this._register(toDisposable(() => this.canvas.domNode.remove()));

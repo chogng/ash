@@ -7,12 +7,12 @@ use crate::ModelResponse;
 use crate::ResponsesEventDecoder;
 use crate::WebSocketSessionConfig;
 use crate::websocket::JsonSocket;
-use serde_json::Value;
-use serde_json::json;
 use ash_async_utils::CancellationToken;
 use ash_client::ResolvedApiTarget;
 use ash_websocket_client::WebSocketConnector;
 use ash_websocket_client::WebSocketRequest;
+use serde_json::Value;
+use serde_json::json;
 
 /// One caller-owned sequential Responses connection. Never share it between execution branches.
 /// A failed, cancelled, or abandoned invocation retires its socket; callers explicitly reconnect.

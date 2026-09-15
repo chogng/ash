@@ -1,7 +1,5 @@
 use crate::LocalTokenizerError;
 use crate::RemoteTokenizerAsset;
-use std::sync::Arc;
-use std::sync::OnceLock;
 use ash_http_client::HttpClient;
 use ash_http_client::HttpClientConfig;
 use ash_http_client::HttpMethod;
@@ -9,6 +7,8 @@ use ash_http_client::HttpRequest;
 use ash_http_client::RedirectPolicy;
 use ash_http_client::ResponseBodyLimit;
 use ash_http_client::UreqHttpClient;
+use std::sync::Arc;
+use std::sync::OnceLock;
 
 /// Downloads one immutable asset without owning cache paths, retries, or publication.
 pub trait TokenizerAssetDownloader: Send + Sync {

@@ -1,4 +1,3 @@
-use serde_json::Value;
 use ash_app_server_protocol::protocol::debug::DebugAdapterCloseParams;
 use ash_app_server_protocol::protocol::debug::DebugAdapterMessageDto;
 use ash_app_server_protocol::protocol::debug::DebugAdapterReadParams;
@@ -9,6 +8,7 @@ use ash_app_server_protocol::protocol::debug::DebugAdapterStartResult;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_debug_adapter::DebugAdapterCommand;
 use ash_debug_adapter::DebugAdapterError;
+use serde_json::Value;
 
 use crate::debug_service::DebugAdapterServiceError;
 

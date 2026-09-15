@@ -1,11 +1,11 @@
 //! One-row presentation of the canonical Thread Goal.
 
 use crate::render::RenderContext;
+use ash_protocol::ThreadGoal;
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::widgets::Paragraph;
-use ash_protocol::ThreadGoal;
 
 pub(crate) fn desired_height(goal: Option<&ThreadGoal>) -> u16 {
     u16::from(goal.is_some())

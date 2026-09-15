@@ -2,20 +2,13 @@
 mod websocket_session;
 pub use websocket_session::ResponsesModelSession;
 
-use crate::diagnostics::DiagnosticClient;
-use response_debug_context::AuthRecovery;
-use response_debug_context::ResponseDiagnosticSink;
-use response_debug_context::ResponseOperation;
 use crate::ModelCatalogBinding;
 use crate::ModelProviderError;
 use crate::ProviderCredentialService;
+use crate::diagnostics::DiagnosticClient;
 use crate::lazy_client::LazyOperationClient;
 use crate::providers;
 use crate::providers::ProviderAdapter;
-use std::borrow::Cow;
-use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering;
 use ash_api::ApiEndpoint;
 use ash_api::ApiProtocol;
 use ash_api::ApiStreamSink;
@@ -29,13 +22,13 @@ use ash_api::StopReason;
 use ash_async_utils::CancellationSource;
 use ash_async_utils::CancellationToken;
 use ash_chatgpt::ChatGptOAuth;
+use ash_client::AshClient;
 use ash_client::ClientError;
 use ash_client::ClientRequest;
 use ash_client::ClientResponse;
 use ash_client::OperationClient;
 use ash_client::OperationStreamSink;
 use ash_client::ResolvedApiTarget;
-use ash_client::AshClient;
 use ash_context_engine::ContextTokenMeasurementCapability;
 use ash_context_engine::ContextTokenMeasurementOutcome;
 use ash_http_client::UreqHttpClient;
@@ -59,6 +52,13 @@ use ash_protocol::CapabilitySupport;
 use ash_protocol::ModelOutputTransport;
 use ash_protocol::ModelRef;
 use ash_secrets::SecretStore;
+use response_debug_context::AuthRecovery;
+use response_debug_context::ResponseDiagnosticSink;
+use response_debug_context::ResponseOperation;
+use std::borrow::Cow;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 
 enum ProviderConnection {
     ChatGpt { auth: Arc<ChatGptOAuth> },

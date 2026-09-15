@@ -3,7 +3,6 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use core_api::CoreError;
 use ash_core::ToolInteractionService;
 use ash_core::ToolUserInputOutcome;
 use ash_protocol::RequestUserInput;
@@ -14,6 +13,7 @@ use ash_rmcp_client::ElicitationAction;
 use ash_rmcp_client::McpClientEvent;
 use ash_rmcp_client::McpElicitation;
 use ash_rmcp_client::McpRequestId;
+use core_api::CoreError;
 
 use super::McpCatalogUpdates;
 use super::with_active_tool_interactions;

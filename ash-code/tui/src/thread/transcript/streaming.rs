@@ -11,13 +11,13 @@ use super::MessageRole;
 use super::TranscriptCell;
 use super::TranscriptCellId;
 use super::model::CellLifecycle;
+use ash_protocol::TurnId;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::VecDeque;
 use std::ops::Range;
 use std::time::Duration;
 use std::time::Instant;
-use ash_protocol::TurnId;
 
 const COMMIT_INTERVAL: Duration = Duration::from_millis(40);
 const MAX_QUEUED_LINES: usize = 1024;

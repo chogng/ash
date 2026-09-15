@@ -4,8 +4,6 @@ use super::HttpStatusClassKind;
 use super::MockOtelProvider;
 use super::OperationOutcome;
 use super::TelemetryEvent;
-use std::num::NonZeroUsize;
-use std::time::Duration;
 use ash_client::ClientOperation;
 use ash_client::ClientTelemetry;
 use ash_client::ClientTelemetryEvent;
@@ -15,6 +13,8 @@ use ash_http_client::HttpClientTelemetryEvent;
 use ash_http_client::HttpMethod;
 use ash_http_client::HttpStatusClass;
 use ash_http_client::HttpTransportOutcome;
+use std::num::NonZeroUsize;
+use std::time::Duration;
 
 #[test]
 fn aggregates_safe_operation_and_http_facts() {

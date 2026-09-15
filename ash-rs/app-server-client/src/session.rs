@@ -1,5 +1,11 @@
 use crate::in_process::{InProcessClientOptions, open_in_process_app_server};
 use crate::{AppServerClient, ClientError, JsonRpcTransport, ServerNotification, notification};
+use ash_app_server::{AppServer, ConnectionNotifications};
+use ash_app_server_protocol::protocol::common::ClientCapabilities;
+use ash_app_server_protocol::protocol::common::ClientInfo;
+use ash_app_server_protocol::protocol::initialize::InitializeParams;
+use ash_app_server_protocol::protocol::initialize::REQUIRED_SESSION_CAPABILITIES;
+use ash_app_server_protocol::protocol::initialize::ensure_protocol_compatible;
 use std::fmt;
 use std::process::Child;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -12,12 +18,6 @@ use std::sync::mpsc::TrySendError;
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
-use ash_app_server::{AppServer, ConnectionNotifications};
-use ash_app_server_protocol::protocol::common::ClientCapabilities;
-use ash_app_server_protocol::protocol::common::ClientInfo;
-use ash_app_server_protocol::protocol::initialize::InitializeParams;
-use ash_app_server_protocol::protocol::initialize::REQUIRED_SESSION_CAPABILITIES;
-use ash_app_server_protocol::protocol::initialize::ensure_protocol_compatible;
 
 #[path = "session_stdio.rs"]
 mod stdio;

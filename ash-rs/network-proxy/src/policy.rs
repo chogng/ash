@@ -1,9 +1,9 @@
+use ash_async_utils::CancellationToken;
 use std::fmt;
 use std::future::Future;
 use std::io;
 use std::pin::Pin;
 use std::sync::Arc;
-use ash_async_utils::CancellationToken;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NetworkProtocol {

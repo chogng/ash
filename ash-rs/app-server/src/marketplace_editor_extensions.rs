@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-use serde::Deserialize;
 use ash_core_plugins::AcquireCapabilityRequest;
 use ash_core_plugins::ActivationSpec;
 use ash_core_plugins::CapabilityKind;
@@ -20,6 +19,7 @@ use ash_editor_extension_host::ActivationLease;
 use ash_editor_extension_host::ExtensionCapability;
 use ash_editor_extension_host::ExtensionLaunchCommand;
 use ash_editor_extension_host::PackageBinding;
+use serde::Deserialize;
 
 use crate::server::extension_host_runtime::source::EditorExtensionDeployment;
 

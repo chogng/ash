@@ -13,8 +13,8 @@ use response_debug_context::ResponseDebugContext;
 use response_debug_context::ResponseDiagnostic;
 use response_debug_context::ResponseDiagnosticSink;
 use response_debug_context::ResponseOperation;
-use std::sync::Mutex;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 

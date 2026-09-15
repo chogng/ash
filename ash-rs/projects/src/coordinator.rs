@@ -5,8 +5,8 @@ use crate::ProjectError;
 use crate::ProjectStore;
 use crate::ProjectStoreError;
 use crate::ProjectStoreOutcome;
-use std::sync::Arc;
 use ash_protocol::ProjectId;
+use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ProjectCommandDisposition {

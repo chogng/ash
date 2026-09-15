@@ -7,9 +7,9 @@ use crate::ToolName;
 use crate::ToolRegistryError;
 use crate::ToolRegistryGeneration;
 use crate::ToolRuntimeKey;
+use ash_protocol::ToolSourceProvenance;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
-use ash_protocol::ToolSourceProvenance;
 
 mod search;
 

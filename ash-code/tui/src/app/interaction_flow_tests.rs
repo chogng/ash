@@ -12,13 +12,13 @@ use crate::thread::interaction::query::Query;
 use crate::thread::interaction::query::QueryChoice;
 use crate::thread::interaction::query::QueryCustomAnswer;
 use crate::thread::interaction::query::QueryQuestion;
+use ash_protocol::AgentResponse;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyModifiers;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use unicode_width::UnicodeWidthStr;
-use ash_protocol::AgentResponse;
 
 #[test]
 fn query_keeps_its_draft_and_renders_edit_submission_failure_and_retry() {

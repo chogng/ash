@@ -3,7 +3,6 @@ use super::ConnectionState;
 use super::RpcError;
 use super::decode;
 use super::result;
-use serde_json::Value;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::search::ContentSearchCancelParams;
 use ash_app_server_protocol::protocol::search::ContentSearchCaseSensitivity as ContentSearchProtocolCaseSensitivity;
@@ -20,6 +19,7 @@ use ash_content_search::ContentSearchOwner;
 use ash_content_search::ContentSearchPage;
 use ash_content_search::ContentSearchPattern;
 use ash_content_search::ContentSearchQuery;
+use serde_json::Value;
 
 impl AppServer {
     pub(super) fn content_search_start(

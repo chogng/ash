@@ -2,10 +2,10 @@ use crate::RemoteConnectionCatalog;
 use crate::RemoteConnectionEntry;
 use crate::RemoteConnectionName;
 use crate::RemoteConnectionSaveMode;
-use serde::Serialize;
 use ash_remote::RemoteDirPath;
 use ash_remote::SshHost;
 use ash_remote::SshTarget;
+use serde::Serialize;
 
 const LIST_USAGE: &str = "usage: ash-server remote connections list";
 const GET_USAGE: &str = "usage: ash-server remote connections get --name <name>";

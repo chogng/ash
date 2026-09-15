@@ -1,5 +1,4 @@
 use super::compose_dynamic_tools;
-use serde_json::json;
 use ash_action_policy::ExecutionDecision;
 use ash_async_utils::CancellationSource;
 use ash_protocol::AgentRequest;
@@ -11,6 +10,7 @@ use ash_protocol::ToolCall;
 use ash_protocol::ToolCallId;
 use ash_protocol::ToolExecutionOutput;
 use ash_protocol::ToolName;
+use serde_json::json;
 
 fn specification(description: &str) -> DynamicToolSpec {
     DynamicToolSpec {

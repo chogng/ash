@@ -6,9 +6,9 @@ use std::sync::Arc;
 use crate::Codebase;
 use crate::CodebaseLimits;
 use crate::CodebaseOverlayDocument;
-use tempfile::TempDir;
 use ash_async_utils::CancellationSource;
 use ash_file_access::Dir;
+use tempfile::TempDir;
 
 use crate::SymbolIndex;
 use crate::SymbolIndexError;

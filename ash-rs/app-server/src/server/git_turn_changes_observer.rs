@@ -1,13 +1,5 @@
 use super::git_turn_changes_message::spawn_message_job;
 use super::git_turn_changes_runtime::GitTurnChangesRuntime;
-use git_turn_changes::{
-    MessageState, RepositoryCaptureTarget, TerminalTurnState, ToolChangeScope,
-    TurnChangeBeginRequest, TurnChangeSealRequest,
-};
-use std::collections::BTreeSet;
-use std::path::{Component, Path, PathBuf};
-use std::sync::Arc;
-use worktree::ManagedDirKind;
 use core_api::CoreError;
 use core_api::HookExecutionEvent;
 use core_api::HookExecutionObserver;
@@ -18,6 +10,14 @@ use core_api::TurnExecutionStarted;
 use core_api::TurnExecutionTerminalState;
 use core_api::TurnToolExecutionFinished;
 use core_api::TurnToolExecutionStarted;
+use git_turn_changes::{
+    MessageState, RepositoryCaptureTarget, TerminalTurnState, ToolChangeScope,
+    TurnChangeBeginRequest, TurnChangeSealRequest,
+};
+use std::collections::BTreeSet;
+use std::path::{Component, Path, PathBuf};
+use std::sync::Arc;
+use worktree::ManagedDirKind;
 
 #[derive(Clone)]
 struct ExecutionRootBinding {

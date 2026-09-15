@@ -27,7 +27,6 @@
     "test:desktop:smoke:ui": "pnpm --dir ash-ts test:smoke:ui",
     "test:desktop:smoke:browser": "pnpm --dir ash-ts test:smoke:browser",
     "test:desktop:smoke:browser:full": "pnpm --dir ash-ts run test:smoke:browser:full",
-    "test:desktop:e2e": "pnpm --dir ash-ts run test:smoke:desktop",
     "typecheck:build": "pnpm --dir build typecheck",
     "typecheck:stanza": "pnpm --dir ash-ts typecheck:stanza",
     "dev:desktop": "pnpm --dir ash-ts dev",

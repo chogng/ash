@@ -1,7 +1,7 @@
 use super::StatusTimer;
+use ash_protocol::TurnId;
 use std::time::Duration;
 use std::time::Instant;
-use ash_protocol::TurnId;
 
 #[test]
 fn same_turn_retains_total_time_and_new_turn_resets_it() {

@@ -4,10 +4,10 @@ use ash_config::HookEnablement;
 use ash_config::HookEvent;
 use ash_config::HookId;
 use ash_config::HookMatcher;
-use core_api::BeforeToolHookRequest;
 use ash_protocol::ThreadId;
 use ash_protocol::ToolCallId;
 use ash_protocol::TurnId;
+use core_api::BeforeToolHookRequest;
 
 #[test]
 fn input_uses_the_ash_protocol_and_canonical_safe_point_identity() {

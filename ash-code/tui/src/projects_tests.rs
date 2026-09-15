@@ -2,16 +2,16 @@ use super::RootSelectionAction;
 use super::root_choices;
 use crate::widgets::list_selection::ListSelection;
 use crate::widgets::list_selection::ListSelectionOutcome;
-use crossterm::event::KeyCode;
-use crossterm::event::KeyEvent;
-use crossterm::event::KeyModifiers;
-use std::path::Path;
 use ash_app_server_protocol::protocol::projects::ProjectDto;
 use ash_app_server_protocol::protocol::projects::ProjectRootDto;
 use ash_app_server_protocol::protocol::projects::ProjectStatusDto;
 use ash_file_access::DirId;
 use ash_file_access::EnvId;
 use ash_protocol::ProjectId;
+use crossterm::event::KeyCode;
+use crossterm::event::KeyEvent;
+use crossterm::event::KeyModifiers;
+use std::path::Path;
 
 #[test]
 fn project_root_picker_preselects_the_current_workspace() {

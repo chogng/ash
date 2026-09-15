@@ -1,9 +1,9 @@
 use super::OpenAiChatCompletionsSseDecoder;
 use crate::ApiError;
-use serde_json::json;
 use ash_client::SseEvent;
 use ash_client::SseFrame;
 use ash_protocol::ModelStreamEvent;
+use serde_json::json;
 
 fn data(value: &str) -> SseFrame {
     SseFrame::Event(SseEvent {

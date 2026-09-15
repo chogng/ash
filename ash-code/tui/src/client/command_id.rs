@@ -1,8 +1,8 @@
+use ash_protocol::CommandId;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
-use ash_protocol::CommandId;
 
 static NEXT_COMMAND: AtomicU64 = AtomicU64::new(0);
 

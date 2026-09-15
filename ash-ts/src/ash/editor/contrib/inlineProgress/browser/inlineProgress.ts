@@ -1,4 +1,4 @@
-import { addDisposableListener } from '../../../../base/browser/dom.js';
+import { h, addDisposableListener } from '../../../../base/browser/dom.js';
 import { disposableTimeout } from '../../../../base/common/async.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { ServiceConstructionDescriptor, type IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -22,12 +22,12 @@ class InlineProgressWidget extends Disposable implements IContentWidget {
 	) {
 		super();
 		const document = editor.getContainerDomNode().ownerDocument;
-		this.domNode = document.createElement('button');
+		this.domNode = h(document, 'button');
 		this.domNode.className = 'inline-progress-widget';
 		this.domNode.type = 'button';
 		this.domNode.title = title;
 		this.domNode.setAttribute('aria-label', title);
-		const icon = document.createElement('span');
+		const icon = h(document, 'span');
 		icon.className = 'icon';
 		this.domNode.append(icon);
 		this._register(addDisposableListener(this.domNode, 'click', () => delegate.cancel()));

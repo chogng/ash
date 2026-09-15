@@ -4,13 +4,13 @@ mod view;
 pub use state::ShortcutCommit;
 pub use view::KeyboardShortcutRow;
 
-use state::KeyboardShortcutsState as ShortcutRecorderState;
-use view::KeyboardShortcuts;
 use ash_commands::AppCommandId;
 use ash_keybinding::HostPlatform;
 use ash_keybinding::KeySequence;
 use ash_keybinding::format_key_sequence;
 use ash_ui_components::QuickInputIds;
+use state::KeyboardShortcutsState as ShortcutRecorderState;
+use view::KeyboardShortcuts;
 use zui::ui::CaretVisibility;
 use zui::ui::ElementId;
 use zui::ui::InteractionFrame;

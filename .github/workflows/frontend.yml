@@ -1,0 +1,100 @@
+name: Frontend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ash-ts/**'
+      - 'build/**'
+      - 'resources/**'
+      - 'extensions/**'
+      - 'ash-rs/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'tsconfig.base.json'
+      - '.nvmrc'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+      - '.cargo/**'
+      - '.github/workflows/frontend.yml'
+  pull_request:
+    paths:
+      - 'ash-ts/**'
+      - 'build/**'
+      - 'resources/**'
+      - 'extensions/**'
+      - 'ash-rs/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'tsconfig.base.json'
+      - '.nvmrc'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+      - '.cargo/**'
+      - '.github/workflows/frontend.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: ${{ matrix.surface }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - surface: browser
+            runner: ubuntu-24.04
+          - surface: electron
+            runner: windows-latest
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version-file: .nvmrc
+      - name: Install the repository package manager
+        run: npm install --global "$(node --print "require('./package.json').packageManager")"
+      - name: Install Linux keyboard build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install --yes libx11-dev libxkbfile-dev
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Check and test build tools
+        if: matrix.surface == 'browser'
+        run: |
+          pnpm typecheck:build
+          pnpm test:build
+          pnpm build:stanza
+      - name: Test frontend units
+        if: matrix.surface == 'browser'
+        run: pnpm --dir ash-ts test:unit
+      - name: Install Chromium
+        if: matrix.surface == 'browser'
+        run: pnpm --dir ash-ts exec playwright install --with-deps chromium
+      - name: Test production browser UI
+        if: matrix.surface == 'browser'
+        run: pnpm test:desktop:smoke:browser
+      - name: Build and test Electron UI
+        if: matrix.surface == 'electron'
+        run: pnpm test:desktop:smoke:ui
+      - name: Upload test diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: frontend-${{ matrix.surface }}
+          path: .build/desktop/playwright/
+          if-no-files-found: ignore

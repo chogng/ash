@@ -1,7 +1,7 @@
 use crate::ConfigError;
+use ash_protocol::TimeContextMode;
 use serde::Deserialize;
 use serde::Serialize;
-use ash_protocol::TimeContextMode;
 
 /// Profile-owned policy for model time information; timers are independent of this setting.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]

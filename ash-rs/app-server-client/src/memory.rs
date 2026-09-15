@@ -1,9 +1,4 @@
 use crate::AppServerRequestHandle;
-use std::sync::Arc;
-use std::sync::Condvar;
-use std::sync::Mutex;
-use std::thread::JoinHandle;
-use std::time::Duration;
 use ash_app_server_protocol::protocol::memory_diagnostics::MemoryDiagnosticsSessionParams;
 use ash_memory_diagnostics::MemoryEvidence;
 use ash_memory_diagnostics::MemoryMetric;
@@ -15,6 +10,11 @@ use ash_memory_diagnostics::MemoryStatus;
 use ash_memory_diagnostics::ProcessResourceMetrics;
 use ash_memory_diagnostics::ProcessResourceTargets;
 use ash_memory_diagnostics::ProcessResourcesSampler;
+use std::sync::Arc;
+use std::sync::Condvar;
+use std::sync::Mutex;
+use std::thread::JoinHandle;
+use std::time::Duration;
 
 /// Runs only the client-host evidence collector; the server owns recording and analysis.
 pub struct MemoryRecording {
