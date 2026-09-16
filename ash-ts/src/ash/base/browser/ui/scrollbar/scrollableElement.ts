@@ -712,16 +712,19 @@ export class SmoothScrollableElement extends Disposable {
 			else deltaY = 0;
 		}
 		const speed = (this.options.mouseWheelScrollSensitivity ?? 1) * (event.altKey ? this.options.fastScrollSensitivity ?? 5 : 1);
+		// Preserve both directions of subpixel input in integer scroll viewports.
+		const distanceX = Math.sign(deltaX * speed) * Math.ceil(Math.abs(deltaX * speed));
+		const distanceY = Math.sign(deltaY * speed) * Math.ceil(Math.abs(deltaY * speed));
 		const previous = this.scrollable.getFutureScrollPosition();
 		const dimensions = this.scrollable.getScrollDimensions();
-		const scrollLeft = clampScrollbarPosition(previous.scrollLeft + deltaX * speed, dimensions.scrollWidth - dimensions.width);
-		const scrollTop = clampScrollbarPosition(previous.scrollTop + deltaY * speed, dimensions.scrollHeight - dimensions.height);
+		const scrollLeft = clampScrollbarPosition(previous.scrollLeft + distanceX, dimensions.scrollWidth - dimensions.width);
+		const scrollTop = clampScrollbarPosition(previous.scrollTop + distanceY, dimensions.scrollHeight - dimensions.height);
 		const changed = scrollLeft !== previous.scrollLeft || scrollTop !== previous.scrollTop;
 		if (changed) {
 			if (this.options.inertialScroll && continuous) {
 				this.scrollable.setScrollPositionNow({ scrollLeft, scrollTop });
 				this.continueInertia(deltaX * speed, deltaY * speed);
-			} else if (this.options.mouseWheelSmoothScroll === false) {
+			} else if (continuous || this.options.mouseWheelSmoothScroll === false) {
 				this.scrollable.setScrollPositionNow({ scrollLeft, scrollTop });
 			} else {
 				this.setScrollPosition({ scrollLeft, scrollTop, reuseAnimation: true });

@@ -380,6 +380,32 @@ test('editor scrollbar uses wheel policy, slider dimensions and page clicks from
 	await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBeGreaterThan(520);
 });
 
+test('smooth scrolling keeps continuous and subpixel wheel input immediate', async ({ page }) => {
+	await page.goto('/textModel.html');
+	await page.evaluate(() => {
+		window.ashTextModelIntegration.setValue(Array.from({ length: 100 }, () => 'x'.repeat(200)).join('\n'));
+		window.ashTextModelIntegration.updateOptions({ smoothScrolling: true, inertialScroll: false, scrollPredominantAxis: false });
+	});
+	const editor = page.locator('.stanza-editor');
+	await expect(editor.getByRole('scrollbar', { name: 'Vertical scrollbar' })).toBeVisible();
+	await page.clock.install();
+	await page.clock.pauseAt(new Date());
+	for (const [deltaY, expected] of [[12, 12], [0.2, 13], [-0.2, 12]]) {
+		await editor.dispatchEvent('wheel', { deltaY, deltaMode: 0 });
+		expect(await editor.evaluate(element => element.scrollTop)).toBe(expected);
+	}
+	await editor.dispatchEvent('wheel', { deltaX: 0.2, deltaY: 0.2, deltaMode: 0 });
+	expect(await editor.evaluate(element => ({ left: element.scrollLeft, top: element.scrollTop }))).toEqual({ left: 1, top: 13 });
+	await page.evaluate(() => window.ashTextModelIntegration.updateOptions({ mouseWheelScrollSensitivity: 0.1 }));
+	await editor.dispatchEvent('wheel', { deltaY: 1, deltaMode: 0 });
+	expect(await editor.evaluate(element => element.scrollTop)).toBe(14);
+	await page.evaluate(() => window.ashTextModelIntegration.updateOptions({ mouseWheelScrollSensitivity: 1 }));
+	await editor.dispatchEvent('wheel', { deltaY: 5, deltaMode: 1 });
+	expect(await editor.evaluate(element => element.scrollTop)).toBe(14);
+	await page.clock.runFor(160);
+	expect(await editor.evaluate(element => element.scrollTop)).toBe(94);
+});
+
 test('editor scrollbar arrows support click, hold, keyboard and runtime removal', async ({ page }) => {
 	await page.goto('/textModel.html');
 	await page.evaluate(() => {
