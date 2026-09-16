@@ -1,20 +1,23 @@
-import { toDisposable } from '../../../base/common/lifecycle.js';
+import { Emitter } from '../../../base/common/event.js';
+import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { createColorTheme, darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme, type IColorTheme, lightColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import { ColorScheme, isDarkColorScheme } from '../../../platform/theme/common/theme.js';
-import { ThemeService } from '../../../platform/theme/common/themeService.js';
 import type { INamedEditorThemeService, NamedEditorThemeData } from '../common/namedEditorTheme.js';
 
 const ForcedColorsQuery = '(forced-colors: active)';
 
 /** Owns named themes and the active theme for one standalone browser window. */
-export class NamedEditorThemeService extends ThemeService implements INamedEditorThemeService {
+export class NamedEditorThemeService extends Disposable implements INamedEditorThemeService {
+	private readonly changed = this._register(new Emitter<IColorTheme>());
+	private colorTheme: IColorTheme = lightColorTheme;
+	public readonly onDidColorThemeChange = this.changed.event;
 	private readonly themes = new Map<string, IColorTheme>();
 	private readonly forcedColors: MediaQueryList;
 	private selectedThemeId = lightColorTheme.id;
 	private autoDetectHighContrast = true;
 
 	constructor(ownerWindow: Window) {
-		super(lightColorTheme);
+		super();
 		for (const theme of [lightColorTheme, darkColorTheme, highContrastLightColorTheme, highContrastDarkColorTheme]) {
 			this.themes.set(theme.id, theme);
 		}
@@ -46,7 +49,11 @@ export class NamedEditorThemeService extends ThemeService implements INamedEdito
 		this.applySelectedTheme();
 	}
 
-	public override setColorTheme(theme: IColorTheme): void {
+	public getColorTheme(): IColorTheme {
+		return this.colorTheme;
+	}
+
+	public setColorTheme(theme: IColorTheme): void {
 		this.themes.set(theme.id, theme);
 		this.selectedThemeId = theme.id;
 		this.applySelectedTheme();
@@ -66,7 +73,7 @@ export class NamedEditorThemeService extends ThemeService implements INamedEdito
 			throw new Error(`Unknown standalone color theme: ${this.selectedThemeId}`);
 		}
 		if (!this.autoDetectHighContrast || !this.forcedColors.matches || isHighContrast(selectedTheme.colorScheme)) {
-			super.setColorTheme(selectedTheme);
+			this.updateColorTheme(selectedTheme);
 			return;
 		}
 		const highContrastTheme = isDarkColorScheme(selectedTheme.colorScheme) ? highContrastDarkColorTheme : highContrastLightColorTheme;
@@ -74,7 +81,15 @@ export class NamedEditorThemeService extends ThemeService implements INamedEdito
 		if (!registeredHighContrastTheme) {
 			throw new Error(`Unknown standalone color theme: ${highContrastTheme.id}`);
 		}
-		super.setColorTheme(registeredHighContrastTheme);
+		this.updateColorTheme(registeredHighContrastTheme);
+	}
+
+	private updateColorTheme(theme: IColorTheme): void {
+		if (theme === this.colorTheme) {
+			return;
+		}
+		this.colorTheme = theme;
+		this.changed.fire(theme);
 	}
 }
 

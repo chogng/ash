@@ -9,12 +9,12 @@ import {
 	darkColorTheme,
 	lightColorTheme,
 } from "../../common/colorTheme.js";
-import { ThemeService } from "../../common/themeService.js";
+import { TestThemeService } from "../common/testThemeService.js";
 import { h } from "../../../../base/browser/dom.js";
 
 test("Seti resolves names, extensions, languages, and color schemes", () => {
 	const browser = new JSDOM("<!doctype html><body></body>");
-	using themeService = new ThemeService(darkColorTheme);
+	using themeService = new TestThemeService(darkColorTheme);
 	using fileIconTheme = new SetiFileIconThemeService(themeService);
 
 	const readme = renderIcon(

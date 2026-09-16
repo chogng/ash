@@ -8,10 +8,10 @@ import {
 	lightColorTheme,
 	sizeCssVariable,
 } from "../../common/colorTheme.js";
-import { ThemeService } from "../../common/themeService.js";
+import { TestThemeService } from "../common/testThemeService.js";
 
 test("color theme binding applies changes and restores prior root styles", () => {
-	using service = new ThemeService(darkColorTheme);
+	using service = new TestThemeService(darkColorTheme);
 	const target = new FakeThemeTarget();
 	const foreground = colorCssVariable(ColorId.foreground);
 	const background = colorCssVariable(ColorId.workbenchBackground);

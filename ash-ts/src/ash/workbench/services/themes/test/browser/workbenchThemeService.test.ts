@@ -3,19 +3,24 @@ import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { WorkbenchConfiguration } from '../../../../common/configuration.js';
+import { WorkbenchConfigurationService } from '../../../configuration/browser/configurationService.js';
 import { lightColorTheme } from '../../../../../platform/theme/common/colorTheme.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { WorkbenchThemesRegistry } from '../../../../common/theme.js';
-import { loadUserThemes } from '../../browser/workbenchThemeService.js';
+import { loadUserThemes, WorkbenchThemeService } from '../../browser/workbenchThemeService.js';
 import { createExtensionWorkbenchColorTheme, parseExtensionTheme } from '../../../extensions/common/extensionTheme.js';
 import { projectColorThemeTokens } from '../../../textMate/common/textMateThemeProjection.js';
 import { parseUserColorTheme, serializeUserColorThemeDraft } from '../../common/colorThemeData.js';
 import { colorThemeSchemaId, registerColorThemeSchemas } from '../../common/colorThemeSchema.js';
 import { JsonSchemasRegistry } from '../../../../../platform/jsonschemas/common/jsonSchemaRegistry.js';
 import { DiskFileSystemProvider } from '../../../../../platform/files/node/diskFileSystemProvider.js';
-import { type WorkbenchThemeService } from '../../browser/workbenchThemeService.js';
+import type { IDisposable } from '../../../../../base/common/lifecycle.js';
+import type { IUserThemeService } from '../../../../common/userThemes.js';
 
 const document = {
 	name: 'Test User Aurora',
@@ -118,23 +123,38 @@ test('theme save, rename, reload, and delete keep identity in the filename', asy
 	const directory = await mkdtemp(join(tmpdir(), 'ash-theme-save-'));
 	using files = new DiskFileSystemProvider([URI.file(directory)]);
 	const service = await loadThemes(files, directory);
+	const browser = new JSDOM('<!doctype html><body></body>');
 	try {
+		Object.defineProperty(browser.window, 'matchMedia', { value: () => ({
+			matches: false,
+			addEventListener: () => {},
+			removeEventListener: () => {},
+		}) });
+		using configuration = new WorkbenchConfigurationService();
+		using services = new ServiceContainer();
+		services.registerInstance(IConfigurationService, configuration);
+		using activeThemes = services.createInstance(WorkbenchThemeService, browser.window.document.body);
+		activeThemes.initialize();
 		const created = await service.saveAs(JSON.stringify(document));
 		assert.equal(created.file, 'test-user-aurora.json');
+		await configuration.updateValue(WorkbenchConfiguration.colorTheme, created.theme.id);
 		const replacement = JSON.stringify({ ...document, name: 'Renamed Theme', colors: { 'editor.background': '#202530' } });
 		const saved = await service.save(created.theme.id, replacement);
 		assert.equal(saved.theme.id, created.theme.id);
 		assert.equal(saved.theme.label, 'Renamed Theme');
 		assert.equal(saved.theme.getColorCss('editor.background'), '#202530');
+		assert.equal(activeThemes.getColorTheme(), saved.theme);
+		assert.equal(browser.window.document.body.style.getPropertyValue('--ash-editor-background'), '#202530');
 		await service.reload();
 		assert.equal(service.getSource(saved.theme.id), replacement);
 		await service.delete(saved.theme.id);
 		assert.equal(WorkbenchThemesRegistry.getColorTheme(saved.theme.id), undefined);
+		assert.equal(activeThemes.getColorTheme(), lightColorTheme);
 		assert.deepEqual(await readdir(directory), []);
-	} finally { service.dispose(); await rm(directory, { recursive: true, force: true }); }
+	} finally { service.dispose(); browser.window.close(); await rm(directory, { recursive: true, force: true }); }
 });
 
-async function loadThemes(files: IFileService, directory: string): Promise<WorkbenchThemeService> {
+async function loadThemes(files: IFileService, directory: string): Promise<IUserThemeService & IDisposable> {
 	using services = new ServiceContainer();
 	services.registerInstance(IFileService, files);
 	return loadUserThemes(services, URI.file(directory));

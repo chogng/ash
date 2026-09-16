@@ -4,7 +4,8 @@ import { JSDOM } from 'jsdom';
 import { Event } from '../../../../../../base/common/event.js';
 import { DisposableTracker, installDisposableTracker } from '../../../../../../base/common/lifecycle.js';
 import { ServiceContainer } from '../../../../../../platform/instantiation/common/instantiation.js';
-import { ThemeService, IThemeService } from '../../../../../../platform/theme/common/themeService.js';
+import { IThemeService } from '../../../../../../platform/theme/common/themeService.js';
+import { TestThemeService } from '../../../../../../platform/theme/test/common/testThemeService.js';
 import { darkColorTheme, lightColorTheme } from '../../../../../../platform/theme/common/colorTheme.js';
 import { INativeHostService } from '../../../../../common/services.js';
 import type { INativeWindowTheme } from '../../../../../../platform/native/common/nativeHost.js';
@@ -33,7 +34,7 @@ test('Electron titlebar applies the active theme and releases its subscription w
 	using tracking = installDisposableTracker(tracker);
 	{
 		using services = new ServiceContainer();
-		using themes = new ThemeService(darkColorTheme);
+		using themes = new TestThemeService(darkColorTheme);
 		using commands = new CommandService(services);
 		using contextKeys = new ContextKeyService();
 		const menus = new MenuService(commands, contextKeys);

@@ -1,5 +1,6 @@
 import { h, text } from '../../../../base/browser/dom.js';
-import { IThemeService, ThemeService } from '../../../../platform/theme/common/themeService.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
+import { TestThemeService } from '../../../../platform/theme/test/common/testThemeService.js';
 import { ILanguageConfigurationService } from '../../../common/languages/languageConfigurationRegistry.js';
 import { createBuiltinLanguageConfigurationService } from '../../../common/languages/languageBuiltinConfigurations.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
@@ -2152,7 +2153,7 @@ test('Returning an already registered controller preserves dependent listener cl
 test('CodeEditorWidget rejects missing shared services before creating its surface', () => {
 	using configurations = createBuiltinLanguageConfigurationService();
 	using features = new LanguageFeaturesService(configurations);
-	using theme = new ThemeService(darkColorTheme);
+	using theme = new TestThemeService(darkColorTheme);
 	using model = new TextModel('text');
 	for (const missing of [IThemeService, ILanguageConfigurationService, ILanguageFeaturesService]) {
 		using services = new ServiceContainer();
@@ -2170,7 +2171,7 @@ test('CodeEditorWidget rejects missing shared services before creating its surfa
 test('CodeEditorWidget shares host language services across contributions and model switches', () => {
 	using configurations = createBuiltinLanguageConfigurationService();
 	using features = new LanguageFeaturesService(configurations);
-	using theme = new ThemeService(darkColorTheme);
+	using theme = new TestThemeService(darkColorTheme);
 	using services = new ServiceContainer();
 	services.registerInstance(IThemeService, theme);
 	services.registerInstance(ILanguageConfigurationService, configurations);

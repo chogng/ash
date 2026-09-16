@@ -1,12 +1,83 @@
-import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Emitter } from '../../../../base/common/event.js';
+import { Disposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { FileKind, FileNotFoundError, FileRevisionConflictError, IFileService, type IFileContent } from '../../../../platform/files/common/files.js';
 import { type IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import type { IColorTheme } from '../../../../platform/theme/common/colorTheme.js';
-import { WorkbenchThemesRegistry } from '../../../common/theme.js';
+import type { IThemeService } from '../../../../platform/theme/common/themeService.js';
+import { bindColorTheme } from '../../../../platform/theme/browser/themeStyles.js';
+import type { IFileIconThemeService } from '../../../../platform/theme/browser/fileIconThemeService.js';
+import { SetiFileIconThemeService } from '../../../../platform/theme/browser/setiFileIconTheme.js';
+import { WorkbenchConfiguration } from '../../../common/configuration.js';
+import { resolveWorkbenchColorTheme, SystemColorThemePreference, WorkbenchThemesRegistry } from '../../../common/theme.js';
 import type { IUserThemeDeleteResult, IUserThemeLoadIssue, IUserThemeSaveResult, IUserThemeService, IUserThemeSource } from '../../../common/userThemes.js';
 import { parseUserColorTheme, userThemeId } from '../common/colorThemeData.js';
 import { migrateUserTheme } from '../common/themeMigration.js';
+import { registerColorThemeSchemas } from '../common/colorThemeSchema.js';
+
+/** Owns active theme selection and its window-scoped visual resources. */
+export class WorkbenchThemeService extends Disposable implements IThemeService {
+	private readonly colorThemeChange = this._register(new Emitter<IColorTheme>());
+	private readonly systemDarkQuery: MediaQueryList;
+	private colorTheme: IColorTheme;
+	private initialized = false;
+	public readonly onDidColorThemeChange = this.colorThemeChange.event;
+	public readonly fileIconTheme: IFileIconThemeService;
+
+	constructor(
+		private readonly container: HTMLElement,
+		@IConfigurationService private readonly configurationService: IConfigurationService,
+	) {
+		super();
+		const ownerWindow = container.ownerDocument.defaultView;
+		if (!ownerWindow) {
+			throw new Error('Workbench themes require an owner window');
+		}
+		this.systemDarkQuery = ownerWindow.matchMedia('(prefers-color-scheme: dark)');
+		this.colorTheme = this.resolveColorTheme();
+		this.fileIconTheme = this._register(new SetiFileIconThemeService(this));
+	}
+
+	public initialize(): void {
+		this.assertNotDisposed();
+		if (this.initialized) {
+			throw new Error('Workbench themes are already initialized');
+		}
+		this.initialized = true;
+		this._register(registerColorThemeSchemas());
+		this._register(this.configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(WorkbenchConfiguration.colorTheme)) {
+				this.updateColorTheme();
+			}
+		}));
+		this._register(WorkbenchThemesRegistry.onDidChange(() => this.updateColorTheme()));
+		const updateSystemTheme = (): void => this.updateColorTheme();
+		this.systemDarkQuery.addEventListener('change', updateSystemTheme);
+		this._register(toDisposable(() => this.systemDarkQuery.removeEventListener('change', updateSystemTheme)));
+		this.updateColorTheme();
+		this._register(bindColorTheme(this, this.container));
+	}
+
+	public getColorTheme(): IColorTheme {
+		return this.colorTheme;
+	}
+
+	private resolveColorTheme(): IColorTheme {
+		const preference = this.configurationService.getValue<string>(WorkbenchConfiguration.colorTheme);
+		const registeredTheme = WorkbenchThemesRegistry.getColorTheme(preference);
+		return registeredTheme ?? resolveWorkbenchColorTheme(SystemColorThemePreference, this.systemDarkQuery.matches);
+	}
+
+	private updateColorTheme(): void {
+		const theme = this.resolveColorTheme();
+		if (theme === this.colorTheme) {
+			return;
+		}
+		this.colorTheme = theme;
+		this.colorThemeChange.fire(theme);
+	}
+}
 
 interface ThemeSource extends IUserThemeSource {
 	readonly fileContent: IFileContent;
@@ -14,7 +85,7 @@ interface ThemeSource extends IUserThemeSource {
 }
 
 /** Owns user theme resources and registration independently of the filesystem host. */
-export class WorkbenchThemeService extends Disposable implements IUserThemeService {
+class UserThemeResources extends Disposable implements IUserThemeService {
 	public readonly available = true;
 	private readonly registration = this._register(WorkbenchThemesRegistry.registerColorThemes([]));
 	private sources = new Map<string, ThemeSource>();
@@ -126,8 +197,8 @@ export class WorkbenchThemeService extends Disposable implements IUserThemeServi
 	}
 }
 
-export async function loadUserThemes(services: IInstantiationService, directory: URI): Promise<WorkbenchThemeService> {
-	const service = services.createInstance(WorkbenchThemeService, directory);
+export async function loadUserThemes(services: IInstantiationService, directory: URI): Promise<IUserThemeService & IDisposable> {
+	const service = services.createInstance(UserThemeResources, directory);
 	try { await service.reload(); return service; }
 	catch (error) { service.dispose(); throw error; }
 }

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { ThemeService } from '../../../../platform/theme/common/themeService.js';
+import { TestThemeService } from '../../../../platform/theme/test/common/testThemeService.js';
 import { darkColorTheme } from '../../../../platform/theme/common/colorTheme.js';
 import { MenuId } from '../../../../platform/actions/common/actions.js';
 import { EditorConfiguration } from '../../../browser/config/editorConfiguration.js';
@@ -75,7 +75,7 @@ test('ViewModel owns line projection, cursor, layout, and visible-line publicati
 	}, container);
 	using languages = createBuiltinLanguageConfigurationService();
 	using model = new TextModel('one\ntwo\nthree', { languageConfigurationService: languages });
-	using theme = new ThemeService(darkColorTheme);
+	using theme = new TestThemeService(darkColorTheme);
 	const factory = MonospaceLineBreaksComputerFactory.create(configuration.options);
 	const visible: Array<{ startLineNumber: number; endLineNumber: number }> = [];
 	using viewModel = new ViewModel(
@@ -164,7 +164,7 @@ test('ViewModel resets cursor markers through CursorsController after model flus
 	using configuration = new EditorConfiguration(false, MenuId.EditorContext, { dimension: { width: 200, height: 40 } }, container);
 	using languages = createBuiltinLanguageConfigurationService();
 	using model = new TextModel('one\ntwo', { languageConfigurationService: languages });
-	using theme = new ThemeService(darkColorTheme);
+	using theme = new TestThemeService(darkColorTheme);
 	const factory = MonospaceLineBreaksComputerFactory.create(configuration.options);
 	using viewModel = new ViewModel(
 		1,

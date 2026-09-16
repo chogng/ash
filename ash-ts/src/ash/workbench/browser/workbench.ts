@@ -69,19 +69,12 @@ import {
 	IFileService,
 } from "../../platform/files/common/files.js";
 import {
-	bindColorTheme,
-} from "../../platform/theme/browser/themeStyles.js";
-import {
 	IFileIconThemeService,
 } from "../../platform/theme/browser/fileIconThemeService.js";
-import {
-	SetiFileIconThemeService,
-} from "../../platform/theme/browser/setiFileIconTheme.js";
 import { FileLabelDecorationService } from "../services/labels/browser/fileLabelDecorationService.js";
 import { IFileLabelDecorationService } from "../services/labels/common/fileLabelDecorationService.js";
 import {
 	IThemeService,
-	ThemeService,
 } from "../../platform/theme/common/themeService.js";
 import { type IWorkspace, IWorkspaceContextService, WorkbenchState, workbenchStateFromWorkspace, workspaceOpenTarget } from "../../platform/workspace/common/workspace.js";
 import { WorkbenchConfiguration } from "../common/configuration.js";
@@ -95,7 +88,6 @@ import {
 	IWorkbenchDialogHandler,
 } from "../common/dialogs.js";
 import { INativeHostService } from "../common/services.js";
-import { resolveWorkbenchColorTheme } from "../common/theme.js";
 import { IUserThemeService, type IUserThemeService as IUserThemeServiceContract, UnavailableUserThemeService } from "../common/userThemes.js";
 import {
 	ViewContainerLocation,
@@ -131,7 +123,7 @@ import {
 	DialogService,
 } from "../services/dialogs/common/dialogService.js";
 import { WorkbenchContextKeysHandler } from './contextkeys.js';
-import { WorkbenchThemeController } from "./theme.js";
+import { WorkbenchThemeService } from "../services/themes/browser/workbenchThemeService.js";
 import { IResourceLabelService, ResourceLabelService } from "./labels.js";
 import { ILabelService, LabelService } from "../../platform/label/common/labelService.js";
 import { WorkbenchLayout, type WorkbenchDefaultLayout } from "./layout.js";
@@ -210,7 +202,6 @@ import { IndexedDbWorkingCopyBackupService } from "../services/workingCopy/brows
 import { WorkingCopyBackupTracker } from "../services/workingCopy/browser/workingCopyBackupTracker.js";
 import { IWorkingCopyBackupService, type WorkingCopyBackup } from "../services/workingCopy/common/workingCopyBackupService.js";
 import { projectColorThemeTokens } from "../services/textMate/common/textMateThemeProjection.js";
-import { registerColorThemeSchemas } from "../services/themes/common/colorThemeSchema.js";
 import { BrowserWorkspaceEditService } from "../services/language/browser/browserWorkspaceEditService.js";
 import { IWorkspaceEditService } from "../services/language/common/workspaceEditService.js";
 import { ITextModelResourceService } from "../../editor/common/services/textModelResourceService.js";
@@ -535,15 +526,10 @@ export class Workbench extends Disposable {
 		const serviceContributionReady: Promise<void>[] = [];
 		installWorkbenchServiceContributions({ container: services, register: value => this._register(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
 		services.registerInstance(IAccessibleViewInformationService, this._register(new AccessibleViewInformationService(storage)));
-		const themeService = this._register(new ThemeService(
-			resolveWorkbenchColorTheme(
-				configuration.getValue(WorkbenchConfiguration.colorTheme),
-				ownerWindow.matchMedia("(prefers-color-scheme: dark)").matches,
-			),
-		));
+		const themeService = this._register(services.createInstance(WorkbenchThemeService, workbenchRoot));
 		services.registerInstance(IThemeService, themeService);
+		themeService.initialize();
 		let textMateThemeRevision = 0;
-		this._register(registerColorThemeSchemas());
 		const updateTextMateTheme = (): void => {
 			const model = textMateService.mutableScopeTheme;
 			if (!model) return;
@@ -554,7 +540,7 @@ export class Workbench extends Disposable {
 		this._register(extensionService.themes.onDidChange(() => updateTextMateTheme()));
 		this._register(themeService.onDidColorThemeChange(() => updateTextMateTheme()));
 		services.registerInstance(IUserThemeService, userThemeService ?? UnavailableUserThemeService);
-		const fileIconThemeService = this._register(new SetiFileIconThemeService(themeService));
+		const fileIconThemeService = themeService.fileIconTheme;
 		services.registerInstance(IFileIconThemeService, fileIconThemeService);
 		services.registerInstance(IResourceLabelService, this._register(new ResourceLabelService({
 			workspaceContextService: workspaceContext,
@@ -563,13 +549,6 @@ export class Workbench extends Disposable {
 			fileLabelDecorationService: services.get(IFileLabelDecorationService),
 			labelService,
 		})));
-		const workbenchThemeController = this._register(new WorkbenchThemeController(
-			configuration,
-			themeService,
-			ownerWindow,
-		));
-		this._register(extensionService.onDidChange(() => workbenchThemeController.refresh()));
-		this._register(bindColorTheme(themeService, workbenchRoot));
 		const statusbarService = this._register(new StatusbarService());
 		services.registerInstance(IStatusbarService, statusbarService);
 		const dialogService = this._register(new DialogService());

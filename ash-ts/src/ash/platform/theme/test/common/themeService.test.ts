@@ -10,10 +10,10 @@ import {
 	lightColorTheme,
 	sizeCssVariable,
 } from "../../common/colorTheme.js";
-import { ThemeService } from "../../common/themeService.js";
+import { TestThemeService } from "./testThemeService.js";
 
-test("ThemeService exposes its initial theme and emits actual changes", () => {
-	using service = new ThemeService(darkColorTheme);
+test("TestThemeService exposes its initial theme and emits actual changes", () => {
+	using service = new TestThemeService(darkColorTheme);
 	const changes: string[] = [];
 	using listener = service.onDidColorThemeChange((theme) => {
 		changes.push(theme.id);

@@ -2,6 +2,14 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
 
+test('Workbench follows system color changes without reopening the window', async ({ workbench }) => {
+	await workbench.page.emulateMedia({ colorScheme: 'dark' });
+	await expect(workbench.element).toHaveAttribute('data-color-theme', 'ash-dark');
+	await workbench.page.emulateMedia({ colorScheme: 'light' });
+	await expect(workbench.element).toHaveAttribute('data-color-theme', 'ash-light');
+	await expect.poll(() => workbench.element.evaluate(element => getComputedStyle(element).colorScheme)).toBe('light');
+});
+
 test('Desktop migrates a user theme through the file provider and applies its colors', async ({ application, target, workbench }) => {
 	test.skip(target.kind !== 'electron', 'Requires the desktop profile file provider');
 	if (!('windows' in application)) return;

@@ -5,12 +5,18 @@ import { createRemoteRuntimeInstallProgressApi } from "../../../platform/remote/
 import { bindColorTheme } from "../../../platform/theme/browser/themeStyles.js";
 import { darkColorTheme } from "../../../platform/theme/common/colorTheme.js";
 import { lightColorTheme } from "../../../platform/theme/common/colorTheme.js";
-import { ThemeService } from "../../../platform/theme/common/themeService.js";
+import type { IThemeService } from "../../../platform/theme/common/themeService.js";
+import type { IColorTheme } from "../../../platform/theme/common/colorTheme.js";
+import { Emitter } from "../../../base/common/event.js";
 
 const api = createRemoteRuntimeInstallProgressApi();
 const resources = new DisposableStore();
 const preferredColorScheme = window.matchMedia("(prefers-color-scheme: light)");
-const themeService = resources.add(new ThemeService(preferredColorScheme.matches ? lightColorTheme : darkColorTheme));
+const themeChanges = resources.add(new Emitter<IColorTheme>());
+const themeService: IThemeService = {
+	onDidColorThemeChange: themeChanges.event,
+	getColorTheme: () => preferredColorScheme.matches ? lightColorTheme : darkColorTheme,
+};
 resources.add(bindColorTheme(themeService, document.documentElement));
 const host = requiredElement("remote-install-host", HTMLParagraphElement);
 const stage = requiredElement("remote-install-stage", HTMLParagraphElement);
@@ -19,7 +25,7 @@ const detail = requiredElement("remote-install-detail", HTMLParagraphElement);
 const cancel = requiredElement("remote-install-cancel", HTMLButtonElement);
 
 resources.add(api.onDidChange(render));
-const updateColorScheme = (): void => themeService.setColorTheme(preferredColorScheme.matches ? lightColorTheme : darkColorTheme);
+const updateColorScheme = (): void => themeChanges.fire(themeService.getColorTheme());
 resources.add(addDisposableListener(preferredColorScheme, "change", updateColorScheme));
 resources.add(addDisposableListener(window, "beforeunload", () => resources.dispose(), { once: true }));
 resources.add(addDisposableListener(cancel, "click", () => {

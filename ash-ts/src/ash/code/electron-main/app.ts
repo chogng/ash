@@ -770,6 +770,7 @@ export class AshApplication extends Disposable {
 			[
 				...sessionsRelay.routes(window.webContents, () => ({ workspaceId: record.workspaceId, workspaceRoot: record.workspaceContext.getResolvedWorkspace().folders[0]?.uri.fsPath ?? this.profileRoot }), this.appServerStartupMode === "required"),
 				...rendererSystemHostRoutes(window),
+				...diskFileSystemProviderRoutes(windowDisposables.add(new DiskFileSystemProvider([URI.file(this.profileRoot)])), URI.file(this.profileRoot)),
 				...workspaceContextIpcRoutes(record.workspaceContext),
 				...sessionsWindowIpcRoutes({
 					openSessionsWindow: () => this.openSessionsWindow(record),

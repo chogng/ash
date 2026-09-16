@@ -1,5 +1,6 @@
 import { h } from '../../../../../base/browser/dom.js';
-import { IThemeService, ThemeService } from '../../../../../platform/theme/common/themeService.js';
+import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
+import { TestThemeService } from '../../../../../platform/theme/test/common/testThemeService.js';
 import { darkColorTheme } from '../../../../../platform/theme/common/colorTheme.js';
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
@@ -547,7 +548,7 @@ test('Workbench status follows cursor movement through public editor events', as
 function paneServices(models: ITextModelResourceService, languages?: LanguageFeaturesService): ServiceContainer {
 	const services = new ServiceContainer();
 	services.registerInstance(ITextModelResourceService, models);
-	services.registerSingleton(IThemeService, () => new ThemeService(darkColorTheme));
+	services.registerSingleton(IThemeService, () => new TestThemeService(darkColorTheme));
 	services.registerInstance(ILogService, new NullLoggerService());
 	if (languages) {
 		services.registerInstance(ILanguageFeaturesService, languages);
@@ -569,7 +570,7 @@ test('code editor creation rejects a missing language configuration registration
 	using languages = new LanguageFeaturesService();
 	using services = new ServiceContainer();
 	services.registerInstance(ITextModelResourceService, models);
-	services.registerSingleton(IThemeService, () => new ThemeService(darkColorTheme));
+	services.registerSingleton(IThemeService, () => new TestThemeService(darkColorTheme));
 	services.registerInstance(ILanguageFeaturesService, languages);
 	using pane = createPane(services, resourceStore, {});
 	const parent = h(browserEnvironment.window.document, 'div');

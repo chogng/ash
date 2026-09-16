@@ -20,6 +20,10 @@ test("Code opens Sessions in a dedicated Electron window and returns to Workbenc
 	const sessionsPage = await sessionPagePromise;
 	await sessionsPage.waitForLoadState("domcontentloaded");
 	await expect(sessionsPage.locator(".ash-code-sessions-window")).toBeVisible();
+	await sessionsPage.emulateMedia({ colorScheme: "dark" });
+	await expect(sessionsPage.locator("#app")).toHaveAttribute("data-color-theme", "ash-dark");
+	await sessionsPage.emulateMedia({ colorScheme: "light" });
+	await expect(sessionsPage.locator("#app")).toHaveAttribute("data-color-theme", "ash-light");
 	await expect(sessionsPage.locator("[data-part='titlebar']")).toBeVisible();
 	await expect(sessionsPage.locator("[data-part='sidebar']")).toBeVisible();
 	await expect(sessionsPage.locator("[data-part='sessions']")).toBeVisible();

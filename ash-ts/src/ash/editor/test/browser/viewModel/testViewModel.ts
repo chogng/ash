@@ -1,7 +1,7 @@
 import { scheduleAtNextAnimationFrame } from '../../../../base/browser/dom.js';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { darkColorTheme } from '../../../../platform/theme/common/colorTheme.js';
-import { ThemeService } from '../../../../platform/theme/common/themeService.js';
+import { TestThemeService } from '../../../../platform/theme/test/common/testThemeService.js';
 import { type EditorViewportOptions, View } from '../../../browser/view.js';
 import { EditorLineWrapping, editorOptionsRegistry, type IEditorOptions, WrappingIndent } from '../../../common/config/editorOptions.js';
 import { type CursorsController } from '../../../common/cursor/cursor.js';
@@ -55,7 +55,7 @@ export class TestView extends View {
 
 function createViewModel(options: TestViewOptions): {
 	readonly configuration: ReturnType<typeof createTestConfiguration>;
-	readonly theme: ReturnType<ThemeService['getColorTheme']>;
+	readonly theme: ReturnType<TestThemeService['getColorTheme']>;
 	readonly viewModel: ViewModel;
 	readonly viewModelSelectionController: CursorsController;
 	readonly store: DisposableStore;
@@ -88,7 +88,7 @@ function createViewModel(options: TestViewOptions): {
 	const configuration = store.add(createTestConfiguration(options.container, editorOptions));
 	configuration.setModelLineCount(options.model.lineCount);
 	const languageConfigurationService = store.add(new TestLanguageConfigurationService());
-	const themeService = store.add(new ThemeService(darkColorTheme));
+	const themeService = store.add(new TestThemeService(darkColorTheme));
 	const attachedView = options.model.onBeforeAttached();
 	store.add(toDisposable(() => options.model.onBeforeDetached(attachedView)));
 	const lineBreaksComputerFactory = MonospaceLineBreaksComputerFactory.create(configuration.options);

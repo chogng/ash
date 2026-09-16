@@ -1,14 +1,14 @@
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
 import { Disposable, DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import { darkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
-import { ThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
+import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { TerminalInstanceWidget } from '../../../src/ash/workbench/contrib/terminal/browser/instance/terminalInstanceWidget.js';
 import type { ITerminalDimensions, ITerminalInstance } from '../../../src/ash/workbench/services/terminal/common/terminal.js';
 
 const store = new DisposableStore();
 const output = store.add(new Emitter<Uint8Array>());
 const exit = store.add(new Emitter<number | undefined>());
-const theme = store.add(new ThemeService(darkColorTheme));
+const theme = store.add(new TestThemeService(darkColorTheme));
 const writes: string[] = [];
 const resizes: ITerminalDimensions[] = [];
 const instance: ITerminalInstance = {
