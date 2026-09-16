@@ -571,12 +571,13 @@ test('editor focus updates the view overlay presentation', () => {
 test('browser EditContext reattaches its editing object after DOM ownership changes', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	class TestEditContext extends dom.window.EventTarget {
+	class TestEditContext extends dom.window.EventTarget implements EditContext {
 		public text = '';
 		public selectionStart = 0;
 		public selectionEnd = 0;
 		public selectionBounds: DOMRect | undefined;
 		public controlBounds: DOMRect | undefined;
+		public updateCharacterBounds(): void {}
 		public updateText(start: number, end: number, text: string): void {
 			this.text = `${this.text.slice(0, start)}${text}${this.text.slice(end)}`;
 		}

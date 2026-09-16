@@ -21,13 +21,16 @@ test('native text window remains bounded around the selection', () => {
 });
 
 test('edit-context factory owns browser object construction and reports missing support', () => {
-	class TestEditContext extends EventTarget {
+	class TestEditContext extends EventTarget implements globalThis.EditContext {
 		readonly text = '';
 		readonly selectionStart = 0;
 		readonly selectionEnd = 0;
-		constructor(readonly options?: unknown) { super(); }
+		constructor(readonly options?: EditContextInit) { super(); }
 		updateText(): void {}
 		updateSelection(): void {}
+		updateControlBounds(): void {}
+		updateSelectionBounds(): void {}
+		updateCharacterBounds(): void {}
 	}
 	const options = { text: 'draft', selectionStart: 1, selectionEnd: 1 };
 	const instance = EditContext.create({ EditContext: TestEditContext } as unknown as Window, options);

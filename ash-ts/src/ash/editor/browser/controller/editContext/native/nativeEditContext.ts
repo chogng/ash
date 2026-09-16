@@ -21,53 +21,6 @@ import { EditorOption } from '../../../../common/config/editorOptions.js';
 import { type ILogService } from '../../../../../platform/log/common/log.js';
 import { CopyOptions } from '../clipboardUtils.js';
 
-/** Minimal local declaration because TypeScript's DOM library does not yet expose EditContext. */
-export interface NativeEditContextObject extends EventTarget {
-	readonly text: string;
-	readonly selectionStart: number;
-	readonly selectionEnd: number;
-	updateText(start: number, end: number, text: string): void;
-	updateSelection(start: number, end: number): void;
-	updateControlBounds?(bounds: DOMRect): void;
-	updateSelectionBounds?(bounds: DOMRect): void;
-	updateCharacterBounds?(start: number, bounds: readonly DOMRect[]): void;
-}
-
-export interface NativeEditContextConstructor {
-	new(options?: unknown): NativeEditContextObject;
-}
-
-export interface NativeEditContextWindow extends Window {
-	readonly EditContext?: NativeEditContextConstructor;
-}
-
-interface NativeEditContextElement extends HTMLElement {
-	editContext?: NativeEditContextObject;
-}
-
-export interface NativeTextUpdateEvent extends globalThis.Event {
-	readonly text: string;
-	readonly updateRangeStart: number;
-	readonly updateRangeEnd: number;
-	readonly selectionStart: number;
-	readonly selectionEnd: number;
-}
-
-export interface NativeCharacterBoundsUpdateEvent extends globalThis.Event {
-	readonly rangeStart: number;
-	readonly rangeEnd: number;
-}
-
-export interface NativeTextFormat {
-	readonly rangeStart: number;
-	readonly rangeEnd: number;
-	readonly underlineThickness?: string;
-}
-
-export interface NativeTextFormatUpdateEvent extends globalThis.Event {
-	getTextFormats?(): readonly NativeTextFormat[];
-}
-
 export interface NativeEditContextOptions extends EditContextOptions {
 	readonly logService: ILogService;
 }
@@ -75,7 +28,7 @@ export interface NativeEditContextOptions extends EditContextOptions {
 /** Native EditContext adapter used when the browser exposes the API. */
 export class NativeEditContext extends AbstractEditContext {
 	readonly domNode: FastDomNode<HTMLElement>;
-	readonly nativeContext: NativeEditContextObject;
+	readonly nativeContext: globalThis.EditContext;
 	private readonly imeTextArea: HTMLTextAreaElement;
 
 	private readonly focusEmitter = this._register(new Emitter<void>());
@@ -102,7 +55,7 @@ export class NativeEditContext extends AbstractEditContext {
 	private compositionText = '';
 	private compositionActiveOffset = 0;
 	private pendingLineBreakTextUpdate = false;
-	private pendingHighSurrogate: NativeTextUpdateEvent | undefined;
+	private pendingHighSurrogate: TextUpdateEvent | undefined;
 	private compositionPosition: EditContextPosition | undefined;
 	private lastPosition: EditContextPosition | undefined;
 	private lastRenderPosition: Position | null = null;
@@ -137,7 +90,7 @@ export class NativeEditContext extends AbstractEditContext {
 		super(context);
 		const ownerDocument = container.ownerDocument;
 		const ownerWindow = ownerDocument.defaultView;
-		if (!ownerWindow || typeof (ownerWindow as NativeEditContextWindow).EditContext !== "function") {
+		if (!ownerWindow || typeof ownerWindow.EditContext !== "function") {
 			throw new Error("The native EditContext API is unavailable");
 		}
 		const element = h(ownerDocument, "div");
@@ -206,7 +159,7 @@ export class NativeEditContext extends AbstractEditContext {
 
 	public override dispose(): void {
 		this.handleElementBlur();
-		(this.domNode.domNode as NativeEditContextElement).editContext = undefined;
+		this.domNode.domNode.editContext = undefined;
 		this.domNode.domNode.blur();
 		this.domNode.domNode.remove();
 		this.imeTextArea.remove();
@@ -353,17 +306,17 @@ export class NativeEditContext extends AbstractEditContext {
 		this._register(editContextAddDisposableListener(
 			this.nativeContext,
 			"textupdate",
-			event => this.handleTextUpdate(event as NativeTextUpdateEvent),
+			event => this.handleTextUpdate(event),
 		));
 		this._register(editContextAddDisposableListener(
 			this.nativeContext,
 			"textformatupdate",
-			event => this.handleTextFormatUpdate(event as NativeTextFormatUpdateEvent),
+			event => this.handleTextFormatUpdate(event),
 		));
 		this._register(editContextAddDisposableListener(
 			this.nativeContext,
 			"characterboundsupdate",
-			event => this.handleCharacterBoundsUpdate(event as NativeCharacterBoundsUpdateEvent),
+			event => this.handleCharacterBoundsUpdate(event),
 		));
 		this._register(editContextAddDisposableListener(
 			this.nativeContext,
@@ -411,7 +364,7 @@ export class NativeEditContext extends AbstractEditContext {
 	}
 
 	public setEditContextOnDomNode(): void {
-		const element = this.domNode.domNode as NativeEditContextElement;
+		const element = this.domNode.domNode;
 		if (element.editContext !== this.nativeContext) element.editContext = this.nativeContext;
 	}
 
@@ -624,7 +577,7 @@ export class NativeEditContext extends AbstractEditContext {
 		this.domNode.setHeight("");
 	}
 
-	private handleTextUpdate(event: NativeTextUpdateEvent): void {
+	private handleTextUpdate(event: TextUpdateEvent): void {
 		if (!isNativeTextUpdateEvent(event)) return;
 		if (!this.isFocused()) {
 			this.pendingHighSurrogate = undefined;
@@ -651,7 +604,7 @@ export class NativeEditContext extends AbstractEditContext {
 		this.applyTextUpdate(event);
 	}
 
-	private applyTextUpdate(event: NativeTextUpdateEvent): void {
+	private applyTextUpdate(event: TextUpdateEvent): void {
 		const previousText = this.shadowText;
 		const previousSelectionStart = this.shadowSelectionStart;
 		const previousSelectionEnd = this.shadowSelectionEnd;
@@ -744,7 +697,7 @@ export class NativeEditContext extends AbstractEditContext {
 		this.compositionEndEmitter.fire(undefined);
 	}
 
-	private handleTextFormatUpdate(event: NativeTextFormatUpdateEvent): void {
+	private handleTextFormatUpdate(event: TextFormatUpdateEvent): void {
 		const formats = event.getTextFormats?.();
 		if (!formats) return;
 		const normalized: EditContextTextFormat[] = [];
@@ -770,7 +723,7 @@ export class NativeEditContext extends AbstractEditContext {
 		}));
 	}
 
-	private handleCharacterBoundsUpdate(event: NativeCharacterBoundsUpdateEvent): void {
+	private handleCharacterBoundsUpdate(event: CharacterBoundsUpdateEvent): void {
 		const updateStart = event.rangeStart;
 		const updateEnd = event.rangeEnd;
 		if (

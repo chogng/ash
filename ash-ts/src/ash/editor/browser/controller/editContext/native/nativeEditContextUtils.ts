@@ -3,12 +3,7 @@ import { Disposable, toDisposable, type IDisposable } from "../../../../../base/
 import { isHighSurrogate, isLowSurrogate } from '../../../../../base/common/strings.js';
 import { type ILogService } from '../../../../../platform/log/common/log.js';
 
-interface EditContextEventHandlersEventMap {
-	readonly textupdate: Event;
-	readonly textformatupdate: Event;
-	readonly characterboundsupdate: Event;
-	readonly compositionstart: Event;
-	readonly compositionend: Event;
+interface EditorEditContextEventMap extends EditContextEventHandlersEventMap {
 	readonly compositionupdate: Event;
 	readonly selectionchange: Event;
 }
@@ -79,10 +74,10 @@ export class FocusTracker extends Disposable {
 }
 
 /** Adds a listener to the browser EditContext object and owns its removal. */
-export function editContextAddDisposableListener<K extends keyof EditContextEventHandlersEventMap>(
-	target: EventTarget,
+export function editContextAddDisposableListener<K extends keyof EditorEditContextEventMap>(
+	target: EditContext,
 	type: K,
-	listener: (this: GlobalEventHandlers, ev: EditContextEventHandlersEventMap[K]) => void,
+	listener: (this: GlobalEventHandlers, ev: EditorEditContextEventMap[K]) => void,
 	options?: boolean | AddEventListenerOptions,
 ): IDisposable {
 	target.addEventListener(type, listener as EventListener, options);

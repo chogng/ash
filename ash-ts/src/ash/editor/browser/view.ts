@@ -64,7 +64,7 @@ import { ViewportData } from '../common/viewLayout/viewLinesViewportData.js';
 import { ViewController, type ViewControllerOptions } from './view/viewController.js';
 import { type AbstractEditContext, type EditContextCharacterBounds, type EditContextOptions } from './controller/editContext/editContext.js';
 import { type IClipboardCopyEvent, type IClipboardPasteEvent } from './controller/editContext/clipboardUtils.js';
-import { NativeEditContext, type NativeEditContextOptions, type NativeEditContextWindow } from './controller/editContext/native/nativeEditContext.js';
+import { NativeEditContext, type NativeEditContextOptions } from './controller/editContext/native/nativeEditContext.js';
 import { TextAreaEditContext } from './controller/editContext/textArea/textAreaEditContext.js';
 import { MouseHandler, type IPointerHandlerHelper } from './controller/mouseHandler.js';
 import { PointerHandlerLastRenderData } from './controller/mouseTarget.js';
@@ -1165,7 +1165,7 @@ function createVisualProjection(model: TextModel, viewModel: IViewModel, spaceWi
 type EditorEditContextOptions = EditContextOptions & Partial<Pick<NativeEditContextOptions, 'logService'>>;
 
 function createEditContext(context: ViewContext, container: HTMLElement, options: EditorEditContextOptions): AbstractEditContext {
-	const ownerWindow = container.ownerDocument.defaultView as NativeEditContextWindow | null;
+	const ownerWindow = container.ownerDocument.defaultView;
 	if (typeof ownerWindow?.EditContext !== 'function') return new TextAreaEditContext(context, container, options);
 	const logService = options.logService;
 	if (!logService) throw new ReferenceError('Native EditContext requires the editor log service');
