@@ -59,7 +59,14 @@ def main() -> None:
                     assert stream is not None
                     output.write_bytes(stream.read())
         subprocess.run(
-            ["git", "apply", "--whitespace=nowarn", str(ROOT / metadata["patchFile"])],
+            [
+                "git",
+                "-c",
+                "core.autocrlf=false",
+                "apply",
+                "--whitespace=nowarn",
+                str(ROOT / metadata["patchFile"]),
+            ],
             cwd=pristine,
             check=True,
         )

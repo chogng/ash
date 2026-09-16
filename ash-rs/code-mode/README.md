@@ -2,11 +2,13 @@
 
 - 通过独立 Host 执行 JavaScript，客户端不链接 V8。
 - 后端的 `CodeModeHost` 按需启动并复用一个进程；Desktop、Web、TUI 使用同一套后端实现。
-- `CodeModeSession` 属于线程会话，保存共享值；每次执行单独绑定工具权限、回合、通知和取消。
+- `CodeModeSession` 属于线程会话，持有 Host 会话和恢复快照；每次执行单独绑定工具权限、回合、通知和取消。
 - 回合结束只终止该回合的执行；会话关闭清理会话；最后一个进程 owner 释放时停止并回收 Host。
 - 默认启动当前程序同目录的 `ash-code-mode-host`；`ASH_CODE_MODE_HOST_BIN` 可指定路径。
 - Host 退出使旧执行结果变为 Unknown；后续新执行可启动新 Host，并导入最后确认的共享值。不会重放旧代码或未确认的工具调用。
-- `ash-code-mode-session` 提供状态与接口；`ash-code-mode-runtime` 仅供 Host 和引擎测试使用。
+- `ash-code-mode-protocol` 定义通信数据、公共调用契约、共享值校验与输出限制。
+- `ash-code-mode-runtime` 拥有 V8 执行和共享值存储，仅供 Host 和引擎测试使用。
+- 客户端只保留最后确认的恢复快照，不管理引擎内部的共享值写入。
 
 ## 传输与容量
 

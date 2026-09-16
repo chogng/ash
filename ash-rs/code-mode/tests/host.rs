@@ -164,3 +164,54 @@ fn assert_process_exited(pid: &str) {
             .success()
     );
 }
+
+#[test]
+fn recovery_imports_the_latest_valid_snapshot_and_keeps_deletions() {
+    let id = CodeModeSessionId::new("recovery").unwrap();
+    let host = CodeModeHost::with_program(env!("CARGO_BIN_EXE_ash-code-mode-fake-host").into());
+    let session = host.session(id.clone(), CodeModeLimits::default());
+    let execute = |source: &str| {
+        let mut request = request(id.clone());
+        request.source = source.into();
+        let started = session.execute(request, Arc::new(NoTools)).unwrap();
+        let outcome = session
+            .wait(WaitRequest {
+                cell_id: started.cell_id,
+                yield_time_ms: 1000,
+                max_output_tokens: None,
+                terminate: false,
+            })
+            .unwrap();
+        match outcome {
+            WaitOutcome::LiveCell { response } => response,
+            other => panic!("unexpected outcome: {other:?}"),
+        }
+    };
+    let values = |response| {
+        let RuntimeResponse::Result {
+            content_items,
+            error_text: None,
+            ..
+        } = response
+        else {
+            panic!("expected completed snapshot request");
+        };
+        let [ash_code_mode_protocol::OutputItem::Text { text }] = content_items.as_slice() else {
+            panic!("expected snapshot output");
+        };
+        serde_json::from_str::<serde_json::Value>(text).unwrap()
+    };
+
+    assert_eq!(
+        values(execute("snapshot")),
+        serde_json::json!({"answer":42, "deleted":true})
+    );
+    assert_eq!(values(execute("delete")), serde_json::json!({"answer":42}));
+    assert!(matches!(execute("crash"), RuntimeResponse::Unknown { .. }));
+    assert_eq!(values(execute("inspect")), serde_json::json!({"answer":42}));
+    assert!(
+        matches!(execute("oversized"), RuntimeResponse::Unknown { reason, .. }
+        if reason.contains("Code Mode store exceeds"))
+    );
+    assert_eq!(values(execute("inspect")), serde_json::json!({"answer":42}));
+}

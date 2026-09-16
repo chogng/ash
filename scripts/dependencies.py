@@ -134,7 +134,7 @@ def boundary_errors(root: Path, metadata: dict) -> list[str]:
                     )
                     or (
                         start
-                        in {"ash-app-server", "ash-code-mode", "ash-code-mode-session"}
+                        in {"ash-app-server", "ash-code-mode", "ash-code-mode-protocol"}
                         and dependency in {"ash-code-mode-runtime", "v8"}
                     )
                     or (

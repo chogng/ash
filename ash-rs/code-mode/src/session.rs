@@ -1,5 +1,4 @@
 use crate::CodeModeHost;
-use crate::CodeModeStore;
 use crate::RuntimeError;
 use crate::ToolInvoker;
 use crate::host::Connection;
@@ -20,6 +19,9 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
+/// Last validated Host snapshot, retained only to reopen a logical session.
+pub(super) type Snapshot = Arc<Mutex<BTreeMap<String, serde_json::Value>>>;
+
 static NEXT_SESSION: AtomicU64 = AtomicU64::new(1);
 const CONTROL_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -33,7 +35,7 @@ struct Session {
     host: CodeModeHost,
     id: CodeModeSessionId,
     limits: CodeModeLimits,
-    store: CodeModeStore,
+    snapshot: Snapshot,
     state: Mutex<SessionState>,
     cells: Mutex<BTreeMap<CellId, Arc<Connection>>>,
 }
@@ -52,7 +54,7 @@ impl CodeModeHost {
                 host: self.clone(),
                 id,
                 limits,
-                store: CodeModeStore::new(),
+                snapshot: Arc::default(),
                 state: Mutex::new(SessionState::default()),
                 cells: Mutex::new(BTreeMap::new()),
             }),
@@ -90,26 +92,34 @@ impl CodeModeSession {
             .is_some_and(|(bound, _)| Arc::ptr_eq(bound, &connection))
         {
             if let Some((previous, id)) = state.binding.take() {
-                previous.remove_store(&id);
+                previous.remove_snapshot(&id);
             }
             let wire_id = CodeModeSessionId::new(format!(
                 "session-{}",
                 NEXT_SESSION.fetch_add(1, Ordering::Relaxed)
             ))
             .map_err(|error| RuntimeError::Initialization(error.to_string()))?;
-            connection.register_store(wire_id.clone(), self.inner.store.clone());
+            let stored_values = self
+                .inner
+                .snapshot
+                .lock()
+                .map_err(|_| {
+                    RuntimeError::Runtime("Code Mode recovery snapshot was poisoned".into())
+                })?
+                .clone();
+            connection.register_snapshot(wire_id.clone(), Arc::clone(&self.inner.snapshot));
             let reply = connection.request(
                 ClientToHost::OpenSession {
                     session_id: wire_id.clone(),
                     limits: self.inner.limits,
-                    stored_values: self.inner.store.snapshot()?,
+                    stored_values,
                 },
                 CONTROL_TIMEOUT,
             );
             match reply {
                 Ok(HostToClient::SessionOpened { session_id }) if session_id == wire_id => {}
                 result => {
-                    connection.remove_store(&wire_id);
+                    connection.remove_snapshot(&wire_id);
                     return Err(unexpected(result));
                 }
             }
@@ -217,7 +227,7 @@ impl Session {
                 },
                 CONTROL_TIMEOUT,
             );
-            connection.remove_store(&session_id);
+            connection.remove_snapshot(&session_id);
         }
     }
 }

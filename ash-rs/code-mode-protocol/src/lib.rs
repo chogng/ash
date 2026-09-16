@@ -8,10 +8,60 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde_json::Value;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::io::{self, Read, Write};
 use ts_rs::TS;
+
+mod output;
+pub use output::limit_output;
+
+/// Bridge from JavaScript to Core's durable tool broker.
+///
+/// The runtime calls this method on a worker thread and resolves the JavaScript Promise back on
+/// the owning V8 thread. Implementations may therefore block for approval or Tool completion
+/// without blocking the cell, and independent calls may execute concurrently.
+pub trait ToolInvoker: Send + Sync {
+    /// Executes one projected ordinary tool call. The implementation owns approval, audit,
+    /// cancellation, and durable outcome handling; the runtime only supplies the call payload.
+    fn invoke(&self, call: NestedToolCall) -> Result<Value, String>;
+
+    /// Publishes a bounded transient notification without exposing the underlying transport.
+    fn notify(&self, _: RuntimeNotification) -> Result<(), String> {
+        Ok(())
+    }
+
+    /// Cancels all nested calls owned by this invoker.
+    fn cancel(&self) {}
+
+    /// Cancels nested calls currently owned by one cell.
+    fn cancel_cell(&self, _: &CellId) {}
+}
+
+/// Errors returned by a Code Mode session.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum RuntimeError {
+    Initialization(String),
+    InvalidRequest(String),
+    CellNotFound(CellId),
+    ChannelClosed,
+    Runtime(String),
+}
+
+impl std::fmt::Display for RuntimeError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Initialization(message)
+            | Self::InvalidRequest(message)
+            | Self::Runtime(message) => formatter.write_str(message),
+            Self::CellNotFound(cell_id) => write!(formatter, "Code Mode cell not found: {cell_id}"),
+            Self::ChannelClosed => formatter.write_str("Code Mode runtime channel closed"),
+        }
+    }
+}
+
+impl std::error::Error for RuntimeError {}
 
 /// Default amount of time an `exec` or `wait` call observes a live cell.
 pub const DEFAULT_EXEC_YIELD_TIME_MS: u64 = 10_000;
@@ -21,6 +71,21 @@ pub const CODE_MODE_PROTOCOL_VERSION: u32 = 3;
 
 /// Maximum payload accepted by the framed stdio Host protocol.
 pub const MAX_FRAME_BYTES: usize = 64 * 1024 * 1024;
+
+const MAX_STORE_BYTES: usize = 16 * 1024 * 1024;
+
+/// Validates a complete stored-value payload at the Host boundary.
+pub fn validate_values(values: &BTreeMap<String, Value>) -> Result<(), String> {
+    let bytes = serde_json::to_vec(values)
+        .map_err(|error| error.to_string())?
+        .len();
+    if bytes > MAX_STORE_BYTES {
+        return Err(format!(
+            "Code Mode store exceeds the {MAX_STORE_BYTES} byte limit; delete unused keys with store(key, undefined)"
+        ));
+    }
+    Ok(())
+}
 
 macro_rules! identifier {
     ($name:ident, $doc:literal) => {

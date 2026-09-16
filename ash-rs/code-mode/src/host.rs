@@ -1,6 +1,6 @@
-use crate::CodeModeStore;
 use crate::RuntimeError;
 use crate::ToolInvoker;
+use crate::session::Snapshot;
 use ash_code_mode_protocol::CODE_MODE_PROTOCOL_VERSION;
 use ash_code_mode_protocol::CellId;
 use ash_code_mode_protocol::ClientToHost;
@@ -8,6 +8,7 @@ use ash_code_mode_protocol::CodeModeSessionId;
 use ash_code_mode_protocol::HostFrame;
 use ash_code_mode_protocol::HostToClient;
 use ash_code_mode_protocol::read_frame;
+use ash_code_mode_protocol::validate_values;
 use ash_code_mode_protocol::write_frame;
 use std::collections::BTreeMap;
 use std::io::BufReader;
@@ -46,7 +47,7 @@ struct State {
     next_request: u64,
     pending: BTreeMap<u64, mpsc::Sender<Reply>>,
     cells: BTreeMap<CellId, Arc<dyn ToolInvoker>>,
-    stores: BTreeMap<CodeModeSessionId, CodeModeStore>,
+    snapshots: BTreeMap<CodeModeSessionId, Snapshot>,
 }
 
 impl Connection {
@@ -161,11 +162,16 @@ impl Connection {
     pub(super) fn failure(&self) -> Option<String> {
         self.shared.failure()
     }
-    pub(super) fn register_store(&self, id: CodeModeSessionId, store: CodeModeStore) {
-        self.shared.state.lock().unwrap().stores.insert(id, store);
+    pub(super) fn register_snapshot(&self, id: CodeModeSessionId, snapshot: Snapshot) {
+        self.shared
+            .state
+            .lock()
+            .unwrap()
+            .snapshots
+            .insert(id, snapshot);
     }
-    pub(super) fn remove_store(&self, id: &CodeModeSessionId) {
-        self.shared.state.lock().unwrap().stores.remove(id);
+    pub(super) fn remove_snapshot(&self, id: &CodeModeSessionId) {
+        self.shared.state.lock().unwrap().snapshots.remove(id);
     }
     pub(super) fn register_cell(&self, id: CellId, invoker: Arc<dyn ToolInvoker>) {
         let mut state = self.shared.state.lock().unwrap();
@@ -272,10 +278,13 @@ impl Shared {
                     if state.failure.is_some() {
                         return;
                     }
-                    state
-                        .stores
-                        .get(&session_id)
-                        .map(|store| store.replace(values))
+                    state.snapshots.get(&session_id).map(|snapshot| {
+                        validate_values(&values)?;
+                        *snapshot.lock().map_err(|_| {
+                            "Code Mode recovery snapshot was poisoned".to_string()
+                        })? = values;
+                        Ok::<(), String>(())
+                    })
                 };
                 if let Some(Err(error)) = result {
                     self.fail(error.to_string());

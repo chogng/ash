@@ -6,10 +6,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-pub use ash_code_mode_session::CodeModeStore;
-pub use ash_code_mode_session::RuntimeError;
-pub use ash_code_mode_session::ToolInvoker;
-pub use ash_code_mode_session::limit_output;
+pub use ash_code_mode_protocol::RuntimeError;
+pub use ash_code_mode_protocol::ToolInvoker;
+pub use ash_code_mode_protocol::limit_output;
 pub use session::CodeModeSession;
 
 /// Backend-owned provider. Starts one Host lazily and replaces it only after failure.

@@ -1,5 +1,5 @@
-use ash_code_mode_protocol::OutputItem;
-use ash_code_mode_protocol::RuntimeResponse;
+use crate::OutputItem;
+use crate::RuntimeResponse;
 
 /// Bounds the text in one observation without altering the cell's execution or resource ceiling.
 /// UTF-8 bytes are a conservative token estimate when no provider tokenizer is available.

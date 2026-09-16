@@ -13,9 +13,10 @@ use std::thread;
 use std::time::Duration;
 
 mod cell;
-use ash_code_mode_session::CodeModeStore;
-use ash_code_mode_session::RuntimeError;
-use ash_code_mode_session::ToolInvoker;
+mod store;
+use ash_code_mode_protocol::RuntimeError;
+use ash_code_mode_protocol::ToolInvoker;
+pub use store::CodeModeStore;
 
 /// One process-local Code Mode session containing isolated JavaScript cells and shared values.
 #[derive(Clone)]
@@ -259,7 +260,7 @@ impl CodeModeRuntime {
                     })?
                     .remove(&cell_id);
             }
-            ash_code_mode_session::limit_output(response, budget);
+            ash_code_mode_protocol::limit_output(response, budget);
         }
         Ok(outcome)
     }

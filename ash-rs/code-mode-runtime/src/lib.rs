@@ -10,9 +10,11 @@ mod session;
 mod v8_init;
 mod value;
 
-pub use ash_code_mode_session::limit_output;
-pub use ash_code_mode_session::{CodeModeStore, RuntimeError, ToolInvoker};
+pub use ash_code_mode_protocol::RuntimeError;
+pub use ash_code_mode_protocol::ToolInvoker;
+pub use ash_code_mode_protocol::limit_output;
 pub use session::CodeModeRuntime;
+pub use session::CodeModeStore;
 pub use v8_init::{V8JitMode, initialize_v8};
 
 #[cfg(test)]

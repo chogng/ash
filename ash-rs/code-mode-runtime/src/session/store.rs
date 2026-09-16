@@ -1,10 +1,9 @@
-use super::RuntimeError;
+use ash_code_mode_protocol::RuntimeError;
+use ash_code_mode_protocol::validate_values;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::Mutex;
-
-const MAX_STORE_BYTES: usize = 16 * 1024 * 1024;
 
 /// Bounded process-local values shared by cells in one owning Thread Session.
 #[derive(Clone, Default)]
@@ -24,24 +23,17 @@ impl CodeModeStore {
         })
     }
 
-    pub fn snapshot(&self) -> Result<BTreeMap<String, Value>, RuntimeError> {
+    pub(crate) fn snapshot(&self) -> Result<BTreeMap<String, Value>, RuntimeError> {
         self.values
             .lock()
             .map_err(|_| RuntimeError::Runtime("Code Mode values were poisoned".into()))
             .map(|values| values.clone())
     }
 
-    /// Atomically replaces a host snapshot, including keys deleted in that host.
-    pub fn replace(&self, values: BTreeMap<String, Value>) -> Result<(), RuntimeError> {
-        validate_values(&values).map_err(RuntimeError::InvalidRequest)?;
-        *self
-            .values
-            .lock()
-            .map_err(|_| RuntimeError::Runtime("Code Mode values were poisoned".into()))? = values;
-        Ok(())
-    }
-
-    pub fn apply(&self, writes: BTreeMap<String, Option<Value>>) -> Result<(), RuntimeError> {
+    pub(crate) fn apply(
+        &self,
+        writes: BTreeMap<String, Option<Value>>,
+    ) -> Result<(), RuntimeError> {
         let mut values = self
             .values
             .lock()
@@ -61,16 +53,4 @@ impl CodeModeStore {
         *values = next;
         Ok(())
     }
-}
-
-pub fn validate_values(values: &BTreeMap<String, Value>) -> Result<(), String> {
-    let bytes = serde_json::to_vec(values)
-        .map_err(|error| error.to_string())?
-        .len();
-    if bytes > MAX_STORE_BYTES {
-        return Err(format!(
-            "Code Mode store exceeds the {MAX_STORE_BYTES} byte limit; delete unused keys with store(key, undefined)"
-        ));
-    }
-    Ok(())
 }

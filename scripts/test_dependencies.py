@@ -149,7 +149,7 @@ class DependencyTests(unittest.TestCase):
         )
 
     def test_code_mode_clients_cannot_link_v8_through_a_shared_dependency(self):
-        for name in ("ash-app-server", "ash-code-mode", "ash-code-mode-session"):
+        for name in ("ash-app-server", "ash-code-mode", "ash-code-mode-protocol"):
             for engine in ("ash-code-mode-runtime", "v8"):
                 with self.subTest(consumer=name, engine=engine):
                     consumer = self.package(
