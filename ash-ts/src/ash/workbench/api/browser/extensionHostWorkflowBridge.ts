@@ -1,7 +1,7 @@
-import { encodeHex, VSBuffer } from "../../../../base/common/buffer.js";
-import type { JsonValue } from "../../../../platform/extensionHost/common/extensionHostApi.js";
-import type { TaskProvider, TaskProviderTask, WorkspaceTaskGroup } from "../../tasks/common/taskService.js";
-import type { TestProfileContribution, TestProfileProvider } from "../../testing/common/testingService.js";
+import { encodeHex, VSBuffer } from "../../../base/common/buffer.js";
+import type { JsonValue } from "../../../platform/extensionHost/common/extensionHostApi.js";
+import type { TaskProvider, TaskProviderTask, WorkspaceTaskGroup } from "../../services/tasks/common/taskService.js";
+import type { TestProfileContribution, TestProfileProvider } from "../../services/testing/common/testingService.js";
 import type { ExtensionHostProviderInvoker } from "./extensionHostLanguageBridge.js";
 
 export function createExtensionHostTaskProvider(id: string, invoke: ExtensionHostProviderInvoker): TaskProvider {

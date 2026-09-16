@@ -4,19 +4,22 @@ import { CancellationTokenSource } from '../../../../../base/common/cancellation
 import { URI } from '../../../../../base/common/uri.js';
 import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import { CommandRegistry } from "../../../../../platform/commands/common/commands.js";
-import type { ServicesAccessor } from "../../../../../platform/instantiation/common/instantiation.js";
+import { ServiceContainer, type ServicesAccessor } from "../../../../../platform/instantiation/common/instantiation.js";
 import type { AppServerConnectionState } from "../../../../../platform/app-server/common/appServerApi.js";
-import type { ExtensionHostFleetSnapshot, ExtensionHostInvocationRequest, ExtensionHostOutputEvent, ExtensionHostReconcileMode, IExtensionHostApi, JsonValue } from "../../../../../platform/extensionHost/common/extensionHostApi.js";
+import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostInvocationRequest, type ExtensionHostOutputEvent, type ExtensionHostReconcileMode, type JsonValue } from "../../../../../platform/extensionHost/common/extensionHostApi.js";
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
 import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from '../../../../../editor/common/core/range.js';
 import { LanguageHoverService } from "../../../../../editor/contrib/hover/common/hover.js";
 import { ParameterHintsService } from "../../../../../editor/contrib/parameterHints/common/languageParameterHints.js";
 import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
-import type { ITaskService, TaskProvider, TaskProviderRegistration } from "../../../tasks/common/taskService.js";
-import type { ITestingService, TestProfileProvider, TestProfileProviderRegistration } from "../../../testing/common/testingService.js";
+import { ITaskService, type TaskProvider, type TaskProviderRegistration } from "../../../tasks/common/taskService.js";
+import { ITestingService, type TestProfileProvider, type TestProfileProviderRegistration } from "../../../testing/common/testingService.js";
 import { AppServerExtensionHostService } from "../../browser/appServerExtensionHostService.js";
-import { createExtensionHostLanguageProviderBatch } from '../../browser/extensionHostLanguageBridge.js';
+import { MainThreadExtensionApi } from '../../../../api/browser/mainThreadExtensionApi.js';
+import { createExtensionHostLanguageProviderBatch } from '../../../../api/browser/extensionHostLanguageBridge.js';
+import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
+import { IOutputService } from '../../../output/common/outputService.js';
 import { OutputService } from "../../../output/browser/outputService.js";
 
 const DIGEST = `sha256:${"b".repeat(64)}`;
@@ -99,7 +102,8 @@ test("keeps last-good contributions while refreshing and revokes them synchronou
 	const tasks = new ProviderSink<TaskProvider>();
 	const tests = new ProviderSink<TestProfileProvider>();
 	using languages = new LanguageFeaturesService();
-	using service = new AppServerExtensionHostService({ api, commands, languageFeatures: languages, tasks: tasks as unknown as ITaskService, testing: tests as unknown as ITestingService, invocationTimeoutMillis: 1_000 });
+	using services = createServices(api, languages, tasks, tests);
+	using service = services.createInstance(AppServerExtensionHostService, commands, 1_000);
 	const failures: string[] = [];
 	service.onDidFail(failure => failures.push(failure.code));
 
@@ -151,7 +155,8 @@ test("projects supported language operations while diagnosing unsupported operat
 	const tasks = new ProviderSink<TaskProvider>();
 	const tests = new ProviderSink<TestProfileProvider>();
 	using languages = new LanguageFeaturesService();
-	using service = new AppServerExtensionHostService({ api, commands: new CommandRegistry(), languageFeatures: languages, tasks: tasks as unknown as ITaskService, testing: tests as unknown as ITestingService });
+	using services = createServices(api, languages, tasks, tests);
+	using service = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 30_000);
 	const failures: string[] = [];
 	service.onDidFail(failure => failures.push(failure.code));
 	await service.start();
@@ -173,7 +178,8 @@ test("keeps the service stopped when the negotiated Host capability is absent", 
 	const tasks = new ProviderSink<TaskProvider>();
 	const tests = new ProviderSink<TestProfileProvider>();
 	using languages = new LanguageFeaturesService();
-	using service = new AppServerExtensionHostService({ api, commands: new CommandRegistry(), languageFeatures: languages, tasks: tasks as unknown as ITaskService, testing: tests as unknown as ITestingService });
+	using services = createServices(api, languages, tasks, tests);
+	using service = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 30_000);
 	const failures: string[] = [];
 	service.onDidFail(failure => failures.push(failure.code));
 
@@ -190,7 +196,8 @@ test("projects bounded Extension Host stderr incrementally into extension-owned 
 	const tests = new ProviderSink<TestProfileProvider>();
 	using languages = new LanguageFeaturesService();
 	using output = new OutputService();
-	using service = new AppServerExtensionHostService({ api, commands: new CommandRegistry(), languageFeatures: languages, tasks: tasks as unknown as ITaskService, testing: tests as unknown as ITestingService, output });
+	using services = createServices(api, languages, tasks, tests, output);
+	using service = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 30_000);
 	await service.start();
 
 	const channel = output.getChannel("extension-host.acme.demo");
@@ -218,7 +225,8 @@ test("projects ordered extension-created named Output channels without replaying
 	using output = new OutputService();
 	const reveals: string[] = [];
 	output.onDidRequestShowChannel(request => reveals.push(request.focus));
-	using service = new AppServerExtensionHostService({ api, commands: new CommandRegistry(), languageFeatures: languages, tasks: tasks as unknown as ITaskService, testing: tests as unknown as ITestingService, output });
+	using services = createServices(api, languages, tasks, tests, output);
+	using service = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 30_000);
 	await service.start();
 
 	const channelId = "extension.acme.demo.review";
@@ -238,7 +246,118 @@ test("projects ordered extension-created named Output channels without replaying
 	assert.equal(output.getChannel(channelId), undefined);
 });
 
+test('extension API requires its domain services before registering any contributions', () => {
+	using services = new ServiceContainer();
+	using output = new OutputService();
+	using diagnostics = output.createChannel({ id: 'host-diagnostics', label: 'Host' });
+	const commands = new CommandRegistry();
+	services.registerInstance(IExtensionHostApi, new FakeExtensionHostApi(snapshot(1, 'acme.run')));
+	assert.throws(() => services.createInstance(MainThreadExtensionApi, commands, 1_000, diagnostics), /Unknown service: ILanguageFeaturesService/);
+	assert.deepEqual(commands.getCommandIds(), []);
+	assert.deepEqual(output.channels.map(channel => channel.id), ['host-diagnostics']);
+});
+
+test('extension API restores all previous registrations when a provider rejects a replacement', async () => {
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.old'));
+	const commands = new CommandRegistry();
+	const tasks = new ProviderSink<TaskProvider>();
+	const tests = new ProviderSink<TestProfileProvider>();
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, tasks, tests);
+	using service = services.createInstance(AppServerExtensionHostService, commands, 1_000);
+	await service.start();
+	const previousTasks = tasks.providers;
+	const previousTests = tests.providers;
+	const failures: string[] = [];
+	using listener = service.onDidFail(failure => failures.push(failure.code));
+	tests.rejectNextReplacement = new Error('Test provider rejected replacement');
+	api.current = snapshot(2, 'acme.new');
+	api.emitChanged(2);
+	await waitFor(() => failures.includes('registrationProjectionFailed'));
+	assert.deepEqual(commands.getCommandIds(), ['acme.old']);
+	assert.deepEqual(tasks.providers, previousTasks);
+	assert.deepEqual(tests.providers, previousTests);
+	assert.equal(service.currentSnapshot.fleetGeneration, 1);
+	assert.deepEqual(await commands.getCommand('acme.old')!({} as ServicesAccessor), { executed: true });
+});
+
+test('extension API cancels old invocations and rejects results from replaced registrations', async () => {
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.old'));
+	const commands = new CommandRegistry();
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>());
+	using service = services.createInstance(AppServerExtensionHostService, commands, 1_000);
+	await service.start();
+	const result = deferred<JsonValue>();
+	api.invocationResult = result.promise;
+	const oldHandler = commands.getCommand('acme.old')!;
+	const pending = Promise.resolve(oldHandler({} as ServicesAccessor));
+	const rejected = assert.rejects(pending, error => error === 'Extension Host fleet generation was replaced');
+	api.current = snapshot(2, 'acme.new');
+	api.emitChanged(2);
+	await waitFor(() => service.currentSnapshot.fleetGeneration === 2);
+	assert.equal(api.invocationSignals[0]?.aborted, true);
+	result.resolve({ executed: true });
+	await rejected;
+	await assert.rejects(async () => oldHandler({} as ServicesAccessor), error => error === 'Extension Host fleet generation was replaced');
+	assert.equal(api.invocations.length, 1);
+	api.invocationResult = undefined;
+	assert.deepEqual(await commands.getCommand('acme.new')!({} as ServicesAccessor), { executed: true });
+});
+
+test('extension API releases named output and providers when its host stops', async () => {
+	const events: readonly ExtensionHostOutputEvent[] = [
+		{ sequence: 1, incarnation: 3, activationGeneration: 11, operation: { operation: 'create', channelId: 'review', label: 'Review', kind: 'output' } },
+	];
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.run', [], '', events));
+	const commands = new CommandRegistry();
+	const tasks = new ProviderSink<TaskProvider>();
+	const tests = new ProviderSink<TestProfileProvider>();
+	using output = new OutputService();
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, tasks, tests, output);
+	using service = services.createInstance(AppServerExtensionHostService, commands, 1_000);
+	await service.start();
+	assert.ok(output.getChannel('extension.acme.demo.review'));
+	await service.stop();
+	assert.equal(output.getChannel('extension.acme.demo.review'), undefined);
+	assert.deepEqual(commands.getCommandIds(), []);
+	assert.deepEqual(tasks.providers, []);
+	assert.deepEqual(tests.providers, []);
+	await service.start();
+	assert.ok(output.getChannel('extension.acme.demo.review'));
+	api.emitConnection('crashed');
+	assert.equal(output.getChannel('extension.acme.demo.review'), undefined);
+});
+
+test('extension API resets output for a new process and ignores stale output events', async () => {
+	const events: readonly ExtensionHostOutputEvent[] = [
+		{ sequence: 1, incarnation: 3, activationGeneration: 11, operation: { operation: 'create', channelId: 'review', label: 'Review', kind: 'output' } },
+		{ sequence: 2, incarnation: 3, activationGeneration: 11, operation: { operation: 'append', channelId: 'review', text: 'old', severity: 'log', category: undefined } },
+	];
+	const api = new FakeExtensionHostApi(snapshot(1, 'acme.run', [], '', events));
+	using output = new OutputService();
+	using languages = new LanguageFeaturesService();
+	using services = createServices(api, languages, new ProviderSink<TaskProvider>(), new ProviderSink<TestProfileProvider>(), output);
+	using service = services.createInstance(AppServerExtensionHostService, new CommandRegistry(), 1_000);
+	await service.start();
+	const previous = output.getChannel('extension.acme.demo.review');
+	assert.equal(previous?.getText(), 'old');
+	const nextEvents: readonly ExtensionHostOutputEvent[] = [
+		{ ...events[0]!, incarnation: 4 },
+		{ sequence: 99, incarnation: 3, activationGeneration: 11, operation: { operation: 'append', channelId: 'review', text: 'stale', severity: 'log', category: undefined } },
+		{ sequence: 2, incarnation: 4, activationGeneration: 11, operation: { operation: 'append', channelId: 'review', text: 'new', severity: 'log', category: undefined } },
+	];
+	api.current = { generation: 2, extensions: [{ ...api.current.extensions[0]!, incarnation: 4, outputEvents: nextEvents }] };
+	api.emitChanged(2);
+	await waitFor(() => service.currentSnapshot.fleetGeneration === 2);
+	assert.notEqual(output.getChannel('extension.acme.demo.review'), previous);
+	assert.equal(output.getChannel('extension.acme.demo.review')?.getText(), 'new');
+});
+
 class FakeExtensionHostApi implements IExtensionHostApi {
+	invocationResult: Promise<JsonValue> | undefined;
+	readonly invocationSignals: AbortSignal[] = [];
 	available = true;
 	reconciles = 0;
 	current: ExtensionHostFleetSnapshot;
@@ -260,6 +379,8 @@ class FakeExtensionHostApi implements IExtensionHostApi {
 	async invoke(request: ExtensionHostInvocationRequest, signal: AbortSignal): Promise<JsonValue> {
 		signal.throwIfAborted();
 		this.invocations.push(request);
+		this.invocationSignals.push(signal);
+		if (this.invocationResult) return this.invocationResult;
 		if (request.operation === "execute") return Object.freeze({ executed: true });
 		if (request.operation === "provideTasks") return Object.freeze({ tasks: Object.freeze([{ id: "unit", label: "Unit", command: "pnpm test", group: "test" }]) });
 		if (request.operation === "provideTestProfiles") return Object.freeze({ profiles: Object.freeze([{ id: "unit", label: "Unit", taskProviderRegistrationId: "tasks", taskId: "unit" }]) });
@@ -274,6 +395,7 @@ class FakeExtensionHostApi implements IExtensionHostApi {
 
 class ProviderSink<TProvider> {
 	providers: readonly TProvider[] = Object.freeze([]);
+	rejectNextReplacement: Error | undefined;
 
 	registerTaskProviders(providers: readonly TaskProvider[]): TaskProviderRegistration { return this.registration(providers as readonly TProvider[]) as TaskProviderRegistration; }
 	registerTestProfileProviders(providers: readonly TestProfileProvider[]): TestProfileProviderRegistration { return this.registration(providers as readonly TProvider[]) as TestProfileProviderRegistration; }
@@ -284,6 +406,11 @@ class ProviderSink<TProvider> {
 		const registration = toDisposable(() => { disposed = true; this.providers = Object.freeze([]); }) as TaskProviderRegistration;
 		registration.replace = providers => {
 			if (disposed) throw new ReferenceError("Provider registration is disposed");
+			if (this.rejectNextReplacement) {
+				const error = this.rejectNextReplacement;
+				this.rejectNextReplacement = undefined;
+				throw error;
+			}
 			this.providers = Object.freeze([...(providers as readonly TProvider[])]);
 		};
 		return registration;
@@ -327,4 +454,18 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 		await new Promise(resolve => setTimeout(resolve, 0));
 	}
 	throw new Error("Timed out waiting for Extension Host state");
+}
+
+function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesService, tasks: ProviderSink<TaskProvider>, tests: ProviderSink<TestProfileProvider>, output?: IOutputService): ServiceContainer {
+	const services = new ServiceContainer();
+	services.registerInstance(IExtensionHostApi, api);
+	services.registerInstance(ILanguageFeaturesService, languages);
+	services.registerInstance(ITaskService, tasks as unknown as ITaskService);
+	services.registerInstance(ITestingService, tests as unknown as ITestingService);
+	if (output) {
+		services.registerInstance(IOutputService, output);
+	} else {
+		services.registerSingleton(IOutputService, () => new OutputService());
+	}
+	return services;
 }

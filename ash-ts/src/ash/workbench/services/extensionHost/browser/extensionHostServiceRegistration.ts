@@ -1,4 +1,5 @@
 import { IExtensionHostApi } from "../../../../platform/extensionHost/common/extensionHostApi.js";
+import { CommandsRegistry } from "../../../../platform/commands/common/commands.js";
 import { ILogService } from "../../../../platform/log/common/log.js";
 import { registerWorkbenchServiceContribution } from "../../../browser/workbenchServiceContributions.js";
 import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
@@ -12,13 +13,7 @@ registerWorkbenchServiceContribution({
 	service: IExtensionHostService,
 	dependencies: [IExtensionHostApi, ILogService, ILanguageFeaturesService, ITaskService, ITestingService, IOutputService],
 	install: context => {
-		const service = context.register(new AppServerExtensionHostService({
-			api: context.container.get(IExtensionHostApi),
-			languageFeatures: context.container.get(ILanguageFeaturesService),
-			tasks: context.container.get(ITaskService),
-			testing: context.container.get(ITestingService),
-			output: context.container.get(IOutputService),
-		}));
+		const service = context.register(context.container.createInstance(AppServerExtensionHostService, CommandsRegistry, 30_000));
 		const ready = service.start();
 		context.blockRestorationUntil(ready);
 		void ready.catch(error => context.container.get(ILogService).error("extensionHost", "Executable Extension Host activation failed", error));

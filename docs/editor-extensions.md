@@ -125,12 +125,22 @@ Manifest activation events 当前是经过验证并传给 runtime 的 facts；`a
 | source normalization + Dir Authorization adapter、Host fleet 与客户端 RPC | App Server composition | OS sandbox implementation、Workbench UI |
 | 生产 sandbox、hard resources 与 killable process tree | 注入的 platform `ExtensionHostLauncher` | package enable/grant 或 provider semantics |
 | Host snapshot normalization 与 transport | `platform/extensionHost` adapter | 领域 provider ownership |
-| Host fleet 生命周期和原子 provider 编排 | `IExtensionHostService` implementation | generated DTO 作为 domain API |
+| Host fleet 生命周期、刷新和连接状态 | `IExtensionHostService` implementation | 扩展 provider 注册、generated DTO 作为 domain API |
+| 扩展 API 的 Workbench 接入、原子注册、调用和 Output 生命周期 | `workbench/api/browser` | 进程监管、WebSocket、App Server 协议定义 |
 | Renderer Host service 安装与启动阻塞 | Code 产品入口选择的 `workbench/contrib/extensionHost` | 通用 Workbench 或 Academic 产品隐式安装 |
 | Commands、Language、Debug、Tasks、Testing 注册与调用 shape | 各自 Workbench domain owner | package 安装、进程监管 |
 
 Frontend common contract 使用 Workbench 自己的 snapshot/descriptor/failure 类型；generated DTO 和
 资源传输 shape 只存在于运行时 adapter。`src/ash/base` 不认识扩展、语言、grammar 或 Host RPC。
+
+`workbench/api/browser/mainThreadExtensionApi.ts` 接收宿主服务已取得的扩展快照，把命令、受支持的语言操作、
+任务与测试配置注册到现有领域服务，并管理扩展命名 Output。语言和任务结果的严格转换由同目录的
+`extensionHostLanguageBridge.ts`、`extensionHostWorkflowBridge.ts` 负责。宿主服务通过实例化容器创建 API
+实现；领域注册、调用取消和输出频道只有一个 owner，原服务目录不再保留转换实现。
+
+替换注册集合会取消旧集合的调用；提交失败保留上一组有效注册。断线、停止或释放宿主服务会撤销注册并释放
+扩展命名 Output。输出按扩展 ID、激活代次和进程 incarnation 隔离，重新连接恢复内容但不重放旧的显示请求。
+此层当前接入已有 Host RPC v1 可执行扩展；没有新增 JavaScript 扩展加载器、`vscode` 模块或 VS Code 扩展兼容承诺。
 
 静态 `package.json` catalog 与 executable consumer manifest 之间没有隐式转换。未来即使共享安装
 UI，也必须保留两种 package identity、authority、generation 和 failure semantics；不能把“静态资源目录可读”转换成

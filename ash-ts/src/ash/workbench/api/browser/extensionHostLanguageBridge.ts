@@ -1,18 +1,18 @@
-import { ExtensionIdentifier } from '../../../../platform/extensions/common/extensions.js';
-import { encodeHex, VSBuffer } from "../../../../base/common/buffer.js";
-import { type CancellationToken } from '../../../../base/common/cancellation.js';
-import { Position } from "../../../../editor/common/core/position.js";
-import { Range } from "../../../../editor/common/core/range.js";
-import type { LinkedEditingRangeProvider, LinkedEditingRanges, TextEdit, DocumentFormattingEditProvider, DocumentRangeFormattingEditProvider, LanguageFormattingOptions } from "../../../../editor/common/languages.js";
-import { type ITextModel } from '../../../../editor/common/model.js';
-import { type TextSnapshot } from "../../../../editor/common/core/textChange.js";
-import { type LanguageCompletionProvider, type LanguageCompletionProviderItem, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from "../../../../editor/common/languages/completion/languageCompletionProviders.js";
-import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind } from "../../../../editor/common/languages/completion/languageCompletions.js";
-import type { LanguageProviderBatch } from '../../../../editor/common/services/languageFeatures.js';
-import type { LanguageHover, LanguageHoverContent, LanguageHoverProvider, LanguageHoverRequest } from "../../../../editor/contrib/hover/common/hover.js";
-import type { LanguageInlayHint, LanguageInlayHintLabel, LanguageInlayHintsProvider, LanguageInlayHintsRequest } from "../../../../editor/contrib/inlayHints/common/languageInlayHints.js";
-import type { LanguageParameterHints, LanguageParameterHintsProvider, LanguageParameterHintsRequest } from "../../../../editor/contrib/parameterHints/common/languageParameterHints.js";
-import type { ExtensionHostLanguageRegistration, JsonValue } from "../../../../platform/extensionHost/common/extensionHostApi.js";
+import { ExtensionIdentifier } from '../../../platform/extensions/common/extensions.js';
+import { encodeHex, VSBuffer } from "../../../base/common/buffer.js";
+import { type CancellationToken } from '../../../base/common/cancellation.js';
+import { Position } from "../../../editor/common/core/position.js";
+import { Range } from "../../../editor/common/core/range.js";
+import type { LinkedEditingRangeProvider, LinkedEditingRanges, TextEdit, DocumentFormattingEditProvider, DocumentRangeFormattingEditProvider, LanguageFormattingOptions } from "../../../editor/common/languages.js";
+import { type ITextModel } from '../../../editor/common/model.js';
+import { type TextSnapshot } from "../../../editor/common/core/textChange.js";
+import { type LanguageCompletionProvider, type LanguageCompletionProviderItem, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from "../../../editor/common/languages/completion/languageCompletionProviders.js";
+import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind } from "../../../editor/common/languages/completion/languageCompletions.js";
+import type { LanguageProviderBatch } from '../../../editor/common/services/languageFeatures.js';
+import type { LanguageHover, LanguageHoverContent, LanguageHoverProvider, LanguageHoverRequest } from "../../../editor/contrib/hover/common/hover.js";
+import type { LanguageInlayHint, LanguageInlayHintLabel, LanguageInlayHintsProvider, LanguageInlayHintsRequest } from "../../../editor/contrib/inlayHints/common/languageInlayHints.js";
+import type { LanguageParameterHints, LanguageParameterHintsProvider, LanguageParameterHintsRequest } from "../../../editor/contrib/parameterHints/common/languageParameterHints.js";
+import type { ExtensionHostLanguageRegistration, JsonValue } from "../../../platform/extensionHost/common/extensionHostApi.js";
 
 export const SUPPORTED_EXTENSION_HOST_LANGUAGE_OPERATIONS = Object.freeze(["completion", "hover", "formatting", "inlayHints", "linkedEditing", "parameterHints"] as const);
 
