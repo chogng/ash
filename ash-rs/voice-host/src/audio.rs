@@ -81,6 +81,10 @@ fn speech() -> sonora::AudioProcessing {
         .config(sonora::Config {
             echo_canceller: Some(sonora::config::EchoCanceller::default()),
             noise_suppression: Some(sonora::config::NoiseSuppression::default()),
+            gain_controller2: Some(sonora::config::GainController2 {
+                adaptive_digital: Some(sonora::config::AdaptiveDigital::default()),
+                ..Default::default()
+            }),
             ..Default::default()
         })
         .capture_config(sonora::StreamConfig::new(48_000, 1))

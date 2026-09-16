@@ -75,6 +75,7 @@ pub enum MediaEvent {
 
 /// Owns a room and its bounded media streams. Dropping signals the room worker to close.
 pub struct MediaRoom {
+    room: Arc<Room>,
     source: Option<PcmAudioSource>,
     publication: Option<LocalAudioTrack>,
     events: mpsc::Receiver<MediaEvent>,
@@ -85,19 +86,40 @@ pub struct MediaRoom {
 }
 
 impl MediaRoom {
+    /// Captures publisher and subscriber connection statistics from the SDK.
+    pub async fn stats(&self) -> Result<livekit::SessionStats, MediaError> {
+        timeout(DEADLINE, self.room.get_stats())
+            .await
+            .map_err(|_| MediaError::Timeout)?
+            .map_err(|_| MediaError::Connection)
+    }
+
     pub async fn connect(
         server_url: &str,
         token: &str,
         publish: AudioPublication,
     ) -> Result<Self, MediaError> {
-        crate::validate_url(server_url)?;
-        let (room, receiver) = timeout(
-            DEADLINE,
-            Room::connect(server_url, token, RoomOptions::default()),
+        let network = ash_http_client::OutboundNetworkSnapshot::new(
+            ash_http_client::HttpClientConfig::default(),
         )
-        .await
-        .map_err(|_| MediaError::Timeout)?
         .map_err(|_| MediaError::Connection)?;
+        Self::connect_with_network(server_url, token, publish, network).await
+    }
+
+    /// Applies one network policy to signaling, reconnects and region requests.
+    pub async fn connect_with_network(
+        server_url: &str,
+        token: &str,
+        publish: AudioPublication,
+        network: ash_http_client::OutboundNetworkSnapshot,
+    ) -> Result<Self, MediaError> {
+        crate::validate_url(server_url)?;
+        let mut options = RoomOptions::default();
+        options.transport = Some(crate::transport::transport(network)?);
+        let (room, receiver) = timeout(DEADLINE, Room::connect(server_url, token, options))
+            .await
+            .map_err(|_| MediaError::Timeout)?
+            .map_err(|_| MediaError::Connection)?;
         let room = Arc::new(room);
         let (event_tx, events) = mpsc::channel(64);
         let (audio_tx, audio) = mpsc::channel(128);
@@ -108,6 +130,7 @@ impl MediaRoom {
             receive(worker_room, receiver, event_tx, audio_tx, stopped).await
         });
         let mut result = Self {
+            room: room.clone(),
             source: None,
             publication: None,
             events,

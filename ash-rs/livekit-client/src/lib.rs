@@ -4,6 +4,8 @@ mod mixer;
 mod resample;
 pub use mixer::AudioMixer;
 mod room;
+mod transport;
+pub use livekit::SessionStats;
 
 pub use resample::AudioRate;
 pub use resample::AudioResampler;

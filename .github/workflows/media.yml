@@ -5,11 +5,15 @@ on:
     branches: [main]
     paths: &media-paths
       - "ash-rs/livekit-client/**"
+      - "ash-rs/vendor/livekit-rust-sdks/**"
+      - "ash-rs/http-client/**"
+      - "ash-rs/websocket-client/**"
       - "ash-rs/livekit-api/**"
       - "ash-rs/voice-agent/**"
       - "ash-rs/voice-host/**"
       - "ash-rs/app-server/src/server/call*"
       - "build/package/livekit.ts"
+      - "third_party/livekit/**"
       - "ash-rs/call/**"
       - "ash-rs/collaboration-server/**"
       - "ash-rs/model-provider/**"
@@ -49,17 +53,19 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends build-essential libglib2.0-dev libssl-dev pkg-config
-      - name: Install verified LiveKit Server 1.13.7
+          sudo apt-get install --yes --no-install-recommends build-essential libasound2-dev libglib2.0-dev libssl-dev pkg-config
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+      - name: Prepare the locked LiveKit Server
         run: |
-          mkdir -p "$RUNNER_TEMP/livekit"
-          curl --fail --silent --show-error --location \
-            https://github.com/livekit/livekit/releases/download/v1.13.7/livekit_1.13.7_linux_amd64.tar.gz \
-            --output "$RUNNER_TEMP/livekit/server.tar.gz"
-          echo "6634aeeb2fb1366b6723708ae4320b9d5408106a4c63457c5e845ae3979c90e2  $RUNNER_TEMP/livekit/server.tar.gz" | sha256sum --check
-          tar -xzf "$RUNNER_TEMP/livekit/server.tar.gz" -C "$RUNNER_TEMP/livekit" livekit-server
-          test "$("$RUNNER_TEMP/livekit/livekit-server" --version)" = "livekit-server version 1.13.7"
-          echo "ASH_TEST_LIVEKIT_SERVER=$RUNNER_TEMP/livekit/livekit-server" >> "$GITHUB_ENV"
+          node build/package/livekit.ts x86_64-unknown-linux-gnu > "$RUNNER_TEMP/livekit.json"
+          echo "ASH_TEST_LIVEKIT_SERVER=$(node -p 'require(process.argv[1]).executable' "$RUNNER_TEMP/livekit.json")" >> "$GITHUB_ENV"
+      - name: Test Rust SDK patches
+        run: |
+          python3 ash-rs/vendor/livekit-rust-sdks/verify.py
+          python3 -B scripts/cargo.py test --locked --manifest-path ash-rs/vendor/livekit-rust-sdks/Cargo.toml -p livekit-signaling --lib
+          python3 -B scripts/cargo.py test --locked --manifest-path ash-rs/vendor/livekit-rust-sdks/Cargo.toml -p webrtc-sys --lib rtc_error
       - name: Check media packages
         run: python3 -B scripts/cargo.py check --locked -p ash-livekit-client -p ash-voice-agent
       - name: Build the collaboration service
@@ -68,5 +74,46 @@ jobs:
           echo "ASH_TEST_COLLABORATION_SERVER=$GITHUB_WORKSPACE/.build/cargo/debug/ash-collaboration-server" >> "$GITHUB_ENV"
       - name: Test rooms, authority and model bridge against the real server
         run: python3 -B scripts/cargo.py test --locked -p ash-livekit-client -p ash-livekit-api -p ash-call -p ash-collaboration-server -p ash-voice-agent --features ash-call/runtime -- --include-ignored
+      - name: Test speech processing
+        run: python3 -B scripts/cargo.py test --locked -p ash-voice-host --features host --lib
       - name: Reject warnings in media packages and tests
-        run: python3 -B scripts/cargo.py --deny-warnings check --locked -p ash-livekit-client -p ash-voice-agent --all-targets
+        run: python3 -B scripts/cargo.py --deny-warnings check --locked -p ash-livekit-client -p ash-voice-agent -p ash-voice-host --features ash-voice-host/host --all-targets
+
+  server-build:
+    name: LiveKit ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            target: aarch64-apple-darwin
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+          - runner: windows-11-arm
+            target: aarch64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Go for the macOS media server build
+        if: runner.os == 'macOS'
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.26'
+          cache: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+      - name: Prepare and run the server
+        shell: bash
+        run: |
+          node build/package/livekit.ts "${{ matrix.target }}" > "$RUNNER_TEMP/livekit.json"
+          server=$(node -p 'require(process.argv[1]).executable' "$RUNNER_TEMP/livekit.json")
+          version=$(node -p 'require("./third_party/livekit/runtime-lock.json").version')
+          test "$("$server" --version)" = "livekit-server version $version"

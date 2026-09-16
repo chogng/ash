@@ -32,6 +32,7 @@ assets.
 
 | Runtime | Purpose | Distribution policy |
 | --- | --- | --- |
+| `livekit` | Local audio/video room server | Lock server downloads; build macOS source only in the ignored cache |
 | `node` | Shared runtime for package-provided JavaScript language servers | Required in every canonical Ash package; language packages must not bundle it |
 | `pdfium` | Agent PDF extraction and page rendering | Required by PDF ingestion releases |
 | `powershell` | Optional Windows PowerShell 7 runtime | Bundle only for releases that require a consistent `pwsh` runtime |

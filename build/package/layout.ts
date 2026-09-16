@@ -59,7 +59,6 @@ export interface FirstPartyExecutables {
   readonly voiceHost: string;
   readonly collaborationServer: string;
   readonly livekit: string;
-  readonly livekitLicense: string;
   readonly windowsSandbox?: string;
 }
 
@@ -224,8 +223,6 @@ export async function assemblePackage(
   for (const [component, relative] of Object.entries(layout.binaries)) {
     await copyExecutable(executables[component as keyof typeof layout.binaries], join(staging, binaryPath(relative, isWindows)), isWindows);
   }
-  await mkdir(join(resourcesDirectory, "licenses", "livekit"), { recursive: true });
-  await copyFile(executables.livekitLicense, join(resourcesDirectory, "licenses", "livekit", "LICENSE"));
   if (isWindows) {
     await copyExecutable(requiredPath(executables.windowsSandbox, "Windows sandbox executable"), join(binDirectory, "ash-windows-sandbox.exe"), true);
     const licenses = join(resourcesDirectory, "licenses", "windows-sandbox");

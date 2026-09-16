@@ -1718,13 +1718,20 @@ dependencies = [
 name = "ash-livekit-client"
 version = "0.1.0"
 dependencies = [
+ "ash-http-client",
  "ash-livekit-api",
  "ash-secrets",
+ "ash-websocket-client",
+ "async-trait",
  "futures",
  "livekit",
+ "livekit-net",
+ "rustls",
  "tempfile",
  "thiserror 2.0.19",
  "tokio",
+ "tokio-rustls",
+ "tokio-tungstenite 0.28.0",
  "url",
 ]
 
@@ -3094,9 +3101,9 @@ checksum = "8b75356056920673b02621b35afd0f7dda9306d03c79a30f5c56c44cf256e3de"
 
 [[package]]
 name = "async-trait"
-version = "0.1.91"
+version = "0.1.92"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae36dc4177970ef04fde5178d3e2429882def40e57a451f919c098f72baa6cec"
+checksum = "82f6aeea286b8eb4dd3431a1be1b59d290ace00f5bfd8e2a159bc2a05e2c1667"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -7734,8 +7741,6 @@ checksum = "11d3d7f243d5c5a8b9bb5d6dd2b1602c0cb0b9db1621bafc7ed66e35ff9fe092"
 [[package]]
 name = "livekit"
 version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2dda2799e0ca0e06d5ede5015eb970f85009fdd7b4a3395830d4b9c86784bf2a"
 dependencies = [
  "base64 0.22.1",
  "bmrng",
@@ -7896,8 +7901,6 @@ dependencies = [
 [[package]]
 name = "livekit-signaling"
 version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c1a9b518fa5434cae1dd679e60254070f203241c0319f239fd836e216960f36"
 dependencies = [
  "base64 0.21.7",
  "device-info",
@@ -14177,8 +14180,6 @@ dependencies = [
 [[package]]
 name = "webrtc-sys"
 version = "0.3.45"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a0908bea8bc16a098fc853983507f6d1588dd0b94492153c5edca551712a3cf"
 dependencies = [
  "cc",
  "cxx",

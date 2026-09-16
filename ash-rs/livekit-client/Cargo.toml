@@ -9,6 +9,10 @@ publish.workspace = true
 name = "livekit_client"
 
 [dependencies]
+livekit-net.workspace = true
+async-trait.workspace = true
+ash-http-client = { path = "../http-client" }
+ash-websocket-client = { path = "../websocket-client" }
 livekit = { workspace = true, features = ["tokio", "rustls-tls-webpki-roots"] }
 futures = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
@@ -16,6 +20,9 @@ thiserror = { workspace = true }
 url = { workspace = true }
 
 [dev-dependencies]
+rustls.workspace = true
+tokio-rustls.workspace = true
+tokio-tungstenite.workspace = true
 livekit-api = { package = "ash-livekit-api", path = "../livekit-api" }
 ash-secrets = { workspace = true }
 tempfile = { workspace = true }

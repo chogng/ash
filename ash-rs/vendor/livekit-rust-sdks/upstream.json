@@ -1,0 +1,27 @@
+{
+  "repository": "https://github.com/livekit/rust-sdks",
+  "packages": {
+    "livekit": {
+      "version": "0.9.1",
+      "revision": "2ff180e403b33ac55caaf88639aaf6aa95cbb6fc",
+      "archiveSha256": "2dda2799e0ca0e06d5ede5015eb970f85009fdd7b4a3395830d4b9c86784bf2a"
+    },
+    "livekit-signaling": {
+      "version": "0.1.2",
+      "revision": "2ff180e403b33ac55caaf88639aaf6aa95cbb6fc",
+      "archiveSha256": "1c1a9b518fa5434cae1dd679e60254070f203241c0319f239fd836e216960f36"
+    },
+    "webrtc-sys": {
+      "version": "0.3.45",
+      "revision": "2ff180e403b33ac55caaf88639aaf6aa95cbb6fc",
+      "archiveSha256": "5a0908bea8bc16a098fc853983507f6d1588dd0b94492153c5edca551712a3cf"
+    }
+  },
+  "patches": [
+    "Per-room signaling transports, including reconnect, validation and region discovery",
+    "Public SessionStats type",
+    "UTF-8-safe WebRTC error decoding",
+    "Remove unused private helpers and duplicate match arm; retain deprecated upstream compatibility APIs explicitly"
+  ],
+  "patchFile": "patches.diff"
+}

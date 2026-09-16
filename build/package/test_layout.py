@@ -142,7 +142,6 @@ await assemblePackage(args.output, args.target, args.platform, args.protocol, ar
                             },
                         )
                     inputs = {name: str(path) for name, path in executables.items()}
-                    inputs["livekitLicense"] = str(executables["livekit"])
                     if sandbox:
                         inputs["windowsSandbox"] = str(sandbox)
                     if bubblewrap:

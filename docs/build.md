@@ -261,7 +261,9 @@ Web 连接实现编译到 `node` 输出后，由 `scripts/web.ts` 或 Vite 插�
 
 ### 共享包组装
 
-音频通话包包含 `ash-voice-host`、`ash-collaboration-server` 和固定版本 LiveKit Server 1.13.7。设备助手以 `ash-voice-host/host` feature 构建；Linux 构建机需要 ALSA 开发文件。LiveKit 的 Linux/Windows 发行包和 macOS 源码包都校验固定 SHA-256。macOS 使用 `build/package/livekit.ts` 从源码构建，要求 PATH 中提供 Go 1.26 或更新版本及系统 C/C++ 工具链；最终用户不需要 Go。LiveKit 许可证写入 `ash-resources/licenses/livekit/`。
+音频通话通过 Cargo 管理的 LiveKit Rust SDK 接入。音频通话包包含 `ash-voice-host`、`ash-collaboration-server` 和独立 LiveKit Server 程序；Go 工具链不随产品分发。设备助手以 `ash-voice-host/host` feature 构建；Linux 构建机需要 ALSA 开发文件。
+
+LiveKit Server 的版本、来源与 SHA-256 位于 `third_party/livekit/runtime-lock.json`。开发和发布共用 `build/package/livekit.ts`：Linux／Windows 下载并校验上游程序；macOS 下载并校验源码，仅在忽略的构建缓存中解压、编译并清理，不将 Go 源码纳入仓库。macOS 构建机需要 PATH 中的 Go 1.26 工具链和系统 C/C++ 工具链。LiveKit 的 LICENSE、NOTICE 与 SFU 版权声明随包保留。更新方式见 [LiveKit Server](../third_party/livekit/README.md)。
 
 开发入口 `build/package/prepare.ts` 与 Python 发布入口共用 `build/package/layout.ts` 组装包，布局与许可证清单由 `layout.json` 声明。组装器要求调用方显式传入协议元数据，不读取前端本地生成文件。开发入口使用受版本控制的协议常量；发布入口使用本次协议生成结果，并通过标准输入传入程序、资源和协议元数据。因此发布环境也需要仓库固定的 Node 24；Desktop 开发入口不调用 Python。
 

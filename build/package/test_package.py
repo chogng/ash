@@ -107,11 +107,6 @@ class PackageTests(unittest.TestCase):
                                 "executable": str(
                                     executable_file(root / "livekit", b"livekit")
                                 ),
-                                "license": str(
-                                    executable_file(
-                                        root / "livekit-license", b"license"
-                                    )
-                                ),
                             }
                         )
                         return subprocess.CompletedProcess(command, 0, payload)
@@ -343,9 +338,6 @@ class PackageTests(unittest.TestCase):
                 ),
                 livekit={
                     "executable": str(executable_file(root / "livekit", b"livekit")),
-                    "license": str(
-                        executable_file(root / "livekit-license", b"license")
-                    ),
                 },
             )
 
@@ -517,9 +509,6 @@ class PackageTests(unittest.TestCase):
                         "executable": str(
                             executable_file(root / "livekit", b"livekit")
                         ),
-                        "license": str(
-                            executable_file(root / "livekit-license", b"license")
-                        ),
                     },
                 )
 
@@ -545,9 +534,6 @@ class PackageTests(unittest.TestCase):
                     livekit={
                         "executable": str(
                             executable_file(root / "livekit", b"livekit")
-                        ),
-                        "license": str(
-                            executable_file(root / "livekit-license", b"license")
                         ),
                     },
                 )
@@ -588,9 +574,6 @@ class PackageTests(unittest.TestCase):
                 ),
                 livekit={
                     "executable": str(executable_file(root / "livekit", b"livekit")),
-                    "license": str(
-                        executable_file(root / "livekit-license", b"license")
-                    ),
                 },
             )
 
@@ -739,9 +722,6 @@ class PackageTests(unittest.TestCase):
                 ),
                 livekit={
                     "executable": str(executable_file(root / "livekit", b"livekit")),
-                    "license": str(
-                        executable_file(root / "livekit-license", b"license")
-                    ),
                 },
             )
 
@@ -810,9 +790,6 @@ class PackageTests(unittest.TestCase):
                 ),
                 livekit={
                     "executable": str(executable_file(root / "livekit", b"livekit")),
-                    "license": str(
-                        executable_file(root / "livekit-license", b"license")
-                    ),
                 },
             )
 

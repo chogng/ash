@@ -17,6 +17,13 @@ filegroup(
         "livekit.ts",
         "layout.json",
         "productServices.ts",
+        "//third_party/livekit:runtime-lock.json",
+        "//third_party/livekit:LICENSE",
+        "//ash-rs/vendor/livekit-rust-sdks:LICENSE",
+        "//ash-rs/vendor/livekit-rust-sdks:NOTICE",
+        "//ash-rs/vendor/livekit-rust-sdks:webrtc-sys/NOTICE.md",
+        "//third_party/livekit:NOTICE",
+        "//third_party/livekit:pkg/sfu/NOTICE",
         "//build/download:artifacts.ts",
     ],
 )

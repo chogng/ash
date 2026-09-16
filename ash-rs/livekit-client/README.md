@@ -18,3 +18,6 @@ ASH_TEST_LIVEKIT_SERVER=/absolute/path/livekit-server just test ash-livekit-clie
 ```
 
 测试启动临时回环服务，验证实际 Opus 音频双向传输；不打开麦克风，不代表真实设备或公网连通性验收。
+
+- 房间网络使用 Ash 的 HTTP／WebSocket 传输；`connect_with_network` 接受统一的证书、代理和超时配置，重连及区域发现继续使用同一配置。
+- `stats` 返回发布端与订阅端的连接统计；SDK 本地补丁由 `../vendor/livekit-rust-sdks/` 维护。

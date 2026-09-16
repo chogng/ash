@@ -95,7 +95,6 @@ def build_package_directory(
             "voiceHost": str(voice_host_binary),
             "collaborationServer": str(collaboration_server_binary),
             "livekit": livekit["executable"],
-            "livekitLicense": livekit["license"],
         }
         if windows_sandbox_binary is not None:
             executables["windowsSandbox"] = str(windows_sandbox_binary)

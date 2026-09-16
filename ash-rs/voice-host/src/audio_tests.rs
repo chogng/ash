@@ -94,3 +94,57 @@ fn speech_processing_accepts_render_reference_and_changes_echo() {
         "processed={processed_energy}, raw={raw_energy}"
     );
 }
+
+#[test]
+fn speech_gain_raises_quiet_capture_without_clipping_and_survives_reset() {
+    let mut leveled =
+        CaptureProcessor::new(48_000, 48_000, SampleRate::Hz48000, Processing::Speech).unwrap();
+    let mut baseline =
+        CaptureProcessor::new(48_000, 48_000, SampleRate::Hz48000, Processing::Speech).unwrap();
+    let mut config = baseline.speech.config().clone();
+    config.gain_controller2 = None;
+    baseline.speech.apply_config(config);
+    let mut elevated = 0_f64;
+    let mut original = 0_f64;
+    for step in 0..300 {
+        let quiet: Vec<_> = tone(48_000, step * 480, 480)
+            .into_iter()
+            .map(|x| x * 0.03)
+            .collect();
+        let output = leveled.capture(&quiet).unwrap();
+        let before = baseline.capture(&quiet).unwrap();
+        assert!(
+            output
+                .iter()
+                .flatten()
+                .all(|&sample| sample != i16::MAX && sample != i16::MIN)
+        );
+        if step > 100 {
+            elevated += output
+                .iter()
+                .flatten()
+                .map(|&x| f64::from(x).powi(2))
+                .sum::<f64>();
+            original += before
+                .iter()
+                .flatten()
+                .map(|&x| f64::from(x).powi(2))
+                .sum::<f64>();
+        }
+    }
+    assert!(
+        original > 0.0 && elevated > original * 2.0,
+        "leveled={elevated}, baseline={original}"
+    );
+    leveled.reset();
+    assert!(
+        leveled
+            .speech
+            .config()
+            .gain_controller2
+            .as_ref()
+            .unwrap()
+            .adaptive_digital
+            .is_some()
+    );
+}

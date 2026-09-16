@@ -42,6 +42,30 @@
     {
       "source": "third_party/tgrep/LICENSE",
       "destination": "ash-resources/licenses/tgrep/LICENSE"
+    },
+    {
+      "source": "third_party/livekit/LICENSE",
+      "destination": "ash-resources/licenses/livekit/LICENSE"
+    },
+    {
+      "source": "third_party/livekit/NOTICE",
+      "destination": "ash-resources/licenses/livekit/NOTICE"
+    },
+    {
+      "source": "third_party/livekit/pkg/sfu/NOTICE",
+      "destination": "ash-resources/licenses/livekit/pkg/sfu/NOTICE"
+    },
+    {
+      "source": "ash-rs/vendor/livekit-rust-sdks/LICENSE",
+      "destination": "ash-resources/licenses/livekit-rust-sdks/LICENSE"
+    },
+    {
+      "source": "ash-rs/vendor/livekit-rust-sdks/NOTICE",
+      "destination": "ash-resources/licenses/livekit-rust-sdks/NOTICE"
+    },
+    {
+      "source": "ash-rs/vendor/livekit-rust-sdks/webrtc-sys/NOTICE.md",
+      "destination": "ash-resources/licenses/livekit-rust-sdks/webrtc-sys/NOTICE.md"
     }
   ]
 }

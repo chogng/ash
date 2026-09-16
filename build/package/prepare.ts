@@ -405,7 +405,6 @@ async function buildFirstPartyExecutables(platform: NodeJS.Platform): Promise<Fi
     voiceHost: string;
     collaborationServer: string;
     livekit: string;
-    livekitLicense: string;
     windowsSandbox?: string;
   } = {
     appServerDaemon: requiredExecutable(artifacts, "ash-app-server-daemon"),
@@ -413,7 +412,6 @@ async function buildFirstPartyExecutables(platform: NodeJS.Platform): Promise<Fi
     voiceHost: requiredExecutable(artifacts, "ash-voice-host"),
     collaborationServer: requiredExecutable(artifacts, "ash-collaboration-server"),
     livekit: livekit.executable,
-    livekitLicense: livekit.license,
     packageStore: requiredExecutable(artifacts, "ash-package-store"),
     appServer: requiredExecutable(artifacts, "ash-app-server"),
     remote: requiredExecutable(artifacts, "ash-remote"),

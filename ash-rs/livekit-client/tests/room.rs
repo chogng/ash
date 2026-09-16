@@ -125,6 +125,8 @@ async fn real_room_transmits_audio_both_ways_and_enforces_listener_permissions()
     )
     .await
     .unwrap();
+    let stats: livekit_client::SessionStats = alice.stats().await.unwrap();
+    assert!(!stats.publisher_stats.is_empty() || !stats.subscriber_stats.is_empty());
     let observer = MediaRoom::connect(
         &listener.server_url,
         listener.token(),

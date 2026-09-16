@@ -77,7 +77,14 @@ impl UreqHttpClient {
         config: HttpClientConfig,
         system_root_loader: SystemRootLoader,
     ) -> Result<Self, HttpClientError> {
-        let network = OutboundNetworkSnapshot::with_root_loader(config, system_root_loader)?;
+        Self::with_network(OutboundNetworkSnapshot::with_root_loader(
+            config,
+            system_root_loader,
+        )?)
+    }
+
+    /// Shares the same immutable certificate, proxy and target policy as other transports.
+    pub fn with_network(network: OutboundNetworkSnapshot) -> Result<Self, HttpClientError> {
         let config = network.config();
         let http_tls_config = network.tls_config_without_system_roots()?;
         let http_direct_agent = build_agent(config, http_tls_config.clone(), None)?;

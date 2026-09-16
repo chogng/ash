@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "runtime": "livekit",
+  "version": "1.13.7",
+  "source": {
+    "repository": "https://github.com/livekit/livekit",
+    "revision": "8d11efdfcd4220092b6ac7b8a21af28526da5a6b",
+    "url": "https://codeload.github.com/livekit/livekit/tar.gz/refs/tags/v1.13.7",
+    "sha256": "b42f34b095dff22639a40256c3f98fd563fdbce5d497e449ceb06ee010de88c5"
+  },
+  "artifacts": {
+    "x86_64-unknown-linux-gnu": {
+      "url": "https://github.com/livekit/livekit/releases/download/v1.13.7/livekit_1.13.7_linux_amd64.tar.gz",
+      "sha256": "6634aeeb2fb1366b6723708ae4320b9d5408106a4c63457c5e845ae3979c90e2",
+      "archive": "livekit_1.13.7_linux_amd64.tar.gz"
+    },
+    "aarch64-unknown-linux-gnu": {
+      "url": "https://github.com/livekit/livekit/releases/download/v1.13.7/livekit_1.13.7_linux_arm64.tar.gz",
+      "sha256": "5d167fdf52cf43c0c72972f25325364479f41f854bfef651056eab2504da5de9",
+      "archive": "livekit_1.13.7_linux_arm64.tar.gz"
+    },
+    "x86_64-pc-windows-msvc": {
+      "url": "https://github.com/livekit/livekit/releases/download/v1.13.7/livekit_1.13.7_windows_amd64.zip",
+      "sha256": "e539e7d2f75807b9c9202cd2a0bf2cb3d52fc4c52978a6953e0f47bc339fe77f",
+      "archive": "livekit_1.13.7_windows_amd64.zip"
+    },
+    "aarch64-pc-windows-msvc": {
+      "url": "https://github.com/livekit/livekit/releases/download/v1.13.7/livekit_1.13.7_windows_arm64.zip",
+      "sha256": "8379c89b9973dc52577710b293f6190644bd6fad0c415df4279a24ea54df2363",
+      "archive": "livekit_1.13.7_windows_arm64.zip"
+    }
+  }
+}
