@@ -28,8 +28,7 @@ test("public Stanza entrypoints retain distinct API, contribution, main, and wor
 	const worker = readFileSync(join(editorRoot, "editor.worker.start.ts"), "utf8");
 	const baseApi = readFileSync(join(editorRoot, "common/services/editorBaseApi.ts"), "utf8");
 	const editorWorkerService = readFileSync(join(editorRoot, "browser/services/editorWorkerService.ts"), "utf8");
-	const analysisWorker = readFileSync(join(editorRoot, "browser/services/syntaxWorkerMain.ts"), "utf8");
-	const completionWorker = readFileSync(join(editorRoot, "browser/services/languageCompletionWorkerMain.ts"), "utf8");
+	const editorWorker = readFileSync(join(editorRoot, "common/services/editorWebWorkerMain.ts"), "utf8");
 	const standaloneEditor = readFileSync(join(editorRoot, "standalone/browser/standaloneEditor.ts"), "utf8");
 	const standaloneCodeEditor = readFileSync(join(editorRoot, "standalone/browser/standaloneCodeEditor.ts"), "utf8");
 	const standaloneLanguages = readFileSync(join(editorRoot, "standalone/browser/standaloneLanguages.ts"), "utf8");
@@ -78,8 +77,8 @@ test("public Stanza entrypoints retain distinct API, contribution, main, and wor
 	assert.match(worker, /StanzaWorkerPort/u);
 	assert.match(worker, /export function start/u);
 	assert.match(editorWorkerService, /class VersionedEditorWorkerClient/u);
-	assert.match(analysisWorker, /editor\.worker\.start/u);
-	assert.match(completionWorker, /editor\.worker\.start/u);
+	assert.match(editorWorker, /editor\.worker\.start/u);
+	for (const retired of ["syntaxWorkerMain.ts", "languageCompletionWorkerMain.ts"]) assert.equal(exists(join(editorRoot, "browser/services", retired)), false);
 	const retiredBrowserLanguageDirectory = join(editorRoot, "browser/language");
 	assert.deepEqual(existsSync(retiredBrowserLanguageDirectory) ? readdirSync(retiredBrowserLanguageDirectory) : [], []);
 });

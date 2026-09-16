@@ -1,3 +1,7 @@
+import { Emitter } from '../../../base/common/event.js';
+import { LanguageWorkerWireServer } from '../../common/languages/languageWorkerWire.js';
+import { editorWorkerWireCodec } from '../../common/services/editorWorkerWire.js';
+import { EditorWorkerRequestExecutor } from '../../common/services/editorWorkerRequestExecutor.js';
 import { FormattingConflicts, FormattingKind, FormattingMode } from '../../contrib/format/browser/format.js';
 import { type DocumentFormattingEditProvider } from '../../common/languages.js';
 import { TextModel } from '../../common/model/textModel.js';
@@ -32,12 +36,29 @@ Object.defineProperty(browserEnvironment.window, "matchMedia", {
 let createdWorkerCount = 0;
 let terminatedWorkerCount = 0;
 class TestWorker extends browserEnvironment.window.EventTarget {
+	private readonly incoming = new Emitter<unknown>();
+	private readonly server = new LanguageWorkerWireServer({
+		onMessage: this.incoming.event,
+		send: message => {
+			const data = structuredClone(message);
+			queueMicrotask(() => this.dispatchEvent(new browserEnvironment.window.MessageEvent('message', { data })));
+		},
+		dispose() {},
+		[Symbol.dispose]() {},
+	}, editorWorkerWireCodec, new EditorWorkerRequestExecutor());
 	constructor() {
 		super();
 		createdWorkerCount += 1;
 	}
-	postMessage(): void {}
-	terminate(): void { terminatedWorkerCount += 1; }
+	postMessage(message: unknown): void {
+		const data = structuredClone(message);
+		queueMicrotask(() => this.incoming.fire(data));
+	}
+	terminate(): void {
+		this.server.dispose();
+		this.incoming.dispose();
+		terminatedWorkerCount += 1;
+	}
 }
 class TestResizeObserver {
 	observe(): void {}

@@ -4,7 +4,7 @@ import { Disposable, MutableDisposable, type IDisposable, toDisposable } from ".
 import { LanguageRequestCoordinator, type LanguageRequestOptions, type LanguageRequestOutcome, type LanguageWorker, type LanguageWorkerRequest } from "../languageRequestCoordinator.js";
 import { LanguageResultAcceptance } from "../languageResultStore.js";
 import { createLanguageCompletionSnapshotNormalizer, createLanguageCompletionStore, normalizeLanguageCompletionItemDetails, normalizeLanguageCompletionResolveRequest, type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionItemResolver, type LanguageCompletionResolveRequest, type LanguageCompletionResult, type LanguageCompletionResultNormalizer } from "./languageCompletions.js";
-import { assertLanguageCompletionRequest, createLanguageCompletionTriggerCharacterContext, languageCompletionProviderMatches, LanguageCompletionProviderRegistry, type LanguageCompletionProviderCatalog, type LanguageCompletionProviderCatalogSource, type LanguageCompletionProviderItem, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult, type LanguageCompletionRequest, type RegisteredLanguageCompletionProvider } from "./languageCompletionProviders.js";
+import { assertLanguageCompletionRequest, createLanguageCompletionTriggerCharacterContext, languageCompletionProviderMatches, LanguageCompletionProviderRegistry, type LanguageCompletionProvider, type LanguageCompletionProviderCatalog, type LanguageCompletionProviderCatalogSource, type LanguageCompletionProviderItem, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult, type LanguageCompletionRequest, type RegisteredLanguageCompletionProvider } from "./languageCompletionProviders.js";
 import { assertLanguageId } from "../languageId.js";
 import { type Position } from "../../core/position.js";
 import { type TextModel } from "../../model/textModel.js";
@@ -20,6 +20,7 @@ export interface LanguageCompletionServiceOptions {
 	readonly onProviderError?: LanguageCompletionProviderErrorHandler;
 	readonly resource?: URI;
 	readonly workerFactory?: LanguageCompletionWorkerFactory;
+	readonly providers?: readonly LanguageCompletionProvider[];
 }
 
 /**
@@ -33,6 +34,7 @@ export class LanguageCompletionService extends Disposable implements LanguageCom
 	private readonly catalogSubscription = this._register(new MutableDisposable<IDisposable>());
 	readonly results: ReturnType<typeof createLanguageCompletionStore>;
 	private readonly coordinator: LanguageRequestCoordinator<LanguageCompletionLane, LanguageCompletionRequest, LanguageCompletionResult>;
+	private readonly registry: LanguageCompletionProviderRegistry;
 	private catalogSource: LanguageCompletionProviderCatalogSource;
 	private catalog: LanguageCompletionProviderCatalog;
 	private currentResolver: LanguageCompletionItemResolver | undefined;
@@ -41,10 +43,15 @@ export class LanguageCompletionService extends Disposable implements LanguageCom
 
 	constructor(
 		private readonly model: TextModel,
-		private readonly registry: LanguageCompletionProviderRegistry,
+		registry: LanguageCompletionProviderRegistry,
 		options: LanguageCompletionServiceOptions = {},
 	) {
 		super();
+		if (options.providers?.length) {
+			registry = this._register(new LanguageCompletionProviderRegistry(registry));
+			this._register(registry.registerMany(options.providers));
+		}
+		this.registry = registry;
 		this.catalogSource = registry;
 		this.catalog = registry.providerCatalog;
 		if (options.onProviderError !== undefined && typeof options.onProviderError !== "function") {

@@ -81,7 +81,7 @@ test('language diagnostics and platform markers produce one visible decoration',
 		onDidChangeDiagnostics: changed.event,
 		getDiagnostics: () => ({ resource: model.uri, revision: model.getVersionId(), diagnostics: [diagnostic] }),
 	};
-	using navigation = new LanguageDiagnosticDecorationBridge(model.tokenization.syntaxService.diagnostics, source, model.uri, false);
+	using navigation = new LanguageDiagnosticDecorationBridge(model.diagnostics.results, source, model.uri, false);
 	markers.set('language', [{ resource: model.uri, range: { start: { lineIndex: 0, columnIndex: 1 }, end: { lineIndex: 0, columnIndex: 3 } }, severity: MarkerSeverity.Error, message: diagnostic.message }]);
 	using reference = service.acquire(model, source);
 	assert.equal(navigation.decorations.size, 1);

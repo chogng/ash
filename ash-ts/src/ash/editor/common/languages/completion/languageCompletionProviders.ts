@@ -114,8 +114,12 @@ export class LanguageCompletionProviderRegistry extends Disposable implements La
 	readonly onDidChangeProviderCatalog: Event<LanguageCompletionProviderCatalog> = this.catalogEmitter.event;
 	readonly providerCatalogReady = true;
 
-	constructor() {
+	constructor(private readonly parent?: LanguageCompletionProviderRegistry) {
 		super();
+		if (parent) {
+			this._register(parent.onDidChangeProviderCatalog(() => this.updateCatalog()));
+			this.updateCatalog();
+		}
 		this._register(toDisposable(() => {
 			this.providers.clear();
 		}));
@@ -165,13 +169,13 @@ export class LanguageCompletionProviderRegistry extends Disposable implements La
 		assertLanguageId(languageId);
 		assertCompletionContext(context);
 		const result = [...this.providers.values()].map(entry => entry.provider).filter(provider => languageCompletionProviderMatches(provider, languageId, context));
-		return Object.freeze(result);
+		return Object.freeze([...result, ...(this.parent?.getProviders(languageId, context).filter(provider => !this.providers.has(provider.id)) ?? [])]);
 	}
 
 	getProvider(providerId: string): RegisteredLanguageCompletionProvider | undefined {
 		this.assertNotDisposed();
 		assertIdentifier(providerId, "Language completion provider ID");
-		return this.providers.get(providerId)?.provider;
+		return this.providers.get(providerId)?.provider ?? this.parent?.getProvider(providerId);
 	}
 
 	private updateCatalog(): void {
@@ -182,7 +186,7 @@ export class LanguageCompletionProviderRegistry extends Disposable implements La
 		})));
 		this.catalog = Object.freeze({
 			revision: this.catalog.revision + 1,
-			providers,
+			providers: Object.freeze([...providers, ...(this.parent?.providerCatalog.providers.filter(provider => !this.providers.has(provider.id)) ?? [])]),
 		});
 		this.catalogEmitter.fire(this.catalog);
 	}

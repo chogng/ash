@@ -1,15 +1,19 @@
+import { languageCompletionWireCodec } from '../languages/completion/languageCompletionWire.js';
+import { type LanguageCompletionRequest } from '../languages/completion/languageCompletionProviders.js';
+import { type LanguageCompletionResult } from '../languages/completion/languageCompletions.js';
 import { Position } from '../core/position.js';
 import { type IRange, Range } from '../core/range.js';
 
 import { type TextSnapshot } from '../core/textChange.js';
 import { type IInplaceReplaceSupportResult } from '../languages.js';
 import { type LanguageWorkerWireCodec } from '../languages/languageWorkerWire.js';
-import { EDITOR_WORKER_MINIMAL_EDITS_LANE, EDITOR_WORKER_NAVIGATE_VALUE_LANE, EDITOR_WORKER_UNICODE_HIGHLIGHTS_LANE, type EditorWorkerLane, type EditorWorkerMinimalEditsRequest, type EditorWorkerNavigateValueRequest, type EditorWorkerRequest, type EditorWorkerResult } from './editorWorkerProtocol.js';
+import { EDITOR_WORKER_TEXTUAL_SUGGEST_LANE, EDITOR_WORKER_MINIMAL_EDITS_LANE, EDITOR_WORKER_NAVIGATE_VALUE_LANE, EDITOR_WORKER_UNICODE_HIGHLIGHTS_LANE, type EditorWorkerLane, type EditorWorkerMinimalEditsRequest, type EditorWorkerNavigateValueRequest, type EditorWorkerRequest, type EditorWorkerResult } from './editorWorkerProtocol.js';
 import { type UnicodeHighlight, type UnicodeHighlightKind } from './unicodeTextModelHighlighter.js';
 import { type TextEdit } from '../languages.js';
 
 export const editorWorkerWireCodec: LanguageWorkerWireCodec<EditorWorkerLane, EditorWorkerRequest, EditorWorkerResult> = Object.freeze({
 	lanes: Object.freeze([
+		EDITOR_WORKER_TEXTUAL_SUGGEST_LANE,
 		EDITOR_WORKER_UNICODE_HIGHLIGHTS_LANE,
 		EDITOR_WORKER_MINIMAL_EDITS_LANE,
 		EDITOR_WORKER_NAVIGATE_VALUE_LANE,
@@ -17,6 +21,8 @@ export const editorWorkerWireCodec: LanguageWorkerWireCodec<EditorWorkerLane, Ed
 	resultProtocol: 'stateless',
 	encodePayload(lane: EditorWorkerLane, payload: EditorWorkerRequest): unknown {
 		switch (lane) {
+			case EDITOR_WORKER_TEXTUAL_SUGGEST_LANE:
+				return languageCompletionWireCodec.encodePayload('completion', payload as LanguageCompletionRequest);
 			case EDITOR_WORKER_UNICODE_HIGHLIGHTS_LANE:
 				return Object.freeze({});
 			case EDITOR_WORKER_MINIMAL_EDITS_LANE:
@@ -34,6 +40,8 @@ export const editorWorkerWireCodec: LanguageWorkerWireCodec<EditorWorkerLane, Ed
 	decodePayload(lane: EditorWorkerLane, value: unknown, snapshot: TextSnapshot): EditorWorkerRequest {
 		assertRecord(value, 'Editor worker request');
 		switch (lane) {
+			case EDITOR_WORKER_TEXTUAL_SUGGEST_LANE:
+				return languageCompletionWireCodec.decodePayload('completion', value, snapshot);
 			case EDITOR_WORKER_UNICODE_HIGHLIGHTS_LANE:
 				return Object.freeze({});
 			case EDITOR_WORKER_MINIMAL_EDITS_LANE:
@@ -48,8 +56,10 @@ export const editorWorkerWireCodec: LanguageWorkerWireCodec<EditorWorkerLane, Ed
 			}
 		}
 	},
-	encodeResult(lane: EditorWorkerLane, result: EditorWorkerResult): unknown {
+	encodeResult(lane: EditorWorkerLane, result: EditorWorkerResult, snapshot: TextSnapshot): unknown {
 		switch (lane) {
+			case EDITOR_WORKER_TEXTUAL_SUGGEST_LANE:
+				return languageCompletionWireCodec.encodeResult('completion', result as LanguageCompletionResult, snapshot, undefined);
 			case EDITOR_WORKER_UNICODE_HIGHLIGHTS_LANE:
 				return Object.freeze((result as readonly UnicodeHighlight[]).map(highlight => Object.freeze({
 					range: encodeRange(highlight.range),
@@ -66,6 +76,8 @@ export const editorWorkerWireCodec: LanguageWorkerWireCodec<EditorWorkerLane, Ed
 	},
 	decodeResult(lane: EditorWorkerLane, value: unknown, snapshot: TextSnapshot): EditorWorkerResult {
 		switch (lane) {
+			case EDITOR_WORKER_TEXTUAL_SUGGEST_LANE:
+				return languageCompletionWireCodec.decodeResult('completion', value, snapshot, undefined);
 			case EDITOR_WORKER_UNICODE_HIGHLIGHTS_LANE:
 				if (!Array.isArray(value)) throw new TypeError('Editor worker Unicode result must be an array');
 				return Object.freeze(value.map(item => decodeUnicodeHighlight(item, snapshot)));

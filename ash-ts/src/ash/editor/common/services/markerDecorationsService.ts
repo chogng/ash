@@ -46,7 +46,7 @@ export class MarkerDecorationsService extends Disposable implements IMarkerDecor
 			this.models.set(model, state);
 			const current = state;
 			if (model instanceof TextModel) {
-				state.store.add(model.tokenization.syntaxService.diagnostics.onDidChange(() => this.synchronize(model, current, true)));
+				state.store.add(model.diagnostics.results.onDidChange(() => this.synchronize(model, current, true)));
 			}
 			if (diagnostics) state.store.add(diagnostics.onDidChangeDiagnostics(uri => {
 				if (uri.toString() === model.uri.toString()) this.synchronize(model, current, true);
@@ -111,7 +111,7 @@ export class MarkerDecorationsService extends Disposable implements IMarkerDecor
 			const decorations: IModelDeltaDecoration[] = [];
 			const markers: Marker[] = [];
 			const values = [...this.markerService.read(model.uri)];
-			const local = model instanceof TextModel ? model.tokenization.syntaxService.diagnostics.result?.value.diagnostics ?? [] : [];
+			const local = model instanceof TextModel ? model.diagnostics.results.result?.value.diagnostics ?? [] : [];
 			const external = state.diagnostics?.getDiagnostics(model.uri);
 			const diagnostics = [...local, ...(external?.revision === model.getVersionId() ? external.diagnostics : [])];
 			values.push(...diagnostics.map((diagnostic, index) => diagnosticMarker(model, diagnostic, index)));

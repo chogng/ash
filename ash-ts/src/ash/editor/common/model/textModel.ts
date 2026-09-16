@@ -1,3 +1,4 @@
+import { ModelLanguageDiagnostics } from '../services/languageDiagnosticsService.js';
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Color } from '../../../base/common/color.js';
 import { BugIndicatingError, onUnexpectedError } from '../../../base/common/errors.js';
@@ -217,6 +218,7 @@ export class TextModel implements ITextModel {
 	get bracketPairs(): IBracketPairsTextModelPart { return this._bracketPairs; }
 	readonly guides: GuidesTextModelPart;
 	readonly tokenization: TokenizationTextModelPart;
+	readonly diagnostics: ModelLanguageDiagnostics;
 
 	readonly onDidChangeContent: Event<TextModelChange> = this.changeEmitter.event;
 	readonly onDidChangeLanguage: Event<IModelLanguageChangedEvent> = this.languageEmitter.event;
@@ -294,6 +296,7 @@ export class TextModel implements ITextModel {
 		this._bracketPairs = this._register(new BracketPairsTextModelPart(this, languageConfigurationService));
 		this.guides = this._register(new GuidesTextModelPart(this, languageConfigurationService));
 		this.tokenization = this._register(new TokenizationTextModelPart(this, options.tokenization));
+		this.diagnostics = this._register(new ModelLanguageDiagnostics(this, options.tokenization?.syntaxProviderRegistry, options.languageConfigurationService?.onDidChange));
 		this._register(languageConfigurationService.onDidChange(event => {
 			this._bracketPairs.handleLanguageConfigurationServiceChange(event);
 			if (event.affects(this.languageId)) this.languageConfigurationEmitter.fire({});
