@@ -1,6 +1,9 @@
+import { createDecorator } from '../../../platform/instantiation/common/instantiation.js';
 import { TimeoutTimer } from '../../../base/common/async.js';
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
+
+export const IInlineCompletionsService = createDecorator<IInlineCompletionsService>('IInlineCompletionsService');
 
 export interface IInlineCompletionsService {
 	readonly _serviceBrand: undefined;

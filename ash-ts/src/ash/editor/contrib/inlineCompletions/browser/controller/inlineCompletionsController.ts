@@ -6,7 +6,7 @@ import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.j
 import { Range } from "../../../../common/core/range.js";
 import { Selection } from '../../../../common/core/selection.js';
 import { type ICodeEditor } from '../../../../browser/editorBrowser.js';
-import { InlineCompletionsService, type IInlineCompletionsService } from '../../../../browser/services/inlineCompletionsService.js';
+import { IInlineCompletionsService } from '../../../../browser/services/inlineCompletionsService.js';
 import { type LanguageInlineCompletionItem, type LanguageInlineCompletionsProvider } from "../../common/inlineCompletions.js";
 import { type View } from "../../../../browser/view.js";
 import { isCompletionsEnabledFromObject } from "../../../../common/services/completionsEnablement.js";
@@ -27,7 +27,17 @@ export class InlineCompletionsController extends Disposable {
 	private item: LanguageInlineCompletionItem | undefined;
 	private completionRequestId = 0;
 
-	constructor(private readonly input: HTMLElement, private readonly editor: ICodeEditor, private readonly viewport: View, private readonly model: TextModel, private readonly providers: LanguageFeatureRegistry<LanguageInlineCompletionsProvider>, private readonly inlineCompletionsService: IInlineCompletionsService, private readonly languageId: string, onDidExecuteCommand?: Event<EditorCommandEvent>, private readonly onError: (error: unknown) => void = error => console.error("Stanza inline completion failed", error)) {
+	constructor(
+		private readonly input: HTMLElement,
+		private readonly editor: ICodeEditor,
+		private readonly viewport: View,
+		private readonly model: TextModel,
+		private readonly providers: LanguageFeatureRegistry<LanguageInlineCompletionsProvider>,
+		private readonly languageId: string,
+		onDidExecuteCommand: Event<EditorCommandEvent> | undefined,
+		private readonly onError: (error: unknown) => void,
+		@IInlineCompletionsService private readonly inlineCompletionsService: IInlineCompletionsService,
+	) {
 		super();
 		if (editor.getModel() !== model || viewport.textModel !== model) throw new TypeError('Inline completion dependencies must share one text model');
 		const element = this.element = h(viewport.domNode.domNode.ownerDocument, "span");
@@ -44,6 +54,11 @@ export class InlineCompletionsController extends Disposable {
 			if (event.defaultPrevented || event.isComposing || !this.item || event.key !== "Enter" || !event.altKey) return;
 			stopEvent(event);
 			this.accept();
+		}));
+		this._register(inlineCompletionsService.onDidChangeIsSnoozing(snoozing => {
+			if (snoozing) {
+				this.clear();
+			}
 		}));
 		this._register(editor.onDidChangeCursorSelection(() => this.clear()));
 		this._register(viewport.onDidChangeLayout(() => this.render()));
@@ -132,6 +147,5 @@ class AcceptInlineCompletionCommand implements ICommand {
 
 registerEditorContribution({ id: "editor.contrib.inlineCompletions", install: context => {
 	if (context.kind !== "text" || (context.options.inlineCompletions !== undefined && !isCompletionsEnabledFromObject(context.options.inlineCompletions, context.languageId))) return;
-	const inlineCompletionsService = context.register(new InlineCompletionsService());
-	return new InlineCompletionsController(context.controller.element, context.editor, context.view, context.model, context.languageFeaturesService.inlineCompletionsProvider, inlineCompletionsService, context.languageId, context.onDidExecuteCommand, context.onLanguageError);
+	return context.instantiationService.createInstance(InlineCompletionsController, context.controller.element, context.editor, context.view, context.model, context.languageFeaturesService.inlineCompletionsProvider, context.languageId, context.onDidExecuteCommand, context.onLanguageError);
 } });

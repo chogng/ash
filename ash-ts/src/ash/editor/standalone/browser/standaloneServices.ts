@@ -1,3 +1,4 @@
+import { IInlineCompletionsService, InlineCompletionsService } from '../../browser/services/inlineCompletionsService.js';
 import { MarkerService, IMarkerService } from '../../../platform/markers/common/markers.js';
 import { MarkerDecorationsService } from '../../common/services/markerDecorationsService.js';
 import { IMarkerDecorationsService } from '../../common/services/markerDecorations.js';
@@ -59,6 +60,7 @@ export class StandaloneServiceCollection extends Disposable {
 		super();
 		const instantiationService = this.instantiationService = this._register(new ServiceContainer());
 		instantiationService.registerInstance(ILogService, new NullLoggerService());
+		instantiationService.registerSingleton(IInlineCompletionsService, () => instantiationService.createInstance(InlineCompletionsService));
 		instantiationService.registerSingleton(IContextKeyService, () => new ContextKeyService());
 		instantiationService.registerSingleton(IMarkerService, () => new MarkerService());
 		instantiationService.registerSingleton(IMarkerDecorationsService, () => instantiationService.createInstance(MarkerDecorationsService));

@@ -1,3 +1,4 @@
+import { IInlineCompletionsService } from '../../../src/ash/editor/browser/services/inlineCompletionsService.js';
 import { CommandsRegistry } from '../../../src/ash/platform/commands/common/commands.js';
 import { IContextKeyService } from "../../../src/ash/platform/contextkey/browser/contextKeyService.js";
 import { ICodeEditorService } from '../../../src/ash/editor/browser/services/codeEditorService.js';
@@ -84,6 +85,7 @@ interface ViewZoneState {
 }
 
 interface StandaloneHarness {
+	runSharedInlineSnooze(): Promise<{ shared: boolean; visibleBefore: number; visibleAfter: number; callsWhilePaused: number; pausedAfterDispose: boolean; resumed: boolean }>;
 	runEmptyWordPattern(): { word: string; startColumn: number; endColumn: number } | null;
 	runDisposedLanguageRequest(kind: 'codeAction' | 'rename' | 'parameterHints' | 'queuedParameterHints'): Promise<{ calls: number; aborted: boolean }>;
 	runEditorActivity(): Promise<boolean[]>;
@@ -312,6 +314,42 @@ let deferredFormatting: { token: CancellationToken; resolve: () => void }[] = []
 let formattingProvider: { dispose(): void } | undefined;
 
 window.ashStandaloneIntegration = {
+	runSharedInlineSnooze: async () => {
+		const service = callerEditor.invokeWithinContext(accessor => accessor.get(IInlineCompletionsService));
+		const other = ownedEditor.invokeWithinContext(accessor => accessor.get(IInlineCompletionsService));
+		let calls = 0;
+		using provider = stanza.languages.registerInlineCompletionsProvider('*', {
+			provideInlineCompletions: () => {
+				calls++;
+				return [{ insertText: ' suggestion' }];
+			},
+		});
+		const trigger = async (container: HTMLElement): Promise<void> => {
+			container.querySelector('.stanza-editor-input')!.dispatchEvent(new KeyboardEvent('keydown', {
+				key: ' ', ctrlKey: true, altKey: true, bubbles: true, cancelable: true,
+			}));
+			await new Promise(resolve => setTimeout(resolve, 0));
+		};
+		const visible = (): number => document.querySelectorAll('.stanza-editor-inline-completion:not([hidden])').length;
+		try {
+			await trigger(callerContainer);
+			await trigger(ownedContainer);
+			const visibleBefore = visible();
+			service.snooze(10_000);
+			const visibleAfter = visible();
+			const previousCalls = calls;
+			await trigger(callerContainer);
+			await trigger(ownedContainer);
+			const callsWhilePaused = calls - previousCalls;
+			ownedEditor.dispose();
+			const pausedAfterDispose = service.isSnoozing();
+			service.cancelSnooze();
+			await trigger(callerContainer);
+			return { shared: service === other, visibleBefore, visibleAfter, callsWhilePaused, pausedAfterDispose, resumed: visible() === 1 };
+		} finally {
+			service.cancelSnooze();
+		}
+	},
 	runEmptyWordPattern: () => {
 		using configuration = stanza.languages.setLanguageConfiguration('plaintext', { wordPattern: /foo|a*/gu });
 		callerEditor.setValue('😀 foo');

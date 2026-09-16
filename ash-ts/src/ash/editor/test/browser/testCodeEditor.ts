@@ -1,3 +1,4 @@
+import { IInlineCompletionsService, InlineCompletionsService } from '../../browser/services/inlineCompletionsService.js';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { IInstantiationService, ServiceContainer } from '../../../platform/instantiation/common/instantiation.js';
 import { darkColorTheme } from '../../../platform/theme/common/colorTheme.js';
@@ -21,6 +22,9 @@ export function createCodeEditorServices(disposables: Pick<DisposableStore, 'add
 	const services = disposables.add(parent ? parent.createChild() : new ServiceContainer());
 	if (!services.has(ICodeEditorService)) {
 		services.registerSingleton(ICodeEditorService, () => createEditorBrowserServices().codeEditorService);
+	}
+	if (!services.has(IInlineCompletionsService)) {
+		services.registerSingleton(IInlineCompletionsService, () => services.createInstance(InlineCompletionsService));
 	}
 	if (!services.has(IThemeService)) {
 		services.registerSingleton(IThemeService, () => new TestThemeService(darkColorTheme));

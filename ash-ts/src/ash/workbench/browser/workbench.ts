@@ -1,3 +1,4 @@
+import { IInlineCompletionsService, InlineCompletionsService } from '../../editor/browser/services/inlineCompletionsService.js';
 import { ICallService } from '../../platform/call/common/callService.js';
 import { FormattingConflicts } from '../../editor/contrib/format/browser/format.js';
 import { MarkerDecorationsService } from '../../editor/common/services/markerDecorationsService.js';
@@ -413,6 +414,7 @@ export class Workbench extends Disposable {
 		const languageFeaturesService = this._register(new LanguageFeaturesService(languageConfigurationService));
 		services.registerInstance(ILanguageFeaturesService, languageFeaturesService);
 		services.registerInstance(ICodeEditorService, editorBrowserServices.codeEditorService);
+		services.registerSingleton(IInlineCompletionsService, () => services.createInstance(InlineCompletionsService));
 		const textMateService = this._register(new BrowserTextMateService());
 		services.registerInstance(ITextMateService, textMateService);
 		const textResourceStore = getBrowserTextResourceStore(textFileService);

@@ -2015,3 +2015,16 @@ for (const outcome of ['second', 'empty', 'decline', 'error', 'cancel', 'silent'
 		});
 	});
 }
+
+
+test('inline completion snooze is shared and survives closing another editor', async ({ page }) => {
+	await page.goto('/standalone.html');
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.runSharedInlineSnooze())).toEqual({
+		shared: true,
+		visibleBefore: 2,
+		visibleAfter: 0,
+		callsWhilePaused: 0,
+		pausedAfterDispose: true,
+		resumed: true,
+	});
+});

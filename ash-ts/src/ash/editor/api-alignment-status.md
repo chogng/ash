@@ -906,3 +906,6 @@
 
 - Browser services 入口核对：通用编辑 Worker 入口迁至上游对应的 `common/services/editorWebWorkerMain.ts`，工厂 URL 与架构入口清单同步更新。语法与单词补全入口按本轮处理方向保留在 Editor：前者运行词法 token 与结构诊断，后者运行文档内单词补全；Workbench 负责 TextMate、扩展和后端提供者的接入。资源级 `EditorWorkerService`、`contribution.ts` 装配职责、Opener 契约归属和行内补全共享服务仍未完成，不能将本次路径修正记作整个目录已对齐。
 - 验证：`build:stanza`（含 common 与 Stanza 类型检查）、4 项启动器/Worker wire 单测、1 项 Chromium 格式化与撤销测试、结构审计及 `git diff --check` 通过。浏览器测试确认实际创建 `editorWebWorkerMain` Worker。结构审计仍报告范围外对齐差异；Playwright 有环境变量 `NO_COLOR`/`FORCE_COLOR` 冲突提示，生产构建无 warning。
+
+- 行内补全服务装配：`browser/services/inlineCompletionsService.ts` 增加同名服务标识，Standalone 与 Workbench 各自在宿主容器注册共享实例。控制器经 `createInstance` 构造注入，不再自行创建和释放暂停服务；暂停事件取消当前请求并隐藏建议，单个编辑器关闭不影响共享暂停状态。
+- 本批验证：63 项行内补全/CodeEditorWidget 单测、1 项 Chromium 多编辑器暂停与恢复测试、Stanza 与 Renderer 生产构建通过；覆盖必需服务缺失、命令重触发、接受与撤销、跨编辑器暂停和关闭后的共享状态。现有 JSDOM Canvas 提示与 Playwright 颜色环境变量提示仍存在，生产构建无 warning。服务装配不代表完整上游暂停命令、存储与遥测行为已完成；`contribution.ts`、资源级 Worker 和 Opener 契约仍待处理。

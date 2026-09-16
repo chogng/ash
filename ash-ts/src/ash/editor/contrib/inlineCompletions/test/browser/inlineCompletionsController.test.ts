@@ -1,3 +1,5 @@
+import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
+import { IInlineCompletionsService } from '../../../../browser/services/inlineCompletionsService.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -63,7 +65,9 @@ test('Registered editor commands retrigger inline completions after their edit',
 	using commands = new Emitter<{ readonly commandId: string }>();
 	const commandId = 'editor.test.inlineCompletionTrigger';
 	TriggerInlineEditCommandsRegistry.registerCommand(commandId);
-	using controller = new InlineCompletionsController(input, editorFor(model, selections), viewport, model, providers, inlineCompletionsService, 'plaintext', commands.event);
+	using services = new ServiceContainer();
+	services.registerInstance(IInlineCompletionsService, inlineCompletionsService);
+	using controller = services.createInstance(InlineCompletionsController, input, editorFor(model, selections), viewport, model, providers, 'plaintext', commands.event, (error: unknown) => { throw error; });
 
 	commands.fire({ commandId: 'editor.test.unrelatedCommand' });
 	await flushPromises();
@@ -95,7 +99,10 @@ test('inline completion acceptance applies additional edits and undoes atomicall
 		}],
 	});
 	using service = new InlineCompletionsService();
-	using controller = new InlineCompletionsController(input, editorFor(model, selections), viewport, model, providers, service, 'plaintext');
+	using services = new ServiceContainer();
+	assert.throws(() => services.createInstance(InlineCompletionsController, input, editorFor(model, selections), viewport, model, providers, 'plaintext', undefined, (error: unknown) => { throw error; }), /Unknown service/);
+	services.registerInstance(IInlineCompletionsService, service);
+	using controller = services.createInstance(InlineCompletionsController, input, editorFor(model, selections), viewport, model, providers, 'plaintext', undefined, (error: unknown) => { throw error; });
 
 	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: ' ', ctrlKey: true, altKey: true }));
 	await flushPromises();
