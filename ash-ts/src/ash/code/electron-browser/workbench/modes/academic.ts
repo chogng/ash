@@ -1,5 +1,5 @@
 import "../../../browser/workbench/modes/academic.contribution.js";
 import { WorkbenchModeId } from "../../../../workbench/common/workbenchMode.js";
-import { startElectronWorkbench } from "../../../../workbench/electron-browser/electronWorkbench.js";
+import { main } from "../../../../workbench/electron-browser/desktop.main.js";
 
-await startElectronWorkbench(WorkbenchModeId.Academic);
+await main(WorkbenchModeId.Academic);

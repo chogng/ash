@@ -636,7 +636,7 @@ export class Workbench extends Disposable {
 			menuService: menus,
 			contextMenuService: contextMenus,
 			localizationService,
-		}));
+		}, services));
 		const sidebar = this._register(new SidebarPart(workbenchRoot, {
 			viewDescriptorService: viewDescriptors,
 			contextKeyService: contextKeys,

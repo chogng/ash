@@ -8,6 +8,7 @@ import { WorkbenchWindowBarHeight } from "../workbenchPartDimensions.js";
 import { BrowserMenubarControl, type IMenubarControl } from "./menubarControl.js";
 import { h } from "../../../../base/browser/dom.js";
 import type { ILocalizationService } from "../../../services/localization/common/localizationService.js";
+import type { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 
 /** Inputs shared by web and Electron titlebar factories. */
 export interface ITitlebarPartFactoryOptions {
@@ -20,6 +21,7 @@ export interface ITitlebarPartFactoryOptions {
 export type TitlebarPartFactory = (
 	container: HTMLElement,
 	options: ITitlebarPartFactoryOptions,
+	instantiationService: IInstantiationService,
 ) => BrowserTitlebarPart;
 
 /** The host-neutral workbench title area and its actions. */

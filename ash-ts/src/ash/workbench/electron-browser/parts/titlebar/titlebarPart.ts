@@ -13,19 +13,24 @@ import {
 	type TitlebarPartFactory,
 } from "../../../browser/parts/titlebar/titlebarPart.js";
 import { NativeMenubarControl } from "./nativeMenubarControl.js";
+import { ColorId } from "../../../../platform/theme/common/colorTheme.js";
+import { IThemeService } from "../../../../platform/theme/common/themeService.js";
+import { INativeHostService } from "../../../common/services.js";
+import type { INativeHostApi } from "../../../../platform/native/common/nativeHost.js";
 import "./titlebarpart.css";
 
 /**
  * Desktop titlebar integration for Electron's native window controls overlay.
  *
- * Windows draws the minimize, maximize, and close controls. This part only
- * marks the draggable region and reserves space around host-provided controls.
+ * Owns the draggable region, host control space, and window control colors.
  */
 export class ElectronTitlebarPart extends BrowserTitlebarPart {
 	constructor(
 		container: HTMLElement,
 		options: ITitlebarPartFactoryOptions,
 		nativeMenubar: INativeMenubarApi,
+		@IThemeService private readonly themeService: IThemeService,
+		@INativeHostService private readonly hostService: INativeHostApi,
 	) {
 		super(
 			container,
@@ -33,6 +38,20 @@ export class ElectronTitlebarPart extends BrowserTitlebarPart {
 			new ElectronMenubarControl(container, options, nativeMenubar),
 		);
 		this.domNode.classList.add("ash-electron-titlebar");
+		this._register(this.themeService.onDidColorThemeChange(() => this.updateStyles()));
+		this.updateStyles();
+	}
+
+	public updateStyles(): void {
+		const theme = this.themeService.getColorTheme();
+		const backgroundColor = theme.getColorCss(ColorId.titleBarBackground);
+		const symbolColor = theme.getColorCss(ColorId.titleBarActionForeground);
+		if (!backgroundColor || !symbolColor) {
+			throw new Error(`Theme '${theme.id}' does not define window control colors`);
+		}
+		void this.hostService.setWindowTheme({ backgroundColor, symbolColor }).catch((error: unknown) => {
+			console.error("Failed to apply window control colors", error);
+		});
 	}
 }
 
@@ -70,5 +89,5 @@ class ElectronMenubarControl extends Disposable
 export function createElectronTitlebarPartFactory(
 	nativeMenubar: INativeMenubarApi,
 ): TitlebarPartFactory {
-	return (container, options) => new ElectronTitlebarPart(container, options, nativeMenubar);
+	return (container, options, instantiationService) => instantiationService.createInstance(ElectronTitlebarPart, container, options, nativeMenubar);
 }

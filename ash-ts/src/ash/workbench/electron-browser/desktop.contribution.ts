@@ -5,7 +5,6 @@ import {
 	ToggleDeveloperToolsAction,
 } from "./actions/developerActions.js";
 import { OpenFolderAction } from "./actions/workspaceActions.js";
-import "./windowTheme.contribution.js";
 
 registerAction2(ToggleDeveloperToolsAction);
 registerAction2(OpenFolderAction);
