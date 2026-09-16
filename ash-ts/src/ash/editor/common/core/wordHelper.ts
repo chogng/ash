@@ -159,6 +159,11 @@ export function getWordAtText(column: number, wordDefinition: RegExp, text: stri
 function _findRegexMatchEnclosingPosition(wordDefinition: RegExp, text: string, pos: number, stopPos: number): RegExpExecArray | null {
 	let match: RegExpExecArray | null;
 	while (match = wordDefinition.exec(text)) {
+		if (match[0].length === 0) {
+			const codePoint = wordDefinition.unicode || wordDefinition.flags.includes('v') ? text.codePointAt(match.index) : undefined;
+			wordDefinition.lastIndex = match.index + (codePoint !== undefined && codePoint > 0xffff ? 2 : 1);
+			continue;
+		}
 		const matchIndex = match.index || 0;
 		if (matchIndex <= pos && wordDefinition.lastIndex >= pos) {
 			return match;

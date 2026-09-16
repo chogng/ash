@@ -28,7 +28,10 @@ export class ParameterHintsController extends Disposable {
 		this.element.setAttribute("role", "dialog");
 		this.element.setAttribute("aria-label", "Parameter hints");
 		viewport.domNode.domNode.append(this.element);
-		this._register(toDisposable(() => this.element.remove()));
+		this._register(toDisposable(() => {
+			this.hide();
+			this.element.remove();
+		}));
 		this._register(addDisposableListener(input, "keydown", event => {
 			if (event.defaultPrevented || event.isComposing || !event.shiftKey || event.altKey || (!event.ctrlKey && !event.metaKey) || event.key !== " ") return;
 			stopEvent(event);
@@ -56,6 +59,7 @@ export class ParameterHintsController extends Disposable {
 	}
 
 	private async refresh(context: LanguageParameterHintsContext = { kind: "invoke" }): Promise<void> {
+		if (this.isDisposed) return;
 		this.request?.abort();
 		const request = this.request = new AbortController();
 		try {

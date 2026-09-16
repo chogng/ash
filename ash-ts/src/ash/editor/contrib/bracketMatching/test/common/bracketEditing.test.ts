@@ -38,6 +38,24 @@ test("Remove matching brackets leaves non-bracket or range selections alone", ()
 	assert.equal(createRemoveMatchingBracketsCommand(bracketPairs, range), undefined);
 });
 
+for (const reversed of [false, true]) {
+	test(`Remove matching brackets preserves unrelated ${reversed ? 'reversed' : 'forward'} selections`, () => {
+		using model = new TextModel('(value) keep');
+		using configurations = configurationsForBrackets();
+		using lexical = new LanguageLexicalContextIndex(model, 'typescript', configurations);
+		using bracketPairs = new LanguageBracketPairs(model, lexical);
+		const other = reversed ? new Selection(1, 13, 1, 9) : new Selection(1, 9, 1, 13);
+		using cursors = createTestCursorsController(model, [new Selection(1, 1, 1, 1), other]);
+		const commands = createRemoveMatchingBracketsCommand(bracketPairs, cursors.getSelections());
+		assert.ok(commands);
+		cursors.executeCommands(commands);
+		assert.equal(model.getText(), 'value keep');
+		assert.deepEqual(cursors.getSelections(), [new Selection(1, 1, 1, 1), reversed ? new Selection(1, 11, 1, 7) : new Selection(1, 7, 1, 11)]);
+		model.undo();
+		assert.equal(model.getText(), '(value) keep');
+	});
+}
+
 function configurationsForBrackets(): TestLanguageConfigurationService {
 	const configurations = new TestLanguageConfigurationService();
 	configurations.register("typescript", {

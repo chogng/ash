@@ -1,5 +1,5 @@
 import { isFirefox } from '../../../../base/browser/browser.js';
-import { addDisposableListener, getActiveDocument } from '../../../../base/browser/dom.js';
+import { addDisposableListener, getActiveDocument, getActiveElement, isEditableElement } from '../../../../base/browser/dom.js';
 import { type IKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
 import { raceCancellation } from '../../../../base/common/async.js';
 import { type CancellationToken } from '../../../../base/common/cancellation.js';
@@ -85,8 +85,8 @@ registerExecCommandImpl(CopyAction, 'copy');
 
 if (PasteAction) {
 	PasteAction.addImplementation(10_000, 'code-editor', accessor => {
-		const editor = accessor.get(ICodeEditorService).getFocusedCodeEditor();
-		if (!editor?.hasModel() || !editor.hasTextFocus()) return false;
+		const editor = getClipboardEditor(accessor);
+		if (!editor) return false;
 		return pasteIntoEditor(editor, accessor.get(IClipboardService));
 	});
 	PasteAction.addImplementation(0, 'generic-dom', () => executeDocumentCommand('paste'));
@@ -94,6 +94,7 @@ if (PasteAction) {
 
 async function pasteIntoEditor(editor: ICodeEditor, clipboardService: IClipboardService): Promise<void> {
 	if (editor.inComposition || editor.getOption(EditorOption.readOnly) || !editor.hasModel()) return;
+	editor.focus();
 	using resources = new DisposableStore();
 	const token = createClipboardCancellation(editor, resources);
 	NativeEditContextRegistry.get(editor.getId())?.handleWillPaste();
@@ -169,21 +170,31 @@ function clipboardMenuOptions(title: string, order: number, writable: boolean) {
 function registerExecCommandImpl(target: MultiCommand | undefined, browserCommand: 'cut' | 'copy'): void {
 	if (!target) return;
 	target.addImplementation(10_000, 'code-editor', accessor => {
-		const editor = accessor.get(ICodeEditorService).getFocusedCodeEditor();
-		if (!editor?.hasModel() || !editor.hasTextFocus()) return false;
+		const editor = getClipboardEditor(accessor);
+		if (!editor) return false;
 		if (!editor.getOption(EditorOption.emptySelectionClipboard) && editor.getSelection()?.isEmpty()) return true;
 		return executeEditorClipboardCommand(editor, accessor.get(IClipboardService), browserCommand);
 	});
 	target.addImplementation(0, 'generic-dom', () => executeDocumentCommand(browserCommand));
 }
 
+function getClipboardEditor(accessor: ServicesAccessor): ICodeEditor | null {
+	const editors = accessor.get(ICodeEditorService);
+	const editor = editors.getFocusedCodeEditor() ?? editors.getActiveCodeEditor();
+	if (!editor?.hasModel()) return null;
+	const activeElement = getActiveElement();
+	if (!editor.hasTextFocus() && activeElement && isEditableElement(activeElement)) return null;
+	return editor;
+}
+
 async function executeEditorClipboardCommand(editor: ICodeEditor, clipboardService: IClipboardService, browserCommand: 'cut' | 'copy'): Promise<void> {
+	if (browserCommand === 'cut' && (editor.inComposition || editor.getOption(EditorOption.readOnly) || !editor.hasModel())) return;
+	editor.focus();
 	NativeEditContextRegistry.get(editor.getId())?.handleWillCopy();
 	if (browserCommand === 'copy') {
 		await executeEditorCopy(editor, clipboardService);
 		return;
 	}
-	if (editor.inComposition || editor.getOption(EditorOption.readOnly) || !editor.hasModel()) return;
 	using resources = new DisposableStore();
 	const token = createClipboardCancellation(editor, resources);
 	const document = editor.getContainerDomNode().ownerDocument;

@@ -57,6 +57,34 @@ test("language hierarchy discards follow-up results when the source revision cha
 	assert.deepEqual(await result, []);
 });
 
+for (const change of ['content', 'language', 'dispose'] as const) {
+	test(`prepared hierarchies reject follow-ups after ${change}`, async () => {
+		using configurations = new TestLanguageConfigurationService();
+		using languages = new LanguageFeaturesService(configurations);
+		using model = new TextModel('class Root {}', { languageId: 'typescript' });
+		const root = item('Root', model.uri, 0);
+		let calls = 0;
+		using callProvider = languages.callHierarchyProvider.register('typescript', {
+			prepareCallHierarchy: () => [root],
+			provideIncomingCalls: () => { calls++; return []; },
+			provideOutgoingCalls: () => { calls++; return []; },
+		});
+		using typeProvider = languages.typeHierarchyProvider.register('typescript', {
+			prepareTypeHierarchy: () => [root],
+			provideSupertypes: () => { calls++; return [root]; },
+			provideSubtypes: () => { calls++; return [root]; },
+		});
+		using service = new LanguageHierarchyService(model, model.uri, languages.callHierarchyProvider, languages.typeHierarchyProvider);
+		const [call] = await service.prepareCallHierarchy('typescript', new Position(1, 7));
+		const [type] = await service.prepareTypeHierarchy('typescript', new Position(1, 7));
+		if (change === 'content') model.setValue('class Other {}');
+		else if (change === 'language') model.setLanguage('javascript');
+		else model.dispose();
+		assert.deepEqual(await Promise.all([call!.incoming(root), call!.outgoing(root), type!.supertypes(root), type!.subtypes(root)]), [[], [], [], []]);
+		assert.equal(calls, 0);
+	});
+}
+
 function item(name: string, resource: URI, line: number) {
 	const range = Range.fromPositions(new Position((line) + 1, (0) + 1), new Position((line) + 1, (name.length + 2) + 1));
 	const selectionRange = Range.fromPositions(new Position((line) + 1, (1) + 1), new Position((line) + 1, (name.length + 1) + 1));

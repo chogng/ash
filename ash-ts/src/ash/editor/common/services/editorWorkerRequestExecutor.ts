@@ -78,7 +78,7 @@ function mergeAdjacentEdits(edits: readonly TextEdit[]): readonly TextEdit[] {
 function navigateValueSet(snapshot: TextSnapshot, request: EditorWorkerNavigateValueRequest): EditorWorkerResult {
 	const document = new StringText(snapshot.getText());
 	const range = validateRange(document, request.range);
-	const selectionRange = range.isEmpty() && range.getEndPosition().column < document.getLineLength(range.getEndPosition().lineNumber)
+	const selectionRange = range.isEmpty() && range.getEndPosition().column <= document.getLineLength(range.getEndPosition().lineNumber)
 		? Range.fromPositions(range.getStartPosition(), new Position(range.endLineNumber, range.endColumn + 1))
 		: range;
 	const selectionText = document.getValueOfRange(selectionRange);
@@ -89,6 +89,9 @@ function navigateValueSet(snapshot: TextSnapshot, request: EditorWorkerNavigateV
 		new Position(range.startLineNumber, word.startColumn),
 		new Position(range.startLineNumber, word.endColumn),
 	) : undefined;
+	if (range.isEmpty() && wordRange) {
+		return BasicInplaceReplace.INSTANCE.navigateValueSet(wordRange, word!.word, selectionRange, selectionText, request.up) ?? undefined;
+	}
 	return BasicInplaceReplace.INSTANCE.navigateValueSet(selectionRange, selectionText, wordRange ?? selectionRange, word?.word ?? null, request.up) ?? undefined;
 }
 

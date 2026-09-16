@@ -35,3 +35,13 @@ test('getReindentEditOperations follows registered language indentation rules', 
 	model.applyEdits(edits);
 	assert.equal(model.getText(), 'if (ok) {\n    value();\n}');
 });
+
+test('indentation conversion preserves tab stops after leading spaces', () => {
+	using model = new TextModel(' \talpha\n   \tbeta\n    \tgamma', { tabSize: 4 });
+	using cursors = createTestCursorsController(model, [new Selection(1, 3, 1, 3)]);
+	cursors.executeCommand(new IndentationToSpacesCommand(cursors.getSelections()[0]!, 4));
+	assert.equal(model.getText(), '    alpha\n    beta\n        gamma');
+	assert.deepEqual(cursors.getSelections(), [new Selection(1, 5, 1, 5)]);
+	cursors.executeCommand(new IndentationToTabsCommand(cursors.getSelections()[0]!, 4));
+	assert.equal(model.getText(), '\talpha\n\tbeta\n\t\tgamma');
+});

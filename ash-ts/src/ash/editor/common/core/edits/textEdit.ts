@@ -1,4 +1,4 @@
-import { commonPrefixLength, commonSuffixLength } from "../../../../base/common/strings.js";
+import { commonPrefixLength, commonSuffixLength, isHighSurrogate, isLowSurrogate } from "../../../../base/common/strings.js";
 import { Position } from "../position.js";
 import { Range } from "../range.js";
 import { TextLength } from "../text/textLength.js";
@@ -49,13 +49,15 @@ export class TextReplacement {
 	removeCommonPrefixAndSuffix(text: AbstractText): TextReplacement { return this.removeCommonPrefix(text).removeCommonSuffix(text); }
 	removeCommonPrefix(text: AbstractText): TextReplacement {
 		const oldText = text.getValueOfRange(this.range);
-		const prefixLength = commonPrefixLength(oldText, this.text);
+		let prefixLength = commonPrefixLength(oldText, this.text);
+		if (splitsSurrogatePair(oldText, prefixLength) || splitsSurrogatePair(this.text, prefixLength)) prefixLength--;
 		const start = TextLength.ofText(oldText.slice(0, prefixLength)).addToPosition(this.range.getStartPosition());
 		return new TextReplacement(Range.fromPositions(start, this.range.getEndPosition()), this.text.slice(prefixLength));
 	}
 	removeCommonSuffix(text: AbstractText): TextReplacement {
 		const oldText = text.getValueOfRange(this.range);
-		const suffixLength = commonSuffixLength(oldText, this.text);
+		let suffixLength = commonSuffixLength(oldText, this.text);
+		if (splitsSurrogatePair(oldText, oldText.length - suffixLength) || splitsSurrogatePair(this.text, this.text.length - suffixLength)) suffixLength--;
 		const end = TextLength.ofText(oldText.slice(0, oldText.length - suffixLength)).addToPosition(this.range.getStartPosition());
 		return new TextReplacement(Range.fromPositions(this.range.getStartPosition(), end), this.text.slice(0, this.text.length - suffixLength));
 	}
@@ -174,6 +176,10 @@ export class TextEdit {
 			return `${replacement.range.toString()} ${JSON.stringify(oldText)} -> ${JSON.stringify(replacement.text)}`;
 		}).join('\n');
 	}
+}
+
+function splitsSurrogatePair(text: string, offset: number): boolean {
+	return isHighSurrogate(text.charCodeAt(offset - 1)) && isLowSurrogate(text.charCodeAt(offset));
 }
 
 function toStringEdit(edit: TextEdit, initialState: AbstractText): StringEdit {

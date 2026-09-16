@@ -14,9 +14,18 @@ export const EditorCoreCommandId = Object.freeze({
 });
 
 SelectAllCommand.addImplementation(100, 'code-editor', accessor => {
-	const editor = accessor.get(ICodeEditorService).getFocusedCodeEditor();
+	const editors = accessor.get(ICodeEditorService);
+	const editor = editors.getFocusedCodeEditor() ?? editors.getActiveCodeEditor();
+	const activeElement = getActiveElement();
+	if (!editor?.hasTextFocus() && activeElement && isEditableElement(activeElement)) {
+		if (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA') {
+			(activeElement as HTMLInputElement | HTMLTextAreaElement).select();
+			return true;
+		}
+		return false;
+	}
 	const model = editor?.getModel();
-	if (!editor || !model || !editor.hasTextFocus()) { return false; }
+	if (!editor || !model) { return false; }
 	const range = model.getFullModelRange();
 	editor.setSelection(range, 'keyboard');
 	return true;
@@ -26,10 +35,14 @@ for (const [command, operation] of [[UndoCommand, 'undo'], [RedoCommand, 'redo']
 	command.addImplementation(100, 'code-editor', accessor => {
 		const editors = accessor.get(ICodeEditorService);
 		const editor = editors.getFocusedCodeEditor() ?? editors.getActiveCodeEditor();
+		const activeElement = getActiveElement();
+		if (!editor?.hasTextFocus() && activeElement && isEditableElement(activeElement)) {
+			// The browser owns the input's history, including an empty undo stack.
+			activeElement.ownerDocument.execCommand(operation);
+			return true;
+		}
 		const model = editor?.getModel();
 		if (!editor || !model) { return false; }
-		const activeElement = getActiveElement();
-		if (!editor.hasTextFocus() && activeElement && isEditableElement(activeElement)) { return false; }
 		if (!editor.getOption(EditorOption.readOnly)) {
 			model[operation]();
 			const selection = editor.getSelection();

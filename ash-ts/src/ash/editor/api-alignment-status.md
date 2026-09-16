@@ -2,11 +2,589 @@
 
 > 本表记录 2026-08-30 对 `ash-ts/src/ash/editor` 生产 TypeScript 文件的扫描结果。分层依据为 VS Code 的 [Source Code Organization](https://github.com/microsoft/vscode/wiki/Source-Code-Organization) 和仓库内 `vscode-api-alignment` skill。
 
+## 逐文件行为审查（2026-09-15）
+
+本次清点得到 530 个非测试 TypeScript 文件：common 254、browser 120、contrib 144、standalone 6、顶层 6。下表记录本轮实际阅读的 40 个文件及其结论；“已检查”只代表表述的行为已检查，不代表全部 API 或边界已完成。其余 490 个文件的本轮全量静态检查见下一节；静态扫描与逐行行为审查分开记录。
+
+本批生产修改限定在 UTF-16 格式化、worker 值替换和语言请求有效性三条调用链，保持现有模型、worker 和 contribution 的职责。新增模型语言快照字段由请求工厂统一创建，Workbench JSON 提供者测试同步使用该工厂。
+
+| 文件（相对 editor） | 本轮结论 |
+| --- | --- |
+| `common/core/text/textLength.ts` | 已修复：UTF-16 列数把 emoji 计为两个代码单元。 |
+| `common/core/edits/textEdit.ts` | 已修复：最小编辑不从代理项对中间截断。 |
+| `common/services/editorWorkerRequestExecutor.ts` | 已修复：行末字符参与值替换；空选区递增整个数字。 |
+| `common/languages/languageFeatureRequest.ts` | 已修复：检查模型销毁与请求开始时的模型语言；请求语言参数独立保留。 |
+| `common/core/text/positionToOffset.ts` | 已检查坐标转换入口与依赖。 |
+| `common/core/text/positionToOffsetImpl.ts` | 已检查偏移转换；CRLF 内部偏移的调用约束待进一步核对。 |
+| `common/core/text/abstractText.ts` | 已检查范围取值和坐标转换。 |
+| `common/core/edits/arrayEdit.ts` | 已读实现；未确认当前生产调用链，不改动。 |
+| `common/core/edits/edit.ts` | 已检查编辑排序、归一化与合并。 |
+| `common/core/edits/lengthEdit.ts` | 已检查长度映射及模型调用点。 |
+| `common/core/edits/stringEdit.ts` | 已检查字符串偏移编辑；其 UTF-16 偏移语义不等同于模型位置校正。 |
+| `common/core/edits/lineEdit.ts` | 已检查行编辑转换；大数组展开的实际规模待核对。 |
+| `common/model/mirrorTextModel.ts` | 已读实现；未确认当前生产调用链，不改动。 |
+| `common/model/prefixSumComputer.ts` | 已检查前缀和与边界查询。 |
+| `common/model/textBufferSnapshot.ts` | 已检查快照读取与切片边界。 |
+| `common/model/textBufferFactory.ts` | 已检查缓冲区创建入口。 |
+| `common/model/textModelLargeFile.ts` | 已检查大文件阈值。 |
+| `common/model/indentationGuesser.ts` | 已检查缩进样本与推断流程。 |
+| `common/model/historyCoalescing.ts` | 已检查历史合并条件。 |
+| `common/model/trackedRange.ts` | 已检查编辑和 EOL 变化后的范围追踪。 |
+| `common/model/textModelPart.ts` | 已读生命周期实现；实际继承链待核对。 |
+| `common/model/utils.ts` | 已检查缩进列计算。 |
+| `common/model/tokens/semanticTokensTextModelPart.ts` | 已检查语义 token 调度与协调器调用。 |
+| `common/commands/replaceCommand.ts` | 已检查替换范围与选区恢复。 |
+| `common/commands/surroundSelectionCommand.ts` | 已检查包裹操作；普通包裹类的生产装配待核对。 |
+| `common/commands/trimTrailingWhitespaceCommand.ts` | 已检查保存调用链；token 偏移边界仍待行为复现，不计为已修复。 |
+| `common/commands/shiftCommand.ts` | 已检查缩进操作；重复字符串缓存规模待核对。 |
+| `common/languages/languageResultStore.ts` | 已检查版本与重入处理；语言切换的调用方清理仍待完整核对。 |
+| `contrib/hover/common/hover.ts` | 已检查请求和异步结果校验，消费本轮公共修复。 |
+| `contrib/gotoSymbol/common/languageNavigation.ts` | 已检查请求和结果校验；新增语言切换、模型销毁回归。 |
+| `contrib/documentSymbols/common/languageDocumentSymbols.ts` | 已检查请求和异步结果校验，消费本轮公共修复。 |
+| `contrib/smartSelect/common/selectionRanges.ts` | 已检查请求和异步结果校验，消费本轮公共修复。 |
+| `contrib/folding/common/languageFoldingRanges.ts` | 已检查请求和异步结果校验，消费本轮公共修复。 |
+| `contrib/parameterHints/common/languageParameterHints.ts` | 已检查请求和结果校验；提前取消时是否调用提供者待继续核对。 |
+| `contrib/codeAction/common/languageCodeActions.ts` | 已修复：每个 action 保留原提供者及原始对象，resolve 不再调用其他提供者；控制器应用与无 resolver 回归通过。 |
+| `contrib/links/common/languageLinks.ts` | 已检查请求和异步结果校验，消费本轮公共修复。 |
+| `contrib/rename/common/languageRename.ts` | 已检查请求和结果校验；提前取消时是否调用提供者待继续核对。 |
+| `contrib/inlineCompletions/browser/model/provideInlineCompletions.ts` | 已检查提供者请求和异步结果校验，消费本轮公共修复。 |
+| `contrib/inlayHints/common/languageInlayHints.ts` | 已检查请求和异步结果校验，消费本轮公共修复。 |
+| `contrib/colorPicker/common/languageColors.ts` | 已修复：提供者异常返回后检查版本、语言与存活状态，3 项回归先失败后通过。 |
+
+## 剩余文件全量静态检查（2026-09-15）
+
+覆盖上表之外的全部 **490 个生产 TypeScript 文件**：common 226、browser 120、contrib 132、standalone 6、顶层 6。扫描解析了每个文件的完整语法树，提取静态/动态导入、Worker URL、导出、await、catch 和资源操作，并反查生产和测试引用。随后人工追踪下表明确标注的风险文件。**这完成了全量静态检查，不等同于 490 个文件逐行语义审查完成；未标注人工追踪的文件仅有静态证据。**
+
+全量结果：530 个生产文件均能解析，相对 TypeScript 导入均能定位；未发现 Editor 对 Workbench/code/sessions 的反向导入，或 common 对 browser/node 实现的导入。4 个 common 文件仍引用 contribution 契约，见下表。62 个文件包含 await。引用数包含类型引用，不等于运行时可达性；测试引用数也不等于行为覆盖率。
+
+本轮复现后修复 10 个实现文件：代码操作、重命名、参数提示、调用/类型层级、颜色展示、折叠区间、词语正则、MARK 标题正则、缩进列计算、Unicode 高亮。颜色展示文件已在首批 40 个文件中，因此本表中新增修复记录为 9 项。未复现的风险和缺少生产调用的端口保留为待验证，不做推测性改动。
+
+剩余文件中的人工检查/修复记录为 **166/490**；另外 **324** 个文件目前仅有静态扫描证据。
+
+### 后续修复：括号删除与代码操作归属
+
+- `bracketEditing.ts`：一个光标命中括号时，其他非空选区不再被清空，选区方向和撤销仍由现有命令执行器维护。
+- `languageCodeActions.ts`：提供者解析自己的原始 action；原提供者没有 resolver 时不会调用其他提供者。弱引用关联不改变对外 action 格式。
+- 两份定向测试修复前合计 4 项失败，修复后 6 项全部通过；7 项 Playwright 回归通过。Stanza 和 Renderer 正常构建通过，无新增构建 warning。保留既有 JSDOM Canvas 与颜色环境提示。
+
+### 待继续追踪的主要风险
+
+- 链接、行内提示、层级展开：功能卸载和异步返回交错时的 DOM/请求清理仍需复现。
+- 富文本图片粘贴：读取图片期间正文或选区变化后可能恢复旧选区，尚未执行真实图片解码回归。
+- 字体及 GPU 样式缓存：多窗口过期、undefined 与 false/0 的区分仍需专门场景验证。
+- 4 个 common 文件的 contribution 依赖需要迁移契约归属；本轮没有以改 import 的方式隐藏依赖。
+
+<details>
+<summary>展开 490 个文件的检查记录</summary>
+
+路径相对 `editor/`。引用列为“直接生产引用文件数 / 直接测试引用文件数”；不含外部使用者，也不能用零引用断定文件应删除。
+
+| 文件 | 引用 | 检查证据与状态 |
+| --- | --- | --- |
+| `browser/config/charWidthReader.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/config/domFontInfo.ts` | 7 / 1 | 人工检查：已通读入口、公开数据和同步状态变化；未发现本轮可复现缺陷。 |
+| `browser/config/editorConfiguration.ts` | 2 / 3 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/config/elementSizeObserver.ts` | 1 / 0 | 人工追踪：ResizeObserver、帧任务和 stopObserving 清理。 |
+| `browser/config/fontMeasurements.ts` | 1 / 1 | 人工追踪：单个到期任务仅清理首个窗口缓存，多窗口过期行为待验证。 |
+| `browser/config/migrateOptions.ts` | 2 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `browser/config/tabFocus.ts` | 2 / 1 | 人工检查：Tab 焦点模式切换与事件发布。 |
+| `browser/controller/dragScrolling.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/controller/editContext/clipboardUtils.ts` | 10 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/controller/editContext/editContext.ts` | 7 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/controller/editContext/native/debugEditContext.ts` | 0 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 未发现直接生产导入，保留并核对装配。 |
+| `browser/controller/editContext/native/editContextFactory.ts` | 2 / 1 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
+| `browser/controller/editContext/native/nativeEditContext.ts` | 3 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/controller/editContext/native/nativeEditContextRegistry.ts` | 2 / 1 | 人工检查：已通读入口、公开数据和同步状态变化；未发现本轮可复现缺陷。 |
+| `browser/controller/editContext/native/nativeEditContextUtils.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/controller/editContext/native/screenReaderContentRich.ts` | 1 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `browser/controller/editContext/native/screenReaderContentSimple.ts` | 2 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/controller/editContext/native/screenReaderSupport.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/controller/editContext/native/screenReaderUtils.ts` | 3 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `browser/controller/editContext/screenReaderUtils.ts` | 2 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `browser/controller/editContext/textArea/textAreaEditContext.ts` | 3 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/controller/editContext/textArea/textAreaEditContextInput.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/controller/editContext/textArea/textAreaEditContextRegistry.ts` | 1 / 1 | 人工检查：owner id 重复检查和注册撤销；同一实例重复注册是否允许由调用方约束。 |
+| `browser/controller/editContext/textArea/textAreaEditContextState.ts` | 2 / 2 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `browser/controller/mouseHandler.ts` | 3 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/controller/mouseTarget.ts` | 3 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `browser/controller/pointerHandler.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/coreCommands.ts` | 5 / 3 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `browser/dataTransfer.ts` | 1 / 0 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
+| `browser/editorBrowser.ts` | 78 / 20 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `browser/editorDom.ts` | 6 / 2 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/editorExtensions.ts` | 57 / 16 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/gpu/atlas/atlas.ts` | 4 / 0 | 人工检查：公开数据/服务契约及依赖方向，无独立可释放状态。 |
+| `browser/gpu/atlas/textureAtlas.ts` | 3 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/gpu/atlas/textureAtlasPage.ts` | 3 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/gpu/atlas/textureAtlasShelfAllocator.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/gpu/atlas/textureAtlasSlabAllocator.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/gpu/bufferDirtyTracker.ts` | 1 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `browser/gpu/contentSegmenter.ts` | 3 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `browser/gpu/css/decorationCssRuleExtractor.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/gpu/css/decorationStyleCache.ts` | 3 / 2 | 人工追踪：缓存键合并 undefined 与 false/0 的语义，待 GPU 样式场景验证。 |
+| `browser/gpu/gpu.ts` | 5 / 0 | 人工检查：公开数据/渲染契约和依赖方向，无独立可释放状态。 |
+| `browser/gpu/gpuDisposable.ts` | 5 / 0 | 人工检查：设备、buffer、texture 返回可释放句柄；初始 buffer 写入抛错时的资源释放待验证。 |
+| `browser/gpu/gpuUtils.ts` | 8 / 0 | 人工检查：已通读入口、公开数据和同步状态变化；未发现本轮可复现缺陷。 |
+| `browser/gpu/objectCollectionBuffer.ts` | 2 / 2 | 人工追踪：扩容、删除搬移、脏区和条目释放。 |
+| `browser/gpu/raster/glyphRasterizer.ts` | 5 / 2 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `browser/gpu/raster/raster.ts` | 7 / 0 | 人工检查：公开类型、请求参数及依赖方向；此文件不持有运行时资源。 |
+| `browser/gpu/rectangleRenderer.ts` | 2 / 2 | 人工追踪：设备就绪后检查销毁状态；资源归入持有者。 |
+| `browser/gpu/rectangleRenderer.wgsl.ts` | 1 / 0 | 人工检查：shader binding、滚动/视口坐标到裁剪坐标变换；零尺寸防护由 renderer 入口负责。 |
+| `browser/gpu/renderStrategy/baseRenderStrategy.ts` | 2 / 0 | 人工检查：已通读入口、公开数据和同步状态变化；未发现本轮可复现缺陷。 |
+| `browser/gpu/renderStrategy/fullFileRenderStrategy.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/gpu/renderStrategy/fullFileRenderStrategy.wgsl.ts` | 2 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `browser/gpu/renderStrategy/viewportRenderStrategy.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/gpu/taskQueue.ts` | 1 / 0 | 人工追踪：队列清理与窗口任务；销毁后重入需结合调用方继续验证。 |
+| `browser/gpu/viewGpuContext.ts` | 9 / 2 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/observableCodeEditor.ts` | 2 / 2 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/services/abstractCodeEditorService.ts` | 1 / 2 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
+| `browser/services/bulkEditService.ts` | 4 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `browser/services/codeEditorService.ts` | 14 / 7 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `browser/services/contribution.ts` | 3 / 6 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/services/editorWorkerService.ts` | 8 / 3 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
+| `browser/services/inlineCompletionsService.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/services/markerDecorations.ts` | 1 / 0 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
+| `browser/services/openerService.ts` | 1 / 1 | 人工追踪：外部 URI 解析结果释放缺失；现有装配创建实例，实际 open 调用链待确认。 |
+| `browser/services/renameSymbolTrackerService.ts` | 1 / 1 | 人工检查：已通读入口、公开数据和同步状态变化；未发现本轮可复现缺陷。 |
+| `browser/stableEditorScroll.ts` | 2 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `browser/triggerInlineEditCommandsRegistry.ts` | 2 / 2 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
+| `browser/view.ts` | 38 / 6 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/view/domLineBreaksComputer.ts` | 1 / 2 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/view/dynamicViewOverlay.ts` | 9 / 0 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
+| `browser/view/renderingContext.ts` | 36 / 3 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `browser/view/viewController.ts` | 9 / 5 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/view/viewLayer.ts` | 6 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/view/viewOverlays.ts` | 1 / 0 | 人工追踪：HTML 来自动态装饰渲染器；仍需逐类核对渲染字符串来源。 |
+| `browser/view/viewPart.ts` | 19 / 2 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/view/viewUserInputEvents.ts` | 1 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `browser/viewParts/blockDecorations/blockDecorations.ts` | 1 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `browser/viewParts/contentWidgets/contentWidgets.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/viewParts/currentLineHighlight/currentLineHighlight.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/viewParts/decorations/decorations.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/viewParts/editorScrollbar/editorScrollbar.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/viewParts/glyphMargin/glyphMargin.ts` | 3 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/viewParts/gpuMark/gpuMark.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/viewParts/indentGuides/indentGuides.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/viewParts/lineNumbers/lineNumbers.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/viewParts/linesDecorations/linesDecorations.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/viewParts/margin/margin.ts` | 1 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `browser/viewParts/marginDecorations/marginDecorations.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/viewParts/minimap/minimap.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/viewParts/minimap/minimapCharRenderer.ts` | 1 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `browser/viewParts/minimap/minimapCharRendererFactory.ts` | 0 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 未发现直接生产导入，保留并核对装配。 |
+| `browser/viewParts/minimap/minimapCharSheet.ts` | 2 / 1 | 人工检查：字符码 128 可返回表外索引；反查仅到未接入生产的字形 renderer/factory，暂未确认可达渲染链，未修改。 |
+| `browser/viewParts/minimap/minimapPreBaked.ts` | 1 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `browser/viewParts/overlayWidgets/overlayWidgets.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/viewParts/overviewRuler/decorationsOverviewRuler.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/viewParts/overviewRuler/overviewRuler.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/viewParts/rulers/rulers.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/viewParts/rulersGpu/rulersGpu.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/viewParts/scrollDecoration/scrollDecoration.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/viewParts/selections/selections.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/viewParts/viewCursors/viewCursor.ts` | 2 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `browser/viewParts/viewCursors/viewCursors.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/viewParts/viewLines/domReadingContext.ts` | 3 / 2 | 人工检查：一次上下文内缓存 DOM 测量和缩放，零 offsetWidth 避免除零。 |
+| `browser/viewParts/viewLines/rangeUtil.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/viewParts/viewLines/viewLine.ts` | 10 / 2 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/viewParts/viewLines/viewLineOptions.ts` | 10 / 3 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `browser/viewParts/viewLines/viewLines.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/viewParts/viewLinesGpu/viewLinesGpu.ts` | 2 / 0 | 人工追踪：设备就绪后检查销毁状态；重复 init 的调用约束待核对。 |
+| `browser/viewParts/viewZones/viewZones.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/viewParts/whitespace/whitespace.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/widget/codeEditor/codeEditorContributions.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/widget/codeEditor/codeEditorWidget.ts` | 9 / 25 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/widget/codeEditor/embeddedCodeEditorWidget.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/widget/diffEditor/diffEditorRows.ts` | 2 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/widget/diffEditor/diffEditorWidget.ts` | 3 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/widget/diffEditor/features/overviewRulerFeature.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/widget/documentOutlineNavigator.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/widget/multiDiffEditor/multiDiffEditorWidget.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/widget/richTextEditor/htmlDocumentFragment.ts` | 1 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `browser/widget/richTextEditor/richTextEditorWidget.ts` | 5 / 0 | 人工追踪：图片解码后恢复旧选区，版本与选区变化场景待验证。 |
+| `common/commands/documentCommands.ts` | 2 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/config/diffEditor.ts` | 1 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/config/editorConfiguration.ts` | 9 / 4 | 人工检查：公开类型、请求参数及依赖方向；此文件不持有运行时资源。 |
+| `common/config/editorConfigurationSchema.ts` | 2 / 1 | 静态语法与依赖已扫描；含异步路径；未作逐行行为结论。 |
+| `common/config/editorOptions.ts` | 94 / 25 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/config/editorZoom.ts` | 3 / 3 | 人工检查：有限值校验、上下界裁剪及仅变化时发布事件。 |
+| `common/config/fontInfo.ts` | 12 / 8 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/config/fontInfoFromSettings.ts` | 3 / 2 | 人工检查：原始字体设置经过各 EditorOption 校验，统一由 BareFontInfo 创建。 |
+| `common/coordinatesConverter.ts` | 9 / 6 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/core/2d/dimension.ts` | 15 / 0 | 人工检查：公开类型、请求参数及依赖方向；此文件不持有运行时资源。 |
+| `common/core/2d/point.ts` | 2 / 0 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
+| `common/core/2d/rect.ts` | 0 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 未发现直接生产导入，保留并核对装配。 |
+| `common/core/2d/size.ts` | 1 / 0 | 人工检查：已通读入口、公开数据和同步状态变化；未发现本轮可复现缺陷。 |
+| `common/core/characterClassifier.ts` | 2 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/core/cursorColumns.ts` | 12 / 1 | 人工检查：UTF-16、字素与制表位坐标转换；未发现本轮可复现缺陷。 |
+| `common/core/documentPosition.ts` | 1 / 1 | 人工检查：文档位置解析、节点坐标与偏移边界；未发现本轮可复现缺陷。 |
+| `common/core/documentSelection.ts` | 20 / 6 | 人工检查：文本/节点/全选描述与位置比较；运行时未知 kind 的拒绝位置待追踪。 |
+| `common/core/editOperation.ts` | 10 / 0 | 人工检查：已通读入口、公开数据和同步状态变化；未发现本轮可复现缺陷。 |
+| `common/core/misc/eolCounter.ts` | 3 / 0 | 人工检查：CR、LF、CRLF 计数和首尾行 UTF-16 长度；空文本返回值一致。 |
+| `common/core/misc/indentation.ts` | 6 / 2 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/core/misc/rgba.ts` | 4 / 1 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
+| `common/core/misc/textModelDefaults.ts` | 3 / 0 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
+| `common/core/position.ts` | 171 / 137 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/core/range.ts` | 181 / 116 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/core/ranges/columnRange.ts` | 1 / 0 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
+| `common/core/ranges/lineRange.ts` | 4 / 1 | 人工检查：行范围交并和集合排序；构造输入是否已合并由调用方契约决定。 |
+| `common/core/ranges/offsetRange.ts` | 15 / 2 | 人工检查：半开范围；clipCyclic 对负整数周期可能返回 endExclusive，目前没有生产调用，未改动。 |
+| `common/core/ranges/rangeMapping.ts` | 0 / 1 | 人工检查：有序映射查找与 TextLength 偏移；目前没有直接生产引用，未改动公开端口。 |
+| `common/core/ranges/rangeSingleLine.ts` | 0 / 1 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
+| `common/core/selection.ts` | 77 / 69 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/core/stringBuilder.ts` | 3 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/core/textChange.ts` | 50 / 9 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/core/textSegmentation.ts` | 7 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/core/wordCharacterClassifier.ts` | 5 / 2 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/core/wordHelper.ts` | 7 / 1 | 已修复：忽略零长度匹配并按 Unicode 字符推进正则游标，避免词语查询卡死；独立进程复现、g/gu/gv 回归及真实模型浏览器测试通过。 |
+| `common/cursor/cursor.ts` | 5 / 13 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/cursor/cursorAtomicMoveOperations.ts` | 1 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/cursor/cursorCollection.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/cursor/cursorColumnSelection.ts` | 1 / 1 | 人工检查：列选择按 UTF-16 列号裁剪；混合 Tab/宽字符时的可视矩形语义需真实交互验证。 |
+| `common/cursor/cursorContext.ts` | 3 / 2 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
+| `common/cursor/cursorDeleteOperations.ts` | 3 / 5 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/cursor/cursorMoveCommands.ts` | 4 / 3 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/cursor/cursorMoveOperations.ts` | 5 / 3 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/cursor/cursorTypeEditOperations.ts` | 3 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/cursor/cursorTypeOperations.ts` | 3 / 2 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/cursor/cursorWordOperations.ts` | 2 / 3 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/cursor/oneCursor.ts` | 1 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/cursorCommon.ts` | 15 / 17 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/cursorEvents.ts` | 14 / 10 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/diff/diffComputationService.ts` | 6 / 5 | 人工检查：公开类型、请求参数及依赖方向；此文件不持有运行时资源。 |
+| `common/diff/diffModel.ts` | 9 / 3 | 人工追踪：两侧版本及请求代次校验；源模型先销毁的异常路径待验证。 |
+| `common/diff/lineDiff.ts` | 12 / 5 | 人工检查：公开数据/渲染契约和依赖方向，无独立可释放状态。 |
+| `common/editorCommon.ts` | 51 / 9 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/editorContextKeys.ts` | 3 / 0 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
+| `common/editorTheme.ts` | 3 / 2 | 人工检查：已通读入口、公开数据和同步状态变化；未发现本轮可复现缺陷。 |
+| `common/encodedTokenAttributes.ts` | 19 / 6 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/inputMode.ts` | 3 / 1 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
+| `common/languageFeatureRegistry.ts` | 24 / 10 | 人工追踪：注册撤销、独占提供者、排序和候选缓存；缓存未包含模型同步资格，尺寸阈值变化场景待验证。 |
+| `common/languageSelector.ts` | 4 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/languages.ts` | 54 / 10 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/languages/autoIndent.ts` | 1 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/languages/completion/languageCompletionCatalogWire.ts` | 2 / 2 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
+| `common/languages/completion/languageCompletionProviderModuleWire.ts` | 2 / 1 | 人工检查：模块通信协议标识与版本、客户端/服务端参数一致，资源交给共同 wire owner。 |
+| `common/languages/completion/languageCompletionProviderModules.ts` | 3 / 2 | 人工检查：提供者模块复用共同 registry/host，协议与目录规范化无独立状态。 |
+| `common/languages/completion/languageCompletionProviders.ts` | 20 / 15 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/languages/completion/languageCompletionResolveWire.ts` | 2 / 1 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
+| `common/languages/completion/languageCompletionService.ts` | 8 / 9 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
+| `common/languages/completion/languageCompletionWire.ts` | 2 / 3 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/languages/completion/languageCompletions.ts` | 16 / 9 | 结构问题：common 引用 contribution 的 snippetParser。 |
+| `common/languages/completion/languageWordCompletionProvider.ts` | 2 / 3 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/languages/defaultDocumentColorsComputer.ts` | 1 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/languages/enterAction.ts` | 1 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/languages/language.ts` | 14 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/languages/languageBracketPairs.ts` | 6 / 5 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/languages/languageBuiltinConfigurations.ts` | 7 / 14 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/languages/languageBuiltinDescriptions.ts` | 2 / 1 | 人工检查：语言关联注册统一释放；内置后缀覆盖是现有产品能力边界。 |
+| `common/languages/languageConfiguration.ts` | 19 / 3 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/languages/languageConfigurationRegistry.ts` | 39 / 8 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/languages/languageId.ts` | 9 / 0 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
+| `common/languages/languageLexicalConfiguration.ts` | 4 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/languages/languageLexicalContext.ts` | 5 / 7 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/languages/languageLexicalLineScanner.ts` | 5 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/languages/languageLexicalSyntaxCache.ts` | 1 / 4 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/languages/languageLexicalSyntaxProvider.ts` | 3 / 4 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/languages/languageProviderModuleWire.ts` | 2 / 0 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
+| `common/languages/languageProviderModules.ts` | 5 / 0 | 人工追踪：串行激活、加载后存活与模块身份检查。 |
+| `common/languages/languageRegistry.ts` | 6 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/languages/languageRequestCoordinator.ts` | 14 / 14 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
+| `common/languages/languageResults.ts` | 21 / 14 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/languages/languageWorkerWire.ts` | 17 / 7 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
+| `common/languages/languageWorkerWireProtocol.ts` | 2 / 2 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/languages/languageWorkspaceEdit.ts` | 17 / 3 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/languages/supports.ts` | 5 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/languages/supports/characterPair.ts` | 2 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/languages/supports/electricCharacter.ts` | 2 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/languages/supports/indentRules.ts` | 3 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/languages/supports/indentationLineProcessor.ts` | 2 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/languages/supports/inplaceReplaceSupport.ts` | 1 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/languages/supports/languageBracketsConfiguration.ts` | 6 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/languages/supports/onEnter.ts` | 1 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/languages/supports/richEditBrackets.ts` | 4 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/languages/syntax/syntaxItemDelta.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/languages/syntax/syntaxModuleWorkerClient.ts` | 2 / 1 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
+| `common/languages/syntax/syntaxProviderModuleWire.ts` | 3 / 2 | 人工检查：模块通信协议标识与版本、客户端/服务端参数一致，资源交给共同 wire owner。 |
+| `common/languages/syntax/syntaxProviderModules.ts` | 5 / 3 | 人工检查：提供者模块复用共同 registry/host，协议与目录规范化无独立状态。 |
+| `common/languages/syntax/syntaxProviders.ts` | 16 / 8 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/languages/syntax/syntaxService.ts` | 15 / 10 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
+| `common/languages/syntax/syntaxWire.ts` | 3 / 5 | 人工检查：请求 record/string 和语言参数校验；两类 lane 复用确认版本的结果协议。 |
+| `common/languages/syntax/syntaxWireResult.ts` | 1 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/languages/workspaceSymbols.ts` | 8 / 3 | 人工追踪：resolve 选择首个提供者；未找到当前生产 resolve 调用，不计为用户可见故障。 |
+| `common/model.ts` | 111 / 21 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/model/bracketPairsTextModelPart/bracketPairsImpl.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/model/bracketPairsTextModelPart/bracketPairsTree/ast.ts` | 7 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/model/bracketPairsTextModelPart/bracketPairsTree/beforeEditPositionMapper.ts` | 3 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/model/bracketPairsTextModelPart/bracketPairsTree/bracketPairsTree.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/model/bracketPairsTextModelPart/bracketPairsTree/brackets.ts` | 2 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/model/bracketPairsTextModelPart/bracketPairsTree/combineTextEditInfos.ts` | 1 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/model/bracketPairsTextModelPart/bracketPairsTree/concat23Trees.ts` | 1 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/model/bracketPairsTextModelPart/bracketPairsTree/length.ts` | 8 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/model/bracketPairsTextModelPart/bracketPairsTree/nodeReader.ts` | 1 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/model/bracketPairsTextModelPart/bracketPairsTree/parser.ts` | 1 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/model/bracketPairsTextModelPart/bracketPairsTree/smallImmutableSet.ts` | 5 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/model/bracketPairsTextModelPart/bracketPairsTree/tokenizer.ts` | 4 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/model/decorationCollection.ts` | 20 / 11 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/model/document.ts` | 32 / 4 | 人工追踪：不可变节点、结构共享、插入/删除/替换及重复 id 检测；外部树的 schema 验证由调用边界负责。 |
+| `common/model/documentDecoration.ts` | 3 / 2 | 人工追踪：装饰 id 唯一性、不可变集合及事务选区映射；未发现本轮可复现缺陷。 |
+| `common/model/documentFragment.ts` | 1 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/model/documentHistory.ts` | 3 / 0 | 人工追踪：撤销重做分支、历史合并顺序、容量限制与 rebase；未发现本轮可复现缺陷。 |
+| `common/model/documentOutline.ts` | 4 / 1 | 人工追踪：标题栈、层级规范化、标题文字与图片替代文本；未发现本轮可复现缺陷。 |
+| `common/model/documentPlugin.ts` | 6 / 2 | 人工检查：插件 key、状态/事务/装饰回调契约与描述符校验；实际执行原子性由 TextModel 持有。 |
+| `common/model/documentSchema.ts` | 27 / 10 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/model/documentSerialization.ts` | 11 / 6 | 人工追踪：版本 envelope、节点/marks 解码与 schema 校验；深层递归和特殊属性名边界待验证。 |
+| `common/model/documentText.ts` | 2 / 1 | 人工追踪：纯文本换行、同块/跨块选择与图片替代文本；跨容器选择返回 undefined 的能力边界保留。 |
+| `common/model/documentTransaction.ts` | 14 / 6 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/model/documentTransactionSerialization.ts` | 3 / 3 | 人工追踪：step/selection 解码和元数据 JSON 编码；对象输入的元数据规范化及特殊键往返待验证。 |
+| `common/model/editStack.ts` | 1 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/model/guidesTextModelPart.ts` | 1 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/model/lineDocument.ts` | 4 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/model/lineDocumentProjection.ts` | 2 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/model/pieceTreeTextBuffer/pieceTreeBase.ts` | 2 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.ts` | 1 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/model/pieceTreeTextBuffer/rbTreeBase.ts` | 2 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/model/textModel.ts` | 106 / 163 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/model/textModelBlockState.ts` | 3 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/model/textModelSearch.ts` | 4 / 2 | 人工追踪：正则空匹配推进、Unicode 代理对、查找数量上限与行内/多行分支；未发现本轮可复现缺陷。 |
+| `common/model/tokens/annotations.ts` | 1 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/model/tokens/tokenizationTextModelPart.ts` | 1 / 0 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
+| `common/modelLineProjectionData.ts` | 8 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/services/completionsEnablement.ts` | 3 / 1 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
+| `common/services/documentCollaborationService.ts` | 8 / 3 | 结构问题：common 引用 contribution 的协议契约。 |
+| `common/services/editorBaseApi.ts` | 1 / 0 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
+| `common/services/editorWebWorkerMain.ts` | 1 / 0 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
+| `common/services/editorWorkerProtocol.ts` | 3 / 1 | 人工检查：已通读入口、公开数据和同步状态变化；未发现本轮可复现缺陷。 |
+| `common/services/editorWorkerWire.ts` | 2 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/services/findSectionHeaders.ts` | 1 / 1 | 已修复：MARK 表达式的前瞻空匹配显式推进游标，后续有效标题仍能返回；独立进程复现，真实 TextModel 回归通过。 |
+| `common/services/languageCompletionWorkerMain.ts` | 1 / 0 | 人工检查：已通读入口、公开数据和同步状态变化；未发现本轮可复现缺陷。 |
+| `common/services/languageDiagnosticsService.ts` | 12 / 2 | 人工检查：公开数据/渲染契约和依赖方向，无独立可释放状态。 |
+| `common/services/languageFeatures.ts` | 28 / 5 | 结构问题：共享注册表引用 contribution 的语言契约。 |
+| `common/services/languageFeaturesService.ts` | 2 / 9 | 结构问题：共享注册表实现引用 contribution 的语言契约。 |
+| `common/services/languageService.ts` | 5 / 7 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/services/languageTokenStylingResolver.ts` | 2 / 2 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/services/markerDecorations.ts` | 5 / 0 | 人工检查：公开类型、请求参数及依赖方向；此文件不持有运行时资源。 |
+| `common/services/markerDecorationsService.ts` | 2 / 1 | 人工追踪：模型引用计数、抑制范围、重入和销毁清理。 |
+| `common/services/model.ts` | 4 / 0 | 人工检查：公开类型、请求参数及依赖方向；此文件不持有运行时资源。 |
+| `common/services/modelService.ts` | 1 / 1 | 人工追踪：模型创建/注销、资源唯一性、配置失效、文本/EOL 更新及历史恢复；关闭模型缓存随服务释放的清理待验证。 |
+| `common/services/resolvedSemanticTokens.ts` | 10 / 3 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/services/resolvedSemanticTokensService.ts` | 1 / 2 | 人工追踪：缓存失效、语义层合并、服务持有源监听。 |
+| `common/services/resolverService.ts` | 1 / 1 | 人工检查：公开数据/服务契约及依赖方向，无独立可释放状态。 |
+| `common/services/retainedModelUndoRedoHistory.ts` | 1 / 1 | 人工追踪：按模型数及文本量限制缓存，恢复时消费快照。 |
+| `common/services/semanticTokensDto.ts` | 3 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/services/semanticTokensProviderStyling.ts` | 2 / 0 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
+| `common/services/semanticTokensStyling.ts` | 2 / 0 | 人工检查：公开类型、请求参数及依赖方向；此文件不持有运行时资源。 |
+| `common/services/semanticTokensStylingService.ts` | 1 / 0 | 人工检查：已通读入口、公开数据和同步状态变化；未发现本轮可复现缺陷。 |
+| `common/services/syntaxWorkerMain.ts` | 1 / 0 | 人工检查：配置、registry、模块 host、wire server 在 worker scope 中统一释放。 |
+| `common/services/textModelResourceService.ts` | 10 / 4 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/services/textModelSync/textModelSync.impl.ts` | 1 / 1 | 人工追踪：版本、范围、换行校验后提交镜像。 |
+| `common/services/textModelSync/textModelSync.protocol.ts` | 9 / 0 | 人工检查：公开类型、请求参数及依赖方向；此文件不持有运行时资源。 |
+| `common/services/textResourceConfiguration.ts` | 2 / 1 | 人工检查：资源 EOL 服务契约，无独立运行时状态。 |
+| `common/services/textResourceStore.ts` | 5 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/services/treeViewsDnd.ts` | 1 / 1 | 人工检查：拖拽 transfer 按 id 存取并消费后删除；拖拽取消未消费的清理路径待验证。 |
+| `common/services/treeViewsDndService.ts` | 1 / 1 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
+| `common/services/unicodeTextModelHighlighter.ts` | 5 / 0 | 已修复：按物理换行分行，CRLF 不再作为不可见字符报告；真实 worker 回归先失败后通过，并验证下一行字符坐标。 |
+| `common/standalone/standaloneEnums.ts` | 1 / 0 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
+| `common/textModelBracketPairs.ts` | 4 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/textModelEditSource.ts` | 11 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/textModelEvents.ts` | 16 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/textModelGuides.ts` | 5 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/tokenizationRegistry.ts` | 1 / 1 | 人工追踪：异步工厂替换和销毁后的注册门禁。 |
+| `common/tokenizationTextModelPart.ts` | 3 / 1 | 人工检查：公开数据/服务契约及依赖方向，无独立可释放状态。 |
+| `common/tokens/common.ts` | 1 / 0 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
+| `common/tokens/languageTokenLineIndex.ts` | 2 / 3 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/tokens/languageTokens.ts` | 12 / 3 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/tokens/lineTokens.ts` | 13 / 4 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/tokens/sparseMultilineTokens.ts` | 3 / 2 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/tokens/sparseTokensStore.ts` | 1 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/viewEventHandler.ts` | 13 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/viewEvents.ts` | 42 / 6 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/viewLayout/lineDecorations.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/viewLayout/lineHeights.ts` | 2 / 2 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/viewLayout/linePart.ts` | 1 / 0 | 人工检查：已通读入口、公开数据和同步状态变化；未发现本轮可复现缺陷。 |
+| `common/viewLayout/linesLayout.ts` | 1 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/viewLayout/viewLayout.ts` | 3 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/viewLayout/viewLineRenderer.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/viewLayout/viewLinesViewportData.ts` | 14 / 2 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/viewModel.ts` | 31 / 3 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/viewModel/editorViewportContracts.ts` | 12 / 1 | 人工检查：公开数据/服务契约及依赖方向，无独立可释放状态。 |
+| `common/viewModel/glyphLanesModel.ts` | 1 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/viewModel/inlineDecorations.ts` | 9 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/viewModel/minimapTokensColorTracker.ts` | 2 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/viewModel/modelLineProjection.ts` | 14 / 4 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/viewModel/monospaceLineBreaksComputer.ts` | 1 / 2 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/viewModel/overviewZoneManager.ts` | 2 / 2 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/viewModel/pointerHitTest.ts` | 1 / 2 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/viewModel/rangeGeometry.ts` | 1 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/viewModel/screenReaderSimpleModel.ts` | 2 / 0 | 人工检查：公开类型、请求参数及依赖方向；此文件不持有运行时资源。 |
+| `common/viewModel/textMeasurer.ts` | 11 / 25 | 人工检查：公开类型、请求参数及依赖方向；此文件不持有运行时资源。 |
+| `common/viewModel/viewContext.ts` | 45 / 7 | 人工检查：复用 viewModel 的布局/事件 owner，不另建缓存；主题更新由 EditorTheme 承接。 |
+| `common/viewModel/viewModelDecoration.ts` | 5 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/viewModel/viewModelDecorations.ts` | 1 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/viewModel/viewModelImpl.ts` | 1 / 2 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/viewModel/viewModelLines.ts` | 2 / 2 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/viewModel/visualCursorNavigation.ts` | 1 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/viewModel/visualRangeGeometry.ts` | 1 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/viewModel/visualSelectionGeometry.ts` | 2 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `common/viewModelEventDispatcher.ts` | 4 / 10 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/academic/browser/nodeViews.ts` | 1 / 1 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
+| `contrib/academic/common/schema.ts` | 2 / 3 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `contrib/anchorSelect/browser/anchorSelect.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/bracketMatching/browser/bracketColorizationPresentation.ts` | 1 / 1 | 人工检查：已通读入口、公开数据和同步状态变化；未发现本轮可复现缺陷。 |
+| `contrib/bracketMatching/browser/bracketMatching.contribution.ts` | 1 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `contrib/bracketMatching/browser/bracketMatching.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/bracketMatching/common/bracketEditing.ts` | 1 / 1 | 已修复：未命中括号的选区返回空命令，复用执行器跟踪选区；正反向选区、快捷键/正式 action 和撤销回归通过。 |
+| `contrib/bracketMatching/common/bracketNavigation.ts` | 1 / 1 | 人工检查：多光标括号匹配、跳转/选择与无变化时复用选区。 |
+| `contrib/callHierarchy/browser/languageHierarchy.contribution.ts` | 1 / 0 | 人工检查：贡献注册入口、安装条件与服务/控制器归属；功能实现结论见对应文件。 |
+| `contrib/callHierarchy/browser/languageHierarchyController.ts` | 1 / 0 | 人工追踪：关闭 Peek 后 expand 返回仍访问旧 DOM，待场景验证。 |
+| `contrib/callHierarchy/common/languageHierarchy.ts` | 7 / 1 | 已复现并修复：后续查询绑定准备阶段的版本及语言。 |
+| `contrib/caretOperations/browser/transpose.ts` | 1 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `contrib/citation/browser/nodeViews.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/citation/browser/toolbarAction.ts` | 1 / 1 | 人工检查：已通读入口、公开数据和同步状态变化；未发现本轮可复现缺陷。 |
+| `contrib/citation/common/citationCommands.ts` | 1 / 1 | 人工检查：schema 能力检查、引用节点创建和书目插入点；空标签保留有效段落。 |
+| `contrib/citation/common/references.ts` | 2 / 2 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/citation/common/schema.ts` | 3 / 0 | 人工检查：已通读入口、公开数据和同步状态变化；未发现本轮可复现缺陷。 |
+| `contrib/clipboard/browser/clipboard.ts` | 1 / 2 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
+| `contrib/codeAction/browser/codeActionContributions.ts` | 1 / 0 | 人工检查：贡献注册入口、安装条件与服务/控制器归属；功能实现结论见对应文件。 |
+| `contrib/codeAction/browser/codeActionController.ts` | 1 / 1 | 已复现并修复：销毁时取消请求。 |
+| `contrib/codelens/browser/codeLensCache.ts` | 2 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/codelens/browser/codelens.ts` | 3 / 1 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
+| `contrib/codelens/browser/codelensController.ts` | 1 / 1 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
+| `contrib/codelens/browser/codelensWidget.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/collaboration/browser/collaborationContribution.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/collaboration/common/controller.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/collaboration/common/envelopeSerialization.ts` | 0 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 未发现直接生产导入，保留并核对装配。 |
+| `contrib/collaboration/common/protocol.ts` | 6 / 3 | 人工检查：有序协作 envelope 契约；被 common 服务反向引用的归属问题保留。 |
+| `contrib/collaboration/common/rebase.ts` | 2 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/collaboration/common/synchronizer.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/colorPicker/browser/colorDetector.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/colorPicker/browser/colorPickerController.ts` | 1 / 1 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
+| `contrib/colorPicker/browser/colorPickerModel.ts` | 2 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/colorPicker/browser/editorColorPickerDialog.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/comment/browser/blockCommentCommand.ts` | 2 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `contrib/comment/browser/comment.ts` | 1 / 2 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `contrib/comment/browser/lineCommentCommand.ts` | 1 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `contrib/contextmenu/browser/contextmenu.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/cursorUndo/browser/cursorUndo.ts` | 1 / 2 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/diffEditorBreadcrumbs/browser/diffEditorBreadcrumbs.ts` | 1 / 0 | 人工检查：根节点移除、模型监听释放、节点自有 click 监听；大量变更逐行生成按钮的成本待测。 |
+| `contrib/documentEditor.contribution.ts` | 1 / 1 | 人工检查：仅 document 模式安装格式与协作贡献，句柄交给 context 的 setter owner。 |
+| `contrib/dropOrPasteInto/browser/copyPasteContribution.ts` | 1 / 1 | 人工检查：贡献注册入口、安装条件与服务/控制器归属；功能实现结论见对应文件。 |
+| `contrib/dropOrPasteInto/browser/copyPasteController.ts` | 1 / 2 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
+| `contrib/dropOrPasteInto/browser/dropIntoEditorContribution.ts` | 1 / 1 | 人工检查：贡献注册入口、安装条件与服务/控制器归属；功能实现结论见对应文件。 |
+| `contrib/dropOrPasteInto/browser/dropIntoEditorController.ts` | 1 / 0 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
+| `contrib/dropOrPasteInto/browser/textFileTransfer.ts` | 2 / 2 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `contrib/editorState/browser/editorState.ts` | 4 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/editorState/browser/editorStateController.ts` | 1 / 0 | 人工检查：焦点/选区/滚动监听均注册释放；创建时已有焦点与滚动状态的同步待验证。 |
+| `contrib/editorState/browser/keybindingCancellation.ts` | 1 / 1 | 人工检查：WeakMap 请求栈、Escape 仅取消最新请求及编辑器销毁取消；父 token 已取消时的同步清理需专门回归。 |
+| `contrib/editorState/common/editorInteractionState.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/find/browser/findController.ts` | 1 / 4 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/find/common/textSearchCommands.ts` | 1 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `contrib/folding/browser/folding.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/folding/browser/foldingDecorations.ts` | 1 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `contrib/folding/browser/foldingModel.ts` | 5 / 3 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/folding/browser/foldingRanges.ts` | 4 / 4 | 已复现并修复：祖先范围交叉校验。 |
+| `contrib/folding/browser/hiddenRangeModel.ts` | 1 / 2 | 人工检查：合并已排序折叠区间，折叠/正文事件监听释放；消费本轮折叠交叉校验修复。 |
+| `contrib/folding/browser/indentRangeProvider.ts` | 1 / 2 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `contrib/folding/browser/syntaxRangeProvider.ts` | 1 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `contrib/fontZoom/browser/fontZoom.ts` | 1 / 1 | 人工检查：三个正式命令委托 EditorZoom，增减和复位共享同一状态。 |
+| `contrib/format/browser/format.ts` | 3 / 4 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
+| `contrib/format/browser/formatActions.ts` | 1 / 1 | 静态语法与依赖已扫描；含异步路径；未作逐行行为结论。 |
+| `contrib/format/browser/formattingEdit.ts` | 1 / 0 | 人工检查：只读/空编辑拒绝、末次 EOL、撤销边界和滚动恢复；消费本轮格式化回归。 |
+| `contrib/formatting/browser/formattingContribution.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/gotoError/browser/gotoError.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/gotoError/common/diagnosticDecorations.ts` | 1 / 3 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/gotoSymbol/browser/gotoSymbol.contribution.ts` | 1 / 0 | 人工检查：贡献注册入口、安装条件与服务/控制器归属；功能实现结论见对应文件。 |
+| `contrib/gotoSymbol/browser/gotoSymbolController.ts` | 1 / 0 | 人工追踪：取消请求后渲染门禁、列表监听清理。 |
+| `contrib/gotoSymbol/browser/languageNavigation.contribution.ts` | 1 / 0 | 人工检查：贡献安装条件与服务/控制器装配；具体生命周期见对应实现。 |
+| `contrib/gotoSymbol/browser/languageNavigationController.ts` | 1 / 0 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
+| `contrib/gotoSymbol/common/languageDocumentSymbolSearch.ts` | 2 / 0 | 人工检查：持有并释放文档符号服务，符号展开和名称排序；异步时效由提供者服务及 controller 负责。 |
+| `contrib/hover/browser/diagnosticHoverController.ts` | 0 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 未发现直接生产导入，保留并核对装配。 |
+| `contrib/hover/browser/hoverContribution.ts` | 1 / 0 | 人工检查：贡献注册入口、安装条件与服务/控制器归属；功能实现结论见对应文件。 |
+| `contrib/hover/browser/hoverController.ts` | 1 / 0 | 人工追踪：延时、请求和 DOM 同步释放。 |
+| `contrib/inPlaceReplace/browser/inPlaceReplace.ts` | 1 / 1 | 人工追踪：worker 结果和选区复核；模型/功能卸载交错待验证。 |
+| `contrib/indentation/browser/indentation.ts` | 1 / 1 | 人工追踪：转换命令遍历正文缩进、生成 edits 并恢复 tracked selection；混合缩进回归通过。 |
+| `contrib/indentation/common/indentUtils.ts` | 2 / 1 | 已修复：Tab 推进至下一制表位，混合缩进转换保持文字对齐；真实缩进命令与选区回归先失败后通过。 |
+| `contrib/indentation/common/indentation.ts` | 1 / 1 | 人工追踪：重缩进规则、首行列宽与输出 edit 的调用链；消费同批 Tab 列宽修复。 |
+| `contrib/inlayHints/browser/inlayHintsController.ts` | 1 / 0 | 人工追踪：dispose 取消请求但不清理已绘制提示，待功能卸载验证。 |
+| `contrib/inlineCompletions/browser/controller/inlineCompletionsController.ts` | 1 / 1 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
+| `contrib/inlineCompletions/common/inlineCompletions.ts` | 6 / 1 | 人工检查：公开类型、请求参数及依赖方向；此文件不持有运行时资源。 |
+| `contrib/inlineProgress/browser/inlineProgress.ts` | 2 / 1 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
+| `contrib/languageAnalysis/browser/languageAnalysis.contribution.ts` | 1 / 0 | 人工检查：贡献注册入口、安装条件与服务/控制器归属；功能实现结论见对应文件。 |
+| `contrib/lineSelection/browser/lineSelection.ts` | 1 / 1 | 人工检查：已通读入口、公开数据和同步状态变化；未发现本轮可复现缺陷。 |
+| `contrib/linesOperations/browser/copyLinesCommand.ts` | 1 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `contrib/linesOperations/browser/linesOperations.ts` | 1 / 7 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/linesOperations/browser/moveLinesCommand.ts` | 1 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `contrib/linesOperations/browser/sortLinesCommand.ts` | 1 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `contrib/linkedEditing/browser/linkedEditing.ts` | 1 / 1 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
+| `contrib/links/browser/linksController.ts` | 1 / 0 | 人工追踪：dispose 未调用 clear，待卸载时的请求及 class 清理验证。 |
+| `contrib/message/browser/messageController.ts` | 2 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/middleScroll/browser/middleScroll.contribution.ts` | 1 / 1 | 人工检查：贡献注册入口、安装条件与服务/控制器归属；功能实现结论见对应文件。 |
+| `contrib/middleScroll/browser/middleScrollController.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/multicursor/browser/multicursor.ts` | 1 / 2 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/multicursor/common/occurrenceSelection.ts` | 1 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `contrib/parameterHints/browser/parameterHintsController.ts` | 1 / 0 | 已复现并修复：功能卸载取消请求并阻止后续微任务。 |
+| `contrib/peekView/browser/editorPeekViewWidget.ts` | 3 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `contrib/placeholderText/browser/placeholderText.contribution.ts` | 2 / 1 | 人工检查：贡献注册入口、安装条件与服务/控制器归属；功能实现结论见对应文件。 |
+| `contrib/placeholderText/browser/placeholderTextContribution.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/quickAccess/browser/quickAccessController.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/quickAccess/common/gotoLocation.ts` | 1 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `contrib/readOnlyMessage/browser/contribution.ts` | 1 / 1 | 人工检查：贡献安装条件与服务/控制器装配；具体生命周期见对应实现。 |
+| `contrib/rename/browser/renameController.ts` | 1 / 1 | 已复现并修复：销毁时取消请求；重复提交的取消顺序待验证。 |
+| `contrib/sectionHeaders/browser/sectionHeaders.contribution.ts` | 1 / 0 | 人工检查：贡献注册入口、安装条件与服务/控制器归属；功能实现结论见对应文件。 |
+| `contrib/sectionHeaders/browser/sectionHeadersController.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/smartSelect/browser/smartSelectController.ts` | 1 / 0 | 人工追踪：展开前版本/选区复核；异常返回路径仍待验证。 |
+| `contrib/smartSelect/common/smartSelectionExpansion.ts` | 1 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `contrib/snippet/browser/snippetSession.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/snippet/common/snippetParser.ts` | 4 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/snippet/common/snippetTransform.ts` | 2 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `contrib/stickyScroll/browser/stickyScrollContribution.ts` | 1 / 0 | 人工检查：贡献注册入口、安装条件与服务/控制器归属；功能实现结论见对应文件。 |
+| `contrib/stickyScroll/browser/stickyScrollController.ts` | 1 / 0 | 人工检查：DOM 与订阅由 controller 清理，字面文字写入 textContent；每次布局重建按钮的焦点保留待验证。 |
+| `contrib/stickyScroll/common/stickyScrollModel.ts` | 1 / 1 | 人工检查：祖先区域筛选、排序和数量裁剪；maxEntries 范围校验由配置入口负责。 |
+| `contrib/suggest/browser/suggestController.ts` | 2 / 3 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/suggest/browser/suggestModel.ts` | 3 / 4 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/suggest/browser/suggestWidget.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/symbolIcons/browser/symbolIcons.contribution.ts` | 1 / 0 | 人工检查：贡献注册入口、安装条件与服务/控制器归属；功能实现结论见对应文件。 |
+| `contrib/symbolIcons/browser/symbolIcons.ts` | 1 / 0 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
+| `contrib/textEditorCapabilities.ts` | 7 / 0 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
+| `contrib/toggleTabFocusMode/browser/toggleTabFocusMode.ts` | 1 / 0 | 人工检查：正式 action/keybinding 切换 TabFocus 并发布无障碍提示。 |
+| `contrib/tokenization/browser/tokenization.contribution.ts` | 1 / 0 | 人工检查：贡献注册入口、安装条件与服务/控制器归属；功能实现结论见对应文件。 |
+| `contrib/unicodeHighlighter/browser/unicodeHighlighter.contribution.ts` | 1 / 1 | 人工检查：贡献注册入口、安装条件与服务/控制器归属；功能实现结论见对应文件。 |
+| `contrib/unicodeHighlighter/browser/unicodeHighlighterController.ts` | 1 / 0 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
+| `contrib/unicodeHighlighter/common/unicodeHighlights.ts` | 2 / 1 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
+| `contrib/unusualLineTerminators/browser/unusualLineTerminators.contribution.ts` | 1 / 0 | 人工检查：贡献注册入口、安装条件与服务/控制器归属；功能实现结论见对应文件。 |
+| `contrib/unusualLineTerminators/browser/unusualLineTerminatorsController.ts` | 1 / 0 | 人工检查：依模型版本更新装饰，监听由 controller 释放，装饰集合归贡献 scope。 |
+| `contrib/unusualLineTerminators/common/unusualLineTerminatorRanges.ts` | 1 / 0 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
+| `contrib/wordHighlighter/browser/highlightDecorations.ts` | 1 / 0 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
+| `contrib/wordHighlighter/browser/textualHighlightProvider.ts` | 1 / 2 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `contrib/wordHighlighter/browser/wordHighlighter.contribution.ts` | 1 / 1 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
+| `contrib/wordWrap/browser/wordWrapController.ts` | 1 / 1 | 人工检查：已通读入口、公开数据和同步状态变化；未发现本轮可复现缺陷。 |
+| `contrib/zoneWidget/browser/zoneWidget.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `editor.academic.all.ts` | 1 / 1 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
+| `editor.all.ts` | 2 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `editor.api.ts` | 1 / 2 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `editor.code.all.ts` | 1 / 4 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
+| `editor.main.ts` | 0 / 3 | 公开构建入口，已核对 editor.main 与 standalone 使用。 |
+| `editor.worker.start.ts` | 4 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `standalone/browser/namedEditorThemeService.ts` | 1 / 1 | 人工追踪：强制颜色监听配对释放，主题切换复用已有 owner。 |
+| `standalone/browser/standaloneCodeEditor.ts` | 2 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `standalone/browser/standaloneEditor.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `standalone/browser/standaloneLanguages.ts` | 1 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `standalone/browser/standaloneServices.ts` | 3 / 2 | 人工追踪：服务装配、覆盖及作用域释放。 |
+| `standalone/common/namedEditorTheme.ts` | 4 / 0 | 人工检查：公开类型、请求参数及依赖方向；此文件不持有运行时资源。 |
+
+</details>
+
 ## 当前结论
 
-- 全局验证：238/238 个 Editor 及相关 Workbench 单测文件、226 项浏览器测试通过；Stanza、Renderer 构建及对齐检查通过。三份 Editor 架构测试在上一轮通过。此次未完成全部 API 对齐缺口，既有 CSS 债务仍保留。
+- 本轮验证：295 项 Playwright 浏览器测试通过；包含正则修复的 238/238 个 Editor 及相关 Workbench 单测文件通过，随后新增的缩进与 CRLF 回归连同所属两份测试文件共 19 项通过。三份 Editor 架构测试已在本轮执行并通过；最终 Stanza 和 Renderer 正常构建通过，未新增构建 warning。浏览器验证包含功能销毁取消、排队任务销毁和空匹配词语查询。保留既有 CSS 债务及测试环境 Canvas/颜色提示。全量静态检查已完成，逐文件人工行为审查仍未覆盖全部 490 个文件，不能把本次结果表述为全部 Editor 问题已经修完。
+
+- 复制、剪切、粘贴成批统一命令目标选择：正文聚焦时操作正文，其他文本输入框聚焦时交给 DOM 命令，从外部按钮调用时恢复最近使用的编辑器焦点。只读正文允许复制，阻止剪切与粘贴。新增 50 项浏览器用例，覆盖三个命令的目标、服务读写、DOM 分发、撤销，以及外部发起的异步请求在选区、焦点、只读、组合输入、Escape、模型切换和销毁后取消；整组 82 项定向回归通过。
+
+- 公共全选命令区分正文、普通文本输入框和活动编辑器：从外部按钮调用时选中最近使用的编辑器全文，查找框聚焦时只选中输入框文本，只读状态允许选择。两种输入模式均先复现外部调用与查找框全选无效，再从命令注册表入口验证正文选区、另一编辑器选区和输入框选区。
 
 - 公共撤销与重做命令在 `coreCommands.ts` 绑定现有模型历史，`default:undo`、`default:redo` 共用相同实现。命令遵守实时只读状态；从外部按钮调用时作用于最近使用的编辑器，焦点位于查找等文本输入框时不修改正文。两种输入模式均先复现公共撤销无效，再通过注册表入口验证正式命令与别名、撤销与重做、只读切换和多编辑器目标。
+
+- 查找与替换输入框的公共撤销、重做交给浏览器编辑历史处理，正文只读状态不阻止输入框自己的编辑。8 项新增浏览器回归通过真实键盘输入建立历史，以键盘撤销结果校验正式命令和别名；浏览器如何合并连续输入不由编辑器另建记录或假定。
 
 - 公共 API 不再在模块求值时注册格式化选择策略；默认策略由 `StandaloneServiceCollection` 创建并持有，服务释放时注销，恢复宿主先前的策略。架构测试先暴露了入口职责混合，服务生命周期回归覆盖创建前后和释放后的选择结果。
 
@@ -162,7 +740,7 @@
 | `browser/controller/dragScrolling.ts` | `DragScrolling` | 同路径文件保留上游抽象 owner、`start` / `stop` 生命周期及上下/左右 operation 拆分；生产由 `MouseHandler` 根据 `IMouseTargetOutsideEditor` 轴向调用，滚动、同步 render、边缘命中、RTL 行首尾和 `dispatchMouse` 形成闭环。operation 由可替换资源持有，重复位置更新不重建，停止与释放取消后续动画帧；直接生命周期测试和真实 Widget 双轴拖选测试覆盖调用链 |
 | `contrib/zoneWidget/browser/zoneWidget.ts` | `ZoneWidget` | 恢复 `IOptions`、`IStyles`、`OverlayWidgetDelegate`、`ZoneWidget` 及其子类扩展点；独立实现通过 `ICodeEditor` 持有模型锚点、视图区、布局、滚动、选区与释放，Peek、Call/Type Hierarchy、跳转结果和 Quick Diff 均传递真实编辑器对象，定向测试覆盖换行锚点、布局、缩放、样式和选区保持 |
 | `contrib/wordHighlighter/browser/textualHighlightProvider.ts` | `TextualMultiDocumentHighlightFeature` | 由语言能力服务统一注册单文档与多文档文本高亮 provider；多编辑器共享同一服务时按引用计数持有注册，不再维护重复的模型 target 表，provider 直接使用 `ITextModel.uri` 返回跨文档结果，Word/Selection Highlighter 7 项测试覆盖 Unicode、语义优先、多文件、取消和导航 |
-| `common/cursor/cursorColumnSelection.ts` | `ColumnSelection` | 同路径实现与上游归一化文本一致；生产鼠标列选经过 `MouseHandler`、`CursorConfiguration`、视觉行模型和坐标转换，直接测试覆盖方向与短行行为 |
+| `common/cursor/cursorColumnSelection.ts` | `ColumnSelection` | 人工检查：列选择按 UTF-16 列号裁剪；混合 Tab/宽字符时的可视矩形语义需真实交互验证。 |
 | `common/cursor/cursorMoveOperations.ts` | `MoveOperations` | 公开成员差异归零；17 个标准移动入口直接使用 `CursorConfiguration`、`ICursorSimpleModel` 与 `SingleCursorState`，旧 `navigate` 总入口及全部调用已移除。键盘控制器按命令调用标准入口，删除、输入、转置与行操作使用标准位置 API；定向测试覆盖水平、垂直、可视列余量、原子缩进、空行、行/文档边界以及真实 Widget 连续键盘导航 |
 | `common/cursor/cursorMoveCommands.ts` | `CursorMoveCommands`、`CursorMove` | 15 个标准命令入口、参数元数据、方向、单位和解析契约的公开差异归零；实现直接使用真实 `IViewModel`、模型/视图光标状态及坐标转换。键盘、行选择和多光标生产调用统一进入该 owner，指针选区合并与行尾多光标辅助逻辑分别回到 `ViewController` 和 `multicursor.ts`；契约测试锁定公开面，真实 Widget 与 contribution 测试覆盖连续垂直移动、重复 caret 归一化和行选择 |
 | `common/cursor/cursorWordOperations.ts` | `WordOperations` | 公开成员差异归零；标准 classifier、移动、删除、词内删除、词段、选词和 `getWordAtPosition` 由同路径 common owner 实现，并同时导出标准 `WordPartOperations`。浏览器双击/拖选、平台词移动和 `beforeinput deleteWord*` 均改接该 API；旧 `getWordSelectionRange`、`getTextWordRanges` 及浏览器自算词边界已移除，common 与真实 Widget 聚焦测试覆盖调用链 |
@@ -174,9 +752,9 @@
 | `common/viewLayout/lineHeights.ts` | `CustomLineHeightData` | 构造参数、公开字段和 `fromDecorations` owner 与上游一致；生产由 `ViewModelImpl` 转换模型装饰，再交给 `LinesLayout`，测试覆盖视觉范围转换与配置行高倍率 |
 | `common/model/pieceTreeTextBuffer/pieceTreeTextBuffer.ts` | `PieceTreeTextBuffer` | 实现 `common/model.ts` 的 `ITextBuffer` 契约；独立红黑树实现负责 1-based 查询、原子编辑与逆编辑、搜索、内容事件、BOM/EOL、快照和释放；单个码元查询不物化整行，测试覆盖跨 chunk 代理对与树不变量 |
 | `common/model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.ts` | `PieceTreeTextBufferBuilder` | 保持 Builder → Factory 两阶段 owner；跨 chunk 连接 CRLF 与代理对，按主导换行选择 EOL，并把 `finish(false)` 的保留换行语义传给主缓冲区 |
-| `common/services/model.ts` | `IModelService` | 公共方法、事件、模型类型与 owner 一致；`getCreationOptions` 只暴露语言 ID、确定资源和 Widget 类型，不再把实现类的宽参数泄漏到服务接口 |
+| `common/services/model.ts` | `IModelService` | 人工检查：公开类型、请求参数及依赖方向；此文件不持有运行时资源。 |
 | `common/model.ts` | `ITextModel` | 同名成员差异归零；模型统一持有装饰事务和 owner 查询、外部 undo/redo 入口、token/语言配置/字体/行高事件以及 ViewModel 注册生命周期，27 项测试覆盖事务回滚、事件顺序、所有者隔离、历史负载和释放 |
-| `common/services/modelService.ts` | `ModelService` | 统一持有资源模型、创建配置、语言事件、内容更新、关闭文件历史与释放；生产由 Standalone 服务注册并通过 `IModelService` 使用，6 项测试覆盖资源身份、事件、配置失效、工厂所有权、历史校验和大文件设置在新模型创建时的生效边界 |
+| `common/services/modelService.ts` | `ModelService` | 人工追踪：模型创建/注销、资源唯一性、配置失效、文本/EOL 更新及历史恢复；关闭模型缓存随服务释放的清理待验证。 |
 | `common/viewLayout/lineHeights.ts` | `LineHeightsManager` | 由 `LinesLayout` 唯一持有默认行高和自定义行高范围；重叠范围取最大高度，插删行移动或收缩范围，5 项测试覆盖累计高度、范围变更和装饰转换 |
 | `common/viewLayout/linesLayout.ts` | `LinesLayout` | 文件只保留行高、纵向几何与空白区职责；视区编排移回 `viewLayout.ts`，生产由布局 owner 调用，3 项直接测试与 11 项布局测试覆盖批处理、坐标、插删行、视图区间和空白区查询 |
 | `standalone/browser/standaloneEditor.ts` | `create` | 创建并返回同一个 `StandaloneEditor` 实例；贡献和主题绑定完成后才由代码编辑器服务登记并触发创建事件，回调可立即使用或释放该实例。释放时从服务移除，仅隐式创建的模型随编辑器释放；Standalone 单测与真实 Chromium 输入、注册、DOM 和释放用例覆盖 |
@@ -189,7 +767,7 @@
 | `browser/gpu/raster/glyphRasterizer.ts` | `GlyphRasterizer` | 构造输入恢复字体大小、字体族、设备像素比和 decoration cache；公开成员、token metadata、颜色表、子像素偏移与复用 glyph 契约归零，atlas 为唯一生产调用方 |
 | `browser/gpu/viewGpuContext.ts` | `ViewGpuContext` | 公开成员差异归零；`View` 唯一创建并挂载 `FastDomNode` canvas，`ctx`、共享 `device` / `deviceSync`、共享 atlas、物理尺寸、DPR 与 contentLeft 均由标准 owner 提供，RectangleRenderer 直接消费 observable；主题更新清理共享 decoration/atlas 状态，窗口级 device 在 pagehide 释放。GPU 定向测试覆盖 canvas/ARIA、observable 更新、handler/ResizeObserver 释放和 rectangle/ruler 调用链 |
 | `browser/gpu/rectangleRenderer.ts` | `RectangleRenderer` | 公开成员与 `draw(ViewportData)` 契约归零；该 owner 自行清屏、写入布局与滚动 uniform、提交 rectangle pass，并在释放时注销 `ViewContext` 事件监听 |
-| `browser/gpu/renderStrategy/baseRenderStrategy.ts` | `BaseRenderStrategy` | 公开成员差异归零；只持有标准 `ViewContext`、`ViewGpuContext`、device、glyph rasterizer、update/draw 抽象和事件注销，不再承载两个具体策略的 cell 编码辅助入口 |
+| `browser/gpu/renderStrategy/baseRenderStrategy.ts` | `BaseRenderStrategy` | 人工检查：已通读入口、公开数据和同步状态变化；未发现本轮可复现缺陷。 |
 | `browser/gpu/renderStrategy/fullFileRenderStrategy.ts` | `FullFileRenderStrategy` | 标准 `ViewportData` 更新写入文档行定位的 cell storage buffer，滚动偏移扣除 `bigNumbersDelta`，绘制从对应文档实例起点开始；配置、装饰、token、行映射和行变化统一失效 |
 | `browser/gpu/renderStrategy/viewportRenderStrategy.ts` | `ViewportRenderStrategy` | 标准 `ViewportData` 更新写入视口 cell storage buffer，容量按视口增长并通过 `onDidChangeBindGroupEntries` 重建 bind group；滚动与全部视图失效事件接入同一 owner |
 | `browser/viewParts/viewLinesGpu/viewLinesGpu.ts` | `ViewLinesGpu` | 构造入口、公开成员与上游归零；生产只消费 `View` 持有的 `ViewGpuContext`，上传 glyph metadata/atlas、调用标准策略并提供 GPU 行几何，不再创建 context、修改兄弟 Part DOM 或公开本地失效入口 |
@@ -197,7 +775,7 @@
 | `browser/viewParts/viewZones/viewZones.ts` | `ViewZones` | 公开成员差异归零；标准 `IViewZoneChangeAccessor` 只在回调生命周期内有效，新增、重排和移除统一进入 `ViewModel.changeWhitespace`。模型到视图坐标、隐藏区、高度、最小宽度、DOM top 回调和鼠标抑制由同一 owner 持有；CodeLens 与 ZoneWidget 只调用编辑器公开 `changeViewZones`。33 项相关单测和真实 Chromium 几何/释放场景通过；零像素/零行高度允许收起，新增两个 Standalone Chromium 用例验证展开、移动、收起、块装饰与光标几何及删除 |
 | `browser/viewParts/viewCursors/viewCursor.ts` | `ViewCursor` | 公开成员差异归零；光标样式、宽高和字体从计算配置读取，位置使用视图选区，token 展示在边界转换回模型坐标；完整字素、软换行、双向文本和行尾空光标仍由独立实现渲染 |
 | `browser/viewParts/viewCursors/viewCursors.ts` | `ViewCursors` | 公开成员差异归零；只持有配置、焦点、只读、组合输入事件、光标 DOM 和可释放闪烁计时器。组合输入范围由 `CompositionController` 写入标准模型 decoration，不再通过 View 和 ViewCursors 的额外公开入口投影 |
-| `browser/view/dynamicViewOverlay.ts` | `DynamicViewOverlay` | 类成员差异归零，只保留准备与逐行输出抽象契约；可见行临时 DOM 由 `viewLayer.ts` 的通用行投影负责，各具体 overlay 自己持有输出并实现 `render`，不再由基类藏一份共享状态 |
+| `browser/view/dynamicViewOverlay.ts` | `DynamicViewOverlay` | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
 | `browser/viewParts/currentLineHighlight/currentLineHighlight.ts` | `CurrentLineHighlightOverlay` | 公开构造和成员契约归零；正文与边栏覆盖层共享 `ViewContext` 的配置、焦点、选区、换行坐标和释放链，主题系统提供聚焦、失焦及高对比度颜色，组件 CSS 负责状态投影。定向测试覆盖焦点、选区与正文/边栏 class，真实 Chromium 验证自定义主题切换和高对比度边框 |
 | `browser/viewParts/rulers/rulers.ts` | `Rulers` | 公开成员差异归零；配置与字体变化从 `ViewContext` 读取，滚动尺寸变化触发重绘，DOM 标尺节点按数量稳定复用并随 Part 释放；CSS 使用 Ash 类名与主题 token，定向测试覆盖配置、几何、颜色、节点复用和释放 |
 | `browser/viewParts/rulersGpu/rulersGpu.ts` | `RulersGpu` | 公开成员差异归零；CPU 与 GPU 路径共享同一标尺配置和主题颜色，GPU 矩形按设备像素比与文字起点更新、按数量复用并随 Part 释放，定向测试覆盖配置、主题切换、缓存和释放 |
@@ -259,7 +837,7 @@
 | `contrib/folding/browser/folding.ts` | `FoldingController` | 本地 contribution 实现改为 `EditorFoldingController` |
 | `contrib/inlayHints/browser/inlayHintsController.ts` | `InlayHintsController` | 本地 contribution 实现改为 `EditorInlayHintsController` |
 | `contrib/inlineCompletions/browser/controller/inlineCompletionsController.ts` | `InlineCompletionsController` | 本地 contribution 实现改为 `EditorInlineCompletionsController` |
-| `contrib/stickyScroll/browser/stickyScrollController.ts` | `StickyScrollController` | 本地 contribution 实现改为 `EditorStickyScrollController` |
+| `contrib/stickyScroll/browser/stickyScrollController.ts` | `StickyScrollController` | 人工检查：DOM 与订阅由 controller 清理，字面文字写入 textContent；每次布局重建按钮的焦点保留待验证。 |
 | `contrib/suggest/browser/suggestController.ts` | `SuggestController` | 本地 contribution 实现改为 `EditorSuggestController` |
 
 ### 原待处理项

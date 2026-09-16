@@ -2,7 +2,9 @@
 export function getSpaceCnt(value: string, tabSize: number): number {
 	validateTabSize(tabSize);
 	let columns = 0;
-	for (const character of value) columns += character === '\t' ? tabSize : 1;
+	for (const character of value) {
+		columns += character === '\t' ? tabSize - columns % tabSize : 1;
+	}
 	return columns;
 }
 

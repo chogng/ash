@@ -30,6 +30,19 @@ test("Folding model rejects crossing and single-line ranges", () => {
 	assert.throws(() => folding.setRanges([{ startLineIndex: 1, endLineIndex: 1 }]));
 });
 
+test('Folding rejects an ancestor crossing after a completed child without replacing existing ranges', () => {
+	using model = new TextModel('0\n1\n2\n3\n4\n5\n6\n7\n8');
+	using folding = new EditorFoldingModel(model);
+	folding.setRanges([{ startLineIndex: 0, endLineIndex: 6, collapsed: true }]);
+	const before = folding.regions;
+	assert.throws(() => folding.setRanges([
+		{ startLineIndex: 0, endLineIndex: 6 },
+		{ startLineIndex: 1, endLineIndex: 2 },
+		{ startLineIndex: 3, endLineIndex: 8 },
+	]), /nested or disjoint/u);
+	assert.deepEqual(folding.regions, before);
+});
+
 test("Folding model retains matching provider collapse state while replacing provider ranges", () => {
 	const model = new TextModel("header\nbody\nend");
 	using folding = new EditorFoldingModel(model);

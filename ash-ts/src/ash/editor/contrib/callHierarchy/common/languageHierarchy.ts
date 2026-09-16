@@ -69,8 +69,8 @@ export class LanguageHierarchyService extends Disposable {
 			if (roots.length === 0) continue;
 			prepared.push(Object.freeze({
 				roots,
-				incoming: (item: LanguageHierarchyItem) => this.followCall(provider, languageId, item, signal, "incoming"),
-				outgoing: (item: LanguageHierarchyItem) => this.followCall(provider, languageId, item, signal, "outgoing"),
+				incoming: (item: LanguageHierarchyItem) => this.followCall(provider, request, item, "incoming"),
+				outgoing: (item: LanguageHierarchyItem) => this.followCall(provider, request, item, "outgoing"),
 			}));
 		}
 		return Object.freeze(prepared);
@@ -85,22 +85,26 @@ export class LanguageHierarchyService extends Disposable {
 			if (roots.length === 0) continue;
 			prepared.push(Object.freeze({
 				roots,
-				supertypes: (item: LanguageHierarchyItem) => this.followType(provider, languageId, item, signal, "supertypes"),
-				subtypes: (item: LanguageHierarchyItem) => this.followType(provider, languageId, item, signal, "subtypes"),
+				supertypes: (item: LanguageHierarchyItem) => this.followType(provider, request, item, "supertypes"),
+				subtypes: (item: LanguageHierarchyItem) => this.followType(provider, request, item, "subtypes"),
 			}));
 		}
 		return Object.freeze(prepared);
 	}
 
-	private async followCall(provider: LanguageCallHierarchyProvider, languageId: string, item: LanguageHierarchyItem, signal: AbortSignal, direction: "incoming" | "outgoing"): Promise<readonly LanguageCallHierarchyEntry[]> {
-		const request = { ...createLanguageFeatureRequest(this.model, languageId, signal), resource: this.resource, item };
+	private async followCall(provider: LanguageCallHierarchyProvider, prepared: LanguageHierarchyRequest, item: LanguageHierarchyItem, direction: "incoming" | "outgoing"): Promise<readonly LanguageCallHierarchyEntry[]> {
+		if (this.isDisposed || !isLanguageFeatureRequestCurrent(prepared)) return Object.freeze([]);
+		const request = { ...prepared, item };
+		const signal = request.signal;
 		const entries = direction === "incoming" ? await provider.provideIncomingCalls(request, signal) : await provider.provideOutgoingCalls(request, signal);
 		if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
 		return Object.freeze(entries.map(entry => Object.freeze({ item: normalizeItem(entry.item), ...(entry.fromResource ? { fromResource: entry.fromResource } : {}), fromRanges: Object.freeze(entry.fromRanges.map(normalizeRange)) })));
 	}
 
-	private async followType(provider: LanguageTypeHierarchyProvider, languageId: string, item: LanguageHierarchyItem, signal: AbortSignal, direction: "supertypes" | "subtypes"): Promise<readonly LanguageHierarchyItem[]> {
-		const request = { ...createLanguageFeatureRequest(this.model, languageId, signal), resource: this.resource, item };
+	private async followType(provider: LanguageTypeHierarchyProvider, prepared: LanguageHierarchyRequest, item: LanguageHierarchyItem, direction: "supertypes" | "subtypes"): Promise<readonly LanguageHierarchyItem[]> {
+		if (this.isDisposed || !isLanguageFeatureRequestCurrent(prepared)) return Object.freeze([]);
+		const request = { ...prepared, item };
+		const signal = request.signal;
 		const items = direction === "supertypes" ? await provider.provideSupertypes(request, signal) : await provider.provideSubtypes(request, signal);
 		return isLanguageFeatureRequestCurrent(request) ? normalizeItems(items) : Object.freeze([]);
 	}

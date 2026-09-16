@@ -45,3 +45,13 @@ test("section headers reject invalid MARK expressions", () => {
 		markSectionHeaderRegex: "(",
 	}), /valid regular expression/);
 });
+
+test('section headers skip zero-width matches and retain later visible headers', () => {
+	using model = new TextModel('foo\nMARK: Ready');
+	const headers = findSectionHeaders(model, {
+		findRegionSectionHeaders: false,
+		findMarkSectionHeaders: true,
+		markSectionHeaderRegex: '(?=foo)|MARK: (?<label>[^\\n]+)',
+	});
+	assert.deepEqual(headers.map(header => [header.text, header.range]), [['Ready', new Range(2, 1, 2, 12)]]);
+});

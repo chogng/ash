@@ -36,7 +36,7 @@ export class TextLength {
 				lineCount += 1;
 				columnCount = 0;
 			} else {
-				columnCount += 1;
+				columnCount += character.length;
 			}
 		}
 		return new TextLength(lineCount, columnCount);

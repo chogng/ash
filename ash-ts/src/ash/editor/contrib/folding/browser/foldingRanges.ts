@@ -43,10 +43,16 @@ export function normalizeEditorFoldingRanges(model: TextModel, ranges: readonly 
 		});
 	});
 	normalized.sort((left, right) => left.startLineIndex - right.startLineIndex || right.endLineIndex - left.endLineIndex);
-	for (let index = 1; index < normalized.length; index += 1) {
-		const previous = normalized[index - 1]!;
-		const current = normalized[index]!;
-		if (current.startLineIndex <= previous.endLineIndex && current.endLineIndex > previous.endLineIndex) throw new RangeError("Folding ranges must be nested or disjoint");
+	const ancestors: ResolvedEditorFoldingRange[] = [];
+	for (const current of normalized) {
+		while (ancestors.length > 0 && current.startLineIndex > ancestors.at(-1)!.endLineIndex) {
+			ancestors.pop();
+		}
+		const parent = ancestors.at(-1);
+		if (parent && current.endLineIndex > parent.endLineIndex) {
+			throw new RangeError("Folding ranges must be nested or disjoint");
+		}
+		ancestors.push(current);
 	}
 	return Object.freeze(deduplicateEditorFoldingRanges(normalized));
 }

@@ -32,7 +32,7 @@ const { CodeActionController } = await import('../../browser/codeActionControlle
 
 suiteTeardown(() => browserEnvironment.window.close());
 
-test('CodeActionController applies a local action through ICodeEditor', async () => {
+test('CodeActionController resolves an action with its original provider before applying it', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	using model = new TextModel('const value = 1;', { languageId: 'typescript' });
 	const resource = model.uri;
@@ -48,11 +48,17 @@ test('CodeActionController applies a local action through ICodeEditor', async ()
 	const input = h(dom.window.document, 'textarea');
 	viewport.domNode.domNode.append(input);
 	const providers = new LanguageFeatureRegistry<LanguageCodeActionProvider>();
+	const originalAction = { title: 'Rename value', data: { id: 1 } };
 	using provider = providers.register('typescript', {
-		provideCodeActions: () => [{
-			title: 'Rename value',
-			edit: { entries: [{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 7, 1, 12), text: 'result' }] }] },
-		}],
+		provideCodeActions: () => [originalAction],
+		resolveCodeAction: action => {
+			assert.equal(action, originalAction);
+			return { ...action, edit: { entries: [{ kind: 'textDocument', resource, edits: [{ range: new Range(1, 7, 1, 12), text: 'result' }] }] } };
+		},
+	});
+	using unrelated = providers.register('typescript', {
+		provideCodeActions: () => [],
+		resolveCodeAction: () => { throw new Error('Unrelated provider must not resolve this action'); },
 	});
 	using service = new CodeActionService(model, resource, providers);
 	using diagnostics = new TextDecorationCollection<LanguageDiagnostic>(model);
@@ -79,6 +85,21 @@ test('CodeActionController applies a local action through ICodeEditor', async ()
 	assert.equal(model.getText(), 'const result = 1;');
 	assert.deepEqual(sources, ['editor.action.codeAction']);
 	dom.window.close();
+});
+
+test('Code actions without a resolver never use another provider resolver', async () => {
+	using model = new TextModel('value', { languageId: 'typescript' });
+	const providers = new LanguageFeatureRegistry<LanguageCodeActionProvider>();
+	using owner = providers.register('typescript', { provideCodeActions: () => [{ title: 'Unresolved action' }] });
+	using unrelated = providers.register('typescript', {
+		provideCodeActions: () => [],
+		resolveCodeAction: () => { throw new Error('Unrelated resolver called'); },
+	});
+	using service = new CodeActionService(model, model.uri, providers);
+	const range = model.getFullModelRange();
+	const [action] = await service.provideCodeActions('typescript', range);
+	assert.ok(action);
+	assert.equal(await service.resolveCodeAction('typescript', range, action), action);
 });
 
 class FixedTextMeasurer implements TextMeasurer {

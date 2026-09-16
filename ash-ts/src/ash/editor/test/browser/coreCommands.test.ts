@@ -39,7 +39,7 @@ const { createEditorBrowserServices } = await import('../../browser/services/con
 
 suiteTeardown(() => browserEnvironment.window.close());
 
-test('workbench select-all command selects the focused editor model', async () => {
+test('workbench select-all command selects the focused or active editor model', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main><button>Outside</button></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('one\ntwo');
@@ -56,7 +56,7 @@ test('workbench select-all command selects the focused editor model', async () =
 	editor.setSelection(new Selection(1, 1, 1, 1));
 	dom.window.document.querySelector('button')!.focus();
 	await SelectAllCommand.runCommand(services, undefined);
-	assert.deepEqual(editor.getSelection(), new Selection(1, 1, 1, 1));
+	assert.deepEqual(editor.getSelection(), new Selection(1, 1, 2, 4));
 	dom.window.close();
 });
 

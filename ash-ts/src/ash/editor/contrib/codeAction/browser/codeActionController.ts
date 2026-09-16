@@ -28,7 +28,10 @@ export class CodeActionController extends Disposable {
 		this.element.hidden = true;
 		this.element.setAttribute("role", "menu");
 		viewport.domNode.domNode.append(this.element);
-		this._register(toDisposable(() => this.element.remove()));
+		this._register(toDisposable(() => {
+			this.cancelRequest();
+			this.element.remove();
+		}));
 		this._register(addDisposableListener(input, "keydown", event => {
 			if (event.defaultPrevented || event.isComposing || event.altKey || (!event.ctrlKey && !event.metaKey) || event.key !== ".") return;
 			stopEvent(event);

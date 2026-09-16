@@ -1,6 +1,65 @@
 import { expect, test } from '@playwright/test';
 
 for (const inputKind of ['editContext', 'textarea'] as const) {
+	for (const command of ['copy', 'cut', 'paste'] as const) {
+		for (const target of ['outside', 'readonly', 'find'] as const) {
+			test(`${inputKind} active clipboard ${command} respects ${target} target`, async ({ page }) => {
+				if (inputKind === 'textarea') {
+					await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+				}
+				await page.goto('/standalone.html');
+				const handled = target === 'outside' || target === 'readonly' && command === 'copy';
+				const edited = target === 'outside' && command !== 'copy';
+				expect(await page.evaluate(({ command, target }) => window.ashStandaloneIntegration.runActiveClipboard(command, target), { command, target })).toEqual({
+					values: [edited ? (command === 'cut' ? '' : 'omega') : 'alpha', 'bravo'],
+					written: handled && command !== 'paste' ? 'alpha' : '',
+					reads: handled && command === 'paste' ? 1 : 0,
+					focused: handled,
+					documentCommands: target === 'find' || handled && command !== 'paste' ? [command] : [],
+				});
+				if (edited) {
+					await page.keyboard.press('ControlOrMeta+z');
+					expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('alpha');
+				}
+			});
+		}
+	}
+
+	for (const label of ['Find', 'Replace']) {
+		for (const useAlias of [false, true]) {
+			test(`${inputKind} ${useAlias ? 'aliased' : 'public'} history commands undo and redo ${label} input`, async ({ page }) => {
+				if (inputKind === 'textarea') {
+					await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+				}
+				await page.goto('/standalone.html');
+				await page.evaluate(() => window.ashStandaloneIntegration.prepareInputHistory());
+				const input = page.locator(`#caller input[aria-label="${label}"]`);
+				await input.fill('');
+				await input.pressSequentially('needle');
+				await input.press('ControlOrMeta+z');
+				const undoneValue = await input.inputValue();
+				expect(undoneValue).not.toBe('needle');
+				await input.press('ControlOrMeta+Shift+z');
+				await expect(input).toHaveValue('needle');
+				expect(await page.evaluate(useAlias => window.ashStandaloneIntegration.runInputHistoryCommand(useAlias ? 'default:undo' : 'undo'), useAlias)).toEqual(['alpha!', 'bravo']);
+				await expect(input).toHaveValue(undoneValue);
+				expect(await page.evaluate(useAlias => window.ashStandaloneIntegration.runInputHistoryCommand(useAlias ? 'default:redo' : 'redo'), useAlias)).toEqual(['alpha!', 'bravo']);
+				await expect(input).toHaveValue('needle');
+			});
+		}
+	}
+
+	test(`${inputKind} public select all targets text, active editor, and find input`, async ({ page }) => {
+		if (inputKind === 'textarea') {
+			await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+		}
+		await page.goto('/standalone.html');
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.runSelectAllCommand())).toEqual({
+			selections: ['[1,1 -> 2,4]|[1,2 -> 1,2]', '[1,1 -> 2,4]|[1,2 -> 1,2]', '[1,2 -> 1,2]|[1,2 -> 1,2]'],
+			inputSelection: 'needle',
+		});
+	});
+
 	for (const useAlias of [false, true]) {
 		test(`${inputKind} ${useAlias ? 'aliased' : 'public'} history commands respect focus and dynamic readonly state`, async ({ page }) => {
 			if (inputKind === 'textarea') {
@@ -53,23 +112,25 @@ for (const inputKind of ['editContext', 'textarea'] as const) {
 		});
 	}
 
-	for (const command of ['cut', 'paste'] as const) {
-		for (const change of ['none', 'selection', 'focus', 'readonly', 'composition', 'escape', 'model', 'dispose'] as const) {
-			test(`${inputKind} delayed clipboard ${command} respects ${change}`, async ({ page }) => {
-				if (inputKind === 'textarea') {
-					await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
-				}
-				await page.goto('/standalone.html');
-				const result = await page.evaluate(({ command, change }) => window.ashStandaloneIntegration.runDeferredClipboard(command, change), { command, change });
-				expect(result).toEqual({
-					value: change === 'none' ? (command === 'cut' ? '' : 'omega') : 'alpha',
-					finishedBeforeTransfer: change !== 'none',
+	for (const fromOutside of [false, true]) {
+		for (const command of ['cut', 'paste'] as const) {
+			for (const change of ['none', 'selection', 'focus', 'readonly', 'composition', 'escape', 'model', 'dispose'] as const) {
+				test(`${inputKind} ${fromOutside ? 'external' : 'focused'} delayed clipboard ${command} respects ${change}`, async ({ page }) => {
+					if (inputKind === 'textarea') {
+						await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+					}
+					await page.goto('/standalone.html');
+					const result = await page.evaluate(({ command, change, fromOutside }) => window.ashStandaloneIntegration.runDeferredClipboard(command, change, fromOutside), { command, change, fromOutside });
+					expect(result).toEqual({
+						value: change === 'none' ? (command === 'cut' ? '' : 'omega') : 'alpha',
+						finishedBeforeTransfer: change !== 'none',
+					});
+					if (change === 'none') {
+						await page.keyboard.press('ControlOrMeta+z');
+						expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('alpha');
+					}
 				});
-				if (change === 'none') {
-					await page.keyboard.press('ControlOrMeta+z');
-					expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('alpha');
-				}
-			});
+			}
 		}
 	}
 
@@ -166,6 +227,18 @@ for (const entry of ['shortcut', 'action'] as const) {
 		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('one two');
 		await page.keyboard.press('ControlOrMeta+z');
 		expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({ value: '(one) [two]', selections: ['[1,1 -> 1,1]', '[1,7 -> 1,7]'] });
+	});
+}
+
+for (const entry of ['shortcut', 'action'] as const) {
+	test(`bracket removal via ${entry} preserves unrelated selected text`, async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareBrackets('(value) keep', [1, [13, 9]]));
+		if (entry === 'shortcut') await page.keyboard.press('ControlOrMeta+Alt+Backspace');
+		else await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.removeBrackets'));
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({ value: 'value keep', selections: ['[1,1 -> 1,1]', '[1,11 -> 1,7]'] });
+		await page.keyboard.press('ControlOrMeta+z');
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({ value: '(value) keep', selections: ['[1,1 -> 1,1]', '[1,13 -> 1,9]'] });
 	});
 }
 
@@ -505,6 +578,23 @@ test('keyboard undo and redo restore multi-cursor selections in a shared model',
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	expect(errors).toEqual([]);
 });
+
+test('model word lookup handles empty regular-expression matches before an emoji', async ({ page }) => {
+	await page.goto('/standalone.html');
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.runEmptyWordPattern())).toEqual({ word: 'foo', startColumn: 4, endColumn: 7 });
+});
+
+for (const kind of ['codeAction', 'rename', 'parameterHints', 'queuedParameterHints'] as const) {
+	test(`disposing the editor cancels ${kind} work`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto('/standalone.html');
+		expect(await page.evaluate(kind => window.ashStandaloneIntegration.runDisposedLanguageRequest(kind), kind)).toEqual(
+			kind === 'queuedParameterHints' ? { calls: 0, aborted: false } : { calls: 1, aborted: true },
+		);
+		expect(errors).toEqual([]);
+	});
+}
 
 test('code action dismissal restores focus only when its menu owns focus', async ({ page }) => {
 	const errors: string[] = [];
@@ -1824,6 +1914,17 @@ test('editor rendering follows updated configuration without replacing the view'
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	expect(errors).toEqual([]);
 });
+
+for (const [original, formatted] of [['😀 hello', '😀 Hello'], ['a😀z', 'a😁z'], ['a😀z', 'a🨀z'], ['first\n😀 hello', 'first\n😀 Hello']]) {
+	test(`formatting preserves UTF-16 characters: ${JSON.stringify(original)} to ${JSON.stringify(formatted)}`, async ({ page }) => {
+		await page.goto('/standalone.html');
+		expect(await page.evaluate(([before, after]) => window.ashStandaloneIntegration.runUnicodeFormatting(before!, after!), [original, formatted])).toBe(formatted);
+		await page.keyboard.press('ControlOrMeta+z');
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe(original);
+		await page.keyboard.press('ControlOrMeta+Shift+z');
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe(formatted);
+	});
+}
 
 for (const change of ['none', 'position', 'model', 'readonly', 'eol', 'returnPosition'] as const) {
 	test(`formatting validates ${change} state before applying delayed edits`, async ({ page }) => {

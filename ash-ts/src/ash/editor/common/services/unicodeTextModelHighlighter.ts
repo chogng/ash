@@ -13,7 +13,7 @@ export interface UnicodeHighlight {
 /** Finds editor-dangerous Unicode characters in one immutable text version. */
 export function computeUnicodeHighlights(snapshot: TextSnapshot, signal?: AbortSignal): readonly UnicodeHighlight[] {
 	const result: UnicodeHighlight[] = [];
-	const lines = snapshot.getText().split('\n');
+	const lines = snapshot.getText().split(/\r\n|\r|\n/);
 	for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
 		signal?.throwIfAborted();
 		const line = lines[lineIndex]!;

@@ -75,7 +75,7 @@ export class ColorService {
 			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
 			return Object.freeze((values?.length ? values : createColorPresentations(request.range, color)).map(normalizePresentation));
 		} catch (error) {
-			if (signal.aborted) return Object.freeze([]);
+			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
 			this.onError(error);
 			return Object.freeze(createColorPresentations(request.range, color).map(normalizePresentation));
 		}

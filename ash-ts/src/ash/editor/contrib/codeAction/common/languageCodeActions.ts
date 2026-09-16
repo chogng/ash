@@ -32,6 +32,8 @@ export interface LanguageCodeActionProvider {
 
 /** Collects code actions and keeps edit application in the editor command layer. */
 export class CodeActionService extends Disposable {
+	private readonly actionOwners = new WeakMap<LanguageCodeAction, { readonly provider: LanguageCodeActionProvider; readonly action: LanguageCodeAction }>();
+
 	constructor(private readonly model: TextModel, private readonly resource: URI, private readonly providers: LanguageFeatureRegistry<LanguageCodeActionProvider>) {
 		super();
 	}
@@ -43,20 +45,26 @@ export class CodeActionService extends Disposable {
 			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
 			const actions = await provider.provideCodeActions(request, signal);
 			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
-			result.push(...actions.map(normalizeLanguageCodeAction));
+			for (const action of actions) {
+				const normalized = normalizeLanguageCodeAction(action);
+				this.actionOwners.set(normalized, { provider, action });
+				result.push(normalized);
+			}
 		}
 		return Object.freeze(result);
 	}
 
 	async resolveCodeAction(languageId: string, range: Range, action: LanguageCodeAction, diagnostics: readonly LanguageDiagnostic[] = [], signal: AbortSignal = new AbortController().signal): Promise<LanguageCodeAction> {
-		const request = { ...createLanguageFeatureRequest(this.model, languageId, signal), resource: this.resource, range, diagnostics };
-		for (const provider of this.providers.ordered(this.model)) {
-			if (!provider.resolveCodeAction) continue;
-			const resolved = await provider.resolveCodeAction(action, request, signal);
-			if (!isLanguageFeatureRequestCurrent(request)) throw new Error("Code action result became stale");
-			return normalizeLanguageCodeAction(resolved);
+		const owner = this.actionOwners.get(action);
+		if (!owner?.provider.resolveCodeAction) {
+			return action;
 		}
-		return action;
+		const request = { ...createLanguageFeatureRequest(this.model, languageId, signal), resource: this.resource, range, diagnostics };
+		const resolved = await owner.provider.resolveCodeAction(owner.action, request, signal);
+		if (!isLanguageFeatureRequestCurrent(request)) throw new Error("Code action result became stale");
+		const normalized = normalizeLanguageCodeAction(resolved);
+		this.actionOwners.set(normalized, { provider: owner.provider, action: resolved });
+		return normalized;
 	}
 }
 

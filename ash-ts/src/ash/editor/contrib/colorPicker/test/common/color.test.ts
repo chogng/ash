@@ -62,6 +62,27 @@ test('default color coordinates belong to the request snapshot after the model c
 	assert.deepEqual(colors.map(color => color.range), [new Range(2, 8, 2, 15)]);
 });
 
+for (const change of ['content', 'language', 'dispose'] as const) {
+	test(`color presentations discard provider failures after ${change}`, async () => {
+		using model = new TextModel('#f00', { languageId: 'css' });
+		const providers = new LanguageFeatureRegistry<LanguageColorProvider>();
+		const errors: unknown[] = [];
+		const service = new ColorService(model, providers, undefined, error => errors.push(error));
+		const signal = new AbortController().signal;
+		const [data] = await service.provideDocumentColors('css', 'auto', signal);
+		let reject!: (error: Error) => void;
+		const pending = new Promise<never>((_resolve, fail) => { reject = fail; });
+		const provider: LanguageColorProvider = { provideDocumentColors: () => [], provideColorPresentations: () => pending };
+		const result = service.provideColorPresentations('css', { ...data!, provider }, data!.information.color, signal);
+		if (change === 'content') model.setValue('');
+		else if (change === 'language') model.setLanguage('plaintext');
+		else model.dispose();
+		reject(new Error('Provider failed after invalidation'));
+		assert.deepEqual(await result, []);
+		assert.deepEqual(errors, []);
+	});
+}
+
 test('an aborted default color request rejects even when there are no literals', () => {
 	using model = new TextModel('plain text');
 	const controller = new AbortController();

@@ -50,7 +50,10 @@ export class RenameController extends Disposable {
 		this.status.setAttribute("aria-live", "polite");
 		this.element.append(this.input, this.status);
 		viewport.domNode.domNode.append(this.element);
-		this._register(toDisposable(() => this.element.remove()));
+		this._register(toDisposable(() => {
+			this.cancelRequest();
+			this.element.remove();
+		}));
 		this._register(addDisposableListener(editorInput, "keydown", event => {
 			if (event.defaultPrevented || event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.key !== "F2") return;
 			stopEvent(event);

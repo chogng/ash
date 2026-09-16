@@ -6,6 +6,7 @@ import { URI } from '../../../../../base/common/uri.js';
 import { Position } from '../../../../../editor/common/core/position.js';
 import { LanguageCompletionTriggerKind } from '../../../../../editor/common/languages/completion/languageCompletionProviders.js';
 import type { LanguageDiagnostic } from '../../../../../editor/common/languages/languageResults.js';
+import { createLanguageFeatureRequest } from '../../../../../editor/common/languages/languageFeatureRequest.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import type { LanguageDiagnosticsPublisher } from '../../../../../editor/common/services/languageDiagnosticsService.js';
 import { JsonSchemaRegistry } from '../../../../../platform/jsonschemas/common/jsonSchemaRegistry.js';
@@ -54,10 +55,7 @@ test('generic JSON language features resolve nested schema completion, hover, an
 	using validModel = new TextModel('{"editor":{"enabled":true,// note\n},}');
 	const signal = new AbortController().signal;
 	const hover = await createJsonHoverProvider(registry).provideHover({
-		model: validModel,
-		snapshot: validModel.createVersionedSnapshot(),
-		languageId: 'jsonc',
-		signal,
+		...createLanguageFeatureRequest(validModel, 'jsonc', signal),
 		resource,
 		position: new Position((0) + 1, (13) + 1),
 	}, signal);

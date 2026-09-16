@@ -16,8 +16,17 @@ import { PositionOffsetTransformer } from "../../common/core/text/positionToOffs
 import { TextLength } from "../../common/core/text/textLength.js";
 import { StringText } from "../../common/core/text/abstractText.js";
 import { TextChange } from "../../common/core/textChange.js";
+import { getWordAtText } from "../../common/core/wordHelper.js";
 
 const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);
+
+test('word lookup skips empty matches and advances across Unicode characters', () => {
+	assert.equal(getWordAtText(4, /a*/g, 'bbbfoo', 0), null);
+	assert.equal(getWordAtText(1, /a*/g, '', 0), null);
+	for (const flags of ['g', 'gu', 'gv']) {
+		assert.deepEqual(getWordAtText(4, new RegExp('foo|a*', flags), '😀 foo', 0), { word: 'foo', startColumn: 4, endColumn: 7 });
+	}
+});
 
 test("rect rejects unordered edges as a bug-indicating error", () => {
 	assert.throws(() => new Rect(3, 0, 2, 1), BugIndicatingError);
@@ -30,6 +39,8 @@ test("core converts UTF-16 positions and text lengths", () => {
 	assert.deepEqual(transformer.getPosition(2), position(0, 2));
 	assert.deepEqual(transformer.getPosition(transformer.text.length), position(1, 4));
 	assert.deepEqual(TextLength.ofText("ab\ncd"), new TextLength(1, 2));
+	assert.deepEqual(TextLength.ofText("A😀"), new TextLength(0, 3));
+	assert.deepEqual(TextLength.ofText("A😀\nb😀"), new TextLength(1, 3));
 	assert.deepEqual(TextLength.ofText("ab\ncd").addToPosition(position(3, 4)), position(4, 2));
 });
 

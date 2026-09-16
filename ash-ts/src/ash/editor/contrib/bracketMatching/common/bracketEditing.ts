@@ -1,4 +1,3 @@
-import { ReplaceCommand } from '../../../common/commands/replaceCommand.js';
 import { type LanguageBracketPairs } from "../../../common/languages/languageBracketPairs.js";
 import { Selection } from "../../../common/core/selection.js";
 import { type Range } from '../../../common/core/range.js';
@@ -7,7 +6,7 @@ import { type ITextModel } from '../../../common/model.js';
 
 
 /** Removes every distinct matched bracket pair containing a collapsed cursor. */
-export function createRemoveMatchingBracketsCommand(bracketPairs: LanguageBracketPairs, selections: readonly Selection[]): ICommand[] | undefined {
+export function createRemoveMatchingBracketsCommand(bracketPairs: LanguageBracketPairs, selections: readonly Selection[]): (ICommand | null)[] | undefined {
 	let hasMatch = false;
 	const commands = selections.map(selection => {
 		if (selection.isEmpty()) {
@@ -17,7 +16,7 @@ export function createRemoveMatchingBracketsCommand(bracketPairs: LanguageBracke
 				return new RemoveMatchingBracketsCommand(match.opening, match.closing);
 			}
 		}
-		return new ReplaceCommand(selection, '');
+		return null;
 	});
 	return hasMatch ? commands : undefined;
 }

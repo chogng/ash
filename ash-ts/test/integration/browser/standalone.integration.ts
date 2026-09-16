@@ -84,8 +84,13 @@ interface ViewZoneState {
 }
 
 interface StandaloneHarness {
+	runEmptyWordPattern(): { word: string; startColumn: number; endColumn: number } | null;
+	runDisposedLanguageRequest(kind: 'codeAction' | 'rename' | 'parameterHints' | 'queuedParameterHints'): Promise<{ calls: number; aborted: boolean }>;
 	runEditorActivity(): Promise<boolean[]>;
 	runHistoryCommands(useAlias: boolean): Promise<string[]>;
+	prepareInputHistory(): void;
+	runInputHistoryCommand(command: 'undo' | 'redo' | 'default:undo' | 'default:redo'): Promise<string[]>;
+	runSelectAllCommand(): Promise<{ selections: string[]; inputSelection: string }>;
 	runFocusRouting(): Promise<{
 		states: { stage: string; text: boolean; widget: boolean; observedText: boolean; observedWidget: boolean; contextText: boolean; contextWidget: boolean; widgetEvents: string }[];
 		events: string[];
@@ -105,13 +110,15 @@ interface StandaloneHarness {
 	finishDeferredFormatting(): void;
 	readEOL(): string;
 	runFormatting(change: 'none' | 'position' | 'model' | 'readonly' | 'eol' | 'returnPosition' | 'range'): Promise<string>;
+	runUnicodeFormatting(original: string, formatted: string): Promise<string>;
 
 	prepareLineComment(options?: { insertSpace?: boolean; ignoreEmptyLines?: boolean; readOnly?: boolean; languageId?: string; value?: string }): void;
 	prepareLineCopy(emptyTail?: boolean): void;
-	prepareBrackets(value: string, columns: number[], readOnly?: boolean): void;
+	prepareBrackets(value: string, columns: (number | [number, number])[], readOnly?: boolean): void;
 	prepareMulticursor(): void;
 	runDeferredRichCopy(fail: boolean): Promise<{ pendingHtml: string; finishedHtml: string; rejected: boolean; writtenText: string }>;
-	runDeferredClipboard(command: 'cut' | 'paste', change: 'none' | 'selection' | 'focus' | 'readonly' | 'composition' | 'escape' | 'model' | 'dispose'): Promise<{ value: string; finishedBeforeTransfer: boolean }>;
+	runDeferredClipboard(command: 'cut' | 'paste', change: 'none' | 'selection' | 'focus' | 'readonly' | 'composition' | 'escape' | 'model' | 'dispose', fromOutside: boolean): Promise<{ value: string; finishedBeforeTransfer: boolean }>;
+	runActiveClipboard(command: 'copy' | 'cut' | 'paste', target: 'outside' | 'readonly' | 'find'): Promise<{ values: string[]; written: string; reads: number; focused: boolean; documentCommands: string[] }>;
 	runDeferredPaste(change: 'none' | 'writableAgain' | 'selection' | 'composition' | 'escape'): Promise<{ value: string; handled: boolean; finishedBeforeDecode: boolean }>;
 	runDeferredDrop(change: 'none' | 'readonly' | 'writableAgain'): Promise<{ value: string; selectionUnchanged: boolean; handled: boolean }>;
 	runLineAction(id: string): Promise<void>;
@@ -305,6 +312,55 @@ let deferredFormatting: { token: CancellationToken; resolve: () => void }[] = []
 let formattingProvider: { dispose(): void } | undefined;
 
 window.ashStandaloneIntegration = {
+	runEmptyWordPattern: () => {
+		using configuration = stanza.languages.setLanguageConfiguration('plaintext', { wordPattern: /foo|a*/gu });
+		callerEditor.setValue('😀 foo');
+		return callerModel.getWordAtPosition(new stanza.Position(1, 4));
+	},
+	runDisposedLanguageRequest: async kind => {
+		const features = callerEditor.invokeWithinContext(accessor => accessor.get(ILanguageFeaturesService));
+		let calls = 0;
+		let signal: AbortSignal | undefined;
+		let release!: () => void;
+		let started!: () => void;
+		const pending = new Promise<void>(resolve => { release = resolve; });
+		const ready = new Promise<void>(resolve => { started = resolve; });
+		const wait = async (requestSignal: AbortSignal): Promise<void> => {
+			calls++;
+			signal = requestSignal;
+			started();
+			await pending;
+		};
+		using provider = kind === 'codeAction'
+			? features.codeActionProvider.register('plaintext', { provideCodeActions: async (_request, signal) => { await wait(signal); return []; } })
+			: kind === 'rename'
+				? features.renameProvider.register('plaintext', {
+					prepareRename: async (_request, signal) => { await wait(signal); return undefined; },
+					provideRenameEdits: () => ({ entries: [] }),
+				})
+				: features.signatureHelpProvider.register('plaintext', { provideParameterHints: async (_request, signal) => { await wait(signal); return undefined; } });
+		try {
+			callerEditor.focus();
+			const hints = kind === 'parameterHints' || kind === 'queuedParameterHints' ? callerEditor.getContribution('editor.contrib.parameterHints') : undefined;
+			if (kind === 'queuedParameterHints') {
+				callerEditor.executeEdits('test', [{ range: new stanza.Range(1, 1, 1, 1), text: '(' }]);
+			} else {
+				const key = kind === 'rename' ? 'F2' : kind === 'codeAction' ? '.' : ' ';
+				callerContainer.querySelector('.stanza-editor-input')!.dispatchEvent(new KeyboardEvent('keydown', {
+					key, ctrlKey: kind !== 'rename', shiftKey: kind === 'parameterHints', bubbles: true, cancelable: true,
+				}));
+				await ready;
+			}
+			hints?.dispose();
+			const aborted = signal?.aborted ?? false;
+			if (!hints) callerEditor.dispose();
+			release();
+			await new Promise<void>(resolve => setTimeout(resolve, 0));
+			return { calls, aborted: hints ? aborted : signal?.aborted ?? false };
+		} finally {
+			release();
+		}
+	},
 	runFormatterChoice: async outcome => {
 		const language = callerModel.getLanguageId();
 		let release!: () => void;
@@ -437,6 +493,19 @@ window.ashStandaloneIntegration = {
 	readDeferredFormatting: () => ({ aborted: deferredFormatting.map(request => request.token.isCancellationRequested), value: callerEditor.getValue() }),
 	finishDeferredFormatting: () => { for (const request of deferredFormatting) request.resolve(); },
 	readEOL: () => callerEditor.getModel()!.getEOL(),
+	runUnicodeFormatting: async (original, formatted) => {
+		callerEditor.setValue(original);
+		callerEditor.focus();
+		const provider = stanza.languages.registerDocumentFormattingEditProvider('*', {
+			provideDocumentFormattingEdits: () => [{ range: callerModel.getFullModelRange(), text: formatted }],
+		});
+		try {
+			await window.ashStandaloneIntegration.runLineAction('editor.action.formatDocument');
+			return callerEditor.getValue();
+		} finally {
+			provider.dispose();
+		}
+	},
 	runFormatting: async change => {
 		callerEditor.setValue('alpha');
 		callerEditor.setPosition(new stanza.Position(1, 1));
@@ -485,7 +554,7 @@ window.ashStandaloneIntegration = {
 		callerEditor.updateOptions({ readOnly: false });
 		callerEditor.setValue(value);
 		callerModel.setLanguage('typescript');
-		callerEditor.setSelections(columns.map(column => new stanza.Selection(1, column, 1, column)));
+		callerEditor.setSelections(columns.map(column => Array.isArray(column) ? new stanza.Selection(1, column[0], 1, column[1]) : new stanza.Selection(1, column, 1, column)));
 		callerEditor.updateOptions({ readOnly });
 		callerEditor.focus();
 	},
@@ -557,6 +626,54 @@ window.ashStandaloneIntegration = {
 			callerEditor.focus();
 			await run('undo');
 			return values;
+		} finally {
+			callerEditor.updateOptions({ readOnly: false });
+			outside.remove();
+		}
+	},
+	prepareInputHistory: () => {
+		callerEditor.setValue('alpha');
+		ownedEditor.setValue('bravo');
+		callerEditor.focus();
+		callerEditor.executeEdits('test', [{ range: new stanza.Range(1, 6, 1, 6), text: '!' }]);
+		callerEditor.pushUndoStop();
+		callerEditor.updateOptions({ readOnly: true });
+		callerEditor.getContribution<FindController>(FindController.ID)!.open({ showReplace: true });
+	},
+	runInputHistoryCommand: async id => {
+		const command = CommandsRegistry.getCommand(id)!;
+		await StandaloneServices.get().instantiationService.invokeFunction(accessor => command(accessor));
+		return [callerEditor.getValue(), ownedEditor.getValue()];
+	},
+	runSelectAllCommand: async () => {
+		const services = StandaloneServices.get().instantiationService;
+		const command = CommandsRegistry.getCommand('editor.action.selectAll')!;
+		const outside = document.createElement('button');
+		document.body.append(outside);
+		callerEditor.setValue('one\ntwo');
+		ownedEditor.setValue('other');
+		ownedEditor.setPosition({ lineNumber: 1, column: 2 });
+		callerEditor.focus();
+		const selections: string[] = [];
+		const run = async (): Promise<void> => {
+			await services.invokeFunction(accessor => command(accessor));
+			selections.push(`${callerEditor.getSelection()}|${ownedEditor.getSelection()}`);
+		};
+		try {
+			await run();
+			callerEditor.setPosition({ lineNumber: 1, column: 2 });
+			callerEditor.updateOptions({ readOnly: true });
+			outside.focus();
+			await new Promise(resolve => setTimeout(resolve, 0));
+			await run();
+			callerEditor.setPosition({ lineNumber: 1, column: 2 });
+			callerEditor.getContribution<FindController>(FindController.ID)!.open({ showReplace: true });
+			const input = callerEditor.getDomNode()!.querySelector<HTMLInputElement>('input[aria-label="Find"]')!;
+			input.value = 'needle';
+			input.focus();
+			input.setSelectionRange(2, 2);
+			await run();
+			return { selections, inputSelection: input.value.slice(input.selectionStart!, input.selectionEnd!) };
 		} finally {
 			callerEditor.updateOptions({ readOnly: false });
 			outside.remove();
@@ -647,10 +764,52 @@ window.ashStandaloneIntegration = {
 			document.execCommand = execCommand;
 		}
 	},
-	runDeferredClipboard: async (command, change) => {
+	runActiveClipboard: async (command, target) => {
+		callerEditor.setValue('alpha');
+		ownedEditor.setValue('bravo');
+		callerEditor.setSelection(new stanza.Selection(1, 1, 1, 6));
+		ownedEditor.focus();
+		callerEditor.focus();
+		callerEditor.updateOptions({ readOnly: target === 'readonly' });
+		const outside = document.createElement('button');
+		document.body.append(outside);
+		const clipboard = StandaloneServices.get().instantiationService.get(IClipboardService);
+		const readText = clipboard.readText;
+		const writeText = clipboard.writeText;
+		const execCommand = document.execCommand;
+		let written = '';
+		let reads = 0;
+		const documentCommands: string[] = [];
+		clipboard.readText = async () => { reads++; return 'omega'; };
+		clipboard.writeText = async text => { written = text; };
+		document.execCommand = command => { documentCommands.push(command); return false; };
+		try {
+			if (target === 'find') {
+				callerEditor.getContribution<FindController>(FindController.ID)!.open({ showReplace: true });
+				callerEditor.getDomNode()!.querySelector<HTMLInputElement>('input[aria-label="Find"]')!.focus();
+			} else {
+				outside.focus();
+			}
+			await new Promise(resolve => setTimeout(resolve, 0));
+			const id = { copy: 'editor.action.clipboardCopyAction', cut: 'editor.action.clipboardCutAction', paste: 'editor.action.clipboardPasteAction' }[command];
+			const action = CommandsRegistry.getCommand(id)!;
+			await StandaloneServices.get().instantiationService.invokeFunction(accessor => action(accessor));
+			return { values: [callerEditor.getValue(), ownedEditor.getValue()], written, reads, focused: callerEditor.hasTextFocus(), documentCommands };
+		} finally {
+			clipboard.readText = readText;
+			clipboard.writeText = writeText;
+			document.execCommand = execCommand;
+			callerEditor.updateOptions({ readOnly: false });
+			outside.remove();
+		}
+	},
+	runDeferredClipboard: async (command, change, fromOutside) => {
 		callerEditor.setValue('alpha');
 		callerEditor.setSelection(new stanza.Selection(1, 1, 1, 6));
 		callerEditor.focus();
+		const outside = document.createElement('button');
+		document.body.append(outside);
+		if (fromOutside) outside.focus();
 		const clipboard = callerEditor.invokeWithinContext(accessor => accessor.get(IClipboardService));
 		const readText = clipboard.readText;
 		const writeText = clipboard.writeText;
@@ -698,6 +857,7 @@ window.ashStandaloneIntegration = {
 			return { value: callerModel.getValue(), finishedBeforeTransfer };
 		} finally {
 			finishTransfer();
+			outside.remove();
 			clipboard.readText = readText;
 			clipboard.writeText = writeText;
 			document.execCommand = execCommand;

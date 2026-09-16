@@ -83,6 +83,23 @@ function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value
 	return { promise, resolve };
 }
 
+for (const change of ['language', 'dispose'] as const) {
+	test(`language navigation discards pending results after ${change}`, async () => {
+		using configurations = new TestLanguageConfigurationService();
+		using languages = new LanguageFeaturesService(configurations);
+		using model = new TextModel('value', { languageId: 'typescript' });
+		const source = URI.file('/project/main.ts');
+		const pending = deferred<readonly { resource: URI; range: Range }[]>();
+		using provider = languages.definitionProvider.register('typescript', { provideDefinition: () => pending.promise });
+		using navigation = createNavigationService(languages, model, source);
+		const result = navigation.provideDefinition('typescript', new Position(1, 2));
+		if (change === 'language') model.setLanguage('javascript');
+		else model.dispose();
+		pending.resolve([{ resource: source, range: new Range(1, 1, 1, 6) }]);
+		assert.deepEqual(await result, []);
+	});
+}
+
 function createNavigationService(languages: LanguageFeaturesService, model: TextModel, resource: URI): LanguageNavigationService {
 	return new LanguageNavigationService(model, resource, {
 		definitions: languages.definitionProvider,

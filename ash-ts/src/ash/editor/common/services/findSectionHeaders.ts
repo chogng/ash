@@ -61,6 +61,10 @@ export function collectMarkHeaders(model: ISectionHeaderFinderTarget, options: F
 		regex.lastIndex = 0;
 		let match: RegExpExecArray | null;
 		while ((match = regex.exec(text)) !== null) {
+			if (match[0].length === 0) {
+				regex.lastIndex = match.index + 1;
+				continue;
+			}
 			const precedingText = text.substring(0, match.index);
 			const lineNumber = startLine + (precedingText.match(/\n/g) ?? []).length;
 			const matchLines = match[0].split('\n');
