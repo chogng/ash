@@ -48,7 +48,7 @@ export class EditorScrollbar extends ViewPart {
 	public override onConfigurationChanged(event: viewEvents.ViewConfigurationChangedEvent): boolean {
 		if (event.hasChanged(EditorOption.scrollbar) || event.hasChanged(EditorOption.mouseWheelScrollSensitivity)
 			|| event.hasChanged(EditorOption.fastScrollSensitivity) || event.hasChanged(EditorOption.scrollPredominantAxis)
-			|| event.hasChanged(EditorOption.smoothScrolling)) {
+			|| event.hasChanged(EditorOption.smoothScrolling) || event.hasChanged(EditorOption.inertialScroll)) {
 			this.scrollbar.updateOptions(this.readOptions());
 		}
 		return true;
@@ -69,6 +69,10 @@ export class EditorScrollbar extends ViewPart {
 		const options = this._context.configuration.options;
 		const scrollbar = options.get(EditorOption.scrollbar);
 		return {
+			arrowSize: scrollbar.arrowSize,
+			horizontalHasArrows: scrollbar.horizontalHasArrows,
+			verticalHasArrows: scrollbar.verticalHasArrows,
+			inertialScroll: options.get(EditorOption.inertialScroll),
 			horizontal: scrollbar.horizontal,
 			vertical: scrollbar.vertical,
 			horizontalScrollbarSize: scrollbar.horizontalScrollbarSize,

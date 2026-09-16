@@ -380,6 +380,124 @@ test('editor scrollbar uses wheel policy, slider dimensions and page clicks from
 	await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBeGreaterThan(520);
 });
 
+test('editor scrollbar arrows support click, hold, keyboard and runtime removal', async ({ page }) => {
+	await page.goto('/textModel.html');
+	await page.evaluate(() => {
+		window.ashTextModelIntegration.setValue(Array.from({ length: 100 }, () => 'x'.repeat(200)).join('\n'));
+		window.ashTextModelIntegration.setScrollbar({
+			vertical: 'visible', horizontal: 'visible', verticalHasArrows: true, horizontalHasArrows: true, arrowSize: 18,
+		});
+	});
+	const editor = page.locator('.stanza-editor');
+	const down = editor.getByRole('button', { name: 'Scroll down', exact: true });
+	const up = editor.getByRole('button', { name: 'Scroll up', exact: true });
+	const right = editor.getByRole('button', { name: 'Scroll right', exact: true });
+	await expect(down).toHaveCSS('height', '18px');
+	await expect(up).toBeDisabled();
+	await down.click();
+	await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBe(40);
+	await right.focus();
+	await page.keyboard.press('Enter');
+	await expect.poll(() => editor.evaluate(element => element.scrollLeft)).toBe(40);
+	const thumb = editor.locator('.ash-scrollbar-track-vertical .ash-scrollbar-thumb');
+	const upBox = await up.boundingBox();
+	const thumbBox = await thumb.boundingBox();
+	assertBox(upBox, 'up arrow');
+	assertBox(thumbBox, 'vertical thumb');
+	expect(thumbBox.y).toBeGreaterThanOrEqual(upBox.y + upBox.height);
+
+	await down.hover();
+	await page.mouse.down();
+	await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBeGreaterThan(80);
+	await page.mouse.up();
+	const released = await editor.evaluate(element => element.scrollTop);
+	await page.waitForTimeout(180);
+	expect(await editor.evaluate(element => element.scrollTop)).toBe(released);
+	await page.mouse.down();
+	await page.evaluate(() => window.ashTextModelIntegration.setScrollbar({ verticalHasArrows: false, horizontalHasArrows: false }));
+	await expect(down).toBeHidden();
+	const disabled = await editor.evaluate(element => element.scrollTop);
+	await page.waitForTimeout(400);
+	expect(await editor.evaluate(element => element.scrollTop)).toBe(disabled);
+	await page.mouse.up();
+	await expect(editor.locator('.ash-scrollbar-track-vertical')).toHaveCSS('top', '0px');
+	await page.evaluate(() => {
+		window.ashTextModelIntegration.setScrollbar({ verticalHasArrows: true });
+		window.ashTextModelIntegration.setTheme('contrast');
+	});
+	await down.focus();
+	await expect(down).toHaveCSS('outline-style', 'solid');
+	const vertical = editor.getByRole('scrollbar', { name: 'Vertical scrollbar' });
+	await vertical.focus();
+	await page.keyboard.press('End');
+	await expect(down).toBeDisabled();
+	await up.focus();
+	await page.keyboard.press('Space');
+	await expect(down).toBeEnabled();
+	await down.hover();
+	await page.mouse.down();
+	await page.evaluate(() => window.ashTextModelIntegration.dispose());
+	await page.waitForTimeout(400);
+	await page.mouse.up();
+	await expect(page.locator('.ash-scrollbar-arrow')).toHaveCount(0);
+});
+
+test('editor inertial scrolling decays and stops on reversal, direct input and configuration changes', async ({ page }) => {
+	await page.goto('/textModel.html');
+	await page.evaluate(() => {
+		window.ashTextModelIntegration.setValue(Array.from({ length: 100 }, () => 'x'.repeat(200)).join('\n'));
+		window.ashTextModelIntegration.updateOptions({ inertialScroll: true, smoothScrolling: false });
+	});
+	const editor = page.locator('.stanza-editor');
+	await page.clock.install();
+	await page.clock.pauseAt(new Date());
+	await editor.dispatchEvent('wheel', { deltaY: 12, deltaMode: 0 });
+	await page.clock.runFor(160);
+	const forward = await editor.evaluate(element => element.scrollTop);
+	expect(forward).toBeGreaterThan(12);
+	await editor.dispatchEvent('wheel', { deltaY: -8, deltaMode: 0 });
+	await page.clock.runFor(80);
+	expect(await editor.evaluate(element => element.scrollTop)).toBeLessThan(forward - 8);
+	await editor.dispatchEvent('keydown', { key: 'Escape' });
+	const interrupted = await editor.evaluate(element => element.scrollTop);
+	await page.clock.runFor(200);
+	expect(await editor.evaluate(element => element.scrollTop)).toBe(interrupted);
+	await editor.dispatchEvent('wheel', { deltaY: 12, deltaMode: 0 });
+	await page.evaluate(() => window.ashTextModelIntegration.updateOptions({ inertialScroll: false }));
+	const disabled = await editor.evaluate(element => element.scrollTop);
+	await page.clock.runFor(500);
+	expect(await editor.evaluate(element => element.scrollTop)).toBe(disabled);
+	await editor.dispatchEvent('wheel', { deltaY: 12, deltaMode: 0 });
+	await page.clock.runFor(500);
+	expect(await editor.evaluate(element => element.scrollTop)).toBe(disabled + 12);
+	await page.evaluate(() => window.ashTextModelIntegration.updateOptions({ inertialScroll: true }));
+	await editor.dispatchEvent('wheel', { deltaY: 3, deltaMode: 1 });
+	const discrete = await editor.evaluate(element => element.scrollTop);
+	await page.clock.runFor(500);
+	expect(await editor.evaluate(element => element.scrollTop)).toBe(discrete);
+	await editor.dispatchEvent('wheel', { deltaY: 12, deltaMode: 0 });
+	await page.clock.runFor(1500);
+	const settled = await editor.evaluate(element => element.scrollTop);
+	await page.clock.runFor(500);
+	expect(await editor.evaluate(element => element.scrollTop)).toBe(settled);
+	await editor.dispatchEvent('wheel', { deltaY: 12, deltaMode: 0 });
+	await page.evaluate(() => window.ashTextModelIntegration.setValue('short\nshort\nshort'));
+	await page.clock.runFor(500);
+	expect(await editor.evaluate(element => element.scrollTop)).toBe(0);
+	await page.evaluate(() => window.ashTextModelIntegration.setValue(Array.from({ length: 100 }, () => 'line').join('\n')));
+	await page.clock.runFor(32);
+	await editor.evaluate(element => { element.scrollTop = element.scrollHeight; });
+	await page.clock.runFor(32);
+	const bottom = await editor.evaluate(element => element.scrollTop);
+	await editor.dispatchEvent('wheel', { deltaY: 12, deltaMode: 0 });
+	await page.clock.runFor(1500);
+	expect(await editor.evaluate(element => element.scrollTop)).toBe(bottom);
+	await editor.dispatchEvent('wheel', { deltaY: -12, deltaMode: 0 });
+	await page.evaluate(() => window.ashTextModelIntegration.dispose());
+	await page.clock.runFor(1500);
+	await expect(page.locator('.ash-smooth-scrollable')).toHaveCount(0);
+});
+
 test('editor surface and diagnostic colors follow the current Ash theme', async ({ page }) => {
 	await page.goto('/textModel.html');
 	const editor = page.locator('.stanza-editor');

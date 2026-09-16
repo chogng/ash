@@ -115,6 +115,10 @@ function nonNegativeFinite(
 
 /** Options for a DOM view backed by an existing Scrollable. */
 export interface ScrollableElementCreationOptions {
+	arrowSize?: number;
+	horizontalHasArrows?: boolean;
+	verticalHasArrows?: boolean;
+	inertialScroll?: boolean;
 	lazyRender?: boolean;
 	className?: string;
 	listenOnDomNode?: HTMLElement;

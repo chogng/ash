@@ -172,3 +172,54 @@
   width: var(--ash-scrollbar-slider-size);
   translate: -50% 0;
 }
+
+.ash-scrollbar-arrow {
+  position: absolute;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ash-foreground);
+  font: inherit;
+  line-height: 1;
+  cursor: default;
+  touch-action: none;
+}
+
+.ash-scrollbar-arrow[hidden] {
+  display: none;
+}
+
+.ash-scrollbar-arrow[data-visibility="auto"] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ash-scrollbar-arrow:hover:not(:disabled) {
+  background: var(--ash-scrollbar-slider-hover-background);
+}
+
+.ash-scrollbar-arrow:active:not(:disabled) {
+  background: var(--ash-scrollbar-slider-active-background);
+}
+
+.ash-scrollbar-arrow:disabled:not([data-visibility="auto"]) {
+  opacity: 0.4;
+}
+
+.ash-scrollbar-arrow:focus-visible {
+  outline: 1px solid var(--ash-focus-border);
+  outline-offset: -1px;
+}
+
+@media (forced-colors: active) {
+  .ash-scrollbar-arrow {
+    color: ButtonText;
+  }
+
+  .ash-scrollbar-arrow:disabled {
+    color: GrayText;
+  }
+}
