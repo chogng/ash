@@ -196,7 +196,7 @@ impl ContextInput {
             instructions,
             environment: String::new(),
             evidence: Vec::new(),
-            items: snapshot.items.clone(),
+            items: model_items(&snapshot.items),
             checkpoints: snapshot.context_checkpoints.clone(),
             terminal_turns: snapshot
                 .turns
@@ -334,4 +334,35 @@ impl ContextInput {
     pub(crate) const fn allow_empty_current_turn(&self) -> bool {
         self.allow_empty_current_turn
     }
+}
+
+// Nested calls are audit facts. Only their owning exec/wait output belongs in model
+// context, including token measurement and compaction input.
+fn model_items(items: &[ThreadItem]) -> Vec<ThreadItem> {
+    let nested = items
+        .iter()
+        .filter_map(|item| match item {
+            ThreadItem::ToolCall {
+                tool_call_id,
+                binding: Some(binding),
+                ..
+            } if matches!(
+                binding.caller,
+                ash_protocol::ToolCallCaller::CodeMode { .. }
+            ) =>
+            {
+                Some(tool_call_id)
+            }
+            _ => None,
+        })
+        .collect::<BTreeSet<_>>();
+    items
+        .iter()
+        .filter(|item| match item {
+            ThreadItem::ToolCall { tool_call_id, .. }
+            | ThreadItem::ToolResult { tool_call_id, .. } => !nested.contains(tool_call_id),
+            _ => true,
+        })
+        .cloned()
+        .collect()
 }

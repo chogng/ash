@@ -16,6 +16,7 @@ use std::time::Duration;
 mod cell;
 mod store;
 pub use store::CodeModeStore;
+pub(crate) use store::validate_values;
 
 /// Bridge from JavaScript to Core's durable tool broker.
 ///
@@ -92,7 +93,7 @@ struct CellEntry {
 
 struct CellEvent {
     response: RuntimeResponse,
-    stored_value_writes: BTreeMap<String, Value>,
+    stored_value_writes: BTreeMap<String, Option<Value>>,
 }
 
 enum CellCommand {
@@ -108,7 +109,7 @@ pub(super) struct RuntimeState {
     pub(super) tool_call_id: String,
     pub(super) enabled_tools: Vec<EnabledTool>,
     pub(super) stored_values: BTreeMap<String, Value>,
-    pub(super) stored_value_writes: BTreeMap<String, Value>,
+    pub(super) stored_value_writes: BTreeMap<String, Option<Value>>,
     pub(super) output_items: Vec<OutputItem>,
     pub(super) output_bytes: usize,
     pub(super) max_output_bytes: usize,
@@ -234,6 +235,7 @@ impl CodeModeRuntime {
         let runtime_cell_id = cell_id.clone();
         let panic_cell_id = cell_id.clone();
         let (handle_tx, handle_rx) = mpsc::sync_channel(1);
+        let cleanup_invoker = Arc::clone(&invoker);
         let thread_done = Arc::clone(&done);
         let thread_timed_out = Arc::clone(&timed_out);
         let thread_termination_requested = Arc::clone(&termination_requested);
@@ -254,6 +256,7 @@ impl CodeModeRuntime {
                     Arc::clone(&thread_done),
                 )
             }));
+            cleanup_invoker.cancel_cell(&panic_cell_id);
             if result.is_err() {
                 let _ = event_tx.send(CellEvent {
                     response: RuntimeResponse::Unknown {
@@ -280,6 +283,33 @@ impl CodeModeRuntime {
     /// Waits for one cell, returning a bounded live/terminal response instead of hiding state in a
     /// boolean. A timed observation is represented by `RuntimeResponse::Running`.
     pub fn wait(&self, request: WaitRequest) -> Result<WaitOutcome, RuntimeError> {
+        if request.max_output_tokens == Some(0) {
+            return Err(RuntimeError::InvalidRequest(
+                "max_output_tokens must be greater than zero".into(),
+            ));
+        }
+        let budget = request.max_output_tokens;
+        let cell_id = request.cell_id.clone();
+        let mut outcome = self.wait_cell(request)?;
+        if let WaitOutcome::LiveCell { response } = &mut outcome {
+            if !matches!(
+                response,
+                RuntimeResponse::Running { .. } | RuntimeResponse::Yielded { .. }
+            ) {
+                self.inner
+                    .cells
+                    .lock()
+                    .map_err(|_| {
+                        RuntimeError::Runtime("Code Mode cell registry was poisoned".into())
+                    })?
+                    .remove(&cell_id);
+            }
+            crate::output::limit_output(response, budget);
+        }
+        Ok(outcome)
+    }
+
+    fn wait_cell(&self, request: WaitRequest) -> Result<WaitOutcome, RuntimeError> {
         let Some(entry) = self
             .inner
             .cells
@@ -347,19 +377,12 @@ impl CodeModeRuntime {
 
     /// Requests termination and interrupts CPU-bound JavaScript through V8's isolate handle.
     pub fn terminate(&self, cell_id: &CellId) -> Result<WaitOutcome, RuntimeError> {
-        let Some(entry) = self
-            .inner
-            .cells
-            .lock()
-            .map_err(|_| RuntimeError::Runtime("Code Mode cell registry was poisoned".into()))?
-            .get(cell_id)
-            .cloned()
-        else {
-            return Ok(WaitOutcome::MissingCell {
-                cell_id: cell_id.clone(),
-            });
-        };
-        self.terminate_cell(cell_id, &entry)
+        self.wait(WaitRequest {
+            cell_id: cell_id.clone(),
+            yield_time_ms: 0,
+            max_output_tokens: None,
+            terminate: true,
+        })
     }
 
     /// Reports whether this session owns a cell without waiting for its runtime thread.
@@ -399,10 +422,31 @@ impl CodeModeRuntime {
     fn record_event(
         &self,
         entry: &CellEntry,
-        event: CellEvent,
+        mut event: CellEvent,
     ) -> Result<RuntimeResponse, RuntimeError> {
-        if !event.stored_value_writes.is_empty() {
-            self.inner.stored_values.extend(event.stored_value_writes)?;
+        if !event.stored_value_writes.is_empty()
+            && let Err(error) = self.inner.stored_values.apply(event.stored_value_writes)
+        {
+            let cell_id = match &event.response {
+                RuntimeResponse::Running { cell_id, .. }
+                | RuntimeResponse::Yielded { cell_id, .. }
+                | RuntimeResponse::Terminated { cell_id, .. }
+                | RuntimeResponse::Result { cell_id, .. }
+                | RuntimeResponse::Unknown { cell_id, .. } => cell_id.clone(),
+            };
+            self.inner.invoker.cancel_cell(&cell_id);
+            entry.termination_requested.store(true, Ordering::Release);
+            let _ = entry.command_tx.send(CellCommand::Terminate);
+            if let Ok(handle) = entry.isolate_handle.lock()
+                && let Some(handle) = handle.as_ref()
+            {
+                let _ = handle.terminate_execution();
+            }
+            event.response = RuntimeResponse::Result {
+                cell_id,
+                content_items: Vec::new(),
+                error_text: Some(error.to_string()),
+            };
         }
         let state = response_state(&event.response);
         *entry

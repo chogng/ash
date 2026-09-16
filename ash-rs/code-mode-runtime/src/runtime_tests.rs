@@ -352,3 +352,156 @@ fn heap_limit_fails_the_cell_without_crashing_the_process() {
     };
     assert!(error_text.unwrap().contains("memory limit"));
 }
+
+#[test]
+fn observations_have_independent_budgets_and_terminal_output_is_consumed() {
+    let invoker = std::sync::Arc::new(RecordingInvoker::default());
+    let (runtime, session_id) = runtime(&invoker);
+    let mut exec = request(
+        &session_id,
+        "text('a'.repeat(200)); await yield_control(); text('later');",
+    );
+    exec.max_output_tokens = Some(16);
+    let cell = runtime.execute(exec).unwrap().cell_id;
+    let first = runtime
+        .wait(WaitRequest {
+            cell_id: cell.clone(),
+            yield_time_ms: 1000,
+            max_output_tokens: Some(32),
+            terminate: false,
+        })
+        .unwrap();
+    let WaitOutcome::LiveCell {
+        response: RuntimeResponse::Yielded { content_items, .. },
+    } = first
+    else {
+        panic!("expected yield");
+    };
+    assert!(
+        matches!(&content_items[..], [OutputItem::Text { text }] if text.len() <= 32 && text.contains("truncated"))
+    );
+    let last = wait_for_result(&runtime, cell.clone());
+    assert!(
+        matches!(last, RuntimeResponse::Result { content_items, error_text: None, .. }
+        if content_items == vec![OutputItem::Text { text: "later".into() }])
+    );
+    assert!(!runtime.has_cell(&cell));
+    assert!(matches!(
+        runtime
+            .wait(WaitRequest {
+                cell_id: cell,
+                yield_time_ms: 0,
+                max_output_tokens: None,
+                terminate: false
+            })
+            .unwrap(),
+        WaitOutcome::MissingCell { .. }
+    ));
+}
+
+#[test]
+fn stored_values_can_be_deleted_across_cells_and_imports_are_bounded() {
+    let invoker = std::sync::Arc::new(RecordingInvoker::default());
+    let (runtime, session_id) = runtime(&invoker);
+    for source in ["store('key', 42);", "store('key', undefined);"] {
+        let cell = runtime
+            .execute(request(&session_id, source))
+            .unwrap()
+            .cell_id;
+        assert!(matches!(
+            wait_for_result(&runtime, cell),
+            RuntimeResponse::Result {
+                error_text: None,
+                ..
+            }
+        ));
+    }
+    assert!(runtime.store_snapshot().unwrap().is_empty());
+    let values = std::collections::BTreeMap::from([(
+        "large".into(),
+        serde_json::Value::String("x".repeat(16 * 1024 * 1024)),
+    )]);
+    assert!(CodeModeStore::from_values(values).is_err());
+}
+
+#[derive(Default)]
+struct CancellableInvoker {
+    state: Mutex<(bool, bool)>,
+    changed: Condvar,
+}
+
+impl ToolInvoker for CancellableInvoker {
+    fn invoke(&self, _: NestedToolCall) -> Result<serde_json::Value, String> {
+        let mut state = self.state.lock().unwrap();
+        state.0 = true;
+        self.changed.notify_all();
+        while !state.1 {
+            let waited = self
+                .changed
+                .wait_timeout(state, Duration::from_secs(5))
+                .unwrap();
+            state = waited.0;
+            if waited.1.timed_out() {
+                return Err("cancellation never arrived".into());
+            }
+        }
+        Err("cancelled".into())
+    }
+
+    fn notify(&self, _: RuntimeNotification) -> Result<(), String> {
+        let state = self.state.lock().unwrap();
+        let waited = self
+            .changed
+            .wait_timeout_while(state, Duration::from_secs(5), |state| !state.0)
+            .unwrap();
+        if !waited.0.0 {
+            return Err("tool never started".into());
+        }
+        Ok(())
+    }
+
+    fn cancel_cell(&self, _: &CellId) {
+        self.state.lock().unwrap().1 = true;
+        self.changed.notify_all();
+    }
+}
+
+#[test]
+fn completion_failure_exit_and_timeout_cancel_outstanding_tools() {
+    for tail in [
+        "text('done');",
+        "throw Error('failure');",
+        "exit();",
+        "while (true) {}",
+    ] {
+        let invoker = std::sync::Arc::new(CancellableInvoker::default());
+        let session_id = CodeModeSessionId::new("cancel-test").unwrap();
+        let runtime = CodeModeRuntime::new(
+            session_id.clone(),
+            CodeModeLimits {
+                max_execution_time_ms: 500,
+                ..CodeModeLimits::default()
+            },
+            invoker.clone(),
+        )
+        .unwrap();
+        let cell = runtime
+            .execute(request(
+                &session_id,
+                &format!("tools.echo({{}}); notify('started'); {tail}"),
+            ))
+            .unwrap()
+            .cell_id;
+        let response = wait_for_result(&runtime, cell);
+        assert!(invoker.state.lock().unwrap().1, "{tail}: {response:?}");
+        if tail == "exit();" {
+            assert!(matches!(
+                response,
+                RuntimeResponse::Result {
+                    error_text: None,
+                    ..
+                }
+            ));
+        }
+    }
+}

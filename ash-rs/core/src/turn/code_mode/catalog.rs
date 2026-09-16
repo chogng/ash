@@ -12,7 +12,7 @@ pub fn control_definitions() -> Vec<ToolDefinition> {
     vec![
         ToolDefinition {
             name: tool_name(EXEC_TOOL_NAME),
-            description: "Execute JavaScript in the Code Mode runtime. Use text(), image(), store(), load(), notify(), and await tools.<name>(args). If the result is still running, wait with its cellId.".into(),
+            description: "Execute JavaScript in a fresh isolated cell with top-level await, without filesystem, network, process, console or Node APIs. Discover tools by filtering ALL_TOOLS by name or description; entries contain name, toolName, description and inputSchema. For example: text(ALL_TOOLS.filter(t => t.description.includes('search'))). Call await tools[entry.name](args) using its inputSchema. Tools return text as a string or structured content as {text, content, isError}; text that looks like JSON remains a string. Only text(value) and image(value) output is returned to the model; filter large results in JavaScript first. store(key, value) and load(key) share JSON values across cells; store(key, undefined) deletes a key. notify(value) sends a live UI notification. await yield_control() returns output and pauses until wait resumes the cell. exit() ends the cell successfully. Await all tool promises: cell completion, failure or termination cancels outstanding calls. If still running, call wait with cellId. maxOutputTokens bounds each returned observation using a conservative UTF-8 byte estimate (default 10000), independently of runtime resource limits.".into(),
             parameters: serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -31,7 +31,7 @@ pub fn control_definitions() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: tool_name(WAIT_TOOL_NAME),
-            description: "Wait for a Code Mode cell. Set terminate to true to stop it.".into(),
+            description: "Wait for new output from a running or yielded Code Mode cell. maxOutputTokens bounds this observation (default 10000); previously returned output is not repeated. A terminal observation closes the cell. Set terminate to true to stop it and cancel outstanding nested calls.".into(),
             parameters: serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -147,42 +147,32 @@ fn directive_u64(
     Ok(value)
 }
 
-pub fn normalize_code_name(name: &str) -> String {
-    let mut normalized = String::with_capacity(name.len());
-    for character in name.chars() {
-        if character.is_ascii_alphanumeric() || character == '_' {
-            normalized.push(character.to_ascii_lowercase());
-        } else {
-            normalized.push_str("__");
-        }
-    }
-    normalized
+pub fn normalize_code_name(name: &str) -> Result<String, CoreError> {
+    ash_tools::CodeModeToolName::from_tool_name(name)
+        .map(|name| name.as_str().to_owned())
+        .map_err(|error| CoreError::Policy(error.to_string()))
 }
 
 pub fn projected_tools(definitions: &[ToolDefinition]) -> Result<Vec<EnabledTool>, CoreError> {
     let mut projected = definitions
         .iter()
-        .map(|definition| EnabledTool {
-            global_name: normalize_code_name(definition.name.as_str()),
-            tool_name: definition.name.to_string(),
-            description: format!(
-                "{}\nCode mode: await tools.{}(<arguments>)",
-                definition.description,
-                normalize_code_name(definition.name.as_str())
-            ),
-            kind: CodeModeToolKind::Function,
-            input_schema: definition.parameters.clone(),
+        .map(|definition| {
+            Ok(EnabledTool {
+                global_name: normalize_code_name(definition.name.as_str())?,
+                tool_name: definition.name.to_string(),
+                description: format!(
+                    "{}\nCode mode: await tools.{}(<arguments>)",
+                    definition.description,
+                    normalize_code_name(definition.name.as_str())?
+                ),
+                kind: CodeModeToolKind::Function,
+                input_schema: definition.parameters.clone(),
+            })
         })
-        .collect::<Vec<_>>();
+        .collect::<Result<Vec<_>, CoreError>>()?;
     projected.sort_by(|left, right| left.global_name.cmp(&right.global_name));
     let mut names = BTreeSet::new();
     for tool in &projected {
-        if is_reserved_projection_name(&tool.global_name) {
-            return Err(CoreError::Policy(format!(
-                "Code Mode cannot expose reserved JavaScript tool name: {}",
-                tool.global_name
-            )));
-        }
         if !names.insert(tool.global_name.clone()) {
             return Err(CoreError::Policy(format!(
                 "Code Mode tool name collision: {}",
@@ -190,23 +180,7 @@ pub fn projected_tools(definitions: &[ToolDefinition]) -> Result<Vec<EnabledTool
             )));
         }
     }
-    if projected
-        .iter()
-        .any(|tool| is_control_projection_name(&tool.global_name))
-    {
-        return Err(CoreError::Policy(
-            "ordinary Tool projection conflicts with Code Mode control tool name".into(),
-        ));
-    }
     Ok(projected)
-}
-
-fn is_reserved_projection_name(name: &str) -> bool {
-    matches!(name, "__proto__" | "prototype" | "constructor")
-}
-
-fn is_control_projection_name(name: &str) -> bool {
-    matches!(name, EXEC_TOOL_NAME | WAIT_TOOL_NAME)
 }
 
 pub(super) fn required_string(

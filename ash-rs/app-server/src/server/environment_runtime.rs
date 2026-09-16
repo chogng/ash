@@ -1878,6 +1878,7 @@ impl AppServer {
             .env_runtime
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
+        runtime.turn_executor.close_code_mode_session(session_id);
         runtime.dir_grants.clear_session(session_id);
         runtime
             .workspace

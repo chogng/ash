@@ -6,7 +6,7 @@ license-file.workspace = true
 publish.workspace = true
 
 [features]
-code-mode = ["dep:ash-code-mode", "dep:ash-code-mode-protocol"]
+code-mode = ["dep:ash-code-mode", "dep:ash-code-mode-protocol", "dep:ash-tools"]
 
 [lib]
 doctest = false
@@ -23,6 +23,7 @@ sha2 = { workspace = true }
 ash-async-utils = { workspace = true, features = ["wait"] }
 ash-attachments = { workspace = true }
 ash-context-engine = { workspace = true }
+ash-tools = { workspace = true, optional = true }
 ash-code-mode = { workspace = true, optional = true }
 ash-code-mode-protocol = { workspace = true, optional = true }
 ash-extension-api = { workspace = true }

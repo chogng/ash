@@ -129,6 +129,7 @@ type ModelToolCallBinder =
 /// Reloadable registries attach a binder that resolves model-produced calls against this exact
 /// catalog generation. Static services may omit the binder and let Core use their ordinary live
 /// binding method because their definitions cannot change during the invocation.
+#[derive(Clone)]
 pub struct ModelToolCatalogSnapshot {
     definitions: Vec<ToolDefinition>,
     binder: Option<Arc<ModelToolCallBinder>>,
@@ -378,6 +379,15 @@ pub trait ToolService: Send + Sync {
         Ok(ModelToolCatalogSnapshot::new(
             self.model_definitions(activated)?,
         ))
+    }
+
+    /// Freezes the tools eligible for nested execution in one cell. Registry-backed
+    /// services must exclude hidden and direct-model-only tools before returning this catalog.
+    fn code_mode_catalog_snapshot(
+        &self,
+        activated: &BTreeSet<ash_protocol::ToolName>,
+    ) -> Result<ModelToolCatalogSnapshot, CoreError> {
+        self.model_catalog_snapshot(activated)
     }
 
     /// Interprets one successful tool result as additive model-tool activation.

@@ -17,7 +17,7 @@ use ts_rs::TS;
 pub const DEFAULT_EXEC_YIELD_TIME_MS: u64 = 10_000;
 
 /// Version of the standalone stdio Host protocol.
-pub const CODE_MODE_PROTOCOL_VERSION: u32 = 1;
+pub const CODE_MODE_PROTOCOL_VERSION: u32 = 2;
 
 /// Maximum payload accepted by the framed stdio Host protocol.
 pub const MAX_FRAME_BYTES: usize = 64 * 1024 * 1024;
@@ -380,6 +380,10 @@ pub enum HostToClient {
     },
     Response {
         response: RuntimeResponse,
+    },
+    /// Cancels outstanding callbacks immediately, independently of cell observation.
+    CancelCellTools {
+        cell_id: CellId,
     },
     CellClosed {
         cell_id: CellId,

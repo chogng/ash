@@ -13,6 +13,21 @@ use std::fmt;
 pub struct CodeModeToolName(String);
 
 impl CodeModeToolName {
+    /// Maps a callable tool name to a safe JavaScript property name.
+    pub fn from_tool_name(name: &str) -> Result<Self, CodeModeProjectionError> {
+        let name = normalize_code_name(name);
+        if matches!(
+            name.as_str(),
+            "__proto__" | "prototype" | "constructor" | "exec" | "wait"
+        ) {
+            return Err(CodeModeProjectionError(format!(
+                "reserved Code Mode tool name: {}",
+                name.as_str()
+            )));
+        }
+        Ok(name)
+    }
+
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -77,6 +92,9 @@ impl CodeModeProjection {
                 })
             })
             .collect::<Vec<_>>();
+        for binding in &bindings {
+            CodeModeToolName::from_tool_name(binding.code_name.as_str())?;
+        }
         bindings.sort_by(|left, right| left.code_name.cmp(&right.code_name));
         if let Some(window) = bindings
             .windows(2)

@@ -6,10 +6,12 @@
 
 mod callbacks;
 mod globals;
+mod output;
 mod session;
 mod v8_init;
 mod value;
 
+pub use output::limit_output;
 pub use session::{CodeModeRuntime, CodeModeStore, RuntimeError, ToolInvoker};
 pub use v8_init::{V8JitMode, initialize_v8};
 

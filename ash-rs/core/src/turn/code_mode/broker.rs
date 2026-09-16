@@ -63,7 +63,15 @@ pub(super) struct CodeModeBrokerInner {
     pub(super) threads: Arc<ThreadController>,
     pub(super) runtimes: Mutex<BTreeMap<RuntimeKey, CodeModeRuntime>>,
     pub(super) session_stores: Mutex<BTreeMap<(String, String), CodeModeStore>>,
-    pub(super) cell_parents: Mutex<BTreeMap<(RuntimeKey, String), ToolCallId>>,
+    pub(super) cell_calls: Mutex<BTreeMap<(RuntimeKey, String), CellCall>>,
+}
+
+#[derive(Clone)]
+pub(super) struct CellCall {
+    pub(super) parent: ToolCallId,
+    pub(super) catalog: crate::ModelToolCatalogSnapshot,
+    pub(super) tools: Arc<dyn ToolService>,
+    pub(super) policy: Arc<dyn ActionPolicyService>,
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -117,7 +125,7 @@ impl CodeModeBroker {
                 threads,
                 runtimes: Mutex::new(BTreeMap::new()),
                 session_stores: Mutex::new(BTreeMap::new()),
-                cell_parents: Mutex::new(BTreeMap::new()),
+                cell_calls: Mutex::new(BTreeMap::new()),
             }),
         }
     }
@@ -135,7 +143,7 @@ impl CodeModeBroker {
         }
     }
 
-    /// Closes the process-local runtime owned by one terminal Turn and drops its parent map.
+    /// Closes the process-local runtime owned by one terminal Turn and drops its cell bindings.
     /// Cells are intentionally scoped to that Turn in the first Core integration, so a later
     /// Turn cannot accidentally resume a cell with the wrong durable parent or tool authority.
     pub(crate) fn close_turn(
@@ -155,11 +163,43 @@ impl CodeModeBroker {
             runtime.close();
         }
         self.inner
-            .cell_parents
+            .cell_calls
             .lock()
             .map_err(|_| CoreError::Execution("Code Mode cell registry was poisoned".into()))?
             .retain(|(runtime_key, _), _| runtime_key != &key);
         Ok(())
+    }
+
+    pub(crate) fn close_session(&self, session_id: &ash_protocol::SessionId) {
+        let session_id = session_id.as_str();
+        let removed = {
+            let mut runtimes = self
+                .inner
+                .runtimes
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let keys = runtimes
+                .keys()
+                .filter(|key| key.session_id == session_id)
+                .cloned()
+                .collect::<Vec<_>>();
+            keys.into_iter()
+                .filter_map(|key| runtimes.remove(&key))
+                .collect::<Vec<_>>()
+        };
+        for runtime in removed {
+            runtime.close();
+        }
+        self.inner
+            .cell_calls
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .retain(|(key, _), _| key.session_id != session_id);
+        self.inner
+            .session_stores
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .retain(|(session, _), _| session != session_id);
     }
 
     pub(crate) fn augment_catalog(
@@ -328,15 +368,25 @@ impl CodeModeBroker {
         // CodeModeOnly hides ordinary tools from the model, but those same tools must remain
         // available through the JavaScript projection. Keep the runtime catalog independent from
         // the model-facing mode filter while retaining the exact activated registry snapshot.
-        let frozen_catalog = self.tools.model_catalog_snapshot(&activated)?;
+        let frozen_catalog = self.tools.code_mode_catalog_snapshot(&activated)?;
         let frozen_catalog = match snapshot.agent_configuration() {
             Some(seed) => frozen_catalog.restrict_to_names(&seed.capability_scope.tools),
             None => frozen_catalog,
         };
+        let frozen_catalog = match snapshot
+            .turns
+            .iter()
+            .find(|turn| &turn.turn_id == context.turn_id())
+            .and_then(|turn| turn.tool_profile.as_ref())
+        {
+            Some(profile) if profile.id == crate::tool_profile::SELECTED_CODING_TOOL_PROFILE_ID => {
+                frozen_catalog.restrict_to_names(&profile.tool_names)
+            }
+            _ => frozen_catalog,
+        };
         let frozen_definitions = frozen_catalog.definitions().to_vec();
         let projected = projected_tools(&frozen_definitions)?;
-        let runtime =
-            self.runtime_for(&key, frozen_catalog, context.cancellation(), updates, hooks)?;
+        let runtime = self.runtime_for(&key, context.cancellation(), updates, hooks)?;
         let started = runtime
             .execute(ExecuteRequest {
                 session_id: key.session_id()?,
@@ -348,17 +398,26 @@ impl CodeModeBroker {
             })
             .map_err(runtime_error)?;
         self.inner
-            .cell_parents
+            .cell_calls
             .lock()
             .map_err(|_| CoreError::Execution("Code Mode cell registry was poisoned".into()))?
-            .insert((key, started.cell_id.to_string()), call.id.clone());
+            .insert(
+                (key.clone(), started.cell_id.to_string()),
+                CellCall {
+                    parent: call.id.clone(),
+                    catalog: frozen_catalog,
+                    tools: Arc::clone(&self.tools),
+                    policy: Arc::clone(&self.policy),
+                },
+            );
         let outcome = observe_runtime(
             &runtime,
-            started.cell_id,
+            started.cell_id.clone(),
             yield_time_ms,
             max_output_tokens,
             context.cancellation(),
         )?;
+        self.release_finished_cell(&key, &runtime, &started.cell_id);
         runtime_wait_output(outcome)
     }
 
@@ -406,7 +465,7 @@ impl CodeModeBroker {
         let outcome = if terminate {
             cancellation_aware_terminate_or_wait(
                 &runtime,
-                cell_id,
+                cell_id.clone(),
                 yield_time_ms,
                 max_output_tokens,
                 context.cancellation(),
@@ -414,19 +473,29 @@ impl CodeModeBroker {
         } else {
             observe_runtime(
                 &runtime,
-                cell_id,
+                cell_id.clone(),
                 yield_time_ms,
                 max_output_tokens,
                 context.cancellation(),
             )?
         };
+        self.release_finished_cell(&key, &runtime, &cell_id);
         runtime_wait_output(outcome)
+    }
+
+    fn release_finished_cell(&self, key: &RuntimeKey, runtime: &CodeModeRuntime, cell_id: &CellId) {
+        if !runtime.has_cell(cell_id) {
+            self.inner
+                .cell_calls
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .remove(&(key.clone(), cell_id.to_string()));
+        }
     }
 
     fn runtime_for(
         &self,
         key: &RuntimeKey,
-        frozen_catalog: crate::ModelToolCatalogSnapshot,
         cancellation: &CancellationToken,
         updates: Arc<dyn ThreadUpdateSink>,
         hooks: Arc<dyn HookService>,
@@ -440,10 +509,7 @@ impl CodeModeBroker {
         }
         let invoker = Arc::new(BrokerToolInvoker::new(
             Arc::downgrade(&self.inner),
-            Arc::clone(&self.tools),
-            Arc::clone(&self.policy),
             key.clone(),
-            frozen_catalog,
             cancellation,
             updates,
             hooks,

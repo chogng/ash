@@ -613,6 +613,19 @@ impl ToolService for ReloadableToolService {
         ))
     }
 
+    fn code_mode_catalog_snapshot(
+        &self,
+        activated: &BTreeSet<ToolName>,
+    ) -> Result<ModelToolCatalogSnapshot, CoreError> {
+        let generation = self.ports.generation();
+        let catalog = generation.tools.code_mode_catalog_snapshot(activated)?;
+        let ports = Arc::clone(&self.ports);
+        Ok(ModelToolCatalogSnapshot::with_binder(
+            catalog.definitions().to_vec(),
+            move |call, caller| ports.bind_call_in_generation(&generation, call, caller),
+        ))
+    }
+
     fn bind_call(
         &self,
         call: &ToolCall,
@@ -1198,6 +1211,33 @@ impl ToolService for CompositeToolService {
             definitions.push(search.definition().clone());
         }
         definitions
+    }
+
+    fn code_mode_catalog_snapshot(
+        &self,
+        activated: &BTreeSet<ToolName>,
+    ) -> Result<ModelToolCatalogSnapshot, CoreError> {
+        let eligible = ash_tools::CodeModeProjection::from_registry(&self.registry)
+            .map_err(|error| CoreError::Policy(error.to_string()))?;
+        let bindings = eligible
+            .bindings()
+            .iter()
+            .map(|binding| &binding.binding_id)
+            .collect::<BTreeSet<_>>();
+        let definitions = self
+            .model_definitions(activated)?
+            .into_iter()
+            .filter(|definition| {
+                self.search
+                    .as_ref()
+                    .is_some_and(|search| search.definition().name == definition.name)
+                    || self
+                        .registry
+                        .resolve(&definition.name)
+                        .is_some_and(|entry| bindings.contains(entry.binding().id()))
+            })
+            .collect();
+        Ok(ModelToolCatalogSnapshot::new(definitions))
     }
 
     fn bind_call(

@@ -181,8 +181,19 @@ impl HostRuntime {
     }
 
     pub(super) fn wait(&self, request: WaitRequest) -> Result<WaitOutcome, RuntimeError> {
+        if !self.has_cell(&request.cell_id) {
+            return Ok(WaitOutcome::MissingCell {
+                cell_id: request.cell_id,
+            });
+        }
         let cell = self.cell(&request.cell_id)?;
         if let Some(response) = terminal_response(&cell)? {
+            self.inner
+                .shared
+                .cells
+                .lock()
+                .map_err(|_| RuntimeError::Runtime("Code Mode Host cell map was poisoned".into()))?
+                .remove(&request.cell_id);
             return Ok(WaitOutcome::LiveCell { response });
         }
         if self.inner.shared.fatal_message().is_some() {
@@ -217,6 +228,14 @@ impl HostRuntime {
         *cell.last_response.lock().map_err(|_| {
             RuntimeError::Runtime("Code Mode Host cell response was poisoned".into())
         })? = Some(response.clone());
+        if is_terminal(&response) {
+            self.inner
+                .shared
+                .cells
+                .lock()
+                .map_err(|_| RuntimeError::Runtime("Code Mode Host cell map was poisoned".into()))?
+                .remove(&response_cell_id(&response));
+        }
         Ok(WaitOutcome::LiveCell { response })
     }
 
@@ -419,13 +438,16 @@ fn read_host(
                 session_id: snapshot_session_id,
                 values,
             } if snapshot_session_id == session_id => {
-                if let Err(error) = shared.stored_values.extend(values) {
+                if let Err(error) = shared.stored_values.replace(values) {
                     shared.fail(error.to_string());
                     return;
                 }
             }
             HostToClient::Response { response } => {
                 let cell_id = response_cell_id(&response);
+                if is_terminal(&response) {
+                    shared.invoker.cancel_cell(&cell_id);
+                }
                 let cell = shared
                     .cells
                     .lock()
@@ -440,7 +462,10 @@ fn read_host(
                     return;
                 }
             }
-            HostToClient::CellClosed { .. } => {}
+            HostToClient::CancelCellTools { cell_id }
+            | HostToClient::CellClosed { cell_id, .. } => {
+                shared.invoker.cancel_cell(&cell_id);
+            }
             HostToClient::Error { message } => {
                 shared.fail(format!("Code Mode Host error: {message}"));
                 return;

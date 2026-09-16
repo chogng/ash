@@ -119,6 +119,11 @@ pub enum TurnExecutionOutcome {
 }
 
 impl TurnExecutor {
+    /// Releases process-local cells and stored values when a session is stopped or archived.
+    pub fn close_code_mode_session(&self, session_id: &SessionId) {
+        self.code_mode.close_session(session_id);
+    }
+
     /// Captures the model-neutral direct tool surface for a newly accepted Turn.
     pub fn tool_profile_snapshot(&self) -> Result<ash_protocol::ToolProfileSnapshot, CoreError> {
         let catalog = self.tools.model_catalog_snapshot(&BTreeSet::new())?;

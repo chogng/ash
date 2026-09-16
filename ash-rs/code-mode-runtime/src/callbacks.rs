@@ -179,16 +179,44 @@ pub(super) fn store_callback(
         return;
     };
     let key = key.to_rust_string_lossy(scope);
-    let value = match v8_value_to_json(scope, args.get(1)) {
-        Ok(value) => value,
-        Err(error) => {
-            throw_type_error(scope, &error);
-            return;
+    let value = if args.get(1).is_undefined() {
+        None
+    } else {
+        match v8_value_to_json(scope, args.get(1)) {
+            Ok(value) => Some(value),
+            Err(error) => {
+                throw_type_error(scope, &error);
+                return;
+            }
         }
     };
-    if let Some(state) = scope.get_slot_mut::<RuntimeState>() {
-        state.stored_values.insert(key.clone(), value.clone());
-        state.stored_value_writes.insert(key, value);
+    let error = if let Some(state) = scope.get_slot_mut::<RuntimeState>() {
+        let previous = match &value {
+            Some(value) => state.stored_values.insert(key.clone(), value.clone()),
+            None => state.stored_values.remove(&key),
+        };
+        match crate::session::validate_values(&state.stored_values) {
+            Ok(()) => {
+                state.stored_value_writes.insert(key, value);
+                None
+            }
+            Err(error) => {
+                match previous {
+                    Some(previous) => {
+                        state.stored_values.insert(key, previous);
+                    }
+                    None => {
+                        state.stored_values.remove(&key);
+                    }
+                }
+                Some(error)
+            }
+        }
+    } else {
+        Some("runtime state unavailable".into())
+    };
+    if let Some(error) = error {
+        throw_type_error(scope, &error);
     }
 }
 

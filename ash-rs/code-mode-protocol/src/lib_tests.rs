@@ -94,3 +94,14 @@ fn tagged_host_messages_round_trip_newtype_payloads() {
         response
     );
 }
+
+#[test]
+fn host_callback_cancellation_round_trips_independently_of_observation() {
+    let message = super::HostToClient::CancelCellTools {
+        cell_id: super::CellId::new("cell-cancel").unwrap(),
+    };
+    let mut bytes = Vec::new();
+    super::write_frame(&mut bytes, &message).unwrap();
+    let decoded = super::read_frame::<_, super::HostToClient>(&mut bytes.as_slice()).unwrap();
+    assert_eq!(decoded, message);
+}

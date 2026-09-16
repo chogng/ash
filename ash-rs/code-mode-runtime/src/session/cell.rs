@@ -91,17 +91,7 @@ pub(super) fn run_cell(
     done: Arc<AtomicBool>,
 ) {
     let params = v8::Isolate::create_params().heap_limits(0, limits.max_heap_bytes);
-    // The runtime does not carry a provider tokenizer. Four UTF-8 bytes per requested output
-    // token is a conservative local ceiling, and the session byte limit remains authoritative.
-    let request_output_bytes = request
-        .max_output_tokens
-        .map(|tokens| {
-            usize::try_from(tokens)
-                .unwrap_or(usize::MAX)
-                .saturating_mul(4)
-        })
-        .unwrap_or(limits.max_output_bytes);
-    let max_output_bytes = limits.max_output_bytes.min(request_output_bytes);
+    let max_output_bytes = limits.max_output_bytes;
     let (tool_completion_tx, tool_completion_rx) = mpsc::channel();
     let isolate = &mut v8::Isolate::new(params);
     let isolate_handle = isolate.thread_safe_handle();
@@ -176,11 +166,22 @@ pub(super) fn run_cell(
     let max_execution_time_ms = limits.max_execution_time_ms;
     let timeout_tx = command_tx;
     let timeout_handle = isolate_handle.clone();
+    let timeout_invoker = scope
+        .get_slot::<RuntimeState>()
+        .expect("runtime installed")
+        .invoker
+        .clone();
+    let timeout_cell = cell_id.clone();
+    let (_finished_tx, finished_rx) = mpsc::channel::<()>();
     thread::spawn(move || {
-        thread::sleep(std::time::Duration::from_millis(max_execution_time_ms));
-        if !watchdog_done.swap(true, Ordering::AcqRel) {
+        if matches!(
+            finished_rx.recv_timeout(Duration::from_millis(max_execution_time_ms)),
+            Err(mpsc::RecvTimeoutError::Timeout)
+        ) && !watchdog_done.swap(true, Ordering::AcqRel)
+        {
             watchdog_timed_out.store(true, Ordering::Release);
             watchdog_termination_requested.store(true, Ordering::Release);
+            timeout_invoker.cancel_cell(&timeout_cell);
             let _ = timeout_tx.send(CellCommand::Terminate);
             let _ = timeout_handle.terminate_execution();
         }
@@ -277,10 +278,7 @@ pub(super) fn run_cell(
                     .map(|state| state.exit_requested)
                     .unwrap_or(false);
                 let response = if exit_requested {
-                    RuntimeResponse::Terminated {
-                        cell_id: cell_id.clone(),
-                        content_items: take_output_items(scope),
-                    }
+                    result_response(scope, cell_id.clone(), None)
                 } else if timed_out.load(Ordering::Acquire)
                     || termination_requested.load(Ordering::Acquire)
                     || isolate_handle.is_execution_terminating()
@@ -551,9 +549,17 @@ fn send_result(
     event_tx: &Sender<CellEvent>,
     response: RuntimeResponse,
 ) {
+    if !matches!(
+        response,
+        RuntimeResponse::Running { .. } | RuntimeResponse::Yielded { .. }
+    ) {
+        if let Some(state) = scope.get_slot::<RuntimeState>() {
+            state.invoker.cancel_cell(&state.cell_id);
+        }
+    }
     let stored_value_writes = scope
-        .get_slot::<RuntimeState>()
-        .map(|state| state.stored_value_writes.clone())
+        .get_slot_mut::<RuntimeState>()
+        .map(|state| std::mem::take(&mut state.stored_value_writes))
         .unwrap_or_default();
     let _ = event_tx.send(CellEvent {
         response,

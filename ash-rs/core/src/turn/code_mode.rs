@@ -62,6 +62,8 @@ mod unavailable {
             Ok(())
         }
 
+        pub(crate) fn close_session(&self, _: &ash_protocol::SessionId) {}
+
         pub(crate) fn augment_catalog(
             &self,
             catalog: ModelToolCatalogSnapshot,

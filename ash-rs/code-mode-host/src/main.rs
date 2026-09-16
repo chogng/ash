@@ -47,8 +47,14 @@ impl ToolInvoker for StdioToolInvoker {
         let Ok(mut cancelled_cells) = self.cancelled_cells.lock() else {
             return;
         };
-        cancelled_cells.insert(cell_id.clone());
+        if !cancelled_cells.insert(cell_id.clone()) {
+            return;
+        }
         self.close_cell_pending(cell_id);
+        drop(cancelled_cells);
+        let _ = self.send(HostToClient::CancelCellTools {
+            cell_id: cell_id.clone(),
+        });
     }
 }
 
@@ -74,6 +80,10 @@ impl StdioToolInvoker {
             .and_then(|mut pending| pending.remove(&key))
             .map(|sender| sender.send(result).is_ok())
             .unwrap_or(false)
+            || self
+                .cancelled_cells
+                .lock()
+                .is_ok_and(|cells| cells.contains(cell_id))
     }
 
     fn close_pending(&self) {
@@ -197,11 +207,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     )?;
                     continue;
                 }
-                match CodeModeRuntime::new_with_store(
-                    session_id.clone(),
-                    limits,
-                    invoker.clone(),
-                    ash_code_mode_runtime::CodeModeStore::from_values(stored_values),
+                match ash_code_mode_runtime::CodeModeStore::from_values(stored_values).and_then(
+                    |store| {
+                        CodeModeRuntime::new_with_store(
+                            session_id.clone(),
+                            limits,
+                            invoker.clone(),
+                            store,
+                        )
+                    },
                 ) {
                     Ok(runtime) => {
                         sessions.insert(session_id.clone(), runtime);

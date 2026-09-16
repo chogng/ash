@@ -22,10 +22,7 @@ use std::sync::atomic::Ordering;
 
 pub(super) struct BrokerToolInvoker {
     broker: Weak<CodeModeBrokerInner>,
-    tools: Arc<dyn crate::ToolService>,
-    policy: Arc<dyn crate::ActionPolicyService>,
     key: RuntimeKey,
-    frozen_catalog: crate::ModelToolCatalogSnapshot,
     cancellation: CancellationToken,
     close_source: CancellationSource,
     cell_cancellations: Mutex<BTreeMap<CellId, CancellationSource>>,
@@ -39,10 +36,7 @@ pub(super) struct BrokerToolInvoker {
 impl BrokerToolInvoker {
     pub(super) fn new(
         broker: Weak<CodeModeBrokerInner>,
-        tools: Arc<dyn crate::ToolService>,
-        policy: Arc<dyn crate::ActionPolicyService>,
         key: RuntimeKey,
-        frozen_catalog: crate::ModelToolCatalogSnapshot,
         cancellation: &CancellationToken,
         updates: Arc<dyn ThreadUpdateSink>,
         hooks: Arc<dyn crate::HookService>,
@@ -51,10 +45,7 @@ impl BrokerToolInvoker {
         let close_source = cancellation.child_source();
         Self {
             broker,
-            tools,
-            policy,
             key,
-            frozen_catalog,
             cancellation: close_source.token(),
             close_source,
             cell_cancellations: Mutex::new(BTreeMap::new()),
@@ -94,9 +85,6 @@ impl ToolInvoker for BrokerToolInvoker {
         broker
             .invoke_nested(
                 &self.key,
-                &self.frozen_catalog,
-                Arc::clone(&self.tools),
-                Arc::clone(&self.policy),
                 call,
                 &cell_cancellation,
                 Arc::clone(&self.updates),

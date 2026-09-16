@@ -26,9 +26,6 @@ impl CodeModeBrokerInner {
     pub(super) fn invoke_nested(
         &self,
         key: &RuntimeKey,
-        frozen_catalog: &crate::ModelToolCatalogSnapshot,
-        tools: Arc<dyn crate::ToolService>,
-        policy: Arc<dyn crate::ActionPolicyService>,
         call: NestedToolCall,
         cancellation: &CancellationToken,
         updates: Arc<dyn ThreadUpdateSink>,
@@ -56,14 +53,14 @@ impl CodeModeBrokerInner {
         let snapshot = self.threads.read_thread(&thread_id)?;
         let parent_tool_call_id = ToolCallId::new(call.parent_tool_call_id.clone())
             .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
-        let expected_parent = self
-            .cell_parents
+        let cell_call = self
+            .cell_calls
             .lock()
             .map_err(|_| CoreError::Execution("Code Mode cell registry was poisoned".into()))?
             .get(&(key.clone(), call.cell_id.to_string()))
             .cloned()
             .ok_or_else(|| CoreError::Execution("Code Mode cell parent is unavailable".into()))?;
-        if expected_parent != parent_tool_call_id {
+        if cell_call.parent != parent_tool_call_id {
             return Err(CoreError::Execution(
                 "Code Mode nested call parent does not match the owning cell".into(),
             ));
@@ -87,6 +84,9 @@ impl CodeModeBrokerInner {
                 "Code Mode nested call parent is not a durable control Tool Call".into(),
             ));
         }
+        let frozen_catalog = &cell_call.catalog;
+        let tools = cell_call.tools;
+        let policy = cell_call.policy;
         let definition = frozen_catalog
             .definitions()
             .iter()
@@ -113,7 +113,7 @@ impl CodeModeBrokerInner {
                 call.tool_name
             )));
         }
-        let expected_global_name = normalize_code_name(call.tool_name.as_str());
+        let expected_global_name = normalize_code_name(call.tool_name.as_str())?;
         if expected_global_name != call.global_name || call.kind != CodeModeToolKind::Function {
             return Err(CoreError::Policy(
                 "Code Mode nested Tool projection does not match its frozen definition".into(),

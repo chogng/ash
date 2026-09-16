@@ -1179,14 +1179,27 @@ opaque code output，使内部副作用不可恢复。
 投影，不得到文件、网络或进程接口。每个 nested call 写入普通 durable Tool Call，caller 记录 parent
 call、cell ID 和 runtime call ID，再由同一个 `ToolScheduler` 处理审批、执行、取消和结果提交。
 
-默认运行时内嵌在进程内；显式选择 Host 时使用 4 字节 little-endian 长度帧 stdio 协议。Host EOF、
+默认运行时内嵌在进程内；显式选择 Host 时使用版本 2 的 4 字节 little-endian 长度帧 stdio 协议。
+Host 通过 `CancelCellTools` 立即取消父进程中的工具回调，不等待下一次 wait。Host EOF、
 运行时 panic 或已开始调用的传输失败会关闭 session 并产生 unknown outcome，不自动重放。Cell 本身
 不跨进程恢复；重启后旧 cell 不可继续等待。首版结果支持文本和图片，不扩展音频协议。
 
-### 14.4 结果结构
+### 14.4 模型上下文与资源
 
-- structured JSON 保持 JSON，不先 stringify 再 parse；
-- text 保持明确 string；
+- nested Tool Call/Result 完整持久化，但不进入模型上下文、输入计量或历史压缩；模型只接收外层
+  `exec`/`wait` 的显式输出。
+- 每个 cell 冻结自己的可嵌套工具目录与绑定；同一 Turn 中后续 cell 可以使用搜索后激活的工具。
+- 模型通过 `ALL_TOOLS` 的 name、description 和 inputSchema 发现工具；只向模型打印所需条目。
+- `maxOutputTokens` 限制单次观察返回的文本，默认 10000；无 provider tokenizer 时用 UTF-8
+  字节保守估算；图片保持完整并受运行时输出字节上限约束。它不改变 cell 的执行限额。终态输出消费后关闭 cell，重复 wait 返回不可用。
+- 正常完成、异常、exit、超时与显式终止都会取消未完成的嵌套调用；取消不能撤销已经发生的副作用。
+- 每个 Thread 的共享 JSON store 上限为 16 MiB；`store(key, undefined)` 删除键。Session 停止、
+  归档或删除时释放其运行时与存储。Host 快照替换包含删除结果，不能合并回已删除的键。
+
+### 14.5 结果结构
+
+- 普通文本结果始终保持 string，包括看起来像 JSON 的文本；需要解析时由脚本显式 JSON.parse。
+- 结构化内容返回 `{text, content, isError}`，保留内容与错误状态；纯文本工具失败拒绝 Promise。
 - image/resource 使用统一 `ToolContent`；
 - MCP result 保留 content、structured content、is-error 和 provenance；
 - output truncation 在 code-mode budget 与普通 tool output budget 两层都可解释；

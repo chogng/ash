@@ -10,6 +10,7 @@ use ash_code_mode_runtime::CodeModeRuntime as EmbeddedRuntime;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+pub use ash_code_mode_runtime::limit_output;
 pub use ash_code_mode_runtime::{CodeModeStore, RuntimeError, ToolInvoker};
 
 const RUNTIME_ENV: &str = "ASH_CODE_MODE_RUNTIME";

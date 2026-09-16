@@ -38,18 +38,22 @@ pub(super) fn cancellation_aware_terminate_or_wait(
     runtime: &CodeModeRuntime,
     cell_id: CellId,
     _: u64,
-    _: Option<u32>,
+    max_output_tokens: Option<u32>,
     cancellation: &CancellationToken,
 ) -> Result<WaitOutcome, CoreError> {
     cancellation_error(runtime, &cell_id, cancellation)?;
-    runtime
+    let mut outcome = runtime
         .wait(WaitRequest {
             cell_id,
             yield_time_ms: 0,
             max_output_tokens: None,
             terminate: true,
         })
-        .map_err(runtime_error)
+        .map_err(runtime_error)?;
+    if let WaitOutcome::LiveCell { response } = &mut outcome {
+        ash_code_mode::limit_output(response, Some(max_output_tokens.unwrap_or(10_000)));
+    }
+    Ok(outcome)
 }
 
 pub(super) fn observe_runtime(
@@ -57,6 +61,19 @@ pub(super) fn observe_runtime(
     cell_id: CellId,
     yield_time_ms: u64,
     max_output_tokens: Option<u32>,
+    cancellation: &CancellationToken,
+) -> Result<WaitOutcome, CoreError> {
+    let mut outcome = observe_unbounded(runtime, cell_id, yield_time_ms, cancellation)?;
+    if let WaitOutcome::LiveCell { response } = &mut outcome {
+        ash_code_mode::limit_output(response, Some(max_output_tokens.unwrap_or(10_000)));
+    }
+    Ok(outcome)
+}
+
+fn observe_unbounded(
+    runtime: &CodeModeRuntime,
+    cell_id: CellId,
+    yield_time_ms: u64,
     cancellation: &CancellationToken,
 ) -> Result<WaitOutcome, CoreError> {
     let timeout_ms = yield_time_ms
@@ -80,7 +97,7 @@ pub(super) fn observe_runtime(
             .wait(WaitRequest {
                 cell_id: cell_id.clone(),
                 yield_time_ms: slice_ms,
-                max_output_tokens,
+                max_output_tokens: None,
                 terminate: false,
             })
             .map_err(runtime_error)?;
@@ -301,17 +318,17 @@ pub(super) fn find_tool_result<'a>(
 }
 
 pub(super) fn result_to_value(result: ToolResultRef<'_>) -> Result<serde_json::Value, CoreError> {
-    if result.is_error {
-        return Err(CoreError::Execution(result.text.to_owned()));
-    }
     if let Some(content) = result.content {
         return Ok(serde_json::json!({
             "text": result.text,
             "content": content,
+            "isError": result.is_error,
         }));
     }
-    Ok(serde_json::from_str(result.text)
-        .unwrap_or_else(|_| serde_json::Value::String(result.text.to_owned())))
+    if result.is_error {
+        return Err(CoreError::Execution(result.text.to_owned()));
+    }
+    Ok(serde_json::Value::String(result.text.to_owned()))
 }
 
 pub(super) fn interaction_pending_for_item(

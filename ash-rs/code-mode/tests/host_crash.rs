@@ -35,7 +35,7 @@ fn host_eof_marks_the_cell_unknown_without_restarting_it() {
         })
         .unwrap();
 
-    for _ in 0..2 {
+    {
         let WaitOutcome::LiveCell { response } = runtime
             .wait(WaitRequest {
                 cell_id: started.cell_id.clone(),
@@ -49,4 +49,15 @@ fn host_eof_marks_the_cell_unknown_without_restarting_it() {
         };
         assert!(matches!(response, RuntimeResponse::Unknown { .. }));
     }
+    assert!(matches!(
+        runtime
+            .wait(WaitRequest {
+                cell_id: started.cell_id,
+                yield_time_ms: 0,
+                max_output_tokens: None,
+                terminate: false,
+            })
+            .unwrap(),
+        WaitOutcome::MissingCell { .. }
+    ));
 }

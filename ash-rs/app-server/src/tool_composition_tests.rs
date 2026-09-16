@@ -1081,3 +1081,40 @@ fn successful_replacement_clears_reconcile_diagnostic() {
 
     assert_eq!(reloadable.diagnostic(), None);
 }
+
+#[test]
+fn code_mode_catalog_excludes_direct_model_only_tools_after_reloadable_composition() {
+    let name = ToolName::new("approval").unwrap();
+    let combined = combine_tool_ports(vec![
+        ToolPort::local(
+            Arc::new(FakeTools::new(
+                "approval",
+                ActionSource::BuiltInTool,
+                "approval",
+            )),
+            Arc::new(AskPolicy),
+        )
+        .with_tool_exposure(&name, ToolExposure::DirectModelOnly)
+        .unwrap(),
+    ])
+    .unwrap();
+    let reloadable = ReloadableToolPorts::new(combined);
+    let tools = reloadable.tools();
+    let activated = std::collections::BTreeSet::new();
+    assert!(
+        tools
+            .model_catalog_snapshot(&activated)
+            .unwrap()
+            .definitions()
+            .iter()
+            .any(|tool| tool.name == name)
+    );
+    assert!(
+        !tools
+            .code_mode_catalog_snapshot(&activated)
+            .unwrap()
+            .definitions()
+            .iter()
+            .any(|tool| tool.name == name)
+    );
+}

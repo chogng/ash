@@ -3318,8 +3318,17 @@ impl ToolService for DeferredWeatherTools {
         _: &ToolAuthorization,
         _: &CancellationToken,
     ) -> Result<ToolExecutionOutput, CoreError> {
-        assert_eq!(call.name.as_str(), "tool_search");
-        Ok(ToolExecutionOutput::Success("weather loaded".into()))
+        match call.name.as_str() {
+            "tool_search" => Ok(ToolExecutionOutput::Success("weather loaded".into())),
+            "weather" => Ok(ToolExecutionOutput::Success(
+                if call.arguments.get("large") == Some(&json!(true)) {
+                    "raw-only-marker".repeat(4096)
+                } else {
+                    "sunny".into()
+                },
+            )),
+            _ => panic!("unexpected tool"),
+        }
     }
 }
 
@@ -4024,4 +4033,64 @@ fn a_read_in_the_same_model_batch_does_not_satisfy_instruction_preflight() {
             .contains(&ToolCallId::new("retry").unwrap())
     );
     assert_eq!(tools.0.load(Ordering::SeqCst), 1);
+}
+
+#[cfg(feature = "code-mode")]
+#[test]
+fn code_mode_search_activates_tools_for_the_next_cell_without_replaying_nested_results() {
+    let (threads, thread_id, turn_id) =
+        started_turn_with_tool_mode(ash_protocol::ToolMode::CodeModeOnly);
+    let exec = |id: &str, source: &str| {
+        Ok(ModelResponse {
+            output: vec![ResponseItem::ToolCall(ToolCall {
+                id: ToolCallId::new(id).unwrap(),
+                name: ToolName::new("exec").unwrap(),
+                arguments: json!({"source": source}),
+            })],
+            usage: None,
+            billing: None,
+            stop_reason: StopReason::ToolUse,
+        })
+    };
+    let model = Arc::new(ScriptedModel::new([
+        exec("discover", "await tools.tool_search({}); text('ready');"),
+        exec(
+            "weather-cell",
+            "const result = await tools.weather({large: true}); store('weather', result); text(result.length);",
+        ),
+        Ok(text_response("done")),
+    ]));
+    let executor = TurnExecutor::new(
+        threads.clone(),
+        model.clone(),
+        Arc::new(DeferredWeatherTools),
+        Arc::new(CodeModeControlPolicy),
+    );
+    executor
+        .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+        .unwrap();
+    let requests = model.requests.lock().unwrap();
+    assert_eq!(requests.len(), 3);
+    for request in &requests[1..] {
+        let serialized = serde_json::to_string(request).unwrap();
+        assert!(!serialized.contains("weather loaded"));
+        assert!(!serialized.contains("raw-only-marker"));
+        assert!(serialized.len() < 16_000);
+        assert!(!serialized.contains("code-discover-tool-"));
+    }
+    assert!(requests[2].input.iter().any(|item| matches!(item, InputItem::ToolResult(result)
+        if result.call_id.as_str() == "weather-cell" && result.content == vec![ContentPart::Text(("raw-only-marker".len() * 4096).to_string())])));
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+    assert!(
+        snapshot
+            .items
+            .iter()
+            .any(|item| matches!(item, ThreadItem::ToolResult { text, .. } if text == &"raw-only-marker".repeat(4096)))
+    );
+    assert!(
+        requests[0]
+            .tools
+            .iter()
+            .any(|tool| tool.name.as_str() == "exec" && tool.description.contains("ALL_TOOLS"))
+    );
 }
