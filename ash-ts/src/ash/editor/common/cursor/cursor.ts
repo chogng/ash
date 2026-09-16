@@ -587,13 +587,52 @@ export class CursorsController extends Disposable {
 		}
 		const configuration = this.context.cursorConfig.languageConfigurationService.getLanguageConfiguration(this.model.getLanguageIdAtPosition(this.getPosition().lineNumber, this.getPosition().column));
 		const typedUnits = source === 'keyboard' && !configuration.characterPair.getAutoClosingPairs().some(pair => pair.open === text)
-			? Array.from(text)
+			? this.typingUnits(text)
 			: [text];
 		for (const character of typedUnits) {
 			const operation = source === 'keyboard'
 				? TypeOperations.typeWithInterceptors(Boolean(this.activeComposition), this.previousEditOperationType, this.context.cursorConfig, this.model, this.getSelections(), [...this.getAutoClosedCharacters()], character)
 				: TypeOperations.typeWithoutInterceptors(this.previousEditOperationType, this.context.cursorConfig, this.model, this.getSelections(), character);
 			this.executeEditOperation(eventsCollector, operation, EditSources.cursor({ kind: 'type', detailedSource: source }), source);
+		}
+	}
+
+	private *typingUnits(text: string): IterableIterator<string> {
+		if (this.context.cursorConfig.inputMode === 'overtype') {
+			yield* text;
+			return;
+		}
+		let offset = 0;
+		while (offset < text.length) {
+			// Spaces retain undo boundaries; language-sensitive characters must
+			// observe all edits preceding them, including changes of language.
+			const boundaries = new Set([' ', '\n', '\r']);
+			for (const selection of this.getSelections()) {
+				const position = selection.getPosition();
+				const languageId = this.model.getLanguageIdAtPosition(position.lineNumber, position.column);
+				const language = this.context.cursorConfig.languageConfigurationService.getLanguageConfiguration(languageId);
+				for (const pair of [...language.characterPair.getAutoClosingPairs(), ...language.getSurroundingPairs()]) {
+					for (const character of pair.open + pair.close) {
+						boundaries.add(character);
+					}
+				}
+				for (const character of language.electricCharacter?.getElectricCharacters() ?? []) {
+					boundaries.add(character);
+				}
+			}
+			const start = offset;
+			const first = String.fromCodePoint(text.codePointAt(offset)!);
+			offset += first.length;
+			if (!boundaries.has(first)) {
+				while (offset < text.length) {
+					const character = String.fromCodePoint(text.codePointAt(offset)!);
+					if (boundaries.has(character)) {
+						break;
+					}
+					offset += character.length;
+				}
+			}
+			yield text.slice(start, offset);
 		}
 	}
 

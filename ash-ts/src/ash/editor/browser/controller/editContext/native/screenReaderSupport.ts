@@ -63,7 +63,7 @@ export class ScreenReaderSupport extends Disposable {
 		}
 		this._register(addDisposableListener(element, "cut", () => this.onWillCut()));
 		this._register(addDisposableListener(element, "paste", () => this.onWillPaste()));
-		this._register(options.viewport.onDidChangeLayout(() => this.layoutContent()));
+		this._register(options.viewport.onDidChangeLayout(() => this.scheduleSynchronization()));
 		if (options.semanticTokenSource) {
 			this._register(options.semanticTokenSource.onDidChange(() => this.scheduleSynchronization()));
 		}

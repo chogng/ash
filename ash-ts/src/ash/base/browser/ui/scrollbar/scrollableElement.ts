@@ -536,6 +536,14 @@ export class SmoothScrollableElement extends Disposable {
 	private readonly arrowPress = this._register(new DisposableStore());
 	private readonly inertia = this._register(new MutableDisposable<IDisposable>());
 	private applyingInertia = false;
+	private readonly wheelEvents = new WeakSet<WheelEvent>();
+	private wheelInput: {
+		magnitude: number;
+		horizontal: boolean;
+		quantum: number;
+		discreteCount: number;
+		continuousTime: number;
+	} | undefined;
 	private options: ScrollableElementCreationOptions;
 
 	constructor(element: HTMLElement, options: ScrollableElementCreationOptions, private readonly scrollable: Scrollable) {
@@ -688,7 +696,12 @@ export class SmoothScrollableElement extends Disposable {
 
 	public delegateScrollFromMouseWheelEvent(event: IMouseWheelEvent): void {
 		if (event.browserEvent.defaultPrevented || this.options.handleMouseWheel === false) return;
+		if (this.wheelEvents.has(event.browserEvent)) {
+			return;
+		}
+		this.wheelEvents.add(event.browserEvent);
 		this.inertia.clear();
+		const continuous = this.isContinuousWheel(event);
 		let { deltaX, deltaY } = event;
 		if (event.shiftKey && deltaX === 0) {
 			deltaX = deltaY;
@@ -705,11 +718,6 @@ export class SmoothScrollableElement extends Disposable {
 		const scrollTop = clampScrollbarPosition(previous.scrollTop + deltaY * speed, dimensions.scrollHeight - dimensions.height);
 		const changed = scrollLeft !== previous.scrollLeft || scrollTop !== previous.scrollTop;
 		if (changed) {
-			// WheelEvent has no device type. Small or fractional pixel deltas are
-			// continuous input; line/page and large integral steps stay discrete.
-			const magnitude = Math.max(Math.abs(event.deltaX), Math.abs(event.deltaY));
-			const continuous = event.browserEvent.deltaMode === 0
-				&& (magnitude < 40 || !Number.isInteger(magnitude) || (event.deltaX !== 0 && event.deltaY !== 0));
 			if (this.options.inertialScroll && continuous) {
 				this.scrollable.setScrollPositionNow({ scrollLeft, scrollTop });
 				this.continueInertia(deltaX * speed, deltaY * speed);
@@ -720,6 +728,42 @@ export class SmoothScrollableElement extends Disposable {
 			}
 		}
 		if (changed || this.options.alwaysConsumeMouseWheel) event.preventDefault();
+	}
+
+	private isContinuousWheel(event: IMouseWheelEvent): boolean {
+		if (event.browserEvent.deltaMode !== 0) {
+			this.wheelInput = undefined;
+			return false;
+		}
+		// Classify before sensitivity and axis mapping. Keep CSS pixels for
+		// scrolling; only the device evidence uses conventional 40px steps.
+		const magnitude = Math.max(Math.abs(event.deltaX), Math.abs(event.deltaY)) / 40;
+		if (magnitude === 0) {
+			return false;
+		}
+		const horizontal = event.deltaX !== 0;
+		const previous = this.wheelInput;
+		const repeated = previous !== undefined && previous.horizontal === horizontal
+			&& magnitude >= 1 && Math.abs(previous.magnitude - magnitude) < 0.00001;
+		let quantum = previous?.quantum ?? 0;
+		if (repeated) {
+			quantum = quantum > 0 ? Math.min(quantum, magnitude) : magnitude;
+		}
+		const wholeStep = Math.abs(magnitude - Math.round(magnitude)) < 0.00001;
+		const learnedStep = quantum > 0 && Math.abs(magnitude / quantum - Math.round(magnitude / quantum)) < 0.00001;
+		const discreteCount = wholeStep || learnedStep ? (previous?.discreteCount ?? 0) + 1 : 0;
+		const now = event.browserEvent.timeStamp;
+		const continuousTime = previous?.continuousTime ?? -Infinity;
+		const continuous = (event.deltaX !== 0 && event.deltaY !== 0) || discreteCount === 0
+			|| (now - continuousTime <= 100 && discreteCount < 2 && !repeated);
+		this.wheelInput = {
+			magnitude,
+			horizontal,
+			quantum: continuous ? 0 : quantum,
+			discreteCount,
+			continuousTime: continuous ? now : continuousTime,
+		};
+		return continuous;
 	}
 
 	private continueInertia(deltaX: number, deltaY: number): void {

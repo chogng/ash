@@ -486,7 +486,7 @@ test('editor inertial scrolling decays and stops on reversal, direct input and c
 	expect(await editor.evaluate(element => element.scrollTop)).toBe(0);
 	await page.evaluate(() => window.ashTextModelIntegration.setValue(Array.from({ length: 100 }, () => 'line').join('\n')));
 	await page.clock.runFor(32);
-	await editor.evaluate(element => { element.scrollTop = element.scrollHeight; });
+	await editor.getByRole('scrollbar', { name: 'Vertical scrollbar' }).dispatchEvent('keydown', { key: 'End' });
 	await page.clock.runFor(32);
 	const bottom = await editor.evaluate(element => element.scrollTop);
 	await editor.dispatchEvent('wheel', { deltaY: 12, deltaMode: 0 });
@@ -496,6 +496,51 @@ test('editor inertial scrolling decays and stops on reversal, direct input and c
 	await page.evaluate(() => window.ashTextModelIntegration.dispose());
 	await page.clock.runFor(1500);
 	await expect(page.locator('.ash-smooth-scrollable')).toHaveCount(0);
+});
+
+test('editor distinguishes accelerating pixel input from fixed wheel steps before applying sensitivity', async ({ page }) => {
+	await page.goto('/textModel.html');
+	await page.evaluate(() => {
+		window.ashTextModelIntegration.setValue(Array.from({ length: 1000 }, () => 'x'.repeat(200)).join('\n'));
+		window.ashTextModelIntegration.updateOptions({ inertialScroll: true, smoothScrolling: false, mouseWheelScrollSensitivity: 2 });
+	});
+	await page.clock.install();
+	await page.clock.pauseAt(new Date());
+	const editor = page.locator('.stanza-editor');
+	// At the top edge the same unconsumed event reaches both wheel listeners.
+	await editor.dispatchEvent('wheel', { deltaY: -60, deltaMode: 0 });
+	await editor.dispatchEvent('wheel', { deltaY: 120, deltaMode: 0 });
+	const edgeInput = await editor.evaluate(element => element.scrollTop);
+	await page.clock.runFor(32);
+	expect(await editor.evaluate(element => element.scrollTop)).toBeGreaterThan(edgeInput);
+	// Large integer pixel deltas remain continuous when their step varies.
+	for (const deltaY of [134, 83, 62, 72, 101]) {
+		await editor.dispatchEvent('wheel', { deltaY, deltaMode: 0 });
+		const immediate = await editor.evaluate(element => element.scrollTop);
+		await page.clock.runFor(32);
+		expect(await editor.evaluate(element => element.scrollTop)).toBeGreaterThan(immediate);
+	}
+	await editor.dispatchEvent('keydown', { key: 'Escape' });
+	await page.clock.runFor(150);
+	for (const deltaY of [40, 80, 160, 40]) {
+		await editor.dispatchEvent('wheel', { deltaY, deltaMode: 0 });
+		const immediate = await editor.evaluate(element => element.scrollTop);
+		await page.clock.runFor(80);
+		expect(await editor.evaluate(element => element.scrollTop)).toBe(immediate);
+	}
+	// Fractional notch sizes become discrete after the repeated step is observed.
+	for (const [index, deltaY] of [60, 60, 120, 120, 60].entries()) {
+		await editor.dispatchEvent('wheel', { deltaY, deltaMode: 0 });
+		const immediate = await editor.evaluate(element => element.scrollTop);
+		await page.clock.runFor(32);
+		if (index > 0) {
+			expect(await editor.evaluate(element => element.scrollTop)).toBe(immediate);
+		}
+	}
+	await editor.dispatchEvent('wheel', { deltaY: 47, deltaX: 9, deltaMode: 0 });
+	const switched = await editor.evaluate(element => element.scrollTop);
+	await page.clock.runFor(32);
+	expect(await editor.evaluate(element => element.scrollTop)).toBeGreaterThan(switched);
 });
 
 test('editor surface and diagnostic colors follow the current Ash theme', async ({ page }) => {
@@ -830,3 +875,17 @@ test('textarea clipboard events pass through TextAreaInput semantic events', asy
 function assertBox(box: { readonly x: number; readonly y: number; readonly width: number; readonly height: number } | null, name: string): asserts box is { readonly x: number; readonly y: number; readonly width: number; readonly height: number } {
 	expect(box, `Expected ${name} geometry`).not.toBeNull();
 }
+
+
+test('large multiline keyboard input replaces the selection and keeps the editor responsive', async ({ page }) => {
+	await page.goto('/textModel.html');
+	const input = page.locator('.stanza-editor-input');
+	await input.focus();
+	await input.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+	const content = Array.from({ length: 200 }, (_, index) => `line${index}${'文🙂x'.repeat(60)}`).join('\n');
+	await page.keyboard.insertText(content);
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe(content);
+	await page.keyboard.insertText('!');
+	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toBe(content + '!');
+	await expect(page.locator('.view-line[data-logical-line-index="199"]')).toBeVisible();
+});

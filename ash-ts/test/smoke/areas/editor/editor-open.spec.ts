@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import type { Page } from "@playwright/test";
 import { expect, test } from "../../../automation/test.js";
 
@@ -440,3 +440,61 @@ async function hasWorkingCopyBackup(page: Page, content: string): Promise<boolea
 		}
 	}, content);
 }
+
+
+test('Code editor scrollbar follows wheel, keyboard and thumb dragging in the desktop window', async ({ target, testWorkspace, workbench }) => {
+	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires a Code workspace');
+	await writeFile(testWorkspace.file, Array.from({ length: 200 }, (_, index) => `// line ${index} ${'x'.repeat(180)}`).join('\n'));
+	const page = workbench.page;
+	const fileRow = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
+	await expect(fileRow).toHaveCount(1);
+	await fileRow.locator('.ash-icon-label-icon').click();
+	const editor = workbench.editors.groupAt(0).content.locator('.stanza-editor');
+	await expect(editor).toBeVisible();
+	const vertical = editor.getByRole('scrollbar', { name: 'Vertical scrollbar' });
+	await expect(vertical).toBeVisible();
+	await vertical.focus();
+	await page.keyboard.press('Home');
+	await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBe(0);
+	await editor.hover();
+	await page.mouse.wheel(0, 180);
+	await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+	await vertical.focus();
+	await page.keyboard.press('End');
+	await expect.poll(async () => vertical.evaluate(element => element.getAttribute('aria-valuenow') === element.getAttribute('aria-valuemax'))).toBe(true);
+	await page.keyboard.press('Home');
+	await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBe(0);
+	const thumb = await vertical.locator('.ash-scrollbar-thumb').boundingBox();
+	if (!thumb) {
+		throw new Error('Missing scrollbar thumb');
+	}
+	await page.mouse.move(thumb.x + thumb.width / 2, thumb.y + thumb.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(thumb.x + thumb.width / 2, thumb.y + thumb.height / 2 + 80, { steps: 5 });
+	await page.mouse.up();
+	await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBeGreaterThan(180);
+});
+
+test('Code replaces a selection with multiline text and remains editable', async ({ target, testWorkspace, workbench }) => {
+	test.skip(target.appServerMode !== 'required' || target.workbenchMode !== 'code', 'Requires a Code workspace');
+	const page = workbench.page;
+	const fileRow = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
+	await expect(fileRow).toHaveCount(1);
+	await fileRow.locator('.ash-icon-label-icon').click();
+	const input = workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
+	await expect(input).toBeAttached();
+	await input.focus();
+	await input.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+	const content = Array.from({ length: 200 }, (_, index) => `// line ${index} ${'x'.repeat(180)}`).join('\n');
+	const started = performance.now();
+	await page.keyboard.insertText(content);
+	await test.info().attach('input-timing', {
+		body: JSON.stringify({ characters: content.length, milliseconds: performance.now() - started }),
+		contentType: 'application/json',
+	});
+	await input.press(process.platform === 'darwin' ? 'Meta+S' : 'Control+S');
+	await expect.poll(() => readFile(testWorkspace.file, 'utf8')).toBe(content);
+	await page.keyboard.insertText('!');
+	await input.press(process.platform === 'darwin' ? 'Meta+S' : 'Control+S');
+	await expect.poll(() => readFile(testWorkspace.file, 'utf8')).toBe(content + '!');
+});

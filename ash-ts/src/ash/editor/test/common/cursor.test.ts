@@ -114,6 +114,51 @@ test('CursorsController types at two cursors in one model transaction', () => {
 	assert.deepEqual({ text: model.getText(), selections: controller.getSelections() }, { text: 'abcd\nefgh', selections: before });
 });
 
+test('CursorsController inserts long ordinary text without a transaction per character', () => {
+	using model = new TextModel('replace');
+	using controller = createTestCursorsController(model, [new Selection(1, 1, 1, 8)]);
+	const content = '中文🙂abc'.repeat(5000);
+	let changes = 0;
+	using listener = model.onDidChangeContent(() => changes++);
+
+	controller.type(new ViewModelEventsCollector(), content, 'keyboard');
+
+	assert.equal(model.getText(), content);
+	assert.equal(changes, 1);
+	assert.deepEqual(controller.getSelections(), [new Selection(1, content.length + 1, 1, content.length + 1)]);
+	model.undo();
+	assert.equal(model.getText(), 'replace');
+	assert.deepEqual(controller.getSelections(), [new Selection(1, 1, 1, 8)]);
+	model.redo();
+	assert.equal(model.getText(), content);
+});
+
+test('CursorsController bulk typing preserves language interceptors, cursors and undo groups', () => {
+	using bulkModel = new TextModel('old\nold', { languageId: 'typescript' });
+	using characterModel = new TextModel('old\nold', { languageId: 'typescript' });
+	const selections = [new Selection(1, 1, 1, 4), new Selection(2, 1, 2, 4)];
+	using bulk = createTestCursorsController(bulkModel, selections);
+	using characters = createTestCursorsController(characterModel, selections);
+	const content = "const value = call('hello')\n  next🙂";
+
+	bulk.type(new ViewModelEventsCollector(), content, 'keyboard');
+	for (const character of content) {
+		characters.type(new ViewModelEventsCollector(), character, 'keyboard');
+	}
+	assert.deepEqual({ text: bulkModel.getText(), selections: bulk.getSelections(), closers: bulk.getAutoClosedCharacters() }, {
+		text: characterModel.getText(), selections: characters.getSelections(), closers: characters.getAutoClosedCharacters(),
+	});
+	while (characterModel.canUndo()) {
+		assert.equal(bulkModel.canUndo(), true);
+		bulkModel.undo();
+		characterModel.undo();
+		assert.deepEqual({ text: bulkModel.getText(), selections: bulk.getSelections() }, {
+			text: characterModel.getText(), selections: characters.getSelections(),
+		});
+	}
+	assert.equal(bulkModel.canUndo(), false);
+});
+
 test('CursorsController setStates enforces the configured cursor limit and emits canonical events', () => {
 	using model = new TextModel('abcdef');
 	using controller = createTestCursorsController(model, single(0, 0), { multiCursorLimit: 2 });
