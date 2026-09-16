@@ -1,7 +1,8 @@
 {
   "extends": "./tsconfig.renderer.json",
   "include": [
-    "src/typings/**/*.d.ts",
+    "src/typings/css.d.ts",
+    "src/typings/editContext.d.ts",
     "src/ash/platform/memories/**/*.ts",
     "src/ash/platform/native/electron-browser/rendererApi.ts",
     "src/ash/platform/app-server/browser/webRendererApi.ts",

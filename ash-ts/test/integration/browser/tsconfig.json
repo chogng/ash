@@ -4,5 +4,5 @@
     "noEmit": true,
     "types": ["node", "vite/client", "@webgpu/types"]
   },
-  "include": ["../../../src/typings/**/*.d.ts", "./**/*.ts"]
+  "include": ["../../../src/typings/css.d.ts", "../../../src/typings/editContext.d.ts", "./**/*.ts"]
 }

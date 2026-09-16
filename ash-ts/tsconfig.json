@@ -5,5 +5,6 @@
     "rootDir": ".",
     "types": ["node", "electron", "@webgpu/types"]
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/typings/base-common.d.ts", "src/typings/crypto.d.ts"]
 }

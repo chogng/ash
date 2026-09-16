@@ -1,0 +1,16 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["ES2022", "ESNext.Disposable"],
+    "types": [],
+    "noUncheckedSideEffectImports": true,
+    "skipLibCheck": false
+  },
+  "include": [
+    "src/typings/base-common.d.ts",
+    "src/typings/crypto.d.ts",
+    "src/ash/base/common/**/*.ts",
+    "test/types/base-common.ts"
+  ]
+}

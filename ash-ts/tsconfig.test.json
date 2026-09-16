@@ -6,7 +6,8 @@
     "types": ["node", "@webgpu/types", "electron"]
   },
   "include": [
-    "src/typings/**/*.d.ts",
+    "src/typings/css.d.ts",
+    "src/typings/editContext.d.ts",
     "src/ash/base/browser/dom.ts",
     "src/ash/base/common/**/*.ts",
     "src/ash/base/parts/contextmenu/common/**/*.ts",

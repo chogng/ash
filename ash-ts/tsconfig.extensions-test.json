@@ -1,7 +1,8 @@
 {
   "extends": "./tsconfig.test.json",
   "include": [
-    "src/typings/**/*.d.ts",
+    "src/typings/css.d.ts",
+    "src/typings/editContext.d.ts",
     "src/ash/base/common/**/*.ts",
     "src/ash/base/test/common/event.test.ts",
     "src/ash/editor/common/**/*.ts",
