@@ -153,3 +153,22 @@
     background: ButtonFace padding-box;
   }
 }
+
+.ash-smooth-scrollable {
+  position: absolute;
+  inset: 0;
+}
+
+.ash-smooth-scrollable > .ash-scrollbar-track-horizontal > .ash-scrollbar-thumb {
+  top: 50%;
+  bottom: auto;
+  height: var(--ash-scrollbar-slider-size);
+  translate: 0 -50%;
+}
+
+.ash-smooth-scrollable > .ash-scrollbar-track-vertical > .ash-scrollbar-thumb {
+  left: 50%;
+  right: auto;
+  width: var(--ash-scrollbar-slider-size);
+  translate: -50% 0;
+}

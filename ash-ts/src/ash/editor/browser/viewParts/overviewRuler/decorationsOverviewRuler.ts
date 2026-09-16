@@ -96,7 +96,8 @@ export class DecorationsOverviewRuler extends ViewPart {
 		}
 	}
 
-	public render(_context: RestrictedRenderingContext): void {
+	public render(context: RestrictedRenderingContext): void {
+		this.domNode.setTransform(`translate3d(${context.scrollLeft}px, ${context.scrollTop}px, 0)`);
 		if (this.renderState !== RenderState.Needed) return;
 		this.paint();
 	}

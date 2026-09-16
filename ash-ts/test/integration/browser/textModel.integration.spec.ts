@@ -259,6 +259,155 @@ test("short documents have no false scroll range and use a proportional hover sl
 	await expect(minimap).not.toHaveClass(/stanza-editor-minimap-dragging/u);
 });
 
+test('editor auto scrollbars reveal on hover, focus and scrolling and remain draggable', async ({ page }) => {
+	await page.goto('/textModel.html');
+	await page.evaluate(() => window.ashTextModelIntegration.setValue(Array.from({ length: 100 }, () => 'x'.repeat(200)).join('\n')));
+	const editor = page.locator('.stanza-editor');
+	const horizontal = editor.getByRole('scrollbar', { name: 'Horizontal scrollbar' });
+	const vertical = editor.getByRole('scrollbar', { name: 'Vertical scrollbar' });
+	await page.mouse.move(0, 0);
+	await expect(vertical).toHaveCSS('opacity', '0');
+	await editor.hover();
+	for (const track of [horizontal, vertical]) {
+		await expect(track).toHaveCSS('opacity', '1');
+		await expect(track).toHaveCSS('pointer-events', 'auto');
+	}
+	await page.mouse.move(0, 0);
+	await expect(vertical).toHaveCSS('opacity', '0');
+	await vertical.focus();
+	await expect(vertical).toHaveCSS('opacity', '1');
+	await vertical.press('ArrowDown');
+	await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBe(40);
+	await expect(vertical).toHaveAttribute('aria-valuenow', '40');
+	await vertical.evaluate(element => element.blur());
+	await expect(vertical).toHaveCSS('opacity', '0');
+	await page.evaluate(() => window.ashTextModelIntegration.setScrollLeft(160));
+	await expect(horizontal).toHaveCSS('opacity', '1');
+	await expect(horizontal).toHaveAttribute('aria-valuenow', '160');
+	await editor.hover();
+	const thumb = vertical.locator('.ash-scrollbar-thumb');
+	const box = await thumb.boundingBox();
+	assertBox(box, 'vertical scrollbar thumb');
+	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + 80, { steps: 5 });
+	await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBeGreaterThan(40);
+	await expect.poll(() => editor.evaluate(element => element.scrollLeft)).toBe(160);
+	await page.mouse.up();
+	const remainingTracks = await editor.evaluate(element => {
+		window.ashTextModelIntegration.setScrollLeft(200);
+		window.ashTextModelIntegration.dispose();
+		return element.querySelectorAll('[role="scrollbar"]').length;
+	});
+	expect(remainingTracks).toBe(0);
+});
+
+test('editor scrollbar configuration updates visibility and track dimensions', async ({ page }) => {
+	await page.goto('/textModel.html');
+	const horizontal = page.locator('.ash-smooth-scrollable > .ash-scrollbar-track-horizontal');
+	const vertical = page.locator('.ash-smooth-scrollable > .ash-scrollbar-track-vertical');
+	await page.evaluate(() => window.ashTextModelIntegration.setScrollbar({
+		horizontal: 'visible', vertical: 'visible', horizontalScrollbarSize: 18, verticalScrollbarSize: 22,
+	}));
+	await expect(horizontal).toBeVisible();
+	await expect(vertical).toBeVisible();
+	await expect(horizontal).toHaveCSS('opacity', '1');
+	await expect(vertical).toHaveCSS('opacity', '1');
+	await expect(horizontal).toHaveCSS('height', '18px');
+	await expect(vertical).toHaveCSS('width', '22px');
+	await expect(horizontal).toHaveCSS('right', '22px');
+	await expect(vertical).toHaveCSS('bottom', '18px');
+	await expect(vertical).toHaveAttribute('aria-disabled', 'true');
+	await expect(vertical).toHaveCSS('pointer-events', 'none');
+	const minimapBox = await page.locator('.minimap').boundingBox();
+	const verticalBox = await vertical.boundingBox();
+	assertBox(minimapBox, 'minimap');
+	assertBox(verticalBox, 'vertical scrollbar');
+	expect(minimapBox.x + minimapBox.width).toBeCloseTo(verticalBox.x, 0);
+
+	await page.evaluate(() => {
+		window.ashTextModelIntegration.setValue(Array.from({ length: 100 }, () => 'x'.repeat(200)).join('\n'));
+		window.ashTextModelIntegration.setScrollbar({ horizontal: 'hidden', vertical: 'hidden' });
+	});
+	await expect(horizontal).toBeHidden();
+	await expect(vertical).toBeHidden();
+	await page.evaluate(() => window.ashTextModelIntegration.setScrollbar({ horizontal: 'auto', vertical: 'auto' }));
+	await page.locator('.stanza-editor').hover();
+	await expect(horizontal).toBeVisible();
+	await expect(vertical).toBeVisible();
+	await expect(vertical).toHaveCSS('pointer-events', 'auto');
+	await page.evaluate(() => window.ashTextModelIntegration.setScrollbar({ horizontalScrollbarSize: 0, verticalScrollbarSize: 0 }));
+	await expect(horizontal).toHaveCSS('height', '0px');
+	await expect(vertical).toHaveCSS('width', '0px');
+	await expect(horizontal).toBeHidden();
+	await expect(vertical).toBeHidden();
+	await expect(horizontal).toHaveAttribute('tabindex', '-1');
+	await expect(vertical).toHaveAttribute('tabindex', '-1');
+});
+
+test('editor scrollbar uses wheel policy, slider dimensions and page clicks from configuration', async ({ page }) => {
+	await page.goto('/textModel.html');
+	await page.evaluate(() => {
+		window.ashTextModelIntegration.setValue(Array.from({ length: 100 }, () => 'x'.repeat(200)).join('\n'));
+		window.ashTextModelIntegration.updateOptions({
+			mouseWheelScrollSensitivity: 2,
+			fastScrollSensitivity: 3,
+			scrollbar: { vertical: 'visible', horizontal: 'visible', verticalSliderSize: 6, horizontalSliderSize: 4, scrollByPage: true },
+		});
+	});
+	const editor = page.locator('.stanza-editor');
+	const horizontal = editor.getByRole('scrollbar', { name: 'Horizontal scrollbar' });
+	const vertical = editor.getByRole('scrollbar', { name: 'Vertical scrollbar' });
+	await expect(horizontal.locator('.ash-scrollbar-thumb')).toHaveCSS('height', '4px');
+	await expect(vertical.locator('.ash-scrollbar-thumb')).toHaveCSS('width', '6px');
+	await editor.dispatchEvent('wheel', { deltaY: 20, deltaMode: 0 });
+	await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBe(40);
+	await editor.dispatchEvent('wheel', { deltaY: 10, deltaMode: 0, altKey: true });
+	await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBe(100);
+	await editor.dispatchEvent('wheel', { deltaY: 10, deltaMode: 0, shiftKey: true });
+	await expect.poll(() => editor.evaluate(element => element.scrollLeft)).toBe(20);
+	await page.evaluate(() => window.ashTextModelIntegration.setScrollbar({ handleMouseWheel: false }));
+	await editor.dispatchEvent('wheel', { deltaY: 20, deltaMode: 0 });
+	await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBe(100);
+	const box = await vertical.boundingBox();
+	assertBox(box, 'vertical scrollbar');
+	await page.mouse.click(box.x + box.width / 2, box.y + box.height - 3);
+	await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBe(520);
+	await page.evaluate(() => window.ashTextModelIntegration.setScrollbar({ scrollByPage: false }));
+	await page.locator('.decorationsOverviewRuler').dispatchEvent('pointerdown', {
+		button: 0, buttons: 1, clientX: box.x + box.width / 2, clientY: box.y + box.height - 3,
+	});
+	await expect.poll(() => editor.evaluate(element => element.scrollTop)).toBeGreaterThan(520);
+});
+
+test('editor surface and diagnostic colors follow the current Ash theme', async ({ page }) => {
+	await page.goto('/textModel.html');
+	const editor = page.locator('.stanza-editor');
+	const diagnostic = page.locator('.cdr.squiggly-error');
+	await expect(diagnostic).toHaveCount(1);
+	for (const theme of ['dark', 'light', 'contrast'] as const) {
+		await page.evaluate(value => window.ashTextModelIntegration.setTheme(value), theme);
+		const colors = await editor.evaluate(element => {
+			const style = getComputedStyle(element);
+			const marker = element.querySelector('.squiggly-error');
+			if (!marker) throw new Error('Missing diagnostic');
+			const probe = element.ownerDocument.createElement('span');
+			probe.style.color = 'var(--ash-editor-foreground)';
+			probe.style.backgroundColor = 'var(--ash-editor-background)';
+			probe.style.borderColor = 'var(--ash-error-foreground)';
+			element.append(probe);
+			const expected = getComputedStyle(probe);
+			const result = {
+				actual: [style.color, style.backgroundColor, getComputedStyle(marker).borderBottomColor],
+				expected: [expected.color, expected.backgroundColor, expected.borderColor],
+			};
+			probe.remove();
+			return result;
+		});
+		expect(colors.actual).toEqual(colors.expected);
+	}
+});
+
 test("glyph margin, line numbers, and folding controls keep VS Code gutter order", async ({ page }) => {
 	await page.goto("/textModel.html");
 	const glyphMargin = page.locator(".glyph-margin");
@@ -315,8 +464,8 @@ test('view zones use the standard accessor, whitespace geometry, and disposal ch
 			'.stanza-native-edit-context',
 			'.minimap',
 			'.decorationsOverviewRuler',
-			'.stanza-editor-scrollbar-track-horizontal',
-			'.stanza-editor-scrollbar-track-vertical',
+			'.ash-smooth-scrollable > .ash-scrollbar-track-horizontal',
+			'.ash-smooth-scrollable > .ash-scrollbar-track-vertical',
 		].map(selector => {
 			const layer = element.querySelector<HTMLElement>(selector);
 			if (!layer) throw new Error(`Missing editor layer '${selector}'`);

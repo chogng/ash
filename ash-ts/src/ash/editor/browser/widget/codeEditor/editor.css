@@ -1,33 +1,23 @@
-/* -------------------- IE10 remove auto clear button -------------------- */
-
-::-ms-clear {
-	display: none;
-}
-
-/* All widgets */
-/* I am not a big fan of this rule */
 .stanza-editor .editor-widget input {
 	color: inherit;
 }
 
-/* -------------------- Editor -------------------- */
-
 .stanza-editor {
 	position: relative;
 	box-sizing: border-box;
-	overflow: scroll;
+	overflow: hidden;
 	overscroll-behavior: none;
 	scrollbar-width: none;
 	-webkit-text-size-adjust: 100%;
 	text-spacing-trim: space-all;
-	color: var(--vscode-editor-foreground);
-	background-color: var(--vscode-editor-background);
+	color: var(--ash-editor-foreground);
+	background-color: var(--ash-editor-background);
 	overflow-wrap: initial;
 }
 .stanza-editor::-webkit-scrollbar {
 	display: none;
 }
-.stanza-editor > .stanza-editor-content {
+.stanza-editor-content {
 	position: absolute;
 	top: 0;
 	left: 0;
@@ -55,29 +45,21 @@
 	top: 0;
 	left: 0;
 }
-.stanza-editor > .stanza-editor-scrollbar-track-horizontal {
-	height: var(--stanza-editor-horizontal-scrollbar-size);
-}
-.stanza-editor > .stanza-editor-scrollbar-track-vertical {
-	width: var(--stanza-editor-vertical-scrollbar-size);
-}
 .stanza-editor-background {
-	background-color: var(--vscode-editor-background);
+	background-color: var(--ash-editor-background);
 }
-.stanza-editor .rangeHighlight {
-	background-color: var(--vscode-editor-rangeHighlightBackground);
-	box-sizing: border-box;
-	border: 1px solid var(--vscode-editor-rangeHighlightBorder);
-}
-.stanza-editor.hc-black .rangeHighlight, .stanza-editor.hc-light .rangeHighlight {
-	border-style: dotted;
-}
+.stanza-editor .rangeHighlight,
 .stanza-editor .symbolHighlight {
-	background-color: var(--vscode-editor-symbolHighlightBackground);
 	box-sizing: border-box;
-	border: 1px solid var(--vscode-editor-symbolHighlightBorder);
+	background-color: var(--ash-selection-background);
+	border: 1px solid var(--ash-focus-border);
 }
-.stanza-editor.hc-black .symbolHighlight, .stanza-editor.hc-light .symbolHighlight {
+
+[data-color-scheme="high-contrast-dark"] .rangeHighlight,
+[data-color-scheme="high-contrast-dark"] .symbolHighlight,
+[data-color-scheme="high-contrast-light"] .rangeHighlight,
+[data-color-scheme="high-contrast-light"] .symbolHighlight {
+	background-color: transparent;
 	border-style: dotted;
 }
 
@@ -88,8 +70,6 @@
 	z-index: 0;
 	pointer-events: none;
 }
-
-/* -------------------- Misc -------------------- */
 
 .stanza-editor .overflow-guard {
 	position: relative;
@@ -106,50 +86,24 @@
 	width: 100%;
 }
 
-/*
-.stanza-editor .auto-closed-character {
-	opacity: 0.3;
-}
-*/
-
-
 .stanza-editor .squiggly-error {
-	border-bottom: 4px double var(--vscode-editorError-border);
+	border-bottom: 2px solid var(--ash-error-foreground);
 }
-.stanza-editor .squiggly-error::before {
-	display: block;
-	content: '';
-	width: 100%;
-	height: 100%;
-	background: var(--vscode-editorError-background);
-}
+
 .stanza-editor .squiggly-warning {
-	border-bottom: 4px double var(--vscode-editorWarning-border);
+	border-bottom: 2px dashed var(--ash-warning-foreground);
 }
-.stanza-editor .squiggly-warning::before {
-	display: block;
-	content: '';
-	width: 100%;
-	height: 100%;
-	background: var(--vscode-editorWarning-background);
-}
+
 .stanza-editor .squiggly-info {
-	border-bottom: 4px double var(--vscode-editorInfo-border);
+	border-bottom: 2px dotted var(--ash-accent-foreground);
 }
-.stanza-editor .squiggly-info::before {
-	display: block;
-	content: '';
-	width: 100%;
-	height: 100%;
-	background: var(--vscode-editorInfo-background);
-}
-.stanza-editor .squiggly-hint {
-	border-bottom: 2px dotted var(--vscode-editorHint-border);
-}
+
+.stanza-editor .squiggly-hint,
 .stanza-editor.showUnused .squiggly-unnecessary {
-	border-bottom: 2px dashed var(--vscode-editorUnnecessaryCode-border);
+	border-bottom: 2px dotted var(--ash-muted-foreground);
 }
+
 .stanza-editor.showDeprecated .squiggly-inline-deprecated {
 	text-decoration: line-through;
-	text-decoration-color: var(--vscode-editor-foreground, inherit);
+	text-decoration-color: var(--ash-editor-foreground);
 }

@@ -24,7 +24,7 @@ export abstract class AbstractScrollbar extends Disposable {
 	readonly thumb: HTMLDivElement;
 	public readonly trackNode: FastDomNode<HTMLDivElement>;
 	protected readonly thumbNode: FastDomNode<HTMLDivElement>;
-	private readonly trackClickBehavior: "jump" | "page";
+	private readonly options: AbstractScrollbarOptions;
 	private readonly getMetrics: () => ScrollbarAxisMetrics;
 	private readonly setPosition: (position: number) => void;
 	private readonly dragListeners: DisposableStore;
@@ -35,7 +35,7 @@ export abstract class AbstractScrollbar extends Disposable {
 		options: AbstractScrollbarOptions,
 	) {
 		super();
-		this.trackClickBehavior = options.trackClickBehavior;
+		this.options = options;
 		this.getMetrics = options.getMetrics;
 		this.setPosition = options.setPosition;
 		const track = h(container.ownerDocument, "div");
@@ -63,8 +63,7 @@ export abstract class AbstractScrollbar extends Disposable {
 			track,
 			"pointerdown",
 			(event: PointerEvent) => {
-				if (event.target === thumb) this.beginThumbDrag(event);
-				else this.handleTrackPointerDown(event);
+				this.delegatePointerDown(event);
 			},
 		));
 		this._register(addDisposableListener(
@@ -72,6 +71,12 @@ export abstract class AbstractScrollbar extends Disposable {
 			"keydown",
 			(event: KeyboardEvent) => this.handleKeydown(event),
 		));
+	}
+
+	public delegatePointerDown(event: PointerEvent): void {
+		if (!this.rendered || this.getMetrics().maximumPosition <= 0) return;
+		if (event.target === this.thumb) this.beginThumbDrag(event);
+		else this.handleTrackPointerDown(event);
 	}
 
 	get rendered(): boolean {
@@ -224,7 +229,7 @@ export abstract class AbstractScrollbar extends Disposable {
 		const coordinate = this.trackPointerCoordinate(event, bounds);
 		const metrics = this.getMetrics();
 		let next: number;
-		if (this.trackClickBehavior === "page") {
+		if (this.options.trackClickBehavior === "page") {
 			next = coordinate < metrics.thumbPosition
 				? metrics.position - metrics.viewportSize
 				: metrics.position + metrics.viewportSize;

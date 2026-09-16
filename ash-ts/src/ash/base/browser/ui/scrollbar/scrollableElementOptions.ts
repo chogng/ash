@@ -1,3 +1,4 @@
+import { ScrollbarVisibility as ScrollbarVisibilityOption } from '../../../common/scrollable.js';
 import { isFiniteNumber } from "../../../common/numbers.js";
 
 export type ScrollbarVisibility = "auto" | "visible" | "hidden";
@@ -111,3 +112,25 @@ function nonNegativeFinite(
 		? value
 		: fallback;
 }
+
+/** Options for a DOM view backed by an existing Scrollable. */
+export interface ScrollableElementCreationOptions {
+	lazyRender?: boolean;
+	className?: string;
+	listenOnDomNode?: HTMLElement;
+	horizontal?: ScrollbarVisibilityOption;
+	vertical?: ScrollbarVisibilityOption;
+	horizontalScrollbarSize?: number;
+	verticalScrollbarSize?: number;
+	horizontalSliderSize?: number;
+	verticalSliderSize?: number;
+	scrollByPage?: boolean;
+	handleMouseWheel?: boolean;
+	alwaysConsumeMouseWheel?: boolean;
+	mouseWheelScrollSensitivity?: number;
+	fastScrollSensitivity?: number;
+	scrollPredominantAxis?: boolean;
+	mouseWheelSmoothScroll?: boolean;
+}
+
+export type ScrollableElementChangeOptions = Omit<ScrollableElementCreationOptions, 'lazyRender' | 'className' | 'listenOnDomNode'>;

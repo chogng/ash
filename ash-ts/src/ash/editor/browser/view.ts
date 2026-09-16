@@ -1,3 +1,4 @@
+import type { IMouseWheelEvent } from '../../base/browser/mouseEvent.js';
 import { Event } from '../../base/common/event.js';
 import { addDisposableListener, getClientArea, h, runWhenWindowIdle } from '../../base/browser/dom.js';
 import { FastDomNode } from '../../base/browser/fastDomNode.js';
@@ -16,7 +17,7 @@ import { ViewEventHandler } from '../common/viewEventHandler.js';
 import * as viewEvents from '../common/viewEvents.js';
 import { EditorVisualLineProjection } from '../common/viewModel/modelLineProjection.js';
 import { type EditorScrollPosition } from '../common/viewModel/editorViewportContracts.js';
-import { ComputeOptionsMemory, EditorLayoutInfoComputer, EditorLineWrapping, EditorOption, EditorOptions, type EditorLayoutInfo, type EditorMinimapLayoutInfo, type EditorMinimapOptions, type FindComputedEditorOptionValueById, RenderLineNumbersType, isWrappingIndent, WrappingIndent } from '../common/config/editorOptions.js';
+import { ComputeOptionsMemory, EditorLayoutInfoComputer, EditorLineWrapping, EditorOption, type EditorLayoutInfo, type EditorMinimapLayoutInfo, type EditorMinimapOptions, type FindComputedEditorOptionValueById, RenderLineNumbersType, isWrappingIndent, WrappingIndent } from '../common/config/editorOptions.js';
 import { type FontInfo } from '../common/config/fontInfo.js';
 import { type TextMeasurer } from '../common/viewModel/textMeasurer.js';
 import { type EditorViewportChange, type EditorViewportLayout, ViewLayout } from '../common/viewLayout/viewLayout.js';
@@ -69,7 +70,6 @@ import { MouseHandler, type IPointerHandlerHelper } from './controller/mouseHand
 import { PointerHandlerLastRenderData } from './controller/mouseTarget.js';
 import './widget/codeEditor/editor.css';
 
-const DEFAULT_EDITOR_SCROLLBAR = EditorOptions.scrollbar.defaultValue;
 interface BrowserCaretPosition {
 	readonly offsetNode: Node;
 	readonly offset: number;
@@ -153,6 +153,7 @@ export class View extends ViewEventHandler {
 	private readonly accessibilityStatusElement: HTMLDivElement;
 	private readonly viewContext: ViewContext;
 	private readonly viewParts: ViewPart[] = [];
+	private readonly scrollbar: EditorScrollbar;
 	private readonly viewGpuContext: ViewGpuContext | undefined;
 	private readonly viewLines: ViewLines;
 	private readonly viewLinesGpu: ViewLinesGpu | undefined;
@@ -382,13 +383,8 @@ export class View extends ViewEventHandler {
 				readTextLeft: () => this.textLeft,
 			})).domNode.domNode;
 		}
-		this.registerViewPart(new EditorScrollbar(this.viewContext, {
-			container: this.domNode.domNode,
-			viewport: this.domNode.domNode,
-			scrollTo: position => this.scrollTo(position),
-			horizontalScrollbarSize: DEFAULT_EDITOR_SCROLLBAR.horizontalScrollbarSize,
-			verticalScrollbarSize: DEFAULT_EDITOR_SCROLLBAR.verticalScrollbarSize,
-		}));
+		this.scrollbar = this.registerViewPart(new EditorScrollbar(this.viewContext, this.contentNode, this.domNode, this.domNode));
+		this.domNode.domNode.prepend(this.scrollbar.getDomNode().domNode);
 		const minimapPart = this.registerViewPart(new Minimap(this.viewContext, {
 			host: this.domNode.domNode,
 			model: this.model,
@@ -416,10 +412,12 @@ export class View extends ViewEventHandler {
 			...(this.viewGpuContext ? [this.viewGpuContext.canvas.domNode] : []),
 			this.overlayWidgets.getDomNode().domNode,
 			minimapPart.getDomNode().domNode,
-			decorationsOverviewRuler.getDomNode(),
 			scrollDecoration.getDomNode().domNode,
 			this.viewZones.domNode.domNode,
 		);
+		const overviewRulerLayout = this.scrollbar.getOverviewRulerLayoutInfo();
+		overviewRulerLayout.parent.insertBefore(decorationsOverviewRuler.getDomNode(), overviewRulerLayout.insertBefore);
+		this._register(addDisposableListener(decorationsOverviewRuler.getDomNode(), 'pointerdown', (event: PointerEvent) => this.delegateVerticalScrollbarPointerDown(event)));
 		this._register(new MouseHandler(this.viewContext, this.controller, this.createPointerHandlerHelper()));
 		ownerDocument.body.append(
 			this.contentWidgets.overflowingContentWidgetsDomNode.domNode,
@@ -781,12 +779,21 @@ export class View extends ViewEventHandler {
 			: new Position((visualLine.logicalLineIndex) + 1, (visualLine.startColumn + nearestColumn) + 1);
 	}
 
+	public delegateVerticalScrollbarPointerDown(event: PointerEvent): void {
+		this.scrollbar.delegateVerticalScrollbarPointerDown(event);
+	}
+
+	public delegateScrollFromMouseWheelEvent(event: IMouseWheelEvent): void {
+		this.scrollbar.delegateScrollFromMouseWheelEvent(event);
+	}
+
 	private createPointerHandlerHelper(): IPointerHandlerHelper {
 		return {
 			viewDomNode: this.domNode.domNode,
 			linesContentDomNode: this.contentElement,
 			viewLinesDomNode: this.viewLines.getDomNode().domNode,
 			viewLinesGpu: this.viewLinesGpu,
+			delegateScrollFromMouseWheelEvent: event => this.delegateScrollFromMouseWheelEvent(event),
 			focusTextArea: () => this.controller.editContext.focus(),
 			dispatchTextAreaEvent: event => this.controller.element.dispatchEvent(event),
 			getLastRenderData: () => new PointerHandlerLastRenderData(this.viewCursors.getLastRenderData(), this.controller.editContext.getLastRenderData()),
@@ -925,7 +932,7 @@ export class View extends ViewEventHandler {
 			paddingTop: this.editorConfiguration.options.get(EditorOption.padding).top,
 			paddingBottom: this.editorConfiguration.options.get(EditorOption.padding).bottom,
 			minimap: this.minimap,
-			verticalScrollbarWidth: DEFAULT_EDITOR_SCROLLBAR.verticalScrollbarSize,
+			verticalScrollbarWidth: this.editorConfiguration.options.get(EditorOption.layoutInfo).verticalScrollbarWidth,
 			viewLineCount: this.visualProjection.visualLineCount,
 			remainingWidth: Math.max(0, viewportWidth - this.gutterWidth),
 			isViewportWrapping: this.softWrapping,

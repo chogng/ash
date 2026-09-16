@@ -1,7 +1,9 @@
+import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
+import type { IEditorScrollbarOptions, IEditorOptions } from '../../../src/ash/editor/common/config/editorOptions.js';
 import { h } from '../../../src/ash/base/browser/dom.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
-import { darkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
+import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { URI } from "../../../src/ash/base/common/uri.js";
 import { DisposableStore, toDisposable } from "../../../src/ash/base/common/lifecycle.js";
 import { Event } from "../../../src/ash/base/common/event.js";
@@ -54,6 +56,9 @@ interface IntegrationHarness {
 	setCursors(positions: readonly { readonly lineIndex: number; readonly columnIndex: number }[], primaryIndex?: number): void;
 	revealPosition(lineIndex: number, columnIndex: number): void;
 	setScrollLeft(scrollLeft: number): void;
+	setScrollbar(options: IEditorScrollbarOptions): void;
+	updateOptions(options: IEditorOptions): void;
+	setTheme(theme: 'dark' | 'light' | 'contrast'): void;
 	setRenderRichScreenReaderContent(enabled: boolean): void;
 	showViewZone(): void;
 	removeViewZone(): void;
@@ -129,7 +134,9 @@ let glyphDecorations: IEditorDecorationsCollection | undefined;
 let modelDecorations: IEditorDecorationsCollection | undefined;
 const services = disposables.add(new ServiceContainer());
 services.registerInstance(ITextModelResourceService, models);
-services.registerSingleton(IThemeService, () => new TestThemeService(darkColorTheme));
+const themeService = disposables.add(new TestThemeService(darkColorTheme));
+services.registerInstance(IThemeService, themeService);
+disposables.add(bindColorTheme(themeService, root));
 services.registerInstance(ILanguageFeaturesService, languageFeaturesService);
 services.registerInstance(ILanguageConfigurationService, languageConfigurationService);
 services.registerInstance(ILogService, new NullLoggerService());
@@ -189,6 +196,9 @@ window.ashTextModelIntegration = {
 	)),
 	revealPosition: (lineIndex, columnIndex) => requiredEditorPart().view.revealPosition(new Position(lineIndex + 1, columnIndex + 1)),
 	setScrollLeft: scrollLeft => requiredEditorPart().setScrollLeft(scrollLeft),
+	setScrollbar: scrollbar => requiredEditorPart().updateOptions({ scrollbar }),
+	updateOptions: options => requiredEditorPart().updateOptions(options),
+	setTheme: theme => themeService.setColorTheme(theme === 'dark' ? darkColorTheme : theme === 'light' ? lightColorTheme : highContrastDarkColorTheme),
 	setRenderRichScreenReaderContent: enabled => requiredEditorPart().updateOptions({ renderRichScreenReaderContent: enabled }),
 	showViewZone: () => {
 		removeViewZone();

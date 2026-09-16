@@ -1,3 +1,8 @@
+import './scrollbar.css';
+import { RunOnceScheduler } from '../../../common/async.js';
+import { Scrollable, ScrollbarVisibility as ScrollbarVisibilityOption, type INewScrollPosition } from '../../../common/scrollable.js';
+import type { IMouseWheelEvent } from '../../mouseEvent.js';
+import type { ScrollableElementCreationOptions, ScrollableElementChangeOptions } from './scrollableElementOptions.js';
 import { addDisposableListener, h } from "../../dom.js";
 import { FastDomNode } from "../../fastDomNode.js";
 import { StandardWheelEvent } from "../../mouseEvent.js";
@@ -508,4 +513,158 @@ function ownerWindow(element: HTMLElement): Window {
 	const targetWindow = element.ownerDocument.defaultView;
 	if (!targetWindow) throw new Error("ScrollableElement requires a browser window");
 	return targetWindow;
+}
+
+export interface IOverviewRulerLayoutInfo {
+	parent: HTMLElement;
+	insertBefore: HTMLElement;
+}
+
+/** Scrollbar controls for content whose scroll state is owned by its caller. */
+export class SmoothScrollableElement extends Disposable {
+	private readonly domNode: HTMLDivElement;
+	private readonly horizontal: HorizontalScrollbar;
+	private readonly vertical: VerticalScrollbar;
+	private horizontalMetrics = createScrollbarAxisMetrics(0, 0, 0, 0, 0);
+	private verticalMetrics = createScrollbarAxisMetrics(0, 0, 0, 0, 0);
+	private hovered = false;
+	private focused = false;
+	private scrolling = false;
+	private readonly activity: RunOnceScheduler;
+	private options: ScrollableElementCreationOptions;
+
+	constructor(element: HTMLElement, options: ScrollableElementCreationOptions, private readonly scrollable: Scrollable) {
+		super();
+		this.options = { ...options };
+		const root = h(element.ownerDocument, 'div');
+		this.domNode = root;
+		root.className = `ash-smooth-scrollable ${options.className ?? ''}`.trim();
+		this._register(toDisposable(() => root.remove()));
+		root.append(element);
+		if (!element.id) element.id = `ash-scrollable-${nextScrollableId++}`;
+		const owner = this;
+		this.horizontal = this._register(new HorizontalScrollbar(root, {
+			viewport: element,
+			get trackClickBehavior() { return owner.options.scrollByPage ? 'page' : 'jump'; },
+			getMetrics: () => this.horizontalMetrics,
+			setPosition: scrollLeft => scrollable.setScrollPositionNow({ scrollLeft }),
+		}));
+		this.vertical = this._register(new VerticalScrollbar(root, {
+			viewport: element,
+			get trackClickBehavior() { return owner.options.scrollByPage ? 'page' : 'jump'; },
+			getMetrics: () => this.verticalMetrics,
+			setPosition: scrollTop => scrollable.setScrollPositionNow({ scrollTop }),
+		}));
+		this.activity = this._register(new RunOnceScheduler(() => {
+			this.scrolling = false;
+			this.updateVisibility();
+		}, 700));
+		const eventTarget = options.listenOnDomNode ?? root;
+		this.hovered = eventTarget.matches(':hover');
+		this.focused = eventTarget.contains(element.ownerDocument.activeElement);
+		this._register(addDisposableListener(eventTarget, 'mouseenter', () => {
+			this.hovered = true;
+			this.updateVisibility();
+		}));
+		this._register(addDisposableListener(eventTarget, 'mouseleave', () => {
+			this.hovered = false;
+			this.updateVisibility();
+		}));
+		this._register(addDisposableListener(eventTarget, 'focusin', () => {
+			this.focused = true;
+			this.updateVisibility();
+		}));
+		this._register(addDisposableListener(eventTarget, 'focusout', (event: FocusEvent) => {
+			this.focused = eventTarget.contains(event.relatedTarget as Node | null);
+			this.updateVisibility();
+		}));
+		this._register(addDisposableListener(eventTarget, 'wheel', (event: WheelEvent) => {
+			const dimensions = scrollable.getScrollDimensions();
+			this.delegateScrollFromMouseWheelEvent(new StandardWheelEvent(event, { pageWidth: dimensions.width, pageHeight: dimensions.height }));
+		}, { passive: false }));
+		this._register(scrollable.onScroll(event => {
+			if (event.scrollLeftChanged || event.scrollTopChanged) {
+				this.scrolling = true;
+				this.activity.schedule();
+				this.updateVisibility();
+			}
+			if (!this.options.lazyRender) this.renderNow();
+		}));
+	}
+
+	public getDomNode(): HTMLElement { return this.domNode; }
+
+	public getOverviewRulerLayoutInfo(): IOverviewRulerLayoutInfo {
+		return { parent: this.domNode, insertBefore: this.vertical.track };
+	}
+
+	public delegateVerticalScrollbarPointerDown(event: PointerEvent): void {
+		this.vertical.delegatePointerDown(event);
+	}
+
+	public updateOptions(options: ScrollableElementChangeOptions): void {
+		this.options = { ...this.options, ...options };
+		if (!this.options.lazyRender) this.renderNow();
+	}
+
+	public setScrollPosition(position: INewScrollPosition & { reuseAnimation?: boolean }): void {
+		this.scrollable.setScrollPositionSmooth(position, position.reuseAnimation);
+	}
+
+	public delegateScrollFromMouseWheelEvent(event: IMouseWheelEvent): void {
+		if (event.browserEvent.defaultPrevented || this.options.handleMouseWheel === false) return;
+		let { deltaX, deltaY } = event;
+		if (event.shiftKey && deltaX === 0) {
+			deltaX = deltaY;
+			deltaY = 0;
+		}
+		if (this.options.scrollPredominantAxis !== false) {
+			if (Math.abs(deltaY) >= Math.abs(deltaX)) deltaX = 0;
+			else deltaY = 0;
+		}
+		const speed = (this.options.mouseWheelScrollSensitivity ?? 1) * (event.altKey ? this.options.fastScrollSensitivity ?? 5 : 1);
+		const previous = this.scrollable.getFutureScrollPosition();
+		const dimensions = this.scrollable.getScrollDimensions();
+		const scrollLeft = clampScrollbarPosition(previous.scrollLeft + deltaX * speed, dimensions.scrollWidth - dimensions.width);
+		const scrollTop = clampScrollbarPosition(previous.scrollTop + deltaY * speed, dimensions.scrollHeight - dimensions.height);
+		const changed = scrollLeft !== previous.scrollLeft || scrollTop !== previous.scrollTop;
+		if (changed) {
+			if (this.options.mouseWheelSmoothScroll === false) this.scrollable.setScrollPositionNow({ scrollLeft, scrollTop });
+			else this.setScrollPosition({ scrollLeft, scrollTop, reuseAnimation: true });
+		}
+		if (changed || this.options.alwaysConsumeMouseWheel) event.preventDefault();
+	}
+
+	public renderNow(): void {
+		const { width, height, scrollWidth, scrollHeight } = this.scrollable.getScrollDimensions();
+		const { scrollLeft, scrollTop } = this.scrollable.getCurrentScrollPosition();
+		const horizontalSize = this.options.horizontalScrollbarSize ?? 10;
+		const verticalSize = this.options.verticalScrollbarSize ?? 10;
+		const horizontalRendered = horizontalSize > 0 && this.isRendered(this.options.horizontal, scrollWidth > width);
+		const verticalRendered = verticalSize > 0 && this.isRendered(this.options.vertical, scrollHeight > height);
+		this.horizontal.trackNode.setHeight(horizontalSize);
+		this.vertical.trackNode.setWidth(verticalSize);
+		this.horizontal.trackNode.setRight(verticalRendered ? verticalSize : 0);
+		this.vertical.trackNode.setBottom(horizontalRendered ? horizontalSize : 0);
+		this.horizontal.track.style.setProperty('--ash-scrollbar-slider-size', `${Math.min(horizontalSize, this.options.horizontalSliderSize ?? horizontalSize)}px`);
+		this.vertical.track.style.setProperty('--ash-scrollbar-slider-size', `${Math.min(verticalSize, this.options.verticalSliderSize ?? verticalSize)}px`);
+		const transform = `translate3d(${scrollLeft}px, ${scrollTop}px, 0)`;
+		this.horizontal.trackNode.setTransform(transform);
+		this.vertical.trackNode.setTransform(transform);
+		this.horizontalMetrics = createScrollbarAxisMetrics(width, scrollWidth, scrollLeft, Math.max(0, width - (verticalRendered ? verticalSize : 0)), 20);
+		this.verticalMetrics = createScrollbarAxisMetrics(height, scrollHeight, scrollTop, Math.max(0, height - (horizontalRendered ? horizontalSize : 0)), 20);
+		this.horizontal.render(this.horizontalMetrics, horizontalRendered);
+		this.vertical.render(this.verticalMetrics, verticalRendered);
+		this.updateVisibility();
+	}
+
+	private isRendered(visibility: ScrollbarVisibilityOption | undefined, needed: boolean): boolean {
+		return visibility === ScrollbarVisibilityOption.Visible || (visibility !== ScrollbarVisibilityOption.Hidden && needed);
+	}
+
+	private updateVisibility(): void {
+		const reveal = this.hovered || this.focused || this.scrolling;
+		this.horizontal.track.dataset.visibility = this.options.horizontal === ScrollbarVisibilityOption.Visible || reveal ? 'visible' : 'auto';
+		this.vertical.track.dataset.visibility = this.options.vertical === ScrollbarVisibilityOption.Visible || reveal ? 'visible' : 'auto';
+	}
 }

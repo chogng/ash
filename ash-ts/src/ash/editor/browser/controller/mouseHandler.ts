@@ -1,5 +1,5 @@
 import { addDisposableListener } from '../../../base/browser/dom.js';
-import { StandardWheelEvent } from '../../../base/browser/mouseEvent.js';
+import { StandardWheelEvent, type IMouseWheelEvent } from '../../../base/browser/mouseEvent.js';
 import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { EditorOption } from '../../common/config/editorOptions.js';
 import { Position } from '../../common/core/position.js';
@@ -23,6 +23,7 @@ export interface IPointerHandlerHelper {
 	viewLinesDomNode: HTMLElement;
 	viewLinesGpu: ViewLinesGpu | undefined;
 	focusTextArea(): void;
+	delegateScrollFromMouseWheelEvent(event: IMouseWheelEvent): void;
 	dispatchTextAreaEvent(event: CustomEvent): void;
 	getLastRenderData(): PointerHandlerLastRenderData;
 	renderNow(): void;
@@ -85,7 +86,7 @@ export class MouseHandler extends ViewEventHandler {
 		this._register(mouseEvents.onMouseMove(viewHelper.viewDomNode, event => this._onMouseMove(event)));
 		this._register(mouseEvents.onMouseLeave(viewHelper.viewDomNode, event => this._onMouseLeave(event)));
 		this._register(mouseEvents.onMouseUp(viewHelper.viewDomNode, event => this._onMouseUp(event)));
-		this._register(addDisposableListener<WheelEvent>(viewHelper.viewDomNode, 'wheel', event => this._onMouseWheel(event)));
+		this._register(addDisposableListener<WheelEvent>(viewHelper.viewDomNode, 'wheel', event => this._onMouseWheel(event), { passive: false }));
 		this._register(addDisposableListener<DragEvent>(viewHelper.viewDomNode, 'drop', event => this._onDrop(event)));
 		this._register(toDisposable(() => this.stopPointerSelection()));
 	}
@@ -183,7 +184,9 @@ export class MouseHandler extends ViewEventHandler {
 	}
 
 	protected _onMouseWheel(event: WheelEvent): void {
-		this.viewController.emitMouseWheel(new StandardWheelEvent(event, { lineHeight: this._context.configuration.options.get(EditorOption.lineHeight) }));
+		const wheel = new StandardWheelEvent(event, { lineHeight: this._context.configuration.options.get(EditorOption.lineHeight) });
+		this.viewHelper.delegateScrollFromMouseWheelEvent(wheel);
+		this.viewController.emitMouseWheel(wheel);
 	}
 
 	private _onDrop(event: DragEvent): void {
