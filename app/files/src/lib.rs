@@ -204,7 +204,7 @@ impl FilesState {
         let Some(root) = self.root.clone() else {
             return;
         };
-        match PathSearchHandle::start(root, PathSearchOptions::default()) {
+        match ash_file_search::Service.start(root, PathSearchOptions::default()) {
             Ok((handle, receiver)) => {
                 self.search_revision = handle.update_query(self.search_input.text());
                 self.search_handle = Some(handle);

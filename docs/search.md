@@ -61,7 +61,7 @@ flowchart TD
 | 公共内容搜索 | Agent、编辑器和 Codebase 检索使用公共 grep 服务 | 共享目录索引，分别管理请求 |
 | 配置与组装 | 宿主持有 `EnvRuntimeConfig`、grep 与 file-search；分别注入使用者 | `LocalToolConfig` 只保留工具执行策略，工具组合不向宿主提供公共服务 |
 | Codebase 职责 | `CodebaseRetrievalService` 组合 FTS、grep、符号和语义候选 | `Codebase` 的源码、chunk 与版本管理不引用 grep |
-| 文件路径搜索 | `file-search::Service` 提供 glob / 枚举与模糊搜索入口；Agent、CLI 和 TUI 调用公共能力 | glob 读当前路径并按修改时间排序；模糊搜索复用请求内的路径索引 |
+| 文件路径搜索 | `file-search::Service` 提供 glob / 枚举与模糊搜索入口；Agent、CLI、TUI 和 Rust 桌面文件面板调用公共能力 | glob 读当前路径并按修改时间排序；模糊搜索复用请求内的路径索引 |
 | 查询新鲜度 | Rust API 与 RPC 均支持 `Indexed` / `Current`，RPC 成功结果返回实际模式 | 编辑器默认保持当前磁盘搜索；Agent 和 Codebase 使用索引候选 |
 
 实现入口：[宿主组装](../ash-rs/app-server/src/server/environment_runtime.rs)、
