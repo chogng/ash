@@ -1,4 +1,4 @@
-import type { ContentSearchReadResult, ContentSearchStartResult } from "../../../../../generated/app-server/index.js";
+import type { ContentSearchReadResult, ContentSearchStartResult } from "../../app-server/common/generated/index.js";
 import { invoke } from "../../ipc/electron-browser/rendererIpc.js";
 import type { IContentSearchApi } from "../common/searchApi.js";
 

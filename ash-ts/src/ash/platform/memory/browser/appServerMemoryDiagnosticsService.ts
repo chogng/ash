@@ -1,5 +1,5 @@
-import { APP_SERVER_METHODS } from '../../../../../generated/app-server/index.js';
-import type { MemoryReport } from '../../../../../generated/app-server/index.js';
+import { APP_SERVER_METHODS } from '../../app-server/common/generated/index.js';
+import type { MemoryReport } from '../../app-server/common/generated/index.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { Emitter } from '../../../base/common/event.js';
 import { generateUuid } from '../../../base/common/uuid.js';

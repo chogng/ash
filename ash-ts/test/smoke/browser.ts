@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
-import { decodeWebListenInfo, decodeWebSessionInfo } from '../../generated/app-server/WebProtocolDecoder.ts';
+import { decodeWebListenInfo, decodeWebSessionInfo } from '../../src/ash/platform/app-server/common/generated/WebProtocolDecoder.ts';
 import { developmentAshPackagePath } from '../../../build/package/store.ts';
 
 const desktopDirectory = resolve(import.meta.dirname, '../..');

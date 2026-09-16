@@ -1,4 +1,4 @@
-import type { AppServerMethod, LanguageOperationParams, MethodParams, MethodResult } from "../../../../../generated/app-server/index.js";
+import type { AppServerMethod, LanguageOperationParams, MethodParams, MethodResult } from "../../app-server/common/generated/index.js";
 import type { AppServerProtocolClient } from "../../app-server/browser/appServerProtocolClient.js";
 import { appServerRequest, voidResult } from "../../app-server/browser/appServerRequest.js";
 import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";

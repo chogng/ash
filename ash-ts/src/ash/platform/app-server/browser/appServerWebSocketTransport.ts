@@ -1,7 +1,7 @@
 import { AbstractDisposable } from '../../../base/common/lifecycle.js';
 import { isRecord } from '../../../base/common/types.js';
-import { decodeWebSessionInfo } from '../../../../../generated/app-server/WebProtocolDecoder.js';
-import type { WebSessionInfo } from '../../../../../generated/app-server/index.js';
+import { decodeWebSessionInfo } from '../common/generated/WebProtocolDecoder.js';
+import type { WebSessionInfo } from '../common/generated/index.js';
 import { type AppServerTransport, WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION } from '../common/appServerTransport.js';
 
 const maxBufferedBytes = 320 * 1024 * 1024;

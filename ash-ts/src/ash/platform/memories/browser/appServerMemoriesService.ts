@@ -1,6 +1,6 @@
-import { decodeAppServerRequestParams } from '../../../../../generated/app-server/AppServerProtocolDecoder.js';
-import { APP_SERVER_METHODS } from '../../../../../generated/app-server/index.js';
-import type { Memory as MemoryDto, MemorySummary as MemorySummaryDto, MemoryPolicy as MemoryPolicyDto } from '../../../../../generated/app-server/index.js';
+import { decodeAppServerRequestParams } from '../../app-server/common/generated/AppServerProtocolDecoder.js';
+import { APP_SERVER_METHODS } from '../../app-server/common/generated/index.js';
+import type { Memory as MemoryDto, MemorySummary as MemorySummaryDto, MemoryPolicy as MemoryPolicyDto } from '../../app-server/common/generated/index.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { Emitter } from '../../../base/common/event.js';
 import { generateUuid } from '../../../base/common/uuid.js';

@@ -72,7 +72,6 @@ generate-config-schema:
 
 # Refresh the checked-in App Server protocol fixtures and generated TypeScript client.
 generate-protocol:
-    cargo run --quiet -p ash-app-server-protocol --bin generate_protocol -- fixtures
     pnpm --dir ash-ts run protocol:generate
 
 # Launch the ash code TUI product from the current source tree.

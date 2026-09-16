@@ -3,7 +3,7 @@ import { test } from "mocha";
 import { isCancellationError } from "../../../../base/common/errors.js";
 import { isRecord } from "../../../../base/common/types.js";
 import { AppServerRemoteError } from "../../../../platform/app-server/common/appServerError.js";
-import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS, APP_SERVER_CAPABILITY_VERSION, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH, type InitializeResult, type ServerNotification } from "../../../../../../generated/app-server/index.js";
+import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS, APP_SERVER_CAPABILITY_VERSION, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH, type InitializeResult, type ServerNotification } from "../../common/generated/index.js";
 import { connectWebRendererApi } from "../../../../platform/app-server/browser/webRendererApi.js";
 import { WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION, type AppServerTransport } from "../../common/appServerTransport.js";
 import { AppServerProtocolClient } from "../../../../platform/app-server/browser/appServerProtocolClient.js";
@@ -51,6 +51,7 @@ test('Web disposal cancels scheduled reconnect and revoked authorization is term
 });
 
 class FakeTransport implements AppServerTransport {
+	constructor(private readonly initialize: (value: InitializeResult) => unknown = value => value) {}
 	private readonly listeners = new Map<string, Set<(payload: unknown) => void>>();
 	readonly requests: Array<Record<string, unknown>> = [];
 	readonly sentEvents: string[] = [];
@@ -82,7 +83,7 @@ class FakeTransport implements AppServerTransport {
 		const request = JSON.parse(payload.frame) as Record<string, unknown>;
 		this.requests.push(request);
 		if (request.method === "initialize") {
-			this.respond(request, {
+			this.respond(request, this.initialize({
 				serverInfo: { name: "ash-app-server", version: "0.1.0" },
 				protocolVersion: { major: APP_SERVER_PROTOCOL_MAJOR, revision: APP_SERVER_PROTOCOL_REVISION },
 				schemaHash: APP_SERVER_SCHEMA_HASH,
@@ -119,7 +120,7 @@ class FakeTransport implements AppServerTransport {
 					},
 				},
 				slashCommands: [],
-			} satisfies InitializeResult);
+			} satisfies InitializeResult));
 		} else if (request.method === "env/dirs/set") {
 			this.respond(request, { dirs: [] });
 		} else if (request.method === "session/list") {
@@ -159,6 +160,48 @@ class FakeTransport implements AppServerTransport {
 		for (const listener of this.listeners.get(event) ?? []) listener(payload);
 	}
 }
+
+test('a compatible newer schema initializes and decodes additive result fields', async () => {
+	const transport = new FakeTransport(value => ({
+		...value,
+		schemaHash: `sha256:${'0'.repeat(64)}`,
+		protocolVersion: { ...value.protocolVersion, revision: value.protocolVersion.revision + 1 },
+		futureCapability: true,
+	}));
+	const client = new AppServerProtocolClient(transport);
+	try {
+		await client.connect();
+		const response = client.request(APP_SERVER_METHODS['automation/list'], {});
+		transport.respondAt(-1, { automations: [], futureResultField: 1 });
+		assert.deepEqual(await response, { automations: [], futureResultField: 1 });
+		assert.equal(client.state, 'ready');
+	} finally { client.dispose(); }
+});
+
+test('incompatible versions and missing required capabilities never make a connection ready', async () => {
+	for (const initialize of [
+		(value: InitializeResult) => ({ ...value, protocolVersion: { ...value.protocolVersion, major: value.protocolVersion.major + 1 } }),
+		(value: InitializeResult) => ({ ...value, capabilities: { ...value.capabilities, sessions: false } }),
+		(value: InitializeResult) => ({ ...value, capabilities: { ...value.capabilities, contracts: { ...value.capabilities.contracts, sessions: { version: APP_SERVER_CAPABILITY_VERSION + 1 } } } }),
+	]) {
+		const client = new AppServerProtocolClient(new FakeTransport(initialize));
+		try {
+			await assert.rejects(client.connect(), /protocol major mismatch|capability sessions/);
+			assert.equal(client.state, 'crashed');
+			await assert.rejects(client.request(APP_SERVER_METHODS['session/list'], {}), /not ready/);
+		} finally { client.dispose(); }
+	}
+});
+
+test('a successful handshake does not authorize undeclared notifications', async () => {
+	const transport = new FakeTransport();
+	const client = new AppServerProtocolClient(transport);
+	try {
+		await client.connect();
+		transport.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', method: 'future/changed', params: {} }) });
+		assert.equal(client.state, 'crashed');
+	} finally { client.dispose(); }
+});
 
 test("connects, initializes, maps renderer requests, and disposes the Web connection", async () => {
 	const hot = new FakeTransport();

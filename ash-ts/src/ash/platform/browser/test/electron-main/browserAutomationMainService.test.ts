@@ -4,7 +4,7 @@ import { BrowserAutomationMainService } from "../../../../platform/browser/elect
 import type { IBrowserViewMainService } from "../../../../platform/browser/electron-main/browserViewIpc.js";
 import { BrowserTargetRegistry, type BrowserTargetView } from "../../../../platform/browser/electron-main/browserTargetRegistry.js";
 import type { IDisposable } from "../../../../base/common/lifecycle.js";
-import { decodeAppServerServerRequestResult } from '../../../../../../generated/app-server/AppServerProtocolDecoder.js';
+import { decodeAppServerServerRequestResult } from '../../../app-server/common/generated/AppServerProtocolDecoder.js';
 
 const targetId = "browser_target_123e4567-e89b-12d3-a456-426614174000";
 

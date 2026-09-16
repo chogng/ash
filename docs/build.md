@@ -16,7 +16,8 @@ Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保
 | `build/` | 产物构建、生成、下载、监听、打包、签名及其共享实现 | 是 | 否 |
 | `scripts/` | Cargo 环境、格式化、测试、诊断和维护等仓库操作 | 是 | 否 |
 | `.build/` | Cargo、Desktop、测试和 Bazel 本地产物 | 否 | 是，运行 `pnpm clean` |
-| `ash-ts/generated/` | 协议和图标生成后参与编译的源码 | 部分文件按生成规则管理 | 否，必须由对应同步命令更新 |
+| `ash-ts/src/ash/platform/app-server/common/generated/` | Rust 协议快照的前端消费副本 | 否 | 可通过 `pnpm --dir ash-ts protocol:sync` 重建 |
+| `ash-ts/src/ash/base/common/productIcons.ts` | 产品 SVG 生成的图标工厂 | 是 | 否，使用 `pnpm icons:generate` 更新 |
 | `ash-ts/docs/`、`ash-ts/licenses/` | Desktop 的文档和打包输入 | 是 | 否 |
 | `node_modules/` | pnpm workspace 的依赖链接和虚拟依赖树；内容寻址 store 使用用户级默认缓存 | 否 | 可通过 `pnpm install` 重新安装 |
 | `.ash/` | 当前目录的 Ash 配置或运行状态 | 按目录用途决定 | 不应由构建清理 |

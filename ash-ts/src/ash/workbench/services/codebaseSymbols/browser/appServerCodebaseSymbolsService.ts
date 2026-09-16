@@ -1,6 +1,6 @@
 import { VSBuffer } from "../../../../base/common/buffer.js";
 import { raceCancellationError } from "../../../../base/common/async.js";
-import type { CodebaseSymbolsSearchHitDto, CodebaseSymbolsStatusResult as CodebaseSymbolsStatusDto } from "../../../../../../generated/app-server/index.js";
+import type { CodebaseSymbolsSearchHitDto, CodebaseSymbolsStatusResult as CodebaseSymbolsStatusDto } from "../../../../platform/app-server/common/generated/index.js";
 import type { ICodebaseSymbolsApi } from "../../../../platform/codebaseSymbols/common/codebaseSymbolsApi.js";
 import type { ICodebaseSymbolsService, CodebaseSymbolsMatch, CodebaseSymbolsPosition, CodebaseSymbolsRange, CodebaseSymbolsSearchResult, CodebaseSymbolsStatus } from "../../../../platform/codebaseSymbols/common/codebaseSymbolsService.js";
 

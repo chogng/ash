@@ -1,6 +1,6 @@
 import { AppServerRemoteError } from '../../app-server/common/appServerError.js';
-import { APP_SERVER_METHODS } from '../../../../../generated/app-server/index.js';
-import { decodeAppServerRequestParams } from '../../../../../generated/app-server/AppServerProtocolDecoder.js';
+import { APP_SERVER_METHODS } from '../../app-server/common/generated/index.js';
+import { decodeAppServerRequestParams } from '../../app-server/common/generated/AppServerProtocolDecoder.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { isRecord } from '../../../base/common/types.js';
 import { type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
@@ -9,7 +9,7 @@ import { invoke, subscribe } from '../../ipc/electron-browser/rendererIpc.js';
 import { parseWorkspace } from '../../workspace/common/workspace.js';
 import { createWorkspaceContextApi } from '../../workspace/electron-browser/workspaceContextApi.js';
 import { getRemoteWorkspacePath, isRemoteResource } from '../../remote/common/remote.js';
-import type { EnvDirSetEntry, PermissionDto } from '../../../../../generated/app-server/index.js';
+import type { EnvDirSetEntry, PermissionDto } from '../../app-server/common/generated/index.js';
 
 export async function initializeWorkspace(client: AppServerProtocolClient): Promise<void> {
 	const workspace = parseWorkspace(await createWorkspaceContextApi().getWorkspace());

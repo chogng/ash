@@ -1,4 +1,4 @@
-import type { FsCreateFileParams, FsDeleteParams, FsGetMetadataParams, FsGetMetadataResult, FsReadBinaryFileParams, FsReadBinaryFileResult, FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult, FsRenameParams, FsWriteFileParams, FsWriteFileResult } from "../../../../../generated/app-server/index.js";
+import type { FsCreateFileParams, FsDeleteParams, FsGetMetadataParams, FsGetMetadataResult, FsReadBinaryFileParams, FsReadBinaryFileResult, FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult, FsRenameParams, FsWriteFileParams, FsWriteFileResult } from "../../app-server/common/generated/index.js";
 
 export interface IFileApi {
 	getMetadata(params: FsGetMetadataParams): Promise<FsGetMetadataResult>;

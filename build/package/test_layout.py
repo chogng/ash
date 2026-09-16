@@ -103,7 +103,12 @@ await assemblePackage(args.output, args.target, args.platform, args.protocol, ar
                         destination = isolated / name
                         destination.parent.mkdir(parents=True, exist_ok=True)
                         shutil.copyfile(ROOT / name, destination)
-                    self.assertFalse((isolated / "ash-ts/generated").exists())
+                    self.assertFalse(
+                        (
+                            isolated
+                            / "ash-ts/src/ash/platform/app-server/common/generated"
+                        ).exists()
+                    )
                     with patch(
                         "build.package.layout.__file__",
                         str(isolated / "build/package/layout.py"),

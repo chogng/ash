@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
-import type { ModelRef, ServerNotification, Session as SessionDto, SessionCreateParams, Thread, ThreadTranscriptSnapshot } from "../../../../../../../generated/app-server/index.js";
+import type { ModelRef, ServerNotification, Session as SessionDto, SessionCreateParams, Thread, ThreadTranscriptSnapshot } from "../../../../../platform/app-server/common/generated/index.js";
 import type { SessionMutationParams, SessionOperationInput } from "../../../../../platform/sessions/common/sessionApi.js";
 import type { IRendererHost } from "../../../../../platform/renderer/common/rendererHost.js";
 import type { IAction } from "../../../../../base/common/actions.js";

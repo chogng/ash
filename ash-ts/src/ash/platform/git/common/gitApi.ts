@@ -1,4 +1,4 @@
-import type { GitBranchListResult, GitBranchSwitchParams, GitChangeFileParams, GitChangeFileResult, GitCommitChangesParams, GitCommitChangesResult, GitCommitFileParams, GitCommitFileResult, GitCommitParams, GitCommitResult, GitGraphParams, GitGraphResult, GitHistoryResult, GitOperationResult, GitPathsParams, GitRepositoriesResult, GitRepositoryParams, GitStatusResult } from "../../../../../generated/app-server/index.js";
+import type { GitBranchListResult, GitBranchSwitchParams, GitChangeFileParams, GitChangeFileResult, GitCommitChangesParams, GitCommitChangesResult, GitCommitFileParams, GitCommitFileResult, GitCommitParams, GitCommitResult, GitGraphParams, GitGraphResult, GitHistoryResult, GitOperationResult, GitPathsParams, GitRepositoriesResult, GitRepositoryParams, GitStatusResult } from "../../app-server/common/generated/index.js";
 
 export interface IGitApi {
 	repositories(): Promise<GitRepositoriesResult>;

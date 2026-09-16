@@ -31,7 +31,7 @@ resources/icons/*.svg
 | 能力 | 当前 owner | 状态 |
 | --- | --- | --- |
 | Canonical first-party SVG artwork | `resources/icons` | ✅ |
-| Desktop generated SVG factories | `ash-ts/generated/product-icons.ts` | ✅ |
+| Desktop generated SVG factories | `ash-ts/src/ash/base/common/productIcons.ts` | ✅ |
 | Desktop semantic registration与resolution | `base/common/icon.ts` / `lxiconsLibrary.ts` | ✅ |
 | Rust semantic identity、definition 与 rendering mode | `ash-icons` | ✅ |
 | Rust logical placement、tint 与 clip scene contract | `zui::PaintIcon` | ✅ |

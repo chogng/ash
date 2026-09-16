@@ -1,16 +1,16 @@
 import type { RendererWorkspaceHost } from './rendererWorkspaceHost.js';
-import { type PermissionDto, type DirGrantDto, type EnvDirSetEntry } from "../../../../../generated/app-server/index.js";
+import { type DirPermission, type DirGrant } from "../../dirPermissions/common/dirPermissionsService.js";
 import type { IDisposable } from "../../../base/common/lifecycle.js";
 import type { AppServerConnectionState } from "../../app-server/common/appServerApi.js";
 import { AppServerRemoteError } from "../../app-server/common/appServerError.js";
 import type { AppServerConnectionRelay } from "../../app-server/electron-main/appServerConnectionRelay.js";
 import { type IWorkspaceRuntimeSwitcher, type IWorkspaceTransitionContext, type IWorkspaceTransitionFailure, type IWorkspaceTransitionRecoveryRouter, WorkspaceTransitionFailureKind, WorkspaceTransitionRecovery } from "./workspaceTransitionMainService.js";
 
-export const READ_DIR_PERMISSIONS: readonly PermissionDto[] = [
+export const READ_DIR_PERMISSIONS: readonly DirPermission[] = [
 	"readFiles", "watchFiles", "browseFiles", "searchFiles", "inspectRepository",
 ];
 
-export const DEVELOPMENT_DIR_PERMISSIONS: readonly PermissionDto[] = [
+export const DEVELOPMENT_DIR_PERMISSIONS: readonly DirPermission[] = [
 	...READ_DIR_PERMISSIONS,
 	"writeFiles", "executeCommands", "loadInstructions", "loadConfig", "discoverSkills",
 	"discoverMcp", "useLanguageServices", "discoverHooks", "discoverPlugins", "mutateRepository",
@@ -107,7 +107,7 @@ interface IWaitUntilReadyOptions {
 export function createAppServerWorkspaceTransitionAdapter(
 	supervisor: AppServerConnectionRelay,
 	workspace: RendererWorkspaceHost,
-	switchWorkspace: (root: string, grant: DirGrantDto) => Promise<void> = async (root, grant) => {
+	switchWorkspace: (root: string, grant: DirGrant) => Promise<void> = async (root, grant) => {
 		await switchAppServerWorkspace(workspace, root, grant);
 	},
 ): AppServerWorkspaceTransitionAdapter {
@@ -118,30 +118,26 @@ export function createAppServerWorkspaceTransitionAdapter(
 	});
 }
 
-export async function readAppServerDirPermissions(workspace: RendererWorkspaceHost, path: string): Promise<readonly PermissionDto[] | undefined> {
+export async function readAppServerDirPermissions(workspace: RendererWorkspaceHost, path: string): Promise<readonly DirPermission[] | undefined> {
 	const result = { permissions: await workspace.readPermissions(path) };
 	return result.permissions ?? undefined;
 }
 
-export async function createUserDirGrant(workspace: RendererWorkspaceHost, path: string, permissions: readonly PermissionDto[]): Promise<DirGrantDto> {
+export async function createUserDirGrant(workspace: RendererWorkspaceHost, path: string, permissions: readonly DirPermission[]): Promise<DirGrant> {
 	return workspace.createGrant(path, permissions);
 }
 
-export async function switchAppServerWorkspace(workspace: RendererWorkspaceHost, path: string, grant: DirGrantDto): Promise<void> {
+export async function switchAppServerWorkspace(workspace: RendererWorkspaceHost, path: string, grant: DirGrant): Promise<void> {
 	await workspace.switchWorkspace(path, grant);
 }
 
 export interface IAppServerWorkspaceFolder {
 	readonly id: string;
 	readonly path: string;
-	readonly grant: DirGrantDto;
+	readonly grant: DirGrant;
 }
 
 /** Atomically replaces the App Server's ordered workspace-folder collection. */
 export async function setAppServerWorkspaceFolders(workspace: RendererWorkspaceHost, folders: readonly IAppServerWorkspaceFolder[]): Promise<void> {
-	const entries: EnvDirSetEntry[] = [];
-	for (const folder of folders) {
-		entries.push({ id: folder.id, path: folder.path, grant: folder.grant });
-	}
-	await workspace.setFolders(entries);
+	await workspace.setFolders(folders);
 }

@@ -1,6 +1,5 @@
-import type { PermissionDto } from "../../../../../../generated/app-server/index.js";
 import type { IDirPermissionsApi } from "../../../../platform/dirPermissions/common/dirPermissionsApi.js";
-import type { DirPermissionsCommandResult, DirPermissionsSnapshot, IDirPermissionsService } from "../../../../platform/dirPermissions/common/dirPermissionsService.js";
+import type { DirPermission, DirPermissionsCommandResult, DirPermissionsSnapshot, IDirPermissionsService } from "../../../../platform/dirPermissions/common/dirPermissionsService.js";
 
 /** App Server transport adapter for directory permissions. */
 export class AppServerDirPermissionsService implements IDirPermissionsService {
@@ -18,11 +17,11 @@ export class AppServerDirPermissionsService implements IDirPermissionsService {
 		};
 	}
 
-	async read(path: string): Promise<readonly PermissionDto[] | undefined> {
+	async read(path: string): Promise<readonly DirPermission[] | undefined> {
 		return (await this.api.read({ path })).permissions ?? undefined;
 	}
 
-	async set(path: string, permissions: readonly PermissionDto[], expectedRevision: number): Promise<DirPermissionsCommandResult> {
+	async set(path: string, permissions: readonly DirPermission[], expectedRevision: number): Promise<DirPermissionsCommandResult> {
 		return projectCommandResult(await this.api.set({
 			commandId: commandId("set"),
 			expectedRevision,

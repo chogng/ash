@@ -3,7 +3,7 @@ import type {
 	TurnChangesMutationResult,
 	TurnChangesReadFileResult,
 	TurnChangesReadResult,
-} from "../../../../../generated/app-server/index.js";
+} from "../../app-server/common/generated/index.js";
 import { invoke } from "../../ipc/electron-browser/rendererIpc.js";
 import type { ITurnChangesApi } from "../common/turnChangesApi.js";
 

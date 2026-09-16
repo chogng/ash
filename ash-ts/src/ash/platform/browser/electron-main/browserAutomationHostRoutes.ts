@@ -1,4 +1,4 @@
-import { decodeAppServerServerRequestParams } from '../../../../../generated/app-server/AppServerProtocolDecoder.js';
+import { decodeAppServerServerRequestParams } from '../../app-server/common/generated/AppServerProtocolDecoder.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { isRecord } from '../../../base/common/types.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';

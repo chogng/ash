@@ -4,7 +4,7 @@ import { BrowserAutomationHost } from "../../platform/browser/electron-main/brow
 import { rendererSystemHostRoutes } from "../../platform/native/electron-main/rendererSystemHostRoutes.js";
 import { shell } from "electron";
 import { app, BrowserWindow, dialog, ipcMain, Menu, screen, type Event as ElectronEvent, type MenuItemConstructorOptions } from "electron/main";
-import type { DirGrantDto } from "../../../../generated/app-server/index.js";
+import type { DirGrant } from "../../platform/dirPermissions/common/dirPermissionsService.js";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { isCancellationError } from "../../base/common/errors.js";
@@ -958,7 +958,7 @@ export class AshApplication extends Disposable {
 		supervisor: AppServerConnectionRelay,
 		launcher: LocalAppServerProcessLauncher,
 		root: string,
-		grant: DirGrantDto,
+		grant: DirGrant,
 		workspaceHost: RendererWorkspaceHost,
 	): Promise<void> {
 		const previousEnvironment = launcher.environment;
@@ -988,7 +988,7 @@ export class AshApplication extends Disposable {
 		supervisor: AppServerConnectionRelay,
 		launcher: SshAppServerProcessLauncher,
 		root: string,
-		grant: DirGrantDto,
+		grant: DirGrant,
 		workspaceHost: RendererWorkspaceHost,
 	): Promise<void> {
 		const previousRoot = launcher.workspaceRoot;
@@ -1112,7 +1112,7 @@ export class AshApplication extends Disposable {
 		return this.closePersistentServicesPromise;
 	}
 
-	private async resolveDirGrant(workspaceHost: RendererWorkspaceHost, path: string, window?: BrowserWindow): Promise<DirGrantDto | undefined> {
+	private async resolveDirGrant(workspaceHost: RendererWorkspaceHost, path: string, window?: BrowserWindow): Promise<DirGrant | undefined> {
 		if (this.appServerStartupMode === "disabled") return { type: "config" };
 		const persisted = await readAppServerDirPermissions(workspaceHost, path);
 		if (persisted !== undefined) return { type: "config" };

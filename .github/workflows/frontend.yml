@@ -75,6 +75,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install --yes libx11-dev libxkbfile-dev
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
+      - name: Check generated protocol contracts
+        run: pnpm --dir ash-ts typecheck:protocol
       - name: Check and test build tools
         if: matrix.surface == 'browser'
         run: |

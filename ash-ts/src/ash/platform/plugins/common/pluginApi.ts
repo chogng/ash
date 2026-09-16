@@ -1,4 +1,4 @@
-import type { PluginCommandResultDto, PluginListResult, PluginPackageCommandParams } from "../../../../../generated/app-server/index.js";
+import type { PluginCommandResultDto, PluginListResult, PluginPackageCommandParams } from "../../app-server/common/generated/index.js";
 
 export interface IPluginApi {
 	list(): Promise<PluginListResult>;

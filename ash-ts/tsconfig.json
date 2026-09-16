@@ -5,5 +5,5 @@
     "rootDir": ".",
     "types": ["node", "electron", "@webgpu/types"]
   },
-  "include": ["src/**/*.ts", "generated/**/*.ts"]
+  "include": ["src/**/*.ts"]
 }

@@ -61,7 +61,7 @@ test("Editor production code does not depend on Workbench or generated transport
 		if (!file.endsWith(".ts") || isTestFile(file)) continue;
 		const source = readFileSync(file, "utf8");
 		assert.doesNotMatch(source, workbenchImportPattern, relative(editorRoot, file));
-		assert.doesNotMatch(source, /from\s+["'][^"']*generated\/app-server[^"']*["']/u, relative(editorRoot, file));
+		assert.doesNotMatch(source, /from\s+["'][^"']*app-server\/common\/generated[^"']*["']/u, relative(editorRoot, file));
 		assert.doesNotMatch(source, /from\s+["'][^"']*platform\/(?:syntax|diff)\/[^"']*["']/u, relative(editorRoot, file));
 	}
 });

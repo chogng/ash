@@ -1,5 +1,5 @@
-import type { FsFileType, FsGetMetadataParams, FsGetMetadataResult, FsReadBinaryFileParams, FsReadBinaryFileResult, FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult, FsWriteFileParams, FsWriteFileResult, ResourceMetadataResult, ResourceReadResult } from "../../../../../generated/app-server/index.js";
-import type { FsChanged } from "../../../../../generated/app-server/index.js";
+import type { FsFileType, FsGetMetadataParams, FsGetMetadataResult, FsReadBinaryFileParams, FsReadBinaryFileResult, FsReadDirectoryParams, FsReadDirectoryResult, FsReadFileParams, FsReadFileResult, FsWriteFileParams, FsWriteFileResult, ResourceMetadataResult, ResourceReadResult } from "../../app-server/common/generated/index.js";
+import type { FsChanged } from "../../app-server/common/generated/index.js";
 import type { IResourceApi } from "../../app-server/common/appServerApi.js";
 import { AppServerRemoteError } from "../../app-server/common/appServerError.js";
 import { decodeBase64 } from "../../../base/common/buffer.js";
@@ -17,9 +17,9 @@ export interface IFileSystemApi {
 	readFile(params: FsReadFileParams): Promise<FsReadFileResult>;
 	readBinaryFile(params: FsReadBinaryFileParams): Promise<FsReadBinaryFileResult>;
 	writeFile(params: FsWriteFileParams): Promise<FsWriteFileResult>;
-	createFile(params: import("../../../../../generated/app-server/index.js").FsCreateFileParams): Promise<FsGetMetadataResult>;
-	rename(params: import("../../../../../generated/app-server/index.js").FsRenameParams): Promise<void>;
-	delete(params: import("../../../../../generated/app-server/index.js").FsDeleteParams): Promise<void>;
+	createFile(params: import("../../app-server/common/generated/index.js").FsCreateFileParams): Promise<FsGetMetadataResult>;
+	rename(params: import("../../app-server/common/generated/index.js").FsRenameParams): Promise<void>;
+	delete(params: import("../../app-server/common/generated/index.js").FsDeleteParams): Promise<void>;
 }
 
 export interface BrowserFileServiceOptions {

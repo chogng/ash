@@ -7,6 +7,7 @@ import { createInterface } from "node:readline";
 
 import { cargoArtifactExecutable, cargoRenderedDiagnostic, cargoTargetDirectory, parseCargoMessage } from "./cargo.ts";
 import { desktopBuildPath } from "./paths.ts";
+import { generateProtocol } from '../protocol/generate.ts';
 
 const desktopRoot = resolve(import.meta.dirname, "../../ash-ts");
 const repositoryRoot = resolve(desktopRoot, "..");
@@ -26,7 +27,7 @@ export function shouldRebuildAppServer(file: string | null, ignoredDirectory?: s
   const ignored = ignoredDirectory?.replaceAll("\\", "/").replace(/\/+$/u, "");
   if (ignored !== undefined && (ignored === "" || normalized === ignored || normalized.startsWith(`${ignored}/`))) return false;
   const name = basename(file);
-  return file.endsWith(".rs") || name === "Cargo.toml" || name === "Cargo.lock" || name === "build.rs";
+  return file.endsWith(".rs") || (normalized.startsWith('app-server-protocol/src/') && file.endsWith('.template.ts')) || name === "Cargo.toml" || name === "Cargo.lock" || name === "build.rs";
 }
 
 export function relativeWatchedDirectory(watchRoot: string, directory: string): string | undefined {
@@ -44,6 +45,8 @@ export async function watchAppServer(options: { skipInitial?: boolean } = {}): P
   let buildRequested = !options.skipInitial;
   let debounce: NodeJS.Timeout | undefined;
   let stopped = false;
+  let building = false;
+  const cancellation = new AbortController();
 
   const watchers: FSWatcher[] = [];
 
@@ -66,20 +69,28 @@ export async function watchAppServer(options: { skipInitial?: boolean } = {}): P
   }
 
   async function drainBuilds(): Promise<void> {
-    if (activeBuild || stopped) return;
-    while (buildRequested && !stopped) {
-      buildRequested = false;
-      try {
-        await buildAndPublish();
-      } catch (error) {
-        console.error(`[app-server] ${error instanceof Error ? error.message : String(error)}`);
+    if (building || stopped) return;
+    building = true;
+    try {
+      while (buildRequested && !stopped) {
+        buildRequested = false;
+        try {
+          await buildAndPublish();
+        } catch (error) {
+          if (!stopped) console.error(`[app-server] ${error instanceof Error ? error.message : String(error)}`);
+        }
       }
+    } finally {
+      building = false;
     }
   }
 
   async function buildAndPublish(): Promise<void> {
     console.log("[app-server] Building ash-app-server");
     const source = await runCargo();
+    cancellation.signal.throwIfAborted();
+    await generateProtocol(cancellation.signal);
+    cancellation.signal.throwIfAborted();
     const published = await publishAppServerGeneration(source, generationDirectory, generationFile, process.platform);
     console.log(published.changed ? `[app-server] Published ${published.generation}` : `[app-server] Unchanged ${published.generation}`);
   }
@@ -129,6 +140,7 @@ export async function watchAppServer(options: { skipInitial?: boolean } = {}): P
   function stop(): void {
     if (stopped) return;
     stopped = true;
+    cancellation.abort();
     clearTimeout(debounce);
     for (const watcher of watchers) watcher.close();
     activeBuild?.kill("SIGTERM");

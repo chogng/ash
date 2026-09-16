@@ -30,6 +30,9 @@ test("app-server watcher selects Rust sources and Cargo manifests", () => {
   assert.equal(shouldRebuildAppServer("target/debug/build/generated/out/schema.rs"), false);
   assert.equal(shouldRebuildAppServer("crate/target/debug/build/generated/out/schema.rs"), false);
   assert.equal(shouldRebuildAppServer("ash-ts/src/main.ts"), false);
+  assert.equal(shouldRebuildAppServer('app-server-protocol/src/typescript_decoder.template.ts'), true);
+  assert.equal(shouldRebuildAppServer('app-server-protocol/src/typescript_web.template.ts'), true);
+  assert.equal(shouldRebuildAppServer('app-server-protocol/schema/typescript/index.ts'), false);
 });
 
 test("app-server watcher excludes a custom Cargo target directory inside Rust sources", () => {

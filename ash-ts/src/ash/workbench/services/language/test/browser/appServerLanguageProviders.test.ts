@@ -19,10 +19,10 @@ import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../..
 import { type ILanguageApi } from "../../../../../platform/language/common/languageApi.js";
 import { type IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
 import { type IDirPermissionsService } from "../../../../../platform/dirPermissions/common/dirPermissionsService.js";
-import type { PermissionDto } from "../../../../../../../generated/app-server/index.js";
+import type { PermissionDto } from "../../../../../platform/app-server/common/generated/index.js";
 import { WorkspaceContextService } from "../../../workspaces/browser/workspaceContextService.js";
 import { AppServerLanguageProviders } from "../../browser/appServerLanguageProviders.js";
-import { type ServerNotification } from "../../../../../../../generated/app-server/index.js";
+import { type ServerNotification } from "../../../../../platform/app-server/common/generated/index.js";
 
 const DTO_RANGE = Object.freeze({ start: Object.freeze({ lineIndex: 0, columnIndex: 0 }), end: Object.freeze({ lineIndex: 0, columnIndex: 5 }) });
 

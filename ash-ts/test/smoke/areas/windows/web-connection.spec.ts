@@ -5,7 +5,7 @@ import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { launchElectron } from '../../../automation/playwrightElectron.js';
 import type { ISandboxGlobals } from '../../../../src/ash/base/parts/sandbox/common/sandboxTypes.js';
-import { decodeAppServerServerRequestResult } from '../../../../generated/app-server/AppServerProtocolDecoder.js';
+import { decodeAppServerServerRequestResult } from '../../../../src/ash/platform/app-server/common/generated/AppServerProtocolDecoder.js';
 import type { Page } from '@playwright/test';
 
 test('two desktops isolate browser targets and closing one preserves the other', async ({ target, testWorkspace }) => {

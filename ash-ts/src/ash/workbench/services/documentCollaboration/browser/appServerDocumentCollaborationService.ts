@@ -19,9 +19,9 @@ import type { DocumentCollaborationEnvelope } from "../../../../editor/contrib/c
 import type { DocumentCollaborationRemoteEnvelope } from "../../../../editor/contrib/collaboration/common/protocol.js";
 import type { IDocumentCollaborationApi } from "../../../../platform/collaboration/common/documentCollaborationApi.js";
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
-import type { DocumentCollaborationPresenceSnapshot as AppServerDocumentCollaborationPresenceSnapshot } from "../../../../../../generated/app-server/index.js";
-import type { DocumentCollaborationSnapshot as AppServerDocumentCollaborationSnapshot } from "../../../../../../generated/app-server/index.js";
-import type { DocumentCollaborationUpdate as AppServerDocumentCollaborationUpdate } from "../../../../../../generated/app-server/index.js";
+import type { DocumentCollaborationPresenceSnapshot as AppServerDocumentCollaborationPresenceSnapshot } from "../../../../platform/app-server/common/generated/index.js";
+import type { DocumentCollaborationSnapshot as AppServerDocumentCollaborationSnapshot } from "../../../../platform/app-server/common/generated/index.js";
+import type { DocumentCollaborationUpdate as AppServerDocumentCollaborationUpdate } from "../../../../platform/app-server/common/generated/index.js";
 
 /** App Server transport adapter for Stanza's server-ordered collaboration contract. */
 export class AppServerDocumentCollaborationService extends Disposable implements IDocumentCollaborationService {

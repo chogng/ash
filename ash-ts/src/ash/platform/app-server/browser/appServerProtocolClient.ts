@@ -1,6 +1,6 @@
 import { WEB_APP_SERVER_PROTOCOL_VERSION, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CLOSED_EVENT, type AppServerTransport } from '../common/appServerTransport.js';
-import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS, type AppServerMethod, type AppServerMethodDefinition, type InitializeResult, type MethodParams, type MethodResult, type ServerCapabilities, type ServerNotification } from "../../../../../generated/app-server/index.js";
-import { decodeAppServerEnvelope, decodeAppServerNotification, decodeAppServerResponse, decodeAppServerServerRequest } from "../../../../../generated/app-server/AppServerProtocolDecoder.js";
+import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS, type AppServerMethod, type AppServerMethodDefinition, type InitializeResult, type MethodParams, type MethodResult, type ServerCapabilities, type ServerNotification } from "../common/generated/index.js";
+import { decodeAppServerEnvelope, decodeAppServerNotification, decodeAppServerResponse, decodeAppServerServerRequest } from "../common/generated/AppServerProtocolDecoder.js";
 import { VSBuffer } from "../../../base/common/buffer.js";
 import { toError } from "../../../base/common/errors.js";
 import { isRecord } from "../../../base/common/types.js";
@@ -8,8 +8,8 @@ import type { AppServerConnectionState } from "../common/appServerApi.js";
 import { AppServerRemoteError } from "../common/appServerError.js";
 import type { DisposableHandle } from "../../ipc/common/ipc.js";
 import { validateAppServerInitializeResult } from "../common/appServerProtocolCompatibility.js";
-import type { AppServerServerRequestDefinition, AppServerServerRequestMethod, ClientCapabilities, JsonRpcId, ServerRequestParams, ServerRequestResult } from '../../../../../generated/app-server/index.js';
-import { decodeAppServerServerRequestResult } from '../../../../../generated/app-server/AppServerProtocolDecoder.js';
+import type { AppServerServerRequestDefinition, AppServerServerRequestMethod, ClientCapabilities, JsonRpcId, ServerRequestParams, ServerRequestResult } from '../common/generated/index.js';
+import { decodeAppServerServerRequestResult } from '../common/generated/AppServerProtocolDecoder.js';
 import { type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 
 

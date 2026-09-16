@@ -1,4 +1,4 @@
-import type { ConfigCommandResult, DirPermissionsForgetParams, DirPermissionsListResult, DirPermissionsReadParams, DirPermissionsReadResult, DirPermissionsSetParams } from "../../../../../generated/app-server/index.js";
+import type { ConfigCommandResult, DirPermissionsForgetParams, DirPermissionsListResult, DirPermissionsReadParams, DirPermissionsReadResult, DirPermissionsSetParams } from "../../app-server/common/generated/index.js";
 
 /** Transport-only directory-permission management operations. */
 export interface IDirPermissionsApi {

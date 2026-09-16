@@ -8,6 +8,7 @@ import { extractMember, materialize, sha256 } from "../download/artifacts.ts";
 import { cargoArtifactExecutable, cargoRenderedDiagnostic, cargoTargetDirectory, parseCargoMessage } from "../lib/cargo.ts";
 import { ashPackageBuildPath } from "../lib/paths.ts";
 import { developmentHostTarget } from "./store.ts";
+import { generateProtocol } from '../protocol/generate.ts';
 import { assemblePackage, type RemoteRuntimeRelease, type ResolvedExecutable, type ResolvedNode, type ResolvedBubblewrap, type FirstPartyExecutables } from "./layout.ts";
 
 const repositoryRoot = resolve(import.meta.dirname, "..", "..");
@@ -490,6 +491,7 @@ export async function prepareDevelopmentPackage(
   if (!javascriptRuntimeKinds.has(javascriptRuntime)) {
     throw new Error(`Unsupported JavaScript runtime package mode: ${javascriptRuntime}`);
   }
+  await generateProtocol();
   const source = await readFile(join(repositoryRoot, "ash-rs/app-server-protocol/schema/typescript/protocol.ts"), "utf8");
   const major = /^export const APP_SERVER_PROTOCOL_MAJOR = (\d+) as const;$/m.exec(source)?.[1];
   const revision = /^export const APP_SERVER_PROTOCOL_REVISION = (\d+) as const;$/m.exec(source)?.[1];

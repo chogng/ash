@@ -5,7 +5,7 @@ import { DialogService } from "../../../dialogs/common/dialogService.js";
 import { OutputService } from "../../../output/browser/outputService.js";
 import { StatusbarAlignment, StatusbarService } from "../../../statusbar/browser/statusbar.js";
 import { AppServerLanguageServerStatusService } from "../../browser/appServerLanguageServerStatusService.js";
-import { type ServerNotification } from "../../../../../../../generated/app-server/index.js";
+import { type ServerNotification } from "../../../../../platform/app-server/common/generated/index.js";
 
 test("language-server status service publishes channels and only projects active work-done progress", () => {
 	const events = new FakeServerEvents();

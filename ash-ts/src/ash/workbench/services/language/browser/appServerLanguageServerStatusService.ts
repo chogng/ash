@@ -3,7 +3,7 @@ import { Disposable, MutableDisposable, toDisposable } from "../../../../base/co
 import { DialogSeverity, type IDialogService } from "../../../../platform/dialogs/common/dialogs.js";
 import { type IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import { type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
-import { type LanguageServerMessageNotification, type LanguageServerMessageSeverityDto, type LanguageServerProgressNotification, type LanguageServerStateDto, type LanguageServerStateNotification } from "../../../../../../generated/app-server/index.js";
+import { type LanguageServerMessageNotification, type LanguageServerMessageSeverityDto, type LanguageServerProgressNotification, type LanguageServerStateDto, type LanguageServerStateNotification } from "../../../../platform/app-server/common/generated/index.js";
 import type { IOutputChannel, IOutputService } from "../../output/common/outputService.js";
 import { StatusbarAlignment, type IStatusbarEntry, type IStatusbarEntryAccessor, type IStatusbarService } from "../../statusbar/browser/statusbar.js";
 import { type ILanguageServerStatusService, type LanguageServerLifecycleState, type LanguageServerProgressState } from "../common/languageServerStatusService.js";

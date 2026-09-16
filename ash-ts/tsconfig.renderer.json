@@ -37,8 +37,7 @@
     "src/ash/platform/theme/common/**/*.ts",
     "src/ash/platform/workspace/common/**/*.ts",
     "src/ash/platform/webview/browser/**/*.ts",
-    "src/ash/workbench/**/*.ts",
-    "generated/**/*.ts"
+    "src/ash/workbench/**/*.ts"
   ],
   "exclude": [
     "src/ash/base/test/**/*.ts",

@@ -15,7 +15,7 @@ test("aggregate and standalone unit commands prepare inputs once and stop on pre
     "test:unit": "unit",
     "test:editor:unit": "editor",
     "prepare:output": "output",
-    "protocol:generate": "protocol",
+    "protocol:sync": "protocol",
     "icons:check": "icons",
   })) scripts[name] = `node record.ts ${operation}`;
   await writeFile(join(directory, "package.json"), JSON.stringify({ private: true, type: "module", scripts }));

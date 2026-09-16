@@ -46,7 +46,7 @@ source.
 
 The cross-client ownership and rendering contract is documented in [`docs/icons.md`](../docs/icons.md).
 
-`icons/*.svg` is the only hand-maintained input for Ash product icons. Add, replace, or remove an SVG and run `pnpm icons:generate` from the repository root; `build/resources/icons/generate.ts` canonicalizes the SVG and generates `icons/manifest.json`, `ash-ts/generated/product-icons.ts`, and `app/icons/src/generated.rs` together through `generate-to-ts.ts` and `generate-to-rs.ts`.
+`icons/*.svg` is the only hand-maintained input for Ash product icons. Add, replace, or remove an SVG and run `pnpm icons:generate` from the repository root; `build/resources/icons/generate.ts` canonicalizes the SVG and generates `icons/manifest.json`, `ash-ts/src/ash/base/common/productIcons.ts`, and `app/icons/src/generated.rs` together through `generate-to-ts.ts` and `generate-to-rs.ts`.
 
 - SVG filenames use lowercase kebab-case and become the icon IDs without a second mapping table.
 - `manifest.json` is generated output; do not edit its `file` or `rendering` fields.

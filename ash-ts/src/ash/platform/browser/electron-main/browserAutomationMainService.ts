@@ -1,4 +1,4 @@
-import { type BrowserCloseParams, type BrowserCreateParams, type BrowserCreateResult, type BrowserObserveParams, type BrowserObserveResult, type BrowserPerformParams, type BrowserPerformResult } from "../../../../../generated/app-server/index.js";
+import { type BrowserCloseParams, type BrowserCreateParams, type BrowserCreateResult, type BrowserObserveParams, type BrowserObserveResult, type BrowserPerformParams, type BrowserPerformResult } from "../../app-server/common/generated/index.js";
 import { type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
 import type { IBrowserViewMainService } from "./browserViewIpc.js";
 import { BrowserTargetRegistry, type BrowserDebuggerClient, type BrowserTargetHandle } from "./browserTargetRegistry.js";

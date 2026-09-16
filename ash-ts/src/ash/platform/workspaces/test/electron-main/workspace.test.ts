@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
 import { test } from "mocha";
-import type { DirGrantDto } from "../../../../../../generated/app-server/index.js";
+import type { DirGrant } from "../../../dirPermissions/common/dirPermissionsService.js";
 import { URI } from "../../../../base/common/uri.js";
 import { toDisposable } from "../../../../base/common/lifecycle.js";
 import {
@@ -358,7 +358,7 @@ test("workspace transition commits only after the runtime accepts the folder", a
 		UNKNOWN_EMPTY_WINDOW_WORKSPACE,
 	);
 	const runtimeSwitches: string[] = [];
-	const grants: DirGrantDto[] = [];
+	const grants: DirGrant[] = [];
 	const transitions = new WorkspaceTransitionMainService({
 		workspaces,
 		context,
@@ -374,7 +374,7 @@ test("workspace transition commits only after the runtime accepts the folder", a
 		classifyRuntimeError: () => WorkspaceTransitionFailureKind.RuntimeRejected,
 	});
 	const acceptedPath = resolve("project");
-	const acceptedGrant: DirGrantDto = { type: "host", permissions: ["readFiles"] };
+	const acceptedGrant: DirGrant = { type: "host", permissions: ["readFiles"] };
 	const accepted = await transitions.transitionToFolder(acceptedPath, acceptedGrant);
 
 	assert.equal(accepted.status, WorkspaceTransitionStatus.Applied);

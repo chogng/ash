@@ -4,7 +4,7 @@ import { test } from "mocha";
 import { DisposableTracker, installDisposableTracker, toDisposable } from "../../../../../base/common/lifecycle.js";
 import type { ExtensionCatalog, ExtensionDescriptor, IExtensionApi } from "../../../../../platform/extensions/common/extensionApi.js";
 import type { IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
-import type { ServerNotification } from "../../../../../../../generated/app-server/index.js";
+import type { ServerNotification } from "../../../../../platform/app-server/common/generated/index.js";
 import { AppServerExtensionService } from "../../browser/appServerExtensionService.js";
 import { parseExtensionManifest, type ExtensionCatalog as WorkbenchExtensionCatalog } from "../../common/extensionService.js";
 import { parseJsonc } from "../../common/jsonc.js";

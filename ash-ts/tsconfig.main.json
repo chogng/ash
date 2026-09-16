@@ -6,7 +6,6 @@
     "types": ["node", "electron"]
   },
   "include": [
-    "generated/**/*.ts",
     "src/bootstrap.ts",
     "src/main.ts",
     "src/ash/base/common/**/*.ts",

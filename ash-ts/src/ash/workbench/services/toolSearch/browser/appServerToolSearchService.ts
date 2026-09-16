@@ -1,4 +1,4 @@
-import type { ModelRef, ToolSearchConfigDto } from "../../../../../../generated/app-server/index.js";
+import type { ModelRef, ToolSearchConfigDto } from "../../../../platform/app-server/common/generated/index.js";
 import type { IToolSearchApi } from "../../../../platform/toolSearch/common/toolSearchApi.js";
 import type { IToolSearchService, ToolSearchConfiguration, ToolSearchEmbeddingStatus, ToolSearchSettings } from "../../../../platform/toolSearch/common/toolSearchService.js";
 

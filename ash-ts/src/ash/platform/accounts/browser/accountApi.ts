@@ -1,4 +1,4 @@
-import type { AccountLoginStartResult } from '../../../../../generated/app-server/index.js';
+import type { AccountLoginStartResult } from '../../app-server/common/generated/index.js';
 import type { AppServerProtocolClient } from '../../app-server/browser/appServerProtocolClient.js';
 import { appServerRequest } from '../../app-server/browser/appServerRequest.js';
 import type { UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';

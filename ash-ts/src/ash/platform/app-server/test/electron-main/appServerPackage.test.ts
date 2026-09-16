@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "mocha";
-import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH } from "../../../../../../generated/app-server/index.js";
+import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_SCHEMA_HASH } from "../../common/generated/index.js";
 import { appServerDaemonExecutablePath, packagedAppServerDaemonSha256, packagedAppServerSha256, remoteExecutablePath } from "../../../../platform/app-server/electron-main/appServerPackage.js";
 
 test("development and production resolve the same canonical package entrypoint", () => {

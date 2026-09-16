@@ -7,7 +7,13 @@ import {
 	decodeAppServerRequestParams,
 	decodeAppServerResponse,
 	decodeAppServerServerRequest,
-} from '../../../../../../generated/app-server/AppServerProtocolDecoder.js';
+} from '../../common/generated/AppServerProtocolDecoder.js';
+
+test('directory permissions reject unknown enum values at the generated boundary', () => {
+	const params = { commandId: 'set-permissions', expectedRevision: 1, path: '/workspace', permissions: ['readFiles'] };
+	assert.deepEqual(decodeAppServerRequestParams('config/dirPermissions/set', params), params);
+	assert.throws(() => decodeAppServerRequestParams('config/dirPermissions/set', { ...params, permissions: ['futurePermission'] }), AppServerProtocolDecodeError);
+});
 
 test('Agent identity and replacement origins survive the generated RPC boundary', () => {
 	const response = {

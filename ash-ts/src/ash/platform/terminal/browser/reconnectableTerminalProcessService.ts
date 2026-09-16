@@ -1,4 +1,4 @@
-import { APP_SERVER_METHODS, type TerminalAttachResult, type TerminalCloseParams, type TerminalCreateParams, type TerminalReadParams, type TerminalReadResult, type TerminalReconnectLease, type TerminalResizeParams, type TerminalWriteParams } from "../../../../../generated/app-server/index.js";
+import { APP_SERVER_METHODS, type TerminalAttachResult, type TerminalCloseParams, type TerminalCreateParams, type TerminalReadParams, type TerminalReadResult, type TerminalReconnectLease, type TerminalResizeParams, type TerminalWriteParams } from "../../app-server/common/generated/index.js";
 import { timeout } from "../../../base/common/async.js";
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
 import type { AppServerConnectionState } from "../../app-server/common/appServerApi.js";

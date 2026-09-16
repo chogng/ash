@@ -1,4 +1,4 @@
-import type { CodebaseStatusResult, ConfigCommandResult, ConfigReadResult, ProviderConfigDto, CodebaseAutomaticContextDto, CodebaseModelsDto } from "../../../../../../generated/app-server/index.js";
+import type { CodebaseStatusResult, ConfigCommandResult, ConfigReadResult, ProviderConfigDto, CodebaseAutomaticContextDto, CodebaseModelsDto } from "../../../../platform/app-server/common/generated/index.js";
 import type { ICodebaseApi } from "../../../../platform/codebase/common/codebaseApi.js";
 import type { CodebaseConfigurationCommandResult, CodebaseConfigurationSnapshot, CodebaseProviderConfiguration, CodebaseStatus, ICodebaseService, CodebaseAutomaticContext, CodebaseModels } from "../../../../platform/codebase/common/codebaseService.js";
 

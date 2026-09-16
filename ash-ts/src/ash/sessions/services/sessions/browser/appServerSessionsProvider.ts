@@ -1,4 +1,4 @@
-import type { AgentTreeNodeProjection as AgentTreeNodeDto, Session as SessionDto, SessionThreadProjection as ThreadDto, TurnStatus as TurnStatusDto } from "../../../../../../generated/app-server/index.js";
+import type { AgentTreeNodeProjection as AgentTreeNodeDto, Session as SessionDto, SessionThreadProjection as ThreadDto, TurnStatus as TurnStatusDto } from "../../../../platform/app-server/common/generated/index.js";
 import { Emitter } from "../../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { createUuid } from "../../../../base/common/uuid.js";

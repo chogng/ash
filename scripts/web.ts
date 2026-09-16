@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { resolve } from 'node:path';
 import sirv from 'sirv';
-import { authenticatedWebUrl, startWeb } from './lib/web.ts';
+import { authenticatedWebUrl, startWeb } from '../build/lib/web.ts';
 
 const repositoryRoot = resolve(import.meta.dirname, '..');
 const root = resolve(process.argv[2] ?? resolve(repositoryRoot, '.build/desktop/renderer/ash'));

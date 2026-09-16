@@ -1,4 +1,4 @@
-import type { CodebaseSymbolsSearchResult, CodebaseSymbolsStatusResult, DocumentOverlayStatusResult } from "../../../../../generated/app-server/index.js";
+import type { CodebaseSymbolsSearchResult, CodebaseSymbolsStatusResult, DocumentOverlayStatusResult } from "../../app-server/common/generated/index.js";
 import { invoke } from "../../ipc/electron-browser/rendererIpc.js";
 import type { ICodebaseSymbolsApi } from "../common/codebaseSymbolsApi.js";
 

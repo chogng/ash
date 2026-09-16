@@ -4,7 +4,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { AppServerMemoryDiagnosticsService } from '../../browser/appServerMemoryDiagnosticsService.js';
 import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CLOSED_EVENT, type AppServerTransport } from '../../../app-server/common/appServerTransport.js';
 import { AppServerProtocolClient } from '../../../app-server/browser/appServerProtocolClient.js';
-import { APP_SERVER_SCHEMA_HASH, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_CAPABILITY_VERSION, type InitializeResult, type ServerCapabilities } from '../../../../../../generated/app-server/index.js';
+import { APP_SERVER_SCHEMA_HASH, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_PROTOCOL_REVISION, APP_SERVER_CAPABILITY_VERSION, type InitializeResult, type ServerCapabilities } from '../../../app-server/common/generated/index.js';
 import { DisposableTracker, installDisposableTracker } from '../../../../base/common/lifecycle.js';
 import type { MemoryObservation } from '../../common/memoryDiagnosticsService.js';
 

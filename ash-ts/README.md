@@ -164,7 +164,7 @@ Command、MenuId、Context Key 与菜单型 Toolbar 的 canonical 组合规范�
 普通 `dev:web`、`dev:renderer` 和静态 Browser 构建未配置 host 时由
 `platform/app-server/browser/rendererApi.ts` 提供 disconnected API：UI 正常启动，状态栏显示
 App Server 不可用，产品操作明确失败。`dev:web:full` 使用 Vite 提供前端资源，
-由 `scripts/lib/web.ts` 启动受管理 App Server 的认证浏览器入口。`build:web` / `start:web`
+由 `build/lib/web.ts` 启动受管理 App Server 的认证浏览器入口。`build:web` / `start:web`
 使用 Rust HTTP 入口提供编译产物；浏览器通过 WebSocket 直接交换 JSON-RPC。
 
 打开启动器给出的完整链接：URL fragment 中的一次性票据兑换为当前页签的会话，随后从地址栏移除。

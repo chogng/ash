@@ -1,5 +1,5 @@
 import { AppServerRemoteError } from '../../app-server/common/appServerError.js';
-import { APP_SERVER_METHODS } from '../../../../../generated/app-server/index.js';
+import { APP_SERVER_METHODS } from '../../app-server/common/generated/index.js';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../base/common/uuid.js';

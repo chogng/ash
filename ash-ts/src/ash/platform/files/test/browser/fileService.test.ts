@@ -5,7 +5,7 @@ import { URI } from "../../../../base/common/uri.js";
 import { AppServerRemoteError } from "../../../../platform/app-server/common/appServerError.js";
 import { BrowserFileService, workspaceRelativePath, workspaceResourceFromPath } from "../../../../platform/files/browser/fileService.js";
 import { FileKind, FileRevisionConflictError } from "../../../../platform/files/common/files.js";
-import type { FsChanged } from "../../../../../../generated/app-server/index.js";
+import type { FsChanged } from "../../../app-server/common/generated/index.js";
 import type { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { WorkspaceContextService } from "../../../../workbench/services/workspaces/browser/workspaceContextService.js";
 import { createSshRemoteWorkspaceUri } from "../../../../platform/remote/common/remote.js";

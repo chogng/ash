@@ -13,7 +13,7 @@ import { workspaceRelativePath, workspaceResourceFromPath } from "../../../../pl
 import { type ILanguageApi } from "../../../../platform/language/common/languageApi.js";
 import { type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { type IDirPermissionsService } from "../../../../platform/dirPermissions/common/dirPermissionsService.js";
-import { type AppServerErrorName, type LanguageCodeActionDiagnosticDto, type LanguageDiagnosticsNotification } from "../../../../../../generated/app-server/index.js";
+import { type AppServerErrorName, type LanguageCodeActionDiagnosticDto, type LanguageDiagnosticsNotification } from "../../../../platform/app-server/common/generated/index.js";
 import { type ICodeIntelligenceDocumentService } from "../../codeIntelligence/common/codeIntelligenceDocumentService.js";
 import { APP_SERVER_WORKSPACE_DIAGNOSTIC_LANGUAGE_IDS, isAppServerLanguageId } from "./appServerLanguageSupport.js";
 import { resolveAppServerLanguageDirAccess } from "./appServerLanguageWorkspace.js";

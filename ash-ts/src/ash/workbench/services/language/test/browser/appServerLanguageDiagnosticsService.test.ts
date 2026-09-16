@@ -9,11 +9,11 @@ import { type IServerEventApi } from "../../../../../platform/app-server/common/
 import { AppServerRemoteError } from "../../../../../platform/app-server/common/appServerError.js";
 import { type ILanguageApi } from "../../../../../platform/language/common/languageApi.js";
 import { type IDirPermissionsService } from "../../../../../platform/dirPermissions/common/dirPermissionsService.js";
-import type { PermissionDto } from "../../../../../../../generated/app-server/index.js";
+import type { PermissionDto } from "../../../../../platform/app-server/common/generated/index.js";
 import { WorkspaceContextService } from "../../../workspaces/browser/workspaceContextService.js";
 import { type CodeIntelligenceDocumentSnapshot, type ICodeIntelligenceDocumentService } from "../../../codeIntelligence/common/codeIntelligenceDocumentService.js";
 import { AppServerLanguageDiagnosticsService } from "../../browser/appServerLanguageDiagnosticsService.js";
-import { type ServerNotification } from "../../../../../../../generated/app-server/index.js";
+import { type ServerNotification } from "../../../../../platform/app-server/common/generated/index.js";
 
 test("App Server diagnostics service synchronizes, filters revisions, and closes once", async () => {
 	const events = new FakeServerEvents();

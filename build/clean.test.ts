@@ -9,7 +9,7 @@ test("clean removes outputs and tool caches while preserving dependencies and li
   const root = await mkdtemp(join(tmpdir(), "ash-clean-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const removed = [".build/desktop/output", "build/lib/__pycache__/cache", "scripts/ash-code/__pycache__/cache"];
-  const preserved = ["build/lib/source.py", "build/node_modules/tool/__pycache__/cache", "scripts/.venv/__pycache__/cache", "external/__pycache__/cache", "ash-ts/generated/source.ts"];
+  const preserved = ["build/lib/source.py", "build/node_modules/tool/__pycache__/cache", "scripts/.venv/__pycache__/cache", "external/__pycache__/cache", "ash-ts/src/ash/platform/app-server/common/generated/index.ts", "ash-ts/src/ash/base/common/productIcons.ts"];
   for (const file of [...removed, ...preserved]) {
     await mkdir(join(root, file, ".."), { recursive: true });
     await writeFile(join(root, file), "keep");

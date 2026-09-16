@@ -1,10 +1,10 @@
 import { spawn } from 'node:child_process';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
-import { developmentAshPackagePath } from '../../build/package/store.ts';
+import { developmentAshPackagePath } from '../package/store.ts';
 import { buildAppServerEnvironment } from '../../ash-ts/src/ash/platform/app-server/common/appServerEnvironment.ts';
-import { decodeWebListenInfo } from '../../ash-ts/generated/app-server/WebProtocolDecoder.ts';
-import type { WebListenInfo } from '../../ash-ts/generated/app-server/WebListenInfo.ts';
+import { decodeWebListenInfo } from '../../ash-ts/src/ash/platform/app-server/common/generated/WebProtocolDecoder.ts';
+import type { WebListenInfo } from '../../ash-ts/src/ash/platform/app-server/common/generated/WebListenInfo.ts';
 
 interface WebLaunch {
 	readonly info: WebListenInfo;

@@ -30,7 +30,7 @@ ash-ts/.tmp/
 ash-ts/debug.log
 node_modules/
 .pnpm-store/
-ash-ts/generated/app-server/
+ash-ts/src/ash/platform/app-server/common/generated/
 schemas/app-server/
 
 # Downloaded, checksum-verified third-party native runtime artifacts.

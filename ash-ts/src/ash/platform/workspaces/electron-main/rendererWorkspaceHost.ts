@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { WebContents } from 'electron/main';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { isRecord } from '../../../base/common/types.js';
-import type { DirGrantDto, PermissionDto } from '../../../../../generated/app-server/index.js';
+import type { DirGrant, DirPermission } from '../../dirPermissions/common/dirPermissionsService.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
 
 /** Routes window-owned workspace operations to the renderer that owns the backend connection. */
@@ -12,10 +12,10 @@ export class RendererWorkspaceHost extends Disposable {
 
 	constructor(private readonly renderer: WebContents) { super(); }
 
-	public readPermissions(path: string): Promise<readonly PermissionDto[] | undefined> { return this.call('readPermissions', { path }) as Promise<readonly PermissionDto[] | undefined>; }
-	public createGrant(path: string, permissions: readonly PermissionDto[]): Promise<DirGrantDto> { return this.call('createGrant', { path, permissions }) as Promise<DirGrantDto>; }
-	public async switchWorkspace(path: string, grant: DirGrantDto): Promise<void> { await this.call('switchWorkspace', { path, grant }); }
-	public async setFolders(folders: readonly { id: string; path: string; grant: DirGrantDto }[]): Promise<void> { await this.call('setFolders', { folders }); }
+	public readPermissions(path: string): Promise<readonly DirPermission[] | undefined> { return this.call('readPermissions', { path }) as Promise<readonly DirPermission[] | undefined>; }
+	public createGrant(path: string, permissions: readonly DirPermission[]): Promise<DirGrant> { return this.call('createGrant', { path, permissions }) as Promise<DirGrant>; }
+	public async switchWorkspace(path: string, grant: DirGrant): Promise<void> { await this.call('switchWorkspace', { path, grant }); }
+	public async setFolders(folders: readonly { id: string; path: string; grant: DirGrant }[]): Promise<void> { await this.call('setFolders', { folders }); }
 
 	public routes(): readonly IpcRoute<unknown, unknown>[] {
 		return [{ channel: 'ash:workspace:completed', validate: value => {

@@ -1,4 +1,4 @@
-import { createProductIconLibrary } from "../../../../generated/product-icons.js";
+import { createProductIconLibrary } from "./productIcons.js";
 import { register } from "./icon.js";
 
 /**

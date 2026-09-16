@@ -1,10 +1,22 @@
-import type { PermissionDto } from "../../../../../generated/app-server/index.js";
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
+
+export type DirPermission =
+	| "readFiles" | "writeFiles" | "executeCommands"
+	| "watchFiles" | "browseFiles" | "searchFiles"
+	| "loadInstructions" | "loadConfig" | "discoverSkills"
+	| "discoverMcp" | "useLanguageServices" | "discoverHooks"
+	| "discoverPlugins" | "inspectRepository" | "mutateRepository";
+
+/** Authorization selected by the host before entering a directory. */
+export type DirGrant =
+	| { readonly type: "config" }
+	| { readonly type: "host"; readonly permissions: readonly DirPermission[] }
+	| { readonly type: "user"; readonly commandId: string; readonly expectedRevision: number; readonly permissions: readonly DirPermission[] };
 
 export interface DirPermissionsEntry {
 	readonly dir: string;
 	readonly path: string | undefined;
-	readonly permissions: readonly PermissionDto[];
+	readonly permissions: readonly DirPermission[];
 }
 
 export interface DirPermissionsSnapshot {
@@ -21,8 +33,8 @@ export interface DirPermissionsCommandResult {
 /** Frontend contract for explicit capability sets attached to directories. */
 export interface IDirPermissionsService {
 	list(): Promise<DirPermissionsSnapshot>;
-	read(path: string): Promise<readonly PermissionDto[] | undefined>;
-	set(path: string, permissions: readonly PermissionDto[], expectedRevision: number): Promise<DirPermissionsCommandResult>;
+	read(path: string): Promise<readonly DirPermission[] | undefined>;
+	set(path: string, permissions: readonly DirPermission[], expectedRevision: number): Promise<DirPermissionsCommandResult>;
 	forget(dir: string, expectedRevision: number): Promise<DirPermissionsCommandResult>;
 }
 

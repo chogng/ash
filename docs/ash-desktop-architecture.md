@@ -206,7 +206,7 @@ Desktop 主进程入口同步注册 Electron `ready` 监听器；异步启动链
 启动过程不创建额外的 splash 窗口。gate 失败时，原生 Retry/Quit 对话框允许 supervisor
 回到 stopped 后重新初始化，或按正常退出生命周期关闭应用。
 
-`ash-ts/generated/` 由 ash-rs 协议生成命令更新，不手写 wire DTO。
+`ash-ts/src/ash/platform/app-server/common/generated/` 消费 Rust 协议 crate 的生成快照，不手写 wire DTO。纯前端构建只同步快照，协议修改通过 `pnpm generate:protocol` 更新；职责和验证见 [App Server 协议来源](ash-app-server-api.md#12-权威来源)。
 生成的 `APP_SERVER_SCHEMA_HASH` 是 bundled Desktop 的 exact-schema 基线；Electron Main
 必须比较 initialize response，hash 不一致时不得创建业务窗口或进入 Ready。
 
@@ -579,7 +579,7 @@ Browser 入口没有 App Server 连接时会明确显示不可用状态。`dev:w
 前端开发入口，使用同一 disconnected API 保持 UI 可检查，但不声称拥有后端能力。当前本地
 `dev:web:full` 与 `build:web` / `start:web` 使用受管理 Rust App Server 的认证
 HTTP/WebSocket 浏览器入口。每个浏览器页签独立交换 JSON-RPC，服务仍由 profile registry 管理。
-`scripts/lib/web.ts` 只持有启动租约、读取启动信息和收尾；不转发业务消息。
+`build/lib/web.ts` 只持有启动租约、读取启动信息和收尾；不转发业务消息。
 Vite 提供开发资源，发布资源由 Rust HTTP 入口读取可信配置中的目录。
 普通 `build:renderer` 保留 disconnected 模式；`build:web` 显式启用后端连接。
 可信启动入口绑定工作区和允许的 Origin；一次性票据兑换后，浏览器通过会话凭证连接，
