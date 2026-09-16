@@ -1,0 +1,19 @@
+# ash-livekit-client
+
+- 隔离官方 LiveKit Rust SDK 与 libwebrtc 依赖。
+- 发布、接收 48 kHz 单声道 PCM，保留参与者和轨道身份。
+- 输出有界媒体事件与音频队列，丢弃超过 200 ms 的积压音频。
+- 封装 24/48 kHz 的 10 ms 重采样。
+- 关闭或丢弃房间时终止收流任务；控制事件过载结束连接。
+- 设备采集、播放及 AEC/NS/AGC 由 `voice-host` 负责。
+- 当前只实现音频；屏幕共享、设备装配和产品界面尚未完成。
+
+macOS 最终二进制需要 `-ObjC` 链接选项，已在工作区 Cargo 配置设置；产品其他构建入口仍需分别验证。
+
+真实服务测试需要显式提供已核验的 LiveKit Server。当前验证版本为 1.13.7：
+
+```sh
+ASH_TEST_LIVEKIT_SERVER=/absolute/path/livekit-server just test ash-livekit-client --test room -- --ignored
+```
+
+测试启动临时回环服务，验证实际 Opus 音频双向传输；不打开麦克风，不代表真实设备或公网连通性验收。

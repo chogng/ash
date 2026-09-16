@@ -2,6 +2,7 @@
 
 pub(crate) mod anthropic;
 pub(crate) mod chat_completions;
+pub(crate) mod live;
 pub(crate) mod realtime;
 pub(crate) mod responses;
 pub(crate) mod responses_websocket;

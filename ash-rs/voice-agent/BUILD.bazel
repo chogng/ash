@@ -1,0 +1,6 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "voice-agent",
+    crate_name = "voice_agent",
+)

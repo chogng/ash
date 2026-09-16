@@ -19,6 +19,180 @@ const TOKEN: &str = "0123456789abcdef0123456789abcdef";
 const ORIGIN: &str = "https://desktop.ash.example";
 
 #[test]
+#[ignore = "requires ASH_TEST_LIVEKIT_SERVER pointing to the pinned server"]
+fn media_calls_enforce_membership_and_rotate_self_hosted_rooms() {
+    struct MediaProcess(std::process::Child);
+    impl Drop for MediaProcess {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+    let directory = TempDir::new().unwrap();
+    let media_port = TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
+    let udp_port = std::net::UdpSocket::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
+    let config = directory.path().join("media.yaml");
+    let secret = "ash-test-call-server-secret-thirty-two-bytes";
+    std::fs::write(&config, format!("port: {media_port}\nbind_addresses: [127.0.0.1]\nrtc:\n  udp_port: {udp_port}\n  tcp_port: 0\n  node_ip: 127.0.0.1\n  use_external_ip: false\nkeys:\n  test: {secret}\nlogging:\n  level: error\n")).unwrap();
+    let mut media = MediaProcess(
+        std::process::Command::new(
+            std::env::var_os("ASH_TEST_LIVEKIT_SERVER").expect("set the test server path"),
+        )
+        .arg("--config")
+        .arg(config)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::inherit())
+        .spawn()
+        .unwrap(),
+    );
+    let started = std::time::Instant::now();
+    while TcpStream::connect(("127.0.0.1", media_port)).is_err() {
+        assert!(media.0.try_wait().unwrap().is_none());
+        assert!(started.elapsed() < std::time::Duration::from_secs(10));
+        thread::sleep(std::time::Duration::from_millis(20));
+    }
+    let service = Arc::new(
+        livekit_api::MediaService::new(
+            &format!("ws://127.0.0.1:{media_port}"),
+            &format!("http://127.0.0.1:{media_port}"),
+            "test".into(),
+            ash_secrets::SecretValue::new(secret.as_bytes().to_vec()),
+        )
+        .unwrap(),
+    );
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    let options =
+        CollaborationServerOptions::new(address, directory.path().join("rooms.sqlite3"), TOKEN)
+            .with_allowed_origin(ORIGIN);
+    let calls = super::calls::CallRuntime::open(options.database_path(), service).unwrap();
+    let mut runtime = HttpRuntime::new(
+        SqliteDocumentCollaborationRooms::open_at(options.database_path()).unwrap(),
+        options,
+    );
+    runtime.calls = Some(calls);
+    let runtime = Arc::new(runtime);
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let stop = shutdown.clone();
+    let worker = thread::spawn(move || serve_listener(listener, runtime, stop).unwrap());
+    let owner = call::MemberCredential::generate();
+    let guest = call::MemberCredential::generate();
+    let request = |method: &str, path: &str, token: &str, body: Value, status| {
+        let authorization = format!("Bearer {token}");
+        let reply = send(
+            address,
+            method,
+            path,
+            &[
+                ("Origin", ORIGIN),
+                ("Authorization", &authorization),
+                ("Content-Type", "application/json"),
+            ],
+            &serde_json::to_vec(&body).unwrap(),
+        );
+        assert_eq!(
+            reply.status,
+            status,
+            "{}",
+            String::from_utf8_lossy(&reply.body)
+        );
+        serde_json::from_slice::<Value>(&reply.body).unwrap()
+    };
+    let create = serde_json::json!({"operationId":"create", "ownerCredential":owner.expose()});
+    request(
+        "POST",
+        "/v1/calls/create",
+        guest.expose(),
+        create.clone(),
+        403,
+    );
+    let created = request("POST", "/v1/calls/create", TOKEN, create.clone(), 200);
+    assert_eq!(created["mediaState"]["state"], "ready");
+    assert_eq!(
+        request("POST", "/v1/calls/create", TOKEN, create, 200),
+        created
+    );
+    let invited = request(
+        "POST",
+        "/v1/calls/invite",
+        owner.expose(),
+        serde_json::json!({"operationId":"invite", "revision":created["revision"], "memberCredential":guest.expose(), "role":"speaker"}),
+        200,
+    );
+    let ticket = request(
+        "POST",
+        "/v1/calls/join",
+        guest.expose(),
+        serde_json::json!({"deviceId":"laptop"}),
+        200,
+    );
+    assert!(ticket["participantToken"].as_str().unwrap().len() > 100);
+    request(
+        "POST",
+        "/v1/calls/end",
+        guest.expose(),
+        serde_json::json!({"operationId":"end", "revision":invited["revision"]}),
+        403,
+    );
+    let changed = request(
+        "POST",
+        "/v1/calls/role",
+        owner.expose(),
+        serde_json::json!({"operationId":"role", "revision":invited["revision"], "memberId":ticket["member"]["id"], "role":"listener"}),
+        200,
+    );
+    assert_ne!(changed["mediaRoom"], created["mediaRoom"]);
+    let next = request(
+        "POST",
+        "/v1/calls/join",
+        guest.expose(),
+        serde_json::json!({"deviceId":"laptop"}),
+        200,
+    );
+    assert_ne!(next["participantId"], ticket["participantId"]);
+    assert_eq!(next["member"]["role"], "listener");
+    let removed = request(
+        "POST",
+        "/v1/calls/remove",
+        owner.expose(),
+        serde_json::json!({"operationId":"remove", "revision":changed["revision"], "memberId":ticket["member"]["id"]}),
+        200,
+    );
+    request(
+        "POST",
+        "/v1/calls/join",
+        guest.expose(),
+        serde_json::json!({"deviceId":"laptop"}),
+        403,
+    );
+    let ended = request(
+        "POST",
+        "/v1/calls/end",
+        owner.expose(),
+        serde_json::json!({"operationId":"end", "revision":removed["revision"]}),
+        200,
+    );
+    assert_eq!(ended["mediaState"]["state"], "closed");
+    request(
+        "POST",
+        "/v1/calls/join",
+        owner.expose(),
+        serde_json::json!({"deviceId":"laptop"}),
+        409,
+    );
+    shutdown.store(true, Ordering::Release);
+    worker.join().unwrap();
+}
+
+#[test]
 fn remote_host_authenticates_origins_and_orders_cross_client_updates() {
     let directory = TempDir::new().unwrap();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();

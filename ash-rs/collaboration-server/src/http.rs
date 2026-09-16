@@ -1,3 +1,4 @@
+mod calls;
 mod wire;
 
 use crate::CollaborationServerError;
@@ -51,7 +52,14 @@ pub(crate) fn serve(options: CollaborationServerOptions) -> Result<(), Collabora
         TcpListener::bind(options.listen_address()).map_err(CollaborationServerError::http)?;
     let rooms = SqliteDocumentCollaborationRooms::open_at(options.database_path())
         .map_err(CollaborationServerError::storage)?;
-    let runtime = Arc::new(HttpRuntime::new(rooms, options));
+    let media = options
+        .media_service
+        .as_ref()
+        .map(|service| calls::CallRuntime::open(options.database_path(), service.clone()))
+        .transpose()?;
+    let mut runtime = HttpRuntime::new(rooms, options);
+    runtime.calls = media;
+    let runtime = Arc::new(runtime);
     serve_listener(listener, runtime, Arc::new(AtomicBool::new(false)))
 }
 
@@ -60,6 +68,7 @@ struct HttpRuntime {
     options: CollaborationServerOptions,
     active_connections: AtomicUsize,
     updates: UpdateSignal,
+    calls: Option<calls::CallRuntime>,
 }
 
 impl HttpRuntime {
@@ -69,6 +78,7 @@ impl HttpRuntime {
             options,
             active_connections: AtomicUsize::new(0),
             updates: UpdateSignal::default(),
+            calls: None,
         }
     }
 }
@@ -161,7 +171,7 @@ fn handle_connection(
         Err(HttpReadError::Io(error)) => return Err(CollaborationServerError::http(error)),
     };
     let (path, _) = split_target(&request.target);
-    if !path.starts_with(API_ROOT) {
+    if !path.starts_with(API_ROOT) && !path.starts_with("/v1/calls/") {
         return write_empty_response(&mut stream, 404, "Not Found", &[])
             .map_err(CollaborationServerError::http);
     }
@@ -183,6 +193,9 @@ fn handle_connection(
         headers.push(("WWW-Authenticate", "Bearer"));
         return write_empty_response(&mut stream, 401, "Unauthorized", &headers)
             .map_err(CollaborationServerError::http);
+    }
+    if path.starts_with("/v1/calls/") {
+        return calls::handle(&mut stream, runtime, &request, path);
     }
     match (request.method.as_str(), path) {
         ("POST", OPEN_PATH) => handle_open(&mut stream, runtime, &request),

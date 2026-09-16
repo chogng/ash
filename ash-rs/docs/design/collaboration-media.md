@@ -2,10 +2,25 @@
 
 Ash 的多人通话、屏幕共享和 GPT Voice 统一使用 LiveKit 房间。GPT Voice 以 AI 协作者身份入房，开发任务交给 Ash 既有 Agent 执行链；`realtime-webrtc` 从目标架构中移除。
 
-- 状态：目标设计，尚未实施。
+- 状态：底层实现进行中，产品接入尚未完成。
 - 核对日期：2026-09-15。
 - 本文负责：crate 边界、部署、房间与权限、AI 接入、实施顺序和验收要求。
-- 本次只新增方案文档；现有 crate、构建配置和产品行为尚未变更。
+- 已新增 `call`、`livekit-client`、`livekit-api`、`voice-agent`，并删除无人调用的 `realtime-webrtc`。
+
+### 当前实现与验收
+
+| 能力 | 当前结果 |
+| --- | --- |
+| LiveKit 双向音频 | 真实 Server 1.13.7 与 Rust SDK 测试通过 |
+| 成员邀请、撤销、角色变更、房间换代 | SQLite 测试与真实服务 HTTP 测试通过 |
+| GPT-Live 会话协议 | 本地 WebSocket 契约测试通过；尚未连接真实模型账户 |
+| AI 混音、重采样与播放清理 | 单元测试与真实 LiveKit + 本地 GPT-Live 模拟服务的桥接测试通过 |
+| 自建服务接入 | HTTP 宿主接受部署者的 LiveKit 地址和密钥 |
+| 设备发言权 | 同一成员只向选中设备签发麦克风权限；切换设备更换房间，双 SQLite 宿主竞争测试通过 |
+| 成员通知、文档房间关联 | 尚未实现 |
+| App Server/Core 任务执行与 UI | 尚未接入 |
+| 自动管理本地媒体服务、屏幕共享、产品打包 | 尚未实现 |
+| 真实设备、三平台、公网 NAT、真实 GPT-Live | 尚未验收 |
 
 ## 1. 架构决定
 
@@ -42,11 +57,11 @@ LiveKit 的 SFU（选择性转发服务器）负责将参与者发布的音视�
 | [collaboration](../../collaboration/README.md) | 结构化文档房间、操作顺序、回放、presence | 与通话关联；继续独立维护文档授权 |
 | [collaboration-server](../../collaboration-server/README.md) | 文档协作 HTTP、鉴权、SQLite 宿主 | 装配通话成员权限、媒体票据和房间管理 |
 | [voice-host](../../voice-host/README.md) | CPAL 设备、PCM 管道、Sonora 音频处理 | 接入 LiveKit；完善真实设备与切换验证 |
-| [realtime-webrtc](../../realtime-webrtc/README.md) | 单条双向音频连接、Opus、数据通道 | 整体退场；有价值的行为覆盖迁入新链路 |
+| `realtime-webrtc`（已删除） | 原单条双向音频连接、Opus、数据通道 | 双向音频改由 `livekit-client` 对真实 LiveKit Server 验证；自维护 RTP 播放与数据通道 API 退场 |
 | [model-provider](../../model-provider/README.md) | 模型选择、凭据和模型会话装配 | 增加 GPT-Live 会话能力 |
 | App Server 与 Core | 产品请求装配、Thread、Turn 和工具执行 | 接收 AI 语音委托，复用权限和任务状态 |
 
-当前 `collaboration` 的 room 是文档房间，并不代表一组人的完整协作会话。现有 `realtime-webrtc` 也不是 LiveKit 客户端；核对时没有其他生产 crate 依赖它。
+当前 `collaboration` 的 room 是文档房间，并不代表一组人的完整协作会话。原 `realtime-webrtc` 不是 LiveKit 客户端；删除前已核对没有其他生产 crate 依赖它。
 
 现有 Realtime 模型会话与 GPT-Live 是不同 API 契约。实现时新增对应协议能力，不能只替换模型名称并沿用旧事件含义。
 

@@ -5,13 +5,14 @@ use std::path::Path;
 use std::path::PathBuf;
 
 /// Runtime configuration for one authenticated remote collaboration host.
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone)]
 pub struct CollaborationServerOptions {
     listen_address: SocketAddr,
     database_path: PathBuf,
     bearer_token: String,
     allowed_origins: BTreeSet<String>,
     maximum_connections: usize,
+    pub(crate) media_service: Option<std::sync::Arc<livekit_api::MediaService>>,
 }
 
 impl CollaborationServerOptions {
@@ -26,11 +27,18 @@ impl CollaborationServerOptions {
             bearer_token: bearer_token.into(),
             allowed_origins: BTreeSet::new(),
             maximum_connections: 64,
+            media_service: None,
         }
     }
 
     pub fn with_allowed_origin(mut self, origin: impl Into<String>) -> Self {
         self.allowed_origins.insert(origin.into());
+        self
+    }
+
+    /// Supplies an explicitly configured media deployment. Credentials stay in the server.
+    pub fn with_media_service(mut self, service: livekit_api::MediaService) -> Self {
+        self.media_service = Some(std::sync::Arc::new(service));
         self
     }
 

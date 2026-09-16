@@ -67,6 +67,15 @@ pub enum RealtimeApiProfile {
     OpenAiRealtime,
 }
 
+/// GPT-Live is declared separately from Realtime and Responses protocols.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum LiveApiProfile {
+    #[default]
+    Unavailable,
+    OpenAiLive,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum EndpointPolicy {
@@ -150,6 +159,8 @@ pub struct ProviderDefinition {
     #[serde(default)]
     pub realtime_api_profile: RealtimeApiProfile,
     #[serde(default)]
+    pub live_api_profile: LiveApiProfile,
+    #[serde(default)]
     pub models: Vec<Model>,
     #[serde(default)]
     pub defaults: ProviderDefaults,
@@ -180,6 +191,7 @@ impl ProviderDefinition {
             output_transport: ModelOutputTransport::Unary,
             websocket_api_profile: WebSocketApiProfile::Unavailable,
             realtime_api_profile: RealtimeApiProfile::Unavailable,
+            live_api_profile: LiveApiProfile::Unavailable,
             models: Vec::new(),
             defaults: ProviderDefaults::default(),
             input_token_count: None,
@@ -214,6 +226,11 @@ impl ProviderDefinition {
 
     pub fn with_realtime_api_profile(mut self, profile: RealtimeApiProfile) -> Self {
         self.realtime_api_profile = profile;
+        self
+    }
+
+    pub fn with_live_api_profile(mut self, profile: LiveApiProfile) -> Self {
+        self.live_api_profile = profile;
         self
     }
 

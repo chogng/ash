@@ -1,0 +1,18 @@
+[package]
+name = "ash-livekit-api"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+name = "livekit_api"
+
+[dependencies]
+livekit-sdk-api = { workspace = true, features = ["services", "rustls-tls-webpki-roots"] }
+thiserror = { workspace = true }
+url = { workspace = true }
+ash-secrets = { workspace = true }
+
+[lints]
+workspace = true

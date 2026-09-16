@@ -22,7 +22,10 @@ members = [
     "ash-rs/config-schema",
     "ash-rs/process-hardening",
     "ash-rs/build-info",
-    "ash-rs/realtime-webrtc",
+    "ash-rs/livekit-client",
+    "ash-rs/voice-agent",
+    "ash-rs/livekit-api",
+    "ash-rs/call",
     "ash-rs/voice-host",
     "ash-rs/agent-environment",
     "ash-rs/agent-graph-store",
@@ -199,12 +202,11 @@ publish = false
 version = "0.1.0"
 
 [workspace.dependencies]
+livekit = { version = "=0.9.1", default-features = false }
+livekit-sdk-api = { package = "livekit-api", version = "=0.7.1", default-features = false }
 rand = "0.9"
-rtc = "=0.20.3"
-webrtc = "=0.20.3"
 cpal = "=0.18.2"
 crossbeam-queue = "0.3.12"
-opus = "=0.4.0"
 rubato = { version = "=5.0.0", default-features = false }
 sonora = { version = "=0.2.0", default-features = false }
 symphonia = { version = "0.6.0", default-features = false }

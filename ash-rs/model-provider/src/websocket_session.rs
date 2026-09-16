@@ -31,6 +31,59 @@ pub struct ResponsesModelSession {
 }
 
 impl ModelProviderRuntime {
+    /// Opens GPT-Live with direct provider credentials and application-owned task delegation.
+    pub async fn connect_live(
+        &self,
+        config: &ModelProviderConfig,
+        model: &ModelRef,
+        voice: &ash_api::LiveConfig,
+        connector: &WebSocketConnector,
+        limits: WebSocketSessionConfig,
+        cancellation: &CancellationToken,
+    ) -> Result<ash_api::LiveSession, ModelProviderError> {
+        super::check_cancellation(cancellation)?;
+        let runtime = self.with_configs([config])?;
+        let normalized = runtime.configs.normalize_for(config, &model.provider)?;
+        let definition = runtime
+            .configs
+            .get(&normalized.provider)
+            .expect("normalized provider exists");
+        if definition.live_api_profile != ash_model_provider_config::LiveApiProfile::OpenAiLive {
+            return Err(ModelProviderError::Unavailable(
+                "provider has no declared GPT-Live protocol".into(),
+            ));
+        }
+        // Live delegates development work; it must not pass through the tool-capable text catalog.
+        if model.model.as_str() != "gpt-live-1" {
+            return Err(ModelProviderError::Unavailable(
+                "model is not declared for the GPT-Live protocol".into(),
+            ));
+        }
+        if ash_model_provider_config::find_static_model(model).is_some_and(|model| {
+            !matches!(
+                model.runtime,
+                ash_model_provider_config::StaticModelRuntime::ProviderApi
+            )
+        }) {
+            return Err(ModelProviderError::Unavailable(
+                "subscription text models do not authorize GPT-Live".into(),
+            ));
+        }
+        let connection = runtime.direct_connection(&normalized)?;
+        let provider = runtime.instantiate_normalized_with_connection(normalized, connection)?;
+        let target = provider.target.resolve()?;
+        ash_api::LiveSession::connect(
+            connector,
+            &target,
+            model.model.as_str(),
+            voice,
+            limits,
+            cancellation,
+        )
+        .await
+        .map_err(Into::into)
+    }
+
     /// Opens an explicitly declared Responses WebSocket service. Does not change HTTP defaults.
     pub async fn connect_responses(
         &self,

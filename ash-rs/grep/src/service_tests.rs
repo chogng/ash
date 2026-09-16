@@ -239,21 +239,130 @@ fn cancelling_a_running_ripgrep_query_reaps_its_process() {
     let token = cancellation.token();
     let worker = std::thread::spawn(move || service.search(&root, &query("needle"), &token));
     let deadline = Instant::now() + Duration::from_secs(5);
-    while !marker.exists() {
+    let pid = loop {
+        if let Some(pid) = fs::read_to_string(&marker)
+            .ok()
+            .and_then(|value| value.trim().parse::<u32>().ok())
+        {
+            break pid;
+        }
         assert!(Instant::now() < deadline);
         std::thread::sleep(Duration::from_millis(10));
-    }
-    let pid = fs::read_to_string(marker).unwrap();
+    };
     cancellation.cancel();
     assert!(matches!(worker.join().unwrap(), Err(Error::Cancelled(_))));
     assert!(
         !std::process::Command::new("kill")
-            .args(["-0", pid.trim()])
+            .args(["-0", &pid.to_string()])
             .stderr(std::process::Stdio::null())
             .status()
             .unwrap()
             .success()
     );
+}
+
+#[test]
+fn cancelling_one_owner_does_not_cancel_another_owners_running_query() {
+    use std::sync::Mutex;
+    use std::sync::mpsc;
+
+    struct ControlledSearch {
+        started: mpsc::Sender<String>,
+        stopped: mpsc::Sender<String>,
+        release: Mutex<mpsc::Receiver<()>>,
+    }
+    impl Search for ControlledSearch {
+        fn search(
+            &self,
+            _: &Dir,
+            query: &Query,
+            cancellation: &CancellationToken,
+        ) -> Result<SearchResult, Error> {
+            self.started.send(query.query.clone()).unwrap();
+            if query.query == "cancel-me" {
+                let deadline = Instant::now() + Duration::from_secs(5);
+                while !cancellation.is_cancelled() && Instant::now() < deadline {
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+                assert!(
+                    cancellation.is_cancelled(),
+                    "job cancellation was not forwarded"
+                );
+                self.stopped.send(query.query.clone()).unwrap();
+                return Err(Error::Cancelled("caller cancelled".into()));
+            }
+            self.release
+                .lock()
+                .unwrap()
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap();
+            assert!(
+                !cancellation.is_cancelled(),
+                "another caller cancelled this query"
+            );
+            Ok(SearchResult {
+                matches: vec![Match {
+                    path: "source.rs".into(),
+                    line_number: 1,
+                    content: query.query.clone(),
+                    ranges: vec![MatchRange {
+                        start: 0,
+                        end: query.query.len(),
+                    }],
+                }],
+                limit_hit: false,
+                freshness: Freshness::Current,
+            })
+        }
+    }
+    let (_temporary, root) = fixture();
+    let (started_tx, started_rx) = mpsc::channel();
+    let (stopped_tx, stopped_rx) = mpsc::channel();
+    let (release_tx, release_rx) = mpsc::channel();
+    let jobs = Jobs::new(
+        root,
+        Arc::new(ControlledSearch {
+            started: started_tx,
+            stopped: stopped_tx,
+            release: Mutex::new(release_rx),
+        }),
+    );
+    let first = jobs.start(Owner::new(1), query("cancel-me")).unwrap();
+    let second = jobs.start(Owner::new(2), query("keep-me")).unwrap();
+    let mut started = (0..2)
+        .map(|_| started_rx.recv_timeout(Duration::from_secs(5)).unwrap())
+        .collect::<Vec<_>>();
+    started.sort();
+    assert_eq!(started, ["cancel-me", "keep-me"]);
+    assert_eq!(jobs.cancel(Owner::new(2), &first), Err(JobError::NotOwner));
+    assert_eq!(
+        jobs.read(Owner::new(1), &second, 0, 100),
+        Err(JobError::NotOwner)
+    );
+    jobs.cancel(Owner::new(1), &first).unwrap();
+    assert_eq!(
+        stopped_rx.recv_timeout(Duration::from_secs(5)).unwrap(),
+        "cancel-me"
+    );
+    assert_eq!(
+        jobs.read(Owner::new(1), &first, 0, 100),
+        Err(JobError::NotFound)
+    );
+    assert!(!jobs.read(Owner::new(2), &second, 0, 100).unwrap().completed);
+    release_tx.send(()).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let page = jobs.read(Owner::new(2), &second, 0, 100).unwrap();
+        if page.completed {
+            assert_eq!(page.error, None);
+            assert_eq!(page.matches.len(), 1);
+            assert_eq!(page.matches[0].content, "keep-me");
+            break;
+        }
+        assert!(Instant::now() < deadline);
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    jobs.cancel(Owner::new(2), &second).unwrap();
 }
 
 #[test]

@@ -1,0 +1,31 @@
+[package]
+name = "ash-voice-agent"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+name = "voice_agent"
+
+[dependencies]
+ash-api = { workspace = true }
+ash-async-utils = { workspace = true }
+livekit-client = { package = "ash-livekit-client", path = "../livekit-client" }
+tokio = { workspace = true, features = ["macros", "sync", "time"] }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+ash-client = { workspace = true }
+ash-http-client = { workspace = true }
+ash-websocket-client = { workspace = true }
+ash-secrets = { workspace = true }
+livekit-api = { package = "ash-livekit-api", path = "../livekit-api" }
+tempfile = { workspace = true }
+tokio-tungstenite = { workspace = true }
+futures = { workspace = true }
+serde_json = { workspace = true }
+base64 = { workspace = true }
+
+[lints]
+workspace = true

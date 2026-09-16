@@ -19,6 +19,10 @@ process-hardening = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 ash-collaboration = { workspace = true }
+call = { package = "ash-call", path = "../call" }
+livekit-api = { package = "ash-livekit-api", path = "../livekit-api" }
+ash-secrets = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "time", "net"] }
 
 [dev-dependencies]
 tempfile = { workspace = true }

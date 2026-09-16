@@ -5,7 +5,7 @@
 - `Speech` 模式调用 Sonora 做降噪和回声消除；回声参考来自实际提交给扬声器的样本。
 - 使用 CPAL 打开设备，Rubato 转换设备采样率；工作线程处理 DSP，设备回调只做有界队列读写。
 - 控制命令优先处理；代次标识使旧音频失效，超时或取消请求会终止不可安全复用的进程。
-- 网络连接、鉴权、转写、模型事件及会话界面由调用方负责。24 kHz 可用于 Ash 实时 API，48 kHz 可用于 `realtime-webrtc`。
+- 网络连接、鉴权、转写、模型事件及会话界面由调用方负责。LiveKit 房间使用 48 kHz PCM。
 
 ## 使用和构建
 
@@ -25,7 +25,7 @@ just rust-warnings ash-voice-host --features host
 ## 设计参考与验证范围
 
 - 参考 VS Code 的采集、语音服务、播放分工，自行实现 Rust PCM 会话及生命周期；没有复制其实现。
-- 原移植的运行库加载、WebRTC、音轨、播放管线及设备处理模块已整体退场；设备与 DSP 归 `devices.rs` / `audio.rs`，进程会话归 `server.rs`，网络归 `realtime-webrtc`。
+- 原移植的运行库加载、WebRTC、音轨、播放管线及设备处理模块已整体退场；设备与 DSP 归 `devices.rs` / `audio.rs`，进程会话归 `server.rs`，房间网络归 `livekit-client`。
 - 单元测试验证实际重采样、Sonora 处理、静音与中断代次、资源释放和协议边界；进程测试使用真实 helper，且不打开麦克风。
 - 自动化结果不代表真实设备、操作系统权限、蓝牙切换或服务端通话已完成验证。
 - 当前完成 macOS 测试与构建、Windows 设备端测试目标交叉编译、Linux 客户端测试目标交叉编译。Linux 设备端检查需要 ALSA 目标 SDK，本机尚未配置。

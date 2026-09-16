@@ -17,6 +17,132 @@ use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::tungstenite::Message as WireMessage;
 
 type Server = WebSocketStream<TcpStream>;
+
+#[tokio::test]
+async fn live_uses_its_own_start_audio_delegation_and_finalization_contract() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let target = ResolvedApiTarget::new(
+        format!("http://{}/v1", listener.local_addr().unwrap()),
+        vec![HttpHeader::new("Authorization", "Bearer fixture")],
+    );
+    let server = tokio::spawn(async move {
+        let (tcp, _) = listener.accept().await.unwrap();
+        let mut socket = tokio_tungstenite::accept_hdr_async(
+            tcp,
+            |request: &tokio_tungstenite::tungstenite::handshake::server::Request, response| {
+                assert_eq!(request.uri().path(), "/v1/live/sessions");
+                assert!(request.uri().query().is_none());
+                assert_eq!(request.headers()["authorization"], "Bearer fixture");
+                Ok(response)
+            },
+        )
+        .await
+        .unwrap();
+        let start = read(&mut socket).await;
+        assert_eq!(start["type"], "session.start");
+        assert_eq!(start["session"]["model"], "gpt-live-1");
+        assert_eq!(start["session"]["delegation"]["type"], "client");
+        assert_eq!(start["session"]["audio"]["format"]["rate"], 24000);
+        assert_eq!(start["session"]["store"], false);
+        send(
+            &mut socket,
+            json!({"type":"session.started","session":{"id":"live-1","model":"gpt-live-1"}}),
+        )
+        .await;
+        let audio = read(&mut socket).await;
+        assert_eq!(audio["type"], "session.input_audio.append");
+        assert_eq!(audio["audio"], "AQACAA==");
+        send(
+            &mut socket,
+            json!({"type":"session.output_audio.delta","delta":"AQACAA=="}),
+        )
+        .await;
+        send(&mut socket, json!({"type":"session.input_transcript.delta","delta":"run tests","start_ms":0,"end_ms":100})).await;
+        send(&mut socket, json!({"type":"session.delegation.created","delegation":{"id":"delegate-1","target":"client"},"offset_ms":100})).await;
+        let reply = read(&mut socket).await;
+        assert_eq!(reply["type"], "session.commentary.append");
+        assert_eq!(reply["delegation_id"], "delegate-1");
+        assert_eq!(reply["content"], "Tests passed");
+        assert_eq!(read(&mut socket).await["type"], "session.close");
+        send(
+            &mut socket,
+            json!({"type":"session.usage.updated","usage":{"seconds":1.5}}),
+        )
+        .await;
+        send(&mut socket, json!({"type":"session.closed","session":{"id":"live-1"},"reason":"close_requested","usage":{"seconds":2.0}})).await;
+        assert!(socket.next().await.unwrap().unwrap().is_close());
+    });
+    let cancel = CancellationSource::new().token();
+    let mut session = LiveSession::connect(
+        &connector(),
+        &target,
+        "gpt-live-1",
+        &LiveConfig {
+            instructions: String::new(),
+            voice: "marin".into(),
+        },
+        limits(),
+        &cancel,
+    )
+    .await
+    .unwrap();
+    assert!(
+        session
+            .send(LiveCommand::AppendAudio { pcm16: vec![1] }, &cancel)
+            .await
+            .is_err()
+    );
+    assert!(session.is_open());
+    session
+        .send(
+            LiveCommand::AppendAudio {
+                pcm16: vec![1, 0, 2, 0],
+            },
+            &cancel,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        session.receive(&cancel).await.unwrap(),
+        LiveEvent::Audio {
+            pcm16: vec![1, 0, 2, 0]
+        }
+    );
+    assert!(matches!(
+        session.receive(&cancel).await.unwrap(),
+        LiveEvent::InputTranscript {
+            start_ms: 0,
+            end_ms: 100,
+            ..
+        }
+    ));
+    assert_eq!(
+        session.receive(&cancel).await.unwrap(),
+        LiveEvent::Delegation {
+            id: "delegate-1".into(),
+            offset_ms: 100
+        }
+    );
+    session
+        .send(
+            LiveCommand::Commentary {
+                delegation_id: "delegate-1".into(),
+                content: "Tests passed".into(),
+            },
+            &cancel,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        session.close(&cancel).await.unwrap(),
+        LiveEvent::Closed {
+            reason: "close_requested".into(),
+            seconds: 2.0
+        }
+    );
+    assert!(!session.is_open());
+    server.await.unwrap();
+}
 fn connector() -> WebSocketConnector {
     WebSocketConnector::new(
         OutboundNetworkSnapshot::new(

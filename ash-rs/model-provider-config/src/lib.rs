@@ -56,4 +56,5 @@ pub fn provider_definition_schema() -> Schema {
 #[path = "config_tests.rs"]
 mod tests;
 
+pub use definition::LiveApiProfile;
 pub use definition::RealtimeApiProfile;

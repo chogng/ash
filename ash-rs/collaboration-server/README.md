@@ -1,10 +1,42 @@
 # ash-collaboration-server
 
-`ash-collaboration-server` is the small remote product host for durable Document Engine
-collaboration. It owns bearer authentication, browser-origin policy, HTTP
-framing, long-poll delivery, connection limits, and SQLite lifecycle. Ordered
-room semantics remain in [`ash-collaboration`](../collaboration/README.md).
-It has no App Server, workspace, tool, terminal, or session authority.
+- Hosts durable document collaboration and call membership APIs.
+- Owns bearer authentication, browser-origin policy, HTTP framing, connection limits and SQLite lifecycle.
+- Delegates document ordering to [`ash-collaboration`](../collaboration/README.md) and call authority to [`call`](../call/README.md).
+- Manages configured LiveKit rooms through [`livekit-api`](../livekit-api/README.md).
+- Has no App Server, workspace, tool, terminal or model execution authority.
+
+## Call media deployment
+
+Configure all four variables on the collaboration host to enable call APIs:
+
+| Variable | Meaning |
+| --- | --- |
+| `ASH_LIVEKIT_SERVER_URL` | Client-facing `wss://` endpoint, including a custom port when needed |
+| `ASH_LIVEKIT_API_URL` | Host-facing `https://` administrative endpoint |
+| `ASH_LIVEKIT_API_KEY` | Deployment API key identifier |
+| `ASH_LIVEKIT_API_SECRET` | Deployment signing secret, at least 32 bytes |
+
+Loopback development endpoints may use `ws://` and `http://`. These addresses configure LiveKit signaling and administration; public ICE/UDP/TCP/TURN reachability remains part of the user's LiveKit deployment. A signaling port alone is not sufficient to configure a public media service.
+
+Call requests use the existing origin policy and `Cache-Control: no-store`. Creation requires the deployment bearer; other operations require a call member credential. The caller generates and retains each 256-bit hexadecimal member credential before submitting it, so an interrupted request can be retried without issuing a second credential. Persisted credentials are hashed.
+
+| Method/path | JSON request |
+| --- | --- |
+| `POST /v1/calls/create` | `operationId`, `ownerCredential` |
+| `GET /v1/calls/read` | No body |
+| `POST /v1/calls/invite` | `operationId`, `revision`, `memberCredential`, `role` |
+| `POST /v1/calls/role` | `operationId`, `revision`, `memberId`, `role` |
+| `POST /v1/calls/remove` | `operationId`, `revision`, `memberId` |
+| `POST /v1/calls/end` | `operationId`, `revision` |
+| `POST /v1/calls/join` | `deviceId` |
+| `POST /v1/calls/device` | `operationId`, `revision`, `deviceId` |
+
+Mutations and reads return the current call snapshot. Join returns `call`, `member`, `microphone`, `participantId`, `serverUrl`, `participantToken` and `expiresAt` (Unix seconds). Only the member's selected device receives microphone permission; its first speaking-device join selects it atomically. The member can explicitly select another device, which replaces the media room. The member credential authorizes the call API; `participantToken` authorizes only the specified LiveKit room. Creation/invitation retries must reuse the same credential and operation ID; changing parameters under the same operation ID is a conflict. Roles are `owner`, `speaker`, `listener`, `agent`; invitation cannot create another owner, and role changes only switch human speakers/listeners.
+
+Errors contain `error.code` and `error.message`: `invalidInput` (400), `accessDenied` (403), `revisionConflict`/`mediaNotReady` (409), `storageFailure` (500), or `mediaUnavailable` (503). Missing bearer authentication returns 401 through the shared HTTP boundary.
+
+Permission changes replace the media room before new tickets are issued. Pending operations survive restart. The current call coordinator serializes operations within one host process; multi-host media-operation ownership is not implemented. Call notifications, local server process management and product UI are also not implemented. See the [full design and acceptance status](../docs/design/collaboration-media.md).
 
 ## Running one host
 

@@ -31,6 +31,21 @@ fn run_from_environment() -> Result<(), Box<dyn std::error::Error>> {
             options = options.with_allowed_origin(origin);
         }
     }
+    if let Ok(server_url) = env::var("ASH_LIVEKIT_SERVER_URL") {
+        let api_url = env::var("ASH_LIVEKIT_API_URL")
+            .map_err(|_| "ASH_LIVEKIT_API_URL is required with media")?;
+        let api_key = env::var("ASH_LIVEKIT_API_KEY")
+            .map_err(|_| "ASH_LIVEKIT_API_KEY is required with media")?;
+        let secret = env::var("ASH_LIVEKIT_API_SECRET")
+            .map_err(|_| "ASH_LIVEKIT_API_SECRET is required with media")?;
+        let service = livekit_api::MediaService::new(
+            &server_url,
+            &api_url,
+            api_key,
+            ash_secrets::SecretValue::new(secret.into_bytes()),
+        )?;
+        options = options.with_media_service(service);
+    }
     run(options)?;
     Ok(())
 }
