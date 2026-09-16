@@ -295,4 +295,25 @@ export interface ITokenizationRegistry<TSupport> {
 	getDefaultBackground(): Color | null;
 }
 
-export const TokenizationRegistry: ITokenizationRegistry<unknown> = new TokenizationRegistryImpl();
+export interface IState {
+	clone(): IState;
+	equals(other: IState): boolean;
+}
+
+export interface Token {
+	readonly offset: number;
+	readonly type: string;
+	readonly language: string;
+}
+
+export interface TokenizationResult {
+	readonly tokens: readonly Token[];
+	readonly endState: IState;
+}
+
+export interface ITokenizationSupport {
+	getInitialState(): IState;
+	tokenize(line: string, hasEOL: boolean, state: IState): TokenizationResult;
+}
+
+export const TokenizationRegistry: ITokenizationRegistry<ITokenizationSupport> = new TokenizationRegistryImpl();

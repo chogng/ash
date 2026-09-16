@@ -143,11 +143,9 @@
 | `browser/services/contribution.ts` | 3 / 6 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
 | `browser/services/editorWorkerService.ts` | 8 / 3 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
 | `browser/services/inlineCompletionsService.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
-| `browser/services/languageCompletionWorkerMain.ts` | 1 / 0 | 人工检查：已通读入口、公开数据和同步状态变化；未发现本轮可复现缺陷。 |
 | `browser/services/markerDecorations.ts` | 1 / 0 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
 | `browser/services/openerService.ts` | 1 / 1 | 人工追踪：外部 URI 解析结果释放缺失；现有装配创建实例，实际 open 调用链待确认。 |
 | `browser/services/renameSymbolTrackerService.ts` | 1 / 1 | 人工检查：已通读入口、公开数据和同步状态变化；未发现本轮可复现缺陷。 |
-| `browser/services/syntaxWorkerMain.ts` | 1 / 0 | 人工检查：配置、registry、模块 host、wire server 在 worker scope 中统一释放。 |
 | `browser/stableEditorScroll.ts` | 2 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
 | `browser/triggerInlineEditCommandsRegistry.ts` | 2 / 2 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
 | `browser/view.ts` | 38 / 6 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
@@ -917,3 +915,5 @@
 - 浏览器 contribution 注册收敛：移除 `createEditorBrowserServices`、`EditorBrowserServices` 和空的 `registerEditorBrowserContributions`。`contribution.ts` 现在在 bundle 装载时注册 eager 诊断装饰；Widget 不再单独创建同一 contribution。每实例诊断源仍作为构造数据传入，必需的 marker 服务由宿主容器解析，模型切换沿 contribution 生命周期释放引用。
 - Standalone 直接注册并取得宿主 code-editor 服务，直接装配通用编辑与词法 Worker。原工厂中的 Opener、重命名跟踪实例及单词补全工厂闭包没有生产消费者，已移除创建逻辑；单词补全入口文件保留，未宣称它已接入默认产品调用链。Opener 和资源级 Worker 的完整契约仍未完成，不新增无调用方服务外壳。
 - 本批验证：73 项定向单测、5 项 Playwright 场景、Stanza 与 Renderer 生产构建通过。覆盖共享 marker 引用、模型释放、诊断源合并、标记出现/清除、模型切换、格式化和相关编辑器行为。没有新增测试文件，现有行为测试覆盖本次装配迁移；JSDOM Canvas 和 Playwright 颜色环境提示仍存在，生产构建没有新增 warning。
+
+2026-09-15：用户确认删除 `browser/services/syntaxWorkerMain.ts` 和 `browser/services/languageCompletionWorkerMain.ts`。Standalone 词法着色使用 TokenizationRegistry；模型诊断由 ModelLanguageDiagnostics 独立调度；单词补全使用通用 Editor Worker。TextMate Worker 仍由 Workbench 创建。

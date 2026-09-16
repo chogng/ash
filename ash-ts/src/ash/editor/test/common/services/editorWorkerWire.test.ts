@@ -1,3 +1,6 @@
+import { LanguageCompletionTriggerKind, LanguageCompletionProviderRegistry } from '../../../common/languages/completion/languageCompletionProviders.js';
+import { LanguageCompletionService } from '../../../common/languages/completion/languageCompletionService.js';
+import { WordBasedCompletionItemProvider } from '../../../browser/services/editorWorkerService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Emitter, type Event } from '../../../../base/common/event.js';
@@ -99,4 +102,22 @@ test('formatting can run again after an overlapping response fails across the wo
 	const edits = await client.computeMoreMinimalEdits([{ range: model.getFullModelRange(), text: 'ALPHA' }]);
 	assert.deepEqual(edits, [{ range: model.getFullModelRange(), text: 'ALPHA' }]);
 	assert.equal(starts, 2);
+});
+
+
+test('word completion shares the general editor worker and retains dynamic providers', async () => {
+	using model = new TextModel('alpha alphabet\nal', { languageId: 'typescript' });
+	const [clientPort, serverPort] = createPortPair();
+	using server = new LanguageWorkerWireServer(serverPort, editorWorkerWireCodec, new EditorWorkerRequestExecutor());
+	using client = new VersionedEditorWorkerClient(model, () => new LanguageWorkerWireClient(clientPort, editorWorkerWireCodec));
+	using registry = new LanguageCompletionProviderRegistry();
+	using completions = new LanguageCompletionService(model, registry, { providers: [new WordBasedCompletionItemProvider(client)] });
+	await completions.request('typescript', new Position(2, 3), { kind: LanguageCompletionTriggerKind.Invoke });
+	assert.deepEqual(completions.results.result?.value.items.map(item => item.label), ['alpha', 'alphabet']);
+	using provider = registry.register({ id: 'test.dynamic', languageIds: ['typescript'], provideCompletions: () => undefined });
+	assert.deepEqual(completions.providerCatalog.providers.map(provider => provider.id), ['language.word', 'test.dynamic']);
+	model.setValue('alpine\nal');
+	await completions.request('typescript', new Position(2, 3), { kind: LanguageCompletionTriggerKind.Invoke });
+	assert.deepEqual(completions.results.result?.value.items.map(item => item.label), ['alpine']);
+	assert.ok(clientPort.sentMessages.some(message => message.kind === 'sync'));
 });

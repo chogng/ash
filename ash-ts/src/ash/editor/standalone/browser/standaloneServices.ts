@@ -1,3 +1,5 @@
+import { TokenizationRegistry } from '../../common/languages.js';
+import { createLanguageLexicalTokenizationSupport } from '../../common/languages/languageLexicalSyntaxProvider.js';
 import { StandaloneCodeEditorService } from './standaloneCodeEditorService.js';
 import { IInlineCompletionsService, InlineCompletionsService } from '../../browser/services/inlineCompletionsService.js';
 import { MarkerService, IMarkerService } from '../../../platform/markers/common/markers.js';
@@ -8,13 +10,11 @@ import { ServiceContainer } from "../../../platform/instantiation/common/instant
 import { IThemeService } from "../../../platform/theme/common/themeService.js";
 import { ConfigurationTarget, IConfigurationService, isConfigurationUpdateOverrides, type IConfigurationChangeEvent, type IConfigurationData, type IConfigurationOverrides, type IConfigurationUpdateOptions, type IConfigurationUpdateOverrides, type IConfigurationValue } from '../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
-import { BrowserWorkerClientPort } from '../../../platform/webWorker/browser/browserWorkerClientPort.js';
-import { SyntaxModuleWorkerClient } from '../../common/languages/syntax/syntaxModuleWorkerClient.js';
 import { ICodeEditorService, type ICodeEditorService as ICodeEditorServiceContract } from '../../browser/services/codeEditorService.js';
 import { type LanguageCompletionWorkerFactory } from "../../common/languages/completion/languageCompletionService.js";
 import { type SyntaxWorkerFactory } from "../../common/languages/syntax/syntaxService.js";
 import { VersionedEditorWorkerClient, type VersionedEditorWorkerFactory } from "../../browser/services/editorWorkerService.js";
-import { registerBuiltinLanguageConfigurations } from "../../common/languages/languageBuiltinConfigurations.js";
+import { BUILTIN_LANGUAGE_IDS, registerBuiltinLanguageConfigurations } from "../../common/languages/languageBuiltinConfigurations.js";
 import { registerBuiltinLanguageDescriptions } from "../../common/languages/languageBuiltinDescriptions.js";
 import { ILanguageFeaturesService } from '../../common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../common/services/languageFeaturesService.js';
@@ -53,7 +53,7 @@ export class StandaloneServiceCollection extends Disposable {
 	readonly languageConfigurationService: ILanguageConfigurationService;
 	readonly languageFeaturesService: ILanguageFeaturesService;
 	readonly themeService: INamedEditorThemeService;
-	readonly syntaxWorkerFactory: SyntaxWorkerFactory;
+	readonly syntaxWorkerFactory: SyntaxWorkerFactory | undefined;
 	readonly editorWorkerFactory: VersionedEditorWorkerFactory;
 	readonly completionWorkerFactory: LanguageCompletionWorkerFactory | undefined;
 	readonly codeEditorService: ICodeEditorServiceContract;
@@ -70,10 +70,7 @@ export class StandaloneServiceCollection extends Disposable {
 		instantiationService.registerSingleton(ICodeEditorService, () => instantiationService.createInstance(StandaloneCodeEditorService));
 		this.codeEditorService = instantiationService.get(ICodeEditorService);
 		this.editorWorkerFactory = overrides.editorWorkerFactory ?? (model => new VersionedEditorWorkerClient(model));
-		this.syntaxWorkerFactory = overrides.syntaxWorkerFactory ?? (() => new SyntaxModuleWorkerClient(
-			new BrowserWorkerClientPort(new Worker(new URL('../../browser/services/syntaxWorkerMain.ts', import.meta.url), { type: 'module', name: 'ash-syntax' })),
-			{ requiredProviderModules: ['language.lexical'] },
-		));
+		this.syntaxWorkerFactory = overrides.syntaxWorkerFactory;
 		this.completionWorkerFactory = overrides.completionWorkerFactory;
 		const configurationService = this._register(new StandaloneConfigurationService());
 		instantiationService.registerInstance(IConfigurationService, configurationService);
@@ -104,6 +101,12 @@ export class StandaloneServiceCollection extends Disposable {
 		this.languageFeaturesService = instantiationService.get(ILanguageFeaturesService);
 		if (!overrides.languageService) this._register(registerBuiltinLanguageDescriptions(this.languageService.languages));
 		if (!overrides.languageConfigurationService) this._register(registerBuiltinLanguageConfigurations(this.languageConfigurationService));
+		if (!this.syntaxWorkerFactory) {
+			for (const languageId of BUILTIN_LANGUAGE_IDS) {
+				this._register(TokenizationRegistry.register(languageId, createLanguageLexicalTokenizationSupport(languageId, this.languageConfigurationService)));
+			}
+			this._register(this.languageConfigurationService.onDidChange(() => TokenizationRegistry.handleChange([...BUILTIN_LANGUAGE_IDS])));
+		}
 		this._register(FormattingConflicts.setFormatterSelector(async formatters => formatters[0]));
 	}
 }

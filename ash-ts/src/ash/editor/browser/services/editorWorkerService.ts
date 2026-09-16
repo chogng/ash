@@ -1,3 +1,5 @@
+import { type LanguageCompletionRequest, type LanguageCompletionProvider } from '../../common/languages/completion/languageCompletionProviders.js';
+import { type LanguageCompletionResult } from '../../common/languages/completion/languageCompletions.js';
 import { BrowserWorkerClientPort } from '../../../platform/webWorker/browser/browserWorkerClientPort.js';
 import { LanguageWorkerWireClient } from '../../common/languages/languageWorkerWire.js';
 import { editorWorkerWireCodec } from '../../common/services/editorWorkerWire.js';
@@ -8,6 +10,7 @@ import { LanguageRequestCoordinator, LanguageRequestStatus } from '../../common/
 import { type IInplaceReplaceSupportResult, type TextEdit } from '../../common/languages.js';
 import { type TextModel } from '../../common/model/textModel.js';
 import {
+	EDITOR_WORKER_TEXTUAL_SUGGEST_LANE,
 	EDITOR_WORKER_MINIMAL_EDITS_LANE,
 	EDITOR_WORKER_NAVIGATE_VALUE_LANE,
 	EDITOR_WORKER_UNICODE_HIGHLIGHTS_LANE,
@@ -23,6 +26,7 @@ export type VersionedEditorWorkerFactory = (model: TextModel) => IVersionedEdito
 export const IVersionedEditorWorkerClient = createServiceIdentifier<IVersionedEditorWorkerClient>('versionedEditorWorkerClient');
 
 export interface IVersionedEditorWorkerClient extends IDisposable {
+	textualSuggest(request: LanguageCompletionRequest, signal?: AbortSignal): Promise<LanguageCompletionResult | undefined>;
 	computeUnicodeHighlights(signal?: AbortSignal): Promise<readonly UnicodeHighlight[] | undefined>;
 	computeMoreMinimalEdits(edits: readonly TextEdit[], signal?: AbortSignal): Promise<readonly TextEdit[] | undefined>;
 	navigateValueSet(range: Range, up: boolean, wordDefinition: RegExp, signal?: AbortSignal): Promise<IInplaceReplaceSupportResult | undefined>;
@@ -38,6 +42,10 @@ export class VersionedEditorWorkerClient extends Disposable implements IVersione
 	)) {
 		super();
 		this.coordinator = this._register(new LanguageRequestCoordinator(model, createWorker));
+	}
+
+	textualSuggest(request: LanguageCompletionRequest, signal?: AbortSignal): Promise<LanguageCompletionResult | undefined> {
+		return this.run(EDITOR_WORKER_TEXTUAL_SUGGEST_LANE, request, signal) as Promise<LanguageCompletionResult | undefined>;
 	}
 
 	computeUnicodeHighlights(signal?: AbortSignal): Promise<readonly UnicodeHighlight[] | undefined> {
@@ -58,5 +66,16 @@ export class VersionedEditorWorkerClient extends Disposable implements IVersione
 			value = result.value;
 		}, signal ? { signal } : {});
 		return outcome.status === LanguageRequestStatus.Applied ? value : undefined;
+	}
+}
+
+export class WordBasedCompletionItemProvider implements LanguageCompletionProvider {
+	readonly id = 'language.word';
+	readonly languageIds = ['*'];
+
+	constructor(private readonly worker: IVersionedEditorWorkerClient) {}
+
+	provideCompletions(request: LanguageCompletionRequest, signal: AbortSignal): Promise<LanguageCompletionResult | undefined> {
+		return this.worker.textualSuggest(request, signal);
 	}
 }

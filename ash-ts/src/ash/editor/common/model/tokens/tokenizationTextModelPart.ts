@@ -4,7 +4,7 @@ import { Position } from '../../core/position.js';
 import { type Range } from '../../core/range.js';
 import { countEOL } from '../../core/misc/eolCounter.js';
 import { ColorId, FontStyle, LanguageId, MetadataConsts, StandardTokenType } from '../../encodedTokenAttributes.js';
-import { type ILanguageIdCodec } from '../../languages.js';
+import { TokenizationRegistry, type ILanguageIdCodec } from '../../languages.js';
 import { type LanguageSemanticTokensProvider } from '../../languages.js';
 import { type LanguageFeatureRegistry } from '../../languageFeatureRegistry.js';
 import { type LanguageTokenizationSource } from '../../languages/languageLexicalContext.js';
@@ -41,7 +41,7 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 
 	readonly onDidChange: Event<void> = this.changeEmitter.event;
 	readonly onDidEncounterError: Event<unknown> = this.errorEmitter.event;
-	readonly syntaxService: SyntaxService;
+	private readonly syntaxService: SyntaxService;
 	readonly semanticTokens: SemanticTokensTextModelPart | undefined;
 	readonly languageTokens: LanguageTokenizationSource & SemanticTokenModelSource;
 
@@ -87,21 +87,21 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 			this.languageIdCodec.encodeLanguageId(textModel.getLanguageId());
 			this.semanticTokensStore.flush();
 			this.syntaxService.tokens.clear();
-			this.syntaxService.diagnostics.clear();
 			this.changeEmitter.fire();
 			this.scheduleAnalysis();
 		}));
 		this._register(this.syntaxProviderRegistry.onDidChange(() => {
 			this.syntaxService.restartWorker();
 			this.syntaxService.tokens.clear();
-			this.syntaxService.diagnostics.clear();
 			this.scheduleAnalysis();
 		}));
 		if (options.onDidChangeLanguageSupport) this._register(options.onDidChangeLanguageSupport(() => {
 			this.syntaxService.restartWorker();
 			this.syntaxService.tokens.clear();
-			this.syntaxService.diagnostics.clear();
 			this.scheduleAnalysis();
+		}));
+		this._register(TokenizationRegistry.onDidChange(event => {
+			if (event.changedLanguages.includes(textModel.getLanguageId())) this.resetTokenization();
 		}));
 		this.scheduleAnalysis();
 	}
@@ -221,24 +221,27 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 	}
 
 	private hasTokenProvider(): boolean {
-		return !this.textModel.largeFile.tooLargeForTokenization
-			&& (this.hasWorkerProvider || this.syntaxProviderRegistry.getTokenProviders(this.textModel.getLanguageId()).length > 0);
+		const languageId = this.textModel.getLanguageId();
+		return !this.textModel.largeFile.tooLargeForTokenization && (
+			this.hasWorkerProvider
+			|| TokenizationRegistry.get(languageId) !== null
+			|| !TokenizationRegistry.isResolved(languageId)
+			|| this.syntaxProviderRegistry.getTokenProviders(languageId).length > 0
+		);
 	}
 
 	private scheduleAnalysis(): void {
 		const generation = ++this.requestGeneration;
 		if (this.textModel.largeFile.tooLargeForTokenization) return;
 		const languageId = this.textModel.getLanguageId();
-		const hasTokens = this.hasWorkerProvider || this.syntaxProviderRegistry.getTokenProviders(languageId).length > 0;
-		const hasDiagnostics = this.hasWorkerProvider || this.syntaxProviderRegistry.getDiagnosticProviders(languageId).length > 0;
-		if (!hasTokens && !hasDiagnostics) return;
+		if (!this.hasTokenProvider()) return;
 		queueMicrotask(() => void this.requestAnalysis(generation, languageId));
 	}
 
 	private async requestAnalysis(generation: number, languageId: string): Promise<void> {
 		try {
 			if (this.isDisposed || generation !== this.requestGeneration || languageId !== this.textModel.getLanguageId()) return;
-			await this.syntaxService.requestAll(languageId);
+			await this.syntaxService.requestTokens(languageId);
 		} catch (error) {
 			if (this.isDisposed || generation !== this.requestGeneration || isCancellation(error)) return;
 			this.errorEmitter.fire(error);

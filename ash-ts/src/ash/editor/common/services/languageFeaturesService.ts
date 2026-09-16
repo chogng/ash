@@ -3,7 +3,6 @@ import { Disposable, toDisposable, type IDisposable } from '../../../base/common
 import { LanguageFeatureRegistry, type NotebookInfo, type NotebookInfoResolver } from '../languageFeatureRegistry.js';
 import { type URI } from '../../../base/common/uri.js';
 import { LanguageCompletionProviderRegistry, type LanguageCompletionProviderRegistration } from '../languages/completion/languageCompletionProviders.js';
-import { createLanguageWordCompletionProvider } from '../languages/completion/languageWordCompletionProvider.js';
 import type { CodeLensProvider, DocumentHighlightProvider, LinkedEditingRangeProvider, MultiDocumentHighlightProvider, DocumentFormattingEditProvider, DocumentRangeFormattingEditProvider, OnTypeFormattingEditProvider, LanguageSemanticTokensProvider } from '../languages.js';
 import { createLanguageLexicalSyntaxProvider } from '../languages/languageLexicalSyntaxProvider.js';
 import type { ILanguageConfigurationService } from '../languages/languageConfigurationRegistry.js';
@@ -63,7 +62,6 @@ export class LanguageFeaturesService extends Disposable implements ILanguageFeat
 		this.syntaxProvider = this._register(new SyntaxProviderRegistry());
 		this._register(this.syntaxProvider.register(createLanguageLexicalSyntaxProvider({ languageConfigurations })));
 		this.completionProvider = this._register(new LanguageCompletionProviderRegistry());
-		this._register(this.completionProvider.register(createLanguageWordCompletionProvider()));
 		this.codeActionProvider = new LanguageFeatureRegistry(this._score.bind(this));
 		this.codeLensProvider = new LanguageFeatureRegistry(this._score.bind(this));
 		this.documentSymbolProvider = new LanguageFeatureRegistry(this._score.bind(this));

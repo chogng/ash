@@ -2028,3 +2028,22 @@ test('inline completion snooze is shared and survives closing another editor', a
 		resumed: true,
 	});
 });
+
+
+test('standalone tokenizer and diagnostics work while word suggestions share the editor worker', async ({ page }) => {
+	const workers: string[] = [];
+	page.on('worker', worker => workers.push(worker.url()));
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareLanguageWorkers());
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageWorkers())).toEqual({
+		tokens: ['keyword', 'variable', 'operator', 'number'],
+		diagnostics: ["Unclosed bracket '('"],
+		current: true,
+	});
+	await page.keyboard.press('Control+Space');
+	await expect(page.locator('#caller .stanza-editor-completion-option')).toHaveCount(2);
+	await expect(page.locator('#caller .stanza-editor-completion-option')).toContainText(['alpha', 'alphabet']);
+	expect(workers.some(url => url.includes('editorWebWorkerMain'))).toBe(true);
+	expect(workers.some(url => /syntaxWorkerMain|languageCompletionWorkerMain/.test(url))).toBe(false);
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});

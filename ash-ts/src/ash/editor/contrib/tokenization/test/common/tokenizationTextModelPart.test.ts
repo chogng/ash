@@ -1,3 +1,5 @@
+import { TokenizationRegistry, type IState } from '../../../../common/languages.js';
+import { LanguageDiagnosticSeverity } from '../../../../common/languages/languageResults.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { TextModel } from "../../../../common/model/textModel.js";
@@ -193,3 +195,54 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 	}
 	assert.fail('Timed out waiting for tokenization');
 }
+
+
+test('registered line tokenizers refresh existing models without clearing diagnostics', async () => {
+	using providers = new SyntaxProviderRegistry();
+	using diagnostic = providers.register({
+		id: 'test.diagnostic', languageIds: ['registry-test'],
+		provideDiagnostics: () => ({ diagnostics: [{ range: new Range(1, 1, 1, 2), severity: LanguageDiagnosticSeverity.Warning, message: 'problem' }] }),
+	});
+	using model = new TextModel('alpha\nbeta', { languageId: 'registry-test', tokenization: { syntaxProviderRegistry: providers } });
+	await waitFor(() => model.diagnostics.results.result !== undefined);
+	const result = model.diagnostics.results.result;
+	const state: IState = { clone() { return this; }, equals(other) { return other === this; } };
+	const first = TokenizationRegistry.register('registry-test', {
+		getInitialState: () => state,
+		tokenize: () => ({ tokens: [{ offset: 0, type: 'comment', language: 'registry-test' }], endState: state }),
+	});
+	try {
+		await waitFor(() => model.tokenization.hasAccurateTokensForLine(2));
+		assert.equal(model.tokenization.getLineTokens(2).getStandardTokenType(0), StandardTokenType.Comment);
+		model.tokenization.resetTokenization();
+		assert.equal(model.diagnostics.results.result, result);
+		await waitFor(() => model.tokenization.hasAccurateTokensForLine(2));
+	} finally {
+		first.dispose();
+	}
+	assert.equal(model.tokenization.getLineTokens(1).getStandardTokenType(0), StandardTokenType.Other);
+	assert.equal(model.diagnostics.results.result, result);
+	model.setValue('changed');
+	assert.equal(model.diagnostics.results.result, undefined);
+	await waitFor(() => model.diagnostics.results.result?.modelVersion === model.version);
+});
+
+
+test('line tokenization reuses unchanged lines after a model edit', async () => {
+	let scanned = 0;
+	const state: IState = { clone() { return this; }, equals(other) { return other === this; } };
+	using support = TokenizationRegistry.register('incremental-test', {
+		getInitialState: () => state,
+		tokenize: () => {
+			scanned++;
+			return { tokens: [{ offset: 0, type: 'comment', language: 'incremental-test' }], endState: state };
+		},
+	});
+	using model = new TextModel('first\nsecond\nthird', { languageId: 'incremental-test' });
+	await waitFor(() => model.tokenization.hasAccurateTokensForLine(3));
+	assert.equal(scanned, 3);
+	model.applyEdits([{ range: new Range(2, 1, 2, 7), text: 'changed' }]);
+	await waitFor(() => model.tokenization.hasAccurateTokensForLine(3));
+	assert.equal(scanned, 4);
+	assert.equal(model.tokenization.getLineTokens(2).getLineContent(), 'changed');
+});

@@ -187,8 +187,6 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/services/editorWorkerService.ts",
 		"browser/services/inlineCompletionsService.ts",
 		"browser/services/markerDecorations.ts",
-		"browser/services/syntaxWorkerMain.ts",
-		"browser/services/languageCompletionWorkerMain.ts",
 		"common/core/position.ts",
 		"common/config/diffEditor.ts",
 		"common/config/editorConfigurationSchema.ts",
@@ -502,8 +500,6 @@ test('Editor production files are entrypoints or have a production caller', () =
 	const explicitEntrypoints = new Set([
 		resolve(editorRoot, 'editor.main.ts'),
 		resolve(editorRoot, 'common/services/editorWebWorkerMain.ts'),
-		resolve(editorRoot, 'browser/services/languageCompletionWorkerMain.ts'),
-		resolve(editorRoot, 'browser/services/syntaxWorkerMain.ts'),
 	].map(architecturePathKey));
 	const unreferenced = editorProductionFiles.filter(file => {
 		const key = architecturePathKey(file);

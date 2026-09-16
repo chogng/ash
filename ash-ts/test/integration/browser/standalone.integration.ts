@@ -85,6 +85,9 @@ interface ViewZoneState {
 }
 
 interface StandaloneHarness {
+	prepareLanguageWorkers(): void;
+	readLanguageWorkers(): { tokens: string[]; diagnostics: string[]; current: boolean };
+
 	runSharedInlineSnooze(): Promise<{ shared: boolean; visibleBefore: number; visibleAfter: number; callsWhilePaused: number; pausedAfterDispose: boolean; resumed: boolean }>;
 	runEmptyWordPattern(): { word: string; startColumn: number; endColumn: number } | null;
 	runDisposedLanguageRequest(kind: 'codeAction' | 'rename' | 'parameterHints' | 'queuedParameterHints'): Promise<{ calls: number; aborted: boolean }>;
@@ -314,6 +317,20 @@ let deferredFormatting: { token: CancellationToken; resolve: () => void }[] = []
 let formattingProvider: { dispose(): void } | undefined;
 
 window.ashStandaloneIntegration = {
+	prepareLanguageWorkers: () => {
+		callerModel.setLanguage('typescript');
+		callerEditor.setValue('const alphabet = 1;\nconst alpha = (\nal');
+		callerEditor.setPosition(new stanza.Position(3, 3));
+		callerEditor.focus();
+	},
+	readLanguageWorkers: () => {
+		if (!(callerModel instanceof stanza.TextModel)) throw new Error('Expected the standalone text model');
+		return {
+			tokens: callerModel.tokenization.getLanguageTokens(0).map(token => token.tokenType),
+			diagnostics: callerModel.diagnostics.results.result?.value.diagnostics.map(diagnostic => diagnostic.message) ?? [],
+			current: callerModel.tokenization.modelVersion === callerModel.version,
+		};
+	},
 	runSharedInlineSnooze: async () => {
 		const service = callerEditor.invokeWithinContext(accessor => accessor.get(IInlineCompletionsService));
 		const other = ownedEditor.invokeWithinContext(accessor => accessor.get(IInlineCompletionsService));

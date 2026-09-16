@@ -1,3 +1,4 @@
+import { WordBasedCompletionItemProvider } from '../../../browser/services/editorWorkerService.js';
 import { registerEditorContribution } from '../../../browser/editorExtensions.js';
 import { type ICodeEditorWidgetOptions } from '../../../browser/widget/codeEditor/codeEditorWidget.js';
 import { isCompletionsEnabledFromObject } from '../../../common/services/completionsEnablement.js';
@@ -312,6 +313,7 @@ registerEditorContribution({
 		if (context.options.suggestions !== undefined && !isCompletionsEnabledFromObject(context.options.suggestions, context.languageId)) return;
 		const completions = context.register(new LanguageCompletionService(context.model, context.languageFeaturesService.completionProvider, {
 			resource: context.options.input.resource,
+			providers: [new WordBasedCompletionItemProvider(context.editorWorker)],
 			...(context.options.completionWorkerFactory ? { workerFactory: context.options.completionWorkerFactory } : {}),
 		}));
 		const session = context.register(new SuggestModel(completions.results, context.editor, {
