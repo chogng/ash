@@ -26,6 +26,15 @@ import type { AutomationRunsParams } from './types/AutomationRunsParams.js';
 import type { AutomationRunsResult } from './types/AutomationRunsResult.js';
 import type { AutomationStopParams } from './types/AutomationStopParams.js';
 import type { AutomationWriteParams } from './types/AutomationWriteParams.js';
+import type { CallControlParams } from './types/CallControlParams.js';
+import type { CallEndParams } from './types/CallEndParams.js';
+import type { CallInvitation } from './types/CallInvitation.js';
+import type { CallInviteParams } from './types/CallInviteParams.js';
+import type { CallMemberParams } from './types/CallMemberParams.js';
+import type { CallResourceParams } from './types/CallResourceParams.js';
+import type { CallRoleParams } from './types/CallRoleParams.js';
+import type { CallStartParams } from './types/CallStartParams.js';
+import type { CallStatus } from './types/CallStatus.js';
 import type { CloudCodebaseAuthorizeParams } from './types/CloudCodebaseAuthorizeParams.js';
 import type { CloudCodebasePreviewParams } from './types/CloudCodebasePreviewParams.js';
 import type { CloudCodebasePreviewResult } from './types/CloudCodebasePreviewResult.js';
@@ -414,6 +423,14 @@ export interface AppServerRequestMap {
   "config/dirPermissions/list": { params: Record<string, never>; response: DirPermissionsListResult };
   "config/dirPermissions/set": { params: DirPermissionsSetParams; response: ConfigCommandResult };
   "config/dirPermissions/forget": { params: DirPermissionsForgetParams; response: ConfigCommandResult };
+  "call/start": { params: CallStartParams; response: CallStatus };
+  "call/read": { params: CallResourceParams; response: CallStatus };
+  "call/control": { params: CallControlParams; response: CallStatus };
+  "call/leave": { params: CallResourceParams; response: CallStatus };
+  "call/end": { params: CallEndParams; response: CallStatus };
+  "call/invite": { params: CallInviteParams; response: CallInvitation };
+  "call/remove": { params: CallMemberParams; response: CallStatus };
+  "call/role": { params: CallRoleParams; response: CallStatus };
   "document/collaboration/open": { params: DocumentCollaborationOpenParams; response: DocumentCollaborationOpenResult };
   "document/collaboration/submit": { params: DocumentCollaborationSubmitParams; response: DocumentCollaborationSubmitResult };
   "document/collaboration/presence/publish": { params: DocumentCollaborationPresenceParams; response: DocumentCollaborationPresenceSnapshot };
@@ -684,6 +701,14 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "config/dirPermissions/list": { method: "config/dirPermissions/list" },
   "config/dirPermissions/set": { method: "config/dirPermissions/set" },
   "config/dirPermissions/forget": { method: "config/dirPermissions/forget" },
+  "call/start": { method: "call/start" },
+  "call/read": { method: "call/read" },
+  "call/control": { method: "call/control" },
+  "call/leave": { method: "call/leave" },
+  "call/end": { method: "call/end" },
+  "call/invite": { method: "call/invite" },
+  "call/remove": { method: "call/remove" },
+  "call/role": { method: "call/role" },
   "document/collaboration/open": { method: "document/collaboration/open" },
   "document/collaboration/submit": { method: "document/collaboration/submit" },
   "document/collaboration/presence/publish": { method: "document/collaboration/presence/publish" },

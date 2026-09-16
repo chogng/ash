@@ -526,6 +526,7 @@ dependencies = [
  "ash-attachments",
  "ash-automation",
  "ash-build-info",
+ "ash-call",
  "ash-chatgpt",
  "ash-client",
  "ash-cloud-codebase",
@@ -567,6 +568,7 @@ dependencies = [
  "ash-install-context",
  "ash-instructions",
  "ash-kimi",
+ "ash-livekit-client",
  "ash-login",
  "ash-lsp-manager",
  "ash-lsp-server-provider",
@@ -605,6 +607,7 @@ dependencies = [
  "ash-utils-absolute-path",
  "ash-utils-home-dir",
  "ash-utils-sleep-inhibitor",
+ "ash-voice-host",
  "ash-web-search-extension",
  "ash-windows-sandbox",
  "base64 0.22.1",
@@ -684,6 +687,7 @@ version = "0.1.0"
 dependencies = [
  "ash-analytics",
  "ash-build-info",
+ "ash-call",
  "ash-collaboration",
  "ash-diagnostics",
  "ash-environment",
@@ -808,14 +812,19 @@ dependencies = [
 name = "ash-call"
 version = "0.1.0"
 dependencies = [
+ "ash-http-client",
  "ash-secrets",
  "rand 0.9.5",
  "rusqlite",
+ "schemars",
  "serde",
  "serde_json",
  "sha2 0.10.9",
  "tempfile",
  "thiserror 2.0.19",
+ "tokio",
+ "ts-rs",
+ "url",
 ]
 
 [[package]]

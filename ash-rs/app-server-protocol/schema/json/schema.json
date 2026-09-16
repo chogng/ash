@@ -1668,6 +1668,7 @@
         "AlreadyInitialized",
         "CommandConflict",
         "CoreOperationFailed",
+        "CallOperationFailed",
         "AgentInteractionNotOwner",
         "AgentInteractionExpired",
         "ResourceNotFound",
@@ -2850,6 +2851,485 @@
       ],
       "type": "object"
     },
+    "CallConnection": {
+      "enum": [
+        "connecting",
+        "connected",
+        "reconnecting",
+        "ended",
+        "failed"
+      ],
+      "type": "string"
+    },
+    "CallControl": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "mute",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "unmute",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "deafen",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "undeafen",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "operationId": {
+              "type": "string"
+            },
+            "revision": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": {
+              "const": "selectDevice",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "operationId",
+            "revision"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "trackId": {
+              "type": "string"
+            },
+            "type": {
+              "const": "volume",
+              "type": "string"
+            },
+            "volume": {
+              "format": "float",
+              "type": "number"
+            }
+          },
+          "required": [
+            "type",
+            "trackId",
+            "volume"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "CallControlParams": {
+      "additionalProperties": false,
+      "properties": {
+        "control": {
+          "$ref": "#/$defs/CallControl"
+        },
+        "resourceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "resourceId",
+        "control"
+      ],
+      "type": "object"
+    },
+    "CallDeployment": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "local",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "administrator": {
+              "type": "string"
+            },
+            "type": {
+              "const": "server",
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "url",
+            "administrator"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "credential": {
+              "type": "string"
+            },
+            "type": {
+              "const": "invitation",
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "url",
+            "credential"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "CallEndParams": {
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string"
+        },
+        "resourceId": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "resourceId",
+        "operationId",
+        "revision"
+      ],
+      "type": "object"
+    },
+    "CallInvitation": {
+      "properties": {
+        "credential": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "url",
+        "credential"
+      ],
+      "type": "object"
+    },
+    "CallInviteParams": {
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string"
+        },
+        "resourceId": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "role": {
+          "$ref": "#/$defs/CallRole"
+        }
+      },
+      "required": [
+        "resourceId",
+        "operationId",
+        "revision",
+        "role"
+      ],
+      "type": "object"
+    },
+    "CallMember": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/CallRole"
+        }
+      },
+      "required": [
+        "id",
+        "role"
+      ],
+      "type": "object"
+    },
+    "CallMemberParams": {
+      "additionalProperties": false,
+      "properties": {
+        "memberId": {
+          "type": "string"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "resourceId": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "resourceId",
+        "operationId",
+        "revision",
+        "memberId"
+      ],
+      "type": "object"
+    },
+    "CallParticipant": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "muted": {
+          "type": "boolean"
+        },
+        "tracks": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "tracks",
+        "muted"
+      ],
+      "type": "object"
+    },
+    "CallResourceParams": {
+      "additionalProperties": false,
+      "properties": {
+        "resourceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "resourceId"
+      ],
+      "type": "object"
+    },
+    "CallRole": {
+      "enum": [
+        "owner",
+        "speaker",
+        "listener",
+        "agent"
+      ],
+      "type": "string"
+    },
+    "CallRoleParams": {
+      "additionalProperties": false,
+      "properties": {
+        "memberId": {
+          "type": "string"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "resourceId": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "role": {
+          "$ref": "#/$defs/CallRole"
+        }
+      },
+      "required": [
+        "resourceId",
+        "operationId",
+        "revision",
+        "memberId",
+        "role"
+      ],
+      "type": "object"
+    },
+    "CallSnapshot": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "mediaEpoch": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mediaRoom": {
+          "type": "string"
+        },
+        "mediaState": {
+          "$ref": "#/$defs/MediaState"
+        },
+        "members": {
+          "items": {
+            "$ref": "#/$defs/CallMember"
+          },
+          "type": "array"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "revision",
+        "mediaEpoch",
+        "mediaRoom",
+        "mediaState",
+        "members"
+      ],
+      "type": "object"
+    },
+    "CallStartParams": {
+      "additionalProperties": false,
+      "properties": {
+        "deployment": {
+          "$ref": "#/$defs/CallDeployment"
+        },
+        "deviceId": {
+          "type": "string"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "resourceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "resourceId",
+        "operationId",
+        "deviceId",
+        "deployment"
+      ],
+      "type": "object"
+    },
+    "CallStatus": {
+      "properties": {
+        "call": {
+          "$ref": "#/$defs/CallSnapshot"
+        },
+        "connection": {
+          "$ref": "#/$defs/CallConnection"
+        },
+        "deafened": {
+          "type": "boolean"
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "memberId": {
+          "type": "string"
+        },
+        "microphoneAllowed": {
+          "type": "boolean"
+        },
+        "muted": {
+          "type": "boolean"
+        },
+        "participants": {
+          "items": {
+            "$ref": "#/$defs/CallParticipant"
+          },
+          "type": "array"
+        },
+        "resourceId": {
+          "type": "string"
+        },
+        "sequence": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "resourceId",
+        "sequence",
+        "connection",
+        "call",
+        "memberId",
+        "participants",
+        "muted",
+        "deafened",
+        "microphoneAllowed"
+      ],
+      "type": "object"
+    },
     "CapabilityContract": {
       "properties": {
         "version": {
@@ -3571,6 +4051,134 @@
             },
             "params": {
               "$ref": "#/$defs/DirPermissionsForgetParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "call/start",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/CallStartParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "call/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/CallResourceParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "call/control",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/CallControlParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "call/leave",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/CallResourceParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "call/end",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/CallEndParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "call/invite",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/CallInviteParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "call/remove",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/CallMemberParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "call/role",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/CallRoleParams"
             }
           },
           "required": [
@@ -7703,6 +8311,134 @@
             },
             "result": {
               "$ref": "#/$defs/ConfigCommandResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "call/start",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/CallStatus"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "call/read",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/CallStatus"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "call/control",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/CallStatus"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "call/leave",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/CallStatus"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "call/end",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/CallStatus"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "call/invite",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/CallInvitation"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "call/remove",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/CallStatus"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "call/role",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/CallStatus"
             }
           },
           "required": [
@@ -23191,6 +23927,74 @@
         }
       ]
     },
+    "MediaState": {
+      "oneOf": [
+        {
+          "properties": {
+            "state": {
+              "const": "preparing",
+              "type": "string"
+            }
+          },
+          "required": [
+            "state"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "state": {
+              "const": "ready",
+              "type": "string"
+            }
+          },
+          "required": [
+            "state"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "previousRoom": {
+              "type": "string"
+            },
+            "state": {
+              "const": "rotating",
+              "type": "string"
+            }
+          },
+          "required": [
+            "state",
+            "previousRoom"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "state": {
+              "const": "closing",
+              "type": "string"
+            }
+          },
+          "required": [
+            "state"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "state": {
+              "const": "closed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "state"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "Memory": {
       "properties": {
         "body": {
@@ -27431,6 +28235,22 @@
             },
             "params": {
               "$ref": "#/$defs/SessionDeleted"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "call/changed",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/CallStatus"
             }
           },
           "required": [

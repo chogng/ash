@@ -1,0 +1,40 @@
+.ash-call {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	min-width: 0;
+	min-height: 0;
+	overflow: auto;
+	padding: 12px;
+}
+.ash-call .call-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+.ash-call label {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin-bottom: 8px;
+	min-width: 0;
+}
+.ash-call input,
+.ash-call textarea,
+.ash-call select,
+.ash-call button {
+	box-sizing: border-box;
+	min-width: 0;
+	max-width: 100%;
+	padding: 6px 8px;
+	font: inherit;
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
+	border: 1px solid var(--ash-input-border);
+	border-radius: 4px;
+}
+.ash-call li { overflow-wrap: anywhere; }
+.ash-call button { cursor: pointer; }
+.ash-call button:disabled { cursor: default; opacity: 0.6; }
+.ash-call :focus-visible { outline: 1px solid var(--ash-focus-border); outline-offset: 2px; }
+.ash-call [hidden] { display: none; }

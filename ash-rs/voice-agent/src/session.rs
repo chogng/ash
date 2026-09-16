@@ -10,6 +10,7 @@ use livekit_client::MediaRoom;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::time::Duration;
+use std::time::Instant;
 use tokio::sync::mpsc;
 
 pub enum AgentCommand {
@@ -18,8 +19,9 @@ pub enum AgentCommand {
         delegation_id: String,
         text: String,
     },
+    /// Permanently suppress this model session's output. A new session is required to speak again:
+    /// the model stream has no response identity with which to reject late pre-stop audio.
     StopPlayback,
-    ResumePlayback,
     Stop,
 }
 
@@ -109,6 +111,7 @@ impl VoiceAgent {
         clock.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         let mut transcript = String::new();
         let mut delegations = BTreeSet::new();
+        let mut humans = BTreeSet::new();
         loop {
             tokio::select! {
                 _ = cancellation.cancelled() => return Ok(()),
@@ -116,7 +119,6 @@ impl VoiceAgent {
                 command = commands.recv() => match command {
                     Some(AgentCommand::Stop) | None => return Ok(()),
                     Some(AgentCommand::StopPlayback) => { self.audio.stop_playback(); self.room.mute()?; }
-                    Some(AgentCommand::ResumePlayback) => { self.audio.resume_playback(); self.room.unmute()?; }
                     Some(AgentCommand::Commentary { delegation_id, text }) => {
                         // A byte bound also bounds byte-level tokens for non-ASCII commentary.
                         if !delegations.contains(&delegation_id) || text.is_empty() || text.len() > 500 { return Err(AgentError::Consumer); }
@@ -124,10 +126,21 @@ impl VoiceAgent {
                     }
                 },
                 event = self.room.next_event() => match event {
-                    Some(MediaEvent::Audio(frame)) => self.audio.push_input(&frame.participant_id, &frame.samples),
+                    Some(MediaEvent::Audio(frame)) => self.audio.push_input(frame)?,
+                    Some(MediaEvent::Connected { participant_ids }) => {
+                        humans = participant_ids.into_iter().filter(|id| self.audio.is_human(id)).collect();
+                        if humans.is_empty() { return Ok(()); }
+                    }
+                    Some(MediaEvent::ParticipantJoined { participant_id }) => {
+                        if self.audio.is_human(&participant_id) { humans.insert(participant_id); }
+                    }
                     Some(MediaEvent::Disconnected) | None => return Err(livekit_client::MediaError::Connection.into()),
                     Some(MediaEvent::Reconnecting) => return Err(livekit_client::MediaError::Connection.into()),
-                    Some(MediaEvent::TrackRemoved { .. } | MediaEvent::ParticipantLeft { .. }) => self.audio.clear_input(),
+                    Some(MediaEvent::TrackRemoved { track_id } | MediaEvent::TrackMuted { track_id }) => self.audio.remove_track(&track_id),
+                    Some(MediaEvent::ParticipantLeft { participant_id }) => {
+                        self.audio.remove_participant(&participant_id);
+                        if humans.remove(&participant_id) && humans.is_empty() { return Ok(()); }
+                    }
                     _ => {}
                 },
                 event = self.model.receive(cancellation) => match event? {
@@ -144,7 +157,7 @@ impl VoiceAgent {
                     VoiceEvent::OutputTranscript { text, start_ms, end_ms } => emit(events, AgentEvent::OutputTranscript { text, start_ms, end_ms })?,
                     VoiceEvent::Delegation { id, .. } => {
                         if delegations.len() >= 256 || !delegations.insert(id.clone()) { return Err(AgentError::Consumer); }
-                        emit(events, AgentEvent::DelegationProposed { id, transcript: std::mem::take(&mut transcript), eligible_members: self.audio.members() })?;
+                        emit(events, AgentEvent::DelegationProposed { id, transcript: std::mem::take(&mut transcript), eligible_members: self.audio.members(&humans) })?;
                     }
                     VoiceEvent::Usage { seconds } => emit(events, AgentEvent::Usage { seconds })?,
                     VoiceEvent::Closed { reason, seconds } => { emit(events, AgentEvent::Closed { reason, seconds })?; return Ok(()); }
@@ -152,7 +165,7 @@ impl VoiceAgent {
                     VoiceEvent::Other { .. } => {}
                 },
                 _ = clock.tick() => {
-                    self.model.send(VoiceCommand::AppendAudio { pcm16: self.audio.input()? }, cancellation).await?;
+                    self.model.send(VoiceCommand::AppendAudio { pcm16: self.audio.input(Instant::now())? }, cancellation).await?;
                     if let Some(samples) = self.audio.output()? { self.room.send_audio(&samples).await?; }
                 }
             }

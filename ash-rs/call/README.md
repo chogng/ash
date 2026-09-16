@@ -6,10 +6,12 @@
 - 权限变更先记录待执行状态，再由宿主更换 LiveKit 房间。
 - 不依赖 UI、LiveKit SDK、设备驱动或模型执行。
 - 持久化成员的发言设备；其他设备只听，切换设备会更换房间。
-- 当前尚未实现离开与重入、成员通知和文档房间关联。
+- `runtime` feature 提供协作服务客户端、本地进程管理、通话控制与权限换代后重入。
+- 成员变化按修订号等待；通话状态通过宿主通知界面。
+- 文档房间关联和 AI 任务执行仍未接入。
 
 设计与验收范围见[协作媒体方案](../docs/design/collaboration-media.md)。
 
 ```sh
-just test ash-call
+just test ash-call --features runtime
 ```

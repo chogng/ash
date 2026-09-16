@@ -2,6 +2,7 @@
 import type { AccountLoginCompleted } from './types/AccountLoginCompleted.js';
 import type { AccountUpdated } from './types/AccountUpdated.js';
 import type { AgentRequestEnvelope } from './types/AgentRequestEnvelope.js';
+import type { CallStatus } from './types/CallStatus.js';
 import type { ConfigChanged } from './types/ConfigChanged.js';
 import type { ConnectorsChanged } from './types/ConnectorsChanged.js';
 import type { DocumentCollaborationPresenceSnapshot } from './types/DocumentCollaborationPresenceSnapshot.js';
@@ -33,6 +34,7 @@ export interface AppServerNotificationMap {
   "agent/request": AgentRequestEnvelope;
   "session/changed": SessionChanged;
   "session/deleted": SessionDeleted;
+  "call/changed": CallStatus;
   "document/collaboration/update": DocumentCollaborationUpdate;
   "document/collaboration/presence": DocumentCollaborationPresenceSnapshot;
   "session/thread/update": ThreadUpdateEnvelope;
@@ -77,6 +79,7 @@ export const APP_SERVER_NOTIFICATIONS: {
   "agent/request": { method: "agent/request" },
   "session/changed": { method: "session/changed" },
   "session/deleted": { method: "session/deleted" },
+  "call/changed": { method: "call/changed" },
   "document/collaboration/update": { method: "document/collaboration/update" },
   "document/collaboration/presence": { method: "document/collaboration/presence" },
   "session/thread/update": { method: "session/thread/update" },

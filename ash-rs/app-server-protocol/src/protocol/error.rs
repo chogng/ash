@@ -40,6 +40,7 @@ pub enum AppServerErrorName {
     AlreadyInitialized,
     CommandConflict,
     CoreOperationFailed,
+    CallOperationFailed,
     AgentInteractionNotOwner,
     AgentInteractionExpired,
     ResourceNotFound,

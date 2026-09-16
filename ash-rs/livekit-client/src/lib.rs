@@ -1,6 +1,8 @@
 //! Device-independent LiveKit room media. Room permissions belong to the caller.
 
+mod mixer;
 mod resample;
+pub use mixer::AudioMixer;
 mod room;
 
 pub use resample::AudioRate;

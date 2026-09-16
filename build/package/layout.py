@@ -61,11 +61,20 @@ def build_package_directory(
     cli_binary: Optional[Path] = None,
     update_public_key: Optional[str] = None,
     windows_sandbox_binary: Optional[Path] = None,
+    voice_host_binary: Optional[Path] = None,
+    collaboration_server_binary: Optional[Path] = None,
+    livekit: Optional[Dict[str, str]] = None,
 ) -> None:
     if spec.is_windows != (windows_sandbox_binary is not None):
         raise RuntimeError(
             "Windows packages require their sandbox executable; other targets must omit it"
         )
+    if (
+        voice_host_binary is None
+        or collaboration_server_binary is None
+        or livekit is None
+    ):
+        raise RuntimeError("Call helper executables are required in product packages")
     output = output.expanduser().resolve()
     if output.exists():
         raise RuntimeError(
@@ -83,6 +92,10 @@ def build_package_directory(
             "execServer": str(exec_server_binary),
             "appServerDaemon": str(app_server_daemon_binary),
             "codeModeHost": str(code_mode_host_binary),
+            "voiceHost": str(voice_host_binary),
+            "collaborationServer": str(collaboration_server_binary),
+            "livekit": livekit["executable"],
+            "livekitLicense": livekit["license"],
         }
         if windows_sandbox_binary is not None:
             executables["windowsSandbox"] = str(windows_sandbox_binary)

@@ -1,17 +1,20 @@
 use crate::AgentError;
+use livekit_client::AudioFrame;
+use livekit_client::AudioMixer;
 use livekit_client::AudioRate;
 use livekit_client::AudioResampler;
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::VecDeque;
+use std::time::Instant;
 
 const PACKET: usize = 480;
-const INPUT_LIMIT: usize = PACKET * 20;
 const OUTPUT_LIMIT: usize = 24_000 * 2;
 
 pub(super) struct AudioBridge {
     // Supplied by call authority, never from participant metadata or model text.
     members: BTreeMap<String, String>,
-    input: BTreeMap<String, VecDeque<i16>>,
+    input: AudioMixer,
     output: VecDeque<i16>,
     downsample: AudioResampler,
     upsample: AudioResampler,
@@ -33,7 +36,7 @@ impl AudioBridge {
         }
         Ok(Self {
             members,
-            input: BTreeMap::new(),
+            input: AudioMixer::default(),
             output: VecDeque::new(),
             downsample: AudioResampler::new(AudioRate::Room, AudioRate::Voice),
             upsample: AudioResampler::new(AudioRate::Voice, AudioRate::Room),
@@ -41,33 +44,29 @@ impl AudioBridge {
         })
     }
 
-    pub(super) fn push_input(&mut self, participant: &str, samples: &[i16]) {
-        if !self.members.contains_key(participant) || samples.len() > INPUT_LIMIT {
-            return;
+    pub(super) fn push_input(&mut self, frame: AudioFrame) -> Result<(), AgentError> {
+        if self.is_human(&frame.participant_id) {
+            self.input.push(frame)?;
         }
-        let queue = self.input.entry(participant.into()).or_default();
-        // Drop old speech when the producer gets ahead of the 10 ms media clock.
-        let overflow = (queue.len() + samples.len()).saturating_sub(INPUT_LIMIT);
-        queue.drain(..overflow);
-        queue.extend(samples);
+        Ok(())
     }
 
-    pub(super) fn clear_input(&mut self) {
-        self.input.clear();
+    pub(super) fn remove_track(&mut self, track: &str) {
+        self.input.remove_track(track);
         self.downsample = AudioResampler::new(AudioRate::Room, AudioRate::Voice);
     }
 
-    pub(super) fn input(&mut self) -> Result<Vec<u8>, AgentError> {
-        let mut mixed = [0_i32; PACKET];
-        for queue in self.input.values_mut() {
-            for sample in &mut mixed {
-                *sample += i32::from(queue.pop_front().unwrap_or(0));
-            }
-        }
-        let samples: Vec<i16> = mixed
-            .into_iter()
-            .map(|value| value.clamp(i16::MIN.into(), i16::MAX.into()) as i16)
-            .collect();
+    pub(super) fn remove_participant(&mut self, participant: &str) {
+        self.input.remove_participant(participant);
+        self.downsample = AudioResampler::new(AudioRate::Room, AudioRate::Voice);
+    }
+
+    pub(super) fn is_human(&self, participant: &str) -> bool {
+        self.members.contains_key(participant)
+    }
+
+    pub(super) fn input(&mut self, now: Instant) -> Result<Vec<u8>, AgentError> {
+        let samples = self.input.render(PACKET, now)?;
         Ok(self
             .downsample
             .process(&samples)?
@@ -105,12 +104,10 @@ impl AudioBridge {
         self.upsample = AudioResampler::new(AudioRate::Voice, AudioRate::Room);
     }
 
-    pub(super) fn resume_playback(&mut self) {
-        self.playback = true;
-    }
-    pub(super) fn members(&self) -> Vec<String> {
-        self.members
-            .values()
+    pub(super) fn members(&self, participants: &BTreeSet<String>) -> Vec<String> {
+        participants
+            .iter()
+            .filter_map(|id| self.members.get(id))
             .cloned()
             .collect::<std::collections::BTreeSet<_>>()
             .into_iter()

@@ -1,3 +1,4 @@
+import '../../../../workbench/contrib/call/browser/call.contribution.js';
 import "../../../../workbench/contrib/automation/browser/automation.contribution.js";
 import "../../../../editor/editor.code.all.js";
 import "../../../../workbench/contrib/codeEditor/browser/codeEditor.contribution.js";

@@ -1,3 +1,4 @@
+import { AppServerCallService } from '../../call/browser/appServerCallService.js';
 import { AppServerMemoriesService } from '../../memories/browser/appServerMemoriesService.js';
 import { AppServerMemoryDiagnosticsService } from '../../memory/browser/appServerMemoryDiagnosticsService.js';
 import type { MemoryObservation } from '../../memory/common/memoryDiagnosticsService.js';
@@ -104,6 +105,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			}, contributions);
 			if (client.capabilities?.memories) { backend = { ...backend, memories: resources.add(new AppServerMemoriesService(client)) }; }
 			if (client.capabilities?.contracts.memoryDiagnostics?.version === 1) { backend = { ...backend, memoryDiagnostics: resources.add(new AppServerMemoryDiagnosticsService(client, 'electron', () => invoke<MemoryObservation[]>('ash:memory:collect'))) }; }
+			if (client.capabilities?.contracts.calls?.version === 1) { backend = { ...backend, calls: resources.add(new AppServerCallService(client)) }; }
 			if (client.capabilities?.contracts.automation?.version === 1) { backend = { ...backend, automation: resources.add(new AppServerAutomationService(client)) }; }
 			if ((await createRemoteAgentApi().getConnection()).kind === 'ssh') {
 				const terminals = resources.add(new ReconnectableTerminalProcessService({ supervisor: client }));

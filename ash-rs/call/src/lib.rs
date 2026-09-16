@@ -1,13 +1,47 @@
 //! Durable call membership and media generations, independent of UI and media SDKs.
 
+#[cfg(feature = "runtime")]
+mod client;
+#[cfg(feature = "runtime")]
+mod deployment;
+#[cfg(feature = "runtime")]
+mod runtime;
+mod session;
 mod store;
+#[cfg(feature = "runtime")]
+pub use runtime::Devices;
+#[cfg(feature = "runtime")]
+pub use runtime::Media;
+#[cfg(feature = "runtime")]
+pub use runtime::MediaEvent;
+#[cfg(feature = "runtime")]
+pub use runtime::Operation;
+#[cfg(feature = "runtime")]
+pub use runtime::SessionCommand;
+#[cfg(feature = "runtime")]
+pub use runtime::SessionRuntime;
+pub use session::CallConnection;
+pub use session::CallControl;
+pub use session::CallParticipant;
+pub use session::CallStatus;
+
+#[cfg(feature = "runtime")]
+pub use client::CallClient;
+#[cfg(feature = "runtime")]
+pub use client::MediaJoin;
+#[cfg(feature = "runtime")]
+pub use deployment::LocalDeployment;
+#[cfg(feature = "runtime")]
+pub use deployment::ServicePaths;
 
 use ash_secrets::SecretValue;
+use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use sha2::Digest;
 use sha2::Sha256;
 pub use store::CallStore;
+use ts_rs::TS;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CallError {
@@ -21,9 +55,13 @@ pub enum CallError {
     NotReady,
     #[error("call storage failed")]
     Storage,
+    #[error("call service request failed")]
+    Transport,
+    #[error("local call service could not start or stop")]
+    Deployment,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum CallRole {
     Owner,
@@ -41,7 +79,7 @@ impl CallRole {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(
     rename_all = "camelCase",
     rename_all_fields = "camelCase",
@@ -55,18 +93,20 @@ pub enum MediaState {
     Closed,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct CallMember {
     pub id: String,
     pub role: CallRole,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct CallSnapshot {
     pub id: String,
+    #[ts(type = "number")]
     pub revision: u64,
+    #[ts(type = "number")]
     pub media_epoch: u64,
     pub media_room: String,
     pub media_state: MediaState,

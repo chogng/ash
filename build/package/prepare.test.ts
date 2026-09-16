@@ -176,6 +176,10 @@ test("assembles and validates the canonical Windows development layout", async (
   const executables = {
     appServerDaemon: join(root, "ash-app-server-daemon.exe"),
     codeModeHost: join(root, "ash-code-mode-host.exe"),
+    voiceHost: join(root, "ash-voice-host.exe"),
+    collaborationServer: join(root, "ash-collaboration-server.exe"),
+    livekit: join(root, "livekit-server.exe"),
+    livekitLicense: join(root, "livekit-LICENSE"),
     windowsSandbox: join(root, "ash-windows-sandbox.exe"),
     appServer: join(root, "ash-app-server.exe"),
     remote: join(root, "ash-remote.exe"),
@@ -191,6 +195,10 @@ test("assembles and validates the canonical Windows development layout", async (
     await Promise.all([
       writeFile(executables.appServerDaemon, "ash-app-server-daemon"),
       writeFile(executables.codeModeHost, "ash-code-mode-host"),
+      writeFile(executables.voiceHost, "voice-host"),
+      writeFile(executables.collaborationServer, "collaboration-server"),
+      writeFile(executables.livekit, "livekit-server"),
+      writeFile(executables.livekitLicense, "livekit-license"),
       writeFile(executables.windowsSandbox, "windows-sandbox"),
       writeFile(executables.appServer, "ash-app-server"),
       writeFile(executables.remote, "ash-remote"),
@@ -305,6 +313,10 @@ test("host-provided runtime package omits the standalone Node payload", async ()
   const executables = {
     appServerDaemon: join(root, "ash-app-server-daemon.exe"),
     codeModeHost: join(root, "ash-code-mode-host.exe"),
+    voiceHost: join(root, "ash-voice-host.exe"),
+    collaborationServer: join(root, "ash-collaboration-server.exe"),
+    livekit: join(root, "livekit-server.exe"),
+    livekitLicense: join(root, "livekit-LICENSE"),
     windowsSandbox: join(root, "ash-windows-sandbox.exe"),
     appServer: join(root, "ash-app-server.exe"),
     remote: join(root, "ash-remote.exe"),
@@ -316,6 +328,10 @@ test("host-provided runtime package omits the standalone Node payload", async ()
     await Promise.all([
       writeFile(executables.appServerDaemon, "ash-app-server-daemon"),
       writeFile(executables.codeModeHost, "ash-code-mode-host"),
+      writeFile(executables.voiceHost, "voice-host"),
+      writeFile(executables.collaborationServer, "collaboration-server"),
+      writeFile(executables.livekit, "livekit-server"),
+      writeFile(executables.livekitLicense, "livekit-license"),
       writeFile(executables.windowsSandbox, "windows-sandbox"),
       writeFile(executables.appServer, "ash-app-server"),
       writeFile(executables.remote, "ash-remote"),
@@ -361,7 +377,7 @@ test("host-provided runtime package omits the standalone Node payload", async ()
 test("Linux development packages retain Bubblewrap without a Ash namespace helper", async () => {
   const root = await mkdtemp(join(tmpdir(), "ash-linux-network-package-"));
   try {
-    const names = ["ash-remote", "ash-remote-server", "ash-exec-server", "ash-app-server", "ash-app-server-daemon", "ash-code-mode-host", "bwrap", "COPYING", "rg"];
+    const names = ["ash-remote", "ash-remote-server", "ash-exec-server", "ash-app-server", "ash-app-server-daemon", "ash-code-mode-host", "bwrap", "COPYING", "rg", "ash-voice-host", "ash-collaboration-server", "livekit-server", "livekit-LICENSE"];
     await Promise.all(names.map((name) => writeFile(join(root, name), name)));
     const staging = join(root, "package");
     await assemblePackage(staging, "x86_64-unknown-linux-gnu", "linux", protocol, {
@@ -369,6 +385,10 @@ test("Linux development packages retain Bubblewrap without a Ash namespace helpe
       execServer: join(root, "ash-exec-server"),
       appServer: join(root, "ash-app-server"), appServerDaemon: join(root, "ash-app-server-daemon"),
       codeModeHost: join(root, "ash-code-mode-host"),
+      voiceHost: join(root, "ash-voice-host"),
+      collaborationServer: join(root, "ash-collaboration-server"),
+      livekit: join(root, "livekit-server"),
+      livekitLicense: join(root, "livekit-LICENSE"),
       bubblewrap: { binary: join(root, "bwrap"), license: join(root, "COPYING"), version: "0.11.2", archive: "bwrap.tar", archiveSha256: "a".repeat(64) },
     }, { executable: join(root, "rg"), archive: "rg.tar", archiveSha256: "b".repeat(64), binarySha256: "c".repeat(64), source: "upstream-release", version: "1" },
       await tgrepFixture(root), undefined);
@@ -436,7 +456,7 @@ async function copyBuiltinExtensions(destination: string, source: string): Promi
   await writeFile(join(root, "ash-rs", "skills", "assets", "review", "SKILL.md"), "review");
   await rename(source, join(root, "extensions"));
   await assemblePackage(join(destination, "package"), "aarch64-apple-darwin", "darwin", protocol, {
-    appServer: "unused", appServerDaemon: "unused", codeModeHost: "unused",
+    appServer: "unused", appServerDaemon: "unused", codeModeHost: "unused", voiceHost: "unused", collaborationServer: "unused", livekit: "unused", livekitLicense: "unused",
     remote: "unused", remoteServer: "unused", execServer: "unused",
   }, { executable: "unused", binarySha256: "", source: "local-override", version: "1" },
       { executable: "unused", binarySha256: "", source: "local-override", version: "1.0.8" },
@@ -451,7 +471,7 @@ test("assembly rejects linked Skill assets", async () => {
     await writeFile(join(skill, "SKILL.md"), "review");
     await symlink(skill, join(skill, "linked"), process.platform === "win32" ? "junction" : "dir");
     await assert.rejects(assemblePackage(join(root, "output"), "aarch64-apple-darwin", "darwin", protocol, {
-      appServer: "unused", appServerDaemon: "unused", codeModeHost: "unused",
+      appServer: "unused", appServerDaemon: "unused", codeModeHost: "unused", voiceHost: "unused", collaborationServer: "unused", livekit: "unused", livekitLicense: "unused",
       remote: "unused", remoteServer: "unused", execServer: "unused",
     }, { executable: "unused", binarySha256: "", source: "local-override", version: "1" },
       { executable: "unused", binarySha256: "", source: "local-override", version: "1.0.8" },

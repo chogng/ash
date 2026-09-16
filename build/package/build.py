@@ -2,6 +2,7 @@
 """Build a canonical Ash package directory."""
 
 import argparse
+import json
 import subprocess
 import sys
 import tempfile
@@ -206,6 +207,8 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         else None
     )
     inputs = {
+        "ash-voice-host": None,
+        "ash-collaboration-server": None,
         "ash-app-server": args.server_bin,
         "ash-app-server-daemon": args.app_server_daemon_bin,
         "ash-code-mode-host": args.code_mode_host_bin,
@@ -252,6 +255,12 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         cargo=args.cargo,
         cargo_profile=args.cargo_profile,
     )
+    livekit = json.loads(
+        subprocess.check_output(
+            ["node", str(REPOSITORY_ROOT / "build/package/livekit.ts"), spec.target],
+            text=True,
+        ).splitlines()[-1]
+    )
     version = read_workspace_version(REPOSITORY_ROOT / "Cargo.toml")
     output = args.package_dir.expanduser().resolve()
     build_package_directory(
@@ -269,6 +278,9 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
         tgrep,
         node,
         bubblewrap,
+        livekit=livekit,
+        voice_host_binary=binaries["ash-voice-host"],
+        collaboration_server_binary=binaries["ash-collaboration-server"],
         protocol_metadata=protocol_metadata,
         build_profile=args.cargo_profile,
         cli_binary=cli_binary,

@@ -261,6 +261,8 @@ Web 连接实现编译到 `node` 输出后，由 `scripts/web.ts` 或 Vite 插�
 
 ### 共享包组装
 
+音频通话包包含 `ash-voice-host`、`ash-collaboration-server` 和固定版本 LiveKit Server 1.13.7。设备助手以 `ash-voice-host/host` feature 构建；Linux 构建机需要 ALSA 开发文件。LiveKit 的 Linux/Windows 发行包和 macOS 源码包都校验固定 SHA-256。macOS 使用 `build/package/livekit.ts` 从源码构建，要求 PATH 中提供 Go 1.26 或更新版本及系统 C/C++ 工具链；最终用户不需要 Go。LiveKit 许可证写入 `ash-resources/licenses/livekit/`。
+
 开发入口 `build/package/prepare.ts` 与 Python 发布入口共用 `build/package/layout.ts` 组装包，布局与许可证清单由 `layout.json` 声明。组装器要求调用方显式传入协议元数据，不读取前端本地生成文件。开发入口使用受版本控制的协议常量；发布入口使用本次协议生成结果，并通过标准输入传入程序、资源和协议元数据。因此发布环境也需要仓库固定的 Node 24；Desktop 开发入口不调用 Python。
 
 下载与解压由 `build/download/artifacts.ts` 和 `artifacts.py` 按调用语言提供。Node、ripgrep、V8 下载都采用流式校验和独立临时文件，通过大小及摘要检查后才发布缓存；失败只清理本次临时文件。

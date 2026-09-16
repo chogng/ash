@@ -1,3 +1,4 @@
+import { resolveLivekit } from './livekit.ts';
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { chmod, mkdir, readFile, rm, stat } from "node:fs/promises";
@@ -369,8 +370,11 @@ async function buildFirstPartyExecutables(platform: NodeJS.Platform): Promise<Fi
     "--bin", "ash-exec-server",
     "--bin", "ash-app-server-daemon",
     "--bin", "ash-code-mode-host",
+    "--bin", "ash-voice-host",
+    "--bin", "ash-collaboration-server",
+    "--features", "ash-voice-host/host",
   ];
-  const expectedTargets = ["ash-package-store", "ash-app-server", "ash-remote", "ash-remote-server", "ash-exec-server", "ash-app-server-daemon", "ash-code-mode-host"];
+  const expectedTargets = ["ash-package-store", "ash-app-server", "ash-remote", "ash-remote-server", "ash-exec-server", "ash-app-server-daemon", "ash-code-mode-host", "ash-voice-host", "ash-collaboration-server"];
   if (platform === "win32") {
     binaryArgs.push("--bin", "ash-windows-sandbox");
     expectedTargets.push("ash-windows-sandbox");
@@ -380,6 +384,7 @@ async function buildFirstPartyExecutables(platform: NodeJS.Platform): Promise<Fi
     expectedTargets.push("bwrap");
   }
   const artifacts = cargoBuild(binaryArgs, expectedTargets, cargoEnvironment);
+  const livekit = await resolveLivekit(developmentHostTarget(platform));
   const executables: {
     appServerDaemon: string;
     bubblewrap?: ResolvedBubblewrap;
@@ -389,10 +394,18 @@ async function buildFirstPartyExecutables(platform: NodeJS.Platform): Promise<Fi
     remoteServer: string;
     execServer: string;
     codeModeHost: string;
+    voiceHost: string;
+    collaborationServer: string;
+    livekit: string;
+    livekitLicense: string;
     windowsSandbox?: string;
   } = {
     appServerDaemon: requiredExecutable(artifacts, "ash-app-server-daemon"),
     codeModeHost: requiredExecutable(artifacts, "ash-code-mode-host"),
+    voiceHost: requiredExecutable(artifacts, "ash-voice-host"),
+    collaborationServer: requiredExecutable(artifacts, "ash-collaboration-server"),
+    livekit: livekit.executable,
+    livekitLicense: livekit.license,
     packageStore: requiredExecutable(artifacts, "ash-package-store"),
     appServer: requiredExecutable(artifacts, "ash-app-server"),
     remote: requiredExecutable(artifacts, "ash-remote"),

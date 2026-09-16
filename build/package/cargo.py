@@ -16,6 +16,11 @@ from build.lib.v8 import resolve_v8_cargo_env
 
 
 _BINARIES = {
+    "ash-voice-host": ("ash-voice-host", "--voice-host-bin"),
+    "ash-collaboration-server": (
+        "ash-collaboration-server",
+        "--collaboration-server-bin",
+    ),
     "ash-app-server": ("ash-app-server", "--server-bin"),
     "ash-app-server-daemon": ("ash-app-server-daemon", "--app-server-daemon-bin"),
     "ash-code-mode-host": ("ash-code-mode-host", "--code-mode-host-bin"),
@@ -67,6 +72,8 @@ def build_binaries(
     ]
     for name in missing:
         command.extend(["--package", _BINARIES[name][0], "--bin", name])
+    if "ash-voice-host" in missing:
+        command.extend(["--features", "ash-voice-host/host"])
     result = subprocess.run(
         command,
         cwd=repository_root,

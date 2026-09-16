@@ -132,8 +132,17 @@ await assemblePackage(args.output, args.target, args.platform, args.protocol, ar
                             protocol_metadata=load_protocol_metadata(ROOT),
                             build_profile="dev-small",
                             windows_sandbox_binary=sandbox,
+                            voice_host_binary=executables["voiceHost"],
+                            collaboration_server_binary=executables[
+                                "collaborationServer"
+                            ],
+                            livekit={
+                                "executable": str(executables["livekit"]),
+                                "license": str(executables["livekit"]),
+                            },
                         )
                     inputs = {name: str(path) for name, path in executables.items()}
+                    inputs["livekitLicense"] = str(executables["livekit"])
                     if sandbox:
                         inputs["windowsSandbox"] = str(sandbox)
                     if bubblewrap:

@@ -9,7 +9,10 @@
     "remoteServer": "bin/ash-remote-server{exe}",
     "execServer": "bin/ash-exec-server{exe}",
     "appServerDaemon": "bin/ash-app-server-daemon{exe}",
-    "codeModeHost": "bin/ash-code-mode-host{exe}"
+    "codeModeHost": "bin/ash-code-mode-host{exe}",
+    "voiceHost": "bin/ash-voice-host{exe}",
+    "collaborationServer": "bin/ash-collaboration-server{exe}",
+    "livekit": "bin/livekit-server{exe}"
   },
   "licenses": [
     {

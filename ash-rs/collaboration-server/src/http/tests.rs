@@ -127,6 +127,16 @@ fn media_calls_enforce_membership_and_rotate_self_hosted_rooms() {
         serde_json::json!({"operationId":"invite", "revision":created["revision"], "memberCredential":guest.expose(), "role":"speaker"}),
         200,
     );
+    assert_eq!(
+        request(
+            "GET",
+            &format!("/v1/calls/watch?afterRevision={}", created["revision"]),
+            guest.expose(),
+            Value::Null,
+            200
+        ),
+        invited
+    );
     let ticket = request(
         "POST",
         "/v1/calls/join",
@@ -171,6 +181,13 @@ fn media_calls_enforce_membership_and_rotate_self_hosted_rooms() {
         "/v1/calls/join",
         guest.expose(),
         serde_json::json!({"deviceId":"laptop"}),
+        403,
+    );
+    request(
+        "GET",
+        "/v1/calls/watch?afterRevision=0",
+        guest.expose(),
+        Value::Null,
         403,
     );
     let ended = request(

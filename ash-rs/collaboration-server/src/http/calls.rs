@@ -163,6 +163,9 @@ pub(super) fn handle(
                 Failure::Domain(CallError::Storage) => {
                     (500, "Internal Server Error", "storageFailure")
                 }
+                Failure::Domain(CallError::Transport | CallError::Deployment) => {
+                    (503, "Service Unavailable", "mediaUnavailable")
+                }
                 Failure::Media => (503, "Service Unavailable", "mediaUnavailable"),
             };
             super::write_json(
@@ -202,6 +205,22 @@ fn dispatch(
     } else {
         runtime.store.read(&credential)?.id
     };
+    if request.method == "GET" && path == "/v1/calls/watch" {
+        let (_, query) = super::split_target(&request.target);
+        let revision = query
+            .and_then(|query| super::query_safe_integer(query, "afterRevision"))
+            .ok_or(CallError::Invalid)?;
+        let started = std::time::Instant::now();
+        loop {
+            let generation = host.updates.current();
+            let snapshot = runtime.store.read(&credential)?;
+            if snapshot.revision != revision || started.elapsed() >= super::POLL_TIMEOUT {
+                return serde_json::to_value(snapshot).map_err(|_| CallError::Storage.into());
+            }
+            host.updates
+                .wait_for_change(generation, super::EXTERNAL_HOST_RECHECK);
+        }
+    }
     let lock = {
         let mut locks = runtime.operations.lock().map_err(|_| CallError::Storage)?;
         locks.retain(|_, value| value.strong_count() > 0);
@@ -284,6 +303,7 @@ fn dispatch(
         _ => return Err(CallError::Invalid.into()),
     };
     let snapshot = runtime.reconcile(snapshot)?;
+    host.updates.notify();
     serde_json::to_value(snapshot).map_err(|_| CallError::Storage.into())
 }
 

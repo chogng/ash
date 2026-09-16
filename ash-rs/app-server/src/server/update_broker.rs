@@ -1095,7 +1095,7 @@ fn interaction_owner_matches(
             .is_some_and(|subscription| subscription.session_owners.contains(&request.session_id))
 }
 
-fn notification<T: Serialize>(method: ServerNotificationMethod, params: &T) -> Value {
+pub(super) fn notification<T: Serialize>(method: ServerNotificationMethod, params: &T) -> Value {
     serde_json::to_value(JsonRpcNotification::new(
         method.as_str().into(),
         serde_json::to_value(params).expect("notification params must serialize"),

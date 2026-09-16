@@ -7,6 +7,7 @@
 3. 在文件、搜索、Git、Terminal、语言服务和目录贡献入口校验 Permission，传递有效授权。
 4. 组合 profile 配置、环境服务与 Core 实现；目录贡献只在获得对应授权后生效。
 5. 在 Agent、Shell 和上下文压缩执行期间持有空闲防休眠租约，同一进程内的目录服务共享系统资源。
+6. 为窗口装配通话、LiveKit 和音频设备助手；连接关闭时释放该窗口的通话资源。
 
 连接建立、鉴权和消息队列由 `ash-app-server-transport` 负责。Core 契约和装配边界见
 [`Core 架构`](../../docs/core.md#7-依赖边界)。

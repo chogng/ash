@@ -1,3 +1,5 @@
+import { resolveLivekit } from '../package/livekit.ts';
+import { developmentHostTarget } from '../package/store.ts';
 import { type ChildProcess, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { constants, createReadStream, type FSWatcher, watch } from "node:fs";
@@ -47,6 +49,8 @@ export async function watchAppServer(options: { skipInitial?: boolean } = {}): P
   let stopped = false;
   let building = false;
   const cancellation = new AbortController();
+  let media: ReturnType<typeof resolveLivekit> | undefined;
+  const helpers = new Map<string, string>();
 
   const watchers: FSWatcher[] = [];
 
@@ -88,6 +92,15 @@ export async function watchAppServer(options: { skipInitial?: boolean } = {}): P
   async function buildAndPublish(): Promise<void> {
     console.log("[app-server] Building ash-app-server");
     const source = await runCargo();
+    media ??= resolveLivekit(developmentHostTarget());
+    helpers.set("livekit-server", (await media).executable);
+    await mkdir(generationDirectory, { recursive: true });
+    for (const [name, executable] of helpers) {
+      const destination = join(generationDirectory, `${name}${process.platform === "win32" ? ".exe" : ""}`);
+      const temporary = `${destination}.partial`;
+      await copyFile(executable, temporary);
+      await rename(temporary, destination);
+    }
     cancellation.signal.throwIfAborted();
     await generateProtocol(cancellation.signal);
     cancellation.signal.throwIfAborted();
@@ -104,6 +117,9 @@ export async function watchAppServer(options: { skipInitial?: boolean } = {}): P
         "--manifest-path", cargoWorkspace,
         "--package", "ash-app-server",
         "--bin", "ash-app-server",
+        "--package", "ash-voice-host", "--bin", "ash-voice-host",
+        "--package", "ash-collaboration-server", "--bin", "ash-collaboration-server",
+        "--features", "ash-voice-host/host",
         "--profile", "dev-small",
         "--target-dir", targetDirectory,
         "--message-format", "json-render-diagnostics",
@@ -115,6 +131,10 @@ export async function watchAppServer(options: { skipInitial?: boolean } = {}): P
         const diagnostic = cargoRenderedDiagnostic(message);
         if (diagnostic) process.stderr.write(diagnostic);
         executable = cargoArtifactExecutable(message, "ash-app-server") ?? executable;
+        for (const name of ["ash-voice-host", "ash-collaboration-server"]) {
+          const path = cargoArtifactExecutable(message, name);
+          if (path) helpers.set(name, path);
+        }
       });
       child.once("error", error => {
         if (settled) return;
@@ -128,7 +148,7 @@ export async function watchAppServer(options: { skipInitial?: boolean } = {}): P
         settled = true;
         if (code !== 0) {
           reject(new Error(signal ? `cargo build stopped by ${signal}` : `cargo build exited with status ${code ?? "unknown"}`));
-        } else if (!executable) {
+        } else if (!executable || !helpers.has("ash-voice-host") || !helpers.has("ash-collaboration-server")) {
           reject(new Error("cargo build did not report the ash-app-server executable"));
         } else {
           resolvePromise(executable);

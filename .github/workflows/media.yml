@@ -1,0 +1,72 @@
+name: Media integration
+
+on:
+  push:
+    branches: [main]
+    paths: &media-paths
+      - "ash-rs/livekit-client/**"
+      - "ash-rs/livekit-api/**"
+      - "ash-rs/voice-agent/**"
+      - "ash-rs/voice-host/**"
+      - "ash-rs/app-server/src/server/call*"
+      - "build/package/livekit.ts"
+      - "ash-rs/call/**"
+      - "ash-rs/collaboration-server/**"
+      - "ash-rs/model-provider/**"
+      - "ash-rs/model-provider-config/**"
+      - "ash-rs/ash-api/**"
+      - "ash-rs/websocket-client/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".cargo/**"
+      - "rust-toolchain.toml"
+      - "scripts/cargo.py"
+      - "scripts/just-shell.py"
+      - "build/lib/**"
+      - "build/download/**"
+      - "justfile"
+      - ".github/workflows/media.yml"
+  pull_request:
+    paths: *media-paths
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: media-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          workspaces: ". -> .build/cargo"
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends build-essential libglib2.0-dev libssl-dev pkg-config
+      - name: Install verified LiveKit Server 1.13.7
+        run: |
+          mkdir -p "$RUNNER_TEMP/livekit"
+          curl --fail --silent --show-error --location \
+            https://github.com/livekit/livekit/releases/download/v1.13.7/livekit_1.13.7_linux_amd64.tar.gz \
+            --output "$RUNNER_TEMP/livekit/server.tar.gz"
+          echo "6634aeeb2fb1366b6723708ae4320b9d5408106a4c63457c5e845ae3979c90e2  $RUNNER_TEMP/livekit/server.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/livekit/server.tar.gz" -C "$RUNNER_TEMP/livekit" livekit-server
+          test "$("$RUNNER_TEMP/livekit/livekit-server" --version)" = "livekit-server version 1.13.7"
+          echo "ASH_TEST_LIVEKIT_SERVER=$RUNNER_TEMP/livekit/livekit-server" >> "$GITHUB_ENV"
+      - name: Check media packages
+        run: python3 -B scripts/cargo.py check --locked -p ash-livekit-client -p ash-voice-agent
+      - name: Build the collaboration service
+        run: |
+          python3 -B scripts/cargo.py build --locked -p ash-collaboration-server --bin ash-collaboration-server
+          echo "ASH_TEST_COLLABORATION_SERVER=$GITHUB_WORKSPACE/.build/cargo/debug/ash-collaboration-server" >> "$GITHUB_ENV"
+      - name: Test rooms, authority and model bridge against the real server
+        run: python3 -B scripts/cargo.py test --locked -p ash-livekit-client -p ash-livekit-api -p ash-call -p ash-collaboration-server -p ash-voice-agent --features ash-call/runtime -- --include-ignored
+      - name: Reject warnings in media packages and tests
+        run: python3 -B scripts/cargo.py --deny-warnings check --locked -p ash-livekit-client -p ash-voice-agent --all-targets

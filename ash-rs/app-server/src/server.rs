@@ -69,6 +69,9 @@ mod agent_selection;
 mod attachment_operations;
 mod automation_execution;
 mod automation_operations;
+mod call_adapters;
+mod call_operations;
+mod call_runtime;
 mod cloud_codebase_operations;
 mod codebase_operations;
 mod codebase_retrieval_operations;
@@ -190,6 +193,7 @@ pub struct AppServer {
     memory_diagnostics: ash_memory_diagnostics::MemoryDiagnostics,
     memories: Option<Arc<memories::Memories>>,
     pub(super) attachment_uploads: Mutex<AttachmentUploadStore>,
+    calls: call_runtime::Calls,
     pub(super) collaboration: Mutex<collaboration_runtime::DocumentCollaborationStore>,
     pub(super) extensions: Mutex<ExtensionCatalog>,
     pub(super) config: Option<Arc<ConfigStore>>,
@@ -519,6 +523,7 @@ impl AppServer {
             memory_diagnostics: ash_memory_diagnostics::MemoryDiagnostics::default(),
             memories: None,
             attachment_uploads: Mutex::new(AttachmentUploadStore::default()),
+            calls: call_runtime::Calls::default(),
             collaboration: Mutex::new(collaboration_runtime::DocumentCollaborationStore::default()),
             extensions: Mutex::new(ExtensionCatalog::default()),
             config: None,
@@ -819,6 +824,7 @@ impl AppServer {
         self.memory_diagnostics
             .close_owner(connection.connection_id);
         self.feedback.close(connection.connection_id);
+        self.calls.close(connection.connection_id);
         self.request_scheduler
             .cancel_connection(connection.connection_id);
         self.request_cancellations
@@ -1968,6 +1974,16 @@ impl AppServer {
             Some(ClientMethod::DirPermissionsForget) => {
                 self.dir_permissions_forget(connection, &request.params)
             }
+            Some(
+                method @ (ClientMethod::CallStart
+                | ClientMethod::CallRead
+                | ClientMethod::CallControl
+                | ClientMethod::CallLeave
+                | ClientMethod::CallEnd
+                | ClientMethod::CallInvite
+                | ClientMethod::CallRemove
+                | ClientMethod::CallRole),
+            ) => self.call_operation(connection, method, &request.params),
             Some(ClientMethod::DocumentCollaborationOpen) => {
                 self.document_collaboration_open(connection, &request.params)
             }

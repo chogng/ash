@@ -192,3 +192,110 @@ async fn real_room_transmits_audio_both_ways_and_enforces_listener_permissions()
     observer.close().await.unwrap();
     server.service.delete_room("audio-test").await.unwrap();
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "requires the pinned LiveKit Server executable"]
+async fn three_speakers_keep_their_sources_and_muting_stops_only_one_source() {
+    let server = Server::start();
+    server.service.create_room("three-speakers").await.unwrap();
+    let permissions = MediaPermissions {
+        microphone: true,
+        subscribe: true,
+        screen: false,
+    };
+    let names = ["alice", "bob", "carol"];
+    let frequencies = [440., 880., 1320.];
+    let mut rooms = Vec::new();
+    for name in names {
+        let ticket = server
+            .service
+            .issue_join("three-speakers", name, permissions)
+            .unwrap();
+        rooms.push(
+            MediaRoom::connect(
+                &ticket.server_url,
+                ticket.token(),
+                AudioPublication::Microphone,
+            )
+            .await
+            .unwrap(),
+        );
+    }
+    let mut heard = [[0; 3]; 3];
+    let mut after_mute = [[0; 3]; 3];
+    let mut clock = tokio::time::interval(Duration::from_millis(10));
+    for packet in 0..350 {
+        clock.tick().await;
+        if packet == 200 {
+            rooms[0].mute().unwrap();
+        }
+        for (index, room) in rooms.iter().enumerate() {
+            let samples: Vec<i16> = (0..480)
+                .map(|i| {
+                    (((packet * 480 + i) as f64 * frequencies[index] * std::f64::consts::TAU
+                        / 48_000.)
+                        .sin()
+                        * 6000.) as i16
+                })
+                .collect();
+            room.send_audio(&samples).await.unwrap();
+        }
+        for (index, room) in rooms.iter_mut().enumerate() {
+            // Drain more than one source each tick, including control events through next_audio.
+            for _ in 0..3 {
+                if let Ok(Some(frame)) = timeout(Duration::from_millis(1), room.next_audio()).await
+                {
+                    let source = names
+                        .iter()
+                        .position(|name| *name == frame.participant_id)
+                        .unwrap();
+                    assert_ne!(source, index);
+                    if tone_energy(&frame.samples, frequencies[source]) > 500. {
+                        if packet < 200 {
+                            heard[index][source] += 1;
+                        }
+                        if packet > 250 {
+                            after_mute[index][source] += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    for listener in 0..3 {
+        for source in 0..3 {
+            if listener == source {
+                continue;
+            }
+            assert!(
+                heard[listener][source] >= 20,
+                "missing tone {source} at {listener}: {heard:?}"
+            );
+            if source == 0 {
+                assert_eq!(
+                    after_mute[listener][source], 0,
+                    "muted source remained audible"
+                );
+            } else {
+                assert!(
+                    after_mute[listener][source] >= 10,
+                    "muting Alice interrupted another source: {after_mute:?}"
+                );
+            }
+        }
+    }
+    for room in rooms {
+        room.close().await.unwrap();
+    }
+    server.service.delete_room("three-speakers").await.unwrap();
+}
+
+fn tone_energy(samples: &[i16], frequency: f64) -> f64 {
+    let (mut real, mut imaginary) = (0., 0.);
+    for (index, sample) in samples.iter().enumerate() {
+        let phase = index as f64 * frequency * std::f64::consts::TAU / 48_000.;
+        real += f64::from(*sample) * phase.cos();
+        imaginary += f64::from(*sample) * phase.sin();
+    }
+    real.hypot(imaginary) / samples.len() as f64
+}

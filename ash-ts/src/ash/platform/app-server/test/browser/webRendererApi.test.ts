@@ -349,3 +349,29 @@ test('invalid response rejects its pending request and unknown host methods rece
 	assert.equal(client.state, 'crashed');
 	client.dispose();
 });
+
+test('Call service is assembled from the negotiated contract and ignores stale or foreign updates', async () => {
+	const transport = new FakeTransport(value => ({ ...value, capabilities: { ...value.capabilities, contracts: { ...value.capabilities.contracts, calls: { version: 1 } } } }));
+	const connected = await connectWebRendererApi(transport, connectorHostServices);
+	try {
+		const calls = connected.api.calls;
+		assert.ok(calls);
+		const starting = calls.start({ type: 'local' });
+		const params = transport.requests.at(-1)?.params as { resourceId: string };
+		const status = {
+			resourceId: params.resourceId, sequence: 1, connection: 'connected' as const,
+			call: { id: 'call', revision: 1, mediaEpoch: 1, mediaRoom: 'room', mediaState: { state: 'ready' as const }, members: [{ id: 'owner', role: 'owner' as const }] },
+			memberId: 'owner', participants: [], muted: true, deafened: false, microphoneAllowed: true, error: null,
+		};
+		transport.respondAt(-1, status);
+		await starting;
+		transport.emitNotification({ method: 'call/changed', params: { ...status, sequence: 3, muted: false } });
+		transport.emitNotification({ method: 'call/changed', params: { ...status, sequence: 2 } });
+		transport.emitNotification({ method: 'call/changed', params: { ...status, sequence: 4, resourceId: 'another-window' } });
+		assert.equal(calls.state?.muted, false);
+		const leaving = calls.leave();
+		transport.respondAt(-1, { ...status, sequence: 4, connection: 'ended', muted: true });
+		await leaving;
+		assert.equal(calls.state?.connection, 'ended');
+	} finally { connected.dispose(); }
+});

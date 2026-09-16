@@ -23,6 +23,7 @@ use futures::SinkExt;
 use futures::StreamExt;
 use livekit_api::MediaPermissions;
 use livekit_client::AudioPublication;
+use livekit_client::MediaEvent;
 use livekit_client::MediaRoom;
 use serde_json::Value;
 use serde_json::json;
@@ -40,6 +41,28 @@ use voice_agent::VoiceAgent;
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[ignore = "requires the pinned LiveKit Server executable"]
 async fn agent_receives_human_audio_publishes_reply_and_delegates_without_executing() {
+    bridge(Ending::Stop).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "requires the pinned LiveKit Server executable"]
+async fn last_human_leaving_finalizes_model_even_with_other_invited_members() {
+    bridge(Ending::Leave).await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "requires the pinned LiveKit Server executable"]
+async fn stopping_playback_suppresses_late_model_audio_in_the_room() {
+    bridge(Ending::StopPlayback).await;
+}
+
+enum Ending {
+    StopPlayback,
+    Stop,
+    Leave,
+}
+
+async fn bridge(ending: Ending) {
     let server = server::Server::start();
     server.service.create_room("bridge-test").await.unwrap();
     let permissions = MediaPermissions {
@@ -69,6 +92,11 @@ async fn agent_receives_human_audio_publishes_reply_and_delegates_without_execut
     )
     .await
     .unwrap();
+    timeout(Duration::from_secs(5), async {
+        loop {
+            if matches!(alice.next_event().await, Some(MediaEvent::TrackAdded { participant_id, .. }) if participant_id == "assistant") { break; }
+        }
+    }).await.unwrap();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let provider = ProviderId::new("openai").unwrap();
     let mut config = ModelProviderConfig::new(provider.clone());
@@ -91,7 +119,11 @@ async fn agent_receives_human_audio_publishes_reply_and_delegates_without_execut
     let mut registry = ProviderConfigRegistry::new();
     registry.register(definition).unwrap();
     let runtime = ModelProviderRuntime::with_secrets(registry, secrets);
+    let (commentary_tx, commentary_rx) = tokio::sync::oneshot::channel();
+    let (late_tx, late_rx) = tokio::sync::oneshot::channel();
     let model = tokio::spawn(async move {
+        let mut late_rx = Some(late_rx);
+        let mut commentary_tx = Some(commentary_tx);
         let (tcp, _) = listener.accept().await.unwrap();
         let mut socket = tokio_tungstenite::accept_hdr_async(
             tcp,
@@ -161,6 +193,17 @@ async fn agent_receives_human_audio_publishes_reply_and_delegates_without_execut
                     assert_eq!(event["delegation_id"], "task");
                     assert_eq!(event["content"], "Awaiting requester approval");
                     commentary = true;
+                    commentary_tx.take().unwrap().send(()).unwrap();
+                    late_rx.take().unwrap().await.unwrap();
+                    let late_audio: Vec<u8> = (0..12_000)
+                        .flat_map(|i| {
+                            ((i as f64 * 880. * std::f64::consts::TAU / 24_000.)
+                                .sin()
+                                .mul_add(6000., 0.) as i16)
+                                .to_le_bytes()
+                        })
+                        .collect();
+                    socket.send(Message::Text(json!({"type":"session.output_audio.delta","delta":STANDARD.encode(late_audio)}).to_string().into())).await.unwrap();
                 }
                 "session.close" => {
                     assert!(heard && commentary);
@@ -198,7 +241,10 @@ async fn agent_receives_human_audio_publishes_reply_and_delegates_without_execut
     let agent = VoiceAgent::new(
         room,
         live,
-        BTreeMap::from([("alice".into(), "member-alice".into())]),
+        BTreeMap::from([
+            ("alice".into(), "member-alice".into()),
+            ("offline".into(), "member-offline".into()),
+        ]),
     )
     .unwrap();
     let (commands, input) = mpsc::channel(8);
@@ -251,7 +297,57 @@ async fn agent_receives_human_audio_publishes_reply_and_delegates_without_execut
         heard >= 10 && delegated,
         "heard={heard}, delegated={delegated}"
     );
-    commands.send(AgentCommand::Stop).await.unwrap();
+    // Allow the commentary to reach the model before testing the independent stop paths.
+    timeout(Duration::from_secs(5), commentary_rx)
+        .await
+        .unwrap()
+        .unwrap();
+    if matches!(ending, Ending::StopPlayback) {
+        commands.send(AgentCommand::StopPlayback).await.unwrap();
+        timeout(Duration::from_secs(5), async {
+            loop {
+                if matches!(
+                    alice.next_event().await,
+                    Some(MediaEvent::TrackMuted { .. })
+                ) {
+                    break;
+                }
+                assert!(
+                    !worker.is_finished(),
+                    "playback stop must preserve the voice session"
+                );
+            }
+        })
+        .await
+        .unwrap();
+    }
+    late_tx.send(()).unwrap();
+    if matches!(ending, Ending::StopPlayback) {
+        let silence = async {
+            while let Some(frame) = alice.next_audio().await {
+                assert!(
+                    frame
+                        .samples
+                        .iter()
+                        .all(|sample| sample.unsigned_abs() < 500),
+                    "late model audio was audible after stop"
+                );
+            }
+            panic!("playback stop unexpectedly disconnected the listener");
+        };
+        assert!(timeout(Duration::from_millis(700), silence).await.is_err());
+        assert!(!worker.is_finished());
+    }
+    let remaining_alice = match ending {
+        Ending::Stop | Ending::StopPlayback => {
+            commands.send(AgentCommand::Stop).await.unwrap();
+            Some(alice)
+        }
+        Ending::Leave => {
+            alice.close().await.unwrap();
+            None
+        }
+    };
     timeout(Duration::from_secs(20), worker)
         .await
         .unwrap()
@@ -261,9 +357,11 @@ async fn agent_receives_human_audio_publishes_reply_and_delegates_without_execut
         .await
         .unwrap()
         .unwrap();
+    if let Some(alice) = remaining_alice {
+        alice.close().await.unwrap();
+    }
     assert!(matches!(
         events.recv().await,
         Some(AgentEvent::Closed { seconds: 3.0, .. })
     ));
-    alice.close().await.unwrap();
 }

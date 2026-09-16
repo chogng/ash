@@ -8,6 +8,9 @@ publish.workspace = true
 [lib]
 name = "call"
 
+[features]
+runtime = ["dep:ash-http-client", "dep:url", "dep:tempfile", "dep:tokio"]
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -16,9 +19,15 @@ rand = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
 ash-secrets = { workspace = true }
-
-[dev-dependencies]
-tempfile = { workspace = true }
+ash-http-client = { optional = true, workspace = true }
+url = { optional = true, workspace = true }
+tempfile = { optional = true, workspace = true }
+schemars = { workspace = true }
+ts-rs = { workspace = true, features = ["no-serde-warnings"] }
+tokio = { optional = true, workspace = true, features = ["rt-multi-thread", "macros", "sync", "time"] }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+tempfile = { workspace = true }

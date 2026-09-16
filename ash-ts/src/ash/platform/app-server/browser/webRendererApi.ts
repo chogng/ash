@@ -1,3 +1,4 @@
+import { AppServerCallService } from '../../call/browser/appServerCallService.js';
 import { AppServerMemoriesService } from '../../memories/browser/appServerMemoriesService.js';
 import { AppServerMemoryDiagnosticsService } from '../../memory/browser/appServerMemoryDiagnosticsService.js';
 import { generateUuid } from '../../../base/common/uuid.js';
@@ -66,11 +67,12 @@ export async function connectWebRendererApi(transport: AppServerTransport, conne
 		const instanceId = generateUuid();
 		const memoryDiagnostics = connection.capabilities?.contracts.memoryDiagnostics?.version === 1 ? new AppServerMemoryDiagnosticsService(connection, 'browser', async () => [{ instanceId, processId: null, role: 'renderer', phase: 'unknown', metrics: [{ kind: 'domNodes', value: document.getElementsByTagName('*').length, unavailable: null }, { kind: 'javaScriptHeapBytes', value: null, unavailable: 'unsupported' }, { kind: 'residentBytes', value: null, unavailable: 'unsupported' }] }]) : undefined;
 		const memories = connection.capabilities?.memories ? new AppServerMemoriesService(connection) : undefined;
+		const calls = connection.capabilities?.contracts.calls?.version === 1 ? new AppServerCallService(connection) : undefined;
 		const automation = connection.capabilities?.contracts.automation?.version === 1 ? new AppServerAutomationService(connection) : undefined;
 		return {
-			api: { ...createRendererHost(connection, connectorHostServices, contributions), automation, memoryDiagnostics, memories },
+			api: { ...createRendererHost(connection, connectorHostServices, contributions), calls, automation, memoryDiagnostics, memories },
 			metadata,
-			dispose: () => { disposed = true; reconnect.dispose(); clearTimeout(retryTimer); releaseWait?.(); memories?.dispose(); memoryDiagnostics?.dispose(); automation?.dispose(); connection.dispose(); },
+			dispose: () => { disposed = true; reconnect.dispose(); clearTimeout(retryTimer); releaseWait?.(); memories?.dispose(); memoryDiagnostics?.dispose(); automation?.dispose(); calls?.dispose(); connection.dispose(); },
 		};
 	} catch (error) {
 		connection.dispose();

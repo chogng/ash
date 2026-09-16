@@ -1,3 +1,4 @@
+import { ICallService } from '../../platform/call/common/callService.js';
 import { FormattingConflicts } from '../../editor/contrib/format/browser/format.js';
 import { MarkerDecorationsService } from '../../editor/common/services/markerDecorationsService.js';
 import { IMarkerDecorationsService } from '../../editor/common/services/markerDecorations.js';
@@ -352,6 +353,7 @@ export class Workbench extends Disposable {
 		if (api.debugAdapter) services.registerInstance(IDebugAdapterProcessService, api.debugAdapter);
 		if (api.memories) { services.registerInstance(IMemoriesService, api.memories); }
 		if (api.memoryDiagnostics) { services.registerInstance(IMemoryDiagnosticsService, api.memoryDiagnostics); }
+		if (api.calls) { services.registerInstance(ICallService, api.calls); }
 		if (api.automation) {
 			services.registerInstance(IAutomationService, api.automation);
 		}

@@ -2,7 +2,7 @@
 export const APP_SERVER_PROTOCOL_MAJOR = 7 as const;
 export const APP_SERVER_PROTOCOL_REVISION = 1 as const;
 export const APP_SERVER_CAPABILITY_VERSION = 5 as const;
-export const APP_SERVER_SCHEMA_HASH = "sha256:a4cefcf47f4121a799c62fa7763d673e2ec4fe62a03d0dd5a575db5976bc698c" as const;
+export const APP_SERVER_SCHEMA_HASH = "sha256:839cd35978b1391441feb727153f0f720cfc907a8b83c160d957739ead8370ab" as const;
 export type JsonRpcVersion = "2.0";
 export type JsonRpcId = number | string | null;
 export type JsonRpcRequest<P> = { jsonrpc: JsonRpcVersion; id: JsonRpcId; method: string; params: P };

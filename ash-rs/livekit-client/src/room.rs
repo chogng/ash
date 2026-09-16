@@ -15,6 +15,7 @@ use livekit::webrtc::audio_source::native::NativeAudioSource as PcmAudioSource;
 use livekit::webrtc::audio_stream::native::NativeAudioStream as PcmAudioStream;
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -44,10 +45,29 @@ pub struct AudioFrame {
 
 #[derive(Debug)]
 pub enum MediaEvent {
+    Connected {
+        participant_ids: Vec<String>,
+    },
     Audio(AudioFrame),
-    ParticipantJoined { participant_id: String },
-    ParticipantLeft { participant_id: String },
-    TrackRemoved { track_id: String },
+    ParticipantJoined {
+        participant_id: String,
+    },
+    ParticipantLeft {
+        participant_id: String,
+    },
+    TrackAdded {
+        participant_id: String,
+        track_id: String,
+    },
+    TrackRemoved {
+        track_id: String,
+    },
+    TrackMuted {
+        track_id: String,
+    },
+    TrackUnmuted {
+        track_id: String,
+    },
     Reconnecting,
     Reconnected,
     Disconnected,
@@ -61,6 +81,7 @@ pub struct MediaRoom {
     audio: mpsc::Receiver<AudioFrame>,
     stop: Option<oneshot::Sender<()>>,
     worker: Option<JoinHandle<Result<(), MediaError>>>,
+    muted: HashSet<String>,
 }
 
 impl MediaRoom {
@@ -93,6 +114,7 @@ impl MediaRoom {
             audio,
             stop: Some(stop),
             worker: Some(worker),
+            muted: HashSet::new(),
         };
         if publish != AudioPublication::SubscribeOnly {
             // Device AEC/NS/AGC belongs to voice-host. No duplicate SDK processing.
@@ -169,7 +191,12 @@ impl MediaRoom {
             tokio::select! {
                 biased;
                 event = self.events.recv() => {
-                    if matches!(event, Some(MediaEvent::Reconnecting | MediaEvent::Disconnected | MediaEvent::TrackRemoved { .. } | MediaEvent::ParticipantLeft { .. })) {
+                    match &event {
+                        Some(MediaEvent::TrackMuted { track_id }) => { self.muted.insert(track_id.clone()); }
+                        Some(MediaEvent::TrackUnmuted { track_id } | MediaEvent::TrackRemoved { track_id }) => { self.muted.remove(track_id); }
+                        _ => {}
+                    }
+                    if matches!(event, Some(MediaEvent::Reconnecting | MediaEvent::Disconnected | MediaEvent::TrackRemoved { .. } | MediaEvent::ParticipantLeft { .. } | MediaEvent::TrackMuted { .. } | MediaEvent::TrackUnmuted { .. })) {
                         // Control changes invalidate audio already queued under the old topology.
                         while self.audio.try_recv().is_ok() {}
                     }
@@ -177,7 +204,7 @@ impl MediaRoom {
                 }
                 frame = self.audio.recv() => {
                     let frame = frame?;
-                    if frame.received_at.elapsed() <= MAX_AGE { return Some(MediaEvent::Audio(frame)); }
+                    if frame.received_at.elapsed() <= MAX_AGE && !self.muted.contains(&frame.track_id) { return Some(MediaEvent::Audio(frame)); }
                 }
             }
         }
@@ -185,8 +212,7 @@ impl MediaRoom {
 
     pub async fn next_audio(&mut self) -> Option<AudioFrame> {
         loop {
-            let frame = self.audio.recv().await?;
-            if frame.received_at.elapsed() <= MAX_AGE {
+            if let MediaEvent::Audio(frame) = self.next_event().await? {
                 return Some(frame);
             }
         }
@@ -230,6 +256,14 @@ async fn receive(
             event = receiver.recv() => match event { Some(event) => event, None => break Ok(()) },
         };
         let notification = match event {
+            RoomEvent::Connected {
+                participants_with_tracks,
+            } => Some(MediaEvent::Connected {
+                participant_ids: participants_with_tracks
+                    .into_iter()
+                    .map(|(participant, _)| participant.identity().to_string())
+                    .collect(),
+            }),
             RoomEvent::TrackSubscribed {
                 track: RemoteTrack::Audio(track),
                 participant,
@@ -245,6 +279,10 @@ async fn receive(
                 let mut stream = PcmAudioStream::new(track.rtc_track(), 48_000, 1);
                 let tx = audio.clone();
                 let participant_id = participant.identity().to_string();
+                let notification = MediaEvent::TrackAdded {
+                    participant_id: participant_id.clone(),
+                    track_id: id.clone(),
+                };
                 let track_id = id.clone();
                 tracks.insert(
                     id,
@@ -263,7 +301,7 @@ async fn receive(
                         stream.close();
                     }),
                 );
-                None
+                Some(notification)
             }
             RoomEvent::TrackUnsubscribed { track, .. } => {
                 let id = track.sid().to_string();
@@ -272,6 +310,12 @@ async fn receive(
                 }
                 Some(MediaEvent::TrackRemoved { track_id: id })
             }
+            RoomEvent::TrackMuted { publication, .. } => Some(MediaEvent::TrackMuted {
+                track_id: publication.sid().to_string(),
+            }),
+            RoomEvent::TrackUnmuted { publication, .. } => Some(MediaEvent::TrackUnmuted {
+                track_id: publication.sid().to_string(),
+            }),
             RoomEvent::ParticipantConnected(participant) => Some(MediaEvent::ParticipantJoined {
                 participant_id: participant.identity().to_string(),
             }),

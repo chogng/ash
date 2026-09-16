@@ -15,6 +15,9 @@ name = "ash_app_server"
 path = "src/lib.rs"
 
 [dependencies]
+call = { package = "ash-call", path = "../call", features = ["runtime"] }
+livekit-client = { package = "ash-livekit-client", path = "../livekit-client" }
+voice-host = { package = "ash-voice-host", path = "../voice-host" }
 file-search = { package = "ash-file-search", path = "../file-search" }
 tempfile = { workspace = true }
 sleep_inhibitor.workspace = true

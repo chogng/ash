@@ -14,6 +14,7 @@ filegroup(
     name = "assembly_sources",
     srcs = [
         "layout.ts",
+        "livekit.ts",
         "layout.json",
         "productServices.ts",
         "//build/download:artifacts.ts",

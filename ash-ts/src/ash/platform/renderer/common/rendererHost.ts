@@ -1,3 +1,4 @@
+import type { ICallService } from '../../call/common/callService.js';
 import type { IMemoriesService } from '../../memories/common/memoriesService.js';
 import type { IMemoryDiagnosticsService } from '../../memory/common/memoryDiagnosticsService.js';
 import type { IAppServerApi, IResourceApi, IServerEventApi } from "../../app-server/common/appServerApi.js";
@@ -49,6 +50,7 @@ export function mergeRendererHostCapabilities(capabilities: readonly RendererHos
 
 /** Transport-neutral capability set supplied by a renderer host at startup. */
 export interface IRendererHost extends RendererHostCapabilities {
+	readonly calls?: ICallService;
 	readonly automation?: IAutomationService;
 	readonly memoryDiagnostics?: IMemoryDiagnosticsService;
 	readonly memories?: IMemoriesService;

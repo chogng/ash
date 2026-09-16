@@ -43,6 +43,16 @@ use crate::protocol::browser::BrowserPerformActionDto;
 use crate::protocol::browser::BrowserPerformParams;
 use crate::protocol::browser::BrowserPerformResult;
 use crate::protocol::browser::BrowserTextInputTargetDto;
+use crate::protocol::call::CallControlParams;
+use crate::protocol::call::CallDeployment;
+use crate::protocol::call::CallEndParams;
+use crate::protocol::call::CallInvitation;
+use crate::protocol::call::CallInviteParams;
+use crate::protocol::call::CallMemberParams;
+use crate::protocol::call::CallResourceParams;
+use crate::protocol::call::CallRoleParams;
+use crate::protocol::call::CallStartParams;
+use crate::protocol::call::CallStatus;
 use crate::protocol::codebase::CloudCodebaseAuthorizeParams;
 use crate::protocol::codebase::CloudCodebaseDestinationDto;
 use crate::protocol::codebase::CloudCodebaseGrantDto;
@@ -865,6 +875,13 @@ use ash_protocol::UserInputOption;
 use ash_protocol::UserInputQuestion;
 use ash_protocol::WorkspaceCheckpoint;
 use build_info::BuildInfo;
+use call::CallConnection;
+use call::CallControl;
+use call::CallMember;
+use call::CallParticipant;
+use call::CallRole;
+use call::CallSnapshot;
+use call::MediaState;
 use diagnostics::Activity;
 use diagnostics::ActivitySummary;
 use diagnostics::DiagnosticSnapshot;
@@ -1374,6 +1391,46 @@ client_methods! {
         params: DirPermissionsForgetParams,
         response: ConfigCommandResult,
         serialization: GlobalExclusive,
+    },
+    CallStart => "call/start" {
+        params: CallStartParams,
+        response: CallStatus,
+        serialization: ConnectionExclusive("call"),
+    },
+    CallRead => "call/read" {
+        params: CallResourceParams,
+        response: CallStatus,
+        serialization: ConnectionExclusive("call"),
+    },
+    CallControl => "call/control" {
+        params: CallControlParams,
+        response: CallStatus,
+        serialization: ConnectionExclusive("call"),
+    },
+    CallLeave => "call/leave" {
+        params: CallResourceParams,
+        response: CallStatus,
+        serialization: ConnectionExclusive("call"),
+    },
+    CallEnd => "call/end" {
+        params: CallEndParams,
+        response: CallStatus,
+        serialization: ConnectionExclusive("call"),
+    },
+    CallInvite => "call/invite" {
+        params: CallInviteParams,
+        response: CallInvitation,
+        serialization: ConnectionExclusive("call"),
+    },
+    CallRemove => "call/remove" {
+        params: CallMemberParams,
+        response: CallStatus,
+        serialization: ConnectionExclusive("call"),
+    },
+    CallRole => "call/role" {
+        params: CallRoleParams,
+        response: CallStatus,
+        serialization: ConnectionExclusive("call"),
     },
     DocumentCollaborationOpen => "document/collaboration/open" {
         params: DocumentCollaborationOpenParams,
@@ -2676,6 +2733,7 @@ server_notifications! {
     SessionDeleted => "session/deleted" {
         params: SessionDeleted,
     },
+    CallChanged => "call/changed" { params: CallStatus, },
     DocumentCollaborationUpdate => "document/collaboration/update" {
         params: DocumentCollaborationUpdate,
     },
@@ -2907,6 +2965,23 @@ typescript_bindings! {
     BrowserTextInputTargetDto,
     ClientCapabilities,
     ServerInfo,
+    CallStartParams,
+    CallResourceParams,
+    CallControlParams,
+    CallInviteParams,
+    CallEndParams,
+    CallInvitation,
+    CallMemberParams,
+    CallRoleParams,
+    CallStatus,
+    CallDeployment,
+    CallConnection,
+    CallControl,
+    CallParticipant,
+    CallRole,
+    CallSnapshot,
+    CallMember,
+    MediaState,
     DocumentCollaborationOpenParams,
     DocumentCollaborationSnapshot,
     DocumentCollaborationOpenResult,

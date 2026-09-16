@@ -5,6 +5,7 @@ pub mod agent;
 pub mod attachments;
 pub mod automation;
 pub mod browser;
+pub mod call;
 pub mod codebase;
 pub mod codebase_symbols;
 pub mod collaboration;

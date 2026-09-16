@@ -79,6 +79,8 @@ class PackageTests(unittest.TestCase):
                 "ash-app-server",
                 "ash-app-server-daemon",
                 "ash-code-mode-host",
+                "ash-voice-host",
+                "ash-collaboration-server",
                 "ash-remote",
                 "ash-remote-server",
                 "ash-exec-server",
@@ -99,6 +101,20 @@ class PackageTests(unittest.TestCase):
 
             def run_command(command, **kwargs):
                 if command[0] == "node":
+                    if str(command[1]).endswith("livekit.ts"):
+                        payload = json.dumps(
+                            {
+                                "executable": str(
+                                    executable_file(root / "livekit", b"livekit")
+                                ),
+                                "license": str(
+                                    executable_file(
+                                        root / "livekit-license", b"license"
+                                    )
+                                ),
+                            }
+                        )
+                        return subprocess.CompletedProcess(command, 0, payload)
                     return real_run(command, **kwargs)
                 return subprocess.CompletedProcess(command, 0, "\n".join(artifacts))
 
@@ -321,6 +337,16 @@ class PackageTests(unittest.TestCase):
                 node,
                 cli_binary=cli_binary,
                 update_public_key="11" * 32,
+                voice_host_binary=executable_file(root / "voice", b"voice"),
+                collaboration_server_binary=executable_file(
+                    root / "collaboration", b"collaboration"
+                ),
+                livekit={
+                    "executable": str(executable_file(root / "livekit", b"livekit")),
+                    "license": str(
+                        executable_file(root / "livekit-license", b"license")
+                    ),
+                },
             )
 
             self.assertEqual(
@@ -483,6 +509,18 @@ class PackageTests(unittest.TestCase):
                     test_tgrep_resolution(root),
                     node,
                     cli_binary=cli_binary,
+                    voice_host_binary=executable_file(root / "voice", b"voice"),
+                    collaboration_server_binary=executable_file(
+                        root / "collaboration", b"collaboration"
+                    ),
+                    livekit={
+                        "executable": str(
+                            executable_file(root / "livekit", b"livekit")
+                        ),
+                        "license": str(
+                            executable_file(root / "livekit-license", b"license")
+                        ),
+                    },
                 )
 
             with self.assertRaisesRegex(RuntimeError, "Refusing to replace"):
@@ -500,6 +538,18 @@ class PackageTests(unittest.TestCase):
                     ripgrep,
                     test_tgrep_resolution(root),
                     node,
+                    voice_host_binary=executable_file(root / "voice", b"voice"),
+                    collaboration_server_binary=executable_file(
+                        root / "collaboration", b"collaboration"
+                    ),
+                    livekit={
+                        "executable": str(
+                            executable_file(root / "livekit", b"livekit")
+                        ),
+                        "license": str(
+                            executable_file(root / "livekit-license", b"license")
+                        ),
+                    },
                 )
 
     def test_host_provided_runtime_package_omits_standalone_node(self) -> None:
@@ -532,6 +582,16 @@ class PackageTests(unittest.TestCase):
                 test_tgrep_resolution(root),
                 None,
                 protocol_metadata=generated_protocol,
+                voice_host_binary=executable_file(root / "voice", b"voice"),
+                collaboration_server_binary=executable_file(
+                    root / "collaboration", b"collaboration"
+                ),
+                livekit={
+                    "executable": str(executable_file(root / "livekit", b"livekit")),
+                    "license": str(
+                        executable_file(root / "livekit-license", b"license")
+                    ),
+                },
             )
 
             metadata = json.loads(
@@ -673,6 +733,16 @@ class PackageTests(unittest.TestCase):
                 test_tgrep_resolution(root),
                 node,
                 bubblewrap,
+                voice_host_binary=executable_file(root / "voice", b"voice"),
+                collaboration_server_binary=executable_file(
+                    root / "collaboration", b"collaboration"
+                ),
+                livekit={
+                    "executable": str(executable_file(root / "livekit", b"livekit")),
+                    "license": str(
+                        executable_file(root / "livekit-license", b"license")
+                    ),
+                },
             )
 
             self.assertEqual(
@@ -734,6 +804,16 @@ class PackageTests(unittest.TestCase):
                 windows_sandbox_binary=executable_file(
                     root / "sandbox-source.exe", b"sandbox"
                 ),
+                voice_host_binary=executable_file(root / "voice", b"voice"),
+                collaboration_server_binary=executable_file(
+                    root / "collaboration", b"collaboration"
+                ),
+                livekit={
+                    "executable": str(executable_file(root / "livekit", b"livekit")),
+                    "license": str(
+                        executable_file(root / "livekit-license", b"license")
+                    ),
+                },
             )
 
             resources = output / "ash-resources"
