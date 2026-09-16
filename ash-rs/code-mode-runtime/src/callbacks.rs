@@ -332,8 +332,13 @@ pub(super) fn exit_callback(
     if let Some(state) = scope.get_slot_mut::<RuntimeState>() {
         state.exit_requested = true;
     }
-    if let Some(error) = v8::String::new(scope, "__ash_code_mode_exit__") {
-        scope.throw_exception(error.into());
+    // Request termination, then enter V8 to process the interrupt before returning
+    // to the caller. Merely requesting it can allow straight-line JS to continue.
+    scope.terminate_execution();
+    if let Some(source) = v8::String::new(scope, "")
+        && let Some(script) = v8::Script::compile(scope, source, None)
+    {
+        let _ = script.run(scope);
     }
 }
 

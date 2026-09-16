@@ -72,26 +72,44 @@ impl HostRuntime {
             let stdout = child.stdout.take().ok_or_else(|| {
                 RuntimeError::Initialization("Code Mode Host stdout is unavailable".into())
             })?;
-            let mut writer = BufWriter::new(stdin);
-            let mut reader = BufReader::new(stdout);
-            write_frame(
-                &mut writer,
-                &ClientToHost::Hello {
-                    protocol_version: CODE_MODE_PROTOCOL_VERSION,
-                },
-            )
-            .map_err(|error| RuntimeError::Initialization(error.to_string()))?;
-            match read_frame::<_, HostToClient>(&mut reader)
-                .map_err(|error| RuntimeError::Initialization(error.to_string()))?
-            {
-                HostToClient::Hello {
-                    protocol_version, ..
-                } if protocol_version == CODE_MODE_PROTOCOL_VERSION => Ok((writer, reader)),
-                HostToClient::Error { message } => Err(RuntimeError::Initialization(message)),
-                message => Err(RuntimeError::Initialization(format!(
-                    "unexpected Code Mode Host handshake response: {message:?}"
-                ))),
-            }
+            let (sender, receiver) = mpsc::channel();
+            thread::spawn(move || {
+                let result = (|| {
+                    let mut writer = BufWriter::new(stdin);
+                    let mut reader = BufReader::new(stdout);
+                    write_frame(
+                        &mut writer,
+                        &ClientToHost::Hello {
+                            protocol_version: CODE_MODE_PROTOCOL_VERSION,
+                        },
+                    )
+                    .map_err(|error| RuntimeError::Initialization(error.to_string()))?;
+                    match read_frame::<_, HostToClient>(&mut reader)
+                        .map_err(|error| RuntimeError::Initialization(error.to_string()))?
+                    {
+                        HostToClient::Hello {
+                            protocol_version, ..
+                        } if protocol_version == CODE_MODE_PROTOCOL_VERSION => Ok((writer, reader)),
+                        HostToClient::Error { message } => {
+                            Err(RuntimeError::Initialization(message))
+                        }
+                        message => Err(RuntimeError::Initialization(format!(
+                            "unexpected Code Mode Host handshake response: {message:?}"
+                        ))),
+                    }
+                })();
+                let _ = sender.send(result);
+            });
+            receiver
+                .recv_timeout(Duration::from_secs(5))
+                .map_err(|error| {
+                    RuntimeError::Initialization(match error {
+                        RecvTimeoutError::Timeout => "Code Mode Host handshake timed out".into(),
+                        RecvTimeoutError::Disconnected => {
+                            "Code Mode Host handshake channel closed".into()
+                        }
+                    })
+                })?
         })();
         let (writer, reader) = match handshake {
             Ok(transport) => transport,

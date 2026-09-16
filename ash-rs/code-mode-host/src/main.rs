@@ -1,10 +1,13 @@
+mod output;
+
 use ash_code_mode_protocol::{
-    CODE_MODE_PROTOCOL_VERSION, CellOutcome, ClientToHost, HostToClient, NestedToolCall,
-    RuntimeNotification, RuntimeResponse, write_frame,
+    CODE_MODE_PROTOCOL_VERSION, ClientToHost, HostToClient, NestedToolCall, RuntimeNotification,
 };
 use ash_code_mode_runtime::{CodeModeRuntime, ToolInvoker};
+use output::send;
+use output::send_wait_result;
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::{self, BufReader, BufWriter, Write};
+use std::io::{self, BufReader, BufWriter};
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -60,11 +63,7 @@ impl ToolInvoker for StdioToolInvoker {
 
 impl StdioToolInvoker {
     fn send(&self, message: HostToClient) -> Result<(), String> {
-        let mut writer = self
-            .writer
-            .lock()
-            .map_err(|_| "Host output writer was poisoned".to_string())?;
-        write_frame(&mut *writer, &message).map_err(|error| error.to_string())
+        send(&self.writer, message).map_err(|error| error.to_string())
     }
 
     fn complete(
@@ -284,7 +283,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let writer = Arc::clone(&stdout);
                 thread::spawn(move || {
                     let result = runtime.wait(request);
-                    send_wait_result(&writer, &runtime, result);
+                    let _ = send_wait_result(&writer, &runtime, result);
                 });
             }
             ClientToHost::Terminate { cell_id } => {
@@ -305,7 +304,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let writer = Arc::clone(&stdout);
                 thread::spawn(move || {
                     let result = runtime.terminate(&cell_id);
-                    send_wait_result(&writer, &runtime, result);
+                    let _ = send_wait_result(&writer, &runtime, result);
                 });
             }
             ClientToHost::CompleteToolCall {
@@ -339,81 +338,4 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         runtime.close();
     }
     Ok(())
-}
-
-fn send(
-    writer: &Arc<Mutex<BufWriter<io::Stdout>>>,
-    message: HostToClient,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let mut writer = writer
-        .lock()
-        .map_err(|_| io::Error::other("Host output writer was poisoned"))?;
-    write_frame(&mut *writer, &message)?;
-    writer.flush()?;
-    Ok(())
-}
-
-fn terminal_outcome(response: &RuntimeResponse) -> Option<CellOutcome> {
-    match response {
-        RuntimeResponse::Result { error_text, .. } => Some(if error_text.is_some() {
-            CellOutcome::Failed
-        } else {
-            CellOutcome::Completed
-        }),
-        RuntimeResponse::Terminated { .. } => Some(CellOutcome::Terminated),
-        RuntimeResponse::Unknown { .. } => Some(CellOutcome::Unknown),
-        RuntimeResponse::Running { .. } | RuntimeResponse::Yielded { .. } => None,
-    }
-}
-
-fn response_cell_id(response: &RuntimeResponse) -> ash_code_mode_protocol::CellId {
-    match response {
-        RuntimeResponse::Running { cell_id, .. }
-        | RuntimeResponse::Yielded { cell_id, .. }
-        | RuntimeResponse::Terminated { cell_id, .. }
-        | RuntimeResponse::Result { cell_id, .. }
-        | RuntimeResponse::Unknown { cell_id, .. } => cell_id.clone(),
-    }
-}
-
-fn send_wait_result(
-    writer: &Arc<Mutex<BufWriter<io::Stdout>>>,
-    runtime: &CodeModeRuntime,
-    result: Result<ash_code_mode_protocol::WaitOutcome, ash_code_mode_runtime::RuntimeError>,
-) {
-    let message = match result {
-        Ok(ash_code_mode_protocol::WaitOutcome::LiveCell { response }) => {
-            let session_values =
-                runtime
-                    .store_snapshot()
-                    .ok()
-                    .map(|values| HostToClient::StoreSnapshot {
-                        session_id: runtime.session_id().clone(),
-                        values,
-                    });
-            let terminal = terminal_outcome(&response).map(|outcome| HostToClient::CellClosed {
-                cell_id: response_cell_id(&response),
-                outcome,
-            });
-            if let Some(message) = session_values
-                && send(writer, message).is_err()
-            {
-                return;
-            }
-            if send(writer, HostToClient::Response { response }).is_err() {
-                return;
-            }
-            if let Some(message) = terminal {
-                let _ = send(writer, message);
-            }
-            return;
-        }
-        Ok(ash_code_mode_protocol::WaitOutcome::MissingCell { cell_id }) => HostToClient::Error {
-            message: format!("Code Mode cell not found: {}", cell_id),
-        },
-        Err(error) => HostToClient::Error {
-            message: error.to_string(),
-        },
-    };
-    let _ = send(writer, message);
 }

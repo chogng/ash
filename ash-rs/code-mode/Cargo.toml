@@ -26,5 +26,5 @@ test = false
 bench = false
 
 [[test]]
-name = "host_crash"
-path = "tests/host_crash.rs"
+name = "host"
+path = "tests/host.rs"

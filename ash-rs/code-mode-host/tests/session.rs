@@ -14,62 +14,82 @@ use std::io::BufReader;
 use std::process::Command;
 use std::process::Stdio;
 
-struct Host(std::process::Child);
+struct Host {
+    child: std::process::Child,
+    writer: std::process::ChildStdin,
+    events: std::sync::mpsc::Receiver<HostToClient>,
+}
 
 impl Drop for Host {
     fn drop(&mut self) {
-        let _ = self.0.kill();
-        let _ = self.0.wait();
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+impl Host {
+    fn new() -> Self {
+        let mut child = Command::new(env!("CARGO_BIN_EXE_ash-code-mode-host"))
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .unwrap();
+        let writer = child.stdin.take().unwrap();
+        let mut reader = BufReader::new(child.stdout.take().unwrap());
+        let (sender, events) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            while let Ok(message) = read_frame::<_, HostToClient>(&mut reader) {
+                if sender.send(message).is_err() {
+                    break;
+                }
+            }
+        });
+        let mut host = Self {
+            child,
+            writer,
+            events,
+        };
+        write_frame(
+            &mut host.writer,
+            &ClientToHost::Hello {
+                protocol_version: CODE_MODE_PROTOCOL_VERSION,
+            },
+        )
+        .unwrap();
+        assert!(matches!(host.receive(), HostToClient::Hello { .. }));
+        host
+    }
+
+    fn receive(&self) -> HostToClient {
+        self.events
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .expect("host response timed out")
+    }
+
+    fn open_session(&mut self, name: &str) -> CodeModeSessionId {
+        let session_id = CodeModeSessionId::new(name).unwrap();
+        write_frame(
+            &mut self.writer,
+            &ClientToHost::OpenSession {
+                session_id: session_id.clone(),
+                limits: CodeModeLimits {
+                    max_execution_time_ms: 1000,
+                    ..CodeModeLimits::default()
+                },
+                stored_values: BTreeMap::new(),
+            },
+        )
+        .unwrap();
+        assert!(matches!(self.receive(), HostToClient::SessionOpened { .. }));
+        session_id
     }
 }
 
 #[test]
 fn host_preserves_store_deletions_and_bounds_each_observation() {
-    let mut host = Host(
-        Command::new(env!("CARGO_BIN_EXE_ash-code-mode-host"))
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
-            .spawn()
-            .unwrap(),
-    );
-    let mut writer = host.0.stdin.take().unwrap();
-    let mut reader = BufReader::new(host.0.stdout.take().unwrap());
-    let (sender, events) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        while let Ok(message) = read_frame::<_, HostToClient>(&mut reader) {
-            if sender.send(message).is_err() {
-                break;
-            }
-        }
-    });
-    let receive = || {
-        events
-            .recv_timeout(std::time::Duration::from_secs(5))
-            .expect("host response timed out")
-    };
-    write_frame(
-        &mut writer,
-        &ClientToHost::Hello {
-            protocol_version: CODE_MODE_PROTOCOL_VERSION,
-        },
-    )
-    .unwrap();
-    assert!(matches!(receive(), HostToClient::Hello { .. }));
-    let session_id = CodeModeSessionId::new("host-test").unwrap();
-    write_frame(
-        &mut writer,
-        &ClientToHost::OpenSession {
-            session_id: session_id.clone(),
-            limits: CodeModeLimits {
-                max_execution_time_ms: 1000,
-                ..CodeModeLimits::default()
-            },
-            stored_values: BTreeMap::new(),
-        },
-    )
-    .unwrap();
-    assert!(matches!(receive(), HostToClient::SessionOpened { .. }));
+    let mut host = Host::new();
+    let session_id = host.open_session("host-test");
     for (index, source) in [
         "store('answer', 42); text('界'.repeat(100));",
         "store('answer', undefined); text('removed');",
@@ -79,7 +99,7 @@ fn host_preserves_store_deletions_and_bounds_each_observation() {
     .enumerate()
     {
         write_frame(
-            &mut writer,
+            &mut host.writer,
             &ClientToHost::Execute(ExecuteRequest {
                 session_id: session_id.clone(),
                 tool_call_id: format!("exec-{index}"),
@@ -90,11 +110,11 @@ fn host_preserves_store_deletions_and_bounds_each_observation() {
             }),
         )
         .unwrap();
-        let HostToClient::StartedCell(started) = receive() else {
+        let HostToClient::StartedCell(started) = host.receive() else {
             panic!("expected started cell");
         };
         write_frame(
-            &mut writer,
+            &mut host.writer,
             &ClientToHost::Wait(WaitRequest {
                 cell_id: started.cell_id.clone(),
                 yield_time_ms: 1000,
@@ -105,7 +125,7 @@ fn host_preserves_store_deletions_and_bounds_each_observation() {
         .unwrap();
         let mut received = false;
         loop {
-            match receive() {
+            match host.receive() {
                 HostToClient::CancelCellTools { cell_id } => {
                     assert_eq!(cell_id, started.cell_id);
                 }
@@ -153,7 +173,7 @@ fn host_preserves_store_deletions_and_bounds_each_observation() {
         }
     }
     write_frame(
-        &mut writer,
+        &mut host.writer,
         &ClientToHost::Execute(ExecuteRequest {
             session_id: session_id.clone(),
             tool_call_id: "timeout".into(),
@@ -170,11 +190,11 @@ fn host_preserves_store_deletions_and_bounds_each_observation() {
         }),
     )
     .unwrap();
-    let HostToClient::StartedCell(started) = receive() else {
+    let HostToClient::StartedCell(started) = host.receive() else {
         panic!("expected started cell");
     };
     write_frame(
-        &mut writer,
+        &mut host.writer,
         &ClientToHost::Wait(WaitRequest {
             cell_id: started.cell_id.clone(),
             yield_time_ms: 1,
@@ -187,7 +207,7 @@ fn host_preserves_store_deletions_and_bounds_each_observation() {
     // parent callback on timeout without requiring an observer to poll the cell.
     let mut invoked = None;
     loop {
-        match receive() {
+        match host.receive() {
             HostToClient::ToolCall(call) => {
                 assert_eq!(call.cell_id, started.cell_id);
                 invoked = Some(call.runtime_tool_call_id);
@@ -207,7 +227,7 @@ fn host_preserves_store_deletions_and_bounds_each_observation() {
     // Cancellation races with a callback already returning from the parent. Its late
     // result must be discarded without poisoning other cells in this session.
     write_frame(
-        &mut writer,
+        &mut host.writer,
         &ClientToHost::CompleteToolCall {
             cell_id: started.cell_id,
             runtime_tool_call_id: invoked.unwrap(),
@@ -217,7 +237,7 @@ fn host_preserves_store_deletions_and_bounds_each_observation() {
     )
     .unwrap();
     write_frame(
-        &mut writer,
+        &mut host.writer,
         &ClientToHost::Execute(ExecuteRequest {
             session_id,
             tool_call_id: "after-cancel".into(),
@@ -228,5 +248,109 @@ fn host_preserves_store_deletions_and_bounds_each_observation() {
         }),
     )
     .unwrap();
-    assert!(matches!(receive(), HostToClient::StartedCell(_)));
+    assert!(matches!(host.receive(), HostToClient::StartedCell(_)));
+}
+
+#[test]
+fn concurrent_cells_publish_monotonic_snapshots_and_complete_result_batches() {
+    let mut host = Host::new();
+    let session_id = host.open_session("concurrent-store");
+    let mut cells = std::collections::BTreeSet::new();
+    for index in 0..32 {
+        write_frame(
+            &mut host.writer,
+            &ClientToHost::Execute(ExecuteRequest {
+                session_id: session_id.clone(),
+                tool_call_id: format!("exec-{index}"),
+                source: format!("store('key-{index}', 'x'.repeat(4096));"),
+                enabled_tools: Vec::new(),
+                yield_time_ms: 1000,
+                max_output_tokens: None,
+            }),
+        )
+        .unwrap();
+        let HostToClient::StartedCell(started) = host.receive() else {
+            panic!("expected started cell");
+        };
+        cells.insert(started.cell_id);
+    }
+    for cell_id in &cells {
+        write_frame(
+            &mut host.writer,
+            &ClientToHost::Wait(WaitRequest {
+                cell_id: cell_id.clone(),
+                yield_time_ms: 1000,
+                max_output_tokens: None,
+                terminate: false,
+            }),
+        )
+        .unwrap();
+    }
+    let mut previous = BTreeMap::new();
+    while !cells.is_empty() {
+        match host.receive() {
+            HostToClient::CancelCellTools { .. } => {}
+            HostToClient::StoreSnapshot { values, .. } => {
+                for (key, value) in &previous {
+                    assert_eq!(values.get(key), Some(value), "snapshot lost {key}");
+                }
+                previous = values;
+                let HostToClient::Response {
+                    response:
+                        RuntimeResponse::Result {
+                            cell_id,
+                            error_text: None,
+                            ..
+                        },
+                } = host.receive()
+                else {
+                    panic!("snapshot and result must be adjacent");
+                };
+                assert!(cells.remove(&cell_id));
+                assert!(matches!(host.receive(), HostToClient::CellClosed {
+                    cell_id: closed, outcome: ash_code_mode_protocol::CellOutcome::Completed,
+                } if closed == cell_id));
+            }
+            other => panic!("unexpected event: {other:?}"),
+        }
+    }
+    assert_eq!(previous.len(), 32);
+}
+
+#[test]
+fn exit_and_timeout_preserve_output_through_the_host() {
+    let mut host = Host::new();
+    let session_id = host.open_session("host-interrupts");
+    for (index, source) in [
+        "text('before'); try { exit(); } catch (_) { text('caught'); } finally { text('finally'); } throw Error('after');",
+        "text('before'); while (true) {}",
+    ].iter().enumerate() {
+        write_frame(&mut host.writer, &ClientToHost::Execute(ExecuteRequest {
+            session_id: session_id.clone(), tool_call_id: format!("exec-{index}"),
+            source: (*source).into(), enabled_tools: Vec::new(),
+            yield_time_ms: 2000, max_output_tokens: None,
+        })).unwrap();
+        let HostToClient::StartedCell(started) = host.receive() else { panic!("expected cell"); };
+        write_frame(&mut host.writer, &ClientToHost::Wait(WaitRequest {
+            cell_id: started.cell_id, yield_time_ms: 2000,
+            max_output_tokens: None, terminate: false,
+        })).unwrap();
+        let mut received = false;
+        loop {
+            match host.receive() {
+                HostToClient::CancelCellTools { .. } | HostToClient::StoreSnapshot { .. } => {}
+                HostToClient::Response { response } => {
+                    let items = match response {
+                        RuntimeResponse::Result { content_items, error_text: None, .. } if index == 0 => content_items,
+                        RuntimeResponse::Terminated { content_items, .. } if index == 1 => content_items,
+                        other => panic!("unexpected response: {other:?}"),
+                    };
+                    assert_eq!(items, vec![OutputItem::Text { text: "before".into() }]);
+                    received = true;
+                }
+                HostToClient::CellClosed { .. } => { assert!(received); break; }
+                other => panic!("unexpected event: {other:?}"),
+            }
+        }
+    }
 }

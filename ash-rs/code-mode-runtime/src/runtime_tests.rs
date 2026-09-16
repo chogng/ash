@@ -280,6 +280,55 @@ fn syntax_errors_are_cell_failures_and_not_process_failures() {
 }
 
 #[test]
+fn exit_cannot_be_caught_or_run_finally_in_any_execution_phase() {
+    for prefix in ["", "await tools.echo({});", "await yield_control();"] {
+        let invoker = std::sync::Arc::new(RecordingInvoker::default());
+        let (runtime, session_id) = runtime(&invoker);
+        let cell = runtime
+            .execute(request(
+                &session_id,
+                &format!(
+                    r#"
+            {prefix}
+            text('before');
+            store('saved', 42);
+            try {{ exit(); }}
+            catch (_) {{ await tools.echo({{unexpected: 'catch'}}); }}
+            finally {{ text('finally'); store('saved', 0); }}
+            await tools.echo({{unexpected: 'after'}});
+            throw Error('must not execute');
+        "#
+                ),
+            ))
+            .unwrap()
+            .cell_id;
+        let response = wait_for_result(&runtime, cell);
+        assert!(
+            matches!(&response, RuntimeResponse::Result {
+            content_items, error_text: None, ..
+        } if content_items == &vec![OutputItem::Text { text: "before".into() }]),
+            "{prefix}: {response:?}"
+        );
+        assert_eq!(
+            runtime.store_snapshot().unwrap().get("saved"),
+            Some(&serde_json::json!(42))
+        );
+        assert_eq!(
+            invoker.calls.lock().unwrap().len(),
+            usize::from(prefix.contains("tools.echo"))
+        );
+        let next = runtime
+            .execute(request(&session_id, "throw Error('real failure');"))
+            .unwrap();
+        assert!(
+            matches!(wait_for_result(&runtime, next.cell_id), RuntimeResponse::Result {
+            error_text: Some(error), ..
+        } if error.contains("real failure"))
+        );
+    }
+}
+
+#[test]
 fn output_limit_is_enforced_inside_the_runtime() {
     let invoker = std::sync::Arc::new(RecordingInvoker::default());
     let session_id = CodeModeSessionId::new("limited-session").unwrap();
@@ -317,11 +366,12 @@ fn execution_timeout_terminates_cpu_bound_javascript() {
     )
     .unwrap();
     let started = runtime
-        .execute(request(&session_id, "while (true) {}"))
+        .execute(request(&session_id, "text('before'); while (true) {}"))
         .unwrap();
     let response = wait_for_result(&runtime, started.cell_id);
     assert!(
-        matches!(response, RuntimeResponse::Terminated { .. }),
+        matches!(&response, RuntimeResponse::Terminated { content_items, .. }
+            if content_items == &vec![OutputItem::Text { text: "before".into() }]),
         "response: {response:?}"
     );
 }

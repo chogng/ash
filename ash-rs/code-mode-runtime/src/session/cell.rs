@@ -207,7 +207,7 @@ pub(super) fn run_cell(
             let response = if memory_limit_exceeded.load(Ordering::Acquire) {
                 RuntimeResponse::Result {
                     cell_id,
-                    content_items: Vec::new(),
+                    content_items: take_output_items(scope),
                     error_text: Some("Code Mode memory limit exceeded".into()),
                 }
             } else if timed_out.load(Ordering::Acquire)
@@ -216,12 +216,12 @@ pub(super) fn run_cell(
             {
                 RuntimeResponse::Terminated {
                     cell_id,
-                    content_items: Vec::new(),
+                    content_items: take_output_items(scope),
                 }
             } else {
                 RuntimeResponse::Result {
                     cell_id,
-                    content_items: Vec::new(),
+                    content_items: take_output_items(scope),
                     error_text: Some(error),
                 }
             };
@@ -273,13 +273,7 @@ pub(super) fn run_cell(
             }
             v8::PromiseState::Rejected => {
                 let error = promise_local.result(scope);
-                let exit_requested = scope
-                    .get_slot::<RuntimeState>()
-                    .map(|state| state.exit_requested)
-                    .unwrap_or(false);
-                let response = if exit_requested {
-                    result_response(scope, cell_id.clone(), None)
-                } else if timed_out.load(Ordering::Acquire)
+                let response = if timed_out.load(Ordering::Acquire)
                     || termination_requested.load(Ordering::Acquire)
                     || isolate_handle.is_execution_terminating()
                 {
@@ -549,6 +543,44 @@ fn send_result(
     event_tx: &Sender<CellEvent>,
     response: RuntimeResponse,
 ) {
+    // exit() interrupts V8 in whichever execution phase is active. Normalize that
+    // interruption here so evaluation, tool continuations and resumed yields agree.
+    let response = if scope
+        .get_slot::<RuntimeState>()
+        .is_some_and(|state| state.exit_requested)
+    {
+        let (cell_id, content_items) = match response {
+            RuntimeResponse::Running {
+                cell_id,
+                content_items,
+            }
+            | RuntimeResponse::Yielded {
+                cell_id,
+                content_items,
+            }
+            | RuntimeResponse::Terminated {
+                cell_id,
+                content_items,
+            }
+            | RuntimeResponse::Result {
+                cell_id,
+                content_items,
+                ..
+            }
+            | RuntimeResponse::Unknown {
+                cell_id,
+                content_items,
+                ..
+            } => (cell_id, content_items),
+        };
+        RuntimeResponse::Result {
+            cell_id,
+            content_items,
+            error_text: None,
+        }
+    } else {
+        response
+    };
     if !matches!(
         response,
         RuntimeResponse::Running { .. } | RuntimeResponse::Yielded { .. }
