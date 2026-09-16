@@ -16,11 +16,14 @@ credential、secret、connection pool 或 process-local adapter。
 | `ProviderDefinition` | provider-owned declaration | adapter identity、HTTP/WebSocket API profile、endpoint/catalog/defaults、API Key policy/header |
 | `NormalizedModelProviderConfig` | runtime-ready immutable config | provider/profile/base URL 已确定 |
 | `ProviderConfigRegistry` | definition authority | validate、register、merge、selection、normalize |
-| `STATIC_MODEL_CATALOG` / `StaticModelSpec` | 唯一 built-in model 目录 | model/provider ID、access、context、capabilities、reasoning、defaults |
+| `STATIC_MODEL_CATALOG` / `StaticModelSpec` | 内置文本模型目录 | model/provider ID、access、context、capabilities、reasoning、defaults |
 | `ProviderAdapter` | serializable adapter identity | 不是 runtime trait/object |
 | `ApiProfile` | declarative wire profile | runtime 显式解析为 `ash-api::ApiEndpoint` |
 | `WebSocketApiProfile` | Responses WebSocket 能力 | 默认 `Unavailable`；不得从 HTTP compatibility 推断 |
 | `RealtimeApiProfile` | 独立语音会话协议能力 | 默认 `Unavailable`；与文本 WebSocket 和订阅身份分开授权 |
+| `LiveApiProfile` | GPT-Live 会话协议能力 | 明确声明，不能从文本协议推断 |
+| `VoiceModelCatalog` / `VoiceModelDefinition` | Provider 的独立语音目录 | 模型、支持的音色与默认值 |
+| `VoiceModelConfig` | 可序列化的语音选择 | 与文本模型选择分开，不含密钥 |
 | `InputTokenCountDefinition` | provider-owned preflight declaration | profile、target 与明确 model policy |
 | `NormalizedInputTokenCountConfig` | runtime-ready count snapshot | 已解析 base URL；不包含 client 或准确度策略 |
 | `EndpointPolicy` | provider default 或 configured-only | 不执行 DNS/network validation |
@@ -32,6 +35,15 @@ credential、secret、connection pool 或 process-local adapter。
 
 `model_provider_config_schema()` 与 `provider_definition_schema()` 从 Rust types 生成 JSON Schema；
 schema 没有第二份手写来源。
+
+## 语音选择
+
+- `ProviderDefinition.voice_models` 声明语音模型目录，`resolve_voice` 完成目录与音色校验。
+- `VoiceModelConfig::with_overrides` 按字段合并请求覆盖值与已保存选择；`resolve_voice` 为未指定字段应用目录默认值。
+- 未知模型、不支持的音色、重复目录条目或无效默认值会报错，不改用其他模型。
+- OpenAI 的语音目录默认选择 `gpt-live-1` 和 `marin`；内置音色与该 Provider 的语音声明一起维护。
+- 语音模型不加入文本 Agent 的 `STATIC_MODEL_CATALOG`，不因此获得工具、上下文窗口或文本订阅能力。
+- `VoiceModelConfig` 提供配置契约；产品设置持久化与选择界面尚未接入。
 
 ## 文件与内部接口
 
@@ -52,7 +64,7 @@ src/
 | `ModelProviderConfig::validate_static` | public method | zero output/context limits 与 configured URL shape | 不依赖 registry或网络 |
 | `ProviderDefinition::validate` | public method | name、default endpoint、profile pairing、defaults、catalog uniqueness | definition 自身必须独立有效 |
 | `InputTokenCountDefinition::validate` | crate-private method | count URL、non-empty/unique model list | 不探测远端 model availability |
-| `STATIC_MODEL_CATALOG` | public constant | 全部产品内置模型及静态 metadata | 新模型只能在这里增加一次 |
+| `STATIC_MODEL_CATALOG` | public constant | 产品内置文本模型及静态 metadata | 文本模型在这里声明；语音目录归 `voice_models` |
 | `attach_static_models` | crate-private function | catalog rows → provider models/default/count eligibility | registry validation 前自动执行 |
 | `ProviderConfigRegistry::register` | public method | validate + reject duplicate | built-in/plugin 定义走相同路径 |
 | `ProviderConfigRegistry::merge` | public method | prevalidate incoming + explicit conflict policy | merge 不能 partial apply |
@@ -102,7 +114,7 @@ Merge 必须 preflight 后一次 extend；在循环中边验证边插入会造�
 
 ## 内置供应商定义
 
-每个 `providers/<name>.rs::definition()` 返回不含产品模型清单的 `ProviderDefinition`。例如 OpenAI 选择
+每个 `providers/<name>.rs::definition()` 返回不含文本模型清单的 `ProviderDefinition`，可声明独立语音目录。例如 OpenAI 选择
 `OpenAiResponses` 与同 base 的 count profile；Google invocation 使用 compatible base，但
 `countTokens` 使用单独声明的 native base；Anthropic 选择 `AnthropicMessages` 并声明默认 max
 tokens。Kimi、Google 和 Z.AI 的额外 allow-unlisted count model 是 transport definition 数据；进入产品
@@ -115,7 +127,7 @@ Chat Completions definition。真实调用仍需 runtime target 和 `ash-api` co
 
 ## 统一静态模型清单
 
-产品内置模型只在 `src/model_catalog.rs` 的 `STATIC_MODEL_CATALOG` 中声明。最小条目只写 provider、
+产品内置文本模型只在 `src/model_catalog.rs` 的 `STATIC_MODEL_CATALOG` 中声明。最小条目只写 provider、
 model ID、显示名和 access；1M context 直接写 `context_window: 1_000_000`，不再维护一个可能与 token
 数冲突的 `is1m` 布尔值。能力、reasoning、personality、自动压缩、input-token count 和 approval-review
 default 都是同一块中的可选命名字段。未填写的 metadata 明确保持 unknown、none 或 false：

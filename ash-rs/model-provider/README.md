@@ -9,7 +9,19 @@
 `Arc<dyn ModelInvoker>`。它选择 provider runtime 和 API profile；wire codec 属于 `ash-api`，
 operation retry/framing 属于 `ash-client`，HTTP transport 与共享 network policy 属于
 `ash-http-client`。WebSocket 连接属于 `ash-websocket-client`；本 crate 已通过
-`connect_responses` 和 `connect_realtime` 组合协议会话、明确的服务能力与凭据。
+`connect_responses`、`connect_realtime` 和 `connect_voice` 组合协议会话、明确的服务能力与凭据。
+
+## 语音模型会话
+
+- `connect_voice` 接收现有 `ModelProviderConfig`、独立的 `VoiceModelConfig`、指令和共享连接器。
+- 语音模型、默认模型和音色由 Provider 的 `voice_models` 声明；运行时不写死模型名称。
+- 请求覆盖值先通过 `VoiceModelConfig::with_overrides` 合并已保存的选择，未指定部分使用 Provider 的默认值；明确指定的无效模型或音色会报错。
+- 鉴权沿用 `ProviderCredentialService` 与现有密钥存储；文本订阅身份不会替代语音 API 凭据。
+- 返回 `VoiceModelSession`，包含已解析的 `ModelRef`、固定音色、会话状态和收发接口。
+- 模型或音色变更需要结束旧会话并新建；房间消费者不直接创建 `ash-api::LiveSession`。
+- `voice-agent` 消费模型会话并交换房间音频；开发任务仍归 App Server/Core。
+
+`connect_live` 已退场。当前协议由 `ash-api` 的 GPT-Live 实现承担，语音模型选择不经过文本 Agent 的工具能力检查。新增目录条目不会自动证明账户可用性。
 
 当前 `EmbeddingInvoker` / `RerankInvoker` 除 canonical、有序、provider-neutral 调用契约外，已接入
 OpenAI-compatible embedding/rerank wire codec、OpenAI/Ollama embedding runtime 和 exact provider

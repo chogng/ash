@@ -1,14 +1,21 @@
 #[path = "support/server.rs"]
 mod server;
 
-use ash_api::LiveConfig;
-use ash_api::LiveSession;
-use ash_api::WebSocketSessionConfig;
 use ash_async_utils::CancellationSource;
-use ash_client::ResolvedApiTarget;
 use ash_http_client::HttpClientConfig;
 use ash_http_client::OutboundNetworkSnapshot;
 use ash_http_client::ProxyPolicy;
+use ash_model_provider::ModelProviderRuntime;
+use ash_model_provider::VoiceSessionLimits;
+use ash_model_provider::provider_api_key_secret_key;
+use ash_model_provider_config::ModelId;
+use ash_model_provider_config::ModelProviderConfig;
+use ash_model_provider_config::ProviderConfigRegistry;
+use ash_model_provider_config::ProviderId;
+use ash_model_provider_config::VoiceModelConfig;
+use ash_secrets::MemorySecretStore;
+use ash_secrets::SecretStore;
+use ash_secrets::SecretValue;
 use ash_websocket_client::WebSocketConnector;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
@@ -20,6 +27,7 @@ use livekit_client::MediaRoom;
 use serde_json::Value;
 use serde_json::json;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::time::timeout;
@@ -62,19 +70,50 @@ async fn agent_receives_human_audio_publishes_reply_and_delegates_without_execut
     .await
     .unwrap();
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let target = ResolvedApiTarget::new(
-        format!("http://{}/v1", listener.local_addr().unwrap()),
-        vec![],
-    );
+    let provider = ProviderId::new("openai").unwrap();
+    let mut config = ModelProviderConfig::new(provider.clone());
+    config.base_url = Some(format!("http://{}/v1", listener.local_addr().unwrap()));
+    let secrets = Arc::new(MemorySecretStore::default());
+    secrets
+        .store(
+            &provider_api_key_secret_key(&provider),
+            &SecretValue::new(b"fixture-voice-key".to_vec()),
+        )
+        .unwrap();
+    // A provider-declared name different from the built-in default catches runtime hardcoding.
+    let mut definition = ProviderConfigRegistry::builtin()
+        .get(&provider)
+        .unwrap()
+        .clone();
+    let catalog = definition.voice_models.as_mut().unwrap();
+    catalog.models[0].id = ModelId::new("fixture-speech-v2").unwrap();
+    catalog.default_model = catalog.models[0].id.clone();
+    let mut registry = ProviderConfigRegistry::new();
+    registry.register(definition).unwrap();
+    let runtime = ModelProviderRuntime::with_secrets(registry, secrets);
     let model = tokio::spawn(async move {
         let (tcp, _) = listener.accept().await.unwrap();
-        let mut socket = tokio_tungstenite::accept_async(tcp).await.unwrap();
+        let mut socket = tokio_tungstenite::accept_hdr_async(
+            tcp,
+            |request: &tokio_tungstenite::tungstenite::handshake::server::Request, response| {
+                assert_eq!(request.uri().path(), "/v1/live/sessions");
+                assert_eq!(
+                    request.headers()["authorization"],
+                    "Bearer fixture-voice-key"
+                );
+                Ok(response)
+            },
+        )
+        .await
+        .unwrap();
         let start: Value =
             serde_json::from_str(socket.next().await.unwrap().unwrap().to_text().unwrap()).unwrap();
         assert_eq!(start["type"], "session.start");
+        assert_eq!(start["session"]["model"], "fixture-speech-v2");
+        assert_eq!(start["session"]["audio"]["output"]["voice"], "cedar");
         socket
             .send(Message::Text(
-                json!({"type":"session.started","session":{"id":"model","model":"gpt-live-1"}})
+                json!({"type":"session.started","session":{"id":"model","model":"fixture-speech-v2"}})
                     .to_string()
                     .into(),
             ))
@@ -138,19 +177,24 @@ async fn agent_receives_human_audio_publishes_reply_and_delegates_without_execut
         )
         .unwrap(),
     );
-    let live = LiveSession::connect(
-        &connector,
-        &target,
-        "gpt-live-1",
-        &LiveConfig {
-            voice: "marin".into(),
-            instructions: String::new(),
-        },
-        WebSocketSessionConfig::default(),
-        &cancellation.token(),
-    )
-    .await
-    .unwrap();
+    let selection = VoiceModelConfig {
+        model: None,
+        voice: Some("cedar".into()),
+    };
+    let live = runtime
+        .connect_voice(
+            &config,
+            &selection,
+            "",
+            &connector,
+            VoiceSessionLimits::default(),
+            &cancellation.token(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(live.model().provider, provider);
+    assert_eq!(live.model().model.as_str(), "fixture-speech-v2");
+    assert_eq!(live.voice(), "cedar");
     let agent = VoiceAgent::new(
         room,
         live,

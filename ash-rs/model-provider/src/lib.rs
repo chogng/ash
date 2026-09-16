@@ -76,3 +76,8 @@ pub use auth::ProviderCredentialStatus;
 pub use auth::provider_api_key_secret_key;
 
 pub use provider::ResponsesModelSession;
+
+pub use ash_api::LiveCommand as VoiceCommand;
+pub use ash_api::LiveEvent as VoiceEvent;
+pub use ash_api::WebSocketSessionConfig as VoiceSessionLimits;
+pub use provider::VoiceModelSession;

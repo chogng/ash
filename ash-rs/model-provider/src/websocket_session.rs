@@ -31,57 +31,51 @@ pub struct ResponsesModelSession {
 }
 
 impl ModelProviderRuntime {
-    /// Opens GPT-Live with direct provider credentials and application-owned task delegation.
-    pub async fn connect_live(
+    /// Creates a voice session using the provider's independent speech catalog and credentials.
+    pub async fn connect_voice(
         &self,
         config: &ModelProviderConfig,
-        model: &ModelRef,
-        voice: &ash_api::LiveConfig,
+        selection: &ash_model_provider_config::VoiceModelConfig,
+        instructions: &str,
         connector: &WebSocketConnector,
         limits: WebSocketSessionConfig,
         cancellation: &CancellationToken,
-    ) -> Result<ash_api::LiveSession, ModelProviderError> {
+    ) -> Result<VoiceModelSession, ModelProviderError> {
         super::check_cancellation(cancellation)?;
         let runtime = self.with_configs([config])?;
-        let normalized = runtime.configs.normalize_for(config, &model.provider)?;
+        let normalized = runtime.configs.normalize_for(config, &config.provider)?;
         let definition = runtime
             .configs
             .get(&normalized.provider)
             .expect("normalized provider exists");
         if definition.live_api_profile != ash_model_provider_config::LiveApiProfile::OpenAiLive {
             return Err(ModelProviderError::Unavailable(
-                "provider has no declared GPT-Live protocol".into(),
+                "provider has no declared voice session protocol".into(),
             ));
         }
-        // Live delegates development work; it must not pass through the tool-capable text catalog.
-        if model.model.as_str() != "gpt-live-1" {
-            return Err(ModelProviderError::Unavailable(
-                "model is not declared for the GPT-Live protocol".into(),
-            ));
-        }
-        if ash_model_provider_config::find_static_model(model).is_some_and(|model| {
-            !matches!(
-                model.runtime,
-                ash_model_provider_config::StaticModelRuntime::ProviderApi
-            )
-        }) {
-            return Err(ModelProviderError::Unavailable(
-                "subscription text models do not authorize GPT-Live".into(),
-            ));
-        }
+        let voice = definition.resolve_voice(selection)?;
+        let model = ModelRef::new(definition.id.clone(), voice.model.clone());
+        // This factory always resolves direct provider credentials, independently of text subscriptions.
         let connection = runtime.direct_connection(&normalized)?;
         let provider = runtime.instantiate_normalized_with_connection(normalized, connection)?;
         let target = provider.target.resolve()?;
-        ash_api::LiveSession::connect(
+        let session = ash_api::LiveSession::connect(
             connector,
             &target,
-            model.model.as_str(),
-            voice,
+            voice.model.as_str(),
+            &ash_api::LiveConfig {
+                instructions: instructions.into(),
+                voice: voice.voice.clone(),
+            },
             limits,
             cancellation,
         )
-        .await
-        .map_err(Into::into)
+        .await?;
+        Ok(VoiceModelSession {
+            model,
+            voice: voice.voice,
+            session,
+        })
     }
 
     /// Opens an explicitly declared Responses WebSocket service. Does not change HTTP defaults.
@@ -279,5 +273,50 @@ impl ApiStreamSink for Events<'_> {
             ));
         }
         Ok(())
+    }
+}
+
+/// A caller-owned speech session with a resolved provider/model identity and fixed voice.
+/// Created only through ModelProviderRuntime so room consumers cannot bypass model admission.
+pub struct VoiceModelSession {
+    model: ModelRef,
+    voice: String,
+    session: ash_api::LiveSession,
+}
+
+impl VoiceModelSession {
+    pub fn model(&self) -> &ModelRef {
+        &self.model
+    }
+    pub fn voice(&self) -> &str {
+        &self.voice
+    }
+    pub fn session_id(&self) -> &str {
+        self.session.session_id()
+    }
+    pub fn is_open(&self) -> bool {
+        self.session.is_open()
+    }
+    pub async fn send(
+        &mut self,
+        command: ash_api::LiveCommand,
+        cancellation: &CancellationToken,
+    ) -> Result<(), ModelProviderError> {
+        self.session
+            .send(command, cancellation)
+            .await
+            .map_err(Into::into)
+    }
+    pub async fn receive(
+        &mut self,
+        cancellation: &CancellationToken,
+    ) -> Result<ash_api::LiveEvent, ModelProviderError> {
+        self.session.receive(cancellation).await.map_err(Into::into)
+    }
+    pub async fn close(
+        &mut self,
+        cancellation: &CancellationToken,
+    ) -> Result<ash_api::LiveEvent, ModelProviderError> {
+        self.session.close(cancellation).await.map_err(Into::into)
     }
 }

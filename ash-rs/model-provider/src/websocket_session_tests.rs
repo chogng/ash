@@ -17,31 +17,38 @@ fn websocket_factories_require_their_own_declared_service_protocols() {
         let cancellation = CancellationSource::new().token();
         let config = provider_config_with_endpoint("openai-compatible", "https://example.test/v1");
         let model = model_ref("openai-compatible", "fixture");
-        let voice = ash_api::LiveConfig {
-            voice: "marin".into(),
-            instructions: String::new(),
+        assert!(matches!(
+            runtime
+                .connect_voice(
+                    &config,
+                    &ash_model_provider_config::VoiceModelConfig::default(),
+                    "",
+                    &connector,
+                    WebSocketSessionConfig::default(),
+                    &cancellation
+                )
+                .await,
+            Err(ModelProviderError::Unavailable(_))
+        ));
+        let selection = ash_model_provider_config::VoiceModelConfig {
+            model: Some(model_ref("openai", "gpt-5.6-luna").model),
+            voice: None,
         };
-        for (config, model) in [
-            (config.clone(), model_ref("openai-compatible", "gpt-live-1")),
-            (
-                provider_config("openai"),
-                model_ref("openai", "gpt-5.6-luna"),
-            ),
-        ] {
-            assert!(matches!(
-                runtime
-                    .connect_live(
-                        &config,
-                        &model,
-                        &voice,
-                        &connector,
-                        WebSocketSessionConfig::default(),
-                        &cancellation
-                    )
-                    .await,
-                Err(ModelProviderError::Unavailable(_))
-            ));
-        }
+        assert!(matches!(
+            runtime
+                .connect_voice(
+                    &provider_config("openai"),
+                    &selection,
+                    "",
+                    &connector,
+                    WebSocketSessionConfig::default(),
+                    &cancellation
+                )
+                .await,
+            Err(ModelProviderError::Config(
+                ash_model_provider_config::ProviderConfigError::ModelNotRegistered { .. }
+            ))
+        ));
         assert!(matches!(
             runtime
                 .connect_responses(

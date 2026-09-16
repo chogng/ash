@@ -1,5 +1,6 @@
 # ash-voice-agent
 
+- 接收 `model-provider` 创建的 `VoiceModelSession`，不选择供应商、模型、音色或密钥。
 - 将授权人类参与者的房间音频混音并发送到 GPT-Live。
 - 将 GPT-Live 输出音频重采样并作为 AI 音轨发布回房间。
 - 隔离输入、输出缓冲；停止播放会丢弃待播放内容。
@@ -14,4 +15,4 @@ just test ash-voice-agent
 ASH_TEST_LIVEKIT_SERVER=/absolute/path/livekit-server just test ash-voice-agent --test bridge -- --ignored
 ```
 
-桥接测试使用真实 LiveKit 服务和本地 GPT-Live 协议模拟服务；真实模型账户、计费、网络和多人对话质量需要单独验收。
+桥接测试从现有模型凭据存储和 `connect_voice` 工厂创建会话，再使用真实 LiveKit 服务和本地 GPT-Live 协议模拟服务，验证默认语音模型、指定音色及鉴权头。真实模型账户、计费、网络和多人对话质量需要单独验收。

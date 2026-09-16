@@ -8,6 +8,11 @@ mod model_catalog;
 mod providers;
 mod registry;
 mod static_model_spec;
+mod voice;
+pub use voice::ResolvedVoiceModel;
+pub use voice::VoiceModelCatalog;
+pub use voice::VoiceModelConfig;
+pub use voice::VoiceModelDefinition;
 
 pub use ash_protocol::Model;
 pub use ash_protocol::ModelId;

@@ -1,4 +1,4 @@
-//! A room participant that bridges authorized human audio to a GPT-Live session.
+//! A room participant that bridges authorized human audio to a model-owned voice session.
 
 mod audio;
 mod session;
@@ -18,5 +18,5 @@ pub enum AgentError {
     #[error("voice agent media failed")]
     Media(#[from] livekit_client::MediaError),
     #[error("voice agent model session failed")]
-    Model(#[from] ash_api::ApiError),
+    Model(#[from] ash_model_provider::ModelProviderError),
 }

@@ -1,10 +1,10 @@
 use crate::AgentError;
 use crate::audio::AudioBridge;
-use ash_api::LiveCommand;
-use ash_api::LiveEvent;
-use ash_api::LiveSession;
 use ash_async_utils::CancellationSource;
 use ash_async_utils::CancellationToken;
+use ash_model_provider::VoiceCommand;
+use ash_model_provider::VoiceEvent;
+use ash_model_provider::VoiceModelSession;
 use livekit_client::MediaEvent;
 use livekit_client::MediaRoom;
 use std::collections::BTreeMap;
@@ -53,7 +53,7 @@ pub enum AgentEvent {
 /// Owns one media epoch. Membership changes retire this worker and its model context.
 pub struct VoiceAgent {
     room: MediaRoom,
-    live: LiveSession,
+    model: VoiceModelSession,
     audio: AudioBridge,
 }
 
@@ -61,12 +61,12 @@ impl VoiceAgent {
     /// `human_participants` must exclude AI participants and come from call authority.
     pub fn new(
         room: MediaRoom,
-        live: LiveSession,
+        model: VoiceModelSession,
         human_participants: BTreeMap<String, String>,
     ) -> Result<Self, AgentError> {
         Ok(Self {
             room,
-            live,
+            model,
             audio: AudioBridge::new(human_participants)?,
         })
     }
@@ -81,13 +81,13 @@ impl VoiceAgent {
         // Leave media before waiting for model billing, including failed or revoked sessions.
         let media = self.room.close().await.map_err(AgentError::from);
         // Cancellation stops the bridge, but final billing requires a fresh bounded close attempt.
-        let finalize = if self.live.is_open() {
-            self.live
+        let finalize = if self.model.is_open() {
+            self.model
                 .close(&CancellationSource::new().token())
                 .await
                 .map_err(AgentError::from)
                 .and_then(|event| {
-                    if let LiveEvent::Closed { reason, seconds } = event {
+                    if let VoiceEvent::Closed { reason, seconds } = event {
                         emit(&events, AgentEvent::Closed { reason, seconds })
                     } else {
                         Err(AgentError::Consumer)
@@ -120,7 +120,7 @@ impl VoiceAgent {
                     Some(AgentCommand::Commentary { delegation_id, text }) => {
                         // A byte bound also bounds byte-level tokens for non-ASCII commentary.
                         if !delegations.contains(&delegation_id) || text.is_empty() || text.len() > 500 { return Err(AgentError::Consumer); }
-                        self.live.send(LiveCommand::Commentary { delegation_id, content: text }, cancellation).await?;
+                        self.model.send(VoiceCommand::Commentary { delegation_id, content: text }, cancellation).await?;
                     }
                 },
                 event = self.room.next_event() => match event {
@@ -130,9 +130,9 @@ impl VoiceAgent {
                     Some(MediaEvent::TrackRemoved { .. } | MediaEvent::ParticipantLeft { .. }) => self.audio.clear_input(),
                     _ => {}
                 },
-                event = self.live.receive(cancellation) => match event? {
-                    LiveEvent::Audio { pcm16 } => self.audio.push_output(&pcm16)?,
-                    LiveEvent::InputTranscript { text, start_ms, end_ms } => {
+                event = self.model.receive(cancellation) => match event? {
+                    VoiceEvent::Audio { pcm16 } => self.audio.push_output(&pcm16)?,
+                    VoiceEvent::InputTranscript { text, start_ms, end_ms } => {
                         transcript.push_str(&text);
                         if transcript.len() > 16 * 1024 {
                             let mut start = transcript.len() - 16 * 1024;
@@ -141,18 +141,18 @@ impl VoiceAgent {
                         }
                         emit(events, AgentEvent::InputTranscript { text, start_ms, end_ms })?;
                     }
-                    LiveEvent::OutputTranscript { text, start_ms, end_ms } => emit(events, AgentEvent::OutputTranscript { text, start_ms, end_ms })?,
-                    LiveEvent::Delegation { id, .. } => {
+                    VoiceEvent::OutputTranscript { text, start_ms, end_ms } => emit(events, AgentEvent::OutputTranscript { text, start_ms, end_ms })?,
+                    VoiceEvent::Delegation { id, .. } => {
                         if delegations.len() >= 256 || !delegations.insert(id.clone()) { return Err(AgentError::Consumer); }
                         emit(events, AgentEvent::DelegationProposed { id, transcript: std::mem::take(&mut transcript), eligible_members: self.audio.members() })?;
                     }
-                    LiveEvent::Usage { seconds } => emit(events, AgentEvent::Usage { seconds })?,
-                    LiveEvent::Closed { reason, seconds } => { emit(events, AgentEvent::Closed { reason, seconds })?; return Ok(()); }
-                    LiveEvent::Error { .. } => return Err(ash_api::ApiError::InvalidResponse("Live session reported an error".into()).into()),
-                    LiveEvent::Other { .. } => {}
+                    VoiceEvent::Usage { seconds } => emit(events, AgentEvent::Usage { seconds })?,
+                    VoiceEvent::Closed { reason, seconds } => { emit(events, AgentEvent::Closed { reason, seconds })?; return Ok(()); }
+                    VoiceEvent::Error { .. } => return Err(ash_model_provider::ModelProviderError::InvalidResponse("Live session reported an error".into()).into()),
+                    VoiceEvent::Other { .. } => {}
                 },
                 _ = clock.tick() => {
-                    self.live.send(LiveCommand::AppendAudio { pcm16: self.audio.input()? }, cancellation).await?;
+                    self.model.send(VoiceCommand::AppendAudio { pcm16: self.audio.input()? }, cancellation).await?;
                     if let Some(samples) = self.audio.output()? { self.room.send_audio(&samples).await?; }
                 }
             }

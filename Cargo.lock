@@ -2786,12 +2786,12 @@ dependencies = [
 name = "ash-voice-agent"
 version = "0.1.0"
 dependencies = [
- "ash-api",
  "ash-async-utils",
- "ash-client",
  "ash-http-client",
  "ash-livekit-api",
  "ash-livekit-client",
+ "ash-model-provider",
+ "ash-model-provider-config",
  "ash-secrets",
  "ash-websocket-client",
  "base64 0.22.1",

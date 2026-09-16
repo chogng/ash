@@ -9,14 +9,14 @@ publish.workspace = true
 name = "voice_agent"
 
 [dependencies]
-ash-api = { workspace = true }
+ash-model-provider = { workspace = true }
 ash-async-utils = { workspace = true }
 livekit-client = { package = "ash-livekit-client", path = "../livekit-client" }
 tokio = { workspace = true, features = ["macros", "sync", "time"] }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-ash-client = { workspace = true }
+ash-model-provider-config = { workspace = true }
 ash-http-client = { workspace = true }
 ash-websocket-client = { workspace = true }
 ash-secrets = { workspace = true }

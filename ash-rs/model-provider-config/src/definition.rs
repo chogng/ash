@@ -160,6 +160,8 @@ pub struct ProviderDefinition {
     pub realtime_api_profile: RealtimeApiProfile,
     #[serde(default)]
     pub live_api_profile: LiveApiProfile,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub voice_models: Option<crate::VoiceModelCatalog>,
     #[serde(default)]
     pub models: Vec<Model>,
     #[serde(default)]
@@ -192,6 +194,7 @@ impl ProviderDefinition {
             websocket_api_profile: WebSocketApiProfile::Unavailable,
             realtime_api_profile: RealtimeApiProfile::Unavailable,
             live_api_profile: LiveApiProfile::Unavailable,
+            voice_models: None,
             models: Vec::new(),
             defaults: ProviderDefaults::default(),
             input_token_count: None,
@@ -258,6 +261,7 @@ impl ProviderDefinition {
     }
 
     pub fn validate(&self) -> Result<(), ProviderConfigError> {
+        self.validate_voice()?;
         if self.name.trim().is_empty() {
             return Err(self.invalid("display name must not be empty"));
         }

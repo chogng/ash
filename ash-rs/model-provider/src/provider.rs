@@ -1,6 +1,7 @@
 #[path = "websocket_session.rs"]
 mod websocket_session;
 pub use websocket_session::ResponsesModelSession;
+pub use websocket_session::VoiceModelSession;
 
 use crate::ModelCatalogBinding;
 use crate::ModelProviderError;
