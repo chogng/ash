@@ -44,14 +44,15 @@ test("Stanza viewport automatic layout uses the observed content box", () => {
 	});
 
 	resizeListener?.([{ contentRect: { width: 383.3875, height: 46.7875 } } as ResizeObserverEntry], {} as ResizeObserver);
+	viewport.render(true, false);
 
 	assert.deepEqual(viewport.viewportLayout.viewportSize, { width: 383, height: 46 });
 	assert.equal(viewport.domNode.domNode.style.width, "383px");
 	assert.equal(viewport.domNode.domNode.style.height, "46px");
 	assert.equal(viewport.domNode.domNode.classList.contains("horizontally-scrollable"), false);
 	assert.equal(viewport.domNode.domNode.classList.contains("vertically-scrollable"), false);
-	assert.equal(requiredElement<HTMLElement>(viewport.domNode.domNode, ".stanza-editor-scrollbar-track-horizontal").hidden, true);
-	assert.equal(requiredElement<HTMLElement>(viewport.domNode.domNode, ".stanza-editor-scrollbar-track-vertical").hidden, true);
+	assert.equal(requiredElement<HTMLElement>(viewport.domNode.domNode, '[role="scrollbar"][aria-orientation="horizontal"]').hidden, true);
+	assert.equal(requiredElement<HTMLElement>(viewport.domNode.domNode, '[role="scrollbar"][aria-orientation="vertical"]').hidden, true);
 	assert.equal(requiredElement<HTMLElement>(viewport.domNode.domNode, ".stanza-editor-content").style.width, "383px");
 	assert.equal(requiredElement<HTMLElement>(viewport.domNode.domNode, ".stanza-editor-content").style.height, "46px");
 	dom.window.close();
@@ -65,19 +66,20 @@ test("Stanza viewport enables scrollbars only for model-backed overflow", () => 
 	using viewport = new View({ container, model, lineHeight: 20 });
 
 	viewport.layout({ width: 50, height: 20 });
+	viewport.render(true, false);
 
 	assert.equal(viewport.domNode.domNode.style.width, "50px");
 	assert.equal(viewport.domNode.domNode.style.height, "20px");
 	assert.equal(viewport.domNode.domNode.classList.contains("horizontally-scrollable"), true);
 	assert.equal(viewport.domNode.domNode.classList.contains("vertically-scrollable"), true);
-	const horizontalScrollbar = requiredElement<HTMLElement>(viewport.domNode.domNode, ".stanza-editor-scrollbar-track-horizontal");
-	const verticalScrollbar = requiredElement<HTMLElement>(viewport.domNode.domNode, ".stanza-editor-scrollbar-track-vertical");
+	const horizontalScrollbar = requiredElement<HTMLElement>(viewport.domNode.domNode, '[role="scrollbar"][aria-orientation="horizontal"]');
+	const verticalScrollbar = requiredElement<HTMLElement>(viewport.domNode.domNode, '[role="scrollbar"][aria-orientation="vertical"]');
 	assert.equal(horizontalScrollbar.hidden, false);
 	assert.equal(verticalScrollbar.hidden, false);
 	assert.equal(horizontalScrollbar.getAttribute("role"), "scrollbar");
-	assert.equal(verticalScrollbar.getAttribute("aria-controls"), viewport.domNode.domNode.id);
-	assert.equal(viewport.domNode.domNode.style.getPropertyValue("--stanza-editor-horizontal-scrollbar-size"), "12px");
-	assert.equal(viewport.domNode.domNode.style.getPropertyValue("--stanza-editor-vertical-scrollbar-size"), "14px");
+	assert.equal(verticalScrollbar.getAttribute("aria-controls"), requiredElement<HTMLElement>(viewport.domNode.domNode, ".stanza-editor-content").id);
+	assert.equal(horizontalScrollbar.style.height, "12px");
+	assert.equal(verticalScrollbar.style.width, "14px");
 	assert.equal(horizontalScrollbar.style.right, "14px");
 	assert.equal(verticalScrollbar.style.bottom, "12px");
 	dom.window.close();
