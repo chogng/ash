@@ -28,8 +28,8 @@ test("public Stanza entrypoints retain distinct API, contribution, main, and wor
 	const worker = readFileSync(join(editorRoot, "editor.worker.start.ts"), "utf8");
 	const baseApi = readFileSync(join(editorRoot, "common/services/editorBaseApi.ts"), "utf8");
 	const editorWorkerService = readFileSync(join(editorRoot, "browser/services/editorWorkerService.ts"), "utf8");
-	const analysisWorker = readFileSync(join(editorRoot, "common/services/syntaxWorkerMain.ts"), "utf8");
-	const completionWorker = readFileSync(join(editorRoot, "common/services/languageCompletionWorkerMain.ts"), "utf8");
+	const analysisWorker = readFileSync(join(editorRoot, "browser/services/syntaxWorkerMain.ts"), "utf8");
+	const completionWorker = readFileSync(join(editorRoot, "browser/services/languageCompletionWorkerMain.ts"), "utf8");
 	const standaloneEditor = readFileSync(join(editorRoot, "standalone/browser/standaloneEditor.ts"), "utf8");
 	const standaloneCodeEditor = readFileSync(join(editorRoot, "standalone/browser/standaloneCodeEditor.ts"), "utf8");
 	const standaloneLanguages = readFileSync(join(editorRoot, "standalone/browser/standaloneLanguages.ts"), "utf8");

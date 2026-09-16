@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import {
-	ContextKeyExpr,
-	ContextKeyService,
-	RawContextKey,
-} from "../../../../platform/contextkey/common/contextkey.js";
+import { ContextKeyExpr, RawContextKey } from "../../../../platform/contextkey/common/contextkey.js";
+import { ContextKeyService } from "../../browser/contextKeyService.js";
 
 test("typed context keys reset to their declared default", () => {
 	using service = new ContextKeyService();

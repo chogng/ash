@@ -4,7 +4,7 @@ import { JSDOM } from 'jsdom';
 import { h } from '../../../../../base/browser/dom.js';
 import type { AuxiliaryWindowOpenOptions, IAuxiliaryWindow, IAuxiliaryWindowService as IAuxiliaryWindowServiceContract } from '../../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import type { WorkbenchLayoutStyle } from '../../../../common/configuration.js';
-import type { IWorkbenchLayoutStyleService as IWorkbenchLayoutStyleServiceContract } from '../../../../services/layout/common/workbenchLayoutStyleService.js';
+import type { IWorkbenchLayoutStyleService as IWorkbenchLayoutStyleServiceContract } from '../../../../services/layout/browser/workbenchLayoutStyleService.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 Object.defineProperty(globalThis, 'window', { configurable: true, value: browserEnvironment.window });
@@ -18,7 +18,7 @@ const { WorkbenchConfiguration } = await import('../../../../common/configuratio
 const { WorkbenchContributionsRegistry, WorkbenchPhase } = await import('../../../../common/contributions.js');
 const { IAuxiliaryWindowService } = await import('../../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js');
 const { WorkbenchConfigurationService } = await import('../../../../services/configuration/browser/configurationService.js');
-const { IWorkbenchLayoutStyleService } = await import('../../../../services/layout/common/workbenchLayoutStyleService.js');
+const { IWorkbenchLayoutStyleService } = await import('../../../../services/layout/browser/workbenchLayoutStyleService.js');
 await import('../../browser/modernUI.contribution.js');
 
 class TestWorkbenchLayoutStyleService implements IWorkbenchLayoutStyleServiceContract {

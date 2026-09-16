@@ -1,5 +1,6 @@
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { type IContextKey, type IContextKeyService, RawContextKey } from "../../../../platform/contextkey/common/contextkey.js";
+import { type IContextKey, RawContextKey } from "../../../../platform/contextkey/common/contextkey.js";
+import { type IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import type { RemoteConnectionState } from "../../../../platform/remote/common/remote.js";
 import type { IRemoteConnectionService } from "../../../../platform/remote/common/remoteConnectionService.js";
 import type { IWorkbenchContribution } from "../../../common/contributions.js";

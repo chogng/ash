@@ -11,7 +11,7 @@ import type {
 	IMenuActionOptions,
 	MenuId,
 } from "../../actions/common/actions.js";
-import type { IContextKeyService } from "../../contextkey/common/contextkey.js";
+import type { IContextKeyService } from "../../contextkey/browser/contextKeyService.js";
 import {
 	createServiceIdentifier,
 } from "../../instantiation/common/instantiation.js";

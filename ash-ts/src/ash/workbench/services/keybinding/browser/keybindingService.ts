@@ -27,11 +27,8 @@ import type {
 	CommandId,
 	ICommandService,
 } from "../../../../platform/commands/common/commands.js";
-import {
-	type Context,
-	type IContextKey,
-	type IContextKeyService,
-} from "../../../../platform/contextkey/common/contextkey.js";
+import { type Context, type IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
+import { type IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import {
 	IKeybindingService,
 	KeybindingContextKeys,

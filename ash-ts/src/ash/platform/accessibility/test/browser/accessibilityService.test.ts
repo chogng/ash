@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
-import { ContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
+import { ContextKeyService } from "../../../contextkey/browser/contextKeyService.js";
 import { InMemoryConfigurationService } from "../../../../platform/configuration/common/inMemoryConfigurationService.js";
 import { AccessibilityConfiguration, AccessibilitySupport, CONTEXT_ACCESSIBILITY_MODE_ENABLED } from "../../../../platform/accessibility/common/accessibility.js";
 import { AccessibilityService } from "../../../../platform/accessibility/browser/accessibilityService.js";

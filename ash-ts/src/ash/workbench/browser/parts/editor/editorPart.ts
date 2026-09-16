@@ -17,7 +17,7 @@ import { createServiceIdentifier } from "../../../../platform/instantiation/comm
 import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
 import type { IKeybindingsResourceService } from "../../../../platform/keybinding/common/keybindingsResource.js";
 import type { IKeyboardLayoutService } from "../../../../platform/keyboardLayout/common/keyboardLayout.js";
-import type { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
+import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { DialogResult, type IDialogService } from "../../../../platform/dialogs/common/dialogs.js";
 import { type ITextFileService } from "../../../services/textfile/common/textFileService.js";
 import type { IFileService } from "../../../../platform/files/common/files.js";

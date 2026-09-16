@@ -1,9 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import {
-	ContextKeyExpr,
-	ContextKeyService,
-} from "../../../platform/contextkey/common/contextkey.js";
+import { ContextKeyExpr } from "../../../platform/contextkey/common/contextkey.js";
+import { ContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
 import {
 	ServiceConstructionDescriptor,
 } from "../../../platform/instantiation/common/instantiation.js";

@@ -8,7 +8,7 @@ import { MenuId, registerAction2 } from "../../../../../platform/actions/common/
 import type { ICommandService } from "../../../../../platform/commands/common/commands.js";
 import { ServiceContainer } from "../../../../../platform/instantiation/common/instantiation.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
-import type { HoverSetupOptions, IHoverService, IManagedHover } from "../../../../../platform/hover/common/hoverService.js";
+import type { HoverSetupOptions, IHoverService, IManagedHover } from "../../../../../platform/hover/browser/hoverService.js";
 import type { IFileIconThemeService } from "../../../../../platform/theme/browser/fileIconThemeService.js";
 import { IGitService, type GraphQuery, type GitStatus } from "../../../../../workbench/services/git/common/gitService.js";
 import { IEditorService, type EditorInput, type EditorOpenOptions } from "../../../../../workbench/services/editor/common/editorService.js";
@@ -69,7 +69,7 @@ test("ScmGraphViewPane renders a repository history page", async () => {
 		{ ServiceContainer },
 		{ CommandService },
 	] = await Promise.all([
-		import("../../../../../platform/contextkey/common/contextkey.js"),
+		import("../../../../../platform/contextkey/browser/contextKeyService.js"),
 		import("../../../../../platform/actions/common/menuService.js"),
 		import("../../../../../platform/instantiation/common/instantiation.js"),
 		import("../../../../../workbench/services/commands/common/commandService.js"),
@@ -199,7 +199,7 @@ test("ScmGraphViewPane loads the complete history across graph pages", async () 
 		{ ServiceContainer },
 		{ CommandService },
 	] = await Promise.all([
-		import("../../../../../platform/contextkey/common/contextkey.js"),
+		import("../../../../../platform/contextkey/browser/contextKeyService.js"),
 		import("../../../../../platform/actions/common/menuService.js"),
 		import("../../../../../platform/instantiation/common/instantiation.js"),
 		import("../../../../../workbench/services/commands/common/commandService.js"),
@@ -277,7 +277,7 @@ test("ScmGraphViewPane virtualizes loaded history rows", async () => {
 		{ ServiceContainer },
 		{ CommandService },
 	] = await Promise.all([
-		import("../../../../../platform/contextkey/common/contextkey.js"),
+		import("../../../../../platform/contextkey/browser/contextKeyService.js"),
 		import("../../../../../platform/actions/common/menuService.js"),
 		import("../../../../../platform/instantiation/common/instantiation.js"),
 		import("../../../../../workbench/services/commands/common/commandService.js"),
@@ -348,7 +348,7 @@ test("ScmGraphViewPane expands commit files and opens a selected change in the d
 	const browser = new JSDOM("<!doctype html><body></body>");
 	const installedGlobals = installDomGlobals(browser);
 	const [{ ContextKeyService }, { MenuService }, { ServiceContainer }, { CommandService }] = await Promise.all([
-		import("../../../../../platform/contextkey/common/contextkey.js"),
+		import("../../../../../platform/contextkey/browser/contextKeyService.js"),
 		import("../../../../../platform/actions/common/menuService.js"),
 		import("../../../../../platform/instantiation/common/instantiation.js"),
 		import("../../../../../workbench/services/commands/common/commandService.js"),

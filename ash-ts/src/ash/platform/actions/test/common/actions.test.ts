@@ -22,10 +22,8 @@ import {
 import {
 	CommandsRegistry,
 } from "../../../../platform/commands/common/commands.js";
-import {
-	ContextKeyExpr,
-	ContextKeyService,
-} from "../../../../platform/contextkey/common/contextkey.js";
+import { ContextKeyExpr } from "../../../../platform/contextkey/common/contextkey.js";
+import { ContextKeyService } from "../../../contextkey/browser/contextKeyService.js";
 import {
 	createServiceIdentifier,
 	ServiceContainer,

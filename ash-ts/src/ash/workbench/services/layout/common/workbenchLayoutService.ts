@@ -1,4 +1,4 @@
-import type { IDimension } from "../../../../base/browser/dom.js";
+import type { ISize } from "../../../../base/common/layout.js";
 import type { Event } from "../../../../base/common/event.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 
@@ -21,8 +21,8 @@ export interface IWorkbenchLayoutService {
 	showParts(partIds: readonly WorkbenchPartId[]): void;
 	hidePart(partId: WorkbenchPartId): void;
 	hideParts(partIds: readonly WorkbenchPartId[]): void;
-	getPartSize(partId: WorkbenchPartId): IDimension;
-	resizePart(partId: WorkbenchPartId, dimension: IDimension): void;
+	getPartSize(partId: WorkbenchPartId): ISize;
+	resizePart(partId: WorkbenchPartId, dimension: ISize): void;
 }
 
 export const IWorkbenchLayoutService = createServiceIdentifier<IWorkbenchLayoutService>("workbenchLayoutService");

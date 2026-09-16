@@ -1,7 +1,8 @@
 import { alert, setARIAContainer, status } from "../../../base/browser/ui/aria/aria.js";
 import { Emitter } from "../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
-import { IContextKey, IContextKeyService } from "../../contextkey/common/contextkey.js";
+import { IContextKey } from "../../contextkey/common/contextkey.js";
+import { IContextKeyService } from "../../contextkey/browser/contextKeyService.js";
 import { IConfigurationService } from "../../configuration/common/configuration.js";
 import { AccessibilityConfiguration, AccessibilitySupport, CONTEXT_ACCESSIBILITY_MODE_ENABLED, IAccessibilityService, type AccessibilityReductionConfiguration, type AccessibilitySupportConfiguration } from "../common/accessibility.js";
 

@@ -1,4 +1,4 @@
-import type { IDimension } from "../../../../base/browser/dom.js";
+import type { ISize } from "../../../../base/common/layout.js";
 import type { Event } from "../../../../base/common/event.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 
@@ -18,8 +18,8 @@ export interface ISessionsLayoutService {
 	isPartVisible(partId: SessionsPartId): boolean;
 	showPart(partId: SessionsPartId): void;
 	hidePart(partId: SessionsPartId): void;
-	getPartSize(partId: SessionsPartId): IDimension;
-	resizePart(partId: SessionsPartId, dimension: IDimension): void;
+	getPartSize(partId: SessionsPartId): ISize;
+	resizePart(partId: SessionsPartId, dimension: ISize): void;
 }
 
 export const ISessionsLayoutService = createServiceIdentifier<ISessionsLayoutService>("sessionsLayoutService");

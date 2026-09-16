@@ -1,5 +1,6 @@
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
-import { IContextKeyService, ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import { ContextKeyExpr } from "../../../../platform/contextkey/common/contextkey.js";
+import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';

@@ -1,5 +1,6 @@
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { IContextKey, IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
+import type { IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
+import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import type { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import { localize, type ILocalizationService } from "../../../services/localization/common/localizationService.js";
 import { FocusedViewContext } from "../../../common/contextkeys.js";

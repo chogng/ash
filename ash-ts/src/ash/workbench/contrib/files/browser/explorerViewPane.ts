@@ -5,7 +5,7 @@ import type { IConfigurationService } from "../../../../platform/configuration/c
 import { FileKind, type IFileEntry, type IFileService } from "../../../../platform/files/common/files.js";
 import type { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import type { IFileIconThemeService } from "../../../../platform/theme/browser/fileIconThemeService.js";
-import type { IHoverService } from "../../../../platform/hover/common/hoverService.js";
+import type { IHoverService } from "../../../../platform/hover/browser/hoverService.js";
 import type { IFileLabelDecorationService } from "../../../services/labels/common/fileLabelDecorationService.js";
 import type { ILabelService } from "../../../../platform/label/common/labelService.js";
 import { DEFAULT_LABELS_CONTAINER, ResourceLabels } from "../../../browser/labels.js";

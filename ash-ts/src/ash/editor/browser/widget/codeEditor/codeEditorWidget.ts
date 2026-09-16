@@ -52,7 +52,8 @@ import { IThemeService } from '../../../../platform/theme/common/themeService.js
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { EditSources, TextModelEditSource } from '../../../common/textModelEditSource.js';
 import { MenuId } from '../../../../platform/actions/common/actions.js';
-import { IContextKeyService, type IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
+import { type IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
+import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { EditorContextKeys } from '../../../common/editorContextKeys.js';
 import { type ICursorPositionChangedEvent, type ICursorSelectionChangedEvent } from '../../../common/cursorEvents.js';
 

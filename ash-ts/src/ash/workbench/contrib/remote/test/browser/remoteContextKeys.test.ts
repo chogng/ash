@@ -6,7 +6,7 @@ import { isMenuItem, MenuId, MenusRegistry } from "../../../../../platform/actio
 import type { RemoteConnectionState } from "../../../../../platform/remote/common/remote.js";
 import type { RemoteAgentConnection } from "../../../../../platform/remote/common/remoteAgentApi.js";
 import type { IRemoteConnectionService } from "../../../../../platform/remote/common/remoteConnectionService.js";
-import { ContextKeyService } from "../../../../../platform/contextkey/common/contextkey.js";
+import { ContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
 import { ConnectToRemoteCommandId, ManageRemoteConnectionsCommandId, ReconnectRemoteCommandId, RollbackRemoteRuntimeCommandId } from "../../browser/remoteActions.js";
 import { RemoteConnectionKindContext, RemoteConnectionsAvailableContext, RemoteConnectionStateContext, RemoteContextKeys } from "../../browser/remoteContextKeys.js";
 import type { IRemoteAgentService } from "../../../../services/remote/common/remoteAgentService.js";

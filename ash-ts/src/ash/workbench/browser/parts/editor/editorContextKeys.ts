@@ -1,6 +1,7 @@
 import type { Event } from '../../../../base/common/event.js';
 import { Disposable, MutableDisposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import type { IContextKey, IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
+import type { IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
+import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { isTextResourceLanguageInput, resolveTextResourceLanguageId, type TextResourceLanguageResolver } from '../../../../platform/language/common/textResourceLanguage.js';
 import { ActiveEditorAvailableEditorIdsContext, ActiveEditorCanRevertContext, ActiveEditorContext, ActiveEditorDirtyContext, ActiveEditorFirstInGroupContext, ActiveEditorLastInGroupContext, ActiveEditorPinnedContext, ActiveEditorReadonlyContext, EditorGroupEditorsCountContext, EditorPartModalVisibleContext, ResourceContext, ResourceDirnameContext, ResourceExtensionContext, ResourceFilenameContext, ResourceLanguageIdContext, ResourcePathContext, ResourceSchemeContext, ResourceSetContext } from '../../../common/contextkeys.js';
 import type { EditorInput } from '../../../services/editor/common/editorService.js';

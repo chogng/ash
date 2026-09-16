@@ -3,7 +3,7 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { WorkbenchConfiguration, type WorkbenchLayoutStyle } from '../../../common/configuration.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { IAuxiliaryWindowService, type IAuxiliaryWindow } from '../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
-import { IWorkbenchLayoutStyleService } from '../../../services/layout/common/workbenchLayoutStyleService.js';
+import { IWorkbenchLayoutStyleService } from '../../../services/layout/browser/workbenchLayoutStyleService.js';
 import './media/editorBorder.css';
 import './media/roundedCorners.css';
 import './media/statusBar.css';

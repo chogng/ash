@@ -1,6 +1,6 @@
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
 import { ICommandService } from "../../../../platform/commands/common/commands.js";
-import { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
+import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { IExtensionService } from "../../../services/extensions/common/extensionService.js";
 import { IRemoteAgentService } from "../../../services/remote/common/remoteAgentService.js";
 import { IRemoteConnectionService } from "../../../../platform/remote/common/remoteConnectionService.js";

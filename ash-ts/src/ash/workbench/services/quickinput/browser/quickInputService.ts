@@ -10,11 +10,9 @@ import type {
 	IQuickPick,
 	IQuickPickItem,
 } from "../../../../platform/quickinput/common/quickInput.js";
-import type {
-	IContextKey,
-	IContextKeyService,
-} from "../../../../platform/contextkey/common/contextkey.js";
-import type { ILayoutService } from "../../../../platform/layout/common/layoutService.js";
+import type { IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
+import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
+import type { ILayoutService } from "../../../../platform/layout/browser/layoutService.js";
 import {
 	InQuickInputContext,
 } from "../../../browser/quickaccess.js";

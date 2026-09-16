@@ -1,9 +1,9 @@
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { IMenuService } from "../../../../platform/actions/common/menuService.js";
-import { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
+import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
 import { ICommandService } from "../../../../platform/commands/common/commands.js";
-import { IHoverService } from "../../../../platform/hover/common/hoverService.js";
+import { IHoverService } from "../../../../platform/hover/browser/hoverService.js";
 import { IFileIconThemeService } from "../../../../platform/theme/browser/fileIconThemeService.js";
 import { ServiceConstructionDescriptor } from "../../../../platform/instantiation/common/instantiation.js";
 import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";

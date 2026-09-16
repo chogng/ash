@@ -1,5 +1,5 @@
 import { CommandsRegistry } from '../../../src/ash/platform/commands/common/commands.js';
-import { IContextKeyService } from '../../../src/ash/platform/contextkey/common/contextkey.js';
+import { IContextKeyService } from "../../../src/ash/platform/contextkey/browser/contextKeyService.js";
 import { ICodeEditorService } from '../../../src/ash/editor/browser/services/codeEditorService.js';
 import { observableCodeEditor } from '../../../src/ash/editor/browser/observableCodeEditor.js';
 import { FindController } from '../../../src/ash/editor/contrib/find/browser/findController.js';

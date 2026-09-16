@@ -1,4 +1,4 @@
-import type { ISandboxGlobals } from "../../../base/parts/sandbox/common/sandboxTypes.js";
+import type { ISandboxGlobals } from "../../../base/parts/sandbox/electron-browser/sandboxTypes.js";
 
 export const CodeDataTransfers = {
 	EDITORS: "CodeEditors",

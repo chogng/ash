@@ -18,7 +18,7 @@ for (const [name, value] of Object.entries({
 }
 
 const { toDisposable } = await import("../../../../../../base/common/lifecycle.js");
-const { ContextKeyService } = await import("../../../../../../platform/contextkey/common/contextkey.js");
+const { ContextKeyService } = await import("../../../../../../platform/contextkey/browser/contextKeyService.js");
 const { ViewContainerLocation } = await import("../../../../../../workbench/common/views.js");
 const { ViewPaneContainer } = await import("../../../../../../workbench/browser/parts/views/viewPaneContainer.js");
 

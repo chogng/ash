@@ -75,16 +75,16 @@ function createWorkers(): EditorBrowserServices['workers'] {
 		editorWorkerFactory: (model) => new VersionedEditorWorkerClient(
 			model,
 			() => new LanguageWorkerWireClient(
-				new BrowserWorkerClientPort(new Worker(new URL('../../common/services/editorWebWorkerMain.ts', import.meta.url), { type: 'module', name: 'ash-editor' })),
+				new BrowserWorkerClientPort(new Worker(new URL('./editorWebWorkerMain.ts', import.meta.url), { type: 'module', name: 'ash-editor' })),
 				editorWorkerWireCodec,
 			),
 		),
 		syntaxWorkerFactory: () => new SyntaxModuleWorkerClient(
-			new BrowserWorkerClientPort(new Worker(new URL('../../common/services/syntaxWorkerMain.ts', import.meta.url), { type: 'module', name: 'ash-syntax' })),
+			new BrowserWorkerClientPort(new Worker(new URL('./syntaxWorkerMain.ts', import.meta.url), { type: 'module', name: 'ash-syntax' })),
 			{ requiredProviderModules: ['language.lexical'] },
 		),
 		completionWorkerFactory: () => new LanguageCompletionCatalogWorkerClient(
-			new BrowserWorkerClientPort(new Worker(new URL('../../common/services/languageCompletionWorkerMain.ts', import.meta.url), { type: 'module', name: 'ash-completion' })),
+			new BrowserWorkerClientPort(new Worker(new URL('./languageCompletionWorkerMain.ts', import.meta.url), { type: 'module', name: 'ash-completion' })),
 			{ requiredProviderModules: ['language.word'] },
 		),
 	});

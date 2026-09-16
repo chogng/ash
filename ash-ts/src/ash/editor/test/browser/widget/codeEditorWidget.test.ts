@@ -25,7 +25,7 @@ import { GlyphMarginLane } from '../../../common/model.js';
 import { EditorLineWrapping, EditorOption, RenderLineNumbersType } from '../../../common/config/editorOptions.js';
 import { ScrollType } from '../../../common/editorCommon.js';
 import { type ViewConfigurationChangedEvent, VerticalRevealType } from '../../../common/viewEvents.js';
-import { IContextKeyService, ContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
+import { IContextKeyService, ContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { AccessibilitySupport, type IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { CursorChangeReason } from '../../../common/cursorEvents.js';
 import { ViewContext } from '../../../common/viewModel/viewContext.js';

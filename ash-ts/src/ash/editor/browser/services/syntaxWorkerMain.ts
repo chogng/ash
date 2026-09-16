@@ -1,15 +1,15 @@
 import { start } from '../../editor.worker.start.js';
-import { SyntaxProviderModuleHost, SyntaxProviderModuleRegistry } from '../languages/syntax/syntaxProviderModules.js';
-import { SyntaxProviderModuleWireServer } from '../languages/syntax/syntaxProviderModuleWire.js';
-import { SyntaxProviderRegistry } from '../languages/syntax/syntaxProviders.js';
-import { SyntaxProviderWorker } from '../languages/syntax/syntaxService.js';
-import { syntaxWireCodec } from '../languages/syntax/syntaxWire.js';
-import { registerBuiltinLanguageConfigurations } from '../languages/languageBuiltinConfigurations.js';
-import { LanguageConfigurationService } from '../languages/languageConfigurationRegistry.js';
-import { createLanguageLexicalSyntaxProvider } from '../languages/languageLexicalSyntaxProvider.js';
-import { LanguageWorkerWireServer } from '../languages/languageWorkerWire.js';
+import { SyntaxProviderModuleHost, SyntaxProviderModuleRegistry } from '../../common/languages/syntax/syntaxProviderModules.js';
+import { SyntaxProviderModuleWireServer } from '../../common/languages/syntax/syntaxProviderModuleWire.js';
+import { SyntaxProviderRegistry } from '../../common/languages/syntax/syntaxProviders.js';
+import { SyntaxProviderWorker } from '../../common/languages/syntax/syntaxService.js';
+import { syntaxWireCodec } from '../../common/languages/syntax/syntaxWire.js';
+import { registerBuiltinLanguageConfigurations } from '../../common/languages/languageBuiltinConfigurations.js';
+import { LanguageConfigurationService } from '../../common/languages/languageConfigurationRegistry.js';
+import { createLanguageLexicalSyntaxProvider } from '../../common/languages/languageLexicalSyntaxProvider.js';
+import { LanguageWorkerWireServer } from '../../common/languages/languageWorkerWire.js';
 import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
-import { LanguageService } from './languageService.js';
+import { LanguageService } from '../../common/services/languageService.js';
 
 start(({ port, resources }) => {
 	const registry = resources.add(new SyntaxProviderRegistry());

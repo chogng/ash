@@ -40,7 +40,7 @@ const { CommandsRegistry } = await import(
 	"../../../../../../platform/commands/common/commands.js"
 );
 const { ContextKeyService } = await import(
-	"../../../../../../platform/contextkey/common/contextkey.js"
+	"../../../../../../platform/contextkey/browser/contextKeyService.js"
 );
 const { ServiceContainer } = await import(
 	"../../../../../../platform/instantiation/common/instantiation.js"

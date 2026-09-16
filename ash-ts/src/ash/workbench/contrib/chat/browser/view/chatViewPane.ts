@@ -14,7 +14,8 @@ import { ChatTitleControl } from "./chatTitleControl.js";
 import { h } from "../../../../../base/browser/dom.js";
 import type { IChatContextPickService, ChatContextAttachment } from "../../../../services/chat/common/chatContextService.js";
 import type { IQuickInputService } from "../../../../../platform/quickinput/common/quickInput.js";
-import { ContextKeyService, type IContextKey, type IContextKeyService } from "../../../../../platform/contextkey/common/contextkey.js";
+import { type IContextKey } from "../../../../../platform/contextkey/common/contextkey.js";
+import { ContextKeyService, type IContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
 import { ChatSessionInspectorVisibleContext } from "../../common/chat.js";
 import { SessionInspector } from "./sessionInspector.js";
 

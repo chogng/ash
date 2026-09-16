@@ -5,7 +5,7 @@ import { h } from "../../../../base/browser/dom.js";
 import type { IAction } from "../../../../base/common/actions.js";
 import { type IMenuActionOptions, MenuId } from "../../../actions/common/actions.js";
 import type { IMenuService } from "../../../actions/common/menuService.js";
-import { ContextKeyService, type IContextKeyService } from "../../../contextkey/common/contextkey.js";
+import { ContextKeyService, type IContextKeyService } from "../../../contextkey/browser/contextKeyService.js";
 
 test("menu delegates prepend explicit actions and use their context-key scope", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");

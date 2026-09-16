@@ -1,6 +1,6 @@
 import { createServer } from 'node:http';
 import type { ElectronApplication } from '@playwright/test';
-import type { ISandboxGlobals } from '../../../../src/ash/base/parts/sandbox/common/sandboxTypes.js';
+import type { ISandboxGlobals } from "../../../../src/ash/base/parts/sandbox/electron-browser/sandboxTypes.js";
 import { decodeAppServerServerRequestResult } from '../../../../src/ash/platform/app-server/common/generated/AppServerProtocolDecoder.js';
 import { expect, test } from '../../../automation/test.js';
 

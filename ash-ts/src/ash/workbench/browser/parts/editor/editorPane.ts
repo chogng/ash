@@ -24,7 +24,7 @@ import type { ILanguageDiagnosticsService } from "../../../../editor/common/serv
 import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
 import type { IKeybindingsResourceService } from "../../../../platform/keybinding/common/keybindingsResource.js";
 import type { IKeyboardLayoutService } from "../../../../platform/keyboardLayout/common/keyboardLayout.js";
-import type { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
+import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
 import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
 import type { Event } from "../../../../base/common/event.js";

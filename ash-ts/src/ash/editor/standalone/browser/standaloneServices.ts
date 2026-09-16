@@ -30,7 +30,7 @@ import { type IWorkspaceFolder } from '../../../platform/workspace/common/worksp
 import { ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
 import { BrowserClipboardService } from '../../../platform/clipboard/browser/browserClipboardService.js';
 import { IClipboardService } from '../../../platform/clipboard/common/clipboardService.js';
-import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/common/contextkey.js';
+import { ContextKeyService, IContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
 import { FormattingConflicts } from '../../contrib/format/browser/format.js';
 
 export interface StandaloneServiceOverrides {

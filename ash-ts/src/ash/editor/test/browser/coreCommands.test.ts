@@ -9,7 +9,7 @@ import { h } from "../../../base/browser/dom.js";
 import { CursorState } from '../../common/cursorCommon.js';
 import { CursorChangeReason } from '../../common/cursorEvents.js';
 import { OperatingSystem } from '../../../base/common/platform.js';
-import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/common/contextkey.js';
+import { ContextKeyService, IContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
 import { ServiceContainer } from '../../../platform/instantiation/common/instantiation.js';
 import { ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
 import { ICodeEditorService } from '../../browser/services/codeEditorService.js';

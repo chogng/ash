@@ -1,8 +1,7 @@
 import { bindResizableLayout } from "../../../base/browser/ui/resizable/resizable.js";
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
-import { BrowserLayoutService } from "../../../platform/layout/browser/layoutService.js";
+import { BrowserLayoutService, ILayoutService } from "../../../platform/layout/browser/layoutService.js";
 import { IConfigurationService, type IConfigurationService as IConfigurationServiceContract } from "../../../platform/configuration/common/configuration.js";
-import { ILayoutService } from "../../../platform/layout/common/layoutService.js";
 import type { IKeybindingsResourceApi } from "../../../platform/keybinding/common/keybindingsResource.js";
 import type { IStorageService } from "../../../platform/storage/common/storage.js";
 import type { WorkbenchPart } from "../../../workbench/browser/part.js";

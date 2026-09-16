@@ -17,7 +17,7 @@ import { ChatInputEditors } from "./input/chatInputEditorRegistry.js";
 import { ChatViewPane } from "./view/chatViewPane.js";
 import { IChatContextPickService } from "../../../services/chat/common/chatContextService.js";
 import { IQuickInputService } from "../../../../platform/quickinput/common/quickInput.js";
-import { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
+import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 
 registerWorkbenchContribution('workbench.contrib.chatInputEditor', WorkbenchPhase.BlockStartup, accessor => {
 	const instantiationService = accessor.get(IInstantiationService);

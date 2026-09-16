@@ -4,7 +4,7 @@ import {
 	type ContextViewOptions,
 } from "../../../base/browser/ui/contextview/contextview.js";
 import { Disposable } from "../../../base/common/lifecycle.js";
-import type { ILayoutService } from "../../layout/common/layoutService.js";
+import type { ILayoutService } from "../../layout/browser/layoutService.js";
 import type { IContextViewService } from "./contextView.js";
 
 /** Browser ContextView service scoped to one Workbench container. */

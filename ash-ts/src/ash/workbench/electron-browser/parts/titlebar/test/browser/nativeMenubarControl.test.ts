@@ -5,7 +5,7 @@ import { Emitter, Event } from '../../../../../../base/common/event.js';
 import type { IMenuChangeEvent, IMenuService } from '../../../../../../platform/actions/common/menuService.js';
 import { MenuItemAction } from '../../../../../../platform/actions/common/actions.js';
 import type { ICommandService } from '../../../../../../platform/commands/common/commands.js';
-import { ContextKeyService } from '../../../../../../platform/contextkey/common/contextkey.js';
+import { ContextKeyService } from "../../../../../../platform/contextkey/browser/contextKeyService.js";
 import type { INativeMenubarApi, INativeMenubarData, INativeMenubarSelection } from '../../../../../../platform/menubar/common/nativeMenubar.js';
 import { NativeMenubarControl } from '../../../../../../workbench/electron-browser/parts/titlebar/nativeMenubarControl.js';
 

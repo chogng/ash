@@ -33,7 +33,7 @@ import { AppServerSessionsProvider } from "../../../../../sessions/services/sess
 import type { ISession } from "../../../../../sessions/services/sessions/common/session.js";
 import { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
 import { IViewsService, ViewsService } from "../../../../../workbench/services/views/browser/viewsService.js";
-import { ContextKeyService, IContextKeyService } from "../../../../../platform/contextkey/common/contextkey.js";
+import { ContextKeyService, IContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
 import { ViewDescriptorService } from "../../../../../workbench/services/views/common/viewDescriptorService.js";
 import { WorkbenchQuickInputService } from "../../../../../workbench/services/quickinput/browser/quickInputService.js";
 import { h } from "../../../../../base/browser/dom.js";

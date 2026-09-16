@@ -2,7 +2,7 @@ import { TabList, type TabListDropPosition } from "../../../../base/browser/ui/t
 import { Disposable, DisposableMap } from "../../../../base/common/lifecycle.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import type { IMenuService } from "../../../../platform/actions/common/menuService.js";
-import type { IContextKeyService } from "../../../../platform/contextkey/common/contextkey.js";
+import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import type { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
 import type { IThemeService } from "../../../../platform/theme/common/themeService.js";
 import { AppServerRemoteError } from "../../../../platform/app-server/common/appServerError.js";

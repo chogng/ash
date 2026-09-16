@@ -19,10 +19,8 @@ import {
 import {
 	CommandRegistry,
 } from "../../../../../platform/commands/common/commands.js";
-import {
-	ContextKeyExpr,
-	ContextKeyService,
-} from "../../../../../platform/contextkey/common/contextkey.js";
+import { ContextKeyExpr } from "../../../../../platform/contextkey/common/contextkey.js";
+import { ContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
 import {
 	parseContextKeyExpression,
 } from "../../../../../platform/contextkey/common/contextKeyExpressionParser.js";

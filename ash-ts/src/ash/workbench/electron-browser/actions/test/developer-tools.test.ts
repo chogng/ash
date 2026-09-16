@@ -6,9 +6,7 @@ import {
 import {
 	MenuService,
 } from "../../../../platform/actions/common/menuService.js";
-import {
-	ContextKeyService,
-} from "../../../../platform/contextkey/common/contextkey.js";
+import { ContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import {
 	ServiceContainer,
 } from "../../../../platform/instantiation/common/instantiation.js";

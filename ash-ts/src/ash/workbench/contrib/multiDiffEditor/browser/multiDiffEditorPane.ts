@@ -14,7 +14,7 @@ import { type IDiffComputationService } from '../../../../editor/common/diff/dif
 import { type ITextModelResourceService, type TextModelReference } from '../../../../editor/common/services/textModelResourceService.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import type { IMenuService } from '../../../../platform/actions/common/menuService.js';
-import type { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
+import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { type EditorInput } from '../../../browser/parts/editor/editorInput.js';
 import { type IEditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { EditorPaneVisibility } from '../../../browser/parts/editor/editorPane.js';

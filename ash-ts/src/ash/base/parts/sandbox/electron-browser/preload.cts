@@ -2,7 +2,7 @@
 	const { contextBridge, ipcRenderer, webUtils } =
 		require("electron") as typeof import("electron");
 	type ISandboxGlobals =
-		import("../common/sandboxTypes.js").ISandboxGlobals;
+		import("./sandboxTypes.js").ISandboxGlobals;
 
 	const validateChannel = (channel: string): string => {
 		if (!channel?.startsWith("ash:")) {

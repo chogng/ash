@@ -7,7 +7,8 @@ import { localize, type ILocalizationService, type LocalizationKey } from "../..
 import { MenuWorkbenchToolBar } from "../../../platform/actions/browser/toolbar.js";
 import { type MenuId } from "../../../platform/actions/common/actions.js";
 import type { IMenuService } from "../../../platform/actions/common/menuService.js";
-import type { IContextKey, IContextKeyService } from '../../../platform/contextkey/common/contextkey.js';
+import type { IContextKey } from "../../../platform/contextkey/common/contextkey.js";
+import type { IContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
 import { ActiveAgentSidebarContext, ActiveAuxiliaryContext, ActivePanelContext, ActiveViewletContext } from '../../common/contextkeys.js';
 import { ViewContainerLocation, type IViewContainerDescriptor } from "../../common/views.js";
 import type { IViewDescriptorService } from "../../services/views/common/viewDescriptorService.js";

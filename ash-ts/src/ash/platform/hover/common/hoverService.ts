@@ -1,6 +1,4 @@
-import type { HoverDelegateSetupOptions, IHoverDelegate, IManagedHover as IBaseManagedHover } from "../../../base/browser/ui/hover/hoverDelegate.js";
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../configuration/common/configurationRegistry.js";
-import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 import { Registry } from "../../registry/common/platform.js";
 
 export const MinimumHoverDelay = 0;
@@ -41,28 +39,6 @@ export const HoverConfiguration = Object.freeze({
 
 /** Selects the Workbench policy used before an automatic Hover is shown. */
 export type HoverDelayMode = "standard" | "reduced" | "instant";
-
-/** Caller-owned description of one target and its managed Hover content. */
-export interface HoverSetupOptions extends HoverDelegateSetupOptions {
-	readonly delay?: HoverDelayMode;
-}
-
-/** Handle returned to callers for updating or explicitly controlling a Hover. */
-export type IManagedHover = IBaseManagedHover;
-
-/**
- * Coordinates managed Hovers inside one Workbench window.
- *
- * Implementations own product delay policy and global overlay coordination;
- * callers retain ownership of the returned managed Hover handles.
- */
-export interface IHoverService extends IHoverDelegate {
-	setupHover(options: HoverSetupOptions): IManagedHover;
-	showHover(options: HoverSetupOptions): IManagedHover;
-	hideHover(): void;
-}
-
-export const IHoverService = createServiceIdentifier<IHoverService>("hoverService");
 
 function parseHoverDelay(value: unknown, key: string): number {
 	if (

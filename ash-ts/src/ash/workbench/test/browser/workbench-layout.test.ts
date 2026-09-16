@@ -6,9 +6,7 @@ import type { IAction } from "../../../base/common/actions.js";
 import { Emitter } from "../../../base/common/event.js";
 import { DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
 import type { IViewPaneOptions, PartTitleProjection } from "../../../workbench/browser/parts/views/viewPane.js";
-import {
-	ContextKeyService,
-} from "../../../platform/contextkey/common/contextkey.js";
+import { ContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
 import { h } from "../../../base/browser/dom.js";
 import type { ILocalizationService } from "../../../workbench/services/localization/common/localizationService.js";
 

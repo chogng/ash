@@ -4,7 +4,7 @@ import { ToolBar, type MoreActionsPlacement, type ToolBarPresentation } from "..
 import { SubmenuAction, type IAction } from "../../../base/common/actions.js";
 import { Emitter } from "../../../base/common/event.js";
 import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
-import type { IContextKeyService } from "../../contextkey/common/contextkey.js";
+import type { IContextKeyService } from "../../contextkey/browser/contextKeyService.js";
 import { createActionViewItem, getActionBarActions } from "./menuEntryActionViewItem.js";
 import { MenuId, type IMenuActionOptions } from "../common/actions.js";
 import type { IMenu, IMenuChangeEvent, IMenuService } from "../common/menuService.js";

@@ -41,8 +41,7 @@ import type { IConfigurationApi } from "../../platform/configuration/common/conf
 import { IConfigurationResourceService } from "../../platform/configuration/common/configurationResourceService.js";
 import { IConfigurationService } from "../../platform/configuration/common/configuration.js";
 import { IStorageService, WillSaveStateReason } from "../../platform/storage/common/storage.js";
-import { BrowserLayoutService } from "../../platform/layout/browser/layoutService.js";
-import { ILayoutService } from "../../platform/layout/common/layoutService.js";
+import { BrowserLayoutService, ILayoutService } from "../../platform/layout/browser/layoutService.js";
 import "../../platform/layout/browser/zIndexRegistry.js";
 import {
 	ServiceContainer,
@@ -128,7 +127,7 @@ import { IResourceLabelService, ResourceLabelService } from "./labels.js";
 import { ILabelService, LabelService } from "../../platform/label/common/labelService.js";
 import { WorkbenchLayout, type WorkbenchDefaultLayout } from "./layout.js";
 import { IWorkbenchLayoutService, type WorkbenchPartId } from "../services/layout/browser/layoutService.js";
-import { IWorkbenchLayoutStyleService } from "../services/layout/common/workbenchLayoutStyleService.js";
+import { IWorkbenchLayoutStyleService } from "../services/layout/browser/workbenchLayoutStyleService.js";
 import { BrowserStorageService } from "../services/storage/browser/storageService.js";
 import { SystemOutputService } from "../services/output/browser/systemOutputService.js";
 import { IContentSearchService } from "../../platform/search/common/search.js";

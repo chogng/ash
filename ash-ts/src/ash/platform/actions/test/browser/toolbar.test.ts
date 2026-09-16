@@ -1,3 +1,4 @@
+import { ContextKeyExpr } from "../../../contextkey/common/contextkey.js";
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -75,7 +76,7 @@ test("menu entry actions switch to their alternative while Alt is held", async (
 	] = await Promise.all([
 		import("../../../../base/browser/dom.js"),
 		import("../../../../platform/actions/common/actions.js"),
-		import("../../../../platform/contextkey/common/contextkey.js"),
+		import("../../../../platform/contextkey/browser/contextKeyService.js"),
 		import("../../../../platform/actions/browser/menuEntryActionViewItem.js"),
 	]);
 	const runs: string[] = [];
@@ -319,7 +320,7 @@ test("workbench toolbar adapts manually supplied platform menu actions", async (
 		import("../../../../platform/actions/common/actions.js"),
 		import("../../../../platform/actions/common/menuService.js"),
 		import("../../../../platform/commands/common/commands.js"),
-		import("../../../../platform/contextkey/common/contextkey.js"),
+		import("../../../../platform/contextkey/browser/contextKeyService.js"),
 		import("../../../../platform/instantiation/common/instantiation.js"),
 		import("../../../../workbench/services/commands/common/commandService.js"),
 		import("../../../../base/common/lifecycle.js"),
@@ -368,7 +369,7 @@ test("menu toolbar keeps navigation inline and moves other groups into More Acti
 		import("../../../../platform/actions/common/actions.js"),
 		import("../../../../platform/actions/common/menuService.js"),
 		import("../../../../platform/commands/common/commands.js"),
-		import("../../../../platform/contextkey/common/contextkey.js"),
+		import("../../../../platform/contextkey/browser/contextKeyService.js"),
 		import("../../../../platform/instantiation/common/instantiation.js"),
 		import("../../../../workbench/services/commands/common/commandService.js"),
 		import("../../../../base/common/lifecycle.js"),
@@ -446,7 +447,7 @@ test("menu toolbar projects empty state as a stable visual class", async () => {
 		{ MenuId, MenusRegistry },
 		{ MenuService },
 		{ CommandsRegistry },
-		{ ContextKeyExpr, ContextKeyService },
+		{ ContextKeyService },
 		{ ServiceContainer },
 		{ CommandService },
 		{ DisposableStore },
@@ -455,7 +456,7 @@ test("menu toolbar projects empty state as a stable visual class", async () => {
 		import("../../../../platform/actions/common/actions.js"),
 		import("../../../../platform/actions/common/menuService.js"),
 		import("../../../../platform/commands/common/commands.js"),
-		import("../../../../platform/contextkey/common/contextkey.js"),
+		import("../../../../platform/contextkey/browser/contextKeyService.js"),
 		import("../../../../platform/instantiation/common/instantiation.js"),
 		import("../../../../workbench/services/commands/common/commandService.js"),
 		import("../../../../base/common/lifecycle.js"),
@@ -507,7 +508,7 @@ test("menu toolbar retains action slots for enablement and toggle changes", asyn
 		{ MenuId, MenusRegistry },
 		{ MenuService },
 		{ CommandsRegistry },
-		{ ContextKeyExpr, ContextKeyService },
+		{ ContextKeyService },
 		{ ServiceContainer },
 		{ CommandService },
 		{ DisposableStore },
@@ -516,7 +517,7 @@ test("menu toolbar retains action slots for enablement and toggle changes", asyn
 		import("../../../../platform/actions/common/actions.js"),
 		import("../../../../platform/actions/common/menuService.js"),
 		import("../../../../platform/commands/common/commands.js"),
-		import("../../../../platform/contextkey/common/contextkey.js"),
+		import("../../../../platform/contextkey/browser/contextKeyService.js"),
 		import("../../../../platform/instantiation/common/instantiation.js"),
 		import("../../../../workbench/services/commands/common/commandService.js"),
 		import("../../../../base/common/lifecycle.js"),
@@ -597,7 +598,7 @@ test("More Actions opens an anchored Menu with actionable list items", async () 
 	] = await Promise.all([
 		import("../../../../base/common/actions.js"),
 		import("../../../../base/browser/ui/toolbar/toolbar.js"),
-		import("../../../../platform/contextkey/common/contextkey.js"),
+		import("../../../../platform/contextkey/browser/contextKeyService.js"),
 		import("../../../../platform/actions/common/menuService.js"),
 		import("../../../../platform/instantiation/common/instantiation.js"),
 		import("../../../../workbench/services/commands/common/commandService.js"),

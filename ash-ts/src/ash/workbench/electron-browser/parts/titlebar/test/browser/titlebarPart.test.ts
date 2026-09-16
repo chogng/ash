@@ -26,7 +26,7 @@ suiteTeardown(() => {
 
 const { createElectronTitlebarPartFactory } = await import('../../titlebarPart.js');
 const { MenuService } = await import('../../../../../../platform/actions/common/menuService.js');
-const { ContextKeyService } = await import('../../../../../../platform/contextkey/common/contextkey.js');
+const { ContextKeyService } = await import('../../../../../../platform/contextkey/browser/contextKeyService.js');
 const { CommandService } = await import('../../../../../services/commands/common/commandService.js');
 
 test('Electron titlebar applies the active theme and releases its subscription with the part', () => {

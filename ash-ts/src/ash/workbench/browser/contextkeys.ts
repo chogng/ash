@@ -1,5 +1,6 @@
 import { Disposable, toDisposable } from '../../base/common/lifecycle.js';
-import type { IContextKey, IContextKeyService } from '../../platform/contextkey/common/contextkey.js';
+import type { IContextKey } from "../../platform/contextkey/common/contextkey.js";
+import type { IContextKeyService } from "../../platform/contextkey/browser/contextKeyService.js";
 import { IsLinuxContext, IsMacContext, IsNativeContext, IsWebContext, IsWindowsContext } from '../../platform/contextkey/common/contextkeys.js';
 import { type IWorkspaceContextService, workbenchStateToString } from '../../platform/workspace/common/workspace.js';
 import { ActiveEditorGroupEmptyContext, ActiveEditorGroupIndexContext, ActiveEditorGroupLastContext, AgentSidebarVisibleContext, AuxiliaryBarVisibleContext, DirtyWorkingCopiesContext, EditorAreaVisibleContext, EditorsVisibleContext, MultipleEditorGroupsContext, PanelMaximizedContext, PanelVisibleContext, SideBarVisibleContext, WorkbenchStateContext, WorkspaceFolderCountContext } from '../common/contextkeys.js';

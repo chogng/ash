@@ -3,7 +3,7 @@ import { SerializableGrid } from "../../../base/browser/ui/grid/grid.js";
 import type { IResizable } from "../../../base/browser/ui/resizable/resizable.js";
 import { Emitter } from "../../../base/common/event.js";
 import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
-import type { ILayoutOffsetInfo } from "../../../platform/layout/common/layoutService.js";
+import type { ILayoutOffsetInfo } from "../../../platform/layout/browser/layoutService.js";
 import type { IStorageService } from "../../../platform/storage/common/storage.js";
 import { WorkbenchPartView } from "../../../workbench/browser/workbenchPartView.js";
 import type { WorkbenchPart } from "../../../workbench/browser/part.js";

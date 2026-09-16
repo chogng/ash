@@ -1,6 +1,4 @@
-import type {
-	ISandboxGlobals,
-} from "../common/sandboxTypes.js";
+import type { ISandboxGlobals } from "./sandboxTypes.js";
 
 interface ISandboxGlobal {
 	readonly ash?: ISandboxGlobals;

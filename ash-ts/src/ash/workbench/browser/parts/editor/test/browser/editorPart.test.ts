@@ -19,10 +19,8 @@ import type { LanguageLocation } from "../../../../../../editor/common/languages
 import type {
 	CommandId,
 } from "../../../../../../platform/commands/common/commands.js";
-import {
-	ContextKeyService,
-	type Context,
-} from "../../../../../../platform/contextkey/common/contextkey.js";
+import { type Context } from "../../../../../../platform/contextkey/common/contextkey.js";
+import { ContextKeyService } from "../../../../../../platform/contextkey/browser/contextKeyService.js";
 import type {
 	IKeybindingService,
 } from "../../../../../../platform/keybinding/common/keybinding.js";
@@ -833,7 +831,7 @@ test("Editor title toolbar splits the active group and owns More Actions", async
 		{ CommandService },
 	] = await Promise.all([
 		import("../../../../../../platform/actions/common/menuService.js"),
-		import("../../../../../../platform/contextkey/common/contextkey.js"),
+		import("../../../../../../platform/contextkey/browser/contextKeyService.js"),
 		import("../../../../../../platform/instantiation/common/instantiation.js"),
 		import("../../../../../../workbench/services/commands/common/commandService.js"),
 	]);

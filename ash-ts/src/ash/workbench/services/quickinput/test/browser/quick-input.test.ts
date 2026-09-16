@@ -9,10 +9,7 @@ import {
 import {
 	ICommandService,
 } from "../../../../../platform/commands/common/commands.js";
-import {
-	ContextKeyService,
-	IContextKeyService,
-} from "../../../../../platform/contextkey/common/contextkey.js";
+import { ContextKeyService, IContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
 import {
 	ServiceContainer,
 } from "../../../../../platform/instantiation/common/instantiation.js";

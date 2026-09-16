@@ -6,7 +6,7 @@ import { InMemoryConfigurationService } from "../../../../../platform/configurat
 import { FileKind, type IFileService } from "../../../../../platform/files/common/files.js";
 import { WorkspaceContextService } from "../../../../../workbench/services/workspaces/browser/workspaceContextService.js";
 import type { IFileIconThemeService } from "../../../../../platform/theme/browser/fileIconThemeService.js";
-import type { IHoverService, IManagedHover } from "../../../../../platform/hover/common/hoverService.js";
+import type { IHoverService, IManagedHover } from "../../../../../platform/hover/browser/hoverService.js";
 import { ListConfiguration } from "../../../../../platform/list/common/listConfiguration.js";
 import type { EditorInput, EditorOpenOptions, EditorOpenTarget, IEditorService } from "../../../../../workbench/services/editor/common/editorService.js";
 import { emptyEditorServiceState } from '../../../../../workbench/test/common/testEditorService.js';

@@ -29,7 +29,7 @@ const { LanguageCompletionTriggerKind } = await import("../../../../../editor/co
 const { TextModel } = await import("../../../../../editor/common/model/textModel.js");
 const { ICodeEditorService } = await import("../../../../../editor/browser/services/codeEditorService.js");
 const { Selection } = await import('../../../../../editor/common/core/selection.js');
-const { IContextKeyService, ContextKeyService } = await import('../../../../../platform/contextkey/common/contextkey.js');
+const { IContextKeyService, ContextKeyService } = await import('../../../../../platform/contextkey/browser/contextKeyService.js');
 const { ILogService, NullLoggerService } = await import('../../../../../platform/log/common/log.js');
 const { SelectAllCommand } = await import("../../../../../editor/browser/editorExtensions.js");
 

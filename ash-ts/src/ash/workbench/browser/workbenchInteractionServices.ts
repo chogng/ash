@@ -3,12 +3,11 @@ import { Disposable, type IDisposable } from "../../base/common/lifecycle.js";
 import { IMenuService, MenuService } from "../../platform/actions/common/menuService.js";
 import { ICommandService } from "../../platform/commands/common/commands.js";
 import { type IConfigurationService as IConfigurationServiceContract } from "../../platform/configuration/common/configuration.js";
-import { IContextKeyService, ContextKeyService } from "../../platform/contextkey/common/contextkey.js";
+import { IContextKeyService, ContextKeyService } from "../../platform/contextkey/browser/contextKeyService.js";
 import { BrowserContextMenuService } from "../../platform/contextview/browser/contextMenuService.js";
 import { IContextMenuService, IContextViewService } from "../../platform/contextview/browser/contextView.js";
 import { BrowserContextViewService } from "../../platform/contextview/browser/contextViewService.js";
-import { HoverService } from "../../platform/hover/browser/hoverService.js";
-import { IHoverService } from "../../platform/hover/common/hoverService.js";
+import { HoverService, IHoverService } from "../../platform/hover/browser/hoverService.js";
 import type { ServiceContainer } from "../../platform/instantiation/common/instantiation.js";
 import { IKeybindingService } from "../../platform/keybinding/common/keybinding.js";
 import type { INotificationService } from "../../platform/notification/common/notification.js";
@@ -19,7 +18,7 @@ import {
 	type IUserKeyboardLayoutApi,
 	UnavailableUserKeyboardLayoutService,
 } from "../../platform/keyboardLayout/common/userKeyboardLayout.js";
-import { type ILayoutService as ILayoutServiceContract } from "../../platform/layout/common/layoutService.js";
+import { type ILayoutService as ILayoutServiceContract } from "../../platform/layout/browser/layoutService.js";
 import { IQuickInputService } from "../../platform/quickinput/common/quickInput.js";
 import { CommandService } from "../services/commands/common/commandService.js";
 import { BrowserKeyboardLayoutService } from "../services/keybinding/browser/keyboardLayoutService.js";

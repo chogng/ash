@@ -8,9 +8,7 @@ import {
 	Extensions as ConfigurationExtensions,
 	type IConfigurationRegistry,
 } from "../../../platform/configuration/common/configurationRegistry.js";
-import {
-	ContextKeyService,
-} from "../../../platform/contextkey/common/contextkey.js";
+import { ContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
 import {
 	createServiceIdentifier,
 	ServiceContainer,

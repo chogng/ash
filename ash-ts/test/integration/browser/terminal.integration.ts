@@ -66,7 +66,7 @@ if (new URLSearchParams(location.search).has('pane')) {
 	widget.dispose();
 	const [{ TerminalViewPane }, { ContextKeyService }, { MenuService }, { ServiceContainer }, { CommandService }, { URI }] = await Promise.all([
 		import('../../../src/ash/workbench/contrib/terminal/browser/terminalView.js'),
-		import('../../../src/ash/platform/contextkey/common/contextkey.js'),
+		import('../../../src/ash/platform/contextkey/browser/contextKeyService.js'),
 		import('../../../src/ash/platform/actions/common/menuService.js'),
 		import('../../../src/ash/platform/instantiation/common/instantiation.js'),
 		import('../../../src/ash/workbench/services/commands/common/commandService.js'),

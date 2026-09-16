@@ -1,6 +1,6 @@
 import { Event } from '../../../base/common/event.js';
 import { noneDisposable } from '../../../base/common/lifecycle.js';
-import type { IContextKeyService } from '../../../platform/contextkey/common/contextkey.js';
+import type { IContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
 import { WorkbenchState, type IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { WorkbenchContextKeysHandler } from '../../browser/contextkeys.js';
 import type { IEditorGroupsService } from '../../services/editor/common/editorGroupsService.js';

@@ -23,7 +23,7 @@ for (const [name, value] of Object.entries({
 const { ServiceContainer } = await import("../../../../../platform/instantiation/common/instantiation.js");
 const { IConfigurationService } = await import("../../../../../platform/configuration/common/configuration.js");
 const { ConfigurationRegistry, Extensions: ConfigurationExtensions } = await import("../../../../../platform/configuration/common/configurationRegistry.js");
-const { ILayoutService } = await import("../../../../../platform/layout/common/layoutService.js");
+const { ILayoutService } = await import("../../../../../platform/layout/browser/layoutService.js");
 const { Registry } = await import("../../../../../platform/registry/common/platform.js");
 const { WorkbenchContributionsRegistry, WorkbenchPhase } = await import("../../../../../workbench/common/contributions.js");
 const { SashConfiguration } = await import("../../../../../workbench/contrib/sash/common/sash.js");
@@ -32,7 +32,7 @@ const { WorkbenchConfigurationService } = await import("../../../../../workbench
 const configurationRegistry = Registry.as<InstanceType<typeof ConfigurationRegistry>>(ConfigurationExtensions.Configuration);
 await import("../../../../../workbench/contrib/sash/browser/sash.contribution.js");
 
-type LayoutService = import("../../../../../platform/layout/common/layoutService.js").ILayoutService;
+type LayoutService = import("../../../../../platform/layout/browser/layoutService.js").ILayoutService;
 
 test("Sash configuration validates its public range", () => {
 	const size = configurationRegistry.getConfiguration(SashConfiguration.size);

@@ -4,7 +4,7 @@ import { type IMouseEvent } from '../../../../base/browser/mouseEvent.js';
 import { KeyCode } from '../../../../base/common/keyCodes.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import * as nls from '../../../../nls.js';
-import { IContextKeyService, type IContextKeyService as IContextKeyServiceContract } from '../../../../platform/contextkey/common/contextkey.js';
+import { IContextKeyService, type IContextKeyService as IContextKeyServiceContract } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { IContextMenuService, type IContextMenuService as IContextMenuServiceContract } from '../../../../platform/contextview/browser/contextView.js';
 import { type ICodeEditor, type IEditorMouseEvent, MouseTargetType } from '../../../browser/editorBrowser.js';
 import { EditorAction, EditorContributionInstantiation, registerEditorAction, registerEditorContribution, type ServicesAccessor } from '../../../browser/editorExtensions.js';

@@ -30,7 +30,7 @@ const [
 	{ CommandService },
 	{ TerminalTitleActions },
 ] = await Promise.all([
-	import("../../../../../platform/contextkey/common/contextkey.js"),
+	import("../../../../../platform/contextkey/browser/contextKeyService.js"),
 	import("../../../../../platform/actions/common/menuService.js"),
 	import("../../../../../platform/instantiation/common/instantiation.js"),
 	import("../../../../../workbench/services/commands/common/commandService.js"),

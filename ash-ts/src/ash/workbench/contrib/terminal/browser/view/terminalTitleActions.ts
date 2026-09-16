@@ -7,7 +7,8 @@ import { MenuWorkbenchToolBar } from "../../../../../platform/actions/browser/to
 import { MenuId, MenusRegistry } from "../../../../../platform/actions/common/actions.js";
 import type { IMenuService } from "../../../../../platform/actions/common/menuService.js";
 import { CommandsRegistry } from "../../../../../platform/commands/common/commands.js";
-import { ContextKeyExpr, type IContextKey, type IContextKeyService, RawContextKey } from "../../../../../platform/contextkey/common/contextkey.js";
+import { ContextKeyExpr, type IContextKey, RawContextKey } from "../../../../../platform/contextkey/common/contextkey.js";
+import { type IContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
 import type { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
 import type { ITerminalInstance, ITerminalProfile } from "../../../../services/terminal/common/terminal.js";
 import { terminalProfileIcon } from "./terminalProfileIcon.js";

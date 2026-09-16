@@ -5,7 +5,7 @@ import { ServiceConstructionDescriptor } from "../../../../platform/instantiatio
 import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { IEditorService } from "../../../services/editor/common/editorService.js";
 import { IFileIconThemeService } from "../../../../platform/theme/browser/fileIconThemeService.js";
-import { IHoverService } from "../../../../platform/hover/common/hoverService.js";
+import { IHoverService } from "../../../../platform/hover/browser/hoverService.js";
 import { IFileLabelDecorationService } from "../../../services/labels/common/fileLabelDecorationService.js";
 import { ILabelService } from "../../../../platform/label/common/labelService.js";
 import { WorkspaceFolderCountContext } from "../../../common/contextkeys.js";

@@ -4,7 +4,7 @@ import { JSDOM } from "jsdom";
 import { Event } from "../../../../../base/common/event.js";
 import type { INativeContextMenuApi } from "../../../../../base/parts/contextmenu/common/contextmenu.js";
 import type { IMenuService } from "../../../../../platform/actions/common/menuService.js";
-import { ContextKeyService } from "../../../../../platform/contextkey/common/contextkey.js";
+import { ContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
 import type { IKeybindingService } from "../../../../../platform/keybinding/common/keybinding.js";
 import type { INotificationService } from "../../../../../platform/notification/common/notification.js";
 

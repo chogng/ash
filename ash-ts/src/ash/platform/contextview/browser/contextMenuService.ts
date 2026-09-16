@@ -10,7 +10,7 @@ import {
 } from "../../actions/browser/menuEntryActionViewItem.js";
 import { MenuId } from "../../actions/common/actions.js";
 import type { IMenuService } from "../../actions/common/menuService.js";
-import type { IContextKeyService } from "../../contextkey/common/contextkey.js";
+import type { IContextKeyService } from "../../contextkey/browser/contextKeyService.js";
 import type { IKeybindingService } from "../../keybinding/common/keybinding.js";
 import type { INotificationService } from "../../notification/common/notification.js";
 import { ContextMenuHandler } from "./contextMenuHandler.js";

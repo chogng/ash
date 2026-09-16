@@ -37,7 +37,9 @@ Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保
 | Node.js | [`.nvmrc`](../.nvmrc) 声明的版本 | Node.js 官方发行包或 fnm |
 | pnpm | 根 [`package.json`](../package.json) 的 `packageManager` | npm；操作见根 README |
 | Rust | [`rust-toolchain.toml`](../rust-toolchain.toml) 的工具链与组件 | rustup |
-| Python | [`scripts/pyproject.toml`](../scripts/pyproject.toml) 的 `requires-python`；建议 3.12 | python.org 或 winget `Python.Python.3.12`；确保 `python` 指向真实解释器 |
+| Just | 仓库统一命令入口，命令需在 PATH 中可用 | winget `Casey.Just` |
+| PowerShell 7 | Windows 的 Just shell，需支持 `-CommandWithArgs` 以保留参数边界 | winget `Microsoft.PowerShell`；`just install` 可安装缺失的工具 |
+| Python | [`scripts/pyproject.toml`](../scripts/pyproject.toml) 的 `requires-python`；建议 3.12 | 由 uv 管理；Just 中的 Python 脚本通过 `uv run` 执行，无需单独配置 `python` 的 PATH |
 | Visual Studio Build Tools | 2022 / MSVC v143，匹配目标架构 | Visual Studio Installer 的“使用 C++ 的桌面开发” |
 | Windows SDK | 提供目标架构头文件和库；未固定补丁版本 | Visual Studio Installer 的 Windows SDK 组件 |
 | Git | 未固定版本，命令需在 PATH 中可用 | git-scm.com 或 winget `Git.Git` |
@@ -54,7 +56,9 @@ Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保
 
 1. 按根 [README](../README.md#quick-start) 配置 Node 和 pnpm，确认 `node --version`、`pnpm --version` 与仓库要求一致。
 2. 执行 `pnpm install` 安装 Node workspace 依赖。
-3. 执行 `just install` 获取 Rust 依赖并通过 uv 准备 Python 工具环境。Windows 上此命令会在缺少 PowerShell 7 时调用 winget 安装。
+3. 执行 `just install` 获取 Rust 依赖并通过 uv 准备 Python 工具环境。Windows 上此入口使用系统自带的 `powershell.exe`，不要求预先安装 `pwsh`；缺少 PowerShell 7 时会调用 winget 安装。安装后重启终端和编辑器，让后续 Just 命令读取更新后的 PATH。
+
+Windows 的普通 Just 命令统一使用 PowerShell 7，目的是正确转发带空格、引号的参数。它是仓库开发工具的选择。TS 桌面的命令行和 VS Code `Run Ash Desktop (TypeScript)` 调试配置统一使用 `just ash-desktop`；该入口内部调用 `pnpm --dir ash-ts dev`，不经过 Python 适配层。
 
 ### 项目命令
 

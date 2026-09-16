@@ -7,7 +7,7 @@ import { URI } from '../../../../../base/common/uri.js';
 import { type DiffComputationRequest, type IDiffComputationService } from '../../../../../editor/common/diff/diffComputationService.js';
 import { type LineDiff } from '../../../../../editor/common/diff/lineDiff.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
-import { ContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
+import { ContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
 import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
 import { EditorPaneVisibility } from '../../../../browser/parts/editor/editorPane.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
