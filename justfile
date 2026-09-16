@@ -1,12 +1,11 @@
 set working-directory := "."
 set positional-arguments
 
-export JUST_SHELL := justfile_directory() / "scripts/just-shell.py"
+set shell := ["sh", "-cu"]
+set windows-shell := ["pwsh", "-NoLogo", "-NoProfile", "-CommandWithArgs"]
 
-set shell := ["python3", "-c", 'import os, runpy; runpy.run_path(os.environ["JUST_SHELL"], run_name="__main__")']
-set windows-shell := ["python", "-c", 'import os, runpy; runpy.run_path(os.environ["JUST_SHELL"], run_name="__main__")']
-
-python := if os_family() == "windows" { "python" } else { "python3" }
+python := "uv run --frozen --project scripts python"
+recipe_args := if os_family() == "windows" { "@($args | Select-Object -Skip 1)" } else { '"$@"' }
 tui_profile := ""
 tui_profile_arg := if tui_profile == "" { "" } else { "--profile " + tui_profile }
 
@@ -24,15 +23,15 @@ lint:
 
 # Run repository-owned Python tests, optionally selecting scripts, ash-code, or build.
 test-python *args:
-    uv run --frozen --project scripts python -B scripts/test-python.py {args}
+    uv run --frozen --project scripts python -B scripts/test-python.py {{ recipe_args }}
 
 # Reject dependency declaration, ownership, version, and unused-dependency violations.
 dependencies *args:
-    uv run --frozen --project scripts python -B scripts/dependencies.py {args}
+    uv run --frozen --project scripts python -B scripts/dependencies.py {{ recipe_args }}
 
 # Measure a selected Cargo package in isolated build directories.
 bench-build *args:
-    uv run --frozen --project scripts python -B scripts/benchmark.py {args}
+    uv run --frozen --project scripts python -B scripts/benchmark.py {{ recipe_args }}
 
 # Build all three product lines from the repository root.
 build: build-desktop build-rust
@@ -43,28 +42,28 @@ build-desktop:
 
 # Build the root Rust workspace with the locked V8 inputs when required.
 build-rust *args:
-    {{ python }} -B scripts/cargo.py build --workspace {args}
+    {{ python }} -B scripts/cargo.py build --workspace {{ recipe_args }}
 
 # Test one Rust package. V8 inputs are configured only when its dependency graph needs them.
 test *args:
-    {{ python }} -B scripts/cargo.py test -p {args}
+    {{ python }} -B scripts/cargo.py test -p {{ recipe_args }}
 
 # Build the matching daemon and run real CLI/TUI scenarios through a PTY.
 test-tui *args:
     {{ python }} -B scripts/cargo.py build -p ash-app-server --bin ash-app-server -p ash-app-server-daemon --bin ash-app-server-daemon -p ash-remote-server --bin ash-remote-server {{ tui_profile_arg }}
-    {{ python }} -B scripts/cargo.py test -p ash-cli --test tui_real_scenarios {{ tui_profile_arg }} {args}
+    {{ python }} -B scripts/cargo.py test -p ash-cli --test tui_real_scenarios {{ tui_profile_arg }} {{ recipe_args }}
 
 # Check one Rust package. V8 inputs are configured only when its dependency graph needs them.
 check *args:
-    {{ python }} -B scripts/cargo.py check -p {args}
+    {{ python }} -B scripts/cargo.py check -p {{ recipe_args }}
 
 # Compile every target in one Rust package and reject compiler warnings.
 rust-warnings *args:
-    {{ python }} -B scripts/cargo.py --deny-warnings check -p {args} --all-targets
+    {{ python }} -B scripts/cargo.py --deny-warnings check -p {{ recipe_args }} --all-targets
 
 # Discover and compile every direct consumer of grep and file-search, including app/files.
 check-search *args:
-    {{ python }} -B scripts/check_search.py {args}
+    {{ python }} -B scripts/check_search.py {{ recipe_args }}
 
 # Run the Rust search capability and host integration tests.
 test-search-rust:
@@ -83,7 +82,7 @@ test-search: check-search test-search-rust
 
 # Exercise an assembled package through real stdio RPC, using its bundled search engines.
 test-search-package *args:
-    {{ python }} -B build/package/search_smoke.py {args}
+    {{ python }} -B build/package/search_smoke.py {{ recipe_args }}
 
 # Fail once the configuration support window makes a compatibility migration removable.
 check-config-migrations:
@@ -99,7 +98,7 @@ generate-protocol:
 
 # Launch the ash code TUI product from the current source tree.
 ash *args:
-    {{ python }} -B scripts/ash-code/run.py {args}
+    {{ python }} -B scripts/ash-code/run.py {{ recipe_args }}
 
 # Preview the Welcome pet's idle frame, all frames, or one named action.
 pet *args:
@@ -107,11 +106,11 @@ pet *args:
 
 # Assemble the complete immutable development package shared by Ash products.
 ash-package *args:
-    node build/package/prepare.ts {args}
+    node build/package/prepare.ts {{ recipe_args }}
 
 # Assemble the complete development package and launch Ash Code against it.
 ash-package-run *args:
-    {{ python }} -B scripts/ash-code/run_package.py {args}
+    {{ python }} -B scripts/ash-code/run_package.py {{ recipe_args }}
 
 # Launch the ash Electron Desktop product.
 ash-desktop:
@@ -132,11 +131,11 @@ app-test:
 
 # Stage an unsigned app package; release CI signs and verifies the staged binary.
 app-package *args:
-    {{ python }} -B build/app/build.py {args}
+    {{ python }} -B build/app/build.py {{ recipe_args }}
 
 # Build a canonical Ash package; pass normal package builder flags.
 package *args:
-    {{ python }} -B build/package/build.py {args}
+    {{ python }} -B build/package/build.py {{ recipe_args }}
 
 [unix]
 install:

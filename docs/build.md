@@ -265,7 +265,9 @@ Web 连接实现编译到 `node` 输出后，由 `scripts/web.ts` 或 Vite 插�
 
 ### 仓库脚本与开发运行
 
-`scripts/` 根目录保存跨产品仓库工具：`just-shell.py` 提供 Just 的跨平台 shell，`cargo.py` 为整个 Cargo workspace 准备锁定的构建输入，`format.py` 统一已有格式化器，`test-python.py` 按 `scripts`、`ash-code`、`build` 分别运行 Python 测试并在不指定范围时聚合执行。
+Just 在 Windows 上直接使用 PowerShell 7，在其他平台使用 `sh`；Python 脚本通过 `uv run --frozen --project scripts python` 执行，无需依赖 PATH 中的 Python。
+
+`scripts/` 根目录保存跨产品仓库工具：`cargo.py` 为整个 Cargo workspace 准备锁定的构建输入，`format.py` 统一已有格式化器，`test-python.py` 按 `scripts`、`ash-code`、`build` 分别运行 Python 测试并在不指定范围时聚合执行。
 
 Desktop 的 Node、Browser 和 Playwright 测试入口与 loader 归 `ash-ts/test/`，根 `package.json` 直接调用 `ash-ts` 的公开测试命令。`scripts/ash-code/` 保存 Code TUI 的源码运行和完整开发包运行入口。`app` 当前没有独立脚本，因此不创建空占位文件。
 
