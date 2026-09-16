@@ -15,6 +15,9 @@ Ash is a Rust-first agent workspace with three product lines sharing one App Ser
 
 ## Quick start
 
+The commands below build and run Ash from source through Just. Tool requirements
+and initialization are described in [the build guide](docs/build.md#构建入口).
+
 On Windows, prepare the tools listed in the
 [Windows requirements](docs/build.md#windows-开发环境).
 Test maintenance tools such as `cargo-insta` are installed separately when needed.
@@ -37,8 +40,8 @@ npm install -g "$(node -p 'require("./package.json").packageManager')"
 pnpm install
 ```
 
-These commands work in PowerShell and Bash. Build and test commands invoke pnpm
-directly; the install check requires the exact declared pnpm version.
+These commands work in PowerShell and Bash. The install check requires the exact
+declared pnpm version.
 
 Build definitions live in [`build/`](build), while reproducible local artifacts are collected under the ignored `.build/` root. See [`docs/build.md`](docs/build.md) for the command and output layout.
 
@@ -58,19 +61,13 @@ just ash ask "explain this repository"
 just ash exec "summarize the current changes"
 ```
 
-Without `just`:
-
-```bash
-cargo run -p ash-cli --bin ash
-```
-
 ### `ash` Electron Desktop
 
 ```bash
 just ash-desktop
-# or:
-pnpm dev:desktop
 ```
+
+In VS Code, select `Run Ash Desktop (TypeScript)` and press F5 to run the same command.
 
 The Desktop command is shared by both Workbench build modes. The default mode is `code`; build
 matrix checks can set `ASH_WORKBENCH_MODE=academic` without changing the command name.
@@ -101,8 +98,6 @@ pnpm dev:stanza
 
 ```bash
 just app
-# or:
-python3 -B scripts/cargo.py run -p app
 ```
 
 ## Repository map
@@ -119,7 +114,7 @@ python3 -B scripts/cargo.py run -p app
 - [Ash user documentation](https://github.com/chogng/ash-docs)
 - [Product lines and host boundaries](docs/product-lines.md)
 - [System architecture](docs/architecture.md)
-- [Ash Code documentation](ash-code/docs/README.md)
+- [Ash Code documentation](ash-code/README.md)
 - [Electron Desktop architecture](docs/ash-desktop-architecture.md)
 - [Shared Rust architecture](docs/ash-rs-architecture.md)
 - [Remote development](docs/remote-development.md)

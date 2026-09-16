@@ -26,6 +26,8 @@ Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保
 
 ### Windows 开发环境
 
+以下工具用于源码开发和仓库维护，安装后的 Ash 产品不依赖 Just、Python 或 uv。
+
 - 开发者根据下表自行安装并确认工具版本；`cargo-insta` 等测试维护工具按任务需要另行准备。项目依赖安装入口保留 Node、pnpm 版本校验，编译器和 SDK 缺项由构建工具报告。
 - Windows 本机拥有 MSVC、Windows SDK 和桌面运行环境。安装后使用对应目标架构的 Visual Studio Developer PowerShell 构建。LLVM 的 `bin` 目录需在构建终端 PATH 中；使用自定义 LLVM 路径时，在该终端设置 `LIBCLANG_PATH` 指向含 `libclang.dll` 的目录。无需全局设置 `CC`、`CXX`。
 - 普通构建和启动入口只准备项目依赖与产物，不调用系统工具安装器。分别用 `just ash`、`just ash-desktop`、`just app` 启动产品。
@@ -37,15 +39,14 @@ Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保
 | Node.js | [`.nvmrc`](../.nvmrc) 声明的版本 | Node.js 官方发行包或 fnm |
 | pnpm | 根 [`package.json`](../package.json) 的 `packageManager` | npm；操作见根 README |
 | Rust | [`rust-toolchain.toml`](../rust-toolchain.toml) 的工具链与组件 | rustup |
-| Just | 仓库统一命令入口，命令需在 PATH 中可用 | winget `Casey.Just` |
 | PowerShell 7 | Windows 的 Just shell，需支持 `-CommandWithArgs` 以保留参数边界 | winget `Microsoft.PowerShell`；`just install` 可安装缺失的工具 |
-| Python | [`scripts/pyproject.toml`](../scripts/pyproject.toml) 的 `requires-python`；建议 3.12 | 由 uv 管理；Just 中的 Python 脚本通过 `uv run` 执行，无需单独配置 `python` 的 PATH |
+| Python | [`scripts/pyproject.toml`](../scripts/pyproject.toml) 的 `requires-python`；建议 3.12 | 安装方式自选；确保 `python` 指向可用解释器 |
 | Visual Studio Build Tools | 2022 / MSVC v143，匹配目标架构 | Visual Studio Installer 的“使用 C++ 的桌面开发” |
 | Windows SDK | 提供目标架构头文件和库；未固定补丁版本 | Visual Studio Installer 的 Windows SDK 组件 |
 | Git | 未固定版本，命令需在 PATH 中可用 | git-scm.com 或 winget `Git.Git` |
 | ripgrep | 开发工具未固定版本；产品使用独立锁定产物 | winget `BurntSushi.ripgrep.MSVC` |
 | just | 未固定版本，命令需在 PATH 中可用 | winget `Casey.Just` |
-| uv | Python 工具环境由 `scripts/uv.lock` 锁定 | winget `astral-sh.uv` |
+| uv | 格式化、lint、Python 测试、依赖检查及构建测量；环境由 `scripts/uv.lock` 锁定 | winget `astral-sh.uv` |
 | CMake | 未固定版本，命令需在 PATH 中可用 | cmake.org 或 winget `Kitware.CMake` |
 | LLVM/Clang | 未固定版本；需要 Clang 和 libclang | LLVM 官方发行包或 winget `LLVM.LLVM` |
 | Bazelisk | [`.bazelversion`](../.bazelversion) 固定 Bazel 版本 | winget `Bazel.Bazelisk`；CI 使用 `setup-bazel` |
@@ -58,13 +59,16 @@ Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保
 2. 执行 `pnpm install` 安装 Node workspace 依赖。
 3. 执行 `just install` 获取 Rust 依赖并通过 uv 准备 Python 工具环境。Windows 上此入口使用系统自带的 `powershell.exe`，不要求预先安装 `pwsh`；缺少 PowerShell 7 时会调用 winget 安装。安装后重启终端和编辑器，让后续 Just 命令读取更新后的 PATH。
 
-Windows 的普通 Just 命令统一使用 PowerShell 7，目的是正确转发带空格、引号的参数。它是仓库开发工具的选择。TS 桌面的命令行和 VS Code `Run Ash Desktop (TypeScript)` 调试配置统一使用 `just ash-desktop`；该入口内部调用 `pnpm --dir ash-ts dev`，不经过 Python 适配层。
-
 ### 项目命令
 
 根 `Justfile` 是三个产品和根 Rust workspace 的统一入口。根 `package.json` 提供 pnpm workspace 与 Electron、Browser、Stanza 等 Node 构建入口；`pnpm test` 还会调用 Rust 协议验证。完整 Rust workspace 构建由 `Justfile` 编排。
 
-Node 工具、发布包组装与 Desktop 单测使用 Node 24 LTS，具体版本由仓库根 `.nvmrc` 固定。切换到该版本后，按 [README 初始化步骤](../README.md#quick-start) 安装根 `package.json` 声明的 pnpm，再执行 `pnpm install`、构建或测试。所有入口直接调用 pnpm，安装检查要求 pnpm 版本与声明完全一致；其他 Node 主版本不受支持。
+- Just 在 Windows 上调用 PowerShell 7 的 `-CommandWithArgs`，保留参数边界；其他平台调用 `sh`。
+- `just ash-desktop` 内部执行 `pnpm --dir ash-ts dev`；VS Code 的 `Run Ash Desktop (TypeScript)` 配置使用同一 Just 入口。
+- Rust 构建、打包和源码启动脚本调用 PATH 中的 Python：Windows 使用 `python`，其他平台使用 `python3`。Python 的安装方式由开发者选择。
+- uv 用于下方的仓库维护命令；产品启动和构建命令不通过 uv 执行。
+
+Node 工具、发布包组装与 Desktop 单测使用 Node 24 LTS，具体版本由仓库根 `.nvmrc` 固定。切换到该版本后，按 [README 初始化步骤](../README.md#quick-start) 安装根 `package.json` 声明的 pnpm，再执行 `pnpm install`、构建或测试。Node 构建与测试入口调用 pnpm，安装检查要求 pnpm 版本与声明完全一致；其他 Node 主版本不受支持。
 
 #### 产品启动与 Rust 构建
 
@@ -268,8 +272,6 @@ Web 连接实现编译到 `node` 输出后，由 `scripts/web.ts` 或 Vite 插�
 共享发布包先收集未提供预编译文件的第一方程序，再用一次 Cargo 调用构建并读取其报告的可执行文件路径。App 发布直接使用打包参数和 `signing.py sign / verify / record`；签名凭据由环境变量提供。
 
 ### 仓库脚本与开发运行
-
-Just 在 Windows 上直接使用 PowerShell 7，在其他平台使用 `sh`；Python 脚本通过 `uv run --frozen --project scripts python` 执行，无需依赖 PATH 中的 Python。
 
 `scripts/` 根目录保存跨产品仓库工具：`cargo.py` 为整个 Cargo workspace 准备锁定的构建输入，`format.py` 统一已有格式化器，`test-python.py` 按 `scripts`、`ash-code`、`build` 分别运行 Python 测试并在不指定范围时聚合执行。
 

@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -14,6 +16,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class JustTests(unittest.TestCase):
     def run_recipe(self, script: str, *args: str) -> subprocess.CompletedProcess[str]:
+        environment = os.environ.copy()
+        environment["PATH"] = (
+            str(Path(sys.executable).parent) + os.pathsep + environment.get("PATH", "")
+        )
         with tempfile.TemporaryDirectory(prefix="ash just ") as directory:
             folder = Path(directory)
             probe = folder / "probe.py"
@@ -40,6 +46,7 @@ class JustTests(unittest.TestCase):
                 ],
                 capture_output=True,
                 text=True,
+                env=environment,
                 check=False,
             )
 

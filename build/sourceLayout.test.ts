@@ -13,7 +13,7 @@ test("repository build orchestration and developer scripts have separate root ow
   for (const category of ["download", "lib", "pnpm", "app", "code", "remote", "darwin", "win32", "linux", "resources", "vite", "package"]) {
     assert.equal(existsSync(join(import.meta.dirname, category)), true, category);
   }
-  for (const entry of ["cargo.py", "format.py", "just-shell.py", "test-python.py", "electron.ts", "web.ts"]) {
+  for (const entry of ["cargo.py", "format.py", "test-python.py", "electron.ts", "web.ts"]) {
     assert.equal(existsSync(join(repositoryRoot, "scripts", entry)), true, entry);
   }
   assert.equal(existsSync(join(repositoryRoot, "ash-ts/test/unit/mocha.ts")), true);

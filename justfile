@@ -4,7 +4,7 @@ set positional-arguments
 set shell := ["sh", "-cu"]
 set windows-shell := ["pwsh", "-NoLogo", "-NoProfile", "-CommandWithArgs"]
 
-python := "uv run --frozen --project scripts python"
+python := if os_family() == "windows" { "python" } else { "python3" }
 recipe_args := if os_family() == "windows" { "@($args | Select-Object -Skip 1)" } else { '"$@"' }
 tui_profile := ""
 tui_profile_arg := if tui_profile == "" { "" } else { "--profile " + tui_profile }

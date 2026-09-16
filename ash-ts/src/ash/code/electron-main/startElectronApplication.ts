@@ -41,18 +41,22 @@ export function startElectronApplication(options: StartElectronApplicationOption
 	app.on('window-all-closed', () => {
 		if (process.platform !== 'darwin') app.quit();
 	});
-	app.once('ready', () => {
-		void startup(application);
-	});
+	void startup(application);
 }
 
 async function startup(application: AshApplication): Promise<void> {
 	try {
+		await app.whenReady();
 		await application.startupAfterReady();
 	} catch (error) {
 		console.error('Failed to start Ash', error);
-		await application.disposeAfterStartupFailure();
-		app.exit(1);
+		try {
+			await application.disposeAfterStartupFailure();
+		} catch (cleanupError) {
+			console.error('Failed to clean up Ash after startup failure', cleanupError);
+		} finally {
+			app.exit(1);
+		}
 	}
 }
 
