@@ -90,7 +90,9 @@ pub(super) fn run_cell(
     handle_tx: mpsc::SyncSender<v8::IsolateHandle>,
     done: Arc<AtomicBool>,
 ) {
-    let params = v8::Isolate::create_params().heap_limits(0, limits.max_heap_bytes);
+    let params = v8::Isolate::create_params()
+        .array_buffer_allocator(crate::v8_init::array_buffer_allocator())
+        .heap_limits(0, limits.max_heap_bytes);
     let max_output_bytes = limits.max_output_bytes;
     let (tool_completion_tx, tool_completion_rx) = mpsc::channel();
     let isolate = &mut v8::Isolate::new(params);

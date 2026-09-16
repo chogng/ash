@@ -33,6 +33,7 @@ struct RuntimeInner {
 }
 
 struct CellEntry {
+    observation: Mutex<()>,
     command_tx: Sender<CellCommand>,
     events: Mutex<Receiver<CellEvent>>,
     started: AtomicBool,
@@ -166,6 +167,7 @@ impl CodeModeRuntime {
         let termination_requested = Arc::new(AtomicBool::new(false));
         let watchdog_tx = command_tx.clone();
         let entry = Arc::new(CellEntry {
+            observation: Mutex::new(()),
             command_tx,
             events: Mutex::new(event_rx),
             started: AtomicBool::new(false),
@@ -276,19 +278,36 @@ impl CodeModeRuntime {
             });
         };
 
-        if request.action() == ash_code_mode_protocol::WaitAction::Terminate {
+        let terminate = request.action() == ash_code_mode_protocol::WaitAction::Terminate;
+        // Interrupt before acquiring the observation lock so an in-flight long poll wakes up.
+        if terminate {
+            entry.termination_requested.store(true, Ordering::Release);
+            let _ = entry.command_tx.send(CellCommand::Terminate);
+            if let Ok(handle) = entry.isolate_handle.lock()
+                && let Some(handle) = handle.as_ref()
+            {
+                let _ = handle.terminate_execution();
+            }
+            self.inner.invoker.cancel_cell(&request.cell_id);
+        }
+        let _observation = if terminate {
+            entry
+                .observation
+                .lock()
+                .map_err(|_| RuntimeError::Runtime("Cell observation was poisoned".into()))?
+        } else {
+            entry.observation.try_lock().map_err(|_| {
+                RuntimeError::InvalidRequest("Cell already has an active observation".into())
+            })?
+        };
+        if entry.terminal.load(Ordering::Acquire) {
+            return Ok(WaitOutcome::MissingCell {
+                cell_id: request.cell_id,
+            });
+        }
+        if terminate {
             return self.terminate_cell(&request.cell_id, &entry);
         }
-        if entry.terminal.load(Ordering::Acquire)
-            && let Some(response) = entry
-                .last_response
-                .lock()
-                .map_err(|_| RuntimeError::Runtime("Code Mode cell was poisoned".into()))?
-                .clone()
-        {
-            return Ok(WaitOutcome::LiveCell { response });
-        }
-
         if let Some(event) = try_receive_event(&entry)? {
             return Ok(WaitOutcome::LiveCell {
                 response: self.record_event(&entry, event)?,

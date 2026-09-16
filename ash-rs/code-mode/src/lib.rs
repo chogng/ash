@@ -1,78 +1,59 @@
-//! Core-facing Code Mode sessions executed in an isolated Host process.
-
+//! Core-facing Code Mode sessions executed in a shared, isolated Host process.
 mod host;
+mod session;
 
-use ash_code_mode_protocol::{
-    CellId, CodeModeLimits, CodeModeSessionId, ExecuteRequest, StartedCell, WaitOutcome,
-    WaitRequest,
-};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::Mutex;
 
+pub use ash_code_mode_session::CodeModeStore;
+pub use ash_code_mode_session::RuntimeError;
+pub use ash_code_mode_session::ToolInvoker;
 pub use ash_code_mode_session::limit_output;
-pub use ash_code_mode_session::{CodeModeStore, RuntimeError, ToolInvoker};
+pub use session::CodeModeSession;
 
-const HOST_BIN_ENV: &str = "ASH_CODE_MODE_HOST_BIN";
-
-/// Core-facing session backed by an isolated Code Mode Host.
-#[derive(Clone)]
-pub struct CodeModeRuntime {
-    inner: host::HostRuntime,
+/// Backend-owned provider. Starts one Host lazily and replaces it only after failure.
+#[derive(Clone, Default)]
+pub struct CodeModeHost {
+    inner: Arc<HostProvider>,
 }
 
-impl CodeModeRuntime {
-    pub fn new(
-        session_id: CodeModeSessionId,
-        limits: CodeModeLimits,
-        invoker: Arc<dyn ToolInvoker>,
-    ) -> Result<Self, RuntimeError> {
-        Self::new_with_store(session_id, limits, invoker, CodeModeStore::new())
+#[derive(Default)]
+struct HostProvider {
+    program: Option<PathBuf>,
+    connection: Mutex<Option<Arc<host::Connection>>>,
+}
+
+impl CodeModeHost {
+    /// Selects an explicit executable for an embedding application.
+    pub fn with_program(program: PathBuf) -> Self {
+        Self {
+            inner: Arc::new(HostProvider {
+                program: Some(program),
+                connection: Mutex::new(None),
+            }),
+        }
     }
 
-    pub fn new_with_store(
-        session_id: CodeModeSessionId,
-        limits: CodeModeLimits,
-        invoker: Arc<dyn ToolInvoker>,
-        stored_values: CodeModeStore,
-    ) -> Result<Self, RuntimeError> {
-        Self::new_host(host_program()?, session_id, limits, invoker, stored_values)
-    }
-
-    /// Starts one explicitly selected isolated Host. This is also useful for embedders that do
-    /// not use process environment configuration.
-    pub fn new_host(
-        program: PathBuf,
-        session_id: CodeModeSessionId,
-        limits: CodeModeLimits,
-        invoker: Arc<dyn ToolInvoker>,
-        stored_values: CodeModeStore,
-    ) -> Result<Self, RuntimeError> {
-        host::HostRuntime::spawn(program, session_id, limits, invoker, stored_values)
-            .map(|runtime| Self { inner: runtime })
-    }
-
-    pub fn execute(&self, request: ExecuteRequest) -> Result<StartedCell, RuntimeError> {
-        self.inner.execute(request)
-    }
-
-    pub fn wait(&self, request: WaitRequest) -> Result<WaitOutcome, RuntimeError> {
-        self.inner.wait(request)
-    }
-
-    pub fn terminate(&self, cell_id: &CellId) -> Result<WaitOutcome, RuntimeError> {
-        self.inner.terminate(cell_id)
-    }
-
-    pub fn has_cell(&self, cell_id: &CellId) -> bool {
-        self.inner.has_cell(cell_id)
-    }
-
-    pub fn close(&self) {
-        self.inner.close()
+    fn connection(&self) -> Result<Arc<host::Connection>, RuntimeError> {
+        let mut current = self.inner.connection.lock().unwrap();
+        if let Some(connection) = current.as_ref()
+            && connection.failure().is_none()
+        {
+            return Ok(Arc::clone(connection));
+        }
+        let program = match &self.inner.program {
+            Some(program) => program.clone(),
+            None => host_program()?,
+        };
+        let connection = Arc::new(host::Connection::spawn(program)?);
+        *current = Some(Arc::clone(&connection));
+        Ok(connection)
     }
 }
 
 fn host_program() -> Result<PathBuf, RuntimeError> {
+    const HOST_BIN_ENV: &str = "ASH_CODE_MODE_HOST_BIN";
     if let Some(program) = std::env::var_os(HOST_BIN_ENV) {
         if program.is_empty() {
             return Err(RuntimeError::Initialization(format!(

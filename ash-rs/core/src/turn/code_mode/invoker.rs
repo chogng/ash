@@ -1,5 +1,5 @@
 use super::broker::CodeModeBrokerInner;
-use super::broker::RuntimeKey;
+use super::broker::TurnKey;
 use crate::ThreadUpdateSink;
 use ash_async_utils::CancellationSource;
 use ash_async_utils::CancellationToken;
@@ -22,7 +22,7 @@ use std::sync::atomic::Ordering;
 
 pub(super) struct BrokerToolInvoker {
     broker: Weak<CodeModeBrokerInner>,
-    key: RuntimeKey,
+    key: TurnKey,
     cancellation: CancellationToken,
     close_source: CancellationSource,
     cell_cancellations: Mutex<BTreeMap<CellId, CancellationSource>>,
@@ -36,7 +36,7 @@ pub(super) struct BrokerToolInvoker {
 impl BrokerToolInvoker {
     pub(super) fn new(
         broker: Weak<CodeModeBrokerInner>,
-        key: RuntimeKey,
+        key: TurnKey,
         cancellation: &CancellationToken,
         updates: Arc<dyn ThreadUpdateSink>,
         hooks: Arc<dyn crate::HookService>,

@@ -2,15 +2,18 @@ use super::*;
 
 #[test]
 fn frame_round_trip_uses_little_endian_length_prefix() {
-    let value = ClientToHost::Hello {
-        protocol_version: 1,
+    let value = HostFrame {
+        request_id: Some(42),
+        message: ClientToHost::Hello {
+            protocol_version: CODE_MODE_PROTOCOL_VERSION,
+        },
     };
     let mut bytes = Vec::new();
     write_frame(&mut bytes, &value).unwrap();
     let payload_len = u32::from_le_bytes(bytes[..4].try_into().unwrap()) as usize;
     assert_eq!(payload_len, bytes.len() - 4);
     assert_eq!(
-        read_frame::<_, ClientToHost>(&mut bytes.as_slice()).unwrap(),
+        read_frame::<_, HostFrame<ClientToHost>>(&mut bytes.as_slice()).unwrap(),
         value
     );
 }

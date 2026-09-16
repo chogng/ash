@@ -3,12 +3,12 @@ use ash_code_mode_protocol::ClientToHost;
 use ash_code_mode_protocol::CodeModeLimits;
 use ash_code_mode_protocol::CodeModeSessionId;
 use ash_code_mode_protocol::ExecuteRequest;
+use ash_code_mode_protocol::HostFrame;
 use ash_code_mode_protocol::HostToClient;
 use ash_code_mode_protocol::OutputItem;
 use ash_code_mode_protocol::RuntimeResponse;
 use ash_code_mode_protocol::WaitRequest;
 use ash_code_mode_protocol::read_frame;
-use ash_code_mode_protocol::write_frame;
 use std::collections::BTreeMap;
 use std::io::BufReader;
 use std::process::Command;
@@ -39,8 +39,8 @@ impl Host {
         let mut reader = BufReader::new(child.stdout.take().unwrap());
         let (sender, events) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
-            while let Ok(message) = read_frame::<_, HostToClient>(&mut reader) {
-                if sender.send(message).is_err() {
+            while let Ok(message) = read_frame::<_, HostFrame<HostToClient>>(&mut reader) {
+                if sender.send(message.message).is_err() {
                     break;
                 }
             }
@@ -255,63 +255,65 @@ fn host_preserves_store_deletions_and_bounds_each_observation() {
 fn concurrent_cells_publish_monotonic_snapshots_and_complete_result_batches() {
     let mut host = Host::new();
     let session_id = host.open_session("concurrent-store");
-    let mut cells = std::collections::BTreeSet::new();
-    for index in 0..32 {
-        write_frame(
-            &mut host.writer,
-            &ClientToHost::Execute(ExecuteRequest {
-                session_id: session_id.clone(),
-                tool_call_id: format!("exec-{index}"),
-                source: format!("store('key-{index}', 'x'.repeat(4096));"),
-                enabled_tools: Vec::new(),
-                yield_time_ms: 1000,
-                max_output_tokens: None,
-            }),
-        )
-        .unwrap();
-        let HostToClient::StartedCell(started) = host.receive() else {
-            panic!("expected started cell");
-        };
-        cells.insert(started.cell_id);
-    }
-    for cell_id in &cells {
-        write_frame(
-            &mut host.writer,
-            &ClientToHost::Wait(WaitRequest {
-                cell_id: cell_id.clone(),
-                yield_time_ms: 1000,
-                max_output_tokens: None,
-                terminate: false,
-            }),
-        )
-        .unwrap();
-    }
     let mut previous = BTreeMap::new();
-    while !cells.is_empty() {
-        match host.receive() {
-            HostToClient::CancelCellTools { .. } => {}
-            HostToClient::StoreSnapshot { values, .. } => {
-                for (key, value) in &previous {
-                    assert_eq!(values.get(key), Some(value), "snapshot lost {key}");
-                }
-                previous = values;
-                let HostToClient::Response {
-                    response:
-                        RuntimeResponse::Result {
-                            cell_id,
-                            error_text: None,
-                            ..
-                        },
-                } = host.receive()
-                else {
-                    panic!("snapshot and result must be adjacent");
-                };
-                assert!(cells.remove(&cell_id));
-                assert!(matches!(host.receive(), HostToClient::CellClosed {
+    for batch in 0..4 {
+        let mut cells = std::collections::BTreeSet::new();
+        for index in batch * 8..(batch + 1) * 8 {
+            write_frame(
+                &mut host.writer,
+                &ClientToHost::Execute(ExecuteRequest {
+                    session_id: session_id.clone(),
+                    tool_call_id: format!("exec-{index}"),
+                    source: format!("store('key-{index}', 'x'.repeat(4096));"),
+                    enabled_tools: Vec::new(),
+                    yield_time_ms: 1000,
+                    max_output_tokens: None,
+                }),
+            )
+            .unwrap();
+            let HostToClient::StartedCell(started) = host.receive() else {
+                panic!("expected started cell");
+            };
+            cells.insert(started.cell_id);
+        }
+        for cell_id in &cells {
+            write_frame(
+                &mut host.writer,
+                &ClientToHost::Wait(WaitRequest {
+                    cell_id: cell_id.clone(),
+                    yield_time_ms: 1000,
+                    max_output_tokens: None,
+                    terminate: false,
+                }),
+            )
+            .unwrap();
+        }
+        while !cells.is_empty() {
+            match host.receive() {
+                HostToClient::CancelCellTools { .. } => {}
+                HostToClient::StoreSnapshot { values, .. } => {
+                    for (key, value) in &previous {
+                        assert_eq!(values.get(key), Some(value), "snapshot lost {key}");
+                    }
+                    previous = values;
+                    let HostToClient::Response {
+                        response:
+                            RuntimeResponse::Result {
+                                cell_id,
+                                error_text: None,
+                                ..
+                            },
+                    } = host.receive()
+                    else {
+                        panic!("snapshot and result must be adjacent");
+                    };
+                    assert!(cells.remove(&cell_id));
+                    assert!(matches!(host.receive(), HostToClient::CellClosed {
                     cell_id: closed, outcome: ash_code_mode_protocol::CellOutcome::Completed,
                 } if closed == cell_id));
+                }
+                other => panic!("unexpected event: {other:?}"),
             }
-            other => panic!("unexpected event: {other:?}"),
         }
     }
     assert_eq!(previous.len(), 32);
@@ -353,4 +355,23 @@ fn exit_and_timeout_preserve_output_through_the_host() {
             }
         }
     }
+}
+
+fn write_frame<W: std::io::Write>(
+    writer: &mut W,
+    message: &ClientToHost,
+) -> Result<(), ash_code_mode_protocol::ProtocolError> {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    let request_id = if matches!(message, ClientToHost::CompleteToolCall { .. }) {
+        None
+    } else {
+        Some(NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed))
+    };
+    ash_code_mode_protocol::write_frame(
+        writer,
+        &HostFrame {
+            request_id,
+            message,
+        },
+    )
 }

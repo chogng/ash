@@ -10,6 +10,7 @@ pub enum V8JitMode {
 
 struct V8Initialization {
     _platform: v8::SharedRef<v8::Platform>,
+    allocator: v8::SharedRef<v8::Allocator>,
     jit_mode: V8JitMode,
 }
 
@@ -34,6 +35,16 @@ pub(super) fn ensure_v8_initialized() -> Result<(), String> {
     }
 }
 
+pub(super) fn array_buffer_allocator() -> v8::SharedRef<v8::Allocator> {
+    V8_INITIALIZATION
+        .get()
+        .expect("V8 is initialized before starting a cell")
+        .as_ref()
+        .expect("V8 initialization succeeded")
+        .allocator
+        .clone()
+}
+
 fn initialize_v8_with_mode(jit_mode: V8JitMode) -> Result<V8Initialization, String> {
     if !linked_v8_sandbox_enabled() {
         return Err("Code Mode must link against sandbox-enabled V8".into());
@@ -46,8 +57,12 @@ fn initialize_v8_with_mode(jit_mode: V8JitMode) -> Result<V8Initialization, Stri
     let platform = v8::new_default_platform(0, false).make_shared();
     v8::V8::initialize_platform(platform.clone());
     v8::V8::initialize();
+    // V8's sandbox allocator lazily initializes PartitionAlloc's process-wide pool
+    // without a lock. Create it inside the OnceLock and share it across cell threads.
+    let allocator = v8::new_default_allocator().make_shared();
     Ok(V8Initialization {
         _platform: platform,
+        allocator,
         jit_mode,
     })
 }

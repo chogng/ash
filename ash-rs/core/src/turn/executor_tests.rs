@@ -4094,3 +4094,76 @@ fn code_mode_search_activates_tools_for_the_next_cell_without_replaying_nested_r
             .any(|tool| tool.name.as_str() == "exec" && tool.description.contains("ALL_TOOLS"))
     );
 }
+
+#[cfg(feature = "code-mode")]
+#[test]
+fn code_mode_thread_values_survive_turn_completion_and_new_turn_authority() {
+    let (threads, thread_id, first_turn) =
+        started_turn_with_tool_mode(ash_protocol::ToolMode::CodeModeOnly);
+    let exec = |id: &str, source: &str| {
+        Ok(ModelResponse {
+            output: vec![ResponseItem::ToolCall(ToolCall {
+                id: ToolCallId::new(id).unwrap(),
+                name: ToolName::new("exec").unwrap(),
+                arguments: json!({"source":source}),
+            })],
+            usage: None,
+            billing: None,
+            stop_reason: StopReason::ToolUse,
+        })
+    };
+    let model = Arc::new(ScriptedModel::new([
+        exec("first", "store('answer', 41); text('saved');"),
+        Ok(text_response("done")),
+        exec(
+            "second",
+            "text(load('answer') + 1); text(await tools.weather({city:'Paris'}));",
+        ),
+        Ok(text_response("done")),
+    ]));
+    let executor = TurnExecutor::new(
+        threads.clone(),
+        model,
+        Arc::new(WeatherTool),
+        Arc::new(CodeModeControlPolicy),
+    );
+    let first_cancel = CancellationSource::new();
+    executor
+        .execute(&thread_id, &first_turn, &first_cancel.token())
+        .unwrap();
+    let _ = first_cancel.cancel();
+    let second_turn = threads
+        .start_turn(
+            &thread_id,
+            StartTurnRequest {
+                kind: ash_protocol::TurnKind::Coding,
+                instructions: crate::test_turn_instructions(),
+                command_id: CommandId::new("second-turn").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                model: None,
+                policy_revision: "test-policy-v1".into(),
+                approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+                tool_mode: ash_protocol::ToolMode::CodeModeOnly,
+                tool_profile: None,
+                activated_skills: Vec::new(),
+                input: vec![UserInput::Text {
+                    text: "again".into(),
+                }],
+            },
+        )
+        .unwrap()
+        .turn_id;
+    executor
+        .execute(&thread_id, &second_turn, &CancellationSource::new().token())
+        .unwrap();
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+    assert!(snapshot.items.iter().any(|item| matches!(
+        item, ThreadItem::ToolResult { tool_call_id, is_error:false, text, .. }
+            if tool_call_id.as_str() == "second" && text.contains("42") && text.contains("sunny")
+    )));
+    assert!(snapshot.items.iter().any(|item| matches!(
+        item, ThreadItem::ToolCall { turn_id, binding: Some(ash_protocol::ToolCallBinding {
+            caller: ash_protocol::ToolCallCaller::CodeMode { .. }, ..
+        }), .. } if turn_id == &second_turn
+    )));
+}

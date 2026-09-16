@@ -2,7 +2,7 @@ use super::super::super::ThreadSnapshot;
 use crate::CoreError;
 use crate::ToolExecutionOutput;
 use ash_async_utils::CancellationToken;
-use ash_code_mode::CodeModeRuntime;
+use ash_code_mode::CodeModeSession;
 use ash_code_mode_protocol::CellId;
 use ash_code_mode_protocol::CodeModeLimits;
 use ash_code_mode_protocol::OutputItem;
@@ -23,7 +23,7 @@ pub(super) fn runtime_error(error: ash_code_mode::RuntimeError) -> CoreError {
 }
 
 fn cancellation_error(
-    runtime: &CodeModeRuntime,
+    runtime: &CodeModeSession,
     cell_id: &CellId,
     cancellation: &CancellationToken,
 ) -> Result<(), CoreError> {
@@ -35,7 +35,7 @@ fn cancellation_error(
 }
 
 pub(super) fn cancellation_aware_terminate_or_wait(
-    runtime: &CodeModeRuntime,
+    runtime: &CodeModeSession,
     cell_id: CellId,
     _: u64,
     max_output_tokens: Option<u32>,
@@ -57,7 +57,7 @@ pub(super) fn cancellation_aware_terminate_or_wait(
 }
 
 pub(super) fn observe_runtime(
-    runtime: &CodeModeRuntime,
+    runtime: &CodeModeSession,
     cell_id: CellId,
     yield_time_ms: u64,
     max_output_tokens: Option<u32>,
@@ -71,7 +71,7 @@ pub(super) fn observe_runtime(
 }
 
 fn observe_unbounded(
-    runtime: &CodeModeRuntime,
+    runtime: &CodeModeSession,
     cell_id: CellId,
     yield_time_ms: u64,
     cancellation: &CancellationToken,

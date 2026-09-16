@@ -28,9 +28,8 @@ use ash_action_policy::CapabilityKind;
 use ash_action_policy::CapabilitySet;
 use ash_action_policy::ResolvedAction;
 use ash_action_policy::SandboxCompatibility;
-use ash_async_utils::CancellationToken;
-use ash_code_mode::CodeModeRuntime;
-use ash_code_mode::CodeModeStore;
+use ash_code_mode::CodeModeHost;
+use ash_code_mode::CodeModeSession;
 use ash_code_mode_protocol::CellId;
 use ash_code_mode_protocol::CodeModeLimits;
 use ash_code_mode_protocol::CodeModeSessionId;
@@ -61,9 +60,9 @@ pub struct CodeModeBroker {
 
 pub(super) struct CodeModeBrokerInner {
     pub(super) threads: Arc<ThreadController>,
-    pub(super) runtimes: Mutex<BTreeMap<RuntimeKey, CodeModeRuntime>>,
-    pub(super) session_stores: Mutex<BTreeMap<(String, String), CodeModeStore>>,
-    pub(super) cell_calls: Mutex<BTreeMap<(RuntimeKey, String), CellCall>>,
+    pub(super) sessions: Mutex<BTreeMap<(String, String), CodeModeSession>>,
+    host: CodeModeHost,
+    pub(super) cell_calls: Mutex<BTreeMap<(TurnKey, String), CellCall>>,
 }
 
 #[derive(Clone)]
@@ -75,13 +74,13 @@ pub(super) struct CellCall {
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub(super) struct RuntimeKey {
+pub(super) struct TurnKey {
     pub(super) session_id: String,
     pub(super) thread_id: String,
     pub(super) turn_id: String,
 }
 
-impl RuntimeKey {
+impl TurnKey {
     pub(super) fn new(
         session_id: impl Into<String>,
         thread_id: &ThreadId,
@@ -94,12 +93,13 @@ impl RuntimeKey {
         }
     }
 
+    pub(super) fn session_key(&self) -> (String, String) {
+        (self.session_id.clone(), self.thread_id.clone())
+    }
+
     pub(super) fn session_id(&self) -> Result<CodeModeSessionId, CoreError> {
-        CodeModeSessionId::new(format!(
-            "code-mode-{}-{}-{}",
-            self.session_id, self.thread_id, self.turn_id
-        ))
-        .map_err(|error| CoreError::Execution(error.to_string()))
+        CodeModeSessionId::new(format!("code-mode-{}-{}", self.session_id, self.thread_id))
+            .map_err(|error| CoreError::Execution(error.to_string()))
     }
 
     pub(super) fn thread_id(&self) -> Result<ThreadId, CoreError> {
@@ -123,8 +123,8 @@ impl CodeModeBroker {
             policy,
             inner: Arc::new(CodeModeBrokerInner {
                 threads,
-                runtimes: Mutex::new(BTreeMap::new()),
-                session_stores: Mutex::new(BTreeMap::new()),
+                sessions: Mutex::new(BTreeMap::new()),
+                host: CodeModeHost::default(),
                 cell_calls: Mutex::new(BTreeMap::new()),
             }),
         }
@@ -143,30 +143,38 @@ impl CodeModeBroker {
         }
     }
 
-    /// Closes the process-local runtime owned by one terminal Turn and drops its cell bindings.
-    /// Cells are intentionally scoped to that Turn in the first Core integration, so a later
-    /// Turn cannot accidentally resume a cell with the wrong durable parent or tool authority.
+    /// Cancels this turn's cells while keeping the thread session and shared Host alive.
     pub(crate) fn close_turn(
         &self,
         thread_id: &ThreadId,
         turn_id: &TurnId,
     ) -> Result<(), CoreError> {
         let snapshot = self.inner.threads.read_thread(thread_id)?;
-        let key = RuntimeKey::new(snapshot.session_id.to_string(), thread_id, turn_id);
+        let key = TurnKey::new(snapshot.session_id.to_string(), thread_id, turn_id);
         let runtime = self
             .inner
-            .runtimes
+            .sessions
             .lock()
-            .map_err(|_| CoreError::Execution("Code Mode runtime registry was poisoned".into()))?
-            .remove(&key);
+            .unwrap()
+            .get(&key.session_key())
+            .cloned();
+        let cells = {
+            let mut calls = self.inner.cell_calls.lock().unwrap();
+            let cells = calls
+                .keys()
+                .filter(|(owner, _)| owner == &key)
+                .map(|(_, id)| id.clone())
+                .collect::<Vec<_>>();
+            calls.retain(|(owner, _), _| owner != &key);
+            cells
+        };
         if let Some(runtime) = runtime {
-            runtime.close();
+            for id in cells {
+                let id =
+                    CellId::new(id).map_err(|error| CoreError::Execution(error.to_string()))?;
+                runtime.terminate(&id).map_err(runtime_error)?;
+            }
         }
-        self.inner
-            .cell_calls
-            .lock()
-            .map_err(|_| CoreError::Execution("Code Mode cell registry was poisoned".into()))?
-            .retain(|(runtime_key, _), _| runtime_key != &key);
         Ok(())
     }
 
@@ -175,12 +183,12 @@ impl CodeModeBroker {
         let removed = {
             let mut runtimes = self
                 .inner
-                .runtimes
+                .sessions
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             let keys = runtimes
                 .keys()
-                .filter(|key| key.session_id == session_id)
+                .filter(|(session, _)| session == session_id)
                 .cloned()
                 .collect::<Vec<_>>();
             keys.into_iter()
@@ -195,11 +203,6 @@ impl CodeModeBroker {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .retain(|(key, _), _| key.session_id != session_id);
-        self.inner
-            .session_stores
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .retain(|(session, _), _| session != session_id);
     }
 
     pub(crate) fn augment_catalog(
@@ -359,7 +362,7 @@ impl CodeModeBroker {
         let thread_id = context.thread_id().clone();
         let turn_id = context.turn_id().clone();
         let snapshot = self.inner.threads.read_thread(&thread_id)?;
-        let key = RuntimeKey::new(snapshot.session_id.to_string(), &thread_id, &turn_id);
+        let key = TurnKey::new(snapshot.session_id.to_string(), &thread_id, &turn_id);
         let activated = super::super::executor::activated_tool_names(
             self.tools.as_ref(),
             &snapshot.items,
@@ -386,16 +389,27 @@ impl CodeModeBroker {
         };
         let frozen_definitions = frozen_catalog.definitions().to_vec();
         let projected = projected_tools(&frozen_definitions)?;
-        let runtime = self.runtime_for(&key, context.cancellation(), updates, hooks)?;
+        let runtime = self.session_for(&key)?;
+        let invoker = Arc::new(BrokerToolInvoker::new(
+            Arc::downgrade(&self.inner),
+            key.clone(),
+            context.cancellation(),
+            updates,
+            hooks,
+            self.inner.threads.next_stream_instance_id(),
+        ));
         let started = runtime
-            .execute(ExecuteRequest {
-                session_id: key.session_id()?,
-                tool_call_id: call.id.to_string(),
-                source: parsed_source.source,
-                enabled_tools: projected,
-                yield_time_ms,
-                max_output_tokens,
-            })
+            .execute(
+                ExecuteRequest {
+                    session_id: key.session_id()?,
+                    tool_call_id: call.id.to_string(),
+                    source: parsed_source.source,
+                    enabled_tools: projected,
+                    yield_time_ms,
+                    max_output_tokens,
+                },
+                invoker,
+            )
             .map_err(runtime_error)?;
         self.inner
             .cell_calls
@@ -445,23 +459,34 @@ impl CodeModeBroker {
             .and_then(serde_json::Value::as_bool)
             .unwrap_or(false);
         let snapshot = self.inner.threads.read_thread(context.thread_id())?;
-        let key = RuntimeKey::new(
+        let key = TurnKey::new(
             snapshot.session_id.to_string(),
             context.thread_id(),
             context.turn_id(),
         );
         let runtime = self
             .inner
-            .runtimes
+            .sessions
             .lock()
             .map_err(|_| CoreError::Execution("Code Mode runtime registry was poisoned".into()))?
-            .get(&key)
+            .get(&key.session_key())
             .cloned();
         let Some(runtime) = runtime else {
             return Ok(ToolExecutionOutput::Failure(
                 "Code Mode cell is unavailable; a process restart never replays a cell".into(),
             ));
         };
+        if !self
+            .inner
+            .cell_calls
+            .lock()
+            .unwrap()
+            .contains_key(&(key.clone(), cell_id.to_string()))
+        {
+            return Ok(ToolExecutionOutput::Failure(
+                "Code Mode cell does not belong to this turn".into(),
+            ));
+        }
         let outcome = if terminate {
             cancellation_aware_terminate_or_wait(
                 &runtime,
@@ -483,7 +508,7 @@ impl CodeModeBroker {
         runtime_wait_output(outcome)
     }
 
-    fn release_finished_cell(&self, key: &RuntimeKey, runtime: &CodeModeRuntime, cell_id: &CellId) {
+    fn release_finished_cell(&self, key: &TurnKey, runtime: &CodeModeSession, cell_id: &CellId) {
         if !runtime.has_cell(cell_id) {
             self.inner
                 .cell_calls
@@ -493,44 +518,20 @@ impl CodeModeBroker {
         }
     }
 
-    fn runtime_for(
-        &self,
-        key: &RuntimeKey,
-        cancellation: &CancellationToken,
-        updates: Arc<dyn ThreadUpdateSink>,
-        hooks: Arc<dyn HookService>,
-    ) -> Result<CodeModeRuntime, CoreError> {
+    fn session_for(&self, key: &TurnKey) -> Result<CodeModeSession, CoreError> {
+        let session_id = key.session_id()?;
         let mut runtimes =
-            self.inner.runtimes.lock().map_err(|_| {
-                CoreError::Execution("Code Mode runtime registry was poisoned".into())
+            self.inner.sessions.lock().map_err(|_| {
+                CoreError::Execution("Code Mode session registry was poisoned".into())
             })?;
-        if let Some(runtime) = runtimes.get(key) {
-            return Ok(runtime.clone());
-        }
-        let invoker = Arc::new(BrokerToolInvoker::new(
-            Arc::downgrade(&self.inner),
-            key.clone(),
-            cancellation,
-            updates,
-            hooks,
-            self.inner.threads.next_stream_instance_id(),
-        ));
-        let session_store = self
-            .inner
-            .session_stores
-            .lock()
-            .map_err(|_| CoreError::Execution("Code Mode session store was poisoned".into()))?
-            .entry((key.session_id.clone(), key.thread_id.clone()))
-            .or_default()
-            .clone();
-        let runtime = CodeModeRuntime::new_with_store(
-            key.session_id()?,
-            CodeModeLimits::default(),
-            invoker,
-            session_store,
-        )
-        .map_err(runtime_error)?;
-        runtimes.insert(key.clone(), runtime.clone());
-        Ok(runtime)
+        // Constructing the handle does no process I/O while holding the registry.
+        Ok(runtimes
+            .entry(key.session_key())
+            .or_insert_with(|| {
+                self.inner
+                    .host
+                    .session(session_id, CodeModeLimits::default())
+            })
+            .clone())
     }
 }

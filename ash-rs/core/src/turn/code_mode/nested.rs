@@ -1,7 +1,7 @@
 use super::super::tool_scheduler::ToolScheduler;
 use super::super::tool_scheduler::ToolSchedulingProgress;
 use super::broker::CodeModeBrokerInner;
-use super::broker::RuntimeKey;
+use super::broker::TurnKey;
 use super::catalog::is_control_name;
 use super::catalog::normalize_code_name;
 use super::response::find_tool_result;
@@ -25,7 +25,7 @@ use std::time::Duration;
 impl CodeModeBrokerInner {
     pub(super) fn invoke_nested(
         &self,
-        key: &RuntimeKey,
+        key: &TurnKey,
         call: NestedToolCall,
         cancellation: &CancellationToken,
         updates: Arc<dyn ThreadUpdateSink>,
@@ -37,10 +37,10 @@ impl CodeModeBrokerInner {
         let thread_id = key.thread_id()?;
         let turn_id = key.turn_id()?;
         let cell_runtime = self
-            .runtimes
+            .sessions
             .lock()
             .map_err(|_| CoreError::Execution("Code Mode runtime registry was poisoned".into()))?
-            .get(key)
+            .get(&key.session_key())
             .cloned()
             .ok_or_else(|| {
                 CoreError::Execution("Code Mode runtime session is unavailable".into())

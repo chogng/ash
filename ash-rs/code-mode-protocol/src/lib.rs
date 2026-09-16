@@ -17,7 +17,7 @@ use ts_rs::TS;
 pub const DEFAULT_EXEC_YIELD_TIME_MS: u64 = 10_000;
 
 /// Version of the standalone stdio Host protocol.
-pub const CODE_MODE_PROTOCOL_VERSION: u32 = 2;
+pub const CODE_MODE_PROTOCOL_VERSION: u32 = 3;
 
 /// Maximum payload accepted by the framed stdio Host protocol.
 pub const MAX_FRAME_BYTES: usize = 64 * 1024 * 1024;
@@ -327,6 +327,15 @@ pub struct RuntimeNotification {
     pub text: String,
 }
 
+/// Transport envelope. Requests and their replies carry the same connection-local ID;
+/// asynchronous events and tool completions carry no request ID.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HostFrame<T> {
+    pub request_id: Option<u64>,
+    pub message: T,
+}
+
 /// Messages sent from a standalone client to the Code Mode Host.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -370,6 +379,9 @@ pub enum HostToClient {
     SessionOpened {
         session_id: CodeModeSessionId,
     },
+    SessionClosed {
+        session_id: CodeModeSessionId,
+    },
     StartedCell(StartedCell),
     ToolCall(NestedToolCall),
     Notification(RuntimeNotification),
@@ -380,6 +392,9 @@ pub enum HostToClient {
     },
     Response {
         response: RuntimeResponse,
+    },
+    MissingCell {
+        cell_id: CellId,
     },
     /// Cancels outstanding callbacks immediately, independently of cell observation.
     CancelCellTools {

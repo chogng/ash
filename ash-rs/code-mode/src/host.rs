@@ -1,533 +1,354 @@
-use ash_code_mode_protocol::{
-    CODE_MODE_PROTOCOL_VERSION, CellId, ClientToHost, CodeModeLimits, CodeModeSessionId,
-    HostToClient, RuntimeResponse, StartedCell, WaitOutcome, WaitRequest, read_frame, write_frame,
-};
-use ash_code_mode_session::{CodeModeStore, RuntimeError, ToolInvoker};
-use serde_json::Value;
+use crate::CodeModeStore;
+use crate::RuntimeError;
+use crate::ToolInvoker;
+use ash_code_mode_protocol::CODE_MODE_PROTOCOL_VERSION;
+use ash_code_mode_protocol::CellId;
+use ash_code_mode_protocol::ClientToHost;
+use ash_code_mode_protocol::CodeModeSessionId;
+use ash_code_mode_protocol::HostFrame;
+use ash_code_mode_protocol::HostToClient;
+use ash_code_mode_protocol::read_frame;
+use ash_code_mode_protocol::write_frame;
 use std::collections::BTreeMap;
-use std::io::{BufReader, BufWriter};
+use std::io::BufReader;
+use std::io::BufWriter;
 use std::path::PathBuf;
-use std::process::{Child, ChildStdin, Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
-use std::sync::{Arc, Mutex};
+use std::process::Child;
+use std::process::Command;
+use std::process::Stdio;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
-type HostResult<T> = Result<T, String>;
+const MAX_REQUESTS: usize = 128;
+const MAX_QUEUED_BYTES: usize = 64 * 1024 * 1024;
+type Reply = Result<HostToClient, RuntimeError>;
 
-#[derive(Clone)]
-pub(super) struct HostRuntime {
-    inner: Arc<HostRuntimeInner>,
+pub(super) struct Connection {
+    shared: Arc<Shared>,
 }
 
-struct HostRuntimeInner {
-    session_id: CodeModeSessionId,
-    shared: Arc<HostShared>,
+struct Shared {
+    state: Mutex<State>,
+    writer: mpsc::SyncSender<Vec<u8>>,
+    queued_bytes: AtomicUsize,
+    workers: AtomicUsize,
     child: Mutex<Option<Child>>,
-    execute_guard: Mutex<()>,
-    closed: AtomicBool,
 }
 
-struct HostShared {
-    writer: Mutex<Option<BufWriter<ChildStdin>>>,
-    invoker: Arc<dyn ToolInvoker>,
-    stored_values: CodeModeStore,
-    session_opened: Mutex<Option<Sender<HostResult<()>>>>,
-    started_cells: Sender<HostResult<StartedCell>>,
-    started_receiver: Mutex<Receiver<HostResult<StartedCell>>>,
-    cells: Mutex<BTreeMap<CellId, Arc<HostCell>>>,
-    fatal_error: Mutex<Option<String>>,
+#[derive(Default)]
+struct State {
+    failure: Option<String>,
+    next_request: u64,
+    pending: BTreeMap<u64, mpsc::Sender<Reply>>,
+    cells: BTreeMap<CellId, Arc<dyn ToolInvoker>>,
+    stores: BTreeMap<CodeModeSessionId, CodeModeStore>,
 }
 
-struct HostCell {
-    receiver: Mutex<Receiver<RuntimeResponse>>,
-    sender: Sender<RuntimeResponse>,
-    last_response: Mutex<Option<RuntimeResponse>>,
-}
-
-impl HostRuntime {
-    pub(super) fn spawn(
-        program: PathBuf,
-        session_id: CodeModeSessionId,
-        limits: CodeModeLimits,
-        invoker: Arc<dyn ToolInvoker>,
-        stored_values: CodeModeStore,
-    ) -> Result<Self, RuntimeError> {
-        let mut child = Command::new(&program)
+impl Connection {
+    pub(super) fn spawn(program: PathBuf) -> Result<Self, RuntimeError> {
+        let mut command = Command::new(&program);
+        command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
-            .spawn()
-            .map_err(|error| {
-                RuntimeError::Initialization(format!(
-                    "failed to start Code Mode Host {}: {error}",
-                    program.display()
-                ))
-            })?;
-        let handshake = (|| {
-            let stdin = child.stdin.take().ok_or_else(|| {
-                RuntimeError::Initialization("Code Mode Host stdin is unavailable".into())
-            })?;
-            let stdout = child.stdout.take().ok_or_else(|| {
-                RuntimeError::Initialization("Code Mode Host stdout is unavailable".into())
-            })?;
-            let (sender, receiver) = mpsc::channel();
-            thread::spawn(move || {
-                let result = (|| {
-                    let mut writer = BufWriter::new(stdin);
-                    let mut reader = BufReader::new(stdout);
-                    write_frame(
-                        &mut writer,
-                        &ClientToHost::Hello {
-                            protocol_version: CODE_MODE_PROTOCOL_VERSION,
-                        },
-                    )
-                    .map_err(|error| RuntimeError::Initialization(error.to_string()))?;
-                    match read_frame::<_, HostToClient>(&mut reader)
-                        .map_err(|error| RuntimeError::Initialization(error.to_string()))?
-                    {
-                        HostToClient::Hello {
-                            protocol_version, ..
-                        } if protocol_version == CODE_MODE_PROTOCOL_VERSION => Ok((writer, reader)),
-                        HostToClient::Error { message } => {
-                            Err(RuntimeError::Initialization(message))
-                        }
-                        message => Err(RuntimeError::Initialization(format!(
-                            "unexpected Code Mode Host handshake response: {message:?}"
-                        ))),
-                    }
-                })();
-                let _ = sender.send(result);
-            });
-            receiver
-                .recv_timeout(Duration::from_secs(5))
-                .map_err(|error| {
-                    RuntimeError::Initialization(match error {
-                        RecvTimeoutError::Timeout => "Code Mode Host handshake timed out".into(),
-                        RecvTimeoutError::Disconnected => {
-                            "Code Mode Host handshake channel closed".into()
-                        }
-                    })
-                })?
-        })();
-        let (writer, reader) = match handshake {
-            Ok(transport) => transport,
-            Err(error) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(error);
-            }
-        };
-
-        let (session_opened_tx, session_opened_rx) = mpsc::channel();
-        let (started_cells_tx, started_cells_rx) = mpsc::channel();
-        let shared = Arc::new(HostShared {
-            writer: Mutex::new(Some(writer)),
-            invoker,
-            stored_values: stored_values.clone(),
-            session_opened: Mutex::new(Some(session_opened_tx)),
-            started_cells: started_cells_tx,
-            started_receiver: Mutex::new(started_cells_rx),
-            cells: Mutex::new(BTreeMap::new()),
-            fatal_error: Mutex::new(None),
+            .stderr(Stdio::inherit());
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+        }
+        let mut child = command.spawn().map_err(|error| {
+            RuntimeError::Initialization(format!(
+                "failed to start Code Mode Host {}: {error}",
+                program.display()
+            ))
+        })?;
+        let mut writer = BufWriter::new(child.stdin.take().unwrap());
+        let mut reader = BufReader::new(child.stdout.take().unwrap());
+        let (sender, receiver) = mpsc::sync_channel::<Vec<u8>>(MAX_REQUESTS);
+        let shared = Arc::new(Shared {
+            state: Mutex::new(State::default()),
+            writer: sender,
+            queued_bytes: AtomicUsize::new(0),
+            workers: AtomicUsize::new(0),
+            child: Mutex::new(Some(child)),
         });
-        let reader_shared = Arc::clone(&shared);
-        let reader_session_id = session_id.clone();
-        thread::spawn(move || read_host(reader, reader_session_id, reader_shared));
-
-        let runtime = Self {
-            inner: Arc::new(HostRuntimeInner {
-                session_id: session_id.clone(),
-                shared,
-                child: Mutex::new(Some(child)),
-                execute_guard: Mutex::new(()),
-                closed: AtomicBool::new(false),
-            }),
-        };
-        runtime.inner.shared.send(ClientToHost::OpenSession {
-            session_id,
-            limits,
-            stored_values: stored_values.snapshot()?,
-        })?;
-        match session_opened_rx.recv_timeout(Duration::from_secs(5)) {
-            Ok(Ok(())) => Ok(runtime),
-            Ok(Err(error)) => Err(RuntimeError::Initialization(error)),
-            Err(_) => Err(RuntimeError::Initialization(
-                "Code Mode Host did not open the session".into(),
-            )),
+        let output = Arc::clone(&shared);
+        thread::spawn(move || {
+            use std::io::Write;
+            while output.failure().is_none() {
+                match receiver.recv_timeout(Duration::from_millis(100)) {
+                    Ok(bytes) => {
+                        let result = writer.write_all(&bytes).and_then(|()| writer.flush());
+                        output.queued_bytes.fetch_sub(bytes.len(), Ordering::AcqRel);
+                        if let Err(error) = result {
+                            output.fail(error.to_string());
+                            break;
+                        }
+                    }
+                    Err(mpsc::RecvTimeoutError::Timeout) => {}
+                    Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                }
+            }
+        });
+        let input = Arc::clone(&shared);
+        thread::spawn(move || {
+            loop {
+                match read_frame::<_, HostFrame<HostToClient>>(&mut reader) {
+                    Ok(frame) => input.receive(frame),
+                    Err(error) => {
+                        input.fail(format!("Code Mode Host exited or closed its output ({error}); active outcomes are unknown"));
+                        break;
+                    }
+                }
+            }
+        });
+        let connection = Self { shared };
+        match connection.request(
+            ClientToHost::Hello {
+                protocol_version: CODE_MODE_PROTOCOL_VERSION,
+            },
+            Duration::from_secs(5),
+        )? {
+            HostToClient::Hello {
+                protocol_version, ..
+            } if protocol_version == CODE_MODE_PROTOCOL_VERSION => Ok(connection),
+            reply => Err(RuntimeError::Initialization(format!(
+                "unexpected Code Mode Host handshake: {reply:?}"
+            ))),
         }
     }
 
-    pub(super) fn execute(
-        &self,
-        request: ash_code_mode_protocol::ExecuteRequest,
-    ) -> Result<StartedCell, RuntimeError> {
-        if request.session_id != self.inner.session_id {
-            return Err(RuntimeError::InvalidRequest(
-                "Execute request belongs to another Code Mode Host session".into(),
-            ));
-        }
-        let _guard = self.inner.execute_guard.lock().map_err(|_| {
-            RuntimeError::Runtime("Code Mode Host execute lock was poisoned".into())
-        })?;
-        self.inner.shared.ensure_live()?;
-        self.inner.shared.send(ClientToHost::Execute(request))?;
-        let started = self
-            .inner
-            .shared
-            .receive_started(Duration::from_secs(5))?
-            .map_err(RuntimeError::Runtime)?;
+    pub(super) fn request(&self, message: ClientToHost, timeout: Duration) -> Reply {
         let (sender, receiver) = mpsc::channel();
-        self.inner
-            .shared
-            .cells
-            .lock()
-            .map_err(|_| RuntimeError::Runtime("Code Mode Host cell map was poisoned".into()))?
-            .insert(
-                started.cell_id.clone(),
-                Arc::new(HostCell {
-                    receiver: Mutex::new(receiver),
-                    sender,
-                    last_response: Mutex::new(None),
-                }),
-            );
-        if self.inner.shared.fatal_message().is_some() {
-            self.inner.shared.mark_unknown_cells();
-        }
-        Ok(started)
-    }
-
-    pub(super) fn wait(&self, request: WaitRequest) -> Result<WaitOutcome, RuntimeError> {
-        if !self.has_cell(&request.cell_id) {
-            return Ok(WaitOutcome::MissingCell {
-                cell_id: request.cell_id,
-            });
-        }
-        let cell = self.cell(&request.cell_id)?;
-        if let Some(response) = terminal_response(&cell)? {
-            self.inner
-                .shared
-                .cells
-                .lock()
-                .map_err(|_| RuntimeError::Runtime("Code Mode Host cell map was poisoned".into()))?
-                .remove(&request.cell_id);
-            return Ok(WaitOutcome::LiveCell { response });
-        }
-        if self.inner.shared.fatal_message().is_some() {
-            self.inner.shared.mark_unknown_cells();
-        } else {
-            if let Err(error) = self.inner.shared.send(ClientToHost::Wait(request.clone())) {
-                self.inner.shared.fail(format!(
-                    "Code Mode Host request failed after the cell started ({error}); active nested tool outcomes are unknown"
+        let id = {
+            let mut state = self.shared.state.lock().unwrap();
+            if let Some(error) = &state.failure {
+                return Err(RuntimeError::Runtime(error.clone()));
+            }
+            if state.pending.len() >= MAX_REQUESTS {
+                return Err(RuntimeError::InvalidRequest(
+                    "Code Mode Host has too many pending requests".into(),
                 ));
             }
-        }
-        let timeout =
-            Duration::from_millis(request.yield_time_ms).saturating_add(Duration::from_secs(1));
-        let response = match cell
-            .receiver
-            .lock()
-            .map_err(|_| RuntimeError::Runtime("Code Mode Host cell receiver was poisoned".into()))?
-            .recv_timeout(timeout)
-        {
-            Ok(response) => response,
-            Err(RecvTimeoutError::Timeout) => RuntimeResponse::Running {
-                cell_id: request.cell_id,
-                content_items: Vec::new(),
-            },
-            Err(RecvTimeoutError::Disconnected) => unknown_response(
-                request.cell_id,
-                self.inner.shared.fatal_message().unwrap_or_else(|| {
-                    "Code Mode Host response channel closed; nested tool outcome is unknown".into()
-                }),
-            ),
+            state.next_request += 1;
+            let id = state.next_request;
+            state.pending.insert(id, sender);
+            id
         };
-        *cell.last_response.lock().map_err(|_| {
-            RuntimeError::Runtime("Code Mode Host cell response was poisoned".into())
-        })? = Some(response.clone());
-        if is_terminal(&response) {
-            self.inner
-                .shared
-                .cells
-                .lock()
-                .map_err(|_| RuntimeError::Runtime("Code Mode Host cell map was poisoned".into()))?
-                .remove(&response_cell_id(&response));
+        if let Err(error) = self.shared.send(HostFrame {
+            request_id: Some(id),
+            message,
+        }) {
+            self.shared.state.lock().unwrap().pending.remove(&id);
+            return Err(error);
         }
-        Ok(WaitOutcome::LiveCell { response })
+        match receiver.recv_timeout(timeout) {
+            Ok(reply) => reply,
+            Err(_) => {
+                self.shared.fail(
+                    "Code Mode Host request timed out; execution will not be replayed".into(),
+                );
+                Err(RuntimeError::Runtime(self.failure().unwrap()))
+            }
+        }
     }
 
-    pub(super) fn terminate(&self, cell_id: &CellId) -> Result<WaitOutcome, RuntimeError> {
-        self.wait(WaitRequest {
-            cell_id: cell_id.clone(),
-            yield_time_ms: 0,
-            max_output_tokens: None,
-            terminate: true,
-        })
+    pub(super) fn failure(&self) -> Option<String> {
+        self.shared.failure()
     }
-
-    pub(super) fn has_cell(&self, cell_id: &CellId) -> bool {
-        self.inner
-            .shared
-            .cells
-            .lock()
-            .map(|cells| cells.contains_key(cell_id))
-            .unwrap_or(false)
+    pub(super) fn register_store(&self, id: CodeModeSessionId, store: CodeModeStore) {
+        self.shared.state.lock().unwrap().stores.insert(id, store);
     }
-
-    pub(super) fn close(&self) {
-        self.inner.close();
+    pub(super) fn remove_store(&self, id: &CodeModeSessionId) {
+        self.shared.state.lock().unwrap().stores.remove(id);
     }
-
-    fn cell(&self, cell_id: &CellId) -> Result<Arc<HostCell>, RuntimeError> {
-        self.inner
-            .shared
-            .cells
-            .lock()
-            .map_err(|_| RuntimeError::Runtime("Code Mode Host cell map was poisoned".into()))?
-            .get(cell_id)
-            .cloned()
-            .ok_or_else(|| RuntimeError::CellNotFound(cell_id.clone()))
+    pub(super) fn register_cell(&self, id: CellId, invoker: Arc<dyn ToolInvoker>) {
+        let mut state = self.shared.state.lock().unwrap();
+        if state.failure.is_some() {
+            drop(state);
+            invoker.cancel_cell(&id);
+        } else {
+            state.cells.insert(id, invoker);
+        }
+    }
+    pub(super) fn remove_cell(&self, id: &CellId) {
+        let invoker = self.shared.state.lock().unwrap().cells.remove(id);
+        if let Some(invoker) = invoker {
+            invoker.cancel_cell(id);
+        }
     }
 }
 
-impl HostRuntimeInner {
-    fn close(&self) {
-        if self.closed.swap(true, Ordering::AcqRel) {
-            return;
-        }
-        self.shared.invoker.cancel();
-        let _ = self.shared.send(ClientToHost::CloseSession {
-            session_id: self.session_id.clone(),
-        });
-        if let Ok(mut writer) = self.shared.writer.lock() {
-            writer.take();
-        }
-        if let Ok(mut child) = self.child.lock()
-            && let Some(mut child) = child.take()
-        {
-            for _ in 0..10 {
-                if child.try_wait().ok().flatten().is_some() {
-                    return;
-                }
-                thread::sleep(Duration::from_millis(10));
+impl Drop for Connection {
+    fn drop(&mut self) {
+        self.shared.fail("Code Mode Host owner closed".into());
+    }
+}
+
+impl Shared {
+    fn failure(&self) -> Option<String> {
+        self.state.lock().unwrap().failure.clone()
+    }
+
+    fn fail(&self, reason: String) {
+        let (pending, cells) = {
+            let mut state = self.state.lock().unwrap();
+            if state.failure.is_some() {
+                return;
             }
+            state.failure = Some(reason.clone());
+            (
+                std::mem::take(&mut state.pending),
+                std::mem::take(&mut state.cells),
+            )
+        };
+        // Killing the child unblocks a partial stdout frame or a blocked stdin write.
+        if let Some(mut child) = self.child.lock().unwrap().take() {
             let _ = child.kill();
             let _ = child.wait();
         }
-    }
-}
-
-impl Drop for HostRuntimeInner {
-    fn drop(&mut self) {
-        self.close();
-    }
-}
-
-impl HostShared {
-    fn send(&self, message: ClientToHost) -> Result<(), RuntimeError> {
-        let mut writer = self
-            .writer
-            .lock()
-            .map_err(|_| RuntimeError::Runtime("Code Mode Host writer was poisoned".into()))?;
-        let writer = writer.as_mut().ok_or_else(|| {
-            RuntimeError::Runtime(
-                self.fatal_message()
-                    .unwrap_or_else(|| "Code Mode Host is closed".into()),
-            )
-        })?;
-        write_frame(writer, &message).map_err(|error| RuntimeError::Runtime(error.to_string()))
-    }
-
-    fn ensure_live(&self) -> Result<(), RuntimeError> {
-        match self.fatal_message() {
-            Some(error) => Err(RuntimeError::Runtime(error)),
-            None => Ok(()),
+        for sender in pending.into_values() {
+            let _ = sender.send(Err(RuntimeError::Runtime(reason.clone())));
+        }
+        for (id, invoker) in cells {
+            invoker.cancel_cell(&id);
         }
     }
 
-    fn fatal_message(&self) -> Option<String> {
-        self.fatal_error.lock().ok().and_then(|error| error.clone())
-    }
-
-    fn fail(&self, message: String) {
-        if let Ok(mut fatal_error) = self.fatal_error.lock() {
-            if fatal_error.is_some() {
-                return;
-            }
-            *fatal_error = Some(message.clone());
+    fn send(&self, frame: HostFrame<ClientToHost>) -> Result<(), RuntimeError> {
+        if let Some(error) = self.failure() {
+            return Err(RuntimeError::Runtime(error));
         }
-        self.invoker.cancel();
-        if let Ok(mut sender) = self.session_opened.lock()
-            && let Some(sender) = sender.take()
+        let mut bytes = Vec::new();
+        write_frame(&mut bytes, &frame)
+            .map_err(|error| RuntimeError::InvalidRequest(error.to_string()))?;
+        let size = bytes.len();
+        if self
+            .queued_bytes
+            .fetch_add(size, Ordering::AcqRel)
+            .saturating_add(size)
+            > MAX_QUEUED_BYTES
         {
-            let _ = sender.send(Err(message.clone()));
+            self.queued_bytes.fetch_sub(size, Ordering::AcqRel);
+            return Err(RuntimeError::InvalidRequest(
+                "Code Mode Host output queue is full".into(),
+            ));
         }
-        let _ = self.started_cells.send(Err(message));
-        self.mark_unknown_cells();
-    }
-
-    fn mark_unknown_cells(&self) {
-        let reason = self
-            .fatal_message()
-            .unwrap_or_else(|| "Code Mode Host closed; nested tool outcome is unknown".into());
-        let cells = self
-            .cells
-            .lock()
-            .map(|cells| {
-                cells
-                    .iter()
-                    .map(|(id, cell)| (id.clone(), Arc::clone(cell)))
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
-        for (cell_id, cell) in cells {
-            let terminal = cell
-                .last_response
-                .lock()
-                .ok()
-                .and_then(|response| response.clone())
-                .is_some_and(|response| is_terminal(&response));
-            if !terminal {
-                let _ = cell.sender.send(unknown_response(cell_id, reason.clone()));
-            }
+        if self.writer.try_send(bytes).is_err() {
+            self.queued_bytes.fetch_sub(size, Ordering::AcqRel);
+            return Err(RuntimeError::InvalidRequest(
+                "Code Mode Host output queue is full".into(),
+            ));
         }
+        Ok(())
     }
 
-    fn receive_started(&self, timeout: Duration) -> Result<HostResult<StartedCell>, RuntimeError> {
-        self.started_receiver
-            .lock()
-            .map_err(|_| {
-                RuntimeError::Runtime("Code Mode Host started receiver was poisoned".into())
-            })?
-            .recv_timeout(timeout)
-            .map_err(|_| RuntimeError::Runtime("Code Mode Host did not start the cell".into()))
-    }
-}
-
-fn read_host(
-    mut reader: BufReader<std::process::ChildStdout>,
-    session_id: CodeModeSessionId,
-    shared: Arc<HostShared>,
-) {
-    loop {
-        let message = match read_frame::<_, HostToClient>(&mut reader) {
-            Ok(message) => message,
-            Err(error) => {
-                shared.fail(format!(
-                    "Code Mode Host exited or closed its output ({error}); active nested tool outcomes are unknown"
-                ));
-                return;
+    fn receive(self: &Arc<Self>, frame: HostFrame<HostToClient>) {
+        if self.failure().is_some() {
+            return;
+        }
+        if let Some(id) = frame.request_id {
+            let sender = self.state.lock().unwrap().pending.remove(&id);
+            if let Some(sender) = sender {
+                let reply = match frame.message {
+                    HostToClient::Error { message } => Err(RuntimeError::Runtime(message)),
+                    message => Ok(message),
+                };
+                let _ = sender.send(reply);
+            } else {
+                self.fail("Code Mode Host returned an unknown request ID".into());
             }
-        };
-        match message {
-            HostToClient::SessionOpened { session_id: opened } if opened == session_id => {
-                if let Ok(mut sender) = shared.session_opened.lock()
-                    && let Some(sender) = sender.take()
-                {
-                    let _ = sender.send(Ok(()));
+            return;
+        }
+        match frame.message {
+            HostToClient::StoreSnapshot { session_id, values } => {
+                let result = {
+                    let state = self.state.lock().unwrap();
+                    if state.failure.is_some() {
+                        return;
+                    }
+                    state
+                        .stores
+                        .get(&session_id)
+                        .map(|store| store.replace(values))
+                };
+                if let Some(Err(error)) = result {
+                    self.fail(error.to_string());
                 }
             }
-            HostToClient::StartedCell(started) => {
-                let _ = shared.started_cells.send(Ok(started));
-            }
             HostToClient::ToolCall(call) => {
-                let invoker = Arc::clone(&shared.invoker);
-                let callback_shared = Arc::clone(&shared);
+                let invoker = self.state.lock().unwrap().cells.get(&call.cell_id).cloned();
+                let shared = Arc::clone(self);
+                if self.workers.fetch_add(1, Ordering::AcqRel) >= MAX_REQUESTS {
+                    self.workers.fetch_sub(1, Ordering::AcqRel);
+                    self.complete(
+                        call.cell_id,
+                        call.runtime_tool_call_id,
+                        Err("Code Mode Host callback limit reached".into()),
+                    );
+                    return;
+                }
                 thread::spawn(move || {
-                    let cell_id = call.cell_id.clone();
-                    let runtime_tool_call_id = call.runtime_tool_call_id.clone();
-                    let (result, error_text) = match invoker.invoke(call) {
-                        Ok(result) => (result, None),
-                        Err(error) => (Value::Null, Some(error)),
-                    };
-                    let _ = callback_shared.send(ClientToHost::CompleteToolCall {
-                        cell_id,
-                        runtime_tool_call_id,
-                        result,
-                        error_text,
-                    });
+                    let id = call.cell_id.clone();
+                    let call_id = call.runtime_tool_call_id.clone();
+                    let result =
+                        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match invoker {
+                            Some(invoker) => invoker.invoke(call),
+                            None => Err("Code Mode cell is closed".into()),
+                        }))
+                        .unwrap_or_else(|_| Err("Code Mode tool callback panicked".into()));
+                    shared.complete(id, call_id, result);
+                    shared.workers.fetch_sub(1, Ordering::AcqRel);
                 });
             }
             HostToClient::Notification(notification) => {
-                let _ = shared.invoker.notify(notification);
-            }
-            HostToClient::StoreSnapshot {
-                session_id: snapshot_session_id,
-                values,
-            } if snapshot_session_id == session_id => {
-                if let Err(error) = shared.stored_values.replace(values) {
-                    shared.fail(error.to_string());
-                    return;
-                }
-            }
-            HostToClient::Response { response } => {
-                let cell_id = response_cell_id(&response);
-                if is_terminal(&response) {
-                    shared.invoker.cancel_cell(&cell_id);
-                }
-                let cell = shared
-                    .cells
+                let invoker = self
+                    .state
                     .lock()
-                    .ok()
-                    .and_then(|cells| cells.get(&cell_id).cloned());
-                if let Some(cell) = cell {
-                    let _ = cell.sender.send(response);
-                } else {
-                    shared.fail(format!(
-                        "Code Mode Host returned an unknown cell: {cell_id}"
-                    ));
-                    return;
+                    .unwrap()
+                    .cells
+                    .get(&notification.cell_id)
+                    .cloned();
+                if let Some(invoker) = invoker {
+                    let _ = invoker.notify(notification);
                 }
             }
             HostToClient::CancelCellTools { cell_id }
             | HostToClient::CellClosed { cell_id, .. } => {
-                shared.invoker.cancel_cell(&cell_id);
+                let invoker = self.state.lock().unwrap().cells.get(&cell_id).cloned();
+                if let Some(invoker) = invoker {
+                    invoker.cancel_cell(&cell_id);
+                }
             }
-            HostToClient::Error { message } => {
-                shared.fail(format!("Code Mode Host error: {message}"));
-                return;
-            }
-            other => {
-                shared.fail(format!("unexpected Code Mode Host message: {other:?}"));
-                return;
-            }
+            other => self.fail(format!("unexpected Code Mode Host event: {other:?}")),
         }
     }
-}
 
-fn terminal_response(cell: &HostCell) -> Result<Option<RuntimeResponse>, RuntimeError> {
-    Ok(cell
-        .last_response
-        .lock()
-        .map_err(|_| RuntimeError::Runtime("Code Mode Host cell response was poisoned".into()))?
-        .clone()
-        .filter(is_terminal))
-}
-
-fn is_terminal(response: &RuntimeResponse) -> bool {
-    matches!(
-        response,
-        RuntimeResponse::Result { .. }
-            | RuntimeResponse::Terminated { .. }
-            | RuntimeResponse::Unknown { .. }
-    )
-}
-
-fn response_cell_id(response: &RuntimeResponse) -> CellId {
-    match response {
-        RuntimeResponse::Running { cell_id, .. }
-        | RuntimeResponse::Yielded { cell_id, .. }
-        | RuntimeResponse::Terminated { cell_id, .. }
-        | RuntimeResponse::Result { cell_id, .. }
-        | RuntimeResponse::Unknown { cell_id, .. } => cell_id.clone(),
-    }
-}
-
-fn unknown_response(cell_id: CellId, reason: String) -> RuntimeResponse {
-    RuntimeResponse::Unknown {
-        cell_id,
-        content_items: Vec::new(),
-        reason,
+    fn complete(
+        &self,
+        cell_id: CellId,
+        runtime_tool_call_id: String,
+        result: Result<serde_json::Value, String>,
+    ) {
+        let (result, error_text) = match result {
+            Ok(value) => (value, None),
+            Err(error) => (serde_json::Value::Null, Some(error)),
+        };
+        if let Err(error) = self.send(HostFrame {
+            request_id: None,
+            message: ClientToHost::CompleteToolCall {
+                cell_id,
+                runtime_tool_call_id,
+                result,
+                error_text,
+            },
+        }) {
+            self.fail(error.to_string());
+        }
     }
 }

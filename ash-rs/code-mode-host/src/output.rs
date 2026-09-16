@@ -1,4 +1,5 @@
 use ash_code_mode_protocol::CellOutcome;
+use ash_code_mode_protocol::HostFrame;
 use ash_code_mode_protocol::HostToClient;
 use ash_code_mode_protocol::RuntimeResponse;
 use ash_code_mode_protocol::WaitOutcome;
@@ -11,17 +12,25 @@ use std::sync::Mutex;
 
 pub(super) fn send(
     writer: &Mutex<BufWriter<io::Stdout>>,
+    request_id: Option<u64>,
     message: HostToClient,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut writer = writer
         .lock()
         .map_err(|_| io::Error::other("Host output writer was poisoned"))?;
-    write_frame(&mut *writer, &message)?;
+    write_frame(
+        &mut *writer,
+        &HostFrame {
+            request_id,
+            message,
+        },
+    )?;
     Ok(())
 }
 
 pub(super) fn send_wait_result(
     writer: &Mutex<BufWriter<io::Stdout>>,
+    request_id: Option<u64>,
     runtime: &CodeModeRuntime,
     result: Result<WaitOutcome, RuntimeError>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -37,8 +46,11 @@ pub(super) fn send_wait_result(
                 Err(error) => {
                     write_frame(
                         &mut *writer,
-                        &HostToClient::Error {
-                            message: error.to_string(),
+                        &HostFrame {
+                            request_id,
+                            message: HostToClient::Error {
+                                message: error.to_string(),
+                            },
                         },
                     )?;
                     return Ok(());
@@ -67,24 +79,43 @@ pub(super) fn send_wait_result(
             };
             write_frame(
                 &mut *writer,
-                &HostToClient::StoreSnapshot {
-                    session_id: runtime.session_id().clone(),
-                    values,
+                &HostFrame {
+                    request_id: None,
+                    message: HostToClient::StoreSnapshot {
+                        session_id: runtime.session_id().clone(),
+                        values,
+                    },
                 },
             )?;
-            write_frame(&mut *writer, &HostToClient::Response { response })?;
+            write_frame(
+                &mut *writer,
+                &HostFrame {
+                    request_id,
+                    message: HostToClient::Response { response },
+                },
+            )?;
             if let Some((cell_id, outcome)) = terminal {
-                write_frame(&mut *writer, &HostToClient::CellClosed { cell_id, outcome })?;
+                write_frame(
+                    &mut *writer,
+                    &HostFrame {
+                        request_id: None,
+                        message: HostToClient::CellClosed { cell_id, outcome },
+                    },
+                )?;
             }
             return Ok(());
         }
-        Ok(WaitOutcome::MissingCell { cell_id }) => HostToClient::Error {
-            message: format!("Code Mode cell not found: {cell_id}"),
-        },
+        Ok(WaitOutcome::MissingCell { cell_id }) => HostToClient::MissingCell { cell_id },
         Err(error) => HostToClient::Error {
             message: error.to_string(),
         },
     };
-    write_frame(&mut *writer, &message)?;
+    write_frame(
+        &mut *writer,
+        &HostFrame {
+            request_id,
+            message,
+        },
+    )?;
     Ok(())
 }
