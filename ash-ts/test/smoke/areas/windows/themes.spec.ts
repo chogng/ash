@@ -1,6 +1,34 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
+
+test('Seti extension fonts render in Explorer and file icons can be switched off', async ({ application, target, workbench }) => {
+	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required', 'Requires extension resources from App Server');
+	if (!('windows' in application)) { return; }
+	const home = await application.evaluate(() => process.env.ASH_HOME!);
+	await cp('../extensions/theme-seti', join(home, 'extensions', 'theme-seti'), { recursive: true });
+	await workbench.page.reload();
+	await workbench.waitForReady();
+	const row = workbench.page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
+	const icon = row.locator('.ash-file-icon');
+	await expect(icon).toHaveCount(1);
+	await expect.poll(() => icon.textContent()).not.toBe('');
+	await expect.poll(() => icon.evaluate(async element => {
+		const family = getComputedStyle(element).fontFamily;
+		await document.fonts.load('16px ' + family);
+		return family.startsWith('ash-file-icon-') && document.fonts.check('16px ' + family);
+	})).toBe(true);
+	for (const id of [null, 'vs-seti']) {
+		await workbench.page.evaluate(async id => {
+			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, args?: unknown): Promise<unknown> } } }).ash.ipcRenderer;
+			const snapshot = await ipc.invoke('ash:configuration:read') as { revision: number; document: { source: string } };
+			const values = JSON.parse(snapshot.document.source);
+			values['workbench.iconTheme'] = id;
+			await ipc.invoke('ash:configuration:update', { expectedRevision: snapshot.revision, document: { version: 1, source: JSON.stringify(values) } });
+		}, id);
+		await expect(icon).toHaveCount(id === null ? 0 : 1);
+	}
+});
 
 test('Workbench follows system color changes without reopening the window', async ({ workbench }) => {
 	await workbench.page.emulateMedia({ colorScheme: 'dark' });

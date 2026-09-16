@@ -540,7 +540,7 @@ export class Workbench extends Disposable {
 		this._register(extensionService.themes.onDidChange(() => updateTextMateTheme()));
 		this._register(themeService.onDidColorThemeChange(() => updateTextMateTheme()));
 		services.registerInstance(IUserThemeService, userThemeService ?? UnavailableUserThemeService);
-		const fileIconThemeService = themeService.fileIconTheme;
+		const fileIconThemeService = themeService;
 		services.registerInstance(IFileIconThemeService, fileIconThemeService);
 		services.registerInstance(IResourceLabelService, this._register(new ResourceLabelService({
 			workspaceContextService: workspaceContext,

@@ -1,0 +1,22 @@
+{
+  "name": "theme-seti",
+  "publisher": "ash",
+  "version": "1.0.0",
+  "displayName": "Seti File Icons",
+  "license": "MIT",
+  "engines": {
+    "vscode": "*"
+  },
+  "categories": [
+    "Themes"
+  ],
+  "contributes": {
+    "iconThemes": [
+      {
+        "id": "vs-seti",
+        "label": "Seti",
+        "path": "./icons/vs-seti-icon-theme.json"
+      }
+    ]
+  }
+}

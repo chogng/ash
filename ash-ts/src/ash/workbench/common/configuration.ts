@@ -1,3 +1,4 @@
+import { WorkbenchFileIconThemesRegistry } from '../services/themes/common/themeExtensionPoints.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from "../../platform/configuration/common/configurationRegistry.js";
 import { AccessibilityConfiguration } from "../../platform/accessibility/common/accessibility.js";
 import { Registry } from "../../platform/registry/common/platform.js";
@@ -17,6 +18,20 @@ export const WorkbenchConfiguration = Object.freeze({
 		parse(value: unknown) {
 			if (typeof value !== "string") throw new TypeError(`Unknown Workbench mode: ${String(value)}`);
 			return WorkbenchModeRegistry.resolveModeId(value);
+		},
+	}),
+	iconTheme: configurationRegistry.registerConfiguration<string>({
+		key: 'workbench.iconTheme',
+		defaultValue: 'vs-seti',
+		parse(value: unknown): string {
+			if (value === null || value === '') { return ''; }
+			if (typeof value === 'string' && /^[a-zA-Z0-9._-]{1,256}$/.test(value)) { return value; }
+			throw new TypeError('Invalid file icon theme ID');
+		},
+		serialize: value => value === '' ? null : value,
+		setting: {
+			valueType: 'select', title: 'File icon theme', description: 'Choose the file icons contributed by an installed extension.',
+			get options() { return [{ value: '', label: 'None' }, ...WorkbenchFileIconThemesRegistry.getThemes().map(theme => ({ value: theme.id, label: theme.label }))]; },
 		},
 	}),
 	colorTheme: configurationRegistry.registerConfiguration<string>({

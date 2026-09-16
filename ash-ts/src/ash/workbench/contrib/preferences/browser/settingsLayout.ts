@@ -68,7 +68,7 @@ export const SettingsNavigation = [
 				id: 'theme',
 				label: 'Color theme',
 				description: 'Choose the colors used by the Workbench.',
-				settings: ['workbench.colorTheme'],
+				settings: ['workbench.colorTheme', 'workbench.iconTheme'],
 			},
 			{
 				id: 'layout',

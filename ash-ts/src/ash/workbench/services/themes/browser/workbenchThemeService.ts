@@ -1,3 +1,5 @@
+import { WorkbenchFileIconThemesRegistry } from '../common/themeExtensionPoints.js';
+import type { IWorkbenchFileIconTheme } from '../common/workbenchThemeService.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -8,7 +10,7 @@ import type { IColorTheme } from '../../../../platform/theme/common/colorTheme.j
 import type { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { bindColorTheme } from '../../../../platform/theme/browser/themeStyles.js';
 import type { IFileIconThemeService } from '../../../../platform/theme/browser/fileIconThemeService.js';
-import { SetiFileIconThemeService } from '../../../../platform/theme/browser/setiFileIconTheme.js';
+import { isDarkColorScheme } from '../../../../platform/theme/common/theme.js';
 import { WorkbenchConfiguration } from '../../../common/configuration.js';
 import { resolveWorkbenchColorTheme, SystemColorThemePreference, WorkbenchThemesRegistry } from '../../../common/theme.js';
 import type { IUserThemeDeleteResult, IUserThemeLoadIssue, IUserThemeSaveResult, IUserThemeService, IUserThemeSource } from '../../../common/userThemes.js';
@@ -17,13 +19,16 @@ import { migrateUserTheme } from '../common/themeMigration.js';
 import { registerColorThemeSchemas } from '../common/colorThemeSchema.js';
 
 /** Owns active theme selection and its window-scoped visual resources. */
-export class WorkbenchThemeService extends Disposable implements IThemeService {
+export class WorkbenchThemeService extends Disposable implements IThemeService, IFileIconThemeService {
 	private readonly colorThemeChange = this._register(new Emitter<IColorTheme>());
 	private readonly systemDarkQuery: MediaQueryList;
 	private colorTheme: IColorTheme;
 	private initialized = false;
 	public readonly onDidColorThemeChange = this.colorThemeChange.event;
-	public readonly fileIconTheme: IFileIconThemeService;
+	private readonly fileIconChange = this._register(new Emitter<void>());
+	public readonly onDidFileIconThemeChange = this.fileIconChange.event;
+	private fileIconTheme: IWorkbenchFileIconTheme | undefined;
+	private iconStyles: HTMLStyleElement | undefined;
 
 	constructor(
 		private readonly container: HTMLElement,
@@ -36,7 +41,6 @@ export class WorkbenchThemeService extends Disposable implements IThemeService {
 		}
 		this.systemDarkQuery = ownerWindow.matchMedia('(prefers-color-scheme: dark)');
 		this.colorTheme = this.resolveColorTheme();
-		this.fileIconTheme = this._register(new SetiFileIconThemeService(this));
 	}
 
 	public initialize(): void {
@@ -45,18 +49,25 @@ export class WorkbenchThemeService extends Disposable implements IThemeService {
 			throw new Error('Workbench themes are already initialized');
 		}
 		this.initialized = true;
+		const iconStyles = this.container.ownerDocument.createElement('style');
+		this.container.ownerDocument.head.append(iconStyles);
+		this.iconStyles = iconStyles;
+		this._register(toDisposable(() => iconStyles.remove()));
 		this._register(registerColorThemeSchemas());
 		this._register(this.configurationService.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(WorkbenchConfiguration.colorTheme)) {
 				this.updateColorTheme();
 			}
+			if (event.affectsConfiguration(WorkbenchConfiguration.iconTheme)) { this.updateFileIconTheme(); }
 		}));
+		this._register(WorkbenchFileIconThemesRegistry.onDidChange(() => this.updateFileIconTheme()));
 		this._register(WorkbenchThemesRegistry.onDidChange(() => this.updateColorTheme()));
 		const updateSystemTheme = (): void => this.updateColorTheme();
 		this.systemDarkQuery.addEventListener('change', updateSystemTheme);
 		this._register(toDisposable(() => this.systemDarkQuery.removeEventListener('change', updateSystemTheme)));
 		this.updateColorTheme();
 		this._register(bindColorTheme(this, this.container));
+		this.updateFileIconTheme();
 	}
 
 	public getColorTheme(): IColorTheme {
@@ -76,6 +87,31 @@ export class WorkbenchThemeService extends Disposable implements IThemeService {
 		}
 		this.colorTheme = theme;
 		this.colorThemeChange.fire(theme);
+		this.fileIconChange.fire();
+	}
+
+	private updateFileIconTheme(): void {
+		const id = this.configurationService.getValue<string | null>(WorkbenchConfiguration.iconTheme);
+		const theme = WorkbenchFileIconThemesRegistry.getThemes().find(theme => theme.id === id);
+		if (theme === this.fileIconTheme) { return; }
+		this.fileIconTheme = theme;
+		if (this.iconStyles) {
+			this.iconStyles.textContent = theme ? theme.styleSheetContent + '\n.ash-file-icon{font-style:normal;font-weight:normal;line-height:16px;}' : '';
+		}
+		this.fileIconChange.fire();
+	}
+
+	public renderFileIcon(resource: URI, container: HTMLElement): void {
+		const name = decodeURIComponent(resource.path.slice(resource.path.lastIndexOf('/') + 1));
+		const icon = this.fileIconTheme?.resolveFileIcon(name, isDarkColorScheme(this.colorTheme.colorScheme));
+		container.classList.toggle('ash-file-icon', icon !== undefined);
+		container.textContent = icon?.character ?? '';
+		container.style.color = icon?.color ?? '';
+		container.style.fontFamily = icon?.fontFamily ?? '';
+		container.style.fontSize = icon?.fontSize ?? '';
+		container.style.backgroundImage = icon?.image ? `url("${icon.image}")` : '';
+		container.style.backgroundSize = icon?.image ? 'contain' : '';
+		container.style.backgroundRepeat = icon?.image ? 'no-repeat' : '';
 	}
 }
 

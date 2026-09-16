@@ -261,7 +261,7 @@ test("assembles and validates the canonical Windows development layout", async (
       await readFile(new URL("../../resources/product-services/marketplace-root.json", import.meta.url), "utf8"),
     );
     const extensionPackages = (await readdir(join(staging, "ash-resources", "extensions"))).sort();
-    assert.deepEqual(extensionPackages, ["css", "html", "javascript", "json", "markdown-basics", "python", "rust", "shellscript", "sql", "theme-defaults", "typescript-basics", "xml", "yaml"]);
+    assert.deepEqual(extensionPackages, ["css", "html", "javascript", "json", "markdown-basics", "python", "rust", "shellscript", "sql", "theme-defaults", "theme-seti", "typescript-basics", "xml", "yaml"]);
     assert.match(await readFile(join(staging, "ash-resources", "extensions", "json", "package.json"), "utf8"), /"name": "json"/);
     assert.equal(
       await readFile(join(staging, "ash-resources", "licenses", "vscode", "LICENSE.txt"), "utf8"),

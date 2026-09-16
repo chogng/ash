@@ -1,6 +1,8 @@
 import { strict as assert } from "node:assert";
 import { createHash } from "node:crypto";
 import { test } from "mocha";
+import { readFile } from 'node:fs/promises';
+import { WorkbenchFileIconThemesRegistry } from '../../../themes/common/themeExtensionPoints.js';
 import { DisposableTracker, installDisposableTracker, toDisposable } from "../../../../../base/common/lifecycle.js";
 import type { ExtensionCatalog, ExtensionDescriptor, IExtensionApi } from "../../../../../platform/extensions/common/extensionApi.js";
 import type { IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
@@ -457,6 +459,35 @@ test("treats an in-flight load cancelled by disposal as normal shutdown", async 
 function catalogWithGeneration(generation: number): ExtensionCatalog {
 	return Object.freeze({ generation, extensions: Object.freeze([descriptor]), diagnostics: Object.freeze([]) });
 }
+
+test('loads icon manifests and fonts through generation-bound resources and revokes them on disposal', async () => {
+	const manifest = JSON.parse(await readFile('../extensions/theme-seti/package.json', 'utf8'));
+	const entry = descriptorWithManifest({ ...manifest, name: 'demo' });
+	let generation = 1;
+	let fail = false;
+	const requests: string[] = [];
+	const api: IExtensionApi = {
+		list: async () => ({ generation, extensions: [entry], diagnostics: [] }),
+		readResource: async request => {
+			assert.equal(request.generation, generation);
+			requests.push(request.path);
+			if (fail && request.path.endsWith('.woff')) { throw new Error('Font unavailable'); }
+			return readFile('../extensions/theme-seti/' + request.path);
+		},
+	};
+	using service = new AppServerExtensionService({ api, textMateService: emptyTextMateService() });
+	await service.start();
+	const theme = WorkbenchFileIconThemesRegistry.getThemes().find(theme => theme.id === 'vs-seti');
+	assert.ok(theme?.resolveFileIcon('main.ts', true)?.character);
+	assert.deepEqual(requests, ['icons/vs-seti-icon-theme.json', 'icons/seti.woff']);
+	generation++;
+	fail = true;
+	await assert.rejects(service.reload(), /Font unavailable/);
+	assert.equal(WorkbenchFileIconThemesRegistry.getThemes().find(theme => theme.id === 'vs-seti'), theme);
+	assert.equal(service.currentCatalog.generation, 1);
+	service.dispose();
+	assert.equal(WorkbenchFileIconThemesRegistry.getThemes().find(theme => theme.id === 'vs-seti'), undefined);
+});
 
 function descriptorWithManifest(manifest: unknown): ExtensionDescriptor {
 	const manifestJson = JSON.stringify(manifest);

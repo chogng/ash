@@ -77,7 +77,7 @@ test('unrelated registrations do not notify colors or file icons and disposal re
 		let colors = 0;
 		let icons = 0;
 		using colorListener = themes.onDidColorThemeChange(() => colors++);
-		using iconListener = themes.fileIconTheme.onDidFileIconThemeChange(() => icons++);
+		using iconListener = themes.onDidFileIconThemeChange(() => icons++);
 		using registration = WorkbenchThemesRegistry.registerColorTheme(highContrastDarkColorTheme);
 		assert.deepEqual([colors, icons], [0, 0]);
 		await configuration.updateValue(WorkbenchConfiguration.colorTheme, highContrastDarkColorTheme.id);

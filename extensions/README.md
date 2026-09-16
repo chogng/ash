@@ -27,7 +27,7 @@ It must publish versioned extension artifacts for Ash and App to consume during 
 release process. A running application must consume the packaged artifact or extracted extension
 directory, never Git credentials or an unversioned repository checkout.
 
-All thirteen packages are derived from `microsoft/vscode` and retain their package-level
+The bundled packages are derived from `microsoft/vscode` and retain their package-level
 `NOTICE.md` provenance. The canonical upstream MIT license copy is
 [`third_party/vscode/LICENSE.txt`](../third_party/vscode/LICENSE.txt); both production and Desktop
 development packaging place it at `ash-resources/licenses/vscode/LICENSE.txt` alongside the
@@ -43,6 +43,7 @@ The current declarative pack contains the following package directories:
 - `css`, `html`, `javascript`, `json`, `markdown-basics`, `python`, `rust`, `shellscript`, `sql`,
   `typescript-basics`, `xml`, and `yaml` provide language IDs, file associations, language
   configuration, TextMate grammars, and—where upstream provides them—snippets.
+- `theme-seti` provides the Seti file icon document, font, and third-party notices.
 - `theme-defaults` provides four self-contained VS Code-derived color-theme documents. Themes that
   rely on VS Code `include` composition are intentionally excluded until the packaging pipeline
   can flatten them deterministically.
@@ -61,6 +62,7 @@ Supported declarative fields are deliberately narrower than a VS Code extension 
 | `snippets` | ✅ 有 prefix 的 snippet 注册为 completion；file template 可通过 `New File from Template` 创建 untitled editor | Editor language completion / extension template registry |
 | `grammars` | ✅ loaded through Rust resource APIs and TextMate catalog snapshots | Workbench TextMate service |
 | `embeddedLanguages`, `tokenTypes`, bracket scope metadata | ✅ validated, transported, and projected to Stanza token language/type/bracket metadata | TextMate adapter |
+| `iconThemes` | Loaded from package resources; supports font and SVG/PNG file icons, light variants, and `workbench.iconTheme` selection | Workbench theme service |
 | `themes` | ✅ 严格解析、版本化 catalog、Workbench theme registration 和 active TextMate token projection | Extension/theme/TextMate services |
 | `debuggers` | ✅ 窄声明式 adapter command discovery；不提供 VS Code Debug Extension API | Extension registry / Debug service |
 | `configurationDefaults`, `semanticTokenScopes` | 尚未接入；bundled manifest 中的字段不会被投影 | 后续领域 adapter |

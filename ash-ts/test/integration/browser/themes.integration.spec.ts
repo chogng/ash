@@ -1,0 +1,26 @@
+import { expect, test } from '@playwright/test';
+
+test('extension file icons load a real font and update existing labels on theme changes', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/themes.html');
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	const icon = page.locator('#icon');
+	await expect(icon).not.toHaveText('');
+	const dark = await icon.evaluate(element => getComputedStyle(element).color);
+	const font = await icon.evaluate(async element => {
+		const family = getComputedStyle(element).fontFamily;
+		const loaded = await document.fonts.load('16px ' + family);
+		return { family, loaded: loaded.length, ready: document.fonts.check('16px ' + family) };
+	});
+	expect(font.family).toContain('ash-file-icon-');
+	expect(font.loaded).toBe(1);
+	expect(font.ready).toBe(true);
+	await page.getByRole('button', { name: 'Light', exact: true }).click();
+	await expect.poll(() => icon.evaluate(element => getComputedStyle(element).color)).not.toBe(dark);
+	await page.getByRole('button', { name: 'None', exact: true }).click();
+	await expect(icon).toHaveText('');
+	await page.getByRole('button', { name: 'Seti', exact: true }).click();
+	await expect(icon).not.toHaveText('');
+	expect(errors).toEqual([]);
+});

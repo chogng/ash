@@ -49,6 +49,7 @@ export interface ExtensionManifest {
 		readonly grammars: readonly ExtensionGrammarContribution[];
 		readonly snippets: readonly ExtensionSnippetContribution[];
 		readonly themes: readonly ExtensionThemeContribution[];
+		readonly iconThemes: readonly ExtensionThemeContribution[];
 		readonly debuggers: readonly ExtensionDebugAdapterContribution[];
 	};
 }
@@ -90,6 +91,7 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 			grammars: Object.freeze(contributes.grammars === undefined ? [] : parseGrammars(contributes.grammars, descriptor.id)),
 			snippets: Object.freeze(contributes.snippets === undefined ? [] : parseSnippets(contributes.snippets, descriptor.id)),
 			themes: Object.freeze(contributes.themes === undefined ? [] : parseThemes(contributes.themes, descriptor.id)),
+			iconThemes: Object.freeze(contributes.iconThemes === undefined ? [] : parseThemes(contributes.iconThemes, descriptor.id)),
 			debuggers: Object.freeze(contributes.debuggers === undefined ? [] : parseDebuggers(contributes.debuggers, descriptor.id)),
 		}),
 	});

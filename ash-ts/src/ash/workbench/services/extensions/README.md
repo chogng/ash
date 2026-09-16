@@ -34,6 +34,7 @@ filesystem access.
 | `snippets` | Prefix-bearing snippets become completion providers; file templates power `New File from Template` | Template bodies create language-tagged untitled editors |
 | `grammars` | Root/injection loader plus advanced embedded/token/bracket metadata | TextMate service owns later materialization |
 | `themes` | Strictly parsed versioned catalog, selectable Workbench color themes, and active TextMate token projection | `include` is rejected; manifest NLS placeholders use deterministic fallback labels |
+| `iconThemes` | Package-relative fonts and SVG/PNG file icons; selectable through `workbench.iconTheme` | File associations and light variants; folder-specific associations are not consumed by the current file label contract |
 | `debuggers` | Unique type, label, adapter program, and args | Discovery only; no VS Code Debug Extension API |
 
 `configurationDefaults`, `semanticTokenScopes`, extension JavaScript, LSP declarations, and dynamic
