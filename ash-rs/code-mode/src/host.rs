@@ -2,7 +2,7 @@ use ash_code_mode_protocol::{
     CODE_MODE_PROTOCOL_VERSION, CellId, ClientToHost, CodeModeLimits, CodeModeSessionId,
     HostToClient, RuntimeResponse, StartedCell, WaitOutcome, WaitRequest, read_frame, write_frame,
 };
-use ash_code_mode_runtime::{CodeModeStore, RuntimeError, ToolInvoker};
+use ash_code_mode_session::{CodeModeStore, RuntimeError, ToolInvoker};
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::io::{BufReader, BufWriter};

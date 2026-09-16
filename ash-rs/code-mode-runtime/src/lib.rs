@@ -6,13 +6,13 @@
 
 mod callbacks;
 mod globals;
-mod output;
 mod session;
 mod v8_init;
 mod value;
 
-pub use output::limit_output;
-pub use session::{CodeModeRuntime, CodeModeStore, RuntimeError, ToolInvoker};
+pub use ash_code_mode_session::limit_output;
+pub use ash_code_mode_session::{CodeModeStore, RuntimeError, ToolInvoker};
+pub use session::CodeModeRuntime;
 pub use v8_init::{V8JitMode, initialize_v8};
 
 #[cfg(test)]

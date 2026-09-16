@@ -1,8 +1,9 @@
 import { resolveLivekit } from './livekit.ts';
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { chmod, mkdir, readFile, rm, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 
 import { extractMember, materialize, sha256 } from "../download/artifacts.ts";
@@ -320,8 +321,8 @@ async function v8CargoEnvironment(target: string, environment: NodeJS.ProcessEnv
   };
 }
 
-function cargoBuild(binaryArgs: readonly string[], expectedTargets: readonly string[], environment: NodeJS.ProcessEnv = process.env): Map<string, string> {
-  const result = spawnSync("cargo", [
+async function cargoBuild(binaryArgs: readonly string[], expectedTargets: readonly string[], environment: NodeJS.ProcessEnv = process.env): Promise<Map<string, string>> {
+  const child = spawn("cargo", [
     "build",
     "--workspace",
     "--manifest-path",
@@ -335,16 +336,13 @@ function cargoBuild(binaryArgs: readonly string[], expectedTargets: readonly str
     "json-render-diagnostics",
   ], {
     cwd: repositoryRoot,
-    encoding: "utf8",
     env: environment,
-    maxBuffer: archiveBufferLimit,
-    stdio: ["inherit", "pipe", "pipe"],
+    stdio: ["inherit", "pipe", "inherit"],
     windowsHide: true,
   });
-  if (result.stderr) process.stderr.write(result.stderr);
-  if (result.error) throw result.error;
   const executables = new Map<string, string>();
-  for (const line of result.stdout?.split(/\r?\n/u) ?? []) {
+  const messages = createInterface({ input: child.stdout, crlfDelay: Infinity });
+  messages.on("line", (line) => {
     const message = parseCargoMessage(line);
     const diagnostic = cargoRenderedDiagnostic(message);
     if (diagnostic) process.stderr.write(diagnostic);
@@ -352,8 +350,18 @@ function cargoBuild(binaryArgs: readonly string[], expectedTargets: readonly str
       const executable = cargoArtifactExecutable(message, targetName);
       if (executable) executables.set(targetName, executable);
     }
+  });
+  try {
+    await new Promise<void>((resolvePromise, reject) => {
+      child.once("error", reject);
+      child.once("close", (code, signal) => {
+        if (code === 0) resolvePromise();
+        else reject(new Error(signal ? `cargo stopped by ${signal}` : `cargo exited with status ${code}`));
+      });
+    });
+  } finally {
+    messages.close();
   }
-  if (result.status !== 0) throw new Error(`cargo exited with status ${result.status}`);
   for (const targetName of expectedTargets) {
     if (!executables.has(targetName)) throw new Error(`Cargo did not report the ${targetName} executable`);
   }
@@ -383,7 +391,7 @@ async function buildFirstPartyExecutables(platform: NodeJS.Platform): Promise<Fi
     binaryArgs.push("--bin", "bwrap");
     expectedTargets.push("bwrap");
   }
-  const artifacts = cargoBuild(binaryArgs, expectedTargets, cargoEnvironment);
+  const artifacts = await cargoBuild(binaryArgs, expectedTargets, cargoEnvironment);
   const livekit = await resolveLivekit(developmentHostTarget(platform));
   const executables: {
     appServerDaemon: string;

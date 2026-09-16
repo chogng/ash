@@ -195,7 +195,7 @@ pub(super) fn store_callback(
             Some(value) => state.stored_values.insert(key.clone(), value.clone()),
             None => state.stored_values.remove(&key),
         };
-        match crate::session::validate_values(&state.stored_values) {
+        match ash_code_mode_session::validate_values(&state.stored_values) {
             Ok(()) => {
                 state.stored_value_writes.insert(key, value);
                 None

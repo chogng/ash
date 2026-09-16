@@ -50,7 +50,7 @@ test *args:
 
 # Build the matching daemon and run real CLI/TUI scenarios through a PTY.
 test-tui *args:
-    {{ python }} -B scripts/cargo.py build -p ash-app-server --bin ash-app-server -p ash-app-server-daemon --bin ash-app-server-daemon -p ash-remote-server --bin ash-remote-server {{ tui_profile_arg }}
+    {{ python }} -B scripts/cargo.py build -p ash-app-server --bin ash-app-server -p ash-app-server-daemon --bin ash-app-server-daemon -p ash-remote-server --bin ash-remote-server -p ash-code-mode-host --bin ash-code-mode-host {{ tui_profile_arg }}
     {{ python }} -B scripts/cargo.py test -p ash-cli --test tui_real_scenarios {{ tui_profile_arg }} {{ recipe_args }}
 
 # Check one Rust package. V8 inputs are configured only when its dependency graph needs them.
@@ -118,7 +118,7 @@ ash-desktop:
 
 # Launch the pure-Rust app Desktop product.
 app:
-    {{ python }} -B scripts/cargo.py build -p ash-app-server --bin ash-app-server
+    {{ python }} -B scripts/cargo.py build -p ash-app-server --bin ash-app-server -p ash-code-mode-host --bin ash-code-mode-host
     {{ python }} -B scripts/cargo.py run -p app
 
 # Check every pure-Rust app target with the locked sandbox-enabled V8 inputs.

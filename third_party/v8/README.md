@@ -2,6 +2,8 @@
 
 本目录拥有 Code Mode 使用的 `rusty_v8` 预编译输入锁定规则，不拥有 JavaScript 执行语义、工具审批或运行时生命周期。运行时实现由 `ash-code-mode-runtime` crate 负责。
 
+产品通过独立的 `ash-code-mode-host` 执行 V8。App Server 只依赖 Host 客户端与共享会话接口，不链接 V8，避免与 WebRTC 所带的 Abseil 静态符号冲突。
+
 ## 构建和打包行为
 
 `runtime-lock.json` 为每个 Ash 发布目标锁定一份启用 V8 沙箱的静态库压缩包和对应 Rust binding，并记录 SHA-256。当前文件来自 OpenAI Codex 的 `rusty-v8-v150.4.0` release，因为 `rusty_v8` 上游没有发布这一版本的沙箱组合产物。

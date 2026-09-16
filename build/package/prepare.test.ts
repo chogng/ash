@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
+import childProcess, { ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, readFile, readdir, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { syncBuiltinESMExports } from "node:module";
 import { join, resolve } from "node:path";
+import { PassThrough } from "node:stream";
 import test from "node:test";
 
 import { assemblePackage } from "./layout.ts";
@@ -11,6 +14,7 @@ import { developmentAshPackagePath, developmentHostTarget } from "./store.ts";
 import {
   parseJavaScriptRuntime,
   parsePackageOptions,
+  prepareDevelopmentPackage,
   selectNodeArtifact,
   selectRipgrepArtifact,
   selectTgrepArtifact,
@@ -18,6 +22,67 @@ import {
 } from "./prepare.ts";
 
 const protocol = { major: 5, revision: 7, schemaHash: `sha256:${"9".repeat(64)}` };
+
+test("package preparation streams diagnostics before Cargo exits and preserves build failures", async (t) => {
+  for (const outcome of ["artifacts", "failure", "signal", "spawn-error"] as const) {
+    await t.test(outcome, async (t) => {
+      const previous = process.env.V8_FROM_SOURCE;
+      process.env.V8_FROM_SOURCE = "1";
+      t.after(() => {
+        if (previous === undefined) delete process.env.V8_FROM_SOURCE;
+        else process.env.V8_FROM_SOURCE = previous;
+        t.mock.restoreAll();
+        syncBuiltinESMExports();
+      });
+      let diagnostics = "";
+      t.mock.method(process.stderr, "write", (chunk: string) => {
+        diagnostics += chunk;
+        return true;
+      });
+      let builds = 0;
+      t.mock.method(childProcess, "spawn", (command: string, args: readonly string[], options: { stdio: unknown }) => {
+        assert.equal(command, "cargo");
+        const child = new ChildProcess();
+        const stdout = new PassThrough();
+        child.stdout = stdout;
+        setImmediate(() => {
+          try {
+            if (args[0] === "run") {
+              child.emit("close", 0, null);
+              return;
+            }
+            builds++;
+            assert.equal(args[0], "build");
+            assert.deepEqual(options.stdio, ["inherit", "pipe", "inherit"]);
+            if (outcome === "spawn-error") {
+              child.emit("error", new Error("Cargo could not start"));
+              child.emit("close", -2, null);
+              return;
+            }
+            const diagnostic = JSON.stringify({ reason: "compiler-message", message: { rendered: "warning: 构建诊断\n" } });
+            stdout.write(diagnostic.slice(0, 20));
+            stdout.write(diagnostic.slice(20) + "\r\n");
+            assert.equal(diagnostics, "warning: 构建诊断\n");
+            stdout.end(JSON.stringify({ reason: "compiler-artifact", target: { name: "ash-package-store", kind: ["bin"] }, executable: "/package-store" }));
+            stdout.once("end", () => child.emit("close", outcome === "failure" ? 101 : outcome === "signal" ? null : 0, outcome === "signal" ? "SIGTERM" : null));
+          } catch (error) {
+            child.emit("error", error);
+          }
+        });
+        return child;
+      });
+      syncBuiltinESMExports();
+      const expected = {
+        artifacts: /Cargo did not report the ash-app-server executable/,
+        failure: /cargo exited with status 101/,
+        signal: /cargo stopped by SIGTERM/,
+        "spawn-error": /Cargo could not start/,
+      };
+      await assert.rejects(prepareDevelopmentPackage(), expected[outcome]);
+      assert.equal(builds, 1);
+    });
+  }
+});
 
 test("selects the latest published package and rejects invalid manifests", async () => {
   const root = await mkdtemp(join(tmpdir(), "ash-package-store-"));

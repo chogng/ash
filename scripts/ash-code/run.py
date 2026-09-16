@@ -21,15 +21,11 @@ DEVELOPMENT_PROFILE = "dev-small"
 DEVELOPMENT_RUNTIME_ROOT = REPOSITORY_ROOT / ".build" / "ash-development"
 
 
-def development_binaries(
-    *, platform_name: str | None = None, code_mode: str | None = None
-) -> list[str]:
+def development_binaries(*, platform_name: str | None = None) -> list[str]:
     platform_name = platform_name or sys.platform
-    binaries = ["ash", "ash-app-server"]
+    binaries = ["ash", "ash-app-server", "ash-code-mode-host"]
     if platform_name.startswith("linux"):
         binaries.append("bwrap")
-    if (code_mode or "embedded").strip().lower() == "host":
-        binaries.append("ash-code-mode-host")
     return binaries
 
 
@@ -113,14 +109,13 @@ def runtime_environment(
         runtime.setdefault("ASH_TGREP_PATH", str(tgrep.resolve()))
     if bubblewrap := executables.get("bwrap"):
         runtime["ASH_BWRAP_PATH"] = str(bubblewrap.resolve())
-    if code_mode_host := executables.get("ash-code-mode-host"):
-        runtime["ASH_CODE_MODE_HOST_BIN"] = str(code_mode_host.resolve())
+    runtime["ASH_CODE_MODE_HOST_BIN"] = str(executables["ash-code-mode-host"].resolve())
     return runtime
 
 
 def main(arguments: list[str] | None = None) -> int:
     environment = os.environ.copy()
-    binaries = development_binaries(code_mode=environment.get("ASH_CODE_MODE_RUNTIME"))
+    binaries = development_binaries()
     returncode, built = build_binaries(binaries, environment)
     if returncode != 0:
         return returncode

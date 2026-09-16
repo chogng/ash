@@ -17,6 +17,7 @@ class SourceRunnerTests(unittest.TestCase):
             patch.object(run, "build_binaries", return_value=(0, built)) as build,
             patch.object(run, "stage_runtime", return_value=staged),
             patch.object(run, "resolve_tgrep") as tgrep,
+            patch.object(run, "default_target", return_value="x86_64-pc-windows-msvc"),
             patch.object(run.subprocess, "run") as subprocess_run,
         ):
             tgrep.return_value.executable = built["tgrep"]
@@ -24,12 +25,14 @@ class SourceRunnerTests(unittest.TestCase):
 
             self.assertEqual(run.main(["--help"]), 0)
 
-        build.assert_called_once_with(
-            run.development_binaries(code_mode=None), {"PATH": "tools"}
-        )
+        build.assert_called_once_with(run.development_binaries(), {"PATH": "tools"})
         runtime = run.runtime_environment({"PATH": "tools"}, staged)
         self.assertNotIn("ASH_RG_PATH", runtime)
         self.assertEqual(runtime["ASH_TGREP_PATH"], str(staged["tgrep"].resolve()))
+        self.assertEqual(
+            runtime["ASH_CODE_MODE_HOST_BIN"],
+            str(staged["ash-code-mode-host"].resolve()),
+        )
         tgrep.assert_called_once()
         subprocess_run.assert_called_once_with(
             [str(staged["ash"]), "--help"],
@@ -98,7 +101,7 @@ class SourceRunnerTests(unittest.TestCase):
         )
         self.assertIn(
             "ash-code-mode-host",
-            run.development_binaries(platform_name="darwin", code_mode="host"),
+            run.development_binaries(platform_name="darwin"),
         )
 
     def test_stage_runtime_reuses_one_content_generation(self) -> None:
@@ -123,6 +126,7 @@ class SourceRunnerTests(unittest.TestCase):
         return {
             "ash": root / "ash.exe",
             "ash-app-server": root / "ash-app-server.exe",
+            "ash-code-mode-host": root / "ash-code-mode-host.exe",
             "tgrep": root / "tgrep.exe",
         }
 

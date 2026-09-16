@@ -14,7 +14,7 @@ path = "src/lib.rs"
 [dependencies]
 serde_json = { workspace = true }
 ash-code-mode-protocol = { workspace = true }
-ash-code-mode-runtime = { workspace = true }
+ash-code-mode-session = { workspace = true }
 
 [lints]
 workspace = true

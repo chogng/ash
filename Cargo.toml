@@ -48,6 +48,7 @@ members = [
     "ash-rs/code-mode-host",
     "ash-rs/code-mode-protocol",
     "ash-rs/code-mode-runtime",
+    "ash-rs/code-mode-session",
     "ash-rs/v8-poc",
     "ash-rs/chatgpt",
     "ash-rs/apply-patch",
@@ -420,6 +421,7 @@ ash-code-mode = { path = "ash-rs/code-mode" }
 ash-code-mode-host = { path = "ash-rs/code-mode-host" }
 ash-code-mode-protocol = { path = "ash-rs/code-mode-protocol" }
 ash-code-mode-runtime = { path = "ash-rs/code-mode-runtime" }
+ash-code-mode-session = { path = "ash-rs/code-mode-session" }
 ash-v8-poc = { path = "ash-rs/v8-poc" }
 ash-chatgpt = { path = "ash-rs/chatgpt" }
 ash-apply-patch = { path = "ash-rs/apply-patch" }

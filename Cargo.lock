@@ -913,7 +913,7 @@ name = "ash-code-mode"
 version = "0.1.0"
 dependencies = [
  "ash-code-mode-protocol",
- "ash-code-mode-runtime",
+ "ash-code-mode-session",
  "serde_json",
 ]
 
@@ -921,6 +921,7 @@ dependencies = [
 name = "ash-code-mode-host"
 version = "0.1.0"
 dependencies = [
+ "ash-code-mode",
  "ash-code-mode-protocol",
  "ash-code-mode-runtime",
  "ash-package-store",
@@ -943,10 +944,19 @@ name = "ash-code-mode-runtime"
 version = "0.1.0"
 dependencies = [
  "ash-code-mode-protocol",
+ "ash-code-mode-session",
  "ash-protocol",
  "deno_core_icudata",
  "serde_json",
  "v8",
+]
+
+[[package]]
+name = "ash-code-mode-session"
+version = "0.1.0"
+dependencies = [
+ "ash-code-mode-protocol",
+ "serde_json",
 ]
 
 [[package]]

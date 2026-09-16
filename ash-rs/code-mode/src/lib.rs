@@ -1,4 +1,4 @@
-//! Code Mode runtime selection and Core-facing session adapter.
+//! Core-facing Code Mode sessions executed in an isolated Host process.
 
 mod host;
 
@@ -6,27 +6,18 @@ use ash_code_mode_protocol::{
     CellId, CodeModeLimits, CodeModeSessionId, ExecuteRequest, StartedCell, WaitOutcome,
     WaitRequest,
 };
-use ash_code_mode_runtime::CodeModeRuntime as EmbeddedRuntime;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-pub use ash_code_mode_runtime::limit_output;
-pub use ash_code_mode_runtime::{CodeModeStore, RuntimeError, ToolInvoker};
+pub use ash_code_mode_session::limit_output;
+pub use ash_code_mode_session::{CodeModeStore, RuntimeError, ToolInvoker};
 
-const RUNTIME_ENV: &str = "ASH_CODE_MODE_RUNTIME";
 const HOST_BIN_ENV: &str = "ASH_CODE_MODE_HOST_BIN";
 
-/// Core-facing session that uses embedded V8 by default and an isolated Host when explicitly
-/// selected for the process.
+/// Core-facing session backed by an isolated Code Mode Host.
 #[derive(Clone)]
 pub struct CodeModeRuntime {
-    inner: RuntimeImplementation,
-}
-
-#[derive(Clone)]
-enum RuntimeImplementation {
-    Embedded(EmbeddedRuntime),
-    Host(host::HostRuntime),
+    inner: host::HostRuntime,
 }
 
 impl CodeModeRuntime {
@@ -44,19 +35,7 @@ impl CodeModeRuntime {
         invoker: Arc<dyn ToolInvoker>,
         stored_values: CodeModeStore,
     ) -> Result<Self, RuntimeError> {
-        match selected_host_program()? {
-            Some(program) => {
-                host::HostRuntime::spawn(program, session_id, limits, invoker, stored_values).map(
-                    |runtime| Self {
-                        inner: RuntimeImplementation::Host(runtime),
-                    },
-                )
-            }
-            None => EmbeddedRuntime::new_with_store(session_id, limits, invoker, stored_values)
-                .map(|runtime| Self {
-                    inner: RuntimeImplementation::Embedded(runtime),
-                }),
-        }
+        Self::new_host(host_program()?, session_id, limits, invoker, stored_values)
     }
 
     /// Starts one explicitly selected isolated Host. This is also useful for embedders that do
@@ -68,70 +47,47 @@ impl CodeModeRuntime {
         invoker: Arc<dyn ToolInvoker>,
         stored_values: CodeModeStore,
     ) -> Result<Self, RuntimeError> {
-        host::HostRuntime::spawn(program, session_id, limits, invoker, stored_values).map(
-            |runtime| Self {
-                inner: RuntimeImplementation::Host(runtime),
-            },
-        )
+        host::HostRuntime::spawn(program, session_id, limits, invoker, stored_values)
+            .map(|runtime| Self { inner: runtime })
     }
 
     pub fn execute(&self, request: ExecuteRequest) -> Result<StartedCell, RuntimeError> {
-        match &self.inner {
-            RuntimeImplementation::Embedded(runtime) => runtime.execute(request),
-            RuntimeImplementation::Host(runtime) => runtime.execute(request),
-        }
+        self.inner.execute(request)
     }
 
     pub fn wait(&self, request: WaitRequest) -> Result<WaitOutcome, RuntimeError> {
-        match &self.inner {
-            RuntimeImplementation::Embedded(runtime) => runtime.wait(request),
-            RuntimeImplementation::Host(runtime) => runtime.wait(request),
-        }
+        self.inner.wait(request)
     }
 
     pub fn terminate(&self, cell_id: &CellId) -> Result<WaitOutcome, RuntimeError> {
-        match &self.inner {
-            RuntimeImplementation::Embedded(runtime) => runtime.terminate(cell_id),
-            RuntimeImplementation::Host(runtime) => runtime.terminate(cell_id),
-        }
+        self.inner.terminate(cell_id)
     }
 
     pub fn has_cell(&self, cell_id: &CellId) -> bool {
-        match &self.inner {
-            RuntimeImplementation::Embedded(runtime) => runtime.has_cell(cell_id),
-            RuntimeImplementation::Host(runtime) => runtime.has_cell(cell_id),
-        }
+        self.inner.has_cell(cell_id)
     }
 
     pub fn close(&self) {
-        match &self.inner {
-            RuntimeImplementation::Embedded(runtime) => runtime.close(),
-            RuntimeImplementation::Host(runtime) => runtime.close(),
-        }
+        self.inner.close()
     }
 }
 
-fn selected_host_program() -> Result<Option<PathBuf>, RuntimeError> {
-    let mode = std::env::var(RUNTIME_ENV).unwrap_or_else(|_| "embedded".into());
-    match mode.trim().to_ascii_lowercase().as_str() {
-        "" | "embedded" => Ok(None),
-        "host" => {
-            if let Some(program) = std::env::var_os(HOST_BIN_ENV) {
-                return Ok(Some(PathBuf::from(program)));
-            }
-            let file_name = if cfg!(windows) {
-                "ash-code-mode-host.exe"
-            } else {
-                "ash-code-mode-host"
-            };
-            let program = std::env::current_exe()
-                .ok()
-                .and_then(|path| path.parent().map(|parent| parent.join(file_name)))
-                .unwrap_or_else(|| PathBuf::from(file_name));
-            Ok(Some(program))
+fn host_program() -> Result<PathBuf, RuntimeError> {
+    if let Some(program) = std::env::var_os(HOST_BIN_ENV) {
+        if program.is_empty() {
+            return Err(RuntimeError::Initialization(format!(
+                "{HOST_BIN_ENV} is empty"
+            )));
         }
-        other => Err(RuntimeError::Initialization(format!(
-            "unsupported {RUNTIME_ENV} value `{other}`; expected `embedded` or `host`"
-        ))),
+        return Ok(PathBuf::from(program));
     }
+    let executable =
+        std::env::current_exe().map_err(|error| RuntimeError::Initialization(error.to_string()))?;
+    let directory = executable.parent().ok_or_else(|| {
+        RuntimeError::Initialization("Current executable has no parent directory".into())
+    })?;
+    Ok(directory.join(format!(
+        "ash-code-mode-host{}",
+        std::env::consts::EXE_SUFFIX
+    )))
 }

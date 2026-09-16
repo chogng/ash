@@ -148,6 +148,27 @@ class DependencyTests(unittest.TestCase):
             dependencies.boundary_errors(self.root, self.metadata(app, tui)), []
         )
 
+    def test_code_mode_clients_cannot_link_v8_through_a_shared_dependency(self):
+        for name in ("ash-app-server", "ash-code-mode", "ash-code-mode-session"):
+            for engine in ("ash-code-mode-runtime", "v8"):
+                with self.subTest(consumer=name, engine=engine):
+                    consumer = self.package(
+                        name,
+                        f"ash-rs/{name}",
+                        deps=[{"name": "adapter", "kind": None}],
+                    )
+                    adapter = self.package(
+                        "adapter",
+                        "ash-rs/adapter",
+                        deps=[{"name": engine, "kind": None}],
+                    )
+                    self.assertIn(
+                        f"forbidden dependency path: {name} -> adapter -> {engine}",
+                        dependencies.boundary_errors(
+                            self.root, self.metadata(consumer, adapter)
+                        ),
+                    )
+
     def test_core_contract_consumers_cannot_reach_execution_through_an_adapter(self):
         for name in ("ash-core-api", "ash-hooks"):
             for target in ("ash-core", "ash-app-server"):

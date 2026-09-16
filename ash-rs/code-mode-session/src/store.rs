@@ -41,10 +41,7 @@ impl CodeModeStore {
         Ok(())
     }
 
-    pub(super) fn apply(
-        &self,
-        writes: BTreeMap<String, Option<Value>>,
-    ) -> Result<(), RuntimeError> {
+    pub fn apply(&self, writes: BTreeMap<String, Option<Value>>) -> Result<(), RuntimeError> {
         let mut values = self
             .values
             .lock()
@@ -66,7 +63,7 @@ impl CodeModeStore {
     }
 }
 
-pub(crate) fn validate_values(values: &BTreeMap<String, Value>) -> Result<(), String> {
+pub fn validate_values(values: &BTreeMap<String, Value>) -> Result<(), String> {
     let bytes = serde_json::to_vec(values)
         .map_err(|error| error.to_string())?
         .len();
