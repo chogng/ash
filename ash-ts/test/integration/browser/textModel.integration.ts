@@ -1,3 +1,6 @@
+import { ICodeEditorService } from '../../../src/ash/editor/browser/services/codeEditorService.js';
+import { StandaloneCodeEditorService } from '../../../src/ash/editor/standalone/browser/standaloneCodeEditorService.js';
+import { IInlineCompletionsService, InlineCompletionsService } from '../../../src/ash/editor/browser/services/inlineCompletionsService.js';
 import { bindColorTheme } from '../../../src/ash/platform/theme/browser/themeStyles.js';
 import type { IEditorScrollbarOptions, IEditorOptions } from '../../../src/ash/editor/common/config/editorOptions.js';
 import { h } from '../../../src/ash/base/browser/dom.js';
@@ -7,7 +10,7 @@ import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme } from '../
 import { URI } from "../../../src/ash/base/common/uri.js";
 import { DisposableStore, toDisposable } from "../../../src/ash/base/common/lifecycle.js";
 import { Event } from "../../../src/ash/base/common/event.js";
-import { createBrowserEditorPart, editorBrowserServices } from "../../../src/ash/workbench/contrib/codeEditor/browser/browserEditorPart.js";
+import { createBrowserEditorPart } from "../../../src/ash/workbench/contrib/codeEditor/browser/browserEditorPart.js";
 import { CodeEditorPane, type EditorPaneOptions } from "../../../src/ash/workbench/contrib/codeEditor/browser/codeEditorPane.js";
 import { ILanguageConfigurationService, LanguageConfigurationService } from "../../../src/ash/editor/common/languages/languageConfigurationRegistry.js";
 import { ILanguageFeaturesService } from '../../../src/ash/editor/common/services/languageFeatures.js';
@@ -34,6 +37,7 @@ import { AccessibilitySupport, type IAccessibilityService } from '../../../src/a
 import { EditorExtensionsRegistry } from '../../../src/ash/editor/browser/editorExtensions.js';
 
 interface WorkbenchSwitchResult {
+	readonly paneOwnsEditor: boolean;
 	readonly oldEditorDisposed: boolean;
 	readonly oldModelDisposed: boolean;
 	readonly oldDomConnected: boolean;
@@ -133,6 +137,8 @@ let glyphWidgetLineNumber = 1;
 let glyphDecorations: IEditorDecorationsCollection | undefined;
 let modelDecorations: IEditorDecorationsCollection | undefined;
 const services = disposables.add(new ServiceContainer());
+services.registerSingleton(ICodeEditorService, () => services.createInstance(StandaloneCodeEditorService));
+services.registerSingleton(IInlineCompletionsService, () => services.createInstance(InlineCompletionsService));
 services.registerInstance(ITextModelResourceService, models);
 const themeService = disposables.add(new TestThemeService(darkColorTheme));
 services.registerInstance(IThemeService, themeService);
@@ -173,10 +179,11 @@ window.ashTextModelIntegration = {
 		const oldDom = oldEditor.getDomNode();
 		await pane.setInput({ resource: URI.parse('inmemory://editor/other.ts'), label: 'other.ts', initialText: 'fn other() {\n  answer();\n}\n' }, new AbortController().signal);
 		return {
+			paneOwnsEditor: pane.getControl() === requiredEditorPart(),
 			oldEditorDisposed: oldEditor.isDisposed,
 			oldModelDisposed: oldModel.isDisposed(),
 			oldDomConnected: oldDom.isConnected,
-			editorCount: editorBrowserServices.codeEditorService.listCodeEditors().length,
+			editorCount: services.get(ICodeEditorService).listCodeEditors().length,
 			value: pane.getValue(),
 		};
 	},

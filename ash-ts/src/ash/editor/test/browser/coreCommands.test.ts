@@ -1,3 +1,4 @@
+import { StandaloneCodeEditorService } from '../../standalone/browser/standaloneCodeEditorService.js';
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
@@ -45,7 +46,7 @@ test('workbench select-all command selects the focused or active editor model', 
 	using model = new TextModel('one\ntwo');
 	using services = new ServiceContainer();
 	using contextKeys = new ContextKeyService();
-	const browserServices = createEditorBrowserServices();
+	const browserServices = createEditorBrowserServices(new StandaloneCodeEditorService());
 	services.registerInstance(IContextKeyService, contextKeys);
 	services.registerInstance(ILogService, new NullLoggerService());
 	services.registerInstance(ICodeEditorService, browserServices.codeEditorService);

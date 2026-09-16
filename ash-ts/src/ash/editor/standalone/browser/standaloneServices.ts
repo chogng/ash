@@ -1,3 +1,4 @@
+import { StandaloneCodeEditorService } from './standaloneCodeEditorService.js';
 import { IInlineCompletionsService, InlineCompletionsService } from '../../browser/services/inlineCompletionsService.js';
 import { MarkerService, IMarkerService } from '../../../platform/markers/common/markers.js';
 import { MarkerDecorationsService } from '../../common/services/markerDecorationsService.js';
@@ -65,7 +66,7 @@ export class StandaloneServiceCollection extends Disposable {
 		instantiationService.registerSingleton(IMarkerService, () => new MarkerService());
 		instantiationService.registerSingleton(IMarkerDecorationsService, () => instantiationService.createInstance(MarkerDecorationsService));
 		instantiationService.registerInstance(IClipboardService, new BrowserClipboardService(window.navigator.clipboard));
-		const browserServices = createEditorBrowserServices();
+		const browserServices = createEditorBrowserServices(instantiationService.createInstance(StandaloneCodeEditorService));
 		this._register(browserServices.codeEditorService);
 		this.codeEditorService = browserServices.codeEditorService;
 		instantiationService.registerInstance(ICodeEditorService, this.codeEditorService);

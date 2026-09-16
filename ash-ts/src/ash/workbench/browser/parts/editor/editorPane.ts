@@ -45,6 +45,7 @@ export enum EditorPaneVisibility {
  * disposes it after hiding it.
  */
 export interface IEditorPane extends IDisposable {
+	getControl?(): unknown;
 	readonly id: string;
 	/** Optional format-specific document exposed through the shared Workbench lifecycle. */
 	readonly workingCopy?: IWorkingCopy;

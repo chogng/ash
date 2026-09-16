@@ -1,3 +1,4 @@
+import { StandaloneCodeEditorService } from '../../../../standalone/browser/standaloneCodeEditorService.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -42,7 +43,7 @@ test('clipboard actions use the focused code editor and platform clipboard servi
 	using model = new TextModel('alpha beta');
 	using services = new ServiceContainer();
 	using contextKeys = new ContextKeyService();
-	const browserServices = createEditorBrowserServices();
+	const browserServices = createEditorBrowserServices(new StandaloneCodeEditorService());
 	const clipboard = new MemoryClipboardService();
 	services.registerInstance(IContextKeyService, contextKeys);
 	services.registerInstance(ILogService, new NullLoggerService());
@@ -80,7 +81,7 @@ test('paste command drops a delayed clipboard read after focus, selection, or mo
 	using secondModel = new TextModel('bravo');
 	using services = new ServiceContainer();
 	using contextKeys = new ContextKeyService();
-	const browserServices = createEditorBrowserServices();
+	const browserServices = createEditorBrowserServices(new StandaloneCodeEditorService());
 	const clipboard = new DeferredClipboardService();
 	services.registerInstance(IContextKeyService, contextKeys);
 	services.registerInstance(ILogService, new NullLoggerService());
@@ -174,7 +175,7 @@ test('cut command keeps text when clipboard writing completes after selection or
 	using secondModel = new TextModel('bravo');
 	using services = new ServiceContainer();
 	using contextKeys = new ContextKeyService();
-	const browserServices = createEditorBrowserServices();
+	const browserServices = createEditorBrowserServices(new StandaloneCodeEditorService());
 	const clipboard = new DeferredClipboardService();
 	services.registerInstance(IContextKeyService, contextKeys);
 	services.registerInstance(ILogService, new NullLoggerService());

@@ -1,7 +1,8 @@
+import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
 import { getBrowserTextModelService } from "../../../services/textmodelResolver/browser/browserTextModelService.js";
 import { registerEditorPane } from "../../../browser/parts/editor/editorRegistry.js";
 import { getBrowserTextResourceStore } from "./browserTextResourceStore.js";
-import { createBrowserEditorPart, editorBrowserServices } from "./browserEditorPart.js";
+import { createBrowserEditorPart } from "./browserEditorPart.js";
 import { CODE_EDITOR_ID, matchCodeEditor } from "./codeEditorInput.js";
 import { CodeEditorPane, type EditorPaneOptions } from "./codeEditorPane.js";
 import { DIFF_EDITOR_ID, matchDiffEditor } from "./diffEditorInput.js";
@@ -91,6 +92,8 @@ registerEditorPane({
 	canOpen: matchDiffEditor,
 	create: options => {
 		if (!options.textFileService) throw new Error("Stanza Diff requires the Workbench text file service");
+		const instantiationService = options.instantiationService;
+		if (!instantiationService) throw new Error('Stanza Diff requires the Workbench instantiation service');
 		const diffService = options.diffService;
 		if (!diffService) throw new Error("Stanza Diff requires the Workbench diff service");
 		const resourceStore = getBrowserTextResourceStore(options.textFileService);
@@ -98,7 +101,7 @@ registerEditorPane({
 		return new DiffEditorPane(resourceStore, {
 			modelService: getBrowserTextModelService(resourceStore),
 			createComputationService: () => diffService.createComputationService(),
-			codeEditorService: editorBrowserServices.codeEditorService,
+			codeEditorService: instantiationService.get(ICodeEditorService),
 			lineHeight: configuration?.getValue(CodeEditorConfiguration.lineHeight),
 			fontFamily: configuration?.getValue(CodeEditorConfiguration.fontFamily) || undefined,
 			fontSize: configuration?.getValue(CodeEditorConfiguration.fontSize),

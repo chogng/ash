@@ -1,3 +1,4 @@
+import { StandaloneCodeEditorService } from '../../standalone/browser/standaloneCodeEditorService.js';
 import { IInlineCompletionsService, InlineCompletionsService } from '../../browser/services/inlineCompletionsService.js';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { IInstantiationService, ServiceContainer } from '../../../platform/instantiation/common/instantiation.js';
@@ -21,7 +22,7 @@ interface TestCodeEditorOptions extends CodeEditorWidgetOptions {
 export function createCodeEditorServices(disposables: Pick<DisposableStore, 'add'>, parent?: IInstantiationService): ServiceContainer {
 	const services = disposables.add(parent ? parent.createChild() : new ServiceContainer());
 	if (!services.has(ICodeEditorService)) {
-		services.registerSingleton(ICodeEditorService, () => createEditorBrowserServices().codeEditorService);
+		services.registerSingleton(ICodeEditorService, () => createEditorBrowserServices(new StandaloneCodeEditorService()).codeEditorService);
 	}
 	if (!services.has(IInlineCompletionsService)) {
 		services.registerSingleton(IInlineCompletionsService, () => services.createInstance(InlineCompletionsService));

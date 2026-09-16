@@ -1,3 +1,4 @@
+import { StandaloneCodeEditorService } from '../../../../../editor/standalone/browser/standaloneCodeEditorService.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -35,7 +36,7 @@ test("Stanza diff pane acquires both models, lays out the review view, and relea
 	const textFiles = new BootstrapTextFiles();
 	const resourceStore = new BrowserTextResourceStore(textFiles);
 	using models = new BrowserTextModelService(resourceStore);
-	const editorServices = createEditorBrowserServices();
+	const editorServices = createEditorBrowserServices(new StandaloneCodeEditorService());
 	using codeEditorService = editorServices.codeEditorService;
 	const pane = new DiffEditorPane(resourceStore, {
 		modelService: models,

@@ -1,3 +1,6 @@
+import { BrowserWorkerClientPort } from '../../../platform/webWorker/browser/browserWorkerClientPort.js';
+import { LanguageWorkerWireClient } from '../../common/languages/languageWorkerWire.js';
+import { editorWorkerWireCodec } from '../../common/services/editorWorkerWire.js';
 import { createServiceIdentifier } from '../../../platform/instantiation/common/instantiation.js';
 import { Disposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { Range } from '../../common/core/range.js';
@@ -29,7 +32,10 @@ export interface IVersionedEditorWorkerClient extends IDisposable {
 export class VersionedEditorWorkerClient extends Disposable implements IVersionedEditorWorkerClient {
 	private readonly coordinator: LanguageRequestCoordinator<EditorWorkerLane, EditorWorkerRequest, EditorWorkerResult>;
 
-	constructor(model: TextModel, createWorker: EditorWorkerImplementationFactory) {
+	constructor(model: TextModel, createWorker: EditorWorkerImplementationFactory = () => new LanguageWorkerWireClient(
+		new BrowserWorkerClientPort(new Worker(new URL('../../common/services/editorWebWorkerMain.ts', import.meta.url), { type: 'module', name: 'ash-editor' })),
+		editorWorkerWireCodec,
+	)) {
 		super();
 		this.coordinator = this._register(new LanguageRequestCoordinator(model, createWorker));
 	}

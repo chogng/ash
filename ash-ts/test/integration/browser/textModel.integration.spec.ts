@@ -50,6 +50,7 @@ test('switching a Workbench file keeps keyboard input on the new editor and rele
 	const switched = await page.evaluate(() => window.ashTextModelIntegration.switchToOther());
 
 	expect(switched).toEqual({
+		paneOwnsEditor: true,
 		oldEditorDisposed: true,
 		oldModelDisposed: true,
 		oldDomConnected: false,

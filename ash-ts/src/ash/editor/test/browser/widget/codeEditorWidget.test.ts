@@ -1,3 +1,4 @@
+import { StandaloneCodeEditorService } from '../../../standalone/browser/standaloneCodeEditorService.js';
 import { h, text } from '../../../../base/browser/dom.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../../platform/theme/test/common/testThemeService.js';
@@ -967,7 +968,7 @@ test('CodeEditorWidget publishes service lifecycle in construction order', () =>
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha');
-	const services = createEditorBrowserServices();
+	const services = createEditorBrowserServices(new StandaloneCodeEditorService());
 	using service = services.codeEditorService;
 	const events: string[] = [];
 	using willCreate = service.onWillCreateCodeEditor(() => events.push('will'));

@@ -1,15 +1,14 @@
+import { type TextModel } from '../../../../editor/common/model/textModel.js';
 import { CodeEditorWidget, type CodeEditorWidgetOptions } from '../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
-import { createEditorBrowserServices } from '../../../../editor/browser/services/contribution.js';
+import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
+import { VersionedEditorWorkerClient } from '../../../../editor/browser/services/editorWorkerService.js';
 import type { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-
-export const editorBrowserServices = createEditorBrowserServices();
 
 /** Creates a browser editor for a model whose language state is already model-owned. */
 export function createBrowserEditorPart(instantiationService: IInstantiationService, options: CodeEditorWidgetOptions): CodeEditorWidget {
-	const editorWorkers = editorBrowserServices.workers;
 	return instantiationService.createInstance(CodeEditorWidget, {
 		...options,
-		codeEditorService: editorBrowserServices.codeEditorService,
-		editorWorkerFactory: editorWorkers.editorWorkerFactory,
+		codeEditorService: instantiationService.get(ICodeEditorService),
+		editorWorkerFactory: (model: TextModel) => new VersionedEditorWorkerClient(model),
 	});
 }

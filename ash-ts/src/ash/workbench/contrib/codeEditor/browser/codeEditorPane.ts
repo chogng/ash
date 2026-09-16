@@ -121,6 +121,10 @@ export class CodeEditorPane extends Disposable implements IEditorPane {
 	private languageId: string | undefined;
 	readonly onDidChangeStatus = this.statusChangeEmitter.event;
 
+	getControl(): EditorPanePart | undefined {
+		return this.part.value;
+	}
+
 	get workingCopy(): IWorkingCopy | undefined {
 		return this.workingCopySlot.value;
 	}

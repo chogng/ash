@@ -1,3 +1,4 @@
+import { StandaloneCodeEditorService } from '../../../standalone/browser/standaloneCodeEditorService.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -30,7 +31,7 @@ test("DiffEditorWidget presents side-by-side changed lines and inline ranges", a
 	using computationService = new WidgetTestDiffComputationService();
 	using model = new DiffModel({ original, modified, computationService });
 	await waitForReady(model);
-	const services = createEditorBrowserServices();
+	const services = createEditorBrowserServices(new StandaloneCodeEditorService());
 	using codeEditorService = services.codeEditorService;
 	const lifecycle: string[] = [];
 	using willCreate = codeEditorService.onWillCreateDiffEditor(() => lifecycle.push('will'));

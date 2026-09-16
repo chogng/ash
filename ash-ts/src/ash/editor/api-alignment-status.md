@@ -909,3 +909,7 @@
 
 - 行内补全服务装配：`browser/services/inlineCompletionsService.ts` 增加同名服务标识，Standalone 与 Workbench 各自在宿主容器注册共享实例。控制器经 `createInstance` 构造注入，不再自行创建和释放暂停服务；暂停事件取消当前请求并隐藏建议，单个编辑器关闭不影响共享暂停状态。
 - 本批验证：63 项行内补全/CodeEditorWidget 单测、1 项 Chromium 多编辑器暂停与恢复测试、Stanza 与 Renderer 生产构建通过；覆盖必需服务缺失、命令重触发、接受与撤销、跨编辑器暂停和关闭后的共享状态。现有 JSDOM Canvas 提示与 Playwright 颜色环境变量提示仍存在，生产构建无 warning。服务装配不代表完整上游暂停命令、存储与遥测行为已完成；`contribution.ts`、资源级 Worker 和 Opener 契约仍待处理。
+
+- 编辑器服务归属迁移：`contribution.ts` 中的 `BrowserCodeEditorService` 迁至上游对应的 `standalone/browser/standaloneCodeEditorService.ts`，保留最近活动编辑器和监听器的原有逻辑。Workbench 在自己的容器创建 `workbench/services/editor/browser/codeEditorService.ts`，通过活动窗格的 `getControl()` 定位准确编辑器；移除 `browserEditorPart.ts` 的模块级服务实例，普通窗格与差异窗格使用同一宿主服务。既有 Ash 专属窗格仍承担原职责，仅迁移服务装配。
+- 通用 Worker 传输创建归回现有客户端构造入口，Standalone 与 Workbench 复用同一默认 Worker 创建逻辑；模型绑定客户端与资源级 Worker 服务的差异仍未解决。本批没有把 `contribution.ts` 的其余工厂或空注册函数标记为已对齐。
+- 本批验证：76 项定向单测通过，涵盖编辑器注册与释放、同模型双编辑器的活动窗格识别、缺失宿主依赖、宿主服务隔离、剪贴板、命令和差异窗格。4 项 Chromium 场景及 Stanza、Renderer 生产构建通过；保留既有 JSDOM Canvas 与 Playwright 颜色环境提示，生产构建无新增 warning。结构检查仍报告其他未完成 API，不能据此宣称目录全部对齐。
