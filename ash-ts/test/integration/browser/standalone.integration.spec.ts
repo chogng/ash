@@ -253,8 +253,11 @@ test('bracket removal respects read-only state while navigation remains availabl
 });
 
 test('document formatting uses a range-only provider and remains undoable', async ({ page }) => {
+	const workers: string[] = [];
+	page.on('worker', worker => workers.push(worker.url()));
 	await page.goto('/standalone.html');
 	expect(await page.evaluate(() => window.ashStandaloneIntegration.runFormatting('range'))).toBe('ALPHA');
+	expect(workers.some(url => /editorWebWorkerMain/u.test(url))).toBe(true);
 	await page.keyboard.press('ControlOrMeta+z');
 	expect(await page.evaluate(() => window.ashStandaloneIntegration.readDeferredFormatting().value)).toBe('alpha');
 });

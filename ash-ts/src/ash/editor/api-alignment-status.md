@@ -143,9 +143,11 @@
 | `browser/services/contribution.ts` | 3 / 6 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
 | `browser/services/editorWorkerService.ts` | 8 / 3 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
 | `browser/services/inlineCompletionsService.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/services/languageCompletionWorkerMain.ts` | 1 / 0 | 人工检查：已通读入口、公开数据和同步状态变化；未发现本轮可复现缺陷。 |
 | `browser/services/markerDecorations.ts` | 1 / 0 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
 | `browser/services/openerService.ts` | 1 / 1 | 人工追踪：外部 URI 解析结果释放缺失；现有装配创建实例，实际 open 调用链待确认。 |
 | `browser/services/renameSymbolTrackerService.ts` | 1 / 1 | 人工检查：已通读入口、公开数据和同步状态变化；未发现本轮可复现缺陷。 |
+| `browser/services/syntaxWorkerMain.ts` | 1 / 0 | 人工检查：配置、registry、模块 host、wire server 在 worker scope 中统一释放。 |
 | `browser/stableEditorScroll.ts` | 2 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
 | `browser/triggerInlineEditCommandsRegistry.ts` | 2 / 2 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
 | `browser/view.ts` | 38 / 6 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
@@ -357,7 +359,6 @@
 | `common/services/editorWorkerProtocol.ts` | 3 / 1 | 人工检查：已通读入口、公开数据和同步状态变化；未发现本轮可复现缺陷。 |
 | `common/services/editorWorkerWire.ts` | 2 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
 | `common/services/findSectionHeaders.ts` | 1 / 1 | 已修复：MARK 表达式的前瞻空匹配显式推进游标，后续有效标题仍能返回；独立进程复现，真实 TextModel 回归通过。 |
-| `common/services/languageCompletionWorkerMain.ts` | 1 / 0 | 人工检查：已通读入口、公开数据和同步状态变化；未发现本轮可复现缺陷。 |
 | `common/services/languageDiagnosticsService.ts` | 12 / 2 | 人工检查：公开数据/渲染契约和依赖方向，无独立可释放状态。 |
 | `common/services/languageFeatures.ts` | 28 / 5 | 结构问题：共享注册表引用 contribution 的语言契约。 |
 | `common/services/languageFeaturesService.ts` | 2 / 9 | 结构问题：共享注册表实现引用 contribution 的语言契约。 |
@@ -375,7 +376,6 @@
 | `common/services/semanticTokensProviderStyling.ts` | 2 / 0 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
 | `common/services/semanticTokensStyling.ts` | 2 / 0 | 人工检查：公开类型、请求参数及依赖方向；此文件不持有运行时资源。 |
 | `common/services/semanticTokensStylingService.ts` | 1 / 0 | 人工检查：已通读入口、公开数据和同步状态变化；未发现本轮可复现缺陷。 |
-| `common/services/syntaxWorkerMain.ts` | 1 / 0 | 人工检查：配置、registry、模块 host、wire server 在 worker scope 中统一释放。 |
 | `common/services/textModelResourceService.ts` | 10 / 4 | 静态语法与依赖已扫描；未作逐行行为结论。 |
 | `common/services/textModelSync/textModelSync.impl.ts` | 1 / 1 | 人工追踪：版本、范围、换行校验后提交镜像。 |
 | `common/services/textModelSync/textModelSync.protocol.ts` | 9 / 0 | 人工检查：公开类型、请求参数及依赖方向；此文件不持有运行时资源。 |
@@ -903,3 +903,6 @@
 - Selection contribution 批次只迁移已经证明仅需读取、提交或监听选区的 14 个生产 controller：Bracket Match/Navigation、Diagnostics、Symbol/Language Navigation、Format、Parameter Hints、Go to Line、Smart Select、Occurrence/Multi Cursor、Rename、Language Hierarchy 和 Color Picker。它们直接改接现有 `ICodeEditor` 或 `IViewModel`，旧 `CursorsController` import 为 0，选区来源字符串、模型一致性检查和原有快捷键/显示逻辑保留；没有新建文件，没有修改 CSS、DOM、焦点目标或快捷键。Stanza 与测试 TypeScript 检查通过，16 项 controller 定向测试和 39 项 Smart Select、语言跳转、`CodeEditorWidget` 集成测试通过。结构门禁保持 392 个同路径、0 个大小写错误、205 个仅本地、337 个仅上游，账本仍为 80 项已处理、39 项待处理；Editor 内 `CursorsController` 引用由 31 个生产文件降至 17 个，剩余项不在本批伪造兼容入口。
 - Selection Highlighter 批次在双方同路径 `contrib/multicursor/browser/multicursor.ts` 原地把选区读取和监听改接 `ICodeEditor`，文本查找与 decoration 生命周期继续由现有模型和 `TextDecorationCollection` 持有；生产装配同步改接 `context.editor`。测试不再手写 Editor 假对象或注入第二份选区 controller，而是通过真实 `CodeEditorWidget` 触发标准选区事件。Stanza、测试 TypeScript 检查和 47 项 Multi Cursor/Selection Highlighter/Widget 测试通过；没有新建文件，也没有修改 CSS、DOM、ARIA、焦点或快捷键。Editor 内 `CursorsController` 引用由 17 个生产文件降至 16 个。Suggest 浏览器文件虽为同路径，但仍被仅 Ash `chatInputEditor.ts` 和补全会话链直接构造，本批保持不动，未添加兼容构造函数或修改仅 Ash 调用方。
 - 下一批按上表 owner 顺序推进；只有完成生产调用方迁移、删除旧入口并通过相关测试后，才会从 80 项中继续扣减。
+
+- Browser services 入口核对：通用编辑 Worker 入口迁至上游对应的 `common/services/editorWebWorkerMain.ts`，工厂 URL 与架构入口清单同步更新。语法与单词补全入口按本轮处理方向保留在 Editor：前者运行词法 token 与结构诊断，后者运行文档内单词补全；Workbench 负责 TextMate、扩展和后端提供者的接入。资源级 `EditorWorkerService`、`contribution.ts` 装配职责、Opener 契约归属和行内补全共享服务仍未完成，不能将本次路径修正记作整个目录已对齐。
+- 验证：`build:stanza`（含 common 与 Stanza 类型检查）、4 项启动器/Worker wire 单测、1 项 Chromium 格式化与撤销测试、结构审计及 `git diff --check` 通过。浏览器测试确认实际创建 `editorWebWorkerMain` Worker。结构审计仍报告范围外对齐差异；Playwright 有环境变量 `NO_COLOR`/`FORCE_COLOR` 冲突提示，生产构建无 warning。

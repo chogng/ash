@@ -75,7 +75,7 @@ function createWorkers(): EditorBrowserServices['workers'] {
 		editorWorkerFactory: (model) => new VersionedEditorWorkerClient(
 			model,
 			() => new LanguageWorkerWireClient(
-				new BrowserWorkerClientPort(new Worker(new URL('./editorWebWorkerMain.ts', import.meta.url), { type: 'module', name: 'ash-editor' })),
+				new BrowserWorkerClientPort(new Worker(new URL('../../common/services/editorWebWorkerMain.ts', import.meta.url), { type: 'module', name: 'ash-editor' })),
 				editorWorkerWireCodec,
 			),
 		),

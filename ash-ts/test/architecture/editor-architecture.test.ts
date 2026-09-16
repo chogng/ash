@@ -501,7 +501,7 @@ test('Editor production files are entrypoints or have a production caller', () =
 
 	const explicitEntrypoints = new Set([
 		resolve(editorRoot, 'editor.main.ts'),
-		resolve(editorRoot, 'browser/services/editorWebWorkerMain.ts'),
+		resolve(editorRoot, 'common/services/editorWebWorkerMain.ts'),
 		resolve(editorRoot, 'browser/services/languageCompletionWorkerMain.ts'),
 		resolve(editorRoot, 'browser/services/syntaxWorkerMain.ts'),
 	].map(architecturePathKey));
