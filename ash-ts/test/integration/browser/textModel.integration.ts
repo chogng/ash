@@ -1,3 +1,6 @@
+import { IMarkerService, MarkerService } from '../../../src/ash/platform/markers/common/markers.js';
+import { IMarkerDecorationsService } from '../../../src/ash/editor/common/services/markerDecorations.js';
+import { MarkerDecorationsService } from '../../../src/ash/editor/common/services/markerDecorationsService.js';
 import { ICodeEditorService } from '../../../src/ash/editor/browser/services/codeEditorService.js';
 import { StandaloneCodeEditorService } from '../../../src/ash/editor/standalone/browser/standaloneCodeEditorService.js';
 import { IInlineCompletionsService, InlineCompletionsService } from '../../../src/ash/editor/browser/services/inlineCompletionsService.js';
@@ -137,6 +140,8 @@ let glyphWidgetLineNumber = 1;
 let glyphDecorations: IEditorDecorationsCollection | undefined;
 let modelDecorations: IEditorDecorationsCollection | undefined;
 const services = disposables.add(new ServiceContainer());
+services.registerSingleton(IMarkerService, () => services.createInstance(MarkerService));
+services.registerSingleton(IMarkerDecorationsService, () => services.createInstance(MarkerDecorationsService));
 services.registerSingleton(ICodeEditorService, () => services.createInstance(StandaloneCodeEditorService));
 services.registerSingleton(IInlineCompletionsService, () => services.createInstance(InlineCompletionsService));
 services.registerInstance(ITextModelResourceService, models);

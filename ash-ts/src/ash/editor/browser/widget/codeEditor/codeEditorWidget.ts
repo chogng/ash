@@ -1,4 +1,3 @@
-import { MarkerDecorationsContribution } from '../../services/markerDecorations.js';
 import { IMarkerDecorationsService } from '../../../common/services/markerDecorations.js';
 import { getClientArea, h, isHTMLElement, scheduleAtNextAnimationFrame } from "../../../../base/browser/dom.js";
 import { type IKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
@@ -551,9 +550,6 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				installContext,
 				options.onContributionError,
 			);
-			if (services.has(IMarkerDecorationsService)) {
-				this.contributions.set(MarkerDecorationsContribution.ID, services.createInstance(MarkerDecorationsContribution, this, options.languageDiagnosticsService));
-			}
 			modelStore.add(this.contributions.onAfterModelAttached());
 		} catch (error) {
 			this.modelSlot.clear();

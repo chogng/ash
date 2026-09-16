@@ -560,6 +560,7 @@ export interface TextEditorContributionContext extends SharedTextContext {
 		| 'indentation'
 		| 'inlayHints'
 		| 'inlineCompletions'
+		| 'languageDiagnosticsService'
 		| 'input'
 		| 'matchBrackets'
 		| 'occurrencesHighlight'

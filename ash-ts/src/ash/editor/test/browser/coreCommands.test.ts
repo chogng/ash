@@ -36,7 +36,6 @@ await import('../../contrib/lineSelection/browser/lineSelection.js');
 const { CodeEditorWidget } = await import('../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('./testCodeEditor.js');
 const { SelectAllCommand } = await import('../../browser/editorExtensions.js');
-const { createEditorBrowserServices } = await import('../../browser/services/contribution.js');
 
 suiteTeardown(() => browserEnvironment.window.close());
 
@@ -46,11 +45,11 @@ test('workbench select-all command selects the focused or active editor model', 
 	using model = new TextModel('one\ntwo');
 	using services = new ServiceContainer();
 	using contextKeys = new ContextKeyService();
-	const browserServices = createEditorBrowserServices(new StandaloneCodeEditorService());
+	using codeEditorService = new StandaloneCodeEditorService();
 	services.registerInstance(IContextKeyService, contextKeys);
 	services.registerInstance(ILogService, new NullLoggerService());
-	services.registerInstance(ICodeEditorService, browserServices.codeEditorService);
-	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, input: { resource: model.uri }, languageId: model.getLanguageId(), instantiationService: services, codeEditorService: browserServices.codeEditorService });
+	services.registerInstance(ICodeEditorService, codeEditorService);
+	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, input: { resource: model.uri }, languageId: model.getLanguageId(), instantiationService: services, codeEditorService: codeEditorService });
 	editor.focus();
 	await SelectAllCommand.runCommand(services, undefined);
 	assert.deepEqual(editor.getSelection(), new Selection(1, 1, 2, 4));

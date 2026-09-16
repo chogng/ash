@@ -67,7 +67,6 @@ const { EditorContributionInstantiation } = await import('../../../browser/edito
 const { ServiceContainer } = await import("../../../../platform/instantiation/common/instantiation.js");
 const { ILogService, NullLoggerService } = await import('../../../../platform/log/common/log.js');
 const { PlaceholderTextContribution } = await import("../../../contrib/placeholderText/browser/placeholderTextContribution.js");
-const { createEditorBrowserServices } = await import('../../../browser/services/contribution.js');
 const { VersionedEditorWorkerClient } = await import('../../../browser/services/editorWorkerService.js');
 const { EditorWorkerRequestExecutor } = await import('../../../common/services/editorWorkerRequestExecutor.js');
 await import("../../../contrib/placeholderText/browser/placeholderText.contribution.js");
@@ -968,8 +967,7 @@ test('CodeEditorWidget publishes service lifecycle in construction order', () =>
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha');
-	const services = createEditorBrowserServices(new StandaloneCodeEditorService());
-	using service = services.codeEditorService;
+	using service = new StandaloneCodeEditorService();
 	const events: string[] = [];
 	using willCreate = service.onWillCreateCodeEditor(() => events.push('will'));
 	using add = service.onCodeEditorAdd(editor => events.push(`add:${editor.getId()}`));

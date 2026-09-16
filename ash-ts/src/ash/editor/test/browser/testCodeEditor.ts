@@ -1,3 +1,7 @@
+import '../../browser/services/contribution.js';
+import { IMarkerService, MarkerService } from '../../../platform/markers/common/markers.js';
+import { IMarkerDecorationsService } from '../../common/services/markerDecorations.js';
+import { MarkerDecorationsService } from '../../common/services/markerDecorationsService.js';
 import { StandaloneCodeEditorService } from '../../standalone/browser/standaloneCodeEditorService.js';
 import { IInlineCompletionsService, InlineCompletionsService } from '../../browser/services/inlineCompletionsService.js';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
@@ -7,7 +11,6 @@ import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../platform/theme/test/common/testThemeService.js';
 import { CodeEditorWidget, type CodeEditorWidgetOptions } from '../../browser/widget/codeEditor/codeEditorWidget.js';
 import { ICodeEditorService } from '../../browser/services/codeEditorService.js';
-import { createEditorBrowserServices } from '../../browser/services/contribution.js';
 import { createBuiltinLanguageConfigurationService } from '../../common/languages/languageBuiltinConfigurations.js';
 import { ILanguageConfigurationService } from '../../common/languages/languageConfigurationRegistry.js';
 import { ILanguageFeaturesService } from '../../common/services/languageFeatures.js';
@@ -21,8 +24,14 @@ interface TestCodeEditorOptions extends CodeEditorWidgetOptions {
 
 export function createCodeEditorServices(disposables: Pick<DisposableStore, 'add'>, parent?: IInstantiationService): ServiceContainer {
 	const services = disposables.add(parent ? parent.createChild() : new ServiceContainer());
+	if (!services.has(IMarkerService)) {
+		services.registerSingleton(IMarkerService, () => services.createInstance(MarkerService));
+	}
+	if (!services.has(IMarkerDecorationsService)) {
+		services.registerSingleton(IMarkerDecorationsService, () => services.createInstance(MarkerDecorationsService));
+	}
 	if (!services.has(ICodeEditorService)) {
-		services.registerSingleton(ICodeEditorService, () => createEditorBrowserServices(new StandaloneCodeEditorService()).codeEditorService);
+		services.registerSingleton(ICodeEditorService, () => services.createInstance(StandaloneCodeEditorService));
 	}
 	if (!services.has(IInlineCompletionsService)) {
 		services.registerSingleton(IInlineCompletionsService, () => services.createInstance(InlineCompletionsService));

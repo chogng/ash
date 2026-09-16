@@ -21,7 +21,6 @@ for (const [name, value] of Object.entries({
 
 const { DiffEditorWidget } = await import("../../../browser/widget/diffEditor/diffEditorWidget.js");
 const { DiffModel } = await import("../../../common/diff/diffModel.js");
-const { createEditorBrowserServices } = await import('../../../browser/services/contribution.js');
 
 test("DiffEditorWidget presents side-by-side changed lines and inline ranges", async () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
@@ -31,8 +30,7 @@ test("DiffEditorWidget presents side-by-side changed lines and inline ranges", a
 	using computationService = new WidgetTestDiffComputationService();
 	using model = new DiffModel({ original, modified, computationService });
 	await waitForReady(model);
-	const services = createEditorBrowserServices(new StandaloneCodeEditorService());
-	using codeEditorService = services.codeEditorService;
+	using codeEditorService = new StandaloneCodeEditorService();
 	const lifecycle: string[] = [];
 	using willCreate = codeEditorService.onWillCreateDiffEditor(() => lifecycle.push('will'));
 	using added = codeEditorService.onDiffEditorAdd(() => lifecycle.push('add'));

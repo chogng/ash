@@ -24,7 +24,6 @@ const { DiffEditorPane } = await import("../../browser/diffEditorPane.js");
 const { BrowserTextModelService } = await import("../../../../services/textmodelResolver/browser/browserTextModelService.js");
 const { BrowserTextResourceStore } = await import("../../browser/browserTextResourceStore.js");
 const { createDiffEditorInput } = await import("../../browser/diffEditorInput.js");
-const { createEditorBrowserServices } = await import('../../../../../editor/browser/services/contribution.js');
 
 test("Stanza diff pane rejects a missing Workbench diff computation service", () => {
 	assert.throws(() => new DiffEditorPane(new BrowserTextResourceStore(new BootstrapTextFiles()), undefined as never), /requires a Workbench diff computation service/);
@@ -36,8 +35,7 @@ test("Stanza diff pane acquires both models, lays out the review view, and relea
 	const textFiles = new BootstrapTextFiles();
 	const resourceStore = new BrowserTextResourceStore(textFiles);
 	using models = new BrowserTextModelService(resourceStore);
-	const editorServices = createEditorBrowserServices(new StandaloneCodeEditorService());
-	using codeEditorService = editorServices.codeEditorService;
+	using codeEditorService = new StandaloneCodeEditorService();
 	const pane = new DiffEditorPane(resourceStore, {
 		modelService: models,
 		createComputationService: () => new PaneTestDiffComputationService(),

@@ -28,7 +28,6 @@ for (const [name, value] of Object.entries({
 
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
-const { createEditorBrowserServices } = await import('../../../../browser/services/contribution.js');
 const { CopyAction, CutAction, PasteAction } = await import('../../browser/clipboard.js');
 assert.ok(CopyAction);
 assert.ok(CutAction);
@@ -43,12 +42,12 @@ test('clipboard actions use the focused code editor and platform clipboard servi
 	using model = new TextModel('alpha beta');
 	using services = new ServiceContainer();
 	using contextKeys = new ContextKeyService();
-	const browserServices = createEditorBrowserServices(new StandaloneCodeEditorService());
+	using codeEditorService = new StandaloneCodeEditorService();
 	const clipboard = new MemoryClipboardService();
 	services.registerInstance(IContextKeyService, contextKeys);
 	services.registerInstance(ILogService, new NullLoggerService());
 	services.registerInstance(IClipboardService, clipboard);
-	services.registerInstance(ICodeEditorService, browserServices.codeEditorService);
+	services.registerInstance(ICodeEditorService, codeEditorService);
 	using editor = createTestCodeEditor({
 		container,
 		model,
@@ -56,7 +55,7 @@ test('clipboard actions use the focused code editor and platform clipboard servi
 		languageId: model.getLanguageId(),
 		lineHeight: 20,
 		instantiationService: services,
-		codeEditorService: browserServices.codeEditorService,
+		codeEditorService: codeEditorService,
 	});
 	editor.focus();
 	editor.setSelection(new Selection(1, 1, 1, 6));
@@ -81,12 +80,12 @@ test('paste command drops a delayed clipboard read after focus, selection, or mo
 	using secondModel = new TextModel('bravo');
 	using services = new ServiceContainer();
 	using contextKeys = new ContextKeyService();
-	const browserServices = createEditorBrowserServices(new StandaloneCodeEditorService());
+	using codeEditorService = new StandaloneCodeEditorService();
 	const clipboard = new DeferredClipboardService();
 	services.registerInstance(IContextKeyService, contextKeys);
 	services.registerInstance(ILogService, new NullLoggerService());
 	services.registerInstance(IClipboardService, clipboard);
-	services.registerInstance(ICodeEditorService, browserServices.codeEditorService);
+	services.registerInstance(ICodeEditorService, codeEditorService);
 	using first = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>('main')!,
 		model: firstModel,
@@ -94,7 +93,7 @@ test('paste command drops a delayed clipboard read after focus, selection, or mo
 		languageId: firstModel.getLanguageId(),
 		lineHeight: 20,
 		instantiationService: services,
-		codeEditorService: browserServices.codeEditorService,
+		codeEditorService: codeEditorService,
 	});
 	using second = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>('aside')!,
@@ -103,7 +102,7 @@ test('paste command drops a delayed clipboard read after focus, selection, or mo
 		languageId: secondModel.getLanguageId(),
 		lineHeight: 20,
 		instantiationService: services,
-		codeEditorService: browserServices.codeEditorService,
+		codeEditorService: codeEditorService,
 	});
 
 	first.focus();
@@ -175,12 +174,12 @@ test('cut command keeps text when clipboard writing completes after selection or
 	using secondModel = new TextModel('bravo');
 	using services = new ServiceContainer();
 	using contextKeys = new ContextKeyService();
-	const browserServices = createEditorBrowserServices(new StandaloneCodeEditorService());
+	using codeEditorService = new StandaloneCodeEditorService();
 	const clipboard = new DeferredClipboardService();
 	services.registerInstance(IContextKeyService, contextKeys);
 	services.registerInstance(ILogService, new NullLoggerService());
 	services.registerInstance(IClipboardService, clipboard);
-	services.registerInstance(ICodeEditorService, browserServices.codeEditorService);
+	services.registerInstance(ICodeEditorService, codeEditorService);
 	using first = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>('main')!,
 		model: firstModel,
@@ -188,7 +187,7 @@ test('cut command keeps text when clipboard writing completes after selection or
 		languageId: firstModel.getLanguageId(),
 		lineHeight: 20,
 		instantiationService: services,
-		codeEditorService: browserServices.codeEditorService,
+		codeEditorService: codeEditorService,
 	});
 	using second = createTestCodeEditor({
 		container: dom.window.document.querySelector<HTMLElement>('aside')!,
@@ -197,7 +196,7 @@ test('cut command keeps text when clipboard writing completes after selection or
 		languageId: secondModel.getLanguageId(),
 		lineHeight: 20,
 		instantiationService: services,
-		codeEditorService: browserServices.codeEditorService,
+		codeEditorService: codeEditorService,
 	});
 
 	first.focus();

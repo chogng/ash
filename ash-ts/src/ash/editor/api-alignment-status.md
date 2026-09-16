@@ -913,3 +913,7 @@
 - 编辑器服务归属迁移：`contribution.ts` 中的 `BrowserCodeEditorService` 迁至上游对应的 `standalone/browser/standaloneCodeEditorService.ts`，保留最近活动编辑器和监听器的原有逻辑。Workbench 在自己的容器创建 `workbench/services/editor/browser/codeEditorService.ts`，通过活动窗格的 `getControl()` 定位准确编辑器；移除 `browserEditorPart.ts` 的模块级服务实例，普通窗格与差异窗格使用同一宿主服务。既有 Ash 专属窗格仍承担原职责，仅迁移服务装配。
 - 通用 Worker 传输创建归回现有客户端构造入口，Standalone 与 Workbench 复用同一默认 Worker 创建逻辑；模型绑定客户端与资源级 Worker 服务的差异仍未解决。本批没有把 `contribution.ts` 的其余工厂或空注册函数标记为已对齐。
 - 本批验证：76 项定向单测通过，涵盖编辑器注册与释放、同模型双编辑器的活动窗格识别、缺失宿主依赖、宿主服务隔离、剪贴板、命令和差异窗格。4 项 Chromium 场景及 Stanza、Renderer 生产构建通过；保留既有 JSDOM Canvas 与 Playwright 颜色环境提示，生产构建无新增 warning。结构检查仍报告其他未完成 API，不能据此宣称目录全部对齐。
+
+- 浏览器 contribution 注册收敛：移除 `createEditorBrowserServices`、`EditorBrowserServices` 和空的 `registerEditorBrowserContributions`。`contribution.ts` 现在在 bundle 装载时注册 eager 诊断装饰；Widget 不再单独创建同一 contribution。每实例诊断源仍作为构造数据传入，必需的 marker 服务由宿主容器解析，模型切换沿 contribution 生命周期释放引用。
+- Standalone 直接注册并取得宿主 code-editor 服务，直接装配通用编辑与词法 Worker。原工厂中的 Opener、重命名跟踪实例及单词补全工厂闭包没有生产消费者，已移除创建逻辑；单词补全入口文件保留，未宣称它已接入默认产品调用链。Opener 和资源级 Worker 的完整契约仍未完成，不新增无调用方服务外壳。
+- 本批验证：73 项定向单测、5 项 Playwright 场景、Stanza 与 Renderer 生产构建通过。覆盖共享 marker 引用、模型释放、诊断源合并、标记出现/清除、模型切换、格式化和相关编辑器行为。没有新增测试文件，现有行为测试覆盖本次装配迁移；JSDOM Canvas 和 Playwright 颜色环境提示仍存在，生产构建没有新增 warning。
