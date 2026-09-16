@@ -209,7 +209,8 @@ import { IWorkingCopyService } from "../services/workingCopy/common/workingCopyS
 import { IndexedDbWorkingCopyBackupService } from "../services/workingCopy/browser/indexedDbWorkingCopyBackupService.js";
 import { WorkingCopyBackupTracker } from "../services/workingCopy/browser/workingCopyBackupTracker.js";
 import { IWorkingCopyBackupService, type WorkingCopyBackup } from "../services/workingCopy/common/workingCopyBackupService.js";
-import { projectExtensionTokenTheme } from "../services/textMate/common/textMateThemeProjection.js";
+import { projectColorThemeTokens } from "../services/textMate/common/textMateThemeProjection.js";
+import { registerColorThemeSchemas } from "../services/themes/common/colorThemeSchema.js";
 import { BrowserWorkspaceEditService } from "../services/language/browser/browserWorkspaceEditService.js";
 import { IWorkspaceEditService } from "../services/language/common/workspaceEditService.js";
 import { ITextModelResourceService } from "../../editor/common/services/textModelResourceService.js";
@@ -542,11 +543,12 @@ export class Workbench extends Disposable {
 		));
 		services.registerInstance(IThemeService, themeService);
 		let textMateThemeRevision = 0;
+		this._register(registerColorThemeSchemas());
 		const updateTextMateTheme = (): void => {
 			const model = textMateService.mutableScopeTheme;
 			if (!model) return;
 			const activeTheme = themeService.getColorTheme();
-			try { model.replace(projectExtensionTokenTheme(extensionService.themes.currentCatalog, activeTheme.colorScheme, ++textMateThemeRevision, activeTheme.id)); }
+			try { model.replace(projectColorThemeTokens(activeTheme, ++textMateThemeRevision)); }
 			catch (error) { logService.error("theme", "Failed to apply extension token theme", error); }
 		};
 		this._register(extensionService.themes.onDidChange(() => updateTextMateTheme()));

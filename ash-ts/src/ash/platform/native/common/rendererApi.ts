@@ -22,7 +22,8 @@ import type {
 import type {
 	IWorkspaceContextApi,
 } from "../../workspace/common/workspaceIpc.js";
-import type { IUserThemeFilesApi } from "../../theme/common/userThemeFiles.js";
+import type { IFileService } from "../../files/common/files.js";
+import type { URI } from "../../../base/common/uri.js";
 import type {
 	INativeHostApi,
 } from "./nativeHost.js";
@@ -38,6 +39,7 @@ export interface AshElectronRendererApi extends IRendererHost {
 	readonly nativeContextMenu: INativeContextMenuApi;
 	readonly nativeHost: INativeHostApi;
 	readonly nativeMenubar: INativeMenubarApi;
-	readonly userThemes: IUserThemeFilesApi;
+	readonly localFiles: IFileService;
+	readonly userDataHome: URI;
 	readonly workspace: IWorkspaceContextApi;
 }

@@ -26,6 +26,6 @@ test("rejects selectable extension themes without a supported UI scheme", () => 
 });
 
 test("rejects invalid token colors and font styles before a theme becomes active", () => {
-	assert.throws(() => parseExtensionTheme({ tokenColors: [{ scope: "comment", settings: { foreground: "green" } }] }, "extension-ash-demo-one", "ash.demo", "Demo", "vs-dark", "theme test"), /hexadecimal color/);
-	assert.throws(() => parseExtensionTheme({ tokenColors: [{ scope: "comment", settings: { fontStyle: "italic blink" } }] }, "extension-ash-demo-one", "ash.demo", "Demo", "vs-dark", "theme test"), /unsupported style 'blink'/);
+	assert.throws(() => parseExtensionTheme({ tokenColors: [{ scope: "comment", settings: { foreground: "green" } }] }, "extension-ash-demo-one", "ash.demo", "Demo", "vs-dark", "theme test"), /Invalid color theme/);
+	assert.throws(() => parseExtensionTheme({ tokenColors: [{ scope: "comment", settings: { fontStyle: "italic blink" } }] }, "extension-ash-demo-one", "ash.demo", "Demo", "vs-dark", "theme test"), /Invalid color theme/);
 });

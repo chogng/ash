@@ -1,6 +1,60 @@
 # 前端连接与浏览器能力
 
-Web 通过受管理 Rust App Server 的认证 HTTP/WebSocket 入口连接；Electron 保留 Main 中转。桌面网页继续由 Electron 显示，Workbench 提供浏览器页签，Agent 请求绑定发起任务的连接。本文说明职责、生命周期和验证边界。
+TS 前端以浏览器环境为运行边界，业务与系统执行通过协议交给 Rust；启动与 Electron 平台能力属于宿主层。当前 Web 通过受管理 Rust App Server 的认证 HTTP/WebSocket 入口连接，Electron 仍保留 Main 中转。本文说明目标职责、当前连接方式、Node 退场范围和验证边界。
+
+## 前端与 Node 的边界
+
+以下是长期要求，不表示剩余 Node 实现已经删除。WebSocket 握手只建立连接，不会自动转移业务、文件存储或进程的所有权。
+
+| 层次 | 长期职责 | Node 边界 |
+| --- | --- | --- |
+| TS 前端 | 界面、编辑器模型、工作副本、交互、领域服务与协议客户端 | 在浏览器环境运行，不依赖 Node API |
+| Rust 后端 | 业务状态、文件读写与监听、进程、终端执行、Git、搜索和远程执行 | 对应领域拥有能力与资源；App Server 提供协议入口 |
+| 桌面宿主 | 启动和连接取得、窗口生命周期、菜单、系统对话框、剪贴板和嵌入网页 | Electron 所需代码可继续使用其运行环境，不承担产品业务执行 |
+| 构建与测试工具 | 编译、打包、代码生成和测试运行 | 可以使用 Node，与前端运行时分开 |
+| 扩展执行环境 | 执行扩展代码并维持扩展 API 契约 | 独立审计；前端去除 Node 不等于扩展不再需要 JavaScript 运行时 |
+
+- 启动入口属于宿主，不是前端的例外。宿主保留能力按职责判断，不按“是否写在入口文件里”判断。
+- 前端生产依赖图中的 `common/`、`browser/`、`electron-browser/` 代码及 Worker 不导入 Node 内置模块、`node/` 实现或 Electron Main；也不依赖 `process`、Node `Buffer`、`require`、`NodeJS.*` 或补齐这些全局的运行时包。
+- preload 虽位于 `electron-browser/`，仍属于隔离的宿主入口。前端只消费明确、可序列化的宿主契约，不能借 preload 暴露通用文件、进程或任意 IPC 调用。
+- 第三方依赖同样检查实际打包入口及传递依赖。TypeScript 使用 `NodeNext` 模块解析、测试在 Node 中执行，都不能据此判断前端需要 Node。
+- 文本模型、未保存内容、撤销、主题应用和快捷键解析继续由 TS 拥有；迁移文件存储与执行不把这些对象搬到 Rust。Rust crate 主要隔离能力和依赖，不按 TS 文件逐一建 crate。
+- WebSocket 使用浏览器 API；每个页面或窗口拥有独立连接与协议客户端，领域服务复用该客户端。认证、初始化、请求配对、事件、取消、关闭与恢复仍需完整协议契约。
+- Electron 是否改为 Renderer 直连 WebSocket，是独立的连接实现工作。当前 Main 中转不是前端依赖 Node API 的理由，也不能把移除中转写成已完成。
+
+## Node 退场盘点
+
+2026-09-16 源码初查：已检查 `ash-ts/src` 的 Node 导入、全局使用、`node/` 目录以及主要装配和调用点；测试与生成物单独识别。以下是后续工作的入口，不是完整传递依赖审计，也没有删除代码。
+
+| 处理范围 | 已定位入口 | 当前情况与下一步 |
+| --- | --- | --- |
+| 公共环境探测 | [platform.ts](../../src/ash/base/common/platform.ts) | 仍探测 `globalThis.process`；核对宿主与测试调用方，把宿主环境读取留在宿主，前端消费浏览器信息或明确环境数据 |
+| 远程执行与隧道 | [remoteCommand.ts](../../src/ash/platform/remote/electron-main/remoteCommand.ts)、[sshAppServerProcessLauncher.ts](../../src/ash/platform/remote/electron-main/sshAppServerProcessLauncher.ts)、[sshRemoteTunnelService.ts](../../src/ash/platform/remote/electron-main/sshRemoteTunnelService.ts) | Main 仍启动 SSH、持有子进程和 TCP 隧道；优先核对 Rust [remote-connections](../../../ash-rs/remote-connections/README.md) 的能力及产品调用入口，再迁移执行与释放职责 |
+| 远程包校验与安装协调 | [packagedRemoteRuntimeCatalog.ts](../../src/ash/platform/remote/electron-main/packagedRemoteRuntimeCatalog.ts)、[remoteRuntimeInstaller.ts](../../src/ash/platform/remote/electron-main/remoteRuntimeInstaller.ts) | 仍有 Node 文件、哈希和环境依赖；区分已有 Rust 安装能力、构建产物选择与窗口进度展示，避免重复实现 |
+| OAuth 回调监听 | [oauthCallbackHost.ts](../../src/ash/platform/connectors/electron-main/oauthCallbackHost.ts)、[loopbackOAuthCallback.ts](../../src/ash/platform/connectors/electron-main/loopbackOAuthCallback.ts) | Main 创建 HTTP 监听；核对本机与远端后端部署位置、回调地址、取消和超时后确定 Rust 接口，打开授权网页仍归宿主 |
+| 配置、快捷键和主题文件 | [revisionedJsonFile.ts](../../src/ash/platform/storage/node/revisionedJsonFile.ts)、[userThemeFileService.ts](../../src/ash/platform/theme/node/userThemeFileService.ts) | Node 持有读写、监听和冲突检查；迁移存储前核对配置规范及领域协议，保留 TS 的配置含义、主题应用与快捷键解析 |
+| 工作区路径解析 | [workspaces.ts](../../src/ash/platform/workspaces/node/workspaces.ts) | Node 执行 realpath、stat 和文件读取；区分启动目标解析与连接后的工作区能力，保持授权边界和工作区身份 |
+| profile 与宿主状态 | [localProfile.ts](../../src/ash/platform/profile/node/localProfile.ts)、[stateService.ts](../../src/ash/platform/state/node/stateService.ts) | 包含文件复制与窗口状态落盘；按启动所需状态和产品数据分别核对，不整包迁入业务后端 |
+| 连接启动与开发工具 | [childProcessJsonlTransport.ts](../../src/ash/platform/app-server/node/childProcessJsonlTransport.ts)、[localAppServerProcessLauncher.ts](../../src/ash/platform/app-server/electron-main/localAppServerProcessLauncher.ts)、[developmentArtifacts.ts](../../src/ash/platform/environment/node/developmentArtifacts.ts) | 分别属于当前宿主连接、启动和开发产物定位；随对应调用链处理，不能仅因目录名直接删除 |
+| Electron 平台能力 | [app.ts](../../src/ash/code/electron-main/app.ts)、[preload.cts](../../src/ash/base/parts/sandbox/electron-browser/preload.cts)、[browserViewMainService.ts](../../src/ash/platform/browser/electron-main/browserViewMainService.ts) | 保留明确宿主能力；继续压缩装配文件中的业务执行，不能把整个 Main 当作可删除的 Node 后端 |
+
+当前主窗口配置为 `nodeIntegration: false`、`contextIsolation: true`、`sandbox: true`；Renderer 编译配置没有主动加入 Node 全局类型。这些是已有隔离措施，不是传递依赖审计完成的证据。`VSBuffer` 当前基于 `Uint8Array`，不能因为名称包含 Buffer 就作为 Node 实现删除。
+
+后续按以下顺序推进，每项完成后删除对应旧调用链，不保留双实现：
+
+1. 核对前端生产依赖图与公共环境探测，补齐针对 Node 导入、全局及传递依赖的边界检查。
+2. 优先核对远程命令、SSH 与隧道执行：列出 TS 调用方、Rust 能力、协议缺口、取消与资源释放，再做一次完整迁移。
+3. 逐项处理 OAuth、文件存储及工作区 IO；配置数据先确认作用域、格式、冲突与通知契约。启动状态和 Electron 平台能力按宿主职责保留。
+4. 每项同步生产装配、调用方、协议生成物、测试及打包依赖；实现和实际消费者都退出后才删除模块。
+
+### 退场验收要求
+
+- 检查前端入口及传递依赖，确认无 Node 模块、全局注入或 Node 补齐包；不能只靠文本搜索或 `tsconfig` 声明验收。
+- 按实际改动运行受影响的前端检查、Rust 检查和正常构建；纯文档更新只检查文档。
+- 用 Playwright 验证受影响的 Web、Electron UI 与真实 Electron 后端链路，以行为断言调试；覆盖多窗口隔离、关闭释放、取消、后端断线恢复，以及相关文件写入冲突。
+- 扩展执行与打包的 JavaScript 运行时单独核对。不得把“前端无需 Node”报告为“整个产品已经移除 Node”。
+
+本次仅更新职责和盘点，未运行产品测试或构建；下文已有实施验证是此前连接工作的记录，不是本次 Node 退场验收结果。
 
 ## 连接与职责
 

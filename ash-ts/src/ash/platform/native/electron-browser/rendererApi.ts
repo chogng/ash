@@ -23,7 +23,8 @@ import { createKeybindingsResourceApi } from "../../keybinding/electron-browser/
 import { createNativeKeyboardLayoutApi } from "../../keyboardLayout/electron-browser/nativeKeyboardLayoutApi.js";
 import { createUserKeyboardLayoutApi } from "../../keyboardLayout/electron-browser/userKeyboardLayoutApi.js";
 import { createNativeMenubarApi } from "../../menubar/electron-browser/nativeMenubarApi.js";
-import { createUserThemeFilesApi } from "../../theme/electron-browser/userThemeFilesApi.js";
+import { DiskFileSystemProviderClient, LOCAL_FILE_SYSTEM_CHANNEL_NAME } from "../../files/common/diskFileSystemProviderClient.js";
+import { URI } from "../../../base/common/uri.js";
 import { createWorkspaceContextApi } from "../../workspace/electron-browser/workspaceContextApi.js";
 import type { AshElectronRendererApi } from "../common/rendererApi.js";
 import { createNativeHostApi } from "./nativeHostApi.js";
@@ -142,7 +143,8 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			nativeContextMenu: createNativeContextMenuApi(),
 			nativeHost: createNativeHostApi(),
 			nativeMenubar: createNativeMenubarApi(),
-			userThemes: createUserThemeFilesApi(),
+			localFiles: resources.add(new DiskFileSystemProviderClient(request => invoke(LOCAL_FILE_SYSTEM_CHANNEL_NAME, request))),
+			userDataHome: URI.parse(await invoke<string>(`${LOCAL_FILE_SYSTEM_CHANNEL_NAME}:userDataHome`)),
 			workspace: createWorkspaceContextApi(),
 		};
 	} catch (error) { resources.dispose(); throw error; }

@@ -45,8 +45,9 @@ import { sessionsWindowIpcRoutes } from "../../sessions/electron-main/sessionsWi
 import { StateService } from "../../platform/state/node/stateService.js";
 import { migrateLegacyLocalProfile } from "../../platform/profile/node/localProfile.js";
 import { resolveHome } from "../../platform/home/node/home.js";
-import { userThemeIpcRoutes } from "../../platform/theme/electron-main/userThemeIpc.js";
-import { UserThemeFileService } from "../../platform/theme/node/userThemeFileService.js";
+import { diskFileSystemProviderRoutes } from "../../platform/files/electron-main/diskFileSystemProviderServer.js";
+import { URI } from "../../base/common/uri.js";
+import { DiskFileSystemProvider } from "../../platform/files/node/diskFileSystemProvider.js";
 import { applyWindowState, resolveBrowserWindowOptions } from "../../platform/windows/electron-main/windows.js";
 import { WindowMode } from "../../platform/window/electron-main/window.js";
 import { WindowsStateHandler } from "../../platform/windows/electron-main/windowsStateHandler.js";
@@ -680,7 +681,7 @@ export class AshApplication extends Disposable {
 				toggleDeveloperTools: () => window.webContents.toggleDevTools(),
 			}),
 			...workbenchModeIpcRoutes(modeId => this.scheduleWorkbenchModeSwitch(record, modeId)),
-			...userThemeIpcRoutes(new UserThemeFileService(join(this.profileRoot, "themes"))),
+			...diskFileSystemProviderRoutes(windowDisposables.add(new DiskFileSystemProvider([URI.file(this.profileRoot)])), URI.file(this.profileRoot)),
 			...workspaceContextIpcRoutes(workspaceContext),
 		];
 		ipcRoutes.push(...sessionsWindowIpcRoutes({

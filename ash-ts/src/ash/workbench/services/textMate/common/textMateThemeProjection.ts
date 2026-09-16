@@ -1,4 +1,5 @@
 import { type ColorScheme } from "../../../../platform/theme/common/theme.js";
+import type { IColorTheme } from "../../../../platform/theme/common/colorTheme.js";
 import { type ExtensionThemeCatalog, type ExtensionThemeDefinition } from "../../extensions/common/extensionTheme.js";
 import { type TextMateScopeTheme, type TextMateScopeThemeRule, type TextMateTokenFontStyle } from "./textMateScopeTheme.js";
 
@@ -14,7 +15,11 @@ function selectTheme(themes: readonly ExtensionThemeDefinition[], colorScheme: C
 	return themes.find(theme => theme.uiTheme === expected) ?? themes.find(theme => theme.uiTheme === fallback);
 }
 
-function compileRules(theme: ExtensionThemeDefinition): readonly TextMateScopeThemeRule[] {
+export function projectColorThemeTokens(theme: IColorTheme, revision: number): TextMateScopeTheme {
+	return Object.freeze({ revision, rules: compileRules({ tokenColors: theme.tokenColors ?? [] }) });
+}
+
+function compileRules(theme: Pick<ExtensionThemeDefinition, "tokenColors">): readonly TextMateScopeThemeRule[] {
 	const rules: TextMateScopeThemeRule[] = [];
 	for (const tokenColor of theme.tokenColors) {
 		const foreground = tokenColor.settings.foreground;

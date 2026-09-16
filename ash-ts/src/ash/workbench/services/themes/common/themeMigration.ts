@@ -1,14 +1,14 @@
-import { Color } from "../../../base/common/color.js";
-import { type ColorValue } from "./colorRegistry.js";
-import { createColorTheme, type IColorTheme } from "./colorTheme.js";
-import { ColorScheme } from "./theme.js";
+import { serializeUserColorThemeDraft } from "./colorThemeData.js";
+import { type ColorValue } from "../../../../platform/theme/common/colorRegistry.js";
+import { createColorTheme, type IColorTheme } from "../../../../platform/theme/common/colorTheme.js";
+import { ColorScheme } from "../../../../platform/theme/common/theme.js";
 
-export const USER_COLOR_THEME_SCHEMA_URL = "https://ash.dev/schemas/color-theme.schema.json";
+const USER_COLOR_THEME_SCHEMA_URL = "https://ash.dev/schemas/color-theme.schema.json";
 
 const LEGACY_EDITOR_TOKEN_PREFIX = "editor.semanticToken.";
 const EDITOR_TOKEN_PREFIX = "editor.token.";
 
-export interface IUserColorThemeDocument {
+interface IUserColorThemeDocument {
 	readonly version: 1;
 	readonly id: string;
 	readonly label: string;
@@ -16,23 +16,8 @@ export interface IUserColorThemeDocument {
 	readonly colors: Readonly<Record<string, ColorValue>>;
 }
 
-/** Creates a self-contained editable user-theme document from a resolved theme. */
-export function serializeUserColorThemeDraft(theme: IColorTheme, id: string, label: string): string {
-	const colors = Object.fromEntries(theme.colorEntries.flatMap(({ id: colorId, value }) => value ? [[colorId, Color.Format.CSS.formatHexA(value, true)]] : []));
-	const document = {
-		$schema: USER_COLOR_THEME_SCHEMA_URL,
-		version: 1,
-		id,
-		label,
-		colorScheme: theme.colorScheme,
-		colors,
-	};
-	validateUserColorThemeDocument(document);
-	return `${JSON.stringify(document, null, 2)}\n`;
-}
-
 /** Parses untrusted JSON and compiles it through the canonical theme resolver. */
-export function parseUserColorTheme(source: string): IColorTheme {
+function parseLegacyTheme(source: string): IColorTheme {
 	if (source.length > 1_048_576) throw new Error("User theme exceeds the 1 MiB document limit");
 	let candidate: unknown;
 	try {
@@ -59,7 +44,7 @@ function normalizeLegacyEditorTokenOverrides(colors: Readonly<Record<string, Col
 	return normalized;
 }
 
-export function validateUserColorThemeDocument(value: unknown): IUserColorThemeDocument {
+function validateUserColorThemeDocument(value: unknown): IUserColorThemeDocument {
 	const document = exactRecord(value, ["$schema", "colorScheme", "colors", "id", "label", "version"]);
 	if (document.version !== 1) throw new Error("User theme version must be 1");
 	if (document.$schema !== undefined && document.$schema !== USER_COLOR_THEME_SCHEMA_URL) throw new Error(`User theme $schema must be '${USER_COLOR_THEME_SCHEMA_URL}'`);
@@ -131,4 +116,13 @@ function requireExactKeys(value: Record<string, unknown>, keys: readonly string[
 function record(value: unknown, path: string): Record<string, unknown> {
 	if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error(`${path} must be an object`);
 	return value as Record<string, unknown>;
+}
+
+/** One-way conversion of the retired version-1 resource, before normal loading. */
+export function migrateUserTheme(source: string): { readonly id: string; readonly content: string } | undefined {
+	let value: unknown;
+	try { value = JSON.parse(source); } catch { return undefined; }
+	if (typeof value !== "object" || value === null || !("version" in value)) return undefined;
+	const theme = parseLegacyTheme(source);
+	return { id: theme.id, content: serializeUserColorThemeDraft(theme, theme.label) };
 }

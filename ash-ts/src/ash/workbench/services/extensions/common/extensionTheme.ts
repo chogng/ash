@@ -1,7 +1,8 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Color } from "../../../../base/common/color.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { colorIdentifiers, createColorTheme, type IColorTheme } from "../../../../platform/theme/common/colorTheme.js";
+import { type IColorTheme } from "../../../../platform/theme/common/colorTheme.js";
+import { createDocumentColorTheme, parseColorThemeDocument } from "../../themes/common/colorThemeData.js";
 import { ColorScheme } from "../../../../platform/theme/common/theme.js";
 
 export interface ExtensionThemeTokenColorSettings {
@@ -71,12 +72,11 @@ export class ExtensionThemeRegistry extends Disposable implements ExtensionTheme
 
 /** Parses the declarative subset of a VS Code color-theme document. */
 export function parseExtensionTheme(value: unknown, id: string, extensionId: string, label: string, uiTheme: string | undefined, owner: string): ExtensionThemeDefinition {
-	const document = record(value, owner);
+	const document = parseColorThemeDocument(value);
 	const tokenColors = document.tokenColors === undefined ? Object.freeze([]) : parseTokenColors(document.tokenColors, `${owner}.tokenColors`);
 	const colors = document.colors === undefined ? Object.freeze({}) : parseColors(document.colors, `${owner}.colors`);
 	const documentName = document.name === undefined ? undefined : boundedText(document.name, `${owner}.name`, 256);
 	const resolvedLabel = /^%[^%]+%$/u.test(label) && documentName !== undefined ? documentName : label;
-	if (document.include !== undefined) throw new TypeError(`${owner}.include is not supported; flatten the theme artifact before packaging`);
 	return Object.freeze({
 		id,
 		extensionId,
@@ -96,14 +96,7 @@ export function extensionWorkbenchThemeId(extensionId: string, contributionId: s
 
 /** Compiles supported VS Code color keys over Ash's complete theme defaults. */
 export function createExtensionWorkbenchColorTheme(theme: ExtensionThemeDefinition): IColorTheme {
-	const knownColors = new Set<string>(colorIdentifiers);
-	const colorOverrides = Object.freeze(Object.fromEntries(Object.entries(theme.colors).filter(([key]) => knownColors.has(key))));
-	return createColorTheme({
-		id: theme.id,
-		label: theme.label,
-		colorScheme: extensionColorScheme(theme.uiTheme),
-		colorOverrides,
-	});
+	return createDocumentColorTheme({ colors: theme.colors, tokenColors: theme.tokenColors.map(rule => ({ scope: rule.scopes, settings: rule.settings })) }, theme.id, theme.label, extensionColorScheme(theme.uiTheme));
 }
 
 function normalizeTheme(theme: ExtensionThemeDefinition): ExtensionThemeDefinition {

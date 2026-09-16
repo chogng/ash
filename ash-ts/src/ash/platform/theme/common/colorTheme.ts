@@ -167,6 +167,10 @@ export type ThemeColors = Readonly<Record<ColorIdentifier, string>>;
 
 /** Immutable, fully resolved theme snapshot selected for one frontend host. */
 export interface IColorTheme {
+	readonly tokenColors?: readonly {
+		readonly scopes: readonly string[];
+		readonly settings: { readonly foreground?: string; readonly background?: string; readonly fontStyle?: string };
+	}[];
 	readonly id: string;
 	readonly label: string;
 	readonly colorScheme: ColorScheme;

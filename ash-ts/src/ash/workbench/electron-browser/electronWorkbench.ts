@@ -21,7 +21,10 @@ import {
 import {
 	createElectronWorkbenchContextMenuService,
 } from "../services/contextmenu/electron-browser/contextMenuService.js";
-import { loadUserThemes } from "./userThemes.js";
+import { URI } from "../../base/common/uri.js";
+import { ServiceContainer } from "../../platform/instantiation/common/instantiation.js";
+import { IFileService } from "../../platform/files/common/files.js";
+import { loadUserThemes } from "../services/themes/browser/workbenchThemeService.js";
 import { type ElectronRendererCapabilityContribution } from "../../platform/native/electron-browser/rendererApi.js";
 import { switchElectronWorkbenchMode } from "../services/workbenchMode/electron-browser/electronWorkbenchModeHost.js";
 
@@ -46,7 +49,9 @@ export async function startElectronWorkbench(
 		showStartupError(error);
 		return;
 	}
-	const userThemes = await loadUserThemes(api.userThemes);
+	const profileServices = new ServiceContainer();
+	profileServices.registerInstance(IFileService, api.localFiles);
+	const userThemes = await loadUserThemes(profileServices, URI.parse(api.userDataHome.toString().replace(/\/$/u, "") + "/themes"));
 	const workbench = startWorkbench({
 		modeId,
 		api,
@@ -71,6 +76,7 @@ export async function startElectronWorkbench(
 	});
 	const lifecycle = new DisposableStore();
 	lifecycle.add(api);
+	lifecycle.add(profileServices);
 	const workspaceSubscription = api.workspace.onDidChange((workspace) => {
 		void applyWorkspaceChange(workbench, workspace);
 	});
