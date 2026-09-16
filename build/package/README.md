@@ -196,7 +196,7 @@ and atomic replacement behavior are covered by:
 node --test build/package/prepare.test.ts
 ```
 
-## Agent grep runtime
+## Public grep runtime
 
 `tgrep.py` and development `prepare.ts` resolve the same pinned 1.0.8 archives from
 [`third_party/tgrep/runtime-lock.json`](../../third_party/tgrep/runtime-lock.json).
@@ -206,3 +206,18 @@ also covers this executable. `--tgrep-bin` is a build-time override, and
 `ASH_TGREP_PATH` is an explicit development runtime override. Query execution never
 downloads an executable. Adding the component preserves layout version 2 so existing
 Ash Code updaters can install the new release.
+
+Run the real App Server search smoke against an assembled package:
+
+```sh
+just test-search-package --package-dir /absolute/path/to/package \
+  --report /absolute/path/to/search-smoke.json
+```
+
+For a host-provided Node development package, optionally pass `--node-bin` with an absolute
+Node executable path. Release packages use their bundled Node. The smoke uses an isolated
+profile and workspace, removes both search engines from `PATH`, verifies the bundled tgrep
+digest, and exercises indexing, result paging, current-disk search and Codebase retrieval over
+stdio RPC. It also requires normal App Server exit and tgrep cleanup. A forced shutdown fails
+the run; cleanup diagnostics preserve the original failure. The release workflow runs this
+check for packages that its runner can execute before signing and uploading them.

@@ -62,6 +62,29 @@ check *args:
 rust-warnings *args:
     {{ python }} -B scripts/cargo.py --deny-warnings check -p {args} --all-targets
 
+# Discover and compile every direct consumer of grep and file-search, including app/files.
+check-search *args:
+    {{ python }} -B scripts/check_search.py {args}
+
+# Run the Rust search capability and host integration tests.
+test-search-rust:
+    just test ash-grep -p ash-tgrep -p ash-file-search -p ash-codebase
+    just test ash-app-server --lib codebase_
+    just test ash-app-server --lib local_tools
+    just test ash-app-server --lib server::environment_runtime::tests
+    just test ash-app-server --lib server::search_operations::tests
+    just test ash-files
+
+# Validate search consumers, backend behavior, renderer lifecycle, and compiler warnings.
+test-search: check-search test-search-rust
+    pnpm --dir ash-ts test:unit --run src/ash/platform/search/test/browser/searchService.test.ts --run src/ash/workbench/contrib/search/test/browser/searchViewPane.test.ts
+    pnpm --dir ash-ts typecheck:renderer
+    just check-search --deny-warnings
+
+# Exercise an assembled package through real stdio RPC, using its bundled search engines.
+test-search-package *args:
+    {{ python }} -B build/package/search_smoke.py {args}
+
 # Fail once the configuration support window makes a compatibility migration removable.
 check-config-migrations:
     {{ python }} -B scripts/cargo.py test -p ash-config tests::config_migration_support_window_has_no_expired_compatibility -- --exact

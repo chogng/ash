@@ -1,6 +1,7 @@
 import type { IContentSearchApi } from "../common/searchApi.js";
 import type { IContentSearchOptions, IContentSearchQuery, IContentSearchComplete, IContentSearchService } from "../common/search.js";
 import type { IWorkspaceContextService, IWorkspaceFolder } from "../../workspace/common/workspace.js";
+import { raceCancellationError } from "../../../base/common/async.js";
 
 const DEFAULT_MAX_RESULTS = 2_000;
 const RESULT_BATCH_SIZE = 100;
@@ -58,12 +59,14 @@ export class BrowserContentSearchService implements IContentSearchService {
 		try {
 			while (true) {
 				throwIfAborted(options.signal);
-				const snapshot = await this.api.read({
+				const read = this.api.read({
 					...(folder ? { dirId: folder.id } : {}),
 					searchId: started.searchId,
 					afterMatch: cursor,
 					maxMatches: RESULT_BATCH_SIZE,
 				});
+				const snapshot = await (options.signal ? raceCancellationError(read, options.signal) : read);
+				throwIfAborted(options.signal);
 				if (snapshot.matches.length > 0) {
 					cursor = snapshot.nextMatch;
 					options.onProgress?.(snapshot.matches.map((match) => ({
@@ -81,6 +84,9 @@ export class BrowserContentSearchService implements IContentSearchService {
 				}
 				await waitForNextPoll(options.signal);
 			}
+		} catch (error) {
+			throwIfAborted(options.signal);
+			throw error;
 		} finally {
 			await this.api.cancel({
 				...(folder ? { dirId: folder.id } : {}),

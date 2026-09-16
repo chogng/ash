@@ -148,6 +148,14 @@ jobs:
             --package-dir "$package"
           ${{ matrix.python }} -B scripts/cargo.py build --package ash-update-sign --bin ash-update-sign
 
+      - name: Verify bundled search through App Server RPC
+        if: github.event_name == 'release' && matrix.release_package != false && matrix.checks != false
+        shell: bash
+        run: |
+          ${{ matrix.python }} -B build/package/search_smoke.py \
+            --package-dir ".build/releases/ash-code-${{ matrix.target }}" \
+            --report ".build/releases/search-smoke-${{ matrix.target }}.json"
+
       - name: Import macOS release credentials
         if: github.event_name == 'release' && matrix.release_package != false && runner.os == 'macOS'
         shell: bash

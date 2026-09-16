@@ -146,3 +146,24 @@ Session 目录时，调用方必须重新明确选择要搜索的 `DirId`。
 - 多目录搜索是上层聚合，不改变每个结果所属的目录。
 - Renderer 不获得任意进程或磁盘访问能力。
 - 产品搜索与 Agent Tool 保持独立权限、任务和结果契约。
+
+## 回归验证
+
+```sh
+just check-search
+just test-search
+just test-search-package --package-dir /absolute/path/to/assembled-package
+```
+
+- `check-search` 从 Cargo 依赖关系发现 grep、file-search 的全部直接使用者，包含 Rust
+  桌面文件面板；新增使用者会自动进入编译检查。`--deny-warnings` 同时检查所有 target。
+- `test-search` 执行能力层与宿主的定向 Rust 测试、前端搜索生命周期测试、Renderer 类型检查
+  和消费者 warning 检查。Codebase 集成测试使用真实 SQLite FTS，并先证明 FTS 无法命中，
+  再验证 grep 候选映射、当前源码复核和未保存内容。前后端均验证并发搜索的取消隔离。
+- `test-search-package` 启动指定包内的 App Server，清空搜索引擎的 `PATH`，验证 tgrep
+  摘要、索引构建、150 条结果的分页、当前磁盘新鲜度、Codebase 调用和宿主退出时的进程回收。
+  使用宿主 Node 的开发包可传 `--node-bin /absolute/path/to/node`；发布包使用内置 Node。
+  可传 `--report /absolute/path/to/report.json` 保存结果。
+
+发布工作流在能直接执行目标二进制的构建项中运行打包验证；交叉编译项不冒充运行验证。
+强制终止宿主或遗留 tgrep 都视为失败，清理诊断附加到原始错误。
