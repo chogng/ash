@@ -1,5 +1,7 @@
 """Verified downloads and regular archive members shared by runtime builders."""
 
+from __future__ import annotations
+
 import hashlib
 import os
 import shutil

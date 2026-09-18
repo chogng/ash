@@ -40,13 +40,13 @@ Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保
 | pnpm | 根 [`package.json`](../package.json) 的 `packageManager` | npm；操作见根 README |
 | Rust | [`rust-toolchain.toml`](../rust-toolchain.toml) 的工具链与组件 | rustup |
 | PowerShell 7 | Windows 的 Just shell，需支持 `-CommandWithArgs` 以保留参数边界 | winget `Microsoft.PowerShell`；`just install` 可安装缺失的工具 |
-| Python | [`scripts/pyproject.toml`](../scripts/pyproject.toml) 的 `requires-python`；建议 3.12 | 安装方式自选；确保 `python` 指向可用解释器 |
+| Python | [`scripts/pyproject.toml`](../scripts/pyproject.toml) 的 `requires-python`；建议 3.12 | 由 uv 管理；Just 中的 Python 脚本通过 `uv run` 执行，无需单独配置 `python` 的 PATH |
 | Visual Studio Build Tools | 2022 / MSVC v143，匹配目标架构 | Visual Studio Installer 的“使用 C++ 的桌面开发” |
 | Windows SDK | 提供目标架构头文件和库；未固定补丁版本 | Visual Studio Installer 的 Windows SDK 组件 |
 | Git | 未固定版本，命令需在 PATH 中可用 | git-scm.com 或 winget `Git.Git` |
 | ripgrep | 开发工具未固定版本；产品使用独立锁定产物 | winget `BurntSushi.ripgrep.MSVC` |
 | just | 未固定版本，命令需在 PATH 中可用 | winget `Casey.Just` |
-| uv | 格式化、lint、Python 测试、依赖检查及构建测量；环境由 `scripts/uv.lock` 锁定 | winget `astral-sh.uv` |
+| uv | Python 工具环境由 `scripts/uv.lock` 锁定 | winget `astral-sh.uv` |
 | CMake | 未固定版本，命令需在 PATH 中可用 | cmake.org 或 winget `Kitware.CMake` |
 | LLVM/Clang | 未固定版本；需要 Clang 和 libclang | LLVM 官方发行包或 winget `LLVM.LLVM` |
 | Bazelisk | [`.bazelversion`](../.bazelversion) 固定 Bazel 版本 | winget `Bazel.Bazelisk`；CI 使用 `setup-bazel` |
@@ -65,8 +65,7 @@ Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保
 
 - Just 在 Windows 上调用 PowerShell 7 的 `-CommandWithArgs`，保留参数边界；其他平台调用 `sh`。
 - `just ash-desktop` 内部执行 `pnpm --dir ash-ts dev`；VS Code 的 `Run Ash Desktop (TypeScript)` 配置使用同一 Just 入口。
-- Rust 构建、打包和源码启动脚本调用 PATH 中的 Python：Windows 使用 `python`，其他平台使用 `python3`。Python 的安装方式由开发者选择。
-- uv 用于下方的仓库维护命令；产品启动和构建命令不通过 uv 执行。
+- Rust 构建、打包和源码启动脚本由 Just 通过 `uv run --frozen --project scripts python` 执行，统一使用锁定的 Python 环境。
 
 Node 工具、发布包组装与 Desktop 单测使用 Node 24 LTS，具体版本由仓库根 `.nvmrc` 固定。切换到该版本后，按 [README 初始化步骤](../README.md#quick-start) 安装根 `package.json` 声明的 pnpm，再执行 `pnpm install`、构建或测试。Node 构建与测试入口调用 pnpm，安装检查要求 pnpm 版本与声明完全一致；其他 Node 主版本不受支持。
 

@@ -3,7 +3,7 @@ set positional-arguments := true
 set shell := ["sh", "-cu"]
 set windows-shell := ["pwsh", "-NoLogo", "-NoProfile", "-CommandWithArgs"]
 
-python := if os_family() == "windows" { "python" } else { "python3" }
+python := "uv run --frozen --project scripts python"
 recipe_args := if os_family() == "windows" { "@($args | Select-Object -Skip 1)" } else { '"$@"' }
 tui_profile := ""
 tui_profile_arg := if tui_profile == "" { "" } else { "--profile " + tui_profile }
@@ -22,15 +22,15 @@ lint:
 
 # Run repository-owned Python tests, optionally selecting scripts, ash-code, or build.
 test-python *args:
-    uv run --frozen --project scripts python -B scripts/test-python.py {{ recipe_args }}
+    {{ python }} -B scripts/test-python.py {{ recipe_args }}
 
 # Reject dependency declaration, ownership, version, and unused-dependency violations.
 dependencies *args:
-    uv run --frozen --project scripts python -B scripts/dependencies.py {{ recipe_args }}
+    {{ python }} -B scripts/dependencies.py {{ recipe_args }}
 
 # Measure a selected Cargo package in isolated build directories.
 bench-build *args:
-    uv run --frozen --project scripts python -B scripts/benchmark.py {{ recipe_args }}
+    {{ python }} -B scripts/benchmark.py {{ recipe_args }}
 
 # Build all three product lines from the repository root.
 build: build-desktop build-rust

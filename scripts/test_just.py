@@ -66,7 +66,7 @@ class JustTests(unittest.TestCase):
     def test_failed_command_fails_recipe(self) -> None:
         result = self.run_recipe("raise SystemExit(23)")
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn("recipe `probe` failed", result.stderr)
+        self.assertIn("recipe `probe` failed", result.stderr.lower())
 
 
 if __name__ == "__main__":

@@ -217,6 +217,7 @@ class PackageTests(unittest.TestCase):
         "shellscript",
         "sql",
         "theme-defaults",
+        "theme-seti",
         "typescript-basics",
         "xml",
         "yaml",
