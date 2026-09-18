@@ -15,12 +15,14 @@ use voice_host::SampleRate;
 pub(super) struct Room {
     room: Option<MediaRoom>,
     mixer: AudioMixer,
+    closing: Option<Operation<'static, ()>>,
 }
 impl Room {
     pub fn new(room: MediaRoom) -> Self {
         Self {
             room: Some(room),
             mixer: AudioMixer::default(),
+            closing: None,
         }
     }
     fn room(&mut self) -> Result<&mut MediaRoom, String> {
@@ -89,6 +91,9 @@ impl call::Media for Room {
     fn clear(&mut self) {
         self.mixer.clear();
     }
+    fn clear_track(&mut self, track: &str) {
+        self.mixer.clear_track(track);
+    }
     fn remove_track(&mut self, track: &str) {
         self.mixer.remove_track(track);
     }
@@ -102,10 +107,10 @@ impl call::Media for Room {
     }
     fn rejoin<'a>(&'a mut self, grant: &'a MediaJoin) -> Operation<'a, ()> {
         Box::pin(async move {
-            self.mixer.clear();
-            if let Some(old) = self.room.take() {
-                old.close().await.map_err(|e| e.to_string())?;
-            }
+            // Replacing a room retires its track identities; buffered PCM and
+            // settings for those removed tracks must not accumulate across epochs.
+            self.mixer = AudioMixer::default();
+            call::Media::close(self).await?;
             self.room = Some(
                 MediaRoom::connect(
                     &grant.server_url,
@@ -124,10 +129,21 @@ impl call::Media for Room {
     }
     fn close(&mut self) -> Operation<'_, ()> {
         Box::pin(async move {
-            if let Some(room) = self.room.take() {
-                room.close().await.map_err(|e| e.to_string())?;
+            if self.closing.is_none() {
+                if let Some(room) = self.room.take() {
+                    self.closing = Some(Box::pin(async move {
+                        room.close().await.map_err(|e| e.to_string())
+                    }));
+                }
             }
-            Ok(())
+            // Keep the close future owned here if rejoin is cancelled by leave.
+            // Final cleanup resumes it and waits for the room worker to finish.
+            let result = match self.closing.as_mut() {
+                Some(closing) => closing.await,
+                None => Ok(()),
+            };
+            self.closing = None;
+            result
         })
     }
 }

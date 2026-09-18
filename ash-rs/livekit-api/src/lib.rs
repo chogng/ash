@@ -81,7 +81,8 @@ impl MediaService {
 
     pub async fn create_room(&self, room: &str) -> Result<(), ServiceError> {
         validate_identity(room)?;
-        self.client
+        match self
+            .client
             .create_room(
                 room,
                 CreateRoomOptions {
@@ -92,7 +93,13 @@ impl MediaService {
                 },
             )
             .await
-            .map_err(|_| ServiceError::Request)?;
+        {
+            Ok(_) => {}
+            Err(livekit_sdk_api::services::ServiceError::Twirp(
+                livekit_sdk_api::services::ServerError::Twirp(error),
+            )) if error.code == livekit_sdk_api::services::ServerErrorCode::ALREADY_EXISTS => {}
+            Err(_) => return Err(ServiceError::Request),
+        }
         Ok(())
     }
 

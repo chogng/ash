@@ -62,6 +62,7 @@ pub trait Media: Send {
     fn render(&mut self, samples: usize, now: Instant) -> Result<Vec<i16>, Failure>;
     fn mute(&mut self) -> Result<(), Failure>;
     fn unmute(&mut self) -> Result<(), Failure>;
+    fn clear_track(&mut self, track: &str);
     fn remove_track(&mut self, track: &str);
     fn remove_participant(&mut self, participant: &str);
     fn clear(&mut self);
@@ -90,9 +91,30 @@ pub struct SessionRuntime {
 }
 
 impl SessionRuntime {
-    pub async fn run(mut self, commands: mpsc::Receiver<SessionCommand>) {
+    pub async fn run(mut self, mut commands: mpsc::Receiver<SessionCommand>) {
         let mut reply = None;
-        let outcome = self.pump(commands, &mut reply).await;
+        // Keep leave outside the media pump so it cancels any pending authority,
+        // device or room operation before ordered cleanup below.
+        let outcome = {
+            let (forward, receiver) = mpsc::channel(8);
+            let mut pump = Box::pin(self.pump(receiver));
+            loop {
+                tokio::select! {
+                    biased;
+                    command = commands.recv() => match command {
+                        Some((None, response)) => { reply = Some(response); break Ok(()); }
+                        None => break Ok(()),
+                        Some((Some(control), response)) => {
+                            if let Err(error) = forward.try_send((control, response)) {
+                                let (_, response) = error.into_inner();
+                                let _ = response.send(Err("Call controls are busy".into()));
+                            }
+                        }
+                    },
+                    outcome = &mut pump => break outcome,
+                }
+            }
+        };
         let media = self.media.close().await;
         let devices = self.devices.close().await;
         self.status.error = outcome.err().or(media.err()).or(devices.err());
@@ -118,8 +140,7 @@ impl SessionRuntime {
 
     async fn pump(
         &mut self,
-        mut commands: mpsc::Receiver<(Option<CallControl>, Reply)>,
-        stop_reply: &mut Option<Reply>,
+        mut commands: mpsc::Receiver<(CallControl, Reply)>,
     ) -> Result<(), Failure> {
         let mut playback = tokio::time::interval(Duration::from_millis(20));
         playback.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -127,33 +148,41 @@ impl SessionRuntime {
         let client = self.client.clone();
         let mut revision = self.status.call.revision;
         let _watcher = Watcher(tokio::spawn(async move {
+            let mut delay = Duration::from_millis(250);
             loop {
                 let client = client.clone();
                 let snapshot =
                     match tokio::task::spawn_blocking(move || client.watch(revision)).await {
-                        Ok(snapshot) => snapshot.map_err(|e| e.to_string()),
-                        Err(_) => Err("Call authority stopped".into()),
+                        Ok(snapshot) => snapshot,
+                        Err(_) => Err(crate::CallError::Transport),
                     };
                 if let Ok(snapshot) = &snapshot {
                     revision = snapshot.revision;
                 }
-                let failed = snapshot.is_err();
-                if updates.send(snapshot).await.is_err() || failed {
+                let retry = matches!(snapshot, Err(crate::CallError::Transport));
+                let terminal = snapshot.is_err() && !retry;
+                if updates.send(snapshot).await.is_err() || terminal {
                     break;
+                }
+                if retry {
+                    tokio::time::sleep(delay).await;
+                    delay = (delay * 2).min(Duration::from_secs(2));
+                } else {
+                    delay = Duration::from_millis(250);
                 }
             }
         }));
         let mut reconnect_started = None;
+        let mut authority_lost = false;
         loop {
             tokio::select! {
                 command = commands.recv() => {
                     let Some((control, reply)) = command else { return Ok(()); };
-                    let Some(control) = control else { *stop_reply = Some(reply); return Ok(()); };
                     let outcome = self.control(control).await;
                     self.publish();
                     let _ = reply.send(outcome.map(|()| self.status.clone()));
                 }
-                event = self.media.next_event() => {
+                event = self.media.next_event(), if !authority_lost => {
                     let event = event?;
                     match event {
                         Some(MediaEvent::Audio) => continue,
@@ -178,7 +207,7 @@ impl SessionRuntime {
                             for participant in &mut self.status.participants { participant.tracks.retain(|id| *id != track_id); }
                         }
                         Some(MediaEvent::TrackMuted { track_id }) => {
-                            self.media.remove_track(&track_id);
+                            self.media.clear_track(&track_id);
                             self.devices.interrupt().await.map_err(|e| e.to_string())?;
                             for participant in &mut self.status.participants { if participant.tracks.contains(&track_id) { participant.muted = true; } }
                         }
@@ -194,7 +223,9 @@ impl SessionRuntime {
                             if !self.status.muted && self.status.microphone_allowed { self.devices.unmute().await?; }
                             reconnect_started = None; self.status.connection = CallConnection::Connected;
                         }
-                        Some(MediaEvent::Disconnected) | None => { self.rejoin().await?; reconnect_started = None; }
+                        Some(MediaEvent::Disconnected) | None => {
+                            self.rejoin().await?; reconnect_started = None;
+                        }
                     }
                     self.publish();
                 }
@@ -207,11 +238,29 @@ impl SessionRuntime {
                     if !self.status.deafened && reconnect_started.is_none() { self.devices.play(&samples).await.map_err(|e| e.to_string())?; }
                 }
                 snapshot = authority.recv() => {
-                    let snapshot = snapshot.ok_or("Call authority stopped")??;
+                    let snapshot = match snapshot.ok_or("Call authority stopped")? {
+                        Ok(snapshot) => snapshot,
+                        Err(crate::CallError::Transport) => {
+                            if !authority_lost {
+                                authority_lost = true;
+                                reconnect_started = Some(Instant::now());
+                                self.status.connection = CallConnection::Reconnecting;
+                                self.devices.mute().await?;
+                                self.devices.interrupt().await?;
+                                self.media.clear();
+                                self.publish();
+                            }
+                            continue;
+                        }
+                        Err(error) => return Err(error.to_string()),
+                    };
                     if matches!(snapshot.media_state, MediaState::Closed | MediaState::Closing) { self.status.call = snapshot; return Ok(()); }
-                    if snapshot.media_state == MediaState::Ready && (snapshot.media_epoch != self.status.call.media_epoch || self.status.call.media_state != MediaState::Ready) {
+                    if snapshot.media_state == MediaState::Ready && (authority_lost || snapshot.media_epoch != self.status.call.media_epoch || self.status.call.media_state != MediaState::Ready) {
                         self.rejoin().await?;
+                        authority_lost = false;
                         reconnect_started = None;
+                        self.status.connection = CallConnection::Connected;
+                        self.publish();
                     } else if snapshot.revision != self.status.call.revision {
                         if matches!(snapshot.media_state, MediaState::Rotating { .. }) {
                             self.devices.mute().await?;
@@ -238,6 +287,9 @@ impl SessionRuntime {
                 }
             }
             CallControl::Unmute => {
+                if self.status.connection == CallConnection::Reconnecting {
+                    return Err("Wait for the call to reconnect before unmuting".into());
+                }
                 if !self.status.microphone_allowed {
                     return Err("This device does not have microphone permission".into());
                 }
@@ -285,29 +337,42 @@ impl SessionRuntime {
         self.devices.mute().await?;
         self.devices.interrupt().await?;
         self.media.close().await?;
-        let client = self.client.clone();
-        let device = self.device.clone();
-        let joined = tokio::task::spawn_blocking(move || {
-            let deadline = Instant::now() + Duration::from_secs(15);
+        let joined = tokio::time::timeout(Duration::from_secs(15), async {
             loop {
-                match client.join(&device) {
-                    Err(crate::CallError::NotReady) if Instant::now() < deadline => {
-                        let snapshot = client.read()?;
-                        if matches!(
-                            snapshot.media_state,
-                            MediaState::Closing | MediaState::Closed
-                        ) {
-                            return Err(crate::CallError::Denied);
+                let client = self.client.clone();
+                let device = self.device.clone();
+                let outcome = tokio::task::spawn_blocking(move || client.join(&device))
+                    .await
+                    .map_err(|_| "Call authority stopped".to_owned())?;
+                match outcome {
+                    Err(crate::CallError::NotReady) => {
+                        let client = self.client.clone();
+                        let snapshot = tokio::task::spawn_blocking(move || client.read())
+                            .await
+                            .map_err(|_| "Call authority stopped".to_owned())?;
+                        match snapshot {
+                            Ok(snapshot)
+                                if matches!(
+                                    snapshot.media_state,
+                                    MediaState::Closing | MediaState::Closed
+                                ) =>
+                            {
+                                return Err("Call has ended".into());
+                            }
+                            Ok(_) | Err(crate::CallError::Transport) => {}
+                            Err(error) => return Err(error.to_string()),
                         }
-                        std::thread::sleep(Duration::from_millis(100));
+                        tokio::time::sleep(Duration::from_millis(250)).await;
                     }
-                    outcome => return outcome,
+                    Err(crate::CallError::Transport) => {
+                        tokio::time::sleep(Duration::from_millis(250)).await;
+                    }
+                    outcome => return outcome.map_err(|error| error.to_string()),
                 }
             }
         })
         .await
-        .map_err(|_| "Call authority stopped")?
-        .map_err(|e| e.to_string())?;
+        .map_err(|_| "Call authorization timed out")??;
         self.media.rejoin(&joined).await?;
         if joined.microphone && self.status.muted {
             self.media.mute()?;
@@ -322,6 +387,7 @@ impl SessionRuntime {
             self.status.muted = true;
             self.devices.mute().await?;
         }
+        self.status.connection = CallConnection::Connected;
         Ok(())
     }
 }

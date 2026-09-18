@@ -122,6 +122,11 @@ fn serve_listener(
     listener
         .set_nonblocking(true)
         .map_err(CollaborationServerError::http)?;
+    let _recovery = if runtime.calls.is_some() {
+        Some(calls::Recovery::start(&runtime)?)
+    } else {
+        None
+    };
     while !shutdown.load(Ordering::Acquire) {
         match listener.accept() {
             Ok((stream, _)) => {

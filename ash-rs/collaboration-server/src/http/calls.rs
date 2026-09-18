@@ -43,16 +43,45 @@ impl CallRuntime {
             executor,
             operations: Mutex::new(std::collections::HashMap::new()),
         };
-        for call in runtime
-            .store
-            .pending_media()
-            .map_err(|e| CollaborationServerError::storage(e.to_string()))?
-        {
-            runtime.reconcile(call).map_err(|_| {
-                CollaborationServerError::storage("Pending call media operation failed".into())
-            })?;
-        }
+        // Pending calls reject join until recovery completes their durable
+        // operation; a media outage must not prevent the service from starting.
         Ok(runtime)
+    }
+
+    fn operation_lock(&self, key: &str) -> Result<Arc<Mutex<()>>, Failure> {
+        let mut locks = self.operations.lock().map_err(|_| CallError::Storage)?;
+        locks.retain(|_, value| value.strong_count() > 0);
+        if let Some(lock) = locks.get(key).and_then(std::sync::Weak::upgrade) {
+            return Ok(lock);
+        }
+        let lock = Arc::new(Mutex::new(()));
+        locks.insert(key.to_owned(), Arc::downgrade(&lock));
+        Ok(lock)
+    }
+
+    fn recover(&self, updates: &super::UpdateSignal) -> Result<(), Failure> {
+        for pending in self.store.pending_media()? {
+            let lock = self.operation_lock(&pending.id)?;
+            // A foreground operation owns its own completion. Never hold up
+            // recovery of other rooms while it is making an administrative request.
+            let Ok(_operation) = lock.try_lock() else {
+                continue;
+            };
+            // The scan precedes the lock. Reload to avoid replaying a rotation
+            // that a foreground request has already completed.
+            let Some(current) = self
+                .store
+                .pending_media()?
+                .into_iter()
+                .find(|call| call.id == pending.id)
+            else {
+                continue;
+            };
+            if self.reconcile(current).is_ok() {
+                updates.notify();
+            }
+        }
+        Ok(())
     }
 
     fn reconcile(&self, snapshot: CallSnapshot) -> Result<CallSnapshot, Failure> {
@@ -70,6 +99,46 @@ impl CallRuntime {
                 .media_completed(&snapshot.id, snapshot.revision)
                 .map_err(Failure::from)
         })
+    }
+}
+
+pub(super) struct Recovery {
+    stop: std::sync::mpsc::Sender<()>,
+    worker: Option<std::thread::JoinHandle<()>>,
+}
+
+impl Recovery {
+    pub(super) fn start(host: &Arc<HttpRuntime>) -> Result<Self, CollaborationServerError> {
+        let (stop, stopped) = std::sync::mpsc::channel();
+        let host = Arc::downgrade(host);
+        let worker = std::thread::Builder::new()
+            .name("call-recovery".into())
+            .spawn(move || {
+                while matches!(
+                    stopped.recv_timeout(std::time::Duration::from_secs(1)),
+                    Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+                ) {
+                    let Some(host) = host.upgrade() else { break };
+                    if let Some(calls) = &host.calls {
+                        // Failures remain durable and are retried on the next pass.
+                        let _ = calls.recover(&host.updates);
+                    }
+                }
+            })
+            .map_err(CollaborationServerError::http)?;
+        Ok(Self {
+            stop,
+            worker: Some(worker),
+        })
+    }
+}
+
+impl Drop for Recovery {
+    fn drop(&mut self) {
+        let _ = self.stop.send(());
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
     }
 }
 
@@ -221,18 +290,7 @@ fn dispatch(
                 .wait_for_change(generation, super::EXTERNAL_HOST_RECHECK);
         }
     }
-    let lock = {
-        let mut locks = runtime.operations.lock().map_err(|_| CallError::Storage)?;
-        locks.retain(|_, value| value.strong_count() > 0);
-        match locks.get(&key).and_then(std::sync::Weak::upgrade) {
-            Some(lock) => lock,
-            None => {
-                let lock = Arc::new(Mutex::new(()));
-                locks.insert(key, Arc::downgrade(&lock));
-                lock
-            }
-        }
-    };
+    let lock = runtime.operation_lock(&key)?;
     let _operation = lock.lock().map_err(|_| CallError::Storage)?;
     let snapshot = match (request.method.as_str(), path) {
         ("POST", "/v1/calls/create") => runtime
@@ -313,3 +371,7 @@ fn decode<T: serde::de::DeserializeOwned>(request: &HttpRequest) -> Result<T, Fa
     }
     super::decode_json(request).ok_or(CallError::Invalid.into())
 }
+
+#[cfg(test)]
+#[path = "calls_tests.rs"]
+mod tests;

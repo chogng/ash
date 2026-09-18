@@ -115,7 +115,23 @@ impl AudioMixer {
         self.tracks
             .retain(|_, track| track.participant != participant);
     }
+    /// Discards queued PCM without changing the track's listening volume.
+    pub fn clear_track(&mut self, track: &str) {
+        if let Some(track) = self.tracks.get_mut(track) {
+            track.frames.clear();
+            track.samples = 0;
+        }
+    }
+
+    /// Discards queued PCM while preserving volumes for the current tracks.
     pub fn clear(&mut self) {
-        self.tracks.clear();
+        for track in self.tracks.values_mut() {
+            track.frames.clear();
+            track.samples = 0;
+        }
     }
 }
+
+#[cfg(test)]
+#[path = "mixer_tests.rs"]
+mod tests;

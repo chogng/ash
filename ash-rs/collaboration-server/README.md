@@ -4,6 +4,7 @@
 - Owns bearer authentication, browser-origin policy, HTTP framing, connection limits and SQLite lifecycle.
 - Delegates document ordering to [`ash-collaboration`](../collaboration/README.md) and call authority to [`call`](../call/README.md).
 - Manages configured LiveKit rooms through [`livekit-api`](../livekit-api/README.md).
+- Retries durable pending media operations every second, including after restart; pending rooms reject joins until recovery completes.
 - Has no App Server, workspace, tool, terminal or model execution authority.
 
 ## Call media deployment

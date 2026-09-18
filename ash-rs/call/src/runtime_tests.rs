@@ -39,6 +39,7 @@ impl Media for Room {
         self.log.lock().unwrap().push("media-unmuted");
         Ok(())
     }
+    fn clear_track(&mut self, _: &str) {}
     fn remove_track(&mut self, _: &str) {}
     fn remove_participant(&mut self, _: &str) {}
     fn clear(&mut self) {
@@ -177,4 +178,266 @@ async fn reconnect_stops_capture_and_leave_waits_for_media_and_device_cleanup() 
             .ends_with(&["capture-started", "media-closed", "devices-closed"])
     );
     worker.await.unwrap();
+}
+
+struct RecoveringAuthority {
+    snapshot: crate::CallSnapshot,
+    status: std::sync::atomic::AtomicU16,
+    joins: std::sync::atomic::AtomicUsize,
+}
+impl HttpClient for RecoveringAuthority {
+    fn execute(&self, request: &HttpRequest) -> Result<HttpResponse, HttpClientError> {
+        use std::sync::atomic::Ordering;
+        std::thread::sleep(Duration::from_millis(10));
+        let status = self.status.load(Ordering::SeqCst);
+        if status != 200 {
+            return Ok(HttpResponse::new(status, vec![], vec![]));
+        }
+        let body = if request.url().ends_with("/join") {
+            self.joins.fetch_add(1, Ordering::SeqCst);
+            serde_json::json!({
+                "call": self.snapshot,
+                "member": {"id":"owner", "role":"owner"},
+                "microphone": true,
+                "participantId":"owner-device", "serverUrl":"ws://localhost:7880",
+                "participantToken":"test", "expiresAt":u64::MAX
+            })
+        } else {
+            serde_json::to_value(&self.snapshot).unwrap()
+        };
+        Ok(HttpResponse::new(
+            200,
+            vec![],
+            serde_json::to_vec(&body).unwrap(),
+        ))
+    }
+}
+
+struct RejoiningRoom {
+    inner: Room,
+    // The test controls completion of the real runtime's room rejoin operation.
+    ready: mpsc::Receiver<()>,
+}
+impl Media for RejoiningRoom {
+    fn next_event(&mut self) -> Operation<'_, Option<MediaEvent>> {
+        self.inner.next_event()
+    }
+    fn send_audio<'a>(&'a mut self, samples: &'a [i16]) -> Operation<'a, ()> {
+        self.inner.send_audio(samples)
+    }
+    fn render(&mut self, samples: usize, now: Instant) -> Result<Vec<i16>, Failure> {
+        self.inner.render(samples, now)
+    }
+    fn mute(&mut self) -> Result<(), Failure> {
+        self.inner.mute()
+    }
+    fn unmute(&mut self) -> Result<(), Failure> {
+        self.inner.unmute()
+    }
+    fn clear_track(&mut self, _: &str) {
+        self.inner.log.lock().unwrap().push("track-cleared");
+    }
+    fn remove_track(&mut self, _: &str) {
+        self.inner.log.lock().unwrap().push("track-removed");
+    }
+    fn remove_participant(&mut self, id: &str) {
+        self.inner.remove_participant(id);
+    }
+    fn clear(&mut self) {
+        self.inner.clear();
+    }
+    fn set_volume(&mut self, id: &str, volume: f32) -> Result<(), Failure> {
+        self.inner.set_volume(id, volume)
+    }
+    fn rejoin<'a>(&'a mut self, _: &'a MediaJoin) -> Operation<'a, ()> {
+        Box::pin(async {
+            self.inner.log.lock().unwrap().push("rejoin-started");
+            self.ready.recv().await.ok_or("rejoin cancelled")?;
+            self.inner.log.lock().unwrap().push("rejoin-completed");
+            Ok(())
+        })
+    }
+    fn close(&mut self) -> Operation<'_, ()> {
+        self.inner.close()
+    }
+}
+
+struct RunningCall {
+    authority: Arc<RecoveringAuthority>,
+    log: Log,
+    events: mpsc::Sender<MediaEvent>,
+    ready: mpsc::Sender<()>,
+    commands: mpsc::Sender<SessionCommand>,
+    changes: mpsc::UnboundedReceiver<CallStatus>,
+    worker: tokio::task::JoinHandle<()>,
+}
+impl RunningCall {
+    fn start() -> Self {
+        let snapshot = crate::CallSnapshot {
+            id: "call".into(),
+            revision: 1,
+            media_epoch: 1,
+            media_room: "room".into(),
+            media_state: MediaState::Ready,
+            members: vec![],
+        };
+        let authority = Arc::new(RecoveringAuthority {
+            snapshot: snapshot.clone(),
+            status: 200.into(),
+            joins: 0.into(),
+        });
+        let log = Log::default();
+        let (events, receiver) = mpsc::channel(8);
+        let (ready, ready_rx) = mpsc::channel(1);
+        let (changes, changed) = mpsc::unbounded_channel();
+        let runtime = SessionRuntime {
+            media: Box::new(RejoiningRoom {
+                inner: Room {
+                    events: receiver,
+                    log: log.clone(),
+                },
+                ready: ready_rx,
+            }),
+            devices: Box::new(Audio(log.clone())),
+            client: CallClient::new(
+                "http://localhost:1",
+                crate::MemberCredential::generate(),
+                authority.clone(),
+            )
+            .unwrap(),
+            device: "device".into(),
+            status: CallStatus {
+                resource_id: "resource".into(),
+                sequence: 0,
+                connection: CallConnection::Connected,
+                call: snapshot,
+                member_id: "owner".into(),
+                participants: vec![],
+                muted: false,
+                deafened: false,
+                microphone_allowed: true,
+                error: None,
+            },
+            changed: Arc::new(move |status| {
+                let _ = changes.send(status.clone());
+            }),
+        };
+        let (commands, receiver) = mpsc::channel(8);
+        Self {
+            authority,
+            log,
+            events,
+            ready,
+            commands,
+            changes: changed,
+            worker: tokio::spawn(runtime.run(receiver)),
+        }
+    }
+
+    async fn changed(&mut self, connection: CallConnection) -> CallStatus {
+        tokio::time::timeout(Duration::from_secs(3), async {
+            loop {
+                let status = self.changes.recv().await.unwrap();
+                if status.connection == connection {
+                    return status;
+                }
+            }
+        })
+        .await
+        .unwrap()
+    }
+
+    async fn wait_log(&self, value: &str) {
+        tokio::time::timeout(Duration::from_secs(3), async {
+            while !self.log.lock().unwrap().contains(&value) {
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .unwrap();
+    }
+
+    async fn leave(self) {
+        let (reply, response) = oneshot::channel();
+        self.commands.send((None, reply)).await.unwrap();
+        let status = tokio::time::timeout(Duration::from_millis(500), response)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        assert_eq!(status.connection, CallConnection::Ended);
+        assert!(
+            self.log
+                .lock()
+                .unwrap()
+                .ends_with(&["media-closed", "devices-closed"])
+        );
+        self.worker.await.unwrap();
+    }
+}
+
+#[tokio::test]
+async fn transient_authority_failure_pauses_then_reauthorizes_before_resuming() {
+    use std::sync::atomic::Ordering;
+    let mut call = RunningCall::start();
+    call.authority.status.store(503, Ordering::SeqCst);
+    call.changed(CallConnection::Reconnecting).await;
+    assert!(call.log.lock().unwrap().contains(&"capture-muted"));
+    assert!(!call.log.lock().unwrap().contains(&"capture-started"));
+    // Even a media reconnect cannot bypass the unavailable authority.
+    call.events.send(MediaEvent::Reconnected).await.unwrap();
+    call.authority.status.store(200, Ordering::SeqCst);
+    call.wait_log("rejoin-started").await;
+    assert_eq!(call.authority.joins.load(Ordering::SeqCst), 1);
+    assert!(!call.log.lock().unwrap().contains(&"capture-started"));
+    call.ready.send(()).await.unwrap();
+    call.changed(CallConnection::Connected).await;
+    call.wait_log("capture-started").await;
+    call.leave().await;
+}
+
+#[tokio::test]
+async fn denied_authority_ends_without_rejoin() {
+    use std::sync::atomic::Ordering;
+    let mut call = RunningCall::start();
+    call.authority.status.store(403, Ordering::SeqCst);
+    let status = call.changed(CallConnection::Failed).await;
+    assert_eq!(status.error.as_deref(), Some("call access denied"));
+    assert_eq!(call.authority.joins.load(Ordering::SeqCst), 0);
+    assert!(!call.log.lock().unwrap().contains(&"capture-started"));
+    call.worker.await.unwrap();
+}
+
+#[tokio::test]
+async fn leave_cancels_pending_room_rejoin_without_resuming_capture() {
+    let call = RunningCall::start();
+    call.events.send(MediaEvent::Disconnected).await.unwrap();
+    call.wait_log("rejoin-started").await;
+    let log = call.log.clone();
+    call.leave().await;
+    assert!(!log.lock().unwrap().contains(&"rejoin-completed"));
+    assert!(!log.lock().unwrap().contains(&"capture-started"));
+}
+
+#[tokio::test]
+async fn leave_cancels_authority_retries() {
+    use std::sync::atomic::Ordering;
+    let mut call = RunningCall::start();
+    call.authority.status.store(503, Ordering::SeqCst);
+    call.changed(CallConnection::Reconnecting).await;
+    call.leave().await;
+}
+
+#[tokio::test]
+async fn muting_remote_track_only_clears_its_audio() {
+    let call = RunningCall::start();
+    call.events
+        .send(MediaEvent::TrackMuted {
+            track_id: "mic".into(),
+        })
+        .await
+        .unwrap();
+    call.wait_log("track-cleared").await;
+    assert!(!call.log.lock().unwrap().contains(&"track-removed"));
+    call.leave().await;
 }
