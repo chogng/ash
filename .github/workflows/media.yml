@@ -25,7 +25,6 @@ on:
       - ".cargo/**"
       - "rust-toolchain.toml"
       - "scripts/cargo.py"
-      - "scripts/just-shell.py"
       - "build/lib/**"
       - "build/download/**"
       - "justfile"
