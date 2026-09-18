@@ -27,6 +27,7 @@ members = [
     "ash-rs/livekit-api",
     "ash-rs/call",
     "ash-rs/voice-host",
+    "ash-rs/screen-capture",
     "ash-rs/agent-environment",
     "ash-rs/agent-graph-store",
     "ash-rs/github",
@@ -502,6 +503,7 @@ ash-rollout = { path = "ash-rs/rollout" }
 ash-rollout-trace = { path = "ash-rs/rollout-trace" }
 ash-rmcp-client = { path = "ash-rs/rmcp-client" }
 ash-sandboxing = { path = "ash-rs/sandboxing" }
+ash-screen-capture = { path = "ash-rs/screen-capture" }
 ash-scm = { path = "app/scm" }
 grep = { package = "ash-grep", path = "ash-rs/grep" }
 arg0 = { package = "ash-arg0", path = "ash-rs/arg0" }

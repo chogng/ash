@@ -5,6 +5,9 @@ mod resample;
 pub use mixer::AudioMixer;
 mod room;
 mod transport;
+#[cfg(test)]
+#[path = "video_tests.rs"]
+mod video_tests;
 pub use livekit::SessionStats;
 
 pub use resample::AudioRate;
@@ -28,6 +31,10 @@ pub enum MediaError {
     AudioFrame,
     #[error("media event consumer is closed or overloaded")]
     Consumer,
+    #[error("screen share publication failed")]
+    ScreenShare,
+    #[error("screen capture failed: {0}")]
+    Capture(String),
 }
 
 pub(crate) fn validate_url(value: &str) -> Result<(), MediaError> {

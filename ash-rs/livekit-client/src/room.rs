@@ -6,6 +6,7 @@ use livekit::RoomOptions;
 use livekit::options::TrackPublishOptions;
 use livekit::prelude::LocalAudioTrack;
 use livekit::prelude::LocalTrack;
+use livekit::prelude::LocalVideoTrack;
 use livekit::prelude::RemoteTrack;
 use livekit::prelude::TrackSource;
 use livekit::webrtc::audio_frame::AudioFrame as RtcAudioFrame;
@@ -13,6 +14,15 @@ use livekit::webrtc::audio_source::AudioSourceOptions;
 use livekit::webrtc::audio_source::RtcAudioSource::Native as PcmSource;
 use livekit::webrtc::audio_source::native::NativeAudioSource as PcmAudioSource;
 use livekit::webrtc::audio_stream::native::NativeAudioStream as PcmAudioStream;
+use livekit::webrtc::prelude::I420Buffer;
+use livekit::webrtc::prelude::RtcVideoSource;
+use livekit::webrtc::prelude::VideoFrame;
+use livekit::webrtc::prelude::VideoResolution;
+use livekit::webrtc::prelude::VideoRotation;
+use livekit::webrtc::video_source::native::NativeVideoSource;
+use screen_capture::CapturedFrame;
+use screen_capture::ScreenCaptureSource;
+use screen_capture::ScreenCaptureStream;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -83,6 +93,9 @@ pub struct MediaRoom {
     stop: Option<oneshot::Sender<()>>,
     worker: Option<JoinHandle<Result<(), MediaError>>>,
     muted: HashSet<String>,
+    screen_source: Option<NativeVideoSource>,
+    screen_publication: Option<LocalVideoTrack>,
+    screen_stream: Option<Box<dyn ScreenCaptureStream>>,
 }
 
 impl MediaRoom {
@@ -138,6 +151,9 @@ impl MediaRoom {
             stop: Some(stop),
             worker: Some(worker),
             muted: HashSet::new(),
+            screen_source: None,
+            screen_publication: None,
+            screen_stream: None,
         };
         if publish != AudioPublication::SubscribeOnly {
             // Device AEC/NS/AGC belongs to voice-host. No duplicate SDK processing.
@@ -241,6 +257,84 @@ impl MediaRoom {
         }
     }
 
+    /// Starts publishing screen capture frames from the given capture source.
+    pub async fn start_screen_share(
+        &mut self,
+        source: &dyn ScreenCaptureSource,
+        fps: u32,
+    ) -> Result<(), MediaError> {
+        if self.is_screen_sharing() {
+            self.stop_screen_share().await?;
+        }
+
+        let info = source.info();
+        let native_source = NativeVideoSource::new(
+            VideoResolution {
+                width: info.width,
+                height: info.height,
+            },
+            true,
+        );
+
+        let track = LocalVideoTrack::create_video_track(
+            "screen-share",
+            RtcVideoSource::Native(native_source.clone()),
+        );
+
+        timeout(
+            DEADLINE,
+            self.room.local_participant().publish_track(
+                LocalTrack::Video(track.clone()),
+                TrackPublishOptions {
+                    source: TrackSource::Screenshare,
+                    ..Default::default()
+                },
+            ),
+        )
+        .await
+        .map_err(|_| MediaError::Timeout)?
+        .map_err(|_| MediaError::ScreenShare)?;
+
+        let native_source_clone = native_source.clone();
+        let stream = source
+            .start_stream(
+                fps,
+                Box::new(move |frame| {
+                    if let Some(video_frame) = convert_captured_frame_to_webrtc(&frame) {
+                        native_source_clone.capture_frame(&video_frame);
+                    }
+                }),
+            )
+            .map_err(|err| MediaError::Capture(err.to_string()))?;
+
+        self.screen_source = Some(native_source);
+        self.screen_publication = Some(track);
+        self.screen_stream = Some(stream);
+        Ok(())
+    }
+
+    /// Stops the currently active screen share and unpublishes the track.
+    pub async fn stop_screen_share(&mut self) -> Result<(), MediaError> {
+        if let Some(mut stream) = self.screen_stream.take() {
+            stream.stop();
+        }
+        self.screen_source = None;
+        if let Some(track) = self.screen_publication.take() {
+            let sid = track.sid();
+            let _ = timeout(
+                DEADLINE,
+                self.room.local_participant().unpublish_track(&sid),
+            )
+            .await;
+        }
+        Ok(())
+    }
+
+    /// Returns whether this room is currently publishing screen share.
+    pub fn is_screen_sharing(&self) -> bool {
+        self.screen_publication.is_some()
+    }
+
     pub async fn close(mut self) -> Result<(), MediaError> {
         if let Some(stop) = self.stop.take() {
             let _ = stop.send(());
@@ -252,10 +346,79 @@ impl MediaRoom {
     }
 }
 
+pub(crate) fn convert_captured_frame_to_webrtc(
+    frame: &CapturedFrame,
+) -> Option<VideoFrame<I420Buffer>> {
+    match frame {
+        CapturedFrame::Rgba {
+            data,
+            width,
+            height,
+            stride,
+            timestamp,
+        } => {
+            let width = *width;
+            let height = *height;
+            let stride = *stride as usize;
+            let mut buffer = I420Buffer::new(width, height);
+            let (stride_y, stride_u, stride_v) = buffer.strides();
+            let stride_y = stride_y as usize;
+            let stride_u = stride_u as usize;
+            let stride_v = stride_v as usize;
+            let (data_y, data_u, data_v) = buffer.data_mut();
+
+            for y in 0..height as usize {
+                let src_row = y * stride;
+                let y_row = y * stride_y;
+                let is_even_row = y % 2 == 0;
+                let uv_row_idx = (y / 2) * stride_u;
+                let v_row_idx = (y / 2) * stride_v;
+
+                for x in 0..width as usize {
+                    let px = src_row + x * 4;
+                    if px + 2 >= data.len() {
+                        break;
+                    }
+                    let r = data[px] as i32;
+                    let g = data[px + 1] as i32;
+                    let b = data[px + 2] as i32;
+
+                    let y_val = ((66 * r + 129 * g + 25 * b + 128) >> 8) + 16;
+                    if y_row + x < data_y.len() {
+                        data_y[y_row + x] = y_val.clamp(0, 255) as u8;
+                    }
+
+                    if is_even_row && x % 2 == 0 {
+                        let u_val = ((-38 * r - 74 * g + 112 * b + 128) >> 8) + 128;
+                        let v_val = ((112 * r - 94 * g - 18 * b + 128) >> 8) + 128;
+                        let uv_col = x / 2;
+                        if uv_row_idx + uv_col < data_u.len() {
+                            data_u[uv_row_idx + uv_col] = u_val.clamp(0, 255) as u8;
+                        }
+                        if v_row_idx + uv_col < data_v.len() {
+                            data_v[v_row_idx + uv_col] = v_val.clamp(0, 255) as u8;
+                        }
+                    }
+                }
+            }
+
+            Some(VideoFrame {
+                rotation: VideoRotation::VideoRotation0,
+                timestamp_us: timestamp.as_micros() as i64,
+                frame_metadata: None,
+                buffer,
+            })
+        }
+    }
+}
+
 impl Drop for MediaRoom {
     fn drop(&mut self) {
         if let Some(source) = &self.source {
             source.clear_buffer();
+        }
+        if let Some(mut stream) = self.screen_stream.take() {
+            stream.stop();
         }
         if let Some(stop) = self.stop.take() {
             let _ = stop.send(());

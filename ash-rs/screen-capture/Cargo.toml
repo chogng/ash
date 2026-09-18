@@ -1,0 +1,23 @@
+[package]
+name = "ash-screen-capture"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+name = "screen_capture"
+path = "src/screen_capture.rs"
+
+[features]
+default = []
+
+[dependencies]
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["sync", "time", "rt"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[lints]
+workspace = true

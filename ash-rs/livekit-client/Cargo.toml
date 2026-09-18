@@ -18,6 +18,7 @@ futures = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
 thiserror = { workspace = true }
 url = { workspace = true }
+ash-screen-capture = { path = "../screen-capture" }
 
 [dev-dependencies]
 rustls.workspace = true

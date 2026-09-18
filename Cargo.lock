@@ -1710,6 +1710,7 @@ version = "0.1.0"
 dependencies = [
  "ash-http-client",
  "ash-livekit-api",
+ "ash-screen-capture",
  "ash-secrets",
  "ash-websocket-client",
  "async-trait",
@@ -2237,6 +2238,14 @@ dependencies = [
  "ash-ui-components",
  "ash-ui-theme",
  "zui",
+]
+
+[[package]]
+name = "ash-screen-capture"
+version = "0.1.0"
+dependencies = [
+ "thiserror 2.0.19",
+ "tokio",
 ]
 
 [[package]]
