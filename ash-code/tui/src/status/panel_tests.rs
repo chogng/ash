@@ -148,10 +148,7 @@ fn status_panel_updates_process_rows_without_resetting_each_tab_scroll() {
         row_value(panel.processes.rows(), "Total"),
         "240.0 MiB · 12.4%"
     );
-    assert_eq!(
-        row_value(panel.processes.rows(), "TUI"),
-        "140.0 MiB · 8.4%"
-    );
+    assert_eq!(row_value(panel.processes.rows(), "TUI"), "140.0 MiB · 8.4%");
     assert_eq!(
         row_value(panel.processes.rows(), "App Server"),
         "100.0 MiB · 4.0%"

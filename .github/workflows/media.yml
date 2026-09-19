@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths: &media-paths
       - "ash-rs/livekit-client/**"
+      - "ash-rs/screen-capture/**"
       - "ash-rs/vendor/livekit-rust-sdks/**"
       - "ash-rs/http-client/**"
       - "ash-rs/websocket-client/**"

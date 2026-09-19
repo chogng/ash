@@ -147,8 +147,8 @@ async fn test_platform_display_stream_lifecycle() {
             _ => return,
         };
 
-        let source = create_display_source(&displays[0].id)
-            .expect("display source creation should succeed");
+        let source =
+            create_display_source(&displays[0].id).expect("display source creation should succeed");
 
         let frame_received = Arc::new(AtomicUsize::new(0));
         let frame_received_clone = Arc::clone(&frame_received);

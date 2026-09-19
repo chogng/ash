@@ -4,8 +4,6 @@ use super::action;
 use super::status_after_recording;
 use ash_memory_diagnostics::MemoryStatus;
 
-
-
 #[test]
 fn finished_recording_allows_enabled_config_to_start_the_next_segment() {
     assert_eq!(

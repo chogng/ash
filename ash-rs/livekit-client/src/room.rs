@@ -263,7 +263,10 @@ impl MediaRoom {
         source: &dyn ScreenCaptureSource,
         fps: u32,
     ) -> Result<(), MediaError> {
-        if self.is_screen_sharing() {
+        if self.screen_source.is_some()
+            || self.screen_publication.is_some()
+            || self.screen_stream.is_some()
+        {
             self.stop_screen_share().await?;
         }
 
@@ -281,22 +284,8 @@ impl MediaRoom {
             RtcVideoSource::Native(native_source.clone()),
         );
 
-        timeout(
-            DEADLINE,
-            self.room.local_participant().publish_track(
-                LocalTrack::Video(track.clone()),
-                TrackPublishOptions {
-                    source: TrackSource::Screenshare,
-                    ..Default::default()
-                },
-            ),
-        )
-        .await
-        .map_err(|_| MediaError::Timeout)?
-        .map_err(|_| MediaError::ScreenShare)?;
-
         let native_source_clone = native_source.clone();
-        let stream = source
+        let mut stream = source
             .start_stream(
                 fps,
                 Box::new(move |frame| {
@@ -307,6 +296,29 @@ impl MediaRoom {
             )
             .map_err(|err| MediaError::Capture(err.to_string()))?;
 
+        let publish_result = timeout(
+            DEADLINE,
+            self.room.local_participant().publish_track(
+                LocalTrack::Video(track.clone()),
+                TrackPublishOptions {
+                    source: TrackSource::Screenshare,
+                    ..Default::default()
+                },
+            ),
+        )
+        .await;
+        match publish_result {
+            Err(_) => {
+                stream.stop();
+                return Err(MediaError::Timeout);
+            }
+            Ok(Err(_)) => {
+                stream.stop();
+                return Err(MediaError::ScreenShare);
+            }
+            Ok(Ok(_)) => {}
+        }
+
         self.screen_source = Some(native_source);
         self.screen_publication = Some(track);
         self.screen_stream = Some(stream);
@@ -315,18 +327,24 @@ impl MediaRoom {
 
     /// Stops the currently active screen share and unpublishes the track.
     pub async fn stop_screen_share(&mut self) -> Result<(), MediaError> {
-        if let Some(mut stream) = self.screen_stream.take() {
-            stream.stop();
-        }
-        self.screen_source = None;
-        if let Some(track) = self.screen_publication.take() {
+        if let Some(track) = self.screen_publication.as_ref() {
             let sid = track.sid();
-            let _ = timeout(
+            let unpublish_result = timeout(
                 DEADLINE,
                 self.room.local_participant().unpublish_track(&sid),
             )
             .await;
+            match unpublish_result {
+                Err(_) => return Err(MediaError::Timeout),
+                Ok(Err(_)) => return Err(MediaError::ScreenShare),
+                Ok(Ok(_)) => {}
+            }
         }
+        if let Some(mut stream) = self.screen_stream.take() {
+            stream.stop();
+        }
+        self.screen_source = None;
+        self.screen_publication = None;
         Ok(())
     }
 
@@ -336,13 +354,16 @@ impl MediaRoom {
     }
 
     pub async fn close(mut self) -> Result<(), MediaError> {
+        let screen_result = self.stop_screen_share().await;
         if let Some(stop) = self.stop.take() {
             let _ = stop.send(());
         }
-        match self.worker.take() {
+        let worker_result = match self.worker.take() {
             Some(worker) => worker.await.map_err(|_| MediaError::Connection)?,
             None => Ok(()),
-        }
+        };
+        screen_result?;
+        worker_result
     }
 }
 

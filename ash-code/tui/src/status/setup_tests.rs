@@ -123,10 +123,7 @@ fn setup_aligns_items_and_switches_with_expandable_descriptions() {
         trailing_column_of(permissions, "on") + "on".len(),
         right_boundary
     );
-    assert_eq!(
-        trailing_column_of(model, "on") + "on".len(),
-        right_boundary
-    );
+    assert_eq!(trailing_column_of(model, "on") + "on".len(), right_boundary);
     assert_eq!(
         trailing_column_of(git_branch, "on") + "on".len(),
         right_boundary
@@ -143,10 +140,7 @@ fn setup_aligns_items_and_switches_with_expandable_descriptions() {
         trailing_column_of(memory, "off") + "off".len(),
         right_boundary
     );
-    assert_eq!(
-        trailing_column_of(cpu, "off") + "off".len(),
-        right_boundary
-    );
+    assert_eq!(trailing_column_of(cpu, "off") + "off".len(), right_boundary);
     assert_eq!(
         trailing_column_of(git_changes, "off") + "off".len(),
         right_boundary
@@ -178,7 +172,11 @@ fn setup_aligns_items_and_switches_with_expandable_descriptions() {
                 .collect::<String>()
         })
         .collect::<Vec<_>>();
-    assert!(expanded_rows.iter().any(|row| row.contains("Current permission mode")));
+    assert!(
+        expanded_rows
+            .iter()
+            .any(|row| row.contains("Current permission mode"))
+    );
 
     state.handle_key(crossterm::event::KeyEvent::new(
         crossterm::event::KeyCode::Left,
@@ -205,7 +203,11 @@ fn setup_aligns_items_and_switches_with_expandable_descriptions() {
                 .collect::<String>()
         })
         .collect::<Vec<_>>();
-    assert!(!collapsed_rows.iter().any(|row| row.contains("Current permission mode")));
+    assert!(
+        !collapsed_rows
+            .iter()
+            .any(|row| row.contains("Current permission mode"))
+    );
 
     crate::tui_assert_snapshot!("status_line_settings_with_accounting", rows.join("\n"));
 }

@@ -35,10 +35,7 @@ const K_CF_STRING_ENCODING_UTF8: u32 = 0x0800_0100;
 unsafe extern "C" {
     fn CGPreflightScreenCaptureAccess() -> bool;
     fn CGRequestScreenCaptureAccess() -> bool;
-    fn CGRectMakeWithDictionaryRepresentation(
-        dict: *const c_void,
-        rect: *mut CGRect,
-    ) -> bool;
+    fn CGRectMakeWithDictionaryRepresentation(dict: *const c_void, rect: *mut CGRect) -> bool;
 }
 
 #[link(name = "CoreFoundation", kind = "framework")]
@@ -56,11 +53,7 @@ unsafe extern "C" {
         key: *const c_void,
         value: *mut *const c_void,
     ) -> bool;
-    fn CFNumberGetValue(
-        number: *const c_void,
-        the_type: i32,
-        value_ptr: *mut c_void,
-    ) -> bool;
+    fn CFNumberGetValue(number: *const c_void, the_type: i32, value_ptr: *mut c_void) -> bool;
     fn CFBooleanGetValue(boolean: *const c_void) -> bool;
     fn CFStringGetCString(
         the_string: *const c_void,
@@ -144,10 +137,9 @@ pub fn enumerate_windows() -> Result<Vec<WindowInfo>, CaptureError> {
             None => continue,
         };
 
-        let app_name = unsafe { get_string_value(dict_ref, "kCGWindowOwnerName") }
-            .unwrap_or_default();
-        let title = unsafe { get_string_value(dict_ref, "kCGWindowName") }
-            .unwrap_or_default();
+        let app_name =
+            unsafe { get_string_value(dict_ref, "kCGWindowOwnerName") }.unwrap_or_default();
+        let title = unsafe { get_string_value(dict_ref, "kCGWindowName") }.unwrap_or_default();
 
         let mut rect = CGRect::new(&CGPoint::new(0.0, 0.0), &CGSize::new(0.0, 0.0));
         let cf_bounds_key = unsafe { make_cf_string("kCGWindowBounds") };
@@ -164,7 +156,10 @@ pub fn enumerate_windows() -> Result<Vec<WindowInfo>, CaptureError> {
 
             if present && !bounds_val.is_null() {
                 if CGRectMakeWithDictionaryRepresentation(bounds_val, &mut rect) {
-                    (rect.size.width.max(0.0) as u32, rect.size.height.max(0.0) as u32)
+                    (
+                        rect.size.width.max(0.0) as u32,
+                        rect.size.height.max(0.0) as u32,
+                    )
                 } else {
                     (0, 0)
                 }
@@ -177,7 +172,8 @@ pub fn enumerate_windows() -> Result<Vec<WindowInfo>, CaptureError> {
             continue;
         }
 
-        let is_on_screen = unsafe { get_bool_value(dict_ref, "kCGWindowIsOnscreen") }.unwrap_or(true);
+        let is_on_screen =
+            unsafe { get_bool_value(dict_ref, "kCGWindowIsOnscreen") }.unwrap_or(true);
 
         windows.push(WindowInfo {
             id,
@@ -193,21 +189,22 @@ pub fn enumerate_windows() -> Result<Vec<WindowInfo>, CaptureError> {
 }
 
 pub fn create_display_source(id: &str) -> Result<Box<dyn ScreenCaptureSource>, CaptureError> {
-    let display_id: u32 = id.parse().map_err(|_| CaptureError::NotFound(id.to_string()))?;
+    let display_id: u32 = id
+        .parse()
+        .map_err(|_| CaptureError::NotFound(id.to_string()))?;
     let displays = enumerate_displays()?;
     let info = displays
         .into_iter()
         .find(|d| d.id == id)
         .ok_or_else(|| CaptureError::NotFound(id.to_string()))?;
 
-    Ok(Box::new(MacDisplaySource {
-        info,
-        display_id,
-    }))
+    Ok(Box::new(MacDisplaySource { info, display_id }))
 }
 
 pub fn create_window_source(id: &str) -> Result<Box<dyn ScreenCaptureSource>, CaptureError> {
-    let window_id: u32 = id.parse().map_err(|_| CaptureError::NotFound(id.to_string()))?;
+    let window_id: u32 = id
+        .parse()
+        .map_err(|_| CaptureError::NotFound(id.to_string()))?;
     let windows = enumerate_windows()?;
     let win = windows
         .into_iter()
@@ -293,10 +290,9 @@ pub struct MacCaptureStream {
 
 impl ScreenCaptureStream for MacCaptureStream {
     fn stop(&mut self) {
-        if self.active.swap(false, Ordering::SeqCst) {
-            if let Some(task) = self.task.take() {
-                task.abort();
-            }
+        self.active.store(false, Ordering::SeqCst);
+        if let Some(task) = self.task.take() {
+            task.abort();
         }
     }
 
@@ -344,12 +340,37 @@ where
                 }
             }
         }
+        active_clone.store(false, Ordering::SeqCst);
     });
 
     Ok(Box::new(MacCaptureStream {
         active,
         task: Some(handle),
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn capture_stream_reports_inactive_after_capture_ends() {
+        let mut stream = start_capture_stream(60, Box::new(|_| {}), |_| {
+            Err(CaptureError::PermissionDenied)
+        })
+        .expect("capture stream should start");
+
+        let finished = tokio::time::timeout(Duration::from_secs(1), async {
+            while stream.is_active() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await;
+
+        assert!(finished.is_ok(), "capture stream did not finish");
+        assert!(!stream.is_active());
+        stream.stop();
+    }
 }
 
 fn capture_display_frame(
@@ -417,9 +438,9 @@ fn cgimage_to_rgba_frame(
             let dp = dst_row + x * 4;
             if sp + 3 < raw.len() && dp + 3 < rgba.len() {
                 // CoreGraphics 32-bit pixel buffers on macOS are BGRA in memory.
-                rgba[dp] = raw[sp + 2];     // R
+                rgba[dp] = raw[sp + 2]; // R
                 rgba[dp + 1] = raw[sp + 1]; // G
-                rgba[dp + 2] = raw[sp];     // B
+                rgba[dp + 2] = raw[sp]; // B
                 rgba[dp + 3] = raw[sp + 3]; // A
             }
         }
@@ -486,13 +507,8 @@ unsafe fn get_i64_value(dict: *const c_void, key_str: &str) -> Option<i64> {
 
     if present && !val.is_null() {
         let mut out: i64 = 0;
-        if unsafe {
-            CFNumberGetValue(
-                val,
-                K_CF_NUMBER_S_INT64_TYPE,
-                (&mut out as *mut i64).cast(),
-            )
-        } {
+        if unsafe { CFNumberGetValue(val, K_CF_NUMBER_S_INT64_TYPE, (&mut out as *mut i64).cast()) }
+        {
             Some(out)
         } else {
             None

@@ -88,10 +88,7 @@ impl StatusPanel {
     }
 
     fn rebuild_processes(&mut self) {
-        self.processes = DetailList::new(
-            "Processes",
-            process_rows(&self.process_resources),
-        );
+        self.processes = DetailList::new("Processes", process_rows(&self.process_resources));
     }
 
     pub(crate) fn tab_rows(&self, width: u16) -> u16 {
@@ -255,10 +252,7 @@ pub(crate) fn status_panel(data: StatusViewData<'_>) -> StatusPanel {
     StatusPanel {
         tabs: TabListState::new(status_tabs()),
         session: DetailList::new("Thread", base_rows),
-        processes: DetailList::new(
-            "Processes",
-            process_rows(&process_resources),
-        ),
+        processes: DetailList::new("Processes", process_rows(&process_resources)),
         process_resources,
         scroll: [0, 0],
     }
@@ -287,10 +281,7 @@ fn process_rows(resources: &ProcessResourcesView) -> Vec<DetailListRow> {
             rows.push(detail("App Server", "included in the TUI process"));
         }
         AppServerResourcesView::Local(app_server) => {
-            rows.push(detail(
-                "App Server",
-                format_process_usage(app_server.total),
-            ));
+            rows.push(detail("App Server", format_process_usage(app_server.total)));
             for process in &app_server.descendants {
                 let indent = "  ".repeat(process.depth.saturating_sub(1));
                 let label = format!("{indent}• {} (PID {})", process.name, process.process_id);

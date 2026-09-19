@@ -25,12 +25,7 @@ fn model_aggregates_local_processes_and_exposes_resource_view() {
     let started = Instant::now();
     let mut model = ProcessResourcesModel::new(AppServerProcess::Local(42));
     model.apply_request(detailed_request());
-    model.apply(reading(
-        500 * MIB,
-        Some(20 * MIB),
-        Some(25),
-        started,
-    ));
+    model.apply(reading(500 * MIB, Some(20 * MIB), Some(25), started));
 
     assert_eq!(
         model.view(),
@@ -155,12 +150,7 @@ fn demand_changes_reset_restarted_metrics_and_reject_stale_readings() {
         demand: ProcessResourceDemand::Disabled,
     };
     model.apply_request(disabled);
-    model.apply(reading(
-        200 * MIB,
-        None,
-        Some(50),
-        started,
-    ));
+    model.apply(reading(200 * MIB, None, Some(50), started));
     assert_eq!(
         model.view().local.memory,
         ProcessMemoryCurrent::Available(100 * MIB)
