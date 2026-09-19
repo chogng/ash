@@ -19,5 +19,9 @@ tokio = { workspace = true, features = ["sync", "time", "rt"] }
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
-[lints]
-workspace = true
+[target.'cfg(target_os = "macos")'.dependencies]
+core-graphics = { workspace = true }
+
+[lints.rust]
+# The crate root denies unsafe internally and allows it only in the audited platform FFI module.
+unsafe_code = "allow"

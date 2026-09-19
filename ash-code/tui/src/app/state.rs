@@ -1326,7 +1326,6 @@ impl App {
 
     fn show_status_panel(&mut self, mut panel: crate::status::StatusPanel) {
         panel.apply_process_resources(self.process_resources.view());
-        panel.apply_memory_diagnostics(self.memory_diagnostics);
         self.open_command_panel(CommandPanel::status(panel));
     }
 
@@ -2388,7 +2387,6 @@ impl App {
             StatusEvent::PanelOpened(panel) => self.show_status_panel(panel),
             StatusEvent::MemoryDiagnosticsChanged(status) => {
                 self.memory_diagnostics = status;
-                self.panels_mut().apply_memory_diagnostics(status);
             }
             StatusEvent::GitStatusReceived(status) => {
                 self.chat_panel.status_line_mut().apply_git_status(&status);

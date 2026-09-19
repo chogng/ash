@@ -35,7 +35,7 @@ pub(crate) fn list_selection(settings: &StatusLineSettings, revision: u64) -> St
             );
             ListSelectionItem::new(item.label())
                 .with_id(id)
-                .with_columns(item.label(), item.description(), checkbox(enabled))
+                .with_columns(item.label(), item.description(), switch_value(enabled))
         })
         .collect();
     let model = ListSelectionModel::new(
@@ -43,12 +43,13 @@ pub(crate) fn list_selection(settings: &StatusLineSettings, revision: u64) -> St
         vec![ListSelectionGroup::new("Status line", items)],
     )
     .without_tab_bar()
+    .with_expandable_descriptions()
     .with_activation(bindings::STATUS_TOGGLE);
     StatusLineChoices { model, actions }
 }
 
-const fn checkbox(checked: bool) -> &'static str {
-    if checked { "[ ✔ ]" } else { "[   ]" }
+const fn switch_value(checked: bool) -> &'static str {
+    if checked { "on" } else { "off" }
 }
 
 #[cfg(test)]

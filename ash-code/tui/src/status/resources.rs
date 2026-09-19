@@ -4,14 +4,6 @@ use ash_memory_diagnostics::ProcessResourceRequest;
 use ash_memory_diagnostics::ProcessResourceUsage;
 use ash_memory_diagnostics::ProcessResourcesReading;
 use ash_memory_diagnostics::ProcessTreeResourceUsage;
-use std::collections::VecDeque;
-use std::time::Duration;
-use std::time::Instant;
-
-const ONE_MINUTE: Duration = Duration::from_secs(60);
-const FIVE_MINUTES: Duration = Duration::from_secs(5 * 60);
-const SAMPLE_TOLERANCE: Duration = Duration::from_secs(2);
-const MAX_SAMPLES: usize = 301;
 const MEBIBYTE: u64 = 1024 * 1024;
 const GIBIBYTE: u64 = 1024 * MEBIBYTE;
 
@@ -20,9 +12,6 @@ pub(crate) struct ProcessResourcesView {
     pub(crate) local: ProcessUsageView,
     pub(crate) tui: ProcessUsageView,
     pub(crate) app_server: AppServerResourcesView,
-    pub(crate) observed_peak_bytes: Option<u64>,
-    pub(crate) one_minute_change_bytes: Option<i128>,
-    pub(crate) five_minute_change_bytes: Option<i128>,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -76,14 +65,6 @@ pub(crate) struct ProcessResourcesModel {
     request: ProcessResourceRequest,
     tui: ProcessUsageView,
     app_server: AppServerProcessResourcesView,
-    observed_peak_bytes: Option<u64>,
-    samples: VecDeque<ProcessMemorySample>,
-}
-
-#[derive(Clone, Copy, Debug)]
-struct ProcessMemorySample {
-    resident_bytes: u64,
-    sampled_at: Instant,
 }
 
 impl ProcessResourcesModel {
@@ -93,8 +74,6 @@ impl ProcessResourcesModel {
             request: ProcessResourceRequest::default(),
             tui: ProcessUsageView::default(),
             app_server: AppServerProcessResourcesView::default(),
-            observed_peak_bytes: None,
-            samples: VecDeque::new(),
         }
     }
 
@@ -112,10 +91,6 @@ impl ProcessResourcesModel {
             for descendant in &mut self.app_server.descendants {
                 descendant.usage.memory = ProcessMemoryCurrent::Collecting;
             }
-        }
-        if !next_memory {
-            self.observed_peak_bytes = None;
-            self.samples.clear();
         }
         let previous_cpu = previous.is_some_and(ProcessResourceMetrics::includes_cpu);
         let next_cpu = next.is_some_and(ProcessResourceMetrics::includes_cpu);
@@ -148,26 +123,11 @@ impl ProcessResourcesModel {
                 }
             }
         }
-        let local = self.local_usage();
-        let ProcessMemoryCurrent::Available(resident_bytes) = local.memory else {
-            return;
-        };
-        self.observed_peak_bytes = Some(
-            self.observed_peak_bytes
-                .map_or(resident_bytes, |peak| peak.max(resident_bytes)),
-        );
-        self.samples.push_back(ProcessMemorySample {
-            resident_bytes,
-            sampled_at: reading.sampled_at,
-        });
-        self.prune(reading.sampled_at);
     }
 
     pub(crate) fn view(&self) -> ProcessResourcesView {
-        let local = self.local_usage();
-        let has_current = matches!(local.memory, ProcessMemoryCurrent::Available(_));
         ProcessResourcesView {
-            local,
+            local: self.local_usage(),
             tui: self.tui,
             app_server: match self.app_server_process {
                 AppServerProcess::IncludedInTui => AppServerResourcesView::IncludedInTui,
@@ -176,17 +136,7 @@ impl ProcessResourcesModel {
                 }
                 AppServerProcess::Remote => AppServerResourcesView::Remote,
             },
-            observed_peak_bytes: self.observed_peak_bytes,
-            one_minute_change_bytes: has_current.then(|| self.change_since(ONE_MINUTE)).flatten(),
-            five_minute_change_bytes: has_current
-                .then(|| self.change_since(FIVE_MINUTES))
-                .flatten(),
         }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn sample_count(&self) -> usize {
-        self.samples.len()
     }
 
     fn local_usage(&self) -> ProcessUsageView {
@@ -196,39 +146,6 @@ impl ProcessResourcesModel {
                 memory: sum_memory(self.tui.memory, self.app_server.total.memory),
                 cpu: sum_cpu(self.tui.cpu, self.app_server.total.cpu),
             },
-        }
-    }
-
-    fn change_since(&self, period: Duration) -> Option<i128> {
-        let latest = self.samples.back()?;
-        let target = latest.sampled_at.checked_sub(period)?;
-        let earlier = self.samples.iter().min_by_key(|sample| {
-            if sample.sampled_at >= target {
-                sample.sampled_at.duration_since(target)
-            } else {
-                target.duration_since(sample.sampled_at)
-            }
-        })?;
-        let distance = if earlier.sampled_at >= target {
-            earlier.sampled_at.duration_since(target)
-        } else {
-            target.duration_since(earlier.sampled_at)
-        };
-        (distance <= SAMPLE_TOLERANCE)
-            .then(|| i128::from(latest.resident_bytes) - i128::from(earlier.resident_bytes))
-    }
-
-    fn prune(&mut self, sampled_at: Instant) {
-        let oldest_useful = sampled_at.checked_sub(FIVE_MINUTES + SAMPLE_TOLERANCE);
-        while self
-            .samples
-            .front()
-            .is_some_and(|sample| oldest_useful.is_some_and(|oldest| sample.sampled_at < oldest))
-        {
-            self.samples.pop_front();
-        }
-        while self.samples.len() > MAX_SAMPLES {
-            self.samples.pop_front();
         }
     }
 }
@@ -376,19 +293,16 @@ pub(crate) fn format_compact_process_cpu(current: ProcessCpuCurrent) -> String {
     }
 }
 
-pub(crate) fn format_memory_change(change_bytes: Option<i128>) -> String {
-    let Some(change_bytes) = change_bytes else {
-        return "collecting".into();
-    };
-    let sign = if change_bytes > 0 {
-        "+"
-    } else if change_bytes < 0 {
-        "-"
-    } else {
-        ""
-    };
-    let magnitude = u64::try_from(change_bytes.unsigned_abs()).unwrap_or(u64::MAX);
-    format!("{sign}{}", format_bytes(magnitude))
+pub(crate) fn format_process_usage(usage: ProcessUsageView) -> String {
+    match (usage.memory, usage.cpu) {
+        (ProcessMemoryCurrent::Collecting, ProcessCpuCurrent::Collecting) => "collecting".into(),
+        (ProcessMemoryCurrent::Unavailable, ProcessCpuCurrent::Unavailable) => "unavailable".into(),
+        _ => format!(
+            "{} · {}",
+            format_process_memory(usage.memory),
+            format_process_cpu(usage.cpu),
+        ),
+    }
 }
 
 #[cfg(test)]

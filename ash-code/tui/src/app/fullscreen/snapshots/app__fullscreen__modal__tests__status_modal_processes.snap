@@ -1,5 +1,6 @@
 ---
 source: ash-code/tui/src/app/fullscreen/modal_tests.rs
+assertion_line: 690
 expression: frame_text(&app)
 ---
   .                                                                            [— / —] [Dashboard]  
@@ -9,15 +10,15 @@ expression: frame_text(&app)
             │                                                                         │             
             │   Thread    Processes                                                   │             
             │                                                                         │             
-            │  Memory diagnostics:          Disabled                                  │             
-            │  Local total resident memory: collecting                                │             
-            │  Local observed peak:         collecting                                │             
-            │  Local total CPU:             collecting                                │             
-            │  1 minute memory change:      collecting                                │             
-            │  5 minute memory change:      collecting                                │             
-            │  TUI resident memory:         collecting                                │             
-            │  TUI CPU:                     collecting                                │             
-            │  App Server:                  included in the TUI process               │             
+            │  Total:      collecting                                                 │             
+            │  TUI:        collecting                                                 │             
+            │  App Server: included in the TUI process                                │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             

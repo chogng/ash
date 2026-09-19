@@ -1,10 +1,6 @@
 use super::AppServerResourcesView;
-use super::ProcessMemoryCurrent;
 use super::ProcessResourcesView;
-use super::format_memory_bytes;
-use super::format_memory_change;
-use super::format_process_cpu;
-use super::format_process_memory;
+use super::format_process_usage;
 use super::model::format_cache_hit_rate;
 use super::model::format_reference_cost;
 use crate::keymap::bindings;
@@ -78,7 +74,6 @@ pub(crate) struct StatusPanel {
     session: DetailList,
     processes: DetailList,
     process_resources: ProcessResourcesView,
-    memory_diagnostics: crate::memory::Status,
     scroll: [u16; 2],
 }
 
@@ -92,15 +87,10 @@ impl StatusPanel {
         self.rebuild_processes();
     }
 
-    pub(crate) fn apply_memory_diagnostics(&mut self, status: crate::memory::Status) {
-        self.memory_diagnostics = status;
-        self.rebuild_processes();
-    }
-
     fn rebuild_processes(&mut self) {
         self.processes = DetailList::new(
             "Processes",
-            process_rows(&self.process_resources, self.memory_diagnostics),
+            process_rows(&self.process_resources),
         );
     }
 
@@ -262,16 +252,14 @@ pub(crate) fn status_panel(data: StatusViewData<'_>) -> StatusPanel {
         detail("Thread ID", data.thread_id),
     ];
     let process_resources = ProcessResourcesView::default();
-    let memory_diagnostics = crate::memory::Status::Disabled;
     StatusPanel {
         tabs: TabListState::new(status_tabs()),
         session: DetailList::new("Thread", base_rows),
         processes: DetailList::new(
             "Processes",
-            process_rows(&process_resources, memory_diagnostics),
+            process_rows(&process_resources),
         ),
         process_resources,
-        memory_diagnostics,
         scroll: [0, 0],
     }
 }
@@ -289,85 +277,28 @@ fn status_tabs() -> Vec<StatusTab> {
     ]
 }
 
-fn process_rows(
-    resources: &ProcessResourcesView,
-    memory_diagnostics: crate::memory::Status,
-) -> Vec<DetailListRow> {
-    let observed_peak = resources.observed_peak_bytes.map_or_else(
-        || match resources.local.memory {
-            ProcessMemoryCurrent::Unavailable => "unavailable".into(),
-            ProcessMemoryCurrent::Collecting | ProcessMemoryCurrent::Available(_) => {
-                "collecting".into()
-            }
-        },
-        format_memory_bytes,
-    );
-    let change = |change| match resources.local.memory {
-        ProcessMemoryCurrent::Unavailable => "unavailable".into(),
-        ProcessMemoryCurrent::Collecting | ProcessMemoryCurrent::Available(_) => {
-            format_memory_change(change)
-        }
-    };
+fn process_rows(resources: &ProcessResourcesView) -> Vec<DetailListRow> {
     let mut rows = vec![
-        detail("Memory diagnostics", memory_diagnostics.label()),
-        detail(
-            "Local total resident memory",
-            format_process_memory(resources.local.memory),
-        ),
-        detail("Local observed peak", observed_peak),
-        detail("Local total CPU", format_process_cpu(resources.local.cpu)),
-        detail(
-            "1 minute memory change",
-            change(resources.one_minute_change_bytes),
-        ),
-        detail(
-            "5 minute memory change",
-            change(resources.five_minute_change_bytes),
-        ),
-        detail(
-            "TUI resident memory",
-            format_process_memory(resources.tui.memory),
-        ),
-        detail("TUI CPU", format_process_cpu(resources.tui.cpu)),
+        detail("Total", format_process_usage(resources.local)),
+        detail("TUI", format_process_usage(resources.tui)),
     ];
     match &resources.app_server {
         AppServerResourcesView::IncludedInTui => {
-            rows.push(detail("App Server", "included in the TUI process"))
+            rows.push(detail("App Server", "included in the TUI process"));
         }
         AppServerResourcesView::Local(app_server) => {
             rows.push(detail(
-                "App Server total memory",
-                format_process_memory(app_server.total.memory),
+                "App Server",
+                format_process_usage(app_server.total),
             ));
-            rows.push(detail(
-                "App Server total CPU",
-                format_process_cpu(app_server.total.cpu),
-            ));
-            rows.push(detail(
-                "App Server process memory",
-                format_process_memory(app_server.process.memory),
-            ));
-            rows.push(detail(
-                "App Server process CPU",
-                format_process_cpu(app_server.process.cpu),
-            ));
-            if app_server.descendants.is_empty() {
-                rows.push(detail("App Server child processes", "none"));
-            } else {
-                for process in &app_server.descendants {
-                    let indent = "  ".repeat(process.depth.saturating_sub(1));
-                    let label = format!("{indent}• {} (PID {})", process.name, process.process_id);
-                    let value = format!(
-                        "{} · {}",
-                        format_process_memory(process.usage.memory),
-                        format_process_cpu(process.usage.cpu)
-                    );
-                    rows.push(detail(label, value));
-                }
+            for process in &app_server.descendants {
+                let indent = "  ".repeat(process.depth.saturating_sub(1));
+                let label = format!("{indent}• {} (PID {})", process.name, process.process_id);
+                rows.push(detail(label, format_process_usage(process.usage)));
             }
         }
         AppServerResourcesView::Remote => {
-            rows.push(detail("App Server", "remote — excluded from local totals"))
+            rows.push(detail("App Server", "remote — excluded from local totals"));
         }
     }
     rows

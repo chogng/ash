@@ -2,12 +2,12 @@
 source: ash-code/tui/src/status/setup_tests.rs
 expression: "rows.join(\"\\n\")"
 ---
-> Permissions       Current permission mode                                                  [ ✔ ]  
-  Model             Configured model                                                         [ ✔ ]  
-  Cache hit rate    Cached input as a share of total input                                   [   ]  
-  Reference cost    Current Thread accumulated reference cost                                [   ]  
-  Memory            Local TUI, App Server, and child-process resident memory                 [   ]  
-  CPU               Local TUI, App Server, and child-process CPU share                       [   ]  
-  Git branch        Current Git branch                                                       [ ✔ ]  
-  Git changes       Working tree changes                                                     [   ]  
-  Context           Current Thread context usage                                             [   ]
+> Permissions                                                                                   on  
+> Model                                                                                         on  
+> Cache hit rate                                                                               off  
+> Reference cost                                                                               off  
+> Memory                                                                                       off  
+> CPU                                                                                          off  
+> Git branch                                                                                    on  
+> Git changes                                                                                  off  
+> Context                                                                                      off

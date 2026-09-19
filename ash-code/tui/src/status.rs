@@ -44,17 +44,17 @@ pub(crate) use resources::AppServerResourcesView;
 pub(crate) use resources::ObservedProcessResourcesView;
 #[cfg(test)]
 pub(crate) use resources::ProcessCpuCurrent;
+#[cfg(test)]
 pub(crate) use resources::ProcessMemoryCurrent;
 pub(crate) use resources::ProcessResourcesModel;
 pub(crate) use resources::ProcessResourcesView;
 #[cfg(test)]
 pub(crate) use resources::ProcessUsageView;
-pub(crate) use resources::format_bytes as format_memory_bytes;
 pub(crate) use resources::format_compact_process_cpu;
 pub(crate) use resources::format_compact_process_memory;
-pub(crate) use resources::format_memory_change;
 pub(crate) use resources::format_process_cpu;
 pub(crate) use resources::format_process_memory;
+pub(crate) use resources::format_process_usage;
 pub(crate) use settings::StatusLineItem;
 pub(crate) use settings::StatusLineSettings;
 pub(crate) use settings::StatusLineStyle;

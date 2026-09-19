@@ -236,12 +236,6 @@ impl CommandPanel {
         }
     }
 
-    pub(crate) fn apply_memory_diagnostics(&mut self, status: crate::memory::Status) {
-        if let Self::Status(panel) = self {
-            panel.apply_memory_diagnostics(status);
-        }
-    }
-
     pub(crate) fn process_resources_visible(&self, area: Rect) -> bool {
         match self {
             Self::Status(panel) => panel.process_resources_visible(area),
@@ -871,12 +865,6 @@ impl Panels {
     pub(crate) fn apply_process_resources(&mut self, resources: ProcessResourcesView) {
         if let Some(command) = self.command.as_mut() {
             command.apply_process_resources(resources);
-        }
-    }
-
-    pub(crate) fn apply_memory_diagnostics(&mut self, status: crate::memory::Status) {
-        if let Some(command) = self.command.as_mut() {
-            command.apply_memory_diagnostics(status);
         }
     }
 

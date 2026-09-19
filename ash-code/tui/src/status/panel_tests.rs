@@ -1,16 +1,15 @@
 use super::AppServerResourcesView;
-use super::ProcessMemoryCurrent;
 use super::ProcessResourcesView;
 use super::RemainingContextWindow;
 use super::StatusPanelOutcome;
 use super::StatusViewData;
 use super::status_panel;
-use crate::memory::Status as MemoryDiagnosticsStatus;
 use crate::render::horizontal_margin;
 use crate::render::test_context;
 use crate::status::AppServerProcessResourcesView;
 use crate::status::ObservedProcessResourcesView;
 use crate::status::ProcessCpuCurrent;
+use crate::status::ProcessMemoryCurrent;
 use crate::status::ProcessUsageView;
 use ash_protocol::ModelMoneyAmount;
 use ash_protocol::ModelReferenceCostSummary;
@@ -138,9 +137,6 @@ fn status_panel_updates_process_rows_without_resetting_each_tab_scroll() {
             },
             descendants: Vec::new(),
         }),
-        observed_peak_bytes: Some(180 * 1024 * 1024),
-        one_minute_change_bytes: Some(3 * 1024 * 1024),
-        five_minute_change_bytes: None,
     });
 
     assert_eq!(panel.scroll, [7, 3]);
@@ -149,28 +145,16 @@ fn status_panel_updates_process_rows_without_resetting_each_tab_scroll() {
         Rect::new(2, 1, 76, 7),
     );
     assert_eq!(
-        row_value(panel.processes.rows(), "Memory diagnostics"),
-        "Disabled"
+        row_value(panel.processes.rows(), "Total"),
+        "240.0 MiB · 12.4%"
     );
     assert_eq!(
-        row_value(panel.processes.rows(), "TUI resident memory"),
-        "140.0 MiB"
+        row_value(panel.processes.rows(), "TUI"),
+        "140.0 MiB · 8.4%"
     );
     assert_eq!(
-        row_value(panel.processes.rows(), "Local total CPU"),
-        "12.4%"
-    );
-    assert_eq!(
-        row_value(panel.processes.rows(), "1 minute memory change"),
-        "+3.0 MiB"
-    );
-    assert_eq!(
-        row_value(panel.processes.rows(), "App Server total memory"),
-        "100.0 MiB"
-    );
-    assert_eq!(
-        row_value(panel.processes.rows(), "5 minute memory change"),
-        "collecting"
+        row_value(panel.processes.rows(), "App Server"),
+        "100.0 MiB · 4.0%"
     );
 }
 
@@ -218,11 +202,7 @@ fn process_tab_renders_local_total_and_owned_process_details() {
                 },
             ],
         }),
-        observed_peak_bytes: Some(260 * 1024 * 1024),
-        one_minute_change_bytes: Some(3 * 1024 * 1024),
-        five_minute_change_bytes: Some(-8 * i128::from(1024 * 1024)),
     });
-    panel.apply_memory_diagnostics(MemoryDiagnosticsStatus::Recording);
     panel.handle_key(
         KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE),
         Rect::new(2, 1, 76, 7),

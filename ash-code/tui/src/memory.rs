@@ -19,18 +19,6 @@ pub(crate) enum Status {
     Failed,
 }
 
-impl Status {
-    pub(crate) const fn label(self) -> &'static str {
-        match self {
-            Self::Disabled => "Disabled",
-            Self::Starting => "Starting",
-            Self::Recording => "Recording",
-            Self::Stopping => "Stopping",
-            Self::Failed => "Failed",
-        }
-    }
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Action {
     Start,

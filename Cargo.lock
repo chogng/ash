@@ -2244,6 +2244,7 @@ dependencies = [
 name = "ash-screen-capture"
 version = "0.1.0"
 dependencies = [
+ "core-graphics",
  "thiserror 2.0.19",
  "tokio",
 ]
