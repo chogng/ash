@@ -77,7 +77,7 @@ Codex 不使用 Ash 的锁，因此不能把安装探测与写入前校验描述
 
 **本功能所有真实模型测试固定使用 `gpt-5.6-luna`、`reasoning.effort=low`，禁止改用其他模型、默认思考强度或刷新真实凭据。** 首次创建和故障测试使用隔离目录与合成 token；用官方 Codex CLI 验证生成文件可读，不能用真实登录覆盖用户账户。
 
-本次实现、命令和结果见[认证兼容验收](../ash-rs/docs/changes/chatgpt-auth/verification.md)。丰富响应项、额度展示、完整流式断线恢复仍属于后续能力，不包含在本次认证改动中。
+本次认证实现、命令和结果见[认证兼容验收](../ash-rs/docs/changes/chatgpt-auth/verification.md)。账号额度查询已通过 `account/rateLimits/read` 提供，参数与错误见 [App Server 账号接口](ash-app-server-api.md#11-account-与登录)；额度界面、丰富响应项和完整流式断线恢复仍属于后续能力。
 
 参考：[官方认证文档](https://developers.openai.com/codex/auth)、[OpenAI 工程师对第三方客户端的说明](https://github.com/openai/codex/discussions/8338)。
 

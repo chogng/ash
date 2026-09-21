@@ -37,6 +37,57 @@ pub struct AccountReadResult {
     pub accounts: Vec<AccountDto>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct AccountRateLimitsReadParams {
+    pub provider: String,
+    pub account_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct AccountRateLimitsReadResult {
+    pub provider: String,
+    pub account_id: String,
+    pub plan: String,
+    pub limits: Vec<AccountRateLimitDto>,
+    pub credits: Option<AccountCreditBalanceDto>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct AccountRateLimitDto {
+    pub id: String,
+    pub name: Option<String>,
+    pub model: Option<String>,
+    pub allowed: Option<bool>,
+    pub limit_reached: Option<bool>,
+    pub primary: Option<AccountRateLimitWindowDto>,
+    pub secondary: Option<AccountRateLimitWindowDto>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct AccountRateLimitWindowDto {
+    pub used_percent: u32,
+    pub window_seconds: u32,
+    #[ts(type = "number")]
+    pub resets_at: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct AccountCreditBalanceDto {
+    pub has_credits: bool,
+    pub unlimited: bool,
+    pub balance: Option<String>,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(tag = "type", rename_all = "camelCase")]
 #[ts(tag = "type", rename_all = "camelCase")]

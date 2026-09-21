@@ -222,6 +222,160 @@ fn local_composition_reads_empty_subscription_accounts_before_sign_in() {
     assert_eq!(account["result"]["accounts"], serde_json::json!([]));
 }
 
+struct AccountUsageClient {
+    response: Mutex<(u16, serde_json::Value)>,
+    requests: Mutex<Vec<ClientRequest>>,
+    during_request: Mutex<Option<Box<dyn FnOnce() + Send>>>,
+}
+
+impl OperationClient for AccountUsageClient {
+    fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
+        self.requests.lock().unwrap().push(request.clone());
+        if let Some(action) = self.during_request.lock().unwrap().take() {
+            action();
+        }
+        let (status, body) = self.response.lock().unwrap().clone();
+        Ok(ClientResponse::new(
+            status,
+            Vec::new(),
+            serde_json::to_vec(&body).unwrap(),
+        ))
+    }
+}
+
+#[test]
+fn local_account_rate_limits_use_the_signed_in_account_and_redact_failures() {
+    use base64::Engine;
+    let profile = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let jwt = |value: serde_json::Value| {
+        format!(
+            "e30.{}.signature",
+            base64::engine::general_purpose::URL_SAFE_NO_PAD
+                .encode(serde_json::to_vec(&value).unwrap())
+        )
+    };
+    let auth = serde_json::to_vec(&serde_json::json!({
+        "auth_mode":"chatgpt", "tokens": {
+            "id_token":jwt(serde_json::json!({"https://api.openai.com/auth":{"chatgpt_account_id":"account-1","chatgpt_plan_type":"plus"}})),
+            "access_token":jwt(serde_json::json!({"exp":4_000_000_000_u64})),
+            "refresh_token":"never-used", "account_id":"account-1"
+        }, "last_refresh":"2026-09-01T00:00:00Z"
+    })).unwrap();
+    std::fs::write(home.path().join("auth.json"), &auth).unwrap();
+    let client = Arc::new(AccountUsageClient {
+        response: Mutex::new((
+            200,
+            serde_json::json!({"plan_type":"plus",
+                "rate_limit":{"allowed":true,"limit_reached":false,
+                    "primary_window":{"used_percent":35,"limit_window_seconds":18000,"reset_at":2000000000}},
+                "credits":{"has_credits":false,"unlimited":false,"balance":null}
+            }),
+        )),
+        requests: Mutex::new(Vec::new()),
+        during_request: Mutex::new(None),
+    });
+    let server = Arc::new(
+        open_local_app_server(
+            LocalAppServerOptions::new(profile.path())
+                .with_codex_home(home.path())
+                .with_model_operation_client(client.clone())
+                .without_built_in_skills()
+                .with_session_state_mode(SessionStateMode::Ephemeral),
+        )
+        .unwrap(),
+    );
+    let mut connection = server.connection();
+    local_call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":1,"method":"initialize",
+            "params":{"clientInfo":{"name":"usage-test","version":"1"},"capabilities":{}}
+        }),
+    );
+    let mut next_id = 2;
+    let mut read = |connection: &mut ConnectionState, provider: &str, account: &str| {
+        let id = next_id;
+        next_id += 1;
+        local_call(
+            &server,
+            connection,
+            serde_json::json!({
+            "jsonrpc":"2.0","id":id,"method":"account/rateLimits/read",
+                "params":{"provider":provider,"accountId":account}
+            }),
+        )
+    };
+    assert_eq!(
+        read(&mut connection, "kimi", "account-1")["error"]["message"],
+        "AccountRateLimitsUnavailable"
+    );
+    assert_eq!(
+        read(&mut connection, "openai-chatgpt", "account-2")["error"]["message"],
+        "AccountChanged"
+    );
+    assert_eq!(
+        read(&mut connection, "openai-chatgpt", "")["error"]["message"],
+        "InvalidParams"
+    );
+    assert!(client.requests.lock().unwrap().is_empty());
+    let result = read(&mut connection, "openai-chatgpt", "account-1");
+    assert_eq!(
+        result["result"],
+        serde_json::json!({
+            "provider":"openai-chatgpt","accountId":"account-1","plan":"plus",
+            "limits":[{"id":"codex","name":null,"model":null,"allowed":true,"limitReached":false,
+                "primary":{"usedPercent":35,"windowSeconds":18000,"resetsAt":2000000000},"secondary":null}],
+            "credits":{"hasCredits":false,"unlimited":false,"balance":null}
+        })
+    );
+    let requests = client.requests.lock().unwrap();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(
+        requests[0].url(),
+        "https://chatgpt.com/backend-api/wham/usage"
+    );
+    assert!(
+        requests[0]
+            .headers()
+            .iter()
+            .any(|header| header.name() == "ChatGPT-Account-ID" && header.value() == "account-1")
+    );
+    drop(requests);
+    for status in [200, 403, 429, 503] {
+        *client.response.lock().unwrap() = (
+            status,
+            serde_json::json!({"private":"sensitive-upstream-body"}),
+        );
+        let failed = read(&mut connection, "openai-chatgpt", "account-1");
+        assert_eq!(failed["error"]["message"], "AccountOperationFailed");
+        assert!(!failed.to_string().contains("sensitive-upstream-body"));
+    }
+    assert_eq!(std::fs::read(home.path().join("auth.json")).unwrap(), auth);
+    let mut closing = server.connection();
+    local_call(
+        &server,
+        &mut closing,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":1,"method":"initialize",
+            "params":{"clientInfo":{"name":"closing-usage-test","version":"1"},"capabilities":{}}
+        }),
+    );
+    let closed = closing.clone();
+    let host = Arc::clone(&server);
+    *client.during_request.lock().unwrap() = Some(Box::new(move || host.close_connection(closed)));
+    let cancelled = read(&mut closing, "openai-chatgpt", "account-1");
+    assert_eq!(cancelled["error"]["message"], "RequestCancelled");
+    assert_eq!(cancelled["error"]["code"], -32800);
+    std::fs::remove_file(home.path().join("auth.json")).unwrap();
+    assert_eq!(
+        read(&mut connection, "openai-chatgpt", "account-1")["error"]["message"],
+        "AccountUnavailable"
+    );
+    assert_eq!(client.requests.lock().unwrap().len(), 6);
+}
+
 #[test]
 fn local_codex_account_reconnects_without_oauth_and_observes_external_logout() {
     use base64::Engine;

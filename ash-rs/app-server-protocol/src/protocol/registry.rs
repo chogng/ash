@@ -1,4 +1,6 @@
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::account::AccountCreditBalanceDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::account::AccountDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::account::AccountLoginCancelParams;
@@ -23,6 +25,14 @@ use crate::protocol::account::AccountLogoutParams;
 use crate::protocol::account::AccountLogoutResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::account::AccountLogoutStatusDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::account::AccountRateLimitDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::account::AccountRateLimitWindowDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::account::AccountRateLimitsReadParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::account::AccountRateLimitsReadResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::account::AccountReadResult;
 #[cfg(any(test, feature = "export"))]
@@ -2745,6 +2755,11 @@ client_methods! {
         response: AccountReadResult,
         serialization: GlobalSharedRead,
     },
+    AccountRateLimitsRead => "account/rateLimits/read" {
+        params: AccountRateLimitsReadParams,
+        response: AccountRateLimitsReadResult,
+        serialization: None,
+    },
     AccountLoginStart => "account/login/start" {
         params: AccountLoginStartParams,
         response: AccountLoginStartResult,
@@ -3775,6 +3790,11 @@ typescript_bindings! {
     AccountLogoutParams,
     AccountLogoutStatusDto,
     AccountReadResult,
+    AccountRateLimitsReadParams,
+    AccountRateLimitsReadResult,
+    AccountRateLimitDto,
+    AccountRateLimitWindowDto,
+    AccountCreditBalanceDto,
     AccountStatusDto,
     AccountUpdated,
     ThreadId,

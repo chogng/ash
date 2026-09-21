@@ -1000,6 +1000,7 @@ Account 是 App Server 暴露给客户端的 redacted 控制面，不是 secret/
 
 ```text
 account/read
+account/rateLimits/read
 account/login/start
 account/login/cancel
 account/logout
@@ -1007,6 +1008,16 @@ account/logout
 account/login/completed
 account/updated
 ```
+
+`account/rateLimits/read` 按 `{ provider, accountId }` 查询指定账号。当前支持 `provider = "openai-chatgpt"`，本地组合复用登录与模型调用持有的同一个 ChatGPT 认证对象，通过 `ash-backend-client` 读取后端额度，不接触客户端凭据。
+
+- 结果为 `{ provider, accountId, plan, limits, credits }`；`limits` 包含 `codex` 主额度和上游提供的附加模型额度，各项含 `id`、`name`、`model`、`allowed`、`limitReached`、`primary`、`secondary`。
+- 每个窗口返回已使用百分比 `usedPercent`、精确时长 `windowSeconds` 和 Unix 秒时间戳 `resetsAt`。余额为 `{ hasCredits, unlimited, balance }`，金额保留上游十进制字符串；缺失窗口、状态和余额保持 `null`。
+- 此接口只查询，不消费重置额度、不修改套餐、不计算本地参考成本。组织消费上限与重置额度明细不在当前结果中。
+- 每次查询读取当前认证，HTTP 401 只允许同账号恢复一次；Codex 管理凭据时不会刷新或写入其凭据。查询前后及重试前检查账号，避免将切换前后的结果混用。
+- 不持有全局请求锁，不阻塞其他领域写入；连接关闭取消额度 HTTP 等待和后续重试。认证刷新期间的取消在刷新提交后生效，以保留上游已轮换的凭据。当前没有单次请求的主动取消 method，也不轮询或缓存额度。
+- 空账号返回 `InvalidParams`；未安装或未登录返回 `AccountUnavailable`；不支持的 provider 返回 `AccountRateLimitsUnavailable`；账号变化返回 `AccountChanged`；明确的认证拒绝返回 `AccountAuthenticationRequired`；其他上游失败返回 `AccountOperationFailed`。错误不包含上游正文、地址或凭据。
+- 协议、类型映射和运行时 decoder 由 Rust registry 统一生成；界面展示仍由产品客户端实现。
 
 当前交互登录 method：
 

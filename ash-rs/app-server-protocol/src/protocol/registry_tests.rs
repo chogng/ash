@@ -119,6 +119,29 @@ fn environment_changes_exclude_concurrent_global_reads() {
 }
 
 #[test]
+fn account_usage_queries_do_not_hold_the_global_mutation_lock() {
+    let method = definition("account/rateLimits/read");
+    assert_eq!(
+        method
+            .serialization_scope(&serde_json::json!({
+                "provider":"openai-chatgpt", "accountId":"account-1"
+            }))
+            .unwrap(),
+        None
+    );
+    let result: crate::protocol::account::AccountRateLimitsReadResult = serde_json::from_value(serde_json::json!({
+        "provider":"openai-chatgpt", "accountId":"account-1", "plan":"plus",
+        "limits":[{"id":"codex","name":null,"model":null,"allowed":null,"limitReached":null,"primary":null,"secondary":null}],
+        "credits":null
+    })).unwrap();
+    let encoded = serde_json::to_value(result).unwrap();
+    assert_eq!(encoded["accountId"], "account-1");
+    assert!(encoded["limits"][0]["allowed"].is_null());
+    assert!(encoded["limits"][0]["primary"].is_null());
+    assert!(encoded["credits"].is_null());
+}
+
+#[test]
 fn resource_scope_keeps_resource_families_separate() {
     let resource = definition("resource/read")
         .serialization_scope(&serde_json::json!({ "resourceId": "same" }))

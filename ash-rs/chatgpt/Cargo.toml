@@ -11,6 +11,7 @@ name = "ash_chatgpt"
 path = "src/lib.rs"
 
 [dependencies]
+backend-client = { workspace = true }
 base64 = { workspace = true }
 chrono = { workspace = true }
 dirs = { workspace = true }

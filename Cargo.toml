@@ -53,6 +53,7 @@ members = [
     "ash-rs/code-mode-runtime",
     "ash-rs/v8-poc",
     "ash-rs/chatgpt",
+    "ash-rs/backend-client",
     "ash-rs/apply-patch",
     "ash-rs/async-utils",
     "ash-rs/ext/guardian-reviewer",
@@ -428,6 +429,7 @@ ash-code-mode-protocol = { path = "ash-rs/code-mode-protocol" }
 ash-code-mode-runtime = { path = "ash-rs/code-mode-runtime" }
 ash-v8-poc = { path = "ash-rs/v8-poc" }
 ash-chatgpt = { path = "ash-rs/chatgpt" }
+backend-client = { package = "ash-backend-client", path = "ash-rs/backend-client" }
 ash-apply-patch = { path = "ash-rs/apply-patch" }
 ash-async-utils = { path = "ash-rs/async-utils" }
 guardian-reviewer = { package = "ash-guardian-reviewer", path = "ash-rs/ext/guardian-reviewer" }

@@ -204,6 +204,7 @@ impl ModelService for TestModel {
                         ContentPart::Text(text) => Some(text.as_str()),
                         ContentPart::ImageUrl { .. } => None,
                         ContentPart::ImageAttachment { .. } => None,
+                        ContentPart::AudioAttachment { .. } | ContentPart::AudioUrl { .. } => None,
                     })
                 }
                 ModelInputItem::ToolResult(_) => None,

@@ -5,6 +5,8 @@ import type { AccountLoginStartParams } from './types/AccountLoginStartParams.js
 import type { AccountLoginStartResult } from './types/AccountLoginStartResult.js';
 import type { AccountLogoutParams } from './types/AccountLogoutParams.js';
 import type { AccountLogoutResult } from './types/AccountLogoutResult.js';
+import type { AccountRateLimitsReadParams } from './types/AccountRateLimitsReadParams.js';
+import type { AccountRateLimitsReadResult } from './types/AccountRateLimitsReadResult.js';
 import type { AccountReadResult } from './types/AccountReadResult.js';
 import type { AgentReadParams } from './types/AgentReadParams.js';
 import type { AgentReadResult } from './types/AgentReadResult.js';
@@ -513,6 +515,7 @@ export interface AppServerRequestMap {
   "provider/models/list": { params: ProviderModelsListParams; response: ProviderModelsListResult };
   "provider/apiKey/set": { params: ProviderApiKeySetParams; response: ProviderApiKeySetResult };
   "account/read": { params: Record<string, never>; response: AccountReadResult };
+  "account/rateLimits/read": { params: AccountRateLimitsReadParams; response: AccountRateLimitsReadResult };
   "account/login/start": { params: AccountLoginStartParams; response: AccountLoginStartResult };
   "account/login/cancel": { params: AccountLoginCancelParams; response: AccountLoginCancelResult };
   "account/logout": { params: AccountLogoutParams; response: AccountLogoutResult };
@@ -793,6 +796,7 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "provider/models/list": { method: "provider/models/list" },
   "provider/apiKey/set": { method: "provider/apiKey/set" },
   "account/read": { method: "account/read" },
+  "account/rateLimits/read": { method: "account/rateLimits/read" },
   "account/login/start": { method: "account/login/start" },
   "account/login/cancel": { method: "account/login/cancel" },
   "account/logout": { method: "account/logout" },

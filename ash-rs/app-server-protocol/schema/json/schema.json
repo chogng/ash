@@ -1,5 +1,26 @@
 {
   "$defs": {
+    "AccountCreditBalanceDto": {
+      "properties": {
+        "balance": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hasCredits": {
+          "type": "boolean"
+        },
+        "unlimited": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "hasCredits",
+        "unlimited"
+      ],
+      "type": "object"
+    },
     "AccountDto": {
       "description": "Redacted provider account metadata safe for the App Server wire contract.",
       "properties": {
@@ -288,6 +309,137 @@
         "alreadyLoggedOut"
       ],
       "type": "string"
+    },
+    "AccountRateLimitDto": {
+      "properties": {
+        "allowed": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "limitReached": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "primary": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AccountRateLimitWindowDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "secondary": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AccountRateLimitWindowDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "AccountRateLimitWindowDto": {
+      "properties": {
+        "resetsAt": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "usedPercent": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "windowSeconds": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "usedPercent",
+        "windowSeconds",
+        "resetsAt"
+      ],
+      "type": "object"
+    },
+    "AccountRateLimitsReadParams": {
+      "properties": {
+        "accountId": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "accountId"
+      ],
+      "type": "object"
+    },
+    "AccountRateLimitsReadResult": {
+      "properties": {
+        "accountId": {
+          "type": "string"
+        },
+        "credits": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AccountCreditBalanceDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "limits": {
+          "items": {
+            "$ref": "#/$defs/AccountRateLimitDto"
+          },
+          "type": "array"
+        },
+        "plan": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "accountId",
+        "plan",
+        "limits"
+      ],
+      "type": "object"
     },
     "AccountReadResult": {
       "properties": {
@@ -1747,6 +1899,9 @@
         "AccountLoginNotFound",
         "AccountLoginConflict",
         "AccountOperationFailed",
+        "AccountChanged",
+        "AccountAuthenticationRequired",
+        "AccountRateLimitsUnavailable",
         "ConnectorsUnavailable",
         "ConnectorGenerationConflict",
         "ConnectorOperationFailed",
@@ -5580,6 +5735,22 @@
             },
             "params": {
               "$ref": "#/$defs/EmptyParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "account/rateLimits/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/AccountRateLimitsReadParams"
             }
           },
           "required": [
@@ -9872,6 +10043,22 @@
             },
             "result": {
               "$ref": "#/$defs/AccountReadResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "account/rateLimits/read",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/AccountRateLimitsReadResult"
             }
           },
           "required": [

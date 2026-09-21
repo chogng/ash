@@ -811,6 +811,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ash-backend-client"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-client",
+ "ash-http-client",
+ "serde",
+ "serde_json",
+ "url",
+]
+
+[[package]]
 name = "ash-build-info"
 version = "0.1.0"
 dependencies = [
@@ -854,6 +866,7 @@ name = "ash-chatgpt"
 version = "0.1.0"
 dependencies = [
  "ash-async-utils",
+ "ash-backend-client",
  "ash-client",
  "ash-http-client",
  "ash-keyring-store",

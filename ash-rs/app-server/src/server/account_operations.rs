@@ -3,6 +3,7 @@ use super::RpcError;
 use super::UpdateBroker;
 use super::decode;
 use super::result;
+use ash_app_server_protocol::protocol::account::AccountCreditBalanceDto;
 use ash_app_server_protocol::protocol::account::AccountDto;
 use ash_app_server_protocol::protocol::account::AccountLoginCancelParams;
 use ash_app_server_protocol::protocol::account::AccountLoginCancelResult;
@@ -16,6 +17,10 @@ use ash_app_server_protocol::protocol::account::AccountLoginStartResult;
 use ash_app_server_protocol::protocol::account::AccountLogoutParams;
 use ash_app_server_protocol::protocol::account::AccountLogoutResult;
 use ash_app_server_protocol::protocol::account::AccountLogoutStatusDto;
+use ash_app_server_protocol::protocol::account::AccountRateLimitDto;
+use ash_app_server_protocol::protocol::account::AccountRateLimitWindowDto;
+use ash_app_server_protocol::protocol::account::AccountRateLimitsReadParams;
+use ash_app_server_protocol::protocol::account::AccountRateLimitsReadResult;
 use ash_app_server_protocol::protocol::account::AccountReadResult;
 use ash_app_server_protocol::protocol::account::AccountStatusDto;
 use ash_app_server_protocol::protocol::account::AccountUpdated;
@@ -37,6 +42,49 @@ use serde_json::Value;
 use std::sync::Arc;
 
 impl AppServer {
+    pub(super) fn account_rate_limits_read(
+        &self,
+        params: &Value,
+        cancellation: &ash_async_utils::CancellationToken,
+    ) -> Result<Value, RpcError> {
+        let params: AccountRateLimitsReadParams = decode(params)?;
+        if params.provider != ash_chatgpt::OPENAI_CHATGPT_PROVIDER_ID {
+            return Err(RpcError::new(
+                -32030,
+                AppServerErrorName::AccountRateLimitsUnavailable,
+            ));
+        }
+        let usage = self
+            .chatgpt
+            .as_ref()
+            .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::AccountUnavailable))?
+            .read_rate_limits(&params.account_id, cancellation)
+            .map_err(usage_error)?;
+        result(&AccountRateLimitsReadResult {
+            provider: params.provider,
+            account_id: params.account_id,
+            plan: usage.plan,
+            limits: usage
+                .limits
+                .into_iter()
+                .map(|limit| AccountRateLimitDto {
+                    id: limit.id,
+                    name: limit.name,
+                    model: limit.model,
+                    allowed: limit.allowed,
+                    limit_reached: limit.limit_reached,
+                    primary: limit.primary.map(window_dto),
+                    secondary: limit.secondary.map(window_dto),
+                })
+                .collect(),
+            credits: usage.credits.map(|credits| AccountCreditBalanceDto {
+                has_credits: credits.has_credits,
+                unlimited: credits.unlimited,
+                balance: credits.balance,
+            }),
+        })
+    }
+
     pub(super) fn account_read(&self) -> Result<Value, RpcError> {
         result(&account_state_dto(
             self.login_service()?.refresh().map_err(login_error)?,
@@ -106,6 +154,34 @@ impl AppServer {
             .as_deref()
             .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::AccountUnavailable))
     }
+}
+
+fn window_dto(window: ash_chatgpt::RateLimitWindow) -> AccountRateLimitWindowDto {
+    AccountRateLimitWindowDto {
+        used_percent: window.used_percent,
+        window_seconds: window.window_seconds,
+        resets_at: window.resets_at,
+    }
+}
+
+fn usage_error(error: ash_chatgpt::ChatGptUsageError) -> RpcError {
+    use ash_chatgpt::ChatGptUsageError;
+    let code = match error {
+        ChatGptUsageError::InvalidAccount => -32602,
+        ChatGptUsageError::Cancelled => -32800,
+        _ => -32030,
+    };
+    let name = match error {
+        ChatGptUsageError::InvalidAccount => AppServerErrorName::InvalidParams,
+        ChatGptUsageError::AccountUnavailable => AppServerErrorName::AccountUnavailable,
+        ChatGptUsageError::AccountChanged => AppServerErrorName::AccountChanged,
+        ChatGptUsageError::AuthenticationRequired => {
+            AppServerErrorName::AccountAuthenticationRequired
+        }
+        ChatGptUsageError::Cancelled => AppServerErrorName::RequestCancelled,
+        ChatGptUsageError::RequestFailed => AppServerErrorName::AccountOperationFailed,
+    };
+    RpcError::new(code, name)
 }
 
 pub(super) struct AppServerLoginEvents {

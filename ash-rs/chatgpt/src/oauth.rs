@@ -69,7 +69,7 @@ impl std::error::Error for ChatGptError {}
 
 /// Maintains ChatGPT authentication when Codex is absent and otherwise reuses its credentials.
 pub struct ChatGptOAuth {
-    client: Arc<dyn OperationClient>,
+    pub(crate) client: Arc<dyn OperationClient>,
     secrets: Arc<dyn SecretStore>,
     self_weak: Weak<Self>,
     login_service: Mutex<Weak<LoginService>>,
@@ -118,6 +118,10 @@ impl ChatGptOAuth {
 
     /// Resolves current credentials, refreshing only when Ash is the credential manager.
     pub fn api_target(&self) -> Result<ResolvedApiTarget, ChatGptError> {
+        self.api_target_for(CHATGPT_RESPONSES_BASE_URL)
+    }
+
+    pub(crate) fn api_target_for(&self, base_url: &str) -> Result<ResolvedApiTarget, ChatGptError> {
         if self.disconnected()? {
             return Err(ChatGptError::new("ChatGPT is disconnected in Ash"));
         }
@@ -130,10 +134,7 @@ impl ChatGptOAuth {
                 "Codex sign-in has expired; update the login in Codex, then reconnect",
             ));
         }
-        Ok(ResolvedApiTarget::new(
-            CHATGPT_RESPONSES_BASE_URL,
-            api_headers(&credential),
-        ))
+        Ok(ResolvedApiTarget::new(base_url, api_headers(&credential)))
     }
 
     fn disconnected_key() -> SecretKey {
@@ -147,7 +148,7 @@ impl ChatGptOAuth {
             .map_err(|_| ChatGptError::new("Ash connection state could not be read"))
     }
 
-    fn load_credential(&self) -> Result<Option<TokenCredential>, ChatGptError> {
+    pub(crate) fn load_credential(&self) -> Result<Option<TokenCredential>, ChatGptError> {
         if self.disconnected()? {
             return Ok(None);
         }
@@ -159,6 +160,14 @@ impl ChatGptOAuth {
     pub fn recover_unauthorized(
         &self,
         rejected: &ResolvedApiTarget,
+    ) -> Result<Option<ResolvedApiTarget>, ChatGptError> {
+        self.recover_unauthorized_for(rejected, CHATGPT_RESPONSES_BASE_URL)
+    }
+
+    pub(crate) fn recover_unauthorized_for(
+        &self,
+        rejected: &ResolvedApiTarget,
+        base_url: &str,
     ) -> Result<Option<ResolvedApiTarget>, ChatGptError> {
         let Some(current) = self.load_credential()? else {
             return Ok(None);
@@ -206,7 +215,7 @@ impl ChatGptOAuth {
             return Ok(None);
         }
         Ok(Some(ResolvedApiTarget::new(
-            CHATGPT_RESPONSES_BASE_URL,
+            base_url,
             api_headers(&credential),
         )))
     }

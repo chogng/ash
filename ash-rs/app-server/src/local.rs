@@ -1349,6 +1349,7 @@ pub fn open_local_app_server_with_codebase_providers(
     .with_approval_review_model(approval_review_model)
     .with_config_store(Arc::clone(&config))
     .with_login_service(login_service)
+    .with_chatgpt_account(Arc::new(ash_chatgpt::ChatGptAccount::new(chatgpt_oauth)))
     .with_language_server_providers(options.language_server_providers)
     .with_slash_command_catalog(options.slash_commands)
     .with_state_runtime(state_runtime)

@@ -222,6 +222,7 @@ pub struct AppServer {
     language: Mutex<language_runtime::AppServerLanguageRuntime>,
     approval_review_model: Option<ProviderReviewModel>,
     login: Option<Arc<ash_login::LoginService>>,
+    chatgpt: Option<Arc<ash_chatgpt::ChatGptAccount>>,
     pub(super) env_runtime_gate: Arc<Mutex<()>>,
     env_runtime: Arc<RwLock<EnvRuntime>>,
     turn_backend: Arc<turn_backend_router::TurnBackendHandle>,
@@ -555,6 +556,7 @@ impl AppServer {
             )),
             approval_review_model: None,
             login: None,
+            chatgpt: None,
             env_runtime_gate,
             env_runtime,
             turn_backend,
@@ -962,6 +964,11 @@ impl AppServer {
             )))
             .expect("a newly composed login service accepts its App Server event sink");
         self.login = Some(login);
+        self
+    }
+
+    pub fn with_chatgpt_account(mut self, chatgpt: Arc<ash_chatgpt::ChatGptAccount>) -> Self {
+        self.chatgpt = Some(chatgpt);
         self
     }
 
@@ -2116,6 +2123,9 @@ impl AppServer {
             Some(ClientMethod::TypstCompile) => self.typst_compile(connection, &request.params),
             Some(ClientMethod::ConfigRead) => self.config_read(),
             Some(ClientMethod::AccountRead) => self.account_read(),
+            Some(ClientMethod::AccountRateLimitsRead) => {
+                self.account_rate_limits_read(&request.params, cancellation)
+            }
             Some(ClientMethod::AccountLoginStart) => self.account_login_start(&request.params),
             Some(ClientMethod::AccountLoginCancel) => self.account_login_cancel(&request.params),
             Some(ClientMethod::AccountLogout) => self.account_logout(&request.params),
