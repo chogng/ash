@@ -84,6 +84,7 @@ pub use tasks::TaskItem;
 pub use tasks::TaskList;
 pub use tasks::TaskListItem;
 pub use tasks::TaskListQuery;
+pub use tasks::TaskMetadata;
 pub use tasks::TaskPullRequest;
 pub use tasks::TaskTurn;
 pub use tasks::TaskWorklog;

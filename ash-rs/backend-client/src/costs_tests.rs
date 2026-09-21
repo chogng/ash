@@ -141,6 +141,128 @@ fn task_usage_preserves_decimal_balances_partial_results_and_descendant_scope() 
 }
 
 #[test]
+fn task_usage_rejects_invalid_credit_amounts_in_totals_and_groups() {
+    let target = target(CHATGPT_BACKEND_BASE_URL);
+    let token = CancellationSource::new().token();
+    let query = [TaskUsageThread {
+        thread_id: "root".into(),
+        created_at: None,
+        descendant_thread_ids: Vec::new(),
+    }];
+    for invalid in [
+        "NaN",
+        "inf",
+        "1..0",
+        "",
+        " 1",
+        "1e",
+        "1e999999999999",
+        "--1",
+    ] {
+        for field in ["total", "group"] {
+            let mut row = json!({"thread_id":"root","data_status":"available","usage_source":"plan_and_credits","groups":[{}]});
+            let amounts = if field == "total" {
+                &mut row
+            } else {
+                &mut row["groups"][0]
+            };
+            amounts["balance_usage_credits"] = json!(invalid);
+            let client = Client::response(200, &json!({"threads":[row]}).to_string());
+            let result = BackendClient::new(&client, &target, RouteStyle::ChatGpt)
+                .unwrap()
+                .read_task_usage(&query, &token);
+            assert_eq!(
+                result,
+                Err(RequestError::InvalidResponse),
+                "{field}: {invalid}"
+            );
+        }
+    }
+}
+
+#[test]
+fn task_usage_preserves_signed_decimal_and_exponent_notation() {
+    let target = target(CHATGPT_BACKEND_BASE_URL);
+    let token = CancellationSource::new().token();
+    let query = [TaskUsageThread {
+        thread_id: "root".into(),
+        created_at: None,
+        descendant_thread_ids: Vec::new(),
+    }];
+    for amount in [
+        "0",
+        "-0.000000000000000001",
+        "+1.00",
+        ".125",
+        "1.",
+        "1e-20",
+        "-1E+3",
+        "1e400",
+    ] {
+        let client = Client::response(200, &json!({"threads":[{"thread_id":"root","data_status":"available","usage_source":"plan_and_credits","balance_usage_credits":amount,"groups":[]}]}).to_string());
+        let response = BackendClient::new(&client, &target, RouteStyle::ChatGpt)
+            .unwrap()
+            .read_task_usage(&query, &token)
+            .unwrap();
+        assert_eq!(
+            response.threads[0].amounts.balance_usage_credits.as_deref(),
+            Some(amount)
+        );
+    }
+}
+
+#[test]
+fn task_usage_requires_finite_numeric_percentages_without_clamping() {
+    let target = target(CHATGPT_BACKEND_BASE_URL);
+    let token = CancellationSource::new().token();
+    let query = [TaskUsageThread {
+        thread_id: "root".into(),
+        created_at: None,
+        descendant_thread_ids: Vec::new(),
+    }];
+    for location in ["total", "group"] {
+        for name in ["five_hour_limit_percent", "weekly_limit_percent"] {
+            for number in ["1e400", "-1e400", "\"NaN\"", "true"] {
+                let mut row = json!({"thread_id":"root","data_status":"available","usage_source":"plan_and_credits","groups":[{}]});
+                let amounts = if location == "total" {
+                    &mut row
+                } else {
+                    &mut row["groups"][0]
+                };
+                amounts[name] = json!("number-to-replace");
+                let body = json!({"threads":[row]})
+                    .to_string()
+                    .replace("\"number-to-replace\"", number);
+                let client = Client::response(200, &body);
+                assert_eq!(
+                    BackendClient::new(&client, &target, RouteStyle::ChatGpt)
+                        .unwrap()
+                        .read_task_usage(&query, &token),
+                    Err(RequestError::InvalidResponse),
+                    "{location}.{name}: {number}"
+                );
+            }
+        }
+    }
+    let client = Client::response(
+        200,
+        r#"{"threads":[{"thread_id":"root","data_status":"available","usage_source":"plan_and_credits","five_hour_limit_percent":150.25,"groups":[{"weekly_limit_percent":0.125}]}]}"#,
+    );
+    let response = BackendClient::new(&client, &target, RouteStyle::ChatGpt)
+        .unwrap()
+        .read_task_usage(&query, &token)
+        .unwrap();
+    assert_eq!(
+        response.threads[0].amounts.five_hour_limit_percent,
+        Some(150.25)
+    );
+    assert_eq!(
+        response.threads[0].groups[0].amounts.weekly_limit_percent,
+        Some(0.125)
+    );
+}
+
+#[test]
 fn chatgpt_turn_costs_preserve_settlement_and_validate_thread_and_turn_pairs() {
     let target = target(CHATGPT_BACKEND_BASE_URL);
     let token = CancellationSource::new().token();

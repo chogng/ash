@@ -61,14 +61,35 @@ pub struct GitPullRequest {
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct TaskDetails {
+    pub task: TaskMetadata,
+    pub task_status_display: Option<serde_json::Map<String, Value>>,
     pub current_user_turn: Option<TaskTurn>,
     pub current_assistant_turn: Option<TaskTurn>,
     pub current_diff_task_turn: Option<TaskTurn>,
 }
 
+/// Task identity and metadata returned by the task-details endpoint.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+pub struct TaskMetadata {
+    pub id: String,
+    pub title: String,
+    pub archived: bool,
+    pub created_at: Option<f64>,
+    pub updated_at: Option<f64>,
+    pub environment_id: Option<String>,
+    pub is_review: Option<bool>,
+    pub has_generated_title: Option<bool>,
+    pub current_turn_id: Option<String>,
+    pub has_unread_turn: Option<bool>,
+    pub denormalized_metadata: Option<serde_json::Map<String, Value>>,
+    pub task_status_display: Option<serde_json::Map<String, Value>>,
+    pub external_pull_requests: Vec<TaskPullRequest>,
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct TaskTurn {
     pub id: Option<String>,
+    pub created_at: Option<f64>,
     pub attempt_placement: Option<i64>,
     pub turn_status: Option<String>,
     pub sibling_turn_ids: Option<Vec<String>>,
@@ -268,7 +289,12 @@ impl BackendClient<'_> {
         task_id: &str,
         cancellation: &CancellationToken,
     ) -> Result<TaskDetails, RequestError> {
-        self.get(self.endpoint(&["tasks", task_id])?, &[], cancellation)
+        let details: TaskDetails =
+            self.get(self.endpoint(&["tasks", task_id])?, &[], cancellation)?;
+        if details.task.id != task_id {
+            return Err(RequestError::InvalidResponse);
+        }
+        Ok(details)
     }
 
     pub fn list_sibling_turns(

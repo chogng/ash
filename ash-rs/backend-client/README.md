@@ -26,8 +26,8 @@
 | 用户设置 | `read_user_settings` | `GET settings/user`，禁止使用缓存 |
 | 工作区消息 | `list_workspace_messages` | `GET workspace-messages`，禁止保存缓存 |
 | 云任务分页 | `list_tasks` | `GET tasks/list`，支持筛选、环境与游标 |
-| 云任务详情 | `read_task` | `GET tasks/{id}`，提供文本、差异和错误提取 |
-| 同轮尝试 | `list_sibling_turns` | `GET tasks/{id}/turns/{turn}/sibling_turns` |
+| 云任务详情 | `read_task` | `GET tasks/{id}`，保留任务元数据与状态，提供文本、差异和错误提取 |
+| 同轮尝试 | `list_sibling_turns` | `GET tasks/{id}/turns/{turn}/sibling_turns`，保留尝试创建时间 |
 | 创建云任务 | `create_task` | `POST tasks`，调用方提供任务 JSON 对象 |
 | 线程费用估算 | `read_thread_usage` | `POST usage/thread_usage/query` |
 | 任务额度占比与余额扣费 | `read_task_usage` | `POST usage/thread_usage/query_v2` |
@@ -56,8 +56,10 @@
 - 创建任务、兑换和发送邮件的取消只表示本地停止等待，不能证明服务端未执行；客户端不会自动重放写入。
 - API key 费用查询需单独构建 `BackendClient`，目标例如 `https://api.chatgpt.com`，并提供该目标的 API key、组织和项目请求头。客户端使用该目标的原始 origin，不猜测主机或转发另一个账号的认证。
 - 路径中的任务 ID 与查询参数分别编码；空路径段和 `.`、`..` 在发送前拒绝。
+- 云任务详情必须包含有效 `task` 元数据，且返回 ID 必须等于请求 ID。标题、环境、创建与更新时间、归档状态和关联 PR 由 `TaskMetadata` 保留；顶层与任务内的 `task_status_display` 分别保留，不互相覆盖。
 - 线程用量每批 1–100 个不同 ID；任务用量每批最多 100 个任务、合计 1,000 个根与后代 ID，任务范围不能重叠。响应里的重复 ID、未请求 ID 和错配回合均报 `InvalidResponse`。
 - 缺失金额、额度、统计和设置保持为空；不推导零用量、允许状态或当前套餐。整数微单位和十进制金额字符串保留原精度。
+- 任务扣费只接受最多 128 字节的十进制字符串，可带正负号和 `i32` 范围的指数；不转换为浮点数。任务额度占比只接受有限数字，支持 `serde_json/arbitrary_precision`，不截断超过 100% 的值。
 - 历史套餐接口的 HTTP 404 表示报表不可用，返回 `None`；其他接口不会吞掉 HTTP 错误。
 - 此 crate 提供 HTTP 能力。当前产品已有调用方是 `chatgpt` 的账号额度查询；新增云任务、统计和写入能力尚未增加 UI 或 App Server RPC 入口。
 
@@ -67,4 +69,5 @@
 - `account.rs`、`usage.rs`、`config.rs`、`tasks.rs`、`costs.rs`、`analytics.rs` 分别拥有相应业务接口；`analytics_types.rs` 保存报表响应结构。
 - 测试通过注入 transport 检查公开调用链，不访问真实账号，不兑换真实额度，也不发送邮件。
 - 验证命令：`just check ash-backend-client`、`just test ash-backend-client`、`just rust-warnings ash-backend-client`。
+- 小数解析配置回归：`just test ash-backend-client --features serde_json/arbitrary_precision`。
 - 现有消费方回归：`just check ash-chatgpt`、`just test ash-chatgpt account::tests`、`just rust-warnings ash-chatgpt`。

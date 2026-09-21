@@ -60,9 +60,12 @@ pub struct TaskUsage {
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
 pub struct TaskUsageAmounts {
+    #[serde(default, deserialize_with = "percentage")]
     pub five_hour_limit_percent: Option<f64>,
+    #[serde(default, deserialize_with = "percentage")]
     pub weekly_limit_percent: Option<f64>,
     /// Decimal text is preserved exactly; no floating-point conversion of balance debits.
+    #[serde(default, deserialize_with = "credit_amount")]
     pub balance_usage_credits: Option<String>,
 }
 
@@ -285,4 +288,45 @@ fn response_ids<'a>(
         }
     }
     Ok(())
+}
+
+// Serde buffers flattened fields. With serde_json/arbitrary_precision, decimals in
+// that buffer are represented as maps, so deserialize through Number before f64.
+fn percentage<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<Option<f64>, D::Error> {
+    Option::<serde_json::Number>::deserialize(deserializer)?
+        .map(|number| {
+            number
+                .as_f64()
+                .filter(|value| value.is_finite())
+                .ok_or_else(|| serde::de::Error::custom("invalid usage percentage"))
+        })
+        .transpose()
+}
+
+fn credit_amount<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<String>, D::Error> {
+    let value = Option::<String>::deserialize(deserializer)?;
+    if let Some(amount) = &value {
+        let unsigned = if amount.starts_with('-') || amount.starts_with('+') {
+            &amount[1..]
+        } else {
+            amount
+        };
+        let (mantissa, exponent) = match unsigned.split_once(['e', 'E']) {
+            Some((mantissa, exponent)) => (mantissa, exponent.parse::<i32>().is_ok()),
+            None => (unsigned, true),
+        };
+        if amount.len() > 128
+            || !exponent
+            || !mantissa.bytes().any(|byte| byte.is_ascii_digit())
+            || !mantissa
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || byte == b'.')
+            || mantissa.bytes().filter(|byte| *byte == b'.').count() > 1
+        {
+            return Err(serde::de::Error::custom("invalid credit amount"));
+        }
+    }
+    Ok(value)
 }
