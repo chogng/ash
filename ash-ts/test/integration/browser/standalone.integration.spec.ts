@@ -993,6 +993,183 @@ for (const kind of ['codeAction', 'rename', 'parameterHints', 'queuedParameterHi
 	});
 }
 
+test.describe('rename requests', () => {
+	test.afterEach(async ({ page }) => {
+		await page.evaluate(() => window.ashStandaloneIntegration?.dispose());
+	});
+
+	for (const phase of ['prepare', 'edit'] as const) {
+		for (const reason of ['text', 'selection', 'language', 'provider', 'readonly', 'model', 'contribution', 'dispose', 'blur'] as const) {
+			test(`${reason} cancels ${phase} and rejects its late rename`, async ({ page }) => {
+				const errors: string[] = [];
+				page.on('pageerror', error => errors.push(error.message));
+				await page.goto('/standalone.html');
+				await page.evaluate(phase => window.ashStandaloneIntegration.prepareRenameRequests(phase), phase);
+				await page.keyboard.press('F2');
+				if (phase === 'edit') {
+					const input = page.getByRole('textbox', { name: 'New symbol name' });
+					await input.fill('result');
+					await input.press('Enter');
+				}
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readRenameRequests().length)).toBe(1);
+				await page.evaluate(reason => window.ashStandaloneIntegration.changeRenameState(reason), reason);
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readRenameRequests()[0]!.aborted)).toBe(true);
+				await page.evaluate(() => window.ashStandaloneIntegration.finishRenameRequest(0, 'edit'));
+				expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe(reason === 'text' ? 'changed' : 'value');
+				await expect(page.locator('#caller .stanza-editor-rename')).toBeHidden();
+				if (reason === 'blur') await expect(page.locator('#owned .stanza-editor-input')).toBeFocused();
+				expect(errors).toEqual([]);
+			});
+		}
+	}
+
+	for (const phase of ['prepare', 'edit'] as const) {
+		test(`leaving focus and completing ${phase} in the same turn cannot revive the rename`, async ({ page }) => {
+			await page.goto('/standalone.html');
+			await page.evaluate(phase => window.ashStandaloneIntegration.prepareRenameRequests(phase), phase);
+			await page.keyboard.press('F2');
+			if (phase === 'edit') {
+				const input = page.getByRole('textbox', { name: 'New symbol name' });
+				await input.fill('result');
+				await input.press('Enter');
+			}
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readRenameRequests().length)).toBe(1);
+			await page.evaluate(async () => {
+				window.ashStandaloneIntegration.changeRenameState('blur');
+				await window.ashStandaloneIntegration.finishRenameRequest(0, 'edit');
+			});
+			await expect(page.locator('#owned .stanza-editor-input')).toBeFocused();
+			await expect(page.locator('#caller .stanza-editor-rename')).toBeHidden();
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('value');
+		});
+	}
+
+	test('clicking the input preserves the symbol and repeated Enter submits one undoable rename', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareRenameRequests('edit'));
+		const before = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
+		await page.keyboard.press('F2');
+		const input = page.getByRole('textbox', { name: 'New symbol name' });
+		await expect(input).toBeFocused();
+		await expect(input).toHaveValue('value');
+		await input.click();
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).selection).toBe(before.selection);
+		await input.fill('result');
+		await input.press('Enter');
+		await input.press('Enter');
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readRenameRequests())).toEqual([{
+			phase: 'edit', languageId: 'plaintext', version: before.version, position: '(1,3)',
+			newName: 'result', sameSnapshot: true, aborted: false,
+		}]);
+		await expect(page.locator('#caller .stanza-editor-rename')).toHaveAttribute('aria-busy', 'true');
+		await page.evaluate(() => window.ashStandaloneIntegration.finishRenameRequest(0, 'edit'));
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('result');
+		await expect(page.locator('#caller .stanza-editor-rename')).toBeHidden();
+		await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
+		await page.keyboard.press('ControlOrMeta+z');
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('value');
+	});
+
+	for (const phase of ['prepare', 'edit'] as const) {
+		test(`Escape cancels ${phase} without allowing its late failure to dismiss a new session`, async ({ page }) => {
+			const errors: string[] = [];
+			page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+			await page.goto('/standalone.html');
+			await page.evaluate(phase => window.ashStandaloneIntegration.prepareRenameRequests(phase), phase);
+			await page.keyboard.press('F2');
+			const input = page.getByRole('textbox', { name: 'New symbol name' });
+			if (phase === 'edit') {
+				await input.fill('first');
+				await input.press('Enter');
+			}
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readRenameRequests().length)).toBe(1);
+			await page.keyboard.press('Escape');
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readRenameRequests()))[0]!.aborted).toBe(true);
+			await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
+			await page.keyboard.press('F2');
+			if (phase === 'prepare') {
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readRenameRequests().length)).toBe(2);
+				await page.evaluate(() => window.ashStandaloneIntegration.finishRenameRequest(1, 'edit'));
+			}
+			await input.fill('second');
+			await page.evaluate(() => window.ashStandaloneIntegration.finishRenameRequest(0, 'error'));
+			await expect(input).toBeFocused();
+			await expect(input).toHaveValue('second');
+			await input.press('Enter');
+			if (phase === 'edit') await page.evaluate(() => window.ashStandaloneIntegration.finishRenameRequest(1, 'edit'));
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('second');
+			expect(errors).toEqual([]);
+		});
+	}
+
+	test('an empty name stays editable and announces validation before submission', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareRenameRequests('edit'));
+		await page.keyboard.press('F2');
+		const input = page.getByRole('textbox', { name: 'New symbol name' });
+		await input.fill('   ');
+		await input.press('Enter');
+		await expect(input).toBeFocused();
+		await expect(input).toHaveAttribute('aria-invalid', 'true');
+		await expect(page.locator('#caller .stanza-editor-rename-status')).toHaveText('Name cannot be empty');
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readRenameRequests())).toEqual([]);
+		await input.fill('result');
+		await expect(input).not.toHaveAttribute('aria-invalid');
+		await input.press('Enter');
+		await page.evaluate(() => window.ashStandaloneIntegration.finishRenameRequest(0, 'edit'));
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('result');
+	});
+
+	for (const outcome of ['stale', 'error', 'empty'] as const) {
+		test(`${outcome} rename result does not change the document`, async ({ page }) => {
+			const errors: string[] = [];
+			page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+			await page.goto('/standalone.html');
+			await page.evaluate(() => window.ashStandaloneIntegration.prepareRenameRequests('edit'));
+			await page.keyboard.press('F2');
+			const input = page.getByRole('textbox', { name: 'New symbol name' });
+			await input.fill('result');
+			await input.press('Enter');
+			await page.evaluate(outcome => window.ashStandaloneIntegration.finishRenameRequest(0, outcome), outcome);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('value');
+			await expect(page.locator('#caller .stanza-editor-rename')).not.toHaveAttribute('aria-busy');
+			if (outcome === 'empty') {
+				await expect(input).toBeHidden();
+				expect(errors).toEqual([]);
+			} else {
+				await expect(input).toBeEditable();
+				expect(errors.some(message => message.includes(outcome === 'stale' ? 'requested document version' : 'rename request failed'))).toBe(true);
+			}
+		});
+	}
+
+	test('read-only editors do not start rename preparation', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => {
+			window.ashStandaloneIntegration.prepareRenameRequests('prepare');
+			window.ashStandaloneIntegration.changeRenameState('readonly');
+		});
+		await page.keyboard.press('F2');
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readRenameRequests())).toEqual([]);
+		await expect(page.locator('#caller .stanza-editor-rename')).toBeHidden();
+	});
+
+	test('new rename preparation uses the current language', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => {
+			window.ashStandaloneIntegration.prepareRenameRequests('prepare');
+			window.ashStandaloneIntegration.changeRenameState('language');
+		});
+		await page.keyboard.press('F2');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readRenameRequests().map(request => request.languageId))).toEqual(['typescript']);
+		await page.evaluate(() => window.ashStandaloneIntegration.finishRenameRequest(0, 'edit'));
+		const input = page.getByRole('textbox', { name: 'New symbol name' });
+		await input.fill('result');
+		await input.press('Enter');
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('result');
+	});
+});
+
 test.describe('code action requests', () => {
 	test.afterEach(async ({ page }) => {
 		await page.evaluate(() => window.ashStandaloneIntegration?.dispose());

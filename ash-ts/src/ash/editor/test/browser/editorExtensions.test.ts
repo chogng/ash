@@ -50,7 +50,7 @@ test("Code bundle explicitly registers independently selectable editor capabilit
 		"editor.contrib.hover",
 		"editor.contrib.multicursor",
 		"editor.contrib.selectionHighlighter",
-		"editor.contrib.rename",
+		"editor.contrib.renameController",
 		"editor.contrib.wordHighlighter",
 	]) {
 		assert.equal(ids.has(id), true, id);

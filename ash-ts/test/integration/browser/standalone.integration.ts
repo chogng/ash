@@ -103,7 +103,22 @@ interface CodeActionRequestState {
 	aborted: boolean;
 }
 
+type RenameOutcome = 'edit' | 'empty' | 'stale' | 'error';
+interface RenameRequestState {
+	phase: 'prepare' | 'edit';
+	languageId: string;
+	version: number;
+	position: string;
+	newName: string | undefined;
+	sameSnapshot: boolean;
+	aborted: boolean;
+}
+
 interface StandaloneHarness {
+	prepareRenameRequests(phase: 'prepare' | 'edit'): void;
+	readRenameRequests(): RenameRequestState[];
+	finishRenameRequest(index: number, outcome: RenameOutcome): Promise<void>;
+	changeRenameState(reason: 'text' | 'selection' | 'language' | 'provider' | 'readonly' | 'model' | 'contribution' | 'dispose' | 'blur'): void;
 	prepareCodeActionRequests(phase: 'query' | 'resolve'): void;
 	readCodeActionRequests(): CodeActionRequestState[];
 	finishCodeActionRequest(index: number, outcome: CodeActionOutcome): Promise<void>;
@@ -281,6 +296,12 @@ if (!ownedModel) throw new Error('Owned standalone editor has no model');
 let pointerMouseUpEvents = 0;
 const pointerMouseUpListener = callerEditor.onMouseUp(() => { pointerMouseUpEvents += 1; });
 let referenceRegistration: { dispose(): void } | undefined;
+let renameRegistration: ReturnType<typeof stanza.languages.registerRenameProvider> | undefined;
+const renameRequests: {
+	state: Omit<RenameRequestState, 'aborted'>;
+	signal: AbortSignal;
+	finish: (outcome: RenameOutcome) => void;
+}[] = [];
 let codeActionRegistration: ReturnType<typeof stanza.languages.registerCodeActionProvider> | undefined;
 const codeActionRequests: {
 	state: Omit<CodeActionRequestState, 'aborted'>;
@@ -387,6 +408,63 @@ let formattingProvider: { dispose(): void } | undefined;
 let bracketTokenRegistration: { dispose(): void } | undefined;
 
 window.ashStandaloneIntegration = {
+	prepareRenameRequests: phase => {
+		renameRegistration?.dispose();
+		callerEditor.setValue('value');
+		callerEditor.setPosition(new stanza.Position(1, 3));
+		callerEditor.focus();
+		let preparation: stanza.LanguageRenameRequest;
+		const wait = (requestPhase: 'prepare' | 'edit', context: stanza.LanguageRenameRequest, signal: AbortSignal): Promise<RenameOutcome> => {
+			return new Promise((resolve, reject) => renameRequests.push({
+				state: {
+					phase: requestPhase,
+					languageId: context.languageId,
+					version: context.snapshot.version,
+					position: context.position.toString(),
+					newName: context.newName,
+					sameSnapshot: context.snapshot === preparation.snapshot && context.position === preparation.position && signal === preparation.signal,
+				},
+				signal,
+				finish: outcome => {
+					if (outcome === 'error') reject(new Error('rename request failed'));
+					else resolve(outcome);
+				},
+			}));
+		};
+		renameRegistration = stanza.languages.registerRenameProvider('*', {
+			prepareRename: async (context, signal) => {
+				preparation = context;
+				if (phase === 'prepare' && await wait('prepare', context, signal) === 'empty') return undefined;
+				return { range: new stanza.Range(1, 1, 1, 6), placeholder: 'value' };
+			},
+			provideRenameEdits: async (context, signal) => {
+				const outcome = phase === 'edit' ? await wait('edit', context, signal) : 'edit';
+				return { entries: outcome === 'empty' ? [] : [{
+					kind: 'textDocument', resource: context.resource,
+					version: context.snapshot.version + (outcome === 'stale' ? 1 : 0),
+					edits: [{ range: new stanza.Range(1, 1, 1, 6), text: context.newName! }],
+				}] };
+			},
+		});
+	},
+	readRenameRequests: () => renameRequests.map(request => ({ ...request.state, aborted: request.signal.aborted })),
+	finishRenameRequest: async (index, outcome) => {
+		renameRequests[index]!.finish(outcome);
+		await Promise.resolve();
+		await Promise.resolve();
+		await Promise.resolve();
+	},
+	changeRenameState: reason => {
+		if (reason === 'text') callerEditor.setValue('changed');
+		if (reason === 'selection') callerEditor.setPosition(new stanza.Position(1, 2));
+		if (reason === 'language') callerModel.setLanguage('typescript');
+		if (reason === 'provider') renameRegistration?.dispose();
+		if (reason === 'readonly') callerEditor.updateOptions({ readOnly: true });
+		if (reason === 'model') callerEditor.setModel(ownedModel);
+		if (reason === 'contribution') callerEditor.getContribution('editor.contrib.renameController')!.dispose();
+		if (reason === 'dispose') callerEditor.dispose();
+		if (reason === 'blur') ownedEditor.focus();
+	},
 	prepareCodeActionRequests: phase => {
 		codeActionRegistration?.dispose();
 		callerEditor.setValue('value');
@@ -1720,6 +1798,8 @@ window.ashStandaloneIntegration = {
 	},
 	releaseOwned: () => ownedEditor.dispose(),
 	dispose: () => {
+		renameRegistration?.dispose();
+		for (const request of renameRequests) request.finish('empty');
 		for (const request of codeActionRequests) request.finish('disabled');
 		inlayRegistration?.dispose();
 		brokenInlayRegistration?.dispose();

@@ -11,7 +11,6 @@ import { getWorkspaceSymbols } from '../../../../contrib/search/common/search.js
 import { LanguageNavigationService } from '../../../../../editor/contrib/gotoSymbol/common/languageNavigation.js';
 import { LanguageHoverService } from '../../../../../editor/contrib/hover/common/hover.js';
 import { ParameterHintsService } from '../../../../../editor/contrib/parameterHints/common/languageParameterHints.js';
-import { RenameService } from '../../../../../editor/contrib/rename/common/languageRename.js';
 import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
 import { type ILanguageApi } from "../../../../../platform/language/common/languageApi.js";
 import { type IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
@@ -135,11 +134,15 @@ test("App Server rename and code actions preserve ordered workspace file operati
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
 	using model = new TextModel("value", { languageId: "typescript" });
 	const resource = URI.file("C:\\project\\main.ts");
-	using rename = new RenameService(model, resource, languages.renameProvider);
-
-	const preparation = await rename.prepareRename("typescript", new Position((0) + 1, (2) + 1));
-	const edit = await rename.provideRenameEdits("typescript", new Position((0) + 1, (2) + 1), "renamed");
 	const signal = new AbortController().signal;
+	const request = {
+		...createLanguageFeatureRequest(model, model.getLanguageId(), signal),
+		resource,
+		position: new Position(1, 3),
+	};
+	const rename = languages.renameProvider.ordered(model)[0]!;
+	const preparation = await rename.prepareRename!(request, signal);
+	const edit = await rename.provideRenameEdits({ ...request, newName: 'renamed' }, signal);
 	const available = await languages.codeActionProvider.ordered(model)[0]!.provideCodeActions({
 		...createLanguageFeatureRequest(model, model.getLanguageId(), signal),
 		resource,

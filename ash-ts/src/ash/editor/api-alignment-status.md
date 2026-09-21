@@ -1,5 +1,36 @@
 # Editor API 对齐状态
 
+## 重命名准备与提交会话（2026-09-21）
+
+准入链：F2 → 标准 bundle 的重命名贡献 → 公共 rename registry → 准备位置与原提供者 → 输入新名称 → 同一快照内提交 → 编辑器事务或宿主工作区编辑。原 `RenameService` 仅有一个生产消费者，准备与提交使用分离请求，提交时丢失提供者归属并重读光标，语言还停留在装配时的值；本批按已授权的职责收敛，将该请求和取消状态迁入重命名贡献。
+
+| 准入路径（相对 editor，另有标注除外） | 存在关系 | 唯一 owner、本批动作与验证 |
+| --- | --- | --- |
+| `contrib/rename/browser/rename.ts` | 仅 VS Code | 承接现有贡献、输入 DOM 与准备/提交会话；注入语言服务，保留原提供者、快照、位置及信号，校验本地编辑版本。验证取消、一次提交和一次撤销。 |
+| `contrib/rename/browser/renameController.ts` | 仅 Ash | 唯一 bundle 调用迁入准确 owner 后删除；不保留别名或测试专用导出，Git 可恢复。 |
+| `contrib/rename/common/languageRename.ts` | 仅 Ash | 唯一生产消费者的调度迁出后删除；公共契约继续由 `common/languages.ts` 拥有，Git 可恢复。 |
+| `editor.all.ts` | 双方都有 | 仅迁移 rename 副作用 import。 |
+| `contrib/rename/test/browser/renameController.test.ts` | 仅 Ash 测试 | 迁为真实 Widget 装配，覆盖原提供者、可选准备、命令通知、错误与宿主提交边界。 |
+| `ash-ts/src/ash/workbench/services/language/test/browser/appServerLanguageProviders.test.ts` | 仅 Ash 测试 | 直接验证已注册的 rename provider 及公共请求，移除旧服务引用。 |
+| `ash-ts/test/architecture/editor-architecture.test.ts` | 仅 Ash 测试 | 更新标准 bundle 的准确 rename 路径断言。 |
+| `test/browser/editorExtensions.test.ts` | 仅 Ash 测试 | 追加准入：bundle 身份断言改为上游对应 `editor.contrib.renameController`，验证命令注册保持存在。 |
+| `ash-ts/test/integration/browser/standalone.integration.ts`、`standalone.integration.spec.ts` | 仅 Ash 测试 | 真实键盘/指针验证准备与编辑期间取消、重复 Enter、失效、焦点和撤销。 |
+| `browser/README.md`、`api-alignment-status.md` | 仅 Ash 文档 | 更新会话 owner 与验证结果，保留未完成的标准命令/API 差异。 |
+
+独立实现：沿用现有 input/status DOM、View 坐标及 CSS，不复制上游 Widget 或私有类图。一个会话持有一次请求及成功准备的提供者；没有可选 prepare 方法时按公共契约使用当前词。内容、选区、语言、提供者、只读、焦点离开与释放使会话失效；输入自身的指针事件由输入组件消费，避免改变底层选区。编辑交给宿主以后保留其错误报告，旧回调不能关闭新的会话。上游只用于确认 `rename.ts` 的调度归属、F2 可写条件和位置/内容取消语义；完整 RenameAction、预览及名称建议不在本切片内。
+
+焦点回归：编辑器的失焦通知会延迟到下一轮事件循环，提供者在此之前完成时，准备结果会抢回焦点，提交结果会改动已离开的文档。两个 Playwright 用例在修复前均失败；重命名组件在自己的根节点上同步处理焦点离开，保留编辑器内转移焦点，修复后全部 30 项重命名浏览器场景通过。
+
+最终验证：
+
+- `check-editor-alignment.mjs --test=all` 通过：233/233 份单测文件、427/427 项 Playwright 用例，以及结构、台账、类型和生成文件检查。
+- Renderer 与 Stanza 生产构建通过，无构建警告。全量测试保留既有 Canvas、marker / inline-completion 测试装配及颜色环境提示；与上一批日志对比没有新增类别或数量，本批定向单测无警告。
+- 原提供者、原快照、无可选准备方法、错误隔离、编辑基线校验、重复提交、宿主完成/失败及撤销均由真实 Widget 验证。浏览器另覆盖两阶段的九类失效、Escape、输入框点击、空名称、过期/空/错误结果与当前语言。
+- 旧请求服务、旧控制器入口及代码引用已退出。Editor 生产文件为 538 个：421 个同路径、117 个 Ash 自有，上游尚缺 313 个路径。common 文件集合和 80/41 声明计数不变；本批未改 CSS，没有新增品牌引用。
+- 完整 RenameAction 命令、重命名预览、名称建议及独立 Widget 公共接口尚未完成；本批不计为完整重命名 API 对齐。
+
+本批开始时工作树为空；改动留在工作区，未创建提交。
+
 ## 代码操作查询、解析与应用生命周期（2026-09-21）
 
 准入链：Ctrl/Cmd+. → `codeActionContributions.ts` 装配 → `CodeActionController` 查询公共 registry → 菜单选择原提供者的动作 → 原快照内解析 → 编辑器事务或宿主工作区编辑 → 取消 / 释放拒绝迟到结果。现有独立 `CodeActionService` 只有该控制器一个生产消费者，且解析阶段脱离菜单取消信号；按用户已授权的职责收敛，本批将其逻辑收回已有控制器，原服务文件在调用清零后退出，Git 可恢复。
@@ -701,7 +732,7 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 | `contrib/parameterHints/common/languageParameterHints.ts` | 已检查请求和结果校验；提前取消时是否调用提供者待继续核对。 |
 | `contrib/codeAction/common/languageCodeActions.ts`（已退出） | 原提供者与原始对象归属已迁入 `CodeActionController`；无 resolver 不串用其他提供者，查询与解析共用快照和取消信号。 |
 | `contrib/links/common/languageLinks.ts` | 已检查请求和异步结果校验，消费本轮公共修复。 |
-| `contrib/rename/common/languageRename.ts` | 已检查请求和结果校验；提前取消时是否调用提供者待继续核对。 |
+| `contrib/rename/common/languageRename.ts` | 2026-09-21 已迁入 `contrib/rename/browser/rename.ts`；原服务退出，准备和提交沿用同一快照及取消信号。 |
 | `contrib/inlineCompletions/browser/model/provideInlineCompletions.ts` | 已检查提供者请求和异步结果校验，消费本轮公共修复。 |
 | `contrib/inlayHints/common/languageInlayHints.ts` | 已检查请求和异步结果校验，消费本轮公共修复。 |
 | `contrib/colorPicker/common/languageColors.ts` | 已修复：提供者异常返回后检查版本、语言与存活状态，3 项回归先失败后通过。 |
@@ -1193,7 +1224,7 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 | `contrib/quickAccess/browser/quickAccessController.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
 | `contrib/quickAccess/common/gotoLocation.ts` | 1 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
 | `contrib/readOnlyMessage/browser/contribution.ts` | 1 / 1 | 人工检查：贡献安装条件与服务/控制器装配；具体生命周期见对应实现。 |
-| `contrib/rename/browser/renameController.ts` | 1 / 1 | 已复现并修复：销毁时取消请求；重复提交的取消顺序待验证。 |
+| `contrib/rename/browser/rename.ts` | 1 / 1 | 2026-09-21 原控制器迁回准确入口；重复提交、取消及焦点离开的同事件循环竞态均已通过真实浏览器验证。 |
 | `contrib/sectionHeaders/browser/sectionHeaders.contribution.ts` | 1 / 0 | 人工检查：贡献注册入口、安装条件与服务/控制器归属；功能实现结论见对应文件。 |
 | `contrib/sectionHeaders/browser/sectionHeadersController.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
 | `contrib/smartSelect/browser/smartSelectController.ts` | 1 / 0 | 人工追踪：展开前版本/选区复核；异常返回路径仍待验证。 |

@@ -40,7 +40,7 @@ import "./contrib/parameterHints/browser/parameterHintsController.js";
 import "./contrib/placeholderText/browser/placeholderText.contribution.js";
 import "./contrib/quickAccess/browser/quickAccessController.js";
 import './contrib/readOnlyMessage/browser/contribution.js';
-import "./contrib/rename/browser/renameController.js";
+import "./contrib/rename/browser/rename.js";
 import "./contrib/sectionHeaders/browser/sectionHeaders.contribution.js";
 import "./contrib/smartSelect/browser/smartSelectController.js";
 import "./contrib/stickyScroll/browser/stickyScrollContribution.js";
