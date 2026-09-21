@@ -1,4 +1,5 @@
-import { SyntaxProviderRegistry, type SyntaxRequest } from '../languages/syntax/syntaxProviders.js';
+import { SyntaxProviderRegistry } from '../languageFeatureRegistry.js';
+import { type SyntaxRequest } from '../languages.js';
 import { SYNTAX_DIAGNOSTIC_LANE, SyntaxProviderWorker, type SyntaxLane, type SyntaxResult } from '../languages/syntax/syntaxService.js';
 import { LanguageRequestCoordinator } from '../languages/languageRequestCoordinator.js';
 import { createLanguageDiagnosticStore } from '../languages/languageResults.js';

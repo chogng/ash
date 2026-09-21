@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { SuggestModel } from "../../browser/suggestModel.js";
-import { LanguageCompletionService } from "../../../../common/languages/completion/languageCompletionService.js";
-import { LanguageCompletionProviderRegistry, LanguageCompletionTriggerKind, type LanguageCompletionProvider, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from "../../../../common/languages/completion/languageCompletionProviders.js";
-import { LanguageCompletionItemKind } from "../../../../common/languages/completion/languageCompletions.js";
+import { LanguageCompletionService } from '../../browser/suggest.js';
+import { LanguageCompletionProviderRegistry } from '../../../../common/languageFeatureRegistry.js';
+import { LanguageCompletionTriggerKind, type LanguageCompletionProvider, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult, LanguageCompletionItemKind } from '../../../../common/languages.js';
+
 import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
@@ -245,7 +246,6 @@ function completionResult(request: LanguageCompletionProviderRequest, label: str
 		isIncomplete,
 	};
 }
-
 
 interface KeyOptions {
 	readonly ctrlKey?: boolean;

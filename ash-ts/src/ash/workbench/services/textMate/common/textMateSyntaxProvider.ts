@@ -1,4 +1,4 @@
-import { type SyntaxProvider, type SyntaxProviderRequest } from "../../../../editor/common/languages/syntax/syntaxProviders.js";
+import { type SyntaxProvider, type SyntaxProviderRequest } from '../../../../editor/common/languages.js';
 import { type LanguageWorkerDocumentSynchronization } from '../../../../editor/common/services/textModelSync/textModelSync.protocol.js';
 import { TextMateTokenizationService } from "./textMateTokenizationService.js";
 

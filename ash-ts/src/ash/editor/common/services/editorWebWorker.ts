@@ -1,5 +1,5 @@
-import { LanguageCompletionItemKind } from "../languages/completion/languageCompletions.js";
-import { type LanguageCompletionProvider, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult, type LanguageCompletionRequest } from "../languages/completion/languageCompletionProviders.js";
+import { LanguageCompletionItemKind, type LanguageCompletionProvider, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult, type LanguageCompletionRequest, type TextEdit } from '../languages.js';
+
 import { Position } from "../core/position.js";
 import { Range } from "../core/range.js";
 import { getTextWordSegments } from "../core/textSegmentation.js";
@@ -13,7 +13,6 @@ import { BasicInplaceReplace } from '../languages/supports/inplaceReplaceSupport
 import { type LanguageWorkerRequest } from '../languages/languageRequestCoordinator.js';
 import { EDITOR_WORKER_TEXTUAL_SUGGEST_LANE, EDITOR_WORKER_MINIMAL_EDITS_LANE, EDITOR_WORKER_NAVIGATE_VALUE_LANE, EDITOR_WORKER_UNICODE_HIGHLIGHTS_LANE, type EditorWorkerImplementation, type EditorWorkerLane, type EditorWorkerMinimalEditsRequest, type EditorWorkerNavigateValueRequest, type EditorWorkerRequest, type EditorWorkerResult } from './editorWorkerWire.js';
 import { computeUnicodeHighlights } from './unicodeTextModelHighlighter.js';
-import { type TextEdit } from '../languages.js';
 
 const MINIMAL_EDIT_LIMIT = 100_000;
 

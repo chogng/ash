@@ -1,6 +1,7 @@
-import { LanguageCompletionTriggerKind, LanguageCompletionProviderRegistry } from '../../../common/languages/completion/languageCompletionProviders.js';
-import { LanguageCompletionService } from '../../../common/languages/completion/languageCompletionService.js';
-import { WordBasedCompletionItemProvider } from '../../../browser/services/editorWorkerService.js';
+import { LanguageCompletionTriggerKind } from '../../../common/languages.js';
+import { LanguageCompletionProviderRegistry } from '../../../common/languageFeatureRegistry.js';
+import { LanguageCompletionService } from '../../../contrib/suggest/browser/suggest.js';
+import { WordBasedCompletionItemProvider, VersionedEditorWorkerClient } from '../../../browser/services/editorWorkerService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Emitter, type Event } from '../../../../base/common/event.js';
@@ -9,7 +10,7 @@ import { LanguageWorkerWireClient, LanguageWorkerWireServer, type LanguageWorker
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { TextModel } from '../../../common/model/textModel.js';
-import { VersionedEditorWorkerClient } from '../../../browser/services/editorWorkerService.js';
+
 import { EditorWorker } from '../../../common/services/editorWebWorker.js';
 import { editorWorkerWireCodec } from '../../../common/services/editorWorkerWire.js';
 import { EndOfLineSequence } from '../../../common/model.js';
@@ -103,7 +104,6 @@ test('formatting can run again after an overlapping response fails across the wo
 	assert.deepEqual(edits, [{ range: model.getFullModelRange(), text: 'ALPHA' }]);
 	assert.equal(starts, 2);
 });
-
 
 test('word completion shares the general editor worker and retains dynamic providers', async () => {
 	using model = new TextModel('alpha alphabet\nal', { languageId: 'typescript' });

@@ -4,7 +4,7 @@ import { FileIconThemeData } from '../../themes/browser/fileIconThemeData.js';
 import { VSBuffer } from "../../../../base/common/buffer.js";
 import { Emitter, runWithBufferedEvents, type Event } from "../../../../base/common/event.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { LanguageCompletionProvider, LanguageCompletionProviderRegistration } from "../../../../editor/common/languages/completion/languageCompletionProviders.js";
+import { type LanguageCompletionProvider, type LanguageCompletionProviderRegistration } from '../../../../editor/common/languages.js';
 import type { LanguageConfiguration } from '../../../../editor/common/languages/languageConfiguration.js';
 import type { ILanguageConfigurationService } from '../../../../editor/common/languages/languageConfigurationRegistry.js';
 import { parseLanguageConfiguration } from "./languageConfigurationParser.js";

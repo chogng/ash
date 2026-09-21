@@ -7,8 +7,8 @@ import { Disposable, toDisposable } from "../../../../../base/common/lifecycle.j
 import { EditorLineWrapping } from "../../../../../editor/common/config/editorOptions.js";
 import { CodeEditorWidget } from "../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js";
 import { ICodeEditorService } from "../../../../../editor/browser/services/codeEditorService.js";
-import { LanguageCompletionService } from "../../../../../editor/common/languages/completion/languageCompletionService.js";
-import { LanguageCompletionProviderRegistry } from "../../../../../editor/common/languages/completion/languageCompletionProviders.js";
+import { LanguageCompletionService } from '../../../../../editor/contrib/suggest/browser/suggest.js';
+import { LanguageCompletionProviderRegistry } from '../../../../../editor/common/languageFeatureRegistry.js';
 import { SuggestModel } from "../../../../../editor/contrib/suggest/browser/suggestModel.js";
 import { SuggestController } from "../../../../../editor/contrib/suggest/browser/suggestController.js";
 import "../../../../../editor/contrib/placeholderText/browser/placeholderText.contribution.js";

@@ -1,11 +1,8 @@
 import type { IDisposable } from '../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../../platform/instantiation/common/instantiation.js';
-import type { LanguageFeatureRegistry } from '../languageFeatureRegistry.js';
+import { type LanguageFeatureRegistry, type LanguageCompletionProviderRegistry, type SyntaxProviderRegistry } from '../languageFeatureRegistry.js';
 import type { LanguageSelector } from '../languageSelector.js';
-import type { LanguageCompletionProvider, LanguageCompletionProviderRegistry } from '../languages/completion/languageCompletionProviders.js';
-import type { CodeLensProvider, DocumentHighlightProvider, LinkedEditingRangeProvider, MultiDocumentHighlightProvider, DocumentFormattingEditProvider, DocumentRangeFormattingEditProvider, OnTypeFormattingEditProvider, LanguageSemanticTokensProvider } from '../languages.js';
-import type { SyntaxProviderRegistry } from '../languages/syntax/syntaxProviders.js';
-import type { LanguageWorkspaceSymbolProvider } from '../languages/workspaceSymbols.js';
+import { type LanguageCompletionProvider, type CodeLensProvider, type DocumentHighlightProvider, type LinkedEditingRangeProvider, type MultiDocumentHighlightProvider, type DocumentFormattingEditProvider, type DocumentRangeFormattingEditProvider, type OnTypeFormattingEditProvider, type LanguageSemanticTokensProvider, type LanguageWorkspaceSymbolProvider } from '../languages.js';
 import type { LanguageCallHierarchyProvider, LanguageTypeHierarchyProvider } from '../../contrib/callHierarchy/common/languageHierarchy.js';
 import type { LanguageCodeActionProvider } from '../../contrib/codeAction/common/languageCodeActions.js';
 import type { LanguageColorProvider } from '../../contrib/colorPicker/common/languageColors.js';

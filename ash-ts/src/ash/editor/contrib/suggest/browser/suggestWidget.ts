@@ -4,7 +4,7 @@ import { addDisposableListener, fragment as createFragment, h, isElement, reset,
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type ICodeEditor } from "../../../browser/editorBrowser.js";
 import { LanguageCompletionDetailsStatus, type LanguageCompletionSessionState, SuggestModel } from "./suggestModel.js";
-import { LanguageCompletionItemKind } from "../../../common/languages/completion/languageCompletions.js";
+import { LanguageCompletionItemKind } from '../../../common/languages.js';
 import { type ViewController } from '../../../browser/view/viewController.js';
 import { type View } from "../../../browser/view.js";
 

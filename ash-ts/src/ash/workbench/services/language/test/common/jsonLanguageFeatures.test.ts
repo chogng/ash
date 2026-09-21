@@ -4,9 +4,9 @@ import { test } from 'mocha';
 import { parseJsonc } from '../../../../../base/common/jsonc.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { Position } from '../../../../../editor/common/core/position.js';
-import { LanguageCompletionTriggerKind } from '../../../../../editor/common/languages/completion/languageCompletionProviders.js';
+import { LanguageCompletionTriggerKind, createLanguageFeatureRequest } from '../../../../../editor/common/languages.js';
 import type { LanguageDiagnostic } from '../../../../../editor/common/languages/languageResults.js';
-import { createLanguageFeatureRequest } from '../../../../../editor/common/languages.js';
+
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import type { LanguageDiagnosticsPublisher } from '../../../../../editor/common/languages/languageResults.js';
 import { JsonSchemaRegistry } from '../../../../../platform/jsonschemas/common/jsonSchemaRegistry.js';

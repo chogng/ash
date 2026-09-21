@@ -1,7 +1,7 @@
 import { Position } from "../../../../editor/common/core/position.js";
 import { Range } from "../../../../editor/common/core/range.js";
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
-import type { LanguageWorkspaceSymbol, LanguageWorkspaceSymbolProvider } from "../../../../editor/common/languages/workspaceSymbols.js";
+import type { LanguageWorkspaceSymbol, LanguageWorkspaceSymbolProvider } from '../../../../editor/common/languages.js';
 import { workspaceResourceFromPath } from "../../../../platform/files/browser/fileService.js";
 import type { ICodebaseSymbolsService, CodebaseSymbolsMatch } from "../../../../platform/codebaseSymbols/common/codebaseSymbolsService.js";
 import type { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";

@@ -1,8 +1,9 @@
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
-import { LanguageCompletionProviderRegistry, createLanguageCompletionInvokeContext, type LanguageCompletionProvider } from "../../common/languages/completion/languageCompletionProviders.js";
-import { LanguageCompletionService } from "../../common/languages/completion/languageCompletionService.js";
-import { LanguageCompletionItemKind, type LanguageCompletionResolveRequest } from "../../common/languages/completion/languageCompletions.js";
+import { LanguageCompletionProviderRegistry } from '../../common/languageFeatureRegistry.js';
+import { createLanguageCompletionInvokeContext, type LanguageCompletionProvider, LanguageCompletionItemKind, type LanguageCompletionResolveRequest } from '../../common/languages.js';
+import { LanguageCompletionService } from '../../contrib/suggest/browser/suggest.js';
+
 import { LanguageRequestStatus } from "../../common/languages/languageRequestCoordinator.js";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";

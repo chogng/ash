@@ -4,12 +4,12 @@ import { Position } from '../../core/position.js';
 import { type Range } from '../../core/range.js';
 import { countEOL } from '../../core/misc/eolCounter.js';
 import { ColorId, FontStyle, LanguageId, MetadataConsts, StandardTokenType } from '../../encodedTokenAttributes.js';
-import { TokenizationRegistry, type ILanguageIdCodec } from '../../languages.js';
-import { type LanguageSemanticTokensProvider } from '../../languages.js';
-import { type LanguageFeatureRegistry } from '../../languageFeatureRegistry.js';
+import { TokenizationRegistry, type ILanguageIdCodec, type LanguageSemanticTokensProvider } from '../../languages.js';
+
+import { type LanguageFeatureRegistry, SyntaxProviderRegistry } from '../../languageFeatureRegistry.js';
 import { type LanguageTokenizationSource } from '../../tokens/languageTokens.js';
 import { SyntaxService, type SyntaxServiceOptions } from '../../languages/syntax/syntaxService.js';
-import { SyntaxProviderRegistry } from '../../languages/syntax/syntaxProviders.js';
+
 import { BackgroundTokenizationState, type ITokenizationTextModelPart, SynchronousTokenizationUnavailableError } from '../../tokenizationTextModelPart.js';
 import { LanguageTokenLineIndex, StyledTokenSource, overlayTokenSources, type LanguageTokenLine } from '../../tokens/languageTokenLineIndex.js';
 import { type LanguageToken } from '../../tokens/languageTokens.js';

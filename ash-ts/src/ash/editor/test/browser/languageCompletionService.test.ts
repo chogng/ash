@@ -3,10 +3,11 @@ import { strict as assert } from "node:assert";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { SuggestModel } from "../../contrib/suggest/browser/suggestModel.js";
-import { LanguageCompletionService } from "../../common/languages/completion/languageCompletionService.js";
-import { LanguageCompletionProviderRegistry, LanguageCompletionTriggerKind, createLanguageCompletionIncompleteRefreshContext, createLanguageCompletionInvokeContext, createLanguageCompletionTriggerCharacterContext, type LanguageCompletionContext, type LanguageCompletionProvider, type LanguageCompletionProviderItem, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from "../../common/languages/completion/languageCompletionProviders.js";
+import { LanguageCompletionService } from '../../contrib/suggest/browser/suggest.js';
+import { LanguageCompletionProviderRegistry } from '../../common/languageFeatureRegistry.js';
+import { LanguageCompletionTriggerKind, createLanguageCompletionIncompleteRefreshContext, createLanguageCompletionInvokeContext, createLanguageCompletionTriggerCharacterContext, type LanguageCompletionContext, type LanguageCompletionProvider, type LanguageCompletionProviderItem, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult, LanguageCompletionItemKind, LanguageCompletionInsertTextFormat } from '../../common/languages.js';
 import { LanguageRequestCancellationReason, LanguageRequestStatus } from "../../common/languages/languageRequestCoordinator.js";
-import { LanguageCompletionItemKind } from "../../common/languages/completion/languageCompletions.js";
+
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
@@ -234,6 +235,25 @@ test("Completion service disposal owns neither registry nor model", () => {
 		text: "!",
 	}]);
 	assert.equal(model.getText(), "con!");
+});
+
+test('Suggest rejects malformed snippet providers while keeping valid completions', async () => {
+	using registry = new LanguageCompletionProviderRegistry();
+	using invalid = registry.register(provider('invalid', () => ({
+		items: [{ ...item('broken', 'broken'), insertText: '${1', insertTextFormat: LanguageCompletionInsertTextFormat.Snippet }],
+		isIncomplete: false,
+	})));
+	using valid = registry.register(provider('valid', () => result('console')));
+	using model = new TextModel('con');
+	const failures: string[] = [];
+	using service = new LanguageCompletionService(model, registry, { onProviderError: id => failures.push(id) });
+
+	await service.request('typescript', new Position(1, 4), createLanguageCompletionInvokeContext());
+
+	assert.deepEqual({
+		failures,
+		items: service.results.result?.value.items.map(item => item.label),
+	}, { failures: ['invalid'], items: ['console'] });
 });
 
 function provider(

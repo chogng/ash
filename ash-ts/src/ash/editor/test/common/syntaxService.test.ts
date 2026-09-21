@@ -1,7 +1,8 @@
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { DisposableStore } from "../../../base/common/lifecycle.js";
-import { SyntaxProviderRegistry, type SyntaxProvider } from "../../common/languages/syntax/syntaxProviders.js";
+import { SyntaxProviderRegistry } from '../../common/languageFeatureRegistry.js';
+import { type SyntaxProvider } from '../../common/languages.js';
 import { SYNTAX_SYNCHRONIZATION, SYNTAX_DIAGNOSTIC_LANE, SYNTAX_TOKEN_LANE, SyntaxProviderWorker, SyntaxService } from "../../common/languages/syntax/syntaxService.js";
 import { LanguageRequestCancellationReason, LanguageRequestStatus } from "../../common/languages/languageRequestCoordinator.js";
 import { LanguageDiagnosticSeverity, type LanguageDiagnosticResult, type LanguageTokenResult } from "../../common/languages/languageResults.js";

@@ -5,10 +5,10 @@ import { URI } from "../../../../../base/common/uri.js";
 import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../editor/common/core/range.js";
 import { LanguageDiagnosticSeverity } from "../../../../../editor/common/languages/languageResults.js";
-import { createLanguageCompletionInvokeContext } from "../../../../../editor/common/languages/completion/languageCompletionProviders.js";
+import { createLanguageCompletionInvokeContext } from '../../../../../editor/common/languages.js';
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
-import { LanguageCompletionService } from '../../../../../editor/common/languages/completion/languageCompletionService.js';
-import { WorkspaceSymbolService } from '../../../../../editor/common/languages/workspaceSymbols.js';
+import { LanguageCompletionService } from '../../../../../editor/contrib/suggest/browser/suggest.js';
+import { getWorkspaceSymbols } from '../../../../contrib/search/common/search.js';
 import { CodeActionService } from '../../../../../editor/contrib/codeAction/common/languageCodeActions.js';
 import { LanguageNavigationService } from '../../../../../editor/contrib/gotoSymbol/common/languageNavigation.js';
 import { LanguageHoverService } from '../../../../../editor/contrib/hover/common/hover.js';
@@ -19,10 +19,9 @@ import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../..
 import { type ILanguageApi } from "../../../../../platform/language/common/languageApi.js";
 import { type IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
 import { type IDirPermissionsService } from "../../../../../platform/dirPermissions/common/dirPermissionsService.js";
-import type { PermissionDto } from "../../../../../platform/app-server/common/generated/index.js";
+import { type PermissionDto, type ServerNotification } from '../../../../../platform/app-server/common/generated/index.js';
 import { WorkspaceContextService } from "../../../workspaces/browser/workspaceContextService.js";
 import { AppServerLanguageProviders } from "../../browser/appServerLanguageProviders.js";
-import { type ServerNotification } from "../../../../../platform/app-server/common/generated/index.js";
 
 const DTO_RANGE = Object.freeze({ start: Object.freeze({ lineIndex: 0, columnIndex: 0 }), end: Object.freeze({ lineIndex: 0, columnIndex: 5 }) });
 
@@ -81,9 +80,8 @@ test("App Server workspace symbols query every supported Code language and dedup
 	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
-	using symbols = new WorkspaceSymbolService(languages.workspaceSymbolProvider);
 
-	const result = await symbols.provideWorkspaceSymbols("answer");
+	const result = await getWorkspaceSymbols(languages.workspaceSymbolProvider.allNoModel(), "answer");
 
 	assert.deepEqual(api.workspaceSymbolLanguages.sort(), ["javascript", "javascriptreact", "json", "jsonc", "rust", "shell", "typescript", "typescriptreact"]);
 	assert.equal(result.length, 1);

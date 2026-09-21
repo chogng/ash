@@ -9,7 +9,7 @@ import { IThemeService } from "../../../platform/theme/common/themeService.js";
 import { ConfigurationTarget, IConfigurationService, isConfigurationUpdateOverrides, type IConfigurationChangeEvent, type IConfigurationData, type IConfigurationOverrides, type IConfigurationUpdateOptions, type IConfigurationUpdateOverrides, type IConfigurationValue } from '../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { ICodeEditorService, type ICodeEditorService as ICodeEditorServiceContract } from '../../browser/services/codeEditorService.js';
-import { type LanguageCompletionWorkerFactory } from "../../common/languages/completion/languageCompletionService.js";
+import { type LanguageCompletionWorkerFactory } from '../../common/languages.js';
 import { type SyntaxWorkerFactory } from "../../common/languages/syntax/syntaxService.js";
 import { VersionedEditorWorkerClient, type VersionedEditorWorkerFactory } from "../../browser/services/editorWorkerService.js";
 import { registerBuiltinLanguageConfigurations, registerBuiltinLanguageDescriptions } from '../common/builtinLanguages.js';

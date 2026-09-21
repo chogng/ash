@@ -1,7 +1,7 @@
 import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../editor/common/core/range.js";
-import { LanguageCompletionItemKind } from "../../../../../editor/common/languages/completion/languageCompletions.js";
-import { type LanguageCompletionProvider, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from "../../../../../editor/common/languages/completion/languageCompletionProviders.js";
+import { LanguageCompletionItemKind, type LanguageCompletionProvider, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from '../../../../../editor/common/languages.js';
+
 import type { SkillSelectorCatalog } from "../../common/skillSelectors.js";
 import { CHAT_INPUT_LANGUAGE_ID } from "./chatCommandCompletion.js";
 

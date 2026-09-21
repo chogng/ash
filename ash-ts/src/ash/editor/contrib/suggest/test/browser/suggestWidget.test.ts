@@ -4,9 +4,10 @@ import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { LanguageCompletionDetailsStatus, SuggestModel, type LanguageCompletionSessionOptions } from "../../browser/suggestModel.js";
 import { LanguageResultAcceptance } from "../../../../common/languages/languageResultStore.js";
-import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind, createLanguageCompletionStore, type LanguageCompletionItem } from "../../../../common/languages/completion/languageCompletions.js";
-import { LanguageCompletionProviderRegistry } from "../../../../common/languages/completion/languageCompletionProviders.js";
-import { LanguageCompletionService } from "../../../../common/languages/completion/languageCompletionService.js";
+import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind, type LanguageCompletionItem } from '../../../../common/languages.js';
+import { createLanguageCompletionStore, LanguageCompletionService } from '../../browser/suggest.js';
+import { LanguageCompletionProviderRegistry } from '../../../../common/languageFeatureRegistry.js';
+
 import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";

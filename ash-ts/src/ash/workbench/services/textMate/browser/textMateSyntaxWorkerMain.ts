@@ -1,5 +1,5 @@
 import { start } from "../../../../editor/editor.worker.start.js";
-import { SyntaxProviderRegistry } from "../../../../editor/common/languages/syntax/syntaxProviders.js";
+import { SyntaxProviderRegistry } from '../../../../editor/common/languageFeatureRegistry.js';
 import { SyntaxProviderWorker } from "../../../../editor/common/languages/syntax/syntaxService.js";
 import { syntaxWireCodec } from "../../../../editor/common/languages/syntax/syntaxWire.js";
 import { LanguageWorkerWireServer } from "../../../../editor/common/languages/languageWorkerWire.js";

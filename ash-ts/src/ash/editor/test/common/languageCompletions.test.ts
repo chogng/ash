@@ -1,7 +1,9 @@
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { LanguageResultAcceptance } from "../../common/languages/languageResultStore.js";
-import { LanguageCompletionItemKind, createLanguageCompletionSnapshotNormalizer, createLanguageCompletionStore, type LanguageCompletionItem } from "../../common/languages/completion/languageCompletions.js";
+import { LanguageCompletionItemKind, type LanguageCompletionItem, createLanguageCompletionSnapshotNormalizer } from '../../common/languages.js';
+
+import { createLanguageCompletionStore } from '../../contrib/suggest/browser/suggest.js';
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { type TextSnapshot } from "../../common/core/textChange.js";

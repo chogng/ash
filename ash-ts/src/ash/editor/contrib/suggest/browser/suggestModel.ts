@@ -5,7 +5,8 @@ import { type ICodeEditor } from "../../../browser/editorBrowser.js";
 import { EditorOption } from "../../../common/config/editorOptions.js";
 import { type VersionedLanguageResult } from "../../../common/languages/languageRequestCoordinator.js";
 import { type VersionedLanguageResultStore } from "../../../common/languages/languageResultStore.js";
-import { assertLanguageCompletionCommitCharacter, LanguageCompletionInsertTextFormat, normalizeLanguageCompletionItemDetails, type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionItemResolver, type LanguageCompletionResolveRequest, type LanguageCompletionResult } from "../../../common/languages/completion/languageCompletions.js";
+import { assertLanguageCompletionCommitCharacter, normalizeLanguageCompletionItemDetails, LanguageCompletionInsertTextFormat, type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionItemResolver, type LanguageCompletionResolveRequest, type LanguageCompletionResult } from '../../../common/languages.js';
+
 import { parseSnippet, type Snippet, type SnippetVariableResolver } from "../../snippet/common/snippetParser.js";
 import { SnippetSession } from "../../snippet/browser/snippetSession.js";
 import { Position } from "../../../common/core/position.js";
@@ -321,7 +322,6 @@ export class SuggestModel extends Disposable {
 		}));
 	}
 
-
 	private startResolution(): void {
 		const state = this.currentState;
 		if (!state || state.detailsStatus !== LanguageCompletionDetailsStatus.Loading || !this.resolver) return;
@@ -424,7 +424,6 @@ function resolveLanguageCompletionInsertion(item: LanguageCompletionItem, commit
 		: 0;
 	return Object.freeze({ text, snippet, resultStartOffset: primaryStartOffset + offsetDelta });
 }
-
 
 function createStateSnapshot(state: LanguageCompletionSessionState, selectedIndex: number, resolverAvailable: boolean): LanguageCompletionSessionState {
 	const selectedItem = state.items[selectedIndex]!;

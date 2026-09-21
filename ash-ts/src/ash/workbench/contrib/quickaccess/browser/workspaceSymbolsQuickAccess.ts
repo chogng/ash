@@ -3,7 +3,8 @@ import { DisposableStore } from "../../../../base/common/lifecycle.js";
 import { Action2, registerAction2 } from "../../../../platform/actions/common/actions.js";
 import { type ServicesAccessor } from "../../../../platform/instantiation/common/instantiation.js";
 import { IQuickInputService, type IQuickPickItem } from "../../../../platform/quickinput/common/quickInput.js";
-import { WorkspaceSymbolService, type LanguageWorkspaceSymbol } from '../../../../editor/common/languages/workspaceSymbols.js';
+import { type LanguageWorkspaceSymbol } from '../../../../editor/common/languages.js';
+import { getWorkspaceSymbols } from '../../search/common/search.js';
 import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import { IEditorService } from "../../../services/editor/common/editorService.js";
 import { IFileService } from "../../../../platform/files/common/files.js";
@@ -27,7 +28,7 @@ registerAction2(class ShowAllSymbolsAction extends Action2 {
 	}
 
 	override run(accessor: ServicesAccessor): void {
-		const service = new WorkspaceSymbolService(accessor.get(ILanguageFeaturesService).workspaceSymbolProvider);
+		const providers = accessor.get(ILanguageFeaturesService).workspaceSymbolProvider;
 		const editor = accessor.get(IEditorService);
 		const files = accessor.get(IFileService);
 		const workingCopies = accessor.get(IWorkingCopyService);
@@ -35,7 +36,6 @@ registerAction2(class ShowAllSymbolsAction extends Action2 {
 		const disposables = new DisposableStore();
 		let request: AbortController | undefined;
 		let requestGeneration = 0;
-		disposables.add(service);
 		disposables.add(quickPick);
 		quickPick.placeholder = "Type the name of a symbol in the workspace";
 
@@ -52,7 +52,7 @@ registerAction2(class ShowAllSymbolsAction extends Action2 {
 					detail: `${resourceLabel(symbol.resource)}:${symbol.range.startLineNumber}`,
 				}));
 			};
-			void service.provideWorkspaceSymbols(query, current.signal, publish).then(publish).catch(error => {
+			void getWorkspaceSymbols(providers.allNoModel(), query, current.signal, publish).then(publish).catch(error => {
 				if (!current.signal.aborted) console.error("Workspace symbol search failed", error);
 			});
 		};

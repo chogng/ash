@@ -1,12 +1,9 @@
 import { runWithBufferedEvents } from '../../../base/common/event.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
-import { LanguageFeatureRegistry, type NotebookInfo, type NotebookInfoResolver } from '../languageFeatureRegistry.js';
+import { LanguageFeatureRegistry, type NotebookInfo, type NotebookInfoResolver, LanguageCompletionProviderRegistry, SyntaxProviderRegistry } from '../languageFeatureRegistry.js';
 import { type URI } from '../../../base/common/uri.js';
-import { LanguageCompletionProviderRegistry, type LanguageCompletionProviderRegistration } from '../languages/completion/languageCompletionProviders.js';
-import type { CodeLensProvider, DocumentHighlightProvider, LinkedEditingRangeProvider, MultiDocumentHighlightProvider, DocumentFormattingEditProvider, DocumentRangeFormattingEditProvider, OnTypeFormattingEditProvider, LanguageSemanticTokensProvider } from '../languages.js';
+import { type LanguageCompletionProviderRegistration, type CodeLensProvider, type DocumentHighlightProvider, type LinkedEditingRangeProvider, type MultiDocumentHighlightProvider, type DocumentFormattingEditProvider, type DocumentRangeFormattingEditProvider, type OnTypeFormattingEditProvider, type LanguageSemanticTokensProvider, type LanguageWorkspaceSymbolProvider } from '../languages.js';
 import type { ILanguageConfigurationService } from '../languages/languageConfigurationRegistry.js';
-import { SyntaxProviderRegistry } from '../languages/syntax/syntaxProviders.js';
-import type { LanguageWorkspaceSymbolProvider } from '../languages/workspaceSymbols.js';
 import type { LanguageCallHierarchyProvider, LanguageTypeHierarchyProvider } from '../../contrib/callHierarchy/common/languageHierarchy.js';
 import type { LanguageCodeActionProvider } from '../../contrib/codeAction/common/languageCodeActions.js';
 import type { LanguageColorProvider } from '../../contrib/colorPicker/common/languageColors.js';

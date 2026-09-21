@@ -1,6 +1,7 @@
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
-import { LanguageCompletionProviderRegistry, LanguageCompletionTriggerKind, createLanguageCompletionIncompleteRefreshContext, createLanguageCompletionInvokeContext, createLanguageCompletionTriggerCharacterContext, normalizeLanguageCompletionProviderCatalog, type LanguageCompletionContext, type LanguageCompletionProvider, type LanguageCompletionProviderCatalog } from "../../common/languages/completion/languageCompletionProviders.js";
+import { LanguageCompletionProviderRegistry } from '../../common/languageFeatureRegistry.js';
+import { LanguageCompletionTriggerKind, createLanguageCompletionIncompleteRefreshContext, createLanguageCompletionInvokeContext, createLanguageCompletionTriggerCharacterContext, normalizeLanguageCompletionProviderCatalog, type LanguageCompletionContext, type LanguageCompletionProvider, type LanguageCompletionProviderCatalog } from '../../common/languages.js';
 
 test("Completion provider registry preserves registration order and selectors", () => {
 	using registry = new LanguageCompletionProviderRegistry();

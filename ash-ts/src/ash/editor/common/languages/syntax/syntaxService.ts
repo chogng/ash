@@ -1,8 +1,9 @@
-import { TokenizationRegistry, type IState, type ITokenizationSupport, type TokenizationResult } from '../../languages.js';
+import { TokenizationRegistry, type IState, type ITokenizationSupport, type TokenizationResult, assertSyntaxRequest, type SyntaxProviderRequest, type SyntaxRequest, type RegisteredSyntaxProvider } from '../../languages.js';
 import { Range } from '../../core/range.js';
 import { type LanguageToken } from '../../tokens/languageTokens.js';
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { assertSyntaxRequest, SyntaxProviderRegistry, type SyntaxProviderRequest, type SyntaxRequest, type RegisteredSyntaxProvider } from "./syntaxProviders.js";
+
+import { SyntaxProviderRegistry } from '../../languageFeatureRegistry.js';
 import { LanguageRequestCoordinator, type LanguageRequestOptions, type LanguageRequestOutcome, type LanguageWorker, type LanguageWorkerModelSynchronizer, type LanguageWorkerRequest, type LanguageWorkerResultDisposition, type LanguageWorkerResultSettler } from "../languageRequestCoordinator.js";
 import { LanguageResultAcceptance } from "../languageResultStore.js";
 import { createLanguageDiagnosticSnapshotNormalizer, createLanguageDiagnosticStore, createLanguageTokenSnapshotNormalizer, createLanguageTokenStore, type LanguageDiagnostic, type LanguageDiagnosticResult, type LanguageTokenResult } from "../languageResults.js";

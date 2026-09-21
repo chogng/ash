@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Position } from '../../../../../editor/common/core/position.js';
 import { Range } from '../../../../../editor/common/core/range.js';
-import { LanguageCompletionTriggerKind } from '../../../../../editor/common/languages/completion/languageCompletionProviders.js';
+import { LanguageCompletionTriggerKind } from '../../../../../editor/common/languages.js';
 import { BrowserTextModelService } from '../../../../services/textmodelResolver/browser/browserTextModelService.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { URI } from '../../../../../base/common/uri.js';

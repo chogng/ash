@@ -1,20 +1,19 @@
-import { TokenizationRegistry, type IState } from '../../../../common/languages.js';
+import { TokenizationRegistry, type IState, type ILanguageIdCodec, type SyntaxRequest } from '../../../../common/languages.js';
 import { LanguageDiagnosticSeverity } from '../../../../common/languages/languageResults.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { TextModel } from "../../../../common/model/textModel.js";
-import { SyntaxProviderRegistry } from '../../../../common/languages/syntax/syntaxProviders.js';
+import { SyntaxProviderRegistry } from '../../../../common/languageFeatureRegistry.js';
 import { Range } from '../../../../common/core/range.js';
 import { MetadataConsts, StandardTokenType } from '../../../../common/encodedTokenAttributes.js';
 import { getStandardTokenTypeAtPosition } from '../../../../common/tokens/lineTokens.js';
 import { SynchronousTokenizationUnavailableError } from '../../../../common/tokenizationTextModelPart.js';
-import { type ILanguageIdCodec } from '../../../../common/languages.js';
+
 import { SparseMultilineTokens } from '../../../../common/tokens/sparseMultilineTokens.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { SYNTAX_DIAGNOSTIC_LANE, SYNTAX_TOKEN_LANE, type SyntaxResult, type SyntaxWorker } from '../../../../common/languages/syntax/syntaxService.js';
 import { type LanguageWorkerRequest } from '../../../../common/languages/languageRequestCoordinator.js';
 import { type SyntaxLane } from '../../../../common/languages/syntax/syntaxService.js';
-import { type SyntaxRequest } from '../../../../common/languages/syntax/syntaxProviders.js';
 
 test("TextModel owns default line tokens when no syntax provider exists", () => {
 	using model = new TextModel("const value = 1;", { languageId: 'typescript' });
@@ -196,7 +195,6 @@ async function waitFor(predicate: () => boolean): Promise<void> {
 	assert.fail('Timed out waiting for tokenization');
 }
 
-
 test('registered line tokenizers refresh existing models without clearing diagnostics', async () => {
 	using providers = new SyntaxProviderRegistry();
 	using diagnostic = providers.register({
@@ -226,7 +224,6 @@ test('registered line tokenizers refresh existing models without clearing diagno
 	assert.equal(model.diagnostics.results.result, undefined);
 	await waitFor(() => model.diagnostics.results.result?.modelVersion === model.version);
 });
-
 
 test('line tokenization reuses unchanged lines after a model edit', async () => {
 	let scanned = 0;

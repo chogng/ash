@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
-import { createLanguageCompletionInvokeContext, type LanguageCompletionProviderRequest } from "../../common/languages/completion/languageCompletionProviders.js";
+import { createLanguageCompletionInvokeContext, type LanguageCompletionProviderRequest } from '../../common/languages.js';
 import { createLanguageWordCompletionProvider } from "../../common/services/editorWebWorker.js";
 import { Position } from "../../common/core/position.js";
 import { TextModel } from "../../common/model/textModel.js";

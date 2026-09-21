@@ -1,5 +1,5 @@
 import { decodeSyntaxWireResult, encodeSyntaxWireResult } from "./syntaxWireResult.js";
-import { assertSyntaxRequest, type SyntaxRequest } from "./syntaxProviders.js";
+import { assertSyntaxRequest, type SyntaxRequest } from '../../languages.js';
 import { SYNTAX_DIAGNOSTIC_LANE, SYNTAX_TOKEN_LANE, type SyntaxLane, type SyntaxResult } from "./syntaxService.js";
 import { type LanguageWorkerWireCodec } from "../languageWorkerWire.js";
 import { type TextSnapshot } from "../../core/textChange.js";

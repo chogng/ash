@@ -28,10 +28,10 @@ export type { CharacterPair, IAutoClosingPair, IAutoClosingPairConditional, Lang
 export { RGBA8 } from './common/core/misc/rgba.js';
 export type { CodeLens, CodeLensList, CodeLensProvider, Command, DocumentColorProvider, IColor, IColorInformation, IColorPresentation, LinkedEditingRangeProvider, LinkedEditingRanges, TextEdit } from './common/languages.js';
 export type { TextSnapshot } from './common/core/textChange.js';
-export { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind } from './common/languages/completion/languageCompletions.js';
-export type { LanguageCompletionCommand, LanguageCompletionItem, LanguageCompletionItemDetails, LanguageCompletionResult, LanguageCompletionTextEdit } from './common/languages/completion/languageCompletions.js';
-export { LanguageCompletionTriggerKind } from './common/languages/completion/languageCompletionProviders.js';
-export type { LanguageCompletionContext, LanguageCompletionIncompleteRefreshContext, LanguageCompletionInvokeContext, LanguageCompletionProvider, LanguageCompletionProviderCommandRequest, LanguageCompletionProviderItem, LanguageCompletionProviderRequest, LanguageCompletionProviderResolveRequest, LanguageCompletionProviderResult, LanguageCompletionRequest, LanguageCompletionTriggerCharacterContext } from './common/languages/completion/languageCompletionProviders.js';
+export { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind } from './common/languages.js';
+export { type LanguageCompletionCommand, type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionResult, type LanguageCompletionTextEdit } from './common/languages.js';
+export { LanguageCompletionTriggerKind } from './common/languages.js';
+export { type LanguageCompletionContext, type LanguageCompletionIncompleteRefreshContext, type LanguageCompletionInvokeContext, type LanguageCompletionProvider, type LanguageCompletionProviderCommandRequest, type LanguageCompletionProviderItem, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResolveRequest, type LanguageCompletionProviderResult, type LanguageCompletionRequest, type LanguageCompletionTriggerCharacterContext } from './common/languages.js';
 export { DocumentHighlightKind } from './common/languages.js';
 export type { DocumentHighlight, DocumentHighlightProvider, MultiDocumentHighlightProvider } from './common/languages.js';
 export type { LanguageFeatureRequest } from './common/languages.js';
@@ -39,8 +39,8 @@ export { LanguageDiagnosticSeverity } from './common/languages/languageResults.j
 export type { LanguageDiagnostic, LanguageDiagnosticCode, LanguageDiagnosticResult, LanguageToken, LanguageTokenResult, LanguageTokenResultDelta, LanguageTokenResultSplice } from './common/languages/languageResults.js';
 export type { LanguageWorkerDocumentSynchronization } from './common/services/textModelSync/textModelSync.protocol.js';
 export type { LanguageCreateFileEdit, LanguageDeleteFileEdit, LanguageDeleteMode, LanguageExistingTargetBehavior, LanguageMissingTargetBehavior, LanguageRenameFileEdit, LanguageTextDocumentEdit, LanguageWorkspaceEdit, LanguageWorkspaceEditEntry } from './common/languages.js';
-export type { SyntaxProvider, SyntaxProviderRequest, SyntaxRequest } from './common/languages/syntax/syntaxProviders.js';
-export type { LanguageWorkspaceSymbol, LanguageWorkspaceSymbolKind, LanguageWorkspaceSymbolProvider } from './common/languages/workspaceSymbols.js';
+export { type SyntaxProvider, type SyntaxProviderRequest, type SyntaxRequest } from './common/languages.js';
+export type { LanguageWorkspaceSymbol, LanguageWorkspaceSymbolKind, LanguageWorkspaceSymbolProvider } from './common/languages.js';
 export type { LanguageCallHierarchyEntry, LanguageCallHierarchyProvider, LanguageHierarchyFollowupRequest, LanguageHierarchyItem, LanguageHierarchyRequest, LanguageTypeHierarchyProvider } from './contrib/callHierarchy/common/languageHierarchy.js';
 export type { LanguageCodeAction, LanguageCodeActionProvider, LanguageCodeActionRequest } from './contrib/codeAction/common/languageCodeActions.js';
 export type { LanguageColorPresentationRequest, LanguageColorProvider, LanguageColorRequest } from './contrib/colorPicker/common/languageColors.js';

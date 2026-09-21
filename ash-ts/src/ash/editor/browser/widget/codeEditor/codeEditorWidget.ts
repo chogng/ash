@@ -16,7 +16,7 @@ import { type IModelContentChangedEvent, type IModelDecorationsChangedEvent } fr
 import { Handler, ScrollType, type CompositionTypePayload, type ICommand, type ICodeEditorViewState, type IEditorDecorationsCollection, type IModelChangedEvent, type INewScrollPosition, type ReplacePreviousCharPayload, type TypePayload } from '../../../common/editorCommon.js';
 import { VerticalRevealType } from '../../../common/viewEvents.js';
 import type { ICodeEditor, IContentWidget, IEditorMouseEvent, IGlyphMarginWidget, IOverlayWidget, IOverviewRuler, IPartialEditorMouseEvent, PastePayload, IViewZoneChangeAccessor } from '../../editorBrowser.js';
-import { View } from "../../view.js";
+import { View, type EditorTextDirection, type EditorViewportPresentation } from '../../view.js';
 import { KeyboardNavigationController, ViewController } from "../../view/viewController.js";
 import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
 import { CodeEditorContributions } from "./codeEditorContributions.js";
@@ -30,12 +30,12 @@ import { ILanguageConfigurationService } from '../../../common/languages/languag
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { type EditorIndentationOptions } from '../../../common/core/misc/indentation.js';
 import { type ConfigurationChangedEvent, EditorLineWrapping, EditorOption, type EditorLayoutInfo, type FindComputedEditorOptionValueById, type IComputedEditorOptions, type IEditorOptions, WrappingIndent } from '../../../common/config/editorOptions.js';
-import { type LanguageCompletionWorkerFactory } from '../../../common/languages/completion/languageCompletionService.js';
+import { type LanguageCompletionWorkerFactory, type LanguageLocation, type LanguageWorkspaceEdit } from '../../../common/languages.js';
 import { type LanguageDiagnosticsHost } from '../../../common/languages/languageResults.js';
 import { isCompletionsEnablement, type CompletionsEnablement } from '../../../common/services/completionsEnablement.js';
-import { type LanguageLocation, type LanguageWorkspaceEdit } from '../../../common/languages.js';
+
 import { type BracketColorizationSource, type SemanticTokenSource } from '../../viewParts/viewLines/viewLine.js';
-import { type EditorTextDirection, type EditorViewportPresentation } from '../../view.js';
+
 import { type IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { type ICodeEditorService } from '../../services/codeEditorService.js';
 import { applyFontInfo } from '../../config/domFontInfo.js';
@@ -1166,7 +1166,6 @@ function editorLabel(input: ICodeEditorWidgetOptions['input']): string {
 	const path = decodeURIComponent(input.resource.path);
 	return path.slice(path.lastIndexOf('/') + 1) || 'Text editor';
 }
-
 
 function reportLanguageError(error: unknown): void {
 	console.error('Editor language request failed', error);

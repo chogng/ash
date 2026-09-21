@@ -2,7 +2,7 @@
 
 ## 语言目录清理（2026-09-21）
 
-按本次用户的清理要求处理 `common/languages` 中冗余文件。目录从 44 个 TypeScript 文件减少到 30 个：15 个与 VS Code 同路径，另 15 个仍承担当前补全、语法、版本结果及通信职责。本批不宣称这些剩余文件已完成归属和 API 对齐。下面旧审计中的文件名与数量保留为当时记录。
+按本次用户的清理要求处理 `common/languages` 中冗余文件。目录从 44 个 TypeScript 文件减少到 24 个：15 个与 VS Code 同路径，另 9 个仍承担语法、版本结果及通信职责。这 9 个文件仍有生产调用，不是可以直接删除的死代码；完整归属和 API 对齐尚未完成。下面旧审计中的文件名与数量保留为当时记录。
 
 | 退出的文件（相对 `common/languages`） | 当前归属或删除原因 |
 | --- | --- |
@@ -12,6 +12,12 @@
 | `completion/languageWordCompletionProvider.ts` | 单词提取实现进入真实调用方 `common/services/editorWebWorker.ts`。 |
 | `completion/languageCompletionCatalogWire.ts`、`completion/languageCompletionProviderModuleWire.ts`、`completion/languageCompletionProviderModules.ts`、`completion/languageCompletionResolveWire.ts` | 没有生产入口，删除未接线的远程补全模块框架及其专用测试；在用的补全请求和延迟详情解析保持原行为。 |
 | `languageProviderModules.ts`、`languageProviderModuleWire.ts`、`syntax/syntaxProviderModules.ts`、`syntax/syntaxProviderModuleWire.ts`、`syntax/syntaxModuleWorkerClient.ts` | 唯一生产使用方 TextMate 在 Worker 启动时直接注册 provider；删除动态模块激活协议和包装层。语法目录、主题同步及失败后的 Worker 重建仍由 TextMate 客户端负责。 |
+| `completion/languageCompletionProviders.ts`、`syntax/syntaxProviders.ts` | 提供者契约归 `common/languages.ts`；注册状态归 `common/languageFeatureRegistry.ts`。 |
+| `completion/languageCompletionService.ts`、`completion/languageCompletions.ts` | 结果契约和结构校验归 `common/languages.ts`；模型请求、结果存储及 snippet 校验归 `contrib/suggest/browser/suggest.ts`，消除 common 对 snippet contribution 的依赖。 |
+| `completion/languageCompletionWire.ts` | 补全编解码归现有 `common/services/editorWorkerWire.ts`，复用坐标和基础值校验。 |
+| `workspaceSymbols.ts` | 提供者契约归 `common/languages.ts`；搜索聚合归 `workbench/contrib/search/common/search.ts`，删除无状态服务包装和没有调用方的 resolve 方法。 |
+
+续批验证：15 份定向单测文件（100 项）、9 项 Chromium 场景、Stanza/Renderer 构建通过。新增回归覆盖无效 snippet 不影响其他提供者，以及取消搜索后不发布迟到结果。浏览器场景覆盖补全选择、snippet 导航/撤销和 TextMate Worker 目录同步及重启。
 
 TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSyntaxWorkerClient.ts`。现有目录/主题传输测试使用直接注册路径；新增 Playwright 回归从真实浏览器 Worker 验证首次高亮、主题更新、语法更新和重启后恢复。定向单元测试 10 份（98 项）、Playwright 4 项、Stanza 类型检查及 Stanza/Renderer 构建通过。
 

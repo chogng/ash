@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { test } from "mocha";
 import * as onigurumaNamespace from "vscode-oniguruma";
 import { type IOnigLib } from "vscode-textmate";
-import { SyntaxProviderRegistry } from "../../../../../editor/common/languages/syntax/syntaxProviders.js";
+import { SyntaxProviderRegistry } from '../../../../../editor/common/languageFeatureRegistry.js';
 import { SyntaxService } from "../../../../../editor/common/languages/syntax/syntaxService.js";
 import { LanguageRequestStatus } from "../../../../../editor/common/languages/languageRequestCoordinator.js";
 import { Position } from "../../../../../editor/common/core/position.js";

@@ -5,7 +5,7 @@ import { test } from "mocha";
 import { URI } from "../../../../../base/common/uri.js";
 import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../editor/common/core/range.js";
-import { type LanguageWorkspaceSymbol } from "../../../../../editor/common/languages/workspaceSymbols.js";
+import { type LanguageWorkspaceSymbol } from '../../../../../editor/common/languages.js';
 import { type IFileService } from "../../../../../platform/files/common/files.js";
 import { type IEditorService } from "../../../../services/editor/common/editorService.js";
 import { type IWorkingCopyService } from "../../../../services/workingCopy/common/workingCopyService.js";

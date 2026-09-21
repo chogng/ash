@@ -8,7 +8,7 @@ import { type LanguageSelectionRangeProvider, type LanguageSelectionRangeRequest
 import { Position } from "../../../../editor/common/core/position.js";
 import { Range } from "../../../../editor/common/core/range.js";
 import { type TextSnapshot } from "../../../../editor/common/core/textChange.js";
-import { type SyntaxProvider, type SyntaxProviderRequest } from "../../../../editor/common/languages/syntax/syntaxProviders.js";
+import { type SyntaxProvider, type SyntaxProviderRequest } from '../../../../editor/common/languages.js';
 import { LanguageDiagnosticSeverity, type LanguageDiagnosticResult, type LanguageToken, type LanguageTokenResult } from "../../../../editor/common/languages/languageResults.js";
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 

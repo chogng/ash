@@ -1,26 +1,24 @@
-import { raceCancellationError } from "../../../../base/common/async.js";
-import { Emitter, type Event } from "../../../../base/common/event.js";
-import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { LanguageRequestCoordinator, type LanguageRequestOptions, type LanguageRequestOutcome, type LanguageWorker, type LanguageWorkerRequest } from "../languageRequestCoordinator.js";
-import { LanguageResultAcceptance } from "../languageResultStore.js";
-import { createLanguageCompletionSnapshotNormalizer, createLanguageCompletionStore, normalizeLanguageCompletionItemDetails, normalizeLanguageCompletionResolveRequest, type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionItemResolver, type LanguageCompletionResolveRequest, type LanguageCompletionResult, type LanguageCompletionResultNormalizer } from "./languageCompletions.js";
-import { assertLanguageCompletionRequest, createLanguageCompletionTriggerCharacterContext, languageCompletionProviderMatches, LanguageCompletionProviderRegistry, type LanguageCompletionProvider, type LanguageCompletionProviderCatalog, type LanguageCompletionProviderCatalogSource, type LanguageCompletionProviderItem, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult, type LanguageCompletionRequest, type RegisteredLanguageCompletionProvider } from "./languageCompletionProviders.js";
-import { assertLanguageId } from '../language.js';
-import { type Position } from "../../core/position.js";
-import { type TextModel } from "../../model/textModel.js";
-import { URI } from "../../../../base/common/uri.js";
+import * as languages from '../../../common/languages.js';
+import { URI } from '../../../../base/common/uri.js';
+import { Emitter, type Event } from '../../../../base/common/event.js';
+import { Disposable, MutableDisposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { LanguageRequestCoordinator, type LanguageRequestOptions, type LanguageRequestOutcome, type LanguageWorkerRequest } from '../../../common/languages/languageRequestCoordinator.js';
+import { LanguageResultAcceptance, VersionedLanguageResultStore } from '../../../common/languages/languageResultStore.js';
+import { LanguageCompletionProviderRegistry } from '../../../common/languageFeatureRegistry.js';
+import { assertLanguageId } from '../../../common/languages/language.js';
+import { Position } from '../../../common/core/position.js';
+import { type TextModel } from '../../../common/model/textModel.js';
+import { raceCancellationError } from '../../../../base/common/async.js';
+import { Range } from '../../../common/core/range.js';
+import { parseSnippet } from '../../snippet/common/snippetParser.js';
 
-export const LANGUAGE_COMPLETION_LANE = "completion";
-export type LanguageCompletionLane = typeof LANGUAGE_COMPLETION_LANE;
 export type LanguageCompletionProviderErrorHandler = (providerId: string, error: unknown) => void;
-export type LanguageCompletionWorker = LanguageWorker<LanguageCompletionLane, LanguageCompletionRequest, LanguageCompletionResult>;
-export type LanguageCompletionWorkerFactory = () => LanguageCompletionWorker;
 
 export interface LanguageCompletionServiceOptions {
 	readonly onProviderError?: LanguageCompletionProviderErrorHandler;
 	readonly resource?: URI;
-	readonly workerFactory?: LanguageCompletionWorkerFactory;
-	readonly providers?: readonly LanguageCompletionProvider[];
+	readonly workerFactory?: languages.LanguageCompletionWorkerFactory;
+	readonly providers?: readonly languages.LanguageCompletionProvider[];
 }
 
 /**
@@ -29,17 +27,17 @@ export interface LanguageCompletionServiceOptions {
  * The service owns its coordinator, provider host instances, and result store.
  * It observes but does not own the provider registry or text model.
  */
-export class LanguageCompletionService extends Disposable implements LanguageCompletionItemResolver {
-	private readonly catalogEmitter = this._register(new Emitter<LanguageCompletionProviderCatalog>());
+export class LanguageCompletionService extends Disposable implements languages.LanguageCompletionItemResolver {
+	private readonly catalogEmitter = this._register(new Emitter<languages.LanguageCompletionProviderCatalog>());
 	private readonly catalogSubscription = this._register(new MutableDisposable<IDisposable>());
 	readonly results: ReturnType<typeof createLanguageCompletionStore>;
-	private readonly coordinator: LanguageRequestCoordinator<LanguageCompletionLane, LanguageCompletionRequest, LanguageCompletionResult>;
+	private readonly coordinator: LanguageRequestCoordinator<languages.LanguageCompletionLane, languages.LanguageCompletionRequest, languages.LanguageCompletionResult>;
 	private readonly registry: LanguageCompletionProviderRegistry;
-	private catalogSource: LanguageCompletionProviderCatalogSource;
-	private catalog: LanguageCompletionProviderCatalog;
-	private currentResolver: LanguageCompletionItemResolver | undefined;
+	private catalogSource: languages.LanguageCompletionProviderCatalogSource;
+	private catalog: languages.LanguageCompletionProviderCatalog;
+	private currentResolver: languages.LanguageCompletionItemResolver | undefined;
 
-	readonly onDidChangeProviderCatalog: Event<LanguageCompletionProviderCatalog> = this.catalogEmitter.event;
+	readonly onDidChangeProviderCatalog: Event<languages.LanguageCompletionProviderCatalog> = this.catalogEmitter.event;
 
 	constructor(
 		private readonly model: TextModel,
@@ -72,7 +70,7 @@ export class LanguageCompletionService extends Disposable implements LanguageCom
 		}
 		this.results = this._register(createLanguageCompletionStore(model));
 		this.resource = options.resource;
-		const createWorker = (): LanguageCompletionWorker => {
+		const createWorker = (): languages.LanguageCompletionWorker => {
 			const worker = options.workerFactory
 				? options.workerFactory()
 				: new LanguageCompletionProviderWorker(this.registry, options.onProviderError);
@@ -112,22 +110,22 @@ export class LanguageCompletionService extends Disposable implements LanguageCom
 		return this.model;
 	}
 
-	get providerCatalog(): LanguageCompletionProviderCatalog {
+	get providerCatalog(): languages.LanguageCompletionProviderCatalog {
 		return this.catalog;
 	}
 
 	supportsTriggerCharacter(languageId: string, triggerCharacter: string): boolean {
-		const context = createLanguageCompletionTriggerCharacterContext(triggerCharacter);
-		return this.catalog.providers.some(provider => languageCompletionProviderMatches(provider, languageId, context));
+		const context = languages.createLanguageCompletionTriggerCharacterContext(triggerCharacter);
+		return this.catalog.providers.some(provider => languages.languageCompletionProviderMatches(provider, languageId, context));
 	}
 
 	async requestTriggerCharacter(languageId: string, position: Position, triggerCharacter: string, options: LanguageRequestOptions = {}): Promise<LanguageRequestOutcome | undefined> {
-		const context = createLanguageCompletionTriggerCharacterContext(triggerCharacter);
+		const context = languages.createLanguageCompletionTriggerCharacterContext(triggerCharacter);
 		const modelVersion = this.model.version;
 		this.model.offsetAt(position);
 		options.signal?.throwIfAborted();
 		this.coordinator.startWorker();
-		let catalog: LanguageCompletionProviderCatalog;
+		let catalog: languages.LanguageCompletionProviderCatalog;
 		try {
 			catalog = await waitForCatalog(this.catalogSource, options.signal);
 		} catch (error) {
@@ -135,18 +133,18 @@ export class LanguageCompletionService extends Disposable implements LanguageCom
 			throw error;
 		}
 		if (this.model.version !== modelVersion) return undefined;
-		if (!catalog.providers.some(provider => languageCompletionProviderMatches(provider, languageId, context))) {
+		if (!catalog.providers.some(provider => languages.languageCompletionProviderMatches(provider, languageId, context))) {
 			return undefined;
 		}
 		return this.request(languageId, position, context, options);
 	}
 
-	request(languageId: string, position: Position, context: LanguageCompletionRequest["context"], options: LanguageRequestOptions = {}): Promise<LanguageRequestOutcome> {
+	request(languageId: string, position: Position, context: languages.LanguageCompletionRequest["context"], options: LanguageRequestOptions = {}): Promise<LanguageRequestOutcome> {
 		const request = Object.freeze({ languageId, ...(this.resource ? { resource: this.resource } : {}), position, context });
-		assertLanguageCompletionRequest(request);
+		languages.assertLanguageCompletionRequest(request);
 		this.model.offsetAt(position);
 		return this.coordinator.runLatest(
-			LANGUAGE_COMPLETION_LANE,
+			languages.LANGUAGE_COMPLETION_LANE,
 			request,
 			result => {
 				const acceptance = this.results.accept(result);
@@ -158,10 +156,10 @@ export class LanguageCompletionService extends Disposable implements LanguageCom
 		);
 	}
 
-	async resolveCompletionItem(request: LanguageCompletionResolveRequest, signal: AbortSignal): Promise<LanguageCompletionItemDetails> {
+	async resolveCompletionItem(request: languages.LanguageCompletionResolveRequest, signal: AbortSignal): Promise<languages.LanguageCompletionItemDetails> {
 		this.assertNotDisposed();
 		signal.throwIfAborted();
-		const normalized = normalizeLanguageCompletionResolveRequest(request);
+		const normalized = languages.normalizeLanguageCompletionResolveRequest(request);
 		this.assertCurrentResolveRequest(normalized);
 		this.coordinator.startWorker();
 		const resolver = this.currentResolver;
@@ -172,10 +170,10 @@ export class LanguageCompletionService extends Disposable implements LanguageCom
 		signal.throwIfAborted();
 		this.assertNotDisposed();
 		this.assertCurrentResolveRequest(normalized);
-		return normalizeLanguageCompletionItemDetails(details);
+		return languages.normalizeLanguageCompletionItemDetails(details);
 	}
 
-	async executeCompletionCommand(languageId: string, item: LanguageCompletionItem, signal: AbortSignal): Promise<void> {
+	async executeCompletionCommand(languageId: string, item: languages.LanguageCompletionItem, signal: AbortSignal): Promise<void> {
 		this.assertNotDisposed();
 		assertLanguageId(languageId);
 		signal.throwIfAborted();
@@ -187,7 +185,7 @@ export class LanguageCompletionService extends Disposable implements LanguageCom
 		this.assertNotDisposed();
 	}
 
-	private bindCatalogSource(source: LanguageCompletionProviderCatalogSource): void {
+	private bindCatalogSource(source: languages.LanguageCompletionProviderCatalogSource): void {
 		this.catalogSource = source;
 		this.catalog = source.providerCatalog;
 		this.catalogSubscription.value = source.onDidChangeProviderCatalog(catalog => {
@@ -208,7 +206,7 @@ export class LanguageCompletionService extends Disposable implements LanguageCom
 		}
 	}
 
-	private assertCurrentResolveRequest(request: LanguageCompletionResolveRequest): void {
+	private assertCurrentResolveRequest(request: languages.LanguageCompletionResolveRequest): void {
 		const result = this.results.result;
 		const item = result?.value.items.find(candidate => candidate.providerId === request.providerId && candidate.id === request.itemId);
 		if (!result || result.requestId !== request.completionRequestId || result.modelVersion !== request.modelVersion || !item?.hasDeferredDetails) {
@@ -219,7 +217,7 @@ export class LanguageCompletionService extends Disposable implements LanguageCom
 }
 
 /** Coordinator-compatible host that runs matching providers concurrently. */
-export class LanguageCompletionProviderWorker implements LanguageCompletionWorker, LanguageCompletionItemResolver {
+export class LanguageCompletionProviderWorker implements languages.LanguageCompletionWorker, languages.LanguageCompletionItemResolver {
 	private resolutionCache: CompletionResolutionCache | undefined;
 	private disposed = false;
 
@@ -232,10 +230,10 @@ export class LanguageCompletionProviderWorker implements LanguageCompletionWorke
 		}
 	}
 
-	async run(request: LanguageWorkerRequest<LanguageCompletionLane, LanguageCompletionRequest>, signal: AbortSignal): Promise<LanguageCompletionResult> {
+	async run(request: LanguageWorkerRequest<languages.LanguageCompletionLane, languages.LanguageCompletionRequest>, signal: AbortSignal): Promise<languages.LanguageCompletionResult> {
 		this.ensureAlive();
 		signal.throwIfAborted();
-		assertLanguageCompletionRequest(request.payload);
+		languages.assertLanguageCompletionRequest(request.payload);
 		const providers = this.registry.getProviders(
 			request.payload.languageId,
 			request.payload.context,
@@ -244,7 +242,7 @@ export class LanguageCompletionProviderWorker implements LanguageCompletionWorke
 			this.resolutionCache = createResolutionCache(request, []);
 			return mergeProviderResults(request.payload.position, []);
 		}
-		const normalizeResult = createLanguageCompletionSnapshotNormalizer(request.snapshot);
+		const normalizeResult = languages.createLanguageCompletionSnapshotNormalizer(request.snapshot);
 		const batches = await Promise.all(providers.map(provider => (
 			this.runProvider(provider, request, signal, normalizeResult)
 		)));
@@ -263,10 +261,10 @@ export class LanguageCompletionProviderWorker implements LanguageCompletionWorke
 		this.dispose();
 	}
 
-	async resolveCompletionItem(request: LanguageCompletionResolveRequest, signal: AbortSignal): Promise<LanguageCompletionItemDetails> {
+	async resolveCompletionItem(request: languages.LanguageCompletionResolveRequest, signal: AbortSignal): Promise<languages.LanguageCompletionItemDetails> {
 		this.ensureAlive();
 		signal.throwIfAborted();
-		const normalized = normalizeLanguageCompletionResolveRequest(request);
+		const normalized = languages.normalizeLanguageCompletionResolveRequest(request);
 		const cache = this.resolutionCache;
 		if (!cache || cache.completionRequestId !== normalized.completionRequestId || cache.modelVersion !== normalized.modelVersion) {
 			throw new ReferenceError("Language completion resolve request no longer has a provider result");
@@ -275,7 +273,7 @@ export class LanguageCompletionProviderWorker implements LanguageCompletionWorke
 		if (!entry || this.registry.getProvider(normalized.providerId) !== entry.provider || !entry.provider.resolveCompletionItem) {
 			throw new ReferenceError(`Language completion item '${normalized.providerId}/${normalized.itemId}' cannot be resolved`);
 		}
-		let details: LanguageCompletionItemDetails;
+		let details: languages.LanguageCompletionItemDetails;
 		try {
 			const value = await entry.provider.resolveCompletionItem(Object.freeze({
 				completionRequestId: normalized.completionRequestId,
@@ -283,7 +281,7 @@ export class LanguageCompletionProviderWorker implements LanguageCompletionWorke
 				item: entry.item,
 			}), signal);
 			signal.throwIfAborted();
-			details = normalizeLanguageCompletionItemDetails(value);
+			details = languages.normalizeLanguageCompletionItemDetails(value);
 		} catch (error) {
 			if (!signal.aborted) this.reportProviderError(entry.provider.id, error);
 			throw error;
@@ -295,12 +293,12 @@ export class LanguageCompletionProviderWorker implements LanguageCompletionWorke
 	}
 
 	private async runProvider(
-		provider: RegisteredLanguageCompletionProvider,
-		request: LanguageWorkerRequest<LanguageCompletionLane, LanguageCompletionRequest>,
+		provider: languages.RegisteredLanguageCompletionProvider,
+		request: LanguageWorkerRequest<languages.LanguageCompletionLane, languages.LanguageCompletionRequest>,
 		signal: AbortSignal,
-		normalizeResult: LanguageCompletionResultNormalizer,
+		normalizeResult: languages.LanguageCompletionResultNormalizer,
 	): Promise<ResolvedProviderBatch | undefined> {
-		const providerRequest = Object.freeze<LanguageCompletionProviderRequest>({
+		const providerRequest = Object.freeze<languages.LanguageCompletionProviderRequest>({
 			requestId: request.requestId,
 			snapshot: request.snapshot,
 			...request.payload,
@@ -310,11 +308,11 @@ export class LanguageCompletionProviderWorker implements LanguageCompletionWorke
 			signal.throwIfAborted();
 			if (value === undefined) return undefined;
 			assertProviderResult(value);
-			const result = normalizeResult({
+			const result = normalizeResult(validateCompletionSnippets({
 				position: request.payload.position,
 				items: value.items.map(item => createCompletionResultItem(provider, item)),
 				isIncomplete: value.isIncomplete,
-			});
+			}));
 			const resolutions = provider.resolveCompletionItem === undefined
 				? Object.freeze([])
 				: Object.freeze(result.items.flatMap((item, index) => value.items[index]!.resolveData === undefined ? [] : [Object.freeze({
@@ -348,18 +346,18 @@ export class LanguageCompletionProviderWorker implements LanguageCompletionWorke
 }
 
 interface ProviderBatch {
-	readonly items: readonly LanguageCompletionItem[];
+	readonly items: readonly languages.LanguageCompletionItem[];
 	readonly isIncomplete: boolean;
 }
 
 interface ResolvedProviderBatch {
-	readonly result: LanguageCompletionResult;
+	readonly result: languages.LanguageCompletionResult;
 	readonly resolutions: readonly CompletionResolutionEntry[];
 }
 
 interface CompletionResolutionEntry {
-	readonly provider: RegisteredLanguageCompletionProvider;
-	readonly item: LanguageCompletionProviderItem;
+	readonly provider: languages.RegisteredLanguageCompletionProvider;
+	readonly item: languages.LanguageCompletionProviderItem;
 }
 
 interface CompletionResolutionCache {
@@ -368,8 +366,8 @@ interface CompletionResolutionCache {
 	readonly items: ReadonlyMap<string, CompletionResolutionEntry>;
 }
 
-function mergeProviderResults(position: Position, batches: readonly (ProviderBatch | undefined)[]): LanguageCompletionResult {
-	const items: LanguageCompletionItem[] = [];
+function mergeProviderResults(position: Position, batches: readonly (ProviderBatch | undefined)[]): languages.LanguageCompletionResult {
+	const items: languages.LanguageCompletionItem[] = [];
 	let hasPreselection = false;
 	let isIncomplete = false;
 	for (const batch of batches) {
@@ -392,7 +390,7 @@ function mergeProviderResults(position: Position, batches: readonly (ProviderBat
 	});
 }
 
-function createResolutionCache(request: LanguageWorkerRequest<LanguageCompletionLane, LanguageCompletionRequest>, batches: readonly (ResolvedProviderBatch | undefined)[]): CompletionResolutionCache {
+function createResolutionCache(request: LanguageWorkerRequest<languages.LanguageCompletionLane, languages.LanguageCompletionRequest>, batches: readonly (ResolvedProviderBatch | undefined)[]): CompletionResolutionCache {
 	const items = new Map<string, CompletionResolutionEntry>();
 	for (const batch of batches) {
 		for (const entry of batch?.resolutions ?? []) {
@@ -406,7 +404,7 @@ function createResolutionCache(request: LanguageWorkerRequest<LanguageCompletion
 	});
 }
 
-function createProviderResolveItem(item: LanguageCompletionItem, resolveData: unknown): LanguageCompletionProviderItem {
+function createProviderResolveItem(item: languages.LanguageCompletionItem, resolveData: unknown): languages.LanguageCompletionProviderItem {
 	return Object.freeze({
 		id: item.id,
 		label: item.label,
@@ -426,7 +424,7 @@ function createProviderResolveItem(item: LanguageCompletionItem, resolveData: un
 	});
 }
 
-function createCompletionResultItem(provider: RegisteredLanguageCompletionProvider, item: LanguageCompletionProviderItem): LanguageCompletionItem {
+function createCompletionResultItem(provider: languages.RegisteredLanguageCompletionProvider, item: languages.LanguageCompletionProviderItem): languages.LanguageCompletionItem {
 	return {
 		providerId: provider.id,
 		id: item.id,
@@ -451,7 +449,7 @@ function completionIdentity(providerId: string, itemId: string): string {
 	return `${providerId}\0${itemId}`;
 }
 
-function assertProviderResult(result: LanguageCompletionProviderResult): void {
+function assertProviderResult(result: languages.LanguageCompletionProviderResult): void {
 	if (
 		typeof result !== "object" ||
 		result === null ||
@@ -466,19 +464,62 @@ function reportProviderError(providerId: string, error: unknown): void {
 	console.error(`Language completion provider '${providerId}' failed`, error);
 }
 
-function isCatalogSource(value: LanguageCompletionWorker): value is LanguageCompletionWorker & LanguageCompletionProviderCatalogSource {
-	const candidate = value as Partial<LanguageCompletionProviderCatalogSource>;
+function isCatalogSource(value: languages.LanguageCompletionWorker): value is languages.LanguageCompletionWorker & languages.LanguageCompletionProviderCatalogSource {
+	const candidate = value as Partial<languages.LanguageCompletionProviderCatalogSource>;
 	return typeof candidate.onDidChangeProviderCatalog === "function" &&
 		typeof candidate.waitForProviderCatalog === "function" &&
 		typeof candidate.providerCatalogReady === "boolean" &&
 		typeof candidate.providerCatalog === "object";
 }
 
-function isCompletionItemResolver(value: LanguageCompletionWorker): value is LanguageCompletionWorker & LanguageCompletionItemResolver {
-	return typeof (value as Partial<LanguageCompletionItemResolver>).resolveCompletionItem === "function";
+function isCompletionItemResolver(value: languages.LanguageCompletionWorker): value is languages.LanguageCompletionWorker & languages.LanguageCompletionItemResolver {
+	return typeof (value as Partial<languages.LanguageCompletionItemResolver>).resolveCompletionItem === "function";
 }
 
-function waitForCatalog(source: LanguageCompletionProviderCatalogSource, signal: AbortSignal | undefined): Promise<LanguageCompletionProviderCatalog> {
+function waitForCatalog(source: languages.LanguageCompletionProviderCatalogSource, signal: AbortSignal | undefined): Promise<languages.LanguageCompletionProviderCatalog> {
 	if (!signal) return source.waitForProviderCatalog();
 	return raceCancellationError(source.waitForProviderCatalog(), signal, "Completion provider catalog wait was cancelled");
+}
+
+export function createLanguageCompletionStore(model: TextModel): VersionedLanguageResultStore<languages.LanguageCompletionResult> {
+	return new VersionedLanguageResultStore(model, (value) => languages.normalizeLanguageCompletionResult(
+		validateCompletionSnippets(value),
+		position => model.offsetAt(position),
+		(position, range) => assertModelCompletionRange(model, position, range),
+		range => assertModelTextEditRange(model, range),
+	));
+}
+
+function assertModelCompletionRange(model: TextModel, position: Position, range: Range): void {
+	if (!(range instanceof Range)) {
+		throw new TypeError("Language completion item range must be a Range");
+	}
+	model.offsetAt(range.getStartPosition());
+	model.offsetAt(range.getEndPosition());
+	if (
+		range.getStartPosition().lineNumber !== position.lineNumber ||
+		range.getEndPosition().lineNumber !== position.lineNumber
+	) {
+		throw new RangeError("Language completion item range must stay on the trigger line");
+	}
+	if (Position.compare(range.getStartPosition(), position) > 0 || Position.compare(range.getEndPosition(), position) < 0) {
+		throw new RangeError("Language completion item range must contain the trigger position");
+	}
+}
+
+function assertModelTextEditRange(model: TextModel, range: Range): void {
+	if (!(range instanceof Range)) {
+		throw new TypeError("Language completion additional edit range must be a Range");
+	}
+	model.offsetAt(range.getStartPosition());
+	model.offsetAt(range.getEndPosition());
+}
+
+function validateCompletionSnippets(result: languages.LanguageCompletionResult): languages.LanguageCompletionResult {
+	for (const item of result.items) {
+		if (item.insertTextFormat === languages.LanguageCompletionInsertTextFormat.Snippet) {
+			parseSnippet(item.insertText, { allowUnresolvedVariables: true });
+		}
+	}
+	return result;
 }
