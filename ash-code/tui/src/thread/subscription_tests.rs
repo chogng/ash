@@ -426,6 +426,7 @@ fn bounded_snapshot_without_a_history_boundary_is_rejected() {
 
 fn thread(session_id: &str, thread_id: &str, sequence: u64) -> Thread {
     Thread {
+        advisor: Default::default(),
         agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
         origin: Default::default(),
         session_id: SessionId::new(session_id).unwrap(),
@@ -444,6 +445,7 @@ fn thread(session_id: &str, thread_id: &str, sequence: u64) -> Thread {
 
 fn turn(turn_id: &str) -> Turn {
     Turn {
+        advisor: None,
         turn_id: TurnId::new(turn_id).unwrap(),
         status: TurnStatus::Completed,
         kind: Default::default(),

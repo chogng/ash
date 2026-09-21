@@ -309,6 +309,7 @@ fn selected_custom_theme_closes_the_entire_theme_flow_immediately() {
 fn selected_rewind_checkpoint_emits_a_typed_rewind_action() {
     let turn_id = TurnId::new("turn-1").unwrap();
     let thread = Thread {
+        advisor: Default::default(),
         agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
         origin: Default::default(),
         session_id: SessionId::new("session").unwrap(),
@@ -322,6 +323,7 @@ fn selected_rewind_checkpoint_emits_a_typed_rewind_action() {
         reference_cost: ash_protocol::ModelReferenceCostSummary::default(),
         goal: None,
         turns: vec![Turn {
+            advisor: None,
             turn_id: turn_id.clone(),
             status: TurnStatus::Completed,
             kind: Default::default(),

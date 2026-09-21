@@ -1323,6 +1323,12 @@ static LOCAL_EXEC_POLICY_HOST_LAYER: LazyLock<ExecPolicyLayer> = LazyLock::new(|
             ExecPolicyEffect::AllowUnsandboxed,
         ),
         local_rule(
+            "built-in:advisor",
+            advisor::TOOL_NAME,
+            ExecPolicyActionKind::SystemOperation,
+            ExecPolicyEffect::AllowUnsandboxed,
+        ),
+        local_rule(
             "built-in:get_goal",
             goal::GET_GOAL_TOOL_NAME,
             ExecPolicyActionKind::SystemOperation,

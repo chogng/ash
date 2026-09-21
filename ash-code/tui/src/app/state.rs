@@ -473,6 +473,24 @@ impl App {
                 }
                 .into(),
             ),
+            CommandPanelOutcome::Model(ModelSelectionAction::Advisor { preference }) => {
+                let command = self
+                    .thread_presentations
+                    .slash_commands()
+                    .command_named("advisor")?
+                    .clone();
+                Some(
+                    ThreadCommand::ExecuteProductCommand(SlashCommandInvocation {
+                        command,
+                        origin: SlashCommandOrigin::Server,
+                        arguments: vec![crate::thread::composer::ChatInputItem::Text(
+                            preference.clone(),
+                        )],
+                        display_arguments: preference,
+                    })
+                    .into(),
+                )
+            }
             CommandPanelOutcome::Model(ModelSelectionAction::Select { preference, .. }) => {
                 Some(ModelCommand::SetModel { preference }.into())
             }
@@ -2743,6 +2761,20 @@ impl App {
                     self.app_keymap.setup_actions(),
                 );
                 self.open_command_panel(CommandPanel::help(spec));
+                None
+            }
+            (SlashCommandOrigin::Server, _)
+                if invocation.command.name == "advisor"
+                    && !invocation.display_arguments.trim().starts_with("ask ") =>
+            {
+                Some(ThreadCommand::ExecuteProductCommand(invocation).into())
+            }
+            (SlashCommandOrigin::Server, _)
+                if invocation.command.name == "advisor" && self.chat_panel.is_steering() =>
+            {
+                self.thread.update(ThreadPresentationEvent::NoticeReceived(
+                    "Wait for the active Turn before consulting the advisor".into(),
+                ));
                 None
             }
             (SlashCommandOrigin::Server, _) => {

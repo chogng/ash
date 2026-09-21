@@ -44,6 +44,7 @@ fn subscription_publishes_the_authoritative_thread_snapshot() {
         },
         thread_projections: vec![SessionThreadProjection {
             thread: Thread {
+                advisor: Default::default(),
                 agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
                 origin: Default::default(),
                 session_id: session_id.clone(),

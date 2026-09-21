@@ -118,6 +118,10 @@ function unavailableChatService(): IChatService {
 	const pending = new Promise<never>(() => {});
 	const neverEvent = <T>(): Event<T> => () => toDisposable(() => {});
 	return {
+		configureAdvisor: async () => {},
+		consultAdvisor: async () => {},
+		readAdvisorDefault: async () => null,
+		saveAdvisorDefault: async () => {},
 		onDidUpdateThread: neverEvent<ThreadUpdateEnvelope>(),
 		onDidUpdateThreadTranscript: neverEvent<ThreadTranscriptUpdateEnvelope>(),
 		onDidUpdateGoal: neverEvent<import("../../../../services/chat/common/chatService.js").ThreadGoalUpdate>(),

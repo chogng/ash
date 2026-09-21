@@ -22,6 +22,8 @@ export function createDisconnectedModelApi(unavailable: UnavailableOperation): I
 	return {
 		list: () => unavailable("model.list"),
 		readModel: () => unavailable("model.readModel"),
+		readAdvisorDefault: () => unavailable("model.readAdvisorDefault"),
+		setAdvisorDefault: () => unavailable("model.setAdvisorDefault"),
 		setModel: () => unavailable("model.setModel"),
 	};
 }
@@ -29,6 +31,7 @@ export function createDisconnectedModelApi(unavailable: UnavailableOperation): I
 export function createDisconnectedThreadApi(unavailable: UnavailableOperation): IThreadApi {
 	return {
 		read: () => unavailable("thread.read"),
+		configureAdvisor: () => unavailable("thread.configureAdvisor"),
 		subscribe: () => unavailable("thread.subscribe"),
 		unsubscribe: () => unavailable("thread.unsubscribe"),
 		getGoal: () => unavailable("thread.goal.get"),
@@ -41,6 +44,7 @@ export function createDisconnectedTurnApi(unavailable: UnavailableOperation): IT
 	return {
 		start: () => unavailable("turn.start"),
 		compact: () => unavailable("turn.compact"),
+		consultAdvisor: () => unavailable("turn.consultAdvisor"),
 		steer: () => unavailable("turn.steer"),
 		interrupt: () => unavailable("turn.interrupt"),
 		resolveInteraction: () => unavailable("turn.resolveInteraction"),
@@ -65,6 +69,11 @@ export function createAppServerModelApi(connection: AppServerProtocolClient): IM
 	return {
 		list: () => appServerRequest(connection, "model/list", {}),
 		readModel: async () => (await appServerRequest(connection, "config/read", {})).model,
+		readAdvisorDefault: async () => (await appServerRequest(connection, "config/read", {})).advisor ?? null,
+		setAdvisorDefault: async ({ commandId, advisor }) => {
+			const config = await appServerRequest(connection, "config/read", {});
+			await appServerRequest(connection, "config/update", { commandId, expectedRevision: config.revision, advisor });
+		},
 		setModel: async ({ commandId, model }) => {
 			const config = await appServerRequest(connection, "config/read", {});
 			await appServerRequest(connection, "config/update", {
@@ -79,6 +88,11 @@ export function createAppServerModelApi(connection: AppServerProtocolClient): IM
 export function createAppServerThreadApi(connection: AppServerProtocolClient): IThreadApi {
 	return {
 		read: (params) => appServerRequest(connection, "session/thread/read", params),
+		configureAdvisor: async (params) => {
+			const result = await appServerRequest(connection, "session/request", sessionRequest(params, { type: "configureAdvisor", threadId: params.threadId, expectedSequence: params.expectedSequence, selection: params.selection }));
+			if (result.type !== "advisorConfigured") throw new Error(`Expected advisor configuration result, received ${result.type}.`);
+			return result.value;
+		},
 		subscribe: (params) => appServerRequest(connection, "session/thread/subscribe", params),
 		unsubscribe: (params) => voidResult(appServerRequest(connection, "session/thread/unsubscribe", params)),
 		getGoal: (params) => appServerRequest(connection, "thread/goal/get", params),
@@ -90,6 +104,7 @@ export function createAppServerThreadApi(connection: AppServerProtocolClient): I
 export function createAppServerTurnApi(connection: AppServerProtocolClient): ITurnApi {
 	return {
 		start: (params) => appServerRequest(connection, "session/request", sessionRequest(params, { type: "startTurn", threadId: params.threadId, expectedSequence: params.expectedSequence, approvalMode: params.approvalMode, toolMode: params.toolMode, input: params.input })).then(turnStartResult),
+		consultAdvisor: (params) => appServerRequest(connection, "session/request", sessionRequest(params, { type: "consultAdvisor", threadId: params.threadId, expectedSequence: params.expectedSequence, question: params.question })).then(turnStartResult),
 		compact: (params) => appServerRequest(connection, "session/request", sessionRequest(params, { type: "compactContext", threadId: params.threadId, expectedSequence: params.expectedSequence, retentionPrompt: params.retentionPrompt })).then(turnStartResult),
 		steer: (params) => appServerRequest(connection, "session/request", sessionRequest(params, { type: "steerTurn", threadId: params.threadId, expectedSequence: params.expectedSequence, turnId: params.turnId, input: params.input })).then(turnSteerResult),
 		interrupt: (params) => appServerRequest(connection, "session/request", sessionRequest(params, { type: "interruptTurn", threadId: params.threadId, expectedSequence: params.expectedSequence, turnId: params.turnId })).then(turnInterruptResult),

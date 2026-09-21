@@ -49,6 +49,7 @@ pub struct ThreadView {
     pub usage: ModelUsageSummary,
     pub reference_cost: ModelReferenceCostSummary,
     pub goal: Option<ash_protocol::ThreadGoal>,
+    pub advisor: ash_protocol::AdvisorSelection,
     pub turns: Vec<TurnView>,
     pub items: Vec<ThreadItem>,
     pub agent: Option<AgentConfiguration>,
@@ -64,6 +65,7 @@ pub struct TurnView {
     pub kind: TurnKind,
     pub instructions: Option<TurnInstructions>,
     pub model: Option<ModelRef>,
+    pub advisor: Option<ash_protocol::AdvisorConfig>,
     pub approval_mode: ApprovalMode,
     pub tool_mode: ToolMode,
     pub activated_skills: Vec<FrozenSkillActivation>,
@@ -93,6 +95,7 @@ impl ThreadView {
             usage: self.usage.clone(),
             reference_cost: self.reference_cost.clone(),
             goal: self.goal.clone(),
+            advisor: self.advisor.clone(),
             turns: self
                 .turns
                 .iter()
@@ -102,6 +105,7 @@ impl ThreadView {
                     kind: turn.kind,
                     instructions: turn.instructions.clone(),
                     model: turn.model.clone(),
+                    advisor: turn.advisor.clone(),
                     tool_profile: turn.tool_profile.clone(),
                     tool_mode: turn.tool_mode,
                     approval_mode: turn.approval_mode,

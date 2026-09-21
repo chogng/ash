@@ -11,7 +11,7 @@ import type { IActiveSessionThread, IChat, ISession, IUntitledChatSession, Threa
 import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
 import { ChatPane } from "../pane/chatPane.js";
 import { ChatTitleControl } from "./chatTitleControl.js";
-import { h } from "../../../../../base/browser/dom.js";
+import { h, isHTMLElement } from "../../../../../base/browser/dom.js";
 import type { IChatContextPickService, ChatContextAttachment } from "../../../../services/chat/common/chatContextService.js";
 import type { IQuickInputService } from "../../../../../platform/quickinput/common/quickInput.js";
 import { type IContextKey } from "../../../../../platform/contextkey/common/contextkey.js";
@@ -156,6 +156,8 @@ export class ChatViewPane extends ViewPane {
 	}
 
 	private syncSessions(): void {
+		const focusedElement = this.element.ownerDocument.activeElement;
+		const restoreFocus = isHTMLElement(focusedElement) && this.paneHost.contains(focusedElement);
 		this.rekeyMaterializedPanes();
 		const entries: ChatPaneEntry[] = [];
 		const retainedPaneIds = new Set<string>();
@@ -229,6 +231,7 @@ export class ChatViewPane extends ViewPane {
 			activeTabId,
 		);
 		for (const entry of orderedEntries) entry.pane.setTabId(tabIds.get(entry.tabId));
+		if (restoreFocus && activePane?.element.contains(focusedElement)) focusedElement.focus();
 	}
 
 	private selectionForSession(session: ISession): IActiveSessionThread | undefined {

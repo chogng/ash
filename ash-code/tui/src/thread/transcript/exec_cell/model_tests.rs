@@ -111,3 +111,21 @@ fn call_id(value: &str) -> ToolCallId {
 fn tool_name(value: &str) -> ToolName {
     ToolName::new(value).expect("the test Tool name is valid")
 }
+
+#[test]
+fn advisor_results_present_advice_and_usage_without_json() {
+    let text=super::advisor_text(serde_json::json!({"status":"reviewed","model":{"provider":"test","model":"reviewer"},"question":"Check cancellation","advice":"Check the token before writing.","sourceSequence":12,"usage":{"inputTokens":120,"outputTokens":8}}).to_string());
+    crate::tui_assert_snapshot!(&text, @"
+    Advisor · test/reviewer
+    Question: Check cancellation
+
+    Check the token before writing.
+
+    Conversation sequence 12
+    Tokens: 120 input · 8 output
+    ");
+    assert_eq!(
+        super::advisor_text("outcome unknown".into()),
+        "outcome unknown"
+    );
+}

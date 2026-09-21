@@ -320,6 +320,7 @@ fn transcript_snapshot_includes_output_assembled_before_a_consumer_subscribes() 
     ));
 
     let thread = ash_protocol::Thread {
+        advisor: Default::default(),
         agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
         origin: Default::default(),
         session_id,

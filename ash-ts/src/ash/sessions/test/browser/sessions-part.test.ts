@@ -88,6 +88,10 @@ test("SessionsPart remains owned by the Sessions product layer", () => {
 	const transcriptUpdates = new Emitter<import("../../../workbench/services/chat/common/chatService.js").ThreadTranscriptUpdateEnvelope>();
 	const ready = new Emitter<void>();
 	const chatService: IChatService = {
+		configureAdvisor: async () => {},
+		consultAdvisor: async () => {},
+		readAdvisorDefault: async () => null,
+		saveAdvisorDefault: async () => {},
 		onDidUpdateThread: threadUpdates.event,
 		onDidUpdateThreadTranscript: transcriptUpdates.event,
 		onDidUpdateGoal: () => toDisposable(() => {}),

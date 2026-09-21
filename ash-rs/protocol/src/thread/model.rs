@@ -35,5 +35,7 @@ pub struct Thread {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub goal: Option<ThreadGoal>,
+    #[serde(default)]
+    pub advisor: crate::AdvisorSelection,
     pub turns: Vec<Turn>,
 }

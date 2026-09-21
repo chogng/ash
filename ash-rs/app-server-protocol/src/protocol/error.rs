@@ -9,6 +9,7 @@ pub enum AppServerErrorName {
     InvalidRequest,
     MethodNotFound,
     InvalidParams,
+    AdvisorDisabled,
     InternalError,
     QueueUnavailable,
     QueueNotFound,

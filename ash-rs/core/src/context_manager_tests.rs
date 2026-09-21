@@ -65,6 +65,7 @@ fn manager_rejects_a_snapshot_older_than_its_observed_sequence() {
 
 fn snapshot(sequence: u64, turn_id: TurnId) -> ThreadSnapshot {
     ThreadSnapshot {
+        advisor: Default::default(),
         user_time_contexts: Default::default(),
         history_sources: Default::default(),
         message_checkpoints: Default::default(),
@@ -87,6 +88,7 @@ fn snapshot(sequence: u64, turn_id: TurnId) -> ThreadSnapshot {
         goal_budget_limited_turn_id: None,
         context_calibrations: Vec::new(),
         turns: vec![TurnSnapshot {
+            advisor: None,
             kind: ash_protocol::TurnKind::Coding,
             instructions: None,
             turn_id: turn_id.clone(),

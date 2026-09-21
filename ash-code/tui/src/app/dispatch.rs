@@ -57,6 +57,39 @@ fn dispatch<T>(
 where
     T: JsonRpcTransport,
 {
+    if invocation.command.name == "advisor" {
+        let conversation_change = if conversation.is_none() {
+            *conversation = Some(ActiveConversation::start(
+                client,
+                "TUI conversation".into(),
+            )?);
+            Some(ConversationChange {
+                notice: "Started a new session.".into(),
+                transcript: crate::sessions::ConversationTranscript::Clear,
+            })
+        } else {
+            None
+        };
+        let current = require_conversation(conversation)?;
+        let argument = invocation.text_arguments().map_err(CommandExecutionError)?;
+        let event = match models::advisor::execute(
+            client,
+            current.session_id(),
+            current.thread_id(),
+            &argument,
+        )? {
+            models::advisor::AdvisorUpdate::Picker(choices) => {
+                models::Event::PickerOpened(choices).into()
+            }
+            models::advisor::AdvisorUpdate::Notice(notice) => {
+                crate::thread::Event::ProductNotice(notice).into()
+            }
+        };
+        return Ok(CommandOutput {
+            events: vec![event],
+            conversation_change,
+        });
+    }
     let command = invocation
         .command
         .name

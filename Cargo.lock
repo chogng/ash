@@ -422,6 +422,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "ash-advisor"
+version = "0.1.0"
+dependencies = [
+ "ash-action-policy",
+ "ash-async-utils",
+ "ash-core",
+ "ash-core-api",
+ "ash-protocol",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ash-agent"
 version = "0.1.0"
 dependencies = [
@@ -511,6 +524,7 @@ name = "ash-app-server"
 version = "0.1.0"
 dependencies = [
  "ash-action-policy",
+ "ash-advisor",
  "ash-agent",
  "ash-agent-environment",
  "ash-agent-roles",

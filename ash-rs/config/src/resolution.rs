@@ -22,6 +22,7 @@ pub struct ConfigProvenance {
     pub model_reasoning_effort: Option<ConfigValueSource>,
     pub approval_review_model: ConfigValueSource,
     pub commit_message_model: Option<ConfigValueSource>,
+    pub advisor: Option<ConfigValueSource>,
     pub providers: BTreeMap<ProviderId, ConfigValueSource>,
     pub mcp_servers: BTreeMap<McpServerId, ConfigValueSource>,
     pub skill_sources: BTreeMap<SkillSourceId, ConfigValueSource>,
@@ -44,6 +45,11 @@ impl ConfigProvenance {
             model_reasoning_effort: document
                 .agent
                 .model_reasoning_effort
+                .as_ref()
+                .map(|_| ConfigValueSource::User),
+            advisor: document
+                .agent
+                .advisor
                 .as_ref()
                 .map(|_| ConfigValueSource::User),
             approval_review_model: ConfigValueSource::User,

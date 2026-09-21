@@ -114,6 +114,7 @@ pub enum TurnExecutionOutcome {
     Completed(CompletedTurn),
     ShellCompleted { sequence: u64 },
     ContextCompacted { sequence: u64 },
+    AdvisorCompleted { sequence: u64 },
     WaitingForApproval,
     WaitingForCapability,
 }
@@ -699,6 +700,16 @@ impl TurnExecutor {
         {
             return self.execute_manual_context_compaction(thread_id, turn_id, cancellation);
         }
+        if self
+            .threads
+            .read_thread(thread_id)
+            .map_err(ExecutionFailure::persistence)?
+            .turns
+            .iter()
+            .any(|turn| &turn.turn_id == turn_id && turn.kind == ash_protocol::TurnKind::Advisor)
+        {
+            return self.execute_consultation(thread_id, turn_id, cancellation);
+        }
         match self
             .tool_scheduler()
             .run_pending(thread_id, turn_id, cancellation)
@@ -752,6 +763,17 @@ impl TurnExecutor {
                 )
                 .map_err(ExecutionFailure::model)?;
             }
+            let ordinary_tool_catalog = if turn.advisor.is_none() {
+                let names = ordinary_tool_catalog
+                    .definitions()
+                    .iter()
+                    .filter(|tool| tool.name.as_str() != "advisor")
+                    .map(|tool| tool.name.clone())
+                    .collect::<Vec<_>>();
+                ordinary_tool_catalog.restrict_to_names(&names)
+            } else {
+                ordinary_tool_catalog
+            };
             let tool_catalog = self
                 .code_mode
                 .augment_catalog(ordinary_tool_catalog, turn.tool_mode)
@@ -1083,6 +1105,80 @@ impl TurnExecutor {
                 }
             }
         }
+    }
+
+    fn execute_consultation(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        cancellation: &CancellationToken,
+    ) -> Result<TurnExecutionOutcome, ExecutionFailure> {
+        let snapshot = self
+            .threads
+            .read_thread(thread_id)
+            .map_err(ExecutionFailure::persistence)?;
+        if !snapshot.items.iter().any(
+            |item| matches!(item, ThreadItem::ToolCall { turn_id: owner, .. } if owner == turn_id),
+        ) {
+            let question = snapshot
+                .items
+                .iter()
+                .find_map(|item| match item {
+                    ThreadItem::UserMessage {
+                        turn_id: owner,
+                        text,
+                        ..
+                    } if owner == turn_id => Some(text.clone()),
+                    _ => None,
+                })
+                .ok_or_else(|| {
+                    ExecutionFailure::model(CoreError::InvalidInput(
+                        "consultation question is missing".into(),
+                    ))
+                })?;
+            let call = ToolCall {
+                id: ash_protocol::ToolCallId::new(format!("advisor-{turn_id}")).map_err(
+                    |error| ExecutionFailure::model(CoreError::InvalidInput(error.to_string())),
+                )?,
+                name: ash_protocol::ToolName::new("advisor").expect("valid advisor tool name"),
+                arguments: serde_json::json!({ "question": question }),
+            };
+            let binding = self
+                .bind_tool_call(&call, ash_protocol::ToolCallCaller::Direct)
+                .map_err(ExecutionFailure::service)?;
+            self.threads
+                .record_tool_call(
+                    thread_id,
+                    turn_id,
+                    crate::RecordToolCallRequest {
+                        tool_call_id: Some(call.id),
+                        name: call.name,
+                        arguments_json: call.arguments.to_string(),
+                        binding: Some(binding),
+                    },
+                )
+                .map_err(ExecutionFailure::persistence)?;
+            self.publish_committed_after(thread_id, snapshot.sequence);
+        }
+        match self
+            .tool_scheduler()
+            .run_pending(thread_id, turn_id, cancellation)
+            .map_err(ExecutionFailure::service)?
+        {
+            ToolSchedulingProgress::WaitingForApproval => {
+                return Ok(TurnExecutionOutcome::WaitingForApproval);
+            }
+            ToolSchedulingProgress::WaitingForCapability => {
+                return Ok(TurnExecutionOutcome::WaitingForCapability);
+            }
+            ToolSchedulingProgress::Complete => {}
+        }
+        check_cancellation(cancellation)?;
+        let sequence = self
+            .threads
+            .complete_turn_without_agent_message(thread_id, turn_id)
+            .map_err(ExecutionFailure::persistence)?;
+        Ok(TurnExecutionOutcome::AdvisorCompleted { sequence })
     }
 
     fn execute_manual_context_compaction(

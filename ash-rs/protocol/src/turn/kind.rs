@@ -12,4 +12,6 @@ pub enum TurnKind {
     Coding,
     /// Read-only code review with its own rubric and output contract.
     Review,
+    /// One explicit consultation, without a main-model inference.
+    Advisor,
 }

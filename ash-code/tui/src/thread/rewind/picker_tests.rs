@@ -41,6 +41,7 @@ fn rewind_picker_lists_user_message_checkpoints_and_selects_the_latest() {
 
 fn thread(messages: &[&str]) -> Thread {
     Thread {
+        advisor: Default::default(),
         agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
         origin: Default::default(),
         session_id: SessionId::new("session").unwrap(),
@@ -60,6 +61,7 @@ fn thread(messages: &[&str]) -> Thread {
                 let ordinal = index + 1;
                 let turn_id = TurnId::new(format!("turn-{ordinal}")).unwrap();
                 Turn {
+                    advisor: None,
                     turn_id: turn_id.clone(),
                     status: TurnStatus::Completed,
                     kind: Default::default(),

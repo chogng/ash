@@ -50,6 +50,17 @@ pub(crate) fn apply_command(
         UserConfigCommand::RemoveProvider { provider } => {
             if document
                 .agent
+                .advisor
+                .as_ref()
+                .is_some_and(|advisor| advisor.model.provider == *provider)
+            {
+                return Err(ConfigError(format!(
+                    "cannot remove provider '{}' while it is the advisor provider",
+                    provider
+                )));
+            }
+            if document
+                .agent
                 .model
                 .as_ref()
                 .is_some_and(|model| model.provider == *provider)
@@ -279,6 +290,11 @@ fn apply_preferences(document: &mut UserConfigDocument, update: &PreferencesUpda
         Patch::Value(selection) => {
             document.agent.approval_review_model = selection.clone();
         }
+    }
+    match &update.advisor {
+        Patch::Missing => {}
+        Patch::Null => document.agent.advisor = None,
+        Patch::Value(advisor) => document.agent.advisor = Some(advisor.clone()),
     }
     match &update.commit_message_model {
         Patch::Missing => {}

@@ -75,6 +75,7 @@ where
     let tui = settings.write_to_tui(&config.tui);
     client
         .update_config(ConfigUpdateParams {
+            advisor: Default::default(),
             time_context: Default::default(),
             features: Default::default(),
             command_id: new_command_id("status-line"),

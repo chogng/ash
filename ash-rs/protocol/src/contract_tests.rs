@@ -197,6 +197,7 @@ fn model_invocation_fact_keeps_exact_cost_strings() {
         thread_id: thread_id.clone(),
         turn_id: turn_id.clone(),
         record: ModelInvocationRecord {
+            tool_call_id: None,
             time_context: None,
             invocation_id: ModelInvocationId::new("model-invocation_1").unwrap(),
             thread_id,

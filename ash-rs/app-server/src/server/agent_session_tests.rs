@@ -342,6 +342,7 @@ fn fork_session_binds_extensions_and_delivers_approval_after_subscription() {
         .start_turn(
             &thread_id,
             ash_core::StartTurnRequest {
+                advisor: None,
                 command_id: CommandId::new("copy-turn").unwrap(),
                 expected_sequence: core_api::SequenceExpectation::Exact(snapshot.sequence),
                 model: None,

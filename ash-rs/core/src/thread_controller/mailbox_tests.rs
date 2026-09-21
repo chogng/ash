@@ -157,6 +157,7 @@ fn install(loaded_threads: &LoadedThreads, snapshot: ThreadSnapshot) {
 
 fn snapshot(thread_id: &ThreadId) -> ThreadSnapshot {
     ThreadSnapshot {
+        advisor: Default::default(),
         user_time_contexts: Default::default(),
         history_sources: Default::default(),
         message_checkpoints: Default::default(),

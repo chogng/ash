@@ -16,7 +16,7 @@ import { IQuickInputService } from "../../../../../platform/quickinput/common/qu
 import { CommandService } from "../../../../../workbench/services/commands/common/commandService.js";
 import type { ViewPaneContainer } from "../../../../../workbench/browser/parts/views/viewPaneContainer.js";
 import { ViewContainerLocation, WorkbenchViewRegistry } from "../../../../../workbench/common/views.js";
-import { chatListItem, chatTurnErrorListItem, type ChatTurnErrorAction } from "../../../../../workbench/contrib/chat/browser/list/chatListItems.js";
+import { chatTranscriptListItems, chatListItem, chatTurnErrorListItem, type ChatTurnErrorAction } from "../../../../../workbench/contrib/chat/browser/list/chatListItems.js";
 import { ChatPaneModel } from "../../../../../workbench/contrib/chat/browser/pane/chatPaneModel.js";
 import { CHAT_VIEW_CONTAINER_ID, CHAT_VIEW_ID, MOVE_CHAT_TO_EDITOR_COMMAND_ID, MOVE_CHAT_TO_NEW_WINDOW_COMMAND_ID, NEW_CHAT_COMMAND_ID, OPEN_CHAT_BROWSER_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, TOGGLE_SESSION_INSPECTOR_COMMAND_ID } from "../../../../../workbench/contrib/chat/common/chat.js";
 import { IPreferencesService, type IPreferencesService as PreferencesService } from "../../../../../workbench/services/preferences/common/preferences.js";
@@ -781,6 +781,10 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
 	assert.ok(chatPane);
 	assert.equal(chatPane.dataset.sessionId, "session-1");
 	assert.equal(chatPane.dataset.threadId, "thread-1");
+	const input = chatPane.querySelector<HTMLTextAreaElement>(".ash-chat-textarea-input");
+	assert.ok(input);
+	input.focus();
+	assert.strictEqual(dom.window.document.activeElement, input);
 
 	sessions.selectThread("session-1", "thread-2");
 	await nextTask();
@@ -791,6 +795,7 @@ test("one Session retains one Chat pane while its selected Thread changes", asyn
 	);
 	assert.equal(chatTitleContent(pane).querySelectorAll("[role='tab']").length, 1);
 	assert.equal(chatPane.dataset.threadId, "thread-2");
+	assert.strictEqual(dom.window.document.activeElement, input);
 	dom.window.close();
 });
 
@@ -1188,6 +1193,7 @@ test("ChatPaneModel mechanically clears and replaces transient transcript entrie
 test("ChatPaneModel projects a durable Turn failure into the conversation", async () => {
 	const activeSession = session("session-1", "thread-1");
 	const failedThread: Thread = {
+		advisor: { type: "default" },
 		agentId: "agent-1",
 		origin: { type: "root" },
 		referenceCost: { knownAmounts: [], complete: true },
@@ -1572,6 +1578,8 @@ function fakeApi(options: FakeOptions = {}): {
 	readonly createSessionRequests: readonly SessionCreateParams[];
 	readonly createThreadRequests: readonly SessionOperationInput<"createThread">[];
 	readonly turnStartRequests: readonly SessionOperationInput<"startTurn">[];
+	readonly advisorRequests: readonly SessionOperationInput<"configureAdvisor">[];
+	readonly consultRequests: readonly SessionOperationInput<"consultAdvisor">[];
 	readonly turnCompactRequests: readonly SessionOperationInput<"compactContext">[];
 	readonly turnSteerRequests: readonly SessionOperationInput<"steerTurn">[];
 	readonly modelListRequests: readonly undefined[];
@@ -1586,6 +1594,8 @@ function fakeApi(options: FakeOptions = {}): {
 	const createSessionRequests: SessionCreateParams[] = [];
 	const createThreadRequests: SessionOperationInput<"createThread">[] = [];
 	const turnStartRequests: SessionOperationInput<"startTurn">[] = [];
+	const advisorRequests: SessionOperationInput<"configureAdvisor">[] = [];
+	const consultRequests: SessionOperationInput<"consultAdvisor">[] = [];
 	const turnCompactRequests: SessionOperationInput<"compactContext">[] = [];
 	const turnSteerRequests: SessionOperationInput<"steerTurn">[] = [];
 	const modelListRequests: undefined[] = [];
@@ -1668,6 +1678,7 @@ function fakeApi(options: FakeOptions = {}): {
 			list: async () => ({ generation: 1, skills: options.skills ?? [] }),
 		},
 		thread: {
+			configureAdvisor: async (params: SessionOperationInput<"configureAdvisor">) => { advisorRequests.push(params); return { sequence: params.expectedSequence + 1 }; },
 			read: async () => {
 				const value = currentThread();
 				return { thread: value, transcript: transcript(value) };
@@ -1680,6 +1691,7 @@ function fakeApi(options: FakeOptions = {}): {
 			unsubscribe: async () => undefined,
 		},
 		turn: {
+			consultAdvisor: async (params: SessionOperationInput<"consultAdvisor">) => { consultRequests.push(params); return { turnId: "advisor-turn", sequence: params.expectedSequence + 1 }; },
 			start: async (params: SessionOperationInput<"startTurn">) => {
 				turnStartRequests.push(params);
 				return { turnId: "turn-started", sequence: 2 };
@@ -1709,6 +1721,8 @@ function fakeApi(options: FakeOptions = {}): {
 		createSessionRequests,
 		createThreadRequests,
 		turnStartRequests,
+		advisorRequests,
+		consultRequests,
 		turnCompactRequests,
 		turnSteerRequests,
 		modelListRequests,
@@ -1759,6 +1773,7 @@ function sessionDto(value: ISession): SessionDto {
 
 function thread(agentText?: string): Thread {
 	return {
+		advisor: { type: "default" },
 		agentId: "agent-1",
 		origin: { type: "root" },
 		referenceCost: { knownAmounts: [], complete: true },
@@ -1816,6 +1831,7 @@ function failedTurn(code: TurnError["code"], retryable: boolean, message = "Turn
 
 function threadWithFailure(code: TurnError["code"], retryable: boolean, sequence = 3): Thread {
 	return {
+		advisor: { type: "default" },
 		agentId: "agent-1",
 		origin: { type: "root" },
 		referenceCost: { knownAmounts: [], complete: true },
@@ -1867,4 +1883,37 @@ test("Audio history identifies the sender and recording duration", () => {
 	})]);
 	assert.equal(list.element.textContent, "YouAudio (2 seconds)");
 	dom.window.close();
+});
+
+
+test("Advisor commands configure the Thread and consult without starting the worker", async () => {
+	const activeSession = session("session-1", "thread-1");
+	const fake = fakeApi({ sessions: [activeSession], thread: () => ({ ...thread("previous answer"), advisor: { type: "model", config: { model: { provider: "test", model: "reviewer" }, maxCalls: 3, maxOutputTokens: 2048 } } }) });
+	using chat = createChatService(fake.api);
+	using sessions = new AppServerSessionsManagementService(fake.api);
+	using model = new ChatPaneModel(chat, { kind: "session", active: { session: activeSession, threadId: "thread-1" } }, sessions);
+	await model.initialize();
+	await model.executeServerCommand("advisor", "off");
+	await model.executeServerCommand("advisor", "ask Check cancellation");
+	assert.equal(fake.turnStartRequests.length, 0);
+	assert.equal(fake.advisorRequests[0]?.selection.type, "off");
+	assert.equal(fake.advisorRequests[0]?.expectedSequence, 4);
+	assert.equal(fake.consultRequests[0]?.question, "Check cancellation");
+	assert.equal(fake.consultRequests[0]?.threadId, "thread-1");
+});
+
+test("Advisor transcript groups the call and renders advice as a disclosure", () => {
+	const entries: ThreadTranscriptSnapshot["entries"] = [
+		{ type: "item", entryId: "call", turnId: "turn", transient: false, item: { type: "toolCall", itemId: "call", turnId: "turn", toolCallId: "consult", name: "advisor", argumentsJson: '{"question":"Check cancellation"}' } },
+		{ type: "item", entryId: "result", turnId: "turn", transient: false, item: { type: "toolResult", itemId: "result", turnId: "turn", toolCallId: "consult", text: JSON.stringify({ status: "reviewed", model: { provider: "test", model: "reviewer" }, advice: "Check **cancellation**.", question: "Check cancellation", sourceSequence: 10, usage: { inputTokens: 120, outputTokens: 8 } }), isError: false } },
+	];
+	const items = chatTranscriptListItems(entries);
+	assert.equal(items.length, 1);
+	assert.equal(items[0]?.type, "advisor");
+	const container = document.createElement("div");
+	using widget = new ChatListWidget(container);
+	widget.render(items);
+	assert.equal(container.querySelector("summary")?.textContent, "Advisor · test/reviewer");
+	assert.equal(container.querySelector("strong")?.textContent, "cancellation");
+	assert.match(container.textContent ?? "", /120 input · 8 output/);
 });

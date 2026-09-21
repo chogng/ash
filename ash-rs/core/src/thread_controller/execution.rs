@@ -45,6 +45,37 @@ impl ThreadController {
         started_at_unix_ms: u64,
         completed_at_unix_ms: u64,
     ) -> Result<u64, CoreError> {
+        self.record_model_invocation_for_tool(
+            thread_id,
+            turn_id,
+            requested_model,
+            response_billing,
+            billing_scope,
+            usage,
+            input_estimate,
+            time_context,
+            started_at_unix_ms,
+            completed_at_unix_ms,
+            None,
+            ModelInvocationOutcome::Completed,
+        )
+    }
+
+    pub(crate) fn record_model_invocation_for_tool(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        requested_model: Option<&ModelRef>,
+        response_billing: Option<&ash_protocol::ModelResponseBilling>,
+        billing_scope: ModelBillingScope,
+        usage: Option<ModelUsage>,
+        input_estimate: Option<ModelInputEstimate>,
+        time_context: Option<ash_protocol::TimeContext>,
+        started_at_unix_ms: u64,
+        completed_at_unix_ms: u64,
+        tool_call_id: Option<ash_protocol::ToolCallId>,
+        outcome: ModelInvocationOutcome,
+    ) -> Result<u64, CoreError> {
         static RATE_CARD: OnceLock<Result<RateCard, String>> = OnceLock::new();
         let rate_card = RATE_CARD
             .get_or_init(|| {
@@ -66,6 +97,7 @@ impl ThreadController {
         let record = ModelInvocationRecord {
             time_context,
             invocation_id,
+            tool_call_id,
             thread_id: thread_id.clone(),
             turn_id: turn_id.clone(),
             requested_model: requested_model.cloned(),
@@ -73,7 +105,7 @@ impl ThreadController {
             billing: priced.billing,
             started_at_unix_ms,
             completed_at_unix_ms,
-            outcome: ModelInvocationOutcome::Completed,
+            outcome,
             usage,
             input_estimate,
             reference_cost: priced.reference_cost,

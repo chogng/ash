@@ -11,6 +11,7 @@ export default defineConfig({
 		rolldownOptions: {
 			output: rendererOutput,
 			input: {
+				advisor: resolve(import.meta.dirname, "advisor.html"),
 				themes: resolve(import.meta.dirname, "themes.html"),
 				webTransport: resolve(import.meta.dirname, 'webTransport.html'),
 				dialog: resolve(import.meta.dirname, "dialog.html"),

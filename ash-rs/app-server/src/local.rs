@@ -1915,35 +1915,26 @@ struct ConfigBackedModelService {
 }
 
 impl ModelService for ConfigBackedModelService {
+    fn snapshot(
+        &self,
+        selection: ModelSelection<'_>,
+    ) -> Result<Option<Arc<dyn ModelService>>, CoreError> {
+        let config = self.config_for_selection(selection)?;
+        let budget =
+            context_budget_for_config(&config, &self.provider_configs, &self.models_manager)?;
+        let image_policy = image_input_policy_for_config(&config, &self.provider_configs);
+        let billing_scope = billing_scope_for_config(&config);
+        Ok(Some(Arc::new(FrozenModelService {
+            provider: ProviderModelService::new(self.resolver.resolve(&config)),
+            budget,
+            image_policy,
+            billing_scope,
+        })))
+    }
+
     fn billing_scope(&self, selection: ModelSelection<'_>) -> Result<ModelBillingScope, CoreError> {
         let config = self.config_for_selection(selection)?;
-        let Some(model) = config.model.as_ref() else {
-            return Ok(ModelBillingScope::Unavailable);
-        };
-        let access = find_static_model(model)
-            .map(|definition| definition.access)
-            .unwrap_or(ModelAccess::ApiKey);
-        if access == ModelAccess::Subscription {
-            return Ok(ModelBillingScope::SubscriptionPlan);
-        }
-        if access != ModelAccess::ApiKey {
-            return Ok(ModelBillingScope::Unavailable);
-        }
-        let uses_provider_endpoint =
-            config
-                .providers
-                .get(&model.provider)
-                .is_some_and(|provider| {
-                    provider
-                        .base_url
-                        .as_deref()
-                        .is_none_or(|base_url| base_url.trim().is_empty())
-                });
-        Ok(if uses_provider_endpoint {
-            ModelBillingScope::PublicApi
-        } else {
-            ModelBillingScope::Unavailable
-        })
+        Ok(billing_scope_for_config(&config))
     }
 
     fn context_budget(&self, selection: ModelSelection<'_>) -> Result<ContextBudget, CoreError> {
@@ -2595,3 +2586,63 @@ fn marketplace_providers(
 #[cfg(test)]
 #[path = "local_tests.rs"]
 mod tests;
+
+fn billing_scope_for_config(config: &ash_config::ResolvedConfig) -> ModelBillingScope {
+    let Some(model) = config.model.as_ref() else {
+        return ModelBillingScope::Unavailable;
+    };
+    let access = find_static_model(model)
+        .map(|definition| definition.access)
+        .unwrap_or(ModelAccess::ApiKey);
+    if access == ModelAccess::Subscription {
+        return ModelBillingScope::SubscriptionPlan;
+    }
+    if access != ModelAccess::ApiKey {
+        return ModelBillingScope::Unavailable;
+    }
+    let uses_provider_endpoint = config
+        .providers
+        .get(&model.provider)
+        .is_some_and(|provider| {
+            provider
+                .base_url
+                .as_deref()
+                .is_none_or(|base_url| base_url.trim().is_empty())
+        });
+    if uses_provider_endpoint {
+        ModelBillingScope::PublicApi
+    } else {
+        ModelBillingScope::Unavailable
+    }
+}
+
+/// One model/provider snapshot shared by auxiliary context preparation and execution.
+struct FrozenModelService {
+    provider: ProviderModelService,
+    budget: ContextBudget,
+    image_policy: ModelImageInputPolicy,
+    billing_scope: ModelBillingScope,
+}
+impl ModelService for FrozenModelService {
+    fn billing_scope(&self, _: ModelSelection<'_>) -> Result<ModelBillingScope, CoreError> {
+        Ok(self.billing_scope)
+    }
+    fn context_budget(&self, _: ModelSelection<'_>) -> Result<ContextBudget, CoreError> {
+        Ok(self.budget)
+    }
+    fn image_input_policy(
+        &self,
+        _: ModelSelection<'_>,
+    ) -> Result<ModelImageInputPolicy, CoreError> {
+        Ok(self.image_policy)
+    }
+    fn invoke(
+        &self,
+        _: ModelSelection<'_>,
+        request: &ash_protocol::ModelRequest,
+        cancellation: &CancellationToken,
+    ) -> Result<ash_protocol::ModelResponse, CoreError> {
+        self.provider
+            .invoke(ModelSelection::ConfiguredDefault, request, cancellation)
+    }
+}

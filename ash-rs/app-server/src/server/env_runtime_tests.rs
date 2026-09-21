@@ -114,6 +114,7 @@ fn clearing_directories_keeps_home_instructions_in_model_requests() {
         .start_turn(
             &thread.thread_id,
             StartTurnRequest {
+                advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("start-home-turn").unwrap(),
@@ -1110,6 +1111,7 @@ fn user_config_revocation_removes_executable_services_but_keeps_file_access() {
         .start_turn(
             &thread.thread_id,
             StartTurnRequest {
+                advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("start-revocation-turn").unwrap(),
@@ -1373,6 +1375,7 @@ fn active_turn_blocks_env_cwd_set_without_changing_authority() {
         .start_turn(
             &thread.thread_id,
             StartTurnRequest {
+                advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("start-turn").unwrap(),
@@ -1435,6 +1438,7 @@ fn active_turn_accepts_session_access_changes_and_revokes_old_snapshots() {
         .start_turn(
             &thread.thread_id,
             StartTurnRequest {
+                advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("start-active-add-dir-turn").unwrap(),

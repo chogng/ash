@@ -5,7 +5,7 @@ import type { SkillReference } from "../../../../../platform/skills/common/skill
 import type { ResolvedChatContext } from "../../../../services/chat/common/chatContextService.js";
 import type { IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from "../../../../../sessions/services/sessions/common/session.js";
 import type { ISessionsManagementService } from "../../../../../sessions/services/sessions/common/sessionsManagementService.js";
-import { chatTranscriptListItem, type IChatListItem } from "../list/chatListItems.js";
+import { chatTranscriptListItems, type IChatListItem } from "../list/chatListItems.js";
 
 export type ChatPaneState =
 	| "loading"
@@ -130,9 +130,7 @@ export class ChatPaneModel extends Disposable {
 
 	get items(): readonly IChatListItem[] {
 		const latestTurnId = this._thread?.turns.at(-1)?.turnId;
-		return this.transcriptEntries.map((entry) => chatTranscriptListItem(entry, {
-			actionsEnabled: entry.turnId === latestTurnId,
-		}));
+		return chatTranscriptListItems(this.transcriptEntries, latestTurnId);
 	}
 
 	get interaction(): TurnInteraction | undefined {
@@ -263,7 +261,7 @@ export class ChatPaneModel extends Disposable {
 	}
 
 	async executeServerCommand(name: string, argumentsText: string): Promise<void> {
-		if (name !== "compact") {
+		if (name !== "compact" && name !== "advisor") {
 			await this.send(`/${name}${argumentsText ? ` ${argumentsText}` : ""}`);
 			return;
 		}
@@ -276,6 +274,29 @@ export class ChatPaneModel extends Disposable {
 			const thread = this._thread;
 			if (!thread || thread.threadId !== active.threadId) {
 				throw new Error("Chat Thread is not available");
+			}
+			if (name === "advisor") {
+				const argument = argumentsText.trim();
+				const options = { sessionId: active.session.sessionId, threadId: active.threadId, expectedSequence: thread.sequence };
+				if (argument === "save") {
+					const selection = thread.advisor;
+					const config = selection.type === "model" ? selection.config : selection.type === "off" ? null : await this.chatService.readAdvisorDefault();
+					await this.chatService.saveAdvisorDefault(config);
+				} else if (argument.startsWith("ask ")) {
+					if (activeTurn(thread)) throw new Error("Wait for the active Turn to finish before starting a consultation");
+					const enabled = thread.advisor.type === "model" || (thread.advisor.type === "default" && await this.chatService.readAdvisorDefault() !== null);
+					if (!enabled) throw new Error("Select an advisor model with /advisor before asking for a second opinion");
+					await this.chatService.consultAdvisor({ ...options, question: argument.slice(4).trim() });
+				} else if (argument === "off" || argument === "default") {
+					await this.chatService.configureAdvisor({ ...options, selection: { type: argument } });
+				} else {
+					const model = this.models.find(entry => `${entry.model.provider}/${entry.model.model}` === argument)?.model;
+					if (!model) throw new Error("Select an available advisor model, or use /advisor off or /advisor ask <question>");
+					await this.chatService.configureAdvisor({ ...options, selection: { type: "model", config: { model, maxCalls: 3, maxOutputTokens: 2048 } } });
+				}
+				await this.refreshThread();
+				this.setState("ready");
+				return;
 			}
 			if (activeTurn(thread)) {
 				throw new Error("Context can be compacted only when the active Turn has finished");

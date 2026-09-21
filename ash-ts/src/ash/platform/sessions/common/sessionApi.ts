@@ -1,4 +1,4 @@
-import type { ModelListResult, ModelRef, SessionCreateParams, SessionListResult, SessionReadParams, SessionRequest, SessionRequestParams, SessionRequestResult, SessionResult, SessionSubscribeParams, SessionSubscribeResult, SessionThreadReadParams, SessionThreadReadResult, SessionThreadResult, SessionThreadSubscribeParams, SessionThreadSubscribeResult, SessionThreadUnsubscribeParams, SessionUnsubscribeParams, ThreadGoalClearParams, ThreadGoalClearResponse, ThreadGoalGetParams, ThreadGoalGetResponse, ThreadGoalSetParams, ThreadGoalSetResponse, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult, TurnSteerResult } from "../../app-server/common/generated/index.js";
+import type { AdvisorConfig, AdvisorConfigureResult, ModelListResult, ModelRef, SessionCreateParams, SessionListResult, SessionReadParams, SessionRequest, SessionRequestParams, SessionRequestResult, SessionResult, SessionSubscribeParams, SessionSubscribeResult, SessionThreadReadParams, SessionThreadReadResult, SessionThreadResult, SessionThreadSubscribeParams, SessionThreadSubscribeResult, SessionThreadUnsubscribeParams, SessionUnsubscribeParams, ThreadGoalClearParams, ThreadGoalClearResponse, ThreadGoalGetParams, ThreadGoalGetResponse, ThreadGoalSetParams, ThreadGoalSetResponse, TurnInteractionResolveResult, TurnInterruptResult, TurnStartResult, TurnSteerResult } from "../../app-server/common/generated/index.js";
 
 export type { SessionRequestResult };
 
@@ -52,12 +52,15 @@ export interface ISessionApi {
 }
 
 export interface IModelApi {
+	readAdvisorDefault(): Promise<AdvisorConfig | null>;
+	setAdvisorDefault(params: { readonly commandId: string; readonly advisor: AdvisorConfig | null }): Promise<void>;
 	list(): Promise<ModelListResult>;
 	readModel(): Promise<ModelRef | null>;
 	setModel(params: { readonly commandId: string; readonly model: ModelRef }): Promise<void>;
 }
 
 export interface IThreadApi {
+	configureAdvisor(params: SessionOperationInput<"configureAdvisor">): Promise<AdvisorConfigureResult>;
 	read(params: SessionThreadReadParams): Promise<SessionThreadReadResult>;
 	subscribe(params: SessionThreadSubscribeParams): Promise<SessionThreadSubscribeResult>;
 	unsubscribe(params: SessionThreadUnsubscribeParams): Promise<void>;
@@ -67,6 +70,7 @@ export interface IThreadApi {
 }
 
 export interface ITurnApi {
+	consultAdvisor(params: SessionOperationInput<"consultAdvisor">): Promise<TurnStartResult>;
 	start(params: SessionOperationInput<"startTurn">): Promise<TurnStartResult>;
 	compact(params: SessionOperationInput<"compactContext">): Promise<TurnStartResult>;
 	steer(params: SessionOperationInput<"steerTurn">): Promise<TurnSteerResult>;

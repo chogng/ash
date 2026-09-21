@@ -523,6 +523,7 @@ fn later_child_turns_cannot_expand_the_spawned_skill_ceiling() {
         .start_turn(
             &spawned.child_thread_id,
             StartTurnRequest {
+                advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("child-second-turn").unwrap(),
@@ -565,6 +566,7 @@ fn later_child_turns_cannot_expand_the_spawned_skill_ceiling() {
     let result = fixture.threads.start_turn(
         &spawned.child_thread_id,
         StartTurnRequest {
+            advisor: None,
             kind: ash_protocol::TurnKind::Coding,
             instructions: crate::test_turn_instructions(),
             command_id: CommandId::new("child-third-turn").unwrap(),
@@ -1013,6 +1015,7 @@ fn fixture_with_agent(
         .start_turn(
             &parent.thread_id,
             StartTurnRequest {
+                advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("start-parent").unwrap(),

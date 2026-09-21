@@ -1,0 +1,27 @@
+---
+source: ash-code/tui/src/app/dispatch_tests.rs
+assertion_line: 1214
+expression: rendered
+---
+  .                                                        [— / —] [Dashboard]  
+                                                                                
+        ┌── Advisor: off ──────────────────────────────────────────[✗]─┐        
+        │                                                              │        
+        │   Models                                                     │        
+        │                                                              │        
+        │> No advisor                                                  │        
+        │  Use saved default                                           │        
+        │  Save current selection as default                           │        
+        │  Claude Sonnet 4                                             │        
+        │  DeepSeek V4 Pro                                             │        
+        │  Gemini 3.6 Flash                                            │        
+        │  Kimi K2.6                                                   │        
+        │  Kimi K2.7 Code                                              │        
+        │  MiMo V2.5 Pro                                               │        
+        │  MiniMax M3                                                  │        
+        │  GPT-5.6 Sol                                                 │        
+        │  GPT-5.6 Terra                                               │        
+        │  8 more below                                                │        
+  ╭─────│  Tab/Shift+Tab to switch · Esc to close                      │─────╮  
+  │ > Bu└──────────────────────────────────────────────────────────────┘     │  
+  ╰──────────────────────────────────────────────────────── Automatic model ─╯

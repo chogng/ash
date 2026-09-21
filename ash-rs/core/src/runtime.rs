@@ -136,6 +136,7 @@ impl AgentRuntime for Runtime<'_> {
             thread_id,
             &request.command_id,
             SubmittedCommand::Turn {
+                kind: request.kind,
                 input: &request.input,
                 tool_mode: request.tool_mode,
             },
@@ -146,12 +147,14 @@ impl AgentRuntime for Runtime<'_> {
         let command_id = request.command_id.clone();
         let input = request.input.clone();
         let tool_mode = request.tool_mode;
+        let kind = request.kind;
         let start = self.threads.start_turn(
             thread_id,
             crate::StartTurnRequest {
                 command_id: request.command_id,
                 expected_sequence: request.expected_sequence,
                 model: request.model,
+                advisor: request.advisor,
                 kind: request.kind,
                 instructions: request.instructions,
                 policy_revision: self.executor.policy_revision(),
@@ -168,6 +171,7 @@ impl AgentRuntime for Runtime<'_> {
                     thread_id,
                     &command_id,
                     SubmittedCommand::Turn {
+                        kind,
                         input: &input,
                         tool_mode,
                     },
@@ -276,13 +280,17 @@ impl AgentRuntime for Runtime<'_> {
         let matches = match (&entry.receipt.command, command) {
             (
                 ThreadCommand::StartTurn {
-                    input, tool_mode, ..
+                    input,
+                    tool_mode,
+                    kind,
+                    ..
                 },
                 SubmittedCommand::Turn {
+                    kind: wanted_kind,
                     input: wanted,
                     tool_mode: mode,
                 },
-            ) => input == wanted && *tool_mode == mode,
+            ) => input == wanted && *tool_mode == mode && *kind == wanted_kind,
             (ThreadCommand::StartTurn { input, .. }, SubmittedCommand::Input { input: wanted }) => {
                 input == wanted
             }
@@ -435,6 +443,45 @@ impl AgentRuntime for Runtime<'_> {
             )?;
         }
         Ok(result.sequence)
+    }
+
+    fn replay_advisor_configuration(
+        &self,
+        thread_id: &ThreadId,
+        command_id: &CommandId,
+        selection: &ash_protocol::AdvisorSelection,
+    ) -> Result<Option<u64>, CoreError> {
+        let snapshot = self.threads.read_thread(thread_id)?;
+        let Some(entry) = snapshot
+            .commands
+            .iter()
+            .find(|entry| &entry.receipt.command_id == command_id)
+        else {
+            return Ok(None);
+        };
+        if entry.receipt.command
+            != (ThreadCommand::ConfigureAdvisor {
+                selection: selection.clone(),
+            })
+        {
+            return Err(CoreError::CommandConflict);
+        }
+        Ok(Some(entry.response_sequence))
+    }
+
+    fn configure_advisor(
+        &self,
+        thread_id: &ThreadId,
+        command_id: CommandId,
+        expected_sequence: SequenceExpectation,
+        selection: ash_protocol::AdvisorSelection,
+    ) -> Result<u64, CoreError> {
+        let before = self.threads.read_thread(thread_id)?.sequence;
+        let sequence =
+            self.threads
+                .configure_advisor(thread_id, command_id, expected_sequence, selection)?;
+        self.publish(thread_id, before)?;
+        Ok(sequence)
     }
 
     fn set_goal(

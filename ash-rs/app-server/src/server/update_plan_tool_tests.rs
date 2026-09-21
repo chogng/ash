@@ -99,6 +99,7 @@ fn tool_call_durably_updates_the_running_turn_plan() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("plan-start").unwrap(),

@@ -549,6 +549,7 @@ impl MultiAgentCoordinator {
         let initial_turn = self.threads.start_turn(
             &spawned.thread_id,
             StartTurnRequest {
+                advisor: None,
                 command_id: initial_turn_command_id(&seed.delegation_id)?,
                 expected_sequence: SequenceExpectation::Any,
                 model: seed

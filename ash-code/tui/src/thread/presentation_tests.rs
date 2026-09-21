@@ -51,6 +51,7 @@ fn every_stable_turn_error_has_a_user_facing_message() {
 
 fn turn(id: &str, status: TurnStatus) -> Turn {
     Turn {
+        advisor: None,
         turn_id: TurnId::new(id).unwrap(),
         status,
         kind: Default::default(),

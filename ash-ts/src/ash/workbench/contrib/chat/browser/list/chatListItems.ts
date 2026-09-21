@@ -13,7 +13,7 @@ interface ChatTurnErrorListItemOptions {
 /** One render-ready committed or transient Thread item. */
 export interface IChatListItem {
 	readonly id: string;
-	readonly type: ThreadItem["type"] | "turnError";
+	readonly type: ThreadItem["type"] | "turnError" | "advisor";
 	readonly text: string;
 	readonly transient: boolean;
 	readonly isError?: boolean;
@@ -43,6 +43,32 @@ function chatPlanUpdateListItem(turnId: string, plan: PlanUpdate): IChatListItem
 		text: [plan.explanation, ...steps].filter((value): value is string => Boolean(value)).join("\n\n"),
 		transient: false,
 	};
+}
+
+/** Groups an advisor call and its result into one inspectable consultation. */
+export function chatTranscriptListItems(entries: readonly ThreadTranscriptEntry[], latestTurnId?: string): readonly IChatListItem[] {
+	const calls = new Map(entries.flatMap(entry => entry.type === "item" && entry.item.type === "toolCall" && entry.item.name === "advisor" ? [[entry.item.toolCallId, entry] as const] : []));
+	const results = new Set(entries.flatMap(entry => entry.type === "item" && entry.item.type === "toolResult" ? [entry.item.toolCallId] : []));
+	return entries.flatMap(entry => {
+		if (entry.type === "item" && entry.item.type === "toolCall" && calls.has(entry.item.toolCallId)) {
+			if (results.has(entry.item.toolCallId)) return [];
+			return [{ id: entry.entryId, type: "advisor" as const, text: "Consulting the selected model…", transient: entry.transient, label: "Advisor" }];
+		}
+		if (entry.type === "item" && entry.item.type === "toolResult" && calls.has(entry.item.toolCallId)) {
+			const item = entry.item;
+			let value: unknown;
+			try { value = JSON.parse(item.text); } catch { /* Core policy/recovery errors are plain text tool results. */ }
+			if (typeof value !== "object" || value === null) return [{ ...chatListItem(item), id: entry.entryId, type: "advisor" as const, label: "Advisor" }];
+			const result = value as Record<string, unknown>;
+			const model = result.model as { provider?: unknown; model?: unknown } | undefined;
+			const modelLabel = typeof model?.provider === "string" && typeof model.model === "string" ? `${model.provider}/${model.model}` : "Advisor";
+			const advice = typeof result.advice === "string" ? result.advice : typeof result.message === "string" ? result.message : result.status === "limitReached" ? "The advisor call limit for this Turn has been reached." : "No advice returned";
+			const usage = result.usage as { inputTokens?: number; outputTokens?: number } | undefined;
+			const details = [typeof result.question === "string" ? result.question : undefined, typeof result.sourceSequence === "number" ? `Conversation sequence ${result.sourceSequence}` : undefined, usage ? `Tokens: ${usage.inputTokens ?? "unknown"} input · ${usage.outputTokens ?? "unknown"} output` : undefined].filter(Boolean).join(" · ");
+			return [{ id: entry.entryId, type: "advisor" as const, text: advice, transient: false, isError: item.isError, label: `Advisor · ${modelLabel}`, detail: details }];
+		}
+		return [chatTranscriptListItem(entry, { actionsEnabled: entry.turnId === latestTurnId })];
+	});
 }
 
 /** Maps one backend-assembled transcript entry to Chat presentation. */

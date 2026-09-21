@@ -18,6 +18,7 @@ impl From<crate::ThreadSnapshot> for core_api::ThreadView {
             usage: snapshot.usage,
             reference_cost: snapshot.reference_cost,
             goal: snapshot.goal,
+            advisor: snapshot.advisor,
             items: snapshot.items,
             agent,
             turns: snapshot
@@ -32,6 +33,7 @@ impl From<crate::ThreadSnapshot> for core_api::ThreadView {
                     kind: turn.kind,
                     instructions: turn.instructions,
                     model: turn.model,
+                    advisor: turn.advisor,
                     approval_mode: turn.approval_mode,
                     tool_mode: turn.tool_mode,
                     activated_skills: turn.activated_skills,

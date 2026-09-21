@@ -46,6 +46,7 @@ fn start(threads: &ThreadController, thread: &ThreadId, command: &str, input: &s
         .start_turn(
             thread,
             StartTurnRequest {
+                advisor: None,
                 command_id: CommandId::new(command).unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,

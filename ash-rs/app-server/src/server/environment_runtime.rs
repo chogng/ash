@@ -201,6 +201,7 @@ pub(crate) struct EnvRuntimeControl {
     runtime: Arc<RwLock<EnvRuntime>>,
     tools: Arc<EnvToolPorts>,
     threads: Arc<ThreadController>,
+    model: Arc<dyn core_api::ModelService>,
     multi_agent: Arc<MultiAgentCoordinator>,
     model_instructions: Arc<ash_models_manager::ModelInstructionCatalog>,
     turn_backend: Arc<dyn ash_core::TurnExecutionBackend>,
@@ -304,6 +305,7 @@ impl EnvRuntimeControl {
             local,
             &self.multi_agent,
             &self.model_instructions,
+            &self.model,
             &self.threads,
             &self.turn_backend,
             customizations.as_ref(),
@@ -475,6 +477,7 @@ impl EnvRuntimeControl {
             local,
             &self.multi_agent,
             &self.model_instructions,
+            &self.model,
             &self.threads,
             &turn_backend,
             Some(&customizations),
@@ -1245,6 +1248,7 @@ impl AppServer {
             runtime: Arc::clone(&self.env_runtime),
             tools: Arc::clone(&host.tools),
             threads: self.threads.clone(),
+            model: self.model.clone(),
             multi_agent: Arc::clone(&self.multi_agent),
             model_instructions: Arc::clone(&self.model_instructions),
             turn_backend: self.turn_backend.clone(),
@@ -2140,6 +2144,7 @@ impl AppServer {
             local,
             &self.multi_agent,
             &self.model_instructions,
+            &self.model,
             &self.threads,
             &turn_backend,
             Some(&customizations),
@@ -2878,6 +2883,7 @@ fn append_multi_agent_tools(
     local: crate::local_tools::LocalToolComposition,
     coordinator: &Arc<MultiAgentCoordinator>,
     model_instructions: &Arc<ash_models_manager::ModelInstructionCatalog>,
+    model: &Arc<dyn core_api::ModelService>,
     threads: &Arc<ThreadController>,
     turn_backend: &Arc<dyn ash_core::TurnExecutionBackend>,
     customizations: Option<&Arc<DirContributions>>,
@@ -2894,6 +2900,14 @@ fn append_multi_agent_tools(
         local,
         Arc::new(GoalToolService::new(
             Arc::clone(threads),
+            action_policy_revision.clone(),
+        )),
+    );
+    let local = append_local_tool(
+        local,
+        Arc::new(advisor::AdvisorToolService::new(
+            Arc::clone(threads),
+            Arc::clone(model),
             action_policy_revision.clone(),
         )),
     );

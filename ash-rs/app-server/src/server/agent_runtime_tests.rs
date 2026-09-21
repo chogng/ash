@@ -59,6 +59,7 @@ fn recovered_spawn_starts_a_new_child_turn_once() {
         .start_turn(
             &parent.thread_id,
             StartTurnRequest {
+                advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("start-parent").unwrap(),

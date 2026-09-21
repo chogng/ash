@@ -222,6 +222,7 @@ impl TranscriptAccumulator {
             | ThreadEvent::GoalCreated { .. }
             | ThreadEvent::GoalUpdated { .. }
             | ThreadEvent::GoalCleared { .. }
+            | ThreadEvent::AdvisorConfigured { .. }
             | ThreadEvent::TurnExecutionBound { .. }
             | ThreadEvent::AgentContextSeedCommitted { .. }
             | ThreadEvent::HistoryImported { .. }

@@ -13,6 +13,7 @@ use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ModelSelectionAction {
+    Advisor { preference: String },
     Select { preference: String, pinned: bool },
     Pin { preference: String, pinned: bool },
 }

@@ -203,6 +203,9 @@ pub struct ModelInvocationRecord {
     #[ts(optional = nullable)]
     pub time_context: Option<crate::TimeContext>,
     pub invocation_id: ModelInvocationId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub tool_call_id: Option<crate::ToolCallId>,
     pub thread_id: ThreadId,
     pub turn_id: TurnId,
     #[serde(default, skip_serializing_if = "Option::is_none")]

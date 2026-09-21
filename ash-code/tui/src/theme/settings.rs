@@ -19,6 +19,7 @@ where
     let mut tui = config.tui.0;
     tui.insert("theme".into(), serde_json::Value::String(theme));
     client.update_config(ConfigUpdateParams {
+        advisor: Default::default(),
         time_context: Default::default(),
         features: Default::default(),
         command_id: new_command_id("theme"),

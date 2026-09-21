@@ -440,6 +440,9 @@ pub struct ConfigReadResult {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub commit_message_model: Option<ModelRefDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub advisor: Option<ash_protocol::AdvisorConfig>,
     pub commit_message_active_dir_authorized: bool,
     pub tool_mode: ToolMode,
     pub grep_backend: GrepBackendDto,
@@ -588,6 +591,10 @@ pub struct ConfigUpdateParams {
     #[schemars(with = "Option<ModelRefDto>")]
     #[ts(as = "Option<ModelRefDto>", optional = nullable)]
     pub commit_message_model: Patch<ModelRefDto>,
+    #[serde(default, skip_serializing_if = "Patch::is_missing")]
+    #[schemars(with = "Option<ash_protocol::AdvisorConfig>")]
+    #[ts(as = "Option<ash_protocol::AdvisorConfig>", optional = nullable)]
+    pub advisor: Patch<ash_protocol::AdvisorConfig>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     #[schemars(with = "Option<ToolMode>")]
     #[ts(as = "Option<ToolMode>", optional = nullable)]

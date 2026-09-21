@@ -151,6 +151,7 @@ impl Fixture {
     }
     fn submit(&self, text: &str) -> SubmitTurnRequest {
         SubmitTurnRequest {
+            advisor: None,
             command_id: CommandId::new("start").unwrap(),
             expected_sequence: SequenceExpectation::Exact(1),
             model: None,

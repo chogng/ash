@@ -17,6 +17,7 @@ export class ChatListWidget extends Disposable {
 	private readonly renderedItems = this._register(new DisposableStore());
 	private readonly onDidRequestErrorAction: ((action: ChatTurnErrorAction) => void) | undefined;
 	private readonly onDidRequestMemoryReference: ((reference: string) => void) | undefined;
+	private readonly advisorExpansion = new Map<string, boolean>();
 	private visible = false;
 	private shouldFollow = true;
 
@@ -41,6 +42,7 @@ export class ChatListWidget extends Disposable {
 	render(items: readonly IChatListItem[]): void {
 		if (this.visible) this.captureFollowState();
 		this.renderedItems.clear();
+		for (const id of this.advisorExpansion.keys()) if (!items.some(item => item.id === id)) this.advisorExpansion.delete(id);
 		this.transcript.replaceChildren(...items.map((item) => this.renderItem(item)));
 		if (this.visible) this.layout();
 	}
@@ -69,21 +71,28 @@ export class ChatListWidget extends Disposable {
 		article.dataset.itemId = item.id;
 		if (item.transient) article.dataset.transient = "true";
 		if (item.isError) article.classList.add("error");
-		const label = h(this.element.ownerDocument, "div");
+		const label = h(this.element.ownerDocument, item.type === "advisor" ? "summary" : "div");
 		label.className = "ash-chat-item-label";
 		label.textContent = itemLabel(item);
-		article.append(label);
-		if (item.type === "agentMessage" || item.type === "reasoning" || item.type === "plan") {
+		const body = item.type === "advisor" ? h(this.element.ownerDocument, "details") : article;
+		body.append(label);
+		if (body !== article) {
+			const disclosure = body as HTMLDetailsElement;
+			disclosure.open = this.advisorExpansion.get(item.id) ?? true;
+			this.renderedItems.add(addDisposableListener(disclosure, "toggle", () => { this.advisorExpansion.set(item.id, disclosure.open); }));
+			article.append(body);
+		}
+		if (item.type === "agentMessage" || item.type === "reasoning" || item.type === "plan" || item.type === "advisor") {
 			const markdown = this.renderedItems.add(new MarkdownElement({
 				ownerDocument: this.element.ownerDocument,
 				markdown: item.text,
 				breaks: true,
 			}));
-			article.append(markdown.element);
+			body.append(markdown.element);
 		} else {
 			const content = h(this.element.ownerDocument, "pre");
 			content.textContent = item.text;
-			article.append(content);
+			body.append(content);
 		}
 		if (this.onDidRequestMemoryReference) {
 			const references = [...new Set(item.text.match(/memory:[A-Za-z0-9_-]+/g) ?? [])].filter(reference => reference.length <= 4096).slice(0, 8);
@@ -99,7 +108,7 @@ export class ChatListWidget extends Disposable {
 			const detail = h(this.element.ownerDocument, "p");
 			detail.className = "ash-chat-turn-error-detail";
 			detail.textContent = item.detail;
-			article.append(detail);
+			body.append(detail);
 		}
 		if (item.action) {
 			const action = item.action;
@@ -133,6 +142,8 @@ function itemLabel(item: IChatListItem): string {
 			return "Tool call";
 		case "toolResult":
 			return item.isError ? "Tool error" : "Tool result";
+		case "advisor":
+			return "Advisor";
 		case "turnError":
 			return "Error";
 	}

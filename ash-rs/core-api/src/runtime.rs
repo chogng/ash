@@ -38,6 +38,7 @@ pub struct SubmitTurnRequest {
     pub command_id: CommandId,
     pub expected_sequence: SequenceExpectation,
     pub model: Option<ModelRef>,
+    pub advisor: Option<ash_protocol::AdvisorConfig>,
     pub kind: TurnKind,
     pub instructions: TurnInstructions,
     pub approval_mode: ApprovalMode,
@@ -70,6 +71,7 @@ pub struct TurnReceipt {
 /// The user-controlled identity of a previously submitted command.
 pub enum SubmittedCommand<'a> {
     Turn {
+        kind: ash_protocol::TurnKind,
         input: &'a [UserInput],
         tool_mode: ToolMode,
     },
@@ -167,6 +169,19 @@ pub trait AgentRuntime {
         &self,
         thread_id: &ThreadId,
         request: ResolveTurnInteractionRequest,
+    ) -> Result<u64, CoreError>;
+    fn replay_advisor_configuration(
+        &self,
+        thread_id: &ThreadId,
+        command_id: &CommandId,
+        selection: &ash_protocol::AdvisorSelection,
+    ) -> Result<Option<u64>, CoreError>;
+    fn configure_advisor(
+        &self,
+        thread_id: &ThreadId,
+        command_id: CommandId,
+        expected_sequence: SequenceExpectation,
+        selection: ash_protocol::AdvisorSelection,
     ) -> Result<u64, CoreError>;
     fn set_goal(
         &self,

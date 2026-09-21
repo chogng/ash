@@ -54,7 +54,7 @@ impl GoalExtension {
         else {
             return Ok(None);
         };
-        if completed_turn.kind == protocol::TurnKind::Review {
+        if completed_turn.kind != protocol::TurnKind::Coding {
             return Ok(None);
         }
         let command_id = CommandId::new(format!("goal_continue_{}", completed_turn.turn_id))
@@ -62,6 +62,7 @@ impl GoalExtension {
         let Some(start) = threads.start_goal_turn(
             thread_id,
             StartGoalTurnRequest {
+                advisor: snapshot.advisor.resolve(completed_turn.advisor.as_ref()),
                 command_id,
                 model: completed_turn.model.clone(),
                 instructions: completed_turn.instructions.clone().ok_or_else(|| {

@@ -19,6 +19,10 @@ mod time_context;
 pub use time_context::TimeContext;
 pub use time_context::TimeContextMode;
 pub use time_context::TimeZoneOrigin;
+mod advisor;
+pub use advisor::AdvisorConfig;
+pub use advisor::AdvisorSelection;
+
 mod thread;
 
 pub use history::HistoryPrefixRef;

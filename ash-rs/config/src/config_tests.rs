@@ -411,6 +411,7 @@ fn update_preferences(
         command_id: CommandId::new(command_id).unwrap(),
         expected_revision: ConfigRevision::new(revision),
         command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+            advisor: Default::default(),
             time_context: ash_protocol::Patch::Missing,
             features: Default::default(),
             model,
@@ -751,6 +752,7 @@ fn tool_mode_defaults_to_direct_and_updates_durably() {
             command_id: CommandId::new("select-code-mode-only").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                advisor: Default::default(),
                 time_context: ash_protocol::Patch::Missing,
                 features: Default::default(),
                 model: Patch::Missing,
@@ -1285,6 +1287,7 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
             command_id: CommandId::new("select-missing-review-provider").unwrap(),
             expected_revision: ConfigRevision::INITIAL,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                advisor: Default::default(),
                 time_context: ash_protocol::Patch::Missing,
                 features: Default::default(),
                 model: Patch::Missing,
@@ -1308,6 +1311,7 @@ fn approval_review_model_is_explicit_and_keeps_its_provider_configured() {
             command_id: CommandId::new("select-review-model").unwrap(),
             expected_revision: configured.revision,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                advisor: Default::default(),
                 time_context: ash_protocol::Patch::Missing,
                 features: Default::default(),
                 model: Patch::Missing,
@@ -2305,4 +2309,68 @@ fn grep_configuration_moves_out_of_agent_and_rejects_conflicting_owners() {
         crate::document_migration::decode_legacy_json(r#"{"agent":{"grepBackend":"fastRegex"}}"#)
             .unwrap();
     assert_eq!(legacy.grep.backend, GrepBackend::Tgrep);
+}
+
+#[test]
+fn advisor_default_validates_provider_and_survives_reopening() {
+    let path = config_path("advisor-default");
+    let store = ConfigStore::open(&path).unwrap();
+    let configured = configure_provider(&store, 0, "openai");
+    let advisor = ash_protocol::AdvisorConfig::new(model_ref("openai", "reviewer"));
+    let selected = store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("advisor-default").unwrap(),
+            expected_revision: configured.revision,
+            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                advisor: Patch::Value(advisor.clone()),
+                ..Default::default()
+            }),
+        })
+        .unwrap();
+    assert_eq!(
+        ConfigStore::open(&path)
+            .unwrap()
+            .read_snapshot()
+            .unwrap()
+            .values
+            .advisor,
+        Some(advisor.clone())
+    );
+    assert!(
+        store
+            .apply(ConfigCommandRequest {
+                command_id: CommandId::new("remove-advisor-provider").unwrap(),
+                expected_revision: selected.revision,
+                command: UserConfigCommand::RemoveProvider {
+                    provider: provider_id("openai")
+                }
+            })
+            .is_err()
+    );
+    let mut invalid = advisor;
+    invalid.max_calls = 0;
+    assert!(
+        store
+            .apply(ConfigCommandRequest {
+                command_id: CommandId::new("invalid-advisor").unwrap(),
+                expected_revision: selected.revision,
+                command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                    advisor: Patch::Value(invalid),
+                    ..Default::default()
+                })
+            })
+            .is_err()
+    );
+    store
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("clear-advisor").unwrap(),
+            expected_revision: selected.revision,
+            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                advisor: Patch::Null,
+                ..Default::default()
+            }),
+        })
+        .unwrap();
+    assert!(store.read_snapshot().unwrap().values.advisor.is_none());
+    remove_config_files(&path);
 }

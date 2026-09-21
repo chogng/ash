@@ -198,6 +198,7 @@ fn empty_snapshot() -> ThreadTranscriptSnapshot {
 fn thread_snapshot() -> Thread {
     let turn_id = TurnId::new("turn_1").unwrap();
     Thread {
+        advisor: Default::default(),
         agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
         origin: Default::default(),
         session_id: session_id(),
@@ -211,6 +212,7 @@ fn thread_snapshot() -> Thread {
         reference_cost: ash_protocol::ModelReferenceCostSummary::default(),
         goal: None,
         turns: vec![Turn {
+            advisor: None,
             turn_id: turn_id.clone(),
             status: TurnStatus::Completed,
             kind: Default::default(),
@@ -249,6 +251,7 @@ fn thread_with_item(turn: &str, item: &str, text: &str) -> Thread {
     let turn_id = TurnId::new(turn).unwrap();
     Thread {
         turns: vec![Turn {
+            advisor: None,
             turn_id: turn_id.clone(),
             status: TurnStatus::Completed,
             kind: Default::default(),

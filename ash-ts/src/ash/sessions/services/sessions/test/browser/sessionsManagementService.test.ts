@@ -180,6 +180,7 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection) {
 		async stop() { throw new Error("Not used"); },
 	};
 	const turn: ITurnApi = {
+		async consultAdvisor() { throw new Error("Not used"); },
 		async start() { throw new Error("Not used"); },
 		async compact() { throw new Error("Not used"); },
 		async steer() { throw new Error("Not used"); },
@@ -208,7 +209,8 @@ function sessionHost(initial: SessionDto[], tree?: AgentTreeNodeProjection) {
 function threadProjection(sessionId: string, threadId: string): SessionThreadProjection {
 	return {
 		thread: {
-			agentId: "agent-1",
+			advisor: { type: "default" },
+		agentId: "agent-1",
 			origin: { type: "root" },
 			referenceCost: { knownAmounts: [], complete: true },
 			sessionId,

@@ -387,6 +387,7 @@ fn preview_result(
     use ash_app_server_protocol::protocol::transcript::ThreadTranscriptEntry;
     use ash_app_server_protocol::protocol::transcript::ThreadTranscriptSnapshot;
     let thread = ash_protocol::Thread {
+        advisor: Default::default(),
         agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
         origin: Default::default(),
         session_id: SessionId::new("current").unwrap(),

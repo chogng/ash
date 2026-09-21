@@ -285,6 +285,7 @@ fn session(ids: &TestIds) -> Session {
 
 fn thread(ids: &TestIds, sequence: u64, turns: Vec<Turn>) -> Thread {
     Thread {
+        advisor: Default::default(),
         agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
         origin: Default::default(),
         session_id: ids.session_id.clone(),
@@ -303,6 +304,7 @@ fn thread(ids: &TestIds, sequence: u64, turns: Vec<Turn>) -> Thread {
 
 fn turn(ids: &TestIds, status: TurnStatus, items: Vec<ThreadItem>) -> Turn {
     Turn {
+        advisor: None,
         turn_id: ids.turn_id.clone(),
         status,
         kind: ash_protocol::TurnKind::Coding,

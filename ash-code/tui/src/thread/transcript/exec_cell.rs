@@ -257,6 +257,11 @@ impl ExecCell {
             return;
         };
         call.result_entry_id = Some(entry_id);
+        let result = if call.name == "advisor" {
+            advisor_text(result)
+        } else {
+            result
+        };
         call.result = Some(bounded_text(&result, MAX_FINAL_BYTES, usize::MAX));
         call.failed = failed;
     }
@@ -432,3 +437,46 @@ fn next_char_boundary(text: &str, start: usize) -> usize {
 #[cfg(test)]
 #[path = "exec_cell/model_tests.rs"]
 mod tests;
+
+#[derive(serde::Deserialize)]
+struct AdvisorAdvice {
+    model: ash_protocol::ModelRef,
+    question: String,
+    advice: String,
+    #[serde(rename = "sourceSequence")]
+    source_sequence: u64,
+    usage: Option<ash_protocol::ModelUsage>,
+}
+
+fn advisor_text(result: String) -> String {
+    // Policy/recovery errors use plain ToolResult text and remain visible as supplied by Core.
+    let Ok(advice) = serde_json::from_str::<AdvisorAdvice>(&result) else {
+        return result;
+    };
+    let usage = advice
+        .usage
+        .as_ref()
+        .map(|usage| {
+            format!(
+                "\nTokens: {} input · {} output",
+                usage
+                    .input_tokens
+                    .map(|value| value.to_string())
+                    .unwrap_or_else(|| "unknown".into()),
+                usage
+                    .output_tokens
+                    .map(|value| value.to_string())
+                    .unwrap_or_else(|| "unknown".into())
+            )
+        })
+        .unwrap_or_default();
+    format!(
+        "Advisor · {}/{}\nQuestion: {}\n\n{}\n\nConversation sequence {}{}",
+        advice.model.provider,
+        advice.model.model,
+        advice.question,
+        advice.advice,
+        advice.source_sequence,
+        usage
+    )
+}

@@ -12,6 +12,7 @@ use zui::ui::{Color, Rect};
 #[test]
 fn timeline_groups_shell_result_under_its_tool_call() {
     let thread = Thread {
+        advisor: Default::default(),
         agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
         origin: Default::default(),
         session_id: SessionId::new("session").unwrap(),
@@ -25,6 +26,7 @@ fn timeline_groups_shell_result_under_its_tool_call() {
         reference_cost: Default::default(),
         goal: None,
         turns: vec![Turn {
+            advisor: None,
             turn_id: TurnId::new("turn").unwrap(),
             status: TurnStatus::Completed,
             kind: ash_protocol::TurnKind::Coding,

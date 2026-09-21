@@ -1186,6 +1186,8 @@ use crate::protocol::search::GrepIndexStatusResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::search::LocalIndexClearOutcomeDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::session::AdvisorConfigureResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::session::MessageCheckpointsParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::session::MessageCheckpointsResult;
@@ -1439,6 +1441,10 @@ use ash_protocol::ActionApprovalDecision;
 use ash_protocol::ActionApprovalRequest;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ActionApprovalResponse;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::AdvisorConfig;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::AdvisorSelection;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::AgentCapabilityScope;
 #[cfg(any(test, feature = "export"))]
@@ -4167,6 +4173,9 @@ typescript_bindings! {
     SessionRequest,
     SessionRequestParams,
     SessionRequestResult,
+    AdvisorConfig,
+    AdvisorSelection,
+    AdvisorConfigureResult,
     SessionThreadReadParams,
     SessionThreadReadResult,
     SessionThreadSubscribeParams,

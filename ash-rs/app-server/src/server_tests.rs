@@ -4170,6 +4170,7 @@ fn interaction_resolution_uses_the_durable_identity_and_resumes_the_turn() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("agent-turn").unwrap(),
@@ -4530,6 +4531,7 @@ fn expired_interaction_is_cancelled_and_fails_the_turn() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("deadline-turn").unwrap(),
@@ -4621,6 +4623,7 @@ fn approval_interaction_resolves_through_the_typed_app_server_contract() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("approval-turn").unwrap(),
@@ -4735,6 +4738,7 @@ fn interaction_response_is_rejected_from_a_capable_non_owner_connection() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("approval-turn-owner-check").unwrap(),
@@ -5959,6 +5963,7 @@ fn message_restore_interrupts_the_source_and_replays_without_interrupting_later_
             .start_turn(
                 &source,
                 StartTurnRequest {
+                    advisor: None,
                     command_id: ash_protocol::CommandId::new(command).unwrap(),
                     expected_sequence: core_api::SequenceExpectation::Any,
                     model: None,
@@ -6175,3 +6180,95 @@ fn instruction_list_and_explicit_attachment_use_current_authorized_files() {
 
 #[path = "execution_environment_tests.rs"]
 mod execution_environment_tests;
+
+#[test]
+fn advisor_requests_are_typed_retry_safe_and_separate_from_worker_turns() {
+    let backend = Arc::new(CountingStartBackend::default());
+    let server = server().with_turn_backend(backend.clone());
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let session = create_session(&server, &mut connection, 2, "advisor-session");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let thread = create_thread(&server, &mut connection, 3, "advisor-thread", session_id, 1);
+    let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
+    let request = |id: u64, command: &str, body: serde_json::Value| serde_json::json!({"jsonrpc":"2.0","id":id,"method":"session/request","params":{"commandId":command,"sessionId":session_id,"request":body}});
+    let mut off = request(
+        4,
+        "off",
+        serde_json::json!({"type":"configureAdvisor","threadId":thread_id,"expectedSequence":1,"selection":{"type":"off"}}),
+    );
+    let changed = call(&server, &mut connection, off.clone());
+    assert_eq!(changed["result"]["type"], "advisorConfigured");
+    off["id"] = serde_json::json!(5);
+    let retry = call(&server, &mut connection, off);
+    assert_eq!(
+        retry["result"], changed["result"],
+        "configuration retry must return the original receipt: {retry}"
+    );
+    let id = ash_protocol::ThreadId::new(thread_id).unwrap();
+    let sequence = server
+        .threads()
+        .configure_advisor(
+            &id,
+            ash_protocol::CommandId::new("select").unwrap(),
+            core_api::SequenceExpectation::Any,
+            ash_protocol::AdvisorSelection::Model {
+                config: ash_protocol::AdvisorConfig::new(ash_protocol::ModelRef {
+                    provider: ash_protocol::ProviderId::new("test").unwrap(),
+                    model: ash_protocol::ModelId::new("advisor").unwrap(),
+                }),
+            },
+        )
+        .unwrap();
+    let replayed = call(
+        &server,
+        &mut connection,
+        request(
+            6,
+            "select",
+            serde_json::json!({
+                "type":"configureAdvisor", "threadId":thread_id, "expectedSequence":1,
+                "selection":{"type":"model", "config":{"model":{"provider":"test", "model":"advisor"}}}
+            }),
+        ),
+    );
+    assert_eq!(
+        replayed["result"]["value"]["sequence"], sequence,
+        "retry must use its receipt even if the model is no longer in the catalog: {replayed}"
+    );
+    let mut ask = request(
+        7,
+        "ask",
+        serde_json::json!({"type":"consultAdvisor","threadId":thread_id,"expectedSequence":sequence,"question":"Check cancellation"}),
+    );
+    let accepted = call(&server, &mut connection, ask.clone());
+    assert_eq!(accepted["result"]["type"], "turn", "{accepted}");
+    ask["id"] = serde_json::json!(8);
+    assert_eq!(
+        call(&server, &mut connection, ask)["result"],
+        accepted["result"]
+    );
+    assert_eq!(backend.starts.load(Ordering::Relaxed), 1);
+    let state = server.threads().read_thread(&id).unwrap();
+    assert_eq!(state.turns[0].kind, ash_protocol::TurnKind::Advisor);
+    assert_eq!(
+        state.turns[0]
+            .advisor
+            .as_ref()
+            .unwrap()
+            .model
+            .model
+            .as_str(),
+        "advisor"
+    );
+    let conflicting = call(
+        &server,
+        &mut connection,
+        request(
+            9,
+            "ask",
+            serde_json::json!({"type":"startTurn","threadId":thread_id,"expectedSequence":sequence,"input":[{"type":"text","text":"Check cancellation"}]}),
+        ),
+    );
+    assert!(conflicting.get("error").is_some());
+}

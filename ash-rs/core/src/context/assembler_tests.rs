@@ -508,6 +508,7 @@ fn test_environment(additional_root: PathBuf) -> AgentEnvironmentSnapshot {
 
 fn snapshot(turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
     ThreadSnapshot {
+        advisor: Default::default(),
         user_time_contexts: Default::default(),
         history_sources: Default::default(),
         message_checkpoints: Default::default(),
@@ -530,6 +531,7 @@ fn snapshot(turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
         goal_budget_limited_turn_id: None,
         context_calibrations: Vec::new(),
         turns: vec![TurnSnapshot {
+            advisor: None,
             kind: ash_protocol::TurnKind::Coding,
             instructions: None,
             turn_id,

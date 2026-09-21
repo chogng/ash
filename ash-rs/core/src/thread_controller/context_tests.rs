@@ -55,6 +55,7 @@ impl Fixture {
             .start_turn(
                 &self.thread,
                 StartTurnRequest {
+                    advisor: None,
                     command_id: CommandId::new(key).unwrap(),
                     expected_sequence: SequenceExpectation::Any,
                     model: None,

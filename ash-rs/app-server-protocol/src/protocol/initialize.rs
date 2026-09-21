@@ -11,9 +11,9 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 pub const APP_SERVER_PROTOCOL_MAJOR: u32 = 7;
-pub const APP_SERVER_PROTOCOL_REVISION: u32 = 1;
-// Version 5 includes profile time-context policy and immutable input/model time facts.
-pub const APP_SERVER_CAPABILITY_VERSION: u32 = 5;
+pub const APP_SERVER_PROTOCOL_REVISION: u32 = 2;
+// Version 6 includes Advisor configuration and explicit consultation Turns.
+pub const APP_SERVER_CAPABILITY_VERSION: u32 = 6;
 
 pub const REQUIRED_SESSION_CAPABILITIES: &[CapabilityRequirement] = &[
     CapabilityRequirement::exact("sessions", APP_SERVER_CAPABILITY_VERSION),

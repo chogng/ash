@@ -467,6 +467,7 @@ impl WorkbenchApplication {
             .map_err(anyhow::Error::msg)?;
             client
                 .update_config(ConfigUpdateParams {
+                    advisor: Default::default(),
                     time_context: Default::default(),
                     features: Default::default(),
                     command_id: next_gui_config_command_id(),

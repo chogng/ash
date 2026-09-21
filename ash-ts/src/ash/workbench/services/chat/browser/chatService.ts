@@ -8,7 +8,7 @@ import type { IModelApi, IThreadApi, ITurnApi } from "../../../../platform/sessi
 import type { ISkillApi } from "../../../../platform/skills/common/skillApi.js";
 import type { ITurnChangesApi } from "../../../../platform/turnChanges/common/turnChangesApi.js";
 import type { ModelRef, SessionId, ThreadId } from "../../../../sessions/services/sessions/common/session.js";
-import type { CompactContextOptions, IChatService, InterruptTurnOptions, ModelCatalogEntry, ResolveInteractionOptions, SkillSelectorDefinition, SlashCommandDefinition, StartTurnOptions, SteerTurnOptions, Thread, ThreadGoalUpdate, ThreadItem, ThreadSubscription, ThreadTranscriptEntry, ThreadTranscriptSnapshot, ThreadTranscriptUpdateEnvelope, ThreadUpdate, ThreadUpdateEnvelope, TurnChangeDetails, TurnChangeSetSummary, TurnChangesUpdate } from "../common/chatService.js";
+import type { AdvisorConfig, ConfigureAdvisorOptions, ConsultAdvisorOptions, CompactContextOptions, IChatService, InterruptTurnOptions, ModelCatalogEntry, ResolveInteractionOptions, SkillSelectorDefinition, SlashCommandDefinition, StartTurnOptions, SteerTurnOptions, Thread, ThreadGoalUpdate, ThreadItem, ThreadSubscription, ThreadTranscriptEntry, ThreadTranscriptSnapshot, ThreadTranscriptUpdateEnvelope, ThreadUpdate, ThreadUpdateEnvelope, TurnChangeDetails, TurnChangeSetSummary, TurnChangesUpdate } from "../common/chatService.js";
 import { ModelCatalogConfiguration, modelRefIdentity } from "../common/modelCatalog.js";
 
 export interface ChatServiceOptions {
@@ -154,6 +154,22 @@ export class ChatService extends Disposable implements IChatService {
 		await this.options.turnApi.start({ commandId: commandId("turn"), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, approvalMode: "askPermissions", input });
 	}
 
+	async configureAdvisor(options: ConfigureAdvisorOptions): Promise<void> {
+		await this.options.threadApi.configureAdvisor({ commandId: commandId("advisor-config"), ...options });
+	}
+
+	async consultAdvisor(options: ConsultAdvisorOptions): Promise<void> {
+		await this.options.turnApi.consultAdvisor({ commandId: commandId("advisor-ask"), ...options });
+	}
+
+	readAdvisorDefault(): Promise<AdvisorConfig | null> {
+		return this.options.modelApi.readAdvisorDefault();
+	}
+
+	saveAdvisorDefault(advisor: AdvisorConfig | null): Promise<void> {
+		return this.options.modelApi.setAdvisorDefault({ commandId: commandId("advisor-default"), advisor });
+	}
+
 	async compactContext(options: CompactContextOptions): Promise<void> {
 		await this.options.turnApi.compact({
 			commandId: commandId("compact"),
@@ -281,6 +297,7 @@ function toThread(thread: ThreadDto): Thread {
 		status: thread.status,
 		sequence: thread.sequence,
 		goal: thread.goal ? { ...thread.goal } : thread.goal,
+		advisor: thread.advisor,
 		usage: {
 			modelInvocations: thread.usage.modelInvocations,
 			inputTokens: { ...thread.usage.inputTokens },

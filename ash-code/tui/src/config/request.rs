@@ -83,6 +83,7 @@ fn set_memories<T: JsonRpcTransport>(
         .map(|state| (state.feature, state.enabled))
         .collect();
     client.update_config(ConfigUpdateParams {
+        advisor: Default::default(),
         features: Patch::Value(overrides),
         command_id: new_command_id("memories-config"),
         expected_revision: edit.server_config.revision,
@@ -280,6 +281,7 @@ where
         .map_err(ConfigCommandError)?;
     let tui = edit.status_line.write_to_tui(&tui);
     client.update_config(ConfigUpdateParams {
+        advisor: Default::default(),
         time_context: Default::default(),
         features: Default::default(),
         command_id: new_command_id("tui"),

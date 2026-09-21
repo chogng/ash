@@ -144,6 +144,18 @@ pub enum SessionRequest {
         command: String,
         working_directory: String,
     },
+    ConfigureAdvisor {
+        thread_id: ThreadId,
+        #[ts(type = "number")]
+        expected_sequence: u64,
+        selection: ash_protocol::AdvisorSelection,
+    },
+    ConsultAdvisor {
+        thread_id: ThreadId,
+        #[ts(type = "number")]
+        expected_sequence: u64,
+        question: String,
+    },
     CompactContext {
         thread_id: ThreadId,
         #[ts(type = "number")]
@@ -329,6 +341,13 @@ pub struct SessionThreadSubscribeResult {
     pub history: Option<ThreadHistoryBoundary>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct AdvisorConfigureResult {
+    #[ts(type = "number")]
+    pub sequence: u64,
+}
+
 /// Typed result returned by the Session request endpoint.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(tag = "type", content = "value", rename_all = "camelCase")]
@@ -340,5 +359,6 @@ pub enum SessionRequestResult {
     Turn(TurnStartResult),
     TurnSteer(crate::protocol::turn::TurnSteerResult),
     TurnInterrupt(TurnInterruptResult),
+    AdvisorConfigured(AdvisorConfigureResult),
     Interaction(TurnInteractionResolveResult),
 }

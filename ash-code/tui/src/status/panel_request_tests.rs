@@ -58,6 +58,7 @@ fn model(name: &str) -> ModelRef {
 
 fn thread(model: ModelRef) -> Thread {
     Thread {
+        advisor: Default::default(),
         agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
         origin: Default::default(),
         session_id: SessionId::new("session-1").unwrap(),
@@ -71,6 +72,7 @@ fn thread(model: ModelRef) -> Thread {
         reference_cost: ash_protocol::ModelReferenceCostSummary::default(),
         goal: None,
         turns: vec![Turn {
+            advisor: None,
             turn_id: TurnId::new("turn-1").unwrap(),
             status: TurnStatus::Completed,
             kind: Default::default(),

@@ -178,6 +178,7 @@ fn wait_timeout_returns_a_durable_waiting_join_without_losing_the_delegation() {
         .start_turn(
             &parent.thread_id,
             StartTurnRequest {
+                advisor: None,
                 kind: protocol::TurnKind::Coding,
                 instructions: prompts::AGENT_INSTRUCTIONS.freeze(),
                 command_id: CommandId::new("timeout-turn").unwrap(),

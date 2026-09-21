@@ -1144,7 +1144,7 @@ Issue Workflow、plan、assignment、task、专属 PR 发布接口及对应存�
 
 ## 时间上下文配置
 
-此契约使用 capability version 5；客户端与后端必须匹配，旧版不能静默忽略时间策略。
+此契约自 capability version 5 提供；客户端与后端必须匹配，旧版不能静默忽略时间策略。
 
 `config/read.timeContext` 返回 profile 的模型时间策略；`config/update.timeContext` 接受完整策略对象，沿用 `commandId` 与 `expectedRevision` 的原子提交、重放和冲突规则。缺失该更新字段保持原策略，`null` 恢复默认 `{ "mode": "date" }`。
 
@@ -1165,3 +1165,30 @@ Issue Workflow、plan、assignment、task、专属 PR 发布接口及对应存�
 - Unix 毫秒受既有 `UnixMillis` 范围约束，日期与时区类型不进入传输契约。
 
 输入参照、跨日、重试、恢复与 Token 边界统一维护在 [Agent 时间与等待](../ash-rs/docs/agent-wait.md)。
+
+## Advisor
+
+此变更使用 protocol revision 2、capability version 6。
+
+`session/request` 提供两种顾问操作：
+
+| request.type | 参数 | 结果 |
+| --- | --- | --- |
+| `configureAdvisor` | `threadId`, `expectedSequence`, `selection` | `{ type: "advisorConfigured", value: { sequence } }` |
+| `consultAdvisor` | `threadId`, `expectedSequence`, `question` | 既有 `{ type: "turn", value: TurnStartResult }` |
+
+未配置顾问的显式咨询返回 `AdvisorDisabled`。两种操作都使用外层 `sessionId` 和 `commandId`，遵循序列冲突与相同命令重放规则。`selection` 为 `{type:"default"}`、`{type:"off"}` 或 `{type:"model",config:AdvisorConfig}`。显式选择须存在于模型目录。问题长度为 1–8000 字节，不能全为空白。
+
+`AdvisorConfig` 包含 `model:{provider,model}`、可选 `reasoningEffort`、`maxCalls`（默认 3，范围 1–16）、`maxOutputTokens`（默认 2048，范围 256–32768）。`config/read.advisor` 和 `config/update.advisor` 管理 `[agent.advisor]` 全局默认；更新时省略表示不变，`null` 表示关闭默认。
+
+Thread 保存选择策略；每次接受 Turn 时将解析后的顾问配置写入 `Turn.advisor`。修改选择不影响已经接受的 Turn。分支继承分支点的选择。目标自动续跑使用当前 Thread 的显式选择；使用默认时沿用目标上一轮已冻结的配置。子 Agent 不自动启用顾问。
+
+`consultAdvisor` 创建 `kind:"advisor"` 的 Turn，经正常工具权限与取消流程直接执行一次顾问调用，不调用工作模型，也不触发目标自动续跑。普通 Coding Turn 在启用顾问时可以调用 `advisor({question})`。关闭时目录中不提供该工具。
+
+顾问没有可用工具。Core 固定一次读取的对话序列，剔除未完成的工具调用，保留已完成调用与结果的配对，沿用已有压缩记录。上下文仍超过顾问窗口时明确返回错误。调用过程中固定供应商配置，不会在失败后切换模型。
+
+顾问输出作为普通 ToolResult 持久化，成功 JSON 包含 `status:"reviewed"|"declined"`、`model`、`question`、`advice`、`sourceSequence`、`checkpoint`、`elapsedMs`、`usage` 和 `stopReason`；次数超限为 `status:"limitReached"`，模型错误为 `status:"failed"`。权限拒绝及恢复中的结果未知状态使用 Core 的普通工具错误文本。
+
+每次实际发起的顾问请求都有带 `toolCallId` 的 `ModelInvocationRecord`。顾问用量与参考费用计入 Turn、Thread 和目标预算；它不更新工作模型的上下文占用。供应商未返回用量时保留未知状态。恢复遵循既有 ToolCall 规则，已开始且结果未知的请求不自动重新计费调用。
+
+桌面端和 TUI 支持 `/advisor` 选择器、`/advisor provider/model`、`/advisor off`、`/advisor default`、`/advisor save` 和 `/advisor ask <question>`。`save` 将当前选择写为全局默认。所有设置与咨询使用上面的结构化请求。

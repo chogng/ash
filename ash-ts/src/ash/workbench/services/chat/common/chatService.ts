@@ -22,6 +22,15 @@ export interface ChatAudioAttachment {
 	readonly durationMs: number;
 }
 
+export interface AdvisorConfig {
+	readonly model: ModelRef;
+	readonly reasoningEffort?: "none" | "minimal" | "low" | "medium" | "high" | "extraHigh" | "max" | null;
+	readonly maxCalls: number;
+	readonly maxOutputTokens: number;
+}
+
+export type AdvisorSelection = { readonly type: "default" } | { readonly type: "off" } | { readonly type: "model"; readonly config: AdvisorConfig };
+
 export interface SlashCommandDefinition {
 	readonly name: string;
 	readonly description: string;
@@ -113,6 +122,7 @@ export type ThreadOrigin =
 	| { readonly type: "replacement"; readonly sourceThreadId: ThreadId; readonly sourceSequence: number };
 
 export interface Thread {
+	readonly advisor: AdvisorSelection;
 	readonly agentId: string;
 	readonly origin: ThreadOrigin;
 	readonly sessionId: SessionId;
@@ -157,6 +167,7 @@ export type ThreadCommittedEvent =
 	| { readonly type: "interactionRequested"; readonly interaction: TurnInteraction }
 	| { readonly type:
 		"threadCreated"
+		| "advisorConfigured"
 		| "threadArchived"
 		| "threadRestored"
 		| "goalCreated"
@@ -252,6 +263,8 @@ export interface ThreadSubscription {
 }
 
 export interface StartTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly text: string; readonly contexts?: readonly ResolvedChatContext[]; readonly skills?: readonly SkillReference[] }
+export interface ConfigureAdvisorOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly selection: AdvisorSelection }
+export interface ConsultAdvisorOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly question: string }
 export interface CompactContextOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly retentionPrompt?: string }
 export interface SteerTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number; readonly text: string; readonly contexts?: readonly ResolvedChatContext[] }
 export interface InterruptTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number }
@@ -332,6 +345,10 @@ export interface IChatService {
 	unsubscribeThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;
 	startTurn(options: StartTurnOptions): Promise<void>;
 	compactContext(options: CompactContextOptions): Promise<void>;
+	configureAdvisor(options: ConfigureAdvisorOptions): Promise<void>;
+	consultAdvisor(options: ConsultAdvisorOptions): Promise<void>;
+	readAdvisorDefault(): Promise<AdvisorConfig | null>;
+	saveAdvisorDefault(advisor: AdvisorConfig | null): Promise<void>;
 	steerTurn(options: SteerTurnOptions): Promise<void>;
 	interruptTurn(options: InterruptTurnOptions): Promise<void>;
 	resolveInteraction(options: ResolveInteractionOptions): Promise<void>;

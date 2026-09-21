@@ -84,6 +84,7 @@ pub struct ThreadSnapshot {
     pub usage: ModelUsageSummary,
     pub reference_cost: ModelReferenceCostSummary,
     pub goal: Option<ash_protocol::ThreadGoal>,
+    pub advisor: ash_protocol::AdvisorSelection,
     /// The Turn that crossed a Goal budget. This is derived from the event log and lets the
     /// remainder of that in-flight Turn be accounted without charging later Turns.
     pub(crate) goal_budget_limited_turn_id: Option<TurnId>,
@@ -205,6 +206,7 @@ impl ThreadSnapshot {
             usage: self.usage.clone(),
             reference_cost: self.reference_cost.clone(),
             goal: self.goal.clone(),
+            advisor: self.advisor.clone(),
             turns: self
                 .turns
                 .iter()
@@ -214,6 +216,7 @@ impl ThreadSnapshot {
                     kind: turn.kind,
                     instructions: turn.instructions.clone(),
                     model: turn.model.clone(),
+                    advisor: turn.advisor.clone(),
                     tool_profile: turn.tool_profile.clone(),
                     tool_mode: turn.tool_mode,
                     approval_mode: turn.approval_mode,
@@ -301,6 +304,7 @@ pub struct TurnSnapshot {
     pub kind: TurnKind,
     pub instructions: Option<TurnInstructions>,
     pub model: Option<ModelRef>,
+    pub advisor: Option<ash_protocol::AdvisorConfig>,
     pub policy_revision: String,
     pub approval_mode: ApprovalMode,
     pub tool_mode: ToolMode,
@@ -346,6 +350,7 @@ pub struct ThreadCommandSnapshot {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ThreadCommandResult {
+    AdvisorConfigured,
     TurnAccepted {
         turn_id: TurnId,
     },
@@ -448,6 +453,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     usage: ModelUsageSummary::default(),
                     reference_cost: ModelReferenceCostSummary::default(),
                     goal: None,
+                    advisor: ash_protocol::AdvisorSelection::Default,
                     goal_budget_limited_turn_id: None,
                     context_calibrations: Vec::new(),
                     turns: Vec::new(),
@@ -539,6 +545,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     .item_sequences
                     .insert(item.item_id().clone(), envelope.sequence);
             }
+            snapshot.advisor = source.advisor.clone();
             snapshot.context_checkpoints = source.context_checkpoints.clone();
             snapshot.user_time_contexts = source
                 .user_time_contexts
@@ -595,6 +602,35 @@ pub(crate) fn reduce_thread_event_with_prefix(
             snapshot.status = ThreadStatus::Active;
             snapshot.archived_at_unix_ms = None;
             snapshot.archive_reason = None;
+        }
+        ThreadEvent::AdvisorConfigured { selection, .. } => {
+            if let ash_protocol::AdvisorSelection::Model { config } = selection {
+                config
+                    .validate()
+                    .map_err(|message| CoreError::Journal(message.into()))?;
+            }
+            let receipt = envelope.command.clone().ok_or_else(|| {
+                CoreError::Journal("advisor configuration requires a command receipt".into())
+            })?;
+            if receipt.command
+                != (ThreadCommand::ConfigureAdvisor {
+                    selection: selection.clone(),
+                })
+                || snapshot
+                    .commands
+                    .iter()
+                    .any(|command| command.receipt.command_id == receipt.command_id)
+            {
+                return Err(CoreError::Journal(
+                    "advisor configuration command does not match".into(),
+                ));
+            }
+            snapshot.advisor = selection.clone();
+            snapshot.commands.push(ThreadCommandSnapshot {
+                receipt,
+                result: ThreadCommandResult::AdvisorConfigured,
+                response_sequence: envelope.sequence,
+            });
         }
         ThreadEvent::GoalCreated { thread_id, goal } => {
             require_no_command(envelope)?;
@@ -709,6 +745,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                 turn_id,
                 usage.as_ref(),
                 input_estimate.as_ref(),
+                ModelUsageSource::Turn,
             )?;
             snapshot.reference_cost = snapshot.reference_cost.record_unpriced();
         }
@@ -727,11 +764,23 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     "model invocation identity does not match its Thread event".into(),
                 ));
             }
+            if let Some(call_id) = &record.tool_call_id {
+                if !snapshot.started_tool_calls.contains(call_id)
+                    || !snapshot.items.iter().any(|item| matches!(item, ThreadItem::ToolCall { turn_id: owner, tool_call_id, .. } if owner == turn_id && tool_call_id == call_id))
+                {
+                    return Err(CoreError::Journal("model invocation must belong to a running Tool Call in its Turn".into()));
+                }
+            }
             apply_model_usage(
                 &mut snapshot,
                 turn_id,
                 record.usage.as_ref(),
                 record.input_estimate.as_ref(),
+                if record.tool_call_id.is_some() {
+                    ModelUsageSource::Tool
+                } else {
+                    ModelUsageSource::Turn
+                },
             )?;
             snapshot.reference_cost = snapshot
                 .reference_cost
@@ -941,6 +990,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
             snapshot.context_checkpoints.push(checkpoint.clone());
         }
         ThreadEvent::TurnAccepted {
+            advisor,
             turn_id,
             kind,
             instructions,
@@ -952,6 +1002,16 @@ pub(crate) fn reduce_thread_event_with_prefix(
             tool_profile,
             ..
         } => {
+            if let Some(config) = advisor {
+                config
+                    .validate()
+                    .map_err(|error| CoreError::Journal(error.into()))?;
+            }
+            if *kind == TurnKind::Advisor && advisor.is_none() {
+                return Err(CoreError::Journal(
+                    "Advisor Turn requires a frozen model selection".into(),
+                ));
+            }
             if let Some(instructions) = instructions {
                 instructions
                     .validate()
@@ -977,6 +1037,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     kind: *kind,
                     instructions: instructions.clone(),
                     model: model.clone(),
+                    advisor: advisor.clone(),
                     policy_revision: policy_revision.clone(),
                     approval_mode: *approval_mode,
                     tool_mode: *tool_mode,
@@ -998,6 +1059,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     kind: command_kind,
                     instructions: command_instructions,
                     model: command_model,
+                    advisor: command_advisor,
                     activated_skills: command_skills,
                     approval_mode: command_approval_mode,
                     tool_mode: command_tool_mode,
@@ -1008,6 +1070,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     command_kind == kind
                         && command_instructions == instructions
                         && command_model == model
+                        && command_advisor == advisor
                         && command_skills == activated_skills
                         && command_approval_mode == approval_mode
                         && command_tool_mode == tool_mode
@@ -2282,6 +2345,7 @@ fn import_history(
             kind: turn.kind,
             instructions: turn.instructions.clone(),
             model: turn.model.clone(),
+            advisor: turn.advisor.clone(),
             policy_revision: "imported-history-policy".into(),
             approval_mode: ApprovalMode::AskPermissions,
             tool_mode: turn.tool_mode,
@@ -2387,6 +2451,7 @@ fn append_imported_turn(
         kind: turn.kind,
         instructions: turn.instructions.clone(),
         model: turn.model.clone(),
+        advisor: turn.advisor.clone(),
         policy_revision: "imported-history-policy".into(),
         approval_mode: ApprovalMode::AskPermissions,
         tool_mode: turn.tool_mode,
@@ -2639,11 +2704,17 @@ fn validate_goal_identity(
     goal.validate().map_err(CoreError::Journal)
 }
 
+enum ModelUsageSource {
+    Turn,
+    Tool,
+}
+
 fn apply_model_usage(
     snapshot: &mut ThreadSnapshot,
     turn_id: &TurnId,
     usage: Option<&ash_protocol::ModelUsage>,
     input_estimate: Option<&ash_protocol::ModelInputEstimate>,
+    source: ModelUsageSource,
 ) -> Result<(), CoreError> {
     let next_thread_usage = snapshot
         .usage
@@ -2678,7 +2749,9 @@ fn apply_model_usage(
         None => None,
     };
     snapshot.turns[turn_index].usage = next_turn_usage;
-    snapshot.turns[turn_index].context_usage = context_usage;
+    if matches!(source, ModelUsageSource::Turn) {
+        snapshot.turns[turn_index].context_usage = context_usage;
+    }
     snapshot.usage = next_thread_usage;
     if let Some(goal) = snapshot.goal.as_mut() {
         let account_usage = goal.status.allows_usage_accounting()
@@ -2698,7 +2771,9 @@ fn apply_model_usage(
             }
         }
     }
-    if let Some(next_calibrations) = next_calibrations {
+    if matches!(source, ModelUsageSource::Turn)
+        && let Some(next_calibrations) = next_calibrations
+    {
         snapshot.context_calibrations = next_calibrations;
     }
     Ok(())

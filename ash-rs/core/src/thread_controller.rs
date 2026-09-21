@@ -101,6 +101,7 @@ pub struct StartTurnRequest {
     pub command_id: CommandId,
     pub expected_sequence: SequenceExpectation,
     pub model: Option<ModelRef>,
+    pub advisor: Option<ash_protocol::AdvisorConfig>,
     pub kind: TurnKind,
     pub instructions: TurnInstructions,
     pub policy_revision: String,
@@ -118,6 +119,7 @@ pub struct StartTurnRequest {
 /// model-invocation boundary, so the continuation is durable without manufacturing a user
 /// message that was never sent.
 pub struct StartGoalTurnRequest {
+    pub advisor: Option<ash_protocol::AdvisorConfig>,
     pub command_id: CommandId,
     pub model: Option<ModelRef>,
     pub instructions: TurnInstructions,
@@ -879,6 +881,14 @@ impl ThreadController {
         request: StartTurnRequest,
     ) -> Result<StartTurnResult, CoreError> {
         validate_command_id(&request.command_id)?;
+        if let Some(advisor) = &request.advisor {
+            advisor
+                .validate()
+                .map_err(|message| CoreError::InvalidInput(message.into()))?;
+        }
+        if request.kind == ash_protocol::TurnKind::Advisor && request.advisor.is_none() {
+            return Err(CoreError::InvalidInput("advisor is off".into()));
+        }
         validate_policy_revision(&request.policy_revision)?;
         request
             .instructions
@@ -998,6 +1008,7 @@ impl ThreadController {
             kind: request.kind,
             instructions: Some(request.instructions.clone()),
             model: request.model.clone(),
+            advisor: request.advisor.clone(),
             activated_skills: activated_skills.clone(),
             host_activated_skills: Some(request.activated_skills.clone()),
             approval_mode: request.approval_mode,
@@ -1042,6 +1053,7 @@ impl ThreadController {
                 tool_mode: request.tool_mode,
                 activated_skills: activated_skills.clone(),
                 model: request.model.clone(),
+                advisor: request.advisor.clone(),
                 tool_profile: request.tool_profile.clone(),
             });
             events.extend(
@@ -1101,6 +1113,7 @@ impl ThreadController {
             kind: TurnKind::Coding,
             instructions: Some(request.instructions.clone()),
             model: request.model.clone(),
+            advisor: request.advisor.clone(),
             activated_skills: Vec::new(),
             host_activated_skills: Some(Vec::new()),
             approval_mode: request.approval_mode,
@@ -1161,6 +1174,7 @@ impl ThreadController {
                         tool_mode: request.tool_mode,
                         activated_skills: Vec::new(),
                         model: request.model.clone(),
+                        advisor: request.advisor.clone(),
                         tool_profile: request.tool_profile.clone(),
                     },
                     ThreadEvent::TurnStarted {
@@ -1183,6 +1197,62 @@ impl ThreadController {
                 sequence: snapshot.sequence,
                 disposition: StartTurnDisposition::Created,
             }))
+        })
+    }
+
+    /// Changes future Turn consultations while preserving the active Turn's frozen selection.
+    pub fn configure_advisor(
+        &self,
+        thread_id: &ThreadId,
+        command_id: CommandId,
+        expected_sequence: SequenceExpectation,
+        selection: ash_protocol::AdvisorSelection,
+    ) -> Result<u64, CoreError> {
+        validate_command_id(&command_id)?;
+        if let ash_protocol::AdvisorSelection::Model { config } = &selection {
+            config
+                .validate()
+                .map_err(|message| CoreError::InvalidInput(message.into()))?;
+        }
+        let command = ThreadCommand::ConfigureAdvisor {
+            selection: selection.clone(),
+        };
+        self.mutate_thread(thread_id, |snapshot| {
+            if let Some(existing) = snapshot
+                .commands
+                .iter()
+                .find(|entry| entry.receipt.command_id == command_id)
+            {
+                return if existing.receipt.command == command {
+                    Ok(existing.response_sequence)
+                } else {
+                    Err(CoreError::CommandConflict)
+                };
+            }
+            validate_thread_expectation(expected_sequence, snapshot.sequence)?;
+            if snapshot.status != ash_protocol::ThreadStatus::Active {
+                return Err(CoreError::InvalidInput(
+                    "cannot configure an archived Thread".into(),
+                ));
+            }
+            let (next, batch) = self.project_batch(
+                Some(snapshot.clone()),
+                thread_id,
+                vec![ThreadEvent::AdvisorConfigured {
+                    thread_id: thread_id.clone(),
+                    selection,
+                }],
+                BatchCommand::AtEvent {
+                    index: 0,
+                    receipt: ThreadCommandReceipt {
+                        command_id,
+                        command,
+                    },
+                },
+            )?;
+            self.commit_batch(&batch)?;
+            *snapshot = next;
+            Ok(snapshot.sequence)
         })
     }
 
@@ -1384,6 +1454,7 @@ impl ThreadController {
                     tool_mode: ash_protocol::ToolMode::Direct,
                     activated_skills: Vec::new(),
                     model: request.model.clone(),
+                    advisor: None,
                     tool_profile: None,
                 },
                 ThreadEvent::TurnStarted {
@@ -1494,6 +1565,7 @@ impl ThreadController {
                     tool_mode: ash_protocol::ToolMode::Direct,
                     activated_skills: Vec::new(),
                     model: None,
+                    advisor: None,
                     tool_profile: None,
                 },
                 ThreadEvent::ItemCompleted {

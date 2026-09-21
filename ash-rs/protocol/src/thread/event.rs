@@ -88,6 +88,10 @@ pub enum ThreadEvent {
         thread_id: ThreadId,
         title: String,
     },
+    AdvisorConfigured {
+        thread_id: ThreadId,
+        selection: crate::AdvisorSelection,
+    },
     ThreadArchived {
         thread_id: ThreadId,
         #[serde(default)]
@@ -190,6 +194,9 @@ pub enum ThreadEvent {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         model: Option<ModelRef>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        advisor: Option<crate::AdvisorConfig>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         tool_profile: Option<ToolProfileSnapshot>,
@@ -348,6 +355,7 @@ impl ThreadEvent {
     pub fn kind(&self) -> &'static str {
         match self {
             Self::ThreadCreated { .. } => "thread.created",
+            Self::AdvisorConfigured { .. } => "advisor.configured",
             Self::ThreadArchived { .. } => "thread.archived",
             Self::ThreadRestored { .. } => "thread.restored",
             Self::GoalCreated { .. } => "thread.goal_created",
@@ -398,6 +406,7 @@ impl ThreadEvent {
     pub fn thread_id(&self) -> &ThreadId {
         match self {
             Self::ThreadCreated { thread_id, .. }
+            | Self::AdvisorConfigured { thread_id, .. }
             | Self::ThreadArchived { thread_id, .. }
             | Self::ThreadRestored { thread_id }
             | Self::GoalCreated { thread_id, .. }

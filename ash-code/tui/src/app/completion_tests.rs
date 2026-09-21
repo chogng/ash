@@ -48,6 +48,7 @@ fn status_line_context_follows_thread_snapshots() {
         ModelId::new("model").unwrap(),
     );
     let mut snapshot = ash_protocol::Thread {
+        advisor: Default::default(),
         agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
         origin: Default::default(),
         session_id: ash_protocol::SessionId::new("session").unwrap(),
@@ -61,6 +62,7 @@ fn status_line_context_follows_thread_snapshots() {
         reference_cost: Default::default(),
         goal: None,
         turns: vec![ash_protocol::Turn {
+            advisor: None,
             turn_id: TurnId::new("turn").unwrap(),
             status: ash_protocol::TurnStatus::Completed,
             kind: Default::default(),

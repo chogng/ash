@@ -611,6 +611,101 @@
       ],
       "type": "object"
     },
+    "AdvisorConfig": {
+      "additionalProperties": false,
+      "description": "Immutable model and budget selected for consultations in one Turn.",
+      "properties": {
+        "maxCalls": {
+          "default": 3,
+          "format": "uint32",
+          "maximum": 16,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "maxOutputTokens": {
+          "default": 2048,
+          "format": "uint32",
+          "maximum": 32768,
+          "minimum": 256,
+          "type": "integer"
+        },
+        "model": {
+          "$ref": "#/$defs/ModelRef"
+        },
+        "reasoningEffort": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReasoningEffort"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "model"
+      ],
+      "type": "object"
+    },
+    "AdvisorConfigureResult": {
+      "properties": {
+        "sequence": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sequence"
+      ],
+      "type": "object"
+    },
+    "AdvisorSelection": {
+      "description": "Durable conversation preference; defaults are resolved before each Turn starts.",
+      "oneOf": [
+        {
+          "properties": {
+            "type": {
+              "const": "default",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "off",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "config": {
+              "$ref": "#/$defs/AdvisorConfig"
+            },
+            "type": {
+              "const": "model",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "config"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "AgentCapabilityScope": {
       "description": "Frozen upper bounds on tools used by this Agent, tools it may delegate, and Skill instructions.",
       "properties": {
@@ -1789,6 +1884,7 @@
         "InvalidRequest",
         "MethodNotFound",
         "InvalidParams",
+        "AdvisorDisabled",
         "InternalError",
         "QueueUnavailable",
         "QueueNotFound",
@@ -13216,6 +13312,16 @@
     "ConfigReadResult": {
       "description": "Current user configuration snapshot returned by `config/read`.",
       "properties": {
+        "advisor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AdvisorConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "approvalReviewModel": {
           "$ref": "#/$defs/ApprovalReviewModelSelectionDto"
         },
@@ -13363,6 +13469,16 @@
       "additionalProperties": false,
       "description": "Patch for user preferences at one expected Config revision.",
       "properties": {
+        "advisor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AdvisorConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "approvalReviewModel": {
           "anyOf": [
             {
@@ -25974,6 +26090,16 @@
           ],
           "description": "Exact immutable time facts included in this request; absent when disabled."
         },
+        "toolCallId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToolCallId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "turnId": {
           "$ref": "#/$defs/TurnId"
         },
@@ -29809,6 +29935,58 @@
               "minimum": 0,
               "type": "integer"
             },
+            "selection": {
+              "$ref": "#/$defs/AdvisorSelection"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "const": "configureAdvisor",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "expectedSequence",
+            "selection"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "expectedSequence": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "question": {
+              "type": "string"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "const": "consultAdvisor",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "expectedSequence",
+            "question"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "expectedSequence": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
             "retentionPrompt": {
               "type": [
                 "string",
@@ -30053,6 +30231,22 @@
             },
             "value": {
               "$ref": "#/$defs/TurnInterruptResult"
+            }
+          },
+          "required": [
+            "type",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "advisorConfigured",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/AdvisorConfigureResult"
             }
           },
           "required": [
@@ -31824,6 +32018,12 @@
     "Thread": {
       "description": "Canonical readable state for one independently ordered Agent execution branch.",
       "properties": {
+        "advisor": {
+          "$ref": "#/$defs/AdvisorSelection",
+          "default": {
+            "type": "default"
+          }
+        },
         "agentId": {
           "$ref": "#/$defs/AgentId"
         },
@@ -32012,6 +32212,26 @@
             "sessionId",
             "threadId",
             "title"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "selection": {
+              "$ref": "#/$defs/AdvisorSelection"
+            },
+            "threadId": {
+              "$ref": "#/$defs/ThreadId"
+            },
+            "type": {
+              "const": "advisorConfigured",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "threadId",
+            "selection"
           ],
           "type": "object"
         },
@@ -32368,6 +32588,16 @@
                 "$ref": "#/$defs/FrozenSkillActivation"
               },
               "type": "array"
+            },
+            "advisor": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AdvisorConfig"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "approvalMode": {
               "$ref": "#/$defs/ApprovalMode",
@@ -34788,6 +35018,16 @@
     "Turn": {
       "description": "Canonical readable state for one user-intent-driven Agent execution.",
       "properties": {
+        "advisor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AdvisorConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "approvalMode": {
           "$ref": "#/$defs/ApprovalMode",
           "default": "askPermissions"
@@ -35585,6 +35825,11 @@
         {
           "const": "review",
           "description": "Read-only code review with its own rubric and output contract.",
+          "type": "string"
+        },
+        {
+          "const": "advisor",
+          "description": "One explicit consultation, without a main-model inference.",
           "type": "string"
         }
       ]

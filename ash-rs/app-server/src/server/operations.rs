@@ -471,6 +471,68 @@ impl AppServer {
                 command,
                 working_directory,
             )?)),
+            SessionRequest::ConfigureAdvisor {
+                thread_id,
+                expected_sequence,
+                selection,
+            } => {
+                self.read_session_thread(&mutation.session_id, &thread_id)?;
+                if let Some(sequence) = self
+                    .agent_runtime()
+                    .replay_advisor_configuration(&thread_id, &mutation.command_id, &selection)
+                    .map_err(core_error)?
+                {
+                    return result(&SessionRequestResult::AdvisorConfigured(
+                        ash_app_server_protocol::protocol::session::AdvisorConfigureResult {
+                            sequence,
+                        },
+                    ));
+                }
+                if let ash_protocol::AdvisorSelection::Model { config } = &selection {
+                    config
+                        .validate()
+                        .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+                    if !self
+                        .model_catalog
+                        .list()
+                        .map_err(core_error)?
+                        .iter()
+                        .any(|entry| entry.model == config.model)
+                    {
+                        return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+                    }
+                }
+                let sequence = self
+                    .agent_runtime()
+                    .configure_advisor(
+                        &thread_id,
+                        mutation.command_id,
+                        SequenceExpectation::Exact(expected_sequence),
+                        selection,
+                    )
+                    .map_err(core_error)?;
+                result(&SessionRequestResult::AdvisorConfigured(
+                    ash_app_server_protocol::protocol::session::AdvisorConfigureResult { sequence },
+                ))
+            }
+            SessionRequest::ConsultAdvisor {
+                thread_id,
+                expected_sequence,
+                question,
+            } => {
+                if question.trim().is_empty() || question.len() > 8000 {
+                    return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+                }
+                result(&SessionRequestResult::Turn(self.start_agent_turn_request(
+                    thread_mutation(mutation, expected_sequence, connection.connection_id),
+                    thread_id,
+                    ash_protocol::ApprovalMode::default(),
+                    TurnToolModeSelection::Explicit(ash_protocol::ToolMode::Direct),
+                    vec![UserInput::Text { text: question }],
+                    ash_protocol::TurnKind::Advisor,
+                    TurnInstructionSelection::Agent,
+                )?))
+            }
             SessionRequest::CompactContext {
                 thread_id,
                 expected_sequence,
@@ -1056,6 +1118,7 @@ impl AppServer {
                 &thread_id,
                 &mutation.command_id,
                 core_api::SubmittedCommand::Turn {
+                    kind,
                     tool_mode,
                     input: &input,
                 },
@@ -1101,6 +1164,17 @@ impl AppServer {
             TurnInstructionSelection::Product(prompt) => prompt.with_shared(&base),
         }
         .with_model_guidance(guidance);
+        let advisor_default = self
+            .config
+            .as_ref()
+            .map(|config| config.read_snapshot())
+            .transpose()
+            .map_err(|_| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?
+            .and_then(|snapshot| snapshot.values.advisor);
+        let advisor = thread_before.advisor.resolve(advisor_default.as_ref());
+        if kind == ash_protocol::TurnKind::Advisor && advisor.is_none() {
+            return Err(RpcError::new(-32602, AppServerErrorName::AdvisorDisabled));
+        }
         let activated_skills = thread_before
             .agent_configuration()
             .map(|agent| agent.capability_scope.skills.clone())
@@ -1118,6 +1192,7 @@ impl AppServer {
                         command_id: mutation.command_id,
                         expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
                         model,
+                        advisor,
                         kind,
                         instructions,
                         approval_mode,

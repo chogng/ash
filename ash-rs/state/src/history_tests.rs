@@ -93,6 +93,7 @@ fn start(
     threads.start_turn(
         thread,
         ash_core::StartTurnRequest {
+            advisor: None,
             command_id: CommandId::new("turn").unwrap(),
             expected_sequence: core_api::SequenceExpectation::Any,
             model: None,

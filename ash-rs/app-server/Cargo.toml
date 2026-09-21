@@ -35,6 +35,7 @@ git-attribution = { workspace = true }
 image-generation = { workspace = true }
 history-notes = { workspace = true }
 goal = { workspace = true }
+advisor = { workspace = true }
 agent = { workspace = true }
 guardian-v2 = { workspace = true }
 ash-utils-home-dir = { workspace = true }

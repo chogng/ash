@@ -167,6 +167,7 @@ where
     };
 
     client.update_config(ConfigUpdateParams {
+        advisor: Default::default(),
         time_context: Default::default(),
         features: Default::default(),
         command_id: new_command_id("model"),
@@ -234,6 +235,7 @@ fn write_pins<T: JsonRpcTransport>(
         serde_json::to_value(pins).map_err(|error| ModelCommandError(error.to_string()))?,
     );
     client.update_config(ConfigUpdateParams {
+        advisor: Default::default(),
         time_context: Default::default(),
         features: Default::default(),
         command_id: new_command_id("pin-model"),

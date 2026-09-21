@@ -1750,6 +1750,7 @@ fn select_model(
             command_id: CommandId::new(command_id).unwrap(),
             expected_revision: revision,
             command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                advisor: Default::default(),
                 time_context: ash_protocol::Patch::Missing,
                 features: Default::default(),
                 model: Patch::Value(model_ref(model)),
@@ -1934,6 +1935,10 @@ fn model_invocations_use_latest_config_without_mutating_an_in_flight_snapshot() 
         catalog_runtime: Arc::new(tokio::runtime::Runtime::new().unwrap()),
         resolver: Arc::new(RecordingSnapshotResolver { gate: gate.clone() }),
     });
+    let frozen = model
+        .snapshot(ModelSelection::ConfiguredDefault)
+        .unwrap()
+        .unwrap();
     let in_flight_model = model.clone();
     let in_flight = thread::spawn(move || invoke_text(in_flight_model.as_ref(), "first"));
     gate.wait_until_entered();
@@ -1941,6 +1946,10 @@ fn model_invocations_use_latest_config_without_mutating_an_in_flight_snapshot() 
     gate.release();
 
     assert_eq!(in_flight.join().unwrap(), "before-update");
+    assert_eq!(
+        invoke_text(frozen.as_ref(), "advisor evidence"),
+        "before-update"
+    );
     assert_eq!(invoke_text(model.as_ref(), "second"), "after-update");
     remove_config_files(&path);
 }

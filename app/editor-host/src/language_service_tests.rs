@@ -46,6 +46,7 @@ fn desktop_configuration_maps_persisted_mode_into_catalog_policy() {
         },
     );
     let configuration = ConfigReadResult {
+        advisor: None,
         time_context: Default::default(),
         model_reasoning_effort: None,
         features: vec![],
@@ -99,6 +100,7 @@ fn desktop_configuration_maps_persisted_mode_into_catalog_policy() {
 #[test]
 fn desktop_configuration_does_not_start_unconfigured_language_servers() {
     let configuration = ConfigReadResult {
+        advisor: None,
         time_context: Default::default(),
         model_reasoning_effort: None,
         features: vec![],

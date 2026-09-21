@@ -93,6 +93,15 @@ pub enum ModelSelection<'a> {
 /// Thread state or mutable product configuration. Implementations should observe `cancellation`
 /// before beginning expensive work and at every safe checkpoint supported by their transport.
 pub trait ModelService: Send + Sync {
+    /// Freezes a configuration-backed selector for one invocation. Already immutable services
+    /// return `None`; callers retain that same service for preparation and invocation.
+    fn snapshot(
+        &self,
+        _: ModelSelection<'_>,
+    ) -> Result<Option<std::sync::Arc<dyn ModelService>>, CoreError> {
+        Ok(None)
+    }
+
     /// Returns the verified billing surface for the selected immutable runtime.
     fn billing_scope(&self, _: ModelSelection<'_>) -> Result<ModelBillingScope, CoreError> {
         Ok(ModelBillingScope::Unavailable)

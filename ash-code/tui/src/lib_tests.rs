@@ -93,6 +93,7 @@ fn completed_active_turn_only_updates_lifecycle_after_snapshot_mapping() {
     let mut app = working_app();
     app.set_active_turn(turn_id.clone());
     let turn = Turn {
+        advisor: None,
         turn_id: turn_id.clone(),
         status: TurnStatus::Completed,
         kind: Default::default(),
@@ -120,6 +121,7 @@ fn completed_active_turn_only_updates_lifecycle_after_snapshot_mapping() {
         error: None,
     };
     let thread = Thread {
+        advisor: Default::default(),
         agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
         origin: Default::default(),
         session_id: SessionId::new("session_1").unwrap(),
@@ -157,6 +159,7 @@ fn completed_turn_advances_to_the_next_queued_turn() {
     app.set_active_turn(first_id.clone());
     let turns = vec![
         Turn {
+            advisor: None,
             turn_id: first_id.clone(),
             status: TurnStatus::Completed,
             kind: Default::default(),
@@ -177,6 +180,7 @@ fn completed_turn_advances_to_the_next_queued_turn() {
             error: None,
         },
         Turn {
+            advisor: None,
             turn_id: second_id.clone(),
             status: TurnStatus::Running,
             kind: Default::default(),
@@ -206,6 +210,7 @@ fn waiting_active_turn_remains_interruptible() {
     let mut app = working_app();
     app.set_active_turn(turn_id.clone());
     let turn = Turn {
+        advisor: None,
         turn_id,
         status: TurnStatus::WaitingForUserInput,
         kind: Default::default(),
@@ -238,6 +243,7 @@ fn resumed_active_turn_returns_from_waiting_to_working() {
     let mut app = working_app();
     app.set_active_turn(turn_id.clone());
     let waiting_turn = Turn {
+        advisor: None,
         turn_id: turn_id.clone(),
         status: TurnStatus::WaitingForUserInput,
         kind: Default::default(),
@@ -256,6 +262,7 @@ fn resumed_active_turn_returns_from_waiting_to_working() {
     apply_active_turn_snapshot(&mut app, &[waiting_turn]);
 
     let resumed_turn = Turn {
+        advisor: None,
         turn_id,
         status: TurnStatus::Running,
         kind: Default::default(),
@@ -282,6 +289,7 @@ fn failed_turn_shows_one_concise_error_on_failure_and_resume() {
     let mut app = working_app();
     app.set_active_turn(turn_id.clone());
     let turn = Turn {
+        advisor: None,
         turn_id,
         status: TurnStatus::Failed,
         kind: Default::default(),
@@ -299,6 +307,7 @@ fn failed_turn_shows_one_concise_error_on_failure_and_resume() {
     };
 
     let thread = Thread {
+        advisor: Default::default(),
         agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
         origin: Default::default(),
         session_id: SessionId::new("session_1").unwrap(),

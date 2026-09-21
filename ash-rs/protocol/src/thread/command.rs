@@ -35,6 +35,9 @@ pub enum ThreadCommand {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         model: Option<ModelRef>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        advisor: Option<crate::AdvisorConfig>,
         #[serde(default)]
         activated_skills: Vec<FrozenSkillActivation>,
         /// Activations supplied by the caller before extension contributors run.
@@ -50,6 +53,9 @@ pub enum ThreadCommand {
         #[ts(optional = nullable)]
         tool_profile: Option<Box<ToolProfileSnapshot>>,
         input: Vec<UserInput>,
+    },
+    ConfigureAdvisor {
+        selection: crate::AdvisorSelection,
     },
     StartShellTurn {
         command: String,

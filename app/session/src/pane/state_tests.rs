@@ -25,6 +25,7 @@ fn switching_threads_cancels_submission_even_with_identical_history() {
 
     let mut pane = super::SessionPaneState::default();
     let mut thread = Thread {
+        advisor: Default::default(),
         agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
         origin: Default::default(),
         session_id: SessionId::new("classification-session").unwrap(),
@@ -109,6 +110,7 @@ fn thread_snapshot_preserves_prompt_and_direct_shell_history_order() {
     let agent_turn_id = TurnId::new("turn-agent").unwrap();
     let shell_turn_id = TurnId::new("turn-shell").unwrap();
     let thread = Thread {
+        advisor: Default::default(),
         agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
         origin: Default::default(),
         session_id: SessionId::new("session-1").unwrap(),
@@ -123,6 +125,7 @@ fn thread_snapshot_preserves_prompt_and_direct_shell_history_order() {
         goal: None,
         turns: vec![
             Turn {
+                advisor: None,
                 turn_id: agent_turn_id.clone(),
                 status: TurnStatus::Completed,
                 kind: ash_protocol::TurnKind::Coding,
@@ -143,6 +146,7 @@ fn thread_snapshot_preserves_prompt_and_direct_shell_history_order() {
                 error: None,
             },
             Turn {
+                advisor: None,
                 turn_id: shell_turn_id.clone(),
                 status: TurnStatus::Completed,
                 kind: ash_protocol::TurnKind::Coding,

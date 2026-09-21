@@ -19,6 +19,7 @@ use ash_protocol::TurnId;
 #[test]
 fn snapshot_preserves_items_and_turn_plans_in_order() {
     let snapshot = ThreadTranscriptSnapshot::from_thread(&Thread {
+        advisor: Default::default(),
         agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
         origin: Default::default(),
         session_id: session_id(),
@@ -32,6 +33,7 @@ fn snapshot_preserves_items_and_turn_plans_in_order() {
         reference_cost: ash_protocol::ModelReferenceCostSummary::default(),
         goal: None,
         turns: vec![ash_protocol::Turn {
+            advisor: None,
             turn_id: turn_id(),
             status: ash_protocol::TurnStatus::Completed,
             kind: ash_protocol::TurnKind::Coding,
@@ -408,6 +410,7 @@ fn agent_item(item: &str, text: &str) -> ThreadItem {
 
 fn empty_thread() -> Thread {
     Thread {
+        advisor: Default::default(),
         agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
         origin: Default::default(),
         session_id: session_id(),

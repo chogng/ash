@@ -375,6 +375,7 @@ fn frozen_tool_profile_rejects_definition_drift_before_model_invocation() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("profile-start").unwrap(),
@@ -421,6 +422,7 @@ fn frozen_tool_profile_rejects_definition_drift_before_model_invocation() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("profile-drift-start").unwrap(),
@@ -562,6 +564,7 @@ fn manual_context_compaction_batches_a_prefix_that_exceeds_the_model_window() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("second-history-turn").unwrap(),
@@ -1004,6 +1007,7 @@ fn compacts_durable_history_then_replans_with_the_verified_checkpoint() {
             .start_turn(
                 &thread_id,
                 StartTurnRequest {
+                    advisor: None,
                     kind: ash_protocol::TurnKind::Coding,
                     instructions: crate::test_turn_instructions(),
                     command_id: CommandId::new(format!("history-{index}")).unwrap(),
@@ -1029,6 +1033,7 @@ fn compacts_durable_history_then_replans_with_the_verified_checkpoint() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("start-after-history").unwrap(),
@@ -1092,6 +1097,7 @@ fn provider_preflight_tightens_the_budget_and_rechecks_after_compaction() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("start-measured-turn").unwrap(),
@@ -1172,6 +1178,7 @@ fn explicit_skill_selection_uses_frozen_digest_and_layered_body() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("skill-start").unwrap(),
@@ -1734,6 +1741,7 @@ fn restart_after_overflow_checkpoint_commit_does_not_replay_the_model_call() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("overflow-restart-history").unwrap(),
@@ -1758,6 +1766,7 @@ fn restart_after_overflow_checkpoint_commit_does_not_replay_the_model_call() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("overflow-restart-current").unwrap(),
@@ -1918,6 +1927,7 @@ fn model_usage_and_goal_projection_are_identical_after_recovery() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("usage-recovery-start").unwrap(),
@@ -2134,6 +2144,7 @@ fn per_thread_mailboxes_run_independently_and_interrupt_the_active_turn() {
         .start_turn(
             &fast_thread_id,
             StartTurnRequest {
+                advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("fast-start").unwrap(),
@@ -3637,6 +3648,7 @@ fn started_turn_with_tool_mode(
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("start").unwrap(),
@@ -3666,6 +3678,7 @@ fn started_turn_with_history() -> (Arc<ThreadController>, ThreadId, TurnId) {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("start-overflow-turn").unwrap(),
@@ -4136,6 +4149,7 @@ fn code_mode_thread_values_survive_turn_completion_and_new_turn_authority() {
         .start_turn(
             &thread_id,
             StartTurnRequest {
+                advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("second-turn").unwrap(),

@@ -1,9 +1,56 @@
 {
   "$defs": {
+    "AdvisorConfig": {
+      "additionalProperties": false,
+      "description": "Immutable model and budget selected for consultations in one Turn.",
+      "properties": {
+        "maxCalls": {
+          "default": 3,
+          "format": "uint32",
+          "maximum": 16,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "maxOutputTokens": {
+          "default": 2048,
+          "format": "uint32",
+          "maximum": 32768,
+          "minimum": 256,
+          "type": "integer"
+        },
+        "model": {
+          "$ref": "#/$defs/ModelRef"
+        },
+        "reasoningEffort": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReasoningEffort"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "model"
+      ],
+      "type": "object"
+    },
     "AgentConfig": {
       "additionalProperties": false,
       "description": "Agent defaults that may be resolved into future model invocations.",
       "properties": {
+        "advisor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AdvisorConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "approvalReviewModel": {
           "$ref": "#/$defs/ApprovalReviewModelSelection",
           "default": {

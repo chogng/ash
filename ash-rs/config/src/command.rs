@@ -39,6 +39,8 @@ pub struct PreferencesUpdate {
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     pub commit_message_model: Patch<ModelRef>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
+    pub advisor: Patch<ash_protocol::AdvisorConfig>,
+    #[serde(default, skip_serializing_if = "Patch::is_missing")]
     pub tool_mode: Patch<ToolMode>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     pub grep_backend: Patch<GrepBackend>,

@@ -37,6 +37,7 @@ fn turn(threads: &ThreadController, thread: &ThreadId, text: &str) -> TurnId {
         .start_turn(
             thread,
             StartTurnRequest {
+                advisor: None,
                 command_id: CommandId::new(text).unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,

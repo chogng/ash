@@ -80,6 +80,7 @@ static NEXT_THREAD: AtomicU64 = AtomicU64::new(1);
 
 fn start_request(key: &str) -> StartTurnRequest {
     StartTurnRequest {
+        advisor: None,
         kind: ash_protocol::TurnKind::Coding,
         instructions: crate::test_turn_instructions(),
         command_id: CommandId::new(key).expect("test ID is non-empty"),
@@ -1646,6 +1647,7 @@ fn typed_command_rejects_reusing_an_id_with_different_input() {
         .start_turn(&thread, start_request("conflict"))
         .unwrap();
     let conflicting = StartTurnRequest {
+        advisor: None,
         kind: ash_protocol::TurnKind::Coding,
         instructions: crate::test_turn_instructions(),
         command_id: CommandId::new("conflict").expect("test ID is non-empty"),
@@ -2212,6 +2214,7 @@ fn start_turn_persists_ordered_text_and_normalized_image_attachment_items() {
         .start_turn(
             &thread,
             StartTurnRequest {
+                advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: crate::test_turn_instructions(),
                 command_id: CommandId::new("image-turn").expect("test ID is non-empty"),
@@ -2477,5 +2480,74 @@ fn invalid_tool_audio_does_not_commit_a_result_and_the_call_can_still_finish() {
     let snapshot = threads.read_thread(&thread).unwrap();
     assert!(
         matches!(&snapshot.items[2], ThreadItem::ToolResult { content: Some(content), .. } if matches!(content.as_slice(), [ash_protocol::ContentPart::AudioAttachment { .. }]))
+    );
+}
+
+#[test]
+fn advisor_selection_is_retry_safe_and_inherited_at_the_fork_boundary() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let controller = ThreadController::with_store(store.clone());
+    let id = create_thread(&controller, "advisor");
+    let before = controller.read_thread(&id).unwrap();
+    let command = CommandId::new("advisor-selection").unwrap();
+    let config = ash_protocol::AdvisorConfig::new(ModelRef {
+        provider: ProviderId::new("test").unwrap(),
+        model: ModelId::new("advisor").unwrap(),
+    });
+    let selection = ash_protocol::AdvisorSelection::Model { config };
+    let sequence = controller
+        .configure_advisor(
+            &id,
+            command.clone(),
+            SequenceExpectation::Exact(before.sequence),
+            selection.clone(),
+        )
+        .unwrap();
+    assert_eq!(
+        controller
+            .configure_advisor(
+                &id,
+                command.clone(),
+                SequenceExpectation::Exact(before.sequence),
+                selection.clone()
+            )
+            .unwrap(),
+        sequence
+    );
+    assert_eq!(
+        controller.configure_advisor(
+            &id,
+            command,
+            SequenceExpectation::Any,
+            ash_protocol::AdvisorSelection::Off
+        ),
+        Err(CoreError::CommandConflict)
+    );
+    let branch = controller
+        .create_forked_thread(CreateForkedThreadRequest {
+            session_id: before.session_id,
+            thread_id: ThreadId::new("advisor-branch").unwrap(),
+            title: "branch".into(),
+            source_thread_id: id.clone(),
+            source_sequence: sequence,
+        })
+        .unwrap();
+    assert_eq!(branch.advisor, selection);
+    controller
+        .configure_advisor(
+            &id,
+            CommandId::new("advisor-off").unwrap(),
+            SequenceExpectation::Exact(sequence),
+            ash_protocol::AdvisorSelection::Off,
+        )
+        .unwrap();
+    let recovered = ThreadController::with_store(store);
+    assert_eq!(
+        recovered.read_thread(&id).unwrap().advisor,
+        ash_protocol::AdvisorSelection::Off
+    );
+    assert_eq!(
+        recovered.read_thread(&branch.thread_id).unwrap().advisor,
+        selection
     );
 }

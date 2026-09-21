@@ -134,17 +134,29 @@ pub(crate) fn submit_prompt<T>(
 where
     T: JsonRpcTransport,
 {
-    let input = materialize_submission(client, submission)?;
-    match client.request_session(SessionRequestParams {
-        command_id: new_command_id("turn"),
-        session_id: scope.session_id,
-        request: SessionRequest::StartTurn {
+    let question = match submission.input.as_slice() {
+        [ChatInputItem::Text(text)] => text.trim().strip_prefix("/advisor ask ").map(str::trim).map(str::to_owned),
+        _ if submission.display_text.trim().starts_with("/advisor ask ") => return Err(ClientError::Protocol("Advisor questions must be text; send attachments to the conversation before consulting.".into())),
+        _ => None,
+    };
+    let request = match question {
+        Some(question) => SessionRequest::ConsultAdvisor {
+            thread_id: scope.thread_id,
+            expected_sequence: scope.expected_sequence,
+            question,
+        },
+        None => SessionRequest::StartTurn {
             thread_id: scope.thread_id,
             expected_sequence: scope.expected_sequence,
             approval_mode,
             tool_mode: None,
-            input,
+            input: materialize_submission(client, submission)?,
         },
+    };
+    match client.request_session(SessionRequestParams {
+        command_id: new_command_id("turn"),
+        session_id: scope.session_id,
+        request,
     })? {
         SessionRequestResult::Turn(result) => Ok(result),
         other => Err(ClientError::Protocol(format!(

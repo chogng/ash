@@ -130,6 +130,8 @@ pub struct AgentConfig {
     pub approval_review_model: ApprovalReviewModelSelection,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub commit_message_model: Option<ModelRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub advisor: Option<ash_protocol::AdvisorConfig>,
     #[serde(default)]
     pub tool_mode: ash_protocol::ToolMode,
 }
@@ -183,6 +185,17 @@ pub struct UserConfigDocument {
 impl UserConfigDocument {
     pub(crate) fn validate(&self) -> Result<(), ConfigError> {
         self.agent.time_context.validate()?;
+        if let Some(advisor) = &self.agent.advisor {
+            advisor
+                .validate()
+                .map_err(|message| ConfigError(message.into()))?;
+            if !self.providers.contains_key(&advisor.model.provider) {
+                return Err(ConfigError(format!(
+                    "advisor model provider '{}' is not configured",
+                    advisor.model.provider
+                )));
+            }
+        }
         ProviderConfigRegistry::new()
             .with_configs(self.providers.values())
             .map_err(provider_config_error)?;
@@ -286,6 +299,7 @@ pub struct ResolvedConfig {
     pub model_reasoning_effort: Option<ReasoningEffort>,
     pub approval_review_model: ApprovalReviewModelSelection,
     pub commit_message_model: Option<ModelRef>,
+    pub advisor: Option<ash_protocol::AdvisorConfig>,
     pub tool_mode: ash_protocol::ToolMode,
     pub grep_backend: GrepBackend,
     pub providers: BTreeMap<ProviderId, ModelProviderConfig>,
@@ -372,6 +386,7 @@ impl From<&UserConfigDocument> for ResolvedConfig {
             model_reasoning_effort: document.agent.model_reasoning_effort,
             approval_review_model: document.agent.approval_review_model.clone(),
             commit_message_model: document.agent.commit_message_model.clone(),
+            advisor: document.agent.advisor.clone(),
             tool_mode: document.agent.tool_mode,
             grep_backend: document.grep.backend,
             providers: document.providers.clone(),

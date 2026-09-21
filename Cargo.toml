@@ -8,6 +8,7 @@ members = [
     "ash-rs/ext/image-generation",
     "ash-rs/ext/history-notes",
     "ash-rs/ext/goal",
+    "ash-rs/ext/advisor",
     "ash-rs/ext/agent",
     "ash-rs/ext/guardian-v2",
     "ash-rs/memories",
@@ -196,6 +197,7 @@ default-members = [
     "ash-rs/ext/image-generation",
     "ash-rs/ext/history-notes",
     "ash-rs/ext/goal",
+    "ash-rs/ext/advisor",
     "ash-rs/ext/agent",
     "ash-rs/ext/guardian-v2","app"]
 resolver = "3"
@@ -254,6 +256,7 @@ git-attribution = { package = "ash-git-attribution", path = "ash-rs/ext/git-attr
 image-generation = { package = "ash-image-generation", path = "ash-rs/ext/image-generation" }
 history-notes = { package = "ash-history-notes", path = "ash-rs/ext/history-notes" }
 goal = { package = "ash-goal", path = "ash-rs/ext/goal" }
+advisor = { package = "ash-advisor", path = "ash-rs/ext/advisor" }
 agent = { package = "ash-agent", path = "ash-rs/ext/agent" }
 guardian-v2 = { package = "ash-guardian-v2", path = "ash-rs/ext/guardian-v2" }
 memories = { package = "ash-memories", path = "ash-rs/memories" }
