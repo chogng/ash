@@ -25,6 +25,8 @@ fn powershell_can_load_a_module_from_the_callers_search_path() {
             "function Invoke-AshModuleTest { [Console]::WriteLine('module-loaded') }",
         )
         .unwrap();
+        let system_modules = PathBuf::from(std::env::var_os("SystemRoot").unwrap())
+            .join("System32/WindowsPowerShell/v1.0/Modules");
         // Give only this test process a custom module path; parallel tests keep
         // their original environment. The executor must carry it to PowerShell.
         let output = std::process::Command::new(std::env::current_exe().unwrap())
@@ -34,7 +36,10 @@ fn powershell_can_load_a_module_from_the_callers_search_path() {
                 "--nocapture",
             ])
             .env(CHILD, "1")
-            .env("PSModulePath", &modules.path)
+            .env(
+                "PSModulePath",
+                std::env::join_paths([&modules.path, &system_modules]).unwrap(),
+            )
             .output()
             .unwrap();
         assert!(output.status.success(), "{output:?}");
