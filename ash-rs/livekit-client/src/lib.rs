@@ -8,7 +8,6 @@ mod transport;
 #[cfg(test)]
 #[path = "video_tests.rs"]
 mod video_tests;
-pub use livekit::SessionStats;
 
 pub use resample::AudioRate;
 pub use resample::AudioResampler;
@@ -16,6 +15,7 @@ pub use room::AudioFrame;
 pub use room::AudioPublication;
 pub use room::MediaEvent;
 pub use room::MediaRoom;
+pub use room::MediaStats;
 pub use room::ScreenFrame;
 
 #[derive(Debug, thiserror::Error)]

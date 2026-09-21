@@ -5,6 +5,8 @@ use ash_http_client::ProxyPolicy;
 use ash_http_client::TlsPolicy;
 use futures::SinkExt;
 use futures::StreamExt;
+use livekit_net::HttpClient as _;
+use livekit_net::WsClient as _;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 
@@ -82,8 +84,8 @@ async fn custom_trust_is_shared_by_http_and_websocket_and_does_not_leak_between_
     let config = HttpClientConfig::new()
         .with_proxy_policy(ProxyPolicy::Direct)
         .with_tls_policy(TlsPolicy::CustomOnly(bundle));
-    let trusted = transport(OutboundNetworkSnapshot::new(config).unwrap()).unwrap();
-    let plain = transport(
+    let trusted = client(OutboundNetworkSnapshot::new(config).unwrap()).unwrap();
+    let plain = client(
         OutboundNetworkSnapshot::new(
             HttpClientConfig::new().with_proxy_policy(ProxyPolicy::Direct),
         )
@@ -91,7 +93,6 @@ async fn custom_trust_is_shared_by_http_and_websocket_and_does_not_leak_between_
     )
     .unwrap();
     let response = trusted
-        .http
         .request(
             livekit_net::HttpMethod::Get,
             format!("https://{address}/validate"),
@@ -103,13 +104,11 @@ async fn custom_trust_is_shared_by_http_and_websocket_and_does_not_leak_between_
     assert_eq!((response.status, response.body), (200, b"ok".to_vec()));
     assert!(
         plain
-            .websocket
             .connect(format!("wss://{address}/rtc"), vec![], 2_000)
             .await
             .is_err()
     );
     let connection = trusted
-        .websocket
         .connect(format!("wss://{address}/rtc"), vec![], 2_000)
         .await
         .unwrap()
@@ -122,4 +121,11 @@ async fn custom_trust_is_shared_by_http_and_websocket_and_does_not_leak_between_
     assert_eq!(received.unwrap().unwrap(), Some(vec![1, 2]));
     connection.close().await;
     timeout(IO_TIMEOUT, server).await.unwrap().unwrap();
+}
+
+#[test]
+fn process_transport_is_registered() {
+    install().unwrap();
+    assert!(livekit_net::has_http_client());
+    assert!(livekit_net::has_ws_client());
 }

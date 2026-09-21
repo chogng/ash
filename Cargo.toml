@@ -597,8 +597,6 @@ debug = "limited"
 unsafe_code = "forbid"
 
 [patch.crates-io]
-livekit = { path = "ash-rs/vendor/livekit-rust-sdks/livekit" }
-livekit-signaling = { path = "ash-rs/vendor/livekit-rust-sdks/livekit-signaling" }
 webrtc-sys = { path = "ash-rs/vendor/livekit-rust-sdks/webrtc-sys" }
 candle-onnx = { path = "third_party/candle-onnx" }
 

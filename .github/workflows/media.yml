@@ -71,7 +71,6 @@ jobs:
       - name: Test Rust SDK patches
         run: |
           python ash-rs/vendor/livekit-rust-sdks/verify.py
-          python -B scripts/cargo.py test --locked --manifest-path ash-rs/vendor/livekit-rust-sdks/Cargo.toml -p livekit-signaling --lib
           python -B scripts/cargo.py test --locked --manifest-path ash-rs/vendor/livekit-rust-sdks/Cargo.toml -p webrtc-sys --lib rtc_error
       - name: Check media packages
         run: python -B scripts/cargo.py check --locked -p ash-livekit-client -p ash-screen-capture -p ash-voice-agent

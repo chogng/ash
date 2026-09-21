@@ -1,4 +1,5 @@
 use ash_http_client::HttpClient;
+use ash_http_client::HttpClientConfig;
 use ash_http_client::HttpHeader;
 use ash_http_client::HttpRequest;
 use ash_http_client::OutboundNetworkSnapshot;
@@ -10,6 +11,7 @@ use ash_websocket_client::WebSocketMessage;
 use ash_websocket_client::WebSocketRequest;
 use livekit_net::TransportError;
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::time::Duration;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc;
@@ -18,19 +20,28 @@ use tokio::time::timeout;
 
 const IO_TIMEOUT: Duration = Duration::from_secs(10);
 
-pub(crate) fn transport(
-    network: OutboundNetworkSnapshot,
-) -> Result<livekit::SignalTransport, crate::MediaError> {
+static INSTALL: OnceLock<Result<(), ()>> = OnceLock::new();
+
+pub(crate) fn install() -> Result<(), crate::MediaError> {
+    match INSTALL.get_or_init(|| {
+        let network = OutboundNetworkSnapshot::new(HttpClientConfig::default()).map_err(|_| ())?;
+        let client = client(network).map_err(|_| ())?;
+        livekit_net::set_http_client(client.clone());
+        livekit_net::set_ws_client(client);
+        Ok(())
+    }) {
+        Ok(()) => Ok(()),
+        Err(()) => Err(crate::MediaError::Connection),
+    }
+}
+
+fn client(network: OutboundNetworkSnapshot) -> Result<Arc<Client>, crate::MediaError> {
     let http =
         UreqHttpClient::with_network(network.clone()).map_err(|_| crate::MediaError::Connection)?;
-    let client = Arc::new(Client {
+    Ok(Arc::new(Client {
         http: Arc::new(http),
         websocket: WebSocketConnector::new(network),
-    });
-    Ok(livekit::SignalTransport {
-        http: client.clone(),
-        websocket: client,
-    })
+    }))
 }
 
 struct Client {

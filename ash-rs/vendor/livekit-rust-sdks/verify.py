@@ -90,7 +90,7 @@ def main() -> None:
                 raise RuntimeError(
                     f"Snapshot differs from upstream plus patch: {name}: {paths}"
                 )
-    print("Verified 3 pinned Rust crates and their local patches")
+    print(f"Verified {len(metadata['packages'])} pinned Rust crate and its local patch")
 
 
 if __name__ == "__main__":

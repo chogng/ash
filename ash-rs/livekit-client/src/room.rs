@@ -68,6 +68,15 @@ pub struct ScreenFrame {
     pub rgba: Vec<u8>,
 }
 
+/// Counts the connection reports returned for the room's publishing and subscribing paths.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct MediaStats {
+    /// Reports collected for locally published media.
+    pub publisher_reports: usize,
+    /// Reports collected for subscribed remote media.
+    pub subscriber_reports: usize,
+}
+
 #[derive(Debug)]
 pub enum MediaEvent {
     Connected {
@@ -124,12 +133,16 @@ pub struct MediaRoom {
 }
 
 impl MediaRoom {
-    /// Captures publisher and subscriber connection statistics from the SDK.
-    pub async fn stats(&self) -> Result<livekit::SessionStats, MediaError> {
-        timeout(DEADLINE, self.room.get_stats())
+    /// Counts the available publisher and subscriber connection reports.
+    pub async fn stats(&self) -> Result<MediaStats, MediaError> {
+        let stats = timeout(DEADLINE, self.room.get_stats())
             .await
             .map_err(|_| MediaError::Timeout)?
-            .map_err(|_| MediaError::Connection)
+            .map_err(|_| MediaError::Connection)?;
+        Ok(MediaStats {
+            publisher_reports: stats.publisher_stats.len(),
+            subscriber_reports: stats.subscriber_stats.len(),
+        })
     }
 
     pub async fn connect(
@@ -137,27 +150,15 @@ impl MediaRoom {
         token: &str,
         publish: AudioPublication,
     ) -> Result<Self, MediaError> {
-        let network = ash_http_client::OutboundNetworkSnapshot::new(
-            ash_http_client::HttpClientConfig::default(),
-        )
-        .map_err(|_| MediaError::Connection)?;
-        Self::connect_with_network(server_url, token, publish, network).await
-    }
-
-    /// Applies one network policy to signaling, reconnects and region requests.
-    pub async fn connect_with_network(
-        server_url: &str,
-        token: &str,
-        publish: AudioPublication,
-        network: ash_http_client::OutboundNetworkSnapshot,
-    ) -> Result<Self, MediaError> {
         crate::validate_url(server_url)?;
-        let mut options = RoomOptions::default();
-        options.transport = Some(crate::transport::transport(network)?);
-        let (room, receiver) = timeout(DEADLINE, Room::connect(server_url, token, options))
-            .await
-            .map_err(|_| MediaError::Timeout)?
-            .map_err(|_| MediaError::Connection)?;
+        crate::transport::install()?;
+        let (room, receiver) = timeout(
+            DEADLINE,
+            Room::connect(server_url, token, RoomOptions::default()),
+        )
+        .await
+        .map_err(|_| MediaError::Timeout)?
+        .map_err(|_| MediaError::Connection)?;
         let room = Arc::new(room);
         let (event_tx, events) = mpsc::channel(64);
         let (audio_tx, audio) = mpsc::channel(128);

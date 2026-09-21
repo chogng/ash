@@ -7743,6 +7743,8 @@ checksum = "11d3d7f243d5c5a8b9bb5d6dd2b1602c0cb0b9db1621bafc7ed66e35ff9fe092"
 [[package]]
 name = "livekit"
 version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2dda2799e0ca0e06d5ede5015eb970f85009fdd7b4a3395830d4b9c86784bf2a"
 dependencies = [
  "base64 0.22.1",
  "bmrng",
@@ -7851,13 +7853,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9528a26c807f49d3fa6d075c01db5fd77bf32454b1e700c530fb8c670892008"
 dependencies = [
  "async-trait",
- "base64 0.21.7",
- "bytes",
- "futures-util",
  "http",
  "log",
  "reqwest 0.12.28",
- "tokio",
  "tokio-tungstenite 0.29.0",
  "url",
 ]
@@ -7903,6 +7901,8 @@ dependencies = [
 [[package]]
 name = "livekit-signaling"
 version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c1a9b518fa5434cae1dd679e60254070f203241c0319f239fd836e216960f36"
 dependencies = [
  "base64 0.21.7",
  "device-info",

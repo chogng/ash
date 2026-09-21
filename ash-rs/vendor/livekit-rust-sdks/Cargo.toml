@@ -1,8 +1,6 @@
 [workspace]
-members = ["livekit", "livekit-signaling", "webrtc-sys"]
+members = ["webrtc-sys"]
 resolver = "2"
 
 [patch.crates-io]
-livekit = { path = "livekit" }
-livekit-signaling = { path = "livekit-signaling" }
 webrtc-sys = { path = "webrtc-sys" }
