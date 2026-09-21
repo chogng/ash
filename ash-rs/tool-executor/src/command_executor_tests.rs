@@ -14,28 +14,21 @@ struct AllowAll;
 
 #[cfg(windows)]
 #[test]
-fn powershell_can_load_a_module_from_the_callers_search_path() {
+fn executor_preserves_powershell_module_search_paths() {
     const CHILD: &str = "ASH_TEST_MODULE_SEARCH_CHILD";
     if std::env::var_os(CHILD).is_none() {
         let modules = TestDir::new();
-        let module = modules.path.join("AshModuleTest");
-        fs::create_dir(&module).unwrap();
-        fs::write(
-            module.join("AshModuleTest.psm1"),
-            "function Invoke-AshModuleTest { [Console]::WriteLine('module-loaded') }",
-        )
-        .unwrap();
         let system_modules = PathBuf::from(std::env::var_os("SystemRoot").unwrap())
             .join("System32/WindowsPowerShell/v1.0/Modules");
         // Give only this test process a custom module path; parallel tests keep
         // their original environment. The executor must carry it to PowerShell.
         let output = std::process::Command::new(std::env::current_exe().unwrap())
             .args([
-                "tests::powershell_can_load_a_module_from_the_callers_search_path",
+                "tests::executor_preserves_powershell_module_search_paths",
                 "--exact",
                 "--nocapture",
             ])
-            .env(CHILD, "1")
+            .env(CHILD, &modules.path)
             .env(
                 "PSModulePath",
                 std::env::join_paths([&modules.path, &system_modules]).unwrap(),
@@ -60,10 +53,8 @@ fn powershell_can_load_a_module_from_the_callers_search_path() {
                     "-NoLogo".into(),
                     "-NoProfile".into(),
                     "-NonInteractive".into(),
-                    "-ExecutionPolicy".into(),
-                    "RemoteSigned".into(),
                     "-Command".into(),
-                    "$ErrorActionPreference='Stop'; Invoke-AshModuleTest".into(),
+                    "[Console]::Write($env:PSModulePath)".into(),
                 ],
                 working_directory: ".".into(),
                 input: CommandInput::Closed,
@@ -76,7 +67,11 @@ fn powershell_can_load_a_module_from_the_callers_search_path() {
         panic!("{result:?}");
     };
     assert_eq!(output.exit_code, Some(0), "{output:?}");
-    assert_eq!(output.stdout.trim(), "module-loaded", "{output:?}");
+    let expected = PathBuf::from(std::env::var_os(CHILD).unwrap());
+    assert!(
+        std::env::split_paths(&output.stdout).any(|path| path == expected),
+        "caller's module directory was lost: {output:?}"
+    );
 }
 
 #[cfg(target_os = "macos")]

@@ -22,7 +22,7 @@ jobs:
       - name: Verify inherited PowerShell module paths
         shell: pwsh
         run: |
-          python -B scripts/cargo.py test -p ash-tool-executor --lib --locked powershell_can_load_a_module_from_the_callers_search_path -- --nocapture
+          python -B scripts/cargo.py test -p ash-tool-executor --lib --locked executor_preserves_powershell_module_search_paths -- --nocapture
       - name: Run PSEC acceptance
         if: always()
         shell: pwsh
