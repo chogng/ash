@@ -186,3 +186,7 @@ impl<'a> BackendClient<'a> {
 pub(crate) fn decode<T: DeserializeOwned>(body: &[u8]) -> Result<T, RequestError> {
     serde_json::from_slice(body).map_err(|_| RequestError::InvalidResponse)
 }
+
+#[cfg(test)]
+#[path = "client_tests.rs"]
+mod tests;

@@ -1,178 +1,31 @@
-use super::*;
+use crate::test_support::Client;
+use crate::test_support::target;
+use crate::*;
 use ::client::ClientError;
 use ::client::ClientRequest;
 use ::client::ClientResponse;
 use ::client::OperationClient;
-use ::client::ResolvedApiTarget;
 use ::client::RetryPolicy;
 use async_utils::CancellationSource;
+use async_utils::CancellationToken;
 use http_client::HttpHeader;
 use http_client::HttpMethod;
+use serde_json::json;
+use std::collections::BTreeMap;
 use std::sync::Mutex;
 
-#[path = "analytics_tests.rs"]
-mod analytics;
-#[path = "business_tests.rs"]
-mod business;
-#[path = "costs_tests.rs"]
-mod costs;
+type Operation = fn(&BackendClient<'_>, &CancellationToken) -> Result<(), RequestError>;
 
-struct Client {
-    response: Result<ClientResponse, ClientError>,
-    requests: Mutex<Vec<ClientRequest>>,
+fn turn_query() -> BTreeMap<String, Vec<String>> {
+    BTreeMap::from([("thread-1".into(), vec!["turn-1".into()])])
 }
 
-impl Client {
-    fn response(status: u16, body: &str) -> Self {
-        Self {
-            response: Ok(ClientResponse::new(
-                status,
-                Vec::new(),
-                body.as_bytes().to_vec(),
-            )),
-            requests: Mutex::new(Vec::new()),
-        }
-    }
-}
-
-impl OperationClient for Client {
-    fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
-        self.requests.lock().unwrap().push(request.clone());
-        self.response.clone()
-    }
-}
-
-fn target(base: &str) -> ResolvedApiTarget {
-    ResolvedApiTarget::new(
-        base,
-        vec![
-            HttpHeader::new("Authorization", "Bearer secret"),
-            HttpHeader::new("ChatGPT-Account-ID", "account-1"),
-            HttpHeader::new("User-Agent", "Ash/test"),
-            HttpHeader::new("X-OpenAI-Fedramp", "true"),
-        ],
-    )
-}
-
-#[test]
-fn both_routes_preserve_authentication_and_exact_usage_windows() {
-    let body = r#"{
-        "account_id":"account-1", "plan_type":"future-plan",
-        "rate_limit":{"allowed":true,"limit_reached":false,
-            "primary_window":{"used_percent":17,"limit_window_seconds":18000,"reset_at":2000000000},
-            "secondary_window":{"used_percent":96,"limit_window_seconds":604800,"reset_at":2000500000}},
-        "additional_rate_limits":[{"metered_feature":"codex_extra","limit_name":"Extra model",
-            "normal_model_slug":"extra-model","rate_limit":{"allowed":false,"limit_reached":true,
-            "primary_window":{"used_percent":100,"limit_window_seconds":60,"reset_at":2000000001}}}],
-        "credits":{"has_credits":true,"unlimited":false,"balance":"12.50"}
-    }"#;
-    for (base, route, expected) in [
-        (
-            "https://example.test/",
-            RouteStyle::Codex,
-            "https://example.test/api/codex/usage",
-        ),
-        (
-            CHATGPT_BACKEND_BASE_URL,
-            RouteStyle::ChatGpt,
-            "https://chatgpt.com/backend-api/wham/usage",
-        ),
-        (
-            "https://example.test/base///",
-            RouteStyle::Codex,
-            "https://example.test/base/api/codex/usage",
-        ),
-    ] {
-        let client = Client::response(200, body);
-        let target = target(base);
-        let actual = BackendClient::new(&client, &target, route)
-            .unwrap()
-            .read_rate_limits(&CancellationSource::new().token())
-            .unwrap();
-        assert_eq!(
-            actual,
-            RateLimits {
-                account_id: Some("account-1".into()),
-                plan: "future-plan".into(),
-                limits: vec![
-                    RateLimit {
-                        id: "codex".into(),
-                        name: None,
-                        model: None,
-                        allowed: Some(true),
-                        limit_reached: Some(false),
-                        primary: Some(RateLimitWindow {
-                            used_percent: 17,
-                            window_seconds: 18000,
-                            resets_at: 2000000000
-                        }),
-                        secondary: Some(RateLimitWindow {
-                            used_percent: 96,
-                            window_seconds: 604800,
-                            resets_at: 2000500000
-                        })
-                    },
-                    RateLimit {
-                        id: "codex_extra".into(),
-                        name: Some("Extra model".into()),
-                        model: Some("extra-model".into()),
-                        allowed: Some(false),
-                        limit_reached: Some(true),
-                        primary: Some(RateLimitWindow {
-                            used_percent: 100,
-                            window_seconds: 60,
-                            resets_at: 2000000001
-                        }),
-                        secondary: None
-                    }
-                ],
-                credits: Some(CreditBalance {
-                    has_credits: true,
-                    unlimited: false,
-                    balance: Some("12.50".into())
-                }),
-            }
-        );
-        let requests = client.requests.lock().unwrap();
-        assert_eq!(requests.len(), 1);
-        assert_eq!(requests[0].url(), expected);
-        assert_eq!(requests[0].headers(), target.headers);
-        assert_eq!(requests[0].method(), HttpMethod::Get);
-        assert!(requests[0].body().is_empty());
-        assert_eq!(requests[0].retry_policy(), RetryPolicy::never());
-    }
-}
-
-#[test]
-fn absent_and_null_limits_are_unknown_instead_of_zero_usage() {
-    for body in [
-        r#"{"plan_type":"plus"}"#,
-        r#"{"plan_type":"plus","rate_limit":null,"additional_rate_limits":null,"credits":null}"#,
-    ] {
-        let client = Client::response(200, body);
-        let target = target(CHATGPT_BACKEND_BASE_URL);
-        let usage = BackendClient::new(&client, &target, RouteStyle::ChatGpt)
-            .unwrap()
-            .read_rate_limits(&CancellationSource::new().token())
-            .unwrap();
-        assert_eq!(
-            usage,
-            RateLimits {
-                account_id: None,
-                plan: "plus".into(),
-                credits: None,
-                limits: vec![RateLimit {
-                    id: "codex".into(),
-                    name: None,
-                    model: None,
-                    allowed: None,
-                    limit_reached: None,
-                    primary: None,
-                    secondary: None
-                }],
-            }
-        );
-    }
+fn task_query() -> Vec<TaskUsageThread> {
+    vec![TaskUsageThread {
+        thread_id: "thread-1".into(),
+        created_at: Some("2026-09-01T00:00:00Z".into()),
+        descendant_thread_ids: vec!["child-1".into()],
+    }]
 }
 
 #[test]
@@ -244,4 +97,229 @@ fn ambiguous_or_unsecured_base_urls_are_rejected_before_sending_credentials() {
         ));
     }
     assert!(client.requests.lock().unwrap().is_empty());
+}
+
+#[test]
+fn business_endpoints_use_both_routes_auth_cancellation_and_redacted_failures() {
+    let operations: &[(&str, HttpMethod, &str, Operation)] = &[
+        (
+            "accounts/check",
+            HttpMethod::Get,
+            r#"{"accounts":[]}"#,
+            |backend, token| backend.read_accounts(token).map(|_| ()),
+        ),
+        (
+            "profiles/me",
+            HttpMethod::Get,
+            r#"{"stats":{}}"#,
+            |backend, token| backend.read_account_profile(token).map(|_| ()),
+        ),
+        (
+            "accounts/send_add_credits_nudge_email",
+            HttpMethod::Post,
+            "",
+            |backend, token| backend.send_credit_nudge(CreditNudge::Credits, token),
+        ),
+        ("config/bundle", HttpMethod::Get, "{}", |backend, token| {
+            backend.read_config_bundle(token).map(|_| ())
+        }),
+        ("settings/user", HttpMethod::Get, "{}", |backend, token| {
+            backend.read_user_settings(token).map(|_| ())
+        }),
+        (
+            "workspace-messages",
+            HttpMethod::Get,
+            r#"{"messages":[]}"#,
+            |backend, token| backend.list_workspace_messages(token).map(|_| ()),
+        ),
+        (
+            "rate-limit-reset-credits",
+            HttpMethod::Get,
+            r#"{"credits":[],"available_count":0}"#,
+            |backend, token| backend.list_reset_credits(token).map(|_| ()),
+        ),
+        (
+            "rate-limit-reset-credits/consume",
+            HttpMethod::Post,
+            r#"{"code":"reset","windows_reset":2}"#,
+            |backend, token| {
+                backend
+                    .consume_reset_credit("request-1", ResetCreditSelection::Available, token)
+                    .map(|_| ())
+            },
+        ),
+        (
+            "usage",
+            HttpMethod::Get,
+            r#"{"plan_type":"plus"}"#,
+            |backend, token| backend.read_rate_limit_status(token).map(|_| ()),
+        ),
+        (
+            "usage",
+            HttpMethod::Get,
+            r#"{"plan_type":"plus"}"#,
+            |backend, token| backend.read_rate_limits_with_reserve(token).map(|_| ()),
+        ),
+        (
+            "tasks/list",
+            HttpMethod::Get,
+            r#"{"items":[]}"#,
+            |backend, token| {
+                backend
+                    .list_tasks(&TaskListQuery::default(), token)
+                    .map(|_| ())
+            },
+        ),
+        (
+            "tasks/task-1",
+            HttpMethod::Get,
+            r#"{"task":{"id":"task-1","title":"Task","archived":false,"external_pull_requests":[]}}"#,
+            |backend, token| backend.read_task("task-1", token).map(|_| ()),
+        ),
+        (
+            "tasks/task-1/turns/turn-1/sibling_turns",
+            HttpMethod::Get,
+            r#"{"sibling_turns":[]}"#,
+            |backend, token| {
+                backend
+                    .list_sibling_turns("task-1", "turn-1", token)
+                    .map(|_| ())
+            },
+        ),
+        (
+            "tasks",
+            HttpMethod::Post,
+            r#"{"task":{"id":"task-1"}}"#,
+            |backend, token| {
+                backend
+                    .create_task(json!({"input_items":[]}).as_object().unwrap(), token)
+                    .map(|_| ())
+            },
+        ),
+        (
+            "usage/thread_usage/query",
+            HttpMethod::Post,
+            r#"{"threads":[]}"#,
+            |backend, token| backend.read_thread_usage(&["thread-1"], token).map(|_| ()),
+        ),
+        (
+            "usage/thread_usage/query_v2",
+            HttpMethod::Post,
+            r#"{"threads":[]}"#,
+            |backend, token| backend.read_task_usage(&task_query(), token).map(|_| ()),
+        ),
+        (
+            "usage/thread-estimates/query",
+            HttpMethod::Post,
+            r#"{"threads":[]}"#,
+            |backend, token| {
+                backend
+                    .query_chatgpt_turn_costs(&turn_query(), token)
+                    .map(|_| ())
+            },
+        ),
+        (
+            "usage/plan_limit_history",
+            HttpMethod::Get,
+            r#"{"coverage_complete":false,"periods":[]}"#,
+            |backend, token| backend.read_plan_limit_history(token).map(|_| ()),
+        ),
+    ];
+    for (route, prefix) in [
+        (RouteStyle::Codex, "api/codex"),
+        (RouteStyle::ChatGpt, "wham"),
+    ] {
+        let target = target("https://example.test/backend-api/");
+        for (path, method, body, run) in operations {
+            let client = Client::response(200, body);
+            let backend = BackendClient::new(&client, &target, route).unwrap();
+            let token = CancellationSource::new().token();
+            run(&backend, &token).unwrap_or_else(|error| panic!("{path}: {error}"));
+            {
+                let requests = client.requests.lock().unwrap();
+                assert_eq!(requests.len(), 1, "{path}");
+                let request = &requests[0];
+                let url = url::Url::parse(request.url()).unwrap();
+                assert_eq!(url.path(), format!("/backend-api/{prefix}/{path}"));
+                assert_eq!(request.method(), *method);
+                assert_eq!(request.retry_policy(), RetryPolicy::never());
+                for header in &target.headers {
+                    assert!(request.headers().contains(header), "{path}");
+                }
+                if *method == HttpMethod::Post {
+                    assert!(
+                        request
+                            .headers()
+                            .contains(&HttpHeader::new("Content-Type", "application/json"))
+                    );
+                    assert!(
+                        serde_json::from_slice::<serde_json::Value>(request.body())
+                            .unwrap()
+                            .is_object()
+                    );
+                } else {
+                    assert!(request.body().is_empty());
+                }
+            }
+            let cancelled = CancellationSource::new();
+            cancelled.cancel();
+            assert_eq!(
+                run(&backend, &cancelled.token()),
+                Err(RequestError::Cancelled),
+                "{path}"
+            );
+            assert_eq!(client.requests.lock().unwrap().len(), 1);
+            for status in [302, 401, 429, 503] {
+                let client = Client::response(status, "private account response");
+                let backend = BackendClient::new(&client, &target, route).unwrap();
+                let error = run(&backend, &token).unwrap_err();
+                assert_eq!(error, RequestError::HttpStatus(status), "{path}");
+                assert!(!format!("{error:?} {error}").contains("private"));
+                assert_eq!(client.requests.lock().unwrap().len(), 1);
+            }
+            if *path != "accounts/send_add_credits_nudge_email" {
+                let client = Client::response(200, "<html>private</html>");
+                let backend = BackendClient::new(&client, &target, route).unwrap();
+                assert_eq!(
+                    run(&backend, &token),
+                    Err(RequestError::InvalidResponse),
+                    "{path}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn cancellation_after_dispatch_does_not_turn_a_write_into_a_retry() {
+    struct CancellingClient {
+        source: CancellationSource,
+        requests: Mutex<Vec<ClientRequest>>,
+    }
+    impl OperationClient for CancellingClient {
+        fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
+            self.requests.lock().unwrap().push(request.clone());
+            self.source.cancel();
+            Ok(ClientResponse::new(
+                200,
+                Vec::new(),
+                br#"{"code":"reset","windows_reset":2}"#.to_vec(),
+            ))
+        }
+    }
+    let client = CancellingClient {
+        source: CancellationSource::new(),
+        requests: Mutex::new(Vec::new()),
+    };
+    let target = target(CHATGPT_BACKEND_BASE_URL);
+    let backend = BackendClient::new(&client, &target, RouteStyle::ChatGpt).unwrap();
+    assert_eq!(
+        backend.consume_reset_credit(
+            "stable-id",
+            ResetCreditSelection::Available,
+            &client.source.token()
+        ),
+        Err(RequestError::Cancelled)
+    );
+    assert_eq!(client.requests.lock().unwrap().len(), 1);
 }

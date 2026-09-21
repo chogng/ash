@@ -169,3 +169,7 @@ impl BackendClient<'_> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "account_tests.rs"]
+mod tests;

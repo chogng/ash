@@ -339,3 +339,7 @@ impl BackendClient<'_> {
         Ok(id)
     }
 }
+
+#[cfg(test)]
+#[path = "tasks_tests.rs"]
+mod tests;

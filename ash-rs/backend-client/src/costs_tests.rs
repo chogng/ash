@@ -1,4 +1,11 @@
-use super::*;
+use crate::test_support::Client;
+use crate::test_support::target;
+use crate::*;
+use ::client::ResolvedApiTarget;
+use ::client::RetryPolicy;
+use async_utils::CancellationSource;
+use http_client::HttpHeader;
+use http_client::HttpMethod;
 use serde_json::json;
 use std::collections::BTreeMap;
 
@@ -380,38 +387,4 @@ fn api_key_costs_use_the_explicit_origin_auth_and_provider_scope() {
             Err(expected)
         );
     }
-}
-
-#[test]
-fn cancellation_after_dispatch_does_not_turn_a_write_into_a_retry() {
-    struct CancellingClient {
-        source: CancellationSource,
-        requests: Mutex<Vec<ClientRequest>>,
-    }
-    impl OperationClient for CancellingClient {
-        fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
-            self.requests.lock().unwrap().push(request.clone());
-            self.source.cancel();
-            Ok(ClientResponse::new(
-                200,
-                Vec::new(),
-                br#"{"code":"reset","windows_reset":2}"#.to_vec(),
-            ))
-        }
-    }
-    let client = CancellingClient {
-        source: CancellationSource::new(),
-        requests: Mutex::new(Vec::new()),
-    };
-    let target = target(CHATGPT_BACKEND_BASE_URL);
-    let backend = BackendClient::new(&client, &target, RouteStyle::ChatGpt).unwrap();
-    assert_eq!(
-        backend.consume_reset_credit(
-            "stable-id",
-            ResetCreditSelection::Available,
-            &client.source.token()
-        ),
-        Err(RequestError::Cancelled)
-    );
-    assert_eq!(client.requests.lock().unwrap().len(), 1);
 }

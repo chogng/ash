@@ -206,3 +206,7 @@ fn valid_date(value: &str) -> bool {
     };
     year > 0 && day > 0 && day <= days
 }
+
+#[cfg(test)]
+#[path = "analytics_tests.rs"]
+mod tests;

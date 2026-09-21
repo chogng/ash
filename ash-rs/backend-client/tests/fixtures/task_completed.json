@@ -1,0 +1,30 @@
+{
+  "task": {
+    "id": "completed",
+    "title": "Review parser",
+    "archived": false,
+    "external_pull_requests": []
+  },
+  "current_user_turn": {
+    "input_items": [
+      { "type": "message", "role": "system", "content": ["Internal instructions"] },
+      { "type": "message", "role": "user", "content": ["Review the parser", { "content_type": "image", "text": "Not a prompt" }, "  "] },
+      { "type": "message", "content": [{ "content_type": "text", "text": "保留换行\nand Unicode" }] }
+    ]
+  },
+  "current_assistant_turn": {
+    "id": "turn-1",
+    "turn_status": "completed",
+    "output_items": [
+      { "type": "message", "content": ["Updated parser", { "content_type": "text", "text": "Tests passed" }] },
+      { "type": "pr", "output_diff": { "diff": "diff --git a/parser.rs b/parser.rs\n--- a/parser.rs\n+++ b/parser.rs\n@@ -1 +1 @@\n-old\n+new\n" } }
+    ],
+    "worklog": {
+      "messages": [
+        { "author": { "role": "tool" }, "content": { "parts": ["Tool output"] } },
+        { "author": { "role": "assistant" }, "content": { "parts": ["Checked edge cases", { "content_type": "image", "text": "Not a message" }] } }
+      ]
+    }
+  },
+  "current_diff_task_turn": null
+}

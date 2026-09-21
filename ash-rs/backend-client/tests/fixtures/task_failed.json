@@ -1,0 +1,16 @@
+{
+  "task": {
+    "id": "failed",
+    "title": "Review parser",
+    "archived": true,
+    "external_pull_requests": []
+  },
+  "current_user_turn": { "input_items": null },
+  "current_assistant_turn": {
+    "id": "turn-2",
+    "turn_status": "failed",
+    "output_items": null,
+    "worklog": { "messages": null },
+    "error": { "code": "EXECUTION_FAILED", "message": "Environment stopped" }
+  }
+}

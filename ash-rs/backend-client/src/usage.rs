@@ -300,3 +300,7 @@ fn window(value: Window) -> RateLimitWindow {
         resets_at: value.reset_at,
     }
 }
+
+#[cfg(test)]
+#[path = "usage_tests.rs"]
+mod tests;

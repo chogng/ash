@@ -67,7 +67,21 @@
 
 - `client.rs` 统一 URL、请求头、序列化、取消和脱敏；原 `lib.rs` 中的实现归入此文件，`lib.rs` 仅保留公开导出。
 - `account.rs`、`usage.rs`、`config.rs`、`tasks.rs`、`costs.rs`、`analytics.rs` 分别拥有相应业务接口；`analytics_types.rs` 保存报表响应结构。
-- 测试通过注入 transport 检查公开调用链，不访问真实账号，不兑换真实额度，也不发送邮件。
+- 业务测试按所属模块组织，共用 `test_support.rs` 中的请求记录器；原 `business_tests.rs` 的断言已迁入各业务专项测试和 `client_tests.rs`。
+- `transport_tests.rs` 使用本地 HTTPS 服务，贯穿 `BackendClient → AshClient → UreqHttpClient`；验证实际请求、禁止重定向、取消、整体超时、响应损坏和写入失败不重发。
+- HTTPS 测试使用独立 CA、随机回环端口和直接连接，不修改系统信任或代理环境；不访问真实账号、不兑换真实额度、不发送邮件。
+- 固定响应和测试证书位于 [`tests/fixtures`](tests/fixtures/README.md)，Cargo 与 Bazel 使用同一份资源。
 - 验证命令：`just check ash-backend-client`、`just test ash-backend-client`、`just rust-warnings ash-backend-client`。
 - 小数解析配置回归：`just test ash-backend-client --features serde_json/arbitrary_precision`。
 - 现有消费方回归：`just check ash-chatgpt`、`just test ash-chatgpt account::tests`、`just rust-warnings ash-chatgpt`。
+
+| 专项测试 | 主要覆盖 | 单独运行 |
+| --- | --- | --- |
+| `account_tests.rs` | 账号排序与身份、统计缺失与零值、调用记录、通知邮件 | `just test ash-backend-client account::tests` |
+| `usage_tests.rs` | 用量窗口、独立允许状态、支出策略、重置券结果与请求 ID | `just test ash-backend-client usage::tests` |
+| `config_tests.rs` | 配置层次、约束片段、设置布尔值、消息时间与缓存头 | `just test ash-backend-client config::tests` |
+| `tasks_tests.rs` | 分页与编码、任务身份与元数据、固定成功/失败响应、文本与差异提取 | `just test ash-backend-client tasks::tests` |
+| `costs_tests.rs` | 批量边界、线程/回合归属、十进制精度、结算与缺失数据 | `just test ash-backend-client costs::tests` |
+| `analytics_tests.rs` | 各报表真实数据结构、日期校验、负值扣费、插件/技能统计、历史额度 | `just test ash-backend-client analytics::tests` |
+| `client_tests.rs` | 全部业务请求的双路由、认证、取消、错误脱敏与禁止重试约定 | `just test ash-backend-client client::tests` |
+| `transport_tests.rs` | 本地 HTTPS 实际调用链 | `just test ash-backend-client transport_tests` |

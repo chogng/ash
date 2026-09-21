@@ -106,5 +106,7 @@ pub use usage::SpendControl;
 pub use usage::SpendLimit;
 
 #[cfg(test)]
-#[path = "client_tests.rs"]
-mod tests;
+mod test_support;
+
+#[cfg(test)]
+mod transport_tests;

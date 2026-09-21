@@ -817,6 +817,7 @@ dependencies = [
  "ash-async-utils",
  "ash-client",
  "ash-http-client",
+ "rustls",
  "serde",
  "serde_json",
  "url",

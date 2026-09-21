@@ -1,5 +1,255 @@
-use super::*;
+use crate::test_support::Client;
+use crate::test_support::target;
+use crate::*;
+use async_utils::CancellationSource;
+use http_client::HttpMethod;
 use serde_json::json;
+
+#[test]
+fn credit_reports_preserve_signed_events_and_enterprise_series() {
+    let target = target(CHATGPT_BACKEND_BASE_URL);
+    let token = CancellationSource::new().token();
+    let client = Client::response(
+        200,
+        r#"{"data":[{"date":"2026-09-20","product_surface":"future","credit_amount":-0.004,"usage_id":"refund"},{"date":"2026-09-21","product_surface":"codex","credit_amount":0}]}"#,
+    );
+    let AnalyticsResponse::Credits(report) =
+        BackendClient::new(&client, &target, RouteStyle::ChatGpt)
+            .unwrap()
+            .read_analytics(AnalyticsReport::Credits, "", "", &token)
+            .unwrap()
+    else {
+        panic!("expected credit events")
+    };
+    assert_eq!(report.data.len(), 2);
+    assert_eq!(
+        report.data[0],
+        CreditUsageEventBySurface {
+            date: "2026-09-20".into(),
+            product_surface: "future".into(),
+            credit_amount: -0.004,
+            usage_id: Some("refund".into())
+        }
+    );
+    assert_eq!(report.data[1].credit_amount, 0.0);
+    assert_eq!(report.data[1].usage_id, None);
+
+    let client = Client::response(
+        200,
+        r#"{"breakdown":"future","data":[{"date":"2026-09-21","values":{"model/a":1.25,"refund":-0.004}}],"series":[{"key":"model/a","label":"Model A","total":1.25}],"unit":"credits","data_freshness_ts":"2026-09-22T00:00:00Z"}"#,
+    );
+    let AnalyticsResponse::EnterpriseCredits(report) =
+        BackendClient::new(&client, &target, RouteStyle::ChatGpt)
+            .unwrap()
+            .read_analytics(
+                AnalyticsReport::EnterpriseCredits {
+                    breakdown: "future",
+                },
+                "2026-09-20",
+                "2026-09-21",
+                &token,
+            )
+            .unwrap()
+    else {
+        panic!("expected enterprise credits")
+    };
+    assert_eq!(report.breakdown, "future");
+    assert_eq!(report.unit.as_deref(), Some("credits"));
+    assert_eq!(
+        report.data_freshness_ts.as_deref(),
+        Some("2026-09-22T00:00:00Z")
+    );
+    assert_eq!(report.data[0].values["refund"], -0.004);
+    assert_eq!(report.data[0].values["model/a"], 1.25);
+    assert_eq!(
+        report.series,
+        vec![CurrentUserCreditUsageSeries {
+            key: "model/a".into(),
+            label: "Model A".into(),
+            total: 1.25
+        }]
+    );
+}
+
+#[test]
+fn workspace_report_preserves_activity_models_and_grouped_costs() {
+    let body = json!({
+        "balance_unit":"credits","group_by":"day","breakdown_by":["model"],
+        "active_users_summary":{"total_users":3,"clients":[{"client_id":"future","users":2}],"models":[{"model":"m","users":3,"threads":4,"turns":5}]},
+        "data":[{"date":"2026-09-21","totals":{"users":3,"threads":4,"turns":5,"credits":1.25,"cost_usd":"0.0000000000001","text_total_tokens":99},
+        "clients":[{"client_id":"future","users":2,"threads":3,"turns":4,"credits":0.0}],
+        "models":[{"model":"m","speed":"fast","credits":1.25,"on_demand_credits":0.25,"text_total_tokens":99}],
+        "groups":[{"dimensions":{"model":"m","new-dimension":"new"},"is_other":false,"users":3,"turns":5,"cost_usd":"0.0000000000001"}]}]
+    });
+    let client = Client::response(200, &body.to_string());
+    let target = target(CHATGPT_BACKEND_BASE_URL);
+    let AnalyticsResponse::Messages(report) =
+        BackendClient::new(&client, &target, RouteStyle::ChatGpt)
+            .unwrap()
+            .read_analytics(
+                AnalyticsReport::Messages,
+                "2026-09-20",
+                "2026-09-21",
+                &CancellationSource::new().token(),
+            )
+            .unwrap()
+    else {
+        panic!("expected workspace usage")
+    };
+    let active = report.active_users_summary.unwrap();
+    assert_eq!(active.total_users, 3);
+    assert_eq!(
+        active.clients[0],
+        ClientActiveUsersCount {
+            client_id: "future".into(),
+            users: 2
+        }
+    );
+    assert_eq!(
+        active.models.unwrap()[0],
+        ModelActivitySummary {
+            model: "m".into(),
+            users: 3,
+            threads: 4,
+            turns: 5
+        }
+    );
+    assert_eq!(report.balance_unit.as_deref(), Some("credits"));
+    let day = &report.data[0];
+    assert_eq!(day.date, "2026-09-21");
+    assert_eq!(
+        (day.totals.users, day.totals.threads, day.totals.turns),
+        (3, 4, 5)
+    );
+    assert_eq!(day.totals.cost_usd.as_deref(), Some("0.0000000000001"));
+    assert_eq!(day.totals.text_total_tokens, Some(99));
+    assert_eq!(day.clients[0].cost_usd, None);
+    assert_eq!(day.clients[0].credits, 0.0);
+    let model = &day.models.as_ref().unwrap()[0];
+    assert_eq!(model.speed.as_deref(), Some("fast"));
+    assert_eq!(model.on_demand_credits, Some(0.25));
+    assert_eq!(model.text_total_tokens, Some(99));
+    let group = &day.groups.as_ref().unwrap()[0];
+    assert_eq!(group.dimensions["new-dimension"], "new");
+    assert_eq!(group.is_other, Some(false));
+    assert_eq!(group.cost_usd.as_deref(), Some("0.0000000000001"));
+}
+
+#[test]
+fn invocation_reports_preserve_plugin_and_skill_identity_and_counts() {
+    let target = target(CHATGPT_BACKEND_BASE_URL);
+    let token = CancellationSource::new().token();
+    let client = Client::response(
+        200,
+        r#"{"data":[{"date":"2026-09-21","plugin_usage_overviews":[{"plugin_id":"p","plugin_name":"review","display_name":"Review","marketplace":"company","invocation_counts":7}]}],"data_freshness_ts":"2026-09-22","group_by":"day"}"#,
+    );
+    let AnalyticsResponse::Plugins(report) =
+        BackendClient::new(&client, &target, RouteStyle::ChatGpt)
+            .unwrap()
+            .read_analytics(
+                AnalyticsReport::Plugins { limit: 10 },
+                "2026-09-20",
+                "2026-09-21",
+                &token,
+            )
+            .unwrap()
+    else {
+        panic!("expected plugin usage")
+    };
+    assert_eq!(report.data_freshness_ts.as_deref(), Some("2026-09-22"));
+    assert_eq!(
+        report.data[0].plugin_usage_overviews,
+        vec![PluginUsageOverview {
+            plugin_id: Some("p".into()),
+            plugin_name: "review".into(),
+            display_name: "Review".into(),
+            marketplace: Some("company".into()),
+            invocation_counts: 7
+        }]
+    );
+    let client = Client::response(
+        200,
+        r#"{"data":[{"date":"2026-09-21","skill_usage_overviews":[{"skill_name":"test","display_name":"Test","skill_ids":["local/test","plugin/test"],"invocation_counts":9}]}],"group_by":"day"}"#,
+    );
+    let AnalyticsResponse::Skills(report) =
+        BackendClient::new(&client, &target, RouteStyle::ChatGpt)
+            .unwrap()
+            .read_analytics(
+                AnalyticsReport::Skills { limit: 10 },
+                "2026-09-20",
+                "2026-09-21",
+                &token,
+            )
+            .unwrap()
+    else {
+        panic!("expected skill usage")
+    };
+    assert_eq!(report.data_freshness_ts, None);
+    assert_eq!(
+        report.data[0].skill_usage_overviews,
+        vec![SkillUsageOverview {
+            skill_name: "test".into(),
+            display_name: "Test".into(),
+            skill_ids: vec!["local/test".into(), "plugin/test".into()],
+            invocation_counts: 9
+        }]
+    );
+}
+
+#[test]
+fn reports_reject_another_report_shape_without_exposing_body() {
+    let target = target(CHATGPT_BACKEND_BASE_URL);
+    let client = Client::response(
+        200,
+        r#"{"data":[{"date":"2026-09-21","product_surface":"private-surface","credit_amount":1}]}"#,
+    );
+    for report in [
+        AnalyticsReport::Messages,
+        AnalyticsReport::Usage,
+        AnalyticsReport::Plugins { limit: 5 },
+        AnalyticsReport::Skills { limit: 5 },
+    ] {
+        let error = BackendClient::new(&client, &target, RouteStyle::ChatGpt)
+            .unwrap()
+            .read_analytics(
+                report,
+                "2026-09-20",
+                "2026-09-21",
+                &CancellationSource::new().token(),
+            )
+            .unwrap_err();
+        assert_eq!(error, RequestError::InvalidResponse);
+        assert!(!format!("{error:?} {error}").contains("private-surface"));
+    }
+}
+
+#[test]
+fn plan_history_preserves_approximation_freshness_and_fractional_breakdowns() {
+    let target = target(CHATGPT_BACKEND_BASE_URL);
+    for approximate in [json!(null), json!(false), json!(true)] {
+        let client = Client::response(200, &json!({"data_as_of":"2026-09-21","coverage_start":null,"coverage_complete":true,"approximate":approximate,"boundary_tolerance_seconds":300,
+            "periods":[{"id":"p","window_minutes":300,"plan_type":"plus","starts_at":"2026-09-20","ends_at":"2026-09-21","accounting_complete":true,"used_basis_points":12.75,"breakdowns":[{"dimension":"model","rows":[{"key":"m","basis_points":12.75}]}]}]}).to_string());
+        let history = BackendClient::new(&client, &target, RouteStyle::ChatGpt)
+            .unwrap()
+            .read_plan_limit_history(&CancellationSource::new().token())
+            .unwrap()
+            .unwrap();
+        assert_eq!(history.approximate, approximate.as_bool());
+        assert_eq!(history.data_as_of.as_deref(), Some("2026-09-21"));
+        assert_eq!(history.coverage_start, None);
+        assert_eq!(history.boundary_tolerance_seconds, Some(300));
+        assert!(history.coverage_complete);
+        assert!(history.periods[0].accounting_complete);
+        assert_eq!(history.periods[0].used_basis_points, Some(12.75));
+        assert_eq!(
+            history.periods[0].breakdowns.as_ref().unwrap()[0].rows[0],
+            PlanLimitValue {
+                key: "m".into(),
+                basis_points: 12.75
+            }
+        );
+    }
+}
 
 #[test]
 fn every_analytics_report_uses_its_route_query_and_typed_response() {

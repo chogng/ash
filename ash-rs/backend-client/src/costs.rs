@@ -330,3 +330,7 @@ fn credit_amount<'de, D: serde::Deserializer<'de>>(
     }
     Ok(value)
 }
+
+#[cfg(test)]
+#[path = "costs_tests.rs"]
+mod tests;
