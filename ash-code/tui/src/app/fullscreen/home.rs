@@ -139,7 +139,7 @@ pub(super) fn draw(
         ]),
         Line::default(),
         Line::from(Span::styled(
-            "Start a task below, or continue a previous session.",
+            context.localize("Start a task below, or continue a previous session."),
             Style::default().fg(context.muted()),
         )),
     ];
@@ -164,7 +164,7 @@ pub(super) fn draw(
                 Paragraph::new(format!(
                     "{}{}",
                     selection_marker(!super::modal::is_open(app)),
-                    ACTIONS[index].1
+                    context.localize(ACTIONS[index].1)
                 ))
                 .style(style),
                 Rect::new(
@@ -201,7 +201,12 @@ pub(super) fn draw(
         )
         .add_modifier(Modifier::BOLD);
         frame.render_widget(
-            Paragraph::new(format!("{}{}", selection_marker(selected), label)).style(style),
+            Paragraph::new(format!(
+                "{}{}",
+                selection_marker(selected),
+                context.localize(label)
+            ))
+            .style(style),
             Rect::new(areas.actions.x, y, areas.actions.width, 1),
         );
     }

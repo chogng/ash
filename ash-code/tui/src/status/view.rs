@@ -115,7 +115,10 @@ fn styled_policy_line(
 ) -> Line<'static> {
     let permission_prefix = approval_mode_text(approval);
     if policy != permission_prefix {
-        return Line::styled(policy, Style::default().fg(context.chat_input_chrome()));
+        return Line::styled(
+            context.localize(&policy).into_owned(),
+            Style::default().fg(context.chat_input_chrome()),
+        );
     }
     let next = approval_mode_display(approval.next);
     if let Some(current_mode) = approval.current.filter(|current| *current != approval.next) {
@@ -126,7 +129,11 @@ fn styled_policy_line(
                 Style::default().fg(mode_color(current_mode, context)),
             ),
             Span::styled(
-                format!(" current: {} · ", current.label),
+                format!(
+                    " {}: {} · ",
+                    context.localize("current"),
+                    context.localize(current.label)
+                ),
                 Style::default().fg(context.chat_input_chrome()),
             ),
             Span::styled(
@@ -134,7 +141,11 @@ fn styled_policy_line(
                 Style::default().fg(mode_color(approval.next, context)),
             ),
             Span::styled(
-                format!(" next: {}", next.label),
+                format!(
+                    " {}: {}",
+                    context.localize("next"),
+                    context.localize(next.label)
+                ),
                 Style::default().fg(context.chat_input_chrome()),
             ),
         ];
@@ -147,7 +158,7 @@ fn styled_policy_line(
             Style::default().fg(mode_color(approval.next, context)),
         ),
         Span::styled(
-            format!(" {}", next.label),
+            format!(" {}", context.localize(next.label)),
             Style::default().fg(context.chat_input_chrome()),
         ),
     ];

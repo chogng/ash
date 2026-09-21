@@ -115,7 +115,12 @@ fn draw_content(
             pointer: ChatHistoryPointerState::default(),
         }
         .render(frame, areas.session.transcript, context);
-        let title = format!("  Preview · {} · read only", preview.title);
+        let title = format!(
+            "  {} · {} · {}",
+            context.localize("Preview"),
+            preview.title,
+            context.localize("read only")
+        );
         frame.render_widget(
             Paragraph::new(title).style(Style::default().fg(context.muted())),
             areas.session.composer,

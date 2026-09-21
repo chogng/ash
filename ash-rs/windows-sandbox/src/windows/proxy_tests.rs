@@ -128,7 +128,9 @@ fn matching_account_and_capability_reaches_upstream() {
                     // Wait for the forwarded request instead of treating WouldBlock as EOF.
                     stream.set_nonblocking(false).unwrap();
                     let mut buf = [0u8; 1024];
-                    stream.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+                    stream
+                        .set_read_timeout(Some(Duration::from_secs(2)))
+                        .unwrap();
                     let read_len = stream.read(&mut buf).unwrap();
                     if read_len > 0 {
                         let _ = stream.write_all(

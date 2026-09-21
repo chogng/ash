@@ -67,6 +67,10 @@ impl<T: TabListItem> TabListState<T> {
         &self.tabs
     }
 
+    pub(crate) fn tabs_mut(&mut self) -> &mut [T] {
+        &mut self.tabs
+    }
+
     pub(crate) fn active_index(&self) -> Option<usize> {
         self.active
     }
@@ -168,6 +172,27 @@ pub(crate) fn index_at<T: TabListItem>(
         })
 }
 
+pub(crate) fn localized_index_at<T: TabListItem>(
+    tabs: &[T],
+    area: Rect,
+    position: ratatui::layout::Position,
+    language: crate::nls::Language,
+) -> Option<usize> {
+    if !area.contains(position) {
+        return None;
+    }
+    localized_tab_positions(tabs, area.width, language)
+        .iter()
+        .enumerate()
+        .find_map(|(index, tab)| {
+            (usize::from(position.y - area.y) == tab.row
+                && usize::from(position.x - area.x) >= tab.start
+                && usize::from(position.x - area.x) < tab.start + tab.width
+                && tabs[index].tab_enabled())
+            .then_some(index)
+        })
+}
+
 pub(crate) fn draw<T: TabListItem>(
     frame: &mut Frame<'_>,
     area: Rect,
@@ -203,7 +228,7 @@ fn tab_lines<T: TabListItem>(
     if tabs.is_empty() {
         return Vec::new();
     }
-    let positions = tab_positions(tabs, width);
+    let positions = localized_tab_positions(tabs, width, context.language());
     let row_count = positions
         .last()
         .map(|position| position.row.saturating_add(1))
@@ -245,7 +270,10 @@ fn tab_lines<T: TabListItem>(
                 style = style.add_modifier(Modifier::UNDERLINED);
             }
         }
-        spans.push(Span::styled(format!(" {} ", tab.tab_label()), style));
+        spans.push(Span::styled(
+            format!(" {} ", context.localize(tab.tab_label())),
+            style,
+        ));
         *row_width = position.start.saturating_add(position.width);
     }
     lines.into_iter().map(Line::from).collect()
@@ -259,13 +287,34 @@ struct TabPosition {
 }
 
 fn tab_positions<T: TabListItem>(tabs: &[T], width: u16) -> Vec<TabPosition> {
+    positions_for_widths(tabs, width, tabs.iter().map(|tab| tab.tab_label().width()))
+}
+
+fn localized_tab_positions<T: TabListItem>(
+    tabs: &[T],
+    width: u16,
+    language: crate::nls::Language,
+) -> Vec<TabPosition> {
+    positions_for_widths(
+        tabs,
+        width,
+        tabs.iter()
+            .map(|tab| crate::nls::localize(language, tab.tab_label()).width()),
+    )
+}
+
+fn positions_for_widths<T: TabListItem>(
+    tabs: &[T],
+    width: u16,
+    label_widths: impl IntoIterator<Item = usize>,
+) -> Vec<TabPosition> {
     let available_width = usize::from(width.max(1));
     let mut positions = Vec::with_capacity(tabs.len());
     let mut row = 0usize;
     let mut row_width = 0usize;
 
-    for tab in tabs {
-        let tab_width = tab.tab_label().width().saturating_add(2);
+    for tab_width in label_widths {
+        let tab_width = tab_width.saturating_add(2);
         let gap = usize::from(row_width > 0) * TAB_GAP;
         if row_width > 0
             && row_width.saturating_add(gap).saturating_add(tab_width) > available_width

@@ -59,7 +59,11 @@ pub(crate) fn more_line(
     context: RenderContext<'_>,
 ) -> Line<'static> {
     let position = if direction == '↑' { "above" } else { "below" };
-    let text = format!("{direction} {count} more {position}");
+    let text = format!(
+        "{direction} {count} {} {}",
+        context.localize("more"),
+        context.localize(position)
+    );
     Line::styled(
         pad_to_width(&truncate_to_width(&text, width), width),
         Style::default()

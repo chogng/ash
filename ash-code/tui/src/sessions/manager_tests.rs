@@ -164,9 +164,10 @@ fn completed_time_is_relative_but_working_time_is_runtime() {
     let completed = session("done", SessionManagerStatus::Completed, None);
     let working = session("work", SessionManagerStatus::Working, None);
 
-    assert_eq!(elapsed_label(&completed, 1_810_000), "");
-    assert_eq!(elapsed_label(&working, 10_750_000), "2h");
-    assert_eq!(elapsed_label(&completed, 259_210_000), "3d ago");
+    let context = crate::render::test_context();
+    assert_eq!(elapsed_label(&completed, 1_810_000, context), "");
+    assert_eq!(elapsed_label(&working, 10_750_000, context), "2h");
+    assert_eq!(elapsed_label(&completed, 259_210_000, context), "3d ago");
 }
 
 #[test]

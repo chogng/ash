@@ -49,6 +49,14 @@ impl DetailList {
             content_width,
         )
     }
+
+    pub(crate) fn localize(&mut self, language: crate::nls::Language) {
+        self.title = crate::nls::localize_owned(language, &self.title);
+        for row in &mut self.rows {
+            row.label = crate::nls::localize_owned(language, &row.label);
+            row.value = crate::nls::localize_owned(language, &row.value);
+        }
+    }
 }
 
 use crate::render::RenderContext;

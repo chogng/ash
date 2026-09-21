@@ -2,6 +2,7 @@
 
 use serde::Deserialize;
 use serde::Serialize;
+use std::borrow::Cow;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub(crate) enum Language {
@@ -263,6 +264,1798 @@ const fn french(message: Message) -> &'static str {
         Message::ConfigNoMatches => "Aucune configuration correspondante",
         Message::ConfigNoLanguageServers => "Aucun serveur de langage configuré",
     }
+}
+
+#[derive(Clone, Copy)]
+struct Translation {
+    english: &'static str,
+    japanese: &'static str,
+    chinese: &'static str,
+    french: &'static str,
+}
+
+const fn translation(
+    english: &'static str,
+    japanese: &'static str,
+    chinese: &'static str,
+    french: &'static str,
+) -> Translation {
+    Translation {
+        english,
+        japanese,
+        chinese,
+        french,
+    }
+}
+
+/// Product-owned TUI chrome. Server-provided names, user content, model output, paths, command
+/// identifiers, and code are intentionally absent so they remain byte-for-byte source text.
+const UI_TRANSLATIONS: &[Translation] = &[
+    translation("above", "上", "上方", "au-dessus"),
+    translation("below", "下", "下方", "en dessous"),
+    translation("active", "有効", "活动", "actif"),
+    translation("archived", "アーカイブ済み", "已归档", "archivé"),
+    translation("cancelled", "キャンセル済み", "已取消", "annulé"),
+    translation("collecting", "収集中", "正在收集", "collecte en cours"),
+    translation("completed", "完了", "已完成", "terminé"),
+    translation("connecting", "接続中", "正在连接", "connexion"),
+    translation("failed", "失敗", "失败", "échec"),
+    translation("idle", "待機中", "空闲", "inactif"),
+    translation("loaded", "読み込み済み", "已加载", "chargés"),
+    translation("needs input", "入力待ち", "需要输入", "saisie requise"),
+    translation("not connected", "未接続", "未连接", "non connecté"),
+    translation("queued", "待機中", "已排队", "en attente"),
+    translation("read only", "読み取り専用", "只读", "lecture seule"),
+    translation(
+        "ready for review",
+        "レビュー待ち",
+        "等待审阅",
+        "prêt à relire",
+    ),
+    translation("running", "実行中", "运行中", "en cours"),
+    translation("satisfied", "完了", "已满足", "satisfait"),
+    translation("stopped", "停止", "已停止", "arrêté"),
+    translation("unavailable", "利用不可", "不可用", "indisponible"),
+    translation("unknown", "不明", "未知", "inconnu"),
+    translation("waiting", "待機中", "等待中", "en attente"),
+    translation("working", "処理中", "工作中", "en cours"),
+    translation(
+        "waiting for next key",
+        "次のキーを待っています",
+        "正在等待下一个按键",
+        "en attente de la touche suivante",
+    ),
+    translation(
+        "Add an alternate chord",
+        "代替コードを追加",
+        "添加备用组合键",
+        "Ajouter une séquence alternative",
+    ),
+    translation(
+        "Add an alternate key",
+        "代替キーを追加",
+        "添加备用按键",
+        "Ajouter une touche alternative",
+    ),
+    translation(
+        "Add memory",
+        "メモリを追加",
+        "添加记忆",
+        "Ajouter une mémoire",
+    ),
+    translation(
+        "Add project folder",
+        "プロジェクトフォルダーを追加",
+        "添加项目文件夹",
+        "Ajouter un dossier de projet",
+    ),
+    translation(
+        "Added directory",
+        "ディレクトリを追加しました",
+        "已添加目录",
+        "Dossier ajouté",
+    ),
+    translation(
+        "Added project folder",
+        "プロジェクトフォルダーを追加しました",
+        "已添加项目文件夹",
+        "Dossier de projet ajouté",
+    ),
+    translation(
+        "Adding directory…",
+        "ディレクトリを追加中…",
+        "正在添加目录…",
+        "Ajout du dossier…",
+    ),
+    translation("Agent", "エージェント", "智能体", "Agent"),
+    translation("All", "すべて", "全部", "Tous"),
+    translation(
+        "Approval required",
+        "承認が必要です",
+        "需要批准",
+        "Approbation requise",
+    ),
+    translation(
+        "Approve once",
+        "今回のみ承認",
+        "仅批准一次",
+        "Approuver une fois",
+    ),
+    translation("Archived", "アーカイブ", "已归档", "Archivées"),
+    translation("Branches", "ブランチ", "分支", "Branches"),
+    translation(
+        "Cancel sign-in",
+        "サインインをキャンセル",
+        "取消登录",
+        "Annuler la connexion",
+    ),
+    translation(
+        "ChatGPT subscription",
+        "ChatGPT サブスクリプション",
+        "ChatGPT 订阅",
+        "Abonnement ChatGPT",
+    ),
+    translation(
+        "Clear user shortcuts",
+        "ユーザーショートカットを消去",
+        "清除用户快捷键",
+        "Effacer les raccourcis utilisateur",
+    ),
+    translation("Closed", "終了", "已关闭", "Fermés"),
+    translation("Commands", "コマンド", "命令", "Commandes"),
+    translation(
+        "Complete provider name and Base URL to save",
+        "保存するにはプロバイダー名とベース URL を入力してください",
+        "请填写提供商名称和基础 URL 后再保存",
+        "Renseignez le fournisseur et l’URL de base avant d’enregistrer",
+    ),
+    translation("Connected", "接続済み", "已连接", "Connectés"),
+    translation("Connection", "接続", "连接", "Connexion"),
+    translation("Connectors", "コネクター", "连接器", "Connecteurs"),
+    translation(
+        "Context usage",
+        "コンテキスト使用量",
+        "上下文用量",
+        "Utilisation du contexte",
+    ),
+    translation("Current", "現在", "当前", "Actuelle"),
+    translation(
+        "Custom commands",
+        "カスタムコマンド",
+        "自定义命令",
+        "Commandes personnalisées",
+    ),
+    translation("Dashboard", "ダッシュボード", "仪表盘", "Tableau de bord"),
+    translation("Decline", "拒否", "拒绝", "Refuser"),
+    translation("Diagnostics", "診断", "诊断", "Diagnostics"),
+    translation("Directories", "ディレクトリ", "目录", "Dossiers"),
+    translation(
+        "Directory already added",
+        "ディレクトリは追加済みです",
+        "目录已添加",
+        "Dossier déjà ajouté",
+    ),
+    translation(
+        "Disconnect from Ash",
+        "Ash から切断",
+        "断开 Ash 连接",
+        "Se déconnecter d’Ash",
+    ),
+    translation(
+        "Duplicate pinned model",
+        "固定済みモデルが重複しています",
+        "固定模型重复",
+        "Modèle épinglé en double",
+    ),
+    translation(
+        "Enter a directory path",
+        "ディレクトリパスを入力",
+        "输入目录路径",
+        "Saisir le chemin du dossier",
+    ),
+    translation("Enter code", "コードを入力", "输入代码", "Saisir le code"),
+    translation("Error", "エラー", "错误", "Erreur"),
+    translation("Favorites", "お気に入り", "收藏", "Favoris"),
+    translation(
+        "File read",
+        "ファイル読み取り",
+        "读取文件",
+        "Lecture de fichier",
+    ),
+    translation(
+        "File write",
+        "ファイル書き込み",
+        "写入文件",
+        "Écriture de fichier",
+    ),
+    translation("Fork", "フォーク", "派生", "Fork"),
+    translation("Help", "ヘルプ", "帮助", "Aide"),
+    translation(
+        "Help and shortcuts",
+        "ヘルプとショートカット",
+        "帮助与快捷键",
+        "Aide et raccourcis",
+    ),
+    translation("ID", "ID", "ID", "ID"),
+    translation("Issues", "Issue", "议题", "Tickets"),
+    translation("Keymap", "キーマップ", "快捷键", "Raccourcis"),
+    translation(
+        "Language servers",
+        "言語サーバー",
+        "语言服务器",
+        "Serveurs de langage",
+    ),
+    translation("Lifecycle", "ライフサイクル", "生命周期", "Cycle de vie"),
+    translation(
+        "Loading context…",
+        "コンテキストを読み込み中…",
+        "正在加载上下文…",
+        "Chargement du contexte…",
+    ),
+    translation(
+        "Loading branches…",
+        "ブランチを読み込み中…",
+        "正在加载分支…",
+        "Chargement des branches…",
+    ),
+    translation(
+        "Loading issues...",
+        "Issue を読み込み中...",
+        "正在加载议题...",
+        "Chargement des tickets...",
+    ),
+    translation(
+        "Loading Project folders…",
+        "プロジェクトフォルダーを読み込み中…",
+        "正在加载项目文件夹…",
+        "Chargement des dossiers de projet…",
+    ),
+    translation("Loading…", "読み込み中…", "正在加载…", "Chargement…"),
+    translation("MCP", "MCP", "MCP", "MCP"),
+    translation("Memories", "メモリ", "记忆", "Mémoires"),
+    translation("Cancel", "キャンセル", "取消", "Annuler"),
+    translation("Startup", "起動情報", "启动信息", "Démarrage"),
+    translation("Branch", "ブランチ", "分支", "Branche"),
+    translation("Forked from", "フォーク元", "派生自", "Dérivé de"),
+    translation("Join", "参加", "加入", "Jonction"),
+    translation(
+        "Delivered result",
+        "配信済み結果",
+        "已交付结果",
+        "Résultat livré",
+    ),
+    translation(
+        "Custom color themes",
+        "カスタム配色テーマ",
+        "自定义配色主题",
+        "Thèmes de couleurs personnalisés",
+    ),
+    translation(
+        "No custom color themes found",
+        "カスタム配色テーマが見つかりません",
+        "未找到自定义配色主题",
+        "Aucun thème de couleurs personnalisé",
+    ),
+    translation(
+        "Diff preview",
+        "差分プレビュー",
+        "差异预览",
+        "Aperçu du diff",
+    ),
+    translation(
+        "Syntax palette",
+        "構文パレット",
+        "语法配色",
+        "Palette syntaxique",
+    ),
+    translation(
+        "Auto (match terminal)",
+        "自動（ターミナルに合わせる）",
+        "自动（匹配终端）",
+        "Auto (selon le terminal)",
+    ),
+    translation("Dark mode", "ダークモード", "深色模式", "Mode sombre"),
+    translation("Light mode", "ライトモード", "浅色模式", "Mode clair"),
+    translation(
+        "Custom color theme",
+        "カスタム配色テーマ",
+        "自定义配色主题",
+        "Thème de couleurs personnalisé",
+    ),
+    translation(
+        "User-defined",
+        "ユーザー定義",
+        "用户定义",
+        "Défini par l’utilisateur",
+    ),
+    translation(
+        "API usage billing",
+        "API 使用量課金",
+        "API 用量计费",
+        "Facturation à l’usage de l’API",
+    ),
+    translation("Subscription", "サブスクリプション", "订阅", "Abonnement"),
+    translation("Local", "ローカル", "本地", "Local"),
+    translation("Enterprise", "エンタープライズ", "企业", "Entreprise"),
+    translation(
+        "Access unknown",
+        "アクセス不明",
+        "访问方式未知",
+        "Accès inconnu",
+    ),
+    translation(
+        "Model pinned",
+        "モデルを固定しました",
+        "模型已固定",
+        "Modèle épinglé",
+    ),
+    translation(
+        "Model unpinned",
+        "モデルの固定を解除しました",
+        "模型已取消固定",
+        "Modèle désépinglé",
+    ),
+    translation(
+        "The key is hidden and stored in the profile secret store",
+        "キーは非表示でプロファイルのシークレットストアに保存されます",
+        "密钥将被隐藏并存储在配置文件的机密存储中",
+        "La clé est masquée et stockée dans le coffre de secrets du profil",
+    ),
+    translation(
+        "Enter API key",
+        "API キーを入力",
+        "输入 API 密钥",
+        "Saisir la clé API",
+    ),
+    translation(
+        "New custom provider",
+        "新しいカスタムプロバイダー",
+        "新建自定义提供商",
+        "Nouveau fournisseur personnalisé",
+    ),
+    translation(
+        "Read files",
+        "ファイルを読み取り",
+        "读取文件",
+        "Lire les fichiers",
+    ),
+    translation(
+        "Watch file changes",
+        "ファイル変更を監視",
+        "监视文件更改",
+        "Surveiller les modifications",
+    ),
+    translation(
+        "Browse files",
+        "ファイルを参照",
+        "浏览文件",
+        "Parcourir les fichiers",
+    ),
+    translation(
+        "Search files",
+        "ファイルを検索",
+        "搜索文件",
+        "Rechercher dans les fichiers",
+    ),
+    translation(
+        "Load instructions",
+        "指示を読み込み",
+        "加载指令",
+        "Charger les instructions",
+    ),
+    translation(
+        "Load config",
+        "設定を読み込み",
+        "加载配置",
+        "Charger la configuration",
+    ),
+    translation("LSP", "LSP", "语言服务", "LSP"),
+    translation("Hooks", "フック", "钩子", "Hooks"),
+    translation("Plugins", "プラグイン", "插件", "Plugins"),
+    translation(
+        "Inspect repository",
+        "リポジトリを調査",
+        "检查仓库",
+        "Inspecter le dépôt",
+    ),
+    translation(
+        "Mutate repository",
+        "リポジトリを変更",
+        "更改仓库",
+        "Modifier le dépôt",
+    ),
+    translation(
+        "Allow read_file, grep and glob",
+        "read_file、grep、glob を許可",
+        "允许 read_file、grep 和 glob",
+        "Autoriser read_file, grep et glob",
+    ),
+    translation(
+        "Allow file-writing tools and apply_patch",
+        "ファイル書き込みツールと apply_patch を許可",
+        "允许文件写入工具和 apply_patch",
+        "Autoriser les outils d’écriture et apply_patch",
+    ),
+    translation(
+        "Allow shell-command and Session terminals",
+        "shell-command とセッションターミナルを許可",
+        "允许 shell-command 和会话终端",
+        "Autoriser shell-command et les terminaux de session",
+    ),
+    translation(
+        "Watch this directory for file changes",
+        "このディレクトリの変更を監視",
+        "监视此目录中的文件更改",
+        "Surveiller les modifications de ce dossier",
+    ),
+    translation(
+        "Show this directory in file browsing surfaces",
+        "ファイル参照画面にこのディレクトリを表示",
+        "在文件浏览界面中显示此目录",
+        "Afficher ce dossier dans les navigateurs de fichiers",
+    ),
+    translation(
+        "Search file contents in this directory",
+        "このディレクトリ内のファイル内容を検索",
+        "搜索此目录中的文件内容",
+        "Rechercher dans le contenu des fichiers de ce dossier",
+    ),
+    translation(
+        "Load .ash/instructions and .ash/agents",
+        ".ash/instructions と .ash/agents を読み込み",
+        "加载 .ash/instructions 和 .ash/agents",
+        "Charger .ash/instructions et .ash/agents",
+    ),
+    translation(
+        "Load configuration supplied by this directory",
+        "このディレクトリが提供する設定を読み込み",
+        "加载此目录提供的配置",
+        "Charger la configuration fournie par ce dossier",
+    ),
+    translation(
+        "Use language servers for this directory; starting them also requires Run commands",
+        "このディレクトリで言語サーバーを使用；起動にはコマンド実行も必要",
+        "为此目录使用语言服务器；启动还需要运行命令权限",
+        "Utiliser les serveurs de langage pour ce dossier ; leur démarrage exige aussi l’exécution de commandes",
+    ),
+    translation(
+        "Read repository metadata and status",
+        "リポジトリのメタデータと状態を読み取り",
+        "读取仓库元数据和状态",
+        "Lire les métadonnées et l’état du dépôt",
+    ),
+    translation(
+        "Change repository state",
+        "リポジトリの状態を変更",
+        "更改仓库状态",
+        "Modifier l’état du dépôt",
+    ),
+    translation(
+        "Enter one directory path without control characters",
+        "制御文字を含まないディレクトリパスを 1 つ入力",
+        "输入一个不含控制字符的目录路径",
+        "Saisissez un chemin de dossier sans caractères de contrôle",
+    ),
+    translation(
+        "This memory changed. Refresh and select it again; your draft is kept.",
+        "このメモリは変更されました。更新して再選択してください；下書きは保持されます。",
+        "此记忆已更改。请刷新后重新选择；草稿已保留。",
+        "Cette mémoire a changé. Actualisez et resélectionnez-la ; votre brouillon est conservé.",
+    ),
+    translation(
+        "The memory list changed. Refresh the list.",
+        "メモリ一覧が変更されました。一覧を更新してください。",
+        "记忆列表已更改。请刷新列表。",
+        "La liste des mémoires a changé. Actualisez-la.",
+    ),
+    translation(
+        "This memory was deleted. Refresh the list.",
+        "このメモリは削除されました。一覧を更新してください。",
+        "此记忆已删除。请刷新列表。",
+        "Cette mémoire a été supprimée. Actualisez la liste.",
+    ),
+    translation(
+        "Check the title, content and memory reference.",
+        "タイトル、内容、メモリ参照を確認してください。",
+        "请检查标题、内容和记忆引用。",
+        "Vérifiez le titre, le contenu et la référence mémoire.",
+    ),
+    translation(
+        "Discover Skills from this directory",
+        "このディレクトリからスキルを検出（",
+        "从此目录发现技能（",
+        "Découvrir les compétences de ce dossier (",
+    ),
+    translation(
+        "Authorize MCP declarations",
+        "MCP 宣言を承認（",
+        "授权 MCP 声明（",
+        "Autoriser les déclarations MCP (",
+    ),
+    translation(
+        "Discover Hooks",
+        "フックを検出（",
+        "发现钩子（",
+        "Découvrir les hooks (",
+    ),
+    translation(
+        "Authorize Plugin requests",
+        "プラグイン要求を承認（",
+        "授权插件请求（",
+        "Autoriser les demandes de plugin (",
+    ),
+    translation("reset", "リセット", "重置", "réinitialiser"),
+    translation(
+        "remove provider",
+        "プロバイダーを削除",
+        "移除提供商",
+        "supprimer le fournisseur",
+    ),
+    translation(
+        "image in clipboard",
+        "クリップボードに画像があります",
+        "剪贴板中有图片",
+        "image dans le presse-papiers",
+    ),
+    translation(
+        "Add a directory to this project",
+        "このプロジェクトにディレクトリを追加",
+        "向此项目添加目录",
+        "Ajouter un dossier à ce projet",
+    ),
+    translation(
+        "restore before this turn; keep the original branch",
+        "このターンの前に復元；元のブランチは保持",
+        "恢复到此轮之前；保留原分支",
+        "restaurer avant ce tour ; conserver la branche d’origine",
+    ),
+    translation(
+        "Search message checkpoints",
+        "メッセージチェックポイントを検索",
+        "搜索消息检查点",
+        "Rechercher les points de contrôle",
+    ),
+    translation(
+        "Search MCP servers",
+        "MCP サーバーを検索",
+        "搜索 MCP 服务器",
+        "Rechercher les serveurs MCP",
+    ),
+    translation(
+        "Search available skills",
+        "利用可能なスキルを検索",
+        "搜索可用技能",
+        "Rechercher les compétences disponibles",
+    ),
+    translation(
+        "Search saved sessions",
+        "保存済みセッションを検索",
+        "搜索已保存的会话",
+        "Rechercher les sessions enregistrées",
+    ),
+    translation(
+        "Search project folders",
+        "プロジェクトフォルダーを検索",
+        "搜索项目文件夹",
+        "Rechercher les dossiers de projet",
+    ),
+    translation("Model", "モデル", "模型", "Modèle"),
+    translation(
+        "Model calls",
+        "モデル呼び出し",
+        "模型调用",
+        "Appels du modèle",
+    ),
+    translation(
+        "Modify files",
+        "ファイルを変更",
+        "修改文件",
+        "Modifier les fichiers",
+    ),
+    translation("Network", "ネットワーク", "网络", "Réseau"),
+    translation("New", "新規", "新建", "Nouveau"),
+    translation(
+        "No custom commands available",
+        "利用可能なカスタムコマンドはありません",
+        "没有可用的自定义命令",
+        "Aucune commande personnalisée",
+    ),
+    translation(
+        "No directories",
+        "ディレクトリがありません",
+        "没有目录",
+        "Aucun dossier",
+    ),
+    translation(
+        "No keymap diagnostics",
+        "キーマップ診断はありません",
+        "没有快捷键诊断",
+        "Aucun diagnostic de raccourci",
+    ),
+    translation(
+        "No matching branches",
+        "一致するブランチがありません",
+        "没有匹配的分支",
+        "Aucune branche correspondante",
+    ),
+    translation(
+        "No matching Connectors",
+        "一致するコネクターがありません",
+        "没有匹配的连接器",
+        "Aucun connecteur correspondant",
+    ),
+    translation(
+        "No matching help entries",
+        "一致するヘルプ項目がありません",
+        "没有匹配的帮助条目",
+        "Aucune aide correspondante",
+    ),
+    translation(
+        "No matching items",
+        "一致する項目がありません",
+        "没有匹配项",
+        "Aucun élément correspondant",
+    ),
+    translation(
+        "No matching shortcuts",
+        "一致するショートカットがありません",
+        "没有匹配的快捷键",
+        "Aucun raccourci correspondant",
+    ),
+    translation(
+        "No models here · Pin models from a provider tab to Favorites",
+        "モデルがありません · プロバイダーのタブからお気に入りに固定してください",
+        "这里没有模型 · 可在提供商标签页中固定到收藏",
+        "Aucun modèle · Épinglez-en depuis l’onglet d’un fournisseur",
+    ),
+    translation(
+        "No sessions yet",
+        "セッションはまだありません",
+        "还没有会话",
+        "Aucune session",
+    ),
+    translation(
+        "No test result received",
+        "テスト結果を受信できませんでした",
+        "未收到测试结果",
+        "Aucun résultat de test reçu",
+    ),
+    translation(
+        "No threads",
+        "スレッドがありません",
+        "没有线程",
+        "Aucun fil",
+    ),
+    translation("Not connected", "未接続", "未连接", "Non connectés"),
+    translation(
+        "Not signed in",
+        "サインインしていません",
+        "未登录",
+        "Non connecté",
+    ),
+    translation("Open", "未解決", "开放", "Ouverts"),
+    translation(
+        "Open in your browser",
+        "ブラウザーで開く",
+        "在浏览器中打开",
+        "Ouvrir dans le navigateur",
+    ),
+    translation("Parent", "親", "父级", "Parent"),
+    translation("Passed", "成功", "已通过", "Réussi"),
+    translation("Pinned", "固定済み", "已固定", "Épinglées"),
+    translation("Plan", "プラン", "计划", "Plan"),
+    translation("Preview", "プレビュー", "预览", "Aperçu"),
+    translation("Processes", "プロセス", "进程", "Processus"),
+    translation("Profile", "プロファイル", "配置档", "Profil"),
+    translation(
+        "Project folder already added",
+        "プロジェクトフォルダーは追加済みです",
+        "项目文件夹已添加",
+        "Dossier de projet déjà ajouté",
+    ),
+    translation("Quit", "終了", "退出", "Quitter"),
+    translation(
+        "Reading issue...",
+        "Issue を読み込み中...",
+        "正在读取议题...",
+        "Lecture du ticket...",
+    ),
+    translation(
+        "Record shortcut",
+        "ショートカットを記録",
+        "录制快捷键",
+        "Enregistrer le raccourci",
+    ),
+    translation(
+        "Remove directory",
+        "ディレクトリを削除",
+        "移除目录",
+        "Retirer le dossier",
+    ),
+    translation(
+        "Replace user shortcut with a chord",
+        "ユーザーショートカットをコードで置換",
+        "用组合键替换用户快捷键",
+        "Remplacer par une séquence",
+    ),
+    translation(
+        "Replace user shortcut with a key",
+        "ユーザーショートカットをキーで置換",
+        "用按键替换用户快捷键",
+        "Remplacer par une touche",
+    ),
+    translation("Resume", "再開", "恢复", "Reprendre"),
+    translation(
+        "Resume session",
+        "セッションを再開",
+        "恢复会话",
+        "Reprendre une session",
+    ),
+    translation("Root", "ルート", "根", "Racine"),
+    translation(
+        "Run commands",
+        "コマンドを実行",
+        "运行命令",
+        "Exécuter des commandes",
+    ),
+    translation("Saved", "保存しました", "已保存", "Enregistré"),
+    translation("Saving…", "保存中…", "正在保存…", "Enregistrement…"),
+    translation(
+        "Search branches",
+        "ブランチを検索",
+        "搜索分支",
+        "Rechercher des branches",
+    ),
+    translation(
+        "Search configuration",
+        "設定を検索",
+        "搜索配置",
+        "Rechercher dans la configuration",
+    ),
+    translation(
+        "Search connectors",
+        "コネクターを検索",
+        "搜索连接器",
+        "Rechercher des connecteurs",
+    ),
+    translation(
+        "Search help",
+        "ヘルプを検索",
+        "搜索帮助",
+        "Rechercher dans l’aide",
+    ),
+    translation(
+        "Search keywords or #number",
+        "キーワードまたは #番号を検索",
+        "搜索关键词或 #编号",
+        "Rechercher des mots-clés ou un n°",
+    ),
+    translation(
+        "Search shortcuts",
+        "ショートカットを検索",
+        "搜索快捷键",
+        "Rechercher des raccourcis",
+    ),
+    translation(
+        "Select a model or enter a model ID before testing",
+        "テスト前にモデルを選択するかモデル ID を入力してください",
+        "测试前请选择模型或输入模型 ID",
+        "Sélectionnez un modèle ou saisissez son ID avant le test",
+    ),
+    translation(
+        "Select one or more issues with Space.",
+        "Space で 1 件以上の Issue を選択してください。",
+        "请用空格键选择一个或多个议题。",
+        "Sélectionnez un ou plusieurs tickets avec Espace.",
+    ),
+    translation("Session", "セッション", "会话", "Session"),
+    translation(
+        "Session details",
+        "セッション詳細",
+        "会话详情",
+        "Détails de la session",
+    ),
+    translation("Session ID", "セッション ID", "会话 ID", "ID de session"),
+    translation("Settings", "設定", "设置", "Paramètres"),
+    translation("Shortcuts", "ショートカット", "快捷键", "Raccourcis"),
+    translation(
+        "Sign in with ChatGPT",
+        "ChatGPT でサインイン",
+        "使用 ChatGPT 登录",
+        "Se connecter avec ChatGPT",
+    ),
+    translation("Skills", "スキル", "技能", "Compétences"),
+    translation(
+        "Start a task below, or continue a previous session.",
+        "下でタスクを開始するか、以前のセッションを続けます。",
+        "在下方开始任务，或继续之前的会话。",
+        "Démarrez une tâche ci-dessous ou reprenez une session.",
+    ),
+    translation(
+        "Starting Issue session...",
+        "Issue セッションを開始中...",
+        "正在启动议题会话...",
+        "Démarrage de la session du ticket...",
+    ),
+    translation(
+        "Starting session…",
+        "セッションを開始中…",
+        "正在启动会话…",
+        "Démarrage de la session…",
+    ),
+    translation("Status", "ステータス", "状态", "État"),
+    translation("Status line", "ステータスライン", "状态栏", "Barre d’état"),
+    translation("Submitting…", "送信中…", "正在提交…", "Envoi…"),
+    translation("Switch", "切り替え", "切换", "Changer"),
+    translation(
+        "Switch branch",
+        "ブランチを切り替え",
+        "切换分支",
+        "Changer de branche",
+    ),
+    translation(
+        "Switch project folder",
+        "プロジェクトフォルダーを切り替え",
+        "切换项目文件夹",
+        "Changer de dossier de projet",
+    ),
+    translation(
+        "System configuration",
+        "システム設定",
+        "系统配置",
+        "Configuration système",
+    ),
+    translation("Test", "テスト", "测试", "Tester"),
+    translation("Testing…", "テスト中…", "正在测试…", "Test…"),
+    translation(
+        "The response belongs to another session.",
+        "応答は別のセッションに属しています。",
+        "响应属于另一个会话。",
+        "La réponse appartient à une autre session.",
+    ),
+    translation("Theme", "テーマ", "主题", "Thème"),
+    translation("Thread", "スレッド", "线程", "Fil"),
+    translation("Thread ID", "スレッド ID", "线程 ID", "ID du fil"),
+    translation("Threads", "スレッド", "线程", "Fils"),
+    translation("Total", "合計", "总计", "Total"),
+    translation("Total usage", "合計使用量", "总用量", "Utilisation totale"),
+    translation(
+        "Type keywords/#number",
+        "キーワード/#番号を入力",
+        "输入关键词/#编号",
+        "Saisir des mots-clés ou un n°",
+    ),
+    translation("User", "ユーザー", "用户", "Utilisateur"),
+    translation(
+        "User interface",
+        "ユーザーインターフェース",
+        "用户界面",
+        "Interface utilisateur",
+    ),
+    translation(
+        "Waiting for the request result",
+        "リクエスト結果を待っています",
+        "正在等待请求结果",
+        "En attente du résultat",
+    ),
+    translation(
+        "completed · choose Main or another Subagent",
+        "完了 · Main または別のサブエージェントを選択",
+        "已完成 · 请选择 Main 或其他子智能体",
+        "terminé · choisissez Main ou un autre sous-agent",
+    ),
+    translation(
+        "Type a new task · Tab actions · Esc return",
+        "新しいタスクを入力 · Tab 操作 · Esc 戻る",
+        "输入新任务 · Tab 操作 · Esc 返回",
+        "Saisissez une nouvelle tâche · Tab actions · Échap retour",
+    ),
+    translation(
+        "Type a task · Tab actions",
+        "タスクを入力 · Tab 操作",
+        "输入任务 · Tab 操作",
+        "Saisissez une tâche · Tab actions",
+    ),
+    translation(
+        "Type a task to begin, or use Tab to choose an action.",
+        "タスクを入力して開始するか、Tab で操作を選択します。",
+        "输入任务以开始，或按 Tab 选择操作。",
+        "Saisissez une tâche ou utilisez Tab pour choisir une action.",
+    ),
+    translation("Workspace", "ワークスペース", "工作区", "Espace de travail"),
+    translation("Working…", "処理中…", "正在处理…", "Traitement…"),
+    translation("actions", "操作", "操作", "actions"),
+    translation("ago", "前", "前", "il y a"),
+    translation("add", "追加", "添加", "ajouter"),
+    translation("answer", "回答", "回答", "répondre"),
+    translation("apply", "適用", "应用", "appliquer"),
+    translation("archive", "アーカイブ", "归档", "archiver"),
+    translation("back", "戻る", "返回", "retour"),
+    translation("cancel", "キャンセル", "取消", "annuler"),
+    translation("change", "変更", "更改", "modifier"),
+    translation("choose", "選択", "选择", "choisir"),
+    translation("close", "閉じる", "关闭", "fermer"),
+    translation("collapse", "折りたたむ", "折叠", "réduire"),
+    translation("commands", "コマンド", "命令", "commandes"),
+    translation("confirm", "確定", "确认", "confirmer"),
+    translation(
+        "connect/disconnect",
+        "接続/切断",
+        "连接/断开",
+        "connecter/déconnecter",
+    ),
+    translation(
+        "cycle policy",
+        "ポリシー切替",
+        "切换策略",
+        "changer de politique",
+    ),
+    translation("delete", "削除", "删除", "supprimer"),
+    translation("details", "詳細", "详情", "détails"),
+    translation("edit", "編集", "编辑", "modifier"),
+    translation(
+        "editing in progress",
+        "編集中",
+        "正在编辑",
+        "modification en cours",
+    ),
+    translation("expand", "展開", "展开", "développer"),
+    translation("input", "入力", "输入", "saisie"),
+    translation("interrupt", "中断", "中断", "interrompre"),
+    translation("move", "移動", "移动", "déplacer"),
+    translation("move down", "下へ移動", "下移", "descendre"),
+    translation("move up", "上へ移動", "上移", "monter"),
+    translation("more", "件", "项", "de plus"),
+    translation("navigate", "移動", "导航", "naviguer"),
+    translation("next", "次へ", "下一个", "suivant"),
+    translation("open", "開く", "打开", "ouvrir"),
+    translation("page down", "次のページ", "下一页", "page suivante"),
+    translation("page up", "前のページ", "上一页", "page précédente"),
+    translation("paste", "貼り付け", "粘贴", "coller"),
+    translation("permissions", "権限", "权限", "autorisations"),
+    translation("pin", "固定", "固定", "épingler"),
+    translation("preview", "プレビュー", "预览", "aperçu"),
+    translation("previous", "前へ", "上一个", "précédent"),
+    translation("refresh", "更新", "刷新", "actualiser"),
+    translation("remove", "削除", "移除", "retirer"),
+    translation("restore", "復元", "恢复", "restaurer"),
+    translation("resume", "再開", "恢复", "reprendre"),
+    translation("return", "戻る", "返回", "retour"),
+    translation(
+        "return to input",
+        "入力に戻る",
+        "返回输入",
+        "retour à la saisie",
+    ),
+    translation("rewind", "巻き戻す", "回退", "rembobiner"),
+    translation("save", "保存", "保存", "enregistrer"),
+    translation("scroll", "スクロール", "滚动", "défiler"),
+    translation("search", "検索", "搜索", "rechercher"),
+    translation("select", "選択", "选择", "sélectionner"),
+    translation("selected", "選択済み", "已选择", "sélectionnés"),
+    translation("send", "送信", "发送", "envoyer"),
+    translation("send now", "今すぐ送信", "立即发送", "envoyer maintenant"),
+    translation("start", "開始", "启动", "démarrer"),
+    translation("state", "状態", "状态", "état"),
+    translation("switch", "切り替え", "切换", "changer"),
+    translation("tabs", "タブ", "标签页", "onglets"),
+    translation("test", "テスト", "测试", "tester"),
+    translation("toggle", "切り替え", "切换", "basculer"),
+    translation("view details", "詳細を表示", "查看详情", "voir les détails"),
+    translation(
+        "Answer in the input below",
+        "下の入力欄で回答",
+        "在下方输入框中回答",
+        "Répondez dans le champ ci-dessous",
+    ),
+    translation("Queue", "キュー", "队列", "File"),
+    translation(
+        "Type your own answer",
+        "自分で入力",
+        "自己输入",
+        "Saisir votre réponse",
+    ),
+    translation("editing", "編集中", "正在编辑", "modification"),
+    translation("paused", "一時停止", "已暂停", "en pause"),
+    translation("sending", "送信中", "正在发送", "envoi"),
+    translation("to interrupt", "で中断", "可中断", "pour interrompre"),
+    translation("total", "合計", "总计", "au total"),
+    translation("Actions", "操作", "操作", "Actions"),
+    translation(
+        "Attach clipboard image",
+        "クリップボード画像を添付",
+        "附加剪贴板图片",
+        "Joindre l’image du presse-papiers",
+    ),
+    translation(
+        "Available context window",
+        "利用可能なコンテキスト",
+        "可用上下文窗口",
+        "Fenêtre de contexte disponible",
+    ),
+    translation(
+        "Cached input",
+        "キャッシュ済み入力",
+        "缓存输入",
+        "Entrée en cache",
+    ),
+    translation(
+        "Cached input share",
+        "キャッシュ入力の割合",
+        "缓存输入占比",
+        "Part d’entrée en cache",
+    ),
+    translation(
+        "Cache writes",
+        "キャッシュ書き込み",
+        "缓存写入",
+        "Écritures en cache",
+    ),
+    translation(
+        "Checkpoints",
+        "チェックポイント",
+        "检查点",
+        "Points de contrôle",
+    ),
+    translation(
+        "Copy last response",
+        "最後の応答をコピー",
+        "复制上一条回复",
+        "Copier la dernière réponse",
+    ),
+    translation(
+        "Cycle approval mode",
+        "承認モードを切り替え",
+        "切换批准模式",
+        "Changer le mode d’approbation",
+    ),
+    translation("Disabled", "無効", "已禁用", "Désactivés"),
+    translation("Enabled", "有効", "已启用", "Activés"),
+    translation(
+        "Full context window",
+        "コンテキスト全体",
+        "完整上下文窗口",
+        "Fenêtre de contexte complète",
+    ),
+    translation(
+        "Input tokens",
+        "入力トークン",
+        "输入令牌",
+        "Jetons d’entrée",
+    ),
+    translation(
+        "Interrupt or quit",
+        "中断または終了",
+        "中断或退出",
+        "Interrompre ou quitter",
+    ),
+    translation("Manage", "管理", "管理", "Gérer"),
+    translation(
+        "No color themes available",
+        "利用可能なカラーテーマはありません",
+        "没有可用的颜色主题",
+        "Aucun thème de couleur",
+    ),
+    translation(
+        "No matching MCP servers",
+        "一致する MCP サーバーがありません",
+        "没有匹配的 MCP 服务器",
+        "Aucun serveur MCP correspondant",
+    ),
+    translation(
+        "No matching project folders",
+        "一致するプロジェクトフォルダーがありません",
+        "没有匹配的项目文件夹",
+        "Aucun dossier de projet correspondant",
+    ),
+    translation(
+        "No matching sessions",
+        "一致するセッションがありません",
+        "没有匹配的会话",
+        "Aucune session correspondante",
+    ),
+    translation(
+        "No matching skills",
+        "一致するスキルがありません",
+        "没有匹配的技能",
+        "Aucune compétence correspondante",
+    ),
+    translation(
+        "No message checkpoints available",
+        "利用可能なメッセージチェックポイントはありません",
+        "没有可用的消息检查点",
+        "Aucun point de contrôle de message",
+    ),
+    translation(
+        "Open rewind checkpoints",
+        "巻き戻しチェックポイントを開く",
+        "打开回退检查点",
+        "Ouvrir les points de rembobinage",
+    ),
+    translation(
+        "Output tokens",
+        "出力トークン",
+        "输出令牌",
+        "Jetons de sortie",
+    ),
+    translation(
+        "P to pin/unpin",
+        "P で固定/解除",
+        "按 P 固定/取消固定",
+        "P pour épingler/désépingler",
+    ),
+    translation(
+        "Reasoning output",
+        "推論出力",
+        "推理输出",
+        "Sortie de raisonnement",
+    ),
+    translation(
+        "Reference cost",
+        "参考コスト",
+        "参考成本",
+        "Coût de référence",
+    ),
+    translation(
+        "Remaining context window",
+        "残りコンテキスト",
+        "剩余上下文窗口",
+        "Fenêtre de contexte restante",
+    ),
+    translation("Rewind", "巻き戻し", "回退", "Rembobiner"),
+    translation(
+        "Rewind escape gesture",
+        "巻き戻しの Esc 操作",
+        "回退退出手势",
+        "Geste d’échappement du rembobinage",
+    ),
+    translation("Sessions", "セッション", "会话", "Sessions"),
+    translation("Suspend Ash", "Ash を一時停止", "挂起 Ash", "Suspendre Ash"),
+    translation("Themes", "テーマ", "主题", "Thèmes"),
+    translation(
+        "Automatic model",
+        "自動モデル",
+        "自动模型",
+        "Modèle automatique",
+    ),
+    translation(
+        "Build anything",
+        "何でも作れます",
+        "构建任何内容",
+        "Créez ce que vous voulez",
+    ),
+    translation(
+        "Provider name",
+        "プロバイダー名",
+        "提供商名称",
+        "Nom du fournisseur",
+    ),
+    translation("Base URL", "ベース URL", "基础 URL", "URL de base"),
+    translation("API key", "API キー", "API 密钥", "Clé API"),
+    translation("Model ID", "モデル ID", "模型 ID", "ID du modèle"),
+    translation("API type", "API タイプ", "API 类型", "Type d’API"),
+    translation(
+        "Model context window",
+        "モデルのコンテキストウィンドウ",
+        "模型上下文窗口",
+        "Fenêtre de contexte du modèle",
+    ),
+    translation(
+        "API key (optional)",
+        "API キー（任意）",
+        "API 密钥（可选）",
+        "Clé API (facultative)",
+    ),
+    translation(
+        "Key saved · Enter to replace",
+        "キー保存済み · Enter で置換",
+        "密钥已保存 · 按 Enter 替换",
+        "Clé enregistrée · Entrée pour remplacer",
+    ),
+    translation(
+        "Leave empty to use the selected built-in model",
+        "選択中の組み込みモデルを使う場合は空欄",
+        "留空以使用已选择的内置模型",
+        "Laisser vide pour utiliser le modèle intégré sélectionné",
+    ),
+    translation(
+        "Provider name must contain 1 to 80 characters",
+        "プロバイダー名は 1〜80 文字で入力してください",
+        "提供商名称必须包含 1 到 80 个字符",
+        "Le nom du fournisseur doit contenir entre 1 et 80 caractères",
+    ),
+    translation(
+        "Enter a valid model ID",
+        "有効なモデル ID を入力してください",
+        "请输入有效的模型 ID",
+        "Saisissez un ID de modèle valide",
+    ),
+    translation(
+        "Enter a valid HTTP or HTTPS base URL",
+        "有効な HTTP または HTTPS のベース URL を入力してください",
+        "请输入有效的 HTTP 或 HTTPS 基础 URL",
+        "Saisissez une URL de base HTTP ou HTTPS valide",
+    ),
+    translation(
+        "Use an HTTP or HTTPS URL without credentials, query or fragment",
+        "認証情報、クエリ、フラグメントを含まない HTTP または HTTPS URL を使用してください",
+        "请使用不含凭据、查询参数或片段的 HTTP 或 HTTPS URL",
+        "Utilisez une URL HTTP ou HTTPS sans identifiants, requête ni fragment",
+    ),
+    translation(
+        "The endpoint path does not match the selected API type",
+        "エンドポイントのパスが選択した API タイプと一致しません",
+        "端点路径与所选 API 类型不匹配",
+        "Le chemin du point de terminaison ne correspond pas au type d’API sélectionné",
+    ),
+    translation(
+        "Configuration changed elsewhere · Reopen this form before saving",
+        "別の場所で設定が変更されました · 保存前にこのフォームを開き直してください",
+        "配置已在其他位置更改 · 保存前请重新打开此表单",
+        "La configuration a changé ailleurs · Rouvrez ce formulaire avant d’enregistrer",
+    ),
+    translation(
+        "Sign-in cancelled",
+        "サインインをキャンセルしました",
+        "登录已取消",
+        "Connexion annulée",
+    ),
+    translation(
+        "Disconnected from ChatGPT in Ash",
+        "Ash で ChatGPT から切断しました",
+        "已在 Ash 中断开 ChatGPT 连接",
+        "Déconnecté de ChatGPT dans Ash",
+    ),
+    translation(
+        "Signed in to ChatGPT",
+        "ChatGPT にサインインしました",
+        "已登录 ChatGPT",
+        "Connecté à ChatGPT",
+    ),
+    translation("Signed in", "サインイン済み", "已登录", "Connecté"),
+    translation(
+        "Sign in again",
+        "再度サインイン",
+        "重新登录",
+        "Se reconnecter",
+    ),
+    translation("Account", "アカウント", "账户", "Compte"),
+    translation(
+        "Account not loaded",
+        "アカウント未読み込み",
+        "账户未加载",
+        "Compte non chargé",
+    ),
+    translation(
+        "Filter memories and actions",
+        "メモリと操作を絞り込み",
+        "筛选记忆和操作",
+        "Filtrer les mémoires et les actions",
+    ),
+    translation(
+        "Open memory reference",
+        "メモリ参照を開く",
+        "打开记忆引用",
+        "Ouvrir une référence mémoire",
+    ),
+    translation(
+        "Paste an exact memory: reference",
+        "正確な memory: 参照を貼り付け",
+        "粘贴准确的 memory: 引用",
+        "Coller une référence memory: exacte",
+    ),
+    translation(
+        "Save a preference or reusable decision",
+        "設定または再利用可能な決定を保存",
+        "保存偏好或可复用的决定",
+        "Enregistrer une préférence ou une décision réutilisable",
+    ),
+    translation(
+        "Search all memories in this scope",
+        "このスコープ内の全メモリを検索",
+        "搜索此范围内的所有记忆",
+        "Rechercher toutes les mémoires de cette portée",
+    ),
+    translation(
+        "Enable memory reading",
+        "メモリ読み取りを有効化",
+        "启用记忆读取",
+        "Activer la lecture des mémoires",
+    ),
+    translation(
+        "Disable memory reading",
+        "メモリ読み取りを無効化",
+        "禁用记忆读取",
+        "Désactiver la lecture des mémoires",
+    ),
+    translation(
+        "Controls automatic recall and model searches",
+        "自動呼び出しとモデル検索を制御",
+        "控制自动回忆和模型搜索",
+        "Contrôle le rappel automatique et les recherches du modèle",
+    ),
+    translation(
+        "Enable model saving",
+        "モデルによる保存を有効化",
+        "启用模型保存",
+        "Activer l’enregistrement par le modèle",
+    ),
+    translation(
+        "Disable model saving",
+        "モデルによる保存を無効化",
+        "禁用模型保存",
+        "Désactiver l’enregistrement par le modèle",
+    ),
+    translation(
+        "Save durable facts in this scope",
+        "このスコープに永続的な情報を保存",
+        "在此范围中保存持久信息",
+        "Enregistrer des faits durables dans cette portée",
+    ),
+    translation("Next page", "次のページ", "下一页", "Page suivante"),
+    translation(
+        "Back to scopes",
+        "スコープに戻る",
+        "返回范围",
+        "Retour aux portées",
+    ),
+    translation(
+        "View full content",
+        "全文を表示",
+        "查看完整内容",
+        "Afficher le contenu complet",
+    ),
+    translation(
+        "Edit memory",
+        "メモリを編集",
+        "编辑记忆",
+        "Modifier la mémoire",
+    ),
+    translation(
+        "Delete memory",
+        "メモリを削除",
+        "删除记忆",
+        "Supprimer la mémoire",
+    ),
+    translation(
+        "Back to list",
+        "一覧に戻る",
+        "返回列表",
+        "Retour à la liste",
+    ),
+    translation(
+        "Delete this memory",
+        "このメモリを削除",
+        "删除此记忆",
+        "Supprimer cette mémoire",
+    ),
+    translation(
+        "Memory title",
+        "メモリのタイトル",
+        "记忆标题",
+        "Titre de la mémoire",
+    ),
+    translation(
+        "Memory content",
+        "メモリの内容",
+        "记忆内容",
+        "Contenu de la mémoire",
+    ),
+    translation(
+        "Search memories",
+        "メモリを検索",
+        "搜索记忆",
+        "Rechercher les mémoires",
+    ),
+    translation(
+        "This field takes one line.",
+        "このフィールドは 1 行のみです。",
+        "此字段只能输入一行。",
+        "Ce champ n’accepte qu’une ligne.",
+    ),
+    translation(
+        "Ctrl+S save · Ctrl+A clear · Esc cancel",
+        "Ctrl+S 保存 · Ctrl+A 消去 · Esc キャンセル",
+        "Ctrl+S 保存 · Ctrl+A 清空 · Esc 取消",
+        "Ctrl+S enregistrer · Ctrl+A effacer · Échap annuler",
+    ),
+    translation("on", "オン", "开启", "activé"),
+    translation("off", "オフ", "关闭", "désactivé"),
+    translation("Reading", "読み取り", "读取", "Lecture"),
+    translation(
+        "Model saving",
+        "モデルによる保存",
+        "模型保存",
+        "Enregistrement par le modèle",
+    ),
+    translation("Revision", "リビジョン", "修订", "Révision"),
+    translation(
+        "Editing takes user ownership",
+        "編集するとユーザー所有になります",
+        "编辑后将归用户所有",
+        "La modification transfère la propriété à l’utilisateur",
+    ),
+    translation("UTF-8 bytes", "UTF-8 バイト", "UTF-8 字节", "octets UTF-8"),
+    translation("characters", "文字", "字符", "caractères"),
+    translation(
+        "ask permissions on",
+        "許可を確認",
+        "请求权限",
+        "demande d’autorisations",
+    ),
+    translation(
+        "auto review on",
+        "自動レビュー",
+        "自动审阅",
+        "révision automatique",
+    ),
+    translation(
+        "bypass permissions on",
+        "許可を省略",
+        "绕过权限",
+        "autorisations contournées",
+    ),
+    translation("current", "現在", "当前", "actuel"),
+    translation(
+        "search input history; Enter edits the match, Esc restores the draft",
+        "入力履歴を検索；Enter で一致項目を編集し、Esc で下書きを復元",
+        "搜索输入历史；Enter 编辑匹配项，Esc 恢复草稿",
+        "rechercher dans l’historique ; Entrée modifie le résultat, Échap restaure le brouillon",
+    ),
+    translation(
+        "open rewind checkpoints when the input is empty",
+        "入力が空のとき巻き戻しチェックポイントを開く",
+        "输入为空时打开回退检查点",
+        "ouvrir les points de rembobinage lorsque la saisie est vide",
+    ),
+    translation(
+        "navigate focused lists or read-only content; letters remain text in editors",
+        "フォーカス中の一覧または読み取り専用内容を移動；エディターでは文字を入力",
+        "浏览聚焦的列表或只读内容；在编辑器中按字母仍会输入文字",
+        "parcourir les listes actives ou le contenu en lecture seule ; les lettres restent du texte dans les éditeurs",
+    ),
+    translation(
+        "jump or page within the focused list or reading view",
+        "フォーカス中の一覧または閲覧ビュー内で先頭・末尾やページを移動",
+        "在聚焦的列表或阅读视图中跳转或翻页",
+        "sauter ou changer de page dans la liste active ou la vue de lecture",
+    ),
+    translation(
+        "focus search in a searchable panel; Enter or Esc returns to its list",
+        "検索可能なパネルで検索にフォーカス；Enter または Esc で一覧に戻る",
+        "在可搜索面板中聚焦搜索；Enter 或 Esc 返回列表",
+        "activer la recherche dans un panneau ; Entrée ou Échap revient à la liste",
+    ),
+    translation(
+        "switch panel tabs from tabs, lists or search",
+        "タブ、一覧、検索からパネルのタブを切り替え",
+        "从标签、列表或搜索中切换面板标签页",
+        "changer d’onglet depuis les onglets, listes ou la recherche",
+    ),
+    translation(
+        "return one interaction level; pending approval/query requires an explicit answer",
+        "操作を 1 段階戻る；保留中の承認や質問には明示的な回答が必要",
+        "返回上一层交互；待处理的批准或提问需要明确回答",
+        "revenir d’un niveau ; une approbation ou question en attente exige une réponse explicite",
+    ),
+    translation("custom", "カスタム", "自定义", "personnalisé"),
+    translation(
+        "ask the Agent to create or inspect a pull request",
+        "エージェントにプルリクエストの作成または確認を依頼",
+        "让智能体创建或检查拉取请求",
+        "demander à l’agent de créer ou d’examiner une pull request",
+    ),
+    translation(
+        "select issues to develop together",
+        "一緒に開発する Issue を選択",
+        "选择要一起开发的议题",
+        "sélectionner les tickets à développer ensemble",
+    ),
+    translation(
+        "show the active session, thread, and model",
+        "現在のセッション、スレッド、モデルを表示",
+        "显示当前会话、线程和模型",
+        "afficher la session, le fil et le modèle actifs",
+    ),
+    translation(
+        "choose the items shown in the status line",
+        "ステータスラインに表示する項目を選択",
+        "选择状态栏中显示的项目",
+        "choisir les éléments affichés dans la barre d’état",
+    ),
+    translation(
+        "open Dashboard",
+        "ダッシュボードを開く",
+        "打开仪表盘",
+        "ouvrir le tableau de bord",
+    ),
+    translation(
+        "focus the current Session Thread list",
+        "現在のセッションのスレッド一覧にフォーカス",
+        "聚焦当前会话的线程列表",
+        "activer la liste des fils de la session actuelle",
+    ),
+    translation(
+        "manage memories, reading consent and model saving",
+        "メモリ、読み取り同意、モデルによる保存を管理",
+        "管理记忆、读取许可和模型保存",
+        "gérer les mémoires, le consentement de lecture et l’enregistrement par le modèle",
+    ),
+    translation(
+        "browse configured skill sources",
+        "設定済みのスキルソースを参照",
+        "浏览已配置的技能来源",
+        "parcourir les sources de compétences configurées",
+    ),
+    translation(
+        "list configured MCP tools",
+        "設定済みの MCP ツールを一覧表示",
+        "列出已配置的 MCP 工具",
+        "lister les outils MCP configurés",
+    ),
+    translation(
+        "show external service connections",
+        "外部サービス接続を表示",
+        "显示外部服务连接",
+        "afficher les connexions aux services externes",
+    ),
+    translation(
+        "list or resume a saved session",
+        "保存済みセッションを一覧表示または再開",
+        "列出或恢复已保存的会话",
+        "lister ou reprendre une session enregistrée",
+    ),
+    translation(
+        "archive the current session and start a new chat",
+        "現在のセッションをアーカイブして新しいチャットを開始",
+        "归档当前会话并开始新聊天",
+        "archiver la session actuelle et démarrer une nouvelle discussion",
+    ),
+    translation(
+        "return to an earlier message checkpoint",
+        "以前のメッセージチェックポイントに戻る",
+        "返回较早的消息检查点",
+        "revenir à un point de contrôle antérieur",
+    ),
+    translation(
+        "show the current configuration",
+        "現在の設定を表示",
+        "显示当前配置",
+        "afficher la configuration actuelle",
+    ),
+    translation(
+        "show the current startup context",
+        "現在の起動コンテキストを表示",
+        "显示当前启动上下文",
+        "afficher le contexte de démarrage actuel",
+    ),
+    translation(
+        "return to the home page",
+        "ホームページに戻る",
+        "返回主页",
+        "revenir à l’accueil",
+    ),
+    translation(
+        "add or manage a session directory",
+        "セッションディレクトリを追加または管理",
+        "添加或管理会话目录",
+        "ajouter ou gérer un dossier de session",
+    ),
+    translation(
+        "move this session to a new working directory",
+        "このセッションを新しい作業ディレクトリへ移動",
+        "将此会话移至新的工作目录",
+        "déplacer cette session vers un nouveau dossier de travail",
+    ),
+    translation(
+        "copy this conversation and switch to the new branch",
+        "この会話をコピーして新しいブランチへ切り替え",
+        "复制此对话并切换到新分支",
+        "copier cette conversation et passer à la nouvelle branche",
+    ),
+    translation(
+        "copy to an independent session; optionally run a prompt in the background",
+        "独立したセッションにコピー；必要に応じてバックグラウンドでプロンプトを実行",
+        "复制到独立会话；可选择在后台运行提示词",
+        "copier vers une session indépendante ; exécuter éventuellement une demande en arrière-plan",
+    ),
+    translation(
+        "show shortcuts and commands",
+        "ショートカットとコマンドを表示",
+        "显示快捷键和命令",
+        "afficher les raccourcis et commandes",
+    ),
+    translation(
+        "browse and customize terminal shortcuts",
+        "ターミナルショートカットを参照・カスタマイズ",
+        "浏览并自定义终端快捷键",
+        "parcourir et personnaliser les raccourcis du terminal",
+    ),
+    translation(
+        "export this conversation as Markdown",
+        "この会話を Markdown としてエクスポート",
+        "将此对话导出为 Markdown",
+        "exporter cette conversation en Markdown",
+    ),
+    translation(
+        "show or set the preferred provider/model",
+        "優先プロバイダー／モデルを表示または設定",
+        "显示或设置首选提供商/模型",
+        "afficher ou définir le fournisseur/modèle préféré",
+    ),
+    translation(
+        "show or set the terminal color theme",
+        "ターミナルのカラーテーマを表示または設定",
+        "显示或设置终端配色主题",
+        "afficher ou définir le thème de couleurs du terminal",
+    ),
+    translation(
+        "start a new chat",
+        "新しいチャットを開始",
+        "开始新聊天",
+        "démarrer une nouvelle discussion",
+    ),
+    translation("quit Ash", "Ash を終了", "退出 Ash", "quitter Ash"),
+];
+
+pub(crate) fn localize<'a>(language: Language, source: &'a str) -> Cow<'a, str> {
+    if language == Language::English {
+        return Cow::Borrowed(source);
+    }
+    if let Some(value) = UI_TRANSLATIONS
+        .iter()
+        .find(|translation| translation.english == source)
+    {
+        return Cow::Borrowed(match language {
+            Language::English => value.english,
+            Language::Japanese => value.japanese,
+            Language::Chinese => value.chinese,
+            Language::French => value.french,
+        });
+    }
+    for prefix in ["All", "Connected", "Not connected", "Enabled", "Disabled"] {
+        if let Some(count) = source
+            .strip_prefix(prefix)
+            .and_then(|suffix| suffix.strip_prefix(" ("))
+            .and_then(|suffix| suffix.strip_suffix(')'))
+        {
+            return Cow::Owned(format!("{} ({count})", localize(language, prefix)));
+        }
+    }
+    for (prefix, separator) in [
+        ("connected as", " "),
+        ("reconnect", " "),
+        ("unavailable", ": "),
+        ("Unavailable", ": "),
+        ("Reading", ": "),
+        ("Model saving", ": "),
+    ] {
+        if let Some(value) = source.strip_prefix(&format!("{prefix}{separator}")) {
+            let value = if matches!(prefix, "Reading" | "Model saving") {
+                localize(language, value)
+            } else {
+                Cow::Borrowed(value)
+            };
+            return Cow::Owned(format!("{}{separator}{value}", localize(language, prefix)));
+        }
+    }
+    if let Some((label, condition)) = source.split_once(" when ") {
+        let localized = localize(language, label);
+        if &*localized != label {
+            return Cow::Owned(format!("{localized} when {condition}"));
+        }
+    }
+    if let Some(display_name) = source.strip_suffix(" API key") {
+        return Cow::Owned(match language {
+            Language::English => source.to_owned(),
+            Language::Japanese => format!("{display_name} API キー"),
+            Language::Chinese => format!("{display_name} API 密钥"),
+            Language::French => format!("Clé API {display_name}"),
+        });
+    }
+    if let Some(palette) = source.strip_prefix("Syntax palette: ") {
+        return Cow::Owned(format!(
+            "{}: {palette}",
+            localize(language, "Syntax palette")
+        ));
+    }
+    for (prefix, suffix, japanese, chinese, french) in [
+        (
+            "Discover Skills from this directory (",
+            " found); requires Read files",
+            "件）；ファイル読み取りが必要",
+            " 个）；需要读取文件权限",
+            " trouvées) ; exige la lecture des fichiers",
+        ),
+        (
+            "Authorize MCP declarations (",
+            " found); connect them separately",
+            "件）を承認；接続は個別に行います",
+            " 个）；请分别连接",
+            " trouvées) ; les connecter séparément",
+        ),
+        (
+            "Discover Hooks (",
+            " found); running them also requires Run commands",
+            "件）；実行にはコマンド実行も必要",
+            " 个）；运行还需要运行命令权限",
+            " trouvés) ; leur exécution exige aussi les commandes",
+        ),
+        (
+            "Authorize Plugin requests (",
+            " found); installation stays separate",
+            "件）を承認；インストールは別に行います",
+            " 个）；安装仍需单独进行",
+            " trouvées) ; l’installation reste séparée",
+        ),
+    ] {
+        if let Some(count) = source
+            .strip_prefix(prefix)
+            .and_then(|rest| rest.strip_suffix(suffix))
+        {
+            return Cow::Owned(match language {
+                Language::English => source.to_owned(),
+                Language::Japanese => format!(
+                    "{}{count}{japanese}",
+                    localize(language, prefix.trim_end_matches('(').trim_end())
+                ),
+                Language::Chinese => format!(
+                    "{}{count}{chinese}",
+                    localize(language, prefix.trim_end_matches('(').trim_end())
+                ),
+                Language::French => format!(
+                    "{}{count}{french}",
+                    localize(language, prefix.trim_end_matches('(').trim_end())
+                ),
+            });
+        }
+    }
+    if let Some(revision) = source.strip_prefix("Revision ") {
+        let revision = if let Some((number, suffix)) = revision.split_once(" · ") {
+            format!("{number} · {}", localize(language, suffix))
+        } else {
+            revision.to_owned()
+        };
+        return Cow::Owned(format!("{} {revision}", localize(language, "Revision")));
+    }
+    if let Some(rest) = source.strip_prefix("This field is limited to ")
+        && let Some((limit, unit)) = rest.strip_suffix('.').and_then(|rest| rest.split_once(' '))
+    {
+        let unit = localize(language, unit);
+        return Cow::Owned(match language {
+            Language::English => format!("This field is limited to {limit} {unit}."),
+            Language::Japanese => format!("このフィールドは {limit} {unit}までです。"),
+            Language::Chinese => format!("此字段最多可输入 {limit} {unit}。"),
+            Language::French => format!("Ce champ est limité à {limit} {unit}."),
+        });
+    }
+    for separator in ["  ·  ", " · "] {
+        if source.contains(separator) {
+            let parts = source.split(separator).collect::<Vec<_>>();
+            let localized = parts
+                .iter()
+                .map(|part| localize(language, part))
+                .collect::<Vec<_>>();
+            if parts
+                .iter()
+                .zip(&localized)
+                .any(|(part, localized)| *part != &**localized)
+            {
+                return Cow::Owned(
+                    localized
+                        .iter()
+                        .map(|part| &**part)
+                        .collect::<Vec<&str>>()
+                        .join(separator),
+                );
+            }
+        }
+    }
+    Cow::Borrowed(source)
+}
+
+pub(crate) fn localize_owned(language: Language, source: impl AsRef<str>) -> String {
+    localize(language, source.as_ref()).into_owned()
 }
 
 #[cfg(test)]

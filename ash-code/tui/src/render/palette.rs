@@ -491,6 +491,7 @@ pub(crate) struct RenderContext<'a> {
     theme: &'a RenderTheme,
     hyperlinks: Option<&'a std::cell::RefCell<crate::terminal::hyperlinks::FrameLinks>>,
     theme_revision: u64,
+    language: crate::nls::Language,
 }
 
 impl<'a> RenderContext<'a> {
@@ -558,7 +559,21 @@ impl<'a> RenderContext<'a> {
             theme,
             hyperlinks: None,
             theme_revision,
+            language: crate::nls::Language::English,
         }
+    }
+
+    pub(crate) const fn with_language(mut self, language: crate::nls::Language) -> Self {
+        self.language = language;
+        self
+    }
+
+    pub(crate) const fn language(self) -> crate::nls::Language {
+        self.language
+    }
+
+    pub(crate) fn localize<'b>(self, source: &'b str) -> std::borrow::Cow<'b, str> {
+        crate::nls::localize(self.language, source)
     }
 
     pub(crate) const fn accent(self) -> Color {

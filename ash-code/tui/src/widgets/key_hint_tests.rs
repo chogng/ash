@@ -8,8 +8,12 @@ use ratatui::backend::TestBackend;
 use ratatui::style::Modifier;
 
 fn visible(hints: &KeyHints, width: usize) -> String {
-    let (entries, shortened) = super::visible_entries(hints, width);
-    super::visible_text(&entries, if shortened { " · " } else { hints.separator })
+    let (entries, shortened) = super::visible_entries(hints, width, crate::nls::Language::English);
+    super::visible_text(
+        &entries,
+        if shortened { " · " } else { hints.separator },
+        crate::nls::Language::English,
+    )
 }
 
 #[test]

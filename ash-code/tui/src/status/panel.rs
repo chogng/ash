@@ -26,15 +26,15 @@ enum StatusSection {
     Processes,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 struct StatusTab {
     section: StatusSection,
-    label: &'static str,
+    label: String,
 }
 
 impl TabListItem for StatusTab {
     fn tab_label(&self) -> &str {
-        self.label
+        &self.label
     }
 }
 
@@ -70,16 +70,28 @@ pub(crate) enum StatusPanelOutcome {
 
 #[derive(Debug)]
 pub(crate) struct StatusPanel {
+    title: String,
     tabs: TabListState<StatusTab>,
     session: DetailList,
     processes: DetailList,
     process_resources: ProcessResourcesView,
     scroll: [u16; 2],
+    language: crate::nls::Language,
 }
 
 impl StatusPanel {
     pub(crate) fn title(&self) -> &str {
-        "Status"
+        &self.title
+    }
+
+    pub(crate) fn localize(&mut self, language: crate::nls::Language) {
+        self.language = language;
+        self.title = crate::nls::localize_owned(language, &self.title);
+        for tab in self.tabs.tabs_mut() {
+            tab.label = crate::nls::localize_owned(language, &tab.label);
+        }
+        self.session.localize(language);
+        self.processes.localize(language);
     }
 
     pub(crate) fn apply_process_resources(&mut self, resources: ProcessResourcesView) {
@@ -89,6 +101,7 @@ impl StatusPanel {
 
     fn rebuild_processes(&mut self) {
         self.processes = DetailList::new("Processes", process_rows(&self.process_resources));
+        self.processes.localize(self.language);
     }
 
     pub(crate) fn tab_rows(&self, width: u16) -> u16 {
@@ -250,11 +263,13 @@ pub(crate) fn status_panel(data: StatusViewData<'_>) -> StatusPanel {
     ];
     let process_resources = ProcessResourcesView::default();
     StatusPanel {
+        title: "Status".into(),
         tabs: TabListState::new(status_tabs()),
         session: DetailList::new("Thread", base_rows),
         processes: DetailList::new("Processes", process_rows(&process_resources)),
         process_resources,
         scroll: [0, 0],
+        language: crate::nls::Language::English,
     }
 }
 
@@ -262,11 +277,11 @@ fn status_tabs() -> Vec<StatusTab> {
     vec![
         StatusTab {
             section: StatusSection::Thread,
-            label: "Thread",
+            label: "Thread".into(),
         },
         StatusTab {
             section: StatusSection::Processes,
-            label: "Processes",
+            label: "Processes".into(),
         },
     ]
 }

@@ -168,7 +168,7 @@ pub(super) fn draw(frame: &mut Frame<'_>, app: &App, context: RenderContext<'_>)
         crate::widgets::modal::draw(
             frame,
             layout,
-            detail.title(),
+            &context.localize(detail.title()),
             &hints,
             close,
             false,
@@ -214,9 +214,14 @@ pub(super) fn draw_panel(
     context: RenderContext<'_>,
 ) {
     let body = panel.body();
-    let title = panel
-        .parent_title()
-        .map(|parent| format!("{parent} › {}", body.title()));
+    let title = panel.parent_title().map(|parent| {
+        format!(
+            "{} › {}",
+            context.localize(parent),
+            context.localize(body.title())
+        )
+    });
+    let body_title = context.localize(body.title());
     let alert_hints;
     let hints = if blocked_alert {
         alert_hints = crate::widgets::key_hint::KeyHints::new()
@@ -229,7 +234,7 @@ pub(super) fn draw_panel(
     crate::widgets::modal::draw(
         frame,
         layout,
-        title.as_deref().unwrap_or(body.title()),
+        title.as_deref().unwrap_or(&body_title),
         hints,
         close,
         blocked_alert,
@@ -237,6 +242,7 @@ pub(super) fn draw_panel(
         context,
     );
     if let Some(parent) = panel.parent_title() {
+        let localized_parent = context.localize(parent);
         let style = ratatui::style::Style::default()
             .fg(context.foreground())
             .add_modifier(ratatui::style::Modifier::UNDERLINED | ratatui::style::Modifier::BOLD)
@@ -249,7 +255,7 @@ pub(super) fn draw_panel(
                 },
             ));
         frame.render_widget(
-            ratatui::widgets::Paragraph::new(parent).style(style),
+            ratatui::widgets::Paragraph::new(localized_parent).style(style),
             parent_area(layout, parent),
         );
     }

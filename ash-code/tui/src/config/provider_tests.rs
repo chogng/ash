@@ -223,6 +223,16 @@ fn saved_model_selection_survives_other_model_ids_and_can_be_cleared() {
 }
 
 fn render(panel: &Panel, width: u16, height: u16, now: Instant) -> ratatui::buffer::Buffer {
+    render_language(panel, width, height, now, crate::nls::Language::English)
+}
+
+fn render_language(
+    panel: &Panel,
+    width: u16,
+    height: u16,
+    now: Instant,
+    language: crate::nls::Language,
+) -> ratatui::buffer::Buffer {
     let mut terminal =
         ratatui::Terminal::new(ratatui::backend::TestBackend::new(width, height)).unwrap();
     terminal
@@ -230,7 +240,7 @@ fn render(panel: &Panel, width: u16, height: u16, now: Instant) -> ratatui::buff
             panel.draw_body_at(
                 frame,
                 Rect::new(2, 0, width.saturating_sub(4), height),
-                crate::render::test_context(),
+                crate::render::test_context().with_language(language),
                 now,
             )
         })
@@ -283,6 +293,24 @@ fn new_provider_shows_all_fields() {
     assert_eq!(buffer[(2, 0)].symbol(), "P");
     assert_eq!(buffer[(4, 2)].symbol(), "P");
     crate::tui_assert_snapshot!(text(&render(&panel, 80, 25, Instant::now())));
+}
+
+#[test]
+fn provider_form_uses_the_selected_language() {
+    let rendered = text(&render_language(
+        &panel(),
+        80,
+        25,
+        Instant::now(),
+        crate::nls::Language::Chinese,
+    ))
+    .replace(' ', "");
+
+    assert!(rendered.contains("提供商名称"));
+    assert!(rendered.contains("基础URL"));
+    assert!(rendered.contains("API密钥"));
+    assert!(rendered.contains("模型上下文窗口"));
+    assert!(!rendered.contains("Providername"));
 }
 
 #[test]

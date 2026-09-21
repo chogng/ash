@@ -31,6 +31,10 @@ impl SearchBoxModel {
         self.masked = true;
         self
     }
+
+    pub(crate) fn localize(&mut self, language: crate::nls::Language) {
+        self.placeholder = crate::nls::localize_owned(language, &self.placeholder);
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -59,6 +63,10 @@ impl SearchBoxState {
 
     pub(crate) fn replace_model(&mut self, model: SearchBoxModel) {
         self.model = model;
+    }
+
+    pub(crate) fn localize(&mut self, language: crate::nls::Language) {
+        self.model.localize(language);
     }
 
     pub(crate) fn placeholder(&self) -> &str {
@@ -197,7 +205,7 @@ pub(crate) fn draw(
         context.muted()
     });
     let text = if search.query().is_empty() {
-        Span::styled(search.placeholder(), text_style)
+        Span::styled(context.localize(search.placeholder()), text_style)
     } else {
         Span::styled(
             rendered_query.as_deref().unwrap_or(search.query()),

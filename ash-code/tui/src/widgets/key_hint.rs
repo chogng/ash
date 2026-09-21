@@ -83,8 +83,17 @@ impl KeyHints {
         self
     }
 
+    #[cfg(test)]
     pub(crate) fn text(&self) -> &str {
         &self.text
+    }
+
+    pub(crate) fn localized_text(&self, language: crate::nls::Language) -> String {
+        visible_text(
+            &self.entries.iter().collect::<Vec<_>>(),
+            self.separator,
+            language,
+        )
     }
 
     fn push(&mut self, entry: KeyHint) {
@@ -126,18 +135,18 @@ pub(crate) fn draw_content(
     );
 }
 
-fn line<'a>(
-    hints: &'a KeyHints,
+fn line(
+    hints: &KeyHints,
     width: usize,
     style: KeyHintStyle,
     context: RenderContext<'_>,
-) -> Line<'a> {
-    let (entries, shortened) = visible_entries(hints, width);
+) -> Line<'static> {
+    let (entries, shortened) = visible_entries(hints, width, context.language());
     let separator = if shortened { " · " } else { hints.separator };
     let muted = Style::default().fg(context.muted());
     if style == KeyHintStyle::Muted {
         return Line::from(Span::styled(
-            visible_text(&entries, separator),
+            visible_text(&entries, separator, context.language()),
             muted.add_modifier(Modifier::ITALIC),
         ));
     }
@@ -150,21 +159,31 @@ fn line<'a>(
         match entry {
             KeyHint::Action { keys, suffix } => {
                 spans.push(Span::styled(
-                    keys.as_str(),
+                    keys.clone(),
                     Style::default()
                         .fg(context.foreground())
                         .add_modifier(Modifier::BOLD),
                 ));
-                spans.push(Span::styled(suffix.as_str(), muted));
+                spans.push(Span::styled(
+                    localized_suffix(suffix, context.language()),
+                    muted,
+                ));
             }
-            KeyHint::Note(note) => spans.push(Span::styled(note.as_str(), muted)),
+            KeyHint::Note(note) => spans.push(Span::styled(
+                crate::nls::localize_owned(context.language(), note),
+                muted,
+            )),
         }
     }
     Line::from(spans)
 }
 
-fn visible_entries(hints: &KeyHints, width: usize) -> (Vec<&KeyHint>, bool) {
-    if hints.text.width() <= width {
+fn visible_entries(
+    hints: &KeyHints,
+    width: usize,
+    language: crate::nls::Language,
+) -> (Vec<&KeyHint>, bool) {
+    if hints.localized_text(language).width() <= width {
         return (hints.entries.iter().collect(), false);
     }
     let mut entries = hints.entries.iter().collect::<Vec<_>>();
@@ -188,7 +207,7 @@ fn visible_entries(hints: &KeyHints, width: usize) -> (Vec<&KeyHint>, bool) {
             break;
         };
         entries.remove(index);
-        let text = visible_text(&entries, " · ");
+        let text = visible_text(&entries, " · ", language);
         if text.width() <= width {
             return (entries, true);
         }
@@ -196,15 +215,33 @@ fn visible_entries(hints: &KeyHints, width: usize) -> (Vec<&KeyHint>, bool) {
     (entries, true)
 }
 
-fn visible_text(entries: &[&KeyHint], separator: &str) -> String {
+fn visible_text(entries: &[&KeyHint], separator: &str, language: crate::nls::Language) -> String {
     entries
         .iter()
         .map(|entry| match entry {
-            KeyHint::Action { keys, suffix } => format!("{keys}{suffix}"),
-            KeyHint::Note(note) => (*note).clone(),
+            KeyHint::Action { keys, suffix } => {
+                format!("{keys}{}", localized_suffix(suffix, language))
+            }
+            KeyHint::Note(note) => crate::nls::localize_owned(language, note),
         })
         .collect::<Vec<_>>()
         .join(separator)
+}
+
+fn localized_suffix(suffix: &str, language: crate::nls::Language) -> String {
+    if let Some(action) = suffix.strip_prefix(" to ") {
+        let connector = match language {
+            crate::nls::Language::English => " to ",
+            crate::nls::Language::Japanese => " で",
+            crate::nls::Language::Chinese => " ",
+            crate::nls::Language::French => " pour ",
+        };
+        return format!("{connector}{}", crate::nls::localize(language, action));
+    }
+    if let Some(action) = suffix.strip_prefix(' ') {
+        return format!(" {}", crate::nls::localize(language, action));
+    }
+    crate::nls::localize_owned(language, suffix)
 }
 
 pub(crate) fn draw_right(
@@ -214,6 +251,7 @@ pub(crate) fn draw_right(
     context: RenderContext<'_>,
 ) {
     let content = horizontal_margin(area, 2);
+    let hints = context.localize(hints);
     let width = hints.width().min(usize::from(content.width)) as u16;
     let hint_area = Rect {
         x: content.right().saturating_sub(width),

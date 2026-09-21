@@ -331,6 +331,39 @@ impl CommandPanel {
         }
     }
 
+    pub(crate) fn localize(&mut self, language: crate::nls::Language) {
+        match self {
+            Self::Help(content) | Self::Loading(content) | Self::Startup(content) => {
+                content.state_mut().localize(language);
+            }
+            Self::GitBranches(content) => content.state_mut().localize(language),
+            Self::Connectors(content) => content.state_mut().localize(language),
+            Self::Mcp(content) => content.state_mut().localize(language),
+            Self::Model(content) => content.state_mut().localize(language),
+            Self::ProjectRoots(content) => content.state_mut().localize(language),
+            Self::Rewind(content) => content.state_mut().localize(language),
+            Self::Sessions(content) => content.state_mut().localize(language),
+            Self::Skills(content) => content.state_mut().localize(language),
+            Self::StatusLine(content) => content.state_mut().localize(language),
+            Self::Dirs(content) => content.localize(language),
+            Self::Config(content) => {
+                if let Some(selection) = content.selection_mut() {
+                    selection.localize(language);
+                }
+            }
+            Self::Keymap(content) => {
+                if let Some(selection) = content.selection_mut() {
+                    selection.localize(language);
+                }
+            }
+            Self::Memories(content) => {
+                content.localize(language);
+            }
+            Self::Status(content) => content.localize(language),
+            Self::Theme(content) => content.selection_mut().localize(language),
+        }
+    }
+
     pub(crate) fn list_selection(&self) -> Option<&ListSelectionState> {
         match self {
             Self::Help(selection) | Self::Loading(selection) => Some(selection.state()),

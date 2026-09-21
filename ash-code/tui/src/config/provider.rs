@@ -28,6 +28,7 @@ use ratatui::widgets::Paragraph;
 use std::collections::BTreeMap;
 use std::sync::LazyLock;
 use std::time::Instant;
+use unicode_width::UnicodeWidthStr;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct Settings {
@@ -584,15 +585,17 @@ impl Panel {
         for (index, row) in self.rows(area) {
             y = row.y;
             let height = row.height;
-            let label = [
-                "Provider name",
-                "Base URL",
-                "API key",
-                "Model ID",
-                "API type",
-                "Model context window",
-                "Test",
-            ][index];
+            let label = context.localize(
+                [
+                    "Provider name",
+                    "Base URL",
+                    "API key",
+                    "Model ID",
+                    "API type",
+                    "Model context window",
+                    "Test",
+                ][index],
+            );
             let focused = self.focus == index;
             let style = Style::default().fg(if focused {
                 context.focus()
@@ -648,7 +651,7 @@ impl Panel {
                     style,
                 ));
             }
-            spans.push(Span::styled(label, style));
+            spans.push(Span::styled(label.clone(), style));
             if matches!(index, 4 | 5) {
                 let value = if index == 4 {
                     match self.protocol {
@@ -662,7 +665,7 @@ impl Panel {
                     "272k"
                 };
                 spans.push(Span::raw(" ".repeat(
-                    usize::from(area.width).saturating_sub(label.len() + value.len()),
+                    usize::from(area.width).saturating_sub(label.width() + value.width()),
                 )));
                 spans.push(Span::styled(value, style));
             }
@@ -690,7 +693,8 @@ impl Panel {
         }
         if y < area.bottom() {
             frame.render_widget(
-                Paragraph::new(self.message.as_str()).style(Style::default().fg(context.muted())),
+                Paragraph::new(context.localize(&self.message))
+                    .style(Style::default().fg(context.muted())),
                 Rect::new(area.x, y, area.width, 1),
             );
         }

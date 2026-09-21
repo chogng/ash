@@ -242,11 +242,19 @@ pub(crate) fn draw(
             .take(MAX_DETAIL_ROWS)
             .map(|detail| Line::styled(detail, Style::default().fg(context.muted()))),
     );
-    lines.push(choice_line("Approve once", states[0], context));
-    lines.push(choice_line("Decline", states[1], context));
+    lines.push(choice_line(
+        &context.localize("Approve once"),
+        states[0],
+        context,
+    ));
+    lines.push(choice_line(
+        &context.localize("Decline"),
+        states[1],
+        context,
+    ));
     if view.submitting {
         lines.push(Line::styled(
-            "Submitting…",
+            context.localize("Submitting…"),
             Style::default().fg(context.muted()),
         ));
     } else if let Some(error) = view.error {
@@ -255,7 +263,7 @@ pub(crate) fn draw(
     frame.render_widget(
         Paragraph::new(lines).block(
             Block::default()
-                .title(view.title)
+                .title(context.localize(view.title))
                 .borders(Borders::ALL)
                 .style(Style::default().bg(context.background())),
         ),
@@ -303,16 +311,12 @@ fn choice_row(area: Rect, view: ApprovalView<'_>, index: usize) -> u16 {
         .saturating_add(index as u16)
 }
 
-fn choice_line<'a>(
-    label: &'a str,
-    state: InteractionState,
-    context: RenderContext<'_>,
-) -> Line<'a> {
+fn choice_line(label: &str, state: InteractionState, context: RenderContext<'_>) -> Line<'static> {
     let marker = selection_marker(state.selected);
     let style = interaction_style(context, state);
     Line::from(vec![
         Span::styled(marker, style),
-        Span::styled(label, style),
+        Span::styled(label.to_owned(), style),
     ])
 }
 

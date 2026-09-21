@@ -23,7 +23,7 @@ expression: frame_text(&app)
 ┌Question  (│                                                                         │────────────┐
 │Choose an o│                                                                         │            │
 │> Continue │                                                                         │            │
-│  自 己 输 入  │                                                                         │            │
+│  Type your│                                                                         │            │
 │           │                                                                         │            │
 └───────────│                                                                         │────────────┘
             │                                                                         │             

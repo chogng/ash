@@ -456,19 +456,25 @@ pub(crate) fn draw(
         .map(|item| {
             let selected = view.focused && view.selected == Some(item.id);
             let state = if item.sending {
-                " · sending"
+                Some("sending")
             } else if item.editing {
-                " · editing"
+                Some("editing")
             } else if item.paused {
-                " · paused"
+                Some("paused")
             } else {
-                ""
+                None
             };
-            let next = if item.position == 1 { " · next" } else { "" };
+            let next = (item.position == 1)
+                .then(|| format!(" · {}", context.localize("next")))
+                .unwrap_or_default();
+            let state = state
+                .map(|state| format!(" · {}", context.localize(state)))
+                .unwrap_or_default();
             Line::styled(
                 format!(
-                    "{}Queue {}: {}{next}{state}",
+                    "{}{} {}: {}{next}{state}",
                     selection_marker(selected),
+                    context.localize("Queue"),
                     item.position,
                     item.text
                 ),

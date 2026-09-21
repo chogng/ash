@@ -43,6 +43,7 @@ pub(crate) struct Panel {
     editor: Option<Editor>,
     draft: Option<Draft>,
     pending: bool,
+    language: crate::nls::Language,
 }
 
 impl Panel {
@@ -213,7 +214,12 @@ impl Panel {
             editor: None,
             draft: None,
             pending: false,
+            language: crate::nls::Language::English,
         }
+    }
+    pub(crate) fn localize(&mut self, language: crate::nls::Language) {
+        self.language = language;
+        self.selection.state_mut().localize(language);
     }
     pub(crate) fn selection(&self) -> Option<&ListSelectionState> {
         self.editor.is_none().then(|| self.selection.state())
@@ -380,6 +386,7 @@ impl Panel {
                             })),
                         ),
                     ]);
+                    self.selection.state_mut().localize(self.language);
                     ListSelectionOutcome::Consumed
                 }
             },

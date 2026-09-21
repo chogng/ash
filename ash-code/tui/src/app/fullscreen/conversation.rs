@@ -26,8 +26,13 @@ pub(super) fn draw(
         }
         .render(frame, areas.session.transcript, context);
         frame.render_widget(
-            Paragraph::new(format!("  Preview · {} · read only", preview.title))
-                .style(Style::default().fg(context.muted())),
+            Paragraph::new(format!(
+                "  {} · {} · {}",
+                context.localize("Preview"),
+                preview.title,
+                context.localize("read only")
+            ))
+            .style(Style::default().fg(context.muted())),
             areas.session.composer,
         );
         if let Some(notice) = preview.notice() {

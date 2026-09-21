@@ -65,7 +65,7 @@ pub(super) fn draw(
             chat_input::content_area(bottom_row(area)),
         ),
         BottomContent::Muted(text) => frame.render_widget(
-            Paragraph::new(text).style(Style::default().fg(context.muted())),
+            Paragraph::new(context.localize(text)).style(Style::default().fg(context.muted())),
             chat_input::content_area(bottom_row(area)),
         ),
         BottomContent::StatusLine => draw_status_line(frame, area, app, context),
@@ -113,8 +113,9 @@ fn bottom_content(app: &App) -> BottomContent<'_> {
     }
     if let Some(prefix) = app.pending_key_chord_label() {
         return BottomContent::Warning(format!(
-            "{prefix} … waiting for next key · {}",
-            bindings::CANCEL_HINTS.text()
+            "{prefix} … {} · {}",
+            crate::nls::localize(app.language(), "waiting for next key"),
+            bindings::CANCEL_HINTS.localized_text(app.language())
         ));
     }
     if app.viewed_thread_completed() {
@@ -154,8 +155,10 @@ pub(super) fn draw_tip(
     context: crate::render::RenderContext<'_>,
 ) {
     if !area.is_empty()
-        && let Some(text) = app.top_tip().text(app.screen_navigation_tip())
+        && let Some(text) = app
+            .top_tip()
+            .localized_text(app.screen_navigation_tip(), context.language())
     {
-        key_hint::draw_right(frame, area, text, context);
+        key_hint::draw_right(frame, area, &text, context);
     }
 }

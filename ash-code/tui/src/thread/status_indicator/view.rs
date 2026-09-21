@@ -29,6 +29,7 @@ pub(super) fn draw(
         TurnActivity::WaitingForCapability => ("Waiting for capability", false),
         TurnActivity::Cancelling => ("Cancelling", true),
     };
+    let label = context.localize(label);
     let elapsed = indicator.timer.elapsed();
     let marker = if active {
         FRAMES[(elapsed.as_millis() / 100 % 10) as usize]
@@ -50,14 +51,19 @@ pub(super) fn draw(
     );
     let content = content_area(area);
     let seconds = elapsed.as_secs();
-    let time = format!(" · {}m {:02}s total", seconds / 60, seconds % 60);
+    let time = format!(
+        " · {}m {:02}s {}",
+        seconds / 60,
+        seconds % 60,
+        context.localize("total")
+    );
     let hint = indicator.interrupt_hint.as_deref().unwrap_or("");
     let hint = if hint.is_empty() {
         String::new()
     } else {
-        format!(" · {hint} to interrupt")
+        format!(" · {hint} {}", context.localize("to interrupt"))
     };
-    let mut spans = vec![Span::styled(label, Style::default().fg(color))];
+    let mut spans = vec![Span::styled(label.clone(), Style::default().fg(color))];
     // Keep the action discoverable before spending remaining columns on elapsed time.
     let width = usize::from(content.width);
     if label.width() + time.width() + hint.width() <= width {

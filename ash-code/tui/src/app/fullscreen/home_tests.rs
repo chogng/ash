@@ -110,6 +110,52 @@ fn home_keeps_actions_above_the_fixed_composer() {
 }
 
 #[test]
+fn home_and_shared_hints_use_the_selected_language() {
+    let mut app = unstarted_app();
+    let mut settings = crate::config::TerminalSettings::default();
+    settings.set_language(crate::nls::Language::Chinese);
+    app.update(crate::config::Event::SettingsReceived(settings));
+    app.open_home();
+    app.handle_key(key(KeyCode::Tab));
+
+    let rendered = text(&render(&app, 80, 24));
+    let compact = rendered.replace(' ', "");
+
+    assert!(compact.contains("恢复会话"));
+    assert!(compact.contains("帮助与快捷键"));
+    assert!(compact.contains("Enter选择"));
+    assert!(!rendered.contains("Resume session"));
+    crate::tui_assert_snapshot!("home_chinese", rendered);
+}
+
+#[test]
+fn home_help_localizes_the_complete_selection_model() {
+    let mut app = unstarted_app();
+    let mut settings = crate::config::TerminalSettings::default();
+    settings.set_language(crate::nls::Language::Chinese);
+    app.update(crate::config::Event::SettingsReceived(settings));
+    app.open_home();
+    app.handle_key(key(KeyCode::Tab));
+    for _ in 0..3 {
+        app.handle_key(key(KeyCode::Down));
+    }
+
+    assert_eq!(app.handle_key(key(KeyCode::Enter)), None);
+    let selection = app.list_selection().unwrap();
+    assert_eq!(selection.title(), "帮助");
+    assert_eq!(
+        selection
+            .tabs()
+            .iter()
+            .map(crate::widgets::list_selection::ListSelectionGroup::label)
+            .collect::<Vec<_>>(),
+        vec!["快捷键", "命令", "自定义命令"]
+    );
+    assert_eq!(selection.search().unwrap().placeholder(), "搜索帮助");
+    crate::tui_assert_snapshot!("help_chinese", text(&render(&app, 90, 24)));
+}
+
+#[test]
 fn first_character_clears_welcome_and_keeps_the_workspace_header() {
     let mut app = unstarted_app();
     app.open_home();

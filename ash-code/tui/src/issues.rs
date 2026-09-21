@@ -404,12 +404,15 @@ impl Manager {
         &self,
         area: Rect,
         position: ratatui::layout::Position,
+        language: crate::nls::Language,
     ) -> Option<PointerTarget> {
         if self.detail.is_some() {
             return None;
         }
         let areas = self.interaction_areas(area);
-        if let Some(index) = tab_list::index_at(self.tabs.tabs(), areas.tabs, position) {
+        if let Some(index) =
+            tab_list::localized_index_at(self.tabs.tabs(), areas.tabs, position, language)
+        {
             return Some(PointerTarget::Tab(index));
         }
         if areas.search.contains(position) {
@@ -598,7 +601,7 @@ impl Manager {
         pressed: Option<&PointerTarget>,
         context: RenderContext<'_>,
     ) {
-        panel::draw_header(frame, area, "Issues", context.focus());
+        panel::draw_header(frame, area, &context.localize("Issues"), context.focus());
         let body = PanelLayout::new(area, 0).body;
         let style = Style::default()
             .fg(context.foreground())
@@ -642,19 +645,21 @@ impl Manager {
         );
         let mut lines = vec![Line::styled(
             format!(
-                "{} · {} selected · {} loaded · {}",
+                "{} · {} {} · {} {} · {}",
                 self.repository
                     .as_ref()
                     .map(|r| format!("{}/{}", r.owner, r.name))
                     .unwrap_or_default(),
                 self.selected.len(),
+                context.localize("selected"),
                 self.issues.len(),
+                context.localize("loaded"),
                 self.freshness
             ),
             muted,
         )];
         if !self.status.is_empty() {
-            lines.push(Line::styled(self.status.as_str(), muted));
+            lines.push(Line::styled(context.localize(self.status.as_str()), muted));
         }
         frame.render_widget(Paragraph::new(lines), areas.summary);
         let list_area = areas.list;

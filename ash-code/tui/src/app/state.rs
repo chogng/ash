@@ -102,6 +102,7 @@ use crate::thread::transcript::TranscriptScrollDirection;
 use crate::thread::transcript::first_scroll_target;
 use crate::widgets::detail_list::DetailList;
 use crate::widgets::detail_list::DetailListRow;
+use crate::widgets::list_selection::ListSelectionSpec;
 use crate::widgets::list_selection::ListSelectionState;
 use crate::widgets::overlay::DetailOverlay;
 use ash_app_server_protocol::protocol::session::SessionThreadReadResult;
@@ -258,6 +259,11 @@ impl App {
 
     pub(crate) fn render_context(&self) -> RenderContext<'_> {
         RenderContext::new(&self.render_theme, self.render_theme_revision)
+            .with_language(self.language())
+    }
+
+    pub(crate) const fn language(&self) -> crate::nls::Language {
+        self.terminal_settings.language()
     }
 
     #[cfg(test)]
@@ -567,7 +573,8 @@ impl App {
                 None
             }
             crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::OpenSubscription) => {
-                let choices = self.subscription.choices();
+                let mut choices = self.subscription.choices();
+                self.localize_selection(&mut choices);
                 self.panels_mut().open_subscription(choices);
                 self.begin_subscription_command(crate::config::SubscriptionCommand::Read)
             }
@@ -612,7 +619,8 @@ impl App {
         if !self.subscription.begin(&command) {
             return None;
         }
-        let choices = self.subscription.choices();
+        let mut choices = self.subscription.choices();
+        self.localize_selection(&mut choices);
         self.panels_mut().update_subscription(choices);
         Some(ConfigCommand::Subscription(command).into())
     }
@@ -1182,7 +1190,8 @@ impl App {
         }
     }
 
-    pub(super) fn open_command_panel(&mut self, panel: CommandPanel) {
+    pub(super) fn open_command_panel(&mut self, mut panel: CommandPanel) {
+        panel.localize(self.language());
         match self.screen_mode() {
             crate::terminal::ScreenMode::Fullscreen => {
                 super::fullscreen::navigation::open_command_panel(self, panel)
@@ -1211,8 +1220,9 @@ impl App {
     pub(super) fn show_overlay_in(
         &mut self,
         mode: crate::terminal::ScreenMode,
-        detail: DetailList,
+        mut detail: DetailList,
     ) {
+        detail.localize(self.language());
         match mode {
             crate::terminal::ScreenMode::Fullscreen => {
                 super::fullscreen::navigation::show_overlay(self, detail)
@@ -1264,7 +1274,8 @@ impl App {
         self.open_command_panel(CommandPanel::connectors(spec));
     }
 
-    fn update_connector_picker(&mut self, spec: ConnectorChoices) {
+    fn update_connector_picker(&mut self, mut spec: ConnectorChoices) {
+        self.localize_selection(&mut spec);
         self.panels_mut().replace_connectors(spec);
     }
 
@@ -1272,7 +1283,8 @@ impl App {
         self.panels().command_is_connectors()
     }
 
-    fn update_mcp_settings(&mut self, spec: McpChoices) {
+    fn update_mcp_settings(&mut self, mut spec: McpChoices) {
+        self.localize_selection(&mut spec);
         self.panels_mut().replace_mcp(spec);
     }
 
@@ -1295,11 +1307,13 @@ impl App {
             diagnostics,
         } = choices;
         self.report_skill_diagnostics(&diagnostics);
-        self.panels_mut().replace_skills(SkillChoices {
+        let mut choices = SkillChoices {
             model,
             actions,
             diagnostics: Vec::new(),
-        });
+        };
+        choices.model.localize(self.language());
+        self.panels_mut().replace_skills(choices);
     }
 
     fn report_skill_diagnostics(
@@ -1334,8 +1348,13 @@ impl App {
         self.open_command_panel(CommandPanel::startup(&context));
     }
 
-    fn update_status_line_editor(&mut self, spec: StatusLineChoices) {
+    fn update_status_line_editor(&mut self, mut spec: StatusLineChoices) {
+        self.localize_selection(&mut spec);
         self.panels_mut().replace_status_line(spec);
+    }
+
+    fn localize_selection<A>(&self, spec: &mut ListSelectionSpec<A>) {
+        spec.model.localize(self.language());
     }
 
     pub(crate) fn skills_view_is_active(&self) -> bool {
@@ -2282,7 +2301,8 @@ impl App {
             }
             ConfigEvent::Subscription(event) => {
                 self.subscription.update(event);
-                let choices = self.subscription.choices();
+                let mut choices = self.subscription.choices();
+                self.localize_selection(&mut choices);
                 self.panels_mut().update_subscription(choices);
             }
             ConfigEvent::SettingsReceived(settings) => {
@@ -2337,7 +2357,10 @@ impl App {
                 self.welcome.apply_model_summary(&summary);
             }
             ModelEvent::PickerOpened(view) => self.show_model_picker(view),
-            ModelEvent::PickerUpdated(view) => self.panels_mut().replace_model(view),
+            ModelEvent::PickerUpdated(mut view) => {
+                self.localize_selection(&mut view);
+                self.panels_mut().replace_model(view);
+            }
         }
     }
 
@@ -2359,7 +2382,9 @@ impl App {
                         .update(ThreadPresentationEvent::NoticeReceived(notice));
                 }
                 if self.panels().command_is_keymap() {
-                    self.panels_mut().replace_keymap(update.choices);
+                    let mut choices = update.choices;
+                    self.localize_selection(&mut choices);
+                    self.panels_mut().replace_keymap(choices);
                 } else {
                     self.show_keymap_editor(update.choices);
                 }

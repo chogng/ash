@@ -178,8 +178,12 @@ pub(crate) fn draw_body_with_pointer(
         ] {
             if !area.is_empty() {
                 frame.render_widget(
-                    Paragraph::new(format!("{count} more {position}"))
-                        .style(Style::default().fg(context.muted())),
+                    Paragraph::new(format!(
+                        "{count} {} {}",
+                        context.localize("more"),
+                        context.localize(position)
+                    ))
+                    .style(Style::default().fg(context.muted())),
                     area,
                 );
             }

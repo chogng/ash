@@ -12,7 +12,7 @@ expression: "render(&app, 80, 20)"
 ┌Next step  (1/1)──────────────────────────────────────────────────────────────┐
 │How should the work continue?                                                 │
 │  Continue  Use the proposed approach                                         │
-│> 自己输入  在下方输入框中回答                                                │
+│> Type your own answer  Answer in the input below                             │
 │> Keep the user draft                                                         │
 │                                                                              │
 └──────────────────────────────────────────────────────────────────────────────┘

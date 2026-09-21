@@ -9,7 +9,7 @@ use ratatui::style::Style;
 use ratatui::widgets::Paragraph;
 use unicode_width::UnicodeWidthStr;
 
-const DASHBOARD: &str = "[Dashboard]";
+const DASHBOARD: &str = "Dashboard";
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub(in crate::app) enum Target {
@@ -119,7 +119,7 @@ pub(super) fn draw(frame: &mut Frame<'_>, area: Rect, app: &App, context: Render
     draw_action(
         frame,
         areas.dashboard,
-        DASHBOARD,
+        &format!("[{}]", context.localize(DASHBOARD)),
         app,
         Target::Dashboard,
         true,
@@ -206,7 +206,7 @@ fn header_layout(area: Rect, app: &App, context: RenderContext<'_>) -> HeaderLay
     if area.is_empty() {
         return HeaderLayout::default();
     }
-    let dashboard_width = DASHBOARD.width() as u16;
+    let dashboard_width = context.localize(DASHBOARD).width() as u16 + 2;
     let show_dashboard = area.width >= 24;
     let dashboard = show_dashboard
         .then(|| {

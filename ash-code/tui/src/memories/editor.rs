@@ -168,9 +168,11 @@ impl Editor {
         };
         frame.render_widget(
             Paragraph::new(
-                self.message
-                    .as_deref()
-                    .unwrap_or("Ctrl+S save · Ctrl+A clear · Esc cancel"),
+                context.localize(
+                    self.message
+                        .as_deref()
+                        .unwrap_or("Ctrl+S save · Ctrl+A clear · Esc cancel"),
+                ),
             )
             .style(Style::default().fg(context.muted())),
             area,

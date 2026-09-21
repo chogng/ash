@@ -40,7 +40,7 @@ pub(super) fn draw(
             chat_input::content_area(bottom_row(area)),
         ),
         BottomContent::Muted(text) => frame.render_widget(
-            Paragraph::new(text).style(Style::default().fg(context.muted())),
+            Paragraph::new(context.localize(text)).style(Style::default().fg(context.muted())),
             chat_input::content_area(bottom_row(area)),
         ),
         BottomContent::InputHints => {
@@ -134,8 +134,9 @@ fn bottom_content(app: &App) -> BottomContent<'_> {
     }
     if let Some(prefix) = app.pending_key_chord_label() {
         return BottomContent::Warning(format!(
-            "{prefix} … waiting for next key · {}",
-            bindings::CANCEL_HINTS.text()
+            "{prefix} … {} · {}",
+            crate::nls::localize(app.language(), "waiting for next key"),
+            bindings::CANCEL_HINTS.localized_text(app.language())
         ));
     }
     if app.viewed_thread_completed() {
@@ -169,7 +170,7 @@ pub(super) fn draw_tip(
         };
         if let Some((text, color)) = persistent {
             frame.render_widget(
-                Paragraph::new(text).style(Style::default().fg(color)),
+                Paragraph::new(context.localize(text)).style(Style::default().fg(color)),
                 chat_input::content_area(area),
             );
             return;

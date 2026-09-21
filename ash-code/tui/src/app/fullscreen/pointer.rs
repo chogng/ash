@@ -201,7 +201,7 @@ pub(crate) fn target_at(
     }
     if let Some(manager) = app.issue_manager() {
         return manager
-            .pointer_target_at(areas.session.transcript, position)
+            .pointer_target_at(areas.session.transcript, position, app.language())
             .map(PointerTarget::Issues);
     }
     if let Some(manager) = app.session_manager_view()

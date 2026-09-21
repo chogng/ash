@@ -132,6 +132,7 @@ impl TopTip {
         notice_expired || clipboard_image_expired || policy_expired
     }
 
+    #[cfg(test)]
     pub(crate) fn text<'a>(&'a self, tip: Option<&'a str>) -> Option<&'a str> {
         if let Some(notice) = self.notice.as_ref() {
             return Some(notice.text.as_str());
@@ -142,6 +143,28 @@ impl TopTip {
         match self.phase {
             TopTipPhase::Navigation => tip,
             TopTipPhase::Policy { .. } => Some(bindings::POLICY_HINTS.text()),
+            TopTipPhase::Hidden => None,
+        }
+    }
+
+    pub(crate) fn localized_text<'a>(
+        &'a self,
+        tip: Option<&'a str>,
+        language: crate::nls::Language,
+    ) -> Option<std::borrow::Cow<'a, str>> {
+        if let Some(notice) = self.notice.as_ref() {
+            return Some(crate::nls::localize(language, &notice.text));
+        }
+        if self.clipboard_image_expires_at.is_some() {
+            return Some(std::borrow::Cow::Owned(
+                bindings::CLIPBOARD_HINTS.localized_text(language),
+            ));
+        }
+        match self.phase {
+            TopTipPhase::Navigation => tip.map(|tip| crate::nls::localize(language, tip)),
+            TopTipPhase::Policy { .. } => Some(std::borrow::Cow::Owned(
+                bindings::POLICY_HINTS.localized_text(language),
+            )),
             TopTipPhase::Hidden => None,
         }
     }
@@ -184,12 +207,12 @@ impl TopTip {
             hint_area.x += occupied;
             hint_area.width -= occupied;
         }
-        if let Some(text) = self.text(navigation)
+        if let Some(text) = self.localized_text(navigation, context.language())
             && (self.notice.is_some()
                 || self.clipboard_image_expires_at.is_some()
                 || text.width() <= usize::from(horizontal_margin(hint_area, 2).width))
         {
-            key_hint::draw_right(frame, hint_area, text, context);
+            key_hint::draw_right(frame, hint_area, &text, context);
         }
         for y in area.y..area.bottom() {
             for x in area.x..area.right() {

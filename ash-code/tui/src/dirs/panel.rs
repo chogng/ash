@@ -22,6 +22,7 @@ pub(crate) struct DirPanel {
     selection: ListSelection<DirSelectionAction>,
     pending: Option<u64>,
     add_target: DirAddTarget,
+    language: crate::nls::Language,
 }
 
 impl DirPanel {
@@ -38,6 +39,7 @@ impl DirPanel {
             selection,
             pending: None,
             add_target,
+            language: crate::nls::Language::English,
         }
     }
 
@@ -45,11 +47,17 @@ impl DirPanel {
         self.selection.state()
     }
 
+    pub(crate) fn localize(&mut self, language: crate::nls::Language) {
+        self.language = language;
+        self.selection.state_mut().localize(language);
+    }
+
     pub(crate) fn selection_mut(&mut self) -> Option<&mut ListSelectionState> {
         self.pending.is_none().then(|| self.selection.state_mut())
     }
 
-    pub(crate) fn replace(&mut self, choices: DirChoices) {
+    pub(crate) fn replace(&mut self, mut choices: DirChoices) {
+        choices.model.localize(self.language);
         self.selection.replace(choices.model, choices.actions);
     }
 
@@ -127,11 +135,13 @@ impl DirPanel {
         self.pending = None;
         match result {
             Ok(added) => {
-                let target = added.choices.actions.iter().find_map(|(id, action)| {
+                let mut choices = added.choices;
+                choices.model.localize(self.language);
+                let target = choices.actions.iter().find_map(|(id, action)| {
                     matches!(action, DirSelectionAction::Remove { path } if *path == added.path)
                         .then(|| id.clone())
                 });
-                self.selection = ListSelection::new(added.choices.model, added.choices.actions);
+                self.selection = ListSelection::new(choices.model, choices.actions);
                 if let Some(target) = target {
                     self.selection.state_mut().focus_item(&target);
                     // Start at Read files, so another Enter cannot remove the directory.
@@ -143,9 +153,11 @@ impl DirPanel {
                     (DirAddTarget::Project, true) => "Project folder already added",
                     (DirAddTarget::Project, false) => "Added project folder",
                 };
-                self.selection
-                    .state_mut()
-                    .set_message(Some(format!("{message}: {}", added.path.display())));
+                self.selection.state_mut().set_message(Some(format!(
+                    "{}: {}",
+                    crate::nls::localize(self.language, message),
+                    added.path.display()
+                )));
             }
             Err(error) => {
                 self.selection.state_mut().focus_search();

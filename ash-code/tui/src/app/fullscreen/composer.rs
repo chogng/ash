@@ -61,7 +61,7 @@ pub(super) fn draw(
         let border = chat_input::ChatInputChrome::Box.border_area(areas.input);
         if border.height >= 3 && border.width >= 8 {
             let model = crate::render::truncate_with_ellipsis(
-                app.status_line().model_label(),
+                &context.localize(app.status_line().model_label()),
                 usize::from(border.width.saturating_sub(6)),
             );
             let label = Line::from(format!(" {model} "));

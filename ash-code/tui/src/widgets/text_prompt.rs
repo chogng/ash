@@ -98,7 +98,10 @@ pub(crate) fn draw(
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(1), Constraint::Length(3)])
         .split(area);
-    frame.render_widget(Paragraph::new(prompt.explanation()), content[0]);
+    frame.render_widget(
+        Paragraph::new(context.localize(prompt.explanation())),
+        content[0],
+    );
     search_box::draw(frame, content[1], prompt.input(), false, false, context);
 }
 

@@ -23,7 +23,12 @@ pub(super) fn draw(
     let content_width = PanelLayout::content_width(area.width);
     let layout = PanelLayout::new(area, body.tab_rows(content_width));
     let presentation_focus = body.presentation_focus().unwrap_or_else(|| context.focus());
-    crate::widgets::panel::draw_header(frame, area, body.title(), presentation_focus);
+    crate::widgets::panel::draw_header(
+        frame,
+        area,
+        &context.localize(body.title()),
+        presentation_focus,
+    );
     body.draw_tabs(frame, layout.tabs, None, None, context);
     body.draw_body(frame, layout.body, None, None, context);
 }

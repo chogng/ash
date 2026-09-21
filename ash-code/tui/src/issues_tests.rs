@@ -207,20 +207,23 @@ fn issue_items_tabs_and_search_share_pointer_targeting_and_hover_feedback() {
         .pointer_target_at(
             area,
             ratatui::layout::Position::new(areas.list.right() - 1, areas.list.y + 1),
+            crate::nls::Language::English,
         )
         .unwrap();
     assert_eq!(issue, PointerTarget::Issue(5));
     assert_eq!(
         manager.pointer_target_at(
             area,
-            ratatui::layout::Position::new(areas.search.x, areas.search.y)
+            ratatui::layout::Position::new(areas.search.x, areas.search.y),
+            crate::nls::Language::English,
         ),
         Some(PointerTarget::Search)
     );
     assert!(matches!(
         manager.pointer_target_at(
             area,
-            ratatui::layout::Position::new(areas.tabs.x + 1, areas.tabs.y)
+            ratatui::layout::Position::new(areas.tabs.x + 1, areas.tabs.y),
+            crate::nls::Language::English,
         ),
         Some(PointerTarget::Tab(0))
     ));

@@ -351,8 +351,8 @@ pub(crate) fn draw(
         && view.question.choices.len() < MAX_CHOICE_ROWS
     {
         lines.push(choice_line(
-            "自己输入",
-            "在下方输入框中回答",
+            &context.localize("Type your own answer"),
+            &context.localize("Answer in the input below"),
             states[view.question.choices.len()],
             context,
         ));
@@ -365,7 +365,7 @@ pub(crate) fn draw(
     }
     if view.submitting {
         lines.push(Line::styled(
-            "Submitting…",
+            context.localize("Submitting…"),
             Style::default().fg(context.muted()),
         ));
     } else if let Some(error) = view.error {
@@ -429,17 +429,17 @@ fn choice_row(area: Rect, index: usize) -> u16 {
     area.y.saturating_add(2).saturating_add(index as u16)
 }
 
-fn choice_line<'a>(
-    label: &'a str,
-    description: &'a str,
+fn choice_line(
+    label: &str,
+    description: &str,
     state: InteractionState,
     context: RenderContext<'_>,
-) -> Line<'a> {
+) -> Line<'static> {
     let marker = selection_marker(state.selected);
     let style = interaction_style(context, state);
     Line::from(vec![
         Span::styled(marker, style),
-        Span::styled(label, style),
+        Span::styled(label.to_owned(), style),
         Span::styled(
             format!("  {description}"),
             if !state.selected && !state.hovered && !state.pressed {

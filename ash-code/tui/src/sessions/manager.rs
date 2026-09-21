@@ -353,7 +353,7 @@ pub(crate) fn draw_manager(
     if rows.is_empty() {
         frame.render_widget(
             Paragraph::new(Line::styled(
-                "No sessions yet",
+                context.localize("No sessions yet"),
                 Style::default().fg(context.muted()),
             )),
             area,
@@ -556,7 +556,7 @@ fn session_line<'a>(
     context: RenderContext<'_>,
 ) -> Line<'a> {
     let icon = status_icon(session.manager.status, animation_frame);
-    let elapsed = elapsed_label(session, now_unix_ms);
+    let elapsed = elapsed_label(session, now_unix_ms, context);
     let elapsed_width = elapsed.width();
     let icon_width = icon.width().unwrap_or(1);
     let indent = 2;
@@ -596,7 +596,7 @@ fn group_line(
     let text = format!(
         "{}{} ({count})",
         selection_marker(state.selected),
-        group.label()
+        context.localize(group.label())
     );
     let style = Style::default()
         .fg(context.muted())
@@ -639,7 +639,7 @@ fn activity_text(session: &Session) -> &str {
     }
 }
 
-fn elapsed_label(session: &Session, now_unix_ms: u64) -> String {
+fn elapsed_label(session: &Session, now_unix_ms: u64, context: RenderContext<'_>) -> String {
     if session.manager.status_changed_at_unix_ms == 0 {
         return String::new();
     }
@@ -650,7 +650,7 @@ fn elapsed_label(session: &Session, now_unix_ms: u64) -> String {
         return elapsed;
     }
     if session.manager.status == SessionManagerStatus::Completed {
-        format!("{elapsed} ago")
+        format!("{elapsed} {}", context.localize("ago"))
     } else {
         elapsed
     }

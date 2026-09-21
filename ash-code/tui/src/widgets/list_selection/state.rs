@@ -258,6 +258,11 @@ impl ListSelectionModel {
         self
     }
 
+    pub(crate) fn localize(&mut self, language: crate::nls::Language) {
+        localize_presentation(&mut self.presentation, language);
+        localize_groups(&mut self.tabs, language);
+    }
+
     pub(super) fn show_tabs(&self) -> bool {
         self.presentation.show_tabs
     }
@@ -381,6 +386,17 @@ impl ListSelectionState {
             self.focus = ListSelectionFocus::Items;
         }
         self.sync_search_focus();
+    }
+
+    pub(crate) fn localize(&mut self, language: crate::nls::Language) {
+        localize_presentation(&mut self.model, language);
+        if let Some(search) = self.search.as_mut() {
+            search.localize(language);
+        }
+        localize_groups(self.tabs.tabs_mut(), language);
+        if let Some(message) = self.message.as_mut() {
+            *message = crate::nls::localize_owned(language, &*message);
+        }
     }
 
     pub(super) fn expandable(&self) -> bool {
@@ -792,6 +808,34 @@ impl ListSelectionState {
             (Some(selected), len) => Some(selected.min(len - 1)),
             (None, _) => Some(0),
         };
+    }
+}
+
+fn localize_presentation(
+    presentation: &mut ListSelectionPresentation,
+    language: crate::nls::Language,
+) {
+    presentation.title = crate::nls::localize_owned(language, &presentation.title);
+    presentation.empty_message = crate::nls::localize_owned(language, &presentation.empty_message);
+    if let Some(search) = presentation.search.as_mut() {
+        search.localize(language);
+    }
+}
+
+fn localize_groups(groups: &mut [ListSelectionGroup], language: crate::nls::Language) {
+    for group in groups {
+        group.label = crate::nls::localize_owned(language, &group.label);
+        for item in &mut group.items {
+            item.label = crate::nls::localize_owned(language, &item.label);
+            if let Some(description) = item.description.as_mut() {
+                *description = crate::nls::localize_owned(language, &*description);
+            }
+            if let Some(columns) = item.columns.as_mut() {
+                columns.leading = crate::nls::localize_owned(language, &columns.leading);
+                columns.middle = crate::nls::localize_owned(language, &columns.middle);
+                columns.trailing = crate::nls::localize_owned(language, &columns.trailing);
+            }
+        }
     }
 }
 

@@ -116,7 +116,10 @@ pub(crate) fn draw(
                     .fg(context.foreground())
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled("Build anything", Style::default().fg(context.muted())),
+            Span::styled(
+                context.localize("Build anything"),
+                Style::default().fg(context.muted()),
+            ),
         ])];
     }
     let visible_rows = area.height.saturating_sub(2) as usize;
