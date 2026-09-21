@@ -1,5 +1,21 @@
 import { expect, test } from '@playwright/test';
 
+test('an active workbench theme includes later colors and restores host variables on disposal', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/themes.html');
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	const root = page.locator('#root');
+	await root.evaluate(element => element.style.setProperty('--ash-test-browser-late', '#fedcba', 'important'));
+	await page.evaluate(() => window.registerLateThemeColor());
+	expect(await root.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-test-browser-late'))).toBe('#123456');
+	await page.getByRole('button', { name: 'Light', exact: true }).click();
+	expect(await root.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-test-browser-late'))).toBe('#abcdef');
+	await page.evaluate(() => window.disposeThemeRoot());
+	expect(await root.evaluate(element => [element.style.getPropertyValue('--ash-test-browser-late'), element.style.getPropertyPriority('--ash-test-browser-late')])).toEqual(['#fedcba', 'important']);
+	expect(errors).toEqual([]);
+});
+
 test('TextMate Worker registers its provider at startup and restores current catalogs after restart', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));

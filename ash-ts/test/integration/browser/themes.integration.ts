@@ -17,9 +17,12 @@ import { TextMateScopeThemeModel } from '../../../src/ash/workbench/services/tex
 import { LanguageRequestCoordinator } from '../../../src/ash/editor/common/model/languageRequestCoordinator.js';
 import type { LanguageToken } from '../../../src/ash/editor/common/tokens/languageTokens.js';
 import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
+import { registerColor } from '../../../src/ash/platform/theme/common/colorRegistry.js';
 
 declare global {
 	interface Window {
+		registerLateThemeColor(): void;
+		disposeThemeRoot(): void;
 		tokenizeInTextMateWorker(): Promise<readonly { type: string; modifiers: readonly string[]; presentation?: { foreground?: string; fontStyle?: readonly string[] } }[]>;
 	}
 }
@@ -73,6 +76,10 @@ const services = resources.add(new ServiceContainer());
 services.registerInstance(IConfigurationService, configuration);
 const themes = resources.add(services.createInstance(WorkbenchThemeService, document.querySelector<HTMLElement>('#root')!));
 themes.initialize();
+window.registerLateThemeColor = () => {
+	registerColor('test.browserLate', { dark: '#123456', light: '#abcdef' }, { description: 'Late browser test.', owner: 'test' });
+};
+window.disposeThemeRoot = () => themes.dispose();
 const render = (): void => themes.renderFileIcon(URI.file('/workspace/main.ts'), document.querySelector<HTMLElement>('#icon')!);
 resources.add(themes.onDidFileIconThemeChange(render));
 const manifestJson = JSON.stringify(manifest);

@@ -598,6 +598,32 @@ test('editor surface and diagnostic colors follow the current Ash theme', async 
 	}
 });
 
+test('editor-owned colors preserve focused cursors, line borders and rulers in all four themes', async ({ page }) => {
+	await page.goto('/textModel.html');
+	await page.evaluate(() => window.ashTextModelIntegration.updateOptions({
+		rulers: [12], renderLineHighlight: 'all', cursorBlinking: 'solid',
+	}));
+	const input = page.locator('.stanza-editor-input');
+	await input.focus();
+	const cursor = page.locator('.cursors-layer > .cursor').first();
+	const line = page.locator('.view-overlays .current-line-exact').first();
+	const ruler = page.locator('.stanza-editor-ruler').first();
+	const palettes = [
+		{ theme: 'dark', cursor: 'rgb(174, 175, 173)', line: 'rgb(40, 40, 40)', ruler: 'rgb(90, 90, 90)', border: '2px' },
+		{ theme: 'light', cursor: 'rgb(0, 0, 0)', line: 'rgb(238, 238, 238)', ruler: 'rgb(211, 211, 211)', border: '2px' },
+		{ theme: 'contrast', cursor: 'rgb(255, 255, 255)', line: 'rgb(243, 133, 24)', ruler: 'rgb(255, 255, 255)', border: '1px' },
+		{ theme: 'contrastLight', cursor: 'rgb(15, 74, 133)', line: 'rgb(15, 74, 133)', ruler: 'rgb(41, 41, 41)', border: '1px' },
+	] as const;
+	for (const palette of palettes) {
+		await page.evaluate(theme => window.ashTextModelIntegration.setTheme(theme), palette.theme);
+		await expect(input).toBeFocused();
+		await expect(cursor).toHaveCSS('background-color', palette.cursor);
+		await expect(line).toHaveCSS('border-top-color', palette.line);
+		await expect(line).toHaveCSS('border-top-width', palette.border);
+		await expect(ruler).toHaveCSS('background-color', palette.ruler);
+	}
+});
+
 test("glyph margin, line numbers, and folding controls keep VS Code gutter order", async ({ page }) => {
 	await page.goto("/textModel.html");
 	const glyphMargin = page.locator(".glyph-margin");

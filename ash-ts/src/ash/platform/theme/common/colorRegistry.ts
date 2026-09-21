@@ -1,4 +1,6 @@
 import { Color, RGBA } from "../../../base/common/color.js";
+import { Emitter } from "../../../base/common/event.js";
+import { Disposable } from "../../../base/common/lifecycle.js";
 import { ColorScheme } from "./theme.js";
 
 export type ColorIdentifier = string;
@@ -55,25 +57,25 @@ export function opaque(value: ColorValue, background: ColorValue): ColorTransfor
 	return { op: "opaque", value, background };
 }
 
-export class ColorRegistry {
+export class ColorRegistry extends Disposable {
 	private readonly colors = new Map<ColorIdentifier, ColorContribution>();
-	private sealed = false;
+	private catalog: readonly ColorContribution[] = Object.freeze([]);
+	private readonly changed = this._register(new Emitter<void>());
+	public readonly onDidChange = this.changed.event;
 
 	registerColor(id: ColorIdentifier, defaults: ColorDefaults, metadata: ColorRegistrationMetadata): ColorIdentifier {
-		if (this.sealed) throw new Error(`Color registry is sealed; cannot register: ${id}`);
+		this.assertNotDisposed();
 		validateTokenId(id, "color");
 		if (this.colors.has(id)) throw new Error(`Color token is already registered: ${id}`);
 		const contribution = Object.freeze({ id, defaults: Object.freeze({ ...defaults }), ...metadata });
 		this.colors.set(id, contribution);
+		this.catalog = Object.freeze([...this.colors.values()]);
+		this.changed.fire();
 		return id;
 	}
 
 	getColors(): readonly ColorContribution[] {
-		return Object.freeze([...this.colors.values()]);
-	}
-
-	seal(): void {
-		this.sealed = true;
+		return this.catalog;
 	}
 
 	resolve(scheme: ColorScheme, overrides: Readonly<Record<string, ColorValue>> = {}): readonly ResolvedColorContribution[] {

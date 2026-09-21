@@ -2,6 +2,7 @@ import { Emitter } from '../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { createColorTheme, darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme, type IColorTheme, lightColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import { ColorScheme, isDarkColorScheme } from '../../../platform/theme/common/theme.js';
+import { Colors } from '../../../platform/theme/common/colorRegistry.js';
 import type { INamedEditorThemeService, NamedEditorThemeData } from '../common/namedEditorTheme.js';
 
 const ForcedColorsQuery = '(forced-colors: active)';
@@ -26,6 +27,7 @@ export class NamedEditorThemeService extends Disposable implements INamedEditorT
 		this.forcedColors.addEventListener('change', handleForcedColorsChange);
 		this._register(toDisposable(() => this.forcedColors.removeEventListener('change', handleForcedColorsChange)));
 		this.applySelectedTheme();
+		this._register(Colors.onDidChange(() => this.changed.fire(this.colorTheme)));
 	}
 
 	public defineNamedTheme(themeId: string, themeData: NamedEditorThemeData): void {

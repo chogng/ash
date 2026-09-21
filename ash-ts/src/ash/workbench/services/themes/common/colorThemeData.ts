@@ -2,7 +2,8 @@ import { Color } from '../../../../base/common/color.js';
 import { parseJsonDocument } from '../../../../base/common/json.js';
 import { parseJsonc } from '../../../../base/common/jsonc.js';
 import { validateJsonSchema } from '../../../../base/common/jsonSchema.js';
-import { colorIdentifiers, createColorTheme, type IColorTheme } from '../../../../platform/theme/common/colorTheme.js';
+import { createColorTheme, type IColorTheme } from '../../../../platform/theme/common/colorTheme.js';
+import { Colors } from '../../../../platform/theme/common/colorRegistry.js';
 import { ColorScheme } from '../../../../platform/theme/common/theme.js';
 import { colorThemeSchema, colorThemeSchemaId } from './colorThemeSchema.js';
 
@@ -50,14 +51,14 @@ export function colorThemeType(type: ColorThemeDocument['type']): ColorScheme {
 }
 
 export function createDocumentColorTheme(document: ColorThemeDocument, id: string, label: string, colorScheme: ColorScheme): IColorTheme {
-	const known = new Set(colorIdentifiers);
+	const known = new Set(Colors.getColors().map(entry => entry.id));
 	const colors = Object.fromEntries(Object.entries(document.colors ?? {}).filter(([key]) => known.has(key)));
 	const tokenColors = Object.freeze((document.tokenColors ?? []).map(rule => Object.freeze({
 		scopes: Object.freeze((typeof rule.scope === 'string' ? [rule.scope] : rule.scope ?? []).flatMap(scope => scope.split(',')).map(scope => scope.trim()).filter(Boolean)),
 		settings: Object.freeze({ ...rule.settings }),
 	})));
 	if (tokenColors.reduce((count, rule) => count + rule.scopes.length, 0) > 1024) throw new Error('Theme exceeds 1024 token scopes');
-	return Object.freeze({ ...createColorTheme({ id, label, colorScheme, colorOverrides: colors }), tokenColors });
+	return createColorTheme({ id, label, colorScheme, colorOverrides: colors, tokenColors });
 }
 
 /** Exports resolved colors, so user documents contain no aliases or transform expressions. */

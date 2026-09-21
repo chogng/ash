@@ -8,6 +8,7 @@ import { IConfigurationService } from '../../../../../platform/configuration/com
 import { WorkbenchConfiguration } from '../../../../common/configuration.js';
 import { WorkbenchConfigurationService } from '../../../configuration/browser/configurationService.js';
 import { lightColorTheme } from '../../../../../platform/theme/common/colorTheme.js';
+import { registerColor } from '../../../../../platform/theme/common/colorRegistry.js';
 import { IFileService } from '../../../../../platform/files/common/files.js';
 import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
 import { URI } from '../../../../../base/common/uri.js';
@@ -49,6 +50,39 @@ test('theme exports contain standard fields and resolved colors', () => {
 	assert.deepEqual(parseUserColorTheme(source).colors, lightColorTheme.colors);
 	using registration = registerColorThemeSchemas();
 	assert.ok(JsonSchemasRegistry.getSchema(colorThemeSchemaId)?.properties?.colors?.properties?.['editor.background']);
+});
+
+test('active user themes refresh later colors while preserving editor overrides and token rules', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
+	try {
+		Object.defineProperty(browser.window, 'matchMedia', { value: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }) });
+		const theme = parseUserColorTheme(JSON.stringify({ ...document, colors: { 'editorCursor.foreground': '#aabbcc' } }), 'late-workbench-colors');
+		using registration = WorkbenchThemesRegistry.registerColorThemes([theme]);
+		using configuration = new WorkbenchConfigurationService();
+		await configuration.updateValue(WorkbenchConfiguration.colorTheme, theme.id);
+		using services = new ServiceContainer();
+		services.registerInstance(IConfigurationService, configuration);
+		using active = services.createInstance(WorkbenchThemeService, browser.window.document.body);
+		active.initialize();
+		const before = theme.colorEntries;
+		const changes: string[] = [];
+		using listener = active.onDidColorThemeChange(value => changes.push(value.getColorCss('test.workbenchLate')!));
+		registerColor('test.workbenchLate', { dark: 'editorCursor.foreground', light: '#123456' }, { description: 'Late workbench test.', owner: 'test' });
+		assert.deepEqual({
+			before: before.find(entry => entry.id === 'test.workbenchLate'),
+			resolved: theme.colors['test.workbenchLate'],
+			css: browser.window.document.body.style.getPropertyValue('--ash-test-workbench-late'),
+			changes,
+			tokenRules: theme.tokenColors,
+		}, {
+			before: undefined, resolved: '#aabbcc', css: '#aabbcc', changes: ['#aabbcc'],
+			tokenRules: [{ scopes: ['comment', 'string.quoted'], settings: { foreground: '#123456', fontStyle: 'italic bold' } }],
+		});
+		assert.equal(JSON.parse(serializeUserColorThemeDraft(theme, theme.label)).colors['test.workbenchLate'], '#aabbcc');
+		assert.ok(JsonSchemasRegistry.getSchema(colorThemeSchemaId)?.properties?.colors?.properties?.['test.workbenchLate']);
+	} finally {
+		browser.window.close();
+	}
 });
 
 test('root theme extensions use the same document validator as user themes', async () => {

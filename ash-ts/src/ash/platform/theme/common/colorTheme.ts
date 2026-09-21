@@ -113,18 +113,6 @@ export const ColorId = Object.freeze({
 	editorTokenFunctionForeground: editorColors.tokenFunctionForeground,
 	editorTokenVariableForeground: editorColors.tokenVariableForeground,
 	editorTokenOperatorForeground: editorColors.tokenOperatorForeground,
-	editorCursorForeground: editorColors.cursorForeground,
-	editorCursorBackground: editorColors.cursorBackground,
-	editorMultiCursorPrimaryForeground: editorColors.multiCursorPrimaryForeground,
-	editorMultiCursorPrimaryBackground: editorColors.multiCursorPrimaryBackground,
-	editorMultiCursorSecondaryForeground: editorColors.multiCursorSecondaryForeground,
-	editorMultiCursorSecondaryBackground: editorColors.multiCursorSecondaryBackground,
-	editorOverviewRulerBorder: editorColors.overviewRulerBorder,
-	editorOverviewRulerBackground: editorColors.overviewRulerBackground,
-	editorLineHighlightBackground: editorColors.lineHighlightBackground,
-	editorInactiveLineHighlightBackground: editorColors.inactiveLineHighlightBackground,
-	editorLineHighlightBorder: editorColors.lineHighlightBorder,
-	editorRulerForeground: editorColors.editorRulerForeground,
 	editorFoldBackground: editorColors.foldBackground,
 	editorFoldPlaceholderForeground: editorColors.foldPlaceholderForeground,
 	editorGutterFoldingControlForeground: editorColors.foldingControlForeground,
@@ -161,11 +149,10 @@ export const ColorId = Object.freeze({
 export { colorCssVariable, sizeCssVariable };
 export type { ColorIdentifier };
 
-export const colorIdentifiers: readonly ColorIdentifier[] = Object.freeze(Colors.getColors().map(({ id }) => id));
 export const sizeIdentifiers: readonly string[] = Object.freeze(Sizes.getSizes().map(({ id }) => id));
 export type ThemeColors = Readonly<Record<ColorIdentifier, string>>;
 
-/** Immutable, fully resolved theme snapshot selected for one frontend host. */
+/** Fixed theme settings with resolved colors that include newly registered contributions. */
 export interface IColorTheme {
 	readonly tokenColors?: readonly {
 		readonly scopes: readonly string[];
@@ -187,32 +174,55 @@ export interface IColorThemeOptions {
 	readonly label: string;
 	readonly colorScheme: ColorScheme;
 	readonly colorOverrides?: Readonly<Record<string, ColorValue>>;
+	readonly tokenColors?: IColorTheme['tokenColors'];
 }
 
-/** Compiles registry contributions and overrides into an immutable snapshot. */
+/** Keeps color resolution current without giving each theme its own registry listener. */
 export function createColorTheme(options: IColorThemeOptions): IColorTheme {
 	if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(options.id)) throw new TypeError(`Invalid color theme ID '${options.id}'`);
-	Colors.seal();
 	Sizes.seal();
-	const colorEntries = Colors.resolve(options.colorScheme, options.colorOverrides);
-	const colorMap = new Map(colorEntries.map(({ id, value }) => [id, value] as const));
-	const colors = Object.freeze(Object.fromEntries(colorEntries.filter(({ value }) => value !== null).map(({ id, value }) => [id, Color.Format.CSS.formatHexA(value!, true)])));
+	const colorScheme = options.colorScheme;
+	const overrides = Object.freeze({ ...options.colorOverrides });
+	let catalog = Colors.getColors();
+	let resolved = resolveThemeColors(colorScheme, overrides);
+	const currentColors = (): typeof resolved => {
+		if (catalog !== Colors.getColors()) {
+			resolved = resolveThemeColors(colorScheme, overrides);
+			catalog = Colors.getColors();
+		}
+		return resolved;
+	};
 	const sizeEntries = Object.freeze(Sizes.getSizes().map((entry) => Object.freeze({ ...entry, value: Object.freeze({ ...entry.value }) })));
 	const sizeMap = new Map(sizeEntries.map(({ id, value }) => [id, value] as const));
-	return Object.freeze({
+	const theme = {
 		id: options.id,
 		label: options.label,
 		colorScheme: options.colorScheme,
-		colors,
-		colorEntries,
+		get colors() { return currentColors().colors; },
+		get colorEntries() { return currentColors().entries; },
 		sizeEntries,
-		getColor: (id: ColorIdentifier) => colorMap.get(id) ?? undefined,
+		getColor: (id: ColorIdentifier) => currentColors().map.get(id) ?? undefined,
 		getColorCss: (id: ColorIdentifier) => {
-			const color = colorMap.get(id);
+			const color = currentColors().map.get(id);
 			return color ? Color.Format.CSS.formatHexA(color, true) : undefined;
 		},
 		getSize: (id: string) => sizeMap.get(id),
-	});
+	};
+	if (options.tokenColors) {
+		Object.assign(theme, { tokenColors: options.tokenColors });
+	}
+	return Object.freeze(theme);
+}
+
+function resolveThemeColors(scheme: ColorScheme, overrides: Readonly<Record<string, ColorValue>>): {
+	readonly entries: readonly ResolvedColorContribution[];
+	readonly map: ReadonlyMap<ColorIdentifier, Color | null>;
+	readonly colors: ThemeColors;
+} {
+	const entries = Colors.resolve(scheme, overrides);
+	const map = new Map(entries.map(({ id, value }) => [id, value] as const));
+	const colors = Object.freeze(Object.fromEntries(entries.flatMap(({ id, value }) => value ? [[id, Color.Format.CSS.formatHexA(value, true)]] : [])));
+	return { entries, map, colors };
 }
 
 export const darkColorTheme = createColorTheme({ id: "ash-dark", label: "Ash Dark", colorScheme: ColorScheme.Dark });

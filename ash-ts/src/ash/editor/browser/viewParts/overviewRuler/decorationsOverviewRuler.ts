@@ -10,7 +10,7 @@ import { type RenderingContext, type RestrictedRenderingContext } from '../../vi
 import { ViewPart } from '../../view/viewPart.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import * as viewEvents from '../../../common/viewEvents.js';
-import { ColorId } from '../../../../platform/theme/common/colorTheme.js';
+import { editorCursorForeground, editorMultiCursorPrimaryForeground, editorMultiCursorSecondaryForeground, editorOverviewRulerBackground, editorOverviewRulerBorder } from '../../../common/core/editorColorRegistry.js';
 
 const MINIMUM_DECORATION_HEIGHT = 6;
 
@@ -217,17 +217,17 @@ class OverviewRulerSettings {
 		this.pixelRatio = options.get(EditorOption.pixelRatio);
 		this.lanes = options.get(EditorOption.overviewRulerLanes);
 		this.renderBorder = options.get(EditorOption.overviewRulerBorder);
-		this.borderColor = context.theme.getColor(ColorId.editorOverviewRulerBorder)?.toString() ?? null;
-		const configuredBackground = context.theme.getColor(ColorId.editorOverviewRulerBackground);
+		this.borderColor = context.theme.getColor(editorOverviewRulerBorder)?.toString() ?? null;
+		const configuredBackground = context.theme.getColor(editorOverviewRulerBackground);
 		this.backgroundColor = configuredBackground && !configuredBackground.isTransparent()
 			? configuredBackground.toString()
 			: (options.get(EditorOption.minimap).enabled && options.get(EditorOption.minimap).side === 'right'
 				? TokenizationRegistry.getDefaultBackground()?.toString() ?? null
 				: null);
 		this.hideCursor = options.get(EditorOption.hideCursorInOverviewRuler);
-		this.cursorColorSingle = context.theme.getColor(ColorId.editorCursorForeground)?.transparent(0.7).toString() ?? null;
-		this.cursorColorPrimary = context.theme.getColor(ColorId.editorMultiCursorPrimaryForeground)?.transparent(0.7).toString() ?? null;
-		this.cursorColorSecondary = context.theme.getColor(ColorId.editorMultiCursorSecondaryForeground)?.transparent(0.7).toString() ?? null;
+		this.cursorColorSingle = context.theme.getColor(editorCursorForeground)?.transparent(0.7).toString() ?? null;
+		this.cursorColorPrimary = context.theme.getColor(editorMultiCursorPrimaryForeground)?.transparent(0.7).toString() ?? null;
+		this.cursorColorSecondary = context.theme.getColor(editorMultiCursorSecondaryForeground)?.transparent(0.7).toString() ?? null;
 		this.top = position.top;
 		this.right = position.right;
 		this.domWidth = position.width;

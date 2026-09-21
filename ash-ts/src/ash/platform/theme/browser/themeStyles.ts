@@ -20,31 +20,26 @@ export function bindColorTheme(
 	target: HTMLElement,
 ): IDisposable {
 	const previousProperties = new Map<string, IPreviousProperty>();
-	const initialTheme = themeService.getColorTheme();
-	const projectedProperties = [
-		...initialTheme.colorEntries.map(({ id }) => colorCssVariable(id)),
-		...initialTheme.sizeEntries.map(({ id }) => sizeCssVariable(id)),
-	];
-	for (const property of projectedProperties) {
+	const rememberProperty = (property: string): void => {
+		if (previousProperties.has(property)) return;
 		previousProperties.set(property, {
 			value: target.style.getPropertyValue(property),
 			priority: target.style.getPropertyPriority(property),
 		});
-	}
-	previousProperties.set("color-scheme", {
-		value: target.style.getPropertyValue("color-scheme"),
-		priority: target.style.getPropertyPriority("color-scheme"),
-	});
+	};
+	rememberProperty("color-scheme");
 
 	const previousThemeId = target.getAttribute("data-color-theme");
 	const previousColorScheme = target.getAttribute("data-color-scheme");
 
 	const apply = (theme: IColorTheme): void => {
 		for (const { id, value } of theme.colorEntries) {
+			rememberProperty(colorCssVariable(id));
 			if (value) target.style.setProperty(colorCssVariable(id), value.toString());
 			else target.style.removeProperty(colorCssVariable(id));
 		}
 		for (const { id, value } of theme.sizeEntries) {
+			rememberProperty(sizeCssVariable(id));
 			target.style.setProperty(sizeCssVariable(id), sizeToCss(value));
 		}
 		target.style.setProperty(

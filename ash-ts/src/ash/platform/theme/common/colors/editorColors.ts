@@ -1,7 +1,6 @@
 import { registerColor, transparent } from "../colorRegistry.js";
 import { border as defaultBorder, descriptionForeground as baseDescriptionForeground, errorForeground, foreground, mutedForeground, successForeground, widgetBorder as baseWidgetBorder, widgetShadow as baseWidgetShadow } from "./baseColors.js";
 import { hoverBackground as componentHoverBackground, hoverBorder as componentHoverBorder, hoverForeground as componentHoverForeground, inputBackground as componentInputBackground, listHoverBackground as componentListHoverBackground, selectionBackground as componentSelectionBackground } from "./componentColors.js";
-import { editorBackground } from "./workbenchColors.js";
 
 const owner = "editor.presentation";
 const color = (id: string, dark: string, light: string, description: string): string => registerColor(id, { dark, light }, { description, owner });
@@ -45,51 +44,6 @@ export const foldBackground = registerColor(
 );
 export const foldPlaceholderForeground = color('editor.foldPlaceholderForeground', '#808080', '#808080', 'Foreground for the collapsed-range placeholder.');
 export const foldingControlForeground = alias('editorGutter.foldingControlForeground', foreground, 'Foreground for editor folding controls.');
-export const cursorForeground = registerColor(
-	"editorCursor.foreground",
-	{ dark: "#aeafad", light: "#000000", highContrastDark: "#ffffff", highContrastLight: "#0f4a85" },
-	{ description: "Foreground for the editor cursor.", owner },
-);
-export const cursorBackground = alias("editorCursor.background", editorBackground, "Foreground for a character covered by a block editor cursor.");
-export const multiCursorPrimaryForeground = alias("editorMultiCursor.primary.foreground", cursorForeground, "Foreground for the primary cursor when multiple cursors are active.");
-export const multiCursorPrimaryBackground = alias("editorMultiCursor.primary.background", cursorBackground, "Foreground for a character covered by the primary cursor when multiple cursors are active.");
-export const multiCursorSecondaryForeground = alias("editorMultiCursor.secondary.foreground", cursorForeground, "Foreground for secondary cursors when multiple cursors are active.");
-export const multiCursorSecondaryBackground = alias("editorMultiCursor.secondary.background", cursorBackground, "Foreground for a character covered by a secondary cursor when multiple cursors are active.");
-export const overviewRulerBorder = registerColor(
-	'editorOverviewRuler.border',
-	{ dark: '#7f7f7f4d', light: '#7f7f7f4d', highContrastDark: '#7f7f7f4d', highContrastLight: '#666666' },
-	{ description: 'Color of the editor overview ruler border.', owner },
-);
-export const overviewRulerBackground = registerColor(
-	'editorOverviewRuler.background',
-	{
-		dark: transparent(editorBackground, 0),
-		light: transparent(editorBackground, 0),
-		highContrastDark: transparent(editorBackground, 0),
-		highContrastLight: transparent(editorBackground, 0),
-	},
-	{ description: 'Background color of the editor overview ruler.', owner, needsTransparency: true },
-);
-export const lineHighlightBackground = registerColor(
-	"editor.lineHighlightBackground",
-	{ dark: "#00000000", light: "#00000000", highContrastDark: "#00000000", highContrastLight: "#00000000" },
-	{ description: "Background for the line at the primary cursor position.", owner },
-);
-export const inactiveLineHighlightBackground = registerColor(
-	"editor.inactiveLineHighlightBackground",
-	{ dark: lineHighlightBackground, light: lineHighlightBackground, highContrastDark: lineHighlightBackground, highContrastLight: lineHighlightBackground },
-	{ description: "Background for the line at the primary cursor position when the editor is not focused.", owner },
-);
-export const lineHighlightBorder = registerColor(
-	"editor.lineHighlightBorder",
-	{ dark: "#282828", light: "#eeeeee", highContrastDark: "#f38518", highContrastLight: "#0f4a85" },
-	{ description: "Border around the line at the primary cursor position.", owner },
-);
-export const editorRulerForeground = registerColor(
-	'editorRuler.foreground',
-	{ dark: '#5a5a5a', light: '#d3d3d3', highContrastDark: '#ffffff', highContrastLight: '#292929' },
-	{ description: 'Color of editor rulers.', owner },
-);
 
 export const diffRemovedLineBackground = color("diffEditor.removedLineBackground", "#4b1818", "#ffebe9", "Background for removed diff lines.");
 export const diffInsertedLineBackground = color("diffEditor.insertedLineBackground", "#173d24", "#dafbe1", "Background for inserted diff lines.");

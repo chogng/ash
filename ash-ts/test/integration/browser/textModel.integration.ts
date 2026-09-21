@@ -10,7 +10,7 @@ import type { IEditorScrollbarOptions, IEditorOptions } from '../../../src/ash/e
 import { h } from '../../../src/ash/base/browser/dom.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
-import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
+import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { URI } from "../../../src/ash/base/common/uri.js";
 import { DisposableStore, toDisposable } from "../../../src/ash/base/common/lifecycle.js";
 import { Event } from "../../../src/ash/base/common/event.js";
@@ -66,7 +66,7 @@ interface IntegrationHarness {
 	setScrollLeft(scrollLeft: number): void;
 	setScrollbar(options: IEditorScrollbarOptions): void;
 	updateOptions(options: IEditorOptions): void;
-	setTheme(theme: 'dark' | 'light' | 'contrast'): void;
+	setTheme(theme: 'dark' | 'light' | 'contrast' | 'contrastLight'): void;
 	setRenderRichScreenReaderContent(enabled: boolean): void;
 	showViewZone(): void;
 	removeViewZone(): void;
@@ -212,7 +212,7 @@ window.ashTextModelIntegration = {
 	setScrollLeft: scrollLeft => requiredEditorPart().setScrollLeft(scrollLeft),
 	setScrollbar: scrollbar => requiredEditorPart().updateOptions({ scrollbar }),
 	updateOptions: options => requiredEditorPart().updateOptions(options),
-	setTheme: theme => themeService.setColorTheme(theme === 'dark' ? darkColorTheme : theme === 'light' ? lightColorTheme : highContrastDarkColorTheme),
+	setTheme: theme => themeService.setColorTheme({ dark: darkColorTheme, light: lightColorTheme, contrast: highContrastDarkColorTheme, contrastLight: highContrastLightColorTheme }[theme]),
 	setRenderRichScreenReaderContent: enabled => requiredEditorPart().updateOptions({ renderRichScreenReaderContent: enabled }),
 	showViewZone: () => {
 		removeViewZone();

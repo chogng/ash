@@ -9,6 +9,7 @@ import {
 	sizeCssVariable,
 } from "../../common/colorTheme.js";
 import { TestThemeService } from "../common/testThemeService.js";
+import { registerColor } from "../../common/colorRegistry.js";
 
 test("color theme binding applies changes and restores prior root styles", () => {
 	using service = new TestThemeService(darkColorTheme);
@@ -76,6 +77,25 @@ test("color theme binding applies changes and restores prior root styles", () =>
 
 	service.setColorTheme(darkColorTheme);
 	assert.equal(target.style.getPropertyValue(background), "");
+});
+
+test("theme binding applies later color contributions and restores their original styles", () => {
+	using service = new TestThemeService(darkColorTheme);
+	const target = new FakeThemeTarget();
+	const property = colorCssVariable('test.lateBinding');
+	target.style.setProperty(property, 'hotpink', 'important');
+	const before = darkColorTheme.colorEntries;
+	using binding = bindColorTheme(service, target as unknown as HTMLElement);
+	registerColor('test.lateBinding', { dark: '#123456', light: '#abcdef' }, { description: 'Late binding test.', owner: 'test' });
+	assert.deepEqual({
+		oldEntry: before.find(entry => entry.id === 'test.lateBinding'),
+		resolved: darkColorTheme.getColorCss('test.lateBinding'),
+		value: target.style.getPropertyValue(property),
+	}, { oldEntry: undefined, resolved: '#123456', value: '#123456' });
+	service.setColorTheme(lightColorTheme);
+	assert.equal(target.style.getPropertyValue(property), '#abcdef');
+	binding.dispose();
+	assert.deepEqual([target.style.getPropertyValue(property), target.style.getPropertyPriority(property)], ['hotpink', 'important']);
 });
 
 interface IStyleProperty {

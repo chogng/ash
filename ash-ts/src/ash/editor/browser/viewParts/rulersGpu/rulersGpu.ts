@@ -9,7 +9,7 @@ import { ViewPart } from '../../view/viewPart.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import * as viewEvents from '../../../common/viewEvents.js';
-import { editorRulerForeground } from '../../../../platform/theme/common/colors/editorColors.js';
+import { editorRuler } from '../../../common/core/editorColorRegistry.js';
 import { type IColorTheme } from '../../../../platform/theme/common/colorTheme.js';
 
 /** Renders configured editor rulers into the shared GPU rectangle buffer. */
@@ -52,7 +52,7 @@ export class RulersGpu extends ViewPart {
 			const ruler = rulers[index]!;
 			const color = ruler.color
 				? Color.fromHex(ruler.color)
-				: theme.getColor(editorRulerForeground) ?? Color.white;
+				: theme.getColor(editorRuler) ?? Color.white;
 			const entry: Parameters<RectangleRenderer['register']> = [
 				ruler.column * typicalHalfwidthCharacterWidth * devicePixelRatio,
 				0,

@@ -1,5 +1,37 @@
 # Editor API 对齐状态
 
+## common 编辑器颜色归属与主题加载（2026-09-21）
+
+准入链：编辑器装配/切换主题 → 编辑器颜色注册 → Platform 解析当前颜色目录 → 宿主主题事件 → CSS 变量、标尺与概览尺绘制。起始工作区干净。用户已授权按职责迁移；本批先验证主题加载，再迁移现有颜色消费者。
+
+| 准入路径 | 存在关系 | 唯一职责与处理 |
+| --- | --- | --- |
+| `common/core/editorColorRegistry.ts` | 仅 VS Code → 双方都有 | 接回现有光标、当前行、标尺和概览尺的颜色定义及公开名称，保留 Ash 配色值。 |
+| `../platform/theme/common/colorRegistry.ts`、`../platform/theme/common/colors/editorColors.ts` | 双方都有 | 注册目录允许功能模块加载时增加颜色；移出上述定义，保留语法 token、组件与 diff 配色。 |
+| `../platform/theme/common/colorTheme.ts` | Ash 现有主题 owner | 主题选择与覆盖值固定，解析结果随注册目录失效；移除启动时封闭颜色目录、静态标识快照与迁出颜色的聚合别名。 |
+| `../platform/theme/browser/themeStyles.ts` | Ash 现有 DOM 主题绑定 | 首次写入每个变量前记录原值，释放时也恢复后加载颜色。 |
+| `standalone/browser/namedEditorThemeService.ts`、`../workbench/services/themes/browser/workbenchThemeService.ts` | Ash 现有宿主 / 双方都有 | 注册目录变化通过现有主题事件通知当前消费者；监听随宿主释放。 |
+| `../workbench/services/themes/common/colorThemeData.ts`、`colorThemeSchema.ts` | 双方都有 | 查询当前颜色目录，保留用户覆盖与 token 规则；主题对象不再通过展开变为陈旧快照。 |
+| `browser/viewParts/overviewRuler/decorationsOverviewRuler.ts`、`browser/viewParts/rulersGpu/rulersGpu.ts` | 双方都有 | 现有直接消费者改用编辑器颜色 owner，渲染算法不变。它们已位于 View 的静态装配链，无需新增入口。 |
+| `../platform/theme/test/common/colorRegistry.test.ts`、`themeService.test.ts`、`testThemeService.ts`、`design-tokens.test.ts`、`../platform/theme/test/browser/themeStyles.test.ts` | 现有测试设施 | 覆盖目录增加、主题解析失效、变量恢复；编辑器专属断言迁回编辑器测试。 |
+| `test/browser/namedEditorThemeService.test.ts`、`editorDecorationViewport.test.ts`、`../workbench/services/themes/test/browser/workbenchThemeService.test.ts` | 现有测试设施 | 验证宿主事件、现有配色、覆盖值、释放与概览尺绘制。 |
+| `test/integration/browser/themes.integration.ts`、`themes.integration.spec.ts`、`textModel.integration.ts`、`textModel.integration.spec.ts` | Ash 现有浏览器测试设施 | Playwright 验证后加载颜色、主题切换、焦点及高对比度的实际样式。 |
+| `common/core/README.md`、`api-alignment-status.md` | 现有文档 | 同步职责、验证及剩余差异。 |
+
+独立实现：注册表继续持有唯一颜色定义，保留不可变目录供主题判断缓存是否过期；主题不持有监听，宿主负责通知与释放。View 与各 ViewPart 继续拥有原 DOM、焦点、滚动和布局；本批不修改 CSS。颜色消费仍经 `--ash-*` 和现有绘制入口。用户主题覆盖值与 token 规则保持只读，颜色目录增加不能覆盖用户选择。
+
+实现结果：12 个颜色定义从 Platform 迁至编辑器，旧注册与 `ColorId` 聚合别名退出；`colorIdentifiers` 静态快照由调用方直接查询当前目录取代。Workbench 主题 schema 显式加载编辑器颜色，并随当前目录提供属性。注册表通知由已有宿主主题事件传递，DOM 绑定记录后加载变量的原值，关闭时恢复；没有新增第二份颜色定义或主题服务。
+
+common 当前 **208 个 TypeScript 文件：177 个同路径、31 个 Ash 自有；仍缺 49 个上游文件**。本批补的是现有颜色消费链，未提前注册尚无消费者的上游颜色。下方其他批次中的文件数和阻塞结论保留为历史记录。
+
+本批验证结果：
+
+- 主题定向单测覆盖实际模块后加载、缓存失效、用户覆盖、TextMate 规则、schema 属性、导出及 DOM 变量恢复。颜色审计补齐滚动条已有的组件尺寸变量声明；尺寸实际由 `scrollableElement.ts` 写入，不属于主题 token。
+- `check-editor-alignment.mjs --test=all` 通过：结构、台账、类型检查、230/230 个单测文件和 318/318 个 Playwright 用例通过。
+- 新增 Playwright 场景验证工作台后加载颜色及释放，四种主题下光标、当前行边框与标尺的计算样式，以及切换时焦点保持。
+- `build:renderer`、`build:stanza` 和 `git diff --check` 通过；没有新增构建 warning 或未跟踪 JavaScript 产物。
+- 保留既有 JSDOM Canvas、测试服务装配输出及 Playwright 颜色环境提示；未改 CSS，结构检查仍记录 7 份既有 CSS 债务。
+
 ## common 动作执行与编辑器上下文（2026-09-21）
 
 准入链：注释、多光标、格式化快捷键 → `CodeEditorWidget.getAction` → `common/editorAction.ts` → 当前编辑器上下文检查 → 已注册 action 修改当前模型/选区 → Widget 与 Playwright 行为验证。起始工作区干净。用户已授权迁移和保留职责差异；本批不改 DOM 层级、布局、主题或快捷键定义。

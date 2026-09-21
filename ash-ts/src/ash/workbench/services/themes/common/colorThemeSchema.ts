@@ -3,6 +3,7 @@ import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import { JsonSchemasRegistry } from '../../../../platform/jsonschemas/common/jsonSchemaRegistry.js';
 import { Colors } from '../../../../platform/theme/common/colorRegistry.js';
 import '../../../../platform/theme/common/colorTheme.js';
+import '../../../../editor/common/core/editorColorRegistry.js';
 
 export const colorThemeSchemaId = 'vscode://schemas/color-theme';
 
@@ -20,7 +21,9 @@ export const colorThemeSchema: JsonSchema = {
 		type: { enum: ['dark', 'light', 'hcDark', 'hcLight'] },
 		colors: {
 			type: 'object',
-			properties: Object.fromEntries(Colors.getColors().map(entry => [entry.id, { ...color, description: entry.description }])),
+			get properties() {
+				return Object.fromEntries(Colors.getColors().map(entry => [entry.id, { ...color, description: entry.description }]));
+			},
 			additionalProperties: color,
 		},
 		tokenColors: {

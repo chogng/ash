@@ -16,12 +16,12 @@ one coordinate model.
 | Edit operations | `editOperation.ts`, `textChange.ts` | Single operations, compact offset changes, change compression/serialization |
 | Text helpers | `characterClassifier.ts`, `wordCharacterClassifier.ts`, `wordHelper.ts`, `stringBuilder.ts` | Word boundaries, classifiers, UTF-16 assembly |
 | Geometry/misc | `2d/*`, `misc/*` | DOM-free points, sizes, rectangles, EOL, indentation, RGBA, model defaults |
+| Editor colors | `editorColorRegistry.ts` | Cursor, current-line, ruler and overview-ruler color definitions; Platform owns registration and theme resolution |
 
-The implementation deliberately does not copy VS Code's
-`editorColorRegistry.ts`. Editor colors are presentation/theme registration,
-and Ash's ownership rule places them under
-`platform/theme/common/colors/editorColors.ts`, not in the editor's core.
-This is an ownership boundary, not a missing capability.
+`editorColorRegistry.ts` registers editor-owned colors with Platform's shared
+registry. Themes include these definitions even when a theme was created before
+the editor module loaded. Shared widget, token and diff colors remain in
+`platform/theme/common/colors/editorColors.ts`.
 
 The parent `common/` layer owns the mutable `TextModel`, piece-tree storage,
 tracked ranges, decorations, command planning, and history implementation.

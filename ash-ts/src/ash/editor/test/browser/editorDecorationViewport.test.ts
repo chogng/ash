@@ -1,3 +1,4 @@
+import { editorCursorForeground } from '../../common/core/editorColorRegistry.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -251,7 +252,7 @@ test("Quick Diff decorations project into the overview ruler and minimap gutter"
 	viewport.layout({ width: 300, height: 80 });
 
 	assert.deepEqual(overviewMarkerColors(minimapPaint), ['#cca700', '#f48771']);
-	assert.deepEqual(overviewCursorColors(minimapPaint), [darkColorTheme.getColor(ColorId.editorCursorForeground)!.transparent(0.7).toString()]);
+	assert.deepEqual(overviewCursorColors(minimapPaint), [darkColorTheme.getColor(editorCursorForeground)!.transparent(0.7).toString()]);
 	assert.equal(requiredElement(viewport.domNode.domNode, '.decorationsOverviewRuler').getAttribute('aria-hidden'), 'true');
 	assert.deepEqual(minimapMarkers(minimapPaint), [
 		{ fill: '#89d185', top: 20 },

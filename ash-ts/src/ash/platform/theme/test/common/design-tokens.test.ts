@@ -2,12 +2,16 @@ import { strict as assert } from "node:assert";
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 import { test } from "mocha";
-import { colorCssVariable, colorIdentifiers, sizeCssVariable, sizeIdentifiers } from "../../common/colorTheme.js";
+import { colorCssVariable, sizeCssVariable, sizeIdentifiers } from "../../common/colorTheme.js";
+import { Colors } from "../../common/colorRegistry.js";
+// This audit covers editor CSS as well as platform CSS.
+import "../../../../editor/common/core/editorColorRegistry.js";
 
 test("CSS consumes registered design tokens and isolates intentional color samples", async () => {
-	const registered = new Set([...colorIdentifiers.map(colorCssVariable), ...sizeIdentifiers.map(sizeCssVariable)]);
+	const registered = new Set([...Colors.getColors().map(({ id }) => colorCssVariable(id)), ...sizeIdentifiers.map(sizeCssVariable)]);
 	const platformVariables = new Set(["--ash-font-family", "--ash-font-family-monospace", "--ash-context-view-layer", "--ash-z-index-context-view", "--ash-z-index-quick-input", "--ash-z-index-sash"]);
 	const componentPresentationVariables = new Set([
+		"--ash-scrollbar-slider-size",
 		"--ash-icon-label-text-overflow",
 		"--ash-sash-inset-gap",
 		"--ash-tab-list-inactive-background",

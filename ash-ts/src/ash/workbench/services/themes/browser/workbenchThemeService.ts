@@ -7,6 +7,7 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { FileKind, FileNotFoundError, FileRevisionConflictError, IFileService, type IFileContent } from '../../../../platform/files/common/files.js';
 import { type IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import type { IColorTheme } from '../../../../platform/theme/common/colorTheme.js';
+import { Colors } from '../../../../platform/theme/common/colorRegistry.js';
 import type { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { bindColorTheme } from '../../../../platform/theme/browser/themeStyles.js';
 import type { IFileIconThemeService } from '../../../../platform/theme/browser/fileIconThemeService.js';
@@ -62,6 +63,7 @@ export class WorkbenchThemeService extends Disposable implements IThemeService, 
 		}));
 		this._register(WorkbenchFileIconThemesRegistry.onDidChange(() => this.updateFileIconTheme()));
 		this._register(WorkbenchThemesRegistry.onDidChange(() => this.updateColorTheme()));
+		this._register(Colors.onDidChange(() => this.colorThemeChange.fire(this.colorTheme)));
 		const updateSystemTheme = (): void => this.updateColorTheme();
 		this.systemDarkQuery.addEventListener('change', updateSystemTheme);
 		this._register(toDisposable(() => this.systemDarkQuery.removeEventListener('change', updateSystemTheme)));

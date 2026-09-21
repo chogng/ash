@@ -7,7 +7,7 @@ import { ColorScheme } from "../../common/theme.js";
 const metadata = { description: "Test token.", owner: "test" };
 
 test("ColorRegistry resolves aliases and transforms deterministically", () => {
-	const registry = new ColorRegistry();
+	using registry = new ColorRegistry();
 	registry.registerColor("surface.background", { dark: "#000000", light: "#ffffff" }, metadata);
 	registry.registerColor("surface.overlay", { dark: transparent("surface.background", 0.5), light: transparent("surface.background", 0.25) }, { ...metadata, needsTransparency: true });
 
@@ -18,16 +18,16 @@ test("ColorRegistry resolves aliases and transforms deterministically", () => {
 });
 
 test("ColorRegistry rejects duplicates, cycles, unknown references, and unknown overrides", () => {
-	const duplicate = new ColorRegistry();
+	using duplicate = new ColorRegistry();
 	duplicate.registerColor("test.color", { dark: "#000000", light: "#ffffff" }, metadata);
 	assert.throws(() => duplicate.registerColor("test.color", { dark: "#000000", light: "#ffffff" }, metadata), /already registered/);
 
-	const cyclic = new ColorRegistry();
+	using cyclic = new ColorRegistry();
 	cyclic.registerColor("cycle.first", { dark: "cycle.second", light: "#ffffff" }, metadata);
 	cyclic.registerColor("cycle.second", { dark: "cycle.first", light: "#ffffff" }, metadata);
 	assert.throws(() => cyclic.resolve(ColorScheme.Dark), /cycle\.first -> cycle\.second -> cycle\.first/);
 
-	const unknown = new ColorRegistry();
+	using unknown = new ColorRegistry();
 	unknown.registerColor("test.color", { dark: "missing.color", light: "#ffffff" }, metadata);
 	assert.throws(() => unknown.resolve(ColorScheme.Dark), /Unknown color token reference/);
 	assert.throws(() => unknown.resolve(ColorScheme.Light, { "missing.override": "#000000" }), /Unknown color token override/);
@@ -42,10 +42,21 @@ test("SizeRegistry validates registration and serializes CSS values", () => {
 	assert.throws(() => size(Number.NaN), /must be finite/);
 });
 
-test("registries reject late contributions after their catalog is sealed", () => {
-	const colors = new ColorRegistry();
-	colors.seal();
-	assert.throws(() => colors.registerColor("late.color", { dark: "#000000", light: "#ffffff" }, metadata), /registry is sealed/);
+test("color contributions publish a new catalog without changing earlier snapshots", () => {
+	using colors = new ColorRegistry();
+	const before = colors.getColors();
+	const changes: string[][] = [];
+	using listener = colors.onDidChange(() => changes.push(colors.getColors().map(entry => entry.id)));
+	colors.registerColor("late.color", { dark: "#000000", light: "#ffffff" }, metadata);
+	assert.deepEqual({ before, changes, resolved: colors.resolve(ColorScheme.Light)[0]?.value?.toString() }, {
+		before: [], changes: [["late.color"]], resolved: "#ffffff",
+	});
+	assert.equal(colors.getColors(), colors.getColors());
+	assert.throws(() => colors.registerColor("late.color", { dark: "#000000", light: "#ffffff" }, metadata), /already registered/);
+	assert.equal(changes.length, 1);
+});
+
+test("size contributions remain sealed after startup", () => {
 	const sizes = new SizeRegistry();
 	sizes.seal();
 	assert.throws(() => sizes.registerSize("late.size", size(1), metadata), /registry is sealed/);
