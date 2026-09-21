@@ -24,7 +24,7 @@ file-search = { package = "ash-file-search", path = "../file-search" }
 tempfile = { workspace = true }
 sleep_inhibitor.workspace = true
 core-api = { workspace = true }
-exec-server = { workspace = true }
+exec-server = { workspace = true, features = ["local-sandbox"] }
 exec-server-protocol = { workspace = true }
 external-agent-migration = { workspace = true }
 serde_yaml = { workspace = true }
@@ -51,7 +51,6 @@ analytics = { workspace = true }
 diagnostics = { workspace = true }
 feedback = { workspace = true }
 features = { workspace = true }
-mxc-sandbox = { workspace = true }
 network-proxy = { workspace = true }
 ash-memory-diagnostics = { workspace = true }
 ash-automation = { workspace = true }
@@ -133,6 +132,7 @@ ash-typst = { workspace = true }
 worktree = { workspace = true }
 
 [dev-dependencies]
+mxc-sandbox = { workspace = true }
 ash-app-server-client = { workspace = true }
 tokio-tungstenite = { workspace = true }
 futures = { workspace = true }
@@ -142,6 +142,3 @@ ash-uds = { workspace = true }
 
 [lints]
 workspace = true
-
-[target.'cfg(windows)'.dependencies]
-windows-sandbox = { workspace = true }

@@ -13,6 +13,7 @@
 
 - 工作区消费者关闭默认 feature，使用执行库、客户端和 PTY 服务。
 - `server` feature 启用独立可执行入口及其安装、包租约、内部启动器和进程加固依赖。
+- `local-sandbox` feature 提供统一的 `LocalSandbox` 入口，集中配置 MXC 与 Windows 账户候选及 PTY 启动器；App Server、Hook 和独立服务共用它。
 - 直接构建本包默认启用 `server`；现有开发与发布打包入口继续构建 `ash-exec-server`。
 - 本地调用直接进入处理器；Workspace 索引、搜索与 Git 不进入执行协议。
 
@@ -33,7 +34,8 @@ ash-exec-server --listen 127.0.0.1:9001 --root /work/project --environment worke
 ```
 
 - 参数按上述顺序传入；`read-only` 禁止文件写入，`read-write` 允许授权目录写入。
-- 进程始终经过 MXC 沙箱，网络关闭；客户端不能扩张权限。
+- Windows 注册 MXC、账户沙箱候选，其他平台注册 MXC；网络关闭，客户端不能扩张权限。
+- 独立入口保持严格隔离策略；缺少 PSEC 时账户候选也会拒绝，不降低要求或重跑命令。
 - 仅监听回环地址；跨机器连接使用宿主管理的 SSH 等加密隧道。
 - 启动输出包含地址、环境身份和协议版本，不包含 token。
 - SIGTERM/SIGINT 关闭连接处理器并取消、回收活动进程。

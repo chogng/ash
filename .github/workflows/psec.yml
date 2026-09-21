@@ -8,6 +8,8 @@ on:
       - 'scripts/test-psec.ps1'
       - 'scripts/test-windows-sandbox.ps1'
       - 'ash-rs/windows-sandbox/**'
+      - 'ash-rs/hooks/**'
+      - 'ash-rs/exec-server/**'
       - 'ash-rs/mxc-sandbox/**'
       - 'ash-rs/vendor/mxc/**'
       - 'ash-rs/sandboxing/**'
@@ -85,7 +87,12 @@ jobs:
           rustflags: ''
       - name: Verify backend selection and no replay
         shell: pwsh
-        run: python -B scripts/cargo.py test -p ash-sandboxing --lib --locked
+        run: |
+          python -B scripts/cargo.py test -p ash-sandboxing --lib --locked
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -B scripts/cargo.py test -p ash-hooks --lib --locked
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -B scripts/cargo.py test -p ash-exec-server --lib --bin ash-exec-server --locked
       - name: Test account execution and cleanup
         shell: pwsh
         run: |

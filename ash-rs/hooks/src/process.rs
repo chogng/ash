@@ -5,6 +5,7 @@ use ash_async_utils::CancellationToken;
 use ash_config::HookAction;
 use ash_config::HookConfig;
 use ash_file_access::Dir;
+use ash_sandboxing::SandboxBackends;
 use ash_tool_executor::ApprovalPolicy;
 use ash_tool_executor::ApprovalRequirement;
 use ash_tool_executor::CommandExecutionAuthority;
@@ -41,17 +42,17 @@ impl ApprovalPolicy for AlwaysAuthorized {
 
 pub(crate) struct LocalHookProcessExecutor {
     dir: Dir,
-    executor: CommandExecutor<AlwaysAuthorized, mxc_sandbox::MxcSandbox>,
+    executor: CommandExecutor<AlwaysAuthorized, SandboxBackends>,
 }
 
 impl LocalHookProcessExecutor {
     pub(crate) fn new(dir: Dir) -> Self {
-        let backend = mxc_sandbox::MxcSandbox::new(ash_install_context::InstallContext::current());
         Self {
             dir: dir.clone(),
             executor: CommandExecutor::new(
                 dir,
-                backend,
+                exec_server::LocalSandbox::new(ash_install_context::InstallContext::current())
+                    .build(),
                 AlwaysAuthorized,
                 ExecutionLimits {
                     timeout: HOOK_TIMEOUT,

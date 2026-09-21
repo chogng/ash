@@ -26,12 +26,12 @@ flowchart TD
 | `action-policy` / Core | 操作及网络授权、审查、持久审批、重试决定 |
 | `sandboxing` | 策略、目录范围、候选选择、准备与进程契约 |
 | `tool-executor` | 工具审批检查与任务身份适配 |
-| `exec-server` | 进程及持续执行会话、输入输出、环境、预算、超时、取消和代理作用域 |
+| `exec-server` | `LocalSandbox` 统一配置平台候选；进程及持续执行会话、输入输出、预算、超时、取消和代理作用域 |
 | `utils/pty` | PTY、管道、尺寸、信号与已有进程驱动；不负责授权和后端选择 |
 | `network-proxy` | 检查真实连接目标，执行授权结果并转发 |
 | `mxc-sandbox` | 请求、错误和进程句柄的机械转换 |
 | 具体后端 | 系统能力检查、进程创建、隔离与清理 |
-| App Server 装配 | 确定产品的最低隔离要求并注册候选；不维护系统版本或令牌分支 |
+| App Server / Hook / 独立服务 | 提供权限要求，通过 `LocalSandbox` 取得统一后端；不自行注册平台候选或判断系统版本 |
 
 后端 crate 依赖统一契约，统一契约不依赖 MXC 或 Codex。平台 crate 用于能力和依赖隔离，不按转发层数拆 crate。`windows-sandbox` 当前还直接使用固定 MXC 版本的 `wxc_common` 策略类型与 ACL 日志；这项共享依赖保留在后端内部，其变更必须同时验证两个消费者，不能宣称两个后端在实现依赖上完全独立。
 授权语义见 [permissions.md](permissions.md)，审查语义见 [auto-review.md](auto-review.md)。
