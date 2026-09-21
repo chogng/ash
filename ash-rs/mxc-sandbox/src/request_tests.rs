@@ -64,13 +64,19 @@ fn psec_startup_diagnostics() {
     use std::time::Duration;
     use wxc_common::sandbox_process::SandboxBackend;
 
-    for variant in ["cmd", "powershell", "hidden", "profile", "capture"] {
+    for variant in [
+        "powershell",
+        "modules",
+        "module-cache",
+        "hidden-enumerate",
+        "hidden-capture",
+    ] {
         let temp = tempfile::tempdir().unwrap();
         let work = temp.path().join("work");
         std::fs::create_dir(&work).unwrap();
         let dir = Dir::open_local(&work).unwrap();
         let profile = tempfile::tempdir().unwrap();
-        let scope = if variant == "hidden" {
+        let scope = if variant.starts_with("hidden") {
             SandboxScope::new(
                 dir.clone(),
                 vec![ash_sandboxing::SandboxDirGrant::new(
@@ -83,7 +89,7 @@ fn psec_startup_diagnostics() {
         } else {
             SandboxScope::single(dir.clone())
         };
-        let scope = if variant == "profile" {
+        let scope = if variant == "module-cache" {
             scope
                 .with_private_ipc_dir(Dir::open_local(profile.path()).unwrap())
                 .unwrap()
@@ -110,7 +116,7 @@ fn psec_startup_diagnostics() {
                     "-NonInteractive".into(),
                     "-Command".into(),
                     format!(
-                        "'engine-ready'; 'process=' + [Environment]::CurrentDirectory; 'location=' + $PWD.Path; try {{ [IO.File]::WriteAllText('{}', 'yes'); 'file-written' }} catch {{ 'write-error=' + $_ }}; 'pipeline-ready' | ForEach-Object {{ Write-Output $_ }}; exit 125",
+                        "$s=[Diagnostics.Stopwatch]::StartNew(); [Console]::WriteLine('engine-ready'); [Console]::WriteLine('process=' + [Environment]::CurrentDirectory); [Console]::WriteLine('location=' + $PWD.Path); try {{ [IO.File]::WriteAllText('{}', 'yes'); [Console]::WriteLine('file-written-ms=' + $s.ElapsedMilliseconds) }} catch {{ [Console]::WriteLine('write-error=' + $_) }}; Write-Output 'output-ready'; [Console]::WriteLine('output-ms=' + $s.ElapsedMilliseconds); 'pipeline-ready' | ForEach-Object {{ [Console]::WriteLine($_) }}; [Console]::WriteLine('pipeline-ms=' + $s.ElapsedMilliseconds); exit 125",
                         dir.canonical_path()
                             .join("started")
                             .display()
@@ -155,22 +161,31 @@ fn psec_startup_diagnostics() {
         .into_iter()
         .filter_map(|key| std::env::var(key).ok().map(|value| (key.to_owned(), value)))
         .collect::<Vec<_>>();
-        if variant == "profile" {
-            for key in [
-                "TEMP",
-                "TMP",
-                "HOME",
-                "USERPROFILE",
-                "APPDATA",
-                "LOCALAPPDATA",
-            ] {
-                env.retain(|(name, _)| name != key);
-                env.push((key.into(), profile.path().display().to_string()));
-            }
+        if variant == "modules" {
+            env.push((
+                "PSModulePath".into(),
+                system
+                    .join("System32/WindowsPowerShell/v1.0/Modules")
+                    .display()
+                    .to_string(),
+            ));
+        }
+        if variant == "module-cache" {
+            env.push((
+                "PSModuleAnalysisCachePath".into(),
+                profile.path().join("cache").display().to_string(),
+            ));
         }
         request.set_env(&env);
         request.restore_runtime_policy();
-        if variant == "capture" {
+        if variant == "hidden-enumerate" {
+            request
+                .inner
+                .policy
+                .enumerate_paths
+                .push(temp.path().display().to_string());
+        }
+        if variant == "hidden-capture" {
             let output = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("../../.build/acceptance/psec-diagnostics");
             std::fs::create_dir_all(&output).unwrap();
@@ -196,15 +211,29 @@ fn psec_startup_diagnostics() {
         };
         eprintln!("PID={}", child.id());
         drop(child.take_stdin());
+        let start = std::time::Instant::now();
         let readers =
             [child.take_stdout().unwrap(), child.take_stderr().unwrap()].map(|mut stream| {
                 std::thread::spawn(move || {
                     let mut output = Vec::new();
-                    let result = stream.read_to_end(&mut output);
+                    let result = loop {
+                        let mut chunk = [0; 1024];
+                        match stream.read(&mut chunk) {
+                            Ok(0) => break Ok(output.len()),
+                            Ok(size) => {
+                                eprintln!(
+                                    "CHUNK {:?}: {}",
+                                    start.elapsed(),
+                                    String::from_utf8_lossy(&chunk[..size])
+                                );
+                                output.extend_from_slice(&chunk[..size]);
+                            }
+                            Err(error) => break Err(error),
+                        }
+                    };
                     (output, result)
                 })
             });
-        let start = std::time::Instant::now();
         let status = loop {
             let status = child.try_wait().unwrap();
             if status.is_some() || start.elapsed() > Duration::from_secs(30) {

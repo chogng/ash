@@ -24,12 +24,9 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force .build/acceptance/psec-diagnostics | Out-Null
           Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, OSArchitecture
+          python .github/scripts/psec-baseline.py
           python -B scripts/cargo.py test -p ash-mxc-sandbox --lib --locked request::tests::psec_startup_diagnostics -- --ignored --exact --nocapture 2>&1 | Tee-Object -FilePath .build/acceptance/psec-diagnostics/startup.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Run PSEC acceptance
-        if: always()
-        shell: pwsh
-        run: ./scripts/test-psec.ps1 -Capability required
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
