@@ -1,8 +1,9 @@
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
-import { LanguageRequestCoordinator, LanguageRequestStatus, type LanguageWorker, type LanguageWorkerRequest } from "../../common/languages/languageRequestCoordinator.js";
-import { LanguageResultAcceptance, LanguageResultStoreChangeReason, VersionedLanguageResultStore } from "../../common/languages/languageResultStore.js";
-import { LanguageDiagnosticSeverity, createLanguageDiagnosticStore, createLanguageTokenStore, type LanguageDiagnosticResult, type LanguageTokenResult } from "../../common/languages/languageResults.js";
+import { LanguageRequestCoordinator, LanguageRequestStatus, type LanguageWorker, type LanguageWorkerRequest } from '../../common/model/languageRequestCoordinator.js';
+import { LanguageResultAcceptance, LanguageResultStoreChangeReason, VersionedLanguageResultStore, createLanguageDiagnosticStore } from '../../common/model/languageResultStore.js';
+import { LanguageDiagnosticSeverity, type LanguageDiagnosticResult } from '../../common/languages.js';
+import { createLanguageTokenStore, type LanguageTokenResult } from '../../common/tokens/languageTokens.js';
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";

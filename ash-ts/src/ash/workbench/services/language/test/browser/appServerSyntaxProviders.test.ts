@@ -3,7 +3,7 @@ import { test } from 'mocha';
 import { Position } from '../../../../../editor/common/core/position.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
-import { SyntaxService } from '../../../../../editor/common/languages/syntax/syntaxService.js';
+import { SyntaxService } from '../../../../../editor/common/model/syntaxService.js';
 import { DocumentSymbolService } from '../../../../../editor/contrib/documentSymbols/common/languageDocumentSymbols.js';
 import { FoldingRangeService } from '../../../../../editor/contrib/folding/common/languageFoldingRanges.js';
 import { SelectionRangeService } from '../../../../../editor/contrib/smartSelect/common/selectionRanges.js';

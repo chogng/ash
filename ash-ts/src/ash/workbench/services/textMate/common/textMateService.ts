@@ -1,7 +1,7 @@
 import { type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type Event } from '../../../../base/common/event.js';
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
-import { type SyntaxWorkerFactory } from "../../../../editor/common/languages/syntax/syntaxService.js";
+import { type SyntaxWorkerFactory } from '../../../../editor/common/languages.js';
 import { type ITextMateGrammarService } from "./textMateGrammarService.js";
 import { type TextMateScopeThemeSource } from "./textMateScopeTheme.js";
 

@@ -1,4 +1,4 @@
-import { LanguageWorkerWireServer } from '../languages/languageWorkerWire.js';
+import { LanguageWorkerWireServer } from './languageWorkerWire.js';
 import { start } from '../../editor.worker.start.js';
 import { EditorWorker } from './editorWebWorker.js';
 import { editorWorkerWireCodec } from './editorWorkerWire.js';

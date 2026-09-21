@@ -30,12 +30,9 @@ import { ILanguageConfigurationService } from '../../../common/languages/languag
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { type EditorIndentationOptions } from '../../../common/core/misc/indentation.js';
 import { type ConfigurationChangedEvent, EditorLineWrapping, EditorOption, type EditorLayoutInfo, type FindComputedEditorOptionValueById, type IComputedEditorOptions, type IEditorOptions, WrappingIndent } from '../../../common/config/editorOptions.js';
-import { type LanguageCompletionWorkerFactory, type LanguageLocation, type LanguageWorkspaceEdit } from '../../../common/languages.js';
-import { type LanguageDiagnosticsHost } from '../../../common/languages/languageResults.js';
+import { type LanguageCompletionWorkerFactory, type LanguageLocation, type LanguageWorkspaceEdit, type LanguageDiagnosticsHost } from '../../../common/languages.js';
 import { isCompletionsEnablement, type CompletionsEnablement } from '../../../common/services/completionsEnablement.js';
-
 import { type BracketColorizationSource, type SemanticTokenSource } from '../../viewParts/viewLines/viewLine.js';
-
 import { type IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { type ICodeEditorService } from '../../services/codeEditorService.js';
 import { applyFontInfo } from '../../config/domFontInfo.js';

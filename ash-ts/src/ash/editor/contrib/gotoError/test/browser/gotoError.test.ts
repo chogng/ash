@@ -3,12 +3,11 @@ import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../../common/viewModel/textMeasurer.js";
 import { TextDecorationCollection } from "../../../../common/model/decorationCollection.js";
-import { LanguageDiagnosticSeverity, type LanguageDiagnostic } from "../../../../common/languages/languageResults.js";
+import { LanguageDiagnosticSeverity, type LanguageDiagnostic } from '../../../../common/languages.js';
 import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
-
 import { h } from "../../../../../base/browser/dom.js";
 import { TrackedRangeStickiness } from '../../../../common/model.js';
 

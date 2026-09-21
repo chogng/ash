@@ -1,10 +1,9 @@
 import { raceCancellationError } from "../../../../base/common/async.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { syntaxWireCodec } from "../../../../editor/common/languages/syntax/syntaxWire.js";
-import { type SyntaxRequest } from '../../../../editor/common/languages.js';
-import { type SyntaxLane, type SyntaxResult, type SyntaxWorker } from "../../../../editor/common/languages/syntax/syntaxService.js";
-import { type LanguageWorkerModelSynchronizer, type LanguageWorkerRequest, type LanguageWorkerResultDisposition, type LanguageWorkerResultSettler } from "../../../../editor/common/languages/languageRequestCoordinator.js";
-import { LanguageWorkerWireClient, type LanguageWorkerWireClientPort } from "../../../../editor/common/languages/languageWorkerWire.js";
+import { syntaxWireCodec } from '../../../../editor/common/services/editorWorkerWire.js';
+import { type SyntaxRequest, type SyntaxLane, type SyntaxResult, type SyntaxWorker } from '../../../../editor/common/languages.js';
+import { type LanguageWorkerModelSynchronizer, type LanguageWorkerRequest, type LanguageWorkerResultDisposition, type LanguageWorkerResultSettler } from '../../../../editor/common/model/languageRequestCoordinator.js';
+import { LanguageWorkerWireClient, type LanguageWorkerWireClientPort } from '../../../../editor/common/services/languageWorkerWire.js';
 import { type TextModelChange } from "../../../../editor/common/core/textChange.js";
 import { type TextMateGrammarCatalog, type TextMateGrammarCatalogSource } from "./textMateGrammarCatalog.js";
 import { TextMateGrammarCatalogWireClient } from "./textMateGrammarCatalogWire.js";

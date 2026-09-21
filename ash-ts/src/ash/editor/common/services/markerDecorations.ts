@@ -1,4 +1,4 @@
-import { type LanguageDiagnosticsSource } from '../languages/languageResults.js';
+import { type LanguageDiagnosticsSource } from '../languages.js';
 import { type Event } from '../../../base/common/event.js';
 import { type IDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';

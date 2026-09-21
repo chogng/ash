@@ -3,10 +3,9 @@ import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { rot } from "../../../../base/common/numbers.js";
 import { type ICodeEditor } from "../../../browser/editorBrowser.js";
 import { EditorOption } from "../../../common/config/editorOptions.js";
-import { type VersionedLanguageResult } from "../../../common/languages/languageRequestCoordinator.js";
-import { type VersionedLanguageResultStore } from "../../../common/languages/languageResultStore.js";
+import { type VersionedLanguageResult } from '../../../common/model/languageRequestCoordinator.js';
+import { type VersionedLanguageResultStore } from '../../../common/model/languageResultStore.js';
 import { assertLanguageCompletionCommitCharacter, normalizeLanguageCompletionItemDetails, LanguageCompletionInsertTextFormat, type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionItemResolver, type LanguageCompletionResolveRequest, type LanguageCompletionResult } from '../../../common/languages.js';
-
 import { parseSnippet, type Snippet, type SnippetVariableResolver } from "../../snippet/common/snippetParser.js";
 import { SnippetSession } from "../../snippet/browser/snippetSession.js";
 import { Position } from "../../../common/core/position.js";

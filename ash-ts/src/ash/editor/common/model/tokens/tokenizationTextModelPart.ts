@@ -4,21 +4,17 @@ import { Position } from '../../core/position.js';
 import { type Range } from '../../core/range.js';
 import { countEOL } from '../../core/misc/eolCounter.js';
 import { ColorId, FontStyle, LanguageId, MetadataConsts, StandardTokenType } from '../../encodedTokenAttributes.js';
-import { TokenizationRegistry, type ILanguageIdCodec, type LanguageSemanticTokensProvider } from '../../languages.js';
-
+import { TokenizationRegistry, type ILanguageIdCodec, type LanguageSemanticTokensProvider, type SyntaxServiceOptions } from '../../languages.js';
 import { type LanguageFeatureRegistry, SyntaxProviderRegistry } from '../../languageFeatureRegistry.js';
-import { type LanguageTokenizationSource } from '../../tokens/languageTokens.js';
-import { SyntaxService, type SyntaxServiceOptions } from '../../languages/syntax/syntaxService.js';
-
+import { type LanguageTokenizationSource, type LanguageToken, type SemanticTokenModelSource, type SemanticTokenSource } from '../../tokens/languageTokens.js';
+import { SyntaxService } from '../syntaxService.js';
 import { BackgroundTokenizationState, type ITokenizationTextModelPart, SynchronousTokenizationUnavailableError } from '../../tokenizationTextModelPart.js';
 import { LanguageTokenLineIndex, StyledTokenSource, overlayTokenSources, type LanguageTokenLine } from '../../tokens/languageTokenLineIndex.js';
-import { type LanguageToken } from '../../tokens/languageTokens.js';
 import { LineTokens } from '../../tokens/lineTokens.js';
 import { type SparseMultilineTokens } from '../../tokens/sparseMultilineTokens.js';
 import { SparseTokensStore } from '../../tokens/sparseTokensStore.js';
 import { type TextModel } from '../textModel.js';
 import { SemanticTokensTextModelPart } from './semanticTokensTextModelPart.js';
-import { type SemanticTokenModelSource, type SemanticTokenSource } from '../../tokens/languageTokens.js';
 
 export interface TokenizationTextModelPartOptions {
 	readonly languageIdCodec?: ILanguageIdCodec;

@@ -6,14 +6,11 @@ import { Position } from "../../../../editor/common/core/position.js";
 import { Range, type IRange } from "../../../../editor/common/core/range.js";
 import { type ITextModel } from "../../../../editor/common/model.js";
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
-import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind, LanguageCompletionTriggerKind, type LanguageCompletionProvider, type LanguageCompletionProviderCommandRequest, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResolveRequest, type LanguageLocation, type DocumentFormattingEditProvider, type DocumentRangeFormattingEditProvider, type LanguageFormattingOptions, type TextEdit, type CodeLens, type CodeLensList, type CodeLensProvider, type LanguageSemanticTokensProvider, type LanguageSemanticTokensRequest, type LinkedEditingRangeProvider, type LinkedEditingRanges } from '../../../../editor/common/languages.js';
-
+import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind, LanguageCompletionTriggerKind, type LanguageCompletionProvider, type LanguageCompletionProviderCommandRequest, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResolveRequest, type LanguageLocation, type DocumentFormattingEditProvider, type DocumentRangeFormattingEditProvider, type LanguageFormattingOptions, type TextEdit, type CodeLens, type CodeLensList, type CodeLensProvider, type LanguageSemanticTokensProvider, type LanguageSemanticTokensRequest, type LinkedEditingRangeProvider, type LinkedEditingRanges, type LanguageWorkspaceSymbol, type LanguageWorkspaceSymbolProvider, LanguageDiagnosticSeverity } from '../../../../editor/common/languages.js';
 import { type LanguageHoverProvider, type LanguageHoverRequest } from "../../../../editor/contrib/hover/common/hover.js";
 import { type LanguageDeclarationProvider, type LanguageDefinitionProvider, type LanguageImplementationProvider, type LanguageLocationRequest, type LanguageReferenceProvider, type LanguageReferenceRequest, type LanguageTypeDefinitionProvider } from "../../../../editor/contrib/gotoSymbol/common/languageNavigation.js";
-
 import { type LanguageCallHierarchyEntry, type LanguageCallHierarchyProvider, type LanguageHierarchyFollowupRequest, type LanguageHierarchyItem, type LanguageHierarchyRequest, type LanguageTypeHierarchyProvider } from "../../../../editor/contrib/callHierarchy/common/languageHierarchy.js";
-import { type LanguageCompletionItemKindDto, type LanguageHierarchyItemDto } from "../../../../platform/app-server/common/generated/index.js";
-import { type LanguageWorkspaceSymbol, type LanguageWorkspaceSymbolProvider } from '../../../../editor/common/languages.js';
+import { type LanguageCompletionItemKindDto, type LanguageHierarchyItemDto, type LanguageCodeActionDto, type LanguageCodeLensDto, type LanguageDirectoryEditDto, type LanguageDocumentLinkDto, type LanguageDocumentSymbolDto } from '../../../../platform/app-server/common/generated/index.js';
 import { type LanguageRenameProvider, type LanguageRenameRequest } from "../../../../editor/contrib/rename/common/languageRename.js";
 import { type LanguageCodeAction, type LanguageCodeActionProvider, type LanguageCodeActionRequest } from "../../../../editor/contrib/codeAction/common/languageCodeActions.js";
 import { type LanguageParameterHintsProvider, type LanguageParameterHintsRequest } from "../../../../editor/contrib/parameterHints/common/languageParameterHints.js";
@@ -22,8 +19,6 @@ import { type LanguageDocumentSymbol, type LanguageDocumentSymbolProvider, type 
 import { type LanguageLink, type LanguageLinkProvider, type LanguageLinkRequest } from "../../../../editor/contrib/links/common/languageLinks.js";
 import { type LanguageColorProvider, type LanguageColorPresentationRequest, type LanguageColorRequest } from "../../../../editor/contrib/colorPicker/common/languageColors.js";
 import { type LanguageFoldingRangeProvider, type LanguageFoldingRangeRequest } from "../../../../editor/contrib/folding/common/languageFoldingRanges.js";
-import { LanguageDiagnosticSeverity } from "../../../../editor/common/languages/languageResults.js";
-import { type LanguageCodeActionDto, type LanguageCodeLensDto, type LanguageDirectoryEditDto, type LanguageDocumentLinkDto, type LanguageDocumentSymbolDto } from "../../../../platform/app-server/common/generated/index.js";
 import { type ILanguageApi } from "../../../../platform/language/common/languageApi.js";
 import { workspaceRelativePath, workspaceResourceFromPath } from "../../../../platform/files/browser/fileService.js";
 import { type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";

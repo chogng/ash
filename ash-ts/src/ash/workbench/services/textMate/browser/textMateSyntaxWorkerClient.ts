@@ -1,4 +1,4 @@
-import { type SyntaxWorkerFactory } from "../../../../editor/common/languages/syntax/syntaxService.js";
+import { type SyntaxWorkerFactory } from '../../../../editor/common/languages.js';
 import { BrowserWorkerClientPort } from "../../../../platform/webWorker/browser/browserWorkerClientPort.js";
 import { TextMateSyntaxWorkerClient } from "../common/textMateSyntaxWorkerClient.js";
 import { type TextMateGrammarCatalogSource } from "../common/textMateGrammarCatalog.js";

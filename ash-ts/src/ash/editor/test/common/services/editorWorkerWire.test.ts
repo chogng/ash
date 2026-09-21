@@ -6,11 +6,10 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
-import { LanguageWorkerWireClient, LanguageWorkerWireServer, type LanguageWorkerWireClientPort } from '../../../common/languages/languageWorkerWire.js';
+import { LanguageWorkerWireClient, LanguageWorkerWireServer, type LanguageWorkerWireClientPort } from '../../../common/services/languageWorkerWire.js';
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { TextModel } from '../../../common/model/textModel.js';
-
 import { EditorWorker } from '../../../common/services/editorWebWorker.js';
 import { editorWorkerWireCodec } from '../../../common/services/editorWorkerWire.js';
 import { EndOfLineSequence } from '../../../common/model.js';

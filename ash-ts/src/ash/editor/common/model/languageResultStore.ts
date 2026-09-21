@@ -1,8 +1,23 @@
-import { Emitter, type Event } from "../../../base/common/event.js";
-import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
-import { isPositiveSafeInteger } from "../../../base/common/numbers.js";
-import { type VersionedLanguageResult } from "./languageRequestCoordinator.js";
-import { type TextModel } from "../model/textModel.js";
+import { type TextModel } from './textModel.js';
+import { type LanguageDiagnosticResult, normalizeLanguageDiagnosticResult } from '../languages.js';
+import { Range } from '../core/range.js';
+import { type VersionedLanguageResult } from './languageRequestCoordinator.js';
+import { Emitter, type Event } from '../../../base/common/event.js';
+import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { isPositiveSafeInteger } from '../../../base/common/numbers.js';
+
+export function createLanguageDiagnosticStore(model: TextModel): VersionedLanguageResultStore<LanguageDiagnosticResult> {
+	return new VersionedLanguageResultStore(model, (value, currentModel) => normalizeLanguageDiagnosticResult(
+		value,
+		range => assertDiagnosticModelRange(currentModel, range, "Language diagnostic"),
+	));
+}
+
+function assertDiagnosticModelRange(model: TextModel, range: Range, owner: string): void {
+	if (!(range instanceof Range)) throw new TypeError(`${owner} range must be a Range`);
+	model.offsetAt(range.getStartPosition());
+	model.offsetAt(range.getEndPosition());
+}
 
 /** The outcome of offering one versioned result to a result store. */
 export enum LanguageResultAcceptance {

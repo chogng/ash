@@ -1,9 +1,9 @@
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
-import { syntaxWireCodec } from "../../common/languages/syntax/syntaxWire.js";
-import { SYNTAX_DIAGNOSTIC_LANE, SYNTAX_TOKEN_LANE, type SyntaxLane, type SyntaxResult } from "../../common/languages/syntax/syntaxService.js";
+import { syntaxWireCodec } from '../../common/services/editorWorkerWire.js';
+import { SYNTAX_DIAGNOSTIC_LANE, SYNTAX_TOKEN_LANE, type SyntaxLane, type SyntaxResult } from '../../common/languages.js';
 import { testTokens, testDiagnostics } from './testSyntaxProvider.js';
-import { type LanguageWorkerWireResultState } from "../../common/languages/languageWorkerWire.js";
+import { type LanguageWorkerWireResultState } from '../../common/services/languageWorkerWire.js';
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { type TextSnapshot } from "../../common/core/textChange.js";

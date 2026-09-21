@@ -3,7 +3,7 @@ import { TextEditorCapability } from '../../textEditorCapabilities.js';
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
-import { type LanguageDiagnostic } from "../../../common/languages/languageResults.js";
+import { type LanguageDiagnostic } from '../../../common/languages.js';
 import { Selection } from "../../../common/core/selection.js";
 import { Position } from "../../../common/core/position.js";
 import { type Range } from "../../../common/core/range.js";

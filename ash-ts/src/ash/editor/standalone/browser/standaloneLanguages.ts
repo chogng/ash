@@ -2,16 +2,12 @@ import type { Event } from '../../../base/common/event.js';
 import type { IDisposable } from '../../../base/common/lifecycle.js';
 import type { TextResourceLanguageInput } from '../../../platform/language/common/textResourceLanguage.js';
 import { RGBA8 } from '../../common/core/misc/rgba.js';
-import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind, LanguageCompletionTriggerKind, type LanguageCompletionProvider, DocumentHighlightKind, type CodeLensProvider, type LinkedEditingRangeProvider, type MultiDocumentHighlightProvider, type DocumentFormattingEditProvider, type DocumentRangeFormattingEditProvider, type OnTypeFormattingEditProvider, type LanguageSemanticTokensProvider, type SyntaxProvider } from '../../common/languages.js';
-
+import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind, LanguageCompletionTriggerKind, type LanguageCompletionProvider, DocumentHighlightKind, type CodeLensProvider, type LinkedEditingRangeProvider, type MultiDocumentHighlightProvider, type DocumentFormattingEditProvider, type DocumentRangeFormattingEditProvider, type OnTypeFormattingEditProvider, type LanguageSemanticTokensProvider, type SyntaxProvider, LanguageDiagnosticSeverity, type LanguageWorkspaceSymbolProvider } from '../../common/languages.js';
 import * as languages from '../../common/languages.js';
 import { selectLanguageIds, type LanguageSelector } from '../../common/languageSelector.js';
 import { type LanguageConfiguration } from '../../common/languages/languageConfiguration.js';
 import type { ILanguageExtensionPoint } from '../../common/languages/language.js';
 import type { LanguageDescriptionChangeEvent, LanguageDescriptionContribution, LanguageDescriptionRegistration } from '../../common/services/languagesRegistry.js';
-import { LanguageDiagnosticSeverity } from '../../common/languages/languageResults.js';
-
-import type { LanguageWorkspaceSymbolProvider } from '../../common/languages.js';
 import type { LanguageCallHierarchyProvider, LanguageTypeHierarchyProvider } from '../../contrib/callHierarchy/common/languageHierarchy.js';
 import type { LanguageCodeActionProvider } from '../../contrib/codeAction/common/languageCodeActions.js';
 import type { LanguageColorProvider } from '../../contrib/colorPicker/common/languageColors.js';

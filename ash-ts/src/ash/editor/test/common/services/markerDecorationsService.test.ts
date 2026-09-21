@@ -1,6 +1,6 @@
 import { Emitter } from '../../../../base/common/event.js';
 import { type URI } from '../../../../base/common/uri.js';
-import { LanguageDiagnosticSeverity } from '../../../common/languages/languageResults.js';
+import { LanguageDiagnosticSeverity } from '../../../common/languages.js';
 import { LanguageDiagnosticDecorationBridge } from '../../../contrib/gotoError/common/diagnosticDecorations.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';

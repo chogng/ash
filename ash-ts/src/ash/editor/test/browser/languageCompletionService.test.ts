@@ -6,8 +6,7 @@ import { SuggestModel } from "../../contrib/suggest/browser/suggestModel.js";
 import { LanguageCompletionService } from '../../contrib/suggest/browser/suggest.js';
 import { LanguageCompletionProviderRegistry } from '../../common/languageFeatureRegistry.js';
 import { LanguageCompletionTriggerKind, createLanguageCompletionIncompleteRefreshContext, createLanguageCompletionInvokeContext, createLanguageCompletionTriggerCharacterContext, type LanguageCompletionContext, type LanguageCompletionProvider, type LanguageCompletionProviderItem, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult, LanguageCompletionItemKind, LanguageCompletionInsertTextFormat } from '../../common/languages.js';
-import { LanguageRequestCancellationReason, LanguageRequestStatus } from "../../common/languages/languageRequestCoordinator.js";
-
+import { LanguageRequestCancellationReason, LanguageRequestStatus } from '../../common/model/languageRequestCoordinator.js';
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";

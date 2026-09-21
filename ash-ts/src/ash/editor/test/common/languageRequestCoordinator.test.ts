@@ -1,6 +1,6 @@
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
-import { LanguageRequestCancellationReason, LanguageRequestCoordinator, LanguageRequestStatus, LanguageWorkerResultDisposition, type LanguageWorker, type LanguageWorkerRequest, type LanguageWorkerResultSettler, type VersionedLanguageResult } from "../../common/languages/languageRequestCoordinator.js";
+import { LanguageRequestCancellationReason, LanguageRequestCoordinator, LanguageRequestStatus, LanguageWorkerResultDisposition, type LanguageWorker, type LanguageWorkerRequest, type LanguageWorkerResultSettler, type VersionedLanguageResult } from '../../common/model/languageRequestCoordinator.js';
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { type TextModelChange } from "../../common/core/textChange.js";

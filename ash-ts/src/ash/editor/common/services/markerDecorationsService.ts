@@ -1,6 +1,5 @@
 import { TextModel } from '../model/textModel.js';
-import { LanguageDiagnosticSeverity, type LanguageDiagnostic } from '../languages/languageResults.js';
-import { type LanguageDiagnosticsSource } from '../languages/languageResults.js';
+import { LanguageDiagnosticSeverity, type LanguageDiagnostic, type LanguageDiagnosticsSource } from '../languages.js';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { type URI } from '../../../base/common/uri.js';

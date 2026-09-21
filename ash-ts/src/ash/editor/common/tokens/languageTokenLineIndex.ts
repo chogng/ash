@@ -1,12 +1,11 @@
 import { resolveSemanticTokenStyling } from '../services/semanticTokensProviderStyling.js';
-import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken, type SemanticTokenLine, type SemanticTokenModelSource, type SemanticTokenSource, type SemanticTokenStylingResolver } from './languageTokens.js';
+import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken, type SemanticTokenLine, type SemanticTokenModelSource, type SemanticTokenSource, type SemanticTokenStylingResolver, type LanguageToken, type LanguageTokenResult } from './languageTokens.js';
 import { arraysEqual } from "../../../base/common/arrays.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable, combinedDisposable, toDisposable } from "../../../base/common/lifecycle.js";
-import { type VersionedLanguageResult } from "../languages/languageRequestCoordinator.js";
-import { LanguageResultStoreChangeReason, type VersionedLanguageResultStore } from "../languages/languageResultStore.js";
+import { type VersionedLanguageResult } from '../model/languageRequestCoordinator.js';
+import { LanguageResultStoreChangeReason, type VersionedLanguageResultStore } from '../model/languageResultStore.js';
 import { getLanguageTokenResultDelta, type LanguageTokenResultDelta, type LanguageTokenResultSplice } from '../services/semanticTokensDto.js';
-import { type LanguageToken, type LanguageTokenResult } from "./languageTokens.js";
 import { Position } from "../core/position.js";
 import { Range } from "../core/range.js";
 import { type TextModelChange } from "../core/textChange.js";

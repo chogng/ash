@@ -1,8 +1,8 @@
 import { start } from "../../../../editor/editor.worker.start.js";
 import { SyntaxProviderRegistry } from '../../../../editor/common/languageFeatureRegistry.js';
-import { SyntaxProviderWorker } from "../../../../editor/common/languages/syntax/syntaxService.js";
-import { syntaxWireCodec } from "../../../../editor/common/languages/syntax/syntaxWire.js";
-import { LanguageWorkerWireServer } from "../../../../editor/common/languages/languageWorkerWire.js";
+import { SyntaxProviderWorker } from '../../../../editor/common/services/editorWebWorker.js';
+import { syntaxWireCodec } from '../../../../editor/common/services/editorWorkerWire.js';
+import { LanguageWorkerWireServer } from '../../../../editor/common/services/languageWorkerWire.js';
 import { createTextMateSyntaxProvider } from "../common/textMateSyntaxProvider.js";
 import { TextMateGrammarCatalogStore } from "../common/textMateGrammarCatalogStore.js";
 import { TextMateGrammarCatalogWireServer } from "../common/textMateGrammarCatalogWire.js";

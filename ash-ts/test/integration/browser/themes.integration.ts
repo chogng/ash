@@ -15,7 +15,7 @@ import { createTextMateSyntaxWorkerFactory } from '../../../src/ash/workbench/se
 import { TextMateGrammarCatalogModel } from '../../../src/ash/workbench/services/textMate/common/textMateGrammarCatalog.js';
 import { TextMateScopeThemeModel } from '../../../src/ash/workbench/services/textMate/common/textMateScopeTheme.js';
 import { SyntaxProviderRegistry } from '../../../src/ash/editor/common/languageFeatureRegistry.js';
-import { SyntaxService } from '../../../src/ash/editor/common/languages/syntax/syntaxService.js';
+import { SyntaxService } from '../../../src/ash/editor/common/model/syntaxService.js';
 import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
 
 declare global {

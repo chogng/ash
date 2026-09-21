@@ -4,8 +4,7 @@ import { Disposable, toDisposable, type IDisposable } from "../../../../base/com
 import { type URI } from "../../../../base/common/uri.js";
 import { Position } from "../../../../editor/common/core/position.js";
 import { Range } from "../../../../editor/common/core/range.js";
-import { LanguageDiagnosticSeverity, type LanguageDiagnostic } from "../../../../editor/common/languages/languageResults.js";
-import { type LanguageDiagnosticsPublisher } from "../../../../editor/common/languages/languageResults.js";
+import { LanguageDiagnosticSeverity, type LanguageDiagnostic, type LanguageDiagnosticsPublisher } from '../../../../editor/common/languages.js';
 import { type TextModel } from "../../../../editor/common/model/textModel.js";
 import { type IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import { AppServerRemoteError } from "../../../../platform/app-server/common/appServerError.js";

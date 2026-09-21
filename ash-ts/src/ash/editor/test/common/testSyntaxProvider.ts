@@ -1,7 +1,6 @@
 import { Range } from '../../common/core/range.js';
 import { type TextSnapshot } from '../../common/core/textChange.js';
-import { type SyntaxProvider } from '../../common/languages.js';
-import { LanguageDiagnosticSeverity } from '../../common/languages/languageResults.js';
+import { type SyntaxProvider, LanguageDiagnosticSeverity } from '../../common/languages.js';
 
 /** Payload generator for transport tests; words are opaque data, not language tokens. */
 export function testTokens(snapshot: TextSnapshot) {

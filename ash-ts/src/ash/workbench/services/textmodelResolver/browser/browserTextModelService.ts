@@ -11,7 +11,7 @@ import { TextModel, type TextModelMaintenanceOptions } from "../../../../editor/
 import { RetainedModelUndoRedoHistory } from '../common/retainedModelUndoRedoHistory.js';
 import { type IAshLanguageService } from '../../../../editor/common/languages/language.js';
 import { type ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
-import { type SyntaxServiceOptions } from '../../../../editor/common/languages/syntax/syntaxService.js';
+import { type SyntaxServiceOptions } from '../../../../editor/common/languages.js';
 
 interface TextModelEntry {
 	readonly resource: URI;

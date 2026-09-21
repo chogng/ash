@@ -1,14 +1,11 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
-import { type VersionedLanguageResultStore } from "../../../common/languages/languageResultStore.js";
-import { type LanguageDiagnostic, type LanguageDiagnosticResult } from "../../../common/languages/languageResults.js";
-
+import { type VersionedLanguageResultStore } from '../../../common/model/languageResultStore.js';
+import { type LanguageDiagnostic, type LanguageDiagnosticResult, type LanguageDiagnosticsPublisher, type LanguageDiagnosticsSource, LanguageDiagnosticSeverity } from '../../../common/languages.js';
 import { type URI } from "../../../../base/common/uri.js";
-import { type LanguageDiagnosticsPublisher, type LanguageDiagnosticsSource } from "../../../common/languages/languageResults.js";
 import { MinimapPosition, OverviewRulerLane, TrackedRangeStickiness, type IModelDecorationOptions } from '../../../common/model.js';
 import { themeColorFromId } from '../../../../base/common/themables.js';
 import { ColorId } from '../../../../platform/theme/common/colorTheme.js';
-import { LanguageDiagnosticSeverity } from '../../../common/languages/languageResults.js';
 
 /**
  * Projects current-version diagnostics into generic text decorations.

@@ -3,8 +3,7 @@ import { test } from "mocha";
 import { LanguageCompletionProviderRegistry } from '../../common/languageFeatureRegistry.js';
 import { createLanguageCompletionInvokeContext, type LanguageCompletionProvider, LanguageCompletionItemKind, type LanguageCompletionResolveRequest } from '../../common/languages.js';
 import { LanguageCompletionService } from '../../contrib/suggest/browser/suggest.js';
-
-import { LanguageRequestStatus } from "../../common/languages/languageRequestCoordinator.js";
+import { LanguageRequestStatus } from '../../common/model/languageRequestCoordinator.js';
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";

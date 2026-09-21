@@ -1,8 +1,8 @@
 import { SyntaxProviderRegistry } from '../languageFeatureRegistry.js';
-import { type SyntaxRequest } from '../languages.js';
-import { SYNTAX_DIAGNOSTIC_LANE, SyntaxProviderWorker, type SyntaxLane, type SyntaxResult } from '../languages/syntax/syntaxService.js';
-import { LanguageRequestCoordinator } from '../languages/languageRequestCoordinator.js';
-import { createLanguageDiagnosticStore } from '../languages/languageResults.js';
+import { type SyntaxRequest, SYNTAX_DIAGNOSTIC_LANE, type SyntaxLane, type SyntaxResult } from '../languages.js';
+import { SyntaxProviderWorker } from '../services/editorWebWorker.js';
+import { LanguageRequestCoordinator } from './languageRequestCoordinator.js';
+import { createLanguageDiagnosticStore } from './languageResultStore.js';
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Color } from '../../../base/common/color.js';
 import { BugIndicatingError, onUnexpectedError } from '../../../base/common/errors.js';

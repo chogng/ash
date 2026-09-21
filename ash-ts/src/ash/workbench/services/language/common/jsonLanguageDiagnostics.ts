@@ -3,9 +3,8 @@ import { validateJsonSchema } from '../../../../base/common/jsonSchema.js';
 import { DisposableStore, type IDisposable } from '../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { Range } from '../../../../editor/common/core/range.js';
-import { LanguageDiagnosticSeverity, type LanguageDiagnostic } from '../../../../editor/common/languages/languageResults.js';
+import { LanguageDiagnosticSeverity, type LanguageDiagnostic, type LanguageDiagnosticsPublisher } from '../../../../editor/common/languages.js';
 import type { TextModel } from '../../../../editor/common/model/textModel.js';
-import type { LanguageDiagnosticsPublisher } from '../../../../editor/common/languages/languageResults.js';
 import { JsonSchemasRegistry, type JsonSchemaRegistry } from '../../../../platform/jsonschemas/common/jsonSchemaRegistry.js';
 
 /** Publishes local syntax diagnostics for JSON and adds schema diagnostics when associated. */

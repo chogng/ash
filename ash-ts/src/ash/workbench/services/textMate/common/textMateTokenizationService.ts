@@ -1,7 +1,7 @@
 import { arraysEqual, commonArraySuffixLength, commonPrefixLength } from "../../../../base/common/arrays.js";
 import { escapeRegExpCharacters } from "../../../../base/common/strings.js";
 import { type LanguageWorkerDocumentSynchronization } from '../../../../editor/common/services/textModelSync/textModelSync.protocol.js';
-import { type LanguageToken, type LanguageTokenResult } from "../../../../editor/common/languages/languageResults.js";
+import { type LanguageToken, type LanguageTokenResult } from '../../../../editor/common/tokens/languageTokens.js';
 import { Position } from "../../../../editor/common/core/position.js";
 import { Range } from "../../../../editor/common/core/range.js";
 import { type TextSnapshot } from "../../../../editor/common/core/textChange.js";

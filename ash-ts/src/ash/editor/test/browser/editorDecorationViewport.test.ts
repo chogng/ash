@@ -4,15 +4,14 @@ import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../common/viewModel/textMeasurer.js";
 import { TextDecorationCollection } from "../../common/model/decorationCollection.js";
 import { LanguageDiagnosticDecorationBridge } from "../../contrib/gotoError/common/diagnosticDecorations.js";
-import { LanguageResultAcceptance } from "../../common/languages/languageResultStore.js";
-import { LanguageDiagnosticSeverity, createLanguageDiagnosticStore } from "../../common/languages/languageResults.js";
+import { LanguageResultAcceptance, createLanguageDiagnosticStore } from '../../common/model/languageResultStore.js';
+import { LanguageDiagnosticSeverity } from '../../common/languages.js';
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { GlyphMarginLane, MinimapPosition, OverviewRulerLane, TrackedRangeStickiness } from '../../common/model.js';
 import { themeColorFromId } from '../../../base/common/themables.js';
 import { ColorId, darkColorTheme } from '../../../platform/theme/common/colorTheme.js';
-
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({

@@ -8,8 +8,8 @@ import { type LanguageSelectionRangeProvider, type LanguageSelectionRangeRequest
 import { Position } from "../../../../editor/common/core/position.js";
 import { Range } from "../../../../editor/common/core/range.js";
 import { type TextSnapshot } from "../../../../editor/common/core/textChange.js";
-import { type SyntaxProvider, type SyntaxProviderRequest } from '../../../../editor/common/languages.js';
-import { LanguageDiagnosticSeverity, type LanguageDiagnosticResult, type LanguageToken, type LanguageTokenResult } from "../../../../editor/common/languages/languageResults.js";
+import { type SyntaxProvider, type SyntaxProviderRequest, LanguageDiagnosticSeverity, type LanguageDiagnosticResult } from '../../../../editor/common/languages.js';
+import { type LanguageToken, type LanguageTokenResult } from '../../../../editor/common/tokens/languageTokens.js';
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 
 const MAX_SYNTAX_INPUT_BYTES = 4 * 1024 * 1024;

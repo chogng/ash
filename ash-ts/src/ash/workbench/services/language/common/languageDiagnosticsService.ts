@@ -1,4 +1,4 @@
-import type { LanguageDiagnosticSnapshot, LanguageDiagnosticsHost } from '../../../../editor/common/languages/languageResults.js';
+import { type LanguageDiagnosticSnapshot, type LanguageDiagnosticsHost } from '../../../../editor/common/languages.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 
 /** Owns diagnostic aggregation across open models and unopened workspace resources. */
@@ -8,4 +8,4 @@ export interface ILanguageDiagnosticsService extends LanguageDiagnosticsHost {
 
 export const ILanguageDiagnosticsService = createServiceIdentifier<ILanguageDiagnosticsService>('languageDiagnosticsService');
 
-export type { LanguageDiagnosticSnapshot, LanguageDiagnosticsPublisher } from '../../../../editor/common/languages/languageResults.js';
+export { type LanguageDiagnosticSnapshot, type LanguageDiagnosticsPublisher } from '../../../../editor/common/languages.js';

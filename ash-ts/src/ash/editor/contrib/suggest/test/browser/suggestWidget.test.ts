@@ -3,11 +3,10 @@ import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { LanguageCompletionDetailsStatus, SuggestModel, type LanguageCompletionSessionOptions } from "../../browser/suggestModel.js";
-import { LanguageResultAcceptance } from "../../../../common/languages/languageResultStore.js";
+import { LanguageResultAcceptance } from '../../../../common/model/languageResultStore.js';
 import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind, type LanguageCompletionItem } from '../../../../common/languages.js';
 import { createLanguageCompletionStore, LanguageCompletionService } from '../../browser/suggest.js';
 import { LanguageCompletionProviderRegistry } from '../../../../common/languageFeatureRegistry.js';
-
 import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
 import { Range } from "../../../../common/core/range.js";

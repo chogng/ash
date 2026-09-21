@@ -1,4 +1,4 @@
-import { type LanguageDiagnosticsSource } from '../../common/languages/languageResults.js';
+import { type LanguageDiagnosticsSource } from '../../common/languages.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { IMarkerDecorationsService } from '../../common/services/markerDecorations.js';
 import { type IEditorContribution } from '../../common/editorCommon.js';

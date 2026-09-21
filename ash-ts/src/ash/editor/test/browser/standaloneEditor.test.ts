@@ -1,15 +1,14 @@
 import { Emitter } from '../../../base/common/event.js';
-import { LanguageWorkerWireServer } from '../../common/languages/languageWorkerWire.js';
+import { LanguageWorkerWireServer } from '../../common/services/languageWorkerWire.js';
 import { editorWorkerWireCodec } from '../../common/services/editorWorkerWire.js';
 import { EditorWorker } from '../../common/services/editorWebWorker.js';
 import { FormattingConflicts, FormattingKind, FormattingMode } from '../../contrib/format/browser/format.js';
-import { type DocumentFormattingEditProvider } from '../../common/languages.js';
+import { type DocumentFormattingEditProvider, type OnTypeFormattingEditProvider } from '../../common/languages.js';
 import { TextModel } from '../../common/model/textModel.js';
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { URI } from "../../../base/common/uri.js";
-import { type OnTypeFormattingEditProvider } from '../../common/languages.js';
 import { CancellationTokenSource } from '../../../base/common/cancellation.js';
 import { AbstractDisposable } from '../../../base/common/lifecycle.js';
 import { lightColorTheme } from "../../../platform/theme/common/colorTheme.js";
@@ -78,7 +77,6 @@ for (const [name, value] of Object.entries({
 })) Object.defineProperty(globalThis, name, { configurable: true, value });
 
 const stanza = await import("../../editor.main.js");
-
 
 suiteTeardown(() => browserEnvironment.window.close());
 

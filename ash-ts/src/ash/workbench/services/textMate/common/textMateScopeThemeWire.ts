@@ -1,5 +1,5 @@
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { type LanguageWorkerWireClientPort, type LanguageWorkerWirePort } from "../../../../editor/common/languages/languageWorkerWire.js";
+import { type LanguageWorkerWireClientPort, type LanguageWorkerWirePort } from '../../../../editor/common/services/languageWorkerWire.js';
 import { normalizeTextMateScopeTheme, TextMateScopeThemeModel, type TextMateScopeTheme } from "./textMateScopeTheme.js";
 
 interface TextMateScopeThemeRequest {

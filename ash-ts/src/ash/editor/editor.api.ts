@@ -35,8 +35,10 @@ export { type LanguageCompletionContext, type LanguageCompletionIncompleteRefres
 export { DocumentHighlightKind } from './common/languages.js';
 export type { DocumentHighlight, DocumentHighlightProvider, MultiDocumentHighlightProvider } from './common/languages.js';
 export type { LanguageFeatureRequest } from './common/languages.js';
-export { LanguageDiagnosticSeverity } from './common/languages/languageResults.js';
-export type { LanguageDiagnostic, LanguageDiagnosticCode, LanguageDiagnosticResult, LanguageToken, LanguageTokenResult, LanguageTokenResultDelta, LanguageTokenResultSplice } from './common/languages/languageResults.js';
+export { LanguageDiagnosticSeverity } from './common/languages.js';
+export { type LanguageDiagnostic, type LanguageDiagnosticCode, type LanguageDiagnosticResult } from './common/languages.js';
+export { type LanguageToken, type LanguageTokenResult } from './common/tokens/languageTokens.js';
+export { type LanguageTokenResultDelta, type LanguageTokenResultSplice } from './common/services/semanticTokensDto.js';
 export type { LanguageWorkerDocumentSynchronization } from './common/services/textModelSync/textModelSync.protocol.js';
 export type { LanguageCreateFileEdit, LanguageDeleteFileEdit, LanguageDeleteMode, LanguageExistingTargetBehavior, LanguageMissingTargetBehavior, LanguageRenameFileEdit, LanguageTextDocumentEdit, LanguageWorkspaceEdit, LanguageWorkspaceEditEntry } from './common/languages.js';
 export { type SyntaxProvider, type SyntaxProviderRequest, type SyntaxRequest } from './common/languages.js';

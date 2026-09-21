@@ -1,6 +1,6 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { Emitter, type Event } from '../../../../base/common/event.js';
-import { type SyntaxWorkerFactory } from "../../../../editor/common/languages/syntax/syntaxService.js";
+import { type SyntaxWorkerFactory } from '../../../../editor/common/languages.js';
 import { type ITextMateService } from "../common/textMateService.js";
 import { type TextMateGrammarDefinition } from "../common/textMateGrammarRegistry.js";
 import { TextMateScopeThemeModel, type TextMateScopeThemeSource } from "../common/textMateScopeTheme.js";

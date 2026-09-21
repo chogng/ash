@@ -1,7 +1,6 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type Range } from "../../../common/core/range.js";
-import { type LanguageDiagnostic } from "../../../common/languages/languageResults.js";
-import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest, normalizeLanguageWorkspaceEdit, type LanguageWorkspaceEdit } from "../../../common/languages.js";
+import { type LanguageDiagnostic, createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest, normalizeLanguageWorkspaceEdit, type LanguageWorkspaceEdit } from '../../../common/languages.js';
 import { LanguageFeatureRegistry } from "../../../common/languageFeatureRegistry.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type URI } from "../../../../base/common/uri.js";

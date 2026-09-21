@@ -1,13 +1,12 @@
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { LanguageFeatureRegistry } from '../../languageFeatureRegistry.js';
-import { LanguageRequestCoordinator, type LanguageRequestOptions, type LanguageRequestOutcome, type LanguageWorker, type LanguageWorkerRequest } from '../../languages/languageRequestCoordinator.js';
-import { LanguageResultAcceptance } from '../../languages/languageResultStore.js';
+import { LanguageRequestCoordinator, type LanguageRequestOptions, type LanguageRequestOutcome, type LanguageWorker, type LanguageWorkerRequest } from '../languageRequestCoordinator.js';
+import { LanguageResultAcceptance } from '../languageResultStore.js';
 import { type LanguageSemanticTokensProvider } from '../../languages.js';
-import { type SemanticTokenModelSource, type SemanticTokenStylingResolver } from '../../tokens/languageTokens.js';
+import { type SemanticTokenModelSource, type SemanticTokenStylingResolver, createLanguageTokenStore, type LanguageToken, type LanguageTokenResult } from '../../tokens/languageTokens.js';
 import { SemanticTokensStylingService } from '../../services/semanticTokensStylingService.js';
 import { LanguageTokenLineIndex } from '../../tokens/languageTokenLineIndex.js';
-import { createLanguageTokenStore, type LanguageToken, type LanguageTokenResult } from '../../tokens/languageTokens.js';
 import { type TextModel } from '../textModel.js';
 
 const SEMANTIC_TOKENS_LANE = 'semanticTokens';

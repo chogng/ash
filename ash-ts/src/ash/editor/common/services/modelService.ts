@@ -13,7 +13,7 @@ import { TextModel, type TextModelUndoRedoSnapshot } from "../model/textModel.js
 import type { ILanguageSelection, IAshLanguageService } from '../languages/language.js';
 import type { ILanguageConfigurationService } from '../languages/languageConfigurationRegistry.js';
 import type { ILanguageFeaturesService } from './languageFeatures.js';
-import type { SyntaxServiceOptions } from '../languages/syntax/syntaxService.js';
+import { type SyntaxServiceOptions } from '../languages.js';
 import type { IModelService } from "./model.js";
 import type { TextModelEditSource } from '../textModelEditSource.js';
 import type { ITextResourcePropertiesService } from './textResourceConfiguration.js';

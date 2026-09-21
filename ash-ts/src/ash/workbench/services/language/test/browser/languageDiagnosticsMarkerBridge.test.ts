@@ -4,7 +4,7 @@ import { Emitter } from "../../../../../base/common/event.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../editor/common/core/range.js";
-import { LanguageDiagnosticSeverity } from "../../../../../editor/common/languages/languageResults.js";
+import { LanguageDiagnosticSeverity } from '../../../../../editor/common/languages.js';
 import { MarkerService, MarkerSeverity } from "../../../../../platform/markers/common/markers.js";
 import { LanguageDiagnosticsMarkerBridge } from "../../browser/languageDiagnosticsMarkerBridge.js";
 import type { ILanguageDiagnosticsService, LanguageDiagnosticSnapshot } from "../../common/languageDiagnosticsService.js";

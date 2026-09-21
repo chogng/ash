@@ -4,7 +4,7 @@ import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
 import { ReplaceCommand } from '../../../../common/commands/replaceCommand.js';
 import { LanguageCompletionDetailsStatus, LanguageCompletionSessionChangeReason, SuggestModel } from "../../browser/suggestModel.js";
-import { LanguageResultAcceptance } from "../../../../common/languages/languageResultStore.js";
+import { LanguageResultAcceptance } from '../../../../common/model/languageResultStore.js';
 import { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind, type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionItemResolver, type LanguageCompletionResolveRequest } from '../../../../common/languages.js';
 import { createLanguageCompletionStore } from '../../browser/suggest.js';
 import { Selection } from "../../../../common/core/selection.js";

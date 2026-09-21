@@ -3,7 +3,7 @@ import type { IDisposable } from '../../../base/common/lifecycle.js';
 import { Position } from "../core/position.js";
 import { Range } from "../core/range.js";
 import { type TextSnapshot } from "../core/textChange.js";
-import { VersionedLanguageResultStore } from "../languages/languageResultStore.js";
+import { VersionedLanguageResultStore } from '../model/languageResultStore.js';
 import { type TextModel } from "../model/textModel.js";
 import { attachLanguageTokenResultDelta, getLanguageTokenResultDelta } from '../services/semanticTokensDto.js';
 

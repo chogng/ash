@@ -3,17 +3,16 @@ import { test } from "mocha";
 import { URI } from "../../../../../base/common/uri.js";
 import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../editor/common/core/range.js";
-import { LanguageDiagnosticSeverity } from "../../../../../editor/common/languages/languageResults.js";
+import { LanguageDiagnosticSeverity } from '../../../../../editor/common/languages.js';
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
 import { type IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
 import { AppServerRemoteError } from "../../../../../platform/app-server/common/appServerError.js";
 import { type ILanguageApi } from "../../../../../platform/language/common/languageApi.js";
 import { type IDirPermissionsService } from "../../../../../platform/dirPermissions/common/dirPermissionsService.js";
-import type { PermissionDto } from "../../../../../platform/app-server/common/generated/index.js";
+import { type PermissionDto, type ServerNotification } from '../../../../../platform/app-server/common/generated/index.js';
 import { WorkspaceContextService } from "../../../workspaces/browser/workspaceContextService.js";
 import { type CodeIntelligenceDocumentSnapshot, type ICodeIntelligenceDocumentService } from "../../../codeIntelligence/common/codeIntelligenceDocumentService.js";
 import { AppServerLanguageDiagnosticsService } from "../../browser/appServerLanguageDiagnosticsService.js";
-import { type ServerNotification } from "../../../../../platform/app-server/common/generated/index.js";
 
 test("App Server diagnostics service synchronizes, filters revisions, and closes once", async () => {
 	const events = new FakeServerEvents();

@@ -1,14 +1,15 @@
+import { type TextSnapshot, type TextModelChange } from '../core/textChange.js';
+import { type Event, Emitter } from '../../../base/common/event.js';
+import { type IDisposable, Disposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { LanguageWorkerResultDisposition, type LanguageWorker, type LanguageWorkerModelSynchronizer, type LanguageWorkerRequest, type LanguageWorkerResultSettler } from '../model/languageRequestCoordinator.js';
+import { LanguageWorkerDocumentMirror } from './textModelSync/textModelSync.impl.js';
+import { isNonEmptyArray } from '../../../base/common/arrays.js';
+import { type LanguageWorkerDocumentSynchronizationObserver, type LanguageWorkerDocumentChange } from './textModelSync/textModelSync.protocol.js';
+import { isPositiveSafeInteger, isNonNegativeSafeInteger } from '../../../base/common/numbers.js';
 import { CharCode } from '../../../base/common/charCode.js';
-import { isNonNegativeSafeInteger, isPositiveSafeInteger } from '../../../base/common/numbers.js';
-import { isNonEmptyArray } from "../../../base/common/arrays.js";
-import { Emitter, type Event } from "../../../base/common/event.js";
-import { Disposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
-import { LanguageWorkerResultDisposition, type LanguageWorker, type LanguageWorkerModelSynchronizer, type LanguageWorkerRequest, type LanguageWorkerResultSettler } from "./languageRequestCoordinator.js";
-import { LanguageWorkerDocumentMirror } from '../services/textModelSync/textModelSync.impl.js';
-import { type LanguageWorkerDocumentChange, type LanguageWorkerDocumentSynchronizationObserver } from '../services/textModelSync/textModelSync.protocol.js';
-import { type TextModelChange, type TextSnapshot } from "../core/textChange.js";
 
 const LANGUAGE_WORKER_PROTOCOL = "ash.language-worker";
+
 const LANGUAGE_WORKER_PROTOCOL_VERSION = 5;
 
 export interface LanguageWorkerWireResultState<TResult> {

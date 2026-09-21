@@ -1,8 +1,8 @@
+import { type TextSnapshot, type TextModelChange } from '../core/textChange.js';
+import { type IDisposable, Disposable, MutableDisposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { type TextModel } from './textModel.js';
 import { raceCancellationError } from '../../../base/common/async.js';
 import { onUnexpectedError } from '../../../base/common/errors.js';
-import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
-import { type TextModelChange, type TextSnapshot } from "../core/textChange.js";
-import { type TextModel } from "../model/textModel.js";
 
 /** One immutable worker invocation against a captured model version. */
 export interface LanguageWorkerRequest<TLane extends string, TPayload> {

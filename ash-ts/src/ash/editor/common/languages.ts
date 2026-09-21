@@ -1,24 +1,23 @@
-import { type LanguageWorker } from './languages/languageRequestCoordinator.js';
+import { Range, type IRange } from './core/range.js';
 import { type TextSnapshot, normalizeTextLineEndings } from './core/textChange.js';
 import { Position } from './core/position.js';
-import { Range, type IRange } from './core/range.js';
+import { type URI } from '../../base/common/uri.js';
+import { type Event } from '../../base/common/event.js';
+import { type IDisposable, Disposable } from '../../base/common/lifecycle.js';
+import { type TextModel } from './model/textModel.js';
+import { type LanguageWorker, type LanguageRequestOutcome } from './model/languageRequestCoordinator.js';
+import { type LanguageTokenResult } from './tokens/languageTokens.js';
 import { isPositiveSafeInteger } from '../../base/common/numbers.js';
 import { type CancellationToken } from '../../base/common/cancellation.js';
 import { type Color } from '../../base/common/color.js';
-import { type Event } from '../../base/common/event.js';
-import { Disposable, type IDisposable } from '../../base/common/lifecycle.js';
-import { type URI } from '../../base/common/uri.js';
 import { type ExtensionIdentifier } from '../../platform/extensions/common/extensions.js';
 import { EditOperation, type ISingleEditOperation } from './core/editOperation.js';
 import { type LanguageId } from './encodedTokenAttributes.js';
 import { type LanguageSelector, assertLanguageSelector } from './languageSelector.js';
 import * as model from './model.js';
-import { type TextModel } from './model/textModel.js';
-import { type LanguageTokenResult } from './tokens/languageTokens.js';
 import { TokenizationRegistry as TokenizationRegistryImpl } from './tokenizationRegistry.js';
 import { isNonEmptyArray } from '../../base/common/arrays.js';
 import { assertLanguageId } from './languages/language.js';
-import { type LanguageDiagnosticResult } from './languages/languageResults.js';
 import { type LanguageWorkerDocumentSynchronization } from './services/textModelSync/textModelSync.protocol.js';
 
 type Thenable<T> = PromiseLike<T>;
@@ -1142,4 +1141,153 @@ export interface LanguageWorkspaceSymbol {
 export interface LanguageWorkspaceSymbolProvider {
 	provideWorkspaceSymbols(query: string, signal: AbortSignal): readonly LanguageWorkspaceSymbol[] | Promise<readonly LanguageWorkspaceSymbol[]>;
 	resolveWorkspaceSymbol?(symbol: LanguageWorkspaceSymbol, signal: AbortSignal): LanguageWorkspaceSymbol | Promise<LanguageWorkspaceSymbol>;
+}
+
+export enum LanguageDiagnosticSeverity {
+	Error = "error",
+	Warning = "warning",
+	Information = "information",
+	Hint = "hint",
+}
+
+export type LanguageDiagnosticCode = string | number;
+
+export interface LanguageDiagnostic {
+	readonly range: Range;
+	readonly severity: LanguageDiagnosticSeverity;
+	readonly message: string;
+	readonly code?: LanguageDiagnosticCode;
+	readonly source?: string;
+}
+
+export interface LanguageDiagnosticResult {
+	readonly diagnostics: readonly LanguageDiagnostic[];
+}
+
+export function createLanguageDiagnosticSnapshotNormalizer(snapshot: TextSnapshot): (value: LanguageDiagnosticResult) => LanguageDiagnosticResult {
+	const lines = snapshot.getText().split("\n");
+	return value => normalizeLanguageDiagnosticResult(value, range => assertDiagnosticSnapshotRange(lines, range, "Language diagnostic"));
+}
+
+export function normalizeLanguageDiagnosticResult(value: LanguageDiagnosticResult, validateRange: (range: Range) => void): LanguageDiagnosticResult {
+	if (typeof value !== "object" || value === null || !Array.isArray(value.diagnostics)) {
+		throw new TypeError("Language diagnostic result must contain a diagnostics array");
+	}
+	const diagnostics = value.diagnostics.map(diagnostic => {
+		if (typeof diagnostic !== "object" || diagnostic === null) {
+			throw new TypeError("Language diagnostic must be an object");
+		}
+		validateRange(diagnostic.range);
+		if (!Object.values(LanguageDiagnosticSeverity).includes(diagnostic.severity)) {
+			throw new TypeError("Unknown language diagnostic severity");
+		}
+		if (typeof diagnostic.message !== "string" || diagnostic.message.trim().length === 0) {
+			throw new TypeError("Language diagnostic message must not be empty");
+		}
+		if (diagnostic.code !== undefined) assertDiagnosticCode(diagnostic.code);
+		if (diagnostic.source !== undefined) assertDiagnosticIdentifier(diagnostic.source, "Language diagnostic source");
+		return Object.freeze({
+			range: diagnostic.range,
+			severity: diagnostic.severity,
+			message: diagnostic.message,
+			...(diagnostic.code === undefined ? {} : { code: diagnostic.code }),
+			...(diagnostic.source === undefined ? {} : { source: diagnostic.source }),
+		});
+	});
+	return Object.freeze({ diagnostics: Object.freeze(diagnostics) });
+}
+
+function assertDiagnosticSnapshotRange(lines: readonly string[], range: Range, owner: string): void {
+	if (!(range instanceof Range)) throw new TypeError(`${owner} range must be a Range`);
+	assertDiagnosticSnapshotPosition(lines, range.getStartPosition(), owner);
+	assertDiagnosticSnapshotPosition(lines, range.getEndPosition(), owner);
+}
+
+function assertDiagnosticSnapshotPosition(lines: readonly string[], position: Position, owner: string): void {
+	if (position.lineNumber < 1 || position.lineNumber > lines.length || position.column < 1 || position.column > lines[position.lineNumber - 1]!.length + 1) {
+		throw new RangeError(`${owner} range is outside its snapshot`);
+	}
+}
+
+function assertDiagnosticIdentifier(value: unknown, owner: string): asserts value is string {
+	if (typeof value !== "string" || value.length === 0 || value.trim() !== value) {
+		throw new TypeError(`${owner} must be a non-empty trimmed string`);
+	}
+}
+
+function assertDiagnosticCode(code: LanguageDiagnosticCode): void {
+	if (typeof code === "string") {
+		assertDiagnosticIdentifier(code, "Language diagnostic code");
+		return;
+	}
+	if (typeof code !== "number" || !Number.isFinite(code)) {
+		throw new TypeError("Language diagnostic code must be a finite number or non-empty string");
+	}
+}
+
+/** Current diagnostics; revision `0` is reserved for unopened workspace resources. */
+export interface LanguageDiagnosticSnapshot {
+	readonly resource: URI;
+	readonly revision: number;
+	readonly diagnostics: readonly LanguageDiagnostic[];
+}
+
+/** Read-only diagnostic source consumed by editor presentation. */
+export interface LanguageDiagnosticsSource {
+	readonly onDidChangeDiagnostics: Event<URI>;
+	getDiagnostics(resource: URI): LanguageDiagnosticSnapshot | undefined;
+}
+
+/** One editor-owned diagnostic producer registered with the shared repository. */
+export interface LanguageDiagnosticsPublisher extends IDisposable {
+	update(revision: number, diagnostics: readonly LanguageDiagnostic[]): void;
+}
+
+/** Host boundary for synchronizing and publishing one editor model's diagnostics. */
+export interface LanguageDiagnosticsHost extends LanguageDiagnosticsSource {
+	acquire(resource: URI, languageId: string, model: TextModel): IDisposable;
+	createPublisher(resource: URI): LanguageDiagnosticsPublisher;
+}
+
+export const SYNTAX_TOKEN_LANE = "tokens";
+
+export const SYNTAX_DIAGNOSTIC_LANE = "diagnostics";
+
+export const SYNTAX_SYNCHRONIZATION = "synchronization";
+
+export type SyntaxLane = typeof SYNTAX_TOKEN_LANE | typeof SYNTAX_DIAGNOSTIC_LANE;
+
+export type SyntaxProviderOperation = SyntaxLane | typeof SYNTAX_SYNCHRONIZATION;
+
+export type SyntaxWorker = LanguageWorker<SyntaxLane, SyntaxRequest, SyntaxResult>;
+
+export type SyntaxWorkerFactory = () => SyntaxWorker;
+
+/** Wraps the default worker without bypassing its provider and synchronization lifecycle. */
+export type SyntaxWorkerDecorator = (fallback: SyntaxWorker) => SyntaxWorker;
+
+export type SyntaxProviderErrorHandler = (providerId: string, operation: SyntaxProviderOperation, error: unknown) => void;
+
+export interface LanguageTokenSyntaxResult {
+	readonly lane: typeof SYNTAX_TOKEN_LANE;
+	readonly value: LanguageTokenResult;
+}
+
+export interface LanguageDiagnosticSyntaxResult {
+	readonly lane: typeof SYNTAX_DIAGNOSTIC_LANE;
+	readonly value: LanguageDiagnosticResult;
+}
+
+export type SyntaxResult = LanguageTokenSyntaxResult | LanguageDiagnosticSyntaxResult;
+
+export interface SyntaxServiceOptions {
+	readonly workerFactory?: SyntaxWorkerFactory;
+	/** Per-model runtime adapter applied outside the common language provider registry. */
+	readonly workerDecorator?: SyntaxWorkerDecorator;
+	readonly onProviderError?: SyntaxProviderErrorHandler;
+}
+
+export interface SyntaxRequestOutcomes {
+	readonly tokens: LanguageRequestOutcome;
+	readonly diagnostics: LanguageRequestOutcome;
 }
