@@ -1,123 +1,108 @@
 //! OpenAI/Codex backend business APIs, separate from model wire protocols.
 
+mod account;
+mod analytics;
+mod analytics_types;
+mod client;
+mod config;
+mod costs;
+mod tasks;
 mod usage;
 
+pub use account::AccountEntry;
+pub use account::AccountProfile;
+pub use account::Accounts;
+pub use account::CreditNudge;
+pub use account::ProfileIdentity;
+pub use account::ProfileInvocation;
+pub use account::ProfileMetadata;
+pub use account::ProfileStats;
+pub use account::TokenUsageBucket;
+pub use analytics::AnalyticsReport;
+pub use analytics::AnalyticsResponse;
+pub use analytics::PlanLimitBreakdown;
+pub use analytics::PlanLimitHistory;
+pub use analytics::PlanLimitPeriod;
+pub use analytics::PlanLimitValue;
+pub use analytics_types::ActiveUsersSummary;
+pub use analytics_types::ClientActiveUsersCount;
+pub use analytics_types::ClientWorkspaceUsageCount;
+pub use analytics_types::ConsumptionUsageGroup;
+pub use analytics_types::CreditUsageEventBySurface;
+pub use analytics_types::CreditUsageEventsResponse;
+pub use analytics_types::CurrentUserCreditUsageDatum;
+pub use analytics_types::CurrentUserCreditUsageResponse;
+pub use analytics_types::CurrentUserCreditUsageSeries;
+pub use analytics_types::DailyProductSurfaceUsage;
+pub use analytics_types::DailyProductSurfaceUsageResponse;
+pub use analytics_types::DailySkillUsageMetricsResponse;
+pub use analytics_types::DailySkillUsageOverview;
+pub use analytics_types::DailyWorkspaceUsageCount;
+pub use analytics_types::DailyWorkspaceUsageCountResponse;
+pub use analytics_types::ModelActivitySummary;
+pub use analytics_types::ModelUsage;
+pub use analytics_types::PersonalUsageAttribution;
+pub use analytics_types::PluginUsageBucket;
+pub use analytics_types::PluginUsageMetricsResponse;
+pub use analytics_types::PluginUsageOverview;
+pub use analytics_types::ProductSurfacePremiumUsageValues;
+pub use analytics_types::SkillUsageOverview;
+pub use analytics_types::WorkspaceUsageCount;
+pub use analytics_types::WorkspaceUsageGroup;
+pub use client::BackendClient;
+pub use client::CHATGPT_BACKEND_BASE_URL;
+pub use client::RequestError;
+pub use client::RouteStyle;
+pub use config::ConfigBundle;
+pub use config::DeliveredToml;
+pub use config::ManagedLayers;
+pub use config::TomlFragment;
+pub use config::UserSettings;
+pub use config::WorkspaceMessage;
+pub use config::WorkspaceMessages;
+pub use costs::ApiKeyResponseCost;
+pub use costs::ApiKeyTurnCost;
+pub use costs::ApiKeyTurnCostStatus;
+pub use costs::ChatGptThreadCosts;
+pub use costs::ChatGptTurnCost;
+pub use costs::TaskUsage;
+pub use costs::TaskUsageAmounts;
+pub use costs::TaskUsageGroup;
+pub use costs::TaskUsageResponse;
+pub use costs::TaskUsageStatus;
+pub use costs::TaskUsageThread;
+pub use costs::ThreadUsage;
+pub use costs::ThreadUsageGroup;
+pub use tasks::GitPullRequest;
+pub use tasks::SiblingTurns;
+pub use tasks::TaskAuthor;
+pub use tasks::TaskContent;
+pub use tasks::TaskDetails;
+pub use tasks::TaskDiff;
+pub use tasks::TaskError;
+pub use tasks::TaskItem;
+pub use tasks::TaskList;
+pub use tasks::TaskListItem;
+pub use tasks::TaskListQuery;
+pub use tasks::TaskPullRequest;
+pub use tasks::TaskTurn;
+pub use tasks::TaskWorklog;
+pub use tasks::TaskWorklogContent;
+pub use tasks::TaskWorklogMessage;
 pub use usage::CreditBalance;
 pub use usage::RateLimit;
+pub use usage::RateLimitReached;
+pub use usage::RateLimitStatus;
 pub use usage::RateLimitWindow;
 pub use usage::RateLimits;
-
-use async_utils::CancellationToken;
-use client::ClientError;
-use client::ClientRequest;
-use client::OperationClient;
-use client::ResolvedApiTarget;
-use client::RetryPolicy;
-use http_client::HttpMethod;
-use std::fmt;
-
-pub const CHATGPT_BACKEND_BASE_URL: &str = "https://chatgpt.com/backend-api";
-
-/// Selects the upstream API contract explicitly, independently of the hostname.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum RouteStyle {
-    Codex,
-    ChatGpt,
-}
-
-/// A redacted failure. Response bodies and credentials never become error text.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum RequestError {
-    InvalidTarget,
-    Cancelled,
-    Transport,
-    HttpStatus(u16),
-    InvalidResponse,
-}
-
-impl fmt::Display for RequestError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::InvalidTarget => formatter.write_str("invalid backend API target"),
-            Self::Cancelled => formatter.write_str("backend request cancelled"),
-            Self::Transport => formatter.write_str("backend transport failed"),
-            Self::HttpStatus(status) => write!(formatter, "backend returned HTTP {status}"),
-            Self::InvalidResponse => formatter.write_str("invalid backend response"),
-        }
-    }
-}
-
-impl std::error::Error for RequestError {}
-
-impl From<ClientError> for RequestError {
-    fn from(error: ClientError) -> Self {
-        match error {
-            ClientError::Cancelled(_) => Self::Cancelled,
-            ClientError::InvalidRequest(_) => Self::InvalidTarget,
-            ClientError::InvalidResponse(_) | ClientError::Framing(_) => Self::InvalidResponse,
-            ClientError::Transport(_) => Self::Transport,
-        }
-    }
-}
-
-/// Executes business requests using a freshly resolved authentication target.
-/// The injected transport must reject redirects for authenticated requests.
-pub struct BackendClient<'a> {
-    client: &'a dyn OperationClient,
-    target: &'a ResolvedApiTarget,
-    route: RouteStyle,
-}
-
-impl<'a> BackendClient<'a> {
-    pub fn new(
-        client: &'a dyn OperationClient,
-        target: &'a ResolvedApiTarget,
-        route: RouteStyle,
-    ) -> Result<Self, RequestError> {
-        let url = url::Url::parse(&target.base_url).map_err(|_| RequestError::InvalidTarget)?;
-        if url.scheme() != "https"
-            || url.host_str().is_none()
-            || !url.username().is_empty()
-            || url.password().is_some()
-            || url.query().is_some()
-            || url.fragment().is_some()
-        {
-            return Err(RequestError::InvalidTarget);
-        }
-        Ok(Self {
-            client,
-            target,
-            route,
-        })
-    }
-
-    pub fn read_rate_limits(
-        &self,
-        cancellation: &CancellationToken,
-    ) -> Result<RateLimits, RequestError> {
-        let route = match self.route {
-            RouteStyle::Codex => "api/codex",
-            RouteStyle::ChatGpt => "wham",
-        };
-        let request = ClientRequest::new(
-            HttpMethod::Get,
-            format!(
-                "{}/{route}/usage",
-                self.target.base_url.trim_end_matches('/')
-            ),
-            self.target.headers.clone(),
-            Vec::new(),
-            RetryPolicy::never(),
-        )?;
-        let response = self
-            .client
-            .execute_with_cancellation(&request, cancellation)?;
-        if !response.is_success() {
-            return Err(RequestError::HttpStatus(response.status()));
-        }
-        usage::decode(response.body())
-    }
-}
+pub use usage::ResetCredit;
+pub use usage::ResetCreditCode;
+pub use usage::ResetCreditResult;
+pub use usage::ResetCreditSelection;
+pub use usage::ResetCredits;
+pub use usage::ResetCreditsSummary;
+pub use usage::SpendControl;
+pub use usage::SpendLimit;
 
 #[cfg(test)]
 #[path = "client_tests.rs"]

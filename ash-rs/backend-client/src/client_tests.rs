@@ -1,8 +1,21 @@
 use super::*;
+use ::client::ClientError;
+use ::client::ClientRequest;
+use ::client::ClientResponse;
+use ::client::OperationClient;
+use ::client::ResolvedApiTarget;
+use ::client::RetryPolicy;
 use async_utils::CancellationSource;
-use client::ClientResponse;
 use http_client::HttpHeader;
+use http_client::HttpMethod;
 use std::sync::Mutex;
+
+#[path = "analytics_tests.rs"]
+mod analytics;
+#[path = "business_tests.rs"]
+mod business;
+#[path = "costs_tests.rs"]
+mod costs;
 
 struct Client {
     response: Result<ClientResponse, ClientError>,
@@ -63,6 +76,11 @@ fn both_routes_preserve_authentication_and_exact_usage_windows() {
             CHATGPT_BACKEND_BASE_URL,
             RouteStyle::ChatGpt,
             "https://chatgpt.com/backend-api/wham/usage",
+        ),
+        (
+            "https://example.test/base///",
+            RouteStyle::Codex,
+            "https://example.test/base/api/codex/usage",
         ),
     ] {
         let client = Client::response(200, body);
