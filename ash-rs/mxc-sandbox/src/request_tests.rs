@@ -64,13 +64,7 @@ fn psec_startup_diagnostics() {
     use std::time::Duration;
     use wxc_common::sandbox_process::SandboxBackend;
 
-    for variant in [
-        "powershell",
-        "modules",
-        "module-cache",
-        "hidden-enumerate",
-        "hidden-capture",
-    ] {
+    for variant in ["inherited-modules", "hidden-literal", "hidden-absolute"] {
         let temp = tempfile::tempdir().unwrap();
         let work = temp.path().join("work");
         std::fs::create_dir(&work).unwrap();
@@ -161,14 +155,27 @@ fn psec_startup_diagnostics() {
         .into_iter()
         .filter_map(|key| std::env::var(key).ok().map(|value| (key.to_owned(), value)))
         .collect::<Vec<_>>();
-        if variant == "modules" {
-            env.push((
-                "PSModulePath".into(),
-                system
-                    .join("System32/WindowsPowerShell/v1.0/Modules")
-                    .display()
-                    .to_string(),
-            ));
+        if let Ok(path) = std::env::var("PSModulePath") {
+            eprintln!("PSModulePath={path}");
+            env.push(("PSModulePath".into(), path));
+        }
+        if variant == "hidden-literal" {
+            request.inner.script_code = request.inner.script_code.replace(
+                "$s=[Diagnostics",
+                &format!(
+                    "Set-Location -LiteralPath '{}'; $s=[Diagnostics",
+                    dir.canonical_path().display()
+                ),
+            );
+        }
+        if variant == "hidden-absolute" {
+            request.inner.script_code = request.inner.script_code.replace(
+                "Write-Output 'output-ready'",
+                &format!(
+                    "Set-Content -LiteralPath '{}' yes; Write-Output 'output-ready'",
+                    dir.canonical_path().join("cmdlet-file").display()
+                ),
+            );
         }
         if variant == "module-cache" {
             env.push((

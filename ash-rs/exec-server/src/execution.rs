@@ -484,6 +484,7 @@ fn execution_environment() -> Vec<(String, String)> {
         "SystemRoot",
         "WINDIR",
         "PATHEXT",
+        "PSModulePath",
         "COMSPEC",
         "USERPROFILE",
         "APPDATA",
