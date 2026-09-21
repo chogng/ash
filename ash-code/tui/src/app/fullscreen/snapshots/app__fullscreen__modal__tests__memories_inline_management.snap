@@ -1,0 +1,34 @@
+---
+source: ash-code/tui/src/app/fullscreen/modal_tests.rs
+expression: frame_text(&app)
+---
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+─ Memories ─────────────────────────────────────────────────────────────────────────────────────────
+                                                                                                    
+   Personal    Projects                                                                             
+> + New Memory                                                                                      
+  Memories off · c Config                                                                           
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────╮  
+  │ Search this scope                                                                            │  
+  ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  
+  No memories yet.                                                                                  
+                                                                                                    
+  Enter new · ↓ search · Tab tabs · Esc close

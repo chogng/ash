@@ -738,33 +738,9 @@ impl<'a> CommandPanelBody<'a> {
         context: crate::render::RenderContext<'_>,
     ) {
         match self {
-            Self::Selection(selection) => {
-                let item_index = |target: Option<&list_selection::ListSelectionPointerTarget>| {
-                    let list_selection::ListSelectionPointerTarget::Item(id) = target? else {
-                        return None;
-                    };
-                    selection
-                        .visible_items()
-                        .iter()
-                        .position(|item| item.id() == Some(id))
-                };
-                list_selection::draw_body_with_pointer(
-                    frame,
-                    area,
-                    selection,
-                    matches!(
-                        hovered,
-                        Some(list_selection::ListSelectionPointerTarget::Search)
-                    ),
-                    matches!(
-                        pressed,
-                        Some(list_selection::ListSelectionPointerTarget::Search)
-                    ),
-                    item_index(hovered),
-                    item_index(pressed),
-                    context,
-                )
-            }
+            Self::Selection(selection) => list_selection::draw_body_with_pointer(
+                frame, area, selection, hovered, pressed, context,
+            ),
             Self::Memories(panel) => panel.draw(frame, area, None, None, context),
             Self::Prompt(prompt) => text_prompt::draw(frame, area, prompt, context),
             Self::KeyCapture(capture) => key_capture::draw(frame, area, capture, context),

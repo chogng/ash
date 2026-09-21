@@ -40,7 +40,6 @@ enum Action {
     Configure,
     Read(memories::MemoryId),
     Scope(MemoryScope),
-    More,
     ReadPolicy,
     WritePolicy,
     ReloadPolicy,
@@ -59,7 +58,7 @@ pub(crate) enum Target {
 #[derive(Debug)]
 pub(crate) struct Panel {
     scopes: Vec<MemoryScopeDescriptor>,
-    chosen: [Option<MemoryScope>; 3],
+    chosen: [Option<MemoryScope>; 2],
     lists: BTreeMap<MemoryScope, Listing>,
     selection: ListSelection<Action>,
     menu: Option<ListSelection<Action>>,
@@ -74,6 +73,7 @@ pub(crate) struct Panel {
     pending: Option<Command>,
     attempt: Option<Command>,
     refresh: bool,
+    more: bool,
     enabled: bool,
     message: Option<String>,
     scroll: Cell<u16>,
@@ -85,7 +85,7 @@ impl Panel {
     pub(crate) fn new(page: Page) -> Self {
         let mut panel = Self {
             scopes: Vec::new(),
-            chosen: [None, None, None],
+            chosen: [None, None],
             lists: BTreeMap::new(),
             selection: ListSelection::new(
                 ListSelectionModel::new("Memories", groups()),
@@ -103,6 +103,7 @@ impl Panel {
             pending: None,
             attempt: None,
             refresh: false,
+            more: false,
             enabled: false,
             message: None,
             scroll: Cell::new(0),
@@ -112,15 +113,16 @@ impl Panel {
         match page {
             Page::Scopes {
                 enabled,
-                scopes,
+                mut scopes,
                 list,
             } => {
+                scopes.retain(|scope| kind(&scope.policy.scope).is_some());
                 panel.enabled = enabled;
                 for scope in &scopes {
-                    panel.chosen[kind(&scope.policy.scope)]
+                    panel.chosen[kind(&scope.policy.scope).expect("visible scope")]
                         .get_or_insert_with(|| scope.policy.scope.clone());
                 }
-                let index = kind(&list.scope);
+                let index = kind(&list.scope).expect("initial memory scope");
                 panel.chosen[index] = Some(list.scope.clone());
                 panel.lists.insert(list.scope.clone(), list);
                 panel.scopes = scopes;
@@ -179,6 +181,7 @@ impl Panel {
         ) {
             self.attempt = Some(command.clone());
         }
+        self.more = false;
         self.pending = Some(command.clone());
         self.message = None;
         self.update_hints();
@@ -204,14 +207,45 @@ impl Panel {
             loaded,
         })
     }
+    fn load_more(&mut self) -> ListSelectionOutcome<Command> {
+        let cursor = self
+            .listing()
+            .filter(|list| list.query == self.selection.state().query().trim())
+            .and_then(|list| list.cursor.clone());
+        match cursor {
+            Some(cursor) => self.browse(Some(cursor)),
+            None => ListSelectionOutcome::Consumed,
+        }
+    }
+    fn browsing(&self) -> bool {
+        self.menu.is_none()
+            && self.editor.is_none()
+            && self.reference.is_none()
+            && self.detail.is_none()
+            && self.citation.is_none()
+    }
+    fn list_area(&self, area: Rect) -> Rect {
+        if self.browsing() {
+            area
+        } else {
+            Self::content_area(area)
+        }
+    }
     pub(crate) fn take_refresh(&mut self) -> Option<Command> {
-        if !self.refresh
+        if (!self.refresh && !self.more)
             || self.pending.is_some()
             || self.editor.is_some()
             || self.reference.is_some()
             || self.menu.is_some()
         {
             return None;
+        }
+        if !self.refresh {
+            self.more = false;
+            return match self.load_more() {
+                ListSelectionOutcome::Activate(command) => Some(command),
+                _ => None,
+            };
         }
         self.refresh = false;
         if let Some(memory) = &self.detail {
@@ -345,7 +379,7 @@ impl Panel {
     }
     fn rebuild(&mut self) {
         let mut actions = BTreeMap::new();
-        let groups = ["Personal", "Projects", "Directories"]
+        let groups = ["Personal", "Projects"]
             .into_iter()
             .enumerate()
             .map(|(index, label)| {
@@ -353,8 +387,7 @@ impl Panel {
                     .as_ref()
                     .and_then(|scope| self.lists.get(scope))
                     .map(|list| {
-                        let mut items: Vec<_> = list
-                            .entries
+                        list.entries
                             .iter()
                             .map(|entry| {
                                 let id = item_id(&list.scope, &entry.id);
@@ -379,26 +412,28 @@ impl Panel {
                                         format!("{source} · {updated}"),
                                     )
                             })
-                            .collect();
-                        if list.cursor.is_some() {
-                            let id = ListSelectionItemId::new(format!("more-{index}"));
-                            actions.insert(id.clone(), Action::More);
-                            items.push(ListSelectionItem::new("Load more").with_id(id));
-                        }
-                        items
+                            .collect()
                     })
                     .unwrap_or_default();
                 ListSelectionGroup::new(label, items)
             })
             .collect();
+        let id = ListSelectionItemId::new("new-memory");
+        let mut action = ListSelectionItem::new("+ New Memory");
+        if self.scope().is_some() {
+            actions.insert(id.clone(), Action::New);
+            action = action.with_id(id);
+        }
         let model = ListSelectionModel::new("Memories", groups)
+            .with_action(action)
+            .without_scroll_counts()
             .with_input(SearchBoxModel::new("Search this scope"))
             .with_empty_message(if self.scope().is_none() {
                 "No authorized scope in this tab."
             } else if self.listing().is_some_and(|list| !list.query.is_empty()) {
                 "No matching memories. Change the search or clear it."
             } else {
-                "No memories in this scope. Press n to add one."
+                "No memories yet."
             });
         self.selection.replace(model, actions);
         self.selection.state_mut().localize(self.language);
@@ -452,6 +487,12 @@ impl Panel {
                 .with_compact_action("Delete", "delete")
                 .with_compact_action("↑/↓", "scroll")
                 .with_compact_action("Esc", "back")
+        } else if self.selection.state().action_focused() {
+            KeyHints::compact()
+                .with_compact_action("Enter", "new")
+                .with_compact_action("↓", "search")
+                .with_compact_action("Tab", "tabs")
+                .with_compact_action("Esc", "close")
         } else if self.selection.state().tabs_focused() {
             crate::keymap::bindings::TAB_HINTS.clone()
         } else if self
@@ -644,7 +685,9 @@ impl Panel {
             self.selection.handle_key(key);
             return self.browse(None);
         }
-        if key.modifiers.is_empty() && self.selection.state().items_focused() {
+        if key.modifiers.is_empty()
+            && (self.selection.state().items_focused() || self.selection.state().action_focused())
+        {
             match key.code {
                 KeyCode::Char('a') => {
                     self.open_menu(
@@ -678,7 +721,7 @@ impl Panel {
                     let rows = self
                         .scopes
                         .iter()
-                        .filter(|scope| kind(&scope.policy.scope) == index)
+                        .filter(|scope| kind(&scope.policy.scope) == Some(index))
                         .map(|scope| {
                             (
                                 scope.label.clone(),
@@ -707,6 +750,15 @@ impl Panel {
             self.message = None;
             self.refresh = true;
             self.rebuild();
+        }
+        if matches!(outcome, ListSelectionOutcome::Consumed)
+            && matches!(key.code, KeyCode::Down | KeyCode::PageDown | KeyCode::End)
+            && self.selection.state().items_focused()
+            && self.selection.state().selected_visible_index().is_some()
+            && self.selection.state().selected_visible_index()
+                == self.selection.state().visible_items().len().checked_sub(1)
+        {
+            return self.load_more();
         }
         match outcome {
             ListSelectionOutcome::Activate(action) => self.activate(action),
@@ -738,12 +790,11 @@ impl Panel {
                 scope: self.scope().unwrap().clone(),
                 id,
             }),
-            Action::More => self.browse(self.listing().and_then(|list| list.cursor.clone())),
             Action::ReloadPolicy => {
                 self.request(Command::ReadPolicy(self.scope().unwrap().clone()))
             }
             Action::Scope(scope) => {
-                let index = kind(&scope);
+                let index = kind(&scope).expect("selected memory scope");
                 self.chosen[index] = Some(scope);
                 self.menu = None;
                 self.rebuild();
@@ -917,8 +968,9 @@ impl Panel {
         self.displayed_list().map_or(0, |list| list.tab_rows(width))
     }
     pub(crate) fn body_rows(&self, width: u16) -> u16 {
-        self.displayed_list()
-            .map_or(16, |list| list.body_rows(width) + 2)
+        self.displayed_list().map_or(16, |list| {
+            list.body_rows(width) + if self.browsing() { 0 } else { 2 }
+        })
     }
     pub(crate) fn draw_tabs(
         &self,
@@ -948,7 +1000,7 @@ impl Panel {
             return crate::widgets::list_selection::pointer_target_at(
                 list,
                 tabs,
-                Self::content_area(body),
+                self.list_area(body),
                 position,
             )
             .map(Target::List);
@@ -978,8 +1030,9 @@ impl Panel {
                     self.refresh = true;
                     self.rebuild();
                 }
-                if matches!(target, ListSelectionPointerTarget::Item(_))
-                    && click == ListSelectionClick::Double
+                if matches!(target, ListSelectionPointerTarget::Action)
+                    || matches!(target, ListSelectionPointerTarget::Item(_))
+                        && click == ListSelectionClick::Double
                 {
                     self.key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
                 } else {
@@ -991,7 +1044,7 @@ impl Panel {
         outcome
     }
     pub(crate) fn scroll(&mut self, area: Rect, position: Position, lines: i16) {
-        let content = Self::content_area(area);
+        let content = self.list_area(area);
         if !content.contains(position) {
             return;
         }
@@ -1008,7 +1061,14 @@ impl Panel {
                 editor.scroll(lines);
             }
         } else {
-            self.selection.state_mut().scroll(content, lines);
+            let end = self.selection.state_mut().scroll(content, lines);
+            if lines > 0
+                && end
+                && self.pending.is_none()
+                && self.listing().is_some_and(|list| list.cursor.is_some())
+            {
+                self.more = true;
+            }
         }
     }
     pub(crate) fn draw(
@@ -1051,11 +1111,13 @@ impl Panel {
         } else {
             scope.to_owned()
         };
-        frame.render_widget(
-            Paragraph::new(status).style(Style::default().fg(context.muted())),
-            Rect::new(area.x, area.y, area.width, area.height.min(1)),
-        );
-        let content = Self::content_area(area);
+        if !self.browsing() {
+            frame.render_widget(
+                Paragraph::new(status).style(Style::default().fg(context.muted())),
+                Rect::new(area.x, area.y, area.width, area.height.min(1)),
+            );
+        }
+        let content = self.list_area(area);
         if let Some(list) = self.displayed_list() {
             fn list_target(target: Option<&Target>) -> Option<&ListSelectionPointerTarget> {
                 match target {
@@ -1063,29 +1125,27 @@ impl Panel {
                     _ => None,
                 }
             }
-            let item_index = |target: Option<&Target>| match list_target(target) {
-                Some(ListSelectionPointerTarget::Item(id)) => list
-                    .visible_items()
-                    .iter()
-                    .position(|item| item.id() == Some(id)),
-                _ => None,
-            };
             crate::widgets::list_selection::draw_body_with_pointer(
                 frame,
                 content,
                 list,
-                matches!(
-                    list_target(hovered),
-                    Some(ListSelectionPointerTarget::Search)
-                ),
-                matches!(
-                    list_target(pressed),
-                    Some(ListSelectionPointerTarget::Search)
-                ),
-                item_index(hovered),
-                item_index(pressed),
+                list_target(hovered),
+                list_target(pressed),
                 context,
             );
+            if self.browsing() && area.height > 1 {
+                let notice = self
+                    .message
+                    .as_deref()
+                    .or_else(|| (!self.enabled).then_some("Memories off · c Config"));
+                if let Some(notice) = notice {
+                    frame.render_widget(
+                        Paragraph::new(context.localize(notice))
+                            .style(Style::default().fg(context.muted())),
+                        Rect::new(area.x, area.y + 1, area.width, 1),
+                    );
+                }
+            }
         } else if let Some(editor) = &self.editor
             && !self.showing_latest
         {
@@ -1137,15 +1197,15 @@ impl Panel {
         }
     }
 }
-fn kind(scope: &MemoryScope) -> usize {
+fn kind(scope: &MemoryScope) -> Option<usize> {
     match scope {
-        MemoryScope::Profile => 0,
-        MemoryScope::Project { .. } => 1,
-        MemoryScope::Dir { .. } => 2,
+        MemoryScope::Profile => Some(0),
+        MemoryScope::Project { .. } => Some(1),
+        MemoryScope::Dir { .. } => None,
     }
 }
 fn groups() -> Vec<ListSelectionGroup> {
-    ["Personal", "Projects", "Directories"]
+    ["Personal", "Projects"]
         .into_iter()
         .map(|label| ListSelectionGroup::new(label, Vec::new()))
         .collect()

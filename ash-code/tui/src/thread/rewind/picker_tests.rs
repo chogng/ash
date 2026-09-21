@@ -159,8 +159,6 @@ fn render(state: &ListSelectionState) -> String {
                 frame,
                 frame.area(),
                 &state,
-                false,
-                false,
                 None,
                 None,
                 crate::render::test_context(),

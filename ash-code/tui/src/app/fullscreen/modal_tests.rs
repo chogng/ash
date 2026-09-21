@@ -769,7 +769,15 @@ fn memories_manager_edits_multiline_text_keeps_failed_drafts_and_restores_home()
         }),
     });
     crate::tui_assert_snapshot!("memories_management", frame_text(&app));
-    app.handle_key(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE));
+    assert_memory_action_columns(&app);
+    let mut settings = crate::config::TerminalSettings::default();
+    settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
+    app.update(crate::config::Event::SettingsReceived(settings.clone()));
+    assert_memory_action_columns(&app);
+    crate::tui_assert_snapshot!("memories_inline_management", frame_text(&app));
+    settings.set_screen_mode(crate::terminal::ScreenMode::Fullscreen);
+    app.update(crate::config::Event::SettingsReceived(settings));
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     app.handle_paste("Fixture decision".into());
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     app.handle_paste("Use Rust\n保留  两个空格".into());
@@ -816,6 +824,30 @@ fn memories_manager_edits_multiline_text_keeps_failed_drafts_and_restores_home()
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.command_panel().is_none());
     assert_eq!(app.input(), "background draft");
+}
+
+fn assert_memory_action_columns(app: &crate::app::App) {
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    terminal
+        .draw(|frame| crate::app::frame::draw(frame, app))
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let locate = |text: &str| {
+        (0..30)
+            .find_map(|y| {
+                let row = (0..100)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<String>();
+                row.find(text)
+                    .map(|offset| (row[..offset].chars().count() as u16, y))
+            })
+            .unwrap_or_else(|| panic!("missing {text}"))
+    };
+    let action = locate("+ New Memory");
+    let search = locate("Search this scope");
+    assert_eq!(action.0 + 2, search.0);
+    assert_eq!(buffer[(action.0 - 2, action.1)].symbol(), ">");
+    assert!(buffer[action].modifier.contains(Modifier::BOLD));
 }
 
 fn assert_memory_editor_columns(app: &crate::app::App) {

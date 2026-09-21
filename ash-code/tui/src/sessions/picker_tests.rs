@@ -195,8 +195,6 @@ fn resume_picker_renders_only_session_title_time_and_tokens() {
                 frame,
                 Rect::new(2, 0, 78, 7),
                 &state,
-                false,
-                false,
                 None,
                 None,
                 test_context(),

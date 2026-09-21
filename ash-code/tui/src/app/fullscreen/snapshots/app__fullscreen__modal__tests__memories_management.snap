@@ -7,14 +7,14 @@ expression: frame_text(&app)
                                                                                                     
             ┌── Memories ─────────────────────────────────────────────────────────[✗]─┐             
             │                                                                         │             
-            │   Personal    Projects    Directories                                   │             
+            │   Personal    Projects                                                  │             
             │                                                                         │             
-            │  Personal memories · Memories off · c Config                            │             
-            │                                                                         │             
+            │> + New Memory                                                           │             
+            │  Memories off · c Config                                                │             
             │  ╭────────────────────────────────────────────────────────────────────╮ │             
             │  │ Search this scope                                                  │ │             
             │  ╰────────────────────────────────────────────────────────────────────╯ │             
-            │  No memories in this scope. Press n to add one.                         │             
+            │  No memories yet.                                                       │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
@@ -27,6 +27,6 @@ expression: frame_text(&app)
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
-  ╭─────────│  Enter view · n new · a actions · Tab tabs · / search · Esc close       │──────────╮  
+  ╭─────────│  Enter new · ↓ search · Tab tabs · Esc close                            │──────────╮  
   │ > backgr└─────────────────────────────────────────────────────────────────────────┘          │  
   ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯

@@ -317,6 +317,18 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "模型维护",
         "Gérée par le modèle",
     ),
+    translation(
+        "+ New Memory",
+        "+ 新しい記憶",
+        "+ 新建记忆",
+        "+ Nouvelle mémoire",
+    ),
+    translation(
+        "No memories yet.",
+        "記憶はまだありません。",
+        "暂无记忆。",
+        "Aucune mémoire pour le moment.",
+    ),
     translation("Load more", "さらに読み込む", "加载更多", "Charger plus"),
     translation(
         "No authorized scope in this tab.",

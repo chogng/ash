@@ -173,6 +173,8 @@ pub(crate) struct ListSelectionModel {
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct ListSelectionPresentation {
     title: String,
+    action: Option<ListSelectionItem>,
+    scroll_counts: bool,
     search: Option<SearchBoxModel>,
     filter_input: bool,
     empty_message: String,
@@ -195,6 +197,8 @@ impl ListSelectionModel {
             tabs,
             presentation: ListSelectionPresentation {
                 title: title.into(),
+                action: None,
+                scroll_counts: true,
                 search: None,
                 filter_input: true,
                 empty_message: "No matching items".into(),
@@ -211,6 +215,16 @@ impl ListSelectionModel {
 
     pub(crate) fn with_expandable_descriptions(mut self) -> Self {
         self.presentation.expandable = true;
+        self
+    }
+
+    pub(crate) fn with_action(mut self, action: ListSelectionItem) -> Self {
+        self.presentation.action = Some(action);
+        self
+    }
+
+    pub(crate) fn without_scroll_counts(mut self) -> Self {
+        self.presentation.scroll_counts = false;
         self
     }
 
@@ -336,6 +350,7 @@ pub(crate) struct ListSelectionState {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ListSelectionFocus {
     Tabs,
+    Action,
     Search,
     Items,
 }
@@ -393,6 +408,7 @@ impl ListSelectionState {
         self.reconcile_selection();
         if self.focus == ListSelectionFocus::Search && self.search.is_none()
             || self.focus == ListSelectionFocus::Tabs && !self.show_tabs()
+            || self.focus == ListSelectionFocus::Action && !self.has_action()
         {
             self.focus = ListSelectionFocus::Items;
         }
@@ -471,6 +487,13 @@ impl ListSelectionState {
 
     pub(crate) fn focus_pointer(&mut self, target: &super::ListSelectionPointerTarget) -> bool {
         match target {
+            super::ListSelectionPointerTarget::Action => {
+                if !self.has_action() {
+                    return false;
+                }
+                self.set_focus(ListSelectionFocus::Action);
+                true
+            }
             super::ListSelectionPointerTarget::Tab(index) => {
                 if !self.show_tabs() {
                     return false;
@@ -502,6 +525,22 @@ impl ListSelectionState {
 
     pub(crate) fn items_focused(&self) -> bool {
         self.focus == ListSelectionFocus::Items
+    }
+
+    pub(crate) fn action_focused(&self) -> bool {
+        self.focus == ListSelectionFocus::Action
+    }
+
+    pub(super) fn action(&self) -> Option<&ListSelectionItem> {
+        self.model.action.as_ref()
+    }
+
+    fn has_action(&self) -> bool {
+        self.action().is_some_and(|action| action.id().is_some())
+    }
+
+    pub(super) fn scroll_counts(&self) -> bool {
+        self.model.scroll_counts
     }
 
     pub(crate) fn query(&self) -> &str {
@@ -563,6 +602,7 @@ impl ListSelectionState {
             .map(ListSelectionPreview::desired_height)
             .unwrap_or_default();
         search_rows
+            .saturating_add(if self.action().is_some() { 2 } else { 0 })
             .saturating_add(u16::from(self.message.is_some()))
             .saturating_add(list_rows.min(u16::MAX as usize) as u16)
             .saturating_add(preview_rows.min(u16::MAX as usize) as u16)
@@ -592,6 +632,17 @@ impl ListSelectionState {
             }
             return ListSelectionInputOutcome::Dismiss;
         }
+        if self.action_focused()
+            && key.kind == KeyEventKind::Press
+            && self.model.activation.matches(key)
+        {
+            return self
+                .action()
+                .and_then(|action| action.id())
+                .cloned()
+                .map(ListSelectionInputOutcome::Activate)
+                .unwrap_or(ListSelectionInputOutcome::Consumed);
+        }
         if self.search_focused() {
             if key.kind == KeyEventKind::Press && bindings::SEARCH_RETURN.matches(key) {
                 self.set_focus(ListSelectionFocus::Items);
@@ -615,7 +666,11 @@ impl ListSelectionState {
                     return ListSelectionInputOutcome::Consumed;
                 }
                 FocusedTabListInputOutcome::EnterContent => {
-                    self.set_focus(ListSelectionFocus::Items);
+                    self.set_focus(if self.has_action() {
+                        ListSelectionFocus::Action
+                    } else {
+                        ListSelectionFocus::Items
+                    });
                     return ListSelectionInputOutcome::Consumed;
                 }
                 FocusedTabListInputOutcome::FocusNext => {
@@ -709,8 +764,19 @@ impl ListSelectionState {
     fn move_focus_up(&mut self) -> bool {
         match self.focus {
             ListSelectionFocus::Tabs => true,
-            ListSelectionFocus::Search => {
+            ListSelectionFocus::Action => {
                 if self.show_tabs() {
+                    self.set_focus(ListSelectionFocus::Tabs);
+                    true
+                } else {
+                    false
+                }
+            }
+            ListSelectionFocus::Search => {
+                if self.has_action() {
+                    self.set_focus(ListSelectionFocus::Action);
+                    true
+                } else if self.show_tabs() {
                     self.set_focus(ListSelectionFocus::Tabs);
                     true
                 } else {
@@ -722,6 +788,8 @@ impl ListSelectionState {
                     self.move_selection(ListSelectionDirection::Previous);
                 } else if self.search.is_some() {
                     self.set_focus(ListSelectionFocus::Search);
+                } else if self.has_action() {
+                    self.set_focus(ListSelectionFocus::Action);
                 } else if self.show_tabs() {
                     self.set_focus(ListSelectionFocus::Tabs);
                 } else {
@@ -735,12 +803,19 @@ impl ListSelectionState {
     fn move_focus_down(&mut self) {
         match self.focus {
             ListSelectionFocus::Tabs => {
-                self.set_focus(if self.search.is_some() {
+                self.set_focus(if self.has_action() {
+                    ListSelectionFocus::Action
+                } else if self.search.is_some() {
                     ListSelectionFocus::Search
                 } else {
                     ListSelectionFocus::Items
                 });
             }
+            ListSelectionFocus::Action => self.set_focus(if self.search.is_some() {
+                ListSelectionFocus::Search
+            } else {
+                ListSelectionFocus::Items
+            }),
             ListSelectionFocus::Search => self.set_focus(ListSelectionFocus::Items),
             ListSelectionFocus::Items => self.move_selection(ListSelectionDirection::Next),
         }
@@ -834,6 +909,9 @@ fn localize_presentation(
 ) {
     presentation.title = crate::nls::localize_owned(language, &presentation.title);
     presentation.empty_message = crate::nls::localize_owned(language, &presentation.empty_message);
+    if let Some(action) = &mut presentation.action {
+        action.label = crate::nls::localize_owned(language, &action.label);
+    }
     if let Some(search) = presentation.search.as_mut() {
         search.localize(language);
     }

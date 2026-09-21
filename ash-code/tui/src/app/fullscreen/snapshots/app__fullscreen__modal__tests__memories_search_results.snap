@@ -7,9 +7,9 @@ expression: frame_text(&app)
   ╭──────────────────────────────────────────────────────────────────────────────────────────────╮  
   │         ┌── Memories ─────────────────────────────────────────────────────────[✗]─┐          │  
   │    ▄  ▄ │                                                                         │          │  
-  │  ▗█▛██▜█│   Personal    Projects    Directories                                   │          │  
+  │  ▗█▛██▜█│   Personal    Projects                                                  │          │  
   │  ▝▜████▛│                                                                         │          │  
-  │    ▝  ▘ │  Personal memories                                                      │          │  
+  │    ▝  ▘ │  + New Memory                                                           │          │  
   │         │                                                                         │          │  
   │         │  ╭────────────────────────────────────────────────────────────────────╮ │          │  
   │         │  │ Rust                                                               │ │          │  
@@ -17,7 +17,7 @@ expression: frame_text(&app)
   │         │> Rust decision 0    Keep shared behavior in     User maintained · 11-14 │          │  
   │         │  Rust decision 1    Keep shared behavior in     User maintained · 11-14 │          │  
   ╰─────────│  Rust decision 2    Keep shared behavior in     User maintained · 11-14 │──────────╯  
-            │  Load more                                                              │             
+            │                                                                         │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             

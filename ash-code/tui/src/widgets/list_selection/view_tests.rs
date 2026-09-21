@@ -4,6 +4,7 @@ use crate::render::horizontal_margin;
 use crate::render::test_context;
 use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
+use crate::widgets::list_selection::ListSelectionItemId;
 use crate::widgets::list_selection::ListSelectionModel;
 use crate::widgets::list_selection::ListSelectionState;
 use crate::widgets::search_box::SearchBoxModel;
@@ -53,8 +54,6 @@ fn overflowing_lists_keep_selection_visible_and_notices_inside_the_area() {
                 frame,
                 frame.area(),
                 &view,
-                false,
-                false,
                 None,
                 None,
                 crate::render::test_context(),
@@ -71,8 +70,6 @@ fn overflowing_lists_keep_selection_visible_and_notices_inside_the_area() {
                 frame,
                 frame.area(),
                 &view,
-                false,
-                false,
                 None,
                 None,
                 crate::render::test_context(),
@@ -122,9 +119,16 @@ fn render_with_pointer(state: &ListSelectionState, hovered_item: Option<usize>) 
                 frame,
                 body,
                 state,
-                false,
-                false,
-                hovered_item,
+                hovered_item
+                    .and_then(|index| {
+                        state
+                            .visible_items()
+                            .get(index)
+                            .and_then(|item| item.id())
+                            .cloned()
+                    })
+                    .map(super::ListSelectionPointerTarget::Item)
+                    .as_ref(),
                 None,
                 test_context(),
             );
@@ -180,8 +184,8 @@ fn keyboard_selection_and_a_different_hovered_row_remain_visible_together() {
             vec![ListSelectionGroup::new(
                 "All",
                 vec![
-                    ListSelectionItem::new("First"),
-                    ListSelectionItem::new("Second"),
+                    ListSelectionItem::new("First").with_id(ListSelectionItemId::new("first")),
+                    ListSelectionItem::new("Second").with_id(ListSelectionItemId::new("second")),
                 ],
             )],
         )
@@ -200,7 +204,6 @@ fn keyboard_selection_and_a_different_hovered_row_remain_visible_together() {
 
 #[test]
 fn expanded_descriptions_wrap_and_follow_items_after_filtering_and_refresh() {
-    use crate::widgets::list_selection::ListSelectionItemId;
     use ratatui::layout::Rect;
     let model = ListSelectionModel::new(
         "Config",
@@ -237,8 +240,6 @@ fn expanded_descriptions_wrap_and_follow_items_after_filtering_and_refresh() {
                 frame,
                 Rect::new(2, 0, 30, 12),
                 &view,
-                false,
-                false,
                 None,
                 None,
                 test_context(),

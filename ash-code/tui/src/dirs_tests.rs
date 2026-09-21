@@ -235,8 +235,6 @@ fn directory_add_feedback_is_visible_below_the_input() {
                     frame,
                     frame.area(),
                     panel.state(),
-                    false,
-                    false,
                     None,
                     None,
                     crate::render::test_context(),

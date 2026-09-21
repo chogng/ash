@@ -26,6 +26,7 @@ const ITEM_COLUMN_GAP: u16 = 4;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ListSelectionPointerTarget {
     Tab(usize),
+    Action,
     Search,
     Item(super::ListSelectionItemId),
 }
@@ -40,6 +41,11 @@ pub(crate) fn pointer_target_at(
         && let Some(index) = tab_list::index_at(view.tabs(), tabs, position)
     {
         return Some(ListSelectionPointerTarget::Tab(index));
+    }
+    if view.action().is_some_and(|action| action.id().is_some())
+        && with_state_column(action_area(body)).contains(position)
+    {
+        return Some(ListSelectionPointerTarget::Action);
     }
     let areas = body_areas(body, view);
     if view.search().is_some() && areas[0].contains(position) {
@@ -87,14 +93,33 @@ pub(crate) fn draw_body_with_pointer(
     frame: &mut Frame<'_>,
     area: Rect,
     view: &ListSelectionState,
-    hovered_search: bool,
-    pressed_search: bool,
-    hovered_item: Option<usize>,
-    pressed_item: Option<usize>,
+    hovered: Option<&ListSelectionPointerTarget>,
+    pressed: Option<&ListSelectionPointerTarget>,
     context: RenderContext<'_>,
 ) {
     if area.is_empty() {
         return;
+    }
+    if let Some(action) = view.action() {
+        let selected = view.action_focused();
+        let style = crate::render::interaction_style(
+            context,
+            crate::render::InteractionState {
+                target: if action.id().is_some() {
+                    crate::render::InteractionTarget::Rest
+                } else {
+                    crate::render::InteractionTarget::Disabled
+                },
+                selected,
+                hovered: hovered == Some(&ListSelectionPointerTarget::Action),
+                pressed: pressed == Some(&ListSelectionPointerTarget::Action),
+            },
+        );
+        frame.render_widget(
+            Paragraph::new(format!("{}{}", selection_marker(selected), action.label()))
+                .style(style),
+            with_state_column(action_area(area)),
+        );
     }
     let areas = body_areas(area, view);
 
@@ -103,8 +128,8 @@ pub(crate) fn draw_body_with_pointer(
             frame,
             areas[0],
             search,
-            hovered_search,
-            pressed_search,
+            hovered == Some(&ListSelectionPointerTarget::Search),
+            pressed == Some(&ListSelectionPointerTarget::Search),
             context,
         );
     }
@@ -136,7 +161,7 @@ pub(crate) fn draw_body_with_pointer(
             .enumerate()
         {
             let item = visible_items[index];
-            let selected = view.selected_visible_index() == Some(index);
+            let selected = view.selected_visible_index() == Some(index) && !view.action_focused();
             let row_area = Rect::new(
                 list_area.x,
                 viewport.items.y + row as u16,
@@ -165,8 +190,8 @@ pub(crate) fn draw_body_with_pointer(
                 item,
                 selected,
                 selected && view.items_focused(),
-                hovered_item == Some(index),
-                pressed_item == Some(index),
+                matches!(hovered, Some(ListSelectionPointerTarget::Item(id)) if item.id() == Some(id)),
+                matches!(pressed, Some(ListSelectionPointerTarget::Item(id)) if item.id() == Some(id)),
                 column_layout,
                 view.expandable().then_some(view.expanded(item)),
                 context,
@@ -242,20 +267,43 @@ pub(crate) fn draw_body_with_pointer(
 }
 
 impl ListSelectionState {
-    pub(crate) fn scroll(&mut self, area: Rect, lines: i16) {
+    pub(crate) fn scroll(&mut self, area: Rect, lines: i16) -> bool {
         let list = body_areas(area, self)[1];
         let start = self.viewport(list).start;
         let count = self.item_rows(list.width).len();
-        let capacity = usize::from(list.height.saturating_sub(2).max(1));
+        let capacity = usize::from(if self.scroll_counts() {
+            list.height.saturating_sub(2).max(1)
+        } else {
+            list.height.max(1)
+        });
         self.scroll_offset = Some(
             start
                 .saturating_add_signed(isize::from(lines))
                 .min(count.saturating_sub(capacity)),
         );
+        self.viewport(list).end == count
     }
 
     fn viewport(&self, area: Rect) -> ListViewport {
         let rows = self.item_rows(area.width);
+        if !self.scroll_counts() {
+            let capacity = usize::from(area.height);
+            let start = self
+                .scroll_offset
+                .unwrap_or_else(|| {
+                    self.selected_visible_index()
+                        .unwrap_or(0)
+                        .saturating_sub(capacity.saturating_sub(1))
+                })
+                .min(rows.len().saturating_sub(capacity));
+            return ListViewport {
+                start,
+                end: (start + capacity).min(rows.len()),
+                items: area,
+                above: Rect::default(),
+                below: Rect::default(),
+            };
+        }
         if let Some(start) = self.scroll_offset {
             return ListViewport::scrolled(area, rows.len(), start);
         }
@@ -364,7 +412,16 @@ fn with_state_column(area: Rect) -> Rect {
     }
 }
 
-fn body_areas(content: Rect, view: &ListSelectionState) -> [Rect; 4] {
+fn action_area(content: Rect) -> Rect {
+    Rect::new(content.x, content.y, content.width, content.height.min(1))
+}
+
+fn body_areas(mut content: Rect, view: &ListSelectionState) -> [Rect; 4] {
+    if view.action().is_some() {
+        let rows = content.height.min(2);
+        content.y += rows;
+        content.height -= rows;
+    }
     let search_height = view.search().map(|_| SEARCH_BOX_HEIGHT).unwrap_or(0);
     let preview_height = view
         .selected_item()

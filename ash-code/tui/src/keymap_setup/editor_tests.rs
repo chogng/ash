@@ -118,8 +118,6 @@ fn shortcut_rows_align_responsibility_and_source_columns_without_command_ids() {
                 frame,
                 crate::render::horizontal_margin(frame.area(), 2),
                 &state,
-                false,
-                false,
                 None,
                 None,
                 test_context(),

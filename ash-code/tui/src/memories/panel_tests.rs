@@ -10,6 +10,9 @@ fn panel() -> Panel {
         MemoryScope::Project {
             project_id: ProjectId::new("ash").unwrap(),
         },
+        MemoryScope::Dir {
+            dir_id: format!("sha256:{}", "a".repeat(64)).parse().unwrap(),
+        },
     ]
     .into_iter()
     .map(|scope| MemoryScopeDescriptor {
@@ -17,11 +20,16 @@ fn panel() -> Panel {
         policy: memories::MemoryPolicy::disabled(scope),
     })
     .collect();
-    Panel::new(Page::Scopes {
+    let mut panel = Panel::new(Page::Scopes {
         enabled: true,
         scopes,
         list: listing(0..30),
-    })
+    });
+    panel
+        .selection
+        .state_mut()
+        .focus_item(&item_id(&MemoryScope::Profile, &memory().memory_id));
+    panel
 }
 fn listing(range: std::ops::Range<usize>) -> Listing {
     Listing {
@@ -81,13 +89,16 @@ fn search_uses_the_server_and_pagination_appends_results() {
     let mut panel = panel();
     panel.handle_key(key(KeyCode::Char('/')));
     panel.paste("Rust".into());
-    assert_eq!(panel.selection.state().visible_items().len(), 31);
+    assert_eq!(panel.selection.state().visible_items().len(), 30);
+    panel.scroll(Rect::new(2, 2, 72, 15), Position::new(10, 10), 100);
+    assert!(panel.take_refresh().is_none());
     let first = command(panel.handle_key(key(KeyCode::Enter)));
     assert!(matches!(&first, Command::Browse { query, cursor: None, .. } if query == "Rust"));
     let mut list = listing(0..20);
     list.query = "Rust".into();
     panel.finish(first, Ok(Page::List(list)));
-    let next = command(panel.activate(Action::More));
+    panel.scroll(Rect::new(2, 2, 72, 15), Position::new(10, 10), 100);
+    let next = panel.take_refresh().expect("scroll loads the next page");
     assert!(
         matches!(&next, Command::Browse { query, cursor: Some(cursor), .. } if query == "Rust" && cursor == "next")
     );
@@ -221,6 +232,112 @@ fn wheel_scroll_preserves_keyboard_selection_and_hit_testing_uses_the_viewport()
 }
 
 #[test]
+fn new_memory_row_is_between_tabs_and_search_and_uses_the_same_click_action() {
+    let mut panel = panel();
+    assert_eq!(
+        panel
+            .selection
+            .state()
+            .tabs()
+            .iter()
+            .map(|tab| tab.label())
+            .collect::<Vec<_>>(),
+        ["Personal", "Projects"]
+    );
+    assert_eq!(panel.scopes.len(), 2);
+    panel.handle_key(key(KeyCode::Up));
+    assert!(panel.selection.state().search().unwrap().input_active());
+    panel.handle_key(key(KeyCode::Up));
+    assert!(panel.selection.state().action_focused());
+    panel.handle_key(key(KeyCode::Up));
+    assert!(panel.selection.state().tabs_focused());
+    panel.handle_key(key(KeyCode::Down));
+    assert!(panel.selection.state().action_focused());
+    panel.handle_key(key(KeyCode::Down));
+    assert!(panel.selection.state().search().unwrap().input_active());
+    panel.handle_key(key(KeyCode::Up));
+    panel.handle_key(key(KeyCode::Enter));
+    assert_eq!(panel.editor.as_ref().unwrap().values(), ("", ""));
+    panel.handle_key(key(KeyCode::Esc));
+    panel.click(
+        &Target::List(ListSelectionPointerTarget::Action),
+        ListSelectionClick::Single,
+    );
+    assert_eq!(panel.editor.as_ref().unwrap().values(), ("", ""));
+}
+
+#[test]
+fn new_memory_row_hits_its_full_width_and_hover_does_not_move_selection() {
+    let panel = panel();
+    let area = Rect::new(4, 2, 70, 18);
+    let target = Target::List(ListSelectionPointerTarget::Action);
+    for x in [area.x - 2, area.x, area.right() - 1] {
+        assert_eq!(
+            panel.target_at(Rect::default(), area, Position::new(x, area.y)),
+            Some(target.clone())
+        );
+    }
+    let context = crate::render::test_context();
+    for pressed in [None, Some(&target)] {
+        let mut terminal =
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(80, 24)).unwrap();
+        terminal
+            .draw(|frame| panel.draw(frame, area, Some(&target), pressed, context))
+            .unwrap();
+        let cell = &terminal.backend().buffer()[(area.x, area.y)];
+        assert_eq!(cell.symbol(), "+");
+        assert_eq!(
+            cell.fg,
+            if pressed.is_some() {
+                context.pressed_foreground()
+            } else {
+                context.hover_foreground()
+            }
+        );
+        assert!(panel.selection.state().items_focused());
+    }
+}
+
+#[test]
+fn scrolling_loads_one_page_at_a_time_and_keyboard_navigation_reaches_later_pages() {
+    let mut panel = panel();
+    let area = Rect::new(4, 2, 70, 14);
+    panel.scroll(area, Position::new(10, 10), 2);
+    assert!(panel.take_refresh().is_none());
+    panel.scroll(area, Position::new(10, 10), 100);
+    let load = panel.take_refresh().unwrap();
+    assert!(matches!(&load, Command::Browse { cursor: Some(cursor), .. } if cursor == "next"));
+    panel.scroll(area, Position::new(10, 10), 100);
+    assert!(panel.take_refresh().is_none());
+    panel.finish(load, Ok(Page::List(listing(30..50))));
+    assert!(panel.take_refresh().is_none());
+    assert_eq!(panel.selection.state().selected_visible_index(), Some(0));
+    let load = command(panel.handle_key(key(KeyCode::End)));
+    let mut last = listing(50..55);
+    last.cursor = None;
+    panel.finish(load, Ok(Page::List(last)));
+    panel.handle_key(key(KeyCode::End));
+    assert_eq!(
+        panel.selection.state().selected_item().unwrap().id(),
+        Some(&item_id(
+            &MemoryScope::Profile,
+            &memories::MemoryId::new("entry-54").unwrap()
+        ))
+    );
+    panel.scroll(area, Position::new(10, 10), 100);
+    assert!(panel.take_refresh().is_none());
+    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(80, 20)).unwrap();
+    terminal
+        .draw(|frame| panel.draw(frame, area, None, None, crate::render::test_context()))
+        .unwrap();
+    let text = terminal.backend().to_string();
+    assert!(text.contains("Decision 54"));
+    assert!(
+        !text.contains("Load more") && !text.contains("more above") && !text.contains("more below")
+    );
+}
+
+#[test]
 fn refresh_preserves_identity_and_loaded_count_and_stale_pages_keep_the_list() {
     let mut panel = panel();
     let id = item_id(
@@ -235,7 +352,8 @@ fn refresh_preserves_identity_and_loaded_count_and_stale_pages_keep_the_list() {
         panel.selection.state().selected_item().unwrap().id(),
         Some(&id)
     );
-    let more = command(panel.activate(Action::More));
+    panel.scroll(Rect::new(2, 2, 72, 15), Position::new(10, 10), 100);
+    let more = panel.take_refresh().expect("scroll loads the next page");
     panel.finish(
         more,
         Err(Failure {
