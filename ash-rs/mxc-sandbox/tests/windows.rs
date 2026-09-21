@@ -7,6 +7,7 @@ use ash_install_context::InstallContext;
 use ash_sandboxing::FileSystemAccess;
 use ash_sandboxing::NetworkAccess;
 use ash_sandboxing::SandboxBackend;
+use ash_sandboxing::SandboxCommand;
 use ash_sandboxing::SandboxDirAccess;
 use ash_sandboxing::SandboxDirGrant;
 use ash_sandboxing::SandboxKind;
@@ -24,12 +25,7 @@ use ash_tool_executor::ExecutionLimits;
 use mxc_sandbox::MxcSandbox;
 use network_proxy::NetworkDecision;
 use network_proxy::NetworkPolicyHandle;
-use std::io::Read;
-use std::io::Write;
-use std::net::TcpListener;
 use std::path::Path;
-use std::sync::Arc;
-use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 struct Approved;
@@ -84,6 +80,64 @@ fn literal(path: &Path) -> String {
 }
 
 #[test]
+#[ignore = "requires a host without PSEC support"]
+fn missing_psec_is_reported_before_execution() {
+    let temp = tempfile::tempdir().unwrap();
+    let dir = Dir::open_local(temp.path()).unwrap();
+    let command = SandboxCommand::new(
+        "must-not-start",
+        std::iter::empty::<&str>(),
+        dir.canonical_path(),
+    );
+    let error = MxcSandbox::new(InstallContext::current())
+        .prepare(
+            &command,
+            sandbox_policy(FileSystemAccess::DirectoryWrite, NetworkAccess::Denied),
+            &dir,
+        )
+        .unwrap_err();
+    assert!(
+        matches!(error, ash_sandboxing::SandboxError::UnsupportedPolicy(_)),
+        "only confirmed unsupported capability permits another backend: {error}"
+    );
+}
+
+#[test]
+#[ignore = "requires a host capable of preparing Ash's PSEC policy"]
+fn psec_host_supports_scoped_policy() {
+    let temp = tempfile::tempdir().unwrap();
+    let work_path = temp.path().join("work");
+    std::fs::create_dir(&work_path).unwrap();
+    std::fs::create_dir(work_path.join(".git")).unwrap();
+    std::fs::write(temp.path().join("secret"), "hidden").unwrap();
+    let work = Dir::open_local(&work_path).unwrap();
+    let scope = SandboxScope::new(
+        work.clone(),
+        vec![SandboxDirGrant::new(
+            work.clone(),
+            SandboxDirAccess::ReadWrite,
+        )],
+        vec![Dir::open_local(temp.path()).unwrap()],
+    )
+    .unwrap();
+    let backend = MxcSandbox::new(InstallContext::current());
+    let command = SandboxCommand::new(
+        "must-not-start",
+        std::iter::empty::<&str>(),
+        work.canonical_path(),
+    );
+    // Preparation creates and closes the actual PSEC environment and startup
+    // attributes. It does not launch a command or select another backend.
+    backend
+        .prepare_scoped(
+            &command,
+            sandbox_policy(FileSystemAccess::DirectoryWrite, NetworkAccess::Denied),
+            &scope,
+        )
+        .unwrap_or_else(|error| panic!("PSEC policy preparation failed: {error}"));
+}
+
+#[test]
 #[ignore = "requires PSEC support for the complete filesystem and process policy"]
 fn scoped_execution_preserves_grants_metadata_and_exit_code_authenticity() {
     let temp = tempfile::tempdir().unwrap();
@@ -123,18 +177,27 @@ fn scoped_execution_preserves_grants_metadata_and_exit_code_authenticity() {
         literal(&secret),
         literal(&reference.canonical_path().join("modified")),
     );
-    let result = executor(&work, Duration::from_secs(30))
-        .execute_scoped_with_network(
-            powershell(script),
-            CommandExecutionAuthority::Sandboxed(sandbox_policy(
-                FileSystemAccess::DirectoryWrite,
-                NetworkAccess::Denied,
-            )),
-            &CancellationSource::new().token(),
-            Some(&scope),
-            None,
+    let result = executor(&work, Duration::from_secs(30)).execute_scoped_with_network(
+        powershell(script),
+        CommandExecutionAuthority::Sandboxed(sandbox_policy(
+            FileSystemAccess::DirectoryWrite,
+            NetworkAccess::Denied,
+        )),
+        &CancellationSource::new().token(),
+        Some(&scope),
+        None,
+    );
+    assert_eq!(
+        protected.map(sddl),
+        before,
+        "host ACLs changed after execution"
+    );
+    let result = result.unwrap_or_else(|error| {
+        panic!(
+            "{error:?}; command reached first write: {}",
+            work.canonical_path().join("output").exists()
         )
-        .unwrap();
+    });
     let CommandExecutionOutcome::Completed(output) = result else {
         panic!("{result:?}")
     };
@@ -151,6 +214,60 @@ fn scoped_execution_preserves_grants_metadata_and_exit_code_authenticity() {
     for name in [".agents", ".codex", ".ash"] {
         assert!(!work.canonical_path().join(name).exists());
     }
+}
+
+#[test]
+#[ignore = "requires PSEC execution with redirected standard streams"]
+fn psec_cmd_preserves_output_and_exit_code() {
+    let temp = tempfile::tempdir().unwrap();
+    let dir = Dir::open_local(temp.path()).unwrap();
+    let program = Path::new(&std::env::var_os("SystemRoot").unwrap()).join("System32/cmd.exe");
+    let result = executor(&dir, Duration::from_secs(15))
+        .execute(
+            CommandRequest {
+                program: program.to_str().unwrap().into(),
+                arguments: vec![
+                    "/d".into(),
+                    "/c".into(),
+                    "echo psec-cmd-ok & exit /b 125".into(),
+                ],
+                working_directory: ".".into(),
+                input: CommandInput::Closed,
+            },
+            CommandExecutionAuthority::Sandboxed(sandbox_policy(
+                FileSystemAccess::DirectoryWrite,
+                NetworkAccess::Denied,
+            )),
+            &CancellationSource::new().token(),
+        )
+        .unwrap();
+    let CommandExecutionOutcome::Completed(output) = result else {
+        panic!("{result:?}")
+    };
+    assert_eq!(output.exit_code, Some(125), "{output:?}");
+    assert!(output.stdout.contains("psec-cmd-ok"), "{output:?}");
+}
+
+#[test]
+#[ignore = "requires PSEC execution of Windows PowerShell"]
+fn psec_powershell_preserves_output_and_exit_code() {
+    let temp = tempfile::tempdir().unwrap();
+    let dir = Dir::open_local(temp.path()).unwrap();
+    let result = executor(&dir, Duration::from_secs(30))
+        .execute(
+            powershell("Write-Output 'psec-powershell-ok'; exit 125".into()),
+            CommandExecutionAuthority::Sandboxed(sandbox_policy(
+                FileSystemAccess::DirectoryWrite,
+                NetworkAccess::Denied,
+            )),
+            &CancellationSource::new().token(),
+        )
+        .unwrap();
+    let CommandExecutionOutcome::Completed(output) = result else {
+        panic!("{result:?}")
+    };
+    assert_eq!(output.exit_code, Some(125), "{output:?}");
+    assert!(output.stdout.contains("psec-powershell-ok"), "{output:?}");
 }
 
 #[test]
@@ -254,97 +371,19 @@ fn sddl(path: &Path) -> String {
     String::from_utf8(output.stdout).unwrap()
 }
 
-struct Origin {
-    port: u16,
-    stop: Arc<std::sync::atomic::AtomicBool>,
-    thread: Option<std::thread::JoinHandle<()>>,
-}
-
-impl Origin {
-    fn start() -> Self {
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let port = listener.local_addr().unwrap().port();
-        listener.set_nonblocking(true).unwrap();
-        let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let stopped = Arc::clone(&stop);
-        let thread = std::thread::spawn(move || {
-            while !stopped.load(Ordering::Acquire) {
-                match listener.accept() {
-                    Ok((mut stream, _)) => {
-                        stream
-                            .set_read_timeout(Some(Duration::from_secs(5)))
-                            .unwrap();
-                        let mut headers = Vec::new();
-                        let mut byte = [0];
-                        while headers.len() < 8192 && !headers.ends_with(b"\r\n\r\n") {
-                            if stream.read_exact(&mut byte).is_err() {
-                                break;
-                            }
-                            headers.push(byte[0]);
-                        }
-                        let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 8\r\nConnection: close\r\n\r\napproved");
-                    }
-                    Err(_) => std::thread::sleep(Duration::from_millis(5)),
-                }
-            }
-        });
-        Self {
-            port,
-            stop,
-            thread: Some(thread),
-        }
-    }
-}
-
-impl Drop for Origin {
-    fn drop(&mut self) {
-        self.stop.store(true, Ordering::Release);
-        self.thread.take().unwrap().join().unwrap();
-    }
-}
-
 #[test]
-#[ignore = "requires PSEC support for the complete policy and ASH_NETWORK_PROBE"]
-fn managed_execution_allows_the_proxy_and_blocks_direct_traffic_and_listeners() {
-    let origin = Origin::start();
-    let target = origin.port;
-    let forbidden = TcpListener::bind("127.0.0.1:0").unwrap();
-    forbidden.set_nonblocking(true).unwrap();
-    let forbidden_port = forbidden.local_addr().unwrap().port();
-    let foreign = TcpListener::bind("127.0.0.1:0").unwrap();
-    foreign.set_nonblocking(true).unwrap();
-    let foreign_port = foreign.local_addr().unwrap().port();
-    let udp = std::net::UdpSocket::bind((std::net::Ipv4Addr::LOCALHOST, forbidden_port)).unwrap();
-    udp.set_nonblocking(true).unwrap();
-    let policy = NetworkPolicyHandle::new(
-        move |request: network_proxy::NetworkRequest, _| async move {
-            if request.port() == target {
-                NetworkDecision::Allow
-            } else {
-                NetworkDecision::Deny("blocked".into())
-            }
-        },
-    );
+fn managed_execution_with_a_policy_is_rejected_before_start() {
+    let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let observed = std::sync::Arc::clone(&calls);
+    let policy = NetworkPolicyHandle::new(move |_, _| {
+        observed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        async { NetworkDecision::Allow }
+    });
     let temp = tempfile::tempdir().unwrap();
     let dir = Dir::open_local(temp.path()).unwrap();
-    let probe = dir.canonical_path().join("probe.exe");
-    std::fs::copy(
-        std::env::var_os("ASH_NETWORK_PROBE").expect("build network-proxy --example probe"),
-        &probe,
-    )
-    .unwrap();
-    let result = executor(&dir, Duration::from_secs(30))
+    let result = executor(&dir, Duration::from_secs(5))
         .execute_scoped_with_network(
-            CommandRequest {
-                program: probe.to_str().unwrap().into(),
-                arguments: vec![
-                    target.to_string(),
-                    forbidden_port.to_string(),
-                    foreign_port.to_string(),
-                ],
-                working_directory: ".".into(),
-                input: CommandInput::Closed,
-            },
+            powershell("Set-Content started 'must not run'".into()),
             CommandExecutionAuthority::Sandboxed(sandbox_policy(
                 FileSystemAccess::DirectoryWrite,
                 NetworkAccess::Managed,
@@ -353,24 +392,16 @@ fn managed_execution_allows_the_proxy_and_blocks_direct_traffic_and_listeners() 
             None,
             Some(&policy),
         )
-        .unwrap();
-    let CommandExecutionOutcome::Completed(output) = result else {
-        panic!("{result:?}")
+        .unwrap_err();
+    let ExecutionError::Sandbox(error) = result else {
+        panic!("{result:?}");
     };
-    assert_eq!(output.exit_code, Some(0), "{output:?}");
-    assert!(output.stdout.contains("network-probe-ready"), "{output:?}");
-    assert_eq!(
-        forbidden.accept().unwrap_err().kind(),
-        std::io::ErrorKind::WouldBlock
+    assert!(
+        error.to_string().contains("inbound private-network"),
+        "{error:?}"
     );
-    assert_eq!(
-        foreign.accept().unwrap_err().kind(),
-        std::io::ErrorKind::WouldBlock
-    );
-    assert_eq!(
-        udp.recv(&mut [0; 64]).unwrap_err().kind(),
-        std::io::ErrorKind::WouldBlock
-    );
+    assert!(!dir.canonical_path().join("started").exists());
+    assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 0);
 }
 
 #[test]

@@ -2,6 +2,7 @@
 mod policy;
 mod process;
 mod pty;
+mod request;
 pub use pty::PTY_HELPER_ARGUMENT;
 pub use pty::run_pty_helper;
 
@@ -18,7 +19,7 @@ use ash_sandboxing::SandboxProcessExitStatus;
 use ash_sandboxing::SandboxScope;
 use std::path::PathBuf;
 
-/// MXC-backed execution. The SDK owns backend selection, process creation and OS resource cleanup.
+/// MXC-backed execution. Ash selects the backend; MXC creates processes and cleans up OS resources.
 pub struct MxcSandbox {
     runtime: InstallContext,
     pty_helper: Option<PathBuf>,
@@ -92,25 +93,10 @@ impl SandboxBackend for MxcSandbox {
             return Ok(PreparedCommand::unrestricted(command));
         }
         let mut request = policy::request(command, policy, scope)?;
-        #[cfg(target_os = "windows")]
-        if policy.network() == ash_sandboxing::NetworkAccess::Managed {
-            return Err(SandboxError::UnsupportedPolicy(
-                "Windows PSEC cannot enforce the requested managed-proxy path while denying unapproved inbound private-network traffic"
-                    .into(),
-            ));
-        }
         if let Some(path) = bubblewrap(&self.runtime)? {
-            request
-                .set_bubblewrap_executable(&path)
-                .map_err(|error| unavailable(error.to_string()))?;
+            request.set_bubblewrap_executable(&path);
         }
-        request.prepare().map_err(|error| {
-            if error.code == mxc_sdk::ErrorCode::UnsupportedContainment {
-                SandboxError::UnsupportedPolicy(error.to_string())
-            } else {
-                unavailable(error.to_string())
-            }
-        })?;
+        request.prepare()?;
         if let ash_sandboxing::ProcessIo::Pty(size) = command.io() {
             let executable = self
                 .pty_helper

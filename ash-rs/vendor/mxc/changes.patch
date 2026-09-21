@@ -1,725 +1,7 @@
-diff --git a/src/core/mxc_engine/Cargo.toml b/src/core/mxc_engine/Cargo.toml
---- a/src/core/mxc_engine/Cargo.toml
-+++ b/src/core/mxc_engine/Cargo.toml
-@@ -1,8 +1,8 @@
- [package]
- name = "mxc_engine"
--version.workspace = true
--edition.workspace = true
--license.workspace = true
-+version = "0.8.0"
-+edition = "2021"
-+license = "MIT"
- description = "MXC execution engine: backend dispatch, host probing, and config building shared by the public SDK and the executor binaries."
- 
- [lib]
-@@ -10,51 +10,38 @@
- path = "src/lib.rs"
- 
- [dependencies]
--wxc_common.workspace = true
--serde = { workspace = true }
--serde_json = { workspace = true }
--# MicroVM runner — used by the Windows and Linux run-to-completion bodies under
--# the `microvm` feature. Never built on hosts/features that don't select it.
--nanvix_runner = { workspace = true, optional = true }
-+wxc_common = { "path" = "../wxc_common" }
-+serde = { "version" = "1", "features" = ["derive"] }
-+serde_json = { "version" = "1" }
-+nanvix_runner = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4", "optional" = true }
- 
--[target.'cfg(target_arch = "x86_64")'.dependencies]
--hyperlight_common = { workspace = true, optional = true }
-+[target."cfg(target_arch = \"x86_64\")".dependencies]
-+hyperlight_common = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4", "optional" = true }
- 
--[target.'cfg(target_os = "windows")'.dependencies]
--appcontainer_common = { workspace = true }
--windows_sandbox_lifecycle = { workspace = true }
--isolation_session_common = { workspace = true, optional = true }
--isolation_session_bindings = { workspace = true, optional = true }
--wslc_common = { workspace = true, optional = true }
--# Elevated PLM guardian client, used to adapt appcontainer_common's
--# GuardedCaptureFactory/GuardedCaptureSession DI traits (guarded-WPR
--# captureDenials fallback) without appcontainer_common depending on plm
--# directly.
--plm = { workspace = true }
--# ProcessLifetime / AnalysisResult types shared across the guarded-capture DI
--# boundary; appcontainer_common and plm already depend on this crate.
--learning_mode_core = { workspace = true }
--windows.workspace = true
-+[target."cfg(target_os = \"windows\")".dependencies]
-+appcontainer_common = { "path" = "../../backends/appcontainer/common" }
-+windows_sandbox_lifecycle = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4" }
-+isolation_session_common = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4", "optional" = true }
-+isolation_session_bindings = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4", "optional" = true }
-+wslc_common = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4", "optional" = true }
-+plm = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4" }
-+learning_mode_core = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4" }
-+windows = { "version" = "0.62", "features" = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_NetworkManagement_WindowsFirewall", "Win32_Security", "Win32_Security_Authorization", "Win32_Security_Credentials", "Win32_Security_Isolation", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_Diagnostics_Debug", "Win32_System_Diagnostics_Etw", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Environment", "Win32_System_IO", "Win32_System_JobObjects", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Ole", "Win32_System_Pipes", "Win32_System_ProcessStatus", "Win32_System_Registry", "Win32_System_SystemInformation", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_Time", "Win32_System_Variant", "Win32_System_WindowsProgramming", "Win32_UI_Shell"] }
- 
--[target.'cfg(target_os = "linux")'.dependencies]
--bwrap_common = { workspace = true }
--lxc_common = { workspace = true }
-+[target."cfg(target_os = \"linux\")".dependencies]
-+bwrap_common = { "path" = "../../backends/bubblewrap/common" }
-+lxc_common = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4" }
- 
--[target.'cfg(target_os = "macos")'.dependencies]
--seatbelt_common = { workspace = true }
-+[target."cfg(target_os = \"macos\")".dependencies]
-+seatbelt_common = { "path" = "../../backends/seatbelt/common" }
- 
- [features]
- default = []
--# Enables constructing the run-to-completion runner for each experimental
--# backend. Mirrors the executor binaries' feature set so backend selection can
--# live in one place. The build-time binary-staging that some backends also need
--# (e.g. NanVix's `nanvix_binaries`) stays with the executor crates.
- microvm = ["dep:nanvix_runner"]
- wslc = ["dep:wslc_common", "wslc_common/link-wslcsdk"]
- hyperlight = ["dep:hyperlight_common", "hyperlight_common/hyperlight"]
--isolation_session = [
--    "dep:isolation_session_bindings",
--    "dep:isolation_session_common",
--]
--# Forwards appcontainer_common/tier2_bfs. OFF by default; see appcontainer_common/Cargo.toml.
-+isolation_session = ["dep:isolation_session_bindings", "dep:isolation_session_common"]
- tier2_bfs = ["appcontainer_common/tier2_bfs"]
-+
-+[dev-dependencies]
-+tempfile = "3"
-diff --git a/src/core/mxc_engine/src/configs/process_container.rs b/src/core/mxc_engine/src/configs/process_container.rs
---- a/src/core/mxc_engine/src/configs/process_container.rs
-+++ b/src/core/mxc_engine/src/configs/process_container.rs
-@@ -81,6 +81,14 @@
-     }
- }
- 
-+impl ProcessContainer {
-+    /// Sets the explicit BaseProcessContainer desktop-resource policy.
-+    pub fn with_ui(mut self, ui: ProcessContainerUi) -> Self {
-+        self.ui = Some(ui);
-+        self
-+    }
-+}
-+
- /// ProcessContainer-specific network settings.
- #[derive(Debug, Clone, Default, PartialEq, Eq)]
- #[non_exhaustive]
-@@ -111,6 +119,14 @@
-             system_settings: ProcessContainerSystemSettings::None,
-             ime: false,
-         }
-+    }
-+}
-+
-+impl ProcessContainerUi {
-+    /// Sets how desktop handles and global atoms are isolated.
-+    pub fn with_isolation(mut self, isolation: ProcessContainerUiIsolation) -> Self {
-+        self.isolation = isolation;
-+        self
-     }
- }
- 
-diff --git a/src/core/mxc_engine/src/dispatch.rs b/src/core/mxc_engine/src/dispatch.rs
---- a/src/core/mxc_engine/src/dispatch.rs
-+++ b/src/core/mxc_engine/src/dispatch.rs
-@@ -146,12 +146,34 @@
- }
- 
- #[cfg(target_os = "windows")]
-+pub(crate) fn require_windows_psec(request: &ExecutionRequest) -> Result<(), MxcError> {
-+    appcontainer_common::base_container_runner::BaseContainerRunner::require_psec(request)
-+}
-+
-+#[cfg(target_os = "windows")]
- fn spawn_process_container(
-     request: &ExecutionRequest,
-     logger: &mut Logger,
- ) -> Result<Box<dyn SandboxProcess>, MxcError> {
-+    if request.host_filesystem.is_some() || request.require_process_security_environment {
-+        use appcontainer_common::base_container_runner::BaseContainerRunner;
-+        use wxc_common::sandbox_process::SandboxBackend;
-+        if let Some(snapshot) = &request.prepared_files {
-+            snapshot
-+                .validate()
-+                .map_err(|error| MxcError::policy_validation(error.to_string()))?;
-+        }
-+        require_windows_psec(request)?;
-+        return BaseContainerRunner::new()
-+            .spawn(
-+                request,
-+                logger,
-+                wxc_common::sandbox_process::StdioMode::Pipes,
-+            )
-+            .map_err(map_spawn_error);
-+    }
-     use appcontainer_common::dispatcher::{
--        spawn_with_fallback_and_capture, DispatchError, SpawnDispatchError,
-+        DispatchError, SpawnDispatchError, spawn_with_fallback_and_capture,
-     };
-     use std::fmt::Write;
-     use wxc_common::sandbox_process::StdioMode;
-@@ -267,7 +289,7 @@
- #[cfg(test)]
- mod tests {
-     use super::{ensure_host_supported, map_spawn_error, spawn_runner};
--    use crate::policy::{build_request, SandboxPolicy};
-+    use crate::policy::{SandboxPolicy, build_request};
-     use wxc_common::logger::{Logger, Mode};
-     use wxc_common::models::ContainmentBackend;
-     use wxc_common::mxc_error::MxcErrorCode;
-@@ -428,3 +450,27 @@
-         assert!(err.message.contains("experimental"), "got: {}", err.message);
-     }
- }
-+
-+/// Attached execution retains the backend's ordinary policy checks and process ownership.
-+pub(crate) fn spawn_inherited(request: &ExecutionRequest) -> Result<Box<dyn SandboxProcess>, MxcError> {
-+    use wxc_common::sandbox_process::SandboxBackend;
-+    use wxc_common::sandbox_process::StdioMode;
-+    ensure_host_supported()?;
-+    if request.dry_run { return Err(MxcError::malformed_request("dry_run cannot start an attached process")); }
-+    let mut logger = Logger::new(wxc_common::logger::Mode::Buffer);
-+    match request.containment {
-+        #[cfg(target_os = "macos")]
-+        ContainmentBackend::Seatbelt => seatbelt_common::seatbelt_runner::SeatbeltScriptRunner::new()
-+            .spawn(request, &mut logger, StdioMode::Inherit).map_err(map_spawn_error),
-+        #[cfg(target_os = "linux")]
-+        ContainmentBackend::Bubblewrap => bwrap_common::bwrap_runner::BubblewrapScriptRunner::new()
-+            .spawn(request, &mut logger, StdioMode::Inherit).map_err(map_spawn_error),
-+        #[cfg(target_os = "windows")]
-+        ContainmentBackend::ProcessContainer => {
-+            require_windows_psec(request)?;
-+            appcontainer_common::base_container_runner::BaseContainerRunner::new()
-+                .spawn(request, &mut logger, StdioMode::Inherit).map_err(map_spawn_error)
-+        }
-+        _ => Err(MxcError::unsupported_containment("this backend cannot inherit a terminal")),
-+    }
-+}
-diff --git a/src/core/mxc_engine/src/inherited.rs b/src/core/mxc_engine/src/inherited.rs
-new file mode 100644
---- /dev/null
-+++ b/src/core/mxc_engine/src/inherited.rs
-@@ -0,0 +1,67 @@
-+//! Trusted embedding-process handoff, separate from the public policy/config parser.
-+use crate::Error;
-+use crate::ErrorCode;
-+use crate::SandboxRequest;
-+use serde::Deserialize;
-+use serde::Serialize;
-+use wxc_common::models::ExecutionRequest;
-+use wxc_common::sandbox_process::SandboxProcess;
-+
-+#[derive(Serialize, Deserialize)]
-+#[serde(deny_unknown_fields)]
-+struct Launch {
-+    request: ExecutionRequest,
-+    host_acl_scope: Option<wxc_common::host_changes::HostAclScope>,
-+    host_filesystem: Option<wxc_common::host_changes::HostFilesystemAccess>,
-+    host_filesystem_roots: Vec<String>,
-+    require_process_security_environment: bool,
-+    prepared_files: Option<wxc_common::filesystem_object::FilesystemSnapshot>,
-+    bubblewrap_executable: Option<std::path::PathBuf>,
-+}
-+
-+/// Encodes a prepared embedding request for a trusted child process, preserving host authority.
-+/// This is not a public sandbox configuration and must never be accepted from an untrusted client.
-+pub fn encode_inherited_launch(request: &SandboxRequest) -> Result<String, Error> {
-+    let r = &request.inner;
-+    serde_json::to_string(&Launch {
-+        request: r.clone(),
-+        host_acl_scope: r.host_acl_scope.clone(),
-+        host_filesystem: r.host_filesystem,
-+        host_filesystem_roots: r.host_filesystem_roots.clone(),
-+        require_process_security_environment: r.require_process_security_environment,
-+        prepared_files: r.prepared_files.clone(),
-+        bubblewrap_executable: r.bubblewrap_executable.clone(),
-+    })
-+    .map_err(|_| Error::new(ErrorCode::MalformedRequest, "invalid inherited launch"))
-+}
-+
-+/// Runs inside the dedicated embedding helper with an already attached terminal.
-+/// Accept only a launch envelope supplied by the embedding host, never public configuration.
-+pub fn spawn_inherited_launch(encoded: &str) -> Result<Box<dyn SandboxProcess>, Error> {
-+    use std::io::IsTerminal;
-+    if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
-+        return Err(Error::new(
-+            ErrorCode::MalformedRequest,
-+            "inherited launch requires terminal stdio",
-+        ));
-+    }
-+    let launch: Launch = serde_json::from_str(encoded)
-+        .map_err(|_| Error::new(ErrorCode::MalformedRequest, "invalid inherited launch"))?;
-+    let mut request = launch.request;
-+    request.host_acl_scope = launch.host_acl_scope;
-+    request.host_filesystem = launch.host_filesystem;
-+    request.host_filesystem_roots = launch.host_filesystem_roots;
-+    request.require_process_security_environment = launch.require_process_security_environment;
-+    request.prepared_files = launch.prepared_files;
-+    request.bubblewrap_executable = launch.bubblewrap_executable;
-+    if let Some(snapshot) = &request.prepared_files {
-+        snapshot
-+            .validate()
-+            .map_err(|_| Error::new(ErrorCode::MalformedRequest, "prepared filesystem changed"))?;
-+    }
-+    crate::dispatch::spawn_inherited(&request).map_err(Error::from)
-+}
-+
-+#[cfg(test)]
-+#[path = "inherited_tests.rs"]
-+mod tests;
-diff --git a/src/core/mxc_engine/src/inherited_tests.rs b/src/core/mxc_engine/src/inherited_tests.rs
-new file mode 100644
---- /dev/null
-+++ b/src/core/mxc_engine/src/inherited_tests.rs
-@@ -0,0 +1,46 @@
-+use super::*;
-+
-+#[test]
-+fn helper_handoff_retains_embedding_authority_and_object_identity() {
-+    let temp = tempfile::tempdir().unwrap();
-+    let root = std::fs::canonicalize(temp.path()).unwrap();
-+    let policy = crate::SandboxPolicy {
-+        version: "0.8.0-alpha".into(),
-+        filesystem: None,
-+        network: None,
-+        ui: None,
-+        timeout_ms: None,
-+    };
-+    let mut request = crate::build_request(&policy, None).unwrap();
-+    request
-+        .permit_host_acl_changes(std::slice::from_ref(&root))
-+        .unwrap();
-+    request.inner.host_filesystem = Some(wxc_common::host_changes::HostFilesystemAccess::ReadOnly);
-+    request.inner.host_filesystem_roots = vec![root.to_string_lossy().into_owned()];
-+    request.inner.require_process_security_environment = true;
-+    request.inner.prepared_files =
-+        Some(wxc_common::filesystem_object::FilesystemSnapshot::capture([root.clone()]).unwrap());
-+    request.inner.bubblewrap_executable = Some(root.join("bwrap"));
-+    let value: Launch = serde_json::from_str(&encode_inherited_launch(&request).unwrap()).unwrap();
-+    assert_eq!(value.host_acl_scope, request.inner.host_acl_scope);
-+    assert_eq!(value.host_filesystem, request.inner.host_filesystem);
-+    assert_eq!(
-+        value.host_filesystem_roots,
-+        request.inner.host_filesystem_roots
-+    );
-+    assert!(value.require_process_security_environment);
-+    assert_eq!(value.prepared_files, request.inner.prepared_files);
-+    assert_eq!(
-+        value.bubblewrap_executable,
-+        request.inner.bubblewrap_executable
-+    );
-+    value.prepared_files.as_ref().unwrap().validate().unwrap();
-+    std::fs::rename(&root, root.with_extension("moved")).unwrap();
-+    std::fs::create_dir(&root).unwrap();
-+    assert!(value.prepared_files.unwrap().validate().is_err());
-+    std::fs::remove_dir(root.with_extension("moved")).unwrap();
-+    // Ordinary public configuration still cannot populate embedding-only fields.
-+    assert!(value.request.host_acl_scope.is_none());
-+    assert!(value.request.host_filesystem.is_none());
-+    assert!(!value.request.require_process_security_environment);
-+}
-diff --git a/src/core/mxc_engine/src/lib.rs b/src/core/mxc_engine/src/lib.rs
---- a/src/core/mxc_engine/src/lib.rs
-+++ b/src/core/mxc_engine/src/lib.rs
-@@ -141,3 +141,8 @@
-         self.inner.stderr_closer()
-     }
- }
-+
-+mod request;
-+mod inherited;
-+pub use inherited::encode_inherited_launch;
-+pub use inherited::spawn_inherited_launch;
-diff --git a/src/core/mxc_engine/src/policy/network.rs b/src/core/mxc_engine/src/policy/network.rs
---- a/src/core/mxc_engine/src/policy/network.rs
-+++ b/src/core/mxc_engine/src/policy/network.rs
-@@ -75,6 +75,36 @@
- }
- 
- impl NetworkSection {
-+    /// Only the embedding application's loopback TCP proxy may be reached.
-+    /// Platform-specific enforcement remains inside MXC; ingress stays denied.
-+    pub fn managed_proxy(port: std::num::NonZeroU16) -> Self {
-+        let egress = NetworkEgressSection {
-+            default: Some(NetworkAction::Deny),
-+            allow: cfg!(windows).then(|| {
-+                vec![NetworkRuleSection {
-+                    to: Some(vec![NetworkPeerSection::new("127.0.0.1/32")]),
-+                    ports: Some(vec![NetworkPortSection {
-+                        protocol: Some(NetworkProtocol::Tcp),
-+                        port: Some(port.get()),
-+                        end_port: None,
-+                    }]),
-+                }]
-+            }),
-+            ..Default::default()
-+        };
-+        Self {
-+            egress: Some(egress),
-+            ingress: Some(NetworkIngressSection {
-+                default: Some(NetworkAction::Deny),
-+                host_loopback: Some(NetworkAction::Deny),
-+            }),
-+            runtime_config: (!cfg!(windows)).then(|| RuntimeConfigSection {
-+                network_proxy: Some(format!("http://127.0.0.1:{port}")),
-+            }),
-+            ..Default::default()
-+        }
-+    }
-+
-     pub(super) fn has_directional_fields(&self) -> bool {
-         self.egress.is_some()
-             || self.ingress.is_some()
-diff --git a/src/core/mxc_engine/src/policy.rs b/src/core/mxc_engine/src/policy.rs
---- a/src/core/mxc_engine/src/policy.rs
-+++ b/src/core/mxc_engine/src/policy.rs
-@@ -617,6 +617,7 @@
-     /// `spawnSandbox(script)` / `process.commandLine` is — behavior is identical
-     /// across the SDK and this crate.
-     pub fn set_script(&mut self, script: impl Into<String>) -> &mut Self {
-+        self.inner.prepared_files = None;
-         self.inner.script_code = script.into();
-         self
-     }
-@@ -624,6 +625,7 @@
-     /// Override the working directory the sandboxed child starts in. Left unset,
-     /// it defaults to the policy's resolution.
-     pub fn set_working_directory(&mut self, working_directory: impl Into<String>) -> &mut Self {
-+        self.inner.prepared_files = None;
-         self.inner.working_directory = working_directory.into();
-         self
-     }
-@@ -1323,6 +1325,7 @@
-             .contains(&"com.example.service".to_string()));
-     }
- 
-+    #[cfg(target_os = "windows")]
-     fn process_container_with_capture_denials(config: CaptureDenials) -> Containment {
-         Containment::ProcessContainer(ProcessContainer {
-             capture_denials: Some(config),
-@@ -1507,7 +1510,9 @@
-         assert!(request.inner.policy.network_proxy.is_enabled());
-     }
- 
--    use super::{build_request_with_containment, Containment, ProcessContainer, WslcSection};
-+    use super::{build_request_with_containment, Containment, WslcSection};
-+    #[cfg(target_os = "windows")]
-+    use super::ProcessContainer;
-     use wxc_common::models::ContainmentBackend;
- 
-     fn minimal_policy() -> SandboxPolicy {
-@@ -1715,3 +1720,5 @@
-         );
-     }
- }
-+
-+pub use wxc_common::host_changes::HostFilesystemAccess;
-diff --git a/src/core/mxc_engine/src/request.rs b/src/core/mxc_engine/src/request.rs
-new file mode 100644
---- /dev/null
-+++ b/src/core/mxc_engine/src/request.rs
-@@ -0,0 +1,202 @@
-+// Copyright (c) Microsoft Corporation.
-+// Licensed under the MIT License.
-+
-+//! Request construction controls used by embedding applications.
-+use crate::Error;
-+use crate::ErrorCode;
-+use crate::policy::HostFilesystemAccess;
-+use crate::policy::SandboxRequest;
-+use std::path::Path;
-+use std::path::PathBuf;
-+
-+impl SandboxRequest {
-+    /// Encodes an argv vector for this request's backend, without shell expansion of arguments.
-+    pub fn set_command(&mut self, argv: &[String]) -> Result<&mut Self, Error> {
-+        self.inner.prepared_files = None;
-+        if argv.is_empty() || argv[0].is_empty() || argv.iter().any(|arg| arg.contains('\0')) {
-+            return Err(Error::new(
-+                ErrorCode::MalformedRequest,
-+                "invalid command arguments",
-+            ));
-+        }
-+        use wxc_common::cmdline::CommandLineContext;
-+        let context = CommandLineContext::for_backend(&self.inner.containment);
-+        let command = wxc_common::cmdline::cmdline_from_argv_for_context(argv, context)
-+            .map_err(|error| Error::new(ErrorCode::MalformedRequest, error.to_string()))?;
-+        self.inner.script_code = if matches!(context, CommandLineContext::PosixShell) {
-+            format!("exec {command}")
-+        } else {
-+            command
-+        };
-+        Ok(self)
-+    }
-+
-+    /// Authorizes only scoped, temporary host ACL changes required by the requested filesystem policy.
-+    pub fn permit_host_acl_changes(&mut self, roots: &[PathBuf]) -> Result<&mut Self, Error> {
-+        self.inner.prepared_files = None;
-+        self.inner.host_acl_scope = Some(
-+            wxc_common::host_changes::HostAclScope::new(roots.iter().cloned())
-+                .map_err(|error| Error::new(ErrorCode::MalformedRequest, error.to_string()))?,
-+        );
-+        self.inner.policy.fallback.allow_dacl_mutation = true;
-+        self.inner.lifecycle.preserve_policy = false;
-+        Ok(self)
-+    }
-+
-+    /// Refuses any backend that would modify host ACLs to implement this request.
-+    pub fn forbid_host_acl_changes(&mut self) -> &mut Self {
-+        self.inner.prepared_files = None;
-+        self.inner.host_acl_scope = Some(Default::default());
-+        self.inner.policy.fallback.allow_dacl_mutation = false;
-+        self
-+    }
-+
-+    /// Binds Bubblewrap validation and launch to one caller-resolved executable.
-+    pub fn set_bubblewrap_executable(&mut self, executable: &Path) -> Result<&mut Self, Error> {
-+        let path = std::fs::canonicalize(executable)
-+            .map_err(|error| Error::new(ErrorCode::BackendUnavailable, error.to_string()))?;
-+        if !path.is_file() {
-+            return Err(Error::new(
-+                ErrorCode::BackendUnavailable,
-+                "Bubblewrap is not a regular file",
-+            ));
-+        }
-+        self.inner.bubblewrap_executable = Some(path);
-+        Ok(self)
-+    }
-+
-+    /// Restricts pathname Unix sockets to execution-owned directories on Seatbelt.
-+    pub fn restrict_seatbelt_unix_sockets(&mut self, paths: Vec<String>) -> &mut Self {
-+        let seatbelt = self.inner.seatbelt.get_or_insert_with(Default::default);
-+        seatbelt.allow_unix_sockets = false;
-+        seatbelt.allowed_unix_socket_paths = paths;
-+        self
-+    }
-+
-+    /// Set the host access ceiling without authorizing host ACL mutations.
-+    /// Windows roots are materialized only in a PSEC specification, never as
-+    /// legacy ACL targets or caller-delegated explicit path grants.
-+    pub fn set_host_filesystem(
-+        &mut self,
-+        access: HostFilesystemAccess,
-+    ) -> Result<&mut Self, Error> {
-+        self.inner.host_filesystem = Some(access);
-+        self.inner.prepared_files = None;
-+        self.inner.host_filesystem_roots.clear();
-+        for path in roots()? {
-+            let name = path
-+                .to_str()
-+                .ok_or_else(|| {
-+                    Error::new(
-+                        ErrorCode::MalformedRequest,
-+                        "host filesystem path is not Unicode",
-+                    )
-+                })?
-+                .to_owned();
-+            if self.inner.policy.readwrite_paths.contains(&name)
-+                || self.inner.policy.readonly_paths.contains(&name)
-+                || self.inner.policy.denied_paths.contains(&name)
-+            {
-+                continue;
-+            }
-+            #[cfg(windows)]
-+            self.inner.host_filesystem_roots.push(name);
-+            #[cfg(not(windows))]
-+            match access {
-+                HostFilesystemAccess::ReadOnly => self.inner.policy.readonly_paths.push(name),
-+                HostFilesystemAccess::ReadWrite => self.inner.policy.readwrite_paths.push(name),
-+            }
-+        }
-+        Ok(self)
-+    }
-+
-+    /// Requires the Windows ProcessContainer request to use PSEC even when the
-+    /// caller intentionally omits a host-wide filesystem visibility ceiling.
-+    pub fn require_process_security_environment(&mut self) -> &mut Self {
-+        self.inner.require_process_security_environment = true;
-+        self.inner.prepared_files = None;
-+        self
-+    }
-+
-+    /// Select a complete implementation without provisioning or starting a process.
-+    /// Spawn revalidates the selected implementation and never switches it after failure.
-+    pub fn prepare(&mut self) -> Result<&mut Self, Error> {
-+        #[cfg(windows)]
-+        if self.inner.containment == wxc_common::models::ContainmentBackend::ProcessContainer
-+            && (self.inner.host_filesystem.is_some()
-+                || self.inner.require_process_security_environment)
-+        {
-+            self.inner.prepared_files = Some(
-+                wxc_common::filesystem_object::FilesystemSnapshot::capture(
-+                    self.inner
-+                        .policy
-+                        .readwrite_paths
-+                        .iter()
-+                        .chain(&self.inner.policy.readonly_paths)
-+                        .chain(&self.inner.policy.denied_paths)
-+                        .map(PathBuf::from)
-+                        .chain(std::iter::once(PathBuf::from(
-+                            &self.inner.working_directory,
-+                        ))),
-+                )
-+                .map_err(|error| Error::new(ErrorCode::MalformedRequest, error.to_string()))?,
-+            );
-+            crate::dispatch::require_windows_psec(&self.inner).map_err(Error::from)?;
-+        }
-+        Ok(self)
-+    }
-+}
-+
-+#[cfg(test)]
-+#[path = "request_tests.rs"]
-+mod tests;
-+
-+#[cfg(not(windows))]
-+fn roots() -> Result<Vec<PathBuf>, Error> {
-+    Ok(vec![PathBuf::from("/")])
-+}
-+
-+#[cfg(windows)]
-+fn roots() -> Result<Vec<PathBuf>, Error> {
-+    let mask = unsafe { windows::Win32::Storage::FileSystem::GetLogicalDrives() };
-+    if mask == 0 {
-+        return Err(Error::new(
-+            ErrorCode::BackendUnavailable,
-+            "could not enumerate host volumes",
-+        ));
-+    }
-+    let mut paths = Vec::new();
-+    for index in 0..26 {
-+        if mask & (1 << index) == 0 {
-+            continue;
-+        }
-+        let root = PathBuf::from(format!("{}:\\", char::from(b'A' + index)));
-+        match std::fs::read_dir(&root) {
-+            Ok(entries) => {
-+                paths.push(root);
-+                for entry in entries {
-+                    paths.push(
-+                        entry
-+                            .map_err(|error| {
-+                                Error::new(ErrorCode::BackendError, error.to_string())
-+                            })?
-+                            .path(),
-+                    );
-+                    if paths.len() > 4096 {
-+                        return Err(Error::new(
-+                            ErrorCode::MalformedRequest,
-+                            "host filesystem expansion exceeds 4096 paths",
-+                        ));
-+                    }
-+                }
-+            }
-+            Err(error)
-+                if matches!(
-+                    error.kind(),
-+                    std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::NotFound
-+                ) || matches!(error.raw_os_error(), Some(21 | 53 | 1201 | 1167)) => {}
-+            Err(error) => return Err(Error::new(ErrorCode::BackendError, error.to_string())),
-+        }
-+    }
-+    Ok(paths)
-+}
-diff --git a/src/core/mxc_engine/src/request_tests.rs b/src/core/mxc_engine/src/request_tests.rs
-new file mode 100644
---- /dev/null
-+++ b/src/core/mxc_engine/src/request_tests.rs
-@@ -0,0 +1,87 @@
-+use super::*;
-+use crate::policy::FilesystemSection;
-+use crate::policy::SandboxPolicy;
-+
-+#[test]
-+fn host_read_ceiling_does_not_extend_acl_mutation_authority() {
-+    let temp = tempfile::tempdir().unwrap();
-+    let work = std::fs::canonicalize(temp.path()).unwrap();
-+    let policy = SandboxPolicy {
-+        version: "0.8.0-alpha".into(),
-+        filesystem: Some(FilesystemSection {
-+            readwrite_paths: vec![work.to_str().unwrap().into()],
-+            ..Default::default()
-+        }),
-+        network: None,
-+        ui: None,
-+        timeout_ms: None,
-+    };
-+    let mut request = crate::build_request(&policy, None).unwrap();
-+    request
-+        .set_host_filesystem(HostFilesystemAccess::ReadOnly)
-+        .unwrap();
-+    request
-+        .permit_host_acl_changes(std::slice::from_ref(&work))
-+        .unwrap();
-+    let authority = request.inner.host_acl_scope.as_ref().unwrap();
-+    authority.check(&work).unwrap();
-+    assert!(authority.check(work.parent().unwrap()).is_err());
-+    #[cfg(windows)]
-+    {
-+        assert!(request.inner.policy.readonly_paths.is_empty());
-+        assert!(!request.inner.host_filesystem_roots.is_empty());
-+    }
-+}
-+
-+#[test]
-+fn managed_proxy_never_opens_general_ingress() {
-+    use crate::policy::NetworkSection;
-+    let network = NetworkSection::managed_proxy(3128.try_into().unwrap());
-+    assert_eq!(
-+        network.egress.as_ref().unwrap().default,
-+        Some(crate::NetworkAction::Deny)
-+    );
-+    let ingress = network.ingress.as_ref().unwrap();
-+    assert_eq!(ingress.default, Some(crate::NetworkAction::Deny));
-+    assert_eq!(ingress.host_loopback, Some(crate::NetworkAction::Deny));
-+    #[cfg(windows)]
-+    {
-+        let rules = network.egress.as_ref().unwrap().allow.as_ref().unwrap();
-+        assert_eq!(rules.len(), 1);
-+        let rule = &rules[0];
-+        assert_eq!(rule.to.as_ref().unwrap()[0].cidr, "127.0.0.1/32");
-+        let port = &rule.ports.as_ref().unwrap()[0];
-+        assert_eq!(port.protocol, Some(crate::NetworkProtocol::Tcp));
-+        assert_eq!(port.port, Some(3128));
-+        assert_eq!(port.end_port, None);
-+        assert!(network.runtime_config.is_none());
-+    }
-+    #[cfg(not(windows))]
-+    assert_eq!(
-+        network.runtime_config.unwrap().network_proxy.as_deref(),
-+        Some("http://127.0.0.1:3128")
-+    );
-+}
-+
-+#[cfg(windows)]
-+#[test]
-+fn psec_can_be_required_without_opening_host_read_access() {
-+    let policy = SandboxPolicy {
-+        version: "0.8.0-alpha".into(),
-+        filesystem: Some(FilesystemSection::default()),
-+        network: None,
-+        ui: None,
-+        timeout_ms: None,
-+    };
-+    let mut request = crate::build_request_with_containment(
-+        &policy,
-+        &crate::Containment::ProcessContainer(Default::default()),
-+        None,
-+    )
-+    .unwrap();
-+
-+    request.require_process_security_environment();
-+
-+    assert!(request.inner.require_process_security_environment);
-+    assert!(request.inner.host_filesystem.is_none());
-+}
 diff --git a/src/core/wxc_common/Cargo.toml b/src/core/wxc_common/Cargo.toml
 --- a/src/core/wxc_common/Cargo.toml
 +++ b/src/core/wxc_common/Cargo.toml
-@@ -1,41 +1,39 @@
+@@ -1,54 +1,46 @@
 -[package]
 -name = "wxc_common"
 -version.workspace = true
@@ -730,20 +12,15 @@ diff --git a/src/core/wxc_common/Cargo.toml b/src/core/wxc_common/Cargo.toml
 -microvm = ["dep:nanvix_common", "dep:uuid"]
 -# Enables JSON Schema generation from the dedicated wire model. Off by default
 -# so normal builds don't carry schemars.
-+[package]
-+name = "wxc_common"
-+version = "0.8.0"
-+edition = "2021"
-+license = "MIT"
-+
-+[features]
-+microvm = ["dep:nanvix_common", "dep:uuid"]
- schema-gen = ["dep:mxc_schema_support", "dep:schemars"]
+-schema-gen = ["dep:mxc_schema_support", "dep:schemars"]
+-# Exposes telemetry test harnesses to downstream integration tests.
+-test-support = []
 -
 -[dependencies]
 -serde = { workspace = true }
 -serde_json = { workspace = true, features = ["raw_value"] }
 -serde_path_to_error = { workspace = true }
+-sha2 = { workspace = true }
 -unicode-general-category = { workspace = true }
 -thiserror = { workspace = true }
 -base64 = { workspace = true }
@@ -759,7 +36,12 @@ diff --git a/src/core/wxc_common/Cargo.toml b/src/core/wxc_common/Cargo.toml
 -mxc_telemetry = { workspace = true }
 -
 -[target.'cfg(target_os = "windows")'.dependencies]
--windows = { workspace = true, features = ["Win32_Globalization"] }
+-windows = { workspace = true, features = [
+-    "Win32_Foundation",
+-    "Win32_Globalization",
+-    "Win32_Storage_FileSystem",
+-    "Win32_System_IO",
+-] }
 -windows-core = { workspace = true }
 -widestring = { workspace = true }
 -winreg = { workspace = true }
@@ -768,9 +50,25 @@ diff --git a/src/core/wxc_common/Cargo.toml b/src/core/wxc_common/Cargo.toml
 -libc = { workspace = true }
 -
 -[dev-dependencies]
+-filetime = "0.2"
 -tempfile.workspace = true
+-
+-[build-dependencies]
+-serde.workspace = true
+-serde_json.workspace = true
++[package]
++name = "wxc_common"
++version = "0.8.0"
++edition = "2021"
++license = "MIT"
++
++[features]
++test-support = []
++microvm = ["dep:nanvix_common", "dep:uuid"]
++schema-gen = ["dep:mxc_schema_support", "dep:schemars"]
 +
 +[dependencies]
++sha2 = "0.10"
 +serde = { "version" = "1", "features" = ["derive"] }
 +serde_json = { "version" = "1", "features" = ["raw_value"] }
 +serde_path_to_error = { "version" = "0.1" }
@@ -782,11 +80,11 @@ diff --git a/src/core/wxc_common/Cargo.toml b/src/core/wxc_common/Cargo.toml
 +getrandom = { "version" = "0.2" }
 +semver = "1"
 +schemars = { "version" = "0.8", "optional" = true }
-+nanvix_common = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4", "optional" = true }
++nanvix_common = { "git" = "https://github.com/microsoft/mxc", "rev" = "ca7ea12ac6bd9f5420d6adecb37e32a8158da476", "optional" = true }
 +uuid = { "version" = "1", "features" = ["v4"], "optional" = true }
-+mxc_config_contract = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4" }
-+mxc_schema_support = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4", "optional" = true }
-+mxc_telemetry = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4" }
++mxc_config_contract = { "git" = "https://github.com/microsoft/mxc", "rev" = "ca7ea12ac6bd9f5420d6adecb37e32a8158da476" }
++mxc_schema_support = { "git" = "https://github.com/microsoft/mxc", "rev" = "ca7ea12ac6bd9f5420d6adecb37e32a8158da476", "optional" = true }
++mxc_telemetry = { "git" = "https://github.com/microsoft/mxc", "rev" = "ca7ea12ac6bd9f5420d6adecb37e32a8158da476" }
 +
 +[target."cfg(target_os = \"windows\")".dependencies]
 +windows = { "version" = "0.62", "features" = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_NetworkManagement_WindowsFirewall", "Win32_Security", "Win32_Security_Authorization", "Win32_Security_Credentials", "Win32_Security_Isolation", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_Diagnostics_Debug", "Win32_System_Diagnostics_Etw", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Environment", "Win32_System_IO", "Win32_System_JobObjects", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Ole", "Win32_System_Pipes", "Win32_System_ProcessStatus", "Win32_System_Registry", "Win32_System_SystemInformation", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_Time", "Win32_System_Variant", "Win32_System_WindowsProgramming", "Win32_UI_Shell", "Win32_Globalization"] }
@@ -798,14 +96,19 @@ diff --git a/src/core/wxc_common/Cargo.toml b/src/core/wxc_common/Cargo.toml
 +libc = { "version" = "0.2" }
 +
 +[dev-dependencies]
++filetime = "0.2"
 +tempfile = { "version" = "3" }
++
++[build-dependencies]
++serde = { version = "1", features = ["derive"] }
++serde_json = "1"
 diff --git a/src/core/wxc_common/src/config_contract_adapters/dev/mod.rs b/src/core/wxc_common/src/config_contract_adapters/dev.rs
 rename from src/core/wxc_common/src/config_contract_adapters/dev/mod.rs
 rename to src/core/wxc_common/src/config_contract_adapters/dev.rs
 diff --git a/src/core/wxc_common/src/config_contract_adapters/dev/one_shot.rs b/src/core/wxc_common/src/config_contract_adapters/dev/one_shot.rs
 --- a/src/core/wxc_common/src/config_contract_adapters/dev/one_shot.rs
 +++ b/src/core/wxc_common/src/config_contract_adapters/dev/one_shot.rs
-@@ -320,5 +320,5 @@
+@@ -319,5 +319,5 @@
  }
  
  #[cfg(test)]
@@ -830,7 +133,7 @@ rename to src/core/wxc_common/src/config_contract_adapters/dev/one_shot_tests.rs
 diff --git a/src/core/wxc_common/src/config_contract_adapters/dev/state_aware.rs b/src/core/wxc_common/src/config_contract_adapters/dev/state_aware.rs
 --- a/src/core/wxc_common/src/config_contract_adapters/dev/state_aware.rs
 +++ b/src/core/wxc_common/src/config_contract_adapters/dev/state_aware.rs
-@@ -450,5 +450,5 @@
+@@ -306,5 +306,5 @@
  }
  
  #[cfg(test)]
@@ -864,18 +167,7 @@ rename to src/core/wxc_common/src/config_contract_adapters.rs
 diff --git a/src/core/wxc_common/src/config_parser.rs b/src/core/wxc_common/src/config_parser.rs
 --- a/src/core/wxc_common/src/config_parser.rs
 +++ b/src/core/wxc_common/src/config_parser.rs
-@@ -15,8 +15,8 @@
- };
- use crate::mxc_error::MxcError;
- use crate::network_parser::{
--    directional_network_version_error, host_is_any_loopback, parse_network_policy,
--    supports_directional_network, NetworkSections,
-+    NetworkSections, directional_network_version_error, host_is_any_loopback, parse_network_policy,
-+    supports_directional_network,
- };
- use crate::state_aware_request::{MxcRequest, ParsedStateAwareRequest, Phase};
- use crate::wire;
-@@ -614,6 +614,8 @@
+@@ -1293,6 +1293,8 @@
          extra_mach_lookups,
      } = sb;
      SeatbeltConfig {
@@ -884,107 +176,14 @@ diff --git a/src/core/wxc_common/src/config_parser.rs b/src/core/wxc_common/src/
          profile_override,
          gui_access: gui_access.unwrap_or(false),
          launch_method: launch_method.map(Into::into).unwrap_or_default(),
-@@ -1342,6 +1344,12 @@
+@@ -2032,6 +2034,7 @@
      }
  
      Ok(ExecutionRequest {
-+        host_acl_scope: None,
-+        host_filesystem: None,
-+        host_filesystem_roots: Vec::new(),
-+        require_process_security_environment: false,
-+        prepared_files: None,
 +        bubblewrap_executable: None,
          schema_version,
          container_id,
          env,
-@@ -1586,7 +1594,7 @@
-         _ => {
-             return Err(WxcError::ConfigParse(
-                 "Unable to locate the experimental configuration block".to_string(),
--            ))
-+            ));
-         }
-     };
- 
-@@ -2196,9 +2204,10 @@
-         assert_eq!(masked[..start], json[..start]);
-         assert_eq!(masked[end..], json[end..]);
-         let span = &masked[start..end];
--        assert!(span
--            .bytes()
--            .all(|b| matches!(b, b'{' | b'}' | b' ' | b'\r' | b'\n')));
-+        assert!(
-+            span.bytes()
-+                .all(|b| matches!(b, b'{' | b'}' | b' ' | b'\r' | b'\n'))
-+        );
-         assert_eq!(span.bytes().filter(|b| *b == b'{').count(), 1);
-         assert_eq!(span.bytes().filter(|b| *b == b'}').count(), 1);
-     }
-@@ -2372,10 +2381,11 @@
-         assert_eq!(req.script_timeout, 3000);
-         assert_eq!(req.container_id, "TestProfile");
-         assert!(req.policy.least_privilege_mode);
--        assert!(req
--            .policy
--            .capabilities
--            .contains(&"internetClient".to_string()));
-+        assert!(
-+            req.policy
-+                .capabilities
-+                .contains(&"internetClient".to_string())
-+        );
-         assert_eq!(req.policy.readwrite_paths, vec!["C:\\rw"]);
-         assert_eq!(req.policy.readonly_paths, vec!["C:\\ro"]);
-         assert_eq!(req.policy.denied_paths, vec!["C:\\denied"]);
-@@ -2662,15 +2672,17 @@
-         let mut logger = test_logger();
- 
-         let req = load_request(&encoded, &mut logger, true).unwrap();
--        assert!(req
--            .policy
--            .capabilities
--            .contains(&"learningModeLogging".to_string()));
-+        assert!(
-+            req.policy
-+                .capabilities
-+                .contains(&"learningModeLogging".to_string())
-+        );
-         // The boolean must NOT inject the allow-all permissive capability.
--        assert!(!req
--            .policy
--            .capabilities
--            .contains(&"permissiveLearningMode".to_string()));
-+        assert!(
-+            !req.policy
-+                .capabilities
-+                .contains(&"permissiveLearningMode".to_string())
-+        );
-     }
- 
-     #[test]
-@@ -5646,12 +5658,16 @@
-             Err(error) => error,
-         };
- 
--        assert!(discriminator_err
--            .to_string()
--            .contains("expected a configuration object"));
--        assert!(wire_err
--            .to_string()
--            .contains("expected a configuration object"));
-+        assert!(
-+            discriminator_err
-+                .to_string()
-+                .contains("expected a configuration object")
-+        );
-+        assert!(
-+            wire_err
-+                .to_string()
-+                .contains("expected a configuration object")
-+        );
-     }
- 
-     #[test]
 diff --git a/src/core/wxc_common/src/filesystem_dacl.rs b/src/core/wxc_common/src/filesystem_dacl.rs
 --- a/src/core/wxc_common/src/filesystem_dacl.rs
 +++ b/src/core/wxc_common/src/filesystem_dacl.rs
@@ -1395,7 +594,7 @@ diff --git a/src/core/wxc_common/src/host_changes.rs b/src/core/wxc_common/src/h
 new file mode 100644
 --- /dev/null
 +++ b/src/core/wxc_common/src/host_changes.rs
-@@ -0,0 +1,52 @@
+@@ -0,0 +1,45 @@
 +// Copyright (c) Microsoft Corporation.
 +// Licensed under the MIT License.
 +
@@ -1438,13 +637,6 @@ new file mode 100644
 +    }
 +}
 +
-+/// A ceiling on host filesystem access, separate from explicit path grants.
-+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
-+pub enum HostFilesystemAccess {
-+    ReadOnly,
-+    ReadWrite,
-+}
-+
 +#[cfg(test)]
 +#[path = "host_changes_tests.rs"]
 +mod tests;
@@ -1452,7 +644,7 @@ diff --git a/src/core/wxc_common/src/host_changes_tests.rs b/src/core/wxc_common
 new file mode 100644
 --- /dev/null
 +++ b/src/core/wxc_common/src/host_changes_tests.rs
-@@ -0,0 +1,75 @@
+@@ -0,0 +1,76 @@
 +use super::HostAclScope;
 +use std::path::PathBuf;
 +
@@ -1508,9 +700,10 @@ new file mode 100644
 +        "prepared_files": {"objects": []}
 +    }))
 +    .unwrap();
-+    assert!(request.host_acl_scope.is_none());
-+    assert!(request.host_filesystem.is_none());
-+    assert!(request.prepared_files.is_none());
++    let serialized = serde_json::to_value(request).unwrap();
++    assert!(serialized.get("host_acl_scope").is_none());
++    assert!(serialized.get("host_filesystem").is_none());
++    assert!(serialized.get("prepared_files").is_none());
 +}
 +
 +#[cfg(unix)]
@@ -1531,7 +724,7 @@ new file mode 100644
 diff --git a/src/core/wxc_common/src/lib.rs b/src/core/wxc_common/src/lib.rs
 --- a/src/core/wxc_common/src/lib.rs
 +++ b/src/core/wxc_common/src/lib.rs
-@@ -13,6 +13,7 @@
+@@ -14,6 +14,7 @@
  pub mod filesystem_canonical;
  pub mod filesystem_object;
  pub mod filesystem_resolve;
@@ -1590,12 +783,11 @@ diff --git a/src/core/wxc_common/src/log_symbols.rs b/src/core/wxc_common/src/lo
 diff --git a/src/core/wxc_common/src/models.rs b/src/core/wxc_common/src/models.rs
 --- a/src/core/wxc_common/src/models.rs
 +++ b/src/core/wxc_common/src/models.rs
-@@ -139,6 +139,13 @@
+@@ -138,6 +138,12 @@
  #[derive(Debug, Clone, Serialize, Deserialize)]
  #[serde(default)]
  pub struct SeatbeltConfig {
 +    /// Whether writable filesystem grants may also open pathname Unix sockets.
-+    #[serde(default = "default_true")]
 +    pub allow_unix_sockets: bool,
 +    /// Embedding-only directories where pathname Unix sockets remain available
 +    /// when `allow_unix_sockets` is false.
@@ -1604,7 +796,7 @@ diff --git a/src/core/wxc_common/src/models.rs b/src/core/wxc_common/src/models.
      /// Optional override of the generated TinyScheme profile.
      #[serde(rename = "profileOverride", skip_serializing_if = "Option::is_none")]
      pub profile_override: Option<String>,
-@@ -204,6 +211,8 @@
+@@ -203,6 +209,8 @@
  impl Default for SeatbeltConfig {
      fn default() -> Self {
          Self {
@@ -1613,30 +805,28 @@ diff --git a/src/core/wxc_common/src/models.rs b/src/core/wxc_common/src/models.
              profile_override: None,
              gui_access: false,
              launch_method: LaunchMethod::default(),
-@@ -944,6 +953,23 @@
+@@ -995,6 +1003,9 @@
  #[derive(Debug, Clone, Default, Serialize, Deserialize)]
  #[serde(default)]
  pub struct ExecutionRequest {
-+    /// Embedding-only authority; never supplied by a serialized command.
-+    #[serde(skip)]
-+    pub host_acl_scope: Option<crate::host_changes::HostAclScope>,
-+    /// Host access ceiling, materialized by the chosen implementation.
-+    #[serde(skip)]
-+    pub host_filesystem: Option<crate::host_changes::HostFilesystemAccess>,
-+    #[serde(skip)]
-+    pub host_filesystem_roots: Vec<String>,
-+    /// Embedding-only requirement that forbids ProcessContainer from selecting
-+    /// AppContainer or host-DACL implementations for this request.
-+    #[serde(skip)]
-+    pub require_process_security_environment: bool,
-+    #[serde(skip)]
-+    pub prepared_files: Option<crate::filesystem_object::FilesystemSnapshot>,
 +    /// Host-resolved executable; unavailable to untrusted serialized requests.
 +    #[serde(skip)]
 +    pub bubblewrap_executable: Option<std::path::PathBuf>,
      /// Schema version for the config format.
      pub schema_version: String,
      /// Externally assigned container identifier.
+diff --git a/src/core/wxc_common/src/policy_identity.rs b/src/core/wxc_common/src/policy_identity.rs
+--- a/src/core/wxc_common/src/policy_identity.rs
++++ b/src/core/wxc_common/src/policy_identity.rs
+@@ -186,6 +186,8 @@
+ /// that keeps the allow-list from silently falling behind the model.
+ fn policy_projection(request: &ExecutionRequest) -> Value {
+     let ExecutionRequest {
++        // Host-resolved launcher location does not change sandbox policy.
++        bubblewrap_executable: _excluded_bubblewrap_executable,
+         schema_version,
+         container_id,
+         working_directory,
 diff --git a/src/core/wxc_common/src/proxy_env.rs b/src/core/wxc_common/src/proxy_env.rs
 --- a/src/core/wxc_common/src/proxy_env.rs
 +++ b/src/core/wxc_common/src/proxy_env.rs
@@ -1704,7 +894,7 @@ diff --git a/src/core/wxc_common/src/proxy_env.rs b/src/core/wxc_common/src/prox
 diff --git a/src/core/wxc_common/src/sandbox_process.rs b/src/core/wxc_common/src/sandbox_process.rs
 --- a/src/core/wxc_common/src/sandbox_process.rs
 +++ b/src/core/wxc_common/src/sandbox_process.rs
-@@ -747,3 +747,34 @@
+@@ -752,3 +752,34 @@
          assert!(status.success());
      }
  }
@@ -1739,10 +929,47 @@ diff --git a/src/core/wxc_common/src/sandbox_process.rs b/src/core/wxc_common/sr
 +        -1
 +    }))
 +}
+diff --git a/src/core/wxc_common/src/telemetry/consent_cli.rs b/src/core/wxc_common/src/telemetry/consent_cli.rs
+--- a/src/core/wxc_common/src/telemetry/consent_cli.rs
++++ b/src/core/wxc_common/src/telemetry/consent_cli.rs
+@@ -821,21 +821,21 @@
+             (
+                 include_str!(concat!(
+                     env!("CARGO_MANIFEST_DIR"),
+-                    "/../../../tests/fixtures/telemetry-consent/presenter-decision-yes.json"
++                    "/tests/fixtures/telemetry-consent/presenter-decision-yes.json"
+                 )),
+                 consent::ConsentDecision::Yes,
+             ),
+             (
+                 include_str!(concat!(
+                     env!("CARGO_MANIFEST_DIR"),
+-                    "/../../../tests/fixtures/telemetry-consent/presenter-decision-no.json"
++                    "/tests/fixtures/telemetry-consent/presenter-decision-no.json"
+                 )),
+                 consent::ConsentDecision::No,
+             ),
+             (
+                 include_str!(concat!(
+                     env!("CARGO_MANIFEST_DIR"),
+-                    "/../../../tests/fixtures/telemetry-consent/presenter-decision-dismissed.json"
++                    "/tests/fixtures/telemetry-consent/presenter-decision-dismissed.json"
+                 )),
+                 consent::ConsentDecision::Dismissed,
+             ),
+@@ -849,7 +849,7 @@
+         }
+         let invalid = include_str!(concat!(
+             env!("CARGO_MANIFEST_DIR"),
+-            "/../../../tests/fixtures/telemetry-consent/presenter-decision-unknown-field.json"
++            "/tests/fixtures/telemetry-consent/presenter-decision-unknown-field.json"
+         ));
+         assert_eq!(
+             parse_presenter_response(invalid, "request-a", 1)
 diff --git a/src/core/wxc_common/src/telemetry/events.rs b/src/core/wxc_common/src/telemetry/events.rs
 --- a/src/core/wxc_common/src/telemetry/events.rs
 +++ b/src/core/wxc_common/src/telemetry/events.rs
-@@ -1,249 +1,249 @@
+@@ -1,868 +1,868 @@
 -// Copyright (c) Microsoft Corporation.
 -// Licensed under the MIT License.
 -
@@ -1808,9 +1035,11 @@ diff --git a/src/core/wxc_common/src/telemetry/events.rs b/src/core/wxc_common/s
 -    pub correlation_vector: &'a str,
 -}
 -
--/// Data for an MXC.Execution ETW event.
+-/// Data for an Execution ETW event.
 -pub struct ExecutionEvent<'a> {
 -    pub backend: &'a str,
+-    /// Containment kind requested by the caller before host-specific resolution.
+-    pub sandbox_kind: &'a str,
 -    pub exit_code: i32,
 -    pub outcome: &'a str,
 -    pub duration_ms: u64,
@@ -1827,7 +1056,26 @@ diff --git a/src/core/wxc_common/src/telemetry/events.rs b/src/core/wxc_common/s
 -    pub correlation_vector: &'a str,
 -}
 -
--/// Log an MXC.Execution ETW event.
+-/// One independently parseable chunk of a Learning Mode verbose document.
+-#[derive(Debug, Clone, Copy)]
+-pub struct VerboseEvent<'a> {
+-    pub backend: &'a str,
+-    pub sandbox_kind: &'a str,
+-    pub phase: &'a str,
+-    pub correlation_vector: &'a str,
+-    pub document_id: &'a str,
+-    pub document_version: u32,
+-    pub chunk_index: u32,
+-    pub chunk_count: u32,
+-    pub document_bytes: u64,
+-    pub document_sha256: &'a str,
+-    /// Compact JSON array of complete `VerboseLoggingAggregate` objects.
+-    pub content: &'a str,
+-    /// Compact JSON `VerboseLoggingDocumentSummary` object.
+-    pub summary: &'a str,
+-}
+-
+-/// Log an Execution ETW event.
 -///
 -/// Delegates to the `mxc_telemetry` provider which adds common fields
 -/// (Version, Channel, IsDebugging, UTCReplace_AppSessionGuid).
@@ -1836,6 +1084,7 @@ diff --git a/src/core/wxc_common/src/telemetry/events.rs b/src/core/wxc_common/s
 -
 -    mxc_telemetry::log_execution(
 -        event.backend,
+-        event.sandbox_kind,
 -        event.exit_code,
 -        event.outcome,
 -        event.duration_ms,
@@ -1848,16 +1097,23 @@ diff --git a/src/core/wxc_common/src/telemetry/events.rs b/src/core/wxc_common/s
 -    test_sink::record_execution(event);
 -}
 -
--/// Log an MXC.Error ETW event.
+-/// Log an Error ETW event.
 -///
 -/// To avoid leaking PII (paths, usernames, credentials embedded in error
 -/// strings), MXC deliberately does **not** emit the free-form error message.
 -/// The event carries only the bounded `error_type` category, the process
--/// `exit_code`, and the [`TelemetryContext`] attribution (backend, lifecycle
--/// phase, and correlation vector — the latter two empty for one-shot).
--pub fn log_error(ctx: TelemetryContext<'_>, error_type: FailureReason, exit_code: i32) {
+-/// `exit_code`, the caller-requested `sandbox_kind`, and the
+-/// [`TelemetryContext`] attribution (backend, lifecycle phase, and correlation
+-/// vector — the latter two empty for one-shot).
+-pub fn log_error(
+-    ctx: TelemetryContext<'_>,
+-    sandbox_kind: &str,
+-    error_type: FailureReason,
+-    exit_code: i32,
+-) {
 -    mxc_telemetry::log_error(
 -        ctx.backend,
+-        sandbox_kind,
 -        error_type.as_str(),
 -        exit_code,
 -        ctx.phase,
@@ -1865,7 +1121,201 @@ diff --git a/src/core/wxc_common/src/telemetry/events.rs b/src/core/wxc_common/s
 -    );
 -
 -    #[cfg(test)]
--    test_sink::record_error(ctx, error_type, exit_code);
+-    test_sink::record_error(ctx, sandbox_kind, error_type, exit_code);
+-}
+-
+-/// Log one `MXC.VerboseDenials` ETW event.
+-pub fn log_verbose(event: &VerboseEvent<'_>) -> u32 {
+-    let status = mxc_telemetry::log_verbose(
+-        event.backend,
+-        event.sandbox_kind,
+-        event.phase,
+-        event.correlation_vector,
+-        event.document_id,
+-        event.document_version,
+-        event.chunk_index,
+-        event.chunk_count,
+-        event.document_bytes,
+-        event.document_sha256,
+-        event.content,
+-        event.summary,
+-    );
+-
+-    #[cfg(test)]
+-    test_sink::record_verbose(event);
+-
+-    status
+-}
+-
+-/// Emit a process lifecycle event required by the Windows diagnostics
+-/// contract. The event kind and payload are coupled in a single enum
+-/// to make mismatches unrepresentable at compile time.
+-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+-pub enum ProcessEvent<'a> {
+-    Exited(i32),
+-    TimedOut(u64),
+-    /// Kill method attempted, plus the numeric OS error code returned by the
+-    /// failed termination call (e.g. `error.code().0` on Windows), so ETW
+-    /// consumers can see *why* the kill failed, not just what was attempted.
+-    KillFailed(&'a str, i32),
+-}
+-
+-fn requirement_emission_allowed() -> bool {
+-    super::process_can_emit()
+-}
+-
+-pub fn log_process_event(identity: &str, process_id: u32, event: ProcessEvent<'_>) {
+-    if !requirement_emission_allowed() {
+-        return;
+-    }
+-
+-    match event {
+-        ProcessEvent::Exited(exit_code) => {
+-            mxc_telemetry::log_process_exited(identity, process_id, exit_code);
+-        }
+-        ProcessEvent::TimedOut(timeout_ms) => {
+-            mxc_telemetry::log_process_timed_out(identity, process_id, timeout_ms);
+-        }
+-        ProcessEvent::KillFailed(error_type, error_code) => {
+-            mxc_telemetry::log_process_kill_failed(identity, process_id, error_type, error_code);
+-        }
+-    }
+-
+-    #[cfg(test)]
+-    test_sink::record_process(identity, process_id, event);
+-}
+-
+-pub fn log_enforcement_degraded(
+-    identity: &str,
+-    tier: &str,
+-    needs_dacl_augmentation: bool,
+-    degradation_reasons: &str,
+-    effective_enforcement_level: &str,
+-) {
+-    if !requirement_emission_allowed() {
+-        return;
+-    }
+-
+-    mxc_telemetry::log_enforcement_degraded(
+-        identity,
+-        tier,
+-        needs_dacl_augmentation,
+-        degradation_reasons,
+-        effective_enforcement_level,
+-    );
+-    #[cfg(test)]
+-    test_sink::record_requirement(
+-        "MXC.EnforcementDegraded",
+-        vec![
+-            ("identity".to_owned(), identity.to_owned()),
+-            ("tier".to_owned(), tier.to_owned()),
+-            (
+-                "needs_dacl_augmentation".to_owned(),
+-                needs_dacl_augmentation.to_string(),
+-            ),
+-            (
+-                "degradation_reasons".to_owned(),
+-                degradation_reasons.to_owned(),
+-            ),
+-            (
+-                "effective_enforcement_level".to_owned(),
+-                effective_enforcement_level.to_owned(),
+-            ),
+-        ],
+-    );
+-}
+-
+-pub fn log_policy_hash(identity: &str, policy_hash: &str, config_schema_version: &str) {
+-    if !requirement_emission_allowed() {
+-        return;
+-    }
+-
+-    mxc_telemetry::log_policy_hash(identity, policy_hash, config_schema_version);
+-    #[cfg(test)]
+-    test_sink::record_requirement(
+-        "MXC.PolicyHash",
+-        vec![
+-            ("identity".to_owned(), identity.to_owned()),
+-            ("policy_hash".to_owned(), policy_hash.to_owned()),
+-            (
+-                "config_schema_version".to_owned(),
+-                config_schema_version.to_owned(),
+-            ),
+-        ],
+-    );
+-}
+-
+-pub fn log_network_policy_applied(
+-    identity: &str,
+-    enforcement_mode: &str,
+-    default_policy: &str,
+-    proxy_port: u64,
+-) {
+-    if !requirement_emission_allowed() {
+-        return;
+-    }
+-
+-    mxc_telemetry::log_network_policy_applied(
+-        identity,
+-        enforcement_mode,
+-        default_policy,
+-        proxy_port,
+-    );
+-    #[cfg(test)]
+-    test_sink::record_requirement(
+-        "MXC.SandboxNetworkPolicyApplied",
+-        vec![
+-            ("identity".to_owned(), identity.to_owned()),
+-            ("enforcement_mode".to_owned(), enforcement_mode.to_owned()),
+-            ("default_policy".to_owned(), default_policy.to_owned()),
+-            ("proxy_port".to_owned(), proxy_port.to_string()),
+-        ],
+-    );
+-}
+-
+-pub fn log_sandbox_torn_down(identity: &str, status: &str, released_resources: &str) {
+-    if !requirement_emission_allowed() {
+-        return;
+-    }
+-
+-    mxc_telemetry::log_sandbox_torn_down(identity, status, released_resources);
+-    #[cfg(test)]
+-    test_sink::record_requirement(
+-        "MXC.SandboxTornDown",
+-        vec![
+-            ("identity".to_owned(), identity.to_owned()),
+-            ("status".to_owned(), status.to_owned()),
+-            (
+-                "released_resources".to_owned(),
+-                released_resources.to_owned(),
+-            ),
+-        ],
+-    );
+-}
+-
+-pub fn log_config_rejected(
+-    correlation_id: &str,
+-    backend: &str,
+-    reason: &str,
+-    offending_field: &str,
+-    phase: &str,
+-) {
+-    if !requirement_emission_allowed() {
+-        return;
+-    }
+-
+-    mxc_telemetry::log_config_rejected(correlation_id, backend, reason, offending_field, phase);
+-    #[cfg(test)]
+-    test_sink::record_requirement(
+-        "MXC.ConfigRejected",
+-        vec![
+-            ("correlation_id".to_owned(), correlation_id.to_owned()),
+-            ("backend".to_owned(), backend.to_owned()),
+-            ("reason".to_owned(), reason.to_owned()),
+-            ("offending_field".to_owned(), offending_field.to_owned()),
+-            ("phase".to_owned(), phase.to_owned()),
+-        ],
+-    );
 -}
 -
 -/// In-memory capture sink for the two ETW emit calls, so tests can assert the
@@ -1875,14 +1325,24 @@ diff --git a/src/core/wxc_common/src/telemetry/events.rs b/src/core/wxc_common/s
 -/// `mxc_telemetry` call regardless.
 -#[cfg(test)]
 -pub(super) mod test_sink {
--    use super::{ExecutionEvent, FailureReason, TelemetryContext};
+-    use super::{ExecutionEvent, FailureReason, ProcessEvent, TelemetryContext, VerboseEvent};
 -    use std::cell::Cell;
 -    use std::sync::Mutex;
 -
--    /// Owned copy of an `MXC.Execution` record as captured for a test.
+-    /// Serializes any test that installs/clears this capture sink or drives
+-    /// the emit glue in `telemetry::tests`, since `EXECUTIONS`/`ERRORS`/
+-    /// `REQUIREMENTS` below (and the process-global emit-slot state in the
+-    /// parent module) are shared regardless of which thread `cargo test`
+-    /// happens to run a given test on. Every test that touches this module,
+-    /// directly or via the parent module's emit helpers, must hold this lock
+-    /// for its capture window.
+-    pub(crate) static TEST_LOCK: Mutex<()> = Mutex::new(());
+-
+-    /// Owned copy of an `Execution` record as captured for a test.
 -    #[derive(Debug, Clone, PartialEq, Eq)]
 -    pub struct CapturedExecution {
 -        pub backend: String,
+-        pub sandbox_kind: String,
 -        pub exit_code: i32,
 -        pub outcome: String,
 -        pub duration_ms: u64,
@@ -1891,14 +1351,38 @@ diff --git a/src/core/wxc_common/src/telemetry/events.rs b/src/core/wxc_common/s
 -        pub correlation_vector: String,
 -    }
 -
--    /// Owned copy of an `MXC.Error` record as captured for a test.
+-    /// Owned copy of an `Error` record as captured for a test.
 -    #[derive(Debug, Clone, PartialEq, Eq)]
 -    pub struct CapturedError {
 -        pub backend: String,
+-        pub sandbox_kind: String,
 -        pub error_type: FailureReason,
 -        pub exit_code: i32,
 -        pub phase: String,
 -        pub correlation_vector: String,
+-    }
+-
+-    /// Owned copy of an `MXC.VerboseDenials` record as captured for a test.
+-    #[derive(Debug, Clone, PartialEq, Eq)]
+-    pub struct CapturedVerbose {
+-        pub backend: String,
+-        pub sandbox_kind: String,
+-        pub phase: String,
+-        pub correlation_vector: String,
+-        pub document_id: String,
+-        pub document_version: u32,
+-        pub chunk_index: u32,
+-        pub chunk_count: u32,
+-        pub document_bytes: u64,
+-        pub document_sha256: String,
+-        pub content: String,
+-        pub summary: String,
+-    }
+-
+-    #[derive(Debug, Clone, PartialEq, Eq)]
+-    pub struct CapturedRequirement {
+-        pub name: String,
+-        pub fields: Vec<(String, String)>,
 -    }
 -
 -    thread_local! {
@@ -1912,6 +1396,8 @@ diff --git a/src/core/wxc_common/src/telemetry/events.rs b/src/core/wxc_common/s
 -
 -    static EXECUTIONS: Mutex<Vec<CapturedExecution>> = Mutex::new(Vec::new());
 -    static ERRORS: Mutex<Vec<CapturedError>> = Mutex::new(Vec::new());
+-    static VERBOSE: Mutex<Vec<CapturedVerbose>> = Mutex::new(Vec::new());
+-    static REQUIREMENTS: Mutex<Vec<CapturedRequirement>> = Mutex::new(Vec::new());
 -
 -    /// Start capturing emitted records into the sink (and clear any leftovers).
 -    /// The caller must hold the telemetry `TEST_LOCK` for the capture window.
@@ -1925,16 +1411,82 @@ diff --git a/src/core/wxc_common/src/telemetry/events.rs b/src/core/wxc_common/s
 -        INSTALLED.with(|f| f.set(false));
 -        EXECUTIONS.lock().unwrap_or_else(|e| e.into_inner()).clear();
 -        ERRORS.lock().unwrap_or_else(|e| e.into_inner()).clear();
+-        VERBOSE.lock().unwrap_or_else(|e| e.into_inner()).clear();
+-        REQUIREMENTS
+-            .lock()
+-            .unwrap_or_else(|e| e.into_inner())
+-            .clear();
 -    }
 -
--    /// Drain and return the captured `MXC.Execution` records.
+-    /// Drain and return the captured `Execution` records.
 -    pub fn take_executions() -> Vec<CapturedExecution> {
 -        std::mem::take(&mut *EXECUTIONS.lock().unwrap_or_else(|e| e.into_inner()))
 -    }
 -
--    /// Drain and return the captured `MXC.Error` records.
+-    /// Drain and return the captured `Error` records.
 -    pub fn take_errors() -> Vec<CapturedError> {
 -        std::mem::take(&mut *ERRORS.lock().unwrap_or_else(|e| e.into_inner()))
+-    }
+-
+-    /// Drain and return the captured `MXC.VerboseDenials` records.
+-    pub fn take_verbose() -> Vec<CapturedVerbose> {
+-        std::mem::take(&mut *VERBOSE.lock().unwrap_or_else(|e| e.into_inner()))
+-    }
+-
+-    pub fn take_requirements() -> Vec<CapturedRequirement> {
+-        std::mem::take(&mut *REQUIREMENTS.lock().unwrap_or_else(|e| e.into_inner()))
+-    }
+-
+-    pub(super) fn record_requirement(name: &str, fields: Vec<(String, String)>) {
+-        if INSTALLED.with(|f| f.get()) {
+-            REQUIREMENTS
+-                .lock()
+-                .unwrap_or_else(|e| e.into_inner())
+-                .push(CapturedRequirement {
+-                    name: name.to_owned(),
+-                    fields,
+-                });
+-        }
+-    }
+-
+-    pub(super) fn record_process(identity: &str, process_id: u32, event: ProcessEvent<'_>) {
+-        let (name, fields) = match event {
+-            ProcessEvent::Exited(exit_code) => (
+-                "MXC.ProcessExited",
+-                vec![
+-                    ("identity".to_owned(), identity.to_owned()),
+-                    ("process_id".to_owned(), process_id.to_string()),
+-                    ("ExitCode".to_owned(), exit_code.to_string()),
+-                ],
+-            ),
+-            ProcessEvent::TimedOut(timeout_ms) => (
+-                "MXC.ProcessTimedOut",
+-                vec![
+-                    ("identity".to_owned(), identity.to_owned()),
+-                    ("process_id".to_owned(), process_id.to_string()),
+-                    ("TimeoutMs".to_owned(), timeout_ms.to_string()),
+-                ],
+-            ),
+-            ProcessEvent::KillFailed(error_type, error_code) => (
+-                "MXC.ProcessKillFailed",
+-                vec![
+-                    ("identity".to_owned(), identity.to_owned()),
+-                    ("process_id".to_owned(), process_id.to_string()),
+-                    ("mxc.error_type".to_owned(), error_type.to_owned()),
+-                    ("mxc.error_code".to_owned(), error_code.to_string()),
+-                ],
+-            ),
+-        };
+-
+-        if INSTALLED.with(|f| f.get()) {
+-            REQUIREMENTS
+-                .lock()
+-                .unwrap_or_else(|e| e.into_inner())
+-                .push(CapturedRequirement {
+-                    name: name.to_owned(),
+-                    fields,
+-                });
+-        }
 -    }
 -
 -    pub(super) fn record_execution(event: &ExecutionEvent<'_>) {
@@ -1946,6 +1498,7 @@ diff --git a/src/core/wxc_common/src/telemetry/events.rs b/src/core/wxc_common/s
 -            .unwrap_or_else(|e| e.into_inner())
 -            .push(CapturedExecution {
 -                backend: event.backend.to_owned(),
+-                sandbox_kind: event.sandbox_kind.to_owned(),
 -                exit_code: event.exit_code,
 -                outcome: event.outcome.to_owned(),
 -                duration_ms: event.duration_ms,
@@ -1957,6 +1510,7 @@ diff --git a/src/core/wxc_common/src/telemetry/events.rs b/src/core/wxc_common/s
 -
 -    pub(super) fn record_error(
 -        ctx: TelemetryContext<'_>,
+-        sandbox_kind: &str,
 -        error_type: FailureReason,
 -        exit_code: i32,
 -    ) {
@@ -1968,10 +1522,34 @@ diff --git a/src/core/wxc_common/src/telemetry/events.rs b/src/core/wxc_common/s
 -            .unwrap_or_else(|e| e.into_inner())
 -            .push(CapturedError {
 -                backend: ctx.backend.to_owned(),
+-                sandbox_kind: sandbox_kind.to_owned(),
 -                error_type,
 -                exit_code,
 -                phase: ctx.phase.to_owned(),
 -                correlation_vector: ctx.correlation_vector.to_owned(),
+-            });
+-    }
+-
+-    pub(super) fn record_verbose(event: &VerboseEvent<'_>) {
+-        if !INSTALLED.with(|f| f.get()) {
+-            return;
+-        }
+-        VERBOSE
+-            .lock()
+-            .unwrap_or_else(|e| e.into_inner())
+-            .push(CapturedVerbose {
+-                backend: event.backend.to_owned(),
+-                sandbox_kind: event.sandbox_kind.to_owned(),
+-                phase: event.phase.to_owned(),
+-                correlation_vector: event.correlation_vector.to_owned(),
+-                document_id: event.document_id.to_owned(),
+-                document_version: event.document_version,
+-                chunk_index: event.chunk_index,
+-                chunk_count: event.chunk_count,
+-                document_bytes: event.document_bytes,
+-                document_sha256: event.document_sha256.to_owned(),
+-                content: event.content.to_owned(),
+-                summary: event.summary.to_owned(),
 -            });
 -    }
 -}
@@ -1990,6 +1568,274 @@ diff --git a/src/core/wxc_common/src/telemetry/events.rs b/src/core/wxc_common/s
 -        assert_eq!(FailureReason::InternalError.as_str(), "internal_error");
 -        assert_eq!(FailureReason::Cancelled.as_str(), "cancelled");
 -        assert_eq!(FailureReason::Unknown.as_str(), "unknown");
+-    }
+-
+-    #[test]
+-    fn verbose_event_is_captured_with_parseable_json_fields() {
+-        let _lock = test_sink::TEST_LOCK
+-            .lock()
+-            .unwrap_or_else(|e| e.into_inner());
+-        test_sink::install();
+-        log_verbose(&VerboseEvent {
+-            backend: "processcontainer",
+-            sandbox_kind: "process",
+-            phase: "",
+-            correlation_vector: "",
+-            document_id: "0123456789abcdef0123456789abcdef",
+-            document_version: 2,
+-            chunk_index: 0,
+-            chunk_count: 1,
+-            document_bytes: 64,
+-            document_sha256: "abc",
+-            content: "[]",
+-            summary: r#"{"totalOccurrences":0}"#,
+-        });
+-
+-        let captured = test_sink::take_verbose();
+-        test_sink::clear();
+-        assert_eq!(captured.len(), 1);
+-        assert_eq!(
+-            serde_json::from_str::<serde_json::Value>(&captured[0].content).unwrap(),
+-            serde_json::json!([])
+-        );
+-        assert!(serde_json::from_str::<serde_json::Value>(&captured[0].summary).is_ok());
+-    }
+-
+-    #[test]
+-    fn requirement_events_use_bounded_event_names() {
+-        let _lock = test_sink::TEST_LOCK
+-            .lock()
+-            .unwrap_or_else(|e| e.into_inner());
+-        super::super::reset_for_test();
+-        super::super::TEST_FORCE_ACTIVE.with(|value| value.set(true));
+-        super::super::TEST_AUTHORIZATION_OVERRIDE.with(|value| value.set(Some(true)));
+-        test_sink::install();
+-        log_process_event("opaque", 42, ProcessEvent::Exited(0));
+-        log_process_event("opaque", 42, ProcessEvent::TimedOut(1000));
+-        log_process_event("opaque", 42, ProcessEvent::KillFailed("terminate", 5));
+-        log_enforcement_degraded("opaque", "base_container", true, "reason", "dacl_augmented");
+-        log_policy_hash("opaque", "sha256:abc", "0.8.0-alpha");
+-        log_network_policy_applied("opaque", "proxy", "deny", 8080);
+-        log_sandbox_torn_down("opaque", "success", "released");
+-        log_config_rejected(
+-            "corr",
+-            "process_container",
+-            "invalid",
+-            "process.commandLine",
+-            "validate",
+-        );
+-        let events = test_sink::take_requirements();
+-        super::super::reset_for_test();
+-
+-        // Validate ProcessExited payload
+-        let process_exited = events
+-            .iter()
+-            .find(|e| {
+-                e.name == "MXC.ProcessExited"
+-                    && e.fields
+-                        .iter()
+-                        .any(|(n, v)| n == "identity" && v == "opaque")
+-            })
+-            .expect("MXC.ProcessExited with opaque identity");
+-        assert!(process_exited
+-            .fields
+-            .iter()
+-            .any(|(n, v)| n == "process_id" && v == "42"));
+-        assert!(
+-            process_exited
+-                .fields
+-                .iter()
+-                .any(|(n, v)| n == "ExitCode" && v == "0"),
+-            "ProcessExited must include ExitCode field with value 0"
+-        );
+-
+-        // Validate ProcessTimedOut payload
+-        let process_timedout = events
+-            .iter()
+-            .find(|e| e.name == "MXC.ProcessTimedOut")
+-            .expect("MXC.ProcessTimedOut");
+-        assert!(process_timedout
+-            .fields
+-            .iter()
+-            .any(|(n, v)| n == "identity" && v == "opaque"));
+-        assert!(process_timedout
+-            .fields
+-            .iter()
+-            .any(|(n, v)| n == "process_id" && v == "42"));
+-        assert!(
+-            process_timedout
+-                .fields
+-                .iter()
+-                .any(|(n, v)| n == "TimeoutMs" && v == "1000"),
+-            "ProcessTimedOut must include TimeoutMs field with value 1000"
+-        );
+-
+-        // Validate ProcessKillFailed payload
+-        let process_killfailed = events
+-            .iter()
+-            .find(|e| e.name == "MXC.ProcessKillFailed")
+-            .expect("MXC.ProcessKillFailed");
+-        assert!(process_killfailed
+-            .fields
+-            .iter()
+-            .any(|(n, v)| n == "identity" && v == "opaque"));
+-        assert!(process_killfailed
+-            .fields
+-            .iter()
+-            .any(|(n, v)| n == "process_id" && v == "42"));
+-        assert!(
+-            process_killfailed
+-                .fields
+-                .iter()
+-                .any(|(n, v)| n == "mxc.error_type" && v == "terminate"),
+-            "ProcessKillFailed must include mxc.error_type field"
+-        );
+-        assert!(
+-            process_killfailed
+-                .fields
+-                .iter()
+-                .any(|(n, v)| n == "mxc.error_code" && v == "5"),
+-            "ProcessKillFailed must include mxc.error_code field"
+-        );
+-
+-        // Validate EnforcementDegraded payload
+-        let enforcement = events
+-            .iter()
+-            .find(|e| e.name == "MXC.EnforcementDegraded")
+-            .expect("enforcement event");
+-        assert!(enforcement
+-            .fields
+-            .iter()
+-            .any(|(n, v)| n == "identity" && v == "opaque"));
+-        assert!(
+-            enforcement
+-                .fields
+-                .iter()
+-                .any(|(n, v)| n == "tier" && v == "base_container"),
+-            "EnforcementDegraded must include tier field with correct value"
+-        );
+-        assert!(enforcement
+-            .fields
+-            .contains(&("needs_dacl_augmentation".to_owned(), "true".to_owned())));
+-        assert!(
+-            enforcement
+-                .fields
+-                .iter()
+-                .any(|(n, v)| !n.starts_with("degradation_reasons") || !v.is_empty()),
+-            "EnforcementDegraded must include non-empty degradation_reasons"
+-        );
+-        assert!(
+-            enforcement
+-                .fields
+-                .iter()
+-                .any(|(n, v)| !n.starts_with("effective_enforcement_level") || !v.is_empty()),
+-            "EnforcementDegraded must include non-empty effective_enforcement_level"
+-        );
+-
+-        // Validate PolicyHash payload
+-        let policy_hash = events
+-            .iter()
+-            .find(|e| e.name == "MXC.PolicyHash")
+-            .expect("policy hash event");
+-        assert!(policy_hash
+-            .fields
+-            .contains(&("identity".to_owned(), "opaque".to_owned())));
+-        assert!(policy_hash
+-            .fields
+-            .contains(&("policy_hash".to_owned(), "sha256:abc".to_owned())));
+-        assert!(policy_hash
+-            .fields
+-            .contains(&("config_schema_version".to_owned(), "0.8.0-alpha".to_owned())));
+-
+-        // Validate SandboxNetworkPolicyApplied payload
+-        let network = events
+-            .iter()
+-            .find(|e| e.name == "MXC.SandboxNetworkPolicyApplied")
+-            .expect("network event");
+-        assert!(network
+-            .fields
+-            .iter()
+-            .any(|(n, v)| n == "identity" && v == "opaque"));
+-        assert!(network
+-            .fields
+-            .iter()
+-            .any(|(n, v)| n == "enforcement_mode" && v == "proxy"));
+-        assert!(network
+-            .fields
+-            .iter()
+-            .any(|(n, v)| n == "default_policy" && v == "deny"));
+-        assert!(network
+-            .fields
+-            .contains(&("proxy_port".to_owned(), "8080".to_owned())));
+-
+-        // Validate SandboxTornDown payload
+-        let teardown = events
+-            .iter()
+-            .find(|e| e.name == "MXC.SandboxTornDown")
+-            .expect("teardown event");
+-        assert!(teardown
+-            .fields
+-            .iter()
+-            .any(|(n, v)| n == "identity" && v == "opaque"));
+-        assert!(teardown
+-            .fields
+-            .iter()
+-            .any(|(n, v)| n == "status" && v == "success"));
+-        assert!(teardown
+-            .fields
+-            .contains(&("released_resources".to_owned(), "released".to_owned())));
+-
+-        // Validate ConfigRejected payload
+-        let rejected = events
+-            .iter()
+-            .find(|e| e.name == "MXC.ConfigRejected")
+-            .expect("config rejection event");
+-        assert!(rejected
+-            .fields
+-            .iter()
+-            .any(|(n, v)| n == "correlation_id" && v == "corr"));
+-        assert!(rejected
+-            .fields
+-            .iter()
+-            .any(|(n, v)| n == "backend" && v == "process_container"));
+-        assert!(rejected
+-            .fields
+-            .iter()
+-            .any(|(n, v)| n == "reason" && v == "invalid"));
+-        assert!(rejected.fields.contains(&(
+-            "offending_field".to_owned(),
+-            "process.commandLine".to_owned()
+-        )));
+-        assert!(rejected
+-            .fields
+-            .contains(&("phase".to_owned(), "validate".to_owned())));
+-    }
+-
+-    #[test]
+-    fn requirement_events_respect_live_authorization() {
+-        let _lock = test_sink::TEST_LOCK
+-            .lock()
+-            .unwrap_or_else(|e| e.into_inner());
+-        super::super::reset_for_test();
+-        super::super::TEST_FORCE_ACTIVE.with(|value| value.set(true));
+-        super::super::TEST_AUTHORIZATION_OVERRIDE.with(|value| value.set(Some(false)));
+-        test_sink::install();
+-
+-        log_process_event("opaque", 42, ProcessEvent::Exited(0));
+-        log_enforcement_degraded("opaque", "base_container", true, "reason", "dacl_augmented");
+-        log_policy_hash("opaque", "sha256:abc", "0.8.0-alpha");
+-        log_network_policy_applied("opaque", "proxy", "deny", 8080);
+-        log_sandbox_torn_down("opaque", "success", "released");
+-        log_config_rejected(
+-            "corr",
+-            "process_container",
+-            "invalid",
+-            "process.commandLine",
+-            "validate",
+-        );
+-
+-        assert!(test_sink::take_requirements().is_empty());
+-        super::super::reset_for_test();
 -    }
 -}
 +// Copyright (c) Microsoft Corporation.
@@ -2057,9 +1903,11 @@ diff --git a/src/core/wxc_common/src/telemetry/events.rs b/src/core/wxc_common/s
 +    pub correlation_vector: &'a str,
 +}
 +
-+/// Data for an MXC.Execution ETW event.
++/// Data for an Execution ETW event.
 +pub struct ExecutionEvent<'a> {
 +    pub backend: &'a str,
++    /// Containment kind requested by the caller before host-specific resolution.
++    pub sandbox_kind: &'a str,
 +    pub exit_code: i32,
 +    pub outcome: &'a str,
 +    pub duration_ms: u64,
@@ -2076,7 +1924,26 @@ diff --git a/src/core/wxc_common/src/telemetry/events.rs b/src/core/wxc_common/s
 +    pub correlation_vector: &'a str,
 +}
 +
-+/// Log an MXC.Execution ETW event.
++/// One independently parseable chunk of a Learning Mode verbose document.
++#[derive(Debug, Clone, Copy)]
++pub struct VerboseEvent<'a> {
++    pub backend: &'a str,
++    pub sandbox_kind: &'a str,
++    pub phase: &'a str,
++    pub correlation_vector: &'a str,
++    pub document_id: &'a str,
++    pub document_version: u32,
++    pub chunk_index: u32,
++    pub chunk_count: u32,
++    pub document_bytes: u64,
++    pub document_sha256: &'a str,
++    /// Compact JSON array of complete `VerboseLoggingAggregate` objects.
++    pub content: &'a str,
++    /// Compact JSON `VerboseLoggingDocumentSummary` object.
++    pub summary: &'a str,
++}
++
++/// Log an Execution ETW event.
 +///
 +/// Delegates to the `mxc_telemetry` provider which adds common fields
 +/// (Version, Channel, IsDebugging, UTCReplace_AppSessionGuid).
@@ -2085,6 +1952,7 @@ diff --git a/src/core/wxc_common/src/telemetry/events.rs b/src/core/wxc_common/s
 +
 +    mxc_telemetry::log_execution(
 +        event.backend,
++        event.sandbox_kind,
 +        event.exit_code,
 +        event.outcome,
 +        event.duration_ms,
@@ -2097,16 +1965,23 @@ diff --git a/src/core/wxc_common/src/telemetry/events.rs b/src/core/wxc_common/s
 +    test_sink::record_execution(event);
 +}
 +
-+/// Log an MXC.Error ETW event.
++/// Log an Error ETW event.
 +///
 +/// To avoid leaking PII (paths, usernames, credentials embedded in error
 +/// strings), MXC deliberately does **not** emit the free-form error message.
 +/// The event carries only the bounded `error_type` category, the process
-+/// `exit_code`, and the [`TelemetryContext`] attribution (backend, lifecycle
-+/// phase, and correlation vector — the latter two empty for one-shot).
-+pub fn log_error(ctx: TelemetryContext<'_>, error_type: FailureReason, exit_code: i32) {
++/// `exit_code`, the caller-requested `sandbox_kind`, and the
++/// [`TelemetryContext`] attribution (backend, lifecycle phase, and correlation
++/// vector — the latter two empty for one-shot).
++pub fn log_error(
++    ctx: TelemetryContext<'_>,
++    sandbox_kind: &str,
++    error_type: FailureReason,
++    exit_code: i32,
++) {
 +    mxc_telemetry::log_error(
 +        ctx.backend,
++        sandbox_kind,
 +        error_type.as_str(),
 +        exit_code,
 +        ctx.phase,
@@ -2114,7 +1989,201 @@ diff --git a/src/core/wxc_common/src/telemetry/events.rs b/src/core/wxc_common/s
 +    );
 +
 +    #[cfg(test)]
-+    test_sink::record_error(ctx, error_type, exit_code);
++    test_sink::record_error(ctx, sandbox_kind, error_type, exit_code);
++}
++
++/// Log one `MXC.VerboseDenials` ETW event.
++pub fn log_verbose(event: &VerboseEvent<'_>) -> u32 {
++    let status = mxc_telemetry::log_verbose(
++        event.backend,
++        event.sandbox_kind,
++        event.phase,
++        event.correlation_vector,
++        event.document_id,
++        event.document_version,
++        event.chunk_index,
++        event.chunk_count,
++        event.document_bytes,
++        event.document_sha256,
++        event.content,
++        event.summary,
++    );
++
++    #[cfg(test)]
++    test_sink::record_verbose(event);
++
++    status
++}
++
++/// Emit a process lifecycle event required by the Windows diagnostics
++/// contract. The event kind and payload are coupled in a single enum
++/// to make mismatches unrepresentable at compile time.
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum ProcessEvent<'a> {
++    Exited(i32),
++    TimedOut(u64),
++    /// Kill method attempted, plus the numeric OS error code returned by the
++    /// failed termination call (e.g. `error.code().0` on Windows), so ETW
++    /// consumers can see *why* the kill failed, not just what was attempted.
++    KillFailed(&'a str, i32),
++}
++
++fn requirement_emission_allowed() -> bool {
++    super::process_can_emit()
++}
++
++pub fn log_process_event(identity: &str, process_id: u32, event: ProcessEvent<'_>) {
++    if !requirement_emission_allowed() {
++        return;
++    }
++
++    match event {
++        ProcessEvent::Exited(exit_code) => {
++            mxc_telemetry::log_process_exited(identity, process_id, exit_code);
++        }
++        ProcessEvent::TimedOut(timeout_ms) => {
++            mxc_telemetry::log_process_timed_out(identity, process_id, timeout_ms);
++        }
++        ProcessEvent::KillFailed(error_type, error_code) => {
++            mxc_telemetry::log_process_kill_failed(identity, process_id, error_type, error_code);
++        }
++    }
++
++    #[cfg(test)]
++    test_sink::record_process(identity, process_id, event);
++}
++
++pub fn log_enforcement_degraded(
++    identity: &str,
++    tier: &str,
++    needs_dacl_augmentation: bool,
++    degradation_reasons: &str,
++    effective_enforcement_level: &str,
++) {
++    if !requirement_emission_allowed() {
++        return;
++    }
++
++    mxc_telemetry::log_enforcement_degraded(
++        identity,
++        tier,
++        needs_dacl_augmentation,
++        degradation_reasons,
++        effective_enforcement_level,
++    );
++    #[cfg(test)]
++    test_sink::record_requirement(
++        "MXC.EnforcementDegraded",
++        vec![
++            ("identity".to_owned(), identity.to_owned()),
++            ("tier".to_owned(), tier.to_owned()),
++            (
++                "needs_dacl_augmentation".to_owned(),
++                needs_dacl_augmentation.to_string(),
++            ),
++            (
++                "degradation_reasons".to_owned(),
++                degradation_reasons.to_owned(),
++            ),
++            (
++                "effective_enforcement_level".to_owned(),
++                effective_enforcement_level.to_owned(),
++            ),
++        ],
++    );
++}
++
++pub fn log_policy_hash(identity: &str, policy_hash: &str, config_schema_version: &str) {
++    if !requirement_emission_allowed() {
++        return;
++    }
++
++    mxc_telemetry::log_policy_hash(identity, policy_hash, config_schema_version);
++    #[cfg(test)]
++    test_sink::record_requirement(
++        "MXC.PolicyHash",
++        vec![
++            ("identity".to_owned(), identity.to_owned()),
++            ("policy_hash".to_owned(), policy_hash.to_owned()),
++            (
++                "config_schema_version".to_owned(),
++                config_schema_version.to_owned(),
++            ),
++        ],
++    );
++}
++
++pub fn log_network_policy_applied(
++    identity: &str,
++    enforcement_mode: &str,
++    default_policy: &str,
++    proxy_port: u64,
++) {
++    if !requirement_emission_allowed() {
++        return;
++    }
++
++    mxc_telemetry::log_network_policy_applied(
++        identity,
++        enforcement_mode,
++        default_policy,
++        proxy_port,
++    );
++    #[cfg(test)]
++    test_sink::record_requirement(
++        "MXC.SandboxNetworkPolicyApplied",
++        vec![
++            ("identity".to_owned(), identity.to_owned()),
++            ("enforcement_mode".to_owned(), enforcement_mode.to_owned()),
++            ("default_policy".to_owned(), default_policy.to_owned()),
++            ("proxy_port".to_owned(), proxy_port.to_string()),
++        ],
++    );
++}
++
++pub fn log_sandbox_torn_down(identity: &str, status: &str, released_resources: &str) {
++    if !requirement_emission_allowed() {
++        return;
++    }
++
++    mxc_telemetry::log_sandbox_torn_down(identity, status, released_resources);
++    #[cfg(test)]
++    test_sink::record_requirement(
++        "MXC.SandboxTornDown",
++        vec![
++            ("identity".to_owned(), identity.to_owned()),
++            ("status".to_owned(), status.to_owned()),
++            (
++                "released_resources".to_owned(),
++                released_resources.to_owned(),
++            ),
++        ],
++    );
++}
++
++pub fn log_config_rejected(
++    correlation_id: &str,
++    backend: &str,
++    reason: &str,
++    offending_field: &str,
++    phase: &str,
++) {
++    if !requirement_emission_allowed() {
++        return;
++    }
++
++    mxc_telemetry::log_config_rejected(correlation_id, backend, reason, offending_field, phase);
++    #[cfg(test)]
++    test_sink::record_requirement(
++        "MXC.ConfigRejected",
++        vec![
++            ("correlation_id".to_owned(), correlation_id.to_owned()),
++            ("backend".to_owned(), backend.to_owned()),
++            ("reason".to_owned(), reason.to_owned()),
++            ("offending_field".to_owned(), offending_field.to_owned()),
++            ("phase".to_owned(), phase.to_owned()),
++        ],
++    );
 +}
 +
 +/// In-memory capture sink for the two ETW emit calls, so tests can assert the
@@ -2124,14 +2193,24 @@ diff --git a/src/core/wxc_common/src/telemetry/events.rs b/src/core/wxc_common/s
 +/// `mxc_telemetry` call regardless.
 +#[cfg(test)]
 +pub(super) mod test_sink {
-+    use super::{ExecutionEvent, FailureReason, TelemetryContext};
++    use super::{ExecutionEvent, FailureReason, ProcessEvent, TelemetryContext, VerboseEvent};
 +    use std::cell::Cell;
 +    use std::sync::Mutex;
 +
-+    /// Owned copy of an `MXC.Execution` record as captured for a test.
++    /// Serializes any test that installs/clears this capture sink or drives
++    /// the emit glue in `telemetry::tests`, since `EXECUTIONS`/`ERRORS`/
++    /// `REQUIREMENTS` below (and the process-global emit-slot state in the
++    /// parent module) are shared regardless of which thread `cargo test`
++    /// happens to run a given test on. Every test that touches this module,
++    /// directly or via the parent module's emit helpers, must hold this lock
++    /// for its capture window.
++    pub(crate) static TEST_LOCK: Mutex<()> = Mutex::new(());
++
++    /// Owned copy of an `Execution` record as captured for a test.
 +    #[derive(Debug, Clone, PartialEq, Eq)]
 +    pub struct CapturedExecution {
 +        pub backend: String,
++        pub sandbox_kind: String,
 +        pub exit_code: i32,
 +        pub outcome: String,
 +        pub duration_ms: u64,
@@ -2140,14 +2219,38 @@ diff --git a/src/core/wxc_common/src/telemetry/events.rs b/src/core/wxc_common/s
 +        pub correlation_vector: String,
 +    }
 +
-+    /// Owned copy of an `MXC.Error` record as captured for a test.
++    /// Owned copy of an `Error` record as captured for a test.
 +    #[derive(Debug, Clone, PartialEq, Eq)]
 +    pub struct CapturedError {
 +        pub backend: String,
++        pub sandbox_kind: String,
 +        pub error_type: FailureReason,
 +        pub exit_code: i32,
 +        pub phase: String,
 +        pub correlation_vector: String,
++    }
++
++    /// Owned copy of an `MXC.VerboseDenials` record as captured for a test.
++    #[derive(Debug, Clone, PartialEq, Eq)]
++    pub struct CapturedVerbose {
++        pub backend: String,
++        pub sandbox_kind: String,
++        pub phase: String,
++        pub correlation_vector: String,
++        pub document_id: String,
++        pub document_version: u32,
++        pub chunk_index: u32,
++        pub chunk_count: u32,
++        pub document_bytes: u64,
++        pub document_sha256: String,
++        pub content: String,
++        pub summary: String,
++    }
++
++    #[derive(Debug, Clone, PartialEq, Eq)]
++    pub struct CapturedRequirement {
++        pub name: String,
++        pub fields: Vec<(String, String)>,
 +    }
 +
 +    thread_local! {
@@ -2161,6 +2264,8 @@ diff --git a/src/core/wxc_common/src/telemetry/events.rs b/src/core/wxc_common/s
 +
 +    static EXECUTIONS: Mutex<Vec<CapturedExecution>> = Mutex::new(Vec::new());
 +    static ERRORS: Mutex<Vec<CapturedError>> = Mutex::new(Vec::new());
++    static VERBOSE: Mutex<Vec<CapturedVerbose>> = Mutex::new(Vec::new());
++    static REQUIREMENTS: Mutex<Vec<CapturedRequirement>> = Mutex::new(Vec::new());
 +
 +    /// Start capturing emitted records into the sink (and clear any leftovers).
 +    /// The caller must hold the telemetry `TEST_LOCK` for the capture window.
@@ -2174,16 +2279,82 @@ diff --git a/src/core/wxc_common/src/telemetry/events.rs b/src/core/wxc_common/s
 +        INSTALLED.with(|f| f.set(false));
 +        EXECUTIONS.lock().unwrap_or_else(|e| e.into_inner()).clear();
 +        ERRORS.lock().unwrap_or_else(|e| e.into_inner()).clear();
++        VERBOSE.lock().unwrap_or_else(|e| e.into_inner()).clear();
++        REQUIREMENTS
++            .lock()
++            .unwrap_or_else(|e| e.into_inner())
++            .clear();
 +    }
 +
-+    /// Drain and return the captured `MXC.Execution` records.
++    /// Drain and return the captured `Execution` records.
 +    pub fn take_executions() -> Vec<CapturedExecution> {
 +        std::mem::take(&mut *EXECUTIONS.lock().unwrap_or_else(|e| e.into_inner()))
 +    }
 +
-+    /// Drain and return the captured `MXC.Error` records.
++    /// Drain and return the captured `Error` records.
 +    pub fn take_errors() -> Vec<CapturedError> {
 +        std::mem::take(&mut *ERRORS.lock().unwrap_or_else(|e| e.into_inner()))
++    }
++
++    /// Drain and return the captured `MXC.VerboseDenials` records.
++    pub fn take_verbose() -> Vec<CapturedVerbose> {
++        std::mem::take(&mut *VERBOSE.lock().unwrap_or_else(|e| e.into_inner()))
++    }
++
++    pub fn take_requirements() -> Vec<CapturedRequirement> {
++        std::mem::take(&mut *REQUIREMENTS.lock().unwrap_or_else(|e| e.into_inner()))
++    }
++
++    pub(super) fn record_requirement(name: &str, fields: Vec<(String, String)>) {
++        if INSTALLED.with(|f| f.get()) {
++            REQUIREMENTS
++                .lock()
++                .unwrap_or_else(|e| e.into_inner())
++                .push(CapturedRequirement {
++                    name: name.to_owned(),
++                    fields,
++                });
++        }
++    }
++
++    pub(super) fn record_process(identity: &str, process_id: u32, event: ProcessEvent<'_>) {
++        let (name, fields) = match event {
++            ProcessEvent::Exited(exit_code) => (
++                "MXC.ProcessExited",
++                vec![
++                    ("identity".to_owned(), identity.to_owned()),
++                    ("process_id".to_owned(), process_id.to_string()),
++                    ("ExitCode".to_owned(), exit_code.to_string()),
++                ],
++            ),
++            ProcessEvent::TimedOut(timeout_ms) => (
++                "MXC.ProcessTimedOut",
++                vec![
++                    ("identity".to_owned(), identity.to_owned()),
++                    ("process_id".to_owned(), process_id.to_string()),
++                    ("TimeoutMs".to_owned(), timeout_ms.to_string()),
++                ],
++            ),
++            ProcessEvent::KillFailed(error_type, error_code) => (
++                "MXC.ProcessKillFailed",
++                vec![
++                    ("identity".to_owned(), identity.to_owned()),
++                    ("process_id".to_owned(), process_id.to_string()),
++                    ("mxc.error_type".to_owned(), error_type.to_owned()),
++                    ("mxc.error_code".to_owned(), error_code.to_string()),
++                ],
++            ),
++        };
++
++        if INSTALLED.with(|f| f.get()) {
++            REQUIREMENTS
++                .lock()
++                .unwrap_or_else(|e| e.into_inner())
++                .push(CapturedRequirement {
++                    name: name.to_owned(),
++                    fields,
++                });
++        }
 +    }
 +
 +    pub(super) fn record_execution(event: &ExecutionEvent<'_>) {
@@ -2195,6 +2366,7 @@ diff --git a/src/core/wxc_common/src/telemetry/events.rs b/src/core/wxc_common/s
 +            .unwrap_or_else(|e| e.into_inner())
 +            .push(CapturedExecution {
 +                backend: event.backend.to_owned(),
++                sandbox_kind: event.sandbox_kind.to_owned(),
 +                exit_code: event.exit_code,
 +                outcome: event.outcome.to_owned(),
 +                duration_ms: event.duration_ms,
@@ -2206,6 +2378,7 @@ diff --git a/src/core/wxc_common/src/telemetry/events.rs b/src/core/wxc_common/s
 +
 +    pub(super) fn record_error(
 +        ctx: TelemetryContext<'_>,
++        sandbox_kind: &str,
 +        error_type: FailureReason,
 +        exit_code: i32,
 +    ) {
@@ -2217,10 +2390,34 @@ diff --git a/src/core/wxc_common/src/telemetry/events.rs b/src/core/wxc_common/s
 +            .unwrap_or_else(|e| e.into_inner())
 +            .push(CapturedError {
 +                backend: ctx.backend.to_owned(),
++                sandbox_kind: sandbox_kind.to_owned(),
 +                error_type,
 +                exit_code,
 +                phase: ctx.phase.to_owned(),
 +                correlation_vector: ctx.correlation_vector.to_owned(),
++            });
++    }
++
++    pub(super) fn record_verbose(event: &VerboseEvent<'_>) {
++        if !INSTALLED.with(|f| f.get()) {
++            return;
++        }
++        VERBOSE
++            .lock()
++            .unwrap_or_else(|e| e.into_inner())
++            .push(CapturedVerbose {
++                backend: event.backend.to_owned(),
++                sandbox_kind: event.sandbox_kind.to_owned(),
++                phase: event.phase.to_owned(),
++                correlation_vector: event.correlation_vector.to_owned(),
++                document_id: event.document_id.to_owned(),
++                document_version: event.document_version,
++                chunk_index: event.chunk_index,
++                chunk_count: event.chunk_count,
++                document_bytes: event.document_bytes,
++                document_sha256: event.document_sha256.to_owned(),
++                content: event.content.to_owned(),
++                summary: event.summary.to_owned(),
 +            });
 +    }
 +}
@@ -2240,601 +2437,302 @@ diff --git a/src/core/wxc_common/src/telemetry/events.rs b/src/core/wxc_common/s
 +        assert_eq!(FailureReason::Cancelled.as_str(), "cancelled");
 +        assert_eq!(FailureReason::Unknown.as_str(), "unknown");
 +    }
++
++    #[test]
++    fn verbose_event_is_captured_with_parseable_json_fields() {
++        let _lock = test_sink::TEST_LOCK
++            .lock()
++            .unwrap_or_else(|e| e.into_inner());
++        test_sink::install();
++        log_verbose(&VerboseEvent {
++            backend: "processcontainer",
++            sandbox_kind: "process",
++            phase: "",
++            correlation_vector: "",
++            document_id: "0123456789abcdef0123456789abcdef",
++            document_version: 2,
++            chunk_index: 0,
++            chunk_count: 1,
++            document_bytes: 64,
++            document_sha256: "abc",
++            content: "[]",
++            summary: r#"{"totalOccurrences":0}"#,
++        });
++
++        let captured = test_sink::take_verbose();
++        test_sink::clear();
++        assert_eq!(captured.len(), 1);
++        assert_eq!(
++            serde_json::from_str::<serde_json::Value>(&captured[0].content).unwrap(),
++            serde_json::json!([])
++        );
++        assert!(serde_json::from_str::<serde_json::Value>(&captured[0].summary).is_ok());
++    }
++
++    #[test]
++    fn requirement_events_use_bounded_event_names() {
++        let _lock = test_sink::TEST_LOCK
++            .lock()
++            .unwrap_or_else(|e| e.into_inner());
++        super::super::reset_for_test();
++        super::super::TEST_FORCE_ACTIVE.with(|value| value.set(true));
++        super::super::TEST_AUTHORIZATION_OVERRIDE.with(|value| value.set(Some(true)));
++        test_sink::install();
++        log_process_event("opaque", 42, ProcessEvent::Exited(0));
++        log_process_event("opaque", 42, ProcessEvent::TimedOut(1000));
++        log_process_event("opaque", 42, ProcessEvent::KillFailed("terminate", 5));
++        log_enforcement_degraded("opaque", "base_container", true, "reason", "dacl_augmented");
++        log_policy_hash("opaque", "sha256:abc", "0.8.0-alpha");
++        log_network_policy_applied("opaque", "proxy", "deny", 8080);
++        log_sandbox_torn_down("opaque", "success", "released");
++        log_config_rejected(
++            "corr",
++            "process_container",
++            "invalid",
++            "process.commandLine",
++            "validate",
++        );
++        let events = test_sink::take_requirements();
++        super::super::reset_for_test();
++
++        // Validate ProcessExited payload
++        let process_exited = events
++            .iter()
++            .find(|e| {
++                e.name == "MXC.ProcessExited"
++                    && e.fields
++                        .iter()
++                        .any(|(n, v)| n == "identity" && v == "opaque")
++            })
++            .expect("MXC.ProcessExited with opaque identity");
++        assert!(process_exited
++            .fields
++            .iter()
++            .any(|(n, v)| n == "process_id" && v == "42"));
++        assert!(
++            process_exited
++                .fields
++                .iter()
++                .any(|(n, v)| n == "ExitCode" && v == "0"),
++            "ProcessExited must include ExitCode field with value 0"
++        );
++
++        // Validate ProcessTimedOut payload
++        let process_timedout = events
++            .iter()
++            .find(|e| e.name == "MXC.ProcessTimedOut")
++            .expect("MXC.ProcessTimedOut");
++        assert!(process_timedout
++            .fields
++            .iter()
++            .any(|(n, v)| n == "identity" && v == "opaque"));
++        assert!(process_timedout
++            .fields
++            .iter()
++            .any(|(n, v)| n == "process_id" && v == "42"));
++        assert!(
++            process_timedout
++                .fields
++                .iter()
++                .any(|(n, v)| n == "TimeoutMs" && v == "1000"),
++            "ProcessTimedOut must include TimeoutMs field with value 1000"
++        );
++
++        // Validate ProcessKillFailed payload
++        let process_killfailed = events
++            .iter()
++            .find(|e| e.name == "MXC.ProcessKillFailed")
++            .expect("MXC.ProcessKillFailed");
++        assert!(process_killfailed
++            .fields
++            .iter()
++            .any(|(n, v)| n == "identity" && v == "opaque"));
++        assert!(process_killfailed
++            .fields
++            .iter()
++            .any(|(n, v)| n == "process_id" && v == "42"));
++        assert!(
++            process_killfailed
++                .fields
++                .iter()
++                .any(|(n, v)| n == "mxc.error_type" && v == "terminate"),
++            "ProcessKillFailed must include mxc.error_type field"
++        );
++        assert!(
++            process_killfailed
++                .fields
++                .iter()
++                .any(|(n, v)| n == "mxc.error_code" && v == "5"),
++            "ProcessKillFailed must include mxc.error_code field"
++        );
++
++        // Validate EnforcementDegraded payload
++        let enforcement = events
++            .iter()
++            .find(|e| e.name == "MXC.EnforcementDegraded")
++            .expect("enforcement event");
++        assert!(enforcement
++            .fields
++            .iter()
++            .any(|(n, v)| n == "identity" && v == "opaque"));
++        assert!(
++            enforcement
++                .fields
++                .iter()
++                .any(|(n, v)| n == "tier" && v == "base_container"),
++            "EnforcementDegraded must include tier field with correct value"
++        );
++        assert!(enforcement
++            .fields
++            .contains(&("needs_dacl_augmentation".to_owned(), "true".to_owned())));
++        assert!(
++            enforcement
++                .fields
++                .iter()
++                .any(|(n, v)| !n.starts_with("degradation_reasons") || !v.is_empty()),
++            "EnforcementDegraded must include non-empty degradation_reasons"
++        );
++        assert!(
++            enforcement
++                .fields
++                .iter()
++                .any(|(n, v)| !n.starts_with("effective_enforcement_level") || !v.is_empty()),
++            "EnforcementDegraded must include non-empty effective_enforcement_level"
++        );
++
++        // Validate PolicyHash payload
++        let policy_hash = events
++            .iter()
++            .find(|e| e.name == "MXC.PolicyHash")
++            .expect("policy hash event");
++        assert!(policy_hash
++            .fields
++            .contains(&("identity".to_owned(), "opaque".to_owned())));
++        assert!(policy_hash
++            .fields
++            .contains(&("policy_hash".to_owned(), "sha256:abc".to_owned())));
++        assert!(policy_hash
++            .fields
++            .contains(&("config_schema_version".to_owned(), "0.8.0-alpha".to_owned())));
++
++        // Validate SandboxNetworkPolicyApplied payload
++        let network = events
++            .iter()
++            .find(|e| e.name == "MXC.SandboxNetworkPolicyApplied")
++            .expect("network event");
++        assert!(network
++            .fields
++            .iter()
++            .any(|(n, v)| n == "identity" && v == "opaque"));
++        assert!(network
++            .fields
++            .iter()
++            .any(|(n, v)| n == "enforcement_mode" && v == "proxy"));
++        assert!(network
++            .fields
++            .iter()
++            .any(|(n, v)| n == "default_policy" && v == "deny"));
++        assert!(network
++            .fields
++            .contains(&("proxy_port".to_owned(), "8080".to_owned())));
++
++        // Validate SandboxTornDown payload
++        let teardown = events
++            .iter()
++            .find(|e| e.name == "MXC.SandboxTornDown")
++            .expect("teardown event");
++        assert!(teardown
++            .fields
++            .iter()
++            .any(|(n, v)| n == "identity" && v == "opaque"));
++        assert!(teardown
++            .fields
++            .iter()
++            .any(|(n, v)| n == "status" && v == "success"));
++        assert!(teardown
++            .fields
++            .contains(&("released_resources".to_owned(), "released".to_owned())));
++
++        // Validate ConfigRejected payload
++        let rejected = events
++            .iter()
++            .find(|e| e.name == "MXC.ConfigRejected")
++            .expect("config rejection event");
++        assert!(rejected
++            .fields
++            .iter()
++            .any(|(n, v)| n == "correlation_id" && v == "corr"));
++        assert!(rejected
++            .fields
++            .iter()
++            .any(|(n, v)| n == "backend" && v == "process_container"));
++        assert!(rejected
++            .fields
++            .iter()
++            .any(|(n, v)| n == "reason" && v == "invalid"));
++        assert!(rejected.fields.contains(&(
++            "offending_field".to_owned(),
++            "process.commandLine".to_owned()
++        )));
++        assert!(rejected
++            .fields
++            .contains(&("phase".to_owned(), "validate".to_owned())));
++    }
++
++    #[test]
++    fn requirement_events_respect_live_authorization() {
++        let _lock = test_sink::TEST_LOCK
++            .lock()
++            .unwrap_or_else(|e| e.into_inner());
++        super::super::reset_for_test();
++        super::super::TEST_FORCE_ACTIVE.with(|value| value.set(true));
++        super::super::TEST_AUTHORIZATION_OVERRIDE.with(|value| value.set(Some(false)));
++        test_sink::install();
++
++        log_process_event("opaque", 42, ProcessEvent::Exited(0));
++        log_enforcement_degraded("opaque", "base_container", true, "reason", "dacl_augmented");
++        log_policy_hash("opaque", "sha256:abc", "0.8.0-alpha");
++        log_network_policy_applied("opaque", "proxy", "deny", 8080);
++        log_sandbox_torn_down("opaque", "success", "released");
++        log_config_rejected(
++            "corr",
++            "process_container",
++            "invalid",
++            "process.commandLine",
++            "validate",
++        );
++
++        assert!(test_sink::take_requirements().is_empty());
++        super::super::reset_for_test();
++    }
 +}
 diff --git a/src/core/wxc_common/src/telemetry/mod.rs b/src/core/wxc_common/src/telemetry.rs
 rename from src/core/wxc_common/src/telemetry/mod.rs
 rename to src/core/wxc_common/src/telemetry.rs
-diff --git a/src/backends/appcontainer/common/Cargo.toml b/src/backends/appcontainer/common/Cargo.toml
---- a/src/backends/appcontainer/common/Cargo.toml
-+++ b/src/backends/appcontainer/common/Cargo.toml
-@@ -1,34 +1,29 @@
- [package]
- name = "appcontainer_common"
--version.workspace = true
--edition.workspace = true
--license.workspace = true
-+version = "0.8.0"
-+edition = "2021"
-+license = "MIT"
- 
- [features]
--# Compile-time gate for Tier 2 (AppContainer + BFS via bfscfg.exe).
--# OFF by default: production wxc-exec cannot resolve or spawn bfscfg.exe,
--# and `fallback_detector::detect` naturally falls through T2 to T3 because
--# `find_bfscfg_exe` returns `Ok(None)`. Enable explicitly on hosts where
--# bfscfg.exe is known safe to invoke.
- tier2_bfs = []
- 
- [dependencies]
--wxc_common = { workspace = true }
--serde = { workspace = true }
--serde_json = { workspace = true }
--thiserror = { workspace = true }
--getrandom = { workspace = true }
-+wxc_common = { "path" = "../../../core/wxc_common" }
-+serde = { "version" = "1", "features" = ["derive"] }
-+serde_json = { "version" = "1" }
-+thiserror = { "version" = "2" }
-+getrandom = { "version" = "0.2" }
- 
--[target.'cfg(target_os = "windows")'.dependencies]
--windows = { workspace = true }
--windows-core = { workspace = true }
--flatbuffers = { workspace = true }
--sandbox_spec = { workspace = true }
--process_security_environment_spec = { workspace = true }
--widestring = { workspace = true }
--winreg = { workspace = true }
--learning_mode_windows = { workspace = true }
--learning_mode_core = { workspace = true }
-+[target."cfg(target_os = \"windows\")".dependencies]
-+windows = { "version" = "0.62", "features" = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_NetworkManagement_WindowsFirewall", "Win32_Security", "Win32_Security_Authorization", "Win32_Security_Credentials", "Win32_Security_Isolation", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_Diagnostics_Debug", "Win32_System_Diagnostics_Etw", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Environment", "Win32_System_IO", "Win32_System_JobObjects", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Ole", "Win32_System_Pipes", "Win32_System_ProcessStatus", "Win32_System_Registry", "Win32_System_SystemInformation", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_Time", "Win32_System_Variant", "Win32_System_WindowsProgramming", "Win32_UI_Shell"] }
-+windows-core = { "version" = "0.62" }
-+flatbuffers = { "version" = "25" }
-+sandbox_spec = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4" }
-+process_security_environment_spec = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4" }
-+widestring = { "version" = "1" }
-+winreg = { "version" = "0.55" }
-+learning_mode_windows = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4" }
-+learning_mode_core = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4" }
- 
- [dev-dependencies]
--tempfile.workspace = true
-+tempfile = { "version" = "3" }
-diff --git a/src/backends/appcontainer/common/src/appcontainer_runner.rs b/src/backends/appcontainer/common/src/appcontainer_runner.rs
---- a/src/backends/appcontainer/common/src/appcontainer_runner.rs
-+++ b/src/backends/appcontainer/common/src/appcontainer_runner.rs
-@@ -68,7 +68,6 @@
- const PROCESS_CREATION_ALL_APPLICATION_PACKAGES_OPT_OUT: u32 = 1;
- 
- /// Proxy-related env var names to strip/override when building the child env block.
--const PROXY_VAR_NAMES: &[&str] = &["HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY"];
- 
- fn create_process_failure(
-     err: &windows_core::Error,
-@@ -202,14 +201,18 @@
-     entries: &mut Vec<(String, String)>,
-     addr: &wxc_common::models::ProxyAddress,
- ) {
--    entries.retain(|(key, _)| {
--        !PROXY_VAR_NAMES
--            .iter()
--            .any(|name| key.eq_ignore_ascii_case(name))
--    });
--    let proxy_url = addr.to_url();
--    entries.push(("HTTP_PROXY".to_string(), proxy_url.clone()));
--    entries.push(("HTTPS_PROXY".to_string(), proxy_url));
-+    let source = entries
-+        .iter()
-+        .map(|(key, value)| format!("{key}={value}"))
-+        .collect::<Vec<_>>();
-+    // Windows environment keys are case-insensitive. Retain one canonical entry per key.
-+    let mut variables = std::collections::BTreeMap::new();
-+    for entry in wxc_common::proxy_env::apply_cooperative_proxy_env(&source, &addr.to_url()) {
-+        if let Some((key, value)) = entry.split_once('=') {
-+            variables.insert(key.to_ascii_uppercase(), value.to_owned());
-+        }
-+    }
-+    *entries = variables.into_iter().collect();
- }
- 
- /// Owned capability SID derived from a capability name. Frees the underlying
-@@ -2181,10 +2184,10 @@
-         let proxy = wxc_common::models::ProxyAddress::new("127.0.0.1".to_string(), 8080);
-         let entries = super::build_explicit_entries(&env, Some(&proxy));
- 
--        // Original proxy vars should be stripped.
-+        // Original proxy vars should be scrubbed.
-         assert!(!entries
-             .iter()
--            .any(|(k, _)| k == "http_proxy" || k == "https_proxy" || k == "NO_PROXY"));
-+            .any(|(k, _)| k == "http_proxy" || k == "https_proxy"));
-         // FOO should remain.
-         assert!(entries.iter().any(|(k, v)| k == "FOO" && v == "bar"));
-         // Injected proxy vars should be present.
-@@ -2195,6 +2198,11 @@
-         assert!(entries
-             .iter()
-             .any(|(k, v)| k == "HTTPS_PROXY" && v == &proxy_url));
-+        // NO_PROXY is neutralized to the empty string rather than omitted, so
-+        // an inherited exemption cannot survive the cooperative proxy.
-+        assert!(entries
-+            .iter()
-+            .any(|(k, v)| k == "NO_PROXY" && v.is_empty()));
-     }
- 
-     // ---- validate_runner: unsupported policy fields surface as errors. ----
-diff --git a/src/backends/appcontainer/common/src/base_container_helpers.rs b/src/backends/appcontainer/common/src/base_container_helpers.rs
---- a/src/backends/appcontainer/common/src/base_container_helpers.rs
-+++ b/src/backends/appcontainer/common/src/base_container_helpers.rs
-@@ -57,8 +57,28 @@
-     spec.capabilities = (!capabilities.is_empty()).then(|| capabilities.join(","));
-     spec.disallow_win32k_system_calls = request.policy.ui.disable;
-     spec.ui_restrictions = ui_restrictions;
--    spec.fs_read_write = non_empty_paths(&request.policy.readwrite_paths);
--    spec.fs_read_only = non_empty_paths(&request.policy.readonly_paths);
-+    let mut writable = request.policy.readwrite_paths.clone();
-+    let mut readonly = request.policy.readonly_paths.clone();
-+    if let Some(access) = request.host_filesystem {
-+        for path in &request.host_filesystem_roots {
-+            if writable.contains(path)
-+                || readonly.contains(path)
-+                || request.policy.denied_paths.contains(path)
-+            {
-+                continue;
-+            }
-+            match access {
-+                wxc_common::host_changes::HostFilesystemAccess::ReadOnly => {
-+                    readonly.push(path.clone())
-+                }
-+                wxc_common::host_changes::HostFilesystemAccess::ReadWrite => {
-+                    writable.push(path.clone())
-+                }
-+            }
-+        }
-+    }
-+    spec.fs_read_write = non_empty_paths(&writable);
-+    spec.fs_read_only = non_empty_paths(&readonly);
-     spec.fs_deny = non_empty_paths(&request.policy.denied_paths);
-     spec.network_policy = Some(Box::new(build_psec_network_policy(&request.policy)));
-     let spec = spec.pack(&mut builder);
-diff --git a/src/backends/appcontainer/common/src/base_container_runner.rs b/src/backends/appcontainer/common/src/base_container_runner.rs
---- a/src/backends/appcontainer/common/src/base_container_runner.rs
-+++ b/src/backends/appcontainer/common/src/base_container_runner.rs
-@@ -18,23 +18,23 @@
- 
- use learning_mode_core::DenialAnalyzer;
- use learning_mode_windows::{
--    CaptureSession, EtlDenialAnalyzer, LearningModeApi, ProcessSecurityEnvironment,
--    SecurityEnvironmentApi, SecurityEnvironmentStartupInfo, PROCESS_SECURITY_ENVIRONMENT_FLAG_NONE,
-+    CaptureSession, EtlDenialAnalyzer, LearningModeApi, LearningModeError,
-+    PROCESS_SECURITY_ENVIRONMENT_FLAG_NONE, ProcessSecurityEnvironment, SecurityEnvironmentApi,
-+    SecurityEnvironmentStartupInfo,
- };
- use windows::Win32::Foundation::{
--    CloseHandle, GetLastError, SetHandleInformation, ERROR_CALL_NOT_IMPLEMENTED,
--    ERROR_NOT_SUPPORTED, E_NOTIMPL, HANDLE, HANDLE_FLAG_INHERIT, WAIT_OBJECT_0, WAIT_TIMEOUT,
-+    CloseHandle, E_NOTIMPL, ERROR_CALL_NOT_IMPLEMENTED, ERROR_NOT_SUPPORTED, GetLastError, HANDLE,
-+    HANDLE_FLAG_INHERIT, SetHandleInformation, WAIT_OBJECT_0, WAIT_TIMEOUT,
- };
- use windows::Win32::System::Console::{
-     GetStdHandle, STD_ERROR_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE,
- };
- use windows::Win32::System::LibraryLoader::{
--    GetProcAddress, LoadLibraryExW, LOAD_LIBRARY_SEARCH_SYSTEM32,
-+    GetProcAddress, LOAD_LIBRARY_SEARCH_SYSTEM32, LoadLibraryExW,
- };
- use windows::Win32::System::Threading::{
--    CreateProcessW, GetExitCodeProcess, TerminateProcess, WaitForSingleObject,
--    EXTENDED_STARTUPINFO_PRESENT, PROCESS_CREATION_FLAGS, PROCESS_INFORMATION,
--    STARTF_USESTDHANDLES, STARTUPINFOW,
-+    CreateProcessW, EXTENDED_STARTUPINFO_PRESENT, GetExitCodeProcess, PROCESS_CREATION_FLAGS,
-+    PROCESS_INFORMATION, STARTF_USESTDHANDLES, STARTUPINFOW, TerminateProcess, WaitForSingleObject,
- };
- use windows_core::{PCWSTR, PWSTR};
- 
-@@ -47,8 +47,8 @@
-     write_stderr_line_best_effort,
- };
- use crate::guarded_capture::{
--    finalize_guarded_capture, validate_retain_etl_supported, GuardedCaptureFactory,
--    GuardedCaptureSession, GuardedStop,
-+    GuardedCaptureFactory, GuardedCaptureSession, GuardedStop, finalize_guarded_capture,
-+    validate_retain_etl_supported,
- };
- use crate::job_object::UiJobObject;
- use crate::launch_diagnostics::{
-@@ -67,20 +67,22 @@
-     CaptureDenialsErrorOutput, CaptureDenialsOutput, ExecutionRequest, FailurePhase, ProxyAddress,
-     SandboxOutputMetadata, ScriptResponse,
- };
-+use wxc_common::mxc_error::ApiFailure;
-+use wxc_common::mxc_error::MxcError;
- use wxc_common::process_util::{
--    create_std_pipes, InterruptiblePipeReader, OwnedHandle, PipeReadCanceller, PipeWriter,
--    SendOwnedHandle,
-+    InterruptiblePipeReader, OwnedHandle, PipeReadCanceller, PipeWriter, SendOwnedHandle,
-+    create_std_pipes,
- };
- use wxc_common::sandbox_process::{
--    boxed_closer, cancel_and_join_discard, spawn_discard, take_boxed_read, take_boxed_write,
--    SandboxBackend, SandboxProcess, StdioMode, StreamCloser,
-+    SandboxBackend, SandboxProcess, StdioMode, StreamCloser, boxed_closer, cancel_and_join_discard,
-+    spawn_discard, take_boxed_read, take_boxed_write,
- };
- use wxc_common::script_runner::get_timeout_milliseconds;
- use wxc_common::string_util;
--use wxc_common::validator::{validate_network_policy_support, NetworkPolicySupport};
-+use wxc_common::validator::{NetworkPolicySupport, validate_network_policy_support};
- 
- use windows::Win32::System::Threading::{
--    ResumeThread, CREATE_NO_WINDOW, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT,
-+    CREATE_NO_WINDOW, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT, ResumeThread,
- };
- 
- fn build_child_env_block(
-@@ -223,8 +225,7 @@
- const SANDBOX_CAP_NETWORK_PROXY: u64 = 0x0000_0000_0000_0004;
- const CAPTURE_API_AVAILABLE_LOG: &str =
-     "captureDenials: learning-mode trace API available (processmodel.dll)";
--const PSEC_DENIED_PATHS_UNSUPPORTED_MSG: &str =
--    "filesystem.deniedPaths on the process-security-environment path requires \
-+const PSEC_DENIED_PATHS_UNSUPPORTED_MSG: &str = "filesystem.deniedPaths on the process-security-environment path requires \
-      QueryProcessSecurityEnvironmentSupport to advertise PSE_SUPPORT_FS_DENY; this OS \
-      build does not support that policy, and the process-security-environment path \
-      cannot fall back to AppContainer or host-DACL enforcement";
-@@ -278,6 +279,58 @@
-         }
-         _ => false,
-     }
-+}
-+
-+fn hresult_from_win32(code: u32) -> u32 {
-+    if code == 0 {
-+        0
-+    } else {
-+        (code & 0x0000_ffff) | 0x8007_0000
-+    }
-+}
-+
-+fn psec_probe_error(error: LearningModeError) -> MxcError {
-+    let unsupported = match &error {
-+        LearningModeError::ApiSetUnavailable { .. } | LearningModeError::ExportMissing { .. } => {
-+            true
-+        }
-+        LearningModeError::HResultCall { code, .. } => {
-+            let code = *code as u32;
-+            code == E_NOTIMPL.0 as u32
-+                || code == hresult_from_win32(ERROR_CALL_NOT_IMPLEMENTED.0)
-+                || code == hresult_from_win32(ERROR_NOT_SUPPORTED.0)
-+        }
-+        LearningModeError::ApiCall { code, .. } => {
-+            is_api_not_implemented(*code) || *code == ERROR_NOT_SUPPORTED.0
-+        }
-+        LearningModeError::DllLoad(_) | LearningModeError::InvalidInput { .. } => false,
-+    };
-+    let failure = match &error {
-+        LearningModeError::ApiSetUnavailable { api_set, .. } => {
-+            Some(ApiFailure::new(format!("IsApiSetImplemented({api_set})")))
-+        }
-+        LearningModeError::DllLoad(_) => Some(ApiFailure::new("LoadLibraryExW(processmodel.dll)")),
-+        LearningModeError::ExportMissing { export, .. } => {
-+            Some(ApiFailure::new(format!("GetProcAddress({export})")))
-+        }
-+        LearningModeError::HResultCall { function, code } => {
-+            Some(ApiFailure::new(*function).with_native_code(format!("0x{:08X}", *code as u32)))
-+        }
-+        LearningModeError::ApiCall { function, code } => {
-+            Some(ApiFailure::new(*function).with_native_code(code.to_string()))
-+        }
-+        LearningModeError::InvalidInput { .. } => None,
-+    };
-+    let message = error.to_string();
-+    let mut result = if unsupported {
-+        MxcError::unsupported_containment(message)
-+    } else {
-+        MxcError::backend_unavailable(message)
-+    };
-+    if let Some(failure) = failure {
-+        result = result.with_api_failure(failure);
-+    }
-+    result
- }
- 
- trait CaptureSessionOps {
-@@ -579,6 +632,65 @@
-         })
-     }
- 
-+    /// Verifies that PSEC can implement this exact request without starting the
-+    /// user command. Confirmed missing capabilities return UnsupportedContainment;
-+    /// API, resource and cleanup failures retain their operation and native code.
-+    pub fn require_psec(request: &ExecutionRequest) -> Result<(), MxcError> {
-+        if request.policy.least_privilege_mode {
-+            return Err(MxcError::unsupported_containment(
-+                "PSEC does not support the requested least-privilege process mode",
-+            ));
-+        }
-+        if request.policy.network_proxy.is_enabled()
-+            && !request.policy.runtime_network_proxy_specified
-+        {
-+            return Err(MxcError::unsupported_containment(
-+                "PSEC requires the runtime proxy contract for proxied networking",
-+            ));
-+        }
-+
-+        let api = SecurityEnvironmentApi::load().map_err(psec_probe_error)?;
-+        if !request.policy.denied_paths.is_empty() {
-+            match api.supports_deny_paths().map_err(psec_probe_error)? {
-+                true => {}
-+                false => {
-+                    return Err(MxcError::unsupported_containment(
-+                        PSEC_DENIED_PATHS_UNSUPPORTED_MSG,
-+                    ));
-+                }
-+            }
-+        }
-+
-+        let specification = build_psec_spec(request);
-+        if request.policy.capture_denials.is_some() {
-+            let learning_mode = LearningModeApi::load().map_err(psec_probe_error)?;
-+            let session = CaptureSession::begin(
-+                api,
-+                learning_mode,
-+                &specification,
-+                PROCESS_SECURITY_ENVIRONMENT_FLAG_NONE,
-+            )
-+            .map_err(psec_probe_error)?;
-+            SecurityEnvironmentStartupInfo::new(
-+                STARTUPINFOW::default(),
-+                session.environment(),
-+                &[],
-+            )
-+            .map(drop)
-+            .map_err(psec_probe_error)?;
-+            drop(session);
-+            return Ok(());
-+        }
-+
-+        let environment = api
-+            .create(&specification, PROCESS_SECURITY_ENVIRONMENT_FLAG_NONE)
-+            .map_err(psec_probe_error)?;
-+        let startup =
-+            SecurityEnvironmentStartupInfo::new(STARTUPINFOW::default(), environment.raw(), &[]);
-+        environment.close();
-+        startup.map(drop).map_err(psec_probe_error)
-+    }
-+
-     /// Whether this host can create a PSEC environment and start a Learning Mode trace.
-     ///
-     /// The successful probe session is dropped immediately, which closes and discards the trace.
-@@ -869,6 +981,11 @@
-             self.process_security_environment_usable(),
-             supports_deny_paths,
-         )
-+    }
-+
-+    /// Whether this exact request can use PSEC without another containment implementation.
-+    pub fn supports_psec(request: &ExecutionRequest) -> bool {
-+        Self::require_psec(request).is_ok()
-     }
- 
-     pub(crate) fn is_usable_for_request(request: &ExecutionRequest) -> bool {
-@@ -1166,6 +1283,14 @@
- 
-         let capture_denials = request.policy.capture_denials.clone();
-         let use_process_security_environment = self.uses_process_security_environment(&request);
-+        if (request.host_filesystem.is_some() || request.require_process_security_environment)
-+            && !use_process_security_environment
-+        {
-+            let mut error =
-+                ScriptResponse::error("the prepared PSEC implementation is no longer available");
-+            error.failure_phase = wxc_common::models::FailurePhase::BackendUnavailable;
-+            return Err(error);
-+        }
-         Self::validate_resolved_network_contract(&request, use_process_security_environment)?;
-         let use_guarded_capture = capture_denials.is_some() && !use_process_security_environment;
-         let spec_bytes = if !use_process_security_environment {
-@@ -1393,19 +1518,19 @@
-                 h_stdin = match unsafe { GetStdHandle(STD_INPUT_HANDLE) } {
-                     Ok(h) => h,
-                     Err(e) => {
--                        return Err(ScriptResponse::error(&format!("GetStdHandle(STDIN): {e}")))
-+                        return Err(ScriptResponse::error(&format!("GetStdHandle(STDIN): {e}")));
-                     }
-                 };
-                 h_stdout = match unsafe { GetStdHandle(STD_OUTPUT_HANDLE) } {
-                     Ok(h) => h,
-                     Err(e) => {
--                        return Err(ScriptResponse::error(&format!("GetStdHandle(STDOUT): {e}")))
-+                        return Err(ScriptResponse::error(&format!("GetStdHandle(STDOUT): {e}")));
-                     }
-                 };
-                 h_stderr = match unsafe { GetStdHandle(STD_ERROR_HANDLE) } {
-                     Ok(h) => h,
-                     Err(e) => {
--                        return Err(ScriptResponse::error(&format!("GetStdHandle(STDERR): {e}")))
-+                        return Err(ScriptResponse::error(&format!("GetStdHandle(STDERR): {e}")));
-                     }
-                 };
- 
-@@ -1683,7 +1808,7 @@
-                 None => {
-                     return Err(ScriptResponse::error(
-                         "internal error: SBOX launch API was not initialized",
--                    ))
-+                    ));
-                 }
-             };
-             let spec_bytes = match spec_bytes.as_deref() {
-@@ -1691,7 +1816,7 @@
-                 None => {
-                     return Err(ScriptResponse::error(
-                         "internal error: SBOX specification was not initialized",
--                    ))
-+                    ));
-                 }
-             };
-             let (success, error) = SandboxLaunchArgs {
-@@ -1859,8 +1984,7 @@
-                     self.proxy_coordinator.stop(logger);
-                 }
- 
--                const JOB_SETUP_FAILED_MSG: &str =
--                    "BaseContainer sandbox could not be placed in a job object, so it \
-+                const JOB_SETUP_FAILED_MSG: &str = "BaseContainer sandbox could not be placed in a job object, so it \
-                      could not be reliably terminated; the launch was rejected to \
-                      avoid running an uncontainable sandbox.";
-                 let mut extended_error = format!("BaseContainer job-object setup failed: {e}");
-@@ -2987,6 +3111,58 @@
-     use wxc_common::ui_policy::EffectiveUiRestrictions;
- 
-     #[test]
-+    fn psec_probe_classifies_only_confirmed_missing_capabilities_as_unsupported() {
-+        for error in [
-+            LearningModeError::ApiSetUnavailable {
-+                api: "process security-environment",
-+                api_set: "api-ms-win-security-basecontainer-l1-1-0",
-+            },
-+            LearningModeError::ExportMissing {
-+                api: "process security-environment",
-+                export: "CreateProcessSecurityEnvironment",
-+                detail: "missing".into(),
-+            },
-+            LearningModeError::HResultCall {
-+                function: "CreateProcessSecurityEnvironment",
-+                code: E_NOTIMPL.0,
-+            },
-+            LearningModeError::ApiCall {
-+                function: "UpdateProcThreadAttribute",
-+                code: ERROR_NOT_SUPPORTED.0,
-+            },
-+        ] {
-+            let result = psec_probe_error(error);
-+            assert_eq!(
-+                result.code,
-+                wxc_common::mxc_error::MxcErrorCode::UnsupportedContainment
-+            );
-+            assert!(result.operation().is_some());
-+        }
-+    }
-+
-+    #[test]
-+    fn psec_probe_preserves_operational_failures_instead_of_enabling_fallback() {
-+        let error = psec_probe_error(LearningModeError::HResultCall {
-+            function: "CreateProcessSecurityEnvironment",
-+            code: windows::Win32::Foundation::E_ACCESSDENIED.0,
-+        });
-+
-+        assert_eq!(
-+            error.code,
-+            wxc_common::mxc_error::MxcErrorCode::BackendUnavailable
-+        );
-+        assert_eq!(error.operation(), Some("CreateProcessSecurityEnvironment"));
-+        assert_eq!(error.native_code(), Some("0x80070005"));
-+
-+        let load = psec_probe_error(LearningModeError::DllLoad("bad image".into()));
-+        assert_eq!(
-+            load.code,
-+            wxc_common::mxc_error::MxcErrorCode::BackendUnavailable
-+        );
-+        assert_eq!(load.operation(), Some("LoadLibraryExW(processmodel.dll)"));
-+    }
-+
-+    #[test]
-     fn guarded_capture_rejects_a_child_that_was_never_suspended() {
-         assert!(guarded_capture_started_too_late(0, true));
-         assert!(!guarded_capture_started_too_late(1, true));
-@@ -3122,8 +3298,10 @@
-             first.etl_path.extension().and_then(|ext| ext.to_str()),
-             Some("etl")
-         );
--        assert!(wxc_common::filesystem_dacl::owner_is_self(&first.directory)
--            .expect("read managed directory owner"));
-+        assert!(
-+            wxc_common::filesystem_dacl::owner_is_self(&first.directory)
-+                .expect("read managed directory owner")
-+        );
-         drop(first);
-         drop(second);
-         assert!(!first_directory.exists());
-@@ -3670,9 +3848,11 @@
-         let error = BaseContainerRunner::validate_resolved_network_contract(&request, false)
-             .expect_err("a late PSEC-to-SBOX transition must fail closed");
-         assert_eq!(error.failure_phase, FailurePhase::BackendUnavailable);
--        assert!(error
--            .error_message
--            .contains("requires process-security-environment networking"));
-+        assert!(
-+            error
-+                .error_message
-+                .contains("requires process-security-environment networking")
-+        );
-     }
- 
-     #[test]
-@@ -3718,10 +3898,11 @@
-         let bytes = BaseContainerRunner::build_sandbox_spec(&request);
-         let spec = base_container_layout::root_as_sandbox_spec(&bytes).unwrap();
-         assert_eq!(spec.capabilities(), Some("privateNetworkClientServer"));
--        assert!(spec
--            .network_policy()
--            .and_then(|policy| policy.allowed_appcontainer_peer())
--            .is_none());
-+        assert!(
-+            spec.network_policy()
-+                .and_then(|policy| policy.allowed_appcontainer_peer())
-+                .is_none()
-+        );
-     }
- 
-     #[test]
-@@ -4426,10 +4607,11 @@
-         );
-         assert!(egress.allow().is_none());
-         assert!(egress.deny().is_none());
--        assert!(spec
--            .network_policy()
--            .and_then(|policy| policy.allowed_appcontainer_peer())
--            .is_none());
-+        assert!(
-+            spec.network_policy()
-+                .and_then(|policy| policy.allowed_appcontainer_peer())
-+                .is_none()
-+        );
-     }
- 
-     #[test]
-diff --git a/src/backends/appcontainer/common/src/dispatcher.rs b/src/backends/appcontainer/common/src/dispatcher.rs
---- a/src/backends/appcontainer/common/src/dispatcher.rs
-+++ b/src/backends/appcontainer/common/src/dispatcher.rs
-@@ -376,6 +376,26 @@
-         prefer_base_container,
-         supports_deny_paths,
-     )?;
-+    if let Some(scope) = &request.host_acl_scope {
-+        let targets = request.policy.denied_paths.iter().chain(
-+            request
-+                .policy
-+                .readwrite_paths
-+                .iter()
-+                .chain(&request.policy.readonly_paths)
-+                .filter(|_| decision.tier == IsolationTier::AppContainerDacl),
-+        );
-+        if decision.needs_dacl_augmentation {
-+            for path in targets {
-+                scope.check(std::path::Path::new(path)).map_err(|error| {
-+                    DispatchError::Fallback(FallbackError::WriteDacUnavailable {
-+                        path: PathBuf::from(path),
-+                        reason: error.to_string(),
-+                    })
-+                })?;
-+            }
-+        }
-+    }
-     let guarded_capture_required = request.policy.capture_denials.is_some()
-         && (decision.tier != IsolationTier::BaseContainer || !uses_native_capture);
-     if guarded_capture_required && capture_factory.is_none() {
+diff --git a/src/core/wxc_common/tests/fixtures/telemetry-consent/presenter-decision-dismissed.json b/src/core/wxc_common/tests/fixtures/telemetry-consent/presenter-decision-dismissed.json
+new file mode 100644
+--- /dev/null
++++ b/src/core/wxc_common/tests/fixtures/telemetry-consent/presenter-decision-dismissed.json
+@@ -0,0 +1 @@
++{"challenge":"request-a","resourceVersion":1,"decision":"dismissed"}
+diff --git a/src/core/wxc_common/tests/fixtures/telemetry-consent/presenter-decision-no.json b/src/core/wxc_common/tests/fixtures/telemetry-consent/presenter-decision-no.json
+new file mode 100644
+--- /dev/null
++++ b/src/core/wxc_common/tests/fixtures/telemetry-consent/presenter-decision-no.json
+@@ -0,0 +1 @@
++{"challenge":"request-a","resourceVersion":1,"decision":"no"}
+diff --git a/src/core/wxc_common/tests/fixtures/telemetry-consent/presenter-decision-unknown-field.json b/src/core/wxc_common/tests/fixtures/telemetry-consent/presenter-decision-unknown-field.json
+new file mode 100644
+--- /dev/null
++++ b/src/core/wxc_common/tests/fixtures/telemetry-consent/presenter-decision-unknown-field.json
+@@ -0,0 +1 @@
++{"challenge":"request-a","resourceVersion":1,"decision":"yes","grant":true}
+diff --git a/src/core/wxc_common/tests/fixtures/telemetry-consent/presenter-decision-yes.json b/src/core/wxc_common/tests/fixtures/telemetry-consent/presenter-decision-yes.json
+new file mode 100644
+--- /dev/null
++++ b/src/core/wxc_common/tests/fixtures/telemetry-consent/presenter-decision-yes.json
+@@ -0,0 +1 @@
++{"challenge":"request-a","resourceVersion":1,"decision":"yes"}
 diff --git a/src/backends/bubblewrap/common/Cargo.toml b/src/backends/bubblewrap/common/Cargo.toml
 --- a/src/backends/bubblewrap/common/Cargo.toml
 +++ b/src/backends/bubblewrap/common/Cargo.toml
@@ -2853,7 +2751,7 @@ diff --git a/src/backends/bubblewrap/common/Cargo.toml b/src/backends/bubblewrap
 -lxc_common = { workspace = true }
 -nix = { workspace = true }
 +wxc_common = { "path" = "../../../core/wxc_common" }
-+lxc_common = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4" }
++lxc_common = { "git" = "https://github.com/microsoft/mxc", "rev" = "ca7ea12ac6bd9f5420d6adecb37e32a8158da476" }
 +nix = { "version" = "0.29", "features" = ["fs", "mount", "sched", "signal", "net", "process", "user", "term"] }
  semver = "1"
 -serde = { workspace = true }
@@ -2879,7 +2777,7 @@ diff --git a/src/backends/bubblewrap/common/src/bwrap_command.rs b/src/backends/
  
  /// The fixed prefix of the command bwrap is asked to run.
  ///
-@@ -648,7 +647,11 @@
+@@ -679,7 +678,11 @@
              // Read-only: already covered by the base ro-bind, but listed
              // explicitly so the intent is clear and it overrides any rw parent.
              FsIntent::ReadOnly => {
@@ -2892,7 +2790,7 @@ diff --git a/src/backends/bubblewrap/common/src/bwrap_command.rs b/src/backends/
              }
              FsIntent::Denied => {
                  if denied_files.contains(&mount.path) {
-@@ -660,39 +663,47 @@
+@@ -691,39 +694,47 @@
          }
      }
  
@@ -2931,7 +2829,7 @@ diff --git a/src/backends/bubblewrap/common/src/bwrap_command.rs b/src/backends/
 -    // request so the sandbox has a minimal, predictable environment.
 +    // Bind the complete environment to the namespace-visible proxy endpoint.
      args.push("--clearenv".into());
--    for env_str in &request.env {
+-    for env_str in request.env_entries() {
 -        if let Some((key, value)) = env_str.split_once('=') {
 -            // When the proxy is active, drop any caller-supplied proxy env
 -            // entries so they cannot override the values we set below.
@@ -2940,9 +2838,9 @@ diff --git a/src/backends/bubblewrap/common/src/bwrap_command.rs b/src/backends/
 -            }
 +    let env = match proxy_address {
 +        Some(address) => {
-+            wxc_common::proxy_env::apply_cooperative_proxy_env(&request.env, &address.to_url())
++            wxc_common::proxy_env::apply_cooperative_proxy_env(request.env_entries(), &address.to_url())
 +        }
-+        None => request.env.clone(),
++        None => request.env_entries().to_vec(),
 +    };
 +    for entry in env {
 +        if let Some((key, value)) = entry.split_once('=') {
@@ -2969,7 +2867,7 @@ diff --git a/src/backends/bubblewrap/common/src/bwrap_command.rs b/src/backends/
 diff --git a/src/backends/bubblewrap/common/src/bwrap_runner.rs b/src/backends/bubblewrap/common/src/bwrap_runner.rs
 --- a/src/backends/bubblewrap/common/src/bwrap_runner.rs
 +++ b/src/backends/bubblewrap/common/src/bwrap_runner.rs
-@@ -172,7 +172,10 @@
+@@ -175,7 +175,10 @@
          // Execution validation deliberately bypasses the advisory success
          // cache: a prior platform-support query must not approve a different
          // executable after `PATH` or its contents change.
@@ -2981,7 +2879,7 @@ diff --git a/src/backends/bubblewrap/common/src/bwrap_runner.rs b/src/backends/b
      }
  
      /// `validate_prepared` with an injectable environment probe.
-@@ -544,7 +547,12 @@
+@@ -584,7 +587,12 @@
          };
  
          // 4. Spawn `bwrap`.
@@ -2995,7 +2893,7 @@ diff --git a/src/backends/bubblewrap/common/src/bwrap_runner.rs b/src/backends/b
          command.args(&args);
          match stdio {
              StdioMode::Pipes => {
-@@ -705,6 +713,7 @@
+@@ -745,6 +753,7 @@
  /// [`BwrapChild`] (child, pipes, and per-run network state), tearing the network
  /// state down once the child exits.
  struct BubblewrapSandboxProcess {
@@ -3003,7 +2901,7 @@ diff --git a/src/backends/bubblewrap/common/src/bwrap_runner.rs b/src/backends/b
      inner: BwrapChild,
      teardown_done: bool,
  }
-@@ -713,6 +722,7 @@
+@@ -753,6 +762,7 @@
      fn new(child: BwrapChild) -> Self {
          Self {
              inner: child,
@@ -3011,7 +2909,7 @@ diff --git a/src/backends/bubblewrap/common/src/bwrap_runner.rs b/src/backends/b
              teardown_done: false,
          }
      }
-@@ -749,11 +759,14 @@
+@@ -789,11 +799,14 @@
      }
  
      fn try_wait(&mut self) -> std::io::Result<Option<i32>> {
@@ -3031,7 +2929,7 @@ diff --git a/src/backends/bubblewrap/common/src/bwrap_runner.rs b/src/backends/b
      }
  
      fn id(&self) -> u32 {
-@@ -764,7 +777,7 @@
+@@ -804,7 +817,7 @@
          // No-op once the child has exited and been reaped: its pid/pgid can be
          // recycled, so signaling it could hit an unrelated process (group). A
          // reaped `Child` returns its cached status here without a syscall.
@@ -3040,7 +2938,7 @@ diff --git a/src/backends/bubblewrap/common/src/bwrap_runner.rs b/src/backends/b
              return Ok(());
          }
          if self.inner.group {
-@@ -816,6 +829,7 @@
+@@ -856,6 +869,7 @@
              }
          };
  
@@ -3051,7 +2949,7 @@ diff --git a/src/backends/bubblewrap/common/src/bwrap_runner.rs b/src/backends/b
 diff --git a/src/backends/bubblewrap/common/src/bwrap_version.rs b/src/backends/bubblewrap/common/src/bwrap_version.rs
 --- a/src/backends/bubblewrap/common/src/bwrap_version.rs
 +++ b/src/backends/bubblewrap/common/src/bwrap_version.rs
-@@ -1497,3 +1497,15 @@
+@@ -1168,3 +1168,15 @@
          assert_eq!(first.join().unwrap(), Err(BwrapUnavailable::NotFound));
      }
  }
@@ -3094,16 +2992,7 @@ diff --git a/src/backends/seatbelt/common/Cargo.toml b/src/backends/seatbelt/com
 diff --git a/src/backends/seatbelt/common/src/profile_builder.rs b/src/backends/seatbelt/common/src/profile_builder.rs
 --- a/src/backends/seatbelt/common/src/profile_builder.rs
 +++ b/src/backends/seatbelt/common/src/profile_builder.rs
-@@ -28,7 +28,7 @@
- use std::fmt::Write as _;
- 
- use crate::seatbelt_policy;
--use wxc_common::filesystem_resolve::{resolve_path_plan, FsIntent};
-+use wxc_common::filesystem_resolve::{FsIntent, resolve_path_plan};
- use wxc_common::host_is_canonical_loopback;
- use wxc_common::models::{ClipboardPolicy, ContainerPolicy, ExecutionRequest, ProxyAddress};
- 
-@@ -82,6 +82,29 @@
+@@ -85,6 +85,29 @@
      write_extra_seatbelt_rules(&mut out, request);
      write_ui_rules(&mut out, request);
  
@@ -3133,7 +3022,7 @@ diff --git a/src/backends/seatbelt/common/src/profile_builder.rs b/src/backends/
      // Policy-derived deny rules go LAST so they win on conflict.
      write_filesystem_deny(&mut out, &resolved);
  
-@@ -174,7 +197,7 @@
+@@ -284,7 +307,7 @@
          let readonly = resolve_all(&policy.readonly_paths)?;
          let mut readwrite = resolve_all(&policy.readwrite_paths)?;
  
@@ -3142,7 +3031,7 @@ diff --git a/src/backends/seatbelt/common/src/profile_builder.rs b/src/backends/
          // dropping the path keeps the emitted profile an honest description of
          // the effective policy.
          let mut readonly: Vec<String> = readonly;
-@@ -204,8 +227,8 @@
+@@ -314,8 +337,8 @@
      // makes the *deepest* intent win at every path — a `readonlyPaths` entry
      // nested inside a broader `readwritePaths` subtree stays read-only rather
      // than inheriting the parent's write grant. `deniedPaths` is deliberately
@@ -3153,7 +3042,7 @@ diff --git a/src/backends/seatbelt/common/src/profile_builder.rs b/src/backends/
      out.push_str(";; --- policy.readonlyPaths / policy.readwritePaths (shallow-to-deep) ---\n");
      for mount in resolve_path_plan(&paths.readwrite, &paths.readonly, &[]) {
          let subpath = [mount.path.clone()];
-@@ -256,11 +279,31 @@
+@@ -366,11 +389,31 @@
          // whatever listens there. A Docker / ssh-agent / gpg-agent socket is a
          // control plane, so that would be an escape.
          out.push_str(";; --- policy.deniedPaths (override broader allow rules) ---\n");
@@ -3190,7 +3079,7 @@ diff --git a/src/backends/seatbelt/common/src/profile_builder.rs b/src/backends/
      }
  }
  
-@@ -1327,6 +1370,24 @@
+@@ -1476,6 +1519,24 @@
      }
  
      #[test]
@@ -3255,7 +3144,7 @@ diff --git a/src/backends/seatbelt/common/src/seatbelt_runner.rs b/src/backends/
  
  // ---------------------------------------------------------------------------
  // FFI declarations for Apple's sandbox API (libsandbox.dylib).
-@@ -284,6 +254,7 @@
+@@ -291,6 +261,7 @@
          };
  
      Ok(Box::new(SeatbeltSandboxProcess {
@@ -3263,7 +3152,7 @@ diff --git a/src/backends/seatbelt/common/src/seatbelt_runner.rs b/src/backends/
          child,
          stdin,
          stdout,
-@@ -412,6 +383,7 @@
+@@ -432,6 +403,7 @@
      // inside Terminal. No streamable stdio; the temp files are removed once the
      // handle's `wait()` (or drop) runs.
      Ok(Box::new(SeatbeltSandboxProcess {
@@ -3271,7 +3160,7 @@ diff --git a/src/backends/seatbelt/common/src/seatbelt_runner.rs b/src/backends/
          child,
          stdin: None,
          stdout: None,
-@@ -428,6 +400,7 @@
+@@ -448,6 +420,7 @@
  /// A running Seatbelt-sandboxed process: the child plus, for the pipes path,
  /// its parent-side pipe ends. See [`SandboxProcess`] for the contract.
  struct SeatbeltSandboxProcess {
@@ -3279,7 +3168,7 @@ diff --git a/src/backends/seatbelt/common/src/seatbelt_runner.rs b/src/backends/
      child: std::process::Child,
      /// Pipe ends — `Some` only for [`StdioMode::Pipes`]; `None` for inherited
      /// stdio / Open mode (the streams are the binary's own, or detached). The
-@@ -496,10 +469,13 @@
+@@ -516,10 +489,13 @@
      }
  
      fn try_wait(&mut self) -> std::io::Result<Option<i32>> {
@@ -3297,7 +3186,7 @@ diff --git a/src/backends/seatbelt/common/src/seatbelt_runner.rs b/src/backends/
      }
  
      fn id(&self) -> u32 {
-@@ -510,7 +486,7 @@
+@@ -530,7 +506,7 @@
          // No-op once the child has exited and been reaped: its pid/pgid can be
          // recycled, so signaling it could hit an unrelated process (group). A
          // reaped `Child` returns its cached status here without a syscall.
@@ -3306,7 +3195,7 @@ diff --git a/src/backends/seatbelt/common/src/seatbelt_runner.rs b/src/backends/
              return Ok(());
          }
          if self.group {
-@@ -557,6 +533,7 @@
+@@ -577,6 +553,7 @@
              }
          };
  
@@ -3314,12 +3203,12 @@ diff --git a/src/backends/seatbelt/common/src/seatbelt_runner.rs b/src/backends/
          cancel_and_join_discard(stdout_thread, &self.stdout_canceller);
          cancel_and_join_discard(stderr_thread, &self.stderr_canceller);
          self.run_cleanup();
-@@ -757,22 +734,20 @@
+@@ -870,22 +847,20 @@
      request: &ExecutionRequest,
      proxy_address: Option<&ProxyAddress>,
  ) -> Vec<(String, String)> {
 -    let mut pairs = Vec::new();
--    for kv in &request.env {
+-    for kv in request.env_entries() {
 -        if let Some((key, value)) = kv.split_once('=') {
 -            if proxy_address.is_some() && PROXY_ENV_KEYS.contains(&key) {
 -                continue;
@@ -3336,9 +3225,9 @@ diff --git a/src/backends/seatbelt/common/src/seatbelt_runner.rs b/src/backends/
 -    pairs
 +    let entries = match proxy_address {
 +        Some(address) => {
-+            wxc_common::proxy_env::apply_cooperative_proxy_env(&request.env, &address.to_url())
++            wxc_common::proxy_env::apply_cooperative_proxy_env(request.env_entries(), &address.to_url())
 +        }
-+        None => request.env.clone(),
++        None => request.env_entries().to_vec(),
 +    };
 +    entries
 +        .into_iter()
@@ -3351,3 +3240,290 @@ diff --git a/src/backends/seatbelt/common/src/seatbelt_runner.rs b/src/backends/
  }
  
  /// Write `content` to a temp file with a cryptographically random name and the
+diff --git a/src/backends/process_container/common/Cargo.toml b/src/backends/process_container/common/Cargo.toml
+--- a/src/backends/process_container/common/Cargo.toml
++++ b/src/backends/process_container/common/Cargo.toml
+@@ -1,37 +1,30 @@
+ [package]
+ name = "appcontainer_common"
+-version.workspace = true
+-edition.workspace = true
+-license.workspace = true
++version = "0.8.0"
++edition = "2021"
++license = "MIT"
+ 
+ [features]
+-# Enables the MXC_FORCE_TIER environment override for dedicated test executors.
+-# Never enable this feature for production binaries.
+ force-tier-testing = []
+-# Compile-time gate for Tier 2 (AppContainer + BFS via bfscfg.exe).
+-# OFF by default: production wxc-exec cannot resolve or spawn bfscfg.exe,
+-# and `fallback_detector::detect` naturally falls through T2 to T3 because
+-# `find_bfscfg_exe` returns `Ok(None)`. Enable explicitly on hosts where
+-# bfscfg.exe is known safe to invoke.
+ tier2_bfs = []
+ 
+ [dependencies]
+-wxc_common = { workspace = true }
+-serde = { workspace = true }
+-serde_json = { workspace = true }
+-thiserror = { workspace = true }
+-getrandom = { workspace = true }
++wxc_common = { "path" = "../../../core/wxc_common" }
++serde = { "version" = "1", "features" = ["derive"] }
++serde_json = { "version" = "1" }
++thiserror = { "version" = "2" }
++getrandom = { "version" = "0.2" }
+ 
+-[target.'cfg(target_os = "windows")'.dependencies]
+-windows = { workspace = true }
+-windows-core = { workspace = true }
+-flatbuffers = { workspace = true }
+-process_security_environment_spec = { workspace = true }
+-widestring = { workspace = true }
+-winreg = { workspace = true }
+-learning_mode_windows = { workspace = true }
+-learning_mode_core = { workspace = true }
++[target."cfg(target_os = \"windows\")".dependencies]
++windows = { "version" = "0.62", "features" = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_NetworkManagement_WindowsFirewall", "Win32_Security", "Win32_Security_Authorization", "Win32_Security_Credentials", "Win32_Security_Isolation", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_Diagnostics_Debug", "Win32_System_Diagnostics_Etw", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Environment", "Win32_System_IO", "Win32_System_JobObjects", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Ole", "Win32_System_Pipes", "Win32_System_ProcessStatus", "Win32_System_Registry", "Win32_System_SystemInformation", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_Time", "Win32_System_Variant", "Win32_System_WindowsProgramming", "Win32_UI_Shell"] }
++windows-core = { "version" = "0.62" }
++flatbuffers = { "version" = "25" }
++process_security_environment_spec = { "git" = "https://github.com/microsoft/mxc", "rev" = "ca7ea12ac6bd9f5420d6adecb37e32a8158da476" }
++widestring = { "version" = "1" }
++winreg = { "version" = "0.55" }
++learning_mode_windows = { "git" = "https://github.com/microsoft/mxc", "rev" = "ca7ea12ac6bd9f5420d6adecb37e32a8158da476" }
++learning_mode_core = { "git" = "https://github.com/microsoft/mxc", "rev" = "ca7ea12ac6bd9f5420d6adecb37e32a8158da476" }
+ 
+ [dev-dependencies]
+-tempfile.workspace = true
+-learning_mode_windows = { workspace = true, features = ["test-support"] }
++learning_mode_windows = { git = "https://github.com/microsoft/mxc", rev = "ca7ea12ac6bd9f5420d6adecb37e32a8158da476", features = ["test-support"] }
++tempfile = { "version" = "3" }
+diff --git a/src/backends/process_container/common/src/base_container_runner.rs b/src/backends/process_container/common/src/base_container_runner.rs
+--- a/src/backends/process_container/common/src/base_container_runner.rs
++++ b/src/backends/process_container/common/src/base_container_runner.rs
+@@ -14,6 +14,9 @@
+ use std::sync::Arc;
+ 
+ use learning_mode_core::DenialAnalyzer;
++use learning_mode_windows::LearningModeError;
++use wxc_common::mxc_error::{MxcError, ApiFailure};
++use windows::Win32::Foundation::ERROR_NOT_SUPPORTED;
+ use learning_mode_windows::{EtlDenialAnalyzer, LearningModeApi};
+ use windows::Win32::Foundation::{
+     CloseHandle, GetLastError, SetHandleInformation, ERROR_CALL_NOT_IMPLEMENTED, E_NOTIMPL, HANDLE,
+@@ -183,10 +186,62 @@
+         | learning_mode_windows::LearningModeError::ExportMissing { .. } => true,
+         learning_mode_windows::LearningModeError::HResultCall { code, .. } => *code == E_NOTIMPL.0,
+         learning_mode_windows::LearningModeError::ApiCall { code, .. } => {
+-            is_api_not_implemented(*code)
++            *code == ERROR_CALL_NOT_IMPLEMENTED.0
+         }
+         _ => false,
+     }
++}
++
++fn hresult_from_win32(code: u32) -> u32 {
++    if code == 0 {
++        0
++    } else {
++        (code & 0x0000_ffff) | 0x8007_0000
++    }
++}
++
++fn psec_probe_error(error: LearningModeError) -> MxcError {
++    let unsupported = match &error {
++        LearningModeError::ApiSetUnavailable { .. } | LearningModeError::ExportMissing { .. } => {
++            true
++        }
++        LearningModeError::HResultCall { code, .. } => {
++            let code = *code as u32;
++            code == E_NOTIMPL.0 as u32
++                || code == hresult_from_win32(ERROR_CALL_NOT_IMPLEMENTED.0)
++                || code == hresult_from_win32(ERROR_NOT_SUPPORTED.0)
++        }
++        LearningModeError::ApiCall { code, .. } => {
++            *code == ERROR_CALL_NOT_IMPLEMENTED.0 || *code == ERROR_NOT_SUPPORTED.0
++        }
++        LearningModeError::DllLoad(_) | LearningModeError::InvalidInput { .. } => false,
++    };
++    let failure = match &error {
++        LearningModeError::ApiSetUnavailable { api_set, .. } => {
++            Some(ApiFailure::new(format!("IsApiSetImplemented({api_set})")))
++        }
++        LearningModeError::DllLoad(_) => Some(ApiFailure::new("LoadLibraryExW(processmodel.dll)")),
++        LearningModeError::ExportMissing { export, .. } => {
++            Some(ApiFailure::new(format!("GetProcAddress({export})")))
++        }
++        LearningModeError::HResultCall { function, code } => {
++            Some(ApiFailure::new(*function).with_native_code(format!("0x{:08X}", *code as u32)))
++        }
++        LearningModeError::ApiCall { function, code } => {
++            Some(ApiFailure::new(*function).with_native_code(code.to_string()))
++        }
++        LearningModeError::InvalidInput { .. } => None,
++    };
++    let message = error.to_string();
++    let mut result = if unsupported {
++        MxcError::unsupported_containment(message)
++    } else {
++        MxcError::backend_unavailable(message)
++    };
++    if let Some(failure) = failure {
++        result = result.with_api_failure(failure);
++    }
++    result
+ }
+ 
+ trait CaptureSessionOps {
+@@ -303,6 +358,83 @@
+ }
+ 
+ impl BaseContainerRunner {
++    /// Verifies that PSEC can implement this exact request without starting the
++    /// user command. Confirmed missing capabilities return UnsupportedContainment;
++    /// API, resource and cleanup failures retain their operation and native code.
++    pub fn require_psec(request: &ExecutionRequest) -> Result<(), MxcError> {
++        if request.policy.least_privilege_mode {
++            return Err(MxcError::unsupported_containment(
++                "PSEC does not support the requested least-privilege process mode",
++            ));
++        }
++        if request.policy.network_proxy.is_enabled()
++            && !request.policy.runtime_network_proxy_specified
++        {
++            return Err(MxcError::unsupported_containment(
++                "PSEC requires the runtime proxy contract for proxied networking",
++            ));
++        }
++
++        let api = SecurityEnvironmentApi::load().map_err(psec_probe_error)?;
++        if !request.policy.denied_paths.is_empty() {
++            match api.supports_deny_paths().map_err(psec_probe_error)? {
++                true => {}
++                false => {
++                    return Err(MxcError::unsupported_containment(
++                        PSEC_DENIED_PATHS_UNSUPPORTED_MSG,
++                    ));
++                }
++            }
++        }
++
++        // Resolve the same contract used by the actual launch, preserving typed probe failures.
++        let contract = if !request.policy.enumerate_paths.is_empty()
++            || crate::base_container_helpers::unrestricted_host_loopback_allowed(&request.policy) {
++            if !api.supports_version(1, 1).map_err(psec_probe_error)? {
++                return Err(MxcError::unsupported_containment("PSEC 1.1 is required by this request"));
++            }
++            if !request.policy.enumerate_paths.is_empty() && !api.supports_enumerate_paths().map_err(psec_probe_error)? {
++                return Err(MxcError::unsupported_containment(PSEC_ENUMERATE_PATHS_UNSUPPORTED_MSG));
++            }
++            let ingress = api.supports_network_ingress().map_err(psec_probe_error)?;
++            if crate::base_container_helpers::unrestricted_host_loopback_allowed(&request.policy) && !ingress {
++                return Err(MxcError::unsupported_containment(PSEC_INGRESS_UNSUPPORTED_MSG));
++            }
++            ResolvedPsecContract { contract: PsecContract::V1_1, supports_network_ingress: ingress }
++        } else {
++            ResolvedPsecContract::baseline()
++        };
++        let specification = build_psec_spec(request, contract);
++        if request.policy.capture_denials.is_some() {
++            let learning_mode = LearningModeApi::load().map_err(psec_probe_error)?;
++            let session = CaptureSession::begin(
++                api,
++                learning_mode,
++                &specification,
++                PROCESS_SECURITY_ENVIRONMENT_FLAG_NONE,
++            )
++            .map_err(psec_probe_error)?;
++            SecurityEnvironmentStartupInfo::new(
++                STARTUPINFOW::default(),
++                session.environment(),
++                &[],
++            )
++            .map(drop)
++            .map_err(psec_probe_error)?;
++            drop(session);
++            return Ok(());
++        }
++
++        let environment = api
++            .create(&specification, PROCESS_SECURITY_ENVIRONMENT_FLAG_NONE)
++            .map_err(psec_probe_error)?;
++        let startup =
++            SecurityEnvironmentStartupInfo::new(STARTUPINFOW::default(), environment.raw(), &[]);
++        environment.close();
++        startup.map(drop).map_err(psec_probe_error)
++    }
++
++
+     pub fn new() -> Self {
+         Self::default()
+     }
+@@ -4061,3 +4193,7 @@
+     // BaseContainer native-PSEC exception) is exercised as a consolidated
+     // matrix in `crate::guarded_capture`'s tests, so it is not duplicated here.
+ }
++
++#[cfg(test)]
++#[path = "psec_tests.rs"]
++mod psec_tests;
+diff --git a/src/backends/process_container/common/src/psec_tests.rs b/src/backends/process_container/common/src/psec_tests.rs
+new file mode 100644
+--- /dev/null
++++ b/src/backends/process_container/common/src/psec_tests.rs
+@@ -0,0 +1,53 @@
++use super::*;
++
++#[test]
++fn psec_probe_classifies_only_confirmed_missing_capabilities_as_unsupported() {
++    for error in [
++        LearningModeError::ApiSetUnavailable {
++            api: "process security-environment",
++            api_set: "api-ms-win-security-basecontainer-l1-1-0",
++        },
++        LearningModeError::ExportMissing {
++            api: "process security-environment",
++            export: "CreateProcessSecurityEnvironment",
++            detail: "missing".into(),
++        },
++        LearningModeError::HResultCall {
++            function: "CreateProcessSecurityEnvironment",
++            code: E_NOTIMPL.0,
++        },
++        LearningModeError::ApiCall {
++            function: "UpdateProcThreadAttribute",
++            code: ERROR_NOT_SUPPORTED.0,
++        },
++    ] {
++        let result = psec_probe_error(error);
++        assert_eq!(
++            result.code,
++            wxc_common::mxc_error::MxcErrorCode::UnsupportedContainment
++        );
++        assert!(result.operation().is_some());
++    }
++}
++
++#[test]
++fn psec_probe_preserves_operational_failures_instead_of_enabling_fallback() {
++    let error = psec_probe_error(LearningModeError::HResultCall {
++        function: "CreateProcessSecurityEnvironment",
++        code: windows::Win32::Foundation::E_ACCESSDENIED.0,
++    });
++
++    assert_eq!(
++        error.code,
++        wxc_common::mxc_error::MxcErrorCode::BackendUnavailable
++    );
++    assert_eq!(error.operation(), Some("CreateProcessSecurityEnvironment"));
++    assert_eq!(error.native_code(), Some("0x80070005"));
++
++    let load = psec_probe_error(LearningModeError::DllLoad("bad image".into()));
++    assert_eq!(
++        load.code,
++        wxc_common::mxc_error::MxcErrorCode::BackendUnavailable
++    );
++    assert_eq!(load.operation(), Some("LoadLibraryExW(processmodel.dll)"));
++}

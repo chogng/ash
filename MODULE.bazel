@@ -139,16 +139,10 @@ use_repo(crate, "crates")
         "learning_mode_core",
         "learning_mode_windows",
         "lxc_common",
-        "mxc-sdk",
-        "mxc_build_common",
         "mxc_config_contract",
         "mxc_pty",
         "mxc_telemetry",
-        "plm",
         "process_security_environment_spec",
-        "sandbox_spec",
-        "windows_sandbox_common",
-        "windows_sandbox_lifecycle",
     ]
 ]
 

@@ -143,6 +143,31 @@ fn manager(candidates: Vec<Candidate>) -> SandboxManager<SandboxBackends> {
 }
 
 #[test]
+fn first_supported_backend_is_selected_without_preparing_another() {
+    let first = Candidate::new("mxc", Behavior::Ready);
+    let starts = Arc::clone(&first.starts);
+    let next = Candidate::new("windows", Behavior::Ready);
+    let calls = Arc::clone(&next.prepares);
+    let manager = manager(vec![first, next]);
+    let prepared = manager
+        .prepare(
+            &SandboxCommand::new("command", Vec::<String>::new(), "."),
+            policy(),
+        )
+        .unwrap();
+    let child = prepared.spawn(&[]).unwrap();
+    assert_eq!(starts.load(Ordering::SeqCst), 1);
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    assert_eq!(
+        child
+            .classify_denial(SandboxProcessExitStatus::Code(1), "", "")
+            .unwrap()
+            .reason(),
+        "mxc"
+    );
+}
+
+#[test]
 fn unsupported_candidates_are_skipped_before_any_process_starts() {
     let first = Candidate::new("first", Behavior::Unsupported);
     let second = Candidate::new("second", Behavior::Ready);

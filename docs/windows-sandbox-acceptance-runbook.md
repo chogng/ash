@@ -5,20 +5,38 @@
 
 ## 当前入口
 
+2026-09-21 起源码固定 MXC `ca7ea12ac6bd9f5420d6adecb37e32a8158da476`，直接使用平台运行器及发布的 0.8 契约。下面 9 月 10–11 日的实机记录使用旧 pin `6cd3d58f05d3447e67109cfb75e042803b843ca4`，不作为新版验收通过证据。
+
 当前 MXC Windows 后端只接受完整 PSEC 能力。此前的账户原型已退出源码和产品包，不能再通过 `mxc-user` 或 `tests/local.ps1` 安装它。独立候选使用 `ash-windows-sandbox`，仍需单独授权和验收，不能沿用旧原型的通过结论。
 
 ```powershell
 just test ash-sandboxing --lib
 just test ash-tool-executor --lib
 just test ash-mxc-sandbox --lib --test windows
-python -B scripts/cargo.py build -p ash-network-proxy --example probe --locked
-$env:ASH_NETWORK_PROBE = Join-Path $PWD '.build/cargo/debug/examples/probe.exe'
-# 需要具备完整策略能力的 PSEC 主机：
-just test ash-mxc-sandbox --test windows -- --ignored --test-threads=1
+# 先探测实际 Ash 策略，再逐项运行 PSEC 成功路径；缺能力返回失败：
+./scripts/test-psec.ps1
 ```
 
 23H2 本机不能作为 PSEC 完整执行的通过证据。缺少能力时应在准备阶段拒绝，不转入旧账户原型或普通进程。
-端到端用例继续覆盖工作目录写入、参考目录只读、隐藏目录、元数据、真实退出码、受管网络、账户或执行身份隔离、取消与后代回收。
+当前 PSEC 成功路径覆盖工作目录写入、参考目录只读、隐藏目录、元数据、真实退出码、执行身份隔离、取消与后代回收。Windows Managed 目前在准备阶段拒绝，测试覆盖代理策略存在和缺失时均不启动命令；不再保留与此实现相反的代理成功断言。
+
+### GitHub Actions
+
+[Windows sandbox acceptance](../.github/workflows/psec.yml) 在 main 或 `codex/psec-*` 分支相关文件更新时，使用 `windows-2022`、`windows-2025`（x64）和 `windows-11-arm`（ARM64）。每种系统独立运行 PSEC 检查与账户执行测试，任一失败不取消其他任务。Run workflow 的 `hosted` 运行全部托管机器，也可单独选择一种。
+
+| 运行器 | PSEC 验收预期 | 账户验收 |
+| --- | --- | --- |
+| Windows Server 2022 x64 | 启动前明确返回能力不支持 | 实际执行、权限与清理 |
+| Windows Server 2025 x64 | 启动前明确返回能力不支持 | 实际执行、权限与清理 |
+| Windows 11 ARM64 | PSEC 准备及执行成功 | 实际执行、权限与清理 |
+
+这是固定测试环境的预期，不是产品按版本分流的代码。产品仍按本次请求准备结果选择 MXC 或账户后端，严格策略不降低要求，启动错误不重跑。Server 2025 和 ARM64 的预期依据已运行镜像；Server 2022 的预期仍需 CI 验证。镜像能力改变时测试应失败并要求复核，不能自动把失败变为通过。Windows 11 x64 和具体旧版客户端仍需对应运行器，不由 Server 或 ARM64 结果替代。
+
+PSEC 检查不安装账户、不改变系统权限。`test-psec.ps1 -Capability absent` 只在适配器明确返回 `UnsupportedPolicy` 时通过；其他准备故障仍失败。默认 `required` 则必须先成功创建 PSEC 环境，再逐项运行命令、文件和生命周期测试，汇总全部失败。不存在的测试名不能计为通过。
+
+账户任务在独立的临时托管机器上运行 `test-windows-sandbox.ps1`，按已有安装计划创建账户，执行测试，并在 finally 中移除安装；同时运行后端选择与禁止重跑测试。手动 `self-hosted` 只运行 PSEC 成功路径，要求 `self-hosted`、`Windows`、`psec` 标签，以及 PowerShell 7、Python 3.11+、Rustup 和 MSVC 工具链。
+
+PSEC 报告包含系统版本、架构、工具链、MXC pin、各项退出码和输出。账户结果见独立任务日志及安装计划。能力不支持用例通过只证明拒绝行为，不是 PSEC 成功证明。PSEC ConPTY、完整网络矩阵、App Server 产品链路及 WSL 尚未纳入此任务。
 
 ## WSL 验收边界
 
@@ -32,7 +50,7 @@ Windows、WSL 2 中的 Linux 进程和 MXC 的 WSL Container（WSLC）是不同�
 | Windows 通过 MXC WSLC 启动 Linux 容器 | 验证 WSLC 的文件、网络、输入输出及完整容器生命周期 | 当前未启用，不属于已接入功能的验收 |
 | WSL 1 内运行 Linux 版 Ash | 独立验证其系统能力，不能沿用 WSL 2 结果 | 本轮不作支持或验收通过声明 |
 
-当前 Ash 未开启 `mxc-sdk` 的 `wslc` feature，也未选择 `Containment::Wslc`。
+当前 Ash 直接使用 Windows PSEC、Linux Bubblewrap、macOS Seatbelt 运行器，没有接入 WSLC。
 固定上游版本将 WSLC 列为需要显式启用的实验能力，见 [WSLC SDK 说明](https://github.com/microsoft/mxc/blob/6cd3d58f05d3447e67109cfb75e042803b843ca4/docs/wsl/wsl-container-getting-started.md#rust-sdk)。
 
 WSL 2 的 Linux 验收复用 [Linux 测试入口](../ash-rs/mxc-sandbox/README.md#验证)，另外必须覆盖：
@@ -58,11 +76,11 @@ SDK 原有 runtime proxy 身份模式仍保留原校验，账户实现不通过�
 
 保存完整命令、退出码、标准流、SDK 诊断、文件和 ACL 差异、存活进程检查。
 Windows 实机及生产隔离资格尚未取得；下列部分结果不能代替完整验收。
-Microsoft 对固定预览版的限制见 [上游说明](https://github.com/microsoft/mxc/tree/6cd3d58f05d3447e67109cfb75e042803b843ca4)。
+Microsoft 对当时固定预览版的限制见 [上游说明](https://github.com/microsoft/mxc/tree/6cd3d58f05d3447e67109cfb75e042803b843ca4)。
 
 ### 2026-09-10 首次实机记录
 
-- 源码：`11496080773c6598b99a7539148c50b59b20d676`，MXC revision 同本文固定版本。
+- 源码：`11496080773c6598b99a7539148c50b59b20d676`，MXC revision 为 `6cd3d58f05d3447e67109cfb75e042803b843ca4`。
 - 系统：Windows 11 专业版 23H2，build `22631.6199`，`x86_64-pc-windows-msvc`；Rust `1.98.0`。
 - 执行环境：未提升权限，PowerShell `LocalMachine=RemoteSigned`，其他执行策略范围均为 `Undefined`。
 - 本机完整构建和测试输出：`.build/acceptance/mxc-windows-20260910/check.log`、`windows.log`；这些是本机证据文件，不随 Git 提交。

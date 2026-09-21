@@ -40,13 +40,6 @@ impl HostAclScope {
     }
 }
 
-/// A ceiling on host filesystem access, separate from explicit path grants.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
-pub enum HostFilesystemAccess {
-    ReadOnly,
-    ReadWrite,
-}
-
 #[cfg(test)]
 #[path = "host_changes_tests.rs"]
 mod tests;

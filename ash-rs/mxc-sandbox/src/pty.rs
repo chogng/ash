@@ -23,7 +23,7 @@ const MAX_REQUEST_BYTES: usize = 16 * 1024;
 
 pub(super) fn prepare(
     command: &SandboxCommand,
-    request: mxc_sdk::SandboxRequest,
+    request: crate::request::Request,
     scope: &SandboxScope,
     size: TerminalSize,
     executable: PathBuf,
@@ -50,14 +50,21 @@ pub fn run_pty_helper() -> Result<i32, String> {
     if encoded.len() > MAX_REQUEST_BYTES {
         return Err("PTY launch request exceeds limit".into());
     }
-    let mut child =
-        mxc_engine::spawn_inherited_launch(&encoded).map_err(|_| "PTY sandbox launch failed")?;
+    use std::io::IsTerminal;
+    if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
+        return Err("PTY helper requires terminal stdio".into());
+    }
+    let request: crate::request::Request =
+        serde_json::from_str(&encoded).map_err(|_| "invalid PTY launch request")?;
+    let mut child = request
+        .spawn(wxc_common::sandbox_process::StdioMode::Inherit)
+        .map_err(|_| "PTY sandbox launch failed")?;
     let status = child.wait().map_err(|_| "PTY sandbox wait failed")?;
     Ok(if status < 0 { 1 } else { status })
 }
 
 struct Launch {
-    request: mxc_sdk::SandboxRequest,
+    request: crate::request::Request,
     executable: PathBuf,
     cwd: PathBuf,
     scope: SandboxScope,
@@ -69,8 +76,8 @@ impl SandboxLaunch for Launch {
         environment: &[(String, String)],
     ) -> Result<ProcessHandle, SandboxError> {
         crate::policy::validate_paths(&self.cwd, &self.scope)?;
-        self.request.set_env(environment.iter().cloned());
-        let encoded = mxc_engine::encode_inherited_launch(&self.request)
+        self.request.set_env(environment);
+        let encoded = serde_json::to_string(&self.request)
             .map_err(|_| crate::unavailable("cannot encode PTY launch"))?;
         if encoded.len() > MAX_REQUEST_BYTES {
             return Err(crate::unavailable("PTY launch request exceeds limit"));
