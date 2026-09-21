@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Position } from '../../../../common/core/position.js';
 import { Selection } from '../../../../common/core/selection.js';
-import { createBuiltinLanguageConfigurationService } from '../../../../common/languages/languageBuiltinConfigurations.js';
+import { createTestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { IndentationToSpacesCommand, IndentationToTabsCommand } from '../../browser/indentation.js';
 import { getReindentEditOperations } from '../../common/indentation.js';
@@ -29,7 +29,7 @@ test('canonical indentation commands convert the document and preserve the selec
 });
 
 test('getReindentEditOperations follows registered language indentation rules', () => {
-	using configurations = createBuiltinLanguageConfigurationService();
+	using configurations = createTestLanguageConfigurationService();
 	using model = new TextModel('if (ok) {\nvalue();\n}', { languageId: 'javascript', tabSize: 4, indentSize: 4, insertSpaces: true });
 	const edits = getReindentEditOperations(model, configurations, 1, 3);
 	model.applyEdits(edits);

@@ -1,30 +1,7 @@
+import { LanguageRegistry, type LanguageDescription } from '../../common/languages/languageRegistry.js';
 import { DisposableStore, type IDisposable } from '../../../base/common/lifecycle.js';
-import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
-import { LanguageService } from '../services/languageService.js';
-import { CharacterPairSupport } from './supports/characterPair.js';
-import {
-	IndentAction,
-	type CharacterPair,
-	type FoldingMarkers,
-	type IAutoClosingPairConditional,
-	type IndentationRule,
-	type LanguageConfiguration,
-	type OnEnterRule,
-} from './languageConfiguration.js';
-import {
-	type ILanguageConfigurationService,
-	LanguageConfigurationService,
-} from './languageConfigurationRegistry.js';
-
-export const BUILTIN_LANGUAGE_IDS = Object.freeze([
-	'typescript',
-	'typescriptreact',
-	'javascript',
-	'javascriptreact',
-	'json',
-	'jsonc',
-	'rust',
-]);
+import { IndentAction, type CharacterPair, type FoldingMarkers, type IAutoClosingPairConditional, type IndentationRule, type LanguageConfiguration, type OnEnterRule } from '../../common/languages/languageConfiguration.js';
+import type { ILanguageConfigurationService } from '../../common/languages/languageConfigurationRegistry.js';
 
 const ECMASCRIPT_LANGUAGE_IDS = new Set(['typescript', 'typescriptreact', 'javascript', 'javascriptreact']);
 const BRACKETS: CharacterPair[] = [
@@ -138,21 +115,6 @@ export function registerBuiltinLanguageConfigurations(service: ILanguageConfigur
 	return registrations;
 }
 
-export function createBuiltinLanguageConfigurationService(): LanguageConfigurationService {
-	return new BuiltinLanguageConfigurationService();
-}
-
-class BuiltinLanguageConfigurationService extends LanguageConfigurationService {
-	constructor() {
-		const configurationService = new InMemoryConfigurationService();
-		const languageService = new LanguageService();
-		super(configurationService, languageService);
-		this._register(configurationService);
-		this._register(languageService);
-		this._register(registerBuiltinLanguageConfigurations(this));
-	}
-}
-
 function pairsFromBrackets(brackets: readonly CharacterPair[]): IAutoClosingPairConditional[] {
 	return brackets.map(([open, close]) => ({ open, close }));
 }
@@ -174,4 +136,36 @@ function onEnter(beforeText: RegExp, indentAction: IndentAction, options: Builti
 	};
 }
 
-export const DEFAULT_LANGUAGE_AUTO_CLOSE_BEFORE = CharacterPairSupport.DEFAULT_AUTOCLOSE_BEFORE_LANGUAGE_DEFINED_BRACKETS;
+
+
+const BUILTIN_LANGUAGE_DESCRIPTIONS: readonly LanguageDescription[] = Object.freeze([
+	{ id: "c", extensions: [".c"] },
+	{ id: "cpp", extensions: [".cc", ".cpp"] },
+	{ id: "csharp", extensions: [".cs"] },
+	{ id: "css", extensions: [".css"], mimetypes: ["text/css"] },
+	{ id: "go", extensions: [".go"] },
+	{ id: "html", extensions: [".html"], mimetypes: ["text/html"] },
+	{ id: "java", extensions: [".java"] },
+	{ id: "javascript", extensions: [".js", ".mjs"], mimetypes: ["application/javascript", "text/javascript"] },
+	{ id: "javascriptreact", extensions: [".jsx"] },
+	{ id: "json", extensions: [".json"], mimetypes: ["application/json"] },
+	{ id: "jsonc", extensions: [".jsonc"] },
+	{ id: "markdown", extensions: [".md"], mimetypes: ["text/markdown"] },
+	{ id: "python", extensions: [".py"] },
+	{ id: "rust", extensions: [".rs"] },
+	{ id: "shell", extensions: [".sh"] },
+	{ id: "sql", extensions: [".sql"] },
+	{ id: "typescript", extensions: [".ts"], mimetypes: ["application/typescript", "text/typescript"] },
+	{ id: "typescriptreact", extensions: [".tsx"] },
+	{ id: "plaintext", extensions: [".txt"], mimetypes: ["text/plain"] },
+	{ id: "xml", extensions: [".xml"] },
+	{ id: "yaml", extensions: [".yaml", ".yml"] },
+	{ id: "ini", extensions: [".toml"] },
+]);
+
+/** Registers the product's baseline language associations before extensions load. */
+export function registerBuiltinLanguageDescriptions(registry: LanguageRegistry): IDisposable {
+	const registrations = new DisposableStore();
+	for (const description of BUILTIN_LANGUAGE_DESCRIPTIONS) registrations.add(registry.register(description));
+	return registrations;
+}

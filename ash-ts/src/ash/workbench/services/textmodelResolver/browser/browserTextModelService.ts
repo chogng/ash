@@ -1,3 +1,4 @@
+import type { ILanguageConfigurationService } from '../../../../editor/common/languages/languageConfigurationRegistry.js';
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { type IDisposable } from "../../../../base/common/lifecycle.js";
@@ -38,6 +39,7 @@ export interface BrowserTextModelServiceOptions {
 	/** Browser-owned maintenance policy applied to newly acquired text models. */
 	readonly maintenance?: TextModelMaintenanceOptions;
 	readonly languageService?: IAshLanguageService;
+	readonly languageConfigurationService?: ILanguageConfigurationService;
 	readonly languageFeaturesService?: ILanguageFeaturesService;
 	readonly syntaxService?: SyntaxServiceOptions;
 	readonly onDidChangeLanguageSupport?: Event<void>;
@@ -83,6 +85,7 @@ export class BrowserTextModelService implements ITextModelResourceService {
 			: undefined;
 		const model = new TextModel(content.text, {
 			resource: input.resource,
+			languageConfigurationService: this.options.languageConfigurationService,
 			languageId: languageSelection?.languageId ?? input.languageId,
 			maintenance: this.options.maintenance,
 			...(this.options.languageService && this.options.languageFeaturesService ? {

@@ -11,7 +11,7 @@ import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../platform/theme/test/common/testThemeService.js';
 import { CodeEditorWidget, type CodeEditorWidgetOptions } from '../../browser/widget/codeEditor/codeEditorWidget.js';
 import { ICodeEditorService } from '../../browser/services/codeEditorService.js';
-import { createBuiltinLanguageConfigurationService } from '../../common/languages/languageBuiltinConfigurations.js';
+import { createTestLanguageConfigurationService } from '../common/modes/testLanguageConfigurationService.js';
 import { ILanguageConfigurationService } from '../../common/languages/languageConfigurationRegistry.js';
 import { ILanguageFeaturesService } from '../../common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../common/services/languageFeaturesService.js';
@@ -40,7 +40,7 @@ export function createCodeEditorServices(disposables: Pick<DisposableStore, 'add
 		services.registerSingleton(IThemeService, () => new TestThemeService(darkColorTheme));
 	}
 	if (!services.has(ILanguageConfigurationService)) {
-		services.registerSingleton(ILanguageConfigurationService, () => createBuiltinLanguageConfigurationService());
+		services.registerSingleton(ILanguageConfigurationService, () => createTestLanguageConfigurationService());
 	}
 	if (!services.has(ILanguageFeaturesService)) {
 		services.registerSingleton(ILanguageFeaturesService, () => new LanguageFeaturesService());

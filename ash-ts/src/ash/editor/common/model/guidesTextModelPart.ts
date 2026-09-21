@@ -6,14 +6,14 @@ import { Range } from '../core/range.js';
 import type { TextModel } from './textModel.js';
 import { TextModelPart } from './textModelPart.js';
 import { computeIndentLevel } from './utils.js';
-import { ILanguageConfigurationService, ResolvedLanguageConfiguration } from '../languages/languageConfigurationRegistry.js';
+import { ResolvedLanguageConfiguration } from '../languages/languageConfigurationRegistry.js';
 import { BracketGuideOptions, HorizontalGuidesState, IActiveIndentGuideInfo, IGuidesTextModelPart, IndentGuide, IndentGuideHorizontalLine } from '../textModelGuides.js';
 import { BugIndicatingError } from '../../../base/common/errors.js';
 
 export class GuidesTextModelPart extends TextModelPart implements IGuidesTextModelPart {
 	constructor(
 		private readonly textModel: TextModel,
-		private readonly languageConfigurationService: ILanguageConfigurationService
+		private readonly resolveLanguageConfiguration: (languageId: string) => ResolvedLanguageConfiguration
 	) {
 		super();
 	}
@@ -21,7 +21,7 @@ export class GuidesTextModelPart extends TextModelPart implements IGuidesTextMod
 	private getLanguageConfiguration(
 		languageId: string
 	): ResolvedLanguageConfiguration {
-		return this.languageConfigurationService.getLanguageConfiguration(
+		return this.resolveLanguageConfiguration(
 			languageId
 		);
 	}

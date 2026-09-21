@@ -12,7 +12,7 @@ import { IdentityCoordinatesConverter } from '../../common/coordinatesConverter.
 import { type Selection } from '../../common/core/selection.js';
 import { getMapForWordSeparators } from '../../common/core/wordCharacterClassifier.js';
 import { type Range } from '../../common/core/range.js';
-import { createBuiltinLanguageConfigurationService } from '../../common/languages/languageBuiltinConfigurations.js';
+import { createTestLanguageConfigurationService } from './modes/testLanguageConfigurationService.js';
 import { type ILanguageConfigurationService } from '../../common/languages/languageConfigurationRegistry.js';
 import { type TextModel } from '../../common/model/textModel.js';
 import { ViewModelEventsCollector } from '../../common/viewModelEventDispatcher.js';
@@ -29,7 +29,7 @@ export function createTestCursorsController(
 	options: TestCursorsControllerOptions = {},
 	languageConfigurationService?: ILanguageConfigurationService,
 ): CursorsController {
-	const ownedLanguageConfigurationService = languageConfigurationService ? undefined : createBuiltinLanguageConfigurationService();
+	const ownedLanguageConfigurationService = languageConfigurationService ? undefined : createTestLanguageConfigurationService();
 	const configurations = languageConfigurationService ?? ownedLanguageConfigurationService!;
 	const cursorConfig = createTestCursorConfiguration(model, configurations, options);
 	const controller = new TestCursorsController(
@@ -81,7 +81,7 @@ class TestCursorsController extends CursorsController {
 		model: TextModel,
 		coordinatesConverter: IdentityCoordinatesConverter,
 		cursorConfig: CursorConfiguration,
-		private readonly languageConfigurationService: ReturnType<typeof createBuiltinLanguageConfigurationService> | undefined,
+		private readonly languageConfigurationService: ReturnType<typeof createTestLanguageConfigurationService> | undefined,
 		options: TestCursorsControllerOptions,
 	) {
 		super(model, model, coordinatesConverter, cursorConfig, options);

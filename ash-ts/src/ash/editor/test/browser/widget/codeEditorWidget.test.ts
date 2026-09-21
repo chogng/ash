@@ -3,7 +3,7 @@ import { h, text } from '../../../../base/browser/dom.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../../platform/theme/test/common/testThemeService.js';
 import { ILanguageConfigurationService } from '../../../common/languages/languageConfigurationRegistry.js';
-import { createBuiltinLanguageConfigurationService } from '../../../common/languages/languageBuiltinConfigurations.js';
+import { createTestLanguageConfigurationService } from '../../common/modes/testLanguageConfigurationService.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../../common/services/languageFeaturesService.js';
 import assert from "node:assert/strict";
@@ -2151,7 +2151,7 @@ test('Returning an already registered controller preserves dependent listener cl
 
 
 test('CodeEditorWidget rejects missing shared services before creating its surface', () => {
-	using configurations = createBuiltinLanguageConfigurationService();
+	using configurations = createTestLanguageConfigurationService();
 	using features = new LanguageFeaturesService();
 	using theme = new TestThemeService(darkColorTheme);
 	using model = new TextModel('text');
@@ -2169,7 +2169,7 @@ test('CodeEditorWidget rejects missing shared services before creating its surfa
 });
 
 test('CodeEditorWidget shares host language services across contributions and model switches', () => {
-	using configurations = createBuiltinLanguageConfigurationService();
+	using configurations = createTestLanguageConfigurationService();
 	using features = new LanguageFeaturesService();
 	using theme = new TestThemeService(darkColorTheme);
 	using services = new ServiceContainer();

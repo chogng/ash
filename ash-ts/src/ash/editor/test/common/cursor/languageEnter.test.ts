@@ -4,7 +4,7 @@ import { test } from "mocha";
 import { TypeOperations } from "../../../common/cursor/cursorTypeOperations.js";
 import { EnterOperation } from "../../../common/cursor/cursorTypeEditOperations.js";
 import { EditorIndentationKind, resolveEditorIndentationOptions, type EditorIndentationOptions } from "../../../common/core/misc/indentation.js";
-import { registerBuiltinLanguageConfigurations } from "../../../common/languages/languageBuiltinConfigurations.js";
+import { registerBuiltinLanguageConfigurations } from '../../../standalone/common/builtinLanguages.js';
 import { IndentAction } from "../../../common/languages/languageConfiguration.js";
 import { TestLanguageConfigurationService } from '../modes/testLanguageConfigurationService.js';
 import { type ResolvedLanguageConfiguration } from "../../../common/languages/languageConfigurationRegistry.js";

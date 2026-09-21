@@ -5,13 +5,13 @@ import { CursorCollection } from '../../common/cursor/cursorCollection.js';
 import { CursorContext } from '../../common/cursor/cursorContext.js';
 import { IdentityCoordinatesConverter } from '../../common/coordinatesConverter.js';
 import { Selection } from '../../common/core/selection.js';
-import { createBuiltinLanguageConfigurationService } from '../../common/languages/languageBuiltinConfigurations.js';
+import { createTestLanguageConfigurationService } from './modes/testLanguageConfigurationService.js';
 import { TextModel } from '../../common/model/textModel.js';
 import { createTestCursorConfiguration } from './testCursorConfiguration.js';
 
 test('CursorCollection preserves primary-first selection order', () => {
 	using model = new TextModel('abcdef\nsecond');
-	using languages = createBuiltinLanguageConfigurationService();
+	using languages = createTestLanguageConfigurationService();
 	const context = new CursorContext(model, model, new IdentityCoordinatesConverter(model), createTestCursorConfiguration(model, languages));
 	const selections = primaryFirst([new Selection(1, 1, 1, 3), new Selection(2, 2, 2, 2)], 1);
 	const cursors = new CursorCollection(context);
@@ -25,7 +25,7 @@ test('CursorCollection preserves primary-first selection order', () => {
 
 test('CursorCollection tracks edits and can remove secondary cursors', () => {
 	using model = new TextModel('abcdef');
-	using languages = createBuiltinLanguageConfigurationService();
+	using languages = createTestLanguageConfigurationService();
 	const context = new CursorContext(model, model, new IdentityCoordinatesConverter(model), createTestCursorConfiguration(model, languages));
 	const cursors = new CursorCollection(context);
 	using cleanup = toDisposable(() => cursors.dispose());

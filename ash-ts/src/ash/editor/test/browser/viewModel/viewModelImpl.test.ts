@@ -12,7 +12,7 @@ import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { Selection } from '../../../common/core/selection.js';
 import { ScrollType } from '../../../common/editorCommon.js';
-import { createBuiltinLanguageConfigurationService } from '../../../common/languages/languageBuiltinConfigurations.js';
+import { createTestLanguageConfigurationService } from '../../common/modes/testLanguageConfigurationService.js';
 import { TextModel } from '../../../common/model/textModel.js';
 import { MonospaceLineBreaksComputerFactory } from '../../../common/viewModel/monospaceLineBreaksComputer.js';
 import { getViewModelCursorController, ViewModel } from '../../../common/viewModel/viewModelImpl.js';
@@ -73,7 +73,7 @@ test('ViewModel owns line projection, cursor, layout, and visible-line publicati
 		dimension: { width: 200, height: 40 },
 		lineHeight: 20,
 	}, container);
-	using languages = createBuiltinLanguageConfigurationService();
+	using languages = createTestLanguageConfigurationService();
 	using model = new TextModel('one\ntwo\nthree', { languageConfigurationService: languages });
 	using theme = new TestThemeService(darkColorTheme);
 	const factory = MonospaceLineBreaksComputerFactory.create(configuration.options);
@@ -162,7 +162,7 @@ test('ViewModel resets cursor markers through CursorsController after model flus
 	const container = dom.window.document.querySelector('main')!;
 	using cleanup = toDisposable(() => dom.window.close());
 	using configuration = new EditorConfiguration(false, MenuId.EditorContext, { dimension: { width: 200, height: 40 } }, container);
-	using languages = createBuiltinLanguageConfigurationService();
+	using languages = createTestLanguageConfigurationService();
 	using model = new TextModel('one\ntwo', { languageConfigurationService: languages });
 	using theme = new TestThemeService(darkColorTheme);
 	const factory = MonospaceLineBreaksComputerFactory.create(configuration.options);

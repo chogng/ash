@@ -3,7 +3,7 @@ import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, IDisposable, IReference, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { IPosition, Position } from '../../core/position.js';
 import { Range } from '../../core/range.js';
-import { ILanguageConfigurationService, LanguageConfigurationServiceChangeEvent } from '../../languages/languageConfigurationRegistry.js';
+import { ResolvedLanguageConfiguration, LanguageConfigurationServiceChangeEvent } from '../../languages/languageConfigurationRegistry.js';
 import { ignoreBracketsInToken } from '../../languages/supports.js';
 import { LanguageBracketsConfiguration } from '../../languages/supports/languageBracketsConfiguration.js';
 import { BracketsUtils, RichEditBracket, RichEditBrackets } from '../../languages/supports/richEditBrackets.js';
@@ -28,7 +28,7 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 
 	public constructor(
 		private readonly textModel: TextModel,
-		private readonly languageConfigurationService: ILanguageConfigurationService
+		private readonly resolveLanguageConfiguration: (languageId: string) => ResolvedLanguageConfiguration
 	) {
 		super();
 	}
@@ -74,7 +74,7 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 				this.bracketPairsTree.value = createDisposableRef(
 					store.add(
 						new BracketPairsTree(this.textModel, (languageId) => {
-							return this.languageConfigurationService.getLanguageConfiguration(languageId);
+							return this.resolveLanguageConfiguration(languageId);
 						})
 					),
 					store
@@ -118,8 +118,7 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 		const languageId = this.textModel.getLanguageIdAtPosition(position.lineNumber, position.column);
 
 		if (this.canBuildAST) {
-			const closingBracketInfo = this.languageConfigurationService
-				.getLanguageConfiguration(languageId)
+			const closingBracketInfo = this.resolveLanguageConfiguration(languageId)
 				.bracketsNew.getClosingBracketInfo(_bracket);
 
 			if (!closingBracketInfo) {
@@ -138,7 +137,7 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 			// Fallback to old bracket matching code:
 			const bracket = _bracket.toLowerCase();
 
-			const bracketsSupport = this.languageConfigurationService.getLanguageConfiguration(languageId).brackets;
+			const bracketsSupport = this.resolveLanguageConfiguration(languageId).brackets;
 
 			if (!bracketsSupport) {
 				return null;
@@ -226,7 +225,7 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 		if (tokenIndex < 0) {
 			return null;
 		}
-		const currentModeBrackets = this.languageConfigurationService.getLanguageConfiguration(lineTokens.getLanguageId(tokenIndex)).brackets;
+		const currentModeBrackets = this.resolveLanguageConfiguration(lineTokens.getLanguageId(tokenIndex)).brackets;
 
 		// check that the token is not to be ignored
 		if (currentModeBrackets && !ignoreBracketsInToken(lineTokens.getStandardTokenType(tokenIndex))) {
@@ -266,7 +265,7 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 		// If position is in between two tokens, try also looking in the previous token
 		if (tokenIndex > 0 && lineTokens.getStartOffset(tokenIndex) === position.column - 1) {
 			const prevTokenIndex = tokenIndex - 1;
-			const prevModeBrackets = this.languageConfigurationService.getLanguageConfiguration(lineTokens.getLanguageId(prevTokenIndex)).brackets;
+			const prevModeBrackets = this.resolveLanguageConfiguration(lineTokens.getLanguageId(prevTokenIndex)).brackets;
 
 			// check that previous token is not to be ignored
 			if (prevModeBrackets && !ignoreBracketsInToken(lineTokens.getStandardTokenType(prevTokenIndex))) {
@@ -516,8 +515,8 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 				const tokenLanguageId = lineTokens.getLanguageId(tokenIndex);
 				if (languageId !== tokenLanguageId) {
 					languageId = tokenLanguageId;
-					modeBrackets = this.languageConfigurationService.getLanguageConfiguration(languageId).brackets;
-					bracketConfig = this.languageConfigurationService.getLanguageConfiguration(languageId).bracketsNew;
+					modeBrackets = this.resolveLanguageConfiguration(languageId).brackets;
+					bracketConfig = this.resolveLanguageConfiguration(languageId).bracketsNew;
 				}
 			}
 
@@ -535,8 +534,8 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 						prevSearchInToken = false;
 					}
 					languageId = tokenLanguageId;
-					modeBrackets = this.languageConfigurationService.getLanguageConfiguration(languageId).brackets;
-					bracketConfig = this.languageConfigurationService.getLanguageConfiguration(languageId).bracketsNew;
+					modeBrackets = this.resolveLanguageConfiguration(languageId).brackets;
+					bracketConfig = this.resolveLanguageConfiguration(languageId).bracketsNew;
 				}
 
 				const searchInToken = (!!modeBrackets && !ignoreBracketsInToken(lineTokens.getStandardTokenType(tokenIndex)));
@@ -604,8 +603,8 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 				const tokenLanguageId = lineTokens.getLanguageId(tokenIndex);
 				if (languageId !== tokenLanguageId) {
 					languageId = tokenLanguageId;
-					modeBrackets = this.languageConfigurationService.getLanguageConfiguration(languageId).brackets;
-					bracketConfig = this.languageConfigurationService.getLanguageConfiguration(languageId).bracketsNew;
+					modeBrackets = this.resolveLanguageConfiguration(languageId).brackets;
+					bracketConfig = this.resolveLanguageConfiguration(languageId).bracketsNew;
 				}
 			}
 
@@ -623,8 +622,8 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 						prevSearchInToken = false;
 					}
 					languageId = tokenLanguageId;
-					modeBrackets = this.languageConfigurationService.getLanguageConfiguration(languageId).brackets;
-					bracketConfig = this.languageConfigurationService.getLanguageConfiguration(languageId).bracketsNew;
+					modeBrackets = this.resolveLanguageConfiguration(languageId).brackets;
+					bracketConfig = this.resolveLanguageConfiguration(languageId).bracketsNew;
 				}
 
 				const searchInToken = (!!modeBrackets && !ignoreBracketsInToken(lineTokens.getStandardTokenType(tokenIndex)));
@@ -740,7 +739,7 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 				const tokenLanguageId = lineTokens.getLanguageId(tokenIndex);
 				if (languageId !== tokenLanguageId) {
 					languageId = tokenLanguageId;
-					modeBrackets = this.languageConfigurationService.getLanguageConfiguration(languageId).brackets;
+					modeBrackets = this.resolveLanguageConfiguration(languageId).brackets;
 					resetCounts(languageId, modeBrackets);
 				}
 			}
@@ -759,7 +758,7 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 						prevSearchInToken = false;
 					}
 					languageId = tokenLanguageId;
-					modeBrackets = this.languageConfigurationService.getLanguageConfiguration(languageId).brackets;
+					modeBrackets = this.resolveLanguageConfiguration(languageId).brackets;
 					resetCounts(languageId, modeBrackets);
 				}
 

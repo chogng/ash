@@ -45,8 +45,7 @@ import * as model from '../model.js';
 import * as languages from '../languages.js';
 import { InternalModelContentChangeEvent, LineInjectedText, ModelFontChanged, ModelFontChangedEvent, ModelInjectedTextChangedEvent, ModelLineHeightChanged, ModelLineHeightChangedEvent, ModelRawContentChangedEvent, ModelRawEOLChanged, ModelRawFlush, ModelRawLineChanged, type IModelContentChangedEvent, type IModelDecorationsChangedEvent, type IModelLanguageChangedEvent, type IModelLanguageConfigurationChangedEvent, type IModelOptionsChangedEvent, type IModelTokensChangedEvent } from '../textModelEvents.js';
 import type { ILanguageSelection } from '../languages/language.js';
-import { createBuiltinLanguageConfigurationService } from '../languages/languageBuiltinConfigurations.js';
-import type { ILanguageConfigurationService } from '../languages/languageConfigurationRegistry.js';
+import { ResolvedLanguageConfiguration, type ILanguageConfigurationService } from '../languages/languageConfigurationRegistry.js';
 import { EditSources, type TextModelEditSource } from '../textModelEditSource.js';
 import { UndoRedoGroup } from '../../../platform/undoRedo/common/undoRedo.js';
 import type { IBracketPairsTextModelPart } from '../textModelBracketPairs.js';
@@ -295,12 +294,15 @@ export class TextModel implements ITextModel {
 				publishTextChange: change => this.publishTextChange(change),
 			},
 		)) : undefined;
-		const languageConfigurationService = options.languageConfigurationService ?? this._register(createBuiltinLanguageConfigurationService());
-		this._bracketPairs = this._register(new BracketPairsTextModelPart(this, languageConfigurationService));
-		this.guides = this._register(new GuidesTextModelPart(this, languageConfigurationService));
+		const languageConfigurationService = options.languageConfigurationService;
+		const resolveLanguageConfiguration = languageConfigurationService
+			? (languageId: string) => languageConfigurationService.getLanguageConfiguration(languageId)
+			: (languageId: string) => new ResolvedLanguageConfiguration(languageId, {});
+		this._bracketPairs = this._register(new BracketPairsTextModelPart(this, resolveLanguageConfiguration));
+		this.guides = this._register(new GuidesTextModelPart(this, resolveLanguageConfiguration));
 		this.tokenization = this._register(new TokenizationTextModelPart(this, options.tokenization));
 		this.diagnostics = this._register(new ModelLanguageDiagnostics(this, options.tokenization?.syntaxProviderRegistry, options.languageConfigurationService?.onDidChange));
-		this._register(languageConfigurationService.onDidChange(event => {
+		if (languageConfigurationService) this._register(languageConfigurationService.onDidChange(event => {
 			this._bracketPairs.handleLanguageConfigurationServiceChange(event);
 			if (event.affects(this.languageId)) this.languageConfigurationEmitter.fire({});
 		}));

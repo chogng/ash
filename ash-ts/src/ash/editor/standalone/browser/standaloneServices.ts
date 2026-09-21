@@ -12,8 +12,7 @@ import { ICodeEditorService, type ICodeEditorService as ICodeEditorServiceContra
 import { type LanguageCompletionWorkerFactory } from "../../common/languages/completion/languageCompletionService.js";
 import { type SyntaxWorkerFactory } from "../../common/languages/syntax/syntaxService.js";
 import { VersionedEditorWorkerClient, type VersionedEditorWorkerFactory } from "../../browser/services/editorWorkerService.js";
-import { registerBuiltinLanguageConfigurations } from "../../common/languages/languageBuiltinConfigurations.js";
-import { registerBuiltinLanguageDescriptions } from "../../common/languages/languageBuiltinDescriptions.js";
+import { registerBuiltinLanguageConfigurations, registerBuiltinLanguageDescriptions } from '../common/builtinLanguages.js';
 import { ILanguageFeaturesService } from '../../common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../common/services/languageFeaturesService.js';
 import { ILanguageService, type IAshLanguageService } from '../../common/languages/language.js';

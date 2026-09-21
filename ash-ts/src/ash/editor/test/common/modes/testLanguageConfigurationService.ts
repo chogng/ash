@@ -1,3 +1,4 @@
+import { registerBuiltinLanguageConfigurations } from '../../../standalone/common/builtinLanguages.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { type LanguageConfiguration } from '../../../common/languages/languageConfiguration.js';
@@ -22,6 +23,10 @@ export class TestLanguageConfigurationService extends Disposable implements ILan
 		}));
 	}
 
+	public registerDefaults(): void {
+		this._register(registerBuiltinLanguageConfigurations(this));
+	}
+
 	register(languageId: string, configuration: LanguageConfiguration, priority?: number): IDisposable {
 		return this.registry.register(languageId, configuration, priority);
 	}
@@ -29,4 +34,10 @@ export class TestLanguageConfigurationService extends Disposable implements ILan
 	getLanguageConfiguration(languageId: string): ResolvedLanguageConfiguration {
 		return this.registry.getLanguageConfiguration(languageId) ?? new ResolvedLanguageConfiguration(languageId, {});
 	}
+}
+
+export function createTestLanguageConfigurationService(): TestLanguageConfigurationService {
+	const service = new TestLanguageConfigurationService();
+	service.registerDefaults();
+	return service;
 }

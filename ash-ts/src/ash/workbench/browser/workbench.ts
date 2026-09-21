@@ -420,6 +420,7 @@ export class Workbench extends Disposable {
 		const textResourceStore = getBrowserTextResourceStore(textFileService);
 		const textModelService = this._register(getBrowserTextModelService(textResourceStore, {
 			languageService,
+			languageConfigurationService,
 			languageFeaturesService,
 			syntaxService: { workerFactory: textMateService.syntaxWorkerFactory },
 			onDidChangeLanguageSupport: textMateService.onDidChange,

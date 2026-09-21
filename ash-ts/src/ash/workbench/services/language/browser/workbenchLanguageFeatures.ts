@@ -1,6 +1,5 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import { registerBuiltinLanguageConfigurations } from '../../../../editor/common/languages/languageBuiltinConfigurations.js';
-import { registerBuiltinLanguageDescriptions } from '../../../../editor/common/languages/languageBuiltinDescriptions.js';
+import { registerBuiltinLanguageConfigurations, registerBuiltinLanguageDescriptions } from '../../../../editor/standalone/common/builtinLanguages.js';
 import type { ILanguageConfigurationService } from '../../../../editor/common/languages/languageConfigurationRegistry.js';
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import type { IAshLanguageService } from '../../../../editor/common/languages/language.js';

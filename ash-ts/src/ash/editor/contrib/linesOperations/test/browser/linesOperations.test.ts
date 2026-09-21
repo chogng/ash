@@ -8,13 +8,13 @@ import { CopyLinesCommand } from '../../browser/copyLinesCommand.js';
 import { MoveLinesCommand } from '../../browser/moveLinesCommand.js';
 import { SortLinesCommand } from '../../browser/sortLinesCommand.js';
 import { EditorAutoIndentStrategy } from '../../../../common/config/editorOptions.js';
-import { createBuiltinLanguageConfigurationService } from '../../../../common/languages/languageBuiltinConfigurations.js';
+import { createTestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
 import { createTestCursorConfiguration, createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 import { type ICodeEditor } from '../../../../browser/editorBrowser.js';
 import { type EditorAction } from '../../../../browser/editorExtensions.js';
 
 test('Canonical line commands execute through ICommand without the legacy controller', () => {
-	using configurations = createBuiltinLanguageConfigurationService();
+	using configurations = createTestLanguageConfigurationService();
 	using model = new TextModel('zero\none\ntwo');
 	using selections = createTestCursorsController(model, [caret(1, 1)]);
 
@@ -129,7 +129,7 @@ for (const down of [false, true]) {
 test("Move lines swaps selected groups with their neighboring rows and keeps directional selections", () => {
 	using model = new TextModel("zero\none\ntwo\nthree\nfour");
 	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((2) + 1, (3) + 1), new Position((1) + 1, (1) + 1))]);
-	using configurations = createBuiltinLanguageConfigurationService();
+	using configurations = createTestLanguageConfigurationService();
 
 	selections.executeCommands(selections.getSelections().map(selection => new MoveLinesCommand(selection, true, EditorAutoIndentStrategy.None, configurations)));
 	assert.equal(model.getText(), "zero\nthree\none\ntwo\nfour");
@@ -155,7 +155,7 @@ test("MoveLinesCommand preserves disjoint selected groups", () => {
 		caret(1, 1),
 		caret(3, 2),
 	], 1));
-	using configurations = createBuiltinLanguageConfigurationService();
+	using configurations = createTestLanguageConfigurationService();
 
 	selections.executeCommands(selections.getSelections().map(selection => new MoveLinesCommand(selection, true, EditorAutoIndentStrategy.None, configurations)));
 	assert.equal(model.getText(), "zero\ntwo\none\nfour\nthree");
@@ -191,7 +191,7 @@ test("Insert line actions follow active cursor lines and undo atomically", () =>
 });
 
 function runAction(action: EditorAction, model: TextModel, selections: ReturnType<typeof createTestCursorsController>): void {
-	using configurations = createBuiltinLanguageConfigurationService();
+	using configurations = createTestLanguageConfigurationService();
 	const cursorConfig = createTestCursorConfiguration(model, configurations);
 	const editor = {
 		getModel: () => model,

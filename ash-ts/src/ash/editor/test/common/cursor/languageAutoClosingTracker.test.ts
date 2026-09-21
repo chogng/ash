@@ -3,7 +3,7 @@ import { test } from "mocha";
 import { CursorsController } from "../../../common/cursor/cursor.js";
 import { DeleteOperations } from "../../../common/cursor/cursorDeleteOperations.js";
 import { EditOperationType } from "../../../common/cursorCommon.js";
-import { registerBuiltinLanguageConfigurations } from "../../../common/languages/languageBuiltinConfigurations.js";
+import { registerBuiltinLanguageConfigurations } from '../../../standalone/common/builtinLanguages.js';
 import { TestLanguageConfigurationService } from '../modes/testLanguageConfigurationService.js';
 import { Selection } from "../../../common/core/selection.js";
 import { Position } from "../../../common/core/position.js";

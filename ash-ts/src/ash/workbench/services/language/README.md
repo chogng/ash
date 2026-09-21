@@ -10,6 +10,13 @@ providers. App Server, extension-host, TextMate, codebase-symbols, and future LS
 adapters register directly through `ILanguageFeaturesService` registries. Every
 registration is disposable and independent of per-document service lifetimes.
 
+The reusable default language data lives in
+`editor/standalone/common/builtinLanguages.ts`. Standalone and Workbench choose
+to register it during assembly; `editor/common` does not import it. File models
+receive the Workbench language configuration service and observe subsequent
+extension registrations. A directly constructed `TextModel` without language
+configuration has no language-specific editing rules and creates no services.
+
 The filename split is intentional:
 
 | Filename family | Owner | Responsibility |

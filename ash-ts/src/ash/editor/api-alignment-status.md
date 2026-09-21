@@ -293,8 +293,6 @@
 | `common/languages/defaultDocumentColorsComputer.ts` | 1 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
 | `common/languages/enterAction.ts` | 1 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
 | `common/languages/language.ts` | 14 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
-| `common/languages/languageBuiltinConfigurations.ts` | 7 / 14 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
-| `common/languages/languageBuiltinDescriptions.ts` | 2 / 1 | 人工检查：语言关联注册统一释放；内置后缀覆盖是现有产品能力边界。 |
 | `common/languages/languageConfiguration.ts` | 19 / 3 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
 | `common/languages/languageConfigurationRegistry.ts` | 39 / 8 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
 | `common/languages/languageId.ts` | 9 / 0 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
@@ -934,3 +932,5 @@
 自建词法体系清理：移除扫描器、词法配置适配、扫描缓存、默认 syntax provider、词法上下文与重复括号索引。括号操作和显示直接使用 `TextModel.bracketPairs`；section headers 和本地折叠读取模型 tokenization。Standalone 不再内置猜测式分词或括号诊断；Workbench TextMate Worker 只激活 grammar 模块。Worker 结果校验与增量传输保留。
 模型括号树补充修复：内容变更在通知视图和 token 监听方前先进入括号树；标准内容事件按范围倒序传递多处编辑，保证增量括号更新与删除/撤销一致。
 本轮验证：扫描器消费方、syntax wire、模型 tokenization、TextMate、模型/编辑器组件定向单测通过；23 项 Editor 架构检查和 10 项 Chromium 场景通过；`build:stanza`、`build:renderer` 通过。此记录仅表示自建词法链路已收敛，不表示整个 Editor API 对齐完成。
+
+内置语言装配清理：两个 `common/languages/languageBuiltin*` 文件退出，默认语言数据合并到 `standalone/common/builtinLanguages.ts`，由 Standalone 与 Workbench 的装配入口注册。`TextModel` 不再创建内置配置服务；未传入配置的裸模型没有语言规则。Workbench 文件模型使用宿主共享配置并响应注册/撤销，测试专用服务工厂移入测试目录。定向单测、23 项架构检查、9 项 Chromium 场景和 Stanza/Renderer 构建通过。其余自建语言服务、协议和反向契约依赖仍待整理。

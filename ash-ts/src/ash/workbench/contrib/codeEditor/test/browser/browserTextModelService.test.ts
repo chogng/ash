@@ -1,3 +1,4 @@
+import { TestLanguageConfigurationService } from '../../../../../editor/test/common/modes/testLanguageConfigurationService.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { isCancellationError } from "../../../../../base/common/errors.js";
@@ -296,3 +297,17 @@ function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value
 	});
 	return { promise, resolve };
 }
+
+test('Workbench file models observe their hosts language configuration registrations', async () => {
+	using configurations = new TestLanguageConfigurationService();
+	using models = new BrowserTextModelService(new BrowserTextResourceStore(new TestTextFileService('{value}')), {
+		languageConfigurationService: configurations,
+	});
+	using reference = await models.acquire({ resource: URI.file('/example.ts'), languageId: 'typescript' }, new AbortController().signal);
+	const pairs = reference.model.bracketPairs;
+	assert.equal(pairs.matchBracket(new Position(1, 1)), null);
+	const registration = configurations.register('typescript', { brackets: [['{', '}']] });
+	assert.deepEqual(pairs.matchBracket(new Position(1, 1)), [new Range(1, 1, 1, 2), new Range(1, 7, 1, 8)]);
+	registration.dispose();
+	assert.equal(pairs.matchBracket(new Position(1, 1)), null);
+});

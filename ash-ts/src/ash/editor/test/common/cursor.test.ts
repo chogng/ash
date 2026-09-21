@@ -12,7 +12,7 @@ import { TextModel } from "../../common/model/textModel.js";
 import { ReplaceCommand, ReplaceCommandThatPreservesSelection } from '../../common/commands/replaceCommand.js';
 import { CursorState } from '../../common/cursorCommon.js';
 import { ScrollType, type ICommand } from '../../common/editorCommon.js';
-import { createBuiltinLanguageConfigurationService } from '../../common/languages/languageBuiltinConfigurations.js';
+import { createTestLanguageConfigurationService } from './modes/testLanguageConfigurationService.js';
 import { CursorStateChangedEvent, ViewModelEventsCollector } from '../../common/viewModelEventDispatcher.js';
 import { VerticalRevealType, ViewCursorStateChangedEvent, ViewRevealRangeRequestEvent } from '../../common/viewEvents.js';
 import { createTestCursorConfiguration, createTestCursorsController } from './testCursorConfiguration.js';
@@ -217,7 +217,7 @@ test('CursorsController refreshes configuration and focused undo state', () => {
 	using model = new TextModel('abcdef');
 	using editor = createTestCursorsController(model, single(1, 4));
 	using observer = createTestCursorsController(model, single(6, 6));
-	using languages = createBuiltinLanguageConfigurationService();
+	using languages = createTestLanguageConfigurationService();
 	const readOnlyConfiguration = createTestCursorConfiguration(model, languages, { readOnly: true });
 	editor.updateConfiguration(readOnlyConfiguration);
 	assert.equal(editor.context.cursorConfig.readOnly, true);

@@ -6,7 +6,7 @@ import { Selection } from '../../common/core/selection.js';
 import { TextChange, TextModelChangeReason } from "../../common/core/textChange.js";
 import { EndOfLinePreference, EndOfLineSequence, MinimapPosition, OverviewRulerLane, PositionAffinity, TrackedRangeStickiness, isITextSnapshot } from '../../common/model.js';
 import { TextModel } from "../../common/model/textModel.js";
-import { createBuiltinLanguageConfigurationService } from '../../common/languages/languageBuiltinConfigurations.js';
+import { createTestLanguageConfigurationService } from './modes/testLanguageConfigurationService.js';
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent } from '../../common/languages/languageFeatureRequest.js';
 import type { IViewModel } from '../../common/viewModel.js';
 
@@ -784,7 +784,7 @@ test('TextModel exposes owner-filtered margin, injected text, and word-prefix qu
 });
 
 test('TextModel owns view-model delivery and model-part events', () => {
-	using configurations = createBuiltinLanguageConfigurationService();
+	using configurations = createTestLanguageConfigurationService();
 	using model = new TextModel('alpha\nbeta', { languageConfigurationService: configurations });
 	const order: string[] = [];
 	const lineHeights: Array<{ line: number; height: number | null }> = [];
@@ -867,4 +867,14 @@ test("TextModel commits history before reentrant change listeners run", () => {
 		afterSecondUndo: "abc",
 		versions: [2, 3, 4, 5],
 	});
+});
+
+test('TextModel does not install language rules merely from its language id', () => {
+	using model = new TextModel('{value}', { languageId: 'typescript' });
+	assert.equal(model.bracketPairs.matchBracket(new Position(1, 1)), null);
+	using configurations = createTestLanguageConfigurationService();
+	using configured = new TextModel('{value}', { languageId: 'typescript', languageConfigurationService: configurations });
+	assert.deepEqual(configured.bracketPairs.matchBracket(new Position(1, 1)), [new Range(1, 1, 1, 2), new Range(1, 7, 1, 8)]);
+	configured.dispose();
+	assert.equal(configurations.getLanguageConfiguration('typescript').comments?.lineCommentToken, '//');
 });

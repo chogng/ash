@@ -13,7 +13,7 @@ import { EditorPaneVisibility } from "../../../../browser/parts/editor/editorPan
 import { TextFileContentSource, type ITextFileService, type ResolvedTextFileContent, type TextFileResolveRequest } from "../../../../services/textfile/common/textFileService.js";
 import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
 import { LanguageService } from '../../../../../editor/common/services/languageService.js';
-import { registerBuiltinLanguageDescriptions } from '../../../../../editor/common/languages/languageBuiltinDescriptions.js';
+import { registerBuiltinLanguageDescriptions } from '../../../../../editor/standalone/common/builtinLanguages.js';
 import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import { type ILanguageDiagnosticsService, type LanguageDiagnosticsPublisher, type LanguageDiagnosticSnapshot } from "../../../../services/language/common/languageDiagnosticsService.js";
 import { type TextModel } from "../../../../../editor/common/model/textModel.js";
