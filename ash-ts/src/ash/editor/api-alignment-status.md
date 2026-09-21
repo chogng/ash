@@ -1,5 +1,94 @@
 # Editor API 对齐状态
 
+## common 缺失文件补齐：分词状态存储（2026-09-21）
+
+用户本批选择“先补现有功能链需要的 common 文件”，不引入前端 diff 与 Tree-sitter 完整引擎。起始工作区干净；目录调查覆盖双方 TypeScript 文件集合，并检索缺失模块的公开符号在 Ash 中的生产引用。符号同名只作为调查线索，不代表职责一致。
+
+准入链：文本编辑 → `TokenizationTextModelPart` 的版本绑定请求 → `SyntaxProviderWorker` → `TokenizationStateStore` → 复用有效行 token、重算受上文状态影响的行 → Worker 与模型分词行为测试。Worker 仍拥有一个模型请求缓存及其释放；新 store 只拥有该成功版本的逐行结束状态，不创建后台调度器或第二份 token 数据。
+
+| 路径 | 存在关系 | 本批处理 |
+| --- | --- | --- |
+| `common/model/textModelTokens.ts` | 仅 VS Code → 双方都有 | 独立实现 `TokenizationStateStore.getEndState/setEndState`，由生产 Worker 使用；其余上游类与方法未实现。 |
+| `common/services/editorWebWorker.ts` | 双方都有 | 缓存行只保留文本、行尾标志和 token；结束状态归 store，首行初始状态单独保留。支持对象或语言变化时不复用缓存；成功校验后才提交新缓存。 |
+| `test/common/syntaxProviderWorker.test.ts` | Ash 现有测试 | 补充缓存命中、可变 tokenizer state、跨行状态传播、行尾变化、提供者替换和失败后重试测试。 |
+
+`textModelStringEdit.ts` 本批未创建：上游整行替换长度转换会覆盖编辑起始行，而 Ash 的稳定 LineId 规则要求保留起始行身份；不能直接替换现有 `projectLineIds`。`core/editorColorRegistry.ts` 也未创建：现有注册由 Platform 的 `colors/editorColors.ts`、统一 `ColorId` 和主题初始化消费，必须先解决这条依赖链，不能增加反向导入或二次注册。
+
+当前 common 有 **200 个 TypeScript 文件：169 个同路径、31 个 Ash 自有；仍缺 57 个上游 TypeScript 文件**。这不是整个 common 已补齐。Ash 自有文件沿用本页已有职责决定，没有删除、重命名或扩张其职责。上游的 3 张编辑算法示意图、5 份 Tree-sitter 查询不计入 TypeScript 数量。
+
+### 剩余同路径缺口
+
+以下为完整文件集合差异，不是自动实施队列。Diff 与 Tree-sitter 完整引擎不在本批范围；两份 semantic styling 服务按本页既有记录不恢复无职责包装。其他模块仍需确认完整生产调用链与下层依赖，不能以“没有同名符号”推断没有对应功能。
+
+- `common/core/editorColorRegistry.ts`
+- `common/core/text/getPositionOffsetTransformerFromTextModel.ts`
+- `common/diff/defaultLinesDiffComputer/algorithms/diffAlgorithm.ts`
+- `common/diff/defaultLinesDiffComputer/algorithms/dynamicProgrammingDiffing.ts`
+- `common/diff/defaultLinesDiffComputer/algorithms/myersDiffAlgorithm.ts`
+- `common/diff/defaultLinesDiffComputer/computeMovedLines.ts`
+- `common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.ts`
+- `common/diff/defaultLinesDiffComputer/heuristicSequenceOptimizations.ts`
+- `common/diff/defaultLinesDiffComputer/lineSequence.ts`
+- `common/diff/defaultLinesDiffComputer/linesSliceCharSequence.ts`
+- `common/diff/defaultLinesDiffComputer/utils.ts`
+- `common/diff/documentDiffProvider.ts`
+- `common/diff/externalLinesDiffComputer.ts`
+- `common/diff/legacyLinesDiffComputer.ts`
+- `common/diff/linesDiffComputer.ts`
+- `common/diff/linesDiffComputers.ts`
+- `common/diff/rangeMapping.ts`
+- `common/editorAction.ts`
+- `common/editorFeatures.ts`
+- `common/languages/linkComputer.ts`
+- `common/languages/modesRegistry.ts`
+- `common/languages/nullTokenize.ts`
+- `common/languages/supports/tokenization.ts`
+- `common/languages/textToHtmlTokenizer.ts`
+- `common/model/bracketPairsTextModelPart/colorizedBracketPairsDecorationProvider.ts`
+- `common/model/bracketPairsTextModelPart/fixBrackets.ts`
+- `common/model/decorationProvider.ts`
+- `common/model/fixedArray.ts`
+- `common/model/intervalTree.ts`
+- `common/model/textModelStringEdit.ts`
+- `common/model/textModelText.ts`
+- `common/model/tokens/abstractSyntaxTokenBackend.ts`
+- `common/model/tokens/tokenizationFontDecorationsProvider.ts`
+- `common/model/tokens/tokenizerSyntaxTokenBackend.ts`
+- `common/model/tokens/treeSitter/cursorUtils.ts`
+- `common/model/tokens/treeSitter/tokenStore.ts`
+- `common/model/tokens/treeSitter/treeSitterSyntaxTokenBackend.ts`
+- `common/model/tokens/treeSitter/treeSitterTokenizationImpl.ts`
+- `common/model/tokens/treeSitter/treeSitterTree.ts`
+- `common/multiDiffEditor.ts`
+- `common/services/editorWorkerHost.ts`
+- `common/services/getIconClasses.ts`
+- `common/services/inMemoryTextModelService.ts`
+- `common/services/languageFeatureDebounce.ts`
+- `common/services/languagesAssociations.ts`
+- `common/services/modelUndoRedoParticipant.ts`
+- `common/services/semanticTokensStyling.ts`
+- `common/services/semanticTokensStylingService.ts`
+- `common/services/textResourceConfigurationService.ts`
+- `common/services/treeSitter/treeSitterLibraryService.ts`
+- `common/services/treeSitter/treeSitterThemeService.ts`
+- `common/standaloneStrings.ts`
+- `common/tokens/contiguousMultilineTokens.ts`
+- `common/tokens/contiguousMultilineTokensBuilder.ts`
+- `common/tokens/contiguousTokensEditing.ts`
+- `common/tokens/contiguousTokensStore.ts`
+- `common/tokens/tokenWithTextArray.ts`
+
+### 本批验证
+
+- 定向 `test:editor:unit`：Worker 与模型分词两份测试共 19 项通过。
+- `check-editor-alignment.mjs --test=unit`：结构、台账、类型检查及 228/228 个 Editor/关联 Workbench 测试文件通过；没有新增源码 JavaScript。结构检查仍报告既有成员差异和 7 份 CSS 品牌替换债务，本批未修改 CSS。
+- `build:stanza`：通过，无构建 warning。
+- Playwright Chromium：TextMate Worker 启动/重启、语义 provider 替换/移除共 2 项通过；验证状态与 token 样式，不以截图判断。
+- 完整单测日志含 JSDOM Canvas 能力提示，以及部分装配场景的 `markerDecorationsService` / `IInlineCompletionsService` 缺失输出；这些装配路径不在本批改动内，不能把测试通过解读为日志无错误。Playwright 仍提示 `NO_COLOR` / `FORCE_COLOR` 环境冲突。
+- 首次测试启动使用 Node 25，被仓库版本检查拒绝；切换至 `.nvmrc` 指定的 Node 24.21.0 后完成以上验证。
+- `git diff --check` 通过。
+
+
 ## common 全目录复核与收尾（2026-09-21）
 
 本次重新扫描 common 全部 202 个 TypeScript 文件的导入、公开声明和生产/测试引用，并检查重复函数；对上一轮剩余 34 个 Ash 自有文件复核实际职责。工作区开始时干净。清理依据是无效入口与重复职责，不按上游文件数量删除功能。

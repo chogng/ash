@@ -10,6 +10,7 @@ import { AbstractDisposable } from '../../../base/common/lifecycle.js';
 import { normalizeTextLineEndings, type TextSnapshot } from '../core/textChange.js';
 import { StringText } from '../core/text/abstractText.js';
 import { TextReplacement } from '../core/edits/textEdit.js';
+import { TokenizationStateStore } from '../model/textModelTokens.js';
 import { getWordAtText } from '../core/wordHelper.js';
 import { BasicInplaceReplace } from '../languages/supports/inplaceReplaceSupport.js';
 import { type UnicodeHighlight, type UnicodeHighlightKind, computeUnicodeHighlights } from './unicodeTextModelHighlighter.js';
@@ -191,7 +192,10 @@ export class SyntaxProviderWorker implements languages.SyntaxWorker, LanguageWor
 	private disposed = false;
 	private tokenizationCache: {
 		readonly support: languages.ITokenizationSupport;
-		readonly lines: readonly { text: string; hasEOL: boolean; state: languages.IState; result: languages.TokenizationResult }[];
+		readonly languageId: string;
+		readonly initialState: languages.IState;
+		readonly states: TokenizationStateStore<languages.IState>;
+		readonly lines: readonly { text: string; hasEOL: boolean; tokens: readonly languages.Token[] }[];
 	} | undefined;
 
 	constructor(
@@ -253,19 +257,26 @@ export class SyntaxProviderWorker implements languages.SyntaxWorker, LanguageWor
 		signal.throwIfAborted();
 		if (support) {
 			const tokens: LanguageToken[] = [];
-			const cached = this.tokenizationCache?.support === support ? this.tokenizationCache.lines : [];
-			const next: { text: string; hasEOL: boolean; state: languages.IState; result: languages.TokenizationResult }[] = [];
+			const cached = this.tokenizationCache?.support === support && this.tokenizationCache.languageId === request.payload.languageId
+				? this.tokenizationCache
+				: undefined;
+			const next: { text: string; hasEOL: boolean; tokens: readonly languages.Token[] }[] = [];
+			const states = new TokenizationStateStore<languages.IState>();
 			let state = support.getInitialState();
+			const initialState = state.clone();
 			const lines = request.snapshot.getText().split('\n');
 			for (let index = 0; index < lines.length; index++) {
 				signal.throwIfAborted();
 				const line = lines[index]!;
 				const hasEOL = index < lines.length - 1;
-				const previous = cached[index];
-				const result = previous?.text === line && previous.hasEOL === hasEOL && previous.state.equals(state)
-					? previous.result
+				const previous = cached?.lines[index];
+				const previousStartState = index === 0 ? cached?.initialState : cached?.states.getEndState(index);
+				const previousEndState = cached?.states.getEndState(index + 1);
+				const result = previous?.text === line && previous.hasEOL === hasEOL && previousStartState?.equals(state) && previousEndState
+					? { tokens: previous.tokens, endState: previousEndState }
 					: support.tokenize(line, hasEOL, state.clone());
-				next.push({ text: line, hasEOL, state: state.clone(), result });
+				next.push({ text: line, hasEOL, tokens: result.tokens });
+				states.setEndState(index + 1, result.endState.clone());
 				state = result.endState;
 				for (let tokenIndex = 0; tokenIndex < result.tokens.length; tokenIndex++) {
 					const token = result.tokens[tokenIndex]!;
@@ -279,7 +290,7 @@ export class SyntaxProviderWorker implements languages.SyntaxWorker, LanguageWor
 				}
 			}
 			const normalized = createLanguageTokenSnapshotNormalizer(request.snapshot)({ tokens });
-			this.tokenizationCache = { support, lines: next };
+			this.tokenizationCache = { support, languageId: request.payload.languageId, initialState, states, lines: next };
 			return normalized;
 		}
 		if (providers.length === 0) return EMPTY_TOKENS;

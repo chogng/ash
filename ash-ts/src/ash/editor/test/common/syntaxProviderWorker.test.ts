@@ -8,6 +8,92 @@ import { type LanguageTokenResult } from '../../common/tokens/languageTokens.js'
 import { Position } from '../../common/core/position.js';
 import { Range } from '../../common/core/range.js';
 import { TextModel } from '../../common/model/textModel.js';
+import { TokenizationRegistry, type IState, type ITokenizationSupport } from '../../common/languages.js';
+
+test('Syntax worker reuses unchanged lines until their incoming token state changes', async () => {
+	using model = new TextModel('open\nword\nclose\ntail');
+	using registry = new SyntaxProviderRegistry();
+	using worker = new SyntaxProviderWorker(registry);
+	const calls: string[] = [];
+	using registration = TokenizationRegistry.register('typescript', statefulSupport(calls));
+	await runLane(worker, model, SYNTAX_TOKEN_LANE);
+	calls.length = 0;
+	await runLane(worker, model, SYNTAX_TOKEN_LANE);
+	assert.deepEqual(calls, []);
+
+	model.applyEdits([{ range: new Range(2, 1, 2, 5), text: 'text' }]);
+	const edited = await runLane(worker, model, SYNTAX_TOKEN_LANE);
+	assert.deepEqual(calls, ['text']);
+	assert.deepEqual(edited.value.tokens.map(token => token.tokenType), ['comment', 'comment', 'word', 'word']);
+
+	calls.length = 0;
+	model.applyEdits([{ range: new Range(1, 1, 1, 5), text: 'start' }]);
+	const changedState = await runLane(worker, model, SYNTAX_TOKEN_LANE);
+	assert.deepEqual(calls, ['start', 'text', 'close']);
+	assert.deepEqual(changedState.value.tokens.map(token => token.tokenType), ['word', 'word', 'word', 'word']);
+});
+
+test('Syntax worker invalidates cached line endings and replaced tokenization support', async () => {
+	using model = new TextModel('word\ntail');
+	using registry = new SyntaxProviderRegistry();
+	using worker = new SyntaxProviderWorker(registry);
+	const calls: string[] = [];
+	using registration = TokenizationRegistry.register('typescript', statefulSupport(calls));
+	await runLane(worker, model, SYNTAX_TOKEN_LANE);
+	calls.length = 0;
+	model.applyEdits([{ range: new Range(2, 5, 2, 5), text: '\n' }]);
+	await runLane(worker, model, SYNTAX_TOKEN_LANE);
+	assert.deepEqual(calls, ['tail', '']);
+
+	calls.length = 0;
+	using replacement = TokenizationRegistry.register('typescript', statefulSupport(calls));
+	await runLane(worker, model, SYNTAX_TOKEN_LANE);
+	assert.deepEqual(calls, ['word', 'tail', '']);
+});
+
+test('Syntax worker retains the last successful token state when tokenization fails', async () => {
+	using model = new TextModel('word\ntail');
+	using registry = new SyntaxProviderRegistry();
+	using worker = new SyntaxProviderWorker(registry);
+	const calls: string[] = [];
+	using registration = TokenizationRegistry.register('typescript', statefulSupport(calls));
+	const original = await runLane(worker, model, SYNTAX_TOKEN_LANE);
+	model.applyEdits([{ range: new Range(1, 1, 2, 5), text: 'open\nfail' }]);
+	await assert.rejects(runLane(worker, model, SYNTAX_TOKEN_LANE), /Tokenization failed/);
+	model.applyEdits([{ range: new Range(1, 1, 2, 5), text: 'word\ntail' }]);
+	calls.length = 0;
+	const restored = await runLane(worker, model, SYNTAX_TOKEN_LANE);
+	assert.deepEqual({ calls, tokens: restored.value.tokens }, { calls: [], tokens: original.value.tokens });
+});
+
+class TokenState implements IState {
+	constructor(public inComment = false) {}
+
+	public clone(): TokenState {
+		return new TokenState(this.inComment);
+	}
+
+	public equals(other: IState): boolean {
+		return other instanceof TokenState && other.inComment === this.inComment;
+	}
+}
+
+function statefulSupport(calls: string[]): ITokenizationSupport {
+	return {
+		getInitialState: () => new TokenState(),
+		tokenize(line, _hasEOL, state) {
+			calls.push(line);
+			assert.ok(state instanceof TokenState);
+			if (line === 'fail') {
+				throw new Error('Tokenization failed');
+			}
+			if (line === 'open' || line === 'close') {
+				state.inComment = line === 'open';
+			}
+			return { tokens: [{ offset: 0, type: state.inComment ? 'comment' : 'word', language: 'typescript' }], endState: state };
+		},
+	};
+}
 
 test("Syntax worker selects one token provider and merges diagnostic providers", async () => {
 	using model = new TextModel("value");
