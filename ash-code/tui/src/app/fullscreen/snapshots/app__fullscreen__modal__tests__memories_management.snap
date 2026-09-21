@@ -7,14 +7,14 @@ expression: frame_text(&app)
                                                                                                     
             ┌── Memories ─────────────────────────────────────────────────────────[✗]─┐             
             │                                                                         │             
+            │   Personal    Projects    Directories                                   │             
+            │                                                                         │             
+            │  Personal memories · Memories off · c Config                            │             
+            │                                                                         │             
             │  ╭────────────────────────────────────────────────────────────────────╮ │             
-            │  │ Filter memories and actions                                        │ │             
+            │  │ Search this scope                                                  │ │             
             │  ╰────────────────────────────────────────────────────────────────────╯ │             
-            │> Add memory  ·  Save a preference or reusable decision                  │             
-            │  Search all memories in this scope                                      │             
-            │  Enable memory reading  ·  Controls automatic recall and model searches │             
-            │  Enable model saving  ·  Save durable facts in this scope               │             
-            │  Back to scopes                                                         │             
+            │  No memories in this scope. Press n to add one.                         │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
@@ -27,6 +27,6 @@ expression: frame_text(&app)
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
-  ╭─────────│  / to search  ·  Esc to close                                           │──────────╮  
+  ╭─────────│  Enter view · n new · a actions · Tab tabs · / search · Esc close       │──────────╮  
   │ > backgr└─────────────────────────────────────────────────────────────────────────┘          │  
   ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯

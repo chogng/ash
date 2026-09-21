@@ -1314,6 +1314,9 @@
         "codeMode": {
           "type": "boolean"
         },
+        "memories": {
+          "type": "boolean"
+        },
         "queue": {
           "type": "boolean"
         }

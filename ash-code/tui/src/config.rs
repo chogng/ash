@@ -50,6 +50,7 @@ pub(crate) enum Event {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Command {
+    SetMemories(ConfigEdit),
     SetIssues(IssueConfigEdit),
     Connection(provider::Request),
     Subscription(SubscriptionCommand),

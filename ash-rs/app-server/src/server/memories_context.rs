@@ -11,6 +11,7 @@ use std::sync::Arc;
 
 /// Adapts task identity and current directory authority to the Memory domain.
 struct MemoryScopes {
+    config: Option<Arc<ash_config::ConfigStore>>,
     projects: Option<Arc<ProjectCoordinator>>,
     dirs: Arc<DirGrants>,
 }
@@ -34,10 +35,11 @@ impl AppServer {
             .dir_grants
             .clone();
         let scopes = MemoryScopes {
+            config: self.config.clone(),
             projects: self.projects.clone(),
             dirs: dirs.clone(),
         }
-        .scopes(&thread.session_id, thread_id)
+        .available_scopes(&thread.session_id, thread_id)
         .map_err(|error| error.to_string())?;
         let mut directory_labels = std::collections::BTreeMap::new();
         if let Some(scope) = dirs
@@ -86,6 +88,7 @@ impl AppServer {
             return Ok(self);
         };
         let scopes = Arc::new(MemoryScopes {
+            config: self.config.clone(),
             projects: self.projects.clone(),
             dirs: Arc::clone(&self.env_runtime_mut().dir_grants),
         });
@@ -114,6 +117,30 @@ impl AppServer {
 
 impl MemoryScopeProvider for MemoryScopes {
     fn scopes(
+        &self,
+        session_id: &SessionId,
+        thread_id: &ThreadId,
+    ) -> Result<Vec<MemoryScope>, MemoryError> {
+        let enabled = self
+            .config
+            .as_ref()
+            .map(|config| {
+                config
+                    .read_snapshot()
+                    .map(|snapshot| features::Feature::Memories.enabled(&snapshot.values.features))
+            })
+            .transpose()
+            .map_err(|error| MemoryError::Storage(error.to_string()))?
+            .unwrap_or(false);
+        if !enabled {
+            return Ok(Vec::new());
+        }
+        self.available_scopes(session_id, thread_id)
+    }
+}
+
+impl MemoryScopes {
+    fn available_scopes(
         &self,
         session_id: &SessionId,
         thread_id: &ThreadId,

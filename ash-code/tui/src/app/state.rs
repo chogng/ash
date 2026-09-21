@@ -561,6 +561,9 @@ impl App {
         outcome: crate::config::ConfigEditorOutcome,
     ) -> Option<AppCommand> {
         match outcome {
+            crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::SetMemories(
+                edit,
+            )) => Some(ConfigCommand::SetMemories(edit).into()),
             crate::config::ConfigEditorOutcome::Action(
                 ConfigSelectionAction::SetIssues(edit)
                 | ConfigSelectionAction::AdjustIssueRefresh(edit),
@@ -1203,6 +1206,11 @@ impl App {
     }
 
     pub(super) fn close_command_panel(&mut self) {
+        if let Some(CommandPanel::Memories(panel)) = self.panels_mut().command_mut() {
+            if !panel.close() {
+                return;
+            }
+        }
         match self.screen_mode() {
             crate::terminal::ScreenMode::Fullscreen => {
                 super::fullscreen::navigation::close_command_panel(self)
@@ -1906,30 +1914,25 @@ impl App {
             }
             AppEvent::Connectors(event) => self.apply_connector_event(event),
             AppEvent::Memories(event) => match event {
-                crate::memories::Event::Changed => {
+                crate::memories::Event::Changed(changed) => {
                     if let Some(CommandPanel::Memories(panel)) = self.panels_mut().command_mut() {
-                        panel.notice(
-                            "Memories changed; reopen the list to refresh. Your draft is kept."
-                                .into(),
-                        );
+                        panel.changed(changed);
                     }
                 }
-                crate::memories::Event::Failed(error) => {
+                crate::memories::Event::Config(event) => self.update(event),
+                crate::memories::Event::Finished { command, result } => {
                     if let Some(CommandPanel::Memories(panel)) = self.panels_mut().command_mut() {
-                        panel.fail(error);
+                        panel.finish(command, result);
                     } else {
-                        self.open_command_panel(CommandPanel::loading("Memories", &error));
+                        match result {
+                            Ok(page) => self.open_command_panel(CommandPanel::memories(page)),
+                            Err(error) => self.open_command_panel(CommandPanel::loading(
+                                "Memories",
+                                &error.message,
+                            )),
+                        }
                     }
                 }
-                crate::memories::Event::Opened(page) => {
-                    self.open_command_panel(CommandPanel::memories(page))
-                }
-                crate::memories::Event::Detail(entry) => self.show_overlay(DetailList::new(
-                    entry.title,
-                    vec![crate::widgets::detail_list::DetailListRow::new(
-                        "Content", entry.body,
-                    )],
-                )),
             },
             AppEvent::Mcp(event) => self.apply_mcp_event(event),
             AppEvent::Sessions(event) => self.apply_session_event(event),

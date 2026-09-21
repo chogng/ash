@@ -24,3 +24,13 @@ fn unknown_and_misspelled_keys_fail_at_the_config_boundary() {
     assert!(serde_json::from_str::<FeatureOverrides>(r#"{"code_mode":true}"#).is_err());
     assert!(serde_json::from_str::<FeatureOverrides>(r#"{"futureFeature":true}"#).is_err());
 }
+
+#[test]
+fn memories_require_explicit_enablement_and_can_be_disabled_again() {
+    assert!(!Feature::Memories.default_enabled());
+    let mut overrides = FeatureOverrides::new();
+    overrides.insert(Feature::Memories, true);
+    assert!(Feature::Memories.enabled(&overrides));
+    overrides.insert(Feature::Memories, false);
+    assert!(!Feature::Memories.enabled(&overrides));
+}

@@ -953,7 +953,8 @@ impl AppServer {
             Arc::clone(&self.agent_extensions),
         ));
         self.config = Some(config);
-        self
+        self.with_memory_extension()
+            .expect("configured memory extension")
     }
 
     /// Installs the redacted interactive-account control plane.

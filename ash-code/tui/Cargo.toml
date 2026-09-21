@@ -11,6 +11,7 @@ name = "ash_tui"
 path = "src/lib.rs"
 
 [dependencies]
+features = { workspace = true }
 ash-utils-home-dir = { workspace = true }
 memories = { workspace = true }
 queue = { workspace = true }

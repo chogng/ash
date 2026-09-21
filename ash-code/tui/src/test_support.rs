@@ -38,7 +38,7 @@ pub(crate) fn in_process_test_guard() -> MutexGuard<'static, ()> {
 pub(crate) fn empty_config_snapshot() -> ConfigReadResult {
     ConfigReadResult {
         time_context: Default::default(),
-        features: vec![],
+        features: features::resolve(&Default::default()),
         revision: 0,
         generation: 0,
         model: None,

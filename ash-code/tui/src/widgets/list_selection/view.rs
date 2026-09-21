@@ -46,7 +46,7 @@ pub(crate) fn pointer_target_at(
         return Some(ListSelectionPointerTarget::Search);
     }
     let viewport = view.viewport(areas[1]);
-    if !viewport.items.contains(position) {
+    if !with_state_column(viewport.items).contains(position) {
         return None;
     }
     let rows = view.item_rows(areas[1].width);
@@ -242,8 +242,23 @@ pub(crate) fn draw_body_with_pointer(
 }
 
 impl ListSelectionState {
+    pub(crate) fn scroll(&mut self, area: Rect, lines: i16) {
+        let list = body_areas(area, self)[1];
+        let start = self.viewport(list).start;
+        let count = self.item_rows(list.width).len();
+        let capacity = usize::from(list.height.saturating_sub(2).max(1));
+        self.scroll_offset = Some(
+            start
+                .saturating_add_signed(isize::from(lines))
+                .min(count.saturating_sub(capacity)),
+        );
+    }
+
     fn viewport(&self, area: Rect) -> ListViewport {
         let rows = self.item_rows(area.width);
+        if let Some(start) = self.scroll_offset {
+            return ListViewport::scrolled(area, rows.len(), start);
+        }
         let selected = self.selected_visible_index().and_then(|selected| {
             let first = rows.iter().position(|&(index, _)| index == selected)?;
             let last = rows.iter().rposition(|&(index, _)| index == selected)?;
@@ -280,6 +295,33 @@ struct ListViewport {
 }
 
 impl ListViewport {
+    fn scrolled(area: Rect, count: usize, start: usize) -> Self {
+        if area.height <= 1 {
+            return Self::new(area, count, Some(start));
+        }
+        if count <= usize::from(area.height) {
+            return Self::new(area, count, None);
+        }
+        let capacity = usize::from(area.height.saturating_sub(2).max(1));
+        let start = start.min(count.saturating_sub(capacity));
+        let above = u16::from(start > 0 && area.height > 1);
+        let end =
+            (start + usize::from(area.height.saturating_sub(above).saturating_sub(1))).min(count);
+        let rows = (end - start) as u16;
+        Self {
+            start,
+            end,
+            items: Rect::new(area.x, area.y + above, area.width, rows),
+            above: Rect::new(area.x, area.y, area.width, above),
+            below: Rect::new(
+                area.x,
+                area.y + above + rows,
+                area.width,
+                u16::from(end < count && area.height > above + rows),
+            ),
+        }
+    }
+
     fn new(area: Rect, count: usize, selected: Option<usize>) -> Self {
         let height = usize::from(area.height);
         let selected = selected.unwrap_or(0).min(count.saturating_sub(1));

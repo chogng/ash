@@ -292,6 +292,26 @@ impl AppDriver {
 
     pub(super) fn schedule_refreshes(&mut self) {
         let origin = RequestOrigin::current(&self.app);
+        if self.requests.is_idle(Some(RequestKey::Memories)) {
+            let command = match self.app.panels_mut().command_mut() {
+                Some(super::command_panel::CommandPanel::Memories(panel)) => panel.take_refresh(),
+                _ => None,
+            };
+            if let Some(command) = command {
+                let mut client = self.client.clone();
+                let thread_id = self
+                    .conversation
+                    .as_ref()
+                    .map(|current| current.conversation.thread_id().clone());
+                self.requests.spawn_presentation(
+                    Some(RequestKey::Memories),
+                    "ash-tui-refresh-memories",
+                    move || crate::memories::execute(&mut client, thread_id.as_ref(), command),
+                    &mut self.app,
+                    origin,
+                );
+            }
+        }
         if self.requests.is_idle(Some(RequestKey::Config)) && self.refresh.config {
             let mut client = self.client.clone();
             self.requests.spawn(
@@ -535,8 +555,8 @@ fn refresh_server_event(
             }
             ServerRefresh::default()
         }
-        client::ClientEvent::MemoriesChanged => {
-            app.update(crate::memories::Event::Changed);
+        client::ClientEvent::MemoriesChanged(changed) => {
+            app.update(crate::memories::Event::Changed(changed));
             ServerRefresh::default()
         }
         client::ClientEvent::SkillsChanged => ServerRefresh {

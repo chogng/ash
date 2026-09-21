@@ -20,7 +20,7 @@ expression: frame_text(&app)
             │> Status bar style                                                Simple │             
             │> Key hint style                                                Contrast │             
             │> Screen mode                                                 fullscreen │             
-            │                                                                         │             
+            │> Memories                                                           off │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             

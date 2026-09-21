@@ -19,7 +19,7 @@ just test ash-config
 
 ## Feature 与 Schema
 
-- `[features]` 接受 `codeMode`、`queue`、`analytics`；前两者默认开启，使用统计默认关闭。
+- `[features]` 接受 `codeMode`、`queue`、`analytics`、`memories`；前两者默认开启，使用统计与记忆默认关闭。
 - Config 保存用户覆盖；`ash-features` 统一解释默认值、阶段和来源。`config/read` 返回 resolved Feature 列表，`config/update.features` 整体替换覆盖，`null` 清空覆盖。
 - `schema.json` 从配置类型生成，包含当前文件 `schemaVersion`、严格字段名和嵌套结构。执行 `just generate-config-schema` 更新，`just test ash-config-schema` 检查同步。
 - Schema 生成依赖仅在 Cargo 的 `schema` feature 启用；跨字段约束仍由运行时校验。

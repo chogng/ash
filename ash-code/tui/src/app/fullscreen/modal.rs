@@ -49,6 +49,7 @@ pub(in crate::app) enum Target {
     Close,
     Parent,
     Provider(crate::config::provider::Target),
+    Memories(crate::memories::Target),
     Backdrop,
     Blocked,
     Tab(usize),
@@ -94,6 +95,11 @@ pub(super) fn target_at(
             .min(layout.content.height),
         ..layout.content
     };
+    if let crate::app::command_panel::CommandPanelBody::Memories(memories) = panel.body() {
+        return memories
+            .target_at(tabs, body, position)
+            .map(Target::Memories);
+    }
     match panel.list_selection() {
         Some(selection) => {
             crate::widgets::list_selection::pointer_target_at(selection, tabs, body, position)
@@ -110,6 +116,14 @@ pub(super) fn activate(
     click: crate::widgets::list_selection::ListSelectionClick,
 ) -> Option<AppCommand> {
     match target {
+        Target::Memories(target) => {
+            let outcome = app
+                .fullscreen
+                .panels
+                .command_mut()?
+                .activate_memory(&target, click);
+            app.handle_command_panel_outcome(outcome)
+        }
         Target::Parent => {
             app.fullscreen.panels.command_mut()?.return_to_parent();
             None
@@ -280,6 +294,35 @@ pub(super) fn draw_panel(
         Some(Target::List(target)) => Some(target),
         _ => None,
     };
+    if let crate::app::command_panel::CommandPanelBody::Memories(memories) = body {
+        fn target(target: Option<&Target>) -> Option<&crate::memories::Target> {
+            match target {
+                Some(Target::Memories(target)) => Some(target),
+                _ => None,
+            }
+        }
+        let tab = |target: Option<&crate::memories::Target>| match target {
+            Some(crate::memories::Target::List(
+                crate::widgets::list_selection::ListSelectionPointerTarget::Tab(index),
+            )) => Some(*index),
+            _ => None,
+        };
+        memories.draw_tabs(
+            frame,
+            tabs,
+            tab(target(hovered)),
+            tab(target(pressed)),
+            context,
+        );
+        memories.draw(
+            frame,
+            body_area(panel, layout.content),
+            target(hovered),
+            target(pressed),
+            context,
+        );
+        return;
+    }
     body.draw_tabs(frame, tabs, tab(hovered), tab(pressed), context);
     if let crate::app::command_panel::CommandPanelBody::Provider(provider) = body {
         let target = |target: Option<&Target>| match target {
@@ -345,7 +388,7 @@ pub(super) fn close(app: &mut App) {
     if app.overlay().is_some() {
         super::navigation::close_overlay(app);
     } else {
-        super::navigation::close_command_panel(app);
+        app.close_command_panel();
     }
 }
 

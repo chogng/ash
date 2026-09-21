@@ -341,6 +341,23 @@ pub(in crate::app) fn handle_mouse(
             MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
                 if super::modal::layout(area).surface.contains(position) =>
             {
+                let body = app.command_panel().map(|panel| {
+                    super::modal::body_area(panel, super::modal::layout(area).content)
+                });
+                if let Some(super::super::command_panel::CommandPanel::Memories(panel)) =
+                    app.fullscreen.panels.command_mut()
+                {
+                    panel.scroll(
+                        body.expect("open memories panel"),
+                        position,
+                        if mouse.kind == MouseEventKind::ScrollUp {
+                            -3
+                        } else {
+                            3
+                        },
+                    );
+                    return MouseAction::Selection(None);
+                }
                 let key = crossterm::event::KeyEvent::new(
                     if mouse.kind == MouseEventKind::ScrollUp {
                         crossterm::event::KeyCode::Up

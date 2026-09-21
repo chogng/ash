@@ -12,9 +12,14 @@ expression: frame_text(&app)
                                                                                                     
                                                                                                     
                                                                                                     
-─ Memory content ───────────────────────────────────────────────────────────────────────────────────
+─ Edit memory ──────────────────────────────────────────────────────────────────────────────────────
                                                                                                     
-  Ctrl+S save · Ctrl+A clear · Esc cancel                                                           
+  Personal memories · Memories off                                                                  
+                                                                                                    
+  Title                                                                                             
+  Fixture decision                                                                                  
+                                                                                                    
+> Content                                                                                           
   Use Rust                                                                                          
   保 留   两 个 空 格                                                                                     
                                                                                                     
@@ -26,9 +31,4 @@ expression: frame_text(&app)
                                                                                                     
                                                                                                     
                                                                                                     
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-                                                                                                    
-  Esc to close
+  Tab fields · Ctrl+S save · Esc back

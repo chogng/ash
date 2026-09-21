@@ -606,6 +606,18 @@ pub(super) fn apply_tui_config(
     model_catalog: Option<&ash_app_server_protocol::protocol::model::ModelListResult>,
     app: &mut App,
 ) {
+    if let Some(super::command_panel::CommandPanel::Memories(panel)) =
+        app.panels_mut().command_mut()
+    {
+        panel.set_enabled(
+            config
+                .features
+                .iter()
+                .find(|state| state.feature == features::Feature::Memories)
+                .expect("config includes memories")
+                .enabled,
+        );
+    }
     match config::TerminalSettings::from_tui(&config.tui) {
         Ok(settings) => app.update(ConfigEvent::SettingsReceived(settings)),
         Err(error) => app.update(ThreadEvent::FailureReported(error)),

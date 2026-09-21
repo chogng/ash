@@ -371,6 +371,8 @@ Connector account 是 GitHub、Slack 等外部产品账号，不是第 11 节的
 
 `initialize.capabilities.memories` 表示当前 App Server 安装了 Memory 后端。所有 `memory/*` 方法只接受服务端授予的产品 host 连接；协议对端不能通过 initialize 参数提升权限。
 
+`config/update.features.memories` 是记忆总开关，默认关闭；`config/read.features` 返回其有效值与来源。关闭后模型的自动召回、搜索、引用读取和保存不可用；用户显式管理与各范围授权保留。每次准备上下文和执行模型记忆操作都重新检查当前配置。
+
 支持用户显式 add、update、list、read、search、delete、精确引用读取，以及独立授权的自动读取和模型保存。模型整理通过当前 Turn 的 `memories-save` 完成。add/update/delete 使用稳定 `commandId`；相同输入重放不会重复发布 `memory/changed`。删除后 live row、命令回执和 tombstone 都不保留 title/body，tombstone 只阻止 Memory ID 被重新使用。旧 add command 在删除后返回 `MemoryNotFound`，不会恢复正文。SQLite page、WAL 和外部备份的物理清理由存储维护策略负责，当前接口不把逻辑删除描述为介质擦除。
 
 list/search 默认每页 20 条，最大 50 条。cursor 绑定 catalog revision、精确作用域和搜索 query；任一 Memory 变化后继续使用旧 cursor 返回 `MemoryCursorStale`。list 不返回正文，search 返回命中位置附近最多 1024 UTF-8 字节的摘录及 citation，read 返回完整的最多 16 KiB 正文。

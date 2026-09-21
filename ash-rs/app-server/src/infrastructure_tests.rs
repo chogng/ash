@@ -638,7 +638,7 @@ impl core_api::ModelService for MemoryToolModel {
 
 #[test]
 fn memory_extension_tools_execute_in_turns_and_survive_host_composition_order() {
-    for memories_first in [true, false] {
+    for (memories_first, enabled) in [(true, true), (false, true), (true, false), (false, false)] {
         let root = tempfile::tempdir().unwrap();
         let path = root.path().join("state.sqlite");
         let skills = root.path().join("skills");
@@ -659,6 +659,7 @@ fn memory_extension_tools_execute_in_turns_and_survive_host_composition_order() 
         if memories_first {
             server = server.with_local_memories(&path).unwrap();
         }
+        server = server.with_config_store(enabled_memories(root.path()));
         server = server
             .with_skill_runtime(
                 ash_skills_extension::BuiltInSkillSource::Root(skills),
@@ -671,6 +672,23 @@ fn memory_extension_tools_execute_in_turns_and_survive_host_composition_order() 
         }
         // Installing Projects after Memories must replace both the context contributor and tools.
         let server = server.with_local_projects(&path).unwrap();
+        if !enabled {
+            let config = server.config.as_ref().unwrap();
+            config
+                .apply(ash_config::ConfigCommandRequest {
+                    command_id: ash_protocol::CommandId::new("disable-memories").unwrap(),
+                    expected_revision: config.read_snapshot().unwrap().revision,
+                    command: ash_config::UserConfigCommand::UpdatePreferences(
+                        ash_config::PreferencesUpdate {
+                            features: ash_protocol::Patch::Value(
+                                [(features::Feature::Memories, false)].into_iter().collect(),
+                            ),
+                            ..Default::default()
+                        },
+                    ),
+                })
+                .unwrap();
+        }
         let mut host = server.product_host_connection();
         let (session, thread) = create(&server, &mut host);
         let added = call(
@@ -681,14 +699,14 @@ fn memory_extension_tools_execute_in_turns_and_survive_host_composition_order() 
             }}),
         );
         assert!(added.get("error").is_none(), "{added}");
-        let enabled = call(
+        let policy_result = call(
             &server,
             &mut host,
             json!({"jsonrpc":"2.0","id":11,"method":"memory/policy/update","params":{
                 "commandId":"enable","scope":{"type":"profile"},"expectedRevision":0,"automaticRead":"firstInvocation","modelWrite":"disabled"
             }}),
         );
-        assert!(enabled.get("error").is_none(), "{enabled}");
+        assert!(policy_result.get("error").is_none(), "{policy_result}");
         let sequence = server
             .threads()
             .read_thread(&ash_protocol::ThreadId::new(&thread).unwrap())
@@ -710,7 +728,7 @@ fn memory_extension_tools_execute_in_turns_and_survive_host_composition_order() 
         for name in ["memories-search", "memories-read", "skills-read"] {
             assert!(first.contains(name), "missing {name}");
         }
-        assert!(first.contains("context_evidence"));
+        assert_eq!(first.contains("context_evidence"), enabled);
         assert!(
             !requests[0]
                 .instructions
@@ -721,11 +739,8 @@ fn memory_extension_tools_execute_in_turns_and_survive_host_composition_order() 
         let second = serde_json::to_string(&requests[1]).unwrap();
         let third = serde_json::to_string(&requests[2]).unwrap();
         assert!(!second.contains("context_evidence"));
-        assert!(
-            second.contains(&citation.reference().unwrap()),
-            "search did not return its reference: {second}"
-        );
-        assert!(third.contains(body));
+        assert_eq!(second.contains(&citation.reference().unwrap()), enabled);
+        assert_eq!(third.contains(body), enabled);
         let snapshot = server
             .threads()
             .read_thread(&ash_protocol::ThreadId::new(&thread).unwrap())
@@ -741,11 +756,16 @@ fn memory_extension_tools_execute_in_turns_and_survive_host_composition_order() 
             })
             .collect::<Vec<_>>();
         assert_eq!(completed.len(), 2);
-        assert!(
-            completed
-                .iter()
-                .all(|(text, is_error)| !**is_error && text.contains(body))
-        );
+        if enabled {
+            assert!(
+                completed
+                    .iter()
+                    .all(|(text, is_error)| !**is_error && text.contains(body))
+            );
+        } else {
+            assert!(completed.iter().all(|(text, _)| !text.contains(body)));
+            assert!(*completed[1].1);
+        }
     }
 }
 
@@ -787,117 +807,149 @@ impl core_api::ModelService for CodeMemoryModel {
 
 #[test]
 fn memories_code_mode_calls_share_identity_policy_and_durable_results() {
-    let root = tempfile::tempdir().unwrap();
-    let citation = memories::MemoryCitation {
-        memory_id: memories::MemoryId::new("seed").unwrap(),
-        scope: memories::MemoryScope::Profile,
-        revision: 1,
-        start_byte: 0,
-        end_byte: 9,
-    };
-    let server = super::server_with_model(Arc::new(CodeMemoryModel {
-        reference: citation.reference().unwrap(),
-        calls: Default::default(),
-    }))
-    .with_local_memories(&root.path().join("state.sqlite"))
-    .unwrap();
-    let mut host = server.product_host_connection();
-    let (session, thread) = create(&server, &mut host);
-    for (id, method, params) in [
-        (
-            10,
-            "memory/add",
-            json!({"commandId":"add","memoryId":"seed","scope":{"type":"profile"},"title":"Seed","body":"Rust seed"}),
-        ),
-        (
-            11,
-            "memory/policy/update",
-            json!({"commandId":"consent","scope":{"type":"profile"},"expectedRevision":0,"automaticRead":"firstInvocation","modelWrite":"enabled"}),
-        ),
-    ] {
-        let result = call(
-            &server,
-            &mut host,
-            json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}),
-        );
-        assert!(result.get("error").is_none(), "{result}");
-    }
-    let sequence = server
-        .threads()
-        .read_thread(&ash_protocol::ThreadId::new(&thread).unwrap())
-        .unwrap()
-        .sequence;
-    let started = call(
-        &server,
-        &mut host,
-        json!({"jsonrpc":"2.0","id":12,"method":"session/request","params":{"commandId":"turn","sessionId":session,"request":{"type":"startTurn","threadId":thread,"expectedSequence":sequence,"input":[{"type":"text","text":"Rust"}],"toolMode":"codeModeOnly"}}}),
-    );
-    assert!(started.get("error").is_none(), "{started}");
-    let deadline = Instant::now() + Duration::from_secs(20);
-    let snapshot = loop {
-        let snapshot = server
+    for enabled in [true, false] {
+        let root = tempfile::tempdir().unwrap();
+        let citation = memories::MemoryCitation {
+            memory_id: memories::MemoryId::new("seed").unwrap(),
+            scope: memories::MemoryScope::Profile,
+            revision: 1,
+            start_byte: 0,
+            end_byte: 9,
+        };
+        let server = super::server_with_model(Arc::new(CodeMemoryModel {
+            reference: citation.reference().unwrap(),
+            calls: Default::default(),
+        }))
+        .with_config_store(enabled_memories(root.path()))
+        .with_local_memories(&root.path().join("state.sqlite"))
+        .unwrap();
+        let mut host = server.product_host_connection();
+        let (session, thread) = create(&server, &mut host);
+        for (id, method, params) in [
+            (
+                10,
+                "memory/add",
+                json!({"commandId":"add","memoryId":"seed","scope":{"type":"profile"},"title":"Seed","body":"Rust seed"}),
+            ),
+            (
+                11,
+                "memory/policy/update",
+                json!({"commandId":"consent","scope":{"type":"profile"},"expectedRevision":0,"automaticRead":"firstInvocation","modelWrite":"enabled"}),
+            ),
+        ] {
+            let result = call(
+                &server,
+                &mut host,
+                json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}),
+            );
+            assert!(result.get("error").is_none(), "{result}");
+        }
+        if !enabled {
+            let config = server.config.as_ref().unwrap();
+            config
+                .apply(ash_config::ConfigCommandRequest {
+                    command_id: ash_protocol::CommandId::new("disable-memories").unwrap(),
+                    expected_revision: config.read_snapshot().unwrap().revision,
+                    command: ash_config::UserConfigCommand::UpdatePreferences(
+                        ash_config::PreferencesUpdate {
+                            features: ash_protocol::Patch::Value(
+                                [(features::Feature::Memories, false)].into_iter().collect(),
+                            ),
+                            ..Default::default()
+                        },
+                    ),
+                })
+                .unwrap();
+        }
+        let sequence = server
             .threads()
             .read_thread(&ash_protocol::ThreadId::new(&thread).unwrap())
-            .unwrap();
-        if snapshot.turns.last().is_some_and(|turn| {
-            matches!(
-                turn.status,
-                ash_protocol::TurnStatus::Completed
-                    | ash_protocol::TurnStatus::Failed
-                    | ash_protocol::TurnStatus::Interrupted
-            )
-        }) {
-            break snapshot;
-        }
-        assert!(Instant::now() < deadline, "Code Mode memory Turn timed out");
-        std::thread::sleep(Duration::from_millis(5));
-    };
-    assert_eq!(
-        snapshot.turns.last().unwrap().status,
-        ash_protocol::TurnStatus::Completed,
-        "{:?}",
-        snapshot.turns.last().unwrap().failure
-    );
-    let nested = snapshot
-        .items
-        .iter()
-        .filter_map(|item| match item {
-            ash_protocol::ThreadItem::ToolCall {
-                name,
-                binding: Some(binding),
-                ..
-            } if matches!(
-                binding.caller,
-                ash_protocol::ToolCallCaller::CodeMode { .. }
-            ) =>
-            {
-                Some(name.as_str())
+            .unwrap()
+            .sequence;
+        let started = call(
+            &server,
+            &mut host,
+            json!({"jsonrpc":"2.0","id":12,"method":"session/request","params":{"commandId":"turn","sessionId":session,"request":{"type":"startTurn","threadId":thread,"expectedSequence":sequence,"input":[{"type":"text","text":"Rust"}],"toolMode":"codeModeOnly"}}}),
+        );
+        assert!(started.get("error").is_none(), "{started}");
+        let deadline = Instant::now() + Duration::from_secs(20);
+        let snapshot = loop {
+            let snapshot = server
+                .threads()
+                .read_thread(&ash_protocol::ThreadId::new(&thread).unwrap())
+                .unwrap();
+            if snapshot.turns.last().is_some_and(|turn| {
+                matches!(
+                    turn.status,
+                    ash_protocol::TurnStatus::Completed
+                        | ash_protocol::TurnStatus::Failed
+                        | ash_protocol::TurnStatus::Interrupted
+                )
+            }) {
+                break snapshot;
             }
-            _ => None,
-        })
-        .collect::<Vec<_>>();
-    assert_eq!(
-        nested,
-        [
-            "memories-scopes",
-            "memories-save",
-            "memories-search",
-            "memories-read"
-        ]
-    );
-    assert!(!snapshot.items.iter().any(|item| matches!(
-        item,
-        ash_protocol::ThreadItem::ToolResult { is_error: true, .. }
-    )));
-    let found = call(
-        &server,
-        &mut host,
-        json!({"jsonrpc":"2.0","id":13,"method":"memory/search","params":{"scope":{"type":"profile"},"query":"Code Mode saved"}}),
-    );
-    assert_eq!(
-        found["result"]["matches"][0]["source"]["model"]["threadId"],
-        thread
-    );
+            assert!(Instant::now() < deadline, "Code Mode memory Turn timed out");
+            std::thread::sleep(Duration::from_millis(5));
+        };
+        assert_eq!(
+            snapshot.turns.last().unwrap().status,
+            ash_protocol::TurnStatus::Completed,
+            "{:?}",
+            snapshot.turns.last().unwrap().failure
+        );
+        let nested = snapshot
+            .items
+            .iter()
+            .filter_map(|item| match item {
+                ash_protocol::ThreadItem::ToolCall {
+                    name,
+                    binding: Some(binding),
+                    ..
+                } if matches!(
+                    binding.caller,
+                    ash_protocol::ToolCallCaller::CodeMode { .. }
+                ) =>
+                {
+                    Some(name.as_str())
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        if enabled {
+            assert_eq!(
+                nested,
+                [
+                    "memories-scopes",
+                    "memories-save",
+                    "memories-search",
+                    "memories-read"
+                ],
+                "{:?}",
+                snapshot.items
+            );
+            assert!(!snapshot.items.iter().any(|item| matches!(
+                item,
+                ash_protocol::ThreadItem::ToolResult { is_error: true, .. }
+            )));
+        }
+        let found = call(
+            &server,
+            &mut host,
+            json!({"jsonrpc":"2.0","id":13,"method":"memory/search","params":{"scope":{"type":"profile"},"query":"Code Mode saved"}}),
+        );
+        if enabled {
+            assert_eq!(
+                found["result"]["matches"][0]["source"]["model"]["threadId"],
+                thread
+            );
+        } else {
+            assert_eq!(found["result"]["matches"], json!([]));
+            assert!(snapshot.items.iter().any(|item| matches!(
+                item,
+                ash_protocol::ThreadItem::ToolResult { is_error: true, .. }
+            )));
+        }
+    }
 }
 
 struct CapabilityModel {
@@ -1045,6 +1097,7 @@ fn agent_capabilities_execute_through_rpc_and_image_approval_before_publishing_r
         .unwrap()
         .with_local_projects(&database)
         .unwrap()
+        .with_config_store(enabled_memories(root.path()))
         .with_local_memories(&database)
         .unwrap();
     let mut host = server.product_host_connection();
@@ -1173,4 +1226,24 @@ fn agent_capabilities_execute_through_rpc_and_image_approval_before_publishing_r
             .body,
         "verified durable finding"
     );
+}
+
+fn enabled_memories(path: &std::path::Path) -> Arc<ash_config::ConfigStore> {
+    let config =
+        Arc::new(ash_config::ConfigStore::open(path.join("memory-config.sqlite")).unwrap());
+    config
+        .apply(ash_config::ConfigCommandRequest {
+            command_id: ash_protocol::CommandId::new("enable-memories").unwrap(),
+            expected_revision: config.read_snapshot().unwrap().revision,
+            command: ash_config::UserConfigCommand::UpdatePreferences(
+                ash_config::PreferencesUpdate {
+                    features: ash_protocol::Patch::Value(
+                        [(features::Feature::Memories, true)].into_iter().collect(),
+                    ),
+                    ..Default::default()
+                },
+            ),
+        })
+        .unwrap();
+    config
 }

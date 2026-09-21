@@ -323,6 +323,7 @@ pub(crate) enum ListSelectionAdjustment {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ListSelectionState {
+    pub(super) scroll_offset: Option<usize>,
     model: ListSelectionPresentation,
     tabs: TabListState<ListSelectionGroup>,
     selected_visible: Option<usize>,
@@ -344,6 +345,7 @@ impl ListSelectionState {
         let (model, tabs) = model.into_parts();
         let search = model.search.clone().map(SearchBoxState::new);
         let mut state = Self {
+            scroll_offset: None,
             model,
             tabs: TabListState::new(tabs),
             selected_visible: None,
@@ -362,6 +364,7 @@ impl ListSelectionState {
     }
 
     pub(crate) fn replace_model(&mut self, model: ListSelectionModel) {
+        let selected = self.selected_item().and_then(|item| item.id()).cloned();
         let (model, tabs) = model.into_parts();
         self.search = match (self.search.take(), model.search.clone()) {
             (Some(mut state), Some(search_model)) => {
@@ -379,6 +382,14 @@ impl ListSelectionState {
                 .iter()
                 .any(|group| group.items.iter().any(|item| item.id() == Some(id)))
         });
+        if let Some(id) = selected
+            && let Some(index) = self
+                .visible_items()
+                .iter()
+                .position(|item| item.id() == Some(&id))
+        {
+            self.selected_visible = Some(index);
+        }
         self.reconcile_selection();
         if self.focus == ListSelectionFocus::Search && self.search.is_none()
             || self.focus == ListSelectionFocus::Tabs && !self.show_tabs()
@@ -421,6 +432,7 @@ impl ListSelectionState {
 
     /// Selects a stable item across groups and moves keyboard focus to it.
     pub(crate) fn focus_item(&mut self, id: &ListSelectionItemId) -> bool {
+        self.scroll_offset = None;
         let Some((tab, item)) = self
             .tabs
             .tabs()
@@ -557,6 +569,7 @@ impl ListSelectionState {
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> ListSelectionInputOutcome {
+        self.scroll_offset = None;
         if key.kind == KeyEventKind::Release {
             return ListSelectionInputOutcome::Consumed;
         }
@@ -746,6 +759,10 @@ impl ListSelectionState {
 
     pub(crate) fn active_tab(&self) -> &ListSelectionGroup {
         self.tabs.active_tab().expect("list groups are enabled")
+    }
+
+    pub(crate) fn active_tab_index(&self) -> usize {
+        self.tabs.active_index().expect("list groups are enabled")
     }
 
     fn selected_item_id(&self) -> Option<ListSelectionItemId> {

@@ -5,28 +5,28 @@ expression: frame_text(&app)
   .                                                                            [— / —] [Dashboard]  
                                                                                                     
   ╭──────────────────────────────────────────────────────────────────────────────────────────────╮  
-  │         ┌── Config ───────────────────────────────────────────────────────────[✗]─┐          │  
+  │         ┌── Memories ─────────────────────────────────────────────────────────[✗]─┐          │  
   │    ▄  ▄ │                                                                         │          │  
-  │  ▗█▛██▜█│   General    Providers    Language servers    Issues                    │          │  
+  │  ▗█▛██▜█│   Personal    Projects    Directories                                   │          │  
   │  ▝▜████▛│                                                                         │          │  
-  │    ▝  ▘ │  ╭────────────────────────────────────────────────────────────────────╮ │          │  
-  │         │  │ Search configuration                                               │ │          │  
+  │    ▝  ▘ │  Personal memories                                                      │          │  
+  │         │                                                                         │          │  
+  │         │  ╭────────────────────────────────────────────────────────────────────╮ │          │  
+  │         │  │ Rust                                                               │ │          │  
   │         │  ╰────────────────────────────────────────────────────────────────────╯ │          │  
-  │         │v Vim mode                                                           off │          │  
-  │         │    Use Vim editing in ChatInput                                         │          │  
-  │         │> Memory diagnostics                                                 off │          │  
-  │         │> Automatic updates                                               Latest │          │  
-  ╰─────────│> Show Git changes as diff                                           off │──────────╯  
-            │> Language                                                       English │             
-            │> Status bar style                                                Simple │             
-            │> Key hint style                                                Contrast │             
-            │> Screen mode                                                 fullscreen │             
-            │> Memories                                                           off │             
+  │         │> Rust decision 0    Keep shared behavior in     User maintained · 11-14 │          │  
+  │         │  Rust decision 1    Keep shared behavior in     User maintained · 11-14 │          │  
+  ╰─────────│  Rust decision 2    Keep shared behavior in     User maintained · 11-14 │──────────╯  
+            │  Load more                                                              │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │ Esc return  
-  ╭─────────│  Enter change · r reset · ←/→ details · Tab tabs · / search · Esc close │──────────╮  
+  ╭─────────│  Enter view · n new · a actions · Tab tabs · / search · Esc close       │──────────╮  
   │ > Build └─────────────────────────────────────────────────────────────────────────┘          │  
   ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯

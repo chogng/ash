@@ -1,29 +1,29 @@
 mod editor;
 mod panel;
 
-pub(crate) use editor::Editor;
-pub(crate) use panel::Panel;
+#[cfg(test)]
+#[path = "memories/request_tests.rs"]
+mod request_tests;
 
-use crate::client::new_command_id;
+pub(crate) use panel::Panel;
+pub(crate) use panel::Target;
+
 use ash_app_server_client::AppServerClient;
 use ash_app_server_client::JsonRpcTransport;
-use ash_app_server_protocol::protocol::memory::MemoryScopeDescriptor;
+use ash_app_server_protocol::protocol::memory::*;
 use ash_protocol::ThreadId;
 use memories::Memory;
 use memories::MemoryPolicy;
 use memories::MemoryScope;
-use memories::MemorySummary;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Command {
     Scopes,
     Browse {
         scope: MemoryScope,
-        cursor: Option<String>,
-    },
-    Search {
-        scope: MemoryScope,
         query: String,
+        cursor: Option<String>,
+        loaded: usize,
     },
     Read {
         scope: MemoryScope,
@@ -46,26 +46,59 @@ pub(crate) enum Command {
         command_id: ash_protocol::CommandId,
         memory: Memory,
     },
-    Policy(MemoryPolicy),
+    Policy {
+        command_id: ash_protocol::CommandId,
+        policy: MemoryPolicy,
+    },
+    ReadPolicy(MemoryScope),
+    Configure,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct Entry {
+    pub(crate) id: memories::MemoryId,
+    pub(crate) title: String,
+    pub(crate) source: memories::MemorySource,
+    pub(crate) updated: u64,
+    pub(crate) excerpt: String,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct Listing {
+    pub(crate) scope: MemoryScope,
+    pub(crate) query: String,
+    pub(crate) revision: u64,
+    pub(crate) entries: Vec<Entry>,
+    pub(crate) cursor: Option<String>,
 }
 
 #[derive(Debug)]
 pub(crate) enum Page {
-    Scopes(Vec<MemoryScopeDescriptor>),
-    List {
-        policy: MemoryPolicy,
-        entries: Vec<MemorySummary>,
-        cursor: Option<String>,
+    Scopes {
+        enabled: bool,
+        scopes: Vec<MemoryScopeDescriptor>,
+        list: Listing,
     },
+    List(Listing),
     Read(Memory),
     Citation(memories::MemoryCitationResult),
+    Policy(MemoryPolicy),
+    Deleted,
+}
+
+#[derive(Debug)]
+pub(crate) struct Failure {
+    pub(crate) code: Option<i64>,
+    pub(crate) message: String,
 }
 
 pub(crate) enum Event {
-    Opened(Page),
-    Detail(memories::MemoryCitationResult),
-    Failed(String),
-    Changed,
+    Finished {
+        command: Command,
+        result: Result<Page, Failure>,
+    },
+    Changed(MemoryChanged),
+    Config(crate::config::Event),
 }
 
 pub(crate) fn execute<T: JsonRpcTransport>(
@@ -73,67 +106,71 @@ pub(crate) fn execute<T: JsonRpcTransport>(
     thread_id: Option<&ThreadId>,
     command: Command,
 ) -> Result<Event, String> {
-    use ash_app_server_protocol::protocol::memory::*;
-    let run = || -> Result<Page, ash_app_server_client::ClientError> {
-        match command {
-            Command::Scopes => client
-                .memory_scopes(MemoryScopesParams {
-                    thread_id: thread_id.cloned(),
-                })
-                .map(|result| Page::Scopes(result.scopes)),
-            Command::Browse { scope, cursor } => {
-                let policy = client.read_memory_policy(MemoryPolicyReadParams {
-                    scope: scope.clone(),
-                })?;
-                let page = client.list_memories(MemoryListParams {
-                    scope,
-                    cursor,
-                    limit: Some(20),
-                })?;
-                Ok(Page::List {
-                    policy,
-                    entries: page.memories,
-                    cursor: page.next_cursor,
-                })
-            }
-            Command::Search { scope, query } => {
-                let result = client.search_memories(MemorySearchParams {
-                    scope: scope.clone(),
-                    query,
-                    cursor: None,
-                    limit: Some(50),
-                })?;
-                let mut entries = Vec::new();
-                for hit in result.matches {
-                    entries.push(
-                        client
-                            .read_memory(MemoryReadParams {
-                                scope: hit.scope,
-                                memory_id: hit.memory_id,
-                            })?
-                            .summary(),
-                    );
+    if command == Command::Configure {
+        return crate::config::execute(client, crate::config::Command::OpenEditor)
+            .map(Event::Config);
+    }
+    let result = (|| -> Result<Page, ash_app_server_client::ClientError> {
+        Ok(match command.clone() {
+            Command::Scopes => {
+                let config = client.read_config()?;
+                let enabled = config
+                    .features
+                    .iter()
+                    .find(|state| state.feature == features::Feature::Memories)
+                    .expect("config includes memories")
+                    .enabled;
+                let scopes = client
+                    .memory_scopes(MemoryScopesParams {
+                        thread_id: thread_id.cloned(),
+                    })?
+                    .scopes;
+                let scope = scopes
+                    .iter()
+                    .find(|scope| matches!(scope.policy.scope, MemoryScope::Project { .. }))
+                    .or_else(|| {
+                        scopes
+                            .iter()
+                            .find(|scope| scope.policy.scope == MemoryScope::Profile)
+                    })
+                    .expect("memory scopes include personal memories")
+                    .policy
+                    .scope
+                    .clone();
+                let list = browse(client, scope, String::new(), None)?;
+                Page::Scopes {
+                    enabled,
+                    scopes,
+                    list,
                 }
-                let policy = client.read_memory_policy(MemoryPolicyReadParams { scope })?;
-                Ok(Page::List {
-                    policy,
-                    entries,
-                    cursor: None,
-                })
             }
-            Command::Read { scope, id } => client
-                .read_memory(MemoryReadParams {
-                    scope,
-                    memory_id: id,
-                })
-                .map(Page::Read),
+            Command::Browse {
+                scope,
+                query,
+                cursor,
+                loaded,
+            } => {
+                let append = cursor.is_some();
+                let mut list = browse(client, scope.clone(), query.clone(), cursor)?;
+                while !append && list.entries.len() < loaded {
+                    let Some(cursor) = list.cursor.take() else {
+                        break;
+                    };
+                    let mut next = browse(client, scope.clone(), query.clone(), Some(cursor))?;
+                    list.entries.append(&mut next.entries);
+                    list.cursor = next.cursor;
+                }
+                Page::List(list)
+            }
+            Command::Read { scope, id } => Page::Read(client.read_memory(MemoryReadParams {
+                scope,
+                memory_id: id,
+            })?),
             Command::Citation(reference) => {
                 let citation = memories::MemoryCitation::parse(&reference).map_err(|error| {
                     ash_app_server_client::ClientError::Protocol(error.to_string())
                 })?;
-                client
-                    .read_memory_citation(MemoryCitationReadParams { citation })
-                    .map(Page::Citation)
+                Page::Citation(client.read_memory_citation(MemoryCitationReadParams { citation })?)
             }
             Command::Add {
                 command_id,
@@ -144,31 +181,35 @@ pub(crate) fn execute<T: JsonRpcTransport>(
                 let memory_id = memories::MemoryId::new(command_id.as_str()).map_err(|error| {
                     ash_app_server_client::ClientError::Protocol(error.to_string())
                 })?;
-                client
-                    .add_memory(MemoryAddParams {
-                        command_id,
-                        memory_id,
-                        scope,
-                        title,
-                        body,
-                    })
-                    .map(|result| Page::Read(result.memory))
+                Page::Read(
+                    client
+                        .add_memory(MemoryAddParams {
+                            command_id,
+                            memory_id,
+                            scope,
+                            title,
+                            body,
+                        })?
+                        .memory,
+                )
             }
             Command::Update {
                 command_id,
                 memory,
                 title,
                 body,
-            } => client
-                .update_memory(MemoryUpdateParams {
-                    command_id,
-                    memory_id: memory.memory_id,
-                    scope: memory.scope,
-                    expected_revision: memory.revision,
-                    title,
-                    body,
-                })
-                .map(|result| Page::Read(result.memory)),
+            } => Page::Read(
+                client
+                    .update_memory(MemoryUpdateParams {
+                        command_id,
+                        memory_id: memory.memory_id,
+                        scope: memory.scope,
+                        expected_revision: memory.revision,
+                        title,
+                        body,
+                    })?
+                    .memory,
+            ),
             Command::Delete { command_id, memory } => {
                 client.delete_memory(MemoryDeleteParams {
                     command_id,
@@ -176,49 +217,100 @@ pub(crate) fn execute<T: JsonRpcTransport>(
                     scope: memory.scope,
                     expected_revision: memory.revision,
                 })?;
-                client
-                    .memory_scopes(MemoryScopesParams {
-                        thread_id: thread_id.cloned(),
-                    })
-                    .map(|result| Page::Scopes(result.scopes))
+                Page::Deleted
             }
-            Command::Policy(policy) => {
-                client.update_memory_policy(MemoryPolicyUpdateParams {
-                    command_id: new_command_id("memory-policy"),
-                    scope: policy.scope,
-                    expected_revision: policy.revision,
-                    automatic_read: policy.automatic_read,
-                    model_write: policy.model_write,
-                })?;
+            Command::Policy { command_id, policy } => Page::Policy(
                 client
-                    .memory_scopes(MemoryScopesParams {
-                        thread_id: thread_id.cloned(),
-                    })
-                    .map(|result| Page::Scopes(result.scopes))
+                    .update_memory_policy(MemoryPolicyUpdateParams {
+                        command_id,
+                        scope: policy.scope,
+                        expected_revision: policy.revision,
+                        automatic_read: policy.automatic_read,
+                        model_write: policy.model_write,
+                    })?
+                    .policy,
+            ),
+            Command::ReadPolicy(scope) => {
+                Page::Policy(client.read_memory_policy(MemoryPolicyReadParams { scope })?)
             }
-        }
-    };
-    Ok(match run() {
-        Ok(Page::Citation(entry)) => Event::Detail(entry),
-        Ok(page) => Event::Opened(page),
-        Err(error) => Event::Failed(explain(error)),
-    })
+            Command::Configure => unreachable!("configuration is dispatched above"),
+        })
+    })()
+    .map_err(|error| {
+        let code = match &error {
+            ash_app_server_client::ClientError::Server { code, .. } => Some(*code),
+            _ => None,
+        };
+        let message = match code {
+            Some(-32133) if matches!(command, Command::Policy { .. }) => {
+                "Permissions changed. Refresh permissions before retrying.".into()
+            }
+            Some(-32133) => {
+                "This memory changed. View the latest version before saving your draft.".into()
+            }
+            Some(-32134) => "The memory list changed. Refresh to continue loading.".into(),
+            Some(-32131) => "This memory was deleted. Your draft is kept.".into(),
+            Some(-32602) => "Check the title, content and memory reference.".into(),
+            _ => error.to_string(),
+        };
+        Failure { code, message }
+    });
+    Ok(Event::Finished { command, result })
 }
 
-fn explain(error: ash_app_server_client::ClientError) -> String {
-    match error {
-        ash_app_server_client::ClientError::Server { code: -32133, .. } => {
-            "This memory changed. Refresh and select it again; your draft is kept.".into()
-        }
-        ash_app_server_client::ClientError::Server { code: -32134, .. } => {
-            "The memory list changed. Refresh the list.".into()
-        }
-        ash_app_server_client::ClientError::Server { code: -32131, .. } => {
-            "This memory was deleted. Refresh the list.".into()
-        }
-        ash_app_server_client::ClientError::Server { code: -32602, .. } => {
-            "Check the title, content and memory reference.".into()
-        }
-        error => error.to_string(),
-    }
+fn browse<T: JsonRpcTransport>(
+    client: &mut AppServerClient<T>,
+    scope: MemoryScope,
+    query: String,
+    cursor: Option<String>,
+) -> Result<Listing, ash_app_server_client::ClientError> {
+    let (revision, entries, cursor) = if query.is_empty() {
+        let page = client.list_memories(MemoryListParams {
+            scope: scope.clone(),
+            cursor,
+            limit: Some(20),
+        })?;
+        (
+            page.catalog_revision,
+            page.memories
+                .into_iter()
+                .map(|entry| Entry {
+                    id: entry.memory_id,
+                    title: entry.title,
+                    source: entry.source,
+                    updated: entry.updated_at_unix_ms,
+                    excerpt: String::new(),
+                })
+                .collect(),
+            page.next_cursor,
+        )
+    } else {
+        let page = client.search_memories(MemorySearchParams {
+            scope: scope.clone(),
+            query: query.clone(),
+            cursor,
+            limit: Some(20),
+        })?;
+        (
+            page.catalog_revision,
+            page.matches
+                .into_iter()
+                .map(|entry| Entry {
+                    id: entry.memory_id,
+                    title: entry.title,
+                    source: entry.source,
+                    updated: entry.updated_at_unix_ms,
+                    excerpt: entry.excerpt,
+                })
+                .collect(),
+            page.next_cursor,
+        )
+    };
+    Ok(Listing {
+        scope,
+        query,
+        revision,
+        entries,
+        cursor,
+    })
 }

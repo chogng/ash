@@ -5,16 +5,12 @@ expression: frame_text(&app)
   .                                                                            [— / —] [Dashboard]  
                                                                                                     
                                                                                                     
-            ┌── Memories › Edit memory ───────────────────────────────────────────[✗]─┐             
+            ┌── Memories › Unsaved changes ───────────────────────────────────────[✗]─┐             
             │                                                                         │             
-            │  Personal memories · Memories off                                       │             
+            │  Offline                                                                │             
             │                                                                         │             
-            │  Title                                                                  │             
-            │  Fixture decision                                                       │             
-            │                                                                         │             
-            │> Content                                                                │             
-            │  Use Rust                                                               │             
-            │  保 留   两 个 空 格                                                          │             
+            │> Continue editing                                                       │             
+            │  Discard changes                                                        │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
@@ -27,6 +23,10 @@ expression: frame_text(&app)
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
-  ╭─────────│  Tab fields · Ctrl+S save · Esc back                                    │──────────╮  
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+  ╭─────────│  Enter select · Esc back                                                │──────────╮  
   │ > backgr└─────────────────────────────────────────────────────────────────────────┘          │  
   ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯

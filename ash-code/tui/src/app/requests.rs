@@ -170,6 +170,7 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
         | AppCommand::Thread(ThreadCommand::CycleNextApprovalMode) => None,
         AppCommand::Config(
             ConfigCommand::SetIssues(_)
+            | ConfigCommand::SetMemories(_)
             | ConfigCommand::OpenEditor
             | ConfigCommand::Subscription(_)
             | ConfigCommand::Edit(_)

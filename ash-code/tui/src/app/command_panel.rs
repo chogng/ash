@@ -53,7 +53,7 @@ use std::collections::BTreeMap;
 pub(super) enum CommandPanelBody<'a> {
     Selection(&'a ListSelectionState),
     Prompt(&'a TextPrompt),
-    MemoryEditor(&'a crate::memories::Editor),
+    Memories(&'a crate::memories::Panel),
     Provider(&'a crate::config::provider::Panel),
     KeyCapture(&'a KeyCapture),
     Status(&'a StatusPanel),
@@ -63,9 +63,8 @@ impl CommandPanelBody<'_> {
     pub(super) fn allows_backdrop_dismiss(&self) -> bool {
         match self {
             Self::Selection(_) | Self::Status(_) => true,
-            Self::Prompt(_) | Self::MemoryEditor(_) | Self::Provider(_) | Self::KeyCapture(_) => {
-                false
-            }
+            Self::Memories(panel) => panel.allows_backdrop_dismiss(),
+            Self::Prompt(_) | Self::Provider(_) | Self::KeyCapture(_) => false,
         }
     }
 }
@@ -129,6 +128,7 @@ impl CommandPanel {
     pub(super) fn parent_title(&self) -> Option<&str> {
         match self {
             Self::Config(editor) => editor.parent_title(),
+            Self::Memories(panel) => panel.parent_title(),
             _ => None,
         }
     }
@@ -136,6 +136,12 @@ impl CommandPanel {
     pub(super) fn return_to_parent(&mut self) {
         if let Self::Config(editor) = self {
             editor.return_to_parent();
+        }
+        if let Self::Memories(panel) = self {
+            panel.handle_key(KeyEvent::new(
+                crossterm::event::KeyCode::Esc,
+                crossterm::event::KeyModifiers::NONE,
+            ));
         }
     }
 
@@ -148,6 +154,19 @@ impl CommandPanel {
                 .provider_mut()
                 .map(|panel| CommandPanelOutcome::Config(panel.activate(target)))
                 .unwrap_or(CommandPanelOutcome::Consumed),
+            _ => CommandPanelOutcome::Consumed,
+        }
+    }
+
+    pub(super) fn activate_memory(
+        &mut self,
+        target: &crate::memories::Target,
+        click: list_selection::ListSelectionClick,
+    ) -> CommandPanelOutcome {
+        match self {
+            Self::Memories(panel) => {
+                map_selection(panel.click(target, click), CommandPanelOutcome::Memories)
+            }
             _ => CommandPanelOutcome::Consumed,
         }
     }
@@ -386,7 +405,7 @@ impl CommandPanel {
             Self::Config(editor) => editor.selection(),
             Self::Connectors(selection) => Some(selection.state()),
             Self::Keymap(editor) => editor.selection(),
-            Self::Memories(panel) => panel.selection(),
+            Self::Memories(_) => None,
             Self::Mcp(selection) => Some(selection.state()),
             Self::Model(selection) => Some(selection.state()),
             Self::ProjectRoots(selection) => Some(selection.state()),
@@ -418,7 +437,7 @@ impl CommandPanel {
             Self::Config(s) => s.selection_mut(),
             Self::Connectors(s) => Some(s.state_mut()),
             Self::Keymap(s) => s.selection_mut(),
-            Self::Memories(panel) => panel.selection_mut(),
+            Self::Memories(_) => None,
             Self::Mcp(s) => Some(s.state_mut()),
             Self::Model(s) => Some(s.state_mut()),
             Self::ProjectRoots(s) => Some(s.state_mut()),
@@ -461,10 +480,7 @@ impl CommandPanel {
                 KeymapEditorPage::Selection(selection) => CommandPanelBody::Selection(selection),
                 KeymapEditorPage::Capture(capture) => CommandPanelBody::KeyCapture(capture),
             },
-            Self::Memories(panel) => match panel.editor() {
-                Some(editor) => CommandPanelBody::MemoryEditor(editor),
-                None => CommandPanelBody::Selection(panel.selection().expect("memory list")),
-            },
+            Self::Memories(panel) => CommandPanelBody::Memories(panel),
             Self::Mcp(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Model(selection) => CommandPanelBody::Selection(selection.state()),
             Self::ProjectRoots(selection) => CommandPanelBody::Selection(selection.state()),
@@ -654,7 +670,7 @@ impl<'a> CommandPanelBody<'a> {
     pub(super) fn title(self) -> &'a str {
         match self {
             Self::Selection(selection) => selection.title(),
-            Self::MemoryEditor(editor) => editor.title(),
+            Self::Memories(panel) => panel.title(),
             Self::Prompt(prompt) => prompt.title(),
             Self::Provider(_) => "Custom provider",
             Self::KeyCapture(capture) => capture.title(),
@@ -666,14 +682,15 @@ impl<'a> CommandPanelBody<'a> {
         match self {
             Self::Selection(selection) => selection.tab_rows(width),
             Self::Status(panel) => panel.tab_rows(width),
-            Self::MemoryEditor(_) | Self::Provider(_) | Self::Prompt(_) | Self::KeyCapture(_) => 0,
+            Self::Memories(panel) => panel.tab_rows(width),
+            Self::Provider(_) | Self::Prompt(_) | Self::KeyCapture(_) => 0,
         }
     }
 
     pub(super) fn body_rows(self, width: u16) -> u16 {
         match self {
             Self::Selection(selection) => selection.body_rows(width),
-            Self::MemoryEditor(_) => 16,
+            Self::Memories(panel) => panel.body_rows(width),
             Self::Prompt(prompt) => prompt.desired_height(),
             Self::KeyCapture(capture) => capture.desired_height(),
             Self::Status(panel) => panel.body_rows(width),
@@ -684,7 +701,7 @@ impl<'a> CommandPanelBody<'a> {
     pub(super) fn presentation_focus(self) -> Option<ratatui::style::Color> {
         match self {
             Self::Selection(selection) => selection.presentation_focus(),
-            Self::MemoryEditor(_)
+            Self::Memories(_)
             | Self::Prompt(_)
             | Self::KeyCapture(_)
             | Self::Status(_)
@@ -705,7 +722,10 @@ impl<'a> CommandPanelBody<'a> {
                 list_selection::draw_tabs(frame, area, selection, hovered_tab, pressed_tab, context)
             }
             Self::Status(panel) => panel.draw_tabs(frame, area, hovered_tab, pressed_tab, context),
-            Self::MemoryEditor(_) | Self::Provider(_) | Self::Prompt(_) | Self::KeyCapture(_) => {}
+            Self::Memories(panel) => {
+                panel.draw_tabs(frame, area, hovered_tab, pressed_tab, context)
+            }
+            Self::Provider(_) | Self::Prompt(_) | Self::KeyCapture(_) => {}
         }
     }
 
@@ -745,7 +765,7 @@ impl<'a> CommandPanelBody<'a> {
                     context,
                 )
             }
-            Self::MemoryEditor(editor) => editor.draw(frame, area, context),
+            Self::Memories(panel) => panel.draw(frame, area, None, None, context),
             Self::Prompt(prompt) => text_prompt::draw(frame, area, prompt, context),
             Self::KeyCapture(capture) => key_capture::draw(frame, area, capture, context),
             Self::Status(panel) => panel.draw_body(frame, area, context),

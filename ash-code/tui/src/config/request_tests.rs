@@ -530,3 +530,46 @@ fn config_reset_saves_with_revision_and_preserves_other_values() {
     assert!(params.get("gui").is_none());
     assert!(params.get("model").is_none());
 }
+
+#[test]
+fn memories_toggle_updates_backend_features_and_preserves_other_overrides() {
+    let mut current = empty_config_snapshot();
+    current.features = features::resolve(
+        &[
+            (features::Feature::Queue, false),
+            (features::Feature::Memories, true),
+        ]
+        .into_iter()
+        .collect(),
+    );
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let mut client = AppServerClient::new(RecordingTransport {
+        requests: requests.clone(),
+        responses: VecDeque::from([
+            response(
+                1,
+                serde_json::json!({"revision":1,"generation":1,"disposition":"updated"}),
+            ),
+            response(2, serde_json::to_value(&current).unwrap()),
+        ]),
+    });
+    super::set_memories(
+        &mut client,
+        crate::config::ConfigEdit {
+            terminal: Default::default(),
+            status_line: Default::default(),
+            server_config: current,
+            providers: ProviderListResult {
+                providers: Vec::new(),
+            },
+        },
+    )
+    .unwrap();
+    let requests = requests.lock().unwrap();
+    assert_eq!(requests[0]["method"], "config/update");
+    assert_eq!(
+        requests[0]["params"]["features"],
+        serde_json::json!({"queue":false,"memories":true})
+    );
+    assert!(requests[0]["params"].get("tui").is_none());
+}

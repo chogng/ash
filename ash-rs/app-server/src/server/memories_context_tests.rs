@@ -98,6 +98,7 @@ fn automatic_memories_follow_session_projects_and_current_directory_grants() {
         &mut builder,
         memories,
         Arc::new(MemoryScopes {
+            config: Some(enabled_memories(root.path())),
             projects: Some(projects.clone()),
             dirs: dirs.clone(),
         }),
@@ -322,6 +323,7 @@ fn memories_are_recollected_after_preflight_compaction_and_revocation() {
         &mut builder,
         memories.clone(),
         Arc::new(MemoryScopes {
+            config: Some(enabled_memories(root.path())),
             projects: None,
             dirs: Arc::new(DirGrants::default()),
         }),
@@ -377,4 +379,67 @@ fn memories_are_recollected_after_preflight_compaction_and_revocation() {
             .iter()
             .all(|request| !request.contains("MEMORY_REVOKED_DURING_PREPARATION"))
     );
+}
+
+fn enabled_memories(path: &std::path::Path) -> Arc<ash_config::ConfigStore> {
+    let config =
+        Arc::new(ash_config::ConfigStore::open(path.join("memory-config.sqlite")).unwrap());
+    config
+        .apply(ash_config::ConfigCommandRequest {
+            command_id: ash_protocol::CommandId::new("enable-memories").unwrap(),
+            expected_revision: config.read_snapshot().unwrap().revision,
+            command: ash_config::UserConfigCommand::UpdatePreferences(
+                ash_config::PreferencesUpdate {
+                    features: ash_protocol::Patch::Value(
+                        [(features::Feature::Memories, true)].into_iter().collect(),
+                    ),
+                    ..Default::default()
+                },
+            ),
+        })
+        .unwrap();
+    config
+}
+
+#[test]
+fn config_master_switch_stops_model_access_and_keeps_scope_permissions() {
+    let root = tempfile::tempdir().unwrap();
+    let config = enabled_memories(root.path());
+    let scopes = MemoryScopes {
+        config: Some(config.clone()),
+        projects: None,
+        dirs: Arc::new(DirGrants::default()),
+    };
+    let session = SessionId::new("s").unwrap();
+    let thread = ThreadId::new("t").unwrap();
+    assert_eq!(
+        scopes.scopes(&session, &thread).unwrap(),
+        [MemoryScope::Profile]
+    );
+    for (id, enabled) in [("off", false), ("on", true)] {
+        config
+            .apply(ash_config::ConfigCommandRequest {
+                command_id: CommandId::new(id).unwrap(),
+                expected_revision: config.read_snapshot().unwrap().revision,
+                command: ash_config::UserConfigCommand::UpdatePreferences(
+                    ash_config::PreferencesUpdate {
+                        features: ash_protocol::Patch::Value(
+                            [(features::Feature::Memories, enabled)]
+                                .into_iter()
+                                .collect(),
+                        ),
+                        ..Default::default()
+                    },
+                ),
+            })
+            .unwrap();
+        assert_eq!(
+            scopes.scopes(&session, &thread).unwrap().is_empty(),
+            !enabled
+        );
+        assert_eq!(
+            scopes.available_scopes(&session, &thread).unwrap(),
+            [MemoryScope::Profile]
+        );
+    }
 }

@@ -19,7 +19,7 @@ pub(crate) enum ClientEvent {
     ConnectorsChanged,
     PackageSourcesChanged,
     SkillsChanged,
-    MemoriesChanged,
+    MemoriesChanged(ash_app_server_protocol::protocol::memory::MemoryChanged),
     SessionChanged(SessionId),
     ThreadUpdated(Box<ThreadUpdateEnvelope>),
     ThreadTranscriptUpdated(Box<ThreadTranscriptUpdateEnvelope>),
@@ -49,7 +49,7 @@ fn project_notification(notification: ServerNotification) -> Option<ClientEvent>
         ServerNotification::MarketplaceChanged(_) | ServerNotification::PluginsChanged(_) => {
             Some(ClientEvent::PackageSourcesChanged)
         }
-        ServerNotification::MemoryChanged(_) => Some(ClientEvent::MemoriesChanged),
+        ServerNotification::MemoryChanged(changed) => Some(ClientEvent::MemoriesChanged(changed)),
         ServerNotification::SkillsChanged(_) => Some(ClientEvent::SkillsChanged),
         ServerNotification::GitStatusChanged(changed) => {
             Some(ClientEvent::GitStatusChanged(changed.status))

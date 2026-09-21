@@ -284,7 +284,7 @@ fn config_root_uses_the_selected_language_through_nls() {
             .iter()
             .map(|tab| tab.label())
             .collect::<Vec<_>>(),
-        vec!["通用", "提供商", "语言服务器", "Issues"]
+        vec!["通用", "提供商", "语言服务器", "议题"]
     );
     assert_eq!(state.visible_items()[0].label(), "Vim 模式");
     assert_eq!(state.visible_items()[7].label(), "屏幕模式");
@@ -840,4 +840,44 @@ fn general_items_select_on_single_click_and_activate_on_double_click() {
         ),
         super::ConfigEditorOutcome::Consumed
     ));
+}
+
+#[test]
+fn memories_master_switch_is_available_in_general_and_reset_uses_its_default() {
+    let mut editor = super::ConfigEditor::new(config_choices(
+        &empty_config_snapshot(),
+        &providers(),
+        TerminalSettings::default(),
+        StatusLineSettings::default(),
+    ));
+    editor.selection.state_mut().focus_item(
+        &crate::widgets::list_selection::ListSelectionItemId::new("memories"),
+    );
+    let super::ConfigEditorOutcome::Action(ConfigSelectionAction::SetMemories(edit)) =
+        editor.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("memories toggle");
+    };
+    assert!(
+        edit.server_config
+            .features
+            .iter()
+            .find(|state| state.feature == features::Feature::Memories)
+            .unwrap()
+            .enabled
+    );
+    let super::ConfigEditorOutcome::Action(ConfigSelectionAction::SetMemories(edit)) =
+        editor.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE))
+    else {
+        panic!("memories reset");
+    };
+    assert!(
+        !edit
+            .server_config
+            .features
+            .iter()
+            .find(|state| state.feature == features::Feature::Memories)
+            .unwrap()
+            .enabled
+    );
 }

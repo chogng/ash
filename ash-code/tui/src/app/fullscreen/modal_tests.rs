@@ -511,11 +511,25 @@ fn editing_modal_blocks_backdrop_dismiss_and_protects_input() {
     use memories::MemoryPolicy;
     use memories::MemoryScope;
     let mut app = crate::app::App::new();
-    app.update(Event::Opened(Page::List {
-        policy: MemoryPolicy::disabled(MemoryScope::Profile),
-        entries: Vec::new(),
-        cursor: None,
-    }));
+    app.update(Event::Finished {
+        command: crate::memories::Command::Scopes,
+        result: Ok(Page::Scopes {
+            enabled: false,
+            scopes: vec![
+                ash_app_server_protocol::protocol::memory::MemoryScopeDescriptor {
+                    label: "Personal memories".into(),
+                    policy: MemoryPolicy::disabled(MemoryScope::Profile),
+                },
+            ],
+            list: crate::memories::Listing {
+                scope: MemoryScope::Profile,
+                query: String::new(),
+                revision: 0,
+                entries: Vec::new(),
+                cursor: None,
+            },
+        }),
+    });
     assert!(super::allows_backdrop_dismiss(&app));
     let area = Rect::new(0, 0, 100, 30);
     let modal = super::layout(area).surface;
@@ -523,7 +537,7 @@ fn editing_modal_blocks_backdrop_dismiss_and_protects_input() {
     assert!(!modal.contains(ratatui::layout::Position::new(outside.0, outside.1)));
 
     // Entering the multi-line editor turns the panel into an editing dialog.
-    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE));
     app.handle_paste("Important draft".into());
     assert!(!super::allows_backdrop_dismiss(&app));
     assert_eq!(
@@ -624,9 +638,12 @@ fn editing_modal_blocks_backdrop_dismiss_and_protects_input() {
     );
     assert!(!app.fullscreen.modal_alert);
 
-    // Esc exits the editor and returns to the list picker.
+    // Esc keeps the draft until the user explicitly discards it.
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.command_panel().is_some());
+    assert!(!super::allows_backdrop_dismiss(&app));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     assert!(super::allows_backdrop_dismiss(&app));
 
     // Now in list picker mode, clicking backdrop closes the dialog.
@@ -732,44 +749,180 @@ fn memories_manager_edits_multiline_text_keeps_failed_drafts_and_restores_home()
     let mut app = crate::app::App::new();
     app.open_home();
     app.insert_text("background draft");
-    app.update(Event::Opened(Page::List {
-        policy: MemoryPolicy::disabled(MemoryScope::Profile),
-        entries: Vec::new(),
-        cursor: None,
-    }));
+    app.update(Event::Finished {
+        command: crate::memories::Command::Scopes,
+        result: Ok(Page::Scopes {
+            enabled: false,
+            scopes: vec![
+                ash_app_server_protocol::protocol::memory::MemoryScopeDescriptor {
+                    label: "Personal memories".into(),
+                    policy: MemoryPolicy::disabled(MemoryScope::Profile),
+                },
+            ],
+            list: crate::memories::Listing {
+                scope: MemoryScope::Profile,
+                query: String::new(),
+                revision: 0,
+                entries: Vec::new(),
+                cursor: None,
+            },
+        }),
+    });
     crate::tui_assert_snapshot!("memories_management", frame_text(&app));
-    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE));
     app.handle_paste("Fixture decision".into());
-    app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL));
+    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     app.handle_paste("Use Rust\n保留  两个空格".into());
+    assert_memory_editor_columns(&app);
     crate::tui_assert_snapshot!("memories_multiline_editor", frame_text(&app));
     let mut settings = crate::config::TerminalSettings::default();
     settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
     app.update(crate::config::Event::SettingsReceived(settings.clone()));
+    assert_memory_editor_columns(&app);
     crate::tui_assert_snapshot!("memories_inline_editor", frame_text(&app));
     settings.set_screen_mode(crate::terminal::ScreenMode::Fullscreen);
     app.update(crate::config::Event::SettingsReceived(settings));
-    let Some(crate::app::AppCommand::Memories(crate::memories::Command::Add {
-        title, body, ..
-    })) = app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL))
-    else {
-        panic!("save must emit a Memory command");
-    };
-    assert_eq!(title, "Fixture decision");
-    assert_eq!(body, "Use Rust\n保留  两个空格");
-    app.update(Event::Failed(
-        "The memory changed in another window. Refresh before saving.".into(),
-    ));
-    crate::tui_assert_snapshot!("memories_failed_draft", frame_text(&app));
-    let Some(crate::app::AppCommand::Memories(crate::memories::Command::Add { body, .. })) =
+    let Some(crate::app::AppCommand::Memories(command)) =
         app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL))
     else {
-        panic!("failed save must retain the draft");
+        panic!("save emits a memory command");
     };
-    assert_eq!(body, "Use Rust\n保留  两个空格");
+    assert!(
+        matches!(&command, crate::memories::Command::Add { title, body, .. } if title == "Fixture decision" && body == "Use Rust\n保留  两个空格")
+    );
+    app.update(Event::Finished {
+        command: command.clone(),
+        result: Err(crate::memories::Failure {
+            code: None,
+            message: "Could not save. Your draft is kept.".into(),
+        }),
+    });
+    crate::tui_assert_snapshot!("memories_failed_draft", frame_text(&app));
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::CONTROL)),
+        Some(crate::app::AppCommand::Memories(command.clone()))
+    );
+    app.update(Event::Finished {
+        command,
+        result: Err(crate::memories::Failure {
+            code: None,
+            message: "Offline".into(),
+        }),
+    });
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    crate::tui_assert_snapshot!("memories_unsaved_draft", frame_text(&app));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
     assert!(app.command_panel().is_none());
     assert_eq!(app.input(), "background draft");
+}
+
+fn assert_memory_editor_columns(app: &crate::app::App) {
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    terminal
+        .draw(|frame| crate::app::frame::draw(frame, app))
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let locate = |text: &str| {
+        (0..30)
+            .find_map(|y| {
+                let row = (0..100)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<String>();
+                row.find(text)
+                    .map(|offset| (row[..offset].chars().count() as u16, y))
+            })
+            .unwrap_or_else(|| panic!("missing {text}"))
+    };
+    let title = locate("Title");
+    let body = locate("Content");
+    assert_eq!(title.0, locate("Fixture decision").0);
+    assert_eq!(title.0, body.0);
+    assert_eq!(title.0, locate("Use Rust").0);
+    assert_eq!(title.0, locate("Personal memories").0);
+    assert_eq!(buffer[(body.0 - 2, body.1)].symbol(), ">");
+    assert!(buffer[body].modifier.contains(Modifier::BOLD));
+}
+
+#[test]
+fn memories_search_and_detail_show_scope_results_and_revision() {
+    use crate::memories::{Command, Entry, Event, Listing, Page};
+    use memories::{Memory, MemoryId, MemoryPolicy, MemoryScope, MemorySource};
+    let mut app = crate::app::App::new();
+    app.open_home();
+    app.update(Event::Finished {
+        command: Command::Scopes,
+        result: Ok(Page::Scopes {
+            enabled: true,
+            scopes: vec![
+                ash_app_server_protocol::protocol::memory::MemoryScopeDescriptor {
+                    label: "Personal memories".into(),
+                    policy: MemoryPolicy::disabled(MemoryScope::Profile),
+                },
+            ],
+            list: Listing {
+                scope: MemoryScope::Profile,
+                query: String::new(),
+                revision: 3,
+                entries: Vec::new(),
+                cursor: None,
+            },
+        }),
+    });
+    app.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+    app.handle_paste("Rust".into());
+    let Some(crate::app::AppCommand::Memories(search)) =
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("search command");
+    };
+    assert!(matches!(&search, Command::Browse { query, .. } if query == "Rust"));
+    app.update(Event::Finished {
+        command: search,
+        result: Ok(Page::List(Listing {
+            scope: MemoryScope::Profile,
+            query: "Rust".into(),
+            revision: 3,
+            entries: (0..3)
+                .map(|i| Entry {
+                    id: MemoryId::new(format!("decision-{i}")).unwrap(),
+                    title: format!("Rust decision {i}"),
+                    source: MemorySource::User,
+                    updated: 1_700_000_000_000,
+                    excerpt: "Keep shared behavior in Rust".into(),
+                })
+                .collect(),
+            cursor: Some("next-page".into()),
+        })),
+    });
+    crate::tui_assert_snapshot!("memories_search_results", frame_text(&app));
+    let Some(crate::app::AppCommand::Memories(read)) =
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("read command");
+    };
+    assert!(matches!(&read, Command::Read { id, .. } if id.as_str() == "decision-0"));
+    app.update(Event::Finished {
+        command: read,
+        result: Ok(Page::Read(Memory {
+            memory_id: MemoryId::new("decision-0").unwrap(),
+            scope: MemoryScope::Profile,
+            revision: 3,
+            title: "Rust decision 0".into(),
+            body: "Keep shared behavior in Rust.\n\nUse the App Server contract from every client."
+                .into(),
+            source: MemorySource::User,
+            created_at_unix_ms: 1_700_000_000_000,
+            updated_at_unix_ms: 1_700_000_000_000,
+        })),
+    });
+    crate::tui_assert_snapshot!("memories_detail", frame_text(&app));
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    let Some(crate::app::command_panel::CommandPanel::Memories(panel)) = app.command_panel() else {
+        panic!("memory list remains open");
+    };
+    assert_eq!(panel.title(), "Memories");
 }
 
 #[test]
@@ -906,6 +1059,142 @@ fn config_descriptions_expand_below_items_and_keep_mouse_targets_aligned() {
             .is_none()
     );
     assert_eq!(frame_text(&app), collapsed);
+}
+
+#[test]
+fn config_switches_keep_the_selected_language_after_saving() {
+    use crate::app::AppCommand;
+    use crate::config::Command;
+    use crate::config::ConfigEditResult;
+    use crate::config::Event;
+    use crate::nls::Language;
+    use crate::widgets::list_selection::ListSelectionItemId;
+
+    for (language, on, off) in [
+        (Language::Chinese, "开启", "关闭"),
+        (Language::Japanese, "オン", "オフ"),
+        (Language::French, "activé", "désactivé"),
+        (Language::English, "on", "off"),
+    ] {
+        let mut terminal = crate::config::TerminalSettings::default();
+        terminal.set_language(language);
+        let mut config = crate::test_support::empty_config_snapshot();
+        config.features =
+            features::resolve(&[(features::Feature::Memories, false)].into_iter().collect());
+        let providers = ash_app_server_protocol::protocol::provider::ProviderListResult {
+            providers: Vec::new(),
+        };
+        let mut app = crate::app::App::new();
+        app.open_home();
+        app.update(Event::SettingsReceived(terminal));
+        app.update(Event::EditorOpened(crate::config::config_choices(
+            &config,
+            &providers,
+            terminal,
+            crate::status::StatusLineSettings::default(),
+        )));
+        for (id, steps) in [
+            ("terminal-vim-mode", 0),
+            ("memory-diagnostics", 1),
+            ("show-git-changes-as-diff", 2),
+            ("memories", 5),
+        ] {
+            for _ in 0..steps {
+                app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+            }
+            assert_eq!(
+                app.list_selection().unwrap().selected_item().unwrap().id(),
+                Some(&ListSelectionItemId::new(id))
+            );
+            let label = app
+                .list_selection()
+                .unwrap()
+                .selected_item()
+                .unwrap()
+                .label()
+                .replace(' ', "");
+            let body = super::body_area(
+                app.command_panel().unwrap(),
+                super::layout(Rect::new(0, 0, 100, 30)).content,
+            );
+            let row_index = usize::from(body.y + crate::widgets::search_box::SEARCH_BOX_HEIGHT)
+                + app
+                    .list_selection()
+                    .unwrap()
+                    .selected_visible_index()
+                    .unwrap();
+            // Wide characters leave continuation cells in the text buffer.
+            let switch_row = |frame: &str| frame.lines().nth(row_index).unwrap().replace(' ', "");
+            let before = frame_text(&app);
+            assert!(
+                switch_row(&before)
+                    .trim_end_matches('│')
+                    .ends_with(&format!("{label}{off}"))
+            );
+            for enabled in [true, false] {
+                let Some(AppCommand::Config(command)) =
+                    app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+                else {
+                    panic!("switch should emit a config command")
+                };
+                let mut edit = match command {
+                    Command::SetMemories(edit) if id == "memories" => edit,
+                    Command::Edit(edit) if id != "memories" => edit,
+                    other => panic!("unexpected switch command: {other:?}"),
+                };
+                let actual = match id {
+                    "terminal-vim-mode" => {
+                        edit.terminal.input_mode() == crate::thread::composer::ChatInputMode::Vim
+                    }
+                    "memory-diagnostics" => edit.terminal.memory_diagnostics(),
+                    "show-git-changes-as-diff" => edit.status_line.show_git_changes_as_diff(),
+                    "memories" => {
+                        edit.server_config
+                            .features
+                            .iter()
+                            .find(|state| state.feature == features::Feature::Memories)
+                            .unwrap()
+                            .enabled
+                    }
+                    _ => unreachable!(),
+                };
+                assert_eq!(actual, enabled);
+                assert_eq!(edit.terminal.language(), language);
+                edit.server_config.revision += 1;
+                app.update(Event::Updated(ConfigEditResult {
+                    terminal: edit.terminal,
+                    status_line: edit.status_line.clone(),
+                    choices: crate::config::config_choices(
+                        &edit.server_config,
+                        &edit.providers,
+                        edit.terminal,
+                        edit.status_line,
+                    ),
+                }));
+                assert_eq!(app.language(), language);
+                let frame = frame_text(&app);
+                let row = switch_row(&frame);
+                assert!(
+                    row.trim_end_matches('│')
+                        .ends_with(&format!("{label}{}", if enabled { on } else { off })),
+                    "{language:?} {id}: {row}"
+                );
+                if !enabled {
+                    assert_eq!(frame, before);
+                }
+                if language == Language::Chinese && id == "memories" {
+                    crate::tui_assert_snapshot!(
+                        if enabled {
+                            "config_chinese_switch_on"
+                        } else {
+                            "config_chinese_switch_off"
+                        },
+                        frame
+                    );
+                }
+            }
+        }
+    }
 }
 
 #[test]

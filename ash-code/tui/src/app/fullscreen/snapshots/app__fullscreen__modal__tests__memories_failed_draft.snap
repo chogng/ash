@@ -5,9 +5,14 @@ expression: frame_text(&app)
   .                                                                            [— / —] [Dashboard]  
                                                                                                     
                                                                                                     
-            ┌── Memory content ───────────────────────────────────────────────────[✗]─┐             
+            ┌── Memories › Edit memory ───────────────────────────────────────────[✗]─┐             
             │                                                                         │             
-            │  The memory changed in another window. Refresh before saving.           │             
+            │  Could not save. Your draft is kept.                                    │             
+            │                                                                         │             
+            │  Title                                                                  │             
+            │  Fixture decision                                                       │             
+            │                                                                         │             
+            │> Content                                                                │             
             │  Use Rust                                                               │             
             │  保 留   两 个 空 格                                                          │             
             │                                                                         │             
@@ -22,11 +27,6 @@ expression: frame_text(&app)
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
-            │                                                                         │             
-            │                                                                         │             
-            │                                                                         │             
-            │                                                                         │             
-            │                                                                         │             
-  ╭─────────│  Esc to close                                                           │──────────╮  
+  ╭─────────│  Tab fields · Ctrl+S save · Esc back                                    │──────────╮  
   │ > backgr└─────────────────────────────────────────────────────────────────────────┘          │  
   ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯

@@ -42,6 +42,7 @@ pub(crate) struct ConfigEdit {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum ConfigSelectionAction {
+    SetMemories(ConfigEdit),
     SetIssues(super::IssueConfigEdit),
     AdjustIssueRefresh(super::IssueConfigEdit),
     OpenProvider(super::provider::Settings),
@@ -309,6 +310,7 @@ impl ConfigEditor {
                 | ConfigSelectionAction::SetShowGitChangesAsDiff(_)
                 | ConfigSelectionAction::SetStatusLineStyle(_)
                 | ConfigSelectionAction::SetTerminalSettings(_)
+                | ConfigSelectionAction::SetMemories(_)
         )
         .then_some(action)
     }
@@ -319,6 +321,13 @@ impl ConfigEditor {
         let defaults = TerminalSettings::default();
         let status_defaults = StatusLineSettings::default();
         match &mut action {
+            ConfigSelectionAction::SetMemories(edit) => {
+                for state in &mut edit.server_config.features {
+                    if state.feature == features::Feature::Memories {
+                        state.enabled = features::Feature::Memories.default_enabled();
+                    }
+                }
+            }
             ConfigSelectionAction::SetVimMode(edit) => {
                 edit.terminal.set_input_mode(defaults.input_mode());
             }
@@ -600,6 +609,24 @@ pub(crate) fn config_choices(
 ) -> ConfigChoices {
     let mut actions = BTreeMap::new();
     let language = terminal.language();
+    let memories_id = ListSelectionItemId::new("memories");
+    let mut memories_config = config.clone();
+    let memories = memories_config
+        .features
+        .iter_mut()
+        .find(|state| state.feature == features::Feature::Memories)
+        .expect("config includes the memories feature");
+    let memories_enabled = memories.enabled;
+    memories.enabled = !memories_enabled;
+    actions.insert(
+        memories_id.clone(),
+        ConfigSelectionAction::SetMemories(ConfigEdit {
+            terminal,
+            status_line: status_line.clone(),
+            server_config: memories_config,
+            providers: providers.clone(),
+        }),
+    );
     let screen_id = ListSelectionItemId::new("screen-mode");
     let mut next_screen = terminal;
     next_screen.set_screen_mode(terminal.screen_mode().next());
@@ -798,9 +825,22 @@ pub(crate) fn config_choices(
                 terminal.screen_mode().label(),
             ),
     ];
+    let mut config_items = config_items;
+    config_items.push(
+        ListSelectionItem::new(nls::localize(language, "Memories"))
+            .with_id(memories_id)
+            .with_columns(
+                nls::localize(language, "Memories"),
+                nls::localize(
+                    language,
+                    "Allow model recall and saving; existing memories are kept when off",
+                ),
+                switch_value(memories_enabled),
+            ),
+    );
     let provider_items = provider_items(config, providers, &mut actions);
     let language_server_items = language_servers(config, language, &mut actions);
-    ConfigChoices {
+    let mut choices = ConfigChoices {
         model: ListSelectionModel::new(
             nls::text(language, Message::ConfigTitle),
             vec![
@@ -824,7 +864,9 @@ pub(crate) fn config_choices(
         )))
         .with_empty_message(nls::text(language, Message::ConfigNoMatches)),
         actions,
-    }
+    };
+    choices.model.localize(language);
+    choices
 }
 
 fn language_outcome(

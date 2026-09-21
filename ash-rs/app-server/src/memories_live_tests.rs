@@ -101,6 +101,7 @@ fn memories_live_model_saves_and_recalls_an_authorized_fact() {
     });
     let root = tempfile::tempdir().unwrap();
     let server = super::server_with_model(model.clone())
+        .with_config_store(enabled_memories(root.path()))
         .with_local_memories(&root.path().join("state.sqlite"))
         .unwrap();
     let mut host = server.product_host_connection();
@@ -203,4 +204,24 @@ fn memories_live_model_saves_and_recalls_an_authorized_fact() {
         "Live memory save and recall passed ({} model invocations)",
         model.requests.lock().unwrap().len()
     );
+}
+
+fn enabled_memories(path: &std::path::Path) -> Arc<ash_config::ConfigStore> {
+    let config =
+        Arc::new(ash_config::ConfigStore::open(path.join("memory-config.sqlite")).unwrap());
+    config
+        .apply(ash_config::ConfigCommandRequest {
+            command_id: ash_protocol::CommandId::new("enable-memories").unwrap(),
+            expected_revision: config.read_snapshot().unwrap().revision,
+            command: ash_config::UserConfigCommand::UpdatePreferences(
+                ash_config::PreferencesUpdate {
+                    features: ash_protocol::Patch::Value(
+                        [(features::Feature::Memories, true)].into_iter().collect(),
+                    ),
+                    ..Default::default()
+                },
+            ),
+        })
+        .unwrap();
+    config
 }

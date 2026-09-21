@@ -13399,6 +13399,9 @@
             "codeMode": {
               "type": "boolean"
             },
+            "memories": {
+              "type": "boolean"
+            },
             "queue": {
               "type": "boolean"
             }
@@ -17325,7 +17328,8 @@
       "enum": [
         "codeMode",
         "queue",
-        "analytics"
+        "analytics",
+        "memories"
       ],
       "type": "string"
     },

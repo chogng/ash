@@ -26,6 +26,7 @@ pub(crate) struct ProviderApiKeyUpdate {
 impl Command {
     pub(crate) const fn request_name(&self) -> &'static str {
         match self {
+            Self::SetMemories(_) => "ash-tui-set-memories",
             Self::SetIssues(_) => "ash-tui-configure-issues",
             Self::Connection(_) => "ash-tui-provider-connection",
             Self::Subscription(_) => "ash-tui-chatgpt-account",
@@ -42,6 +43,7 @@ where
     T: JsonRpcTransport,
 {
     match command {
+        Command::SetMemories(edit) => set_memories(client, edit).map(Event::Updated),
         Command::SetIssues(edit) => set_issue_settings(client, edit).map(Event::Updated),
         Command::Connection(request) => {
             let id = request.id.clone();
@@ -64,6 +66,44 @@ where
         }
     }
     .map_err(|error| error.to_string())
+}
+
+fn set_memories<T: JsonRpcTransport>(
+    client: &mut AppServerClient<T>,
+    edit: ConfigEdit,
+) -> Result<ConfigEditResult, ConfigCommandError> {
+    let overrides = edit
+        .server_config
+        .features
+        .iter()
+        .filter(|state| {
+            state.source == features::FeatureSource::User
+                || state.feature == features::Feature::Memories
+        })
+        .map(|state| (state.feature, state.enabled))
+        .collect();
+    client.update_config(ConfigUpdateParams {
+        features: Patch::Value(overrides),
+        command_id: new_command_id("memories-config"),
+        expected_revision: edit.server_config.revision,
+        time_context: Patch::Missing,
+        model: Patch::Missing,
+        model_reasoning_effort: Patch::Missing,
+        approval_review_model: Patch::Missing,
+        commit_message_model: Patch::Missing,
+        tool_mode: Patch::Missing,
+        grep_backend: Patch::Missing,
+        gui: Patch::Missing,
+        tui: Patch::Missing,
+    })?;
+    let config = client.read_config()?;
+    let terminal = TerminalSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
+    let status_line = StatusLineSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
+    Ok(ConfigEditResult {
+        terminal,
+        status_line: status_line.clone(),
+        choices: config_choices(&config, &edit.providers, terminal, status_line),
+    })
 }
 
 fn set_issue_settings<T: JsonRpcTransport>(

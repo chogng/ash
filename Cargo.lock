@@ -2589,6 +2589,7 @@ dependencies = [
  "ash-app-server-client",
  "ash-app-server-protocol",
  "ash-client",
+ "ash-features",
  "ash-file-access",
  "ash-file-search",
  "ash-keybinding",

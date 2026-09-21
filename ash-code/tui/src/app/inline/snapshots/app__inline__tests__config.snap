@@ -16,5 +16,6 @@ expression: text(&buffer)
 > Status bar style                                                                          Simple  
 > Key hint style                                                                          Contrast  
 > Screen mode                                                                               inline  
+> Memories                                                                                     off  
                                                                                                     
   Enter change · r reset · ←/→ details · Tab tabs · / search · Esc close
