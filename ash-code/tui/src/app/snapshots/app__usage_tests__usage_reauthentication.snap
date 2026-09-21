@@ -1,0 +1,22 @@
+---
+source: ash-code/tui/src/app/usage_tests.rs
+expression: screen
+---
+  .                                                        [— / —] [Dashboard]
+
+        ┌── Usage ─────────────────────────────────────────────────[✗]─┐
+        │                                                              │
+        │  Reconnect ChatGPT in /config > Providers.                   │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+  ╭─────│                                                              │─────╮
+  │ > Bu│  Esc to close                                                │     │
+  ╰─────└──────────────────────────────────────────────────────────────┘del ─╯

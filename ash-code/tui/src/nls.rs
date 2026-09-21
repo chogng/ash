@@ -1084,6 +1084,69 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Démarrage de la session…",
     ),
     translation("Status", "ステータス", "状态", "État"),
+    translation("Usage", "使用量", "额度", "Utilisation"),
+    translation(
+        "ChatGPT plan",
+        "ChatGPT プラン",
+        "ChatGPT 套餐",
+        "Abonnement ChatGPT",
+    ),
+    translation("Limits", "利用上限", "额度限制", "Limites"),
+    translation("Windows", "集計期間", "额度窗口", "Périodes"),
+    translation("Resets", "リセット", "重置时间", "Réinitialisation"),
+    translation("Credits", "クレジット", "点数", "Crédits"),
+    translation("Unlimited", "無制限", "无限制", "Illimités"),
+    translation("Not reported", "情報なし", "未提供", "Non communiqué"),
+    translation("Availability", "利用状況", "可用状态", "Disponibilité"),
+    translation("Limit reached", "上限に到達", "已达上限", "Limite atteinte"),
+    translation(
+        "No credits available",
+        "クレジットなし",
+        "无可用点数",
+        "Aucun crédit disponible",
+    ),
+    translation(
+        "Available; balance not reported",
+        "利用可能・残高情報なし",
+        "可用；余额未提供",
+        "Disponibles ; solde non communiqué",
+    ),
+    translation(
+        "Run /usage to refresh",
+        "/usage で更新",
+        "运行 /usage 刷新",
+        "Relancer /usage pour actualiser",
+    ),
+    translation(
+        "show ChatGPT quota and reset times",
+        "ChatGPT の利用上限とリセット時刻を表示",
+        "查看 ChatGPT 额度和重置时间",
+        "afficher les quotas ChatGPT et leur réinitialisation",
+    ),
+    translation(
+        "Sign in to ChatGPT: /config > Providers.",
+        "/config > プロバイダーで ChatGPT にログインしてください。",
+        "在 /config > 提供商中登录 ChatGPT 后查看额度。",
+        "Connectez-vous à ChatGPT dans /config > Fournisseurs pour consulter les quotas.",
+    ),
+    translation(
+        "Reconnect ChatGPT in /config > Providers.",
+        "/config > プロバイダーで ChatGPT に再接続してください。",
+        "ChatGPT 登录需要处理。打开 /config > 提供商重新连接。",
+        "Reconnectez-vous à ChatGPT dans /config > Fournisseurs.",
+    ),
+    translation(
+        "ChatGPT account changed. Run /usage again.",
+        "ChatGPT アカウントが変更されました。/usage を再実行してください。",
+        "ChatGPT 账号已切换，请重新运行 /usage。",
+        "Le compte ChatGPT a changé. Relancez /usage.",
+    ),
+    translation(
+        "Could not load ChatGPT usage. Run /usage to retry.",
+        "ChatGPT の使用量を取得できませんでした。/usage で再試行してください。",
+        "无法读取 ChatGPT 额度，请运行 /usage 重试。",
+        "Impossible de lire les quotas ChatGPT. Relancez /usage.",
+    ),
     translation("Status line", "ステータスライン", "状态栏", "Barre d’état"),
     translation("Submitting…", "送信中…", "正在提交…", "Envoi…"),
     translation("Switch", "切り替え", "切换", "Changer"),
@@ -1911,6 +1974,24 @@ pub(crate) fn localize<'a>(language: Language, source: &'a str) -> Cow<'a, str> 
             Language::Japanese => value.japanese,
             Language::Chinese => value.chinese,
             Language::French => value.french,
+        });
+    }
+    if let Some((remaining, used)) = source.split_once("% left (")
+        && let Some(used) = used.strip_suffix("% used)")
+    {
+        return Cow::Owned(match language {
+            Language::English => source.to_owned(),
+            Language::Japanese => format!("残り {remaining}%（使用済み {used}%）"),
+            Language::Chinese => format!("剩余 {remaining}%（已用 {used}%）"),
+            Language::French => format!("{remaining}% restants ({used}% utilisés)"),
+        });
+    }
+    if let Some(duration) = source.strip_suffix(" window") {
+        return Cow::Owned(match language {
+            Language::English => source.to_owned(),
+            Language::Japanese => format!("{duration} の期間"),
+            Language::Chinese => format!("{duration} 额度"),
+            Language::French => format!("Période de {duration}"),
         });
     }
     for prefix in ["All", "Connected", "Not connected", "Enabled", "Disabled"] {

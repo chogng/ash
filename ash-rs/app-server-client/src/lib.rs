@@ -15,6 +15,8 @@ use ash_app_server_protocol::protocol::account::AccountLoginStartParams;
 use ash_app_server_protocol::protocol::account::AccountLoginStartResult;
 use ash_app_server_protocol::protocol::account::AccountLogoutParams;
 use ash_app_server_protocol::protocol::account::AccountLogoutResult;
+use ash_app_server_protocol::protocol::account::AccountRateLimitsReadParams;
+use ash_app_server_protocol::protocol::account::AccountRateLimitsReadResult;
 use ash_app_server_protocol::protocol::account::AccountReadResult;
 use ash_app_server_protocol::protocol::attachments::AttachmentImportRemoteParams;
 use ash_app_server_protocol::protocol::attachments::AttachmentMaterializeResult;
@@ -764,6 +766,14 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
     /// Reads redacted provider accounts without exposing credentials to the client.
     pub fn read_accounts(&mut self) -> Result<AccountReadResult, ClientError> {
         self.call(ClientMethod::AccountRead, EmptyParams {})
+    }
+
+    /// Reads current quota for the selected provider account.
+    pub fn read_account_rate_limits(
+        &mut self,
+        params: AccountRateLimitsReadParams,
+    ) -> Result<AccountRateLimitsReadResult, ClientError> {
+        self.call(ClientMethod::AccountRateLimitsRead, params)
     }
 
     /// Starts the provider-owned interactive sign-in flow.

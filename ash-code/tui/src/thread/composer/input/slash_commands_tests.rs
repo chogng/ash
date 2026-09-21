@@ -11,6 +11,7 @@ fn builtins_follow_enum_presentation_order() {
             .collect::<Vec<_>>(),
         vec![
             "status",
+            "usage",
             "statusline",
             "skills",
             "memories",
@@ -39,7 +40,7 @@ fn builtins_follow_enum_presentation_order() {
             "pr",
         ]
     );
-    assert_eq!(definitions.len(), 27);
+    assert_eq!(definitions.len(), 28);
 }
 
 #[test]

@@ -34,6 +34,9 @@ mod start;
 mod startup;
 mod state;
 mod top_tip;
+#[cfg(test)]
+#[path = "app/usage_tests.rs"]
+mod usage_tests;
 mod welcome;
 
 pub(crate) use crate::sessions::ActiveConversation;

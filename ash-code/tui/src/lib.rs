@@ -57,6 +57,7 @@ macro_rules! tui_assert_snapshot {
 
 mod theme;
 mod thread;
+mod usage;
 mod widgets;
 
 use ash_app_server_client::AppServerSession;

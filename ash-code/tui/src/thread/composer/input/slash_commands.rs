@@ -17,6 +17,7 @@ use ash_slash_commands::SlashCommandCatalog;
 #[strum(serialize_all = "kebab-case")]
 pub(crate) enum TuiSlashCommandAction {
     Status,
+    Usage,
     #[strum(serialize = "statusline")]
     StatusLine,
     Skills,
@@ -74,6 +75,7 @@ impl TuiSlashCommandAction {
             Self::Pr => "ask the Agent to create or inspect a pull request",
             Self::Issue => "select issues to develop together",
             Self::Status => "show the active session, thread, and model",
+            Self::Usage => "show ChatGPT quota and reset times",
             Self::StatusLine => "choose the items shown in the status line",
             Self::Dashboard => "open Dashboard",
             Self::Subagents => "focus the current Session Thread list",

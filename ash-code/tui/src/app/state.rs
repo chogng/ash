@@ -1901,6 +1901,9 @@ impl App {
             AppEvent::Thread(event) => self.apply_thread_event(event),
             AppEvent::Keymap(event) => self.apply_keymap_event(event),
             AppEvent::Status(event) => self.apply_status_event(event),
+            AppEvent::Usage(crate::usage::Event::Opened(model)) => {
+                self.open_command_panel(CommandPanel::usage(model));
+            }
             AppEvent::Connectors(event) => self.apply_connector_event(event),
             AppEvent::Memories(event) => match event {
                 crate::memories::Event::Changed => {
@@ -2012,6 +2015,7 @@ impl App {
             )
             | AppEvent::Models(ModelEvent::PickerOpened(_) | ModelEvent::PickerUpdated(_))
             | AppEvent::Status(StatusEvent::PanelOpened(_))
+            | AppEvent::Usage(_)
             | AppEvent::Sessions(SessionEvent::PickerOpened(_))
             | AppEvent::Connectors(
                 ConnectorEvent::PickerOpened(_) | ConnectorEvent::PickerUpdated(_),

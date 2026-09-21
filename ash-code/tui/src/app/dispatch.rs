@@ -91,6 +91,13 @@ where
                 .into(),
             );
         }
+        TuiSlashCommandAction::Usage => {
+            output.events.push(
+                crate::usage::load(client)
+                    .map_err(CommandExecutionError)?
+                    .into(),
+            );
+        }
         TuiSlashCommandAction::Memories => {
             let command = if arguments.is_empty() {
                 crate::memories::Command::Scopes

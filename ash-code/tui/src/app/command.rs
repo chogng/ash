@@ -44,6 +44,7 @@ impl AppCommand {
                     "mcp" => Some("MCP"),
                     "connectors" => Some("Connectors"),
                     "status" => Some("Status"),
+                    "usage" => Some("Usage"),
                     "rewind" => Some("Rewind"),
                     "add-dir" => Some("Directories"),
                     _ => None,

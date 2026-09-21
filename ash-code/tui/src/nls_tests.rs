@@ -46,6 +46,11 @@ fn languages_cycle_in_both_directions() {
 
 #[test]
 fn product_chrome_is_localized_without_changing_source_content() {
+    assert_eq!(
+        localize(Language::Chinese, "65% left (35% used)"),
+        "剩余 65%（已用 35%）"
+    );
+    assert_eq!(localize(Language::Chinese, "5h window"), "5h 额度");
     assert_eq!(localize(Language::Chinese, "Dashboard"), "仪表盘");
     assert_eq!(localize(Language::Japanese, "close"), "閉じる");
     assert_eq!(

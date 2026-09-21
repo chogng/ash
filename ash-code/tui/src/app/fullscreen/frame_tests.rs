@@ -1617,7 +1617,8 @@ fn bare_slash_renders_the_first_command_window() {
     assert!(rendered.contains("/skills"));
     assert!(rendered.contains("/memories"));
     assert!(rendered.contains("/mcp"));
-    assert!(rendered.contains("/resume"));
+    assert!(rendered.contains("/usage"));
+    assert!(!rendered.contains("/resume"));
     assert!(!rendered.contains("/archive-thread"));
     assert!(!rendered.contains("/archive-session"));
     assert!(!rendered.contains("/thread "));

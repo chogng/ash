@@ -17,6 +17,7 @@ pub(crate) enum AppEvent {
     Sessions(crate::sessions::Event),
     Skills(crate::skills::Event),
     Status(crate::status::Event),
+    Usage(crate::usage::Event),
     Theme(crate::theme::Event),
     Thread(crate::thread::Event),
     CommandPanelClosed,
@@ -46,6 +47,7 @@ app_event_from!(crate::projects::Event, Projects);
 app_event_from!(crate::sessions::Event, Sessions);
 app_event_from!(crate::skills::Event, Skills);
 app_event_from!(crate::status::Event, Status);
+app_event_from!(crate::usage::Event, Usage);
 app_event_from!(crate::theme::Event, Theme);
 app_event_from!(crate::thread::Event, Thread);
 

@@ -16,6 +16,48 @@ const TEST_MODEL: &str = "gpt-5.6-luna";
 const TEST_EFFORT: &str = "low";
 
 #[test]
+#[ignore = "Reads real ChatGPT quota with existing Codex auth; no model call, refresh, or writes"]
+fn live_codex_usage_is_read_only() {
+    let home = super::codex_home().expect("Codex home must resolve");
+    let before = auth_digest(&home);
+    let client = Arc::new(AshClient::new(Arc::new(UreqHttpClient::new().unwrap())));
+    let auth = ChatGptOAuth::with_client(
+        home.clone(),
+        Arc::new(MemorySecretStore::default()),
+        client,
+        super::ChatGptAuthManagement::Codex,
+    );
+    let credential = auth
+        .load_credential()
+        .expect("Codex auth must be readable")
+        .expect("an existing Codex login is required");
+    let account_id = credential
+        .account_id
+        .as_deref()
+        .expect("ChatGPT account identity is required");
+    let result = super::ChatGptAccount::new(auth).read_rate_limits(
+        account_id,
+        &ash_async_utils::CancellationSource::new().token(),
+    );
+    assert!(
+        before == auth_digest(&home),
+        "source auth.json changed during quota query"
+    );
+    let usage = result.expect("real ChatGPT quota query must succeed");
+    assert!(!usage.plan.is_empty());
+    assert!(!usage.limits.is_empty());
+    println!("ChatGPT quota read succeeded; plan: {}", usage.plan);
+    for limit in usage.limits {
+        for window in [limit.primary, limit.secondary].into_iter().flatten() {
+            println!(
+                "Window {}s: {}% used; reset at {}",
+                window.window_seconds, window.used_percent, window.resets_at
+            );
+        }
+    }
+}
+
+#[test]
 #[ignore = "Uses the user's existing Codex subscription: Luna / low only, no refresh or writes"]
 fn live_codex_auth_is_read_only_and_luna_low_completes() {
     let home = super::codex_home().expect("Codex home must resolve");

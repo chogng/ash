@@ -87,6 +87,7 @@ pub(crate) enum CommandPanel {
     Sessions(ListSelection<SessionSelectionAction>),
     Skills(ListSelection<SkillSelectionAction>),
     Startup(ListSelection<()>),
+    Usage(ListSelection<()>),
     Status(StatusPanel),
     StatusLine(ListSelection<StatusLineSelectionAction>),
     Theme(ThemePicker),
@@ -230,6 +231,10 @@ impl CommandPanel {
         Self::Status(panel)
     }
 
+    pub(crate) fn usage(model: crate::widgets::list_selection::ListSelectionModel) -> Self {
+        Self::Usage(ListSelection::new(model, BTreeMap::new()))
+    }
+
     pub(crate) fn apply_process_resources(&mut self, resources: ProcessResourcesView) {
         if let Self::Status(panel) = self {
             panel.apply_process_resources(resources);
@@ -249,7 +254,9 @@ impl CommandPanel {
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent, area: Rect) -> CommandPanelOutcome {
         match self {
-            Self::Help(content) | Self::Loading(content) => map_read_only(content.handle_key(key)),
+            Self::Help(content) | Self::Loading(content) | Self::Usage(content) => {
+                map_read_only(content.handle_key(key))
+            }
             Self::Dirs(content) => {
                 map_selection(content.handle_key(key), CommandPanelOutcome::Dirs)
             }
@@ -311,7 +318,9 @@ impl CommandPanel {
 
     pub(crate) fn handle_paste(&mut self, pasted: String) {
         match self {
-            Self::Help(content) | Self::Loading(content) => content.handle_paste(pasted),
+            Self::Help(content) | Self::Loading(content) | Self::Usage(content) => {
+                content.handle_paste(pasted)
+            }
             Self::Dirs(content) => content.handle_paste(pasted),
             Self::GitBranches(content) => content.handle_paste(pasted),
             Self::Config(content) => content.handle_paste(pasted),
@@ -333,7 +342,10 @@ impl CommandPanel {
 
     pub(crate) fn localize(&mut self, language: crate::nls::Language) {
         match self {
-            Self::Help(content) | Self::Loading(content) | Self::Startup(content) => {
+            Self::Help(content)
+            | Self::Loading(content)
+            | Self::Startup(content)
+            | Self::Usage(content) => {
                 content.state_mut().localize(language);
             }
             Self::GitBranches(content) => content.state_mut().localize(language),
@@ -366,7 +378,9 @@ impl CommandPanel {
 
     pub(crate) fn list_selection(&self) -> Option<&ListSelectionState> {
         match self {
-            Self::Help(selection) | Self::Loading(selection) => Some(selection.state()),
+            Self::Help(selection) | Self::Loading(selection) | Self::Usage(selection) => {
+                Some(selection.state())
+            }
             Self::Dirs(selection) => Some(selection.state()),
             Self::GitBranches(selection) => Some(selection.state()),
             Self::Config(editor) => editor.selection(),
@@ -396,7 +410,9 @@ impl CommandPanel {
             return CommandPanelOutcome::Config(editor.handle_click(target, click));
         }
         let selection = match self {
-            Self::Help(s) | Self::Startup(s) | Self::Loading(s) => Some(s.state_mut()),
+            Self::Help(s) | Self::Startup(s) | Self::Loading(s) | Self::Usage(s) => {
+                Some(s.state_mut())
+            }
             Self::Dirs(s) => s.selection_mut(),
             Self::GitBranches(s) => Some(s.state_mut()),
             Self::Config(s) => s.selection_mut(),
@@ -430,7 +446,7 @@ impl CommandPanel {
 
     pub(super) fn body(&self) -> CommandPanelBody<'_> {
         match self {
-            Self::Help(selection) | Self::Loading(selection) => {
+            Self::Help(selection) | Self::Loading(selection) | Self::Usage(selection) => {
                 CommandPanelBody::Selection(selection.state())
             }
             Self::Dirs(selection) => CommandPanelBody::Selection(selection.state()),
@@ -464,7 +480,9 @@ impl CommandPanel {
 
     pub(crate) fn key_hints(&self) -> &crate::widgets::key_hint::KeyHints {
         match self {
-            Self::Help(content) | Self::Loading(content) => content.key_hints(),
+            Self::Help(content) | Self::Loading(content) | Self::Usage(content) => {
+                content.key_hints()
+            }
             Self::Dirs(content) => content.key_hints(),
             Self::GitBranches(content) => content.key_hints(),
             Self::Config(content) => content.key_hints(),

@@ -77,7 +77,9 @@ Codex 不使用 Ash 的锁，因此不能把安装探测与写入前校验描述
 
 **本功能所有真实模型测试固定使用 `gpt-5.6-luna`、`reasoning.effort=low`，禁止改用其他模型、默认思考强度或刷新真实凭据。** 首次创建和故障测试使用隔离目录与合成 token；用官方 Codex CLI 验证生成文件可读，不能用真实登录覆盖用户账户。
 
-本次认证实现、命令和结果见[认证兼容验收](../ash-rs/docs/changes/chatgpt-auth/verification.md)。账号额度查询已通过 `account/rateLimits/read` 提供，参数与错误见 [App Server 账号接口](ash-app-server-api.md#11-account-与登录)；额度界面、丰富响应项和完整流式断线恢复仍属于后续能力。
+本次认证实现、命令和结果见[认证兼容验收](../ash-rs/docs/changes/chatgpt-auth/verification.md)。账号额度查询已通过 `account/rateLimits/read` 提供，参数与错误见 [App Server 账号接口](ash-app-server-api.md#11-account-与登录)。TUI 的 `/usage` 展示套餐、各额度窗口的剩余比例、UTC 重置时间和点数；每次打开读取当前账号，缺失数据保留“未提供”。丰富响应项和完整流式断线恢复仍属于后续能力。
+
+额度查询的真实账号验证不调用模型：运行 `just test ash-chatgpt live_codex_usage_is_read_only -- --ignored --nocapture` 验证只读认证与后端接口，运行 `just test ash-tui live_usage_command_through_local_app_server -- --ignored --nocapture` 验证 `/usage` 到本地 App Server 的完整链路。后者要求已安装 Codex CLI 与现有文件凭据，两项测试都检查源 `auth.json` 未改变；正常测试默认忽略真实账号调用。
 
 参考：[官方认证文档](https://developers.openai.com/codex/auth)、[OpenAI 工程师对第三方客户端的说明](https://github.com/openai/codex/discussions/8338)。
 
@@ -91,7 +93,7 @@ Codex 不使用 Ash 的锁，因此不能把安装探测与写入前校验描述
 | 丰富响应项 | 尚未完成 | 把订阅 Responses 支持的响应项映射为统一的持久化 Item 与通知；重连后只从统一状态重建，Desktop 不依赖供应商 DTO。 |
 | 图片输入 | 已实现 | 继续通过工作区附件授权、MIME、字节与像素边界进入受控的模型输入。 |
 | 敏感交互输入 | 进行中 | 按 [`secrets.md`](secrets.md#8-交互式敏感输入) 的一次性交付边界响应 `isSecret` 请求，不进入普通 transcript、Thread Item、错误、Debug 或观测数据。 |
-| 账户摘要与限流状态 | 部分具备 | Codex 凭据读取和首次 OAuth 已提供账户、组织、方案、状态和凭据版本摘要；仍需增加额度与限流观察。过期观察必须变为未知，不能门禁静态模型目录，真实失败仍归属准确 Turn。 |
+| 账户摘要与限流状态 | 部分具备 | 已提供账户摘要、账号额度接口与 TUI `/usage` 即时查询；尚无后台限流观察。额度仅用于展示，不门禁静态模型目录，真实失败仍归属准确 Turn。 |
 | 登录与流式故障矩阵 | 尚未完成 | 覆盖 device poll、外部凭据轮换、401、429、流截断、取消和恢复；token 不泄露，不确定的模型调用结果不重放，所有等待都有终态。 |
 
 升级或发布这条路径前，至少运行登录、只读凭据更新、流式、重连、错误分类和脱敏测试。任何线上字段无法映射为统一 Item 时必须明确失败或标记未支持，不能静默丢弃。
