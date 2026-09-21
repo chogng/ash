@@ -11,6 +11,54 @@ import { AppServerExtensionService } from '../../../src/ash/workbench/services/e
 import { WorkbenchThemeService } from '../../../src/ash/workbench/services/themes/browser/workbenchThemeService.js';
 import { TextMateGrammarService } from '../../../src/ash/workbench/services/textMate/common/textMateGrammarService.js';
 import type { ITextMateService } from '../../../src/ash/workbench/services/textMate/common/textMateService.js';
+import { createTextMateSyntaxWorkerFactory } from '../../../src/ash/workbench/services/textMate/browser/textMateSyntaxWorkerClient.js';
+import { TextMateGrammarCatalogModel } from '../../../src/ash/workbench/services/textMate/common/textMateGrammarCatalog.js';
+import { TextMateScopeThemeModel } from '../../../src/ash/workbench/services/textMate/common/textMateScopeTheme.js';
+import { SyntaxProviderRegistry } from '../../../src/ash/editor/common/languages/syntax/syntaxProviders.js';
+import { SyntaxService } from '../../../src/ash/editor/common/languages/syntax/syntaxService.js';
+import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
+
+declare global {
+	interface Window {
+		tokenizeInTextMateWorker(): Promise<readonly { type: string; modifiers: readonly string[] }[]>;
+	}
+}
+
+window.tokenizeInTextMateWorker = async () => {
+	using catalogs = new TextMateGrammarCatalogModel({
+		revision: 1,
+		grammars: [{
+			scopeName: 'source.demo',
+			languageId: 'demo',
+			injectTo: [],
+			content: JSON.stringify({ scopeName: 'source.demo', patterns: [{ match: '\\bif\\b', name: 'keyword.control.demo' }] }),
+		}],
+	});
+	using scopeTheme = new TextMateScopeThemeModel();
+	using providers = new SyntaxProviderRegistry();
+	using model = new TextModel('if');
+	using syntax = new SyntaxService(model, providers, { workerFactory: createTextMateSyntaxWorkerFactory(catalogs, scopeTheme) });
+	const results: { type: string; modifiers: readonly string[] }[] = [];
+	const capture = async (): Promise<void> => {
+		await syntax.requestTokens('demo');
+		const token = syntax.tokens.result?.value.tokens[0];
+		if (!token) {
+			throw new Error('TextMate Worker did not tokenize the registered grammar');
+		}
+		results.push({ type: token.tokenType, modifiers: token.modifiers });
+	};
+	await capture();
+	scopeTheme.replace({ revision: 1, rules: [{ selector: 'keyword.control.demo', tokenType: 'keyword', modifiers: ['declaration'] }] });
+	await capture();
+	catalogs.replace({
+		revision: 2,
+		grammars: [{ ...catalogs.currentCatalog.grammars[0]!, content: JSON.stringify({ scopeName: 'source.demo', patterns: [{ match: '\\bif\\b', name: 'string.quoted.demo' }] }) }],
+	});
+	await capture();
+	syntax.restartWorker();
+	await capture();
+	return results;
+};
 
 const resources = new DisposableStore();
 const configuration = resources.add(new WorkbenchConfigurationService());

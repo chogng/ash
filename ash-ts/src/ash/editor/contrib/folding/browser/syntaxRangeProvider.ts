@@ -1,7 +1,7 @@
 import { StandardTokenType } from "../../../common/encodedTokenAttributes.js";
 import { EditorFoldingRangeSource, type EditorFoldingRange } from "./foldingRanges.js";
 import { type ILanguageConfigurationService } from '../../../common/languages/languageConfigurationRegistry.js';
-import { assertLanguageId } from "../../../common/languages/languageId.js";
+import { assertLanguageId } from '../../../common/languages/language.js';
 import { type TextModel } from "../../../common/model/textModel.js";
 
 /** Computes structural folds from model brackets and configured region markers. */

@@ -1,10 +1,10 @@
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { URI } from "../../../base/common/uri.js";
-import { LanguageRegistry } from "../../common/languages/languageRegistry.js";
+import { LanguagesRegistry } from "../../common/services/languagesRegistry.js";
 
 test("a language description group replaces itself after validating the complete candidate", () => {
-	using registry = new LanguageRegistry();
+	using registry = new LanguagesRegistry();
 	using descriptions = registry.registerMany([{ description: { id: "demo", extensions: [".demo"] } }]);
 
 	assert.throws(() => descriptions.replace([{ description: { id: "broken", firstLine: "[" } }]), /regular expression/);
@@ -16,7 +16,7 @@ test("a language description group replaces itself after validating the complete
 });
 
 test("first-line associations are anchored, ignore a UTF-8 BOM, and cannot match empty input", () => {
-	using registry = new LanguageRegistry();
+	using registry = new LanguagesRegistry();
 	using descriptions = registry.registerMany([{ description: { id: "script", firstLine: "#!.*\\bdemo" } }]);
 
 	assert.equal(registry.resolveLanguageId({ resource: URI.file("C:\\project\\script"), firstLine: "#!/usr/bin/env demo" }), "script");
@@ -27,7 +27,7 @@ test("first-line associations are anchored, ignore a UTF-8 BOM, and cannot match
 });
 
 test("first-line associations accept VS Code extension regex compatibility escapes", () => {
-	using registry = new LanguageRegistry();
+	using registry = new LanguagesRegistry();
 	using description = registry.register({ id: "xml", firstLine: "(\\<\\?xml.*)|(\\<svg)|(\\<\\!doctype\\s+svg)" });
 
 	assert.equal(registry.resolveLanguageId({ resource: URI.file("C:\\project\\document"), firstLine: "<?xml version=\"1.0\"?>" }), "xml");

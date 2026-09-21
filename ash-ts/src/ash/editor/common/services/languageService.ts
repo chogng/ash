@@ -2,7 +2,7 @@ import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { type URI } from '../../../base/common/uri.js';
 import type { TextResourceLanguageInput } from '../../../platform/language/common/textResourceLanguage.js';
-import { LanguageRegistry, type LanguageDescription, type LanguageDescriptionContribution, type LanguageDescriptionRegistration, type LanguageRegistrationOptions } from '../languages/languageRegistry.js';
+import { LanguagesRegistry, type LanguageDescription, type LanguageDescriptionContribution, type LanguageDescriptionRegistration, type LanguageRegistrationOptions } from './languagesRegistry.js';
 import { type ILanguageIdCodec } from '../languages.js';
 import { LanguageId } from '../encodedTokenAttributes.js';
 import { type ILanguageExtensionPoint, type ILanguageIcon, type ILanguageNameIdPair, type ILanguageSelection, type IAshLanguageService } from '../languages/language.js';
@@ -12,7 +12,7 @@ export class LanguageService extends Disposable implements IAshLanguageService {
 	public static instanceCount = 0;
 
 	readonly _serviceBrand = undefined;
-	public readonly languages = this._register(new LanguageRegistry());
+	public readonly languages = this._register(new LanguagesRegistry());
 	private readonly basicFeaturesEmitter = this._register(new Emitter<string>());
 	private readonly richFeaturesEmitter = this._register(new Emitter<string>());
 	private readonly requestedBasic = new Set<string>();

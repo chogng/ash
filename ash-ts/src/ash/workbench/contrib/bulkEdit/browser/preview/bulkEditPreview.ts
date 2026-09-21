@@ -5,7 +5,7 @@ import { FileKind, FileNotFoundError, type IFileService } from "../../../../../p
 import { normalizeTextLineEndings } from "../../../../../editor/common/core/textChange.js";
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
 import { type ITextModelResourceService } from "../../../../services/textmodelResolver/common/textModelResourceService.js";
-import { normalizeLanguageWorkspaceEdit, type LanguageWorkspaceEdit, type LanguageWorkspaceEditEntry } from "../../../../../editor/common/languages/languageWorkspaceEdit.js";
+import { normalizeLanguageWorkspaceEdit, type LanguageWorkspaceEdit, type LanguageWorkspaceEditEntry } from "../../../../../editor/common/languages.js";
 import { type IWorkingCopyService } from "../../../../services/workingCopy/common/workingCopyService.js";
 import { type BulkEditPreviewEntry, type BulkEditPreviewModel } from "../../common/bulkEdit.js";
 

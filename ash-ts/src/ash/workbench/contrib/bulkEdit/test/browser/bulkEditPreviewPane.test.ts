@@ -4,7 +4,7 @@ import { JSDOM } from "jsdom";
 import { URI } from "../../../../../base/common/uri.js";
 import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../editor/common/core/range.js";
-import { type LanguageWorkspaceEdit } from "../../../../../editor/common/languages/languageWorkspaceEdit.js";
+import { type LanguageWorkspaceEdit } from "../../../../../editor/common/languages.js";
 import { type BulkEditPreviewModel } from "../../common/bulkEdit.js";
 
 test("bulk edit preview applies only the selected valid entries", async () => {

@@ -5,7 +5,7 @@ import { BrowserBulkEditService } from "../../browser/bulkEditService.js";
 import { type IWorkspaceEditService, type WorkspaceEditResult } from "../../../../services/language/common/workspaceEditService.js";
 import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../editor/common/core/range.js";
-import { type LanguageWorkspaceEdit } from "../../../../../editor/common/languages/languageWorkspaceEdit.js";
+import { type LanguageWorkspaceEdit } from "../../../../../editor/common/languages.js";
 
 test("bulk edits apply directly for a single entry", async () => {
 	const applier = new RecordingWorkspaceEditService();

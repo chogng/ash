@@ -33,8 +33,7 @@ import { type ConfigurationChangedEvent, EditorLineWrapping, EditorOption, type 
 import { type LanguageCompletionWorkerFactory } from '../../../common/languages/completion/languageCompletionService.js';
 import { type LanguageDiagnosticsHost } from '../../../common/languages/languageResults.js';
 import { isCompletionsEnablement, type CompletionsEnablement } from '../../../common/services/completionsEnablement.js';
-import { type LanguageLocation } from '../../../common/languages.js';
-import { type LanguageWorkspaceEdit } from '../../../common/languages/languageWorkspaceEdit.js';
+import { type LanguageLocation, type LanguageWorkspaceEdit } from '../../../common/languages.js';
 import { type BracketColorizationSource, type SemanticTokenSource } from '../../viewParts/viewLines/viewLine.js';
 import { type EditorTextDirection, type EditorViewportPresentation } from '../../view.js';
 import { type IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';

@@ -1,6 +1,6 @@
 import { toDisposable } from "../../../../../base/common/lifecycle.js";
 import { addDisposableListener, h } from "../../../../../base/browser/dom.js";
-import { normalizeLanguageWorkspaceEdit, type LanguageWorkspaceEdit, type LanguageWorkspaceEditEntry } from "../../../../../editor/common/languages/languageWorkspaceEdit.js";
+import { normalizeLanguageWorkspaceEdit, type LanguageWorkspaceEdit, type LanguageWorkspaceEditEntry } from "../../../../../editor/common/languages.js";
 import { ViewPane, type IViewPaneOptions } from "../../../../browser/parts/views/viewPane.js";
 import { type BulkEditPreviewEntry, type BulkEditPreviewModel } from "../../common/bulkEdit.js";
 

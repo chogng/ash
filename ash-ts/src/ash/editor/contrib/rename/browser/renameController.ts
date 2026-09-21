@@ -5,7 +5,7 @@ import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type View } from "../../../browser/view.js";
 import { RenameService } from "../common/languageRename.js";
-import { type LanguageWorkspaceEdit } from "../../../common/languages/languageWorkspaceEdit.js";
+import { type LanguageWorkspaceEdit } from "../../../common/languages.js";
 import { type EditorCommandExecutor } from '../../../browser/editorExtensions.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { type IIdentifiedSingleEditOperation } from '../../../common/model.js';

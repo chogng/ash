@@ -1,6 +1,6 @@
 import { type Position } from '../../../../common/core/position.js';
 import { type LanguageFeatureRegistry } from '../../../../common/languageFeatureRegistry.js';
-import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent } from '../../../../common/languages/languageFeatureRequest.js';
+import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent } from '../../../../common/languages.js';
 import { type TextModel } from '../../../../common/model/textModel.js';
 import { type LanguageInlineCompletionItem, type LanguageInlineCompletionsProvider, type LanguageInlineCompletionsRequest } from '../../common/inlineCompletions.js';
 

@@ -5,7 +5,7 @@ import { Range } from '../../../../common/core/range.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { LanguageFeatureRegistry } from '../../../../common/languageFeatureRegistry.js';
 import { ColorService, DefaultDocumentColorProvider, type LanguageColorProvider } from '../../common/languageColors.js';
-import { createLanguageFeatureRequest } from '../../../../common/languages/languageFeatureRequest.js';
+import { createLanguageFeatureRequest } from '../../../../common/languages.js';
 
 test('default document colors parse CSS hex, RGB, HSL, alpha, and presentations', async () => {
 	using model = new TextModel('a:#f00; b:rgba(0, 128, 255, .5); c:hsl(120, 100%, 25%); d:#11223344; invalid:rgb(1, 2, 3, 4, 5);');

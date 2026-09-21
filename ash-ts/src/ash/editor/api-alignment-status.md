@@ -1,5 +1,21 @@
 # Editor API 对齐状态
 
+## 语言目录清理（2026-09-21）
+
+按本次用户的清理要求处理 `common/languages` 中冗余文件。目录从 44 个 TypeScript 文件减少到 30 个：15 个与 VS Code 同路径，另 15 个仍承担当前补全、语法、版本结果及通信职责。本批不宣称这些剩余文件已完成归属和 API 对齐。下面旧审计中的文件名与数量保留为当时记录。
+
+| 退出的文件（相对 `common/languages`） | 当前归属或删除原因 |
+| --- | --- |
+| `languageRegistry.ts` | `common/services/languagesRegistry.ts`；生产调用方和测试使用 `LanguagesRegistry`，保留原有注册替换与文件关联行为。 |
+| `languageFeatureRequest.ts`、`languageWorkspaceEdit.ts` | 公共请求、编辑契约和校验进入 `common/languages.ts`，调用方直接引用。 |
+| `languageId.ts` | 语言身份校验由 `language.ts` 拥有；选择器校验由 `common/languageSelector.ts` 拥有。 |
+| `completion/languageWordCompletionProvider.ts` | 单词提取实现进入真实调用方 `common/services/editorWebWorker.ts`。 |
+| `completion/languageCompletionCatalogWire.ts`、`completion/languageCompletionProviderModuleWire.ts`、`completion/languageCompletionProviderModules.ts`、`completion/languageCompletionResolveWire.ts` | 没有生产入口，删除未接线的远程补全模块框架及其专用测试；在用的补全请求和延迟详情解析保持原行为。 |
+| `languageProviderModules.ts`、`languageProviderModuleWire.ts`、`syntax/syntaxProviderModules.ts`、`syntax/syntaxProviderModuleWire.ts`、`syntax/syntaxModuleWorkerClient.ts` | 唯一生产使用方 TextMate 在 Worker 启动时直接注册 provider；删除动态模块激活协议和包装层。语法目录、主题同步及失败后的 Worker 重建仍由 TextMate 客户端负责。 |
+
+TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSyntaxWorkerClient.ts`。现有目录/主题传输测试使用直接注册路径；新增 Playwright 回归从真实浏览器 Worker 验证首次高亮、主题更新、语法更新和重启后恢复。定向单元测试 10 份（98 项）、Playwright 4 项、Stanza 类型检查及 Stanza/Renderer 构建通过。
+
+
 > 本表记录 2026-08-30 对 `ash-ts/src/ash/editor` 生产 TypeScript 文件的扫描结果。分层依据为 VS Code 的 [Source Code Organization](https://github.com/microsoft/vscode/wiki/Source-Code-Organization) 和仓库内 `vscode-api-alignment` skill。
 
 ## 逐文件行为审查（2026-09-15）

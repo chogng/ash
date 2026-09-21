@@ -2,10 +2,9 @@ import { CharCode } from "../../../base/common/charCode.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
 import { escapeRegExpCharacters } from "../../../base/common/strings.js";
-import { assertLanguageId } from "./languageId.js";
+import { assertLanguageId, type ILanguageIcon, type ILanguageNameIdPair } from '../languages/language.js';
 import type { TextResourceLanguageInput } from "../../../platform/language/common/textResourceLanguage.js";
 import { type URI } from '../../../base/common/uri.js';
-import { type ILanguageIcon, type ILanguageNameIdPair } from './language.js';
 
 /** Declarative identity and file-association metadata for one editor language. */
 export interface LanguageDescription {
@@ -47,7 +46,7 @@ interface RegisteredLanguageDescription {
 }
 
 /** Resolves declarative language associations without owning extension resources. */
-export class LanguageRegistry extends Disposable {
+export class LanguagesRegistry extends Disposable {
 	private readonly changeEmitter = this._register(new Emitter<LanguageDescriptionChangeEvent>());
 	private readonly descriptions = new Map<string, RegisteredLanguageDescription[]>();
 	private nextOrder = 1;

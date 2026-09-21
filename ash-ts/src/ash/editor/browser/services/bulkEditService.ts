@@ -1,8 +1,7 @@
 import { type IDisposable } from '../../../base/common/lifecycle.js';
 import { type URI } from '../../../base/common/uri.js';
 import { createServiceIdentifier } from '../../../platform/instantiation/common/instantiation.js';
-import { type TextEdit } from '../../common/languages.js';
-import { normalizeLanguageWorkspaceEdit, type LanguageWorkspaceEdit, type LanguageWorkspaceEditEntry } from '../../common/languages/languageWorkspaceEdit.js';
+import { type TextEdit, normalizeLanguageWorkspaceEdit, type LanguageWorkspaceEdit, type LanguageWorkspaceEditEntry } from '../../common/languages.js';
 import { type ICodeEditor } from '../editorBrowser.js';
 
 export const IBulkEditService = createServiceIdentifier<IBulkEditService>('bulkEditService');

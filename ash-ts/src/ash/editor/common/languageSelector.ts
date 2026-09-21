@@ -1,3 +1,4 @@
+import { assertLanguageId } from './languages/language.js';
 import { type IRelativePattern, match as matchGlobPattern } from '../../base/common/glob.js';
 import { URI } from '../../base/common/uri.js';
 
@@ -70,4 +71,10 @@ export function selectLanguageIds(selector: LanguageSelector, into: Set<string>)
 		const language = (selector as LanguageFilter).language;
 		if (language) into.add(language);
 	}
+}
+
+/** Validates a provider selector, including the explicit all-languages selector. */
+export function assertLanguageSelector(value: unknown): asserts value is string {
+	if (value === "*") return;
+	assertLanguageId(value);
 }

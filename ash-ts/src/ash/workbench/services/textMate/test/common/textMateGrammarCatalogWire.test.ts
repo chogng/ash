@@ -5,8 +5,6 @@ import * as onigurumaNamespace from "vscode-oniguruma";
 import { type IOnigLib } from "vscode-textmate";
 import { Emitter, type Event } from "../../../../../base/common/event.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../../../base/common/lifecycle.js";
-import { SyntaxProviderModuleHost, SyntaxProviderModuleRegistry } from "../../../../../editor/common/languages/syntax/syntaxProviderModules.js";
-import { SyntaxProviderModuleWireServer } from "../../../../../editor/common/languages/syntax/syntaxProviderModuleWire.js";
 import { SyntaxProviderRegistry, type SyntaxProviderRequest } from "../../../../../editor/common/languages/syntax/syntaxProviders.js";
 import { SyntaxProviderWorker, SyntaxService } from "../../../../../editor/common/languages/syntax/syntaxService.js";
 import { syntaxWireCodec } from "../../../../../editor/common/languages/syntax/syntaxWire.js";
@@ -15,8 +13,8 @@ import { LanguageWorkerWireServer, type LanguageWorkerWireClientPort } from "../
 import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../editor/common/core/range.js";
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
-import { createTextMateSyntaxModule } from "../../common/textMateSyntaxModule.js";
-import { TextMateSyntaxModuleWorkerClient } from "../../common/textMateSyntaxModuleWorkerClient.js";
+import { createTextMateSyntaxProvider } from "../../common/textMateSyntaxProvider.js";
+import { TextMateSyntaxWorkerClient } from "../../common/textMateSyntaxWorkerClient.js";
 import { materializeTextMateGrammarCatalog, TextMateGrammarCatalogModel, type TextMateGrammarCatalog } from "../../common/textMateGrammarCatalog.js";
 import { TextMateGrammarCatalogStore } from "../../common/textMateGrammarCatalogStore.js";
 import { TextMateGrammarCatalogWireClient, TextMateGrammarCatalogWireServer } from "../../common/textMateGrammarCatalogWire.js";
@@ -108,36 +106,28 @@ test("Grammar catalog wire clones catalogs and poisons stale clients", async () 
 	assert.throws(() => client.replaceCatalog(grammarCatalog(2)), /already disposed/);
 });
 
-test("Catalog-gated module Worker selects TextMate and falls back dynamically", async () => {
+test("Catalog-gated Worker selects TextMate and falls back dynamically", async () => {
 	using resources = new DisposableStore();
 	const providers = resources.add(new SyntaxProviderRegistry());
-	const modules = resources.add(new SyntaxProviderModuleRegistry());
 	const grammarStore = resources.add(new TextMateGrammarCatalogStore());
 	const tokenization = resources.add(new TextMateTokenizationService(grammarStore, onigLib));
-	resources.add(modules.register(createTextMateSyntaxModule(tokenization)));
-	resources.add(modules.register({
+	resources.add(providers.register(createTextMateSyntaxProvider(tokenization)));
+	resources.add(providers.register({
 		id: "test.fallback",
-		load: () => [{
-			id: "test.fallback",
-			languageIds: ["*"],
-			provideTokens: (request: SyntaxProviderRequest) => ({
-				tokens: [{
-					range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (request.snapshot.getText().length) + 1)),
-					tokenType: "fallback",
-					modifiers: [],
-				}],
-			}),
-		}],
+		languageIds: ["*"],
+		provideTokens: (request: SyntaxProviderRequest) => ({
+			tokens: [{
+				range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (request.snapshot.getText().length) + 1)),
+				tokenType: "fallback",
+				modifiers: [],
+			}],
+		}),
 	}));
-	const host = resources.add(new SyntaxProviderModuleHost(modules, providers));
 	const [clientPort, serverPort] = createPortPair();
 	resources.add(new LanguageWorkerWireServer(serverPort, syntaxWireCodec, new SyntaxProviderWorker(providers)));
-	resources.add(new SyntaxProviderModuleWireServer(serverPort, modules, host));
 	resources.add(new TextMateGrammarCatalogWireServer(serverPort, grammarStore));
 	const catalogs = resources.add(new TextMateGrammarCatalogModel(grammarCatalog(1, "keyword.control.demo")));
-	const worker = resources.add(new TextMateSyntaxModuleWorkerClient(clientPort, catalogs, {
-		requiredProviderModules: ["textmate.grammars", "test.fallback"],
-	}));
+	const worker = resources.add(new TextMateSyntaxWorkerClient(clientPort, catalogs));
 	const localProviders = resources.add(new SyntaxProviderRegistry());
 	const model = resources.add(new TextModel("if"));
 	const syntax = resources.add(new SyntaxService(model, localProviders, { workerFactory: () => worker }));
@@ -157,23 +147,19 @@ test("Catalog-gated module Worker selects TextMate and falls back dynamically", 
 test("Scope themes cross the Syntax Worker boundary and invalidate cached token styles", async () => {
 	using resources = new DisposableStore();
 	const providers = resources.add(new SyntaxProviderRegistry());
-	const modules = resources.add(new SyntaxProviderModuleRegistry());
 	const grammarStore = resources.add(new TextMateGrammarCatalogStore());
 	const workerThemes = resources.add(new TextMateScopeThemeModel());
 	const tokenization = resources.add(new TextMateTokenizationService(grammarStore, onigLib, {
 		scopeResolver: scopes => workerThemes.resolve(scopes),
 	}));
-	resources.add(modules.register(createTextMateSyntaxModule(tokenization)));
-	const host = resources.add(new SyntaxProviderModuleHost(modules, providers));
+	resources.add(providers.register(createTextMateSyntaxProvider(tokenization)));
 	const [clientPort, serverPort] = createPortPair();
 	resources.add(new LanguageWorkerWireServer(serverPort, syntaxWireCodec, new SyntaxProviderWorker(providers)));
-	resources.add(new SyntaxProviderModuleWireServer(serverPort, modules, host));
 	resources.add(new TextMateGrammarCatalogWireServer(serverPort, grammarStore));
 	resources.add(new TextMateScopeThemeWireServer(serverPort, workerThemes, () => tokenization.invalidateTokenCaches()));
 	const catalogs = resources.add(new TextMateGrammarCatalogModel(grammarCatalog(1)));
 	const themes = resources.add(new TextMateScopeThemeModel());
-	const worker = resources.add(new TextMateSyntaxModuleWorkerClient(clientPort, catalogs, {
-		requiredProviderModules: ["textmate.grammars"],
+	const worker = resources.add(new TextMateSyntaxWorkerClient(clientPort, catalogs, {
 		scopeTheme: themes,
 	}));
 	const localProviders = resources.add(new SyntaxProviderRegistry());

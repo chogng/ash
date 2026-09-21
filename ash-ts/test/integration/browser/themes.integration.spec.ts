@@ -1,5 +1,19 @@
 import { expect, test } from '@playwright/test';
 
+test('TextMate Worker registers its provider at startup and restores current catalogs after restart', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/themes.html');
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	expect(await page.evaluate(() => window.tokenizeInTextMateWorker())).toEqual([
+		{ type: 'keyword', modifiers: [] },
+		{ type: 'keyword', modifiers: ['declaration'] },
+		{ type: 'string', modifiers: [] },
+		{ type: 'string', modifiers: [] },
+	]);
+	expect(errors).toEqual([]);
+});
+
 test('extension file icons load a real font and update existing labels on theme changes', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));

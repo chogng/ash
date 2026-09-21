@@ -1,5 +1,5 @@
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { normalizeLanguageWorkspaceEdit, type LanguageWorkspaceEdit } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
+import { normalizeLanguageWorkspaceEdit, type LanguageWorkspaceEdit } from "../../../../editor/common/languages.js";
 import { type IBulkEditOptions, type IBulkEditPreviewHandler, type IBulkEditResult, type IBulkEditService, ResourceEdit, ResourceFileEdit, ResourceTextEdit } from '../../../../editor/browser/services/bulkEditService.js';
 import { type IWorkspaceEditService, type WorkspaceEditResult } from "../../../services/language/common/workspaceEditService.js";
 

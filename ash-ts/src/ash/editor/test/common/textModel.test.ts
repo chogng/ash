@@ -7,7 +7,7 @@ import { TextChange, TextModelChangeReason } from "../../common/core/textChange.
 import { EndOfLinePreference, EndOfLineSequence, MinimapPosition, OverviewRulerLane, PositionAffinity, TrackedRangeStickiness, isITextSnapshot } from '../../common/model.js';
 import { TextModel } from "../../common/model/textModel.js";
 import { createTestLanguageConfigurationService } from './modes/testLanguageConfigurationService.js';
-import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent } from '../../common/languages/languageFeatureRequest.js';
+import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent } from '../../common/languages.js';
 import type { IViewModel } from '../../common/viewModel.js';
 
 const position = (lineIndex: number, columnIndex: number): Position => new Position(lineIndex + 1, columnIndex + 1);

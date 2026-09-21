@@ -9,7 +9,7 @@ import * as languages from '../../common/languages.js';
 import { selectLanguageIds, type LanguageSelector } from '../../common/languageSelector.js';
 import { type LanguageConfiguration } from '../../common/languages/languageConfiguration.js';
 import type { ILanguageExtensionPoint } from '../../common/languages/language.js';
-import type { LanguageDescriptionChangeEvent, LanguageDescriptionContribution, LanguageDescriptionRegistration } from '../../common/languages/languageRegistry.js';
+import type { LanguageDescriptionChangeEvent, LanguageDescriptionContribution, LanguageDescriptionRegistration } from '../../common/services/languagesRegistry.js';
 import { LanguageDiagnosticSeverity } from '../../common/languages/languageResults.js';
 import type { SyntaxProvider } from '../../common/languages/syntax/syntaxProviders.js';
 import type { LanguageWorkspaceSymbolProvider } from '../../common/languages/workspaceSymbols.js';

@@ -1,7 +1,8 @@
 import { isNonEmptyArray } from "../../../../base/common/arrays.js";
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
-import { assertLanguageId, assertLanguageSelector } from "../languageId.js";
+import { assertLanguageId } from '../language.js';
+import { assertLanguageSelector } from '../../languageSelector.js';
 import { type LanguageDiagnosticResult, type LanguageTokenResult } from "../languageResults.js";
 import { type LanguageWorkerDocumentSynchronization } from '../../services/textModelSync/textModelSync.protocol.js';
 import { type TextSnapshot } from "../../core/textChange.js";

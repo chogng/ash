@@ -8,7 +8,7 @@ import type { LanguageCompletionProvider, LanguageCompletionProviderRegistration
 import type { LanguageConfiguration } from '../../../../editor/common/languages/languageConfiguration.js';
 import type { ILanguageConfigurationService } from '../../../../editor/common/languages/languageConfigurationRegistry.js';
 import { parseLanguageConfiguration } from "./languageConfigurationParser.js";
-import type { LanguageDescriptionContribution, LanguageDescriptionRegistration } from "../../../../editor/common/languages/languageRegistry.js";
+import type { LanguageDescriptionContribution, LanguageDescriptionRegistration } from "../../../../editor/common/services/languagesRegistry.js";
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import type { IAshLanguageService } from '../../../../editor/common/languages/language.js';
 import type { IExtensionApi, ExtensionCatalog as TransportExtensionCatalog, ExtensionDescriptor as TransportExtensionDescriptor } from "../../../../platform/extensions/common/extensionApi.js";

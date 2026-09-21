@@ -1,7 +1,7 @@
 import { raceCancellationError } from "../../../../base/common/async.js";
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { assertLanguageId } from "../../../../editor/common/languages/languageId.js";
+import { assertLanguageId } from '../../../../editor/common/languages/language.js';
 import { type TextMateGrammarRegistrySnapshot, type TextMateGrammarTokenType } from "./textMateGrammarRegistry.js";
 import * as textMateNamespace from "vscode-textmate";
 

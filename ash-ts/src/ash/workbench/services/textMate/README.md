@@ -19,8 +19,8 @@ belong to the extension resource layer.
 | TextMate runtime and incremental line-state cache | `TextMateTokenizationService` | ✅ |
 | Scope-to-Stanza token vocabulary mapping | `TextMateScopeResolver` | ✅, replaceable |
 | Revisioned selector rules and Worker theme transport | `TextMateScopeThemeModel` / scope-theme wire | ✅ |
-| Stanza Syntax provider/module adaptation | `createTextMateSyntaxProvider` / `createTextMateSyntaxModule` | ✅ |
-| Catalog-gated Syntax Worker composition | `TextMateSyntaxModuleWorkerClient` / `browser/textMateSyntaxWorkerMain.ts` | ✅ |
+| Stanza Syntax provider adaptation | `createTextMateSyntaxProvider` | ✅ |
+| Catalog-gated Syntax Worker composition | `TextMateSyntaxWorkerClient` / `browser/textMateSyntaxWorkerMain.ts` | ✅ |
 | Browser Worker Oniguruma WASM loading | `browser/textMateOniguruma.ts` | ✅ |
 | Grammar contribution-to-catalog lifecycle | `TextMateGrammarService` | ✅ |
 | Workbench service composition and lifecycle | `ITextMateService` / `BrowserTextMateService` | ✅ |
@@ -107,16 +107,15 @@ applicable provider, the model has no syntax tokens or invented diagnostics.
 ## Worker catalog path
 
 `TextMateGrammarCatalogWireClient` sends complete validated catalog revisions
-over the same structural port used by Stanza's Syntax and provider-module
-protocols. `TextMateGrammarCatalogWireServer` atomically builds a new registry
+over the same structural port used by Stanza's Syntax protocol. `TextMateGrammarCatalogWireServer` atomically builds a new registry
 before swapping the Worker-side store. Stale or malformed revisions poison the
 catalog client and invalidate that Worker so Stanza's coordinator can rebuild it
 from the catalog source's current revision.
 
-`TextMateSyntaxModuleWorkerClient` serializes catalog and scope-theme updates
+`TextMateSyntaxWorkerClient` serializes catalog and scope-theme updates
 and gates every Syntax request on the latest scheduled revisions. The dedicated browser Worker
-activates `textmate.grammars`; it owns the catalog
-store, scope-theme model, TextMate service, Oniguruma runtime, provider registries, and all four
+registers its TextMate provider during startup; it owns the catalog
+store, scope-theme model, TextMate service, Oniguruma runtime, provider registry, and all three
 wire servers. A replacement Worker accepts the source's current revision even
 when its revision is greater than one.
 

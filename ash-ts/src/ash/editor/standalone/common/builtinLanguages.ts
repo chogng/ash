@@ -1,4 +1,4 @@
-import { LanguageRegistry, type LanguageDescription } from '../../common/languages/languageRegistry.js';
+import { LanguagesRegistry, type LanguageDescription } from '../../common/services/languagesRegistry.js';
 import { DisposableStore, type IDisposable } from '../../../base/common/lifecycle.js';
 import { IndentAction, type CharacterPair, type FoldingMarkers, type IAutoClosingPairConditional, type IndentationRule, type LanguageConfiguration, type OnEnterRule } from '../../common/languages/languageConfiguration.js';
 import type { ILanguageConfigurationService } from '../../common/languages/languageConfigurationRegistry.js';
@@ -164,7 +164,7 @@ const BUILTIN_LANGUAGE_DESCRIPTIONS: readonly LanguageDescription[] = Object.fre
 ]);
 
 /** Registers the product's baseline language associations before extensions load. */
-export function registerBuiltinLanguageDescriptions(registry: LanguageRegistry): IDisposable {
+export function registerBuiltinLanguageDescriptions(registry: LanguagesRegistry): IDisposable {
 	const registrations = new DisposableStore();
 	for (const description of BUILTIN_LANGUAGE_DESCRIPTIONS) registrations.add(registry.register(description));
 	return registrations;

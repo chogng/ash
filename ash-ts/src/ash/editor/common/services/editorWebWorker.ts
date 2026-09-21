@@ -1,8 +1,9 @@
-import { createLanguageWordCompletionProvider } from '../languages/completion/languageWordCompletionProvider.js';
-import { type LanguageCompletionRequest } from '../languages/completion/languageCompletionProviders.js';
+import { LanguageCompletionItemKind } from "../languages/completion/languageCompletions.js";
+import { type LanguageCompletionProvider, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult, type LanguageCompletionRequest } from "../languages/completion/languageCompletionProviders.js";
+import { Position } from "../core/position.js";
+import { Range } from "../core/range.js";
+import { getTextWordSegments } from "../core/textSegmentation.js";
 import { AbstractDisposable } from '../../../base/common/lifecycle.js';
-import { Position } from '../core/position.js';
-import { Range } from '../core/range.js';
 import { normalizeTextLineEndings, type TextSnapshot } from '../core/textChange.js';
 
 import { StringText } from '../core/text/abstractText.js';
@@ -112,4 +113,74 @@ function validateRange(document: StringText, range: Range): Range {
 	const lifted = Range.fromPositions(range.getStartPosition(), range.getEndPosition());
 	document.getValueOfRange(lifted);
 	return lifted;
+}
+
+const DEFAULT_MAXIMUM_WORD_COMPLETIONS = 100;
+
+export interface LanguageWordCompletionProviderOptions {
+	readonly id?: string;
+	readonly languageIds?: readonly string[];
+	readonly maximumItems?: number;
+}
+
+/** Creates a snapshot-local lexical word provider suitable for a worker realm. */
+export function createLanguageWordCompletionProvider(options: LanguageWordCompletionProviderOptions = {}): LanguageCompletionProvider {
+	const id = options.id ?? "language.word";
+	const languageIds = Object.freeze([...(options.languageIds ?? ["*"])]);
+	const maximumItems = options.maximumItems ?? DEFAULT_MAXIMUM_WORD_COMPLETIONS;
+	if (!Number.isSafeInteger(maximumItems) || maximumItems <= 0) {
+		throw new RangeError("Maximum word completion items must be a positive safe integer");
+	}
+	return Object.freeze({
+		id,
+		languageIds,
+		provideCompletions: (request: LanguageCompletionProviderRequest, signal: AbortSignal): LanguageCompletionProviderResult | undefined => {
+			signal.throwIfAborted();
+			const lines = request.snapshot.getText().split("\n");
+			const columnIndex = request.position.column - 1;
+			const triggerLine = lines[request.position.lineNumber - 1];
+			if (triggerLine === undefined || columnIndex < 0 || columnIndex > triggerLine.length) {
+				throw new RangeError("Word completion position is outside its snapshot");
+			}
+			const active = getTextWordSegments(triggerLine).find(segment => (
+				segment.wordLike &&
+				columnIndex > segment.start &&
+				columnIndex <= segment.end
+			));
+			if (!active) return undefined;
+			const prefix = triggerLine.slice(active.start, columnIndex);
+			if (prefix.length === 0) return undefined;
+			const currentWord = triggerLine.slice(active.start, active.end);
+			const words = new Set<string>();
+			for (const line of lines) {
+				signal.throwIfAborted();
+				for (const segment of getTextWordSegments(line)) {
+					if (!segment.wordLike) continue;
+					const word = line.slice(segment.start, segment.end);
+					if (word !== currentWord && word.startsWith(prefix)) words.add(word);
+				}
+			}
+			const candidates = [...words].sort().slice(0, maximumItems);
+			if (candidates.length === 0) return undefined;
+			const range = Range.fromPositions(
+				new Position(request.position.lineNumber, active.start + 1),
+				new Position(request.position.lineNumber, active.end + 1),
+			);
+			return Object.freeze({
+				items: Object.freeze(candidates.map(word => Object.freeze({
+					id: wordIdentity(word),
+					label: word,
+					kind: LanguageCompletionItemKind.Text,
+					range,
+					insertText: word,
+					sortText: word,
+				}))),
+				isIncomplete: words.size > maximumItems,
+			});
+		},
+	});
+}
+
+function wordIdentity(word: string): string {
+	return `word-${[...word].map(character => character.codePointAt(0)!.toString(16)).join("-")}`;
 }

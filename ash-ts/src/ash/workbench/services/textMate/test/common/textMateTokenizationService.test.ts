@@ -11,7 +11,6 @@ import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../editor/common/core/range.js";
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
 import { createTextMateSyntaxProvider, TEXTMATE_SYNTAX_PROVIDER_ID } from "../../common/textMateSyntaxProvider.js";
-import { createTextMateSyntaxModule, TEXTMATE_SYNTAX_MODULE_ID } from "../../common/textMateSyntaxModule.js";
 import { TextMateGrammarRegistry } from "../../common/textMateGrammarRegistry.js";
 import { TextMateTokenizationService, type TextMateTokenizationCacheUpdate } from "../../common/textMateTokenizationService.js";
 
@@ -203,7 +202,6 @@ test("TextMate Syntax provider overrides lexical fallback by explicit priority",
 	assert.equal(outcome.status, LanguageRequestStatus.Applied);
 	assert.equal(providers.getTokenProvider("demo")?.id, TEXTMATE_SYNTAX_PROVIDER_ID);
 	assert.equal(syntax.tokens.result!.value.tokens[0]!.tokenType, "keyword");
-	assert.equal(createTextMateSyntaxModule(tokenization).id, TEXTMATE_SYNTAX_MODULE_ID);
 });
 
 test("TextMate rejects mismatched grammars, cancellation, and use after disposal", async () => {

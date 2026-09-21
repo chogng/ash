@@ -8,7 +8,7 @@ import { type LanguageDiagnostic } from "../../../common/languages/languageResul
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
 import { type View } from "../../../browser/view.js";
 import { type CodeActionService, type LanguageCodeAction } from "../common/languageCodeActions.js";
-import { type LanguageWorkspaceEdit } from "../../../common/languages/languageWorkspaceEdit.js";
+import { type LanguageWorkspaceEdit } from "../../../common/languages.js";
 
 /** Owns the editor-local code-action picker and routes selected edits through cursor commands. */
 export class CodeActionController extends Disposable {

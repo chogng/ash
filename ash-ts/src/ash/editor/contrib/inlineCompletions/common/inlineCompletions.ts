@@ -1,8 +1,7 @@
 import { type Position } from "../../../common/core/position.js";
 import { type Range } from "../../../common/core/range.js";
 
-import { type LanguageFeatureRequest } from "../../../common/languages/languageFeatureRequest.js";
-import { type TextEdit } from '../../../common/languages.js';
+import { type LanguageFeatureRequest, type TextEdit } from "../../../common/languages.js";
 
 export interface LanguageInlineCompletionItem {
 	readonly insertText: string;

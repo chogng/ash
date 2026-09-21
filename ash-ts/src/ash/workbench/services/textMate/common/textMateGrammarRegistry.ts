@@ -1,6 +1,6 @@
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
-import { assertLanguageId } from "../../../../editor/common/languages/languageId.js";
+import { assertLanguageId } from '../../../../editor/common/languages/language.js';
 import { type IRawGrammar } from "vscode-textmate";
 
 export type TextMateGrammarContent = string | IRawGrammar;

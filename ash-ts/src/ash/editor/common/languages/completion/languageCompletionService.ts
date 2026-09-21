@@ -5,7 +5,7 @@ import { LanguageRequestCoordinator, type LanguageRequestOptions, type LanguageR
 import { LanguageResultAcceptance } from "../languageResultStore.js";
 import { createLanguageCompletionSnapshotNormalizer, createLanguageCompletionStore, normalizeLanguageCompletionItemDetails, normalizeLanguageCompletionResolveRequest, type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionItemResolver, type LanguageCompletionResolveRequest, type LanguageCompletionResult, type LanguageCompletionResultNormalizer } from "./languageCompletions.js";
 import { assertLanguageCompletionRequest, createLanguageCompletionTriggerCharacterContext, languageCompletionProviderMatches, LanguageCompletionProviderRegistry, type LanguageCompletionProvider, type LanguageCompletionProviderCatalog, type LanguageCompletionProviderCatalogSource, type LanguageCompletionProviderItem, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult, type LanguageCompletionRequest, type RegisteredLanguageCompletionProvider } from "./languageCompletionProviders.js";
-import { assertLanguageId } from "../languageId.js";
+import { assertLanguageId } from '../language.js';
 import { type Position } from "../../core/position.js";
 import { type TextModel } from "../../model/textModel.js";
 import { URI } from "../../../../base/common/uri.js";

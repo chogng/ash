@@ -4,10 +4,9 @@ import { Range } from '../../../common/core/range.js';
 import { PositionOffsetTransformer } from '../../../common/core/text/positionToOffset.js';
 import { computeDefaultDocumentColors } from '../../../common/languages/defaultDocumentColorsComputer.js';
 
-import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from '../../../common/languages/languageFeatureRequest.js';
+import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest, type IColor, type IColorInformation, type IColorPresentation } from '../../../common/languages.js';
 import { LanguageFeatureRegistry } from '../../../common/languageFeatureRegistry.js';
 import { type TextModel } from '../../../common/model/textModel.js';
-import { type IColor, type IColorInformation, type IColorPresentation } from '../../../common/languages.js';
 
 export interface LanguageColorRequest extends LanguageFeatureRequest {
 	readonly resource?: URI;

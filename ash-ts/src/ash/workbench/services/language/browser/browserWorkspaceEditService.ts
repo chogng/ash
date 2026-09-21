@@ -2,7 +2,7 @@ import { throwIfCancelled } from "../../../../base/common/cancellation.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { normalizeTextLineEndings } from "../../../../editor/common/core/textChange.js";
-import { normalizeLanguageWorkspaceEdit, type LanguageTextDocumentEdit, type LanguageWorkspaceEdit, type LanguageWorkspaceEditEntry } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
+import { normalizeLanguageWorkspaceEdit, type LanguageTextDocumentEdit, type LanguageWorkspaceEdit, type LanguageWorkspaceEditEntry } from "../../../../editor/common/languages.js";
 import { TextModel } from "../../../../editor/common/model/textModel.js";
 import { type ITextModelResourceService, type TextModelReference } from "../../textmodelResolver/common/textModelResourceService.js";
 import { FileKind, FileNotFoundError, type IFileService } from "../../../../platform/files/common/files.js";

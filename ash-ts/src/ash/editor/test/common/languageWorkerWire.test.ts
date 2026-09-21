@@ -6,7 +6,7 @@ import { createLanguageCompletionInvokeContext, LanguageCompletionProviderRegist
 import { LANGUAGE_COMPLETION_LANE, LanguageCompletionProviderWorker, LanguageCompletionService, type LanguageCompletionWorker } from "../../common/languages/completion/languageCompletionService.js";
 import { languageCompletionWireCodec } from "../../common/languages/completion/languageCompletionWire.js";
 import { LanguageCompletionItemKind } from "../../common/languages/completion/languageCompletions.js";
-import { createLanguageWordCompletionProvider } from "../../common/languages/completion/languageWordCompletionProvider.js";
+import { createLanguageWordCompletionProvider } from "../../common/services/editorWebWorker.js";
 import { LanguageWorkerRemoteError, LanguageWorkerWireClient, LanguageWorkerWireServer, type LanguageWorkerWireClientPort } from "../../common/languages/languageWorkerWire.js";
 import { LanguageRequestStatus, type LanguageWorkerRequest } from "../../common/languages/languageRequestCoordinator.js";
 import { Position } from "../../common/core/position.js";

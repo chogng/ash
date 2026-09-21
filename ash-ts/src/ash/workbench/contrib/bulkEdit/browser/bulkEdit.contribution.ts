@@ -1,6 +1,6 @@
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { isCancellationError } from "../../../../base/common/errors.js";
-import { type LanguageWorkspaceEdit } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
+import { type LanguageWorkspaceEdit } from "../../../../editor/common/languages.js";
 import { IBulkEditService, ResourceEdit } from '../../../../editor/browser/services/bulkEditService.js';
 import { ITextModelResourceService } from "../../../services/textmodelResolver/common/textModelResourceService.js";
 import { IDialogService } from "../../../../platform/dialogs/common/dialogs.js";

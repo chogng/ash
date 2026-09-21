@@ -4,7 +4,7 @@ import { type URI } from '../../../base/common/uri.js';
 import { createServiceIdentifier } from '../../../platform/instantiation/common/instantiation.js';
 import { type TextResourceLanguageInput } from '../../../platform/language/common/textResourceLanguage.js';
 import { type ILanguageIdCodec } from '../languages.js';
-import { type LanguageDescription, type LanguageDescriptionContribution, type LanguageDescriptionRegistration, type LanguageRegistrationOptions, type LanguageRegistry } from './languageRegistry.js';
+import { type LanguageDescription, type LanguageDescriptionContribution, type LanguageDescriptionRegistration, type LanguageRegistrationOptions, type LanguagesRegistry } from '../services/languagesRegistry.js';
 
 export const ILanguageService = createServiceIdentifier<IAshLanguageService>('languageService');
 
@@ -63,8 +63,17 @@ export interface ILanguageService {
 
 /** Ash-owned language contribution operations layered on the VS Code contract. */
 export interface IAshLanguageService extends ILanguageService, IDisposable {
-	readonly languages: LanguageRegistry;
+	readonly languages: LanguagesRegistry;
 	registerLanguage(description: LanguageDescription, options?: LanguageRegistrationOptions): IDisposable;
 	registerLanguages(contributions: readonly LanguageDescriptionContribution[]): LanguageDescriptionRegistration;
 	resolveLanguageId(input: TextResourceLanguageInput): string | undefined;
+}
+
+const LANGUAGE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+/** Validates one concrete editor language identity. */
+export function assertLanguageId(value: unknown): asserts value is string {
+	if (typeof value !== "string" || !LANGUAGE_ID_PATTERN.test(value)) {
+		throw new TypeError("Language ID must contain only letters, digits, dot, underscore, or hyphen");
+	}
 }
