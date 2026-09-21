@@ -1,9 +1,10 @@
+import type { LanguageInlayHint } from '../../../common/languages.js';
 import "./media/inlayHints.css";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
-import { InlayHintsService, type LanguageInlayHint } from "../common/languageInlayHints.js";
+import { InlayHintsService } from "../common/languageInlayHints.js";
 import { type View } from "../../../browser/view.js";
 import { h } from "../../../../base/browser/dom.js";
 

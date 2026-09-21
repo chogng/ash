@@ -5,9 +5,9 @@ import { Selection } from "../../../common/core/selection.js";
 import { type Position } from "../../../common/core/position.js";
 import { type View } from "../../../browser/view.js";
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
-import { type LanguageLocation } from "../../../common/languages.js";
+import type { LanguageLocation, LanguageHierarchyItem } from '../../../common/languages.js';
 import { EditorPeekViewWidget } from "../../peekView/browser/editorPeekViewWidget.js";
-import { type LanguageHierarchyItem, type LanguageHierarchyService, type PreparedCallHierarchy, type PreparedTypeHierarchy } from "../common/languageHierarchy.js";
+import { type LanguageHierarchyService, type PreparedCallHierarchy, type PreparedTypeHierarchy } from "../common/languageHierarchy.js";
 
 type HierarchyKind = "call" | "type";
 type HierarchyDirection = "incoming" | "outgoing" | "supertypes" | "subtypes";

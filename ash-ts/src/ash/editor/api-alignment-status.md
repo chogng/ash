@@ -1,5 +1,65 @@
 # Editor API 对齐状态
 
+## 公共语言契约收回 common（2026-09-21）
+
+准入链：Standalone / Workbench / 扩展注册语言提供者 → `ILanguageFeaturesService` 公共 registry → contribution 请求编排 → 既有编辑器行为。检查发现公共 registry 对 12 组 contribution 类型的反向依赖；本批把 50 个已有契约收回 `common/languages.ts`，不更换提供者协议、模型、请求或 UI owner。上游证据只用于确认公共语言契约及 registry 的所属模块，本批不复制其私有实现，也不把 Ash 快照协议宣称为标准签名全量对齐。
+
+上一批括号修复改动已暂存；本批保留索引内容，工作区迁移完整保留 `completeBracketPairs`。按用户“该抽抽、该收收、该留留”整理契约和真实调用方；只有全部声明迁出、调用方清零的 `contrib/inlineCompletions/common/inlineCompletions.ts` 退出，其余 contribution 实现文件保留。
+
+| 准入路径（相对 editor，带 ash-ts 的为仓库相对） | 存在关系 | 本批动作 |
+| --- | --- | --- |
+| `README.md` | 既有 Ash 职责 / 测试 | 更新契约归属、剩余实现差异及实际验证。 |
+| `api-alignment-status.md` | 既有 Ash 职责 / 测试 | 更新契约归属、剩余实现差异及实际验证。 |
+| `browser/README.md` | 既有 Ash 职责 / 测试 | 更新契约归属、剩余实现差异及实际验证。 |
+| `common/languages.ts` | 双方都有 | 收回 50 个已有 provider、请求及结果契约；保留现有快照与 AbortSignal 语义。 |
+| `common/services/languageFeatures.ts` | 双方都有 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。 |
+| `common/services/languageFeaturesService.ts` | 双方都有 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。 |
+| `contrib/callHierarchy/browser/languageHierarchyController.ts` | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。 |
+| `contrib/callHierarchy/common/languageHierarchy.ts` | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。 |
+| `contrib/codeAction/browser/codeActionController.ts` | 双方都有 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。 |
+| `contrib/codeAction/common/languageCodeActions.ts` | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。 |
+| `contrib/codeAction/test/browser/codeAction.test.ts` | 双方都有 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。 |
+| `contrib/colorPicker/common/languageColors.ts` | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。 |
+| `contrib/colorPicker/test/browser/colorPickerController.test.ts` | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。 |
+| `contrib/colorPicker/test/common/color.test.ts` | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。 |
+| `contrib/documentSymbols/common/languageDocumentSymbols.ts` | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。 |
+| `contrib/folding/common/languageFoldingRanges.ts` | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。 |
+| `contrib/gotoSymbol/common/languageDocumentSymbolSearch.ts` | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。 |
+| `contrib/gotoSymbol/common/languageNavigation.ts` | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。 |
+| `contrib/hover/browser/hoverController.ts` | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。 |
+| `contrib/hover/common/hover.ts` | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。 |
+| `contrib/inlayHints/browser/inlayHintsController.ts` | 双方都有 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。 |
+| `contrib/inlayHints/common/languageInlayHints.ts` | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。 |
+| `contrib/inlineCompletions/browser/controller/inlineCompletionsController.ts` | 双方都有 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。 |
+| `contrib/inlineCompletions/browser/model/provideInlineCompletions.ts` | 双方都有 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。 |
+| `contrib/inlineCompletions/common/inlineCompletions.ts` | 既有 Ash 职责 / 测试 | 全部类型迁入公共 owner 后移除空载体；上一批 completeBracketPairs 契约完整保留。 |
+| `contrib/inlineCompletions/test/browser/inlineCompletionsController.test.ts` | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。 |
+| `contrib/parameterHints/browser/parameterHintsController.ts` | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。 |
+| `contrib/parameterHints/common/languageParameterHints.ts` | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。 |
+| `contrib/rename/common/languageRename.ts` | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。 |
+| `contrib/rename/test/browser/renameController.test.ts` | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。 |
+| `contrib/smartSelect/common/selectionRanges.ts` | 既有 Ash 职责 / 测试 | 只移出公共类型，原请求调度、校验、状态及生命周期保持原处。 |
+| `contrib/symbolIcons/browser/symbolIcons.ts` | 双方都有 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。 |
+| `editor.api.ts` | 双方都有 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。 |
+| `standalone/browser/standaloneLanguages.ts` | 双方都有 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。 |
+| `ash-ts/src/ash/workbench/api/browser/extensionHostLanguageBridge.ts` | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。 |
+| `ash-ts/src/ash/workbench/services/language/browser/appServerLanguageProviders.ts` | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。 |
+| `ash-ts/src/ash/workbench/services/language/browser/appServerSyntaxProviders.ts` | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。 |
+| `ash-ts/src/ash/workbench/services/language/common/jsonLanguageFeatures.ts` | 既有 Ash 职责 / 测试 | 改为直接引用 common/languages；保留实现引用及运行行为，移除重复类型入口。 |
+| `ash-ts/test/architecture/editor-architecture.test.ts` | 既有 Ash 职责 / 测试 | 增加 common 不依赖 contribution 的导入边界回归。 |
+
+独立实现与验证：从本地现有声明迁移，保持所有字段、可选性、返回类型、取消、选择顺序与状态副作用；各 contribution 的服务继续拥有请求编排，公共模块只增加契约。公共边界回归、现有 provider / 适配器单测、真实 Playwright 场景及两种生产构建用于确认迁移。
+
+结果：`common` 对 contribution 的类型依赖已清零，12 组共 50 个契约只有一个声明 owner；逐项比对迁移前后字段和签名一致，公开入口的 214 个具名导出保持不变。原行内补全类型文件及其代码引用已退出，上一批括号修复的字段和行为保留。现有 contribution 请求 service 的进一步组织、Ash 协议与上游标准 provider 签名的差异仍在，不把契约归位算作这些实现已全部对齐。
+
+本批验证：
+
+- 6 份定向单测文件通过，含依赖边界、Standalone 注册、共享 registry、Workbench 安装、App Server 提供者和扩展宿主；33 个定向 Playwright 场景通过。
+- `check-editor-alignment.mjs --test=all` 通过：结构、台账、类型检查、233/233 份单测文件、358/358 个 Playwright 用例。
+- `build:renderer`、`build:stanza`、`git diff --check` 通过。构建无新增 warning；既有 JSDOM Canvas、旧 fixture 服务装配与颜色环境提示保持原状。
+- 当前生产文件为 541 个：420 个同路径、121 个 Ash 自有；common 保持 211 个文件、46 个上游路径未引入。80/41 的声明核对计数不变，没有新增 CSS 或上游品牌引用。
+- 上一批已暂存 patch 逐字节核对未变；本批结果留在工作区，未创建提交。
+
 ## 补全括号修复与异步分词试算（2026-09-21）
 
 准入链：带 `completeBracketPairs` 的行内补全 → 控制器 / `provideInlineCompletions` → 模型分词试算 → 现有 Syntax Worker / TextMate 语法 → `fixBracketsInLine` → 既有接受与撤销命令。上一批防抖改动已由用户提交；本批继续当前工作区，不修改提交历史。

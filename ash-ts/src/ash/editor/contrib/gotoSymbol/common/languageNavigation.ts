@@ -2,38 +2,9 @@ import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
-import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest, type LanguageLocation } from "../../../common/languages.js";
+import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageLocation, type LanguageLocationRequest, type LanguageDefinitionProvider, type LanguageDeclarationProvider, type LanguageImplementationProvider, type LanguageTypeDefinitionProvider, type LanguageReferenceProvider } from '../../../common/languages.js';
 import { LanguageFeatureRegistry } from "../../../common/languageFeatureRegistry.js";
 import { type TextModel } from "../../../common/model/textModel.js";
-
-export interface LanguageLocationRequest extends LanguageFeatureRequest {
-	readonly resource: URI;
-	readonly position: Position;
-}
-
-export interface LanguageReferenceRequest extends LanguageLocationRequest {
-	readonly includeDeclaration: boolean;
-}
-
-export interface LanguageDefinitionProvider {
-	provideDefinition(request: LanguageLocationRequest, signal: AbortSignal): readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>;
-}
-
-export interface LanguageDeclarationProvider {
-	provideDeclaration(request: LanguageLocationRequest, signal: AbortSignal): readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>;
-}
-
-export interface LanguageImplementationProvider {
-	provideImplementation(request: LanguageLocationRequest, signal: AbortSignal): readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>;
-}
-
-export interface LanguageTypeDefinitionProvider {
-	provideTypeDefinition(request: LanguageLocationRequest, signal: AbortSignal): readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>;
-}
-
-export interface LanguageReferenceProvider {
-	provideReferences(request: LanguageReferenceRequest, signal: AbortSignal): readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>;
-}
 
 export interface LanguageNavigationProviderRegistries {
 	readonly definitions: LanguageFeatureRegistry<LanguageDefinitionProvider>;

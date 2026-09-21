@@ -1,26 +1,9 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type Position } from "../../../common/core/position.js";
-import { type Range } from "../../../common/core/range.js";
-import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest, normalizeLanguageWorkspaceEdit, type LanguageWorkspaceEdit } from "../../../common/languages.js";
+import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, normalizeLanguageWorkspaceEdit, type LanguageWorkspaceEdit, type LanguageRenamePreparation, type LanguageRenameProvider } from '../../../common/languages.js';
 import { LanguageFeatureRegistry } from "../../../common/languageFeatureRegistry.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type URI } from "../../../../base/common/uri.js";
-
-export interface LanguageRenameRequest extends LanguageFeatureRequest {
-	readonly resource: URI;
-	readonly position: Position;
-	readonly newName?: string;
-}
-
-export interface LanguageRenamePreparation {
-	readonly range: Range;
-	readonly placeholder: string;
-}
-
-export interface LanguageRenameProvider {
-	prepareRename?(request: LanguageRenameRequest, signal: AbortSignal): LanguageRenamePreparation | undefined | Promise<LanguageRenamePreparation | undefined>;
-	provideRenameEdits(request: LanguageRenameRequest, signal: AbortSignal): LanguageWorkspaceEdit | Promise<LanguageWorkspaceEdit>;
-}
 
 /** Separates rename preparation/UI from the eventual workspace edit transaction. */
 export class RenameService extends Disposable {

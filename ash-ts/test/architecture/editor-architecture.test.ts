@@ -66,6 +66,19 @@ test("Editor production code does not depend on Workbench or generated transport
 	}
 });
 
+test('Common editor contracts do not import contribution-owned modules', () => {
+	for (const file of collectFiles(join(editorRoot, 'common'))) {
+		if (!file.endsWith('.ts')) continue;
+		const source = readFileSync(file, 'utf8');
+		for (const match of source.matchAll(/(?:from\s+|import\s*\(\s*)["']([^"']+)["']/gu)) {
+			const specifier = match[1]!;
+			if (!specifier.startsWith('.')) continue;
+			const target = relative(editorRoot, resolve(dirname(file), specifier)).replaceAll('\\', '/');
+			assert.equal(target.startsWith('contrib/'), false, `${relative(editorRoot, file)} imports ${specifier}`);
+		}
+	}
+});
+
 test('Editor dependency checks distinguish layer paths from Platform filenames', () => {
 	assert.doesNotMatch("import { editorBackground } from '../../../platform/theme/common/colors/workbenchColors.js';", workbenchImportPattern);
 	assert.match("import { EditorPart } from '../../../workbench/browser/parts/editor/editorPart.js';", workbenchImportPattern);

@@ -1,7 +1,8 @@
+import type { LanguageDocumentSymbol } from '../../../common/languages.js';
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { Position } from "../../../common/core/position.js";
 import { type Range } from "../../../common/core/range.js";
-import { type LanguageDocumentSymbol, DocumentSymbolService } from "../../documentSymbols/common/languageDocumentSymbols.js";
+import { DocumentSymbolService } from "../../documentSymbols/common/languageDocumentSymbols.js";
 
 export interface LanguageSymbolMatch {
 	readonly symbol: LanguageDocumentSymbol;

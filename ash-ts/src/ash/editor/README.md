@@ -46,6 +46,9 @@ Editor 维护以下核心入口。实现 README 可以补充局部细节，但�
 
 顶层依赖遵循[代码组织规范](../../../../.github/instructions/source-code-organization.instructions.md)：`workbench → editor → platform → base`。因此 Editor 可以依赖 Base 和 Platform；反向依赖禁止。Editor 内部由贡献消费公共契约，公共契约与 registry 不反向依赖贡献，即使只是类型导入。`common` 不使用 DOM 是运行环境限制，不是文件归属标准。每个 `TextModel` 原生拥有有序逻辑行和稳定 `LineId`；Code 使用只有行与文档 metadata 的受限 profile，Academic 额外使用 mark、atom、facet、region 与 relation。浏览器投影和 Workbench 不得为代码区域或其他语义对象再创建隐藏模型。
 
+语言提供者、请求及返回值统一声明在 `common/languages.ts`；`ILanguageFeaturesService` 与 `LanguageFeaturesService` 只依赖该公共契约。Standalone、Workbench 和扩展适配器直接注册这些类型；贡献中的 service / controller 继续持有提供者选择、版本检查、取消与结果应用。共享 registry 不导入贡献文件，也不替功能保存请求状态。
+
+
 内容主轴只有 `TextModel → LineSequence → ModelLine`。持久语义通过互相正交的 `RangeStore`、`PointStore`、`LineFacetStore`、`RegionStore` 与 `RelationStore` 引用 `LineId`；字符仍由 TextModel 私有拥有的 `ITextBuffer` 保存。buffer 当前由 Builder 构建的红黑树 `PieceTreeTextBuffer` 实现，PieceTree 不属于公开模型拓扑。
 
 ## 一个品牌，两套功能实现
@@ -94,7 +97,7 @@ editor.main.ts ────────────→ editor.all.ts + editor.ap
 standalone/{common,browser} ─→ window services + model/editor/language/theme registries; never Workbench persistence
 ```
 
-`LanguageService` 只管理语言 ID 与文件关联，`ComposableLanguageConfigurationService` 只管理括号、注释、缩进等编辑规则，`LanguageFeaturesService` 只管理能力 provider registry。Standalone 的 `languages` API 和 Workbench 的 App Server、TextMate、扩展适配器都写入这组共享 registry；具体 contribution 消费 registry 并拥有自身请求与展示流程，不要求额外创建 model-level service。公共 provider 契约归 `common/languages.ts`，Editor 不读取服务器 DTO。其他功能的 registry 仍从贡献导入部分类型，这是待修正的依赖。
+`LanguageService` 只管理语言 ID 与文件关联，`ComposableLanguageConfigurationService` 只管理括号、注释、缩进等编辑规则，`LanguageFeaturesService` 只管理能力 provider registry。Standalone 的 `languages` API 和 Workbench 的 App Server、TextMate、扩展适配器都写入这组共享 registry；具体 contribution 消费 registry 并拥有自身请求与展示流程，不要求额外创建 model-level service。公共 provider 契约归 `common/languages.ts`，Editor 不读取服务器 DTO。各 registry 已统一消费公共契约；贡献仅保留自身的请求编排和结果处理。
 
 格式化职责与当前行为：
 

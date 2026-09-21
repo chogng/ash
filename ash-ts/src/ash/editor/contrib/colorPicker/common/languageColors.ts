@@ -4,24 +4,9 @@ import { Range } from '../../../common/core/range.js';
 import { PositionOffsetTransformer } from '../../../common/core/text/positionToOffset.js';
 import { computeDefaultDocumentColors } from '../../../common/languages/defaultDocumentColorsComputer.js';
 
-import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest, type IColor, type IColorInformation, type IColorPresentation } from '../../../common/languages.js';
+import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type IColor, type IColorInformation, type IColorPresentation, type LanguageColorRequest, type LanguageColorPresentationRequest, type LanguageColorProvider } from '../../../common/languages.js';
 import { LanguageFeatureRegistry } from '../../../common/languageFeatureRegistry.js';
 import { type TextModel } from '../../../common/model/textModel.js';
-
-export interface LanguageColorRequest extends LanguageFeatureRequest {
-	readonly resource?: URI;
-}
-
-export interface LanguageColorPresentationRequest extends LanguageFeatureRequest {
-	readonly color: IColor;
-	readonly range: Range;
-	readonly resource?: URI;
-}
-
-export interface LanguageColorProvider {
-	provideDocumentColors(request: LanguageColorRequest, signal: AbortSignal): readonly IColorInformation[] | undefined | Promise<readonly IColorInformation[] | undefined>;
-	provideColorPresentations(request: LanguageColorPresentationRequest, signal: AbortSignal): readonly IColorPresentation[] | undefined | Promise<readonly IColorPresentation[] | undefined>;
-}
 
 export interface ColorData {
 	readonly information: IColorInformation & { readonly range: Range };

@@ -1,32 +1,9 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type Range } from "../../../common/core/range.js";
-import { type LanguageDiagnostic, createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest, normalizeLanguageWorkspaceEdit, type LanguageWorkspaceEdit } from '../../../common/languages.js';
+import { type LanguageDiagnostic, createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, normalizeLanguageWorkspaceEdit, type LanguageCodeAction, type LanguageCodeActionProvider } from '../../../common/languages.js';
 import { LanguageFeatureRegistry } from "../../../common/languageFeatureRegistry.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type URI } from "../../../../base/common/uri.js";
-
-export type { LanguageWorkspaceEdit } from "../../../common/languages.js";
-
-export interface LanguageCodeAction {
-	readonly title: string;
-	readonly kind?: string;
-	readonly isPreferred?: boolean;
-	readonly disabledReason?: string;
-	readonly edit?: LanguageWorkspaceEdit;
-	readonly data?: unknown;
-}
-
-export interface LanguageCodeActionRequest extends LanguageFeatureRequest {
-	readonly resource: URI;
-	readonly range: Range;
-	readonly diagnostics: readonly LanguageDiagnostic[];
-	readonly only?: readonly string[];
-}
-
-export interface LanguageCodeActionProvider {
-	provideCodeActions(request: LanguageCodeActionRequest, signal: AbortSignal): readonly LanguageCodeAction[] | Promise<readonly LanguageCodeAction[]>;
-	resolveCodeAction?(action: LanguageCodeAction, request: LanguageCodeActionRequest, signal: AbortSignal): LanguageCodeAction | Promise<LanguageCodeAction>;
-}
 
 /** Collects code actions and keeps edit application in the editor command layer. */
 export class CodeActionService extends Disposable {

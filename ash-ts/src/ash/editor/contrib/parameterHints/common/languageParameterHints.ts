@@ -1,38 +1,9 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type Position } from "../../../common/core/position.js";
-import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages.js";
+import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageParameterInformation, type LanguageParameterHints, type LanguageParameterHintsContext, type LanguageParameterHintsProvider } from '../../../common/languages.js';
 import { LanguageFeatureRegistry } from "../../../common/languageFeatureRegistry.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 import { type URI } from "../../../../base/common/uri.js";
-
-export interface LanguageParameterInformation {
-	readonly label: string;
-	readonly documentation?: string;
-}
-
-export interface LanguageSignatureInformation {
-	readonly label: string;
-	readonly documentation?: string;
-	readonly parameters: readonly LanguageParameterInformation[];
-	readonly activeParameter?: number;
-}
-
-export interface LanguageParameterHints {
-	readonly signatures: readonly LanguageSignatureInformation[];
-	readonly activeSignature?: number;
-}
-
-export interface LanguageParameterHintsRequest extends LanguageFeatureRequest {
-	readonly resource?: URI;
-	readonly position: Position;
-	readonly context: LanguageParameterHintsContext;
-}
-
-export type LanguageParameterHintsContext = { readonly kind: "invoke" } | { readonly kind: "triggerCharacter"; readonly triggerCharacter: string } | { readonly kind: "contentChange" };
-
-export interface LanguageParameterHintsProvider {
-	provideParameterHints(request: LanguageParameterHintsRequest, signal: AbortSignal): LanguageParameterHints | undefined | Promise<LanguageParameterHints | undefined>;
-}
 
 /** Queries signature help independently of completion and keeps active indices provider-owned. */
 export class ParameterHintsService extends Disposable {

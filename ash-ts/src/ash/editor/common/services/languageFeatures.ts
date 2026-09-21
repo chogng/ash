@@ -2,52 +2,40 @@ import type { IDisposable } from '../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../../platform/instantiation/common/instantiation.js';
 import { type LanguageFeatureRegistry, type LanguageCompletionProviderRegistry, type SyntaxProviderRegistry } from '../languageFeatureRegistry.js';
 import type { LanguageSelector } from '../languageSelector.js';
-import { type LanguageLinkProvider, type LanguageCompletionProvider, type CodeLensProvider, type DocumentHighlightProvider, type LinkedEditingRangeProvider, type MultiDocumentHighlightProvider, type DocumentFormattingEditProvider, type DocumentRangeFormattingEditProvider, type OnTypeFormattingEditProvider, type LanguageSemanticTokensProvider, type LanguageWorkspaceSymbolProvider } from '../languages.js';
-import type { LanguageCallHierarchyProvider, LanguageTypeHierarchyProvider } from '../../contrib/callHierarchy/common/languageHierarchy.js';
-import type { LanguageCodeActionProvider } from '../../contrib/codeAction/common/languageCodeActions.js';
-import type { LanguageColorProvider } from '../../contrib/colorPicker/common/languageColors.js';
-import type { LanguageDocumentSymbolProvider } from '../../contrib/documentSymbols/common/languageDocumentSymbols.js';
-import type { LanguageFoldingRangeProvider } from '../../contrib/folding/common/languageFoldingRanges.js';
-import type { LanguageDeclarationProvider, LanguageDefinitionProvider, LanguageImplementationProvider, LanguageReferenceProvider, LanguageTypeDefinitionProvider } from '../../contrib/gotoSymbol/common/languageNavigation.js';
-import type { LanguageHoverProvider } from '../../contrib/hover/common/hover.js';
-import type { LanguageInlayHintsProvider } from '../../contrib/inlayHints/common/languageInlayHints.js';
-import type { LanguageInlineCompletionsProvider } from '../../contrib/inlineCompletions/common/inlineCompletions.js';
-import type { LanguageParameterHintsProvider } from '../../contrib/parameterHints/common/languageParameterHints.js';
-import type { LanguageRenameProvider } from '../../contrib/rename/common/languageRename.js';
-import type { LanguageSelectionRangeProvider } from '../../contrib/smartSelect/common/selectionRanges.js';
+import type * as languages from '../languages.js';
 
 /** Provider registries shared by standalone callers and Workbench adapters. */
 export interface ILanguageFeaturesService extends IDisposable {
 	readonly _serviceBrand: undefined;
 	readonly syntaxProvider: SyntaxProviderRegistry;
 	readonly completionProvider: LanguageCompletionProviderRegistry;
-	readonly codeActionProvider: LanguageFeatureRegistry<LanguageCodeActionProvider>;
-	readonly codeLensProvider: LanguageFeatureRegistry<CodeLensProvider>;
-	readonly documentSymbolProvider: LanguageFeatureRegistry<LanguageDocumentSymbolProvider>;
-	readonly documentFormattingEditProvider: LanguageFeatureRegistry<DocumentFormattingEditProvider>;
-	readonly documentRangeFormattingEditProvider: LanguageFeatureRegistry<DocumentRangeFormattingEditProvider>;
-	readonly onTypeFormattingEditProvider: LanguageFeatureRegistry<OnTypeFormattingEditProvider>;
-	readonly hoverProvider: LanguageFeatureRegistry<LanguageHoverProvider>;
-	readonly inlayHintsProvider: LanguageFeatureRegistry<LanguageInlayHintsProvider>;
-	readonly inlineCompletionsProvider: LanguageFeatureRegistry<LanguageInlineCompletionsProvider>;
-	readonly linkedEditingRangeProvider: LanguageFeatureRegistry<LinkedEditingRangeProvider>;
-	readonly linkProvider: LanguageFeatureRegistry<LanguageLinkProvider>;
-	readonly signatureHelpProvider: LanguageFeatureRegistry<LanguageParameterHintsProvider>;
-	readonly renameProvider: LanguageFeatureRegistry<LanguageRenameProvider>;
-	readonly colorProvider: LanguageFeatureRegistry<LanguageColorProvider>;
-	readonly definitionProvider: LanguageFeatureRegistry<LanguageDefinitionProvider>;
-	readonly declarationProvider: LanguageFeatureRegistry<LanguageDeclarationProvider>;
-	readonly implementationProvider: LanguageFeatureRegistry<LanguageImplementationProvider>;
-	readonly typeDefinitionProvider: LanguageFeatureRegistry<LanguageTypeDefinitionProvider>;
-	readonly referenceProvider: LanguageFeatureRegistry<LanguageReferenceProvider>;
-	readonly workspaceSymbolProvider: LanguageFeatureRegistry<LanguageWorkspaceSymbolProvider>;
-	readonly callHierarchyProvider: LanguageFeatureRegistry<LanguageCallHierarchyProvider>;
-	readonly typeHierarchyProvider: LanguageFeatureRegistry<LanguageTypeHierarchyProvider>;
-	readonly documentSemanticTokensProvider: LanguageFeatureRegistry<LanguageSemanticTokensProvider>;
-	readonly foldingRangeProvider: LanguageFeatureRegistry<LanguageFoldingRangeProvider>;
-	readonly selectionRangeProvider: LanguageFeatureRegistry<LanguageSelectionRangeProvider>;
-	readonly documentHighlightProvider: LanguageFeatureRegistry<DocumentHighlightProvider>;
-	readonly multiDocumentHighlightProvider: LanguageFeatureRegistry<MultiDocumentHighlightProvider>;
+	readonly codeActionProvider: LanguageFeatureRegistry<languages.LanguageCodeActionProvider>;
+	readonly codeLensProvider: LanguageFeatureRegistry<languages.CodeLensProvider>;
+	readonly documentSymbolProvider: LanguageFeatureRegistry<languages.LanguageDocumentSymbolProvider>;
+	readonly documentFormattingEditProvider: LanguageFeatureRegistry<languages.DocumentFormattingEditProvider>;
+	readonly documentRangeFormattingEditProvider: LanguageFeatureRegistry<languages.DocumentRangeFormattingEditProvider>;
+	readonly onTypeFormattingEditProvider: LanguageFeatureRegistry<languages.OnTypeFormattingEditProvider>;
+	readonly hoverProvider: LanguageFeatureRegistry<languages.LanguageHoverProvider>;
+	readonly inlayHintsProvider: LanguageFeatureRegistry<languages.LanguageInlayHintsProvider>;
+	readonly inlineCompletionsProvider: LanguageFeatureRegistry<languages.LanguageInlineCompletionsProvider>;
+	readonly linkedEditingRangeProvider: LanguageFeatureRegistry<languages.LinkedEditingRangeProvider>;
+	readonly linkProvider: LanguageFeatureRegistry<languages.LanguageLinkProvider>;
+	readonly signatureHelpProvider: LanguageFeatureRegistry<languages.LanguageParameterHintsProvider>;
+	readonly renameProvider: LanguageFeatureRegistry<languages.LanguageRenameProvider>;
+	readonly colorProvider: LanguageFeatureRegistry<languages.LanguageColorProvider>;
+	readonly definitionProvider: LanguageFeatureRegistry<languages.LanguageDefinitionProvider>;
+	readonly declarationProvider: LanguageFeatureRegistry<languages.LanguageDeclarationProvider>;
+	readonly implementationProvider: LanguageFeatureRegistry<languages.LanguageImplementationProvider>;
+	readonly typeDefinitionProvider: LanguageFeatureRegistry<languages.LanguageTypeDefinitionProvider>;
+	readonly referenceProvider: LanguageFeatureRegistry<languages.LanguageReferenceProvider>;
+	readonly workspaceSymbolProvider: LanguageFeatureRegistry<languages.LanguageWorkspaceSymbolProvider>;
+	readonly callHierarchyProvider: LanguageFeatureRegistry<languages.LanguageCallHierarchyProvider>;
+	readonly typeHierarchyProvider: LanguageFeatureRegistry<languages.LanguageTypeHierarchyProvider>;
+	readonly documentSemanticTokensProvider: LanguageFeatureRegistry<languages.LanguageSemanticTokensProvider>;
+	readonly foldingRangeProvider: LanguageFeatureRegistry<languages.LanguageFoldingRangeProvider>;
+	readonly selectionRangeProvider: LanguageFeatureRegistry<languages.LanguageSelectionRangeProvider>;
+	readonly documentHighlightProvider: LanguageFeatureRegistry<languages.DocumentHighlightProvider>;
+	readonly multiDocumentHighlightProvider: LanguageFeatureRegistry<languages.MultiDocumentHighlightProvider>;
 	setNotebookTypeResolver(resolver: import('../languageFeatureRegistry.js').NotebookInfoResolver | undefined): void;
 	registerProviderBatch(providers: LanguageProviderBatch): LanguageProviderBatchRegistration;
 }
@@ -61,12 +49,12 @@ export interface LanguageProviderBatchEntry<TProvider> {
 }
 
 export interface LanguageProviderBatch {
-	readonly completions?: readonly LanguageCompletionProvider[];
-	readonly hovers?: readonly LanguageProviderBatchEntry<LanguageHoverProvider>[];
-	readonly formatting?: readonly LanguageProviderBatchEntry<DocumentFormattingEditProvider | DocumentRangeFormattingEditProvider | OnTypeFormattingEditProvider>[];
-	readonly inlayHints?: readonly LanguageProviderBatchEntry<LanguageInlayHintsProvider>[];
-	readonly linkedEditing?: readonly LanguageProviderBatchEntry<LinkedEditingRangeProvider>[];
-	readonly parameterHints?: readonly LanguageProviderBatchEntry<LanguageParameterHintsProvider>[];
+	readonly completions?: readonly languages.LanguageCompletionProvider[];
+	readonly hovers?: readonly LanguageProviderBatchEntry<languages.LanguageHoverProvider>[];
+	readonly formatting?: readonly LanguageProviderBatchEntry<languages.DocumentFormattingEditProvider | languages.DocumentRangeFormattingEditProvider | languages.OnTypeFormattingEditProvider>[];
+	readonly inlayHints?: readonly LanguageProviderBatchEntry<languages.LanguageInlayHintsProvider>[];
+	readonly linkedEditing?: readonly LanguageProviderBatchEntry<languages.LinkedEditingRangeProvider>[];
+	readonly parameterHints?: readonly LanguageProviderBatchEntry<languages.LanguageParameterHintsProvider>[];
 }
 
 export interface LanguageProviderBatchRegistration extends IDisposable {

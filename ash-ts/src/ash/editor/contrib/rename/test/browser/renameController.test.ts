@@ -1,3 +1,4 @@
+import type { LanguageRenameProvider } from '../../../../common/languages.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -9,7 +10,7 @@ import { Selection } from '../../../../common/core/selection.js';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
 import { TextModel } from '../../../../common/model/textModel.js';
-import { type LanguageRenameProvider, RenameService } from '../../common/languageRename.js';
+import { RenameService } from '../../common/languageRename.js';
 import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 import { type TextMeasurer } from '../../../../common/viewModel.js';
 

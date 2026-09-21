@@ -9,9 +9,9 @@ import { Range } from '../../../../common/core/range.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { TextDecorationCollection } from '../../../../common/model/decorationCollection.js';
 import { TextModel } from '../../../../common/model/textModel.js';
-import { type LanguageDiagnostic } from '../../../../common/languages.js';
+import type { LanguageDiagnostic, LanguageCodeActionProvider } from '../../../../common/languages.js';
 import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
-import { CodeActionService, type LanguageCodeActionProvider } from '../../common/languageCodeActions.js';
+import { CodeActionService } from '../../common/languageCodeActions.js';
 import { type TextMeasurer } from '../../../../common/viewModel.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');

@@ -4,10 +4,10 @@ import { Disposable, DisposableStore, toDisposable } from "../../../../base/comm
 import { type URI } from "../../../../base/common/uri.js";
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { Range } from "../../../common/core/range.js";
-import { type LanguageDiagnostic, type LanguageWorkspaceEdit } from '../../../common/languages.js';
+import type { LanguageDiagnostic, LanguageWorkspaceEdit, LanguageCodeAction } from '../../../common/languages.js';
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
 import { type View } from "../../../browser/view.js";
-import { type CodeActionService, type LanguageCodeAction } from "../common/languageCodeActions.js";
+import { type CodeActionService } from "../common/languageCodeActions.js";
 
 /** Owns the editor-local code-action picker and routes selected edits through cursor commands. */
 export class CodeActionController extends Disposable {

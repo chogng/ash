@@ -2,47 +2,9 @@ import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { type Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
-import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages.js";
+import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageHierarchyItem, type LanguageCallHierarchyEntry, type LanguageHierarchyRequest, type LanguageCallHierarchyProvider, type LanguageTypeHierarchyProvider } from '../../../common/languages.js';
 import { LanguageFeatureRegistry } from "../../../common/languageFeatureRegistry.js";
 import { type TextModel } from "../../../common/model/textModel.js";
-
-export interface LanguageHierarchyItem {
-	readonly name: string;
-	readonly symbolKind: number;
-	readonly detail?: string;
-	readonly resource: URI;
-	readonly range: Range;
-	readonly selectionRange: Range;
-	readonly data?: unknown;
-}
-
-export interface LanguageCallHierarchyEntry {
-	readonly item: LanguageHierarchyItem;
-	readonly fromResource?: URI;
-	readonly fromRanges: readonly Range[];
-}
-
-export interface LanguageHierarchyRequest extends LanguageFeatureRequest {
-	readonly resource: URI;
-	readonly position: Position;
-}
-
-export interface LanguageHierarchyFollowupRequest extends LanguageFeatureRequest {
-	readonly resource: URI;
-	readonly item: LanguageHierarchyItem;
-}
-
-export interface LanguageCallHierarchyProvider {
-	prepareCallHierarchy(request: LanguageHierarchyRequest, signal: AbortSignal): readonly LanguageHierarchyItem[] | Promise<readonly LanguageHierarchyItem[]>;
-	provideIncomingCalls(request: LanguageHierarchyFollowupRequest, signal: AbortSignal): readonly LanguageCallHierarchyEntry[] | Promise<readonly LanguageCallHierarchyEntry[]>;
-	provideOutgoingCalls(request: LanguageHierarchyFollowupRequest, signal: AbortSignal): readonly LanguageCallHierarchyEntry[] | Promise<readonly LanguageCallHierarchyEntry[]>;
-}
-
-export interface LanguageTypeHierarchyProvider {
-	prepareTypeHierarchy(request: LanguageHierarchyRequest, signal: AbortSignal): readonly LanguageHierarchyItem[] | Promise<readonly LanguageHierarchyItem[]>;
-	provideSupertypes(request: LanguageHierarchyFollowupRequest, signal: AbortSignal): readonly LanguageHierarchyItem[] | Promise<readonly LanguageHierarchyItem[]>;
-	provideSubtypes(request: LanguageHierarchyFollowupRequest, signal: AbortSignal): readonly LanguageHierarchyItem[] | Promise<readonly LanguageHierarchyItem[]>;
-}
 
 export interface PreparedCallHierarchy {
 	readonly roots: readonly LanguageHierarchyItem[];

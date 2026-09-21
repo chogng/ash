@@ -1,13 +1,12 @@
 import { type Position } from '../../../../common/core/position.js';
 import { type LanguageFeatureRegistry } from '../../../../common/languageFeatureRegistry.js';
-import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent } from '../../../../common/languages.js';
+import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageInlineCompletionItem, type LanguageInlineCompletionsProvider, type LanguageInlineCompletionsRequest } from '../../../../common/languages.js';
 import { type TextModel } from '../../../../common/model/textModel.js';
 import { Range } from '../../../../common/core/range.js';
 import { normalizeTextLineEndings } from '../../../../common/core/textChange.js';
 import { type ILanguageConfigurationService } from '../../../../common/languages/languageConfigurationRegistry.js';
 import { fixBracketsInLine } from '../../../../common/model/bracketPairsTextModelPart/fixBrackets.js';
 import { LineTokens } from '../../../../common/tokens/lineTokens.js';
-import { type LanguageInlineCompletionItem, type LanguageInlineCompletionsProvider, type LanguageInlineCompletionsRequest } from '../../common/inlineCompletions.js';
 
 /** Collects the current candidates from providers in language-feature order. */
 export async function provideInlineCompletions(

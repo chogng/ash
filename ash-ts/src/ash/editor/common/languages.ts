@@ -332,6 +332,256 @@ export interface LanguageFeatureRequest {
 	readonly signal: AbortSignal;
 }
 
+export interface LanguageHierarchyItem {
+	readonly name: string;
+	readonly symbolKind: number;
+	readonly detail?: string;
+	readonly resource: URI;
+	readonly range: Range;
+	readonly selectionRange: Range;
+	readonly data?: unknown;
+}
+
+export interface LanguageCallHierarchyEntry {
+	readonly item: LanguageHierarchyItem;
+	readonly fromResource?: URI;
+	readonly fromRanges: readonly Range[];
+}
+
+export interface LanguageHierarchyRequest extends LanguageFeatureRequest {
+	readonly resource: URI;
+	readonly position: Position;
+}
+
+export interface LanguageHierarchyFollowupRequest extends LanguageFeatureRequest {
+	readonly resource: URI;
+	readonly item: LanguageHierarchyItem;
+}
+
+export interface LanguageCallHierarchyProvider {
+	prepareCallHierarchy(request: LanguageHierarchyRequest, signal: AbortSignal): readonly LanguageHierarchyItem[] | Promise<readonly LanguageHierarchyItem[]>;
+	provideIncomingCalls(request: LanguageHierarchyFollowupRequest, signal: AbortSignal): readonly LanguageCallHierarchyEntry[] | Promise<readonly LanguageCallHierarchyEntry[]>;
+	provideOutgoingCalls(request: LanguageHierarchyFollowupRequest, signal: AbortSignal): readonly LanguageCallHierarchyEntry[] | Promise<readonly LanguageCallHierarchyEntry[]>;
+}
+
+export interface LanguageTypeHierarchyProvider {
+	prepareTypeHierarchy(request: LanguageHierarchyRequest, signal: AbortSignal): readonly LanguageHierarchyItem[] | Promise<readonly LanguageHierarchyItem[]>;
+	provideSupertypes(request: LanguageHierarchyFollowupRequest, signal: AbortSignal): readonly LanguageHierarchyItem[] | Promise<readonly LanguageHierarchyItem[]>;
+	provideSubtypes(request: LanguageHierarchyFollowupRequest, signal: AbortSignal): readonly LanguageHierarchyItem[] | Promise<readonly LanguageHierarchyItem[]>;
+}
+
+export interface LanguageCodeAction {
+	readonly title: string;
+	readonly kind?: string;
+	readonly isPreferred?: boolean;
+	readonly disabledReason?: string;
+	readonly edit?: LanguageWorkspaceEdit;
+	readonly data?: unknown;
+}
+
+export interface LanguageCodeActionRequest extends LanguageFeatureRequest {
+	readonly resource: URI;
+	readonly range: Range;
+	readonly diagnostics: readonly LanguageDiagnostic[];
+	readonly only?: readonly string[];
+}
+
+export interface LanguageCodeActionProvider {
+	provideCodeActions(request: LanguageCodeActionRequest, signal: AbortSignal): readonly LanguageCodeAction[] | Promise<readonly LanguageCodeAction[]>;
+	resolveCodeAction?(action: LanguageCodeAction, request: LanguageCodeActionRequest, signal: AbortSignal): LanguageCodeAction | Promise<LanguageCodeAction>;
+}
+
+export interface LanguageColorRequest extends LanguageFeatureRequest {
+	readonly resource?: URI;
+}
+
+export interface LanguageColorPresentationRequest extends LanguageFeatureRequest {
+	readonly color: IColor;
+	readonly range: Range;
+	readonly resource?: URI;
+}
+
+export interface LanguageColorProvider {
+	provideDocumentColors(request: LanguageColorRequest, signal: AbortSignal): readonly IColorInformation[] | undefined | Promise<readonly IColorInformation[] | undefined>;
+	provideColorPresentations(request: LanguageColorPresentationRequest, signal: AbortSignal): readonly IColorPresentation[] | undefined | Promise<readonly IColorPresentation[] | undefined>;
+}
+
+export type LanguageSymbolKind = string | number;
+
+export interface LanguageDocumentSymbol {
+	readonly name: string;
+	readonly detail?: string;
+	readonly kind: LanguageSymbolKind;
+	readonly range: Range;
+	readonly selectionRange: Range;
+	readonly children?: readonly LanguageDocumentSymbol[];
+}
+
+export interface LanguageDocumentSymbolRequest extends LanguageFeatureRequest {
+	readonly resource?: URI;
+}
+
+export interface LanguageDocumentSymbolProvider {
+	provideDocumentSymbols(request: LanguageDocumentSymbolRequest, signal: AbortSignal): readonly LanguageDocumentSymbol[] | Promise<readonly LanguageDocumentSymbol[]>;
+}
+
+export type LanguageFoldingRangeKind = "comment" | "imports" | "region";
+
+export interface LanguageFoldingRange {
+	readonly startLineIndex: number;
+	readonly endLineIndex: number;
+	readonly kind?: LanguageFoldingRangeKind;
+	readonly collapsedText?: string;
+}
+
+export interface LanguageFoldingRangeRequest extends LanguageFeatureRequest {
+	readonly resource?: URI;
+}
+
+export interface LanguageFoldingRangeProvider {
+	provideFoldingRanges(request: LanguageFoldingRangeRequest, signal: AbortSignal): readonly LanguageFoldingRange[] | Promise<readonly LanguageFoldingRange[]>;
+}
+
+export interface LanguageLocationRequest extends LanguageFeatureRequest {
+	readonly resource: URI;
+	readonly position: Position;
+}
+
+export interface LanguageReferenceRequest extends LanguageLocationRequest {
+	readonly includeDeclaration: boolean;
+}
+
+export interface LanguageDefinitionProvider {
+	provideDefinition(request: LanguageLocationRequest, signal: AbortSignal): readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>;
+}
+
+export interface LanguageDeclarationProvider {
+	provideDeclaration(request: LanguageLocationRequest, signal: AbortSignal): readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>;
+}
+
+export interface LanguageImplementationProvider {
+	provideImplementation(request: LanguageLocationRequest, signal: AbortSignal): readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>;
+}
+
+export interface LanguageTypeDefinitionProvider {
+	provideTypeDefinition(request: LanguageLocationRequest, signal: AbortSignal): readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>;
+}
+
+export interface LanguageReferenceProvider {
+	provideReferences(request: LanguageReferenceRequest, signal: AbortSignal): readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>;
+}
+
+export type LanguageHoverContent = string | { readonly value: string; readonly language?: string };
+
+export interface LanguageHover {
+	readonly range?: Range;
+	readonly contents: readonly LanguageHoverContent[];
+}
+
+export interface LanguageHoverRequest extends LanguageFeatureRequest {
+	readonly resource?: URI;
+	readonly position: Position;
+}
+
+export interface LanguageHoverProvider {
+	provideHover(request: LanguageHoverRequest, signal: AbortSignal): LanguageHover | undefined | Promise<LanguageHover | undefined>;
+}
+
+export type LanguageInlayHintKind = "type" | "parameter" | "other";
+
+export type LanguageInlayHintLabel = string | readonly { readonly value: string; readonly location?: Range }[];
+
+export interface LanguageInlayHint {
+	readonly position: Position;
+	readonly label: LanguageInlayHintLabel;
+	readonly kind?: LanguageInlayHintKind;
+	readonly tooltip?: string;
+	readonly paddingLeft?: boolean;
+	readonly paddingRight?: boolean;
+}
+
+export interface LanguageInlayHintsRequest extends LanguageFeatureRequest {
+	readonly resource?: URI;
+	readonly range: Range;
+}
+
+export interface LanguageInlayHintsProvider {
+	provideInlayHints(request: LanguageInlayHintsRequest, signal: AbortSignal): readonly LanguageInlayHint[] | Promise<readonly LanguageInlayHint[]>;
+}
+
+export interface LanguageInlineCompletionItem {
+	readonly insertText: string;
+	/** Repairs missing and unexpected brackets using the document's lexical context. */
+	readonly completeBracketPairs?: boolean;
+	readonly range?: Range;
+	readonly filterText?: string;
+	readonly commandId?: string;
+	readonly additionalTextEdits?: readonly TextEdit[];
+}
+
+export interface LanguageInlineCompletionsRequest extends LanguageFeatureRequest {
+	readonly position: Position;
+	readonly triggerKind: "automatic" | "explicit";
+}
+
+export interface LanguageInlineCompletionsProvider {
+	provideInlineCompletions(request: LanguageInlineCompletionsRequest, signal: AbortSignal): readonly LanguageInlineCompletionItem[] | Promise<readonly LanguageInlineCompletionItem[]>;
+}
+
+export interface LanguageParameterInformation {
+	readonly label: string;
+	readonly documentation?: string;
+}
+
+export interface LanguageSignatureInformation {
+	readonly label: string;
+	readonly documentation?: string;
+	readonly parameters: readonly LanguageParameterInformation[];
+	readonly activeParameter?: number;
+}
+
+export interface LanguageParameterHints {
+	readonly signatures: readonly LanguageSignatureInformation[];
+	readonly activeSignature?: number;
+}
+
+export interface LanguageParameterHintsRequest extends LanguageFeatureRequest {
+	readonly resource?: URI;
+	readonly position: Position;
+	readonly context: LanguageParameterHintsContext;
+}
+
+export type LanguageParameterHintsContext = { readonly kind: "invoke" } | { readonly kind: "triggerCharacter"; readonly triggerCharacter: string } | { readonly kind: "contentChange" };
+
+export interface LanguageParameterHintsProvider {
+	provideParameterHints(request: LanguageParameterHintsRequest, signal: AbortSignal): LanguageParameterHints | undefined | Promise<LanguageParameterHints | undefined>;
+}
+
+export interface LanguageRenameRequest extends LanguageFeatureRequest {
+	readonly resource: URI;
+	readonly position: Position;
+	readonly newName?: string;
+}
+
+export interface LanguageRenamePreparation {
+	readonly range: Range;
+	readonly placeholder: string;
+}
+
+export interface LanguageRenameProvider {
+	prepareRename?(request: LanguageRenameRequest, signal: AbortSignal): LanguageRenamePreparation | undefined | Promise<LanguageRenamePreparation | undefined>;
+	provideRenameEdits(request: LanguageRenameRequest, signal: AbortSignal): LanguageWorkspaceEdit | Promise<LanguageWorkspaceEdit>;
+}
+
+export interface LanguageSelectionRangeRequest extends LanguageFeatureRequest {
+	readonly resource?: URI;
+	readonly ranges: readonly Range[];
+}
+
+export interface LanguageSelectionRangeProvider {
+	provideSelectionRanges(request: LanguageSelectionRangeRequest, signal: AbortSignal): readonly Range[] | Promise<readonly Range[]>;
+}
+
 export interface ILink {
 	range: IRange;
 	url?: URI | string;

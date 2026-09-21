@@ -1,3 +1,4 @@
+import type { LanguageInlineCompletionsProvider } from '../../../../common/languages.js';
 import { createTestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
 import { ILanguageConfigurationService } from '../../../../common/languages/languageConfigurationRegistry.js';
 import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../../../common/services/languageFeatureDebounce.js';
@@ -13,7 +14,6 @@ import { LanguageFeatureRegistry } from '../../../../common/languageFeatureRegis
 import { Selection } from '../../../../common/core/selection.js';
 import { Position } from '../../../../common/core/position.js';
 import { TextModel } from '../../../../common/model/textModel.js';
-import { type LanguageInlineCompletionsProvider } from '../../common/inlineCompletions.js';
 import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 import { type ICodeEditor } from '../../../../browser/editorBrowser.js';
 import { type ICommand } from '../../../../common/editorCommon.js';

@@ -7,9 +7,7 @@ import { getJsonNodePath, parseJsonDocument, JsonTokenKind, type JsonDocument, t
 import { jsonSchemaAtPath, type JsonSchema } from '../../../../base/common/jsonSchema.js';
 import { Position } from '../../../../editor/common/core/position.js';
 import { Range } from '../../../../editor/common/core/range.js';
-import { type TextEdit, type DocumentFormattingEditProvider, type FormattingOptions, LanguageCompletionItemKind, type LanguageCompletionProvider, type LanguageCompletionProviderItem, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from '../../../../editor/common/languages.js';
-
-import type { LanguageHover, LanguageHoverProvider, LanguageHoverRequest } from '../../../../editor/contrib/hover/common/hover.js';
+import { type TextEdit, type DocumentFormattingEditProvider, type FormattingOptions, LanguageCompletionItemKind, type LanguageCompletionProvider, type LanguageCompletionProviderItem, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult, type LanguageHover, type LanguageHoverProvider, type LanguageHoverRequest } from '../../../../editor/common/languages.js';
 import { JsonSchemasRegistry, type JsonSchemaRegistry } from '../../../../platform/jsonschemas/common/jsonSchemaRegistry.js';
 
 const jsonLanguageIds = Object.freeze(['json', 'jsonc']);

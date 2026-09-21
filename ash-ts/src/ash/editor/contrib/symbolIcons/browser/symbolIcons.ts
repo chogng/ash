@@ -1,10 +1,11 @@
+import type { LanguageDocumentSymbol } from '../../../common/languages.js';
 import "./symbolIcons.css";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Range } from "../../../common/core/range.js";
 import { TextDecorationCollection, type TextDecorationId } from "../../../common/model/decorationCollection.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 
-import { type DocumentSymbolService, type LanguageDocumentSymbol } from "../../documentSymbols/common/languageDocumentSymbols.js";
+import { type DocumentSymbolService } from "../../documentSymbols/common/languageDocumentSymbols.js";
 import { TrackedRangeStickiness } from '../../../common/model.js';
 
 interface SymbolIconMetadata {

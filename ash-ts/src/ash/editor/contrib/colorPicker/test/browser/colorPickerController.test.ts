@@ -1,3 +1,4 @@
+import type { LanguageColorProvider } from '../../../../common/languages.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -6,7 +7,7 @@ import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
 import { LanguageFeatureRegistry } from '../../../../common/languageFeatureRegistry.js';
 import { TextModel } from '../../../../common/model/textModel.js';
-import { ColorService, type LanguageColorProvider } from '../../common/languageColors.js';
+import { ColorService } from '../../common/languageColors.js';
 import { ColorDetector } from '../../browser/colorDetector.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 

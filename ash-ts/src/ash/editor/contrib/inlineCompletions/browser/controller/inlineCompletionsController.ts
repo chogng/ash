@@ -7,7 +7,6 @@ import { Range } from "../../../../common/core/range.js";
 import { Selection } from '../../../../common/core/selection.js';
 import { type ICodeEditor } from '../../../../browser/editorBrowser.js';
 import { IInlineCompletionsService } from '../../../../browser/services/inlineCompletionsService.js';
-import { type LanguageInlineCompletionItem, type LanguageInlineCompletionsProvider } from "../../common/inlineCompletions.js";
 import { type View } from "../../../../browser/view.js";
 import { isCompletionsEnabledFromObject } from "../../../../common/services/completionsEnablement.js";
 import { type Event } from '../../../../../base/common/event.js';
@@ -16,7 +15,7 @@ import { TriggerInlineEditCommandsRegistry } from '../../../../browser/triggerIn
 import { type TextModel } from '../../../../common/model/textModel.js';
 import { type LanguageFeatureRegistry } from '../../../../common/languageFeatureRegistry.js';
 import { provideInlineCompletions } from '../model/provideInlineCompletions.js';
-import { type TextEdit } from '../../../../common/languages.js';
+import type { LanguageInlineCompletionItem, LanguageInlineCompletionsProvider, TextEdit } from '../../../../common/languages.js';
 import { type ICursorStateComputerData, type IEditOperationBuilder, type ICommand } from '../../../../common/editorCommon.js';
 import { type ITextModel } from '../../../../common/model.js';
 import { RunOnceScheduler } from '../../../../../base/common/async.js';

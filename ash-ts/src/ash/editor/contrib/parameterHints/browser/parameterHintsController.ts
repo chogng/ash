@@ -1,8 +1,9 @@
+import type { LanguageParameterHints, LanguageParameterHintsContext } from '../../../common/languages.js';
 import "./parameterHints.css";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { ParameterHintsService, type LanguageParameterHints, type LanguageParameterHintsContext } from "../common/languageParameterHints.js";
+import { ParameterHintsService } from "../common/languageParameterHints.js";
 import { type View } from "../../../browser/view.js";
 import { EditorOptions } from '../../../common/config/editorOptions.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';

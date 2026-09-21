@@ -2,13 +2,10 @@ import { VSBuffer } from "../../../../base/common/buffer.js";
 import { raceCancellationError } from "../../../../base/common/async.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import type { ISyntaxApi, SyntaxAnalyzeResult, SyntaxDiagnostic, SyntaxSelectionRangesResult, SyntaxSymbol, SyntaxToken } from "../../../../platform/syntax/common/syntaxApi.js";
-import { type LanguageDocumentSymbol, type LanguageDocumentSymbolProvider, type LanguageDocumentSymbolRequest } from "../../../../editor/contrib/documentSymbols/common/languageDocumentSymbols.js";
-import { type LanguageFoldingRange, type LanguageFoldingRangeProvider, type LanguageFoldingRangeRequest } from "../../../../editor/contrib/folding/common/languageFoldingRanges.js";
-import { type LanguageSelectionRangeProvider, type LanguageSelectionRangeRequest } from "../../../../editor/contrib/smartSelect/common/selectionRanges.js";
 import { Position } from "../../../../editor/common/core/position.js";
 import { Range } from "../../../../editor/common/core/range.js";
 import { type TextSnapshot } from "../../../../editor/common/core/textChange.js";
-import { type SyntaxProvider, type SyntaxProviderRequest, LanguageDiagnosticSeverity, type LanguageDiagnosticResult } from '../../../../editor/common/languages.js';
+import { type LanguageDocumentSymbol, type LanguageDocumentSymbolProvider, type LanguageDocumentSymbolRequest, type LanguageFoldingRange, type LanguageFoldingRangeProvider, type LanguageFoldingRangeRequest, type LanguageSelectionRangeProvider, type LanguageSelectionRangeRequest, type SyntaxProvider, type SyntaxProviderRequest, LanguageDiagnosticSeverity, type LanguageDiagnosticResult } from '../../../../editor/common/languages.js';
 import { type LanguageToken, type LanguageTokenResult } from '../../../../editor/common/tokens/languageTokens.js';
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 

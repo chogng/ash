@@ -1,8 +1,9 @@
+import type { LanguageHover } from '../../../common/languages.js';
 import "./hover.css";
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { disposableWindowTimeout } from "../../../../base/browser/scheduler.js";
 import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { type LanguageHoverService, type LanguageHover } from "../common/hover.js";
+import { type LanguageHoverService } from "../common/hover.js";
 import { type Position } from "../../../common/core/position.js";
 import { type View } from "../../../browser/view.js";
 
