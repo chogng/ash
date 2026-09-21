@@ -150,25 +150,11 @@ pub(crate) fn compose_local_tools_with_config(
         .map_err(|error| LocalToolError::permission(error.to_string()))?;
     let install_context = InstallContext::current();
     let sandbox = || {
-        ash_sandboxing::SandboxBackends::new(vec![
-            (
-                "mxc",
-                Arc::new({
-                    let backend = mxc_sandbox::MxcSandbox::new(install_context.clone());
-                    match pty_helper {
-                        Some(executable) => backend.with_pty_helper(executable.clone()),
-                        None => backend,
-                    }
-                }),
-            ),
-            #[cfg(windows)]
-            (
-                "windows",
-                Arc::new(windows_sandbox::WindowsSandbox::new(
-                    install_context.clone(),
-                )),
-            ),
-        ])
+        let sandbox = exec_server::LocalSandbox::new(install_context.clone());
+        match pty_helper {
+            Some(executable) => sandbox.with_pty_helper(executable.clone()).build(),
+            None => sandbox.build(),
+        }
     };
     let ripgrep = resolve_ripgrep(&install_context).map_err(LocalToolError::ripgrep)?;
     let environment_id = ash_tools::EnvId::local();

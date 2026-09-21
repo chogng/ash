@@ -104,6 +104,7 @@ Core typed Hook safe point
 - 每个动作摘要绑定 Hook ID、完整 argv 和 canonical directory；Authorization 必须再次匹配动作摘要、能力
   集合与策略版本。
 - 默认沙箱允许目录读写、拒绝网络，并把 process spawn capability 绑定到声明的 program。
+- Windows 按 MXC、账户沙箱顺序选择后端，原样保留动作策略返回的隔离和 ACL 要求；默认严格隔离不能由账户沙箱满足。启动错误不会换后端重跑。
 - stdin、stdout 与 stderr 均有 byte 上限；单个进程最长运行 30 秒，captured output 总上限为
   64 KiB。
 - 非零退出、截断、非空但无效的 JSON 和空拒绝原因都是执行失败，不会被解释成继续。

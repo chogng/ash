@@ -4,6 +4,8 @@ mod client;
 mod environment;
 pub mod execution;
 mod process;
+#[cfg(feature = "local-sandbox")]
+mod sandbox;
 pub mod terminal;
 mod transport;
 
@@ -11,6 +13,8 @@ pub use client::ExecClient;
 pub use client::RemoteEndpoint;
 pub use environment::ExecutionEnvironment;
 pub use environment::LocalEnvironment;
+#[cfg(feature = "local-sandbox")]
+pub use sandbox::LocalSandbox;
 pub use transport::ExecListener;
 
 use exec_server_protocol::ExecError;
