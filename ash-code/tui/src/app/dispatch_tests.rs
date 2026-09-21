@@ -219,8 +219,15 @@ fn status_mcp_connectors_and_skills_return_real_surfaces() {
     assert_eq!(app.status(), &Status::Ready);
     let selection = app.list_selection().unwrap();
     assert_eq!(selection.title(), "Skills");
-    assert_eq!(selection.active_tab().label(), "All (1)");
-    assert_eq!(selection.visible_items()[0].label(), "skill-creator");
+    assert_eq!(selection.active_tab().label(), "All (2)");
+    assert_eq!(
+        selection
+            .visible_items()
+            .iter()
+            .map(|item| item.label())
+            .collect::<Vec<_>>(),
+        vec!["create-instructions", "skill-creator"]
+    );
 
     drop(client);
     let _ = fs::remove_dir_all(state_root);
@@ -240,16 +247,19 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
     );
 
     let all = app.list_selection().unwrap();
-    assert_eq!(all.active_tab().label(), "All (1)");
+    assert_eq!(all.active_tab().label(), "All (2)");
     assert_eq!(
         all.visible_items()
             .iter()
             .map(|item| item.label())
             .collect::<Vec<_>>(),
-        vec!["skill-creator"]
+        vec!["create-instructions", "skill-creator"]
     );
     assert!(
-        all.visible_items()[0]
+        all.visible_items()
+            .iter()
+            .find(|item| item.label() == "skill-creator")
+            .unwrap()
             .description()
             .unwrap()
             .contains("enabled  ·  built-in  ·  builtin:skill-source:ash-release")
@@ -259,8 +269,15 @@ fn skills_view_toggles_catalog_entries_by_enablement() {
     app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     let enabled = app.list_selection().unwrap();
-    assert_eq!(enabled.active_tab().label(), "Enabled (1)");
-    assert_eq!(enabled.visible_items()[0].label(), "skill-creator");
+    assert_eq!(enabled.active_tab().label(), "Enabled (2)");
+    assert_eq!(
+        enabled
+            .visible_items()
+            .iter()
+            .map(|item| item.label())
+            .collect::<Vec<_>>(),
+        vec!["create-instructions", "skill-creator"]
+    );
 
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
     app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
