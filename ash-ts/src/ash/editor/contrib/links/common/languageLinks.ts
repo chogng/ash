@@ -1,23 +1,10 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
-import { type Range } from "../../../common/core/range.js";
-import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageFeatureRequest } from "../../../common/languages.js";
+import { Range } from "../../../common/core/range.js";
+import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageLink, type LanguageLinkRequest, type LanguageLinkProvider } from "../../../common/languages.js";
+import { computeLinks } from '../../../common/languages/linkComputer.js';
 import { LanguageFeatureRegistry } from "../../../common/languageFeatureRegistry.js";
 import { type TextModel } from "../../../common/model/textModel.js";
-
-export interface LanguageLink {
-	readonly range: Range;
-	readonly target: string;
-	readonly tooltip?: string;
-}
-
-export interface LanguageLinkRequest extends LanguageFeatureRequest {
-	readonly resource?: URI;
-}
-
-export interface LanguageLinkProvider {
-	provideLinks(request: LanguageLinkRequest, signal: AbortSignal): readonly LanguageLink[] | Promise<readonly LanguageLink[]>;
-}
 
 /** Provides link candidates; opening a target remains a host-owned operation. */
 export class LinkService extends Disposable {
@@ -26,6 +13,7 @@ export class LinkService extends Disposable {
 	}
 
 	async provideLinks(languageId: string, signal: AbortSignal = new AbortController().signal): Promise<readonly LanguageLink[]> {
+		this.assertNotDisposed();
 		const request: LanguageLinkRequest = Object.freeze({ ...createLanguageFeatureRequest(this.model, languageId, signal), ...(this.resource ? { resource: this.resource } : {}) });
 		const links: LanguageLink[] = [];
 		const seen = new Set<string>();
@@ -40,6 +28,13 @@ export class LinkService extends Disposable {
 				seen.add(key);
 				links.push(Object.freeze({ range: link.range, target: link.target, ...(link.tooltip !== undefined ? { tooltip: link.tooltip } : {}) }));
 			}
+		}
+		if (!isLanguageFeatureRequestCurrent(request) || this.isDisposed) return Object.freeze([]);
+		const providerRanges = links.map(link => link.range);
+		for (const link of computeLinks(this.model)) {
+			const range = Range.lift(link.range);
+			if (providerRanges.some(existing => Range.areIntersecting(existing, range))) continue;
+			links.push(Object.freeze({ range, target: String(link.url) }));
 		}
 		return Object.freeze(links);
 	}

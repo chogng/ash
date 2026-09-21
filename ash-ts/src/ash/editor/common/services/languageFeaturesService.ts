@@ -2,7 +2,7 @@ import { runWithBufferedEvents } from '../../../base/common/event.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { LanguageFeatureRegistry, type NotebookInfo, type NotebookInfoResolver, LanguageCompletionProviderRegistry, SyntaxProviderRegistry } from '../languageFeatureRegistry.js';
 import { type URI } from '../../../base/common/uri.js';
-import { type LanguageCompletionProviderRegistration, type CodeLensProvider, type DocumentHighlightProvider, type LinkedEditingRangeProvider, type MultiDocumentHighlightProvider, type DocumentFormattingEditProvider, type DocumentRangeFormattingEditProvider, type OnTypeFormattingEditProvider, type LanguageSemanticTokensProvider, type LanguageWorkspaceSymbolProvider } from '../languages.js';
+import { type LanguageLinkProvider, type LanguageCompletionProviderRegistration, type CodeLensProvider, type DocumentHighlightProvider, type LinkedEditingRangeProvider, type MultiDocumentHighlightProvider, type DocumentFormattingEditProvider, type DocumentRangeFormattingEditProvider, type OnTypeFormattingEditProvider, type LanguageSemanticTokensProvider, type LanguageWorkspaceSymbolProvider } from '../languages.js';
 import type { ILanguageConfigurationService } from '../languages/languageConfigurationRegistry.js';
 import type { LanguageCallHierarchyProvider, LanguageTypeHierarchyProvider } from '../../contrib/callHierarchy/common/languageHierarchy.js';
 import type { LanguageCodeActionProvider } from '../../contrib/codeAction/common/languageCodeActions.js';
@@ -13,7 +13,6 @@ import type { LanguageDeclarationProvider, LanguageDefinitionProvider, LanguageI
 import type { LanguageHoverProvider } from '../../contrib/hover/common/hover.js';
 import type { LanguageInlayHintsProvider } from '../../contrib/inlayHints/common/languageInlayHints.js';
 import type { LanguageInlineCompletionsProvider } from '../../contrib/inlineCompletions/common/inlineCompletions.js';
-import type { LanguageLinkProvider } from '../../contrib/links/common/languageLinks.js';
 import type { LanguageParameterHintsProvider } from '../../contrib/parameterHints/common/languageParameterHints.js';
 import type { LanguageRenameProvider } from '../../contrib/rename/common/languageRename.js';
 import type { LanguageSelectionRangeProvider } from '../../contrib/smartSelect/common/selectionRanges.js';

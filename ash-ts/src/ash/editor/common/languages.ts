@@ -332,6 +332,26 @@ export interface LanguageFeatureRequest {
 	readonly signal: AbortSignal;
 }
 
+export interface ILink {
+	range: IRange;
+	url?: URI | string;
+	tooltip?: string;
+}
+
+export interface LanguageLink {
+	readonly range: Range;
+	readonly target: string;
+	readonly tooltip?: string;
+}
+
+export interface LanguageLinkRequest extends LanguageFeatureRequest {
+	readonly resource?: URI;
+}
+
+export interface LanguageLinkProvider {
+	provideLinks(request: LanguageLinkRequest, signal: AbortSignal): readonly LanguageLink[] | Promise<readonly LanguageLink[]>;
+}
+
 /** Creates a request from the model's current snapshot and a caller-owned cancellation signal. */
 export function createLanguageFeatureRequest(model: TextModel, languageId: string, signal: AbortSignal): LanguageFeatureRequest {
 	return Object.freeze({ model, snapshot: model.createVersionedSnapshot(), languageId, modelLanguageId: model.getLanguageId(), signal });

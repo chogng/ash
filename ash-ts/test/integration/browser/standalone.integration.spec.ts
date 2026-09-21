@@ -1,5 +1,21 @@
 import { expect, test } from '@playwright/test';
 
+test('detected document links reach the editor host without a language provider', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareLinks());
+	const link = page.locator('#caller .view-line > span > span').filter({ hasText: 'https://example.test/path' }).first();
+	await expect(link).toBeVisible();
+	const bounds = await link.boundingBox();
+	expect(bounds).not.toBeNull();
+	const point = { x: bounds!.x + bounds!.width / 2, y: bounds!.y + bounds!.height / 2 };
+	await page.mouse.move(point.x, point.y);
+	await expect(page.locator('#caller .stanza-editor-link-target')).toHaveCount(1);
+	await page.mouse.click(point.x, point.y);
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readOpenedLinks())).toEqual(['https://example.test/path']);
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareClipboard('plain text'));
+	await expect(page.locator('#caller .stanza-editor-link-target')).toHaveCount(0);
+});
+
 test('semantic provider replacement and removal update rendered token styles', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));

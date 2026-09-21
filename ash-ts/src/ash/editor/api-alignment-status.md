@@ -1,5 +1,54 @@
 # Editor API 对齐状态
 
+## common 缺失文件续批：链接与 token 分类（2026-09-21）
+
+按“先补现有功能链需要的 common 文件”继续核对全部缺口。本批增加两个有生产调用的模块；没有恢复空服务或加入未被产品使用的上游引擎。当前 common 有 **202 个 TypeScript 文件：171 个同路径、31 个 Ash 自有；仍缺 55 个上游文件**。文件数量不表示 API 或功能完全对齐，下方旧批次数字保留为历史。
+
+| 新增路径 | 生产调用与行为 |
+| --- | --- |
+| `common/languages/linkComputer.ts` | `LinksController → LinkService → computeLinks`，识别 HTTP(S)/file 链接，处理 UTF-16 范围、尾部标点和括号。提供者覆盖重叠检测结果，过期或取消请求不提交结果；打开目标仍交给宿主。只实现当前使用的 `computeLinks` 契约。 |
+| `common/languages/supports/tokenization.ts` | `TokenizationTextModelPart → toStandardTokenType`，按完整 scope 单词识别 comment/string/regex/regexp，支持带点 scope，避免把 commentary 等误判。未引入上游编码 tokenizer 后端。 |
+
+链接公共类型统一由 `common/languages.ts` 持有，服务、贡献、独立编辑器公开入口和 Workbench 提供者均已迁移。
+
+### 其余 55 个文件的处理结论
+
+15 个 `common/diff/**` 文件和 7 个 Tree-sitter 文件属于本批明确排除的完整引擎。其余 33 个文件逐项核对如下；“保留现有实现”只表示当前链路已有职责归属，不表示实现了该文件的全部 VS Code API。
+
+| 缺失文件（相对 common） | 当前职责与处理结论 |
+| --- | --- |
+| `core/editorColorRegistry.ts` | 保留 Platform 的 `colors/editorColors.ts` 注册链。迁移仍未完成：主题在模块初始化时生成并封闭注册表，需先调整主题生命周期；直接迁移会重复注册或引入反向依赖。 |
+| `core/text/getPositionOffsetTransformerFromTextModel.ts`、`model/textModelText.ts` | Worker 与异步语言请求使用版本绑定的字符串快照；没有需要活模型文本适配器的生产消费者。 |
+| `editorAction.ts`、`editorFeatures.ts` | 命令由 `browser/editorExtensions.ts`、贡献与服务装配持有。上游内部 action 包装与进程级 feature 注册尚未接入。 |
+| `languages/modesRegistry.ts`、`services/languagesAssociations.ts` | 当前 `LanguagesRegistry` 按宿主和注册所有者管理匹配、优先级及释放；保留此唯一注册源。 |
+| `languages/nullTokenize.ts` | 当前模型以空 token store 和默认行 metadata 处理无提供者情况；上游 tokenizer 接口未接入。 |
+| `languages/textToHtmlTokenizer.ts` | 富文本复制由 `ViewModelImpl.getRichTextToCopy` 持有，保留源码 tab 与文本内容。上游 HTML tokenizer 的 tab 展开行为未引入。 |
+| `model/bracketPairsTextModelPart/colorizedBracketPairsDecorationProvider.ts` | 括号树拥有结构，`bracketColorizationPresentation.ts` 向渲染器提供颜色与辅助线；尚未迁移到上游模型装饰提供者接口。 |
+| `model/bracketPairsTextModelPart/fixBrackets.ts` | 补全结果的括号修复能力未接入；已有输入配对使用当前括号树及语言配置。 |
+| `model/decorationProvider.ts`、`model/intervalTree.ts` | 当前 TextModel 与 `TrackedRangeCollection` 持有装饰、跟踪范围和编辑映射；上游装饰接口与区间树算法未引入。 |
+| `model/fixedArray.ts` | `TokenizationStateStore` 使用 Map；不为替换私有容器单独增加文件。 |
+| `model/textModelStringEdit.ts` | 当前稳定 LineId 变换保留编辑起始行身份；上游整行替换转换不满足该契约，无其他当前消费者。 |
+| `model/tokens/abstractSyntaxTokenBackend.ts`、`model/tokens/tokenizerSyntaxTokenBackend.ts` | 现有模型通过版本绑定语言请求、具名 token store 和行索引管理分词；上游同步编码 token 后端未接入。 |
+| `model/tokens/tokenizationFontDecorationsProvider.ts` | 当前字体样式随语法/语义 token 展示信息传递；独立 token 字体装饰提供者未接入。 |
+| `multiDiffEditor.ts` | 当前多文件 diff 使用 `MultiDiffEditorItem` 与 item/row 定位；上游布局变体和资源 viewState 契约未接入。 |
+| `services/editorWorkerHost.ts` | Worker 通道由 `base/common/worker/webWorker.ts` 和 `services/textModelSync.ts` 持有，保留单一传输链。 |
+| `services/getIconClasses.ts` | 文件图标由 Platform 的 `fileIconThemeService.ts` 渲染；没有使用上游图标 CSS 类生成器的调用方。 |
+| `services/inMemoryTextModelService.ts` | 独立编辑器由 ModelService 持有模型，Workbench 由资源模型服务持有引用；上游 synthetic document 服务未接入。 |
+| `services/languageFeatureDebounce.ts` | 当前高亮贡献拥有定时调度；基于提供者延迟的自适应 debounce 服务未接入。 |
+| `services/modelUndoRedoParticipant.ts` | 当前模型历史与 Workbench 关闭文档历史持有撤销状态；上游跨模型 edit-stack 重开参与者未接入。 |
+| `services/semanticTokensStyling.ts`、`services/semanticTokensStylingService.ts` | 按下方既有决定不恢复：当前具名 token 由 `semanticTokensProviderStyling.ts` 转换，服务包装没有独立职责。 |
+| `services/textResourceConfigurationService.ts` | ModelService 直接读取资源/语言配置，资源换行符由现有 properties 服务提供；上游完整资源配置服务未接入。 |
+| `standaloneStrings.ts` | 文案仍由实际界面和命令持有，没有需要这些上游共享字符串的调用方。 |
+| `tokens/contiguousMultilineTokens.ts`、`tokens/contiguousMultilineTokensBuilder.ts`、`tokens/contiguousTokensEditing.ts`、`tokens/contiguousTokensStore.ts`、`tokens/tokenWithTextArray.ts` | 当前具名 token store/行索引处理结果、编辑和渲染读取；上游编码 token 存储体系未接入，不并存第二份持久 token 状态。 |
+
+### 本批验证
+
+- 链接与模型分词定向单测：2 文件、13 项通过，覆盖实际服务与模型链。
+- `check-editor-alignment.mjs --test=unit`：结构、台账、类型检查及 229/229 个测试文件通过。
+- `build:renderer`、`build:stanza` 通过，无新增构建 warning。
+- Playwright Chromium：链接真实鼠标点击及编辑后清除通过；TextMate Worker 与语义提供者替换场景通过。首次链接用例的 DOM 选择器及鼠标操作修正后，重跑该用例通过。
+- 保留既有 JSDOM Canvas、测试服务装配输出及 Playwright 颜色环境提示；未改 CSS，结构检查仍记录 7 份既有 CSS 债务。
+
 ## common 缺失文件补齐：分词状态存储（2026-09-21）
 
 用户本批选择“先补现有功能链需要的 common 文件”，不引入前端 diff 与 Tree-sitter 完整引擎。起始工作区干净；目录调查覆盖双方 TypeScript 文件集合，并检索缺失模块的公开符号在 Ash 中的生产引用。符号同名只作为调查线索，不代表职责一致。

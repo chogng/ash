@@ -85,6 +85,8 @@ interface ViewZoneState {
 }
 
 interface StandaloneHarness {
+	prepareLinks(): void;
+	readOpenedLinks(): string[];
 	setSemanticProvider(tokenType: string | null): void;
 	prepareLanguageWorkers(): void;
 	readLanguageWorkers(): { tokens: string[]; diagnostics: string[]; current: boolean };
@@ -223,7 +225,8 @@ const listener = stanza.editor.onDidCreateEditor(editor => {
 	});
 });
 const callerModel = stanza.editor.createModel('caller', 'plaintext', callerResource);
-const callerEditor = stanza.editor.create(callerContainer, { model: callerModel, placeholder: 'Caller model' });
+const openedLinks: string[] = [];
+const callerEditor = stanza.editor.create(callerContainer, { model: callerModel, placeholder: 'Caller model', onOpenLink: target => { openedLinks.push(target); } });
 const ownedEditor = stanza.editor.create(ownedContainer, { value: 'owned', language: 'plaintext', resource: ownedResource, placeholder: 'Owned model' });
 callerEditor.layout({ width: callerContainer.clientWidth, height: callerContainer.clientHeight });
 ownedEditor.layout({ width: ownedContainer.clientWidth, height: ownedContainer.clientHeight });
@@ -319,6 +322,11 @@ let deferredFormatting: { token: CancellationToken; resolve: () => void }[] = []
 let formattingProvider: { dispose(): void } | undefined;
 
 window.ashStandaloneIntegration = {
+	prepareLinks: () => {
+		openedLinks.length = 0;
+		callerEditor.setValue('https://example.test/path');
+	},
+	readOpenedLinks: () => [...openedLinks],
 	setSemanticProvider: tokenType => {
 		semanticRegistration?.dispose();
 		semanticRegistration = undefined;

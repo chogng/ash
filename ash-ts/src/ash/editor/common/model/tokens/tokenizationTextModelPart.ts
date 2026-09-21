@@ -17,6 +17,7 @@ import { type TextModel } from '../textModel.js';
 import { SemanticTokensTextModelPart } from './semanticTokensTextModelPart.js';
 import { createSyntaxWorker } from '../../services/editorWebWorker.js';
 import { LanguageRequestCoordinator } from '../languageRequestCoordinator.js';
+import { toStandardTokenType } from '../../languages/supports/tokenization.js';
 
 export interface TokenizationTextModelPartOptions {
 	readonly languageIdCodec?: ILanguageIdCodec;
@@ -273,7 +274,7 @@ function createLineTokens(lineContent: string, tokens: readonly LanguageToken[],
 		const startOffset = token.range.startColumn - 1;
 		const endOffset = token.range.endColumn - 1;
 		if (startOffset > offset) appendToken(data, lineContent.slice(offset, startOffset), metadata(topLevelLanguageId, StandardTokenType.Other, true, codec));
-		const standardType = standardTokenType(token.tokenType);
+		const standardType = toStandardTokenType(token.tokenType);
 		appendToken(data, lineContent.slice(startOffset, endOffset), metadata(
 			token.languageId ?? topLevelLanguageId,
 			standardType,
@@ -306,13 +307,6 @@ function metadata(languageId: string, tokenType: StandardTokenType, balancedBrac
 		| (ColorId.DefaultForeground << MetadataConsts.FOREGROUND_OFFSET)
 		| (ColorId.DefaultBackground << MetadataConsts.BACKGROUND_OFFSET)
 	) >>> 0;
-}
-
-function standardTokenType(tokenType: string): StandardTokenType {
-	if (tokenType === 'comment') return StandardTokenType.Comment;
-	if (tokenType === 'string') return StandardTokenType.String;
-	if (tokenType === 'regexp' || tokenType === 'regex') return StandardTokenType.RegEx;
-	return StandardTokenType.Other;
 }
 
 function isCancellation(error: unknown): boolean {

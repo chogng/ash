@@ -2,7 +2,8 @@ import "./links.css";
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import { LinkService, type LanguageLink } from "../common/languageLinks.js";
+import { LinkService } from "../common/languageLinks.js";
+import type { LanguageLink } from "../../../common/languages.js";
 import { type Position } from "../../../common/core/position.js";
 import { type View } from "../../../browser/view.js";
 

@@ -54,7 +54,7 @@ export type { LanguageLocation } from './common/languages.js';
 export type { LanguageHover, LanguageHoverContent, LanguageHoverProvider, LanguageHoverRequest } from './contrib/hover/common/hover.js';
 export type { LanguageInlayHint, LanguageInlayHintKind, LanguageInlayHintLabel, LanguageInlayHintsProvider, LanguageInlayHintsRequest } from './contrib/inlayHints/common/languageInlayHints.js';
 export type { LanguageInlineCompletionItem, LanguageInlineCompletionsProvider, LanguageInlineCompletionsRequest } from './contrib/inlineCompletions/common/inlineCompletions.js';
-export type { LanguageLink, LanguageLinkProvider, LanguageLinkRequest } from './contrib/links/common/languageLinks.js';
+export type { LanguageLink, LanguageLinkProvider, LanguageLinkRequest } from './common/languages.js';
 export type { LanguageParameterHints, LanguageParameterHintsContext, LanguageParameterHintsProvider, LanguageParameterHintsRequest, LanguageParameterInformation, LanguageSignatureInformation } from './contrib/parameterHints/common/languageParameterHints.js';
 export type { LanguageRenamePreparation, LanguageRenameProvider, LanguageRenameRequest } from './contrib/rename/common/languageRename.js';
 export type { LanguageSelectionRangeProvider, LanguageSelectionRangeRequest } from './contrib/smartSelect/common/selectionRanges.js';

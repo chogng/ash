@@ -22,6 +22,22 @@ test("TextModel owns default line tokens when no syntax provider exists", () => 
 	assert.equal(getStandardTokenTypeAtPosition(model, { lineNumber: 1, column: 2 }), StandardTokenType.Other);
 });
 
+test('scoped language tokens expose standard comment, string and regex categories', async () => {
+	using registry = new SyntaxProviderRegistry();
+	const scopes = ['comment.block.demo', 'string.quoted.demo', 'regex.demo', 'regexp.demo', 'notacomment', 'commentary', 'string_value'];
+	using registration = registry.register({
+		id: 'test.scoped-tokens',
+		languageIds: ['scoped'],
+		provideTokens: () => ({ tokens: scopes.map((tokenType, index) => ({ range: new Range(index + 1, 1, index + 1, 2), tokenType, modifiers: [] })) }),
+	});
+	using model = new TextModel(scopes.map(() => 'x').join('\n'), { languageId: 'scoped', tokenization: { syntaxProviderRegistry: registry } });
+	await waitFor(() => model.tokenization.hasAccurateTokensForLine(1));
+	assert.deepEqual(scopes.map((_, index) => model.tokenization.getLineTokens(index + 1).getStandardTokenType(0)), [
+		StandardTokenType.Comment, StandardTokenType.String, StandardTokenType.RegEx, StandardTokenType.RegEx,
+		StandardTokenType.Other, StandardTokenType.Other, StandardTokenType.Other,
+	]);
+});
+
 test("TextModel publishes current provider tokens through the standard and renderer projections", async () => {
 	using registry = new SyntaxProviderRegistry();
 	let requests = 0;
