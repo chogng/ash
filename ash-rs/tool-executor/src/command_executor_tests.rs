@@ -45,11 +45,7 @@ fn executor_preserves_powershell_module_search_paths() {
                     .join("cmd.exe")
                     .display()
                     .to_string(),
-                arguments: vec![
-                    "/d".into(),
-                    "/c".into(),
-                    "echo %PSModulePath%".into(),
-                ],
+                arguments: vec!["/d".into(), "/c".into(), "echo %PSModulePath%".into()],
                 working_directory: ".".into(),
                 input: CommandInput::Closed,
             },
