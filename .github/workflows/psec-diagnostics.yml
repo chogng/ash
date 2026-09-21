@@ -1,4 +1,4 @@
-name: PSEC startup diagnostics
+name: Windows sandbox validation
 
 on:
   push:
@@ -19,20 +19,18 @@ jobs:
         with:
           override: false
           rustflags: ''
-      - name: Diagnose PSEC startup
+      - name: Verify inherited PowerShell module paths
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force .build/acceptance/psec-diagnostics | Out-Null
-          Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, OSArchitecture
-          python .github/scripts/psec-baseline.py
-          python -B scripts/cargo.py test -p ash-mxc-sandbox --lib --locked request::tests::psec_startup_diagnostics -- --ignored --exact --nocapture 2>&1 | Tee-Object -FilePath .build/acceptance/psec-diagnostics/startup.log
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -B scripts/cargo.py test -p ash-tool-executor --lib --locked powershell_can_load_a_module_from_the_callers_search_path -- --nocapture
+      - name: Run PSEC acceptance
+        if: always()
+        shell: pwsh
+        run: ./scripts/test-psec.ps1 -Capability required
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: psec-startup-${{ github.run_attempt }}
-          path: |
-            .build/acceptance/psec-diagnostics/
-            .build/acceptance/psec/
+          path: .build/acceptance/psec/
           retention-days: 14

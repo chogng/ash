@@ -12,6 +12,68 @@ use std::thread;
 
 struct AllowAll;
 
+#[cfg(windows)]
+#[test]
+fn powershell_can_load_a_module_from_the_callers_search_path() {
+    const CHILD: &str = "ASH_TEST_MODULE_SEARCH_CHILD";
+    if std::env::var_os(CHILD).is_none() {
+        let modules = TestDir::new();
+        let module = modules.path.join("AshModuleTest");
+        fs::create_dir(&module).unwrap();
+        fs::write(
+            module.join("AshModuleTest.psm1"),
+            "function Invoke-AshModuleTest { [Console]::WriteLine('module-loaded') }",
+        )
+        .unwrap();
+        // Give only this test process a custom module path; parallel tests keep
+        // their original environment. The executor must carry it to PowerShell.
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "tests::powershell_can_load_a_module_from_the_callers_search_path",
+                "--exact",
+                "--nocapture",
+            ])
+            .env(CHILD, "1")
+            .env("PSModulePath", &modules.path)
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{output:?}");
+        assert!(String::from_utf8_lossy(&output.stdout).contains("1 passed"));
+        return;
+    }
+
+    let dir = TestDir::new();
+    let executor = CommandExecutor::new(dir.root(), PassThroughBackend, AllowAll, test_limits());
+    let result = executor
+        .execute(
+            CommandRequest {
+                program: PathBuf::from(std::env::var_os("SystemRoot").unwrap())
+                    .join("System32/WindowsPowerShell/v1.0/powershell.exe")
+                    .display()
+                    .to_string(),
+                arguments: vec![
+                    "-NoLogo".into(),
+                    "-NoProfile".into(),
+                    "-NonInteractive".into(),
+                    "-ExecutionPolicy".into(),
+                    "RemoteSigned".into(),
+                    "-Command".into(),
+                    "$ErrorActionPreference='Stop'; Invoke-AshModuleTest".into(),
+                ],
+                working_directory: ".".into(),
+                input: CommandInput::Closed,
+            },
+            CommandExecutionAuthority::Unrestricted,
+            &CancellationSource::new().token(),
+        )
+        .unwrap();
+    let CommandExecutionOutcome::Completed(output) = result else {
+        panic!("{result:?}");
+    };
+    assert_eq!(output.exit_code, Some(0), "{output:?}");
+    assert_eq!(output.stdout.trim(), "module-loaded", "{output:?}");
+}
+
 #[cfg(target_os = "macos")]
 #[test]
 fn managed_command_can_reach_only_its_authorized_proxy_destinations() {

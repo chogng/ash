@@ -167,15 +167,26 @@ fn scoped_execution_preserves_grants_metadata_and_exit_code_authenticity() {
         vec![storage],
     )
     .unwrap();
+    // Windows PowerShell resolves its provider location through ancestors, which
+    // this policy intentionally hides. Check the process cwd independently and
+    // address each grant directly when testing filesystem permissions.
     let script = format!(
-        "$ErrorActionPreference='Stop'; Set-Content output 'ok'; \
-         if ((Get-Content {}) -ne 'reference') {{ exit 10 }}; \
+        "$ErrorActionPreference='Stop'; \
+         if ([Environment]::CurrentDirectory -ne {cwd}) {{ exit 12 }}; \
+         Set-Content -LiteralPath {output} 'ok'; \
+         if ((Get-Content -LiteralPath {input}) -ne 'reference') {{ exit 10 }}; \
          function MustDeny([scriptblock]$action) {{ try {{ & $action }} catch {{ return }}; throw 'restriction was not enforced' }}; \
-         MustDeny {{ Get-Content {} }}; MustDeny {{ Set-Content {} 'bad' }}; \
-         MustDeny {{ Set-Content .git/modified 'bad' }}; if ((Get-Content .git/config) -ne 'metadata') {{ exit 11 }}; MustDeny {{ Set-Content .git/config 'bad' }}; Write-Output 'scoped-ok'; exit 125",
-        literal(&reference.canonical_path().join("input")),
-        literal(&secret),
-        literal(&reference.canonical_path().join("modified")),
+         MustDeny {{ Get-Content -LiteralPath {secret} }}; MustDeny {{ Set-Content -LiteralPath {reference_write} 'bad' }}; \
+         MustDeny {{ Set-Content -LiteralPath {metadata_write} 'bad' }}; \
+         if ((Get-Content -LiteralPath {config}) -ne 'metadata') {{ exit 11 }}; \
+         MustDeny {{ Set-Content -LiteralPath {config} 'bad' }}; Write-Output 'scoped-ok'; exit 125",
+        cwd = literal(work.canonical_path()),
+        output = literal(&work.canonical_path().join("output")),
+        input = literal(&reference.canonical_path().join("input")),
+        secret = literal(&secret),
+        reference_write = literal(&reference.canonical_path().join("modified")),
+        metadata_write = literal(&work.canonical_path().join(".git/modified")),
+        config = literal(&work.canonical_path().join(".git/config")),
     );
     let result = executor(&work, Duration::from_secs(30)).execute_scoped_with_network(
         powershell(script),
