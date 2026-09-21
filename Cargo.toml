@@ -38,6 +38,7 @@ members = [
     "ash-rs/app-server",
     "ash-rs/app-server-daemon",
     "ash-rs/app-server-client",
+    "ash-rs/app-server-test-client",
     "ash-rs/app-server-protocol",
     "ash-rs/app-server-protocol-noop-macros",
     "ash-rs/app-server-transport",

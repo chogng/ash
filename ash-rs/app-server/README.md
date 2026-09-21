@@ -46,6 +46,8 @@ just test ash-app-server
 
 验证：`just test ash-app-server --test stdio --test websocket --test worker`。
 
+手动调用和观察协议可使用独立的 [`app-server-test-client`](../app-server-test-client/README.md)。
+
 ## 受管后台进程
 
 - `ash-app-server --managed` 运行 profile 级共享服务；PID 记录直接指向此进程。

@@ -715,6 +715,24 @@ name = "ash-app-server-protocol-noop-macros"
 version = "0.1.0"
 
 [[package]]
+name = "ash-app-server-test-client"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ash-app-server-protocol",
+ "ash-app-server-transport",
+ "clap",
+ "futures",
+ "libtest-mimic",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "tokio",
+ "tokio-tungstenite 0.28.0",
+]
+
+[[package]]
 name = "ash-app-server-transport"
 version = "0.1.0"
 dependencies = [
