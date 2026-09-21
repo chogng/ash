@@ -124,34 +124,21 @@ fn managed_psec_rejection_keeps_the_policy_unchanged_for_the_account_candidate()
 
 #[test]
 fn processcontainer_requires_its_proxy_constraints_without_relaxing_the_request() {
-    let mut egress = mxc_sdk::NetworkEgressSection::default();
-    egress.default = Some(mxc_sdk::NetworkAction::Deny);
-    let mut ingress = mxc_sdk::NetworkIngressSection::default();
-    ingress.default = Some(mxc_sdk::NetworkAction::Deny);
-    ingress.host_loopback = Some(mxc_sdk::NetworkAction::Deny);
-    let mut runtime = mxc_sdk::RuntimeConfigSection::default();
-    runtime.network_proxy = Some("http://127.0.0.1:3128".into());
-    let mut network = mxc_sdk::policy::NetworkSection::default();
-    network.egress = Some(egress);
-    network.ingress = Some(ingress);
-    network.runtime_config = Some(runtime);
-    let policy = mxc_sdk::SandboxPolicy {
-        version: "0.8.0-alpha".into(),
-        filesystem: None,
-        network: Some(network),
-        ui: None,
-        timeout_ms: None,
-    };
-    let error = mxc_sdk::build_request_with_containment(
-        &policy,
-        &mxc_sdk::Containment::ProcessContainer(Default::default()),
-        None,
-    )
-    .unwrap_err();
-    let message = error.to_string().to_ascii_lowercase();
+    let config = serde_json::json!({
+        "version": "0.8.0-alpha",
+        "containment": "processcontainer",
+        "process": {"commandLine": "cmd.exe /c exit 0"},
+        "network": {"egress": {"default": "deny"}, "ingress": {"default": "deny", "hostLoopback": "deny"}},
+        "runtimeConfig": {"networkProxy": "http://127.0.0.1:3128"}
+    });
+    let mut logger = wxc_common::logger::Logger::new(wxc_common::logger::Mode::Buffer);
+    let error =
+        wxc_common::config_parser::load_mxc_request_from_json(&config.to_string(), &mut logger)
+            .unwrap_err();
+    let message = format!("{error:?}").to_ascii_lowercase();
     assert!(
         message.contains("proxy") && (message.contains("ingress") || message.contains("peer")),
-        "{error}"
+        "{error:?}"
     );
 }
 

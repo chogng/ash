@@ -1,8 +1,4 @@
 use super::filesystem_from_resolved;
-#[cfg(target_os = "windows")]
-use super::windows_process_container;
-#[cfg(target_os = "windows")]
-use super::windows_ui;
 use ash_file_access::Dir;
 use ash_sandboxing::FileSystemAccess;
 use ash_sandboxing::MissingPathBehavior;
@@ -16,23 +12,31 @@ use std::path::Path;
 #[cfg(target_os = "windows")]
 #[test]
 fn windows_policy_allows_required_desktop_resources_but_keeps_sensitive_ui_blocked() {
-    let ui = windows_ui().unwrap();
-    assert!(ui.allow_windows);
-    assert_eq!(ui.clipboard, mxc_sdk::policy::ClipboardPolicy::None);
-    assert!(!ui.allow_input_injection);
-
-    let process_container = windows_process_container();
-    let ui = process_container.ui.unwrap();
-    assert_eq!(
-        ui.isolation,
-        mxc_sdk::configs::ProcessContainerUiIsolation::Desktop
-    );
-    assert!(!ui.desktop_system_control);
-    assert_eq!(
-        ui.system_settings,
-        mxc_sdk::configs::ProcessContainerSystemSettings::None
-    );
-    assert!(!ui.ime);
+    let temp = tempfile::tempdir().unwrap();
+    let dir = Dir::open_local(temp.path()).unwrap();
+    let command =
+        ash_sandboxing::SandboxCommand::new("cmd.exe", ["/c", "exit", "0"], dir.canonical_path());
+    let request = super::request(
+        &command,
+        ash_sandboxing::SandboxPolicy::new(
+            FileSystemAccess::ReadOnly,
+            ash_sandboxing::NetworkAccess::Denied,
+        ),
+        &SandboxScope::single(dir),
+    )
+    .unwrap();
+    let policy = request.inner.policy;
+    assert!(!policy.ui.disable);
+    assert!(matches!(
+        policy.ui.clipboard,
+        wxc_common::models::ClipboardPolicy::None
+    ));
+    assert!(!policy.ui.injection);
+    assert_eq!(policy.base_process_ui.isolation, "desktop");
+    assert!(!policy.base_process_ui.desktop_system_control);
+    assert_eq!(policy.base_process_ui.system_settings, "none");
+    assert!(!policy.base_process_ui.ime);
+    assert!(!policy.fallback.allow_dacl_mutation);
 }
 
 #[test]
@@ -78,7 +82,6 @@ fn writable_grants_protect_existing_metadata_without_creating_absent_paths() {
             policy.denied_paths,
             [storage.canonical_path().to_str().unwrap()]
         );
-        assert_eq!(policy.clear_policy_on_exit, Some(true));
         for name in [".codex", ".ash"] {
             assert!(!work.canonical_path().join(name).exists());
         }
@@ -137,12 +140,12 @@ fn exact_path_rules_are_carried_into_the_mxc_filesystem_policy() {
             .readonly_paths
             .iter()
             .any(|path| Path::new(path)
-                == std::fs::canonicalize(temp.path().join("config")).unwrap())
+                == dunce::canonicalize(temp.path().join("config")).unwrap())
     );
     assert!(
         policy
             .denied_paths
             .iter()
-            .any(|path| Path::new(path) == std::fs::canonicalize(temp.path().join(".env")).unwrap())
+            .any(|path| Path::new(path) == dunce::canonicalize(temp.path().join(".env")).unwrap())
     );
 }

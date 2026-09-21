@@ -2,9 +2,9 @@
 
 Ash 保留 macOS/Linux 使用 MXC、Windows 按请求能力选择 PSEC 或账户后端的架构，并把 Codex 的路径级权限、交互终端和持续执行会话纳入正式范围。后端必须同时满足权限、输入输出方式及平台能力，任何失败都不能降低要求或自动重跑命令。
 
-> 状态：对齐范围与实现要求已明确；已有普通命令接线、精确路径与执行前模式快照、结构化 PSEC 准备门禁和 Windows UI 请求策略。可配置路径授权、PSEC 受管代理、PTY 及完整验收尚未完成。
+> 状态：已有普通命令、PTY 适配、精确路径与执行前模式快照、结构化 PSEC 准备门禁和 Windows UI 请求策略。可配置路径授权、PSEC 受管代理及完整跨平台验收尚未完成。
 >
-> Owner：`ash-rs` 沙箱系统。源码核对日期：2026-09-12。
+> Owner：`ash-rs` 沙箱系统。MXC 接口更新日期：2026-09-22；原始 Codex 对比基线保留。
 
 本文维护 Codex 对齐范围、MXC 文档依据、平台选择、接入方式及实施验收。权限类型、宿主 ACL 授权、账户模型及所有权由 [沙箱架构](../../docs/sandboxing.md) 维护；系统操作与历史证据由 [Windows 验收手册](../../docs/windows-sandbox-acceptance-runbook.md) 维护。本文是实现要求，不是功能对齐或安全验收通过声明。
 
@@ -28,9 +28,9 @@ Ash 保留 macOS/Linux 使用 MXC、Windows 按请求能力选择 PSEC 或账户
 | 路径级读/写/拒绝与权限例外 | 已有目录 Grant、单路径规则、执行前模式快照和固定 `.env` 拒绝 | 可配置规则、所有执行路径一致及跨平台验收 |
 | 文件工具与 shell 的权限一致 | 固定 `.env` 规则覆盖本地工具与沙箱范围；普通批准保留快照命中的拒绝 | 同一可配置授权结果覆盖读取、搜索、补丁和子进程 |
 | 断网、允许网络、受管代理 | 有实现及部分平台证据 | 准确区分出口、入站、宿主回环和代理客户端行为 |
-| 本地工具 IPC | macOS 受限网络请求目前全禁 Unix socket | 执行私有 IPC 可用，敏感/跨任务 socket 仍不可访问 |
+| 本地工具 IPC | macOS 已保留执行私有 IPC 路径并拒绝敏感 socket | 验证合法工具通信与跨任务隔离 |
 | 持续运行并返回进程会话标识 | 当前执行器等待命令结束 | 有界等待返回，后续读取/输入/关闭/中断/终止 |
-| PTY、REPL、终端尺寸调整 | `utils/pty` 已有底层能力，沙箱链未接齐 | PTY 和管道使用同一权限、进程树和代理生命周期 |
+| PTY、REPL、终端尺寸调整 | 已有 MXC 内部 helper 与完整请求交接；跨平台实机验收未完成 | PTY 和管道使用同一权限、进程树和代理生命周期 |
 | 取消、超时、输出与异常恢复 | 已有部分实现/证据 | 等待预算与硬超时分开，保留尾部输出及清理错误 |
 | 安装、诊断与兼容支持 | 有 Windows 独立安装与历史排错记录 | 验证工具环境、代理身份、UI 设置及发布包，错误可定位 |
 
@@ -42,12 +42,12 @@ Codex 源码依据：[文件权限模型](https://github.com/openai/codex/blob/d
 
 | 来源与约束 | 对 Ash 的影响与决定 |
 | --- | --- |
-| [Rust SDK](https://github.com/microsoft/mxc/blob/6cd3d58f05d3447e67109cfb75e042803b843ca4/src/core/mxc-sdk/README.md)：流式管道可持续交互，普通 `spawn_sandbox` 不分配 PTY | 管道会话复用已有句柄；PTY 需要补 SDK/后端能力，不能给现有函数加一个不存在的选项 |
+| [Rust SDK](https://github.com/microsoft/mxc/blob/6cd3d58f05d3447e67109cfb75e042803b843ca4/src/core/mxc-sdk/README.md)：流式管道可持续交互，普通 `spawn_sandbox` 不分配 PTY | 顶层 SDK 没有普通 PTY 入口；Ash 经平台运行器继承终端，并复用同一进程句柄接口 |
 | [生命周期及实施矩阵](https://github.com/microsoft/mxc/blob/567570084f1ebaca539b0a3186aeb68bca77788a/docs/state-aware-lifecycle/mxc-state-aware-sandbox-api.md)：后端与阶段的支持不同 | 不把 ProcessContainer/Seatbelt/Bubblewrap 当成可 provision/attach 的容器；不为 PTY 改用不支持所需文件/网络策略的 IsolationSession |
 | [Windows 网络](https://github.com/microsoft/mxc/blob/6cd3d58f05d3447e67109cfb75e042803b843ca4/docs/process-container/networking.md)：代理需要身份、私有网络能力和准确的入站配置 | 当前回环 IP 允许规则不能证明 PSEC 代理可用；按下文重新设计能力检查和代理部署 |
 | [Windows 兼容性](https://github.com/microsoft/mxc/blob/567570084f1ebaca539b0a3186aeb68bca77788a/docs/playground-limitations.md)：PowerShell 需要桌面资源；工具路径 ACL、DNS、Git 所有者也会导致失败 | 明确 UI 和工具环境，分层诊断。文档解释潜在失败机制，不能据此宣布历史所有失败均已定位 |
 | [宿主准备](https://github.com/microsoft/mxc/blob/6cd3d58f05d3447e67109cfb75e042803b843ca4/docs/host-prep.md)：AppContainer/DACL 需要系统盘属性权限，NUL 权限还可能每次启动重置 | 这些要求专属于对应后端；不能照搬到 Ash 账户模型，更不能在普通执行里修改宿主来试错 |
-| [Seatbelt](https://github.com/microsoft/mxc/blob/567570084f1ebaca539b0a3186aeb68bca77788a/docs/seatbelt/seatbelt-backend.md)：Unix socket 随文件路径授权，工具链依赖其 IPC | 当前全禁 socket 的补丁会阻止合法工具通信，改为执行私有 IPC 与敏感 socket 拒绝 |
+| [Seatbelt](https://github.com/microsoft/mxc/blob/567570084f1ebaca539b0a3186aeb68bca77788a/docs/seatbelt/seatbelt-backend.md)：Unix socket 随文件路径授权，工具链依赖其 IPC | 执行私有 IPC 例外与敏感 socket 拒绝分别验证 |
 | [Bubblewrap](https://github.com/microsoft/mxc/blob/567570084f1ebaca539b0a3186aeb68bca77788a/docs/bwrap-support/bubblewrap-backend.md)：最小读取基线、网络依赖和路由均有限制 | PATH 不代替文件 Grant；验证 nft/conntrack；IPv6 被阻断不能证明 IPv6 允许可用 |
 | [策略 0.8](https://github.com/microsoft/mxc/blob/6cd3d58f05d3447e67109cfb75e042803b843ca4/docs/sandbox-policy/0.8.0/policy.md)：JSON 形状不等于所有 SDK 都已覆盖 | 核对 Rust 类型、生成 Config、解析后的有效策略与后端，不混用顶层 `ui` 和 `processContainer.ui` |
 | [能力探测设计](https://github.com/microsoft/mxc/blob/6cd3d58f05d3447e67109cfb75e042803b843ca4/docs/backend-support-probe-api-plan.md)：可用列表不解释全部失败，tier 只是上限 | 诊断列表不直接决定安全选择；需要本次请求的结构化准备结果。设计提案不作为实现完成证据 |
@@ -101,7 +101,7 @@ flowchart TD
 
 ### Windows 系统版本与能力
 
-Ash 和本次核对的 Codex 都固定 MXC `6cd3d58f05d3447e67109cfb75e042803b843ca4`。该版本的 [官方支持表](https://github.com/microsoft/mxc/blob/6cd3d58f05d3447e67109cfb75e042803b843ca4/docs/process-container/os-version-support.md) 区分 ProcessContainer 产品支持与 PSEC 能力：
+最初对比的 Ash 和 Codex 固定 MXC `6cd3d58f05d3447e67109cfb75e042803b843ca4`；Ash 现已升级至 `ca7ea12ac6bd9f5420d6adecb37e32a8158da476`，使用发布的 0.8 契约。以下历史基线的 [官方支持表](https://github.com/microsoft/mxc/blob/6cd3d58f05d3447e67109cfb75e042803b843ca4/docs/process-container/os-version-support.md) 区分 ProcessContainer 产品支持与 PSEC 能力：
 
 | 系统范围 | 固定 MXC 版本描述 | Ash 选择依据 |
 | --- | --- | --- |
@@ -127,7 +127,7 @@ Ash 和本次核对的 Codex 都固定 MXC `6cd3d58f05d3447e67109cfb75e042803b84
 
 MXC 的正式代理模式是 `runtimeConfig.networkProxy` 加 Windows `allowedProxyPeer`，由调用方先启动代理。仅设置环境变量或 IP 白名单没有代理身份绑定，也不会取得所需的系统回环能力。
 
-当前 [Ash MXC 补丁](../vendor/mxc/core/mxc_engine/src/policy/network.rs) 的 `managed_proxy()` 在 Windows 生成 `127.0.0.1/32` 的 TCP 允许规则，省略 `runtimeConfig.networkProxy`，并保持 `ingress.default` 与 `hostLoopback` 为 deny。这是直连规则形状，不能按官方 Model 2 的证据解释。[现有测试](../mxc-sandbox/src/sandbox_tests.rs) 还专门断言“runtime proxy 加 deny ingress”被拒绝。没有 PSEC 实机结果时，不能把替换配置形状当成问题已解决。
+当前 [Ash 请求转换](../mxc-sandbox/src/policy.rs) 在 Windows 明确拒绝不能保持禁止入站的 Managed 请求，不生成宽泛回环允许规则。Unix 使用 `runtimeConfig.networkProxy`；PTY 交接显式保留代理端点。[现有测试](../mxc-sandbox/src/sandbox_tests.rs) 验证拒绝的策略不会被放宽，PSEC 成功路径仍需实机验收。
 
 最终接入要求：
 
@@ -135,7 +135,7 @@ MXC 的正式代理模式是 `runtimeConfig.networkProxy` 加 Windows `allowedPr
 2. `tool-executor` 获取已经监听的端点和平台验证后的代理身份，再交给 `mxc-sandbox` 构造 `ProcessContainer.network.allowedProxyPeer` 及 `runtimeConfig.networkProxy`。平台身份不成为模型可填写的授权参数。
 3. 官方 Model 2 要求 `ingress.default: allow` 来启用双向的 `privateNetworkClientServer`；即使设置了 peer 且 `hostLoopback: deny`，也不能据此声称一般私网入站被禁止。只有请求明确允许这种入站范围，或另有已验证的机制完整实施原请求时，PSEC 才能接受请求。
 4. 当前产品的 Managed 默认要求禁止未授权入站。在现有能力无法表达它时，PSEC 必须在准备阶段返回策略不支持；接受 WindowsAccount 的请求再检查账户后端，Strict 则拒绝。不得在适配器中把 ingress 改成 allow 来使验证通过。
-5. 不采用无身份代理所要求的宽泛 `hostLoopback: allow` 部署来满足严格请求。新 MXC 文档还为该设置增加了 PSEC 1.1 能力要求，固定版本不能借用新文档的支持结论。
+5. 不采用无身份代理所要求的宽泛 `hostLoopback: allow` 部署来满足严格请求。新 MXC 文档还为该设置增加了 PSEC 1.1 能力要求，当前准备门禁按请求查询该能力，不按系统版本推断支持。
 6. 代理端点、OS peer 身份和每次执行归属都需要验证；包/profile 身份可以属于整个代理安装，不能单独证明请求属于哪个任务。HTTP/CONNECT/SOCKS 路由继续绑定实际客户端执行身份，无匹配身份或路由时拒绝。
 
 这一决定保留长期的平台能力差异：PSEC 可用不等于它能执行本次 Managed 请求，拥有包身份也不消除入站能力耦合。补齐代理身份是必要条件，不能单独作为 PSEC Managed 发布条件。
@@ -160,7 +160,7 @@ Ash 当前 [MXC 请求](../mxc-sandbox/src/policy.rs) 使用 `ui: None`。在固
 - 通过现有 Ash 授权解析得到完整权限集，再转换到 MXC。补充单文件拒绝、工作区内只读子树、最小可读基线和拒绝模式；检查每个平台的交叠、缺失文件和别名语义。
 - Seatbelt 的明确拒绝通常最后生效；路径经符号链接解析后还需重新判定优先级。Bubblewrap 文件拒绝通过空内容遮蔽，目录通过独立挂载遮蔽；测试应验证敏感内容不可读取，不强求所有平台都返回相同 errno。
 - 为每次执行分配并授权私有临时目录，提供正确的 TMP/TEMP/TMPDIR。只在该目录和明确授权的 IPC 路径允许 Unix socket；阻止 Docker、SSH/GPG agent 和其他任务控制端点。Node 的 tsx、esbuild、测试 worker 需要的 IPC 必须有正向用例。
-- 不把 `Denied/Managed` 自动等同于全禁 Unix socket。旧 `deny_seatbelt_unix_sockets()` 及仅验证“全部失败”的测试需要按新 IPC 契约修订，保护目标保持为防止未授权通信。
+- 不把 `Denied/Managed` 自动等同于全禁 Unix socket。私有 IPC 的正向用例与敏感端点拒绝用例都要保留，保护目标是防止未授权通信。
 - PATH、HOME、工具只读目录、运行库、证书和可写缓存分别配置；MXC 清空继承环境，设置 PATH 不使不可见的工具目录变为可访问。最小读取模式不得继续无条件调用 `set_host_filesystem(ReadOnly)`。
 - 上游策略发现 helpers 可以收集候选工具/临时目录，但它们不是授权来源。对发现的路径做权限交集；不因为辅助函数列出了用户目录，就把凭据一并授给命令。
 - Windows 验证用户安装和系统安装的 Python/Node/PowerShell。AppContainer 的包 SID 权限要求只适用于对应模型；账户模型按自身令牌检查。Git 的 dubious ownership 先核对目录所有者，不采用全局 `safe.directory=*` 绕开。
@@ -171,7 +171,7 @@ Ash 当前 [MXC 请求](../mxc-sandbox/src/policy.rs) 使用 `ui: None`。在固
 
 ### 管道与会话管理
 
-MXC `spawn_sandbox` 已提供持续双向标准流和终止句柄，足够承接无 PTY 的长命令。主要工作在 Ash 执行器：
+Ash 直接通过 MXC 平台运行器的 `SandboxBackend::spawn` 获取持续双向标准流和终止句柄。执行会话由 Ash 执行器负责：
 
 - 开始执行只创建一次进程；短等待后返回已完成结果或稳定、不透明的进程会话标识及输出游标。
 - 后续读输出、写输入、关闭输入、中断和终止都操作同一执行记录，校验调用方/Thread/Environment 归属及授权快照。对交互 shell 的授权覆盖会话内输入；不能只批准初始 shell 路径而忽略其后续任意执行能力。
@@ -184,7 +184,7 @@ MXC `spawn_sandbox` 已提供持续双向标准流和终止句柄，足够承接
 
 固定与新核对版本的公开 Rust `spawn_sandbox` 都只有普通管道。`exec_attached` 的终端路径只对 IsolationSession 有验证，要求调用进程自身具有终端；IsolationSession 又拒绝文件策略并要求不受限网络。它不能用于满足本方案的受限交互终端。
 
-- 在同一个 MXC Rust SDK/engine/后端创建链补充显式 PTY 或已准备的标准句柄接入，并把 resize、终止和退出资源暴露给适配器。上游已有 `StdioMode::Inherit` 可作为实现参考，但当前公开 SDK 没有等价调用入口，不能把参考写成现成功能。
+- Ash 通过内部 helper 将已准备的请求交给选定的平台运行器，以 `StdioMode::Inherit` 继承终端；管道使用同一运行器的 `StdioMode::Pipes`。PTY 分配、resize、终止和退出资源属于适配器与 `utils/pty`，不再修改 `mxc_engine`。
 - MXC 内部复用自己的平台终端能力，不能依赖 `ash-*`。Ash 侧由 `utils/pty::ProcessDriver` 适配已经受限的进程和终端；`mxc-sandbox` 保持机械转换，不另起未受限命令。
 - Windows 账户后端在同一受限令牌、Job 和桌面创建流程接入 ConPTY；Linux/macOS 校验 controlling terminal、前台进程组、信号以及后代仍在隔离范围内。
 - 用户请求 PTY 时，后端准备必须检查该能力；没有 PTY 不能静默改为管道。PTY 合并 stdout/stderr，管道仍分离；resize 只用于终端，中断与强制终止分别实施并验证。
@@ -218,9 +218,9 @@ PSEC 检查分为宿主能力和本次请求两部分，由现有 MXC 平台实�
 
 ### 当前实现与边界
 
-[当前 PSEC 准备](../vendor/mxc/backends/appcontainer/common/src/base_container_runner.rs) 使用本次请求的有效策略创建并关闭临时 PSEC 环境，同时构造启动属性并查询请求实际使用的拒绝路径能力；需要拒绝捕获时才检查 Learning Mode。API set 或导出明确缺失、已识别的 `E_NOTIMPL`/`ERROR_CALL_NOT_IMPLEMENTED`/`ERROR_NOT_SUPPORTED` 返回 `UnsupportedContainment`，DLL 加载、访问拒绝、资源及未知查询错误返回 `BackendUnavailable`，并保留失败操作和系统错误码。
+[当前 PSEC 准备](../vendor/mxc/backends/process_container/common/src/base_container_runner.rs) 使用本次请求的有效策略创建并关闭临时 PSEC 环境，同时构造启动属性并查询请求实际使用的拒绝路径能力；需要拒绝捕获时才检查 Learning Mode。API set 或导出明确缺失、已识别的 `E_NOTIMPL`/`ERROR_CALL_NOT_IMPLEMENTED`/`ERROR_NOT_SUPPORTED` 返回 `UnsupportedContainment`，DLL 加载、访问拒绝、资源及未知查询错误返回 `BackendUnavailable`，并保留失败操作和系统错误码。
 
-[准备门禁](../vendor/mxc/core/mxc_engine/src/dispatch.rs) 直接传递该结构化结果；`mxc-sandbox` 只按 SDK 错误码决定是否返回 `UnsupportedPolicy`，不从错误文本推断。启动前再次执行同一门禁，变化或故障直接终止，不重新选择后端。公开布尔探测仍供诊断和旧入口使用，但不再是 Ash 安全选择的输入。
+[准备门禁](../mxc-sandbox/src/request.rs) 直接传递该结构化结果；`mxc-sandbox` 只按 SDK 错误码决定是否返回 `UnsupportedPolicy`，不从错误文本推断。启动前再次执行同一门禁，变化或故障直接终止，不重新选择后端。公开布尔探测仍供诊断和旧入口使用，但不再是 Ash 安全选择的输入。
 
 Windows Managed 请求仍受官方代理模型的入站耦合限制。当前适配器在准备阶段明确返回策略不支持，使接受 `WindowsAccount` 的请求可以继续检查账户候选；`Strict` 请求没有合格候选时拒绝。此行为是保守门禁，不代表 PSEC Managed 已实现。
 
@@ -277,12 +277,12 @@ Windows Managed 请求仍受官方代理模型的入站耦合限制。当前适�
 | 候选顺序与统一选择器 | 已接线；选择器只接受 `UnsupportedPolicy` 继续 | [选择器](../sandboxing/src/backends.rs)、[App Server](../app-server/src/local_tools.rs) |
 | 正式版本候选与支持清单一致 | 待发布验收后核定，当前固定注册不代表取得资格 | App Server 装配与发行验证 |
 | Windows 最低模型与 Strict 拒绝 | 已实现，账户后端不改写请求 | [策略类型](../sandboxing/src/model.rs)、[账户准备](../windows-sandbox/src/windows.rs) |
-| PSEC 准备门禁 | 已区分明确不支持与运行故障；按本次请求创建临时环境并检查启动属性，启动前复核 | [MXC 请求](../vendor/mxc/core/mxc_engine/src/request.rs)、[平台探测](../vendor/mxc/backends/appcontainer/common/src/base_container_runner.rs) |
+| PSEC 准备门禁 | 已区分明确不支持与运行故障；按本次请求创建临时环境并检查启动属性，启动前复核 | [MXC 请求](../mxc-sandbox/src/request.rs)、[平台探测](../vendor/mxc/backends/process_container/common/src/base_container_runner.rs) |
 | PSEC Managed 接入 | 当前明确拒绝不能保持默认禁止入站的组合；正式代理身份及成功路径未完成 | [适配器门禁](../mxc-sandbox/src/lib.rs)、[拒绝组合测试](../mxc-sandbox/src/sandbox_tests.rs) |
-| Windows 工具 UI 兼容 | 已显式允许窗口与桌面资源，同时禁止剪贴板、输入注入、桌面控制和系统设置；需按 PSEC 路径实机验证 | [请求转换](../mxc-sandbox/src/policy.rs)、[UI 转换](../vendor/mxc/core/mxc_engine/src/configs/process_container.rs) |
+| Windows 工具 UI 兼容 | 已显式允许窗口与桌面资源，同时禁止剪贴板、输入注入、桌面控制和系统设置；需按 PSEC 路径实机验证 | [请求转换](../mxc-sandbox/src/policy.rs)、[UI 转换](../mxc-sandbox/src/policy.rs) |
 | 路径级规则与最小读取基线 | 精确路径、执行前模式快照和宿主读取选择已接入；可配置授权与跨平台验收未完成 | [目录范围](../sandboxing/src/scope.rs)、[规则解析](../sandboxing/src/filesystem.rs) |
-| 受控 Unix socket | 当前有全禁补丁，目标需支持私有 IPC | [请求转换](../mxc-sandbox/src/policy.rs) |
-| PTY 与命令会话 | 有底层 PTY/driver；统一沙箱链和会话层尚未完成 | [进程接口](../sandboxing/src/process.rs)、[执行器](../tool-executor/src/lib.rs)、[PTY](../utils/pty/README.md) |
+| 受控 Unix socket | 已有执行私有 IPC 例外与敏感路径拒绝；需实机验证 | [请求转换](../mxc-sandbox/src/policy.rs) |
+| PTY 与命令会话 | MXC 管道与 PTY 已使用同一平台运行器；会话及各平台验收单独推进 | [终端交接](../mxc-sandbox/src/pty.rs)、[执行器](../tool-executor/src/lib.rs)、[PTY](../utils/pty/README.md) |
 | 选择器故障停止、启动不重跑 | 已有替身测试；不证明 SDK 错误转换正确 | [选择器测试](../sandboxing/src/backends_tests.rs) |
 | 账户模型实机执行 | 23H2 本机记录 21 项单测、9 项完整执行用例通过 | [验收记录](../../docs/windows-sandbox-acceptance-runbook.md#2026-09-11-windowsaccount-模型验收) |
 | PSEC 完整成功路径 | 未取得实机通过证据；对应测试标为忽略 | [Windows PSEC 测试](../mxc-sandbox/tests/windows.rs) |

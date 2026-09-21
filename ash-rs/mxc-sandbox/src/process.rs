@@ -1,5 +1,4 @@
 use ash_sandboxing::ProcessHandle;
-use ash_sandboxing::SandboxDenialTiming;
 use ash_sandboxing::SandboxError;
 use ash_sandboxing::SandboxLaunch;
 use ash_sandboxing::SandboxProcess;
@@ -11,7 +10,7 @@ use std::io::Write;
 use std::path::PathBuf;
 
 pub(super) struct Launch {
-    pub request: mxc_sdk::SandboxRequest,
+    pub request: crate::request::Request,
     pub scope: SandboxScope,
     pub cwd: PathBuf,
 }
@@ -22,12 +21,10 @@ impl SandboxLaunch for Launch {
         environment: &[(String, String)],
     ) -> Result<ProcessHandle, SandboxError> {
         crate::policy::validate_paths(&self.cwd, &self.scope)?;
-        self.request.set_env(environment.iter().cloned());
-        let inner =
-            mxc_sdk::spawn_sandbox(self.request).map_err(|error| SandboxError::StartFailed {
-                timing: SandboxDenialTiming::ProcessMayHaveStarted,
-                message: error.to_string(),
-            })?;
+        self.request.set_env(environment);
+        let inner = self
+            .request
+            .spawn(wxc_common::sandbox_process::StdioMode::Pipes)?;
         for warning in inner.warnings() {
             log::warn!(target: "sandbox", "MXC execution diagnostic: {warning}");
         }
@@ -40,7 +37,7 @@ impl SandboxLaunch for Launch {
 }
 
 struct Process {
-    inner: mxc_sdk::Sandbox,
+    inner: Box<dyn wxc_common::sandbox_process::SandboxProcess>,
     exit: Option<SandboxProcessExitStatus>,
     closed: bool,
 }
@@ -79,7 +76,7 @@ impl SandboxProcess for Process {
         self.closed = waited.is_ok();
         killed?;
         self.exit = Some(match waited? {
-            mxc_sdk::WaitOutcome::Exited(code) if code >= 0 => SandboxProcessExitStatus::Code(code),
+            code if code >= 0 => SandboxProcessExitStatus::Code(code),
             _ => SandboxProcessExitStatus::Terminated,
         });
         Ok(())

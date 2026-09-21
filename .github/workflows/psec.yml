@@ -1,0 +1,64 @@
+name: Windows PSEC acceptance
+
+on:
+  push:
+    branches: [main, 'codex/psec-*']
+    paths:
+      - '.github/workflows/psec.yml'
+      - 'scripts/test-psec.ps1'
+      - 'ash-rs/mxc-sandbox/**'
+      - 'ash-rs/vendor/mxc/**'
+      - 'ash-rs/sandboxing/**'
+      - 'ash-rs/tool-executor/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: 'hosted runs x64 and ARM64; self-hosted requires labels Windows and psec'
+        type: choice
+        default: hosted
+        options:
+          - hosted
+          - windows-2025
+          - windows-11-arm
+          - self-hosted
+
+permissions:
+  contents: read
+
+concurrency:
+  group: psec-${{ github.ref }}-${{ inputs.runner || 'hosted' }}
+  cancel-in-progress: false
+
+jobs:
+  psec:
+    name: PSEC (${{ matrix.runner }})
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: ${{ (!inputs.runner || inputs.runner == 'hosted') && fromJSON('["windows-2025", "windows-11-arm"]') || fromJSON(format('["{0}"]', inputs.runner)) }}
+    runs-on: ${{ matrix.runner == 'self-hosted' && fromJSON('["self-hosted", "Windows", "psec"]') || matrix.runner }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up the pinned Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
+        with:
+          override: false
+          rustflags: ''
+      - name: Probe and test PSEC
+        timeout-minutes: 30
+        shell: pwsh
+        run: ./scripts/test-psec.ps1
+      - name: Upload PSEC evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: psec-${{ runner.arch }}-${{ github.run_attempt }}
+          path: .build/acceptance/psec/
+          if-no-files-found: error
+          retention-days: 14
