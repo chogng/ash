@@ -1,5 +1,32 @@
 # Editor API 对齐状态
 
+## 行内提示请求与释放归回控制器（2026-09-21）
+
+准入链：Standalone / Workbench 注册行内提示 → `InlayHintsController` 消费公共 registry 与模型快照 → 显示提示 → 编辑、语言/配置变化、提供者退出或功能释放时取消请求并清理节点 → Playwright 从公开编辑器入口验证。当前 `InlayHintsService` 只有该控制器一个生产调用方；按用户已授权的职责收敛，本批把请求选择与校验移回同路径控制器，删除不再有调用方的原文件，Git 可恢复。
+
+| 准入路径（相对 editor，另有标注除外） | 存在关系 | 调用方、唯一 owner 与本批动作 / 验证 |
+| --- | --- | --- |
+| `contrib/inlayHints/browser/inlayHintsController.ts` | 双方都有 | contribution 装配调用；控制器统一持有请求、提示结果与节点，直接注入公共 registry / 防抖服务；响应模型、配置与 registry 失效，释放自己创建的节点。浏览器验证取消、刷新、节点复用和卸载。 |
+| `contrib/inlayHints/common/languageInlayHints.ts` | 既有 Ash 请求载体 | 唯一生产调用方迁移后退出；没有公共 provider 契约遗留，不新增别名或替代服务。 |
+| `ash-ts/src/ash/workbench/services/language/test/browser/appServerLanguageProviders.test.ts` | 既有 Ash 测试 | 使用注册的 provider 与公共快照请求验证 App Server 适配，移除旧请求 service 依赖；保留原断言。 |
+| `ash-ts/src/ash/workbench/contrib/codeEditor/test/browser/codeEditorPane.test.ts` | 既有 Ash 测试 | 完整回归暴露旧 pane fixture 缺少防抖服务；补齐真实服务注册，断言实际窗格创建了行内提示 contribution，再运行该文件。 |
+| `ash-ts/test/integration/browser/standalone.integration.ts` | 既有 Ash 测试 | 通过真实 Standalone 注册、编辑、配置、语言、模型切换与功能释放，提供可控异步 provider。 |
+| `ash-ts/test/integration/browser/standalone.integration.spec.ts` | 既有 Ash 测试 | 验证动态注册、连续编辑防抖、旧结果拒绝、提供者错误、开关、释放、节点几何和模型内容不变。 |
+| `browser/README.md`、`api-alignment-status.md` | 既有 Ash 文档 | 记录请求 / DOM owner、已验证行为与剩余能力差异。 |
+
+独立实现：保留 Ash 的 span 提示与 `View.getPositionContentCoordinates` / `viewportLayout` 坐标来源。控制器只持有当前结果和自己的节点；布局仅更新坐标，不重建节点。公共请求仍由 `common/languages.ts` 创建并检验快照，防抖复用公共服务。上游证据限于公共 inlay provider / controller 职责及 registry、语言、配置、dispose 的可观察触发；不引入上游 fragment、装饰器或缓存类图。本批不改变 CSS、焦点目标和提示契约。
+
+定向结果：15 个 Playwright 场景与 App Server / Editor 架构两份单测文件通过。覆盖动态注册、文本/语言失效、连续编辑合并、旧结果迟到、开关、模型切换、功能与编辑器释放、提供者失败隔离、文本缩短、节点复用、几何，以及原文/版本/焦点/选区不被提示修改。
+
+最终验证：
+
+- `check-editor-alignment.mjs --test=all` 通过：233/233 份单测文件、373/373 个 Playwright 用例，以及结构、台账、类型检查。
+- Renderer 与 Stanza 生产构建通过，无新增构建警告。完整回归发现 pane fixture 缺少防抖服务；补齐后该文件 12 项测试通过，并断言真实窗格创建了行内提示功能。本次新增的装配警告已清除；既有 Canvas、marker / inline-completion fixture 服务和颜色环境提示不变。
+- 最终结构审计与 `git diff --check` 通过。生产文件变为 540 个：420 个同路径、120 个 Ash 自有；common 文件集合和 80/41 声明核对计数不变。没有新增 CSS、上游品牌引用或生成文件。
+- 本批开始时工作树为空；全部改动保留在工作区，未创建提交。
+
+仍保留 Ash 的 provider 协议、全模型请求范围和 span 显示；延迟解析、按修饰键显示及文字占位排版并未在本批实现。没有新增公共声明或 CSS，不把本批记为整个上游行内提示功能完成。
+
 ## 公共语言契约收回 common（2026-09-21）
 
 准入链：Standalone / Workbench / 扩展注册语言提供者 → `ILanguageFeaturesService` 公共 registry → contribution 请求编排 → 既有编辑器行为。检查发现公共 registry 对 12 组 contribution 类型的反向依赖；本批把 50 个已有契约收回 `common/languages.ts`，不更换提供者协议、模型、请求或 UI owner。上游证据只用于确认公共语言契约及 registry 的所属模块，本批不复制其私有实现，也不把 Ash 快照协议宣称为标准签名全量对齐。
@@ -687,7 +714,7 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 
 ### 待继续追踪的主要风险
 
-- 链接、行内提示、层级展开：功能卸载和异步返回交错时的 DOM/请求清理仍需复现。
+- 链接、层级展开：功能卸载和异步返回交错时的 DOM/请求清理仍需复现。行内提示已在 2026-09-21 的控制器收敛批次验证并修复。
 - 富文本图片粘贴：读取图片期间正文或选区变化后可能恢复旧选区，尚未执行真实图片解码回归。
 - 字体及 GPU 样式缓存：多窗口过期、undefined 与 false/0 的区分仍需专门场景验证。
 - 原审查中的 collaboration 公共协议依赖已修复；其他 common 文件的 contribution 依赖仍按各自调用链处理。
@@ -1113,7 +1140,7 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 | `contrib/indentation/browser/indentation.ts` | 1 / 1 | 人工追踪：转换命令遍历正文缩进、生成 edits 并恢复 tracked selection；混合缩进回归通过。 |
 | `contrib/indentation/common/indentUtils.ts` | 2 / 1 | 已修复：Tab 推进至下一制表位，混合缩进转换保持文字对齐；真实缩进命令与选区回归先失败后通过。 |
 | `contrib/indentation/common/indentation.ts` | 1 / 1 | 人工追踪：重缩进规则、首行列宽与输出 edit 的调用链；消费同批 Tab 列宽修复。 |
-| `contrib/inlayHints/browser/inlayHintsController.ts` | 1 / 0 | 人工追踪：dispose 取消请求但不清理已绘制提示，待功能卸载验证。 |
+| `contrib/inlayHints/browser/inlayHintsController.ts` | 1 / 0 | 2026-09-21 已验证并修复：控制器释放清理节点、计时器和请求；真实浏览器覆盖功能卸载与迟到响应。 |
 | `contrib/inlineCompletions/browser/controller/inlineCompletionsController.ts` | 1 / 1 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
 | `contrib/inlineCompletions/common/inlineCompletions.ts` | 6 / 1 | 人工检查：公开类型、请求参数及依赖方向；此文件不持有运行时资源。 |
 | `contrib/inlineProgress/browser/inlineProgress.ts` | 2 / 1 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |

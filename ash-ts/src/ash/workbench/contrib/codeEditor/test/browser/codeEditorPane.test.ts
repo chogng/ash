@@ -23,6 +23,7 @@ import type { EditorPaneOptions, EditorPanePartOptions } from "../../browser/cod
 import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ITextModelResourceService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
+import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../../../../editor/common/services/languageFeatureDebounce.js';
 import { ILanguageConfigurationService } from '../../../../../editor/common/languages/languageConfigurationRegistry.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 
@@ -76,6 +77,9 @@ test("Stanza editor pane loads, lays out, focuses, hides, and clears one editor 
 	}, new AbortController().signal);
 
 	assert.equal(pane.getValue(), "const alpha = 1;");
+	const control = pane.getControl();
+	assert.ok(control instanceof CodeEditorWidget);
+	assert.ok(control.getContribution('editor.contrib.inlayHints'));
 	assert.deepEqual(pane.getStatus(), { lineNumber: 1, columnNumber: 1, languageId: "typescript", encoding: "UTF-8", endOfLine: "LF" });
 	assert.equal(parent.querySelectorAll(".stanza-editor-pane").length, 1);
 	assert.equal(parent.querySelectorAll(".stanza-editor").length, 1);
@@ -550,6 +554,7 @@ function paneServices(models: ITextModelResourceService, languages?: LanguageFea
 	const services = new ServiceContainer();
 	services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 	services.registerInstance(ITextModelResourceService, models);
+	services.registerSingleton(ILanguageFeatureDebounceService, () => new LanguageFeatureDebounceService());
 	services.registerSingleton(IThemeService, () => new TestThemeService(darkColorTheme));
 	services.registerInstance(ILogService, new NullLoggerService());
 	if (languages) {

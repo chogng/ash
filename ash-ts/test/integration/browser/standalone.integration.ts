@@ -93,6 +93,11 @@ interface InlineRequestState {
 }
 
 interface StandaloneHarness {
+	prepareInlayRequests(): void;
+	readInlayRequests(): { text: string; languageId: string; resource: string | undefined; range: string; aborted: boolean }[];
+	finishInlayRequest(index: number, label: string): Promise<void>;
+	changeInlayState(reason: 'text' | 'shrink' | 'language' | 'provider' | 'off' | 'on' | 'contribution' | 'model' | 'dispose' | 'layout'): void;
+	addBrokenInlayProvider(): void;
 	prepareBracketCompletion(value: string, insertText: string, column: number, tokenType: 'other' | 'string' | 'comment' | 'unavailable', completeBracketPairs: boolean, replaceLength?: number): void;
 	prepareInlineRequests(): void;
 	readInlineRequests(): InlineRequestState;
@@ -247,7 +252,12 @@ const listener = stanza.editor.onDidCreateEditor(editor => {
 });
 const callerModel = stanza.editor.createModel('caller', 'plaintext', callerResource);
 const openedLinks: string[] = [];
-const callerEditor = stanza.editor.create(callerContainer, { model: callerModel, placeholder: 'Caller model', onOpenLink: target => { openedLinks.push(target); } });
+const callerEditor = stanza.editor.create(callerContainer, {
+	model: callerModel,
+	placeholder: 'Caller model',
+	onOpenLink: target => { openedLinks.push(target); },
+	inlayHints: { enabled: new URL(location.href).searchParams.has('inlayHintsOff') ? 'off' : 'on' },
+});
 const ownedEditor = stanza.editor.create(ownedContainer, { value: 'owned', language: 'plaintext', resource: ownedResource, placeholder: 'Owned model' });
 callerEditor.layout({ width: callerContainer.clientWidth, height: callerContainer.clientHeight });
 ownedEditor.layout({ width: ownedContainer.clientWidth, height: ownedContainer.clientHeight });
@@ -260,6 +270,16 @@ let codeActionRegistration: ReturnType<typeof stanza.languages.registerCodeActio
 let inlineRegistration: ReturnType<typeof stanza.languages.registerInlineCompletionsProvider> | undefined;
 const inlineBracketResources = new DisposableStore();
 const inlineRequests: { kind: string; text: string; languageId: string; signal: AbortSignal; resolve: () => void }[] = [];
+let inlayRegistration: ReturnType<typeof stanza.languages.registerInlayHintsProvider> | undefined;
+let brokenInlayRegistration: ReturnType<typeof stanza.languages.registerInlayHintsProvider> | undefined;
+const inlayRequests: {
+	text: string;
+	languageId: string;
+	resource: string | undefined;
+	range: string;
+	signal: AbortSignal;
+	resolve: (hints: readonly stanza.LanguageInlayHint[]) => void;
+}[] = [];
 let semanticRegistration: ReturnType<typeof stanza.languages.registerDocumentSemanticTokensProvider> | undefined;
 let completionRegistration: ReturnType<typeof stanza.languages.registerCompletionItemProvider> | undefined;
 let viewZone: stanza.IViewZone | undefined;
@@ -347,6 +367,49 @@ let formattingProvider: { dispose(): void } | undefined;
 let bracketTokenRegistration: { dispose(): void } | undefined;
 
 window.ashStandaloneIntegration = {
+	prepareInlayRequests: () => {
+		inlayRegistration?.dispose();
+		callerEditor.setValue('call(value)');
+		callerEditor.focus();
+		inlayRegistration = stanza.languages.registerInlayHintsProvider('*', {
+			provideInlayHints: (request, signal) => {
+				if (request.model !== callerModel) return [];
+				return new Promise(resolve => inlayRequests.push({
+					text: request.model.getValue(),
+					languageId: request.languageId,
+					resource: request.resource?.toString(),
+					range: request.range.toString(),
+					signal,
+					resolve,
+				}));
+			},
+		});
+	},
+	readInlayRequests: () => inlayRequests.map(({ resolve: _resolve, signal, ...request }) => ({ ...request, aborted: signal.aborted })),
+	finishInlayRequest: async (index, label) => {
+		inlayRequests[index]!.resolve([{ position: new stanza.Position(1, 6), label, tooltip: 'inlay detail' }]);
+		await Promise.resolve();
+		await Promise.resolve();
+	},
+	changeInlayState: reason => {
+		if (reason === 'shrink') callerEditor.setValue('');
+		if (reason === 'text') {
+			callerEditor.executeEdits('test.inlay', [{ range: new stanza.Range(1, 1, 1, 1), text: 'a' }]);
+			callerEditor.executeEdits('test.inlay', [{ range: new stanza.Range(1, 1, 1, 1), text: 'b' }]);
+		}
+		if (reason === 'language') callerModel.setLanguage('typescript');
+		if (reason === 'provider') inlayRegistration?.dispose();
+		if (reason === 'off' || reason === 'on') callerEditor.updateOptions({ inlayHints: { enabled: reason } });
+		if (reason === 'contribution') callerEditor.getContribution('editor.contrib.inlayHints')!.dispose();
+		if (reason === 'model') callerEditor.setModel(ownedModel);
+		if (reason === 'dispose') callerEditor.dispose();
+		if (reason === 'layout') callerEditor.layout({ width: 340, height: 220 });
+	},
+	addBrokenInlayProvider: () => {
+		brokenInlayRegistration = stanza.languages.registerInlayHintsProvider('*', {
+			provideInlayHints: () => { throw new Error('inlay provider failed'); },
+		});
+	},
 	prepareLinks: () => {
 		openedLinks.length = 0;
 		callerEditor.setValue('https://example.test/path');
@@ -1572,6 +1635,9 @@ window.ashStandaloneIntegration = {
 	},
 	releaseOwned: () => ownedEditor.dispose(),
 	dispose: () => {
+		inlayRegistration?.dispose();
+		brokenInlayRegistration?.dispose();
+		for (const request of inlayRequests) request.resolve([]);
 		inlineBracketResources.dispose();
 		inlineRegistration?.dispose();
 		for (const request of inlineRequests) request.resolve();

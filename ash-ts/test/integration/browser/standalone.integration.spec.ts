@@ -1,5 +1,128 @@
 import { expect, test } from '@playwright/test';
 
+test.describe('inlay hints', () => {
+	test.afterEach(async ({ page }) => {
+		await page.evaluate(() => window.ashStandaloneIntegration?.dispose());
+	});
+
+	test('late provider registration displays hints and layout retains their nodes', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareInlayRequests());
+		const editorState = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests())).toEqual([{
+			text: 'call(value)', languageId: 'plaintext', resource: 'inmemory://stanza/caller.txt', range: '[1,1 -> 1,12]', aborted: false,
+		}]);
+		await page.evaluate(() => window.ashStandaloneIntegration.finishInlayRequest(0, 'value:'));
+		const hint = page.locator('#caller .stanza-editor-inlay-hint');
+		await expect(hint).toHaveText('value:');
+		await expect(hint).toHaveAttribute('title', 'inlay detail');
+		const node = await hint.elementHandle();
+		await page.evaluate(() => window.ashStandaloneIntegration.changeInlayState('layout'));
+		expect(await node!.evaluate(element => element.isConnected)).toBe(true);
+		const box = await hint.boundingBox();
+		expect(box!.width).toBeGreaterThan(0);
+		expect(box!.height).toBeGreaterThan(0);
+		await expect(hint).toHaveCount(1);
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests())).toHaveLength(1);
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).toEqual(editorState);
+	});
+
+	test('edits clear old hints immediately and coalesce requests for the latest text', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareInlayRequests());
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().length)).toBe(1);
+		await page.evaluate(() => window.ashStandaloneIntegration.finishInlayRequest(0, 'old:'));
+		await expect(page.locator('#caller .stanza-editor-inlay-hint')).toHaveText('old:');
+		const cleared = await page.evaluate(() => {
+			window.ashStandaloneIntegration.changeInlayState('text');
+			return document.querySelectorAll('#caller .stanza-editor-inlay-hint').length;
+		});
+		expect(cleared).toBe(0);
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().map(request => request.text))).toEqual(['call(value)', 'bacall(value)']);
+		await page.evaluate(() => window.ashStandaloneIntegration.changeInlayState('language'));
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().map(request => [request.languageId, request.aborted]))).toEqual([
+			['plaintext', false], ['plaintext', true], ['typescript', false],
+		]);
+		await page.evaluate(() => window.ashStandaloneIntegration.finishInlayRequest(2, 'current:'));
+		await expect(page.locator('#caller .stanza-editor-inlay-hint')).toHaveText('current:');
+		await page.evaluate(() => window.ashStandaloneIntegration.finishInlayRequest(1, 'stale:'));
+		await expect(page.locator('#caller .stanza-editor-inlay-hint')).toHaveText('current:');
+	});
+
+	test('shortening the document removes hints before layout reads obsolete positions', async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareInlayRequests());
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().length)).toBe(1);
+		await page.evaluate(() => window.ashStandaloneIntegration.finishInlayRequest(0, 'obsolete:'));
+		await expect(page.locator('#caller .stanza-editor-inlay-hint')).toHaveText('obsolete:');
+		await page.evaluate(() => window.ashStandaloneIntegration.changeInlayState('shrink'));
+		await expect(page.locator('#caller .stanza-editor-inlay-hint')).toHaveCount(0);
+		expect(errors).toEqual([]);
+	});
+
+	for (const reason of ['provider', 'off', 'contribution', 'model', 'dispose'] as const) {
+		test(`${reason} removes rendered hints and stops requests`, async ({ page }) => {
+			await page.goto('/standalone.html');
+			await page.evaluate(() => window.ashStandaloneIntegration.prepareInlayRequests());
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().length)).toBe(1);
+			await page.evaluate(() => window.ashStandaloneIntegration.finishInlayRequest(0, 'visible:'));
+			await expect(page.locator('#caller .stanza-editor-inlay-hint')).toHaveText('visible:');
+			await page.evaluate(reason => window.ashStandaloneIntegration.changeInlayState(reason), reason);
+			await expect(page.locator('#caller .stanza-editor-inlay-hint')).toHaveCount(0);
+			if (reason !== 'dispose') {
+				await page.evaluate(() => {
+					window.ashStandaloneIntegration.changeInlayState('text');
+					window.ashStandaloneIntegration.changeInlayState('language');
+				});
+			}
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests())).toHaveLength(1);
+		});
+
+		test(`${reason} aborts an unresolved provider`, async ({ page }) => {
+			await page.goto('/standalone.html');
+			await page.evaluate(() => window.ashStandaloneIntegration.prepareInlayRequests());
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().length)).toBe(1);
+			await page.evaluate(reason => window.ashStandaloneIntegration.changeInlayState(reason), reason);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests()))[0]!.aborted).toBe(true);
+			await page.evaluate(() => window.ashStandaloneIntegration.finishInlayRequest(0, 'late:'));
+			await expect(page.locator('#caller .stanza-editor-inlay-hint')).toHaveCount(0);
+		});
+	}
+
+	test('initially disabled hints can be enabled and toggled during a request', async ({ page }) => {
+		await page.goto('/standalone.html?inlayHintsOff');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareInlayRequests());
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests())).toEqual([]);
+		await page.evaluate(() => window.ashStandaloneIntegration.changeInlayState('on'));
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().length)).toBe(1);
+		await page.evaluate(() => {
+			window.ashStandaloneIntegration.changeInlayState('off');
+			window.ashStandaloneIntegration.changeInlayState('on');
+		});
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().length)).toBe(2);
+		await page.evaluate(() => window.ashStandaloneIntegration.finishInlayRequest(1, 'enabled:'));
+		await page.evaluate(() => window.ashStandaloneIntegration.finishInlayRequest(0, 'cancelled:'));
+		await expect(page.locator('#caller .stanza-editor-inlay-hint')).toHaveText('enabled:');
+	});
+
+	test('a failing provider does not discard hints from another provider', async ({ page }) => {
+		const errors: string[] = [];
+		page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+		await page.goto('/standalone.html');
+		await page.evaluate(() => {
+			window.ashStandaloneIntegration.prepareInlayRequests();
+			window.ashStandaloneIntegration.addBrokenInlayProvider();
+		});
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().length)).toBe(1);
+		await page.evaluate(() => window.ashStandaloneIntegration.finishInlayRequest(0, 'healthy:'));
+		await expect(page.locator('#caller .stanza-editor-inlay-hint')).toHaveText('healthy:');
+		expect(errors.some(message => message.includes('inlay provider failed'))).toBe(true);
+	});
+});
+
 test('detected document links reach the editor host without a language provider', async ({ page }) => {
 	await page.goto('/standalone.html');
 	await page.evaluate(() => window.ashStandaloneIntegration.prepareLinks());

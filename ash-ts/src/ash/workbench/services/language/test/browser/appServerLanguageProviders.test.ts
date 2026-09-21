@@ -4,14 +4,13 @@ import { CancellationToken } from "../../../../../base/common/cancellation.js";
 import { URI } from "../../../../../base/common/uri.js";
 import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../editor/common/core/range.js";
-import { LanguageDiagnosticSeverity, createLanguageCompletionInvokeContext } from '../../../../../editor/common/languages.js';
+import { LanguageDiagnosticSeverity, createLanguageCompletionInvokeContext, createLanguageFeatureRequest } from '../../../../../editor/common/languages.js';
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
 import { LanguageCompletionService } from '../../../../../editor/contrib/suggest/browser/suggest.js';
 import { getWorkspaceSymbols } from '../../../../contrib/search/common/search.js';
 import { CodeActionService } from '../../../../../editor/contrib/codeAction/common/languageCodeActions.js';
 import { LanguageNavigationService } from '../../../../../editor/contrib/gotoSymbol/common/languageNavigation.js';
 import { LanguageHoverService } from '../../../../../editor/contrib/hover/common/hover.js';
-import { InlayHintsService } from '../../../../../editor/contrib/inlayHints/common/languageInlayHints.js';
 import { ParameterHintsService } from '../../../../../editor/contrib/parameterHints/common/languageParameterHints.js';
 import { RenameService } from '../../../../../editor/contrib/rename/common/languageRename.js';
 import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
@@ -97,7 +96,6 @@ test("App Server hover and completion providers keep revision, resource, and ins
 	using hover = new LanguageHoverService(model, languages.hoverProvider, resource);
 	using completions = new LanguageCompletionService(model, languages.completionProvider, { resource });
 	using parameterHints = new ParameterHintsService(model, languages.signatureHelpProvider, resource);
-	using inlayHints = new InlayHintsService(model, languages.inlayHintsProvider, resource);
 
 	const hoverResult = await hover.provideHover("rust", new Position((0) + 1, (1) + 1));
 	await completions.request("rust", new Position((0) + 1, (3) + 1), createLanguageCompletionInvokeContext());
@@ -106,7 +104,12 @@ test("App Server hover and completion providers keep revision, resource, and ins
 	const resolved = await completions.resolveCompletionItem({ completionRequestId: completionResult.requestId, modelVersion: completionResult.modelVersion, providerId: completionItem.providerId, itemId: completionItem.id }, new AbortController().signal);
 	await completions.executeCompletionCommand("rust", completionItem, new AbortController().signal);
 	const hints = await parameterHints.provideParameterHints("rust", new Position((0) + 1, (3) + 1), { kind: "triggerCharacter", triggerCharacter: "(" });
-	const inlays = await inlayHints.provideInlayHints("rust", Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (3) + 1)));
+	const signal = new AbortController().signal;
+	const inlays = await languages.inlayHintsProvider.ordered(model)[0]!.provideInlayHints({
+		...createLanguageFeatureRequest(model, model.getLanguageId(), signal),
+		resource,
+		range: model.getFullModelRange(),
+	}, signal);
 	const linkedEditing = languages.linkedEditingRangeProvider.ordered(model)[0]!;
 	const linked = await linkedEditing.provideLinkedEditingRanges(model, new Position((0) + 1, (1) + 1), CancellationToken.None);
 
