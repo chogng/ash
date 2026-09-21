@@ -4,7 +4,7 @@ import { type VersionedLanguageResultStore } from "../../../common/languages/lan
 import { type LanguageDiagnostic, type LanguageDiagnosticResult } from "../../../common/languages/languageResults.js";
 
 import { type URI } from "../../../../base/common/uri.js";
-import { type LanguageDiagnosticsPublisher, type LanguageDiagnosticsSource } from "../../../common/services/languageDiagnosticsService.js";
+import { type LanguageDiagnosticsPublisher, type LanguageDiagnosticsSource } from "../../../common/languages/languageResults.js";
 import { MinimapPosition, OverviewRulerLane, TrackedRangeStickiness, type IModelDecorationOptions } from '../../../common/model.js';
 import { themeColorFromId } from '../../../../base/common/themables.js';
 import { ColorId } from '../../../../platform/theme/common/colorTheme.js';

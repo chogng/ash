@@ -1,7 +1,7 @@
 import { Emitter } from '../../../base/common/event.js';
 import { LanguageWorkerWireServer } from '../../common/languages/languageWorkerWire.js';
 import { editorWorkerWireCodec } from '../../common/services/editorWorkerWire.js';
-import { EditorWorkerRequestExecutor } from '../../common/services/editorWorkerRequestExecutor.js';
+import { EditorWorker } from '../../common/services/editorWebWorker.js';
 import { FormattingConflicts, FormattingKind, FormattingMode } from '../../contrib/format/browser/format.js';
 import { type DocumentFormattingEditProvider } from '../../common/languages.js';
 import { TextModel } from '../../common/model/textModel.js';
@@ -45,7 +45,7 @@ class TestWorker extends browserEnvironment.window.EventTarget {
 		},
 		dispose() {},
 		[Symbol.dispose]() {},
-	}, editorWorkerWireCodec, new EditorWorkerRequestExecutor());
+	}, editorWorkerWireCodec, new EditorWorker());
 	constructor() {
 		super();
 		createdWorkerCount += 1;

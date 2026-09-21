@@ -3,7 +3,7 @@ import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { isCancellationError } from "../../../../../base/common/errors.js";
 import { createDefaultDocumentSchema } from "../../../../../editor/common/model/documentSchema.js";
-import type { DocumentCollaborationOpenInput, IDocumentCollaborationService } from "../../../../../editor/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationOpenInput, IDocumentCollaborationService } from '../../common/documentCollaborationService.js';
 import { DocumentCollaborationService } from "../../browser/documentCollaborationService.js";
 
 test("Workbench collaboration routes an empty endpoint to its App Server service", async () => {

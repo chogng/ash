@@ -8,7 +8,7 @@ import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { clamp } from '../../../../base/common/numbers.js';
 import { type EditorMinimapLayoutInfo, EditorOption, RenderMinimap } from '../../../common/config/editorOptions.js';
 import { type TextModel } from '../../../common/model/textModel.js';
-import { type SemanticTokenSource } from '../../../common/services/resolvedSemanticTokens.js';
+import { type SemanticTokenSource } from '../../../common/tokens/languageTokens.js';
 import { type EditorScrollPosition } from '../../../common/viewModel/editorViewportContracts.js';
 import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import { type EditorViewportLayout } from '../../../common/viewLayout/viewLayout.js';

@@ -1,6 +1,6 @@
-import { AbstractDisposable } from '../../../base/common/lifecycle.js';
-import type { URI } from '../../../base/common/uri.js';
-import type { TextModel, TextModelUndoRedoSnapshot } from '../model/textModel.js';
+import { AbstractDisposable } from '../../../../base/common/lifecycle.js';
+import type { URI } from '../../../../base/common/uri.js';
+import type { TextModel, TextModelUndoRedoSnapshot } from '../../../../editor/common/model/textModel.js';
 
 export interface RetainedModelUndoRedoHistoryOptions {
 	readonly maxEntries?: number;

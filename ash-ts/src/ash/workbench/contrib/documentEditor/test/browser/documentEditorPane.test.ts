@@ -1,3 +1,4 @@
+import { Event } from '../../../../../base/common/event.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -104,6 +105,28 @@ test("Stanza refuses a stale conditional save even before a file-change notifica
 	assert.equal(pane.hasExternalChange, true);
 	assert.equal(files.lastSavedText, "");
 	environment.window.close();
+});
+
+test('Document pane owns and releases the working copy when its input is cleared', async () => {
+	const environment = new JSDOM('<!doctype html><body></body>');
+	try {
+		using pane = new EditorPane(new MemoryTextFiles('Original'));
+		const parent = environment.window.document.body;
+		pane.create(parent);
+		await pane.setInput({ resource: URI.parse('untitled:document/lifetime') }, new AbortController().signal);
+		const reference = pane.workingCopy;
+		assert.ok(reference);
+		pane.clearInput();
+		assert.equal(pane.workingCopy, undefined);
+		assert.equal(parent.querySelector('textarea'), null);
+		assert.equal(pane.isDirty, false);
+		await assert.rejects(pane.save(), /no active working copy/);
+		await pane.setInput({ resource: URI.parse('untitled:document/reopened') }, new AbortController().signal);
+		assert.notEqual(pane.workingCopy, reference);
+		assert.equal(pane.getDocument().content[0]?.content[0]?.text, 'Original');
+	} finally {
+		environment.window.close();
+	}
 });
 
 test("Stanza routes block keyboard commands through Stanza", async () => {
@@ -1686,3 +1709,51 @@ class MemoryTextFiles implements ITextFileService {
 		return `revision-${this.revision}`;
 	}
 }
+
+test('switching a document cancels a pending room and disposes a late connection', async () => {
+	const environment = new JSDOM('<!doctype html><body></body>');
+	Object.defineProperty(environment.window, 'prompt', { configurable: true, value: () => '' });
+	let finishOpen!: () => void;
+	const pending = new Promise<void>(resolve => { finishOpen = resolve; });
+	let openingSignal: AbortSignal | undefined;
+	let disposed = false;
+	using pane = new EditorPane(new MemoryTextFiles('First'), {
+		createDocumentCollaborationService: () => ({
+			dispose() {},
+			[Symbol.dispose]() {},
+			async open(input, signal) {
+				openingSignal = signal;
+				await pending;
+				return {
+					roomId: 'late-room', clientId: input.clientId, principalId: 'owner', canEdit: true, canManageMembers: true,
+					schema: input.schema, initialSnapshot: { roomId: 'late-room', version: 0, document: input.document }, currentPresence: [],
+					onDidReceiveUpdate: Event.None, onDidReceiveSnapshot: Event.None, onDidReceivePresence: Event.None, onDidFail: Event.None,
+					submit: async () => { throw new Error('A stale connection must not submit'); },
+					updatePresence: async () => { throw new Error('A stale connection must not publish presence'); },
+					createInvite: async () => { throw new Error('A stale connection must not invite'); },
+					listMembers: async () => [],
+					rotateMemberAccessToken: async () => { throw new Error('A stale connection must not rotate credentials'); },
+					revokeMember: async () => {},
+					dispose: () => { disposed = true; },
+					[Symbol.dispose]: () => { disposed = true; },
+				};
+			},
+		}),
+	});
+	try {
+		pane.create(environment.window.document.body);
+		await pane.setInput({ resource: URI.file('/first.md') }, new AbortController().signal);
+		documentAction(environment.window.document, 'startCollaboration').click();
+		assert.equal(openingSignal?.aborted, false);
+		await pane.setInput({ resource: URI.file('/second.md') }, new AbortController().signal);
+		assert.equal(openingSignal?.aborted, true);
+		finishOpen();
+		await new Promise(resolve => setTimeout(resolve, 0));
+		assert.equal(disposed, true);
+		assert.equal(environment.window.document.querySelector('.stanza-document-collaboration-toolbar')?.getAttribute('data-state'), 'inactive');
+		assert.equal(environment.window.document.querySelector('[data-action-id="inviteCollaborator"]'), null);
+	} finally {
+		pane.dispose();
+		environment.window.close();
+	}
+});

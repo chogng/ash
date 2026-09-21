@@ -1,5 +1,5 @@
 import { type Event } from "../../../../base/common/event.js";
-import { TextResourceConflictError, type TextResourceChangeEvent, type TextResourceContent, type TextResourceResolveRequest, type TextResourceSaveRequest, type TextResourceSaveResult, type ITextResourceStore } from "../../../../editor/common/services/textResourceStore.js";
+import { TextResourceConflictError, type TextResourceChangeEvent, type TextResourceContent, type TextResourceResolveRequest, type TextResourceSaveRequest, type TextResourceSaveResult, type ITextResourceStore } from "../../../services/textmodelResolver/common/textResourceStore.js";
 import { type ITextFileService } from "../../../services/textfile/common/textFileService.js";
 import { TextFileSaveConflictError } from "../../../services/textfile/common/textFileService.js";
 

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
-import { CollaborationContribution } from "../../contrib/collaboration/browser/collaborationContribution.js";
+import { CollaborationContribution } from "../../browser/collaborationContribution.js";
 
 test("Stanza collaboration contribution keeps a newly issued invitation available until its owner dismisses it", async () => {
 	const environment = new JSDOM("<!doctype html><body></body>");

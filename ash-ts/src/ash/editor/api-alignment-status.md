@@ -12,7 +12,7 @@
 | --- | --- |
 | `common/core/text/textLength.ts` | 已修复：UTF-16 列数把 emoji 计为两个代码单元。 |
 | `common/core/edits/textEdit.ts` | 已修复：最小编辑不从代理项对中间截断。 |
-| `common/services/editorWorkerRequestExecutor.ts` | 已修复：行末字符参与值替换；空选区递增整个数字。 |
+| `common/services/editorWebWorker.ts` | 已修复：行末字符参与值替换；空选区递增整个数字。 |
 | `common/languages/languageFeatureRequest.ts` | 已修复：检查模型销毁与请求开始时的模型语言；请求语言参数独立保留。 |
 | `common/core/text/positionToOffset.ts` | 已检查坐标转换入口与依赖。 |
 | `common/core/text/positionToOffsetImpl.ts` | 已检查偏移转换；CRLF 内部偏移的调用约束待进一步核对。 |
@@ -67,12 +67,29 @@
 - `languageCodeActions.ts`：提供者解析自己的原始 action；原提供者没有 resolver 时不会调用其他提供者。弱引用关联不改变对外 action 格式。
 - 两份定向测试修复前合计 4 项失败，修复后 6 项全部通过；7 项 Playwright 回归通过。Stanza 和 Renderer 正常构建通过，无新增构建 warning。保留既有 JSDOM Canvas 与颜色环境提示。
 
+### 后续修复：公共服务职责收敛
+
+用户确认修复 `common/services` 审查清单。资源持久化、诊断和显示数据按实际调用链调整，不将文件数量或上游名称当作完成标准。
+
+| 原路径或职责 | 当前归属 |
+| --- | --- |
+| `textModelResourceService.ts`、`textResourceStore.ts`、`retainedModelUndoRedoHistory.ts` | `workbench/services/textmodelResolver/common`；工作副本由 Pane 持有，富文本控件仅接收模型。 |
+| `languageTokenStylingResolver.ts` | 解析函数合入 `semanticTokensProviderStyling.ts`。 |
+| `resolvedSemanticTokens.ts`、`resolvedSemanticTokensService.ts` | 类型归 `tokens/languageTokens.ts`，逐行缓存归 `tokens/languageTokenLineIndex.ts`，由 `TokenizationTextModelPart` 创建和释放。 |
+| `languageDiagnosticsService.ts` | 模型调度成为 `textModel.ts` 私有实现；模型诊断契约归 `languages/languageResults.ts`；工作区枚举归 Workbench 诊断服务。 |
+| `editorWorkerProtocol.ts`、`editorWorkerRequestExecutor.ts`、`editorWorkerWire.ts` | 通用消息仍经 `LanguageWorkerWireClient/Server`；计算集中到 `editorWebWorker.ts`，`editorWebWorkerMain.ts` 是唯一启动入口，`editorWorkerWire.ts` 只保留编辑请求编解码与边界校验。资源级 Worker 完整 API 仍未对齐。 |
+| `contrib/collaboration/common/protocol.ts` | 协作消息类型合入 `common/services/documentCollaborationService.ts`，公共契约不再依赖 contribution。房间输入、邀请、成员角色和凭证契约归 Workbench；工具栏归 `workbench/contrib/documentEditor`，Pane 负责房间打开、切换取消和成员请求。Editor 控制器只处理文档同步与远端选区。 |
+
+下方全量表保留原审查时的路径与引用数；上表说明本次迁移后的归属。
+
+本批定向验证：14 份单测文件分批通过，覆盖工作副本、关闭后撤销历史、诊断、语义 token、协作与 Worker；新增迟到房间连接释放、非法 Worker 坐标与 EOL 回归。7 项 Chromium 场景通过，协作迁移最终再跑 4 项通过。Renderer 类型检查、Renderer/Stanza 生产构建、结构审计和 diff 检查通过。结构审计仍记录 7 份未触及的 CSS 历史债务；本次没有新增构建 warning，Playwright 保留颜色环境变量提示。
+
 ### 待继续追踪的主要风险
 
 - 链接、行内提示、层级展开：功能卸载和异步返回交错时的 DOM/请求清理仍需复现。
 - 富文本图片粘贴：读取图片期间正文或选区变化后可能恢复旧选区，尚未执行真实图片解码回归。
 - 字体及 GPU 样式缓存：多窗口过期、undefined 与 false/0 的区分仍需专门场景验证。
-- 4 个 common 文件的 contribution 依赖需要迁移契约归属；本轮没有以改 import 的方式隐藏依赖。
+- 原审查中的 collaboration 公共协议依赖已修复；其他 common 文件的 contribution 依赖仍按各自调用链处理。
 
 <details>
 <summary>展开 490 个文件的检查记录</summary>

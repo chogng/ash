@@ -17,7 +17,7 @@ import { createBrowserEditorPart } from "../../../src/ash/workbench/contrib/code
 import { CodeEditorPane, type EditorPaneOptions } from "../../../src/ash/workbench/contrib/codeEditor/browser/codeEditorPane.js";
 import { ILanguageConfigurationService, LanguageConfigurationService } from "../../../src/ash/editor/common/languages/languageConfigurationRegistry.js";
 import { ILanguageFeaturesService } from '../../../src/ash/editor/common/services/languageFeatures.js';
-import { ITextModelResourceService } from '../../../src/ash/editor/common/services/textModelResourceService.js';
+import { ITextModelResourceService } from '../../../src/ash/workbench/services/textmodelResolver/common/textModelResourceService.js';
 import { ServiceContainer } from '../../../src/ash/platform/instantiation/common/instantiation.js';
 import { ILogService, NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
 import { LanguageFeaturesService } from "../../../src/ash/editor/common/services/languageFeaturesService.js";

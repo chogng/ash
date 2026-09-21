@@ -1,3 +1,6 @@
+import type { Event } from '../../../base/common/event.js';
+import type { IDisposable } from '../../../base/common/lifecycle.js';
+import type { URI } from '../../../base/common/uri.js';
 import { type Position } from "../core/position.js";
 import { Range } from "../core/range.js";
 import { type TextSnapshot } from "../core/textChange.js";
@@ -102,4 +105,28 @@ function assertDiagnosticCode(code: LanguageDiagnosticCode): void {
 	if (typeof code !== "number" || !Number.isFinite(code)) {
 		throw new TypeError("Language diagnostic code must be a finite number or non-empty string");
 	}
+}
+
+/** Current diagnostics; revision `0` is reserved for unopened workspace resources. */
+export interface LanguageDiagnosticSnapshot {
+	readonly resource: URI;
+	readonly revision: number;
+	readonly diagnostics: readonly LanguageDiagnostic[];
+}
+
+/** Read-only diagnostic source consumed by editor presentation. */
+export interface LanguageDiagnosticsSource {
+	readonly onDidChangeDiagnostics: Event<URI>;
+	getDiagnostics(resource: URI): LanguageDiagnosticSnapshot | undefined;
+}
+
+/** One editor-owned diagnostic producer registered with the shared repository. */
+export interface LanguageDiagnosticsPublisher extends IDisposable {
+	update(revision: number, diagnostics: readonly LanguageDiagnostic[]): void;
+}
+
+/** Host boundary for synchronizing and publishing one editor model's diagnostics. */
+export interface LanguageDiagnosticsHost extends LanguageDiagnosticsSource {
+	acquire(resource: URI, languageId: string, model: TextModel): IDisposable;
+	createPublisher(resource: URI): LanguageDiagnosticsPublisher;
 }

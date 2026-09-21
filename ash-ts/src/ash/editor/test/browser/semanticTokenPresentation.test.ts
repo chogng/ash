@@ -2,25 +2,24 @@ import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { projectStanzaSemanticTokenLine } from "../../browser/viewParts/viewLines/viewLine.js";
-import { LanguageTokenStylingResolver, resolveSemanticTokenModifiers, resolveSemanticTokenPresentation } from '../../common/services/languageTokenStylingResolver.js';
-import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken } from '../../common/services/resolvedSemanticTokens.js';
-import { ResolvedSemanticTokensService } from '../../common/services/resolvedSemanticTokensService.js';
+import { resolveSemanticTokenStyling } from '../../common/services/semanticTokensProviderStyling.js';
+import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken } from '../../common/tokens/languageTokens.js';
+import { LanguageTokenLineIndex, StyledTokenSource, overlayTokenSources } from '../../common/tokens/languageTokenLineIndex.js';
 import { LanguageResultAcceptance } from "../../common/languages/languageResultStore.js";
-import { LanguageTokenLineIndex } from "../../common/tokens/languageTokenLineIndex.js";
 import { createLanguageTokenStore, type LanguageToken } from "../../common/languages/languageResults.js";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 
 test("Default resolver maps only Stanza's explicit semantic vocabulary", () => {
-	assert.equal(resolveSemanticTokenPresentation(token(0, 0, 1, "keyword")), SemanticTokenPresentation.Keyword);
-	assert.equal(resolveSemanticTokenPresentation(token(0, 0, 1, "method")), SemanticTokenPresentation.Function);
-	assert.equal(resolveSemanticTokenPresentation(token(0, 0, 1, "plugin-controlled-class")), undefined);
+	assert.equal(resolveSemanticTokenStyling(token(0, 0, 1, "keyword")).presentation, SemanticTokenPresentation.Keyword);
+	assert.equal(resolveSemanticTokenStyling(token(0, 0, 1, "method")).presentation, SemanticTokenPresentation.Function);
+	assert.equal(resolveSemanticTokenStyling(token(0, 0, 1, "plugin-controlled-class")).presentation, undefined);
 });
 
 test("Semantic token modifiers use Stanza's closed presentation vocabulary", () => {
 	assert.deepEqual(
-		resolveSemanticTokenModifiers(token(0, 0, 1, "variable", ["declaration", "readonly", "unknown-plugin-modifier", "definition"])),
+		resolveSemanticTokenStyling(token(0, 0, 1, "variable", ["declaration", "readonly", "unknown-plugin-modifier", "definition"])).modifiers,
 		[SemanticTokenModifier.Declaration, SemanticTokenModifier.Readonly],
 	);
 
@@ -54,7 +53,6 @@ test("syntax token presentation applies exact theme styling without a semantic c
 test("Semantic token source resolves immutable named lines without owning common state", () => {
 	using model = new TextModel("const value");
 	using store = createLanguageTokenStore(model);
-	using styling = new ResolvedSemanticTokensService();
 	assert.equal(store.accept({
 		requestId: 1,
 		textModel: model,
@@ -67,11 +65,11 @@ test("Semantic token source resolves immutable named lines without owning common
 		},
 	}), LanguageResultAcceptance.Applied);
 	using index = new LanguageTokenLineIndex(store);
-	const source = styling.createSource(index, new LanguageTokenStylingResolver(entry => (
+	using source = new StyledTokenSource(index, { resolve: entry => ({ modifiers: [], presentation: (
 		entry.tokenType === "plugin-variable"
 			? SemanticTokenPresentation.Variable
-			: resolveSemanticTokenPresentation(entry)
-	)));
+			: resolveSemanticTokenStyling(entry).presentation
+	) }) });
 
 	assert.equal(source.textModel, model);
 	assert.deepEqual(source.lines, [{
@@ -87,7 +85,7 @@ test("Semantic token source resolves immutable named lines without owning common
 		}],
 	}]);
 
-	styling.dispose();
+	source.dispose();
 	assert.throws(() => source.lines, /already disposed/);
 	assert.equal(index.getLineTokens(0).length, 2);
 	index.dispose();
@@ -98,7 +96,6 @@ test("server semantic tokens replace intersecting syntax presentation and preser
 	using model = new TextModel("const value");
 	using lexicalStore = createLanguageTokenStore(model);
 	using semanticStore = createLanguageTokenStore(model);
-	using styling = new ResolvedSemanticTokensService();
 	lexicalStore.accept({
 		requestId: 1,
 		textModel: model,
@@ -111,7 +108,9 @@ test("server semantic tokens replace intersecting syntax presentation and preser
 	semanticStore.accept({ requestId: 1, textModel: model, modelVersion: model.version, value: { tokens: [token(0, 6, 11, "function", ["declaration"])] } });
 	using lexicalIndex = new LanguageTokenLineIndex(lexicalStore);
 	using semanticIndex = new LanguageTokenLineIndex(semanticStore);
-	const source = styling.createOverlay(styling.createSource(lexicalIndex), styling.createSource(semanticIndex));
+	using lexicalSource = new StyledTokenSource(lexicalIndex);
+	using semanticSource = new StyledTokenSource(semanticIndex);
+	const source = overlayTokenSources(lexicalSource, semanticSource);
 
 	assert.deepEqual(source.getLineTokens(0), [{
 		startColumn: 0,

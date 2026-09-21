@@ -45,7 +45,7 @@ test('Academic bundle activates document contributions without Code editor UI an
 	await page.goto('/academic.html');
 	const ids = await page.evaluate(() => window.ashAcademicIntegration.getBundleIds());
 	expect(ids).toContain('editor.contrib.documentFormatting');
-	expect(ids).toContain('editor.contrib.collaboration');
+	expect(ids).not.toContain('editor.contrib.collaboration');
 	expect(ids).not.toContain('editor.contrib.clipboard');
 	expect(ids).not.toContain('editor.contrib.findController');
 	await expect(page.locator('#document-editor .stanza-structured-format-toolbar')).toHaveAttribute('role', 'group');

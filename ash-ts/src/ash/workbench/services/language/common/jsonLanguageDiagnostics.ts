@@ -5,7 +5,7 @@ import type { URI } from '../../../../base/common/uri.js';
 import { Range } from '../../../../editor/common/core/range.js';
 import { LanguageDiagnosticSeverity, type LanguageDiagnostic } from '../../../../editor/common/languages/languageResults.js';
 import type { TextModel } from '../../../../editor/common/model/textModel.js';
-import type { LanguageDiagnosticsPublisher } from '../../../../editor/common/services/languageDiagnosticsService.js';
+import type { LanguageDiagnosticsPublisher } from '../../../../editor/common/languages/languageResults.js';
 import { JsonSchemasRegistry, type JsonSchemaRegistry } from '../../../../platform/jsonschemas/common/jsonSchemaRegistry.js';
 
 /** Publishes local syntax diagnostics for JSON and adds schema diagnostics when associated. */

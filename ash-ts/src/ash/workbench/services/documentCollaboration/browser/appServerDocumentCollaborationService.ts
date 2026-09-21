@@ -6,17 +6,17 @@ import { allSelection, nodeSelection, textSelection, type DocumentSelection } fr
 import type { DocumentNode } from "../../../../editor/common/model/document.js";
 import { deserializeDocument, serializeDocument } from "../../../../editor/common/model/documentSerialization.js";
 import { deserializeDocumentTransaction, serializeDocumentTransaction } from "../../../../editor/common/model/documentTransactionSerialization.js";
-import type { DocumentCollaborationConnection } from "../../../../editor/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationInvite } from "../../../../editor/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationMember } from "../../../../editor/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationOpenInput } from "../../../../editor/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationRoom } from '../common/documentCollaborationService.js';
+import type { DocumentCollaborationInvite } from '../common/documentCollaborationService.js';
+import type { DocumentCollaborationMember } from '../common/documentCollaborationService.js';
+import type { DocumentCollaborationOpenInput } from '../common/documentCollaborationService.js';
 import type { DocumentCollaborationPresence } from "../../../../editor/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationRoomRole } from "../../../../editor/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationRoomRole } from '../common/documentCollaborationService.js';
 import type { DocumentCollaborationSnapshot } from "../../../../editor/common/services/documentCollaborationService.js";
 import type { DocumentCollaborationSubmitOutcome } from "../../../../editor/common/services/documentCollaborationService.js";
-import type { IDocumentCollaborationService } from "../../../../editor/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationEnvelope } from "../../../../editor/contrib/collaboration/common/protocol.js";
-import type { DocumentCollaborationRemoteEnvelope } from "../../../../editor/contrib/collaboration/common/protocol.js";
+import type { IDocumentCollaborationService } from '../common/documentCollaborationService.js';
+import type { DocumentCollaborationEnvelope } from "../../../../editor/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationRemoteEnvelope } from "../../../../editor/common/services/documentCollaborationService.js";
 import type { IDocumentCollaborationApi } from "../../../../platform/collaboration/common/documentCollaborationApi.js";
 import type { IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import type { DocumentCollaborationPresenceSnapshot as AppServerDocumentCollaborationPresenceSnapshot } from "../../../../platform/app-server/common/generated/index.js";
@@ -41,7 +41,7 @@ export class AppServerDocumentCollaborationService extends Disposable implements
 		this._register(toDisposable(() => subscription.dispose()));
 	}
 
-	async open(input: DocumentCollaborationOpenInput, signal: AbortSignal): Promise<DocumentCollaborationConnection> {
+	async open(input: DocumentCollaborationOpenInput, signal: AbortSignal): Promise<DocumentCollaborationRoom> {
 		throwIfCancelled(signal, "Opening a Stanza collaboration room was cancelled");
 		const opened = await this.api.open({
 			...(input.roomId === undefined ? {} : { roomId: input.roomId }),
@@ -100,7 +100,7 @@ export class AppServerDocumentCollaborationService extends Disposable implements
 	}
 }
 
-class AppServerDocumentCollaborationConnection extends Disposable implements DocumentCollaborationConnection {
+class AppServerDocumentCollaborationConnection extends Disposable implements DocumentCollaborationRoom {
 	private readonly updateEmitter = this._register(new Emitter<DocumentCollaborationRemoteEnvelope>());
 	private readonly snapshotEmitter = this._register(new Emitter<DocumentCollaborationSnapshot>());
 	private readonly presenceEmitter = this._register(new Emitter<readonly DocumentCollaborationPresence[]>());
@@ -113,7 +113,7 @@ class AppServerDocumentCollaborationConnection extends Disposable implements Doc
 	readonly onDidReceivePresence = this.presenceEmitter.event;
 	readonly onDidFail = this.failureEmitter.event;
 
-	constructor(private readonly service: AppServerDocumentCollaborationService, readonly schema: DocumentCollaborationConnection["schema"], readonly clientId: string, readonly initialSnapshot: DocumentCollaborationSnapshot) {
+	constructor(private readonly service: AppServerDocumentCollaborationService, readonly schema: DocumentCollaborationRoom["schema"], readonly clientId: string, readonly initialSnapshot: DocumentCollaborationSnapshot) {
 		super();
 		this.roomId = initialSnapshot.roomId;
 		this._register(toDisposable(() => {
@@ -171,11 +171,11 @@ class AppServerDocumentCollaborationConnection extends Disposable implements Doc
 	}
 }
 
-function decodeSnapshot(value: AppServerDocumentCollaborationSnapshot, schema: DocumentCollaborationConnection["schema"]): DocumentCollaborationSnapshot {
+function decodeSnapshot(value: AppServerDocumentCollaborationSnapshot, schema: DocumentCollaborationRoom["schema"]): DocumentCollaborationSnapshot {
 	return Object.freeze({ roomId: value.roomId, version: validateProtocolInteger(value.version, "version", 0), document: deserializeDocument(value.document, schema) });
 }
 
-function decodeUpdate(value: AppServerDocumentCollaborationUpdate, schema: DocumentCollaborationConnection["schema"]): DocumentCollaborationRemoteEnvelope {
+function decodeUpdate(value: AppServerDocumentCollaborationUpdate, schema: DocumentCollaborationRoom["schema"]): DocumentCollaborationRemoteEnvelope {
 	return Object.freeze({
 		clientId: value.clientId,
 		sequence: validateProtocolInteger(value.sequence, "sequence", 1),

@@ -11,14 +11,14 @@ import { type LanguageTokenizationSource } from '../../languages/languageLexical
 import { SyntaxService, type SyntaxServiceOptions } from '../../languages/syntax/syntaxService.js';
 import { SyntaxProviderRegistry } from '../../languages/syntax/syntaxProviders.js';
 import { BackgroundTokenizationState, type ITokenizationTextModelPart, SynchronousTokenizationUnavailableError } from '../../tokenizationTextModelPart.js';
-import { LanguageTokenLineIndex, type LanguageTokenLine } from '../../tokens/languageTokenLineIndex.js';
+import { LanguageTokenLineIndex, StyledTokenSource, overlayTokenSources, type LanguageTokenLine } from '../../tokens/languageTokenLineIndex.js';
 import { type LanguageToken } from '../../tokens/languageTokens.js';
 import { LineTokens } from '../../tokens/lineTokens.js';
 import { type SparseMultilineTokens } from '../../tokens/sparseMultilineTokens.js';
 import { SparseTokensStore } from '../../tokens/sparseTokensStore.js';
 import { type TextModel } from '../textModel.js';
 import { SemanticTokensTextModelPart } from './semanticTokensTextModelPart.js';
-import { type SemanticTokenModelSource } from '../../services/resolvedSemanticTokens.js';
+import { type SemanticTokenModelSource, type SemanticTokenSource } from '../../tokens/languageTokens.js';
 
 export interface TokenizationTextModelPartOptions {
 	readonly languageIdCodec?: ILanguageIdCodec;
@@ -43,6 +43,7 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 	readonly onDidEncounterError: Event<unknown> = this.errorEmitter.event;
 	private readonly syntaxService: SyntaxService;
 	readonly semanticTokens: SemanticTokensTextModelPart | undefined;
+	readonly renderedTokens: SemanticTokenSource;
 	readonly languageTokens: LanguageTokenizationSource & SemanticTokenModelSource;
 
 	constructor(readonly textModel: TextModel, options: TokenizationTextModelPartOptions = {}) {
@@ -66,6 +67,10 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 			? this._register(new SemanticTokensTextModelPart(textModel, options.documentSemanticTokensProvider))
 			: undefined;
 		if (this.semanticTokens) this._register(this.semanticTokens.onDidEncounterError(error => this.errorEmitter.fire(error)));
+		const lexicalSource = this._register(new StyledTokenSource(this.languageTokens));
+		this.renderedTokens = this.semanticTokens
+			? overlayTokenSources(lexicalSource, this._register(new StyledTokenSource(this.semanticTokens, this.semanticTokens.styling)))
+			: lexicalSource;
 		this._register(this.languageTokenLineIndex.onDidChange(() => this.changeEmitter.fire()));
 		this._register(textModel.onDidChangeContent(change => {
 			if (!change.isEolChange) {

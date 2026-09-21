@@ -6,7 +6,7 @@ import { URI } from "../../../../../base/common/uri.js";
 import { BrowserTextModelService } from "../../../textmodelResolver/browser/browserTextModelService.js";
 import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../editor/common/core/range.js";
-import { type TextResourceChangeEvent, type TextResourceContent, type TextResourceResolveRequest, type TextResourceSaveRequest, type ITextResourceStore } from "../../../../../editor/common/services/textResourceStore.js";
+import { type TextResourceChangeEvent, type TextResourceContent, type TextResourceResolveRequest, type TextResourceSaveRequest, type ITextResourceStore } from "../../../textmodelResolver/common/textResourceStore.js";
 import { BrowserWorkingCopyService } from "../../../workingCopy/browser/browserWorkingCopyService.js";
 import { type IWorkingCopy } from "../../../workingCopy/common/workingCopyService.js";
 import { BrowserWorkspaceEditService } from "../../browser/browserWorkspaceEditService.js";

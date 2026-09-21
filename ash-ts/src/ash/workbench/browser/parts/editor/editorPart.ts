@@ -36,7 +36,7 @@ import type { IWorkingCopyService } from "../../../services/workingCopy/common/w
 import type { IEditorPane } from "./editorPane.js";
 import { EditorPaneRegistry, EditorPanes } from "./editorRegistry.js";
 import type { IBulkEditService } from "../../../../editor/browser/services/bulkEditService.js";
-import type { ILanguageDiagnosticsService } from "../../../../editor/common/services/languageDiagnosticsService.js";
+import type { ILanguageDiagnosticsService } from "../../../services/language/common/languageDiagnosticsService.js";
 import type { EditorWelcomeOptions, IEditorWelcomeProject } from "../../../contrib/files/browser/editorWelcome.js";
 import { EditorInputSerializers, type EditorInputSerializerRegistry, isSerializedEditorInput } from "../../../services/editor/common/editorInputSerializer.js";
 import type { ApplyEditorWorkingSetOptions, EditorWorkingSet, EditorWorkingSetLayout, EditorWorkingSetTarget } from "../../../services/editor/common/editorWorkingSet.js";

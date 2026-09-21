@@ -8,7 +8,7 @@ import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { TextDirection } from '../../../common/model.js';
 import { type TextModel } from '../../../common/model/textModel.js';
-import { type SemanticTokenSource } from '../../../common/services/resolvedSemanticTokens.js';
+import { type SemanticTokenSource } from '../../../common/tokens/languageTokens.js';
 import { createStanzaVisualSelectionGeometry } from '../../../common/viewModel/visualSelectionGeometry.js';
 import { type HorizontalRange, type RenderingContext } from '../../view/renderingContext.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';

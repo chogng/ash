@@ -10,6 +10,7 @@ runUnitTests([
 	'src/ash/workbench/services/documentCollaboration/**/test/**/*.test.js',
 	'src/ash/workbench/services/language/**/test/**/*.test.js',
 	'src/ash/workbench/services/textMate/**/test/**/*.test.js',
+	'src/ash/workbench/services/textmodelResolver/**/test/**/*.test.js',
 	'src/ash/workbench/services/textfile/**/test/**/*.test.js',
 	'src/ash/workbench/services/workingCopy/**/test/**/*.test.js',
 ], true);

@@ -2,7 +2,7 @@ import { isRecord } from "../../../../base/common/types.js";
 import { DocumentSerializationError } from "../../../common/model/documentSerialization.js";
 import { type DocumentSchema } from "../../../common/model/documentSchema.js";
 import { deserializeDocumentTransaction, serializeDocumentTransaction, type SerializedDocumentTransaction } from "../../../common/model/documentTransactionSerialization.js";
-import { type DocumentCollaborationEnvelope, type DocumentCollaborationRemoteEnvelope } from "./protocol.js";
+import { type DocumentCollaborationEnvelope, type DocumentCollaborationRemoteEnvelope } from "../../../common/services/documentCollaborationService.js";
 
 export const DOCUMENT_COLLABORATION_SERIALIZATION_FORMAT = "ash.document.collaboration";
 export const DOCUMENT_COLLABORATION_SERIALIZATION_VERSION = 1;

@@ -5,9 +5,9 @@ import type { IAction } from "../../../../base/common/actions.js";
 import { isCancellationError } from "../../../../base/common/errors.js";
 import { lxiconsLibrary } from "../../../../base/common/lxiconsLibrary.js";
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { DocumentCollaborationInvite } from "../../../common/services/documentCollaborationService.js";
-import type { DocumentCollaborationMember } from "../../../common/services/documentCollaborationService.js";
-import type { DocumentCollaborationRoomRole } from "../../../common/services/documentCollaborationService.js";
+import type { DocumentCollaborationInvite } from "../../../services/documentCollaboration/common/documentCollaborationService.js";
+import type { DocumentCollaborationMember } from "../../../services/documentCollaboration/common/documentCollaborationService.js";
+import type { DocumentCollaborationRoomRole } from "../../../services/documentCollaboration/common/documentCollaborationService.js";
 import { addDisposableListener, h, fragment as createFragment } from "../../../../base/browser/dom.js";
 
 export type CollaborationToolbarState = "unavailable" | "inactive" | "connecting" | "connected" | "resyncRequired" | "error";
@@ -41,6 +41,7 @@ export class CollaborationContribution extends Disposable {
 	private message: string | undefined;
 	private principalId: string | undefined;
 	private canManageMembers = false;
+	private startGeneration = 0;
 	private readonly memberActionListeners = this._register(new MutableDisposable<DisposableStore>());
 
 	constructor(container: HTMLElement, private readonly options: CollaborationContributionOptions) {
@@ -98,6 +99,7 @@ export class CollaborationContribution extends Disposable {
 	}
 
 	setState(state: CollaborationToolbarState, options: { readonly roomId?: string; readonly message?: string; readonly principalId?: string; readonly canManageMembers?: boolean } = {}): void {
+		this.startGeneration += 1;
 		this._state = state;
 		this.roomId = options.roomId;
 		this.message = options.message;
@@ -159,15 +161,16 @@ export class CollaborationContribution extends Disposable {
 		const entered = this.element.ownerDocument.defaultView?.prompt("Enter a collaboration room ID to join, or leave it blank to create one.", "");
 		if (entered == null) return;
 		this.setState("connecting");
+		const generation = this.startGeneration;
 		void this.options.onStart(entered.trim() || undefined).then(
 			result => {
-				if (this.isDisposed || this._state !== "connecting") {
+				if (this.isDisposed || generation !== this.startGeneration || this._state !== "connecting") {
 					return;
 				}
 				this.setState("connected", { roomId: result.roomId, principalId: result.principalId, canManageMembers: result.canManageMembers });
 			},
 			error => {
-				if (this.isDisposed || this._state !== "connecting") {
+				if (this.isDisposed || generation !== this.startGeneration || this._state !== "connecting") {
 					return;
 				}
 				if (isCancellationError(error)) this.setState("inactive");

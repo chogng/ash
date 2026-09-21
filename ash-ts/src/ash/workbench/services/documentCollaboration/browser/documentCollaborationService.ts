@@ -1,9 +1,9 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { CancellationError } from "../../../../base/common/errors.js";
 import { throwIfCancelled } from "../../../../base/common/cancellation.js";
-import type { DocumentCollaborationConnection } from "../../../../editor/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationOpenInput } from "../../../../editor/common/services/documentCollaborationService.js";
-import type { IDocumentCollaborationService } from "../../../../editor/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationRoom } from '../common/documentCollaborationService.js';
+import type { DocumentCollaborationOpenInput } from '../common/documentCollaborationService.js';
+import type { IDocumentCollaborationService } from '../common/documentCollaborationService.js';
 import { RemoteDocumentCollaborationService } from "./remoteDocumentCollaborationService.js";
 
 /** Workbench-owned selection and routing for document collaboration transports. */
@@ -15,7 +15,7 @@ export class DocumentCollaborationService extends Disposable implements IDocumen
 		if (appServer) this._register(appServer);
 	}
 
-	async open(input: DocumentCollaborationOpenInput, signal: AbortSignal): Promise<DocumentCollaborationConnection> {
+	async open(input: DocumentCollaborationOpenInput, signal: AbortSignal): Promise<DocumentCollaborationRoom> {
 		throwIfCancelled(signal, "Opening a document collaboration room was cancelled");
 		const endpoint = this.ownerWindow.prompt("Enter a remote collaboration server URL, or leave it blank to use this Workbench's App Server.", "");
 		if (endpoint == null) throw new CancellationError("Choosing a document collaboration service was cancelled");

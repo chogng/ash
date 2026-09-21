@@ -1,5 +1,5 @@
-import { type Event } from "../../../base/common/event.js";
-import { type URI } from "../../../base/common/uri.js";
+import { type Event } from "../../../../base/common/event.js";
+import { type URI } from "../../../../base/common/uri.js";
 
 /** Request used by the editor to resolve a persisted or bootstrapped text resource. */
 export interface TextResourceResolveRequest {

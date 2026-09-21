@@ -27,7 +27,7 @@ export interface EditorProfile {
 }
 
 export interface EditorRuntimeOptions {
-	readonly onSave?: RichTextEditorOptions["onSave"];
+	readonly onSave?: () => Promise<void | boolean>;
 	readonly workingCopyService?: EditorPaneOptions["workingCopyService"];
 	readonly createDocumentCollaborationService?: EditorPaneOptions["createDocumentCollaborationService"];
 }

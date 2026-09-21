@@ -4,7 +4,7 @@ import { type URI } from "../../../../base/common/uri.js";
 import { normalizeTextLineEndings } from "../../../../editor/common/core/textChange.js";
 import { normalizeLanguageWorkspaceEdit, type LanguageTextDocumentEdit, type LanguageWorkspaceEdit, type LanguageWorkspaceEditEntry } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
 import { TextModel } from "../../../../editor/common/model/textModel.js";
-import { type ITextModelResourceService, type TextModelReference } from "../../../../editor/common/services/textModelResourceService.js";
+import { type ITextModelResourceService, type TextModelReference } from "../../textmodelResolver/common/textModelResourceService.js";
 import { FileKind, FileNotFoundError, type IFileService } from "../../../../platform/files/common/files.js";
 import { type IWorkingCopyService } from "../../workingCopy/common/workingCopyService.js";
 import { type IWorkspaceEditService, type WorkspaceEditResult } from "../common/workspaceEditService.js";

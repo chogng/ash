@@ -4,14 +4,11 @@ import { TextModel } from "../../../common/model/textModel.js";
 import { TextModelRemoteHistoryPolicy } from "../../../common/model/textModelBlockState.js";
 import { serializeDocument } from "../../../common/model/documentSerialization.js";
 import type { DocumentCollaborationConnection } from "../../../common/services/documentCollaborationService.js";
-import type { DocumentCollaborationInvite } from "../../../common/services/documentCollaborationService.js";
-import type { DocumentCollaborationMember } from "../../../common/services/documentCollaborationService.js";
 import type { DocumentCollaborationPresence } from "../../../common/services/documentCollaborationService.js";
-import type { DocumentCollaborationRoomRole } from "../../../common/services/documentCollaborationService.js";
 import type { DocumentCollaborationSnapshot } from "../../../common/services/documentCollaborationService.js";
 import type { DocumentCollaborationSubmitOutcome } from "../../../common/services/documentCollaborationService.js";
-import type { DocumentCollaborationEnvelope } from "./protocol.js";
-import type { DocumentCollaborationRemoteEnvelope } from "./protocol.js";
+import type { DocumentCollaborationEnvelope } from "../../../common/services/documentCollaborationService.js";
+import type { DocumentCollaborationRemoteEnvelope } from "../../../common/services/documentCollaborationService.js";
 import { rebaseDocumentHistory, rebaseDocumentTransaction } from "./rebase.js";
 import { DocumentCollaborationSynchronizer } from "./synchronizer.js";
 import { DocumentTransaction } from "../../../common/model/documentTransaction.js";
@@ -77,13 +74,7 @@ export class DocumentCollaborationController extends Disposable {
 		return this.connection.canEdit;
 	}
 
-	get canManageMembers(): boolean {
-		return this.connection.canManageMembers;
-	}
 
-	get principalId(): string | undefined {
-		return this.connection.principalId;
-	}
 
 	get state(): DocumentCollaborationState {
 		return this._state;
@@ -93,29 +84,9 @@ export class DocumentCollaborationController extends Disposable {
 		return this._presences;
 	}
 
-	createInvite(displayName: string, role: DocumentCollaborationRoomRole): Promise<DocumentCollaborationInvite> {
-		if (this.isDisposed) return Promise.reject(new ReferenceError("Stanza collaboration controller is disposed"));
-		if (!this.connection.canManageMembers) return Promise.reject(new Error("This collaboration member cannot create room invitations"));
-		return this.connection.createInvite(displayName, role, new AbortController().signal);
-	}
 
-	listMembers(): Promise<readonly DocumentCollaborationMember[]> {
-		if (this.isDisposed) return Promise.reject(new ReferenceError("Stanza collaboration controller is disposed"));
-		if (!this.connection.canManageMembers) return Promise.reject(new Error("This collaboration member cannot inspect room members"));
-		return this.connection.listMembers(new AbortController().signal);
-	}
 
-	rotateMemberAccessToken(principalId: string): Promise<DocumentCollaborationInvite> {
-		if (this.isDisposed) return Promise.reject(new ReferenceError("Stanza collaboration controller is disposed"));
-		if (!this.connection.canManageMembers) return Promise.reject(new Error("This collaboration member cannot manage room credentials"));
-		return this.connection.rotateMemberAccessToken(principalId, new AbortController().signal);
-	}
 
-	revokeMember(principalId: string): Promise<void> {
-		if (this.isDisposed) return Promise.reject(new ReferenceError("Stanza collaboration controller is disposed"));
-		if (!this.connection.canManageMembers) return Promise.reject(new Error("This collaboration member cannot manage room credentials"));
-		return this.connection.revokeMember(principalId, new AbortController().signal);
-	}
 
 	private _state: DocumentCollaborationState = "connected";
 

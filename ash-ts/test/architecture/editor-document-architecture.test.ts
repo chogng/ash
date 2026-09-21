@@ -35,15 +35,15 @@ test("document editing separates editor capabilities from Workbench hosting", ()
 		"browser/widget/richTextEditor/richTextEditorWidget.css",
 		"browser/widget/richTextEditor/htmlDocumentFragment.ts",
 		"contrib/formatting/browser/formattingContribution.ts",
-		"contrib/collaboration/common/protocol.ts",
 		"contrib/collaboration/common/controller.ts",
-		"contrib/collaboration/browser/collaborationContribution.ts",
 		"common/services/documentCollaborationService.ts",
 		"contrib/academic/common/schema.ts",
 	]) assert.equal(statSafe(join(editorRoot, file)), true, file);
 	for (const file of [
 		"contrib/documentEditor/browser/documentEditorInput.ts",
 		"contrib/documentEditor/browser/documentEditorPane.ts",
+		"contrib/documentEditor/browser/collaborationContribution.ts",
+		"services/documentCollaboration/common/documentCollaborationService.ts",
 		"contrib/documentEditor/browser/editorProfile.ts",
 		"contrib/academic/browser/academicEditorProfile.ts",
 		"contrib/academic/browser/academicEditor.contribution.ts",
@@ -123,8 +123,9 @@ test("document editing keeps lines and orthogonal rich semantics in one TextMode
 	assert.match(lineProjection, /node\.type === 'codeBlock'/u);
 	assert.match(pane, /DocumentEditorTextModelService/u);
 	assert.match(editor, /export class RichTextEditorWidget/u);
-	assert.match(editor, /ITextModelResourceService/u);
-	assert.match(editor, /TextModelWorkingCopyReference/u);
+	assert.doesNotMatch(editor, /ITextModelResourceService|TextModelWorkingCopyReference|requireWorkingCopy/u);
+	assert.match(pane, /TextModelWorkingCopyReference/u);
+	assert.match(editor, /setModel\(model: TextModel/u);
 	assert.match(editor, /case "codeBlock":[\s\S]*this\.appendEditableText\(element, node, model, decorations\)/u);
 	assert.doesNotMatch(editor, /new TextModel|TextModel\.createStructured|EmbeddedTextEditor|CodeBlockEditorWidget/u);
 	assert.doesNotMatch(academicContribution, /AcademicCodeBlockEditorFactory|EmbeddedTextEditor|CodeEditorWidget/u);
@@ -133,10 +134,16 @@ test("document editing keeps lines and orthogonal rich semantics in one TextMode
 	const collaborationWidget = readFileSync(join(editorRoot, "browser/widget/richTextEditor/richTextEditorWidget.ts"), "utf8");
 	const collaborationRouter = readFileSync(join(workbenchRoot, "services/documentCollaboration/browser/documentCollaborationService.ts"), "utf8");
 	const documentPane = readFileSync(join(workbenchRoot, "contrib/documentEditor/browser/documentEditorPane.ts"), "utf8");
-	assert.match(collaborationService, /export interface IDocumentCollaborationService/u);
+	assert.doesNotMatch(collaborationService, /IDocumentCollaborationService|createInvite|listMembers|accessToken|RoomRole/u);
+	const roomService = readFileSync(join(workbenchRoot, "services/documentCollaboration/common/documentCollaborationService.ts"), "utf8");
+	assert.match(roomService, /export interface IDocumentCollaborationService/u);
+	assert.match(roomService, /createInvite|listMembers/u);
+	assert.match(collaborationService, /export interface DocumentCollaborationEnvelope/u);
+	assert.doesNotMatch(collaborationService, /from\s+["'][^"']*contrib\//u);
 	assert.doesNotMatch(collaborationService, /from\s+["'][^"']*(?:platform|workbench|electron|generated)[^"']*["']/u);
 	assert.doesNotMatch(collaborationService, /DocumentCollaborationTarget|endpoint|bearerToken/u);
-	assert.match(collaborationWidget, /CollaborationContribution/u);
+	assert.match(documentPane, /new CollaborationContribution/u);
+	assert.doesNotMatch(collaborationWidget, /createInvite|listMembers|accessToken|RoomRole/u);
 	assert.doesNotMatch(collaborationWidget, /AppServerDocumentCollaborationService|endpoint|bearerToken/u);
 	assert.match(collaborationRouter, /ownerWindow\.prompt/u);
 	assert.match(collaborationRouter, /RemoteDocumentCollaborationService/u);

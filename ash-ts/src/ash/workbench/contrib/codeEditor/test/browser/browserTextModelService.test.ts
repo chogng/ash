@@ -6,7 +6,7 @@ import { URI } from "../../../../../base/common/uri.js";
 import { BrowserTextModelService } from "../../../../services/textmodelResolver/browser/browserTextModelService.js";
 import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../editor/common/core/range.js";
-import { TextModelConflictError } from "../../../../../editor/common/services/textModelResourceService.js";
+import { TextModelConflictError } from "../../../../services/textmodelResolver/common/textModelResourceService.js";
 import { type IFileChangeEvent } from "../../../../../platform/files/common/files.js";
 import { TextFileContentSource, TextFileSaveConflictError, type ITextFileService, type TextFileSaveRequest } from "../../../../services/textfile/common/textFileService.js";
 import { BrowserTextResourceStore } from "../../browser/browserTextResourceStore.js";

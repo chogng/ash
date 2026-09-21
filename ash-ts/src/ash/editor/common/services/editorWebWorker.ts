@@ -10,14 +10,14 @@ import { TextReplacement } from '../core/edits/textEdit.js';
 import { getWordAtText } from '../core/wordHelper.js';
 import { BasicInplaceReplace } from '../languages/supports/inplaceReplaceSupport.js';
 import { type LanguageWorkerRequest } from '../languages/languageRequestCoordinator.js';
-import { EDITOR_WORKER_TEXTUAL_SUGGEST_LANE, EDITOR_WORKER_MINIMAL_EDITS_LANE, EDITOR_WORKER_NAVIGATE_VALUE_LANE, EDITOR_WORKER_UNICODE_HIGHLIGHTS_LANE, type EditorWorkerImplementation, type EditorWorkerLane, type EditorWorkerMinimalEditsRequest, type EditorWorkerNavigateValueRequest, type EditorWorkerRequest, type EditorWorkerResult } from './editorWorkerProtocol.js';
+import { EDITOR_WORKER_TEXTUAL_SUGGEST_LANE, EDITOR_WORKER_MINIMAL_EDITS_LANE, EDITOR_WORKER_NAVIGATE_VALUE_LANE, EDITOR_WORKER_UNICODE_HIGHLIGHTS_LANE, type EditorWorkerImplementation, type EditorWorkerLane, type EditorWorkerMinimalEditsRequest, type EditorWorkerNavigateValueRequest, type EditorWorkerRequest, type EditorWorkerResult } from './editorWorkerWire.js';
 import { computeUnicodeHighlights } from './unicodeTextModelHighlighter.js';
 import { type TextEdit } from '../languages.js';
 
 const MINIMAL_EDIT_LIMIT = 100_000;
 
 /** Executes model-versioned editor computations inside a dedicated Worker or in-process host. */
-export class EditorWorkerRequestExecutor extends AbstractDisposable implements EditorWorkerImplementation {
+export class EditorWorker extends AbstractDisposable implements EditorWorkerImplementation {
 	private readonly wordProvider = createLanguageWordCompletionProvider();
 
 	public async run(request: LanguageWorkerRequest<EditorWorkerLane, EditorWorkerRequest>, signal: AbortSignal): Promise<EditorWorkerResult> {

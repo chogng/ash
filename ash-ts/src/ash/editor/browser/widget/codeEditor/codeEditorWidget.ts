@@ -25,14 +25,13 @@ import { EditorConfiguration, type IEditorConstructionOptions } from '../../conf
 import { migrateOptions } from '../../config/migrateOptions.js';
 import { EditorExtensionsRegistry, type EditorCommandEvent, type EditorContributionRegistration, type TextEditorContributionContext } from '../../editorExtensions.js';
 import { IVersionedEditorWorkerClient, VersionedEditorWorkerClient, type VersionedEditorWorkerFactory } from '../../services/editorWorkerService.js';
-import { EditorWorkerRequestExecutor } from '../../../common/services/editorWorkerRequestExecutor.js';
+import { EditorWorker } from '../../../common/services/editorWebWorker.js';
 import { ILanguageConfigurationService } from '../../../common/languages/languageConfigurationRegistry.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
-import { ResolvedSemanticTokensService } from '../../../common/services/resolvedSemanticTokensService.js';
 import { type EditorIndentationOptions } from '../../../common/core/misc/indentation.js';
 import { type ConfigurationChangedEvent, EditorLineWrapping, EditorOption, type EditorLayoutInfo, type FindComputedEditorOptionValueById, type IComputedEditorOptions, type IEditorOptions, WrappingIndent } from '../../../common/config/editorOptions.js';
 import { type LanguageCompletionWorkerFactory } from '../../../common/languages/completion/languageCompletionService.js';
-import { type ILanguageDiagnosticsService } from '../../../common/services/languageDiagnosticsService.js';
+import { type LanguageDiagnosticsHost } from '../../../common/languages/languageResults.js';
 import { isCompletionsEnablement, type CompletionsEnablement } from '../../../common/services/completionsEnablement.js';
 import { type LanguageLocation } from '../../../common/languages.js';
 import { type LanguageWorkspaceEdit } from '../../../common/languages/languageWorkspaceEdit.js';
@@ -79,7 +78,7 @@ export interface ICodeEditorWidgetOptions extends IEditorConstructionOptions {
 	readonly accessibilityService?: IAccessibilityService;
 	readonly editorWorkerFactory?: VersionedEditorWorkerFactory;
 	readonly completionWorkerFactory?: LanguageCompletionWorkerFactory;
-	readonly languageDiagnosticsService?: ILanguageDiagnosticsService;
+	readonly languageDiagnosticsService?: LanguageDiagnosticsHost;
 	readonly onLanguageError?: (error: unknown) => void;
 	readonly onOpenLink?: (target: string) => void | Promise<void>;
 	readonly onExecuteEditorCommand?: (id: string, args: readonly unknown[] | undefined) => void | Promise<void>;
@@ -334,10 +333,9 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			const languageConfigurationService = this.languageConfigurationService;
 			const languageFeaturesService = this.languageFeaturesService;
 			const onLanguageError = this.onLanguageError;
-			const resolvedSemanticTokensService = modelStore.add(new ResolvedSemanticTokensService());
 			const editorWorker = modelStore.add(options.editorWorkerFactory
 				? options.editorWorkerFactory(model)
-				: new VersionedEditorWorkerClient(model, () => new EditorWorkerRequestExecutor()));
+				: new VersionedEditorWorkerClient(model, () => new EditorWorker()));
 			services.registerInstance(IVersionedEditorWorkerClient, editorWorker);
 			this.configuration.setModelLineCount(model.lineCount);
 			modelStore.add(model.onDidChangeDecorations(event => this.modelDecorationsEmitter.fire(event)));
@@ -406,7 +404,6 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				editorWorker,
 				languageId: options.languageId,
 				languageFeaturesService,
-				resolvedSemanticTokensService,
 				configurations: languageConfigurationService,
 				onLanguageError,
 				getService,

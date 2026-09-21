@@ -9,18 +9,18 @@ import { DocumentEditorPane } from "../../../src/ash/workbench/contrib/documentE
 import type { DocumentNode } from "../../../src/ash/editor/common/model/document.js";
 import { serializeDocument } from "../../../src/ash/editor/common/model/documentSerialization.js";
 import type { DocumentSchema } from "../../../src/ash/editor/common/model/documentSchema.js";
-import type { DocumentCollaborationConnection } from "../../../src/ash/editor/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationInvite } from "../../../src/ash/editor/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationMember } from "../../../src/ash/editor/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationOpenInput } from "../../../src/ash/editor/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationRoom } from "../../../src/ash/workbench/services/documentCollaboration/common/documentCollaborationService.js";
+import type { DocumentCollaborationInvite } from "../../../src/ash/workbench/services/documentCollaboration/common/documentCollaborationService.js";
+import type { DocumentCollaborationMember } from "../../../src/ash/workbench/services/documentCollaboration/common/documentCollaborationService.js";
+import type { DocumentCollaborationOpenInput } from "../../../src/ash/workbench/services/documentCollaboration/common/documentCollaborationService.js";
 import type { DocumentCollaborationPresence } from "../../../src/ash/editor/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationRoomRole } from "../../../src/ash/editor/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationRoomRole } from "../../../src/ash/workbench/services/documentCollaboration/common/documentCollaborationService.js";
 import type { DocumentSelection } from "../../../src/ash/editor/common/core/documentSelection.js";
 import type { DocumentCollaborationSnapshot } from "../../../src/ash/editor/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationRemoteEnvelope } from "../../../src/ash/editor/contrib/collaboration/common/protocol.js";
-import type { DocumentCollaborationEnvelope } from "../../../src/ash/editor/contrib/collaboration/common/protocol.js";
+import type { DocumentCollaborationRemoteEnvelope } from "../../../src/ash/editor/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationEnvelope } from "../../../src/ash/editor/common/services/documentCollaborationService.js";
 import type { DocumentCollaborationSubmitOutcome } from "../../../src/ash/editor/common/services/documentCollaborationService.js";
-import type { IDocumentCollaborationService } from "../../../src/ash/editor/common/services/documentCollaborationService.js";
+import type { IDocumentCollaborationService } from "../../../src/ash/workbench/services/documentCollaboration/common/documentCollaborationService.js";
 import { MemoryTextFiles } from "./memoryTextFiles.js";
 import { EditorExtensionsRegistry } from '../../../src/ash/editor/browser/editorExtensions.js';
 
@@ -43,12 +43,12 @@ declare global {
 }
 
 class BrowserDocumentCollaborationService extends Disposable implements IDocumentCollaborationService {
-	async open(input: DocumentCollaborationOpenInput, _signal: AbortSignal): Promise<DocumentCollaborationConnection> {
+	async open(input: DocumentCollaborationOpenInput, _signal: AbortSignal): Promise<DocumentCollaborationRoom> {
 		return new BrowserDocumentCollaborationConnection(input.schema, input.clientId, input.document, input.roomId ?? "editor-browser-room", true);
 	}
 }
 
-class BrowserDocumentCollaborationConnection extends Disposable implements DocumentCollaborationConnection {
+class BrowserDocumentCollaborationConnection extends Disposable implements DocumentCollaborationRoom {
 	private readonly updates = this._register(new Emitter<DocumentCollaborationRemoteEnvelope>());
 	private readonly snapshots = this._register(new Emitter<DocumentCollaborationSnapshot>());
 	private readonly presences = this._register(new Emitter<readonly DocumentCollaborationPresence[]>());

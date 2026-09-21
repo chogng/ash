@@ -14,7 +14,7 @@ Stanza Text Engine 是 Ash 唯一的行式文本编辑权威。文本、版本�
 | 换行、折叠、可见行和滚动 | `common/viewModel` + `common/viewLayout` | DOM-free、版本绑定 |
 | DOM、光标、选区和 decoration | `browser/view` + `browser/viewParts` | 只投影，不创建第二套模型或滚动权威 |
 | token、诊断、补全、折叠、符号和结构选择 | `common/languages`、通用 provider contract 与 frontend service | 异步结果必须通过 model identity 与 version gate；App Server provider 由 Workbench 注册 |
-| 打开、保存、冲突和恢复 | Editor model service + Workbench adapter | 文件传输不拥有 live model |
+| 打开、保存、冲突和恢复 | Workbench model resolver 与 working copy | 文件传输不拥有 live model |
 | 可选编辑能力 | `contrib/<feature>` | 移除 feature 不破坏基础模型正确性 |
 
 ## 设计不变量
@@ -108,7 +108,7 @@ IME composition 使用受保护的 history revision。Provisional updates 可以
 
 语言请求从 immutable model snapshot 开始。`LanguageRequestCoordinator`、`VersionedLanguageResultStore` 和对应 token/diagnostic index 共同执行 latest-wins、cancellation、cross-model rejection 和 stale-result rejection。Worker 或 Rust adapter 可以生产事实，但不能成为 token store、selection 或 model owner。
 
-语义 token 的 provider 生命周期由 `SemanticTokensStylingService` 按 provider identity 缓存 `SemanticTokensProviderStyling`；单 provider owner 把当前 `LanguageToken` 映射为展示属性，`ResolvedSemanticTokensService` 只负责 source/overlay 的结果转换。浏览器 contribution 实际经过这两个 owner，不把 provider cache 合并进 DOM 展示服务。当前本地 provider 直接返回结构化 `LanguageToken`，尚未采用 VS Code legend 的数字 metadata 表示。
+语义 token 的 provider 样式由 `SemanticTokensStylingService` 按 provider identity 缓存 `SemanticTokensProviderStyling`。`TokenizationTextModelPart` 持有 `StyledTokenSource`，负责逐行显示数据的缓存、失效与语法/语义 token 合并；同一模型的多个编辑器共用该结果。浏览器 contribution 直接消费 `model.tokenization.renderedTokens`，不再创建额外的解析服务。当前本地 provider 直接返回结构化 `LanguageToken`，尚未采用 VS Code legend 的数字 metadata 表示。
 
 ## 视图架构
 

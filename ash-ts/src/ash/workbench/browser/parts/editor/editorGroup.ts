@@ -29,7 +29,7 @@ import { editorInputKey, type EditorTabDescriptor } from "./editorTabsControl.js
 import { EditorTitleControl, type EditorTitleActions } from "./editorTitleControl.js";
 import type { LanguageLocation } from "../../../../editor/common/languages.js";
 import type { LanguageWorkspaceEdit } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
-import type { ILanguageDiagnosticsService } from "../../../../editor/common/services/languageDiagnosticsService.js";
+import type { ILanguageDiagnosticsService } from "../../../services/language/common/languageDiagnosticsService.js";
 import type { IKeybindingsResourceService } from "../../../../platform/keybinding/common/keybindingsResource.js";
 import type { IKeyboardLayoutService } from "../../../../platform/keyboardLayout/common/keyboardLayout.js";
 import type { IContextKeyService, IScopedContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";

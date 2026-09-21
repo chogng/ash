@@ -205,7 +205,7 @@ import { IWorkingCopyBackupService, type WorkingCopyBackup } from "../services/w
 import { projectColorThemeTokens } from "../services/textMate/common/textMateThemeProjection.js";
 import { BrowserWorkspaceEditService } from "../services/language/browser/browserWorkspaceEditService.js";
 import { IWorkspaceEditService } from "../services/language/common/workspaceEditService.js";
-import { ITextModelResourceService } from "../../editor/common/services/textModelResourceService.js";
+import { ITextModelResourceService } from "../services/textmodelResolver/common/textModelResourceService.js";
 import { registerTreeViewsDnDService } from '../../editor/common/services/treeViewsDndService.js';
 import { BrowserBulkEditService } from "../contrib/bulkEdit/browser/bulkEditService.js";
 import { IBulkEditService } from "../../editor/browser/services/bulkEditService.js";

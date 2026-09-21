@@ -11,7 +11,7 @@ import { assertDefined } from '../../../../base/common/types.js';
 import { MultiDiffEditorWidget, type MultiDiffEditorItem, type MultiDiffEditorLocation } from '../../../../editor/browser/widget/multiDiffEditor/multiDiffEditorWidget.js';
 import { DiffModel } from '../../../../editor/common/diff/diffModel.js';
 import { type IDiffComputationService } from '../../../../editor/common/diff/diffComputationService.js';
-import { type ITextModelResourceService, type TextModelReference } from '../../../../editor/common/services/textModelResourceService.js';
+import { type ITextModelResourceService, type TextModelReference } from '../../../services/textmodelResolver/common/textModelResourceService.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import type { IMenuService } from '../../../../platform/actions/common/menuService.js';
 import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";

@@ -1,9 +1,11 @@
-import { type ILanguageDiagnosticsService as EditorLanguageDiagnosticsService } from "../../../../editor/common/services/languageDiagnosticsService.js";
-import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
+import type { LanguageDiagnosticSnapshot, LanguageDiagnosticsHost } from '../../../../editor/common/languages/languageResults.js';
+import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 
-/** Workbench DI view of the editor diagnostic aggregation contract. */
-export interface ILanguageDiagnosticsService extends EditorLanguageDiagnosticsService {}
+/** Owns diagnostic aggregation across open models and unopened workspace resources. */
+export interface ILanguageDiagnosticsService extends LanguageDiagnosticsHost {
+	getAllDiagnostics(): readonly LanguageDiagnosticSnapshot[];
+}
 
-export const ILanguageDiagnosticsService = createServiceIdentifier<ILanguageDiagnosticsService>("languageDiagnosticsService");
+export const ILanguageDiagnosticsService = createServiceIdentifier<ILanguageDiagnosticsService>('languageDiagnosticsService');
 
-export type { LanguageDiagnosticSnapshot, LanguageDiagnosticsPublisher, LanguageDiagnosticsRepository, LanguageDiagnosticsSource } from "../../../../editor/common/services/languageDiagnosticsService.js";
+export type { LanguageDiagnosticSnapshot, LanguageDiagnosticsPublisher } from '../../../../editor/common/languages/languageResults.js';

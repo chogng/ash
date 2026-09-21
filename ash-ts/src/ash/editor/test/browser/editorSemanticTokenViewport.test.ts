@@ -2,11 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../common/viewModel/textMeasurer.js";
-import { LanguageTokenStylingResolver } from '../../common/services/languageTokenStylingResolver.js';
-import { SemanticTokenPresentation } from '../../common/services/resolvedSemanticTokens.js';
-import { ResolvedSemanticTokensService } from '../../common/services/resolvedSemanticTokensService.js';
+import { SemanticTokenPresentation } from '../../common/tokens/languageTokens.js';
+import { LanguageTokenLineIndex, StyledTokenSource } from '../../common/tokens/languageTokenLineIndex.js';
 import { LanguageResultAcceptance } from "../../common/languages/languageResultStore.js";
-import { LanguageTokenLineIndex } from "../../common/tokens/languageTokenLineIndex.js";
 import { createLanguageTokenStore, type LanguageToken } from "../../common/languages/languageResults.js";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
@@ -46,8 +44,7 @@ test("Viewport projects tokens only for virtualized lines and preserves overlapp
 		token(10, 0, 4, "number"),
 	]);
 	using index = new LanguageTokenLineIndex(store);
-	using styling = new ResolvedSemanticTokensService();
-	const source = styling.createSource(index);
+	using source = new StyledTokenSource(index);
 	using viewport = new View({
 		container,
 		model,
@@ -77,8 +74,7 @@ test("Same-version token replacement rerenders visible text and model edits clea
 	using store = createLanguageTokenStore(model);
 	acceptTokens(store, model, 1, [token(0, 0, 5, "string")]);
 	using index = new LanguageTokenLineIndex(store);
-	using styling = new ResolvedSemanticTokensService();
-	const source = styling.createSource(index);
+	using source = new StyledTokenSource(index);
 	using viewport = new View({
 		container,
 		model,
@@ -122,14 +118,14 @@ test("Viewport clips semantic token spans to every soft-wrapped text fragment", 
 		presentation: { foreground: "#123456", fontStyle: ["italic"] },
 	}]);
 	using index = new LanguageTokenLineIndex(store);
-	using styling = new ResolvedSemanticTokensService();
+	using source = new StyledTokenSource(index);
 	using viewport = new View({
 		container,
 		model,
 		glyphMargin: false,
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
-		semanticTokenSource: styling.createSource(index),
+		semanticTokenSource: source,
 		lineWrapping: EditorLineWrapping.On,
 		minimap: { enabled: false },
 	});
@@ -162,9 +158,8 @@ test("Viewport rejects cross-model token sources and owns none of their common s
 	using otherStore = createLanguageTokenStore(otherModel);
 	using index = new LanguageTokenLineIndex(store);
 	using otherIndex = new LanguageTokenLineIndex(otherStore);
-	using styling = new ResolvedSemanticTokensService();
-	const source = styling.createSource(index);
-	const otherSource = styling.createSource(otherIndex);
+	using source = new StyledTokenSource(index);
+	using otherSource = new StyledTokenSource(otherIndex);
 
 	assert.throws(() => new View({
 		container,
@@ -199,12 +194,11 @@ test("Viewport resolves semantic tokens only for virtualized lines", () => {
 	using store = createLanguageTokenStore(model);
 	acceptTokens(store, model, 1, Array.from({ length: 1_000 }, (_, lineIndex) => token(lineIndex, 0, 4, "keyword")));
 	using index = new LanguageTokenLineIndex(store);
-	using styling = new ResolvedSemanticTokensService();
 	let resolverCalls = 0;
-	const source = styling.createSource(index, new LanguageTokenStylingResolver(() => {
+	using source = new StyledTokenSource(index, { resolve: () => {
 		resolverCalls += 1;
-		return SemanticTokenPresentation.Keyword;
-	}));
+		return { modifiers: [], presentation: SemanticTokenPresentation.Keyword };
+	} });
 	using viewport = new View({
 		container,
 		model,

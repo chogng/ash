@@ -98,7 +98,7 @@ Schema transaction compatibility 尚未迁移成直接的 `LineDocumentTransacti
 
 ## Browser projection 与输入 profile
 
-`CodeEditorWidget` 投影普通代码文件的逻辑行、visual wrapping、selection、caret、token 和 decoration。`RichTextEditorWidget` 当前投影 schema compatibility value，并通过同一个 `TextModel` 提交 Academic commands；它不得拥有第二套文本、版本或 history。
+`CodeEditorWidget` 投影普通代码文件的逻辑行、visual wrapping、selection、caret、token 和 decoration。`RichTextEditorWidget` 当前投影 schema compatibility value，并通过同一个 `TextModel` 提交 Academic commands；它不得拥有第二套文本、版本或 history。 `DocumentEditorPane` 获取并持有工作副本，负责保存、另存为、回退和释放模型；控件通过 `setModel` 接收模型，使用模型自身的 schema，并仅释放自己的监听和视图。
 
 输入语义由 profile/widget 决定：
 
@@ -124,7 +124,7 @@ Academic `codeBlock` 当前投影为父 `TextModel` 中的连续 code region。�
 
 Workbench `EditorProfile` 组合 resource matcher、schema/semantic vocabulary、empty document factory、node/atom views、toolbar actions、plugins 与 collaboration schema identity。Profile 在 pane 生命周期内固定。
 
-协作边界与 VS Code 的 Editor/Workbench 分层一致：Editor 只定义房间输入、连接能力和状态投影，不知道服务地址、凭据或产品通信方式；Workbench 创建具体服务、选择连接方式并把通用 `IDocumentCollaborationService` 注入 pane。
+协作边界与 VS Code 的 Editor/Workbench 分层一致：Editor 定义文档事务、快照、远端选区和同步连接契约；Workbench 定义房间输入、邀请、成员角色与凭证管理。DocumentEditorPane 创建房间工具栏并选择连接方式，将已打开的连接交给 Widget；切换文档时取消房间请求并释放连接。
 
 Code codec 只读写 LF/CRLF 文本，并把 `languageId` 等信息放在文档 metadata 或宿主资源状态中。Academic codec 必须保存 lines、marks、atoms、facets、regions、relations、assets、references 与 document metadata；当前 production codec 仍使用 versioned schema serialization envelope，迁移到直接 line serialization 时必须提供兼容 migration。
 

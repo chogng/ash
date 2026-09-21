@@ -1,12 +1,11 @@
-import { createServiceIdentifier, type ServiceIdentifier } from "../../../platform/instantiation/common/instantiation.js";
-import { type Event } from "../../../base/common/event.js";
-import { type IDisposable } from "../../../base/common/lifecycle.js";
-import { type URI } from "../../../base/common/uri.js";
-import type { DocumentNode } from "../model/document.js";
-import type { DocumentPlugin } from "../model/documentPlugin.js";
-import type { DocumentSchema } from "../model/documentSchema.js";
-import { type TextModel } from "../model/textModel.js";
-import { type ITextResourceStore } from "./textResourceStore.js";
+import { createServiceIdentifier, type ServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
+import { type Event } from "../../../../base/common/event.js";
+import { type IDisposable } from "../../../../base/common/lifecycle.js";
+import { type URI } from "../../../../base/common/uri.js";
+import type { DocumentNode } from "../../../../editor/common/model/document.js";
+import type { DocumentPlugin } from "../../../../editor/common/model/documentPlugin.js";
+import type { DocumentSchema } from "../../../../editor/common/model/documentSchema.js";
+import { type TextModel } from "../../../../editor/common/model/textModel.js";
 
 /** The minimum identity and bootstrap data needed to acquire a text model. */
 export interface TextModelInput {

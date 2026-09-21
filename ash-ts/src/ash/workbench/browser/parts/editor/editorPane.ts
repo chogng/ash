@@ -20,7 +20,7 @@ import type { IServerEventApi } from "../../../../platform/app-server/common/app
 import type { Range } from "../../../../editor/common/core/range.js";
 import type { LanguageLocation } from "../../../../editor/common/languages.js";
 import type { LanguageWorkspaceEdit } from "../../../../editor/common/languages/languageWorkspaceEdit.js";
-import type { ILanguageDiagnosticsService } from "../../../../editor/common/services/languageDiagnosticsService.js";
+import type { ILanguageDiagnosticsService } from "../../../services/language/common/languageDiagnosticsService.js";
 import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
 import type { IKeybindingsResourceService } from "../../../../platform/keybinding/common/keybindingsResource.js";
 import type { IKeyboardLayoutService } from "../../../../platform/keyboardLayout/common/keyboardLayout.js";

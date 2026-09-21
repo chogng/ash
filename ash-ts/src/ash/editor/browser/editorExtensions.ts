@@ -32,8 +32,6 @@ import { type TextModel } from '../common/model/textModel.js';
 import { type DocumentTextStyleAttributes } from '../common/model/documentSchema.js';
 import { type ILanguageConfigurationService } from '../common/languages/languageConfigurationRegistry.js';
 import { type ILanguageFeaturesService } from '../common/services/languageFeatures.js';
-import { type IResolvedSemanticTokensService } from '../common/services/resolvedSemanticTokens.js';
-import { type DocumentCollaborationInvite, type DocumentCollaborationMember, type DocumentCollaborationRoomRole } from '../common/services/documentCollaborationService.js';
 import { type ICodeEditorWidgetOptions } from './widget/codeEditor/codeEditorWidget.js';
 import { type ViewController } from './view/viewController.js';
 import { type View } from './view.js';
@@ -539,7 +537,6 @@ export interface TextEditorContributionConfigurationContext extends SharedTextCo
 	readonly renderDiagnosticDecorations: boolean;
 	readonly viewModel: IViewModel;
 	readonly selectionController: CursorsController;
-	readonly resolvedSemanticTokensService: IResolvedSemanticTokensService;
 	readonly provideService: <T>(capability: ServiceIdentifier<T>, value: T) => void;
 	readonly setSemanticTokenSource: (source: SemanticTokenSource) => void;
 	readonly setBracketColorizationSource: (source: BracketColorizationSource) => void;
@@ -605,17 +602,6 @@ export interface DocumentFormattingContribution extends IDisposable {
 	setState(state: DocumentFormattingState): void;
 }
 
-export interface DocumentCollaborationStartResult {
-	readonly roomId: string;
-	readonly principalId: string | undefined;
-	readonly canManageMembers: boolean;
-}
-
-export interface DocumentCollaborationContribution extends IDisposable {
-	readonly element: HTMLElement;
-	setState(state: 'unavailable' | 'inactive' | 'connecting' | 'connected' | 'resyncRequired' | 'error', options?: { readonly roomId?: string; readonly message?: string; readonly principalId?: string; readonly canManageMembers?: boolean }): void;
-}
-
 export interface DocumentEditorContributionContext {
 	readonly kind: 'document';
 	readonly container: HTMLElement;
@@ -624,14 +610,7 @@ export interface DocumentEditorContributionContext {
 	readonly onSetTextStyle: (attrs: DocumentTextStyleAttributes) => void;
 	readonly onClearTextStyle: () => void;
 	readonly onRunDocumentAction: (actionId: string) => void;
-	readonly onStartCollaboration: (roomId: string | undefined) => Promise<DocumentCollaborationStartResult>;
-	readonly onStopCollaboration: () => void;
-	readonly onInviteCollaborator: (displayName: string, role: DocumentCollaborationRoomRole) => Promise<DocumentCollaborationInvite>;
-	readonly onListCollaborators: () => Promise<readonly DocumentCollaborationMember[]>;
-	readonly onRotateCollaboratorAccessToken: (principalId: string) => Promise<DocumentCollaborationInvite>;
-	readonly onRevokeCollaborator: (principalId: string) => Promise<void>;
 	readonly setFormattingContribution: (contribution: DocumentFormattingContribution) => void;
-	readonly setCollaborationContribution: (contribution: DocumentCollaborationContribution) => void;
 }
 
 export type EditorContributionContext = TextEditorContributionContext | DocumentEditorContributionContext;

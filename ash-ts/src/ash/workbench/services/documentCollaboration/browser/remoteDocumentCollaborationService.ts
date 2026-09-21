@@ -6,16 +6,16 @@ import { allSelection, nodeSelection, textSelection, type DocumentSelection } fr
 import type { DocumentNode } from "../../../../editor/common/model/document.js";
 import { deserializeDocument, serializeDocument } from "../../../../editor/common/model/documentSerialization.js";
 import { deserializeDocumentTransaction, serializeDocumentTransaction } from "../../../../editor/common/model/documentTransactionSerialization.js";
-import type { DocumentCollaborationConnection } from "../../../../editor/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationInvite } from "../../../../editor/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationMember } from "../../../../editor/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationOpenInput } from "../../../../editor/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationRoom } from '../common/documentCollaborationService.js';
+import type { DocumentCollaborationInvite } from '../common/documentCollaborationService.js';
+import type { DocumentCollaborationMember } from '../common/documentCollaborationService.js';
+import type { DocumentCollaborationOpenInput } from '../common/documentCollaborationService.js';
 import type { DocumentCollaborationPresence } from "../../../../editor/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationRoomRole } from "../../../../editor/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationRoomRole } from '../common/documentCollaborationService.js';
 import type { DocumentCollaborationSnapshot } from "../../../../editor/common/services/documentCollaborationService.js";
 import type { DocumentCollaborationSubmitOutcome } from "../../../../editor/common/services/documentCollaborationService.js";
-import type { DocumentCollaborationEnvelope } from "../../../../editor/contrib/collaboration/common/protocol.js";
-import type { DocumentCollaborationRemoteEnvelope } from "../../../../editor/contrib/collaboration/common/protocol.js";
+import type { DocumentCollaborationEnvelope } from "../../../../editor/common/services/documentCollaborationService.js";
+import type { DocumentCollaborationRemoteEnvelope } from "../../../../editor/common/services/documentCollaborationService.js";
 
 const API_ROOT = "/v1/document-collaboration";
 const INITIAL_POLL_RETRY_DELAY_MS = 250;
@@ -43,7 +43,7 @@ export class RemoteDocumentCollaborationService extends Disposable {
 		}));
 	}
 
-	async open(input: DocumentCollaborationOpenInput, options: RemoteDocumentCollaborationOptions, signal: AbortSignal): Promise<DocumentCollaborationConnection> {
+	async open(input: DocumentCollaborationOpenInput, options: RemoteDocumentCollaborationOptions, signal: AbortSignal): Promise<DocumentCollaborationRoom> {
 		throwIfCancelled(signal, "Opening a remote Stanza collaboration room was cancelled");
 		const target = normalizeTarget(options.endpoint, options.bearerToken);
 		const opened = await this.request(target, "rooms/open", {
@@ -178,7 +178,7 @@ export class RemoteDocumentCollaborationService extends Disposable {
 	}
 }
 
-class RemoteDocumentCollaborationConnection extends Disposable implements DocumentCollaborationConnection {
+class RemoteDocumentCollaborationConnection extends Disposable implements DocumentCollaborationRoom {
 	private readonly updateEmitter = this._register(new Emitter<DocumentCollaborationRemoteEnvelope>());
 	private readonly snapshotEmitter = this._register(new Emitter<DocumentCollaborationSnapshot>());
 	private readonly presenceEmitter = this._register(new Emitter<readonly DocumentCollaborationPresence[]>());
@@ -197,7 +197,7 @@ class RemoteDocumentCollaborationConnection extends Disposable implements Docume
 	readonly onDidFail = this.failureEmitter.event;
 	readonly roomId: string;
 
-	constructor(private readonly service: RemoteDocumentCollaborationService, readonly target: RemoteTarget, readonly schema: DocumentCollaborationConnection["schema"], readonly clientId: string, readonly principalId: string | undefined, readonly initialSnapshot: DocumentCollaborationSnapshot, readonly canEdit: boolean, readonly canManageMembers: boolean) {
+	constructor(private readonly service: RemoteDocumentCollaborationService, readonly target: RemoteTarget, readonly schema: DocumentCollaborationRoom["schema"], readonly clientId: string, readonly principalId: string | undefined, readonly initialSnapshot: DocumentCollaborationSnapshot, readonly canEdit: boolean, readonly canManageMembers: boolean) {
 		super();
 		this.roomId = initialSnapshot.roomId;
 		this._version = initialSnapshot.version;
@@ -353,12 +353,12 @@ function normalizeTarget(endpoint: string, bearerToken: string): RemoteTarget {
 	return Object.freeze({ endpoint: parsed, bearerToken });
 }
 
-function decodeSnapshot(value: unknown, schema: DocumentCollaborationConnection["schema"]): DocumentCollaborationSnapshot {
+function decodeSnapshot(value: unknown, schema: DocumentCollaborationRoom["schema"]): DocumentCollaborationSnapshot {
 	const record = expectRecord(value, "remote collaboration snapshot");
 	return Object.freeze({ roomId: expectString(record.roomId, "remote collaboration roomId"), version: validateProtocolInteger(record.version, "version", 0), document: deserializeDocument(expectString(record.document, "remote collaboration document"), schema) });
 }
 
-function decodeUpdate(value: unknown, schema: DocumentCollaborationConnection["schema"]): DocumentCollaborationRemoteEnvelope {
+function decodeUpdate(value: unknown, schema: DocumentCollaborationRoom["schema"]): DocumentCollaborationRemoteEnvelope {
 	const record = expectRecord(value, "remote collaboration update");
 	return Object.freeze({
 		clientId: expectString(record.clientId, "remote collaboration clientId"),

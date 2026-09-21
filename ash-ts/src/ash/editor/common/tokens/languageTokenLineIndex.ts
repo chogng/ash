@@ -1,6 +1,8 @@
+import { resolveSemanticTokenStyling } from '../services/semanticTokensProviderStyling.js';
+import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken, type SemanticTokenLine, type SemanticTokenModelSource, type SemanticTokenSource, type SemanticTokenStylingResolver } from './languageTokens.js';
 import { arraysEqual } from "../../../base/common/arrays.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
+import { Disposable, combinedDisposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { type VersionedLanguageResult } from "../languages/languageRequestCoordinator.js";
 import { LanguageResultStoreChangeReason, type VersionedLanguageResultStore } from "../languages/languageResultStore.js";
 import { getLanguageTokenResultDelta, type LanguageTokenResultDelta, type LanguageTokenResultSplice } from '../services/semanticTokensDto.js';
@@ -415,4 +417,101 @@ const EMPTY_STATE: LanguageTokenIndexState = Object.freeze({
 
 function assertLineIndex(lineIndex: number): void {
 	if (!Number.isSafeInteger(lineIndex) || lineIndex < 0) throw new RangeError("Language token line index must be a non-negative safe integer");
+}
+
+/** Lazily styles one model token index and invalidates its cached lines with that index. */
+export class StyledTokenSource extends Disposable implements SemanticTokenSource {
+	private readonly lineTokens = new Map<number, readonly ResolvedSemanticToken[]>();
+	private readonly changeEmitter = this._register(new Emitter<void>());
+	public readonly onDidChange = this.changeEmitter.event;
+
+	constructor(private readonly source: SemanticTokenModelSource, private readonly styling: SemanticTokenStylingResolver = { resolve: resolveSemanticTokenStyling }) {
+		super();
+		this._register(source.onDidChange(() => {
+			this.lineTokens.clear();
+			this.changeEmitter.fire();
+		}));
+	}
+
+	public get textModel(): TextModel {
+		return this.source.textModel;
+	}
+
+	public get lines(): readonly SemanticTokenLine[] {
+		this.assertNotDisposed();
+		return Object.freeze(this.source.lines.map(line => Object.freeze({ lineIndex: line.lineIndex, tokens: this.getLineTokens(line.lineIndex) })));
+	}
+
+	public getLineTokens(lineIndex: number): readonly ResolvedSemanticToken[] {
+		this.assertNotDisposed();
+		let tokens = this.lineTokens.get(lineIndex);
+		if (!tokens) {
+			tokens = resolveLineTokens(this.source.getLineTokens(lineIndex), this.styling);
+			this.lineTokens.set(lineIndex, tokens);
+		}
+		return tokens;
+	}
+
+	protected override disposeCore(): void {
+		this.lineTokens.clear();
+		super.disposeCore();
+	}
+}
+
+export function overlayTokenSources(base: SemanticTokenSource, overlay: SemanticTokenSource): SemanticTokenSource {
+	if (base.textModel !== overlay.textModel) {
+		throw new TypeError('Semantic-token overlay sources must share one text model');
+	}
+	const getLineTokens = (lineIndex: number): readonly ResolvedSemanticToken[] => mergeResolvedLineTokens(base.getLineTokens(lineIndex), overlay.getLineTokens(lineIndex));
+	return Object.freeze({
+		textModel: base.textModel,
+		onDidChange: (listener: () => void) => combinedDisposable(base.onDidChange(listener), overlay.onDidChange(listener)),
+		get lines(): readonly SemanticTokenLine[] {
+			const lineIndexes = new Set([...base.lines.map(line => line.lineIndex), ...overlay.lines.map(line => line.lineIndex)]);
+			return Object.freeze([...lineIndexes].sort((left, right) => left - right).map(lineIndex => Object.freeze({ lineIndex, tokens: getLineTokens(lineIndex) })));
+		},
+		getLineTokens,
+	});
+}
+
+function resolveLineTokens(tokens: readonly LanguageToken[], styling: SemanticTokenStylingResolver): readonly ResolvedSemanticToken[] {
+	const resolved: ResolvedSemanticToken[] = [];
+	for (const token of tokens) {
+		const tokenStyling = styling.resolve(token);
+		if (!tokenStyling || typeof tokenStyling !== 'object' || !Array.isArray(tokenStyling.modifiers)) throw new TypeError('Semantic token resolver returned invalid styling');
+		if (tokenStyling.presentation !== undefined && !Object.values(SemanticTokenPresentation).includes(tokenStyling.presentation)) throw new TypeError(`Unknown semantic token presentation '${tokenStyling.presentation}'`);
+		if (new Set(tokenStyling.modifiers).size !== tokenStyling.modifiers.length || tokenStyling.modifiers.some(modifier => !Object.values(SemanticTokenModifier).includes(modifier))) throw new TypeError('Unknown or duplicate semantic token modifier');
+		if (tokenStyling.presentation === undefined && token.presentation === undefined) continue;
+		resolved.push(Object.freeze({
+			startColumn: token.range.startColumn - 1,
+			endColumn: token.range.endColumn - 1,
+			...(tokenStyling.presentation === undefined ? {} : { presentation: tokenStyling.presentation }),
+			...(tokenStyling.modifiers.length === 0 ? {} : { modifiers: tokenStyling.modifiers }),
+			...(token.presentation === undefined ? {} : { syntaxPresentation: token.presentation }),
+		}));
+	}
+	return Object.freeze(resolved);
+}
+
+function mergeResolvedLineTokens(base: readonly ResolvedSemanticToken[], overlay: readonly ResolvedSemanticToken[]): readonly ResolvedSemanticToken[] {
+	if (overlay.length === 0) return base;
+	if (base.length === 0) return overlay;
+	const boundaries = [...new Set([...base.flatMap(token => [token.startColumn, token.endColumn]), ...overlay.flatMap(token => [token.startColumn, token.endColumn])])].sort((left, right) => left - right);
+	const result: ResolvedSemanticToken[] = [];
+	for (let index = 0; index + 1 < boundaries.length; index += 1) {
+		const startColumn = boundaries[index]!;
+		const endColumn = boundaries[index + 1]!;
+		const semantic = overlay.find(token => token.startColumn <= startColumn && token.endColumn >= endColumn);
+		const lexical = base.find(token => token.startColumn <= startColumn && token.endColumn >= endColumn);
+		const token = semantic ?? lexical;
+		if (!token) continue;
+		result.push(Object.freeze({
+			startColumn,
+			endColumn,
+			...(token.presentation === undefined ? {} : { presentation: token.presentation }),
+			...(token.modifiers === undefined ? {} : { modifiers: token.modifiers }),
+			...(semantic || token.syntaxPresentation === undefined ? {} : { syntaxPresentation: token.syntaxPresentation }),
+		}));
+	}
+	return Object.freeze(result);
 }

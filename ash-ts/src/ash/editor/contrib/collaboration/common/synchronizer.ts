@@ -4,7 +4,7 @@ import { validateDocumentSelection } from "../../../common/core/documentSelectio
 import { freezeDocumentNode, type DocumentNode } from "../../../common/model/document.js";
 import { DocumentSchema } from "../../../common/model/documentSchema.js";
 import { applyDocumentTransaction, DocumentTransaction, type DocumentStep } from "../../../common/model/documentTransaction.js";
-import type { DocumentCollaborationAcknowledgement, DocumentCollaborationEnvelope, DocumentCollaborationRemoteEnvelope } from "./protocol.js";
+import type { DocumentCollaborationAcknowledgement, DocumentCollaborationEnvelope, DocumentCollaborationRemoteEnvelope } from "../../../common/services/documentCollaborationService.js";
 import { rebaseDocumentTransaction } from "./rebase.js";
 
 export interface DocumentCollaborationSynchronizerOptions {

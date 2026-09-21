@@ -9,7 +9,7 @@ import { type Selection } from '../../../common/core/selection.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type IViewModel } from '../../../common/viewModel.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
-import { type SemanticTokenSource } from '../../../common/services/resolvedSemanticTokens.js';
+import { type SemanticTokenSource } from '../../../common/tokens/languageTokens.js';
 import { type RenderingContext } from '../../view/renderingContext.js';
 import { ViewPart } from '../../view/viewPart.js';
 import { CursorPlurality, ViewCursor, type IViewCursorRenderData, type ViewCursorOptions } from './viewCursor.js';

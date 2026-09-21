@@ -68,7 +68,7 @@ const { ServiceContainer } = await import("../../../../platform/instantiation/co
 const { ILogService, NullLoggerService } = await import('../../../../platform/log/common/log.js');
 const { PlaceholderTextContribution } = await import("../../../contrib/placeholderText/browser/placeholderTextContribution.js");
 const { VersionedEditorWorkerClient } = await import('../../../browser/services/editorWorkerService.js');
-const { EditorWorkerRequestExecutor } = await import('../../../common/services/editorWorkerRequestExecutor.js');
+const { EditorWorker } = await import('../../../common/services/editorWebWorker.js');
 await import("../../../contrib/placeholderText/browser/placeholderText.contribution.js");
 await import('../../../contrib/inPlaceReplace/browser/inPlaceReplace.js');
 
@@ -1123,7 +1123,7 @@ test('CodeEditorWidget leaves a usable empty editor when replacement setup fails
 		lineHeight: 20,
 		editorWorkerFactory: model => {
 			if (model === failed) throw new Error('worker unavailable');
-			return new VersionedEditorWorkerClient(model, () => new EditorWorkerRequestExecutor());
+			return new VersionedEditorWorkerClient(model, () => new EditorWorker());
 		},
 	});
 	try {
@@ -2259,7 +2259,7 @@ test('selection formatting merges expanded edits repeatedly before one undoable 
 			return [{ range: receivedModel.getFullModelRange(), text: range.endLineNumber === 3 ? 'ALPHA\nBETA\nGAMMA' : 'discard me' }];
 		},
 	});
-	using worker = new VersionedEditorWorkerClient(model, () => new EditorWorkerRequestExecutor());
+	using worker = new VersionedEditorWorkerClient(model, () => new EditorWorker());
 	editor.setSelections([new Selection(1, 1, 1, 6), new Selection(2, 1, 2, 5), new Selection(3, 1, 3, 6)]);
 	await formatEditor(editor, features, worker, FormattingKind.Selection);
 	assert.equal(model.getValue(), 'ALPHA\nBETA\nGAMMA');
@@ -2289,7 +2289,7 @@ test('format actions share the model worker and release the save hook on detach'
 		input: { resource: model.uri }, languageId: model.getLanguageId(),
 		formatOnSave: true,
 		onLanguageError: error => { throw error; },
-		editorWorkerFactory: model => worker = new VersionedEditorWorkerClient(model, () => new EditorWorkerRequestExecutor()),
+		editorWorkerFactory: model => worker = new VersionedEditorWorkerClient(model, () => new EditorWorker()),
 		registerBeforeSave: hook => {
 			saveHook = hook;
 			return toDisposable(() => { saveHook = undefined; });

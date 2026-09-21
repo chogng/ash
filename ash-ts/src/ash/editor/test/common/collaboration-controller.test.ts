@@ -8,15 +8,12 @@ import { createDefaultDocumentSchema, type DocumentSchema } from "../../common/m
 import { DocumentTransaction } from "../../common/model/documentTransaction.js";
 import { textSelection, type DocumentSelection } from "../../common/core/documentSelection.js";
 import type { DocumentCollaborationConnection } from "../../common/services/documentCollaborationService.js";
-import type { DocumentCollaborationInvite } from "../../common/services/documentCollaborationService.js";
-import type { DocumentCollaborationMember } from "../../common/services/documentCollaborationService.js";
 import type { DocumentCollaborationSnapshot } from "../../common/services/documentCollaborationService.js";
 import type { DocumentCollaborationPresence } from "../../common/services/documentCollaborationService.js";
-import type { DocumentCollaborationRoomRole } from "../../common/services/documentCollaborationService.js";
 import type { DocumentCollaborationSubmitOutcome } from "../../common/services/documentCollaborationService.js";
 import { DocumentCollaborationController } from "../../contrib/collaboration/common/controller.js";
-import type { DocumentCollaborationEnvelope } from "../../contrib/collaboration/common/protocol.js";
-import type { DocumentCollaborationRemoteEnvelope } from "../../contrib/collaboration/common/protocol.js";
+import type { DocumentCollaborationEnvelope } from "../../common/services/documentCollaborationService.js";
+import type { DocumentCollaborationRemoteEnvelope } from "../../common/services/documentCollaborationService.js";
 
 test("Stanza collaboration submits only the in-flight snapshot while later typing is buffered", async () => {
 	const schema = createDefaultDocumentSchema();
@@ -190,9 +187,7 @@ class FakeDocumentCollaborationConnection extends Disposable implements Document
 
 	readonly roomId = "stanza-test-room";
 	readonly clientId = "client-a";
-	readonly principalId = undefined;
 	readonly canEdit = true;
-	readonly canManageMembers = false;
 	readonly initialSnapshot: DocumentCollaborationSnapshot;
 	readonly currentPresence: readonly DocumentCollaborationPresence[] = [];
 	readonly onDidReceiveUpdate: Event<DocumentCollaborationRemoteEnvelope> = this.updateEmitter.event;
@@ -218,21 +213,9 @@ class FakeDocumentCollaborationConnection extends Disposable implements Document
 		return Promise.resolve();
 	}
 
-	createInvite(_displayName: string, _role: DocumentCollaborationRoomRole, _signal: AbortSignal): Promise<DocumentCollaborationInvite> {
-		return Promise.reject(new Error("Fake collaboration connection does not manage room members"));
-	}
 
-	listMembers(_signal: AbortSignal): Promise<readonly DocumentCollaborationMember[]> {
-		return Promise.reject(new Error("Fake collaboration connection does not manage room members"));
-	}
 
-	rotateMemberAccessToken(_principalId: string, _signal: AbortSignal): Promise<DocumentCollaborationInvite> {
-		return Promise.reject(new Error("Fake collaboration connection does not manage room members"));
-	}
 
-	revokeMember(_principalId: string, _signal: AbortSignal): Promise<void> {
-		return Promise.reject(new Error("Fake collaboration connection does not manage room members"));
-	}
 
 	acceptPresence(presences: readonly DocumentCollaborationPresence[]): void {
 		this.presenceEmitter.fire(presences);

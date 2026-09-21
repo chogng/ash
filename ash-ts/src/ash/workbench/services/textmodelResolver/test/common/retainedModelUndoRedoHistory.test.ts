@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { URI } from "../../../base/common/uri.js";
-import { UndoRedoGroup } from "../../../platform/undoRedo/common/undoRedo.js";
-import { Range } from "../../common/core/range.js";
-import { TextModel } from "../../common/model/textModel.js";
-import { RetainedModelUndoRedoHistory } from "../../common/services/retainedModelUndoRedoHistory.js";
+import { URI } from "../../../../../base/common/uri.js";
+import { UndoRedoGroup } from "../../../../../platform/undoRedo/common/undoRedo.js";
+import { Range } from "../../../../../editor/common/core/range.js";
+import { TextModel } from "../../../../../editor/common/model/textModel.js";
+import { RetainedModelUndoRedoHistory } from "../../common/retainedModelUndoRedoHistory.js";
 
 test("RetainedModelUndoRedoHistory retains only the configured number of model histories", () => {
 	using participant = new RetainedModelUndoRedoHistory({ maxEntries: 1 });

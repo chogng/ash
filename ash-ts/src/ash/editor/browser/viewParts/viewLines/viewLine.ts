@@ -5,7 +5,7 @@ import { RangeUtil } from './rangeUtil.js';
 import { type ViewLineOptions } from './viewLineOptions.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type Range } from '../../../common/core/range.js';
-import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken, type SemanticTokenSource } from '../../../common/services/resolvedSemanticTokens.js';
+import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken, type SemanticTokenSource } from '../../../common/tokens/languageTokens.js';
 import { type LanguageToken } from '../../../common/tokens/languageTokens.js';
 import { CharacterMapping, DomPosition } from '../../../common/viewLayout/viewLineRenderer.js';
 import { InlineDecorationType, type InlineDecoration } from '../../../common/viewModel/inlineDecorations.js';
@@ -218,8 +218,8 @@ class RenderedViewLine {
 	}
 }
 
-export { SemanticTokenModifier, SemanticTokenPresentation } from '../../../common/services/resolvedSemanticTokens.js';
-export type { ResolvedSemanticToken, SemanticTokenSource } from '../../../common/services/resolvedSemanticTokens.js';
+export { SemanticTokenModifier, SemanticTokenPresentation } from '../../../common/tokens/languageTokens.js';
+export type { ResolvedSemanticToken, SemanticTokenSource } from '../../../common/tokens/languageTokens.js';
 
 export interface BracketColorizationSpan {
 	readonly startColumn: number;

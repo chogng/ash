@@ -1,19 +1,9 @@
+import type { DocumentTransaction } from '../model/documentTransaction.js';
 import type { Event } from "../../../base/common/event.js";
 import type { IDisposable } from "../../../base/common/lifecycle.js";
 import type { DocumentNode } from "../model/document.js";
 import type { DocumentSchema } from "../model/documentSchema.js";
 import type { DocumentSelection } from "../core/documentSelection.js";
-import type { DocumentCollaborationEnvelope } from "../../contrib/collaboration/common/protocol.js";
-import type { DocumentCollaborationRemoteEnvelope } from "../../contrib/collaboration/common/protocol.js";
-
-/** Inputs needed to create or join one server-ordered Stanza collaboration room. */
-export interface DocumentCollaborationOpenInput {
-	readonly roomId?: string;
-	readonly clientId: string;
-	readonly schemaId: string;
-	readonly schema: DocumentSchema;
-	readonly document: DocumentNode;
-}
 
 /** Canonical room snapshot supplied after joining or resynchronizing. */
 export interface DocumentCollaborationSnapshot {
@@ -28,25 +18,6 @@ export interface DocumentCollaborationPresence {
 	readonly selection: DocumentSelection;
 }
 
-/** Role assigned to a member invited into a collaboration room. */
-export type DocumentCollaborationRoomRole = "owner" | "editor" | "viewer";
-
-/** A newly issued room credential, exposed once to the inviting owner. */
-export interface DocumentCollaborationInvite {
-	readonly roomId: string;
-	readonly principalId: string;
-	readonly displayName: string;
-	readonly role: DocumentCollaborationRoomRole;
-	readonly accessToken: string;
-}
-
-/** One active collaboration member visible to a room owner. */
-export interface DocumentCollaborationMember {
-	readonly principalId: string;
-	readonly displayName: string;
-	readonly role: DocumentCollaborationRoomRole;
-}
-
 export type DocumentCollaborationSubmitOutcome =
 	| { readonly kind: "accepted"; readonly update: DocumentCollaborationRemoteEnvelope }
 	| { readonly kind: "conflict"; readonly updates: readonly DocumentCollaborationRemoteEnvelope[] }
@@ -56,12 +27,8 @@ export type DocumentCollaborationSubmitOutcome =
 export interface DocumentCollaborationConnection extends IDisposable {
 	readonly roomId: string;
 	readonly clientId: string;
-	/** Persistent member identity when the host supports room membership. */
-	readonly principalId: string | undefined;
 	/** Whether this room connection may create document updates. */
 	readonly canEdit: boolean;
-	/** Whether this room connection may create member credentials. */
-	readonly canManageMembers: boolean;
 	readonly schema: DocumentSchema;
 	readonly initialSnapshot: DocumentCollaborationSnapshot;
 	/** Current remote selections known at connection creation or from later transport events. */
@@ -72,13 +39,19 @@ export interface DocumentCollaborationConnection extends IDisposable {
 	readonly onDidFail: Event<Error>;
 	submit(envelope: DocumentCollaborationEnvelope, document: DocumentNode, signal: AbortSignal): Promise<DocumentCollaborationSubmitOutcome>;
 	updatePresence(selection: DocumentSelection | undefined, signal: AbortSignal): Promise<void>;
-	createInvite(displayName: string, role: DocumentCollaborationRoomRole, signal: AbortSignal): Promise<DocumentCollaborationInvite>;
-	listMembers(signal: AbortSignal): Promise<readonly DocumentCollaborationMember[]>;
-	rotateMemberAccessToken(principalId: string, signal: AbortSignal): Promise<DocumentCollaborationInvite>;
-	revokeMember(principalId: string, signal: AbortSignal): Promise<void>;
 }
 
-/** Opens Stanza collaboration rooms and turns transport payloads into schema-valid domain values. */
-export interface IDocumentCollaborationService extends IDisposable {
-	open(input: DocumentCollaborationOpenInput, signal: AbortSignal): Promise<DocumentCollaborationConnection>;
+/** One ordered client submission to a Stanza collaboration authority. */
+export interface DocumentCollaborationEnvelope {
+	readonly clientId: string;
+	readonly sequence: number;
+	readonly baseVersion: number;
+	readonly transaction: DocumentTransaction;
 }
+
+/** A server-ordered collaboration submission with its committed document version. */
+export interface DocumentCollaborationRemoteEnvelope extends DocumentCollaborationEnvelope {
+	readonly version: number;
+}
+
+export type DocumentCollaborationAcknowledgement = DocumentCollaborationRemoteEnvelope;

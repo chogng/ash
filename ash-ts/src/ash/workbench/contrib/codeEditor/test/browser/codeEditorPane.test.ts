@@ -15,12 +15,12 @@ import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../..
 import { LanguageService } from '../../../../../editor/common/services/languageService.js';
 import { registerBuiltinLanguageDescriptions } from '../../../../../editor/common/languages/languageBuiltinDescriptions.js';
 import { toDisposable } from "../../../../../base/common/lifecycle.js";
-import { type ILanguageDiagnosticsService, type LanguageDiagnosticsPublisher, type LanguageDiagnosticSnapshot } from "../../../../../editor/common/services/languageDiagnosticsService.js";
+import { type ILanguageDiagnosticsService, type LanguageDiagnosticsPublisher, type LanguageDiagnosticSnapshot } from "../../../../services/language/common/languageDiagnosticsService.js";
 import { type TextModel } from "../../../../../editor/common/model/textModel.js";
 import { EDITOR_FONT_DEFAULTS } from "../../../../../editor/common/config/fontInfo.js";
 import type { EditorPaneOptions, EditorPanePartOptions } from "../../browser/codeEditorPane.js";
 import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
-import { ITextModelResourceService } from '../../../../../editor/common/services/textModelResourceService.js';
+import { ITextModelResourceService } from '../../../../services/textmodelResolver/common/textModelResourceService.js';
 import { ILanguageFeaturesService } from '../../../../../editor/common/services/languageFeatures.js';
 import { ILanguageConfigurationService } from '../../../../../editor/common/languages/languageConfigurationRegistry.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';

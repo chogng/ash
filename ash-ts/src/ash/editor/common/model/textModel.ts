@@ -1,10 +1,13 @@
-import { ModelLanguageDiagnostics } from '../services/languageDiagnosticsService.js';
+import { SyntaxProviderRegistry, type SyntaxRequest } from '../languages/syntax/syntaxProviders.js';
+import { SYNTAX_DIAGNOSTIC_LANE, SyntaxProviderWorker, type SyntaxLane, type SyntaxResult } from '../languages/syntax/syntaxService.js';
+import { LanguageRequestCoordinator } from '../languages/languageRequestCoordinator.js';
+import { createLanguageDiagnosticStore } from '../languages/languageResults.js';
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Color } from '../../../base/common/color.js';
 import { BugIndicatingError, onUnexpectedError } from '../../../base/common/errors.js';
 import { StringSHA1 } from '../../../base/common/hash.js';
 import type { IMarkdownString } from '../../../base/common/htmlContent.js';
-import { DisposableStore, MutableDisposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
+import { Disposable, DisposableStore, MutableDisposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
 import * as strings from '../../../base/common/strings.js';
 import type { ThemeColor } from '../../../base/common/themables.js';
 import { URI } from "../../../base/common/uri.js";
@@ -2445,4 +2448,45 @@ function endOfLineText(eol: EndOfLineSequence): '\n' | '\r\n' {
 
 function normalizeTextToEOL(text: string, eol: '\n' | '\r\n'): string {
 	return text.replace(/\r\n|\r|\n/g, eol);
+}
+
+/** Owns diagnostic requests independently of tokenization and its Worker. */
+class ModelLanguageDiagnostics extends Disposable {
+	private readonly coordinator: LanguageRequestCoordinator<SyntaxLane, SyntaxRequest, SyntaxResult>;
+	private readonly errors = this._register(new Emitter<unknown>());
+	readonly onDidEncounterError = this.errors.event;
+	readonly results: ReturnType<typeof createLanguageDiagnosticStore>;
+	private generation = 0;
+
+	constructor(private readonly model: TextModel, registry?: SyntaxProviderRegistry, onDidChangeConfiguration?: Event<unknown>) {
+		super();
+		const providers = registry ?? this._register(new SyntaxProviderRegistry());
+		this.results = this._register(createLanguageDiagnosticStore(model));
+		this.coordinator = this._register(new LanguageRequestCoordinator(model, () => new SyntaxProviderWorker(providers)));
+		this._register(model.onDidChangeContent(() => this.schedule()));
+		this._register(model.onDidChangeLanguage(() => this.reset()));
+		this._register(providers.onDidChange(() => this.reset()));
+		if (onDidChangeConfiguration) this._register(onDidChangeConfiguration(() => this.reset()));
+		this.schedule();
+	}
+
+	private reset(): void {
+		this.coordinator.restartWorker();
+		this.results.clear();
+		this.schedule();
+	}
+
+	private schedule(): void {
+		const generation = ++this.generation;
+		if (this.model.largeFile.tooLargeForTokenization) return;
+		queueMicrotask(() => {
+			if (this.isDisposed || generation !== this.generation) return;
+			void this.coordinator.runLatest(SYNTAX_DIAGNOSTIC_LANE, { languageId: this.model.getLanguageId() }, result => {
+				if (result.value.lane !== SYNTAX_DIAGNOSTIC_LANE) throw new TypeError('Expected diagnostic result');
+				this.results.accept({ ...result, value: result.value.value });
+			}).catch(error => {
+				if (!this.isDisposed && generation === this.generation) this.errors.fire(error);
+			});
+		});
+	}
 }

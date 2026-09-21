@@ -3,8 +3,8 @@ import { test } from 'mocha';
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { DEFAULT_WORD_REGEXP } from '../../../common/core/wordHelper.js';
-import { EDITOR_WORKER_MINIMAL_EDITS_LANE, EDITOR_WORKER_NAVIGATE_VALUE_LANE, EDITOR_WORKER_UNICODE_HIGHLIGHTS_LANE, type EditorWorkerLane, type EditorWorkerRequest } from '../../../common/services/editorWorkerProtocol.js';
-import { EditorWorkerRequestExecutor } from '../../../common/services/editorWorkerRequestExecutor.js';
+import { EDITOR_WORKER_MINIMAL_EDITS_LANE, EDITOR_WORKER_NAVIGATE_VALUE_LANE, EDITOR_WORKER_UNICODE_HIGHLIGHTS_LANE, type EditorWorkerLane, type EditorWorkerRequest } from '../../../common/services/editorWorkerWire.js';
+import { EditorWorker } from '../../../common/services/editorWebWorker.js';
 import { TextModel } from '../../../common/model/textModel.js';
 import { EndOfLineSequence } from '../../../common/model.js';
 
@@ -16,7 +16,7 @@ for (const [original, formatted] of [
 ]) {
 	test(`minimal formatting preserves UTF-16 characters in ${JSON.stringify(original)}`, async () => {
 		using model = new TextModel(original);
-		using worker = new EditorWorkerRequestExecutor();
+		using worker = new EditorWorker();
 		const result = await run(worker, model, 1, EDITOR_WORKER_MINIMAL_EDITS_LANE, {
 			edits: [{ range: model.getFullModelRange(), text: formatted }],
 		});
@@ -30,7 +30,7 @@ for (const [original, formatted] of [
 
 test('value navigation includes the final character when the word pattern excludes numbers', async () => {
 	using model = new TextModel('version 2');
-	using worker = new EditorWorkerRequestExecutor();
+	using worker = new EditorWorker();
 	const result = await run(worker, model, 1, EDITOR_WORKER_NAVIGATE_VALUE_LANE, {
 		range: new Range(1, 9, 1, 9), up: true, wordDefinition: /[A-Za-z]+/g,
 	});
@@ -40,7 +40,7 @@ test('value navigation includes the final character when the word pattern exclud
 for (const column of [7, 8, 9]) {
 	test(`value navigation increments the entire number with a cursor at column ${column}`, async () => {
 		using model = new TextModel('value 99');
-		using worker = new EditorWorkerRequestExecutor();
+		using worker = new EditorWorker();
 		const result = await run(worker, model, 1, EDITOR_WORKER_NAVIGATE_VALUE_LANE, {
 			range: new Range(1, column, 1, column), up: true, wordDefinition: DEFAULT_WORD_REGEXP,
 		});
@@ -50,7 +50,7 @@ for (const column of [7, 8, 9]) {
 
 test('minimal formatting edits retain the last requested EOL with text changes', async () => {
 	using model = new TextModel('abc');
-	using worker = new EditorWorkerRequestExecutor();
+	using worker = new EditorWorker();
 	const result = await run(worker, model, 1, EDITOR_WORKER_MINIMAL_EDITS_LANE, {
 		edits: [
 			{ range: new Range(1, 1, 1, 2), text: 'A', eol: EndOfLineSequence.CRLF },
@@ -65,7 +65,7 @@ test('minimal formatting edits retain the last requested EOL with text changes',
 
 test('Editor worker computes Unicode highlights from the captured model version', async () => {
 	using model = new TextModel('const a = 1;\u200b\nconst \u0430 = 2;\u202e');
-	using worker = new EditorWorkerRequestExecutor();
+	using worker = new EditorWorker();
 
 	const result = await run(worker, model, 1, EDITOR_WORKER_UNICODE_HIGHLIGHTS_LANE, Object.freeze({}));
 
@@ -74,14 +74,14 @@ test('Editor worker computes Unicode highlights from the captured model version'
 
 test('Unicode highlights exclude CRLF separators and retain character positions', async () => {
 	using model = new TextModel('first\r\nsecond\u200b\r\nthird');
-	using worker = new EditorWorkerRequestExecutor();
+	using worker = new EditorWorker();
 	const result = await run(worker, model, 1, EDITOR_WORKER_UNICODE_HIGHLIGHTS_LANE, {});
 	assert.deepEqual(result, [{ range: new Range(2, 7, 2, 8), kind: 'invisible', character: '\u200b' }]);
 });
 
 test('Editor worker reduces formatting replacements without changing their result', async () => {
 	using model = new TextModel('This is line one');
-	using worker = new EditorWorkerRequestExecutor();
+	using worker = new EditorWorker();
 	const range = Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (model.length) + 1));
 
 	const result = await run(worker, model, 1, EDITOR_WORKER_MINIMAL_EDITS_LANE, Object.freeze({ edits: [{ range, text: 'This is line One' }] }));
@@ -94,7 +94,7 @@ test('Editor worker reduces formatting replacements without changing their resul
 
 test('Editor worker navigates values at an empty selection through the enclosing word', async () => {
 	using model = new TextModel('const enabled = true;');
-	using worker = new EditorWorkerRequestExecutor();
+	using worker = new EditorWorker();
 	const start = model.getText().indexOf('true');
 
 	const result = await run(worker, model, 1, EDITOR_WORKER_NAVIGATE_VALUE_LANE, Object.freeze({
@@ -111,7 +111,7 @@ test('Editor worker navigates values at an empty selection through the enclosing
 
 test('Editor worker navigates an explicitly selected number without a matching word pattern', async () => {
 	using model = new TextModel('version 2');
-	using worker = new EditorWorkerRequestExecutor();
+	using worker = new EditorWorker();
 	const result = await run(worker, model, 1, EDITOR_WORKER_NAVIGATE_VALUE_LANE, Object.freeze({
 		range: Range.fromPositions(new Position((0) + 1, (8) + 1), new Position((0) + 1, (9) + 1)),
 		up: true,
@@ -124,13 +124,13 @@ test('Editor worker navigates an explicitly selected number without a matching w
 	});
 });
 
-function run(worker: EditorWorkerRequestExecutor, model: TextModel, requestId: number, lane: EditorWorkerLane, payload: EditorWorkerRequest): ReturnType<EditorWorkerRequestExecutor['run']> {
+function run(worker: EditorWorker, model: TextModel, requestId: number, lane: EditorWorkerLane, payload: EditorWorkerRequest): ReturnType<EditorWorker['run']> {
 	return worker.run(Object.freeze({ requestId, lane, payload, snapshot: model.createVersionedSnapshot() }), new AbortController().signal);
 }
 
 test('a single formatting response with overlapping edits is rejected without changing the model', async () => {
 	using model = new TextModel('alpha');
-	using worker = new EditorWorkerRequestExecutor();
+	using worker = new EditorWorker();
 	await assert.rejects(run(worker, model, 1, EDITOR_WORKER_MINIMAL_EDITS_LANE, {
 		edits: [
 			{ range: new Range(1, 1, 1, 4), text: 'ALP', eol: EndOfLineSequence.CRLF },

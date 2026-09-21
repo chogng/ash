@@ -4,7 +4,7 @@ import { LanguageFeatureRegistry } from '../../languageFeatureRegistry.js';
 import { LanguageRequestCoordinator, type LanguageRequestOptions, type LanguageRequestOutcome, type LanguageWorker, type LanguageWorkerRequest } from '../../languages/languageRequestCoordinator.js';
 import { LanguageResultAcceptance } from '../../languages/languageResultStore.js';
 import { type LanguageSemanticTokensProvider } from '../../languages.js';
-import { type SemanticTokenModelSource, type SemanticTokenStylingResolver } from '../../services/resolvedSemanticTokens.js';
+import { type SemanticTokenModelSource, type SemanticTokenStylingResolver } from '../../tokens/languageTokens.js';
 import { SemanticTokensStylingService } from '../../services/semanticTokensStylingService.js';
 import { LanguageTokenLineIndex } from '../../tokens/languageTokenLineIndex.js';
 import { createLanguageTokenStore, type LanguageToken, type LanguageTokenResult } from '../../tokens/languageTokens.js';

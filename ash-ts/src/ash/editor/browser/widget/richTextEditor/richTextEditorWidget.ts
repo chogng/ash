@@ -1,14 +1,10 @@
 import './richTextEditorWidget.css';
-import { throwIfCancelled } from '../../../../base/common/cancellation.js';
-import { CancellationError } from '../../../../base/common/errors.js';
-import { Disposable, MutableDisposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable, combinedDisposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { isSafeInteger } from '../../../../base/common/numbers.js';
 import { assertDefined } from '../../../../base/common/types.js';
 import { URI } from '../../../../base/common/uri.js';
-import { generateUuid } from '../../../../base/common/uuid.js';
 import type { IDimension } from '../../../common/core/2d/dimension.js';
 import { TextModel } from '../../../common/model/textModel.js';
-import type { DocumentPlugin } from '../../../common/model/documentPlugin.js';
 import { containsDocumentNode, findDocumentNode, type DocumentMark, type DocumentNode, type DocumentNodeId } from '../../../common/model/document.js';
 import { createDocumentDecoration, type DocumentDecoration } from '../../../common/model/documentDecoration.js';
 import { buildDocumentOutline, type DocumentOutline, type DocumentOutlineOptions } from '../../../common/model/documentOutline.js';
@@ -16,29 +12,19 @@ import { documentPointToPosition } from '../../../common/core/documentPosition.j
 import { documentSelectionToText } from '../../../common/model/documentText.js';
 import { createDeleteAdjacentInlineNodeCommand, createDeleteInlineSelectionCommand, createDeleteNodeSelectionCommand, createDeleteTableColumnCommand, createDeleteTableRowCommand, createExitEmptyListItemCommand, createInsertFragmentCommand, createInsertHardBreakCommand, createInsertHorizontalRuleCommand, createInsertImageAtSelectionCommand, createInsertImageCommand, createInsertParagraphAfterCommand, createInsertTableColumnCommand, createInsertTableCommand, createInsertTableRowCommand, createJoinAdjacentBlockCommand, createJoinAdjacentListItemCommand, createJoinAdjacentTextRunCommand, createListItemIndentationCommand, createMoveBlockCommand, createRemoveMarkCommand, createPasteTextCommand, createReplaceTextCommand, createSetBlockTypeCommand, createSetLinkMarkCommand, createSetTextStyleCommand, createSplitBlockCommand, createSplitListItemCommand, createToggleBlockquoteCommand, createToggleListCommand, createToggleMarkCommand, findAdjacentTableCell, findTableCellContext, type DocumentCommand } from '../../../common/commands/documentCommands.js';
 import { extractDocumentFragment } from '../../../common/model/documentFragment.js';
-import { createDefaultDocumentSchema, type DocumentNodeKind, type DocumentSchema, type DocumentTextStyleAttributes } from '../../../common/model/documentSchema.js';
+import { type DocumentNodeKind, type DocumentSchema, type DocumentTextStyleAttributes } from '../../../common/model/documentSchema.js';
 import { DOCUMENT_FRAGMENT_CLIPBOARD_MIME, deserializeDocumentFragment, serializeDocumentFragment } from '../../../common/model/documentSerialization.js';
 import { allSelection, nodeSelection, textSelection, type DocumentSelection, type DocumentTextSelection } from '../../../common/core/documentSelection.js';
 import { DocumentTransaction } from '../../../common/model/documentTransaction.js';
 import { EditorDom } from '../../editorDom.js';
-import { EditorExtensionsRegistry, type DocumentCollaborationContribution, type DocumentCollaborationStartResult, type DocumentFormattingContribution } from '../../editorExtensions.js';
+import { EditorExtensionsRegistry, type DocumentFormattingContribution } from '../../editorExtensions.js';
 import { DocumentOutlineNavigator } from '../documentOutlineNavigator.js';
 import { DocumentCollaborationController } from '../../../contrib/collaboration/common/controller.js';
 import { createDocumentFragmentFromHtml } from './htmlDocumentFragment.js';
-import type { ITextModelResourceService, TextModelBlockInput, TextModelWorkingCopyReference } from '../../../common/services/textModelResourceService.js';
-import type { IDocumentCollaborationService } from '../../../common/services/documentCollaborationService.js';
-import type { DocumentCollaborationPresence } from '../../../common/services/documentCollaborationService.js';
-import type { DocumentCollaborationInvite } from '../../../common/services/documentCollaborationService.js';
-import type { DocumentCollaborationMember } from '../../../common/services/documentCollaborationService.js';
-import type { DocumentCollaborationRoomRole } from '../../../common/services/documentCollaborationService.js';
+import type { DocumentCollaborationConnection, DocumentCollaborationPresence } from '../../../common/services/documentCollaborationService.js';
 import { h, fragment as createFragment } from '../../../../base/browser/dom.js';
 
 export interface RichTextEditorOptions {
-	readonly onSave?: () => Promise<void | boolean>;
-	readonly plugins?: readonly DocumentPlugin<unknown>[];
-	readonly schema?: DocumentSchema;
-	/** Creates the canonical document when the loaded resource has no content. */
-	readonly createEmptyDocument?: () => DocumentNode;
 	/** Configures the generic heading query exposed by the pane. */
 	readonly outline?: DocumentOutlineOptions;
 	/** Adds the browser-owned outline navigator to the pane layout. */
@@ -48,10 +34,6 @@ export interface RichTextEditorOptions {
 	/** Adds profile-owned commands to the shared block toolbar. */
 	readonly toolbarActions?: readonly EditorToolbarAction[];
 	readonly nodeViews?: Readonly<Record<string, NodeViewFactory>>;
-	/** Optional room transport exposed through the collaboration contribution. */
-	readonly documentCollaborationService?: IDocumentCollaborationService;
-	/** Stable server-side schema compatibility identity for this editor profile. */
-	readonly collaborationSchemaId?: string;
 }
 
 export interface NodeViewContext {
@@ -112,57 +94,41 @@ type CommandFocusBehavior = "focus-editor" | "preserve-focus";
 
 interface RichTextEditorInput {
 	readonly resource: URI;
-	readonly initialText?: string;
 	readonly readOnly?: boolean;
 }
 
 /**
  * One browser editor projected over a line-first TextModel with schema-backed rich semantics.
  *
- * The editor owns the schema-backed TextModel reference, working copy, DOM projection, and
- * block-level input. `EditorPane` owns Workbench pane lifecycle. Code blocks
+ * The editor renders the supplied model and handles block-level input.
+ * The host owns the model lifetime and persistence. Code blocks
  * edit line ranges in this same TextModel rather than creating nested models.
  */
 export class RichTextEditorWidget extends Disposable {
 
-	private readonly modelReferenceSlot = this._register(new MutableDisposable<TextModelWorkingCopyReference>());
+	private model: TextModel | undefined;
 	private readonly modelChangeListenerSlot = this._register(new MutableDisposable<IDisposable>());
 	private readonly collaborationControllerSlot = this._register(new MutableDisposable<DocumentCollaborationController>());
-	private readonly collaborationStateListenerSlot = this._register(new MutableDisposable<IDisposable>());
 	private readonly collaborationPresenceListenerSlot = this._register(new MutableDisposable<IDisposable>());
-	private readonly schema: DocumentSchema;
 	private readonly nodeViewSlots = new Map<string, { readonly type: string; readonly view: NodeView }>();
 	private editorDom: EditorDom | undefined;
 	private container: HTMLDivElement | undefined;
 	private formattingContribution: DocumentFormattingContribution | undefined;
-	private collaborationContribution: DocumentCollaborationContribution | undefined;
 	private outlineNavigator: DocumentOutlineNavigator | undefined;
 	private input: RichTextEditorInput | undefined;
 	private activeBlockId: string | undefined;
 	private composition: DocumentComposition | undefined;
-	private collaborationStart: AbortController | undefined;
 	private remotePresences: readonly DocumentCollaborationPresence[] = [];
 	private dimension: IDimension = { width: 0, height: 0 };
 
-	get modelReference(): TextModelWorkingCopyReference | undefined {
-		return this.modelReferenceSlot.value;
-	}
-
-	constructor(private readonly modelService: ITextModelResourceService<TextModelBlockInput, TextModelWorkingCopyReference>, private readonly options: RichTextEditorOptions = {}) {
+	constructor(private readonly options: RichTextEditorOptions = {}) {
 		super();
-		if (!modelService || typeof modelService.acquire !== "function") {
-			this.dispose();
-			throw new TypeError("Document editor requires a TextModel service");
-		}
-		this.schema = options.schema ?? createDefaultDocumentSchema();
-		this._register(toDisposable(() => this.cancelCollaborationStart()));
 		this._register(toDisposable(() => this.disposeNodeViews()));
 	}
 
 	create(parent: HTMLElement): void {
 		if (this.container) throw new ReferenceError("Document editor has already been created");
 		let formattingContribution: DocumentFormattingContribution | undefined;
-		let collaborationContribution: DocumentCollaborationContribution | undefined;
 		for (const contribution of EditorExtensionsRegistry.getEditorContributions()) {
 			if ('ctor' in contribution) continue;
 			contribution.install?.({
@@ -173,19 +139,9 @@ export class RichTextEditorWidget extends Disposable {
 				onSetTextStyle: attrs => this.handleTextStyleAction(attrs),
 				onClearTextStyle: () => this.handleClearTextStyleAction(),
 				onRunDocumentAction: actionId => this.handleToolbarAction(actionId),
-				onStartCollaboration: roomId => this.startCollaboration(roomId),
-				onStopCollaboration: () => this.stopCollaboration(),
-				onInviteCollaborator: (displayName, role) => this.createCollaborationInvite(displayName, role),
-				onListCollaborators: () => this.listCollaborationMembers(),
-				onRotateCollaboratorAccessToken: principalId => this.rotateCollaborationMemberAccessToken(principalId),
-				onRevokeCollaborator: principalId => this.revokeCollaborationMember(principalId),
 				setFormattingContribution: value => {
 					if (formattingContribution) throw new Error("Document formatting contribution is already installed");
 					formattingContribution = this._register(value);
-				},
-				setCollaborationContribution: value => {
-					if (collaborationContribution) throw new Error("Document collaboration contribution is already installed");
-					collaborationContribution = this._register(value);
 				},
 			});
 		}
@@ -193,15 +149,13 @@ export class RichTextEditorWidget extends Disposable {
 			rootClassName: "ash-text-editor-widget-layout",
 			contentClassName: "ash-text-editor-widget-pane",
 		}));
-		parent.append(...[collaborationContribution?.element, formattingContribution?.element].filter((element): element is HTMLElement => element !== undefined));
+		parent.append(...[formattingContribution?.element].filter((element): element is HTMLElement => element !== undefined));
 		editorDom.attach(parent);
 		const container = editorDom.contentDomNode;
 		const layoutContainer = editorDom.domNode;
 		const outlineNavigator = this.options.outlineNavigator ? new DocumentOutlineNavigator(layoutContainer, { onSelect: nodeId => this.revealOutlineNode(nodeId) }) : undefined;
 		if (outlineNavigator) layoutContainer.append(outlineNavigator.element);
 		layoutContainer.append(container);
-		collaborationContribution?.setState(this.options.documentCollaborationService ? "inactive" : "unavailable");
-		this.collaborationContribution = collaborationContribution;
 		this.formattingContribution = formattingContribution;
 		this.editorDom = editorDom;
 		this.container = container;
@@ -211,8 +165,6 @@ export class RichTextEditorWidget extends Disposable {
 		this._register(toDisposable(() => {
 			parent.ownerDocument.removeEventListener("selectionchange", onSelectionChange);
 			outlineNavigator?.dispose();
-			collaborationContribution?.element.remove();
-			this.collaborationContribution = undefined;
 			formattingContribution?.element.remove();
 			this.formattingContribution = undefined;
 			this.editorDom = undefined;
@@ -221,56 +173,37 @@ export class RichTextEditorWidget extends Disposable {
 		}));
 	}
 
-	async setInput(input: RichTextEditorInput, signal: AbortSignal): Promise<void> {
+	setModel(model: TextModel, input: RichTextEditorInput): void {
 		const container = this.requireContainer();
-		this.cancelCollaborationStart();
-		throwIfCancelled(signal, "Document editor input loading was cancelled");
-		const modelReference = await this.modelService.acquire({
-			resource: input.resource,
-			initialText: input.initialText,
-			schema: this.schema,
-			plugins: this.options.plugins,
-			createEmptyDocument: this.options.createEmptyDocument,
-			onSave: this.options.onSave,
-		}, signal);
-		if (signal.aborted) {
-			modelReference.dispose();
-			throwIfCancelled(signal, "Document editor input loading was cancelled");
-		}
-		const model = modelReference.model;
-		this.collaborationStateListenerSlot.clear();
+		this.composition = undefined;
 		this.collaborationPresenceListenerSlot.clear();
 		this.collaborationControllerSlot.clear();
 		this.remotePresences = [];
 		this.modelChangeListenerSlot.clear();
-		this.modelReferenceSlot.value = modelReference;
-		this.modelChangeListenerSlot.value = model.onDidChangeBlocks(() => this.render());
+		this.model = model;
+		this.modelChangeListenerSlot.value = combinedDisposable(
+			model.onDidChangeBlocks(() => this.render()),
+			model.onWillDispose(() => this.clearInput()),
+		);
 		this.input = input;
 		this.activeBlockId = undefined;
 		container.replaceChildren();
 		if (this.formattingContribution) this.formattingContribution.element.hidden = false;
-		if (this.collaborationContribution) {
-			this.collaborationContribution.element.hidden = false;
-			this.collaborationContribution.setState(this.options.documentCollaborationService ? "inactive" : "unavailable");
-		}
 		this.render();
 	}
 
 	clearInput(): void {
 		this.composition = undefined;
-		this.cancelCollaborationStart();
-		this.collaborationStateListenerSlot.clear();
 		this.collaborationPresenceListenerSlot.clear();
 		this.collaborationControllerSlot.clear();
 		this.remotePresences = [];
 		this.modelChangeListenerSlot.clear();
-		this.modelReferenceSlot.clear();
+		this.model = undefined;
 		this.disposeNodeViews();
 		this.input = undefined;
 		this.activeBlockId = undefined;
 		this.outlineNavigator?.setOutline([]);
 		if (this.formattingContribution) this.formattingContribution.element.hidden = true;
-		if (this.collaborationContribution) this.collaborationContribution.element.hidden = true;
 		this.container?.replaceChildren();
 	}
 
@@ -283,33 +216,13 @@ export class RichTextEditorWidget extends Disposable {
 		this.container?.querySelector<HTMLTextAreaElement>("textarea")?.focus();
 	}
 
-	async save(): Promise<void> {
-		await this.requireWorkingCopy().save(new AbortController().signal);
-	}
-
-	async saveAs(resource: URI): Promise<void> {
-		await this.requireWorkingCopy().saveAs(resource, new AbortController().signal);
-	}
-
-	async revert(): Promise<void> {
-		await this.requireWorkingCopy().revert(new AbortController().signal);
-	}
-
-	get isDirty(): boolean {
-		return this.modelReference?.isDirty ?? false;
-	}
-
-	get hasExternalChange(): boolean {
-		return this.modelReference?.hasExternalChange ?? false;
-	}
-
 	getDocument(): DocumentNode {
 		return this.requireModel().document;
 	}
 
 	/** Returns the current block-document selection, if the editor has input. */
 	getDocumentSelection(): DocumentSelection | undefined {
-		return this.modelReferenceSlot.value?.model.selection;
+		return this.model?.selection;
 	}
 
 	getOutline(): DocumentOutline {
@@ -317,7 +230,7 @@ export class RichTextEditorWidget extends Disposable {
 	}
 
 	private revealOutlineNode(nodeId: string): void {
-		const model = this.modelReferenceSlot.value?.model;
+		const model = this.model;
 		const container = this.container;
 		if (!model || !container) return;
 		const target = Array.from(container.querySelectorAll<HTMLElement>("[data-node-id]")).find(element => element.dataset.nodeId === nodeId);
@@ -333,7 +246,7 @@ export class RichTextEditorWidget extends Disposable {
 
 	private render(): void {
 		const container = this.requireContainer();
-		const model = this.modelReferenceSlot.value?.model;
+		const model = this.model;
 		if (!model) return;
 		const previousElements = new Map<string, HTMLElement>();
 		for (const element of container.querySelectorAll<HTMLElement>("[data-node-id]")) {
@@ -361,7 +274,7 @@ export class RichTextEditorWidget extends Disposable {
 
 	private renderNode(node: DocumentNode, model: TextModel, previousElements: Map<string, HTMLElement>, activeNodeIds: Set<string>, decorations: readonly ViewDecoration[]): HTMLElement {
 		const document = this.requireContainer().ownerDocument;
-		const nodeKind = this.schema.getNodeSpec(node.type)?.kind ?? "block";
+		const nodeKind = model.schema.getNodeSpec(node.type)?.kind ?? "block";
 		activeNodeIds.add(node.id);
 		const nodeView = this.options.nodeViews?.[node.type];
 		if (nodeView) {
@@ -470,7 +383,7 @@ export class RichTextEditorWidget extends Disposable {
 			this.updateToolbar();
 		});
 		const syncTextareaSelection = () => {
-			if (this.modelReferenceSlot.value?.model !== model) return;
+			if (this.model !== model) return;
 			const start = textarea.selectionStart ?? 0;
 			const end = textarea.selectionEnd ?? start;
 			if (model.selection?.kind === "all" && start === 0 && end === textarea.value.length) return;
@@ -487,7 +400,7 @@ export class RichTextEditorWidget extends Disposable {
 		textarea.addEventListener("compositionend", event => this.endComposition(event, textarea));
 		textarea.addEventListener("compositioncancel", () => this.cancelComposition(textarea));
 		textarea.addEventListener("input", () => {
-			const currentModel = this.modelReferenceSlot.value?.model;
+			const currentModel = this.model;
 			if (currentModel !== model) return;
 			if (this.isReadOnly()) return;
 			if (this.composition?.element === textarea) return;
@@ -623,7 +536,7 @@ export class RichTextEditorWidget extends Disposable {
 	}
 
 	private handleRichEditContext(editor: HTMLDivElement, model: TextModel): void {
-		if (this.modelReferenceSlot.value?.model !== model) return;
+		if (this.model !== model) return;
 		if (this.isReadOnly() || !this.requireContainer().contains(editor) || this.composition?.element === editor) return;
 		const blockId = editor.dataset.blockId;
 		if (!blockId) return;
@@ -656,7 +569,7 @@ export class RichTextEditorWidget extends Disposable {
 	}
 
 	private beginComposition(model: TextModel, blockId: string, element: HTMLTextAreaElement | HTMLDivElement, selection: DocumentTextSelection | undefined): void {
-		if (this.isReadOnly() || this.modelReferenceSlot.value?.model !== model || !selection || selection.kind !== "text") return;
+		if (this.isReadOnly() || this.model !== model || !selection || selection.kind !== "text") return;
 		if (findTextBearingBlockId(model.document, selection.anchor.nodeId) !== blockId) return;
 		this.composition = { model, blockId, element, selection, baseText: readCompositionText(element), version: model.version };
 		if (model.selection?.kind !== "text" || model.selection.anchor.nodeId !== selection.anchor.nodeId || model.selection.anchor.offset !== selection.anchor.offset || model.selection.head.nodeId !== selection.head.nodeId || model.selection.head.offset !== selection.head.offset) model.setSelection(selection);
@@ -667,8 +580,8 @@ export class RichTextEditorWidget extends Disposable {
 		if (!composition || composition.element !== element) return;
 		this.composition = undefined;
 		const model = composition.model;
-		if (this.isReadOnly() || this.modelReferenceSlot.value?.model !== model || model.version !== composition.version) {
-			if (this.modelReferenceSlot.value?.model === model) this.render();
+		if (this.isReadOnly() || this.model !== model || model.version !== composition.version) {
+			if (this.model === model) this.render();
 			return;
 		}
 		const currentText = readCompositionText(element);
@@ -695,7 +608,7 @@ export class RichTextEditorWidget extends Disposable {
 		if (this.composition?.element !== element) return;
 		const model = this.composition.model;
 		this.composition = undefined;
-		if (this.modelReferenceSlot.value?.model === model) this.render();
+		if (this.model === model) this.render();
 	}
 
 	private handleTextPaste(event: ClipboardEvent, model: TextModel, blockId: string, textarea: HTMLTextAreaElement): void {
@@ -703,7 +616,7 @@ export class RichTextEditorWidget extends Disposable {
 			event.preventDefault();
 			return;
 		}
-		if (this.modelReferenceSlot.value?.model !== model) return;
+		if (this.model !== model) return;
 		const image = findImageClipboardFile(event.clipboardData);
 		if (image) {
 			event.preventDefault();
@@ -749,7 +662,7 @@ export class RichTextEditorWidget extends Disposable {
 			event.preventDefault();
 			return;
 		}
-		if (this.modelReferenceSlot.value?.model !== model) return;
+		if (this.model !== model) return;
 		const image = findImageClipboardFile(event.clipboardData);
 		const blockId = editor.dataset.blockId;
 		if (image && blockId) {
@@ -786,7 +699,7 @@ export class RichTextEditorWidget extends Disposable {
 	}
 
 	private handleRichTextClipboard(event: ClipboardEvent, model: TextModel, cut: boolean): void {
-		if (this.modelReferenceSlot.value?.model !== model) return;
+		if (this.model !== model) return;
 		if (cut && this.isReadOnly()) {
 			event.preventDefault();
 			return;
@@ -815,7 +728,7 @@ export class RichTextEditorWidget extends Disposable {
 	}
 
 	private handleTextClipboard(event: ClipboardEvent, model: TextModel, blockId: string, textarea: HTMLTextAreaElement, cut: boolean): void {
-		if (this.modelReferenceSlot.value?.model !== model) return;
+		if (this.model !== model) return;
 		if (cut && this.isReadOnly()) {
 			event.preventDefault();
 			return;
@@ -851,7 +764,7 @@ export class RichTextEditorWidget extends Disposable {
 		} catch {
 			return;
 		}
-		if (this.modelReferenceSlot.value?.model !== model) return;
+		if (this.model !== model) return;
 		if (selection) model.setSelection(selection);
 		const command = selection
 			? createInsertImageAtSelectionCommand(model.schema, model.document, blockId, selection, src, image.name) ?? createInsertImageCommand(model.schema, model.document, blockId, src, image.name)
@@ -860,7 +773,7 @@ export class RichTextEditorWidget extends Disposable {
 	}
 
 	private handleRichTextBeforeInput(event: InputEvent, model: TextModel, editor: HTMLDivElement): void {
-		if (this.isReadOnly() || this.modelReferenceSlot.value?.model !== model || event.isComposing || event.inputType === "insertCompositionText" || event.inputType === "deleteCompositionText") return;
+		if (this.isReadOnly() || this.model !== model || event.isComposing || event.inputType === "insertCompositionText" || event.inputType === "deleteCompositionText") return;
 		const blockId = editor.dataset.blockId;
 		if (!blockId) return;
 		if (model.selection?.kind === "all") {
@@ -920,7 +833,7 @@ export class RichTextEditorWidget extends Disposable {
 	}
 
 	private syncRichDocumentTextSelection(editor: HTMLDivElement, model: TextModel, force = false): void {
-		if (this.modelReferenceSlot.value?.model !== model) return;
+		if (this.model !== model) return;
 		const inlineSelection = readDocumentTextSelection(this.requireContainer(), true);
 		if (inlineSelection && !isDocumentTextSelectionInDocument(model.document, inlineSelection.selection)) return;
 		this.activeBlockId = inlineSelection?.blockId ?? editor.dataset.blockId;
@@ -930,7 +843,7 @@ export class RichTextEditorWidget extends Disposable {
 	}
 
 	private syncDocumentSelection(): void {
-		const model = this.modelReferenceSlot.value?.model;
+		const model = this.model;
 		const container = this.container;
 		if (!model || !container) return;
 		const inlineSelection = readDocumentTextSelection(container, true);
@@ -1005,7 +918,7 @@ export class RichTextEditorWidget extends Disposable {
 	}
 
 	private handleTextKeydown(event: KeyboardEvent, node: DocumentNode, model: TextModel, textarea: HTMLTextAreaElement): void {
-		const currentModel = this.modelReferenceSlot.value?.model;
+		const currentModel = this.model;
 		if (this.isReadOnly() || currentModel !== model || event.isComposing) return;
 		if (this.handleHistoryShortcut(event, model)) return;
 		if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "a") {
@@ -1102,7 +1015,7 @@ export class RichTextEditorWidget extends Disposable {
 	}
 
 	private selectInlineNode(model: TextModel, blockId: string, nodeId: string, editor: HTMLDivElement): void {
-		if (this.modelReferenceSlot.value?.model !== model) return;
+		if (this.model !== model) return;
 		editor.focus();
 		model.setSelection(nodeSelection(nodeId));
 		this.activeBlockId = blockId;
@@ -1112,7 +1025,7 @@ export class RichTextEditorWidget extends Disposable {
 
 	private updateInlineNodeSelection(): void {
 		const container = this.container;
-		const model = this.modelReferenceSlot.value?.model;
+		const model = this.model;
 		if (!container || !model) return;
 		const selectedNodeId = model.selection?.kind === "node" ? model.selection.nodeId : undefined;
 		for (const element of container.querySelectorAll<HTMLElement>("[data-inline-node-id]")) {
@@ -1162,7 +1075,7 @@ export class RichTextEditorWidget extends Disposable {
 	}
 
 	private dispatchCommand(model: TextModel, command: DocumentCommand, historyGroup?: string, focusBehavior: CommandFocusBehavior = "focus-editor"): void {
-		if (this.isReadOnly() || this.modelReferenceSlot.value?.model !== model) return;
+		if (this.isReadOnly() || this.model !== model) return;
 		this.activeBlockId = command.focus.blockId;
 		model.dispatch(historyGroup ? command.transaction.withHistoryGroup(historyGroup) : command.transaction);
 		if (focusBehavior === "preserve-focus") {
@@ -1185,7 +1098,7 @@ export class RichTextEditorWidget extends Disposable {
 
 	private handleToolbarAction(action: string): void {
 		if (this.isReadOnly()) return;
-		const model = this.modelReferenceSlot.value?.model;
+		const model = this.model;
 		if (!model) return;
 		const blockId = this.activeBlockId ?? findTextBearingBlockId(model.document, model.selection?.kind === "text" ? model.selection.anchor.nodeId : undefined) ?? findFirstEditableBlock(model.document)?.id;
 		if (!blockId) return;
@@ -1198,35 +1111,35 @@ export class RichTextEditorWidget extends Disposable {
 				command = createSetBlockTypeCommand(model.document, blockId, action);
 				break;
 			case "blockquote":
-				command = createToggleBlockquoteCommand(this.schema, model.document, blockId);
+				command = createToggleBlockquoteCommand(model.schema, model.document, blockId);
 				break;
 			case "bulletList":
 			case "orderedList":
-				command = createToggleListCommand(this.schema, model.document, blockId, action);
+				command = createToggleListCommand(model.schema, model.document, blockId, action);
 				break;
 			case "horizontalRule":
-				command = createInsertHorizontalRuleCommand(this.schema, model.document, blockId);
+				command = createInsertHorizontalRuleCommand(model.schema, model.document, blockId);
 				break;
 			case "link": {
 				if (!selection || !selectionBlockId) break;
 				const href = this.requireContainer().ownerDocument.defaultView?.prompt("Link URL", "https://");
-				if (href) command = createSetLinkMarkCommand(this.schema, model.document, selectionBlockId, selection.anchor.nodeId, selection, href, model.storedMarks);
+				if (href) command = createSetLinkMarkCommand(model.schema, model.document, selectionBlockId, selection.anchor.nodeId, selection, href, model.storedMarks);
 				break;
 			}
 			case "unlink":
-				if (selection && selectionBlockId) command = createRemoveMarkCommand(this.schema, model.document, selectionBlockId, selection.anchor.nodeId, selection, "link", model.storedMarks);
+				if (selection && selectionBlockId) command = createRemoveMarkCommand(model.schema, model.document, selectionBlockId, selection.anchor.nodeId, selection, "link", model.storedMarks);
 				break;
 			case "table":
-				command = createInsertTableCommand(this.schema, model.document, blockId);
+				command = createInsertTableCommand(model.schema, model.document, blockId);
 				break;
 			case "insertTableRow": {
 				const context = findTableCellContext(model.document, blockId);
-				if (context) command = createInsertTableRowCommand(this.schema, model.document, context.table.id, context.rowIndex + 1);
+				if (context) command = createInsertTableRowCommand(model.schema, model.document, context.table.id, context.rowIndex + 1);
 				break;
 			}
 			case "insertTableColumn": {
 				const context = findTableCellContext(model.document, blockId);
-				if (context) command = createInsertTableColumnCommand(this.schema, model.document, context.table.id, context.columnIndex + 1);
+				if (context) command = createInsertTableColumnCommand(model.schema, model.document, context.table.id, context.columnIndex + 1);
 				break;
 			}
 			case "deleteTableRow": {
@@ -1250,7 +1163,7 @@ export class RichTextEditorWidget extends Disposable {
 
 	private handleTextMarkAction(markType: "strong" | "em"): void {
 		if (this.isReadOnly()) return;
-		const model = this.modelReferenceSlot.value?.model;
+		const model = this.model;
 		if (!model) return;
 		const blockId = this.activeBlockId ?? findTextBearingBlockId(model.document, model.selection?.kind === "text" ? model.selection.anchor.nodeId : undefined);
 		if (!blockId) return;
@@ -1258,13 +1171,13 @@ export class RichTextEditorWidget extends Disposable {
 		if (!isTypographyBlock(block)) return;
 		const selection = this.readActiveDocumentTextSelection(model, blockId);
 		if (!selection) return;
-		const command = createToggleMarkCommand(this.schema, model.document, blockId, selection.anchor.nodeId, selection, markType, {}, model.storedMarks);
+		const command = createToggleMarkCommand(model.schema, model.document, blockId, selection.anchor.nodeId, selection, markType, {}, model.storedMarks);
 		if (command) this.dispatchCommand(model, command, undefined, "preserve-focus");
 	}
 
 	private handleTextStyleAction(attrs: DocumentTextStyleAttributes): void {
 		if (this.isReadOnly()) return;
-		const model = this.modelReferenceSlot.value?.model;
+		const model = this.model;
 		if (!model) return;
 		const blockId = this.activeBlockId ?? findTextBearingBlockId(model.document, model.selection?.kind === "text" ? model.selection.anchor.nodeId : undefined);
 		if (!blockId) return;
@@ -1272,13 +1185,13 @@ export class RichTextEditorWidget extends Disposable {
 		if (!isTypographyBlock(block)) return;
 		const selection = this.readActiveDocumentTextSelection(model, blockId);
 		if (!selection) return;
-		const command = createSetTextStyleCommand(this.schema, model.document, blockId, selection.anchor.nodeId, selection, attrs, model.storedMarks);
+		const command = createSetTextStyleCommand(model.schema, model.document, blockId, selection.anchor.nodeId, selection, attrs, model.storedMarks);
 		if (command) this.dispatchCommand(model, command, undefined, "preserve-focus");
 	}
 
 	private handleClearTextStyleAction(): void {
 		if (this.isReadOnly()) return;
-		const model = this.modelReferenceSlot.value?.model;
+		const model = this.model;
 		if (!model) return;
 		const blockId = this.activeBlockId ?? findTextBearingBlockId(model.document, model.selection?.kind === "text" ? model.selection.anchor.nodeId : undefined);
 		if (!blockId) return;
@@ -1286,7 +1199,7 @@ export class RichTextEditorWidget extends Disposable {
 		if (!isTypographyBlock(block)) return;
 		const selection = this.readActiveDocumentTextSelection(model, blockId);
 		if (!selection) return;
-		const command = createRemoveMarkCommand(this.schema, model.document, blockId, selection.anchor.nodeId, selection, "textStyle", model.storedMarks);
+		const command = createRemoveMarkCommand(model.schema, model.document, blockId, selection.anchor.nodeId, selection, "textStyle", model.storedMarks);
 		if (command) this.dispatchCommand(model, command, undefined, "preserve-focus");
 	}
 
@@ -1311,7 +1224,7 @@ export class RichTextEditorWidget extends Disposable {
 
 	private updateToolbar(): void {
 		const toolbar = this.formattingContribution;
-		const model = this.modelReferenceSlot.value?.model;
+		const model = this.model;
 		if (!toolbar || !model) return;
 		const blockId = this.activeBlockId ?? findTextBearingBlockId(model.document, model.selection?.kind === "text" ? model.selection.anchor.nodeId : undefined) ?? findFirstEditableBlock(model.document)?.id;
 		if (blockId && !this.activeBlockId) this.activeBlockId = blockId;
@@ -1354,6 +1267,11 @@ export class RichTextEditorWidget extends Disposable {
 		return h(document, tagName);
 	}
 
+	protected override disposeCore(): void {
+		this.clearInput();
+		super.disposeCore();
+	}
+
 	private requireContainer(): HTMLDivElement {
 		const container = this.container;
 		assertDefined(container, new ReferenceError("Document editor has not been created"));
@@ -1361,97 +1279,30 @@ export class RichTextEditorWidget extends Disposable {
 	}
 
 	private requireModel(): TextModel {
-		const model = this.modelReferenceSlot.value?.model;
+		const model = this.model;
 		assertDefined(model, new ReferenceError("Document editor has no active model"));
 		return model;
 	}
 
-	private async startCollaboration(roomId: string | undefined): Promise<DocumentCollaborationStartResult> {
-		const service = this.options.documentCollaborationService;
-		if (!service) throw new Error("Document collaboration is unavailable in this renderer");
-		const model = this.requireModel();
-		const input = this.requireInput();
-		this.cancelCollaborationStart();
-		this.collaborationStateListenerSlot.clear();
-		this.collaborationPresenceListenerSlot.clear();
-		this.collaborationControllerSlot.clear();
-		this.remotePresences = [];
-		const start = new AbortController();
-		this.collaborationStart = start;
-		try {
-			const connection = await service.open({
-				...(roomId === undefined ? {} : { roomId }),
-				clientId: createCollaborationClientId(),
-				schemaId: this.options.collaborationSchemaId ?? "stanza-document-v1",
-				schema: model.schema,
-				document: model.document,
-			}, start.signal);
-			if (start.signal.aborted || this.modelReferenceSlot.value?.model !== model) {
-				connection.dispose();
-				if (start.signal.aborted) throwIfCancelled(start.signal, 'Opening a document collaboration room was cancelled');
-				throw new CancellationError('Opening a document collaboration room was cancelled');
-			}
-			const controller = new DocumentCollaborationController(model, connection);
-			this.collaborationControllerSlot.value = controller;
-			this.remotePresences = controller.presences;
-			this.collaborationStateListenerSlot.value = controller.onDidChangeState(change => {
-				if (this.collaborationControllerSlot.value !== controller) return;
-				this.collaborationContribution?.setState(change.state, { roomId: change.roomId, principalId: controller.principalId, canManageMembers: controller.canManageMembers, ...(change.message === undefined ? {} : { message: change.message }) });
-			});
-			this.collaborationPresenceListenerSlot.value = controller.onDidChangePresence(change => {
-				if (this.collaborationControllerSlot.value !== controller) return;
-				this.remotePresences = change.presences;
-				this.render();
-			});
+	/** Attaches document synchronization; the connection follows the current model lifetime. */
+	public setCollaborationConnection(connection: DocumentCollaborationConnection): DocumentCollaborationController {
+		this.clearCollaboration();
+		const controller = new DocumentCollaborationController(this.requireModel(), connection);
+		this.collaborationControllerSlot.value = controller;
+		this.remotePresences = controller.presences;
+		this.collaborationPresenceListenerSlot.value = controller.onDidChangePresence(change => {
+			this.remotePresences = change.presences;
 			this.render();
-			return { roomId: controller.roomId, principalId: controller.principalId, canManageMembers: controller.canManageMembers };
-		} finally {
-			if (this.collaborationStart === start) this.collaborationStart = undefined;
-		}
+		});
+		this.render();
+		return controller;
 	}
 
-	private stopCollaboration(): void {
-		this.cancelCollaborationStart();
-		this.collaborationStateListenerSlot.clear();
+	public clearCollaboration(): void {
 		this.collaborationPresenceListenerSlot.clear();
 		this.collaborationControllerSlot.clear();
 		this.remotePresences = [];
-		this.collaborationContribution?.setState(this.options.documentCollaborationService ? "inactive" : "unavailable");
-	}
-
-	private createCollaborationInvite(displayName: string, role: DocumentCollaborationRoomRole): Promise<DocumentCollaborationInvite> {
-		const controller = this.collaborationControllerSlot.value;
-		if (!controller) return Promise.reject(new Error("Document collaboration is not connected"));
-		return controller.createInvite(displayName, role);
-	}
-
-	private listCollaborationMembers(): Promise<readonly DocumentCollaborationMember[]> {
-		const controller = this.collaborationControllerSlot.value;
-		if (!controller) return Promise.reject(new Error("Document collaboration is not connected"));
-		return controller.listMembers();
-	}
-
-	private rotateCollaborationMemberAccessToken(principalId: string): Promise<DocumentCollaborationInvite> {
-		const controller = this.collaborationControllerSlot.value;
-		if (!controller) return Promise.reject(new Error("Document collaboration is not connected"));
-		return controller.rotateMemberAccessToken(principalId);
-	}
-
-	private revokeCollaborationMember(principalId: string): Promise<void> {
-		const controller = this.collaborationControllerSlot.value;
-		if (!controller) return Promise.reject(new Error("Document collaboration is not connected"));
-		return controller.revokeMember(principalId);
-	}
-
-	private cancelCollaborationStart(): void {
-		this.collaborationStart?.abort();
-		this.collaborationStart = undefined;
-	}
-
-	private requireWorkingCopy(): TextModelWorkingCopyReference {
-		const workingCopy = this.modelReferenceSlot.value;
-		assertDefined(workingCopy, new ReferenceError("Document editor pane has no active working copy"));
-		return workingCopy;
+		if (this.model) this.render();
 	}
 
 	private requireInput(): RichTextEditorInput {
@@ -1473,9 +1324,6 @@ function createFallbackInlineNode(ownerDocument: Document, node: DocumentNode): 
 	return element;
 }
 
-function createCollaborationClientId(): string {
-	return `stanza-${generateUuid()}`;
-}
 
 function editableBlockAriaLabel(node: DocumentNode): string {
 	switch (node.type) {

@@ -14,7 +14,7 @@ import type { DocumentNode } from "../../../../../editor/common/model/document.j
 import { createDefaultDocumentSchema, type DocumentSchema } from "../../../../../editor/common/model/documentSchema.js";
 import { applyDocumentTransaction, DocumentTransaction } from "../../../../../editor/common/model/documentTransaction.js";
 import { serializeDocumentTransaction } from "../../../../../editor/common/model/documentTransactionSerialization.js";
-import type { DocumentCollaborationRemoteEnvelope } from "../../../../../editor/contrib/collaboration/common/protocol.js";
+import type { DocumentCollaborationRemoteEnvelope } from "../../../../../editor/common/services/documentCollaborationService.js";
 import type { IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
 import type { IDocumentCollaborationApi } from "../../../../../platform/collaboration/common/documentCollaborationApi.js";
 import { AppServerDocumentCollaborationService } from "../../browser/appServerDocumentCollaborationService.js";
