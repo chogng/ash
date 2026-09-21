@@ -33,6 +33,8 @@ import { ViewContext } from '../../../common/viewModel/viewContext.js';
 import { darkColorTheme } from '../../../../platform/theme/common/colorTheme.js';
 import { type TextEditorContributionContext } from '../../../browser/editorExtensions.js';
 import { IInstantiationService, ServiceConstructionDescriptor, createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import { errorHandler, setUnexpectedErrorHandler } from '../../../../base/common/errors.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
@@ -2316,6 +2318,72 @@ test('CodeEditorWidget shares host language services across contributions and mo
 	assert.equal(services.get(ILanguageConfigurationService), configurations);
 	assert.equal(first.isDisposed(), false);
 	assert.equal(second.isDisposed(), false);
+});
+
+test('trigger dispatches actions and commands in the receiving editor with its context', async () => {
+	const { EditorAction, EditorCommand, registerEditorAction, registerEditorCommand } = await import('../../../browser/editorExtensions.js');
+	const calls: { editor: ICodeEditor; args: unknown }[] = [];
+	const condition = ContextKeyExpr.has('test.trigger.enabled');
+	registerEditorAction(class extends EditorAction {
+		constructor() { super({ id: 'test.trigger.action', label: 'Test trigger', alias: 'Test trigger', precondition: condition }); }
+		public run(_accessor: unknown, editor: ICodeEditor, args: unknown): void { calls.push({ editor, args }); }
+	});
+	registerEditorCommand(new class extends EditorCommand {
+		constructor() { super({ id: 'test.trigger.command', precondition: condition }); }
+		public runEditorCommand(_accessor: unknown, editor: ICodeEditor, args: unknown): void { calls.push({ editor, args }); }
+	}());
+	const dom = new JSDOM('<!doctype html><body><main></main><aside></aside></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('alpha');
+	using otherModel = new TextModel('beta');
+	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, input: { resource: model.uri }, languageId: model.getLanguageId(), contributions: [] });
+	using other = createTestCodeEditor({ container: requiredElement(dom.window.document, 'aside'), model: otherModel, input: { resource: otherModel.uri }, languageId: otherModel.getLanguageId(), contributions: [] });
+	const context = editor.invokeWithinContext(accessor => accessor.get(IContextKeyService));
+	context.setContext('test.trigger.enabled', false);
+	other.invokeWithinContext(accessor => accessor.get(IContextKeyService)).setContext('test.trigger.enabled', true);
+	other.focus();
+	const payload = Object.freeze({ value: 42 });
+	for (const id of ['test.trigger.action', 'test.trigger.command']) editor.trigger('test', id, payload);
+	assert.deepEqual(calls, []);
+	context.setContext('test.trigger.enabled', true);
+	for (const id of ['test.trigger.action', 'test.trigger.command']) editor.trigger('test', id, payload);
+	assert.deepEqual(calls, [{ editor, args: payload }, { editor, args: { value: 42, source: 'test' } }]);
+	assert.equal(dom.window.document.activeElement, other.controller.element);
+	assert.deepEqual(payload, { value: 42 });
+	editor.setModel(null);
+	editor.trigger('test', 'test.trigger.command', payload);
+	assert.equal(calls.length, 2);
+	dom.window.close();
+});
+
+test('trigger reports synchronous command errors and rejected action promises', async () => {
+	const { EditorAction, EditorCommand, registerEditorAction, registerEditorCommand } = await import('../../../browser/editorExtensions.js');
+	const commandError = new Error('Command failed');
+	const actionError = new Error('Action failed');
+	registerEditorCommand(new class extends EditorCommand {
+		constructor() { super({ id: 'test.trigger.failure.command', precondition: undefined }); }
+		public runEditorCommand(): void { throw commandError; }
+	}());
+	registerEditorAction(class extends EditorAction {
+		constructor() { super({ id: 'test.trigger.failure.action', label: 'Test failure', alias: 'Test failure', precondition: undefined }); }
+		public async run(): Promise<void> { throw actionError; }
+	});
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using model = new TextModel('alpha');
+	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, input: { resource: model.uri }, languageId: model.getLanguageId(), contributions: [] });
+	const previous = errorHandler.getUnexpectedErrorHandler();
+	const errors: unknown[] = [];
+	setUnexpectedErrorHandler(error => errors.push(error));
+	try {
+		editor.trigger('test', 'test.trigger.failure.command', {});
+		editor.trigger('test', 'test.trigger.failure.action', {});
+		await delay(dom.window, 0);
+		assert.deepEqual(errors, [commandError, actionError]);
+	} finally {
+		setUnexpectedErrorHandler(previous);
+		dom.window.close();
+	}
 });
 
 test('formatting context keys follow registration, language changes, and model replacement', async () => {

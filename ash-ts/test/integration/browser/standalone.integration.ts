@@ -123,9 +123,11 @@ interface ParameterHintRequestState {
 }
 
 interface StandaloneHarness {
-	prepareParameterHints(enabled?: boolean): void;
+	prepareParameterHints(enabled?: boolean, cycle?: boolean): void;
 	readParameterHintRequests(): ParameterHintRequestState[];
-	finishParameterHintRequest(index: number, outcome: 'hints' | 'empty' | 'error'): Promise<void>;
+	finishParameterHintRequest(index: number, outcome: 'hints' | 'empty' | 'error', hints?: stanza.LanguageParameterHints): Promise<void>;
+	runParameterHintCommand(id: string, global?: boolean): Promise<void>;
+	readParameterHintContext(): { supported: boolean; visible: boolean | undefined; multiple: boolean | undefined };
 	changeParameterHintsState(reason: 'text' | 'selection' | 'language' | 'provider' | 'off' | 'on' | 'model' | 'contribution' | 'dispose' | 'blur'): void;
 	queueParameterHints(reason: 'escape' | 'selection' | 'off' | 'blur' | 'dispose' | 'type'): void;
 	shareParameterHintsModel(): void;
@@ -314,7 +316,7 @@ let parameterHintsRegistration: ReturnType<typeof stanza.languages.registerSigna
 const parameterHintRequests: {
 	state: Omit<ParameterHintRequestState, 'aborted'>;
 	signal: AbortSignal;
-	finish: (outcome: 'hints' | 'empty' | 'error') => void;
+	finish: (outcome: 'hints' | 'empty' | 'error', hints?: stanza.LanguageParameterHints) => void;
 }[] = [];
 let renameRegistration: ReturnType<typeof stanza.languages.registerRenameProvider> | undefined;
 const renameRequests: {
@@ -428,11 +430,11 @@ let formattingProvider: { dispose(): void } | undefined;
 let bracketTokenRegistration: { dispose(): void } | undefined;
 
 window.ashStandaloneIntegration = {
-	prepareParameterHints: (enabled = true) => {
+	prepareParameterHints: (enabled = true, cycle = true) => {
 		parameterHintsRegistration?.dispose();
 		callerEditor.setValue('call');
 		callerEditor.setPosition(new stanza.Position(1, 5));
-		callerEditor.updateOptions({ parameterHints: { enabled } });
+		callerEditor.updateOptions({ parameterHints: { enabled, cycle } });
 		callerEditor.focus();
 		parameterHintsRegistration = stanza.languages.registerSignatureHelpProvider('*', {
 			provideParameterHints: (request, signal) => new Promise((resolve, reject) => parameterHintRequests.push({
@@ -443,11 +445,11 @@ window.ashStandaloneIntegration = {
 					context: request.context,
 				},
 				signal,
-				finish: outcome => {
+				finish: (outcome, hints) => {
 					if (outcome === 'error') {
 						reject(new Error('parameter hints failed'));
 					} else {
-						resolve({ signatures: outcome === 'empty' ? [] : [{
+						resolve(hints ?? { signatures: outcome === 'empty' ? [] : [{
 							label: `call(value): ${request.languageId}`,
 							parameters: [{ label: 'value' }],
 							activeParameter: 0,
@@ -458,12 +460,29 @@ window.ashStandaloneIntegration = {
 		});
 	},
 	readParameterHintRequests: () => parameterHintRequests.map(request => ({ ...request.state, aborted: request.signal.aborted })),
-	finishParameterHintRequest: async (index, outcome) => {
-		parameterHintRequests[index]!.finish(outcome);
+	finishParameterHintRequest: async (index, outcome, hints) => {
+		parameterHintRequests[index]!.finish(outcome, hints);
 		await Promise.resolve();
 		await Promise.resolve();
 		await Promise.resolve();
 	},
+	runParameterHintCommand: async (id, global = false) => {
+		if (global) {
+			const command = CommandsRegistry.getCommand(id);
+			if (!command) throw new Error(`Missing parameter hint command: ${id}`);
+			await StandaloneServices.get().instantiationService.invokeFunction(accessor => command(accessor));
+		} else {
+			callerEditor.trigger('test', id, {});
+		}
+	},
+	readParameterHintContext: () => callerEditor.invokeWithinContext(accessor => {
+		const context = accessor.get(IContextKeyService);
+		return {
+			supported: callerEditor.getAction('editor.action.triggerParameterHints')?.isSupported() ?? false,
+			visible: context.getValue<boolean>('parameterHintsVisible'),
+			multiple: context.getValue<boolean>('parameterHintsMultipleSignatures'),
+		};
+	}),
 	changeParameterHintsState: reason => {
 		if (reason === 'text') callerEditor.setValue('changed');
 		if (reason === 'selection') callerEditor.setPosition(new stanza.Position(1, 2));

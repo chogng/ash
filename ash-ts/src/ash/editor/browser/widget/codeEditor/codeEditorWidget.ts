@@ -5,6 +5,7 @@ import { type IKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
 import { trackFocus, type IFocusTracker } from '../../../../base/browser/focus.js';
 import { type IMouseWheelEvent } from '../../../../base/browser/mouseEvent.js';
 import { Emitter, type Event } from "../../../../base/common/event.js";
+import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { CursorsController } from "../../../common/cursor/cursor.js";
 import { type IDimension } from '../../../common/core/2d/dimension.js';
@@ -937,7 +938,20 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				this.controller.cut();
 				return;
 		}
-		void source;
+		try {
+			const action = this.getAction(handlerId);
+			if (action) {
+				void action.run(payload).catch(onUnexpectedError);
+				return;
+			}
+			const command = EditorExtensionsRegistry.getEditorCommand(handlerId);
+			if (command && this.contextKeyService.contextMatchesRules(command.precondition)) {
+				const commandArgs = payload && typeof payload === 'object' && !Array.isArray(payload) ? { ...args, source } : payload ?? { source };
+				void Promise.resolve(this.invokeWithinContext(accessor => command.runEditorCommand(accessor, this, commandArgs))).catch(onUnexpectedError);
+			}
+		} catch (error) {
+			onUnexpectedError(error);
+		}
 	}
 
 	getAction(id: string): IEditorAction | null {
@@ -1050,25 +1064,28 @@ class EditorContextKeysManager extends Disposable {
 		if (!model) throw new ReferenceError('Editor context keys require a text model');
 		const documentFormatting = EditorContextKeys.hasDocumentFormattingProvider.bindTo(contextKeyService);
 		const selectionFormatting = EditorContextKeys.hasDocumentSelectionFormattingProvider.bindTo(contextKeyService);
+		const signatureHelp = EditorContextKeys.hasSignatureHelpProvider.bindTo(contextKeyService);
 		this._register(toDisposable(() => {
 			for (const key of [
 				this.editorSimpleInput, this.editorFocus, this.textInputFocus, this.editorTextFocus,
 				this.editorReadonly, this.hasMultipleSelections, this.hasNonEmptySelection,
-				this.isComposing, this.languageId, documentFormatting, selectionFormatting,
+				this.isComposing, this.languageId, documentFormatting, selectionFormatting, signatureHelp,
 			]) {
 				key.reset();
 			}
 		}));
-		const updateFormatting = () => {
+		const updateLanguageFeatures = () => {
 			const hasRangeProvider = languageFeaturesService.documentRangeFormattingEditProvider.has(model);
 			selectionFormatting.set(hasRangeProvider);
 			documentFormatting.set(hasRangeProvider || languageFeaturesService.documentFormattingEditProvider.has(model));
+			signatureHelp.set(languageFeaturesService.signatureHelpProvider.has(model));
 			this.languageId.set(model.getLanguageId());
 		};
-		this._register(languageFeaturesService.documentFormattingEditProvider.onDidChange(updateFormatting));
-		this._register(languageFeaturesService.documentRangeFormattingEditProvider.onDidChange(updateFormatting));
-		this._register(model.onDidChangeLanguage(updateFormatting));
-		updateFormatting();
+		this._register(languageFeaturesService.documentFormattingEditProvider.onDidChange(updateLanguageFeatures));
+		this._register(languageFeaturesService.documentRangeFormattingEditProvider.onDidChange(updateLanguageFeatures));
+		this._register(languageFeaturesService.signatureHelpProvider.onDidChange(updateLanguageFeatures));
+		this._register(model.onDidChangeLanguage(updateLanguageFeatures));
+		updateLanguageFeatures();
 		this.updateConfiguration();
 		this.updateSelection();
 		this.updateFocus();

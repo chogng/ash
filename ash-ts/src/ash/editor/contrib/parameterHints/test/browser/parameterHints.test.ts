@@ -5,6 +5,7 @@ import { Position } from '../../../../common/core/position.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { LanguageFeaturesService } from '../../../../common/services/languageFeaturesService.js';
 import type { LanguageParameterHints, LanguageParameterHintsRequest } from '../../../../common/languages.js';
+import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
@@ -31,6 +32,56 @@ suiteTeardown(() => browserEnvironment.window.close());
 const hints: LanguageParameterHints = {
 	signatures: [{ label: 'call(value)', parameters: [{ label: 'value' }], activeParameter: 0 }],
 };
+
+test('signature actions follow provider availability, language and model attachment', async () => {
+	using fixture = createEditor();
+	const action = fixture.editor.getAction('editor.action.triggerParameterHints');
+	assert.ok(action);
+	const context = fixture.editor.invokeWithinContext(accessor => accessor.get(IContextKeyService));
+	const read = () => [action.isSupported(), context.getValue('editorHasSignatureHelpProvider')];
+	assert.deepEqual(read(), [false, false]);
+	using provider = fixture.features.signatureHelpProvider.register('typescript', { provideParameterHints: () => hints });
+	assert.deepEqual(read(), [true, true]);
+	fixture.model.setLanguage('plaintext');
+	assert.deepEqual(read(), [false, false]);
+	fixture.model.setLanguage('typescript');
+	fixture.editor.updateOptions({ readOnly: true });
+	await action.run();
+	assert.equal(fixture.dialog.hidden, false);
+	fixture.editor.setModel(null);
+	assert.deepEqual(read(), [false, false]);
+	fixture.editor.setModel(fixture.model);
+	assert.deepEqual(read(), [true, true]);
+	provider.dispose();
+	assert.deepEqual(read(), [false, false]);
+});
+
+test('signature commands switch the returned result without querying or moving the cursor', async () => {
+	using fixture = createEditor();
+	let calls = 0;
+	using provider = fixture.features.signatureHelpProvider.register('typescript', {
+		provideParameterHints: () => {
+			calls++;
+			return { signatures: [...hints.signatures, { label: 'call(other)', parameters: [{ label: 'other' }], activeParameter: 0 }] };
+		},
+	});
+	await fixture.invoke();
+	const nodes = [...fixture.dialog.children];
+	const before = fixture.editor.getSelections();
+	fixture.editor.trigger('test', 'showNextParameterHint', {});
+	assert.equal(fixture.dialog.querySelector('.stanza-editor-parameter-hints-signature.active')?.textContent, 'call(other)');
+	assert.deepEqual([...fixture.dialog.children], nodes);
+	fixture.editor.trigger('test', 'showNextParameterHint', {});
+	assert.equal(fixture.dialog.querySelector('.stanza-editor-parameter-hints-signature.active')?.textContent, 'call(value)');
+	fixture.editor.trigger('test', 'showPrevParameterHint', {});
+	assert.equal(fixture.dialog.querySelector('.stanza-editor-parameter-hints-signature.active')?.textContent, 'call(other)');
+	assert.deepEqual(fixture.editor.getSelections(), before);
+	assert.equal(calls, 1);
+	fixture.editor.trigger('test', 'closeParameterHints', {});
+	assert.equal(fixture.dialog.hidden, true);
+	const context = fixture.editor.invokeWithinContext(accessor => accessor.get(IContextKeyService));
+	assert.deepEqual([context.getValue('parameterHintsVisible'), context.getValue('parameterHintsMultipleSignatures')], [false, false]);
+});
 
 test('signature help uses the editor snapshot and stops after the first usable provider', async () => {
 	using fixture = createEditor();

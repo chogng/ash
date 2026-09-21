@@ -1,5 +1,32 @@
 # Editor API 对齐状态
 
+## 签名提示命令与签名切换（2026-09-21）
+
+准入链：快捷键 / `getAction().run()` / `trigger()` → 已有 EditorAction / EditorCommand 注册表 → 当前编辑器的签名提示控制器 → 查询、关闭或切换返回的签名 → 现有 DOM 与上下文状态。检查发现 `trigger()` 尚未分发已注册命令；先补该入口，再接功能命令，避免组件内保留另一套动作实现。
+
+| 准入路径（相对 editor，另有标注除外） | 存在关系 | 唯一 owner、本批动作与验证 |
+| --- | --- | --- |
+| `browser/widget/codeEditor/codeEditorWidget.ts` | 双方都有 | `trigger` 分发本编辑器的动作 / 命令并报告异步错误；现有上下文管理器维护 signature provider 可用性，随注册、语言、模型及释放更新。验证编辑器作用域、条件和错误。 |
+| `common/editorContextKeys.ts` | 双方都有 | 补实际被触发动作消费的 `hasSignatureHelpProvider`，不承载状态。 |
+| `contrib/parameterHints/browser/parameterHints.ts` | 双方都有 | 注册触发、关闭、上一项和下一项；控制器持有结果和活动签名，维护可见 / 多签名上下文，尊重已有 cycle 配置。按键进入公开 trigger，不增加状态服务或 DOM owner。 |
+| `contrib/parameterHints/test/browser/parameterHints.test.ts` | 仅 Ash 测试 | 真实 Widget 验证动作条件、命令取消、切换、不重复查询与释放。 |
+| `test/browser/widget/codeEditorWidget.test.ts` | 双方都有 | 验证公开 trigger 的目标编辑器、payload、条件与错误报告。 |
+| `ash-ts/test/integration/browser/standalone.integration.ts`、`standalone.integration.spec.ts` | 仅 Ash 测试 | 实际键盘和公开命令验证切换、循环边界、焦点 / 选区 / DOM 稳定、无障碍状态和动态 provider。 |
+| `browser/README.md`、`api-alignment-status.md` | 仅 Ash 文档 | 更新已接通的命令、状态职责、验证和剩余契约差异。 |
+
+独立实现：保持提示 div/strong、现有主题 class、输入焦点、View 坐标及 CSS；切换只更新现有签名节点，不请求 provider、不改变正文和选区。结果和活动下标由现有控制器统一持有，上下文只反映该状态。沿现有构造注入取得编辑器作用域的上下文服务。上游仅核对命令 ID、快捷键、provider 条件及 cycle=false 到边界时关闭的行为，不搬入其 Model/Widget 私有结构。关闭命令可取消在途请求；可见上下文仍只描述实际显示。
+
+本批开始时上一批签名提示改动已暂存；保留暂存区，只追加本批工作区变化。
+
+最终结果：
+
+- 四个命令均已接通：`editor.action.triggerParameterHints`、`closeParameterHints`、`showPrevParameterHint`、`showNextParameterHint`。按键通过 editor 的 keydown 事件先消费，再进入公开 `trigger`，正文导航不会重复处理。切换保留原签名节点，以 `aria-current` 标记活动签名，并提供键盘说明。
+- 两份受影响单测共 77 项通过（签名提示 10 项、Widget 67 项），无警告。常规入口被下述范围外错误阻塞后，使用临时配置继承 `ash-ts/tsconfig.test.json`，仅将 include 缩到两份测试与原声明文件，并将相同 types 解析为绝对路径；编译通过后用原 `test/unit/editor.ts --run` 执行，未跳过类型检查。
+- `pnpm --dir ash-ts test:editor:browser` 完整通过，459/459 项，其中签名提示定向场景 31 项。验证公开动作和命令、动态 provider / 语言 / 模型上下文、循环边界、焦点与选区不变、DOM 复用、取消和原有输入链。浏览器只保留既有 `NO_COLOR` 环境提示。
+- Stanza 直接编译目标 `tsc -p ../build/vite/stanza/tsconfig.json --noEmit` 与现有 `editor.vite.config.ts` 生产打包均通过，无警告。
+- `check-editor-alignment.mjs --test=all`、常规单测入口和两种常规构建均被 `platform/sessions/common/sessionApi.ts` 的四处类型错误阻塞：生成协议已无 `AdvisorConfig`、`AdvisorConfigureResult`、`configureAdvisor`、`consultAdvisor`，调用方仍引用它们。本批没有修改这些范围外文件，不把全量单测或常规构建记为通过。
+- 结构、台账、CSS ownership 和 `git diff --check` 通过；生产文件集合仍为 537 个（422 同路径、115 Ash 自有），声明核对仍为 80/41。没有新增文件或修改 CSS。provider 触发字符声明、标准 signature-help 请求契约与独立 Model/Widget 接口仍待后续调用链处理。
+
 ## 签名提示查询、排队触发与关闭（2026-09-21）
 
 准入链：Ctrl/Cmd+Shift+Space 或输入 `(`/`,` → 标准 bundle 的签名提示贡献 → 公共 signature-help registry → 当前快照与光标查询 → 现有提示 DOM 与 View 坐标 → Escape、配置变化或释放取消。现有 `ParameterHintsService` 只有控制器一个生产消费者；请求信号、排队任务、启用配置和提示显示必须由同一会话持有，不能让关闭后遗留的任务重新打开提示。
@@ -1249,7 +1276,7 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 | `contrib/middleScroll/browser/middleScrollController.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
 | `contrib/multicursor/browser/multicursor.ts` | 1 / 2 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
 | `contrib/multicursor/common/occurrenceSelection.ts` | 1 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
-| `contrib/parameterHints/browser/parameterHints.ts` | 1 / 1 | 2026-09-21 已迁回对应入口；关闭、动态配置、输入合并、独立导航和共享模型焦点均由真实浏览器验证。 |
+| `contrib/parameterHints/browser/parameterHints.ts` | 1 / 1 | 2026-09-21 已迁回对应入口并接通触发、关闭、前后切换命令；取消、动态配置、循环边界、节点复用和焦点均由真实浏览器验证。 |
 | `contrib/peekView/browser/editorPeekViewWidget.ts` | 3 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
 | `contrib/placeholderText/browser/placeholderText.contribution.ts` | 2 / 1 | 人工检查：贡献注册入口、安装条件与服务/控制器归属；功能实现结论见对应文件。 |
 | `contrib/placeholderText/browser/placeholderTextContribution.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |

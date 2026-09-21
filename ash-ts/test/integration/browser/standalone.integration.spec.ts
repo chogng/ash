@@ -998,6 +998,107 @@ test.describe('parameter hints requests', () => {
 		await page.evaluate(() => window.ashStandaloneIntegration?.dispose());
 	});
 
+	const signatures = [
+		{ label: 'call(value)', parameters: [{ label: 'value' }], activeParameter: 0 },
+		{ label: 'call(other)', parameters: [{ label: 'other' }], activeParameter: 0 },
+		{ label: 'call(last)', parameters: [{ label: 'last' }], activeParameter: 0 },
+	];
+
+	for (const global of [false, true]) {
+		test(`${global ? 'global' : 'editor'} signature commands trigger, switch and close the current result`, async ({ page }) => {
+			await page.goto('/standalone.html');
+			await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints());
+			// The trigger action returns when its provider finishes; dispatch without waiting for it.
+			await page.evaluate(global => { void window.ashStandaloneIntegration.runParameterHintCommand('editor.action.triggerParameterHints', global); }, global);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(1);
+			await page.evaluate(signatures => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints', { signatures, activeSignature: 1 }), signatures);
+			const dialog = page.getByRole('dialog', { name: 'Parameter hints' });
+			const active = dialog.locator('.stanza-editor-parameter-hints-signature.active');
+			await expect(active).toHaveText('call(other)');
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintContext())).toEqual({ supported: true, visible: true, multiple: true });
+			await page.evaluate(global => window.ashStandaloneIntegration.runParameterHintCommand('showNextParameterHint', global), global);
+			await expect(active).toHaveText('call(last)');
+			await page.evaluate(global => window.ashStandaloneIntegration.runParameterHintCommand('showPrevParameterHint', global), global);
+			await expect(active).toHaveText('call(other)');
+			await page.evaluate(global => window.ashStandaloneIntegration.runParameterHintCommand('closeParameterHints', global), global);
+			await expect(dialog).toBeHidden();
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintContext())).toEqual({ supported: true, visible: false, multiple: false });
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(1);
+			await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
+		});
+	}
+
+	for (const modifier of ['', 'Alt+']) {
+		test(`${modifier || 'unmodified '}arrow keys cycle signatures without changing text, selection or hint nodes`, async ({ page }) => {
+			await page.goto('/standalone.html');
+			await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints());
+			await page.keyboard.press('ControlOrMeta+Shift+Space');
+			await page.evaluate(signatures => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints', { signatures }), signatures);
+			const before = await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy());
+			const dialog = page.getByRole('dialog', { name: 'Parameter hints' });
+			const nodes = await dialog.evaluateHandle(element => [...element.children]);
+			try {
+				const active = dialog.locator('.stanza-editor-parameter-hints-signature.active');
+				await expect(dialog).toHaveAttribute('aria-description', /Up and Down/);
+				for (const [key, label] of [
+					['ArrowDown', 'call(other)'], ['ArrowDown', 'call(last)'], ['ArrowDown', 'call(value)'], ['ArrowUp', 'call(last)'],
+				]) {
+					await page.keyboard.press(`${modifier}${key}`);
+					await expect(active).toHaveText(label!);
+					await expect(active).toHaveAttribute('aria-current', 'true');
+					await expect(dialog.locator('[aria-current="true"]')).toHaveCount(1);
+				}
+				expect(await nodes.evaluate(nodes => nodes.every(node => node.isConnected))).toBe(true);
+				expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual(before);
+				expect(await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(1);
+				await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
+				await page.keyboard.press('Shift+Escape');
+				await expect(dialog).toBeHidden();
+			} finally {
+				await nodes.dispose();
+			}
+		});
+	}
+
+	for (const direction of ['previous', 'next'] as const) {
+		test(`non-cycling signatures close beyond the ${direction} boundary`, async ({ page }) => {
+			await page.goto('/standalone.html');
+			await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints(true, false));
+			await page.keyboard.press('ControlOrMeta+Shift+Space');
+			await page.evaluate(({ signatures, direction }) => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints', {
+				signatures, activeSignature: direction === 'next' ? 2 : 0,
+			}), { signatures, direction });
+			const before = await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy());
+			await page.keyboard.press(direction === 'next' ? 'ArrowDown' : 'ArrowUp');
+			await expect(page.locator('#caller .stanza-editor-parameter-hints')).toBeHidden();
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual(before);
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintContext())).toEqual({ supported: true, visible: false, multiple: false });
+		});
+	}
+
+	test('a single signature leaves normal arrow navigation available', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints());
+		await page.keyboard.press('ControlOrMeta+Shift+Space');
+		await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints'));
+		const before = await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy());
+		await page.evaluate(() => window.ashStandaloneIntegration.runParameterHintCommand('showNextParameterHint'));
+		await expect(page.getByRole('dialog', { name: 'Parameter hints' })).toBeVisible();
+		await page.keyboard.press('ArrowUp');
+		await expect(page.locator('#caller .stanza-editor-parameter-hints')).toBeHidden();
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).not.toEqual(before.selections);
+	});
+
+	test('the close signature command cancels a request before hints are visible', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints());
+		await page.keyboard.press('ControlOrMeta+Shift+Space');
+		await page.evaluate(() => window.ashStandaloneIntegration.runParameterHintCommand('closeParameterHints', true));
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests()))[0]!.aborted).toBe(true);
+		await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints'));
+		await expect(page.locator('#caller .stanza-editor-parameter-hints')).toBeHidden();
+	});
+
 	for (const reason of ['text', 'selection', 'language', 'provider', 'off', 'model', 'contribution', 'dispose', 'blur'] as const) {
 		test(`${reason} cancels pending parameter hints and rejects late results`, async ({ page }) => {
 			const errors: string[] = [];
