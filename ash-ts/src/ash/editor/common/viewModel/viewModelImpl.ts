@@ -14,6 +14,7 @@ import { type ICommand, type ICursorState, type IViewState, ScrollType } from '.
 import { EditorTheme } from '../editorTheme.js';
 import { type ILanguageConfigurationService } from '../languages/languageConfigurationRegistry.js';
 import { TokenizationRegistry } from '../languages.js';
+import { tokenizeLineToHTML } from '../languages/textToHtmlTokenizer.js';
 import { EndOfLinePreference, type IAttachedView, type ICursorStateComputer, type IIdentifiedSingleEditOperation, type ITextModel, PositionAffinity, TextDirection } from '../model.js';
 import { TextModel } from '../model/textModel.js';
 import { type ILineBreaksComputer, type ILineBreaksComputerContext, type ILineBreaksComputerFactory, type InjectedText } from '../modelLineProjectionData.js';
@@ -454,19 +455,10 @@ export class ViewModel extends Disposable implements IViewModel {
 				const content = this.model.getLineContent(lineNumber);
 				const start = lineNumber === range.startLineNumber ? range.startColumn - 1 : 0;
 				const end = lineNumber === range.endLineNumber ? range.endColumn - 1 : content.length;
-				const spans: string[] = [];
-				for (let token = tokens.findTokenIndexAtOffset(start); token < tokens.getCount(); token++) {
-					const from = Math.max(start, tokens.getStartOffset(token));
-					const to = Math.min(end, tokens.getEndOffset(token));
-					if (from >= end) break;
-					const text = escapeClipboardHtml(content.slice(from, to));
-					const style = colorMap[tokens.getForeground(token)] ? tokens.getInlineStyle(token, colorMap) : '';
-					spans.push(style ? `<span style="${escapeClipboardHtml(style)}">${text}</span>` : text);
-				}
-				lines.push(spans.join(''));
+				lines.push(tokenizeLineToHTML(content, tokens, colorMap, start, end, this.model.getOptions().tabSize, false));
 			}
 			const trailingText = texts[index]!.slice(this.model.getValueInRange(range).length);
-			return lines.join(this.model.getEOL()) + escapeClipboardHtml(trailingText);
+			return lines.join(this.model.getEOL()) + trailingText;
 		});
 		return {
 			html: `<pre style="white-space: pre; tab-size: ${this.model.getOptions().tabSize}"><code>${fragments.join(this.model.getEOL())}</code></pre>`,
@@ -732,10 +724,6 @@ export class ViewModel extends Disposable implements IViewModel {
 		const position = this.toViewSelection(selection).getPosition();
 		this.revealRange(source, true, Range.fromPositions(position), viewEvents.VerticalRevealType.Simple, ScrollType.Smooth);
 	}
-}
-
-function escapeClipboardHtml(value: string): string {
-	return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 }
 
 export interface IBatchableTarget {

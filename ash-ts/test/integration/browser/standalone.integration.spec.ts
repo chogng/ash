@@ -1473,7 +1473,7 @@ for (const inputKind of ['EditContext', 'textarea'] as const) {
 		expect(errors).toEqual([]);
 	});
 
-	for (const mode of ['full', 'partial', 'line', 'multi', 'disabled'] as const) {
+	for (const mode of ['full', 'partial', 'line', 'multi', 'disabled', 'missingColors'] as const) {
 		test(`${inputKind} rich clipboard copy preserves ${mode} content and token styles`, async ({ page }) => {
 			if (inputKind === 'textarea') {
 				await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
@@ -1482,10 +1482,10 @@ for (const inputKind of ['EditContext', 'textarea'] as const) {
 			await page.evaluate(mode => {
 				const ranges: Record<typeof mode, [number, number, number, number][]> = {
 					full: [[1, 1, 2, 9]], partial: [[1, 3, 1, 5]], line: [[1, 3, 1, 3]],
-					multi: [[1, 3, 1, 5], [2, 2, 2, 5]], disabled: [[1, 1, 2, 9]],
+					multi: [[1, 3, 1, 5], [2, 2, 2, 5]], disabled: [[1, 1, 2, 9]], missingColors: [[1, 1, 2, 9]],
 				};
 				window.ashStandaloneIntegration.prepareClipboard('const <x>&\n\t"value"', ranges[mode]);
-				window.ashStandaloneIntegration.configureClipboardTokens(mode !== 'disabled');
+				window.ashStandaloneIntegration.configureClipboardTokens(mode !== 'disabled', mode !== 'missingColors');
 			}, mode);
 			const input = page.locator('#caller .stanza-editor-input');
 			await input.focus();
@@ -1500,16 +1500,16 @@ for (const inputKind of ['EditContext', 'textarea'] as const) {
 					styles: [...content.querySelectorAll('span')].map(span => ({ text: span.textContent, color: span.style.color, weight: span.style.fontWeight, italic: span.style.fontStyle, decoration: span.style.textDecoration })),
 				};
 			});
-			const expected = { full: 'const <x>&\n\t"value"', partial: 'ns', line: 'const <x>&\n', multi: 'ns\n"va', disabled: 'const <x>&\n\t"value"' }[mode];
+			const expected = { full: 'const <x>&\n\t"value"', partial: 'ns', line: 'const <x>&\n', multi: 'ns\n"va', disabled: 'const <x>&\n\t"value"', missingColors: 'const <x>&\n\t"value"' }[mode];
 			expect(copied.text).toBe(expected);
 			if (mode === 'disabled') {
 				expect(copied.html).toBe('');
 			} else {
 				expect(copied.richText).toBe(expected);
 				expect(copied.injected).toBe(false);
-				expect(copied.styles[0]).toMatchObject({ color: 'rgb(18, 52, 86)', weight: 'bold', italic: 'italic' });
-				if (mode === 'full' || mode === 'multi') {
-					expect(copied.styles.at(-1)).toMatchObject({ color: 'rgb(101, 67, 33)', decoration: 'underline' });
+				expect(copied.styles[0]).toMatchObject({ color: mode === 'missingColors' ? '' : 'rgb(18, 52, 86)', weight: 'bold', italic: 'italic' });
+				if (mode === 'full' || mode === 'multi' || mode === 'missingColors') {
+					expect(copied.styles.at(-1)).toMatchObject({ color: mode === 'missingColors' ? '' : 'rgb(101, 67, 33)', decoration: 'underline' });
 				}
 			}
 		});

@@ -142,7 +142,7 @@ export class TokenMetadata {
 		const foreground = this.getForeground(metadata);
 		const fontStyle = this.getFontStyle(metadata);
 
-		let result = `color: ${colorMap[foreground]};`;
+		let result = colorMap[foreground] ? `color: ${colorMap[foreground]};` : '';
 		if (fontStyle & FontStyle.Italic) {
 			result += 'font-style: italic;';
 		}

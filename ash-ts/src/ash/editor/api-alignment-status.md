@@ -1,5 +1,58 @@
 # Editor API 对齐状态
 
+## common 剩余文件逐项收尾（2026-09-21）
+
+用户要求把剩余项全部处理，沿用“现有功能链”的范围，以及按职责抽取、收回和保留的决定。起始工作区干净；重新比较得到 49 个上游缺失文件，其中 diff 15 个、Tree-sitter 7 个仍在范围外。其余 27 个按实际消费者和状态 owner 逐项核对，不以创建无调用文件或替换私有容器来消除差异。
+
+本批准入：复制选区 → `ViewModelImpl.getRichTextToCopy` → 行 token HTML 序列化 → 剪贴板 HTML；模型仍持有文本和 token，ViewModel 选择范围并组装多行内容。
+
+| 准入路径 | 存在关系 | 本批动作与验证 |
+| --- | --- | --- |
+| `common/languages/textToHtmlTokenizer.ts` | 仅上游 → 双方都有 | `tokenizeLineToHTML` 接收现有行 token，负责范围裁剪、HTML 转义及 token 样式；Ash 的原始 tab 与 span 片段输出保持不变，不创建分词状态。 |
+| `common/viewModel/viewModelImpl.ts` | 双方都有 | 移出逐 token HTML 循环和转义函数，继续持有多选区、行范围、EOL 与外层复制容器。 |
+| `common/encodedTokenAttributes.ts` | 双方都有 | 缺少颜色时仍生成字体样式，避免合法的字体 metadata 被丢弃。 |
+| `test/common/modes/textToHtmlTokenizer.test.ts` | 对应上游测试路径，新建 Ash 测试 | 独立验证跨 token 裁剪、UTF-16、HTML 转义、tab、空范围和缺色字体。 |
+| `ash-ts/test/integration/browser/standalone.integration.ts`、`standalone.integration.spec.ts`（仓库相对路径） | Ash 现有设施 | 经过真实 copy 事件验证两种输入方式的选区文本、HTML 和缺色字体；复用既有复制、剪切、粘贴和撤销场景。 |
+| `api-alignment-status.md`、`browser/README.md` | 现有文档 | 记录 27 项的实际归属、范围差异和验证。 |
+
+独立实现：将 Ash 现有无 DOM 的序列化逻辑收回到对应 common 文件，读取现有 `IViewLineTokens`，不引入上游整文同步 tokenizer 或另一份 token store。文本内容和剪贴板的多行结构保持原行为；缺色时只省略 color 声明，字体语义仍由 token metadata 提供。本批不改变编辑器 DOM、CSS、焦点或输入 owner。
+
+### 剩余 27 项的最终归属核对
+
+以下路径相对 `common/`。每个缺失文件均有去向；“保留”表示已有功能继续由当前 owner 实现，不表示拥有该上游文件的全部 API。旧批次的“仍缺 49”等统计是历史记录。
+
+| 上游文件 | 本次结论 | 当前生产 owner 与依据 |
+| --- | --- | --- |
+| `languages/textToHtmlTokenizer.ts` | 已补齐当前消费端口 | `ViewModelImpl.getRichTextToCopy` 调用 `tokenizeLineToHTML`，原逐 token 实现退出；复制文本、字体与转义经过真实浏览器验证。 |
+| `languages/modesRegistry.ts`、`services/languagesAssociations.ts` | 保留宿主级语言注册 | `services/languagesRegistry.ts` 的 `registerMany/resolveLanguageId` 与 `LanguageService` 持有注册优先级、文件匹配和释放；Standalone / 扩展宿主使用同一套实例归属，不增加全局注册源。 |
+| `languages/nullTokenize.ts` | 保留现有无提供者语义 | `model/tokens/tokenizationTextModelPart.ts` 用当前模型语言生成默认行 metadata，Worker 无提供者时没有语法结果；不存在编码 tokenizer 的状态切换需求。 |
+| `model/fixedArray.ts` | 保留私有容器 | `TokenizationStateStore` 的 Map 只存逐行结束状态；换容器没有新增语义或当前性能证据。 |
+| `model/intervalTree.ts` | 保留跟踪范围实现 | `TrackedRangeCollection` 和 TextModel 统一映射编辑、装饰及 stickiness；不并行引入第二个装饰索引。 |
+| `model/textModelStringEdit.ts` | 保留稳定行身份转换 | `lineDocumentProjection.ts` 与模型事务持有 LineId 编辑映射；上游整行替换转换不能替代“保留编辑起始行身份”的约定，其余 StringEdit 端口没有生产调用方。 |
+| `model/tokens/abstractSyntaxTokenBackend.ts`、`model/tokens/tokenizerSyntaxTokenBackend.ts` | 保留异步分词 owner | `TokenizationTextModelPart` → `LanguageRequestCoordinator` → `SyntaxProviderWorker` 使用版本绑定请求、状态缓存和取消；不再创建同步编码分词后端。 |
+| `model/tokens/tokenizationFontDecorationsProvider.ts` | 保留 token 字体展示 | `languageTokenLineIndex.ts` 的 `StyledTokenSource` 与行渲染器消费 provider 字体信息；语义字体来自 token metadata，不另建字体装饰状态。 |
+| `tokens/contiguousMultilineTokens.ts`、`tokens/contiguousMultilineTokensBuilder.ts`、`tokens/contiguousTokensEditing.ts`、`tokens/contiguousTokensStore.ts`、`tokens/tokenWithTextArray.ts` | 保留单一 token 存储 | `languageTokens.ts`、`LanguageTokenLineIndex` 和 `LineTokens` 承担结果保存、编辑失效与可见行读取；上游连续编码数组不是当前持久状态格式。 |
+| `services/editorWorkerHost.ts` | 保留唯一 Worker 通道 | `services/textModelSync.ts` 与 `base/common/worker/webWorker.ts` 持有同步、版本校验、传输和释放；没有独立 Editor host 回调通道。 |
+| `services/getIconClasses.ts` | 保留 Platform 图标绘制 | `platform/theme/browser/fileIconThemeService.ts` → Workbench 资源标签，按资源解析并渲染图标；没有 Editor 图标 CSS 类生成器消费者。 |
+| `services/modelUndoRedoParticipant.ts` | 保留模型历史 owner | `ModelService` 的关闭模型历史预算与重开恢复、`TextModel` 历史持有现有撤销行为；没有跨资源 edit-stack 重开参与者。 |
+| `services/semanticTokensStyling.ts`、`services/semanticTokensStylingService.ts` | 按既有决定不恢复包装 | `semanticTokensProviderStyling.ts` 转换 provider 结果；主题和具名 token 的 owner 保持唯一。 |
+| `services/textResourceConfigurationService.ts` | 保留资源配置查询 | `ModelService` 经 `IConfigurationService` 查询资源/语言覆盖并监听更新；EOL 经 `ITextResourcePropertiesService` 解析。未出现需要独立资源配置 facade 的生产消费者。 |
+| `multiDiffEditor.ts` | 保留 Ash 定位契约 | `MultiDiffEditorWidget` 使用 item ID、行位置和 DiffModel；上游 cards 变体与 original/modified URI viewState 并非当前布局/定位格式。后端 diff 范围不变。 |
+| `standaloneStrings.ts` | 文案留在实际界面 owner | 文案由现有命令与组件消费；没有需要共享上游字符串集合的调用链。 |
+| `editorFeatures.ts` | 未引入额外能力 | 当前采用宿主服务和逐编辑器 contribution；没有进程级 EditorFeature 创建需求，不增加空 registry。 |
+| `model/bracketPairsTextModelPart/fixBrackets.ts` | 未引入额外能力 | 当前补全契约没有 `completeBracketPairs`；`tokenizeLinesAt` 明确返回 null，不能用未经词法识别的字符扫描改写字符串、注释中的括号。输入配对继续读取语言配置与模型括号树。 |
+| `services/inMemoryTextModelService.ts` | 未引入额外能力 | 当前独立模型由 ModelService 注册；没有 synthetic document 或 `registerModelAndPositionCommand` 的生产调用。仅存在服务接口不能证明需要另一套引用 owner。 |
+| `services/languageFeatureDebounce.ts` | 未引入额外能力 | WordHighlighter 的固定用户延迟由现有 scheduler 持有；自适应 provider 延迟是未接入的另一种策略，不改写现有配置含义。 |
+
+本轮文件结论：**1 个补入并接通、22 个保留现有职责、4 个尚未接入的额外能力**；另有 **22 个 diff / Tree-sitter 文件明确排除**。common 现有 **209 个文件：178 个同路径、31 个 Ash 自有；仍有 48 个上游路径不存在**。这关闭的是本次现有功能链的文件归属调查，不代表整个 VS Code Editor 的功能与 API 全量完成；4 个额外能力及 Editor 总账中的其他待处理契约仍明确保留。
+
+本批验证：
+
+- 三份定向单测文件通过；12 个 Chromium 复制场景通过，覆盖两种输入方式、完整/部分/多选区、整行复制、关闭语法 HTML、颜色表缺项及字体保留。
+- `check-editor-alignment.mjs --test=all` 通过：结构、台账、类型检查、231/231 个单测文件与 329/329 个 Playwright 用例通过。
+- `build:renderer`、`build:stanza`、`git diff --check` 通过；没有新增生产构建 warning 或未跟踪 JavaScript 产物。未修改 CSS，既有 6 份等价样式债务保持原状态。
+- 文件集合复核确认 48 个缺失路径全部落入上表 26 项或范围外的 22 项，没有遗漏；既有 JSDOM Canvas、测试服务装配与 Playwright 颜色环境提示保留。
+
 ## 缩进与括号辅助线的模型查询和显示（2026-09-21）
 
 准入链：模型缩进规则 / 括号树 → ViewModel 可见行查询 / 既有括号适配 → `IndentGuidesOverlay` → 主题辅助线。起始工作区干净。用户已授权继续补齐现有功能；本批不增加括号索引、前端 diff 或 Tree-sitter。

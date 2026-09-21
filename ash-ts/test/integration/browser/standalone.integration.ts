@@ -184,7 +184,7 @@ interface StandaloneHarness {
 	prepareKeyboardEditing(): KeyboardEditingState;
 	readKeyboardEditing(): KeyboardEditingState;
 	selectRange(): KeyboardEditingState;
-	configureClipboardTokens(highlighting: boolean): void;
+	configureClipboardTokens(highlighting: boolean, colorsAvailable?: boolean): void;
 	prepareClipboard(value?: string, selections?: [number, number, number, number][], emptySelectionClipboard?: boolean): KeyboardEditingState;
 	prepareWrappedLayout(): WrappedLayoutState;
 	prepareProportionalWrap(): WrappedLayoutState;
@@ -1316,10 +1316,10 @@ window.ashStandaloneIntegration = {
 		callerEditor.setSelection({ startLineNumber: 1, startColumn: 2, endLineNumber: 2, endColumn: 4 });
 		return readKeyboardEditing();
 	},
-	configureClipboardTokens: highlighting => {
+	configureClipboardTokens: (highlighting, colorsAvailable = true) => {
 		callerEditor.updateOptions({ copyWithSyntaxHighlighting: highlighting });
 		callerModel.setLanguage('typescript');
-		TokenizationRegistry.setColorMap(['#000000', '#222222', '#ffffff', '#123456', '#654321'].map(Color.fromHex));
+		TokenizationRegistry.setColorMap((colorsAvailable ? ['#000000', '#222222', '#ffffff', '#123456', '#654321'] : ['#000000', '#222222', '#ffffff']).map(Color.fromHex));
 		const keyword = MetadataConsts.SEMANTIC_USE_FOREGROUND | MetadataConsts.SEMANTIC_USE_BOLD | MetadataConsts.SEMANTIC_USE_ITALIC
 			| (3 << MetadataConsts.FOREGROUND_OFFSET) | ((FontStyle.Bold | FontStyle.Italic) << MetadataConsts.FONT_STYLE_OFFSET);
 		const string = MetadataConsts.SEMANTIC_USE_FOREGROUND | MetadataConsts.SEMANTIC_USE_UNDERLINE
