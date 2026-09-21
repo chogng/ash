@@ -15,6 +15,7 @@ import { type CancellationToken } from '../../../src/ash/base/common/cancellatio
 import { scheduleAtNextAnimationFrame } from '../../../src/ash/base/browser/scheduler.js';
 import { h } from '../../../src/ash/base/browser/dom.js';
 import { type Range } from '../../../src/ash/editor/common/core/range.js';
+import { type IEditorOptions } from '../../../src/ash/editor/common/config/editorOptions.js';
 import { EndOfLineSequence, type ITextModel } from '../../../src/ash/editor/common/model.js';
 import { IVersionedEditorWorkerClient } from '../../../src/ash/editor/browser/services/editorWorkerService.js';
 import { ILanguageFeaturesService } from '../../../src/ash/editor/common/services/languageFeatures.js';
@@ -125,6 +126,9 @@ interface StandaloneHarness {
 	prepareBrackets(value: string, columns: (number | [number, number])[], readOnly?: boolean): void;
 	configureBracketColors(enabled: boolean, independent: boolean): void;
 	setBracketTheme(scheme: keyof typeof stanza.ColorScheme, colors?: readonly string[]): void;
+	prepareGuides(value: string): void;
+	configureGuides(options: IEditorOptions): void;
+	setGuideTheme(scheme: keyof typeof stanza.ColorScheme, colors?: Record<string, string>): void;
 	prepareBracketToken(): void;
 	prepareLineJoin(): void;
 	prepareMulticursor(): void;
@@ -668,6 +672,23 @@ window.ashStandaloneIntegration = {
 				tokenType: 'other', modifiers: [], presentation: { foreground: '#123456', fontStyle: ['bold'] },
 			}] }),
 		});
+	},
+	prepareGuides: value => {
+		callerEditor.setValue(value);
+		callerModel.setLanguage('typescript');
+		callerModel.updateOptions({ tabSize: 4, indentSize: 2, bracketColorizationOptions: { enabled: true, independentColorPoolPerBracketType: false } });
+		callerEditor.updateOptions({
+			lineHeight: 20,
+			wordWrap: 'off',
+			guides: { indentation: true, highlightActiveIndentation: 'always', bracketPairs: true, bracketPairsHorizontal: true, highlightActiveBracketPair: true },
+		});
+		callerEditor.setPosition(new stanza.Position(1, 1));
+		callerEditor.focus();
+	},
+	configureGuides: options => callerEditor.updateOptions(options),
+	setGuideTheme: (scheme, colors) => {
+		stanza.editor.defineNamedTheme('guide-test', { label: 'Guide test', colorScheme: stanza.ColorScheme[scheme], colors });
+		stanza.editor.setTheme('guide-test');
 	},
 	prepareLineJoin: () => {
 		callerEditor.setValue('😀 one\r\n  two\r\nkeep\r\n三\r\n  four');

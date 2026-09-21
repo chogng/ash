@@ -1,18 +1,20 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { createStanzaIndentationGuides } from "../../../../browser/viewParts/indentGuides/indentGuides.js";
+import { TextModel } from '../../../../common/model/textModel.js';
+import { TestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
 
-test("Indentation guides follow complete visual units in mixed leading whitespace", () => {
-	assert.deepEqual(createStanzaIndentationGuides("        value", 4), [
-		{ columnIndex: 4, level: 1 },
-		{ columnIndex: 8, level: 2 },
-	]);
-	assert.deepEqual(createStanzaIndentationGuides("  \t  value", 4), [
-		{ columnIndex: 3, level: 1 },
-	]);
+test('Indentation guides use visual tab stops and the model indentation unit', () => {
+	using model = new TextModel('        value\n  \t  value\n  value  ');
+	model.updateOptions({ tabSize: 4, indentSize: 2 });
+	assert.deepEqual(model.guides.getLinesIndentGuides(1, 3), [4, 3, 1]);
+	model.updateOptions({ indentSize: 4 });
+	assert.deepEqual(model.guides.getLinesIndentGuides(1, 3), [2, 2, 1]);
 });
 
-test("Indentation guides stop at source text and validate tab sizing", () => {
-	assert.deepEqual(createStanzaIndentationGuides("  value  ", 4), []);
-	assert.throws(() => createStanzaIndentationGuides("  ", 0), /positive safe integer/);
+test('Blank-line guides follow the language off-side rule', () => {
+	using configurations = new TestLanguageConfigurationService();
+	using model = new TextModel('root\n    child\n\nroot', { languageId: 'guide-test', languageConfigurationService: configurations });
+	assert.deepEqual(model.guides.getLinesIndentGuides(1, 4), [0, 1, 1, 0]);
+	using registration = configurations.register('guide-test', { folding: { offSide: true } });
+	assert.deepEqual(model.guides.getLinesIndentGuides(1, 4), [0, 1, 0, 0]);
 });

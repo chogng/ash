@@ -1,5 +1,35 @@
 # Editor API 对齐状态
 
+## 缩进与括号辅助线的模型查询和显示（2026-09-21）
+
+准入链：模型缩进规则 / 括号树 → ViewModel 可见行查询 / 既有括号适配 → `IndentGuidesOverlay` → 主题辅助线。起始工作区干净。用户已授权继续补齐现有功能；本批不增加括号索引、前端 diff 或 Tree-sitter。
+
+| 准入路径 | 存在关系 | 唯一职责与处理 |
+| --- | --- | --- |
+| `browser/viewParts/indentGuides/indentGuides.ts`、`indentGuides.css` | 双方都有 | 使用已有 common 缩进层级和活动范围查询；ViewPart 只持有可见行 DOM 和像素几何，修正首尾高度并消费主题颜色。 |
+| `common/core/editorColorRegistry.ts` | 双方都有 | 注册实际被绘制使用的缩进、活动缩进和六级括号辅助线颜色；四种主题与用户覆盖共用现有目录。 |
+| `contrib/bracketMatching/browser/bracketColorizationPresentation.ts` | Ash 自有，既有适配职责保留 | 从同一模型颜色池策略确定辅助线层级；不缓存或计算第二份括号树。 |
+| `test/browser/widget/codeEditorWidget.test.ts`、`contrib/bracketMatching/test/browser/bracketColorizationPresentation.test.ts` | 现有测试设施 | 验证空白行、缩进单位与 tab 不同、活动位置、选项更新和颜色池。 |
+| `contrib/indentation/test/browser/indentationGuides.test.ts` | 既有辅助线测试 | 随浏览器重复 helper 退出，改从真实模型公共入口验证混合空白和语言 off-side 规则。 |
+| `ash-ts/test/integration/browser/standalone.integration.ts`、`standalone.integration.spec.ts`（仓库相对路径） | Ash 现有浏览器测试设施 | Playwright 验证实际颜色、笔画、首尾几何、换行、主题切换、开关及鼠标输入。 |
+| `common/core/README.md`、`browser/README.md`、`api-alignment-status.md` | 现有文档 | 同步职责、验证和保留差异。 |
+
+独立实现：查询复用 Ash 已有 ViewModel 与模型 guide part；移除 ViewPart 的缩进扫描，不复制上游算法。CSS 围绕既有 Ash 辅助线节点独立编写，使用公共颜色 token 和现有笔画尺寸 token；节点不参与焦点、鼠标命中或辅助阅读。软换行只在为缩进保留的空间内延续辅助线。括号源和文本测量继续保留现有 Ash 几何职责，上游运行时界面尚未验证。
+
+几何补充准入：启用实际笔画后，原先沿开括号列绘制会穿过函数体文字。既有 `BracketGuide` 增加模型可见列，由同一括号树的最小缩进查询提供；ViewPart 只转换为像素，并在必要时连接开闭括号，避免浏览器重新扫描文本块。该变更仍限于上表括号源、ViewPart 和现有测试，不增加服务或存储。
+
+实现结果：浏览器的缩进扫描、活动块扫描和 tabSize 副本已退出，空白行与 off-side 规则由 common 查询统一处理；软换行、折叠、模型选项和光标变化进入原有视图事件链。14 个实际使用的辅助线颜色进入编辑器颜色目录，支持四种主题与用户覆盖，活动线同时通过粗细区分。同列括号线优先显示，单行括号不会抢走所在多行块的活动状态，连接线限制在本行内。
+
+保留差异：Ash 继续使用既有六级颜色池和括号几何适配；没有引入上游的 30 级样式池或全套辅助线布局算法。common 文件数仍为 **208：177 个同路径、31 个 Ash 自有，49 个上游文件未引入**。本批补齐生产消费和绘制，不以新增文件数作为完成标准。
+
+本批验证结果：
+
+- 三份定向单测文件通过，覆盖混合空白、off-side 规则、空白行活动范围、模型选项更新、括号最小缩进及独立颜色池。
+- `check-editor-alignment.mjs --test=all` 通过：结构、台账、类型检查、230/230 个单测文件和 327/327 个 Playwright 用例通过。
+- 完整回归后，同列去重进一步改为直接比较模型可见列，避免 CSS 小数像素序列化影响；最终源码再通过六个相关 Playwright 场景及 `build:renderer`、`build:stanza`。浏览器验证四种主题、用户覆盖、活动笔画、端点几何、软换行、折叠、滚动和鼠标输入，不使用截图作为判定。
+- `git diff --check` 通过；生产构建没有新增 warning。JSDOM Canvas、测试服务装配和 Playwright 颜色环境提示仍是既有输出。
+- CSS 审计的既有等价复制债务由 7 份降为 6 份；本批等价复制和新增上游品牌引用均为 0，没有未跟踪 JavaScript 产物。
+
 ## 括号装饰的主题着色（2026-09-21）
 
 准入链：模型括号树 → 六级 inline decoration → 行渲染 / 辅助技术文本 / GPU 字形 → 编辑器主题颜色。起始工作区干净；现有装饰已有 class，但尚无颜色规则，直接写入的 token 前景色也会压过装饰。用户已授权继续补齐现有链路，本批不引入新的括号索引或引擎。
@@ -1186,7 +1216,7 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 | `browser/viewParts/lineNumbers/lineNumbers.ts` | `LineNumbersOverlay` | 公开成员差异归零；配置、主光标、文本行、滚动、View Zone 和行号装饰事件均进入 margin overlay 失效链，行号配置不再保留构造时快照；真实 Widget 测试覆盖相对行号随光标变化以及运行时关闭行号后的内容和 gutter 几何 |
 | `browser/viewParts/selections/selections.ts` | `SelectionsOverlay` | 公开成员差异归零；配置、光标、装饰、文本行、滚动和 View Zone 事件均触发选区几何重算，逐行输出仍只由 `ContentViewOverlays` 持有且释放时清空缓存；真实 Widget 测试覆盖选区变化后的 DOM 投影 |
 | `browser/viewParts/whitespace/whitespace.ts` | `WhitespaceOverlay` | 公开成员差异归零；`renderWhitespace` 从计算配置动态读取，selection 模式只在光标变化时失效，配置、装饰、文本行、滚动和 View Zone 变化进入同一覆盖层；真实 Widget 测试覆盖 selection → all 运行时切换和空白字符数量 |
-| `browser/viewParts/indentGuides/indentGuides.ts` | `IndentGuidesOverlay` | 公开成员差异归零；guides 配置、主光标、装饰、语言配置、文本行、滚动和 View Zone 事件进入同一失效链，模型 tabSize 变化通过 `ViewModel` flush 更新；真实 Widget 和 ViewModel 测试覆盖逐行 guide、运行时关闭、tabSize 映射刷新与语言配置事件 |
+| `browser/viewParts/indentGuides/indentGuides.ts` | `IndentGuidesOverlay` | 公开成员差异归零；模型 guide part 通过 ViewModel 提供缩进深度和活动范围，括号树提供最小缩进列；ViewPart 持有像素几何。配置、光标、装饰、语言、换行、文本、滚动和 View Zone 事件进入同一失效链。主题笔画、空白行、独立颜色池、折叠和输入均有真实 Widget / Chromium 验证 |
 | `browser/viewParts/linesDecorations/linesDecorations.ts` | `LinesDecorationsOverlay` | `_getDecorations` 恢复为子类可扩展的 protected owner；生产仍从统一 Decorations overlay 读取可见装饰，装饰视口测试覆盖行侧 lane、软换行和更新投影 |
 | `browser/viewParts/marginDecorations/marginDecorations.ts` | `MarginViewLineDecorationsOverlay` | `_getDecorations` 恢复为 protected owner；诊断严重度、边栏 DOM 与 hover 均沿 Decorations → Margin overlay 链投影，现有装饰和诊断 hover 测试覆盖 |
 | `browser/viewParts/scrollDecoration/scrollDecoration.ts` | `ScrollDecorationViewPart` | 删除本地公开 `domNode`，恢复 canonical `getDomNode()`；View 和测试均改接该入口，阴影几何、配置变化、ARIA presentation 和释放行为通过定向测试 |

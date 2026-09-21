@@ -325,6 +325,156 @@ for (const inputKind of ['editContext', 'textarea'] as const) {
 	});
 }
 
+test('indent guides show blank-line depth, theme strokes and preserve pointer editing', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => {
+		window.ashStandaloneIntegration.prepareGuides('root\n\tchild\n\n    sibling\nroot');
+		window.ashStandaloneIntegration.moveGutterCaret(3, 1);
+	});
+	const row = (line: number) => page.locator(`#caller .view-overlay-line[data-line-index="${line}"]`);
+	const guides = row(2).locator('.stanza-editor-indent-guide');
+	await expect(guides).toHaveCount(2);
+	await expect(guides.last()).toHaveClass(/active/);
+	const positions = (line: number) => row(line).locator('.stanza-editor-indent-guide').evaluateAll(elements => elements.map(element => element.getBoundingClientRect().x));
+	expect(await positions(2)).toEqual(await positions(1));
+	expect(await positions(2)).toEqual(await positions(3));
+	for (const [scheme, inactive, active] of [
+		['Dark', 'rgb(69, 69, 69)', 'rgb(144, 144, 144)'],
+		['Light', 'rgb(196, 196, 196)', 'rgb(112, 112, 112)'],
+		['HighContrastDark', 'rgb(160, 160, 160)', 'rgb(255, 255, 255)'],
+		['HighContrastLight', 'rgb(102, 102, 102)', 'rgb(0, 0, 0)'],
+	] as const) {
+		await page.evaluate(scheme => window.ashStandaloneIntegration.setGuideTheme(scheme), scheme);
+		await expect(guides.first()).toHaveCSS('border-left-color', inactive);
+		await expect(guides.last()).toHaveCSS('border-left-color', active);
+		await expect(guides.first()).toHaveCSS('border-left-width', '1px');
+		await expect(guides.last()).toHaveCSS('border-left-width', '2px');
+	}
+	await page.evaluate(() => window.ashStandaloneIntegration.setGuideTheme('Dark', {
+		'editorIndentGuide.background1': '#123456', 'editorIndentGuide.activeBackground1': '#abcdef',
+	}));
+	await expect(guides.first()).toHaveCSS('border-left-color', 'rgb(18, 52, 86)');
+	await expect(guides.last()).toHaveCSS('border-left-color', 'rgb(171, 205, 239)');
+	await expect(guides.last()).toHaveCSS('pointer-events', 'none');
+	const bounds = await guides.last().boundingBox();
+	expect(bounds?.height).toBe(20);
+	expect(await guides.last().evaluate(element => element.closest('[aria-hidden="true"]') !== null)).toBe(true);
+	await page.mouse.click(bounds!.x, bounds!.y + 10);
+	await page.keyboard.type('x');
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).value).toBe('root\n\tchild\nx\n    sibling\nroot');
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).focused).toBe(true);
+	await page.evaluate(() => window.ashStandaloneIntegration.configureGuides({ guides: { indentation: false } }));
+	await expect(page.locator('#caller .stanza-editor-indent-guide')).toHaveCount(0);
+});
+
+test('bracket guides use nesting themes, active strokes and half-line endpoints', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => {
+		window.ashStandaloneIntegration.prepareGuides('{\n  [\n    value\n    ]\n  tail\n}');
+		window.ashStandaloneIntegration.moveGutterCaret(3, 5);
+	});
+	const vertical = page.locator('#caller .stanza-editor-bracket-guide');
+	const levelOne = page.locator('#caller .stanza-editor-bracket-guide.stanza-editor-guide-level-1');
+	const levelTwo = page.locator('#caller .stanza-editor-bracket-guide.stanza-editor-guide-level-2');
+	await expect(levelOne).toHaveCount(6);
+	await expect(levelTwo).toHaveCount(3);
+	await expect(page.locator('#caller .view-overlay-line[data-line-index="2"] .stanza-editor-indent-guide')).toHaveCount(0);
+	await expect(levelTwo.first()).toHaveClass(/active/);
+	await expect(levelOne.first()).toHaveCSS('border-left-width', '1px');
+	await expect(levelTwo.first()).toHaveCSS('border-left-width', '2px');
+	expect(await levelOne.evaluateAll(elements => elements.map(element => ({ height: element.getBoundingClientRect().height, top: (element as HTMLElement).style.top })))).toEqual([
+		{ height: 10, top: '10px' }, ...Array(4).fill({ height: 20, top: '0px' }), { height: 10, top: '0px' },
+	]);
+	const horizontal = page.locator('#caller .stanza-editor-bracket-guide-horizontal.stanza-editor-guide-level-2');
+	await expect(horizontal).toHaveCSS('border-top-width', '2px');
+	expect((await horizontal.boundingBox())!.width).toBeGreaterThan(0);
+	for (const [scheme, color] of [
+		['Dark', 'rgb(198, 120, 221)'], ['Light', 'rgb(136, 65, 160)'],
+		['HighContrastDark', 'rgb(255, 112, 232)'], ['HighContrastLight', 'rgb(136, 65, 160)'],
+	] as const) {
+		await page.evaluate(scheme => window.ashStandaloneIntegration.setGuideTheme(scheme), scheme);
+		await expect(levelTwo.first()).toHaveCSS('border-left-color', color);
+		await expect(horizontal).toHaveCSS('border-top-color', color);
+	}
+	await page.evaluate(() => window.ashStandaloneIntegration.setGuideTheme('Dark', {
+		'editorBracketPairGuide.background1': '#123456', 'editorBracketPairGuide.activeBackground2': '#abcdef',
+	}));
+	await expect(levelOne.first()).toHaveCSS('border-left-color', 'rgb(18, 52, 86)');
+	await expect(levelTwo.first()).toHaveCSS('border-left-color', 'rgb(171, 205, 239)');
+	await page.evaluate(() => window.ashStandaloneIntegration.configureGuides({ guides: { bracketPairs: 'active', bracketPairsHorizontal: false } }));
+	await expect(levelOne).toHaveCount(0);
+	await expect(levelTwo).toHaveCount(3);
+	await expect(horizontal).toHaveCount(0);
+	await page.evaluate(() => window.ashStandaloneIntegration.moveGutterCaret(5, 3));
+	await expect(levelTwo).toHaveCount(0);
+	await expect(levelOne).toHaveCount(6);
+	await page.evaluate(() => window.ashStandaloneIntegration.configureBracketColors(true, true));
+	await expect(levelTwo).toHaveCount(0);
+	await expect(levelOne).toHaveCount(9);
+	await page.evaluate(() => window.ashStandaloneIntegration.configureGuides({ guides: { bracketPairs: false } }));
+	await expect(vertical).toHaveCount(0);
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareGuides('({[]})'));
+	await expect(vertical).toHaveCount(0);
+});
+
+test('wrapped indentation guides stay in the reserved indentation space', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => {
+		window.ashStandaloneIntegration.prepareGuides(`    ${'word '.repeat(100)}`);
+		window.ashStandaloneIntegration.configureGuides({ wordWrap: 'wordWrapColumn', wordWrapColumn: 24, wrappingIndent: 'same', guides: { bracketPairs: false } });
+	});
+	const rows = page.locator('#caller .view-line');
+	await expect.poll(() => rows.count()).toBeGreaterThan(1);
+	await expect(page.locator('#caller .view-overlay-line[data-line-index="1"] .stanza-editor-indent-guide')).toHaveCount(2);
+	await page.evaluate(() => window.ashStandaloneIntegration.configureGuides({ wrappingIndent: 'none' }));
+	await expect(page.locator('#caller .view-overlay-line[data-line-index="1"] .stanza-editor-indent-guide')).toHaveCount(0);
+	await expect(page.locator('#caller .view-overlay-line[data-line-index="0"] .stanza-editor-indent-guide')).toHaveCount(2);
+});
+
+test('bracket guides follow block indentation without crossing function text', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => {
+		window.ashStandaloneIntegration.prepareGuides('function example() {\n    call();\n}');
+		window.ashStandaloneIntegration.moveGutterCaret(2, 10);
+	});
+	const vertical = page.locator('#caller .stanza-editor-bracket-guide');
+	await expect(vertical).toHaveCount(3);
+	await expect(vertical.first()).toHaveClass(/active/);
+	const row = page.locator('#caller .view-overlay-line[data-line-index="0"]').filter({ has: page.locator('.stanza-editor-bracket-guide') });
+	const horizontal = page.locator('#caller .stanza-editor-bracket-guide-horizontal');
+	await expect(horizontal).toHaveCount(1);
+	const opening = (await row.boundingBox())!;
+	const connector = (await horizontal.boundingBox())!;
+	expect(connector.y + connector.height).toBeCloseTo(opening.y + opening.height);
+	const columns = await vertical.evaluateAll(elements => elements.map(element => element.getBoundingClientRect().x));
+	expect(columns).toEqual([columns[0], columns[0], columns[0]]);
+	const text = (await page.locator('#caller .view-line').nth(1).locator('.stanza-editor-line-text').boundingBox())!;
+	expect(columns[1]).toBeCloseTo(text.x);
+	const indent = await page.locator('#caller .view-overlay-line[data-line-index="1"] .stanza-editor-indent-guide').evaluateAll(elements => elements.map(element => element.getBoundingClientRect().x));
+	expect(indent).not.toContain(columns[1]);
+});
+
+test('guide rows track folding and scrolling without retaining hidden lines', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => {
+		window.ashStandaloneIntegration.prepareGuides(['{', '    child', '}', ...Array(50).fill('tail')].join('\n'));
+		window.ashStandaloneIntegration.configureGuides({ showFoldingControls: 'always', scrollBeyondLastLine: false });
+	});
+	const guides = page.locator('#caller .stanza-editor-bracket-guide');
+	await expect(guides).toHaveCount(3);
+	await page.locator('#caller .ash-icon-folding-expanded').first().click();
+	await expect(page.locator('#caller .ash-icon-folding-collapsed').first()).toBeVisible();
+	await expect.poll(() => guides.count()).toBeLessThan(3);
+	await expect(page.locator('#caller .view-line').filter({ hasText: 'child' })).toHaveCount(0);
+	await page.locator('#caller .ash-icon-folding-collapsed').first().click();
+	await expect(guides).toHaveCount(3);
+	await page.evaluate(() => window.ashStandaloneIntegration.scrollVisibleRows(500));
+	await expect(guides).toHaveCount(0);
+	await expect(page.locator('#caller .stanza-editor-indent-guide')).toHaveCount(0);
+	await page.evaluate(() => window.ashStandaloneIntegration.scrollVisibleRows(0));
+	await expect(guides).toHaveCount(3);
+});
+
 test('common text operations preserve multi-cursor joins, deletions and undo', async ({ page }) => {
 	await page.goto('/standalone.html');
 	await page.evaluate(() => window.ashStandaloneIntegration.prepareLineJoin());

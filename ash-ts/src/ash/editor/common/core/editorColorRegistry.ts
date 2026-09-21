@@ -80,3 +80,37 @@ export const editorBracketHighlightingForeground6 = registerColor(
 	{ dark: '#61afef', light: '#005fb8', highContrastDark: '#9ac8ff', highContrastLight: '#005fb8' },
 	{ description: 'Foreground for the sixth bracket nesting color.', owner },
 );
+
+export const editorIndentGuide1 = registerColor(
+	'editorIndentGuide.background1',
+	{ dark: '#454545', light: '#c4c4c4', highContrastDark: '#a0a0a0', highContrastLight: '#666666' },
+	{ description: 'Color of editor indentation guides.', owner },
+);
+export const editorActiveIndentGuide1 = registerColor(
+	'editorIndentGuide.activeBackground1',
+	{ dark: '#909090', light: '#707070', highContrastDark: '#ffffff', highContrastLight: '#000000' },
+	{ description: 'Color of the active editor indentation guide.', owner },
+);
+
+function bracketGuideColor(id: string, foreground: string): string {
+	return registerColor(id, {
+		dark: transparent(foreground, 0.4),
+		light: transparent(foreground, 0.4),
+		highContrastDark: foreground,
+		highContrastLight: foreground,
+	}, { description: 'Color of an inactive bracket pair guide.', owner });
+}
+
+export const editorBracketPairGuideBackground1 = bracketGuideColor('editorBracketPairGuide.background1', editorBracketHighlightingForeground1);
+export const editorBracketPairGuideBackground2 = bracketGuideColor('editorBracketPairGuide.background2', editorBracketHighlightingForeground2);
+export const editorBracketPairGuideBackground3 = bracketGuideColor('editorBracketPairGuide.background3', editorBracketHighlightingForeground3);
+export const editorBracketPairGuideBackground4 = bracketGuideColor('editorBracketPairGuide.background4', editorBracketHighlightingForeground4);
+export const editorBracketPairGuideBackground5 = bracketGuideColor('editorBracketPairGuide.background5', editorBracketHighlightingForeground5);
+export const editorBracketPairGuideBackground6 = bracketGuideColor('editorBracketPairGuide.background6', editorBracketHighlightingForeground6);
+
+export const editorBracketPairGuideActiveBackground1 = alias('editorBracketPairGuide.activeBackground1', editorBracketHighlightingForeground1, 'Color of the first active bracket pair guide.');
+export const editorBracketPairGuideActiveBackground2 = alias('editorBracketPairGuide.activeBackground2', editorBracketHighlightingForeground2, 'Color of the second active bracket pair guide.');
+export const editorBracketPairGuideActiveBackground3 = alias('editorBracketPairGuide.activeBackground3', editorBracketHighlightingForeground3, 'Color of the third active bracket pair guide.');
+export const editorBracketPairGuideActiveBackground4 = alias('editorBracketPairGuide.activeBackground4', editorBracketHighlightingForeground4, 'Color of the fourth active bracket pair guide.');
+export const editorBracketPairGuideActiveBackground5 = alias('editorBracketPairGuide.activeBackground5', editorBracketHighlightingForeground5, 'Color of the fifth active bracket pair guide.');
+export const editorBracketPairGuideActiveBackground6 = alias('editorBracketPairGuide.activeBackground6', editorBracketHighlightingForeground6, 'Color of the sixth active bracket pair guide.');

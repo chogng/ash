@@ -451,6 +451,37 @@ test('editor configuration updates rerender line-number, selection, whitespace, 
 	dom.window.close();
 });
 
+test('indent guides use model indentation units and include blank lines in the active block', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using closeWindow = toDisposable(() => dom.window.close());
+	using model = new TextModel('root\n\tchild\n\n    sibling\nroot');
+	model.updateOptions({ tabSize: 4, indentSize: 2 });
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		input: { resource: model.uri },
+		languageId: model.getLanguageId(),
+		lineHeight: 20,
+		guides: { indentation: true, bracketPairs: false, highlightActiveIndentation: true },
+		minimap: { enabled: false },
+	});
+	editor.layout({ width: 300, height: 140 });
+	editor.setPosition(new Position(3, 1));
+	const guides = (line: number) => [...editor.getDomNode().querySelectorAll<HTMLElement>(`.view-overlay-line[data-line-index="${line}"] .stanza-editor-indent-guide`)];
+	assert.deepEqual([0, 1, 2, 3, 4].map(line => guides(line).length), [0, 2, 2, 2, 0]);
+	assert.deepEqual(guides(2).map(guide => guide.classList.contains('active')), [false, true]);
+	assert.deepEqual(guides(1).map(guide => guide.style.left), guides(2).map(guide => guide.style.left));
+	assert.deepEqual(guides(3).map(guide => guide.style.left), guides(2).map(guide => guide.style.left));
+	model.updateOptions({ indentSize: 4 });
+	assert.deepEqual([1, 2, 3].map(line => guides(line).length), [1, 1, 1]);
+	assert.equal(guides(2)[0]?.classList.contains('active'), true);
+	editor.updateOptions({ guides: { highlightActiveIndentation: false } });
+	assert.equal(editor.getDomNode().querySelectorAll('.stanza-editor-indent-guide.active').length, 0);
+	model.setValue('root\nplain\n\nplain\nroot');
+	assert.equal(editor.getDomNode().querySelectorAll('.stanza-editor-indent-guide').length, 0);
+});
+
 test('setSelection accepts ranges, preserves selection direction, and reports its source', () => {
 	using model = new TextModel('alpha\nbeta');
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');

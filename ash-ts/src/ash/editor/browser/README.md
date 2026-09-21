@@ -81,7 +81,7 @@ Text-bearing virtual row roots use ordinary `top` positioning rather than perman
 
 Diagnostics and diff features publish standard model decoration options for the overview ruler and minimap. Those Parts read only decoration color, lane, position, and model range; they do not retain diagnostic text, source text, or syntax results.
 
-`EditorIndentGuidesOverlay` projects indentation guides only for visible first fragments of logical lines. `browser/viewParts/indentGuides/indentGuides.ts` identifies complete visual indentation units from leading tabs/spaces, while `TextMeasurer` places each guide in the same coordinate system as carets and selections. Continuation fragments never duplicate a guide, and scrolling does not retain offscreen source text.
+`IndentGuidesOverlay` reads indentation levels and active ranges through `ViewModel` from the model's guide part. The model owns tab stops, indentation size, blank-line inference and language off-side rules. The overlay only measures and draws visible rows; wrapped rows retain guides within their reserved indentation space. Bracket columns come from the same bracket tree's minimum-indentation query, and take precedence over indentation strokes at the same position. Scrolling and folding discard hidden guide rows.
 
 `TextModel.bracketPairs` owns one model-wide structural bracket index shared by matching, navigation, editing, and nested colors. `ColorizedBracketPairsDecorationProvider` derives ordinary inline model decorations from that tree and invalidates them when tokens, language configuration, or colorization options change. The viewport and rich accessibility text consume those decorations; strings, comments, and unmatched brackets remain uncolored. `BracketGuideSource` supplies only pair geometry to `IndentGuidesOverlay`. Browser contributions no longer compute bracket colors or pass a separate color source through the input chain.
 
@@ -142,6 +142,8 @@ The cursor actions in `multicursor.ts` add one logical-line caret above or below
 `BracketMatchingController` in `contrib/bracketMatching/browser/bracketMatching.ts` consumes the model bracket-pair part index. It updates matching decorations and owns the jump/remove operations used by editor actions and shortcuts. The model, index, and decoration collection retain their existing owners.
 
 Bracket colorization uses the model's six nesting classes. `widget/codeEditor/editor.css` applies the colors registered in `common/core/editorColorRegistry.ts` to visible rows and rich screen-reader content. Token foregrounds arrive through a component-local CSS variable so inline decorations can take precedence without changing text or adding nested spans. GPU strategies resolve the same color variables, and theme events invalidate the decoration cache and glyph atlas. Standalone binds its theme root before constructing the view so synchronous redraws read the current variables.
+
+`viewParts/indentGuides/indentGuides.css` draws indentation and bracket guides using editor-owned theme colors. Bracket guides follow the model's shared or independent nesting color pool. Active guides have thicker strokes; high-contrast themes use opaque colors, and custom themes can override active and inactive colors separately. Endpoint connectors remain inside their rows, and guide nodes neither receive pointer input nor enter accessibility text.
 
 The go-to-bracket shortcut and `editor.action.jumpToBracket` share lexical filtering, multiple-selection updates, and cursor reveal.
 
