@@ -10,13 +10,13 @@ content underlying transcript content underlying transcript content
 ● Model invocation failed 9 underlying transcript content underlying transcript 
 content underlying transcript content underlying transcript content             
                                                                                 
-  ────────────────────────────────────────────────────────────────────────────  
-  /status                    show the active session, thread, and model         
-  /statusline                choose the items shown in the status line          
-  /skills                    browse configured skill sources                    
-  /memories                  manage memories, reading consent and model saving  
-  /mcp                       list configured MCP tools                          
-  /resume                    list or resume a saved session                     
+  ────────────────────────────────────────────────────────────────────── 1/27   
+  /status                    show the active session, thread, and model        ┃
+  /statusline                choose the items shown in the status line         │
+  /skills                    browse configured skill sources                   │
+  /memories                  manage memories, reading consent and model saving │
+  /mcp                       list configured MCP tools                         │
+  /resume                    list or resume a saved session                    │
   ╭──────────────────────────────────────────────────────────────────────────╮  
   │ > /                                                                      │  
   ╰─────────────────────────────────────────────────── Claude Sonnet (high) ─╯  

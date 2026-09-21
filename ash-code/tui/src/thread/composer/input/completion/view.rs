@@ -238,6 +238,7 @@ mod slash {
     use super::super::SlashCommandsView;
     use super::description_height;
     use super::description_popup_layout;
+    use super::draw_position;
     use crate::render::RenderContext;
     use crate::render::horizontal_margin;
     use ratatui::Frame;
@@ -246,10 +247,18 @@ mod slash {
     use ratatui::text::Line;
     use ratatui::text::Span;
     use ratatui::widgets::Paragraph;
+    use ratatui::widgets::Scrollbar;
+    use ratatui::widgets::ScrollbarOrientation;
+    use ratatui::widgets::ScrollbarState;
     use ratatui::widgets::Wrap;
 
     const COMMAND_COLUMN_WIDTH: usize = 26;
     const COMMAND_COLUMN_DISPLAY_WIDTH: u16 = COMMAND_COLUMN_WIDTH as u16 + 1;
+
+    struct SlashPopupLayout {
+        list: super::DescriptionPopupLayout,
+        scrollbar_area: Option<Rect>,
+    }
 
     pub(crate) fn draw(
         frame: &mut Frame<'_>,
@@ -262,58 +271,55 @@ mod slash {
         let Some(popup) = popup else {
             return;
         };
-        let description_width = horizontal_margin(area, 2)
-            .width
-            .saturating_sub(COMMAND_COLUMN_DISPLAY_WIDTH);
-        let item_heights = if popup.commands.is_empty() {
-            vec![1]
-        } else {
-            popup
-                .commands
-                .iter()
-                .map(|command| description_height(&command.description, description_width))
-                .collect()
-        };
-        let Some(layout) = description_popup_layout(area, popup.selected, &item_heights) else {
+        let Some(layout) = popup_layout(area, popup) else {
             return;
         };
-        super::clear_popup(frame, area, layout.area, context);
+        super::clear_popup(frame, area, layout.list.area, context);
+        draw_position(
+            frame,
+            area,
+            layout.list.area,
+            popup.selected,
+            popup.commands.len(),
+            context,
+        );
         if popup.commands.is_empty() {
             frame.render_widget(
                 Paragraph::new(Line::from(Span::styled(
                     "No matching commands",
                     Style::default().fg(context.muted()),
                 ))),
-                layout.area,
+                layout.list.area,
             );
             return;
         }
 
-        let mut y = layout.area.y;
-        for (offset, height) in layout.item_heights.iter().copied().enumerate() {
-            let index = layout.first_item + offset;
+        let mut y = layout.list.area.y;
+        for (offset, height) in layout.list.item_heights.iter().copied().enumerate() {
+            let index = layout.list.first_item + offset;
             let command = &popup.commands[index];
             let command_style = super::item_style(index, popup.selected, hovered, pressed, context);
-            let command_width = COMMAND_COLUMN_DISPLAY_WIDTH.min(layout.area.width);
+            let command_width = COMMAND_COLUMN_DISPLAY_WIDTH.min(layout.list.area.width);
             frame.render_widget(
                 Paragraph::new(Span::styled(
                     format!("/{:<width$}", command.name, width = COMMAND_COLUMN_WIDTH),
                     command_style,
                 )),
-                Rect::new(layout.area.x, y, command_width, 1),
+                Rect::new(layout.list.area.x, y, command_width, 1),
             );
             frame.render_widget(
                 Paragraph::new(Span::styled(&command.description, command_style))
                     .wrap(Wrap { trim: true }),
                 Rect::new(
-                    layout.area.x.saturating_add(command_width),
+                    layout.list.area.x.saturating_add(command_width),
                     y,
-                    layout.area.width.saturating_sub(command_width),
+                    layout.list.area.width.saturating_sub(command_width),
                     height,
                 ),
             );
             y = y.saturating_add(height);
         }
+        draw_scrollbar(frame, popup.commands.len(), &layout, context);
     }
 
     pub(crate) fn command_index_at(
@@ -326,23 +332,87 @@ mod slash {
         if popup.commands.is_empty() {
             return None;
         }
-        let description_width = horizontal_margin(area, 2)
-            .width
-            .saturating_sub(COMMAND_COLUMN_DISPLAY_WIDTH);
-        let item_heights = popup
-            .commands
-            .iter()
-            .map(|command| description_height(&command.description, description_width))
-            .collect::<Vec<_>>();
-        let layout = description_popup_layout(area, popup.selected, &item_heights)?;
-        if column < layout.area.x
-            || column >= layout.area.right()
-            || row < layout.area.y
-            || row >= layout.area.bottom()
+        let layout = popup_layout(area, popup)?;
+        if column < layout.list.area.x
+            || column >= layout.list.area.right()
+            || row < layout.list.area.y
+            || row >= layout.list.area.bottom()
         {
             return None;
         }
-        layout.item_at(row)
+        layout.list.item_at(row)
+    }
+
+    pub(crate) fn contains(
+        area: Rect,
+        popup: Option<SlashCommandsView<'_>>,
+        column: u16,
+        row: u16,
+    ) -> bool {
+        let Some(popup) = popup else {
+            return false;
+        };
+        popup_layout(area, popup).is_some_and(|layout| {
+            let position = ratatui::layout::Position::new(column, row);
+            layout.list.area.contains(position)
+                || layout
+                    .scrollbar_area
+                    .is_some_and(|scrollbar| scrollbar.contains(position))
+        })
+    }
+
+    fn popup_layout(area: Rect, popup: SlashCommandsView<'_>) -> Option<SlashPopupLayout> {
+        let popup_width = horizontal_margin(area, 2).width;
+        let description_width = popup_width.saturating_sub(COMMAND_COLUMN_DISPLAY_WIDTH);
+        let item_heights = if popup.commands.is_empty() {
+            vec![1]
+        } else {
+            popup
+                .commands
+                .iter()
+                .map(|command| description_height(&command.description, description_width))
+                .collect()
+        };
+        let list = description_popup_layout(area, popup.selected, &item_heights)?;
+        let scrollable = popup.commands.len() > list.item_heights.len();
+        let scrollbar_area = scrollable.then(|| {
+            Rect::new(
+                area.right().saturating_sub(1),
+                list.area.y,
+                1,
+                list.area.height,
+            )
+        });
+        Some(SlashPopupLayout {
+            list,
+            scrollbar_area,
+        })
+    }
+
+    fn draw_scrollbar(
+        frame: &mut Frame<'_>,
+        command_count: usize,
+        layout: &SlashPopupLayout,
+        context: RenderContext<'_>,
+    ) {
+        let visible_items = layout.list.item_heights.len();
+        let Some(scrollbar_area) = layout.scrollbar_area else {
+            return;
+        };
+        let scroll_positions = command_count
+            .saturating_sub(visible_items)
+            .saturating_add(1);
+        let mut state = ScrollbarState::new(scroll_positions)
+            .position(layout.list.first_item)
+            .viewport_content_length(visible_items);
+        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(None)
+            .end_symbol(None)
+            .track_symbol(Some("│"))
+            .track_style(Style::default().fg(context.border()))
+            .thumb_symbol("┃")
+            .thumb_style(Style::default().fg(context.muted()));
+        frame.render_stateful_widget(scrollbar, scrollbar_area, &mut state);
     }
 }
 
@@ -385,6 +455,46 @@ fn clear_popup(
             .borders(Borders::TOP)
             .border_style(Style::default().fg(context.border())),
         horizontal_margin(surface_area, 2),
+    );
+}
+
+fn draw_position(
+    frame: &mut Frame<'_>,
+    available_area: Rect,
+    content_area: Rect,
+    selected: usize,
+    item_count: usize,
+    context: RenderContext<'_>,
+) {
+    let position = if item_count == 0 {
+        " 0 ".to_owned()
+    } else {
+        format!(" {}/{} ", selected.min(item_count - 1) + 1, item_count)
+    };
+    let surface_top = content_area.y.saturating_sub(1);
+    let border_area = horizontal_margin(
+        Rect::new(available_area.x, surface_top, available_area.width, 1),
+        2,
+    );
+    let Ok(width) = u16::try_from(position.len()) else {
+        return;
+    };
+    if width > border_area.width {
+        return;
+    }
+    let area = Rect::new(
+        border_area.right().saturating_sub(width),
+        border_area.y,
+        width,
+        1,
+    );
+    frame.render_widget(
+        Paragraph::new(position).style(
+            Style::default()
+                .fg(context.muted())
+                .bg(context.background()),
+        ),
+        area,
     );
 }
 
@@ -509,5 +619,23 @@ pub(crate) fn index_at(
         }
         Some(CompletionView::Skill(view)) => skill::skill_index_at(area, Some(view), column, row),
         None => None,
+    }
+}
+
+pub(crate) fn contains(
+    area: Rect,
+    completion: Option<CompletionView<'_>>,
+    column: u16,
+    row: u16,
+) -> bool {
+    match completion {
+        Some(CompletionView::Slash(view)) => slash::contains(area, Some(view), column, row),
+        Some(CompletionView::Mention(view)) => {
+            mention::mention_index_at(area, Some(view), column, row).is_some()
+        }
+        Some(CompletionView::Skill(view)) => {
+            skill::skill_index_at(area, Some(view), column, row).is_some()
+        }
+        None => false,
     }
 }

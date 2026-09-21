@@ -1,0 +1,24 @@
+---
+source: ash-code/tui/src/app/fullscreen/frame_tests.rs
+expression: rendered
+---
+  .                                                        [— / —] [Dashboard]  
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+  ───────────────────────────────────────────────────────────────────── 27/27   
+  /new                       start a new chat                                  │
+  /quit                      quit Ash                                          │
+  /dashboard                 open Dashboard                                    │
+  /subagents                 focus the current Session Thread list             │
+  /issue                     select issues to develop together                 │
+  /pr                        ask the Agent to create or inspect a pull request ┃
+  ╭──────────────────────────────────────────────────────────────────────────╮  
+  │ > /                                                                      │  
+  ╰──────────────────────────────────────────────────────── Automatic model ─╯  
+                                                                                
+  Enter send  ·  shift+tab permissions  ·  /home

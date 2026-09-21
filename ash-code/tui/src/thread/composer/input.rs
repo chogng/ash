@@ -13,6 +13,7 @@ pub(crate) use completion::ChatInputCatalog;
 pub(crate) use completion::CompletionView;
 pub(crate) use completion::MentionPluginItem;
 pub(crate) use completion::SkillCompletionItem;
+pub(crate) use completion::contains as completion_contains;
 pub(crate) use completion::draw as draw_completion;
 pub(crate) use completion::index_at as completion_index_at;
 pub(crate) use slash_commands::SlashCommandInvocation;

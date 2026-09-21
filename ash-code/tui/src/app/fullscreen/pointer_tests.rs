@@ -486,6 +486,42 @@ fn pointer_move_tracks_hover_without_changing_the_keyboard_completion() {
 }
 
 #[test]
+fn mouse_wheel_scrolls_the_slash_command_completion() {
+    let mut app = App::new();
+    app.insert_text("/");
+    let area = Rect::new(0, 0, 80, 20);
+    let popup_row = crate::app::fullscreen::layout(&app, area).input.y - 1;
+
+    assert!(matches!(app.completion(), Some(CompletionView::Slash(view)) if view.selected == 0));
+    assert!(matches!(
+        handle_mouse(
+            &mut app,
+            area,
+            MouseEvent {
+                kind: MouseEventKind::ScrollDown,
+                column: 79,
+                row: popup_row,
+                modifiers: KeyModifiers::NONE,
+            },
+        ),
+        super::MouseAction::Command(None)
+    ));
+    assert!(matches!(app.completion(), Some(CompletionView::Slash(view)) if view.selected == 1));
+
+    handle_mouse(
+        &mut app,
+        area,
+        MouseEvent {
+            kind: MouseEventKind::ScrollUp,
+            column: 2,
+            row: popup_row,
+            modifiers: KeyModifiers::NONE,
+        },
+    );
+    assert!(matches!(app.completion(), Some(CompletionView::Slash(view)) if view.selected == 0));
+}
+
+#[test]
 fn session_manager_items_hover_and_activate_without_changing_the_draft() {
     let mut app = App::new();
     let session_id = SessionId::new("pointer-session").unwrap();

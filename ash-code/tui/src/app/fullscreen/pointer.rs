@@ -294,14 +294,12 @@ pub(crate) fn overlay_contains(
     if !app.completion_visible() {
         return false;
     }
-    chat_composer::pointer_target_at(
+    chat_composer::completion_contains(
         areas.completion_area(),
         &app.chat_composer_view(),
-        true,
         position.x,
         position.y,
     )
-    .is_some()
 }
 
 pub(in crate::app) enum MouseAction {
@@ -489,7 +487,9 @@ pub(super) fn activate_pointer_item(
             target,
             crate::widgets::list_selection::ListSelectionClick::Single,
         ),
-        PointerTarget::Composer(ChatComposerPointerTarget::Input) => {
+        PointerTarget::Composer(
+            ChatComposerPointerTarget::Input | ChatComposerPointerTarget::CompletionSurface,
+        ) => {
             super::navigation::focus_input(app);
             None
         }

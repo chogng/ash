@@ -39,6 +39,7 @@ pub(crate) use submission::ChatComposerOutcome;
 pub(crate) use submission::ChatComposerView;
 pub(crate) use surface::ChatComposerPointerTarget;
 pub(crate) use surface::ChatComposerSurface;
+pub(crate) use surface::completion_contains;
 pub(crate) use surface::draw_completion_layer;
 pub(crate) use surface::pointer_target_at;
 

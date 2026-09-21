@@ -27,6 +27,7 @@ use crate::thread::Event as ThreadEvent;
 use crate::thread::TurnActivity;
 use crate::thread::composer::ChatComposerPointerTarget;
 use crate::thread::composer::ChatInputCatalog;
+use crate::thread::composer::CompletionView;
 use crate::thread::composer::SkillCompletionItem;
 use crate::thread::composer::SlashCommandCatalog;
 use crate::thread::composer::built_in_slash_command_definitions;
@@ -1641,14 +1642,26 @@ fn slash_popup_clears_covered_transcript_rows_edge_to_edge() {
     let popup_top = popup_bottom - 6;
     let popup_border = popup_top - 1;
     let buffer = render_buffer(&app, terminal_area.width, terminal_area.height);
+    let (selected, command_count) = match app.completion().unwrap() {
+        CompletionView::Slash(view) => (view.selected, view.commands.len()),
+        _ => panic!("expected Slash Commands completion"),
+    };
+    let position = format!(" {}/{} ", selected + 1, command_count);
+    let position_start = terminal_area.width - 2 - position.len() as u16;
 
-    for column in 2..terminal_area.width - 2 {
+    for column in 2..position_start {
         assert_eq!(buffer[(column, popup_border)].symbol(), "─");
         assert_eq!(buffer[(column, popup_border)].fg, test_context().border());
         assert_eq!(
             buffer[(column, popup_border)].bg,
             test_context().background()
         );
+    }
+    for (offset, character) in position.chars().enumerate() {
+        let cell = &buffer[(position_start + offset as u16, popup_border)];
+        assert_eq!(cell.symbol(), character.to_string());
+        assert_eq!(cell.fg, test_context().muted());
+        assert_eq!(cell.bg, test_context().background());
     }
     for column in [0, 1, terminal_area.width - 2, terminal_area.width - 1] {
         assert_eq!(buffer[(column, popup_border)].symbol(), " ");
@@ -1659,10 +1672,13 @@ fn slash_popup_clears_covered_transcript_rows_edge_to_edge() {
     }
     for row in popup_top..popup_bottom {
         assert_eq!(buffer[(0, row)].symbol(), " ");
-        assert_eq!(buffer[(79, row)].symbol(), " ");
         assert_eq!(buffer[(0, row)].bg, test_context().background());
         assert_eq!(buffer[(79, row)].bg, test_context().background());
     }
+    assert_eq!(buffer[(79, popup_top)].symbol(), "┃");
+    assert_eq!(buffer[(79, popup_top)].fg, test_context().muted());
+    assert_eq!(buffer[(79, popup_bottom - 1)].symbol(), "│");
+    assert_eq!(buffer[(79, popup_bottom - 1)].fg, test_context().border());
     crate::tui_assert_snapshot!(
         "slash_popup_clears_covered_transcript_rows_edge_to_edge",
         render(&app, terminal_area.width, terminal_area.height)
@@ -1719,6 +1735,20 @@ fn slash_popup_hit_testing_maps_visible_rows_and_rejects_outside_clicks() {
         Some(5)
     );
     assert_eq!(
+        input_overlay_index_at(&app, terminal_area, 78, popup_bottom - 1),
+        None
+    );
+    assert_eq!(
+        input_overlay_index_at(&app, terminal_area, 79, popup_bottom - 1),
+        None
+    );
+    assert_eq!(
+        target_at(&app, terminal_area, 79, popup_bottom - 1),
+        Some(PointerTarget::Composer(
+            ChatComposerPointerTarget::CompletionSurface
+        ))
+    );
+    assert_eq!(
         input_overlay_index_at(&app, terminal_area, 1, popup_top),
         None
     );
@@ -1738,6 +1768,28 @@ fn slash_popup_hit_testing_maps_visible_rows_and_rejects_outside_clicks() {
         input_overlay_index_at(&app, terminal_area, 2, popup_bottom - 1),
         Some(7)
     );
+}
+
+#[test]
+fn slash_popup_position_and_scrollbar_follow_keyboard_navigation() {
+    let mut app = App::new();
+    app.insert_text("/");
+    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+
+    let terminal_area = Rect::new(0, 0, 80, 20);
+    let popup_bottom = layout(&app, terminal_area).input.y;
+    let (selected, command_count) = match app.completion().unwrap() {
+        CompletionView::Slash(view) => (view.selected, view.commands.len()),
+        _ => panic!("expected Slash Commands completion"),
+    };
+    assert_eq!(selected, command_count - 1);
+
+    let rendered = render(&app, terminal_area.width, terminal_area.height);
+    assert!(rendered.contains(&format!(" {command_count}/{command_count} ")));
+    let buffer = render_buffer(&app, terminal_area.width, terminal_area.height);
+    assert_eq!(buffer[(79, popup_bottom - 1)].symbol(), "┃");
+    assert_eq!(buffer[(79, popup_bottom - 1)].fg, test_context().muted());
+    crate::tui_assert_snapshot!("slash_popup_scrolled_to_last_command", rendered);
 }
 
 #[test]

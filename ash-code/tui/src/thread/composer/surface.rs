@@ -1,4 +1,5 @@
 use super::ChatComposerView;
+use super::input;
 use crate::render::RenderContext;
 use crate::render::Renderable;
 use crate::thread::composer as chat_input;
@@ -10,6 +11,7 @@ use ratatui::layout::Rect;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ChatComposerPointerTarget {
     Input,
+    CompletionSurface,
     CompletionItem(usize),
 }
 
@@ -73,12 +75,16 @@ pub(crate) fn draw_completion_layer(
         area,
         view.input_completion(),
         match hovered {
-            Some(ChatComposerPointerTarget::Input) => None,
+            Some(
+                ChatComposerPointerTarget::Input | ChatComposerPointerTarget::CompletionSurface,
+            ) => None,
             Some(ChatComposerPointerTarget::CompletionItem(index)) => Some(index),
             None => None,
         },
         match pressed {
-            Some(ChatComposerPointerTarget::Input) => None,
+            Some(
+                ChatComposerPointerTarget::Input | ChatComposerPointerTarget::CompletionSurface,
+            ) => None,
             Some(ChatComposerPointerTarget::CompletionItem(index)) => Some(index),
             None => None,
         },
@@ -93,10 +99,23 @@ pub(crate) fn pointer_target_at(
     column: u16,
     row: u16,
 ) -> Option<ChatComposerPointerTarget> {
-    completion_visible
-        .then(|| {
-            chat_input::completion_index_at(overlay_area, view.input_completion(), column, row)
-        })
-        .flatten()
-        .map(ChatComposerPointerTarget::CompletionItem)
+    if !completion_visible {
+        return None;
+    }
+    if let Some(index) =
+        chat_input::completion_index_at(overlay_area, view.input_completion(), column, row)
+    {
+        return Some(ChatComposerPointerTarget::CompletionItem(index));
+    }
+    completion_contains(overlay_area, view, column, row)
+        .then_some(ChatComposerPointerTarget::CompletionSurface)
+}
+
+pub(crate) fn completion_contains(
+    overlay_area: Rect,
+    view: &ChatComposerView<'_>,
+    column: u16,
+    row: u16,
+) -> bool {
+    input::completion_contains(overlay_area, view.input_completion(), column, row)
 }
