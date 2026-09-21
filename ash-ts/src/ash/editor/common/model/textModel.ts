@@ -11,6 +11,8 @@ import * as strings from '../../../base/common/strings.js';
 import { URI } from "../../../base/common/uri.js";
 import { LengthEdit, LengthReplacement } from "../core/edits/lengthEdit.js";
 import { TextEdit } from '../core/edits/textEdit.js';
+import { ColorizedBracketPairsDecorationProvider } from './bracketPairsTextModelPart/colorizedBracketPairsDecorationProvider.js';
+import type { DecorationProvider } from './decorationProvider.js';
 import { countEOL } from "../core/misc/eolCounter.js";
 import { normalizeIndentation } from '../core/misc/indentation.js';
 import { EDITOR_MODEL_DEFAULTS } from '../core/misc/textModelDefaults.js';
@@ -212,6 +214,7 @@ export class TextModel implements ITextModel {
 	readonly uri: URI;
 	readonly isForSimpleWidget: boolean;
 	private readonly _bracketPairs: BracketPairsTextModelPart;
+	private readonly bracketDecorations: DecorationProvider;
 	get bracketPairs(): IBracketPairsTextModelPart { return this._bracketPairs; }
 	readonly guides: GuidesTextModelPart;
 	readonly tokenization: TokenizationTextModelPart;
@@ -294,6 +297,9 @@ export class TextModel implements ITextModel {
 			? (languageId: string) => languageConfigurationService.getLanguageConfiguration(languageId)
 			: (languageId: string) => new ResolvedLanguageConfiguration(languageId, {});
 		this._bracketPairs = this._register(new BracketPairsTextModelPart(this, resolveLanguageConfiguration));
+		const bracketDecorations = this._register(new ColorizedBracketPairsDecorationProvider(this));
+		this.bracketDecorations = bracketDecorations;
+		this._register(bracketDecorations.onDidChange(() => this.emitDecorationsChanged([])));
 		this.guides = this._register(new GuidesTextModelPart(this, resolveLanguageConfiguration));
 		this.tokenization = this._register(new TokenizationTextModelPart(this, options.tokenization));
 		this.diagnostics = this._register(new ModelLanguageDiagnostics(this, options.tokenization?.syntaxProviderRegistry, options.languageConfigurationService?.onDidChange));
@@ -1256,7 +1262,7 @@ export class TextModel implements ITextModel {
 		ownerId = 0,
 		filterOutValidation = false,
 		filterFontDecorations = false,
-		_onlyMinimapDecorations = false,
+		onlyMinimapDecorations = false,
 		onlyMarginDecorations = false,
 	): model.IModelDecoration[] {
 		this.assertNotDisposed();
@@ -1275,6 +1281,9 @@ export class TextModel implements ITextModel {
 				range: decorationRange,
 				options: entry.options,
 			});
+		}
+		if (!onlyMarginDecorations && !onlyMinimapDecorations) {
+			result.push(...this.bracketDecorations.getDecorationsInRange(validatedRange, ownerId, filterOutValidation, filterFontDecorations));
 		}
 		return result;
 	}

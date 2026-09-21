@@ -15,7 +15,7 @@ import { type ScrollType } from '../../../common/editorCommon.js';
 import { type ColorScheme } from '../../../../platform/theme/common/theme.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { VerticalRevealType, type ViewConfigurationChangedEvent, type ViewCursorStateChangedEvent, type ViewDecorationsChangedEvent, type ViewFlushedEvent, type ViewLinesChangedEvent, type ViewLinesDeletedEvent, type ViewLinesInsertedEvent, type ViewRevealRangeRequestEvent, type ViewScrollChangedEvent, type ViewThemeChangedEvent, type ViewTokensChangedEvent, type ViewZonesChangedEvent } from '../../../common/viewEvents.js';
-import { ViewLine, type BracketColorizationSource, type ResolvedSemanticToken, type SemanticTokenSource } from './viewLine.js';
+import { ViewLine, type ResolvedSemanticToken, type SemanticTokenSource } from './viewLine.js';
 import { DomReadingContext } from './domReadingContext.js';
 import { ViewLineOptions } from './viewLineOptions.js';
 import { ViewLayer } from '../../view/viewLayer.js';
@@ -30,7 +30,6 @@ export interface ViewLinesOptions {
 	readonly readVisualProjection: () => EditorVisualLineProjection;
 	readonly readProjectionRevision: () => number;
 	readonly semanticTokenSource: SemanticTokenSource | undefined;
-	readonly bracketColorizationSource: BracketColorizationSource | undefined;
 	readonly configuration: IEditorConfiguration;
 	readonly themeType: ColorScheme;
 	readonly tabSize: number;
@@ -44,7 +43,6 @@ export class ViewLines extends ViewPart implements IViewLines {
 	private readonly model: TextModel;
 	private readonly readVisualProjection: () => EditorVisualLineProjection;
 	private readonly semanticTokenSource: SemanticTokenSource | undefined;
-	private readonly bracketColorizationSource: BracketColorizationSource | undefined;
 	private readonly _visibleLines: ViewLayer<ViewLine>;
 	private readonly _typicalHalfwidthCharacterWidth: number;
 	private readonly viewGpuContext: ViewGpuContext | undefined;
@@ -58,7 +56,6 @@ export class ViewLines extends ViewPart implements IViewLines {
 		this.model = options.model;
 		this.readVisualProjection = options.readVisualProjection;
 		this.semanticTokenSource = options.semanticTokenSource;
-		this.bracketColorizationSource = options.bracketColorizationSource;
 		this._viewLineOptions = new ViewLineOptions(options.configuration, options.themeType);
 		if (!Number.isSafeInteger(options.tabSize) || options.tabSize < 1) throw new RangeError('Stanza view-line tab size must be a positive safe integer');
 		if (!Number.isFinite(options.typicalHalfwidthCharacterWidth) || options.typicalHalfwidthCharacterWidth <= 0) throw new RangeError('Stanza view-line halfwidth character width must be positive');
@@ -390,12 +387,10 @@ export class ViewLines extends ViewPart implements IViewLines {
 	private projectLineText(line: ViewLine, visualLine: EditorVisualLine, tokens: readonly ResolvedSemanticToken[]): void {
 		const viewLineNumber = visualLine.visualLineIndex + 1;
 		const lineData = this._context.viewModel.getViewLineRenderingData(viewLineNumber);
-		const brackets = this.bracketColorizationSource?.getLineBrackets(visualLine.logicalLineIndex) ?? [];
 		const hasInjectedText = !!visualLine.projectionData?.injectionOffsets;
 		line.renderLine(
 			lineData.content,
 			hasInjectedText ? [] : clipSemanticTokens(tokens, visualLine.startColumn, visualLine.endColumn),
-			hasInjectedText ? [] : clipBracketColorizations(brackets, visualLine.startColumn, visualLine.endColumn),
 			0,
 			lineData.inlineDecorations,
 			viewLineNumber,
@@ -479,14 +474,7 @@ function clipSemanticTokens(tokens: readonly ResolvedSemanticToken[], startColum
 		})];
 	}));
 }
-function clipBracketColorizations(brackets: readonly { readonly startColumn: number; readonly endColumn: number; readonly level: number }[], startColumn: number, endColumn: number): readonly { readonly startColumn: number; readonly endColumn: number; readonly level: number }[] {
-	return Object.freeze(brackets.flatMap(bracket => {
-		const start = Math.max(bracket.startColumn, startColumn);
-		const end = Math.min(bracket.endColumn, endColumn);
-		if (end <= start) return [];
-		return [Object.freeze({ startColumn: start - startColumn, endColumn: end - startColumn, level: bracket.level })];
-	}));
-}
+
 
 interface AffectedLineGroup {
 	readonly oldStartLineIndex: number;

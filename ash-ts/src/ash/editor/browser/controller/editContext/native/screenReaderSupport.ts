@@ -8,7 +8,7 @@ import { type View } from "../../../view.js";
 import { RichScreenReaderContent } from "./screenReaderContentRich.js";
 import { SimpleScreenReaderContent } from "./screenReaderContentSimple.js";
 import { type IScreenReaderContent, type ScreenReaderContentLayout, type ScreenReaderContentState } from "./screenReaderUtils.js";
-import { type BracketColorizationSource, type SemanticTokenSource } from "../../../viewParts/viewLines/viewLine.js";
+import { type SemanticTokenSource } from "../../../viewParts/viewLines/viewLine.js";
 import { type IEditorAriaOptions } from '../../../editorBrowser.js';
 import { type RenderingContext, type RestrictedRenderingContext } from '../../../view/renderingContext.js';
 import * as viewEvents from '../../../../common/viewEvents.js';
@@ -26,7 +26,6 @@ export interface NativeScreenReaderSupportOptions {
 	readonly onDidBlur?: Event<void>;
 	readonly accessibilityService?: IAccessibilityService;
 	readonly semanticTokenSource?: SemanticTokenSource;
-	readonly bracketColorizationSource?: BracketColorizationSource;
 }
 
 /**
@@ -220,7 +219,6 @@ export class ScreenReaderSupport extends Disposable {
 				this.options.accessibilityService,
 				{
 					semanticTokenSource: this.options.semanticTokenSource,
-					bracketColorizationSource: this.options.bracketColorizationSource,
 				},
 			)
 			: new SimpleScreenReaderContent(

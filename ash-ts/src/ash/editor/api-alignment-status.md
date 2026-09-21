@@ -1,5 +1,33 @@
 # Editor API 对齐状态
 
+## common 职责迁移：文本操作与括号装饰（2026-09-21）
+
+用户授权“职责差异该抽抽，该收收，该留留”。本批开始工作区干净；沿两条现有生产链迁移职责，没有加入前端 diff 或 Tree-sitter。common 当前 **206 个 TypeScript 文件：175 个同路径、31 个 Ash 自有；仍缺 51 个上游文件**。下方旧批次统计保留为历史，不表示所有 VS Code 能力已经实现。
+
+准入与实现结果：
+
+| 用户行为与生产链 | 本批文件及存在关系 | 唯一职责与处理 |
+| --- | --- | --- |
+| 合并行 → `JoinLinesAction` → `TextEdit.apply` → 模型文本 | `common/model/textModelText.ts`、`common/core/text/getPositionOffsetTransformerFromTextModel.ts`，仅 VS Code → 双方都有 | 文本和 UTF-16 坐标直接由 TextModel 提供；适配器不保存文本副本，也不缓存过期坐标。`AbstractText` 的转换接口允许模型坐标实现。 |
+| 删行 → `DeleteLinesAction` → `TextEdit.mapRange` → 光标与撤销 | `contrib/linesOperations/browser/linesOperations.ts`，双方都有 | 移除私有 offset edit 结构、编辑应用、偏移映射和全串坐标扫描；复用 common 编辑与坐标能力。CRLF、多光标顺序及 UTF-16 行为保留。 |
+| 括号树 → 模型装饰查询 → ViewModel → 文本行/辅助技术文本 | `common/model/decorationProvider.ts`、`common/model/bracketPairsTextModelPart/colorizedBracketPairsDecorationProvider.ts`，仅 VS Code → 双方都有；`textModel.ts`，双方都有 | TextModel 持有并释放提供者。按需计算 inline decorations，处理颜色池、选项及括号变化；没有第二份括号索引。只补当前使用的范围查询契约，未宣称全部上游成员完成。 |
+| 括号辅助线 → `LanguageBracketGuideSource` → `IndentGuidesOverlay` | `contrib/bracketMatching/browser/bracketColorizationPresentation.ts`，Ash 自有；`browser/viewParts/indentGuides/indentGuides.ts`，双方都有 | 保留 Ash 辅助线几何适配，移除该文件中的颜色计算。源契约归实际布局消费者，名称改为 `BracketGuideSource`。 |
+| 编辑器装配 → View/输入/行渲染 | `browser/editorExtensions.ts`、`browser/widget/codeEditor/codeEditorWidget.ts`、`browser/view.ts`、`browser/view/viewController.ts`、`browser/viewParts/viewLines/{viewLine,viewLines}.ts`、`browser/controller/editContext/editContext.ts`、`browser/controller/editContext/native/{nativeEditContext,screenReaderSupport,screenReaderContentRich}.ts`，双方都有 | 清除旧 `BracketColorizationSource`、`BracketColorizationSpan`、`getLineBrackets` 与重复裁剪路径；输入链不再接收颜色源。DOM、焦点、文本测量和滚动 owner 保持原职责。 |
+| 每编辑器颜色开关 → 装饰可见性 | `common/viewModel/viewModelDecorations.ts`，双方都有 | 过滤当前编辑器关闭的括号装饰；配置改变使查询缓存失效。监听和缓存清理进入 Disposable 生命周期，移除绕过父类释放的旧 dispose 实现。 |
+
+保留的差异：稳定 LineId 编辑规则、版本绑定 Worker 快照、具名 token store、宿主级语言注册与后端 diff 仍各有实际职责。括号提供者保留 Ash 的六级 class 和无效括号不着色行为，本批没有引入上游主题注册器、颜色样式或错误括号装饰。
+
+配套验证涵盖 common 模型文本、行命令、括号模型查询、ViewModel 失效、装饰与语义 token 合成、Widget 释放，以及 Playwright 中的颜色开关、颜色池、多光标编辑和撤销。原括号匹配测试改为断言该控制器拥有的 matching decorations；ViewModel 测试分别计入行重映射与括号树重建的失效事件。
+
+GPU 回归原先用隐藏的 DOM 行测量宽度；这些行在 GPU 渲染时允许不保留文本。测试现在通过已有连字选项切到实际 DOM 渲染后比较宽度，再切回 GPU，保留初始状态、删除/撤销、行布局和绘制顺序断言；没有为测试改变 GPU 生产渲染行为。
+
+本批验证结果：
+
+- `check-editor-alignment.mjs --test=all` 通过：结构、台账、类型检查、230/230 个单测文件及 314/314 个 Playwright 用例通过，包含 Chromium 和 Chrome GPU。
+- `build:renderer`、`build:stanza` 通过；`git diff --check` 通过，没有新增未跟踪的 JavaScript 产物。
+- 定向浏览器验证覆盖颜色开关、独立颜色池、创建后启用辅助线、CRLF/Unicode 多光标合并与删行、撤销，以及辅助技术文本和 DOM 选区。
+- 保留既有 JSDOM Canvas、测试服务装配输出及 Playwright 颜色环境提示；未改 CSS，结构检查仍记录 7 份既有 CSS 债务。
+
 ## common 缺失文件续批：链接与 token 分类（2026-09-21）
 
 按“先补现有功能链需要的 common 文件”继续核对全部缺口。本批增加两个有生产调用的模块；没有恢复空服务或加入未被产品使用的上游引擎。当前 common 有 **202 个 TypeScript 文件：171 个同路径、31 个 Ash 自有；仍缺 55 个上游文件**。文件数量不表示 API 或功能完全对齐，下方旧批次数字保留为历史。

@@ -132,7 +132,8 @@ test('ViewModel owns line projection, cursor, layout, and visible-line publicati
 
 	model.updateOptions({ tabSize: 8 });
 	assert.equal(captured.flushedEvents.length, 1);
-	assert.equal(captured.decorationsEvents.length, 1);
+	// Line remapping and the model's rebuilt bracket decorations invalidate independently.
+	assert.equal(captured.decorationsEvents.length, 2);
 	assert.equal(captured.lineMappingEvents.length, 1);
 	using languageConfiguration = languages.register('plaintext', { comments: { lineComment: '//' } });
 	assert.equal(captured.languageConfigurationEvents.length, 1);

@@ -250,6 +250,44 @@ test('bracket navigation shares the controller with its action for multiple curs
 	expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).toEqual(['[1,1 -> 1,1]', '[1,7 -> 1,7]']);
 });
 
+test('model bracket decorations reach the viewport and follow per-editor color settings', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareBrackets('{([])}', [1]));
+	const colors = page.locator('#caller .view-line [class*="stanza-editor-bracket-level-"]');
+	await expect(colors).toHaveCount(6);
+	expect(await colors.evaluateAll(elements => elements.map(element => [...element.classList].find(value => value.startsWith('stanza-editor-bracket-level-'))))).toEqual([1, 2, 3, 3, 2, 1].map(level => `stanza-editor-bracket-level-${level}`));
+	await page.evaluate(() => window.ashStandaloneIntegration.configureBracketColors(false, false));
+	await expect(colors).toHaveCount(0);
+	await page.evaluate(() => window.ashStandaloneIntegration.configureBracketColors(true, true));
+	await expect(page.locator('#caller .view-line .stanza-editor-bracket-level-1')).toHaveCount(6);
+	await page.keyboard.press('ArrowRight');
+	await page.keyboard.type('x');
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('{x([])}');
+	await expect(colors).toHaveCount(6);
+	await page.keyboard.press('ControlOrMeta+z');
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe('{([])}');
+	await page.evaluate(() => {
+		window.ashStandaloneIntegration.prepareBrackets('{\n  value\n}', [1]);
+		window.ashStandaloneIntegration.configureBracketColors(false, false);
+	});
+	await expect(colors).toHaveCount(0);
+	await expect(page.locator('#caller .stanza-editor-bracket-guide')).not.toHaveCount(0);
+});
+
+test('common text operations preserve multi-cursor joins, deletions and undo', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareLineJoin());
+	const before = await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy());
+	await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.joinLines'));
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({ value: '😀 one two\r\nkeep\r\n三 four', selections: ['[3,2 -> 3,2]', '[1,7 -> 1,7]'] });
+	await page.keyboard.press('ControlOrMeta+z');
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual(before);
+	await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.action.deleteLines'));
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({ value: '  two\r\nkeep\r\n  four', selections: ['[3,1 -> 3,1]', '[1,1 -> 1,1]'] });
+	await page.keyboard.press('ControlOrMeta+z');
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual(before);
+});
+
 for (const entry of ['shortcut', 'action'] as const) {
 	test(`bracket removal via ${entry} is one undo step`, async ({ page }) => {
 		await page.goto('/standalone.html');

@@ -3,8 +3,6 @@ import { FastDomNode } from "../../../../base/browser/fastDomNode.js";
 import { DomReadingContext } from './domReadingContext.js';
 import { RangeUtil } from './rangeUtil.js';
 import { type ViewLineOptions } from './viewLineOptions.js';
-import { type TextModel } from '../../../common/model/textModel.js';
-import { type Range } from '../../../common/core/range.js';
 import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken, type SemanticTokenSource } from '../../../common/tokens/languageTokens.js';
 import { type LanguageToken } from '../../../common/tokens/languageTokens.js';
 import { CharacterMapping, DomPosition } from '../../../common/viewLayout/viewLineRenderer.js';
@@ -72,9 +70,9 @@ export class ViewLine {
 		return false;
 	}
 
-	public renderLine(text: string, tokens: readonly ResolvedSemanticToken[], brackets: readonly BracketColorizationSpan[], wrappedTextIndentWidth = 0, inlineDecorations: readonly InlineDecoration[] = [], lineNumber = 1): boolean {
+	public renderLine(text: string, tokens: readonly ResolvedSemanticToken[], wrappedTextIndentWidth = 0, inlineDecorations: readonly InlineDecoration[] = [], lineNumber = 1): boolean {
 		if (!Number.isFinite(wrappedTextIndentWidth) || wrappedTextIndentWidth < 0) throw new RangeError('View line indent must be finite and non-negative');
-		this._renderedViewLine.render(text, tokens, brackets, wrappedTextIndentWidth, inlineDecorations, lineNumber);
+		this._renderedViewLine.render(text, tokens, wrappedTextIndentWidth, inlineDecorations, lineNumber);
 		this._isMaybeInvalid = false;
 		return true;
 	}
@@ -137,7 +135,7 @@ class RenderedViewLine {
 		private readonly textElement: HTMLSpanElement,
 		readonly tabSize: number,
 	) {
-		this.characterMapping = projectStanzaSemanticTokenLine(this.textElement, '', [], [], this.tabSize);
+		this.characterMapping = projectStanzaSemanticTokenLine(this.textElement, '', [], this.tabSize);
 	}
 
 	get hasCachedWidth(): boolean {
@@ -148,8 +146,8 @@ class RenderedViewLine {
 		return this.cachedWidth !== undefined && (this.cachedWidth > this.wrappedTextIndentWidth || this.renderedText.length === 0);
 	}
 
-	render(text: string, tokens: readonly ResolvedSemanticToken[], brackets: readonly BracketColorizationSpan[], wrappedTextIndentWidth: number, inlineDecorations: readonly InlineDecoration[], lineNumber: number): void {
-		this.characterMapping = projectStanzaSemanticTokenLine(this.textElement, text, tokens, brackets, this.tabSize, inlineDecorations, lineNumber);
+	render(text: string, tokens: readonly ResolvedSemanticToken[], wrappedTextIndentWidth: number, inlineDecorations: readonly InlineDecoration[], lineNumber: number): void {
+		this.characterMapping = projectStanzaSemanticTokenLine(this.textElement, text, tokens, this.tabSize, inlineDecorations, lineNumber);
 		this.textElement.style.marginInlineStart = `${wrappedTextIndentWidth}px`;
 		this.renderedText = text;
 		this.wrappedTextIndentWidth = wrappedTextIndentWidth;
@@ -221,42 +219,21 @@ class RenderedViewLine {
 export { SemanticTokenModifier, SemanticTokenPresentation } from '../../../common/tokens/languageTokens.js';
 export type { ResolvedSemanticToken, SemanticTokenSource } from '../../../common/tokens/languageTokens.js';
 
-export interface BracketColorizationSpan {
-	readonly startColumn: number;
-	readonly endColumn: number;
-	readonly level: number;
-}
-
-export interface BracketGuide {
-	readonly opening: Range;
-	readonly closing: Range;
-	readonly level: number;
-}
-
-/** Feature-neutral bracket projection consumed by the browser viewport. */
-export interface BracketColorizationSource {
-	readonly textModel: TextModel;
-	getLineBrackets(lineIndex: number): readonly BracketColorizationSpan[];
-	getBracketGuides?(startLineIndex: number, endLineIndexInclusive: number): readonly BracketGuide[];
-}
-
 /** Projects one line transactionally while preserving its exact source text. */
 export function projectStanzaSemanticTokenLine(
 	element: HTMLElement,
 	lineText: string,
 	tokens: readonly ResolvedSemanticToken[],
-	brackets: readonly BracketColorizationSpan[] = [],
 	tabSize = 4,
 	inlineDecorations: readonly InlineDecoration[] = [],
 	lineNumber = 1,
 ): CharacterMapping {
 	validateLineTokens(lineText, tokens);
-	validateBracketColorizations(lineText, brackets);
 	if (!Number.isSafeInteger(tabSize) || tabSize < 1) throw new RangeError('Stanza semantic line tab size must be a positive safe integer');
 	const ownerDocument = element.ownerDocument;
 	const fragment = createFragment(ownerDocument);
 	const lineDecorations = inlineDecorations.filter(decoration => decoration.range.startLineNumber <= lineNumber && decoration.range.endLineNumber >= lineNumber);
-	const boundaries = [...new Set([0, lineText.length, ...tokens.flatMap(token => [token.startColumn, token.endColumn]), ...brackets.flatMap(bracket => [bracket.startColumn, bracket.endColumn]), ...lineDecorations.flatMap(decoration => [Math.max(0, decoration.range.startColumn - 1), Math.min(lineText.length, decoration.range.endColumn - 1)])])].sort((left, right) => left - right);
+	const boundaries = [...new Set([0, lineText.length, ...tokens.flatMap(token => [token.startColumn, token.endColumn]), ...lineDecorations.flatMap(decoration => [Math.max(0, decoration.range.startColumn - 1), Math.min(lineText.length, decoration.range.endColumn - 1)])])].sort((left, right) => left - right);
 	const characterMapping = new CharacterMapping(lineText.length + 1, Math.max(1, boundaries.length - 1));
 	let visibleColumn = 0;
 	if (lineText.length === 0) {
@@ -273,14 +250,12 @@ export function projectStanzaSemanticTokenLine(
 			fragment.append(injectedElement);
 		}
 		const token = tokens.find(candidate => candidate.startColumn <= startColumn && candidate.endColumn >= endColumn);
-		const bracket = brackets.find(candidate => candidate.startColumn <= startColumn && candidate.endColumn >= endColumn);
 		const decorations = lineDecorations.filter(decoration => decoration.type !== InlineDecorationType.WidthOnly && decoration.range.startColumn - 1 <= startColumn && decoration.range.endColumn - 1 >= endColumn);
 		const tokenElement = h(ownerDocument, "span");
-		if (token || bracket || decorations.length > 0) tokenElement.className = "stanza-editor-token";
+		if (token || decorations.length > 0) tokenElement.className = "stanza-editor-token";
 		if (token?.presentation) tokenElement.classList.add(token.presentation);
 		for (const modifier of token?.modifiers ?? []) tokenElement.classList.add(modifier);
 		if (token?.syntaxPresentation) applySyntaxPresentation(tokenElement, token.syntaxPresentation);
-		if (bracket) tokenElement.classList.add(`stanza-editor-bracket-level-${bracket.level}`);
 		for (const decoration of decorations) tokenElement.classList.add(...decoration.inlineClassName.split(/\s+/u).filter(Boolean));
 		tokenElement.textContent = lineText.slice(startColumn, endColumn);
 		for (let offset = startColumn; offset < endColumn; offset += 1) {
@@ -295,19 +270,6 @@ export function projectStanzaSemanticTokenLine(
 	}
 	reset(element, fragment);
 	return characterMapping;
-}
-
-function validateBracketColorizations(lineText: string, brackets: readonly BracketColorizationSpan[]): void {
-	let previousEnd = 0;
-	for (const bracket of brackets) {
-		if (!Number.isSafeInteger(bracket.startColumn) || !Number.isSafeInteger(bracket.endColumn) || bracket.startColumn < previousEnd || bracket.endColumn <= bracket.startColumn || bracket.endColumn > lineText.length) {
-			throw new RangeError("Stanza bracket colorizations must be sorted, non-overlapping source ranges");
-		}
-		if (!Number.isSafeInteger(bracket.level) || bracket.level < 1 || bracket.level > 6) {
-			throw new RangeError("Stanza bracket colorization level must be between 1 and 6");
-		}
-		previousEnd = bracket.endColumn;
-	}
 }
 
 /** Captures and validates one source before a viewport replaces its snapshot. */

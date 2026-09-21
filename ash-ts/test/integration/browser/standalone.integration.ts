@@ -123,6 +123,8 @@ interface StandaloneHarness {
 	prepareLineComment(options?: { insertSpace?: boolean; ignoreEmptyLines?: boolean; readOnly?: boolean; languageId?: string; value?: string }): void;
 	prepareLineCopy(emptyTail?: boolean): void;
 	prepareBrackets(value: string, columns: (number | [number, number])[], readOnly?: boolean): void;
+	configureBracketColors(enabled: boolean, independent: boolean): void;
+	prepareLineJoin(): void;
 	prepareMulticursor(): void;
 	runDeferredRichCopy(fail: boolean): Promise<{ pendingHtml: string; finishedHtml: string; rejected: boolean; writtenText: string }>;
 	runDeferredClipboard(command: 'cut' | 'paste', change: 'none' | 'selection' | 'focus' | 'readonly' | 'composition' | 'escape' | 'model' | 'dispose', fromOutside: boolean): Promise<{ value: string; finishedBeforeTransfer: boolean }>;
@@ -638,6 +640,15 @@ window.ashStandaloneIntegration = {
 		callerModel.setLanguage('typescript');
 		callerEditor.setSelections(columns.map(column => Array.isArray(column) ? new stanza.Selection(1, column[0], 1, column[1]) : new stanza.Selection(1, column, 1, column)));
 		callerEditor.updateOptions({ readOnly });
+		callerEditor.focus();
+	},
+	configureBracketColors: (enabled, independent) => {
+		callerModel.updateOptions({ bracketColorizationOptions: { enabled: true, independentColorPoolPerBracketType: independent } });
+		callerEditor.updateOptions({ bracketPairColorization: { enabled }, guides: { bracketPairs: true } });
+	},
+	prepareLineJoin: () => {
+		callerEditor.setValue('😀 one\r\n  two\r\nkeep\r\n三\r\n  four');
+		callerEditor.setSelections([new stanza.Selection(4, 2, 4, 2), new stanza.Selection(1, 3, 1, 3)]);
 		callerEditor.focus();
 	},
 	prepareMulticursor: () => {

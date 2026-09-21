@@ -147,7 +147,6 @@ export class NativeEditContext extends AbstractEditContext {
 			onDidBlur: this.onDidBlur,
 			accessibilityService: options.accessibilityService,
 			semanticTokenSource: options.semanticTokenSource,
-			bracketColorizationSource: options.bracketColorizationSource,
 		}));
 		this.synchronizeState();
 		this.connect();

@@ -16,13 +16,9 @@ import { ReplaceCommand, ReplaceCommandThatSelectsText } from '../../../common/c
 import { EnterOperation } from '../../../common/cursor/cursorTypeEditOperations.js';
 import { EditorAutoIndentStrategy } from '../../../common/config/editorOptions.js';
 import { ILanguageConfigurationService } from '../../../common/languages/languageConfigurationRegistry.js';
-
-interface OffsetEdit {
-	readonly startOffset: number;
-	readonly endOffset: number;
-	readonly text: string;
-	readonly edit: { readonly range: Range; readonly text: string };
-}
+import { TextEdit, TextReplacement } from '../../../common/core/edits/textEdit.js';
+import { StringText } from '../../../common/core/text/abstractText.js';
+import { TextModelText } from '../../../common/model/textModelText.js';
 
 interface TransposeOperation {
 	readonly selectionIndex: number;
@@ -254,14 +250,13 @@ function deleteLines(editor: ICodeEditor): void {
 	const selections = editor.getSelections();
 	if (!model || !selections || (model.getLineCount() === 1 && model.getLineMaxColumn(1) === 1)) return;
 	const groups = contiguousLineGroups(selectedLineIndices(selections));
-	const edits = groups.flatMap<OffsetEdit>(group => deleteLineGroup(model, group));
-	const finalText = applyOffsetEdits(model.getValue(), edits);
+	const edit = new TextEdit(groups.map(group => deleteLineGroup(model, group)));
 	const cursorState = selections.map(selection => Selection.fromPositions(
-		positionAtOffset(finalText, mapOffsetThroughEdits(model.getOffsetAt(selection.getSelectionStart()), edits)),
-		positionAtOffset(finalText, mapOffsetThroughEdits(model.getOffsetAt(selection.getPosition()), edits)),
+		edit.mapRange(Range.fromPositions(selection.getSelectionStart())).getStartPosition(),
+		edit.mapRange(Range.fromPositions(selection.getPosition())).getStartPosition(),
 	));
 	editor.pushUndoStop();
-	editor.executeEdits('editor.action.deleteLines', edits.map(edit => edit.edit), cursorState);
+	editor.executeEdits('editor.action.deleteLines', edit.replacements.map(replacement => replacement.toSingleEditOperation()), cursorState);
 	editor.pushUndoStop();
 }
 
@@ -312,10 +307,11 @@ function joinLines(editor: ICodeEditor): void {
 		operations.push({ range: edit.range, text: edit.text });
 		delta += edit.text.length - (edit.endOffset - edit.startOffset);
 	}
-	const finalText = applyOffsetEdits(model.getValue(), edits.map(edit => ({ ...edit, edit: { range: edit.range, text: edit.text } })));
+	const textEdit = new TextEdit(operations.map(operation => new TextReplacement(operation.range, operation.text)));
+	const coordinates = new StringText(textEdit.apply(new TextModelText(model))).getTransformer();
 	const cursorState = selectionOffsets.map(offsets => Selection.fromPositions(
-		positionAtOffset(finalText, offsets.anchorOffset),
-		positionAtOffset(finalText, offsets.activeOffset),
+		coordinates.getPosition(offsets.anchorOffset),
+		coordinates.getPosition(offsets.activeOffset),
 	));
 	if (primarySelectionIndex > 0) cursorState.unshift(cursorState.splice(primarySelectionIndex, 1)[0]!);
 	editor.pushUndoStop();
@@ -404,33 +400,22 @@ function joinText(model: ITextModel, startLineNumber: number, endLineNumber: num
 	return { text, lastPartLength };
 }
 
-function deleteLineGroup(model: ITextModel, group: EditorLineGroup): readonly OffsetEdit[] {
+function deleteLineGroup(model: ITextModel, group: EditorLineGroup): TextReplacement {
 	const first = group.startLineIndex;
 	const last = group.endLineIndex;
 	if (first === 0 && last === model.getLineCount() - 1) {
 		const start = new Position((0) + 1, (0) + 1);
 		const end = new Position((last) + 1, (model.getLineContent((last) + 1).length) + 1);
-		return [offsetEdit(model, start, end, "")];
+		return TextReplacement.delete(Range.fromPositions(start, end));
 	}
 	if (last + 1 < model.getLineCount()) {
-		return [offsetEdit(model, new Position((first) + 1, (0) + 1), new Position((last + 1) + 1, (0) + 1), "")];
+		return TextReplacement.delete(new Range(first + 1, 1, last + 2, 1));
 	}
 	const previousLineIndex = first - 1;
-	return [offsetEdit(
-		model,
+	return TextReplacement.delete(Range.fromPositions(
 		new Position((previousLineIndex) + 1, (model.getLineContent((previousLineIndex) + 1).length) + 1),
 		new Position((last) + 1, (model.getLineContent((last) + 1).length) + 1),
-		"",
-	)];
-}
-
-function offsetEdit(model: ITextModel, start: Position, end: Position, text: string): OffsetEdit {
-	return Object.freeze({
-		startOffset: model.getOffsetAt(start),
-		endOffset: model.getOffsetAt(end),
-		text,
-		edit: Object.freeze({ range: Range.fromPositions(start, end), text }),
-	});
+	));
 }
 
 interface EditorLineGroup {
@@ -462,43 +447,6 @@ function contiguousLineGroups(lineIndices: readonly number[]): readonly EditorLi
 		}
 	}
 	return Object.freeze(groups);
-}
-
-function mapOffsetThroughEdits(offset: number, edits: readonly OffsetEdit[]): number {
-	let delta = 0;
-	for (const edit of edits) {
-		if (offset < edit.startOffset) break;
-		if (edit.startOffset === edit.endOffset && offset === edit.startOffset) {
-			return offset + delta + edit.text.length;
-		}
-		if (offset <= edit.endOffset) {
-			return edit.startOffset + delta + Math.min(offset - edit.startOffset, edit.text.length);
-		}
-		delta += edit.text.length - (edit.endOffset - edit.startOffset);
-	}
-	return offset + delta;
-}
-
-function applyOffsetEdits(text: string, edits: readonly OffsetEdit[]): string {
-	let result = text;
-	for (let index = edits.length - 1; index >= 0; index -= 1) {
-		const edit = edits[index]!;
-		result = result.slice(0, edit.startOffset) + edit.text + result.slice(edit.endOffset);
-	}
-	return result;
-}
-
-function positionAtOffset(text: string, offset: number): Position {
-	if (!Number.isSafeInteger(offset) || offset < 0 || offset > text.length) throw new RangeError('Line operation cursor offset is outside the result text');
-	let lineNumber = 1;
-	let lineStartOffset = 0;
-	for (let index = 0; index < offset; index += 1) {
-		if (text.charCodeAt(index) === 10) {
-			lineNumber += 1;
-			lineStartOffset = index + 1;
-		}
-	}
-	return new Position(lineNumber, offset - lineStartOffset + 1);
 }
 
 registerEditorAction(CopyLinesUpAction);

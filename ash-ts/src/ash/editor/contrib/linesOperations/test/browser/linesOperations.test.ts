@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { DeleteLinesAction, InsertLineAfterAction, InsertLineBeforeAction } from "../../browser/linesOperations.js";
+import { DeleteLinesAction, InsertLineAfterAction, InsertLineBeforeAction, JoinLinesAction } from "../../browser/linesOperations.js";
 import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
@@ -70,6 +70,28 @@ test("Delete lines removes selected physical line groups and keeps a valid final
 	runAction(new DeleteLinesAction(), model, selections);
 	runAction(new DeleteLinesAction(), model, selections);
 	assert.equal(model.getText(), "");
+});
+
+test('Line actions retain CRLF, Unicode and primary selection across disjoint edits and undo', () => {
+	using model = new TextModel('😀 one\r\n  two\r\nkeep\r\n三\r\n  four');
+	const original = [new Selection(4, 2, 4, 2), new Selection(1, 3, 1, 3)];
+	using cursors = createTestCursorsController(model, original);
+	cursors.setHasFocus(true);
+	runAction(new JoinLinesAction(), model, cursors);
+	assert.deepEqual({ text: model.getValue(), selections: cursors.getSelections() }, {
+		text: '😀 one two\r\nkeep\r\n三 four',
+		selections: [new Selection(3, 2, 3, 2), new Selection(1, 7, 1, 7)],
+	});
+	model.undo();
+	assert.deepEqual({ text: model.getValue(), selections: cursors.getSelections() }, {
+		text: '😀 one\r\n  two\r\nkeep\r\n三\r\n  four',
+		selections: original,
+	});
+	runAction(new DeleteLinesAction(), model, cursors);
+	assert.deepEqual({ text: model.getValue(), selections: cursors.getSelections() }, {
+		text: '  two\r\nkeep\r\n  four',
+		selections: [new Selection(3, 1, 3, 1), new Selection(1, 1, 1, 1)],
+	});
 });
 
 test("Duplicate lines supports multi-line groups, document edges, and isolated undo", () => {

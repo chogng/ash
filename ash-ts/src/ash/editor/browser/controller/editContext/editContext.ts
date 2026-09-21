@@ -15,7 +15,7 @@ import { type IEditorAriaOptions } from '../../editorBrowser.js';
 import { type View } from "../../view.js";
 import { ViewPart } from '../../view/viewPart.js';
 import { type EditorViewTextUpdateEvent } from "../../view/viewController.js";
-import { type BracketColorizationSource, type SemanticTokenSource } from '../../viewParts/viewLines/viewLine.js';
+import { type SemanticTokenSource } from '../../viewParts/viewLines/viewLine.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { type IViewModel } from '../../../common/viewModel.js';
 import { isFirefox } from '../../../../base/browser/browser.js';
@@ -86,7 +86,6 @@ export interface EditContextOptions {
 	readonly viewport: View;
 	readonly accessibilityService?: IAccessibilityService;
 	readonly semanticTokenSource?: SemanticTokenSource;
-	readonly bracketColorizationSource?: BracketColorizationSource;
 }
 
 export interface EditContextViewController {

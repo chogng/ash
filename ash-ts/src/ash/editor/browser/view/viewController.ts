@@ -29,7 +29,7 @@ import { TextAreaEditContext } from '../controller/editContext/textArea/textArea
 import { ViewUserInputEvents } from './viewUserInputEvents.js';
 import { type IAccessibilityService } from '../../../platform/accessibility/common/accessibility.js';
 import { type IEditorMouseEvent, type IPartialEditorMouseEvent } from '../editorBrowser.js';
-import { type BracketColorizationSource, type SemanticTokenSource } from '../viewParts/viewLines/viewLine.js';
+import { type SemanticTokenSource } from '../viewParts/viewLines/viewLine.js';
 import { type ILogService } from '../../../platform/log/common/log.js';
 import { type ICommand } from '../../common/editorCommon.js';
 import { InputMode } from '../../common/inputMode.js';
@@ -53,7 +53,6 @@ export interface ViewControllerOptions {
 	readonly ariaLabel?: string;
 	readonly accessibilityService?: IAccessibilityService;
 	readonly semanticTokenSource?: SemanticTokenSource;
-	readonly bracketColorizationSource?: BracketColorizationSource;
 	readonly userInputEvents?: ViewUserInputEvents;
 }
 

@@ -48,7 +48,7 @@ test("Bracket match controller stores standard decoration options and clears the
 	using controller = new BracketMatchingController(editorFor(model, selections), bracketPairs, decorations, "always");
 	viewport.layout({ width: 240, height: 40 });
 
-	assert.deepEqual(model.getAllDecorations().map(decoration => ({
+	assert.deepEqual(model.getAllDecorations().filter(decoration => decoration.options.className === 'bracket-match').map(decoration => ({
 		range: decoration.range,
 		className: decoration.options.className,
 	})), [{

@@ -1,3 +1,4 @@
+import type { BracketGuideSource } from '../../viewParts/indentGuides/indentGuides.js';
 import { IMarkerDecorationsService } from '../../../common/services/markerDecorations.js';
 import { getClientArea, h, isHTMLElement, scheduleAtNextAnimationFrame } from "../../../../base/browser/dom.js";
 import { type IKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
@@ -32,7 +33,7 @@ import { type EditorIndentationOptions } from '../../../common/core/misc/indenta
 import { type ConfigurationChangedEvent, EditorLineWrapping, EditorOption, type EditorLayoutInfo, type FindComputedEditorOptionValueById, type IComputedEditorOptions, type IEditorOptions, WrappingIndent } from '../../../common/config/editorOptions.js';
 import { type LanguageCompletionWorkerFactory, type LanguageLocation, type LanguageWorkspaceEdit, type LanguageDiagnosticsHost } from '../../../common/languages.js';
 import { isCompletionsEnablement, type CompletionsEnablement } from '../../../common/services/completionsEnablement.js';
-import { type BracketColorizationSource, type SemanticTokenSource } from '../../viewParts/viewLines/viewLine.js';
+import { type SemanticTokenSource } from '../../viewParts/viewLines/viewLine.js';
 import { type IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { type ICodeEditorService } from '../../services/codeEditorService.js';
 import { applyFontInfo } from '../../config/domFontInfo.js';
@@ -387,7 +388,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			const getOptionalService = services.getOptional.bind(services);
 			const provideService = services.registerInstance.bind(services);
 			let semanticTokenSource: SemanticTokenSource | undefined;
-			let bracketColorizationSource: BracketColorizationSource | undefined;
+			let bracketGuideSource: BracketGuideSource | undefined;
 			const selectedContributions = options.contributions ?? EditorExtensionsRegistry.getEditorContributions();
 			this.contributions = modelStore.add(this.instantiationService.createInstance(CodeEditorContributions));
 			this.contributions.configure(selectedContributions, {
@@ -409,9 +410,9 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 					if (semanticTokenSource) throw new Error('Text editor semantic-token source is already configured');
 					semanticTokenSource = source;
 				},
-				setBracketColorizationSource: source => {
-					if (bracketColorizationSource) throw new Error('Text editor bracket-colorization source is already configured');
-					bracketColorizationSource = source;
+				setBracketGuideSource: source => {
+					if (bracketGuideSource) throw new Error('Text editor bracket-guide source is already configured');
+					bracketGuideSource = source;
 				},
 				register: value => modelStore.add(value),
 			});
@@ -424,7 +425,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				ariaLabel: options.ariaLabel ?? editorLabel(options.input),
 				dimension: options.dimension,
 				semanticTokenSource,
-				bracketColorizationSource,
+				bracketGuideSource,
 				textDirection: options.textDirection,
 				presentation: options.presentation,
 				indentation: options.indentation,
@@ -434,7 +435,6 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 					ariaLabel: options.ariaLabel ?? editorLabel(options.input),
 					accessibilityService: options.accessibilityService,
 					semanticTokenSource,
-					bracketColorizationSource,
 				},
 			}));
 			modelStore.add(this.view.onDidChangeLayout(() => this.layoutChangeEmitter.fire(this.getLayoutInfo())));

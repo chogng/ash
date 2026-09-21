@@ -1628,14 +1628,15 @@ test('CodeEditorWidget keeps model sources alive after installation fails', () =
 			container: requiredElement(dom.window.document, 'main'),
 			model, input: { resource: model.uri }, languageId: model.getLanguageId(),
 			onContributionError: error => errors.push(error),
+			guides: { bracketPairs: true },
 			dimension: { width: 400, height: 100 },
 			contributions: [{
 				id: 'test.failedHook',
 				configure: context => {
 					context.register(toDisposable(() => { sourceDisposed = true; events.push('configuration'); }));
-					context.setBracketColorizationSource({
+					context.setBracketGuideSource({
 						textModel: context.model,
-						getLineBrackets: () => {
+						getBracketGuides: () => {
 							assert.equal(sourceDisposed, false, 'the live View must retain its model source');
 							sourceReads += 1;
 							return [];

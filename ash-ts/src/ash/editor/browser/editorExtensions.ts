@@ -35,7 +35,8 @@ import { type ILanguageFeaturesService } from '../common/services/languageFeatur
 import { type ICodeEditorWidgetOptions } from './widget/codeEditor/codeEditorWidget.js';
 import { type ViewController } from './view/viewController.js';
 import { type View } from './view.js';
-import { type BracketColorizationSource, type SemanticTokenSource } from './viewParts/viewLines/viewLine.js';
+import type { BracketGuideSource } from './viewParts/indentGuides/indentGuides.js';
+import { type SemanticTokenSource } from './viewParts/viewLines/viewLine.js';
 import { type IVersionedEditorWorkerClient } from './services/editorWorkerService.js';
 import { type CursorsController } from '../common/cursor/cursor.js';
 import { type IViewModel } from '../common/viewModel.js';
@@ -539,7 +540,7 @@ export interface TextEditorContributionConfigurationContext extends SharedTextCo
 	readonly selectionController: CursorsController;
 	readonly provideService: <T>(capability: ServiceIdentifier<T>, value: T) => void;
 	readonly setSemanticTokenSource: (source: SemanticTokenSource) => void;
-	readonly setBracketColorizationSource: (source: BracketColorizationSource) => void;
+	readonly setBracketGuideSource: (source: BracketGuideSource) => void;
 }
 
 export interface TextEditorContributionContext extends SharedTextContext {

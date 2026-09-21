@@ -1,3 +1,4 @@
+import { InlineDecoration, InlineDecorationType } from '../../common/viewModel/inlineDecorations.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
@@ -151,9 +152,9 @@ test("Semantic line projection is HTML-safe and preserves exact text", () => {
 test("Semantic line projection composes lexical bracket colors without changing token text", () => {
 	const dom = new JSDOM("<!doctype html><body><code></code></body>");
 	const element = requiredElement<HTMLElement>(dom.window.document, "code");
-	projectStanzaSemanticTokenLine(element, "fn(a)", [presented(0, 2, SemanticTokenPresentation.Function)], [
-		{ startColumn: 2, endColumn: 3, level: 1 },
-		{ startColumn: 4, endColumn: 5, level: 1 },
+	projectStanzaSemanticTokenLine(element, "fn(a)", [presented(0, 2, SemanticTokenPresentation.Function)], 4, [
+		new InlineDecoration(new Range(1, 3, 1, 4), 'stanza-editor-bracket-level-1', InlineDecorationType.Regular),
+		new InlineDecoration(new Range(1, 5, 1, 6), 'stanza-editor-bracket-level-1', InlineDecorationType.Regular),
 	]);
 	assert.equal(element.textContent, "fn(a)");
 	assert.deepEqual([...element.querySelectorAll(".stanza-editor-bracket-level-1")].map(entry => entry.textContent), ["(", ")"]);

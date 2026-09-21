@@ -13,7 +13,6 @@ interface GpuEditorState {
 	readonly glyphMarginTouchesLineNumber: boolean;
 	readonly lineNumberTouchesFolding: boolean;
 	readonly foldingPrecedesText: boolean;
-	readonly punctuationLineAdvanceMatchesDom: boolean;
 }
 
 interface ClearedGpuEditorState {
@@ -45,6 +44,7 @@ test('GPU text keeps wrapped rows disjoint and the gutter in VS Code order', asy
 	await expect(page.locator('.stanza-editor-gpu-canvas')).toBeVisible();
 	await expect(page.locator('.margin-view-overlays .view-overlay-line[data-line-index="0"] .ash-icon-folding-expanded')).toBeVisible();
 	await expect.poll(() => gpuEditorState(page)).toEqual(healthyGpuEditorState());
+	await expectGpuAdvanceMatchesDom(page);
 
 	const input = page.locator('.stanza-editor-input');
 	await input.focus();
@@ -64,7 +64,24 @@ test('GPU text keeps wrapped rows disjoint and the gutter in VS Code order', asy
 	await page.keyboard.press('ControlOrMeta+z');
 	await expect.poll(() => gpuEditorState(page)).toEqual(healthyGpuEditorState());
 	await expect.poll(() => gpuFrameLayeringState(page)).toEqual({ hasFrame: true, everyFrameIsLayered: true });
+	await expectGpuAdvanceMatchesDom(page);
 });
+
+async function expectGpuAdvanceMatchesDom(page: Page): Promise<void> {
+	// Ligatures select the DOM renderer; GPU rows need not retain hidden DOM text.
+	await page.evaluate(() => window.ashGpuTextIntegration.setFontLigatures(true));
+	await expect(page.locator('.view-line.gpu-rendered')).toHaveCount(0);
+	await expect.poll(() => page.evaluate(() => {
+		const line = [...document.querySelectorAll<HTMLElement>('.view-line')].find(row => row.textContent === 'console.log(describe(sample));');
+		const text = line?.querySelector<HTMLElement>('.stanza-editor-line-text');
+		if (!text) return Number.POSITIVE_INFINITY;
+		const range = document.createRange();
+		range.selectNodeContents(text);
+		return Math.abs(window.ashGpuTextIntegration.measureGpuAdvance(text.textContent ?? '') - range.getBoundingClientRect().width);
+	})).toBeLessThan(0.1);
+	await page.evaluate(() => window.ashGpuTextIntegration.setFontLigatures(false));
+	await expect.poll(() => gpuEditorState(page)).toEqual(healthyGpuEditorState());
+}
 
 function healthyGpuEditorState(): GpuEditorState {
 	return {
@@ -78,7 +95,6 @@ function healthyGpuEditorState(): GpuEditorState {
 		glyphMarginTouchesLineNumber: true,
 		lineNumberTouchesFolding: true,
 		foldingPrecedesText: true,
-		punctuationLineAdvanceMatchesDom: true,
 	};
 }
 
@@ -102,10 +118,6 @@ async function gpuEditorState(page: Page): Promise<GpuEditorState> {
 		const lineNumberRectangle = lineNumber.getBoundingClientRect();
 		const foldingRectangle = folding.getBoundingClientRect();
 		const textRectangle = text.getBoundingClientRect();
-		const punctuationLine = rows.find(row => row.textContent === 'console.log(describe(sample));');
-		const punctuationText = punctuationLine?.querySelector<HTMLElement>('.stanza-editor-line-text');
-		const punctuationRange = document.createRange();
-		if (punctuationText) punctuationRange.selectNodeContents(punctuationText);
 		const equal = (left: number, right: number) => Math.abs(left - right) < 0.01;
 		const canvasWasHidden = canvas.hidden;
 		canvas.hidden = true;
@@ -122,9 +134,6 @@ async function gpuEditorState(page: Page): Promise<GpuEditorState> {
 			glyphMarginTouchesLineNumber: equal(glyphMarginRectangle.right, lineNumberRectangle.left),
 			lineNumberTouchesFolding: equal(lineNumberRectangle.right, foldingRectangle.left),
 			foldingPrecedesText: foldingRectangle.right <= textRectangle.left,
-			punctuationLineAdvanceMatchesDom: !!punctuationText && Math.abs(
-				window.ashGpuTextIntegration.measureGpuAdvance(punctuationText.textContent ?? '') - punctuationRange.getBoundingClientRect().width,
-			) < 0.1,
 		};
 	});
 }

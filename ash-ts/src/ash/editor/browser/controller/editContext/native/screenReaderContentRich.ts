@@ -3,13 +3,15 @@ import { type FastDomNode } from '../../../../../base/browser/fastDomNode.js';
 import { type IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
 import { type ViewContext } from '../../../../common/viewModel/viewContext.js';
 import { type EditContextViewController } from '../editContext.js';
-import { projectStanzaSemanticTokenLine, type BracketColorizationSource, type BracketColorizationSpan, type ResolvedSemanticToken, type SemanticTokenSource } from "../../../viewParts/viewLines/viewLine.js";
+import { projectStanzaSemanticTokenLine, type ResolvedSemanticToken, type SemanticTokenSource } from "../../../viewParts/viewLines/viewLine.js";
 import { type ScreenReaderContentState } from "./screenReaderUtils.js";
 import { SimpleScreenReaderContent } from "./screenReaderContentSimple.js";
+import { EditorOption } from '../../../../common/config/editorOptions.js';
+import { InlineDecoration, InlineDecorationType } from '../../../../common/viewModel/inlineDecorations.js';
+import { Range } from '../../../../common/core/range.js';
 
 export interface RichScreenReaderContentOptions {
 	readonly semanticTokenSource?: SemanticTokenSource;
-	readonly bracketColorizationSource?: BracketColorizationSource;
 }
 
 /**
@@ -33,9 +35,6 @@ export class RichScreenReaderContent extends SimpleScreenReaderContent {
 		if (options.semanticTokenSource && options.semanticTokenSource.textModel !== model) {
 			throw new TypeError("Native rich screen-reader semantic tokens must share the text model");
 		}
-		if (options.bracketColorizationSource && options.bracketColorizationSource.textModel !== model) {
-			throw new TypeError("Native rich screen-reader brackets must share the text model");
-		}
 	}
 
 	protected override renderText(text: string, state: ScreenReaderContentState): void {
@@ -56,6 +55,7 @@ export class RichScreenReaderContent extends SimpleScreenReaderContent {
 				startPosition.lineNumber - 1,
 				startPosition.column - 1,
 				this.options,
+				this.richContext,
 			);
 		}
 		this.element.replaceChildren(fragment);
@@ -68,6 +68,7 @@ function renderSegment(
 	startLineIndex: number,
 	startColumn: number,
 	options: RichScreenReaderContentOptions,
+	context: ViewContext,
 ): void {
 	const ownerDocument = fragment.ownerDocument;
 	const lines = text.split("\n");
@@ -79,11 +80,24 @@ function renderSegment(
 		const lineElement = h(ownerDocument, "span");
 		lineElement.dataset.lineIndex = String(lineIndex);
 		const lineEndColumn = lineStartColumn + lineText.length;
+		const decorations = context.configuration.options.get(EditorOption.bracketPairColorization).enabled
+			? context.viewModel.model.getLineDecorations(lineIndex + 1).filter(decoration => decoration.options.description === 'BracketPairColorization')
+			: [];
+		const inlineDecorations = decorations.flatMap(decoration => {
+			const start = Math.max(lineStartColumn, decoration.range.startColumn - 1);
+			const end = Math.min(lineEndColumn, decoration.range.endColumn - 1);
+			if (start >= end) {
+				return [];
+			}
+			const range = new Range(1, start - lineStartColumn + 1, 1, end - lineStartColumn + 1);
+			return [new InlineDecoration(range, decoration.options.inlineClassName!, InlineDecorationType.Regular)];
+		});
 		projectStanzaSemanticTokenLine(
 			lineElement,
 			lineText,
 			clipSemanticTokens(options.semanticTokenSource?.getLineTokens(lineIndex) ?? [], lineStartColumn, lineEndColumn),
-			clipBracketColorizations(options.bracketColorizationSource?.getLineBrackets(lineIndex) ?? [], lineStartColumn, lineEndColumn),
+			context.viewModel.model.getOptions().tabSize,
+			inlineDecorations,
 		);
 		if (!lineElement.firstChild) lineElement.append(createText(ownerDocument, ""));
 		fragment.append(lineElement);
@@ -108,23 +122,6 @@ function clipSemanticTokens(
 			...(token.presentation === undefined ? {} : { presentation: token.presentation }),
 			...(token.modifiers === undefined ? {} : { modifiers: token.modifiers }),
 			...(token.syntaxPresentation === undefined ? {} : { syntaxPresentation: token.syntaxPresentation }),
-		})];
-	}));
-}
-
-function clipBracketColorizations(
-	brackets: readonly BracketColorizationSpan[],
-	startColumn: number,
-	endColumn: number,
-): readonly BracketColorizationSpan[] {
-	return Object.freeze(brackets.flatMap(bracket => {
-		const start = Math.max(bracket.startColumn, startColumn);
-		const end = Math.min(bracket.endColumn, endColumn);
-		if (end <= start) return [];
-		return [Object.freeze({
-			startColumn: start - startColumn,
-			endColumn: end - startColumn,
-			level: bracket.level,
 		})];
 	}));
 }

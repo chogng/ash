@@ -3,7 +3,7 @@ import { OffsetRange } from "../ranges/offsetRange.js";
 import { Position } from "../position.js";
 import { Range } from "../range.js";
 import { splitLines } from '../../../../base/common/strings.js';
-import { PositionOffsetTransformer } from "./positionToOffsetImpl.js";
+import { PositionOffsetTransformer, PositionOffsetTransformerBase } from "./positionToOffsetImpl.js";
 import { TextLength } from '../text/textLength.js';
 
 /** A DOM-free text value that can expose slices in editor coordinates. */
@@ -16,11 +16,11 @@ export abstract class AbstractText {
 	get lineRange(): LineRange { return this.length.toLineRange(); }
 	getValue(): string { return this.getValueOfRange(this.length.toRange()); }
 	getValueOfOffsetRange(range: OffsetRange): string { return this.getValueOfRange(this.getTransformer().getRange(range)); }
-	getLineLength(lineNumber: number): number { return this.getTransformer().getLineLength(lineNumber); }
+	getLineLength(lineNumber: number): number { return this.getLineAt(lineNumber).length; }
 	getLineAt(lineNumber: number): string { return this.getValueOfRange(new Range(lineNumber, 1, lineNumber, Number.MAX_SAFE_INTEGER)); }
 	getLines(): string[] { return splitLines(this.getValue()); }
 	getLinesOfRange(range: LineRange): string[] { return range.mapToLineArray(lineNumber => this.getLineAt(lineNumber)); }
-	getTransformer(): PositionOffsetTransformer { return this._transformer ??= new PositionOffsetTransformer(this.getValue()); }
+	getTransformer(): PositionOffsetTransformerBase { return this._transformer ??= new PositionOffsetTransformer(this.getValue()); }
 	equals(other: AbstractText): boolean { return this === other || this.getValue() === other.getValue(); }
 }
 

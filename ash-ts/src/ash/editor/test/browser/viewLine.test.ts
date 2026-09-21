@@ -28,7 +28,7 @@ test('ViewLine owns rendering, character mapping, geometry, and width state', ()
 	const row = line.getDomNode();
 	const textElement = row.firstElementChild as HTMLElement;
 	assert.equal(row.children.length, 1);
-	assert.equal(line.renderLine('ab😊cd', [{ startColumn: 2, endColumn: 4, presentation: SemanticTokenPresentation.String }], []), true);
+	assert.equal(line.renderLine('ab😊cd', [{ startColumn: 2, endColumn: 4, presentation: SemanticTokenPresentation.String }]), true);
 	assert.equal(textElement.textContent, 'ab😊cd');
 	assert.deepEqual([...textElement.children].map(child => child.textContent), ['ab', '😊', 'cd']);
 	assert.equal(line.getColumnOfNodeOffset(textElement.children[2] as HTMLElement, 1), 6);
