@@ -59,7 +59,7 @@ fn jwt(value: serde_json::Value) -> String {
 fn credentials(path: &Path, account: &str, expiry: u64) {
     std::fs::write(path.join("auth.json"), serde_json::to_vec(&serde_json::json!({
         "auth_mode":"chatgpt", "tokens": {
-            "id_token":jwt(serde_json::json!({"https://api.openai.com/auth":{"chatgpt_account_id":account,"chatgpt_plan_type":"plus","chatgpt_account_is_fedramp":true}})),
+            "id_token":jwt(serde_json::json!({"https://api.openai.com/auth":{"chatgpt_user_id":"user-1","chatgpt_account_id":account,"chatgpt_plan_type":"plus","chatgpt_account_is_fedramp":true}})),
             "access_token":jwt(serde_json::json!({"exp":expiry})),
             "refresh_token":"refresh-secret", "account_id":account
         }, "last_refresh":"2026-09-01T00:00:00Z"
@@ -242,6 +242,50 @@ fn a_response_for_another_account_is_not_returned_to_the_caller() {
         serde_json::json!({"account_id":"account-2","plan_type":"plus"}),
     )]);
     let auth = runtime(home.path(), client, ChatGptAuthManagement::Codex);
+    assert_eq!(
+        auth.read_rate_limits("account-1", &CancellationSource::new().token()),
+        Err(ChatGptUsageError::AccountChanged)
+    );
+}
+
+#[test]
+fn usage_rejects_a_user_switch_within_the_same_workspace_before_returning_or_retrying() {
+    for status in [200, 401] {
+        let home = tempfile::tempdir().unwrap();
+        credentials(home.path(), "account-1", 4_000_000_000);
+        let client = Client::new([(status, usage())]);
+        let auth = runtime(home.path(), client.clone(), ChatGptAuthManagement::Codex);
+        let path = home.path().to_owned();
+        *client.during_request.lock().unwrap() = Some(Box::new(move || {
+            let file = path.join("auth.json");
+            let mut value: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+            value["tokens"]["id_token"] = jwt(serde_json::json!({
+                "https://api.openai.com/auth":{"chatgpt_user_id":"user-2","chatgpt_account_id":"account-1"}
+            })).into();
+            value["tokens"]["access_token"] =
+                jwt(serde_json::json!({"exp":4_000_000_000_u64,"sub":"user-2"})).into();
+            std::fs::write(file, serde_json::to_vec(&value).unwrap()).unwrap();
+        }));
+        assert_eq!(
+            auth.read_rate_limits("account-1", &CancellationSource::new().token()),
+            Err(ChatGptUsageError::AccountChanged)
+        );
+        assert_eq!(client.requests.lock().unwrap().len(), 1);
+    }
+}
+
+#[test]
+fn usage_rejects_a_response_for_another_user_in_the_same_workspace() {
+    let home = tempfile::tempdir().unwrap();
+    credentials(home.path(), "account-1", 4_000_000_000);
+    let mut body = usage();
+    body["user_id"] = "user-2".into();
+    let auth = runtime(
+        home.path(),
+        Client::new([(200, body)]),
+        ChatGptAuthManagement::Codex,
+    );
     assert_eq!(
         auth.read_rate_limits("account-1", &CancellationSource::new().token()),
         Err(ChatGptUsageError::AccountChanged)

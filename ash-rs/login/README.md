@@ -18,6 +18,8 @@ LoginService::begin
 
 `LoginService::cancel` 只接受仍处于活动状态的精确 `LoginId`，并委托给拥有该 provider 的 driver。`LoginService::logout_provider` 只向对应驱动传递 `AccountRef`，随后清除该 provider 的脱敏投影并递增版本号。`refresh` 读取全部 driver 的脱敏快照，并且只在账户集合变化时发布。
 
+每个供应商独立记录读取版本。读取期间若该供应商完成登录、登出、另一次读取或账户更新，则丢弃旧结果；其他供应商的有效结果仍可更新。
+
 ## 失败与安全契约
 
 `LoginErrorKind` 提供稳定的内部分类；产品协议映射这些分类，不转发供应商载荷。公共类型和事件均不得包含 access token、refresh token、API key、cookie、authorization code、PKCE state、secret-store reference 或 credential path。

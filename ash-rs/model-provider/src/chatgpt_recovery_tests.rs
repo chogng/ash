@@ -18,6 +18,7 @@ struct RecoveryClient {
     attempts: AtomicUsize,
     refreshed_access: String,
     response: ResponseCase,
+    during_request: Mutex<Option<Box<dyn FnOnce() + Send>>>,
 }
 
 impl OperationClient for RecoveryClient {
@@ -43,6 +44,9 @@ impl OperationClient for RecoveryClient {
             ));
         }
         assert_luna_low(request);
+        if let Some(action) = self.during_request.lock().unwrap().take() {
+            action();
+        }
         let attempt = self.attempts.fetch_add(1, Ordering::SeqCst);
         if attempt > 0 {
             match self.response {
@@ -155,13 +159,14 @@ fn fixture_with_diagnostics(
     let home = tempfile::tempdir().unwrap();
     std::fs::write(home.path().join("auth.json"), serde_json::to_vec(&json!({
         "auth_mode":"chatgpt","OPENAI_API_KEY":null,"last_refresh":"2026-09-07T00:00:00Z",
-        "tokens":{"id_token":jwt(json!({"https://api.openai.com/auth":{"chatgpt_account_id":"account-1"}})),"access_token":jwt(json!({"exp":4_000_000_000_u64,"jti":"old"})),"refresh_token":"old-refresh","account_id":"account-1"}
+        "tokens":{"id_token":jwt(json!({"https://api.openai.com/auth":{"chatgpt_user_id":"user-1","chatgpt_account_id":"account-1"}})),"access_token":jwt(json!({"exp":4_000_000_000_u64,"jti":"old"})),"refresh_token":"old-refresh","account_id":"account-1"}
     })).unwrap()).unwrap();
     let client = Arc::new(RecoveryClient {
         calls: Mutex::new(Vec::new()),
         attempts: AtomicUsize::new(0),
         refreshed_access: jwt(json!({"exp":4_000_000_000_u64,"jti":"new"})),
         response,
+        during_request: Mutex::new(None),
     });
     let secrets = Arc::new(MemorySecretStore::default());
     let auth = ChatGptOAuth::with_client(
@@ -210,6 +215,43 @@ fn managed_chatgpt_recovers_one_rejected_request_for_both_consumers() {
                 "https://auth.openai.com/oauth/token",
                 "https://chatgpt.com/backend-api/codex/responses",
             ]
+        );
+    }
+}
+
+#[test]
+fn chatgpt_never_replays_a_request_as_another_user_in_the_same_workspace() {
+    for streaming in [false, true] {
+        let (home, client, model) = fixture(ResponseCase::Recover);
+        let path = home.path().join("auth.json");
+        let access = client.refreshed_access.clone();
+        *client.during_request.lock().unwrap() = Some(Box::new(move || {
+            let mut value: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+            let identity = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(
+                serde_json::to_vec(&json!({"https://api.openai.com/auth":{
+                    "chatgpt_user_id":"user-2","chatgpt_account_id":"account-1"
+                }}))
+                .unwrap(),
+            );
+            value["tokens"]["id_token"] = format!("e30.{identity}.signature").into();
+            value["tokens"]["access_token"] = access.into();
+            std::fs::write(path, serde_json::to_vec(&value).unwrap()).unwrap();
+        }));
+        let mut events = RecordedModelEvents::default();
+        let result = if streaming {
+            model.stream_with_cancellation(
+                &request(),
+                &CancellationSource::new().token(),
+                &mut events,
+            )
+        } else {
+            model.invoke(&request())
+        };
+        assert!(matches!(result, Err(ModelProviderError::Credential(_))));
+        assert!(events.0.is_empty());
+        assert_eq!(
+            *client.calls.lock().unwrap(),
+            vec!["https://chatgpt.com/backend-api/codex/responses"]
         );
     }
 }

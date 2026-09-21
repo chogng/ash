@@ -1,4 +1,5 @@
 use crate::ChatGptAuthManagement;
+use crate::credential::AccountIdentity;
 use crate::credential::TokenCredential;
 use crate::credential::TokenResponse;
 use crate::device_flow;
@@ -67,6 +68,31 @@ impl fmt::Display for ChatGptError {
 
 impl std::error::Error for ChatGptError {}
 
+/// Authentication for one request, bound to its original user and workspace.
+pub struct ChatGptApiTarget {
+    target: ResolvedApiTarget,
+    pub(crate) identity: AccountIdentity,
+    revision: [u8; 32],
+}
+
+impl ChatGptApiTarget {
+    pub fn api_target(&self) -> &ResolvedApiTarget {
+        &self.target
+    }
+
+    pub fn into_api_target(self) -> ResolvedApiTarget {
+        self.target
+    }
+
+    fn new(base_url: &str, credential: &TokenCredential) -> Result<Self, ChatGptError> {
+        Ok(Self {
+            target: ResolvedApiTarget::new(base_url, api_headers(credential)),
+            identity: credential.identity()?,
+            revision: credential.storage_revision,
+        })
+    }
+}
+
 /// Maintains ChatGPT authentication when Codex is absent and otherwise reuses its credentials.
 pub struct ChatGptOAuth {
     pub(crate) client: Arc<dyn OperationClient>,
@@ -117,11 +143,11 @@ impl ChatGptOAuth {
     }
 
     /// Resolves current credentials, refreshing only when Ash is the credential manager.
-    pub fn api_target(&self) -> Result<ResolvedApiTarget, ChatGptError> {
+    pub fn api_target(&self) -> Result<ChatGptApiTarget, ChatGptError> {
         self.api_target_for(CHATGPT_RESPONSES_BASE_URL)
     }
 
-    pub(crate) fn api_target_for(&self, base_url: &str) -> Result<ResolvedApiTarget, ChatGptError> {
+    pub(crate) fn api_target_for(&self, base_url: &str) -> Result<ChatGptApiTarget, ChatGptError> {
         if self.disconnected()? {
             return Err(ChatGptError::new("ChatGPT is disconnected in Ash"));
         }
@@ -134,7 +160,7 @@ impl ChatGptOAuth {
                 "Codex sign-in has expired; update the login in Codex, then reconnect",
             ));
         }
-        Ok(ResolvedApiTarget::new(base_url, api_headers(&credential)))
+        ChatGptApiTarget::new(base_url, &credential)
     }
 
     fn disconnected_key() -> SecretKey {
@@ -159,30 +185,26 @@ impl ChatGptOAuth {
     /// The model layer may retry once only when no streamed output was delivered.
     pub fn recover_unauthorized(
         &self,
-        rejected: &ResolvedApiTarget,
-    ) -> Result<Option<ResolvedApiTarget>, ChatGptError> {
+        rejected: &ChatGptApiTarget,
+    ) -> Result<Option<ChatGptApiTarget>, ChatGptError> {
         self.recover_unauthorized_for(rejected, CHATGPT_RESPONSES_BASE_URL)
     }
 
     pub(crate) fn recover_unauthorized_for(
         &self,
-        rejected: &ResolvedApiTarget,
+        rejected: &ChatGptApiTarget,
         base_url: &str,
-    ) -> Result<Option<ResolvedApiTarget>, ChatGptError> {
+    ) -> Result<Option<ChatGptApiTarget>, ChatGptError> {
         let Some(current) = self.load_credential()? else {
             return Ok(None);
         };
-        let account = rejected
-            .headers
-            .iter()
-            .find(|header| header.name().eq_ignore_ascii_case("ChatGPT-Account-ID"))
-            .map(|header| header.value());
-        if current.account_id.as_deref() != account {
+        if current.identity()? != rejected.identity {
             return Err(ChatGptError::new(
                 "ChatGPT account changed; the request was not retried",
             ));
         }
         let bearer = rejected
+            .target
             .headers
             .iter()
             .find(|header| header.name().eq_ignore_ascii_case("Authorization"))
@@ -198,7 +220,7 @@ impl ChatGptOAuth {
                     &self.auth,
                     self.client.as_ref(),
                     RefreshReason::Unauthorized {
-                        account_id: current.account_id.clone(),
+                        identity: rejected.identity.clone(),
                         revision: current.storage_revision,
                     },
                 )?
@@ -206,7 +228,7 @@ impl ChatGptOAuth {
                     ChatGptError::new("ChatGPT credentials disappeared during recovery")
                 })?
         };
-        if credential.account_id.as_deref() != account || !credential.is_usable() {
+        if credential.identity()? != rejected.identity || !credential.is_usable() {
             return Err(ChatGptError::new(
                 "ChatGPT recovery did not produce valid credentials for the same account",
             ));
@@ -214,19 +236,13 @@ impl ChatGptOAuth {
         if self.disconnected()? {
             return Ok(None);
         }
-        Ok(Some(ResolvedApiTarget::new(
-            base_url,
-            api_headers(&credential),
-        )))
+        ChatGptApiTarget::new(base_url, &credential).map(Some)
     }
 
     /// Remembers a rejected credential version without deleting shared authentication.
-    pub fn note_rejected(&self, rejected: &ResolvedApiTarget) {
+    pub fn note_rejected(&self, rejected: &ChatGptApiTarget) {
         if let Ok(Some(current)) = self.load_credential() {
-            if rejected.headers.iter().any(|header| {
-                header.name().eq_ignore_ascii_case("Authorization")
-                    && header.value() == format!("Bearer {}", current.access_token)
-            }) {
+            if current.storage_revision == rejected.revision {
                 self.maintenance.reject(&current);
             }
         }
@@ -253,6 +269,7 @@ impl ChatGptOAuth {
             organization: credential.account_id.clone(),
             plan: credential.plan.clone(),
             status: if !self.maintenance.requires_login(credential)
+                && credential.identity().is_ok()
                 && (credential.is_usable()
                     || self.maintenance.management.is_ash() && credential.refresh_available)
             {
@@ -360,7 +377,10 @@ impl InteractiveLoginDriver for ChatGptOAuth {
                     Err(_) => {}
                 }
             }
-            if credential.is_usable() && !self.maintenance.requires_login(&credential) {
+            if credential.is_usable()
+                && credential.identity().is_ok()
+                && !self.maintenance.requires_login(&credential)
+            {
                 self.connect().map_err(login_driver_error)?;
                 return Ok(BeginLogin::Connected {
                     login_id: request.login_id,
@@ -368,9 +388,10 @@ impl InteractiveLoginDriver for ChatGptOAuth {
                 });
             }
             if !managed {
-                return Err(login_driver_error(ChatGptError::new(
+                return Err(LoginError::new(
+                    LoginErrorKind::ExternalLoginRequired,
                     "Codex sign-in has expired; update it in Codex before reconnecting",
-                )));
+                ));
             }
             LoginWrite::Replace {
                 revision: credential.storage_revision,
@@ -380,9 +401,10 @@ impl InteractiveLoginDriver for ChatGptOAuth {
             LoginWrite::Create
         };
         if matches!(write, LoginWrite::Replace { .. }) && !self.maintenance.management.is_ash() {
-            return Err(login_driver_error(ChatGptError::new(
+            return Err(LoginError::new(
+                LoginErrorKind::ExternalLoginRequired,
                 "Codex now manages authentication; complete sign-in there",
-            )));
+            ));
         }
         let device =
             device_flow::request_device_code(self.client.as_ref()).map_err(login_driver_error)?;

@@ -121,6 +121,7 @@ pub enum AppServerErrorName {
     AccountOperationFailed,
     AccountChanged,
     AccountAuthenticationRequired,
+    AccountExternalLoginRequired,
     AccountRateLimitsUnavailable,
     ConnectorsUnavailable,
     ConnectorGenerationConflict,

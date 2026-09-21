@@ -1,3 +1,4 @@
+use crate::credential::AccountIdentity;
 use crate::credential::TokenCredential;
 use crate::oauth::CLIENT_ID;
 use crate::oauth::ChatGptError;
@@ -36,7 +37,7 @@ impl ChatGptAuthManagement {
 pub(crate) enum RefreshReason {
     Proactive,
     Unauthorized {
-        account_id: Option<String>,
+        identity: AccountIdentity,
         revision: [u8; 32],
     },
 }
@@ -76,12 +77,9 @@ impl AuthMaintenance {
         let Some(observed) = store.load()? else {
             return Ok(None);
         };
-        if let RefreshReason::Unauthorized {
-            account_id,
-            revision,
-        } = &reason
-        {
-            if observed.account_id != *account_id {
+        let owner = observed.identity()?;
+        if let RefreshReason::Unauthorized { identity, revision } = &reason {
+            if owner != *identity {
                 return Err(ChatGptError::new("ChatGPT account changed before recovery"));
             }
             if observed.storage_revision != *revision {
@@ -104,7 +102,7 @@ impl AuthMaintenance {
         let mut snapshot = store
             .snapshot()?
             .ok_or_else(|| ChatGptError::new("ChatGPT credentials were removed before refresh"))?;
-        if snapshot.credential.account_id != observed.account_id {
+        if snapshot.credential.identity()? != owner {
             return Err(ChatGptError::new(
                 "ChatGPT account changed before refresh; retry with the current account",
             ));
@@ -139,7 +137,7 @@ impl AuthMaintenance {
                 // Another credential owner may have completed rotation while our request
                 // was in flight. Adopt only a changed record for the same account.
                 if let Some(latest) = store.load()? {
-                    if latest.account_id != snapshot.credential.account_id {
+                    if latest.identity()? != snapshot.credential.identity()? {
                         return Err(ChatGptError::new("ChatGPT account changed during refresh"));
                     }
                     if latest.storage_revision != snapshot.credential.storage_revision {

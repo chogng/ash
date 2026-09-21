@@ -1,4 +1,6 @@
+use crate::ChatGptApiTarget;
 use crate::ChatGptOAuth;
+use crate::credential::AccountIdentity;
 use ash_async_utils::CancellationToken;
 use backend_client::BackendClient;
 use backend_client::CHATGPT_BACKEND_BASE_URL;
@@ -55,33 +57,37 @@ impl ChatGptAccount {
             return Err(ChatGptUsageError::InvalidAccount);
         }
         check_cancelled(cancellation)?;
-        self.check_usage_account(account_id)?;
+        let identity = self.account_identity(account_id)?;
         // A started credential refresh must commit rotated tokens even if this query is cancelled.
         let target = self.auth.api_target_for(CHATGPT_BACKEND_BASE_URL);
         check_cancelled(cancellation)?;
-        self.check_usage_account(account_id)?;
+        self.check_usage_account(&identity)?;
         let target = target.map_err(|_| ChatGptUsageError::AccountUnavailable)?;
         // The target must still identify the requested account after a concurrent refresh.
-        check_target_account(&target, account_id)?;
-        let read = |target: &ash_client::ResolvedApiTarget| {
-            BackendClient::new(self.auth.client.as_ref(), target, RouteStyle::ChatGpt)?
-                .read_rate_limits(cancellation)
+        check_target_account(&target, &identity)?;
+        let read = |target: &ChatGptApiTarget| {
+            BackendClient::new(
+                self.auth.client.as_ref(),
+                target.api_target(),
+                RouteStyle::ChatGpt,
+            )?
+            .read_rate_limit_status(cancellation)
         };
         let result = match read(&target) {
             Err(RequestError::HttpStatus(401)) => {
                 check_cancelled(cancellation)?;
-                self.check_usage_account(account_id)?;
+                self.check_usage_account(&identity)?;
                 let recovered = self
                     .auth
                     .recover_unauthorized_for(&target, CHATGPT_BACKEND_BASE_URL);
                 check_cancelled(cancellation)?;
-                self.check_usage_account(account_id)?;
+                self.check_usage_account(&identity)?;
                 let recovered = recovered.map_err(|_| ChatGptUsageError::AccountUnavailable)?;
                 let Some(recovered) = recovered else {
                     self.auth.note_rejected(&target);
                     return Err(ChatGptUsageError::AuthenticationRequired);
                 };
-                check_target_account(&recovered, account_id)?;
+                check_target_account(&recovered, &identity)?;
                 let result = read(&recovered);
                 if matches!(result, Err(RequestError::HttpStatus(401))) {
                     self.auth.note_rejected(&recovered);
@@ -91,23 +97,28 @@ impl ChatGptAccount {
             result => result,
         };
         check_cancelled(cancellation)?;
-        self.check_usage_account(account_id)?;
+        self.check_usage_account(&identity)?;
         let result = result.map_err(|error| match error {
             RequestError::Cancelled => ChatGptUsageError::Cancelled,
             RequestError::HttpStatus(401) => ChatGptUsageError::AuthenticationRequired,
             _ => ChatGptUsageError::RequestFailed,
         })?;
         if result
+            .usage
             .account_id
             .as_deref()
-            .is_some_and(|id| id != account_id)
+            .is_some_and(|id| id != identity.account_id)
+            || result
+                .user_id
+                .as_deref()
+                .is_some_and(|id| id != identity.user_id)
         {
             return Err(ChatGptUsageError::AccountChanged);
         }
-        Ok(result)
+        Ok(result.usage)
     }
 
-    fn check_usage_account(&self, account_id: &str) -> Result<(), ChatGptUsageError> {
+    fn account_identity(&self, account_id: &str) -> Result<AccountIdentity, ChatGptUsageError> {
         let credential = self
             .auth
             .load_credential()
@@ -116,17 +127,24 @@ impl ChatGptAccount {
         if credential.account_id.as_deref() != Some(account_id) {
             return Err(ChatGptUsageError::AccountChanged);
         }
+        credential
+            .identity()
+            .map_err(|_| ChatGptUsageError::AccountUnavailable)
+    }
+
+    fn check_usage_account(&self, identity: &AccountIdentity) -> Result<(), ChatGptUsageError> {
+        if self.account_identity(&identity.account_id)? != *identity {
+            return Err(ChatGptUsageError::AccountChanged);
+        }
         Ok(())
     }
 }
 
 fn check_target_account(
-    target: &ash_client::ResolvedApiTarget,
-    account_id: &str,
+    target: &ChatGptApiTarget,
+    identity: &AccountIdentity,
 ) -> Result<(), ChatGptUsageError> {
-    if target.headers.iter().any(|header| {
-        header.name().eq_ignore_ascii_case("ChatGPT-Account-ID") && header.value() == account_id
-    }) {
+    if target.identity == *identity {
         Ok(())
     } else {
         Err(ChatGptUsageError::AccountChanged)

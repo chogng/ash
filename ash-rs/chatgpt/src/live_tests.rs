@@ -71,7 +71,8 @@ fn live_codex_auth_is_read_only_and_luna_low_completes() {
     );
     let target = runtime
         .api_target()
-        .expect("an unexpired Codex ChatGPT login is required; update it in Codex if expired");
+        .expect("an unexpired Codex ChatGPT login is required; update it in Codex if expired")
+        .into_api_target();
     let mut headers = target.headers;
     headers.push(HttpHeader::new("Content-Type", "application/json"));
     headers.push(HttpHeader::new("Accept", "text/event-stream"));

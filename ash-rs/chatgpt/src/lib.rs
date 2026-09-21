@@ -18,6 +18,7 @@ pub use backend_client::RateLimit;
 pub use backend_client::RateLimitWindow;
 pub use backend_client::RateLimits;
 pub use oauth::CHATGPT_RESPONSES_BASE_URL;
+pub use oauth::ChatGptApiTarget;
 pub use oauth::ChatGptError;
 pub use oauth::ChatGptOAuth;
 pub use oauth::OPENAI_CHATGPT_PROVIDER_ID;

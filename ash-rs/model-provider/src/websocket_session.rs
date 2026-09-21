@@ -61,7 +61,7 @@ impl ModelProviderRuntime {
         let target = provider.target.resolve()?;
         let session = ash_api::LiveSession::connect(
             connector,
-            &target,
+            target.api_target(),
             voice.model.as_str(),
             &ash_api::LiveConfig {
                 instructions: instructions.into(),
@@ -103,7 +103,7 @@ impl ModelProviderRuntime {
         let connection = runtime.connection(model, &normalized)?;
         let provider = runtime.instantiate_normalized_with_connection(normalized, connection)?;
         provider.resolve_model(&model.model)?;
-        let target = provider.target.resolve()?.into_owned();
+        let target = provider.target.resolve()?.into_api_target();
         let endpoint = provider.target.endpoint(provider.adapter.endpoint());
         let session = ResponsesWebSocketSession::connect(
             &connector,
@@ -165,7 +165,7 @@ impl ModelProviderRuntime {
         let target = provider.target.resolve()?;
         RealtimeSession::connect(
             connector,
-            &target,
+            target.api_target(),
             model.model.as_str(),
             limits,
             cancellation,
@@ -235,7 +235,7 @@ impl ResponsesModelSession {
     ) -> Result<(), ModelProviderError> {
         super::check_cancellation(cancellation)?;
         let target = match self.provider.target.resolve() {
-            Ok(target) => target.into_owned(),
+            Ok(target) => target.into_api_target(),
             Err(error) => {
                 self.session.abort();
                 return Err(error);

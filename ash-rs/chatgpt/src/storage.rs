@@ -374,9 +374,7 @@ impl CodexAuthStore {
                 snapshot.credential.access_token.clone(),
                 None,
             )?;
-            if identity.account_id.is_some()
-                && identity.account_id != snapshot.credential.account_id
-            {
+            if identity.identity()? != snapshot.credential.identity()? {
                 return Err(ChatGptError::new(
                     "ChatGPT account changed in the refresh response",
                 ));
@@ -626,6 +624,7 @@ fn encode_new_auth(
     tokens: &TokenResponse,
     credential: &TokenCredential,
 ) -> Result<Zeroizing<Vec<u8>>, ChatGptError> {
+    credential.identity()?;
     Ok(Zeroizing::new(
         serde_json::to_vec_pretty(&NewAuth {
             auth_mode: "chatgpt",

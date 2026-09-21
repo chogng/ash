@@ -733,7 +733,7 @@ fn chatgpt_subscription_runtime_uses_local_oauth_and_ash_agent_loop() {
     let access = jwt(json!({"exp":4_000_000_000_u64}));
     std::fs::write(home.path().join("auth.json"), serde_json::to_vec(&json!({
         "auth_mode":"chatgpt", "OPENAI_API_KEY":null,
-        "tokens": {"id_token":jwt(json!({"https://api.openai.com/auth":{"chatgpt_account_id":"account-1"}})), "access_token":access,"refresh_token":"never-used","account_id":"account-1"},
+        "tokens": {"id_token":jwt(json!({"https://api.openai.com/auth":{"chatgpt_user_id":"user-1","chatgpt_account_id":"account-1"}})), "access_token":access,"refresh_token":"never-used","account_id":"account-1"},
         "last_refresh":"2026-09-07T00:00:00Z"
     })).unwrap()).unwrap();
     let chatgpt_oauth = ChatGptOAuth::with_client(

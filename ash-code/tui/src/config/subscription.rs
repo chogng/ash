@@ -5,6 +5,7 @@ use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
 use crate::widgets::list_selection::ListSelectionModel;
 use ash_app_server_client::AppServerClient;
+use ash_app_server_client::ClientError;
 use ash_app_server_client::JsonRpcTransport;
 use ash_app_server_protocol::protocol::account::AccountLoginCancelParams;
 use ash_app_server_protocol::protocol::account::AccountLoginCompleted;
@@ -287,7 +288,14 @@ pub(crate) fn execute<T: JsonRpcTransport>(
             .and_then(|_| client.read_accounts())
             .map(SubscriptionEvent::SignedOut),
     };
-    result.unwrap_or_else(|error| SubscriptionEvent::Failed(error.to_string()))
+    result.unwrap_or_else(|error| {
+        SubscriptionEvent::Failed(match error {
+            ClientError::Server { message, .. } if message == "AccountExternalLoginRequired" => {
+                "Sign in to ChatGPT in Codex, then reconnect here.".into()
+            }
+            error => error.to_string(),
+        })
+    })
 }
 
 #[cfg(test)]

@@ -7,6 +7,13 @@ use std::time::UNIX_EPOCH;
 use zeroize::Zeroize;
 use zeroize::Zeroizing;
 
+/// The user and workspace that own a ChatGPT credential, independent of token rotation.
+#[derive(Clone, Eq, PartialEq)]
+pub(crate) struct AccountIdentity {
+    pub(crate) user_id: String,
+    pub(crate) account_id: String,
+}
+
 #[derive(Clone)]
 pub(crate) struct TokenCredential {
     pub(crate) access_token: String,
@@ -23,6 +30,22 @@ pub(crate) struct TokenCredential {
 }
 
 impl TokenCredential {
+    pub(crate) fn identity(&self) -> Result<AccountIdentity, ChatGptError> {
+        match (&self.user_id, &self.account_id) {
+            (Some(user_id), Some(account_id))
+                if !user_id.trim().is_empty() && !account_id.trim().is_empty() =>
+            {
+                Ok(AccountIdentity {
+                    user_id: user_id.clone(),
+                    account_id: account_id.clone(),
+                })
+            }
+            _ => Err(ChatGptError::new(
+                "ChatGPT credentials have incomplete account identity",
+            )),
+        }
+    }
+
     pub(crate) fn from_parts(
         id_token: &str,
         access_token: String,

@@ -1151,6 +1151,78 @@ fn chatgpt_subscription_keeps_pending_login_across_navigation_and_cancels_by_id(
 }
 
 #[test]
+fn chatgpt_external_login_error_shows_codex_instructions_and_allows_retry() {
+    use crate::config::SubscriptionCommand;
+    use ash_app_server_client::AppServerClient;
+    use ash_app_server_client::ClientError;
+    use ash_app_server_client::JsonRpcTransport;
+    struct ExpiredAccount;
+    impl JsonRpcTransport for ExpiredAccount {
+        fn round_trip(&mut self, request: &str) -> Result<String, ClientError> {
+            let request: serde_json::Value = serde_json::from_str(request).unwrap();
+            let mut response = serde_json::json!({"jsonrpc":"2.0","id":request["id"]});
+            match request["method"].as_str().unwrap() {
+                "account/read" => {
+                    response["result"] = serde_json::json!({"revision":1,"accounts":[{
+                        "provider":"openai-chatgpt","accountId":"account-1","status":"reauthenticationRequired",
+                        "email":null,"displayName":"ChatGPT","organization":null,"plan":"pro","credentialRevision":1
+                    }]})
+                }
+                "account/login/start" => {
+                    response["error"] = serde_json::json!({"code":-32030,
+                    "message":"AccountExternalLoginRequired","data":{"kind":"AccountExternalLoginRequired"}})
+                }
+                method => panic!("unexpected method {method}"),
+            }
+            Ok(response.to_string())
+        }
+    }
+    let mut client = AppServerClient::new(ExpiredAccount);
+    let mut app = App::new();
+    let Some(AppCommand::Config(command)) = enter_provider_row(&mut app, "ChatGPT") else {
+        panic!("subscription must read the account");
+    };
+    app.update(crate::config::execute(&mut client, command).unwrap());
+    let mut signin = None;
+    for _ in 0..8 {
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        if app
+            .list_selection()
+            .unwrap()
+            .selected_item()
+            .is_some_and(|item| item.label() == "Sign in with ChatGPT")
+        {
+            signin = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+            break;
+        }
+    }
+    assert_eq!(
+        signin,
+        Some(AppCommand::Config(ConfigCommand::Subscription(
+            SubscriptionCommand::SignIn
+        )))
+    );
+    app.update(
+        crate::config::execute(
+            &mut client,
+            ConfigCommand::Subscription(SubscriptionCommand::SignIn),
+        )
+        .unwrap(),
+    );
+    let screen = crate::app::usage_tests::render(&app, 96, 24);
+    assert!(screen.contains("Sign in to ChatGPT in Codex, then reconnect here."));
+    assert!(!screen.contains("Working…"));
+    crate::tui_assert_snapshot!("chatgpt_external_login_required", screen);
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::Config(ConfigCommand::Subscription(
+            SubscriptionCommand::SignIn
+        )))
+    );
+}
+
+#[test]
 fn statusline_slash_command_is_owned_by_the_local_host() {
     let mut app = App::new();
     app.insert_text("/statusline");

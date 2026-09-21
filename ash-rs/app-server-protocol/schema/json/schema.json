@@ -1901,6 +1901,7 @@
         "AccountOperationFailed",
         "AccountChanged",
         "AccountAuthenticationRequired",
+        "AccountExternalLoginRequired",
         "AccountRateLimitsUnavailable",
         "ConnectorsUnavailable",
         "ConnectorGenerationConflict",

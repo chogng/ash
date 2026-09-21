@@ -1016,10 +1016,12 @@ account/updated
 - 结果为 `{ provider, accountId, plan, limits, credits }`；`limits` 包含 `codex` 主额度和上游提供的附加模型额度，各项含 `id`、`name`、`model`、`allowed`、`limitReached`、`primary`、`secondary`。
 - 每个窗口返回已使用百分比 `usedPercent`、精确时长 `windowSeconds` 和 Unix 秒时间戳 `resetsAt`。余额为 `{ hasCredits, unlimited, balance }`，金额保留上游十进制字符串；缺失窗口、状态和余额保持 `null`。
 - 此接口只查询，不消费重置额度、不修改套餐、不计算本地参考成本。组织消费上限与重置额度明细不在当前结果中。
-- 每次查询读取当前认证，HTTP 401 只允许同账号恢复一次；Codex 管理凭据时不会刷新或写入其凭据。查询前后及重试前检查账号，避免将切换前后的结果混用。
+- 每次查询读取当前认证，HTTP 401 只允许同一用户与工作区恢复一次；Codex 管理凭据时不会刷新或写入其凭据。查询前后及重试前检查这两个身份；上游提供用户 ID 时也校验它，避免将同一工作区内不同用户的结果混用。
 - 不持有全局请求锁，不阻塞其他领域写入；连接关闭取消额度 HTTP 等待和后续重试。认证刷新期间的取消在刷新提交后生效，以保留上游已轮换的凭据。当前没有单次请求的主动取消 method，也不轮询或缓存额度。
 - 空账号返回 `InvalidParams`；未安装或未登录返回 `AccountUnavailable`；不支持的 provider 返回 `AccountRateLimitsUnavailable`；账号变化返回 `AccountChanged`；明确的认证拒绝返回 `AccountAuthenticationRequired`；其他上游失败返回 `AccountOperationFailed`。错误不包含上游正文、地址或凭据。
 - 协议、类型映射和运行时 decoder 由 Rust registry 统一生成；界面展示仍由产品客户端实现。
+
+`account/read` 丢弃被同一供应商后续登录、登出、读取或账户更新取代的旧读取结果，不将旧状态发布为新版本。`account/login/start` 在已有凭据由 Codex 管理且需要重新登录时返回 `AccountExternalLoginRequired`（code `-32030`，`data.kind` 同名）。客户端应提示用户先在 Codex 完成登录，再重新连接；错误不转发供应商原始消息。
 
 当前交互登录 method：
 

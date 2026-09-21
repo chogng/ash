@@ -11,7 +11,7 @@ fn tokens() -> TokenResponse {
     };
     TokenResponse {
         id_token: jwt(
-            serde_json::json!({"https://api.openai.com/auth":{"chatgpt_account_id":"account-1","chatgpt_plan_type":"pro"}}),
+            serde_json::json!({"https://api.openai.com/auth":{"chatgpt_user_id":"user-1","chatgpt_account_id":"account-1","chatgpt_plan_type":"pro"}}),
         ),
         access_token: jwt(serde_json::json!({"exp":4_000_000_000_u64})),
         refresh_token: "refresh-token-must-not-be-used".into(),
@@ -44,8 +44,8 @@ fn creates_codex_schema_with_private_permissions_and_refuses_replacement() {
             .unwrap()
             .keys()
             .map(String::as_str)
-            .collect::<Vec<_>>(),
-        vec!["OPENAI_API_KEY", "auth_mode", "last_refresh", "tokens"]
+            .collect::<std::collections::BTreeSet<_>>(),
+        std::collections::BTreeSet::from(["OPENAI_API_KEY", "auth_mode", "last_refresh", "tokens"])
     );
     assert!(json["OPENAI_API_KEY"].is_null());
     assert_eq!(
@@ -54,8 +54,13 @@ fn creates_codex_schema_with_private_permissions_and_refuses_replacement() {
             .unwrap()
             .keys()
             .map(String::as_str)
-            .collect::<Vec<_>>(),
-        vec!["access_token", "account_id", "id_token", "refresh_token"]
+            .collect::<std::collections::BTreeSet<_>>(),
+        std::collections::BTreeSet::from([
+            "access_token",
+            "account_id",
+            "id_token",
+            "refresh_token"
+        ])
     );
     assert!(chrono::DateTime::parse_from_rfc3339(json["last_refresh"].as_str().unwrap()).is_ok());
     assert!(store.create(&tokens()).is_err());
@@ -95,6 +100,36 @@ fn malformed_other_auth_modes_and_api_keys_are_never_treated_as_absent() {
             contents
         );
     }
+}
+
+#[test]
+fn login_without_user_identity_cannot_create_or_replace_credentials() {
+    let home = tempfile::tempdir().unwrap();
+    let store = CodexAuthStore::new(home.path().into());
+    let mut incomplete = tokens();
+    let claims =
+        serde_json::json!({"https://api.openai.com/auth":{"chatgpt_account_id":"account-1"}});
+    incomplete.id_token = format!(
+        "e30.{}.signature",
+        base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .encode(serde_json::to_vec(&claims).unwrap())
+    );
+    assert!(store.write_login(&incomplete, LoginWrite::Create).is_err());
+    let path = home.path().join("auth.json");
+    assert!(!path.exists());
+    let credential = store.create(&tokens()).unwrap();
+    let original = fs::read(&path).unwrap();
+    assert!(
+        store
+            .write_login(
+                &incomplete,
+                LoginWrite::Replace {
+                    revision: credential.storage_revision,
+                }
+            )
+            .is_err()
+    );
+    assert_eq!(fs::read(path).unwrap(), original);
 }
 
 #[test]

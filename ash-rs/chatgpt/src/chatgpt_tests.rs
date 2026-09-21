@@ -105,7 +105,7 @@ fn device_flow_creates_codex_compatible_credentials_and_subscription_headers() {
     assert_eq!(account.plan.as_deref(), Some("plus"));
     assert_eq!(account.status, AccountStatus::Ready);
 
-    let target = runtime.api_target().unwrap();
+    let target = runtime.api_target().unwrap().into_api_target();
     assert_eq!(target.base_url, CHATGPT_RESPONSES_BASE_URL);
     assert!(target.headers.iter().any(|header| {
         header.name() == "Authorization" && header.value() == format!("Bearer {access_token}")
@@ -223,7 +223,7 @@ fn disconnect_and_reconnect_leave_codex_unchanged_and_external_logout_is_observe
 fn test_tokens(expiry: u64) -> TokenResponse {
     TokenResponse {
         id_token: jwt(
-            serde_json::json!({"email":"person@example.com", "https://api.openai.com/auth":{"chatgpt_account_id":"account-1", "chatgpt_plan_type":"plus"}}),
+            serde_json::json!({"email":"person@example.com", "https://api.openai.com/auth":{"chatgpt_user_id":"user-1","chatgpt_account_id":"account-1", "chatgpt_plan_type":"plus"}}),
         ),
         access_token: jwt(serde_json::json!({"exp":expiry})),
         refresh_token: "test-refresh-never-used".into(),

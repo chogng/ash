@@ -14,3 +14,20 @@ fn error_kind_is_structured_separately_from_diagnostic_message() {
         })
     );
 }
+
+#[test]
+fn external_login_required_has_a_stable_redacted_error_kind() {
+    let error = AppServerError::new(-32030, AppServerErrorName::AccountExternalLoginRequired);
+    let encoded = serde_json::to_value(&error).unwrap();
+    assert_eq!(
+        encoded,
+        serde_json::json!({
+            "code":-32030,"message":"AccountExternalLoginRequired",
+            "data":{"kind":"AccountExternalLoginRequired"}
+        })
+    );
+    assert_eq!(
+        serde_json::from_value::<AppServerError>(encoded).unwrap(),
+        error
+    );
+}

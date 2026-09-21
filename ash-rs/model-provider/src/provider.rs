@@ -22,6 +22,7 @@ use ash_api::OutputItem;
 use ash_api::StopReason;
 use ash_async_utils::CancellationSource;
 use ash_async_utils::CancellationToken;
+use ash_chatgpt::ChatGptApiTarget;
 use ash_chatgpt::ChatGptOAuth;
 use ash_client::AshClient;
 use ash_client::ClientError;
@@ -56,7 +57,6 @@ use ash_secrets::SecretStore;
 use response_debug_context::AuthRecovery;
 use response_debug_context::ResponseDiagnosticSink;
 use response_debug_context::ResponseOperation;
-use std::borrow::Cow;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -73,6 +73,27 @@ enum ProviderTarget {
     ChatGpt(Arc<ChatGptOAuth>),
 }
 
+enum ResolvedProviderTarget<'a> {
+    Fixed(&'a ResolvedApiTarget),
+    ChatGpt(ChatGptApiTarget),
+}
+
+impl ResolvedProviderTarget<'_> {
+    fn api_target(&self) -> &ResolvedApiTarget {
+        match self {
+            Self::Fixed(target) => target,
+            Self::ChatGpt(target) => target.api_target(),
+        }
+    }
+
+    fn into_api_target(self) -> ResolvedApiTarget {
+        match self {
+            Self::Fixed(target) => target.clone(),
+            Self::ChatGpt(target) => target.into_api_target(),
+        }
+    }
+}
+
 impl ProviderTarget {
     fn endpoint(&self, direct: ApiEndpoint) -> ApiEndpoint {
         match self {
@@ -81,30 +102,31 @@ impl ProviderTarget {
         }
     }
 
-    fn resolve(&self) -> Result<Cow<'_, ResolvedApiTarget>, ModelProviderError> {
+    fn resolve(&self) -> Result<ResolvedProviderTarget<'_>, ModelProviderError> {
         match self {
-            Self::Fixed(target) => Ok(Cow::Borrowed(target)),
+            Self::Fixed(target) => Ok(ResolvedProviderTarget::Fixed(target)),
             Self::ChatGpt(auth) => auth
                 .api_target()
-                .map(Cow::Owned)
+                .map(ResolvedProviderTarget::ChatGpt)
                 .map_err(|error| ModelProviderError::Credential(error.to_string())),
         }
     }
 
     fn recover_unauthorized(
         &self,
-        rejected: &ResolvedApiTarget,
-    ) -> Result<Option<ResolvedApiTarget>, ModelProviderError> {
-        match self {
-            Self::Fixed(_) => Ok(None),
-            Self::ChatGpt(auth) => auth
+        rejected: &ResolvedProviderTarget<'_>,
+    ) -> Result<Option<ResolvedProviderTarget<'static>>, ModelProviderError> {
+        match (self, rejected) {
+            (Self::ChatGpt(auth), ResolvedProviderTarget::ChatGpt(rejected)) => auth
                 .recover_unauthorized(rejected)
+                .map(|target| target.map(ResolvedProviderTarget::ChatGpt))
                 .map_err(|error| ModelProviderError::Credential(error.to_string())),
+            _ => Ok(None),
         }
     }
 
-    fn note_rejected(&self, target: &ResolvedApiTarget) {
-        if let Self::ChatGpt(auth) = self {
+    fn note_rejected(&self, target: &ResolvedProviderTarget<'_>) {
+        if let (Self::ChatGpt(auth), ResolvedProviderTarget::ChatGpt(target)) = (self, target) {
             auth.note_rejected(target);
         }
     }
@@ -352,7 +374,7 @@ impl Provider {
                 emitted: false,
             };
             let response = self.execute_attempt(
-                &target,
+                target.api_target(),
                 model.id.as_str(),
                 &request,
                 &attempt_client,
@@ -376,7 +398,7 @@ impl Provider {
                 if let Some(renewed) = recovered? {
                     let retry_client = AttemptClient::new(&diagnostic);
                     let response = self.execute_attempt(
-                        &renewed,
+                        renewed.api_target(),
                         model.id.as_str(),
                         &request,
                         &retry_client,

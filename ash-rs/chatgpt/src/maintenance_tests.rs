@@ -64,7 +64,7 @@ fn access(expiry: u64, version: &str) -> String {
 
 fn document(token: &str) -> serde_json::Value {
     serde_json::json!({"auth_mode":"chatgpt","OPENAI_API_KEY":null,
-        "tokens":{"id_token":jwt(serde_json::json!({"https://api.openai.com/auth":{"chatgpt_account_id":"account-1","chatgpt_plan_type":"pro"}})),"access_token":token,"refresh_token":"old-refresh","account_id":"account-1"},
+        "tokens":{"id_token":jwt(serde_json::json!({"https://api.openai.com/auth":{"chatgpt_user_id":"user-1","chatgpt_account_id":"account-1","chatgpt_plan_type":"pro"}})),"access_token":token,"refresh_token":"old-refresh","account_id":"account-1"},
         "last_refresh":"2020-01-01T00:00:00Z","other_metadata":{"preserve":true}})
 }
 
@@ -292,6 +292,52 @@ fn refresh_does_not_overwrite_an_external_update() {
 }
 
 #[test]
+fn refresh_rejects_another_user_in_the_same_workspace_without_committing_tokens() {
+    let home = tempfile::tempdir().unwrap();
+    let path = home.path().join("auth.json");
+    let original = serde_json::to_vec(&document(&access(1, "old"))).unwrap();
+    std::fs::write(&path, &original).unwrap();
+    let client = Client::new([(
+        200,
+        serde_json::json!({
+            "id_token":jwt(serde_json::json!({"https://api.openai.com/auth":{
+                "chatgpt_user_id":"user-2","chatgpt_account_id":"account-1"
+            }})),
+            "access_token":access(4_000_000_000, "new"),"refresh_token":"rotated"
+        }),
+    )]);
+    let auth = runtime(home.path(), client.clone(), ChatGptAuthManagement::Ash);
+    assert!(auth.api_target().is_err());
+    assert_eq!(std::fs::read(path).unwrap(), original);
+    assert_eq!(client.requests.lock().unwrap().len(), 1);
+}
+
+#[test]
+fn incomplete_identity_cannot_authorize_a_request_or_refresh() {
+    for user in [serde_json::Value::Null, serde_json::json!(" ")] {
+        let home = tempfile::tempdir().unwrap();
+        let mut value = document(&access(1, "expired"));
+        value["tokens"]["id_token"] = jwt(serde_json::json!({"https://api.openai.com/auth":{
+            "chatgpt_user_id":user,"chatgpt_account_id":"account-1"
+        }}))
+        .into();
+        std::fs::write(
+            home.path().join("auth.json"),
+            serde_json::to_vec(&value).unwrap(),
+        )
+        .unwrap();
+        let client = Client::new([]);
+        let auth = runtime(home.path(), client.clone(), ChatGptAuthManagement::Ash);
+        assert!(auth.api_target().is_err());
+        assert_eq!(
+            auth.read_account().unwrap().unwrap().status,
+            AccountStatus::ReauthenticationRequired
+        );
+        assert!(client.requests.lock().unwrap().is_empty());
+    }
+}
+
+#[test]
 fn discovery_uses_executable_files_and_observes_installation_changes() {
     let root = tempfile::tempdir().unwrap();
     let bin = root.path().join("platform");
@@ -334,7 +380,7 @@ fn recovery_reloads_new_tokens_and_never_changes_accounts() {
             &store,
             client.as_ref(),
             RefreshReason::Unauthorized {
-                account_id: original.account_id.clone(),
+                identity: original.identity().unwrap(),
                 revision: original.storage_revision,
             },
         )
@@ -350,7 +396,7 @@ fn recovery_reloads_new_tokens_and_never_changes_accounts() {
                 &store,
                 client.as_ref(),
                 RefreshReason::Unauthorized {
-                    account_id: original.account_id.clone(),
+                    identity: original.identity().unwrap(),
                     revision: original.storage_revision
                 }
             )

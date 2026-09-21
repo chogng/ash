@@ -32,6 +32,17 @@ struct LoginServiceState {
     account: AccountState,
     active_logins: BTreeMap<LoginId, String>,
     initialized_providers: BTreeSet<String>,
+    provider_revisions: BTreeMap<String, u64>,
+}
+
+impl LoginServiceState {
+    fn advance_provider(&mut self, provider: &str) {
+        let revision = self
+            .provider_revisions
+            .get_mut(provider)
+            .expect("account provider was registered");
+        *revision += 1;
+    }
 }
 
 impl LoginService {
@@ -90,6 +101,10 @@ impl LoginService {
             registered.insert(provider.to_owned(), driver);
         }
         accounts.sort_by(|left, right| left.account.provider.cmp(&right.account.provider));
+        let provider_revisions = registered
+            .keys()
+            .map(|provider| (provider.clone(), 0))
+            .collect();
         Ok(Self {
             drivers: registered,
             next_login_id: AtomicU64::new(1),
@@ -100,6 +115,7 @@ impl LoginService {
                 },
                 active_logins: BTreeMap::new(),
                 initialized_providers,
+                provider_revisions,
             }),
             events: Mutex::new(None),
         })
@@ -222,6 +238,7 @@ impl LoginService {
             };
             if let LoginCompletionOutcome::Succeeded { account } = &completion.outcome {
                 validate_account_provider(&provider, account)?;
+                state.advance_provider(&provider);
                 replace_provider_account(
                     &mut state.account.accounts,
                     &provider,
@@ -246,46 +263,54 @@ impl LoginService {
     }
 
     pub fn refresh(&self) -> Result<AccountState, LoginError> {
+        let revisions = self
+            .state
+            .lock()
+            .map_err(lock_error)?
+            .provider_revisions
+            .clone();
         let mut observed = Vec::with_capacity(self.drivers.len());
-        let mut failed_providers = Vec::new();
-        let mut first_error = None;
         for (provider, driver) in &self.drivers {
-            match driver.read_account().and_then(|account| {
+            let account = driver.read_account().and_then(|account| {
                 if let Some(account) = &account {
                     validate_account_provider(provider, account)?;
                 }
                 Ok(account)
-            }) {
-                Ok(account) => observed.push((provider.clone(), account)),
-                Err(error) => {
-                    if first_error.is_none() {
-                        first_error = Some(error);
-                    }
-                    failed_providers.push(provider.clone());
-                }
-            }
-        }
-        if observed.is_empty()
-            && let Some(error) = first_error
-        {
-            return Err(error);
+            });
+            observed.push((provider.clone(), account));
         }
         let updated = {
             let mut state = self.state.lock().map_err(lock_error)?;
-            let before = state.account.accounts.clone();
-            for (provider, account) in observed {
-                replace_provider_account(&mut state.account.accounts, &provider, account);
-                state.initialized_providers.insert(provider);
+            // Driver I/O may overlap completion, logout, or another read. Only
+            // observations of the unchanged provider state may commit.
+            observed
+                .retain(|(provider, _)| state.provider_revisions[provider] == revisions[provider]);
+            if observed.iter().all(|(_, result)| result.is_err())
+                && let Some(error) = observed
+                    .iter()
+                    .find_map(|(_, result)| result.as_ref().err())
+            {
+                return Err(error.clone());
             }
-            for provider in failed_providers {
-                state.initialized_providers.remove(&provider);
-                if let Some(account) = state
-                    .account
-                    .accounts
-                    .iter_mut()
-                    .find(|account| account.account.provider == provider)
-                {
-                    account.status = crate::AccountStatus::Unavailable;
+            let before = state.account.accounts.clone();
+            for (provider, result) in observed {
+                state.advance_provider(&provider);
+                match result {
+                    Ok(account) => {
+                        replace_provider_account(&mut state.account.accounts, &provider, account);
+                        state.initialized_providers.insert(provider);
+                    }
+                    Err(_) => {
+                        state.initialized_providers.remove(&provider);
+                        if let Some(account) = state
+                            .account
+                            .accounts
+                            .iter_mut()
+                            .find(|account| account.account.provider == provider)
+                        {
+                            account.status = crate::AccountStatus::Unavailable;
+                        }
+                    }
                 }
             }
             if state.account.accounts == before {
@@ -317,6 +342,7 @@ impl LoginService {
         validate_account_provider(&provider, &account)?;
         let updated = {
             let mut state = self.state.lock().map_err(lock_error)?;
+            state.advance_provider(&provider);
             let before = state.account.accounts.clone();
             replace_provider_account(&mut state.account.accounts, &provider, Some(account));
             state.initialized_providers.insert(provider);
@@ -350,6 +376,7 @@ impl LoginService {
         driver.logout(&account.account)?;
         let updated = {
             let mut state = self.state.lock().map_err(lock_error)?;
+            state.advance_provider(provider);
             let before = state.account.accounts.len();
             replace_provider_account(&mut state.account.accounts, provider, None);
             if state.account.accounts.len() == before {

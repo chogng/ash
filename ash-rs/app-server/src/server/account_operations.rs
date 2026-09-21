@@ -250,6 +250,7 @@ fn login_error(error: LoginError) -> RpcError {
         LoginErrorKind::Unavailable => AppServerErrorName::AccountUnavailable,
         LoginErrorKind::NotFound => AppServerErrorName::AccountLoginNotFound,
         LoginErrorKind::Conflict => AppServerErrorName::AccountLoginConflict,
+        LoginErrorKind::ExternalLoginRequired => AppServerErrorName::AccountExternalLoginRequired,
         LoginErrorKind::Driver => AppServerErrorName::AccountOperationFailed,
     };
     RpcError::new(-32030, name)

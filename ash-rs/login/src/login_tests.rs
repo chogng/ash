@@ -9,6 +9,12 @@ struct FakeDriver {
     account: Mutex<Option<AccountSnapshot>>,
     active: Mutex<Vec<LoginId>>,
     reads: AtomicUsize,
+    read_gate: Mutex<Option<ReadGate>>,
+}
+
+struct ReadGate {
+    entered: std::sync::mpsc::SyncSender<()>,
+    release: std::sync::mpsc::Receiver<()>,
 }
 
 #[derive(Default)]
@@ -81,7 +87,15 @@ impl InteractiveLoginDriver for FakeDriver {
 
     fn read_account(&self) -> Result<Option<AccountSnapshot>, LoginError> {
         self.reads.fetch_add(1, Ordering::Relaxed);
-        Ok(self.account.lock().unwrap().clone())
+        let account = self.account.lock().unwrap().clone();
+        let gate = self.read_gate.lock().unwrap().take();
+        if let Some(gate) = gate {
+            gate.entered.send(()).unwrap();
+            gate.release
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .unwrap();
+        }
+        Ok(account)
     }
 
     fn begin(&self, request: BeginLoginRequest) -> Result<BeginLogin, LoginError> {
@@ -260,4 +274,98 @@ fn one_unavailable_provider_does_not_hide_another_provider_account() {
         service.read_or_refresh().unwrap().accounts,
         vec![kimi_account]
     );
+}
+
+fn delayed_refresh(
+    driver: &FakeDriver,
+    service: &Arc<LoginService>,
+) -> (
+    std::sync::mpsc::SyncSender<()>,
+    std::thread::JoinHandle<AccountState>,
+) {
+    let (entered, waiting) = std::sync::mpsc::sync_channel(1);
+    let (release, receiver) = std::sync::mpsc::sync_channel(1);
+    *driver.read_gate.lock().unwrap() = Some(ReadGate {
+        entered,
+        release: receiver,
+    });
+    let service = Arc::clone(service);
+    let read = std::thread::spawn(move || service.refresh().unwrap());
+    waiting
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .unwrap();
+    (release, read)
+}
+
+#[test]
+fn refresh_started_before_login_cannot_erase_the_completed_account() {
+    let driver = Arc::new(FakeDriver::default());
+    let service = Arc::new(LoginService::new(driver.clone()).unwrap());
+    let events = Arc::new(RecordedEvents::default());
+    service.install_events(events.clone()).unwrap();
+    let started = service.begin(LoginMethod::OpenAiChatGptDeviceCode).unwrap();
+    let (release, read) = delayed_refresh(&driver, &service);
+    *driver.account.lock().unwrap() = Some(account());
+    service
+        .complete(CompleteLogin {
+            login_id: started.login_id().clone(),
+            outcome: LoginCompletionOutcome::Succeeded { account: account() },
+        })
+        .unwrap();
+    let completed = service.read().unwrap();
+    release.send(()).unwrap();
+    assert_eq!(read.join().unwrap(), completed);
+    assert_eq!(events.accounts.lock().unwrap().as_slice(), &[completed]);
+}
+
+#[test]
+fn refresh_started_before_logout_cannot_restore_the_account() {
+    let driver = Arc::new(FakeDriver::default());
+    *driver.account.lock().unwrap() = Some(account());
+    let service = Arc::new(LoginService::new(driver.clone()).unwrap());
+    let (release, read) = delayed_refresh(&driver, &service);
+    assert_eq!(service.logout().unwrap(), LogoutOutcome::LoggedOut);
+    let logged_out = service.read().unwrap();
+    release.send(()).unwrap();
+    assert_eq!(read.join().unwrap(), logged_out);
+    assert!(logged_out.accounts.is_empty());
+}
+
+#[test]
+fn refresh_cannot_overwrite_a_later_read_or_provider_update() {
+    for update in [false, true] {
+        let driver = Arc::new(FakeDriver::default());
+        let service = Arc::new(LoginService::new(driver.clone()).unwrap());
+        let (release, read) = delayed_refresh(&driver, &service);
+        *driver.account.lock().unwrap() = Some(account());
+        let current = if update {
+            service.update_account(account()).unwrap()
+        } else {
+            service.refresh().unwrap()
+        };
+        release.send(()).unwrap();
+        assert_eq!(read.join().unwrap(), current);
+    }
+}
+
+#[test]
+fn refresh_discards_only_the_provider_changed_during_the_read() {
+    let driver = Arc::new(FakeDriver::default());
+    let kimi = Arc::new(FakeKimiDriver::default());
+    let service = Arc::new(
+        LoginService::new_with_drivers([
+            driver.clone() as Arc<dyn InteractiveLoginDriver>,
+            kimi.clone() as Arc<dyn InteractiveLoginDriver>,
+        ])
+        .unwrap(),
+    );
+    let mut kimi_account = account();
+    kimi_account.account.provider = "kimi".into();
+    *kimi.account.lock().unwrap() = Some(kimi_account.clone());
+    let (release, read) = delayed_refresh(&driver, &service);
+    let updated = service.update_account(account()).unwrap();
+    release.send(()).unwrap();
+    let result = read.join().unwrap();
+    assert_eq!(result.accounts, vec![kimi_account, account()]);
+    assert_eq!(result.revision, updated.revision + 1);
 }
