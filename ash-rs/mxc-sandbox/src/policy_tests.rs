@@ -9,6 +9,44 @@ use ash_sandboxing::SandboxPathRule;
 use ash_sandboxing::SandboxScope;
 use std::path::Path;
 
+#[cfg(windows)]
+#[test]
+fn windows_command_path_preserves_cmd_syntax_and_argument_slashes() {
+    use std::os::windows::process::CommandExt;
+
+    let temp = tempfile::tempdir().unwrap();
+    let dir = Dir::open_local(temp.path()).unwrap();
+    let system = std::path::PathBuf::from(std::env::var_os("SystemRoot").unwrap());
+    let command = ash_sandboxing::SandboxCommand::new(
+        system.join("System32/cmd.exe"),
+        ["/d", "/c", "echo https://example.test/a/b & exit /b 125"],
+        dir.canonical_path(),
+    );
+    let request = super::request(
+        &command,
+        ash_sandboxing::SandboxPolicy::new(
+            FileSystemAccess::DirectoryWrite,
+            ash_sandboxing::NetworkAccess::Denied,
+        ),
+        &SandboxScope::single(dir).with_host_read(ash_sandboxing::HostReadScope::Minimal),
+    )
+    .unwrap();
+    // Exercise the serialized command with cmd's parser even on hosts that
+    // cannot create a PSEC environment. Keep its /c payload unchanged.
+    let output = std::process::Command::new(system.join("System32").join("cmd.exe"))
+        .args(["/d", "/s", "/c"])
+        .raw_arg(format!("\"{}\"", request.inner.script_code))
+        .current_dir(&request.inner.working_directory)
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(125), "{output:?}");
+    assert_eq!(
+        std::str::from_utf8(&output.stdout).unwrap().trim(),
+        "https://example.test/a/b"
+    );
+    assert!(output.stderr.is_empty(), "{output:?}");
+}
+
 #[cfg(target_os = "windows")]
 #[test]
 fn windows_policy_allows_required_desktop_resources_but_keeps_sensitive_ui_blocked() {

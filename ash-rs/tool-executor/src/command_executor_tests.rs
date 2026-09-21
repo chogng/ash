@@ -12,6 +12,58 @@ use std::thread;
 
 struct AllowAll;
 
+#[cfg(windows)]
+#[test]
+fn executor_preserves_powershell_module_search_paths() {
+    const CHILD: &str = "ASH_TEST_MODULE_SEARCH_CHILD";
+    if std::env::var_os(CHILD).is_none() {
+        let modules = TestDir::new();
+        // Give only this test process a custom module path; parallel tests keep
+        // their original environment. The executor must carry it to its child.
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "tests::executor_preserves_powershell_module_search_paths",
+                "--exact",
+                "--nocapture",
+            ])
+            .env(CHILD, &modules.path)
+            .env("PSModulePath", &modules.path)
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{output:?}");
+        assert!(String::from_utf8_lossy(&output.stdout).contains("1 passed"));
+        return;
+    }
+
+    let dir = TestDir::new();
+    let executor = CommandExecutor::new(dir.root(), PassThroughBackend, AllowAll, test_limits());
+    let result = executor
+        .execute(
+            CommandRequest {
+                program: PathBuf::from(std::env::var_os("SystemRoot").unwrap())
+                    .join("System32")
+                    .join("cmd.exe")
+                    .display()
+                    .to_string(),
+                arguments: vec!["/d".into(), "/c".into(), "echo %PSModulePath%".into()],
+                working_directory: ".".into(),
+                input: CommandInput::Closed,
+            },
+            CommandExecutionAuthority::Unrestricted,
+            &CancellationSource::new().token(),
+        )
+        .unwrap();
+    let CommandExecutionOutcome::Completed(output) = result else {
+        panic!("{result:?}");
+    };
+    assert_eq!(output.exit_code, Some(0), "{output:?}");
+    let expected = PathBuf::from(std::env::var_os(CHILD).unwrap());
+    assert!(
+        std::env::split_paths(output.stdout.trim()).any(|path| path == expected),
+        "caller's module directory was lost: {output:?}"
+    );
+}
+
 #[cfg(target_os = "macos")]
 #[test]
 fn managed_command_can_reach_only_its_authorized_proxy_destinations() {
