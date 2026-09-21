@@ -11,6 +11,7 @@ test("CSS consumes registered design tokens and isolates intentional color sampl
 	const registered = new Set([...Colors.getColors().map(({ id }) => colorCssVariable(id)), ...sizeIdentifiers.map(sizeCssVariable)]);
 	const platformVariables = new Set(["--ash-font-family", "--ash-font-family-monospace", "--ash-context-view-layer", "--ash-z-index-context-view", "--ash-z-index-quick-input", "--ash-z-index-sash"]);
 	const componentPresentationVariables = new Set([
+		"--ash-editor-token-foreground",
 		"--ash-scrollbar-slider-size",
 		"--ash-icon-label-text-overflow",
 		"--ash-sash-inset-gap",

@@ -327,7 +327,9 @@ function validateModifiers(modifiers: readonly SemanticTokenModifier[] | undefin
 }
 
 function applySyntaxPresentation(element: HTMLElement, presentation: NonNullable<LanguageToken["presentation"]>): void {
-	if (presentation.foreground !== undefined) element.style.color = presentation.foreground;
+	if (presentation.foreground !== undefined) {
+		element.style.setProperty('--ash-editor-token-foreground', presentation.foreground);
+	}
 	if (presentation.background !== undefined) element.style.backgroundColor = presentation.background;
 	if (presentation.fontStyle?.includes("italic")) element.style.fontStyle = "italic";
 	if (presentation.fontStyle?.includes("bold")) element.style.fontWeight = "bold";

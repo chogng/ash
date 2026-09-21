@@ -819,6 +819,10 @@ test("text-model editor has the accessibility contract", async ({ page }) => {
 	await page.evaluate(() => window.ashTextModelIntegration.setRenderRichScreenReaderContent(true));
 	await expect(input.locator('[data-content-kind="simple"]')).toHaveCount(0);
 	await expect(screenReaderContent.locator('span[data-line-index]')).not.toHaveCount(0);
+	const viewportBracket = page.locator('.view-line .stanza-editor-bracket-level-1').first();
+	const richBracket = screenReaderContent.locator('.stanza-editor-bracket-level-1').first();
+	await expect(richBracket).toHaveCSS('color', await viewportBracket.evaluate(element => getComputedStyle(element).color));
+	expect(await richBracket.evaluate(element => getComputedStyle(element).color)).not.toBe(await editor.evaluate(element => getComputedStyle(element).color));
 	await page.waitForTimeout(110);
 	await screenReaderContent.evaluate(element => {
 		const walker = element.ownerDocument.createTreeWalker(element, NodeFilter.SHOW_TEXT);

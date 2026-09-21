@@ -28,6 +28,7 @@ export interface IStandaloneCodeEditor extends ICodeEditor, IDisposable {
 /** Standalone editor owner whose identity is shared by create(), editor events, and the editor registry. */
 export class StandaloneEditor extends CodeEditorWidget implements IStandaloneCodeEditor {
 	private modelToDispose: TextModel | null;
+	private readonly modelService: IModelService;
 
 	constructor(
 		options: CodeEditorWidgetOptions,
@@ -39,13 +40,21 @@ export class StandaloneEditor extends CodeEditorWidget implements IStandaloneCod
 		@ILanguageFeaturesService languageFeaturesService: ILanguageFeaturesService,
 		@IContextKeyService contextKeyService: IContextKeyService,
 		@ICodeEditorService codeEditorService: ICodeEditorService,
-		@IModelService private readonly modelService: IModelService,
+		@IModelService modelService: IModelService,
 	) {
 		codeEditorService.willCreateCodeEditor();
-		super(options, instantiationService, themeService, languageConfigurationService, languageFeaturesService, contextKeyService);
+		// Theme variables must be ready before the view handles a theme event.
+		const themeBinding = bindColorTheme(themeService, options.container);
+		try {
+			super(options, instantiationService, themeService, languageConfigurationService, languageFeaturesService, contextKeyService);
+		} catch (error) {
+			themeBinding.dispose();
+			throw error;
+		}
+		this._register(themeBinding);
+		this.modelService = modelService;
 		this.modelToDispose = ownsModel ? modelToDispose : null;
 		try {
-			this._register(bindColorTheme(themeService, options.container));
 			this._register(toDisposable(() => codeEditorService.removeCodeEditor(this)));
 			codeEditorService.addCodeEditor(this);
 		} catch (error) {

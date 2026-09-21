@@ -43,7 +43,7 @@ test("syntax token presentation applies exact theme styling without a semantic c
 	const element = requiredElement<HTMLElement>(dom.window.document, "code");
 	projectStanzaSemanticTokenLine(element, "note", [{ startColumn: 0, endColumn: 4, syntaxPresentation: { foreground: "#6A9955", background: "#10101080", fontStyle: ["italic", "bold", "underline"] } }]);
 	const rendered = requiredElement<HTMLElement>(element, ".stanza-editor-token");
-	assert.equal(rendered.style.color, "rgb(106, 153, 85)");
+	assert.equal(rendered.style.getPropertyValue('--ash-editor-token-foreground'), '#6A9955');
 	assert.equal(rendered.style.fontStyle, "italic");
 	assert.equal(rendered.style.fontWeight, "bold");
 	assert.equal(rendered.style.textDecorationLine, "underline");

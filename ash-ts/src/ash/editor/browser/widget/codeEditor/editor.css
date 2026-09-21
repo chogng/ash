@@ -48,6 +48,35 @@
 .stanza-editor-background {
 	background-color: var(--ash-editor-background);
 }
+
+:where(.stanza-editor .stanza-editor-token) {
+	color: var(--ash-editor-token-foreground);
+}
+
+.stanza-editor .stanza-editor-bracket-level-1 {
+	color: var(--ash-editor-bracket-highlight-foreground1);
+}
+
+.stanza-editor .stanza-editor-bracket-level-2 {
+	color: var(--ash-editor-bracket-highlight-foreground2);
+}
+
+.stanza-editor .stanza-editor-bracket-level-3 {
+	color: var(--ash-editor-bracket-highlight-foreground3);
+}
+
+.stanza-editor .stanza-editor-bracket-level-4 {
+	color: var(--ash-editor-bracket-highlight-foreground4);
+}
+
+.stanza-editor .stanza-editor-bracket-level-5 {
+	color: var(--ash-editor-bracket-highlight-foreground5);
+}
+
+.stanza-editor .stanza-editor-bracket-level-6 {
+	color: var(--ash-editor-bracket-highlight-foreground6);
+}
+
 .stanza-editor .rangeHighlight,
 .stanza-editor .symbolHighlight {
 	box-sizing: border-box;

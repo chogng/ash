@@ -1,5 +1,35 @@
 # Editor API 对齐状态
 
+## 括号装饰的主题着色（2026-09-21）
+
+准入链：模型括号树 → 六级 inline decoration → 行渲染 / 辅助技术文本 / GPU 字形 → 编辑器主题颜色。起始工作区干净；现有装饰已有 class，但尚无颜色规则，直接写入的 token 前景色也会压过装饰。用户已授权继续补齐现有链路，本批不引入新的括号索引或引擎。
+
+| 准入路径 | 存在关系 | 唯一职责与处理 |
+| --- | --- | --- |
+| `common/core/editorColorRegistry.ts` | 双方都有 | 注册六级括号颜色，提供四种主题默认值与用户覆盖入口。 |
+| `browser/widget/codeEditor/editor.css`、`browser/viewParts/viewLines/viewLine.ts` | 双方都有 | 由现有编辑器样式消费六级装饰；语法前景色通过行内组件变量传递，装饰可覆盖颜色，不增加文本节点层级。 |
+| `browser/gpu/viewGpuContext.ts` | 双方都有 | 主题事件使装饰颜色与字形缓存失效，覆盖只改括号颜色的主题切换。 |
+| `browser/gpu/renderStrategy/viewportRenderStrategy.ts`、`fullFileRenderStrategy.ts` | 双方都有 | 装饰前景色与已有删除线颜色共用 CSS 变量解析，两个绘制策略都消费实际主题值。 |
+| `standalone/browser/standaloneCodeEditor.ts` | 双方都有 | 宿主先绑定主题根，再创建视图，保证同步绘制前 CSS 变量已更新；构造失败和正常关闭均释放绑定。 |
+| `test/browser/semanticTokenPresentation.test.ts`、`editorSemanticTokenViewport.test.ts`、`namedEditorThemeService.test.ts`、`../platform/theme/test/common/design-tokens.test.ts` | 现有测试设施 | 验证 token 展示数据、换行后的片段与文本合成、四种主题的颜色对比度，声明实际由行渲染器写入的组件变量。 |
+| `test/integration/browser/standalone.integration.ts`、`standalone.integration.spec.ts`、`gpuText.integration.ts`、`gpuText.integration.spec.ts` | Ash 现有浏览器测试设施 | Playwright 验证实际计算颜色、语法色优先级、开关与颜色池、主题切换及 GPU 字形颜色。 |
+| `test/integration/browser/textModel.integration.spec.ts` | Ash 现有浏览器测试 | 在已有屏幕阅读器宿主场景中验证富文本括号颜色与可见行一致。 |
+| `common/core/README.md`、`browser/README.md`、`api-alignment-status.md` | 现有文档 | 同步颜色、样式和缓存职责，记录准入、验证及保留差异。 |
+
+独立实现：沿 Ash 已有六级 class 与配色目录编写规则，不复制上游颜色或 CSS。DOM、文本、焦点、滚动及模型装饰生命周期仍由原 owner 持有；组件变量只传递单个 token 的可选前景色，字体与背景保持原行为。GPU 继续使用既有 CSS 规则提取器和字形图集，主题变化从既有事件入口清理缓存。括号辅助线的几何与显示是另一条链，本批不增加其样式或算法。
+
+实现结果：六个标准颜色标识已进入共享主题目录，现有 Workbench schema 与 Standalone 用户主题可以覆盖它们；可见行、辅助阅读文本和 GPU 均实际消费。装饰颜色优先于 token 前景色，关闭颜色后恢复语法色。GPU 的两种绘制策略解析 CSS 变量，并在颜色变化时重建字形；主题根绑定早于视图创建，避免同步绘制读到上一次主题的变量。
+
+common 仍为 **208 个 TypeScript 文件：177 个同路径、31 个 Ash 自有；49 个上游文件尚未引入**。本批补齐已有模块的生产行为，没有增加空文件。保留 Ash 的六级循环配色、独立颜色池及无效括号不着色规则，未引入上游跳过透明色的调色板算法。上游核对以当前工作区源码契约为准；其浏览器构建未就绪，本次没有运行上游 UI，也不把本批记为整个编辑器界面已完全对齐。
+
+本批验证结果：
+
+- 定向单测通过，覆盖 token 前景色、软换行片段、主题与独立编辑器生命周期、颜色变量审计；默认六色在四种主题背景上的对比度均不低于 4.5:1。
+- 六个定向 Playwright 场景通过，覆盖两种输入方式的文本和焦点、四种主题、用户覆盖、颜色开关与独立颜色池、辅助阅读文本，以及短行和长行对应的两种 GPU 绘制策略。GPU 检查实际图集像素，确认新颜色出现、旧颜色清除，绘制仍由 GPU 完成。
+- `check-editor-alignment.mjs --test=all` 通过：结构、台账、类型检查、230/230 个单测文件及 322/322 个 Playwright 用例通过。
+- `build:renderer`、`build:stanza` 和 `git diff --check` 通过；没有新增构建 warning 或未跟踪 JavaScript 产物。
+- CSS 审计确认本批等价复制和新增上游品牌引用均为 0；保留 7 份既有 CSS 债务。JSDOM Canvas、测试服务装配和 Playwright 颜色环境提示仍是既有输出。
+
 ## common 编辑器颜色归属与主题加载（2026-09-21）
 
 准入链：编辑器装配/切换主题 → 编辑器颜色注册 → Platform 解析当前颜色目录 → 宿主主题事件 → CSS 变量、标尺与概览尺绘制。起始工作区干净。用户已授权按职责迁移；本批先验证主题加载，再迁移现有颜色消费者。

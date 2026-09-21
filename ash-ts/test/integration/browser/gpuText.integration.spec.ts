@@ -170,6 +170,29 @@ async function gpuFrameLayeringState(page: Page): Promise<GpuFrameLayeringState>
 }
 
 
+for (const length of [16, 240]) {
+	test(`GPU bracket glyphs refresh for ${length}-column text when only decoration colors change`, async ({ page }) => {
+		await page.goto('/gpuText.html');
+		await expect.poll(() => gpuEditorState(page)).toEqual(healthyGpuEditorState());
+		await page.evaluate(length => window.ashGpuTextIntegration.prepareBracketText(length), length);
+		await expect(page.locator('.view-line.gpu-rendered')).toHaveCount(1);
+		expect(await page.evaluate(() => window.ashGpuTextIntegration.countGlyphPixels(19, 135, 201))).toBe(0);
+		await page.evaluate(() => window.ashGpuTextIntegration.setBracketColor('#1387c9'));
+		await expect.poll(() => page.evaluate(() => window.ashGpuTextIntegration.countGlyphPixels(19, 135, 201))).toBeGreaterThan(0);
+		const baseColor = await page.locator('.stanza-editor').evaluate(element => getComputedStyle(element).color);
+		await page.evaluate(() => {
+			window.ashGpuTextIntegration.resetGpuFrameTrace();
+			window.ashGpuTextIntegration.setBracketColor('#46ac72');
+		});
+		await expect.poll(() => page.evaluate(() => window.ashGpuTextIntegration.countGlyphPixels(70, 172, 114))).toBeGreaterThan(0);
+		expect(await page.evaluate(() => window.ashGpuTextIntegration.countGlyphPixels(19, 135, 201))).toBe(0);
+		await expect(page.locator('.stanza-editor')).toHaveCSS('color', baseColor);
+		await expect(page.locator('.view-line.gpu-rendered')).toHaveCount(1);
+		expect(await page.evaluate(() => window.ashGpuTextIntegration.getValue())).toBe(`(${'x'.repeat(length)})`);
+		await expect.poll(() => gpuFrameLayeringState(page)).toEqual({ hasFrame: true, everyFrameIsLayered: true });
+	});
+}
+
 test('GPU rejection markers follow renderer capability changes and use the active theme', async ({ page }) => {
 	await page.goto('/gpuText.html');
 	await expect(page.locator('.stanza-editor-gpu-canvas')).toBeVisible();

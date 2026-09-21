@@ -141,6 +141,8 @@ The cursor actions in `multicursor.ts` add one logical-line caret above or below
 
 `BracketMatchingController` in `contrib/bracketMatching/browser/bracketMatching.ts` consumes the model bracket-pair part index. It updates matching decorations and owns the jump/remove operations used by editor actions and shortcuts. The model, index, and decoration collection retain their existing owners.
 
+Bracket colorization uses the model's six nesting classes. `widget/codeEditor/editor.css` applies the colors registered in `common/core/editorColorRegistry.ts` to visible rows and rich screen-reader content. Token foregrounds arrive through a component-local CSS variable so inline decorations can take precedence without changing text or adding nested spans. GPU strategies resolve the same color variables, and theme events invalidate the decoration cache and glyph atlas. Standalone binds its theme root before constructing the view so synchronous redraws read the current variables.
+
 The go-to-bracket shortcut and `editor.action.jumpToBracket` share lexical filtering, multiple-selection updates, and cursor reveal.
 
 Ctrl/Cmd+Alt+Backspace and `editor.action.removeBrackets` share an isolated undo transaction. Read-only editors reject removal; the shortcut remains unhandled when no pair can be removed.

@@ -38,7 +38,29 @@ const {
 	editorRuler,
 	editorOverviewRulerBorder,
 	editorOverviewRulerBackground,
+	editorBracketHighlightingForeground1,
+	editorBracketHighlightingForeground2,
+	editorBracketHighlightingForeground3,
+	editorBracketHighlightingForeground4,
+	editorBracketHighlightingForeground5,
+	editorBracketHighlightingForeground6,
 } = await import('../../common/core/editorColorRegistry.js');
+
+test('all bracket nesting colors remain readable in light, dark and high contrast themes', () => {
+	const identifiers = [editorBracketHighlightingForeground1, editorBracketHighlightingForeground2, editorBracketHighlightingForeground3, editorBracketHighlightingForeground4, editorBracketHighlightingForeground5, editorBracketHighlightingForeground6];
+	for (const theme of [lightColorTheme, darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme]) {
+		const background = theme.getColor('editor.background');
+		assert.ok(background);
+		const colors = identifiers.map(identifier => {
+			const color = theme.getColor(identifier);
+			assert.ok(color, `${theme.id}: ${identifier}`);
+			assert.equal(color.rgba.a, 1);
+			assert.ok(color.getContrastRatio(background) >= 4.5, `${theme.id}: ${identifier}`);
+			return color.toString();
+		});
+		assert.equal(new Set(colors).size, 6);
+	}
+});
 
 test('themes created before the editor loads include its color contributions', () => {
 	assert.deepEqual({ before: colorsBeforeEditor[editorCursorForeground], after: lightColorTheme.getColorCss(editorCursorForeground) }, {

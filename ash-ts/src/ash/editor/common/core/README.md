@@ -16,7 +16,7 @@ one coordinate model.
 | Edit operations | `editOperation.ts`, `textChange.ts` | Single operations, compact offset changes, change compression/serialization |
 | Text helpers | `characterClassifier.ts`, `wordCharacterClassifier.ts`, `wordHelper.ts`, `stringBuilder.ts` | Word boundaries, classifiers, UTF-16 assembly |
 | Geometry/misc | `2d/*`, `misc/*` | DOM-free points, sizes, rectangles, EOL, indentation, RGBA, model defaults |
-| Editor colors | `editorColorRegistry.ts` | Cursor, current-line, ruler and overview-ruler color definitions; Platform owns registration and theme resolution |
+| Editor colors | `editorColorRegistry.ts` | Cursor, current-line, ruler, overview-ruler and bracket nesting colors; Platform owns registration and theme resolution |
 
 `editorColorRegistry.ts` registers editor-owned colors with Platform's shared
 registry. Themes include these definitions even when a theme was created before

@@ -2,6 +2,7 @@ import { DisposableStore, toDisposable } from '../../../src/ash/base/common/life
 import * as stanzaApi from '../../../src/ash/editor/editor.main.js';
 import { GlyphRasterizer } from '../../../src/ash/editor/browser/gpu/raster/glyphRasterizer.js';
 import { DecorationStyleCache } from '../../../src/ash/editor/browser/gpu/css/decorationStyleCache.js';
+import { ViewGpuContext } from '../../../src/ash/editor/browser/gpu/viewGpuContext.js';
 import '../../../src/ash/editor/editor.code.all.js';
 
 const initialText = `interface GeometrySample {
@@ -30,6 +31,9 @@ interface GpuTextIntegrationHarness {
 	measureGpuAdvance(text: string): number;
 	resetGpuFrameTrace(): void;
 	readGpuFrameTrace(): readonly GpuRenderPassTrace[];
+	setBracketColor(color: string): void;
+	prepareBracketText(length: number): void;
+	countGlyphPixels(red: number, green: number, blue: number): number;
 	dispose(): void;
 }
 
@@ -79,6 +83,34 @@ window.ashGpuTextIntegration = {
 	measureGpuAdvance: text => measureGpuAdvance(text),
 	resetGpuFrameTrace: () => gpuFrameTrace.reset(),
 	readGpuFrameTrace: () => gpuFrameTrace.read(),
+	prepareBracketText: length => {
+		editor.updateOptions({ wordWrap: 'off' });
+		editor.setValue(`(${'x'.repeat(length)})`);
+	},
+	setBracketColor: color => {
+		stanzaApi.editor.defineNamedTheme('gpu-brackets', {
+			label: 'GPU brackets',
+			colorScheme: stanzaApi.ColorScheme.Dark,
+			colors: Object.fromEntries([1, 2, 3, 4, 5, 6].map(level => [`editorBracketHighlight.foreground${level}`, color])),
+		});
+		stanzaApi.editor.setTheme('gpu-brackets');
+	},
+	countGlyphPixels: (red, green, blue) => {
+		let count = 0;
+		for (const page of ViewGpuContext.atlas.pages) {
+			const context = page.source.getContext('2d');
+			if (!context) {
+				throw new Error('Glyph atlas has no 2D context');
+			}
+			const pixels = context.getImageData(0, 0, page.source.width, page.source.height).data;
+			for (let index = 0; index < pixels.length; index += 4) {
+				if (pixels[index] === red && pixels[index + 1] === green && pixels[index + 2] === blue && pixels[index + 3]! > 0) {
+					count++;
+				}
+			}
+		}
+		return count;
+	},
 	dispose: () => disposables.dispose(),
 };
 

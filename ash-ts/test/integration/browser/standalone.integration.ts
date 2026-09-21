@@ -124,6 +124,8 @@ interface StandaloneHarness {
 	prepareLineCopy(emptyTail?: boolean): void;
 	prepareBrackets(value: string, columns: (number | [number, number])[], readOnly?: boolean): void;
 	configureBracketColors(enabled: boolean, independent: boolean): void;
+	setBracketTheme(scheme: keyof typeof stanza.ColorScheme, colors?: readonly string[]): void;
+	prepareBracketToken(): void;
 	prepareLineJoin(): void;
 	prepareMulticursor(): void;
 	runDeferredRichCopy(fail: boolean): Promise<{ pendingHtml: string; finishedHtml: string; rejected: boolean; writtenText: string }>;
@@ -323,6 +325,7 @@ function readViewZone(): ViewZoneState {
 
 let deferredFormatting: { token: CancellationToken; resolve: () => void }[] = [];
 let formattingProvider: { dispose(): void } | undefined;
+let bracketTokenRegistration: { dispose(): void } | undefined;
 
 window.ashStandaloneIntegration = {
 	prepareLinks: () => {
@@ -646,6 +649,25 @@ window.ashStandaloneIntegration = {
 	configureBracketColors: (enabled, independent) => {
 		callerModel.updateOptions({ bracketColorizationOptions: { enabled: true, independentColorPoolPerBracketType: independent } });
 		callerEditor.updateOptions({ bracketPairColorization: { enabled }, guides: { bracketPairs: true } });
+	},
+	setBracketTheme: (scheme, colors) => {
+		stanza.editor.defineNamedTheme('bracket-test', {
+			label: 'Bracket test',
+			colorScheme: stanza.ColorScheme[scheme],
+			colors: colors && Object.fromEntries(colors.map((color, index) => [`editorBracketHighlight.foreground${index + 1}`, color])),
+		});
+		stanza.editor.setTheme('bracket-test');
+	},
+	prepareBracketToken: () => {
+		bracketTokenRegistration?.dispose();
+		bracketTokenRegistration = stanza.languages.registerSyntaxProvider({
+			id: 'bracket-color-test',
+			languageIds: ['typescript'],
+			provideTokens: request => ({ tokens: [{
+				range: new stanza.Range(1, 1, 1, request.snapshot.getText().length + 1),
+				tokenType: 'other', modifiers: [], presentation: { foreground: '#123456', fontStyle: ['bold'] },
+			}] }),
+		});
 	},
 	prepareLineJoin: () => {
 		callerEditor.setValue('😀 one\r\n  two\r\nkeep\r\n三\r\n  four');
@@ -1452,6 +1474,7 @@ window.ashStandaloneIntegration = {
 	releaseOwned: () => ownedEditor.dispose(),
 	dispose: () => {
 		formattingProvider?.dispose();
+		bracketTokenRegistration?.dispose();
 		for (const request of deferredFormatting) request.resolve();
 		referenceRegistration?.dispose();
 		TokenizationRegistry.setColorMap([]);

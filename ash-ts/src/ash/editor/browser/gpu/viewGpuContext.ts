@@ -68,8 +68,8 @@ export class ViewGpuContext extends Disposable {
 		}));
 
 		this.ctx = ensureNonNullable(this.canvas.domNode.getContext('webgpu'));
-		ViewGpuContext.updateColorMap(context.theme.value);
-		this._register(new GpuThemeListener(context, theme => ViewGpuContext.updateColorMap(theme)));
+		ViewGpuContext.updateTheme(context.theme.value);
+		this._register(new GpuThemeListener(context, theme => ViewGpuContext.updateTheme(theme)));
 
 		if (!ViewGpuContext.device) {
 			ViewGpuContext.device = GPULifecycle.requestDevice(ownerWindow).then(reference => {
@@ -152,15 +152,15 @@ export class ViewGpuContext extends Disposable {
 		this.canvas.domNode.style.paddingRight = `${context.configuration.options.get(EditorOption.scrollbar).verticalScrollbarSize}px`;
 	}
 
-	private static updateColorMap(theme: IColorTheme): void {
+	private static updateTheme(theme: IColorTheme): void {
 		const foreground = theme.getColor(editorForeground);
 		const background = theme.getColor(editorBackground);
 		if (!foreground || !background) throw new Error('The editor theme must define GPU foreground and background colors');
 		const nextForeground = foreground.toString();
 		const nextBackground = background.toString();
-		if (ViewGpuContext._colorMap[ColorId.DefaultForeground] === nextForeground && ViewGpuContext._colorMap[ColorId.DefaultBackground] === nextBackground) return;
 		ViewGpuContext._colorMap[ColorId.DefaultForeground] = nextForeground;
 		ViewGpuContext._colorMap[ColorId.DefaultBackground] = nextBackground;
+		// Decoration colors can change while the base text colors stay the same.
 		ViewGpuContext.decorationCssRuleExtractor.clear();
 		ViewGpuContext._atlas?.clear();
 	}

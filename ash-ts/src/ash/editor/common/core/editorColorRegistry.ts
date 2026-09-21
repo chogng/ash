@@ -49,3 +49,34 @@ export const editorRuler = registerColor(
 	{ dark: '#5a5a5a', light: '#d3d3d3', highContrastDark: '#ffffff', highContrastLight: '#292929' },
 	{ description: 'Color of editor rulers.', owner },
 );
+
+export const editorBracketHighlightingForeground1 = registerColor(
+	'editorBracketHighlight.foreground1',
+	{ dark: '#e5c07b', light: '#795e00', highContrastDark: '#ffff00', highContrastLight: '#795e00' },
+	{ description: 'Foreground for the first bracket nesting color.', owner },
+);
+export const editorBracketHighlightingForeground2 = registerColor(
+	'editorBracketHighlight.foreground2',
+	{ dark: '#c678dd', light: '#8841a0', highContrastDark: '#ff70e8', highContrastLight: '#8841a0' },
+	{ description: 'Foreground for the second bracket nesting color.', owner },
+);
+export const editorBracketHighlightingForeground3 = registerColor(
+	'editorBracketHighlight.foreground3',
+	{ dark: '#56b6c2', light: '#007681', highContrastDark: '#00ffff', highContrastLight: '#007681' },
+	{ description: 'Foreground for the third bracket nesting color.', owner },
+);
+export const editorBracketHighlightingForeground4 = registerColor(
+	'editorBracketHighlight.foreground4',
+	{ dark: '#98c379', light: '#387d22', highContrastDark: '#8cff66', highContrastLight: '#387d22' },
+	{ description: 'Foreground for the fourth bracket nesting color.', owner },
+);
+export const editorBracketHighlightingForeground5 = registerColor(
+	'editorBracketHighlight.foreground5',
+	{ dark: '#e06c75', light: '#a12c40', highContrastDark: '#ff9d9d', highContrastLight: '#a12c40' },
+	{ description: 'Foreground for the fifth bracket nesting color.', owner },
+);
+export const editorBracketHighlightingForeground6 = registerColor(
+	'editorBracketHighlight.foreground6',
+	{ dark: '#61afef', light: '#005fb8', highContrastDark: '#9ac8ff', highContrastLight: '#005fb8' },
+	{ description: 'Foreground for the sixth bracket nesting color.', owner },
+);

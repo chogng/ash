@@ -92,7 +92,7 @@ function decorationStyleSetId(viewGpuContext: ViewGpuContext, lineNumber: number
 			for (const property of rule.style) {
 				const value = rule.style.getPropertyValue(property).trim();
 				switch (property) {
-					case 'color': color = Color.Format.CSS.parse(value)?.toNumber32Bit(); break;
+					case 'color': color = Color.Format.CSS.parse(resolveCssColor(viewGpuContext, value))?.toNumber32Bit(); break;
 					case 'font-weight': bold = parseFontWeight(value) >= 600; break;
 					case 'opacity': opacity = parseOpacity(value); break;
 					case 'text-decoration':

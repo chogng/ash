@@ -141,9 +141,9 @@ test("Viewport clips semantic token spans to every soft-wrapped text fragment", 
 		text: "e",
 	}]);
 	assert.deepEqual([...viewport.domNode.domNode.querySelectorAll<HTMLElement>(".stanza-editor-token")].map(element => ({
-		color: element.style.color,
+		color: element.style.getPropertyValue('--ash-editor-token-foreground'),
 		fontStyle: element.style.fontStyle,
-	})), Array.from({ length: 3 }, () => ({ color: "rgb(18, 52, 86)", fontStyle: "italic" })));
+	})), Array.from({ length: 3 }, () => ({ color: "#123456", fontStyle: "italic" })));
 
 	dom.window.close();
 });

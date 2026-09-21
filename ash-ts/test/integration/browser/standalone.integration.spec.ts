@@ -287,6 +287,44 @@ test('model bracket decorations reach the viewport and follow per-editor color s
 	await expect(page.locator('#caller .stanza-editor-bracket-guide')).not.toHaveCount(0);
 });
 
+for (const inputKind of ['editContext', 'textarea'] as const) {
+	test(`bracket themes override token foreground and preserve ${inputKind} text and focus`, async ({ page }) => {
+		if (inputKind === 'textarea') {
+			await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+		}
+		await page.goto('/standalone.html');
+		await page.evaluate(() => {
+			window.ashStandaloneIntegration.prepareBrackets('({[({[x]})]})', [1]);
+			window.ashStandaloneIntegration.prepareBracketToken();
+		});
+		const brackets = page.locator('#caller .view-line [class*="stanza-editor-bracket-level-"]');
+		const readColors = (): Promise<string[]> => brackets.evaluateAll(elements => elements.map(element => getComputedStyle(element).color));
+		const palettes = {
+			Dark: ['rgb(229, 192, 123)', 'rgb(198, 120, 221)', 'rgb(86, 182, 194)', 'rgb(152, 195, 121)', 'rgb(224, 108, 117)', 'rgb(97, 175, 239)'],
+			Light: ['rgb(121, 94, 0)', 'rgb(136, 65, 160)', 'rgb(0, 118, 129)', 'rgb(56, 125, 34)', 'rgb(161, 44, 64)', 'rgb(0, 95, 184)'],
+			HighContrastDark: ['rgb(255, 255, 0)', 'rgb(255, 112, 232)', 'rgb(0, 255, 255)', 'rgb(140, 255, 102)', 'rgb(255, 157, 157)', 'rgb(154, 200, 255)'],
+			HighContrastLight: ['rgb(121, 94, 0)', 'rgb(136, 65, 160)', 'rgb(0, 118, 129)', 'rgb(56, 125, 34)', 'rgb(161, 44, 64)', 'rgb(0, 95, 184)'],
+		};
+		for (const scheme of Object.keys(palettes) as (keyof typeof palettes)[]) {
+			await page.evaluate(scheme => window.ashStandaloneIntegration.setBracketTheme(scheme), scheme);
+			const expected = [...palettes[scheme], ...[...palettes[scheme]].reverse()];
+			await expect.poll(readColors).toEqual(expected);
+			await expect(page.locator('#caller .stanza-editor-line-text')).toHaveText('({[({[x]})]})');
+			await expect(page.locator('#caller .view-line .stanza-editor-token').filter({ hasText: /^x$/ })).toHaveCSS('color', 'rgb(18, 52, 86)');
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).focused).toBe(true);
+		}
+		await page.evaluate(() => window.ashStandaloneIntegration.setBracketTheme('Light', ['#aabb01', '#aabb02', '#aabb03', '#aabb04', '#aabb05', '#aabb06']));
+		const custom = [1, 2, 3, 4, 5, 6].map(value => `rgb(170, 187, ${value})`);
+		await expect.poll(readColors).toEqual([...custom, ...[...custom].reverse()]);
+		await page.evaluate(() => window.ashStandaloneIntegration.configureBracketColors(false, false));
+		await expect(brackets).toHaveCount(0);
+		await expect(page.locator('#caller .view-line .stanza-editor-token')).toHaveCSS('color', 'rgb(18, 52, 86)');
+		await page.evaluate(() => window.ashStandaloneIntegration.configureBracketColors(true, true));
+		await expect.poll(readColors).toEqual([custom[0], custom[0], custom[0], custom[1], custom[1], custom[1], custom[1], custom[1], custom[1], custom[0], custom[0], custom[0]]);
+		await expect(brackets.first()).toHaveCSS('font-weight', '700');
+	});
+}
+
 test('common text operations preserve multi-cursor joins, deletions and undo', async ({ page }) => {
 	await page.goto('/standalone.html');
 	await page.evaluate(() => window.ashStandaloneIntegration.prepareLineJoin());
