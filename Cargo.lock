@@ -817,7 +817,7 @@ dependencies = [
  "ash-async-utils",
  "ash-client",
  "ash-http-client",
- "rustls",
+ "ash-http-test-support",
  "serde",
  "serde_json",
  "url",
@@ -928,6 +928,7 @@ version = "0.1.0"
 dependencies = [
  "ash-async-utils",
  "ash-http-client",
+ "ash-http-test-support",
 ]
 
 [[package]]
@@ -1607,6 +1608,7 @@ dependencies = [
 name = "ash-http-client"
 version = "0.1.0"
 dependencies = [
+ "ash-http-test-support",
  "rustls",
  "rustls-native-certs 0.7.3",
  "tokio",
@@ -1614,6 +1616,13 @@ dependencies = [
  "ureq",
  "url",
  "zeroize",
+]
+
+[[package]]
+name = "ash-http-test-support"
+version = "0.1.0"
+dependencies = [
+ "rustls",
 ]
 
 [[package]]

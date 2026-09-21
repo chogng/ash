@@ -19,5 +19,8 @@ ureq = { workspace = true }
 url = { workspace = true }
 zeroize = { workspace = true }
 
+[dev-dependencies]
+http-test-support = { package = "ash-http-test-support", path = "../http-test-support" }
+
 [lints]
 workspace = true

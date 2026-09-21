@@ -14,5 +14,8 @@ path = "src/lib.rs"
 ash-async-utils = { workspace = true }
 ash-http-client = { workspace = true }
 
+[dev-dependencies]
+http-test-support = { package = "ash-http-test-support", path = "../http-test-support" }
+
 [lints]
 workspace = true

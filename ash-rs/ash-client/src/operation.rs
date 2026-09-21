@@ -15,6 +15,10 @@ use std::time::{Duration, Instant};
 
 const CANCELLATION_POLL_INTERVAL: Duration = Duration::from_millis(5);
 
+#[cfg(test)]
+#[path = "operation_tests.rs"]
+mod tests;
+
 /// A provider operation paired with its explicit replay policy.
 ///
 /// The raw request is owned by `ash-http-client`; this layer only decides

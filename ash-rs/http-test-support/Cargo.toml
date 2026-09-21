@@ -1,0 +1,15 @@
+[package]
+name = "ash-http-test-support"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish = false
+
+[lib]
+doctest = false
+
+[dependencies]
+rustls = { workspace = true }
+
+[lints]
+workspace = true

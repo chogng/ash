@@ -226,15 +226,17 @@ cross-origin sensitive-header stripping、scheme-downgrade rule 或 body replay 
 ## 测试
 
 ```text
-cargo test -p ash-http-client
+just test ash-http-client
 bazel test //ash-rs/http-client:http-client-unit-tests
 ```
 
-测试使用本地 TCP 样例，不访问真实供应商，覆盖：
+测试使用本地 TCP 与 HTTPS 样例，不访问真实供应商。HTTPS 服务与证书由仅用于测试的
+[`http-test-support`](../http-test-support/README.md) 提供；`ureq_client_tests.rs` 验证重定向、整体超时和响应截断，不依赖业务协议。覆盖：
 
 - header/proxy/certificate/private-key debug redaction；
 - invalid URL/config；
 - one-attempt、non-2xx preservation 与 redirect rejection；
+- HTTPS 跨来源重定向不发送认证头、响应未完成时触发整体超时、截断响应报脱敏传输错误；
 - bypass domain/IP/port matching 和 direct route；
 - 纯 HTTP 不加载 system roots，HTTPS 惰性加载并缓存失败；
 - custom trust/mTLS invalid material；

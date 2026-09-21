@@ -31,3 +31,7 @@ pub use ureq_client::{HttpBodySink, HttpClient, UreqHttpClient};
 #[cfg(test)]
 #[path = "http_client_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "ureq_client_tests.rs"]
+mod transport_tests;

@@ -1,0 +1,8 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "http-test-support",
+    crate_name = "ash_http_test_support",
+    data = glob(["fixtures/*.der"]),
+    testonly = True,
+)

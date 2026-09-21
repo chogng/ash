@@ -1,8 +1,6 @@
 use super::*;
 use ash_async_utils::CancellationSource;
-use ash_http_client::{HttpHeader, HttpMethod, UreqHttpClient};
-use std::io::{Read, Write};
-use std::net::TcpListener;
+use ash_http_client::HttpHeader;
 use std::num::NonZeroU8;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -19,13 +17,6 @@ fn target_rejects_a_non_http_base_url() {
 }
 
 #[test]
-fn header_debug_output_redacts_its_value() {
-    let debug = format!("{:?}", HttpHeader::new("Authorization", "Bearer secret"));
-    assert!(debug.contains("Authorization"));
-    assert!(!debug.contains("Bearer secret"));
-}
-
-#[test]
 fn retry_policy_never_replays_inference_by_default() {
     let policy = RetryPolicy::never();
     assert_eq!(policy.safety(), RetrySafety::Never);
@@ -38,46 +29,6 @@ fn retry_backoff_is_bounded() {
     assert_eq!(backoff.delay_before_retry(0), Duration::from_millis(50));
     assert_eq!(backoff.delay_before_retry(1), Duration::from_millis(100));
     assert_eq!(backoff.delay_before_retry(2), Duration::from_millis(120));
-}
-
-#[test]
-fn idempotent_request_retries_a_retryable_http_status() {
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let address = listener.local_addr().unwrap();
-    let server = std::thread::spawn(move || {
-        for status in [503, 200] {
-            let (mut stream, _) = listener.accept().unwrap();
-            read_headers(&mut stream);
-            let body = if status == 200 { "ok" } else { "retry" };
-            write!(
-                stream,
-                "HTTP/1.1 {status} Test\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-                body.len(),
-            )
-            .unwrap();
-        }
-    });
-    let retry_policy = RetryPolicy::replayable(
-        RetrySafety::Idempotent,
-        NonZeroU8::new(2).unwrap(),
-        BackoffPolicy::new(Duration::ZERO, Duration::ZERO),
-    );
-    let request = ClientRequest::new(
-        HttpMethod::Get,
-        format!("http://{address}/catalog"),
-        Vec::new(),
-        Vec::new(),
-        retry_policy,
-    )
-    .unwrap();
-
-    let response = AshClient::new(Arc::new(UreqHttpClient::new().unwrap()))
-        .execute(&request)
-        .unwrap();
-
-    assert_eq!(response.status(), 200);
-    assert_eq!(response.body(), b"ok");
-    server.join().unwrap();
 }
 
 #[test]
@@ -333,21 +284,5 @@ impl ash_http_client::HttpClient for BlockingHttpClient {
         state.finished = true;
         self.changed.notify_all();
         Ok(ClientResponse::new(200, Vec::new(), Vec::new()))
-    }
-}
-
-fn read_headers(stream: &mut impl Read) {
-    let mut received = Vec::new();
-    let mut buffer = [0; 256];
-    loop {
-        let bytes_read = stream.read(&mut buffer).unwrap();
-        assert_ne!(
-            bytes_read, 0,
-            "client closed before sending request headers"
-        );
-        received.extend_from_slice(&buffer[..bytes_read]);
-        if received.windows(4).any(|window| window == b"\r\n\r\n") {
-            return;
-        }
     }
 }

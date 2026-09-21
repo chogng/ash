@@ -96,6 +96,7 @@ members = [
     "ash-rs/message-history",
     "ash-rs/hooks",
     "ash-rs/http-client",
+    "ash-rs/http-test-support",
     "ash-rs/network-proxy",
     "ash-rs/mxc-sandbox",
     "ash-rs/windows-sandbox",

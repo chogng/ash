@@ -65,12 +65,13 @@
 
 ## 实现与验证
 
-- `client.rs` 统一 URL、请求头、序列化、取消和脱敏；原 `lib.rs` 中的实现归入此文件，`lib.rs` 仅保留公开导出。
+- `client.rs` 统一后端 URL、请求头、业务 JSON 和错误脱敏；取消令牌传给 `ash-client` 执行，`lib.rs` 仅保留公开导出。
 - `account.rs`、`usage.rs`、`config.rs`、`tasks.rs`、`costs.rs`、`analytics.rs` 分别拥有相应业务接口；`analytics_types.rs` 保存报表响应结构。
 - 业务测试按所属模块组织，共用 `test_support.rs` 中的请求记录器；原 `business_tests.rs` 的断言已迁入各业务专项测试和 `client_tests.rs`。
-- `transport_tests.rs` 使用本地 HTTPS 服务，贯穿 `BackendClient → AshClient → UreqHttpClient`；验证实际请求、禁止重定向、取消、整体超时、响应损坏和写入失败不重发。
+- `transport_tests.rs` 贯穿 `BackendClient → AshClient → UreqHttpClient`，验证业务路由、认证、JSON、写入不重发和后端错误映射。
+- 传输重定向、超时与原始响应读取由 `http-client` 验证；取消与重试执行由 `ash-client` 验证。两个下层 crate 的测试使用通用请求，不依赖后端业务类型。
 - HTTPS 测试使用独立 CA、随机回环端口和直接连接，不修改系统信任或代理环境；不访问真实账号、不兑换真实额度、不发送邮件。
-- 固定响应和测试证书位于 [`tests/fixtures`](tests/fixtures/README.md)，Cargo 与 Bazel 使用同一份资源。
+- 业务固定响应位于 [`tests/fixtures`](tests/fixtures/README.md)；HTTPS 服务和测试证书由 [`http-test-support`](../http-test-support/README.md) 提供，只通过 `dev-dependencies` 引入。Cargo 与 Bazel 使用同一份资源。
 - 验证命令：`just check ash-backend-client`、`just test ash-backend-client`、`just rust-warnings ash-backend-client`。
 - 小数解析配置回归：`just test ash-backend-client --features serde_json/arbitrary_precision`。
 - 现有消费方回归：`just check ash-chatgpt`、`just test ash-chatgpt account::tests`、`just rust-warnings ash-chatgpt`。

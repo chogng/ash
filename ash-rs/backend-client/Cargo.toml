@@ -17,7 +17,7 @@ serde_json = { workspace = true }
 url = { workspace = true }
 
 [dev-dependencies]
-rustls = { workspace = true }
+http-test-support = { package = "ash-http-test-support", path = "../http-test-support" }
 
 [lints]
 workspace = true
