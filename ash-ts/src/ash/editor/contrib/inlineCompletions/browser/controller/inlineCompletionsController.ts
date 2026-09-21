@@ -19,6 +19,9 @@ import { provideInlineCompletions } from '../model/provideInlineCompletions.js';
 import { type TextEdit } from '../../../../common/languages.js';
 import { type ICursorStateComputerData, type IEditOperationBuilder, type ICommand } from '../../../../common/editorCommon.js';
 import { type ITextModel } from '../../../../common/model.js';
+import { RunOnceScheduler } from '../../../../../base/common/async.js';
+import { StopWatch } from '../../../../../base/common/stopwatch.js';
+import { ILanguageFeatureDebounceService, type IFeatureDebounceInformation } from '../../../../common/services/languageFeatureDebounce.js';
 
 /** Owns ghost-text projection and explicit acceptance of one inline completion. */
 export class InlineCompletionsController extends Disposable {
@@ -26,6 +29,9 @@ export class InlineCompletionsController extends Disposable {
 	private request: AbortController | undefined;
 	private item: LanguageInlineCompletionItem | undefined;
 	private completionRequestId = 0;
+	private readonly debounce: IFeatureDebounceInformation;
+	private readonly scheduler: RunOnceScheduler;
+	private composing = false;
 
 	constructor(
 		private readonly input: HTMLElement,
@@ -33,18 +39,23 @@ export class InlineCompletionsController extends Disposable {
 		private readonly viewport: View,
 		private readonly model: TextModel,
 		private readonly providers: LanguageFeatureRegistry<LanguageInlineCompletionsProvider>,
-		private readonly languageId: string,
 		onDidExecuteCommand: Event<EditorCommandEvent> | undefined,
 		private readonly onError: (error: unknown) => void,
 		@IInlineCompletionsService private readonly inlineCompletionsService: IInlineCompletionsService,
+		@ILanguageFeatureDebounceService debounceService: ILanguageFeatureDebounceService,
 	) {
 		super();
 		if (editor.getModel() !== model || viewport.textModel !== model) throw new TypeError('Inline completion dependencies must share one text model');
+		this.debounce = debounceService.for(providers, 'Inline completions', { min: 50, max: 500 });
+		this.scheduler = this._register(new RunOnceScheduler(() => void this.refresh('automatic'), this.debounce.default()));
 		const element = this.element = h(viewport.domNode.domNode.ownerDocument, "span");
 		element.className = "stanza-editor-inline-completion";
 		element.hidden = true;
 		viewport.domNode.domNode.append(element);
-		this._register(toDisposable(() => element.remove()));
+		this._register(toDisposable(() => {
+			this.clear();
+			element.remove();
+		}));
 		this._register(addDisposableListener(input, "keydown", event => {
 			if (event.defaultPrevented || event.isComposing || !event.ctrlKey || !event.altKey || event.key !== " ") return;
 			stopEvent(event);
@@ -61,35 +72,61 @@ export class InlineCompletionsController extends Disposable {
 			}
 		}));
 		this._register(editor.onDidChangeCursorSelection(() => this.clear()));
+		this._register(editor.onDidType(() => this.schedule()));
+		this._register(editor.onDidCompositionStart(() => {
+			this.composing = true;
+			this.clear();
+		}));
+		this._register(editor.onDidCompositionEnd(() => {
+			this.composing = false;
+			this.schedule();
+		}));
+		this._register(editor.onDidBlurEditorText(() => this.clear()));
+		this._register(providers.onDidChange(() => this.clear()));
+		this._register(model.onWillDispose(() => this.clear()));
+		this._register(model.onDidChangeLanguage(() => this.clear()));
 		this._register(viewport.onDidChangeLayout(() => this.render()));
 		this._register(viewport.textModel.onDidChangeContent(() => this.clear()));
 		if (onDidExecuteCommand) {
 			const triggerCommands = new Set(TriggerInlineEditCommandsRegistry.getRegisteredCommands());
 			this._register(onDidExecuteCommand(event => {
 				if (!triggerCommands.has(event.commandId)) return;
-				void this.refresh('automatic');
+				this.schedule();
 			}));
 		}
 	}
 
+	private schedule(): void {
+		this.clear();
+		if (this.isDisposed || this.model.isDisposed() || this.composing || this.inlineCompletionsService.isSnoozing() || !this.providers.has(this.model)) {
+			return;
+		}
+		this.scheduler.schedule(this.debounce.get(this.model));
+	}
+
 	private async refresh(triggerKind: "automatic" | "explicit"): Promise<void> {
-		if (this.inlineCompletionsService.isSnoozing()) {
-			this.clear();
+		this.clear();
+		if (this.isDisposed || this.model.isDisposed() || this.composing || this.inlineCompletionsService.isSnoozing()) {
 			return;
 		}
 		const selection = this.editor.getSelection();
 		if (!selection) return;
 		if (!selection.isEmpty()) return;
-		this.request?.abort();
 		const request = this.request = new AbortController();
+		const duration = StopWatch.create();
 		try {
-			const items = await provideInlineCompletions(this.model, this.providers, this.languageId, selection.getPosition(), triggerKind, request.signal);
+			const items = await provideInlineCompletions(this.model, this.providers, this.model.getLanguageId(), selection.getPosition(), triggerKind, request.signal);
 			if (request.signal.aborted) return;
+			this.debounce.update(this.model, duration.elapsed());
 			this.item = items[0];
 			if (this.item) this.inlineCompletionsService.reportNewCompletion(`editor-inline-${++this.completionRequestId}`);
 			this.render();
 		} catch (error) {
 			if (!request.signal.aborted) this.onError(error);
+		} finally {
+			if (this.request === request) {
+				this.request = undefined;
+			}
 		}
 	}
 
@@ -125,6 +162,7 @@ export class InlineCompletionsController extends Disposable {
 	}
 
 	private clear(): void {
+		this.scheduler.cancel();
 		this.request?.abort();
 		this.request = undefined;
 		this.item = undefined;
@@ -147,5 +185,5 @@ class AcceptInlineCompletionCommand implements ICommand {
 
 registerEditorContribution({ id: "editor.contrib.inlineCompletions", install: context => {
 	if (context.kind !== "text" || (context.options.inlineCompletions !== undefined && !isCompletionsEnabledFromObject(context.options.inlineCompletions, context.languageId))) return;
-	return context.instantiationService.createInstance(InlineCompletionsController, context.controller.element, context.editor, context.view, context.model, context.languageFeaturesService.inlineCompletionsProvider, context.languageId, context.onDidExecuteCommand, context.onLanguageError);
+	return context.instantiationService.createInstance(InlineCompletionsController, context.controller.element, context.editor, context.view, context.model, context.languageFeaturesService.inlineCompletionsProvider, context.onDidExecuteCommand, context.onLanguageError);
 } });

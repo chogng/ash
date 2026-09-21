@@ -1,3 +1,4 @@
+import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../common/services/languageFeatureDebounce.js';
 import { StandaloneCodeEditorService } from './standaloneCodeEditorService.js';
 import { IInlineCompletionsService, InlineCompletionsService } from '../../browser/services/inlineCompletionsService.js';
 import { MarkerService, IMarkerService } from '../../../platform/markers/common/markers.js';
@@ -59,6 +60,7 @@ export class StandaloneServiceCollection extends Disposable {
 		const instantiationService = this.instantiationService = this._register(new ServiceContainer());
 		instantiationService.registerInstance(ILogService, new NullLoggerService());
 		instantiationService.registerSingleton(IInlineCompletionsService, () => instantiationService.createInstance(InlineCompletionsService));
+		instantiationService.registerSingleton(ILanguageFeatureDebounceService, () => instantiationService.createInstance(LanguageFeatureDebounceService));
 		instantiationService.registerSingleton(IContextKeyService, () => new ContextKeyService());
 		instantiationService.registerSingleton(IMarkerService, () => new MarkerService());
 		instantiationService.registerSingleton(IMarkerDecorationsService, () => instantiationService.createInstance(MarkerDecorationsService));

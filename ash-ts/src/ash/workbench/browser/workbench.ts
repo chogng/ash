@@ -1,3 +1,4 @@
+import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../editor/common/services/languageFeatureDebounce.js';
 import { IInlineCompletionsService, InlineCompletionsService } from '../../editor/browser/services/inlineCompletionsService.js';
 import { ICallService } from '../../platform/call/common/callService.js';
 import { FormattingConflicts } from '../../editor/contrib/format/browser/format.js';
@@ -415,6 +416,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(ILanguageFeaturesService, languageFeaturesService);
 		services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService));
 		services.registerSingleton(IInlineCompletionsService, () => services.createInstance(InlineCompletionsService));
+		services.registerSingleton(ILanguageFeatureDebounceService, () => services.createInstance(LanguageFeatureDebounceService));
 		const textMateService = this._register(new BrowserTextMateService());
 		services.registerInstance(ITextMateService, textMateService);
 		const textResourceStore = getBrowserTextResourceStore(textFileService);

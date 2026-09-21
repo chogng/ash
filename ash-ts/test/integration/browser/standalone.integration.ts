@@ -1,3 +1,4 @@
+import { ILanguageFeatureDebounceService } from '../../../src/ash/editor/common/services/languageFeatureDebounce.js';
 import { IInlineCompletionsService } from '../../../src/ash/editor/browser/services/inlineCompletionsService.js';
 import { CommandsRegistry } from '../../../src/ash/platform/commands/common/commands.js';
 import { IContextKeyService } from "../../../src/ash/platform/contextkey/browser/contextKeyService.js";
@@ -85,7 +86,17 @@ interface ViewZoneState {
 	readonly computedHeights: readonly number[];
 }
 
+interface InlineRequestState {
+	requests: { kind: string; text: string; languageId: string; aborted: boolean }[];
+	delay: number;
+	shared: boolean;
+}
+
 interface StandaloneHarness {
+	prepareInlineRequests(): void;
+	readInlineRequests(): InlineRequestState;
+	finishInlineRequest(index: number): Promise<void>;
+	cancelInlineRequests(reason: 'position' | 'provider' | 'snooze' | 'dispose' | 'model' | 'blur' | 'language'): void;
 	prepareLinks(): void;
 	readOpenedLinks(): string[];
 	setSemanticProvider(tokenType: string | null): void;
@@ -245,6 +256,8 @@ let pointerMouseUpEvents = 0;
 const pointerMouseUpListener = callerEditor.onMouseUp(() => { pointerMouseUpEvents += 1; });
 let referenceRegistration: { dispose(): void } | undefined;
 let codeActionRegistration: ReturnType<typeof stanza.languages.registerCodeActionProvider> | undefined;
+let inlineRegistration: ReturnType<typeof stanza.languages.registerInlineCompletionsProvider> | undefined;
+const inlineRequests: { kind: string; text: string; languageId: string; signal: AbortSignal; resolve: () => void }[] = [];
 let semanticRegistration: ReturnType<typeof stanza.languages.registerDocumentSemanticTokensProvider> | undefined;
 let completionRegistration: ReturnType<typeof stanza.languages.registerCompletionItemProvider> | undefined;
 let viewZone: stanza.IViewZone | undefined;
@@ -367,6 +380,48 @@ window.ashStandaloneIntegration = {
 			diagnostics: callerModel.diagnostics.results.result?.value.diagnostics.map(diagnostic => diagnostic.message) ?? [],
 			current: callerModel.tokenization.modelVersion === callerModel.version,
 		};
+	},
+	prepareInlineRequests: () => {
+		inlineRegistration?.dispose();
+		inlineRequests.length = 0;
+		callerEditor.setValue('');
+		callerEditor.focus();
+		inlineRegistration = stanza.languages.registerInlineCompletionsProvider('*', {
+			provideInlineCompletions: async (request, signal) => {
+				await new Promise<void>(resolve => inlineRequests.push({
+					kind: request.triggerKind,
+					text: request.model.getValue(),
+					languageId: request.languageId,
+					signal,
+					resolve,
+				}));
+				return [{ insertText: ' suggestion' }];
+			},
+		});
+	},
+	readInlineRequests: () => {
+		const service = StandaloneServices.get().instantiationService.get(ILanguageFeatureDebounceService);
+		const other = ownedEditor.invokeWithinContext(accessor => accessor.get(ILanguageFeatureDebounceService));
+		const features = StandaloneServices.get().instantiationService.get(ILanguageFeaturesService);
+		return {
+			requests: inlineRequests.map(request => ({ kind: request.kind, text: request.text, languageId: request.languageId, aborted: request.signal.aborted })),
+			delay: service.for(features.inlineCompletionsProvider, 'Inline completions', { min: 50, max: 500 }).get(callerModel),
+			shared: service === other,
+		};
+	},
+	finishInlineRequest: async index => {
+		inlineRequests[index]!.resolve();
+		await Promise.resolve();
+		await Promise.resolve();
+	},
+	cancelInlineRequests: reason => {
+		if (reason === 'position') callerEditor.setPosition(new stanza.Position(1, 1));
+		if (reason === 'provider') inlineRegistration?.dispose();
+		if (reason === 'snooze') callerEditor.invokeWithinContext(accessor => accessor.get(IInlineCompletionsService)).snooze(10_000);
+		if (reason === 'blur') ownedEditor.focus();
+		if (reason === 'language') callerModel.setLanguage('typescript');
+		if (reason === 'dispose') callerEditor.dispose();
+		if (reason === 'model') callerEditor.setModel(ownedEditor.getModel());
 	},
 	runSharedInlineSnooze: async () => {
 		const service = callerEditor.invokeWithinContext(accessor => accessor.get(IInlineCompletionsService));
@@ -1494,6 +1549,8 @@ window.ashStandaloneIntegration = {
 	},
 	releaseOwned: () => ownedEditor.dispose(),
 	dispose: () => {
+		inlineRegistration?.dispose();
+		for (const request of inlineRequests) request.resolve();
 		formattingProvider?.dispose();
 		bracketTokenRegistration?.dispose();
 		for (const request of deferredFormatting) request.resolve();

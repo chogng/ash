@@ -1,5 +1,40 @@
 # Editor API 对齐状态
 
+## 行内补全自动请求与公共防抖服务（2026-09-21）
+
+准入链：输入文本 / 已注册编辑命令 → `InlineCompletionsController` → `ILanguageFeatureDebounceService` 的模型与提供者延迟记录 → 当前版本的补全请求 → 既有提示与接受命令。起始工作区干净；继续采用已确认的现有功能链范围。
+
+| 准入路径（相对 editor，另有标注除外） | 存在关系 | 唯一职责与本批动作 |
+| --- | --- | --- |
+| `common/services/languageFeatureDebounce.ts` | 仅上游 → 双方都有 | 新增公共延迟查询与采样契约；按服务作用域、registry、配置、模型和当前提供者隔离，不拥有计时器或请求。 |
+| `contrib/inlineCompletions/browser/controller/inlineCompletionsController.ts` | 双方都有 | 当前控制器注入延迟服务，复用 RunOnceScheduler 合并输入/命令触发；手动请求即时，组合输入暂停。语言切换取消旧任务，下一次请求读取当前模型语言；取消和释放归同一控制器。 |
+| `standalone/browser/standaloneServices.ts`、`../workbench/browser/workbench.ts` | 双方都有 | 各自现有宿主容器注册服务；不增加全局 feature registry。 |
+| `test/browser/testCodeEditor.ts`、`contrib/inlineCompletions/test/browser/inlineCompletionsController.test.ts` | 现有测试设施 | 同步真实容器装配，验证命令调度、必需依赖、接受与撤销。 |
+| `test/common/services/languageFeatureDebounce.test.ts` | Ash 测试（所属生产模块同名） | 验证延迟上下限、独立作用域、模型与提供者变化、已释放模型。 |
+| `ash-ts/test/integration/browser/standalone.integration.ts`、`standalone.integration.spec.ts`（仓库相对） | Ash 现有设施 | Playwright 从真实输入/快捷键验证请求合并、手动触发、组合输入、提供者变化、取消、过期响应和释放。 |
+| `browser/README.md`、`api-alignment-status.md` | 现有文档 | 记录调度与采样的不同职责及实际验证。 |
+
+独立实现：控制器继续持有唯一提示 DOM、选择范围与请求；位置使用现有 View 坐标。公共服务弱引用模型和提供者，避免延迟记录保留已卸载的提供者；提供者集合或语言改变后重新估计；控制器只提交成功且仍有效的请求耗时。自动等待限定在 50–500 ms，冷启动为 50 ms，后续按观测耗时平滑调整。WordHighlighter 的用户延迟配置保持原语义。没有新 DOM、CSS、快捷键、文本副本或同步 tokenizer。
+
+实现已接通：普通输入和组合输入结束事件进入既有控制器；手动请求会撤销排队的自动任务；成功且未取消的请求才更新延迟。服务通过两个宿主的真实容器注入，没有新增对 contribution 契约的 common 反向依赖。
+
+common 当前 **210 个文件：179 个同路径、31 个 Ash 自有；47 个上游路径未引入**。上一批的四项额外能力中，防抖服务已接通；其余三项维持以下明确边界：
+
+| 上游额外能力 | 当前结果 |
+| --- | --- |
+| `editorFeatures.ts` | 未引入。现有文本高亮提供者已按语言服务引用计数共享，关闭最后一个消费者时释放，没有重复注册需要另建全局 feature 启动器解决。 |
+| `services/inMemoryTextModelService.ts` | 未引入。ModelService 与 Workbench 资源引用服务继续拥有模型；当前链没有 synthetic document 消费者。 |
+| `model/bracketPairsTextModelPart/fixBrackets.ts` | 未引入。需要先建立补全插入文本的词法分词能力；当前异步模型分词不能被未经词法识别的字符扫描替代。 |
+
+其余 22 个缺失文件保留现有职责，22 个完整 diff / Tree-sitter 文件仍在本次范围外。下方批次数字与结论按时间保留。上游行为依据为工作区源码契约，没有运行 VS Code 本身的 UI 对照，不宣称全量界面或能力对齐。
+
+本批验证：
+
+- 两份定向单测文件、21 个 Playwright 场景通过，覆盖真实输入、组合输入、手动触发、耗时调整、语言切换、失焦、过期响应、取消和释放。
+- `check-editor-alignment.mjs --test=all` 通过：结构、台账、类型检查、232/232 个单测文件和 349/349 个 Playwright 用例通过。
+- `build:renderer`、`build:stanza` 和 `git diff --check` 通过；生产构建没有新增 warning。公共缓存改用弱引用后，重新运行受影响单测和两种生产构建。
+- 没有改 CSS，没有新增上游品牌引用，保留既有 6 份等价样式债务。JSDOM Canvas、既有测试服务装配和 Playwright 颜色环境提示仍存在。
+
 ## common 剩余文件逐项收尾（2026-09-21）
 
 用户要求把剩余项全部处理，沿用“现有功能链”的范围，以及按职责抽取、收回和保留的决定。起始工作区干净；重新比较得到 49 个上游缺失文件，其中 diff 15 个、Tree-sitter 7 个仍在范围外。其余 27 个按实际消费者和状态 owner 逐项核对，不以创建无调用文件或替换私有容器来消除差异。

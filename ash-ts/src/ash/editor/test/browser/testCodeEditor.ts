@@ -1,3 +1,4 @@
+import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../common/services/languageFeatureDebounce.js';
 import '../../browser/services/contribution.js';
 import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { IMarkerService, MarkerService } from '../../../platform/markers/common/markers.js';
@@ -36,6 +37,9 @@ export function createCodeEditorServices(disposables: Pick<DisposableStore, 'add
 	}
 	if (!services.has(ICodeEditorService)) {
 		services.registerSingleton(ICodeEditorService, () => services.createInstance(StandaloneCodeEditorService));
+	}
+	if (!services.has(ILanguageFeatureDebounceService)) {
+		services.registerSingleton(ILanguageFeatureDebounceService, () => services.createInstance(LanguageFeatureDebounceService));
 	}
 	if (!services.has(IInlineCompletionsService)) {
 		services.registerSingleton(IInlineCompletionsService, () => services.createInstance(InlineCompletionsService));

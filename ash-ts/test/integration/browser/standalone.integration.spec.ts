@@ -2300,6 +2300,131 @@ test('inline completion snooze is shared and survives closing another editor', a
 	});
 });
 
+for (const inputKind of ['editContext', 'textarea'] as const) {
+	test(`${inputKind} inline completion debounces typing, learns latency and keeps explicit requests immediate`, async ({ page }) => {
+		if (inputKind === 'textarea') {
+			await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+		}
+		await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
+		await page.goto('/standalone.html');
+		await page.clock.pauseAt(new Date('2026-01-01T00:01:00Z'));
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareInlineRequests());
+		await page.keyboard.type('abc');
+		await page.clock.runFor(49);
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readInlineRequests())).toEqual({ requests: [], delay: 50, shared: true });
+		await page.clock.runFor(1);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readInlineRequests())).requests).toEqual([{ kind: 'automatic', text: 'abc', languageId: 'plaintext', aborted: false }]);
+		await page.clock.runFor(240);
+		await page.evaluate(() => window.ashStandaloneIntegration.finishInlineRequest(0));
+		await expect(page.locator('#caller .stanza-editor-inline-completion')).toBeVisible();
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readInlineRequests())).delay).toBe(240);
+		await page.keyboard.type('d');
+		await page.clock.runFor(200);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readInlineRequests())).requests).toHaveLength(1);
+		await page.keyboard.press('Control+Alt+Space');
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readInlineRequests())).requests[1]).toEqual({ kind: 'explicit', text: 'abcd', languageId: 'plaintext', aborted: false });
+		await page.evaluate(() => window.ashStandaloneIntegration.finishInlineRequest(1));
+		await page.clock.runFor(500);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readInlineRequests())).requests).toHaveLength(2);
+		await page.keyboard.press('Alt+Enter');
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('abcd suggestion');
+		await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
+		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	});
+
+	test(`${inputKind} inline completion waits for composition to finish`, async ({ page }) => {
+		if (inputKind === 'textarea') {
+			await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+		}
+		await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
+		await page.goto('/standalone.html');
+		await page.clock.pauseAt(new Date('2026-01-01T00:01:00Z'));
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareInlineRequests());
+		await page.keyboard.type('abc');
+		await page.evaluate(() => {
+			const input = document.querySelector<HTMLElement>('#caller .stanza-editor-input')!;
+			const target = (input as HTMLElement & { editContext?: EventTarget }).editContext ?? input;
+			target.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+		});
+		await page.clock.runFor(500);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readInlineRequests())).requests).toEqual([]);
+		await page.evaluate(() => {
+			const input = document.querySelector<HTMLElement>('#caller .stanza-editor-input')!;
+			const target = (input as HTMLElement & { editContext?: EventTarget }).editContext ?? input;
+			target.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }));
+		});
+		await page.clock.runFor(50);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readInlineRequests())).requests).toEqual([{ kind: 'automatic', text: 'abc', languageId: 'plaintext', aborted: false }]);
+		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	});
+}
+
+test('inline completion uses the new language after cancelling an old request', async ({ page }) => {
+	await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
+	await page.goto('/standalone.html');
+	await page.clock.pauseAt(new Date('2026-01-01T00:01:00Z'));
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareInlineRequests());
+	await page.keyboard.type('a');
+	await page.clock.runFor(50);
+	await page.evaluate(() => window.ashStandaloneIntegration.cancelInlineRequests('language'));
+	await page.keyboard.type('b');
+	await page.clock.runFor(50);
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readInlineRequests())).requests).toEqual([
+		{ kind: 'automatic', text: 'a', languageId: 'plaintext', aborted: true },
+		{ kind: 'automatic', text: 'ab', languageId: 'typescript', aborted: false },
+	]);
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+test('inline completion ignores late responses after more typing', async ({ page }) => {
+	await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
+	await page.goto('/standalone.html');
+	await page.clock.pauseAt(new Date('2026-01-01T00:01:00Z'));
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareInlineRequests());
+	await page.keyboard.type('a');
+	await page.clock.runFor(200);
+	await page.keyboard.type('b');
+	await page.clock.runFor(50);
+	await page.evaluate(() => window.ashStandaloneIntegration.finishInlineRequest(0));
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readInlineRequests())).toEqual({
+		requests: [{ kind: 'automatic', text: 'a', languageId: 'plaintext', aborted: true }, { kind: 'automatic', text: 'ab', languageId: 'plaintext', aborted: false }],
+		delay: 50,
+		shared: true,
+	});
+	await expect(page.locator('#caller .stanza-editor-inline-completion:not([hidden])')).toHaveCount(0);
+	await page.evaluate(() => window.ashStandaloneIntegration.finishInlineRequest(1));
+	await expect(page.locator('#caller .stanza-editor-inline-completion')).toBeVisible();
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+for (const reason of ['position', 'provider', 'snooze', 'dispose', 'model', 'blur', 'language'] as const) {
+	for (const queued of [true, false]) {
+		test(`inline completion ${queued ? 'queued' : 'running'} request is cancelled on ${reason}`, async ({ page }) => {
+			const errors: string[] = [];
+			page.on('pageerror', error => errors.push(error.message));
+			await page.clock.install({ time: new Date('2026-01-01T00:00:00Z') });
+			await page.goto('/standalone.html');
+			await page.clock.pauseAt(new Date('2026-01-01T00:01:00Z'));
+			await page.evaluate(() => window.ashStandaloneIntegration.prepareInlineRequests());
+			await page.keyboard.type('abc');
+			if (!queued) {
+				await page.clock.runFor(50);
+			}
+			await page.evaluate(reason => window.ashStandaloneIntegration.cancelInlineRequests(reason), reason);
+			await page.clock.runFor(1_000);
+			const state = await page.evaluate(() => window.ashStandaloneIntegration.readInlineRequests());
+			expect(state.requests).toEqual(queued ? [] : [{ kind: 'automatic', text: 'abc', languageId: 'plaintext', aborted: true }]);
+			expect(state.delay).toBe(50);
+			if (!queued) {
+				await page.evaluate(() => window.ashStandaloneIntegration.finishInlineRequest(0));
+			}
+			await expect(page.locator('#caller .stanza-editor-inline-completion:not([hidden])')).toHaveCount(0);
+			await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+			expect(errors).toEqual([]);
+		});
+	}
+}
+
 
 test('standalone without a grammar keeps plain text and no invented diagnostics while word suggestions work', async ({ page }) => {
 	const workers: string[] = [];

@@ -1,9 +1,10 @@
+import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../../../common/services/languageFeatureDebounce.js';
 import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IInlineCompletionsService, InlineCompletionsService } from '../../../../browser/services/inlineCompletionsService.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
-import { Emitter } from '../../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
 import { h } from '../../../../../base/browser/dom.js';
 import { TriggerInlineEditCommandsRegistry } from '../../../../browser/triggerInlineEditCommandsRegistry.js';
 import { LanguageFeatureRegistry } from '../../../../common/languageFeatureRegistry.js';
@@ -54,9 +55,12 @@ test('Registered editor commands retrigger inline completions after their edit',
 	container.append(input);
 	const providers = new LanguageFeatureRegistry<LanguageInlineCompletionsProvider>();
 	const requests: string[] = [];
-	providers.register('plaintext', {
+	let provided!: () => void;
+	const ready = new Promise<void>(resolve => { provided = resolve; });
+	using provider = providers.register('plaintext', {
 		provideInlineCompletions: request => {
 			requests.push(request.triggerKind);
+			provided();
 			return [{ insertText: ' completion' }];
 		},
 	});
@@ -66,12 +70,16 @@ test('Registered editor commands retrigger inline completions after their edit',
 	TriggerInlineEditCommandsRegistry.registerCommand(commandId);
 	using services = new ServiceContainer();
 	services.registerInstance(IInlineCompletionsService, inlineCompletionsService);
-	using controller = services.createInstance(InlineCompletionsController, input, editorFor(model, selections), viewport, model, providers, 'plaintext', commands.event, (error: unknown) => { throw error; });
+	services.registerInstance(ILanguageFeatureDebounceService, new LanguageFeatureDebounceService());
+	using controller = services.createInstance(InlineCompletionsController, input, editorFor(model, selections), viewport, model, providers, commands.event, (error: unknown) => { throw error; });
 
 	commands.fire({ commandId: 'editor.test.unrelatedCommand' });
 	await flushPromises();
 	assert.deepEqual(requests, []);
 	commands.fire({ commandId });
+	commands.fire({ commandId });
+	assert.deepEqual(requests, []);
+	await ready;
 	await flushPromises();
 	assert.deepEqual(requests, ['automatic']);
 	assert.equal(viewport.domNode.domNode.querySelector('.stanza-editor-inline-completion')?.textContent, ' completion');
@@ -91,7 +99,7 @@ test('inline completion acceptance applies additional edits and undoes atomicall
 	const input = h(dom.window.document, 'textarea');
 	container.append(input);
 	const providers = new LanguageFeatureRegistry<LanguageInlineCompletionsProvider>();
-	providers.register('plaintext', {
+	using provider = providers.register('plaintext', {
 		provideInlineCompletions: () => [{
 			insertText: 'value',
 			additionalTextEdits: [{ range: new Selection(1, 1, 1, 1), text: 'const ' }],
@@ -99,9 +107,11 @@ test('inline completion acceptance applies additional edits and undoes atomicall
 	});
 	using service = new InlineCompletionsService();
 	using services = new ServiceContainer();
-	assert.throws(() => services.createInstance(InlineCompletionsController, input, editorFor(model, selections), viewport, model, providers, 'plaintext', undefined, (error: unknown) => { throw error; }), /Unknown service/);
+	assert.throws(() => services.createInstance(InlineCompletionsController, input, editorFor(model, selections), viewport, model, providers, undefined, (error: unknown) => { throw error; }), /Unknown service/);
 	services.registerInstance(IInlineCompletionsService, service);
-	using controller = services.createInstance(InlineCompletionsController, input, editorFor(model, selections), viewport, model, providers, 'plaintext', undefined, (error: unknown) => { throw error; });
+	assert.throws(() => services.createInstance(InlineCompletionsController, input, editorFor(model, selections), viewport, model, providers, undefined, (error: unknown) => { throw error; }), /Unknown service/);
+	services.registerInstance(ILanguageFeatureDebounceService, new LanguageFeatureDebounceService());
+	using controller = services.createInstance(InlineCompletionsController, input, editorFor(model, selections), viewport, model, providers, undefined, (error: unknown) => { throw error; });
 
 	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: ' ', ctrlKey: true, altKey: true }));
 	await flushPromises();
@@ -149,6 +159,10 @@ async function flushPromises(): Promise<void> {
 
 function editorFor(model: TextModel, selections: CursorsController): ICodeEditor {
 	return {
+		onDidType: Event.None,
+		onDidCompositionStart: Event.None,
+		onDidCompositionEnd: Event.None,
+		onDidBlurEditorText: Event.None,
 		onDidChangeCursorSelection: (listener: (event: ICursorSelectionChangedEvent) => void) => {
 			let previous = selections.getSelections();
 			return selections.onDidChange(change => {
