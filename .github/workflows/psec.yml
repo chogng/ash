@@ -1,4 +1,4 @@
-name: Windows PSEC acceptance
+name: Windows sandbox acceptance
 
 on:
   push:
@@ -6,6 +6,8 @@ on:
     paths:
       - '.github/workflows/psec.yml'
       - 'scripts/test-psec.ps1'
+      - 'scripts/test-windows-sandbox.ps1'
+      - 'ash-rs/windows-sandbox/**'
       - 'ash-rs/mxc-sandbox/**'
       - 'ash-rs/vendor/mxc/**'
       - 'ash-rs/sandboxing/**'
@@ -16,11 +18,12 @@ on:
   workflow_dispatch:
     inputs:
       runner:
-        description: 'hosted runs x64 and ARM64; self-hosted requires labels Windows and psec'
+        description: 'hosted runs Server 2022/2025 x64 and Windows 11 ARM64; self-hosted tests PSEC only'
         type: choice
         default: hosted
         options:
           - hosted
+          - windows-2022
           - windows-2025
           - windows-11-arm
           - self-hosted
@@ -38,7 +41,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: ${{ (!inputs.runner || inputs.runner == 'hosted') && fromJSON('["windows-2025", "windows-11-arm"]') || fromJSON(format('["{0}"]', inputs.runner)) }}
+        runner: ${{ (!inputs.runner || inputs.runner == 'hosted') && fromJSON('["windows-2022", "windows-2025", "windows-11-arm"]') || fromJSON(format('["{0}"]', inputs.runner)) }}
     runs-on: ${{ matrix.runner == 'self-hosted' && fromJSON('["self-hosted", "Windows", "psec"]') || matrix.runner }}
     timeout-minutes: 45
     steps:
@@ -53,12 +56,55 @@ jobs:
       - name: Probe and test PSEC
         timeout-minutes: 30
         shell: pwsh
-        run: ./scripts/test-psec.ps1
+        run: ./scripts/test-psec.ps1 -Capability '${{ (matrix.runner == 'windows-2022' || matrix.runner == 'windows-2025') && 'absent' || 'required' }}'
       - name: Upload PSEC evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: psec-${{ runner.arch }}-${{ github.run_attempt }}
+          name: psec-${{ matrix.runner }}-${{ github.run_attempt }}
           path: .build/acceptance/psec/
           if-no-files-found: error
+          retention-days: 14
+
+  account:
+    name: Account (${{ matrix.runner }})
+    if: inputs.runner != 'self-hosted'
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: ${{ (!inputs.runner || inputs.runner == 'hosted') && fromJSON('["windows-2022", "windows-2025", "windows-11-arm"]') || fromJSON(format('["{0}"]', inputs.runner)) }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
+        with:
+          override: false
+          rustflags: ''
+      - name: Verify backend selection and no replay
+        shell: pwsh
+        run: python -B scripts/cargo.py test -p ash-sandboxing --lib --locked
+      - name: Test account execution and cleanup
+        shell: pwsh
+        run: |
+          $target = if ('${{ runner.arch }}' -eq 'ARM64') { 'aarch64-pc-windows-msvc' } else { 'x86_64-pc-windows-msvc' }
+          New-Item -ItemType Directory -Force .build/acceptance | Out-Null
+          Start-Transcript -Path .build/acceptance/account.log
+          try {
+            Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, OSArchitecture | Format-List
+            ./scripts/test-windows-sandbox.ps1 -Target $target
+          } finally {
+            Stop-Transcript
+          }
+      - name: Upload account evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: account-${{ matrix.runner }}-${{ github.run_attempt }}
+          path: |
+            .build/acceptance/account.log
+            .build/acceptance/windows-sandbox-*/*-plan.json
+          if-no-files-found: warn
           retention-days: 14

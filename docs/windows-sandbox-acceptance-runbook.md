@@ -22,11 +22,21 @@ just test ash-mxc-sandbox --lib --test windows
 
 ### GitHub Actions
 
-[Windows PSEC acceptance](../.github/workflows/psec.yml) 在 main 或 `codex/psec-*` 分支相关文件更新时并行使用 `windows-2025`（x64）和 `windows-11-arm`（ARM64），一侧失败不取消另一侧。Run workflow 的 `hosted` 选项运行两者，也可单独选择一种。专用机器注册到本仓库后，添加 `self-hosted`、`Windows`、`psec` 标签，手动选择 `self-hosted`；机器须预装 PowerShell 7、Python 3.11+、Rustup 和对应 MSVC C++ 工具链。不假设运行器标签代表具备 PSEC 能力。
+[Windows sandbox acceptance](../.github/workflows/psec.yml) 在 main 或 `codex/psec-*` 分支相关文件更新时，使用 `windows-2022`、`windows-2025`（x64）和 `windows-11-arm`（ARM64）。每种系统独立运行 PSEC 检查与账户执行测试，任一失败不取消其他任务。Run workflow 的 `hosted` 运行全部托管机器，也可单独选择一种。
 
-工作流不安装沙箱账户，不改变系统功能或放宽文件策略。能力用例通过 Ash 适配器准备含隐藏存储、工作目录写入、只读元数据和禁止网络的真实请求，创建并关闭 PSEC 环境及启动属性，不启动用户命令。失败时工作流失败，随后成功路径不执行；测试名未匹配也不能算通过。探测成功后，cmd、Windows PowerShell、文件策略和进程生命周期用例分别运行，汇总全部失败；不让第一个失败遮住后续独立用例。
+| 运行器 | PSEC 验收预期 | 账户验收 |
+| --- | --- | --- |
+| Windows Server 2022 x64 | 启动前明确返回能力不支持 | 实际执行、权限与清理 |
+| Windows Server 2025 x64 | 启动前明确返回能力不支持 | 实际执行、权限与清理 |
+| Windows 11 ARM64 | PSEC 准备及执行成功 | 实际执行、权限与清理 |
 
-每次上传 `.build/acceptance/psec`，包含系统版本、架构、Rust 工具链、MXC pin、各阶段命令/退出码/输出和 `report.json`。通过状态仅表示报告列出的范围；PSEC ConPTY、Allowed/Denied 完整网络矩阵、App Server 产品链路及 WSL 尚未纳入此任务，不能据此宣布完整生产验收通过。托管运行器缺能力时，需要已确认支持相同策略的专用运行器，不能以账户后端结果代替。
+这是固定测试环境的预期，不是产品按版本分流的代码。产品仍按本次请求准备结果选择 MXC 或账户后端，严格策略不降低要求，启动错误不重跑。Server 2025 和 ARM64 的预期依据已运行镜像；Server 2022 的预期仍需 CI 验证。镜像能力改变时测试应失败并要求复核，不能自动把失败变为通过。Windows 11 x64 和具体旧版客户端仍需对应运行器，不由 Server 或 ARM64 结果替代。
+
+PSEC 检查不安装账户、不改变系统权限。`test-psec.ps1 -Capability absent` 只在适配器明确返回 `UnsupportedPolicy` 时通过；其他准备故障仍失败。默认 `required` 则必须先成功创建 PSEC 环境，再逐项运行命令、文件和生命周期测试，汇总全部失败。不存在的测试名不能计为通过。
+
+账户任务在独立的临时托管机器上运行 `test-windows-sandbox.ps1`，按已有安装计划创建账户，执行测试，并在 finally 中移除安装；同时运行后端选择与禁止重跑测试。手动 `self-hosted` 只运行 PSEC 成功路径，要求 `self-hosted`、`Windows`、`psec` 标签，以及 PowerShell 7、Python 3.11+、Rustup 和 MSVC 工具链。
+
+PSEC 报告包含系统版本、架构、工具链、MXC pin、各项退出码和输出。账户结果见独立任务日志及安装计划。能力不支持用例通过只证明拒绝行为，不是 PSEC 成功证明。PSEC ConPTY、完整网络矩阵、App Server 产品链路及 WSL 尚未纳入此任务。
 
 ## WSL 验收边界
 
