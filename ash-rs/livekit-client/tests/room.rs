@@ -301,3 +301,104 @@ fn tone_energy(samples: &[i16], frequency: f64) -> f64 {
     }
     real.hypot(imaginary) / samples.len() as f64
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "requires the pinned LiveKit Server executable"]
+async fn screen_share_transmits_decoded_frames_and_republishes_after_stop() {
+    let server = Server::start();
+    server.service.create_room("screen-test").await.unwrap();
+    let publisher = server
+        .service
+        .issue_join(
+            "screen-test",
+            "presenter",
+            MediaPermissions {
+                screen: true,
+                subscribe: true,
+                microphone: false,
+            },
+        )
+        .unwrap();
+    let listener = server
+        .service
+        .issue_join(
+            "screen-test",
+            "viewer",
+            MediaPermissions {
+                screen: false,
+                subscribe: true,
+                microphone: false,
+            },
+        )
+        .unwrap();
+    let mut presenter = MediaRoom::connect(
+        &publisher.server_url,
+        publisher.token(),
+        AudioPublication::SubscribeOnly,
+    )
+    .await
+    .unwrap();
+    let mut viewer = MediaRoom::connect(
+        &listener.server_url,
+        listener.token(),
+        AudioPublication::SubscribeOnly,
+    )
+    .await
+    .unwrap();
+    let source = screen_capture::mock::MockCaptureSource::new("display", 320, 240);
+    let mut previous_track = String::new();
+    for _ in 0..2 {
+        presenter.start_screen_share(&source, 15).await.unwrap();
+        assert!(presenter.is_screen_sharing());
+        let track = timeout(Duration::from_secs(15), async {
+            let mut received = 0;
+            loop {
+                if let Some(livekit_client::MediaEvent::Video(frame)) = viewer.next_event().await {
+                    assert_eq!(frame.participant_id, "presenter");
+                    assert_eq!(
+                        (frame.width, frame.height, frame.rgba.len()),
+                        (320, 240, 320 * 240 * 4)
+                    );
+                    received += 1;
+                    if received == 3 {
+                        break frame.track_id;
+                    }
+                }
+            }
+        })
+        .await
+        .expect("no decoded screen frames");
+        assert_ne!(track, previous_track);
+        presenter.stop_screen_share().await.unwrap();
+        assert!(!presenter.is_screen_sharing());
+        timeout(Duration::from_secs(5), async {
+            loop {
+                if let Some(livekit_client::MediaEvent::TrackRemoved { track_id }) =
+                    viewer.next_event().await
+                {
+                    if track_id == track {
+                        break;
+                    }
+                }
+            }
+        })
+        .await
+        .expect("screen track was not removed");
+        assert!(
+            timeout(Duration::from_millis(250), async {
+                loop {
+                    if let Some(livekit_client::MediaEvent::Video(_)) = viewer.next_event().await {
+                        break;
+                    }
+                }
+            })
+            .await
+            .is_err(),
+            "video survived unpublication"
+        );
+        previous_track = track;
+    }
+    presenter.close().await.unwrap();
+    viewer.close().await.unwrap();
+    server.service.delete_room("screen-test").await.unwrap();
+}

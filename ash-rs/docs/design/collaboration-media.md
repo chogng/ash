@@ -2,8 +2,8 @@
 
 Ash 的多人通话、屏幕共享和 GPT Voice 统一使用 LiveKit 房间。GPT Voice 以 AI 协作者身份入房，开发任务交给 Ash 既有 Agent 执行链；`realtime-webrtc` 从目标架构中移除。
 
-- 状态：音频通话已接入 App Server、设备助手和 TypeScript 通话面板；完整 AI 协作与屏幕共享仍在实施。
-- 核对日期：2026-09-15。
+- 状态：音频通话已接入 App Server、设备助手和 TypeScript 通话面板；已接入 Windows 显示器/窗口共享与远端画面；完整 AI 协作仍在实施。
+- 核对日期：2026-09-22。
 - 本文负责：crate 边界、部署、房间与权限、AI 接入、实施顺序和验收要求。
 - 已新增 `call`、`livekit-client`、`livekit-api`、`voice-agent`，并删除无人调用的 `realtime-webrtc`。
 
@@ -22,8 +22,8 @@ Ash 的多人通话、屏幕共享和 GPT Voice 统一使用 LiveKit 房间。GP
 | App Server 与 UI | 通话资源归连接所有；面板提供创建、加入、静音、收听、邀请和离开 |
 | Core 任务执行 | AI 委托尚未接入生产任务链 |
 | 本地媒体服务与产品打包 | 固定版本服务器与助手随包分发；本地通话持有服务进程，最后一个通话释放时回收 |
-| 屏幕共享 | 尚未实现 |
-| 真实设备、三平台、公网 NAT、真实 GPT-Live | 尚未验收 |
+| 屏幕共享 | Windows 采集、缩放与停止实测通过；真实 LiveKit 视频收发和重复发布测试通过；Windows x64 双窗口产品端到端测试通过（选窗口、远端显示、停止清除、结束通话） |
+| 真实设备、三平台、公网 NAT、真实 GPT-Live | Windows x64 屏幕共享产品链路已验收；ARM64 实机、真实音频设备、公网 NAT 与真实 GPT-Live 仍待验收 |
 
 ## 1. 架构决定
 
@@ -169,7 +169,7 @@ LiveKit 官方支持本地启动，但跨平台随产品分发、签名、升级
 
 ## 6. 入房 API 与权限收回
 
-下表是目标能力契约；具体线上类型由所属协议生成器维护。音频通话已提供 `call/start`、`call/read`、`call/control`、`call/leave`、`call/end`、`call/invite`、`call/remove`、`call/role` 和 `call/changed`；AI 与屏幕共享接口尚未提供。
+下表是目标能力契约；具体线上类型由所属协议生成器维护。音频通话已提供 `call/start`、`call/read`、`call/control`、`call/leave`、`call/end`、`call/invite`、`call/remove`、`call/role` 和 `call/changed`；屏幕共享增加 `call/screenSources`、`call/screenFrames` 和共享控制，字段与限制见 [App Server 协议](../../app-server-protocol/README.md#通话屏幕共享)；AI 接口尚未提供。
 
 | 能力 | 输入重点 | 结果与约束 |
 | --- | --- | --- |
@@ -300,9 +300,39 @@ GPT-Live 当前支持文本和音频，不支持图像或视频输入。人类�
 | 构建与打包 | 三平台依赖、实际产品构建、安装包资源及 SDK 所需运行库 |
 | 旧实现退场 | 无生产引用、无失效构建目标，新链路保留所需行为覆盖 |
 
+### Windows ARM64 实机验收流程
+
+GitHub Actions 的 `windows-11-arm` 任务只证明 ARM64 目标可以构建并完成无桌面依赖的自动化测试。要把 ARM64 标记为已支持，必须在一台 Windows 11 ARM64 实机的已解锁桌面上完成下面的流程，并保留测试日志和产品版本。
+
+先确认运行环境确实是 ARM64，而不是 x64 模拟进程：
+
+```powershell
+node -p "process.arch"
+rustc -vV
+```
+
+前一个命令必须输出 `arm64`，后一个命令的 `host` 必须是 `aarch64-pc-windows-msvc`。在仓库根目录执行：
+
+```powershell
+just test ash-screen-capture --lib window_frames_resize_stop_and_close_release_capture -- --ignored
+just test ash-voice-host --features host
+pnpm --dir ash-ts run pretest:smoke:desktop
+pnpm --dir ash-ts exec playwright test --project=electron-app-server test/smoke/areas/call/call.spec.ts
+```
+
+屏幕共享的双窗口验收必须使用两个独立产品窗口和一个真实 LiveKit 房间，逐项确认：
+
+1. 创建通话并让第二个窗口通过邀请加入。
+2. 选择显示器和窗口来源，开始共享；接收端出现画面且图像尺寸有效。
+3. 调整被共享窗口大小，确认画面继续更新；关闭该窗口，确认共享停止并显示错误或结束状态。
+4. 主动停止共享，确认接收端画面立即清除；再次选择来源并开始共享，确认新轨道正常工作。
+5. 接收端离开、发起端结束通话，确认两个窗口都显示结束状态，后台服务和音频助手退出。
+
+真实设备验收还要用两台设备完成连续双向说话、静音、麦克风权限、扬声器输出和设备切换；若涉及团队外网部署，再分别验证 UDP、TCP/TURN、断线重连和公网 NAT。每一项都记录系统版本、CPU 架构、产品构建版本、LiveKit 服务版本、结果和失败日志。任何一项未执行都只能标记为“未验收”，不能用 x64 结果替代 ARM64 结果。
+
 - 音频测试必须检查可辨识的真实解码输出、双向持续传输和停止后的静默；仅收到连接成功事件不算通过。
 - 协议测试覆盖生成类型、错误分类、修订号、幂等操作、资源释放与旧代次隔离。
 - 实际模型测试与无需凭据的本地测试分开记录；模拟事件不能证明模型兼容或真实语音质量。
 - 发布前确定并测量延迟、连续通话资源占用和重连恢复预算；目前没有实测数字，不预先宣称优于其他方案。
 
-**当前验收状态：真实 LiveKit 的多路音频、成员权限与模型模拟桥接已有回归测试；通话运行时与打包路径已有自动化覆盖。真实麦克风／扬声器、蓝牙切换、三平台签名、公网 NAT、真实模型账户、屏幕共享和生产任务委托尚未完成验收。**
+**当前验收状态：真实 LiveKit 的多路音频、成员权限与模型模拟桥接已有回归测试；Windows x64 已完成屏幕共享双窗口产品端到端验收，通话运行时与打包路径已有自动化覆盖。Windows ARM64 实机、真实麦克风／扬声器、蓝牙切换、三平台签名、公网 NAT、真实模型账户和生产任务委托仍未完成验收。**

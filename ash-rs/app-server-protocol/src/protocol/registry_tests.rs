@@ -168,3 +168,17 @@ fn non_cancellable_method_has_no_operation_identity() {
         None
     );
 }
+
+#[test]
+fn screen_controls_round_trip_and_reject_ambiguous_targets() {
+    use super::super::call::CallControlParams;
+    let value = serde_json::json!({ "resourceId": "call-window", "control": { "type": "shareScreen", "target": { "type": "window", "id": "42" } } });
+    let request: CallControlParams = serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(serde_json::to_value(request).unwrap(), value);
+    for target in [
+        serde_json::json!({"type":"window"}),
+        serde_json::json!({"type":"window","id":"42","display":"7"}),
+    ] {
+        assert!(serde_json::from_value::<CallControlParams>(serde_json::json!({ "resourceId": "call-window", "control": { "type":"shareScreen", "target": target } })).is_err());
+    }
+}

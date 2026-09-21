@@ -72,6 +72,7 @@ mod automation_operations;
 mod call_adapters;
 mod call_operations;
 mod call_runtime;
+mod call_video;
 mod cloud_codebase_operations;
 mod codebase_operations;
 mod codebase_retrieval_operations;
@@ -1977,6 +1978,8 @@ impl AppServer {
             Some(
                 method @ (ClientMethod::CallStart
                 | ClientMethod::CallRead
+                | ClientMethod::CallScreenSources
+                | ClientMethod::CallScreenFrames
                 | ClientMethod::CallControl
                 | ClientMethod::CallLeave
                 | ClientMethod::CallEnd

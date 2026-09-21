@@ -1,7 +1,8 @@
 import { IDialogService, DialogSeverity } from '../../../../platform/dialogs/common/dialogs.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
-import { ICallService } from '../../../../platform/call/common/callService.js';
+import { ICallService, type ScreenFrame, type ScreenSource } from '../../../../platform/call/common/callService.js';
+import { Disposable, DisposableMap, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 
 export class CallViewPane extends ViewPane {
@@ -12,6 +13,12 @@ export class CallViewPane extends ViewPane {
 	private readonly credentialDomNode: HTMLInputElement;
 	private readonly participantsDomNode: HTMLUListElement;
 	private readonly invitationDomNode: HTMLTextAreaElement;
+	private readonly sourcePickerDomNode: HTMLDivElement;
+	private readonly sourceDomNode: HTMLSelectElement;
+	private readonly screensDomNode: HTMLDivElement;
+	private readonly screenStatusDomNode: HTMLDivElement;
+	private readonly screens = this._register(new DisposableMap<string, SharedScreen>());
+	private sources: readonly ScreenSource[] = [];
 	private readonly buttons = new Map<string, HTMLButtonElement>();
 	private working = false;
 
@@ -50,6 +57,19 @@ export class CallViewPane extends ViewPane {
 		const actions = h(document, 'div');
 		actions.className = 'call-actions';
 		actions.append(
+			this.button('Share screen', 'share', async () => {
+				this.sources = await this.calls.screenSources();
+				if (this.isDisposed || this.calls.state?.connection !== 'connected') { return; }
+				this.sourceDomNode.replaceChildren(...this.sources.map((source, index) => {
+					const option = h(document, 'option');
+					option.value = String(index);
+					option.textContent = `${source.target.type === 'display' ? 'Display' : 'Window'}: ${source.title} (${source.width} × ${source.height})`;
+					return option;
+				}));
+				if (!this.sources.length) { throw new Error('No displays or windows are available to share.'); }
+				this.sourcePickerDomNode.hidden = false;
+			}),
+			this.button('Stop sharing', 'stop-share', () => this.calls.stopScreenShare()),
 			this.button('Unmute microphone', 'mute', () => this.calls.mute(!this.calls.state?.muted)),
 			this.button('Stop listening', 'deafen', () => this.calls.deafen(!this.calls.state?.deafened)),
 			this.button('Use microphone on this device', 'device', () => this.calls.selectDevice()),
@@ -63,18 +83,47 @@ export class CallViewPane extends ViewPane {
 			this.button('Leave call', 'leave', () => this.calls.leave()),
 			this.button('End for everyone', 'end', () => this.calls.end()),
 		);
+		this.sourcePickerDomNode = h(document, 'div');
+		this.sourcePickerDomNode.className = 'call-source-picker';
+		this.sourcePickerDomNode.hidden = true;
+		this.sourceDomNode = h(document, 'select');
+		this.field(this.sourcePickerDomNode, 'Display or window to share', this.sourceDomNode);
+		this.sourcePickerDomNode.append(
+			this.button('Start sharing', 'start-share', async () => {
+				const source = this.sources[Number(this.sourceDomNode.value)];
+				if (!source) { throw new Error('Choose a display or window.'); }
+				await this.calls.shareScreen(source.target);
+				this.sourcePickerDomNode.hidden = true;
+			}),
+			this.button('Cancel sharing', 'cancel-share', async () => { this.sourcePickerDomNode.hidden = true; }),
+		);
+		this._register(addDisposableListener(this.sourcePickerDomNode, 'keydown', event => {
+			if (event.key === 'Escape') {
+				event.preventDefault();
+				this.sourcePickerDomNode.hidden = true;
+				this.buttons.get('share')?.focus();
+			}
+		}));
+		this.screenStatusDomNode = h(document, 'div');
+		this.screenStatusDomNode.className = 'call-screen-status';
+		this.screenStatusDomNode.setAttribute('aria-live', 'polite');
+		this.screensDomNode = h(document, 'div');
+		this.screensDomNode.className = 'call-screens';
+		this.screensDomNode.setAttribute('aria-label', 'Shared screens');
 		this.invitationDomNode = h(document, 'textarea');
 		this.invitationDomNode.readOnly = true;
 		this.invitationDomNode.hidden = true;
 		this.invitationDomNode.setAttribute('aria-label', 'Invitation server address and key');
 		this.participantsDomNode = h(document, 'ul');
 		this.participantsDomNode.setAttribute('aria-label', 'People in this call');
-		this.contentElement.append(this.statusDomNode, this.formDomNode, actions, this.invitationDomNode, this.participantsDomNode);
+		this.contentElement.append(this.statusDomNode, this.formDomNode, actions, this.sourcePickerDomNode, this.screenStatusDomNode, this.screensDomNode, this.invitationDomNode, this.participantsDomNode);
 		this._register(addDisposableListener(this.contentElement, 'keydown', event => {
 			if (event.altKey && event.key === 'F1') { event.preventDefault(); void this.showHelp(); }
 		}));
 		this._register(calls.onDidChange(() => this.render()));
+		this._register(calls.onDidChangeScreens(() => this.renderScreens()));
 		this.render();
+		this.renderScreens();
 	}
 
 	public override focus(): void {
@@ -87,7 +136,7 @@ export class CallViewPane extends ViewPane {
 
 	private async showHelp(): Promise<void> {
 		const focus = this.element.ownerDocument.activeElement;
-		await this.dialogs.showMessage({ title: 'Calls help', severity: DialogSeverity.Info, message: 'Create a call on this computer or a server, or join with an invitation. Your microphone starts off. Use Tab and Shift+Tab to move between controls and Enter or Space to activate a button. Muting stops sending audio; Stop listening stops playback. Leave disconnects only you. End for everyone closes the room. Invitation keys grant access: share them only with people you want in the call. Escape closes this help.' });
+		await this.dialogs.showMessage({ title: 'Calls help', severity: DialogSeverity.Info, message: 'Create a call on this computer or a server, or join with an invitation. Your microphone starts off. Use Tab and Shift+Tab to move between controls and Enter or Space to activate a button. Muting stops sending audio; Stop listening stops playback. Share screen opens a display or window selector. Use arrow keys to choose a source, then Start sharing. Escape cancels selection. Stop sharing ends screen capture without leaving the call. Shared screen images are labeled by participant; their visual contents are not transcribed. Sharing stops when its window closes, the call reconnects, or you leave. Leave disconnects only you. End for everyone closes the room. Invitation keys grant access: share them only with people you want in the call. Escape closes this help.' });
 		if (focus instanceof HTMLElement && focus.isConnected) { focus.focus(); }
 	}
 
@@ -114,6 +163,9 @@ export class CallViewPane extends ViewPane {
 				if (this.isDisposed) { return; }
 				this.render();
 				if (id === 'start' && this.formDomNode.hidden) { this.buttons.get('leave')?.focus(); }
+				else if (id === 'share' && !this.sourcePickerDomNode.hidden) { this.sourceDomNode.focus(); }
+				else if (id === 'start-share') { this.buttons.get('stop-share')?.focus(); }
+				else if (id === 'cancel-share' || id === 'stop-share') { this.buttons.get('share')?.focus(); }
 				else if (!button.disabled && !button.hidden) { button.focus(); }
 			}, error => {
 				this.working = false;
@@ -143,7 +195,12 @@ export class CallViewPane extends ViewPane {
 				button.setAttribute('aria-pressed', String(!state?.muted && active));
 			}
 			if (id === 'deafen') { button.textContent = state?.deafened ? 'Resume listening' : 'Stop listening'; }
+			if (id === 'share' || id === 'start-share') { button.disabled ||= !state?.screenAllowed || state.connection !== 'connected'; }
+			if (id === 'share') { button.hidden = !!state?.screenSharing; }
+			if (id === 'stop-share') { button.hidden = !state?.screenSharing; }
 		}
+		if (!active || state?.connection !== 'connected' || !state.screenAllowed) { this.sourcePickerDomNode.hidden = true; }
+		this.renderScreens();
 		if (!active) { this.invitationDomNode.value = ''; this.invitationDomNode.hidden = true; }
 		const people = state?.participants ?? [];
 		const document = this.contentElement.ownerDocument;
@@ -152,5 +209,50 @@ export class CallViewPane extends ViewPane {
 			item.textContent = `Participant ${index + 1}${person.muted ? ' · microphone off' : ''}`;
 			return item;
 		}));
+	}
+
+	private renderScreens(): void {
+		const frames = this.calls.screens;
+		const activeIds = new Set(frames.map(frame => frame.trackId));
+		for (const [id] of this.screens) { if (!activeIds.has(id)) { this.screens.deleteAndDispose(id); } }
+		for (const frame of frames) {
+			let screen = this.screens.get(frame.trackId);
+			if (!screen) {
+				screen = new SharedScreen(this.screensDomNode);
+				this.screens.set(frame.trackId, screen);
+			}
+			const index = this.calls.state?.participants.findIndex(person => person.id === frame.participantId) ?? -1;
+			screen.update(frame, index < 0 ? 'Shared screen' : `Participant ${index + 1} shared screen`);
+		}
+		const status = this.calls.screenError ?? (this.calls.state?.screenSharing ? 'You are sharing your screen.' : frames.length ? `${frames.length} shared screen${frames.length === 1 ? '' : 's'}.` : '');
+		if (this.screenStatusDomNode.textContent !== status) { this.screenStatusDomNode.textContent = status; }
+	}
+}
+
+class SharedScreen extends Disposable {
+	private readonly imageDomNode: HTMLImageElement;
+	private readonly captionDomNode: HTMLElement;
+	private readonly imageUrl = this._register(new MutableDisposable());
+	private frame: ScreenFrame | undefined;
+
+	constructor(container: HTMLElement) {
+		super();
+		const figure = h(container.ownerDocument, 'figure');
+		figure.className = 'call-screen';
+		this.imageDomNode = h(container.ownerDocument, 'img');
+		this.captionDomNode = h(container.ownerDocument, 'figcaption');
+		figure.append(this.imageDomNode, this.captionDomNode);
+		container.append(figure);
+		this._register(toDisposable(() => { this.imageDomNode.removeAttribute('src'); figure.remove(); }));
+	}
+
+	public update(frame: ScreenFrame, label: string): void {
+		this.imageDomNode.alt = label;
+		this.captionDomNode.textContent = label;
+		if (this.frame === frame) { return; }
+		this.frame = frame;
+		const url = URL.createObjectURL(new Blob([frame.data], { type: 'image/jpeg' }));
+		this.imageDomNode.src = url;
+		this.imageUrl.value = toDisposable(() => URL.revokeObjectURL(url));
 	}
 }

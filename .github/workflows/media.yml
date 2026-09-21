@@ -43,7 +43,15 @@ concurrency:
 
 jobs:
   integration:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+          - runner: windows-11-arm
+            target: aarch64-pc-windows-msvc
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
     defaults:
       run:
@@ -58,7 +66,7 @@ jobs:
           node-version-file: .nvmrc
       - name: Prepare the locked LiveKit Server
         run: |
-          node build/package/livekit.ts x86_64-pc-windows-msvc > "$RUNNER_TEMP/livekit.json"
+          node build/package/livekit.ts "${{ matrix.target }}" > "$RUNNER_TEMP/livekit.json"
           echo "ASH_TEST_LIVEKIT_SERVER=$(node -p 'require(process.argv[1]).executable' "$RUNNER_TEMP/livekit.json")" >> "$GITHUB_ENV"
       - name: Test Rust SDK patches
         run: |
@@ -66,17 +74,19 @@ jobs:
           python -B scripts/cargo.py test --locked --manifest-path ash-rs/vendor/livekit-rust-sdks/Cargo.toml -p livekit-signaling --lib
           python -B scripts/cargo.py test --locked --manifest-path ash-rs/vendor/livekit-rust-sdks/Cargo.toml -p webrtc-sys --lib rtc_error
       - name: Check media packages
-        run: python -B scripts/cargo.py check --locked -p ash-livekit-client -p ash-voice-agent
+        run: python -B scripts/cargo.py check --locked -p ash-livekit-client -p ash-screen-capture -p ash-voice-agent
       - name: Build the collaboration service
         run: |
           python -B scripts/cargo.py build --locked -p ash-collaboration-server --bin ash-collaboration-server
           echo "ASH_TEST_COLLABORATION_SERVER=$(node -p 'require("node:path").resolve(".build/cargo/debug/ash-collaboration-server.exe")')" >> "$GITHUB_ENV"
       - name: Test rooms, authority and model bridge against the real server
         run: python -B scripts/cargo.py test --locked -p ash-livekit-client -p ash-livekit-api -p ash-call -p ash-collaboration-server -p ash-voice-agent --features ash-call/runtime -- --include-ignored
+      - name: Test screen capture contracts
+        run: python -B scripts/cargo.py test --locked -p ash-screen-capture
       - name: Test speech processing
-        run: python -B scripts/cargo.py test --locked -p ash-voice-host --features host --lib
+        run: python -B scripts/cargo.py test --locked -p ash-voice-host --features host
       - name: Reject warnings in media packages and tests
-        run: python -B scripts/cargo.py --deny-warnings check --locked -p ash-livekit-client -p ash-voice-agent -p ash-voice-host --features ash-voice-host/host --all-targets
+        run: python -B scripts/cargo.py --deny-warnings check --locked -p ash-livekit-client -p ash-screen-capture -p ash-call -p ash-voice-agent -p ash-voice-host --features ash-call/runtime,ash-voice-host/host --all-targets
 
   server-build:
     name: LiveKit ${{ matrix.target }}
@@ -116,3 +126,6 @@ jobs:
           server=$(node -p 'require(process.argv[1]).executable' "$RUNNER_TEMP/livekit.json")
           version=$(node -p 'require("./third_party/livekit/runtime-lock.json").version')
           test "$("$server" --version)" = "livekit-server version $version"
+
+      - name: Check screen capture platform and test targets
+        run: python -B scripts/cargo.py --deny-warnings check --locked -p ash-screen-capture --all-targets

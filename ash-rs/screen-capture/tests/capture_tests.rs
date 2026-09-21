@@ -3,11 +3,14 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
+#[cfg(any(target_os = "macos", windows))]
 use screen_capture::CaptureTarget;
 use screen_capture::PermissionStatus;
 use screen_capture::ScreenCaptureSource;
 use screen_capture::check_permission;
+#[cfg(any(target_os = "macos", windows))]
 use screen_capture::create_display_source;
+#[cfg(any(target_os = "macos", windows))]
 use screen_capture::create_window_source;
 use screen_capture::enumerate_displays;
 use screen_capture::enumerate_windows;
@@ -54,29 +57,29 @@ async fn test_mock_capture_stream_lifecycle() {
 #[test]
 fn test_permission_query() {
     let status = check_permission();
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", windows))]
     assert!(
         status == PermissionStatus::Granted || status == PermissionStatus::Denied,
         "unexpected permission status: {:?}",
         status
     );
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", windows)))]
     assert_eq!(status, PermissionStatus::NotDetermined);
 }
 
 #[test]
 fn test_display_enumeration() {
     let displays = enumerate_displays();
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", windows))]
     {
-        let displays = displays.expect("enumerate_displays should succeed on macOS");
+        let displays = displays.expect("enumerate_displays should succeed on supported platforms");
         for disp in &displays {
             assert!(!disp.id.is_empty(), "display id should not be empty");
             assert!(disp.width > 0, "display width should be > 0");
             assert!(disp.height > 0, "display height should be > 0");
         }
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         assert!(displays.is_err());
     }
@@ -85,24 +88,25 @@ fn test_display_enumeration() {
 #[test]
 fn test_window_enumeration() {
     let windows = enumerate_windows();
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", windows))]
     {
-        let windows = windows.expect("enumerate_windows should succeed on macOS");
+        let windows = windows.expect("enumerate_windows should succeed on supported platforms");
         for win in &windows {
             assert!(!win.id.is_empty(), "window id should not be empty");
             assert!(win.width > 0, "window width should be > 0");
             assert!(win.height > 0, "window height should be > 0");
         }
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         assert!(windows.is_err());
     }
 }
 
+#[cfg(any(target_os = "macos", windows))]
 #[test]
 fn test_source_creation_and_targets() {
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", windows))]
     {
         if let Ok(displays) = enumerate_displays() {
             if let Some(first_disp) = displays.first() {
@@ -134,6 +138,7 @@ fn test_source_creation_and_targets() {
     }
 }
 
+#[cfg(target_os = "macos")]
 #[tokio::test]
 async fn test_platform_display_stream_lifecycle() {
     #[cfg(target_os = "macos")]

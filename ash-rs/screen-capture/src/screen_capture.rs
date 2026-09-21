@@ -8,9 +8,14 @@ mod macos;
 #[cfg(target_os = "macos")]
 use macos as platform;
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(windows)]
+mod windows;
+#[cfg(windows)]
+use windows as platform;
+
+#[cfg(not(any(target_os = "macos", windows)))]
 mod fallback;
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", windows)))]
 use fallback as platform;
 
 use std::sync::Arc;
@@ -126,6 +131,8 @@ pub trait ScreenCaptureStream: Send + Sync {
 
     /// Check whether the stream is still active.
     fn is_active(&self) -> bool;
+    /// Failure that ended capture, or None for a normal stop or closed target.
+    fn error(&self) -> Option<String>;
 }
 
 /// Check current screen capture permission status.

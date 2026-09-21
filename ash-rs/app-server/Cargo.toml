@@ -17,6 +17,8 @@ path = "src/lib.rs"
 [dependencies]
 call = { package = "ash-call", path = "../call", features = ["runtime"] }
 livekit-client = { package = "ash-livekit-client", path = "../livekit-client" }
+ash-screen-capture = { workspace = true }
+image = { workspace = true, features = ["jpeg"] }
 voice-host = { package = "ash-voice-host", path = "../voice-host" }
 file-search = { package = "ash-file-search", path = "../file-search" }
 tempfile = { workspace = true }

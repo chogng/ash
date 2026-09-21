@@ -24,12 +24,14 @@ const DEADLINE: Duration = Duration::from_secs(5);
 struct RequestGuard<'a> {
     child: &'a mut Child,
     reader: &'a JoinHandle<()>,
+    retired: &'a mut bool,
     complete: bool,
 }
 
 impl Drop for RequestGuard<'_> {
     fn drop(&mut self) {
         if !self.complete {
+            *self.retired = true;
             self.reader.abort();
             let _ = self.child.start_kill();
         }
@@ -48,6 +50,7 @@ pub struct AudioHost {
     capture_epoch: u64,
     playback_epoch: u64,
     config: Option<AudioConfig>,
+    retired: bool,
 }
 
 impl AudioHost {
@@ -120,6 +123,7 @@ impl AudioHost {
             capture_epoch: 0,
             playback_epoch: 0,
             config: None,
+            retired: false,
         };
         host.request(Operation::Hello {
             version: wire::VERSION,
@@ -129,6 +133,9 @@ impl AudioHost {
     }
 
     async fn request(&mut self, operation: Operation) -> Result<u64, AudioError> {
+        if self.retired {
+            return Err(AudioError::Protocol);
+        }
         self.next_id = self.next_id.checked_add(1).ok_or(AudioError::Protocol)?;
         let id = self.next_id;
         let bytes = wire::encode(&Request { id, operation })?;
@@ -136,6 +143,7 @@ impl AudioHost {
         let mut guard = RequestGuard {
             child: &mut self.child,
             reader: &self.reader,
+            retired: &mut self.retired,
             complete: false,
         };
         let result = timeout(DEADLINE, async {
@@ -212,11 +220,16 @@ impl AudioHost {
     }
 
     pub async fn close(mut self) -> Result<(), AudioError> {
-        self.request(Operation::Shutdown).await?;
+        // Cancellation already terminated the helper; cleanup must reap it without
+        // sending another command over the invalidated pipe.
+        let retired = self.retired;
+        if !retired {
+            self.request(Operation::Shutdown).await?;
+        }
         let status = timeout(DEADLINE, self.child.wait())
             .await
             .map_err(|_| AudioError::Timeout)??;
-        if !status.success() {
+        if !retired && !status.success() {
             return Err(AudioError::Protocol);
         }
         Ok(())

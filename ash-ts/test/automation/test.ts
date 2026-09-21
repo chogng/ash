@@ -11,6 +11,7 @@ import type { Workbench } from "./workbench.js";
 
 interface PlaywrightFixtures {
 	readonly includeLargeTestFile: boolean;
+	readonly openWorkspace: boolean;
 	readonly target: PlaywrightTarget;
 	readonly application: PlaywrightApplication;
 	readonly driver: PlaywrightDriver;
@@ -22,6 +23,7 @@ const FORBIDDEN_WORKBENCH_CONSOLE_ERRORS = ["App Server language document synchr
 
 export const test = base.extend<PlaywrightFixtures>({
 	includeLargeTestFile: [false, { option: true }],
+	openWorkspace: [true, { option: true }],
 	target: async ({ baseURL }, use, testInfo) => {
 		await use(playwrightTargetForProject(testInfo.project.name, baseURL));
 	},
@@ -33,7 +35,7 @@ export const test = base.extend<PlaywrightFixtures>({
 			await disposeTestWorkspace(workspace);
 		}
 	},
-	driver: async ({ target, testWorkspace }, use) => {
+	driver: async ({ target, testWorkspace, openWorkspace }, use) => {
 		if (target.kind === "browser") {
 			const { application, driver } = await launchBrowser(target);
 			try {
@@ -44,22 +46,23 @@ export const test = base.extend<PlaywrightFixtures>({
 			return;
 		}
 
-		const userDataDirectory = await mkdtemp(join(tmpdir(), "ash-playwright-"));
+		// Keep the profile socket path below Windows AF_UNIX limits.
+		const userDataDirectory = await mkdtemp(join(tmpdir(), "ash-"));
 		try {
-			const { application, driver } = await launchElectron({
+			const { driver, close } = await launchElectron({
 				appServerMode: target.appServerMode,
 				workbenchMode: target.workbenchMode,
 				userDataDirectory,
-				workspaceDirectory: testWorkspace.directory,
-				workspacePermissions: testWorkspace.removeOnDispose ? "development" : undefined,
+				workspaceDirectory: openWorkspace ? testWorkspace.directory : undefined,
+				workspacePermissions: openWorkspace && testWorkspace.removeOnDispose ? "development" : undefined,
 			});
 			try {
 				await use(driver);
 			} finally {
-				await application.close().catch(() => undefined);
+				await close();
 			}
 		} finally {
-			await rm(userDataDirectory, { force: true, recursive: true });
+			await rm(userDataDirectory, { force: true, recursive: true, maxRetries: 10, retryDelay: 100 });
 		}
 	},
 	application: async ({ driver }, use) => {

@@ -38,3 +38,24 @@
 .ash-call button:disabled { cursor: default; opacity: 0.6; }
 .ash-call :focus-visible { outline: 1px solid var(--ash-focus-border); outline-offset: 2px; }
 .ash-call [hidden] { display: none; }
+
+.ash-call .call-screens {
+	display: grid;
+	gap: 8px;
+	min-width: 0;
+}
+.ash-call .call-screen {
+	margin: 0;
+	min-width: 0;
+}
+.ash-call .call-screen img {
+	display: block;
+	width: 100%;
+	height: auto;
+	object-fit: contain;
+}
+.ash-call .call-screen figcaption {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}

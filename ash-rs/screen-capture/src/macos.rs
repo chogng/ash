@@ -3,6 +3,7 @@
 use std::os::raw::c_void;
 use std::ptr;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
@@ -286,9 +287,13 @@ impl ScreenCaptureSource for MacWindowSource {
 pub struct MacCaptureStream {
     active: Arc<AtomicBool>,
     task: Option<JoinHandle<()>>,
+    error: Arc<Mutex<Option<String>>>,
 }
 
 impl ScreenCaptureStream for MacCaptureStream {
+    fn error(&self) -> Option<String> {
+        self.error.lock().ok().and_then(|error| error.clone())
+    }
     fn stop(&mut self) {
         self.active.store(false, Ordering::SeqCst);
         if let Some(task) = self.task.take() {
@@ -319,6 +324,8 @@ where
     let interval = Duration::from_secs_f64(1.0 / fps as f64);
     let active = Arc::new(AtomicBool::new(true));
     let active_clone = Arc::clone(&active);
+    let error = Arc::new(Mutex::new(None));
+    let worker_error = error.clone();
     let start_time = Instant::now();
 
     let handle = tokio::spawn(async move {
@@ -333,6 +340,9 @@ where
             match capture_fn(timestamp) {
                 Ok(frame) => on_frame(frame),
                 Err(CaptureError::PermissionDenied) => {
+                    if let Ok(mut slot) = worker_error.lock() {
+                        *slot = Some(CaptureError::PermissionDenied.to_string());
+                    }
                     break;
                 }
                 Err(_) => {
@@ -346,6 +356,7 @@ where
     Ok(Box::new(MacCaptureStream {
         active,
         task: Some(handle),
+        error,
     }))
 }
 

@@ -15,6 +15,10 @@ pub enum CallControl {
     Unmute,
     Deafen,
     Undeafen,
+    ShareScreen {
+        target: ScreenTarget,
+    },
+    StopScreenShare,
     SelectDevice {
         operation_id: String,
         #[ts(type = "number")]
@@ -24,6 +28,18 @@ pub enum CallControl {
         track_id: String,
         volume: f32,
     },
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(
+    tag = "type",
+    content = "id",
+    rename_all = "camelCase",
+    deny_unknown_fields
+)]
+pub enum ScreenTarget {
+    Display(String),
+    Window(String),
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -57,5 +73,6 @@ pub struct CallStatus {
     pub muted: bool,
     pub deafened: bool,
     pub microphone_allowed: bool,
+    pub screen_sharing: bool,
     pub error: Option<String>,
 }

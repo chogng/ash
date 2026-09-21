@@ -4,6 +4,8 @@ use livekit_client::AudioMixer;
 use livekit_client::AudioPublication;
 use livekit_client::MediaEvent;
 use livekit_client::MediaRoom;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::time::Instant;
 use voice_host::AudioConfig;
 use voice_host::AudioHost;
@@ -16,13 +18,15 @@ pub(super) struct Room {
     room: Option<MediaRoom>,
     mixer: AudioMixer,
     closing: Option<Operation<'static, ()>>,
+    screens: Arc<Mutex<super::call_video::Screens>>,
 }
 impl Room {
-    pub fn new(room: MediaRoom) -> Self {
+    pub fn new(room: MediaRoom, screens: Arc<Mutex<super::call_video::Screens>>) -> Self {
         Self {
             room: Some(room),
             mixer: AudioMixer::default(),
             closing: None,
+            screens,
         }
     }
     fn room(&mut self) -> Result<&mut MediaRoom, String> {
@@ -32,12 +36,51 @@ impl Room {
     }
 }
 impl call::Media for Room {
+    fn share_screen(&mut self, target: call::ScreenTarget) -> Operation<'_, ()> {
+        Box::pin(async move {
+            let source = match target {
+                call::ScreenTarget::Display(id) => screen_capture::create_display_source(&id),
+                call::ScreenTarget::Window(id) => screen_capture::create_window_source(&id),
+            }
+            .map_err(|error| error.to_string())?;
+            self.room()?
+                .start_screen_share(source.as_ref(), 15)
+                .await
+                .map_err(|error| error.to_string())
+        })
+    }
+    fn stop_screen_share(&mut self) -> Operation<'_, ()> {
+        Box::pin(async move {
+            self.room()?
+                .stop_screen_share()
+                .await
+                .map_err(|error| error.to_string())
+        })
+    }
     fn next_event(&mut self) -> Operation<'_, Option<call::MediaEvent>> {
         Box::pin(async move {
             let Some(event) = self.room()?.next_event().await else {
                 return Ok(None);
             };
             Ok(Some(match event {
+                MediaEvent::Video(frame) => {
+                    self.screens
+                        .lock()
+                        .map_err(|_| "Screen state unavailable")?
+                        .push(frame);
+                    call::MediaEvent::Video
+                }
+                MediaEvent::ScreenAdded {
+                    participant_id,
+                    track_id,
+                } => {
+                    self.screens
+                        .lock()
+                        .map_err(|_| "Screen state unavailable")?
+                        .add(track_id, participant_id)?;
+                    call::MediaEvent::Video
+                }
+                MediaEvent::ScreenStopped { error } => call::MediaEvent::ScreenStopped { error },
                 MediaEvent::Audio(frame) => {
                     self.mixer.push(frame).map_err(|e| e.to_string())?;
                     call::MediaEvent::Audio
@@ -59,9 +102,19 @@ impl call::Media for Room {
                     track_id,
                 },
                 MediaEvent::TrackRemoved { track_id } => {
+                    self.screens
+                        .lock()
+                        .map_err(|_| "Screen state unavailable")?
+                        .remove(&track_id);
                     call::MediaEvent::TrackRemoved { track_id }
                 }
-                MediaEvent::TrackMuted { track_id } => call::MediaEvent::TrackMuted { track_id },
+                MediaEvent::TrackMuted { track_id } => {
+                    self.screens
+                        .lock()
+                        .map_err(|_| "Screen state unavailable")?
+                        .remove(&track_id);
+                    call::MediaEvent::TrackMuted { track_id }
+                }
                 MediaEvent::TrackUnmuted { track_id } => {
                     call::MediaEvent::TrackUnmuted { track_id }
                 }
@@ -90,6 +143,9 @@ impl call::Media for Room {
     }
     fn clear(&mut self) {
         self.mixer.clear();
+        if let Ok(mut screens) = self.screens.lock() {
+            screens.clear();
+        }
     }
     fn clear_track(&mut self, track: &str) {
         self.mixer.clear_track(track);
@@ -99,6 +155,9 @@ impl call::Media for Room {
     }
     fn remove_participant(&mut self, participant: &str) {
         self.mixer.remove_participant(participant);
+        if let Ok(mut screens) = self.screens.lock() {
+            screens.remove_participant(participant);
+        }
     }
     fn set_volume(&mut self, track: &str, volume: f32) -> Result<(), String> {
         self.mixer
@@ -129,6 +188,10 @@ impl call::Media for Room {
     }
     fn close(&mut self) -> Operation<'_, ()> {
         Box::pin(async move {
+            self.screens
+                .lock()
+                .map_err(|_| "Screen state unavailable")?
+                .clear();
             if self.closing.is_none() {
                 if let Some(room) = self.room.take() {
                     self.closing = Some(Box::pin(async move {

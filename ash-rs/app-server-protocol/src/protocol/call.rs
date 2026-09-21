@@ -80,6 +80,39 @@ pub struct CallRoleParams {
 pub use call::CallConnection;
 pub use call::CallParticipant;
 pub use call::CallStatus;
+pub use call::ScreenTarget;
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct CallScreenSource {
+    pub target: ScreenTarget,
+    pub title: String,
+    pub width: u32,
+    pub height: u32,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct CallScreenSources {
+    pub sources: Vec<CallScreenSource>,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct CallScreenFrame {
+    pub track_id: String,
+    pub participant_id: String,
+    pub jpeg: String,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct CallScreenFrames {
+    #[ts(type = "number")]
+    pub media_epoch: u64,
+    pub tracks: Vec<String>,
+    pub frames: Vec<CallScreenFrame>,
+}
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

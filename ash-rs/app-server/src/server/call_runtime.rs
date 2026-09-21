@@ -37,6 +37,7 @@ pub(super) struct Session {
     pub client: CallClient,
     pub url: String,
     pub state: Arc<Mutex<CallStatus>>,
+    pub screens: Arc<Mutex<super::call_video::Screens>>,
     pub invitations: BTreeMap<String, (call::CallRole, u64, String)>,
     fingerprint: [u8; 32],
     commands: mpsc::Sender<(Option<CallControl>, Reply)>,
@@ -238,16 +239,19 @@ impl Calls {
             muted: true,
             deafened: false,
             microphone_allowed: joined.microphone,
+            screen_sharing: false,
             error: None,
         };
         let state = Arc::new(Mutex::new(status.clone()));
+        let screens = Arc::new(Mutex::new(super::call_video::Screens::default()));
+        let worker_screens = screens.clone();
         let (commands, receiver) = mpsc::channel(16);
         let worker_state = state.clone();
         let worker_client = client.clone();
         let worker = self.executor()?.spawn(async move {
             let _local = local;
             call::SessionRuntime {
-                media: Box::new(super::call_adapters::Room::new(room)),
+                media: Box::new(super::call_adapters::Room::new(room, worker_screens)),
                 devices: Box::new(super::call_adapters::Devices::new(audio)),
                 status,
                 changed: Arc::new(move |status| {
@@ -269,6 +273,7 @@ impl Calls {
                     fingerprint,
                     url,
                     state,
+                    screens,
                     commands,
                     worker,
                     invitations: BTreeMap::new(),

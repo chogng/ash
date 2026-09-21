@@ -19,7 +19,10 @@ use livekit::webrtc::prelude::RtcVideoSource;
 use livekit::webrtc::prelude::VideoFrame;
 use livekit::webrtc::prelude::VideoResolution;
 use livekit::webrtc::prelude::VideoRotation;
+use livekit::webrtc::video_frame::VideoFormatType;
+use livekit::webrtc::video_frame::native::VideoFrameBufferExt;
 use livekit::webrtc::video_source::native::NativeVideoSource;
+use livekit::webrtc::video_stream::native::NativeVideoStream;
 use screen_capture::CapturedFrame;
 use screen_capture::ScreenCaptureSource;
 use screen_capture::ScreenCaptureStream;
@@ -53,12 +56,32 @@ pub struct AudioFrame {
     pub samples: Vec<i16>,
 }
 
+/// Decoded RGBA video, independently bounded from audio and control events.
+#[derive(Debug)]
+pub struct ScreenFrame {
+    pub participant_id: String,
+    pub track_id: String,
+    pub received_at: Instant,
+    pub width: u32,
+    pub height: u32,
+    pub rotation: u16,
+    pub rgba: Vec<u8>,
+}
+
 #[derive(Debug)]
 pub enum MediaEvent {
     Connected {
         participant_ids: Vec<String>,
     },
     Audio(AudioFrame),
+    Video(ScreenFrame),
+    ScreenAdded {
+        participant_id: String,
+        track_id: String,
+    },
+    ScreenStopped {
+        error: Option<String>,
+    },
     ParticipantJoined {
         participant_id: String,
     },
@@ -90,6 +113,8 @@ pub struct MediaRoom {
     publication: Option<LocalAudioTrack>,
     events: mpsc::Receiver<MediaEvent>,
     audio: mpsc::Receiver<AudioFrame>,
+    video: mpsc::Receiver<ScreenFrame>,
+    video_tracks: HashMap<String, String>,
     stop: Option<oneshot::Sender<()>>,
     worker: Option<JoinHandle<Result<(), MediaError>>>,
     muted: HashSet<String>,
@@ -136,11 +161,12 @@ impl MediaRoom {
         let room = Arc::new(room);
         let (event_tx, events) = mpsc::channel(64);
         let (audio_tx, audio) = mpsc::channel(128);
+        let (video_tx, video) = mpsc::channel(2);
         let (stop, stopped) = oneshot::channel();
         // Start ownership before any cancellable publication operation.
         let worker_room = room.clone();
         let worker = tokio::spawn(async move {
-            receive(worker_room, receiver, event_tx, audio_tx, stopped).await
+            receive(worker_room, receiver, event_tx, audio_tx, video_tx, stopped).await
         });
         let mut result = Self {
             room: room.clone(),
@@ -148,6 +174,8 @@ impl MediaRoom {
             publication: None,
             events,
             audio,
+            video,
+            video_tracks: HashMap::new(),
             stop: Some(stop),
             worker: Some(worker),
             muted: HashSet::new(),
@@ -227,23 +255,52 @@ impl MediaRoom {
 
     pub async fn next_event(&mut self) -> Option<MediaEvent> {
         loop {
+            if self
+                .screen_stream
+                .as_ref()
+                .is_some_and(|stream| !stream.is_active())
+            {
+                let error = self
+                    .screen_stream
+                    .as_ref()
+                    .and_then(|stream| stream.error());
+                let _ = self.stop_screen_share().await;
+                return Some(MediaEvent::ScreenStopped { error });
+            }
             tokio::select! {
                 biased;
+                _ = tokio::time::sleep(Duration::from_millis(100)), if self.screen_stream.is_some() => {
+                    if self.screen_stream.as_ref().is_some_and(|stream| !stream.is_active()) {
+                        let error = self.screen_stream.as_ref().and_then(|stream| stream.error());
+                        let _ = self.stop_screen_share().await;
+                        return Some(MediaEvent::ScreenStopped { error });
+                    }
+                }
                 event = self.events.recv() => {
                     match &event {
+                        Some(MediaEvent::ScreenAdded { track_id, participant_id }) => { self.video_tracks.insert(track_id.clone(), participant_id.clone()); }
+                        Some(MediaEvent::ParticipantLeft { participant_id }) => { self.video_tracks.retain(|_, owner| owner != participant_id); }
+                        Some(MediaEvent::TrackRemoved { track_id }) => { self.video_tracks.remove(track_id); self.muted.remove(track_id); }
                         Some(MediaEvent::TrackMuted { track_id }) => { self.muted.insert(track_id.clone()); }
-                        Some(MediaEvent::TrackUnmuted { track_id } | MediaEvent::TrackRemoved { track_id }) => { self.muted.remove(track_id); }
+                        Some(MediaEvent::TrackUnmuted { track_id }) => { self.muted.remove(track_id); }
                         _ => {}
                     }
                     if matches!(event, Some(MediaEvent::Reconnecting | MediaEvent::Disconnected | MediaEvent::TrackRemoved { .. } | MediaEvent::ParticipantLeft { .. } | MediaEvent::TrackMuted { .. } | MediaEvent::TrackUnmuted { .. })) {
                         // Control changes invalidate audio already queued under the old topology.
                         while self.audio.try_recv().is_ok() {}
+                        while self.video.try_recv().is_ok() {}
                     }
                     return event;
                 }
                 frame = self.audio.recv() => {
                     let frame = frame?;
                     if frame.received_at.elapsed() <= MAX_AGE && !self.muted.contains(&frame.track_id) { return Some(MediaEvent::Audio(frame)); }
+                }
+                frame = self.video.recv() => {
+                    let frame = frame?;
+                    if frame.received_at.elapsed() <= MAX_AGE && self.video_tracks.contains_key(&frame.track_id) && !self.muted.contains(&frame.track_id) {
+                        return Some(MediaEvent::Video(frame));
+                    }
                 }
             }
         }
@@ -327,6 +384,11 @@ impl MediaRoom {
 
     /// Stops the currently active screen share and unpublishes the track.
     pub async fn stop_screen_share(&mut self) -> Result<(), MediaError> {
+        // Stop collecting pixels even when the server cannot acknowledge unpublication.
+        if let Some(mut stream) = self.screen_stream.take() {
+            stream.stop();
+        }
+        self.screen_source = None;
         if let Some(track) = self.screen_publication.as_ref() {
             let sid = track.sid();
             let unpublish_result = timeout(
@@ -340,17 +402,15 @@ impl MediaRoom {
                 Ok(Ok(_)) => {}
             }
         }
-        if let Some(mut stream) = self.screen_stream.take() {
-            stream.stop();
-        }
-        self.screen_source = None;
         self.screen_publication = None;
         Ok(())
     }
 
     /// Returns whether this room is currently publishing screen share.
     pub fn is_screen_sharing(&self) -> bool {
-        self.screen_publication.is_some()
+        self.screen_stream
+            .as_ref()
+            .is_some_and(|stream| stream.is_active())
     }
 
     pub async fn close(mut self) -> Result<(), MediaError> {
@@ -381,6 +441,16 @@ pub(crate) fn convert_captured_frame_to_webrtc(
             let width = *width;
             let height = *height;
             let stride = *stride as usize;
+            if width == 0
+                || height == 0
+                || width > 8192
+                || height > 8192
+                || u64::from(width) * u64::from(height) > 16_777_216
+                || stride < width as usize * 4
+                || data.len() < stride.checked_mul(height as usize)?
+            {
+                return None;
+            }
             let mut buffer = I420Buffer::new(width, height);
             let (stride_y, stride_u, stride_v) = buffer.strides();
             let stride_y = stride_y as usize;
@@ -452,6 +522,7 @@ async fn receive(
     mut receiver: mpsc::UnboundedReceiver<RoomEvent>,
     events: mpsc::Sender<MediaEvent>,
     audio: mpsc::Sender<AudioFrame>,
+    video: mpsc::Sender<ScreenFrame>,
     mut stop: oneshot::Receiver<()>,
 ) -> Result<(), MediaError> {
     let mut tracks: HashMap<String, JoinHandle<()>> = HashMap::new();
@@ -471,6 +542,68 @@ async fn receive(
                     .map(|(participant, _)| participant.identity().to_string())
                     .collect(),
             }),
+            RoomEvent::TrackSubscribed {
+                track: RemoteTrack::Video(track),
+                participant,
+                publication,
+                ..
+            } if publication.source() == TrackSource::Screenshare => {
+                let id = track.sid().to_string();
+                if let Some(old) = tracks.remove(&id) {
+                    old.abort();
+                }
+                if tracks.len() >= 64 {
+                    break Err(MediaError::Consumer);
+                }
+                let participant_id = participant.identity().to_string();
+                let notification = MediaEvent::ScreenAdded {
+                    participant_id: participant_id.clone(),
+                    track_id: id.clone(),
+                };
+                let track_id = id.clone();
+                let tx = video.clone();
+                let mut stream = NativeVideoStream::new(track.rtc_track());
+                tracks.insert(
+                    id,
+                    tokio::spawn(async move {
+                        while let Some(frame) = stream.next().await {
+                            let width = frame.buffer.width();
+                            let height = frame.buffer.height();
+                            if width == 0
+                                || height == 0
+                                || width > 8192
+                                || height > 8192
+                                || u64::from(width) * u64::from(height) > 16_777_216
+                                || tx.capacity() == 0
+                            {
+                                continue;
+                            }
+                            let mut rgba = vec![0; width as usize * height as usize * 4];
+                            frame.buffer.to_i420().to_argb(
+                                VideoFormatType::ABGR,
+                                &mut rgba,
+                                width * 4,
+                                width as i32,
+                                height as i32,
+                            );
+                            let packet = ScreenFrame {
+                                participant_id: participant_id.clone(),
+                                track_id: track_id.clone(),
+                                received_at: Instant::now(),
+                                width,
+                                height,
+                                rotation: frame.rotation as u16,
+                                rgba,
+                            };
+                            if let Err(mpsc::error::TrySendError::Closed(_)) = tx.try_send(packet) {
+                                break;
+                            }
+                        }
+                        stream.close();
+                    }),
+                );
+                Some(notification)
+            }
             RoomEvent::TrackSubscribed {
                 track: RemoteTrack::Audio(track),
                 participant,

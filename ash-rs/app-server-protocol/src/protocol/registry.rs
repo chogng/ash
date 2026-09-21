@@ -51,8 +51,13 @@ use crate::protocol::call::CallInviteParams;
 use crate::protocol::call::CallMemberParams;
 use crate::protocol::call::CallResourceParams;
 use crate::protocol::call::CallRoleParams;
+use crate::protocol::call::CallScreenFrame;
+use crate::protocol::call::CallScreenFrames;
+use crate::protocol::call::CallScreenSource;
+use crate::protocol::call::CallScreenSources;
 use crate::protocol::call::CallStartParams;
 use crate::protocol::call::CallStatus;
+use crate::protocol::call::ScreenTarget;
 use crate::protocol::codebase::CloudCodebaseAuthorizeParams;
 use crate::protocol::codebase::CloudCodebaseDestinationDto;
 use crate::protocol::codebase::CloudCodebaseGrantDto;
@@ -1400,6 +1405,16 @@ client_methods! {
     CallRead => "call/read" {
         params: CallResourceParams,
         response: CallStatus,
+        serialization: ConnectionExclusive("call"),
+    },
+    CallScreenSources => "call/screenSources" {
+        params: CallResourceParams,
+        response: CallScreenSources,
+        serialization: ConnectionExclusive("call"),
+    },
+    CallScreenFrames => "call/screenFrames" {
+        params: CallResourceParams,
+        response: CallScreenFrames,
         serialization: ConnectionExclusive("call"),
     },
     CallControl => "call/control" {
@@ -2974,6 +2989,11 @@ typescript_bindings! {
     CallMemberParams,
     CallRoleParams,
     CallStatus,
+    CallScreenSource,
+    CallScreenSources,
+    CallScreenFrame,
+    CallScreenFrames,
+    ScreenTarget,
     CallDeployment,
     CallConnection,
     CallControl,

@@ -33,3 +33,22 @@ async fn test_screen_capture_frame_conversion() {
     assert!(converted_count.load(Ordering::SeqCst) >= 2);
     stream.stop();
 }
+
+#[test]
+fn invalid_capture_dimensions_and_truncated_rows_are_rejected() {
+    for (width, height, stride, bytes) in [
+        (0, 1, 4, 4),
+        (2, 2, 4, 8),
+        (2, 2, 8, 15),
+        (u32::MAX, 2, 8, 16),
+    ] {
+        let frame = screen_capture::CapturedFrame::Rgba {
+            data: vec![0; bytes].into(),
+            width,
+            height,
+            stride,
+            timestamp: Duration::ZERO,
+        };
+        assert!(convert_captured_frame_to_webrtc(&frame).is_none());
+    }
+}

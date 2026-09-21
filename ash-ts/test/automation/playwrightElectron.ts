@@ -1,5 +1,9 @@
 import type { BrowserWindow, MessageBoxOptions } from "electron";
 import { realpath } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { resolve } from "node:path";
+import { promisify } from "node:util";
+import { appServerDaemonExecutablePath } from "../../src/ash/platform/app-server/electron-main/appServerPackage.js";
 import { _electron, type ElectronApplication, type Request } from "@playwright/test";
 import { ElectronPlaywrightDriver } from "./electronDriver.js";
 import { resolveElectronConfiguration, type ElectronLaunchOptions } from "./electron.js";
@@ -7,6 +11,7 @@ import { resolveElectronConfiguration, type ElectronLaunchOptions } from "./elec
 export interface ElectronLaunchResult {
 	readonly application: ElectronApplication;
 	readonly driver: ElectronPlaywrightDriver;
+	close(): Promise<void>;
 }
 
 /** Launches Ash Desktop through Playwright's Electron adapter. */
@@ -19,6 +24,18 @@ export async function launchElectron(options: ElectronLaunchOptions): Promise<El
 		executablePath: configuration.executablePath,
 		timeout: 30_000,
 	});
+	const close = async (): Promise<void> => {
+		// Stop this launch's private daemon before waiting for Electron's process
+		// tree to close. Explicit shared profiles remain owned by their caller.
+		try {
+			if (options.appServerMode === 'required' && options.profileDirectory === undefined) {
+				const daemon = appServerDaemonExecutablePath({ appPath: configuration.cwd, isPackaged: false, platform: process.platform, resourcesPath: '' });
+				await promisify(execFile)(daemon, ['stop'], { env: { ...configuration.env, ASH_HOME: resolve(options.userDataDirectory, 'profile') }, windowsHide: true, timeout: 30_000 });
+			}
+		} finally {
+			await application.close();
+		}
+	};
 	let processErrors = '';
 	const onProcessError = (chunk: Buffer): void => { processErrors = (processErrors + chunk.toString()).slice(-16_384); };
 	application.process().stderr?.on('data', onProcessError);
@@ -72,9 +89,9 @@ export async function launchElectron(options: ElectronLaunchOptions): Promise<El
 			page.off('requestfailed', onRequestFailed);
 			application.process().stderr?.off('data', onProcessError);
 		}
-		return { application, driver };
+		return { application, driver, close };
 	} catch (error) {
-		await application.close().catch(() => undefined);
+		await close();
 		throw error;
 	}
 }

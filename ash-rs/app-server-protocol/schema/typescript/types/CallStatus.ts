@@ -3,4 +3,4 @@ import type { CallConnection } from './CallConnection.js';
 import type { CallParticipant } from './CallParticipant.js';
 import type { CallSnapshot } from './CallSnapshot.js';
 
-export type CallStatus = { resourceId: string, sequence: number, connection: CallConnection, call: CallSnapshot, memberId: string, participants: Array<CallParticipant>, muted: boolean, deafened: boolean, microphoneAllowed: boolean, error: string | null, };
+export type CallStatus = { resourceId: string, sequence: number, connection: CallConnection, call: CallSnapshot, memberId: string, participants: Array<CallParticipant>, muted: boolean, deafened: boolean, microphoneAllowed: boolean, screenSharing: boolean, error: string | null, };

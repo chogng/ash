@@ -90,6 +90,9 @@ pub struct MockCaptureStream {
 }
 
 impl ScreenCaptureStream for MockCaptureStream {
+    fn error(&self) -> Option<String> {
+        None
+    }
     fn stop(&mut self) {
         if self.active.swap(false, Ordering::SeqCst) {
             if let Some(task) = self.task.take() {

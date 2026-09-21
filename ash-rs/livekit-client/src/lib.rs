@@ -16,6 +16,7 @@ pub use room::AudioFrame;
 pub use room::AudioPublication;
 pub use room::MediaEvent;
 pub use room::MediaRoom;
+pub use room::ScreenFrame;
 
 #[derive(Debug, thiserror::Error)]
 pub enum MediaError {

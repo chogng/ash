@@ -2918,6 +2918,36 @@
         {
           "additionalProperties": false,
           "properties": {
+            "target": {
+              "$ref": "#/$defs/ScreenTarget"
+            },
+            "type": {
+              "const": "shareScreen",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "target"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "type": {
+              "const": "stopScreenShare",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
             "operationId": {
               "type": "string"
             },
@@ -3214,6 +3244,93 @@
       ],
       "type": "object"
     },
+    "CallScreenFrame": {
+      "properties": {
+        "jpeg": {
+          "type": "string"
+        },
+        "participantId": {
+          "type": "string"
+        },
+        "trackId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "trackId",
+        "participantId",
+        "jpeg"
+      ],
+      "type": "object"
+    },
+    "CallScreenFrames": {
+      "properties": {
+        "frames": {
+          "items": {
+            "$ref": "#/$defs/CallScreenFrame"
+          },
+          "type": "array"
+        },
+        "mediaEpoch": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "tracks": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "mediaEpoch",
+        "tracks",
+        "frames"
+      ],
+      "type": "object"
+    },
+    "CallScreenSource": {
+      "properties": {
+        "height": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "target": {
+          "$ref": "#/$defs/ScreenTarget"
+        },
+        "title": {
+          "type": "string"
+        },
+        "width": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "target",
+        "title",
+        "width",
+        "height"
+      ],
+      "type": "object"
+    },
+    "CallScreenSources": {
+      "properties": {
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/CallScreenSource"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "sources"
+      ],
+      "type": "object"
+    },
     "CallSnapshot": {
       "properties": {
         "id": {
@@ -3311,6 +3428,9 @@
         "resourceId": {
           "type": "string"
         },
+        "screenSharing": {
+          "type": "boolean"
+        },
         "sequence": {
           "format": "uint64",
           "minimum": 0,
@@ -3326,7 +3446,8 @@
         "participants",
         "muted",
         "deafened",
-        "microphoneAllowed"
+        "microphoneAllowed",
+        "screenSharing"
       ],
       "type": "object"
     },
@@ -4079,6 +4200,38 @@
           "properties": {
             "method": {
               "const": "call/read",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/CallResourceParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "call/screenSources",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/CallResourceParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "call/screenFrames",
               "type": "string"
             },
             "params": {
@@ -8343,6 +8496,38 @@
             },
             "result": {
               "$ref": "#/$defs/CallStatus"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "call/screenSources",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/CallScreenSources"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "call/screenFrames",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/CallScreenFrames"
             }
           },
           "required": [
@@ -28015,6 +28200,44 @@
     },
     "SchemaHash": {
       "type": "string"
+    },
+    "ScreenTarget": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "type": {
+              "const": "display",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "type": {
+              "const": "window",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type",
+            "id"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "SearchSource": {
       "additionalProperties": false,

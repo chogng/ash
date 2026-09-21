@@ -24,6 +24,7 @@ pub use session::CallConnection;
 pub use session::CallControl;
 pub use session::CallParticipant;
 pub use session::CallStatus;
+pub use session::ScreenTarget;
 
 #[cfg(feature = "runtime")]
 pub use client::CallClient;

@@ -28,6 +28,10 @@ impl Drop for Watcher {
 /// Media facts supplied by the host's room adapter; authorization remains with CallClient.
 pub enum MediaEvent {
     Audio,
+    Video,
+    ScreenStopped {
+        error: Option<String>,
+    },
     Connected {
         participant_ids: Vec<String>,
     },
@@ -57,6 +61,8 @@ pub enum MediaEvent {
 
 /// The media adapter owns SDK tracks and bounded playback queues, independently of devices.
 pub trait Media: Send {
+    fn share_screen(&mut self, target: crate::ScreenTarget) -> Operation<'_, ()>;
+    fn stop_screen_share(&mut self) -> Operation<'_, ()>;
     fn next_event(&mut self) -> Operation<'_, Option<MediaEvent>>;
     fn send_audio<'a>(&'a mut self, samples: &'a [i16]) -> Operation<'a, ()>;
     fn render(&mut self, samples: usize, now: Instant) -> Result<Vec<i16>, Failure>;
@@ -121,6 +127,7 @@ impl SessionRuntime {
         self.status.muted = true;
         self.status.deafened = true;
         self.status.microphone_allowed = false;
+        self.status.screen_sharing = false;
         self.status.participants.clear();
         self.status.connection = if self.status.error.is_none() {
             CallConnection::Ended
@@ -185,7 +192,8 @@ impl SessionRuntime {
                 event = self.media.next_event(), if !authority_lost => {
                     let event = event?;
                     match event {
-                        Some(MediaEvent::Audio) => continue,
+                        Some(MediaEvent::Audio | MediaEvent::Video) => continue,
+                        Some(MediaEvent::ScreenStopped { error }) => { self.status.screen_sharing = false; self.status.error = error; }
                         Some(MediaEvent::Connected { participant_ids }) => {
                             self.status.connection = CallConnection::Connected;
                             self.status.participants = participant_ids.into_iter().map(|id| CallParticipant { id, tracks: Vec::new(), muted: false }).collect();
@@ -215,6 +223,7 @@ impl SessionRuntime {
                             for participant in &mut self.status.participants { if participant.tracks.contains(&track_id) { participant.muted = false; } }
                         }
                         Some(MediaEvent::Reconnecting) => {
+                            self.stop_screen_share().await?;
                             reconnect_started = Some(Instant::now());
                             self.status.connection = CallConnection::Reconnecting;
                             self.media.clear(); self.devices.mute().await?; self.devices.interrupt().await?;
@@ -243,6 +252,7 @@ impl SessionRuntime {
                         Err(crate::CallError::Transport) => {
                             if !authority_lost {
                                 authority_lost = true;
+                                self.stop_screen_share().await?;
                                 reconnect_started = Some(Instant::now());
                                 self.status.connection = CallConnection::Reconnecting;
                                 self.devices.mute().await?;
@@ -263,6 +273,7 @@ impl SessionRuntime {
                         self.publish();
                     } else if snapshot.revision != self.status.call.revision {
                         if matches!(snapshot.media_state, MediaState::Rotating { .. }) {
+                            self.stop_screen_share().await?;
                             self.devices.mute().await?;
                             self.devices.interrupt().await?;
                             self.media.clear();
@@ -279,6 +290,23 @@ impl SessionRuntime {
 
     async fn control(&mut self, control: CallControl) -> Result<(), Failure> {
         match control {
+            CallControl::ShareScreen { target } => {
+                if self.status.connection != CallConnection::Connected {
+                    return Err("Wait for the call to connect before sharing".into());
+                }
+                if !self.status.call.members.iter().any(|member| {
+                    member.id == self.status.member_id && member.role.can_share_screen()
+                }) {
+                    return Err("You do not have screen sharing permission".into());
+                }
+                self.stop_screen_share().await?;
+                self.media.share_screen(target).await?;
+                self.status.screen_sharing = true;
+                self.status.error = None;
+            }
+            CallControl::StopScreenShare => {
+                self.stop_screen_share().await?;
+            }
             CallControl::Mute => {
                 self.devices.mute().await?;
                 self.status.muted = true;
@@ -331,6 +359,7 @@ impl SessionRuntime {
     }
 
     async fn rejoin(&mut self) -> Result<(), Failure> {
+        self.status.screen_sharing = false;
         self.status.connection = CallConnection::Reconnecting;
         self.publish();
         self.media.clear();
@@ -389,6 +418,11 @@ impl SessionRuntime {
         }
         self.status.connection = CallConnection::Connected;
         Ok(())
+    }
+
+    async fn stop_screen_share(&mut self) -> Result<(), Failure> {
+        self.status.screen_sharing = false;
+        self.media.stop_screen_share().await
     }
 }
 

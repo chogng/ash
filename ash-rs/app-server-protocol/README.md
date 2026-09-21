@@ -57,3 +57,16 @@
 - Turn 输入使用 `audioAttachment` 加已上传引用，或 `audio` 加 base64 data URL；后端先校验并保存引用，再接受 Turn。普通音频附件与实时语音是独立接口。
 - 持久记录使用 `userAudioAttachment`；订阅、读取和恢复均不返回音频正文。模型调用时才读取字节。
 - Chat Completions 用户消息编码 WAV/MP3，格式遵循 [OpenAI 音频输入文档](https://developers.openai.com/api/docs/guides/audio-chat-completions)；ChatGPT Responses 使用音频 data URL。编码器不支持的端点或角色会明确拒绝；模型是否具备音频能力仍由提供商决定。
+
+## 通话屏幕共享
+
+| 接口 | 参数与结果 | 行为 |
+| --- | --- | --- |
+| `call/screenSources` | `resourceId` → `sources` | 返回可用显示器和窗口的 `target`、标题与尺寸；要求已连接且成员可共享。 |
+| `call/control` | `control: {type: "shareScreen", target: {type: "display" 或 "window", id}}` | 按所选来源以 15 fps 采集并发布；来源 ID 在执行时重新验证。 |
+| `call/control` | `control: {type: "stopScreenShare"}` | 停止采集并注销视频轨道，保留通话。 |
+| `call/screenFrames` | `resourceId` → `mediaEpoch`、`tracks`、`frames` | 拉取最新画面；每个 frame 含 `trackId`、`participantId` 和 base64 `jpeg`。 |
+
+`CallStatus.screenSharing` 表示本地共享状态。上述接口仅允许拥有该通话资源的产品连接调用。角色限制由通话运行时执行；窗口关闭、重连和离开后需要用户重新选择并开始共享。
+
+通知不携带像素。服务端最多保存 8 条共享轨道、64 MiB 最新 RGBA 画面，丢弃超过 500 ms 的待取帧。输出已应用旋转，缩放至 1920×1080 范围，单张 JPEG 不超过 2 MiB。`tracks` 是当前集合，`frames` 只包含本次有新画面的轨道；轨道移除后客户端释放对应画面。客户端按 `mediaEpoch` 和连接代次丢弃过时响应，最多一个拉取请求在途。

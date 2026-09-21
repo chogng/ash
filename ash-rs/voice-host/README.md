@@ -31,3 +31,5 @@ just rust-warnings ash-voice-host --features host
 - 当前完成 macOS 测试与构建、Windows 设备端测试目标交叉编译、Linux 客户端测试目标交叉编译。Linux 设备端检查需要 ALSA 目标 SDK，本机尚未配置。
 
 - 语音处理启用 AGC2 自适应数字增益，提升较轻的人声；与回声消除、降噪共用同一处理器，重置时保留配置。
+
+- 控制请求取消后终止助手并废弃管道；随后关闭只等待进程退出，不再向已废弃的管道发送命令。

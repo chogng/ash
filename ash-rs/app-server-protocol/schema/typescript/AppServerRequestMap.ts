@@ -33,6 +33,8 @@ import type { CallInviteParams } from './types/CallInviteParams.js';
 import type { CallMemberParams } from './types/CallMemberParams.js';
 import type { CallResourceParams } from './types/CallResourceParams.js';
 import type { CallRoleParams } from './types/CallRoleParams.js';
+import type { CallScreenFrames } from './types/CallScreenFrames.js';
+import type { CallScreenSources } from './types/CallScreenSources.js';
 import type { CallStartParams } from './types/CallStartParams.js';
 import type { CallStatus } from './types/CallStatus.js';
 import type { CloudCodebaseAuthorizeParams } from './types/CloudCodebaseAuthorizeParams.js';
@@ -425,6 +427,8 @@ export interface AppServerRequestMap {
   "config/dirPermissions/forget": { params: DirPermissionsForgetParams; response: ConfigCommandResult };
   "call/start": { params: CallStartParams; response: CallStatus };
   "call/read": { params: CallResourceParams; response: CallStatus };
+  "call/screenSources": { params: CallResourceParams; response: CallScreenSources };
+  "call/screenFrames": { params: CallResourceParams; response: CallScreenFrames };
   "call/control": { params: CallControlParams; response: CallStatus };
   "call/leave": { params: CallResourceParams; response: CallStatus };
   "call/end": { params: CallEndParams; response: CallStatus };
@@ -703,6 +707,8 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "config/dirPermissions/forget": { method: "config/dirPermissions/forget" },
   "call/start": { method: "call/start" },
   "call/read": { method: "call/read" },
+  "call/screenSources": { method: "call/screenSources" },
+  "call/screenFrames": { method: "call/screenFrames" },
   "call/control": { method: "call/control" },
   "call/leave": { method: "call/leave" },
   "call/end": { method: "call/end" },

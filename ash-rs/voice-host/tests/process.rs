@@ -108,3 +108,22 @@ async fn stop_before_start_and_repeated_stop_are_device_free() {
     host.stop().await.unwrap();
     host.close().await.unwrap();
 }
+
+#[tokio::test]
+async fn cancelled_control_retires_the_pipe_and_close_waits_for_process_cleanup() {
+    let mut host = AudioHost::spawn(&executable()).await.unwrap();
+    let mut operation = Box::pin(host.stop());
+    // Poll once on the current-thread runtime: the request starts, but its reply
+    // reader cannot run before we drop the operation.
+    let pending = std::future::poll_fn(|context| {
+        std::task::Poll::Ready(operation.as_mut().poll(context).is_pending())
+    })
+    .await;
+    assert!(pending);
+    drop(operation);
+    assert!(host.stop().await.is_err());
+    timeout(Duration::from_secs(3), host.close())
+        .await
+        .unwrap()
+        .unwrap();
+}

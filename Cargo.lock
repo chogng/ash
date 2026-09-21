@@ -591,6 +591,7 @@ dependencies = [
  "ash-queue",
  "ash-rollout",
  "ash-sandboxing",
+ "ash-screen-capture",
  "ash-secrets",
  "ash-shell-command",
  "ash-skills",
@@ -2247,6 +2248,7 @@ dependencies = [
  "core-graphics",
  "thiserror 2.0.19",
  "tokio",
+ "windows",
 ]
 
 [[package]]

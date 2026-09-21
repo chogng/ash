@@ -22,6 +22,15 @@ struct Room {
     log: Log,
 }
 impl Media for Room {
+    fn share_screen(&mut self, _: crate::ScreenTarget) -> Operation<'_, ()> {
+        Box::pin(async {
+            self.log.lock().unwrap().push("screen-started");
+            Ok(())
+        })
+    }
+    fn stop_screen_share(&mut self) -> Operation<'_, ()> {
+        Box::pin(async { Ok(()) })
+    }
     fn next_event(&mut self) -> Operation<'_, Option<MediaEvent>> {
         Box::pin(async { Ok(self.events.recv().await) })
     }
@@ -129,6 +138,7 @@ async fn reconnect_stops_capture_and_leave_waits_for_media_and_device_cleanup() 
             muted: true,
             deafened: false,
             microphone_allowed: true,
+            screen_sharing: false,
             error: None,
         },
         changed: Arc::new(move |status| {
@@ -219,6 +229,12 @@ struct RejoiningRoom {
     ready: mpsc::Receiver<()>,
 }
 impl Media for RejoiningRoom {
+    fn share_screen(&mut self, target: crate::ScreenTarget) -> Operation<'_, ()> {
+        self.inner.share_screen(target)
+    }
+    fn stop_screen_share(&mut self) -> Operation<'_, ()> {
+        self.inner.stop_screen_share()
+    }
     fn next_event(&mut self) -> Operation<'_, Option<MediaEvent>> {
         self.inner.next_event()
     }
@@ -273,13 +289,20 @@ struct RunningCall {
 }
 impl RunningCall {
     fn start() -> Self {
+        Self::with_role(crate::CallRole::Owner)
+    }
+
+    fn with_role(role: crate::CallRole) -> Self {
         let snapshot = crate::CallSnapshot {
             id: "call".into(),
             revision: 1,
             media_epoch: 1,
             media_room: "room".into(),
             media_state: MediaState::Ready,
-            members: vec![],
+            members: vec![crate::CallMember {
+                id: "owner".into(),
+                role,
+            }],
         };
         let authority = Arc::new(RecoveringAuthority {
             snapshot: snapshot.clone(),
@@ -316,6 +339,7 @@ impl RunningCall {
                 muted: false,
                 deafened: false,
                 microphone_allowed: true,
+                screen_sharing: false,
                 error: None,
             },
             changed: Arc::new(move |status| {
@@ -439,5 +463,91 @@ async fn muting_remote_track_only_clears_its_audio() {
         .unwrap();
     call.wait_log("track-cleared").await;
     assert!(!call.log.lock().unwrap().contains(&"track-removed"));
+    call.leave().await;
+}
+
+#[tokio::test]
+async fn screen_permission_is_checked_before_starting_capture() {
+    for role in [crate::CallRole::Listener, crate::CallRole::Agent] {
+        let call = RunningCall::with_role(role);
+        let (reply, response) = oneshot::channel();
+        call.commands
+            .send((
+                Some(CallControl::ShareScreen {
+                    target: crate::ScreenTarget::Window("42".into()),
+                }),
+                reply,
+            ))
+            .await
+            .unwrap();
+        assert!(response.await.unwrap().unwrap_err().contains("permission"));
+        assert!(!call.log.lock().unwrap().contains(&"screen-started"));
+        call.leave().await;
+    }
+}
+
+#[tokio::test]
+async fn screen_state_follows_stop_capture_failure_and_reconnect_without_restarting() {
+    let mut call = RunningCall::with_role(crate::CallRole::Speaker);
+    for stop in [Some(CallControl::StopScreenShare), None] {
+        let (reply, response) = oneshot::channel();
+        call.commands
+            .send((
+                Some(CallControl::ShareScreen {
+                    target: crate::ScreenTarget::Window("42".into()),
+                }),
+                reply,
+            ))
+            .await
+            .unwrap();
+        assert!(response.await.unwrap().unwrap().screen_sharing);
+        assert!(call.changed(CallConnection::Connected).await.screen_sharing);
+        if let Some(control) = stop {
+            let (reply, response) = oneshot::channel();
+            call.commands.send((Some(control), reply)).await.unwrap();
+            assert!(!response.await.unwrap().unwrap().screen_sharing);
+            assert!(!call.changed(CallConnection::Connected).await.screen_sharing);
+        } else {
+            call.events
+                .send(MediaEvent::ScreenStopped {
+                    error: Some("capture target closed".into()),
+                })
+                .await
+                .unwrap();
+            let state = call.changed(CallConnection::Connected).await;
+            assert!(!state.screen_sharing);
+            assert_eq!(state.error.as_deref(), Some("capture target closed"));
+        }
+    }
+    let (reply, response) = oneshot::channel();
+    call.commands
+        .send((
+            Some(CallControl::ShareScreen {
+                target: crate::ScreenTarget::Display("1".into()),
+            }),
+            reply,
+        ))
+        .await
+        .unwrap();
+    assert!(response.await.unwrap().unwrap().screen_sharing);
+    call.changed(CallConnection::Connected).await;
+    call.events.send(MediaEvent::Reconnecting).await.unwrap();
+    assert!(
+        !call
+            .changed(CallConnection::Reconnecting)
+            .await
+            .screen_sharing
+    );
+    call.events.send(MediaEvent::Reconnected).await.unwrap();
+    assert!(!call.changed(CallConnection::Connected).await.screen_sharing);
+    assert_eq!(
+        call.log
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|entry| **entry == "screen-started")
+            .count(),
+        3
+    );
     call.leave().await;
 }

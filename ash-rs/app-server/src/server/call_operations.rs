@@ -22,6 +22,12 @@ impl AppServer {
         method: ClientMethod,
         params: &Value,
     ) -> Result<Value, RpcError> {
+        if !connection.allows_product_host_capabilities() {
+            return Err(RpcError::new(
+                -32073,
+                AppServerErrorName::PermissionRequired,
+            ));
+        }
         let state = connection
             .state
             .lock()
@@ -31,6 +37,74 @@ impl AppServer {
         }
         let owner = connection.connection_id;
         match method {
+            ClientMethod::CallScreenSources | ClientMethod::CallScreenFrames => {
+                let params: CallResourceParams = decode(params)?;
+                let (status, screens) = {
+                    let sessions = self
+                        .calls
+                        .sessions
+                        .lock()
+                        .map_err(|_| failure("Call state unavailable".into()))?;
+                    let session = sessions
+                        .get(&(owner, params.resource_id))
+                        .ok_or_else(|| failure("Call not found".into()))?;
+                    let status = session
+                        .state
+                        .lock()
+                        .map_err(|_| failure("Call state unavailable".into()))?
+                        .clone();
+                    (status, session.screens.clone())
+                };
+                if status.connection != call::CallConnection::Connected {
+                    return Err(failure("Call is not connected".into()));
+                }
+                if method == ClientMethod::CallScreenSources {
+                    if !status.call.members.iter().any(|member| {
+                        member.id == status.member_id && member.role.can_share_screen()
+                    }) {
+                        return Err(failure("You do not have screen sharing permission".into()));
+                    }
+                    use ash_app_server_protocol::protocol::call::CallScreenSource;
+                    use ash_app_server_protocol::protocol::call::CallScreenSources;
+                    let mut sources: Vec<_> = screen_capture::enumerate_displays()
+                        .map_err(|error| failure(error.to_string()))?
+                        .into_iter()
+                        .map(|info| CallScreenSource {
+                            target: call::ScreenTarget::Display(info.id),
+                            title: info.title,
+                            width: info.width,
+                            height: info.height,
+                        })
+                        .collect();
+                    sources.extend(
+                        screen_capture::enumerate_windows()
+                            .map_err(|error| failure(error.to_string()))?
+                            .into_iter()
+                            .map(|info| CallScreenSource {
+                                target: call::ScreenTarget::Window(info.id),
+                                title: info.title,
+                                width: info.width,
+                                height: info.height,
+                            }),
+                    );
+                    result(&CallScreenSources { sources })
+                } else {
+                    let (tracks, frames) = screens
+                        .lock()
+                        .map_err(|_| failure("Screen state unavailable".into()))?
+                        .take();
+                    let frames = frames
+                        .into_iter()
+                        .map(super::call_video::encode)
+                        .collect::<Result<Vec<_>, _>>()
+                        .map_err(failure)?;
+                    result(&ash_app_server_protocol::protocol::call::CallScreenFrames {
+                        media_epoch: status.call.media_epoch,
+                        tracks,
+                        frames,
+                    })
+                }
+            }
             ClientMethod::CallStart => {
                 let params: CallStartParams = decode(params)?;
                 let home = self
