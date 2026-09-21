@@ -5,7 +5,7 @@ import { syncProtocol } from './sync.ts';
 /** Refreshes the canonical Rust-owned snapshot before updating its frontend consumer. */
 export async function generateProtocol(signal?: AbortSignal): Promise<void> {
 	await new Promise<void>((resolvePromise, reject) => {
-		const child = spawn('cargo', ['run', '--quiet', '--locked', '-p', 'ash-app-server-protocol', '--bin', 'generate_protocol', '--', 'fixtures'], {
+		const child = spawn('cargo', ['run', '--quiet', '--locked', '-p', 'ash-app-server-protocol', '--features', 'export', '--bin', 'generate_protocol', '--', 'fixtures'], {
 			cwd: resolve(import.meta.dirname, '../..'), stdio: 'inherit', windowsHide: true, signal,
 		});
 		child.once('error', reject);

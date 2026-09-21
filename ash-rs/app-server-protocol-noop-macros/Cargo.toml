@@ -1,0 +1,12 @@
+[package]
+name = "ash-app-server-protocol-noop-macros"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+proc-macro = true
+
+[lints]
+workspace = true

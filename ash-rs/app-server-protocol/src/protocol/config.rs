@@ -1,12 +1,12 @@
+use crate::JsonSchema;
+use crate::TS;
 use ash_protocol::CommandId;
 use ash_protocol::Patch;
 use ash_protocol::ReasoningEffort;
 use ash_protocol::ToolMode;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::BTreeMap;
-use ts_rs::TS;
 
 /// Profile-owned time information supplied to model requests.
 #[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

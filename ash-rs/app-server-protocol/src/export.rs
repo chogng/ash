@@ -14,13 +14,13 @@ use crate::rpc::JsonRpcFailure;
 use crate::rpc::JsonRpcNotification;
 use crate::rpc::JsonRpcRequest;
 use crate::rpc::JsonRpcResponse;
+use crate::schema::canonicalize_json;
+use crate::schema_hash;
 use crate::typescript_decoder;
 use schemars::JsonSchema;
 use schemars::Schema;
 use schemars::schema_for;
 use serde_json::Value;
-use sha2::Digest;
-use sha2::Sha256;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::path::Component;
@@ -441,38 +441,11 @@ pub fn json_schema() -> String {
     output
 }
 
-pub fn schema_hash() -> String {
-    let schema = protocol_schema_value();
-    let canonical =
-        serde_json::to_vec(&schema).expect("canonical protocol schema must serialize as JSON");
-    let digest = Sha256::digest(canonical);
-    format!("sha256:{digest:x}")
-}
-
-fn protocol_schema_value() -> Value {
+pub(crate) fn protocol_schema_value() -> Value {
     let mut schema =
         serde_json::to_value(protocol_schema()).expect("protocol schema must serialize as JSON");
     canonicalize_json(&mut schema);
     schema
-}
-
-fn canonicalize_json(value: &mut Value) {
-    match value {
-        Value::Array(values) => {
-            for value in values {
-                canonicalize_json(value);
-            }
-        }
-        Value::Object(object) => {
-            let mut entries = std::mem::take(object).into_iter().collect::<Vec<_>>();
-            for (_, value) in &mut entries {
-                canonicalize_json(value);
-            }
-            entries.sort_by(|left, right| left.0.cmp(&right.0));
-            object.extend(entries);
-        }
-        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {}
-    }
 }
 
 fn protocol_schema() -> Schema {

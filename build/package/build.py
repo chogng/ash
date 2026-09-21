@@ -42,6 +42,8 @@ def generate_protocol_metadata(repository_root: Path, cargo: str) -> Dict[str, o
                 str(repository_root / "Cargo.toml"),
                 "-p",
                 "ash-app-server-protocol",
+                "--features",
+                "export",
                 "--bin",
                 "generate_protocol",
                 "--",

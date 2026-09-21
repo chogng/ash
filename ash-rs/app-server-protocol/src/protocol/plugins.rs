@@ -1,7 +1,7 @@
-use schemars::JsonSchema;
+use crate::JsonSchema;
+use crate::TS;
 use serde::Deserialize;
 use serde::Serialize;
-use ts_rs::TS;
 
 /// Exact installed package plus each independent Plugin authority layer.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

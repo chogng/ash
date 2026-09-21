@@ -1,7 +1,7 @@
-use schemars::JsonSchema;
+use crate::JsonSchema;
+use crate::TS;
 use serde::Deserialize;
 use serde::Serialize;
-use ts_rs::TS;
 
 /// Whether a server-advertised slash command accepts inline composer arguments.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

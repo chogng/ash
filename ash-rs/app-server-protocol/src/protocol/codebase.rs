@@ -1,8 +1,8 @@
-use schemars::JsonSchema;
+use crate::JsonSchema;
+use crate::TS;
 use serde::Deserialize;
 use serde::Serialize;
 use std::path::PathBuf;
-use ts_rs::TS;
 
 /// Lifecycle state of the directory-side codebase projection.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

@@ -4,6 +4,13 @@
 - Session API 只提供按 `session_id` 聚合的 Agent tree；Project 使用独立 revision 和命令回执，不复制 Thread 状态。
 - Rust DTO 与方法注册表是唯一协议来源；修改后必须从仓库根运行 `just generate-protocol`，并提交 JSON Schema、三张 TypeScript 方法映射与运行时解码器。
 
+## 编译与导出
+
+- 默认构建使用空实现 `JsonSchema` / `TS` 派生，保留属性但不生成实现；握手 hash 来自编译时嵌入的已提交 JSON Schema。
+- 单元测试使用真实派生，校验 Rust 定义与已提交产物一致。
+- `export` feature 启用真实派生和导出 API；`generate_protocol` 二进制要求该 feature。`just generate-protocol` 与打包入口已显式启用。
+- 其他领域 crate 自己使用的 schema / TypeScript 依赖不受此开关控制。
+
 ## 运行基础设施
 
 | Method | 参数与结果 | 行为 |

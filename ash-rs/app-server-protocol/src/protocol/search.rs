@@ -1,11 +1,11 @@
+use crate::JsonSchema;
+use crate::TS;
 use crate::protocol::config::ConfigCommandResult;
 use crate::protocol::environment::SessionDirSelector;
 use ash_protocol::CommandId;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::path::PathBuf;
-use ts_rs::TS;
 
 /// Selects how the directory search query is interpreted by the backend.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

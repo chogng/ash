@@ -1,13 +1,13 @@
+use crate::JsonSchema;
+use crate::TS;
 use crate::protocol::environment::SessionDirSelector;
 use crate::protocol::fs::FsDeleteMode;
 use crate::protocol::fs::FsExistingTargetBehavior;
 use crate::protocol::fs::FsMissingTargetBehavior;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use std::path::PathBuf;
-use ts_rs::TS;
 
 /// Cross-file language operation requested for one source position.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

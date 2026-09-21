@@ -1,10 +1,10 @@
+use crate::JsonSchema;
+use crate::TS;
 use crate::protocol::environment::SessionDirSelector;
 use crate::protocol::resources::ResourceMetadataResult;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::path::PathBuf;
-use ts_rs::TS;
 
 /// Stable filesystem entry kind exposed to clients.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

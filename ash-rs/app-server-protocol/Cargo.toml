@@ -10,7 +10,16 @@ doctest = false
 name = "ash_app_server_protocol"
 path = "src/lib.rs"
 
+[features]
+export = ["dep:schemars", "dep:ts-rs"]
+
+[[bin]]
+name = "generate_protocol"
+path = "src/bin/generate_protocol.rs"
+required-features = ["export"]
+
 [dependencies]
+noop-macros = { package = "ash-app-server-protocol-noop-macros", path = "../app-server-protocol-noop-macros" }
 call = { package = "ash-call", path = "../call" }
 response-debug-context = { workspace = true }
 memories = { workspace = true }
@@ -22,11 +31,11 @@ diagnostics = { workspace = true }
 feedback = { workspace = true }
 features = { workspace = true }
 ash-memory-diagnostics = { workspace = true }
-schemars = { workspace = true }
+schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
-ts-rs = { workspace = true, features = ["no-serde-warnings"] }
+ts-rs = { workspace = true, features = ["no-serde-warnings"], optional = true }
 url = { workspace = true }
 zeroize = { workspace = true }
 ash-protocol = { workspace = true }
@@ -34,6 +43,10 @@ ash-environment = { workspace = true }
 ash-file-access = { workspace = true }
 ash-collaboration = { workspace = true }
 ash-thread-transcript = { workspace = true }
+
+[dev-dependencies]
+schemars = { workspace = true }
+ts-rs = { workspace = true, features = ["no-serde-warnings"] }
 
 [lints]
 workspace = true

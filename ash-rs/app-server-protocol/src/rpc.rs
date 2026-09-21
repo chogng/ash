@@ -4,7 +4,7 @@
 //! deliberately knows nothing about those domain DTOs so a future Protobuf encoding can map the
 //! same RPC semantics without changing the business protocol.
 
-use schemars::JsonSchema;
+use crate::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 

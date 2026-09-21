@@ -1,8 +1,8 @@
+use crate::JsonSchema;
+use crate::TS;
 use ash_protocol::StreamInstanceId;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
-use ts_rs::TS;
 
 /// Selects one repository discovered inside the active directory.
 #[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

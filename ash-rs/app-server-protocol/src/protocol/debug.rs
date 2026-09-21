@@ -1,8 +1,8 @@
-use schemars::JsonSchema;
+use crate::JsonSchema;
+use crate::TS;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
-use ts_rs::TS;
 
 /// Starts one connection-owned stdio Debug Adapter Protocol process.
 #[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]

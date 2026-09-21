@@ -1,8 +1,8 @@
-use schemars::JsonSchema;
+use crate::JsonSchema;
+use crate::TS;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
-use ts_rs::TS;
 
 /// Requests a complete reconciliation of the executable Editor Extension fleet.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

@@ -1,7 +1,7 @@
-use schemars::JsonSchema;
+use crate::JsonSchema;
+use crate::TS;
 use serde::Deserialize;
 use serde::Serialize;
-use ts_rs::TS;
 
 /// Inputs for one presentation-independent comparison of two text snapshots.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

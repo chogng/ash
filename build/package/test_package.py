@@ -258,6 +258,7 @@ class PackageTests(unittest.TestCase):
         self.assertEqual(REPOSITORY_ROOT, cwd)
         self.assertTrue(check)
         self.assertEqual("ash-app-server-protocol", command[command.index("-p") + 1])
+        self.assertEqual("export", command[command.index("--features") + 1])
         self.assertEqual("typescript", command[command.index("--") + 1])
         self.assertNotEqual(metadata, load_protocol_metadata(REPOSITORY_ROOT))
 

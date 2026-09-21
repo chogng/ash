@@ -1,11 +1,11 @@
+use crate::JsonSchema;
+use crate::TS;
 use ash_protocol::AttachmentRef;
 use ash_protocol::AudioMediaType;
 use ash_protocol::ImageDetail;
 use ash_protocol::ImageMediaType;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
-use ts_rs::TS;
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(untagged, deny_unknown_fields, rename_all_fields = "camelCase")]

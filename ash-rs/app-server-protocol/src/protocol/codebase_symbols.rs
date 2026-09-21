@@ -1,10 +1,10 @@
+use crate::JsonSchema;
+use crate::TS;
 use crate::protocol::language::LanguageDocumentDto;
 use crate::protocol::language::LanguageRangeDto;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::path::PathBuf;
-use ts_rs::TS;
 
 /// Lifecycle state of the directory-side declaration projection.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

@@ -1,7 +1,7 @@
+use crate::JsonSchema;
+use crate::TS;
 use crate::protocol::common::{CommandId, SessionId, ThreadId, TurnId};
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use ts_rs::TS;
 
 /// Stable identity of one Turn/repository change set.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, Ord, PartialEq, PartialOrd, Serialize, TS)]

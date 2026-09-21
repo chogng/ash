@@ -2,12 +2,14 @@ use std::error::Error;
 use std::fmt;
 use std::net::SocketAddr;
 
-use schemars::JsonSchema;
+use crate::JsonSchema;
+use crate::TS;
+#[cfg(any(test, feature = "export"))]
 use schemars::Schema;
+#[cfg(any(test, feature = "export"))]
 use schemars::SchemaGenerator;
 use serde::Deserialize;
 use serde::Serialize;
-use ts_rs::TS;
 use url::Url;
 
 const LISTEN_INFO_KIND: &str = "app-server-listen-info";
@@ -27,6 +29,7 @@ pub struct AppServerListenInfo {
     endpoint: String,
 }
 
+#[cfg(any(test, feature = "export"))]
 fn listen_info_kind_schema(_: &mut SchemaGenerator) -> Schema {
     schemars::json_schema!({
         "type": "string",
@@ -34,6 +37,7 @@ fn listen_info_kind_schema(_: &mut SchemaGenerator) -> Schema {
     })
 }
 
+#[cfg(any(test, feature = "export"))]
 fn listen_info_version_schema(_: &mut SchemaGenerator) -> Schema {
     schemars::json_schema!({
         "type": "integer",

@@ -1,13 +1,13 @@
+use crate::JsonSchema;
+use crate::TS;
 use crate::protocol::common::CommandId;
 use crate::protocol::common::SessionId;
 use ash_environment::EnvId;
 use ash_file_access::DirId;
 use ash_protocol::ProjectId;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::path::PathBuf;
-use ts_rs::TS;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

@@ -1,7 +1,7 @@
-use schemars::JsonSchema;
+use crate::JsonSchema;
+use crate::TS;
 use serde::Deserialize;
 use serde::Serialize;
-use ts_rs::TS;
 
 /// Browser listener requested through the authenticated local launch connection.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

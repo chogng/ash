@@ -1,9 +1,9 @@
 //! Stable leaf values that may cross the RPC boundary.
 
-use schemars::JsonSchema;
+use crate::JsonSchema;
+use crate::TS;
 use serde::Deserialize;
 use serde::Serialize;
-use ts_rs::TS;
 
 pub use ash_protocol::CommandId;
 pub use ash_protocol::ItemId;
@@ -92,6 +92,7 @@ pub struct ServerInfo {
 #[serde(deny_unknown_fields)]
 pub struct EmptyParams {}
 
+#[cfg(any(test, feature = "export"))]
 impl TS for EmptyParams {
     type WithoutGenerics = Self;
     type OptionInnerType = Self;

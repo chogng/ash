@@ -1,9 +1,9 @@
+use crate::JsonSchema;
+use crate::TS;
 use crate::protocol::model::ModelCatalogEntry;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use std::fmt;
-use ts_rs::TS;
 use zeroize::Zeroize;
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

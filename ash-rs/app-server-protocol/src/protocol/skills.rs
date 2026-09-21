@@ -1,11 +1,11 @@
+use crate::JsonSchema;
+use crate::TS;
 use crate::protocol::common::CommandId;
 use crate::protocol::resources::ResourceMetadataResult;
 use ash_protocol::ContentDigest;
 use ash_protocol::SkillId;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
-use ts_rs::TS;
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

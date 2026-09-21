@@ -1,3 +1,5 @@
+use crate::JsonSchema;
+use crate::TS;
 use crate::protocol::common::CommandId;
 use crate::protocol::common::RequestId;
 use crate::protocol::common::SessionId;
@@ -15,10 +17,8 @@ use ash_protocol::Thread;
 use ash_protocol::ThreadUpdateEnvelope;
 use ash_protocol::ToolMode;
 use ash_thread_transcript::ThreadTranscriptSnapshot;
-use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
-use ts_rs::TS;
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]

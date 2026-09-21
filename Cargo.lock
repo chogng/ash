@@ -685,6 +685,7 @@ name = "ash-app-server-protocol"
 version = "0.1.0"
 dependencies = [
  "ash-analytics",
+ "ash-app-server-protocol-noop-macros",
  "ash-build-info",
  "ash-call",
  "ash-collaboration",
@@ -708,6 +709,10 @@ dependencies = [
  "url",
  "zeroize",
 ]
+
+[[package]]
+name = "ash-app-server-protocol-noop-macros"
+version = "0.1.0"
 
 [[package]]
 name = "ash-app-server-transport"

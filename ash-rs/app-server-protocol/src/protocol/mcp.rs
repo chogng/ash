@@ -1,8 +1,8 @@
-use schemars::JsonSchema;
+use crate::JsonSchema;
+use crate::TS;
 use serde::Deserialize;
 use serde::Serialize;
 use std::fmt;
-use ts_rs::TS;
 use zeroize::Zeroize;
 
 /// Inbound-only MCP OAuth value that redacts diagnostics and clears its allocation on drop.
