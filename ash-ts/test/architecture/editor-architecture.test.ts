@@ -757,6 +757,7 @@ test("Editor engines delegate optional feature composition to mode bundles", () 
 	assert.match(standardBundle, /contrib\/stickyScroll\/browser\/stickyScrollContribution\.js/u);
 	assert.match(standardBundle, /contrib\/format\/browser\/formatActions\.js/u);
 	assert.match(standardBundle, /contrib\/rename\/browser\/rename\.js/u);
+	assert.match(standardBundle, /contrib\/parameterHints\/browser\/parameterHints\.js/u);
 	assert.match(standardBundle, /contrib\/dropOrPasteInto\/browser\/dropIntoEditorContribution/u);
 	assert.match(standardBundle, /contrib\/clipboard\/browser\/clipboard\.js/u);
 	assert.match(standardBundle, /contrib\/folding\/browser\/folding\.js/u);

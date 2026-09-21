@@ -1,5 +1,37 @@
 # Editor API 对齐状态
 
+## 签名提示查询、排队触发与关闭（2026-09-21）
+
+准入链：Ctrl/Cmd+Shift+Space 或输入 `(`/`,` → 标准 bundle 的签名提示贡献 → 公共 signature-help registry → 当前快照与光标查询 → 现有提示 DOM 与 View 坐标 → Escape、配置变化或释放取消。现有 `ParameterHintsService` 只有控制器一个生产消费者；请求信号、排队任务、启用配置和提示显示必须由同一会话持有，不能让关闭后遗留的任务重新打开提示。
+
+| 准入路径（相对 editor，另有标注除外） | 存在关系 | 唯一 owner、本批动作与验证 |
+| --- | --- | --- |
+| `contrib/parameterHints/browser/parameterHints.ts` | 仅 VS Code | 承接现有贡献、DOM、请求与可取消排队任务；注入语言 registry，读取当前语言和配置，校验返回的签名，修复首次定位及默认活动签名。真实 Widget/Playwright 验证输入、关闭与生命周期。 |
+| `contrib/parameterHints/browser/parameterHintsController.ts` | 仅 Ash | bundle 唯一调用迁入准确路径后删除，不保留别名，Git 可恢复。 |
+| `contrib/parameterHints/common/languageParameterHints.ts` | 仅 Ash | 请求选择及结果校验收回控制器后删除；公共 provider 类型保留在 `common/languages.ts`。Git 可恢复。 |
+| `editor.all.ts` | 双方都有 | 仅修改签名提示的副作用 import。 |
+| `contrib/parameterHints/test/browser/parameterHints.test.ts` | 仅 Ash 测试 | 新增真实编辑器创建链测试，验证请求快照、提供者错误隔离、空结果、结果校验和取消。 |
+| `ash-ts/src/ash/workbench/services/language/test/browser/appServerLanguageProviders.test.ts`、`ash-ts/src/ash/workbench/services/extensionHost/test/browser/appServerExtensionHostService.test.ts` | 仅 Ash 测试 | 通过公共请求调用已注册的 provider，移除旧请求服务依赖，保留宿主协议断言。 |
+| `ash-ts/test/integration/browser/standalone.integration.ts`、`standalone.integration.spec.ts` | 仅 Ash 测试 | 验证快捷键、输入触发合并、Escape 取消排队/在途请求、语言/配置/提供者/光标/焦点/模型变化、首次位置及背景编辑器不请求。迁移原卸载测试的贡献 ID。 |
+| `ash-ts/test/architecture/editor-architecture.test.ts` | 仅 Ash 测试 | 增加准确 bundle 路径断言。 |
+| `common/cursor/cursor.ts` | 双方都有 | 追加准入：输入回归发现 `setStates` 在文本提交后才记录旧文档版本；编辑事务记录提交前版本，事件直接携带准确的前后状态，不改变光标操作或事件入口。 |
+| `test/browser/widget/codeEditorWidget.test.ts` | 双方都有 | 追加准入：通过真实输入/编辑/导航验证选区事件的旧选区、旧版本与新版本，覆盖签名提示所需的区分依据。 |
+| `browser/README.md`、`api-alignment-status.md` | 仅 Ash 文档 | 更新唯一请求 owner、验证与未完成的标准接口。 |
+
+独立实现：保留 Ash 的 div/strong 提示 DOM、现有 CSS 和 View 布局来源，不复制上游 Model/Widget 私有结构。以可取消的一次调度替代不受关闭约束的微任务；模型内容变化立即中止旧查询，在编辑完成后读取最新光标。同一次编辑引起的选区事件不取消新触发，独立导航会取消。上游证据只用于定位 `parameterHints.ts`、查询的提供者错误隔离以及触发合并/关闭语义。完整标准命令、provider 触发字符声明、签名切换及独立 Model/Widget 公共契约仍单独记录。
+
+选区事件回归：输入、粘贴和 `executeEdits` 原先把提交后的版本写入 `oldModelVersionId`，因此消费方无法用事件区分编辑与导航。三个真实 Widget 用例在修复前均失败；光标 owner 在现有事务中保留提交前版本后通过，不再由签名提示猜测事件来源。Widget 测试文件的全局 JSDOM Canvas 装配同步补齐，与其局部窗口的处理一致。
+
+最终验证：
+
+- `check-editor-alignment.mjs --test=all` 通过：234/234 份单测文件、450/450 项 Playwright 用例，以及结构、台账、类型和生成文件检查。
+- 25 项签名提示浏览器场景覆盖在途与排队取消、连续输入、动态开关、共享模型、语言变化、首次位置、默认活动签名、焦点和迟到结果。真实 Widget 单测另覆盖请求快照、错误隔离、结果校验、只读查询与模型释放。
+- Renderer 与 Stanza 生产构建通过，无构建警告。全量测试保留既有 Canvas、marker / inline-completion 测试装配及颜色环境提示；新增选区用例带出的 Canvas 提示已修复测试装配，随后该文件 65/65 项复验通过且无警告。
+- 旧请求服务、旧控制器文件及代码引用已退出。Editor 生产文件为 537 个：422 个同路径、115 个 Ash 自有，上游尚缺 312 个路径；common 文件集合与 80/41 声明计数不变。没有修改 CSS 或新增品牌引用。
+- 本批闭合已有签名提示链；完整标准命令、provider 触发字符声明、签名切换及独立 Model/Widget 公共接口仍未完成，不计为完整签名提示 API 对齐。
+
+上一批重命名变化已由用户提交；本批改动留在工作区，未创建提交。
+
 ## 重命名准备与提交会话（2026-09-21）
 
 准入链：F2 → 标准 bundle 的重命名贡献 → 公共 rename registry → 准备位置与原提供者 → 输入新名称 → 同一快照内提交 → 编辑器事务或宿主工作区编辑。原 `RenameService` 仅有一个生产消费者，准备与提交使用分离请求，提交时丢失提供者归属并重读光标，语言还停留在装配时的值；本批按已授权的职责收敛，将该请求和取消状态迁入重命名贡献。
@@ -729,7 +761,7 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 | `contrib/documentSymbols/common/languageDocumentSymbols.ts` | 已检查请求和异步结果校验，消费本轮公共修复。 |
 | `contrib/smartSelect/common/selectionRanges.ts` | 已检查请求和异步结果校验，消费本轮公共修复。 |
 | `contrib/folding/common/languageFoldingRanges.ts` | 已检查请求和异步结果校验，消费本轮公共修复。 |
-| `contrib/parameterHints/common/languageParameterHints.ts` | 已检查请求和结果校验；提前取消时是否调用提供者待继续核对。 |
+| `contrib/parameterHints/common/languageParameterHints.ts` | 2026-09-21 已迁入 `contrib/parameterHints/browser/parameterHints.ts`；旧服务退出，关闭同时取消排队任务和在途请求。 |
 | `contrib/codeAction/common/languageCodeActions.ts`（已退出） | 原提供者与原始对象归属已迁入 `CodeActionController`；无 resolver 不串用其他提供者，查询与解析共用快照和取消信号。 |
 | `contrib/links/common/languageLinks.ts` | 已检查请求和异步结果校验，消费本轮公共修复。 |
 | `contrib/rename/common/languageRename.ts` | 2026-09-21 已迁入 `contrib/rename/browser/rename.ts`；原服务退出，准备和提交沿用同一快照及取消信号。 |
@@ -1217,7 +1249,7 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 | `contrib/middleScroll/browser/middleScrollController.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
 | `contrib/multicursor/browser/multicursor.ts` | 1 / 2 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
 | `contrib/multicursor/common/occurrenceSelection.ts` | 1 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
-| `contrib/parameterHints/browser/parameterHintsController.ts` | 1 / 0 | 已复现并修复：功能卸载取消请求并阻止后续微任务。 |
+| `contrib/parameterHints/browser/parameterHints.ts` | 1 / 1 | 2026-09-21 已迁回对应入口；关闭、动态配置、输入合并、独立导航和共享模型焦点均由真实浏览器验证。 |
 | `contrib/peekView/browser/editorPeekViewWidget.ts` | 3 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
 | `contrib/placeholderText/browser/placeholderText.contribution.ts` | 2 / 1 | 人工检查：贡献注册入口、安装条件与服务/控制器归属；功能实现结论见对应文件。 |
 | `contrib/placeholderText/browser/placeholderTextContribution.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |

@@ -35,6 +35,7 @@ import { type TextEditorContributionContext } from '../../../browser/editorExten
 import { IInstantiationService, ServiceConstructionDescriptor, createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;
 class TestResizeObserver {
 	observe(): void {}
 	unobserve(): void {}
@@ -598,6 +599,40 @@ test('CodeEditorWidget publishes canonical cursor position and selection events'
 	}]);
 	dom.window.close();
 });
+
+for (const edit of ['type', 'paste', 'executeEdits'] as const) {
+	test(`selection events retain the state before ${edit} and distinguish later navigation`, () => {
+		const dom = new JSDOM('<!doctype html><body><main></main></body>');
+		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+		using model = new TextModel('ab');
+		using editor = createTestCodeEditor({
+			container: requiredElement(dom.window.document, 'main'), model,
+			input: { resource: model.uri }, languageId: model.getLanguageId(),
+		});
+		const before = new Selection(1, 1, 1, 2);
+		editor.setSelection(before);
+		const oldVersion = model.version;
+		const events: Parameters<Parameters<typeof editor.onDidChangeCursorSelection>[0]>[0][] = [];
+		using listener = editor.onDidChangeCursorSelection(event => events.push(event));
+		if (edit === 'executeEdits') {
+			editor.executeEdits('test', [{ range: before, text: 'xy' }], [new Selection(1, 3, 1, 3)]);
+		} else {
+			editor.trigger('keyboard', edit, { text: 'xy' });
+		}
+		editor.setPosition(new Position(1, 1));
+		assert.equal(model.getValue(), 'xyb');
+		assert.deepEqual(events.map(event => ({
+			old: event.oldSelections?.map(selection => selection.toString()),
+			current: event.selection.toString(),
+			oldVersion: event.oldModelVersionId,
+			version: event.modelVersionId,
+		})), [
+			{ old: [before.toString()], current: new Selection(1, 3, 1, 3).toString(), oldVersion, version: oldVersion + 1 },
+			{ old: [new Selection(1, 3, 1, 3).toString()], current: new Selection(1, 1, 1, 1).toString(), oldVersion: oldVersion + 1, version: oldVersion + 1 },
+		]);
+		dom.window.close();
+	});
+}
 
 test('editor focus updates the view overlay presentation', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');

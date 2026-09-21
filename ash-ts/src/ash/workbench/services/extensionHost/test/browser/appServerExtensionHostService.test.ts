@@ -11,7 +11,7 @@ import { TextModel } from "../../../../../editor/common/model/textModel.js";
 import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from '../../../../../editor/common/core/range.js';
 import { LanguageHoverService } from "../../../../../editor/contrib/hover/common/hover.js";
-import { ParameterHintsService } from "../../../../../editor/contrib/parameterHints/common/languageParameterHints.js";
+import { createLanguageFeatureRequest } from '../../../../../editor/common/languages.js';
 import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
 import { ITaskService, type TaskProvider, type TaskProviderRegistration } from "../../../tasks/common/taskService.js";
 import { ITestingService, type TestProfileProvider, type TestProfileProviderRegistration } from "../../../testing/common/testingService.js";
@@ -163,9 +163,14 @@ test("projects supported language operations while diagnosing unsupported operat
 
 	using model = new TextModel("answer", { languageId: "typescript" });
 	using hover = new LanguageHoverService(model, languages.hoverProvider);
-	using parameterHints = new ParameterHintsService(model, languages.signatureHelpProvider);
+	const signal = new AbortController().signal;
+	const request = {
+		...createLanguageFeatureRequest(model, model.getLanguageId(), signal),
+		position: new Position(1, 2),
+		context: { kind: 'invoke' as const },
+	};
 	assert.deepEqual(await hover.provideHover("typescript", new Position((0) + 1, (1) + 1)), { contents: ["Host hover"] });
-	assert.deepEqual(await parameterHints.provideParameterHints("typescript", new Position((0) + 1, (1) + 1)), { signatures: [{ label: "fn(value)", parameters: [{ label: "value" }], activeParameter: 0 }], activeSignature: 0 });
+	assert.deepEqual(await languages.signatureHelpProvider.ordered(model)[0]!.provideParameterHints(request, signal), { signatures: [{ label: "fn(value)", parameters: [{ label: "value" }], activeParameter: 0 }], activeSignature: 0 });
 	assert.deepEqual((api.invocations.find(request => request.operation === "hover")!.payload as { readonly position: unknown }).position, { lineIndex: 0, columnIndex: 1 });
 	assert.deepEqual((api.invocations.find(request => request.operation === "parameterHints")!.payload as { readonly position: unknown }).position, { lineIndex: 0, columnIndex: 1 });
 	assert.equal(service.state, "degraded");

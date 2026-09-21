@@ -993,6 +993,155 @@ for (const kind of ['codeAction', 'rename', 'parameterHints', 'queuedParameterHi
 	});
 }
 
+test.describe('parameter hints requests', () => {
+	test.afterEach(async ({ page }) => {
+		await page.evaluate(() => window.ashStandaloneIntegration?.dispose());
+	});
+
+	for (const reason of ['text', 'selection', 'language', 'provider', 'off', 'model', 'contribution', 'dispose', 'blur'] as const) {
+		test(`${reason} cancels pending parameter hints and rejects late results`, async ({ page }) => {
+			const errors: string[] = [];
+			page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+			await page.goto('/standalone.html');
+			await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints());
+			await page.keyboard.press('ControlOrMeta+Shift+Space');
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(1);
+			await page.evaluate(reason => window.ashStandaloneIntegration.changeParameterHintsState(reason), reason);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests()))[0]!.aborted).toBe(true);
+			await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints'));
+			await expect(page.locator('#caller .stanza-editor-parameter-hints')).toBeHidden();
+			if (reason === 'blur') await expect(page.locator('#owned .stanza-editor-input')).toBeFocused();
+			expect(errors).toEqual([]);
+		});
+	}
+
+	for (const reason of ['escape', 'selection', 'off', 'blur', 'dispose'] as const) {
+		test(`${reason} cancels queued parameter hints before calling a provider`, async ({ page }) => {
+			await page.goto('/standalone.html');
+			await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints());
+			await page.evaluate(reason => window.ashStandaloneIntegration.queueParameterHints(reason), reason);
+			// Allow both microtask and timer-based triggers to run before inspecting provider calls.
+			await page.evaluate(() => new Promise<void>(resolve => setTimeout(resolve, 20)));
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests())).toEqual([]);
+			await expect(page.locator('#caller .stanza-editor-parameter-hints')).toBeHidden();
+		});
+	}
+
+	test('Escape cancels pending parameter hints without closing a newer result', async ({ page }) => {
+		const errors: string[] = [];
+		page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints());
+		await page.keyboard.press('ControlOrMeta+Shift+Space');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(1);
+		await page.keyboard.press('Escape');
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests()))[0]!.aborted).toBe(true);
+		await page.keyboard.press('ControlOrMeta+Shift+Space');
+		await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(1, 'hints'));
+		await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'error'));
+		await expect(page.getByRole('dialog', { name: 'Parameter hints' })).toContainText('call(value): plaintext');
+		await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
+		expect(errors).toEqual([]);
+	});
+
+	test('first parameter hints are positioned beside the cursor and mark the default signature', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints());
+		await page.keyboard.press('ControlOrMeta+Shift+Space');
+		await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints'));
+		const dialog = page.getByRole('dialog', { name: 'Parameter hints' });
+		await expect(dialog).toBeVisible();
+		await expect(dialog.locator('.stanza-editor-parameter-hints-signature.active')).toHaveText('call(value): plaintext');
+		await expect(dialog.locator('strong')).toHaveText('value');
+		const position = await dialog.evaluate(element => ({ left: parseFloat((element as HTMLElement).style.left), top: parseFloat((element as HTMLElement).style.top), live: element.getAttribute('aria-live') }));
+		expect(position.left).toBeGreaterThan(8);
+		expect(position.top).toBeGreaterThan(8);
+		expect(position.live).toBe('polite');
+		await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
+	});
+
+	test('parameter hints respect runtime disabling and enabling', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints(false));
+		await page.keyboard.press('ControlOrMeta+Shift+Space');
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests())).toEqual([]);
+		await page.evaluate(() => window.ashStandaloneIntegration.changeParameterHintsState('on'));
+		await page.keyboard.press('ControlOrMeta+Shift+Space');
+		await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints'));
+		await expect(page.getByRole('dialog', { name: 'Parameter hints' })).toBeVisible();
+		await page.evaluate(() => window.ashStandaloneIntegration.changeParameterHintsState('off'));
+		await expect(page.locator('#caller .stanza-editor-parameter-hints')).toBeHidden();
+	});
+
+	test('quick edits coalesce into one parameter request at the final cursor', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints());
+		await page.evaluate(() => window.ashStandaloneIntegration.queueParameterHints('type'));
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests())).toEqual([{
+			text: 'call(a,)', languageId: 'plaintext', position: '(1,8)', context: { kind: 'triggerCharacter', triggerCharacter: ',' }, aborted: false,
+		}]);
+		await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints'));
+		await expect(page.getByRole('dialog', { name: 'Parameter hints' })).toBeVisible();
+	});
+
+	test('typing refreshes active parameter hints and cancels the previous request', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints());
+		await page.keyboard.type('(');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(1);
+		await page.keyboard.type('a');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(2);
+		const requests = await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests());
+		expect(requests[0]!.aborted).toBe(true);
+		expect(requests[1]!).toMatchObject({ position: '(1,7)', context: { kind: 'contentChange' } });
+		await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(1, 'hints'));
+		await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints'));
+		await expect(page.getByRole('dialog', { name: 'Parameter hints' })).toBeVisible();
+		await page.keyboard.type('b');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(3);
+		await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(2, 'empty'));
+		await expect(page.locator('#caller .stanza-editor-parameter-hints')).toBeHidden();
+	});
+
+	test('background editors sharing the model do not request parameter hints', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => {
+			window.ashStandaloneIntegration.prepareParameterHints();
+			window.ashStandaloneIntegration.shareParameterHintsModel();
+		});
+		await page.keyboard.type('(');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(1);
+		await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints'));
+		await expect(page.locator('#caller .stanza-editor-parameter-hints')).toBeVisible();
+		await expect(page.locator('#owned .stanza-editor-parameter-hints')).toBeHidden();
+	});
+
+	test('new parameter requests use the current language', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => {
+			window.ashStandaloneIntegration.prepareParameterHints();
+			window.ashStandaloneIntegration.changeParameterHintsState('language');
+		});
+		await page.keyboard.press('ControlOrMeta+Shift+Space');
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests()))[0]!.languageId).toBe('typescript');
+		await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints'));
+		await expect(page.getByRole('dialog', { name: 'Parameter hints' })).toContainText('typescript');
+	});
+
+	for (const outcome of ['empty', 'error'] as const) {
+		test(`${outcome} parameter result leaves no visible stale hint`, async ({ page }) => {
+			await page.goto('/standalone.html');
+			await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints());
+			await page.keyboard.press('ControlOrMeta+Shift+Space');
+			await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints'));
+			await expect(page.getByRole('dialog', { name: 'Parameter hints' })).toBeVisible();
+			await page.keyboard.press('ControlOrMeta+Shift+Space');
+			await page.evaluate(outcome => window.ashStandaloneIntegration.finishParameterHintRequest(1, outcome), outcome);
+			await expect(page.locator('#caller .stanza-editor-parameter-hints')).toBeHidden();
+		});
+	}
+});
+
 test.describe('rename requests', () => {
 	test.afterEach(async ({ page }) => {
 		await page.evaluate(() => window.ashStandaloneIntegration?.dispose());

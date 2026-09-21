@@ -114,7 +114,21 @@ interface RenameRequestState {
 	aborted: boolean;
 }
 
+interface ParameterHintRequestState {
+	text: string;
+	languageId: string;
+	position: string;
+	context: stanza.LanguageParameterHintsContext;
+	aborted: boolean;
+}
+
 interface StandaloneHarness {
+	prepareParameterHints(enabled?: boolean): void;
+	readParameterHintRequests(): ParameterHintRequestState[];
+	finishParameterHintRequest(index: number, outcome: 'hints' | 'empty' | 'error'): Promise<void>;
+	changeParameterHintsState(reason: 'text' | 'selection' | 'language' | 'provider' | 'off' | 'on' | 'model' | 'contribution' | 'dispose' | 'blur'): void;
+	queueParameterHints(reason: 'escape' | 'selection' | 'off' | 'blur' | 'dispose' | 'type'): void;
+	shareParameterHintsModel(): void;
 	prepareRenameRequests(phase: 'prepare' | 'edit'): void;
 	readRenameRequests(): RenameRequestState[];
 	finishRenameRequest(index: number, outcome: RenameOutcome): Promise<void>;
@@ -296,6 +310,12 @@ if (!ownedModel) throw new Error('Owned standalone editor has no model');
 let pointerMouseUpEvents = 0;
 const pointerMouseUpListener = callerEditor.onMouseUp(() => { pointerMouseUpEvents += 1; });
 let referenceRegistration: { dispose(): void } | undefined;
+let parameterHintsRegistration: ReturnType<typeof stanza.languages.registerSignatureHelpProvider> | undefined;
+const parameterHintRequests: {
+	state: Omit<ParameterHintRequestState, 'aborted'>;
+	signal: AbortSignal;
+	finish: (outcome: 'hints' | 'empty' | 'error') => void;
+}[] = [];
 let renameRegistration: ReturnType<typeof stanza.languages.registerRenameProvider> | undefined;
 const renameRequests: {
 	state: Omit<RenameRequestState, 'aborted'>;
@@ -408,6 +428,67 @@ let formattingProvider: { dispose(): void } | undefined;
 let bracketTokenRegistration: { dispose(): void } | undefined;
 
 window.ashStandaloneIntegration = {
+	prepareParameterHints: (enabled = true) => {
+		parameterHintsRegistration?.dispose();
+		callerEditor.setValue('call');
+		callerEditor.setPosition(new stanza.Position(1, 5));
+		callerEditor.updateOptions({ parameterHints: { enabled } });
+		callerEditor.focus();
+		parameterHintsRegistration = stanza.languages.registerSignatureHelpProvider('*', {
+			provideParameterHints: (request, signal) => new Promise((resolve, reject) => parameterHintRequests.push({
+				state: {
+					text: request.snapshot.getText(),
+					languageId: request.languageId,
+					position: request.position.toString(),
+					context: request.context,
+				},
+				signal,
+				finish: outcome => {
+					if (outcome === 'error') {
+						reject(new Error('parameter hints failed'));
+					} else {
+						resolve({ signatures: outcome === 'empty' ? [] : [{
+							label: `call(value): ${request.languageId}`,
+							parameters: [{ label: 'value' }],
+							activeParameter: 0,
+						}] });
+					}
+				},
+			})),
+		});
+	},
+	readParameterHintRequests: () => parameterHintRequests.map(request => ({ ...request.state, aborted: request.signal.aborted })),
+	finishParameterHintRequest: async (index, outcome) => {
+		parameterHintRequests[index]!.finish(outcome);
+		await Promise.resolve();
+		await Promise.resolve();
+		await Promise.resolve();
+	},
+	changeParameterHintsState: reason => {
+		if (reason === 'text') callerEditor.setValue('changed');
+		if (reason === 'selection') callerEditor.setPosition(new stanza.Position(1, 2));
+		if (reason === 'language') callerModel.setLanguage('typescript');
+		if (reason === 'provider') parameterHintsRegistration?.dispose();
+		if (reason === 'off' || reason === 'on') callerEditor.updateOptions({ parameterHints: { enabled: reason === 'on' } });
+		if (reason === 'model') callerEditor.setModel(ownedModel);
+		if (reason === 'contribution') callerEditor.getContribution('editor.controller.parameterHints')!.dispose();
+		if (reason === 'dispose') callerEditor.dispose();
+		if (reason === 'blur') ownedEditor.focus();
+	},
+	queueParameterHints: reason => {
+		callerEditor.trigger('keyboard', 'type', { text: '(' });
+		if (reason === 'escape') {
+			callerContainer.querySelector('.stanza-editor-input')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+		} else if (reason === 'type') {
+			callerEditor.trigger('keyboard', 'type', { text: 'a,' });
+		} else {
+			window.ashStandaloneIntegration.changeParameterHintsState(reason);
+		}
+	},
+	shareParameterHintsModel: () => {
+		ownedEditor.setModel(callerModel);
+		callerEditor.focus();
+	},
 	prepareRenameRequests: phase => {
 		renameRegistration?.dispose();
 		callerEditor.setValue('value');
@@ -737,7 +818,7 @@ window.ashStandaloneIntegration = {
 				: features.signatureHelpProvider.register('plaintext', { provideParameterHints: async (_request, signal) => { await wait(signal); return undefined; } });
 		try {
 			callerEditor.focus();
-			const hints = kind === 'parameterHints' || kind === 'queuedParameterHints' ? callerEditor.getContribution('editor.contrib.parameterHints') : undefined;
+			const hints = kind === 'parameterHints' || kind === 'queuedParameterHints' ? callerEditor.getContribution('editor.controller.parameterHints') : undefined;
 			if (kind === 'queuedParameterHints') {
 				callerEditor.executeEdits('test', [{ range: new stanza.Range(1, 1, 1, 1), text: '(' }]);
 			} else {
@@ -1798,6 +1879,8 @@ window.ashStandaloneIntegration = {
 	},
 	releaseOwned: () => ownedEditor.dispose(),
 	dispose: () => {
+		parameterHintsRegistration?.dispose();
+		for (const request of parameterHintRequests) request.finish('empty');
 		renameRegistration?.dispose();
 		for (const request of renameRequests) request.finish('empty');
 		for (const request of codeActionRequests) request.finish('disabled');

@@ -316,7 +316,7 @@ export class CursorsController extends Disposable {
 	private autoClosedActions: AutoClosedAction[] = [];
 	private currentSelections: readonly Selection[];
 	private activeComposition: ActiveComposition | undefined;
-	private executingCommand = false;
+	private commandVersion: number | undefined;
 	private previousEditOperationType = EditOperationType.Other;
 	private hasFocus = false;
 	private columnSelectData: IColumnSelectData | null = null;
@@ -404,7 +404,7 @@ export class CursorsController extends Disposable {
 
 		const oldStates = this.cursors.getAll();
 		const oldSelections = this.cursors.getSelections();
-		const modelVersion = this.model.version;
+		const modelVersion = this.commandVersion ?? this.model.version;
 		this.cursors.setStates(states);
 		this.cursors.normalize();
 		this.currentSelections = this.cursors.getSelections();
@@ -528,12 +528,12 @@ export class CursorsController extends Disposable {
 		this.assertNotDisposed();
 		if (edits.length === 0) return;
 		const before = this.getSelections();
-		this.executingCommand = true;
+		this.commandVersion = this.model.version;
 		try {
 			const after = this.model.pushEditOperations(before, edits, cursorStateComputer, undefined, reason);
 			if (after) this.setStates(eventsCollector, source, CursorChangeReason.NotSet, CursorState.fromModelSelections(after));
 		} finally {
-			this.executingCommand = false;
+			this.commandVersion = undefined;
 		}
 	}
 
@@ -692,18 +692,18 @@ export class CursorsController extends Disposable {
 	public onModelContentChanged(eventsCollector: ViewModelEventsCollector, event: InternalModelContentChangeEvent | ModelInjectedTextChangedEvent): void {
 		this.assertNotDisposed();
 		if (!('rawContentChangedEvent' in event)) {
-			if (this.executingCommand) return;
-			this.executingCommand = true;
+			if (this.commandVersion !== undefined) return;
+			this.commandVersion = this.model.version;
 			try {
 				this.setStates(eventsCollector, 'modelChange', CursorChangeReason.NotSet, this.getCursorStates());
 			} finally {
-				this.executingCommand = false;
+				this.commandVersion = undefined;
 			}
 			return;
 		}
 		const rawEvent = event.rawContentChangedEvent;
 		this.knownModelVersion = rawEvent.versionId;
-		if (this.executingCommand) return;
+		if (this.commandVersion !== undefined) return;
 		this.previousEditOperationType = EditOperationType.Other;
 		this.cursorHistory.length = 0;
 		this.cursorRedoHistory.length = 0;
@@ -885,7 +885,7 @@ export class CursorsController extends Disposable {
 		const before = this.getSelections();
 		let change: TextModelChange | undefined;
 		const capture = this.model.onDidChangeContent(event => { change = event; });
-		this.executingCommand = true;
+		this.commandVersion = this.model.version;
 		try {
 			const after = CommandExecutor.executeCommands(this.model, before, operation.commands, reason, this.activeComposition?.historyGroup);
 			if (after) {
@@ -903,7 +903,7 @@ export class CursorsController extends Disposable {
 				if (change) this.rememberSelectionHistory(change.transactionId, { before, after: this.getSelections() });
 			}
 		} finally {
-			this.executingCommand = false;
+			this.commandVersion = undefined;
 			capture.dispose();
 		}
 		if (operation.shouldPushStackElementAfter && !compositionOwnsHistory) {
@@ -913,7 +913,7 @@ export class CursorsController extends Disposable {
 
 	private acceptModelChange(change: TextModelChange): void {
 		this.knownModelVersion = change.version;
-		if (this.executingCommand) {
+		if (this.commandVersion !== undefined) {
 			this.refreshTrackedSelections(CursorChangeReason.RecoverFromMarkers, false);
 			return;
 		}

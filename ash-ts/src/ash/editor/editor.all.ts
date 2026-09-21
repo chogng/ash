@@ -36,7 +36,7 @@ import "./contrib/links/browser/linksController.js";
 import './contrib/message/browser/messageController.js';
 import './contrib/middleScroll/browser/middleScroll.contribution.js';
 import "./contrib/multicursor/browser/multicursor.js";
-import "./contrib/parameterHints/browser/parameterHintsController.js";
+import "./contrib/parameterHints/browser/parameterHints.js";
 import "./contrib/placeholderText/browser/placeholderText.contribution.js";
 import "./contrib/quickAccess/browser/quickAccessController.js";
 import './contrib/readOnlyMessage/browser/contribution.js';

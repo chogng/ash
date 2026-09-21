@@ -10,7 +10,6 @@ import { LanguageCompletionService } from '../../../../../editor/contrib/suggest
 import { getWorkspaceSymbols } from '../../../../contrib/search/common/search.js';
 import { LanguageNavigationService } from '../../../../../editor/contrib/gotoSymbol/common/languageNavigation.js';
 import { LanguageHoverService } from '../../../../../editor/contrib/hover/common/hover.js';
-import { ParameterHintsService } from '../../../../../editor/contrib/parameterHints/common/languageParameterHints.js';
 import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
 import { type ILanguageApi } from "../../../../../platform/language/common/languageApi.js";
 import { type IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
@@ -93,7 +92,6 @@ test("App Server hover and completion providers keep revision, resource, and ins
 	using model = new TextModel("pri", { languageId: "rust", resource });
 	using hover = new LanguageHoverService(model, languages.hoverProvider, resource);
 	using completions = new LanguageCompletionService(model, languages.completionProvider, { resource });
-	using parameterHints = new ParameterHintsService(model, languages.signatureHelpProvider, resource);
 
 	const hoverResult = await hover.provideHover("rust", new Position((0) + 1, (1) + 1));
 	await completions.request("rust", new Position((0) + 1, (3) + 1), createLanguageCompletionInvokeContext());
@@ -101,8 +99,13 @@ test("App Server hover and completion providers keep revision, resource, and ins
 	const completionItem = completionResult.value.items[0]!;
 	const resolved = await completions.resolveCompletionItem({ completionRequestId: completionResult.requestId, modelVersion: completionResult.modelVersion, providerId: completionItem.providerId, itemId: completionItem.id }, new AbortController().signal);
 	await completions.executeCompletionCommand("rust", completionItem, new AbortController().signal);
-	const hints = await parameterHints.provideParameterHints("rust", new Position((0) + 1, (3) + 1), { kind: "triggerCharacter", triggerCharacter: "(" });
 	const signal = new AbortController().signal;
+	const hints = await languages.signatureHelpProvider.ordered(model)[0]!.provideParameterHints({
+		...createLanguageFeatureRequest(model, model.getLanguageId(), signal),
+		resource,
+		position: new Position(1, 4),
+		context: { kind: 'triggerCharacter', triggerCharacter: '(' },
+	}, signal);
 	const inlays = await languages.inlayHintsProvider.ordered(model)[0]!.provideInlayHints({
 		...createLanguageFeatureRequest(model, model.getLanguageId(), signal),
 		resource,
