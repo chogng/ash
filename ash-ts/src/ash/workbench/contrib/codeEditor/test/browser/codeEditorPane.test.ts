@@ -1,3 +1,4 @@
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { h } from '../../../../../base/browser/dom.js';
 import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../../../platform/theme/test/common/testThemeService.js';
@@ -547,6 +548,7 @@ test('Workbench status follows cursor movement through public editor events', as
 
 function paneServices(models: ITextModelResourceService, languages?: LanguageFeaturesService): ServiceContainer {
 	const services = new ServiceContainer();
+	services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 	services.registerInstance(ITextModelResourceService, models);
 	services.registerSingleton(IThemeService, () => new TestThemeService(darkColorTheme));
 	services.registerInstance(ILogService, new NullLoggerService());

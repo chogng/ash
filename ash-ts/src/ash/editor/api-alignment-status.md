@@ -1,5 +1,35 @@
 # Editor API 对齐状态
 
+## common 动作执行与编辑器上下文（2026-09-21）
+
+准入链：注释、多光标、格式化快捷键 → `CodeEditorWidget.getAction` → `common/editorAction.ts` → 当前编辑器上下文检查 → 已注册 action 修改当前模型/选区 → Widget 与 Playwright 行为验证。起始工作区干净。用户已授权迁移和保留职责差异；本批不改 DOM 层级、布局、主题或快捷键定义。
+
+| 准入路径 | 存在关系 | 唯一职责与局部动作 |
+| --- | --- | --- |
+| `common/editorAction.ts` | 仅 VS Code → 双方都有 | `InternalEditorAction` 读取启用条件并执行绑定的动作；没有注册表或模型副本。 |
+| `browser/editorBrowser.ts`、`browser/widget/codeEditor/codeEditorWidget.ts` | 双方都有 | 补 `getAction`，从已有注册表按需绑定；上下文作用域归稳定编辑器实例，模型服务作用域保留。 |
+| `standalone/browser/standaloneCodeEditor.ts`、`browser/widget/codeEditor/embeddedCodeEditorWidget.ts` | 双方都有 | 两个实际子类显式注入并传递必需上下文服务。 |
+| `contrib/comment/browser/comment.ts`、`contrib/multicursor/browser/multicursor.ts`、`contrib/format/browser/formatActions.ts` | 双方都有 | 快捷键通过编辑器绑定的 action 检查启用条件、执行并处理异常；退出直接执行 action 的路径。 |
+| `contrib/linesOperations/browser/linesOperations.ts` | 双方都有 | 写操作补齐 writable 条件，查询可用性与实际编辑限制一致；不修改编辑算法。注释动作同样补齐声明。 |
+| `test/browser/testCodeEditor.ts`、`test/browser/widget/codeEditorWidget.test.ts` | 双方都有 | 真实容器注册必需上下文服务，验证动作、条件变化、跨编辑器隔离和模型切换。 |
+| `../workbench/contrib/codeEditor/test/browser/codeEditorPane.test.ts` | Ash 测试设施 | Pane 的真实装配 fixture 同步注册必需上下文服务，不修改生产 Pane。 |
+| `test/integration/browser/standalone.integration.ts`、`standalone.integration.spec.ts`、`textModel.integration.ts` | Ash 测试设施 | 从编辑器入口执行动作，验证实际键盘效果和编辑器隔离；文本模型宿主同步注册必需上下文服务。 |
+| `browser/README.md`、`api-alignment-status.md` | 现有文档 | 同步动作与上下文的职责、验证及剩余差异。 |
+
+HTML 复制保留源码 tab 的现有契约；模型配置继续由 ModelService 和配置服务持有。本批不为这些差异新增不兼容的同名接口。
+
+实现保留已有动作注册表，`getAction` 按需构造绑定，不建立第二份注册表或动作缓存。上下文服务变为 Widget 的显式构造依赖，Standalone、Embedded 和测试装配同步迁移；编辑器级子作用域保留稳定 context，模型级子作用域继续管理 Worker 等服务。模型分离时清空对应 context 值，关闭后查询根作用域不会留下该编辑器的条件。
+
+common 当前 **207 个 TypeScript 文件：176 个同路径、31 个 Ash 自有；仍缺 50 个上游文件**。本批只接入有生产调用的 `getAction`，没有为减少成员差异提前补 `getActions`、`getSupportedActions` 或未接入的全局 feature 注册器。
+
+本批验证结果：
+
+- 最小切片：Widget 61 项测试、两种输入模式的 Playwright 动作隔离场景通过，随后迁移三个快捷键入口。
+- `check-editor-alignment.mjs --test=all` 通过：结构、台账、类型检查、230/230 个单测文件及 316/316 个 Playwright 用例通过。
+- 覆盖只读开关、不同焦点编辑器的动作隔离、动作句柄跨模型切换、分离与关闭、格式化提供者注册/语言切换/释放，以及注释、多光标、格式化和撤销的现有键盘行为。
+- `build:renderer`、`build:stanza` 和 `git diff --check` 通过；没有新增构建 warning 或未跟踪 JavaScript 产物。
+- 保留既有 JSDOM Canvas、测试服务装配输出及 Playwright 颜色环境提示。未改 CSS，结构检查仍记录 7 份既有 CSS 债务。
+
 ## common 职责迁移：文本操作与括号装饰（2026-09-21）
 
 用户授权“职责差异该抽抽，该收收，该留留”。本批开始工作区干净；沿两条现有生产链迁移职责，没有加入前端 diff 或 Tree-sitter。common 当前 **206 个 TypeScript 文件：175 个同路径、31 个 Ash 自有；仍缺 51 个上游文件**。下方旧批次统计保留为历史，不表示所有 VS Code 能力已经实现。

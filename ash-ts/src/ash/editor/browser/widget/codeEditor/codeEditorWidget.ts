@@ -14,7 +14,7 @@ import { Range, type IRange } from "../../../common/core/range.js";
 import { TextModel } from "../../../common/model/textModel.js";
 import { type ICursorStateComputer, type IIdentifiedSingleEditOperation, type IModelDecoration, type IModelDecorationsChangeAccessor, type IModelDeltaDecoration, type ITextModel } from '../../../common/model.js';
 import { type IModelContentChangedEvent, type IModelDecorationsChangedEvent } from '../../../common/textModelEvents.js';
-import { Handler, ScrollType, type CompositionTypePayload, type ICommand, type ICodeEditorViewState, type IEditorDecorationsCollection, type IModelChangedEvent, type INewScrollPosition, type ReplacePreviousCharPayload, type TypePayload } from '../../../common/editorCommon.js';
+import { Handler, ScrollType, type CompositionTypePayload, type ICommand, type IEditorAction, type ICodeEditorViewState, type IEditorDecorationsCollection, type IModelChangedEvent, type INewScrollPosition, type ReplacePreviousCharPayload, type TypePayload } from '../../../common/editorCommon.js';
 import { VerticalRevealType } from '../../../common/viewEvents.js';
 import type { ICodeEditor, IContentWidget, IEditorMouseEvent, IGlyphMarginWidget, IOverlayWidget, IOverviewRuler, IPartialEditorMouseEvent, PastePayload, IViewZoneChangeAccessor } from '../../editorBrowser.js';
 import { View, type EditorTextDirection, type EditorViewportPresentation } from '../../view.js';
@@ -50,6 +50,7 @@ import { MenuId } from '../../../../platform/actions/common/actions.js';
 import { type IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
 import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
 import { EditorContextKeys } from '../../../common/editorContextKeys.js';
+import { InternalEditorAction } from '../../../common/editorAction.js';
 import { type ICursorPositionChangedEvent, type ICursorSelectionChangedEvent } from '../../../common/cursorEvents.js';
 
 export interface EditorSectionHeaderOptions {
@@ -197,6 +198,8 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	private modelState: Partial<CodeEditorModelState> | null = null;
 	private ownerId!: string;
 	private instantiationService!: IInstantiationService;
+	private readonly editorServices!: IInstantiationService;
+	private readonly contextKeyService!: IContextKeyService;
 	private readonly modelSlot = this._register(new MutableDisposable<DisposableStore>());
 	private currentModel: TextModel | null = null;
 	private modelGeneration = 0;
@@ -261,6 +264,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		@IThemeService private readonly themeService: IThemeService,
 		@ILanguageConfigurationService private readonly languageConfigurationService: ILanguageConfigurationService,
 		@ILanguageFeaturesService private readonly languageFeaturesService: ILanguageFeaturesService,
+		@IContextKeyService contextKeyService: IContextKeyService,
 	) {
 		super();
 		options.codeEditorService?.willCreateCodeEditor();
@@ -301,6 +305,10 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			this.widgetFocus = this._register(trackFocus(this.rootDomNode));
 			this._register(this.widgetFocus.onDidFocus(() => this.focusEditorWidgetEmitter.fire()));
 			this._register(this.widgetFocus.onDidBlur(() => this.blurEditorWidgetEmitter.fire()));
+			const editorServices = this.editorServices = this._register(this.rootServices.createChild());
+			this.contextKeyService = this._register(contextKeyService.createScoped(this.rootDomNode));
+			editorServices.registerInstance(IContextKeyService, this.contextKeyService);
+			this.instantiationService = this.editorServices;
 			this.attachModel(initialModel);
 			if (options.codeEditorService) {
 				this._register(toDisposable(() => options.codeEditorService?.removeCodeEditor(this)));
@@ -323,7 +331,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		const modelStore = new DisposableStore();
 		this.modelSlot.value = modelStore;
 		try {
-			const services = modelStore.add(this.rootServices.createChild());
+			const services = modelStore.add(this.editorServices.createChild());
 			this.instantiationService = services;
 			const logService = services.getOptional(ILogService);
 			const themeService = this.themeService;
@@ -460,12 +468,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			}));
 			this.userInputEvents = this.controller.userInputEvents;
 			const inputEvents = this.userInputEvents;
-			const parentContextKeyService = services.getOptional(IContextKeyService);
-			if (parentContextKeyService) {
-				const scopedContextKeyService = modelStore.add(parentContextKeyService.createScoped(this.view.domNode.domNode));
-				services.registerInstance(IContextKeyService, scopedContextKeyService);
-				modelStore.add(new EditorContextKeysManager(this, scopedContextKeyService, languageFeaturesService));
-			}
+			modelStore.add(new EditorContextKeysManager(this, this.contextKeyService, languageFeaturesService));
 			const handleKeyDown = (event: IKeyboardEvent): void => this.keyDownEmitter.fire(event);
 			const handleKeyUp = (event: IKeyboardEvent): void => this.keyUpEmitter.fire(event);
 			const handleContextMenu = (event: IEditorMouseEvent): void => this.contextMenuEmitter.fire(event);
@@ -581,7 +584,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			throw error;
 		}
 		this.modelState = null;
-		this.instantiationService = this.rootServices;
+		this.instantiationService = this.editorServices;
 		try {
 			if (model) {
 				this.attachModel(model);
@@ -602,7 +605,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		this.modelSlot.clear();
 		this.currentModel = null;
 		this.modelState = null;
-		this.instantiationService = this.rootServices;
+		this.instantiationService = this.editorServices;
 		this.rootDomNode.replaceChildren();
 		this.configuration.setModelLineCount(1);
 		this.modelChangeEmitter.fire({ oldModelUrl: previousModel?.uri ?? null, newModelUrl: null });
@@ -937,6 +940,26 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		void source;
 	}
 
+	getAction(id: string): IEditorAction | null {
+		this.assertNotDisposed();
+		for (const action of EditorExtensionsRegistry.getEditorActions()) {
+			if (action.id !== id) {
+				continue;
+			}
+			return new InternalEditorAction(
+				action.id, action.label, action.alias, action.metadata, action.precondition,
+				async args => {
+					this.assertNotDisposed();
+					if (this.currentModel) {
+						await this.invokeWithinContext(accessor => action.runEditorCommand(accessor, this, args));
+					}
+				},
+				this.contextKeyService,
+			);
+		}
+		return null;
+	}
+
 	invokeWithinContext<T>(fn: (accessor: import('../../../../platform/instantiation/common/instantiation.js').ServicesAccessor) => T): T {
 		return this.instantiationService.invokeFunction(fn);
 	}
@@ -1027,6 +1050,15 @@ class EditorContextKeysManager extends Disposable {
 		if (!model) throw new ReferenceError('Editor context keys require a text model');
 		const documentFormatting = EditorContextKeys.hasDocumentFormattingProvider.bindTo(contextKeyService);
 		const selectionFormatting = EditorContextKeys.hasDocumentSelectionFormattingProvider.bindTo(contextKeyService);
+		this._register(toDisposable(() => {
+			for (const key of [
+				this.editorSimpleInput, this.editorFocus, this.textInputFocus, this.editorTextFocus,
+				this.editorReadonly, this.hasMultipleSelections, this.hasNonEmptySelection,
+				this.isComposing, this.languageId, documentFormatting, selectionFormatting,
+			]) {
+				key.reset();
+			}
+		}));
 		const updateFormatting = () => {
 			const hasRangeProvider = languageFeaturesService.documentRangeFormattingEditProvider.has(model);
 			selectionFormatting.set(hasRangeProvider);

@@ -63,8 +63,10 @@ registerEditorContribution({ id: 'editor.contrib.format', install: context => {
 	}
 	context.register(context.editor.onKeyDown(event => {
 		if (event.browserEvent.defaultPrevented || event.isComposing || event.altKey || (!event.ctrlKey && !event.metaKey) || !event.shiftKey || event.key.toLowerCase() !== 'i') return;
+		const action = context.editor.getAction(formatDocumentAction.id);
+		if (!action?.isSupported()) return;
 		event.stop();
-		void context.editor.invokeWithinContext(accessor => formatDocumentAction.run(accessor, context.editor)).catch(context.onLanguageError);
+		void action.run().catch(context.onLanguageError);
 	}));
 	if (!context.options.formatOnSave || !context.registerBeforeSave) {
 		return;

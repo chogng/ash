@@ -1,3 +1,4 @@
+import { EditorContextKeys } from '../../../common/editorContextKeys.js';
 import { Selection } from "../../../common/core/selection.js";
 import { Position } from "../../../common/core/position.js";
 import { Range } from "../../../common/core/range.js";
@@ -42,20 +43,20 @@ abstract class CopyLinesAction extends EditorAction {
 
 class CopyLinesUpAction extends CopyLinesAction {
 	constructor() {
-		super(false, { id: 'editor.action.copyLinesUpAction', label: nls.localize2('lines.copyUp', 'Copy Line Up'), precondition: undefined, canTriggerInlineEdits: true });
+		super(false, { id: 'editor.action.copyLinesUpAction', label: nls.localize2('lines.copyUp', 'Copy Line Up'), precondition: EditorContextKeys.writable, canTriggerInlineEdits: true });
 	}
 }
 
 class CopyLinesDownAction extends CopyLinesAction {
 	constructor() {
-		super(true, { id: 'editor.action.copyLinesDownAction', label: nls.localize2('lines.copyDown', 'Copy Line Down'), precondition: undefined, canTriggerInlineEdits: true });
+		super(true, { id: 'editor.action.copyLinesDownAction', label: nls.localize2('lines.copyDown', 'Copy Line Down'), precondition: EditorContextKeys.writable, canTriggerInlineEdits: true });
 	}
 }
 
 /** Duplicates selected text, or the selected physical line for an empty selection. */
 export class DuplicateSelectionAction extends EditorAction {
 	constructor() {
-		super({ id: 'editor.action.duplicateSelection', label: nls.localize2('duplicateSelection', 'Duplicate Selection'), precondition: undefined, canTriggerInlineEdits: true });
+		super({ id: 'editor.action.duplicateSelection', label: nls.localize2('duplicateSelection', 'Duplicate Selection'), precondition: EditorContextKeys.writable, canTriggerInlineEdits: true });
 	}
 
 	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
@@ -94,13 +95,13 @@ abstract class MoveLinesAction extends EditorAction {
 
 class MoveLinesUpAction extends MoveLinesAction {
 	constructor() {
-		super(false, { id: 'editor.action.moveLinesUpAction', label: nls.localize2('lines.moveUp', 'Move Line Up'), precondition: undefined, canTriggerInlineEdits: true });
+		super(false, { id: 'editor.action.moveLinesUpAction', label: nls.localize2('lines.moveUp', 'Move Line Up'), precondition: EditorContextKeys.writable, canTriggerInlineEdits: true });
 	}
 }
 
 class MoveLinesDownAction extends MoveLinesAction {
 	constructor() {
-		super(true, { id: 'editor.action.moveLinesDownAction', label: nls.localize2('lines.moveDown', 'Move Line Down'), precondition: undefined, canTriggerInlineEdits: true });
+		super(true, { id: 'editor.action.moveLinesDownAction', label: nls.localize2('lines.moveDown', 'Move Line Down'), precondition: EditorContextKeys.writable, canTriggerInlineEdits: true });
 	}
 }
 
@@ -125,13 +126,13 @@ export abstract class AbstractSortLinesAction extends EditorAction {
 
 export class SortLinesAscendingAction extends AbstractSortLinesAction {
 	constructor() {
-		super(false, { id: 'editor.action.sortLinesAscending', label: nls.localize2('lines.sortAscending', 'Sort Lines Ascending'), precondition: undefined, canTriggerInlineEdits: true });
+		super(false, { id: 'editor.action.sortLinesAscending', label: nls.localize2('lines.sortAscending', 'Sort Lines Ascending'), precondition: EditorContextKeys.writable, canTriggerInlineEdits: true });
 	}
 }
 
 export class SortLinesDescendingAction extends AbstractSortLinesAction {
 	constructor() {
-		super(true, { id: 'editor.action.sortLinesDescending', label: nls.localize2('lines.sortDescending', 'Sort Lines Descending'), precondition: undefined, canTriggerInlineEdits: true });
+		super(true, { id: 'editor.action.sortLinesDescending', label: nls.localize2('lines.sortDescending', 'Sort Lines Descending'), precondition: EditorContextKeys.writable, canTriggerInlineEdits: true });
 	}
 }
 
@@ -140,7 +141,7 @@ export class TransposeAction extends EditorAction {
 		super({
 			id: 'editor.action.transpose',
 			label: nls.localize2('editor.transpose', 'Transpose Characters around the Cursor'),
-			precondition: undefined,
+			precondition: EditorContextKeys.writable,
 			canTriggerInlineEdits: true,
 		});
 	}
@@ -152,7 +153,7 @@ export class TransposeAction extends EditorAction {
 
 export class DeleteLinesAction extends EditorAction {
 	constructor() {
-		super({ id: 'editor.action.deleteLines', label: nls.localize2('lines.delete', 'Delete Line'), precondition: undefined, canTriggerInlineEdits: true });
+		super({ id: 'editor.action.deleteLines', label: nls.localize2('lines.delete', 'Delete Line'), precondition: EditorContextKeys.writable, canTriggerInlineEdits: true });
 	}
 
 	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
@@ -164,7 +165,7 @@ export class InsertLineBeforeAction extends EditorAction {
 	public static readonly ID = 'editor.action.insertLineBefore';
 
 	constructor() {
-		super({ id: InsertLineBeforeAction.ID, label: nls.localize2('lines.insertBefore', 'Insert Line Above'), precondition: undefined, canTriggerInlineEdits: true });
+		super({ id: InsertLineBeforeAction.ID, label: nls.localize2('lines.insertBefore', 'Insert Line Above'), precondition: EditorContextKeys.writable, canTriggerInlineEdits: true });
 	}
 
 	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
@@ -176,7 +177,7 @@ export class InsertLineAfterAction extends EditorAction {
 	public static readonly ID = 'editor.action.insertLineAfter';
 
 	constructor() {
-		super({ id: InsertLineAfterAction.ID, label: nls.localize2('lines.insertAfter', 'Insert Line Below'), precondition: undefined, canTriggerInlineEdits: true });
+		super({ id: InsertLineAfterAction.ID, label: nls.localize2('lines.insertAfter', 'Insert Line Below'), precondition: EditorContextKeys.writable, canTriggerInlineEdits: true });
 	}
 
 	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
@@ -186,7 +187,7 @@ export class InsertLineAfterAction extends EditorAction {
 
 export class JoinLinesAction extends EditorAction {
 	constructor() {
-		super({ id: 'editor.action.joinLines', label: nls.localize2('lines.joinLines', 'Join Lines'), precondition: undefined, canTriggerInlineEdits: true });
+		super({ id: 'editor.action.joinLines', label: nls.localize2('lines.joinLines', 'Join Lines'), precondition: EditorContextKeys.writable, canTriggerInlineEdits: true });
 	}
 
 	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {

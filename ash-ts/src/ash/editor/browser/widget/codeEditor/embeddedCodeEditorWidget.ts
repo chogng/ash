@@ -1,3 +1,4 @@
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { ILanguageConfigurationService } from '../../../common/languages/languageConfigurationRegistry.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
@@ -19,13 +20,14 @@ export class EmbeddedCodeEditorWidget extends CodeEditorWidget {
 		@IThemeService themeService: IThemeService,
 		@ILanguageConfigurationService languageConfigurationService: ILanguageConfigurationService,
 		@ILanguageFeaturesService languageFeaturesService: ILanguageFeaturesService,
+		@IContextKeyService contextKeyService: IContextKeyService,
 	) {
 		super({
 			...parentEditor.getRawOptions(),
 			...codeEditorWidgetOptions,
 			...options,
 			container: domElement,
-		}, instantiationService, themeService, languageConfigurationService, languageFeaturesService);
+		}, instantiationService, themeService, languageConfigurationService, languageFeaturesService, contextKeyService);
 
 		this.overwriteOptions = { ...options };
 		super.updateOptions(this.overwriteOptions);

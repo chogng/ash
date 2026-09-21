@@ -10,7 +10,7 @@ import { type IModelDeltaDecoration } from '../common/model.js';
 import { type IModelContentChangedEvent, type IModelDecorationsChangedEvent } from '../common/textModelEvents.js';
 import { type InjectedText } from '../common/modelLineProjectionData.js';
 import { type ConfigurationChangedEvent, type EditorLayoutInfo, type EditorOption, type FindComputedEditorOptionValueById, type IComputedEditorOptions, type IEditorOptions, type OverviewRulerPosition } from '../common/config/editorOptions.js';
-import { type ICommand, type IEditorContribution, type IEditorDecorationsCollection, type IModelChangedEvent, type INewScrollPosition, type ScrollType } from '../common/editorCommon.js';
+import { type ICommand, type IEditorAction, type IEditorContribution, type IEditorDecorationsCollection, type IModelChangedEvent, type INewScrollPosition, type ScrollType } from '../common/editorCommon.js';
 import { type ITextModel } from '../common/model.js';
 import { type ServicesAccessor } from '../../platform/instantiation/common/instantiation.js';
 import { type IClipboardCopyEvent, type IClipboardPasteEvent } from './controller/editContext/clipboardUtils.js';
@@ -229,6 +229,7 @@ export interface ICodeEditor {
 	executeCommands(source: string | null | undefined, commands: (ICommand | null)[]): void;
 	pushUndoStop(): boolean;
 	trigger(source: string | null | undefined, handlerId: string, payload: unknown): void;
+	getAction(id: string): IEditorAction | null;
 	getContribution<T extends IEditorContribution>(id: string): T | null;
 	invokeWithinContext<T>(fn: (accessor: ServicesAccessor) => T): T;
 	getContainerDomNode(): HTMLElement;

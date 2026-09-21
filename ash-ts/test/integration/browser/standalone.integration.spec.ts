@@ -250,6 +250,19 @@ test('bracket navigation shares the controller with its action for multiple curs
 	expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).toEqual(['[1,1 -> 1,1]', '[1,7 -> 1,7]']);
 });
 
+for (const inputKind of ['editContext', 'textarea'] as const) {
+	test(`${inputKind} editor actions keep their context across read-only and model changes`, async ({ page }) => {
+		if (inputKind === 'textarea') {
+			await page.addInitScript(() => { Reflect.deleteProperty(window, 'EditContext'); });
+		}
+		await page.goto('/standalone.html');
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.runScopedActions())).toEqual({
+			supported: [false, true], values: ['alpha\nbeta\ngamma', 'beta\ngamma', 'gamma'],
+			otherValue: 'owned', sameContext: true, focusRetained: true,
+		});
+	});
+}
+
 test('model bracket decorations reach the viewport and follow per-editor color settings', async ({ page }) => {
 	await page.goto('/standalone.html');
 	await page.evaluate(() => window.ashStandaloneIntegration.prepareBrackets('{([])}', [1]));

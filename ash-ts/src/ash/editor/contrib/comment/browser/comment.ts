@@ -1,3 +1,4 @@
+import { EditorContextKeys } from '../../../common/editorContextKeys.js';
 import { KeyChord, KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import * as nls from '../../../../nls.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
@@ -52,7 +53,7 @@ class ToggleCommentLineAction extends CommentLineAction {
 		super(Type.Toggle, {
 			id: 'editor.action.commentLine',
 			label: nls.localize2('comment.line', 'Toggle Line Comment'),
-			precondition: undefined,
+			precondition: EditorContextKeys.writable,
 			kbOpts: { primary: KeyMod.CtrlCmd | KeyCode.Slash, weight: KeybindingWeight.EditorContrib },
 			canTriggerInlineEdits: true,
 		});
@@ -64,7 +65,7 @@ class AddLineCommentAction extends CommentLineAction {
 		super(Type.ForceAdd, {
 			id: 'editor.action.addCommentLine',
 			label: nls.localize2('comment.line.add', 'Add Line Comment'),
-			precondition: undefined,
+			precondition: EditorContextKeys.writable,
 			kbOpts: { primary: KeyChord(KeyMod.CtrlCmd | KeyCode.KeyK, KeyMod.CtrlCmd | KeyCode.KeyC), weight: KeybindingWeight.EditorContrib },
 			canTriggerInlineEdits: true,
 		});
@@ -76,7 +77,7 @@ class RemoveLineCommentAction extends CommentLineAction {
 		super(Type.ForceRemove, {
 			id: 'editor.action.removeCommentLine',
 			label: nls.localize2('comment.line.remove', 'Remove Line Comment'),
-			precondition: undefined,
+			precondition: EditorContextKeys.writable,
 			kbOpts: { primary: KeyChord(KeyMod.CtrlCmd | KeyCode.KeyK, KeyMod.CtrlCmd | KeyCode.KeyU), weight: KeybindingWeight.EditorContrib },
 			canTriggerInlineEdits: true,
 		});
@@ -88,7 +89,7 @@ class BlockCommentAction extends EditorAction {
 		super({
 			id: 'editor.action.blockComment',
 			label: nls.localize2('comment.block', 'Toggle Block Comment'),
-			precondition: undefined,
+			precondition: EditorContextKeys.writable,
 			kbOpts: {
 				primary: KeyMod.Shift | KeyMod.Alt | KeyCode.KeyA,
 				linux: { primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyA },
@@ -124,7 +125,11 @@ registerEditorContribution({ id: 'editor.contrib.comment', install: context => {
 		}
 		const line = (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key === '/';
 		const block = event.shiftKey && event.altKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === 'a';
-		if ((!line && !block) || context.editor.getOption(EditorOption.readOnly)) {
+		if (!line && !block) {
+			return;
+		}
+		const action = context.editor.getAction(line ? toggleLineComment.id : toggleBlockComment.id);
+		if (!action?.isSupported()) {
 			return;
 		}
 		const position = context.editor.getPosition();
@@ -138,7 +143,7 @@ registerEditorContribution({ id: 'editor.contrib.comment', install: context => {
 			return;
 		}
 		event.stop();
-		context.editor.invokeWithinContext(accessor => (line ? toggleLineComment : toggleBlockComment).run(accessor, context.editor));
+		void action.run().catch(context.onLanguageError);
 		const selection = context.editor.getSelection();
 		if (selection) {
 			context.view.revealPosition(selection.getPosition());

@@ -1,3 +1,4 @@
+import { ContextKeyService, IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { IMarkerService, MarkerService } from '../../../src/ash/platform/markers/common/markers.js';
 import { IMarkerDecorationsService } from '../../../src/ash/editor/common/services/markerDecorations.js';
 import { MarkerDecorationsService } from '../../../src/ash/editor/common/services/markerDecorationsService.js';
@@ -140,6 +141,7 @@ let glyphWidgetLineNumber = 1;
 let glyphDecorations: IEditorDecorationsCollection | undefined;
 let modelDecorations: IEditorDecorationsCollection | undefined;
 const services = disposables.add(new ServiceContainer());
+services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 services.registerSingleton(IMarkerService, () => services.createInstance(MarkerService));
 services.registerSingleton(IMarkerDecorationsService, () => services.createInstance(MarkerDecorationsService));
 services.registerSingleton(ICodeEditorService, () => services.createInstance(StandaloneCodeEditorService));

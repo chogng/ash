@@ -244,8 +244,10 @@ registerEditorContribution({ id: "editor.contrib.multicursor", install: context 
 		else if ((event.ctrlKey || event.metaKey) && !event.altKey && event.shiftKey && event.key.toLowerCase() === 'l') action = selectAll;
 		if (!action) return;
 		if (action === insertLineEnds && !context.viewModel.getSelections().some(selection => !selection.isEmpty())) return;
+		const editorAction = context.editor.getAction(action.id);
+		if (!editorAction?.isSupported()) return;
 		event.stop();
-		context.editor.invokeWithinContext(accessor => action.run(accessor, context.editor, {}));
+		void editorAction.run().catch(context.onLanguageError);
 	}));
 } });
 

@@ -239,6 +239,51 @@ test('CodeEditorWidget scopes and updates the standard editor context keys', () 
 	dom.window.close();
 });
 
+test('CodeEditorWidget actions keep their editor context across read-only changes and model switches', async () => {
+	await import('../../../contrib/linesOperations/browser/linesOperations.js');
+	const dom = new JSDOM('<!doctype html><body><main></main><aside></aside></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using first = new TextModel('first\nkeep');
+	using second = new TextModel('second\nkeep');
+	using replacement = new TextModel('replacement\nkeep');
+	using services = new ServiceContainer();
+	using rootContext = new ContextKeyService();
+	services.registerInstance(IContextKeyService, rootContext);
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'), model: first,
+		input: { resource: first.uri, readOnly: true }, languageId: first.getLanguageId(), instantiationService: services,
+	});
+	using other = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'aside'), model: second,
+		input: { resource: second.uri }, languageId: second.getLanguageId(), instantiationService: services,
+	});
+	try {
+		const action = editor.getAction('editor.action.deleteLines')!;
+		const context = editor.invokeWithinContext(accessor => accessor.get(IContextKeyService));
+		other.focus();
+		assert.equal(editor.getAction('missing.action'), null);
+		assert.equal(action.isSupported(), false);
+		assert.equal(other.getAction(action.id)!.isSupported(), true);
+		await action.run();
+		assert.deepEqual([first.getValue(), second.getValue()], ['first\nkeep', 'second\nkeep']);
+		editor.updateOptions({ readOnly: false });
+		assert.equal(action.isSupported(), true);
+		await action.run();
+		assert.deepEqual([first.getValue(), second.getValue()], ['keep', 'second\nkeep']);
+		editor.setModel(null);
+		await action.run();
+		assert.equal(context.getValue('editorLangId'), '');
+		editor.setModel(replacement);
+		assert.strictEqual(editor.invokeWithinContext(accessor => accessor.get(IContextKeyService)), context);
+		await action.run();
+		assert.deepEqual([first.getValue(), replacement.getValue(), second.getValue()], ['keep', 'keep', 'second\nkeep']);
+		editor.dispose();
+		await assert.rejects(action.run(), ReferenceError);
+	} finally {
+		dom.window.close();
+	}
+});
+
 test('EditContext owns default copy, paste, and cut behavior without a clipboard contribution', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
@@ -2156,8 +2201,10 @@ test('CodeEditorWidget rejects missing shared services before creating its surfa
 	using features = new LanguageFeaturesService();
 	using theme = new TestThemeService(darkColorTheme);
 	using model = new TextModel('text');
-	for (const missing of [IThemeService, ILanguageConfigurationService, ILanguageFeaturesService]) {
+	using contextKeys = new ContextKeyService();
+	for (const missing of [IThemeService, ILanguageConfigurationService, ILanguageFeaturesService, IContextKeyService]) {
 		using services = new ServiceContainer();
+		if (missing !== IContextKeyService) services.registerInstance(IContextKeyService, contextKeys);
 		if (missing !== IThemeService) services.registerInstance(IThemeService, theme);
 		if (missing !== ILanguageConfigurationService) services.registerInstance(ILanguageConfigurationService, configurations);
 		if (missing !== ILanguageFeaturesService) services.registerInstance(ILanguageFeaturesService, features);
@@ -2174,6 +2221,7 @@ test('CodeEditorWidget shares host language services across contributions and mo
 	using features = new LanguageFeaturesService();
 	using theme = new TestThemeService(darkColorTheme);
 	using services = new ServiceContainer();
+	services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 	services.registerInstance(IThemeService, theme);
 	services.registerInstance(ILanguageConfigurationService, configurations);
 	services.registerInstance(ILanguageFeaturesService, features);
@@ -2204,7 +2252,8 @@ test('CodeEditorWidget shares host language services across contributions and mo
 	assert.equal(second.isDisposed(), false);
 });
 
-test('formatting context keys follow registration, language changes, and model replacement', () => {
+test('formatting context keys follow registration, language changes, and model replacement', async () => {
+	await import('../../../contrib/format/browser/formatActions.js');
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha', { languageId: 'plaintext' });
@@ -2219,22 +2268,26 @@ test('formatting context keys follow registration, language changes, and model r
 		languageId: model.getLanguageId(),
 		instantiationService: services,
 	});
+	const action = editor.getAction('editor.action.formatDocument')!;
 	const features = editor.invokeWithinContext(accessor => accessor.get(ILanguageFeaturesService));
 	const read = () => editor.invokeWithinContext(accessor => {
 		const context = accessor.get(IContextKeyService);
-		return [context.getValue('editorHasDocumentFormattingProvider'), context.getValue('editorHasDocumentSelectionFormattingProvider')];
+		return [context.getValue('editorHasDocumentFormattingProvider'), context.getValue('editorHasDocumentSelectionFormattingProvider'), action.isSupported()];
 	});
-	assert.deepEqual(read(), [false, false]);
+	assert.deepEqual(read(), [false, false, false]);
 	using registration = features.documentRangeFormattingEditProvider.register('typescript', { provideDocumentRangeFormattingEdits: () => [] });
-	assert.deepEqual(read(), [false, false]);
+	assert.deepEqual(read(), [false, false, false]);
 	model.setLanguage('typescript');
-	assert.deepEqual(read(), [true, true]);
+	assert.deepEqual(read(), [true, true, true]);
 	model.setLanguage('plaintext');
-	assert.deepEqual(read(), [false, false]);
+	assert.deepEqual(read(), [false, false, false]);
 	editor.setModel(next);
-	assert.deepEqual(read(), [true, true]);
+	assert.deepEqual(read(), [true, true, true]);
+	editor.updateOptions({ readOnly: true });
+	assert.deepEqual(read(), [true, true, false]);
+	editor.updateOptions({ readOnly: false });
 	registration.dispose();
-	assert.deepEqual(read(), [false, false]);
+	assert.deepEqual(read(), [false, false, false]);
 	dom.window.close();
 });
 

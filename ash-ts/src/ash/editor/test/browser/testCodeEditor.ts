@@ -1,4 +1,5 @@
 import '../../browser/services/contribution.js';
+import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { IMarkerService, MarkerService } from '../../../platform/markers/common/markers.js';
 import { IMarkerDecorationsService } from '../../common/services/markerDecorations.js';
 import { MarkerDecorationsService } from '../../common/services/markerDecorationsService.js';
@@ -24,6 +25,9 @@ interface TestCodeEditorOptions extends CodeEditorWidgetOptions {
 
 export function createCodeEditorServices(disposables: Pick<DisposableStore, 'add'>, parent?: IInstantiationService): ServiceContainer {
 	const services = disposables.add(parent ? parent.createChild() : new ServiceContainer());
+	if (!services.has(IContextKeyService)) {
+		services.registerSingleton(IContextKeyService, () => new ContextKeyService());
+	}
 	if (!services.has(IMarkerService)) {
 		services.registerSingleton(IMarkerService, () => services.createInstance(MarkerService));
 	}
@@ -75,8 +79,9 @@ class TestCodeEditor extends CodeEditorWidget {
 		@IThemeService themeService: IThemeService,
 		@ILanguageConfigurationService languageConfigurationService: ILanguageConfigurationService,
 		@ILanguageFeaturesService languageFeaturesService: ILanguageFeaturesService,
+		@IContextKeyService contextKeyService: IContextKeyService,
 	) {
-		super(options, instantiationService, themeService, languageConfigurationService, languageFeaturesService);
+		super(options, instantiationService, themeService, languageConfigurationService, languageFeaturesService, contextKeyService);
 		this._register(resources);
 	}
 }

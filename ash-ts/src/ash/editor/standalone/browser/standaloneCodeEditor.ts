@@ -1,3 +1,4 @@
+import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { ILanguageConfigurationService } from '../../common/languages/languageConfigurationRegistry.js';
@@ -36,11 +37,12 @@ export class StandaloneEditor extends CodeEditorWidget implements IStandaloneCod
 		@IThemeService themeService: IThemeService,
 		@ILanguageConfigurationService languageConfigurationService: ILanguageConfigurationService,
 		@ILanguageFeaturesService languageFeaturesService: ILanguageFeaturesService,
+		@IContextKeyService contextKeyService: IContextKeyService,
 		@ICodeEditorService codeEditorService: ICodeEditorService,
 		@IModelService private readonly modelService: IModelService,
 	) {
 		codeEditorService.willCreateCodeEditor();
-		super(options, instantiationService, themeService, languageConfigurationService, languageFeaturesService);
+		super(options, instantiationService, themeService, languageConfigurationService, languageFeaturesService, contextKeyService);
 		this.modelToDispose = ownsModel ? modelToDispose : null;
 		try {
 			this._register(bindColorTheme(themeService, options.container));

@@ -132,6 +132,7 @@ interface StandaloneHarness {
 	runDeferredPaste(change: 'none' | 'writableAgain' | 'selection' | 'composition' | 'escape'): Promise<{ value: string; handled: boolean; finishedBeforeDecode: boolean }>;
 	runDeferredDrop(change: 'none' | 'readonly' | 'writableAgain'): Promise<{ value: string; selectionUnchanged: boolean; handled: boolean }>;
 	runLineAction(id: string): Promise<void>;
+	runScopedActions(): Promise<{ supported: boolean[]; values: string[]; otherValue: string; sameContext: boolean; focusRetained: boolean }>;
 	readLineCopy(): { value: string; selections: string[] };
 	prepareReferencePreview(): void;
 	setParentFontSize(): void;
@@ -1017,10 +1018,35 @@ window.ashStandaloneIntegration = {
 			callerEditor.updateOptions({ readOnly: false });
 		}
 	},
+	runScopedActions: async () => {
+		callerEditor.setValue('alpha\nbeta\ngamma');
+		callerEditor.setPosition({ lineNumber: 1, column: 1 });
+		callerEditor.updateOptions({ readOnly: true });
+		ownedEditor.focus();
+		const context = callerEditor.invokeWithinContext(accessor => accessor.get(IContextKeyService));
+		const action = callerEditor.getAction('editor.action.deleteLines')!;
+		const supported = [action.isSupported()];
+		await action.run();
+		const values = [callerEditor.getValue()];
+		callerEditor.updateOptions({ readOnly: false });
+		supported.push(action.isSupported());
+		await action.run();
+		values.push(callerEditor.getValue());
+		callerEditor.setModel(null);
+		await action.run();
+		callerEditor.setModel(callerModel);
+		await action.run();
+		values.push(callerEditor.getValue());
+		return {
+			supported, values, otherValue: ownedEditor.getValue(),
+			sameContext: context === callerEditor.invokeWithinContext(accessor => accessor.get(IContextKeyService)),
+			focusRetained: ownedEditor.hasTextFocus(),
+		};
+	},
 	runLineAction: async id => {
-		const action = [...EditorExtensionsRegistry.getEditorActions()].find(action => action.id === id);
+		const action = callerEditor.getAction(id);
 		if (!action) throw new Error(`Missing editor action: ${id}`);
-		await callerEditor.invokeWithinContext(accessor => action.runEditorCommand(accessor, callerEditor, {}));
+		await action.run();
 	},
 	readLineCopy: () => ({ value: callerEditor.getValue(), selections: (callerEditor.getSelections() ?? []).map(selection => selection.toString()) }),
 	updateRenderingOptions: enabled => {
