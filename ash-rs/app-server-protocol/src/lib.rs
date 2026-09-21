@@ -41,11 +41,11 @@ mod tests;
 #[path = "protocol_compatibility_tests.rs"]
 mod protocol_compatibility_tests;
 
-#[cfg(not(any(test, feature = "export")))]
+#[cfg(not(any(test, feature = "json-schema")))]
 pub(crate) use noop_macros::JsonSchema;
 #[cfg(not(any(test, feature = "export")))]
 pub(crate) use noop_macros::TS;
-#[cfg(any(test, feature = "export"))]
+#[cfg(any(test, feature = "json-schema"))]
 pub(crate) use schemars::JsonSchema;
 #[cfg(any(test, feature = "export"))]
 pub(crate) use ts_rs::TS;

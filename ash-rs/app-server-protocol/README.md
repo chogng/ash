@@ -8,7 +8,8 @@
 
 - 默认构建使用空实现 `JsonSchema` / `TS` 派生，保留属性但不生成实现；握手 hash 由构建脚本从已提交的 `schema/metadata.json` 写入编译常量。
 - 单元测试使用真实派生，校验 Rust 定义与已提交产物一致。
-- `export` feature 启用真实派生和导出 API；`generate_protocol` 二进制要求该 feature。`just generate-protocol` 显式启用并同步生成 schema、TypeScript 和协议元数据。
+- `json-schema` feature 只启用真实 `JsonSchema` 派生，供需要组成自有 schema 的 Rust 消费方使用。
+- `export` feature 在 `json-schema` 之上启用 TypeScript 派生和完整导出 API；`generate_protocol` 二进制要求该 feature。`just generate-protocol` 显式启用并同步生成 schema、TypeScript 和协议元数据。
 - 导出内容未变化时保留文件时间戳，避免重复触发 Rust 构建；开发监听器先生成协议，再编译服务。
 - 开发与发布打包直接读取 `schema/metadata.json`，不启动协议生成器；测试校验它与 Rust 定义、运行时 hash 和客户端一致。
 - 其他领域 crate 自己使用的 schema / TypeScript 依赖不受此开关控制。

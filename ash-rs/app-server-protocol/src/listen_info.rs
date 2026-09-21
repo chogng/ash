@@ -4,9 +4,9 @@ use std::net::SocketAddr;
 
 use crate::JsonSchema;
 use crate::TS;
-#[cfg(any(test, feature = "export"))]
+#[cfg(any(test, feature = "json-schema"))]
 use schemars::Schema;
-#[cfg(any(test, feature = "export"))]
+#[cfg(any(test, feature = "json-schema"))]
 use schemars::SchemaGenerator;
 use serde::Deserialize;
 use serde::Serialize;
@@ -29,7 +29,7 @@ pub struct AppServerListenInfo {
     endpoint: String,
 }
 
-#[cfg(any(test, feature = "export"))]
+#[cfg(any(test, feature = "json-schema"))]
 fn listen_info_kind_schema(_: &mut SchemaGenerator) -> Schema {
     schemars::json_schema!({
         "type": "string",
@@ -37,7 +37,7 @@ fn listen_info_kind_schema(_: &mut SchemaGenerator) -> Schema {
     })
 }
 
-#[cfg(any(test, feature = "export"))]
+#[cfg(any(test, feature = "json-schema"))]
 fn listen_info_version_schema(_: &mut SchemaGenerator) -> Schema {
     schemars::json_schema!({
         "type": "integer",

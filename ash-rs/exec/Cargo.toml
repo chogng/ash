@@ -16,7 +16,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 ash-app-server-client = { workspace = true }
-ash-app-server-protocol = { workspace = true }
+ash-app-server-protocol = { workspace = true, features = ["json-schema"] }
 ash-async-utils = { workspace = true }
 ash-protocol = { workspace = true }
 
