@@ -48,6 +48,7 @@ pub use invocation::ModelUsage;
 pub use invocation::ModelUsageSummary;
 pub use invocation::ModelUsageTotal;
 pub use invocation::ReasoningConfig;
+pub use invocation::ReasoningState;
 pub use invocation::ResponseItem;
 pub use invocation::StopReason;
 pub use invocation::ToolCall;

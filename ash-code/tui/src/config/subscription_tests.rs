@@ -9,7 +9,7 @@ fn account(revision: u64) -> AccountReadResult {
     AccountReadResult {
         revision,
         accounts: vec![AccountDto {
-            provider: PROVIDER.into(),
+            provider: SubscriptionProvider::ChatGpt.id().into(),
             account_id: "account-1".into(),
             email: Some("person@example.com".into()),
             display_name: Some("ChatGPT".into()),
@@ -156,7 +156,11 @@ fn reconnecting_existing_codex_credentials_reads_the_account_without_a_challenge
         ]),
     });
     assert_eq!(
-        execute(&mut client, SubscriptionCommand::SignIn),
+        execute(
+            &mut client,
+            SubscriptionProvider::ChatGpt,
+            SubscriptionCommand::SignIn
+        ),
         SubscriptionEvent::Read(account(2))
     );
     let requests = client.into_transport().requests;
@@ -191,16 +195,25 @@ fn account_actions_use_only_redacted_account_rpcs_and_logout_refreshes() {
         ]),
     });
     assert!(matches!(
-        execute(&mut client, SubscriptionCommand::Read),
+        execute(
+            &mut client,
+            SubscriptionProvider::ChatGpt,
+            SubscriptionCommand::Read
+        ),
         SubscriptionEvent::Read(_)
     ));
     assert_eq!(
-        execute(&mut client, SubscriptionCommand::SignIn),
+        execute(
+            &mut client,
+            SubscriptionProvider::ChatGpt,
+            SubscriptionCommand::SignIn
+        ),
         SubscriptionEvent::Started(started())
     );
     assert_eq!(
         execute(
             &mut client,
+            SubscriptionProvider::ChatGpt,
             SubscriptionCommand::Cancel {
                 login_id: "login-1".into()
             }
@@ -210,7 +223,11 @@ fn account_actions_use_only_redacted_account_rpcs_and_logout_refreshes() {
         }
     );
     assert_eq!(
-        execute(&mut client, SubscriptionCommand::SignOut),
+        execute(
+            &mut client,
+            SubscriptionProvider::ChatGpt,
+            SubscriptionCommand::SignOut
+        ),
         SubscriptionEvent::SignedOut(AccountReadResult {
             revision: 2,
             accounts: vec![]
@@ -227,5 +244,37 @@ fn account_actions_use_only_redacted_account_rpcs_and_logout_refreshes() {
             serde_json::json!({ "method": "account/logout", "params": { "provider": "openai-chatgpt" } }),
             serde_json::json!({ "method": "account/read", "params": {} }),
         ]
+    );
+}
+
+#[test]
+fn xai_subscription_commands_select_xai_device_authorization_and_logout() {
+    let mut client = AppServerClient::new(Transport {
+        requests: Vec::new(),
+        results: VecDeque::from([
+            serde_json::json!({"type":"deviceCode","loginId":"xai-login","verificationUrl":"https://auth.x.ai/device","userCode":"XAI-1234"}),
+            serde_json::json!({"status":"loggedOut"}),
+            serde_json::json!({"revision":2,"accounts":[]}),
+        ]),
+    });
+    assert!(
+        matches!(execute(&mut client, SubscriptionProvider::Xai, SubscriptionCommand::SignIn), SubscriptionEvent::Started(AccountLoginStartResult::DeviceCode { login_id, .. }) if login_id == "xai-login")
+    );
+    assert!(matches!(
+        execute(
+            &mut client,
+            SubscriptionProvider::Xai,
+            SubscriptionCommand::SignOut
+        ),
+        SubscriptionEvent::SignedOut(_)
+    ));
+    let requests = client.into_transport().requests;
+    assert_eq!(
+        requests[0]["params"],
+        serde_json::json!({"method":{"type":"xaiDeviceCode"}})
+    );
+    assert_eq!(
+        requests[1]["params"],
+        serde_json::json!({"provider":"xai-subscription"})
     );
 }

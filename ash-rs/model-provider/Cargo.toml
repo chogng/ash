@@ -24,6 +24,7 @@ ash-client = { workspace = true }
 ash-context-engine = { workspace = true }
 ash-http-client = { workspace = true }
 ash-kimi = { workspace = true }
+xai = { workspace = true }
 ash-model-provider-config = { workspace = true }
 ash-models-manager = { workspace = true }
 ash-model-tokenizer = { workspace = true }

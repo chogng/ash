@@ -78,5 +78,6 @@ fn contains_tool_history(request: &ModelRequest) -> bool {
     request.input.iter().any(|item| match item {
         InputItem::Message(message) => !message.tool_calls.is_empty(),
         InputItem::ToolResult(_) => true,
+        InputItem::Reasoning(_) => false,
     })
 }

@@ -239,6 +239,7 @@ impl ContextCompactionService for ModelContextCompactionService {
                 ResponseItem::Text(text) => Some(text.trim()),
                 ResponseItem::Refusal(_)
                 | ResponseItem::Reasoning(_)
+                | ResponseItem::ReasoningState(_)
                 | ResponseItem::ToolCall(_) => None,
             })
             .filter(|text| !text.is_empty())

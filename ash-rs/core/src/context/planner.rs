@@ -638,7 +638,11 @@ fn group_visible_items(items: &[ThreadItem]) -> Vec<TurnGroup> {
 }
 
 fn is_model_visible(item: &ThreadItem) -> bool {
-    !matches!(item, ThreadItem::Reasoning { .. } | ThreadItem::Plan { .. })
+    match item {
+        ThreadItem::Reasoning { state, .. } => !state.is_empty(),
+        ThreadItem::Plan { .. } => false,
+        _ => true,
+    }
 }
 
 fn tool_group_is_complete(items: &[ThreadItem]) -> bool {

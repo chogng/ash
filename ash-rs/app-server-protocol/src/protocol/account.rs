@@ -95,6 +95,7 @@ pub enum AccountLoginMethodDto {
     OpenAiChatGptBrowser,
     OpenAiChatGptDeviceCode,
     KimiDeviceCode,
+    XaiDeviceCode,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

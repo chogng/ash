@@ -25,7 +25,7 @@ fn catalog_reports_every_builtin_without_exposing_values() {
 
     let catalog = service.catalog().unwrap();
 
-    assert_eq!(catalog.len(), 13);
+    assert_eq!(catalog.len(), 14);
     assert!(catalog.iter().any(|entry| {
         entry.provider == openai
             && entry.api_key_policy == ApiKeyPolicy::Required

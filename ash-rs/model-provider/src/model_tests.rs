@@ -1928,7 +1928,10 @@ fn every_builtin_provider_applies_its_authentication_without_subscription_header
     ];
     assert_eq!(
         providers.len(),
-        ProviderConfigRegistry::builtin().providers().count()
+        ProviderConfigRegistry::builtin()
+            .providers()
+            .filter(|provider| provider.id.as_str() != "xai-subscription")
+            .count()
     );
     for provider in providers {
         let capture = Arc::new(Capture(Mutex::new(None)));
@@ -1995,13 +1998,9 @@ fn every_builtin_provider_applies_its_authentication_without_subscription_header
             values("session-id").is_empty(),
             "subscription context leaked into {provider}"
         );
-        assert_eq!(
-            values("x-grok-conv-id"),
-            if provider == "xai" {
-                vec!["cache-scope"]
-            } else {
-                vec![]
-            }
+        assert!(
+            values("x-grok-conv-id").is_empty(),
+            "subscription routing leaked into {provider}"
         );
         assert_eq!(values("Content-Type"), vec!["application/json"]);
         assert_eq!(values("Accept"), vec!["text/event-stream"]);

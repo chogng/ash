@@ -172,7 +172,7 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
             ConfigCommand::SetIssues(_)
             | ConfigCommand::SetMemories(_)
             | ConfigCommand::OpenEditor
-            | ConfigCommand::Subscription(_)
+            | ConfigCommand::Subscription(_, _)
             | ConfigCommand::Edit(_)
             | ConfigCommand::SetLanguageServerMode(_)
             | ConfigCommand::Connection(_)

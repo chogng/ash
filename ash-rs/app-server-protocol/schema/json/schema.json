@@ -203,6 +203,18 @@
             "type"
           ],
           "type": "object"
+        },
+        {
+          "properties": {
+            "type": {
+              "const": "xaiDeviceCode",
+              "type": "string"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -28048,6 +28060,20 @@
       ],
       "type": "string"
     },
+    "ReasoningState": {
+      "description": "An encrypted Responses reasoning item, replayable only in its original credential/model scope.\nThe wire item is retained unchanged, including provider extensions and summary blocks.",
+      "properties": {
+        "item": true,
+        "scope": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "scope",
+        "item"
+      ],
+      "type": "object"
+    },
     "RepositoryCheckpoint": {
       "description": "Exact immutable Git version retained for one repository at a message boundary.",
       "properties": {
@@ -33709,6 +33735,13 @@
           "properties": {
             "itemId": {
               "$ref": "#/$defs/ItemId"
+            },
+            "state": {
+              "default": [],
+              "items": {
+                "$ref": "#/$defs/ReasoningState"
+              },
+              "type": "array"
             },
             "text": {
               "type": "string"

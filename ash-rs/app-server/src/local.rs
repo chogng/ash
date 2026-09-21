@@ -1246,6 +1246,18 @@ pub fn open_local_app_server_with_codebase_providers(
         None => KimiOAuth::production(Arc::clone(&profile_secrets))
             .map_err(|error| OpenAppServerError(error.to_string()))?,
     };
+    let xai_oauth = match &model_operation_client {
+        Some(client) => xai::XaiOAuth::with_client(
+            Arc::clone(&profile_secrets),
+            Arc::clone(client),
+            options.profile_root.join("xai.lock"),
+        ),
+        None => xai::XaiOAuth::production(
+            Arc::clone(&profile_secrets),
+            options.profile_root.join("xai.lock"),
+        )
+        .map_err(|error| OpenAppServerError(error.to_string()))?,
+    };
     let model_provider = match model_operation_client {
         Some(client) => ModelProviderRuntime::with_client_and_secrets(
             provider_configs.clone(),
@@ -1260,7 +1272,8 @@ pub fn open_local_app_server_with_codebase_providers(
     .with_response_diagnostics(Arc::new(diagnostics.clone()))
     .with_local_tokenizers(local_tokenizers)
     .with_chatgpt_oauth(Arc::clone(&chatgpt_oauth))
-    .with_kimi_oauth(Arc::clone(&kimi_oauth));
+    .with_kimi_oauth(Arc::clone(&kimi_oauth))
+    .with_xai_oauth(Arc::clone(&xai_oauth));
     let models_manager = model_provider.models_manager();
     let model_provider = Arc::new(model_provider);
     let catalog_runtime = Arc::new(
@@ -1295,7 +1308,7 @@ pub fn open_local_app_server_with_codebase_providers(
     let built_in_skill_root = resolve_built_in_skill_root(options.built_in_skills);
     let extension_roots = resolve_extension_roots(&options.profile_root);
     let login_drivers: Vec<Arc<dyn InteractiveLoginDriver>> =
-        vec![chatgpt_oauth.clone(), kimi_oauth.clone()];
+        vec![chatgpt_oauth.clone(), kimi_oauth.clone(), xai_oauth.clone()];
     let login_service = Arc::new(
         LoginService::deferred_with_drivers(login_drivers)
             .map_err(|error| OpenAppServerError(error.to_string()))?,
@@ -1304,6 +1317,9 @@ pub fn open_local_app_server_with_codebase_providers(
         .install_login_service(&login_service)
         .map_err(|error| OpenAppServerError(error.to_string()))?;
     kimi_oauth
+        .install_login_service(&login_service)
+        .map_err(|error| OpenAppServerError(error.to_string()))?;
+    xai_oauth
         .install_login_service(&login_service)
         .map_err(|error| OpenAppServerError(error.to_string()))?;
     let direct_catalog: Arc<dyn ModelCatalog> = configured_model.clone();
@@ -1938,11 +1954,18 @@ impl ModelService for ConfigBackedModelService {
     }
 
     fn context_budget(&self, selection: ModelSelection<'_>) -> Result<ContextBudget, CoreError> {
-        context_budget_for_config(
-            &self.config_for_selection(selection)?,
-            &self.provider_configs,
-            &self.models_manager,
-        )
+        let config = self.config_for_selection(selection)?;
+        if let Some(model) = &config.model
+            && model.provider.as_str() == xai::XAI_PROVIDER_ID
+        {
+            let provider = &config.providers[&model.provider];
+            let info = self
+                .catalog_provider
+                .model_info(provider, model)
+                .map_err(|error| CoreError::Model(error.to_string()))?;
+            return context_budget_for_model(&info, provider, &self.provider_configs);
+        }
+        context_budget_for_config(&config, &self.provider_configs, &self.models_manager)
     }
 
     fn image_input_policy(
@@ -1964,10 +1987,15 @@ impl ModelService for ConfigBackedModelService {
         let Some(model) = config.model.as_ref() else {
             return Ok(None);
         };
-        let static_model = find_static_model(model);
-        let effort = config
-            .model_reasoning_effort
-            .or_else(|| static_model.and_then(|m| m.model_reasoning_effort));
+        let default_effort = if model.provider.as_str() == xai::XAI_PROVIDER_ID {
+            self.catalog_provider
+                .model_info(&config.providers[&model.provider], model)
+                .map_err(|error| CoreError::Model(error.to_string()))?
+                .model_reasoning_effort
+        } else {
+            find_static_model(model).and_then(|model| model.model_reasoning_effort)
+        };
+        let effort = config.model_reasoning_effort.or(default_effort);
         Ok(effort.map(|effort| ash_protocol::ReasoningConfig {
             effort,
             summary: false,
@@ -2075,7 +2103,15 @@ impl ModelCatalog for ConfigBackedModelService {
     fn list(
         &self,
     ) -> Result<Vec<ash_app_server_protocol::protocol::model::ModelCatalogEntry>, CoreError> {
-        let config = self.resolved_config()?;
+        let mut config = self.resolved_config()?;
+        let subscription =
+            ash_protocol::ProviderId::new(xai::XAI_PROVIDER_ID).expect("constant provider ID");
+        if self.provider_configs.get(&subscription).is_some() {
+            config
+                .providers
+                .entry(subscription.clone())
+                .or_insert_with(|| ModelProviderConfig::new(subscription));
+        }
         let registry = self
             .provider_configs
             .with_configs(config.providers.values())
@@ -2104,7 +2140,9 @@ impl ModelCatalog for ConfigBackedModelService {
             let scope = binding.scope().clone();
             if let Err(error) = self.catalog_runtime.block_on(manager.read(
                 scope.clone(),
-                if provider.provider.as_str() == "ollama" {
+                if provider.provider.as_str() == "ollama"
+                    || provider.provider.as_str() == xai::XAI_PROVIDER_ID
+                {
                     ash_models_manager::CatalogReadPolicy::CachePreferred
                 } else {
                     ash_models_manager::CatalogReadPolicy::CacheOnly
@@ -2156,6 +2194,7 @@ impl ModelCatalog for ConfigBackedModelService {
                 .providers
                 .get(&model.provider)
                 .is_none_or(|provider| provider.custom.is_none())
+            && model.provider.as_str() != xai::XAI_PROVIDER_ID
             && !models.iter().any(|entry| entry.model == model)
         {
             let resolved = manager
@@ -2198,6 +2237,26 @@ impl ConfigBackedModelService {
         let mut config = self.resolve_config(&user)?;
         if let ModelSelection::Session(model) = selection {
             config.model = Some(model.clone());
+        }
+        if let Some(model) = &config.model
+            && model.provider.as_str() == xai::XAI_PROVIDER_ID
+        {
+            let provider = config
+                .providers
+                .entry(model.provider.clone())
+                .or_insert_with(|| ModelProviderConfig::new(model.provider.clone()));
+            let binding = self
+                .catalog_provider
+                .catalog_binding(provider)
+                .map_err(|error| CoreError::Model(error.to_string()))?
+                .ok_or_else(|| CoreError::Model("xAI Subscription is not signed in".into()))?;
+            self.catalog_runtime
+                .block_on(self.models_manager.read(
+                    binding.scope().clone(),
+                    ash_models_manager::CatalogReadPolicy::CachePreferred,
+                    ash_models_manager::CatalogReadSource::dynamic(binding.source()),
+                ))
+                .map_err(|error| CoreError::Model(error.to_string()))?;
         }
         Ok(config)
     }
@@ -2591,6 +2650,9 @@ fn billing_scope_for_config(config: &ash_config::ResolvedConfig) -> ModelBilling
     let Some(model) = config.model.as_ref() else {
         return ModelBillingScope::Unavailable;
     };
+    if model.provider.as_str() == xai::XAI_PROVIDER_ID {
+        return ModelBillingScope::SubscriptionPlan;
+    }
     let access = find_static_model(model)
         .map(|definition| definition.access)
         .unwrap_or(ModelAccess::ApiKey);

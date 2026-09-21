@@ -110,7 +110,7 @@ impl InteractiveLoginDriver for FakeDriver {
                 verification_url: "https://auth.example.test/device".into(),
                 user_code: "ABCD-EFGH".into(),
             },
-            LoginMethod::KimiDeviceCode => unreachable!(),
+            LoginMethod::KimiDeviceCode | LoginMethod::XaiDeviceCode => unreachable!(),
         })
     }
 

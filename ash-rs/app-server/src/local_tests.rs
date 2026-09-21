@@ -2484,3 +2484,104 @@ fn message_restore_points_preserve_git_versions_after_restart() {
         "message refs survived: {remaining}"
     );
 }
+
+#[test]
+fn xai_subscription_catalog_drives_model_selection_context_and_invocation() {
+    use ash_secrets::SecretStore;
+    struct Proxy;
+    impl OperationClient for Proxy {
+        fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
+            assert_eq!(
+                request.url(),
+                "https://cli-chat-proxy.grok.com/v1/models-v2"
+            );
+            Ok(ClientResponse::new(200, vec![], br#"{"data":[{"model":"grok-test","apiBackend":"responses","contextWindow":500000,"reasoningEfforts":["high"],"reasoningEffort":"high"}]}"#.to_vec()))
+        }
+        fn execute_streaming(
+            &self,
+            request: &ClientRequest,
+            sink: &mut dyn ash_client::OperationStreamSink,
+        ) -> Result<ClientResponse, ClientError> {
+            assert_eq!(
+                request.url(),
+                "https://cli-chat-proxy.grok.com/v1/responses"
+            );
+            let body: serde_json::Value = serde_json::from_slice(request.body()).unwrap();
+            assert_eq!(body["model"], "grok-test");
+            sink.emit(b"data: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"hello\"}]}]}}\n\n")?;
+            Ok(ClientResponse::new(200, vec![], vec![]))
+        }
+    }
+    let profile = tempfile::tempdir().unwrap();
+    let config = Arc::new(ConfigStore::open(profile.path().join("config.json")).unwrap());
+    let secrets = Arc::new(MemorySecretStore::default());
+    secrets.store(&ash_secrets::SecretKey::new("provider/xai/current/oauth").unwrap(), &ash_secrets::SecretValue::new(br#"{"access_token":"fixture","refresh_token":"fixture-refresh","token_type":"Bearer","scope":"","expires_at":4102444800,"account_id":"a","credential_revision":1}"#.to_vec())).unwrap();
+    let client = Arc::new(Proxy);
+    let auth = xai::XaiOAuth::with_client(secrets, client.clone(), profile.path().join("xai.lock"));
+    let registry = ProviderConfigRegistry::builtin();
+    let runtime =
+        Arc::new(ModelProviderRuntime::with_client(registry.clone(), client).with_xai_oauth(auth));
+    let service = ConfigBackedModelService {
+        config: config.clone(),
+        dir_config: None,
+        provider_configs: registry,
+        models_manager: runtime.models_manager(),
+        catalog_provider: runtime.clone(),
+        catalog_runtime: Arc::new(tokio::runtime::Runtime::new().unwrap()),
+        resolver: Arc::new(ModelProviderSnapshotResolver {
+            model_provider: runtime,
+        }),
+    };
+    let entries = service.list().unwrap();
+    let model = ModelRef::new(
+        ProviderId::new("xai-subscription").unwrap(),
+        ModelId::new("grok-test").unwrap(),
+    );
+    let entry = entries.iter().find(|entry| entry.model == model).unwrap();
+    assert_eq!(entry.access, ModelAccess::Subscription);
+    assert_eq!(entry.context_window, Some(500000));
+    let configured = config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("configure-xai").unwrap(),
+            expected_revision: ConfigRevision::INITIAL,
+            command: UserConfigCommand::ConfigureProvider {
+                provider: model.provider.clone(),
+                config: ModelProviderConfig::new(model.provider.clone()),
+            },
+        })
+        .unwrap();
+    config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("select-xai").unwrap(),
+            expected_revision: configured.revision,
+            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                model: Patch::Value(model),
+                ..Default::default()
+            }),
+        })
+        .unwrap();
+
+    assert_eq!(
+        service
+            .billing_scope(ModelSelection::ConfiguredDefault)
+            .unwrap(),
+        ModelBillingScope::SubscriptionPlan
+    );
+    assert!(matches!(
+        service
+            .context_budget(ModelSelection::ConfiguredDefault)
+            .unwrap()
+            .resolve()
+            .unwrap(),
+        ResolvedContextBudget::CoreManaged(_)
+    ));
+    assert_eq!(
+        service
+            .reasoning_config(ModelSelection::ConfiguredDefault)
+            .unwrap()
+            .unwrap()
+            .effort,
+        ReasoningEffort::High
+    );
+    assert_eq!(invoke_text(&service, "hi"), "hello");
+}

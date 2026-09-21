@@ -138,7 +138,7 @@ impl ModelService for TextModel {
                     };
                     Some(text.clone())
                 }),
-                InputItem::ToolResult(_) => None,
+                InputItem::ToolResult(_) | InputItem::Reasoning(_) => None,
             })
             .unwrap_or_else(|| "done".into());
         Ok(ModelResponse {

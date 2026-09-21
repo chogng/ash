@@ -171,6 +171,12 @@ impl TranscriptAccumulator {
                 let entry_id = item_entry_id(item.item_id().as_str());
                 self.remove_transient_entry(&entry_id);
                 self.remember_committed_item(item.item_id().clone());
+                if matches!(item, ThreadItem::Reasoning { text, .. } if text.is_empty()) {
+                    changes.push(ThreadTranscriptChange::Remove {
+                        entry_ids: vec![entry_id],
+                    });
+                    return;
+                }
                 if let ThreadItem::ToolResult { tool_call_id, .. } = item {
                     let removed = self.remove_tool_output(tool_call_id);
                     if !removed.is_empty() {
@@ -432,6 +438,7 @@ fn item_from_delta(turn_id: &TurnId, item_id: &ItemId, delta: &ItemDelta) -> Thr
             text: String::new(),
         },
         ItemDelta::Reasoning { .. } => ThreadItem::Reasoning {
+            state: Vec::new(),
             item_id: item_id.clone(),
             turn_id: turn_id.clone(),
             text: String::new(),

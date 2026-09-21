@@ -80,3 +80,10 @@
 `CallStatus.screenSharing` 表示本地共享状态。上述接口仅允许拥有该通话资源的产品连接调用。角色限制由通话运行时执行；窗口关闭、重连和离开后需要用户重新选择并开始共享。
 
 通知不携带像素。服务端最多保存 8 条共享轨道、64 MiB 最新 RGBA 画面，丢弃超过 500 ms 的待取帧。输出已应用旋转，缩放至 1920×1080 范围，单张 JPEG 不超过 2 MiB。`tracks` 是当前集合，`frames` 只包含本次有新画面的轨道；轨道移除后客户端释放对应画面。客户端按 `mediaEpoch` 和连接代次丢弃过时响应，最多一个拉取请求在途。
+
+## xAI 订阅账户
+
+- `account/login/start` 的 `method: {type: "xaiDeviceCode"}` 返回设备授权链接、验证码和 `loginId`；取消与完成沿用 `account/login/cancel` 和 `account/login/completed`。
+- 开始 xAI 登录时注册空的提供商配置，保留已有配置，供登录后保存模型选择。账户 provider 为 `xai-subscription`；`account/logout` 按该 provider 退出。凭证仅保存在后端，账户 RPC 不返回 token。
+- `model/list` 根据当前账户的 `/models-v2` 目录返回模型，切换账户后旧目录不可用于调用。订阅额度暂未接入 `account/rateLimits/read`。
+- `ThreadItem.reasoning.state` 保存带作用域的加密 Responses 项；重载历史和工具续轮保留完整项，切换账户、模型或端点后不再发送旧项。

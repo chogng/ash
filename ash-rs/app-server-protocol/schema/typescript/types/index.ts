@@ -735,6 +735,7 @@ export type { QueueStatus } from './QueueStatus.js';
 export type { QueuedMessage } from './QueuedMessage.js';
 export type { RatedModelCost } from './RatedModelCost.js';
 export type { ReasoningEffort } from './ReasoningEffort.js';
+export type { ReasoningState } from './ReasoningState.js';
 export type { RepositoryCheckpoint } from './RepositoryCheckpoint.js';
 export type { RequestAttempt } from './RequestAttempt.js';
 export type { RequestId } from './RequestId.js';

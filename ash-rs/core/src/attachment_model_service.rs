@@ -37,6 +37,7 @@ impl AttachmentModelService {
             let content = match item {
                 InputItem::Message(message) => &mut message.content,
                 InputItem::ToolResult(result) => &mut result.content,
+                InputItem::Reasoning(_) => continue,
             };
             for part in content {
                 let replacement = match part {

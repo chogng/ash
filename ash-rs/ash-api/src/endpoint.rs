@@ -42,6 +42,8 @@ pub enum ApiEndpoint {
     OpenAiResponses,
     /// ChatGPT subscription Responses, with Session routing and automatic caching.
     ChatGptResponses,
+    /// xAI subscription Responses through the Grok CLI proxy.
+    XaiSubscriptionResponses,
     /// An endpoint implementing the OpenAI Chat Completions-compatible API.
     OpenAiChatCompletions,
     /// DeepSeek's Chat Completions endpoint and usage schema.
@@ -66,7 +68,9 @@ impl ApiEndpoint {
     /// Returns the wire protocol implemented by this endpoint family.
     pub fn protocol(self) -> ApiProtocol {
         match self {
-            Self::OpenAiResponses | Self::ChatGptResponses => ApiProtocol::OpenAiResponses,
+            Self::OpenAiResponses | Self::ChatGptResponses | Self::XaiSubscriptionResponses => {
+                ApiProtocol::OpenAiResponses
+            }
             Self::OpenAiChatCompletions => ApiProtocol::OpenAiCompletions,
             Self::DeepSeekChatCompletions | Self::XaiChatCompletions => {
                 ApiProtocol::OpenAiCompletions
@@ -135,7 +139,7 @@ impl ApiEndpoint {
     ) -> Result<ModelResponse, ApiError> {
         validate_request(model, request)?;
         match self {
-            Self::OpenAiResponses | Self::ChatGptResponses => {
+            Self::OpenAiResponses | Self::ChatGptResponses | Self::XaiSubscriptionResponses => {
                 responses::complete(self, target, model, request, client, cancellation)
             }
             Self::OpenAiChatCompletions
@@ -165,7 +169,7 @@ impl ApiEndpoint {
     ) -> Result<ModelResponse, ApiError> {
         validate_request(model, request)?;
         match self {
-            Self::OpenAiResponses | Self::ChatGptResponses => {
+            Self::OpenAiResponses | Self::ChatGptResponses | Self::XaiSubscriptionResponses => {
                 responses::stream(self, target, model, request, client, cancellation, sink)
             }
             Self::OpenAiChatCompletions
@@ -208,9 +212,11 @@ impl ApiEndpoint {
     ) -> Result<InputTokenCount, ApiError> {
         validate_request(model, request)?;
         match self {
-            Self::ChatGptResponses => Err(ApiError::InvalidRequest(
-                "ChatGPT subscription Responses does not expose input-token preflight".into(),
-            )),
+            Self::ChatGptResponses | Self::XaiSubscriptionResponses => {
+                Err(ApiError::InvalidRequest(
+                    "Subscription Responses does not expose input-token preflight".into(),
+                ))
+            }
             Self::OpenAiResponses => {
                 responses::count_input_tokens(self, target, model, request, client, cancellation)
             }

@@ -22,6 +22,7 @@ pub struct ModelCapabilitiesPatch {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ModelMetadataPatch {
+    pub access: Option<ash_protocol::ModelAccess>,
     pub display_name: Option<String>,
     pub context_window: Option<ContextWindow>,
     pub auto_compact_token_limit: Option<u32>,

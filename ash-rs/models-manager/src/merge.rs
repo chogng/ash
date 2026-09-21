@@ -131,6 +131,9 @@ pub(crate) fn mark_unverified(records: &mut BTreeMap<ModelId, CatalogRecord>) {
 }
 
 fn apply_live_patch(record: &mut CatalogRecord, patch: &ModelMetadataPatch) {
+    if let Some(access) = patch.access {
+        record.info.access = access;
+    }
     let source = MetadataSource::ProviderLive;
     if let Some(display_name) = patch
         .display_name

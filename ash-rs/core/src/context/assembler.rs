@@ -178,10 +178,11 @@ impl ContextAssembler {
                         is_error: *is_error,
                     }));
                 }
-                // Reasoning and plan items are durable product output, not provider-neutral
-                // conversation messages. They require an explicit provider contract before they
-                // can safely be fed back into another invocation.
-                ThreadItem::Reasoning { .. } | ThreadItem::Plan { .. } => {
+                ThreadItem::Reasoning { state, .. } => {
+                    active_user_turn = None;
+                    input.extend(state.iter().cloned().map(InputItem::Reasoning));
+                }
+                ThreadItem::Plan { .. } => {
                     active_user_turn = None;
                 }
             }

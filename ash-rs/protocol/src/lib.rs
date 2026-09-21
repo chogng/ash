@@ -154,6 +154,7 @@ pub use model::ProviderId;
 pub use model::RatedModelCost;
 pub use model::ReasoningConfig;
 pub use model::ReasoningEffort;
+pub use model::ReasoningState;
 pub use model::ResponseItem;
 pub use model::StopReason;
 pub use model::ToolCall;

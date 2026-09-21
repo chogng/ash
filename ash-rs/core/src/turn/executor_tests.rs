@@ -3182,7 +3182,7 @@ impl ModelService for BlockingFirstModel {
                         ContentPart::ImageUrl { .. } => None,
                     })
                 }
-                InputItem::ToolResult(_) => None,
+                InputItem::ToolResult(_) | InputItem::Reasoning(_) => None,
             })
             .unwrap_or_default();
         if prompt == "fast" {
@@ -3630,9 +3630,14 @@ fn started_turn() -> (Arc<ThreadController>, ThreadId, TurnId) {
 fn started_turn_with_tool_mode(
     tool_mode: ash_protocol::ToolMode,
 ) -> (Arc<ThreadController>, ThreadId, TurnId) {
-    let threads = Arc::new(ThreadController::with_store(Arc::new(
-        InMemoryThreadStore::default(),
-    )));
+    started_turn_with_store(tool_mode, Arc::new(InMemoryThreadStore::default()))
+}
+
+fn started_turn_with_store(
+    tool_mode: ash_protocol::ToolMode,
+    store: Arc<InMemoryThreadStore>,
+) -> (Arc<ThreadController>, ThreadId, TurnId) {
+    let threads = Arc::new(ThreadController::with_store(store));
     let thread_id = ThreadId::new("thread").unwrap();
     threads
         .create_thread(CreateThreadRequest {
@@ -3714,7 +3719,7 @@ fn request_contains(request: &ModelRequest, expected: &str) -> bool {
             .content
             .iter()
             .any(|content| matches!(content, ContentPart::Text(text) if text.contains(expected))),
-        InputItem::ToolResult(_) => false,
+        InputItem::ToolResult(_) | InputItem::Reasoning(_) => false,
     })
 }
 
@@ -4180,4 +4185,83 @@ fn code_mode_thread_values_survive_turn_completion_and_new_turn_authority() {
             caller: ash_protocol::ToolCallCaller::CodeMode { .. }, ..
         }), .. } if turn_id == &second_turn
     )));
+}
+
+#[test]
+fn encrypted_reasoning_survives_tool_results_and_reloading_thread_history() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let (threads, thread_id, turn_id) =
+        started_turn_with_store(ash_protocol::ToolMode::Direct, store.clone());
+    let state = ash_protocol::ReasoningState {
+        scope: "account-model-scope".into(),
+        item: serde_json::json!({"type":"reasoning","id":"reasoning-1","summary":[],"encrypted_content":"opaque"}),
+    };
+    let mut response = ModelResponse {
+        output: vec![ResponseItem::ToolCall(ToolCall {
+            id: ToolCallId::new("call_1").unwrap(),
+            name: ToolName::new("weather").unwrap(),
+            arguments: json!({"city":"Paris"}),
+        })],
+        usage: None,
+        billing: None,
+        stop_reason: StopReason::ToolUse,
+    };
+    response
+        .output
+        .insert(0, ResponseItem::ReasoningState(state.clone()));
+    let model = Arc::new(ScriptedModel::new([
+        Ok(response),
+        Ok(text_response("done")),
+    ]));
+    let executor = TurnExecutor::new(
+        threads.clone(),
+        model.clone(),
+        Arc::new(WeatherTool),
+        Arc::new(SandboxActionPolicyService),
+    );
+    executor
+        .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+        .unwrap();
+    let expected = InputItem::Reasoning(state.clone());
+    assert!(model.requests()[1].input.contains(&expected));
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+    let reasoning = snapshot
+        .items
+        .iter()
+        .find(|item| matches!(item, ThreadItem::Reasoning { state, .. } if !state.is_empty()))
+        .unwrap();
+    let serialized = serde_json::to_vec(reasoning).unwrap();
+    assert_eq!(
+        &serde_json::from_slice::<ThreadItem>(&serialized).unwrap(),
+        reasoning
+    );
+    drop(executor);
+    drop(threads);
+    let reloaded = Arc::new(ThreadController::with_store(store));
+    let next = reloaded
+        .start_turn(
+            &thread_id,
+            StartTurnRequest {
+                kind: ash_protocol::TurnKind::Coding,
+                instructions: crate::test_turn_instructions(),
+                command_id: CommandId::new("continue-encrypted").unwrap(),
+                expected_sequence: SequenceExpectation::Any,
+                model: None,
+                policy_revision: "test-policy-v1".into(),
+                approval_mode: ash_protocol::ApprovalMode::AskPermissions,
+                tool_mode: ash_protocol::ToolMode::Direct,
+                tool_profile: None,
+                activated_skills: Vec::new(),
+                input: vec![UserInput::Text {
+                    text: "continue".into(),
+                }],
+            },
+        )
+        .unwrap()
+        .turn_id;
+    let model = Arc::new(ScriptedModel::new([Ok(text_response("continued"))]));
+    TurnExecutor::without_tools(reloaded, model.clone())
+        .execute(&thread_id, &next, &CancellationSource::new().token())
+        .unwrap();
+    assert!(model.requests()[0].input.contains(&expected));
 }

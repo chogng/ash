@@ -97,8 +97,37 @@ impl AppServer {
             AccountLoginMethodDto::OpenAiChatGptBrowser => LoginMethod::OpenAiChatGptBrowser,
             AccountLoginMethodDto::OpenAiChatGptDeviceCode => LoginMethod::OpenAiChatGptDeviceCode,
             AccountLoginMethodDto::KimiDeviceCode => LoginMethod::KimiDeviceCode,
+            AccountLoginMethodDto::XaiDeviceCode => LoginMethod::XaiDeviceCode,
         };
-        let started = self.login_service()?.begin(method).map_err(login_error)?;
+        let login = self.login_service()?;
+        if method == LoginMethod::XaiDeviceCode {
+            let store = self
+                .config
+                .as_ref()
+                .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+            let snapshot = store
+                .read_snapshot()
+                .map_err(|_| RpcError::new(-32030, AppServerErrorName::ConfigUnavailable))?;
+            let provider =
+                ash_protocol::ProviderId::new(xai::XAI_PROVIDER_ID).expect("constant provider ID");
+            if !snapshot.values.providers.contains_key(&provider) {
+                store
+                    .apply(ash_config::ConfigCommandRequest {
+                        command_id: ash_protocol::CommandId::new(format!(
+                            "configure-xai-subscription-{}",
+                            snapshot.revision.get()
+                        ))
+                        .expect("generated command ID"),
+                        expected_revision: snapshot.revision,
+                        command: ash_config::UserConfigCommand::ConfigureProvider {
+                            provider: provider.clone(),
+                            config: ash_model_provider_config::ModelProviderConfig::new(provider),
+                        },
+                    })
+                    .map_err(super::config_operations::config_operation_error)?;
+            }
+        }
+        let started = login.begin(method).map_err(login_error)?;
         result(&match started {
             BeginLogin::Connected { login_id, .. } => AccountLoginStartResult::Connected {
                 login_id: login_id.to_string(),

@@ -53,6 +53,7 @@ impl ModelRequest {
                 InputItem::ToolResult(result) => {
                     sanitize_content(&mut result.content, supports_original, &mut decisions)
                 }
+                InputItem::Reasoning(_) => {}
             }
         }
         decisions
@@ -117,6 +118,17 @@ impl ModelRequest {
 pub enum InputItem {
     Message(Message),
     ToolResult(ToolResult),
+    Reasoning(ReasoningState),
+}
+
+/// An encrypted Responses reasoning item, replayable only in its original credential/model scope.
+/// The wire item is retained unchanged, including provider extensions and summary blocks.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ReasoningState {
+    pub scope: String,
+    #[ts(type = "unknown")]
+    pub item: Value,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -428,6 +440,7 @@ pub enum ResponseItem {
     Text(String),
     Refusal(String),
     Reasoning(String),
+    ReasoningState(ReasoningState),
     ToolCall(ToolCall),
 }
 

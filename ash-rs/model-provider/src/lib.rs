@@ -64,6 +64,10 @@ pub use semantic_models::SemanticRuntimeLocation;
 mod tests;
 
 #[cfg(test)]
+#[path = "xai_tests.rs"]
+mod xai_tests;
+
+#[cfg(test)]
 #[path = "auth_tests.rs"]
 mod auth_tests;
 

@@ -70,6 +70,7 @@ pub enum LoginMethod {
     OpenAiChatGptBrowser,
     OpenAiChatGptDeviceCode,
     KimiDeviceCode,
+    XaiDeviceCode,
 }
 
 impl LoginMethod {
@@ -77,6 +78,7 @@ impl LoginMethod {
         match self {
             Self::OpenAiChatGptBrowser | Self::OpenAiChatGptDeviceCode => "openai-chatgpt",
             Self::KimiDeviceCode => "kimi",
+            Self::XaiDeviceCode => "xai-subscription",
         }
     }
 }

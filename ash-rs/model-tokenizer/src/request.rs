@@ -21,6 +21,7 @@ pub(crate) fn render_input(
         messages.push(match item {
             InputItem::Message(message) => message_value(message)?,
             InputItem::ToolResult(result) => tool_result_value(result)?,
+            InputItem::Reasoning(_) => return None,
         });
     }
 

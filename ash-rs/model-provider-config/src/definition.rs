@@ -87,6 +87,8 @@ pub enum EndpointPolicy {
 #[serde(rename_all = "camelCase")]
 pub enum ModelCatalogPolicy {
     ListedOnly,
+    /// Model IDs are validated against an authenticated runtime catalog.
+    DiscoveredOnly,
     AllowUnlisted,
 }
 

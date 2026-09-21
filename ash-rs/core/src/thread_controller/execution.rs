@@ -249,6 +249,7 @@ impl ThreadController {
             thread_id,
             turn_id,
             ThreadItem::Reasoning {
+                state: Vec::new(),
                 item_id,
                 turn_id: turn_id.clone(),
                 text,

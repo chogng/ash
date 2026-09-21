@@ -60,6 +60,8 @@ pub enum ThreadItem {
         item_id: ItemId,
         turn_id: TurnId,
         text: String,
+        #[serde(default)]
+        state: Vec<crate::ReasoningState>,
     },
     Plan {
         item_id: ItemId,

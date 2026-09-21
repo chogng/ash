@@ -513,6 +513,7 @@ dependencies = [
  "ash-websocket-client",
  "base64 0.22.1",
  "futures",
+ "getrandom 0.2.17",
  "serde_json",
  "tokio",
  "tokio-tungstenite 0.28.0",
@@ -623,6 +624,7 @@ dependencies = [
  "ash-utils-sleep-inhibitor",
  "ash-voice-host",
  "ash-web-search-extension",
+ "ash-xai",
  "base64 0.22.1",
  "dunce",
  "external-agent-migration",
@@ -1972,6 +1974,7 @@ dependencies = [
  "ash-response-debug-context",
  "ash-secrets",
  "ash-websocket-client",
+ "ash-xai",
  "base64 0.22.1",
  "serde",
  "serde_json",
@@ -2569,6 +2572,7 @@ dependencies = [
  "ash-protocol",
  "schemars",
  "serde",
+ "serde_json",
  "ts-rs",
 ]
 
@@ -3006,6 +3010,25 @@ dependencies = [
  "tar",
  "tempfile",
  "zui",
+]
+
+[[package]]
+name = "ash-xai"
+version = "0.1.0"
+dependencies = [
+ "ash-async-utils",
+ "ash-client",
+ "ash-http-client",
+ "ash-login",
+ "ash-secrets",
+ "fs2",
+ "getrandom 0.2.17",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "url",
+ "urlencoding",
+ "zeroize",
 ]
 
 [[package]]

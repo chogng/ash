@@ -108,6 +108,7 @@ members = [
     "ash-rs/keybinding",
     "ash-rs/keyring-store",
     "ash-rs/kimi",
+    "ash-rs/xai",
     "ash-rs/lsp-server-provider",
     "ash-rs/lsp-manager",
     "ash-rs/login",
@@ -483,6 +484,7 @@ ash-input-classifier = { path = "ash-rs/input-classifier" }
 ash-instructions = { path = "ash-rs/instructions" }
 ash-keyring-store = { path = "ash-rs/keyring-store" }
 ash-kimi = { path = "ash-rs/kimi" }
+xai = { package = "ash-xai", path = "ash-rs/xai" }
 ash-keybinding = { path = "ash-rs/keybinding" }
 ash-keybindings-host = { path = "app/keybindings" }
 ash-lsp-server-provider = { path = "ash-rs/lsp-server-provider" }

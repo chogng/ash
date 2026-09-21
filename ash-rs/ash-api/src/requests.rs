@@ -113,6 +113,7 @@ pub(crate) fn require_materialized_attachments(request: &ModelRequest) -> Result
     for content in request.input.iter().flat_map(|item| match item {
         InputItem::Message(message) => message.content.as_slice(),
         InputItem::ToolResult(result) => result.content.as_slice(),
+        InputItem::Reasoning(_) => &[],
     }) {
         match content {
             ContentPart::ImageAttachment { .. } | ContentPart::AudioAttachment { .. } => {

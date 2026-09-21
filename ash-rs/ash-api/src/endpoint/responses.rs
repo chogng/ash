@@ -68,9 +68,10 @@ pub(crate) fn complete(
     client: &dyn OperationClient,
     cancellation: &CancellationToken,
 ) -> Result<ModelResponse, ApiError> {
+    let target = request_target(endpoint, target, model, request)?;
     let response = crate::requests::post_json(
         client,
-        target,
+        &target,
         endpoint,
         request,
         build_request(endpoint, model, request)?,
@@ -88,6 +89,7 @@ pub(crate) fn stream(
     cancellation: &CancellationToken,
     sink: &mut dyn ApiStreamSink,
 ) -> Result<ModelResponse, ApiError> {
+    let target = request_target(endpoint, target, model, request)?;
     let Value::Object(mut body) = build_request(endpoint, model, request)? else {
         unreachable!("Responses request builders always return an object");
     };
@@ -98,7 +100,7 @@ pub(crate) fn stream(
         ash_http_client::HttpMethod::Post,
         target.endpoint(endpoint.relative_path())?,
         crate::headers::build(
-            endpoint.headers(target, request)?,
+            endpoint.headers(&target, request)?,
             crate::headers::ResponseFormat::EventStream,
         )?,
         body,
@@ -169,7 +171,7 @@ pub(crate) fn count_input_tokens(
         client,
         target,
         "responses/input_tokens",
-        endpoint.headers(target, request)?,
+        endpoint.headers(&target, request)?,
         build_count_request(model, request)?,
         cancellation,
     )?;
@@ -224,6 +226,7 @@ pub(super) fn build_request(
         let (content, allowed_role) = match item {
             InputItem::Message(message) => (&message.content, message.role == MessageRole::User),
             InputItem::ToolResult(result) => (&result.content, true),
+            InputItem::Reasoning(_) => continue,
         };
         if content
             .iter()
@@ -272,13 +275,13 @@ pub(super) fn build_request(
             "reasoning".into(),
             json!({
                 "effort": reasoning_effort(reasoning.effort),
-                "summary": reasoning.summary.then_some("auto"),
             }),
         );
         if reasoning.summary {
-            body.insert("include".into(), json!(["reasoning.encrypted_content"]));
+            body["reasoning"]["summary"] = json!("auto");
         }
     }
+    body.insert("include".into(), json!(["reasoning.encrypted_content"]));
     if let Some(max_output_tokens) = request.max_output_tokens {
         body.insert("max_output_tokens".into(), json!(max_output_tokens));
     }
@@ -308,6 +311,7 @@ fn convert_input(
     }
     for (index, item) in input.iter().enumerate() {
         match item {
+            InputItem::Reasoning(state) => converted.push(state.item.clone()),
             InputItem::Message(message) => {
                 if !message.content.is_empty() {
                     if message.role != MessageRole::Assistant {
@@ -461,6 +465,16 @@ pub(crate) fn parse_response(response: Value) -> Result<ModelResponse, ApiError>
                 arguments: parse_arguments(item.get("arguments"))?,
             })),
             Some("reasoning") => {
+                if item
+                    .get("encrypted_content")
+                    .and_then(Value::as_str)
+                    .is_some_and(|value| !value.is_empty())
+                {
+                    output.push(OutputItem::ReasoningState(ash_protocol::ReasoningState {
+                        scope: String::new(),
+                        item: item.clone(),
+                    }));
+                }
                 let text = item
                     .get("summary")
                     .and_then(Value::as_array)
@@ -619,4 +633,40 @@ pub(super) fn headers(
         crate::headers::insert(headers, "session-id", scope)?;
     }
     Ok(())
+}
+
+fn request_target(
+    endpoint: ApiEndpoint,
+    target: &ResolvedApiTarget,
+    model: &str,
+    request: &ModelRequest,
+) -> Result<ResolvedApiTarget, ApiError> {
+    let mut target = target.clone();
+    if endpoint == ApiEndpoint::XaiSubscriptionResponses {
+        let mut bytes = [0u8; 16];
+        getrandom::getrandom(&mut bytes).map_err(|_| {
+            ApiError::InvalidRequest("could not generate xAI request identity".into())
+        })?;
+        bytes[6] = (bytes[6] & 0x0f) | 0x40;
+        bytes[8] = (bytes[8] & 0x3f) | 0x80;
+        let hex: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
+        let request_id = format!(
+            "{}-{}-{}-{}-{}",
+            &hex[..8],
+            &hex[8..12],
+            &hex[12..16],
+            &hex[16..20],
+            &hex[20..]
+        );
+        let conversation = request.prompt_cache_key.as_deref().unwrap_or(&request_id);
+        for (name, value) in [
+            ("x-grok-conv-id", conversation),
+            ("x-grok-session-id", conversation),
+            ("x-grok-req-id", request_id.as_str()),
+            ("x-grok-model-override", model),
+        ] {
+            crate::headers::insert(&mut target.headers, name, value)?;
+        }
+    }
+    Ok(target)
 }

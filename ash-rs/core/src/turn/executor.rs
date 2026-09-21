@@ -1393,30 +1393,37 @@ impl TurnExecutor {
         response: &ModelResponse,
         stream: &mut InvocationStream,
     ) -> Vec<ash_protocol::ThreadItem> {
-        if let Some((item_id, text)) = stream.take_reasoning() {
-            if !text.trim().is_empty() {
-                return vec![ash_protocol::ThreadItem::Reasoning {
-                    item_id,
-                    turn_id: turn_id.clone(),
-                    text,
-                }];
-            }
-            return Vec::new();
-        }
-        response
+        let state = response
             .output
             .iter()
             .filter_map(|item| match item {
-                ResponseItem::Reasoning(text) if !text.trim().is_empty() => {
-                    Some(ash_protocol::ThreadItem::Reasoning {
-                        item_id: self.threads.next_stream_item_id(),
-                        turn_id: turn_id.clone(),
-                        text: text.clone(),
-                    })
-                }
+                ResponseItem::ReasoningState(state) => Some(state.clone()),
                 _ => None,
             })
-            .collect()
+            .collect::<Vec<_>>();
+        let (item_id, text) = stream.take_reasoning().unwrap_or_else(|| {
+            (
+                self.threads.next_stream_item_id(),
+                response
+                    .output
+                    .iter()
+                    .filter_map(|item| match item {
+                        ResponseItem::Reasoning(text) => Some(text.as_str()),
+                        _ => None,
+                    })
+                    .collect(),
+            )
+        });
+        if text.trim().is_empty() && state.is_empty() {
+            Vec::new()
+        } else {
+            vec![ash_protocol::ThreadItem::Reasoning {
+                item_id,
+                turn_id: turn_id.clone(),
+                text,
+                state,
+            }]
+        }
     }
 
     fn publish_committed_after(&self, thread_id: &ThreadId, sequence: u64) {
@@ -1712,6 +1719,7 @@ impl InvocationStream {
         self.publish(ThreadUpdate::ItemStarted {
             turn_id: self.turn_id.clone(),
             item: ThreadItem::Reasoning {
+                state: Vec::new(),
                 item_id: item_id.clone(),
                 turn_id: self.turn_id.clone(),
                 text: String::new(),

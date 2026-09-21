@@ -1,0 +1,27 @@
+---
+source: ash-code/tui/src/app/state_tests.rs
+assertion_line: 2685
+expression: screen
+---
+  .                                                                        [— / —] [Dashboard]
+
+            ┌── Config › xAI subscription ─────────────────────────────────────[✗]─┐
+            │                                                                      │
+            │   Account                                                            │
+            │                                                                      │
+            │  Not signed in                                                       │
+            │> Open in your browser  ·  https://auth.x.ai/device                   │
+            │  Enter code  ·  XAI-1234                                             │
+            │  Cancel sign-in                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+            │                                                                      │
+  ╭─────────│  Tab/Shift+Tab to switch  ·  Esc to return                           │─────────╮
+  │ > Build └──────────────────────────────────────────────────────────────────────┘         │
+  ╰──────────────────────────────────────────────────────────────────────── Automatic model ─╯

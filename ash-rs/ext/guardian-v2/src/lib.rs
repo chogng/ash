@@ -129,7 +129,7 @@ impl ReviewModel for ProviderReviewModel {
                     }
                     text.push_str(&fragment);
                 }
-                ResponseItem::Reasoning(_) => {}
+                ResponseItem::Reasoning(_) | ResponseItem::ReasoningState(_) => {}
                 ResponseItem::Refusal(reason) => {
                     return Err(ReviewModelError::Invocation(format!(
                         "review model refused the assessment: {reason}"

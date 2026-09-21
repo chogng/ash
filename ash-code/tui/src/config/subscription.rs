@@ -18,7 +18,45 @@ use ash_app_server_protocol::protocol::account::AccountReadResult;
 use ash_app_server_protocol::protocol::account::AccountStatusDto;
 use std::collections::BTreeMap;
 
-const PROVIDER: &str = "openai-chatgpt";
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) enum SubscriptionProvider {
+    #[default]
+    ChatGpt,
+    Xai,
+}
+
+impl SubscriptionProvider {
+    pub(crate) fn index(self) -> usize {
+        match self {
+            Self::ChatGpt => 0,
+            Self::Xai => 1,
+        }
+    }
+    fn id(self) -> &'static str {
+        match self {
+            Self::ChatGpt => "openai-chatgpt",
+            Self::Xai => "xai-subscription",
+        }
+    }
+    fn name(self) -> &'static str {
+        match self {
+            Self::ChatGpt => "ChatGPT",
+            Self::Xai => "xAI",
+        }
+    }
+    fn title(self) -> &'static str {
+        match self {
+            Self::ChatGpt => "ChatGPT subscription",
+            Self::Xai => "xAI subscription",
+        }
+    }
+    fn method(self) -> AccountLoginMethodDto {
+        match self {
+            Self::ChatGpt => AccountLoginMethodDto::OpenAiChatGptDeviceCode,
+            Self::Xai => AccountLoginMethodDto::XaiDeviceCode,
+        }
+    }
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum SubscriptionCommand {
@@ -42,6 +80,7 @@ pub(crate) enum SubscriptionEvent {
 /// Keeps a pending sign-in available when the user leaves and reopens Providers.
 #[derive(Debug, Default)]
 pub(crate) struct Subscription {
+    provider: SubscriptionProvider,
     account: Option<AccountReadResult>,
     login: Option<AccountLoginStartResult>,
     pending: Option<SubscriptionCommand>,
@@ -50,6 +89,13 @@ pub(crate) struct Subscription {
 }
 
 impl Subscription {
+    pub(crate) fn new(provider: SubscriptionProvider) -> Self {
+        Self {
+            provider,
+            ..Self::default()
+        }
+    }
+
     pub(crate) fn begin(&mut self, command: &SubscriptionCommand) -> bool {
         if self.pending.is_some()
             || (self.login.is_some()
@@ -115,7 +161,8 @@ impl Subscription {
                     }
                     SubscriptionEvent::SignedOut(account) => {
                         self.update_account(account);
-                        self.message = Some("Disconnected from ChatGPT in Ash".into());
+                        self.message =
+                            Some(format!("Disconnected from {} in Ash", self.provider.name()));
                     }
                     SubscriptionEvent::Failed(message) => {
                         self.early_completions.clear();
@@ -140,7 +187,9 @@ impl Subscription {
     fn finish(&mut self, completed: AccountLoginCompleted) {
         self.login = None;
         self.message = Some(match completed.status {
-            AccountLoginCompletionStatusDto::Succeeded => "Signed in to ChatGPT".into(),
+            AccountLoginCompletionStatusDto::Succeeded => {
+                format!("Signed in to {}", self.provider.name())
+            }
             AccountLoginCompletionStatusDto::Failed { failure } => failure.message,
         });
     }
@@ -152,7 +201,7 @@ impl Subscription {
             result
                 .accounts
                 .iter()
-                .find(|account| account.provider == PROVIDER)
+                .find(|account| account.provider == self.provider.id())
         });
         if let Some(account) = account {
             let status = match account.status {
@@ -217,7 +266,7 @@ impl Subscription {
                 add_action(
                     &mut items,
                     &mut actions,
-                    "Sign in with ChatGPT",
+                    &format!("Sign in with {}", self.provider.name()),
                     SubscriptionCommand::SignIn,
                 );
             }
@@ -232,7 +281,7 @@ impl Subscription {
         }
         ConfigChoices {
             model: ListSelectionModel::new(
-                "ChatGPT subscription",
+                self.provider.title(),
                 vec![ListSelectionGroup::new("Account", items)],
             )
             .with_dismiss(crate::keymap::bindings::RETURN_LIST),
@@ -262,13 +311,14 @@ fn login_id(login: &AccountLoginStartResult) -> &str {
 
 pub(crate) fn execute<T: JsonRpcTransport>(
     client: &mut AppServerClient<T>,
+    provider: SubscriptionProvider,
     command: SubscriptionCommand,
 ) -> SubscriptionEvent {
     let result = match command {
         SubscriptionCommand::Read => client.read_accounts().map(SubscriptionEvent::Read),
         SubscriptionCommand::SignIn => client
             .start_account_login(AccountLoginStartParams {
-                method: AccountLoginMethodDto::OpenAiChatGptDeviceCode,
+                method: provider.method(),
             })
             .and_then(|started| match started {
                 AccountLoginStartResult::Connected { .. } => {
@@ -283,7 +333,7 @@ pub(crate) fn execute<T: JsonRpcTransport>(
             .map(|_| SubscriptionEvent::Cancelled { login_id }),
         SubscriptionCommand::SignOut => client
             .logout_account(AccountLogoutParams {
-                provider: PROVIDER.into(),
+                provider: provider.id().into(),
             })
             .and_then(|_| client.read_accounts())
             .map(SubscriptionEvent::SignedOut),

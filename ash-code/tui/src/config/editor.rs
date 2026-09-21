@@ -47,7 +47,7 @@ pub(crate) enum ConfigSelectionAction {
     AdjustIssueRefresh(super::IssueConfigEdit),
     OpenProvider(super::provider::Settings),
     Connection(super::provider::Request),
-    OpenSubscription,
+    OpenSubscription(super::SubscriptionProvider),
     Subscription(super::SubscriptionCommand),
     SetTerminalSettings(ConfigEdit),
     SetUpdatePolicy(ConfigEdit),
@@ -391,7 +391,7 @@ impl ConfigEditor {
                 ConfigSelectionAction::OpenProviderApiKey { .. }
                 | ConfigSelectionAction::OpenProvider(_)
                 | ConfigSelectionAction::Connection(_)
-                | ConfigSelectionAction::OpenSubscription
+                | ConfigSelectionAction::OpenSubscription(_)
                 | ConfigSelectionAction::Subscription(_) => ConfigEditorOutcome::Consumed,
                 ConfigSelectionAction::SetLanguage(edit) => language_outcome(edit, adjustment),
                 ConfigSelectionAction::SetUpdatePolicy(edit) => {
@@ -1006,9 +1006,19 @@ fn provider_items(
         {
             continue;
         }
-        if provider.provider == "openai-chatgpt" {
+        if provider.provider == "xai-subscription" {
+            let id = ListSelectionItemId::new("xai-subscription");
+            actions.insert(
+                id.clone(),
+                ConfigSelectionAction::OpenSubscription(super::SubscriptionProvider::Xai),
+            );
+            items.push(ListSelectionItem::new("xAI Subscription").with_id(id));
+        } else if provider.provider == "openai-chatgpt" {
             let id = ListSelectionItemId::new("openai-chatgpt");
-            actions.insert(id.clone(), ConfigSelectionAction::OpenSubscription);
+            actions.insert(
+                id.clone(),
+                ConfigSelectionAction::OpenSubscription(super::SubscriptionProvider::ChatGpt),
+            );
             items.push(ListSelectionItem::new("ChatGPT").with_id(id));
         } else {
             items.push(provider_item(provider, actions));
@@ -1020,7 +1030,10 @@ fn provider_items(
         .any(|provider| provider.provider == "openai-chatgpt")
     {
         let id = ListSelectionItemId::new("openai-chatgpt");
-        actions.insert(id.clone(), ConfigSelectionAction::OpenSubscription);
+        actions.insert(
+            id.clone(),
+            ConfigSelectionAction::OpenSubscription(super::SubscriptionProvider::ChatGpt),
+        );
         items.push(ListSelectionItem::new("ChatGPT").with_id(id));
     }
     let id = ListSelectionItemId::new("new-custom-provider");

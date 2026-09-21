@@ -1029,12 +1029,20 @@ fn enter_provider_row(app: &mut App, label: &str) -> Option<AppCommand> {
     app.update(ConfigEvent::EditorOpened(config_choices(
         &empty_config_snapshot(),
         &ProviderListResult {
-            providers: vec![ProviderCatalogEntryDto {
-                provider: "openai".into(),
-                display_name: "OpenAI".into(),
-                api_key_policy: ProviderApiKeyPolicyDto::Required,
-                api_key_configured: false,
-            }],
+            providers: vec![
+                ProviderCatalogEntryDto {
+                    provider: "openai".into(),
+                    display_name: "OpenAI".into(),
+                    api_key_policy: ProviderApiKeyPolicyDto::Required,
+                    api_key_configured: false,
+                },
+                ProviderCatalogEntryDto {
+                    provider: "xai-subscription".into(),
+                    display_name: "xAI Subscription".into(),
+                    api_key_policy: ProviderApiKeyPolicyDto::Unsupported,
+                    api_key_configured: false,
+                },
+            ],
         },
         TerminalSettings::default(),
         StatusLineSettings::default(),
@@ -1086,6 +1094,7 @@ fn chatgpt_subscription_keeps_pending_login_across_navigation_and_cancels_by_id(
     assert_eq!(
         enter_provider_row(&mut app, "ChatGPT"),
         Some(AppCommand::Config(ConfigCommand::Subscription(
+            crate::config::SubscriptionProvider::ChatGpt,
             SubscriptionCommand::Read
         )))
     );
@@ -1099,6 +1108,7 @@ fn chatgpt_subscription_keeps_pending_login_across_navigation_and_cancels_by_id(
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         Some(AppCommand::Config(ConfigCommand::Subscription(
+            crate::config::SubscriptionProvider::ChatGpt,
             SubscriptionCommand::SignIn
         )))
     );
@@ -1117,6 +1127,7 @@ fn chatgpt_subscription_keeps_pending_login_across_navigation_and_cancels_by_id(
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         Some(AppCommand::Config(ConfigCommand::Subscription(
+            crate::config::SubscriptionProvider::ChatGpt,
             SubscriptionCommand::Read
         )))
     );
@@ -1132,6 +1143,7 @@ fn chatgpt_subscription_keeps_pending_login_across_navigation_and_cancels_by_id(
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         Some(AppCommand::Config(ConfigCommand::Subscription(
+            crate::config::SubscriptionProvider::ChatGpt,
             SubscriptionCommand::Cancel {
                 login_id: "login-1".into()
             }
@@ -1201,13 +1213,17 @@ fn chatgpt_external_login_error_shows_codex_instructions_and_allows_retry() {
     assert_eq!(
         signin,
         Some(AppCommand::Config(ConfigCommand::Subscription(
+            crate::config::SubscriptionProvider::ChatGpt,
             SubscriptionCommand::SignIn
         )))
     );
     app.update(
         crate::config::execute(
             &mut client,
-            ConfigCommand::Subscription(SubscriptionCommand::SignIn),
+            ConfigCommand::Subscription(
+                crate::config::SubscriptionProvider::ChatGpt,
+                SubscriptionCommand::SignIn,
+            ),
         )
         .unwrap(),
     );
@@ -1219,6 +1235,7 @@ fn chatgpt_external_login_error_shows_codex_instructions_and_allows_retry() {
     assert_eq!(
         app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         Some(AppCommand::Config(ConfigCommand::Subscription(
+            crate::config::SubscriptionProvider::ChatGpt,
             SubscriptionCommand::SignIn
         )))
     );
@@ -2662,4 +2679,79 @@ fn fork_rejects_image_arguments_before_session_creation() {
             .unwrap()
             .contains("do not accept image arguments")
     );
+}
+
+#[test]
+fn xai_subscription_login_stays_separate_from_chatgpt_after_navigation() {
+    use crate::config::SubscriptionCommand;
+    use crate::config::SubscriptionEvent;
+    use crate::config::SubscriptionProvider;
+    use ash_app_server_protocol::protocol::account::AccountLoginStartResult;
+    use ash_app_server_protocol::protocol::account::AccountReadResult;
+    let mut app = App::new();
+    assert_eq!(
+        enter_provider_row(&mut app, "xAI Subscription"),
+        Some(AppCommand::Config(ConfigCommand::Subscription(
+            SubscriptionProvider::Xai,
+            SubscriptionCommand::Read
+        )))
+    );
+    app.update(ConfigEvent::SubscriptionReply(
+        SubscriptionProvider::Xai,
+        SubscriptionEvent::Read(AccountReadResult {
+            revision: 1,
+            accounts: vec![],
+        }),
+    ));
+    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        Some(AppCommand::Config(ConfigCommand::Subscription(
+            SubscriptionProvider::Xai,
+            SubscriptionCommand::SignIn
+        )))
+    );
+    app.update(ConfigEvent::SubscriptionReply(
+        SubscriptionProvider::Xai,
+        SubscriptionEvent::Started(AccountLoginStartResult::DeviceCode {
+            login_id: "xai-login".into(),
+            verification_url: "https://auth.x.ai/device".into(),
+            user_code: "XAI-1234".into(),
+        }),
+    ));
+    let screen = crate::app::usage_tests::render(&app, 96, 24);
+    assert!(screen.contains("XAI-1234") && screen.contains("https://auth.x.ai/device"));
+    crate::tui_assert_snapshot!("xai_subscription_device_login", screen);
+    for _ in 0..2 {
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    }
+    assert_eq!(
+        enter_provider_row(&mut app, "ChatGPT"),
+        Some(AppCommand::Config(ConfigCommand::Subscription(
+            SubscriptionProvider::ChatGpt,
+            SubscriptionCommand::Read
+        )))
+    );
+    app.update(ConfigEvent::SubscriptionReply(
+        SubscriptionProvider::ChatGpt,
+        SubscriptionEvent::Read(AccountReadResult {
+            revision: 1,
+            accounts: vec![],
+        }),
+    ));
+    let screen = crate::app::usage_tests::render(&app, 96, 24);
+    assert!(screen.contains("Sign in with ChatGPT"));
+    assert!(!screen.contains("XAI-1234"));
+    for _ in 0..2 {
+        app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    }
+    enter_provider_row(&mut app, "xAI Subscription");
+    app.update(ConfigEvent::SubscriptionReply(
+        SubscriptionProvider::Xai,
+        SubscriptionEvent::Read(AccountReadResult {
+            revision: 1,
+            accounts: vec![],
+        }),
+    ));
+    assert!(crate::app::usage_tests::render(&app, 96, 24).contains("XAI-1234"));
 }

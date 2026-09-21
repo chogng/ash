@@ -2515,7 +2515,7 @@ impl ModelService for CountingModel {
                     };
                     Some(text.as_str())
                 }),
-                InputItem::ToolResult(_) => None,
+                InputItem::ToolResult(_) | InputItem::Reasoning(_) => None,
             })
             .unwrap_or_default();
         Ok(ModelResponse {
@@ -6271,4 +6271,62 @@ fn advisor_requests_are_typed_retry_safe_and_separate_from_worker_turns() {
         ),
     );
     assert!(conflicting.get("error").is_some());
+}
+
+#[test]
+fn xai_subscription_login_registers_its_provider_once_for_model_selection() {
+    struct Driver;
+    impl InteractiveLoginDriver for Driver {
+        fn provider_id(&self) -> &'static str {
+            "xai-subscription"
+        }
+        fn read_account(&self) -> Result<Option<AccountSnapshot>, LoginError> {
+            Ok(None)
+        }
+        fn begin(&self, request: BeginLoginRequest) -> Result<BeginLogin, LoginError> {
+            assert_eq!(request.method, ash_login::LoginMethod::XaiDeviceCode);
+            Ok(BeginLogin::DeviceCode {
+                login_id: request.login_id,
+                verification_url: "https://auth.x.ai/device".into(),
+                user_code: "XAI-CODE".into(),
+            })
+        }
+        fn cancel(&self, _: &LoginId) -> Result<CancelLoginOutcome, LoginError> {
+            Ok(CancelLoginOutcome::Cancelled)
+        }
+        fn logout(&self, _: &AccountRef) -> Result<(), LoginError> {
+            Ok(())
+        }
+    }
+    let profile = tempfile::tempdir().unwrap();
+    let config = Arc::new(ConfigStore::open(profile.path().join("config.sqlite3")).unwrap());
+    let server = server()
+        .with_config_store(config.clone())
+        .with_login_service(Arc::new(LoginService::new(Arc::new(Driver)).unwrap()));
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    for id in 2..4 {
+        let response = call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":id,"method":"account/login/start","params":{"method":{"type":"xaiDeviceCode"}}}),
+        );
+        assert_eq!(response["result"]["userCode"], "XAI-CODE", "{response}");
+        let cancelled = call(
+            &server,
+            &mut connection,
+            serde_json::json!({"jsonrpc":"2.0","id":id+2,"method":"account/login/cancel","params":{"loginId":response["result"]["loginId"]}}),
+        );
+        assert_eq!(cancelled["result"]["status"], "cancelled");
+        let snapshot = config.read_snapshot().unwrap();
+        assert_eq!(snapshot.revision.get(), 1);
+        assert_eq!(snapshot.values.providers.len(), 1);
+        assert!(
+            snapshot
+                .values
+                .providers
+                .contains_key(&ProviderId::new("xai-subscription").unwrap())
+        );
+        assert!(snapshot.values.model.is_none());
+    }
 }

@@ -7,6 +7,7 @@ mod subscription;
 pub(crate) use subscription::Subscription;
 pub(crate) use subscription::SubscriptionCommand;
 pub(crate) use subscription::SubscriptionEvent;
+pub(crate) use subscription::SubscriptionProvider;
 
 pub(crate) use editor::ConfigChoices;
 pub(crate) use editor::ConfigEdit;
@@ -39,6 +40,7 @@ pub(crate) struct ConfigEditResult {
 pub(crate) enum Event {
     Connection(provider::Reply),
     Subscription(SubscriptionEvent),
+    SubscriptionReply(SubscriptionProvider, SubscriptionEvent),
     SettingsReceived(TerminalSettings),
     Updated(ConfigEditResult),
     EditorOpened(ConfigChoices),
@@ -53,7 +55,7 @@ pub(crate) enum Command {
     SetMemories(ConfigEdit),
     SetIssues(IssueConfigEdit),
     Connection(provider::Request),
-    Subscription(SubscriptionCommand),
+    Subscription(SubscriptionProvider, SubscriptionCommand),
     OpenEditor,
     Edit(ConfigEdit),
     SetLanguageServerMode(LanguageServerEdit),

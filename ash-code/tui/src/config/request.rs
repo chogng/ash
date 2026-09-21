@@ -29,7 +29,7 @@ impl Command {
             Self::SetMemories(_) => "ash-tui-set-memories",
             Self::SetIssues(_) => "ash-tui-configure-issues",
             Self::Connection(_) => "ash-tui-provider-connection",
-            Self::Subscription(_) => "ash-tui-chatgpt-account",
+            Self::Subscription(_, _) => "ash-tui-subscription-account",
             Self::OpenEditor => "ash-tui-read-config",
             Self::Edit(_) => "ash-tui-set-config",
             Self::SetLanguageServerMode(_) => "ash-tui-set-language-server-mode",
@@ -50,9 +50,10 @@ where
             let result = execute_connection(client, request);
             return Ok(Event::Connection(super::provider::Reply { id, result }));
         }
-        Command::Subscription(command) => Ok(Event::Subscription(super::subscription::execute(
-            client, command,
-        ))),
+        Command::Subscription(provider, command) => Ok(Event::SubscriptionReply(
+            provider,
+            super::subscription::execute(client, provider, command),
+        )),
         Command::OpenEditor => read_config_choices(client).map(Event::EditorOpened),
         Command::Edit(edit) => set_settings(client, edit).map(Event::Updated),
         Command::SetLanguageServerMode(edit) => {

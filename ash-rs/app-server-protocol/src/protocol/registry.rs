@@ -1643,6 +1643,8 @@ use ash_protocol::RatedModelCost;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ReasoningEffort;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::ReasoningState;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::RepositoryCheckpoint;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::RequestUserInput;
@@ -4204,6 +4206,7 @@ typescript_bindings! {
     ModelOutputTransport,
     ModelCapabilities,
     ReasoningEffort,
+    ReasoningState,
     Personality,
     ModelCatalogEntry,
     ModelListResult,

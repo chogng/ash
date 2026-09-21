@@ -321,7 +321,7 @@ fn request_contains(request: &ModelRequest, expected: &str) -> bool {
             .content
             .iter()
             .any(|content| matches!(content, ContentPart::Text(text) if text.contains(expected))),
-        InputItem::ToolResult(_) => false,
+        InputItem::ToolResult(_) | InputItem::Reasoning(_) => false,
     })
 }
 

@@ -1,3 +1,6 @@
+mod xai;
+pub(crate) use xai::xai_catalog_binding;
+
 use crate::diagnostics::DiagnosticClient;
 use ash_async_utils::CancellationSource;
 use ash_client::OperationClient;

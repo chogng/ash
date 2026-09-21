@@ -63,6 +63,7 @@ use std::sync::atomic::Ordering;
 
 enum ProviderConnection {
     ChatGpt { auth: Arc<ChatGptOAuth> },
+    Xai { auth: Arc<xai::XaiOAuth> },
     Direct { headers: crate::auth::ModelHeaders },
     Subscription { target: ResolvedApiTarget },
 }
@@ -71,11 +72,13 @@ enum ProviderConnection {
 enum ProviderTarget {
     Fixed(ResolvedApiTarget),
     ChatGpt(Arc<ChatGptOAuth>),
+    Xai(Arc<xai::XaiOAuth>),
 }
 
 enum ResolvedProviderTarget<'a> {
     Fixed(&'a ResolvedApiTarget),
     ChatGpt(ChatGptApiTarget),
+    Xai(xai::XaiApiTarget),
 }
 
 impl ResolvedProviderTarget<'_> {
@@ -83,6 +86,7 @@ impl ResolvedProviderTarget<'_> {
         match self {
             Self::Fixed(target) => target,
             Self::ChatGpt(target) => target.api_target(),
+            Self::Xai(target) => &target.target,
         }
     }
 
@@ -90,6 +94,7 @@ impl ResolvedProviderTarget<'_> {
         match self {
             Self::Fixed(target) => target.clone(),
             Self::ChatGpt(target) => target.into_api_target(),
+            Self::Xai(target) => target.target,
         }
     }
 }
@@ -98,6 +103,7 @@ impl ProviderTarget {
     fn endpoint(&self, direct: ApiEndpoint) -> ApiEndpoint {
         match self {
             Self::ChatGpt(_) => ApiEndpoint::ChatGptResponses,
+            Self::Xai(_) => ApiEndpoint::XaiSubscriptionResponses,
             Self::Fixed(_) => direct,
         }
     }
@@ -105,6 +111,10 @@ impl ProviderTarget {
     fn resolve(&self) -> Result<ResolvedProviderTarget<'_>, ModelProviderError> {
         match self {
             Self::Fixed(target) => Ok(ResolvedProviderTarget::Fixed(target)),
+            Self::Xai(auth) => auth
+                .api_target()
+                .map(ResolvedProviderTarget::Xai)
+                .map_err(|error| ModelProviderError::Credential(error.to_string())),
             Self::ChatGpt(auth) => auth
                 .api_target()
                 .map(ResolvedProviderTarget::ChatGpt)
@@ -117,6 +127,10 @@ impl ProviderTarget {
         rejected: &ResolvedProviderTarget<'_>,
     ) -> Result<Option<ResolvedProviderTarget<'static>>, ModelProviderError> {
         match (self, rejected) {
+            (Self::Xai(auth), ResolvedProviderTarget::Xai(rejected)) => auth
+                .recover_unauthorized(rejected)
+                .map(|target| target.map(ResolvedProviderTarget::Xai))
+                .map_err(|error| ModelProviderError::Credential(error.to_string())),
             (Self::ChatGpt(auth), ResolvedProviderTarget::ChatGpt(rejected)) => auth
                 .recover_unauthorized(rejected)
                 .map(|target| target.map(ResolvedProviderTarget::ChatGpt))
@@ -126,6 +140,9 @@ impl ProviderTarget {
     }
 
     fn note_rejected(&self, target: &ResolvedProviderTarget<'_>) {
+        if let (Self::Xai(auth), ResolvedProviderTarget::Xai(target)) = (self, target) {
+            auth.note_rejected(target);
+        }
         if let (Self::ChatGpt(auth), ResolvedProviderTarget::ChatGpt(target)) = (self, target) {
             auth.note_rejected(target);
         }
@@ -261,6 +278,9 @@ impl Provider {
             ProviderConnection::Subscription { target } => {
                 (ProviderTarget::Fixed(target), RemoteMeasurement::Disabled)
             }
+            ProviderConnection::Xai { auth } => {
+                (ProviderTarget::Xai(auth), RemoteMeasurement::Disabled)
+            }
             ProviderConnection::ChatGpt { auth } => {
                 (ProviderTarget::ChatGpt(auth), RemoteMeasurement::Disabled)
             }
@@ -374,7 +394,7 @@ impl Provider {
                 emitted: false,
             };
             let response = self.execute_attempt(
-                target.api_target(),
+                &target,
                 model.id.as_str(),
                 &request,
                 &attempt_client,
@@ -398,7 +418,7 @@ impl Provider {
                 if let Some(renewed) = recovered? {
                     let retry_client = AttemptClient::new(&diagnostic);
                     let response = self.execute_attempt(
-                        renewed.api_target(),
+                        &renewed,
                         model.id.as_str(),
                         &request,
                         &retry_client,
@@ -427,35 +447,83 @@ impl Provider {
 
     fn execute_attempt(
         &self,
-        target: &ResolvedApiTarget,
+        target: &ResolvedProviderTarget<'_>,
         model: &str,
         request: &ModelRequest,
         client: &dyn OperationClient,
         cancellation: &CancellationToken,
         sink: &mut dyn ModelEventSink,
     ) -> Result<ModelResponse, ModelProviderError> {
+        use sha2::Digest;
         let endpoint = self.target.endpoint(self.adapter.endpoint());
         let model = self.adapter.model_id(model);
-        match self.definition.output_transport {
+        let mut digest = sha2::Sha256::new();
+        let mut hash = |value: &str| {
+            digest.update((value.len() as u64).to_be_bytes());
+            digest.update(value.as_bytes());
+        };
+        hash(self.id().as_str());
+        hash(&format!("{endpoint:?}"));
+        hash(model);
+        match target {
+            ResolvedProviderTarget::Xai(target) => hash(&target.account_id),
+            _ => {
+                hash(&target.api_target().base_url);
+                for header in &target.api_target().headers {
+                    hash(header.name());
+                    hash(header.value());
+                }
+            }
+        }
+        let scope = format!("{:x}", digest.finalize());
+        let mut request = request.clone();
+        let mut retained_prefix: u32 = 0;
+        let mut index = 0;
+        request.input.retain(|item| {
+            let keep = match item {
+                InputItem::Reasoning(state) => {
+                    endpoint.protocol() == ApiProtocol::OpenAiResponses && state.scope == scope
+                }
+                _ => true,
+            };
+            if keep
+                && request
+                    .prompt_cache_prefix_end
+                    .is_some_and(|end| index <= end)
+            {
+                retained_prefix += 1;
+            }
+            index += 1;
+            keep
+        });
+        request.prompt_cache_prefix_end = retained_prefix.checked_sub(1);
+        let target = target.api_target();
+        let mut response = match self.definition.output_transport {
             ModelOutputTransport::NativeStreaming => stream_endpoint(
                 endpoint,
-                &target,
+                target,
                 model,
-                request,
+                &request,
                 client,
                 cancellation,
                 sink,
             ),
             ModelOutputTransport::Unary => endpoint
                 .complete_with_client_and_cancellation(
-                    &target,
+                    target,
                     model,
-                    request,
+                    &request,
                     client,
                     cancellation,
                 )
                 .map_err(Into::into),
+        }?;
+        for item in &mut response.output {
+            if let OutputItem::ReasoningState(state) = item {
+                state.scope = scope.clone();
+            }
         }
+        Ok(response)
     }
 
     pub fn input_token_measurement_capability(
@@ -526,6 +594,17 @@ impl Provider {
     }
 
     fn resolve_model(&self, model_id: &ModelId) -> Result<Model, ModelProviderError> {
+        if let ProviderTarget::Xai(auth) = &self.target {
+            let binding =
+                crate::catalog::xai_catalog_binding(Arc::clone(auth))?.ok_or_else(|| {
+                    ModelProviderError::Credential("xAI Subscription is not signed in".into())
+                })?;
+            return self
+                .models
+                .resolve(binding.scope(), model_id, &ModelRequirements::agent())
+                .map(|resolved| resolved.entry().info().clone())
+                .map_err(model_resolution_error);
+        }
         self.models
             .resolve_static(
                 &ModelRef::new(self.definition.id.clone(), model_id.clone()),
@@ -546,6 +625,7 @@ pub struct ModelProviderRuntime {
     local_tokenizers: Arc<dyn LocalTokenizerService>,
     chatgpt_oauth: Option<Arc<ChatGptOAuth>>,
     kimi_oauth: Option<Arc<KimiOAuth>>,
+    xai_oauth: Option<Arc<xai::XaiOAuth>>,
     diagnostics: Option<Arc<dyn ResponseDiagnosticSink>>,
 }
 
@@ -582,6 +662,7 @@ impl ModelProviderRuntime {
             local_tokenizers: Arc::new(LocalTokenizerRegistry::new()),
             chatgpt_oauth: None,
             kimi_oauth: None,
+            xai_oauth: None,
             diagnostics: None,
         }
     }
@@ -609,6 +690,7 @@ impl ModelProviderRuntime {
             local_tokenizers: Arc::new(LocalTokenizerRegistry::new()),
             chatgpt_oauth: None,
             kimi_oauth: None,
+            xai_oauth: None,
             diagnostics: None,
         }
     }
@@ -622,6 +704,12 @@ impl ModelProviderRuntime {
         local_tokenizers: Arc<dyn LocalTokenizerService>,
     ) -> Self {
         self.local_tokenizers = local_tokenizers;
+        self
+    }
+
+    /// Installs the xAI subscription credential authority.
+    pub fn with_xai_oauth(mut self, auth: Arc<xai::XaiOAuth>) -> Self {
+        self.xai_oauth = Some(auth);
         self
     }
 
@@ -781,6 +869,14 @@ impl ModelProviderRuntime {
     ) -> Result<Option<ModelCatalogBinding>, ModelProviderError> {
         let runtime = self.with_configs([config])?;
         let normalized = runtime.configs.normalize(config)?;
+        if normalized.provider.as_str() == xai::XAI_PROVIDER_ID {
+            return self
+                .xai_oauth
+                .as_ref()
+                .map(|auth| crate::catalog::xai_catalog_binding(Arc::clone(auth)))
+                .transpose()
+                .map(Option::flatten);
+        }
         let definition = runtime
             .configs
             .get(&normalized.provider)
@@ -825,6 +921,19 @@ impl ModelProviderRuntime {
         runtime.instantiate_normalized(normalized)
     }
 
+    pub fn model_info(
+        &self,
+        config: &ModelProviderConfig,
+        model: &ModelRef,
+    ) -> Result<Model, ModelProviderError> {
+        let runtime = self.with_configs([config])?;
+        let normalized = runtime.configs.normalize_for(config, &model.provider)?;
+        let connection = runtime.connection(model, &normalized)?;
+        runtime
+            .instantiate_normalized_with_connection(normalized, connection)?
+            .resolve_model(&model.model)
+    }
+
     pub fn build_model(
         &self,
         config: &ModelProviderConfig,
@@ -856,7 +965,11 @@ impl ModelProviderRuntime {
         &self,
         normalized: NormalizedModelProviderConfig,
     ) -> Result<Provider, ModelProviderError> {
-        let connection = self.direct_connection(&normalized)?;
+        let connection = if normalized.provider.as_str() == xai::XAI_PROVIDER_ID {
+            self.xai_connection()?
+        } else {
+            self.direct_connection(&normalized)?
+        };
         self.instantiate_normalized_with_connection(normalized, connection)
     }
 
@@ -887,6 +1000,9 @@ impl ModelProviderRuntime {
         model: &ModelRef,
         normalized: &NormalizedModelProviderConfig,
     ) -> Result<ProviderConnection, ModelProviderError> {
+        if normalized.provider.as_str() == xai::XAI_PROVIDER_ID {
+            return self.xai_connection();
+        }
         match find_static_model(model).map(|spec| spec.runtime) {
             Some(StaticModelRuntime::KimiCode) => self
                 .kimi_oauth
@@ -911,6 +1027,15 @@ impl ModelProviderRuntime {
             }
             Some(StaticModelRuntime::ProviderApi) | None => self.direct_connection(normalized),
         }
+    }
+
+    fn xai_connection(&self) -> Result<ProviderConnection, ModelProviderError> {
+        let auth = self.xai_oauth.as_ref().ok_or_else(|| {
+            ModelProviderError::Credential("xAI subscription login is unavailable".into())
+        })?;
+        Ok(ProviderConnection::Xai {
+            auth: Arc::clone(auth),
+        })
     }
 
     fn direct_connection(
@@ -1232,7 +1357,7 @@ impl ModelInvoker for EchoModel {
                     };
                     Some(text.as_str())
                 }),
-                InputItem::ToolResult(_) => None,
+                InputItem::ToolResult(_) | InputItem::Reasoning(_) => None,
             })
             .unwrap_or_default();
         let text = format!("Ash: {prompt}");

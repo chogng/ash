@@ -442,3 +442,39 @@ fn turn_id() -> TurnId {
 fn item_id(value: &str) -> ItemId {
     ItemId::new(value).unwrap()
 }
+
+#[test]
+fn encrypted_reasoning_without_a_summary_has_no_visible_transcript_entry() {
+    let item = ThreadItem::Reasoning {
+        item_id: item_id("r1"),
+        turn_id: turn_id(),
+        text: String::new(),
+        state: vec![ash_protocol::ReasoningState {
+            scope: "scope".into(),
+            item: serde_json::json!({"type":"reasoning","encrypted_content":"opaque"}),
+        }],
+    };
+    let mut accumulator = TranscriptAccumulator::new(session_id(), thread_id());
+    let result = apply(
+        &mut accumulator,
+        durable(
+            1,
+            ThreadEvent::ItemCompleted {
+                item,
+                checkpoint_after_sequence: None,
+                workspace_checkpoint: None,
+                thread_id: thread_id(),
+                turn_id: turn_id(),
+            },
+        ),
+    );
+    let TranscriptApplyResult::Applied(update) = result else {
+        panic!("committed update")
+    };
+    assert_eq!(
+        update.changes,
+        vec![ThreadTranscriptChange::Remove {
+            entry_ids: vec!["item:r1".into()]
+        }]
+    );
+}

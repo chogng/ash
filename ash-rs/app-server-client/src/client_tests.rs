@@ -103,7 +103,7 @@ impl ModelService for TestModel {
                         ContentPart::AudioAttachment { .. } | ContentPart::AudioUrl { .. } => None,
                     })
                 }
-                ModelInputItem::ToolResult(_) => None,
+                ModelInputItem::ToolResult(_) | ModelInputItem::Reasoning(_) => None,
             })
             .unwrap_or_default();
         Ok(ModelResponse {

@@ -135,6 +135,11 @@ pub(crate) fn build_request(model: &str, request: &ModelRequest) -> Result<Value
     crate::requests::require_materialized_attachments(request)?;
     for item in &request.input {
         let (content, user_message) = match item {
+            InputItem::Reasoning(_) => {
+                return Err(ApiError::InvalidRequest(
+                    "Responses reasoning requires a Responses endpoint".into(),
+                ));
+            }
             InputItem::Message(message) => (&message.content, message.role == MessageRole::User),
             InputItem::ToolResult(result) => (&result.content, false),
         };
@@ -161,6 +166,11 @@ pub(crate) fn build_request(model: &str, request: &ModelRequest) -> Result<Value
     }
     for item in &request.input {
         match item {
+            InputItem::Reasoning(_) => {
+                return Err(ApiError::InvalidRequest(
+                    "Responses reasoning requires a Responses endpoint".into(),
+                ));
+            }
             InputItem::Message(message) => messages.push(convert_message(message)),
             InputItem::ToolResult(result) => messages.push(json!({
                 "role": "tool",
@@ -397,6 +407,7 @@ fn parse_usage(endpoint: ApiEndpoint, usage: Option<&Value>) -> Option<ModelUsag
             .and_then(Value::as_u64),
         ApiEndpoint::OpenAiResponses
         | ApiEndpoint::ChatGptResponses
+        | ApiEndpoint::XaiSubscriptionResponses
         | ApiEndpoint::AnthropicMessages
         | ApiEndpoint::AnthropicMessagesAtBase => {
             unreachable!("Chat Completions parser requires a Chat Completions endpoint")

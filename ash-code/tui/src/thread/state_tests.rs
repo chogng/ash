@@ -230,6 +230,7 @@ fn thread_snapshot() -> Thread {
                     text: "canonical prompt".into(),
                 },
                 ThreadItem::Reasoning {
+                    state: Vec::new(),
                     item_id: ItemId::new("item_2").unwrap(),
                     turn_id: turn_id.clone(),
                     text: "inspect the code".into(),

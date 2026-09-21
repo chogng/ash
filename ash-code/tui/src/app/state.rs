@@ -138,7 +138,8 @@ pub(crate) struct App {
     welcome: WelcomeModel,
     status: Status,
     terminal_settings: TerminalSettings,
-    subscription: crate::config::Subscription,
+    subscriptions: [crate::config::Subscription; 2],
+    selected_subscription: crate::config::SubscriptionProvider,
     pub(super) fullscreen: Fullscreen,
     pub(super) inline: super::inline::Inline,
     render_theme: RenderTheme,
@@ -164,7 +165,11 @@ impl App {
             welcome: WelcomeModel::for_workspace(Path::new(".")),
             status: Status::Ready,
             terminal_settings: TerminalSettings::default(),
-            subscription: crate::config::Subscription::default(),
+            subscriptions: [
+                crate::config::Subscription::new(crate::config::SubscriptionProvider::ChatGpt),
+                crate::config::Subscription::new(crate::config::SubscriptionProvider::Xai),
+            ],
+            selected_subscription: crate::config::SubscriptionProvider::ChatGpt,
             fullscreen: Fullscreen::new(
                 ash_protocol::ThreadId::new("tui-local").expect("valid initial Thread"),
             ),
@@ -241,7 +246,11 @@ impl App {
             welcome: WelcomeModel::for_workspace(dir_root),
             status: Status::Ready,
             terminal_settings: TerminalSettings::default(),
-            subscription: crate::config::Subscription::default(),
+            subscriptions: [
+                crate::config::Subscription::new(crate::config::SubscriptionProvider::ChatGpt),
+                crate::config::Subscription::new(crate::config::SubscriptionProvider::Xai),
+            ],
+            selected_subscription: crate::config::SubscriptionProvider::ChatGpt,
             fullscreen: Fullscreen::new(
                 ash_protocol::ThreadId::new("tui-local").expect("valid initial Thread"),
             ),
@@ -593,8 +602,11 @@ impl App {
             crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::OpenProvider(_)) => {
                 None
             }
-            crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::OpenSubscription) => {
-                let mut choices = self.subscription.choices();
+            crate::config::ConfigEditorOutcome::Action(
+                ConfigSelectionAction::OpenSubscription(provider),
+            ) => {
+                self.selected_subscription = provider;
+                let mut choices = self.subscriptions[self.selected_subscription.index()].choices();
                 self.localize_selection(&mut choices);
                 self.panels_mut().open_subscription(choices);
                 self.begin_subscription_command(crate::config::SubscriptionCommand::Read)
@@ -637,13 +649,13 @@ impl App {
         &mut self,
         command: crate::config::SubscriptionCommand,
     ) -> Option<AppCommand> {
-        if !self.subscription.begin(&command) {
+        if !self.subscriptions[self.selected_subscription.index()].begin(&command) {
             return None;
         }
-        let mut choices = self.subscription.choices();
+        let mut choices = self.subscriptions[self.selected_subscription.index()].choices();
         self.localize_selection(&mut choices);
         self.panels_mut().update_subscription(choices);
-        Some(ConfigCommand::Subscription(command).into())
+        Some(ConfigCommand::Subscription(self.selected_subscription, command).into())
     }
 
     fn handle_theme_picker_outcome(&mut self, outcome: ThemePickerOutcome) -> Option<AppCommand> {
@@ -2325,10 +2337,20 @@ impl App {
                 self.set_status(Status::Ready);
             }
             ConfigEvent::Subscription(event) => {
-                self.subscription.update(event);
-                let mut choices = self.subscription.choices();
+                for subscription in &mut self.subscriptions {
+                    subscription.update(event.clone());
+                }
+                let mut choices = self.subscriptions[self.selected_subscription.index()].choices();
                 self.localize_selection(&mut choices);
                 self.panels_mut().update_subscription(choices);
+            }
+            ConfigEvent::SubscriptionReply(provider, event) => {
+                self.subscriptions[provider.index()].update(event);
+                if provider == self.selected_subscription {
+                    let mut choices = self.subscriptions[provider.index()].choices();
+                    self.localize_selection(&mut choices);
+                    self.panels_mut().update_subscription(choices);
+                }
             }
             ConfigEvent::SettingsReceived(settings) => {
                 self.set_terminal_settings(settings);

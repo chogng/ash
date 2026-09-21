@@ -16,12 +16,13 @@ mod qwen;
 mod xai;
 mod zai;
 
-pub(crate) fn builtin() -> [ProviderDefinition; 13] {
+pub(crate) fn builtin() -> [ProviderDefinition; 14] {
     [
         openai::definition(),
         openai_compatible::definition(),
         google::definition(),
         xai::definition(),
+        xai::subscription_definition(),
         qwen::definition(),
         kimi::definition(),
         deepseek::definition(),

@@ -94,6 +94,7 @@ impl ThreadTranscriptSnapshot {
             entries.extend(
                 turn.items
                     .iter()
+                    .filter(|item| !matches!(item, ThreadItem::Reasoning { text, .. } if text.is_empty()))
                     .cloned()
                     .map(|item| ThreadTranscriptEntry::Item {
                         entry_id: item_entry_id(item.item_id().as_str()),

@@ -1,5 +1,5 @@
 [package]
-name = "ash-api"
+name = "ash-xai"
 version.workspace = true
 edition.workspace = true
 license-file.workspace = true
@@ -7,26 +7,25 @@ publish.workspace = true
 
 [lib]
 doctest = false
-name = "ash_api"
+name = "xai"
 path = "src/lib.rs"
 
 [dependencies]
+fs2 = { workspace = true }
 getrandom = { workspace = true }
-audio = { workspace = true }
-base64 = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
-tokio = { workspace = true, features = ["macros", "time"] }
 url = { workspace = true }
+urlencoding = { workspace = true }
+zeroize = { workspace = true }
 ash-async-utils = { workspace = true }
 ash-client = { workspace = true }
 ash-http-client = { workspace = true }
-ash-protocol = { workspace = true }
-ash-websocket-client = { workspace = true }
+ash-login = { workspace = true }
+ash-secrets = { workspace = true }
 
 [dev-dependencies]
-futures = { workspace = true }
-tokio = { workspace = true, features = ["sync"] }
-tokio-tungstenite = { workspace = true }
+tempfile = { workspace = true }
 
 [lints]
 workspace = true

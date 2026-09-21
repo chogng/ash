@@ -22,7 +22,8 @@ export interface AccountState {
 export type AccountLoginMethod =
 	| { readonly type: 'openAiChatGptBrowser' }
 	| { readonly type: 'openAiChatGptDeviceCode' }
-	| { readonly type: 'kimiDeviceCode' };
+	| { readonly type: 'kimiDeviceCode' }
+	| { readonly type: 'xaiDeviceCode' };
 
 export type AccountLoginChallenge =
 	| { readonly type: 'connected'; readonly loginId: string }

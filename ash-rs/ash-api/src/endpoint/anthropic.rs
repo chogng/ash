@@ -181,6 +181,11 @@ fn build_request(model: &str, request: &ModelRequest) -> Result<Value, ApiError>
     crate::requests::require_materialized_attachments(request)?;
     for item in &request.input {
         let content = match item {
+            InputItem::Reasoning(_) => {
+                return Err(ApiError::InvalidRequest(
+                    "Responses reasoning requires a Responses endpoint".into(),
+                ));
+            }
             InputItem::Message(message) => &message.content,
             InputItem::ToolResult(result) => &result.content,
         };
@@ -196,6 +201,11 @@ fn build_request(model: &str, request: &ModelRequest) -> Result<Value, ApiError>
     let mut messages = Vec::new();
     for item in &request.input {
         match item {
+            InputItem::Reasoning(_) => {
+                return Err(ApiError::InvalidRequest(
+                    "Responses reasoning requires a Responses endpoint".into(),
+                ));
+            }
             InputItem::Message(message) => messages.push(convert_message(message)?),
             InputItem::ToolResult(result) => messages.push(json!({
                 "role": "user",
