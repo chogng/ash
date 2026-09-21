@@ -80,6 +80,29 @@ fn literal(path: &Path) -> String {
 }
 
 #[test]
+#[ignore = "requires a host without PSEC support"]
+fn missing_psec_is_reported_before_execution() {
+    let temp = tempfile::tempdir().unwrap();
+    let dir = Dir::open_local(temp.path()).unwrap();
+    let command = SandboxCommand::new(
+        "must-not-start",
+        std::iter::empty::<&str>(),
+        dir.canonical_path(),
+    );
+    let error = MxcSandbox::new(InstallContext::current())
+        .prepare(
+            &command,
+            sandbox_policy(FileSystemAccess::DirectoryWrite, NetworkAccess::Denied),
+            &dir,
+        )
+        .unwrap_err();
+    assert!(
+        matches!(error, ash_sandboxing::SandboxError::UnsupportedPolicy(_)),
+        "only confirmed unsupported capability permits another backend: {error}"
+    );
+}
+
+#[test]
 #[ignore = "requires a host capable of preparing Ash's PSEC policy"]
 fn psec_host_supports_scoped_policy() {
     let temp = tempfile::tempdir().unwrap();

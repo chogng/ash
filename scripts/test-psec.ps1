@@ -1,4 +1,5 @@
 #Requires -Version 7.0
+param([ValidateSet('required', 'absent')][string]$Capability = 'required')
 # Uses the same Rust adapter as Ash; no SDK backend dispatcher or account setup.
 $ErrorActionPreference = 'Stop'
 $workspace = Split-Path -Parent $PSScriptRoot
@@ -9,6 +10,7 @@ $report = [ordered]@{
     stage = 'inventory'
     commit = $env:GITHUB_SHA
     runnerImage = $env:ImageVersion
+    expectedCapability = $Capability
     scope = 'PSEC preparation, scoped files, exit codes, process cleanup, cross-execution isolation; Managed refusal'
     notCovered = @('PSEC ConPTY', 'Allowed/Denied network traffic matrix', 'App Server product chain', 'WSL')
     commands = @()
@@ -61,6 +63,13 @@ try {
     Invoke-Test 'unit' $unit[0].executable @('--nocapture')
     Invoke-Test 'regressions' $windows[0].executable @('--nocapture')
     $report.stage = 'capability'
+    if ($Capability -eq 'absent') {
+        $report.scope = 'Confirmed PSEC unavailability before execution; Managed refusal'
+        Invoke-Test 'capability-absent' $windows[0].executable @('missing_psec_is_reported_before_execution', '--ignored', '--exact', '--nocapture')
+        $report.status = 'passed-unsupported-capability'
+        $report.stage = 'complete'
+        return
+    }
     Invoke-Test 'capability' $windows[0].executable @('psec_host_supports_scoped_policy', '--ignored', '--exact', '--nocapture')
     $report.stage = 'execution'
     $failures = @()
@@ -96,7 +105,7 @@ try {
             '',
             "Not covered: $($report.notCovered -join ', ').",
             '',
-            'A failed capability probe is not a skipped or passed acceptance test. See the evidence artifact.'
+            "Expected PSEC capability: $Capability. Unsupported-capability acceptance does not certify PSEC execution. See the evidence artifact."
         ) | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY
     }
     Pop-Location
