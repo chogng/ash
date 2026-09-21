@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { LanguageCompletionProviderRegistry } from '../../common/languageFeatureRegistry.js';
-import { LanguageCompletionTriggerKind, createLanguageCompletionIncompleteRefreshContext, createLanguageCompletionInvokeContext, createLanguageCompletionTriggerCharacterContext, normalizeLanguageCompletionProviderCatalog, type LanguageCompletionContext, type LanguageCompletionProvider, type LanguageCompletionProviderCatalog } from '../../common/languages.js';
+import { LanguageCompletionTriggerKind, createLanguageCompletionIncompleteRefreshContext, createLanguageCompletionInvokeContext, createLanguageCompletionTriggerCharacterContext, type LanguageCompletionContext, type LanguageCompletionProvider, type LanguageCompletionProviderCatalog } from '../../common/languages.js';
 
 test("Completion provider registry preserves registration order and selectors", () => {
 	using registry = new LanguageCompletionProviderRegistry();
@@ -99,30 +99,6 @@ test("Provider registry validates identities, selectors, triggers, and lifecycle
 		() => registry.getProviders("typescript", createLanguageCompletionInvokeContext()),
 		/already disposed/,
 	);
-});
-
-test("Provider catalog normalization rejects ambiguous metadata atomically", () => {
-	const catalog = normalizeLanguageCompletionProviderCatalog({
-		revision: 4,
-		providers: [{
-			id: "typescript.member",
-			languageIds: ["typescript"],
-			triggerCharacters: ["."],
-		}],
-	});
-	assert.equal(Object.isFrozen(catalog), true);
-	assert.equal(Object.isFrozen(catalog.providers), true);
-	assert.throws(() => normalizeLanguageCompletionProviderCatalog({
-		revision: 1,
-		providers: [
-			{ id: "same", languageIds: ["*"], triggerCharacters: [] },
-			{ id: "same", languageIds: ["typescript"], triggerCharacters: ["."] },
-		],
-	}), /Duplicate.*metadata/);
-	assert.throws(() => normalizeLanguageCompletionProviderCatalog({
-		revision: 1,
-		providers: [{ id: "bad", languageIds: ["typescript"], triggerCharacters: [".", "."] }],
-	}), /trigger characters must be unique/);
 });
 
 test("a provider group replaces itself without colliding with stable IDs", () => {

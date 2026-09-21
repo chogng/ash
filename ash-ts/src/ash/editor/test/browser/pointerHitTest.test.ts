@@ -2,7 +2,8 @@ import { h } from '../../../base/browser/dom.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
-import { EditorHitTargetKind, hitTestStanzaEditorPoint } from "../../common/viewModel/pointerHitTest.js";
+import { EditorHitTargetKind, hitTestStanzaVisualEditorPoint } from "../../common/viewModel/pointerHitTest.js";
+import { EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
 import { Position } from "../../common/core/position.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { ContentWidgetPositionPreference, type IContentWidget, type IEditorMouseEvent, type IViewZoneChangeAccessor, MouseTargetType } from '../../browser/editorBrowser.js';
@@ -31,6 +32,7 @@ class FixedTextMeasurer implements TextMeasurer {
 
 test("Pointer hit testing distinguishes gutter, text, empty content, and lines", () => {
 	using model = new TextModel("a\tb\n😀a\n");
+	const projection = EditorVisualLineProjection.fromBreakColumns(model, Array.from({ length: model.lineCount }, (_, index) => [model.getLineContent(index + 1).length]));
 	const measurer = new FixedTextMeasurer();
 	const layout = {
 		lineHeight: 20,
@@ -38,8 +40,9 @@ test("Pointer hit testing distinguishes gutter, text, empty content, and lines",
 		scrollPosition: { left: 0, top: 0 },
 	};
 	const metrics = { gutterWidth: 30, textLeft: 40 };
-	const hit = (left: number, top: number) => hitTestStanzaEditorPoint(
+	const hit = (left: number, top: number) => hitTestStanzaVisualEditorPoint(
 		model,
+		projection,
 		layout,
 		{ left, top },
 		metrics,
@@ -48,8 +51,9 @@ test("Pointer hit testing distinguishes gutter, text, empty content, and lines",
 
 	assert.equal(hit(-1, 0), undefined);
 	assert.equal(hit(0, 80), undefined);
-	assert.throws(() => hitTestStanzaEditorPoint(
+	assert.throws(() => hitTestStanzaVisualEditorPoint(
 		model,
+		projection,
 		{ ...layout, lineHeight: 0 },
 		{ left: 0, top: 0 },
 		metrics,
@@ -62,34 +66,50 @@ test("Pointer hit testing distinguishes gutter, text, empty content, and lines",
 	assert.deepEqual(hit(35, 5), {
 		kind: EditorHitTargetKind.EmptyContent,
 		position: new Position((0) + 1, (0) + 1),
+		viewPosition: new Position((0) + 1, (0) + 1),
+		injectedText: null,
 	});
 	assert.deepEqual(hit(54, 5), {
 		kind: EditorHitTargetKind.Text,
 		position: new Position((0) + 1, (1) + 1),
+		viewPosition: new Position((0) + 1, (1) + 1),
+		injectedText: null,
 	});
 	assert.deepEqual(hit(65, 5), {
 		kind: EditorHitTargetKind.Text,
 		position: new Position((0) + 1, (2) + 1),
+		viewPosition: new Position((0) + 1, (2) + 1),
+		injectedText: null,
 	});
 	assert.deepEqual(hit(86, 5), {
 		kind: EditorHitTargetKind.Text,
 		position: new Position((0) + 1, (3) + 1),
+		viewPosition: new Position((0) + 1, (3) + 1),
+		injectedText: null,
 	});
 	assert.deepEqual(hit(100, 5), {
 		kind: EditorHitTargetKind.EmptyContent,
 		position: new Position((0) + 1, (3) + 1),
+		viewPosition: new Position((0) + 1, (3) + 1),
+		injectedText: null,
 	});
 	assert.deepEqual(hit(44, 25), {
 		kind: EditorHitTargetKind.Text,
 		position: new Position((1) + 1, (0) + 1),
+		viewPosition: new Position((1) + 1, (0) + 1),
+		injectedText: null,
 	});
 	assert.deepEqual(hit(45, 25), {
 		kind: EditorHitTargetKind.Text,
 		position: new Position((1) + 1, (2) + 1),
+		viewPosition: new Position((1) + 1, (2) + 1),
+		injectedText: null,
 	});
 	assert.deepEqual(hit(40, 45), {
 		kind: EditorHitTargetKind.EmptyContent,
 		position: new Position((2) + 1, (0) + 1),
+		viewPosition: new Position((2) + 1, (0) + 1),
+		injectedText: null,
 	});
 	assert.deepEqual(hit(40, 65), {
 		kind: EditorHitTargetKind.AfterLines,
@@ -99,6 +119,7 @@ test("Pointer hit testing distinguishes gutter, text, empty content, and lines",
 
 test("Pointer hit testing applies sticky gutter and viewport scrolling", () => {
 	using model = new TextModel("first\n😀a\nthird");
+	const projection = EditorVisualLineProjection.fromBreakColumns(model, Array.from({ length: model.lineCount }, (_, index) => [model.getLineContent(index + 1).length]));
 	const layout = {
 		lineHeight: 20,
 		viewportSize: { width: 100, height: 40 },
@@ -106,8 +127,9 @@ test("Pointer hit testing applies sticky gutter and viewport scrolling", () => {
 	};
 	const metrics = { gutterWidth: 30, textLeft: 40 };
 
-	assert.deepEqual(hitTestStanzaEditorPoint(
+	assert.deepEqual(hitTestStanzaVisualEditorPoint(
 		model,
+		projection,
 		layout,
 		{ left: 10, top: 5 },
 		metrics,
@@ -116,8 +138,9 @@ test("Pointer hit testing applies sticky gutter and viewport scrolling", () => {
 		kind: EditorHitTargetKind.Gutter,
 		position: new Position((1) + 1, (0) + 1),
 	});
-	assert.deepEqual(hitTestStanzaEditorPoint(
+	assert.deepEqual(hitTestStanzaVisualEditorPoint(
 		model,
+		projection,
 		layout,
 		{ left: 30, top: 5 },
 		metrics,
@@ -125,6 +148,8 @@ test("Pointer hit testing applies sticky gutter and viewport scrolling", () => {
 	), {
 		kind: EditorHitTargetKind.Text,
 		position: new Position((1) + 1, (2) + 1),
+		viewPosition: new Position((1) + 1, (2) + 1),
+		injectedText: null,
 	});
 });
 

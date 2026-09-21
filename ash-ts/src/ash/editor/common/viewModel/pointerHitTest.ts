@@ -46,64 +46,6 @@ export interface EditorHitTarget {
 }
 
 /** @internal */
-export function hitTestStanzaEditorPoint(
-	model: TextModel,
-	layout: HitTestLayout,
-	point: ViewportPoint,
-	metrics: HitTestMetrics,
-	measurer: TextMeasurer,
-): EditorHitTarget | undefined {
-	validatePoint(point);
-	validateLayout(layout);
-	validateMetrics(metrics);
-	if (
-		point.left < 0 ||
-		point.top < 0 ||
-		point.left >= layout.viewportSize.width ||
-		point.top >= layout.viewportSize.height
-	) {
-		return undefined;
-	}
-
-	const contentTop = point.top + layout.scrollPosition.top - (metrics.paddingTop ?? 0);
-	if (contentTop < 0) {
-		return target(EditorHitTargetKind.EmptyContent, 0, 0);
-	}
-	const lineIndex = Math.floor(contentTop / layout.lineHeight);
-	if (lineIndex >= model.lineCount) {
-		const lastLineIndex = model.lineCount - 1;
-		return target(
-			EditorHitTargetKind.AfterLines,
-			lastLineIndex,
-			model.getLineContent((lastLineIndex) + 1).length,
-		);
-	}
-	if (point.left < metrics.gutterWidth) {
-		return target(EditorHitTargetKind.Gutter, lineIndex, 0);
-	}
-
-	const line = model.getLineContent((lineIndex) + 1);
-	const textOffset =
-		point.left + layout.scrollPosition.left - metrics.textLeft;
-	if (textOffset < 0 || line.length === 0) {
-		return target(EditorHitTargetKind.EmptyContent, lineIndex, 0);
-	}
-	const lineWidth = measurer.measureLineWidth(line);
-	if (textOffset >= lineWidth) {
-		return target(
-			EditorHitTargetKind.EmptyContent,
-			lineIndex,
-			line.length,
-		);
-	}
-	return target(
-		EditorHitTargetKind.Text,
-		lineIndex,
-		nearestCursorColumn(line, textOffset, measurer),
-	);
-}
-
-/** @internal */
 export function hitTestStanzaVisualEditorPoint(model: TextModel, projection: EditorVisualLineProjection, layout: HitTestLayout, point: ViewportPoint, metrics: HitTestMetrics, measurer: TextMeasurer): EditorHitTarget | undefined {
 	validatePoint(point);
 	validateLayout(layout);

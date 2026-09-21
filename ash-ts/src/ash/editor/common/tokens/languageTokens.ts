@@ -181,10 +181,6 @@ export interface SemanticTokenStyling {
 	readonly modifiers: readonly SemanticTokenModifier[];
 }
 
-export interface SemanticTokenStylingResolver {
-	resolve(token: LanguageToken): SemanticTokenStyling;
-}
-
 export interface ResolvedSemanticToken {
 	readonly startColumn: number;
 	readonly endColumn: number;

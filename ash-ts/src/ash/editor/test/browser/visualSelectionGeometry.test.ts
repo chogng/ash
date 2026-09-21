@@ -5,7 +5,6 @@ import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
-import { createStanzaVisualRangeRectangles } from "../../common/viewModel/visualRangeGeometry.js";
 import { createStanzaVisualSelectionGeometry } from "../../common/viewModel/visualSelectionGeometry.js";
 import { type TextMeasurer } from '../../common/viewModel.js';
 
@@ -55,14 +54,11 @@ test("visual selection geometry offsets continuation rows by their wrapping inde
 	}]);
 });
 
-test("visual range geometry rejects a projection from another model version", () => {
+test("visual selection geometry rejects a projection from another model version", () => {
 	using model = new TextModel("abc");
 	const projection = EditorVisualLineProjection.fromBreakColumns(model, [[3]]);
 	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (3) + 1)), text: "d" }]);
-	assert.throws(() => createStanzaVisualRangeRectangles(model, [{
-		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (1) + 1)),
-		value: undefined,
-	}], projection, { startLineIndex: 0, endLineIndexExclusive: 1 }, 0, new FixedTextMeasurer()), /current text model projection/);
+	assert.throws(() => createStanzaVisualSelectionGeometry(model, [Selection.fromPositions(new Position(1, 1), new Position(1, 2))], projection, { startLineIndex: 0, endLineIndexExclusive: 1 }, 0, new FixedTextMeasurer()), /current text model projection/);
 });
 
 class FixedTextMeasurer implements TextMeasurer {

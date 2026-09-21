@@ -19,7 +19,6 @@ import {
 import { EditorZoom } from '../../common/config/editorZoom.js';
 import { createBareFontInfoFromRawSettings } from '../../common/config/fontInfoFromSettings.js';
 import { EDITOR_FONT_DEFAULTS } from '../../common/config/fontInfo.js';
-import { diffEditorDefaultOptions, resolveDiffEditorOptions } from '../../common/config/diffEditor.js';
 import { editorConfiguration, isDiffEditorConfigurationKey, isEditorConfigurationKey } from '../../common/config/editorConfigurationSchema.js';
 import { CodeEditorConfiguration } from '../../../workbench/contrib/codeEditor/common/editorConfiguration.js';
 
@@ -143,23 +142,6 @@ test('editor zoom clamps levels and emits only effective changes', () => {
 		EditorZoom.setZoomLevel(previousZoomLevel);
 		subscription.dispose();
 	}
-});
-
-test('diff editor options merge nested defaults and validate limits', () => {
-	const options = resolveDiffEditorOptions({
-		splitViewDefaultRatio: 0.75,
-		experimental: { showMoves: true },
-		hideUnchangedRegions: { enabled: true },
-	});
-
-	assert.equal(options.splitViewDefaultRatio, 0.75);
-	assert.equal(options.experimental.showMoves, true);
-	assert.equal(options.experimental.showEmptyDecorations, diffEditorDefaultOptions.experimental.showEmptyDecorations);
-	assert.equal(options.hideUnchangedRegions.enabled, true);
-	assert.equal(options.hideUnchangedRegions.contextLineCount, diffEditorDefaultOptions.hideUnchangedRegions.contextLineCount);
-	assert.ok(Object.isFrozen(options));
-	assert.ok(Object.isFrozen(options.experimental));
-	assert.throws(() => resolveDiffEditorOptions({ splitViewDefaultRatio: 2 }), RangeError);
 });
 
 test('editor settings are registered by the common configuration owner', () => {

@@ -1,5 +1,33 @@
 # Editor API 对齐状态
 
+## common 全目录复核与收尾（2026-09-21）
+
+本次重新扫描 common 全部 202 个 TypeScript 文件的导入、公开声明和生产/测试引用，并检查重复函数；对上一轮剩余 34 个 Ash 自有文件复核实际职责。工作区开始时干净。清理依据是无效入口与重复职责，不按上游文件数量删除功能。
+
+| 清理项 | 最终处理 |
+| --- | --- |
+| `viewModel/visualRangeGeometry.ts` | 删除仅供选区使用的泛型范围包装及不可达空范围分支；矩形计算归 `visualSelectionGeometry.ts`，直接产生选区矩形，减少中间数组和对象。 |
+| `viewModel/pointerHitTest.ts` | 删除无生产调用的逻辑行命中算法；未折行测试也使用生产中的视觉行路径，保留滚动、gutter、空行、tab 和 Unicode 覆盖。 |
+| `model/documentFragment.ts`、`model/documentText.ts` | 删除两个文件。片段提取及纯文本转换归已有 `documentSerialization.ts`，共用节点查找和文本块判断；widget、working copy 与测试直接引用该 owner。 |
+| `core/documentPosition.ts` | 删除没有调用方的绝对位置反查、路径解析和边界偏向逻辑；保留富文档 DOM 使用的文本点到绝对位置转换及节点尺寸计算。 |
+| `tokens/languageTokenLineIndex.ts`、`languageTokens.ts` | 移除只剩测试使用的自定义样式 resolver 注入及类型；实际路径直接调用唯一转换函数，不再重复验证它自己产生的样式。虚拟化测试改为观测真实行读取。 |
+| `languages.ts` | 删除早先远程补全目录框架遗留的 catalog 解码校验；实际 provider 注册与目录事件继续由 registry 管理。 |
+| `config/diffEditor.ts` | 删除无生产调用、上游也没有的 options 解析器；保留配置注册在用的默认值。 |
+| `core/text/positionToOffsetImpl.ts`、`core/misc/indentation.ts` | 删除无调用的额外行数组转换器、缩进增加 helper；实际坐标转换、输入和缩进命令路径不变。 |
+
+完成后 common 有 199 个 TypeScript 文件（168 个同路径、31 个 Ash 自有）。剩余 Ash 文件继续承担富文档数据/事务/历史/协作、后端差异计算、模型范围跟踪、语言请求与结果、token 行索引及实际视图几何，均有生产消费者。它们不因 VS Code 没有同名文件而成为垃圾。已有上游同路径公共能力如 `ArrayEdit`、`RangeMapping`、`Rect`、`MirrorTextModel` 等不以暂时无静态调用为由删除；本次也未增加空实现或测试专用生产调用。
+
+旧 API、已删除源文件的生产和测试 import 已清除；以下各批数据保留为历史记录。本节描述本次清理范围，不表示全部 VS Code API 已实现。
+
+验证完成：
+
+- `check-editor-alignment.mjs --test=unit` 通过：结构检查、Stanza 类型检查、Editor 与关联 Workbench 单测 228/228 文件通过，无新增源码 JavaScript 产物。
+- Playwright `--project chromium` 全量 309/309 通过，涵盖鼠标、折行选区、富文档剪贴板、主题和语言 Worker；本批未运行 `chrome-gpu` 项目。
+- 最后复跑富文档、鼠标及两份架构测试，4/4 文件通过，其中架构断言 26 项。
+- 最终 `build:stanza`、`build:renderer` 通过，无新增构建 warning；`git diff --check` 通过。保留既有 JSDOM Canvas 与 Playwright 颜色环境提示；CSS 未修改。
+- 再次扫描确认剩余 31 个 Ash 自有文件均有生产 import；已删除源路径无生产或测试 import，历史台账中的旧路径保留用于说明迁移。
+
+
 ## common 样式服务续批清理（2026-09-21）
 
 删除 `services/semanticTokensStyling.ts`、`services/semanticTokensStylingService.ts`，移除 `semanticTokensProviderStyling.ts` 中的无状态 provider 包装类，保留实际转换函数。VS Code 的对应服务根据 provider legend、主题和语言解析数字 token metadata；Ash 使用带名称的 `LanguageToken`，当前转换完全不读取 provider，原服务只有额外的对象与缓存，没有独立职责。

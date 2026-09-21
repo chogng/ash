@@ -9,11 +9,9 @@ import { containsDocumentNode, findDocumentNode, type DocumentMark, type Documen
 import { createDocumentDecoration, type DocumentDecoration } from '../../../common/model/documentDecoration.js';
 import { buildDocumentOutline, type DocumentOutline, type DocumentOutlineOptions } from '../../../common/model/documentOutline.js';
 import { documentPointToPosition } from '../../../common/core/documentPosition.js';
-import { documentSelectionToText } from '../../../common/model/documentText.js';
 import { createDeleteAdjacentInlineNodeCommand, createDeleteInlineSelectionCommand, createDeleteNodeSelectionCommand, createDeleteTableColumnCommand, createDeleteTableRowCommand, createExitEmptyListItemCommand, createInsertFragmentCommand, createInsertHardBreakCommand, createInsertHorizontalRuleCommand, createInsertImageAtSelectionCommand, createInsertImageCommand, createInsertParagraphAfterCommand, createInsertTableColumnCommand, createInsertTableCommand, createInsertTableRowCommand, createJoinAdjacentBlockCommand, createJoinAdjacentListItemCommand, createJoinAdjacentTextRunCommand, createListItemIndentationCommand, createMoveBlockCommand, createRemoveMarkCommand, createPasteTextCommand, createReplaceTextCommand, createSetBlockTypeCommand, createSetLinkMarkCommand, createSetTextStyleCommand, createSplitBlockCommand, createSplitListItemCommand, createToggleBlockquoteCommand, createToggleListCommand, createToggleMarkCommand, findAdjacentTableCell, findTableCellContext, type DocumentCommand } from '../../../common/commands/documentCommands.js';
-import { extractDocumentFragment } from '../../../common/model/documentFragment.js';
 import { type DocumentNodeKind, type DocumentSchema, type DocumentTextStyleAttributes } from '../../../common/model/documentSchema.js';
-import { DOCUMENT_FRAGMENT_CLIPBOARD_MIME, deserializeDocumentFragment, serializeDocumentFragment } from '../../../common/model/documentSerialization.js';
+import { documentSelectionToText, extractDocumentFragment, DOCUMENT_FRAGMENT_CLIPBOARD_MIME, deserializeDocumentFragment, serializeDocumentFragment } from '../../../common/model/documentSerialization.js';
 import { allSelection, nodeSelection, textSelection, type DocumentSelection, type DocumentTextSelection } from '../../../common/core/documentSelection.js';
 import { DocumentTransaction } from '../../../common/model/documentTransaction.js';
 import { EditorDom } from '../../editorDom.js';

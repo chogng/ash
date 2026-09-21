@@ -56,10 +56,6 @@ export function normalizeEditorIndentationText(text: string, options: ResolvedEd
 	return normalizeEditorIndentation(leading, options) + text.slice(leading.length);
 }
 
-export function shiftEditorIndentation(indentation: string, options: ResolvedEditorIndentationOptions): string {
-	return indentationFromColumns(indentationColumns(indentation, options.tabSize) + options.tabSize, options);
-}
-
 export function unshiftEditorIndentation(indentation: string, options: ResolvedEditorIndentationOptions): string {
 	return indentationFromColumns(Math.max(0, indentationColumns(indentation, options.tabSize) - options.tabSize), options);
 }

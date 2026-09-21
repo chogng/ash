@@ -553,42 +553,6 @@ export function languageCompletionProviderMatches(provider: LanguageCompletionPr
 	);
 }
 
-export function normalizeLanguageCompletionProviderCatalog(value: unknown): LanguageCompletionProviderCatalog {
-	if (typeof value !== "object" || value === null) {
-		throw new TypeError("Language completion provider catalog must be an object");
-	}
-	const catalog = value as Partial<LanguageCompletionProviderCatalog>;
-	if (!Number.isSafeInteger(catalog.revision) || catalog.revision! < 0) {
-		throw new RangeError("Language completion provider catalog revision must be a non-negative safe integer");
-	}
-	if (!Array.isArray(catalog.providers)) {
-		throw new TypeError("Language completion provider catalog must contain providers");
-	}
-	const identities = new Set<string>();
-	const providers = catalog.providers.map(provider => {
-		assertProviderMetadata(provider);
-		if (identities.has(provider.id)) {
-			throw new RangeError(`Duplicate language completion provider metadata '${provider.id}'`);
-		}
-		identities.add(provider.id);
-		if (new Set(provider.languageIds).size !== provider.languageIds.length) {
-			throw new RangeError(`Language completion provider '${provider.id}' language IDs must be unique`);
-		}
-		if (new Set(provider.triggerCharacters).size !== provider.triggerCharacters.length) {
-			throw new RangeError(`Language completion provider '${provider.id}' trigger characters must be unique`);
-		}
-		return Object.freeze({
-			id: provider.id,
-			languageIds: Object.freeze([...provider.languageIds]),
-			triggerCharacters: Object.freeze([...provider.triggerCharacters]),
-		});
-	});
-	return Object.freeze({
-		revision: catalog.revision!,
-		providers: Object.freeze(providers),
-	});
-}
-
 const INVOKE_CONTEXT = Object.freeze({
 	kind: LanguageCompletionTriggerKind.Invoke,
 });

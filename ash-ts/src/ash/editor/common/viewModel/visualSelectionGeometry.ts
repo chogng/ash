@@ -1,7 +1,6 @@
 import { type Selection } from "../core/selection.js";
 import { type TextModel } from "../model/textModel.js";
 import { type EditorVisualLineProjection } from "./modelLineProjection.js";
-import { createStanzaVisualRangeRectangles } from "./visualRangeGeometry.js";
 import { type EditorLineRange, type TextMeasurer } from '../viewModel.js';
 
 export interface VisualSelectionRectangle {
@@ -43,24 +42,45 @@ export function createStanzaVisualSelectionGeometry(model: TextModel, selectionS
 			primary: selectionIndex === 0,
 		}));
 	}
-	const selections = createStanzaVisualRangeRectangles(
-		model,
-		selectionSet.map((selection, selectionIndex) => ({
-			range: selection,
-			value: selectionIndex,
-		})),
-		projection,
-		renderLines,
-		textLeft,
-		measurer,
-	).map(rectangle => Object.freeze({
-		selectionIndex: rectangle.value,
-		visualLineIndex: rectangle.visualLineIndex,
-		left: rectangle.left,
-		width: rectangle.width,
-	}));
+	const selections = selectionRectangles(model, selectionSet, projection, renderLines, textLeft, measurer);
 	return Object.freeze({
-		selections: Object.freeze(selections),
+		selections,
 		carets: Object.freeze(carets),
 	});
+}
+
+function selectionRectangles(model: TextModel, selections: readonly Selection[], projection: EditorVisualLineProjection, renderLines: EditorLineRange, textLeft: number, measurer: TextMeasurer): readonly VisualSelectionRectangle[] {
+	const rectangles: VisualSelectionRectangle[] = [];
+	const newlineWidth = measurer.measureLineWidth(" ");
+	for (let selectionIndex = 0; selectionIndex < selections.length; selectionIndex += 1) {
+		const range = selections[selectionIndex]!;
+		if (range.isEmpty()) continue;
+		for (let visualLineIndex = renderLines.startLineIndex; visualLineIndex < renderLines.endLineIndexExclusive; visualLineIndex += 1) {
+			const visualLine = projection.lineAt(visualLineIndex);
+			if (!visualLine || (visualLine.logicalLineIndex < range.startLineNumber - 1 || visualLine.logicalLineIndex > range.endLineNumber - 1)) continue;
+			const logicalText = model.getLineContent((visualLine.logicalLineIndex) + 1);
+			const startsOnLogicalLine = visualLine.logicalLineIndex === range.startLineNumber - 1;
+			const endsOnLogicalLine = visualLine.logicalLineIndex === range.endLineNumber - 1;
+			const startColumn = startsOnLogicalLine
+				? Math.max(visualLine.startColumn, range.startColumn - 1)
+				: visualLine.startColumn;
+			const endColumn = endsOnLogicalLine
+				? Math.min(visualLine.endColumn, range.endColumn - 1)
+				: visualLine.endColumn;
+			if (endColumn < startColumn) continue;
+			if (endsOnLogicalLine && endColumn === 0 && !startsOnLogicalLine) continue;
+			const indent = visualLine.wrappedTextIndentWidth ?? 0;
+			const left = textLeft + indent + measurer.measureLineWidth(logicalText.slice(visualLine.startColumn, startColumn));
+			let right = textLeft + indent + measurer.measureLineWidth(logicalText.slice(visualLine.startColumn, endColumn));
+			if (!endsOnLogicalLine && visualLine.lastForLogicalLine) right += newlineWidth;
+			if (right <= left) continue;
+			rectangles.push(Object.freeze({
+				selectionIndex,
+				visualLineIndex,
+				left,
+				width: right - left,
+			}));
+		}
+	}
+	return Object.freeze(rectangles);
 }

@@ -59,16 +59,12 @@ test("Semantic token source resolves immutable named lines without owning common
 		value: {
 			tokens: [
 				token(0, 0, 5, "keyword"),
-				token(0, 6, 11, "plugin-variable"),
+				token(0, 6, 11, "variable"),
 			],
 		},
 	}), LanguageResultAcceptance.Applied);
 	using index = new LanguageTokenLineIndex(store);
-	using source = new StyledTokenSource(index, { resolve: entry => ({ modifiers: [], presentation: (
-		entry.tokenType === "plugin-variable"
-			? SemanticTokenPresentation.Variable
-			: resolveSemanticTokenStyling(entry).presentation
-	) }) });
+	using source = new StyledTokenSource(index);
 
 	assert.equal(source.textModel, model);
 	assert.deepEqual(source.lines, [{

@@ -9,11 +9,9 @@ import { createAcademicDocumentSchema, createEmptyAcademicDocument } from "../..
 import { TextModel } from "../../common/model/textModel.js";
 import { createDocumentDecoration, DocumentDecorationSet } from "../../common/model/documentDecoration.js";
 import { buildDocumentOutline } from "../../common/model/documentOutline.js";
-import { documentContentSize, documentNodeSize, documentPointToPosition, documentPositionToPoint, resolveDocumentPosition } from "../../common/core/documentPosition.js";
-import { documentSelectionToText } from "../../common/model/documentText.js";
-import { extractDocumentFragment } from "../../common/model/documentFragment.js";
+import { documentContentSize, documentNodeSize, documentPointToPosition } from "../../common/core/documentPosition.js";
 import { createDocumentPlugin, DocumentPluginKey } from "../../common/model/documentPlugin.js";
-import { deserializeDocument, deserializeDocumentFragment, DocumentSerializationError, serializeDocument, serializeDocumentFragment } from "../../common/model/documentSerialization.js";
+import { documentSelectionToText, extractDocumentFragment, deserializeDocument, deserializeDocumentFragment, DocumentSerializationError, serializeDocument, serializeDocumentFragment } from "../../common/model/documentSerialization.js";
 import { allSelection, nodeSelection, textSelection } from "../../common/core/documentSelection.js";
 import { DocumentTransaction } from "../../common/model/documentTransaction.js";
 import { deserializeDocumentTransaction, serializeDocumentTransaction } from "../../common/model/documentTransactionSerialization.js";
@@ -180,7 +178,7 @@ test("Stanza maps decoration ranges through one transaction and drops ranges wit
 	assert.throws(() => decorations.add(createDocumentDecoration({ id: "hit", from: { nodeId: "text-1", offset: 0 } })), /Duplicate document decoration/);
 });
 
-test("Stanza converts nested text points to absolute positions with stable boundary bias", () => {
+test("Stanza converts nested text points to absolute positions", () => {
 	const schema = createDefaultDocumentSchema();
 	const paragraph = schema.createNode("paragraph", {
 		id: "paragraph-inline",
@@ -206,22 +204,7 @@ test("Stanza converts nested text points to absolute positions with stable bound
 	assert.equal(documentNodeSize(document, schema), 31);
 	assert.equal(documentPointToPosition(document, schema, { nodeId: "text-nested", offset: 3 }), 12);
 	assert.equal(documentPointToPosition(document, schema, { nodeId: "text-cell", offset: 4 }), 25);
-	assert.deepEqual(documentPositionToPoint(document, schema, 2, "forward"), { nodeId: "text-b", offset: 0 });
-	assert.deepEqual(documentPositionToPoint(document, schema, 2, "backward"), { nodeId: "text-a", offset: 1 });
-	assert.deepEqual(documentPositionToPoint(document, schema, 7, "forward"), { nodeId: "text-nested", offset: 0 });
-	assert.deepEqual(documentPositionToPoint(document, schema, 7, "backward"), { nodeId: "text-c", offset: 1 });
-
-	const resolved = resolveDocumentPosition(document, schema, 12);
-	assert.deepEqual(resolved.point, { nodeId: "text-nested", offset: 3 });
-	assert.deepEqual(resolved.path.map(entry => ({ type: entry.node.type, start: entry.start, index: entry.index })), [
-		{ type: "doc", start: -1, index: -1 },
-		{ type: "blockquote", start: 7, index: 1 },
-		{ type: "paragraph", start: 8, index: 0 },
-		{ type: "text", start: 9, index: 0 },
-	]);
-	assert.equal(resolved.depth, 3);
 	assert.throws(() => documentPointToPosition(document, schema, { nodeId: "image-1", offset: 0 }), /must target a text node/);
-	assert.throws(() => documentPositionToPoint(document, schema, 30), /between 0 and 29/);
 });
 
 test("TextModel applies text transactions and preserves transaction-level undo", () => {

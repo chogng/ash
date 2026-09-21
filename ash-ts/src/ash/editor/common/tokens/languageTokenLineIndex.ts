@@ -1,5 +1,5 @@
 import { resolveSemanticTokenStyling } from '../services/semanticTokensProviderStyling.js';
-import { SemanticTokenModifier, SemanticTokenPresentation, type ResolvedSemanticToken, type SemanticTokenLine, type SemanticTokenModelSource, type SemanticTokenSource, type SemanticTokenStylingResolver, type LanguageToken, type LanguageTokenResult } from './languageTokens.js';
+import { type ResolvedSemanticToken, type SemanticTokenLine, type SemanticTokenModelSource, type SemanticTokenSource, type LanguageToken, type LanguageTokenResult } from './languageTokens.js';
 import { arraysEqual } from "../../../base/common/arrays.js";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable, combinedDisposable, toDisposable } from "../../../base/common/lifecycle.js";
@@ -424,7 +424,7 @@ export class StyledTokenSource extends Disposable implements SemanticTokenSource
 	private readonly changeEmitter = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changeEmitter.event;
 
-	constructor(private readonly source: SemanticTokenModelSource, private readonly styling: SemanticTokenStylingResolver = { resolve: resolveSemanticTokenStyling }) {
+	constructor(private readonly source: SemanticTokenModelSource) {
 		super();
 		this._register(source.onDidChange(() => {
 			this.lineTokens.clear();
@@ -445,7 +445,7 @@ export class StyledTokenSource extends Disposable implements SemanticTokenSource
 		this.assertNotDisposed();
 		let tokens = this.lineTokens.get(lineIndex);
 		if (!tokens) {
-			tokens = resolveLineTokens(this.source.getLineTokens(lineIndex), this.styling);
+			tokens = resolveLineTokens(this.source.getLineTokens(lineIndex));
 			this.lineTokens.set(lineIndex, tokens);
 		}
 		return tokens;
@@ -473,13 +473,10 @@ export function overlayTokenSources(base: SemanticTokenSource, overlay: Semantic
 	});
 }
 
-function resolveLineTokens(tokens: readonly LanguageToken[], styling: SemanticTokenStylingResolver): readonly ResolvedSemanticToken[] {
+function resolveLineTokens(tokens: readonly LanguageToken[]): readonly ResolvedSemanticToken[] {
 	const resolved: ResolvedSemanticToken[] = [];
 	for (const token of tokens) {
-		const tokenStyling = styling.resolve(token);
-		if (!tokenStyling || typeof tokenStyling !== 'object' || !Array.isArray(tokenStyling.modifiers)) throw new TypeError('Semantic token resolver returned invalid styling');
-		if (tokenStyling.presentation !== undefined && !Object.values(SemanticTokenPresentation).includes(tokenStyling.presentation)) throw new TypeError(`Unknown semantic token presentation '${tokenStyling.presentation}'`);
-		if (new Set(tokenStyling.modifiers).size !== tokenStyling.modifiers.length || tokenStyling.modifiers.some(modifier => !Object.values(SemanticTokenModifier).includes(modifier))) throw new TypeError('Unknown or duplicate semantic token modifier');
+		const tokenStyling = resolveSemanticTokenStyling(token);
 		if (tokenStyling.presentation === undefined && token.presentation === undefined) continue;
 		resolved.push(Object.freeze({
 			startColumn: token.range.startColumn - 1,

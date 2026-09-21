@@ -249,7 +249,6 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"browser/config/tabFocus.ts",
 		"common/viewModel/overviewZoneManager.ts",
 		"common/viewModel/viewModelLines.ts",
-		"common/viewModel/visualRangeGeometry.ts",
 		"common/viewModel/visualSelectionGeometry.ts",
 		"common/viewModel/visualCursorNavigation.ts",
 		"common/viewModel/pointerHitTest.ts",

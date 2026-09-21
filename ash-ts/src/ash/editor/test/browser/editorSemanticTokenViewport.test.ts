@@ -193,11 +193,16 @@ test("Viewport resolves semantic tokens only for virtualized lines", () => {
 	using store = createLanguageTokenStore(model);
 	acceptTokens(store, model, 1, Array.from({ length: 1_000 }, (_, lineIndex) => token(lineIndex, 0, 4, "keyword")));
 	using index = new LanguageTokenLineIndex(store);
-	let resolverCalls = 0;
-	using source = new StyledTokenSource(index, { resolve: () => {
-		resolverCalls += 1;
-		return { modifiers: [], presentation: SemanticTokenPresentation.Keyword };
-	} });
+	let requestedLines = 0;
+	using source = new StyledTokenSource({
+		textModel: index.textModel,
+		onDidChange: index.onDidChange,
+		get lines() { return index.lines; },
+		getLineTokens: lineIndex => {
+			requestedLines += 1;
+			return index.getLineTokens(lineIndex);
+		},
+	});
 	using viewport = new View({
 		container,
 		model,
@@ -207,11 +212,11 @@ test("Viewport resolves semantic tokens only for virtualized lines", () => {
 	});
 
 	viewport.layout({ width: 200, height: 20 });
-	assert.equal(resolverCalls, 1);
+	assert.equal(requestedLines, 1);
 	viewport.scrollTo({ left: 0, top: 500 * 20 });
-	assert.equal(resolverCalls, 2);
+	assert.equal(requestedLines, 2);
 	acceptTokens(store, model, 2, Array.from({ length: 1_000 }, (_, lineIndex) => token(lineIndex, 0, 4, "keyword")));
-	assert.equal(resolverCalls, 3);
+	assert.equal(requestedLines, 3);
 	dom.window.close();
 });
 
