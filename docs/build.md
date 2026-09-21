@@ -30,6 +30,7 @@ Ash 使用根 `Justfile` 提供跨语言、跨产品入口，使用 `build/` 保
 
 - 开发者根据下表自行安装并确认工具版本；`cargo-insta` 等测试维护工具按任务需要另行准备。项目依赖安装入口保留 Node、pnpm 版本校验，编译器和 SDK 缺项由构建工具报告。
 - Windows 本机拥有 MSVC、Windows SDK 和桌面运行环境。安装后使用对应目标架构的 Visual Studio Developer PowerShell 构建。LLVM 的 `bin` 目录需在构建终端 PATH 中；使用自定义 LLVM 路径时，在该终端设置 `LIBCLANG_PATH` 指向含 `libclang.dll` 的目录。无需全局设置 `CC`、`CXX`。
+- Visual Studio Installer 的“语言包”需安装 **English**，已有中文安装可直接补装。Rust 会向 MSVC 请求英文诊断；缺少英文资源时，中文“正在创建库”进度会被误报为 `linker_messages` warning，见 [Rust #159133](https://github.com/rust-lang/rust/issues/159133)。
 - 普通构建和启动入口只准备项目依赖与产物，不调用系统工具安装器。分别用 `just ash`、`just ash-desktop`、`just app` 启动产品。
 - Bazel 由 Bazelisk 管理；它读取仓库根的 [`.bazelversion`](../.bazelversion)，不需要手动选择 Bazel 版本。Windows 运行测试前需让 `BAZEL_SH` 指向 Git Bash，例如 `C:\Program Files\Git\bin\bash.exe`。
 - 当前未提供 Dev Container。Windows 桌面构建、调试和平台验证在 Windows 上完成。

@@ -15,6 +15,7 @@ test("aggregate and standalone unit commands prepare inputs once and stop on pre
     "test:unit": "unit",
     "test:editor:unit": "editor",
     "prepare:output": "output",
+    "typecheck:common": "common",
     "protocol:sync": "protocol",
     "icons:check": "icons",
   })) scripts[name] = `node record.ts ${operation}`;
@@ -30,10 +31,11 @@ test("aggregate and standalone unit commands prepare inputs once and stop on pre
   const executable = script ? process.execPath : pnpm;
   const prefix = script ? [pnpm] : [];
   for (const [command, expected, failure] of [
-    ["test:main", ["tools", "output", "protocol", "icons", "unit"], ""],
-    ["test:unit", ["output", "protocol", "icons", "unit"], ""],
-    ["test:editor:unit", ["output", "protocol", "icons", "editor"], ""],
-    ["test:main", ["tools", "output", "protocol"], "protocol"],
+    ["test:main", ["tools", "output", "common", "protocol", "icons", "unit"], ""],
+    ["test:unit", ["output", "common", "protocol", "icons", "unit"], ""],
+    ["test:editor:unit", ["output", "common", "protocol", "icons", "editor"], ""],
+    ["test:main", ["tools", "output", "common"], "common"],
+    ["test:main", ["tools", "output", "common", "protocol"], "protocol"],
   ] as const) {
     await writeFile(join(directory, "operations.jsonl"), "");
     const result = spawnSync(executable, [...prefix, "run", command], {
