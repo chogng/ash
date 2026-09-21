@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
-import { type TextMeasurer } from "../../../../common/viewModel/textMeasurer.js";
 import { TestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
 import { TextDecorationCollection } from "../../../../common/model/decorationCollection.js";
 import { Selection } from "../../../../common/core/selection.js";
@@ -10,6 +9,7 @@ import { Range } from "../../../../common/core/range.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 import { type ICodeEditor } from '../../../../browser/editorBrowser.js';
+import { type TextMeasurer } from '../../../../common/viewModel.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({

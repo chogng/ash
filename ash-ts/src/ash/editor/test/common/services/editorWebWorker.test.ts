@@ -3,10 +3,10 @@ import { test } from 'mocha';
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { DEFAULT_WORD_REGEXP } from '../../../common/core/wordHelper.js';
-import { EDITOR_WORKER_MINIMAL_EDITS_LANE, EDITOR_WORKER_NAVIGATE_VALUE_LANE, EDITOR_WORKER_UNICODE_HIGHLIGHTS_LANE, type EditorWorkerLane, type EditorWorkerRequest } from '../../../common/services/editorWorkerWire.js';
 import { EditorWorker } from '../../../common/services/editorWebWorker.js';
 import { TextModel } from '../../../common/model/textModel.js';
 import { EndOfLineSequence } from '../../../common/model.js';
+import { EDITOR_WORKER_MINIMAL_EDITS_LANE, EDITOR_WORKER_NAVIGATE_VALUE_LANE, EDITOR_WORKER_UNICODE_HIGHLIGHTS_LANE, type EditorWorkerLane, type EditorWorkerRequest } from '../../../common/services/editorWorker.js';
 
 for (const [original, formatted] of [
 	['😀 hello', '😀 Hello'],

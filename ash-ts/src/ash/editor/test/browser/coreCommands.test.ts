@@ -2,7 +2,6 @@ import { StandaloneCodeEditorService } from '../../standalone/browser/standalone
 import assert from "node:assert/strict";
 import { test, suiteTeardown } from "mocha";
 import { JSDOM } from "jsdom";
-import { type TextMeasurer } from "../../common/viewModel/textMeasurer.js";
 import { Selection } from "../../common/core/selection.js";
 import { Position } from "../../common/core/position.js";
 import { TextModel } from "../../common/model/textModel.js";
@@ -14,6 +13,7 @@ import { ContextKeyService, IContextKeyService } from "../../../platform/context
 import { ServiceContainer } from '../../../platform/instantiation/common/instantiation.js';
 import { ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
 import { ICodeEditorService } from '../../browser/services/codeEditorService.js';
+import { type TextMeasurer } from '../../common/viewModel.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 browserEnvironment.window.HTMLCanvasElement.prototype.getContext = () => null;

@@ -6,7 +6,7 @@ import { CursorColumns } from '../../common/core/cursorColumns.js';
 import { getTextGraphemeBoundaries } from '../../common/core/textSegmentation.js';
 import { type ILineBreaksComputer, type ILineBreaksComputerContext, type ILineBreaksComputerFactory, ModelLineProjectionData } from '../../common/modelLineProjectionData.js';
 import { LineInjectedText } from '../../common/textModelEvents.js';
-import { type TextMeasurer } from '../../common/viewModel/textMeasurer.js';
+import { type TextMeasurer } from '../../common/viewModel.js';
 
 /** Browser measurement implementation for the common line-break batch contract. */
 export class DOMLineBreaksComputerFactory implements ILineBreaksComputerFactory {

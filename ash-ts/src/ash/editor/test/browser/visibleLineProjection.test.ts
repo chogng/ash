@@ -4,12 +4,12 @@ import { EditorLineWrapping } from "../../common/config/editorOptions.js";
 import { FontInfo } from "../../common/config/fontInfo.js";
 import { ViewModelLinesFromProjectedModel } from "../../common/viewModel/viewModelLines.js";
 import { DOMLineBreaksComputerFactory } from "../../browser/view/domLineBreaksComputer.js";
-import { type TextMeasurer } from "../../common/viewModel/textMeasurer.js";
 import { EditorFoldingModel } from "../../contrib/folding/browser/foldingModel.js";
 import { EditorHiddenRangeModel } from "../../contrib/folding/browser/hiddenRangeModel.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
+import { type TextMeasurer } from '../../common/viewModel.js';
 
 test("Visible visual-line projection removes hidden bodies while preserving wrapped header rows", () => {
 	using model = new TextModel("header\ninside\nend\nlast");

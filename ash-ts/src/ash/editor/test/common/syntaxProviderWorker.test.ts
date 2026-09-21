@@ -1,17 +1,15 @@
-import { strict as assert } from "node:assert";
-import { test } from "mocha";
-import { DisposableStore } from "../../../base/common/lifecycle.js";
+import { strict as assert } from 'node:assert';
+import { test } from 'mocha';
+import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { SyntaxProviderRegistry } from '../../common/languageFeatureRegistry.js';
 import { type SyntaxProvider, SYNTAX_SYNCHRONIZATION, SYNTAX_DIAGNOSTIC_LANE, SYNTAX_TOKEN_LANE, LanguageDiagnosticSeverity, type LanguageDiagnosticResult } from '../../common/languages.js';
 import { SyntaxProviderWorker } from '../../common/services/editorWebWorker.js';
-import { SyntaxService } from '../../common/model/syntaxService.js';
-import { LanguageRequestCancellationReason, LanguageRequestStatus } from '../../common/model/languageRequestCoordinator.js';
 import { type LanguageTokenResult } from '../../common/tokens/languageTokens.js';
-import { Position } from "../../common/core/position.js";
-import { Range } from "../../common/core/range.js";
-import { TextModel } from "../../common/model/textModel.js";
+import { Position } from '../../common/core/position.js';
+import { Range } from '../../common/core/range.js';
+import { TextModel } from '../../common/model/textModel.js';
 
-test("Syntax service selects one token provider and merges diagnostic providers", async () => {
+test("Syntax worker selects one token provider and merges diagnostic providers", async () => {
 	using model = new TextModel("value");
 	using registry = new SyntaxProviderRegistry();
 	let ignoredTokenCalls = 0;
@@ -26,51 +24,14 @@ test("Syntax service selects one token provider and merges diagnostic providers"
 		},
 		diagnostics: () => diagnosticResult("second"),
 	}));
-	using service = new SyntaxService(model, registry);
+	using worker = new SyntaxProviderWorker(registry);
 
-	const outcomes = await service.requestAll("typescript");
+	const tokens = await runLane(worker, model, SYNTAX_TOKEN_LANE);
+	const diagnostics = await runLane(worker, model, SYNTAX_DIAGNOSTIC_LANE);
 
-	assert.equal(outcomes.tokens.status, LanguageRequestStatus.Applied);
-	assert.equal(outcomes.diagnostics.status, LanguageRequestStatus.Applied);
 	assert.equal(ignoredTokenCalls, 0);
-	assert.deepEqual(service.tokens.result!.value.tokens.map(token => token.tokenType), ["variable"]);
-	assert.deepEqual(service.diagnostics.result!.value.diagnostics.map(diagnostic => diagnostic.message), ["first", "second"]);
-});
-
-test("Token and diagnostic lanes run concurrently while each lane remains latest-wins", async () => {
-	using model = new TextModel("value");
-	using registry = new SyntaxProviderRegistry();
-	const tokenRuns: Array<Deferred<LanguageTokenResult>> = [];
-	const diagnosticRun = new Deferred<LanguageDiagnosticResult>();
-	using registration = registry.register(provider("controlled", {
-		tokens: (_request, signal) => {
-			const run = new Deferred<LanguageTokenResult>();
-			signal.addEventListener("abort", () => run.reject(new Error("token cancelled")), { once: true });
-			tokenRuns.push(run);
-			return run.promise;
-		},
-		diagnostics: () => diagnosticRun.promise,
-	}));
-	using service = new SyntaxService(model, registry);
-
-	const firstTokens = service.requestTokens("typescript");
-	const diagnostics = service.requestDiagnostics("typescript");
-	await turn();
-	assert.equal(tokenRuns.length, 1);
-	const secondTokens = service.requestTokens("typescript");
-	await turn();
-	assert.equal(tokenRuns.length, 2);
-
-	tokenRuns[1]!.resolve(tokenResult("keyword"));
-	diagnosticRun.resolve(diagnosticResult("healthy"));
-	const [firstOutcome, secondOutcome, diagnosticOutcome] = await Promise.all([firstTokens, secondTokens, diagnostics]);
-
-	assert.equal(firstOutcome.status, LanguageRequestStatus.Cancelled);
-	assert.equal(firstOutcome.status === LanguageRequestStatus.Cancelled && firstOutcome.reason, LanguageRequestCancellationReason.Superseded);
-	assert.equal(secondOutcome.status, LanguageRequestStatus.Applied);
-	assert.equal(diagnosticOutcome.status, LanguageRequestStatus.Applied);
-	assert.equal(service.tokens.result!.value.tokens[0]!.tokenType, "keyword");
-	assert.equal(service.diagnostics.result!.value.diagnostics[0]!.message, "healthy");
+	assert.deepEqual(tokens.value.tokens.map(token => token.tokenType), ["variable"]);
+	assert.deepEqual(diagnostics.value.diagnostics.map(diagnostic => diagnostic.message), ["first", "second"]);
 });
 
 test("Syntax provider failures are isolated by lane and provider", async () => {
@@ -88,15 +49,13 @@ test("Syntax provider failures are isolated by lane and provider", async () => {
 	using healthy = registry.register(provider("healthy", {
 		diagnostics: () => diagnosticResult("healthy diagnostic"),
 	}));
-	using service = new SyntaxService(model, registry, {
-		onProviderError: (providerId, lane, error) => errors.push({ providerId, lane, error }),
-	});
+	using worker = new SyntaxProviderWorker(registry, (providerId, lane, error) => errors.push({ providerId, lane, error }));
 
-	const outcomes = await service.requestAll("typescript");
+	const tokens = await runLane(worker, model, SYNTAX_TOKEN_LANE);
+	const diagnostics = await runLane(worker, model, SYNTAX_DIAGNOSTIC_LANE);
 
-	assert.equal(outcomes.tokens.status, LanguageRequestStatus.Applied);
-	assert.deepEqual(service.tokens.result!.value.tokens, []);
-	assert.deepEqual(service.diagnostics.result!.value.diagnostics.map(diagnostic => diagnostic.message), ["healthy diagnostic"]);
+	assert.deepEqual(tokens.value.tokens, []);
+	assert.deepEqual(diagnostics.value.diagnostics.map(diagnostic => diagnostic.message), ["healthy diagnostic"]);
 	assert.deepEqual(errors.map(error => [error.providerId, error.lane]), [
 		["broken", SYNTAX_TOKEN_LANE],
 		["broken", SYNTAX_DIAGNOSTIC_LANE],
@@ -141,40 +100,14 @@ test("Syntax provider synchronization failures do not block healthy request lane
 	assert.deepEqual(result.value.diagnostics.map(diagnostic => diagnostic.message), ["healthy after sync"]);
 });
 
-test("Model changes cancel both syntax lanes before either store can publish stale ranges", async () => {
-	using model = new TextModel("value");
-	using registry = new SyntaxProviderRegistry();
-	const started: string[] = [];
-	using registration = registry.register(provider("slow", {
-		tokens: (_request, signal) => pendingUntilAbort(signal, () => started.push(SYNTAX_TOKEN_LANE)),
-		diagnostics: (_request, signal) => pendingUntilAbort(signal, () => started.push(SYNTAX_DIAGNOSTIC_LANE)),
-	}));
-	using service = new SyntaxService(model, registry);
-	const pending = service.requestAll("typescript");
-	await turn();
-	assert.deepEqual(started, [SYNTAX_TOKEN_LANE, SYNTAX_DIAGNOSTIC_LANE]);
-
-	model.applyEdits([{
-		range: Range.fromPositions(new Position((0) + 1, (5) + 1)),
-		text: "!",
-	}]);
-	const outcomes = await pending;
-
-	assert.equal(outcomes.tokens.status, LanguageRequestStatus.Cancelled);
-	assert.equal(outcomes.diagnostics.status, LanguageRequestStatus.Cancelled);
-	assert.equal(outcomes.tokens.status === LanguageRequestStatus.Cancelled && outcomes.tokens.reason, LanguageRequestCancellationReason.ModelChanged);
-	assert.equal(outcomes.diagnostics.status === LanguageRequestStatus.Cancelled && outcomes.diagnostics.reason, LanguageRequestCancellationReason.ModelChanged);
-	assert.equal(service.tokens.result, undefined);
-	assert.equal(service.diagnostics.result, undefined);
-});
-
-test("An unconfigured syntax service does not invent tokens or diagnostics", async () => {
+test("An unconfigured syntax worker does not invent tokens or diagnostics", async () => {
 	using model = new TextModel("const value = 1 + 2;\nif (value] {");
 	using registry = new SyntaxProviderRegistry();
-	using service = new SyntaxService(model, registry);
-	await service.requestAll("typescript");
-	assert.deepEqual(service.tokens.result!.value.tokens, []);
-	assert.deepEqual(service.diagnostics.result!.value.diagnostics, []);
+	using worker = new SyntaxProviderWorker(registry);
+	const tokens = await runLane(worker, model, SYNTAX_TOKEN_LANE);
+	const diagnostics = await runLane(worker, model, SYNTAX_DIAGNOSTIC_LANE);
+	assert.deepEqual(tokens.value.tokens, []);
+	assert.deepEqual(diagnostics.value.diagnostics, []);
 });
 
 test("Syntax registry validates batches and releases providers independently", () => {
@@ -237,14 +170,12 @@ test("Token providers fall through undefined and isolated failures by priority",
 		} }),
 		tokenPriority: 50,
 	}));
-	using service = new SyntaxService(model, registry, {
-		onProviderError: providerId => errors.push(providerId),
-	});
+	using worker = new SyntaxProviderWorker(registry, providerId => errors.push(providerId));
 
-	assert.equal((await service.requestTokens("typescript")).status, LanguageRequestStatus.Applied);
+	const tokens = await runLane(worker, model, SYNTAX_TOKEN_LANE);
 	assert.deepEqual(calls, ["missing", "broken", "baseline"]);
 	assert.deepEqual(errors, ["broken"]);
-	assert.equal(service.tokens.result!.value.tokens[0]!.tokenType, "variable");
+	assert.equal(tokens.value.tokens[0]!.tokenType, "variable");
 });
 
 function provider(
@@ -283,38 +214,8 @@ function diagnosticResult(message: string): LanguageDiagnosticResult {
 	};
 }
 
-function turn(): Promise<void> {
-	return new Promise(resolve => setImmediate(resolve));
-}
-
-function pendingUntilAbort<T>(signal: AbortSignal, onStart: () => void): Promise<T> {
-	onStart();
-	return new Promise((_resolve, reject) => {
-		signal.addEventListener("abort", () => reject(new Error("syntax cancelled")), { once: true });
-	});
-}
-
-class Deferred<T> {
-	readonly promise: Promise<T>;
-	private readonly resolvePromise: (value: T) => void;
-	private readonly rejectPromise: (error: unknown) => void;
-
-	constructor() {
-		let resolvePromise!: (value: T) => void;
-		let rejectPromise!: (error: unknown) => void;
-		this.promise = new Promise<T>((resolve, reject) => {
-			resolvePromise = resolve;
-			rejectPromise = reject;
-		});
-		this.resolvePromise = resolvePromise;
-		this.rejectPromise = rejectPromise;
-	}
-
-	resolve(value: T): void {
-		this.resolvePromise(value);
-	}
-
-	reject(error: unknown): void {
-		this.rejectPromise(error);
-	}
+async function runLane<T extends typeof SYNTAX_TOKEN_LANE | typeof SYNTAX_DIAGNOSTIC_LANE>(worker: SyntaxProviderWorker, model: TextModel, lane: T): Promise<Extract<import('../../common/languages.js').SyntaxResult, { lane: T }>> {
+	const result = await worker.run({ requestId: 1, lane, payload: { languageId: 'typescript' }, snapshot: model.createVersionedSnapshot() }, new AbortController().signal);
+	assert.equal(result.lane, lane);
+	return result as Extract<import('../../common/languages.js').SyntaxResult, { lane: T }>;
 }

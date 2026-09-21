@@ -5,9 +5,8 @@ import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
 import { parseStanzaGotoLocation, type GotoLocationParseResult } from "../common/gotoLocation.js";
 import { Selection } from "../../../common/core/selection.js";
-import { type EditorScrollPosition } from "../../../common/viewModel/editorViewportContracts.js";
 import { type View } from "../../../browser/view.js";
-import { type IViewModel } from '../../../common/viewModel.js';
+import { type EditorScrollPosition, type IViewModel } from '../../../common/viewModel.js';
 
 export interface GotoLineControllerOptions {
 	readonly operatingSystem?: OperatingSystem;

@@ -1,13 +1,13 @@
+import { LanguageResultAcceptance } from '../languageResultStore.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Position } from '../../core/position.js';
 import { type Range } from '../../core/range.js';
 import { countEOL } from '../../core/misc/eolCounter.js';
 import { ColorId, FontStyle, LanguageId, MetadataConsts, StandardTokenType } from '../../encodedTokenAttributes.js';
-import { TokenizationRegistry, type ILanguageIdCodec, type LanguageSemanticTokensProvider, type SyntaxServiceOptions } from '../../languages.js';
+import { SYNTAX_TOKEN_LANE, type SyntaxLane, type SyntaxRequest, type SyntaxResult, TokenizationRegistry, type ILanguageIdCodec, type LanguageSemanticTokensProvider, type SyntaxServiceOptions } from '../../languages.js';
 import { type LanguageFeatureRegistry, SyntaxProviderRegistry } from '../../languageFeatureRegistry.js';
-import { type LanguageTokenizationSource, type LanguageToken, type SemanticTokenModelSource, type SemanticTokenSource } from '../../tokens/languageTokens.js';
-import { SyntaxService } from '../syntaxService.js';
+import { createLanguageTokenStore, type LanguageTokenizationSource, type LanguageToken, type SemanticTokenModelSource, type SemanticTokenSource } from '../../tokens/languageTokens.js';
 import { BackgroundTokenizationState, type ITokenizationTextModelPart, SynchronousTokenizationUnavailableError } from '../../tokenizationTextModelPart.js';
 import { LanguageTokenLineIndex, StyledTokenSource, overlayTokenSources, type LanguageTokenLine } from '../../tokens/languageTokenLineIndex.js';
 import { LineTokens } from '../../tokens/lineTokens.js';
@@ -15,6 +15,8 @@ import { type SparseMultilineTokens } from '../../tokens/sparseMultilineTokens.j
 import { SparseTokensStore } from '../../tokens/sparseTokensStore.js';
 import { type TextModel } from '../textModel.js';
 import { SemanticTokensTextModelPart } from './semanticTokensTextModelPart.js';
+import { createSyntaxWorker } from '../../services/editorWebWorker.js';
+import { LanguageRequestCoordinator } from '../languageRequestCoordinator.js';
 
 export interface TokenizationTextModelPartOptions {
 	readonly languageIdCodec?: ILanguageIdCodec;
@@ -37,7 +39,8 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 
 	readonly onDidChange: Event<void> = this.changeEmitter.event;
 	readonly onDidEncounterError: Event<unknown> = this.errorEmitter.event;
-	private readonly syntaxService: SyntaxService;
+	private readonly tokenStore: ReturnType<typeof createLanguageTokenStore>;
+	private readonly coordinator: LanguageRequestCoordinator<SyntaxLane, SyntaxRequest, SyntaxResult>;
 	readonly semanticTokens: SemanticTokensTextModelPart | undefined;
 	readonly renderedTokens: SemanticTokenSource;
 	readonly languageTokens: LanguageTokenizationSource & SemanticTokenModelSource;
@@ -48,8 +51,9 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 		this.languageIdCodec.encodeLanguageId(textModel.getLanguageId());
 		this.syntaxProviderRegistry = options.syntaxProviderRegistry ?? this._register(new SyntaxProviderRegistry());
 		this.hasWorkerProvider = options.syntaxService?.workerFactory !== undefined;
-		this.syntaxService = this._register(new SyntaxService(textModel, this.syntaxProviderRegistry, options.syntaxService));
-		this.languageTokenLineIndex = this._register(new LanguageTokenLineIndex(this.syntaxService.tokens));
+		this.tokenStore = this._register(createLanguageTokenStore(textModel));
+		this.coordinator = this._register(new LanguageRequestCoordinator(textModel, () => createSyntaxWorker(this.syntaxProviderRegistry, options.syntaxService ?? {})));
+		this.languageTokenLineIndex = this._register(new LanguageTokenLineIndex(this.tokenStore));
 		const tokenization = this;
 		this.languageTokens = Object.freeze({
 			textModel,
@@ -84,21 +88,21 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 			this.scheduleAnalysis();
 		}));
 		this._register(textModel.onDidChangeLanguage(() => {
-			this.syntaxService.restartWorker();
+			this.coordinator.restartWorker();
 			this.languageIdCodec.encodeLanguageId(textModel.getLanguageId());
 			this.semanticTokensStore.flush();
-			this.syntaxService.tokens.clear();
+			this.tokenStore.clear();
 			this.changeEmitter.fire();
 			this.scheduleAnalysis();
 		}));
 		this._register(this.syntaxProviderRegistry.onDidChange(() => {
-			this.syntaxService.restartWorker();
-			this.syntaxService.tokens.clear();
+			this.coordinator.restartWorker();
+			this.tokenStore.clear();
 			this.scheduleAnalysis();
 		}));
 		if (options.onDidChangeLanguageSupport) this._register(options.onDidChangeLanguageSupport(() => {
-			this.syntaxService.restartWorker();
-			this.syntaxService.tokens.clear();
+			this.coordinator.restartWorker();
+			this.tokenStore.clear();
 			this.scheduleAnalysis();
 		}));
 		this._register(TokenizationRegistry.onDidChange(event => {
@@ -147,8 +151,8 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 	}
 
 	resetTokenization(): void {
-		this.syntaxService.restartWorker();
-		this.syntaxService.tokens.clear();
+		this.coordinator.restartWorker();
+		this.tokenStore.clear();
 		this.scheduleAnalysis();
 	}
 
@@ -242,7 +246,13 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 	private async requestAnalysis(generation: number, languageId: string): Promise<void> {
 		try {
 			if (this.isDisposed || generation !== this.requestGeneration || languageId !== this.textModel.getLanguageId()) return;
-			await this.syntaxService.requestTokens(languageId);
+			await this.coordinator.runLatest(SYNTAX_TOKEN_LANE, { languageId }, result => {
+				if (result.value.lane !== SYNTAX_TOKEN_LANE) throw new TypeError('Token request returned a different lane');
+				const acceptance = this.tokenStore.accept({ ...result, value: result.value.value });
+				if (acceptance !== LanguageResultAcceptance.Applied) {
+					throw new Error(`Token store rejected current result as '${acceptance}'`);
+				}
+			});
 		} catch (error) {
 			if (this.isDisposed || generation !== this.requestGeneration || isCancellation(error)) return;
 			this.errorEmitter.fire(error);

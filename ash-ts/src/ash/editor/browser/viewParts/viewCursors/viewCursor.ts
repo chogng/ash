@@ -13,8 +13,8 @@ import { createStanzaVisualSelectionGeometry } from '../../../common/viewModel/v
 import { type HorizontalRange, type RenderingContext } from '../../view/renderingContext.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
-import { type TextMeasurer } from '../../../common/viewModel/textMeasurer.js';
 import { type ViewConfigurationChangedEvent } from '../../../common/viewEvents.js';
+import { type TextMeasurer } from '../../../common/viewModel.js';
 
 export interface ViewCursorOptions {
 	readonly readVisualProjection: () => EditorVisualLineProjection;

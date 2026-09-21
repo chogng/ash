@@ -6,28 +6,28 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
-import { LanguageWorkerWireClient, LanguageWorkerWireServer, type LanguageWorkerWireClientPort } from '../../../common/services/languageWorkerWire.js';
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { TextModel } from '../../../common/model/textModel.js';
-import { EditorWorker } from '../../../common/services/editorWebWorker.js';
-import { editorWorkerWireCodec } from '../../../common/services/editorWorkerWire.js';
+import { EditorWorker, editorWorkerWireCodec } from '../../../common/services/editorWebWorker.js';
 import { EndOfLineSequence } from '../../../common/model.js';
+import { WorkerTextModelSyncClient, WorkerTextModelSyncServer } from '../../../common/services/textModelSync/textModelSync.impl.js';
+import { type WebWorkerClientPort } from '../../../../base/common/worker/webWorker.js';
 
 test('worker wire preserves EOL-only edits after text minimization', async () => {
 	using model = new TextModel('alpha');
 	const [clientPort, serverPort] = createPortPair();
-	using server = new LanguageWorkerWireServer(serverPort, editorWorkerWireCodec, new EditorWorker());
-	using client = new VersionedEditorWorkerClient(model, () => new LanguageWorkerWireClient(clientPort, editorWorkerWireCodec));
+	using server = new WorkerTextModelSyncServer(serverPort, editorWorkerWireCodec, new EditorWorker());
+	using client = new VersionedEditorWorkerClient(model, () => new WorkerTextModelSyncClient(clientPort, editorWorkerWireCodec));
 	const result = await client.computeMoreMinimalEdits([{ range: model.getFullModelRange(), text: 'alpha', eol: EndOfLineSequence.CRLF }]);
 	assert.deepEqual(result, [{ range: new Range(1, 1, 1, 1), text: '', eol: EndOfLineSequence.CRLF }]);
 });
 
 test('Editor worker client synchronizes model versions across the structured-clone boundary', async () => {
 	const [clientPort, serverPort] = createPortPair();
-	using server = new LanguageWorkerWireServer(serverPort, editorWorkerWireCodec, new EditorWorker());
+	using server = new WorkerTextModelSyncServer(serverPort, editorWorkerWireCodec, new EditorWorker());
 	using model = new TextModel('const value = true;');
-	using client = new VersionedEditorWorkerClient(model, () => new LanguageWorkerWireClient(clientPort, editorWorkerWireCodec));
+	using client = new VersionedEditorWorkerClient(model, () => new WorkerTextModelSyncClient(clientPort, editorWorkerWireCodec));
 
 	const first = await client.navigateValueSet(Range.fromPositions(new Position((0) + 1, (14) + 1)), true, /[A-Za-z]+/g);
 	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (14) + 1), new Position((0) + 1, (18) + 1)), text: 'false' }]);
@@ -54,7 +54,7 @@ interface WireMessage {
 	readonly snapshot?: { readonly kind: string };
 }
 
-class MemoryWirePort extends Disposable implements LanguageWorkerWireClientPort {
+class MemoryWirePort extends Disposable implements WebWorkerClientPort {
 	private readonly messageEmitter = this._register(new Emitter<unknown>());
 	private readonly failureEmitter = this._register(new Emitter<unknown>());
 	private peer: MemoryWirePort | undefined;
@@ -92,8 +92,8 @@ test('formatting can run again after an overlapping response fails across the wo
 	using client = new VersionedEditorWorkerClient(model, () => {
 		starts++;
 		const [clientPort, serverPort] = createPortPair();
-		servers.add(new LanguageWorkerWireServer(serverPort, editorWorkerWireCodec, new EditorWorker()));
-		return new LanguageWorkerWireClient(clientPort, editorWorkerWireCodec);
+		servers.add(new WorkerTextModelSyncServer(serverPort, editorWorkerWireCodec, new EditorWorker()));
+		return new WorkerTextModelSyncClient(clientPort, editorWorkerWireCodec);
 	});
 	await assert.rejects(client.computeMoreMinimalEdits([
 		{ range: new Range(1, 1, 1, 4), text: 'ALP' },
@@ -107,8 +107,8 @@ test('formatting can run again after an overlapping response fails across the wo
 test('word completion shares the general editor worker and retains dynamic providers', async () => {
 	using model = new TextModel('alpha alphabet\nal', { languageId: 'typescript' });
 	const [clientPort, serverPort] = createPortPair();
-	using server = new LanguageWorkerWireServer(serverPort, editorWorkerWireCodec, new EditorWorker());
-	using client = new VersionedEditorWorkerClient(model, () => new LanguageWorkerWireClient(clientPort, editorWorkerWireCodec));
+	using server = new WorkerTextModelSyncServer(serverPort, editorWorkerWireCodec, new EditorWorker());
+	using client = new VersionedEditorWorkerClient(model, () => new WorkerTextModelSyncClient(clientPort, editorWorkerWireCodec));
 	using registry = new LanguageCompletionProviderRegistry();
 	using completions = new LanguageCompletionService(model, registry, { providers: [new WordBasedCompletionItemProvider(client)] });
 	await completions.request('typescript', new Position(2, 3), { kind: LanguageCompletionTriggerKind.Invoke });

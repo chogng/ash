@@ -2,9 +2,8 @@ import { Position } from "../core/position.js";
 import { getTextGraphemeBoundaries } from "../core/textSegmentation.js";
 import { type TextModel } from "../model/textModel.js";
 import { type InjectedText } from "../modelLineProjectionData.js";
-import { type EditorScrollPosition } from "./editorViewportContracts.js";
 import { type EditorVisualLineProjection } from "./modelLineProjection.js";
-import { type TextMeasurer } from "./textMeasurer.js";
+import { type EditorScrollPosition, type TextMeasurer } from '../viewModel.js';
 
 export interface ClientPoint {
 	readonly clientX: number;

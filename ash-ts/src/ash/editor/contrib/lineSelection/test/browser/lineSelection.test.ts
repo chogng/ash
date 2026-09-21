@@ -7,7 +7,7 @@ import { CursorChangeReason } from '../../../../common/cursorEvents.js';
 import { Position } from '../../../../common/core/position.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { TextModel } from '../../../../common/model/textModel.js';
-import { type TextMeasurer } from '../../../../common/viewModel/textMeasurer.js';
+import { type TextMeasurer } from '../../../../common/viewModel.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 class TestResizeObserver { observe(): void {} unobserve(): void {} disconnect(): void {} }

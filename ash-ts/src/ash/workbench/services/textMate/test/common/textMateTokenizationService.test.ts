@@ -5,14 +5,13 @@ import { test } from "mocha";
 import * as onigurumaNamespace from "vscode-oniguruma";
 import { type IOnigLib } from "vscode-textmate";
 import { SyntaxProviderRegistry } from '../../../../../editor/common/languageFeatureRegistry.js';
-import { SyntaxService } from '../../../../../editor/common/model/syntaxService.js';
-import { LanguageRequestStatus } from '../../../../../editor/common/model/languageRequestCoordinator.js';
 import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../editor/common/core/range.js";
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
 import { createTextMateSyntaxProvider, TEXTMATE_SYNTAX_PROVIDER_ID } from "../../common/textMateSyntaxProvider.js";
 import { TextMateGrammarRegistry } from "../../common/textMateGrammarRegistry.js";
 import { TextMateTokenizationService, type TextMateTokenizationCacheUpdate } from "../../common/textMateTokenizationService.js";
+import { SyntaxProviderWorker } from '../../../../../editor/common/services/editorWebWorker.js';
 
 const onigurumaRuntime = (onigurumaNamespace as unknown as { readonly default?: typeof onigurumaNamespace }).default ?? onigurumaNamespace;
 const { createOnigScanner, createOnigString, loadWASM } = onigurumaRuntime;
@@ -195,13 +194,14 @@ test("TextMate Syntax provider overrides lexical fallback by explicit priority",
 	});
 	using textmate = providers.register(createTextMateSyntaxProvider(tokenization));
 	using model = new TextModel("if");
-	using syntax = new SyntaxService(model, providers);
+	using syntax = new SyntaxProviderWorker(providers);
 
-	const outcome = await syntax.requestTokens("demo");
+	const outcome = await syntax.run({ requestId: 1, lane: "tokens", payload: { languageId: "demo" }, snapshot: model.createVersionedSnapshot() }, new AbortController().signal);
 
-	assert.equal(outcome.status, LanguageRequestStatus.Applied);
+	assert.equal(outcome.lane, "tokens");
+	if (outcome.lane !== "tokens") throw new Error("Unexpected lane");
 	assert.equal(providers.getTokenProvider("demo")?.id, TEXTMATE_SYNTAX_PROVIDER_ID);
-	assert.equal(syntax.tokens.result!.value.tokens[0]!.tokenType, "keyword");
+	assert.equal(outcome.value.tokens[0]!.tokenType, "keyword");
 });
 
 test("TextMate rejects mismatched grammars, cancellation, and use after disposal", async () => {

@@ -3,38 +3,41 @@ import { test } from "mocha";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
 import { SyntaxProviderRegistry } from '../../common/languageFeatureRegistry.js';
-import { type SyntaxRequest, SYNTAX_TOKEN_LANE, type SyntaxLane, type SyntaxResult, type SyntaxWorker } from '../../common/languages.js';
+import { type SyntaxRequest, SYNTAX_DIAGNOSTIC_LANE, SYNTAX_TOKEN_LANE, type SyntaxLane, type SyntaxResult, type SyntaxWorker } from '../../common/languages.js';
 import { SyntaxProviderWorker } from '../../common/services/editorWebWorker.js';
-import { SyntaxService } from '../../common/model/syntaxService.js';
-import { syntaxWireCodec } from '../../common/services/editorWorkerWire.js';
 import { testSyntaxProvider } from './testSyntaxProvider.js';
 import { LanguageRequestCoordinator, LanguageRequestStatus, LanguageWorkerResultDisposition, type LanguageWorkerRequest } from '../../common/model/languageRequestCoordinator.js';
-import { LanguageWorkerWireClient, LanguageWorkerWireServer, type LanguageWorkerWireClientPort } from '../../common/services/languageWorkerWire.js';
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
+import { syntaxWireCodec } from '../../common/services/semanticTokensDto.js';
+import { WorkerTextModelSyncClient, WorkerTextModelSyncServer } from '../../common/services/textModelSync/textModelSync.impl.js';
+import { type WebWorkerClientPort } from '../../../base/common/worker/webWorker.js';
 
 test("Token and diagnostic lanes share one structured-clone incremental document mirror", async () => {
 	using model = new TextModel("const value = 1;");
-	using localRegistry = new SyntaxProviderRegistry();
+
 	using remoteRegistry = new SyntaxProviderRegistry();
 	using registration = remoteRegistry.register(testSyntaxProvider());
 	const [clientPort, serverPort] = createPortPair();
-	using server = new LanguageWorkerWireServer(
+	using server = new WorkerTextModelSyncServer(
 		serverPort,
 		syntaxWireCodec,
 		new SyntaxProviderWorker(remoteRegistry),
 	);
-	using service = new SyntaxService(model, localRegistry, {
-		workerFactory: () => new LanguageWorkerWireClient(clientPort, syntaxWireCodec),
+	using coordinator = new LanguageRequestCoordinator(model, () => new WorkerTextModelSyncClient(clientPort, syntaxWireCodec));
+	let tokens: Extract<SyntaxResult, { lane: typeof SYNTAX_TOKEN_LANE }> | undefined;
+	const requestTokens = () => coordinator.runLatest(SYNTAX_TOKEN_LANE, { languageId: "typescript" }, result => {
+		if (result.value.lane !== SYNTAX_TOKEN_LANE) throw new Error("Wrong lane");
+		tokens = result.value;
 	});
 
-	const outcomes = await service.requestAll("typescript");
+	const [tokenOutcome, diagnosticOutcome] = await Promise.all([requestTokens(), coordinator.runLatest(SYNTAX_DIAGNOSTIC_LANE, { languageId: "typescript" }, () => undefined)]);
 
-	assert.equal(outcomes.tokens.status, LanguageRequestStatus.Applied);
-	assert.equal(outcomes.diagnostics.status, LanguageRequestStatus.Applied);
-	assert.deepEqual(service.tokens.result!.value.tokens.map(token => token.tokenType), ["const", "value", "=", "1;"]);
-	assert.equal(service.tokens.result!.value.tokens[0]!.range instanceof Range, true);
+	assert.equal(tokenOutcome.status, LanguageRequestStatus.Applied);
+	assert.equal(diagnosticOutcome.status, LanguageRequestStatus.Applied);
+	assert.deepEqual(tokens!.value.tokens.map(token => token.tokenType), ["const", "value", "=", "1;"]);
+	assert.equal(tokens!.value.tokens[0]!.range instanceof Range, true);
 	const initialMessages = clientPort.sentMessages as WireMessage[];
 	assert.deepEqual(initialMessages.map(message => message.kind), ["request", "request"]);
 	assert.equal(initialMessages[0]!.lane, "tokens");
@@ -46,14 +49,14 @@ test("Token and diagnostic lanes share one structured-clone incremental document
 		range: Range.fromPositions(new Position((0) + 1, (model.getText().length) + 1)),
 		text: "\nreturn value;",
 	}]);
-	assert.equal((await service.requestTokens("typescript")).status, LanguageRequestStatus.Applied);
+	assert.equal((await requestTokens()).status, LanguageRequestStatus.Applied);
 
 	const messages = clientPort.sentMessages as WireMessage[];
 	assert.deepEqual(messages.map(message => message.kind), ["request", "request", "sync", "request"]);
 	assert.equal(messages[2]!.previousVersion, 1);
 	assert.equal(messages[3]!.snapshot?.kind, "reference");
 	assert.equal(messages[3]!.resultBaseRequestId, 1);
-	assert.deepEqual(service.tokens.result!.value.tokens.filter(token => token.range.startLineNumber === 2).map(token => token.tokenType), ["return", "value;"]);
+	assert.deepEqual(tokens!.value.tokens.filter(token => token.range.startLineNumber === 2).map(token => token.tokenType), ["return", "value;"]);
 	const incrementalResponse = (serverPort.sentMessages as WireMessage[]).find(message => message.requestId === 3);
 	assert.equal(incrementalResponse?.result?.kind, "delta");
 	assert.equal(incrementalResponse?.result?.baseRequestId, 1);
@@ -65,7 +68,7 @@ test("Syntax wire rejects malformed lane DTOs in the client realm", async () => 
 	using model = new TextModel("value");
 	const [clientPort, serverPort] = createPortPair();
 	using serverEndpoint = serverPort;
-	using client = new LanguageWorkerWireClient(clientPort, syntaxWireCodec);
+	using client = new WorkerTextModelSyncClient(clientPort, syntaxWireCodec);
 	const pending = client.run({
 		requestId: 1,
 		lane: SYNTAX_TOKEN_LANE,
@@ -74,8 +77,8 @@ test("Syntax wire rejects malformed lane DTOs in the client realm", async () => 
 	}, new AbortController().signal);
 	await turn();
 	serverPort.send({
-		protocol: "ash.language-worker",
-		version: 5,
+		protocol: "ash.text-model",
+		version: 1,
 		kind: "result",
 		requestId: 1,
 		result: {
@@ -103,29 +106,32 @@ test("Syntax wire rejects malformed lane DTOs in the client realm", async () => 
 
 test("Syntax service replaces a failed wire Worker on the next request", async () => {
 	using model = new TextModel("const value = 1;");
-	using localRegistry = new SyntaxProviderRegistry();
+
 	using remoteRegistry = new SyntaxProviderRegistry();
 	using registration = remoteRegistry.register(testSyntaxProvider());
 	using workerResources = new DisposableStore();
 	let workerCount = 0;
-	using service = new SyntaxService(model, localRegistry, {
-		workerFactory: () => {
+	using coordinator = new LanguageRequestCoordinator(model, () => {
 			workerCount += 1;
 			const [clientPort, serverPort] = createPortPair();
 			const worker: SyntaxWorker = workerCount === 1
 				? new FailingSyntaxWorker()
 				: new SyntaxProviderWorker(remoteRegistry);
-			workerResources.add(new LanguageWorkerWireServer(serverPort, syntaxWireCodec, worker));
-			return new LanguageWorkerWireClient(clientPort, syntaxWireCodec);
-		},
+			workerResources.add(new WorkerTextModelSyncServer(serverPort, syntaxWireCodec, worker));
+			return new WorkerTextModelSyncClient(clientPort, syntaxWireCodec);
+	});
+	let tokens: Extract<SyntaxResult, { lane: typeof SYNTAX_TOKEN_LANE }> | undefined;
+	const requestTokens = () => coordinator.runLatest(SYNTAX_TOKEN_LANE, { languageId: "typescript" }, result => {
+		if (result.value.lane !== SYNTAX_TOKEN_LANE) throw new Error("Wrong lane");
+		tokens = result.value;
 	});
 
-	await assert.rejects(service.requestTokens("typescript"), /syntax worker failed/);
-	const outcome = await service.requestTokens("typescript");
+	await assert.rejects(requestTokens(), /syntax worker failed/);
+	const outcome = await requestTokens();
 
 	assert.equal(outcome.status, LanguageRequestStatus.Applied);
 	assert.equal(workerCount, 2);
-	assert.equal(service.tokens.result!.value.tokens[0]!.tokenType, "const");
+	assert.equal(tokens!.value.tokens[0]!.tokenType, "const");
 });
 
 test("Syntax wire falls back to full when the client missed the server result base", async () => {
@@ -133,8 +139,8 @@ test("Syntax wire falls back to full when the client missed the server result ba
 	using registry = new SyntaxProviderRegistry();
 	using registration = registry.register(testSyntaxProvider());
 	const [clientPort, serverPort] = createPortPair();
-	using server = new LanguageWorkerWireServer(serverPort, syntaxWireCodec, new SyntaxProviderWorker(registry));
-	using client = new LanguageWorkerWireClient(clientPort, syntaxWireCodec);
+	using server = new WorkerTextModelSyncServer(serverPort, syntaxWireCodec, new SyntaxProviderWorker(registry));
+	using client = new WorkerTextModelSyncClient(clientPort, syntaxWireCodec);
 	const signal = new AbortController().signal;
 	const request = (requestId: number): LanguageWorkerRequest<SyntaxLane, SyntaxRequest> => ({
 		requestId,
@@ -146,8 +152,8 @@ test("Syntax wire falls back to full when the client missed the server result ba
 	client.settleResult(1, LanguageWorkerResultDisposition.Applied);
 	const snapshot = model.createVersionedSnapshot();
 	clientPort.send({
-		protocol: "ash.language-worker",
-		version: 5,
+		protocol: "ash.text-model",
+		version: 1,
 		kind: "request",
 		requestId: 2,
 		lane: SYNTAX_TOKEN_LANE,
@@ -177,8 +183,8 @@ test("Syntax wire does not confirm a result rejected by renderer application", a
 	using registry = new SyntaxProviderRegistry();
 	using registration = registry.register(testSyntaxProvider());
 	const [clientPort, serverPort] = createPortPair();
-	using server = new LanguageWorkerWireServer(serverPort, syntaxWireCodec, new SyntaxProviderWorker(registry));
-	const client = new LanguageWorkerWireClient(clientPort, syntaxWireCodec);
+	using server = new WorkerTextModelSyncServer(serverPort, syntaxWireCodec, new SyntaxProviderWorker(registry));
+	const client = new WorkerTextModelSyncClient(clientPort, syntaxWireCodec);
 	using coordinator = new LanguageRequestCoordinator<SyntaxLane, SyntaxRequest, SyntaxResult>(model, () => client);
 	const applicationFailure = new Error("renderer rejected result");
 
@@ -221,7 +227,7 @@ function createPortPair(): readonly [MemorySyntaxPort, MemorySyntaxPort] {
 	return [first, second];
 }
 
-class MemorySyntaxPort extends Disposable implements LanguageWorkerWireClientPort {
+class MemorySyntaxPort extends Disposable implements WebWorkerClientPort {
 	private readonly messageEmitter = this._register(new Emitter<unknown>());
 	private readonly failureEmitter = this._register(new Emitter<unknown>());
 	private peer: MemorySyntaxPort | undefined;

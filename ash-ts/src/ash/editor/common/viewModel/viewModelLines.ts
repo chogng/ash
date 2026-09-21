@@ -5,16 +5,14 @@ import { EditorLineWrapping, isWrappingIndent, WrappingIndent } from '../config/
 import { type FontInfo } from '../config/fontInfo.js';
 import { IdentityCoordinatesConverter, type ICoordinatesConverter } from '../coordinatesConverter.js';
 import { type ICursorSimpleModel } from '../cursorCommon.js';
-import { type IPosition } from '../core/position.js';
-import { Position } from '../core/position.js';
+import { type IPosition, Position } from '../core/position.js';
 import { Range } from '../core/range.js';
 import { type IModelDecoration, type ITextModel, PositionAffinity } from '../model.js';
 import { type TextModel } from '../model/textModel.js';
 import { type ILineBreaksComputer, type ILineBreaksComputerContext, type ILineBreaksComputerFactory, type InjectedText, type ModelLineProjectionData } from '../modelLineProjectionData.js';
 import { type BracketGuideOptions, type IActiveIndentGuideInfo, type IndentGuide } from '../textModelGuides.js';
 import * as viewEvents from '../viewEvents.js';
-import { ViewLineData } from '../viewModel.js';
-import { type EditorViewportLineSource } from './editorViewportContracts.js';
+import { ViewLineData, type EditorViewportLineSource } from '../viewModel.js';
 import { EditorVisualLineProjection, type EditorVisualLine } from './modelLineProjection.js';
 
 export interface IViewModelLines extends IDisposable {

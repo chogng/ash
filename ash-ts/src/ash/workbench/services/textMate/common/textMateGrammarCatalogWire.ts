@@ -1,7 +1,7 @@
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { type LanguageWorkerWireClientPort, type LanguageWorkerWirePort } from '../../../../editor/common/services/languageWorkerWire.js';
 import { normalizeTextMateGrammarCatalog, type TextMateGrammarCatalog } from "./textMateGrammarCatalog.js";
 import { TextMateGrammarCatalogStore } from "./textMateGrammarCatalogStore.js";
+import { type WebWorkerClientPort, type WebWorkerPort } from '../../../../base/common/worker/webWorker.js';
 
 interface TextMateGrammarCatalogRequest {
 	readonly protocol: typeof PROTOCOL;
@@ -34,7 +34,7 @@ export class TextMateGrammarCatalogWireClient extends Disposable {
 	private closed = false;
 
 	constructor(
-		private readonly port: LanguageWorkerWireClientPort,
+		private readonly port: WebWorkerClientPort,
 		private readonly invalidateWorker: (error: Error) => void,
 	) {
 		super();
@@ -118,7 +118,7 @@ export class TextMateGrammarCatalogWireClient extends Disposable {
 /** Worker-side atomic catalog receiver sharing the Syntax Worker port. */
 export class TextMateGrammarCatalogWireServer extends Disposable {
 	constructor(
-		private readonly port: LanguageWorkerWirePort,
+		private readonly port: WebWorkerPort,
 		private readonly store: TextMateGrammarCatalogStore,
 	) {
 		super();

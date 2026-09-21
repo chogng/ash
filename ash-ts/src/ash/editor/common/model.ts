@@ -502,7 +502,6 @@ import type { IWordAtPosition } from './core/wordHelper.js';
 import type { WordCharacterClassifier } from './core/wordCharacterClassifier.js';
 import type { ILanguageSelection } from './languages/language.js';
 import type { FormattingOptions } from './languages.js';
-import type { TextBufferSnapshot } from './model/textBufferSnapshot.js';
 import type { TextEdit } from './core/edits/textEdit.js';
 import type { ISingleEditOperation } from './core/editOperation.js';
 import type { IModelDecorationsChangedEvent, IModelLanguageChangedEvent, IModelLanguageConfigurationChangedEvent, IModelOptionsChangedEvent, IModelTokensChangedEvent, ModelFontChangedEvent, ModelLineHeightChangedEvent } from './textModelEvents.js';
@@ -515,3 +514,10 @@ import type { IBracketPairsTextModelPart } from './textModelBracketPairs.js';
 import type { LineInjectedText } from './textModelEvents.js';
 import type { TokenArray } from './tokens/lineTokens.js';
 import type { IViewModel } from './viewModel.js';
+
+export interface TextBufferSnapshot {
+	readonly length: number;
+	readonly lineCount: number;
+	getText(): string;
+	getTextBetweenOffsets(startOffset: number, endOffset: number): string;
+}

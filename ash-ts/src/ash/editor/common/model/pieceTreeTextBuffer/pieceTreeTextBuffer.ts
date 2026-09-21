@@ -6,9 +6,8 @@ import { NodeColor, deleteNode, insertAfter, insertBefore, leftmost, nextNode, p
 import { Position } from '../../core/position.js';
 import { Range } from '../../core/range.js';
 import { WordCharacterClass } from '../../core/wordCharacterClassifier.js';
-import { ApplyEditsResult, EndOfLinePreference, FindMatch, type IInternalModelContentChange, type ITextBuffer, type IValidEditOperation, type SearchData, type ValidAnnotatedEditOperation } from '../../model.js';
+import { ApplyEditsResult, EndOfLinePreference, FindMatch, type IInternalModelContentChange, type ITextBuffer, type IValidEditOperation, type SearchData, type ValidAnnotatedEditOperation, type TextBufferSnapshot } from '../../model.js';
 import { TextChange } from '../../core/textChange.js';
-import { createTextBufferSnapshot, type TextBufferSnapshot, type TextBufferSnapshotSegment } from "../textBufferSnapshot.js";
 
 export interface PieceTreeTextBufferStatistics {
 	readonly liveTextUnits: number;
@@ -705,5 +704,46 @@ function normalizeEOL(text: string, eol: '\n' | '\r\n'): string {
 function assertSafeIndex(value: number, name: string): void {
 	if (!Number.isSafeInteger(value) || value < 0) {
 		throw new RangeError(`${name} must be a non-negative safe integer`);
+	}
+}
+
+interface TextBufferSnapshotSegment {
+	readonly source: string;
+	readonly startOffset: number;
+	readonly length: number;
+}
+
+function createTextBufferSnapshot(segments: readonly TextBufferSnapshotSegment[], length: number, lineCount: number): TextBufferSnapshot {
+	const capturedSegments = Object.freeze(segments.map(segment => Object.freeze({ ...segment })));
+	return Object.freeze({
+		length,
+		lineCount,
+		getText: () => capturedSegments.map(segment => segment.source.slice(segment.startOffset, segment.startOffset + segment.length)).join(''),
+		getTextBetweenOffsets: (startOffset: number, endOffset: number) => readTextBetweenOffsets(capturedSegments, length, startOffset, endOffset),
+	});
+}
+
+function readTextBetweenOffsets(segments: readonly TextBufferSnapshotSegment[], length: number, startOffset: number, endOffset: number): string {
+	assertOffsetRange(startOffset, endOffset, length);
+	if (startOffset === endOffset) return '';
+	const parts: string[] = [];
+	let segmentStartOffset = 0;
+	for (const segment of segments) {
+		const segmentEndOffset = segmentStartOffset + segment.length;
+		if (segmentEndOffset > startOffset && segmentStartOffset < endOffset) {
+			parts.push(segment.source.slice(
+				segment.startOffset + Math.max(startOffset, segmentStartOffset) - segmentStartOffset,
+				segment.startOffset + Math.min(endOffset, segmentEndOffset) - segmentStartOffset,
+			));
+		}
+		if (segmentEndOffset >= endOffset) break;
+		segmentStartOffset = segmentEndOffset;
+	}
+	return parts.join('');
+}
+
+function assertOffsetRange(startOffset: number, endOffset: number, length: number): void {
+	if (!Number.isSafeInteger(startOffset) || !Number.isSafeInteger(endOffset) || startOffset < 0 || endOffset < startOffset || endOffset > length) {
+		throw new RangeError(`Offsets must satisfy 0 <= start <= end <= ${length}`);
 	}
 }

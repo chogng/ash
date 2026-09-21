@@ -20,6 +20,8 @@ import { InlineDecoration } from './viewModel/inlineDecorations.js';
 import { EditorOption, FindComputedEditorOptionValueById } from './config/editorOptions.js';
 import { ISelection, Selection } from './core/selection.js';
 import { TextModelEditSource } from './textModelEditSource.js';
+import { type Event } from '../../base/common/event.js';
+import { type TextModelChange } from './core/textChange.js';
 
 export interface IViewModel extends ICursorSimpleModel, ISimpleModel {
 
@@ -457,4 +459,56 @@ export class OverviewRulerDecorationsGroup {
 	public static equalsArr(a: OverviewRulerDecorationsGroup[], b: OverviewRulerDecorationsGroup[]): boolean {
 		return arrays.equals(a, b, OverviewRulerDecorationsGroup.equals);
 	}
+}
+
+/**
+ * Measures text using the editor's current visual font metrics.
+ *
+ * The common geometry and navigation algorithms depend only on this small
+ * contract. Browser implementations may add lifecycle operations such as
+ * refreshing cached metrics, but those operations do not belong in common.
+ */
+export interface TextMeasurer {
+	readonly horizontalPadding: number;
+	readonly contentLeftPadding: number;
+	measureLineWidth(text: string): number;
+}
+
+/** A half-open range of visual-line indexes shared by layout and view-model code. */
+export interface EditorLineRange {
+	readonly startLineIndex: number;
+	readonly endLineIndexExclusive: number;
+}
+
+/** Supplies the current visual-line collection to the common layout. */
+export interface EditorViewportLineSource {
+	readonly lineCount: number;
+	readonly onDidChange: Event<void>;
+}
+
+/** Minimal model contract consumed by the DOM-free viewport layout. */
+export interface EditorViewportModelSource {
+	readonly lineCount: number;
+	readonly version: number;
+	readonly onDidChangeContent: Event<TextModelChange>;
+}
+
+/** Batch mutation boundary used by view-layout custom line-height owners. */
+export interface EditorLineHeightChangeAccessor {
+	insertOrChangeCustomLineHeight(decorationId: string, startLineNumber: number, endLineNumber: number, lineHeight: number): void;
+	removeCustomLineHeight(decorationId: string): void;
+}
+
+/** Immutable geometry for one block of vertical space between visual lines. */
+export interface EditorViewZoneLayout {
+	readonly id: string;
+	readonly afterLineIndex: number;
+	readonly top: number;
+	readonly heightInPixels: number;
+}
+
+/** The scroll coordinates exchanged between the view-model and the browser view. */
+export interface EditorScrollPosition {
+	readonly left: number;
+	readonly top: number;
 }

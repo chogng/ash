@@ -1,6 +1,6 @@
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { type LanguageWorkerWireClientPort, type LanguageWorkerWirePort } from '../../../../editor/common/services/languageWorkerWire.js';
 import { normalizeTextMateScopeTheme, TextMateScopeThemeModel, type TextMateScopeTheme } from "./textMateScopeTheme.js";
+import { type WebWorkerClientPort, type WebWorkerPort } from '../../../../base/common/worker/webWorker.js';
 
 interface TextMateScopeThemeRequest {
 	readonly protocol: typeof PROTOCOL;
@@ -29,7 +29,7 @@ export class TextMateScopeThemeWireClient extends Disposable {
 	private nextRequestId = 1;
 	private closed = false;
 
-	constructor(private readonly port: LanguageWorkerWireClientPort, private readonly invalidateWorker: (error: Error) => void) {
+	constructor(private readonly port: WebWorkerClientPort, private readonly invalidateWorker: (error: Error) => void) {
 		super();
 		if (!port || typeof port.send !== "function" || typeof port.onMessage !== "function" || typeof port.onFailure !== "function") {
 			throw new TypeError("TextMate scope theme client requires a Worker client port");
@@ -97,7 +97,7 @@ export class TextMateScopeThemeWireClient extends Disposable {
 
 /** Worker-side atomic scope-theme receiver sharing an Syntax Worker port. */
 export class TextMateScopeThemeWireServer extends Disposable {
-	constructor(private readonly port: LanguageWorkerWirePort, private readonly themes: TextMateScopeThemeModel, private readonly onDidReplace?: () => void) {
+	constructor(private readonly port: WebWorkerPort, private readonly themes: TextMateScopeThemeModel, private readonly onDidReplace?: () => void) {
 		super();
 		if (!port || typeof port.send !== "function" || typeof port.onMessage !== "function") {
 			throw new TypeError("TextMate scope theme server requires a Worker port");

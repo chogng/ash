@@ -5,14 +5,13 @@ import { URI } from '../../../../../base/common/uri.js';
 import { Position } from '../../../../../editor/common/core/position.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import { LanguageCompletionService } from '../../../../../editor/contrib/suggest/browser/suggest.js';
-import { LanguageRequestStatus } from '../../../../../editor/common/model/languageRequestCoordinator.js';
-import { SyntaxService } from '../../../../../editor/common/model/syntaxService.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { TestLanguageConfigurationService } from '../../../../../editor/test/common/modes/testLanguageConfigurationService.js';
 import { LanguageFeaturesService } from '../../../../../editor/common/services/languageFeaturesService.js';
 import { LanguageService } from '../../../../../editor/common/services/languageService.js';
 import { LanguageHoverService } from '../../../../../editor/contrib/hover/common/hover.js';
 import { WorkbenchLanguageFeatures } from '../../browser/workbenchLanguageFeatures.js';
+import { SyntaxProviderWorker } from '../../../../../editor/common/services/editorWebWorker.js';
 
 test('Workbench installs product languages while Editor owns provider registries', async () => {
 	using languageService = new LanguageService();
@@ -20,12 +19,12 @@ test('Workbench installs product languages while Editor owns provider registries
 	using languageFeatures = new LanguageFeaturesService();
 	using workbenchLanguages = new WorkbenchLanguageFeatures(languageService, languageConfigurations, languageFeatures);
 	using model = new TextModel('const answer = 42;');
-	using syntax = new SyntaxService(model, languageFeatures.syntaxProvider);
+	using syntax = new SyntaxProviderWorker(languageFeatures.syntaxProvider);
 	using completions = new LanguageCompletionService(model, languageFeatures.completionProvider);
 
 	assert.equal(languageService.resolveLanguageId({ resource: URI.file('C:\\project\\source.ts') }), 'typescript');
 	assert.equal(languageConfigurations.getLanguageConfiguration('typescript').comments?.lineCommentToken, '//');
-	assert.equal((await syntax.requestAll('typescript')).tokens.status, LanguageRequestStatus.Applied);
+	assert.equal((await syntax.run({ requestId: 1, lane: 'tokens', payload: { languageId: 'typescript' }, snapshot: model.createVersionedSnapshot() }, new AbortController().signal)).lane, 'tokens');
 	assert.equal(completions.textModel, model);
 });
 

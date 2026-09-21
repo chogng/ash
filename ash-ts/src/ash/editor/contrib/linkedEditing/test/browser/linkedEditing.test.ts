@@ -10,10 +10,10 @@ import { Selection } from '../../../../common/core/selection.js';
 import { LanguageFeatureRegistry } from '../../../../common/languageFeatureRegistry.js';
 import { type LinkedEditingRangeProvider } from '../../../../common/languages.js';
 import { TextModel } from '../../../../common/model/textModel.js';
-import { type TextMeasurer } from '../../../../common/viewModel/textMeasurer.js';
 import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 import { type ICodeEditor } from '../../../../browser/editorBrowser.js';
 import { type ICommand } from '../../../../common/editorCommon.js';
+import { type TextMeasurer } from '../../../../common/viewModel.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 for (const [name, value] of Object.entries({

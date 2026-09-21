@@ -1,16 +1,13 @@
 import { SyntaxProviderRegistry } from '../languageFeatureRegistry.js';
-import { type SyntaxRequest, SYNTAX_DIAGNOSTIC_LANE, type SyntaxLane, type SyntaxResult } from '../languages.js';
+import * as languages from '../languages.js';
 import { SyntaxProviderWorker } from '../services/editorWebWorker.js';
 import { LanguageRequestCoordinator } from './languageRequestCoordinator.js';
 import { createLanguageDiagnosticStore } from './languageResultStore.js';
 import { Emitter, type Event } from "../../../base/common/event.js";
-import { Color } from '../../../base/common/color.js';
 import { BugIndicatingError, onUnexpectedError } from '../../../base/common/errors.js';
 import { StringSHA1 } from '../../../base/common/hash.js';
-import type { IMarkdownString } from '../../../base/common/htmlContent.js';
 import { Disposable, DisposableStore, MutableDisposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
 import * as strings from '../../../base/common/strings.js';
-import type { ThemeColor } from '../../../base/common/themables.js';
 import { URI } from "../../../base/common/uri.js";
 import { LengthEdit, LengthReplacement } from "../core/edits/lengthEdit.js";
 import { TextEdit } from '../core/edits/textEdit.js';
@@ -28,10 +25,8 @@ import { TextLength } from "../core/text/textLength.js";
 import { canCoalesceHistoryEdits, canReplaceHistoryEdits, coalesceHistoryUndoEdits, normalizeInverseEdits, replaceHistoryUndoEdits, type OffsetTextEdit } from "./historyCoalescing.js";
 import { guessIndentation } from './indentationGuesser.js';
 import { findNextTextMatch, findTextMatches, TextSearchPatternKind, type TextSearchMatch, type TextModelSearchQuery } from './textModelSearch.js';
-import { createPieceTreeTextBuffer } from "./textBufferFactory.js";
 import { TextModelHistory, type TextModelHistoryEntry, type TextModelHistorySnapshot } from "./editStack.js";
 import { TrackedRangeCollection, type TrackedRange } from "./trackedRange.js";
-import { classifyTextModelSize, type TextModelLargeFilePolicy } from "./textModelLargeFile.js";
 import type { DocumentSelection } from "../core/documentSelection.js";
 import type { DocumentMark, DocumentNode } from "./document.js";
 import type { DocumentHistoryEntries } from "./documentHistory.js";
@@ -41,9 +36,9 @@ import type { DocumentTransaction } from "./documentTransaction.js";
 import { TextModelBlockState, TextModelRemoteHistoryPolicy, type TextModelBlockChange, type TextModelBlockOptions, type TextModelPluginDecorationSource } from "./textModelBlockState.js";
 import { projectDocumentToLines } from "./lineDocumentProjection.js";
 import { createLineDocumentSnapshot, linePoint, type LineDocumentSnapshot, type LineId, type LinePoint, type LineSemanticAttributes } from "./lineDocument.js";
-import { DefaultEndOfLine, EndOfLinePreference, EndOfLineSequence, FindMatch, PositionAffinity, TextModelResolvedOptions, TrackedRangeStickiness, ValidAnnotatedEditOperation, isITextSnapshot, type BracketPairColorizationOptions, type IAttachedView, type ICursorStateComputer, type IIdentifiedSingleEditOperation, type IModelDecorationOptions, type IModelDecorationsChangeAccessor, type IModelDeltaDecoration, type ITextBuffer, type ITextModel, type ITextModelUpdateOptions, type ITextSnapshot, type IValidEditOperation } from '../model.js';
 import * as model from '../model.js';
-import * as languages from '../languages.js';
+import { DefaultEndOfLine, EndOfLinePreference, EndOfLineSequence, FindMatch, PositionAffinity, TextModelResolvedOptions, TrackedRangeStickiness, ValidAnnotatedEditOperation, isITextSnapshot, type BracketPairColorizationOptions, type IAttachedView, type ICursorStateComputer, type IIdentifiedSingleEditOperation, type IModelDecorationOptions, type IModelDecorationsChangeAccessor, type IModelDeltaDecoration, type ITextBuffer, type ITextModel, type ITextModelUpdateOptions, type ITextSnapshot, type IValidEditOperation } from '../model.js';
+import { type SyntaxRequest, SYNTAX_DIAGNOSTIC_LANE, type SyntaxLane, type SyntaxResult } from '../languages.js';
 import { InternalModelContentChangeEvent, LineInjectedText, ModelFontChanged, ModelFontChangedEvent, ModelInjectedTextChangedEvent, ModelLineHeightChanged, ModelLineHeightChangedEvent, ModelRawContentChangedEvent, ModelRawEOLChanged, ModelRawFlush, ModelRawLineChanged, type IModelContentChangedEvent, type IModelDecorationsChangedEvent, type IModelLanguageChangedEvent, type IModelLanguageConfigurationChangedEvent, type IModelOptionsChangedEvent, type IModelTokensChangedEvent } from '../textModelEvents.js';
 import type { ILanguageSelection } from '../languages/language.js';
 import { ResolvedLanguageConfiguration, type ILanguageConfigurationService } from '../languages/languageConfigurationRegistry.js';
@@ -52,11 +47,10 @@ import { UndoRedoGroup } from '../../../platform/undoRedo/common/undoRedo.js';
 import type { IBracketPairsTextModelPart } from '../textModelBracketPairs.js';
 import { BracketPairsTextModelPart } from './bracketPairsTextModelPart/bracketPairsImpl.js';
 import { TokenizationTextModelPart, type TokenizationTextModelPartOptions } from './tokens/tokenizationTextModelPart.js';
-import { LineTokens, TokenArray } from '../tokens/lineTokens.js';
-import type { IColorTheme } from '../../../platform/theme/common/colorTheme.js';
-import { isDarkColorScheme } from '../../../platform/theme/common/theme.js';
+import { LineTokens } from '../tokens/lineTokens.js';
 import { GuidesTextModelPart } from './guidesTextModelPart.js';
 import type { IViewModel } from '../viewModel.js';
+import { createPieceTreeTextBuffer } from './pieceTreeTextBuffer/pieceTreeTextBufferBuilder.js';
 
 interface OffsetEdit extends OffsetTextEdit {}
 
@@ -2494,4 +2488,32 @@ class ModelLanguageDiagnostics extends Disposable {
 			});
 		});
 	}
+}
+
+/** Fixed model-size limits used to keep expensive editor features bounded. */
+export const TEXT_MODEL_LARGE_FILE_LIMITS = Object.freeze({
+	tokenizationTextUnits: 20 * 1_024 * 1_024,
+	tokenizationLineCount: 300_000,
+	synchronizationTextUnits: 50 * 1_024 * 1_024,
+	heapOperationTextUnits: 256 * 1_024 * 1_024,
+});
+
+export interface TextModelLargeFilePolicy {
+	readonly tooLargeForTokenization: boolean;
+	readonly tooLargeForSynchronization: boolean;
+	readonly tooLargeForHeapOperation: boolean;
+}
+
+/** Classifies the initial model snapshot. The result deliberately remains stable for the model lifetime. */
+export function classifyTextModelSize(textUnits: number, lineCount: number, largeFileOptimizations = true): TextModelLargeFilePolicy {
+	if (!Number.isSafeInteger(textUnits) || textUnits < 0) throw new RangeError("Text model size must be a non-negative safe integer");
+	if (!Number.isSafeInteger(lineCount) || lineCount < 1) throw new RangeError("Text model line count must be a positive safe integer");
+	return Object.freeze({
+		tooLargeForTokenization: largeFileOptimizations && (
+			textUnits > TEXT_MODEL_LARGE_FILE_LIMITS.tokenizationTextUnits
+			|| lineCount > TEXT_MODEL_LARGE_FILE_LIMITS.tokenizationLineCount
+		),
+		tooLargeForSynchronization: textUnits > TEXT_MODEL_LARGE_FILE_LIMITS.synchronizationTextUnits,
+		tooLargeForHeapOperation: largeFileOptimizations && textUnits > TEXT_MODEL_LARGE_FILE_LIMITS.heapOperationTextUnits,
+	});
 }

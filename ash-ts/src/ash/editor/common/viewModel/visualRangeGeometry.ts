@@ -1,9 +1,12 @@
 import { type Range } from "../core/range.js";
 import { type TextModel } from "../model/textModel.js";
 import { type EditorVisualLineProjection } from "./modelLineProjection.js";
-import { type EditorLineRange } from "./editorViewportContracts.js";
-import { type TextMeasurer } from "./textMeasurer.js";
-import { EmptyRangeRendering } from "./rangeGeometry.js";
+import { type EditorLineRange, type TextMeasurer } from '../viewModel.js';
+
+enum EmptyRangeRendering {
+	Ignore = "ignore",
+	RenderAsSpace = "render-as-space",
+}
 
 export interface VisualRangeGeometryEntry<T> {
 	readonly range: Range;

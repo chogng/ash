@@ -1,23 +1,22 @@
 import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
-import { IInlineCompletionsService } from '../../../../browser/services/inlineCompletionsService.js';
+import { IInlineCompletionsService, InlineCompletionsService } from '../../../../browser/services/inlineCompletionsService.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Emitter } from '../../../../../base/common/event.js';
 import { h } from '../../../../../base/browser/dom.js';
-import { type TextMeasurer } from '../../../../common/viewModel/textMeasurer.js';
 import { TriggerInlineEditCommandsRegistry } from '../../../../browser/triggerInlineEditCommandsRegistry.js';
 import { LanguageFeatureRegistry } from '../../../../common/languageFeatureRegistry.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { Position } from '../../../../common/core/position.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { type LanguageInlineCompletionsProvider } from '../../common/inlineCompletions.js';
-import { InlineCompletionsService } from '../../../../browser/services/inlineCompletionsService.js';
 import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 import { type ICodeEditor } from '../../../../browser/editorBrowser.js';
 import { type ICommand } from '../../../../common/editorCommon.js';
 import { type CursorsController } from '../../../../common/cursor/cursor.js';
 import { type ICursorSelectionChangedEvent } from '../../../../common/cursorEvents.js';
+import { type TextMeasurer } from '../../../../common/viewModel.js';
 
 class TestResizeObserver {
 	observe(): void {}

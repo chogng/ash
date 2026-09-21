@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { OperatingSystem } from "../../../../../base/common/platform.js";
-import { type TextMeasurer } from "../../../../common/viewModel/textMeasurer.js";
 import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { h } from "../../../../../base/browser/dom.js";
+import { type TextMeasurer } from '../../../../common/viewModel.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({

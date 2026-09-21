@@ -6,13 +6,12 @@ import { type IScrollPosition, Scrollable, type ScrollEvent } from '../../../bas
 import { type INewScrollPosition, ScrollType } from '../editorCommon.js';
 import { type IEditorConfiguration } from '../config/editorConfiguration.js';
 import { type ConfigurationChangedEvent, EditorOption } from '../config/editorOptions.js';
-import { type IEditorWhitespace, type ILineHeightChangeAccessor, type IPartialViewLinesViewportData, type IViewWhitespaceViewportData, type IWhitespaceChangeAccessor, Viewport } from '../viewModel.js';
+import { type IEditorWhitespace, type ILineHeightChangeAccessor, type IPartialViewLinesViewportData, type IViewWhitespaceViewportData, type IWhitespaceChangeAccessor, Viewport, type EditorLineHeightChangeAccessor, type EditorLineRange, type EditorScrollPosition } from '../viewModel.js';
 import { ContentSizeChangedEvent } from '../viewModelEventDispatcher.js';
-import { type EditorLineHeightChangeAccessor, type EditorLineRange, type EditorScrollPosition } from '../viewModel/editorViewportContracts.js';
 import { type CustomLineHeightData } from './lineHeights.js';
 import { LinesLayout } from './linesLayout.js';
 
-export type { EditorLineHeightChangeAccessor, EditorLineRange, EditorScrollPosition } from '../viewModel/editorViewportContracts.js';
+export type { EditorLineHeightChangeAccessor, EditorLineRange, EditorScrollPosition } from '../viewModel.js';
 
 /** Vertical space reserved around the projected line collection. */
 export interface EditorViewportVerticalPadding {

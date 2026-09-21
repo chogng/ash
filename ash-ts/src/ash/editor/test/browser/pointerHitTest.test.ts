@@ -2,11 +2,11 @@ import { h } from '../../../base/browser/dom.js';
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
-import { type TextMeasurer } from "../../common/viewModel/textMeasurer.js";
 import { EditorHitTargetKind, hitTestStanzaEditorPoint } from "../../common/viewModel/pointerHitTest.js";
 import { Position } from "../../common/core/position.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { ContentWidgetPositionPreference, type IContentWidget, type IEditorMouseEvent, type IViewZoneChangeAccessor, MouseTargetType } from '../../browser/editorBrowser.js';
+import { type TextMeasurer } from '../../common/viewModel.js';
 
 class FixedTextMeasurer implements TextMeasurer {
 	readonly horizontalPadding = 24;

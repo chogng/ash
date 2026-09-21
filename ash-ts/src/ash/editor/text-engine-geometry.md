@@ -122,7 +122,7 @@ The following facts describe the current Ash implementation; they do not redefin
 
 | Area | Status | Current evidence and boundary |
 | --- | --- | --- |
-| Common measurement contract | Current | `common/viewModel/textMeasurer.ts` exposes text width and padding inputs without importing browser APIs |
+| Common measurement contract | Current | `common/viewModel.ts` exposes text width and padding inputs without importing browser APIs |
 | Browser editor geometry configuration | Current | `browser/config/editorConfiguration.ts` resolves font and line-height defaults/validation at the browser composition boundary; it does not aggregate product services or feature state |
 | Browser element-size observation | Current | `browser/config/elementSizeObserver.ts` turns ResizeObserver and initial client-area reads into one coalesced dimension event for the viewport |
 | DOM font application | Current | `browser/config/domFontInfo.ts` applies the shared editor font vocabulary to viewport and diff surfaces; zoom remains feature-owned and invalidates measurements explicitly |

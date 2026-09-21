@@ -5,14 +5,14 @@ import { Disposable, DisposableStore, toDisposable } from "../../../base/common/
 import { createLanguageCompletionInvokeContext, type LanguageCompletionRequest, LanguageCompletionItemKind, LANGUAGE_COMPLETION_LANE, type LanguageCompletionWorker } from '../../common/languages.js';
 import { LanguageCompletionProviderRegistry } from '../../common/languageFeatureRegistry.js';
 import { LanguageCompletionProviderWorker, LanguageCompletionService } from '../../contrib/suggest/browser/suggest.js';
-import { languageCompletionWireCodec } from '../../common/services/editorWorkerWire.js';
-import { createLanguageWordCompletionProvider } from "../../common/services/editorWebWorker.js";
-import { LanguageWorkerRemoteError, LanguageWorkerWireClient, LanguageWorkerWireServer, type LanguageWorkerWireClientPort } from '../../common/services/languageWorkerWire.js';
+import { languageCompletionWireCodec, createLanguageWordCompletionProvider } from '../../common/services/editorWebWorker.js';
 import { LanguageRequestStatus, type LanguageWorkerRequest } from '../../common/model/languageRequestCoordinator.js';
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { type TextModelChange } from '../../common/core/textChange.js';
+import { WebWorkerRemoteError, type WebWorkerClientPort } from '../../../base/common/worker/webWorker.js';
+import { WorkerTextModelSyncClient, WorkerTextModelSyncServer } from '../../common/services/textModelSync/textModelSync.impl.js';
 
 test("Completion service crosses a structured-clone worker boundary", async () => {
 	const text = "console\nconst connection = con";
@@ -21,13 +21,13 @@ test("Completion service crosses a structured-clone worker boundary", async () =
 	using remoteRegistry = new LanguageCompletionProviderRegistry();
 	using remoteRegistration = remoteRegistry.register(createLanguageWordCompletionProvider());
 	const [clientPort, serverPort] = createPortPair();
-	using server = new LanguageWorkerWireServer(
+	using server = new WorkerTextModelSyncServer(
 		serverPort,
 		languageCompletionWireCodec,
 		new LanguageCompletionProviderWorker(remoteRegistry),
 	);
 	using service = new LanguageCompletionService(model, localRegistry, {
-		workerFactory: () => new LanguageWorkerWireClient(clientPort, languageCompletionWireCodec),
+		workerFactory: () => new WorkerTextModelSyncClient(clientPort, languageCompletionWireCodec),
 	});
 	const line = "const connection = con";
 	const position = new Position((1) + 1, (line.length) + 1);
@@ -52,13 +52,13 @@ test("Completion wire synchronizes model changes and then references the mirror"
 	using remoteRegistry = new LanguageCompletionProviderRegistry();
 	using remoteRegistration = remoteRegistry.register(createLanguageWordCompletionProvider());
 	const [clientPort, serverPort] = createPortPair();
-	using server = new LanguageWorkerWireServer(
+	using server = new WorkerTextModelSyncServer(
 		serverPort,
 		languageCompletionWireCodec,
 		new LanguageCompletionProviderWorker(remoteRegistry),
 	);
 	using service = new LanguageCompletionService(model, localRegistry, {
-		workerFactory: () => new LanguageWorkerWireClient(clientPort, languageCompletionWireCodec),
+		workerFactory: () => new WorkerTextModelSyncClient(clientPort, languageCompletionWireCodec),
 	});
 	const firstPosition = new Position((0) + 1, (model.getText().length) + 1);
 	assert.equal((await service.request("plaintext", firstPosition, createLanguageCompletionInvokeContext())).status, LanguageRequestStatus.Applied);
@@ -86,12 +86,12 @@ test("A skipped model version makes the next wire request send a full snapshot",
 	using registry = new LanguageCompletionProviderRegistry();
 	using registration = registry.register(createLanguageWordCompletionProvider());
 	const [clientPort, serverPort] = createPortPair();
-	using server = new LanguageWorkerWireServer(
+	using server = new WorkerTextModelSyncServer(
 		serverPort,
 		languageCompletionWireCodec,
 		new LanguageCompletionProviderWorker(registry),
 	);
-	using client = new LanguageWorkerWireClient(clientPort, languageCompletionWireCodec);
+	using client = new WorkerTextModelSyncClient(clientPort, languageCompletionWireCodec);
 	await client.run(request(model, 1), new AbortController().signal);
 	let skipped: TextModelChange | undefined;
 	using listener = model.onDidChangeContent(change => { skipped = change; });
@@ -127,8 +127,8 @@ test("Wire cancellation aborts remote work and ignores late messages", async () 
 		});
 		throw new Error("unreachable");
 	});
-	using server = new LanguageWorkerWireServer(serverPort, languageCompletionWireCodec, worker);
-	using client = new LanguageWorkerWireClient(clientPort, languageCompletionWireCodec);
+	using server = new WorkerTextModelSyncServer(serverPort, languageCompletionWireCodec, worker);
+	using client = new WorkerTextModelSyncClient(clientPort, languageCompletionWireCodec);
 	using model = new TextModel("value");
 	const controller = new AbortController();
 	const promise = client.run(request(model, 1), controller.signal);
@@ -145,7 +145,7 @@ test("Remote failures and invalid DTO results reject in the client realm", async
 		new TestCompletionWorker(async () => {
 			throw new TypeError("provider host exploded");
 		}),
-		error => error instanceof LanguageWorkerRemoteError &&
+		error => error instanceof WebWorkerRemoteError &&
 			error.remoteName === "TypeError" &&
 			error.message === "provider host exploded",
 	);
@@ -183,8 +183,8 @@ test("Completion service replaces a failed wire worker on the next request", asy
 					throw new Error("first worker failed");
 				})
 				: new LanguageCompletionProviderWorker(remoteRegistry);
-			servers.add(new LanguageWorkerWireServer(serverPort, languageCompletionWireCodec, worker));
-			return new LanguageWorkerWireClient(clientPort, languageCompletionWireCodec);
+			servers.add(new WorkerTextModelSyncServer(serverPort, languageCompletionWireCodec, worker));
+			return new WorkerTextModelSyncClient(clientPort, languageCompletionWireCodec);
 		},
 	});
 	const position = new Position((0) + 1, (model.getText().length) + 1);
@@ -203,11 +203,11 @@ test("Wire rejects inconsistent snapshots and unsupported protocol responses", a
 	const worker = new TestCompletionWorker(async () => {
 		throw new Error("Malformed requests must not reach the worker");
 	});
-	using server = new LanguageWorkerWireServer(serverPort, languageCompletionWireCodec, worker);
+	using server = new WorkerTextModelSyncServer(serverPort, languageCompletionWireCodec, worker);
 	const response = nextMessage(requester);
 	requester.send({
-		protocol: "ash.language-worker",
-		version: 5,
+		protocol: "ash.text-model",
+		version: 1,
 		kind: "request",
 		requestId: 1,
 		lane: LANGUAGE_COMPLETION_LANE,
@@ -219,18 +219,18 @@ test("Wire rejects inconsistent snapshots and unsupported protocol responses", a
 
 	const [clientPort, peerPort] = createPortPair();
 	using peer = peerPort;
-	using client = new LanguageWorkerWireClient(clientPort, languageCompletionWireCodec);
+	using client = new WorkerTextModelSyncClient(clientPort, languageCompletionWireCodec);
 	using model = new TextModel("value");
 	const pending = client.run(request(model, 1), new AbortController().signal);
 	peerPort.send({
-		protocol: "ash.language-worker",
-		version: 6,
+		protocol: "ash.text-model",
+		version: 2,
 		kind: "result",
 		requestId: 1,
 		result: {},
 	});
 
-	await assert.rejects(pending, /Unsupported language worker protocol version/);
+	await assert.rejects(pending, /Unsupported worker protocol version/);
 });
 
 test("Invalid incremental synchronization drops the mirror and poisons its client", async () => {
@@ -238,17 +238,17 @@ test("Invalid incremental synchronization drops the mirror and poisons its clien
 	using registry = new LanguageCompletionProviderRegistry();
 	using registration = registry.register(createLanguageWordCompletionProvider());
 	const [clientPort, serverPort] = createPortPair();
-	using server = new LanguageWorkerWireServer(
+	using server = new WorkerTextModelSyncServer(
 		serverPort,
 		languageCompletionWireCodec,
 		new LanguageCompletionProviderWorker(registry),
 	);
-	using client = new LanguageWorkerWireClient(clientPort, languageCompletionWireCodec);
+	using client = new WorkerTextModelSyncClient(clientPort, languageCompletionWireCodec);
 	await client.run(request(model, 1), new AbortController().signal);
 
 	clientPort.send({
-		protocol: "ash.language-worker",
-		version: 5,
+		protocol: "ash.text-model",
+		version: 1,
 		kind: "sync",
 		previousVersion: 1,
 		modelVersion: 2,
@@ -266,7 +266,7 @@ test("Invalid incremental synchronization drops the mirror and poisons its clien
 test("Wire ports fail pending requests and validate service factory options", async () => {
 	const [clientPort, peerPort] = createPortPair();
 	using unusedPeer = peerPort;
-	using client = new LanguageWorkerWireClient(clientPort, languageCompletionWireCodec);
+	using client = new WorkerTextModelSyncClient(clientPort, languageCompletionWireCodec);
 	using model = new TextModel("value");
 	const pending = client.run(request(model, 1), new AbortController().signal);
 
@@ -283,8 +283,8 @@ test("Wire ports fail pending requests and validate service factory options", as
 
 async function assertRemoteFailure(worker: LanguageCompletionWorker, predicate: (error: unknown) => boolean): Promise<void> {
 	const [clientPort, serverPort] = createPortPair();
-	using server = new LanguageWorkerWireServer(serverPort, languageCompletionWireCodec, worker);
-	using client = new LanguageWorkerWireClient(clientPort, languageCompletionWireCodec);
+	using server = new WorkerTextModelSyncServer(serverPort, languageCompletionWireCodec, worker);
+	using client = new WorkerTextModelSyncClient(clientPort, languageCompletionWireCodec);
 	using model = new TextModel("value");
 	await assert.rejects(client.run(request(model, 1), new AbortController().signal), predicate);
 }
@@ -335,7 +335,7 @@ function nextMessage(port: MemoryWirePort): Promise<unknown> {
 	});
 }
 
-class MemoryWirePort extends Disposable implements LanguageWorkerWireClientPort {
+class MemoryWirePort extends Disposable implements WebWorkerClientPort {
 	private readonly messageEmitter = this._register(new Emitter<unknown>());
 	private readonly failureEmitter = this._register(new Emitter<unknown>());
 	private peer: MemoryWirePort | undefined;

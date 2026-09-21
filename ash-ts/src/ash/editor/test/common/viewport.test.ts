@@ -8,9 +8,9 @@ import { EditorOption, type IComputedEditorOptions } from '../../common/config/e
 import { Range } from "../../common/core/range.js";
 import { ScrollType } from '../../common/editorCommon.js';
 import { TextModel } from "../../common/model/textModel.js";
-import { type EditorViewportLineSource } from "../../common/viewModel/editorViewportContracts.js";
 import { type CustomLineHeightData } from '../../common/viewLayout/lineHeights.js';
 import { EditorViewportChangeReason, type EditorViewportVerticalPadding, ViewLayout as EditorViewLayout } from "../../common/viewLayout/viewLayout.js";
+import { type EditorViewportLineSource } from '../../common/viewModel.js';
 
 interface TestViewLayoutOptions {
 	readonly lineHeight: number;

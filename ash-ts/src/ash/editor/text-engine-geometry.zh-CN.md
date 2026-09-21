@@ -122,7 +122,7 @@ GPU 或 Canvas 后端可以提高密集文本的吞吐，但自身不提供原�
 
 | 领域 | 状态 | 当前证据与边界 |
 | --- | --- | --- |
-| Common 测量契约 | Current / 已实现 | `common/viewModel/textMeasurer.ts` 提供文本宽度和 padding 输入，不导入浏览器 API |
+| Common 测量契约 | Current / 已实现 | `common/viewModel.ts` 提供文本宽度和 padding 输入，不导入浏览器 API |
 | 浏览器编辑器几何配置 | Current / 已实现 | `browser/config/editorConfiguration.ts` 在 browser composition boundary 解析字体和行高默认值/校验；不聚合产品服务或 feature 状态 |
 | 浏览器元素尺寸观察 | Current / 已实现 | `browser/config/elementSizeObserver.ts` 将 ResizeObserver 和初始 client-area 读取统一为 viewport 使用的合并尺寸事件 |
 | DOM 字体应用 | Current / 已实现 | `browser/config/domFontInfo.ts` 为 viewport 和 diff surface 应用统一的编辑器字体词汇；zoom 仍由 feature 自己拥有，并显式使测量失效 |

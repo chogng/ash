@@ -8,10 +8,7 @@ import { Disposable, DisposableStore, toDisposable } from "../../../../../base/c
 import { SyntaxProviderRegistry } from '../../../../../editor/common/languageFeatureRegistry.js';
 import { type SyntaxProviderRequest } from '../../../../../editor/common/languages.js';
 import { SyntaxProviderWorker } from '../../../../../editor/common/services/editorWebWorker.js';
-import { SyntaxService } from '../../../../../editor/common/model/syntaxService.js';
-import { syntaxWireCodec } from '../../../../../editor/common/services/editorWorkerWire.js';
-import { LanguageRequestStatus } from '../../../../../editor/common/model/languageRequestCoordinator.js';
-import { LanguageWorkerWireServer, type LanguageWorkerWireClientPort } from '../../../../../editor/common/services/languageWorkerWire.js';
+import { LanguageRequestCoordinator } from '../../../../../editor/common/model/languageRequestCoordinator.js';
 import { Position } from "../../../../../editor/common/core/position.js";
 import { Range } from "../../../../../editor/common/core/range.js";
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
@@ -24,6 +21,11 @@ import { TextMateGrammarRegistry } from "../../common/textMateGrammarRegistry.js
 import { TextMateScopeThemeModel } from "../../common/textMateScopeTheme.js";
 import { TextMateScopeThemeWireServer } from "../../common/textMateScopeThemeWire.js";
 import { TextMateTokenizationService } from "../../common/textMateTokenizationService.js";
+import type { LanguageTokenResult } from '../../../../../editor/common/tokens/languageTokens.js';
+import { syntaxWireCodec } from '../../../../../editor/common/services/semanticTokensDto.js';
+import { LanguageRequestStatus } from '../../../../../editor/common/model/languageRequestCoordinator.js';
+import { WorkerTextModelSyncServer } from '../../../../../editor/common/services/textModelSync/textModelSync.impl.js';
+import { type WebWorkerClientPort } from '../../../../../base/common/worker/webWorker.js';
 
 const onigurumaRuntime = (onigurumaNamespace as unknown as { readonly default?: typeof onigurumaNamespace }).default ?? onigurumaNamespace;
 const { createOnigScanner, createOnigString, loadWASM } = onigurumaRuntime;
@@ -126,22 +128,26 @@ test("Catalog-gated Worker selects TextMate and falls back dynamically", async (
 		}),
 	}));
 	const [clientPort, serverPort] = createPortPair();
-	resources.add(new LanguageWorkerWireServer(serverPort, syntaxWireCodec, new SyntaxProviderWorker(providers)));
+	resources.add(new WorkerTextModelSyncServer(serverPort, syntaxWireCodec, new SyntaxProviderWorker(providers)));
 	resources.add(new TextMateGrammarCatalogWireServer(serverPort, grammarStore));
 	const catalogs = resources.add(new TextMateGrammarCatalogModel(grammarCatalog(1, "keyword.control.demo")));
 	const worker = resources.add(new TextMateSyntaxWorkerClient(clientPort, catalogs));
-	const localProviders = resources.add(new SyntaxProviderRegistry());
 	const model = resources.add(new TextModel("if"));
-	const syntax = resources.add(new SyntaxService(model, localProviders, { workerFactory: () => worker }));
+	const coordinator = resources.add(new LanguageRequestCoordinator(model, () => worker));
+	let tokens: LanguageTokenResult | undefined;
+	const requestTokens = (languageId: string) => coordinator.runLatest('tokens', { languageId }, result => {
+		if (result.value.lane !== 'tokens') throw new Error('Unexpected lane');
+		tokens = result.value.value;
+	});
 
-	assert.equal((await syntax.requestTokens("demo")).status, LanguageRequestStatus.Applied);
-	assert.equal(syntax.tokens.result!.value.tokens[0]!.tokenType, "keyword");
-	assert.equal((await syntax.requestTokens("plain")).status, LanguageRequestStatus.Applied);
-	assert.equal(syntax.tokens.result!.value.tokens[0]!.tokenType, "fallback");
+	assert.equal((await requestTokens("demo")).status, LanguageRequestStatus.Applied);
+	assert.equal(tokens!.tokens[0]!.tokenType, "keyword");
+	assert.equal((await requestTokens("plain")).status, LanguageRequestStatus.Applied);
+	assert.equal(tokens!.tokens[0]!.tokenType, "fallback");
 
 	catalogs.replace(grammarCatalog(2, "string.quoted.demo"));
-	assert.equal((await syntax.requestTokens("demo")).status, LanguageRequestStatus.Applied);
-	assert.equal(syntax.tokens.result!.value.tokens[0]!.tokenType, "string");
+	assert.equal((await requestTokens("demo")).status, LanguageRequestStatus.Applied);
+	assert.equal(tokens!.tokens[0]!.tokenType, "string");
 	const catalogRequests = clientPort.sentMessages.filter(message => (message as { protocol?: string }).protocol === "ash.textmate.grammar-catalog");
 	assert.equal(catalogRequests.length, 2);
 });
@@ -156,7 +162,7 @@ test("Scope themes cross the Syntax Worker boundary and invalidate cached token 
 	}));
 	resources.add(providers.register(createTextMateSyntaxProvider(tokenization)));
 	const [clientPort, serverPort] = createPortPair();
-	resources.add(new LanguageWorkerWireServer(serverPort, syntaxWireCodec, new SyntaxProviderWorker(providers)));
+	resources.add(new WorkerTextModelSyncServer(serverPort, syntaxWireCodec, new SyntaxProviderWorker(providers)));
 	resources.add(new TextMateGrammarCatalogWireServer(serverPort, grammarStore));
 	resources.add(new TextMateScopeThemeWireServer(serverPort, workerThemes, () => tokenization.invalidateTokenCaches()));
 	const catalogs = resources.add(new TextMateGrammarCatalogModel(grammarCatalog(1)));
@@ -164,16 +170,20 @@ test("Scope themes cross the Syntax Worker boundary and invalidate cached token 
 	const worker = resources.add(new TextMateSyntaxWorkerClient(clientPort, catalogs, {
 		scopeTheme: themes,
 	}));
-	const localProviders = resources.add(new SyntaxProviderRegistry());
 	const model = resources.add(new TextModel("if"));
-	const syntax = resources.add(new SyntaxService(model, localProviders, { workerFactory: () => worker }));
+	const coordinator = resources.add(new LanguageRequestCoordinator(model, () => worker));
+	let tokens: LanguageTokenResult | undefined;
+	const requestTokens = (languageId: string) => coordinator.runLatest('tokens', { languageId }, result => {
+		if (result.value.lane !== 'tokens') throw new Error('Unexpected lane');
+		tokens = result.value.value;
+	});
 
-	assert.equal((await syntax.requestTokens("demo")).status, LanguageRequestStatus.Applied);
-	assert.equal(syntax.tokens.result!.value.tokens[0]!.tokenType, "keyword");
+	assert.equal((await requestTokens("demo")).status, LanguageRequestStatus.Applied);
+	assert.equal(tokens!.tokens[0]!.tokenType, "keyword");
 
 	themes.replace({ revision: 1, rules: [{ selector: "keyword.control.demo", tokenType: "keyword", modifiers: ["declaration"] }] });
-	assert.equal((await syntax.requestTokens("demo")).status, LanguageRequestStatus.Applied);
-	assert.deepEqual(syntax.tokens.result!.value.tokens[0], {
+	assert.equal((await requestTokens("demo")).status, LanguageRequestStatus.Applied);
+	assert.deepEqual(tokens!.tokens[0], {
 		range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (2) + 1)),
 		tokenType: "keyword",
 		modifiers: ["declaration"],
@@ -181,7 +191,7 @@ test("Scope themes cross the Syntax Worker boundary and invalidate cached token 
 	assert.equal(clientPort.sentMessages.filter(message => (message as { protocol?: string }).protocol === "ash.textmate.scope-theme").length, 1);
 });
 
-interface MemoryWirePort extends LanguageWorkerWireClientPort {
+interface MemoryWirePort extends WebWorkerClientPort {
 	readonly sentMessages: unknown[];
 	connect(peer: MemoryWirePort): void;
 }

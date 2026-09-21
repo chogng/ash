@@ -3,9 +3,8 @@ import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { DiagnosticHoverController } from "../../browser/diagnosticHoverController.js";
-import { type TextMeasurer } from "../../../../common/viewModel/textMeasurer.js";
 import { TextModel } from "../../../../common/model/textModel.js";
-
+import { type TextMeasurer } from '../../../../common/viewModel.js';
 
 class FixedTextMeasurer implements TextMeasurer {
 	readonly horizontalPadding = 24;

@@ -4,7 +4,6 @@ import { JSDOM } from 'jsdom';
 import { h } from '../../../../../base/browser/dom.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { type ICodeEditor } from '../../../../browser/editorBrowser.js';
-import { type TextMeasurer } from '../../../../common/viewModel/textMeasurer.js';
 import { CursorsController } from '../../../../common/cursor/cursor.js';
 import { Selection, type ISelection } from '../../../../common/core/selection.js';
 import { Position } from '../../../../common/core/position.js';
@@ -12,6 +11,7 @@ import { Range } from '../../../../common/core/range.js';
 import { TextDecorationCollection } from '../../../../common/model/decorationCollection.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
+import { type TextMeasurer } from '../../../../common/viewModel.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 for (const [name, value] of Object.entries({

@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { classifyTextModelSize, TEXT_MODEL_LARGE_FILE_LIMITS } from "../../common/model/textModelLargeFile.js";
-import { TextModel } from '../../common/model/textModel.js';
+import { classifyTextModelSize, TEXT_MODEL_LARGE_FILE_LIMITS, TextModel } from '../../common/model/textModel.js';
 
 test("text model large-file policy follows the fixed editor limits", () => {
 	assert.deepEqual(classifyTextModelSize(1, 1), {

@@ -4,13 +4,11 @@ import { CharCode } from '../../../../base/common/charCode.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, MutableDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { type EditorVisualLine, type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
-import { type EditorLineRange } from '../../../common/viewModel/editorViewportContracts.js';
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { type TextModelChange } from '../../../common/core/textChange.js';
 import { type ViewportData } from '../../../common/viewLayout/viewLinesViewportData.js';
 import { type TextModel } from '../../../common/model/textModel.js';
-import { type TextMeasurer } from '../../../common/viewModel/textMeasurer.js';
 import { type IEditorConfiguration } from '../../../common/config/editorConfiguration.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { type ScrollType } from '../../../common/editorCommon.js';
@@ -24,6 +22,7 @@ import { ViewLayer } from '../../view/viewLayer.js';
 import { FloatHorizontalRange, HorizontalPosition, HorizontalRange, type IViewLines, LineVisibleRanges, type RestrictedRenderingContext, type VisibleRanges } from '../../view/renderingContext.js';
 import { ViewPart } from '../../view/viewPart.js';
 import { type ViewGpuContext } from '../../gpu/viewGpuContext.js';
+import { type EditorLineRange, type TextMeasurer } from '../../../common/viewModel.js';
 
 export interface ViewLinesOptions {
 	readonly host: HTMLElement;

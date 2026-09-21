@@ -7,7 +7,7 @@ import { TextModel } from "../../common/model/textModel.js";
 import { EditorVisualLineProjection } from "../../common/viewModel/modelLineProjection.js";
 import { createStanzaVisualRangeRectangles } from "../../common/viewModel/visualRangeGeometry.js";
 import { createStanzaVisualSelectionGeometry } from "../../common/viewModel/visualSelectionGeometry.js";
-import { type TextMeasurer } from "../../common/viewModel/textMeasurer.js";
+import { type TextMeasurer } from '../../common/viewModel.js';
 
 test("visual selection geometry splits one logical range across wrapped fragments", () => {
 	using model = new TextModel("abcdef\ngh");

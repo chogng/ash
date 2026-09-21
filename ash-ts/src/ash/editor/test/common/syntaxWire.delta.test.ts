@@ -1,14 +1,14 @@
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
-import { syntaxWireCodec } from '../../common/services/editorWorkerWire.js';
 import { SYNTAX_DIAGNOSTIC_LANE, SYNTAX_TOKEN_LANE, type SyntaxLane, type SyntaxResult } from '../../common/languages.js';
 import { testTokens, testDiagnostics } from './testSyntaxProvider.js';
-import { type LanguageWorkerWireResultState } from '../../common/services/languageWorkerWire.js';
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { type TextSnapshot } from "../../common/core/textChange.js";
 import { TextModel } from "../../common/model/textModel.js";
 import type { LanguageToken } from '../../common/tokens/languageTokens.js';
+import { syntaxWireCodec } from '../../common/services/semanticTokensDto.js';
+import { type WorkerTextModelResult } from '../../common/services/textModelSync/textModelSync.protocol.js';
 
 test('Syntax wire preserves metadata-only token changes and removals in deltas', () => {
 	using model = new TextModel('first\nsecond');
@@ -45,8 +45,8 @@ test('Syntax wire preserves metadata-only token changes and removals in deltas',
 
 test("Syntax wire deltas stay equal to full results across random edits", () => {
 	using model = new TextModel("const value = `start\nmiddle\nend`;\nif (value) {\n  return 1;\n}");
-	const serverStates = new Map<SyntaxLane, LanguageWorkerWireResultState<SyntaxResult>>();
-	const clientStates = new Map<SyntaxLane, LanguageWorkerWireResultState<SyntaxResult>>();
+	const serverStates = new Map<SyntaxLane, WorkerTextModelResult<SyntaxResult>>();
+	const clientStates = new Map<SyntaxLane, WorkerTextModelResult<SyntaxResult>>();
 	const insertions = ["x", " ", "\n", "/*", "*/", "`", "'", "(", ")", "const"];
 	let requestId = 1;
 	let seed = 0x34de17a;
@@ -184,8 +184,8 @@ test("Syntax wire isolates two distant edits into multiple item splices", () => 
 test("Syntax wire multi-splices stay exact across repeated disjoint transactions", () => {
 	const lines = Array.from({ length: 300 }, (_, index) => `const uniqueValue${index} = ${index};`);
 	using model = new TextModel(lines.join("\n"));
-	let serverState: LanguageWorkerWireResultState<SyntaxResult> | undefined;
-	let clientState: LanguageWorkerWireResultState<SyntaxResult> | undefined;
+	let serverState: WorkerTextModelResult<SyntaxResult> | undefined;
+	let clientState: WorkerTextModelResult<SyntaxResult> | undefined;
 	let seed = 0x36a17;
 	let multiSpliceCount = 0;
 

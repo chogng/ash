@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
-import { type TextMeasurer } from "../../../../common/viewModel/textMeasurer.js";
 import { TextModel } from "../../../../common/model/textModel.js";
 import { h } from "../../../../../base/browser/dom.js";
+import { type TextMeasurer } from '../../../../common/viewModel.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({

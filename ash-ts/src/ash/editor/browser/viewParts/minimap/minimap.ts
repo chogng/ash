@@ -1,7 +1,6 @@
 import './minimap.css';
 import { MinimapTokensColorTracker } from '../../../common/viewModel/minimapTokensColorTracker.js';
 import { TokenizationRegistry } from '../../../common/languages.js';
-
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
@@ -9,13 +8,13 @@ import { clamp } from '../../../../base/common/numbers.js';
 import { type EditorMinimapLayoutInfo, EditorOption, RenderMinimap } from '../../../common/config/editorOptions.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { type SemanticTokenSource } from '../../../common/tokens/languageTokens.js';
-import { type EditorScrollPosition } from '../../../common/viewModel/editorViewportContracts.js';
 import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import { type EditorViewportLayout } from '../../../common/viewLayout/viewLayout.js';
 import { type RestrictedRenderingContext } from '../../view/renderingContext.js';
 import { ViewPart, PartFingerprint, PartFingerprints } from '../../view/viewPart.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { Range } from '../../../common/core/range.js';
+import { type EditorScrollPosition } from '../../../common/viewModel.js';
 
 export interface MinimapOptions {
 	readonly host: HTMLElement;

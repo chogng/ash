@@ -1,9 +1,8 @@
 import { type Selection } from "../core/selection.js";
 import { type TextModel } from "../model/textModel.js";
 import { type EditorVisualLineProjection } from "./modelLineProjection.js";
-import { type EditorLineRange } from "./editorViewportContracts.js";
-import { type TextMeasurer } from "./textMeasurer.js";
 import { createStanzaVisualRangeRectangles } from "./visualRangeGeometry.js";
+import { type EditorLineRange, type TextMeasurer } from '../viewModel.js';
 
 export interface VisualSelectionRectangle {
 	readonly selectionIndex: number;

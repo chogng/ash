@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
-import { type TextMeasurer } from "../../common/viewModel/textMeasurer.js";
 import { SemanticTokenPresentation, createLanguageTokenStore, type LanguageToken } from '../../common/tokens/languageTokens.js';
 import { LanguageTokenLineIndex, StyledTokenSource } from '../../common/tokens/languageTokenLineIndex.js';
 import { LanguageResultAcceptance } from '../../common/model/languageResultStore.js';
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
+import { type TextMeasurer } from '../../common/viewModel.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({

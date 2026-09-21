@@ -8,7 +8,6 @@ import '../config/editorConfigurationSchema.js';
 import { EditOperation, type ISingleEditOperation } from '../core/editOperation.js';
 import { Range } from '../core/range.js';
 import { DefaultEndOfLine, EndOfLinePreference, EndOfLineSequence, type ITextBuffer, type ITextBufferFactory, type ITextModel, type ITextModelCreationOptions } from '../model.js';
-import { createPieceTreeTextBuffer } from '../model/textBufferFactory.js';
 import { TextModel, type TextModelUndoRedoSnapshot } from "../model/textModel.js";
 import type { ILanguageSelection, IAshLanguageService } from '../languages/language.js';
 import type { ILanguageConfigurationService } from '../languages/languageConfigurationRegistry.js';
@@ -17,6 +16,7 @@ import { type SyntaxServiceOptions } from '../languages.js';
 import type { IModelService } from "./model.js";
 import type { TextModelEditSource } from '../textModelEditSource.js';
 import type { ITextResourcePropertiesService } from './textResourceConfiguration.js';
+import { createPieceTreeTextBuffer } from '../model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.js';
 
 export interface ModelServiceTokenizationOptions {
 	readonly syntaxService?: SyntaxServiceOptions;

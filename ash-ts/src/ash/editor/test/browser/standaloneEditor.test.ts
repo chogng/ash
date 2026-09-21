@@ -1,7 +1,5 @@
 import { Emitter } from '../../../base/common/event.js';
-import { LanguageWorkerWireServer } from '../../common/services/languageWorkerWire.js';
-import { editorWorkerWireCodec } from '../../common/services/editorWorkerWire.js';
-import { EditorWorker } from '../../common/services/editorWebWorker.js';
+import { editorWorkerWireCodec, EditorWorker } from '../../common/services/editorWebWorker.js';
 import { FormattingConflicts, FormattingKind, FormattingMode } from '../../contrib/format/browser/format.js';
 import { type DocumentFormattingEditProvider, type OnTypeFormattingEditProvider } from '../../common/languages.js';
 import { TextModel } from '../../common/model/textModel.js';
@@ -18,6 +16,7 @@ import { EditorContributionInstantiation } from '../../browser/editorExtensions.
 import { TestLanguageConfigurationService } from '../common/modes/testLanguageConfigurationService.js';
 import { LanguageHoverService } from '../../contrib/hover/common/hover.js';
 import { StandaloneServiceCollection, StandaloneServices } from "../../standalone/browser/standaloneServices.js";
+import { WorkerTextModelSyncServer } from '../../common/services/textModelSync/textModelSync.impl.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 const forcedColors = new browserEnvironment.window.EventTarget();
@@ -36,7 +35,7 @@ let createdWorkerCount = 0;
 let terminatedWorkerCount = 0;
 class TestWorker extends browserEnvironment.window.EventTarget {
 	private readonly incoming = new Emitter<unknown>();
-	private readonly server = new LanguageWorkerWireServer({
+	private readonly server = new WorkerTextModelSyncServer({
 		onMessage: this.incoming.event,
 		send: message => {
 			const data = structuredClone(message);

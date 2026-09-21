@@ -3,9 +3,9 @@ import { h } from '../../../base/browser/dom.js';
 import { FastDomNode } from '../../../base/browser/fastDomNode.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { type EditorVisualLine, type EditorVisualLineProjection } from '../../common/viewModel/modelLineProjection.js';
-import { type EditorLineRange } from '../../common/viewModel/editorViewportContracts.js';
 import { type ViewportData } from '../../common/viewLayout/viewLinesViewportData.js';
 import { type RestrictedRenderingContext } from './renderingContext.js';
+import { type EditorLineRange } from '../../common/viewModel.js';
 
 export interface ViewLayerLineRenderer<TLine> {
 	createLine(visualLineIndex: number): TLine;

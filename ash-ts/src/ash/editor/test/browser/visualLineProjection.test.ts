@@ -5,11 +5,11 @@ import { EditorLineWrapping, WrappingIndent } from "../../common/config/editorOp
 import { FontInfo } from "../../common/config/fontInfo.js";
 import { ViewModelLinesFromModelAsIs, ViewModelLinesFromProjectedModel } from "../../common/viewModel/viewModelLines.js";
 import { DOMLineBreaksComputerFactory } from "../../browser/view/domLineBreaksComputer.js";
-import { type TextMeasurer } from "../../common/viewModel/textMeasurer.js";
 import { TextModel } from "../../common/model/textModel.js";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { PositionAffinity } from "../../common/model.js";
+import { type TextMeasurer } from '../../common/viewModel.js';
 
 test("browser visual-line projection wraps at grapheme boundaries and rebuilds after edits", () => {
 	using model = new TextModel("ab😀cd\nxyz");

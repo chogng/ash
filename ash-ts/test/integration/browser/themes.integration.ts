@@ -14,8 +14,8 @@ import type { ITextMateService } from '../../../src/ash/workbench/services/textM
 import { createTextMateSyntaxWorkerFactory } from '../../../src/ash/workbench/services/textMate/browser/textMateSyntaxWorkerClient.js';
 import { TextMateGrammarCatalogModel } from '../../../src/ash/workbench/services/textMate/common/textMateGrammarCatalog.js';
 import { TextMateScopeThemeModel } from '../../../src/ash/workbench/services/textMate/common/textMateScopeTheme.js';
-import { SyntaxProviderRegistry } from '../../../src/ash/editor/common/languageFeatureRegistry.js';
-import { SyntaxService } from '../../../src/ash/editor/common/model/syntaxService.js';
+import { LanguageRequestCoordinator } from '../../../src/ash/editor/common/model/languageRequestCoordinator.js';
+import type { LanguageToken } from '../../../src/ash/editor/common/tokens/languageTokens.js';
 import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
 
 declare global {
@@ -35,13 +35,15 @@ window.tokenizeInTextMateWorker = async () => {
 		}],
 	});
 	using scopeTheme = new TextMateScopeThemeModel();
-	using providers = new SyntaxProviderRegistry();
 	using model = new TextModel('if');
-	using syntax = new SyntaxService(model, providers, { workerFactory: createTextMateSyntaxWorkerFactory(catalogs, scopeTheme) });
+	using syntax = new LanguageRequestCoordinator(model, createTextMateSyntaxWorkerFactory(catalogs, scopeTheme));
 	const results: { type: string; modifiers: readonly string[]; presentation?: { foreground?: string; fontStyle?: readonly string[] } }[] = [];
 	const capture = async (): Promise<void> => {
-		await syntax.requestTokens('demo');
-		const token = syntax.tokens.result?.value.tokens[0];
+		let token: LanguageToken | undefined;
+		await syntax.runLatest('tokens', { languageId: 'demo' }, result => {
+			if (result.value.lane !== 'tokens') throw new Error('Unexpected syntax result lane');
+			token = result.value.value.tokens[0];
+		});
 		if (!token) {
 			throw new Error('TextMate Worker did not tokenize the registered grammar');
 		}

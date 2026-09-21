@@ -5,8 +5,6 @@ import { Disposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
 import { DefaultEndOfLine } from '../../common/model.js';
 import { ModelService } from '../../common/services/modelService.js';
-import { createPieceTreeTextBuffer } from '../../common/model/textBufferFactory.js';
-import { TEXT_MODEL_LARGE_FILE_LIMITS } from '../../common/model/textModelLargeFile.js';
 import { EditSources } from '../../common/textModelEditSource.js';
 import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
 import type { ITextResourcePropertiesService } from '../../common/services/textResourceConfiguration.js';
@@ -21,6 +19,8 @@ import {
 	type IConfigurationValue,
 } from '../../../platform/configuration/common/configuration.js';
 import type { IWorkspaceFolder } from '../../../platform/workspace/common/workspace.js';
+import { createPieceTreeTextBuffer } from '../../common/model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.js';
+import { TEXT_MODEL_LARGE_FILE_LIMITS } from '../../common/model/textModel.js';
 
 test('ModelService owns model creation options and applies indentation detection', () => {
 	using configuration = new TestResourceConfigurationService();

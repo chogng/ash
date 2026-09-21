@@ -6,7 +6,6 @@ import { errorHandler } from '../../../../../base/common/errors.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { type IStorageService, type IStorageValueChangeEvent, type IWillSaveStateEvent, StorageScope, StorageTarget, type StorageValue, WillSaveStateReason } from '../../../../../platform/storage/common/storage.js';
-import { type TextMeasurer } from '../../../../common/viewModel/textMeasurer.js';
 import { type ICodeEditor, type IEditorMouseEvent, MouseTargetType } from '../../../../browser/editorBrowser.js';
 import { type View as EditorView } from '../../../../browser/view.js';
 import { Position } from '../../../../common/core/position.js';
@@ -16,6 +15,7 @@ import { LanguageFeatureRegistry } from '../../../../common/languageFeatureRegis
 import { TextModel } from '../../../../common/model/textModel.js';
 import { bindCodeLensCacheStorage, codeLensCache } from '../../browser/codeLensCache.js';
 import { CodeLensModel, getCodeLensModel } from '../../browser/codelens.js';
+import { type TextMeasurer } from '../../../../common/viewModel.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 for (const [name, value] of Object.entries({

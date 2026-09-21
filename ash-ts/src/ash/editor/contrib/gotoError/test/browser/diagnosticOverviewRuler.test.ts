@@ -3,7 +3,7 @@ import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { OverviewRulerZone } from '../../../../common/viewModel/overviewZoneManager.js';
 import { TextModel } from '../../../../common/model/textModel.js';
-import { type TextMeasurer } from '../../../../common/viewModel/textMeasurer.js';
+import { type TextMeasurer } from '../../../../common/viewModel.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 for (const [name, value] of Object.entries({

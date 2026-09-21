@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
-import { type TextMeasurer } from "../../common/viewModel/textMeasurer.js";
 import { TextDecorationCollection } from "../../common/model/decorationCollection.js";
 import { LanguageDiagnosticDecorationBridge } from "../../contrib/gotoError/common/diagnosticDecorations.js";
 import { LanguageResultAcceptance, createLanguageDiagnosticStore } from '../../common/model/languageResultStore.js';
@@ -12,6 +11,7 @@ import { TextModel } from "../../common/model/textModel.js";
 import { GlyphMarginLane, MinimapPosition, OverviewRulerLane, TrackedRangeStickiness } from '../../common/model.js';
 import { themeColorFromId } from '../../../base/common/themables.js';
 import { ColorId, darkColorTheme } from '../../../platform/theme/common/colorTheme.js';
+import { type TextMeasurer } from '../../common/viewModel.js';
 
 const browserEnvironment = new JSDOM("<!doctype html><body></body>");
 for (const [name, value] of Object.entries({

@@ -1,7 +1,7 @@
 import { CharCode } from '../../../../base/common/charCode.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import { containsRTL, isBasicASCII } from '../../../../base/common/strings.js';
-import { DefaultEndOfLine, type ITextBufferBuilder, type ITextBufferFactory } from '../../model.js';
+import { DefaultEndOfLine, type ITextBuffer, type ITextBufferBuilder, type ITextBufferFactory } from '../../model.js';
 import { PieceTreeTextBuffer } from './pieceTreeTextBuffer.js';
 
 class PieceTreeTextBufferFactory implements ITextBufferFactory {
@@ -126,4 +126,11 @@ export class PieceTreeTextBufferBuilder implements ITextBufferBuilder {
 		this._hasPreviousChar = false;
 		this._acceptChunk2(String.fromCharCode(this._previousChar));
 	}
+}
+
+/** Selects the private TextBuffer implementation used by TextModel and worker mirrors. */
+export function createPieceTreeTextBuffer(text: string, defaultEOL: DefaultEndOfLine = DefaultEndOfLine.LF): ITextBuffer {
+	const builder = new PieceTreeTextBufferBuilder();
+	builder.acceptChunk(text);
+	return builder.finish().create(defaultEOL).textBuffer;
 }

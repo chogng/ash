@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
 import { toDisposable } from "../../../base/common/lifecycle.js";
-import { type TextMeasurer } from "../../common/viewModel/textMeasurer.js";
 import { LineWidthIndex } from "../../browser/viewParts/viewLines/viewLines.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
+import { type TextMeasurer } from '../../common/viewModel.js';
 
 test("LineWidthIndex matches full scans across random transactions", () => {
 	const random = seededRandom(0xA17A);

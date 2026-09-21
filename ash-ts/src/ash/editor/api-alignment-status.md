@@ -1,5 +1,64 @@
 # Editor API 对齐状态
 
+## common 目录清理（2026-09-21）
+
+按用户要求检查整个 `common` 文件集合、生产引用和测试引用：清理前 212 个 TypeScript 文件，169 个有 VS Code 同路径、43 个仅 Ash；本批删除 9 个旧文件，新增上游同路径的 `services/editorWorker.ts` 契约，清理后 204 个文件（170 个同路径、34 个仅 Ash）。文件数只描述目录变化，不代表完整 VS Code API 已对齐。
+
+准入链：补全/格式化与 TextMate → 编辑器 Worker 客户端 → 通用消息传输与文本同步 → 当前版本的结果应用；复用请求取消、镜像同步、结果确认、增量属性和真实浏览器 Worker 测试。原工作区干净。本批新增通用 Worker 模块独立实现 Ash 已有的消息行为，不复制上游实现；同路径不表示已经提供上游完整代理 API。
+
+| 删除的文件（相对 common） | 处理结果 |
+| --- | --- |
+| `services/languageWorkerWire.ts` | 请求、取消、错误及端口契约归 `base/common/worker/webWorker.ts`；镜像与请求快照归已有 `services/textModelSync`；结果基线归分词 DTO 模块。 |
+| `services/editorWorkerWire.ts` | 编辑请求契约归 `services/editorWorker.ts`；编辑与补全编解码归 `editorWebWorker.ts`；语法结果及增量编解码归 `semanticTokensDto.ts`。 |
+| `model/syntaxService.ts` | 分词请求、token store 直接由 `model/tokens/tokenizationTextModelPart.ts` 管理；提供者优先级归 Worker 实现。删除没有生产请求入口的重复诊断存储与 `requestAll` 包装；模型已有的诊断流程继续工作。 |
+| `model/textBufferFactory.ts` | 创建逻辑收回现有 PieceTree builder，调用方直接使用。 |
+| `model/textBufferSnapshot.ts` | 公共快照契约归 `model.ts`；唯一消费者 PieceTree 私有实现分段快照。 |
+| `model/textModelLargeFile.ts` | 大文件策略收回唯一生产使用方 `textModel.ts`。 |
+| `viewModel/rangeGeometry.ts` | 删除无生产调用的逻辑行矩形算法；唯一在用的枚举收回视觉行几何实现。 |
+| `viewModel/textMeasurer.ts`、`viewModel/editorViewportContracts.ts` | 共享视图契约归已有 `common/viewModel.ts`，删除零散契约文件。 |
+
+旧文件没有别名或转发入口。实现、生产引用、单测、浏览器场景及架构断言一起迁移；两个重复的 SyntaxService 并发/取消测试由既有 `languageRequestCoordinator` 测试覆盖，提供者选择和错误隔离测试改为直接验证 Worker。
+
+### 剩余 34 个仅 Ash 文件
+
+以下文件保留当前独立职责，不能按上游是否有同名文件删除。判断依据为生产调用与状态归属；没有宣称逐行验证每一种行为，也没有把公开 API 差异标为已解决。
+
+| 文件（相对 common） | 保留理由与生产调用方 |
+| --- | --- |
+| `commands/documentCommands.ts` | 富文档事务命令；富文档 widget、citation 调用。 |
+| `core/documentPosition.ts`、`core/documentSelection.ts` | 富文档坐标与选区；widget、事务和协作使用。 |
+| `core/textSegmentation.ts` | 文本分段算法；编辑输入、折行和单词补全共享。 |
+| `diff/diffComputationService.ts`、`diff/lineDiff.ts` | 版本绑定计算契约和行差异结果；后端适配器、diff widget、SCM 使用，不能换名后冒充上游不同的结果契约。 |
+| `diff/diffModel.ts` | 两个模型的差异请求状态与取消；diff、多文件 diff、SCM 使用。 |
+| `model/decorationCollection.ts`、`model/trackedRange.ts` | 装饰集合与编辑后位置跟踪；多种 contribution 和模型使用。 |
+| `model/document.ts`、`model/documentSchema.ts` | 富文档类型与 schema 校验；模型、序列化和 Academic 使用。 |
+| `model/documentDecoration.ts`、`model/documentFragment.ts` | 富文档装饰映射与片段操作；模型插件、widget 使用。 |
+| `model/documentHistory.ts`、`model/historyCoalescing.ts` | 文档历史与编辑合并规则；TextModel、editStack、协作使用。 |
+| `model/documentOutline.ts`、`model/documentText.ts` | 富文档提纲与文本转换；widget、pane、working copy 使用。 |
+| `model/documentPlugin.ts` | 事务插件契约；TextModel、文档 profile 使用。 |
+| `model/documentSerialization.ts`、`model/documentTransactionSerialization.ts` | 文档与事务的持久化/传输边界；working copy、协作使用。 |
+| `model/documentTransaction.ts` | 富文档事务和选区映射；TextModel、命令、协作使用。 |
+| `model/lineDocument.ts`、`model/lineDocumentProjection.ts`、`model/textModelBlockState.ts` | TextModel 内的行身份、富文档语义与状态映射，不是第二套文本模型。 |
+| `model/languageRequestCoordinator.ts`、`model/languageResultStore.ts` | 模型版本、取消与结果接受；补全、诊断、分词各自持有实例，共享同一实现。 |
+| `model/tokens/semanticTokensTextModelPart.ts` | 语义 token 提供者请求与样式状态；模型分词组件使用。 |
+| `services/documentCollaborationService.ts` | 富文档协作边界；编辑器协作贡献和 Workbench 适配器使用。 |
+| `tokens/languageTokenLineIndex.ts`、`tokens/languageTokens.ts` | Ash token 数据与增量行索引；分词、样式、渲染器使用。 |
+| `viewModel/pointerHitTest.ts`、`viewModel/visualCursorNavigation.ts` | 命中测试与视觉导航算法；View 和输入控制器使用。 |
+| `viewModel/visualRangeGeometry.ts`、`viewModel/visualSelectionGeometry.ts` | 折行后的范围与选区几何；光标和选区绘制使用。 |
+
+同路径文件还检查了引用入口：`editorWebWorkerMain.ts` 经 Worker URL 加载；`core/ranges/rangeMapping.ts`、`rangeSingleLine.ts`、`core/2d/rect.ts`、`core/edits/arrayEdit.ts` 当前没有静态生产导入，属于已有上游同路径基础 API，并有独立测试，本批没有借清理删除这些公开能力。
+
+### 本批验证
+
+- `check-editor-alignment.mjs --test=unit` 完成：结构检查、Stanza 类型检查、Editor 与关联 Workbench 单测 228/228 文件通过；无新增源码 `.js` 产物。
+- 通用 Worker 和两份编辑器架构测试 3/3 文件通过（28 项），覆盖请求取消隔离、通知失败、目录职责和单一模型约束。
+- `build:stanza`、`build:renderer` 通过，无新增构建 warning。
+- Playwright 全量 309/310 项通过。唯一失败为 GPU 场景撤销后的 `punctuationLineAdvanceMatchesDom`；当前代码定向复跑和改动前 HEAD 对照均在同一断言失败。对照后本批 85 个已跟踪 TypeScript 路径完整恢复，无覆盖冲突。本批未改动 GPU 实现或放宽断言。
+- 测试仍报告既有 JSDOM Canvas 能力提示与 Playwright 颜色环境变量提示；CSS 审计报告已有 7 份品牌替换差异，本批未修改 CSS。
+- 旧源文件 import、旧语言 Worker 协议和 SyntaxService 引用已清零；同步更新几何文档和架构测试的归属。
+
+旧章节保留当时的审计数据，本批归属优先于旧“最终保留”结论。
+
 ## 语言目录清理（2026-09-21）
 
 按用户“全部处理完”的要求，`common/languages` 的目录归属清理已完成：44 个 TypeScript 文件收敛为 15 个，全部有 VS Code 同路径；6 个剩余旧文件均已退出，没有保留转发入口。仍在使用的 Ash 模型和 Worker 机制按实际职责保留在下表归属中，不能把同路径数量视为整个 Editor 的 API 一致性证明。下面旧审计中的文件名与数量保留为当时记录。
@@ -26,7 +85,7 @@
 
 通信层续批修复：语法增量比较遗漏 token 的嵌入语言、括号标记和显示属性，导致文本未变时沿用旧结果。新增测试先复现失败，再补全比较；增量添加/移除属性、随机编辑、远距离编辑、错误基线、取消和镜像同步共 4 份定向单测（30 项）通过。4 项 Chromium 场景通过，增强后的真实 TextMate Worker 主题场景再跑通过，验证相同文本与 token 类型下颜色及字体更新。Stanza/Renderer 构建通过；仅保留既有 Playwright 颜色环境变量提示。本批收拢 Ash 通信实现，没有将其标为 VS Code 标准协议。
 
-最终保留的四个 Ash 专用实现是 `common/model/languageRequestCoordinator.ts`、`common/model/languageResultStore.ts`、`common/model/syntaxService.ts` 和 `common/services/languageWorkerWire.ts`。这些文件分别持有独立的请求、模型结果、语法调度和传输生命周期，属于本次已处理的明确归属，不是待清理项，也不宣称是上游标准 API。
+当时保留的四个 Ash 专用实现是 `common/model/languageRequestCoordinator.ts`、`common/model/languageResultStore.ts`、`common/model/syntaxService.ts` 和 `common/services/languageWorkerWire.ts`。这些文件分别持有独立的请求、模型结果、语法调度和传输生命周期，该历史结论已由上方 common 清理重新审查，不作为永久保留依据。
 
 收尾验证：Editor 全量单测 228/228 文件通过；Workbench 语言、诊断和 TextMate 定向 8/8 文件（37 项）通过；54 项 Chromium 场景通过。基础校验去重后复跑 4 份单测和 3 项浏览器场景通过；Stanza/Renderer 构建、目录对照、旧引用检查及结构审计通过。复用现有请求取消、过期结果、销毁、镜像恢复和增量属性回归，未新增重复测试。保留既有 JSDOM Canvas 与 Playwright 颜色环境提示，无新增构建 warning。
 

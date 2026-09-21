@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { URI } from '../../../../../base/common/uri.js';
-import { type TextMeasurer } from '../../../../common/viewModel/textMeasurer.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
@@ -12,6 +11,7 @@ import { TextDecorationCollection } from '../../../../common/model/decorationCol
 import { TextModel } from '../../../../common/model/textModel.js';
 import { TestLanguageFeaturesService } from '../../../../test/common/testLanguageFeaturesService.js';
 import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
+import { type TextMeasurer } from '../../../../common/viewModel.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 class TestResizeObserver {

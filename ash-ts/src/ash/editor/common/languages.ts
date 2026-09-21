@@ -1286,8 +1286,3 @@ export interface SyntaxServiceOptions {
 	readonly workerDecorator?: SyntaxWorkerDecorator;
 	readonly onProviderError?: SyntaxProviderErrorHandler;
 }
-
-export interface SyntaxRequestOutcomes {
-	readonly tokens: LanguageRequestOutcome;
-	readonly diagnostics: LanguageRequestOutcome;
-}

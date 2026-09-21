@@ -1,16 +1,15 @@
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
-import { syntaxWireCodec } from '../../common/services/editorWorkerWire.js';
 import { SYNTAX_TOKEN_LANE, type SyntaxResult } from '../../common/languages.js';
 import { testTokens } from './testSyntaxProvider.js';
 import { LanguageResultAcceptance, LanguageResultStoreChangeReason } from '../../common/model/languageResultStore.js';
 import { LanguageTokenLineIndex } from "../../common/tokens/languageTokenLineIndex.js";
-import { attachLanguageTokenResultDelta } from '../../common/services/semanticTokensDto.js';
+import { syntaxWireCodec, attachLanguageTokenResultDelta } from '../../common/services/semanticTokensDto.js';
 import { createLanguageTokenSnapshotNormalizer, createLanguageTokenStore, type LanguageToken } from '../../common/tokens/languageTokens.js';
-import { type LanguageWorkerWireResultState } from '../../common/services/languageWorkerWire.js';
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";
+import { type WorkerTextModelResult } from '../../common/services/textModelSync/textModelSync.protocol.js';
 
 test("Token line index groups sparse lines and answers constant-time line queries", () => {
 	using model = new TextModel("const one = 1;\n\nreturn one;");
@@ -330,8 +329,8 @@ test("Token line index matches full results across random wire deltas", () => {
 	using store = createLanguageTokenStore(model);
 	using index = new LanguageTokenLineIndex(store);
 	const insertions = ["x", " ", "\n", "/*", "*/", "`", "'", "(", ")", "const"];
-	let serverState: LanguageWorkerWireResultState<SyntaxResult> | undefined;
-	let clientState: LanguageWorkerWireResultState<SyntaxResult> | undefined;
+	let serverState: WorkerTextModelResult<SyntaxResult> | undefined;
+	let clientState: WorkerTextModelResult<SyntaxResult> | undefined;
 	let seed = 0x3511de;
 	let reusedLineCount = 0;
 	using listener = index.onDidChange(event => {
