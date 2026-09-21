@@ -2,7 +2,7 @@
 
 ## 语言目录清理（2026-09-21）
 
-按本次用户的清理要求处理 `common/languages` 中冗余文件。目录从 44 个 TypeScript 文件减少到 24 个：15 个与 VS Code 同路径，另 9 个仍承担语法、版本结果及通信职责。这 9 个文件仍有生产调用，不是可以直接删除的死代码；完整归属和 API 对齐尚未完成。下面旧审计中的文件名与数量保留为当时记录。
+按本次用户的清理要求处理 `common/languages` 中冗余文件。目录从 44 个 TypeScript 文件减少到 21 个：15 个与 VS Code 同路径，另 6 个仍承担语法、版本结果及通信职责。这 6 个文件仍有生产调用，不是可以直接删除的死代码；完整归属和 API 对齐尚未完成。下面旧审计中的文件名与数量保留为当时记录。
 
 | 退出的文件（相对 `common/languages`） | 当前归属或删除原因 |
 | --- | --- |
@@ -16,6 +16,12 @@
 | `completion/languageCompletionService.ts`、`completion/languageCompletions.ts` | 结果契约和结构校验归 `common/languages.ts`；模型请求、结果存储及 snippet 校验归 `contrib/suggest/browser/suggest.ts`，消除 common 对 snippet contribution 的依赖。 |
 | `completion/languageCompletionWire.ts` | 补全编解码归现有 `common/services/editorWorkerWire.ts`，复用坐标和基础值校验。 |
 | `workspaceSymbols.ts` | 提供者契约归 `common/languages.ts`；搜索聚合归 `workbench/contrib/search/common/search.ts`，删除无状态服务包装和没有调用方的 resolve 方法。 |
+| `syntax/syntaxItemDelta.ts`、`syntax/syntaxWireResult.ts` | 只有语法编解码入口使用，合入 `syntax/syntaxWire.ts`；增量算法及结果编解码成为私有实现，不再跨文件导出。 |
+| `languageWorkerWireProtocol.ts` | 消息生成、解码和协议校验合入唯一传输实现 `languageWorkerWire.ts`；外部仅保留 codec 和已确认结果基线契约。 |
+
+通信层续批修复：语法增量比较遗漏 token 的嵌入语言、括号标记和显示属性，导致文本未变时沿用旧结果。新增测试先复现失败，再补全比较；增量添加/移除属性、随机编辑、远距离编辑、错误基线、取消和镜像同步共 4 份定向单测（30 项）通过。4 项 Chromium 场景通过，增强后的真实 TextMate Worker 主题场景再跑通过，验证相同文本与 token 类型下颜色及字体更新。Stanza/Renderer 构建通过；仅保留既有 Playwright 颜色环境变量提示。本批收拢 Ash 通信实现，没有将其标为 VS Code 标准协议。
+
+剩余 6 个 Ash 文件：`languageRequestCoordinator.ts`、`languageResultStore.ts`、`languageResults.ts`、`languageWorkerWire.ts`、`syntax/syntaxService.ts`、`syntax/syntaxWire.ts`。它们仍承担请求生命周期、版本结果、诊断及语法通信，后续调整需按这些实际职责处理。
 
 续批验证：15 份定向单测文件（100 项）、9 项 Chromium 场景、Stanza/Renderer 构建通过。新增回归覆盖无效 snippet 不影响其他提供者，以及取消搜索后不发布迟到结果。浏览器场景覆盖补全选择、snippet 导航/撤销和 TextMate Worker 目录同步及重启。
 

@@ -6,7 +6,7 @@ import { testTokens } from './testSyntaxProvider.js';
 import { LanguageResultAcceptance, LanguageResultStoreChangeReason } from "../../common/languages/languageResultStore.js";
 import { LanguageTokenLineIndex } from "../../common/tokens/languageTokenLineIndex.js";
 import { attachLanguageTokenResultDelta, createLanguageTokenSnapshotNormalizer, createLanguageTokenStore, type LanguageToken } from "../../common/languages/languageResults.js";
-import { type LanguageWorkerWireResultState } from "../../common/languages/languageWorkerWireProtocol.js";
+import { type LanguageWorkerWireResultState } from "../../common/languages/languageWorkerWire.js";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { TextModel } from "../../common/model/textModel.js";

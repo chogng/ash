@@ -20,7 +20,7 @@ import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
 
 declare global {
 	interface Window {
-		tokenizeInTextMateWorker(): Promise<readonly { type: string; modifiers: readonly string[] }[]>;
+		tokenizeInTextMateWorker(): Promise<readonly { type: string; modifiers: readonly string[]; presentation?: { foreground?: string; fontStyle?: readonly string[] } }[]>;
 	}
 }
 
@@ -38,17 +38,21 @@ window.tokenizeInTextMateWorker = async () => {
 	using providers = new SyntaxProviderRegistry();
 	using model = new TextModel('if');
 	using syntax = new SyntaxService(model, providers, { workerFactory: createTextMateSyntaxWorkerFactory(catalogs, scopeTheme) });
-	const results: { type: string; modifiers: readonly string[] }[] = [];
+	const results: { type: string; modifiers: readonly string[]; presentation?: { foreground?: string; fontStyle?: readonly string[] } }[] = [];
 	const capture = async (): Promise<void> => {
 		await syntax.requestTokens('demo');
 		const token = syntax.tokens.result?.value.tokens[0];
 		if (!token) {
 			throw new Error('TextMate Worker did not tokenize the registered grammar');
 		}
-		results.push({ type: token.tokenType, modifiers: token.modifiers });
+		results.push({ type: token.tokenType, modifiers: token.modifiers, ...(token.presentation ? { presentation: token.presentation } : {}) });
 	};
 	await capture();
 	scopeTheme.replace({ revision: 1, rules: [{ selector: 'keyword.control.demo', tokenType: 'keyword', modifiers: ['declaration'] }] });
+	await capture();
+	scopeTheme.replace({ revision: 2, rules: [{ selector: 'keyword.control.demo', tokenType: 'keyword', modifiers: ['declaration'], foreground: '#ff0000', fontStyle: ['italic'] }] });
+	await capture();
+	scopeTheme.replace({ revision: 3, rules: [{ selector: 'keyword.control.demo', tokenType: 'keyword', modifiers: ['declaration'], foreground: '#0000ff', fontStyle: ['bold'] }] });
 	await capture();
 	catalogs.replace({
 		revision: 2,

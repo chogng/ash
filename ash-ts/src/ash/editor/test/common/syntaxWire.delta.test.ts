@@ -3,11 +3,45 @@ import { test } from "mocha";
 import { syntaxWireCodec } from "../../common/languages/syntax/syntaxWire.js";
 import { SYNTAX_DIAGNOSTIC_LANE, SYNTAX_TOKEN_LANE, type SyntaxLane, type SyntaxResult } from "../../common/languages/syntax/syntaxService.js";
 import { testTokens, testDiagnostics } from './testSyntaxProvider.js';
-import { type LanguageWorkerWireResultState } from "../../common/languages/languageWorkerWireProtocol.js";
+import { type LanguageWorkerWireResultState } from "../../common/languages/languageWorkerWire.js";
 import { Position } from "../../common/core/position.js";
 import { Range } from "../../common/core/range.js";
 import { type TextSnapshot } from "../../common/core/textChange.js";
 import { TextModel } from "../../common/model/textModel.js";
+import type { LanguageToken } from '../../common/tokens/languageTokens.js';
+
+test('Syntax wire preserves metadata-only token changes and removals in deltas', () => {
+	using model = new TextModel('first\nsecond');
+	const snapshot = model.createVersionedSnapshot();
+	const first: LanguageToken = {
+		range: new Range(1, 1, 1, 6),
+		tokenType: 'variable',
+		modifiers: [],
+	};
+	const second: LanguageToken = { ...first, range: new Range(2, 1, 2, 7) };
+	const variants: readonly LanguageToken[] = [
+		{ ...first, languageId: 'javascript' },
+		{ ...first, balancedBrackets: false },
+		{ ...first, presentation: { foreground: '#ff0000' } },
+		{ ...first, presentation: { background: '#000000' } },
+		{ ...first, presentation: { fontStyle: ['italic'] } },
+	];
+	for (const variant of variants) {
+		for (const [before, after] of [[first, variant], [variant, first]] as const) {
+			const previous: SyntaxResult = { lane: SYNTAX_TOKEN_LANE, value: { tokens: [before, second] } };
+			const current: SyntaxResult = { lane: SYNTAX_TOKEN_LANE, value: { tokens: [after, second] } };
+			const base = { requestId: 1, snapshot, result: previous };
+			const encoded = syntaxWireCodec.encodeResult(SYNTAX_TOKEN_LANE, current, snapshot, base) as { kind: string };
+			const full = syntaxWireCodec.encodeResult(SYNTAX_TOKEN_LANE, current, snapshot, undefined);
+
+			assert.equal(encoded.kind, 'delta');
+			assert.deepEqual(
+				syntaxWireCodec.decodeResult(SYNTAX_TOKEN_LANE, structuredClone(encoded), snapshot, base),
+				syntaxWireCodec.decodeResult(SYNTAX_TOKEN_LANE, structuredClone(full), snapshot, undefined),
+			);
+		}
+	}
+});
 
 test("Syntax wire deltas stay equal to full results across random edits", () => {
 	using model = new TextModel("const value = `start\nmiddle\nend`;\nif (value) {\n  return 1;\n}");

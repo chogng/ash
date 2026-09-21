@@ -8,6 +8,8 @@ test('TextMate Worker registers its provider at startup and restores current cat
 	expect(await page.evaluate(() => window.tokenizeInTextMateWorker())).toEqual([
 		{ type: 'keyword', modifiers: [] },
 		{ type: 'keyword', modifiers: ['declaration'] },
+		{ type: 'keyword', modifiers: ['declaration'], presentation: { foreground: '#ff0000', fontStyle: ['italic'] } },
+		{ type: 'keyword', modifiers: ['declaration'], presentation: { foreground: '#0000ff', fontStyle: ['bold'] } },
 		{ type: 'string', modifiers: [] },
 		{ type: 'string', modifiers: [] },
 	]);
