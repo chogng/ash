@@ -1,5 +1,34 @@
 # Editor API 对齐状态
 
+## 代码操作查询、解析与应用生命周期（2026-09-21）
+
+准入链：Ctrl/Cmd+. → `codeActionContributions.ts` 装配 → `CodeActionController` 查询公共 registry → 菜单选择原提供者的动作 → 原快照内解析 → 编辑器事务或宿主工作区编辑 → 取消 / 释放拒绝迟到结果。现有独立 `CodeActionService` 只有该控制器一个生产消费者，且解析阶段脱离菜单取消信号；按用户已授权的职责收敛，本批将其逻辑收回已有控制器，原服务文件在调用清零后退出，Git 可恢复。
+
+| 准入路径（相对 editor，另有标注除外） | 存在关系 | 唯一 owner、本批动作与验证 |
+| --- | --- | --- |
+| `contrib/codeAction/browser/codeActionController.ts` | 双方都有 | 统一持有当前查询快照、原动作 / 提供者、解析及菜单状态；注入共享 registry。关闭、模型/语言/选区/提供者/只读变化取消查询和解析，提交前核对版本，防止重复点击重复提交。沿真实菜单验证取消与一次撤销。 |
+| `contrib/codeAction/browser/codeActionContributions.ts` | 双方都有 | 保留诊断装配与注册入口，通过容器创建控制器，停止创建旧服务。 |
+| `contrib/codeAction/common/languageCodeActions.ts` | 既有 Ash 请求载体 | 查询、解析与校验迁出后删除；公共契约仍在 `common/languages.ts`，不新增服务别名。 |
+| `contrib/codeAction/test/browser/codeAction.test.ts` | 双方都有 | 通过真实 Widget 和 contribution 装配保留原提供者身份、禁止串用 resolver 的回归，增加事务和错误边界验证。 |
+| `ash-ts/src/ash/workbench/services/language/test/browser/appServerLanguageProviders.test.ts` | 既有 Ash 测试 | App Server 契约断言直接消费已注册 provider 与公共快照请求，移除旧服务依赖。 |
+| `ash-ts/test/integration/browser/standalone.integration.ts`、`standalone.integration.spec.ts` | 既有 Ash 测试 | 以可控异步 provider 验证真实快捷键、菜单点击、Escape、各类失效、解析期间重复点击与撤销。 |
+| `browser/README.md`、`api-alignment-status.md` | 既有 Ash 文档 | 更新唯一请求 owner、验证结果与剩余标准接口差异。 |
+
+独立实现：沿用 Ash 的 menu/button DOM、View 坐标和既有焦点恢复规则。一个菜单会话只使用一个快照和 AbortSignal，动作条目保存原 provider 与原对象；不以弱映射跨会话保留解析归属。工作区编辑的宿主回调保持不变，取消校验到宿主调用之前为止，已交给宿主的编辑不宣称可撤回。上游只核对公共 provide/resolve 契约、原提供者归属、缺失 edit 时解析以及模型解绑释放场景；不移植内部模型、菜单、灯泡与命令结构，不把本批计为标准 code-action API 全量对齐。
+
+浏览器验证补充准入：真实按钮点击冒泡到正文 pointer/mouse 起始监听后改变选区，使菜单在 click 前失效。控制器在自己的菜单节点阻断这两个起始事件向正文传播，保留按钮默认焦点、click 和键盘路径；同批用 Playwright 真鼠标点击及双击验证，不修改正文指针 owner。
+
+定向验证：27 个 Playwright 场景和 3 份单测文件通过。覆盖查询 / 解析两阶段的八类失效、Escape、原动作与快照身份、鼠标双击与 Enter / 空格激活、一次撤销、禁用 / 错误 / 版本不符结果、更新后的语言、宿主提交完成或失败时保留新菜单，以及提供者错误隔离。
+
+最终验证：
+
+- `check-editor-alignment.mjs --test=all` 通过：233/233 份单测文件、398/398 个 Playwright 用例，以及结构、台账和类型检查。
+- Renderer 与 Stanza 生产构建通过，无新增构建警告。全量测试只保留既有 Canvas、marker / inline-completion fixture 服务及颜色环境提示；本批定向单测无警告。
+- 旧请求服务及代码引用已退出。Editor 生产文件为 539 个：420 个同路径、119 个 Ash 自有；common 文件集合与 80/41 的声明计数不变，没有新增 CSS 或上游品牌引用。
+- 最终结构与 `git diff --check` 检查通过；标准代码操作命令、kind 过滤、灯泡及完整公共 controller 接口仍未在本批实现。
+
+本批开始时工作树为空；上一批行内提示变化已由用户提交。本批改动留在工作区，未创建提交。
+
 ## 行内提示请求与释放归回控制器（2026-09-21）
 
 准入链：Standalone / Workbench 注册行内提示 → `InlayHintsController` 消费公共 registry 与模型快照 → 显示提示 → 编辑、语言/配置变化、提供者退出或功能释放时取消请求并清理节点 → Playwright 从公开编辑器入口验证。当前 `InlayHintsService` 只有该控制器一个生产调用方；按用户已授权的职责收敛，本批把请求选择与校验移回同路径控制器，删除不再有调用方的原文件，Git 可恢复。
@@ -670,7 +699,7 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 | `contrib/smartSelect/common/selectionRanges.ts` | 已检查请求和异步结果校验，消费本轮公共修复。 |
 | `contrib/folding/common/languageFoldingRanges.ts` | 已检查请求和异步结果校验，消费本轮公共修复。 |
 | `contrib/parameterHints/common/languageParameterHints.ts` | 已检查请求和结果校验；提前取消时是否调用提供者待继续核对。 |
-| `contrib/codeAction/common/languageCodeActions.ts` | 已修复：每个 action 保留原提供者及原始对象，resolve 不再调用其他提供者；控制器应用与无 resolver 回归通过。 |
+| `contrib/codeAction/common/languageCodeActions.ts`（已退出） | 原提供者与原始对象归属已迁入 `CodeActionController`；无 resolver 不串用其他提供者，查询与解析共用快照和取消信号。 |
 | `contrib/links/common/languageLinks.ts` | 已检查请求和异步结果校验，消费本轮公共修复。 |
 | `contrib/rename/common/languageRename.ts` | 已检查请求和结果校验；提前取消时是否调用提供者待继续核对。 |
 | `contrib/inlineCompletions/browser/model/provideInlineCompletions.ts` | 已检查提供者请求和异步结果校验，消费本轮公共修复。 |
@@ -690,7 +719,7 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 ### 后续修复：括号删除与代码操作归属
 
 - `bracketEditing.ts`：一个光标命中括号时，其他非空选区不再被清空，选区方向和撤销仍由现有命令执行器维护。
-- `languageCodeActions.ts`：提供者解析自己的原始 action；原提供者没有 resolver 时不会调用其他提供者。弱引用关联不改变对外 action 格式。
+- 原 `languageCodeActions.ts` 的请求逻辑已迁入 `CodeActionController`：菜单条目直接保存原提供者和原始 action，原提供者没有 resolver 时不会调用其他提供者；旧弱引用关联随服务一起退出，对外 action 格式保持不变。
 - 两份定向测试修复前合计 4 项失败，修复后 6 项全部通过；7 项 Playwright 回归通过。Stanza 和 Renderer 正常构建通过，无新增构建 warning。保留既有 JSDOM Canvas 与颜色环境提示。
 
 ### 后续修复：公共服务职责收敛

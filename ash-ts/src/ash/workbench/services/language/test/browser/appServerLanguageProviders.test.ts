@@ -8,7 +8,6 @@ import { LanguageDiagnosticSeverity, createLanguageCompletionInvokeContext, crea
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
 import { LanguageCompletionService } from '../../../../../editor/contrib/suggest/browser/suggest.js';
 import { getWorkspaceSymbols } from '../../../../contrib/search/common/search.js';
-import { CodeActionService } from '../../../../../editor/contrib/codeAction/common/languageCodeActions.js';
 import { LanguageNavigationService } from '../../../../../editor/contrib/gotoSymbol/common/languageNavigation.js';
 import { LanguageHoverService } from '../../../../../editor/contrib/hover/common/hover.js';
 import { ParameterHintsService } from '../../../../../editor/contrib/parameterHints/common/languageParameterHints.js';
@@ -137,11 +136,16 @@ test("App Server rename and code actions preserve ordered workspace file operati
 	using model = new TextModel("value", { languageId: "typescript" });
 	const resource = URI.file("C:\\project\\main.ts");
 	using rename = new RenameService(model, resource, languages.renameProvider);
-	using actions = new CodeActionService(model, resource, languages.codeActionProvider);
 
 	const preparation = await rename.prepareRename("typescript", new Position((0) + 1, (2) + 1));
 	const edit = await rename.provideRenameEdits("typescript", new Position((0) + 1, (2) + 1), "renamed");
-	const available = await actions.provideCodeActions("typescript", Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)), [{ range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)), severity: LanguageDiagnosticSeverity.Warning, message: "demo", source: "test" }]);
+	const signal = new AbortController().signal;
+	const available = await languages.codeActionProvider.ordered(model)[0]!.provideCodeActions({
+		...createLanguageFeatureRequest(model, model.getLanguageId(), signal),
+		resource,
+		range: model.getFullModelRange(),
+		diagnostics: [{ range: model.getFullModelRange(), severity: LanguageDiagnosticSeverity.Warning, message: "demo", source: "test" }],
+	}, signal);
 
 	assert.equal(preparation?.placeholder, "value");
 	assert.equal(edit.entries[0]!.kind, "create");

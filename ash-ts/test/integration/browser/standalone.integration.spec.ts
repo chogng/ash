@@ -993,6 +993,131 @@ for (const kind of ['codeAction', 'rename', 'parameterHints', 'queuedParameterHi
 	});
 }
 
+test.describe('code action requests', () => {
+	test.afterEach(async ({ page }) => {
+		await page.evaluate(() => window.ashStandaloneIntegration?.dispose());
+	});
+
+	for (const phase of ['query', 'resolve'] as const) {
+		for (const reason of ['text', 'selection', 'language', 'provider', 'readonly', 'model', 'contribution', 'dispose'] as const) {
+			test(`${reason} cancels ${phase} and rejects its late edit`, async ({ page }) => {
+				const errors: string[] = [];
+				page.on('pageerror', error => errors.push(error.message));
+				await page.goto('/standalone.html');
+				await page.evaluate(phase => window.ashStandaloneIntegration.prepareCodeActionRequests(phase), phase);
+				await page.keyboard.press('ControlOrMeta+.');
+				if (phase === 'resolve') {
+					await page.getByRole('menuitem', { name: 'Replace value' }).click();
+				}
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readCodeActionRequests().length)).toBe(1);
+				await page.evaluate(reason => window.ashStandaloneIntegration.changeCodeActionState(reason), reason);
+				expect((await page.evaluate(() => window.ashStandaloneIntegration.readCodeActionRequests()))[0]!.aborted).toBe(true);
+				await page.evaluate(() => window.ashStandaloneIntegration.finishCodeActionRequest(0, 'edit'));
+				expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe(reason === 'text' ? 'changed' : 'value');
+				await expect(page.locator('#caller .stanza-editor-code-action')).toBeHidden();
+				expect(errors).toEqual([]);
+			});
+		}
+	}
+
+	for (const activation of ['double click', 'Enter', 'Space']) {
+		test(`${activation} resolves the original action once and applies one undoable edit`, async ({ page }) => {
+			await page.goto('/standalone.html');
+			await page.evaluate(() => window.ashStandaloneIntegration.prepareCodeActionRequests('resolve'));
+			const version = (await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).version;
+			await page.keyboard.press('ControlOrMeta+.');
+			const action = page.getByRole('menuitem', { name: 'Replace value' });
+			if (activation === 'double click') {
+				await action.dblclick();
+			} else {
+				await action.press(activation);
+			}
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.readCodeActionRequests())).toEqual([{
+				phase: 'resolve',
+				languageId: 'plaintext',
+				version,
+				range: '[1,1 -> 1,6]',
+				original: true,
+				sameContext: true,
+				aborted: false,
+			}]);
+			await expect(page.locator('#caller .stanza-editor-code-action')).toHaveAttribute('aria-busy', 'true');
+			await page.evaluate(() => window.ashStandaloneIntegration.finishCodeActionRequest(0, 'edit'));
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('result');
+			await expect(page.locator('#caller .stanza-editor-code-action')).toBeHidden();
+			await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
+			await page.keyboard.press('ControlOrMeta+z');
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('value');
+		});
+	}
+
+	test('Escape cancels a pending query before a menu is displayed', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareCodeActionRequests('query'));
+		await page.keyboard.press('ControlOrMeta+.');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readCodeActionRequests().length)).toBe(1);
+		await page.keyboard.press('Escape');
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readCodeActionRequests()))[0]!.aborted).toBe(true);
+		await page.evaluate(() => window.ashStandaloneIntegration.finishCodeActionRequest(0, 'edit'));
+		await expect(page.locator('#caller .stanza-editor-code-action')).toBeHidden();
+		await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
+	});
+
+	test('Escape cancels resolution without allowing its late failure to close a new menu', async ({ page }) => {
+		const errors: string[] = [];
+		page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareCodeActionRequests('resolve'));
+		await page.keyboard.press('ControlOrMeta+.');
+		await page.getByRole('menuitem', { name: 'Replace value' }).click();
+		await page.keyboard.press('Escape');
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readCodeActionRequests()))[0]!.aborted).toBe(true);
+		await page.keyboard.press('ControlOrMeta+.');
+		const action = page.getByRole('menuitem', { name: 'Replace value' });
+		await expect(action).toBeFocused();
+		await page.evaluate(() => window.ashStandaloneIntegration.finishCodeActionRequest(0, 'error'));
+		await expect(action).toBeFocused();
+		await action.click();
+		await page.evaluate(() => window.ashStandaloneIntegration.finishCodeActionRequest(1, 'edit'));
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('result');
+		expect(errors).toEqual([]);
+	});
+
+	for (const outcome of ['disabled', 'stale', 'error'] as const) {
+		test(`${outcome} resolution does not edit the document`, async ({ page }) => {
+			const errors: string[] = [];
+			page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+			await page.goto('/standalone.html');
+			await page.evaluate(() => window.ashStandaloneIntegration.prepareCodeActionRequests('resolve'));
+			await page.keyboard.press('ControlOrMeta+.');
+			await page.getByRole('menuitem', { name: 'Replace value' }).click();
+			await page.evaluate(outcome => window.ashStandaloneIntegration.finishCodeActionRequest(0, outcome), outcome);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('value');
+			await expect(page.locator('#caller .stanza-editor-code-action')).not.toHaveAttribute('aria-busy');
+			if (outcome === 'disabled') {
+				await expect(page.locator('#caller .stanza-editor-code-action')).toBeHidden();
+				expect(errors).toEqual([]);
+			} else {
+				await expect(page.getByRole('menuitem', { name: 'Replace value' })).toBeVisible();
+				expect(errors.some(message => message.includes(outcome === 'stale' ? 'requested document version' : 'code action resolve failed'))).toBe(true);
+			}
+		});
+	}
+
+	test('a new request uses the current model language', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => {
+			window.ashStandaloneIntegration.prepareCodeActionRequests('query');
+			window.ashStandaloneIntegration.changeCodeActionState('language');
+		});
+		await page.keyboard.press('ControlOrMeta+.');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readCodeActionRequests().map(request => request.languageId))).toEqual(['typescript']);
+		await page.evaluate(() => window.ashStandaloneIntegration.finishCodeActionRequest(0, 'edit'));
+		await page.getByRole('menuitem', { name: 'Replace value' }).click();
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('result');
+	});
+});
+
 test('code action dismissal restores focus only when its menu owns focus', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.stack ?? error.message));

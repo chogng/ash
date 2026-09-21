@@ -92,7 +92,22 @@ interface InlineRequestState {
 	shared: boolean;
 }
 
+type CodeActionOutcome = 'edit' | 'disabled' | 'stale' | 'error';
+interface CodeActionRequestState {
+	phase: 'query' | 'resolve';
+	languageId: string;
+	version: number;
+	range: string;
+	original: boolean;
+	sameContext: boolean;
+	aborted: boolean;
+}
+
 interface StandaloneHarness {
+	prepareCodeActionRequests(phase: 'query' | 'resolve'): void;
+	readCodeActionRequests(): CodeActionRequestState[];
+	finishCodeActionRequest(index: number, outcome: CodeActionOutcome): Promise<void>;
+	changeCodeActionState(reason: 'text' | 'selection' | 'language' | 'provider' | 'readonly' | 'model' | 'contribution' | 'dispose'): void;
 	prepareInlayRequests(): void;
 	readInlayRequests(): { text: string; languageId: string; resource: string | undefined; range: string; aborted: boolean }[];
 	finishInlayRequest(index: number, label: string): Promise<void>;
@@ -267,6 +282,11 @@ let pointerMouseUpEvents = 0;
 const pointerMouseUpListener = callerEditor.onMouseUp(() => { pointerMouseUpEvents += 1; });
 let referenceRegistration: { dispose(): void } | undefined;
 let codeActionRegistration: ReturnType<typeof stanza.languages.registerCodeActionProvider> | undefined;
+const codeActionRequests: {
+	state: Omit<CodeActionRequestState, 'aborted'>;
+	signal: AbortSignal;
+	finish: (outcome: CodeActionOutcome) => void;
+}[] = [];
 let inlineRegistration: ReturnType<typeof stanza.languages.registerInlineCompletionsProvider> | undefined;
 const inlineBracketResources = new DisposableStore();
 const inlineRequests: { kind: string; text: string; languageId: string; signal: AbortSignal; resolve: () => void }[] = [];
@@ -367,6 +387,71 @@ let formattingProvider: { dispose(): void } | undefined;
 let bracketTokenRegistration: { dispose(): void } | undefined;
 
 window.ashStandaloneIntegration = {
+	prepareCodeActionRequests: phase => {
+		codeActionRegistration?.dispose();
+		callerEditor.setValue('value');
+		callerEditor.setSelection(new stanza.Selection(1, 1, 1, 6));
+		callerEditor.focus();
+		const original = { title: 'Replace value', data: { id: 1 } };
+		let queryContext: stanza.LanguageCodeActionRequest;
+		const wait = (
+			requestPhase: 'query' | 'resolve',
+			context: stanza.LanguageCodeActionRequest,
+			signal: AbortSignal,
+			action: stanza.LanguageCodeAction,
+		): Promise<stanza.LanguageCodeAction> => {
+			return new Promise((resolve, reject) => codeActionRequests.push({
+				state: {
+					phase: requestPhase,
+					languageId: context.languageId,
+					version: context.snapshot.version,
+					range: context.range.toString(),
+					original: action === original,
+					sameContext: context === queryContext && signal === queryContext.signal,
+				},
+				signal,
+				finish: outcome => {
+					if (outcome === 'error') {
+						reject(new Error('code action resolve failed'));
+						return;
+					}
+					resolve({
+						...action,
+						...(outcome === 'disabled' ? { disabledReason: 'Action is unavailable' } : {}),
+						edit: { entries: [{
+							kind: 'textDocument', resource: context.resource,
+							version: context.snapshot.version + (outcome === 'stale' ? 1 : 0),
+							edits: [{ range: context.range, text: 'result' }],
+						}] },
+					});
+				},
+			}));
+		};
+		codeActionRegistration = stanza.languages.registerCodeActionProvider('*', {
+			provideCodeActions: async (context, signal) => {
+				queryContext = context;
+				return phase === 'query' ? [await wait('query', context, signal, original)] : [original];
+			},
+			resolveCodeAction: (action, context, signal) => wait('resolve', context, signal, action),
+		});
+	},
+	readCodeActionRequests: () => codeActionRequests.map(request => ({ ...request.state, aborted: request.signal.aborted })),
+	finishCodeActionRequest: async (index, outcome) => {
+		codeActionRequests[index]!.finish(outcome);
+		await Promise.resolve();
+		await Promise.resolve();
+		await Promise.resolve();
+	},
+	changeCodeActionState: reason => {
+		if (reason === 'text') callerEditor.setValue('changed');
+		if (reason === 'selection') callerEditor.setPosition(new stanza.Position(1, 2));
+		if (reason === 'language') callerModel.setLanguage('typescript');
+		if (reason === 'provider') codeActionRegistration?.dispose();
+		if (reason === 'readonly') callerEditor.updateOptions({ readOnly: true });
+		if (reason === 'model') callerEditor.setModel(ownedModel);
+		if (reason === 'contribution') callerEditor.getContribution('editor.contrib.codeAction')!.dispose();
+		if (reason === 'dispose') callerEditor.dispose();
+	},
 	prepareInlayRequests: () => {
 		inlayRegistration?.dispose();
 		callerEditor.setValue('call(value)');
@@ -1635,6 +1720,7 @@ window.ashStandaloneIntegration = {
 	},
 	releaseOwned: () => ownedEditor.dispose(),
 	dispose: () => {
+		for (const request of codeActionRequests) request.finish('disabled');
 		inlayRegistration?.dispose();
 		brokenInlayRegistration?.dispose();
 		for (const request of inlayRequests) request.resolve([]);
