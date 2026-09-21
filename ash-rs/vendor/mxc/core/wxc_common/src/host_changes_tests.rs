@@ -53,9 +53,10 @@ fn serialized_requests_cannot_grant_host_mutation_authority() {
         "prepared_files": {"objects": []}
     }))
     .unwrap();
-    assert!(request.host_acl_scope.is_none());
-    assert!(request.host_filesystem.is_none());
-    assert!(request.prepared_files.is_none());
+    let serialized = serde_json::to_value(request).unwrap();
+    assert!(serialized.get("host_acl_scope").is_none());
+    assert!(serialized.get("host_filesystem").is_none());
+    assert!(serialized.get("prepared_files").is_none());
 }
 
 #[cfg(unix)]

@@ -13,7 +13,7 @@ pub enum ContainmentBackend {
     #[default]
     /// Windows process-level containment. Resolves at runtime to either
     /// AppContainer (legacy OS API) or BaseContainer (newer Windows
-    /// sandbox API exposed via `Experimental_CreateProcessInSandbox`)
+    /// process security environment API)
     /// based purely on host capability — BaseContainer is preferred when
     /// the OS supports it, AppContainer is the downlevel fallback. The
     /// schema version does not influence this choice.
@@ -44,9 +44,8 @@ pub enum ContainmentBackend {
     /// is "Seatbelt"); selected on the wire as `"seatbelt"`.
     Seatbelt,
     /// Bubblewrap — unprivileged Linux sandboxing via user namespaces.
-    /// Experimental — requires `--experimental` flag. Uses `bwrap` to
-    /// create namespace-isolated processes without root privileges.
-    /// Selected on the wire as `"bubblewrap"`.
+    /// Uses `bwrap` to create namespace-isolated processes without root
+    /// privileges. Selected on the wire as `"bubblewrap"`.
     Bubblewrap,
 }
 
@@ -140,7 +139,6 @@ impl From<crate::wire::Containment> for ContainmentBackend {
 #[serde(default)]
 pub struct SeatbeltConfig {
     /// Whether writable filesystem grants may also open pathname Unix sockets.
-    #[serde(default = "default_true")]
     pub allow_unix_sockets: bool,
     /// Embedding-only directories where pathname Unix sockets remain available
     /// when `allow_unix_sockets` is false.
@@ -177,7 +175,7 @@ pub struct SeatbeltConfig {
     /// read/write/ioctl on `/dev/ptmx`. Set to `false` for the tightest
     /// possible sandbox when the inner command does not need to allocate
     /// new ttys.
-    #[serde(rename = "nestedPty", default = "default_true")]
+    #[serde(rename = "nestedPty", default = "default_nested_pty")]
     pub nested_pty: bool,
 
     /// Allow Mach IPC + filesystem access required for `keytar` /
@@ -204,7 +202,7 @@ pub struct SeatbeltConfig {
     pub extra_mach_lookups: Vec<String>,
 }
 
-fn default_true() -> bool {
+fn default_nested_pty() -> bool {
     true
 }
 
@@ -268,7 +266,7 @@ impl Default for WindowsSandboxConfig {
 /// State-aware provision-phase config for the Isolation Session backend.
 /// Nested under `experimental.isolation_session.provision`. The one-shot
 /// surface takes no backend configuration.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct IsolationSessionProvisionConfig {
     /// Optional identifier for the calling application, associating the
@@ -283,9 +281,37 @@ pub struct IsolationSessionProvisionConfig {
     /// without the caller re-supplying it.
     ///
     /// On an unpackaged host an explicitly-supplied empty string is a
-    /// **distinct** value from an absent one and round-trips as such. A JSON
-    /// `null` is a second spelling of absent.
+    /// **distinct** value from an absent one and round-trips as such. The exact
+    /// JSON contract rejects `null`; the retained legacy deserializer treats it
+    /// as absent only for compatibility characterization.
     pub app_id: Option<String>,
+}
+
+/// Runtime-owned state-aware provision config for the WSLc backend.
+///
+/// Image selection and defaulting remain backend responsibilities. Conversion
+/// preserves absent fields and explicitly supplied empty strings unchanged.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct WslcProvisionConfig {
+    /// Container image reference. The backend selects its default when absent.
+    pub image: Option<String>,
+    /// Local image tarball to import instead of pulling an image.
+    pub image_tar_path: Option<String>,
+}
+
+#[cfg(test)]
+impl From<crate::wire::WslcProvisionPhase> for WslcProvisionConfig {
+    fn from(config: crate::wire::WslcProvisionPhase) -> Self {
+        let crate::wire::WslcProvisionPhase {
+            image,
+            image_tar_path,
+        } = config;
+        Self {
+            image,
+            image_tar_path,
+        }
+    }
 }
 
 /// Configuration specific to the LXC container backend.
@@ -306,6 +332,15 @@ pub enum NetworkPolicy {
     Block,
 }
 
+impl NetworkPolicy {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Allow => "allow",
+            Self::Block => "block",
+        }
+    }
+}
+
 impl From<crate::wire::NetworkPolicy> for NetworkPolicy {
     fn from(p: crate::wire::NetworkPolicy) -> Self {
         match p {
@@ -322,6 +357,18 @@ pub enum NetworkEnforcementMode {
     Capabilities,
     Firewall,
     Both,
+}
+
+impl NetworkEnforcementMode {
+    /// Canonical wire string, matching the JSON schema enum. Bounded
+    /// vocabulary for structured logs.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Capabilities => "capabilities",
+            Self::Firewall => "firewall",
+            Self::Both => "both",
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -711,6 +758,7 @@ pub struct ContainerPolicy {
     pub capabilities: Vec<String>,
     pub readwrite_paths: Vec<String>,
     pub readonly_paths: Vec<String>,
+    pub enumerate_paths: Vec<String>,
     pub denied_paths: Vec<String>,
     pub fallback: FallbackPolicy,
     pub default_network_policy: NetworkPolicy,
@@ -937,36 +985,24 @@ pub struct ExperimentalConfig {
     pub windows_sandbox: Option<WindowsSandboxConfig>,
     /// WSL Container (WSLC SDK) backend (experimental).
     pub wslc: Option<WslcConfig>,
-    /// Telemetry configuration (experimental).
-    pub telemetry: Option<TelemetryConfig>,
 }
 
-/// Telemetry configuration parsed from the JSON config `experimental.telemetry` section.
+/// Telemetry configuration parsed from the top-level JSON config `telemetry` section.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TelemetryConfig {
-    /// Explicit telemetry override.
-    /// `Some(true)` = force on, `Some(false)` = force off, `None` = disabled (default off).
+    /// Explicit telemetry opt-in for this invocation.
+    /// `Some(true)` = opt in (still subject to consent and policy),
+    /// `Some(false)` = force off, `None` = off.
     pub enabled: Option<bool>,
+    /// Caller-requested containment kind, retained for telemetry attribution.
+    #[serde(skip)]
+    pub requested_sandbox_kind: Option<&'static str>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ExecutionRequest {
-    /// Embedding-only authority; never supplied by a serialized command.
-    #[serde(skip)]
-    pub host_acl_scope: Option<crate::host_changes::HostAclScope>,
-    /// Host access ceiling, materialized by the chosen implementation.
-    #[serde(skip)]
-    pub host_filesystem: Option<crate::host_changes::HostFilesystemAccess>,
-    #[serde(skip)]
-    pub host_filesystem_roots: Vec<String>,
-    /// Embedding-only requirement that forbids ProcessContainer from selecting
-    /// AppContainer or host-DACL implementations for this request.
-    #[serde(skip)]
-    pub require_process_security_environment: bool,
-    #[serde(skip)]
-    pub prepared_files: Option<crate::filesystem_object::FilesystemSnapshot>,
     /// Host-resolved executable; unavailable to untrusted serialized requests.
     #[serde(skip)]
     pub bubblewrap_executable: Option<std::path::PathBuf>,
@@ -974,8 +1010,32 @@ pub struct ExecutionRequest {
     pub schema_version: String,
     /// Externally assigned container identifier.
     pub container_id: String,
-    /// Environment variables as "KEY=VALUE" strings (from process.env).
-    pub env: Vec<String>,
+    /// Environment variables as "KEY=VALUE" strings (from `process.env`).
+    ///
+    /// Three states, deliberately distinct:
+    ///
+    /// * `None` — the caller supplied no environment. Backends provide a
+    ///   default: on Windows, the user's profile block.
+    /// * `Some(vec![])` — the caller asked for an *empty* environment. This is
+    ///   not the same as `None`, and on the Windows process container it is
+    ///   expected to fail at process creation, because the OS requires certain
+    ///   names to be present (see `REQUIRED_CHILD_ENV_VARS`).
+    /// * `Some(entries)` — the caller's environment, used verbatim. MXC does
+    ///   not add to it; callers that want the profile block or the calling
+    ///   process's variables must merge them in themselves.
+    ///
+    /// The distinction is currently honored only by the Windows process
+    /// container. The LXC, Bubblewrap, Seatbelt, and WSLc backends treat `None`
+    /// and `Some(vec![])` alike, as they did before the field became optional.
+    pub env: Option<Vec<String>>,
+
+    /// Layer [`ExecutionRequest::env`] on top of the backend's default
+    /// environment instead of replacing it (from `process.inheritDefaultEnv`).
+    ///
+    /// Only meaningful when `env` is `Some`: with `None` the child already gets
+    /// the default. Only the Windows process container has a non-empty default
+    /// (the user's profile block), so elsewhere this is inert.
+    pub inherit_default_env: bool,
     pub script_code: String,
     pub working_directory: String,
     pub script_timeout: u32,
@@ -989,6 +1049,8 @@ pub struct ExecutionRequest {
     pub lxc_config: LxcConfig,
     /// Seatbelt (macOS) backend configuration (used when containment == Seatbelt).
     pub seatbelt: Option<SeatbeltConfig>,
+    /// Per-invocation telemetry configuration.
+    pub telemetry: Option<TelemetryConfig>,
     /// Whether the --experimental flag was passed.
     pub experimental_enabled: bool,
     /// Whether the --allow-testing-features flag was passed. Gates testing-only,
@@ -1024,6 +1086,22 @@ pub struct ResolvedWorkingDirectory<'a> {
 }
 
 impl ExecutionRequest {
+    /// The caller's environment entries, with "not supplied" and "supplied but
+    /// empty" flattened to the same empty slice.
+    ///
+    /// For backends that build the child's environment additively from a
+    /// cleared base — LXC, Bubblewrap, Seatbelt, WSLc — the two cases are
+    /// already indistinguishable in the result, so they use this and keep the
+    /// behavior they had before [`ExecutionRequest::env`] became optional.
+    ///
+    /// The Windows process container must *not* use this: there, `None` means
+    /// "give the child the user's profile block" and `Some(vec![])` means "give
+    /// the child nothing", which are very different outcomes. It matches on
+    /// [`ExecutionRequest::env`] directly.
+    pub fn env_entries(&self) -> &[String] {
+        self.env.as_deref().unwrap_or(&[])
+    }
+
     /// Resolve the working directory for the sandboxed child: an explicit
     /// `working_directory`, else the first filesystem-policy grant that is an
     /// existing directory (`readwrite` paths before `readonly` ones), else
@@ -1118,7 +1196,7 @@ pub struct ScriptResponse {
     pub standard_err: String,
     pub error_message: String,
     /// Raw system/API error detail intended for developers and diagnostics
-    /// (e.g. "Experimental_CreateProcessInSandbox failed: WIN32_ERROR(1920)").
+    /// (e.g. "CreateProcessSecurityEnvironment failed: HRESULT(...)").
     /// Kept separate from `error_message` which holds user-friendly text.
     #[serde(skip_serializing_if = "String::is_empty")]
     pub extended_error: String,
@@ -1206,6 +1284,103 @@ impl ScriptResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wslc_provision_config_from_wire_preserves_requested_fields() {
+        let cases = [
+            (
+                crate::wire::WslcProvisionPhase {
+                    image: None,
+                    image_tar_path: None,
+                },
+                None,
+                None,
+            ),
+            (
+                crate::wire::WslcProvisionPhase {
+                    image: Some(String::new()),
+                    image_tar_path: None,
+                },
+                Some(""),
+                None,
+            ),
+            (
+                crate::wire::WslcProvisionPhase {
+                    image: None,
+                    image_tar_path: Some(String::new()),
+                },
+                None,
+                Some(""),
+            ),
+            (
+                crate::wire::WslcProvisionPhase {
+                    image: Some(String::new()),
+                    image_tar_path: Some(String::new()),
+                },
+                Some(""),
+                Some(""),
+            ),
+            (
+                crate::wire::WslcProvisionPhase {
+                    image: Some("custom/image:tag".to_string()),
+                    image_tar_path: None,
+                },
+                Some("custom/image:tag"),
+                None,
+            ),
+            (
+                crate::wire::WslcProvisionPhase {
+                    image: None,
+                    image_tar_path: Some("C:\\images\\custom.tar".to_string()),
+                },
+                None,
+                Some("C:\\images\\custom.tar"),
+            ),
+            (
+                crate::wire::WslcProvisionPhase {
+                    image: Some("custom/image:tag".to_string()),
+                    image_tar_path: Some("C:\\images\\custom.tar".to_string()),
+                },
+                Some("custom/image:tag"),
+                Some("C:\\images\\custom.tar"),
+            ),
+        ];
+        for (wire, expected_image, expected_tar_path) in cases {
+            let config = WslcProvisionConfig::from(wire);
+            assert_eq!(config.image.as_deref(), expected_image);
+            assert_eq!(config.image_tar_path.as_deref(), expected_tar_path);
+        }
+    }
+
+    #[test]
+    fn wslc_provision_config_deserializes_intermediate_dispatch_payloads() {
+        for (json, expected_image, expected_tar_path) in [
+            ("{}", None, None),
+            (r#"{"image":null,"imageTarPath":null}"#, None, None),
+            (r#"{"image":"","imageTarPath":""}"#, Some(""), Some("")),
+            (
+                r#"{"image":"custom/image:tag","imageTarPath":"C:\\images\\custom.tar"}"#,
+                Some("custom/image:tag"),
+                Some("C:\\images\\custom.tar"),
+            ),
+            (r#"{"futureField":true}"#, None, None),
+        ] {
+            let config: WslcProvisionConfig = serde_json::from_str(json).unwrap();
+            assert_eq!(config.image.as_deref(), expected_image, "{json}");
+            assert_eq!(
+                config.image_tar_path.as_deref(),
+                expected_tar_path,
+                "{json}"
+            );
+        }
+        assert_eq!(
+            WslcProvisionConfig::default(),
+            WslcProvisionConfig {
+                image: None,
+                image_tar_path: None,
+            }
+        );
+    }
 
     #[test]
     fn directional_network_defaults_deny() {

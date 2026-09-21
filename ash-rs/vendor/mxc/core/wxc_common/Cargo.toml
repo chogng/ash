@@ -5,10 +5,12 @@ edition = "2021"
 license = "MIT"
 
 [features]
+test-support = []
 microvm = ["dep:nanvix_common", "dep:uuid"]
 schema-gen = ["dep:mxc_schema_support", "dep:schemars"]
 
 [dependencies]
+sha2 = "0.10"
 serde = { "version" = "1", "features" = ["derive"] }
 serde_json = { "version" = "1", "features" = ["raw_value"] }
 serde_path_to_error = { "version" = "0.1" }
@@ -20,11 +22,11 @@ url = { "version" = "2" }
 getrandom = { "version" = "0.2" }
 semver = "1"
 schemars = { "version" = "0.8", "optional" = true }
-nanvix_common = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4", "optional" = true }
+nanvix_common = { "git" = "https://github.com/microsoft/mxc", "rev" = "ca7ea12ac6bd9f5420d6adecb37e32a8158da476", "optional" = true }
 uuid = { "version" = "1", "features" = ["v4"], "optional" = true }
-mxc_config_contract = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4" }
-mxc_schema_support = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4", "optional" = true }
-mxc_telemetry = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4" }
+mxc_config_contract = { "git" = "https://github.com/microsoft/mxc", "rev" = "ca7ea12ac6bd9f5420d6adecb37e32a8158da476" }
+mxc_schema_support = { "git" = "https://github.com/microsoft/mxc", "rev" = "ca7ea12ac6bd9f5420d6adecb37e32a8158da476", "optional" = true }
+mxc_telemetry = { "git" = "https://github.com/microsoft/mxc", "rev" = "ca7ea12ac6bd9f5420d6adecb37e32a8158da476" }
 
 [target."cfg(target_os = \"windows\")".dependencies]
 windows = { "version" = "0.62", "features" = ["Win32_Foundation", "Win32_Networking_WinSock", "Win32_NetworkManagement_WindowsFirewall", "Win32_Security", "Win32_Security_Authorization", "Win32_Security_Credentials", "Win32_Security_Isolation", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_Console", "Win32_System_Diagnostics_Debug", "Win32_System_Diagnostics_Etw", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Environment", "Win32_System_IO", "Win32_System_JobObjects", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Ole", "Win32_System_Pipes", "Win32_System_ProcessStatus", "Win32_System_Registry", "Win32_System_SystemInformation", "Win32_System_SystemServices", "Win32_System_Threading", "Win32_System_Time", "Win32_System_Variant", "Win32_System_WindowsProgramming", "Win32_UI_Shell", "Win32_Globalization"] }
@@ -36,4 +38,9 @@ winreg = { "version" = "0.55" }
 libc = { "version" = "0.2" }
 
 [dev-dependencies]
+filetime = "0.2"
 tempfile = { "version" = "3" }
+
+[build-dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

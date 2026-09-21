@@ -124,9 +124,12 @@ fn matching_account_and_capability_reaches_upstream() {
         while std::time::Instant::now() < deadline {
             match upstream.accept() {
                 Ok((mut stream, _)) => {
+                    // Windows accepts inherit the listener's nonblocking mode.
+                    // Wait for the forwarded request instead of treating WouldBlock as EOF.
+                    stream.set_nonblocking(false).unwrap();
                     let mut buf = [0u8; 1024];
-                    let _ = stream.set_read_timeout(Some(Duration::from_secs(2)));
-                    let read_len = stream.read(&mut buf).unwrap_or(0);
+                    stream.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+                    let read_len = stream.read(&mut buf).unwrap();
                     if read_len > 0 {
                         let _ = stream.write_all(
                             b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK",

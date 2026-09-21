@@ -6,7 +6,7 @@ license = "MIT"
 
 [dependencies]
 wxc_common = { "path" = "../../../core/wxc_common" }
-lxc_common = { "git" = "https://github.com/microsoft/mxc", "rev" = "6cd3d58f05d3447e67109cfb75e042803b843ca4" }
+lxc_common = { "git" = "https://github.com/microsoft/mxc", "rev" = "ca7ea12ac6bd9f5420d6adecb37e32a8158da476" }
 nix = { "version" = "0.29", "features" = ["fs", "mount", "sched", "signal", "net", "process", "user", "term"] }
 semver = "1"
 serde = { "version" = "1", "features" = ["derive"] }

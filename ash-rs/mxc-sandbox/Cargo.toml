@@ -11,16 +11,25 @@ doctest = false
 
 [dependencies]
 log = { workspace = true }
-mxc_engine = { workspace = true }
+wxc_common = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 ash-utils-pty = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "sync", "time"] }
-mxc-sdk = { workspace = true }
 dunce = { workspace = true }
 ash-install-context = { workspace = true }
 ash-sandboxing = { workspace = true }
 ash-file-access = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
+appcontainer_common = { workspace = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+bwrap_common = { workspace = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+seatbelt_common = { workspace = true }
+
 [dev-dependencies]
 test-binary-support = { workspace = true }
 libtest-mimic = { workspace = true }
