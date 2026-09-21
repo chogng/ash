@@ -666,11 +666,17 @@ function assertTriggerCharacter(value: unknown): asserts value is string {
 
 export interface SyntaxRequest {
 	readonly languageId: string;
+	/** Hypothetical lines, starting in the lexical state of the real document. */
+	readonly tokenize?: { readonly lineNumber: number; readonly lines: readonly string[] };
 }
 
 export interface SyntaxProviderRequest extends SyntaxRequest {
 	readonly requestId: number;
 	readonly snapshot: TextSnapshot;
+}
+
+export interface SyntaxTokenizationRequest extends SyntaxProviderRequest {
+	readonly tokenize: NonNullable<SyntaxRequest["tokenize"]>;
 }
 
 export interface SyntaxProvider {
@@ -679,6 +685,8 @@ export interface SyntaxProvider {
 	readonly tokenPriority?: number;
 	readonly diagnosticPriority?: number;
 	provideTokens?(request: SyntaxProviderRequest, signal: AbortSignal): LanguageTokenResult | undefined | PromiseLike<LanguageTokenResult | undefined>;
+	/** Returns tokens relative to the proposed lines without changing document state. */
+	provideTokensForLines?(request: SyntaxTokenizationRequest, signal: AbortSignal): LanguageTokenResult | undefined | PromiseLike<LanguageTokenResult | undefined>;
 	provideDiagnostics?(request: SyntaxProviderRequest, signal: AbortSignal): LanguageDiagnosticResult | undefined | PromiseLike<LanguageDiagnosticResult | undefined>;
 	synchronizeDocument?(synchronization: LanguageWorkerDocumentSynchronization): void;
 }
@@ -689,6 +697,7 @@ export interface RegisteredSyntaxProvider {
 	readonly tokenPriority: number;
 	readonly diagnosticPriority: number;
 	readonly provideTokens?: NonNullable<SyntaxProvider["provideTokens"]>;
+	readonly provideTokensForLines?: NonNullable<SyntaxProvider["provideTokensForLines"]>;
 	readonly provideDiagnostics?: NonNullable<SyntaxProvider["provideDiagnostics"]>;
 	readonly synchronizeDocument?: NonNullable<SyntaxProvider["synchronizeDocument"]>;
 }
@@ -698,6 +707,13 @@ export function assertSyntaxRequest(request: SyntaxRequest): void {
 		throw new TypeError("Syntax request must be an object");
 	}
 	assertLanguageId(request.languageId);
+	if (request.tokenize !== undefined) {
+		const { lineNumber, lines } = request.tokenize;
+		if (!Number.isSafeInteger(lineNumber) || lineNumber < 1) throw new RangeError("Tokenization start line must be positive");
+		if (!Array.isArray(lines) || lines.length === 0 || lines.some(line => typeof line !== "string" || /[\r\n]/.test(line))) {
+			throw new TypeError("Tokenization requires non-empty lines without line endings");
+		}
+	}
 }
 
 export function normalizeSyntaxProvider(provider: SyntaxProvider): RegisteredSyntaxProvider {
@@ -717,6 +733,9 @@ export function normalizeSyntaxProvider(provider: SyntaxProvider): RegisteredSyn
 	}
 	if (provider.provideTokens !== undefined && typeof provider.provideTokens !== "function") {
 		throw new TypeError("Syntax provider provideTokens must be a function");
+	}
+	if (provider.provideTokensForLines !== undefined && (typeof provider.provideTokensForLines !== "function" || !provider.provideTokens)) {
+		throw new TypeError("Syntax provider provideTokensForLines requires a token provider and must be a function");
 	}
 	if (provider.tokenPriority !== undefined && (!Number.isSafeInteger(provider.tokenPriority) || !provider.provideTokens)) {
 		throw new TypeError("Syntax provider token priority requires a token provider and must be a safe integer");
@@ -739,6 +758,7 @@ export function normalizeSyntaxProvider(provider: SyntaxProvider): RegisteredSyn
 		tokenPriority: provider.tokenPriority ?? 0,
 		diagnosticPriority: provider.diagnosticPriority ?? 0,
 		...(provider.provideTokens === undefined ? {} : { provideTokens: provider.provideTokens.bind(provider) }),
+		...(provider.provideTokensForLines === undefined ? {} : { provideTokensForLines: provider.provideTokensForLines.bind(provider) }),
 		...(provider.provideDiagnostics === undefined ? {} : { provideDiagnostics: provider.provideDiagnostics.bind(provider) }),
 		...(provider.synchronizeDocument === undefined ? {} : { synchronizeDocument: provider.synchronizeDocument.bind(provider) }),
 	});
@@ -1235,11 +1255,13 @@ export interface LanguageDiagnosticsHost extends LanguageDiagnosticsSource {
 
 export const SYNTAX_TOKEN_LANE = "tokens";
 
+export const SYNTAX_TOKENIZE_LANE = "tokenize";
+
 export const SYNTAX_DIAGNOSTIC_LANE = "diagnostics";
 
 export const SYNTAX_SYNCHRONIZATION = "synchronization";
 
-export type SyntaxLane = typeof SYNTAX_TOKEN_LANE | typeof SYNTAX_DIAGNOSTIC_LANE;
+export type SyntaxLane = typeof SYNTAX_TOKEN_LANE | typeof SYNTAX_DIAGNOSTIC_LANE | typeof SYNTAX_TOKENIZE_LANE;
 
 export type SyntaxProviderOperation = SyntaxLane | typeof SYNTAX_SYNCHRONIZATION;
 
@@ -1262,7 +1284,13 @@ export interface LanguageDiagnosticSyntaxResult {
 	readonly value: LanguageDiagnosticResult;
 }
 
-export type SyntaxResult = LanguageTokenSyntaxResult | LanguageDiagnosticSyntaxResult;
+export interface LanguageTokenizationSyntaxResult {
+	readonly lane: typeof SYNTAX_TOKENIZE_LANE;
+	/** Null means the selected tokenizer cannot tokenize hypothetical text. */
+	readonly value: LanguageTokenResult | null;
+}
+
+export type SyntaxResult = LanguageTokenSyntaxResult | LanguageDiagnosticSyntaxResult | LanguageTokenizationSyntaxResult;
 
 export interface SyntaxServiceOptions {
 	readonly workerFactory?: SyntaxWorkerFactory;

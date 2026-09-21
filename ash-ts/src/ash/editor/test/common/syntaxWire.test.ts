@@ -3,7 +3,7 @@ import { test } from "mocha";
 import { Emitter, type Event } from "../../../base/common/event.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../base/common/lifecycle.js";
 import { SyntaxProviderRegistry } from '../../common/languageFeatureRegistry.js';
-import { type SyntaxRequest, SYNTAX_DIAGNOSTIC_LANE, SYNTAX_TOKEN_LANE, type SyntaxLane, type SyntaxResult, type SyntaxWorker } from '../../common/languages.js';
+import { type SyntaxRequest, SYNTAX_DIAGNOSTIC_LANE, SYNTAX_TOKENIZE_LANE, SYNTAX_TOKEN_LANE, type SyntaxLane, type SyntaxResult, type SyntaxWorker } from '../../common/languages.js';
 import { SyntaxProviderWorker } from '../../common/services/editorWebWorker.js';
 import { testSyntaxProvider } from './testSyntaxProvider.js';
 import { LanguageRequestCoordinator, LanguageRequestStatus, LanguageWorkerResultDisposition, type LanguageWorkerRequest } from '../../common/model/languageRequestCoordinator.js';
@@ -269,3 +269,39 @@ class FailingSyntaxWorker extends Disposable implements SyntaxWorker {
 function turn(): Promise<void> {
 	return new Promise(resolve => setImmediate(resolve));
 }
+
+
+test('hypothetical syntax travels across the wire without changing the shared snapshot or delta baseline', async () => {
+	using registry = new SyntaxProviderRegistry();
+	const observed: string[] = [];
+	using registration = registry.register({ id: 'test.preview', languageIds: ['demo'],
+		provideTokens: request => { observed.push(request.snapshot.getText()); return { tokens: [] }; },
+		provideTokensForLines: request => ({ tokens: request.tokenize.lines.map((line, index) => ({ range: new Range(index + 1, 1, index + 1, line.length + 1), tokenType: 'string', modifiers: [] })) }),
+	});
+	const [clientPort, serverPort] = createPortPair();
+	using server = new WorkerTextModelSyncServer(serverPort, syntaxWireCodec, new SyntaxProviderWorker(registry));
+	using model = new TextModel('x', { languageId: 'demo', tokenization: { syntaxService: {
+		workerFactory: () => new WorkerTextModelSyncClient(clientPort, syntaxWireCodec),
+	} } });
+	const signal = new AbortController().signal;
+	const tokens = await model.tokenization.tokenizeLinesAtAsync(1, ['longer than x', 'second line'], signal);
+	assert.deepEqual(tokens!.map(line => line.getLineContent()), ['longer than x', 'second line']);
+	await model.tokenization.tokenizeLinesAtAsync(1, ['another'], signal);
+	assert.ok(observed.length >= 2);
+	assert.ok(observed.every(text => text === 'x'));
+	const requests = (clientPort.sentMessages as WireMessage[]).filter(message => message.lane === SYNTAX_TOKENIZE_LANE);
+	assert.equal(requests.length, 2);
+	assert.ok(requests.every(message => message.resultBaseRequestId === undefined));
+	assert.equal(model.getText(), 'x');
+	assert.equal(model.tokenization.getLineTokens(1).getLineContent(), 'x');
+});
+
+test('hypothetical syntax wire rejects wrong lanes, line endings and out of document starting lines', () => {
+	using model = new TextModel('x');
+	const snapshot = model.createVersionedSnapshot();
+	for (const tokenize of [{ lineNumber: 2, lines: ['x'] }, { lineNumber: 1, lines: ['a\nb'] }, { lineNumber: 1, lines: [] }]) {
+		assert.throws(() => syntaxWireCodec.decodePayload(SYNTAX_TOKENIZE_LANE, { languageId: 'demo', tokenize }, snapshot));
+	}
+	assert.throws(() => syntaxWireCodec.decodePayload(SYNTAX_TOKEN_LANE, { languageId: 'demo', tokenize: { lineNumber: 1, lines: ['x'] } }, snapshot), /lane/);
+	assert.throws(() => syntaxWireCodec.decodePayload(SYNTAX_TOKENIZE_LANE, { languageId: 'demo' }, snapshot), /lane/);
+});

@@ -1,4 +1,4 @@
-import { type SyntaxProvider, type SyntaxProviderRequest } from '../../../../editor/common/languages.js';
+import { type SyntaxProvider, type SyntaxProviderRequest, type SyntaxTokenizationRequest } from '../../../../editor/common/languages.js';
 import { type LanguageWorkerDocumentSynchronization } from '../../../../editor/common/services/textModelSync/textModelSync.protocol.js';
 import { TextMateTokenizationService } from "./textMateTokenizationService.js";
 
@@ -15,6 +15,7 @@ export function createTextMateSyntaxProvider(tokenization: TextMateTokenizationS
 		languageIds: Object.freeze(["*"]),
 		tokenPriority: TEXTMATE_TOKEN_PRIORITY,
 		provideTokens: (request: SyntaxProviderRequest, signal: AbortSignal) => tokenization.tokenize(request.languageId, request.snapshot, signal),
+		provideTokensForLines: (request: SyntaxTokenizationRequest, signal: AbortSignal) => tokenization.tokenizeLinesAt(request.languageId, request.snapshot, request.tokenize.lineNumber, request.tokenize.lines, signal),
 		synchronizeDocument: (synchronization: LanguageWorkerDocumentSynchronization) => tokenization.synchronizeDocument(synchronization),
 	});
 }

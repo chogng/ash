@@ -9,6 +9,7 @@ import { getStandardTokenTypeAtPosition } from '../../../../common/tokens/lineTo
 import { SynchronousTokenizationUnavailableError } from '../../../../common/tokenizationTextModelPart.js';
 import { SparseMultilineTokens } from '../../../../common/tokens/sparseMultilineTokens.js';
 import { Emitter } from '../../../../../base/common/event.js';
+import { type LanguageTokenResult } from '../../../../common/tokens/languageTokens.js';
 import { type LanguageWorkerRequest } from '../../../../common/model/languageRequestCoordinator.js';
 
 test("TextModel owns default line tokens when no syntax provider exists", () => {
@@ -254,4 +255,60 @@ test('line tokenization reuses unchanged lines after a model edit', async () => 
 	await waitFor(() => model.tokenization.hasAccurateTokensForLine(3));
 	assert.equal(scanned, 4);
 	assert.equal(model.tokenization.getLineTokens(2).getLineContent(), 'changed');
+});
+
+
+test('async hypothetical tokens are bounded by proposed text and never change live tokens or model state', async () => {
+	using registry = new SyntaxProviderRegistry();
+	using registration = registry.register({
+		id: 'test.preview', languageIds: ['demo'], provideTokens: () => ({ tokens: [] }),
+		provideTokensForLines: request => ({ tokens: request.tokenize.lines.map((line, index) => ({
+			range: new Range(index + 1, 1, index + 1, line.length + 1), tokenType: 'string', modifiers: [],
+		})) }),
+	});
+	using model = new TextModel('x', { languageId: 'demo', tokenization: { syntaxProviderRegistry: registry } });
+	await waitFor(() => model.tokenization.hasAccurateTokensForLine(1));
+	let changes = 0;
+	using listener = model.tokenization.onDidChange(() => changes++);
+	const preview = await model.tokenization.tokenizeLinesAtAsync(1, ['long ( string', 'second'], new AbortController().signal);
+	assert.deepEqual(preview!.map(line => [line.getLineContent(), line.getStandardTokenType(0)]), [['long ( string', StandardTokenType.String], ['second', StandardTokenType.String]]);
+	assert.equal(model.getText(), 'x');
+	assert.equal(model.getVersionId(), 1);
+	assert.equal(model.tokenization.getLineTokens(1).getStandardTokenType(0), StandardTokenType.Other);
+	assert.equal(changes, 0);
+});
+
+for (const reason of ['edit', 'language', 'abort', 'dispose'] as const) {
+	test(`hypothetical tokenization is discarded after ${reason}`, async () => {
+		using registry = new SyntaxProviderRegistry();
+		let resolve: ((result: LanguageTokenResult) => void) | undefined;
+		using registration = registry.register({
+			id: 'test.deferred-preview', languageIds: ['demo'], provideTokens: () => ({ tokens: [] }),
+			provideTokensForLines: () => new Promise<LanguageTokenResult>(done => { resolve = done; }),
+		});
+		using model = new TextModel('x', { languageId: 'demo', tokenization: { syntaxProviderRegistry: registry } });
+		await waitFor(() => model.tokenization.hasAccurateTokensForLine(1));
+		const controller = new AbortController();
+		const pending = model.tokenization.tokenizeLinesAtAsync(1, ['()'], controller.signal);
+		await waitFor(() => resolve !== undefined);
+		if (reason === 'edit') model.setValue('new');
+		if (reason === 'language') model.setLanguage('plaintext');
+		if (reason === 'abort') controller.abort();
+		if (reason === 'dispose') model.dispose();
+		assert.equal(await pending, null);
+		resolve!({ tokens: [] });
+	});
+}
+
+test('hypothetical tokenization reports unavailable lexers and rejects malformed ranges', async () => {
+	using plain = new TextModel('x');
+	const signal = new AbortController().signal;
+	assert.equal(await plain.tokenization.tokenizeLinesAtAsync(1, ['('], signal), null);
+	using registry = new SyntaxProviderRegistry();
+	using registration = registry.register({ id: 'test.invalid-preview', languageIds: ['demo'], provideTokens: () => ({ tokens: [] }),
+		provideTokensForLines: () => ({ tokens: [{ range: new Range(1, 1, 1, 100), tokenType: 'string', modifiers: [] }] }),
+	});
+	using model = new TextModel('x', { languageId: 'demo', tokenization: { syntaxProviderRegistry: registry } });
+	await assert.rejects(model.tokenization.tokenizeLinesAtAsync(1, ['()'], signal), /range|column/i);
+	await assert.rejects(model.tokenization.tokenizeLinesAtAsync(1, ['a\nb'], signal), /line endings/);
 });

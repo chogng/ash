@@ -295,3 +295,21 @@ async function initializeOnigLib(): Promise<IOnigLib> {
 	await loadWASM(data);
 	return Object.freeze({ createOnigScanner, createOnigString });
 }
+
+
+test('TextMate hypothetical lines inherit multiline state without publishing or retaining their tokens', async () => {
+	using registry = grammarRegistry();
+	const updates: TextMateTokenizationCacheUpdate[] = [];
+	using tokenization = new TextMateTokenizationService(registry, onigLib, { onDidUpdateCache: update => updates.push(update) });
+	using model = new TextModel('"hello\nworld";\n42');
+	const signal = new AbortController().signal;
+	const snapshot = model.createVersionedSnapshot();
+	const original = await tokenization.tokenize('demo', snapshot, signal);
+	const preview = await tokenization.tokenizeLinesAt('demo', snapshot, 2, ['new [)"', 'if'], signal);
+	assert.deepEqual(project(preview), [[1, 1, 8, 'string'], [2, 1, 3, 'keyword']]);
+	assert.equal(await tokenization.tokenize('demo', snapshot, signal), original);
+	assert.equal(updates.length, 1);
+	const second = await tokenization.tokenizeLinesAt('demo', snapshot, 3, ['if'], signal);
+	assert.deepEqual(project(second), [[1, 1, 3, 'keyword']]);
+	assert.equal(await tokenization.tokenizeLinesAt('missing', snapshot, 1, ['('], signal), undefined);
+});

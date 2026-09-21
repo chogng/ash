@@ -18,6 +18,8 @@ export interface ITokenizationTextModelPart {
 	getLineTokens(lineNumber: number): LineTokens;
 	getTokenTypeIfInsertingCharacter(lineNumber: number, column: number, character: string): StandardTokenType;
 	tokenizeLinesAt(lineNumber: number, lines: string[]): LineTokens[] | null;
+	/** Tokenizes proposed lines using the current document's lexical state without publishing them. */
+	tokenizeLinesAtAsync(lineNumber: number, lines: readonly string[], signal: AbortSignal): Promise<LineTokens[] | null>;
 	getLanguageId(): string;
 	getLanguageIdAtPosition(lineNumber: number, column: number): string;
 	setLanguageId(languageId: string, source?: string): void;

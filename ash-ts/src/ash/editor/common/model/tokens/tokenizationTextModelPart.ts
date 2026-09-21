@@ -5,9 +5,9 @@ import { Position } from '../../core/position.js';
 import { type Range } from '../../core/range.js';
 import { countEOL } from '../../core/misc/eolCounter.js';
 import { ColorId, FontStyle, LanguageId, MetadataConsts, StandardTokenType } from '../../encodedTokenAttributes.js';
-import { SYNTAX_TOKEN_LANE, type SyntaxLane, type SyntaxRequest, type SyntaxResult, TokenizationRegistry, type ILanguageIdCodec, type LanguageSemanticTokensProvider, type SyntaxServiceOptions } from '../../languages.js';
+import { SYNTAX_TOKEN_LANE, SYNTAX_TOKENIZE_LANE, assertSyntaxRequest, type SyntaxLane, type SyntaxRequest, type SyntaxResult, TokenizationRegistry, type ILanguageIdCodec, type LanguageSemanticTokensProvider, type SyntaxServiceOptions } from '../../languages.js';
 import { type LanguageFeatureRegistry, SyntaxProviderRegistry } from '../../languageFeatureRegistry.js';
-import { createLanguageTokenStore, type LanguageTokenizationSource, type LanguageToken, type SemanticTokenModelSource, type SemanticTokenSource } from '../../tokens/languageTokens.js';
+import { createLanguageTokenStore, createLanguageTokenSnapshotNormalizer, type LanguageTokenizationSource, type LanguageToken, type SemanticTokenModelSource, type SemanticTokenSource } from '../../tokens/languageTokens.js';
 import { BackgroundTokenizationState, type ITokenizationTextModelPart, SynchronousTokenizationUnavailableError } from '../../tokenizationTextModelPart.js';
 import { LanguageTokenLineIndex, StyledTokenSource, overlayTokenSources, type LanguageTokenLine } from '../../tokens/languageTokenLineIndex.js';
 import { LineTokens } from '../../tokens/lineTokens.js';
@@ -204,6 +204,33 @@ export class TokenizationTextModelPart extends Disposable implements ITokenizati
 		this.validateLineNumber(lineNumber);
 		if (!Array.isArray(lines) || lines.some(line => typeof line !== 'string')) throw new TypeError('Tokenization lines must be strings');
 		return null;
+	}
+
+	async tokenizeLinesAtAsync(lineNumber: number, lines: readonly string[], signal: AbortSignal): Promise<LineTokens[] | null> {
+		this.validateLineNumber(lineNumber);
+		const languageId = this.textModel.getLanguageId();
+		const payload = { languageId, tokenize: { lineNumber, lines: [...lines] } };
+		assertSyntaxRequest(payload);
+		if (!this.hasTokenProvider() || signal.aborted) return null;
+		const text = lines.join('\n');
+		const generation = this.requestGeneration;
+		let result: LineTokens[] | null = null;
+		await this.coordinator.runLatest(SYNTAX_TOKENIZE_LANE, payload, response => {
+			if (response.value.lane !== SYNTAX_TOKENIZE_LANE) throw new TypeError('Hypothetical tokenization returned a different lane');
+			if (response.value.value === null || generation !== this.requestGeneration) return;
+			const tokens = createLanguageTokenSnapshotNormalizer({
+				version: response.modelVersion, length: text.length, lineCount: payload.tokenize.lines.length,
+				getText: () => text, getTextBetweenOffsets: (start, end) => text.slice(start, end),
+			})(response.value.value).tokens;
+			const byLine = new Map<number, LanguageToken[]>();
+			for (const token of tokens) {
+				const group = byLine.get(token.range.startLineNumber) ?? [];
+				group.push(token);
+				byLine.set(token.range.startLineNumber, group);
+			}
+			result = payload.tokenize.lines.map((line, index) => createLineTokens(line, byLine.get(index + 1) ?? [], languageId, this.languageIdCodec));
+		}, { signal });
+		return result;
 	}
 
 	getLanguageId(): string {

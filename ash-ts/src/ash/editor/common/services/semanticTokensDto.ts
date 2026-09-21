@@ -83,7 +83,9 @@ function createSyntaxResultStore(): WorkerTextModelResultStore<languages.SyntaxL
 	const staged = new Map<number, { lane: languages.SyntaxLane; state: WorkerTextModelResult<languages.SyntaxResult> }>();
 	return {
 		get: lane => confirmed.get(lane),
-		stage: (lane, state) => { staged.set(state.requestId, { lane, state }); },
+		stage: (lane, state) => {
+			if (lane !== languages.SYNTAX_TOKENIZE_LANE) staged.set(state.requestId, { lane, state });
+		},
 		settle: (requestId, applied) => {
 			const entry = staged.get(requestId);
 			if (!entry) {
@@ -102,18 +104,28 @@ function createSyntaxResultStore(): WorkerTextModelResultStore<languages.SyntaxL
 }
 
 export const syntaxWireCodec: WorkerTextModelCodec<languages.SyntaxLane, languages.SyntaxRequest, languages.SyntaxResult> = Object.freeze({
-	lanes: Object.freeze([languages.SYNTAX_TOKEN_LANE, languages.SYNTAX_DIAGNOSTIC_LANE] as const),
+	lanes: Object.freeze([languages.SYNTAX_TOKEN_LANE, languages.SYNTAX_DIAGNOSTIC_LANE, languages.SYNTAX_TOKENIZE_LANE] as const),
 	createResultStore: createSyntaxResultStore,
-	encodePayload(_lane: languages.SyntaxLane, request: languages.SyntaxRequest) {
+	encodePayload(lane: languages.SyntaxLane, request: languages.SyntaxRequest) {
 		languages.assertSyntaxRequest(request);
-		return Object.freeze({ languageId: request.languageId });
+		assertTokenizationLane(lane, request);
+		return Object.freeze({ languageId: request.languageId, ...(request.tokenize === undefined ? {} : {
+			tokenize: Object.freeze({ lineNumber: request.tokenize.lineNumber, lines: Object.freeze([...request.tokenize.lines]) }),
+		}) });
 	},
-	decodePayload(_lane: languages.SyntaxLane, value: unknown, _snapshot: TextSnapshot) {
+	decodePayload(lane: languages.SyntaxLane, value: unknown, snapshot: TextSnapshot) {
 		assertRecord(value, "Syntax wire request");
-		const request = Object.freeze({
-			languageId: decodeString(value.languageId, "Syntax wire language ID"),
-		});
+		let tokenize: languages.SyntaxRequest["tokenize"];
+		if (value.tokenize !== undefined) {
+			assertRecord(value.tokenize, "Syntax wire tokenization");
+			if (!Array.isArray(value.tokenize.lines)) throw new TypeError("Syntax wire tokenization requires lines");
+			const lineNumber = decodePositiveSafeInteger(value.tokenize.lineNumber, "Syntax wire tokenization start line");
+			if (lineNumber > snapshot.lineCount) throw new RangeError("Syntax wire tokenization start line is outside the document");
+			tokenize = Object.freeze({ lineNumber, lines: Object.freeze(value.tokenize.lines.map(line => decodeString(line, "Syntax wire tokenization line"))) });
+		}
+		const request = Object.freeze({ languageId: decodeString(value.languageId, "Syntax wire language ID"), ...(tokenize === undefined ? {} : { tokenize }) });
 		languages.assertSyntaxRequest(request);
+		assertTokenizationLane(lane, request);
 		return request;
 	},
 	encodeResult: encodeSyntaxWireResult,
@@ -122,6 +134,9 @@ export const syntaxWireCodec: WorkerTextModelCodec<languages.SyntaxLane, languag
 
 function encodeSyntaxWireResult(lane: languages.SyntaxLane, result: languages.SyntaxResult, snapshot: TextSnapshot, base: WorkerTextModelResult<languages.SyntaxResult> | undefined): unknown {
 	assertResultLane(lane, result);
+	if (result.lane === languages.SYNTAX_TOKENIZE_LANE) {
+		return Object.freeze({ tokens: result.value === null ? null : Object.freeze(result.value.tokens.map(token => syntaxEncodeItem(languages.SYNTAX_TOKEN_LANE, token))) });
+	}
 	const items = lane === languages.SYNTAX_TOKEN_LANE
 		? (result.value as LanguageTokenResult).tokens
 		: (result.value as languages.LanguageDiagnosticResult).diagnostics;
@@ -144,6 +159,11 @@ function encodeSyntaxWireResult(lane: languages.SyntaxLane, result: languages.Sy
 
 function decodeSyntaxWireResult(lane: languages.SyntaxLane, value: unknown, snapshot: TextSnapshot, base: WorkerTextModelResult<languages.SyntaxResult> | undefined): languages.SyntaxResult {
 	assertRecord(value, "Syntax wire result");
+	if (lane === languages.SYNTAX_TOKENIZE_LANE) {
+		if (value.tokens === null) return Object.freeze({ lane, value: null });
+		if (!Array.isArray(value.tokens)) throw new TypeError("Syntax tokenization result requires tokens or null");
+		return Object.freeze({ lane, value: { tokens: value.tokens.map(token => syntaxDecodeItem(languages.SYNTAX_TOKEN_LANE, token) as LanguageToken) } });
+	}
 	if (value.kind === "full") {
 		if (!Array.isArray(value.items)) throw new TypeError("Full syntax wire result must contain items");
 		return resultFromItems(lane, value.items.map(item => syntaxDecodeItem(lane, item)), snapshot);
@@ -326,6 +346,12 @@ function decodeDiagnosticCode(value: unknown): languages.LanguageDiagnosticCode 
 	if (value === undefined || typeof value === "string") return value;
 	if (typeof value === "number" && Number.isFinite(value)) return value;
 	throw new TypeError("Language diagnostic wire code must be a finite number or string");
+}
+
+function assertTokenizationLane(lane: languages.SyntaxLane, request: languages.SyntaxRequest): void {
+	if ((lane === languages.SYNTAX_TOKENIZE_LANE) !== (request.tokenize !== undefined)) {
+		throw new TypeError("Hypothetical tokenization parameters must match their request lane");
+	}
 }
 
 function assertResultLane(lane: languages.SyntaxLane, result: languages.SyntaxResult): void {

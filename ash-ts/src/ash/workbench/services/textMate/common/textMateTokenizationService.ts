@@ -115,6 +115,15 @@ export class TextMateTokenizationService implements Disposable {
 	}
 
 	async tokenize(languageId: string, snapshot: TextSnapshot, signal: AbortSignal): Promise<LanguageTokenResult | undefined> {
+		return this.withCache(languageId, signal, cache => cache.getTokens(snapshot, signal));
+	}
+
+	async tokenizeLinesAt(languageId: string, snapshot: TextSnapshot, lineNumber: number, lines: readonly string[], signal: AbortSignal): Promise<LanguageTokenResult | undefined> {
+		if (!Number.isSafeInteger(lineNumber) || lineNumber < 1 || lineNumber > snapshot.lineCount) throw new RangeError("TextMate tokenization start line is outside the document");
+		return this.withCache(languageId, signal, cache => cache.tokenizeLinesAt(snapshot, lineNumber, lines, signal));
+	}
+
+	private async withCache(languageId: string, signal: AbortSignal, read: (cache: TextMateTokenizationCache) => LanguageTokenResult): Promise<LanguageTokenResult | undefined> {
 		this.ensureAlive();
 		signal.throwIfAborted();
 		const grammarSnapshot = this.grammars.currentSnapshot;
@@ -130,7 +139,7 @@ export class TextMateTokenizationService implements Disposable {
 				cache = new TextMateTokenizationCache(languageId, grammar, this.lineTimeLimitMilliseconds, createGrammarScopeResolver(definition, grammarSnapshot, this.scopeResolver), createGrammarMetadataResolver(definition, grammarSnapshot), this.onDidUpdateCache);
 				state.caches.set(languageId, cache);
 			}
-			return cache.getTokens(snapshot, signal);
+			return read(cache);
 		} finally {
 			this.releaseState(state);
 		}
@@ -226,6 +235,19 @@ class TextMateTokenizationCache {
 		const kind = this.syntax ? "incremental" : "full";
 		this.syntax = this.update(snapshot, signal, kind);
 		return this.syntax.tokens;
+	}
+
+	tokenizeLinesAt(snapshot: TextSnapshot, lineNumber: number, lines: readonly string[], signal: AbortSignal): LanguageTokenResult {
+		this.getTokens(snapshot, signal);
+		let state = lineNumber === 1 ? INITIAL : this.syntax!.lineResults[lineNumber - 2]!.outputState;
+		const results: TextMateLineResult[] = [];
+		for (const line of lines) {
+			signal.throwIfAborted();
+			const result = scanLine(this.grammar, line, state, this.lineTimeLimitMilliseconds, this.scopeResolver, this.metadataResolver);
+			results.push(result);
+			state = result.outputState;
+		}
+		return aggregateTokens(results);
 	}
 
 	synchronizeDocument(synchronization: LanguageWorkerDocumentSynchronization): void {

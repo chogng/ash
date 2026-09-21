@@ -2443,3 +2443,34 @@ test('standalone without a grammar keeps plain text and no invented diagnostics 
 	expect(workers.some(url => /syntaxWorkerMain|languageCompletionWorkerMain/.test(url))).toBe(false);
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 });
+
+
+for (const scenario of [
+	{ name: 'nested', value: 'let x = ; tail', insertText: 'call({x: [1', column: 9, tokenType: 'other', completeBracketPairs: true, repaired: 'call({x: [1]})', result: 'let x = call({x: [1]}); tail' },
+	{ name: 'unexpected closing', value: 'let x = ; tail', insertText: 'value)]', column: 9, tokenType: 'other', completeBracketPairs: true, repaired: 'value', result: 'let x = value; tail' },
+	{ name: 'string', value: 'let x = "', insertText: '[)', column: 10, tokenType: 'string', completeBracketPairs: true, repaired: '[)', result: 'let x = "[)' },
+	{ name: 'comment', value: '// ', insertText: '[)', column: 4, tokenType: 'comment', completeBracketPairs: true, repaired: '[)', result: '// [)' },
+	{ name: 'multiline', value: 'let x = ;', insertText: 'call(\n[1', column: 9, tokenType: 'other', completeBracketPairs: true, repaired: 'call(\n[1])', result: 'let x = call(\n[1]);' },
+	{ name: 'explicit replacement', value: 'let x = old; tail', insertText: 'call(', column: 9, tokenType: 'other', completeBracketPairs: true, replaceLength: 3, repaired: 'call()', result: 'let x = call(); tail' },
+	{ name: 'unavailable lexer', value: 'let x = ', insertText: 'call(', column: 9, tokenType: 'unavailable', completeBracketPairs: true, repaired: 'call(', result: 'let x = call(' },
+	{ name: 'provider opt out', value: 'let x = ', insertText: 'call(', column: 9, tokenType: 'other', completeBracketPairs: false, repaired: 'call(', result: 'let x = call(' },
+] as const) {
+	test(`inline completion bracket repair ${scenario.name} preserves suffix and accepts with one undo`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto('/standalone.html');
+		await page.evaluate(scenario => window.ashStandaloneIntegration.prepareBracketCompletion(scenario.value, scenario.insertText, scenario.column, scenario.tokenType, scenario.completeBracketPairs, 'replaceLength' in scenario ? scenario.replaceLength : 0), scenario);
+		await page.keyboard.press('Control+Alt+Space');
+		const ghost = page.locator('#caller .stanza-editor-inline-completion');
+		await expect(ghost).toBeVisible();
+		expect(await ghost.textContent()).toBe(scenario.repaired);
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe(scenario.value);
+		await page.keyboard.press('Alt+Enter');
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('/* accepted */ ' + scenario.result);
+		await page.keyboard.press('ControlOrMeta+z');
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe(scenario.value);
+		await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
+		expect(errors).toEqual([]);
+		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	});
+}

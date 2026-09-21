@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert';
 import { test } from 'mocha';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { SyntaxProviderRegistry } from '../../common/languageFeatureRegistry.js';
-import { type SyntaxProvider, SYNTAX_SYNCHRONIZATION, SYNTAX_DIAGNOSTIC_LANE, SYNTAX_TOKEN_LANE, LanguageDiagnosticSeverity, type LanguageDiagnosticResult } from '../../common/languages.js';
+import { type SyntaxProvider, SYNTAX_TOKENIZE_LANE, SYNTAX_SYNCHRONIZATION, SYNTAX_DIAGNOSTIC_LANE, SYNTAX_TOKEN_LANE, LanguageDiagnosticSeverity, type LanguageDiagnosticResult } from '../../common/languages.js';
 import { SyntaxProviderWorker } from '../../common/services/editorWebWorker.js';
 import { type LanguageTokenResult } from '../../common/tokens/languageTokens.js';
 import { Position } from '../../common/core/position.js';
@@ -305,3 +305,50 @@ async function runLane<T extends typeof SYNTAX_TOKEN_LANE | typeof SYNTAX_DIAGNO
 	assert.equal(result.lane, lane);
 	return result as Extract<import('../../common/languages.js').SyntaxResult, { lane: T }>;
 }
+
+
+test('hypothetical tokenization borrows incoming state and cannot replace real cached states', async () => {
+	using model = new TextModel('open\nword\nclose\ntail');
+	using registry = new SyntaxProviderRegistry();
+	using worker = new SyntaxProviderWorker(registry);
+	const calls: string[] = [];
+	using registration = TokenizationRegistry.register('typescript', statefulSupport(calls));
+	const before = await runLane(worker, model, SYNTAX_TOKEN_LANE);
+	calls.length = 0;
+	const result = await worker.run({ requestId: 2, lane: SYNTAX_TOKENIZE_LANE, snapshot: model.createVersionedSnapshot(), payload: {
+		languageId: 'typescript', tokenize: { lineNumber: 2, lines: ['preview', 'close', 'after'] },
+	} }, new AbortController().signal);
+	assert.equal(result.lane, SYNTAX_TOKENIZE_LANE);
+	if (result.lane !== SYNTAX_TOKENIZE_LANE) throw new Error('Wrong lane');
+	assert.deepEqual(result.value!.tokens.map(token => [token.range.startLineNumber, token.tokenType]), [[1, 'comment'], [2, 'word'], [3, 'word']]);
+	assert.deepEqual(calls, ['preview', 'close', 'after']);
+	calls.length = 0;
+	assert.deepEqual((await runLane(worker, model, SYNTAX_TOKEN_LANE)).value, before.value);
+	assert.deepEqual(calls, []);
+});
+
+test('a selected provider without hypothetical tokenization does not borrow another lexer', async () => {
+	using model = new TextModel('word');
+	using registry = new SyntaxProviderRegistry();
+	using tokenizer = TokenizationRegistry.register('typescript', statefulSupport([]));
+	using registration = registry.register({ id: 'preferred', languageIds: ['typescript'], tokenPriority: 100, provideTokens: () => ({ tokens: [] }) });
+	using worker = new SyntaxProviderWorker(registry);
+	const result = await worker.run({ requestId: 1, lane: SYNTAX_TOKENIZE_LANE, snapshot: model.createVersionedSnapshot(), payload: {
+		languageId: 'typescript', tokenize: { lineNumber: 1, lines: ['open'] },
+	} }, new AbortController().signal);
+	assert.deepEqual(result, { lane: SYNTAX_TOKENIZE_LANE, value: null });
+});
+
+test('hypothetical tokens retain an embedded language even when it has no styling scope', async () => {
+	using model = new TextModel('word');
+	using registry = new SyntaxProviderRegistry();
+	using registration = TokenizationRegistry.register('typescript', {
+		getInitialState: () => new TokenState(),
+		tokenize: (_line, _hasEOL, state) => ({ tokens: [{ offset: 0, type: '', language: 'embedded' }], endState: state }),
+	});
+	using worker = new SyntaxProviderWorker(registry);
+	const result = await worker.run({ requestId: 1, lane: SYNTAX_TOKENIZE_LANE, snapshot: model.createVersionedSnapshot(), payload: {
+		languageId: 'typescript', tokenize: { lineNumber: 1, lines: ['begin'] },
+	} }, new AbortController().signal);
+	assert.deepEqual(result, { lane: SYNTAX_TOKENIZE_LANE, value: { tokens: [{ range: new Range(1, 1, 1, 6), tokenType: 'other', modifiers: [], languageId: 'embedded' }] } });
+});

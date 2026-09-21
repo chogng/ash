@@ -1,5 +1,36 @@
 # Editor API 对齐状态
 
+## 补全括号修复与异步分词试算（2026-09-21）
+
+准入链：带 `completeBracketPairs` 的行内补全 → 控制器 / `provideInlineCompletions` → 模型分词试算 → 现有 Syntax Worker / TextMate 语法 → `fixBracketsInLine` → 既有接受与撤销命令。上一批防抖改动已由用户提交；本批继续当前工作区，不修改提交历史。
+
+| 准入路径（相对 editor，另有标注除外） | 存在关系 | 唯一职责与本批动作 |
+| --- | --- | --- |
+| `common/model/bracketPairsTextModelPart/fixBrackets.ts` | 仅上游 → 双方都有 | 读取 token 类型、语言和括号配置；独立实现缺失闭括号补齐及多余闭括号移除，不复制上游 AST 遍历。 |
+| `common/languages.ts`、`common/services/editorWebWorker.ts`、`common/services/semanticTokensDto.ts` | 双方都有 | 增加独立试算 lane 和可选 provider 能力；复用已选择的 tokenizer、传输和取消，不将试算冒充已提交文本。 |
+| `common/tokenizationTextModelPart.ts`、`common/model/tokens/tokenizationTextModelPart.ts` | 双方都有 | 新增实际调用的异步 `tokenizeLinesAtAsync`；现有同步不可用语义保留。试算有自己的请求 lane，结果不进入模型 token store。 |
+| `contrib/inlineCompletions/common/inlineCompletions.ts` | 已确认的 Ash 现有补全契约 | 添加 provider 可选修复标记，保持当前 range 与附加编辑语义。 |
+| `contrib/inlineCompletions/browser/model/provideInlineCompletions.ts`、`browser/controller/inlineCompletionsController.ts`（同 contribution 下） | 双方都有 | 等待试算，检查取消和版本；控制器显式注入语言配置服务。修复后的文本仍经现有接受命令。 |
+| `../workbench/services/textMate/common/textMateTokenizationService.ts`、`textMateSyntaxProvider.ts` | Ash 既有 TextMate owner | 借用当前行前的词法状态并复用 scanLine；不替换缓存版本、不发布试算 token。 |
+| `test/common/model/bracketPairsTextModelPart/fixBrackets.test.ts` | 模块行为测试 | 新增括号、token 边界、嵌入语言、字符串及注释场景。 |
+| `test/common/syntaxProviderWorker.test.ts`、`contrib/tokenization/test/common/tokenizationTextModelPart.test.ts`、`test/common/syntaxWire.test.ts`、`test/common/syntaxWire.delta.test.ts` | 现有测试 | 验证试算、传输、取消和真实 token 缓存隔离。 |
+| `../workbench/services/textMate/test/common/textMateTokenizationService.test.ts` | 现有测试 | 验证跨行词法状态与试算前后缓存内容一致。 |
+| `contrib/inlineCompletions/test/browser/inlineCompletionsController.test.ts`、`ash-ts/test/integration/browser/standalone.integration.ts`、`standalone.integration.spec.ts`（后两项为仓库相对） | 现有测试设施 | 同步装配并从真实输入、接受与撤销入口验证结果。 |
+| `ash-ts/test/integration/browser/themes.integration.ts`、`themes.integration.spec.ts`（仓库相对） | 既有真实 TextMate Worker 设施 | 验证试算跨 Worker 传输、跨行字符串状态及缓存不变。 |
+| `browser/README.md`、`api-alignment-status.md` | 现有文档 | 记录异步边界、生产链和实际验证。 |
+
+实现依据：当前 TextModel 和 View 的文本、DOM、坐标及滚动职责保持唯一。语法状态归现有 Worker / TextMate 缓存，试算使用独立 lane，结果只在原请求仍有效时用于补全；没有语法或 provider 未提供试算能力时保持其原始补全文本，不猜测词法类型。同步与异步接口表达两种能力，不添加同步 tokenizer 或新的资源模型服务。
+
+common 当前 **211 个文件：180 个同路径、31 个 Ash 自有；46 个上游路径未引入**。`fixBrackets.ts` 已接入生产链。其余路径仍为 22 个由现有 owner 承担的职责、22 个本次范围外的完整 diff / Tree-sitter 文件，以及没有实际消费者的 `editorFeatures.ts`、`services/inMemoryTextModelService.ts`；不创建空入口或第二套模型生命周期。
+
+定向验证已通过 7 份单测文件和 9 个 Playwright 场景，覆盖括号嵌套、字符串/注释/正则、嵌入语言、UTF-16、多行补全、保留后缀、替换范围、附加编辑与一次撤销、取消及真实 TextMate Worker。Renderer 与 Stanza 生产构建通过。
+
+本批最终验证：
+
+- `check-editor-alignment.mjs --test=all` 通过：结构、台账、类型检查、233/233 份单测文件、358/358 个 Playwright 用例。
+- 复查补齐较长括号优先匹配和无样式 token 的嵌入语言信息后，重跑受影响的 2 份单测、9 个 Playwright 场景与 Renderer / Stanza 构建，全部通过。
+- `git diff --check` 通过，没有新增 CSS 或上游品牌引用。构建无新增 warning；测试保留原有 JSDOM Canvas、旧 fixture 服务装配和颜色环境提示。没有把私有实现或未运行的上游 UI 标为已对齐。
+
 ## 行内补全自动请求与公共防抖服务（2026-09-21）
 
 准入链：输入文本 / 已注册编辑命令 → `InlineCompletionsController` → `ILanguageFeatureDebounceService` 的模型与提供者延迟记录 → 当前版本的补全请求 → 既有提示与接受命令。起始工作区干净；继续采用已确认的现有功能链范围。

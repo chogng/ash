@@ -217,6 +217,9 @@ export class SyntaxProviderWorker implements languages.SyntaxWorker, LanguageWor
 				value: await this.runTokens(request, signal),
 			});
 		}
+		if (request.lane === languages.SYNTAX_TOKENIZE_LANE) {
+			return Object.freeze({ lane: languages.SYNTAX_TOKENIZE_LANE, value: await this.runTokenization(request, signal) });
+		}
 		if (request.lane === languages.SYNTAX_DIAGNOSTIC_LANE) {
 			return Object.freeze({
 				lane: languages.SYNTAX_DIAGNOSTIC_LANE,
@@ -248,51 +251,9 @@ export class SyntaxProviderWorker implements languages.SyntaxWorker, LanguageWor
 
 	private async runTokens(request: LanguageWorkerRequest<languages.SyntaxLane, languages.SyntaxRequest>, signal: AbortSignal): Promise<LanguageTokenResult> {
 		const providers = this.registry.getTokenProviders(request.payload.languageId);
-		let support = languages.TokenizationRegistry.get(request.payload.languageId);
-		if (providers.some(provider => provider.tokenPriority > 0)) {
-			support = null;
-		} else if (!support && !languages.TokenizationRegistry.isResolved(request.payload.languageId)) {
-			support = await languages.TokenizationRegistry.getOrCreate(request.payload.languageId);
-		}
+		const support = await this.getTokenizationSupport(request.payload.languageId);
 		signal.throwIfAborted();
-		if (support) {
-			const tokens: LanguageToken[] = [];
-			const cached = this.tokenizationCache?.support === support && this.tokenizationCache.languageId === request.payload.languageId
-				? this.tokenizationCache
-				: undefined;
-			const next: { text: string; hasEOL: boolean; tokens: readonly languages.Token[] }[] = [];
-			const states = new TokenizationStateStore<languages.IState>();
-			let state = support.getInitialState();
-			const initialState = state.clone();
-			const lines = request.snapshot.getText().split('\n');
-			for (let index = 0; index < lines.length; index++) {
-				signal.throwIfAborted();
-				const line = lines[index]!;
-				const hasEOL = index < lines.length - 1;
-				const previous = cached?.lines[index];
-				const previousStartState = index === 0 ? cached?.initialState : cached?.states.getEndState(index);
-				const previousEndState = cached?.states.getEndState(index + 1);
-				const result = previous?.text === line && previous.hasEOL === hasEOL && previousStartState?.equals(state) && previousEndState
-					? { tokens: previous.tokens, endState: previousEndState }
-					: support.tokenize(line, hasEOL, state.clone());
-				next.push({ text: line, hasEOL, tokens: result.tokens });
-				states.setEndState(index + 1, result.endState.clone());
-				state = result.endState;
-				for (let tokenIndex = 0; tokenIndex < result.tokens.length; tokenIndex++) {
-					const token = result.tokens[tokenIndex]!;
-					const end = result.tokens[tokenIndex + 1]?.offset ?? line.length;
-					if (end > token.offset && token.type) tokens.push({
-						range: new Range(index + 1, token.offset + 1, index + 1, end + 1),
-						tokenType: token.type,
-						modifiers: [],
-						languageId: token.language,
-					});
-				}
-			}
-			const normalized = createLanguageTokenSnapshotNormalizer(request.snapshot)({ tokens });
-			this.tokenizationCache = { support, languageId: request.payload.languageId, initialState, states, lines: next };
-			return normalized;
-		}
+		if (support) return this.tokenizeDocument(support, request, signal);
 		if (providers.length === 0) return EMPTY_TOKENS;
 		const normalize = createLanguageTokenSnapshotNormalizer(request.snapshot);
 		for (const provider of providers) {
@@ -306,6 +267,97 @@ export class SyntaxProviderWorker implements languages.SyntaxWorker, LanguageWor
 			}
 		}
 		return EMPTY_TOKENS;
+	}
+
+	private async getTokenizationSupport(languageId: string): Promise<languages.ITokenizationSupport | null> {
+		if (this.registry.getTokenProviders(languageId).some(provider => provider.tokenPriority > 0)) return null;
+		return languages.TokenizationRegistry.get(languageId) ?? (languages.TokenizationRegistry.isResolved(languageId)
+			? null : await languages.TokenizationRegistry.getOrCreate(languageId));
+	}
+
+	private tokenizeDocument(support: languages.ITokenizationSupport, request: LanguageWorkerRequest<languages.SyntaxLane, languages.SyntaxRequest>, signal: AbortSignal): LanguageTokenResult {
+		const tokens: LanguageToken[] = [];
+		const cached = this.tokenizationCache?.support === support && this.tokenizationCache.languageId === request.payload.languageId
+			? this.tokenizationCache
+			: undefined;
+		const next: { text: string; hasEOL: boolean; tokens: readonly languages.Token[] }[] = [];
+		const states = new TokenizationStateStore<languages.IState>();
+		let state = support.getInitialState();
+		const initialState = state.clone();
+		const lines = request.snapshot.getText().split('\n');
+		for (let index = 0; index < lines.length; index++) {
+			signal.throwIfAborted();
+			const line = lines[index]!;
+			const hasEOL = index < lines.length - 1;
+			const previous = cached?.lines[index];
+			const previousStartState = index === 0 ? cached?.initialState : cached?.states.getEndState(index);
+			const previousEndState = cached?.states.getEndState(index + 1);
+			const result = previous?.text === line && previous.hasEOL === hasEOL && previousStartState?.equals(state) && previousEndState
+				? { tokens: previous.tokens, endState: previousEndState }
+				: support.tokenize(line, hasEOL, state.clone());
+			next.push({ text: line, hasEOL, tokens: result.tokens });
+			states.setEndState(index + 1, result.endState.clone());
+			state = result.endState;
+			for (let tokenIndex = 0; tokenIndex < result.tokens.length; tokenIndex++) {
+				const token = result.tokens[tokenIndex]!;
+				const end = result.tokens[tokenIndex + 1]?.offset ?? line.length;
+				if (end > token.offset && token.type) tokens.push({
+					range: new Range(index + 1, token.offset + 1, index + 1, end + 1),
+					tokenType: token.type,
+					modifiers: [],
+					languageId: token.language,
+				});
+			}
+		}
+		const normalized = createLanguageTokenSnapshotNormalizer(request.snapshot)({ tokens });
+		this.tokenizationCache = { support, languageId: request.payload.languageId, initialState, states, lines: next };
+		return normalized;
+	}
+
+	private async runTokenization(request: LanguageWorkerRequest<languages.SyntaxLane, languages.SyntaxRequest>, signal: AbortSignal): Promise<LanguageTokenResult | null> {
+		const proposed = request.payload.tokenize;
+		if (!proposed || proposed.lineNumber > request.snapshot.lineCount) throw new RangeError("Hypothetical tokenization requires a start line in the document");
+		const support = await this.getTokenizationSupport(request.payload.languageId);
+		signal.throwIfAborted();
+		if (support) {
+			this.tokenizeDocument(support, request, signal);
+			const cache = this.tokenizationCache!;
+			let state = proposed.lineNumber === 1 ? cache.initialState : cache.states.getEndState(proposed.lineNumber - 1)!;
+			const tokens: LanguageToken[] = [];
+			for (let index = 0; index < proposed.lines.length; index++) {
+				signal.throwIfAborted();
+				const line = proposed.lines[index]!;
+				const result = support.tokenize(line, index < proposed.lines.length - 1, state.clone());
+				state = result.endState;
+				for (let tokenIndex = 0; tokenIndex < result.tokens.length; tokenIndex++) {
+					const token = result.tokens[tokenIndex]!;
+					const end = result.tokens[tokenIndex + 1]?.offset ?? line.length;
+					if (end > token.offset) tokens.push({
+						range: new Range(index + 1, token.offset + 1, index + 1, end + 1),
+						tokenType: token.type === '' ? 'other' : token.type,
+						modifiers: [], languageId: token.language,
+					});
+				}
+			}
+			return { tokens };
+		}
+		// The provider that owns live tokens also decides whether preview is available.
+		for (const provider of this.registry.getTokenProviders(request.payload.languageId)) {
+			try {
+				const realRequest = providerRequest(request);
+				const realTokens = await provider.provideTokens!(realRequest, signal);
+				signal.throwIfAborted();
+				if (realTokens === undefined) continue;
+				const value = await provider.provideTokensForLines?.({ ...realRequest, tokenize: proposed }, signal);
+				signal.throwIfAborted();
+				return value ?? null;
+			} catch (error) {
+				if (signal.aborted) throw error;
+				this.reportProviderError(provider.id, languages.SYNTAX_TOKENIZE_LANE, error);
+				return null;
+			}
+		}
+		return null;
 	}
 
 	private async runDiagnostics(request: LanguageWorkerRequest<languages.SyntaxLane, languages.SyntaxRequest>, signal: AbortSignal): Promise<languages.LanguageDiagnosticResult> {
@@ -729,7 +781,7 @@ class SyntaxProviderOverlayWorker implements languages.SyntaxWorker, LanguageWor
 
 	run(request: LanguageWorkerRequest<languages.SyntaxLane, languages.SyntaxRequest>, signal: AbortSignal): Promise<languages.SyntaxResult> {
 		const languageId = request.payload.languageId;
-		const preferred = request.lane === languages.SYNTAX_TOKEN_LANE
+		const preferred = request.lane !== languages.SYNTAX_DIAGNOSTIC_LANE
 			? languages.TokenizationRegistry.get(languageId) !== null || !languages.TokenizationRegistry.isResolved(languageId) || this.registry.getTokenProviders(languageId).some(provider => provider.tokenPriority > 0)
 			: this.registry.getDiagnosticProviders(languageId).some(provider => provider.diagnosticPriority > 0);
 		return preferred ? this.providers.run(request, signal) : this.fallback.run(request, signal);

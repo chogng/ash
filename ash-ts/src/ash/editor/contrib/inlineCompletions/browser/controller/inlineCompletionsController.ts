@@ -22,6 +22,7 @@ import { type ITextModel } from '../../../../common/model.js';
 import { RunOnceScheduler } from '../../../../../base/common/async.js';
 import { StopWatch } from '../../../../../base/common/stopwatch.js';
 import { ILanguageFeatureDebounceService, type IFeatureDebounceInformation } from '../../../../common/services/languageFeatureDebounce.js';
+import { ILanguageConfigurationService } from '../../../../common/languages/languageConfigurationRegistry.js';
 
 /** Owns ghost-text projection and explicit acceptance of one inline completion. */
 export class InlineCompletionsController extends Disposable {
@@ -43,6 +44,7 @@ export class InlineCompletionsController extends Disposable {
 		private readonly onError: (error: unknown) => void,
 		@IInlineCompletionsService private readonly inlineCompletionsService: IInlineCompletionsService,
 		@ILanguageFeatureDebounceService debounceService: ILanguageFeatureDebounceService,
+		@ILanguageConfigurationService private readonly languageConfigurationService: ILanguageConfigurationService,
 	) {
 		super();
 		if (editor.getModel() !== model || viewport.textModel !== model) throw new TypeError('Inline completion dependencies must share one text model');
@@ -115,7 +117,7 @@ export class InlineCompletionsController extends Disposable {
 		const request = this.request = new AbortController();
 		const duration = StopWatch.create();
 		try {
-			const items = await provideInlineCompletions(this.model, this.providers, this.model.getLanguageId(), selection.getPosition(), triggerKind, request.signal);
+			const items = await provideInlineCompletions(this.model, this.providers, this.model.getLanguageId(), selection.getPosition(), triggerKind, request.signal, this.languageConfigurationService);
 			if (request.signal.aborted) return;
 			this.debounce.update(this.model, duration.elapsed());
 			this.item = items[0];

@@ -5,6 +5,8 @@ import { type LanguageFeatureRequest, type TextEdit } from "../../../common/lang
 
 export interface LanguageInlineCompletionItem {
 	readonly insertText: string;
+	/** Repairs missing and unexpected brackets using the document's lexical context. */
+	readonly completeBracketPairs?: boolean;
 	readonly range?: Range;
 	readonly filterText?: string;
 	readonly commandId?: string;

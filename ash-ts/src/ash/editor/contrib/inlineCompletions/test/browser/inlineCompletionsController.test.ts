@@ -1,3 +1,5 @@
+import { createTestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
+import { ILanguageConfigurationService } from '../../../../common/languages/languageConfigurationRegistry.js';
 import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../../../common/services/languageFeatureDebounce.js';
 import { ServiceContainer } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IInlineCompletionsService, InlineCompletionsService } from '../../../../browser/services/inlineCompletionsService.js';
@@ -71,6 +73,8 @@ test('Registered editor commands retrigger inline completions after their edit',
 	using services = new ServiceContainer();
 	services.registerInstance(IInlineCompletionsService, inlineCompletionsService);
 	services.registerInstance(ILanguageFeatureDebounceService, new LanguageFeatureDebounceService());
+	using configurations = createTestLanguageConfigurationService();
+	services.registerInstance(ILanguageConfigurationService, configurations);
 	using controller = services.createInstance(InlineCompletionsController, input, editorFor(model, selections), viewport, model, providers, commands.event, (error: unknown) => { throw error; });
 
 	commands.fire({ commandId: 'editor.test.unrelatedCommand' });
@@ -111,6 +115,8 @@ test('inline completion acceptance applies additional edits and undoes atomicall
 	services.registerInstance(IInlineCompletionsService, service);
 	assert.throws(() => services.createInstance(InlineCompletionsController, input, editorFor(model, selections), viewport, model, providers, undefined, (error: unknown) => { throw error; }), /Unknown service/);
 	services.registerInstance(ILanguageFeatureDebounceService, new LanguageFeatureDebounceService());
+	using configurations = createTestLanguageConfigurationService();
+	services.registerInstance(ILanguageConfigurationService, configurations);
 	using controller = services.createInstance(InlineCompletionsController, input, editorFor(model, selections), viewport, model, providers, undefined, (error: unknown) => { throw error; });
 
 	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: ' ', ctrlKey: true, altKey: true }));

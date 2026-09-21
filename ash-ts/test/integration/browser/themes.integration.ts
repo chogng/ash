@@ -23,6 +23,7 @@ declare global {
 	interface Window {
 		registerLateThemeColor(): void;
 		disposeThemeRoot(): void;
+		previewInTextMateWorker(): Promise<{ preview: string[]; unchanged: boolean; text: string }>;
 		tokenizeInTextMateWorker(): Promise<readonly { type: string; modifiers: readonly string[]; presentation?: { foreground?: string; fontStyle?: readonly string[] } }[]>;
 	}
 }
@@ -109,3 +110,17 @@ document.querySelector('#seti')!.addEventListener('click', () => { void configur
 document.querySelector('#light')!.addEventListener('click', () => { void configuration.updateValue(WorkbenchConfiguration.colorTheme, 'ash-light'); });
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
 document.body.dataset.ready = 'true';
+
+
+window.previewInTextMateWorker = async () => {
+	using catalogs = new TextMateGrammarCatalogModel({ revision: 1, grammars: [{ scopeName: 'source.preview', languageId: 'preview', injectTo: [],
+		content: JSON.stringify({ scopeName: 'source.preview', patterns: [{ begin: '"', end: '"', name: 'string.quoted.preview' }, { match: '\\bif\\b', name: 'keyword.control.preview' }] }),
+	}] });
+	using theme = new TextMateScopeThemeModel();
+	using model = new TextModel('"start\nend"\nif', { languageId: 'preview', tokenization: { syntaxService: { workerFactory: createTextMateSyntaxWorkerFactory(catalogs, theme) } } });
+	const signal = new AbortController().signal;
+	const preview = await model.tokenization.tokenizeLinesAtAsync(2, ['[)"', 'if'], signal);
+	const first = await model.tokenization.tokenizeLinesAtAsync(3, ['if'], signal);
+	const second = await model.tokenization.tokenizeLinesAtAsync(3, ['if'], signal);
+	return { preview: preview!.map(line => `${line.getLineContent()}:${line.getStandardTokenType(0)}`), unchanged: first![0]!.equals(second![0]!), text: model.getText() };
+};

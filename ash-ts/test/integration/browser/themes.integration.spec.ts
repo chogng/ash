@@ -56,3 +56,13 @@ test('extension file icons load a real font and update existing labels on theme 
 	await expect(icon).not.toHaveText('');
 	expect(errors).toEqual([]);
 });
+
+
+test('TextMate Worker tokenizes hypothetical lines in context without changing the document', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/themes.html');
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	expect(await page.evaluate(() => window.previewInTextMateWorker())).toEqual({ preview: ['[)":2', 'if:0'], unchanged: true, text: '"start\nend"\nif' });
+	expect(errors).toEqual([]);
+});

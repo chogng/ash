@@ -93,6 +93,7 @@ interface InlineRequestState {
 }
 
 interface StandaloneHarness {
+	prepareBracketCompletion(value: string, insertText: string, column: number, tokenType: 'other' | 'string' | 'comment' | 'unavailable', completeBracketPairs: boolean, replaceLength?: number): void;
 	prepareInlineRequests(): void;
 	readInlineRequests(): InlineRequestState;
 	finishInlineRequest(index: number): Promise<void>;
@@ -257,6 +258,7 @@ const pointerMouseUpListener = callerEditor.onMouseUp(() => { pointerMouseUpEven
 let referenceRegistration: { dispose(): void } | undefined;
 let codeActionRegistration: ReturnType<typeof stanza.languages.registerCodeActionProvider> | undefined;
 let inlineRegistration: ReturnType<typeof stanza.languages.registerInlineCompletionsProvider> | undefined;
+const inlineBracketResources = new DisposableStore();
 const inlineRequests: { kind: string; text: string; languageId: string; signal: AbortSignal; resolve: () => void }[] = [];
 let semanticRegistration: ReturnType<typeof stanza.languages.registerDocumentSemanticTokensProvider> | undefined;
 let completionRegistration: ReturnType<typeof stanza.languages.registerCompletionItemProvider> | undefined;
@@ -380,6 +382,27 @@ window.ashStandaloneIntegration = {
 			diagnostics: callerModel.diagnostics.results.result?.value.diagnostics.map(diagnostic => diagnostic.message) ?? [],
 			current: callerModel.tokenization.modelVersion === callerModel.version,
 		};
+	},
+	prepareBracketCompletion: (value, insertText, column, tokenType, completeBracketPairs, replaceLength = 0) => {
+		inlineRegistration?.dispose();
+		inlineBracketResources.clear();
+		callerEditor.setValue(value);
+		callerModel.setLanguage('typescript');
+		callerEditor.setPosition(new stanza.Position(1, column));
+		if (tokenType !== 'unavailable') {
+			inlineBracketResources.add(stanza.languages.registerSyntaxProvider({
+				id: 'inline-bracket-test', languageIds: ['typescript'], tokenPriority: 100,
+				provideTokens: () => ({ tokens: [] }),
+				provideTokensForLines: request => ({ tokens: request.tokenize.lines.flatMap((line, index) => line.length ? [{
+					range: new stanza.Range(index + 1, 1, index + 1, line.length + 1), tokenType, modifiers: [],
+				}] : []) }),
+			}));
+		}
+		inlineRegistration = stanza.languages.registerInlineCompletionsProvider('typescript', { provideInlineCompletions: () => [{
+			insertText, completeBracketPairs, range: new stanza.Range(1, column, 1, column + replaceLength),
+			additionalTextEdits: [{ range: new stanza.Range(1, 1, 1, 1), text: '/* accepted */ ' }],
+		}] });
+		callerEditor.focus();
 	},
 	prepareInlineRequests: () => {
 		inlineRegistration?.dispose();
@@ -1549,6 +1572,7 @@ window.ashStandaloneIntegration = {
 	},
 	releaseOwned: () => ownedEditor.dispose(),
 	dispose: () => {
+		inlineBracketResources.dispose();
 		inlineRegistration?.dispose();
 		for (const request of inlineRequests) request.resolve();
 		formattingProvider?.dispose();

@@ -215,7 +215,7 @@ test("Syntax wire multi-splices stay exact across repeated disjoint transactions
 	}
 });
 
-function syntaxResult(lane: SyntaxLane, snapshot: TextSnapshot): SyntaxResult {
+function syntaxResult(lane: typeof SYNTAX_TOKEN_LANE | typeof SYNTAX_DIAGNOSTIC_LANE, snapshot: TextSnapshot): SyntaxResult {
 	return lane === SYNTAX_TOKEN_LANE
 		? Object.freeze({ lane, value: testTokens(snapshot) })
 		: Object.freeze({ lane, value: testDiagnostics(snapshot) });
@@ -235,6 +235,7 @@ function tokenResult(tokenType: string): SyntaxResult {
 }
 
 function serializeResult(result: SyntaxResult): unknown {
+	if (result.lane === "tokenize") throw new Error("Hypothetical results have no delta baseline");
 	const items = result.lane === SYNTAX_TOKEN_LANE ? result.value.tokens : result.value.diagnostics;
 	return {
 		lane: result.lane,
