@@ -24,7 +24,7 @@ just test ash-mxc-sandbox --lib --test windows
 
 [Windows PSEC acceptance](../.github/workflows/psec.yml) 在 main 或 `codex/psec-*` 分支相关文件更新时并行使用 `windows-2025`（x64）和 `windows-11-arm`（ARM64），一侧失败不取消另一侧。Run workflow 的 `hosted` 选项运行两者，也可单独选择一种。专用机器注册到本仓库后，添加 `self-hosted`、`Windows`、`psec` 标签，手动选择 `self-hosted`；机器须预装 PowerShell 7、Python 3.11+、Rustup 和对应 MSVC C++ 工具链。不假设运行器标签代表具备 PSEC 能力。
 
-工作流不安装沙箱账户，不改变系统功能或放宽文件策略。能力用例通过 Ash 适配器准备含隐藏存储、工作目录写入、只读元数据和禁止网络的真实请求，创建并关闭 PSEC 环境及启动属性，不启动用户命令。失败时工作流失败，随后四项成功路径不执行；测试名未匹配也不能算通过。
+工作流不安装沙箱账户，不改变系统功能或放宽文件策略。能力用例通过 Ash 适配器准备含隐藏存储、工作目录写入、只读元数据和禁止网络的真实请求，创建并关闭 PSEC 环境及启动属性，不启动用户命令。失败时工作流失败，随后成功路径不执行；测试名未匹配也不能算通过。探测成功后，cmd、Windows PowerShell、文件策略和进程生命周期用例分别运行，汇总全部失败；不让第一个失败遮住后续独立用例。
 
 每次上传 `.build/acceptance/psec`，包含系统版本、架构、Rust 工具链、MXC pin、各阶段命令/退出码/输出和 `report.json`。通过状态仅表示报告列出的范围；PSEC ConPTY、Allowed/Denied 完整网络矩阵、App Server 产品链路及 WSL 尚未纳入此任务，不能据此宣布完整生产验收通过。托管运行器缺能力时，需要已确认支持相同策略的专用运行器，不能以账户后端结果代替。
 

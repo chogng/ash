@@ -154,18 +154,27 @@ fn scoped_execution_preserves_grants_metadata_and_exit_code_authenticity() {
         literal(&secret),
         literal(&reference.canonical_path().join("modified")),
     );
-    let result = executor(&work, Duration::from_secs(30))
-        .execute_scoped_with_network(
-            powershell(script),
-            CommandExecutionAuthority::Sandboxed(sandbox_policy(
-                FileSystemAccess::DirectoryWrite,
-                NetworkAccess::Denied,
-            )),
-            &CancellationSource::new().token(),
-            Some(&scope),
-            None,
+    let result = executor(&work, Duration::from_secs(30)).execute_scoped_with_network(
+        powershell(script),
+        CommandExecutionAuthority::Sandboxed(sandbox_policy(
+            FileSystemAccess::DirectoryWrite,
+            NetworkAccess::Denied,
+        )),
+        &CancellationSource::new().token(),
+        Some(&scope),
+        None,
+    );
+    assert_eq!(
+        protected.map(sddl),
+        before,
+        "host ACLs changed after execution"
+    );
+    let result = result.unwrap_or_else(|error| {
+        panic!(
+            "{error:?}; command reached first write: {}",
+            work.canonical_path().join("output").exists()
         )
-        .unwrap();
+    });
     let CommandExecutionOutcome::Completed(output) = result else {
         panic!("{result:?}")
     };
@@ -182,6 +191,60 @@ fn scoped_execution_preserves_grants_metadata_and_exit_code_authenticity() {
     for name in [".agents", ".codex", ".ash"] {
         assert!(!work.canonical_path().join(name).exists());
     }
+}
+
+#[test]
+#[ignore = "requires PSEC execution with redirected standard streams"]
+fn psec_cmd_preserves_output_and_exit_code() {
+    let temp = tempfile::tempdir().unwrap();
+    let dir = Dir::open_local(temp.path()).unwrap();
+    let program = Path::new(&std::env::var_os("SystemRoot").unwrap()).join("System32/cmd.exe");
+    let result = executor(&dir, Duration::from_secs(15))
+        .execute(
+            CommandRequest {
+                program: program.to_str().unwrap().into(),
+                arguments: vec![
+                    "/d".into(),
+                    "/c".into(),
+                    "echo psec-cmd-ok & exit /b 125".into(),
+                ],
+                working_directory: ".".into(),
+                input: CommandInput::Closed,
+            },
+            CommandExecutionAuthority::Sandboxed(sandbox_policy(
+                FileSystemAccess::DirectoryWrite,
+                NetworkAccess::Denied,
+            )),
+            &CancellationSource::new().token(),
+        )
+        .unwrap();
+    let CommandExecutionOutcome::Completed(output) = result else {
+        panic!("{result:?}")
+    };
+    assert_eq!(output.exit_code, Some(125), "{output:?}");
+    assert!(output.stdout.contains("psec-cmd-ok"), "{output:?}");
+}
+
+#[test]
+#[ignore = "requires PSEC execution of Windows PowerShell"]
+fn psec_powershell_preserves_output_and_exit_code() {
+    let temp = tempfile::tempdir().unwrap();
+    let dir = Dir::open_local(temp.path()).unwrap();
+    let result = executor(&dir, Duration::from_secs(30))
+        .execute(
+            powershell("Write-Output 'psec-powershell-ok'; exit 125".into()),
+            CommandExecutionAuthority::Sandboxed(sandbox_policy(
+                FileSystemAccess::DirectoryWrite,
+                NetworkAccess::Denied,
+            )),
+            &CancellationSource::new().token(),
+        )
+        .unwrap();
+    let CommandExecutionOutcome::Completed(output) = result else {
+        panic!("{result:?}")
+    };
+    assert_eq!(output.exit_code, Some(125), "{output:?}");
+    assert!(output.stdout.contains("psec-powershell-ok"), "{output:?}");
 }
 
 #[test]

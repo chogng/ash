@@ -63,14 +63,22 @@ try {
     $report.stage = 'capability'
     Invoke-Test 'capability' $windows[0].executable @('psec_host_supports_scoped_policy', '--ignored', '--exact', '--nocapture')
     $report.stage = 'execution'
+    $failures = @()
     foreach ($test in @(
+        'psec_cmd_preserves_output_and_exit_code',
+        'psec_powershell_preserves_output_and_exit_code',
         'scoped_execution_preserves_grants_metadata_and_exit_code_authenticity',
         'timeout_and_cancellation_terminate_descendants',
         'subsequent_executions_cannot_write_files_owned_by_an_earlier_execution',
         'ordinary_exit_reaps_background_descendants'
     )) {
-        Invoke-Test $test $windows[0].executable @($test, '--ignored', '--exact', '--nocapture')
+        try {
+            Invoke-Test $test $windows[0].executable @($test, '--ignored', '--exact', '--nocapture')
+        } catch {
+            $failures += $_.Exception.Message
+        }
     }
+    if ($failures.Count -gt 0) { throw ($failures -join "`n") }
     $report.status = 'passed-listed-scope'
     $report.stage = 'complete'
 } catch {
