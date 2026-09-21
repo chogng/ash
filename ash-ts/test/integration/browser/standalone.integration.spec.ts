@@ -1,5 +1,21 @@
 import { expect, test } from '@playwright/test';
 
+test('semantic provider replacement and removal update rendered token styles', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.setSemanticProvider('variable'));
+	const variable = page.locator('#caller .view-lines .token-variable.token-modifier-readonly');
+	await expect(variable).toHaveText('caller');
+	await page.evaluate(() => window.ashStandaloneIntegration.setSemanticProvider('function'));
+	await expect(page.locator('#caller .view-lines .token-function.token-modifier-readonly')).toHaveText('caller');
+	await expect(variable).toHaveCount(0);
+	await page.evaluate(() => window.ashStandaloneIntegration.setSemanticProvider(null));
+	await expect(page.locator('#caller .view-lines .token-modifier-readonly')).toHaveCount(0);
+	expect(errors).toEqual([]);
+});
+
+
 for (const inputKind of ['editContext', 'textarea'] as const) {
 	for (const command of ['copy', 'cut', 'paste'] as const) {
 		for (const target of ['outside', 'readonly', 'find'] as const) {

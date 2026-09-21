@@ -4,8 +4,7 @@ import { LanguageFeatureRegistry } from '../../languageFeatureRegistry.js';
 import { LanguageRequestCoordinator, type LanguageRequestOptions, type LanguageRequestOutcome, type LanguageWorker, type LanguageWorkerRequest } from '../languageRequestCoordinator.js';
 import { LanguageResultAcceptance } from '../languageResultStore.js';
 import { type LanguageSemanticTokensProvider } from '../../languages.js';
-import { type SemanticTokenModelSource, type SemanticTokenStylingResolver, createLanguageTokenStore, type LanguageToken, type LanguageTokenResult } from '../../tokens/languageTokens.js';
-import { SemanticTokensStylingService } from '../../services/semanticTokensStylingService.js';
+import { type SemanticTokenModelSource, createLanguageTokenStore, type LanguageTokenResult } from '../../tokens/languageTokens.js';
 import { LanguageTokenLineIndex } from '../../tokens/languageTokenLineIndex.js';
 import { type TextModel } from '../textModel.js';
 
@@ -16,36 +15,22 @@ interface SemanticTokensPayload {
 	readonly languageId: string;
 }
 
-interface SemanticTokensProviderResult {
-	readonly tokens: LanguageTokenResult;
-	readonly provider?: LanguageSemanticTokensProvider;
-}
-
-/** Owns provider requests, version gating, styling, and the semantic line index for one model. */
+/** Owns provider requests, version gating, and the semantic line index for one model. */
 export class SemanticTokensTextModelPart extends Disposable implements SemanticTokenModelSource {
 	private readonly errorEmitter = this._register(new Emitter<unknown>());
-	private readonly stylingService = this._register(new SemanticTokensStylingService());
 	private readonly tokens: ReturnType<typeof createLanguageTokenStore>;
 	private readonly index: LanguageTokenLineIndex;
-	private readonly coordinator: LanguageRequestCoordinator<SemanticTokensLane, SemanticTokensPayload, SemanticTokensProviderResult>;
-	private providerStyling: SemanticTokenStylingResolver | undefined;
+	private readonly coordinator: LanguageRequestCoordinator<SemanticTokensLane, SemanticTokensPayload, LanguageTokenResult>;
 	private requestGeneration = 0;
 
 	readonly onDidChange: LanguageTokenLineIndex['onDidChange'];
 	readonly onDidEncounterError: Event<unknown> = this.errorEmitter.event;
-	readonly styling: SemanticTokenStylingResolver;
 
 	constructor(readonly textModel: TextModel, private readonly providers: LanguageFeatureRegistry<LanguageSemanticTokensProvider>) {
 		super();
 		this.tokens = this._register(createLanguageTokenStore(textModel));
 		this.index = this._register(new LanguageTokenLineIndex(this.tokens));
 		this.onDidChange = this.index.onDidChange;
-		this.styling = Object.freeze({
-			resolve: (token: LanguageToken) => {
-				if (!this.providerStyling) throw new ReferenceError('Semantic token styling has no active provider');
-				return this.providerStyling.resolve(token);
-			},
-		});
 		this.coordinator = this._register(new LanguageRequestCoordinator(
 			textModel,
 			() => new SemanticTokensProviderWorker(textModel, providers),
@@ -53,12 +38,12 @@ export class SemanticTokensTextModelPart extends Disposable implements SemanticT
 		this._register(textModel.onDidChangeContent(() => this.schedule()));
 		this._register(textModel.onDidChangeLanguage(() => {
 			this.coordinator.restartWorker();
-			this.clear();
+			this.tokens.clear();
 			this.schedule();
 		}));
 		this._register(providers.onDidChange(() => {
 			this.coordinator.restartWorker();
-			this.clear();
+			this.tokens.clear();
 			this.schedule();
 		}));
 		this.schedule();
@@ -74,15 +59,9 @@ export class SemanticTokensTextModelPart extends Disposable implements SemanticT
 
 	requestTokens(languageId: string, options: LanguageRequestOptions = {}): Promise<LanguageRequestOutcome> {
 		return this.coordinator.runLatest(SEMANTIC_TOKENS_LANE, Object.freeze({ languageId }), result => {
-			this.providerStyling = result.value.provider ? this.stylingService.getStyling(result.value.provider) : undefined;
-			const acceptance = this.tokens.accept({ ...result, value: result.value.tokens });
+			const acceptance = this.tokens.accept(result);
 			if (acceptance !== LanguageResultAcceptance.Applied) throw new Error(`Semantic-token result store rejected current result as '${acceptance}'`);
 		}, options);
-	}
-
-	private clear(): void {
-		this.providerStyling = undefined;
-		this.tokens.clear();
 	}
 
 	private schedule(): void {
@@ -103,10 +82,10 @@ export class SemanticTokensTextModelPart extends Disposable implements SemanticT
 	}
 }
 
-class SemanticTokensProviderWorker implements LanguageWorker<SemanticTokensLane, SemanticTokensPayload, SemanticTokensProviderResult> {
+class SemanticTokensProviderWorker implements LanguageWorker<SemanticTokensLane, SemanticTokensPayload, LanguageTokenResult> {
 	constructor(private readonly model: TextModel, private readonly providers: LanguageFeatureRegistry<LanguageSemanticTokensProvider>) {}
 
-	async run(request: LanguageWorkerRequest<SemanticTokensLane, SemanticTokensPayload>, signal: AbortSignal): Promise<SemanticTokensProviderResult> {
+	async run(request: LanguageWorkerRequest<SemanticTokensLane, SemanticTokensPayload>, signal: AbortSignal): Promise<LanguageTokenResult> {
 		const providerRequest = Object.freeze({
 			requestId: request.requestId,
 			model: this.model,
@@ -118,9 +97,9 @@ class SemanticTokensProviderWorker implements LanguageWorker<SemanticTokensLane,
 			signal.throwIfAborted();
 			const result = await provider.provideSemanticTokens(providerRequest, signal);
 			signal.throwIfAborted();
-			if (result) return Object.freeze({ tokens: result, provider });
+			if (result) return result;
 		}
-		return Object.freeze({ tokens: EMPTY_RESULT });
+		return EMPTY_RESULT;
 	}
 
 	dispose(): void {}

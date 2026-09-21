@@ -1,18 +1,4 @@
-import { SemanticTokenModifier, SemanticTokenPresentation, type LanguageToken, type SemanticTokenStyling, type SemanticTokenStylingResolver } from '../tokens/languageTokens.js';
-import type { DocumentTokensProvider } from './semanticTokensStyling.js';
-
-/** Resolves the object-token vocabulary for one semantic-token provider. */
-export class SemanticTokensProviderStyling implements SemanticTokenStylingResolver {
-	constructor(readonly provider: DocumentTokensProvider) {
-		if (!provider || typeof provider.provideSemanticTokens !== 'function') {
-			throw new TypeError('Semantic token styling requires a document token provider');
-		}
-	}
-
-	public resolve(token: LanguageToken): SemanticTokenStyling {
-		return resolveSemanticTokenStyling(token);
-	}
-}
+import { SemanticTokenModifier, SemanticTokenPresentation, type LanguageToken, type SemanticTokenStyling } from '../tokens/languageTokens.js';
 
 export function resolveSemanticTokenStyling(token: LanguageToken): SemanticTokenStyling {
 	const presentation = resolveSemanticTokenPresentation(token);

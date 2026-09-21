@@ -108,7 +108,7 @@ IME composition 使用受保护的 history revision。Provisional updates 可以
 
 语言请求从 immutable model snapshot 开始。`LanguageRequestCoordinator`、`VersionedLanguageResultStore` 和对应 token/diagnostic index 共同执行 latest-wins、cancellation、cross-model rejection 和 stale-result rejection。Worker 或 Rust adapter 可以生产事实，但不能成为 token store、selection 或 model owner。
 
-语义 token 的 provider 样式由 `SemanticTokensStylingService` 按 provider identity 缓存 `SemanticTokensProviderStyling`。`TokenizationTextModelPart` 持有 `StyledTokenSource`，负责逐行显示数据的缓存、失效与语法/语义 token 合并；同一模型的多个编辑器共用该结果。浏览器 contribution 直接消费 `model.tokenization.renderedTokens`，不再创建额外的解析服务。当前本地 provider 直接返回结构化 `LanguageToken`，尚未采用 VS Code legend 的数字 metadata 表示。
+语法和语义 token 共用 `semanticTokensProviderStyling.ts` 中的无状态转换函数，把 token 名称和修饰符映射到显示样式；转换不依赖 provider，不创建 provider 缓存或额外样式服务。`TokenizationTextModelPart` 持有 `StyledTokenSource`，负责逐行显示数据的缓存、失效与语法/语义 token 合并；同一模型的多个编辑器共用该结果。浏览器 contribution 直接消费 `model.tokenization.renderedTokens`，不再创建额外的解析服务。当前本地 provider 直接返回结构化 `LanguageToken`，尚未采用 VS Code legend 的数字 metadata 表示。
 
 ## 视图架构
 

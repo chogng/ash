@@ -85,6 +85,7 @@ interface ViewZoneState {
 }
 
 interface StandaloneHarness {
+	setSemanticProvider(tokenType: string | null): void;
 	prepareLanguageWorkers(): void;
 	readLanguageWorkers(): { tokens: string[]; diagnostics: string[]; current: boolean };
 
@@ -232,6 +233,7 @@ let pointerMouseUpEvents = 0;
 const pointerMouseUpListener = callerEditor.onMouseUp(() => { pointerMouseUpEvents += 1; });
 let referenceRegistration: { dispose(): void } | undefined;
 let codeActionRegistration: ReturnType<typeof stanza.languages.registerCodeActionProvider> | undefined;
+let semanticRegistration: ReturnType<typeof stanza.languages.registerDocumentSemanticTokensProvider> | undefined;
 let completionRegistration: ReturnType<typeof stanza.languages.registerCompletionItemProvider> | undefined;
 let viewZone: stanza.IViewZone | undefined;
 let viewZoneId = '';
@@ -317,6 +319,23 @@ let deferredFormatting: { token: CancellationToken; resolve: () => void }[] = []
 let formattingProvider: { dispose(): void } | undefined;
 
 window.ashStandaloneIntegration = {
+	setSemanticProvider: tokenType => {
+		semanticRegistration?.dispose();
+		semanticRegistration = undefined;
+		if (tokenType === null) return;
+		semanticRegistration = stanza.languages.registerDocumentSemanticTokensProvider('plaintext', {
+			provideSemanticTokens: request => {
+				if (request.model !== callerModel) return undefined;
+				return {
+					tokens: [{
+						range: new stanza.Range(1, 1, 1, 7),
+						tokenType,
+						modifiers: ['readonly'],
+					}],
+				};
+			},
+		});
+	},
 	prepareLanguageWorkers: () => {
 		callerModel.setLanguage('typescript');
 		callerEditor.setValue('const alphabet = 1;\nconst alpha = (\nal');
@@ -1392,6 +1411,7 @@ window.ashStandaloneIntegration = {
 		referenceRegistration?.dispose();
 		TokenizationRegistry.setColorMap([]);
 		codeActionRegistration?.dispose();
+		semanticRegistration?.dispose();
 		completionRegistration?.dispose();
 		ownedEditor.dispose();
 		callerEditor.dispose();

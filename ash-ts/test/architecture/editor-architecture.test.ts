@@ -277,8 +277,6 @@ test("Flat editor layout keeps one TextModel owner and both mode bundles", () =>
 		"common/services/modelService.ts",
 		"common/services/semanticTokensDto.ts",
 		"common/services/semanticTokensProviderStyling.ts",
-		"common/services/semanticTokensStyling.ts",
-		"common/services/semanticTokensStylingService.ts",
 		"common/services/textModelSync/textModelSync.impl.ts",
 		"common/services/textModelSync/textModelSync.protocol.ts",
 		"common/model/documentTransaction.ts",
@@ -597,7 +595,7 @@ test("Tree-sitter runtime stays behind App Server syntax facts", () => {
 	const sharedWorkbench = readFileSync(join(workbenchRoot, "browser/workbench.ts"), "utf8");
 	const codeContribution = readFileSync(resolve(editorRoot, "../code/browser/workbench/modes/code.contribution.ts"), "utf8");
 	const academicContribution = readFileSync(resolve(editorRoot, "../code/browser/workbench/modes/academic.contribution.ts"), "utf8");
-	const styling = readFileSync(join(editorRoot, "common/services/semanticTokensStylingService.ts"), "utf8");
+	const styling = readFileSync(join(editorRoot, "common/services/semanticTokensProviderStyling.ts"), "utf8");
 	assert.doesNotMatch(packageManifest, /tree-sitter/u);
 	assert.equal(existsSync(join(editorRoot, "common/services/treeSitter")), false);
 	assert.match(syntaxCrate, /SyntaxDocument/u);

@@ -1,5 +1,15 @@
 # Editor API 对齐状态
 
+## common 样式服务续批清理（2026-09-21）
+
+删除 `services/semanticTokensStyling.ts`、`services/semanticTokensStylingService.ts`，移除 `semanticTokensProviderStyling.ts` 中的无状态 provider 包装类，保留实际转换函数。VS Code 的对应服务根据 provider legend、主题和语言解析数字 token metadata；Ash 使用带名称的 `LanguageToken`，当前转换完全不读取 provider，原服务只有额外的对象与缓存，没有独立职责。
+
+生产调用链为模型语义 provider → `SemanticTokensTextModelPart` 的请求与版本检查 → token store → `StyledTokenSource` → 渲染行。模型直接接受 token 结果，语法和语义路径共用转换函数，不再保存结果 provider 或为每个模型创建样式服务。模型、行缓存和 DOM 的归属没有变化。`textResourceConfiguration.ts` 的资源换行符契约继续保留。
+
+本批从干净工作区开始，删除 2 个同路径文件后 common 有 202 个 TypeScript 文件，其中 168 个与 VS Code 同路径、34 个仅 Ash；该数量不代表 API 一致性。下方上一批统计保留为历史记录。
+
+验证：`check-editor-alignment.mjs --test=unit` 通过，包含结构检查、Stanza 类型检查和 Editor/关联 Workbench 单测 228/228 文件；定向语义 token 单测 3/3 文件（18 项）、编辑器架构测试 23 项通过。新增提供者替换、移除和迟到结果验证，原样式测试改为直接断言模型渲染结果。Playwright 的提供者高亮切换和真实 TextMate Worker 场景 2/2 通过，测试提供者限制为目标模型后再次运行高亮场景通过。`build:stanza`、`build:renderer` 通过，无新增构建 warning；保留既有 JSDOM Canvas 与 Playwright 颜色环境提示，未修改 CSS。
+
 ## common 目录清理（2026-09-21）
 
 按用户要求检查整个 `common` 文件集合、生产引用和测试引用：清理前 212 个 TypeScript 文件，169 个有 VS Code 同路径、43 个仅 Ash；本批删除 9 个旧文件，新增上游同路径的 `services/editorWorker.ts` 契约，清理后 204 个文件（170 个同路径、34 个仅 Ash）。文件数只描述目录变化，不代表完整 VS Code API 已对齐。
@@ -40,7 +50,7 @@
 | `model/documentTransaction.ts` | 富文档事务和选区映射；TextModel、命令、协作使用。 |
 | `model/lineDocument.ts`、`model/lineDocumentProjection.ts`、`model/textModelBlockState.ts` | TextModel 内的行身份、富文档语义与状态映射，不是第二套文本模型。 |
 | `model/languageRequestCoordinator.ts`、`model/languageResultStore.ts` | 模型版本、取消与结果接受；补全、诊断、分词各自持有实例，共享同一实现。 |
-| `model/tokens/semanticTokensTextModelPart.ts` | 语义 token 提供者请求与样式状态；模型分词组件使用。 |
+| `model/tokens/semanticTokensTextModelPart.ts` | 语义 token 提供者请求与行索引；模型分词组件使用。 |
 | `services/documentCollaborationService.ts` | 富文档协作边界；编辑器协作贡献和 Workbench 适配器使用。 |
 | `tokens/languageTokenLineIndex.ts`、`tokens/languageTokens.ts` | Ash token 数据与增量行索引；分词、样式、渲染器使用。 |
 | `viewModel/pointerHitTest.ts`、`viewModel/visualCursorNavigation.ts` | 命中测试与视觉导航算法；View 和输入控制器使用。 |
