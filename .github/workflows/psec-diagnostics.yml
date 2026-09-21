@@ -27,6 +27,10 @@ jobs:
         if: always()
         shell: pwsh
         run: ./scripts/test-psec.ps1 -Capability required
+      - name: Verify restricted-token process workloads
+        if: always()
+        shell: pwsh
+        run: python -B scripts/cargo.py test -p ash-windows-sandbox --lib --locked
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

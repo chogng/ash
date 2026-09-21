@@ -289,6 +289,9 @@ fn check_child(command: String) -> (String, String) {
         environment: vec![
             format!("SystemRoot={system}"),
             format!("TEMP={}", directory.display()),
+            // This workload uses only the Windows PowerShell system modules.
+            // Keep command discovery independent of modules installed on the host.
+            format!("PSModulePath={system}\\System32\\WindowsPowerShell\\v1.0\\Modules"),
         ],
         pipes: Some(pipes.names.clone()),
         pseudoconsole: None,
