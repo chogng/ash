@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
+import childProcess, { ChildProcess } from "node:child_process";
+import fs from "node:fs";
+import fsPromises from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
+import { PassThrough } from "node:stream";
 import { mkdtemp, mkdir, readFile, readdir, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
 import { cargoArtifactExecutable, cargoRenderedDiagnostic, parseCargoMessage } from "./cargo.ts";
-import { publishAppServerGeneration, relativeWatchedDirectory, shouldRebuildAppServer, shouldRebuildWorkspaceManifest } from "./appServer.ts";
+import { publishAppServerGeneration, relativeWatchedDirectory, shouldRebuildAppServer, shouldRebuildWorkspaceManifest, watchAppServer } from "./appServer.ts";
 
 test("reads executable paths and diagnostics from Cargo JSON messages", () => {
   const artifact = parseCargoMessage(JSON.stringify({
@@ -104,4 +109,30 @@ test("app-server publisher removes duplicate legacy generations while preserving
   } finally {
     await rm(root, { force: true, recursive: true });
   }
+});
+
+test("watcher regenerates protocol metadata before compiling and stops on generation failure", async (t) => {
+  const commands: string[] = [];
+  const failure = Promise.withResolvers<string>();
+  t.after(() => {
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+  });
+  t.mock.method(fs, "watch", () => ({ close() {} }));
+  t.mock.method(fsPromises, "readFile", async () => {
+    throw Object.assign(new Error("No published generation"), { code: "ENOENT" });
+  });
+  t.mock.method(console, "error", (message: string) => failure.resolve(message));
+  t.mock.method(childProcess, "spawn", (_command: string, args: readonly string[]) => {
+    commands.push(args[0]);
+    const child = new ChildProcess();
+    child.stdout = new PassThrough();
+    setImmediate(() => child.emit("close", 1, null));
+    return child;
+  });
+  syncBuiltinESMExports();
+  const stop = await watchAppServer();
+  t.after(stop);
+  assert.match(await failure.promise, /Protocol generation exited with status 1/);
+  assert.deepEqual(commands, ["run"]);
 });

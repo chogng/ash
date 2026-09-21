@@ -47,10 +47,6 @@ test("package preparation streams diagnostics before Cargo exits and preserves b
         child.stdout = stdout;
         setImmediate(() => {
           try {
-            if (args[0] === "run") {
-              child.emit("close", 0, null);
-              return;
-            }
             builds++;
             assert.equal(args[0], "build");
             assert.deepEqual(options.stdio, ["inherit", "pipe", "inherit"]);

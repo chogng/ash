@@ -1,17 +1,20 @@
 use ash_app_server_protocol::GENERATED_TYPESCRIPT_HEADER;
 use ash_app_server_protocol::JSON_SCHEMA_FIXTURE;
+use ash_app_server_protocol::METADATA_FIXTURE;
 use ash_app_server_protocol::TYPESCRIPT_FIXTURE_DIRECTORY;
 use ash_app_server_protocol::json_schema;
+use ash_app_server_protocol::protocol_metadata;
 use ash_app_server_protocol::typescript_files;
 use std::collections::BTreeSet;
 use std::path::Path;
 use std::path::PathBuf;
 
-const USAGE: &str = "usage: generate_protocol <json|typescript> --out <directory>\n       generate_protocol fixtures";
+const USAGE: &str = "usage: generate_protocol <json|typescript|metadata> --out <directory>\n       generate_protocol fixtures";
 
 enum Artifact {
     JsonSchema,
     TypeScript,
+    Metadata,
 }
 
 impl Artifact {
@@ -19,6 +22,7 @@ impl Artifact {
         match argument {
             "json" => Ok(Self::JsonSchema),
             "typescript" => Ok(Self::TypeScript),
+            "metadata" => Ok(Self::Metadata),
             _ => Err(USAGE.into()),
         }
     }
@@ -73,6 +77,9 @@ impl Command {
                     write_artifact(&output_directory, "schema.json", json_schema())
                 }
                 Artifact::TypeScript => write_typescript_files(&output_directory),
+                Artifact::Metadata => {
+                    write_artifact(&output_directory, "metadata.json", protocol_metadata())
+                }
             },
             Self::WriteFixtures => write_fixtures(),
         }
@@ -99,16 +106,13 @@ fn write_artifact(
     file_name: impl AsRef<Path>,
     contents: String,
 ) -> std::io::Result<()> {
-    let path = directory.join(file_name);
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    std::fs::write(path, contents)
+    write_fixture(directory.join(file_name), contents)
 }
 
 fn write_fixtures() -> std::io::Result<()> {
     let crate_directory = Path::new(env!("CARGO_MANIFEST_DIR"));
     write_fixture(crate_directory.join(JSON_SCHEMA_FIXTURE), json_schema())?;
+    write_fixture(crate_directory.join(METADATA_FIXTURE), protocol_metadata())?;
     write_typescript_files(&crate_directory.join(TYPESCRIPT_FIXTURE_DIRECTORY))
 }
 
@@ -161,6 +165,12 @@ fn generated_typescript_paths(directory: &Path) -> std::io::Result<Vec<PathBuf>>
 }
 
 fn write_fixture(path: PathBuf, contents: String) -> std::io::Result<()> {
+    match std::fs::read_to_string(&path) {
+        Ok(current) if current == contents => return Ok(()),
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error),
+    }
     if let Some(directory) = path.parent() {
         std::fs::create_dir_all(directory)?;
     }
@@ -168,84 +178,5 @@ fn write_fixture(path: PathBuf, contents: String) -> std::io::Result<()> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::Artifact;
-    use super::Command;
-    use super::write_typescript_files;
-    use ash_app_server_protocol::GENERATED_TYPESCRIPT_HEADER;
-    use std::path::PathBuf;
-    use std::time::SystemTime;
-
-    #[test]
-    fn parses_a_typescript_output_directory() {
-        let command = Command::parse([
-            "typescript".to_owned(),
-            "--out".to_owned(),
-            "generated/app-server".to_owned(),
-        ])
-        .unwrap();
-
-        let Command::Generate {
-            artifact,
-            output_directory,
-        } = command
-        else {
-            panic!("expected an artifact generation command");
-        };
-        assert!(matches!(artifact, Artifact::TypeScript));
-        assert_eq!(output_directory, PathBuf::from("generated/app-server"));
-    }
-
-    #[test]
-    fn parses_the_checked_in_fixture_command() {
-        assert!(matches!(
-            Command::parse(["fixtures".to_owned()]),
-            Ok(Command::WriteFixtures)
-        ));
-    }
-
-    #[test]
-    fn rejects_missing_and_extra_arguments() {
-        assert!(Command::parse(["json".to_owned()]).is_err());
-        assert!(
-            Command::parse([
-                "json".to_owned(),
-                "--out".to_owned(),
-                "schema".to_owned(),
-                "unexpected".to_owned(),
-            ])
-            .is_err()
-        );
-        assert!(Command::parse(["fixtures".to_owned(), "unexpected".to_owned()]).is_err());
-    }
-
-    #[test]
-    fn generation_removes_only_stale_generated_typescript() {
-        let unique = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let directory = std::env::temp_dir().join(format!(
-            "ash-app-server-protocol-{}-{unique}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&directory).unwrap();
-        std::fs::write(
-            directory.join("stale.ts"),
-            format!("{GENERATED_TYPESCRIPT_HEADER}export type Stale = never;\n"),
-        )
-        .unwrap();
-        std::fs::write(
-            directory.join("handwritten.ts"),
-            "export const keep = true;\n",
-        )
-        .unwrap();
-
-        write_typescript_files(&directory).unwrap();
-
-        assert!(!directory.join("stale.ts").exists());
-        assert!(directory.join("handwritten.ts").exists());
-        assert!(directory.join("types/ModelRef.ts").exists());
-        std::fs::remove_dir_all(directory).unwrap();
-    }
-}
+#[path = "generate_protocol/tests.rs"]
+mod tests;

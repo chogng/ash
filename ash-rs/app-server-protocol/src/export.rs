@@ -14,13 +14,13 @@ use crate::rpc::JsonRpcFailure;
 use crate::rpc::JsonRpcNotification;
 use crate::rpc::JsonRpcRequest;
 use crate::rpc::JsonRpcResponse;
-use crate::schema::canonicalize_json;
-use crate::schema_hash;
 use crate::typescript_decoder;
 use schemars::JsonSchema;
 use schemars::Schema;
 use schemars::schema_for;
 use serde_json::Value;
+use sha2::Digest;
+use sha2::Sha256;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::path::Component;
@@ -32,6 +32,22 @@ pub const JSON_SCHEMA_FIXTURE: &str = "schema/json/schema.json";
 
 /// Checked-in TypeScript fixture directory, relative to this crate's manifest directory.
 pub const TYPESCRIPT_FIXTURE_DIRECTORY: &str = "schema/typescript";
+
+/// Checked-in protocol metadata, shared by Rust builds and product packaging.
+pub const METADATA_FIXTURE: &str = "schema/metadata.json";
+
+/// Generates version and schema identity from the current Rust contract.
+pub fn protocol_metadata() -> String {
+    let metadata = serde_json::json!({
+        "major": crate::protocol::initialize::APP_SERVER_PROTOCOL_MAJOR,
+        "revision": crate::protocol::initialize::APP_SERVER_PROTOCOL_REVISION,
+        "schemaHash": schema_hash(),
+    });
+    let mut output =
+        serde_json::to_string_pretty(&metadata).expect("protocol metadata must serialize as JSON");
+    output.push('\n');
+    output
+}
 
 /// Prefix that identifies TypeScript files owned by the protocol generator.
 pub const GENERATED_TYPESCRIPT_HEADER: &str =
@@ -450,4 +466,30 @@ pub(crate) fn protocol_schema_value() -> Value {
 
 fn protocol_schema() -> Schema {
     schema_for!(ProtocolSchema)
+}
+
+pub(crate) fn schema_hash() -> String {
+    let canonical = serde_json::to_vec(&protocol_schema_value())
+        .expect("canonical protocol schema must serialize as JSON");
+    let digest = Sha256::digest(canonical);
+    format!("sha256:{digest:x}")
+}
+
+fn canonicalize_json(value: &mut Value) {
+    match value {
+        Value::Array(values) => {
+            for value in values {
+                canonicalize_json(value);
+            }
+        }
+        Value::Object(object) => {
+            let mut entries = std::mem::take(object).into_iter().collect::<Vec<_>>();
+            for (_, value) in &mut entries {
+                canonicalize_json(value);
+            }
+            entries.sort_by(|left, right| left.0.cmp(&right.0));
+            object.extend(entries);
+        }
+        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {}
+    }
 }

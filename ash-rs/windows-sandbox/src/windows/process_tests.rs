@@ -189,6 +189,17 @@ fn powershell_initializes_and_runs_a_pipeline_with_the_restricted_token() {
 }
 
 #[test]
+fn restricted_child_drains_stdout_and_stderr_beyond_pipe_capacity() {
+    let system = std::env::var("SystemRoot").unwrap();
+    // Each stream exceeds the 64 KiB pipe buffer before the child exits.
+    let (output, errors) = check_child(format!(
+        "\"{system}\\System32\\cmd.exe\" /d /c \"(for /l %i in (1,1,10000) do @echo output-line) & (for /l %i in (1,1,10000) do @echo error-line 1>&2) & echo child-ready & exit /b 125\""
+    ));
+    assert_eq!(output.matches("output-line").count(), 10000);
+    assert_eq!(errors.matches("error-line").count(), 10000);
+}
+
+#[test]
 fn restricted_child_attaches_to_execution_owned_conpty() {
     let temp = tempfile::tempdir().unwrap();
     let directory = std::fs::canonicalize(temp.path()).unwrap();
@@ -257,7 +268,7 @@ fn restricted_child_attaches_to_execution_owned_conpty() {
     );
 }
 
-fn check_child(command: String) {
+fn check_child(command: String) -> (String, String) {
     // Exercises the actual child-creation path under the current ordinary user.
     // Dedicated-account logon and network enforcement are separate acceptance.
     let temp = tempfile::tempdir().unwrap();
@@ -299,21 +310,35 @@ fn check_child(command: String) {
     job.assign_process(process.0).unwrap();
     job.set_ui_limits().unwrap();
     pipes.connect(unsafe { GetCurrentProcess() }).unwrap();
-    let [stdin, mut stdout, mut stderr] = pipes.files();
+    let [stdin, stdout, stderr] = pipes.files();
     drop(stdin);
+    // Drain both streams while the child runs; waiting for exit first can
+    // block the child on a full pipe and turn output into a false timeout.
+    let [stdout, stderr] = [stdout, stderr].map(|mut stream| {
+        std::thread::spawn(move || {
+            let mut bytes = Vec::new();
+            stream.read_to_end(&mut bytes).unwrap();
+            bytes
+        })
+    });
     assert_eq!(unsafe { ResumeThread(thread.0) }, 1);
-    assert_eq!(
-        unsafe { WaitForSingleObject(process.0, 10000) },
-        WAIT_OBJECT_0
-    );
+    const TIMEOUT_MS: u32 = 10_000;
+    let wait = unsafe { WaitForSingleObject(process.0, TIMEOUT_MS) };
+    if wait != WAIT_OBJECT_0 {
+        // Close every child-side pipe before joining readers so timeout
+        // diagnostics include captured output without hanging teardown.
+        job.terminate_and_wait(1).unwrap();
+    }
     let mut code = 0;
     assert_ne!(unsafe { GetExitCodeProcess(process.0, &mut code) }, 0);
-    let mut output = Vec::new();
-    let mut errors = Vec::new();
-    stdout.read_to_end(&mut output).unwrap();
-    stderr.read_to_end(&mut errors).unwrap();
-    let output = String::from_utf8_lossy(&output);
-    let errors = String::from_utf8_lossy(&errors);
+    let output = String::from_utf8_lossy(&stdout.join().unwrap()).into_owned();
+    let errors = String::from_utf8_lossy(&stderr.join().unwrap()).into_owned();
+    assert_eq!(
+        wait, WAIT_OBJECT_0,
+        "child did not exit within {TIMEOUT_MS} ms: {}\nstdout:\n{output}\nstderr:\n{errors}",
+        request.command
+    );
     assert_eq!(code, 125, "{output}\n{errors}");
     assert!(output.contains("child-ready"), "{output}\n{errors}");
+    (output, errors)
 }

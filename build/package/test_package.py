@@ -15,7 +15,6 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from build.lib.targets import TARGETS
-from build.package.build import generate_protocol_metadata
 from build.package.build import main as build_main
 from build.package.bubblewrap import load_vendored_source, resolve_bubblewrap
 from build.package.layout import (
@@ -111,13 +110,10 @@ class PackageTests(unittest.TestCase):
                         )
                         return subprocess.CompletedProcess(command, 0, payload)
                     return real_run(command, **kwargs)
+                self.assertEqual("build", command[1])
                 return subprocess.CompletedProcess(command, 0, "\n".join(artifacts))
 
             with (
-                patch(
-                    "build.package.build.generate_protocol_metadata",
-                    return_value=load_protocol_metadata(REPOSITORY_ROOT),
-                ),
                 patch("build.package.cargo.cargo_environment", return_value={}),
                 patch(
                     "build.package.cargo.subprocess.run",
@@ -223,44 +219,34 @@ class PackageTests(unittest.TestCase):
         "yaml",
     ]
 
-    def test_product_protocol_metadata_comes_from_generator_output(self) -> None:
-        generated_fixture = (
-            "export const APP_SERVER_PROTOCOL_MAJOR = 7 as const;\n"
-            "export const APP_SERVER_PROTOCOL_REVISION = 11 as const;\n"
-            'export const APP_SERVER_SCHEMA_HASH = "sha256:'
-            + "a" * 64
-            + '" as const;\n'
-        )
-        commands = []
+    def test_product_protocol_metadata_comes_from_committed_metadata(self) -> None:
+        metadata = {"major": 7, "revision": 11, "schemaHash": "sha256:" + "a" * 64}
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            path = root / "ash-rs/app-server-protocol/schema/metadata.json"
+            path.parent.mkdir(parents=True)
+            path.write_text(json.dumps(metadata), encoding="utf-8")
+            with patch(
+                "subprocess.run",
+                side_effect=AssertionError("metadata must not run Cargo"),
+            ):
+                self.assertEqual(metadata, load_protocol_metadata(root))
 
-        def run(command, *, cwd, check):
-            commands.append((command, cwd, check))
-            output_directory = Path(command[command.index("--out") + 1])
-            output_directory.mkdir(parents=True, exist_ok=True)
-            (output_directory / "protocol.ts").write_text(
-                generated_fixture,
-                encoding="utf-8",
-            )
-
-        with patch("build.package.build.subprocess.run", side_effect=run):
-            metadata = generate_protocol_metadata(REPOSITORY_ROOT, "cargo")
-
-        self.assertEqual(
-            {
-                "major": 7,
-                "revision": 11,
-                "schemaHash": "sha256:" + "a" * 64,
-            },
-            metadata,
-        )
-        self.assertEqual(1, len(commands))
-        command, cwd, check = commands[0]
-        self.assertEqual(REPOSITORY_ROOT, cwd)
-        self.assertTrue(check)
-        self.assertEqual("ash-app-server-protocol", command[command.index("-p") + 1])
-        self.assertEqual("export", command[command.index("--features") + 1])
-        self.assertEqual("typescript", command[command.index("--") + 1])
-        self.assertNotEqual(metadata, load_protocol_metadata(REPOSITORY_ROOT))
+    def test_rejects_invalid_protocol_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            path = root / "ash-rs/app-server-protocol/schema/metadata.json"
+            path.parent.mkdir(parents=True)
+            for value in (
+                [],
+                {},
+                {"major": True, "revision": 1, "schemaHash": "sha256:" + "a" * 64},
+                {"major": 7, "revision": 1, "schemaHash": "invalid"},
+            ):
+                with self.subTest(metadata=value):
+                    path.write_text(json.dumps(value), encoding="utf-8")
+                    with self.assertRaisesRegex(RuntimeError, "protocol metadata"):
+                        load_protocol_metadata(root)
 
     def test_production_lock_covers_every_package_target(self) -> None:
         lock = load_lock(PRODUCTION_LOCK)

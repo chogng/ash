@@ -607,38 +607,20 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def load_protocol_metadata(
-    repository_root: Path,
-    generated_typescript: Optional[Path] = None,
-) -> Dict[str, object]:
-    generated = (
-        generated_typescript
-        or repository_root
-        / "ash-rs"
-        / "app-server-protocol"
-        / "schema"
-        / "typescript"
-        / "protocol.ts"
-    ).read_text(encoding="utf-8")
-    major = re.search(
-        r"^export const APP_SERVER_PROTOCOL_MAJOR = (\d+) as const;$",
-        generated,
-        re.MULTILINE,
+def load_protocol_metadata(repository_root: Path) -> Dict[str, object]:
+    metadata = json.loads(
+        (repository_root / "ash-rs/app-server-protocol/schema/metadata.json").read_text(
+            encoding="utf-8"
+        )
     )
-    revision = re.search(
-        r"^export const APP_SERVER_PROTOCOL_REVISION = (\d+) as const;$",
-        generated,
-        re.MULTILINE,
-    )
-    schema_hash = re.search(
-        r'^export const APP_SERVER_SCHEMA_HASH = "(sha256:[a-f0-9]{64})" as const;$',
-        generated,
-        re.MULTILINE,
-    )
-    if major is None or revision is None or schema_hash is None:
+    if (
+        not isinstance(metadata, dict)
+        or any(
+            type(metadata.get(key)) is not int or metadata[key] < 0
+            for key in ("major", "revision")
+        )
+        or not isinstance(metadata.get("schemaHash"), str)
+        or re.fullmatch(r"sha256:[a-f0-9]{64}", metadata["schemaHash"]) is None
+    ):
         raise RuntimeError("Generated App Server protocol metadata is invalid")
-    return {
-        "major": int(major.group(1)),
-        "revision": int(revision.group(1)),
-        "schemaHash": schema_hash.group(1),
-    }
+    return metadata

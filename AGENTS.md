@@ -20,7 +20,7 @@ Before modifying this repository:
 - 回复时请说人话, 避免抽象语言描述
 - 禁止 native, projection name
 - crate 主要负责能力和依赖隔离
-- 禁止兜底写法，过渡设计，过渡思考
+- 禁止兜底写法，过渡设计，过渡思考，防御性编程
 - 当你思考项目架构时，请考虑从长期架构的终极形态去设计，而不是基于当前架构的优化方向
 - 拆分文件时，避免拆过头
 - 使用playwright测试web and electron-ui 以及electron , 调试不通过截图

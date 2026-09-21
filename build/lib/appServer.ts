@@ -91,6 +91,8 @@ export async function watchAppServer(options: { skipInitial?: boolean } = {}): P
 
   async function buildAndPublish(): Promise<void> {
     console.log("[app-server] Building ash-app-server");
+    await generateProtocol(cancellation.signal);
+    cancellation.signal.throwIfAborted();
     const source = await runCargo();
     media ??= resolveLivekit(developmentHostTarget());
     helpers.set("livekit-server", (await media).executable);
@@ -101,8 +103,6 @@ export async function watchAppServer(options: { skipInitial?: boolean } = {}): P
       await copyFile(executable, temporary);
       await rename(temporary, destination);
     }
-    cancellation.signal.throwIfAborted();
-    await generateProtocol(cancellation.signal);
     cancellation.signal.throwIfAborted();
     const published = await publishAppServerGeneration(source, generationDirectory, generationFile, process.platform);
     console.log(published.changed ? `[app-server] Published ${published.generation}` : `[app-server] Unchanged ${published.generation}`);

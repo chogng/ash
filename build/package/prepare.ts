@@ -10,7 +10,6 @@ import { extractMember, materialize, sha256 } from "../download/artifacts.ts";
 import { cargoArtifactExecutable, cargoRenderedDiagnostic, cargoTargetDirectory, parseCargoMessage } from "../lib/cargo.ts";
 import { ashPackageBuildPath } from "../lib/paths.ts";
 import { developmentHostTarget } from "./store.ts";
-import { generateProtocol } from '../protocol/generate.ts';
 import { assemblePackage, type RemoteRuntimeRelease, type ResolvedExecutable, type ResolvedNode, type ResolvedBubblewrap, type FirstPartyExecutables } from "./layout.ts";
 
 const repositoryRoot = resolve(import.meta.dirname, "..", "..");
@@ -510,15 +509,12 @@ export async function prepareDevelopmentPackage(
   if (!javascriptRuntimeKinds.has(javascriptRuntime)) {
     throw new Error(`Unsupported JavaScript runtime package mode: ${javascriptRuntime}`);
   }
-  await generateProtocol();
-  const source = await readFile(join(repositoryRoot, "ash-rs/app-server-protocol/schema/typescript/protocol.ts"), "utf8");
-  const major = /^export const APP_SERVER_PROTOCOL_MAJOR = (\d+) as const;$/m.exec(source)?.[1];
-  const revision = /^export const APP_SERVER_PROTOCOL_REVISION = (\d+) as const;$/m.exec(source)?.[1];
-  const schemaHash = /^export const APP_SERVER_SCHEMA_HASH = "(sha256:[a-f0-9]{64})" as const;$/m.exec(source)?.[1];
-  if (major === undefined || revision === undefined || schemaHash === undefined) {
+  const protocol = JSON.parse(await readFile(join(repositoryRoot, "ash-rs/app-server-protocol/schema/metadata.json"), "utf8"));
+  if (!protocol || !Number.isSafeInteger(protocol.major) || protocol.major < 0
+    || !Number.isSafeInteger(protocol.revision) || protocol.revision < 0
+    || typeof protocol.schemaHash !== "string" || !/^sha256:[a-f0-9]{64}$/.test(protocol.schemaHash)) {
     throw new Error("Generated App Server protocol metadata is invalid");
   }
-  const protocol = { major: Number(major), revision: Number(revision), schemaHash };
   const target = developmentHostTarget();
   const isWindows = process.platform === "win32";
   const outputDirectory = ashPackageBuildPath(repositoryRoot, "dev", "store-v1", target, javascriptRuntime, developmentBuildProfile);

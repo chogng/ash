@@ -11,6 +11,7 @@ on:
       - "rust-toolchain.toml"
       - "scripts/*.py"
       - "build/**"
+      - "ash-rs/app-server-protocol/schema/**"
       - "scripts/pyproject.toml"
       - "scripts/uv.lock"
       - "justfile"
@@ -24,6 +25,7 @@ on:
       - "rust-toolchain.toml"
       - "scripts/*.py"
       - "build/**"
+      - "ash-rs/app-server-protocol/schema/**"
       - "scripts/pyproject.toml"
       - "scripts/uv.lock"
       - "justfile"
@@ -49,6 +51,30 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  protocol:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install protocol build tools
+        uses: taiki-e/install-action@a6b2e2dcd845ddd7f509ce4f3ed3d922b80cc5d9
+        with:
+          tool: just@1.46.0,uv
+      - name: Install compiler prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends build-essential libssl-dev pkg-config
+      - name: Check the default protocol build and committed artifacts
+        run: |
+          just check ash-app-server-protocol --locked
+          just test ash-app-server-protocol --locked
+          just rust-warnings ash-app-server-protocol --locked
+      - name: Check the protocol exporter and its runtime metadata
+        run: |
+          just check ash-app-server-protocol --features export --locked
+          just test ash-app-server-protocol --features export --bin generate_protocol --test schema_hash --locked
+          just rust-warnings ash-app-server-protocol --features export --locked
+
   dependencies:
     runs-on: ubuntu-24.04
     timeout-minutes: 20

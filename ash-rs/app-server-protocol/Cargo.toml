@@ -11,7 +11,7 @@ name = "ash_app_server_protocol"
 path = "src/lib.rs"
 
 [features]
-export = ["dep:schemars", "dep:ts-rs"]
+export = ["dep:schemars", "dep:sha2", "dep:ts-rs"]
 
 [[bin]]
 name = "generate_protocol"
@@ -34,7 +34,7 @@ ash-memory-diagnostics = { workspace = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sha2 = { workspace = true }
+sha2 = { workspace = true, optional = true }
 ts-rs = { workspace = true, features = ["no-serde-warnings"], optional = true }
 url = { workspace = true }
 zeroize = { workspace = true }
@@ -44,7 +44,11 @@ ash-file-access = { workspace = true }
 ash-collaboration = { workspace = true }
 ash-thread-transcript = { workspace = true }
 
+[build-dependencies]
+serde_json = { workspace = true }
+
 [dev-dependencies]
+sha2 = { workspace = true }
 schemars = { workspace = true }
 ts-rs = { workspace = true, features = ["no-serde-warnings"] }
 

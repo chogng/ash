@@ -785,6 +785,7 @@ fn schema_hash_is_stable_sha256_of_the_generated_schema() {
     let second = schema_hash();
 
     assert_eq!(first, second);
+    assert_eq!(first, crate::export::schema_hash());
     assert_eq!(first.len(), "sha256:".len() + 64);
     assert!(first.starts_with("sha256:"));
 }
@@ -855,6 +856,10 @@ fn schema_fixtures_match_the_generators() {
     let schema = include_str!("../schema/json/schema.json");
 
     assert_eq!(schema.replace("\r\n", "\n"), json_schema());
+    assert_eq!(
+        include_str!("../schema/metadata.json").replace("\r\n", "\n"),
+        protocol_metadata()
+    );
     let fixture_directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("schema")
         .join("typescript");

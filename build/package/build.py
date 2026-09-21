@@ -5,9 +5,8 @@ import argparse
 import json
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
-from typing import Dict, Optional, Sequence
+from typing import Optional, Sequence
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
@@ -28,36 +27,6 @@ DEFAULT_LOCK = REPOSITORY_ROOT / "third_party" / "ripgrep" / "runtime-lock.json"
 DEFAULT_CACHE = REPOSITORY_ROOT / "third_party" / ".cache" / "ripgrep"
 DEFAULT_NODE_LOCK = REPOSITORY_ROOT / "third_party" / "node" / "runtime-lock.json"
 DEFAULT_NODE_CACHE = REPOSITORY_ROOT / "third_party" / ".cache" / "node"
-
-
-def generate_protocol_metadata(repository_root: Path, cargo: str) -> Dict[str, object]:
-    with tempfile.TemporaryDirectory(prefix=".ash-protocol-") as temporary:
-        output_directory = Path(temporary)
-        subprocess.run(
-            [
-                cargo,
-                "run",
-                "--quiet",
-                "--manifest-path",
-                str(repository_root / "Cargo.toml"),
-                "-p",
-                "ash-app-server-protocol",
-                "--features",
-                "export",
-                "--bin",
-                "generate_protocol",
-                "--",
-                "typescript",
-                "--out",
-                str(output_directory),
-            ],
-            cwd=repository_root,
-            check=True,
-        )
-        return load_protocol_metadata(
-            repository_root,
-            output_directory / "protocol.ts",
-        )
 
 
 def parse_arguments(arguments: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -200,7 +169,7 @@ def main(arguments: Optional[Sequence[str]] = None) -> int:
     args = parse_arguments(arguments)
     target = args.target or default_target()
     spec = TARGETS[target]
-    protocol_metadata = generate_protocol_metadata(REPOSITORY_ROOT, args.cargo)
+    protocol_metadata = load_protocol_metadata(REPOSITORY_ROOT)
     cli_binary = (
         validate_input_binary(
             args.cli_bin, "Ash CLI executable", "--cli-bin", spec.is_windows
