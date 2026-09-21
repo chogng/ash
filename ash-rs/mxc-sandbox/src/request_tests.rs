@@ -56,6 +56,181 @@ fn explicit_empty_environment_stays_empty_after_terminal_handoff() {
     assert!(!decoded.inner.inherit_default_env);
 }
 
+#[cfg(windows)]
+#[test]
+#[ignore = "diagnoses startup on a PSEC host"]
+fn psec_startup_diagnostics() {
+    use std::io::Read;
+    use std::time::Duration;
+    use wxc_common::sandbox_process::SandboxBackend;
+
+    for variant in ["cmd", "powershell", "hidden", "profile", "capture"] {
+        let temp = tempfile::tempdir().unwrap();
+        let work = temp.path().join("work");
+        std::fs::create_dir(&work).unwrap();
+        let dir = Dir::open_local(&work).unwrap();
+        let profile = tempfile::tempdir().unwrap();
+        let scope = if variant == "hidden" {
+            SandboxScope::new(
+                dir.clone(),
+                vec![ash_sandboxing::SandboxDirGrant::new(
+                    dir.clone(),
+                    ash_sandboxing::SandboxDirAccess::ReadWrite,
+                )],
+                vec![Dir::open_local(temp.path()).unwrap()],
+            )
+            .unwrap()
+        } else {
+            SandboxScope::single(dir.clone())
+        };
+        let scope = if variant == "profile" {
+            scope
+                .with_private_ipc_dir(Dir::open_local(profile.path()).unwrap())
+                .unwrap()
+        } else {
+            scope
+        };
+        let system = std::path::PathBuf::from(std::env::var_os("SystemRoot").unwrap());
+        let command = if variant == "cmd" {
+            SandboxCommand::new(
+                system.join("System32/cmd.exe"),
+                [
+                    "/d",
+                    "/c",
+                    "echo engine-ready & cd & echo yes>started & echo file-written & exit /b 125",
+                ],
+                dir.canonical_path(),
+            )
+        } else {
+            SandboxCommand::new(
+                system.join("System32/WindowsPowerShell/v1.0/powershell.exe"),
+                vec![
+                    "-NoLogo".into(),
+                    "-NoProfile".into(),
+                    "-NonInteractive".into(),
+                    "-Command".into(),
+                    format!(
+                        "'engine-ready'; 'process=' + [Environment]::CurrentDirectory; 'location=' + $PWD.Path; try {{ [IO.File]::WriteAllText('{}', 'yes'); 'file-written' }} catch {{ 'write-error=' + $_ }}; 'pipeline-ready' | ForEach-Object {{ Write-Output $_ }}; exit 125",
+                        dir.canonical_path()
+                            .join("started")
+                            .display()
+                            .to_string()
+                            .replace('\'', "''")
+                    ),
+                ],
+                dir.canonical_path(),
+            )
+        };
+        let mut request = crate::policy::request(
+            &command,
+            SandboxPolicy::new(FileSystemAccess::DirectoryWrite, NetworkAccess::Denied),
+            &scope,
+        )
+        .unwrap();
+        let mut env = [
+            "PATH",
+            "HOME",
+            "USER",
+            "LOGNAME",
+            "SHELL",
+            "TERM",
+            "LANG",
+            "LC_ALL",
+            "LC_CTYPE",
+            "TMPDIR",
+            "TMP",
+            "TEMP",
+            "SystemRoot",
+            "WINDIR",
+            "PATHEXT",
+            "COMSPEC",
+            "USERPROFILE",
+            "APPDATA",
+            "LOCALAPPDATA",
+            "CARGO_HOME",
+            "RUSTUP_HOME",
+            "JAVA_HOME",
+            "GOPATH",
+        ]
+        .into_iter()
+        .filter_map(|key| std::env::var(key).ok().map(|value| (key.to_owned(), value)))
+        .collect::<Vec<_>>();
+        if variant == "profile" {
+            for key in [
+                "TEMP",
+                "TMP",
+                "HOME",
+                "USERPROFILE",
+                "APPDATA",
+                "LOCALAPPDATA",
+            ] {
+                env.retain(|(name, _)| name != key);
+                env.push((key.into(), profile.path().display().to_string()));
+            }
+        }
+        request.set_env(&env);
+        request.restore_runtime_policy();
+        if variant == "capture" {
+            let output = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../.build/acceptance/psec-diagnostics");
+            std::fs::create_dir_all(&output).unwrap();
+            request.inner.policy.capture_denials = Some(wxc_common::models::CaptureDenialsConfig {
+                output_path: Some(output.join("denials.json").display().to_string()),
+                ..Default::default()
+            });
+        }
+        let mut runner = appcontainer_common::base_container_runner::BaseContainerRunner::new();
+        let mut logger = wxc_common::logger::Logger::new(wxc_common::logger::Mode::Buffer);
+        let result = runner.spawn(
+            &request.inner,
+            &mut logger,
+            wxc_common::sandbox_process::StdioMode::Pipes,
+        );
+        eprintln!("VARIANT={variant}\n{}", logger.get_buffer());
+        let mut child = match result {
+            Ok(child) => child,
+            Err(error) => {
+                eprintln!("SPAWN FAILED: {error:?}");
+                continue;
+            }
+        };
+        eprintln!("PID={}", child.id());
+        drop(child.take_stdin());
+        let readers =
+            [child.take_stdout().unwrap(), child.take_stderr().unwrap()].map(|mut stream| {
+                std::thread::spawn(move || {
+                    let mut output = Vec::new();
+                    let result = stream.read_to_end(&mut output);
+                    (output, result)
+                })
+            });
+        let start = std::time::Instant::now();
+        let status = loop {
+            let status = child.try_wait().unwrap();
+            if status.is_some() || start.elapsed() > Duration::from_secs(30) {
+                break status;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        };
+        child.kill().unwrap();
+        let waited = child.wait();
+        eprintln!(
+            "RESULT={variant} status={status:?} waited={waited:?} elapsed={:?} file={} metadata={:?} warnings={:?}",
+            start.elapsed(),
+            work.join("started").exists(),
+            child.output_metadata(),
+            child.warnings()
+        );
+        for (name, reader) in ["stdout", "stderr"].into_iter().zip(readers) {
+            let (bytes, result) = reader.join().unwrap();
+            eprintln!(
+                "{name}: result={result:?}\n{}",
+                String::from_utf8_lossy(&bytes)
+            );
+        }
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn terminal_handoff_keeps_managed_proxy_and_network_restrictions() {

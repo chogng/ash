@@ -1,0 +1,41 @@
+name: PSEC startup diagnostics
+
+on:
+  push:
+    branches: [codex/windows-sandbox-diagnostics]
+
+permissions:
+  contents: read
+
+jobs:
+  arm64:
+    runs-on: windows-11-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f
+        with:
+          override: false
+          rustflags: ''
+      - name: Diagnose PSEC startup
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force .build/acceptance/psec-diagnostics | Out-Null
+          Get-CimInstance Win32_OperatingSystem | Select-Object Caption, Version, OSArchitecture
+          python -B scripts/cargo.py test -p ash-mxc-sandbox --lib --locked request::tests::psec_startup_diagnostics -- --ignored --exact --nocapture 2>&1 | Tee-Object -FilePath .build/acceptance/psec-diagnostics/startup.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Run PSEC acceptance
+        if: always()
+        shell: pwsh
+        run: ./scripts/test-psec.ps1 -Capability required
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: psec-startup-${{ github.run_attempt }}
+          path: |
+            .build/acceptance/psec-diagnostics/
+            .build/acceptance/psec/
+          retention-days: 14
