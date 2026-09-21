@@ -10,7 +10,7 @@ import { LanguageService } from '../../common/services/languageService.js';
 test('language identity, configuration, and feature providers have separate owners', () => {
 	using languageService = new LanguageService();
 	using languageConfigurationService = new TestLanguageConfigurationService();
-	using languageFeaturesService = new LanguageFeaturesService(languageConfigurationService);
+	using languageFeaturesService = new LanguageFeaturesService();
 	using model = new TextModel('', { languageId: 'demo' });
 
 	assert.equal(languageService.resolveLanguageId({ resource: URI.file('C:\\project\\source.ts') }), undefined);
@@ -28,7 +28,7 @@ test('language identity, configuration, and feature providers have separate owne
 
 test('language feature registries report effective provider changes', () => {
 	using languageConfigurationService = new TestLanguageConfigurationService();
-	using languageFeaturesService = new LanguageFeaturesService(languageConfigurationService);
+	using languageFeaturesService = new LanguageFeaturesService();
 	let changes = 0;
 	using listener = languageFeaturesService.colorProvider.onDidChange(() => changes += 1);
 	assert.equal(changes, 0);

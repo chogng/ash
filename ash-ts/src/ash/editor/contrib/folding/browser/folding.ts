@@ -102,6 +102,8 @@ class FoldingRangeSource extends Disposable {
 	) {
 		super();
 		this._register(folding.model.onDidChangeContent(() => this.refresh()));
+		this._register(folding.model.onDidChangeTokens(() => this.refresh()));
+		this._register(options.configurations.onDidChange(() => this.refresh()));
 		this._register(options.providers.onDidChange(() => this.refresh()));
 		this._register(toDisposable(() => this.request?.abort()));
 		this.refresh();

@@ -43,7 +43,7 @@ export function createCodeEditorServices(disposables: Pick<DisposableStore, 'add
 		services.registerSingleton(ILanguageConfigurationService, () => createBuiltinLanguageConfigurationService());
 	}
 	if (!services.has(ILanguageFeaturesService)) {
-		services.registerSingleton(ILanguageFeaturesService, accessor => new LanguageFeaturesService(accessor.get(ILanguageConfigurationService)));
+		services.registerSingleton(ILanguageFeaturesService, () => new LanguageFeaturesService());
 	}
 	return services;
 }

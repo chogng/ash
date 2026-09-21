@@ -71,7 +71,7 @@ nor the dedicated Worker reads product or workspace files. Workbench constructs 
 then projects Rust-discovered static grammar contributions into the same
 registry. The service owns the shared grammar catalog and scope theme; each
 Stanza editor part creates and disposes only its dedicated TextMate Syntax Worker.
-Unsupported languages still fall back to Stanza's lexical provider.
+Languages without a grammar remain plain text.
 
 Direct `createBrowserEditorPart` callers may omit the service and get a
 private `BrowserTextMateService`; that compatibility path is session-owned and
@@ -99,12 +99,10 @@ The renderer mirrors each revision through `TextMateScopeThemeWireClient`; the
 Worker atomically replaces its model, drops cached token styles, and performs
 the next syntax request with the new rules.
 
-TextMate uses `tokenPriority: 100`; Stanza's deterministic lexical fallback uses
-the default priority `0`. The TextMate provider intentionally declares `*` and
-returns `undefined` when the current catalog has no root grammar for a language.
-Stanza tries token providers in descending priority, so unsupported languages,
-provider omissions, and isolated failures continue to the lexical fallback.
-Equal priorities preserve registration order.
+TextMate uses `tokenPriority: 100` and declares `*`. It returns `undefined`
+when the catalog has no root grammar for a language. Token providers run in
+descending priority; equal priorities preserve registration order. Without an
+applicable provider, the model has no syntax tokens or invented diagnostics.
 
 ## Worker catalog path
 
@@ -117,7 +115,7 @@ from the catalog source's current revision.
 
 `TextMateSyntaxModuleWorkerClient` serializes catalog and scope-theme updates
 and gates every Syntax request on the latest scheduled revisions. The dedicated browser Worker
-activates both `textmate.grammars` and `language.lexical`; it owns the catalog
+activates `textmate.grammars`; it owns the catalog
 store, scope-theme model, TextMate service, Oniguruma runtime, provider registries, and all four
 wire servers. A replacement Worker accepts the source's current revision even
 when its revision is greater than one.

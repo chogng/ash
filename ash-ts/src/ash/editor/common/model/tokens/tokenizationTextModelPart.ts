@@ -7,7 +7,7 @@ import { ColorId, FontStyle, LanguageId, MetadataConsts, StandardTokenType } fro
 import { TokenizationRegistry, type ILanguageIdCodec } from '../../languages.js';
 import { type LanguageSemanticTokensProvider } from '../../languages.js';
 import { type LanguageFeatureRegistry } from '../../languageFeatureRegistry.js';
-import { type LanguageTokenizationSource } from '../../languages/languageLexicalContext.js';
+import { type LanguageTokenizationSource } from '../../tokens/languageTokens.js';
 import { SyntaxService, type SyntaxServiceOptions } from '../../languages/syntax/syntaxService.js';
 import { SyntaxProviderRegistry } from '../../languages/syntax/syntaxProviders.js';
 import { BackgroundTokenizationState, type ITokenizationTextModelPart, SynchronousTokenizationUnavailableError } from '../../tokenizationTextModelPart.js';

@@ -75,7 +75,7 @@ test('Editor dependency checks distinguish layer paths from Platform filenames',
 
 test("Bracket structure, cursor editing, and browser presentation keep separate owners", () => {
 	for (const file of [
-		"common/languages/languageBracketPairs.ts",
+		"common/model/bracketPairsTextModelPart/bracketPairsImpl.ts",
 		"common/cursor/cursor.ts",
 		"common/cursor/cursorTypeOperations.ts",
 		"common/cursor/cursorTypeEditOperations.ts",
@@ -90,7 +90,7 @@ test("Bracket structure, cursor editing, and browser presentation keep separate 
 		"contrib/bracketMatching/browser/languageEditingAdapter.ts",
 	]) assert.equal(existsSync(join(editorRoot, file)), false, file);
 	const contribution = readFileSync(join(editorRoot, "contrib/bracketMatching/browser/bracketMatching.contribution.ts"), "utf8");
-	assert.match(contribution, /LanguageBracketPairs/u);
+	assert.match(contribution, /context.model.bracketPairs/u);
 	assert.doesNotMatch(contribution, /LanguageLexicalContextIndex|TokenAwareLanguageLexicalContext|LanguageEditingAdapter|LanguageAutoClosingTracker/u);
 	const adapter = readFileSync(join(editorRoot, "browser/view/viewController.ts"), "utf8");
 	assert.match(adapter, /common\/cursor\/cursorTypeOperations/u);
@@ -761,7 +761,9 @@ test("Editor engines delegate optional feature composition to mode bundles", () 
 	assert.doesNotMatch(documentHost, /registerDocumentEditorContributionFactory/u);
 	assert.match(documentContribution, /registerEditorContribution/u);
 	assert.match(documentContribution, /FormattingContribution/u);
-	assert.match(documentContribution, /CollaborationContribution/u);
+	assert.doesNotMatch(documentContribution, /CollaborationContribution/u);
+	const documentPane = readFileSync(join(workbenchRoot, "contrib/documentEditor/browser/documentEditorPane.ts"), "utf8");
+	assert.match(documentPane, /new CollaborationContribution/u);
 	assert.doesNotMatch(academicPaneContribution, /codeEditorPart\.contribution/u);
 	assert.doesNotMatch(academicPaneContribution, /contrib\/codeEditor|CodeEditorPane|EmbeddedTextEditorFactory|AcademicCodeBlockEditorFactory|CodeEditorWidget/u);
 	assert.doesNotMatch(academicPaneContribution, /documentEditor\.contribution/u);

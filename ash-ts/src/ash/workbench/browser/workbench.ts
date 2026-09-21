@@ -411,7 +411,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(ILanguageService, languageService);
 		const languageConfigurationService = this._register(new LanguageConfigurationService(configuration, languageService));
 		services.registerInstance(ILanguageConfigurationService, languageConfigurationService);
-		const languageFeaturesService = this._register(new LanguageFeaturesService(languageConfigurationService));
+		const languageFeaturesService = this._register(new LanguageFeaturesService());
 		services.registerInstance(ILanguageFeaturesService, languageFeaturesService);
 		services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService));
 		services.registerSingleton(IInlineCompletionsService, () => services.createInstance(InlineCompletionsService));

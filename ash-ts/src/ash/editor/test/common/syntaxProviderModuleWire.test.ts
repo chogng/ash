@@ -8,7 +8,7 @@ import { SyntaxProviderModuleHost, SyntaxProviderModuleRegistry } from "../../co
 import { SyntaxProviderModuleWireServer } from "../../common/languages/syntax/syntaxProviderModuleWire.js";
 import { SYNTAX_TOKEN_LANE, SyntaxProviderWorker, SyntaxService } from "../../common/languages/syntax/syntaxService.js";
 import { syntaxWireCodec } from "../../common/languages/syntax/syntaxWire.js";
-import { createLanguageLexicalSyntaxProvider } from "../../common/languages/languageLexicalSyntaxProvider.js";
+import { testSyntaxProvider } from './testSyntaxProvider.js';
 import { LanguageRequestStatus } from "../../common/languages/languageRequestCoordinator.js";
 import { LanguageWorkerWireServer, type LanguageWorkerWireClientPort } from "../../common/languages/languageWorkerWire.js";
 import { Position } from "../../common/core/position.js";
@@ -20,10 +20,10 @@ test("Required Syntax modules activate before the first request and preserve con
 	using providers = new SyntaxProviderRegistry();
 	using modules = new SyntaxProviderModuleRegistry();
 	using moduleRegistration = modules.register({
-		id: "language.lexical",
+		id: "test.payloads",
 		load: async () => {
 			await new Promise<void>(resolve => setImmediate(resolve));
-			return [createLanguageLexicalSyntaxProvider()];
+			return [testSyntaxProvider()];
 		},
 	});
 	using host = new SyntaxProviderModuleHost(modules, providers);
@@ -33,12 +33,12 @@ test("Required Syntax modules activate before the first request and preserve con
 	using localProviders = new SyntaxProviderRegistry();
 	using service = new SyntaxService(model, localProviders, {
 		workerFactory: () => new SyntaxModuleWorkerClient(clientPort, {
-			requiredProviderModules: ["language.lexical"],
+			requiredProviderModules: ["test.payloads"],
 		}),
 	});
 
 	assert.equal((await service.requestTokens("typescript")).status, LanguageRequestStatus.Applied);
-	assert.deepEqual(service.tokens.result!.value.tokens.map(token => token.tokenType), ["keyword", "variable", "operator", "number"]);
+	assert.deepEqual(service.tokens.result!.value.tokens.map(token => token.tokenType), ["const", "value", "=", "1;"]);
 	const firstMessages = clientPort.sentMessages as WireMessage[];
 	const activationIndex = firstMessages.findIndex(message => message.protocol === "ash.syntax.provider-modules" && message.kind === "setActivation");
 	const requestIndex = firstMessages.findIndex(message => message.protocol === "ash.language-worker" && message.kind === "request");
@@ -67,10 +67,10 @@ test("Required Syntax module failure discards the Worker before the next request
 			const providers = workerResources.add(new SyntaxProviderRegistry());
 			const modules = workerResources.add(new SyntaxProviderModuleRegistry());
 			workerResources.add(modules.register({
-				id: "language.lexical",
+				id: "test.payloads",
 				load: () => {
 					if (workerCount === 1) throw new Error("syntax module failed");
-					return [createLanguageLexicalSyntaxProvider()];
+					return [testSyntaxProvider()];
 				},
 			}));
 			const host = workerResources.add(new SyntaxProviderModuleHost(modules, providers));
@@ -78,7 +78,7 @@ test("Required Syntax module failure discards the Worker before the next request
 			workerResources.add(new LanguageWorkerWireServer(serverPort, syntaxWireCodec, new SyntaxProviderWorker(providers)));
 			workerResources.add(new SyntaxProviderModuleWireServer(serverPort, modules, host));
 			return new SyntaxModuleWorkerClient(clientPort, {
-				requiredProviderModules: ["language.lexical"],
+				requiredProviderModules: ["test.payloads"],
 			});
 		},
 	});
@@ -88,7 +88,7 @@ test("Required Syntax module failure discards the Worker before the next request
 
 	assert.equal(outcome.status, LanguageRequestStatus.Applied);
 	assert.equal(workerCount, 2);
-	assert.equal(service.tokens.result!.value.tokens[0]!.tokenType, "keyword");
+	assert.equal(service.tokens.result!.value.tokens[0]!.tokenType, "const");
 });
 
 interface WireMessage {

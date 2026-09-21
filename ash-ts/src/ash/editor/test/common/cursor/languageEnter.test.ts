@@ -1,3 +1,4 @@
+import { registerTestTokens } from '../testTokenization.js';
 import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { TypeOperations } from "../../../common/cursor/cursorTypeOperations.js";
@@ -6,7 +7,6 @@ import { EditorIndentationKind, resolveEditorIndentationOptions, type EditorInde
 import { registerBuiltinLanguageConfigurations } from "../../../common/languages/languageBuiltinConfigurations.js";
 import { IndentAction } from "../../../common/languages/languageConfiguration.js";
 import { TestLanguageConfigurationService } from '../modes/testLanguageConfigurationService.js';
-import { LanguageLexicalContextIndex, type LanguageLexicalContextSource } from "../../../common/languages/languageLexicalContext.js";
 import { type ResolvedLanguageConfiguration } from "../../../common/languages/languageConfigurationRegistry.js";
 import { Selection } from "../../../common/core/selection.js";
 import { Position } from "../../../common/core/position.js";
@@ -191,41 +191,25 @@ test("Language Enter normalizes removeText and validates editor indentation befo
 	assert.equal(model.getText(), "    stop\n  ");
 });
 
-test("Language Enter ignores bracket-looking text in strings and comments", () => {
-	assert.deepEqual(enterWithLexicalContext("const text = \"{\"", new Position((0) + 1, (16) + 1)), {
+test("Language Enter ignores bracket-looking text in strings and comments", async () => {
+	assert.deepEqual(await enterWithTokens("const text = \"{\"", new Position((0) + 1, (16) + 1)), {
 		text: "const text = \"{\"\n",
 		position: new Position((1) + 1, (0) + 1),
 	});
-	assert.deepEqual(enterWithLexicalContext("// {", new Position((0) + 1, (4) + 1)), {
+	assert.deepEqual(await enterWithTokens("// {", new Position((0) + 1, (4) + 1)), {
 		text: "// {\n",
 		position: new Position((1) + 1, (0) + 1),
 	});
-	assert.deepEqual(enterWithLexicalContext("/*\n{", new Position((1) + 1, (1) + 1)), {
+	assert.deepEqual(await enterWithTokens("/*\n{", new Position((1) + 1, (1) + 1)), {
 		text: "/*\n{\n",
 		position: new Position((2) + 1, (0) + 1),
 	});
-	assert.deepEqual(enterWithLexicalContext("if (ok) {", new Position((0) + 1, (9) + 1)), {
+	assert.deepEqual(await enterWithTokens("if (ok) {", new Position((0) + 1, (9) + 1)), {
 		text: "if (ok) {\n  ",
 		position: new Position((1) + 1, (2) + 1),
 	});
 });
 
-test("Language Enter rejects lexical context from another model or language", () => {
-	using model = new TextModel("{}");
-	using otherModel = new TextModel("{}");
-	using configurations = new TestLanguageConfigurationService();
-	using builtins = registerBuiltinLanguageConfigurations(configurations);
-	using otherModelContext = new LanguageLexicalContextIndex(otherModel, "typescript", configurations);
-	using otherLanguageContext = new LanguageLexicalContextIndex(model, "json", configurations);
-	const configuration = configurations.getLanguageConfiguration("typescript");
-
-	assert.throws(() => createLanguageEnterCommand(model, [caret(1)], configuration, {
-		lexicalContext: otherModelContext,
-	}), /match its model and language/);
-	assert.throws(() => createLanguageEnterCommand(model, [caret(1)], configuration, {
-		lexicalContext: otherLanguageContext,
-	}), /match its model and language/);
-});
 
 test("EnterOperation inserts blank lines before and after every cursor line", () => {
 	using model = new TextModel("zero\none\ntwo");
@@ -248,18 +232,23 @@ test("EnterOperation inserts blank lines before and after every cursor line", ()
 	assert.equal(model.getText(), "\n\nzero\none\n\n\ntwo");
 });
 
-function enterWithLexicalContext(initialText: string, position: Position): { readonly text: string; readonly position: Position } {
-	using model = new TextModel(initialText);
+async function enterWithTokens(initialText: string, position: Position): Promise<{ readonly text: string; readonly position: Position }> {
+	using tokens = registerTestTokens(new Map([
+		['const text = "{"', [{ offset: 0, type: "" }, { offset: 13, type: "string" }]],
+		["// {", [{ offset: 0, type: "comment" }]],
+		["/*", [{ offset: 0, type: "comment" }]],
+		["{", [{ offset: 0, type: "comment" }]],
+	]));
+	using model = new TextModel(initialText, { languageId: "typescript" });
+	await new Promise(resolve => setImmediate(resolve));
 	using selections = createTestCursorsController(model, [Selection.fromPositions(position)]);
 	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerBuiltinLanguageConfigurations(configurations);
-	using lexicalContext = new LanguageLexicalContextIndex(model, "typescript", configurations);
 	executeTestEditOperation(selections, createLanguageEnterCommand(model, selections.getSelections(), configurations.getLanguageConfiguration("typescript"), {
 		indentation: {
 			kind: EditorIndentationKind.Spaces,
 			tabSize: 2,
 		},
-		lexicalContext,
 	}));
 	return {
 		text: model.getText(),
@@ -275,11 +264,9 @@ function createLanguageEnterCommand(
 	model: TextModel,
 	selections: readonly Selection[],
 	configuration: ResolvedLanguageConfiguration,
-	options: { readonly indentation?: EditorIndentationOptions; readonly lexicalContext?: LanguageLexicalContextSource } = {},
+	options: { readonly indentation?: EditorIndentationOptions } = {},
 ) {
 	resolveEditorIndentationOptions(options.indentation);
-	if (options.lexicalContext && options.lexicalContext.textModel !== model) throw new TypeError('Language editing lexical context must match its model and language');
-	if (options.lexicalContext && !options.lexicalContext.supportsLanguageId(configuration.languageId)) throw new TypeError('Language editing lexical context must match its model and language');
 	const languageConfigurationService = {
 		_serviceBrand: undefined,
 		onDidChange: Event.None,

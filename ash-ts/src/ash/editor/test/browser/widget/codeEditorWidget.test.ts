@@ -2152,7 +2152,7 @@ test('Returning an already registered controller preserves dependent listener cl
 
 test('CodeEditorWidget rejects missing shared services before creating its surface', () => {
 	using configurations = createBuiltinLanguageConfigurationService();
-	using features = new LanguageFeaturesService(configurations);
+	using features = new LanguageFeaturesService();
 	using theme = new TestThemeService(darkColorTheme);
 	using model = new TextModel('text');
 	for (const missing of [IThemeService, ILanguageConfigurationService, ILanguageFeaturesService]) {
@@ -2170,7 +2170,7 @@ test('CodeEditorWidget rejects missing shared services before creating its surfa
 
 test('CodeEditorWidget shares host language services across contributions and model switches', () => {
 	using configurations = createBuiltinLanguageConfigurationService();
-	using features = new LanguageFeaturesService(configurations);
+	using features = new LanguageFeaturesService();
 	using theme = new TestThemeService(darkColorTheme);
 	using services = new ServiceContainer();
 	services.registerInstance(IThemeService, theme);

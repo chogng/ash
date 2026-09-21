@@ -19,13 +19,13 @@ The filename split is intentional:
 | `editor/common/services/languageService.ts` | Editor | Language identity and file association |
 | `editor/common/services/languageConfigurationService.ts` | Editor | Composable editing rules |
 | `editor/common/services/languageFeatures*.ts` | Editor | Provider registry contract and implementation |
-| `languageLexical*`, `languagePair*`, `languageBracket*` | Editor language layer | Deterministic editor semantics and editing behavior |
+| `TextModel.bracketPairs`, model tokenization | Editor model | Bracket structure and token data consumed by editing features |
 | `editor/contrib/folding/browser/` | Editor contribution | Folding range providers, tracked fold state, commands, and browser projection; it consumes language configuration but does not own language infrastructure |
 | `languageCompletionSession*`, `languageDiagnostic*`, `languageTokenLineIndex.ts` | Editor language layer | Version gates, session state, and browser-facing result projection |
 | `*Provider*`, `*Worker*`, `*Wire*` | Owning Editor or Workbench layer | Editor owns provider/worker contracts; Workbench owns product and transport adapters |
 
 The editor language layer still owns the contracts and editor semantics consumed by those
-providers: lexical fallback, bracket and pair editing, folding state, completion
+providers: bracket and pair editing, folding state, completion
 sessions/snippets, result version gates, and browser presentation. This service
 does not move those responsibilities into Workbench.
 
@@ -65,6 +65,4 @@ channel selection and clearing. User-visible messages use the shared dialog
 service. Active work-done progress is summarized through a transient statusbar
 entry, which is removed when no operation remains.
 
-TextMate is a separate provider under `workbench/services/textMate`. The local
-lexical provider remains the deterministic fallback when no external
-provider is available.
+TextMate is a separate provider under `workbench/services/textMate`. Without a registered grammar, models expose plain text; diagnostics come from registered language providers.

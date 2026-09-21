@@ -4,7 +4,6 @@ import { LanguageFeatureRegistry, type NotebookInfo, type NotebookInfoResolver }
 import { type URI } from '../../../base/common/uri.js';
 import { LanguageCompletionProviderRegistry, type LanguageCompletionProviderRegistration } from '../languages/completion/languageCompletionProviders.js';
 import type { CodeLensProvider, DocumentHighlightProvider, LinkedEditingRangeProvider, MultiDocumentHighlightProvider, DocumentFormattingEditProvider, DocumentRangeFormattingEditProvider, OnTypeFormattingEditProvider, LanguageSemanticTokensProvider } from '../languages.js';
-import { createLanguageLexicalSyntaxProvider } from '../languages/languageLexicalSyntaxProvider.js';
 import type { ILanguageConfigurationService } from '../languages/languageConfigurationRegistry.js';
 import { SyntaxProviderRegistry } from '../languages/syntax/syntaxProviders.js';
 import type { LanguageWorkspaceSymbolProvider } from '../languages/workspaceSymbols.js';
@@ -57,10 +56,9 @@ export class LanguageFeaturesService extends Disposable implements ILanguageFeat
 	public readonly multiDocumentHighlightProvider: LanguageFeatureRegistry<MultiDocumentHighlightProvider>;
 	private _notebookTypeResolver: NotebookInfoResolver | undefined;
 
-	constructor(languageConfigurations: ILanguageConfigurationService) {
+	constructor() {
 		super();
 		this.syntaxProvider = this._register(new SyntaxProviderRegistry());
-		this._register(this.syntaxProvider.register(createLanguageLexicalSyntaxProvider({ languageConfigurations })));
 		this.completionProvider = this._register(new LanguageCompletionProviderRegistry());
 		this.codeActionProvider = new LanguageFeatureRegistry(this._score.bind(this));
 		this.codeLensProvider = new LanguageFeatureRegistry(this._score.bind(this));

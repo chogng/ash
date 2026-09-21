@@ -84,7 +84,7 @@ suiteTeardown(() => browserEnvironment.window.close());
 
 test("standalone service collection honors explicit first-scope overrides", () => {
 	const languageConfigurations = new TestLanguageConfigurationService();
-	const languages = new LanguageFeaturesService(languageConfigurations);
+	const languages = new LanguageFeaturesService();
 	const services = new StandaloneServiceCollection({ languageConfigurationService: languageConfigurations, languageFeaturesService: languages });
 	assert.equal(services.languageFeaturesService, languages);
 	assert.equal(services.themeService.getColorTheme(), lightColorTheme);
@@ -537,7 +537,7 @@ test("standalone editor rejects unregistered models and conflicting model option
 	assert.throws(() => stanza.editor.create(dom.window.document.querySelector<HTMLElement>("main")!, { model: registered, value: "conflict" }), /cannot be combined/);
 	registered.dispose();
 	const lateConfigurations = new TestLanguageConfigurationService();
-	const lateOverride = new LanguageFeaturesService(lateConfigurations);
+	const lateOverride = new LanguageFeaturesService();
 	assert.throws(() => stanza.editor.create(dom.window.document.querySelector<HTMLElement>("main")!, {}, { languageFeaturesService: lateOverride }), /already initialized/);
 	lateOverride.dispose();
 	lateConfigurations.dispose();

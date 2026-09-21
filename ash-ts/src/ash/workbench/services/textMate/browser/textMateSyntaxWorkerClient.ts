@@ -19,7 +19,7 @@ export function createTextMateSyntaxWorkerFactory(catalogs: TextMateGrammarCatal
 		)),
 		catalogs,
 		{
-			requiredProviderModules: ["textmate.grammars", "language.lexical"],
+			requiredProviderModules: ["textmate.grammars"],
 			...(scopeTheme === undefined ? {} : { scopeTheme }),
 		},
 	);

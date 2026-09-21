@@ -82,6 +82,8 @@
 
 下方全量表保留原审查时的路径与引用数；上表说明本次迁移后的归属。
 
+2026-09-21 Worker 生命周期续修：`LanguageRequestCoordinator` 在模型关闭时取消请求并释放 Worker；调用方取消或同通道请求被替代时，不再等待忽略取消信号的提供者，迟到结果按 discarded 结算。Worker 创建期间模型关闭也会释放刚创建的实例。27 项调度/传输单测、3 项 Chromium 格式化/保存/切换文件场景及 Stanza 构建通过。资源级 Worker 服务尚未完成：Workbench 文件模型与 Standalone 模型仍由不同注册入口创建，当前通道仍按单模型维护镜像；本次没有增加不完整的 `IEditorWorkerService`。
+
 本批定向验证：14 份单测文件分批通过，覆盖工作副本、关闭后撤销历史、诊断、语义 token、协作与 Worker；新增迟到房间连接释放、非法 Worker 坐标与 EOL 回归。7 项 Chromium 场景通过，协作迁移最终再跑 4 项通过。Renderer 类型检查、Renderer/Stanza 生产构建、结构审计和 diff 检查通过。结构审计仍记录 7 份未触及的 CSS 历史债务；本次没有新增构建 warning，Playwright 保留颜色环境变量提示。
 
 ### 待继续追踪的主要风险
@@ -291,17 +293,11 @@
 | `common/languages/defaultDocumentColorsComputer.ts` | 1 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
 | `common/languages/enterAction.ts` | 1 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
 | `common/languages/language.ts` | 14 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
-| `common/languages/languageBracketPairs.ts` | 6 / 5 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
 | `common/languages/languageBuiltinConfigurations.ts` | 7 / 14 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
 | `common/languages/languageBuiltinDescriptions.ts` | 2 / 1 | 人工检查：语言关联注册统一释放；内置后缀覆盖是现有产品能力边界。 |
 | `common/languages/languageConfiguration.ts` | 19 / 3 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
 | `common/languages/languageConfigurationRegistry.ts` | 39 / 8 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
 | `common/languages/languageId.ts` | 9 / 0 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
-| `common/languages/languageLexicalConfiguration.ts` | 4 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
-| `common/languages/languageLexicalContext.ts` | 5 / 7 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
-| `common/languages/languageLexicalLineScanner.ts` | 5 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
-| `common/languages/languageLexicalSyntaxCache.ts` | 1 / 4 | 静态语法与依赖已扫描；未作逐行行为结论。 |
-| `common/languages/languageLexicalSyntaxProvider.ts` | 3 / 4 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
 | `common/languages/languageProviderModuleWire.ts` | 2 / 0 | 静态语法与依赖已扫描；含异步路径、含资源/集合操作；未作逐行行为结论。 |
 | `common/languages/languageProviderModules.ts` | 5 / 0 | 人工追踪：串行激活、加载后存活与模块身份检查。 |
 | `common/languages/languageRegistry.ts` | 6 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
@@ -934,3 +930,7 @@
 - 本批验证：73 项定向单测、5 项 Playwright 场景、Stanza 与 Renderer 生产构建通过。覆盖共享 marker 引用、模型释放、诊断源合并、标记出现/清除、模型切换、格式化和相关编辑器行为。没有新增测试文件，现有行为测试覆盖本次装配迁移；JSDOM Canvas 和 Playwright 颜色环境提示仍存在，生产构建没有新增 warning。
 
 2026-09-15：用户确认删除 `browser/services/syntaxWorkerMain.ts` 和 `browser/services/languageCompletionWorkerMain.ts`。Standalone 词法着色使用 TokenizationRegistry；模型诊断由 ModelLanguageDiagnostics 独立调度；单词补全使用通用 Editor Worker。TextMate Worker 仍由 Workbench 创建。
+
+自建词法体系清理：移除扫描器、词法配置适配、扫描缓存、默认 syntax provider、词法上下文与重复括号索引。括号操作和显示直接使用 `TextModel.bracketPairs`；section headers 和本地折叠读取模型 tokenization。Standalone 不再内置猜测式分词或括号诊断；Workbench TextMate Worker 只激活 grammar 模块。Worker 结果校验与增量传输保留。
+模型括号树补充修复：内容变更在通知视图和 token 监听方前先进入括号树；标准内容事件按范围倒序传递多处编辑，保证增量括号更新与删除/撤销一致。
+本轮验证：扫描器消费方、syntax wire、模型 tokenization、TextMate、模型/编辑器组件定向单测通过；23 项 Editor 架构检查和 10 项 Chromium 场景通过；`build:stanza`、`build:renderer` 通过。此记录仅表示自建词法链路已收敛，不表示整个 Editor API 对齐完成。

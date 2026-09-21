@@ -7,6 +7,13 @@ import { VersionedLanguageResultStore } from "../languages/languageResultStore.j
 import { type TextModel } from "../model/textModel.js";
 import { attachLanguageTokenResultDelta, getLanguageTokenResultDelta } from '../services/semanticTokensDto.js';
 
+export interface LanguageTokenizationSource {
+	readonly textModel: TextModel;
+	readonly modelVersion: number;
+	readonly onDidChange: Event<void>;
+	getLineTokens(lineIndex: number): readonly LanguageToken[];
+}
+
 export interface LanguageToken {
 	readonly range: Range;
 	readonly tokenType: string;

@@ -2,9 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "mocha";
 import { JSDOM } from "jsdom";
 import { type TextMeasurer } from "../../../../common/viewModel/textMeasurer.js";
-import { LanguageBracketPairs } from "../../../../common/languages/languageBracketPairs.js";
 import { TestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
-import { LanguageLexicalContextIndex } from "../../../../common/languages/languageLexicalContext.js";
 import { TextDecorationCollection } from "../../../../common/model/decorationCollection.js";
 import { Selection } from "../../../../common/core/selection.js";
 import { Position } from "../../../../common/core/position.js";
@@ -31,14 +29,13 @@ const { BracketMatchingController } = await import("../../browser/bracketMatchin
 test("Bracket match controller stores standard decoration options and clears them for a range selection", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
-	using model = new TextModel("function value() {\n}");
 	using configurations = new TestLanguageConfigurationService();
+	using model = new TextModel("function value() {\n}", { languageId: "typescript", languageConfigurationService: configurations });
 	using registration = configurations.register("typescript", {
 		brackets: [["(", ")"], ["{", "}"]],
 	});
 	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((0) + 1, (17) + 1))]);
-	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
-	using bracketPairs = new LanguageBracketPairs(model, lexical);
+	const bracketPairs = model.bracketPairs;
 	using decorations = new TextDecorationCollection<void>(model);
 	using viewport = new View({
 		container,
@@ -68,11 +65,10 @@ test("Bracket match controller stores standard decoration options and clears the
 });
 
 test("Bracket match controller distinguishes near, always, and never modes", () => {
-	using model = new TextModel("{ value }");
 	using configurations = new TestLanguageConfigurationService();
+	using model = new TextModel("{ value }", { languageId: "typescript", languageConfigurationService: configurations });
 	using registration = configurations.register("typescript", { brackets: [["{", "}"]] });
-	using lexical = new LanguageLexicalContextIndex(model, "typescript", configurations);
-	using bracketPairs = new LanguageBracketPairs(model, lexical);
+	const bracketPairs = model.bracketPairs;
 	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((0) + 1, (3) + 1))]);
 	const editor = editorFor(model, selections);
 
@@ -87,6 +83,9 @@ test("Bracket match controller distinguishes near, always, and never modes", () 
 	using neverDecorations = new TextDecorationCollection<void>(model);
 	using never = new BracketMatchingController(editor, bracketPairs, neverDecorations, "never");
 	assert.equal(neverDecorations.size, 0);
+
+	model.applyEdits([{ range: new Range(1, 9, 1, 10), text: " " }]);
+	assert.equal(alwaysDecorations.size, 0);
 });
 
 class FixedTextMeasurer implements TextMeasurer {

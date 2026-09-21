@@ -306,7 +306,6 @@ export class TextModel implements ITextModel {
 		}));
 		this._register(this.onDidChangeLanguage(event => this._bracketPairs.handleDidChangeLanguage(event)));
 		this._register(this.onDidChangeOptions(event => this._bracketPairs.handleDidChangeOptions(event)));
-		this._register(this.onDidChangeContent(change => this._bracketPairs.handleDidChangeContent(toModelContentChangedEvent(change))));
 		this._register(this.tokenization.onDidChange(() => {
 			const event: IModelTokensChangedEvent = {
 				semanticTokensApplied: false,
@@ -1394,6 +1393,8 @@ export class TextModel implements ITextModel {
 
 	private publishTextChange(change: TextModelChange): void {
 		const event = toInternalModelContentChangedEvent(change);
+		// Views and token listeners may query brackets while processing this change.
+		this._bracketPairs.handleDidChangeContent(event.contentChangedEvent);
 		for (const viewModel of [...this.viewModels]) {
 			try {
 				viewModel.onDidChangeContentOrInjectedText(event);
@@ -2293,7 +2294,8 @@ export function getLineTokensWithInjections(tokens: LineTokens, injectionOptions
 }
 
 function toModelContentChangedEvent(change: TextModelChange): IModelContentChangedEvent {
-	const changes = change.changes.map(contentChange => ({ ...contentChange }));
+	const changes = change.changes.map(contentChange => ({ ...contentChange }))
+		.sort((left, right) => Range.compareRangesUsingStarts(right.range, left.range));
 	const detailedReasons = [...change.detailedReasons];
 	return {
 		changes,

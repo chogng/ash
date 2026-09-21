@@ -1,6 +1,6 @@
 import { Disposable } from "../../../../base/common/lifecycle.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
-import { type LanguageBracketPairs } from "../../../common/languages/languageBracketPairs.js";
+import { type IBracketPairsTextModelPart } from "../../../common/textModelBracketPairs.js";
 import { Range } from "../../../common/core/range.js";
 import { TrackedRangeStickiness } from '../../../common/model.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
@@ -23,16 +23,17 @@ export class BracketMatchingController extends Disposable {
 
 	constructor(
 		private readonly editor: ICodeEditor,
-		private readonly bracketPairs: LanguageBracketPairs,
+		private readonly bracketPairs: IBracketPairsTextModelPart,
 		private readonly decorations: TextDecorationCollection<void>,
 		private readonly mode: "never" | "near" | "always",
 	) {
 		super();
 		try {
-			if (editor.getModel() !== bracketPairs.textModel || editor.getModel() !== decorations.textModel) {
+			if (editor.getModel()?.bracketPairs !== bracketPairs || editor.getModel() !== decorations.textModel) {
 				throw new TypeError("Stanza bracket matching dependencies must share one text model");
 			}
 			this._register(editor.onDidChangeCursorSelection(() => this.update()));
+			this._register(decorations.textModel.onDidChangeContent(() => this.update()));
 			this._register(bracketPairs.onDidChange(() => this.update()));
 			this.update();
 		} catch (error) {
@@ -52,8 +53,8 @@ export class BracketMatchingController extends Disposable {
 			const match = this.bracketPairs.matchBracket(selection.getPosition())
 				?? (this.mode === "always" ? this.bracketPairs.findEnclosingBrackets(selection.getPosition()) : undefined);
 			if (!match) continue;
-			ranges.set(rangeKey(match.opening), match.opening);
-			ranges.set(rangeKey(match.closing), match.closing);
+			ranges.set(rangeKey(match[0]), match[0]);
+			ranges.set(rangeKey(match[1]), match[1]);
 		}
 		this.decorations.replaceAll([...ranges.values()].map(range => ({
 			range,

@@ -17,7 +17,7 @@ import { WorkbenchLanguageFeatures } from '../../browser/workbenchLanguageFeatur
 test('Workbench installs product languages while Editor owns provider registries', async () => {
 	using languageService = new LanguageService();
 	using languageConfigurations = new TestLanguageConfigurationService();
-	using languageFeatures = new LanguageFeaturesService(languageConfigurations);
+	using languageFeatures = new LanguageFeaturesService();
 	using workbenchLanguages = new WorkbenchLanguageFeatures(languageService, languageConfigurations, languageFeatures);
 	using model = new TextModel('const answer = 42;');
 	using syntax = new SyntaxService(model, languageFeatures.syntaxProvider);
@@ -31,7 +31,7 @@ test('Workbench installs product languages while Editor owns provider registries
 
 test('Language features service atomically owns a replaceable cross-kind provider batch', async () => {
 	using languageConfigurations = new TestLanguageConfigurationService();
-	using languageFeatures = new LanguageFeaturesService(languageConfigurations);
+	using languageFeatures = new LanguageFeaturesService();
 	using model = new TextModel('answer', { languageId: 'typescript' });
 	using hover = new LanguageHoverService(model, languageFeatures.hoverProvider);
 	const registration = languageFeatures.registerProviderBatch({ hovers: [{ selector: 'typescript', provider: { provideHover: () => ({ contents: ['first'] }) } }] });
@@ -47,7 +47,7 @@ test('Language features service atomically owns a replaceable cross-kind provide
 
 test('Language features service keeps document, range, and on-type formatting registries independent', async () => {
 	using languageConfigurations = new TestLanguageConfigurationService();
-	using languageFeatures = new LanguageFeaturesService(languageConfigurations);
+	using languageFeatures = new LanguageFeaturesService();
 	using model = new TextModel('answer', { languageId: 'typescript' });
 	const formattingOptions = { tabSize: 4, insertSpaces: true };
 	const range = new Range(1, 1, 1, 7);

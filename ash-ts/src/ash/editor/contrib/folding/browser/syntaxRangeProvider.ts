@@ -1,71 +1,44 @@
+import { StandardTokenType } from "../../../common/encodedTokenAttributes.js";
 import { EditorFoldingRangeSource, type EditorFoldingRange } from "./foldingRanges.js";
 import { type ILanguageConfigurationService } from '../../../common/languages/languageConfigurationRegistry.js';
 import { assertLanguageId } from "../../../common/languages/languageId.js";
-import { createLanguageLexicalLineScanner } from "../../../common/languages/languageLexicalConfiguration.js";
-import { type LanguageLexicalState } from "../../../common/languages/languageLexicalLineScanner.js";
 import { type TextModel } from "../../../common/model/textModel.js";
 
-interface OpenBracketFold {
-	readonly startLineIndex: number;
-	readonly matchingToken: string;
-}
-
-interface OpenMarkerFold {
-	readonly startLineIndex: number;
-}
-
-/**
- * Computes synchronous structural fold ranges from Stanza's configured lexical scanner.
- *
- * Brace, bracket, multi-line block-comment, and configured named region markers
- * participate. Parentheses are intentionally excluded: multi-line argument lists
- * remain editor text rather than becoming accidental fold headers. Callers may merge
- * these provider-owned ranges with indentation folds without exposing scanner state to
- * browser code.
- */
+/** Computes structural folds from model brackets and configured region markers. */
 export function computeEditorLanguageFoldingRanges(model: TextModel, languageId: string, configurations: ILanguageConfigurationService): readonly EditorFoldingRange[] {
 	assertLanguageId(languageId);
 	if (!configurations || typeof configurations.getLanguageConfiguration !== "function") {
 		throw new TypeError("Language folding requires language configurations");
 	}
 	const configuration = configurations.getLanguageConfiguration(languageId);
-	const scanner = createLanguageLexicalLineScanner(languageId, configuration);
-	const bracketStack: OpenBracketFold[] = [];
-	const blockCommentStarts: number[] = [];
-	const markerStarts: OpenMarkerFold[] = [];
+	const markerStarts: number[] = [];
 	const ranges: EditorFoldingRange[] = [];
-	let state: LanguageLexicalState = "normal";
+	let commentStart: number | undefined;
+	const blockComment = configuration.comments;
+	model.bracketPairs.getBracketPairsInRange(model.getFullModelRange()).forEach(pair => {
+		if (pair.closingBracketRange && isFoldOpeningToken(model.getValueInRange(pair.openingBracketRange))) {
+			appendRange(ranges, pair.openingBracketRange.startLineNumber - 1, pair.closingBracketRange.startLineNumber - 1);
+		}
+	});
 	for (let lineIndex = 0; lineIndex < model.lineCount; lineIndex += 1) {
-		const line = model.getLineContent((lineIndex) + 1);
-		const result = scanner.scan(line, state);
-		state = result.outputState;
+		const line = model.getLineContent(lineIndex + 1);
+		const tokens = model.tokenization.getLineTokens(lineIndex + 1);
+		if (blockComment?.blockCommentStartToken && blockComment.blockCommentEndToken) {
+			for (let index = 0; index < tokens.getCount(); index++) {
+				if (tokens.getStandardTokenType(index) !== StandardTokenType.Comment) continue;
+				const text = line.slice(tokens.getStartOffset(index), tokens.getEndOffset(index));
+				if (commentStart === undefined && text.startsWith(blockComment.blockCommentStartToken)) commentStart = lineIndex;
+				if (commentStart !== undefined && text.endsWith(blockComment.blockCommentEndToken)) {
+					appendRange(ranges, commentStart, lineIndex);
+					commentStart = undefined;
+				}
+			}
+		}
 		if (matchesMarker(configuration.foldingRules.markers?.end, line)) {
 			const start = markerStarts.pop();
-			if (start) appendRange(ranges, start.startLineIndex, lineIndex);
+			if (start !== undefined) appendRange(ranges, start, lineIndex);
 		} else if (matchesMarker(configuration.foldingRules.markers?.start, line)) {
-			markerStarts.push(Object.freeze({ startLineIndex: lineIndex }));
-		}
-		for (const event of result.events) {
-			if (event.kind === "multiline") {
-				if (event.lexicalKind !== "blockComment") continue;
-				if (event.action === "open") {
-					blockCommentStarts.push(lineIndex);
-				} else {
-					const startLineIndex = blockCommentStarts.pop();
-					if (startLineIndex !== undefined) appendRange(ranges, startLineIndex, lineIndex);
-				}
-				continue;
-			}
-			if (event.kind !== "bracket") continue;
-			if (event.action === "open" && isFoldOpeningToken(event.token)) {
-				bracketStack.push(Object.freeze({ startLineIndex: lineIndex, matchingToken: event.matchingToken }));
-				continue;
-			}
-			if (event.action !== "close") continue;
-			const opener = bracketStack.at(-1);
-			if (!opener || opener.matchingToken !== event.token) continue;
-			bracketStack.pop();
-			appendRange(ranges, opener.startLineIndex, lineIndex);
+			markerStarts.push(lineIndex);
 		}
 	}
 	return Object.freeze(normalizeFoldingRanges(ranges));

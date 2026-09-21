@@ -3,7 +3,6 @@ import { test } from "mocha";
 import { DisposableStore } from "../../../base/common/lifecycle.js";
 import { SyntaxProviderRegistry, type SyntaxProvider } from "../../common/languages/syntax/syntaxProviders.js";
 import { SYNTAX_SYNCHRONIZATION, SYNTAX_DIAGNOSTIC_LANE, SYNTAX_TOKEN_LANE, SyntaxProviderWorker, SyntaxService } from "../../common/languages/syntax/syntaxService.js";
-import { createLanguageLexicalSyntaxProvider } from "../../common/languages/languageLexicalSyntaxProvider.js";
 import { LanguageRequestCancellationReason, LanguageRequestStatus } from "../../common/languages/languageRequestCoordinator.js";
 import { LanguageDiagnosticSeverity, type LanguageDiagnosticResult, type LanguageTokenResult } from "../../common/languages/languageResults.js";
 import { Position } from "../../common/core/position.js";
@@ -167,34 +166,13 @@ test("Model changes cancel both syntax lanes before either store can publish sta
 	assert.equal(service.diagnostics.result, undefined);
 });
 
-test("Lexical syntax provider emits deterministic baseline tokens and bracket diagnostics", async () => {
+test("An unconfigured syntax service does not invent tokens or diagnostics", async () => {
 	using model = new TextModel("const value = 1 + 2;\nif (value] {");
 	using registry = new SyntaxProviderRegistry();
-	using registration = registry.register(createLanguageLexicalSyntaxProvider());
 	using service = new SyntaxService(model, registry);
-
 	await service.requestAll("typescript");
-
-	assert.deepEqual(service.tokens.result!.value.tokens.map(token => [
-		token.range.getStartPosition().lineNumber,
-		token.range.getStartPosition().column,
-		token.range.getEndPosition().column,
-		token.tokenType,
-	]), [
-		[1, 1, 6, "keyword"],
-		[1, 7, 12, "variable"],
-		[1, 13, 14, "operator"],
-		[1, 15, 16, "number"],
-		[1, 17, 18, "operator"],
-		[1, 19, 20, "number"],
-		[2, 1, 3, "keyword"],
-		[2, 5, 10, "variable"],
-	]);
-	assert.deepEqual(service.diagnostics.result!.value.diagnostics.map(diagnostic => diagnostic.message), [
-		"Unexpected closing bracket ']'",
-		"Unclosed bracket '('",
-		"Unclosed bracket '{'",
-	]);
+	assert.deepEqual(service.tokens.result!.value.tokens, []);
+	assert.deepEqual(service.diagnostics.result!.value.diagnostics, []);
 });
 
 test("Syntax registry validates batches and releases providers independently", () => {

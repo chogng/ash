@@ -2,7 +2,7 @@ import { strict as assert } from "node:assert";
 import { test } from "mocha";
 import { syntaxWireCodec } from "../../common/languages/syntax/syntaxWire.js";
 import { SYNTAX_TOKEN_LANE, type SyntaxResult } from "../../common/languages/syntax/syntaxService.js";
-import { LanguageLexicalSyntaxCache } from "../../common/languages/languageLexicalSyntaxCache.js";
+import { testTokens } from './testSyntaxProvider.js';
 import { LanguageResultAcceptance, LanguageResultStoreChangeReason } from "../../common/languages/languageResultStore.js";
 import { LanguageTokenLineIndex } from "../../common/tokens/languageTokenLineIndex.js";
 import { attachLanguageTokenResultDelta, createLanguageTokenSnapshotNormalizer, createLanguageTokenStore, type LanguageToken } from "../../common/languages/languageResults.js";
@@ -271,12 +271,10 @@ test("Token line index reuses relative suffix payloads across line insertion", (
 	using model = new TextModel(lines.join("\n"));
 	using store = createLanguageTokenStore(model);
 	using index = new LanguageTokenLineIndex(store);
-	const cache = new LanguageLexicalSyntaxCache();
-	const signal = new AbortController().signal;
 	const firstSnapshot = model.createVersionedSnapshot();
 	const firstResult: SyntaxResult = Object.freeze({
 		lane: SYNTAX_TOKEN_LANE,
-		value: cache.getTokens(firstSnapshot, signal),
+		value: testTokens(firstSnapshot),
 	});
 	const firstDecoded = syntaxWireCodec.decodeResult(
 		SYNTAX_TOKEN_LANE,
@@ -303,7 +301,7 @@ test("Token line index reuses relative suffix payloads across line insertion", (
 	const snapshot = model.createVersionedSnapshot();
 	const currentResult: SyntaxResult = Object.freeze({
 		lane: SYNTAX_TOKEN_LANE,
-		value: cache.getTokens(snapshot, signal),
+		value: testTokens(snapshot),
 	});
 	const serverBase = Object.freeze({ requestId: 1, snapshot: firstSnapshot, result: firstResult });
 	const clientBase = Object.freeze({ requestId: 1, snapshot: firstSnapshot, result: firstDecoded });
@@ -321,7 +319,7 @@ test("Token line index reuses relative suffix payloads across line insertion", (
 	assert.equal(index.lines[0], originalLines[0]);
 	assert.equal(index.lines[insertionLine]!.lineIndex, insertionLine);
 	assert.equal(index.lines[insertionLine + 1]!.lineIndex, insertionLine + 1);
-	assert.deepEqual(index.getLineTokens(insertionLine + 1).map(entry => entry.tokenType), ["variable"]);
+	assert.deepEqual(index.getLineTokens(insertionLine + 1).map(entry => entry.tokenType), ["value100"]);
 	assert.equal(events.at(-1)?.rebuiltLineCount, 1);
 	assert.equal(events.at(-1)?.reusedLineCount, 1_000);
 });
@@ -330,8 +328,6 @@ test("Token line index matches full results across random wire deltas", () => {
 	using model = new TextModel("const value = `start\nmiddle\nend`;\nif (value) {\n  return 1;\n}");
 	using store = createLanguageTokenStore(model);
 	using index = new LanguageTokenLineIndex(store);
-	const cache = new LanguageLexicalSyntaxCache();
-	const signal = new AbortController().signal;
 	const insertions = ["x", " ", "\n", "/*", "*/", "`", "'", "(", ")", "const"];
 	let serverState: LanguageWorkerWireResultState<SyntaxResult> | undefined;
 	let clientState: LanguageWorkerWireResultState<SyntaxResult> | undefined;
@@ -345,7 +341,7 @@ test("Token line index matches full results across random wire deltas", () => {
 		const snapshot = model.createVersionedSnapshot();
 		const serverResult: SyntaxResult = Object.freeze({
 			lane: SYNTAX_TOKEN_LANE,
-			value: cache.getTokens(snapshot, signal),
+			value: testTokens(snapshot),
 		});
 		const encoded = syntaxWireCodec.encodeResult(SYNTAX_TOKEN_LANE, serverResult, snapshot, serverState);
 		const clientResult = syntaxWireCodec.decodeResult(SYNTAX_TOKEN_LANE, structuredClone(encoded), snapshot, clientState);

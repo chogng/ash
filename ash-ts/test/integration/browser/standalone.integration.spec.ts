@@ -2030,14 +2030,14 @@ test('inline completion snooze is shared and survives closing another editor', a
 });
 
 
-test('standalone tokenizer and diagnostics work while word suggestions share the editor worker', async ({ page }) => {
+test('standalone without a grammar keeps plain text and no invented diagnostics while word suggestions work', async ({ page }) => {
 	const workers: string[] = [];
 	page.on('worker', worker => workers.push(worker.url()));
 	await page.goto('/standalone.html');
 	await page.evaluate(() => window.ashStandaloneIntegration.prepareLanguageWorkers());
 	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageWorkers())).toEqual({
-		tokens: ['keyword', 'variable', 'operator', 'number'],
-		diagnostics: ["Unclosed bracket '('"],
+		tokens: [],
+		diagnostics: [],
 		current: true,
 	});
 	await page.keyboard.press('Control+Space');

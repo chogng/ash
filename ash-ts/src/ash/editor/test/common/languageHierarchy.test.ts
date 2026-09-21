@@ -10,7 +10,7 @@ import { LanguageHierarchyService } from '../../contrib/callHierarchy/common/lan
 
 test("language hierarchy keeps prepare and follow-up requests on the same provider", async () => {
 	using configurations = new TestLanguageConfigurationService();
-	using languages = new LanguageFeaturesService(configurations);
+	using languages = new LanguageFeaturesService();
 	using model = new TextModel("function root() {}\n", { languageId: 'typescript' });
 	const source = URI.file("C:\\project\\main.ts");
 	const root = item("root", source, 0);
@@ -39,7 +39,7 @@ test("language hierarchy keeps prepare and follow-up requests on the same provid
 
 test("language hierarchy discards follow-up results when the source revision changes", async () => {
 	using configurations = new TestLanguageConfigurationService();
-	using languages = new LanguageFeaturesService(configurations);
+	using languages = new LanguageFeaturesService();
 	using model = new TextModel("class Root {}\n", { languageId: 'typescript' });
 	const source = URI.file("C:\\project\\main.ts");
 	const root = item("Root", source, 0);
@@ -60,7 +60,7 @@ test("language hierarchy discards follow-up results when the source revision cha
 for (const change of ['content', 'language', 'dispose'] as const) {
 	test(`prepared hierarchies reject follow-ups after ${change}`, async () => {
 		using configurations = new TestLanguageConfigurationService();
-		using languages = new LanguageFeaturesService(configurations);
+		using languages = new LanguageFeaturesService();
 		using model = new TextModel('class Root {}', { languageId: 'typescript' });
 		const root = item('Root', model.uri, 0);
 		let calls = 0;

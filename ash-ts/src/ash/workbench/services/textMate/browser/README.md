@@ -22,7 +22,7 @@ supplies loaders to the common grammar service, and never grants the Worker
 filesystem or extension-host access.
 
 `textMateSyntaxWorkerMain.ts` is the complete dedicated Worker composition:
-it owns TextMate and lexical fallback modules, the grammar catalog and scope-theme
+it owns the TextMate grammar module, the grammar catalog and scope-theme
 stores, the Syntax/module/catalog/theme wire servers, and the Oniguruma-backed tokenization
 service. `createTextMateSyntaxWorkerFactory` creates the matching renderer
 client and gates requests on the latest catalog and scope-theme revisions supplied

@@ -461,3 +461,56 @@ function createDeferred<T>(): Deferred<T> {
 	});
 	return { promise, resolve, reject };
 }
+
+test('closing a model cancels pending work without waiting for its worker', async () => {
+	using model = new TextModel('old');
+	const worker = new ControlledLanguageWorker();
+	using coordinator = new LanguageRequestCoordinator<TestLane, TestPayload, TestResult>(model, () => worker);
+	const pending = coordinator.runLatest('tokens', { label: 'closing' }, () => assert.fail('Closed model must not receive results'));
+	model.dispose();
+	assert.equal(worker.requests[0]!.signal.aborted, true);
+	assert.equal(worker.disposed, true);
+	const outcome = await pending;
+	assert.equal(outcome.status, LanguageRequestStatus.Cancelled);
+	if (outcome.status === LanguageRequestStatus.Cancelled) {
+		assert.equal(outcome.reason, LanguageRequestCancellationReason.ModelUnavailable);
+	}
+	assert.throws(() => coordinator.startWorker(), /model is disposed/);
+	worker.requests[0]!.completion.resolve({ label: 'late', text: 'old' });
+	await Promise.resolve();
+	assert.deepEqual(worker.settlements, [{ requestId: 1, disposition: LanguageWorkerResultDisposition.Discarded }]);
+});
+
+test('a superseded request finishes even when its worker ignores cancellation', async () => {
+	using model = new TextModel('text');
+	const worker = new ControlledLanguageWorker();
+	using coordinator = new LanguageRequestCoordinator<TestLane, TestPayload, TestResult>(model, () => worker);
+	const first = coordinator.runLatest('tokens', { label: 'first' }, () => assert.fail('Superseded result must not apply'));
+	const applied: string[] = [];
+	const second = coordinator.runLatest('tokens', { label: 'second' }, result => applied.push(result.value.label));
+	assert.equal((await first).status, LanguageRequestStatus.Cancelled);
+	worker.requests[1]!.completion.resolve({ label: 'second', text: 'text' });
+	assert.equal((await second).status, LanguageRequestStatus.Applied);
+	worker.requests[0]!.completion.resolve({ label: 'first', text: 'text' });
+	await Promise.resolve();
+	assert.deepEqual(applied, ['second']);
+	assert.deepEqual(worker.settlements, [
+		{ requestId: 2, disposition: LanguageWorkerResultDisposition.Applied },
+		{ requestId: 1, disposition: LanguageWorkerResultDisposition.Discarded },
+	]);
+});
+
+test('a model closed during worker creation releases the newly created worker', async () => {
+	using model = new TextModel('closing');
+	const worker = new ControlledLanguageWorker();
+	using coordinator = new LanguageRequestCoordinator<TestLane, TestPayload, TestResult>(model, () => {
+		model.dispose();
+		return worker;
+	});
+	const outcome = await coordinator.runLatest('tokens', { label: 'closing' }, () => assert.fail('Closed model must not receive results'));
+	assert.deepEqual({ outcome, disposed: worker.disposed, requests: worker.requests.length }, {
+		outcome: { status: LanguageRequestStatus.Cancelled, requestId: 1, modelVersion: 1, reason: LanguageRequestCancellationReason.ModelUnavailable },
+		disposed: true,
+		requests: 0,
+	});
+});

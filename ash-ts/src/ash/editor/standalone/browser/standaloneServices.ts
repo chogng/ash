@@ -1,5 +1,3 @@
-import { TokenizationRegistry } from '../../common/languages.js';
-import { createLanguageLexicalTokenizationSupport } from '../../common/languages/languageLexicalSyntaxProvider.js';
 import { StandaloneCodeEditorService } from './standaloneCodeEditorService.js';
 import { IInlineCompletionsService, InlineCompletionsService } from '../../browser/services/inlineCompletionsService.js';
 import { MarkerService, IMarkerService } from '../../../platform/markers/common/markers.js';
@@ -14,7 +12,7 @@ import { ICodeEditorService, type ICodeEditorService as ICodeEditorServiceContra
 import { type LanguageCompletionWorkerFactory } from "../../common/languages/completion/languageCompletionService.js";
 import { type SyntaxWorkerFactory } from "../../common/languages/syntax/syntaxService.js";
 import { VersionedEditorWorkerClient, type VersionedEditorWorkerFactory } from "../../browser/services/editorWorkerService.js";
-import { BUILTIN_LANGUAGE_IDS, registerBuiltinLanguageConfigurations } from "../../common/languages/languageBuiltinConfigurations.js";
+import { registerBuiltinLanguageConfigurations } from "../../common/languages/languageBuiltinConfigurations.js";
 import { registerBuiltinLanguageDescriptions } from "../../common/languages/languageBuiltinDescriptions.js";
 import { ILanguageFeaturesService } from '../../common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../common/services/languageFeaturesService.js';
@@ -84,7 +82,7 @@ export class StandaloneServiceCollection extends Disposable {
 			accessor.get(ILanguageService),
 		));
 		if (overrides.languageFeaturesService) instantiationService.registerInstance(ILanguageFeaturesService, overrides.languageFeaturesService);
-		else instantiationService.registerSingleton(ILanguageFeaturesService, accessor => new LanguageFeaturesService(accessor.get(ILanguageConfigurationService)));
+		else instantiationService.registerSingleton(ILanguageFeaturesService, () => new LanguageFeaturesService());
 		instantiationService.registerSingleton(IThemeService, () => new NamedEditorThemeService(window));
 		this.themeService = instantiationService.get(IThemeService) as INamedEditorThemeService;
 		instantiationService.registerSingleton(IModelService, accessor => new ModelService(
@@ -101,12 +99,6 @@ export class StandaloneServiceCollection extends Disposable {
 		this.languageFeaturesService = instantiationService.get(ILanguageFeaturesService);
 		if (!overrides.languageService) this._register(registerBuiltinLanguageDescriptions(this.languageService.languages));
 		if (!overrides.languageConfigurationService) this._register(registerBuiltinLanguageConfigurations(this.languageConfigurationService));
-		if (!this.syntaxWorkerFactory) {
-			for (const languageId of BUILTIN_LANGUAGE_IDS) {
-				this._register(TokenizationRegistry.register(languageId, createLanguageLexicalTokenizationSupport(languageId, this.languageConfigurationService)));
-			}
-			this._register(this.languageConfigurationService.onDidChange(() => TokenizationRegistry.handleChange([...BUILTIN_LANGUAGE_IDS])));
-		}
 		this._register(FormattingConflicts.setFormatterSelector(async formatters => formatters[0]));
 	}
 }

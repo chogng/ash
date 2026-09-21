@@ -1,3 +1,5 @@
+import { raceCancellationError } from '../../../base/common/async.js';
+import { onUnexpectedError } from '../../../base/common/errors.js';
 import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
 import { type TextModelChange, type TextSnapshot } from "../core/textChange.js";
 import { type TextModel } from "../model/textModel.js";
@@ -124,6 +126,10 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 			this.cancelAll(LanguageRequestCancellationReason.ModelChanged);
 			this.synchronizeWorker(change);
 		}));
+		this._register(model.onWillDispose(() => {
+			this.cancelAll(LanguageRequestCancellationReason.ModelUnavailable);
+			this.workerSlot.clear();
+		}));
 		this._register(toDisposable(() => {
 			this.cancelAll(LanguageRequestCancellationReason.CoordinatorDisposed);
 		}));
@@ -197,10 +203,13 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 
 		try {
 			let value: TResult;
+			let computation: Promise<TResult> | undefined;
 			try {
-				value = await worker.run(request, active.controller.signal);
+				computation = worker.run(request, active.controller.signal);
+				value = await raceCancellationError(computation, active.controller.signal);
 			} catch (error) {
 				if (active.cancellation) {
+					void computation?.then(() => settleWorkerResult(worker, requestId, LanguageWorkerResultDisposition.Discarded), () => undefined).catch(onUnexpectedError);
 					return cancelledOutcome(requestId, snapshot.version, active.cancellation);
 				}
 				const disposalError = this.invalidateWorker(worker, active);
@@ -261,6 +270,9 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 	}
 
 	private getWorker(): LanguageWorker<TLane, TPayload, TResult> {
+		if (this.model.isDisposed()) {
+			throw new ReferenceError("Language worker model is disposed");
+		}
 		const current = this.workerSlot.value;
 		if (current) return current;
 		const worker = this.createWorker();
@@ -273,6 +285,9 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 			throw new TypeError("Language worker factory returned an invalid worker");
 		}
 		this.workerSlot.value = worker;
+		if (this.model.isDisposed()) {
+			this.workerSlot.clear();
+		}
 		return worker;
 	}
 

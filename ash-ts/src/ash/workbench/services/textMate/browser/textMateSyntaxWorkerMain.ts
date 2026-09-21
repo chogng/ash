@@ -4,9 +4,6 @@ import { SyntaxProviderModuleWireServer } from "../../../../editor/common/langua
 import { SyntaxProviderRegistry } from "../../../../editor/common/languages/syntax/syntaxProviders.js";
 import { SyntaxProviderWorker } from "../../../../editor/common/languages/syntax/syntaxService.js";
 import { syntaxWireCodec } from "../../../../editor/common/languages/syntax/syntaxWire.js";
-import { registerBuiltinLanguageConfigurations } from "../../../../editor/common/languages/languageBuiltinConfigurations.js";
-import { LanguageConfigurationService } from "../../../../editor/common/languages/languageConfigurationRegistry.js";
-import { createLanguageLexicalSyntaxProvider } from "../../../../editor/common/languages/languageLexicalSyntaxProvider.js";
 import { LanguageWorkerWireServer } from "../../../../editor/common/languages/languageWorkerWire.js";
 import { createTextMateSyntaxModule } from "../common/textMateSyntaxModule.js";
 import { TextMateGrammarCatalogStore } from "../common/textMateGrammarCatalogStore.js";
@@ -14,20 +11,10 @@ import { TextMateGrammarCatalogWireServer } from "../common/textMateGrammarCatal
 import { TextMateScopeThemeModel } from "../common/textMateScopeTheme.js";
 import { TextMateScopeThemeWireServer } from "../common/textMateScopeThemeWire.js";
 import { createBrowserTextMateTokenizationService } from "./browserTextMateTokenization.js";
-import { InMemoryConfigurationService } from "../../../../platform/configuration/common/inMemoryConfigurationService.js";
-import { LanguageService } from "../../../../editor/common/services/languageService.js";
 
 start(({ port, resources }) => {
 	const registry = resources.add(new SyntaxProviderRegistry());
 	const modules = resources.add(new SyntaxProviderModuleRegistry());
-	const configurationService = resources.add(new InMemoryConfigurationService());
-	const languageService = resources.add(new LanguageService());
-	const languageConfigurations = resources.add(new LanguageConfigurationService(configurationService, languageService));
-	resources.add(registerBuiltinLanguageConfigurations(languageConfigurations));
-	resources.add(modules.register({
-		id: "language.lexical",
-		load: () => [createLanguageLexicalSyntaxProvider({ languageConfigurations })],
-	}));
 	const grammarCatalog = resources.add(new TextMateGrammarCatalogStore());
 	const scopeTheme = resources.add(new TextMateScopeThemeModel());
 	const textMateTokenization = resources.add(createBrowserTextMateTokenizationService(grammarCatalog, {

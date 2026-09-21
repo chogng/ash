@@ -1,7 +1,5 @@
 import { registerEditorContribution } from '../../../browser/editorExtensions.js';
-import { LanguageBracketPairs } from '../../../common/languages/languageBracketPairs.js';
 import { TextDecorationCollection } from '../../../common/model/decorationCollection.js';
-import { TextEditorCapability } from '../../textEditorCapabilities.js';
 import { LanguageBracketColorizationSource } from './bracketColorizationPresentation.js';
 import { BracketMatchingController } from './bracketMatching.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
@@ -10,19 +8,16 @@ import { KeyCode } from '../../../../base/common/keyCodes.js';
 registerEditorContribution({
 	id: BracketMatchingController.ID,
 	configure: context => {
-		const lexicalContext = context.getService(TextEditorCapability.languageLexicalContext);
 		const largeFile = context.model.largeFile.tooLargeForTokenization;
-		const bracketPairs = context.register(new LanguageBracketPairs(context.model, lexicalContext));
-		context.provideService(TextEditorCapability.bracketPairs, bracketPairs);
 		const colorizeBrackets = context.options.bracketPairColorization?.enabled !== false;
 		const renderBracketGuides = context.options.guides?.bracketPairs !== undefined && context.options.guides.bracketPairs !== false;
 		if (!largeFile && (colorizeBrackets || renderBracketGuides)) {
-			context.setBracketColorizationSource(new LanguageBracketColorizationSource(bracketPairs, colorizeBrackets));
+			context.setBracketColorizationSource(new LanguageBracketColorizationSource(context.model, colorizeBrackets));
 		}
 	},
 	install: context => {
 		if (context.kind !== 'text') return;
-		const bracketPairs = context.getService(TextEditorCapability.bracketPairs);
+		const bracketPairs = context.model.bracketPairs;
 		const controller = new BracketMatchingController(
 			context.editor,
 			bracketPairs,

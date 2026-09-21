@@ -5,8 +5,7 @@ import { Disposable, DisposableStore, toDisposable } from "../../../base/common/
 import { SyntaxProviderRegistry, type SyntaxRequest } from "../../common/languages/syntax/syntaxProviders.js";
 import { SYNTAX_TOKEN_LANE, SyntaxProviderWorker, SyntaxService, type SyntaxLane, type SyntaxResult, type SyntaxWorker } from "../../common/languages/syntax/syntaxService.js";
 import { syntaxWireCodec } from "../../common/languages/syntax/syntaxWire.js";
-import { type LanguageLexicalCacheUpdate } from "../../common/languages/languageLexicalSyntaxCache.js";
-import { createLanguageLexicalSyntaxProvider } from "../../common/languages/languageLexicalSyntaxProvider.js";
+import { testSyntaxProvider } from './testSyntaxProvider.js';
 import { LanguageRequestCoordinator, LanguageRequestStatus, LanguageWorkerResultDisposition, type LanguageWorkerRequest } from "../../common/languages/languageRequestCoordinator.js";
 import { LanguageWorkerWireClient, LanguageWorkerWireServer, type LanguageWorkerWireClientPort } from "../../common/languages/languageWorkerWire.js";
 import { Position } from "../../common/core/position.js";
@@ -17,10 +16,7 @@ test("Token and diagnostic lanes share one structured-clone incremental document
 	using model = new TextModel("const value = 1;");
 	using localRegistry = new SyntaxProviderRegistry();
 	using remoteRegistry = new SyntaxProviderRegistry();
-	const cacheUpdates: LanguageLexicalCacheUpdate[] = [];
-	using registration = remoteRegistry.register(createLanguageLexicalSyntaxProvider({
-		onDidUpdateCache: update => cacheUpdates.push(update),
-	}));
+	using registration = remoteRegistry.register(testSyntaxProvider());
 	const [clientPort, serverPort] = createPortPair();
 	using server = new LanguageWorkerWireServer(
 		serverPort,
@@ -35,7 +31,7 @@ test("Token and diagnostic lanes share one structured-clone incremental document
 
 	assert.equal(outcomes.tokens.status, LanguageRequestStatus.Applied);
 	assert.equal(outcomes.diagnostics.status, LanguageRequestStatus.Applied);
-	assert.deepEqual(service.tokens.result!.value.tokens.map(token => token.tokenType), ["keyword", "variable", "operator", "number"]);
+	assert.deepEqual(service.tokens.result!.value.tokens.map(token => token.tokenType), ["const", "value", "=", "1;"]);
 	assert.equal(service.tokens.result!.value.tokens[0]!.range instanceof Range, true);
 	const initialMessages = clientPort.sentMessages as WireMessage[];
 	assert.deepEqual(initialMessages.map(message => message.kind), ["request", "request"]);
@@ -43,12 +39,6 @@ test("Token and diagnostic lanes share one structured-clone incremental document
 	assert.equal(initialMessages[0]!.snapshot?.kind, "full");
 	assert.equal(initialMessages[1]!.lane, "diagnostics");
 	assert.equal(initialMessages[1]!.snapshot?.kind, "reference");
-	assert.deepEqual(cacheUpdates, [{
-		modelVersion: 1,
-		kind: "full",
-		scannedLineCount: 1,
-		reusedLineCount: 0,
-	}]);
 
 	model.applyEdits([{
 		range: Range.fromPositions(new Position((0) + 1, (model.getText().length) + 1)),
@@ -61,19 +51,12 @@ test("Token and diagnostic lanes share one structured-clone incremental document
 	assert.equal(messages[2]!.previousVersion, 1);
 	assert.equal(messages[3]!.snapshot?.kind, "reference");
 	assert.equal(messages[3]!.resultBaseRequestId, 1);
-	assert.deepEqual(service.tokens.result!.value.tokens.filter(token => token.range.startLineNumber === 2).map(token => token.tokenType), ["keyword", "variable"]);
+	assert.deepEqual(service.tokens.result!.value.tokens.filter(token => token.range.startLineNumber === 2).map(token => token.tokenType), ["return", "value;"]);
 	const incrementalResponse = (serverPort.sentMessages as WireMessage[]).find(message => message.requestId === 3);
 	assert.equal(incrementalResponse?.result?.kind, "delta");
 	assert.equal(incrementalResponse?.result?.baseRequestId, 1);
 	assert.equal(incrementalResponse?.result?.splices?.at(-1)?.lineDelta, 1);
 	assert.equal(incrementalResponse?.result?.splices?.reduce((count, splice) => count + splice.items.length, 0), 2);
-	assert.deepEqual(cacheUpdates[1], {
-		modelVersion: 2,
-		kind: "incremental",
-		scannedLineCount: 1,
-		reusedLineCount: 1,
-	});
-	assert.equal(cacheUpdates.length, 2);
 });
 
 test("Syntax wire rejects malformed lane DTOs in the client realm", async () => {
@@ -120,7 +103,7 @@ test("Syntax service replaces a failed wire Worker on the next request", async (
 	using model = new TextModel("const value = 1;");
 	using localRegistry = new SyntaxProviderRegistry();
 	using remoteRegistry = new SyntaxProviderRegistry();
-	using registration = remoteRegistry.register(createLanguageLexicalSyntaxProvider());
+	using registration = remoteRegistry.register(testSyntaxProvider());
 	using workerResources = new DisposableStore();
 	let workerCount = 0;
 	using service = new SyntaxService(model, localRegistry, {
@@ -140,13 +123,13 @@ test("Syntax service replaces a failed wire Worker on the next request", async (
 
 	assert.equal(outcome.status, LanguageRequestStatus.Applied);
 	assert.equal(workerCount, 2);
-	assert.equal(service.tokens.result!.value.tokens[0]!.tokenType, "keyword");
+	assert.equal(service.tokens.result!.value.tokens[0]!.tokenType, "const");
 });
 
 test("Syntax wire falls back to full when the client missed the server result base", async () => {
 	using model = new TextModel("const value = 1;");
 	using registry = new SyntaxProviderRegistry();
-	using registration = registry.register(createLanguageLexicalSyntaxProvider());
+	using registration = registry.register(testSyntaxProvider());
 	const [clientPort, serverPort] = createPortPair();
 	using server = new LanguageWorkerWireServer(serverPort, syntaxWireCodec, new SyntaxProviderWorker(registry));
 	using client = new LanguageWorkerWireClient(clientPort, syntaxWireCodec);
@@ -190,7 +173,7 @@ test("Syntax wire falls back to full when the client missed the server result ba
 test("Syntax wire does not confirm a result rejected by renderer application", async () => {
 	using model = new TextModel("const value = 1;");
 	using registry = new SyntaxProviderRegistry();
-	using registration = registry.register(createLanguageLexicalSyntaxProvider());
+	using registration = registry.register(testSyntaxProvider());
 	const [clientPort, serverPort] = createPortPair();
 	using server = new LanguageWorkerWireServer(serverPort, syntaxWireCodec, new SyntaxProviderWorker(registry));
 	const client = new LanguageWorkerWireClient(clientPort, syntaxWireCodec);

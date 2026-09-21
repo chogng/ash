@@ -1,6 +1,5 @@
 import { registerEditorContribution } from "../../../browser/editorExtensions.js";
 import { SectionHeadersController } from "./sectionHeadersController.js";
-import { TextEditorCapability } from "../../textEditorCapabilities.js";
 
 registerEditorContribution({ id: "editor.contrib.sectionHeaders", install: context => {
 	if (context.kind !== "text" || context.model.largeFile.tooLargeForTokenization || context.options.sectionHeaders === false) return;
@@ -10,7 +9,6 @@ registerEditorContribution({ id: "editor.contrib.sectionHeaders", install: conte
 		context.model,
 		context.languageId,
 		context.configurations,
-		context.getService(TextEditorCapability.languageLexicalContext),
 		{
 			findRegionSectionHeaders: options.showRegionSectionHeaders ?? true,
 			findMarkSectionHeaders: options.showMarkSectionHeaders ?? true,

@@ -106,7 +106,7 @@ const accessibilityService: IAccessibilityService = {
 	status: () => {},
 };
 const languageConfigurationService = disposables.add(new LanguageConfigurationService(configurationService, languageService));
-const languageFeaturesService = disposables.add(new LanguageFeaturesService(languageConfigurationService));
+const languageFeaturesService = disposables.add(new LanguageFeaturesService());
 const models = disposables.add(new BrowserTextModelService(resourceStore, { languageService, languageFeaturesService }));
 disposables.add(new WorkbenchLanguageFeatures(languageService, languageConfigurationService, languageFeaturesService));
 let syntaxAnalysisCount = 0;

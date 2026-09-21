@@ -10,7 +10,7 @@ import { LanguageNavigationService } from '../../contrib/gotoSymbol/common/langu
 
 test("language navigation collects provider results with source resource identity and removes duplicates", async () => {
 	using configurations = new TestLanguageConfigurationService();
-	using languages = new LanguageFeaturesService(configurations);
+	using languages = new LanguageFeaturesService();
 	using model = new TextModel("const answer = value;", { languageId: 'typescript' });
 	const source = URI.file("C:\\project\\main.ts");
 	const target = URI.file("C:\\project\\value.ts");
@@ -38,7 +38,7 @@ test("language navigation collects provider results with source resource identit
 
 test("language navigation exposes declaration, implementation, type definition, and references independently", async () => {
 	using configurations = new TestLanguageConfigurationService();
-	using languages = new LanguageFeaturesService(configurations);
+	using languages = new LanguageFeaturesService();
 	using model = new TextModel("value", { languageId: 'typescript' });
 	const source = URI.file("C:\\project\\main.ts");
 	const location = { resource: source, range: Range.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1)) };
@@ -62,7 +62,7 @@ test("language navigation exposes declaration, implementation, type definition, 
 
 test("language navigation discards results after the source model changes", async () => {
 	using configurations = new TestLanguageConfigurationService();
-	using languages = new LanguageFeaturesService(configurations);
+	using languages = new LanguageFeaturesService();
 	using model = new TextModel("value", { languageId: 'typescript' });
 	const source = URI.file("C:\\project\\main.ts");
 	const pending = deferred<readonly { readonly resource: URI; readonly range: Range }[]>();
@@ -86,7 +86,7 @@ function deferred<T>(): { readonly promise: Promise<T>; readonly resolve: (value
 for (const change of ['language', 'dispose'] as const) {
 	test(`language navigation discards pending results after ${change}`, async () => {
 		using configurations = new TestLanguageConfigurationService();
-		using languages = new LanguageFeaturesService(configurations);
+		using languages = new LanguageFeaturesService();
 		using model = new TextModel('value', { languageId: 'typescript' });
 		const source = URI.file('/project/main.ts');
 		const pending = deferred<readonly { resource: URI; range: Range }[]>();
