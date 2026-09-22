@@ -129,6 +129,7 @@ GPU 或 Canvas 后端可以提高密集文本的吞吐，但自身不提供原�
 | DOM 字体应用 | Current / 已实现 | `browser/config/domFontInfo.ts` 为 viewport 和 diff surface 应用统一的编辑器字体词汇；zoom 仍由 feature 自己拥有，并显式使测量失效 |
 | Tab-focus 状态 | Current / 已实现 | `browser/config/tabFocus.ts` 拥有可由 host 注入的状态和变更事件；`toggleTabFocusMode` contribution 拥有快捷键、DOM 状态和播报 |
 | 浏览器字体测量 | Current / 已实现 | `browser/config/fontMeasurements.ts` 按窗口测量、缓存、序列化 `FontInfo`，并独立清理各窗口中到期的不可靠测量；窗口关闭时取消任务。`browser/config/charWidthReader.ts` 使用布局像素批量测量字符宽度，不受祖先元素 transform 影响 |
+| 字体缓存持久化 | Current / 已实现 | `workbench/browser/workbench.ts` 在创建编辑器前恢复并预热字体，保存状态及直接释放时将 `editorFontInfo` 写入 application/machine 存储。恢复读数经过校验，仍属不可靠数据；本窗口尚未重新测量时序列化返回 `undefined`，到期后也保留原存储。关闭流程完成保存后，释放阶段不再重复保存 |
 | 惰性行宽聚合 | Current / 已实现 | `browser/viewParts/viewLines/viewLines.ts` 提供有界初始工作、可取消分片、编辑增量更新和 lower-bound 最大值 |
 | 可见行虚拟化 | Current / 已实现 | `browser/viewParts/viewLines/viewLines.ts` 拥有渲染行 DOM 和 semantic text projection；承载文字的根节点使用普通布局定位，不长期提升为 transform 合成层 |
 | 浏览器 shaping 后的可见几何 | Current / 部分具备 | `viewLine.ts` 负责单行读取，`CharacterMapping` 把 UTF-16 列映射到子 span，`rangeUtil.ts` 读取并整理浏览器范围，`domReadingContext.ts` 缓存布局基准 |

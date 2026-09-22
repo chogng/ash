@@ -5,6 +5,9 @@ import { IInlineCompletionsService, InlineCompletionsService } from '../../edito
 import { ICallService } from '../../platform/call/common/callService.js';
 import { FormattingConflicts } from '../../editor/contrib/format/browser/format.js';
 import { MarkerDecorationsService } from '../../editor/common/services/markerDecorationsService.js';
+import { FontMeasurements } from '../../editor/browser/config/fontMeasurements.js';
+import { createBareFontInfoFromRawSettings } from '../../editor/common/config/fontInfoFromSettings.js';
+import { type IEditorOptions } from '../../editor/common/config/editorOptions.js';
 import { IMarkerDecorationsService } from '../../editor/common/services/markerDecorations.js';
 import { IMemoriesService } from '../../platform/memories/common/memoriesService.js';
 import { IMemoryDiagnosticsService } from '../../platform/memory/common/memoryDiagnosticsService.js';
@@ -14,9 +17,11 @@ import { IChatSessionNavigationService } from '../services/chat/common/chatSessi
 import { bindResizableLayout } from "../../base/browser/ui/resizable/resizable.js";
 import { disposableWindowTimeout } from "../../base/browser/scheduler.js";
 import { mainWindow } from "../../base/browser/window.js";
+import { PixelRatio } from '../../base/browser/pixelRatio.js';
 import {
 	type IDisposable,
 	Disposable,
+	toDisposable,
 } from "../../base/common/lifecycle.js";
 import { CancellationError, getErrorMessage, onUnexpectedError, setUnexpectedErrorHandler } from "../../base/common/errors.js";
 import { assertDefined } from "../../base/common/types.js";
@@ -45,7 +50,7 @@ import { MenuId } from "../../platform/actions/common/actions.js";
 import type { IConfigurationApi } from "../../platform/configuration/common/configurationIpc.js";
 import { IConfigurationResourceService } from "../../platform/configuration/common/configurationResourceService.js";
 import { IConfigurationService } from "../../platform/configuration/common/configuration.js";
-import { IStorageService, WillSaveStateReason } from "../../platform/storage/common/storage.js";
+import { IStorageService, StorageScope, StorageTarget, WillSaveStateReason } from "../../platform/storage/common/storage.js";
 import { BrowserLayoutService, ILayoutService } from "../../platform/layout/browser/layoutService.js";
 import "../../platform/layout/browser/zIndexRegistry.js";
 import {
@@ -523,6 +528,30 @@ export class Workbench extends Disposable {
 		this.workbenchWindow = workbenchWindow;
 		this.storage = storage;
 		services.registerInstance(IStorageService, storage);
+		const savedFontInfo = storage.get('editorFontInfo', StorageScope.APPLICATION);
+		if (savedFontInfo !== undefined) {
+			try {
+				const entries: unknown = JSON.parse(savedFontInfo);
+				if (!Array.isArray(entries)) throw new TypeError('Saved editor font information must be an array');
+				FontMeasurements.restoreFontInfo(ownerWindow, entries);
+			} catch (error) {
+				storage.remove('editorFontInfo', StorageScope.APPLICATION);
+				logService.warn('editor', 'Discarded invalid saved font information', error);
+			}
+		}
+		FontMeasurements.readFontInfo(ownerWindow, createBareFontInfoFromRawSettings(
+			configuration.getValue<IEditorOptions>('editor'), PixelRatio.getInstance(ownerWindow).value,
+		));
+		const saveFontInfo = (): void => {
+			const entries = FontMeasurements.serializeFontInfo(ownerWindow);
+			if (entries !== undefined) {
+				storage.store('editorFontInfo', JSON.stringify(entries), StorageScope.APPLICATION, StorageTarget.MACHINE);
+			}
+		};
+		this._register(storage.onWillSaveState(saveFontInfo));
+		this._register(toDisposable(() => {
+			if (lifecycleService.phase === 'running') saveFontInfo();
+		}));
 		const recentWorkspaces = this._register(new RecentWorkspacesService(storage, workspaceContext, workspaceOpenService));
 		services.registerInstance(IRecentWorkspacesService, recentWorkspaces);
 		this._register(lifecycleService.onWillShutdown(event => {
