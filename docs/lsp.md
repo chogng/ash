@@ -76,6 +76,8 @@ flowchart LR
   使用 `languageId` 与 `capabilityKind=executable` 查找明确路由，排除只有语法资源的包。安装前展示整个包。
   `/lsp` 可按工作区目录检查可用性，启用/停用服务器、保存宿主 executable 路径或移除配置覆盖。入口职责见
   [Slash Commands](slash-commands.md#marketplace-与领域管理入口)。
+- Ash Code 的 `/lsp [language-id]` 提供可用服务器、显式配置和会话目录页签；可编辑程序路径、启用状态和恢复默认值。
+  查找入口将精确语言 ID 与 executable 能力筛选交给同一 Marketplace。可用列表不启动服务器，也不代表进程正在运行。
 
 ## 1. 一次操作
 

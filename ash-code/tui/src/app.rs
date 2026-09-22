@@ -50,3 +50,7 @@ pub(crate) use event_loop::run;
 pub(crate) use state::App;
 #[cfg(test)]
 pub(crate) use state::Status;
+
+#[cfg(test)]
+#[path = "app/marketplace_tests.rs"]
+mod marketplace_tests;

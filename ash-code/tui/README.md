@@ -344,6 +344,15 @@ just test-tui
 
 输入历史验证：`just test ash-tui history`；跨进程重启验证：`just test-tui actual_tui_recalls_input_history_after_process_restart`。
 
+## Marketplace 与语言服务器
+
+- `/marketplace [query]` 搜索包并按能力筛选；安装前审阅整个包的版本、能力和权限。
+- `/plugins` 查看本地安装记录，按精确版本更新或卸载；使用中的包等待消费方释放后删除。
+- `/lsp [language-id]` 查看当前目录可用服务器，修改启用状态、程序路径或恢复配置默认值。
+- `/skills`、`/mcp`、`/connectors` 的获取入口与 Config 语言服务器页连接同一个包管理服务。
+- `marketplace.rs` 和 `lsp.rs` 拥有终端状态与交互，后端继续拥有安装、解析和配置。共享契约见 [Slash Commands](../../docs/slash-commands.md#marketplace-与领域管理入口)。
+- 定向验证：`just test ash-tui marketplace`；真实终端流程：`just test-tui actual_tui_marketplace_and_lsp_commands`。
+
 ## Memories
 
 - Config 的通用页提供记忆总开关，默认关闭；关闭后保留已有记忆与范围授权，停止模型召回、读取和保存。

@@ -75,6 +75,8 @@ use ash_app_server_protocol::protocol::language::LanguageHoverParams;
 use ash_app_server_protocol::protocol::language::LanguageHoverResult;
 use ash_app_server_protocol::protocol::language::LanguageLocationsParams;
 use ash_app_server_protocol::protocol::language::LanguageLocationsResult;
+use ash_app_server_protocol::protocol::language::LanguageServersParams;
+use ash_app_server_protocol::protocol::language::LanguageServersResult;
 use ash_app_server_protocol::protocol::language::LanguageSynchronizeParams;
 use ash_app_server_protocol::protocol::marketplace::MarketplaceAcquireCapabilityParams;
 use ash_app_server_protocol::protocol::marketplace::MarketplaceAcquiredCapabilityDto;
@@ -414,6 +416,14 @@ impl<T: JsonRpcTransport> AppServerClient<T> {
         params: SessionDirPermissionsSetParams,
     ) -> Result<SessionDirMutationResult, ClientError> {
         self.call(ClientMethod::SessionDirPermissionsSet, params)
+    }
+
+    /// Lists enabled, resolved language servers without starting their processes.
+    pub fn list_language_servers(
+        &mut self,
+        params: LanguageServersParams,
+    ) -> Result<LanguageServersResult, ClientError> {
+        self.call(ClientMethod::LanguageServers, params)
     }
 
     /// Synchronizes one authoritative editor snapshot with the App Server language runtime.

@@ -38,9 +38,12 @@ fn builtins_follow_enum_presentation_order() {
             "subagents",
             "issue",
             "pr",
+            "marketplace",
+            "plugins",
+            "lsp",
         ]
     );
-    assert_eq!(definitions.len(), 28);
+    assert_eq!(definitions.len(), 31);
 }
 
 #[test]

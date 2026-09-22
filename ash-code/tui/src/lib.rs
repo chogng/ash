@@ -10,6 +10,8 @@ mod host;
 mod issues;
 mod keymap;
 mod keymap_setup;
+mod lsp;
+mod marketplace;
 mod mcp;
 mod memories;
 mod memory;

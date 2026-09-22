@@ -12,6 +12,7 @@ use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum SkillSelectionAction {
+    Marketplace,
     SetEnablement {
         skill_id: SkillId,
         enablement: SkillEnablementDto,
@@ -26,6 +27,8 @@ pub(crate) struct SkillChoices {
 
 pub(crate) fn skill_choices(catalog: &SkillListResult) -> SkillChoices {
     let mut actions = BTreeMap::new();
+    let marketplace_id = ListSelectionItemId::new("marketplace");
+    actions.insert(marketplace_id.clone(), SkillSelectionAction::Marketplace);
     let all = catalog
         .skills
         .iter()
@@ -96,6 +99,7 @@ pub(crate) fn skill_choices(catalog: &SkillListResult) -> SkillChoices {
             ],
         )
         .with_activation(bindings::SKILL_TOGGLE)
+        .with_action(ListSelectionItem::new("Get skills").with_id(marketplace_id))
         .with_search(SearchBoxModel::new("Search available skills"))
         .with_empty_message("No matching skills"),
         actions,

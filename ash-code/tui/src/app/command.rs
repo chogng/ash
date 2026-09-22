@@ -8,6 +8,8 @@ pub(crate) enum AppCommand {
     Host(crate::host::Command),
     Issues(crate::issues::Command),
     Keymap(crate::keymap_setup::Command),
+    Marketplace(crate::marketplace::Command),
+    Lsp(crate::lsp::Command),
     Mcp(crate::mcp::Command),
     Memories(crate::memories::Command),
     Models(crate::models::Command),
@@ -33,6 +35,18 @@ impl AppCommand {
             Self::Status(crate::status::Command::OpenLineEditor) => Some("Status line"),
             Self::Theme(crate::theme::Command::OpenPicker) => Some("Theme"),
             Self::Thread(crate::thread::Command::OpenRewindPicker) => Some("Rewind"),
+            Self::Thread(crate::thread::Command::ExecuteProductCommand(invocation))
+                if matches!(
+                    invocation.command.name.as_str(),
+                    "marketplace" | "plugins" | "lsp"
+                ) =>
+            {
+                Some(match invocation.command.name.as_str() {
+                    "lsp" => "Language servers",
+                    "plugins" => "Plugins",
+                    _ => "Marketplace",
+                })
+            }
             Self::Thread(crate::thread::Command::ExecuteProductCommand(invocation))
                 if invocation.arguments.is_empty() =>
             {
@@ -71,6 +85,8 @@ app_command_from!(crate::dirs::Command, Dirs);
 app_command_from!(crate::git::Command, Git);
 app_command_from!(crate::host::Command, Host);
 app_command_from!(crate::keymap_setup::Command, Keymap);
+app_command_from!(crate::marketplace::Command, Marketplace);
+app_command_from!(crate::lsp::Command, Lsp);
 app_command_from!(crate::mcp::Command, Mcp);
 app_command_from!(crate::models::Command, Models);
 app_command_from!(crate::projects::Command, Projects);

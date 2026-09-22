@@ -408,3 +408,41 @@ fn wait_for_config(fixture: &Fixture, expected: &str) {
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
 }
+
+#[test]
+fn actual_tui_marketplace_and_lsp_commands() {
+    let fixture = Fixture::new()
+        .with_product_services(serde_json::json!({"schemaVersion":2,"marketplaces":[]}));
+    let server = ScenarioServer::start([]);
+    fixture.write_config(&server.base_url());
+    fixture.append_config("\n[languageServers.servers.fixture-lsp]\nmode = \"disabled\"\n");
+    let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+    process.wait_for_screen("Enter send");
+    process.submit("/marketplace");
+    process.wait_for_screen("Filter capabilities");
+    process.down();
+    process.enter();
+    process.wait_for_screen("Installed packages");
+    process.wait_for_screen("Browse Marketplace");
+    process.escape();
+    process.submit("/plugins");
+    process.wait_for_screen("Refresh installed packages");
+    process.escape();
+    process.submit("/lsp rust");
+    process.wait_for_screen("Find language servers in Marketplace");
+    process.tab();
+    process.wait_for_screen("fixture-lsp");
+    process.enter();
+    process.enter();
+    process.wait_for_screen("Enable server");
+    process.down();
+    process.enter();
+    wait_for_config(&fixture, "mode = \"enabled\"");
+    process.wait_for_screen("Find language servers in Marketplace");
+    process.escape();
+    process.submit("/skills");
+    process.wait_for_screen("Get skills");
+    process.escape();
+    process.quit();
+    assert!(server.request_bodies().is_empty());
+}

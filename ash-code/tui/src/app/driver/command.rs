@@ -121,6 +121,30 @@ impl AppDriver {
                     origin,
                 );
             }
+            AppCommand::Marketplace(command) => {
+                let mut client = self.client.clone();
+                self.requests.spawn_presentation(
+                    request_key,
+                    "ash-tui-marketplace",
+                    move || crate::marketplace::execute(&mut client, command),
+                    &mut self.app,
+                    origin,
+                );
+            }
+            AppCommand::Lsp(command) => {
+                let mut client = self.client.clone();
+                let session_id = self
+                    .conversation
+                    .as_ref()
+                    .map(|current| current.conversation.session_id().clone());
+                self.requests.spawn_presentation(
+                    request_key,
+                    "ash-tui-lsp",
+                    move || crate::lsp::execute(&mut client, session_id.as_ref(), command),
+                    &mut self.app,
+                    origin,
+                );
+            }
             AppCommand::Mcp(command) => {
                 let name = command.request_name();
                 let mut client = self.client.clone();

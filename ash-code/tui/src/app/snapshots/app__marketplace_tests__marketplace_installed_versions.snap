@@ -1,0 +1,34 @@
+---
+source: ash-code/tui/src/app/marketplace_tests.rs
+expression: screen(&app)
+---
+  .                                                                            [— / —] [Dashboard]  
+                                                                                                    
+                                                                                                    
+            ┌── Plugins · Installed packages ─────────────────────────────────────[✗]─┐             
+            │                                                                         │             
+            │  Browse Marketplace  ·  Find skills, plugins, MCP, connectors and langu │             
+            │  Refresh installed packages  ·  Reads local installations; no catalog c │             
+            │> web@official · 1.0.0  ·  installed · v1                                │             
+            │  web@official · 2.0.0  ·  installed · v2                                │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │  Enter to confirm  ·  Esc to close                                      │             
+  ╭─────────└─────────────────────────────────────────────────────────────────────────┘──────────╮  
+  │ > Build anything                                                                             │  
+  ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯

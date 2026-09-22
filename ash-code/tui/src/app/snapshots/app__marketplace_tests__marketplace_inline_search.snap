@@ -1,0 +1,36 @@
+---
+source: ash-code/tui/src/app/marketplace_tests.rs
+expression: screen(&app)
+---
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+─ Marketplace ──────────────────────────────────────────────────────────────────────────────────────
+                                                                                                    
+  ╭──────────────────────────────────────────────────────────────────────────────────────────────╮  
+  │ Search Marketplace; Enter to search                                                          │  
+  ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  
+  Installed packages / Plugins  ·  Manage exact installed versions                                  
+  Filter capabilities  ·  Skills                                                                    
+  Guide  ·  guide@official · 1.0.0 · A bundled skill                                                
+                                                                                                    
+  Enter search · Esc return

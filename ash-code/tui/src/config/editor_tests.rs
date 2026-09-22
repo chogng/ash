@@ -388,12 +388,16 @@ fn language_server_tab_exposes_one_switch_per_configured_server() {
     let _ = state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
 
     assert_eq!(state.active_tab().label(), "Language servers");
-    assert_eq!(state.visible_items().len(), 2);
-    assert_eq!(state.visible_items()[0].label(), "rust-analyzer");
-    assert_eq!(state.visible_items()[0].description(), Some(" on"));
+    assert_eq!(state.visible_items().len(), 3);
+    assert!(matches!(
+        view.actions.get(state.visible_items()[0].id().unwrap()),
+        Some(ConfigSelectionAction::OpenLanguageServers)
+    ));
+    assert_eq!(state.visible_items()[1].label(), "rust-analyzer");
+    assert_eq!(state.visible_items()[1].description(), Some(" on"));
     assert!(matches!(
         view.actions
-            .get(state.visible_items()[0].id().unwrap())
+            .get(state.visible_items()[1].id().unwrap())
             .unwrap(),
         ConfigSelectionAction::SetLanguageServerMode(edit)
             if edit.expected_revision == 7
@@ -402,16 +406,16 @@ fn language_server_tab_exposes_one_switch_per_configured_server() {
                 && edit.config.executable.is_none()
     ));
     assert_eq!(
-        state.visible_items()[1].label(),
+        state.visible_items()[2].label(),
         "typescript-language-server"
     );
     assert_eq!(
-        state.visible_items()[1].description(),
+        state.visible_items()[2].description(),
         Some("C:\\tools\\typescript-language-server.exe off")
     );
     assert!(matches!(
         view.actions
-            .get(state.visible_items()[1].id().unwrap())
+            .get(state.visible_items()[2].id().unwrap())
             .unwrap(),
         ConfigSelectionAction::SetLanguageServerMode(edit)
             if edit.expected_revision == 7

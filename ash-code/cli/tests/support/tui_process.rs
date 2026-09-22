@@ -46,6 +46,7 @@ pub struct Fixture {
     workspace: PathBuf,
     profile: PathBuf,
     daemon: PathBuf,
+    product_services: Option<PathBuf>,
 }
 
 impl Fixture {
@@ -102,11 +103,19 @@ impl Fixture {
             workspace,
             profile,
             daemon,
+            product_services: None,
         }
     }
 
+    pub fn with_product_services(mut self, document: serde_json::Value) -> Self {
+        let path = self.root.join("product-services.json");
+        fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
+        self.product_services = Some(path);
+        self
+    }
+
     fn environment(&self) -> Vec<(&'static str, PathBuf)> {
-        let environment = vec![
+        let mut environment = vec![
             ("ASH_HOME", self.profile.clone()),
             ("ASH_WORKSPACE_ROOT", self.workspace.clone()),
             ("CODEX_HOME", self.codex_home()),
@@ -116,6 +125,9 @@ impl Fixture {
                     .with_file_name(format!("ash-app-server{}", std::env::consts::EXE_SUFFIX)),
             ),
         ];
+        if let Some(path) = &self.product_services {
+            environment.push(("ASH_PRODUCT_SERVICES_PATH", path.clone()));
+        }
         #[cfg(windows)]
         let environment = {
             let mut environment = environment;

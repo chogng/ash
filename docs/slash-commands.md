@@ -113,7 +113,7 @@ Theme picker，带 ID 时静默直接切换；Theme picker 不启用搜索，通
 
 ## Marketplace 与领域管理入口
 
-Web/Electron Workbench 使用一个包管理入口，加上各领域的使用入口。命令只打开对应功能；安装状态由
+Web/Electron Workbench 和 Ash Code TUI 使用一个包管理入口，加上各领域的使用入口。命令只打开对应功能；安装状态由
 [`Core Plugins`](../ash-rs/docs/core-plugins.md#一个包入口多个领域消费方) 统一持有。
 
 | 入口 | 用户操作 | 安装相关操作 |
@@ -135,7 +135,12 @@ Web/Electron Workbench 使用一个包管理入口，加上各领域的使用入
 页面提供 Tab/方向键导航、Alt+F1 帮助与独立 accessibility verbosity 设置。安装前展示完整包的版本和能力；
 已安装列表按安装记录 ID 管理，同包多版本不会混用；目录不可用时仍可读取本地安装列表并卸载。
 Skill 启用和 LSP 配置使用后端配置 revision；遇到冲突保留输入并提示刷新，不自动覆盖。
-Ash Code 已有 `/skills`、`/mcp` 和 Connector 管理入口，本次不改变 TUI 命令。
+Ash Code 同时注册 `/marketplace [query]`、`/plugins`、`/lsp [language-id]`，命令直接打开终端面板。
+Marketplace 提供搜索、能力筛选、完整包审阅和版本管理；`/plugins` 进入同一安装列表。
+`/lsp` 的 Available、Configured、Directories 页签显示可用服务器、配置和会话目录；输入语言 ID 后进入
+Marketplace 精确路由搜索。可用表示已启用且程序可解析，不表示进程已启动。
+`/skills`、`/mcp`、`/connectors` 的获取入口进入同一个 Marketplace，Config 语言服务器页也可打开完整管理面板。
+终端使用共享列表的 Tab/方向键、搜索与鼠标路径；请求期间可按 Esc 关闭，迟到结果不会重开面板。
 
 ## Config 边界
 

@@ -37,6 +37,7 @@ use crate::keymap_setup::Command as KeymapCommand;
 use crate::keymap_setup::Event as KeymapEvent;
 use crate::keymap_setup::KeymapChoices;
 use crate::keymap_setup::KeymapEditorOutcome;
+use crate::marketplace::Command as MarketplaceCommand;
 use crate::mcp::Command as McpCommand;
 use crate::mcp::Event as McpEvent;
 use crate::mcp::McpChoices;
@@ -105,6 +106,7 @@ use crate::widgets::detail_list::DetailListRow;
 use crate::widgets::list_selection::ListSelectionSpec;
 use crate::widgets::list_selection::ListSelectionState;
 use crate::widgets::overlay::DetailOverlay;
+use ash_app_server_protocol::protocol::marketplace::MarketplaceCapabilityKindDto;
 use ash_app_server_protocol::protocol::session::SessionThreadReadResult;
 use ash_memory_diagnostics::ProcessResourceRequest;
 use ash_protocol::ApprovalMode;
@@ -560,6 +562,16 @@ impl App {
                 }
                 .into(),
             ),
+            CommandPanelOutcome::Marketplace(command) => Some(command.into()),
+            CommandPanelOutcome::Lsp(crate::lsp::Outcome::Command(command)) => Some(command.into()),
+            CommandPanelOutcome::Lsp(crate::lsp::Outcome::Marketplace(command)) => {
+                Some(command.into())
+            }
+            CommandPanelOutcome::Lsp(crate::lsp::Outcome::Consumed) => None,
+            CommandPanelOutcome::Lsp(crate::lsp::Outcome::Dismiss) => {
+                self.close_command_panel();
+                None
+            }
             CommandPanelOutcome::Memories(command) => Some(command.into()),
             CommandPanelOutcome::Skills(SkillSelectionAction::SetEnablement {
                 skill_id,
@@ -575,6 +587,15 @@ impl App {
                 Some(StatusCommand::EditLine(edit).into())
             }
             CommandPanelOutcome::Theme(outcome) => self.handle_theme_picker_outcome(outcome),
+            CommandPanelOutcome::Skills(SkillSelectionAction::Marketplace) => {
+                Some(MarketplaceCommand::browse(Some(MarketplaceCapabilityKindDto::Skill)).into())
+            }
+            CommandPanelOutcome::Mcp(McpSelectionAction::Marketplace) => {
+                Some(MarketplaceCommand::browse(Some(MarketplaceCapabilityKindDto::Mcp)).into())
+            }
+            CommandPanelOutcome::Connectors(ConnectorSelectionAction::Marketplace) => Some(
+                MarketplaceCommand::browse(Some(MarketplaceCapabilityKindDto::Connector)).into(),
+            ),
             CommandPanelOutcome::Consumed => None,
             CommandPanelOutcome::Dismiss => {
                 self.close_command_panel();
@@ -588,6 +609,9 @@ impl App {
         outcome: crate::config::ConfigEditorOutcome,
     ) -> Option<AppCommand> {
         match outcome {
+            crate::config::ConfigEditorOutcome::Action(
+                ConfigSelectionAction::OpenLanguageServers,
+            ) => Some(crate::lsp::Command::Load(Default::default()).into()),
             crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::SetMemories(
                 edit,
             )) => Some(ConfigCommand::SetMemories(edit).into()),
@@ -1964,6 +1988,27 @@ impl App {
                     }
                 }
             },
+            AppEvent::Marketplace(event) => {
+                let selected = match (&event.0, self.command_panel()) {
+                    (
+                        crate::marketplace::Page::Installed { selected: None, .. },
+                        Some(CommandPanel::Marketplace(panel)),
+                    ) if panel.installed() => panel
+                        .state()
+                        .selected_item()
+                        .and_then(|item| item.id())
+                        .cloned(),
+                    _ => None,
+                };
+                let mut panel = crate::marketplace::Panel::new(event.0);
+                if let Some(selected) = selected {
+                    panel.state_mut().focus_item(&selected);
+                }
+                self.open_command_panel(CommandPanel::Marketplace(panel));
+            }
+            AppEvent::Lsp(event) => {
+                self.open_command_panel(CommandPanel::Lsp(crate::lsp::Panel::new(event.0)))
+            }
             AppEvent::Mcp(event) => self.apply_mcp_event(event),
             AppEvent::Sessions(event) => self.apply_session_event(event),
             AppEvent::CommandPanelClosed => self.close_command_panel(),
@@ -2020,6 +2065,16 @@ impl App {
                 let title = self.command_panel().unwrap().body().title().to_owned();
                 self.open_command_panel(CommandPanel::loading(&title, error));
             }
+            if let AppEvent::Thread(
+                ThreadEvent::FailureReported(error) | ThreadEvent::CommandFailed { error, .. },
+            ) = &event
+            {
+                match self.panels_mut().command_mut() {
+                    Some(CommandPanel::Marketplace(panel)) => panel.fail(error.clone()),
+                    Some(CommandPanel::Lsp(panel)) => panel.fail(error.clone()),
+                    _ => {}
+                }
+            }
             self.update(event);
             return;
         }
@@ -2053,6 +2108,8 @@ impl App {
             | AppEvent::Connectors(
                 ConnectorEvent::PickerOpened(_) | ConnectorEvent::PickerUpdated(_),
             )
+            | AppEvent::Marketplace(_)
+            | AppEvent::Lsp(_)
             | AppEvent::Memories(_)
             | AppEvent::Mcp(McpEvent::SettingsOpened(_) | McpEvent::SettingsUpdated(_))
             | AppEvent::Theme(ThemeEvent::PickerOpened(_))

@@ -147,6 +147,37 @@ where
                 .into(),
             );
         }
+        TuiSlashCommandAction::Marketplace | TuiSlashCommandAction::Plugins => {
+            let request = if command == TuiSlashCommandAction::Plugins {
+                crate::marketplace::Command::Installed
+            } else {
+                crate::marketplace::Command::Browse(
+                    ash_app_server_protocol::protocol::marketplace::MarketplaceSearchParams {
+                        query: arguments,
+                        ..Default::default()
+                    },
+                )
+            };
+            output.events.push(
+                crate::marketplace::execute(client, request)
+                    .map_err(CommandExecutionError)?
+                    .into(),
+            );
+        }
+        TuiSlashCommandAction::Lsp => {
+            output.events.push(
+                crate::lsp::execute(
+                    client,
+                    conversation.as_ref().map(ActiveConversation::session_id),
+                    crate::lsp::Command::Load(crate::lsp::Scope {
+                        language_id: (!arguments.is_empty()).then_some(arguments),
+                        ..Default::default()
+                    }),
+                )
+                .map_err(CommandExecutionError)?
+                .into(),
+            );
+        }
         TuiSlashCommandAction::Skills => {
             output.events.push(
                 crate::skills::Event::SettingsOpened(load_selection(

@@ -1,0 +1,34 @@
+---
+source: ash-code/tui/src/app/marketplace_tests.rs
+expression: screen(&app)
+---
+  .                                                                            [— / —] [Dashboard]  
+                                                                                                    
+                                                                                                    
+            ┌── Confirm removal ──────────────────────────────────────────────────[✗]─┐             
+            │                                                                         │             
+            │> Back to installed packages                                             │             
+            │  web@official  ·  1.0.0 · v1                                            │             
+            │  Skills · web-guide  ·  Permissions: none declared                      │             
+            │  Confirm whole-package removal  ·  Removal waits until all consumers re │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │  Enter to confirm  ·  Esc to close                                      │             
+  ╭─────────└─────────────────────────────────────────────────────────────────────────┘──────────╮  
+  │ > Build anything                                                                             │  
+  ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯

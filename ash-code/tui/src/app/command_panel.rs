@@ -78,6 +78,8 @@ pub(crate) enum CommandPanel {
     Config(ConfigEditor),
     Connectors(ListSelection<ConnectorSelectionAction>),
     Keymap(KeymapEditor),
+    Marketplace(crate::marketplace::Panel),
+    Lsp(crate::lsp::Panel),
     Mcp(ListSelection<McpSelectionAction>),
     Memories(crate::memories::Panel),
     Model(ListSelection<ModelSelectionAction>),
@@ -99,6 +101,8 @@ pub(crate) enum CommandPanelOutcome {
     Config(ConfigEditorOutcome),
     Connectors(ConnectorSelectionAction),
     Keymap(KeymapEditorOutcome),
+    Marketplace(crate::marketplace::Command),
+    Lsp(crate::lsp::Outcome),
     Mcp(McpSelectionAction),
     Memories(crate::memories::Command),
     Model(ModelSelectionAction),
@@ -290,6 +294,10 @@ impl CommandPanel {
             Self::Memories(content) => {
                 map_selection(content.handle_key(key), CommandPanelOutcome::Memories)
             }
+            Self::Marketplace(content) => {
+                map_selection(content.handle_key(key), CommandPanelOutcome::Marketplace)
+            }
+            Self::Lsp(content) => CommandPanelOutcome::Lsp(content.handle_key(key)),
             Self::Mcp(content) => map_selection(content.handle_key(key), CommandPanelOutcome::Mcp),
             Self::Model(content) => {
                 if key.kind == crossterm::event::KeyEventKind::Press
@@ -346,6 +354,8 @@ impl CommandPanel {
             Self::Connectors(content) => content.handle_paste(pasted),
             Self::Keymap(content) => content.handle_paste(pasted),
             Self::Memories(content) => content.paste(pasted),
+            Self::Marketplace(content) => content.handle_paste(pasted),
+            Self::Lsp(content) => content.handle_paste(pasted),
             Self::Mcp(content) => content.handle_paste(pasted),
             Self::Model(content) => content.handle_paste(pasted),
             Self::ProjectRoots(content) => content.handle_paste(pasted),
@@ -369,6 +379,8 @@ impl CommandPanel {
             }
             Self::GitBranches(content) => content.state_mut().localize(language),
             Self::Connectors(content) => content.state_mut().localize(language),
+            Self::Marketplace(content) => content.state_mut().localize(language),
+            Self::Lsp(content) => content.state_mut().localize(language),
             Self::Mcp(content) => content.state_mut().localize(language),
             Self::Model(content) => content.state_mut().localize(language),
             Self::ProjectRoots(content) => content.state_mut().localize(language),
@@ -406,6 +418,8 @@ impl CommandPanel {
             Self::Connectors(selection) => Some(selection.state()),
             Self::Keymap(editor) => editor.selection(),
             Self::Memories(_) => None,
+            Self::Marketplace(selection) => Some(selection.state()),
+            Self::Lsp(selection) => Some(selection.state()),
             Self::Mcp(selection) => Some(selection.state()),
             Self::Model(selection) => Some(selection.state()),
             Self::ProjectRoots(selection) => Some(selection.state()),
@@ -438,6 +452,8 @@ impl CommandPanel {
             Self::Connectors(s) => Some(s.state_mut()),
             Self::Keymap(s) => s.selection_mut(),
             Self::Memories(_) => None,
+            Self::Marketplace(s) => Some(s.state_mut()),
+            Self::Lsp(s) => Some(s.state_mut()),
             Self::Mcp(s) => Some(s.state_mut()),
             Self::Model(s) => Some(s.state_mut()),
             Self::ProjectRoots(s) => Some(s.state_mut()),
@@ -449,7 +465,11 @@ impl CommandPanel {
             Self::Status(_) => None,
         };
         if selection.is_some_and(|selection| selection.focus_pointer(target))
-            && matches!(target, list_selection::ListSelectionPointerTarget::Item(_))
+            && matches!(
+                target,
+                list_selection::ListSelectionPointerTarget::Item(_)
+                    | list_selection::ListSelectionPointerTarget::Action
+            )
         {
             self.handle_key(
                 KeyEvent::new(
@@ -481,6 +501,8 @@ impl CommandPanel {
                 KeymapEditorPage::Capture(capture) => CommandPanelBody::KeyCapture(capture),
             },
             Self::Memories(panel) => CommandPanelBody::Memories(panel),
+            Self::Marketplace(selection) => CommandPanelBody::Selection(selection.state()),
+            Self::Lsp(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Mcp(selection) => CommandPanelBody::Selection(selection.state()),
             Self::Model(selection) => CommandPanelBody::Selection(selection.state()),
             Self::ProjectRoots(selection) => CommandPanelBody::Selection(selection.state()),
@@ -505,6 +527,8 @@ impl CommandPanel {
             Self::Connectors(content) => content.key_hints(),
             Self::Keymap(content) => content.key_hints(),
             Self::Memories(panel) => panel.key_hints(),
+            Self::Marketplace(content) => content.key_hints(),
+            Self::Lsp(content) => content.key_hints(),
             Self::Mcp(content) => content.key_hints(),
             Self::Model(content) => content.key_hints(),
             Self::ProjectRoots(content) => content.key_hints(),

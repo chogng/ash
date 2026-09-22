@@ -55,6 +55,7 @@ pub(crate) enum ConfigSelectionAction {
     SetShowGitChangesAsDiff(ConfigEdit),
     SetStatusLineStyle(ConfigEdit),
     SetLanguage(ConfigEdit),
+    OpenLanguageServers,
     SetLanguageServerMode(LanguageServerEdit),
     OpenProviderApiKey {
         provider: String,
@@ -1069,7 +1070,14 @@ fn language_servers(
     language: Language,
     actions: &mut BTreeMap<ListSelectionItemId, ConfigSelectionAction>,
 ) -> Vec<ListSelectionItem> {
-    or_empty(
+    let id = ListSelectionItemId::new("manage-language-servers");
+    actions.insert(id.clone(), ConfigSelectionAction::OpenLanguageServers);
+    let mut items = vec![
+        ListSelectionItem::new("Manage language servers / Marketplace")
+            .with_id(id)
+            .with_description("Inspect installed servers, configure programs and find packages"),
+    ];
+    items.extend(or_empty(
         config
             .language_servers
             .iter()
@@ -1099,7 +1107,8 @@ fn language_servers(
             })
             .collect(),
         nls::text(language, Message::ConfigNoLanguageServers),
-    )
+    ));
+    items
 }
 
 fn or_empty(items: Vec<ListSelectionItem>, message: &str) -> Vec<ListSelectionItem> {

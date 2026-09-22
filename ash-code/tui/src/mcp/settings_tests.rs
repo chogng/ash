@@ -31,7 +31,7 @@ fn mcp_settings_filter_servers_and_maps_enter_to_the_opposite_enablement() {
     assert_eq!(state.tabs()[0].label(), "All (1)");
     assert_eq!(state.visible_items()[0].label(), "Documentation");
     assert_eq!(
-        view.actions.values().next(),
+        view.actions.get(state.visible_items()[0].id().unwrap()),
         Some(&McpSelectionAction::SetEnablement {
             server_id: "docs".into(),
             enablement: McpServerEnablementDto::Disabled,

@@ -35,7 +35,7 @@ fn connected_connector_is_actionable_while_disconnected_connector_is_read_only()
     let state = ListSelectionState::new(view.model);
 
     assert_eq!(state.title(), "Connectors");
-    assert_eq!(view.actions.len(), 1);
+    assert_eq!(view.actions.len(), 2);
     assert!(matches!(
         view.actions.values().next(),
         Some(ConnectorSelectionAction::Disconnect { connector_id }) if connector_id == "github"

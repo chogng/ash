@@ -10,6 +10,8 @@ pub(crate) enum AppEvent {
     Host(crate::host::Event),
     Issues(crate::issues::Event),
     Keymap(crate::keymap_setup::Event),
+    Marketplace(crate::marketplace::Event),
+    Lsp(crate::lsp::Event),
     Mcp(crate::mcp::Event),
     Memories(crate::memories::Event),
     Models(crate::models::Event),
@@ -41,6 +43,8 @@ app_event_from!(crate::dirs::Event, Dirs);
 app_event_from!(crate::git::Event, Git);
 app_event_from!(crate::host::Event, Host);
 app_event_from!(crate::keymap_setup::Event, Keymap);
+app_event_from!(crate::marketplace::Event, Marketplace);
+app_event_from!(crate::lsp::Event, Lsp);
 app_event_from!(crate::mcp::Event, Mcp);
 app_event_from!(crate::models::Event, Models);
 app_event_from!(crate::projects::Event, Projects);

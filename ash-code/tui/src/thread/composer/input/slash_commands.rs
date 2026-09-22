@@ -45,6 +45,9 @@ pub(crate) enum TuiSlashCommandAction {
     Subagents,
     Issue,
     Pr,
+    Marketplace,
+    Plugins,
+    Lsp,
 }
 
 impl TuiSlashCommandAction {
@@ -80,6 +83,9 @@ impl TuiSlashCommandAction {
             Self::Dashboard => "open Dashboard",
             Self::Subagents => "focus the current Session Thread list",
             Self::Memories => "manage memories, reading consent and model saving",
+            Self::Marketplace => "find and install Marketplace packages",
+            Self::Plugins => "manage installed packages and exact versions",
+            Self::Lsp => "manage language servers and find packages",
             Self::Skills => "browse configured skill sources",
             Self::Mcp => "list configured MCP tools",
             Self::Connectors => "show external service connections",
@@ -107,7 +113,9 @@ impl TuiSlashCommandAction {
 
     pub(crate) fn argument_mode(self) -> SlashCommandArgumentMode {
         match self {
-            Self::Resume
+            Self::Marketplace
+            | Self::Lsp
+            | Self::Resume
             | Self::Memories
             | Self::Rewind
             | Self::AddDir
@@ -125,6 +133,8 @@ impl TuiSlashCommandAction {
     pub(crate) fn argument_hint(self) -> Option<&'static str> {
         match self {
             Self::Cd | Self::AddDir | Self::Export => Some("<path>"),
+            Self::Marketplace => Some("<query>"),
+            Self::Lsp => Some("<language-id>"),
             Self::Model => Some("<model> [effort]"),
             Self::Theme => Some("<theme>"),
             Self::Resume => Some("<session-id>"),

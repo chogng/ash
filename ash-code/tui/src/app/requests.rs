@@ -31,6 +31,7 @@ pub(super) enum RequestKey {
     Sessions,
     Preview,
     SessionDetails,
+    Marketplace,
     Mcp,
     Memories,
     Skills,
@@ -232,6 +233,8 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
         AppCommand::Issues(command) if command.is_control() => Some(RequestKey::IssueControl),
         AppCommand::Issues(_) => Some(RequestKey::Issues),
         AppCommand::Memories(_) => Some(RequestKey::Memories),
+        AppCommand::Marketplace(_) => Some(RequestKey::Marketplace),
+        AppCommand::Lsp(_) => Some(RequestKey::Config),
         AppCommand::Mcp(_) => Some(RequestKey::Mcp),
         AppCommand::Skills(_) => Some(RequestKey::Skills),
     }

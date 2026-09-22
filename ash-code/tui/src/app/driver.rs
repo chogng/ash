@@ -65,6 +65,8 @@ struct ServerRefresh {
     sessions: bool,
     thread: bool,
     skills: bool,
+    packages: bool,
+    language_servers: bool,
 }
 
 impl ServerRefresh {
@@ -74,6 +76,8 @@ impl ServerRefresh {
         self.sessions |= refresh.sessions;
         self.thread |= refresh.thread;
         self.skills |= refresh.skills;
+        self.packages |= refresh.packages;
+        self.language_servers |= refresh.language_servers;
     }
 }
 
@@ -249,6 +253,30 @@ impl AppDriver {
         had_active_turn: bool,
     ) -> Option<ScheduledCommand> {
         let command = command.map(|command| {
+            match (&command, self.app.panels_mut().command_mut()) {
+                (
+                    AppCommand::Marketplace(_),
+                    Some(super::command_panel::CommandPanel::Marketplace(panel)),
+                ) => panel.begin_request(),
+                (AppCommand::Lsp(_), Some(super::command_panel::CommandPanel::Lsp(panel))) => {
+                    panel.begin_request()
+                }
+                (AppCommand::Marketplace(_), _) => {
+                    self.app
+                        .open_command_panel(super::command_panel::CommandPanel::loading(
+                            "Marketplace",
+                            "Loading…",
+                        ))
+                }
+                (AppCommand::Lsp(_), _) => {
+                    self.app
+                        .open_command_panel(super::command_panel::CommandPanel::loading(
+                            "Language servers",
+                            "Loading…",
+                        ))
+                }
+                _ => {}
+            }
             if let Some(title) = command.panel_title() {
                 self.app
                     .open_command_panel(super::command_panel::CommandPanel::loading(
@@ -307,6 +335,51 @@ impl AppDriver {
                     Some(RequestKey::Memories),
                     "ash-tui-refresh-memories",
                     move || crate::memories::execute(&mut client, thread_id.as_ref(), command),
+                    &mut self.app,
+                    origin,
+                );
+            }
+        }
+        if self.refresh.packages && self.requests.is_idle(Some(RequestKey::Marketplace)) {
+            self.refresh.packages = false;
+            if let Some(super::command_panel::CommandPanel::Marketplace(panel)) =
+                self.app.command_panel()
+                && let Some(command) = panel.refresh()
+            {
+                if let Some(super::command_panel::CommandPanel::Marketplace(panel)) =
+                    self.app.panels_mut().command_mut()
+                {
+                    panel.begin_request();
+                }
+                let mut client = self.client.clone();
+                self.requests.spawn_presentation(
+                    Some(RequestKey::Marketplace),
+                    "ash-tui-marketplace-refresh",
+                    move || crate::marketplace::execute(&mut client, command),
+                    &mut self.app,
+                    origin,
+                );
+            }
+        }
+        if self.refresh.language_servers && self.requests.is_idle(Some(RequestKey::Config)) {
+            self.refresh.language_servers = false;
+            if let Some(super::command_panel::CommandPanel::Lsp(panel)) = self.app.command_panel()
+                && let Some(command) = panel.refresh()
+            {
+                let mut client = self.client.clone();
+                let session_id = self
+                    .conversation
+                    .as_ref()
+                    .map(|current| current.conversation.session_id().clone());
+                if let Some(super::command_panel::CommandPanel::Lsp(panel)) =
+                    self.app.panels_mut().command_mut()
+                {
+                    panel.begin_request();
+                }
+                self.requests.spawn_presentation(
+                    Some(RequestKey::Config),
+                    "ash-tui-lsp-refresh",
+                    move || crate::lsp::execute(&mut client, session_id.as_ref(), command),
                     &mut self.app,
                     origin,
                 );
@@ -522,6 +595,7 @@ fn refresh_server_event(
         }
         client::ClientEvent::QueueChanged => ServerRefresh::default(),
         client::ClientEvent::ConfigChanged => ServerRefresh {
+            language_servers: true,
             config: true,
             ..ServerRefresh::default()
         },
@@ -568,6 +642,8 @@ fn refresh_server_event(
             ..ServerRefresh::default()
         },
         client::ClientEvent::PackageSourcesChanged => ServerRefresh {
+            packages: true,
+            language_servers: true,
             connectors: app.connector_picker_open(),
             skills: true,
             ..ServerRefresh::default()

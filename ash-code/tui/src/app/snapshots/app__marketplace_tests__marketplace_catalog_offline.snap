@@ -1,0 +1,34 @@
+---
+source: ash-code/tui/src/app/marketplace_tests.rs
+expression: screen(&app)
+---
+  .                                                                            [— / —] [Dashboard]  
+                                                                                                    
+                                                                                                    
+            ┌── Marketplace ──────────────────────────────────────────────────────[✗]─┐             
+            │                                                                         │             
+            │  ╭────────────────────────────────────────────────────────────────────╮ │             
+            │  │ Search Marketplace; Enter to search                                │ │             
+            │  ╰────────────────────────────────────────────────────────────────────╯ │             
+            │  server error -32000: Catalog offline                                   │             
+            │  Installed packages / Plugins  ·  Manage exact installed versions       │             
+            │  Filter capabilities  ·  All capabilities                               │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │                                                                         │             
+            │  Enter search · Esc return                                              │             
+  ╭─────────└─────────────────────────────────────────────────────────────────────────┘──────────╮  
+  │ > Build anything                                                                             │  
+  ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯
