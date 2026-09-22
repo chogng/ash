@@ -1413,6 +1413,13 @@ pub fn open_local_app_server_with_codebase_providers(
                 }
                 .map_err(OpenAppServerError)?,
             ),
+            Arc::new(
+                match options.session_state_mode {
+                    SessionStateMode::Durable => agent_message_board::Store::open(&database_path),
+                    SessionStateMode::Ephemeral => agent_message_board::Store::in_memory(),
+                }
+                .map_err(open_error)?,
+            ),
             options.image_generation_backend.take(),
             &options.profile_root.join("generated-images"),
             options

@@ -8,6 +8,7 @@ Agent 能力由 `ext/` 中的 crate 拥有；Core 提交 Thread/Turn 事实并�
 | --- | --- |
 | `ext/extension-api` | 按身份注册贡献、提示与上下文、续跑、工具与 MCP 生命周期、审核接口、Session/Thread/Turn 临时状态 |
 | `ext/agent` | 根 Agent 与子 Agent 的角色选择、能力范围、工具定义、启动和等待编排 |
+| `ext/agent-message-board` | 同一 Agent 树共享的频道、讨论、回复、订阅、持久化与当前 Turn 通知 |
 | `ext/goal` | Goal 工具、目标提示、续跑条件与重启恢复；通过 Core 的原子入口创建 Turn |
 | `ext/queue` | 消息持久化、FIFO、领取租约、交付结果、空闲唤醒与队列展示 |
 | `ext/guardian-reviewer` | 严格审核协议、结果绑定、并发上限、异步任务、超时、取消和暂时性失败重试 |
@@ -44,6 +45,32 @@ Agent 能力由 `ext/` 中的 crate 拥有；Core 提交 Thread/Turn 事实并�
 | `app-server/src/server/goal_tool.rs`、Core Goal 提示与续跑策略 | `ext/goal` |
 | `app-server/src/server/multi_agent_tools.rs`、角色选择逻辑 | `ext/agent`；App Server 仅获取已授权目录快照 |
 | `app-server/src/marketplace_connector_runtime.rs` | `ext/mcp/marketplace`；Connector 声明解析归 `ext/connectors/declaration.rs` |
+
+## Agent 共享讨论板
+
+App Server 默认注册 `board_read` 与 `board_write`。同一 Session 内的根 Agent 和它逐层委托的成员共享讨论板；独立根 Thread、新分叉和其他 Session 各自隔离。调用方 Session、Thread、Turn 来自宿主，模型不能指定。成员参数使用 `spawn_agent` 返回的 Thread ID；`topic` 为消息板根帖的整数 ID。
+
+| 工具与 action | 参数与行为 |
+| --- | --- |
+| `board_read: channels` | 列出频道；可用 `query` 搜索频道名 |
+| `board_read: topics` | `channel` 必填；列出根帖预览和回复数 |
+| `board_read: posts` | 可组合 `channel`、`topic`、`author`、`query`；按话题读取时包含根帖和回复 |
+| `board_read: post` | `id` 必填；`offset` 默认 0，`chars` 默认 1000、最多 4000，按 Unicode 字符读取 |
+| `board_write: create_channel` | `channel` 必填；创建频道并订阅该频道的新话题 |
+| `board_write: post` | `channel`、`text` 必填；省略 `topic` 创建话题，指定根帖 ID 则回复；`notify` 可额外通知成员 |
+| `board_write: subscription` | `channel`、`state` 必填，状态为 `on` 或 `off`；指定 `topic` 则修改话题订阅，`member` 默认调用方 |
+
+- 列表按创建序号倒序，接受 `limit` 和 `cursor`；默认 20 项、最多 50 项，返回 `items` 和 `next_cursor`。游标绑定讨论板、操作和筛选条件，按最后返回项的序号推进；新增消息不改变后续页的位置。刷新时省略游标。
+- 列表中的正文预览最多 200 字符，包含 `total_chars`；完整读取返回 `text`、`total_chars` 和 `next_offset`，读完时偏移为 null。每份成功结果最多 8000 字节，包含 JSON 转义和元数据；缩短页面时同步返回实际继续位置。
+- 搜索使用 Unicode 大小写折叠后的子串，查询最多 2048 字节。频道名为 1–128 字节且不含首尾空白或控制字符；正文非空白、最多 65536 字节；显式收件人最多 256 个。
+- 读取贡献与写入贡献分开注册，写入走现有 `ManagedStateWrite` 授权。频道创建、发帖和订阅修改都在同一事务中保存操作凭据；同一 Thread、Turn 与 operation 重试返回原结果，参数变化则报错。Code Mode 同一外层调用内的不同 operation 分别记录。
+- 频道订阅通知新话题，话题订阅通知回复。发帖自动订阅该话题；显式通知不改变订阅。收件人去重并排除作者，跨树成员在写入前被拒绝。
+- 通知只送达成员当前活动 Turn，不启动空闲 Agent，也不转存到后续 Turn。每条最多预览 150 字符，每个 Turn 保留最近 64 条；通知失败不撤回已保存的消息，操作重试不会再次发出通知。消息内容作为待核实的报告提供，不增加指令权限。
+- `created_at` 为宿主时钟的 Unix 毫秒数；未配置时钟时使用系统 UTC，配置时钟失败则写入失败。排序使用持久化序号，因此不受时钟回拨影响。
+- 持久会话使用 profile 的 `state.sqlite3`，临时会话使用内存。归档保留讨论；删除 Session 在事务中清理频道、帖子、订阅和操作凭据，同时关闭该 Session 的讨论板，旧调用不能重新创建内容。
+- 不存在的频道或消息、无效话题、重复频道、游标不匹配、越界参数和操作冲突均报告错误。数据库故障不重建或清空已有数据。
+
+团队模式可用频道组织工作，用话题共享发现、阻塞、接口决定和验证证据。开发流程可按工作与阶段组织频道，报告中引用相应产物版本。讨论板不负责分工状态、阶段转换、权限授予或验收；模式入口状态见 [Agent 树](../../docs/core-multi-agent.md#31-团队共享讨论) 与 [Develop 设计](../../docs/develop.md#9-team-的位置)。
 
 ## 历史与任务笔记
 

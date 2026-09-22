@@ -244,6 +244,7 @@ pub struct AppServer {
     pub(super) slash_commands: SlashCommandCatalog,
     agent_extensions: Arc<ExtensionRegistry>,
     notes: Option<Arc<history_notes::NotesStore>>,
+    message_board: Option<Arc<agent_message_board::Store>>,
     pub(super) skills: Option<Arc<SkillRuntime>>,
     _skill_watcher: Option<SkillWatcher>,
     _config_watcher: Option<config_runtime::ConfigWatcher>,
@@ -579,6 +580,7 @@ impl AppServer {
             slash_commands: SlashCommandCatalog::default(),
             agent_extensions,
             notes: None,
+            message_board: None,
             skills: None,
             _skill_watcher: None,
             _config_watcher: None,
@@ -1168,6 +1170,7 @@ impl AppServer {
     pub fn with_agent_capabilities(
         mut self,
         notes: Arc<history_notes::NotesStore>,
+        message_board: Arc<agent_message_board::Store>,
         image_backend: Option<Arc<dyn image_generation::ImageGenerationBackend>>,
         artifact_root: &std::path::Path,
         attribution: Arc<dyn git_attribution::GitAttributionPolicySource>,
@@ -1178,6 +1181,7 @@ impl AppServer {
         builder.item_contributor("results", items.clone());
         sleep::install(&mut builder, items.clone());
         history_notes::install(&mut builder, &self.threads, notes.clone());
+        agent_message_board::install(&mut builder, &self.threads, message_board.clone());
         git_attribution::install(&mut builder, attribution);
         if let Some(backend) = image_backend {
             image_generation::install(
@@ -1205,6 +1209,7 @@ impl AppServer {
         self.env_runtime_mut().turn_executor = executor;
         self.agent_extensions = registry;
         self.notes = Some(notes);
+        self.message_board = Some(message_board);
         self.restart_extension_config_watcher();
         self.with_extension_tool_port(port)
             .map_err(|e| e.to_string())

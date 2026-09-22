@@ -270,6 +270,11 @@ impl AppServer {
                 .delete_session(&session_id)
                 .map_err(|error| core_error(core_api::CoreError::Execution(error)))?;
         }
+        if let Some(board) = &self.message_board {
+            board
+                .delete_session(&session_id)
+                .map_err(|error| core_error(core_api::CoreError::Execution(error.to_string())))?;
+        }
         self.agent_extensions
             .state()
             .remove(&ash_extension_api::ExtensionScope::Session(

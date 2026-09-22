@@ -4247,6 +4247,7 @@ fn encrypted_reasoning_survives_tool_results_and_reloading_thread_history() {
                 command_id: CommandId::new("continue-encrypted").unwrap(),
                 expected_sequence: SequenceExpectation::Any,
                 model: None,
+                advisor: None,
                 policy_revision: "test-policy-v1".into(),
                 approval_mode: ash_protocol::ApprovalMode::AskPermissions,
                 tool_mode: ash_protocol::ToolMode::Direct,

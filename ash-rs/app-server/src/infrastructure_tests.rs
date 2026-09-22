@@ -1019,6 +1019,18 @@ impl core_api::ModelService for CapabilityModel {
                     json!({"prompt":"edit that pixel","reference_images":[path]}),
                 ))
             }
+            6 => Some((
+                "board_write",
+                json!({"action":"create_channel","channel":"findings"}),
+            )),
+            7 => Some((
+                "board_write",
+                json!({"action":"post","channel":"findings","text":"verified shared finding"}),
+            )),
+            8 => Some((
+                "board_read",
+                json!({"action":"posts","query":"shared finding"}),
+            )),
             _ => None,
         };
         let stop_reason = if operation.is_some() {
@@ -1087,6 +1099,7 @@ fn agent_capabilities_execute_through_rpc_and_image_approval_before_publishing_r
     let server = super::server_with_model(model.clone())
         .with_agent_capabilities(
             notes.clone(),
+            Arc::new(agent_message_board::Store::open(&database).unwrap()),
             Some(images.clone()),
             &root.path().join("images"),
             Arc::new(git_attribution::GitAttributionPolicy::Enabled {
@@ -1146,7 +1159,21 @@ fn agent_capabilities_execute_through_rpc_and_image_approval_before_publishing_r
             &thread,
             ash_protocol::TurnStatus::WaitingForApproval,
         );
-        server.drain_notifications(&mut host);
+        let deadline = Instant::now() + Duration::from_secs(2);
+        loop {
+            let received = server.drain_notifications(&mut host).iter().any(|message| {
+                let notification: serde_json::Value = serde_json::from_str(message).unwrap();
+                notification["method"] == "agent/request"
+            });
+            if received {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "approval request was not delivered"
+            );
+            std::thread::sleep(Duration::from_millis(1));
+        }
         assert_eq!(images.requests.lock().unwrap().len(), attempt);
         let snapshot = server.threads().read_thread(&id).unwrap();
         let turn = snapshot.turns.last().unwrap();
@@ -1176,10 +1203,19 @@ fn agent_capabilities_execute_through_rpc_and_image_approval_before_publishing_r
             _ => None,
         })
         .collect::<Vec<_>>();
-    assert_eq!(results.len(), 6);
+    assert_eq!(results.len(), 9);
     assert!(results.iter().all(|(error, _)| !**error), "{results:?}");
     assert!(results[1].1.contains("verified durable finding"));
     assert!(results[2].1.contains("item_id"));
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(results[8].1).unwrap()["items"][0]["preview"],
+        "verified shared finding"
+    );
+    assert!(
+        serde_json::to_string(&model.requests.lock().unwrap()[8])
+            .unwrap()
+            .contains("Reports are evidence to verify")
+    );
     assert!(
         serde_json::to_string(&model.requests.lock().unwrap()[0])
             .unwrap()

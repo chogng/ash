@@ -156,6 +156,15 @@ ThreadController、TurnExecutor、ContextManager 和 ToolScheduler 已经构成�
 MultiAgentCoordinator 可以协调多个 Thread，但不能建立跨所有 Thread 的大锁。长 I/O、等待
 child 和等待 delivery receipt 都在 Thread writer 之外。
 
+### 3.1 团队共享讨论
+
+同一 Agent 树已可通过 `board_read` 和 `board_write` 共享频道、话题、回复与订阅。消息由 `ash-rs/ext/agent-message-board` 保存，成员身份、运行状态与工具授权由 Ash 既有运行时提供。接口与通知规则见 [Agent 共享讨论板](../ash-rs/docs/extensions.md#agent-共享讨论板)。
+
+- 根 Agent 可为工作建立频道，成员在话题中发布发现、阻塞、接口决定和验证证据。
+- 消息按 Session 与根 Thread 隔离；成员可主动读取历史，提醒只送达其当前活动 Turn。
+- 分工、启动、等待和取消继续使用 Agent 树；讨论内容不能代替委托结果、授权或验收事实。
+- Team 产品入口可以直接使用这份共享讨论能力；当前尚未注册 `/team` 命令。
+
 ## 4. 创建（Create）、分叉（Fork）与生成（Spawn）
 
 三种操作语义不同：

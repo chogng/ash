@@ -1,0 +1,3 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+ash_rust_crate(name = "agent-message-board", crate_name = "ash_agent_message_board")

@@ -400,9 +400,8 @@ impl ThreadController {
         Ok(())
     }
 
-    pub(crate) fn sample_time_context(
-        &self,
-    ) -> Result<Option<ash_protocol::TimeContext>, CoreError> {
+    /// Samples the configured clock for model input and host-owned Agent extensions.
+    pub fn sample_time_context(&self) -> Result<Option<ash_protocol::TimeContext>, CoreError> {
         let provider = self
             .time_context
             .read()
@@ -1998,6 +1997,34 @@ impl ThreadController {
 
     pub fn read_thread(&self, thread_id: &ThreadId) -> Result<ThreadSnapshot, CoreError> {
         self.with_loaded_thread(thread_id, |loaded| Ok(loaded.snapshot.clone()))
+    }
+
+    /// Admits transient extension data to the current Turn under the Thread commit lock.
+    /// The callback must not re-enter Core. It must keep data in the supplied Turn's
+    /// extension scope, which is removed when that Turn ends. This never starts work.
+    pub fn with_running_turn<R>(
+        &self,
+        thread_id: &ThreadId,
+        accept: impl FnOnce(&SessionId, &TurnId) -> Result<R, CoreError>,
+    ) -> Result<Option<R>, CoreError> {
+        self.with_loaded_thread(thread_id, |loaded| {
+            let snapshot = &loaded.snapshot;
+            if snapshot.status == ThreadStatus::Archived {
+                return Ok(None);
+            }
+            let Some(turn) = snapshot.turns.iter().rev().find(|turn| {
+                matches!(
+                    turn.status,
+                    TurnStatus::Running
+                        | TurnStatus::WaitingForApproval
+                        | TurnStatus::WaitingForUserInput
+                        | TurnStatus::WaitingForCapability
+                )
+            }) else {
+                return Ok(None);
+            };
+            accept(&snapshot.session_id, &turn.turn_id).map(Some)
+        })
     }
 
     /// Reads every durable Thread known to this authority.

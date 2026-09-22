@@ -250,6 +250,13 @@ fn manual_consultation_uses_frozen_evidence_without_worker_or_tools() {
     assert_eq!(request.tool_choice, protocol::ToolChoice::None);
     assert!(!request.parallel_tool_calls);
     assert_eq!(request.max_output_tokens, Some(config.max_output_tokens));
+    assert!(
+        request
+            .instructions
+            .as_deref()
+            .unwrap()
+            .contains(INSTRUCTIONS.trim())
+    );
     let evidence = serde_json::to_string(request).unwrap();
     assert!(evidence.contains("Check the actual task evidence"));
     assert!(evidence.contains("Preserve user changes"));
@@ -276,6 +283,24 @@ fn automatic_advice_returns_to_worker_and_enforces_call_limit() {
     let requests = f.model.requests.lock().unwrap();
     assert_eq!(requests.len(), 4);
     assert_eq!(requests[1].0, model("reviewer"));
+    assert!(
+        requests[1]
+            .1
+            .instructions
+            .as_deref()
+            .unwrap()
+            .contains(INSTRUCTIONS.trim())
+    );
+    for index in [0, 2, 3] {
+        assert!(
+            !requests[index]
+                .1
+                .instructions
+                .as_deref()
+                .unwrap()
+                .contains(INSTRUCTIONS.trim())
+        );
+    }
     assert!(
         serde_json::to_string(&requests[2].1)
             .unwrap()
