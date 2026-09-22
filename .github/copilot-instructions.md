@@ -76,3 +76,4 @@ Generic Marketplace infrastructure and templates must not hardcode a repository 
 ## Learnings
 
 * 仅在用户显式使用 `/develop` 时生成和维护 intent、spec、plan、verification 及变更登记。普通评估、修复和实现直接完成必要工作与测试，按需更新现有文档，不自动套用阶段产物流程。
+* 新增或修改产品自有的用户可见文案时，必须同步接入所属端现有 NLS、更新语言词条，并验证至少一种非默认语言，否则不得宣称功能完成。共享命令描述、参数提示、面板、错误和无障碍文本均适用；动态文案使用可翻译模板与参数，命令标识、协议字段、路径和用户内容不翻译。

@@ -2,19 +2,18 @@
 source: ash-code/tui/src/app/marketplace_tests.rs
 expression: screen(&app)
 ---
-  .                                                                            [— / —] [Dashboard]  
+  .                                                                               [— / —] [仪 表 盘 ]  
                                                                                                     
                                                                                                     
-            ┌── Marketplace ──────────────────────────────────────────────────────[✗]─┐             
+            ┌── 扩 展 市 场  ─────────────────────────────────────────────────────────[✗]─┐             
             │                                                                         │             
-            │   All    Skills    Plugins    MCP    Connectors    Executables          │             
-            │   Languages    Themes    Localizations    Assets    Installed           │             
+            │   全 部     技 能     插 件     MCP    连 接 器     可 执 行 程 序     编 程 语 言        │             
+            │   主 题     语 言 包     资 源     已 安 装                                       │             
             │                                                                         │             
             │  ╭────────────────────────────────────────────────────────────────────╮ │             
-            │  │ Search Marketplace; Enter to search                                │ │             
+            │  │ rust                                                               │ │             
             │  ╰────────────────────────────────────────────────────────────────────╯ │             
-            │  server error -32000: Catalog offline                                   │             
-            │  No packages in this view                                               │             
+            │  此 页 暂 无 软 件 包                                                          │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
@@ -28,7 +27,8 @@ expression: screen(&app)
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
-            │  Enter search · Esc return                                              │             
+            │                                                                         │             
+            │  Tab/Shift+Tab 切 换  · Enter 返 回  · Esc 关 闭                              │             
   ╭─────────└─────────────────────────────────────────────────────────────────────────┘──────────╮  
-  │ > Build anything                                                                             │  
-  ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯
+  │ > 构 建 任 何 内 容                                                                                │  
+  ╰─────────────────────────────────────────────────────────────────────────────────── 自 动 模 型  ─╯

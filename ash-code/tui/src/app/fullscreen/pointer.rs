@@ -183,6 +183,7 @@ pub(crate) fn target_at(
             true,
             column,
             row,
+            app.language(),
         )
         .map(PointerTarget::Composer);
     }
@@ -299,6 +300,7 @@ pub(crate) fn overlay_contains(
         &app.chat_composer_view(),
         position.x,
         position.y,
+        app.language(),
     )
 }
 

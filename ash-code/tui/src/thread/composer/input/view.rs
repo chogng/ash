@@ -102,8 +102,10 @@ pub(crate) fn draw(
     if let Some(hint) = argument_hint
         && let Some(line) = lines.get_mut(wrapped.cursor_row)
     {
-        line.spans
-            .push(Span::styled(hint, Style::default().fg(context.muted())));
+        line.spans.push(Span::styled(
+            context.localize(hint),
+            Style::default().fg(context.muted()),
+        ));
     }
     if input.is_empty()
         && matches!(chrome, ChatInputChrome::Box)

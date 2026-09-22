@@ -2,19 +2,20 @@
 source: ash-code/tui/src/app/marketplace_tests.rs
 expression: screen(&app)
 ---
-  .                                                                            [— / —] [Dashboard]  
+  .                                                                               [— / —] [仪 表 盘 ]  
                                                                                                     
                                                                                                     
-            ┌── Marketplace ──────────────────────────────────────────────────────[✗]─┐             
+            ┌── 语 言 服 务 器  ───────────────────────────────────────────────────────[✗]─┐             
             │                                                                         │             
-            │   All    Skills    Plugins    MCP    Connectors    Executables          │             
-            │   Languages    Themes    Localizations    Assets    Installed           │             
+            │   可 用     已 配 置                                                         │             
             │                                                                         │             
             │  ╭────────────────────────────────────────────────────────────────────╮ │             
-            │  │ Search Marketplace; Enter to search                                │ │             
+            │  │ 筛 选 服 务 器  ID                                                      │ │             
             │  ╰────────────────────────────────────────────────────────────────────╯ │             
-            │  server error -32000: Catalog offline                                   │             
-            │  No packages in this view                                               │             
+            │> 在 扩 展 市 场 查 找 语 言 服 务 器   ·  按 包 声 明 的 精 确 语 言  ID 匹 配                 │             
+            │  按  ID 配 置 服 务 器   ·  设 置 启 用 状 态 和 可 选 程 序 路 径                         │             
+            │  刷 新 服 务 器   ·  列 出 已 启 用 且 程 序 可 用 的 服 务 器 ， 不 启 动 进 程                 │             
+            │  web-lsp  ·  可 用  · typescript, javascript                              │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
@@ -27,8 +28,7 @@ expression: screen(&app)
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
-            │                                                                         │             
-            │  Enter search · Esc return                                              │             
+            │  Enter 确 认   ·  Tab/Shift+Tab 切 换   ·  / 搜 索   ·  Esc 关 闭               │             
   ╭─────────└─────────────────────────────────────────────────────────────────────────┘──────────╮  
-  │ > Build anything                                                                             │  
-  ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯
+  │ > 构 建 任 何 内 容                                                                                │  
+  ╰─────────────────────────────────────────────────────────────────────────────────── 自 动 模 型  ─╯

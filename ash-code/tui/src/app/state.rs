@@ -609,9 +609,6 @@ impl App {
         outcome: crate::config::ConfigEditorOutcome,
     ) -> Option<AppCommand> {
         match outcome {
-            crate::config::ConfigEditorOutcome::Action(
-                ConfigSelectionAction::OpenLanguageServers,
-            ) => Some(crate::lsp::Command::Load(Default::default()).into()),
             crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::SetMemories(
                 edit,
             )) => Some(ConfigCommand::SetMemories(edit).into()),
@@ -652,9 +649,6 @@ impl App {
             crate::config::ConfigEditorOutcome::Action(ConfigSelectionAction::SetLanguage(
                 edit,
             )) => Some(ConfigCommand::Edit(edit).into()),
-            crate::config::ConfigEditorOutcome::Action(
-                ConfigSelectionAction::SetLanguageServerMode(edit),
-            ) => Some(ConfigCommand::SetLanguageServerMode(edit).into()),
             crate::config::ConfigEditorOutcome::Action(
                 ConfigSelectionAction::OpenProviderApiKey { .. },
             ) => None,
@@ -2000,9 +1994,16 @@ impl App {
                         .cloned(),
                     _ => None,
                 };
+                let tabs_focused = matches!(self.command_panel(), Some(CommandPanel::Marketplace(panel)) if panel.state().tabs_focused());
                 let mut panel = crate::marketplace::Panel::new(event.0);
                 if let Some(selected) = selected {
                     panel.state_mut().focus_item(&selected);
+                }
+                if tabs_focused {
+                    let tab = panel.state().active_tab_index();
+                    panel.state_mut().focus_pointer(
+                        &crate::widgets::list_selection::ListSelectionPointerTarget::Tab(tab),
+                    );
                 }
                 self.open_command_panel(CommandPanel::Marketplace(panel));
             }
@@ -2062,7 +2063,12 @@ impl App {
             ) = &event
                 && let Some(CommandPanel::Loading(_)) = self.command_panel()
             {
-                let title = self.command_panel().unwrap().body().title().to_owned();
+                let title = self
+                    .command_panel()
+                    .unwrap()
+                    .body()
+                    .title(self.language())
+                    .into_owned();
                 self.open_command_panel(CommandPanel::loading(&title, error));
             }
             if let AppEvent::Thread(

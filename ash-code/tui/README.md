@@ -346,10 +346,11 @@ just test-tui
 
 ## Marketplace 与语言服务器
 
-- `/marketplace [query]` 搜索包并按能力筛选；安装前审阅整个包的版本、能力和权限。
-- `/plugins` 查看本地安装记录，按精确版本更新或卸载；使用中的包等待消费方释放后删除。
+- `/marketplace [query]` 按全部、技能、插件、MCP、连接器、可执行程序、编程语言、主题、语言包和资源页签浏览；安装前审阅整个包的版本、能力和权限。
+- `/plugins` 直接打开 Marketplace 的“已安装”页签，按精确版本更新或卸载；使用中的包等待消费方释放后删除。
 - `/lsp [language-id]` 查看当前目录可用服务器，修改启用状态、程序路径或恢复配置默认值。
-- `/skills`、`/mcp`、`/connectors` 的获取入口与 Config 语言服务器页连接同一个包管理服务。
+- `/skills`、`/mcp`、`/connectors`、`/lsp` 的获取入口连接同一个包管理服务；Config 不重复提供语言服务器页签。
+- 分类页签共用已配置的 Marketplace 来源；发行配置已提供 `ash`，增加独立来源才需要配置新的 metadata/targets 地址与信任根。
 - `marketplace.rs` 和 `lsp.rs` 拥有终端状态与交互，后端继续拥有安装、解析和配置。共享契约见 [Slash Commands](../../docs/slash-commands.md#marketplace-与领域管理入口)。
 - 定向验证：`just test ash-tui marketplace`；真实终端流程：`just test-tui actual_tui_marketplace_and_lsp_commands`。
 

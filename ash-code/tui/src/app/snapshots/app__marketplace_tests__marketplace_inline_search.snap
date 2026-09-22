@@ -26,11 +26,11 @@ expression: screen(&app)
                                                                                                     
 ─ Marketplace ──────────────────────────────────────────────────────────────────────────────────────
                                                                                                     
+   All    Skills    Plugins    MCP    Connectors    Executables    Languages    Themes              
+   Localizations    Assets    Installed                                                             
   ╭──────────────────────────────────────────────────────────────────────────────────────────────╮  
   │ Search Marketplace; Enter to search                                                          │  
   ╰──────────────────────────────────────────────────────────────────────────────────────────────╯  
-  Installed packages / Plugins  ·  Manage exact installed versions                                  
-  Filter capabilities  ·  Skills                                                                    
   Guide  ·  guide@official · 1.0.0 · A bundled skill                                                
                                                                                                     
   Enter search · Esc return

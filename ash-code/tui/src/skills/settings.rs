@@ -1,4 +1,5 @@
 use crate::keymap::bindings;
+use crate::nls::Text;
 use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionItemId;
@@ -35,14 +36,16 @@ pub(crate) fn skill_choices(catalog: &SkillListResult) -> SkillChoices {
         .enumerate()
         .map(|(index, skill)| {
             let item_id = ListSelectionItemId::new(format!("skill-{index}"));
-            ListSelectionItem::new(skill.id.name.as_str())
+            ListSelectionItem::new(Text::literal(skill.id.name.as_str()))
                 .with_id(item_id)
-                .with_description(format!(
-                    "{}  ·  {}  ·  {}  ·  {}",
-                    enablement_label(skill.enablement),
-                    source_kind_label(skill.source_kind),
-                    skill.id.source,
-                    skill.description,
+                .with_description(Text::template(
+                    "{0}  ·  {1}  ·  {2}  ·  {3}",
+                    vec![
+                        enablement_label(skill.enablement).into(),
+                        source_kind_label(skill.source_kind).into(),
+                        Text::literal(skill.id.source.to_string()),
+                        Text::literal(&skill.description),
+                    ],
                 ))
         })
         .collect::<Vec<_>>();
@@ -75,13 +78,15 @@ pub(crate) fn skill_choices(catalog: &SkillListResult) -> SkillChoices {
                     enablement,
                 },
             );
-            ListSelectionItem::new(skill.id.name.as_str())
+            ListSelectionItem::new(Text::literal(skill.id.name.as_str()))
                 .with_id(item_id)
-                .with_description(format!(
-                    "{} → {}  ·  {}",
-                    enablement_label(skill.enablement),
-                    enablement_label(enablement),
-                    skill.id.source,
+                .with_description(Text::template(
+                    "{0} → {1}  ·  {2}",
+                    vec![
+                        enablement_label(skill.enablement).into(),
+                        enablement_label(enablement).into(),
+                        Text::literal(skill.id.source.to_string()),
+                    ],
                 ))
         })
         .collect::<Vec<_>>();
@@ -92,9 +97,24 @@ pub(crate) fn skill_choices(catalog: &SkillListResult) -> SkillChoices {
         model: ListSelectionModel::new(
             "Skills",
             vec![
-                ListSelectionGroup::new(format!("All ({})", all.len()), all),
-                ListSelectionGroup::new(format!("Enabled ({enabled_count})"), enabled),
-                ListSelectionGroup::new(format!("Disabled ({disabled_count})"), disabled),
+                ListSelectionGroup::new(
+                    Text::template("All ({0})", vec![Text::literal(all.len().to_string())]),
+                    all,
+                ),
+                ListSelectionGroup::new(
+                    Text::template(
+                        "Enabled ({0})",
+                        vec![Text::literal(enabled_count.to_string())],
+                    ),
+                    enabled,
+                ),
+                ListSelectionGroup::new(
+                    Text::template(
+                        "Disabled ({0})",
+                        vec![Text::literal(disabled_count.to_string())],
+                    ),
+                    disabled,
+                ),
                 ListSelectionGroup::new("Manage", manage),
             ],
         )

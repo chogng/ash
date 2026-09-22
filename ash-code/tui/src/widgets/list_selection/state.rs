@@ -1,5 +1,6 @@
 use crate::keymap::bindings;
 use crate::keymap::bindings::Keybinding;
+use crate::nls::Text;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEvent;
 use crossterm::event::KeyEventKind;
@@ -24,8 +25,8 @@ const PAGE_ROWS: usize = 12;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ListSelectionItem {
     id: Option<ListSelectionItemId>,
-    label: String,
-    description: Option<String>,
+    label: Text,
+    description: Option<Text>,
     columns: Option<ListSelectionItemColumns>,
     selection_foreground: Option<Color>,
     presentation_focus: Option<Color>,
@@ -40,7 +41,7 @@ pub(super) struct ListSelectionItemColumns {
 }
 
 impl ListSelectionItem {
-    pub(crate) fn new(label: impl Into<String>) -> Self {
+    pub(crate) fn new(label: impl Into<Text>) -> Self {
         Self {
             id: None,
             label: label.into(),
@@ -57,7 +58,7 @@ impl ListSelectionItem {
         self
     }
 
-    pub(crate) fn with_description(mut self, description: impl Into<String>) -> Self {
+    pub(crate) fn with_description(mut self, description: impl Into<Text>) -> Self {
         self.description = Some(description.into());
         self
     }
@@ -73,7 +74,7 @@ impl ListSelectionItem {
             middle: middle.into(),
             trailing: trailing.into(),
         };
-        self.description = Some(format!("{} {}", columns.middle, columns.trailing));
+        self.description = Some(format!("{} {}", columns.middle, columns.trailing).into());
         self.columns = Some(columns);
         self
     }
@@ -141,12 +142,12 @@ impl ListSelectionItemId {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct ListSelectionGroup {
-    label: String,
+    label: Text,
     items: Vec<ListSelectionItem>,
 }
 
 impl ListSelectionGroup {
-    pub(crate) fn new(label: impl Into<String>, items: Vec<ListSelectionItem>) -> Self {
+    pub(crate) fn new(label: impl Into<Text>, items: Vec<ListSelectionItem>) -> Self {
         Self {
             label: label.into(),
             items,
@@ -172,7 +173,7 @@ pub(crate) struct ListSelectionModel {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct ListSelectionPresentation {
-    title: String,
+    title: Text,
     action: Option<ListSelectionItem>,
     scroll_counts: bool,
     search: Option<SearchBoxModel>,
@@ -188,7 +189,7 @@ struct ListSelectionPresentation {
 }
 
 impl ListSelectionModel {
-    pub(crate) fn new(title: impl Into<String>, tabs: Vec<ListSelectionGroup>) -> Self {
+    pub(crate) fn new(title: impl Into<Text>, tabs: Vec<ListSelectionGroup>) -> Self {
         assert!(
             !tabs.is_empty(),
             "a selection view requires at least one tab"
@@ -436,6 +437,12 @@ impl ListSelectionState {
 
     pub(crate) fn title(&self) -> &str {
         &self.model.title
+    }
+
+    pub(crate) fn localized_title(&self, language: crate::nls::Language) -> String {
+        let mut title = self.model.title.clone();
+        title.localize(language);
+        title.to_string()
     }
 
     pub(crate) fn set_message(&mut self, message: Option<String>) {
@@ -907,10 +914,10 @@ fn localize_presentation(
     presentation: &mut ListSelectionPresentation,
     language: crate::nls::Language,
 ) {
-    presentation.title = crate::nls::localize_owned(language, &presentation.title);
+    presentation.title.localize(language);
     presentation.empty_message = crate::nls::localize_owned(language, &presentation.empty_message);
     if let Some(action) = &mut presentation.action {
-        action.label = crate::nls::localize_owned(language, &action.label);
+        action.label.localize(language);
     }
     if let Some(search) = presentation.search.as_mut() {
         search.localize(language);
@@ -919,11 +926,11 @@ fn localize_presentation(
 
 fn localize_groups(groups: &mut [ListSelectionGroup], language: crate::nls::Language) {
     for group in groups {
-        group.label = crate::nls::localize_owned(language, &group.label);
+        group.label.localize(language);
         for item in &mut group.items {
-            item.label = crate::nls::localize_owned(language, &item.label);
+            item.label.localize(language);
             if let Some(description) = item.description.as_mut() {
-                *description = crate::nls::localize_owned(language, &*description);
+                description.localize(language);
             }
             if let Some(columns) = item.columns.as_mut() {
                 columns.leading = crate::nls::localize_owned(language, &columns.leading);

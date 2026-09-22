@@ -19,8 +19,6 @@ use crate::widgets::text_prompt::TextPrompt;
 use crate::widgets::text_prompt::TextPromptOutcome;
 use crate::widgets::text_prompt::TextPromptSpec;
 use ash_app_server_protocol::protocol::config::ConfigReadResult;
-use ash_app_server_protocol::protocol::config::LanguageServerConfigDto;
-use ash_app_server_protocol::protocol::config::LanguageServerModeDto;
 use ash_app_server_protocol::protocol::provider::{
     ProviderApiKeyPolicyDto, ProviderCatalogEntryDto, ProviderListResult,
 };
@@ -55,19 +53,10 @@ pub(crate) enum ConfigSelectionAction {
     SetShowGitChangesAsDiff(ConfigEdit),
     SetStatusLineStyle(ConfigEdit),
     SetLanguage(ConfigEdit),
-    OpenLanguageServers,
-    SetLanguageServerMode(LanguageServerEdit),
     OpenProviderApiKey {
         provider: String,
         display_name: String,
     },
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct LanguageServerEdit {
-    pub(crate) expected_revision: u64,
-    pub(crate) server_id: String,
-    pub(crate) config: LanguageServerConfigDto,
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -840,7 +829,6 @@ pub(crate) fn config_choices(
             ),
     );
     let provider_items = provider_items(config, providers, &mut actions);
-    let language_server_items = language_servers(config, language, &mut actions);
     let mut choices = ConfigChoices {
         model: ListSelectionModel::new(
             nls::text(language, Message::ConfigTitle),
@@ -849,10 +837,6 @@ pub(crate) fn config_choices(
                 ListSelectionGroup::new(
                     nls::text(language, Message::ConfigProviders),
                     provider_items,
-                ),
-                ListSelectionGroup::new(
-                    nls::text(language, Message::ConfigLanguageServers),
-                    language_server_items,
                 ),
                 issue_tab,
             ],
@@ -1063,60 +1047,6 @@ fn provider_item(
         },
     );
     item.with_id(id)
-}
-
-fn language_servers(
-    config: &ConfigReadResult,
-    language: Language,
-    actions: &mut BTreeMap<ListSelectionItemId, ConfigSelectionAction>,
-) -> Vec<ListSelectionItem> {
-    let id = ListSelectionItemId::new("manage-language-servers");
-    actions.insert(id.clone(), ConfigSelectionAction::OpenLanguageServers);
-    let mut items = vec![
-        ListSelectionItem::new("Manage language servers / Marketplace")
-            .with_id(id)
-            .with_description("Inspect installed servers, configure programs and find packages"),
-    ];
-    items.extend(or_empty(
-        config
-            .language_servers
-            .iter()
-            .map(|(server_id, server)| {
-                let enabled = server.mode == LanguageServerModeDto::Enabled;
-                let id = ListSelectionItemId::new(format!("language-server-{server_id}"));
-                let mut next_config = server.clone();
-                next_config.mode = if enabled {
-                    LanguageServerModeDto::Disabled
-                } else {
-                    LanguageServerModeDto::Enabled
-                };
-                actions.insert(
-                    id.clone(),
-                    ConfigSelectionAction::SetLanguageServerMode(LanguageServerEdit {
-                        expected_revision: config.revision,
-                        server_id: server_id.clone(),
-                        config: next_config,
-                    }),
-                );
-                let description = server.executable.as_deref().unwrap_or_default();
-                ListSelectionItem::new(server_id).with_id(id).with_columns(
-                    server_id,
-                    description,
-                    switch_value(enabled),
-                )
-            })
-            .collect(),
-        nls::text(language, Message::ConfigNoLanguageServers),
-    ));
-    items
-}
-
-fn or_empty(items: Vec<ListSelectionItem>, message: &str) -> Vec<ListSelectionItem> {
-    if items.is_empty() {
-        vec![ListSelectionItem::new(message)]
-    } else {
-        items
-    }
 }
 
 #[cfg(test)]

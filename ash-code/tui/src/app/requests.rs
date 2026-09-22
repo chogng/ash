@@ -175,7 +175,6 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
             | ConfigCommand::OpenEditor
             | ConfigCommand::Subscription(_, _)
             | ConfigCommand::Edit(_)
-            | ConfigCommand::SetLanguageServerMode(_)
             | ConfigCommand::Connection(_)
             | ConfigCommand::SetProviderApiKey(_),
         )

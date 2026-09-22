@@ -15,7 +15,6 @@ pub(crate) use editor::ConfigEditor;
 pub(crate) use editor::ConfigEditorOutcome;
 pub(crate) use editor::ConfigEditorPage;
 pub(crate) use editor::ConfigSelectionAction;
-pub(crate) use editor::LanguageServerEdit;
 pub(crate) use editor::ProviderApiKeyEdit;
 pub(crate) use editor::config_choices;
 pub(crate) use request::execute;
@@ -58,6 +57,5 @@ pub(crate) enum Command {
     Subscription(SubscriptionProvider, SubscriptionCommand),
     OpenEditor,
     Edit(ConfigEdit),
-    SetLanguageServerMode(LanguageServerEdit),
     SetProviderApiKey(ProviderApiKeyEdit),
 }

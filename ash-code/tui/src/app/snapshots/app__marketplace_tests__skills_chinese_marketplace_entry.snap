@@ -2,19 +2,19 @@
 source: ash-code/tui/src/app/marketplace_tests.rs
 expression: screen(&app)
 ---
-  .                                                                            [— / —] [Dashboard]  
+  .                                                                               [— / —] [仪 表 盘 ]  
                                                                                                     
                                                                                                     
-            ┌── Marketplace ──────────────────────────────────────────────────────[✗]─┐             
+            ┌── 技 能  ─────────────────────────────────────────────────────────────[✗]─┐             
             │                                                                         │             
-            │   All    Skills    Plugins    MCP    Connectors    Executables          │             
-            │   Languages    Themes    Localizations    Assets    Installed           │             
+            │   全 部  (1)    已 启 用  (1)    已 停 用  (0)    管 理                           │             
+            │                                                                         │             
+            │  获 取 技 能                                                                │             
             │                                                                         │             
             │  ╭────────────────────────────────────────────────────────────────────╮ │             
-            │  │ Search Marketplace; Enter to search                                │ │             
+            │  │ 搜 索 可 用 技 能                                                        │ │             
             │  ╰────────────────────────────────────────────────────────────────────╯ │             
-            │  server error -32000: Catalog offline                                   │             
-            │  No packages in this view                                               │             
+            │> skills  ·  已 启 用   ·  用 户   ·  user:skill-source:personal  ·  Availabl │             
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
@@ -28,7 +28,7 @@ expression: screen(&app)
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
-            │  Enter search · Esc return                                              │             
+            │  Enter/Space 切 换   ·  Tab/Shift+Tab 切 换   ·  / 搜 索   ·  Esc 关 闭         │             
   ╭─────────└─────────────────────────────────────────────────────────────────────────┘──────────╮  
-  │ > Build anything                                                                             │  
-  ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯
+  │ > 构 建 任 何 内 容                                                                                │  
+  ╰─────────────────────────────────────────────────────────────────────────────────── 自 动 模 型  ─╯

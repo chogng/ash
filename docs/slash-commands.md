@@ -137,10 +137,13 @@ Web/Electron Chat 与 Ash Code 共用 `ProductSlashCommand` 的命令定义；Ru
 已安装列表按安装记录 ID 管理，同包多版本不会混用；目录不可用时仍可读取本地安装列表并卸载。
 Skill 启用和 LSP 配置使用后端配置 revision；遇到冲突保留输入并提示刷新，不自动覆盖。
 Ash Code 同时注册 `/marketplace [query]`、`/plugins`、`/lsp [language-id]`，命令直接打开终端面板。
-Marketplace 提供搜索、能力筛选、完整包审阅和版本管理；`/plugins` 进入同一安装列表。
+Marketplace 按能力分类提供页签，另有插件包和已安装页签；分类切换沿用同一个后端搜索接口。
+安装前审阅整个包，`/plugins` 直接进入“已安装”页签，按具体安装记录更新和卸载。
 `/lsp` 的 Available、Configured、Directories 页签显示可用服务器、配置和会话目录；输入语言 ID 后进入
 Marketplace 精确路由搜索。可用表示已启用且程序可解析，不表示进程已启动。
-`/skills`、`/mcp`、`/connectors` 的获取入口进入同一个 Marketplace，Config 语言服务器页也可打开完整管理面板。
+`/skills`、`/mcp`、`/connectors`、`/lsp` 的获取入口进入同一个 Marketplace；语言服务器配置统一由 `/lsp` 管理，Config 不再重复提供页签。
+分类不对应独立来源：Ash 发行配置已包含 `ash` Marketplace，只有接入另一个独立目录才需要增加来源与信任根。
+终端在显示边界翻译共享命令描述和参数提示；面板动态文案使用翻译模板，包名、语言 ID、路径、权限标识和第三方描述保持原文。
 终端使用共享列表的 Tab/方向键、搜索与鼠标路径；请求期间可按 Esc 关闭，迟到结果不会重开面板。
 
 ## Config 边界

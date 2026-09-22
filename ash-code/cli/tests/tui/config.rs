@@ -419,11 +419,9 @@ fn actual_tui_marketplace_and_lsp_commands() {
     let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
     process.wait_for_screen("Enter send");
     process.submit("/marketplace");
-    process.wait_for_screen("Filter capabilities");
-    process.down();
-    process.enter();
-    process.wait_for_screen("Installed packages");
-    process.wait_for_screen("Browse Marketplace");
+    process.wait_for_screen("No packages in this view");
+    process.back_tab();
+    process.wait_for_screen("Refresh installed packages");
     process.escape();
     process.submit("/plugins");
     process.wait_for_screen("Refresh installed packages");

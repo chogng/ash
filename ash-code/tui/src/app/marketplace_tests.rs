@@ -171,12 +171,7 @@ fn marketplace_slash_commands_open_panels_without_creating_a_conversation() {
             "Marketplace",
             "Marketplace",
         ),
-        (
-            TuiSlashCommandAction::Plugins,
-            "",
-            "Plugins",
-            "Plugins · Installed packages",
-        ),
+        (TuiSlashCommandAction::Plugins, "", "Plugins", "Marketplace"),
         (
             TuiSlashCommandAction::Lsp,
             "rust",
@@ -371,9 +366,8 @@ fn marketplace_failed_search_keeps_offline_management_accessible_and_dismissal_r
     let mut app = App::new();
     app.update(marketplace::execute(&mut client, marketplace::Command::browse(None)).unwrap());
     crate::tui_assert_snapshot!("marketplace_catalog_offline", screen(&app));
-    focus(&mut app, "installed");
     assert_eq!(
-        app.handle_key(key(KeyCode::Enter)),
+        app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT)),
         Some(AppCommand::Marketplace(marketplace::Command::Installed))
     );
     let generation = app.panels().generation();
@@ -535,4 +529,238 @@ fn marketplace_in_flight_actions_cannot_be_repeated_and_failure_keeps_the_review
         ))
     ));
     app.handle_key(key(KeyCode::Esc));
+}
+
+fn chinese_app() -> App {
+    let mut app = App::new();
+    let mut terminal = crate::config::TerminalSettings::default();
+    terminal.set_language(crate::nls::Language::Chinese);
+    app.update(crate::config::Event::SettingsReceived(terminal));
+    app
+}
+
+#[test]
+fn marketplace_tabs_share_backend_filters_and_keep_search_and_tab_focus() {
+    let mut app = chinese_app();
+    app.update(marketplace::Event(marketplace::Page::Catalog {
+        params: MarketplaceSearchParams {
+            query: "rust".into(),
+            ..Default::default()
+        },
+        packages: vec![],
+        error: None,
+    }));
+    let Some(AppCommand::Marketplace(marketplace::Command::Browse(params))) =
+        app.handle_key(key(KeyCode::Tab))
+    else {
+        panic!("tab must search skills")
+    };
+    assert_eq!(params.query, "rust");
+    assert_eq!(params.capability_kind, Some(Kind::Skill));
+    assert_eq!(params.package_type, None);
+    assert!(app.list_selection().unwrap().tabs_focused());
+    app.update(marketplace::Event(marketplace::Page::Catalog {
+        params,
+        packages: vec![],
+        error: None,
+    }));
+    assert!(app.list_selection().unwrap().tabs_focused());
+    assert_eq!(app.list_selection().unwrap().active_tab().label(), "技能");
+    crate::tui_assert_snapshot!("marketplace_chinese_tabs", screen(&app));
+    let outcome = app.panels_mut().command_mut().unwrap().handle_click(
+        &ListSelectionPointerTarget::Tab(2),
+        Rect::new(0, 0, 100, 32),
+        crate::widgets::list_selection::ListSelectionClick::Single,
+    );
+    let Some(AppCommand::Marketplace(marketplace::Command::Browse(params))) =
+        app.handle_command_panel_outcome(outcome)
+    else {
+        panic!("click must search plugins")
+    };
+    assert_eq!(params.query, "rust");
+    assert_eq!(params.capability_kind, None);
+    assert_eq!(params.package_type.as_deref(), Some("plugin"));
+}
+
+#[test]
+fn marketplace_chinese_review_and_installed_actions_preserve_package_identity() {
+    let mut app = chinese_app();
+    let mut package_details = details();
+    package_details.display_name = "Skills".into();
+    package_details.description = "Available · {0}".into();
+    app.update(marketplace::Event(marketplace::Page::Review {
+        details: package_details,
+        installation_id: None,
+    }));
+    assert_eq!(app.list_selection().unwrap().title(), "检查软件包 · Skills");
+    assert!(
+        app.list_selection()
+            .unwrap()
+            .visible_items()
+            .iter()
+            .any(|item| item.label() == "Available · {0}")
+    );
+    crate::tui_assert_snapshot!("marketplace_chinese_review", screen(&app));
+    focus(&mut app, "confirm");
+    assert_eq!(
+        app.handle_key(key(KeyCode::Enter)),
+        Some(AppCommand::Marketplace(marketplace::Command::Install {
+            package_id: "web@official".into(),
+            version: "2.0.0".into()
+        }))
+    );
+    app.update(marketplace::Event(marketplace::Page::Installed {
+        packages: vec![package("v1", "1.0.0")],
+        selected: Some("v1".into()),
+    }));
+    assert_eq!(app.list_selection().unwrap().active_tab().label(), "已安装");
+    crate::tui_assert_snapshot!("marketplace_chinese_installed", screen(&app));
+    app.handle_key(key(KeyCode::Enter));
+    focus(&mut app, "remove");
+    app.handle_key(key(KeyCode::Enter));
+    assert_eq!(app.list_selection().unwrap().title(), "确认卸载");
+    crate::tui_assert_snapshot!("marketplace_chinese_removal", screen(&app));
+    focus(&mut app, "remove");
+    assert_eq!(
+        app.handle_key(key(KeyCode::Enter)),
+        Some(AppCommand::Marketplace(marketplace::Command::Uninstall {
+            installation_id: "v1".into()
+        }))
+    );
+}
+
+#[test]
+fn lsp_chinese_details_and_input_stay_localized_after_navigation() {
+    let mut app = chinese_app();
+    app.update(lsp::Event(lsp_page()));
+    crate::tui_assert_snapshot!("lsp_chinese_servers", screen(&app));
+    focus(&mut app, "web-lsp");
+    app.handle_key(key(KeyCode::Enter));
+    assert_eq!(
+        app.list_selection().unwrap().title(),
+        "语言服务器 · web-lsp"
+    );
+    crate::tui_assert_snapshot!("lsp_chinese_configuration", screen(&app));
+    focus(&mut app, "mode");
+    assert!(
+        matches!(app.handle_key(key(KeyCode::Enter)), Some(AppCommand::Lsp(lsp::Command::Configure { revision: 7, server_id, config, .. })) if server_id == "web-lsp" && config.executable.as_deref() == Some("/tools/web-lsp"))
+    );
+    focus(&mut app, "path");
+    app.handle_key(key(KeyCode::Enter));
+    app.handle_paste("/tools/程序 {0}".into());
+    crate::tui_assert_snapshot!("lsp_chinese_path", screen(&app));
+    app.handle_key(key(KeyCode::Esc));
+    assert_eq!(app.list_selection().unwrap().title(), "语言服务器");
+    focus(&mut app, "find");
+    app.handle_key(key(KeyCode::Enter));
+    app.handle_paste("typescript".into());
+    let Some(AppCommand::Marketplace(marketplace::Command::Browse(params))) =
+        app.handle_key(key(KeyCode::Enter))
+    else {
+        panic!("expected search")
+    };
+    assert_eq!(params.language_id.as_deref(), Some("typescript"));
+    assert_eq!(params.capability_kind, Some(Kind::Executable));
+}
+
+#[test]
+fn skills_and_config_chinese_panels_keep_distinct_responsibilities() {
+    let mut app = chinese_app();
+    app.update(crate::skills::Event::SettingsOpened(crate::skills::skill_choices(&serde_json::from_value(json!({
+        "generation":1,"diagnostics":[],"skills":[{
+            "id":{"name":"skills","source":"user:skill-source:personal"},"description":"Available · {0}","sourceKind":"user","contentDigest":ash_protocol::ContentDigest::sha256(b"fixture"),"enablement":"enabled","compatibility":{"type":"compatible"}
+        }]
+    })).unwrap())));
+    let state = app.list_selection().unwrap();
+    assert_eq!(state.active_tab().label(), "全部 (1)");
+    assert_eq!(state.visible_items()[0].label(), "skills");
+    assert_eq!(
+        state.visible_items()[0].description(),
+        Some("已启用  ·  用户  ·  user:skill-source:personal  ·  Available · {0}")
+    );
+    crate::tui_assert_snapshot!("skills_chinese_marketplace_entry", screen(&app));
+    let mut terminal = crate::config::TerminalSettings::default();
+    terminal.set_language(crate::nls::Language::Chinese);
+    app.update(crate::config::Event::EditorOpened(
+        crate::config::config_choices(
+            &crate::test_support::empty_config_snapshot(),
+            &ash_app_server_protocol::protocol::provider::ProviderListResult { providers: vec![] },
+            terminal,
+            crate::status::StatusLineSettings::default(),
+        ),
+    ));
+    assert_eq!(
+        app.list_selection()
+            .unwrap()
+            .tabs()
+            .iter()
+            .map(|tab| tab.label())
+            .collect::<Vec<_>>(),
+        ["通用", "提供商", "议题"]
+    );
+    crate::tui_assert_snapshot!("config_chinese_without_lsp_tab", screen(&app));
+}
+
+#[test]
+fn marketplace_chinese_completion_and_argument_hint_keep_the_shared_command() {
+    let mut app = chinese_app();
+    app.insert_text("/market");
+    let completion = screen(&app);
+    assert!(
+        completion
+            .replace(' ', "")
+            .contains("查找和安装扩展市场中的包")
+    );
+    assert!(completion.contains("/marketplace"));
+    app.handle_key(key(KeyCode::Tab));
+    let hint = screen(&app);
+    assert!(hint.replace(' ', "").contains("<搜索词>"));
+    app.insert_text("rust");
+    assert!(
+        matches!(app.handle_key(key(KeyCode::Enter)), Some(AppCommand::Thread(crate::thread::Command::ExecuteProductCommand(invocation))) if invocation.command == TuiSlashCommandAction::Marketplace.definition() && invocation.display_arguments == "rust")
+    );
+    crate::tui_assert_snapshot!(
+        "marketplace_chinese_command_completion",
+        format!("{completion}\n\n{hint}")
+    );
+}
+
+#[test]
+fn marketplace_failed_tab_load_keeps_the_loaded_view_and_can_be_retried() {
+    let mut app = App::new();
+    app.update(marketplace::Event(marketplace::Page::Catalog {
+        params: MarketplaceSearchParams::default(),
+        packages: vec![],
+        error: None,
+    }));
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT)),
+        Some(AppCommand::Marketplace(marketplace::Command::Installed))
+    );
+    let Some(CommandPanel::Marketplace(panel)) = app.panels_mut().command_mut() else {
+        panic!("missing marketplace")
+    };
+    panel.begin_request();
+    assert_eq!(panel.select_tab(1), None);
+    panel.fail("Installation records unavailable".into());
+    assert_eq!(panel.state().active_tab().label(), "All");
+    assert_eq!(
+        panel.state().message(),
+        Some("Installation records unavailable")
+    );
+    assert_eq!(
+        app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT)),
+        Some(AppCommand::Marketplace(marketplace::Command::Installed))
+    );
+    for _ in 0..2 {
+        app.update(marketplace::Event(marketplace::Page::Installed {
+            packages: vec![],
+            selected: None,
+        }));
+        assert!(app.list_selection().unwrap().tabs_focused());
+        assert_eq!(
+            app.list_selection().unwrap().active_tab().label(),
+            "Installed"
+        );
+    }
 }

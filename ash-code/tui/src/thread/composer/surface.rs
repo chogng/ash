@@ -98,16 +98,21 @@ pub(crate) fn pointer_target_at(
     completion_visible: bool,
     column: u16,
     row: u16,
+    language: crate::nls::Language,
 ) -> Option<ChatComposerPointerTarget> {
     if !completion_visible {
         return None;
     }
-    if let Some(index) =
-        chat_input::completion_index_at(overlay_area, view.input_completion(), column, row)
-    {
+    if let Some(index) = chat_input::completion_index_at(
+        overlay_area,
+        view.input_completion(),
+        column,
+        row,
+        language,
+    ) {
         return Some(ChatComposerPointerTarget::CompletionItem(index));
     }
-    completion_contains(overlay_area, view, column, row)
+    completion_contains(overlay_area, view, column, row, language)
         .then_some(ChatComposerPointerTarget::CompletionSurface)
 }
 
@@ -116,6 +121,7 @@ pub(crate) fn completion_contains(
     view: &ChatComposerView<'_>,
     column: u16,
     row: u16,
+    language: crate::nls::Language,
 ) -> bool {
-    input::completion_contains(overlay_area, view.input_completion(), column, row)
+    input::completion_contains(overlay_area, view.input_completion(), column, row, language)
 }

@@ -220,7 +220,10 @@ fn usage_loading_failure_and_late_results_preserve_the_current_panel() {
     app.open_command_panel(CommandPanel::loading("Settings", "Loading…"));
     let (mut client, _) = self::client(vec![account("ready"), quota()]);
     app.update_for_panel(generation, crate::usage::load(&mut client).unwrap());
-    assert_eq!(app.command_panel().unwrap().body().title(), "Settings");
+    assert_eq!(
+        app.command_panel().unwrap().body().title(app.language()),
+        "Settings"
+    );
 }
 
 #[test]

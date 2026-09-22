@@ -64,8 +64,6 @@ use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
 use crate::widgets::list_selection::ListSelectionModel;
 use ash_app_server_protocol::protocol::config::FrontendConfigDto;
-use ash_app_server_protocol::protocol::config::LanguageServerConfigDto;
-use ash_app_server_protocol::protocol::config::LanguageServerModeDto;
 use ash_app_server_protocol::protocol::environment::PermissionDto;
 use ash_app_server_protocol::protocol::environment::SessionDirDto;
 use ash_app_server_protocol::protocol::environment::SessionDirListResult;
@@ -950,52 +948,6 @@ fn saved_language_rebuilds_the_open_config_page() {
         selection.visible_items()[4].description(),
         Some("切换界面语言 中文")
     );
-}
-
-#[test]
-fn config_language_server_switch_emits_a_revision_bound_backend_edit() {
-    let mut config = empty_config_snapshot();
-    config.revision = 7;
-    config.language_servers.insert(
-        "rust-analyzer".into(),
-        LanguageServerConfigDto {
-            mode: LanguageServerModeDto::Disabled,
-            executable: None,
-        },
-    );
-    let mut app = App::new();
-    app.update(ConfigEvent::EditorOpened(config_choices(
-        &config,
-        &ProviderListResult {
-            providers: vec![ProviderCatalogEntryDto {
-                provider: "ollama".into(),
-                display_name: "Ollama".into(),
-                api_key_policy: ProviderApiKeyPolicyDto::Unsupported,
-                api_key_configured: false,
-            }],
-        },
-        TerminalSettings::default(),
-        StatusLineSettings::default(),
-    )));
-    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-    assert_eq!(
-        app.list_selection().unwrap().active_tab().label(),
-        "Language servers"
-    );
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-    app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
-
-    assert!(matches!(
-        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
-        Some(AppCommand::Config(ConfigCommand::SetLanguageServerMode(edit)))
-            if edit.expected_revision == 7
-                && edit.server_id == "rust-analyzer"
-                && edit.config.mode == LanguageServerModeDto::Enabled
-    ));
 }
 
 #[test]

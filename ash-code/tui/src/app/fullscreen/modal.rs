@@ -232,10 +232,10 @@ pub(super) fn draw_panel(
         format!(
             "{} › {}",
             context.localize(parent),
-            context.localize(body.title())
+            body.title(context.language())
         )
     });
-    let body_title = context.localize(body.title());
+    let body_title = body.title(context.language());
     let alert_hints;
     let hints = if blocked_alert {
         alert_hints = crate::widgets::key_hint::KeyHints::new()

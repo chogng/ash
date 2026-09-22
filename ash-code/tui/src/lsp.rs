@@ -2,6 +2,8 @@ mod request;
 pub(crate) use request::execute;
 
 use crate::keymap::bindings;
+use crate::nls::Language;
+use crate::nls::Text;
 use crate::widgets::list_selection::ListSelection;
 use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
@@ -88,6 +90,7 @@ pub(crate) struct Panel {
     input_hints: crate::widgets::key_hint::KeyHints,
     input: Option<Input>,
     detail: bool,
+    language: Language,
 }
 
 impl Panel {
@@ -123,8 +126,11 @@ impl Panel {
                 &mut available,
                 &mut actions,
                 &server.id,
-                &server.id,
-                &format!("Available · {}", server.language_ids.join(", ")),
+                Text::literal(&server.id),
+                Text::template(
+                    "Available · {0}",
+                    vec![Text::literal(server.language_ids.join(", "))],
+                ),
                 Action::Server(server.id.clone()),
             );
         }
@@ -134,14 +140,17 @@ impl Panel {
                 &mut configured,
                 &mut actions,
                 id,
-                id,
-                &format!(
-                    "{} · {}",
-                    mode_label(config.mode),
-                    config
-                        .executable
-                        .as_deref()
-                        .unwrap_or("provider executable")
+                Text::literal(id),
+                Text::template(
+                    "{0} · {1}",
+                    vec![
+                        mode_label(config.mode).into(),
+                        config
+                            .executable
+                            .as_ref()
+                            .map(Text::literal)
+                            .unwrap_or_else(|| "provider executable".into()),
+                    ],
                 ),
                 Action::Server(id.clone()),
             );
@@ -155,7 +164,7 @@ impl Panel {
                 &mut dirs,
                 &mut actions,
                 &format!("dir:{label}"),
-                &label,
+                Text::literal(&label),
                 if page.scope.directory.as_ref() == Some(dir) {
                     "Current directory"
                 } else {
@@ -189,6 +198,7 @@ impl Panel {
             list,
             input: None,
             detail: false,
+            language: Language::English,
             pending: false,
             input_hints: crate::widgets::key_hint::KeyHints::compact()
                 .with_compact_action("Enter", "continue")
@@ -196,13 +206,35 @@ impl Panel {
         }
     }
 
+    pub(crate) fn localize(&mut self, language: Language) {
+        self.language = language;
+        self.list.state_mut().localize(language);
+        if !self.pending
+            && !self.detail
+            && self.input.is_none()
+            && self.page.error.is_none()
+            && let Some(dir) = &self.page.scope.directory
+        {
+            let mut message = Text::template(
+                "Directory: {0}",
+                vec![Text::literal(dir.path.display().to_string())],
+            );
+            message.localize(language);
+            self.list.state_mut().set_message(Some(message.to_string()));
+        }
+    }
+
     pub(crate) fn begin_request(&mut self) {
         self.pending = true;
-        self.list.state_mut().set_message(Some("Loading…".into()));
+        self.list
+            .state_mut()
+            .set_message(Some(crate::nls::localize_owned(self.language, "Loading…")));
     }
     pub(crate) fn fail(&mut self, error: String) {
         self.pending = false;
-        self.list.state_mut().set_message(Some(error));
+        self.list
+            .state_mut()
+            .set_message(Some(crate::nls::localize_owned(self.language, error)));
     }
     pub(crate) fn state(&self) -> &ListSelectionState {
         self.list.state()
@@ -246,7 +278,9 @@ impl Panel {
             && bindings::CANCEL.matches(key)
             && (self.input.is_some() || self.detail)
         {
+            let language = self.language;
             *self = Self::new(self.page.clone());
+            self.localize(language);
             return Outcome::Consumed;
         }
         if key.kind == KeyEventKind::Press
@@ -320,7 +354,9 @@ impl Panel {
                 Outcome::Consumed
             }
             ListSelectionOutcome::Activate(Action::Back) => {
+                let language = self.language;
                 *self = Self::new(self.page.clone());
+                self.localize(language);
                 Outcome::Consumed
             }
             ListSelectionOutcome::Dismiss => Outcome::Dismiss,
@@ -379,7 +415,7 @@ impl Panel {
             } else {
                 "Enable server"
             },
-            &format!("Currently {}", mode_label(current)),
+            Text::template("Currently {0}", vec![mode_label(current).into()]),
             Action::Request(self.configure(id.clone(), config)),
         );
         push(
@@ -389,8 +425,8 @@ impl Panel {
             "Set program path",
             self.config(&id)
                 .executable
-                .as_deref()
-                .unwrap_or("Using provider executable"),
+                .map(Text::literal)
+                .unwrap_or_else(|| "Using provider executable".into()),
             Action::Executable(id.clone()),
         );
         let mut config = self.config(&id);
@@ -419,7 +455,7 @@ impl Panel {
         }
         self.list = ListSelection::new(
             ListSelectionModel::new(
-                format!("Language server · {id}"),
+                Text::template("Language server · {0}", vec![Text::literal(id)]),
                 vec![ListSelectionGroup::new("", items)],
             )
             .without_tab_bar()
@@ -428,6 +464,7 @@ impl Panel {
         );
         self.input = None;
         self.detail = true;
+        self.localize(self.language);
     }
 
     fn prompt(&mut self, input: Input, title: &str, placeholder: &str) {
@@ -441,6 +478,7 @@ impl Panel {
         );
         self.list.state_mut().focus_search();
         self.input = Some(input);
+        self.localize(self.language);
     }
 }
 
@@ -448,10 +486,11 @@ fn push(
     items: &mut Vec<ListSelectionItem>,
     actions: &mut BTreeMap<ListSelectionItemId, Action>,
     id: &str,
-    label: &str,
-    description: &str,
+    label: impl Into<Text>,
+    description: impl Into<Text>,
     action: Action,
 ) {
+    let description = description.into();
     let id = ListSelectionItemId::new(id);
     let item = ListSelectionItem::new(label).with_id(id.clone());
     items.push(if description.is_empty() {

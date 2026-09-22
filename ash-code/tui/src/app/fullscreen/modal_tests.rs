@@ -308,7 +308,10 @@ fn delayed_editor_results_do_not_reopen_or_replace_a_new_modal() {
         generation,
         crate::config::Event::EditorOpened(config_choices()),
     );
-    assert_eq!(app.command_panel().unwrap().body().title(), "Model");
+    assert_eq!(
+        app.command_panel().unwrap().body().title(app.language()),
+        "Model"
+    );
     let mut settings = crate::config::TerminalSettings::default();
     settings.set_screen_mode(crate::terminal::ScreenMode::Inline);
     app.update_for_panel(
@@ -320,7 +323,10 @@ fn delayed_editor_results_do_not_reopen_or_replace_a_new_modal() {
         }),
     );
     assert_eq!(app.screen_mode(), crate::terminal::ScreenMode::Inline);
-    assert_eq!(app.command_panel().unwrap().body().title(), "Model");
+    assert_eq!(
+        app.command_panel().unwrap().body().title(app.language()),
+        "Model"
+    );
 }
 
 #[test]

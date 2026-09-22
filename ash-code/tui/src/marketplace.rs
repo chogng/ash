@@ -2,6 +2,8 @@ mod request;
 pub(crate) use request::execute;
 
 use crate::keymap::bindings;
+use crate::nls::Language;
+use crate::nls::Text;
 use crate::widgets::list_selection::ListSelection;
 use crate::widgets::list_selection::ListSelectionGroup;
 use crate::widgets::list_selection::ListSelectionItem;
@@ -79,7 +81,6 @@ enum Removal {
 #[derive(Clone, Debug)]
 enum Action {
     Request(Command),
-    Filters,
     InstalledPackage(MarketplaceInstalledPackageDto),
     ConfirmRemoval(MarketplaceInstalledPackageDto),
 }
@@ -100,6 +101,7 @@ pub(crate) struct Panel {
     input_hints: crate::widgets::key_hint::KeyHints,
     search: Option<MarketplaceSearchParams>,
     back: Option<Command>,
+    language: Language,
 }
 
 impl Panel {
@@ -122,44 +124,17 @@ impl Panel {
                 packages,
                 error: failure,
             } => {
-                title = "Marketplace".to_owned();
-                push(
-                    &mut items,
-                    &mut actions,
-                    "installed",
-                    "Installed packages / Plugins",
-                    "Manage exact installed versions",
-                    Action::Request(Command::Installed),
-                );
-                push(
-                    &mut items,
-                    &mut actions,
-                    "filters",
-                    "Filter capabilities",
-                    &format!(
-                        "{}{}",
-                        params
-                            .capability_kind
-                            .map(kind_label)
-                            .unwrap_or("All capabilities"),
-                        params
-                            .language_id
-                            .as_ref()
-                            .map(|id| format!(" · language: {id}"))
-                            .unwrap_or_default()
-                    ),
-                    Action::Filters,
-                );
+                title = Text::from("Marketplace");
                 for package in packages {
                     push(
                         &mut items,
                         &mut actions,
                         &package.id,
-                        &package.display_name,
-                        &format!(
+                        Text::literal(&package.display_name),
+                        Text::literal(format!(
                             "{} · {} · {}",
                             package.id, package.version, package.description
-                        ),
+                        )),
                         Action::Request(Command::Review {
                             package_id: package.id.clone(),
                             version: Some(package.version),
@@ -174,15 +149,7 @@ impl Panel {
                 packages,
                 selected: focus,
             } => {
-                title = "Plugins · Installed packages".to_owned();
-                push(
-                    &mut items,
-                    &mut actions,
-                    "browse",
-                    "Browse Marketplace",
-                    "Find skills, plugins, MCP, connectors and language servers",
-                    Action::Request(Command::browse(None)),
-                );
+                title = "Marketplace".into();
                 push(
                     &mut items,
                     &mut actions,
@@ -202,8 +169,14 @@ impl Panel {
                         &mut items,
                         &mut actions,
                         &package.installation_id,
-                        &format!("{} · {}", package.package.id, package.package.version),
-                        &format!("{state} · {}", package.installation_id),
+                        Text::literal(format!(
+                            "{} · {}",
+                            package.package.id, package.package.version
+                        )),
+                        Text::template(
+                            "{0} · {1}",
+                            vec![state.into(), Text::literal(&package.installation_id)],
+                        ),
                         Action::InstalledPackage(package.clone()),
                     );
                 }
@@ -213,7 +186,10 @@ impl Panel {
                 details,
                 installation_id,
             } => {
-                title = format!("Review package · {}", details.display_name);
+                title = Text::template(
+                    "Review package · {0}",
+                    vec![Text::literal(&details.display_name)],
+                );
                 let returning = if installation_id.is_some() {
                     Command::Installed
                 } else {
@@ -228,30 +204,37 @@ impl Panel {
                     Action::Request(returning.clone()),
                 );
                 back = Some(returning);
-                items.push(ListSelectionItem::new(&details.package.id));
-                items.push(ListSelectionItem::new(format!(
-                    "Version {} · License {}",
-                    details.package.version, details.license
+                items.push(ListSelectionItem::new(Text::literal(&details.package.id)));
+                items.push(ListSelectionItem::new(Text::template(
+                    "Version {0} · License {1}",
+                    vec![
+                        Text::literal(&details.package.version),
+                        Text::literal(&details.license),
+                    ],
                 )));
                 items.push(ListSelectionItem::new(match details.source { ash_app_server_protocol::protocol::marketplace::MarketplacePackageSourceDto::Official => "Source: official", ash_app_server_protocol::protocol::marketplace::MarketplacePackageSourceDto::ThirdParty => "Source: third party" }));
-                items.push(ListSelectionItem::new(&details.description));
+                items.push(ListSelectionItem::new(Text::literal(&details.description)));
                 for capability in &details.capabilities {
-                    items.push(ListSelectionItem::new(format!(
-                        "{} · {}",
-                        kind_label(capability.kind),
-                        capability.id
+                    items.push(ListSelectionItem::new(Text::template(
+                        "{0} · {1}",
+                        vec![
+                            kind_label(capability.kind).into(),
+                            Text::literal(&capability.id),
+                        ],
                     )));
                     if capability.permissions.is_empty() {
                         items.push(ListSelectionItem::new("  Permissions: none declared"));
                     }
                     for permission in &capability.permissions {
-                        items.push(ListSelectionItem::new(format!(
-                            "  Permission: {permission}"
+                        items.push(ListSelectionItem::new(Text::template(
+                            "  Permission: {0}",
+                            vec![Text::literal(permission)],
                         )));
                     }
                     if let Some(provider) = &capability.authentication_provider {
-                        items.push(ListSelectionItem::new(format!(
-                            "  Authentication: {provider}"
+                        items.push(ListSelectionItem::new(Text::template(
+                            "  Authentication: {0}",
+                            vec![Text::literal(provider)],
                         )));
                     }
                 }
@@ -275,13 +258,45 @@ impl Panel {
                 );
             }
         }
-        let mut model = ListSelectionModel::new(title, vec![ListSelectionGroup::new("", items)])
-            .without_tab_bar()
+        let active_tab = if view == View::Installed {
+            Tab::Installed
+        } else {
+            search.as_ref().map(Tab::from_params).unwrap_or(Tab::All)
+        };
+        let groups = if view == View::Other {
+            vec![ListSelectionGroup::new("", items)]
+        } else {
+            Tab::ALL
+                .into_iter()
+                .map(|tab| {
+                    ListSelectionGroup::new(
+                        tab.label(),
+                        if tab == active_tab {
+                            std::mem::take(&mut items)
+                        } else {
+                            Vec::new()
+                        },
+                    )
+                })
+                .collect()
+        };
+        let mut model = ListSelectionModel::new(title, groups)
+            .with_empty_message("No packages in this view")
             .with_activation(bindings::ACCEPT);
+        if view == View::Other {
+            model = model.without_tab_bar();
+        }
         if search.is_some() {
             model = model.with_input(SearchBoxModel::new("Search Marketplace; Enter to search"));
         }
         let mut list = ListSelection::new(model, actions);
+        if view != View::Other {
+            list.state_mut().focus_pointer(
+                &crate::widgets::list_selection::ListSelectionPointerTarget::Tab(
+                    active_tab.index(),
+                ),
+            );
+        }
         if let Some(params) = &search {
             list.state_mut().focus_search();
             list.handle_paste(params.query.clone());
@@ -297,19 +312,41 @@ impl Panel {
             search,
             back,
             pending: false,
+            language: Language::English,
             input_hints: crate::widgets::key_hint::KeyHints::compact()
                 .with_compact_action("Enter", "search")
                 .with_compact_action("Esc", "return"),
         }
     }
 
+    pub(crate) fn localize(&mut self, language: Language) {
+        self.language = language;
+        self.list.state_mut().localize(language);
+    }
+
     pub(crate) fn begin_request(&mut self) {
         self.pending = true;
-        self.list.state_mut().set_message(Some("Loading…".into()));
+        self.list
+            .state_mut()
+            .set_message(Some(crate::nls::localize_owned(self.language, "Loading…")));
     }
     pub(crate) fn fail(&mut self, error: String) {
         self.pending = false;
-        self.list.state_mut().set_message(Some(error));
+        let loaded_tab = match self.view {
+            View::Catalog => self.search.as_ref().map(Tab::from_params),
+            View::Installed => Some(Tab::Installed),
+            View::Other => None,
+        };
+        if let Some(tab) = loaded_tab
+            && tab.index() != self.state().active_tab_index()
+        {
+            self.list.state_mut().focus_pointer(
+                &crate::widgets::list_selection::ListSelectionPointerTarget::Tab(tab.index()),
+            );
+        }
+        self.list
+            .state_mut()
+            .set_message(Some(crate::nls::localize_owned(self.language, error)));
     }
     pub(crate) fn state(&self) -> &ListSelectionState {
         self.list.state()
@@ -374,13 +411,14 @@ impl Panel {
             params.query = self.state().query().trim().into();
             return ListSelectionOutcome::Activate(Command::Browse(params));
         }
-        match self.list.handle_key(key) {
+        let tab = self.state().active_tab_index();
+        let outcome = self.list.handle_key(key);
+        if self.view != View::Other && tab != self.state().active_tab_index() {
+            return ListSelectionOutcome::Activate(self.tab_command());
+        }
+        match outcome {
             ListSelectionOutcome::Activate(Action::Request(command)) => {
                 ListSelectionOutcome::Activate(command)
-            }
-            ListSelectionOutcome::Activate(Action::Filters) => {
-                self.filters();
-                ListSelectionOutcome::Consumed
             }
             ListSelectionOutcome::Activate(Action::InstalledPackage(package)) => {
                 self.installed_package(package, Removal::Review);
@@ -399,53 +437,30 @@ impl Panel {
         }
     }
 
-    fn filters(&mut self) {
-        let mut actions = BTreeMap::new();
-        let mut items = Vec::new();
-        for kind in [
-            None,
-            Some(Kind::Skill),
-            Some(Kind::Mcp),
-            Some(Kind::Connector),
-            Some(Kind::Executable),
-            Some(Kind::Language),
-            Some(Kind::Theme),
-            Some(Kind::Localization),
-            Some(Kind::Asset),
-        ] {
-            let label = kind.map(kind_label).unwrap_or("All capabilities");
-            push(
-                &mut items,
-                &mut actions,
-                label,
-                label,
-                "Search all package types, including bundled capabilities",
-                Action::Request(Command::browse(kind)),
-            );
+    pub(crate) fn select_tab(&mut self, index: usize) -> Option<Command> {
+        if self.pending || self.view == View::Other {
+            return None;
         }
-        push(
-            &mut items,
-            &mut actions,
-            "plugins",
-            "Plugin packages",
-            "Filter by package type",
-            Action::Request(Command::Browse(MarketplaceSearchParams {
-                package_type: Some("plugin".into()),
-                ..Default::default()
-            })),
-        );
-        self.list = ListSelection::new(
-            ListSelectionModel::new(
-                "Marketplace · Capabilities",
-                vec![ListSelectionGroup::new("", items)],
-            )
-            .without_tab_bar()
-            .with_activation(bindings::ACCEPT),
-            actions,
-        );
-        self.view = View::Other;
-        self.search = None;
-        self.back = Some(Command::browse(None));
+        let previous = self.state().active_tab_index();
+        self.list
+            .state_mut()
+            .focus_pointer(&crate::widgets::list_selection::ListSelectionPointerTarget::Tab(index));
+        (previous != self.state().active_tab_index()).then(|| self.tab_command())
+    }
+
+    fn tab_command(&self) -> Command {
+        let tab = Tab::ALL[self.state().active_tab_index()];
+        if tab == Tab::Installed {
+            return Command::Installed;
+        }
+        let mut params = self.search.clone().unwrap_or_default();
+        params.query = self.state().query().trim().into();
+        params.package_type = (tab == Tab::Plugins).then(|| "plugin".into());
+        params.capability_kind = tab.kind();
+        if tab != Tab::Executables {
+            params.language_id = None;
+        }
+        Command::Browse(params)
     }
 
     fn installed_package(&mut self, package: MarketplaceInstalledPackageDto, removal: Removal) {
@@ -460,25 +475,29 @@ impl Panel {
             Action::Request(Command::Installed),
         );
         items.push(
-            ListSelectionItem::new(&package.package.id).with_description(format!(
-                "{} · {}",
-                package.package.version, package.installation_id
-            )),
+            ListSelectionItem::new(Text::literal(&package.package.id)).with_description(
+                Text::literal(format!(
+                    "{} · {}",
+                    package.package.version, package.installation_id
+                )),
+            ),
         );
         for capability in &package.capabilities {
             items.push(
-                ListSelectionItem::new(format!(
-                    "{} · {}",
-                    kind_label(capability.kind),
-                    capability.id
+                ListSelectionItem::new(Text::template(
+                    "{0} · {1}",
+                    vec![
+                        kind_label(capability.kind).into(),
+                        Text::literal(&capability.id),
+                    ],
                 ))
-                .with_description(format!(
-                    "Permissions: {}",
-                    if capability.permissions.is_empty() {
+                .with_description(Text::template(
+                    "Permissions: {0}",
+                    vec![if capability.permissions.is_empty() {
                         "none declared".into()
                     } else {
-                        capability.permissions.join(", ")
-                    }
+                        Text::literal(capability.permissions.join(", "))
+                    }],
                 )),
             );
         }
@@ -537,6 +556,7 @@ impl Panel {
         self.view = View::Other;
         self.search = None;
         self.back = Some(Command::Installed);
+        self.localize(self.language);
     }
 }
 
@@ -544,10 +564,11 @@ fn push(
     items: &mut Vec<ListSelectionItem>,
     actions: &mut BTreeMap<ListSelectionItemId, Action>,
     id: &str,
-    label: &str,
-    description: &str,
+    label: impl Into<Text>,
+    description: impl Into<Text>,
     action: Action,
 ) {
+    let description = description.into();
     let id = ListSelectionItemId::new(id);
     let item = ListSelectionItem::new(label).with_id(id.clone());
     items.push(if description.is_empty() {
@@ -568,5 +589,69 @@ fn kind_label(kind: Kind) -> &'static str {
         Kind::Localization => "Localizations",
         Kind::Executable => "Executables",
         Kind::Asset => "Assets",
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Tab {
+    All,
+    Skills,
+    Plugins,
+    Mcp,
+    Connectors,
+    Executables,
+    Languages,
+    Themes,
+    Localizations,
+    Assets,
+    Installed,
+}
+
+impl Tab {
+    const ALL: [Self; 11] = [
+        Self::All,
+        Self::Skills,
+        Self::Plugins,
+        Self::Mcp,
+        Self::Connectors,
+        Self::Executables,
+        Self::Languages,
+        Self::Themes,
+        Self::Localizations,
+        Self::Assets,
+        Self::Installed,
+    ];
+    fn index(self) -> usize {
+        Self::ALL.iter().position(|tab| *tab == self).unwrap()
+    }
+    fn kind(self) -> Option<Kind> {
+        match self {
+            Self::All | Self::Plugins | Self::Installed => None,
+            Self::Skills => Some(Kind::Skill),
+            Self::Mcp => Some(Kind::Mcp),
+            Self::Connectors => Some(Kind::Connector),
+            Self::Executables => Some(Kind::Executable),
+            Self::Languages => Some(Kind::Language),
+            Self::Themes => Some(Kind::Theme),
+            Self::Localizations => Some(Kind::Localization),
+            Self::Assets => Some(Kind::Asset),
+        }
+    }
+    fn label(self) -> &'static str {
+        match self {
+            Self::All => "All",
+            Self::Plugins => "Plugins",
+            Self::Installed => "Installed",
+            _ => kind_label(self.kind().unwrap()),
+        }
+    }
+    fn from_params(params: &MarketplaceSearchParams) -> Self {
+        if params.package_type.as_deref() == Some("plugin") {
+            return Self::Plugins;
+        }
+        Self::ALL
+            .into_iter()
+            .find(|tab| tab.kind() == params.capability_kind)
+            .unwrap_or(Self::All)
     }
 }

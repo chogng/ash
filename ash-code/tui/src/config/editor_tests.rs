@@ -9,8 +9,6 @@ use crate::thread::composer::ChatInputMode;
 use crate::widgets::list_selection::ListSelectionState;
 use crate::widgets::text_prompt::TextPrompt;
 use crate::widgets::text_prompt::TextPromptOutcome;
-use ash_app_server_protocol::protocol::config::LanguageServerConfigDto;
-use ash_app_server_protocol::protocol::config::LanguageServerModeDto;
 use ash_app_server_protocol::protocol::provider::{
     ProviderApiKeyPolicyDto, ProviderCatalogEntryDto, ProviderListResult,
 };
@@ -90,7 +88,7 @@ fn config_editor_organizes_the_snapshot_into_searchable_tabs() {
             .iter()
             .map(|tab| tab.label())
             .collect::<Vec<_>>(),
-        vec!["General", "Providers", "Language servers", "Issues"]
+        vec!["General", "Providers", "Issues"]
     );
     assert!(state.visible_items().iter().all(|item| !matches!(
         item.label(),
@@ -284,7 +282,7 @@ fn config_root_uses_the_selected_language_through_nls() {
             .iter()
             .map(|tab| tab.label())
             .collect::<Vec<_>>(),
-        vec!["通用", "提供商", "语言服务器", "议题"]
+        vec!["通用", "提供商", "议题"]
     );
     assert_eq!(state.visible_items()[0].label(), "Vim 模式");
     assert_eq!(state.visible_items()[7].label(), "屏幕模式");
@@ -354,76 +352,6 @@ fn automatic_update_policy_cycles_with_activation() {
                 if edit.terminal.auto_update() == expected
         ));
     }
-}
-
-#[test]
-fn language_server_tab_exposes_one_switch_per_configured_server() {
-    let mut config = empty_config_snapshot();
-    config.revision = 7;
-    config.language_servers.insert(
-        "rust-analyzer".into(),
-        LanguageServerConfigDto {
-            mode: LanguageServerModeDto::Enabled,
-            executable: None,
-        },
-    );
-    config.language_servers.insert(
-        "typescript-language-server".into(),
-        LanguageServerConfigDto {
-            mode: LanguageServerModeDto::Disabled,
-            executable: Some("C:\\tools\\typescript-language-server.exe".into()),
-        },
-    );
-    let view = config_choices(
-        &config,
-        &providers(),
-        TerminalSettings::default(),
-        StatusLineSettings::default(),
-    );
-    let mut state = ListSelectionState::new(view.model);
-
-    state.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
-    state.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
-    let _ = state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-    let _ = state.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-
-    assert_eq!(state.active_tab().label(), "Language servers");
-    assert_eq!(state.visible_items().len(), 3);
-    assert!(matches!(
-        view.actions.get(state.visible_items()[0].id().unwrap()),
-        Some(ConfigSelectionAction::OpenLanguageServers)
-    ));
-    assert_eq!(state.visible_items()[1].label(), "rust-analyzer");
-    assert_eq!(state.visible_items()[1].description(), Some(" on"));
-    assert!(matches!(
-        view.actions
-            .get(state.visible_items()[1].id().unwrap())
-            .unwrap(),
-        ConfigSelectionAction::SetLanguageServerMode(edit)
-            if edit.expected_revision == 7
-                && edit.server_id == "rust-analyzer"
-                && edit.config.mode == LanguageServerModeDto::Disabled
-                && edit.config.executable.is_none()
-    ));
-    assert_eq!(
-        state.visible_items()[2].label(),
-        "typescript-language-server"
-    );
-    assert_eq!(
-        state.visible_items()[2].description(),
-        Some("C:\\tools\\typescript-language-server.exe off")
-    );
-    assert!(matches!(
-        view.actions
-            .get(state.visible_items()[2].id().unwrap())
-            .unwrap(),
-        ConfigSelectionAction::SetLanguageServerMode(edit)
-            if edit.expected_revision == 7
-                && edit.server_id == "typescript-language-server"
-                && edit.config.mode == LanguageServerModeDto::Enabled
-                && edit.config.executable.as_deref()
-                    == Some("C:\\tools\\typescript-language-server.exe")
-    ));
 }
 
 #[test]

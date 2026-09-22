@@ -379,8 +379,8 @@ impl CommandPanel {
             }
             Self::GitBranches(content) => content.state_mut().localize(language),
             Self::Connectors(content) => content.state_mut().localize(language),
-            Self::Marketplace(content) => content.state_mut().localize(language),
-            Self::Lsp(content) => content.state_mut().localize(language),
+            Self::Marketplace(content) => content.localize(language),
+            Self::Lsp(content) => content.localize(language),
             Self::Mcp(content) => content.state_mut().localize(language),
             Self::Model(content) => content.state_mut().localize(language),
             Self::ProjectRoots(content) => content.state_mut().localize(language),
@@ -442,6 +442,15 @@ impl CommandPanel {
         if let Self::Config(editor) = self {
             return CommandPanelOutcome::Config(editor.handle_click(target, click));
         }
+        if let Self::Marketplace(panel) = self
+            && let list_selection::ListSelectionPointerTarget::Tab(index) = target
+        {
+            return panel
+                .select_tab(*index)
+                .map(CommandPanelOutcome::Marketplace)
+                .unwrap_or(CommandPanelOutcome::Consumed);
+        }
+
         let selection = match self {
             Self::Help(s) | Self::Startup(s) | Self::Loading(s) | Self::Usage(s) => {
                 Some(s.state_mut())
@@ -691,15 +700,18 @@ fn map_selection<A>(
 }
 
 impl<'a> CommandPanelBody<'a> {
-    pub(super) fn title(self) -> &'a str {
-        match self {
-            Self::Selection(selection) => selection.title(),
+    pub(super) fn title(self, language: crate::nls::Language) -> std::borrow::Cow<'a, str> {
+        let title = match self {
+            Self::Selection(selection) => {
+                return std::borrow::Cow::Owned(selection.localized_title(language));
+            }
             Self::Memories(panel) => panel.title(),
             Self::Prompt(prompt) => prompt.title(),
             Self::Provider(_) => "Custom provider",
             Self::KeyCapture(capture) => capture.title(),
             Self::Status(panel) => panel.title(),
-        }
+        };
+        crate::nls::localize(language, title)
     }
 
     pub(super) fn tab_rows(self, width: u16) -> u16 {

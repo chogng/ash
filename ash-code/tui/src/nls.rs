@@ -4,6 +4,80 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::borrow::Cow;
 
+/// Keeps a translatable template separate from verbatim names, paths and user content.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct Text {
+    source: String,
+    arguments: Option<Vec<Text>>,
+    value: String,
+}
+
+impl Text {
+    pub(crate) fn literal(value: impl Into<String>) -> Self {
+        let value = value.into();
+        Self {
+            source: value.clone(),
+            arguments: None,
+            value,
+        }
+    }
+
+    pub(crate) fn template(source: &str, arguments: Vec<Text>) -> Self {
+        let mut text = Self {
+            source: source.into(),
+            arguments: Some(arguments),
+            value: String::new(),
+        };
+        text.localize(Language::English);
+        text
+    }
+
+    pub(crate) fn localize(&mut self, language: Language) {
+        let Some(arguments) = &mut self.arguments else {
+            return;
+        };
+        for argument in arguments.iter_mut() {
+            argument.localize(language);
+        }
+        let template = localize(language, &self.source);
+        self.value.clear();
+        let mut rest: &str = template.as_ref();
+        while let Some(start) = rest.find('{') {
+            self.value.push_str(&rest[..start]);
+            rest = &rest[start..];
+            if let Some(end) = rest.find('}')
+                && let Ok(index) = rest[1..end].parse::<usize>()
+                && let Some(argument) = arguments.get(index)
+            {
+                self.value.push_str(argument);
+                rest = &rest[end + 1..];
+            } else {
+                self.value.push('{');
+                rest = &rest[1..];
+            }
+        }
+        self.value.push_str(rest);
+    }
+}
+
+impl std::ops::Deref for Text {
+    type Target = str;
+    fn deref(&self) -> &str {
+        &self.value
+    }
+}
+
+impl<T: Into<String>> From<T> for Text {
+    fn from(source: T) -> Self {
+        let source = source.into();
+        Self {
+            value: source.clone(),
+            source,
+            arguments: Some(Vec::new()),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub(crate) enum Language {
     #[serde(rename = "en")]
@@ -69,7 +143,6 @@ pub(crate) enum Message {
     ConfigScreenModeDescription,
     ConfigGeneral,
     ConfigProviders,
-    ConfigLanguageServers,
     ConfigVimMode,
     ConfigVimModeDescription,
     ConfigKeyHintStyle,
@@ -95,7 +168,6 @@ pub(crate) enum Message {
     ConfigLanguageDescription,
     ConfigSearch,
     ConfigNoMatches,
-    ConfigNoLanguageServers,
 }
 
 const fn english(message: Message) -> &'static str {
@@ -107,7 +179,6 @@ const fn english(message: Message) -> &'static str {
         Message::ConfigScreenModeDescription => "Use a full screen or keep terminal history",
         Message::ConfigGeneral => "General",
         Message::ConfigProviders => "Providers",
-        Message::ConfigLanguageServers => "Language servers",
         Message::ConfigVimMode => "Vim mode",
         Message::ConfigVimModeDescription => "Use Vim editing in ChatInput",
         Message::ConfigKeyHintStyle => "Key hint style",
@@ -137,7 +208,6 @@ const fn english(message: Message) -> &'static str {
         Message::ConfigLanguageDescription => "Change the interface language",
         Message::ConfigSearch => "Search configuration",
         Message::ConfigNoMatches => "No matching configuration",
-        Message::ConfigNoLanguageServers => "No language servers configured",
     }
 }
 
@@ -150,7 +220,6 @@ const fn japanese(message: Message) -> &'static str {
         Message::ConfigScreenModeDescription => "全画面表示またはターミナル履歴を保持",
         Message::ConfigGeneral => "一般",
         Message::ConfigProviders => "プロバイダー",
-        Message::ConfigLanguageServers => "言語サーバー",
         Message::ConfigVimMode => "Vim モード",
         Message::ConfigVimModeDescription => "ChatInput で Vim 編集を使用する",
         Message::ConfigKeyHintStyle => "キーヒントの表示",
@@ -180,20 +249,18 @@ const fn japanese(message: Message) -> &'static str {
         Message::ConfigLanguageDescription => "インターフェースの言語を変更する",
         Message::ConfigSearch => "設定を検索",
         Message::ConfigNoMatches => "一致する設定がありません",
-        Message::ConfigNoLanguageServers => "設定された言語サーバーはありません",
     }
 }
 
 const fn chinese(message: Message) -> &'static str {
     match message {
-        Message::ConfigIssues => "Issues",
+        Message::ConfigIssues => "议题",
 
         Message::ConfigTitle => "配置",
         Message::ConfigScreenMode => "屏幕模式",
         Message::ConfigScreenModeDescription => "使用全屏界面或保留终端历史",
         Message::ConfigGeneral => "通用",
         Message::ConfigProviders => "提供商",
-        Message::ConfigLanguageServers => "语言服务器",
         Message::ConfigVimMode => "Vim 模式",
         Message::ConfigVimModeDescription => "在 ChatInput 中使用 Vim 编辑",
         Message::ConfigKeyHintStyle => "按键提示风格",
@@ -219,7 +286,6 @@ const fn chinese(message: Message) -> &'static str {
         Message::ConfigLanguageDescription => "切换界面语言",
         Message::ConfigSearch => "搜索配置",
         Message::ConfigNoMatches => "没有匹配的配置",
-        Message::ConfigNoLanguageServers => "未配置语言服务器",
     }
 }
 
@@ -232,7 +298,6 @@ const fn french(message: Message) -> &'static str {
         Message::ConfigScreenModeDescription => "Plein écran ou historique du terminal",
         Message::ConfigGeneral => "Général",
         Message::ConfigProviders => "Fournisseurs",
-        Message::ConfigLanguageServers => "Serveurs de langage",
         Message::ConfigVimMode => "Mode Vim",
         Message::ConfigVimModeDescription => "Utiliser l’édition Vim dans ChatInput",
         Message::ConfigKeyHintStyle => "Style des raccourcis",
@@ -262,7 +327,6 @@ const fn french(message: Message) -> &'static str {
         Message::ConfigLanguageDescription => "Changer la langue de l’interface",
         Message::ConfigSearch => "Rechercher dans la configuration",
         Message::ConfigNoMatches => "Aucune configuration correspondante",
-        Message::ConfigNoLanguageServers => "Aucun serveur de langage configuré",
     }
 }
 
@@ -291,6 +355,434 @@ const fn translation(
 /// Product-owned TUI chrome. Server-provided names, user content, model output, paths, command
 /// identifiers, and code are intentionally absent so they remain byte-for-byte source text.
 const UI_TRANSLATIONS: &[Translation] = &[
+    translation("continue", "続行", "继续", "continuer"),
+    translation(
+        "No matching commands",
+        "一致するコマンドはありません",
+        "没有匹配的命令",
+        "Aucune commande correspondante",
+    ),
+    translation("Marketplace", "マーケットプレイス", "扩展市场", "Catalogue"),
+    translation("Installed", "インストール済み", "已安装", "Installés"),
+    translation("installed", "インストール済み", "已安装", "installé"),
+    translation("Available", "利用可能", "可用", "Disponibles"),
+    translation("Configured", "設定済み", "已配置", "Configurés"),
+    translation("Languages", "言語", "编程语言", "Langages"),
+    translation(
+        "Localizations",
+        "言語パック",
+        "语言包",
+        "Packs linguistiques",
+    ),
+    translation("Executables", "実行プログラム", "可执行程序", "Exécutables"),
+    translation("Assets", "リソース", "资源", "Ressources"),
+    translation("enabled", "有効", "已启用", "activé"),
+    translation("disabled", "無効", "已停用", "désactivé"),
+    translation("built-in", "組み込み", "内置", "intégré"),
+    translation("user", "ユーザー", "用户", "utilisateur"),
+    translation("directory", "ディレクトリ", "目录", "répertoire"),
+    translation("plugin", "プラグイン", "插件", "plugin"),
+    translation("marketplace", "マーケットプレイス", "扩展市场", "catalogue"),
+    translation(
+        "Get skills",
+        "スキルを入手",
+        "获取技能",
+        "Obtenir des compétences",
+    ),
+    translation(
+        "Get MCP servers",
+        "MCP サーバーを入手",
+        "获取 MCP 服务器",
+        "Obtenir des serveurs MCP",
+    ),
+    translation(
+        "Get connectors",
+        "コネクターを入手",
+        "获取连接器",
+        "Obtenir des connecteurs",
+    ),
+    translation("All ({0})", "すべて ({0})", "全部 ({0})", "Tous ({0})"),
+    translation(
+        "Enabled ({0})",
+        "有効 ({0})",
+        "已启用 ({0})",
+        "Activés ({0})",
+    ),
+    translation(
+        "Disabled ({0})",
+        "無効 ({0})",
+        "已停用 ({0})",
+        "Désactivés ({0})",
+    ),
+    translation(
+        "Refresh installed packages",
+        "インストール済みパッケージを更新",
+        "刷新已安装包",
+        "Actualiser les paquets installés",
+    ),
+    translation(
+        "Reads local installations; no catalog connection required",
+        "ローカルのインストールを表示、カタログ接続は不要",
+        "读取本地安装记录，无需连接目录",
+        "Lit les installations locales, sans connexion au catalogue",
+    ),
+    translation(
+        "waiting for consumers to release",
+        "使用中の機能の終了を待機",
+        "等待使用中的功能释放",
+        "en attente de libération par les utilisateurs du paquet",
+    ),
+    translation(
+        "Review package · {0}",
+        "パッケージを確認 · {0}",
+        "检查软件包 · {0}",
+        "Vérifier le paquet · {0}",
+    ),
+    translation(
+        "Return without changing installations",
+        "インストールを変更せずに戻る",
+        "返回，不更改安装",
+        "Revenir sans modifier les installations",
+    ),
+    translation(
+        "Version {0} · License {1}",
+        "バージョン {0} · ライセンス {1}",
+        "版本 {0} · 许可证 {1}",
+        "Version {0} · Licence {1}",
+    ),
+    translation(
+        "Source: official",
+        "提供元: 公式",
+        "来源：官方",
+        "Source : officielle",
+    ),
+    translation(
+        "Source: third party",
+        "提供元: サードパーティー",
+        "来源：第三方",
+        "Source : tierce",
+    ),
+    translation(
+        "  Permissions: none declared",
+        "  権限: 宣言なし",
+        "  权限：未声明",
+        "  Autorisations : aucune déclarée",
+    ),
+    translation(
+        "  Permission: {0}",
+        "  権限: {0}",
+        "  权限：{0}",
+        "  Autorisation : {0}",
+    ),
+    translation(
+        "  Authentication: {0}",
+        "  認証: {0}",
+        "  身份验证：{0}",
+        "  Authentification : {0}",
+    ),
+    translation(
+        "Confirm whole-package installation",
+        "パッケージ全体のインストールを確認",
+        "确认安装整个包",
+        "Confirmer l’installation du paquet complet",
+    ),
+    translation(
+        "All listed capabilities are installed together",
+        "記載の機能はまとめてインストールされます",
+        "列出的所有能力将一起安装",
+        "Toutes les capacités listées sont installées ensemble",
+    ),
+    translation(
+        "No packages in this view",
+        "表示するパッケージはありません",
+        "此页暂无软件包",
+        "Aucun paquet dans cette vue",
+    ),
+    translation(
+        "Search Marketplace; Enter to search",
+        "マーケットプレイスを検索、Enter で実行",
+        "搜索扩展市场，按 Enter 搜索",
+        "Rechercher dans le catalogue, puis Entrée",
+    ),
+    translation(
+        "Back to installed packages",
+        "インストール済みパッケージに戻る",
+        "返回已安装包",
+        "Retour aux paquets installés",
+    ),
+    translation(
+        "Permissions: {0}",
+        "権限: {0}",
+        "权限：{0}",
+        "Autorisations : {0}",
+    ),
+    translation("none declared", "宣言なし", "未声明", "aucune déclarée"),
+    translation(
+        "Confirm whole-package removal",
+        "パッケージ全体の削除を確認",
+        "确认卸载整个包",
+        "Confirmer la suppression du paquet complet",
+    ),
+    translation(
+        "Removal waits until all consumers release this version",
+        "使用中の機能がこのバージョンを解放してから削除",
+        "使用中的功能释放此版本后才会卸载",
+        "La suppression attend que cette version ne soit plus utilisée",
+    ),
+    translation(
+        "Review latest version",
+        "最新バージョンを確認",
+        "检查最新版本",
+        "Vérifier la dernière version",
+    ),
+    translation(
+        "Review capabilities and permissions before updating",
+        "更新前に機能と権限を確認",
+        "更新前检查能力和权限",
+        "Vérifier les capacités et autorisations avant la mise à jour",
+    ),
+    translation(
+        "Uninstall this version…",
+        "このバージョンを削除…",
+        "卸载此版本…",
+        "Désinstaller cette version…",
+    ),
+    translation(
+        "Removes all capabilities in this installed package",
+        "このパッケージの全機能を削除",
+        "移除此安装包中的所有能力",
+        "Supprime toutes les capacités de ce paquet installé",
+    ),
+    translation(
+        "Pending removal · waiting for consumers to release",
+        "削除待ち · 使用中の機能の終了を待機",
+        "待卸载 · 等待使用中的功能释放",
+        "Suppression en attente · en attente de libération",
+    ),
+    translation(
+        "Confirm removal",
+        "削除を確認",
+        "确认卸载",
+        "Confirmer la suppression",
+    ),
+    translation(
+        "Installed package",
+        "インストール済みパッケージ",
+        "已安装包",
+        "Paquet installé",
+    ),
+    translation(
+        "Find language servers in Marketplace",
+        "マーケットプレイスで言語サーバーを探す",
+        "在扩展市场查找语言服务器",
+        "Rechercher des serveurs de langage dans le catalogue",
+    ),
+    translation(
+        "Match the exact language route in the package manifest",
+        "パッケージが対応する正確な言語 ID で検索",
+        "按包声明的精确语言 ID 匹配",
+        "Rechercher l’identifiant exact du langage déclaré par le paquet",
+    ),
+    translation(
+        "Configure a server by ID",
+        "ID でサーバーを設定",
+        "按 ID 配置服务器",
+        "Configurer un serveur par identifiant",
+    ),
+    translation(
+        "Set mode and optional program path",
+        "有効状態と任意のプログラムパスを設定",
+        "设置启用状态和可选程序路径",
+        "Définir l’activation et le chemin facultatif du programme",
+    ),
+    translation(
+        "Refresh servers",
+        "サーバーを更新",
+        "刷新服务器",
+        "Actualiser les serveurs",
+    ),
+    translation(
+        "Lists enabled, resolved servers without starting processes",
+        "有効で実行可能なサーバーを表示、プロセスは起動しません",
+        "列出已启用且程序可用的服务器，不启动进程",
+        "Liste les serveurs activés et résolus sans démarrer de processus",
+    ),
+    translation(
+        "Available · {0}",
+        "利用可能 · {0}",
+        "可用 · {0}",
+        "Disponible · {0}",
+    ),
+    translation(
+        "provider executable",
+        "提供元の実行プログラム",
+        "提供方程序",
+        "exécutable du fournisseur",
+    ),
+    translation(
+        "Current directory",
+        "現在のディレクトリ",
+        "当前目录",
+        "Répertoire actuel",
+    ),
+    translation(
+        "Inspect servers in this directory",
+        "このディレクトリのサーバーを確認",
+        "查看此目录的服务器",
+        "Examiner les serveurs de ce répertoire",
+    ),
+    translation(
+        "Filter server IDs",
+        "サーバー ID を絞り込む",
+        "筛选服务器 ID",
+        "Filtrer les identifiants des serveurs",
+    ),
+    translation(
+        "No language servers in this view",
+        "表示する言語サーバーはありません",
+        "此页暂无语言服务器",
+        "Aucun serveur de langage dans cette vue",
+    ),
+    translation(
+        "Directory: {0}",
+        "ディレクトリ: {0}",
+        "目录：{0}",
+        "Répertoire : {0}",
+    ),
+    translation(
+        "Find language servers",
+        "言語サーバーを探す",
+        "查找语言服务器",
+        "Rechercher des serveurs de langage",
+    ),
+    translation(
+        "Language ID, for example rust or typescript",
+        "言語 ID（例: rust、typescript）",
+        "语言 ID，例如 rust 或 typescript",
+        "Identifiant du langage, par exemple rust ou typescript",
+    ),
+    translation(
+        "Configure language server",
+        "言語サーバーを設定",
+        "配置语言服务器",
+        "Configurer le serveur de langage",
+    ),
+    translation(
+        "Server ID, for example rust-analyzer",
+        "サーバー ID（例: rust-analyzer）",
+        "服务器 ID，例如 rust-analyzer",
+        "Identifiant du serveur, par exemple rust-analyzer",
+    ),
+    translation(
+        "Language server program",
+        "言語サーバーのプログラム",
+        "语言服务器程序",
+        "Programme du serveur de langage",
+    ),
+    translation(
+        "Absolute executable path",
+        "実行プログラムの絶対パス",
+        "可执行文件的绝对路径",
+        "Chemin absolu de l’exécutable",
+    ),
+    translation(
+        "Back to language servers",
+        "言語サーバーに戻る",
+        "返回语言服务器",
+        "Retour aux serveurs de langage",
+    ),
+    translation(
+        "Disable server",
+        "サーバーを無効にする",
+        "停用服务器",
+        "Désactiver le serveur",
+    ),
+    translation(
+        "Enable server",
+        "サーバーを有効にする",
+        "启用服务器",
+        "Activer le serveur",
+    ),
+    translation("Currently {0}", "現在 {0}", "当前{0}", "Actuellement {0}"),
+    translation(
+        "Set program path",
+        "プログラムパスを設定",
+        "设置程序路径",
+        "Définir le chemin du programme",
+    ),
+    translation(
+        "Using provider executable",
+        "提供元の実行プログラムを使用",
+        "使用提供方程序",
+        "Utilise l’exécutable du fournisseur",
+    ),
+    translation(
+        "Use provider executable",
+        "提供元の実行プログラムを使う",
+        "使用提供方程序",
+        "Utiliser l’exécutable du fournisseur",
+    ),
+    translation(
+        "Keep the current enabled/disabled setting",
+        "現在の有効・無効設定を維持",
+        "保留当前启用或停用状态",
+        "Conserver le réglage d’activation actuel",
+    ),
+    translation(
+        "Restore provider defaults",
+        "提供元の既定値に戻す",
+        "恢复提供方默认值",
+        "Rétablir les valeurs du fournisseur",
+    ),
+    translation(
+        "Remove this explicit configuration",
+        "この明示的な設定を削除",
+        "删除此显式配置",
+        "Supprimer cette configuration explicite",
+    ),
+    translation(
+        "Language server · {0}",
+        "言語サーバー · {0}",
+        "语言服务器 · {0}",
+        "Serveur de langage · {0}",
+    ),
+    translation(
+        "find and install Marketplace packages",
+        "マーケットプレイスのパッケージを検索・インストール",
+        "查找和安装扩展市场中的包",
+        "rechercher et installer des paquets du catalogue",
+    ),
+    translation(
+        "manage installed packages and exact versions",
+        "インストール済みパッケージとバージョンを管理",
+        "管理已安装包及其具体版本",
+        "gérer les paquets installés et leurs versions exactes",
+    ),
+    translation(
+        "browse and manage skills",
+        "スキルを参照・管理",
+        "浏览和管理技能",
+        "parcourir et gérer les compétences",
+    ),
+    translation(
+        "manage language servers and find packages",
+        "言語サーバーを管理・パッケージを検索",
+        "管理语言服务器并查找软件包",
+        "gérer les serveurs de langage et rechercher des paquets",
+    ),
+    translation("<query>", "<検索語>", "<搜索词>", "<recherche>"),
+    translation(
+        "<language-id>",
+        "<言語 ID>",
+        "<语言 ID>",
+        "<identifiant-langage>",
+    ),
+    translation(
+        "This App Server does not support capability and language filters",
+        "この App Server は機能・言語フィルターに対応していません",
+        "此 App Server 不支持能力和语言筛选",
+        "Cet App Server ne prend pas en charge les filtres de capacité et de langage",
+    ),
     translation(
         "Allow model recall and saving; existing memories are kept when off",
         "モデルの記憶の読み書きを許可。オフでも既存の記憶は保持",

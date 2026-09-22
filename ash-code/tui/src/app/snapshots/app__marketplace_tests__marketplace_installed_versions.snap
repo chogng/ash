@@ -5,9 +5,11 @@ expression: screen(&app)
   .                                                                            [— / —] [Dashboard]  
                                                                                                     
                                                                                                     
-            ┌── Plugins · Installed packages ─────────────────────────────────────[✗]─┐             
+            ┌── Marketplace ──────────────────────────────────────────────────────[✗]─┐             
             │                                                                         │             
-            │  Browse Marketplace  ·  Find skills, plugins, MCP, connectors and langu │             
+            │   All    Skills    Plugins    MCP    Connectors    Executables          │             
+            │   Languages    Themes    Localizations    Assets    Installed           │             
+            │                                                                         │             
             │  Refresh installed packages  ·  Reads local installations; no catalog c │             
             │> web@official · 1.0.0  ·  installed · v1                                │             
             │  web@official · 2.0.0  ·  installed · v2                                │             
@@ -26,9 +28,7 @@ expression: screen(&app)
             │                                                                         │             
             │                                                                         │             
             │                                                                         │             
-            │                                                                         │             
-            │                                                                         │             
-            │  Enter to confirm  ·  Esc to close                                      │             
+            │  Enter to confirm  ·  Tab/Shift+Tab to switch  ·  Esc to close          │             
   ╭─────────└─────────────────────────────────────────────────────────────────────────┘──────────╮  
   │ > Build anything                                                                             │  
   ╰──────────────────────────────────────────────────────────────────────────── Automatic model ─╯

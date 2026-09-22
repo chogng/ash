@@ -3,7 +3,6 @@ use super::ConfigChoices;
 use super::ConfigEdit;
 use super::ConfigEditResult;
 use super::Event;
-use super::LanguageServerEdit;
 use super::ProviderApiKeyEdit;
 use super::TerminalSettings;
 use super::config_choices;
@@ -14,7 +13,6 @@ use ash_app_server_client::ClientError;
 use ash_app_server_client::JsonRpcTransport;
 use ash_app_server_client::ProviderApiKeySetRequest;
 use ash_app_server_protocol::protocol::config::ConfigUpdateParams;
-use ash_app_server_protocol::protocol::config::LanguageServerConfigureParams;
 use ash_protocol::Patch;
 use std::fmt;
 
@@ -32,7 +30,6 @@ impl Command {
             Self::Subscription(_, _) => "ash-tui-subscription-account",
             Self::OpenEditor => "ash-tui-read-config",
             Self::Edit(_) => "ash-tui-set-config",
-            Self::SetLanguageServerMode(_) => "ash-tui-set-language-server-mode",
             Self::SetProviderApiKey(_) => "ash-tui-set-provider-api-key",
         }
     }
@@ -56,9 +53,6 @@ where
         )),
         Command::OpenEditor => read_config_choices(client).map(Event::EditorOpened),
         Command::Edit(edit) => set_settings(client, edit).map(Event::Updated),
-        Command::SetLanguageServerMode(edit) => {
-            set_language_server_mode(client, edit).map(Event::Updated)
-        }
         Command::SetProviderApiKey(edit) => {
             set_provider_api_key(client, edit).map(|update| Event::ApiKeySaved {
                 provider: update.provider,
@@ -303,30 +297,6 @@ where
         terminal,
         status_line: status_line.clone(),
         choices: config_choices(&config, &edit.providers, terminal, status_line),
-    })
-}
-
-pub(crate) fn set_language_server_mode<T>(
-    client: &mut AppServerClient<T>,
-    edit: LanguageServerEdit,
-) -> Result<ConfigEditResult, ConfigCommandError>
-where
-    T: JsonRpcTransport,
-{
-    client.configure_language_server(LanguageServerConfigureParams {
-        command_id: new_command_id("language-server"),
-        expected_revision: edit.expected_revision,
-        server_id: edit.server_id,
-        config: edit.config,
-    })?;
-    let config = client.read_config()?;
-    let terminal = TerminalSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
-    let status_line = StatusLineSettings::from_tui(&config.tui).map_err(ConfigCommandError)?;
-    let providers = client.list_providers()?;
-    Ok(ConfigEditResult {
-        terminal,
-        status_line: status_line.clone(),
-        choices: config_choices(&config, &providers, terminal, status_line),
     })
 }
 

@@ -268,10 +268,11 @@ mod slash {
         pressed: Option<usize>,
         context: RenderContext<'_>,
     ) {
+        let language = context.language();
         let Some(popup) = popup else {
             return;
         };
-        let Some(layout) = popup_layout(area, popup) else {
+        let Some(layout) = popup_layout(area, popup, language) else {
             return;
         };
         super::clear_popup(frame, area, layout.list.area, context);
@@ -286,7 +287,7 @@ mod slash {
         if popup.commands.is_empty() {
             frame.render_widget(
                 Paragraph::new(Line::from(Span::styled(
-                    "No matching commands",
+                    context.localize("No matching commands"),
                     Style::default().fg(context.muted()),
                 ))),
                 layout.list.area,
@@ -308,7 +309,7 @@ mod slash {
                 Rect::new(layout.list.area.x, y, command_width, 1),
             );
             frame.render_widget(
-                Paragraph::new(Span::styled(&command.description, command_style))
+                Paragraph::new(Span::styled(description(command, language), command_style))
                     .wrap(Wrap { trim: true }),
                 Rect::new(
                     layout.list.area.x.saturating_add(command_width),
@@ -327,12 +328,13 @@ mod slash {
         popup: Option<SlashCommandsView<'_>>,
         column: u16,
         row: u16,
+        language: crate::nls::Language,
     ) -> Option<usize> {
         let popup = popup?;
         if popup.commands.is_empty() {
             return None;
         }
-        let layout = popup_layout(area, popup)?;
+        let layout = popup_layout(area, popup, language)?;
         if column < layout.list.area.x
             || column >= layout.list.area.right()
             || row < layout.list.area.y
@@ -348,11 +350,12 @@ mod slash {
         popup: Option<SlashCommandsView<'_>>,
         column: u16,
         row: u16,
+        language: crate::nls::Language,
     ) -> bool {
         let Some(popup) = popup else {
             return false;
         };
-        popup_layout(area, popup).is_some_and(|layout| {
+        popup_layout(area, popup, language).is_some_and(|layout| {
             let position = ratatui::layout::Position::new(column, row);
             layout.list.area.contains(position)
                 || layout
@@ -361,7 +364,26 @@ mod slash {
         })
     }
 
-    fn popup_layout(area: Rect, popup: SlashCommandsView<'_>) -> Option<SlashPopupLayout> {
+    fn description(
+        command: &ash_slash_commands::SlashCommandDefinition,
+        language: crate::nls::Language,
+    ) -> std::borrow::Cow<'_, str> {
+        if command
+            .name
+            .parse::<super::super::super::slash_commands::TuiSlashCommandAction>()
+            .is_ok_and(|action| action.definition().description == command.description)
+        {
+            crate::nls::localize(language, &command.description)
+        } else {
+            std::borrow::Cow::Borrowed(&command.description)
+        }
+    }
+
+    fn popup_layout(
+        area: Rect,
+        popup: SlashCommandsView<'_>,
+        language: crate::nls::Language,
+    ) -> Option<SlashPopupLayout> {
         let popup_width = horizontal_margin(area, 2).width;
         let description_width = popup_width.saturating_sub(COMMAND_COLUMN_DISPLAY_WIDTH);
         let item_heights = if popup.commands.is_empty() {
@@ -370,7 +392,9 @@ mod slash {
             popup
                 .commands
                 .iter()
-                .map(|command| description_height(&command.description, description_width))
+                .map(|command| {
+                    description_height(&description(command, language), description_width)
+                })
                 .collect()
         };
         let list = description_popup_layout(area, popup.selected, &item_heights)?;
@@ -611,9 +635,12 @@ pub(crate) fn index_at(
     completion: Option<CompletionView<'_>>,
     column: u16,
     row: u16,
+    language: crate::nls::Language,
 ) -> Option<usize> {
     match completion {
-        Some(CompletionView::Slash(view)) => slash::command_index_at(area, Some(view), column, row),
+        Some(CompletionView::Slash(view)) => {
+            slash::command_index_at(area, Some(view), column, row, language)
+        }
         Some(CompletionView::Mention(view)) => {
             mention::mention_index_at(area, Some(view), column, row)
         }
@@ -627,9 +654,12 @@ pub(crate) fn contains(
     completion: Option<CompletionView<'_>>,
     column: u16,
     row: u16,
+    language: crate::nls::Language,
 ) -> bool {
     match completion {
-        Some(CompletionView::Slash(view)) => slash::contains(area, Some(view), column, row),
+        Some(CompletionView::Slash(view)) => {
+            slash::contains(area, Some(view), column, row, language)
+        }
         Some(CompletionView::Mention(view)) => {
             mention::mention_index_at(area, Some(view), column, row).is_some()
         }

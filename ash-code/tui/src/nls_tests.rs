@@ -16,6 +16,22 @@ fn product_chrome_keys_are_unique() {
 }
 
 #[test]
+fn shared_management_commands_have_translated_descriptions_and_argument_hints() {
+    for command in ash_slash_commands::ProductSlashCommand::ALL {
+        let definition = command.definition();
+        for language in [Language::Chinese, Language::Japanese, Language::French] {
+            assert_ne!(
+                localize(language, &definition.description),
+                definition.description
+            );
+            if let Some(hint) = &definition.argument_hint {
+                assert_ne!(&*localize(language, hint), hint);
+            }
+        }
+    }
+}
+
+#[test]
 fn languages_cycle_in_both_directions() {
     let languages = [
         Language::English,
@@ -42,6 +58,20 @@ fn languages_cycle_in_both_directions() {
             Language::Chinese,
         ]
     );
+}
+
+#[test]
+fn templates_translate_labels_and_preserve_literal_arguments_across_languages() {
+    let mut text = super::Text::template(
+        "Permissions: {0}",
+        vec![super::Text::literal("Skills · {0} /tools/program")],
+    );
+    text.localize(Language::Chinese);
+    assert_eq!(&*text, "权限：Skills · {0} /tools/program");
+    text.localize(Language::French);
+    assert_eq!(&*text, "Autorisations : Skills · {0} /tools/program");
+    text.localize(Language::English);
+    assert_eq!(&*text, "Permissions: Skills · {0} /tools/program");
 }
 
 #[test]

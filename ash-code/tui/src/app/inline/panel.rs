@@ -26,7 +26,7 @@ pub(super) fn draw(
     crate::widgets::panel::draw_header(
         frame,
         area,
-        &context.localize(body.title()),
+        &body.title(context.language()),
         presentation_focus,
     );
     body.draw_tabs(frame, layout.tabs, None, None, context);
