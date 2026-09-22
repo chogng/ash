@@ -11,6 +11,7 @@ export default defineConfig({
 		rolldownOptions: {
 			output: rendererOutput,
 			input: {
+				diff: resolve(import.meta.dirname, 'diff.html'),
 				language: resolve(import.meta.dirname, "language.html"),
 				marketplace: resolve(import.meta.dirname, "marketplace.html"),
 				advisor: resolve(import.meta.dirname, "advisor.html"),

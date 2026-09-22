@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<title>Frontend diff integration</title>
+		<style>
+			body { margin: 16px; }
+			#single, #multi { height: 240px; width: 800px; }
+			textarea { width: 780px; height: 80px; }
+		</style>
+	</head>
+	<body>
+		<label>Modified text <textarea id="modified"></textarea></label>
+		<div id="single"></div>
+		<div id="multi"></div>
+		<script type="module" src="./diff.integration.ts"></script>
+	</body>
+</html>

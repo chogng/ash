@@ -34,7 +34,7 @@ export interface DiffApiResult {
 	readonly modifiedLineCount: number;
 }
 
-/** Transport-neutral entry point for the authoritative Rust text diff. */
+/** Backend business diff API. Interactive editor comparisons use the frontend computation service. */
 export interface IDiffApi {
 	compute(request: DiffApiRequest): Promise<DiffApiResult>;
 }

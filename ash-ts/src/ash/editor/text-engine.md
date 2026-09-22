@@ -218,7 +218,7 @@ contrib/<feature>/
 | 原始资源读写和 expected revision | editor-owned `ITextResourceStore` contract | Workbench/file service/App Server adapter |
 | Language provider registry | `ILanguageFeaturesService`，消费 editor 公共 provider 契约 | TextMate、Worker、Rust 或 LSP adapter |
 | Language 请求失效与结果提交 | 发起请求的 contribution 校验模型身份、版本和取消状态；模型拥有版本与编辑事务 | Adapter 传递取消与结果，不拥有编辑器请求状态 |
-| Diff request/result 和 `DiffModel` | `common/diff` | Workbench `IDiffService` / `AppServerDiffComputationService` |
+| Diff request/result、算法和 `DiffModel` | `common/diff` | Workbench `IDiffService` 创建 Editor `WorkerDiffComputationService`；前端 Worker 只消费一次性快照，取消和版本检查由前端持有 |
 | Pane、tab、save command、notification | 无 | Workbench |
 
 Editor contract 使用领域类型；generated DTO 和 transport error 在 runtime adapter 内终止。强制能力缺失时显式失败，不添加行为不同的 production fallback。
@@ -240,7 +240,7 @@ Editor contract 使用领域类型；generated DTO 和 transport error 在 runti
 | Multi-selection、IME、clipboard、pointer/keyboard input | 部分具备 | 本地链可用；cursor 与 edit-context owner 尚未对齐 |
 | Virtualized lines、wrapping、folding、selection、decorations、minimap | 部分具备 | ViewPart 生命周期、统一覆盖层、标准渲染上下文和 DOM/GPU `IViewLines` 几何已接通；GPU context 与两个策略的初始化、cell buffer 和释放 owner 已收敛 |
 | Token、diagnostic、completion、TextMate 和 App Server parser provider | 部分具备 | 异步版本边界存在；language service 与 tokenization owner 尚未对齐 |
-| Diff editor 与 App Server diff | 部分具备 | 本地 review widget 可用；canonical DiffEditorWidget/MultiDiffEditorWidget 契约尚未完成 |
+| 编辑器交互 Diff | 部分具备 | 双栏、Multi Diff 和 Quick Diff 使用前端 Worker；版本、取消、行与字素范围在本端处理；完整 DiffEditorWidget/MultiDiffEditorWidget 契约仍待补齐 |
 | `ViewContext → ViewPart → View` | 部分具备 | 事件、渲染阶段和释放已统一；两个输入实现仍待进入同一 Part 生命周期 |
 | `ViewModelImpl → CursorsController → CursorCollection → Cursor` | 部分具备 | selection 状态、marker、normalize、flush 和单命令 primary 语义已接通；输入与 contribution 仍需移除 controller 的仅本地公共入口 |
 | Incremental compaction 和更广 parser-grade language coverage | Potential | 由可复现性能与产品需求驱动 |

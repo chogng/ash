@@ -220,7 +220,7 @@ import { IBulkEditService } from "../../editor/browser/services/bulkEditService.
 import { getBrowserTextModelService } from "../services/textmodelResolver/browser/browserTextModelService.js";
 import { getBrowserTextResourceStore } from "../contrib/codeEditor/browser/browserTextResourceStore.js";
 import { AppServerLanguageProviders } from "../services/language/browser/appServerLanguageProviders.js";
-import { AppServerDiffService } from "../services/diff/browser/appServerDiffService.js";
+import { DiffService } from "../services/diff/browser/diffService.js";
 import { IDiffService } from "../services/diff/common/diffService.js";
 import { AppServerLanguageDiagnosticsService } from "../services/language/browser/appServerLanguageDiagnosticsService.js";
 import { AppServerCodeIntelligenceDocumentService } from "../services/codeIntelligence/browser/appServerCodeIntelligenceDocumentService.js";
@@ -441,7 +441,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IBulkEditService, bulkEditService);
 		this._register(new WorkbenchLanguageFeatures(languageService, languageConfigurationService, languageFeaturesService));
 		this._register(new AppServerLanguageProviders(languageFeaturesService, api.language, workspaceContext, { dirPermissions: dirPermissionsService, events: api.events }));
-		const diffService = new AppServerDiffService(api.diff);
+		const diffService = new DiffService();
 		services.registerInstance(IDiffService, diffService);
 		const codeIntelligenceDocuments = new AppServerCodeIntelligenceDocumentService(api.codebaseSymbols);
 		services.registerInstance(ICodeIntelligenceDocumentService, codeIntelligenceDocuments);

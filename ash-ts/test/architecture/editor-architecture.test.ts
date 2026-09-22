@@ -110,19 +110,24 @@ test("Bracket structure, cursor editing, and browser presentation keep separate 
 	assert.doesNotMatch(adapter, /\/contrib\//u);
 });
 
-test("Workbench owns App Server language, diff, and text-model adapters", () => {
+test("Workbench composes frontend diff and owns language and text-model adapters", () => {
 	for (const file of [
 		"services/language/browser/appServerSyntaxProviders.ts",
-		"services/diff/browser/appServerDiffService.ts",
-		"services/diff/browser/appServerDiffComputationService.ts",
+		"services/diff/browser/diffService.ts",
 		"services/textmodelResolver/browser/browserTextModelService.ts",
 	]) assert.equal(statSafe(join(workbenchRoot, file)), true, file);
+	for (const file of [
+		"browser/services/workerDiffComputationService.ts",
+		"common/diff/diffWorker.ts",
+		"common/diff/diffWorkerMain.ts",
+	]) assert.equal(statSafe(join(editorRoot, file)), true, file);
 });
 
 test("Editor synchronous layers do not import Electron or generated DTOs", () => {
 	const protectedDirectories = [
 		"common/config",
 		"common/core",
+		"common/diff",
 		"common/model",
 		"common/cursor",
 		"common/commands",
@@ -507,6 +512,7 @@ test('Editor production files are entrypoints or have a production caller', () =
 	const explicitEntrypoints = new Set([
 		resolve(editorRoot, 'editor.main.ts'),
 		resolve(editorRoot, 'common/services/editorWebWorkerMain.ts'),
+		resolve(editorRoot, 'common/diff/diffWorkerMain.ts'),
 	].map(architecturePathKey));
 	const unreferenced = editorProductionFiles.filter(file => {
 		const key = architecturePathKey(file);

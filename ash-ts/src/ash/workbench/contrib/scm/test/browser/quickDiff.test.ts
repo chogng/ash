@@ -10,8 +10,8 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
-import { type IDiffApi } from '../../../../../platform/diff/common/diffApi.js';
-import { AppServerDiffService } from '../../../../services/diff/browser/appServerDiffService.js';
+import { DiffTestPort } from '../../../../../editor/test/browser/services/diffTestPort.js';
+import { DiffService } from '../../../../services/diff/browser/diffService.js';
 import { type GitStatus, type IGitService } from '../../../../services/git/common/gitService.js';
 import { GitQuickDiffProvider } from '../../browser/gitQuickDiffProvider.js';
 import { QuickDiffDecorator } from '../../browser/quickDiffDecorator.js';
@@ -36,7 +36,7 @@ test('Quick Diff shares one resource model and projects configurable editor targ
 	using provider = new GitQuickDiffProvider(fixture.gitService);
 	using quickDiffService = new WorkbenchQuickDiffService();
 	using providerRegistration = quickDiffService.addProvider(provider);
-	using modelService = new QuickDiffModelService(quickDiffService, new AppServerDiffService(fixture.diffApi));
+	using modelService = new QuickDiffModelService(quickDiffService, new DiffService(() => new DiffTestPort()));
 	using model = new TextModel('same\nnew\nlast', { resource: URI.file('/workspace/src/file.ts') });
 	const firstReference = modelService.createModelReference(URI.file('/workspace/src/file.ts'), model);
 	const secondReference = modelService.createModelReference(URI.file('/workspace/src/file.ts'), model);
@@ -55,6 +55,11 @@ test('Quick Diff shares one resource model and projects configurable editor targ
 	]);
 	assert.ok(decorations.every(decoration => decoration.options.overviewRuler && decoration.options.minimap));
 	assert.ok(secondReference.object.findChangeAtLine(2), 'the deletion gutter line resolves to its containing hunk');
+	const baselineRequests = fixture.requests.length;
+	model.setValue('same\nold\nremoved\nlast');
+	await waitFor(() => secondReference.object.state.comparisons[0]?.model.state.kind === 'ready');
+	assert.deepEqual(model.getAllDecorations(), [], 'unsaved edits are compared with the existing Git baseline');
+	assert.equal(fixture.requests.length, baselineRequests, 'typing does not refetch Git or invoke a backend diff');
 
 	secondReference.dispose();
 	fixture.dispose();
@@ -77,7 +82,7 @@ const { createTestCodeEditor } = await import('../../../../../editor/test/browse
 		using provider = new GitQuickDiffProvider(fixture.gitService);
 		using quickDiffService = new WorkbenchQuickDiffService();
 		using providerRegistration = quickDiffService.addProvider(provider);
-		using modelService = new QuickDiffModelService(quickDiffService, new AppServerDiffService(fixture.diffApi));
+		using modelService = new QuickDiffModelService(quickDiffService, new DiffService(() => new DiffTestPort()));
 		using controllers = new QuickDiffEditorControllerService();
 		using configuration = new InMemoryConfigurationService();
 		await configuration.updateValue(ScmConfiguration.diffDecorations, 'all');
@@ -126,7 +131,7 @@ const { createTestCodeEditor } = await import('../../../../../editor/test/browse
 	}
 });
 
-function gitFixture(): { readonly gitService: IGitService; readonly diffApi: IDiffApi; readonly requests: Array<{ readonly path: string; readonly comparison: string }>; dispose(): void } {
+function gitFixture(): { readonly gitService: IGitService; readonly requests: Array<{ readonly path: string; readonly comparison: string }>; dispose(): void } {
 	const statusChanged = new Emitter<GitStatus>();
 	const repositoriesChanged = new Emitter<never>();
 	const becameReady = new Emitter<void>();
@@ -162,22 +167,8 @@ function gitFixture(): { readonly gitService: IGitService; readonly diffApi: IDi
 			};
 		},
 	} as unknown as IGitService;
-	const diffApi: IDiffApi = {
-		compute: async () => ({
-			rows: [
-				{ kind: 'context', originalLineIndex: 0, modifiedLineIndex: 0, originalChanges: [], modifiedChanges: [] },
-				{ kind: 'modified', originalLineIndex: 1, modifiedLineIndex: 1, originalChanges: [], modifiedChanges: [] },
-				{ kind: 'removed', originalLineIndex: 2, modifiedLineIndex: null, originalChanges: [], modifiedChanges: [] },
-				{ kind: 'context', originalLineIndex: 3, modifiedLineIndex: 2, originalChanges: [], modifiedChanges: [] },
-			],
-			hunks: [],
-			originalLineCount: 4,
-			modifiedLineCount: 3,
-		}),
-	};
 	return {
 		gitService,
-		diffApi,
 		requests,
 		dispose(): void {
 			statusChanged.dispose();

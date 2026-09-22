@@ -24,7 +24,7 @@
 | 1 | `editor-core`、`text-file`、`terminal` 从 `ash-rs/` 移到 `app/` | 路径、Cargo/Bazel、文档与消费者同步，定向验证通过 | 已完成，macOS 定向验证通过 |
 | 2 | `input-classifier`、`shell-completion` 移到 `app/` | 模型、词典、嵌入资源和相对路径完整迁移，输入分类与补全测试通过 | 已完成，macOS 定向验证通过 |
 | 3 | `terminal-detection` 移到 `ash-code/` | TUI 终端识别、主题调用与包构建验证通过 | 已完成，macOS Cargo 验证与 crate Bazel 单测通过；产品 Bazel 图限制见记录 |
-| 4 | TS 编辑器实时 Diff 改由前端计算 | 双栏、行内、Quick Diff、取消与版本检查验证通过；后台业务 Diff 独立保留 | 待执行 |
+| 4 | TS 编辑器实时 Diff 改由前端计算 | 双栏、行内、Quick Diff、取消与版本检查验证通过；后台业务 Diff 独立保留 | 已完成，定向行为、浏览器与构建通过；既有架构检查问题见记录 |
 | 5 | TS 基础语法高亮解除对后台 parser 的依赖 | TextMate/前端 Worker 覆盖现有语言，token 与异步语言结果边界明确 | 待执行 |
 
 每批独立交付验证结果，再推进下一批。后两批涉及行为变化，不与目录移动混在一起。
@@ -69,6 +69,28 @@
 5. 验证 Cargo/Bazel 依赖图、锁文件与新 target，确认共享后端没有反向依赖。
 
 本批保持运行行为和终端输出不变，复用现有语义测试与 snapshot，不新增重复测试。
+
+## 第四批执行清单
+
+- 行为链：打开对比或编辑未保存文本 → DiffEditorPane / MultiDiffEditorPane / QuickDiffModel → IDiffService → 前端 Worker → DiffModel 检查版本 → 现有行与行内差异展示。
+- TextModel 继续独占文本、事务和历史；DiffModel 继续负责版本与过期结果；Worker 只执行一次性快照计算，不维护文本镜像。
+- 算法使用线性空间 Myers 分割和字素边界，计算期间处理取消；复用现有 WebWorkerClient/Server 的请求、失败和释放机制。
+- 本批保留 Ash 已有的 LineDiff 契约。VS Code 的 linesDiffComputer/documentDiffProvider 用于核对职责与插入、删除、空行、行内差异场景，不复制其实现或扩展本批公开功能。
+
+| 准入路径（相对 ash-ts/） | 对应关系与动作 | 验证 |
+| --- | --- | --- |
+| `src/ash/editor/common/diff/lineDiff.ts` | Ash 现有契约，加入前端纯算法 | 行对齐、hunk、字素与随机编辑 |
+| `src/ash/editor/common/diff/diffWorker.ts`、`diffWorkerMain.ts` | Ash 本批计算运行入口，复用通用 Worker 通道 | 取消、并发、失败与释放 |
+| `src/ash/editor/browser/services/workerDiffComputationService.ts` | 从旧后台适配器迁移为前端 Worker 客户端 | 实际 Worker 与版本更新 |
+| `src/ash/workbench/services/diff/browser/diffService.ts`、`src/ash/workbench/browser/workbench.ts` | 替换旧 AppServerDiffService 装配 | 所有交互消费者使用前端计算 |
+| `src/ash/workbench/services/diff/test/browser/appServerDiffComputationService.test.ts` | 旧适配器测试迁到 Editor 的 Worker 与算法测试 | 保留 Unicode、末尾空行覆盖 |
+| `src/ash/editor/test/common/models/diff/lineDiff.test.ts`、`src/ash/editor/test/browser/services/workerDiffComputationService.test.ts`、`diffTestPort.ts` | 本地行为测试与测试专用通道 | 精确结果、取消、资源释放 |
+| `src/ash/workbench/contrib/scm/test/browser/quickDiff.test.ts` | 使用真实前端计算替换返回固定 Diff 的 fixture | dirty buffer、基线复用、装饰释放 |
+| `test/integration/browser/diff.html`、`diff.integration.ts`、`diff.integration.spec.ts`、`vite.config.ts` | 独立 Playwright 场景接入既有入口 | 双栏、行内、Multi Diff、键盘、并发与取消 |
+| `test/architecture/editor-architecture.test.ts` | 既有归属检查同步新计算入口，继续禁止 Editor 导入后台 DTO | 依赖边界检查 |
+| `src/ash/editor/text-engine.md`、`src/ash/editor/browser/README.md`、`src/ash/platform/diff/common/diffApi.ts` | 同步当前职责说明 | 后台业务 API 保留，旧交互入口退出 |
+
+旧 `appServerDiffService.ts`、`appServerDiffComputationService.ts` 及适配器测试随本批替换退出；不保留双计算入口。
 
 ## 共享库与后续边界
 
@@ -153,4 +175,27 @@ CLI 的 PTY 场景完成编译检查，未执行真实交互场景；没有变�
 
 此次验证平台为 macOS，未执行 Windows/Linux 构建、真实 PTY 交互或实际打包发布。Bazel 仍输出既有第三方 annotation 与测试 size 提示。
 
-后续按第四批处理 TypeScript 编辑器实时 Diff。
+### 第四批执行记录
+
+- 2026-09-22：Workbench 改为创建 `DiffService`；双栏、Multi Diff 和 Quick Diff 统一使用 Editor 的 `WorkerDiffComputationService`，旧 App Server 交互适配器及其测试已退出。
+- `lineDiff.ts` 在前端计算精确行对齐、连续 hunk 和字素级 UTF-16 范围，使用线性空间 Myers 分割。Worker 在长计算中让出执行权处理取消；释放计算服务会终止其 Worker。
+- 保留 `DiffModel` 的请求代次、双侧版本检查和源模型生命周期。Worker 只消费一次性快照，没有远程编辑对象、文本镜像或撤销状态。
+- Quick Diff 仍从 Git provider 获取基线；未保存文本变化直接在前端重新计算，不重新请求 Git 基线。后台 `ash-diff`、`diff/compute` 和 Git/Agent 业务接口保持原有实现。
+- 未增加依赖，未修改锁文件、Rust 实现或生成协议。没有变更编辑器 DOM、主题或快捷键。
+
+| 第四批验证 | 结果 |
+| --- | --- |
+| `pnpm --dir ash-ts test:unit`，用 `--run` 选择 8 个 Diff 行为测试文件 | 26 个测试通过；覆盖算法、300 组重复行/重排对齐、Unicode、空行、2 万行编辑、取消、并发、版本、释放及现有窗格行为 |
+| 同一命令追加 `test/architecture/editor-architecture.test.ts` | 23 个检查通过，1 个既有检查失败；整个合并命令退出 1，不记为全套通过 |
+| `pnpm --dir ash-ts test:editor:browser diff.integration.spec.ts` | Chromium 下 3 个 Playwright 场景通过：真实 Worker、双栏/行内/Multi Diff、F7 与朗读状态、dirty buffer/Quick Diff、大计算取消 |
+| `pnpm --dir ash-ts build:renderer` | 通过，生产产物包含独立 Diff Worker |
+| `pnpm --dir ash-ts test:smoke:ui areas/windows/home.spec.ts` | main/preload/renderer 完整构建与自动化类型检查通过；Electron UI 的实际产品启动场景通过 |
+| 旧交互入口检索、锁文件检查、文档与 `git diff --check` | 通过；后台 Diff API 仍独立保留 |
+
+8 个行为测试文件为 `lineDiff`、`diffModel`、`workerDiffComputationService`、`diffEditorWidget`、`multiDiffEditorWidget`、`quickDiff`、`diffEditorPane` 和 `multiDiffEditorPane`。
+
+既有架构检查 `Flat editor layout keeps one TextModel owner and both mode bundles` 仍要求不存在的 `contrib/smartSelect/common/selectionRanges.ts`。本批前的 Git 版本已同时存在该断言与文件缺失；本批未修改 Smart Select，也没有削弱该断言。
+
+验证平台为 macOS。Electron 场景验证产品启动与装配，Diff 行为由 Chromium 真实 Worker 场景覆盖；未执行 Electron 后端完整业务场景、跨平台构建或帧率基准。Electron 测试输出环境已有的 `NO_COLOR`/`FORCE_COLOR` 冲突提示，产品构建没有新增 warning。
+
+后续按第五批处理 TypeScript 基础语法高亮。
