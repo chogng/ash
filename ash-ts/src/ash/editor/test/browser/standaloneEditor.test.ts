@@ -240,15 +240,10 @@ test("standalone completion providers execute in a live editor", async () => {
 		},
 	});
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
-	const editor = stanza.editor.create(container, { language: "stanza-completion-test" });
+	using editor = stanza.editor.create(container, { language: "stanza-completion-test" });
 
 	editor.focus();
-	container.querySelector<HTMLElement>(".stanza-editor-input")!.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
-		bubbles: true,
-		cancelable: true,
-		ctrlKey: true,
-		key: " ",
-	}));
+	await editor.getAction('editor.action.triggerSuggest')!.run();
 	await new Promise<void>(resolve => setImmediate(resolve));
 	await new Promise<void>(resolve => setImmediate(resolve));
 

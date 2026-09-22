@@ -1,10 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { DocumentSerializationError } from "../../common/model/documentSerialization.js";
 import { createDefaultDocumentSchema, type DocumentSchema } from "../../common/model/documentSchema.js";
 import { textSelection } from "../../common/core/documentSelection.js";
 import { DocumentTransaction } from "../../common/model/documentTransaction.js";
-import { deserializeDocumentCollaborationEnvelope, serializeDocumentCollaborationEnvelope } from "../../contrib/collaboration/common/envelopeSerialization.js";
 import { DocumentCollaborationSynchronizer, DocumentCollaborationError } from "../../contrib/collaboration/common/synchronizer.js";
 
 function createDocument(schema: DocumentSchema) {
@@ -73,24 +71,6 @@ test("Stanza collaboration synchronizer buffers typing while one ordered update 
 	assert.equal(next?.baseVersion, 1);
 	assert.equal(next?.transaction.steps.length, 1);
 	assert.equal(synchronizer.document.content[0]?.content[0]?.text, "ABHello");
-});
-
-test("Stanza collaboration synchronizer envelopes round-trip local and remote transaction versions", () => {
-	const schema = createDefaultDocumentSchema();
-	using synchronizer = new DocumentCollaborationSynchronizer({ schema, document: createDocument(schema), clientId: "client-a", version: 3 });
-	const local = synchronizer.dispatchLocal(new DocumentTransaction().replaceText("text-1", 0, 0, "L"));
-	assert.ok(local);
-
-	const decodedLocal = deserializeDocumentCollaborationEnvelope(serializeDocumentCollaborationEnvelope(local, schema), schema);
-	assert.equal("documentVersion" in decodedLocal, false);
-	assert.deepEqual(decodedLocal.transaction.steps, local.transaction.steps);
-	assert.equal(decodedLocal.baseVersion, 3);
-
-	const remote = { clientId: "client-b", sequence: 7, baseVersion: 3, version: 4, transaction: new DocumentTransaction().replaceText("text-1", 0, 0, "R") } as const;
-	const decodedRemote = deserializeDocumentCollaborationEnvelope(serializeDocumentCollaborationEnvelope(remote, schema), schema);
-	assert.equal("version" in decodedRemote ? decodedRemote.version : -1, 4);
-	assert.deepEqual(decodedRemote.transaction.steps, remote.transaction.steps);
-	assert.throws(() => deserializeDocumentCollaborationEnvelope("{\"format\":\"ash.document.collaboration\",\"version\":99}", schema), DocumentSerializationError);
 });
 
 test("Stanza collaboration synchronizer rejects stale updates and local echoes", () => {

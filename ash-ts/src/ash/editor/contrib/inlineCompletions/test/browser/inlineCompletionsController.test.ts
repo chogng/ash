@@ -1,3 +1,4 @@
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import type { LanguageInlineCompletionsProvider } from '../../../../common/languages.js';
 import { createTestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
 import { ILanguageConfigurationService } from '../../../../common/languages/languageConfigurationRegistry.js';
@@ -8,7 +9,6 @@ import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Emitter, Event } from '../../../../../base/common/event.js';
-import { h } from '../../../../../base/browser/dom.js';
 import { TriggerInlineEditCommandsRegistry } from '../../../../browser/triggerInlineEditCommandsRegistry.js';
 import { LanguageFeatureRegistry } from '../../../../common/languageFeatureRegistry.js';
 import { Selection } from '../../../../common/core/selection.js';
@@ -20,6 +20,7 @@ import { type ICommand } from '../../../../common/editorCommon.js';
 import { type CursorsController } from '../../../../common/cursor/cursor.js';
 import { type ICursorSelectionChangedEvent } from '../../../../common/cursorEvents.js';
 import { type TextMeasurer } from '../../../../common/viewModel.js';
+import { EditorOptions, type EditorOption } from '../../../../common/config/editorOptions.js';
 
 class TestResizeObserver {
 	observe(): void {}
@@ -53,8 +54,6 @@ test('Registered editor commands retrigger inline completions after their edit',
 	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position((0) + 1, (3) + 1))]);
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 200, height: 40 });
-	const input = h(dom.window.document, 'textarea');
-	container.append(input);
 	const providers = new LanguageFeatureRegistry<LanguageInlineCompletionsProvider>();
 	const requests: string[] = [];
 	let provided!: () => void;
@@ -71,11 +70,12 @@ test('Registered editor commands retrigger inline completions after their edit',
 	const commandId = 'editor.test.inlineCompletionTrigger';
 	TriggerInlineEditCommandsRegistry.registerCommand(commandId);
 	using services = new ServiceContainer();
+	services.registerInstance(IContextKeyService, new ContextKeyService());
 	services.registerInstance(IInlineCompletionsService, inlineCompletionsService);
 	services.registerInstance(ILanguageFeatureDebounceService, new LanguageFeatureDebounceService());
 	using configurations = createTestLanguageConfigurationService();
 	services.registerInstance(ILanguageConfigurationService, configurations);
-	using controller = services.createInstance(InlineCompletionsController, input, editorFor(model, selections), viewport, model, providers, commands.event, (error: unknown) => { throw error; });
+	using controller = services.createInstance(InlineCompletionsController, editorFor(model, selections), viewport, model, providers, commands.event, (error: unknown) => { throw error; });
 
 	commands.fire({ commandId: 'editor.test.unrelatedCommand' });
 	await flushPromises();
@@ -100,8 +100,6 @@ test('inline completion acceptance applies additional edits and undoes atomicall
 	using selections = createTestCursorsController(model, [Selection.fromPositions(new Position(1, 8))]);
 	using viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
 	viewport.layout({ width: 200, height: 40 });
-	const input = h(dom.window.document, 'textarea');
-	container.append(input);
 	const providers = new LanguageFeatureRegistry<LanguageInlineCompletionsProvider>();
 	using provider = providers.register('plaintext', {
 		provideInlineCompletions: () => [{
@@ -111,17 +109,18 @@ test('inline completion acceptance applies additional edits and undoes atomicall
 	});
 	using service = new InlineCompletionsService();
 	using services = new ServiceContainer();
-	assert.throws(() => services.createInstance(InlineCompletionsController, input, editorFor(model, selections), viewport, model, providers, undefined, (error: unknown) => { throw error; }), /Unknown service/);
+	services.registerInstance(IContextKeyService, new ContextKeyService());
+	assert.throws(() => services.createInstance(InlineCompletionsController, editorFor(model, selections), viewport, model, providers, undefined, (error: unknown) => { throw error; }), /Unknown service/);
 	services.registerInstance(IInlineCompletionsService, service);
-	assert.throws(() => services.createInstance(InlineCompletionsController, input, editorFor(model, selections), viewport, model, providers, undefined, (error: unknown) => { throw error; }), /Unknown service/);
+	assert.throws(() => services.createInstance(InlineCompletionsController, editorFor(model, selections), viewport, model, providers, undefined, (error: unknown) => { throw error; }), /Unknown service/);
 	services.registerInstance(ILanguageFeatureDebounceService, new LanguageFeatureDebounceService());
 	using configurations = createTestLanguageConfigurationService();
 	services.registerInstance(ILanguageConfigurationService, configurations);
-	using controller = services.createInstance(InlineCompletionsController, input, editorFor(model, selections), viewport, model, providers, undefined, (error: unknown) => { throw error; });
+	using controller = services.createInstance(InlineCompletionsController, editorFor(model, selections), viewport, model, providers, undefined, (error: unknown) => { throw error; });
 
-	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: ' ', ctrlKey: true, altKey: true }));
+	await controller.trigger();
 	await flushPromises();
-	input.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: 'Enter', altKey: true }));
+	controller.accept();
 	assert.equal(model.getText(), 'const name = value');
 	assert.deepEqual(selections.getSelection().getPosition(), new Position(1, 19));
 	selections.context.model.undo();
@@ -165,6 +164,8 @@ async function flushPromises(): Promise<void> {
 
 function editorFor(model: TextModel, selections: CursorsController): ICodeEditor {
 	return {
+		onDidChangeConfiguration: Event.None,
+		getOption: (id: EditorOption) => Object.values(EditorOptions).find(option => option.id === id)!.defaultValue,
 		onDidType: Event.None,
 		onDidCompositionStart: Event.None,
 		onDidCompositionEnd: Event.None,

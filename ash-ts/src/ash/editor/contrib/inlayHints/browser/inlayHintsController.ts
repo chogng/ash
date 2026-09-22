@@ -4,7 +4,7 @@ import { registerEditorContribution } from "../../../browser/editorExtensions.js
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Position } from "../../../common/core/position.js";
 import { type View } from "../../../browser/view.js";
-import { h } from "../../../../base/browser/dom.js";
+import { h, ModifierKeyEmitter } from "../../../../base/browser/dom.js";
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
@@ -19,6 +19,7 @@ export class InlayHintsController extends Disposable {
 	private request: AbortController | undefined;
 	private readonly debounce: IFeatureDebounceInformation;
 	private readonly scheduler: RunOnceScheduler;
+	private readonly modifierKeys: ModifierKeyEmitter;
 
 	constructor(
 		private readonly viewport: View,
@@ -31,6 +32,8 @@ export class InlayHintsController extends Disposable {
 		if (editor.getModel() !== viewport.textModel) throw new TypeError('Inlay hint dependencies must share one text model');
 		this.debounce = debounceService.for(languageFeaturesService.inlayHintsProvider, 'Inlay hints', { min: 25, max: 500 });
 		this.scheduler = this._register(new RunOnceScheduler(() => void this.refresh(), this.debounce.default()));
+		this.modifierKeys = ModifierKeyEmitter.getInstance(viewport.domNode.domNode.ownerDocument.defaultView!);
+		this._register(this.modifierKeys.event(() => this.render()));
 		this._register(toDisposable(() => this.clear()));
 		this._register(viewport.onDidChangeLayout(() => this.render()));
 		this._register(viewport.textModel.onDidChangeContent(() => this.schedule()));
@@ -99,8 +102,12 @@ export class InlayHintsController extends Disposable {
 
 	private render(): void {
 		const scroll = this.viewport.viewportLayout.scrollPosition;
+		const mode = this.editor.getOption(EditorOption.inlayHints).enabled;
+		const pressed = this.modifierKeys.keyStatus.ctrlKey && this.modifierKeys.keyStatus.altKey;
+		const visible = mode === 'on' || (mode === 'offUnlessPressed' && pressed) || (mode === 'onUnlessPressed' && !pressed);
 		for (const [index, hint] of this.hints.entries()) {
 			const element = this.elements[index]!;
+			element.hidden = !visible;
 			const coordinates = this.viewport.getPositionContentCoordinates(hint.position);
 			element.style.left = `${coordinates.left - scroll.left + 2}px`;
 			element.style.top = `${coordinates.top - scroll.top}px`;

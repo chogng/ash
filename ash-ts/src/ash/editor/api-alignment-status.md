@@ -1,5 +1,95 @@
 # Editor API 对齐状态
 
+## Contrib 行为修复（2026-09-21）
+
+本轮接续下方目录审查，修复已复现的五类配置行为、补通九个标准命令，并按用户确认完成文件迁移与删除。保留 Ash 的文本、折叠、选区、DOM 和请求 owner；CSS 与布局结构没有变更。下方审查记录描述修复前的状态。
+
+准入链为配置 / 键盘 / editor action → `editor.all.ts` 装配的既有控制器 → 当前请求、控件或编辑状态 → DOM、文本、选区、撤销和取消结果。路径均相对 `ash-ts/src/ash/editor/`；现有文件只修改本表职责。
+
+| 生产路径 | 起始关系与调用方 | 修复结果 |
+| --- | --- | --- |
+| `contrib/inlineCompletions/browser/controller/inlineCompletionsController.ts` | 双方都有；输入、命令与模型事件 | 自动请求读取 `inlineSuggest.enabled`；动态关闭和只读切换清除建议并取消请求；显式触发仍可用于关闭自动建议的编辑器 |
+| `contrib/hover/browser/contentHoverController.ts` | 双方都有；hoverContribution | 消费启用模式、delay 和多光标修饰键配置；配置或修饰键变化重新判断当前悬停并取消失效请求 |
+| `contrib/inlayHints/browser/inlayHintsController.ts` | 双方都有；editor.all | 四种 enabled 模式控制同一组节点；按下、松开 Ctrl+Alt / Ctrl+Option 和窗口失焦更新显示，不重新请求 |
+| `contrib/folding/browser/folding.ts` | 双方都有；editor.all 与折叠动作 | indentation 策略不请求语言提供者；切换策略取消旧请求；数量上限优先保留外层范围，范围移除同步恢复隐藏行；标准 fold / unfold 使用原折叠模型 |
+| `contrib/find/browser/findController.ts` | 双方都有；editor.all 与查找动作 | 标准 find / replace 动作及快捷键进入原控件 |
+| `contrib/suggest/browser/suggestController.ts` | 双方都有；editor.all 与补全动作 | 标准 triggerSuggest 动作及快捷键进入原请求、会话和控件 |
+| `contrib/inlineCompletions/browser/controller/commands.ts`、`inlineCompletionContextKeys.ts` | 仅上游；editor.all 与 Inline 控制器 | trigger / commit / hide 操作原控制器；控制器维护实际消费的可见状态键，接受和隐藏快捷键受该状态约束 |
+| `contrib/links/browser/links.ts` | 仅上游；editor.all 与 host onOpenLink | 原链接检测、provider 查询和打开职责合并；消费 links 配置及与多光标相反的修饰键，普通点击定位光标；关闭时取消请求、拒绝迟到结果 |
+| `standalone/browser/quickAccess/standaloneGotoLineQuickAccess.ts` | 仅上游；editor.main | 标准 gotoLine 动作调用用户确认保留的 Ash 输入框 |
+| `editor.all.ts`、`editor.main.ts` | 双方都有；产品入口 | 更新贡献注册；Go to Line 从完整入口加载，最小 standalone API 不装入贡献 |
+
+用户明确确认下列仅 Ash 文件的处理方式；删除文件均可从本轮起始 Git HEAD 恢复，旧 TypeScript 引用已清空：
+
+| 路径 | 原生产调用 | 已执行的决定 |
+| --- | --- | --- |
+| `contrib/links/browser/linksController.ts`、`contrib/links/common/languageLinks.ts` | 各 1 个 | 职责迁入 `contrib/links/browser/links.ts`，迁移调用与测试后删除 |
+| `contrib/quickAccess/browser/quickAccessController.ts` | editor.all | 保留现有输入框实现，标准动作使用上游 standalone 路径 |
+| `contrib/hover/browser/diagnosticHoverController.ts`、`contrib/hover/test/browser/diagnosticHoverController.test.ts` | 0 个 | 删除未接入产品的旧实现与专用测试 |
+| `contrib/collaboration/common/envelopeSerialization.ts` | 0 个 | 删除实现及旧序列化测试；协作同步行为测试保留 |
+| `contrib/editorState/browser/editorStateController.ts`、`contrib/editorState/common/editorInteractionState.ts` | bundle → controller → state；无状态读取方 | 删除两个文件及 bundle 注册 |
+
+配套测试限定既有 `contrib/find/test/browser/findController.test.ts`、`contrib/suggest/test/browser/suggestTrigger.test.ts`、`contrib/inlineCompletions/test/browser/inlineCompletionsController.test.ts`、`test/common/modes/linkComputer.test.ts`、`test/common/collaboration-synchronizer.test.ts`，以及 `ash-ts/test/integration/browser/standalone.integration.ts` / `.spec.ts`。链接 provider 与 URL 合并的测试迁到真实浏览器，原纯 URL 扫描测试保留。
+
+全量验证追加 `test/browser/standaloneEditor.test.ts`：provider 测试改从公开 action 进入窗口命令服务，编辑器使用作用域释放；真实快捷键继续由 Chromium 场景覆盖。
+
+浏览器全量验证追加准入 `ash-ts/test/integration/browser/textModel.integration.ts`（既有 Ash 场景装配）：真实按键 → 已注册查找动作 → 原 CodeEditorPane → 查找控件。该 fixture 缺少命令与快捷键服务，复用既有 `registerCodeEditorServices` 补齐并启动按键监听；Workbench 生产装配已具备服务，无需修改。同批调整 standalone 场景的共享 snooze 装配：直接请求两个控制器，保留双编辑器显示、共同暂停和释放后恢复的断言；不再向未聚焦节点派发合成快捷键。
+
+当前 Editor 为 **535 个生产文件：436 个上游同路径、99 个 Ash 自有；298 个上游路径未引入**。其中 contrib 为 **164 个：106 个同路径、58 个 Ash 自有；189 个上游路径未引入**。声明总账仍为 80 项已处理、41 项待核对；标准命令接通不表示各控制器完整公开契约已经对齐。Inlay 的完整行内布局、补全其余契约、Workbench Quick Access 归属和 richTextEditorWidget 到协作 contribution 的依赖仍需继续处理。
+
+本轮最终验证：
+
+- `test:editor:unit`：1,238 项、234 个文件通过。随后调整的 Inline / Suggest 单测与公开入口架构检查定向复验 11 项通过；保留测试环境既有的 JSDOM Canvas 提示，没有新增缺失服务错误。
+- `check-editor-alignment.mjs --test=browser`：结构、台账、CSS、类型检查和 589 项浏览器测试全部通过，未生成源码目录下的 JavaScript。首次全量检查发现的命令入口与服务装配测试问题已修正，原效果和释放断言保留。
+- `build:stanza` 通过，无新增构建警告。仓库未配置 TypeScript formatter / linter；已人工检查本轮 diff，`git diff --check` 通过。
+- 未运行上游 VS Code 窗口；预期依据本地上游公开配置、动作及行为测试，不将本轮修复标为完整界面一致。
+
+## Contrib 扩展审查：修复前记录（2026-09-21）
+
+此前对整个 `contrib` 完成生产文件、导入、注册入口和测试入口扫描，并对下列六类问题做了浏览器抽查。该次审查只更新台账，没有修改生产实现或测试；其中确认的配置、命令与无消费者代码问题已由上方修复批次处理。
+
+审查基线：Ash `36571dd38`，本地只读 VS Code `1aaf9d931d8`。本轮起始工作树干净。统计包含此前检查的 Sticky Scroll 8 个文件；其他贡献共 159 个生产文件。
+
+| 文件集合 | 数量 | 含义 |
+| --- | --- | --- |
+| Ash 生产文件 | 167 | 包含 TypeScript 与 CSS，排除测试 |
+| 双方同路径 | 103 | 仍需按公开契约和实际行为验收 |
+| 仅 Ash | 64 | 包含 Academic、Citation、协作等专属能力，也包含尚未归位的通用编辑器功能；不能统一判为多余文件 |
+| 仅上游 | 192 | 只是缺失路径清单，不能当作直接创建文件的任务队列 |
+
+### 已复现的行为与命令缺口
+
+下表使用现有 `standalone.html` 测试装配，通过 `updateOptions`、真实键盘与鼠标、provider 请求记录、命令注册表及 DOM 状态检查。没有运行上游窗口；预期取自本地上游公开配置、动作注册及必要的交互判断。
+
+| 优先处理范围 | Ash 入口与当前 owner | 实际结果 | 对齐目标与回归场景 |
+| --- | --- | --- | --- |
+| Links 配置与点击 | `editor.all.ts` → `contrib/links/browser/linksController.ts` → host `onOpenLink` | 设置 `links: false` 后，鼠标经过 URL 再普通左击仍调用 host。控制器没有读取链接选项，也没有要求打开链接的修饰键 | 对应职责在上游 `contrib/links/browser/links.ts`。先核实已有 Ash 文件决定，再收口配置、修饰键和取消；验证关闭后的请求与点击、普通定位光标、修饰键打开 |
+| Inline Completions 开关 | `contrib/inlineCompletions/browser/controller/inlineCompletionsController.ts` 的 `onDidType` → scheduler → provider | `inlineSuggest.enabled: false` 后键入 `abc`，仍发出 automatic 请求并显示建议 | 同路径现有控制器消费配置；验证初始关闭、动态关闭、待返回请求、重新开启 |
+| Hover 开关与延迟 | `hoverContribution.ts` → `contrib/hover/browser/contentHoverController.ts` → pointer timer | `hover.enabled: 'off'` 后仍显示 `alpha documentation`。代码固定等待 300ms，没有消费 `hover` 选项 | 同路径 owner 消费启用模式与延迟；验证初始关闭、动态关闭、延迟和修饰键模式 |
+| Inlay Hints 显示模式 | `contrib/inlayHints/browser/inlayHintsController.ts` → provider → hint DOM | `inlayHints.enabled: 'offUnlessPressed'` 且没有按键时，仍显示 `value:`。控制器只区分 `'off'` 与其他值 | 验证四种 enabled 值及 Ctrl+Alt / Ctrl+Option 按下、松开和失焦；完整字体、padding、长度和行内布局仍需另行验收 |
+| Folding 策略 | `contrib/folding/browser/folding.ts` 的范围来源 → provider | `foldingStrategy: 'indentation'` 时仍请求语言折叠 provider；代码同时没有消费 `foldingMaximumRegions` | 保持现有折叠状态 owner，接通策略和数量上限；补充切换策略、取消旧请求、范围截断及隐藏区更新测试。数量上限本轮只有静态证据 |
+| Find / Folding / Suggest / Inline / Quick Access 命令 | 对应控制器的本地按键处理器；已有编辑器 action / command 注册链 | 下列 9 个标准命令均不在注册表；Quick Fix 作为对照存在。快捷键处理没有形成相应命令入口 | 命令操作现有唯一控制器，不建立第二套状态；同时验证命令执行效果、物理按键、自定义快捷键、上下文条件及释放 |
+
+缺少的 9 个命令：`actions.find`、`editor.action.startFindReplaceAction`、`editor.fold`、`editor.unfold`、`editor.action.triggerSuggest`、`editor.action.inlineSuggest.trigger`、`editor.action.inlineSuggest.commit`、`editor.action.inlineSuggest.hide`、`editor.action.gotoLine`。代码中的 `executeCommands('editor.action.inlineSuggest.commit', ...)` 和 `setSelections('editor.action.gotoLine', ...)` 只是来源标记，不是命令注册。上游 Go to Line 的动作属于 `standalone/browser/quickAccess/standaloneGotoLineQuickAccess.ts`，共享定位职责属于 `contrib/quickAccess/browser/gotoLineQuickAccess.ts`，不能把整个动作强塞进 contrib。
+
+现有测试缺口：Links 集成测试明确以普通点击打开作为预期，修复时需同步改正，并保留 host 调用与生命周期覆盖；Inlay Hints 只覆盖 `on/off`；Folding 覆盖总开关和请求取消；Inline Completions 覆盖输入、取消与 snooze；Hover 覆盖语言、provider、模型和焦点变化。它们不能证明上表配置组合或标准命令已生效。
+
+### 归属与装配待核实
+
+- `contrib/hover/browser/diagnosticHoverController.ts` 和 `contrib/collaboration/common/envelopeSerialization.ts` 仍只有测试引用，未发现生产导入。前者依赖的旧 marker class / dataset 也仅见于自身与测试；这证明其生产链未接通，不等于诊断功能整体缺失。两者的删除或迁移仍需按准确路径处理。
+- `contrib/editorState/browser/editorStateController.ts` 创建 `common/editorInteractionState.ts` 的状态副本，只持续写入焦点、选区、滚动和版本；没有生产读取方或事件订阅者。应先确认是否还有必要的功能消费方，不能把有注册入口等同于有业务用途。
+- `browser/widget/richTextEditor/richTextEditorWidget.ts` 仍直接创建并公开返回 `contrib/collaboration/common/controller.ts` 的具体控制器。公共协作协议虽已迁回 common，Widget 到 contribution 的实现依赖仍待收敛；此前协议迁移不代表整条职责链已完成。
+- `gotoSymbol`、`callHierarchy`、`quickAccess`、`sectionHeaders`、`unicodeHighlighter`、`unusualLineTerminators` 等仍有仅 Ash 载体。已有审批按原记录沿用；没有新决定的文件本轮不改变归属。Academic、Citation 和协作的专属能力也不能按上游缺失路径批量迁移。
+
+实施顺序应先闭合上述配置行为，再按现有命令服务补通标准操作，随后逐项处理载体与无消费方状态。每一批仍需重新列出准确路径、已有文件决定、唯一 owner 和真实入口测试；此次目录扫描不是整目录重写授权。
+
+### 本轮验证
+
+- `check-editor-alignment.mjs --structure-only --full` 通过：Editor 台账仍为 80 已处理、41 待处理；本次未把成员差异或文件数量计为完成。CSS 扫描没有原样复制、品牌替换等价或品牌残留项。
+- `pnpm --dir ash-ts run test:editor:browser:build` 通过；Playwright CLI 使用该产物完成上表五类配置场景及一组标准命令检查，均观察到缺口。
+- `pnpm --dir ash-ts run test:editor:browser --grep 'links|inlay hints|folding toggles|inline completion debounces|hover'` 通过，48 个既有浏览器测试通过。此入口同时完成测试 TypeScript 编译和浏览器产物构建，没有新增测试。
+- 本轮没有运行完整单测、完整浏览器套件、Stanza 产品构建或上游同场景对照；不能引用之前批次的验证数字作为本轮结论。
+
 ## Sticky Scroll 文件与调用链（2026-09-21）
 
 `contrib/stickyScroll` 的 8 个生产文件现在全部与上游同路径。模型来源、候选行、DOM 和命令已接入原有 `editor.all.ts` 注册链；文件齐全不表示全部上游交互已经实现。
@@ -39,7 +129,7 @@ Widget 继续拥有并复用标题按钮，在同一行中增加独立折叠按�
 
 尚未完整对齐的能力：控件高度事件在本地暂无消费方，不增加空端口；标准 `gotoSymbol/browser/goToSymbol.ts` 查询入口仍是导航模块的待处理项。预检只读取定义可用性，点击使用已有导航 owner。开关命令修改当前编辑器选项，Workbench 持久配置不在本批。控制器仍保留在下方待核对表，不能按成员数记作全量完成。
 
-当前 Editor 文件集合为 **537 个：432 个上游同路径、105 个 Ash 自有；302 个上游路径未引入**。本批 CSS 审计无阻断项。实际验证：
+当时 Editor 文件集合为 **537 个：432 个上游同路径、105 个 Ash 自有；302 个上游路径未引入**。本批 CSS 审计无阻断项。实际验证：
 
 - 续批 `test:editor:browser --grep 'sticky'`：15 项通过，包括正文与标题颜色一致、着色更新不丢焦点、固定行号、相对与自定义行号、鼠标 / Enter / Space 折叠、隐藏按钮后转移焦点、Shift 结尾预览及窗口高度限制。
 - 续批 `check-editor-alignment.mjs --test=browser` 通过，包括结构、台账、CSS、类型检查与 555 个浏览器测试；`build:stanza` 通过。
@@ -1725,14 +1815,14 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 | `contrib/colorPicker/browser/colorPickerWidget.ts` | `ColorPickerWidget` | 已回到对应路径并拥有挂载、控件事件和释放；保留 Ash 的颜色模型与展示，构造器和其余上游公开接口仍未全量对齐 |
 | `contrib/peekView/browser/peekView.ts` | `PeekViewWidget` | 已回到对应路径并拥有标题、Escape 和关闭事件，导航 / 层级 / Quick Diff 接通释放；Ash 的内容容器与布局接口继续保留，未实现上游全部标题栏能力 |
 | `contrib/codeAction/browser/codeActionController.ts` | `CodeActionController` | 同路径贡献负责本地 Code Action 菜单；内容变化只在菜单拥有焦点时恢复所属输入节点，避免共享模型的另一编辑器抢焦点。菜单的其余公开契约仍待 Code Action 分部验收 |
-| `contrib/codelens/browser/codelensWidget.ts` | `CodeLensWidget` | 本地 contribution Widget 改为 `EditorCodeLensWidget` |
+| `contrib/codelens/browser/codelensWidget.ts` | `CodeLensWidget` | 当前已使用 `CodeLensWidget` 名称；其余公开契约仍待按生产调用方逐项验收 |
 | `contrib/colorPicker/browser/colorDetector.ts` | `ColorDetector` | 已恢复上游公开名；颜色 provider 结果写入标准 before decoration，动态 class ref 先于 CSS owner 释放，注入 marker 由标准鼠标目标读取 |
-| `contrib/find/browser/findController.ts` | `FindController` | 本地 contribution 实现改为 `EditorFindController` |
-| `contrib/folding/browser/folding.ts` | `FoldingController` | 本地 contribution 实现改为 `EditorFoldingController` |
-| `contrib/inlayHints/browser/inlayHintsController.ts` | `InlayHintsController` | 本地 contribution 实现改为 `EditorInlayHintsController` |
-| `contrib/inlineCompletions/browser/controller/inlineCompletionsController.ts` | `InlineCompletionsController` | 本地 contribution 实现改为 `EditorInlineCompletionsController` |
-| `contrib/stickyScroll/browser/stickyScrollController.ts` | `StickyScrollController` | 文件职责、来源请求、候选行及命令已接通；语法着色、行号、折叠图标、定义跳转和高度事件仍待补齐，见顶部 Sticky Scroll 记录。 |
-| `contrib/suggest/browser/suggestController.ts` | `SuggestController` | 本地 contribution 实现改为 `EditorSuggestController` |
+| `contrib/find/browser/findController.ts` | `FindController` | 标准查找 / 替换动作及快捷键接通原控件；其余公开契约仍待分部验收 |
+| `contrib/folding/browser/folding.ts` | `FoldingController` | 标准 fold / unfold、范围策略和数量上限接通原折叠状态；完整命令参数、公开状态与 provider 契约仍待核对 |
+| `contrib/inlayHints/browser/inlayHintsController.ts` | `InlayHintsController` | 请求失效及四种 enabled 模式已接通；完整行内布局与其他展示选项仍待验收 |
+| `contrib/inlineCompletions/browser/controller/inlineCompletionsController.ts` | `InlineCompletionsController` | 自动建议开关、只读切换、trigger / commit / hide 命令已接通；完整模型、视图与交互公开契约仍待核对 |
+| `contrib/stickyScroll/browser/stickyScrollController.ts` | `StickyScrollController` | 文件职责、来源请求、候选行、命令、语法着色、行号、折叠图标与定义交互已接通；标准定义查询归属、高度事件消费方和上游同场景验证仍待核对，见 Sticky Scroll 记录 |
+| `contrib/suggest/browser/suggestController.ts` | `SuggestController` | 标准 `editor.action.triggerSuggest` 与快捷键进入现有请求和会话；其余补全公开契约仍待分部验收 |
 
 ### 原待处理项
 

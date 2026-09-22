@@ -28,14 +28,11 @@ const { FindController } = await import("../../browser/findController.js");
 
 suiteTeardown(() => browserEnvironment.window.close());
 
-test("find opens from the editor shortcut, highlights matches, navigates, and restores focus", () => {
+test("find opens, highlights matches, navigates, and restores focus", () => {
 	const fixture = createFixture("alpha beta alpha", new Position((0) + 1, (0) + 1), new Position((0) + 1, (5) + 1));
 	using resources = fixture;
 
-	const open = keyboardEvent(fixture.dom.window, "f", { ctrlKey: true });
-	fixture.editorInput.dispatchEvent(open);
-
-	assert.equal(open.defaultPrevented, true);
+	fixture.find.open();
 	assert.equal(fixture.find.visible, true);
 	assert.equal(fixture.find.searchInput.value, "alpha");
 	assert.equal(fixture.find.element.querySelector(".stanza-editor-find-result")?.textContent, "1 of 2");
@@ -143,12 +140,10 @@ test("configured find defaults seed toggles, selection scope, and non-looping na
 test("replace current and replace all use isolated undo transactions", () => {
 	const fixture = createFixture("a a a");
 	using resources = fixture;
-	const openReplace = keyboardEvent(fixture.dom.window, "h", { ctrlKey: true });
-	fixture.editorInput.dispatchEvent(openReplace);
+	fixture.find.open({ showReplace: true });
 	setInputValue(fixture.find.searchInput, "a");
 	fixture.find.replaceInput.value = "long";
 
-	assert.equal(openReplace.defaultPrevented, true);
 	assert.equal(fixture.find.replaceInput.closest(".stanza-editor-replace-row")?.hasAttribute("hidden"), false);
 	requiredElement<HTMLButtonElement>(fixture.find.element, '[aria-label="Replace current match"]').click();
 	assert.equal(fixture.model.getText(), "long a a");

@@ -4,7 +4,7 @@ import { Disposable, MutableDisposable, toDisposable } from "../../../../base/co
 import { rot } from "../../../../base/common/numbers.js";
 import { type ICodeEditor } from "../../../browser/editorBrowser.js";
 import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
-import { registerEditorContribution } from '../../../browser/editorExtensions.js';
+import { EditorAction, registerEditorAction, registerEditorContribution, type ServicesAccessor } from '../../../browser/editorExtensions.js';
 import { Selection } from "../../../common/core/selection.js";
 import { Range } from "../../../common/core/range.js";
 import { type TextModel } from "../../../common/model/textModel.js";
@@ -14,6 +14,11 @@ import { type TrackedRange } from "../../../common/model/trackedRange.js";
 import { type View } from "../../../browser/view.js";
 import { EditorOptions, type IEditorFindOptions } from '../../../common/config/editorOptions.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
+
+import { EditorContextKeys } from '../../../common/editorContextKeys.js';
+import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
+import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
+import { localize2 } from '../../../../nls.js';
 
 const DISPLAY_RESULT_LIMIT = 999;
 const REPLACE_ALL_RESULT_LIMIT = 100_000;
@@ -197,20 +202,6 @@ export class FindController extends Disposable {
 
 	private handleEditorKeydown(event: KeyboardEvent): void {
 		if (event.defaultPrevented || event.isComposing) return;
-		const primaryModifier = event.ctrlKey || event.metaKey;
-		if (primaryModifier && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "f") {
-			stopEvent(event);
-			this.open();
-			return;
-		}
-		if (
-			(primaryModifier && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "h") ||
-			(event.metaKey && event.altKey && !event.ctrlKey && !event.shiftKey && event.key.toLowerCase() === "f")
-		) {
-			stopEvent(event);
-			this.open({ showReplace: true });
-			return;
-		}
 		if (event.key === "F3" && !event.ctrlKey && !event.altKey && !event.metaKey) {
 			stopEvent(event);
 			if (!this.visible) this.open();
@@ -473,3 +464,45 @@ registerEditorContribution({
 		return new FindController(context.controller.element, context.editor, context.view, decorations, context.options.find);
 	},
 });
+
+class StartFindAction extends EditorAction {
+	constructor() {
+		super({
+			id: 'actions.find',
+			label: localize2('find', 'Find'),
+			precondition: undefined,
+			kbOpts: {
+				primary: KeyMod.CtrlCmd | KeyCode.KeyF,
+				weight: KeybindingWeight.EditorContrib,
+				kbExpr: EditorContextKeys.editorTextFocus.isEqualTo(true),
+			},
+		});
+	}
+
+	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
+		editor.getContribution<FindController>(FindController.ID)?.open();
+	}
+}
+
+class StartFindReplaceAction extends EditorAction {
+	constructor() {
+		super({
+			id: 'editor.action.startFindReplaceAction',
+			label: localize2('replace', 'Replace'),
+			precondition: EditorContextKeys.writable,
+			kbOpts: {
+				primary: KeyMod.CtrlCmd | KeyCode.KeyH,
+				mac: { primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.KeyF },
+				weight: KeybindingWeight.EditorContrib,
+				kbExpr: EditorContextKeys.editorTextFocus.isEqualTo(true),
+			},
+		});
+	}
+
+	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
+		editor.getContribution<FindController>(FindController.ID)?.open({ showReplace: true });
+	}
+}
+
+registerEditorAction(StartFindAction);
+registerEditorAction(StartFindReplaceAction);

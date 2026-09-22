@@ -603,6 +603,7 @@ test.describe('contribution lifecycle', () => {
 
 	test('links discard cached targets when language changes', async ({ page }) => {
 		await page.goto('/standalone.html');
+		await page.keyboard.down('ControlOrMeta');
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareContributionRequests('links'));
 		const point = await page.evaluate(() => window.ashStandaloneIntegration.contributionPoint(3));
 		await page.mouse.move(point.x, point.y);
@@ -618,6 +619,7 @@ test.describe('contribution lifecycle', () => {
 		await expect(page.locator('#caller .stanza-editor-link-target')).toHaveCount(1);
 		await page.mouse.click(point.x + 1, point.y);
 		expect(await page.evaluate(() => window.ashStandaloneIntegration.readOpenedLinks())).toEqual(['https://example.invalid/javascript']);
+		await page.keyboard.up('ControlOrMeta');
 	});
 
 	test('CodeLens removes old language commands and rejects late responses', async ({ page }) => {
@@ -681,6 +683,35 @@ test.describe('inlay hints', () => {
 	test.afterEach(async ({ page }) => {
 		await page.evaluate(() => window.ashStandaloneIntegration?.dispose());
 	});
+
+	for (const mode of ['on', 'offUnlessPressed', 'onUnlessPressed'] as const) {
+		test(`inlay visibility follows ${mode}, modifier release and window blur without replacing nodes`, async ({ page }) => {
+			await page.goto('/standalone.html');
+			await page.evaluate(mode => {
+				window.ashStandaloneIntegration.updateContributionOptions({ inlayHints: { enabled: mode } });
+				window.ashStandaloneIntegration.prepareInlayRequests();
+			}, mode);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests().length)).toBe(1);
+			await page.evaluate(() => window.ashStandaloneIntegration.finishInlayRequest(0, 'value:'));
+			const hint = page.locator('#caller .stanza-editor-inlay-hint');
+			await expect(hint).toBeVisible({ visible: mode !== 'offUnlessPressed' });
+			const node = await hint.elementHandle();
+			await page.keyboard.down('Control');
+			await page.keyboard.down('Alt');
+			await expect(hint).toBeVisible({ visible: mode !== 'onUnlessPressed' });
+			await page.keyboard.up('Alt');
+			await page.keyboard.up('Control');
+			await expect(hint).toBeVisible({ visible: mode !== 'offUnlessPressed' });
+			await page.keyboard.down('Control');
+			await page.keyboard.down('Alt');
+			await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+			await expect(hint).toBeVisible({ visible: mode !== 'offUnlessPressed' });
+			await page.keyboard.up('Alt');
+			await page.keyboard.up('Control');
+			expect(await node!.evaluate(element => element.isConnected)).toBe(true);
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.readInlayRequests())).toHaveLength(1);
+		});
+	}
 
 	test('late provider registration displays hints and layout retains their nodes', async ({ page }) => {
 		await page.goto('/standalone.html');
@@ -809,11 +840,59 @@ test('detected document links reach the editor host without a language provider'
 	expect(bounds).not.toBeNull();
 	const point = { x: bounds!.x + bounds!.width / 2, y: bounds!.y + bounds!.height / 2 };
 	await page.mouse.move(point.x, point.y);
+	await page.mouse.click(point.x, point.y);
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readOpenedLinks())).toEqual([]);
+	await page.keyboard.down('ControlOrMeta');
 	await expect(page.locator('#caller .stanza-editor-link-target')).toHaveCount(1);
 	await page.mouse.click(point.x, point.y);
 	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readOpenedLinks())).toEqual(['https://example.test/path']);
 	await page.evaluate(() => window.ashStandaloneIntegration.prepareClipboard('plain text'));
 	await expect(page.locator('#caller .stanza-editor-link-target')).toHaveCount(0);
+	await page.keyboard.up('ControlOrMeta');
+});
+
+test('links combine provider targets and detected URLs and honor disabled state and modifiers', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => {
+		window.ashStandaloneIntegration.updateContributionOptions({ links: false });
+		window.ashStandaloneIntegration.prepareLinkCandidates();
+	});
+	const first = await page.evaluate(() => window.ashStandaloneIntegration.contributionPoint(4));
+	await page.keyboard.down('ControlOrMeta');
+	await page.mouse.click(first.x, first.y);
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readOpenedLinks())).toEqual([]);
+	await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ links: true }));
+	await page.mouse.move(first.x + 1, first.y);
+	await expect(page.locator('#caller .stanza-editor-link-target')).toHaveCount(1);
+	await page.mouse.click(first.x + 1, first.y);
+	await page.keyboard.up('ControlOrMeta');
+	await expect(page.locator('#caller .stanza-editor-link-target')).toHaveCount(0);
+	const second = await page.evaluate(() => window.ashStandaloneIntegration.contributionPoint(23));
+	await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ multiCursorModifier: 'ctrlCmd' }));
+	await page.keyboard.down('Alt');
+	await page.mouse.move(second.x, second.y);
+	await expect(page.locator('#caller .stanza-editor-link-target')).toHaveCount(1);
+	await page.mouse.click(second.x, second.y);
+	await page.keyboard.up('Alt');
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readOpenedLinks())).toEqual(['https://resolved.test', 'https://two.test']);
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+test('links disabling aborts pending results and prevents further provider requests', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareContributionRequests('links'));
+	const point = await page.evaluate(() => window.ashStandaloneIntegration.contributionPoint(3));
+	await page.mouse.move(point.x, point.y);
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(1);
+	await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ links: false }));
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests()))[0]!.aborted).toBe(true);
+	await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(0));
+	await page.keyboard.down('ControlOrMeta');
+	await page.mouse.click(point.x + 1, point.y);
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readOpenedLinks())).toEqual([]);
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).toHaveLength(1);
+	await page.keyboard.up('ControlOrMeta');
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 });
 
 test('semantic provider replacement and removal update rendered token styles', async ({ page }) => {
@@ -3640,6 +3719,93 @@ for (const outcome of ['second', 'empty', 'decline', 'error', 'cancel', 'silent'
 }
 
 
+test('inline suggestions respect automatic enablement and cancel disabled requests', async ({ page }) => {
+	await page.clock.install();
+	await page.goto('/standalone.html');
+	await page.evaluate(() => {
+		window.ashStandaloneIntegration.updateContributionOptions({ inlineSuggest: { enabled: false } });
+		window.ashStandaloneIntegration.prepareInlineRequests();
+	});
+	await page.keyboard.type('abc');
+	await page.clock.runFor(600);
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readInlineRequests())).requests).toEqual([]);
+	await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ inlineSuggest: { enabled: true } }));
+	await page.keyboard.type('d');
+	await page.clock.runFor(600);
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readInlineRequests())).requests).toHaveLength(1);
+	await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ inlineSuggest: { enabled: false } }));
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readInlineRequests())).requests[0]!.aborted).toBe(true);
+	await page.evaluate(() => window.ashStandaloneIntegration.finishInlineRequest(0));
+	await expect(page.locator('#caller .stanza-editor-inline-completion')).toBeHidden();
+	await page.keyboard.press('Control+Alt+Space');
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readInlineRequests())).requests[1]!.kind).toBe('explicit');
+	await page.evaluate(() => window.ashStandaloneIntegration.finishInlineRequest(1));
+	await expect(page.locator('#caller .stanza-editor-inline-completion')).toBeVisible();
+	await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ readOnly: true }));
+	await expect(page.locator('#caller .stanza-editor-inline-completion')).toBeHidden();
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+test('standard contribution commands operate the existing find, fold and goto widgets', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareClipboard('alpha\n  child\nend'));
+	await page.evaluate(() => window.ashStandaloneIntegration.invokeLanguageAction('actions.find'));
+	const find = page.locator('#caller .stanza-editor-find-widget');
+	await expect(find).toBeVisible();
+	await find.getByRole('textbox', { name: 'Find', exact: true }).fill('alpha');
+	await expect(find.locator('.stanza-editor-find-result')).toHaveText('1 of 1');
+	await page.keyboard.press('Escape');
+	await page.evaluate(() => window.ashStandaloneIntegration.invokeLanguageAction('editor.action.startFindReplaceAction'));
+	await expect(find.getByRole('textbox', { name: 'Replace', exact: true })).toBeVisible();
+	await page.keyboard.press('Escape');
+	await page.evaluate(() => window.ashStandaloneIntegration.invokeLanguageAction('editor.fold'));
+	await expect(page.locator('#caller .view-line[data-logical-line-index="1"]')).toHaveCount(0);
+	await page.evaluate(() => window.ashStandaloneIntegration.invokeLanguageAction('editor.unfold'));
+	await expect(page.locator('#caller .view-line[data-logical-line-index="1"]')).toHaveCount(1);
+	await page.evaluate(() => window.ashStandaloneIntegration.invokeLanguageAction('editor.action.gotoLine'));
+	const location = page.locator('#caller .stanza-editor-goto-line-input');
+	await expect(location).toBeFocused();
+	await location.fill('3:2');
+	await page.keyboard.press('Enter');
+	await expect(location).toBeHidden();
+	await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
+	await page.keyboard.type('X');
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('alpha\n  child\neXnd');
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+test('standard suggestion commands trigger, hide and commit through one undoable edit', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => {
+		window.ashStandaloneIntegration.prepareContributionRequests('completion');
+		window.ashStandaloneIntegration.invokeLanguageAction('editor.action.triggerSuggest');
+	});
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(1);
+	await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(0));
+	await expect(page.locator('#caller .stanza-editor-completion')).toBeVisible();
+	await page.keyboard.press('Escape');
+	await page.evaluate(() => {
+		window.ashStandaloneIntegration.prepareInlineRequests();
+		window.ashStandaloneIntegration.invokeLanguageAction('editor.action.inlineSuggest.trigger');
+	});
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlineRequests().requests.length)).toBe(1);
+	await page.evaluate(() => window.ashStandaloneIntegration.finishInlineRequest(0));
+	const ghost = page.locator('#caller .stanza-editor-inline-completion');
+	await expect(ghost).toBeVisible();
+	await page.evaluate(() => window.ashStandaloneIntegration.invokeLanguageAction('editor.action.inlineSuggest.hide'));
+	await expect(ghost).toBeHidden();
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('');
+	await page.evaluate(() => window.ashStandaloneIntegration.invokeLanguageAction('editor.action.inlineSuggest.trigger'));
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readInlineRequests().requests.length)).toBe(2);
+	await page.evaluate(() => window.ashStandaloneIntegration.finishInlineRequest(1));
+	await page.evaluate(() => window.ashStandaloneIntegration.invokeLanguageAction('editor.action.inlineSuggest.commit'));
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe(' suggestion');
+	await expect(ghost).toBeHidden();
+	await page.keyboard.press('ControlOrMeta+z');
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe('');
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
 test('inline completion snooze is shared and survives closing another editor', async ({ page }) => {
 	await page.goto('/standalone.html');
 	expect(await page.evaluate(() => window.ashStandaloneIntegration.runSharedInlineSnooze())).toEqual({
@@ -3859,6 +4025,75 @@ test('color picker retains one widget, applies one undoable edit and releases it
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	await expect(picker).toHaveCount(0);
 	expect(errors).toEqual([]);
+});
+
+test('hover options control requests, delay and keyboard modifiers', async ({ page }) => {
+	await page.clock.install();
+	await page.goto('/standalone.html');
+	await page.evaluate(() => {
+		window.ashStandaloneIntegration.updateContributionOptions({ hover: { enabled: 'off', delay: 900 } });
+		window.ashStandaloneIntegration.prepareLanguageRequest('hover');
+	});
+	const point = await page.evaluate(() => window.ashStandaloneIntegration.contributionPoint(2));
+	await page.mouse.move(point.x, point.y);
+	await page.clock.runFor(1000);
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests())).toEqual([]);
+	await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ hover: { enabled: 'on' } }));
+	await page.clock.runFor(899);
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests())).toEqual([]);
+	await page.clock.runFor(1);
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests())).toHaveLength(1);
+	await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ hover: { enabled: 'off' } }));
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests()))[0]!.aborted).toBe(true);
+	await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
+	const hover = page.locator('#caller .stanza-editor-hover');
+	await expect(hover).toBeHidden();
+	await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ hover: { enabled: 'onKeyboardModifier', delay: 0 }, multiCursorModifier: 'ctrlCmd' }));
+	await page.clock.runFor(1);
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests())).toHaveLength(1);
+	await page.keyboard.down('Alt');
+	await page.clock.runFor(1);
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests())).toHaveLength(2);
+	await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(1));
+	await expect(hover).toBeVisible();
+	await page.keyboard.up('Alt');
+	await expect(hover).toBeHidden();
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+test('folding strategy cancels providers and region limits update hidden lines', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => {
+		window.ashStandaloneIntegration.updateContributionOptions({ foldingStrategy: 'indentation', showFoldingControls: 'always' });
+		window.ashStandaloneIntegration.prepareContributionRequests('folding');
+	});
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).toEqual([]);
+	await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ foldingStrategy: 'auto' }));
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBeGreaterThan(0);
+	await page.evaluate(async () => {
+		window.ashStandaloneIntegration.updateContributionOptions({ foldingStrategy: 'indentation' });
+		const requests = window.ashStandaloneIntegration.readContributionRequests();
+		for (let index = 0; index < requests.length; index++) await window.ashStandaloneIntegration.finishContributionRequest(index);
+	});
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).every(request => request.aborted)).toBe(true);
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareClipboard('first\n  child\nsecond\n  child\nthird\n  child'));
+	const controls = page.locator('#caller .ash-icon-folding-expanded');
+	await expect(controls).toHaveCount(3);
+	await controls.last().click();
+	await expect(page.locator('#caller .view-line[data-logical-line-index="5"]')).toHaveCount(0);
+	await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ foldingMaximumRegions: 1 }));
+	await expect(controls).toHaveCount(1);
+	await expect(page.locator('#caller .view-line[data-logical-line-index="5"]')).toHaveCount(1);
+	await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ foldingMaximumRegions: 3 }));
+	await expect(controls).toHaveCount(3);
+	await page.evaluate(() => {
+		window.ashStandaloneIntegration.prepareClipboard('first\n  inner\n    child\nsecond\n  child');
+		window.ashStandaloneIntegration.updateContributionOptions({ foldingMaximumRegions: 2 });
+	});
+	await expect(controls).toHaveCount(2);
+	await controls.last().click();
+	await expect(page.locator('#caller .view-line[data-logical-line-index="4"]')).toHaveCount(0);
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 });
 
 for (const kind of ['hover', 'selection'] as const) {

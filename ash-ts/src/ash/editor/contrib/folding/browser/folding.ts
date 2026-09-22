@@ -1,16 +1,20 @@
+import { EditorContextKeys } from '../../../common/editorContextKeys.js';
+import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
+import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
+import { localize2 } from '../../../../nls.js';
 import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
 import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type ICodeEditor, type IEditorMouseEvent, MouseTargetType } from '../../../browser/editorBrowser.js';
 import { EditorFoldingModel } from "./foldingModel.js";
-import { EditorFoldingRangeSource, type EditorFoldingRegion } from "./foldingRanges.js";
+import { EditorFoldingRangeSource, type EditorFoldingRange, type EditorFoldingRegion } from "./foldingRanges.js";
 import { Position } from "../../../common/core/position.js";
 import { Selection } from "../../../common/core/selection.js";
 import { type View } from "../../../browser/view.js";
 import { type ILanguageConfigurationService } from "../../../common/languages/languageConfigurationRegistry.js";
 import { type ILanguageFeaturesService } from "../../../common/services/languageFeatures.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
-import { registerEditorContribution } from "../../../browser/editorExtensions.js";
+import { EditorAction, registerEditorAction, registerEditorContribution, type ServicesAccessor } from "../../../browser/editorExtensions.js";
 import { EditorHiddenRangeModel } from "./hiddenRangeModel.js";
 import { computeEditorIndentFoldingRanges } from "./indentRangeProvider.js";
 import { computeEditorLanguageFoldingRanges, mergeEditorFoldingRanges } from "./syntaxRangeProvider.js";
@@ -108,7 +112,7 @@ class FoldingRangeSource extends Disposable {
 		this._register(options.configurations.onDidChange(() => this.refresh()));
 		this._register(options.providers.onDidChange(() => this.refresh()));
 		this._register(editor.onDidChangeConfiguration(event => {
-			if (event.hasChanged(EditorOption.folding)) this.refresh();
+			if (event.hasChanged(EditorOption.folding) || event.hasChanged(EditorOption.foldingStrategy) || event.hasChanged(EditorOption.foldingMaximumRegions)) this.refresh();
 		}));
 		this._register(toDisposable(() => this.request?.abort()));
 		this.refresh();
@@ -120,19 +124,41 @@ class FoldingRangeSource extends Disposable {
 			this.folding.setRanges([]);
 			return;
 		}
-		const local = mergeEditorFoldingRanges(
+		const indentationOnly = this.editor.getOption(EditorOption.foldingStrategy) === 'indentation';
+		const indentation = computeEditorIndentFoldingRanges(this.folding.model, { tabSize: this.options.tabSize });
+		const local = indentationOnly ? indentation : mergeEditorFoldingRanges(
 			computeEditorLanguageFoldingRanges(this.folding.model, this.folding.model.getLanguageId(), this.options.configurations),
-			computeEditorIndentFoldingRanges(this.folding.model, { tabSize: this.options.tabSize }),
+			indentation,
 		);
-		this.folding.setProviderRanges(local);
-		if (!this.options.providers.has(this.folding.model)) return;
+		this.applyRanges(local);
+		if (indentationOnly || !this.options.providers.has(this.folding.model)) return;
 		const request = this.request = new AbortController();
 		void this.service.provideFoldingRanges(this.folding.model.getLanguageId(), request.signal).then(ranges => {
 			if (request.signal.aborted || this.request !== request) return;
-			this.folding.setProviderRanges(mergeEditorFoldingRanges(local, ranges));
+			this.applyRanges(mergeEditorFoldingRanges(local, ranges));
 		}, error => {
 			if (!request.signal.aborted) this.options.onError(error);
 		});
+	}
+
+	private applyRanges(ranges: readonly EditorFoldingRange[]): void {
+		const ordered = mergeEditorFoldingRanges(ranges);
+		const limit = this.editor.getOption(EditorOption.foldingMaximumRegions);
+		if (ordered.length <= limit) {
+			this.folding.setProviderRanges(ordered);
+			return;
+		}
+		const enclosingEnds: number[] = [];
+		const ranked = ordered.map((range, index) => {
+			while (enclosingEnds.length && enclosingEnds.at(-1)! < range.startLineIndex) {
+				enclosingEnds.pop();
+			}
+			const depth = enclosingEnds.length;
+			enclosingEnds.push(range.endLineIndex);
+			return { range, depth, index };
+		});
+		const selected = ranked.sort((left, right) => left.depth - right.depth || left.index - right.index).slice(0, limit);
+		this.folding.setProviderRanges(selected.sort((left, right) => left.index - right.index).map(item => item.range));
 	}
 }
 
@@ -230,7 +256,8 @@ export class FoldingController extends Disposable {
 		if (region?.collapsed) this.relocateHiddenSelections(region);
 	}
 
-	private setContainingFoldCollapsed(collapsed: boolean): void {
+	public setContainingFoldCollapsed(collapsed: boolean): void {
+		if (!this.editor.getOption(EditorOption.folding)) return;
 		const position = this.editor.getPosition();
 		if (!position) return;
 		const region = this.folding.setContainingLineCollapsed(position.lineNumber - 1, collapsed);
@@ -338,3 +365,46 @@ function readOperatingSystem(value: OperatingSystem | undefined): OperatingSyste
 	}
 	return resolved;
 }
+
+class FoldAction extends EditorAction {
+	constructor() {
+		super({
+			id: 'editor.fold',
+			label: localize2('fold', 'Fold'),
+			precondition: undefined,
+			kbOpts: {
+				primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.BracketLeft,
+				mac: { primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.BracketLeft },
+				weight: KeybindingWeight.EditorContrib,
+				kbExpr: EditorContextKeys.editorTextFocus.isEqualTo(true),
+			},
+		});
+	}
+
+	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
+		editor.getContribution<FoldingController>('editor.contrib.folding')?.setContainingFoldCollapsed(true);
+	}
+}
+
+class UnfoldAction extends EditorAction {
+	constructor() {
+		super({
+			id: 'editor.unfold',
+			label: localize2('unfold', 'Unfold'),
+			precondition: undefined,
+			kbOpts: {
+				primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.BracketRight,
+				mac: { primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.BracketRight },
+				weight: KeybindingWeight.EditorContrib,
+				kbExpr: EditorContextKeys.editorTextFocus.isEqualTo(true),
+			},
+		});
+	}
+
+	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
+		editor.getContribution<FoldingController>('editor.contrib.folding')?.setContainingFoldCollapsed(false);
+	}
+}
+
+registerEditorAction(FoldAction);
+registerEditorAction(UnfoldAction);

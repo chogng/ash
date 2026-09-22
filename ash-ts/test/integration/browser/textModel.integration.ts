@@ -39,6 +39,8 @@ import "../../../src/ash/editor/editor.code.all.js";
 import { MemoryTextFiles } from "./memoryTextFiles.js";
 import { AccessibilitySupport, type IAccessibilityService } from '../../../src/ash/platform/accessibility/common/accessibility.js';
 import { EditorExtensionsRegistry } from '../../../src/ash/editor/browser/editorExtensions.js';
+import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
+import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
 
 interface WorkbenchSwitchResult {
 	readonly paneOwnsEditor: boolean;
@@ -153,6 +155,8 @@ disposables.add(bindColorTheme(themeService, root));
 services.registerInstance(ILanguageFeaturesService, languageFeaturesService);
 services.registerInstance(ILanguageConfigurationService, languageConfigurationService);
 services.registerInstance(ILogService, new NullLoggerService());
+registerCodeEditorServices(services);
+services.get(IKeybindingService);
 const pane = disposables.add(services.createInstance(CodeEditorPane, resourceStore, {
 	createPart: options => {
 		editorPart = createBrowserEditorPart(services, options);

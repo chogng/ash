@@ -1,5 +1,9 @@
+import { EditorContextKeys } from '../../../common/editorContextKeys.js';
+import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
+import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
+import { localize2 } from '../../../../nls.js';
 import { WordBasedCompletionItemProvider } from '../../../browser/services/editorWorkerService.js';
-import { registerEditorContribution } from '../../../browser/editorExtensions.js';
+import { EditorAction, registerEditorAction, registerEditorContribution, type ServicesAccessor } from '../../../browser/editorExtensions.js';
 import { type ICodeEditorWidgetOptions } from '../../../browser/widget/codeEditor/codeEditorWidget.js';
 import { isCompletionsEnabledFromObject } from '../../../common/services/completionsEnablement.js';
 import { Position } from "../../../common/core/position.js";
@@ -112,17 +116,6 @@ export class SuggestController extends Disposable {
 	private handleKeydown(event: KeyboardEvent): void {
 		if (this.isDisposed || event.defaultPrevented || event.isComposing) return;
 		if (
-			event.key === ' ' &&
-			event.ctrlKey &&
-			!event.shiftKey &&
-			!event.altKey &&
-			!event.metaKey
-		) {
-			stopEvent(event);
-			this.requestCompletion(createLanguageCompletionInvokeContext());
-			return;
-		}
-		if (
 			event.altKey &&
 			!event.shiftKey &&
 			!event.ctrlKey &&
@@ -210,7 +203,7 @@ export class SuggestController extends Disposable {
 		if (event.insertedText !== undefined) {
 			this.requestAfterInsert(event.insertedText, refreshIncomplete);
 		} else if (refreshIncomplete) {
-			this.requestCompletion(createLanguageCompletionIncompleteRefreshContext());
+			this.triggerSuggest(createLanguageCompletionIncompleteRefreshContext());
 		}
 	}
 
@@ -261,17 +254,17 @@ export class SuggestController extends Disposable {
 					selections[0]!.isEmpty() &&
 					Position.compare(selections[0]!.getPosition(), position) === 0
 				) {
-					this.requestCompletion(createLanguageCompletionIncompleteRefreshContext());
+					this.triggerSuggest(createLanguageCompletionIncompleteRefreshContext());
 				}
 			}).catch(error => {
 				if (!request.signal.aborted) this.reportRequestError(error);
 			}).finally(() => this.releaseCompletionRequest(request));
 			return;
 		}
-		if (refreshIncomplete) this.requestCompletion(createLanguageCompletionIncompleteRefreshContext());
+		if (refreshIncomplete) this.triggerSuggest(createLanguageCompletionIncompleteRefreshContext());
 	}
 
-	private requestCompletion(context: LanguageCompletionContext): void {
+	public triggerSuggest(context: LanguageCompletionContext = createLanguageCompletionInvokeContext()): void {
 		if (this.editor.getOption(EditorOption.readOnly)) {
 			return;
 		}
@@ -381,3 +374,28 @@ function createSnippetVariables(input: ICodeEditorWidgetOptions['input']): { rea
 		},
 	});
 }
+
+export class TriggerSuggestAction extends EditorAction {
+	public static readonly id = 'editor.action.triggerSuggest';
+
+	constructor() {
+		super({
+			id: TriggerSuggestAction.id,
+			label: localize2('suggest.trigger', 'Trigger Suggest'),
+			precondition: EditorContextKeys.writable,
+			kbOpts: {
+				primary: KeyMod.CtrlCmd | KeyCode.Space,
+				mac: { primary: KeyMod.WinCtrl | KeyCode.Space },
+				weight: KeybindingWeight.EditorContrib,
+				kbExpr: EditorContextKeys.editorTextFocus.isEqualTo(true),
+			},
+		});
+	}
+
+	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
+		editor.focus();
+		editor.getContribution<SuggestController>('editor.contrib.suggest')?.triggerSuggest();
+	}
+}
+
+registerEditorAction(TriggerSuggestAction);

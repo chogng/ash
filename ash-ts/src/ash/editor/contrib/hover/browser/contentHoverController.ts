@@ -3,21 +3,25 @@ import { ILanguageFeaturesService } from '../../../common/services/languageFeatu
 import type { ICodeEditor } from '../../../browser/editorBrowser.js';
 import { isNonEmptyArray } from '../../../../base/common/arrays.js';
 import "./hover.css";
-import { addDisposableListener, h } from "../../../../base/browser/dom.js";
+import { addDisposableListener, h, ModifierKeyEmitter } from "../../../../base/browser/dom.js";
 import { disposableWindowTimeout } from "../../../../base/browser/scheduler.js";
 import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type Position } from "../../../common/core/position.js";
 import { type View } from "../../../browser/view.js";
+import { EditorOption } from '../../../common/config/editorOptions.js';
+import { isMacintosh } from '../../../../base/common/platform.js';
 
 /** Projects provider-backed hover content into an editor-local, non-modal widget. */
 export class ContentHoverController extends Disposable {
 	private readonly element: HTMLDivElement;
 	private request: AbortController | undefined;
 	private readonly timer = this._register(new MutableDisposable<IDisposable>());
+	private readonly modifierKeys: ModifierKeyEmitter;
+	private hoverPosition: Position | undefined;
 
 	constructor(
 		private readonly viewport: View,
-		editor: ICodeEditor,
+		private readonly editor: ICodeEditor,
 		private readonly onError: (error: unknown) => void,
 		@ILanguageFeaturesService private readonly languageFeatures: ILanguageFeaturesService,
 	) {
@@ -27,6 +31,17 @@ export class ContentHoverController extends Disposable {
 		this.element.hidden = true;
 		this.element.setAttribute("role", "tooltip");
 		viewport.domNode.domNode.append(this.element);
+		this.modifierKeys = ModifierKeyEmitter.getInstance(this.element.ownerDocument.defaultView!);
+		this._register(this.modifierKeys.event(() => {
+			if (this.hoverPosition && editor.getOption(EditorOption.hover).enabled === 'onKeyboardModifier') {
+				this.scheduleAt(this.hoverPosition);
+			}
+		}));
+		this._register(editor.onDidChangeConfiguration(event => {
+			if (event.hasChanged(EditorOption.hover) || event.hasChanged(EditorOption.multiCursorModifier)) {
+				this.scheduleAt(this.hoverPosition);
+			}
+		}));
 		this._register(toDisposable(() => { this.cancelRequest(); this.element.remove(); }));
 		this._register(addDisposableListener<PointerEvent>(viewport.domNode.domNode, "pointermove", event => this.schedule(event)));
 		this._register(addDisposableListener(viewport.domNode.domNode, "pointerleave", () => this.hide()));
@@ -45,13 +60,25 @@ export class ContentHoverController extends Disposable {
 			this.hide();
 			return;
 		}
+		this.scheduleAt(target.position);
+	}
+
+	private scheduleAt(position: Position | undefined): void {
 		this.hide();
+		this.hoverPosition = position;
+		if (!position) return;
+		const options = this.editor.getOption(EditorOption.hover);
+		const modifiers = this.modifierKeys.keyStatus;
+		const modifierPressed = this.editor.getOption(EditorOption.multiCursorModifier) === 'altKey'
+			? (isMacintosh ? modifiers.metaKey : modifiers.ctrlKey)
+			: modifiers.altKey;
+		if (options.enabled === 'off' || (options.enabled === 'onKeyboardModifier' && !modifierPressed)) return;
 		const targetWindow = this.element.ownerDocument.defaultView;
 		if (!targetWindow) return;
 		this.timer.value = disposableWindowTimeout(targetWindow, () => {
 			this.timer.clear();
-			void this.show(target.position);
-		}, 300);
+			void this.show(position);
+		}, options.delay);
 	}
 
 	private async show(position: Position): Promise<void> {
@@ -100,6 +127,7 @@ export class ContentHoverController extends Disposable {
 	}
 
 	private hide(): void {
+		this.hoverPosition = undefined;
 		this.cancelRequest();
 		this.timer.clear();
 		this.element.hidden = true;

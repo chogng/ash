@@ -1,5 +1,7 @@
 import { ILanguageFeatureDebounceService } from '../../../src/ash/editor/common/services/languageFeatureDebounce.js';
 import { IInlineCompletionsService } from '../../../src/ash/editor/browser/services/inlineCompletionsService.js';
+import { InlineCompletionsController } from '../../../src/ash/editor/contrib/inlineCompletions/browser/controller/inlineCompletionsController.js';
+import type { ICodeEditor } from '../../../src/ash/editor/browser/editorBrowser.js';
 import { CommandsRegistry } from '../../../src/ash/platform/commands/common/commands.js';
 import { IContextKeyService } from "../../../src/ash/platform/contextkey/browser/contextKeyService.js";
 import { ICodeEditorService } from '../../../src/ash/editor/browser/services/codeEditorService.js';
@@ -147,6 +149,7 @@ interface StandaloneHarness {
 	prepareCompletionGeometry(scrolled: boolean): void;
 	readCompletionGeometry(): { caret: { left: number; top: number; height: number }; api: { left: number; top: number; height: number }; widget: { left: number; top: number }; contentLeft: number; textLeft: number };
 	prepareContributionRequests(kind: ContributionRequestKind): void;
+	prepareLinkCandidates(): void;
 	readContributionRequests(): { languageId: string; aborted: boolean }[];
 	finishContributionRequest(index: number, empty?: boolean): Promise<void>;
 	changeContributionState(reason: 'language' | 'edit' | 'dispose' | 'provider' | 'off' | 'on' | 'selection' | 'blur' | 'readonly'): void;
@@ -674,6 +677,14 @@ window.ashStandaloneIntegration = {
 			}));
 		}
 	},
+	prepareLinkCandidates: () => {
+		contributionProviders.clear();
+		openedLinks.length = 0;
+		callerEditor.setValue('https://one.test https://two.test');
+		contributionProviders.add(stanza.languages.registerLinkProvider('*', {
+			provideLinks: () => [{ range: new stanza.Range(1, 1, 1, 17), target: 'https://resolved.test' }],
+		}));
+	},
 	readContributionRequests: () => contributionRequests.map(request => ({ languageId: request.languageId, aborted: request.isAborted() })),
 	finishContributionRequest: async (index, empty = false) => {
 		contributionRequests[index]!.finish(empty);
@@ -1144,27 +1155,22 @@ window.ashStandaloneIntegration = {
 				return [{ insertText: ' suggestion' }];
 			},
 		});
-		const trigger = async (container: HTMLElement): Promise<void> => {
-			container.querySelector('.stanza-editor-input')!.dispatchEvent(new KeyboardEvent('keydown', {
-				key: ' ', ctrlKey: true, altKey: true, bubbles: true, cancelable: true,
-			}));
-			await new Promise(resolve => setTimeout(resolve, 0));
-		};
+		const trigger = (editor: ICodeEditor): Promise<void> => InlineCompletionsController.get(editor)!.trigger();
 		const visible = (): number => document.querySelectorAll('.stanza-editor-inline-completion:not([hidden])').length;
 		try {
-			await trigger(callerContainer);
-			await trigger(ownedContainer);
+			await trigger(callerEditor);
+			await trigger(ownedEditor);
 			const visibleBefore = visible();
 			service.snooze(10_000);
 			const visibleAfter = visible();
 			const previousCalls = calls;
-			await trigger(callerContainer);
-			await trigger(ownedContainer);
+			await trigger(callerEditor);
+			await trigger(ownedEditor);
 			const callsWhilePaused = calls - previousCalls;
 			ownedEditor.dispose();
 			const pausedAfterDispose = service.isSnoozing();
 			service.cancelSnooze();
-			await trigger(callerContainer);
+			await trigger(callerEditor);
 			return { shared: service === other, visibleBefore, visibleAfter, callsWhilePaused, pausedAfterDispose, resumed: visible() === 1 };
 		} finally {
 			service.cancelSnooze();

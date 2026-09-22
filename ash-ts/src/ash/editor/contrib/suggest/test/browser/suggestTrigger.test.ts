@@ -32,7 +32,7 @@ for (const [name, value] of Object.entries({
 const { createTestCodeEditor } = await import("../../../../test/browser/testCodeEditor.js");
 suiteTeardown(() => browserEnvironment.window.close());
 const { ViewController } = await import('../../../../browser/view/viewController.js');
-test("Ctrl+Space requests providers through the completion service", async () => {
+test("Explicit invocation requests providers through the completion service", async () => {
 	const requests: LanguageCompletionProviderRequest[] = [];
 	using fixture = createFixture({
 		id: "typescript",
@@ -42,11 +42,9 @@ test("Ctrl+Space requests providers through the completion service", async () =>
 			return completionResult(request, "const");
 		},
 	});
-	const event = keyboardEvent(fixture.dom.window, " ", { ctrlKey: true });
-	fixture.input.element.dispatchEvent(event);
+	fixture.suggest.triggerSuggest();
 	await waitFor(() => fixture.session.state !== undefined);
 
-	assert.equal(event.defaultPrevented, true);
 	assert.equal(requests.length, 1);
 	assert.equal(requests[0]!.context.kind, LanguageCompletionTriggerKind.Invoke);
 	assert.equal(requests[0]!.snapshot.getText(), "con");
@@ -114,7 +112,7 @@ test("Typing after an incomplete result retriggers all providers at the new vers
 			return completionResult(request, requests.length === 1 ? "const" : "continue", true);
 		},
 	});
-	fixture.input.element.dispatchEvent(keyboardEvent(fixture.dom.window, " ", { ctrlKey: true }));
+	fixture.suggest.triggerSuggest();
 	await waitFor(() => fixture.session.state?.requestId === 1);
 
 	fixture.input.element.dispatchEvent(beforeInputEvent(fixture.dom.window, "t"));
@@ -140,7 +138,7 @@ test("Deleting after an incomplete result retriggers providers at the new versio
 			return completionResult(request, request.snapshot.getText(), true);
 		},
 	});
-	fixture.input.element.dispatchEvent(keyboardEvent(fixture.dom.window, " ", { ctrlKey: true }));
+	fixture.suggest.triggerSuggest();
 	await waitFor(() => fixture.session.state?.requestId === 1);
 
 	fixture.input.element.dispatchEvent(beforeInputEvent(fixture.dom.window, null, "deleteContentBackward"));
