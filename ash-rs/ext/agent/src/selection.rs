@@ -148,6 +148,7 @@ fn validate_launch(
         parent_role.is_some_and(|parent| role.callers().iter().any(|name| name == parent.name()));
     let allowed = match role.launch() {
         agent_roles::RoleLaunch::Any => true,
+        agent_roles::RoleLaunch::Host => false,
         agent_roles::RoleLaunch::Workflow => {
             matches!(launch, AgentLaunch::Workflow) || caller_allowed
         }

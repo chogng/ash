@@ -426,6 +426,7 @@ name = "ash-advisor"
 version = "0.1.0"
 dependencies = [
  "ash-action-policy",
+ "ash-agent-roles",
  "ash-async-utils",
  "ash-core",
  "ash-core-api",
@@ -506,7 +507,6 @@ dependencies = [
  "serde_yaml",
  "sha2 0.10.9",
  "tempfile",
- "toml 0.9.12+spec-1.1.0",
 ]
 
 [[package]]

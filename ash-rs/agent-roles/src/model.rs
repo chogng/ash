@@ -9,6 +9,8 @@ pub enum RoleLaunch {
     Any,
     Workflow,
     Delegation,
+    /// A dedicated host operation consumes this role; ordinary Agent selection cannot launch it.
+    Host,
 }
 
 /// Origin of one validated Agent role.
@@ -247,6 +249,10 @@ impl AgentRoleCatalogSnapshot {
 
     pub fn entries(&self) -> &[AgentRole] {
         &self.entries
+    }
+
+    pub fn get(&self, name: &str) -> Option<&AgentRole> {
+        self.entries.iter().find(|role| role.name() == name)
     }
 
     pub fn diagnostics(&self) -> &[AgentRoleDiagnostic] {

@@ -99,7 +99,7 @@ loop:
 | 环境快照 | 见 §4.2 | 环境连接时采集静态字段；accessible dirs 在每次模型调用时读取 | `ash-agent-environment` 定义值和渲染，App Server 采集，Core 放在请求尾部 |
 | 目录与功能指令 | Global `.ash/instructions`、Goal、Skill、extension fragment | model invocation 内冻结；对应状态变化影响后续调用 | 各功能 owner 提供，Core 按 layer 和 provenance 组装 |
 
-`ash-prompts` 只拥有公共设施和共享产品提示词。目前 context compaction 与通用代码 review 在这里；模型基础 instructions 留在 `ash-models-manager`，Goal 提示归 `ext/goal`，Core 负责最终组装，动作授权审查提示词留在 `ash-guardian-reviewer`。
+`ash-prompts` 只拥有公共设施和共享产品提示词。context compaction、审查目标与续接模板在这里；代码审查与 Advisor 的角色正文统一归 `ash-agent-roles`；模型基础 instructions 留在 `ash-models-manager`，Goal 提示归 `ext/goal`，Core 负责最终组装，动作授权审查提示词留在 `ash-guardian-reviewer`。
 
 外部产品如何组织目录指令只是参照系；Ash 的 artifact、目录和加载策略由
 [`agent-customizations.md`](agent-customizations.md) 定义。共同点是**静态与动态严格分离**——

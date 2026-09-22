@@ -3,6 +3,7 @@
 
 # Embed identical shared prompt assets on every platform.
 /ash-rs/prompts/templates/** text eol=lf
+/ash-rs/agent-roles/assets/** text eol=lf
 /ash-rs/models-manager/templates/instructions/** text eol=lf
 
 # Keep embedded classifier assets identical to their pinned release hashes.

@@ -1,2 +1,2 @@
 load("//:defs.bzl", "ash_rust_crate")
-ash_rust_crate(name = "advisor", crate_name = "ash_advisor", data = glob(["templates/*.md"]))
+ash_rust_crate(name = "advisor", crate_name = "ash_advisor")

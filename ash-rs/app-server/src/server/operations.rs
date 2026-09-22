@@ -1075,6 +1075,15 @@ impl AppServer {
     ) -> Result<TurnStartResult, RpcError> {
         let prompt = ash_prompts::review_target_prompt(&target)
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        let roles = agent_roles::built_in_roles();
+        let role = roles.get("reviewer").expect("packaged reviewer role");
+        let instructions = ash_protocol::TurnInstructions::new(
+            "agent-roles",
+            role.name(),
+            role.content_digest(),
+            role.role_instructions(),
+        )
+        .expect("validated reviewer instructions");
         self.start_agent_turn_request(
             mutation,
             thread_id,
@@ -1082,7 +1091,7 @@ impl AppServer {
             TurnToolModeSelection::Explicit(ash_protocol::ToolMode::Direct),
             vec![UserInput::Text { text: prompt }],
             ash_protocol::TurnKind::Review,
-            TurnInstructionSelection::Product(ash_prompts::REVIEW_PROMPT.freeze()),
+            TurnInstructionSelection::Product(instructions),
         )
     }
 

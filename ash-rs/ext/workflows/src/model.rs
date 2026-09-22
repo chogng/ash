@@ -93,12 +93,12 @@ pub enum Stage {
 impl Stage {
     pub(crate) fn role(self) -> &'static str {
         match self {
-            Self::Team => "team-coordinator",
-            Self::Intent => "develop-intent",
-            Self::Spec => "develop-spec",
-            Self::Plan => "develop-plan",
-            Self::Implementation => "develop-implementer",
-            Self::Acceptance => "develop-acceptance",
+            Self::Team => "team/coordinator",
+            Self::Intent => "develop/intent",
+            Self::Spec => "develop/spec",
+            Self::Plan => "develop/plan",
+            Self::Implementation => "develop/implementer",
+            Self::Acceptance => "develop/acceptance",
         }
     }
     fn next(self) -> Option<Self> {

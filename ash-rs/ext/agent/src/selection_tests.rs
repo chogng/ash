@@ -42,17 +42,19 @@ fn workflow_roles_and_private_investigators_require_their_trusted_launchers() {
         name: name.into(),
     };
     for name in [
-        "team-coordinator",
-        "team-implementer",
-        "team-reviewer",
-        "develop-intent",
-        "develop-spec",
-        "develop-plan",
-        "develop-implementer",
-        "develop-acceptance",
-        "intent-project-investigator",
-        "intent-researcher",
-        "intent-conflict-reviewer",
+        "advisor",
+        "reviewer",
+        "team/coordinator",
+        "team/implementer",
+        "team/reviewer",
+        "develop/intent",
+        "develop/spec",
+        "develop/plan",
+        "develop/implementer",
+        "develop/acceptance",
+        "develop/investigator",
+        "develop/researcher",
+        "develop/conflict-reviewer",
     ] {
         assert!(
             resolve_agent_selection(&selection(name), None, tools.clone(), &[], &catalogs, &[])
@@ -74,7 +76,7 @@ fn workflow_roles_and_private_investigators_require_their_trusted_launchers() {
         );
     }
     let intent = resolve_launched_agent(
-        &selection("develop-intent"),
+        &selection("develop/intent"),
         None,
         tools.clone(),
         &[],
@@ -84,9 +86,9 @@ fn workflow_roles_and_private_investigators_require_their_trusted_launchers() {
     )
     .unwrap();
     for name in [
-        "intent-project-investigator",
-        "intent-researcher",
-        "intent-conflict-reviewer",
+        "develop/investigator",
+        "develop/researcher",
+        "develop/conflict-reviewer",
     ] {
         let investigator = resolve_launched_agent(
             &selection(name),
@@ -124,7 +126,7 @@ fn workflow_roles_and_private_investigators_require_their_trusted_launchers() {
     );
     assert!(
         resolve_launched_agent(
-            &selection("develop-implementer"),
+            &selection("develop/implementer"),
             None,
             tools.clone(),
             &[],
@@ -140,7 +142,7 @@ fn workflow_roles_and_private_investigators_require_their_trusted_launchers() {
     };
     assert!(
         resolve_launched_agent(
-            &selection("intent-researcher"),
+            &selection("develop/researcher"),
             None,
             tools.clone(),
             &[],
@@ -151,7 +153,7 @@ fn workflow_roles_and_private_investigators_require_their_trusted_launchers() {
         .is_err()
     );
     let implementer = resolve_launched_agent(
-        &selection("develop-implementer"),
+        &selection("develop/implementer"),
         None,
         tools.clone(),
         &[],
@@ -161,7 +163,7 @@ fn workflow_roles_and_private_investigators_require_their_trusted_launchers() {
     )
     .unwrap();
     let team = resolve_launched_agent(
-        &selection("team-coordinator"),
+        &selection("team/coordinator"),
         None,
         tools.clone(),
         &[],
@@ -171,7 +173,7 @@ fn workflow_roles_and_private_investigators_require_their_trusted_launchers() {
     )
     .unwrap();
     let worker = resolve_launched_agent(
-        &selection("team-implementer"),
+        &selection("team/implementer"),
         None,
         tools.clone(),
         &[],
@@ -191,7 +193,7 @@ fn workflow_roles_and_private_investigators_require_their_trusted_launchers() {
     }
     assert!(
         resolve_launched_agent(
-            &selection("team-reviewer"),
+            &selection("team/reviewer"),
             None,
             tools.clone(),
             &[],
@@ -203,7 +205,7 @@ fn workflow_roles_and_private_investigators_require_their_trusted_launchers() {
     );
     assert!(
         resolve_launched_agent(
-            &selection("intent-researcher"),
+            &selection("develop/researcher"),
             None,
             tools,
             &[],
@@ -489,7 +491,7 @@ fn built_in_issue_role_freezes_github_and_coordination_capabilities() {
     let frozen = selected.role.as_ref().unwrap().definition.clone().unwrap();
     assert_eq!(frozen.name, "issue");
     assert_eq!(frozen.source, AgentRoleSource::BuiltIn);
-    assert_eq!(frozen.version, Some(3));
+    assert_eq!(frozen.version, Some(4));
     assert_eq!(selected.capability_scope.tools.len(), 5);
     assert!(
         selected

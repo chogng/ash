@@ -29,7 +29,7 @@
 - Intent 与 Team 接收启动时的冻结对话前缀；后续阶段使用 `fresh` Thread 和精确上游候选版本。工作上下文含摘要，重放复用原 Core 种子。
 - `needs_user_decision` 保留问题并等待用户用 `resume` 作答；`failed`、格式错误、版本不匹配均不能接受。Implementation 和 Acceptance 的成功候选必须包含证据引用。
 - 流程命令先保存准备记录，再由 Core 接受控制 Turn，然后提交状态与启动动作；重启恢复未完成步骤，不重复创建阶段 Agent。已结束工作不会因旧命令重放重新打开。
-- `develop-implementer` 仅能进一步委托 `team-coordinator`；团队协调者仅能委托实现者、审查者。Intent 仅能委托三个私有调查角色。讨论板不保存权威接受状态。
+- `develop/implementer` 仅能进一步委托 `team/coordinator`；团队协调者仅能委托实现者、审查者。Intent 仅能委托三个私有调查角色。讨论板不保存权威接受状态。
 - 当前审查与验收使用源码读取和已有验证证据，不获得任意 Shell。自动捕获并校验 Git 基线、封存 ChangeSet、按文件范围限制实现者、只读进程验证、交互式决策卡片、`.ash/work` 导出与真实模型质量评测仍未实现；以下完整设计要求不能据此视为全部完成。
 
 ### 目标体验
@@ -188,7 +188,7 @@ Intent Agent 必须回答：
 
 以下 Agent 只注册到 Intent Agent 的私有能力面，不进入普通 Agent、Spec Agent、Plan Agent 或用户可直接选择的公共目录：
 
-它们对应 `intent-project-investigator`、`intent-researcher` 与 `intent-conflict-reviewer`。本节拥有其工作流输入、输出和使用时机；准确提示词、工具上限、上下文策略和允许调用方由 [`agents.md`](agents.md#53-intent-私有角色) 统一维护。
+它们对应 `develop/investigator`、`develop/researcher` 与 `develop/conflict-reviewer`。本节拥有其工作流输入、输出和使用时机；准确提示词、工具上限、上下文策略和允许调用方由 [`agents.md`](agents.md#53-intent-私有角色) 统一维护。
 
 | 私有 Agent | 输入 | 工具 | 输出 | 禁止行为 |
 | --- | --- | --- | --- | --- |
@@ -216,7 +216,7 @@ Intent 候选只有满足以下条件才能请求接受：
 
 阶段 Agent 是按需创建的短生命周期工作者，不是长期保存整个开发历史的角色。每个阶段从已接受的上游产物和选择后的项目上下文开始，完成后返回候选产物或证据。
 
-本流程分别使用 `develop-intent`、`develop-spec`、`develop-plan`、`develop-implementer` 与 `develop-acceptance`。本文拥有阶段顺序、产物和完成门；角色自身的提示词、工具、能力、模型策略和启动范围由 [`agents.md`](agents.md#52-develop-阶段角色) 统一维护。
+本流程分别使用 `develop/intent`、`develop/spec`、`develop/plan`、`develop/implementer` 与 `develop/acceptance`。本文拥有阶段顺序、产物和完成门；角色自身的提示词、工具、能力、模型策略和启动范围由 [`agents.md`](agents.md#52-develop-阶段角色) 统一维护。
 
 | Agent | 主要职责 | 主要工具 | 不能做什么 |
 | --- | --- | --- | --- |

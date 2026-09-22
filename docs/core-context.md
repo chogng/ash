@@ -239,9 +239,9 @@ ContextManager/Planner 完成。
 
 ### 5.5 提示词所有权与组装
 
-提示词按功能归属：`ash-models-manager` 拥有所选模型的基础 instructions，Goal 提示归 `ext/goal`，动态上下文由对应贡献者提供，`ash-guardian-reviewer` 拥有与动作授权 response schema 绑定的审查提示词，Skill、扩展和工具描述由各能力 crate 拥有。[`ash-prompts`](../ash-rs/prompts/README.md) 提供统一资产和冻结契约，并拥有 context compaction、通用代码 review 这类共享产品提示词。
+提示词按功能归属：`ash-models-manager` 拥有所选模型的基础 instructions，Goal 提示归 `ext/goal`，动态上下文由对应贡献者提供，`ash-guardian-reviewer` 拥有与动作授权 response schema 绑定的审查提示词，Skill、扩展和工具描述由各能力 crate 拥有。[`ash-prompts`](../ash-rs/prompts/README.md) 提供统一资产和冻结契约，并拥有 context compaction、审查目标与续接模板；代码审查与 Advisor 的角色正文归 `ash-agent-roles`。
 
-App Server 在接受普通 Turn 前把 `ash-models-manager` 的基础 instructions 冻结为 durable `TurnInstructions`，review Turn 则冻结共享 review rubric 并标记 `TurnKind::Review`。`$create-instructions` 使用通用 Skill 激活流程创建指令文件。Core 不在 invocation 时重新读取模型配置；它把 Turn 快照连同 User、Directory、Goal、Skill 与扩展 fragment 按 instruction layer、放置顺序、budget 和 provenance 组装成最终 request。User Instructions 位于 Directory 之前，两者作为 user-role 指令进入首条输入消息，不进入 system body。Core 从本 Turn 成功的 `read_file` / `read_instruction` 调用提供路径，App Server 确认目录归属后做 Contextual 匹配，并按准确指令文件读取路径加载 OnDemand 正文。写入工具提交后，由 host 在执行前校验目标路径的规则；缺少规则以工具错误返回模型，不能用同一批调用中新读到的规则直接执行写入。Review Turn 跳过 active Goal 注入与 Goal continuation。历史旧 Turn 可以读取为缺少快照，但不能以临时查询或默认文本继续执行。
+App Server 在接受普通 Turn 前把 `ash-models-manager` 的基础 instructions 冻结为 durable `TurnInstructions`，review Turn 则冻结 `agent-roles/assets/reviewer.md` 的正文与定义摘要 并标记 `TurnKind::Review`。`$create-instructions` 使用通用 Skill 激活流程创建指令文件。Core 不在 invocation 时重新读取模型配置；它把 Turn 快照连同 User、Directory、Goal、Skill 与扩展 fragment 按 instruction layer、放置顺序、budget 和 provenance 组装成最终 request。User Instructions 位于 Directory 之前，两者作为 user-role 指令进入首条输入消息，不进入 system body。Core 从本 Turn 成功的 `read_file` / `read_instruction` 调用提供路径，App Server 确认目录归属后做 Contextual 匹配，并按准确指令文件读取路径加载 OnDemand 正文。写入工具提交后，由 host 在执行前校验目标路径的规则；缺少规则以工具错误返回模型，不能用同一批调用中新读到的规则直接执行写入。Review Turn 跳过 active Goal 注入与 Goal continuation。历史旧 Turn 可以读取为缺少快照，但不能以临时查询或默认文本继续执行。
 
 当前 assembler 会把同一 Turn 中相邻的 `UserMessage` / `UserImage` 按 durable 顺序合并成一个
 provider-neutral user `Message`，分别映射为 `ContentPart::Text` 与

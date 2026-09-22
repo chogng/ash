@@ -3,16 +3,6 @@ use ash_protocol::ReviewTarget;
 use std::error::Error;
 use std::fmt;
 
-const REVIEW_PROMPT_TEXT: &str = include_str!("../templates/review/rubric.md");
-
-/// Stable system instructions for a read-only code review Turn.
-pub const REVIEW_PROMPT: PromptArtifact = PromptArtifact::new(
-    "prompts",
-    "review/code",
-    "code-review-v3",
-    REVIEW_PROMPT_TEXT,
-);
-
 /// The durable outcome of a completed review attempt, independent of the findings' verdict.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ReviewOutcome {

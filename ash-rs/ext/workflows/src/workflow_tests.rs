@@ -171,17 +171,17 @@ fn develop_requires_each_exact_candidate_and_uses_independent_restricted_roles()
         .child
         .unwrap();
     for (revision, role, content) in [
-        (2, "develop-spec", "Spec marker"),
-        (3, "develop-plan", "Plan marker"),
-        (4, "develop-implementer", "Implementation marker"),
-        (5, "develop-acceptance", "Acceptance marker"),
+        (2, "develop/spec", "Spec marker"),
+        (3, "develop/plan", "Plan marker"),
+        (4, "develop/implementer", "Implementation marker"),
+        (5, "develop/acceptance", "Acceptance marker"),
     ] {
         let snapshot = fixture.threads.read_thread(&child).unwrap();
         let seed = snapshot.agent_context_seed.as_ref().unwrap();
         assert_eq!(seed.agent.role.as_ref().unwrap().name, role);
         assert!(seed.task.instructions.contains("Accepted intent marker"));
         assert_eq!(seed.inheritance, AgentContextMode::Fresh);
-        if role != "develop-implementer" {
+        if role != "develop/implementer" {
             assert!(
                 !seed
                     .agent
@@ -378,7 +378,7 @@ fn team_cancel_interrupts_the_coordinator_and_replay_does_not_create_another_chi
             .as_ref()
             .unwrap()
             .name,
-        "team-coordinator"
+        "team/coordinator"
     );
     assert!(fixture.command("different", "/develop status").is_err());
     fixture.command("cancel", "/team cancel").unwrap();

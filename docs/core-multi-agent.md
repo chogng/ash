@@ -163,7 +163,7 @@ child 和等待 delivery receipt 都在 Thread writer 之外。
 - 根 Agent 可为工作建立频道，成员在话题中发布发现、阻塞、接口决定和验证证据。
 - 消息按 Session 与根 Thread 隔离；成员可主动读取历史，提醒只送达其当前活动 Turn。
 - 分工、启动、等待和取消继续使用 Agent 树；讨论内容不能代替委托结果、授权或验收事实。
-- `/team <任务>` 已通过服务端命令启动 `team-coordinator`，由其委托 `team-implementer` 与 `team-reviewer`；这些角色使用同一讨论板。
+- `/team <任务>` 已通过服务端命令启动 `team/coordinator`，由其委托 `team/implementer` 与 `team/reviewer`；这些角色使用同一讨论板。
 - `/team status` 查看结果，`/team resume` 恢复当前执行或重试失败尝试，`/team cancel` 取消协调者及其后代。命令状态由 `ash-rs/ext/workflows` 保存，执行仍归 Core。
 
 ## 4. 创建（Create）、分叉（Fork）与生成（Spawn）

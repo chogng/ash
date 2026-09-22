@@ -2,12 +2,7 @@ use crate::model::AgentRole;
 use crate::model::AgentRoleCatalogSnapshot;
 use crate::model::AgentRoleDiagnostic;
 use crate::model::AgentRoleDiagnosticCode;
-use crate::model::AgentRoleFields;
 use crate::model::AgentRoleSource;
-use serde::Deserialize;
-use sha2::Digest;
-use sha2::Sha256;
-use std::collections::BTreeSet;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::Path;
@@ -17,32 +12,7 @@ use std::sync::Arc;
 const AGENT_DIRECTORY: &str = ".ash/agents";
 const MAX_ENTRIES: usize = 64;
 const MAX_FILE_BYTES: usize = 32 * 1024;
-const MAX_DESCRIPTION_BYTES: usize = 1024;
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-struct AgentFrontmatter {
-    name: String,
-    description: String,
-    model: Option<String>,
-    tools: Option<Vec<String>>,
-    #[serde(default)]
-    disallowed_tools: Vec<String>,
-    #[serde(default)]
-    required_tools: Vec<String>,
-    delegation_tools: Option<Vec<String>>,
-    #[serde(default)]
-    disallowed_delegation_tools: Vec<String>,
-    #[serde(default)]
-    required_delegation_tools: Vec<String>,
-    skills: Option<Vec<String>>,
-    #[serde(default)]
-    required_skills: Vec<String>,
-    #[serde(default)]
-    instructions: Vec<String>,
-}
-
-/// Refreshable catalog for one directory's native Agent definition directory.
+/// Refreshable catalog for one directory's Agent definitions.
 pub struct AgentRoleCatalog {
     source: AgentRoleSource,
     dir_root: PathBuf,
@@ -204,7 +174,6 @@ fn load_entry(
             return None;
         }
     };
-    let content_digest = format!("sha256:{:x}", Sha256::digest(&bytes));
     let text = match String::from_utf8(bytes) {
         Ok(text) => text,
         Err(_) => {
@@ -216,217 +185,13 @@ fn load_entry(
             return None;
         }
     };
-    let (frontmatter, body) = match split_frontmatter(&text) {
-        Some(parts) => parts,
-        None => {
-            diagnostics.push(diagnostic(
-                Some(relative_path),
-                AgentRoleDiagnosticCode::InvalidFrontmatter,
-                "Agent definition must start with YAML frontmatter",
-            ));
-            return None;
+    match crate::definition::parse(source, &relative_path, &text) {
+        Ok(role) => Some(role),
+        Err(error) => {
+            diagnostics.push(error);
+            None
         }
-    };
-    let frontmatter: AgentFrontmatter = match serde_yaml::from_str(frontmatter) {
-        Ok(frontmatter) => frontmatter,
-        Err(_) => {
-            diagnostics.push(diagnostic(
-                Some(relative_path),
-                AgentRoleDiagnosticCode::InvalidFrontmatter,
-                "Agent definition frontmatter is invalid",
-            ));
-            return None;
-        }
-    };
-    let file_name = path.file_stem()?.to_str()?;
-    if !valid_name(&frontmatter.name) || frontmatter.name != file_name {
-        diagnostics.push(diagnostic(
-            Some(relative_path),
-            AgentRoleDiagnosticCode::InvalidName,
-            "Agent name must match its lowercase filename",
-        ));
-        return None;
     }
-    let description = frontmatter.description.trim().to_owned();
-    if description.is_empty() || description.len() > MAX_DESCRIPTION_BYTES {
-        diagnostics.push(diagnostic(
-            Some(relative_path),
-            AgentRoleDiagnosticCode::DescriptionInvalid,
-            "Agent description must contain 1 to 1024 UTF-8 bytes",
-        ));
-        return None;
-    }
-    let model = match frontmatter.model {
-        Some(model) if valid_reference(&model) => Some(model),
-        Some(_) => {
-            diagnostics.push(diagnostic(
-                Some(relative_path),
-                AgentRoleDiagnosticCode::InvalidReference,
-                "Agent model reference is invalid",
-            ));
-            return None;
-        }
-        None => None,
-    };
-    let tools = validate_optional_references(frontmatter.tools);
-    let disallowed_tools = validate_references(frontmatter.disallowed_tools);
-    let required_tools = validate_references(frontmatter.required_tools);
-    let delegation_tools = validate_optional_references(frontmatter.delegation_tools);
-    let disallowed_delegation_tools = validate_references(frontmatter.disallowed_delegation_tools);
-    let required_delegation_tools = validate_references(frontmatter.required_delegation_tools);
-    let skills = validate_optional_references(frontmatter.skills);
-    let required_skills = validate_references(frontmatter.required_skills);
-    let instructions = validate_references(frontmatter.instructions);
-    let (
-        tools,
-        disallowed_tools,
-        required_tools,
-        delegation_tools,
-        disallowed_delegation_tools,
-        required_delegation_tools,
-        skills,
-        required_skills,
-        instructions,
-    ) = match (
-        tools,
-        disallowed_tools,
-        required_tools,
-        delegation_tools,
-        disallowed_delegation_tools,
-        required_delegation_tools,
-        skills,
-        required_skills,
-        instructions,
-    ) {
-        (
-            Some(tools),
-            Some(disallowed_tools),
-            Some(required_tools),
-            Some(delegation_tools),
-            Some(disallowed_delegation_tools),
-            Some(required_delegation_tools),
-            Some(skills),
-            Some(required_skills),
-            Some(instructions),
-        ) => (
-            tools,
-            disallowed_tools,
-            required_tools,
-            delegation_tools,
-            disallowed_delegation_tools,
-            required_delegation_tools,
-            skills,
-            required_skills,
-            instructions,
-        ),
-        _ => {
-            diagnostics.push(diagnostic(
-                Some(relative_path),
-                AgentRoleDiagnosticCode::InvalidReference,
-                "Agent tool, Skill, and Instruction references must be valid and unique",
-            ));
-            return None;
-        }
-    };
-    if required_tools
-        .iter()
-        .any(|required| disallowed_tools.contains(required))
-        || tools.as_ref().is_some_and(|tools| {
-            required_tools
-                .iter()
-                .any(|required| !tools.contains(required))
-        })
-        || required_delegation_tools
-            .iter()
-            .any(|required| disallowed_delegation_tools.contains(required))
-        || delegation_tools.as_ref().is_some_and(|tools| {
-            required_delegation_tools
-                .iter()
-                .any(|required| !tools.contains(required))
-        })
-        || skills.as_ref().is_some_and(|skills| {
-            required_skills
-                .iter()
-                .any(|required| !skills.contains(required))
-        })
-    {
-        diagnostics.push(diagnostic(
-            Some(relative_path),
-            AgentRoleDiagnosticCode::InvalidReference,
-            "Agent required Tool and Skill references must remain available after role filtering",
-        ));
-        return None;
-    }
-    let role_instructions = body.trim().to_owned();
-    if role_instructions.is_empty() {
-        diagnostics.push(diagnostic(
-            Some(relative_path),
-            AgentRoleDiagnosticCode::EmptyBody,
-            "Agent role instructions cannot be empty",
-        ));
-        return None;
-    }
-    Some(AgentRole::new(AgentRoleFields {
-        launch: crate::RoleLaunch::Any,
-        callers: Vec::new(),
-        delegates: None,
-        name: frontmatter.name,
-        description,
-        source: source.clone(),
-        version: None,
-        content_digest,
-        relative_path,
-        model,
-        tools,
-        disallowed_tools,
-        required_tools,
-        delegation_tools,
-        disallowed_delegation_tools,
-        required_delegation_tools,
-        skills,
-        required_skills,
-        instructions,
-        role_instructions,
-    }))
-}
-
-fn validate_references(values: Vec<String>) -> Option<Vec<String>> {
-    if values.iter().any(|value| !valid_reference(value)) {
-        return None;
-    }
-    let unique = values.iter().collect::<BTreeSet<_>>();
-    (unique.len() == values.len()).then_some(values)
-}
-
-fn validate_optional_references(values: Option<Vec<String>>) -> Option<Option<Vec<String>>> {
-    match values {
-        Some(values) => validate_references(values).map(Some),
-        None => Some(None),
-    }
-}
-
-pub(super) fn valid_name(name: &str) -> bool {
-    !name.is_empty()
-        && name.len() <= 64
-        && !name.starts_with('-')
-        && !name.ends_with('-')
-        && name
-            .bytes()
-            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
-}
-
-pub(super) fn valid_reference(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 128
-        && value.bytes().all(|byte| {
-            byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':' | b'/')
-        })
-}
-
-fn split_frontmatter(text: &str) -> Option<(&str, &str)> {
-    let rest = text.strip_prefix("---\n")?;
-    let boundary = rest.find("\n---\n")?;
-    Some((&rest[..boundary], &rest[boundary + 5..]))
 }
 
 fn diagnostic(

@@ -2825,8 +2825,18 @@ fn review_turn_freezes_review_rubric_and_renders_the_requested_target() {
         .unwrap();
     let instructions = snapshot.turns[0].instructions.as_ref().unwrap();
     assert_eq!(snapshot.turns[0].kind, ash_protocol::TurnKind::Review);
-    assert_eq!(instructions.owner(), "prompts");
-    assert_eq!(instructions.id(), "review/code");
+    assert_eq!(instructions.owner(), "agent-roles");
+    assert_eq!(instructions.id(), "reviewer");
+    let roles = agent_roles::built_in_roles();
+    let reviewer = roles.get("reviewer").unwrap();
+    assert_eq!(instructions.revision(), reviewer.content_digest());
+    assert!(
+        requests[0]
+            .instructions
+            .as_deref()
+            .unwrap()
+            .contains(reviewer.role_instructions())
+    );
     assert_eq!(
         instructions.shared(),
         &[ash_prompts::AGENT_INSTRUCTIONS.freeze().as_text()]

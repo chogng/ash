@@ -5,7 +5,7 @@
 - `AGENT_INSTRUCTIONS`：所有 Agent 的共同工作与报告规则。
 - `permissions_instructions`：工具授权说明与当前 Turn 的三种批准模式。
 - `COMPACTION_PROMPT`、`checkpoint_prompt`：生成摘要，以及压缩后的续接说明和来源边界。
-- `REVIEW_PROMPT`、`review_target_prompt`：审查规则与明确的审查目标。
+- `review_target_prompt`：明确本次审查目标；审查职责与输出规则归 [reviewer 角色](../agent-roles/assets/reviewer.md)。
 - `review_exit_prompt`、`TURN_INTERRUPTED_PROMPT`：审查完成、中断、失败及普通 Turn 中断后的续接说明。
 - `PromptArtifact`、`RenderedPrompt`：正文、来源、版本与渲染结果；摘要大小接口供 Core 使用相同编码计算预算。
 

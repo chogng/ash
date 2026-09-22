@@ -74,6 +74,47 @@ fn conflicting_delegation_tool_rules_are_rejected() {
 }
 
 #[test]
+fn windows_line_endings_use_the_same_body_and_digest() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join(".ash/agents");
+    fs::create_dir_all(&root).unwrap();
+    let text =
+        "---\nname: reviewer\ndescription: Reviews code.\ntools: []\n---\n\nReview evidence.\n";
+    let path = root.join("reviewer.md");
+    fs::write(&path, text).unwrap();
+    let lf = AgentRoleCatalog::discover("test", dir.path()).snapshot();
+    fs::write(path, text.replace('\n', "\r\n")).unwrap();
+    let crlf = AgentRoleCatalog::discover("test", dir.path()).snapshot();
+    assert!(crlf.diagnostics().is_empty());
+    assert_eq!(lf.entries(), crlf.entries());
+}
+
+#[test]
+fn directory_definitions_cannot_claim_a_product_entry_point_or_source() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join(".ash/agents");
+    fs::create_dir_all(&root).unwrap();
+    for metadata in [
+        "launch: host",
+        "source: builtIn",
+        "version: 1",
+        "delegates: [team/implementer]",
+    ] {
+        fs::write(
+            root.join("advisor.md"),
+            format!("---\nname: advisor\ndescription: Advice.\n{metadata}\n---\n\nAdvise.\n"),
+        )
+        .unwrap();
+        let snapshot = AgentRoleCatalog::discover("test", dir.path()).snapshot();
+        assert!(snapshot.entries().is_empty(), "{metadata}");
+        assert_eq!(
+            snapshot.diagnostics()[0].code(),
+            AgentRoleDiagnosticCode::InvalidFrontmatter
+        );
+    }
+}
+
+#[test]
 fn refresh_advances_generation_after_a_definition_changes() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join(".ash/agents");

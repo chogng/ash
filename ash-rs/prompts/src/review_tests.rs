@@ -1,4 +1,3 @@
-use super::REVIEW_PROMPT;
 use super::review_target_prompt;
 use ash_protocol::ReviewTarget;
 
@@ -19,13 +18,6 @@ fn review_exit_notices_keep_completed_interrupted_and_failed_assessments_distinc
         assert_eq!(prompt.body().matches("</review_end>").count(), 1);
         assert!(!prompt.body().contains("{{"));
     }
-}
-
-#[test]
-fn review_asset_requires_structured_findings_and_read_only_behavior() {
-    assert_eq!(REVIEW_PROMPT.owner(), "prompts");
-    assert!(REVIEW_PROMPT.body().contains("overall_correctness"));
-    assert!(REVIEW_PROMPT.body().contains("Do not modify"));
 }
 
 #[test]

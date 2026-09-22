@@ -9,6 +9,7 @@ publish.workspace = true
 doctest = false
 
 [dependencies]
+agent-roles = { workspace = true }
 core-api = { workspace = true }
 ash-core = { workspace = true }
 action-policy = { package = "ash-action-policy", path = "../../action-policy" }

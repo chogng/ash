@@ -4,11 +4,12 @@
 //! declarations, and bounded discovery below `.ash/agents`. It does not create Threads, invoke
 //! models, resolve tools, grant permissions, or coordinate Agents.
 
-mod built_in;
+mod assets;
 mod catalog;
+mod definition;
 mod model;
 
-pub use built_in::built_in_roles;
+pub use assets::built_in_roles;
 pub use catalog::AgentRoleCatalog;
 pub use model::AgentRole;
 pub use model::AgentRoleCatalogSnapshot;

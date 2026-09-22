@@ -96,7 +96,7 @@ fn workflow_commands_run_dedicated_agents_through_rpc_and_require_user_acceptanc
         &server,
         &mut connection,
         "session/create",
-        serde_json::json!({"commandId":"forbidden-role", "title":"No workflow bypass", "agent":{"type":"exact","source":{"type":"builtIn"},"name":"develop-implementer"}}),
+        serde_json::json!({"commandId":"forbidden-role", "title":"No workflow bypass", "agent":{"type":"exact","source":{"type":"builtIn"},"name":"develop/implementer"}}),
     );
     assert!(rejected.get("error").is_some(), "{rejected}");
     let created = call(
@@ -119,11 +119,11 @@ fn workflow_commands_run_dedicated_agents_through_rpc_and_require_user_acceptanc
     let start = submit("workflow-start", "/develop add offline search");
     assert!(start.get("error").is_none(), "{start}");
     for (revision, role) in [
-        (1, "develop-intent"),
-        (2, "develop-spec"),
-        (3, "develop-plan"),
-        (4, "develop-implementer"),
-        (5, "develop-acceptance"),
+        (1, "develop/intent"),
+        (2, "develop/spec"),
+        (3, "develop/plan"),
+        (4, "develop/implementer"),
+        (5, "develop/acceptance"),
     ] {
         let request = requests.recv_timeout(Duration::from_secs(10)).unwrap();
         let snapshot = threads.read_thread(&root).unwrap();
@@ -169,7 +169,7 @@ fn workflow_commands_run_dedicated_agents_through_rpc_and_require_user_acceptanc
                 .unwrap()
                 .contains("Return your final response as one JSON object")
         );
-        if role != "develop-implementer" {
+        if role != "develop/implementer" {
             assert!(
                 !request
                     .tools

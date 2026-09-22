@@ -29,7 +29,6 @@ use serde_json::json;
 use std::sync::Arc;
 
 pub const TOOL_NAME: &str = "advisor";
-const INSTRUCTIONS: &str = include_str!("../templates/instructions.md");
 
 pub struct AdvisorToolService {
     threads: Arc<ThreadController>,
@@ -88,12 +87,14 @@ impl AdvisorToolService {
         if calls >= config.max_calls as usize {
             return Ok(json!({"status": "limitReached", "maxCalls": config.max_calls}));
         }
+        let roles = agent_roles::built_in_roles();
+        let role = roles.get("advisor").expect("packaged advisor role");
         let result = self.model.invoke(
             ToolModelRequest {
                 identity,
                 call_id: &call.id,
                 model: &config.model,
-                instructions: INSTRUCTIONS.trim(),
+                instructions: role.role_instructions(),
                 question: &arguments.question,
                 max_output_tokens: config.max_output_tokens,
                 reasoning: config

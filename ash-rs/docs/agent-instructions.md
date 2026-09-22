@@ -35,7 +35,7 @@
 - `Default` 不加载专用 Role 正文。正常执行能力来自共同规则、任务和实际工具，不依赖额外的通用 worker 文件。
 - 创建 worker 时重新组装指令，只传递允许的任务上下文。父 Role 不因完整历史复制而成为子 Agent 的有效角色指令。
 - Issue 内容作为任务材料输入。Issue Manager 不拥有计划执行、assignment 或调度状态机；GitHub 操作由 Plugin 提供，委托由通用多 Agent 能力执行。
-- TOML 的 `model`、工具列表和 Skill 引用由程序解析；只有正文是提示词。格式并不决定指令优先级。
+- Markdown frontmatter 的 `model`、工具列表和 Skill 引用由程序解析；只有正文是提示词。格式并不决定指令优先级。
 - 根 Role 所需 Skill 从已授权 catalog 解析并激活，不能要求尚不存在的父 Turn 已经激活它；调用方的 Skill 上限与正文加载仍是两个步骤。
 - Core 保留来源、层级与顺序，由供应商 adapter 映射到对应请求格式。不能把模型、Role、用户输入混成无法追溯的单个字符串。
 - 角色选择、模板选择和实际授权分开保存。恢复角色快照不能恢复已撤销权限，缓存也不能代替授权检查。
@@ -50,7 +50,7 @@
 | 沙箱 read-only/workspace-write/full-access | `templates/permissions/actions.md` | Ash 按 Tool Call 解析文件、网络和沙箱授权；不从可访问目录推断写权限，不描述不存在的全局沙箱状态 |
 | approval never/on-request/unless-trusted、扩展权限工具 | `templates/permissions/approval/*` | 使用 Ash 的三种真实批准模式；不引入 Codex 专用参数和工具 |
 | compact prompt / summary prefix | [`compact.rs`](../prompts/src/compact.rs) | 原生成模板继续使用；补上 `checkpoint_prompt`，保留 ID/来源摘要并转义摘要内容 |
-| review rubric / review request | [`review.rs`](../prompts/src/review.rs) | 已有规则与目标选择保留；Git 比较仍经授权工具执行，prompt crate 不运行 Git 或解释失败后猜测目标 |
+| review rubric / review request | [角色正文](../agent-roles/assets/reviewer.md)、[目标渲染](../prompts/src/review.rs) | App Server 从角色目录冻结审查职责；Git 比较仍经授权工具执行，prompt crate 只渲染目标 |
 | review exit success / interrupted | `review_exit_prompt` | 按已保存的结果选择 completed/interrupted/failed，结果正文保留在原 Assistant 消息，不重复复制 |
 | 普通 Turn 中断说明 | `TURN_INTERRUPTED_PROMPT` | 将 Core 中的共享文案收归 prompts，不假定中断一定由用户主动发起 |
 | realtime start / end / backend | 尚未接入 | Ash 没有实时语音会话、转写来源与转发执行链路；不放入声称这些能力已存在的模板 |

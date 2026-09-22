@@ -46,8 +46,8 @@ fn spawn_agent_describes_the_built_in_issue_role() {
         .unwrap();
 
     assert!(description.contains("issue: Coordinates one or more GitHub issues"));
-    assert!(!description.contains("develop-intent"));
-    assert!(!description.contains("intent-researcher"));
+    assert!(!description.contains("develop/intent"));
+    assert!(!description.contains("develop/researcher"));
 }
 
 #[test]
@@ -118,7 +118,7 @@ fn spawn_tool_uses_frozen_intent_parent_to_launch_private_investigator() {
     let role = crate::resolve_launched_agent(
         &protocol::AgentRoleSelection::Exact {
             source: protocol::AgentRoleSource::BuiltIn,
-            name: "develop-intent".into(),
+            name: "develop/intent".into(),
         },
         None,
         tools.clone(),
@@ -219,7 +219,7 @@ fn spawn_tool_uses_frozen_intent_parent_to_launch_private_investigator() {
             .as_ref()
             .unwrap()
             .name,
-        "intent-project-investigator"
+        "develop/investigator"
     );
     assert!(
         child
@@ -527,7 +527,7 @@ impl core_api::ModelService for PrivateSpawnModel {
             protocol::ResponseItem::ToolCall(ToolCall {
                 id: ToolCallId::new("private-spawn").unwrap(),
                 name: ToolName::new("spawn_agent").unwrap(),
-                arguments: json!({"task":"Read the current module", "name":null, "agent":{"type":"exact","source":{"type":"builtIn"},"name":"intent-project-investigator"}, "context":null}),
+                arguments: json!({"task":"Read the current module", "name":null, "agent":{"type":"exact","source":{"type":"builtIn"},"name":"develop/investigator"}, "context":null}),
             })
         };
         Ok(protocol::ModelResponse {

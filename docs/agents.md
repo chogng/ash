@@ -36,7 +36,7 @@ Agent 定义回答“使用什么职责、提示词、模型策略、工具和�
 
 定义不是正在运行的 Agent。会话入口和每次委托都使用同一种定义解析流程，并冻结角色提示词、专长、工具、能力、模型策略和上下文策略；委托另外创建拥有独立 `ThreadId`、Turn、上下文和取消域的 Thread。
 
-内置与自定义定义必须使用带来源的稳定身份，例如 `BuiltIn(explorer)` 与 `Directory(dir_id, explorer)`。内部不能再只用裸 `name` 标识定义；自定义同名项不能覆盖或伪装成内置定义，显式选择出现歧义时必须要求准确来源。`Default` 表示不应用专用 Role，使用正常 Agent 配置；它与专用 Role 共用执行系统，不要求存在 `general.toml`。
+内置与自定义定义必须使用带来源的稳定身份，例如 `BuiltIn(explorer)` 与 `Directory(dir_id, explorer)`。内部不能再只用裸 `name` 标识定义；自定义同名项不能覆盖或伪装成内置定义，显式选择出现歧义时必须要求准确来源。`Default` 表示不应用专用 Role，使用正常 Agent 配置；它与专用 Role 共用执行系统，不要求存在 `general.md`。
 
 ## 2. `ash-agent-roles` 统一拥有角色定义
 
@@ -47,11 +47,15 @@ ash-rs/agent-roles/
 ├── Cargo.toml
 ├── README.md
 ├── assets/
-│   └── builtins/
-│       └── <role>.toml    # 专用 Role；Default 不需要独立文件
+│   ├── advisor.md
+│   ├── issue.md
+│   ├── reviewer.md
+│   ├── team/             # coordinator.md、implementer.md、reviewer.md
+│   └── develop/          # 阶段与私有调查角色，文件名只写职责
 └── src/
-    ├── built_in.rs
+    ├── assets.rs
     ├── catalog.rs
+    ├── definition.rs
     ├── model.rs
     └── lib.rs
 ```
@@ -70,59 +74,43 @@ ash-rs/agent-roles/
 
 ## 3. 统一定义契约与内置格式
 
-每个内置专用 Role 使用一个独立的 `assets/builtins/<role>.toml`。描述、能力配置和 `developer_instructions` 作为一个版本单元发布，不拼进所有角色共享的大提示词，也不允许通过设置修改。共同规则与当前 Role 在执行时组合，默认启动不附加专用 Role 正文。
+每个 Role 使用 Markdown 正文与 YAML frontmatter，内置资源位于 `assets/**/*.md`，自定义资源位于 `.ash/agents/*.md`，共用解析与校验。正文直接维护角色提示词，frontmatter 保存可检查的配置；完整文件作为一个版本单元发布。选择 Markdown 是因为提示词需要分段、列表和代码示例，配置字段保持简短；没有必要把长篇正文放进 TOML 字符串，再为自定义角色维护另一套格式。
 
-统一领域类型至少包含带来源的 `AgentRoleId`、选择 metadata、提示词、模型策略、工具与 Skill 上限、上下文策略、启动策略和带作用范围的执行能力上限。来源由 catalog loader 注入，不能由内置 Role TOML 或 `.ash/agents/*.md` 自报。当前 `ash-agent-roles::AgentRole` 已统一表达来源、内置版本、内容摘要、提示词及已有的模型、Tool、Skill、Instruction 声明；上下文策略、启动策略和带作用范围能力仍需继续补齐。
+`assets` 本身就表示随产品发布的资源，不再增加 `builtins` 层。`team` 与 `develop` 提供作用域，因此文件分别命名为 `coordinator.md`、`implementer.md` 等。frontmatter 的 `name` 是本地文件名；运行时 ID 从相对路径生成，如 `team/implementer` 与 `develop/implementer`。跨角色引用写准确 ID，来源由加载器注入；两个同名文件不会互相覆盖。
 
-下面是计划格式，用于固定字段语义，不表示当前已经存在该 API：
+Advisor 和代码审查同样有明确职责，分别归 `advisor.md`、`reviewer.md`。它们的 `launch: host` 只允许专用调用入口读取，不进入普通会话与委托选择。咨询次数、模型调用、Review Turn 与权限仍由执行模块负责。权限审查器的提示词与授权响应协议共同归 `guardian-reviewer`；压缩、续接、共同规则和模型指导也保留各自 owner。
 
-```toml
-name = "explorer"
-version = 1
-description = "定位代码、调用链和实现证据，不修改文件。"
-specialties = ["code.explore", "code.trace"]
-tools = ["read_file", "grep", "glob", "search_code"]
-required_tools = ["read_file", "grep", "glob"]
-disallowed_tools = []
-delegation_tools = []
-required_delegation_tools = []
-disallowed_delegation_tools = []
-skills = []
-required_skills = []
-developer_instructions = """
+当前 `AgentRole` 已统一表达来源、内置版本、内容摘要、正文、模型、Tool、Skill、Instruction 与启动范围；上下文策略和带作用范围能力仍需补齐。
+
+当前文件格式示例（示例角色未注册）：
+
+```markdown
+---
+name: explorer
+version: 1
+description: 定位代码、调用链和实现证据，不修改文件。
+launch: any
+tools: [read_file, grep, glob]
+requiredTools: [read_file, grep, glob]
+delegationTools: []
+delegates: []
+---
+
 沿真实符号和调用链回答明确的代码问题，给出文件、行号、测试和不确定点。
 不要修改文件，也不要执行与调查无关的工作。
-"""
-
-[model]
-default = "session"
-allow_override = true
-replacement = "any-compatible"
-required_capabilities = ["tools"]
-
-[context]
-default = "selected"
-allowed = ["fresh", "selected"]
-
-[launch]
-allowed = ["session", "delegation"]
-allowed_callers = []
-workflows = []
-
-[[capabilities]]
-kind = "file_read"
-scope = "thread_dirs"
 ```
 
-字段边界如下：
+字段名统一使用 camelCase。当前 `launch` 是 `any/workflow/delegation/host`，`callers` 与 `delegates` 保存准确角色 ID；内置必须声明正整数 `version`。自定义角色仍使用 catalog generation 与内容摘要，不能声明产品版本或产品入口限制。未知字段、重复引用、空正文和冲突工具规则直接报错。LF 与 CRLF 在解析和摘要计算前统一成 LF，内置资源另由 `.gitattributes` 固定 LF。
 
-- `description` 只用于选择，必须短、具体，并写清何时使用；完整行为规则放在同一 TOML 的 `developer_instructions`。
+以下保留完整能力目标；`specialties`、结构化模型策略、`context`、`capabilities` 及 `launch.allowed*` 尚未成为当前 frontmatter 字段，不能写入运行资源。字段边界如下：
+
+- `description` 只用于选择，必须短、具体，并写清何时使用；完整行为规则放在 Markdown 正文。
 - 内置格式的 `version` 是定义内容版本；提示词、工具、Skill、模型、上下文、启动范围或能力上限变化都必须提升，并与完整内容摘要一起冻结。自定义来源继续使用 catalog generation 与内容摘要表达版本身份。
 - `specialties` 描述角色擅长解决的问题，用于路由和评测，不产生执行权限。
-- `tools` 省略时继承调用方的下放工具上限，存在时是精确白名单；`disallowed_tools` 从继承或白名单结果中删除工具，任何形式都不能扩大调用方的下放上限。
-- `required_tools` 只做启动前检查，缺少任一工具就不创建；它不授予工具，也不改变最终可见集合。
-- `delegation_tools`、`disallowed_delegation_tools` 和 `required_delegation_tools` 使用相同的白名单、黑名单和启动门禁语义，但只决定该 Agent 能向直接子 Agent 下放的工具上限；省略 `delegation_tools` 表示继承调用方的下放上限。自身 Tool 与下放 Tool 互不隐含，二者都不能越过任何祖先的下放上限。
-- 委托的 `skills` 省略时继承调用方已经激活的 Skill，存在时只保留列出的 Skill；根角色从已授权 catalog 解析声明的 Skill。`required_skills` 不授予权限，缺失时创建失败。
+- `tools` 省略时继承调用方的下放工具上限，存在时是精确白名单；`disallowedTools` 从继承或白名单结果中删除工具，任何形式都不能扩大调用方的下放上限。
+- `requiredTools` 只做启动前检查，缺少任一工具就不创建；它不授予工具，也不改变最终可见集合。
+- `delegationTools`、`disallowedDelegationTools` 和 `requiredDelegationTools` 使用相同的白名单、黑名单和启动门禁语义，但只决定该 Agent 能向直接子 Agent 下放的工具上限；省略 `delegationTools` 表示继承调用方的下放上限。自身 Tool 与下放 Tool 互不隐含，二者都不能越过任何祖先的下放上限。
+- 委托的 `skills` 省略时继承调用方已经激活的 Skill，存在时只保留列出的 Skill；根角色从已授权 catalog 解析声明的 Skill。`requiredSkills` 不授予权限，缺失时创建失败。
 - `capabilities` 是带作用范围的执行能力上限，使用现有 `CapabilityKind` 语义；它不能因为提示词或工具引用而扩大。
 - `model.default` 使用 `session` 或准确 `provider/model`。`session` 表示当前 Session 的模型与推理配置；没有 Session 的工作流改用自己的模型基线。委托不从中间调用者继承临时模型覆盖。
 - `model.allow_override` 独立决定本次启动能否请求其他模型；被禁止的覆盖是无效启动请求，不能被静默忽略。
@@ -149,7 +137,7 @@ Agent 定义本身不继承另一个 Agent。会话入口从会话已经解析�
 | 内容 | 委托运行的默认行为 | 例外与限制 |
 | --- | --- | --- |
 | 委托任务 | 始终传递 | 必须是完整、可独立执行的任务，不能只传一句角色名。 |
-| 专用提示词 | 始终使用该 Role 自己的 `developer_instructions` | 不能由调用方对话或设置替换；系统安全规则优先级更高。 |
+| 专用提示词 | 始终使用该 Role 自己的 Markdown 正文 | 不能由调用方对话或设置替换；系统安全规则优先级更高。 |
 | 产品安全与基础规则 | 重新应用并冻结适用于委托 Thread 的规则 | 不是复制调用方整段系统提示词，定义提示词不能覆盖它们。新委托在创建前冻结自己的共享规则与模型指导，历史种子继续使用其已记录的内容。 |
 | 工作区 Instructions | 按委托 Thread 的准确目录和作用范围重新解析后冻结 | 同一环境且目录作用范围完全一致时可以复用已冻结基线；环境或目录变化时必须重新解析，不能复制无关调用方规则。 |
 | 调用方完整对话 | 默认不传递 | `full` 只允许显式请求，且定义必须声明允许；初始内置定义均不默认允许。 |
@@ -193,7 +181,7 @@ Agent 只声明默认值、覆盖权限、替换范围和能力要求。App Serv
 
 ## 5. 内置 Agent 清单
 
-普通会话与普通 worker 都选择 `Default`，不通过任务关键词寻找专用 Role，也不继承父 Role 的职责。当前 catalog 打包 `issue`、三个 Team 角色、五个 Develop 阶段角色及三个 Intent 私有角色；根角色通过 `session/create.agent` 选择，工作流角色只能经过其运行入口。以下普通可选清单目前只有 `issue` 已上线，其余普通角色仍为设计；阶段表中的完整能力目标与当前工具边界分开说明。
+普通会话与普通 worker 都选择 `Default`，不通过任务关键词寻找专用 Role，也不继承父 Role 的职责。当前 catalog 打包 `issue`、`advisor`、`reviewer`、三个 Team 角色、五个 Develop 阶段角色及三个 Intent 私有角色；根角色通过 `session/create.agent` 选择，工作流角色只能经过其运行入口。以下普通可选清单目前只有 `issue` 已上线，其他普通入口仍为设计，`reviewer` 当前由专用审查入口消费；阶段表中的完整能力目标与当前工具边界分开说明。
 
 ### 5.1 普通可选 Agent
 
@@ -204,12 +192,12 @@ Agent 只声明默认值、覆盖权限、替换范围和能力要求。App Serv
 | `issue` | 会话、委托 | 读取 Issue 引用，通过 GitHub Skill 管理 Issue 状态，并把实现交给 Default worker | `fresh` 加明确 Issue 引用 | 自身只保留 GitHub 与协调 Tool；下放范围受会话与祖先上限约束 | 本次启动已经授权的能力上限 | 直接修改代码、拥有 Issue 专属执行状态机 |
 | `explorer` | 会话、委托 | 回答范围明确的代码问题；沿真实符号和调用链给出文件、行号、测试与不确定点 | 会话输入或 `selected` | `read_file`、`grep`、`glob`、`search_code` | 授权目录只读 | 修改文件、运行长任务、泛泛设计 |
 | `implementer` | 会话、委托 | 在明确文件或模块责任内完成代码修改；保留他人改动，运行最小验证并报告改动与测试 | 会话输入或 `checkpointAndTail` | `read_file`、`grep`、`glob`、`search_code`、`process_start`、`process_wait`、`process_terminate`、`apply_patch`、`edit`、`write_file` | 授权目录读写、受沙箱约束的进程 | 外部服务修改、凭据使用、超出分配范围的重构 |
-| `reviewer` | 会话、委托 | 独立审查目标、最终 diff 与验证证据；先报可操作问题、严重度和证据，再给摘要 | 会话输入或 `fresh` 加显式目标与证据 | `read_file`、`grep`、`glob`、`search_code`、`process_start`、`process_wait`、`process_terminate` | 源码只读、只读进程检查 | 修改代码、接受工作 Agent 的总结代替证据 |
+| `reviewer` | 当前 host 审查入口；会话、委托为目标 | 独立审查目标、最终 diff 与验证证据；先报可操作问题、严重度和证据，再给摘要 | 会话输入或 `fresh` 加显式目标与证据 | `read_file`、`grep`、`glob`、`search_code`、`process_start`、`process_wait`、`process_terminate` | 源码只读、只读进程检查 | 修改代码、接受工作 Agent 的总结代替证据 |
 | `test-runner` | 会话、委托 | 运行指定测试或检查；区分首个根因与连带失败，返回命令、退出状态和关键输出 | 会话输入或 `selected` | `read_file`、`grep`、`glob`、`search_code`、`process_start`、`process_wait`、`process_terminate` | 源码只读、受沙箱约束的进程、仅构建产物目录可写 | 修复代码、无界运行、把失败误报为完成 |
 | `researcher` | 会话、委托 | 优先使用官方一手资料；核对发布日期、版本和适用范围，区分来源事实与推断 | 会话输入或 `fresh` | `read_file`、`grep`、`glob`、`web_search`、`browser_open`、`browser_observe`、`browser_navigate`、`browser_close` | 授权目录只读、网络读取、浏览器只读交互 | 修改本地文件、登录账户、提交表单、把本地文档当最终事实 |
 | `ui-validator` | 会话、委托 | 用真实浏览器或 Electron 流程复现并验证 UI；记录步骤、语义状态和可复查证据 | 会话输入或 `selected` | `read_file`、`grep`、`glob`、`process_start`、`process_wait`、`process_terminate`、`browser_open`、`browser_observe`、`browser_navigate`、`browser_click`、`browser_type`、`browser_scroll`、`browser_back`、`browser_reload`、`browser_screenshot`、`browser_close` | 源码只读、受沙箱约束的进程、网络与 UI 交互 | 修改源码、使用截图代替调试结论、执行不可逆外部操作 |
 
-每个已经上线的表格行都必须对应一个真实 `assets/builtins/<id>.toml`，文档只维护提示词契约，不复制完整正文。这样提示词只有一个可执行 owner，修改时不会出现文档与实际资源两份正文漂移。
+每个已经上线的表格行都必须对应一个真实 `assets/<id>.md`，文档只维护提示词契约，不复制完整正文。这样提示词只有一个可执行 owner，修改时不会出现文档与实际资源两份正文漂移。
 
 `process_start`、`process_wait` 与 `process_terminate` 表示计划中的显式进程资源契约。当前 App Server 的 `shell-command` 默认 30 秒超时，不能可靠承载长测试，也不能单靠工具名证明“只读”。专化角色上线前必须让进程动作产生准确的文件、进程和网络能力需求，以角色能力上限执行检查，并支持等待、取消、超时和未知结果；不能用反复调用短时 shell 维持长任务。
 
@@ -219,29 +207,29 @@ Agent 只声明默认值、覆盖权限、替换范围和能力要求。App Serv
 
 | ID | 自己的提示词重点 | 默认上下文 | 自己的工具集 | 执行能力上限 | 产物与停止条件 |
 | --- | --- | --- | --- | --- | --- |
-| `develop-intent` | 从用户原话和有来源证据中提炼问题、期望、约束、非目标与未决判断，不把方案伪装成意图 | `selected`：命令锚点、用户决定和调查证据 | `write_intent_candidate`、`spawn_agent`、`send_agent_message`、`wait_agent` | 只能写当前工作 Intent 候选并调用三个私有角色 | 产出可追溯候选；缺产品判断时返回 `NeedsUserDecision` 并停止，由工作流向用户提问 |
-| `develop-spec` | 把已接受 Intent 转换成可观察行为、系统边界、失败语义、风险和验收标准 | `selected`：已接受 Intent、项目事实和领域文档 | `read_file`、`grep`、`glob`、`search_code`、`write_spec_candidate` | 项目只读，只能写当前工作 Spec 候选 | 产出 Spec 候选；不能改变 Intent 或实施代码 |
-| `develop-plan` | 根据已接受 Spec 和固定代码基线形成有顺序、可验证的工作契约与执行方式 | `selected`：已接受 Intent/Spec、代码基线、测试入口 | `read_file`、`grep`、`glob`、`search_code`、`process_start`、`process_wait`、`process_terminate`、`write_plan_candidate` | 源码只读、只读进程检查，只能写当前工作 Plan 候选 | 产出 Plan 候选；不能降低验收标准 |
-| `develop-implementer` | 严格按已接受工作契约修改分配范围，保留他人改动并产生可封存 ChangeSet | `selected`：已接受 Intent/Spec/Plan、工作契约和代码检查点 | `read_file`、`grep`、`glob`、`search_code`、`process_start`、`process_wait`、`process_terminate`、`apply_patch`、`edit`、`write_file` | 只读写分配的代码范围并运行获准验证 | 工作完成、失败或工作契约失效时停止；不能改写上游产物和验收规则 |
-| `develop-acceptance` | 独立对照原始意图、固定 Spec、最终差异和真实证据判断是否满足验收标准 | `fresh` 加显式选择的固定验收包 | `read_file`、`grep`、`glob`、`search_code`、`process_start`、`process_wait`、`process_terminate`、获准的 `browser_*` 验证工具、`write_acceptance_candidate` | 源码与控制资源只读，只能运行已定义验证并写验收候选 | 返回逐项证据和未满足项；不能修改候选代码或接受自己的工作 |
+| `develop/intent` | 从用户原话和有来源证据中提炼问题、期望、约束、非目标与未决判断，不把方案伪装成意图 | `selected`：命令锚点、用户决定和调查证据 | `write_intent_candidate`、`spawn_agent`、`send_agent_message`、`wait_agent` | 只能写当前工作 Intent 候选并调用三个私有角色 | 产出可追溯候选；缺产品判断时返回 `NeedsUserDecision` 并停止，由工作流向用户提问 |
+| `develop/spec` | 把已接受 Intent 转换成可观察行为、系统边界、失败语义、风险和验收标准 | `selected`：已接受 Intent、项目事实和领域文档 | `read_file`、`grep`、`glob`、`search_code`、`write_spec_candidate` | 项目只读，只能写当前工作 Spec 候选 | 产出 Spec 候选；不能改变 Intent 或实施代码 |
+| `develop/plan` | 根据已接受 Spec 和固定代码基线形成有顺序、可验证的工作契约与执行方式 | `selected`：已接受 Intent/Spec、代码基线、测试入口 | `read_file`、`grep`、`glob`、`search_code`、`process_start`、`process_wait`、`process_terminate`、`write_plan_candidate` | 源码只读、只读进程检查，只能写当前工作 Plan 候选 | 产出 Plan 候选；不能降低验收标准 |
+| `develop/implementer` | 严格按已接受工作契约修改分配范围，保留他人改动并产生可封存 ChangeSet | `selected`：已接受 Intent/Spec/Plan、工作契约和代码检查点 | `read_file`、`grep`、`glob`、`search_code`、`process_start`、`process_wait`、`process_terminate`、`apply_patch`、`edit`、`write_file` | 只读写分配的代码范围并运行获准验证 | 工作完成、失败或工作契约失效时停止；不能改写上游产物和验收规则 |
+| `develop/acceptance` | 独立对照原始意图、固定 Spec、最终差异和真实证据判断是否满足验收标准 | `fresh` 加显式选择的固定验收包 | `read_file`、`grep`、`glob`、`search_code`、`process_start`、`process_wait`、`process_terminate`、获准的 `browser_*` 验证工具、`write_acceptance_candidate` | 源码与控制资源只读，只能运行已定义验证并写验收候选 | 返回逐项证据和未满足项；不能修改候选代码或接受自己的工作 |
 
 `write_intent_candidate`、`write_spec_candidate`、`write_plan_candidate` 与 `write_acceptance_candidate` 是计划中的领域工具，当前不注册。当前阶段 Agent 用最终 JSON 提交候选，工作流只接收所绑定阶段 Thread 的终态结果，再按版本保存；接受与失效只能由用户命令触发，普通 `write_file` 不能改写领域候选。Spec、Plan、Acceptance 当前仅有 `read_file/grep/glob/board_read/board_write`，不获任意 Shell；Intent 另有协调工具。实现者使用获准工具上限，并且只能委托 Team 协调者。表中的进程资源、按文件范围授权与封存契约仍为目标。
 
-`develop-acceptance` 的浏览器工具不是每次全部加载。工作流从已接受 Spec 的验证方法推导本次必需工具，并在创建时冻结实际子集；任何必需工具不可用时验收阻塞，不能删掉该验收项继续通过。
+`develop/acceptance` 的浏览器工具不是每次全部加载。工作流从已接受 Spec 的验证方法推导本次必需工具，并在创建时冻结实际子集；任何必需工具不可用时验收阻塞，不能删掉该验收项继续通过。
 
-表格中的 `browser_*` 是阅读缩写，实际 Role TOML 必须逐项列出允许的浏览器工具。当前 `ToolDefinition` 没有来源可信、可签名的“只读/修改”动作 metadata，因此通用专化角色不动态接入 Connector；`issue` 是明确绑定 GitHub Skill 的协调角色，仍只能从调用方当前已授权的 `search_tools` 与 `call_mcp_tool` 上限中收窄，具体外部写操作继续经过工具策略和批准。
+表格中的 `browser_*` 是阅读缩写，实际 Role frontmatter 必须逐项列出允许的浏览器工具。当前 `ToolDefinition` 没有来源可信、可签名的“只读/修改”动作 metadata，因此通用专化角色不动态接入 Connector；`issue` 是明确绑定 GitHub Skill 的协调角色，仍只能从调用方当前已授权的 `search_tools` 与 `call_mcp_tool` 上限中收窄，具体外部写操作继续经过工具策略和批准。
 
 ### 5.3 Intent 私有角色
 
-以下角色只注册到 `develop-intent` 的私有能力面：不进入设置、不进入普通协调层 catalog、不接受用户直接选择，也不能被其他阶段 Agent 调用。每次委托只回答一个可验证问题并返回有来源的证据，不写任何阶段产物。
+以下角色只注册到 `develop/intent` 的私有能力面：不进入设置、不进入普通协调层 catalog、不接受用户直接选择，也不能被其他阶段 Agent 调用。每次委托只回答一个可验证问题并返回有来源的证据，不写任何阶段产物。
 
 | ID | 自己的提示词重点 | 默认上下文 | 自己的工具集 | 执行能力上限 | 唯一允许的调用方 |
 | --- | --- | --- | --- | --- | --- |
-| `intent-project-investigator` | 调查一个明确的本地事实，返回源码、Git、测试证据、代码基线与不确定性 | `fresh` 或 `selected` | `read_file`、`grep`、`glob`、`search_code`、`process_start`、`process_wait`、`process_terminate` | 项目只读、只读 Git/构建/测试进程、仅构建产物目录可写 | `develop-intent` |
-| `intent-researcher` | 调查一个明确的外部事实，优先一手来源并说明时间、版本、适用范围和不确定性 | `fresh` 或 `selected` | `web_search`、`browser_open`、`browser_observe`、`browser_navigate`、`browser_close` | 网络和外部来源只读；不得登录、提交或修改外部状态 | `develop-intent` |
-| `intent-conflict-reviewer` | 比较指定的用户原话、项目事实、外部来源和候选产物，列出冲突双方、影响与可确定优先级 | `selected` | `read_file`、`grep` | 只读明确提供的来源 | `develop-intent` |
+| `develop/investigator` | 调查一个明确的本地事实，返回源码、Git、测试证据、代码基线与不确定性 | `fresh` 或 `selected` | `read_file`、`grep`、`glob`、`search_code`、`process_start`、`process_wait`、`process_terminate` | 项目只读、只读 Git/构建/测试进程、仅构建产物目录可写 | `develop/intent` |
+| `develop/researcher` | 调查一个明确的外部事实，优先一手来源并说明时间、版本、适用范围和不确定性 | `fresh` 或 `selected` | `web_search`、`browser_open`、`browser_observe`、`browser_navigate`、`browser_close` | 网络和外部来源只读；不得登录、提交或修改外部状态 | `develop/intent` |
+| `develop/conflict-reviewer` | 比较指定的用户原话、项目事实、外部来源和候选产物，列出冲突双方、影响与可确定优先级 | `selected` | `read_file`、`grep` | 只读明确提供的来源 | `develop/intent` |
 
-三个私有角色的 `launch.allowed` 都只包含 `delegation`，`launch.allowed_callers` 只包含内置 `develop-intent` 的来源身份。App Server 为 `develop-intent` 计算可用定义时反向得到这三个目标，并把 `spawn_agent` 的可选范围冻结到该集合；仅靠提示词要求“不要调用其他 Agent”不构成隔离。
+三个私有角色都声明 `launch: delegation`，`callers` 只包含内置 `develop/intent`；Intent 的 `delegates` 列出这三个准确 ID。委托入口核对父角色来源、冻结摘要及目标限制，`Default` 不能绕过；仅靠提示词要求“不要调用其他 Agent”不构成隔离。
 
 ### 5.4 与 `/develop` 的责任联动
 
@@ -256,13 +244,13 @@ Agent 只声明默认值、覆盖权限、替换范围和能力要求。App Serv
 
 ## 6. 选择、可见性与执行流程
 
-当前内置定义用 `launch = any/workflow/delegation`、`callers` 与 `delegates` 表达启动范围。运行时校验准确内置来源、调用方定义摘要及委托目标；普通选择目录只列通用角色，Default 也不能绕过私有角色门禁。资源正文归 `ash-rs/agent-roles/assets/builtins`。
+当前内置定义用 `launch: any/workflow/delegation/host`、`callers` 与 `delegates` 表达启动范围。运行时校验准确内置来源、调用方定义摘要及委托目标；普通选择目录只列通用角色，Default 也不能绕过私有角色门禁。资源正文归 `ash-rs/agent-roles/assets`。
 
 | Team 角色 | 入口与当前工具边界 |
 | --- | --- |
-| `team-coordinator` | `/team` 或 `develop-implementer` 委托；源码读取、讨论板与协调工具，只能委托下面两个角色 |
-| `team-implementer` | 仅协调者委托；继承获准实现工具，不能继续委托 |
-| `team-reviewer` | 仅协调者委托；源码与已有证据读取、讨论板，不获代码写入或 Shell |
+| `team/coordinator` | `/team` 或 `develop/implementer` 委托；源码读取、讨论板与协调工具，只能委托下面两个角色 |
+| `team/implementer` | 仅协调者委托；继承获准实现工具，不能继续委托 |
+| `team/reviewer` | 仅协调者委托；源码与已有证据读取、讨论板，不获代码写入或 Shell |
 
 ```mermaid
 flowchart LR
@@ -316,8 +304,8 @@ flowchart LR
 | Agent 模型继承、覆盖和兼容替换 | 尚未完成 | 当前委托只使用调用方当前 `ModelRef` 或定义中的准确模型；`ash-models-manager` 目前只解析指定模型，没有跨 provider 候选选择、替换决定和用户警告。 |
 | 会话入口选择 Agent 定义 | 已实现 | `session/create.agent` 接收带来源的选择，配置与 ThreadCreated 同批提交；重试复用原配置。 |
 | Default 与共同规则、模型指导、Role 组合 | 已实现 | 共同规则归 prompts，模型指导独立冻结，Role 通过统一 Thread 配置生效；见 [指令组合设计](../ash-rs/docs/agent-instructions.md)。 |
-| 统一定义契约 | 部分具备 | 内置 TOML 和目录 Markdown 已统一产出 `AgentRole`；内置启动范围已接入，模型完整策略、上下文策略和带作用范围能力仍需补齐。 |
-| 内置专化 catalog 与本文角色资源 | 部分具备 | `issue`、Team、Develop 阶段与 Intent 私有角色已打包；其他普通角色仍未加入。 |
+| 统一定义契约 | 部分具备 | 内置与目录 Markdown 共用解析器并产出 `AgentRole`；内置启动范围已接入，模型完整策略、上下文策略和带作用范围能力仍需补齐。 |
+| 内置专化 catalog 与本文角色资源 | 部分具备 | `issue`、Advisor、代码审查、Team、Develop 阶段与 Intent 私有角色已打包；其他普通角色仍未加入。 |
 | 启动来源与 `/develop` 私有范围 | 已实现当前入口 | 会话、工作流与委托入口检查准确内置来源、调用方摘要和允许目标；私有角色不进入通用工具目录，不能通过 Default 绕过。 |
 | 带来源的定义身份 | 已实现 | `AgentRole` 与 `FrozenAgentDefinitionRef` 都冻结 `BuiltIn` 或准确目录 ID，内置 Role 同时冻结版本与内容摘要。 |
 | 每个角色的带作用范围执行能力上限 | 尚未完成 | 当前 `AgentCapabilityScope` 已分离自身与下放 Tool，但仍需冻结并执行检查文件、进程、网络等 `Capability` 上限。 |
@@ -334,7 +322,7 @@ flowchart LR
 
 每次新增或修改内置 Agent，必须同时完成：
 
-1. 更新唯一的 `assets/builtins/<role>.toml`，提升定义版本并生成稳定摘要。
+1. 更新唯一的 `assets/<role>.md`，提升定义版本并生成稳定摘要。
 2. 校验 ID、提示词非空与大小上限、工具引用、能力作用范围、模型策略、上下文策略和禁止递归规则。
 3. 增加 Default、准确来源选择、同名歧义和错误目标测试，证明任务文字不会改变已经确定的角色。
 4. 增加行为评测，覆盖结果格式、证据质量、禁止动作和工具最小化；只读角色必须有“不能修改”的执行测试。

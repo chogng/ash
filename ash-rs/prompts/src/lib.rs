@@ -18,7 +18,6 @@ pub use compact::checkpoint_prompt;
 pub use compact::checkpoint_prompt_overhead;
 pub use compact::checkpoint_summary_bytes;
 pub use permissions::permissions_instructions;
-pub use review::REVIEW_PROMPT;
 pub use review::ReviewOutcome;
 pub use review::ReviewPromptError;
 pub use review::review_exit_prompt;

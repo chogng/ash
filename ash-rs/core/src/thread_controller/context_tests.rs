@@ -47,7 +47,14 @@ impl Fixture {
     fn start(&self, key: &str, kind: TurnKind, mode: ApprovalMode) -> TurnId {
         let base = ash_prompts::AGENT_INSTRUCTIONS.freeze();
         let instructions = if kind == TurnKind::Review {
-            ash_prompts::REVIEW_PROMPT.freeze().with_shared(&base)
+            ash_protocol::TurnInstructions::new(
+                "test",
+                "review",
+                "1",
+                "Review the supplied change.",
+            )
+            .unwrap()
+            .with_shared(&base)
         } else {
             base
         };
