@@ -470,7 +470,8 @@ export class View extends ViewEventHandler {
 				const layoutInfo = this.editorConfiguration.options.get(EditorOption.layoutInfo);
 				this.domNode.setWidth(layoutInfo.width);
 				this.domNode.setHeight(layoutInfo.height);
-				this.project(viewport.layout);
+				// Configuration can change before the view-model finishes publishing cursor and line events.
+				this.scheduleProjection();
 			}
 		}));
 		this._register(this.pixelRatio.onDidChange(() => this.project(viewport.layout)));

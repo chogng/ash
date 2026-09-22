@@ -102,6 +102,70 @@ function delay(targetWindow: Pick<Window, 'setTimeout'>, duration: number): Prom
 	return new Promise(resolve => targetWindow.setTimeout(resolve, duration));
 }
 
+test('editor line-number width follows edits, undo, and model replacement before content events', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using cleanup = toDisposable(() => dom.window.close());
+	using model = new TextModel(Array.from({ length: 9 }, () => 'line').join('\n'));
+	using replacement = new TextModel('short');
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		input: { resource: model.uri },
+		languageId: model.getLanguageId(),
+		lineNumbersMinChars: 1,
+		minimap: { enabled: false },
+	});
+	editor.layout({ width: 320, height: 80 });
+	const digitWidth = editor.getOption(EditorOption.fontInfo).maxDigitWidth;
+	const widths: number[] = [];
+	using listener = editor.onDidChangeModelContent(() => widths.push(editor.getLayoutInfo().lineNumbersWidth));
+
+	editor.executeEdits('test', [{ range: new Range(9, 5, 9, 5), text: '\nline' }]);
+	editor.pushUndoStop();
+	model.undo();
+	model.setValue(Array.from({ length: 100 }, () => 'line').join('\n'));
+	editor.setModel(replacement);
+	widths.push(editor.getLayoutInfo().lineNumbersWidth);
+
+	assert.deepEqual(widths, [2, 1, 3, 1].map(digits => Math.round(digits * digitWidth)));
+});
+
+test('editor reads long-line wrapping from each attached model and honors accessibility overrides', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+	using cleanup = toDisposable(() => dom.window.close());
+	using longModel = new TextModel('x'.repeat(20000));
+	using shortModel = new TextModel('short');
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model: longModel,
+		input: { resource: longModel.uri },
+		languageId: longModel.getLanguageId(),
+		accessibilityService: enabledAccessibilityService,
+		accessibilitySupport: 'auto',
+		wordWrap: 'off',
+		minimap: { enabled: false },
+	});
+	editor.layout({ width: 320, height: 80 });
+	const states: boolean[] = [];
+	const read = (): void => { states.push(editor.getLayoutInfo().isWordWrapMinified); };
+	read();
+	editor.updateOptions({ accessibilitySupport: 'off' });
+	read();
+	editor.updateOptions({ accessibilitySupport: 'auto', wordWrapOverride1: 'off' });
+	read();
+	editor.updateOptions({ wordWrapOverride1: 'inherit' });
+	read();
+	editor.setModel(null);
+	read();
+	editor.setModel(shortModel);
+	read();
+	editor.setModel(longModel);
+	read();
+	assert.deepEqual(states, [true, false, false, true, false, false, true]);
+});
+
 test("CodeEditorWidget owns one canonical browser editing surface", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;

@@ -3620,6 +3620,66 @@ test('editor rendering follows updated configuration without replacing the view'
 	expect(errors).toEqual([]);
 });
 
+test('editor configuration widens and shrinks the line-number gutter while typing and undoing', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareLineCountConfiguration(9, 'fit'));
+	const before = await page.evaluate(() => window.ashStandaloneIntegration.readLineCountConfiguration());
+	await page.keyboard.press('Enter');
+	const after = await page.evaluate(() => window.ashStandaloneIntegration.readLineCountConfiguration());
+	expect(after.lines).toBe(10);
+	expect(after.layout.lineNumbersWidth).toBe(Math.round(2 * after.digitWidth));
+	expect(after.layout.contentLeft).toBeGreaterThan(before.layout.contentLeft);
+	await expect(page.locator('#caller .line-numbers').last()).toHaveCSS('width', `${after.layout.lineNumbersWidth}px`);
+	await page.keyboard.press('ControlOrMeta+z');
+	const undone = await page.evaluate(() => window.ashStandaloneIntegration.readLineCountConfiguration());
+	expect(undone.lines).toBe(9);
+	expect(undone.layout.lineNumbersWidth).toBe(before.layout.lineNumbersWidth);
+	await expect(page.locator('#caller .line-numbers').last()).toHaveCSS('width', `${before.layout.lineNumbersWidth}px`);
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+for (const size of ['fill', 'fit'] as const) {
+	test(`editor configuration keeps ${size} minimap in sync with folded and wrapped lines`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.stack ?? error.message));
+		await page.goto('/standalone.html');
+		await page.evaluate(size => window.ashStandaloneIntegration.prepareLineCountConfiguration(1000, size), size);
+		const initial = await page.evaluate(() => window.ashStandaloneIntegration.readLineCountConfiguration());
+		expect(initial.layout.minimap.minimapIsSampling).toBe(true);
+		await page.evaluate(() => window.ashStandaloneIntegration.foldConfigurationLines(true));
+		const folded = await page.evaluate(() => window.ashStandaloneIntegration.readLineCountConfiguration());
+		expect(folded.viewLines).toBe(2);
+		expect(folded.layout.minimap.minimapIsSampling).toBe(false);
+		await page.evaluate(() => window.ashStandaloneIntegration.foldConfigurationLines(false));
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCountConfiguration())).layout.minimap).toEqual(initial.layout.minimap);
+
+		await page.evaluate(size => window.ashStandaloneIntegration.prepareLineCountConfiguration(80, size, 'content '.repeat(30)), size);
+		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ wordWrap: 'on' }));
+		await expect.poll(async () => (await page.evaluate(() => window.ashStandaloneIntegration.readLineCountConfiguration())).layout.minimap.minimapIsSampling).toBe(true);
+		const wrapped = await page.evaluate(() => window.ashStandaloneIntegration.readLineCountConfiguration());
+		expect(wrapped.viewLines).toBeGreaterThan(wrapped.lines);
+		await expect(page.locator('#caller .minimap')).toHaveCSS('width', `${wrapped.layout.minimap.minimapWidth}px`);
+		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ wordWrap: 'off' }));
+		await expect.poll(async () => (await page.evaluate(() => window.ashStandaloneIntegration.readLineCountConfiguration())).viewLines).toBe(80);
+		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+		expect(errors).toEqual([]);
+	});
+}
+
+test('editor configuration wraps an attached long-line file for screen readers and respects explicit off', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.configureAccessibility(true, 'auto'));
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareLineCountConfiguration(1, 'fit', 'x'.repeat(20000)));
+	const wrapped = await page.evaluate(() => window.ashStandaloneIntegration.readLineCountConfiguration());
+	expect(wrapped.layout.isWordWrapMinified).toBe(true);
+	expect(wrapped.viewLines).toBeGreaterThan(1);
+	await page.evaluate(() => window.ashStandaloneIntegration.configureAccessibility(true, 'off'));
+	const unwrapped = await page.evaluate(() => window.ashStandaloneIntegration.readLineCountConfiguration());
+	expect(unwrapped.layout.isWordWrapMinified).toBe(false);
+	expect(unwrapped.viewLines).toBe(1);
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
 test('editor font measurements stay in layout pixels when the host is transformed', async ({ page }) => {
 	await page.goto('/standalone.html');
 	const before = await page.evaluate(() => window.ashStandaloneIntegration.readFontMetrics());

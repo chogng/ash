@@ -6,6 +6,7 @@ import { TestThemeService } from '../../../../platform/theme/test/common/testThe
 import { darkColorTheme } from '../../../../platform/theme/common/colorTheme.js';
 import { MenuId } from '../../../../platform/actions/common/actions.js';
 import { EditorConfiguration } from '../../../browser/config/editorConfiguration.js';
+import { EditorOption } from '../../../common/config/editorOptions.js';
 import { createConfigurationServices } from '../config/testConfiguration.js';
 import { CursorState } from '../../../common/cursorCommon.js';
 import { CursorChangeReason } from '../../../common/cursorEvents.js';
@@ -65,6 +66,66 @@ class CapturedViewEvents extends ViewEventHandler {
 		return false;
 	}
 }
+
+test('minimap configuration follows visible lines through folding, wrapping, tab changes, and edits', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	const container = dom.window.document.querySelector('main')!;
+	using cleanup = toDisposable(() => dom.window.close());
+	using resources = new DisposableStore();
+	const services = createConfigurationServices(resources, container);
+	using configuration = services.createInstance(EditorConfiguration, false, MenuId.EditorContext, {
+		dimension: { width: 400, height: 120 },
+		lineHeight: 20,
+		padding: { top: 0, bottom: 0 },
+		scrollBeyondLastLine: false,
+		minimap: { enabled: true, size: 'fill' },
+	}, container);
+	using languages = createTestLanguageConfigurationService();
+	using model = new TextModel(Array.from({ length: 60 }, () => 'abcd').join('\n'), { languageConfigurationService: languages });
+	using theme = new TestThemeService(darkColorTheme);
+	const factory = MonospaceLineBreaksComputerFactory.create(configuration.options);
+	using viewModel = new ViewModel(
+		1,
+		configuration,
+		model,
+		factory,
+		factory,
+		() => Disposable.None,
+		languages,
+		theme,
+		{ setVisibleLines: () => {} },
+		{ batchChanges: callback => callback() },
+	);
+	const states: Array<{ lines: number; height: number; sampling: boolean }> = [];
+	const read = (): void => {
+		const minimap = configuration.options.get(EditorOption.layoutInfo).minimap;
+		states.push({ lines: viewModel.getLineCount(), height: minimap.minimapLineHeight, sampling: minimap.minimapIsSampling });
+	};
+	read();
+	viewModel.setHiddenAreas([new Range(2, 1, 59, 5)]);
+	read();
+	viewModel.setHiddenAreas([]);
+	read();
+	configuration.updateOptions({ wordWrap: 'wordWrapColumn', wordWrapColumn: 1, wrappingIndent: 'none' });
+	read();
+	configuration.updateOptions({ wordWrapColumn: 4 });
+	model.setValue(Array.from({ length: 60 }, () => '\tx').join('\n'));
+	model.updateOptions({ tabSize: 1 });
+	read();
+	model.updateOptions({ tabSize: 4 });
+	read();
+	model.setValue('short');
+	read();
+	assert.deepEqual(states, [
+		{ lines: 60, height: 2, sampling: false },
+		{ lines: 2, height: 20, sampling: false },
+		{ lines: 60, height: 2, sampling: false },
+		{ lines: 240, height: 1, sampling: true },
+		{ lines: 60, height: 2, sampling: false },
+		{ lines: 120, height: 1, sampling: false },
+		{ lines: 2, height: 20, sampling: false },
+	]);
+});
 
 test('ViewModel owns line projection, cursor, layout, and visible-line publication', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');

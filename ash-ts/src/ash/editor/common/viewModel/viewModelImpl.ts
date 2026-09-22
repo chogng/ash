@@ -106,6 +106,7 @@ export class ViewModel extends Disposable implements IViewModel {
 					eventsCollector.emitViewEvent(new viewEvents.ViewLineMappingChangedEvent());
 					eventsCollector.emitViewEvent(new viewEvents.ViewDecorationsChangedEvent(null));
 					this.cursor.onLineMappingChanged(eventsCollector);
+					configuration.setViewLineCount(this.lines.getViewLineCount());
 				});
 			}));
 		}
@@ -135,6 +136,7 @@ export class ViewModel extends Disposable implements IViewModel {
 					eventsCollector.emitViewEvent(new viewEvents.ViewLineMappingChangedEvent());
 					eventsCollector.emitViewEvent(new viewEvents.ViewDecorationsChangedEvent(null));
 					this.cursor.onLineMappingChanged(eventsCollector);
+					configuration.setViewLineCount(this.lines.getViewLineCount());
 				}
 				this.recreateCursorConfiguration();
 			});
@@ -154,6 +156,7 @@ export class ViewModel extends Disposable implements IViewModel {
 		}));
 		model.registerViewModel(this);
 		this._register(toDisposable(() => model.unregisterViewModel(this)));
+		configuration.setViewLineCount(this.lines.getViewLineCount());
 	}
 
 	getEditorOption<T extends EditorOption>(id: T): FindComputedEditorOptionValueById<T> {
@@ -473,6 +476,8 @@ export class ViewModel extends Disposable implements IViewModel {
 			this.decorations.onLineMappingChanged();
 			this.viewLayout.onFlushed(this.lines.getViewLineCount(), []);
 			this.events.emitSingleViewEvent(new viewEvents.ViewFlushedEvent());
+			this.configuration.setModelLineCount(this.model.getLineCount());
+			this.configuration.setViewLineCount(this.lines.getViewLineCount());
 		} finally {
 			this.collectedCursorEventDepth -= 1;
 		}

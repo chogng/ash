@@ -332,6 +332,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				? options.editorWorkerFactory(model)
 				: new VersionedEditorWorkerClient(model, () => new EditorWorker()));
 			services.registerInstance(IVersionedEditorWorkerClient, editorWorker);
+			this.configuration.setIsDominatedByLongLines(model.isDominatedByLongLines());
 			this.configuration.setModelLineCount(model.lineCount);
 			modelStore.add(model.onDidChangeDecorations(event => this.modelDecorationsEmitter.fire(event)));
 			modelStore.add(model.onWillDispose(() => this.setModel(null)));
@@ -575,7 +576,9 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			if (model) {
 				this.attachModel(model);
 			} else {
+				this.configuration.setIsDominatedByLongLines(false);
 				this.configuration.setModelLineCount(1);
+				this.configuration.setViewLineCount(1);
 			}
 		} catch (error) {
 			this.failModelChange(previousModel);
@@ -593,7 +596,9 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		this.modelState = null;
 		this.instantiationService = this.editorServices;
 		this.rootDomNode.replaceChildren();
+		this.configuration.setIsDominatedByLongLines(false);
 		this.configuration.setModelLineCount(1);
+		this.configuration.setViewLineCount(1);
 		this.modelChangeEmitter.fire({ oldModelUrl: previousModel?.uri ?? null, newModelUrl: null });
 	}
 

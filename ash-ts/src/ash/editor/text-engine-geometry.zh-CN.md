@@ -124,6 +124,7 @@ GPU 或 Canvas 后端可以提高密集文本的吞吐，但自身不提供原�
 | --- | --- | --- |
 | Common 测量契约 | Current / 已实现 | `common/viewModel.ts` 提供文本宽度和 padding 输入，不导入浏览器 API |
 | 浏览器编辑器几何配置 | Current / 已实现 | `browser/config/editorConfiguration.ts` 解析字体、行高和容器尺寸；通过构造注入读取窗口无障碍服务，统一计算每个编辑器的 `auto`/`on`/`off` 策略，读屏内容消费同一结果 |
+| 模型相关几何配置 | Current / 已实现 | `CodeEditorWidget` 提供所挂载模型的长行特征；`ViewModel` 在编辑、折叠、换行和 tabSize 变化后更新模型与显示行数，配置据此计算行号栏宽度和缩略图 fit/fill 几何。布局通知通过调度等待光标与行事件发布完成后绘制 |
 | 浏览器元素尺寸观察 | Current / 已实现 | `browser/config/elementSizeObserver.ts` 将 ResizeObserver 和初始 client-area 读取统一为 viewport 使用的合并尺寸事件 |
 | DOM 字体应用 | Current / 已实现 | `browser/config/domFontInfo.ts` 为 viewport 和 diff surface 应用统一的编辑器字体词汇；zoom 仍由 feature 自己拥有，并显式使测量失效 |
 | Tab-focus 状态 | Current / 已实现 | `browser/config/tabFocus.ts` 拥有可由 host 注入的状态和变更事件；`toggleTabFocusMode` contribution 拥有快捷键、DOM 状态和播报 |

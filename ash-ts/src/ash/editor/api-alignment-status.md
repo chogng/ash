@@ -1162,7 +1162,7 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 | --- | --- | --- |
 | `browser/config/charWidthReader.ts` | 1 / 1 | 2026-09-22：字符宽度使用布局像素；真实编辑器在宿主 0.75/1.5 倍 transform 下重新测量，代表字符宽度保持一致。 |
 | `browser/config/domFontInfo.ts` | 7 / 1 | 人工检查：已通读入口、公开数据和同步状态变化；未发现本轮可复现缺陷。 |
-| `browser/config/editorConfiguration.ts` | 2 / 3 | 2026-09-22：构造注入窗口无障碍服务，跟随宿主状态并计算编辑器 on/off/auto 优先级；读屏内容统一消费计算结果。能力检测读取容器窗口；验证变化事件顺序、换行缩进、焦点和释放。 |
+| `browser/config/editorConfiguration.ts` | 2 / 3 | 2026-09-22：构造注入窗口无障碍服务，统一计算编辑器 on/off/auto 优先级；能力检测读取容器窗口。模型挂载提供长行特征，ViewModel 在编辑、折叠、换行与 tabSize 变化后提供最新行数；验证行号宽度、缩略图 fit/fill 和读屏长行换行。 |
 | `browser/config/elementSizeObserver.ts` | 1 / 0 | 2026-09-22：尺寸事件发布前登记帧任务，使监听器内停止观察可以清理当前任务；补充同一回调中停止并重启自动布局的回归。 |
 | `browser/config/fontMeasurements.ts` | 1 / 1 | 2026-09-22：按窗口安排不可靠测量的到期任务，关闭窗口取消任务，缓存弱引用窗口；验证多个窗口分别失效。恢复后保存语义仍与上游不同，当前无生产恢复/保存调用方，未扩建持久化链路。 |
 | `browser/config/migrateOptions.ts` | 2 / 1 | 2026-09-22：布尔旧设置生成的嵌套对象归各次迁移独享；显式 allowCodeShifting 优先于旧 codeShifting。验证不同编辑器互不污染及新设置优先级。 |
@@ -1227,7 +1227,7 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 | `browser/services/renameSymbolTrackerService.ts` | 1 / 1 | 人工检查：已通读入口、公开数据和同步状态变化；未发现本轮可复现缺陷。 |
 | `browser/stableEditorScroll.ts` | 2 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
 | `browser/triggerInlineEditCommandsRegistry.ts` | 2 / 2 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
-| `browser/view.ts` | 38 / 6 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/view.ts` | 38 / 6 | 2026-09-22：布局配置通知进入已有渲染调度，避免显示行与光标事件尚未发布完成时提前绘制；真实浏览器验证折叠、取消换行不发生光标行号越界。其他职责未作逐行行为结论。 |
 | `browser/view/domLineBreaksComputer.ts` | 1 / 2 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
 | `browser/view/dynamicViewOverlay.ts` | 9 / 0 | 人工检查：已通读短模块的入口、边界及返回值；未发现本轮可复现缺陷。 |
 | `browser/view/renderingContext.ts` | 36 / 3 | 静态语法与依赖已扫描；未作逐行行为结论。 |
@@ -1271,7 +1271,7 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 | `browser/viewParts/viewZones/viewZones.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
 | `browser/viewParts/whitespace/whitespace.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
 | `browser/widget/codeEditor/codeEditorContributions.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
-| `browser/widget/codeEditor/codeEditorWidget.ts` | 9 / 25 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/widget/codeEditor/codeEditorWidget.ts` | 9 / 25 | 2026-09-22：挂载模型时更新长行特征与模型行数，卸载或挂载失败时清除模型相关配置输入；验证模型替换、读屏策略与显式关闭换行。其他职责未作逐行行为结论。 |
 | `browser/widget/codeEditor/embeddedCodeEditorWidget.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
 | `browser/widget/diffEditor/diffEditorRows.ts` | 2 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
 | `browser/widget/diffEditor/diffEditorWidget.ts` | 3 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
@@ -1490,7 +1490,7 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 | `common/viewModel/viewContext.ts` | 45 / 7 | 人工检查：复用 viewModel 的布局/事件 owner，不另建缓存；主题更新由 EditorTheme 承接。 |
 | `common/viewModel/viewModelDecoration.ts` | 5 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
 | `common/viewModel/viewModelDecorations.ts` | 1 / 0 | 静态语法与依赖已扫描；未作逐行行为结论。 |
-| `common/viewModel/viewModelImpl.ts` | 1 / 2 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `common/viewModel/viewModelImpl.ts` | 1 / 2 | 2026-09-22：显示行变化回写配置；编辑后在对外内容事件前更新模型行数和显示行数。验证编辑/撤销跨行号位数、折叠/换行/tabSize 变化下的缩略图比例。其他职责未作逐行行为结论。 |
 | `common/viewModel/viewModelLines.ts` | 2 / 2 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
 | `common/viewModel/visualCursorNavigation.ts` | 1 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
 | `common/viewModel/visualRangeGeometry.ts` | 1 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |

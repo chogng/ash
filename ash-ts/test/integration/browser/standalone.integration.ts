@@ -19,7 +19,7 @@ import { type CancellationToken } from '../../../src/ash/base/common/cancellatio
 import { scheduleAtNextAnimationFrame } from '../../../src/ash/base/browser/scheduler.js';
 import { h } from '../../../src/ash/base/browser/dom.js';
 import { type Range } from '../../../src/ash/editor/common/core/range.js';
-import { type IEditorOptions } from '../../../src/ash/editor/common/config/editorOptions.js';
+import { type EditorLayoutInfo, type IEditorOptions } from '../../../src/ash/editor/common/config/editorOptions.js';
 import { EndOfLineSequence, type ITextModel } from '../../../src/ash/editor/common/model.js';
 import { IVersionedEditorWorkerClient } from '../../../src/ash/editor/browser/services/editorWorkerService.js';
 import { ILanguageFeaturesService } from '../../../src/ash/editor/common/services/languageFeatures.js';
@@ -259,6 +259,9 @@ interface StandaloneHarness {
 	updateRenderingOptions(enabled: boolean): number;
 	readFontMetrics(): { halfwidth: number; fullwidth: number; space: number; digit: number };
 	configureAccessibility(hostEnabled: boolean, option: 'auto' | 'on' | 'off'): { support: number; indent: number };
+	prepareLineCountConfiguration(lines: number, size: 'fill' | 'fit', content?: string): void;
+	foldConfigurationLines(folded: boolean): void;
+	readLineCountConfiguration(): { lines: number; viewLines: number; digitWidth: number; layout: EditorLayoutInfo };
 	setTestMarkers(enabled: boolean): void;
 	setMinimapColor(color: string): void;
 	readMinimapPixel(): number[];
@@ -1924,6 +1927,32 @@ window.ashStandaloneIntegration = {
 			indent: callerEditor.getOption(EditorOption.wrappingIndent),
 		};
 	},
+	prepareLineCountConfiguration: (lines, size, content = 'line') => {
+		callerEditor.setModel(null);
+		callerModel.setValue(Array.from({ length: lines }, () => content).join('\n'));
+		callerEditor.updateOptions({
+			lineNumbersMinChars: 1,
+			lineHeight: 20,
+			wordWrap: 'off',
+			padding: { top: 0, bottom: 0 },
+			scrollBeyondLastLine: false,
+			minimap: { enabled: true, size },
+			folding: false,
+		});
+		callerEditor.setModel(callerModel);
+		callerEditor.layout({ width: 400, height: 120 });
+		callerEditor.setPosition(new stanza.Position(lines, callerModel.getLineMaxColumn(lines)));
+		callerEditor.focus();
+	},
+	foldConfigurationLines: folded => {
+		callerEditor._getViewModel()!.setHiddenAreas(folded ? [new stanza.Range(2, 1, callerModel.getLineCount() - 1, 1)] : []);
+	},
+	readLineCountConfiguration: () => ({
+		lines: callerModel.getLineCount(),
+		viewLines: callerEditor._getViewModel()!.getLineCount(),
+		digitWidth: callerEditor.getOption(EditorOption.fontInfo).maxDigitWidth,
+		layout: callerEditor.getLayoutInfo(),
+	}),
 	prepareReferencePreview: () => {
 		callerEditor.setValue('alpha beta\nalpha gamma');
 		callerEditor.setPosition(new stanza.Position(1, 2));

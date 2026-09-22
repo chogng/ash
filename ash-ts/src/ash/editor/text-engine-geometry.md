@@ -124,6 +124,7 @@ The following facts describe the current Ash implementation; they do not redefin
 | --- | --- | --- |
 | Common measurement contract | Current | `common/viewModel.ts` exposes text width and padding inputs without importing browser APIs |
 | Browser editor geometry configuration | Current | `browser/config/editorConfiguration.ts` resolves font, line height, and container geometry. It consumes the injected window accessibility service and owns each editor's computed `auto`/`on`/`off` policy; screen-reader content reads that same policy |
+| Model-derived geometry configuration | Current | `CodeEditorWidget` supplies the attached model's long-line characteristic. `ViewModel` updates model and visible line counts after edits, folding, wrapping, and tab-size changes; configuration computes gutter width and minimap fit/fill geometry. Layout notifications schedule rendering after cursor and line events finish |
 | Browser element-size observation | Current | `browser/config/elementSizeObserver.ts` turns ResizeObserver and initial client-area reads into one coalesced dimension event for the viewport |
 | DOM font application | Current | `browser/config/domFontInfo.ts` applies the shared editor font vocabulary to viewport and diff surfaces; zoom remains feature-owned and invalidates measurements explicitly |
 | Tab-focus state | Current | `browser/config/tabFocus.ts` owns host-injectable state and change events; the `toggleTabFocusMode` contribution owns keybindings, DOM state, and announcements |
