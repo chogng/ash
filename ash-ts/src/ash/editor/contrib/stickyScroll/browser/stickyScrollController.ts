@@ -20,11 +20,14 @@ export class StickyScrollController extends Disposable {
 	private readonly widget: StickyScrollWidget;
 	private readonly candidateProvider: StickyLineCandidateProvider;
 	private readonly visible: IContextKey<boolean>;
+	private hoveredLine: number | null = null;
+	private previewLine: number | null = null;
+	private changingFold = false;
 
 	constructor(
 		private readonly editor: ICodeEditor,
 		private readonly viewport: View,
-		folding: EditorFoldingModel,
+		private readonly folding: EditorFoldingModel,
 		onError: (error: unknown) => void,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IContextKeyService contextKeyService: IContextKeyService,
@@ -68,6 +71,9 @@ export class StickyScrollController extends Disposable {
 					command = "editor.action.selectPreviousStickyScrollLine";
 					break;
 				case "Enter":
+					if (this.widget.isInFoldingIconDomNode(event.target as HTMLElement)) {
+						return;
+					}
 					command = "editor.action.goToFocusedStickyScrollLine";
 					break;
 				case "Escape":
@@ -81,10 +87,40 @@ export class StickyScrollController extends Disposable {
 		}));
 		this._register(viewport.onDidChangeLayout(() => this.render()));
 		this._register(this.candidateProvider.onDidChangeStickyScroll(() => this.render()));
+		this._register(folding.onDidChange(() => this.render()));
+		this._register(viewport.textModel.tokenization.renderedTokens.onDidChange(() => this.render()));
+		this._register(viewport.textModel.onDidChangeOptions(() => this.render()));
+		this._register(editor.onDidChangeCursorPosition(() => this.render()));
 		this._register(editor.onDidChangeConfiguration(event => {
-			if (event.hasChanged(EditorOption.stickyScroll) || event.hasChanged(EditorOption.lineHeight) || event.hasChanged(EditorOption.fontInfo)) {
+			if (event.hasChanged(EditorOption.stickyScroll) || event.hasChanged(EditorOption.lineHeight)
+				|| event.hasChanged(EditorOption.fontInfo) || event.hasChanged(EditorOption.lineNumbers)
+				|| event.hasChanged(EditorOption.showFoldingControls) || event.hasChanged(EditorOption.folding)) {
 				this.render();
 			}
+		}));
+		this._register(addDisposableListener(element, "pointermove", event => {
+			const index = this.widget.getLineIndexFromChildDomNode(event.target as HTMLElement);
+			this.hoveredLine = index === null ? null : this.widget.getCurrentLines()[index]!;
+			this.preview(event.shiftKey);
+		}));
+		this._register(addDisposableListener(element, "pointerleave", () => {
+			this.hoveredLine = null;
+			this.preview(false);
+		}));
+		const window = element.ownerDocument.defaultView!;
+		this._register(addDisposableListener(window, "keydown", event => {
+			if (event.key === "Shift") {
+				this.preview(true);
+			}
+		}));
+		this._register(addDisposableListener(window, "keyup", event => {
+			if (event.key === "Shift") {
+				this.preview(false);
+			}
+		}));
+		this._register(addDisposableListener(window, "blur", () => {
+			this.hoveredLine = null;
+			this.preview(false);
 		}));
 		this._register(addDisposableListener(element, "click", event => {
 			if (event.button !== 0 || event.altKey || event.ctrlKey || event.metaKey) {
@@ -95,6 +131,20 @@ export class StickyScrollController extends Disposable {
 				return;
 			}
 			const state = this.findScrollWidgetState();
+			if (this.widget.isInFoldingIconDomNode(event.target as HTMLElement)) {
+				stopEvent(event);
+				// Hidden areas and scroll change together; retain the focused row until its anchor is settled.
+				this.changingFold = true;
+				try {
+					const line = state.startLineNumbers[index]!;
+					this.folding.toggleAtLine(line - 1);
+					this.editor.setScrollTop(this.editor.getTopForLineNumber(line) - index * this.editor.getOption(EditorOption.lineHeight) + 1);
+				} finally {
+					this.changingFold = false;
+					this.render();
+				}
+				return;
+			}
 			this.revealLine(event.shiftKey ? state.endLineNumbers[index]! : state.startLineNumbers[index]!);
 		}));
 	}
@@ -156,10 +206,12 @@ export class StickyScrollController extends Disposable {
 		const candidates = this.candidateProvider.getCandidateStickyLinesIntersecting(new StickyRange(ranges[0]!.startLineNumber, ranges.at(-1)!.endLineNumber));
 		const starts: number[] = [];
 		const ends: number[] = [];
+		const heightLimit = Math.round(this.editor.getLayoutInfo().height / (4 * this.editor.getOption(EditorOption.lineHeight)));
+		const lineLimit = Math.min(options.maxLineCount, heightLimit);
 		let offset = 0;
 		const scrollTop = this.editor.getScrollTop();
 		for (const candidate of candidates) {
-			if (starts.length === options.maxLineCount) {
+			if (starts.length === lineLimit) {
 				break;
 			}
 			const slotTop = starts.length * candidate.height;
@@ -174,7 +226,16 @@ export class StickyScrollController extends Disposable {
 				break;
 			}
 		}
-		return new StickyScrollWidgetState(starts, ends, offset);
+		const previewIndex = this.previewLine === null ? -1 : starts.indexOf(this.previewLine);
+		return new StickyScrollWidgetState(starts, ends, offset, previewIndex < 0 ? null : previewIndex);
+	}
+
+	private preview(enabled: boolean): void {
+		const line = enabled ? this.hoveredLine : null;
+		if (this.previewLine !== line) {
+			this.previewLine = line;
+			this.render();
+		}
 	}
 
 	private revealLine(lineNumber: number): void {
@@ -185,7 +246,15 @@ export class StickyScrollController extends Disposable {
 	}
 
 	private render(): void {
-		this.widget.setState(this.findScrollWidgetState());
+		if (this.changingFold) {
+			return;
+		}
+		const state = this.findScrollWidgetState();
+		if (this.hoveredLine !== null && !state.startLineNumbers.includes(this.hoveredLine)) {
+			this.hoveredLine = null;
+			this.previewLine = null;
+		}
+		this.widget.setState(state, this.folding);
 		this.visible.set(this.widget.getCurrentLines().length > 0);
 	}
 }

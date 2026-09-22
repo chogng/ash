@@ -131,12 +131,13 @@ interface StandaloneHarness {
 	readContributionDecorations(): { colors: number; highlights: number; folding: number };
 	prepareStickyHeaders(): void;
 	prepareStickySymbols(): void;
+	setStickySyntax(foreground: string | null): void;
 	runStickyCommand(id: string): Promise<void>;
 	scrollSticky(top: number, left?: number): void;
 	hideStickyLines(start: number, end: number): void;
-	readStickyState(): { starts: number[]; ends: number[]; offset: number; focused: boolean; line: number; scrollLeft: number };
+	readStickyState(): { starts: number[]; ends: number[]; offset: number; focused: boolean; line: number; scrollLeft: number; hidden: number[][] };
 	setStickyTheme(name: string): void;
-	layoutContribution(width: number): void;
+	layoutContribution(width: number, height?: number): void;
 	prepareCompletionGeometry(scrolled: boolean): void;
 	readCompletionGeometry(): { caret: { left: number; top: number; height: number }; api: { left: number; top: number; height: number }; widget: { left: number; top: number }; contentLeft: number; textLeft: number };
 	prepareContributionRequests(kind: ContributionRequestKind): void;
@@ -475,6 +476,7 @@ function readViewZone(): ViewZoneState {
 let deferredFormatting: { token: CancellationToken; resolve: () => void }[] = [];
 let formattingProvider: { dispose(): void } | undefined;
 let bracketTokenRegistration: { dispose(): void } | undefined;
+let stickySyntaxRegistration: { dispose(): void } | undefined;
 
 window.ashStandaloneIntegration = {
 	updateContributionOptions: options => callerEditor.updateOptions(options),
@@ -507,6 +509,19 @@ window.ashStandaloneIntegration = {
 			}),
 		}));
 	},
+	setStickySyntax: foreground => {
+		stickySyntaxRegistration?.dispose();
+		stickySyntaxRegistration = foreground === null ? undefined : stanza.languages.registerSyntaxProvider({
+			id: 'sticky-color-test',
+			languageIds: ['plaintext'],
+			provideTokens: request => ({
+				tokens: request.snapshot.getText().split('\n').map((line, index) => ({
+					range: new stanza.Range(index + 1, 1, index + 1, line.length + 1),
+					tokenType: 'keyword', modifiers: [], presentation: { foreground, fontStyle: ['bold'] },
+				})),
+			}),
+		});
+	},
 	runStickyCommand: async id => {
 		if (!callerEditor.hasWidgetFocus()) callerEditor.focus();
 		await callerEditor.invokeWithinContext(accessor => CommandsRegistry.getCommand(id)!(accessor));
@@ -523,10 +538,11 @@ window.ashStandaloneIntegration = {
 			focused: controller.isFocused(),
 			line: callerEditor.getPosition()!.lineNumber,
 			scrollLeft: callerEditor.getScrollLeft(),
+			hidden: callerEditor._getViewModel()!.getHiddenAreas().map(range => [range.startLineNumber, range.endLineNumber]),
 		};
 	},
 	setStickyTheme: name => stanza.editor.setTheme(name),
-	layoutContribution: width => callerEditor.layout({ width, height: 180 }),
+	layoutContribution: (width, height = 180) => callerEditor.layout({ width, height }),
 	prepareCompletionGeometry: scrolled => {
 		const lineNumber = scrolled ? 40 : 1;
 		callerEditor.setValue(Array.from({ length: 80 }, () => 'alpha '.repeat(50)).join('\n'));
@@ -2201,6 +2217,7 @@ window.ashStandaloneIntegration = {
 		for (const request of inlineRequests) request.resolve();
 		formattingProvider?.dispose();
 		bracketTokenRegistration?.dispose();
+		stickySyntaxRegistration?.dispose();
 		for (const request of deferredFormatting) request.resolve();
 		referenceRegistration?.dispose();
 		TokenizationRegistry.setColorMap([]);

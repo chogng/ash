@@ -179,9 +179,9 @@ test.describe('contribution lifecycle', () => {
 		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ lineHeight: 28 }));
 		await expect.poll(() => buttons.first().evaluate(element => element.getBoundingClientRect().height)).toBe(28);
 		await page.evaluate(() => window.ashStandaloneIntegration.scrollSticky(200, 80));
-		await expect.poll(() => buttons.first().evaluate(element => getComputedStyle(element).textIndent)).toBe('-80px');
+		await expect(buttons.first().locator('.stanza-editor-sticky-scroll-text')).toHaveCSS('text-indent', '-80px');
 		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ stickyScroll: { scrollWithEditor: false } }));
-		await expect.poll(() => buttons.first().evaluate(element => getComputedStyle(element).textIndent)).toBe('0px');
+		await expect(buttons.first().locator('.stanza-editor-sticky-scroll-text')).toHaveCSS('text-indent', '0px');
 		for (const theme of ['ash-high-contrast-dark', 'ash-high-contrast-light']) {
 			await page.evaluate(theme => window.ashStandaloneIntegration.setStickyTheme(theme), theme);
 			await page.evaluate(() => window.ashStandaloneIntegration.runStickyCommand('editor.action.focusStickyScroll'));
@@ -218,7 +218,7 @@ test.describe('contribution lifecycle', () => {
 		const state = await page.evaluate(() => window.ashStandaloneIntegration.readStickyState());
 		await page.evaluate(end => window.ashStandaloneIntegration.scrollSticky(end * 20 - 30), state.ends[1]!);
 		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readStickyState().offset)).toBe(-10);
-		await expect(buttons.last()).toHaveCSS('clip-path', 'inset(10px 0px 0px)');
+		await expect(page.locator('#caller .stanza-editor-sticky-scroll-row').last()).toHaveCSS('clip-path', 'inset(10px 0px 0px)');
 		await page.evaluate(end => window.ashStandaloneIntegration.scrollSticky(end * 20 - 20), state.ends[1]!);
 		await expect(buttons).toHaveCount(1);
 		await page.evaluate(() => {
@@ -226,6 +226,114 @@ test.describe('contribution lifecycle', () => {
 			window.ashStandaloneIntegration.hideStickyLines(2, 4);
 		});
 		await expect(buttons).toHaveText(['function outer() {']);
+	});
+
+	test('sticky scroll follows live syntax and semantic tokens without changing header identity', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => {
+			window.ashStandaloneIntegration.prepareStickyHeaders();
+			window.ashStandaloneIntegration.setStickySyntax('#123456');
+		});
+		const header = page.locator('#caller .stanza-editor-sticky-scroll-item').first();
+		const token = header.locator('.stanza-editor-token').first();
+		await expect(token).toHaveCSS('color', 'rgb(18, 52, 86)');
+		await expect(token).toHaveCSS('font-weight', '700');
+		const bodyToken = page.locator('#caller .view-line .stanza-editor-token').first();
+		await expect(bodyToken).toHaveCSS('color', 'rgb(18, 52, 86)');
+		await header.focus();
+		const retained = await header.elementHandle();
+		await page.evaluate(() => window.ashStandaloneIntegration.setStickySyntax('#654321'));
+		await expect(token).toHaveCSS('color', 'rgb(101, 67, 33)');
+		expect(await retained!.evaluate(element => element.isConnected && document.activeElement === element)).toBe(true);
+		await page.evaluate(() => {
+			window.ashStandaloneIntegration.setStickySyntax(null);
+			window.ashStandaloneIntegration.setSemanticProvider('variable');
+		});
+		await expect(token).toHaveClass(/token-variable/);
+		await page.evaluate(() => window.ashStandaloneIntegration.setSemanticProvider('function'));
+		await expect(token).toHaveClass(/token-function/);
+	});
+
+	test('sticky scroll reduces its line limit with editor height and restores focus when no header fits', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => {
+			window.ashStandaloneIntegration.updateContributionOptions({ lineHeight: 20 });
+			window.ashStandaloneIntegration.prepareStickyHeaders();
+		});
+		const headers = page.locator('#caller .stanza-editor-sticky-scroll-item');
+		await expect(headers).toHaveCount(2);
+		await page.evaluate(() => window.ashStandaloneIntegration.layoutContribution(590, 40));
+		await expect(headers).toHaveCount(1);
+		await headers.first().focus();
+		await page.evaluate(() => window.ashStandaloneIntegration.layoutContribution(590, 20));
+		await expect(headers).toHaveCount(0);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).focused).toBe(true);
+		await page.evaluate(() => window.ashStandaloneIntegration.layoutContribution(590, 180));
+		await expect(headers).toHaveCount(2);
+	});
+
+	test('sticky scroll keeps line numbers fixed and updates numbering with the cursor and options', async ({ page }) => {
+		await page.goto('/standalone.html?symbolIconsOff');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareStickySymbols());
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().length)).toBe(1);
+		await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
+		const numbers = page.locator('#caller .stanza-editor-sticky-scroll-number');
+		await expect(numbers).toHaveText(['2', '4']);
+		const left = await numbers.first().evaluate(element => element.getBoundingClientRect().left);
+		await page.evaluate(() => window.ashStandaloneIntegration.scrollSticky(200, 80));
+		expect(await numbers.first().evaluate(element => element.getBoundingClientRect().left)).toBe(left);
+		await page.evaluate(() => {
+			window.ashStandaloneIntegration.updateContributionOptions({ lineNumbers: 'relative' });
+			window.ashStandaloneIntegration.moveGutterCaret(20, 1);
+		});
+		await expect(numbers).toHaveText(['18', '16']);
+		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ lineNumbers: 'off' }));
+		await expect(numbers).toHaveText(['', '']);
+		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ lineNumbers: line => `L${line}` }));
+		await expect(numbers).toHaveText(['L2', 'L4']);
+	});
+
+	test('sticky scroll folding controls update the shared hidden ranges by mouse and keyboard', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => {
+			window.ashStandaloneIntegration.prepareStickyHeaders();
+			window.ashStandaloneIntegration.updateContributionOptions({ showFoldingControls: 'always' });
+		});
+		const folds = page.locator('#caller .stanza-editor-sticky-scroll-folding');
+		await expect(folds).toHaveCount(2);
+		await folds.last().click();
+		await expect(folds.last()).toHaveAttribute('aria-expanded', 'false');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readStickyState().hidden)).toEqual([[3, 83]]);
+		await folds.last().focus();
+		await page.keyboard.press('Enter');
+		await expect(folds.last()).toHaveAttribute('aria-expanded', 'true');
+		await expect(folds.last()).toBeFocused();
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readStickyState().hidden)).toEqual([]);
+		await page.keyboard.press('Space');
+		await expect(folds.last()).toHaveAttribute('aria-expanded', 'false');
+		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ showFoldingControls: 'never' }));
+		await expect(folds.last()).toBeHidden();
+		await expect(page.locator('#caller .stanza-editor-sticky-scroll-item').last()).toBeFocused();
+	});
+
+	test('sticky scroll Shift hover previews the ending line and restores the same focused header', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareStickyHeaders());
+		const header = page.locator('#caller .stanza-editor-sticky-scroll-item').last();
+		await expect(header).toHaveText('  function inner() {');
+		await header.focus();
+		const retained = await header.elementHandle();
+		const end = await page.evaluate(() => window.ashStandaloneIntegration.readStickyState().ends[1]!);
+		await header.hover();
+		await page.keyboard.down('Shift');
+		await expect(header).toHaveAttribute('data-line-number', String(end));
+		await expect(page.locator('#caller .stanza-editor-sticky-scroll-number').last()).toHaveText(String(end));
+		await expect(page.locator('#caller .stanza-editor-sticky-scroll-folding').last()).toBeHidden();
+		await page.keyboard.up('Shift');
+		await expect(header).toHaveText('  function inner() {');
+		expect(await retained!.evaluate(element => element.isConnected && document.activeElement === element)).toBe(true);
+		await header.click({ modifiers: ['Shift'] });
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readStickyState())).line).toBe(end);
 	});
 
 	test('completion uses the new language and Escape stops incomplete refreshes', async ({ page }) => {
