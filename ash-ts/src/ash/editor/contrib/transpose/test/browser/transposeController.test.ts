@@ -45,14 +45,14 @@ test('Transpose Letters runs directly through its canonical action', () => {
 	editor.invokeWithinContext(accessor => action.run(accessor, editor, {}));
 
 	assert.equal(model.getText(), '😊ab');
-	assert.deepEqual(editor.selections.getSelections(), [Selection.fromPositions(new Position(1, 4))]);
-	editor.selections.context.model.undo();
+	assert.deepEqual(editor.getSelections()!, [Selection.fromPositions(new Position(1, 4))]);
+	editor.getModel()!.undo();
 	assert.equal(model.getText(), 'a😊b');
 	model.reset('ab\ncd');
 	editor.setSelection(Selection.fromPositions(new Position(2, 1)));
 	editor.invokeWithinContext(accessor => action.run(accessor, editor, {}));
 	assert.equal(model.getText(), 'abc\nd');
-	assert.deepEqual(editor.selections.getSelections(), [Selection.fromPositions(new Position(2, 1))]);
+	assert.deepEqual(editor.getSelections()!, [Selection.fromPositions(new Position(2, 1))]);
 	editor.setSelection(Selection.fromPositions(new Position(1, 1), new Position(1, 2)));
 	editor.invokeWithinContext(accessor => action.run(accessor, editor, {}));
 	assert.equal(model.getText(), 'abc\nd');
@@ -72,7 +72,7 @@ test('Transpose Action runs directly at a line end', () => {
 	editor.invokeWithinContext(accessor => action.run(accessor, editor, {}));
 
 	assert.equal(model.getText(), 'hell\noworld');
-	assert.deepEqual(editor.selections.getSelections(), [Selection.fromPositions(new Position(2, 2))]);
+	assert.deepEqual(editor.getSelections()!, [Selection.fromPositions(new Position(2, 2))]);
 	dom.window.close();
 });
 

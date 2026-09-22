@@ -8,8 +8,6 @@ import { LanguageDiagnosticSeverity, createLanguageCompletionInvokeContext, crea
 import { TextModel } from "../../../../../editor/common/model/textModel.js";
 import { LanguageCompletionService } from '../../../../../editor/contrib/suggest/browser/suggest.js';
 import { getWorkspaceSymbols } from '../../../../contrib/search/common/search.js';
-import { LanguageNavigationService } from '../../../../../editor/contrib/gotoSymbol/common/languageNavigation.js';
-import { LanguageHoverService } from '../../../../../editor/contrib/hover/common/hover.js';
 import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
 import { type ILanguageApi } from "../../../../../platform/language/common/languageApi.js";
 import { type IServerEventApi } from "../../../../../platform/app-server/common/appServerApi.js";
@@ -20,14 +18,10 @@ import { AppServerLanguageProviders } from "../../browser/appServerLanguageProvi
 
 const DTO_RANGE = Object.freeze({ start: Object.freeze({ lineIndex: 0, columnIndex: 0 }), end: Object.freeze({ lineIndex: 0, columnIndex: 5 }) });
 
-function createNavigationService(languages: LanguageFeaturesService, model: TextModel, resource: URI): LanguageNavigationService {
-	return new LanguageNavigationService(model, resource, {
-		definitions: languages.definitionProvider,
-		declarations: languages.declarationProvider,
-		implementations: languages.implementationProvider,
-		typeDefinitions: languages.typeDefinitionProvider,
-		references: languages.referenceProvider,
-	});
+function definition(languages: LanguageFeaturesService, model: TextModel, resource: URI, position: Position) {
+	const signal = new AbortController().signal;
+	const request = { ...createLanguageFeatureRequest(model, model.getLanguageId(), signal), resource, position };
+	return languages.definitionProvider.ordered(model)[0]!.provideDefinition(request, signal);
 }
 
 test("App Server language providers map cross-resource locations without double-encoding paths", async () => {
@@ -36,9 +30,9 @@ test("App Server language providers map cross-resource locations without double-
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
 	using model = new TextModel("value", { languageId: "typescript" });
-	using navigation = createNavigationService(languages, model, URI.file("C:\\project\\main file.ts"));
+	const source = URI.file("C:\\project\\main file.ts");
 
-	const locations = await navigation.provideDefinition("typescript", new Position((0) + 1, (2) + 1));
+	const locations = await definition(languages, model, source, new Position((0) + 1, (2) + 1));
 
 	assert.equal(api.locationRequests.length, 1);
 	assert.equal(api.locationRequests[0]!.document.path, "main file.ts");
@@ -61,9 +55,9 @@ test("App Server language providers route resources through their owning Workspa
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
 	using model = new TextModel("value", { languageId: "typescript" });
-	using navigation = createNavigationService(languages, model, URI.file("C:\\backend\\main.ts"));
+	const source = URI.file("C:\\backend\\main.ts");
 
-	const locations = await navigation.provideDefinition("typescript", new Position((0) + 1, (2) + 1));
+	const locations = await definition(languages, model, source, new Position((0) + 1, (2) + 1));
 
 	assert.equal(api.locationRequests[0]!.document.dirId, "backend");
 	assert.equal(api.locationRequests[0]!.document.path, "main.ts");
@@ -90,10 +84,14 @@ test("App Server hover and completion providers keep revision, resource, and ins
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
 	const resource = URI.file("C:\\project\\main.rs");
 	using model = new TextModel("pri", { languageId: "rust", resource });
-	using hover = new LanguageHoverService(model, languages.hoverProvider, resource);
 	using completions = new LanguageCompletionService(model, languages.completionProvider, { resource });
 
-	const hoverResult = await hover.provideHover("rust", new Position((0) + 1, (1) + 1));
+	const hoverSignal = new AbortController().signal;
+	const hoverResult = await languages.hoverProvider.ordered(model)[0]!.provideHover({
+		...createLanguageFeatureRequest(model, model.getLanguageId(), hoverSignal),
+		resource,
+		position: new Position(1, 2),
+	}, hoverSignal);
 	await completions.request("rust", new Position((0) + 1, (3) + 1), createLanguageCompletionInvokeContext());
 	const completionResult = completions.results.result!;
 	const completionItem = completionResult.value.items[0]!;
@@ -204,9 +202,9 @@ test("App Server language providers do not send documents above their transport 
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
 	using model = new TextModel("界".repeat(Math.ceil((10 * 1024 * 1024 + 1) / 3)), { languageId: "typescript" });
-	using navigation = createNavigationService(languages, model, URI.file("C:\\project\\large.ts"));
+	const source = URI.file("C:\\project\\large.ts");
 
-	assert.deepEqual(await navigation.provideDefinition("typescript", new Position((0) + 1, (0) + 1)), []);
+	assert.deepEqual(await definition(languages, model, source, new Position((0) + 1, (0) + 1)), []);
 	assert.equal(api.locationRequests.length, 0);
 });
 
@@ -218,22 +216,22 @@ test("App Server language providers register only while directory permissions al
 	const permissions = new FakeDirPermissionsService("workspace", []);
 	using providers = new AppServerLanguageProviders(languages, api, workspace, { dirPermissions: permissions, events });
 	using model = new TextModel("value", { languageId: "typescript" });
-	using navigation = createNavigationService(languages, model, URI.file("C:\\project\\main.ts"));
+	const source = URI.file("C:\\project\\main.ts");
 
 	await tick();
-	assert.deepEqual(await navigation.provideDefinition("typescript", new Position((0) + 1, (2) + 1)), []);
+	assert.deepEqual(languages.definitionProvider.ordered(model), []);
 	assert.equal(api.locationRequests.length, 0);
 
 	permissions.value = ["executeCommands", "useLanguageServices"];
 	events.fire({ method: "config/changed", params: { revision: 2, generation: 2 } });
 	await tick();
-	assert.equal((await navigation.provideDefinition("typescript", new Position((0) + 1, (2) + 1))).length, 1);
+	assert.equal((await definition(languages, model, source, new Position((0) + 1, (2) + 1))).length, 1);
 	assert.equal(api.locationRequests.length, 1);
 
 	permissions.value = [];
 	events.fire({ method: "config/changed", params: { revision: 3, generation: 3 } });
 	await tick();
-	assert.deepEqual(await navigation.provideDefinition("typescript", new Position((0) + 1, (2) + 1)), []);
+	assert.deepEqual(languages.definitionProvider.ordered(model), []);
 	assert.equal(api.locationRequests.length, 1);
 });
 

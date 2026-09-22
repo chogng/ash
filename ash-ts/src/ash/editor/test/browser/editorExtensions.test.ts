@@ -42,7 +42,7 @@ test("Code bundle explicitly registers independently selectable editor capabilit
 	const ids = new Set(EditorExtensionsRegistry.getEditorContributions().map(contribution => contribution.id));
 	for (const id of [
 		"editor.contrib.bracketMatchingController",
-		"editor.contrib.codeAction",
+		"editor.contrib.codeActionController",
 		"editor.contrib.comment",
 		"editor.contrib.folding",
 		"editor.contrib.format",

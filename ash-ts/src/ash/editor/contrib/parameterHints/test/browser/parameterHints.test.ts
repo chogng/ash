@@ -106,7 +106,7 @@ test('signature help uses the editor snapshot and stops after the first usable p
 		position: request.position.toString(), language: request.languageId, context: request.context,
 	}, {
 		text: 'call(', version: fixture.model.version,
-		position: '(1,6)', language: 'typescript', context: { kind: 'invoke' },
+		position: '(1,6)', language: 'typescript', context: { kind: 'invoke', isRetrigger: false },
 	});
 	assert.equal(fixture.dialog.hidden, false);
 	assert.equal(fixture.dialog.querySelector('.active')?.textContent, 'call(value)');

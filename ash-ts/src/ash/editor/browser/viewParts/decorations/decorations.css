@@ -1,8 +1,7 @@
-/*
-	Keeping name short for faster parsing.
-	cdr = core decorations rendering (div)
-*/
-.stanza-editor .lines-content .cdr {
+/* Decoration geometry comes from DecorationsOverlay; the row supplies its height. */
+.stanza-editor .view-overlays .cdr {
 	position: absolute;
-	height: 100%;
+	inset-block: 0;
+	box-sizing: border-box;
+	pointer-events: none;
 }

@@ -8,7 +8,7 @@ import { ICodeEditorService } from '../../../../editor/browser/services/codeEdit
 import { EditorOption, RenderLineNumbersType } from '../../../../editor/common/config/editorOptions.js';
 import { Position } from '../../../../editor/common/core/position.js';
 import { LineDiffKind } from '../../../../editor/common/diff/lineDiff.js';
-import { EditorPeekViewWidget } from '../../../../editor/contrib/peekView/browser/editorPeekViewWidget.js';
+import { PeekViewWidget } from '../../../../editor/contrib/peekView/browser/peekView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { type IQuickDiffEditorController, IQuickDiffEditorControllerService, IQuickDiffModelService, type QuickDiffChange, type QuickDiffModelReference } from '../common/quickDiff.js';
 import { ScmConfiguration } from '../common/scmConfiguration.js';
@@ -144,7 +144,9 @@ class QuickDiffPeekView extends Disposable {
 		if (!domNode) throw new Error('Quick Diff requires an attached editor');
 		const document = domNode.ownerDocument;
 		const kind = change.kind === LineDiffKind.Added ? 'Added' : change.kind === LineDiffKind.Removed ? 'Deleted' : 'Modified';
-		const peek = this._register(new EditorPeekViewWidget(editor, new Position((change.lineIndex) + 1, (0) + 1), `${change.comparison.original.label} — ${kind} — ${index} of ${count}`));
+		const peek = this._register(new PeekViewWidget(editor));
+		peek.setTitle(`${change.comparison.original.label} — ${kind} — ${index} of ${count}`);
+		this._register(peek.onDidClose(close));
 		peek.element.classList.add('ash-quick-diff-peek');
 		const body = h(document, 'div');
 		body.className = 'ash-quick-diff-peek-body';
@@ -184,7 +186,7 @@ class QuickDiffPeekView extends Disposable {
 		};
 		this._register(change.comparison.model.onDidChange(reveal));
 		reveal();
-		peek.show();
+		peek.show(new Position(change.lineIndex + 1, 1));
 	}
 }
 

@@ -5,7 +5,7 @@ import { Range } from '../../../../../editor/common/core/range.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { DocumentSymbolService } from '../../../../../editor/contrib/documentSymbols/common/languageDocumentSymbols.js';
 import { FoldingRangeService } from '../../../../../editor/contrib/folding/common/languageFoldingRanges.js';
-import { SelectionRangeService } from '../../../../../editor/contrib/smartSelect/common/selectionRanges.js';
+import { createLanguageFeatureRequest } from '../../../../../editor/common/languages.js';
 import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../../../../editor/test/common/testLanguageFeaturesService.js';
 import { AppServerSyntaxProviders, syntaxLanguageForEditorLanguage } from '../../browser/appServerSyntaxProviders.js';
 import { createSyntaxWorker } from '../../../../../editor/common/services/editorWebWorker.js';
@@ -50,7 +50,6 @@ test('App Server syntax registers tokens, diagnostics, symbols, folds, and selec
 	});
 	using symbols = new DocumentSymbolService(model, languages.documentSymbolProvider);
 	using folding = new FoldingRangeService(model, languages.foldingRangeProvider);
-	using selections = new SelectionRangeService(model, languages.selectionRangeProvider);
 
 	const tokens = await syntax.run({ requestId: 1, lane: 'tokens', payload: { languageId: 'rust' }, snapshot: model.createVersionedSnapshot() }, new AbortController().signal);
 	const diagnostics = await syntax.run({ requestId: 2, lane: 'diagnostics', payload: { languageId: 'rust' }, snapshot: model.createVersionedSnapshot() }, new AbortController().signal);
@@ -59,7 +58,11 @@ test('App Server syntax registers tokens, diagnostics, symbols, folds, and selec
 	if (tokens.lane !== 'tokens' || diagnostics.lane !== 'diagnostics') throw new Error('Unexpected lane');
 	const documentSymbols = await symbols.provideDocumentSymbols('rust');
 	const foldingRanges = await folding.provideFoldingRanges('rust');
-	const structural = await selections.provideSelectionRanges('rust', [Range.fromPositions(new Position((0) + 1, (3) + 1), new Position((0) + 1, (7) + 1))]);
+	const signal = new AbortController().signal;
+	const structural = await languages.selectionRangeProvider.ordered(model)[0]!.provideSelectionRanges({
+		...createLanguageFeatureRequest(model, model.getLanguageId(), signal),
+		ranges: [new Range(1, 4, 1, 8)],
+	}, signal);
 
 	assert.equal(analyzeCalls, 1);
 	assert.equal(workerCalls, 0);

@@ -17,6 +17,10 @@ interface CodeActionEntry {
 
 /** Owns the editor-local code-action picker and routes selected edits through cursor commands. */
 export class CodeActionController extends Disposable {
+	static readonly ID = 'editor.contrib.codeActionController';
+	static get(editor: ICodeEditor): CodeActionController | null {
+		return editor.getContribution<CodeActionController>(CodeActionController.ID);
+	}
 	private readonly element: HTMLDivElement;
 	private readonly actionListeners = this._register(new DisposableStore());
 	private request: AbortController | undefined;
@@ -57,8 +61,9 @@ export class CodeActionController extends Disposable {
 				return;
 			}
 			if (event.altKey || (!event.ctrlKey && !event.metaKey) || event.key !== ".") return;
+			if (!editor.getAction('editor.action.quickFix')?.isSupported()) return;
 			stopEvent(event);
-			void this.open();
+			editor.trigger('keyboard', 'editor.action.quickFix', {});
 		}));
 		this._register(addDisposableListener(this.element, "keydown", event => {
 			if (event.key !== "Escape") return;
@@ -75,7 +80,7 @@ export class CodeActionController extends Disposable {
 		}));
 	}
 
-	private async open(): Promise<void> {
+	public async manualTriggerAtCurrentPosition(): Promise<void> {
 		this.close();
 		const model = this.viewport.textModel;
 		if (this.isDisposed || model.isDisposed() || this.editor.getOption(EditorOption.readOnly)) return;

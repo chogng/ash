@@ -204,7 +204,7 @@ window.ashTextModelIntegration = {
 			endColumnIndex: selection.endColumn - 1,
 		};
 	},
-	setCursors: (positions, primaryIndex = 0) => requiredEditorPart().selections.setCursorSelections(primaryFirst(
+	setCursors: (positions, primaryIndex = 0) => requiredEditorPart().setSelections(primaryFirst(
 		positions.map(position => Selection.fromPositions(new Position(position.lineIndex + 1, position.columnIndex + 1))),
 		primaryIndex,
 	)),

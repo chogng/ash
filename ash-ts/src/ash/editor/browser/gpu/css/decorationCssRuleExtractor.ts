@@ -10,7 +10,7 @@ export class DecorationCssRuleExtractor extends Disposable {
 
 	constructor() {
 		super();
-		this._container = $('div.monaco-decoration-css-rule-extractor');
+		this._container = $('div.stanza-decoration-style-probe');
 		this._dummyElement = $('span');
 		this._container.appendChild(this._dummyElement);
 		this._register(toDisposable(() => this._container.remove()));

@@ -42,7 +42,7 @@ import "./contrib/quickAccess/browser/quickAccessController.js";
 import './contrib/readOnlyMessage/browser/contribution.js';
 import "./contrib/rename/browser/rename.js";
 import "./contrib/sectionHeaders/browser/sectionHeaders.contribution.js";
-import "./contrib/smartSelect/browser/smartSelectController.js";
+import "./contrib/smartSelect/browser/smartSelect.js";
 import "./contrib/stickyScroll/browser/stickyScrollContribution.js";
 import "./contrib/symbolIcons/browser/symbolIcons.contribution.js";
 import "./contrib/suggest/browser/suggestController.js";

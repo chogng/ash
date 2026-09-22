@@ -1,30 +1,17 @@
-/*
-	Keeping name short for faster parsing.
-	cslr = core selections layer rendering (div)
-*/
-.stanza-editor .lines-content .cslr {
+.stanza-editor .stanza-editor-selection {
 	position: absolute;
+	inset-block: 0;
+	box-sizing: border-box;
+	pointer-events: none;
+	background: var(--ash-editor-inactive-selection-background);
 }
 
-.stanza-editor .focused .selected-text {
-	background-color: var(--vscode-editor-selectionBackground);
+.stanza-editor .view-overlays.focused .stanza-editor-selection {
+	background: var(--ash-editor-selection-background);
 }
 
-.stanza-editor .selected-text {
-	background-color: var(--vscode-editor-inactiveSelectionBackground);
+[data-color-scheme="high-contrast-dark"] .stanza-editor-selection,
+[data-color-scheme="high-contrast-light"] .stanza-editor-selection {
+	outline: 1px solid var(--ash-focus-border);
+	outline-offset: -1px;
 }
-
-.stanza-editor			.top-left-radius		{ border-top-left-radius: 3px; }
-.stanza-editor			.bottom-left-radius		{ border-bottom-left-radius: 3px; }
-.stanza-editor			.top-right-radius		{ border-top-right-radius: 3px; }
-.stanza-editor			.bottom-right-radius	{ border-bottom-right-radius: 3px; }
-
-.stanza-editor.hc-black .top-left-radius		{ border-top-left-radius: 0; }
-.stanza-editor.hc-black .bottom-left-radius		{ border-bottom-left-radius: 0; }
-.stanza-editor.hc-black .top-right-radius		{ border-top-right-radius: 0; }
-.stanza-editor.hc-black .bottom-right-radius	{ border-bottom-right-radius: 0; }
-
-.stanza-editor.hc-light .top-left-radius		{ border-top-left-radius: 0; }
-.stanza-editor.hc-light .bottom-left-radius		{ border-bottom-left-radius: 0; }
-.stanza-editor.hc-light .top-right-radius		{ border-top-right-radius: 0; }
-.stanza-editor.hc-light .bottom-right-radius	{ border-bottom-right-radius: 0; }

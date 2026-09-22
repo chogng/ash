@@ -7,6 +7,7 @@ import { type TextModel } from "../../../common/model/textModel.js";
 
 import { type DocumentSymbolService } from "../../documentSymbols/common/languageDocumentSymbols.js";
 import { TrackedRangeStickiness } from '../../../common/model.js';
+import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 
 interface SymbolIconMetadata {
 	readonly kind: LanguageDocumentSymbol["kind"];
@@ -21,24 +22,29 @@ export class SymbolIconsController extends Disposable {
 	private request: AbortController | undefined;
 
 	constructor(
-		model: TextModel,
+		private readonly model: TextModel,
 		private readonly service: DocumentSymbolService,
-		private readonly languageId: string,
-		private readonly onError: (error: unknown) => void = error => console.error("Stanza symbol icons failed", error),
+		private readonly onError: (error: unknown) => void,
+		@ILanguageFeaturesService languageFeatures: ILanguageFeaturesService,
 	) {
 		super();
 		if (service.textModel !== model) throw new TypeError("Stanza symbol icon dependencies must share a text model");
 		this.collection = this._register(new TextDecorationCollection(model));
 		this._register(model.onDidChangeContent(() => void this.refresh()));
+		this._register(model.onDidChangeLanguage(() => void this.refresh()));
+		this._register(languageFeatures.documentSymbolProvider.onDidChange(() => void this.refresh()));
+		this._register(model.onWillDispose(() => this.request?.abort()));
 		this._register(toDisposable(() => this.request?.abort()));
 		void this.refresh();
 	}
 
 	private async refresh(): Promise<void> {
 		this.request?.abort();
+		if (this.model.isDisposed()) return;
+		this.decorationIds = this.collection.deltaDecorations(this.decorationIds, []);
 		const request = this.request = new AbortController();
 		try {
-			const symbols = await this.service.provideDocumentSymbols(this.languageId, request.signal);
+			const symbols = await this.service.provideDocumentSymbols(this.model.getLanguageId(), request.signal);
 			if (request.signal.aborted || request !== this.request) return;
 			const seenLines = new Set<number>();
 			this.decorationIds = this.collection.deltaDecorations(

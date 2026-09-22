@@ -13,14 +13,15 @@ import { registerEditorContribution } from '../../../browser/editorExtensions.js
 import { ColorService, type ColorData } from '../common/languageColors.js';
 import { ColorDecorationInjectedTextMarker, ColorDetector } from './colorDetector.js';
 import { ColorPickerModel } from './colorPickerModel.js';
-import { EditorColorPickerDialog } from './editorColorPickerDialog.js';
+import { ColorPickerWidget } from './colorPickerWidget.js';
+import { EditorOption } from '../../../common/config/editorOptions.js';
 
 
 export type ColorDecoratorsActivatedOn = 'clickAndHover' | 'click' | 'hover';
 
 /** Coordinates color detection, picker requests, focus, and one atomic editor edit. */
 export class ColorPickerController extends Disposable {
-	private readonly widget: EditorColorPickerDialog;
+	private readonly widget: ColorPickerWidget;
 	private readonly model = this._register(new MutableDisposable<ColorPickerModel>());
 	private readonly hoverTimer = this._register(new MutableDisposable<IDisposable>());
 	private presentationRequest: AbortController | undefined;
@@ -34,20 +35,17 @@ export class ColorPickerController extends Disposable {
 		private readonly viewport: View,
 		private readonly service: ColorService,
 		private readonly detector: ColorDetector,
-		private readonly languageId: string,
 		private readonly activatedOn: ColorDecoratorsActivatedOn,
-		private readonly readOnly: boolean,
 		private readonly onError: (error: unknown) => void,
 	) {
 		super();
 		if (viewport.textModel !== editor.getModel()) throw new TypeError('Stanza color picker dependencies must share a text model');
-		this.widget = this._register(new EditorColorPickerDialog(
+		this.widget = this._register(new ColorPickerWidget(
 			viewport.domNode.domNode,
 			color => this.refreshPresentations(color),
 			() => this.apply(),
 			() => this.close(true),
 		));
-		viewport.domNode.domNode.append(this.widget.domNode);
 		this._register(addDisposableListener(editorInput, 'keydown', event => this.handleEditorKeyDown(event), true));
 		this._register(editor.onMouseDown(event => this.handleEditorMouseDown(event)));
 		this._register(addDisposableListener(viewport.domNode.domNode, 'pointerover', event => this.handlePointerOver(event)));
@@ -64,6 +62,12 @@ export class ColorPickerController extends Disposable {
 			this.close(false);
 		}, true));
 		this._register(viewport.textModel.onDidChangeContent(() => this.close(false)));
+		this._register(viewport.textModel.onDidChangeLanguage(() => this.close(false)));
+		this._register(viewport.textModel.onWillDispose(() => this.close(false)));
+		this._register(service.onDidChange(() => this.close(false)));
+		this._register(editor.onDidChangeConfiguration(event => {
+			if (event.hasChanged(EditorOption.readOnly)) this.close(false);
+		}));
 		this._register(viewport.onDidChangeLayout(() => this.close(false)));
 	}
 
@@ -73,7 +77,7 @@ export class ColorPickerController extends Disposable {
 		try {
 			let data = this.detector.findAtPosition(position);
 			if (!data) {
-				const colors = await this.service.provideDocumentColors(this.languageId, 'auto', request.signal);
+				const colors = await this.service.provideDocumentColors(this.viewport.textModel.getLanguageId(), 'auto', request.signal);
 				if (request.signal.aborted) return;
 				data = colors.find(candidate => candidate.information.range.containsPosition(position));
 			}
@@ -169,7 +173,7 @@ export class ColorPickerController extends Disposable {
 		this.presentationRequest?.abort();
 		const request = this.presentationRequest = new AbortController();
 		try {
-			const presentations = await this.service.provideColorPresentations(this.languageId, data, toLanguageColor(color), request.signal);
+			const presentations = await this.service.provideColorPresentations(this.viewport.textModel.getLanguageId(), data, toLanguageColor(color), request.signal);
 			if (request.signal.aborted || this.model.value !== model) return;
 			model.colorPresentations = [...presentations];
 			model.guessColorPresentation(color, this.originalText);
@@ -182,7 +186,7 @@ export class ColorPickerController extends Disposable {
 		const data = this.activeData;
 		const presentation = this.model.value?.presentation;
 		if (!data || !presentation) return;
-		if (this.readOnly) {
+		if (this.editor.getOption(EditorOption.readOnly)) {
 			this.viewport.announceAccessibilityStatus(localize('readOnly', 'The editor is read-only.'));
 			this.close(true);
 			return;
@@ -260,7 +264,6 @@ registerEditorContribution({
 			context.editor,
 			context.model,
 			service,
-			context.languageId,
 			targetWindow,
 			{
 				enabled: context.options.colorDecorators !== false,
@@ -275,9 +278,7 @@ registerEditorContribution({
 			context.view,
 			service,
 			detector,
-			context.languageId,
 			context.options.colorDecoratorsActivatedOn ?? 'clickAndHover',
-			context.options.input.readOnly === true,
 			context.onLanguageError,
 		);
 	},

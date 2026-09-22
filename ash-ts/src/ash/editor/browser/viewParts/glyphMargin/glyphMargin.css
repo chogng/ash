@@ -1,27 +1,11 @@
-.stanza-editor .glyph-margin {
+/* Margin owns the background; GlyphMargin owns each measured icon cell. */
+.stanza-editor .glyph-margin-widgets > .cgmr {
 	position: absolute;
-	top: 0;
+	display: grid;
+	place-items: center;
+	box-sizing: border-box;
 }
 
-/*
-	Keeping name short for faster parsing.
-	cgmr = core glyph margin rendering (div)
-*/
-.stanza-editor .glyph-margin-widgets .cgmr {
-	position: absolute;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-}
-
-/*
-	Ensure spinning icons are pixel-perfectly centered and avoid wobble.
-	This is only applied to icons that spin to avoid unnecessary
-	GPU layers and blurry subpixel AA.
-*/
-.stanza-editor .glyph-margin-widgets .cgmr.codicon-modifier-spin::before  {
-	position: absolute;
-	top: 50%;
-	left: 50%;
-	transform: translate(-50%, -50%);
+.stanza-editor .glyph-margin-widgets > .cgmr::before {
+	grid-area: 1 / 1;
 }

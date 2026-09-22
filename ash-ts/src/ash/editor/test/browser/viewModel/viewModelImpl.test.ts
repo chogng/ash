@@ -15,7 +15,7 @@ import { ScrollType } from '../../../common/editorCommon.js';
 import { createTestLanguageConfigurationService } from '../../common/modes/testLanguageConfigurationService.js';
 import { TextModel } from '../../../common/model/textModel.js';
 import { MonospaceLineBreaksComputerFactory } from '../../../common/viewModel/monospaceLineBreaksComputer.js';
-import { getViewModelCursorController, ViewModel } from '../../../common/viewModel/viewModelImpl.js';
+import { ViewModel } from '../../../common/viewModel/viewModelImpl.js';
 import { CursorStateChangedEvent, ModelTokensChangedEvent } from '../../../common/viewModelEventDispatcher.js';
 import { ViewEventHandler } from '../../../common/viewEventHandler.js';
 import { type ViewCursorStateChangedEvent, type ViewDecorationsChangedEvent, type ViewFlushedEvent, type ViewLanguageConfigurationEvent, type ViewLineMappingChangedEvent, type ViewRevealRangeRequestEvent, type ViewTokensChangedEvent } from '../../../common/viewEvents.js';
@@ -98,8 +98,6 @@ test('ViewModel owns line projection, cursor, layout, and visible-line publicati
 	using detachCaptured = toDisposable(() => viewModel.removeViewEventHandler(captured));
 	const outgoingCursorSources: string[] = [];
 	let outgoingTokenChanges = 0;
-	let controllerSelectionChanges = 0;
-	using controllerListener = getViewModelCursorController(viewModel).onDidChange(() => controllerSelectionChanges += 1);
 	using outgoingListener = viewModel.onEvent(event => {
 		if (event instanceof CursorStateChangedEvent) outgoingCursorSources.push(event.source);
 		if (event instanceof ModelTokensChangedEvent) outgoingTokenChanges += 1;
@@ -113,7 +111,6 @@ test('ViewModel owns line projection, cursor, layout, and visible-line publicati
 	assert.deepEqual(viewModel.getPrimaryCursorState().modelState.position, new Position(3, 2));
 	assert.deepEqual(outgoingCursorSources, ['test']);
 	assert.equal(captured.cursorEvents.length, 1);
-	assert.equal(controllerSelectionChanges, 1);
 	const columnSelection = { isReal: true, fromViewLineNumber: 1, fromViewVisualColumn: 2, toViewLineNumber: 3, toViewVisualColumn: 4 };
 	viewModel.setCursorColumnSelectData(columnSelection);
 	assert.deepEqual(viewModel.getCursorColumnSelectData(), columnSelection);

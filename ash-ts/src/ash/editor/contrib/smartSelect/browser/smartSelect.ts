@@ -7,7 +7,8 @@ import { type Range } from "../../../common/core/range.js";
 import { type TextSnapshot } from "../../../common/core/textChange.js";
 import { type View } from "../../../browser/view.js";
 import { expandSmartSelection } from "../common/smartSelectionExpansion.js";
-import { SelectionRangeService } from "../common/selectionRanges.js";
+import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent } from '../../../common/languages.js';
+import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 
 /** Routes the editor smart-select shortcut into the DOM-free range expansion policy. */
@@ -19,17 +20,29 @@ export class SmartSelectController extends Disposable {
 		private readonly input: HTMLElement,
 		private readonly editor: ICodeEditor,
 		private readonly viewport: View,
-		private readonly languageId: string,
-		private readonly selectionRanges: SelectionRangeService,
 		private readonly onError: (error: unknown) => void,
+		@ILanguageFeaturesService private readonly languageFeatures: ILanguageFeaturesService,
 	) {
 		super();
 		if (viewport.textModel !== editor.getModel()) throw new TypeError("Stanza smart select dependencies must share a text model");
 		this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event), true));
 		this._register(editor.onDidChangeCursorSelection(event => {
-			if (event.source !== 'editor.action.smartSelect.expand' && event.source !== 'editor.action.smartSelect.shrink') this.history.length = 0;
+			if (event.source !== 'editor.action.smartSelect.expand' && event.source !== 'editor.action.smartSelect.shrink') {
+				this.reset();
+			}
 		}));
-		this._register(toDisposable(() => this.request?.abort()));
+		this._register(toDisposable(() => this.reset()));
+		this._register(viewport.textModel.onDidChangeContent(() => this.reset()));
+		this._register(viewport.textModel.onDidChangeLanguage(() => this.reset()));
+		this._register(viewport.textModel.onWillDispose(() => this.reset()));
+		this._register(languageFeatures.selectionRangeProvider.onDidChange(() => this.reset()));
+		this._register(editor.onDidBlurEditorWidget(() => this.reset()));
+	}
+
+	private reset(): void {
+		this.request?.abort();
+		this.request = undefined;
+		this.history.length = 0;
 	}
 
 	private handleKeydown(event: KeyboardEvent): void {
@@ -57,17 +70,33 @@ export class SmartSelectController extends Disposable {
 	}
 
 	private async expand(request: AbortController, before: readonly Selection[], snapshot: TextSnapshot): Promise<void> {
+		const model = this.viewport.textModel;
+		const context = Object.freeze({
+			...createLanguageFeatureRequest(model, model.getLanguageId(), request.signal),
+			resource: model.uri,
+			ranges: Object.freeze([...before]),
+		});
+		const syntaxRanges: Range[] = [];
 		try {
-			const syntaxRanges = await this.selectionRanges.provideSelectionRanges(this.languageId, before.map(selection => selection), request.signal);
-			if (request.signal.aborted || this.request !== request) return;
-			this.commitExpansion(before, snapshot, syntaxRanges);
-		} catch (error) {
-			if (!isCancellationError(error)) {
-				this.onError(error);
-				if (this.request === request) this.commitExpansion(before, snapshot, []);
+			for (const provider of this.languageFeatures.selectionRangeProvider.ordered(model)) {
+				if (!isLanguageFeatureRequestCurrent(context)) {
+					return;
+				}
+				try {
+					syntaxRanges.push(...await provider.provideSelectionRanges(context, request.signal));
+				} catch (error) {
+					if (!request.signal.aborted && !isCancellationError(error)) {
+						this.onError(error);
+					}
+				}
+			}
+			if (isLanguageFeatureRequestCurrent(context) && this.request === request) {
+				this.commitExpansion(before, snapshot, syntaxRanges);
 			}
 		} finally {
-			if (this.request === request) this.request = undefined;
+			if (this.request === request) {
+				this.request = undefined;
+			}
 		}
 	}
 
@@ -86,13 +115,10 @@ registerEditorContribution({
 	id: "editor.contrib.smartSelect",
 	install: context => {
 		if (context.kind !== "text") return;
-		const selectionRanges = context.register(new SelectionRangeService(context.model, context.languageFeaturesService.selectionRangeProvider, context.options.input.resource));
-		return new SmartSelectController(
+		return context.instantiationService.createInstance(SmartSelectController,
 			context.controller.element,
 			context.editor,
 			context.view,
-			context.languageId,
-			selectionRanges,
 			context.onLanguageError,
 		);
 	},

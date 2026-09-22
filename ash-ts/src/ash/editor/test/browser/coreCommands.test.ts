@@ -62,6 +62,7 @@ test('workbench select-all command selects the focused or active editor model', 
 
 test("core commands select all", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("one\n  two\nthree");
 	using viewport = new View({
@@ -70,7 +71,7 @@ test("core commands select all", () => {
 		lineHeight: 20,
 		textMeasurer: new FixedTextMeasurer(),
 	});
-	const selections = viewport.testSelectionController;
+	const selections = viewport.testViewModel;
 	viewport.testViewModel.setCursorStates('test', CursorChangeReason.NotSet, CursorState.fromModelSelections([Selection.fromPositions(new Position((0) + 1, (0) + 1))]));
 	viewport.layout({ width: 400, height: 100 });
 	const input = viewport.controller;
@@ -86,6 +87,7 @@ test("core commands select all", () => {
 
 test("line selection remains an independent editor extension", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>("main")!;
 	using model = new TextModel("one\ntwo\nthree");
 	using editor = createTestCodeEditor({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
@@ -95,15 +97,16 @@ test("line selection remains an independent editor extension", () => {
 	const first = keyboardEvent(dom.window, "l", { ctrlKey: true });
 	editor.controller.element.dispatchEvent(first);
 	assert.equal(first.defaultPrevented, true);
-	assert.deepEqual(editor.selections.getSelections()[0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((1) + 1, (0) + 1)));
+	assert.deepEqual(editor.getSelections()![0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((1) + 1, (0) + 1)));
 	editor.controller.element.dispatchEvent(keyboardEvent(dom.window, "l", { ctrlKey: true }));
-	assert.deepEqual(editor.selections.getSelections()[0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((2) + 1, (0) + 1)));
+	assert.deepEqual(editor.getSelections()![0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((2) + 1, (0) + 1)));
 
 	dom.window.close();
 });
 
 test('keyboard word navigation consumes standard WordOperations boundaries', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha beta');
 	using viewport = new View({
 		container: dom.window.document.querySelector<HTMLElement>('main')!,
@@ -121,14 +124,15 @@ test('keyboard word navigation consumes standard WordOperations boundaries', () 
 
 	viewport.controller.element.focus();
 	viewport.controller.element.dispatchEvent(keyboardEvent(dom.window, 'ArrowLeft', { altKey: true }));
-	assert.deepEqual(viewport.testSelectionController.getSelections()[0]!.getPosition(), new Position(1, 7));
+	assert.deepEqual(viewport.testViewModel.getSelections()[0]!.getPosition(), new Position(1, 7));
 	viewport.controller.element.dispatchEvent(keyboardEvent(dom.window, 'ArrowRight', { altKey: true }));
-	assert.deepEqual(viewport.testSelectionController.getSelections()[0]!.getPosition(), new Position(1, 11));
+	assert.deepEqual(viewport.testViewModel.getSelections()[0]!.getPosition(), new Position(1, 11));
 	dom.window.close();
 });
 
 test("core commands reject dependencies from different text models", () => {
 	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel("one");
 	using otherModel = new TextModel("two");
 	using viewport = new View({

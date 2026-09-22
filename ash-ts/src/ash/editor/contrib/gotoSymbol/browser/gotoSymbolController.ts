@@ -2,7 +2,11 @@ import "./media/gotoSymbol.css";
 import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
 import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Selection } from "../../../common/core/selection.js";
-import { type GotoSymbolService, type LanguageSymbolMatch } from "../common/languageDocumentSymbolSearch.js";
+import { DocumentSymbolService } from '../../documentSymbols/common/languageDocumentSymbols.js';
+import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
+import { type LanguageDocumentSymbol } from '../../../common/languages.js';
+import { Position } from '../../../common/core/position.js';
+import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { type View } from "../../../browser/view.js";
 import { type IViewModel } from '../../../common/viewModel.js';
 
@@ -12,6 +16,7 @@ export class GotoSymbolController extends Disposable {
 	private readonly queryInput: HTMLInputElement;
 	private readonly list: HTMLDivElement;
 	private readonly itemListeners = this._register(new DisposableStore());
+	private readonly documentSymbols: DocumentSymbolService;
 	private request: AbortController | undefined;
 	private matches: readonly LanguageSymbolMatch[] = [];
 
@@ -19,11 +24,12 @@ export class GotoSymbolController extends Disposable {
 		private readonly input: HTMLElement,
 		private readonly viewport: View,
 		private readonly viewModel: IViewModel,
-		private readonly service: GotoSymbolService,
-		private readonly languageId: string,
-		private readonly onError: (error: unknown) => void = error => console.error("Stanza goto symbol failed", error),
+		editor: ICodeEditor,
+		private readonly onError: (error: unknown) => void,
+		@ILanguageFeaturesService languageFeatures: ILanguageFeaturesService,
 	) {
 		super();
+		this.documentSymbols = this._register(new DocumentSymbolService(viewport.textModel, languageFeatures.documentSymbolProvider, { resource: viewport.textModel.uri }));
 		if (viewport.textModel !== viewModel.model) throw new TypeError('Stanza goto symbol dependencies must share one text model');
 		const ownerDocument = viewport.domNode.domNode.ownerDocument;
 		this.element = h(ownerDocument, "div");
@@ -57,6 +63,12 @@ export class GotoSymbolController extends Disposable {
 		}));
 		this._register(addDisposableListener(this.queryInput, "input", () => void this.refresh()));
 		this._register(viewport.onDidChangeLayout(() => this.position()));
+		this._register(viewport.textModel.onDidChangeContent(() => this.close(false)));
+		this._register(viewport.textModel.onDidChangeLanguage(() => this.close(false)));
+		this._register(viewport.textModel.onWillDispose(() => this.close(false)));
+		this._register(languageFeatures.documentSymbolProvider.onDidChange(() => this.close(false)));
+		this._register(editor.onDidChangeCursorSelection(() => this.close(false)));
+		this._register(editor.onDidBlurEditorWidget(() => this.close(false)));
 	}
 
 	private open(): void {
@@ -71,11 +83,27 @@ export class GotoSymbolController extends Disposable {
 		this.request?.abort();
 		const request = this.request = new AbortController();
 		try {
-			this.matches = await this.service.query(this.languageId, this.queryInput.value, request.signal);
-			if (!request.signal.aborted) this.render();
+			const matches = await this.query(this.queryInput.value, request.signal);
+			if (!request.signal.aborted && this.request === request) {
+				this.matches = matches;
+				this.render();
+			}
 		} catch (error) {
 			if (!request.signal.aborted) this.onError(error);
 		}
+	}
+
+	private async query(query: string, signal: AbortSignal): Promise<readonly LanguageSymbolMatch[]> {
+		const symbols = await this.documentSymbols.provideDocumentSymbols(this.viewport.textModel.getLanguageId(), signal);
+		const normalizedQuery = query.trim().toLocaleLowerCase();
+		const matches: LanguageSymbolMatch[] = [];
+		for (const symbol of flattenSymbols(symbols)) {
+			const score = symbol.name.toLocaleLowerCase().includes(normalizedQuery) ? symbol.name.toLocaleLowerCase() === normalizedQuery ? 2 : 1 : 0;
+			if (normalizedQuery.length > 0 && score === 0) continue;
+			matches.push(Object.freeze({ symbol, position: symbol.selectionRange.getStartPosition(), score }));
+		}
+		matches.sort((left, right) => right.score - left.score || Position.compare(left.position, right.position));
+		return Object.freeze(matches);
 	}
 
 	private render(): void {
@@ -107,12 +135,28 @@ export class GotoSymbolController extends Disposable {
 		this.element.style.top = `${layout.scrollPosition.top + 8}px`;
 	}
 
-	private close(): void {
+	private close(focus = true): void {
 		this.request?.abort();
 		this.request = undefined;
 		this.element.hidden = true;
 		this.itemListeners.clear();
 		this.list.replaceChildren();
-		this.input.focus({ preventScroll: true });
+		if (focus) this.input.focus({ preventScroll: true });
 	}
+}
+
+interface LanguageSymbolMatch {
+	readonly symbol: LanguageDocumentSymbol;
+	readonly position: Position;
+	readonly score: number;
+}
+
+function flattenSymbols(symbols: readonly LanguageDocumentSymbol[]): readonly LanguageDocumentSymbol[] {
+	const result: LanguageDocumentSymbol[] = [];
+	const visit = (symbol: LanguageDocumentSymbol): void => {
+		result.push(symbol);
+		symbol.children?.forEach(visit);
+	};
+	symbols.forEach(visit);
+	return result;
 }

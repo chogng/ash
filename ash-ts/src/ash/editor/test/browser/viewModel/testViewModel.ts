@@ -9,7 +9,7 @@ import { CursorState } from '../../../common/cursorCommon.js';
 import { CursorChangeReason } from '../../../common/cursorEvents.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 import { MonospaceLineBreaksComputerFactory } from '../../../common/viewModel/monospaceLineBreaksComputer.js';
-import { getViewModelCursorController, ViewModel } from '../../../common/viewModel/viewModelImpl.js';
+import { ViewModel } from '../../../common/viewModel/viewModelImpl.js';
 import { TestLanguageConfigurationService } from '../../common/modes/testLanguageConfigurationService.js';
 import { createTestConfiguration } from '../config/testConfiguration.js';
 
@@ -27,7 +27,6 @@ export class TestView extends View {
 	private readonly setupStore: DisposableStore;
 	readonly testConfiguration: ReturnType<typeof createTestConfiguration>;
 	readonly testViewModel: ViewModel;
-	readonly testSelectionController: CursorsController;
 
 	constructor(options: TestViewOptions) {
 		const setup = createViewModel(options);
@@ -41,7 +40,6 @@ export class TestView extends View {
 		this.setupStore = setup.store;
 		this.testConfiguration = setup.configuration;
 		this.testViewModel = setup.viewModel;
-		this.testSelectionController = setup.viewModelSelectionController;
 	}
 
 	protected override disposeCore(): void {
@@ -57,7 +55,6 @@ function createViewModel(options: TestViewOptions): {
 	readonly configuration: ReturnType<typeof createTestConfiguration>;
 	readonly theme: ReturnType<TestThemeService['getColorTheme']>;
 	readonly viewModel: ViewModel;
-	readonly viewModelSelectionController: CursorsController;
 	readonly store: DisposableStore;
 } {
 	const ownerWindow = options.container.ownerDocument.defaultView;
@@ -115,12 +112,10 @@ function createViewModel(options: TestViewOptions): {
 		synchronizeSelections();
 		store.add(options.selectionController.onDidChange(synchronizeSelections));
 	}
-	const viewModelSelectionController = getViewModelCursorController(viewModel);
 	return {
 		configuration,
 		theme: themeService.getColorTheme(),
 		viewModel,
-		viewModelSelectionController,
 		store,
 	};
 }

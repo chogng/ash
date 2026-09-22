@@ -1,19 +1,26 @@
-import type { LanguageHover } from '../../../common/languages.js';
+import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageHover } from '../../../common/languages.js';
+import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
+import type { ICodeEditor } from '../../../browser/editorBrowser.js';
+import { isNonEmptyArray } from '../../../../base/common/arrays.js';
 import "./hover.css";
 import { addDisposableListener, h } from "../../../../base/browser/dom.js";
 import { disposableWindowTimeout } from "../../../../base/browser/scheduler.js";
 import { Disposable, MutableDisposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { type LanguageHoverService } from "../common/hover.js";
 import { type Position } from "../../../common/core/position.js";
 import { type View } from "../../../browser/view.js";
 
 /** Projects provider-backed hover content into an editor-local, non-modal widget. */
-export class HoverController extends Disposable {
+export class ContentHoverController extends Disposable {
 	private readonly element: HTMLDivElement;
 	private request: AbortController | undefined;
 	private readonly timer = this._register(new MutableDisposable<IDisposable>());
 
-	constructor(private readonly viewport: View, private readonly service: LanguageHoverService, private readonly languageId: string) {
+	constructor(
+		private readonly viewport: View,
+		editor: ICodeEditor,
+		private readonly onError: (error: unknown) => void,
+		@ILanguageFeaturesService private readonly languageFeatures: ILanguageFeaturesService,
+	) {
 		super();
 		this.element = h(viewport.domNode.domNode.ownerDocument, "div");
 		this.element.className = "stanza-editor-hover";
@@ -25,6 +32,11 @@ export class HoverController extends Disposable {
 		this._register(addDisposableListener(viewport.domNode.domNode, "pointerleave", () => this.hide()));
 		this._register(addDisposableListener(viewport.domNode.domNode, "scroll", () => this.hide()));
 		this._register(viewport.textModel.onDidChangeContent(() => this.hide()));
+		this._register(viewport.textModel.onDidChangeLanguage(() => this.hide()));
+		this._register(viewport.textModel.onWillDispose(() => this.hide()));
+		this._register(languageFeatures.hoverProvider.onDidChange(() => this.hide()));
+		this._register(editor.onDidBlurEditorWidget(() => this.hide()));
+		this._register(editor.onDidChangeCursorSelection(() => this.hide()));
 	}
 
 	private schedule(event: PointerEvent): void {
@@ -45,12 +57,30 @@ export class HoverController extends Disposable {
 
 	private async show(position: Position): Promise<void> {
 		const request = this.request = new AbortController();
-		try {
-			const hover = await this.service.provideHover(this.languageId, position, request.signal);
-			if (request.signal.aborted || !hover) return;
-			this.render(hover, position);
-		} catch {
-			if (!request.signal.aborted) this.hide();
+		const model = this.viewport.textModel;
+		const context = {
+			...createLanguageFeatureRequest(model, model.getLanguageId(), request.signal),
+			resource: model.uri,
+			position,
+		};
+		for (const provider of this.languageFeatures.hoverProvider.ordered(model)) {
+			if (!isLanguageFeatureRequestCurrent(context)) {
+				return;
+			}
+			try {
+				const result = await provider.provideHover(context, request.signal);
+				if (!isLanguageFeatureRequestCurrent(context)) {
+					return;
+				}
+				if (result) {
+					this.render(normalizeLanguageHover(result), position);
+					return;
+				}
+			} catch (error) {
+				if (!request.signal.aborted) {
+					this.onError(error);
+				}
+			}
 		}
 	}
 
@@ -81,4 +111,14 @@ export class HoverController extends Disposable {
 		this.request?.abort();
 		this.request = undefined;
 	}
+}
+
+function normalizeLanguageHover(value: LanguageHover): LanguageHover {
+	if (!value || typeof value !== "object" || !isNonEmptyArray(value.contents)) throw new TypeError("Language hover must contain content");
+	const contents = value.contents.map(content => {
+		if (typeof content === "string") return content;
+		if (!content || typeof content !== "object" || typeof content.value !== "string") throw new TypeError("Language hover content must contain a string value");
+		return Object.freeze({ value: content.value, ...(content.language !== undefined ? { language: content.language } : {}) });
+	});
+	return Object.freeze({ ...(value.range ? { range: value.range } : {}), contents: Object.freeze(contents) });
 }

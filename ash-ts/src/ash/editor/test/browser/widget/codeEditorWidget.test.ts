@@ -127,13 +127,12 @@ test("CodeEditorWidget owns one canonical browser editing surface", () => {
 	assert.equal(fontTarget.style.fontFamily, editor.getDomNode().style.fontFamily);
 	assert.equal(fontTarget.style.fontFeatureSettings, editor.getDomNode().style.fontFeatureSettings);
 
-	const selections = editor.selections;
 	editor.dispose();
 	assert.equal(TextAreaEditContextRegistry.get(ownerId), undefined);
 	assert.equal(editor.getDomNode().isConnected, false);
 	assert.equal(model.getText(), "alpha");
-	assert.equal(selections.context.model, model);
-	assert.throws(() => selections.getSelections(), /already disposed/);
+	assert.equal(editor.getModel(), null);
+	assert.equal(editor.getSelections(), null);
 	dom.window.close();
 });
 
@@ -558,7 +557,7 @@ test('executeEdits applies one editor transaction and its requested cursor state
 	assert.equal(model.getText(), 'beta');
 	assert.deepEqual(editor.getSelection(), Selection.fromPositions(new Position(1, 5)));
 
-	editor.selections.context.model.undo();
+	editor.getModel()!.undo();
 	assert.equal(model.getText(), 'alpha');
 	dom.window.close();
 });
@@ -1824,7 +1823,7 @@ test("CodeEditorWidget creates one selection controller for its model", () => {
 	const container = requiredElement(dom.window.document, "main");
 	using model = new TextModel("alpha");
 	using editor = createTestCodeEditor({ container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), lineHeight: 20 });
-	assert.equal(editor.selections.context.model, model);
+	assert.equal(editor.getModel(), model);
 	dom.window.close();
 });
 

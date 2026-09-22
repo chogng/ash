@@ -1,3 +1,4 @@
+import { createLanguageFeatureRequest } from '../../common/languages.js';
 import { Emitter } from '../../../base/common/event.js';
 import { editorWorkerWireCodec, EditorWorker } from '../../common/services/editorWebWorker.js';
 import { FormattingConflicts, FormattingKind, FormattingMode } from '../../contrib/format/browser/format.js';
@@ -14,7 +15,6 @@ import { ILogService, NullLoggerService } from '../../../platform/log/common/log
 import { LanguageFeaturesService } from "../../common/services/languageFeaturesService.js";
 import { EditorContributionInstantiation } from '../../browser/editorExtensions.js';
 import { TestLanguageConfigurationService } from '../common/modes/testLanguageConfigurationService.js';
-import { LanguageHoverService } from '../../contrib/hover/common/hover.js';
 import { StandaloneServiceCollection, StandaloneServices } from "../../standalone/browser/standaloneServices.js";
 import { WorkerTextModelSyncServer } from '../../common/services/textModelSync/textModelSync.impl.js';
 
@@ -212,8 +212,8 @@ test("standalone languages API feeds the shared editor registries", async () => 
 	using model = stanza.editor.createModel('answer', 'stanza-public-test', URI.parse('inmemory://stanza/public-api.stanza-public'));
 	assert.equal(model instanceof stanza.TextModel, true);
 	if (!(model instanceof stanza.TextModel)) throw new Error('Expected the standalone model implementation');
-	using hover = new LanguageHoverService(model, services.languageFeaturesService.hoverProvider);
-	assert.deepEqual(await hover.provideHover('stanza-public-test', new stanza.Position(1, 2)), { contents: ['Public hover'] });
+	const signal = new AbortController().signal;
+	assert.deepEqual(await services.languageFeaturesService.hoverProvider.ordered(model)[0]!.provideHover({ ...createLanguageFeatureRequest(model, model.getLanguageId(), signal), position: new stanza.Position(1, 2) }, signal), { contents: ['Public hover'] });
 });
 
 test("standalone completion providers execute in a live editor", async () => {

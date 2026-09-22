@@ -1,5 +1,94 @@
 # Editor API 对齐状态
 
+## 现有功能链剩余修正（2026-09-21）
+
+本轮处理上次审查的八类问题，起始工作区干净。范围继续限定为现有功能链：保留单一文本、token、历史和后端 diff owner，不引入整套前端 diff / Tree-sitter。下面的当前结果覆盖历史批次中已经过时的缺口描述；历史数字只代表当时状态。
+
+| 审查项 | 本轮结果 |
+| --- | --- |
+| 协议生成顺序 | common 类型检查先同步已提交的 Rust 协议快照，普通测试和构建入口无需手动准备。 |
+| 语言与请求生命周期 | 悬停、智能选区、跳转、层级、文档符号、符号图标和颜色控件读取当前模型语言，失效时取消请求并拒绝迟到结果。 |
+| 签名上下文 | 使用 provider 声明的触发 / 重触发字符，传递重触发状态和活动签名；扩展桥保留 JSON 上下文。 |
+| 重命名与 Quick Fix | 标准 action / command 接通现有控制器；条件随模型、语言、provider 和只读状态更新。 |
+| 请求职责 | 删除五个单消费者请求 service；共享 DocumentSymbolService 与 ColorService 保留。 |
+| Peek / Color Picker | 控件进入对应路径，拥有自身挂载、事件和释放，调用方管理请求和编辑。 |
+| 内部光标入口 | Widget.selections、contribution.selectionController 和 getViewModelCursorController 已退出，调用方使用 ICodeEditor / IViewModel。 |
+| CSS 与记录 | 六份只替换品牌的 CSS 已重写，无效主题变量改用 Ash 注册颜色，输入样式命中实际 DOM；更新本记录与 browser/README.md。 |
+
+Editor 当前有 **533 个生产文件：427 个上游同路径、106 个 Ash 自有；307 个上游路径未引入**。54 份 CSS 中，与上游原样相同、仅替换品牌后相同、上游品牌残留均为 **0**。同名声明总账仍为 **80 项已处理、41 项待核对**；新路径、相同成员名和通过 Ash 测试不等于完整上游契约。
+
+common 保持 **211 个文件：180 个同路径、31 个 Ash 自有；46 个上游路径未引入**。其中 22 个由现有 owner 承担、22 个属于已排除的 diff / Tree-sitter、2 个没有当前消费者。fixBrackets 和 languageFeatureDebounce 已接通；不是待新增文件。
+
+本轮文档准入：现有 `browser/README.md` 与本记录，修正职责、剩余范围及验证状态，不移动文档。
+
+### 构建协议准备
+
+准入路径：`ash-ts/package.json`（Ash 构建入口）、本记录。构建 / 测试 / 直接 common 类型检查先同步 Rust 已提交的协议快照，再检查消费方。`ash-rs/app-server-protocol/schema/typescript` 仍有 Advisor 类型；此前“协议已移除”的判断不准确，实际是忽略跟踪的前端 generated 目录过期。生成器与后端协议不变，通过现有 sync 脚本刷新，不手改生成内容、不删除 Advisor 功能。验证 `typecheck:common`、常规测试及生产构建。
+
+### 悬停与智能选区
+
+鼠标悬停 / 扩大选区 → contribution → 控制器 → 当前模型和 provider registry → 结果显示或选区变化。控制器唯一持有请求和释放，保留既有 View 坐标、DOM 与 smartSelectionExpansion 纯算法。用户已授权收拢职责；删除旧文件前迁完全部生产与测试引用，恢复来源为本批开始时 Git HEAD。
+
+| editor 相对路径 | 关系 | 动作 |
+| --- | --- | --- |
+| `contrib/hover/browser/hoverController.ts` | 仅 Ash | 迁到 contentHoverController.ts，合并请求选择与校验；监听语言、注册和释放。 |
+| `contrib/hover/browser/contentHoverController.ts` | 仅 VS Code | 承接现有悬停 DOM 与请求生命周期，不新增界面层。 |
+| `contrib/hover/browser/hoverContribution.ts` | 双方都有 | 容器构造控制器并注入语言服务。 |
+| `contrib/hover/common/hover.ts` | 仅 Ash | 移入控制器后删除无独立状态的 service。 |
+| `contrib/smartSelect/browser/smartSelectController.ts` | 仅 Ash | 迁到 smartSelect.ts，合并范围请求，取消失效选区请求。 |
+| `contrib/smartSelect/browser/smartSelect.ts` | 仅 VS Code | 承接现有键盘入口与纯选择算法的调用。 |
+| `contrib/smartSelect/common/selectionRanges.ts` | 仅 Ash | 请求归控制器后删除 service。 |
+| `editor.all.ts` | 双方都有 | 迁移 smartSelect import。 |
+| `test/browser/standaloneEditor.test.ts` | 仅 Ash 测试 | 注册测试直接验证 registry；DOM 生命周期由浏览器测试验证。 |
+
+同批测试路径：`ash-ts/test/integration/browser/standalone.integration.ts`、`standalone.integration.spec.ts`；Workbench 适配测试 `services/language/test/common/languageFeaturesService.test.ts`、`services/language/test/browser/appServerLanguageProviders.test.ts`、`services/language/test/browser/appServerSyntaxProviders.test.ts`、`services/extensionHost/test/browser/appServerExtensionHostService.test.ts` 只迁移旧 service 引用到实际 provider 契约。真实 standalone 编辑器验证请求在语言、注册、选区、文本、模型和释放变化时取消，迟到结果不显示，下一次请求使用当前语言。首条链通过后再迁移导航与层级。
+
+### 导航、层级与文档符号
+
+本轮新增准入：导航 / 层级 / 文档符号快捷键 → 各自控制器 → registry → 当前语言和快照 → 跳转、Peek 或符号列表。悬停与智能选区取消及当前语言场景已分别通过 8 项浏览器测试，允许继续同类迁移。保留 Ash 层级 UI、Peek 与 View 的现有 owner；收回单消费者请求 service，保留多消费者 DocumentSymbolService 与纯算法。
+
+准确路径（均相对 `ash-ts/src/ash/editor`）：`contrib/gotoSymbol/browser/languageNavigationController.ts`、`languageNavigation.contribution.ts`、`gotoSymbolController.ts`、`gotoSymbol.contribution.ts`；`contrib/callHierarchy/browser/languageHierarchyController.ts`、`languageHierarchy.contribution.ts`。这些仅 Ash 文件已获本轮职责收拢授权：控制器注入 registry，读取当前语言，统一取消；层级展开返回时复核会话，节点移除时释放自己的监听器。旧 `contrib/gotoSymbol/common/languageNavigation.ts`、`languageDocumentSymbolSearch.ts`、`contrib/callHierarchy/common/languageHierarchy.ts` 的生产调用全部迁入控制器后删除，Git HEAD 可恢复。测试 `test/common/languageNavigation.test.ts`、`languageHierarchy.test.ts` 迁到 `test/browser` 同名路径，使用新增测试辅助 `test/browser/testLanguageFeatureEditor.ts` 走真实 Widget；Workbench `services/language/test/browser/appServerLanguageProviders.test.ts` 改走 provider 契约。既有两份 standalone 浏览器测试追加取消、当前语言、层级展开和重复会话场景。没有新增无调用方的公开 API。
+
+### 签名触发信息与编辑器动作
+
+新增准入链：输入 provider 声明的字符 → 签名控制器排队 → 请求携带重触发状态与活动签名；F2 / Ctrl+. / 公开 action → editor 作用域条件 → 既有 Rename / Code Action 控制器。准确生产路径：`common/languages.ts`、`common/editorContextKeys.ts`、`browser/widget/codeEditor/codeEditorWidget.ts`、`contrib/parameterHints/browser/parameterHints.ts`、`contrib/rename/browser/rename.ts`、`contrib/codeAction/browser/codeActionController.ts`、`codeActionContributions.ts`（双方都有）；新增上游同路径 `contrib/codeAction/browser/codeActionCommands.ts` 承接 QuickFixAction，由 contribution 接入。只补当前 UI 的触发、接受、取消命令，不制造尚无能力的 refactor/source actions。
+
+Workbench 准入：`services/language/browser/appServerLanguageProviders.ts` 与 `api/browser/extensionHostLanguageBridge.ts`（已有 Ash 适配层），各自声明现有签名触发字符，避免与 completion 的字符混淆；扩展 host 传递 JSON 上下文，App Server 保持现有已生成协议能力。测试准入：现有 `contrib/parameterHints/test/browser/parameterHints.test.ts`、两份 standalone 浏览器测试、`workbench/services/extensionHost/test/browser/appServerExtensionHostService.test.ts`。验证自定义触发与只在活动会话重触发、无声明时仅显式调用、签名上下文、动态 provider / 只读条件和公开动作真实效果。状态继续归控制器，条件由 Widget 的现有上下文管理器统一维护。
+
+注册 ID 迁移补充：`test/browser/editorExtensions.test.ts` 同步 CodeActionController.ID，旧 ID 的生产和测试引用同批退出。
+
+### 光标内部入口退出
+
+补充测试准入：`contrib/find/test/browser/findController.test.ts` 的 fixture 解构也持有 Widget.selections；同步改用 Widget 的选区与模型入口，保留查找、替换、撤销断言。
+
+准入：单词高亮与编辑器交互状态 → ICodeEditor 的选区、事件 → IViewModel 的既有操作 → 唯一 CursorsController。`browser/widget/codeEditor/codeEditorWidget.ts` 删除公开 selections 与重复 model-state 引用；`browser/editorExtensions.ts` 移除两个 context 的 selectionController；`common/viewModel/viewModelImpl.ts` 删除 WeakMap 和 getViewModelCursorController。调用方 `contrib/wordHighlighter/browser/wordHighlighter.contribution.ts`、`contrib/editorState/browser/editorStateController.ts` 迁到编辑器契约，前者同时不再缓存语言 ID。以上均已有文件，不新增转发层或光标 owner。
+
+测试准确路径：`test/browser/viewModel/testViewModel.ts`、`viewModelImpl.test.ts`、`test/browser/coreCommands.test.ts`、`test/browser/widget/codeEditorWidget.test.ts`、`contrib/transpose/test/browser/transposeController.test.ts`、`contrib/wordHighlighter/test/browser/wordHighlighter.test.ts`、`ash-ts/test/integration/browser/textModel.integration.ts`。前五项改用真实 ViewModel/Widget 端口；高亮测试创建真实 Widget，保留 Unicode、多文件、取消和导航行为覆盖；浏览器多光标测试经 setSelections 执行。只删除已迁走的入口与对应内部计数断言，保留公开事件与结果断言。
+
+### Peek 与颜色控件归属
+
+导航 / 层级 / Quick Diff → PeekViewWidget → ZoneWidget 的留白与覆盖层；颜色控制器 → ColorPickerWidget → 已有 ColorPickerModel 与控件。准入路径：`contrib/peekView/browser/editorPeekViewWidget.ts` 迁入上游对应 `contrib/peekView/browser/peekView.ts`，标题更新与关闭事件归 Widget，控制器收到关闭后释放请求和子编辑器；`contrib/colorPicker/browser/editorColorPickerDialog.ts` 迁到 `colorPickerWidget.ts`，控件挂载、移除和用户事件归 Widget，控制器只处理颜色请求与提交。旧文件引用清空后删除，Git HEAD 可恢复。保留已有 DOM、配色、尺寸和颜色模型，不复制上游私有 header/body 类。
+
+同批准确调用方：`contrib/gotoSymbol/browser/languageNavigationController.ts`、`contrib/callHierarchy/browser/languageHierarchyController.ts`、`contrib/colorPicker/browser/colorPickerController.ts`、`workbench/contrib/scm/browser/quickDiffEditorController.ts`；验证文件为既有 standalone 两份浏览器测试及 `test/integration/browser/textModel.integration.spec.ts`。标准入口没有完整上游接口时继续标明范围，不因改名宣称全部契约完成。首个 Peek 关闭链先用真实浏览器验证，颜色控件再独立验证。
+
+### 编辑器样式与同因修正
+
+同因补充准入：沿本轮颜色控件和文档符号调用链，确认 `contrib/colorPicker/browser/colorPickerController.ts`、`colorDetector.ts`、`contrib/symbolIcons/browser/symbolIcons.ts`、`symbolIcons.contribution.ts` 仍缓存创建时语言。现有控制器改读模型当前语言，语言/提供者/释放立即取消请求，颜色面板同时响应只读变化；不改变共享 ColorService 与 DocumentSymbolService 的归属。符号贡献通过现有容器注入 registry。验证准确路径为 `contrib/colorPicker/test/browser/colorPickerController.test.ts`、新增 `test/browser/symbolIcons.test.ts`（现有真实 Widget 辅助）、既有 standalone 两份浏览器测试。测试隔离符号导航与后台图标两个独立消费者，另以真实图标装配验证动态注册和语言变化。
+
+准入链：View 已有选区、装饰、空白、边栏和输入 DOM → 所属 CSS → Ash 已注册主题变量 → 浏览器计算样式、点击目标与 IME 焦点。准确路径：`browser/viewParts/decorations/decorations.css`、`glyphMargin/glyphMargin.css`、`margin/margin.css`、`selections/selections.css`、`whitespace/whitespace.css`、`lineNumbers/lineNumbers.css`、`viewLines/viewLines.css`；`browser/controller/editContext/textArea/textAreaEditContext.css`、`browser/controller/editContext/native/nativeEditContext.css`；`browser/gpu/css/decorationCssRuleExtractor.ts` 与其 `media/decorationCssRuleExtractor.css`。均有真实 DOM owner；六份仅换品牌的旧样式按本地 DOM 重新实现，删除不产生的 radius / overflow 等选择器，不复制上游声明。其余只修正具体无效变量与高对比选择器。
+
+`common/core/editorColorRegistry.ts` 补当前选区、行号、空白和边栏实际需要的 token，使用现有主题颜色建立四种主题默认值。测试准入：`test/integration/browser/textModel.integration.spec.ts`、`standalone.integration.ts`、`standalone.integration.spec.ts`；覆盖主题切换、聚焦与失焦选区、空白、行号、输入、颜色面板、关闭释放与输入法。保留 View 的坐标和现有 DOM 层级，不制造颜色别名桥接。
+
+### 最终验证
+
+- `check-editor-alignment.mjs --test=all` 通过：235/235 份单测文件、513/513 项 Playwright 浏览器用例，以及台账、类型、结构和生成产物检查。
+- 最后的颜色提供者清理补强会立即移除已退出提供者的旧色块；补强后的 6 项颜色单测与 12 项相关浏览器用例通过，同时重新完成全测试 TypeScript 编译与 Renderer / Stanza 构建。两种生产构建没有 warning。
+- Electron UI 的聊天编辑器输入 / 换行 / 焦点和两项编辑器窗口布局场景均通过，3/3。使用仓库 Playwright 入口，没有依赖截图判断。
+- 全量单测仍输出既有 JSDOM Canvas 提示，以及测试装配中的 markerDecorationsService / IInlineCompletionsService 提示各 5 次；本轮新测试的装配和 Canvas 提示已清除。浏览器仍有环境变量 NO_COLOR 提示。
+- 旧生产引用为零；CursorsController 仅由自身文件与 ViewModelImpl 使用。54 份 CSS 的原样复制、仅替换品牌复制和品牌残留均为零。没有新增未跟踪 JavaScript 产物；结构审计和 `git diff --check` 通过。
+
+全部改动保留在工作区，未暂存或提交。本轮完成的是上述八类问题和相同原因的现有调用链修正；完整上游 API、前端 diff / Tree-sitter、新的 Rename 预览和 Code Action 分类等能力不计作已实现。
+
 ## 签名提示命令与签名切换（2026-09-21）
 
 准入链：快捷键 / `getAction().run()` / `trigger()` → 已有 EditorAction / EditorCommand 注册表 → 当前编辑器的签名提示控制器 → 查询、关闭或切换返回的签名 → 现有 DOM 与上下文状态。检查发现 `trigger()` 尚未分发已注册命令；先补该入口，再接功能命令，避免组件内保留另一套动作实现。
@@ -24,7 +113,7 @@
 - 两份受影响单测共 77 项通过（签名提示 10 项、Widget 67 项），无警告。常规入口被下述范围外错误阻塞后，使用临时配置继承 `ash-ts/tsconfig.test.json`，仅将 include 缩到两份测试与原声明文件，并将相同 types 解析为绝对路径；编译通过后用原 `test/unit/editor.ts --run` 执行，未跳过类型检查。
 - `pnpm --dir ash-ts test:editor:browser` 完整通过，459/459 项，其中签名提示定向场景 31 项。验证公开动作和命令、动态 provider / 语言 / 模型上下文、循环边界、焦点与选区不变、DOM 复用、取消和原有输入链。浏览器只保留既有 `NO_COLOR` 环境提示。
 - Stanza 直接编译目标 `tsc -p ../build/vite/stanza/tsconfig.json --noEmit` 与现有 `editor.vite.config.ts` 生产打包均通过，无警告。
-- `check-editor-alignment.mjs --test=all`、常规单测入口和两种常规构建均被 `platform/sessions/common/sessionApi.ts` 的四处类型错误阻塞：生成协议已无 `AdvisorConfig`、`AdvisorConfigureResult`、`configureAdvisor`、`consultAdvisor`，调用方仍引用它们。本批没有修改这些范围外文件，不把全量单测或常规构建记为通过。
+- 当时 `check-editor-alignment.mjs --test=all`、常规单测入口和构建被 `platform/sessions/common/sessionApi.ts` 的四处类型错误阻塞。原先“生成协议已移除 Advisor”的判断已纠正：Rust 已提交快照仍有这些成员，是本地生成目录过期且检查顺序错误；本轮通过既有同步脚本及 package 生命周期修复。
 - 结构、台账、CSS ownership 和 `git diff --check` 通过；生产文件集合仍为 537 个（422 同路径、115 Ash 自有），声明核对仍为 80/41。没有新增文件或修改 CSS。provider 触发字符声明、标准 signature-help 请求契约与独立 Model/Widget 接口仍待后续调用链处理。
 
 ## 签名提示查询、排队触发与关闭（2026-09-21）
@@ -312,11 +401,11 @@ common 当前 **210 个文件：179 个同路径、31 个 Ash 自有；47 个上
 | `multiDiffEditor.ts` | 保留 Ash 定位契约 | `MultiDiffEditorWidget` 使用 item ID、行位置和 DiffModel；上游 cards 变体与 original/modified URI viewState 并非当前布局/定位格式。后端 diff 范围不变。 |
 | `standaloneStrings.ts` | 文案留在实际界面 owner | 文案由现有命令与组件消费；没有需要共享上游字符串集合的调用链。 |
 | `editorFeatures.ts` | 未引入额外能力 | 当前采用宿主服务和逐编辑器 contribution；没有进程级 EditorFeature 创建需求，不增加空 registry。 |
-| `model/bracketPairsTextModelPart/fixBrackets.ts` | 未引入额外能力 | 当前补全契约没有 `completeBracketPairs`；`tokenizeLinesAt` 明确返回 null，不能用未经词法识别的字符扫描改写字符串、注释中的括号。输入配对继续读取语言配置与模型括号树。 |
+| `model/bracketPairsTextModelPart/fixBrackets.ts` | 已补齐当前消费端口 | 后续批次已接通 `completeBracketPairs`、异步词法试算和 `fixBracketsInLine`；保持字符串、注释与原有插入事务语义。 |
 | `services/inMemoryTextModelService.ts` | 未引入额外能力 | 当前独立模型由 ModelService 注册；没有 synthetic document 或 `registerModelAndPositionCommand` 的生产调用。仅存在服务接口不能证明需要另一套引用 owner。 |
-| `services/languageFeatureDebounce.ts` | 未引入额外能力 | WordHighlighter 的固定用户延迟由现有 scheduler 持有；自适应 provider 延迟是未接入的另一种策略，不改写现有配置含义。 |
+| `services/languageFeatureDebounce.ts` | 已补齐当前消费端口 | 后续批次已接通共享延迟采样，Inline Completions / Inlay Hints 的控制器持有各自计时器与请求；WordHighlighter 用户延迟保持原含义。 |
 
-本轮文件结论：**1 个补入并接通、22 个保留现有职责、4 个尚未接入的额外能力**；另有 **22 个 diff / Tree-sitter 文件明确排除**。common 现有 **209 个文件：178 个同路径、31 个 Ash 自有；仍有 48 个上游路径不存在**。这关闭的是本次现有功能链的文件归属调查，不代表整个 VS Code Editor 的功能与 API 全量完成；4 个额外能力及 Editor 总账中的其他待处理契约仍明确保留。
+更新后的归属结论：**3 个补入并接通、22 个保留现有职责、2 个没有当前消费者的额外能力**；另有 **22 个 diff / Tree-sitter 文件明确排除**。common 现有 **211 个文件：180 个同路径、31 个 Ash 自有；46 个上游路径未引入**。此前 209/48 的数字只对应本批最初结果。文件归属核对不代表整个 VS Code Editor 的功能与 API 全量完成。
 
 本批验证：
 
@@ -1583,8 +1672,8 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 | `common/viewLayout/viewLayout.ts` | `ViewLayout` | View Zone 的并行 map、`addViewZone` / `changeViewZone` / `removeViewZone` / `getViewZoneLayout` 已删除，标准 whitespace 同时决定纵向空间和最小内容宽度；仍多出 `layout`、`lineCount`、`onDidChange`、`setLineHeight`、`setViewportSize` 及两个零基行坐标入口，需等待 View/Widget 调用方迁完后收敛 |
 | `common/cursor/cursorTypeEditOperations.ts` | `TypeWithoutInterceptorsOperation` | 只拥有无拦截输入的编辑构造；结果选区由标准 `ICommand` 收集和 `CursorsController` 事务归一化，不再依赖仅本地编辑命令协议 |
 | `common/cursor/cursorTypeEditOperations.ts` | `AutoClosingOvertypeOperation` | 只根据自动闭合来源和当前位置构造覆盖命令；多光标、完整字素和物理行边界由本地行为测试直接验证，不要求复刻上游私有执行阶段 |
-| `contrib/colorPicker/browser/colorPickerWidget.ts` | `ColorPickerWidget` | 本地职责已改名或移出上游 owner |
-| `contrib/peekView/browser/peekView.ts` | `PeekViewWidget` | 本地职责已改名或移出上游 owner |
+| `contrib/colorPicker/browser/colorPickerWidget.ts` | `ColorPickerWidget` | 已回到对应路径并拥有挂载、控件事件和释放；保留 Ash 的颜色模型与展示，构造器和其余上游公开接口仍未全量对齐 |
+| `contrib/peekView/browser/peekView.ts` | `PeekViewWidget` | 已回到对应路径并拥有标题、Escape 和关闭事件，导航 / 层级 / Quick Diff 接通释放；Ash 的内容容器与布局接口继续保留，未实现上游全部标题栏能力 |
 | `contrib/codeAction/browser/codeActionController.ts` | `CodeActionController` | 同路径贡献负责本地 Code Action 菜单；内容变化只在菜单拥有焦点时恢复所属输入节点，避免共享模型的另一编辑器抢焦点。菜单的其余公开契约仍待 Code Action 分部验收 |
 | `contrib/codelens/browser/codelensWidget.ts` | `CodeLensWidget` | 本地 contribution Widget 改为 `EditorCodeLensWidget` |
 | `contrib/colorPicker/browser/colorDetector.ts` | `ColorDetector` | 已恢复上游公开名；颜色 provider 结果写入标准 before decoration，动态 class ref 先于 CSS owner 释放，注入 marker 由标准鼠标目标读取 |
@@ -1601,7 +1690,7 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 | --- | --- | --- |
 | `browser/view.ts` | `View` | 根节点已从仅本地 `element` 迁为标准 `domNode`，40 余个 Editor/Workbench 调用方全部改接；焦点、Widget 焦点、ARIA、辅助阅读器、强制渲染、行宽缓存与 `onWillCopy` / `onWillCut` / `onWillPaste` 已回到该 owner。输入实例当前仍由 Controller 构造回调建立，需继续迁回 `View` 后再计为完成 |
 | `browser/widget/codeEditor/codeEditorWidget.ts` | `CodeEditorWidget` | 已接通标准 editor contribution 注册表与滚动、配置 API；`setModel`、`onWillChangeModel`、`onDidChangeModel` 和模型装饰事件沿同一 Widget 的可替换模型资源生效，根 DOM、注册身份、外部 Widget 与装饰集合句柄保持稳定，旧 View/worker/贡献/监听释放。`setValue` 直接进入模型重置，同值写入也发布新版本；Standalone 处理隐式模型所有权，单测及 Chromium 验证共享模型、输入、焦点、事件、空模型、错误恢复与释放。Widget 仍有其他公开成员差异，按对应行为分部继续处理 |
-| `common/cursor/cursor.ts` | `CursorsController` | 已恢复上游公开名；文档 undo/redo 已回到 `TextModel`，标准 Cursor Undo 已改走 `ICodeEditor` 事件，自动闭合和组合输入结果已改为内部会话状态，仅测试调用的 `beginComposition` / `CompositionSession` 平行入口已移除。多光标 Alt 点选、同位取消及一次键入两个位置由 owner 与 Chromium 验证，模型只提交一个版本，另一编辑器选区隔离。成员差异由 12 项降至 8 项；View、EditContext、ScreenReaderSupport、Anchor Select、In-place Replace、Line Selection、Selection Highlighter 和 14 个只读写选区的 contribution controller 已改走 `IViewModel` 或 `ICodeEditor`。Editor 内仍有 9 个外部生产调用方，剩余链涉及编辑事务、光标历史、只读事件、仅 Ash 文件和装配契约，不能按成员差异直接删除或包一层转发 |
+| `common/cursor/cursor.ts` | `CursorsController` | 内部光标入口已收口：只有 cursor.ts 与 ViewModelImpl 引用该类，浏览器、贡献和 Widget 均使用 ICodeEditor / IViewModel。保留 Ash 的模型历史与光标事件实现；其余 8 项成员差异继续单独核对，不为减少差异添加转发方法。 |
 | `common/cursor/cursorDeleteOperations.ts` | `DeleteOperations` | 4 个公开入口的成员边界比较为 0，已恢复 `CursorConfiguration`、`Selection[]`、`ICommand`、`EditOperationResult` 和自动闭合范围语义；浏览器删除、语言成对删除与剪贴板剪切均通过 `CursorsController.executeCommands` 进入模型事务，连续同向删除由 `pushUndoStop` 和 `EditOperationType` 控制撤销边界 |
 | `common/model/textModel.ts` | `TextModel` | 1.1–1.5 已验收：编辑范围按 UTF-16 边界约束，失败不留半次提交；同值重置推进版本，快照可读，undo/redo 恢复选区；行 ID 预检和普通、结构文档映射已覆盖。创建时的大文件分级尊重设置，整份读取受堆预算限制而快照可继续读取。其余公开成员与私有 owner 仍待随其他分部核对 |
 
@@ -1625,12 +1714,14 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 | --- | --- | --- | --- |
 | 1 | Platform 配置与语言身份 | 配置注册表已由标准 `Registry.as(...Extensions.Configuration)` 唯一持有，24 个配置声明、服务与 UI 调用文件不再导入并行 `ConfigurationsRegistry` 单例；配置节点/默认 override、Modes Registry、语言实例 Registry 和语言配置 Registry 仍未形成完整上游链，现有语言配置服务有 28 个生产调用方 | 继续统一标准配置节点和 override，再迁移语言身份和语言配置调用方，删除旧 owner |
 | 2 | TextModel parts | `ITextModel` 成员、模型部件事件和 ViewModel 注册链已闭合；实现类仍保留 Ash 文档块、行身份与历史能力，并与上游私有阶段存在差异 | 明确这些 Ash 能力在同一 TextModel 内的长期边界，继续统一基础模型私有 owner，不为私有常量或字段制造同名壳 |
-| 3 | ViewModel 与 Cursor | 生产构造链已收敛为 `CodeEditorWidget → ViewModel → View`；行映射、坐标转换、光标、布局、装饰和事件只有一份，`ViewModelLinesFromProjectedModel` 只由 `ViewModel` 创建。当前缺口是输入与 contribution 仍通过内部光标执行器工作，Widget 还保留获取该执行器的内部入口 | 将选择、输入、组合输入、命令执行和只读事件逐项改为 `ViewModel` 契约，删除内部执行器入口；相关调用方完成迁移后再把本切片计为完成 |
-| 4 | ViewContext、ViewPart 与 View | `ViewContext → ViewPart → View` 生命周期已经接通，内容/margin 覆盖层统一逐行 DOM，块装饰和光标回到独立 Part；标准渲染上下文与 DOM/GPU `IViewLines` 几何已接通。当前缺口只剩两个输入实现尚未进入同一 Part 渲染阶段 | 迁移输入 Part，不保留第二套调度框架 |
-| 5 | CodeEditor Widget 与服务 | `CodeEditorWidget`、`ICodeEditor`、编辑器服务和 contribution 生命周期不完整；Workbench 仍导入缺失的 Diff/MultiDiff canonical export | Widget、服务、贡献初始化、model attach/detach、view state 和公开对象身份同批闭环 |
-| 6 | GPU 与 Editor contribution | GPU context、atlas、page、allocator、glyph rasterizer、两个 strategy、RectangleRenderer 与 ViewLinesGpu 已统一到标准 buffer/atlas 链；19 个 contribution 仍通过改成 `Editor*` 隐藏同路径声明缺口 | GPU 基础链已闭合，后续按各自 Widget/服务 owner 迁移 contribution |
+| 3 | ViewModel 与 Cursor | 选区、输入、组合输入与命令均走 ICodeEditor / IViewModel，Widget 内部执行器入口已删除；光标类的其余成员差异仍保留 | 仅在存在实际消费者时补公开契约，保留唯一光标与历史 owner |
+| 4 | ViewContext、ViewPart 与 View | 输入实现已经进入 ViewPart；DOM/GPU 行几何、覆盖层和模型事件由现有链统一管理；构造及公开成员仍有上游差异 | 按真实输入、布局和辅助阅读行为验证，避免复制上游私有 DOM 结构 |
+| 5 | CodeEditor Widget 与服务 | 模型挂接、贡献释放、动作作用域和 Diff/MultiDiff 入口均已接通；完整 Widget 和服务 API 仍有范围差异 | 随实际调用方补充尚缺公开行为，保留稳定编辑器身份和模型引用归属 |
+| 6 | GPU 与 Editor contribution | GPU 绘制与行几何链已接通；Peek、颜色、Rename、Quick Fix 等现有功能链完成本轮修正，其余上游功能未因此自动实现 | 按现有功能的请求、控件和服务 owner 验证；未引入的新能力单独定范围 |
 
-## 验证状态
+## 历史验证记录
+
+以下为历次批次的原始结果，包含当时失败和已被后续修复的判断。当前统计、构建状态和待处理边界以本文开头及同名契约表为准，不把历史失败当作当前阻塞。
 
 - 文件集合审计：395 个同路径、0 个大小写错误、199 个仅本地、338 个仅上游；Ash 594 个生产文件，VS Code 733 个。该结果只说明路径集合，不说明同路径文件的职责和 API 已一致。
 - 121 项账本：80 项已处理、41 项待处理、总计 121 个唯一声明。

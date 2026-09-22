@@ -1,4 +1,8 @@
-.stanza-editor .mwh {
+.stanza-editor .stanza-editor-whitespace {
 	position: absolute;
-	color: var(--vscode-editorWhitespace-foreground) !important;
+	inset-block-start: 0;
+	pointer-events: none;
+	white-space: pre;
+	font: inherit;
+	color: var(--ash-editor-whitespace-foreground);
 }

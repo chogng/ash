@@ -1179,7 +1179,7 @@ test.describe('parameter hints requests', () => {
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints());
 		await page.evaluate(() => window.ashStandaloneIntegration.queueParameterHints('type'));
 		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests())).toEqual([{
-			text: 'call(a,)', languageId: 'plaintext', position: '(1,8)', context: { kind: 'triggerCharacter', triggerCharacter: ',' }, aborted: false,
+			text: 'call(a,)', languageId: 'plaintext', position: '(1,8)', context: { kind: 'triggerCharacter', triggerCharacter: ',', isRetrigger: true }, aborted: false,
 		}]);
 		await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints'));
 		await expect(page.getByRole('dialog', { name: 'Parameter hints' })).toBeVisible();
@@ -3146,6 +3146,188 @@ for (const scenario of [
 		expect(await page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe(scenario.value);
 		await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
 		expect(errors).toEqual([]);
+		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	});
+}
+
+test('color picker retains one widget, applies one undoable edit and releases its controls', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareColorPicker());
+	await page.keyboard.press('ControlOrMeta+Shift+c');
+	const picker = page.locator('#caller .stanza-editor-color-picker');
+	await expect(picker).toBeVisible();
+	await expect(picker.locator('option')).toHaveCount(3);
+	await picker.evaluate(element => { element.dataset.retained = 'true'; });
+	const hue = picker.getByRole('slider', { name: 'Hue', exact: true });
+	await hue.focus();
+	await hue.evaluate(element => {
+		(element as HTMLInputElement).value = '119';
+		element.dispatchEvent(new Event('input', { bubbles: true }));
+	});
+	await hue.press('ArrowRight');
+	await expect(picker.getByRole('combobox', { name: 'Color format' })).toHaveValue('#00ff0080');
+	await picker.getByRole('button', { name: 'Apply', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('const color = #00ff0080;');
+	await expect(picker).toBeHidden();
+	await expect(page.locator('#caller .stanza-editor-input')).toBeFocused();
+	await page.keyboard.press('ControlOrMeta+z');
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.state('caller').value)).toBe('const color = #ff000080;');
+	await page.keyboard.press('ControlOrMeta+Shift+c');
+	await expect(picker).toBeVisible();
+	await expect(picker).toHaveAttribute('data-retained', 'true');
+	await page.keyboard.press('Escape');
+	await expect(picker).toBeHidden();
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	await expect(picker).toHaveCount(0);
+	expect(errors).toEqual([]);
+});
+
+for (const kind of ['hover', 'selection'] as const) {
+	for (const reason of ['text', 'selection', 'language', 'provider', 'model', 'dispose', 'blur'] as const) {
+		test(`${kind} provider request cancels on ${reason} and rejects late results`, async ({ page }) => {
+			await page.goto('/standalone.html');
+			await page.evaluate(kind => window.ashStandaloneIntegration.prepareLanguageRequest(kind), kind);
+			if (kind === 'hover') {
+				const point = await page.evaluate(() => window.ashStandaloneIntegration.languageHoverPoint());
+				await page.mouse.move(point.x, point.y);
+			} else {
+				await page.keyboard.press('ControlOrMeta+Shift+ArrowRight');
+			}
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests())).toEqual([{ languageId: 'plaintext', aborted: false }]);
+			await page.evaluate(reason => window.ashStandaloneIntegration.changeLanguageRequest(reason), reason);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests())).toEqual([{ languageId: 'plaintext', aborted: true }]);
+			const before = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
+			await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
+			await expect(page.locator('#caller .stanza-editor-hover:not([hidden])')).toHaveCount(0);
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).toEqual(before);
+			await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+		});
+	}
+	test(`${kind} provider uses the current model language`, async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(kind => window.ashStandaloneIntegration.prepareLanguageRequest(kind), kind);
+		await page.evaluate(() => window.ashStandaloneIntegration.changeLanguageRequest('language'));
+		if (kind === 'hover') {
+			const point = await page.evaluate(() => window.ashStandaloneIntegration.languageHoverPoint());
+			await page.mouse.move(point.x, point.y);
+		} else {
+			await page.keyboard.press('ControlOrMeta+Shift+ArrowRight');
+		}
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests())).toEqual([{ languageId: 'typescript', aborted: false }]);
+		await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
+		if (kind === 'hover') {
+			await expect(page.locator('#caller .stanza-editor-hover')).toHaveText('hover: typescript');
+		} else {
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).selection).toBe('[1,1 -> 1,13]');
+		}
+		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	});
+}
+
+for (const kind of ['definition', 'call', 'type', 'symbols'] as const) {
+	const shortcut = { definition: 'F12', call: 'Alt+Shift+h', type: 'Alt+Shift+t', symbols: 'ControlOrMeta+Shift+o' }[kind];
+	for (const reason of ['text', 'selection', 'language', 'provider', 'model', 'dispose', 'blur'] as const) {
+		test(`${kind} provider cancels on ${reason} without applying late results`, async ({ page }) => {
+			await page.goto('/standalone.html?symbolIconsOff');
+			await page.evaluate(kind => window.ashStandaloneIntegration.prepareLanguageRequest(kind), kind);
+			await page.keyboard.press(shortcut);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().slice(0, 1))).toEqual([{ languageId: 'plaintext', aborted: false }]);
+			await page.evaluate(reason => window.ashStandaloneIntegration.changeLanguageRequest(reason), reason);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().slice(0, 1))).toEqual([{ languageId: 'plaintext', aborted: true }]);
+			const before = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
+			await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).toEqual(before);
+			await expect(page.locator('#caller .stanza-editor-peek-view, #caller .stanza-editor-goto-symbol:not([hidden])')).toHaveCount(0);
+			await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+		});
+	}
+	test(`${kind} provider queries the current language and applies the current response`, async ({ page }) => {
+		await page.goto('/standalone.html?symbolIconsOff');
+		await page.evaluate(kind => window.ashStandaloneIntegration.prepareLanguageRequest(kind), kind);
+		await page.evaluate(() => window.ashStandaloneIntegration.changeLanguageRequest('language'));
+		await page.keyboard.press(shortcut);
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().slice(0, 1))).toEqual([{ languageId: 'typescript', aborted: false }]);
+		await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
+		if (kind === 'definition') {
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).selection).toBe('[1,7 -> 1,13]');
+		} else if (kind === 'symbols') {
+			await expect(page.locator('#caller .stanza-editor-goto-symbol-item')).toHaveText('second');
+		} else {
+			await expect(page.locator('#caller .stanza-editor-language-hierarchy-item')).toHaveText('root');
+			await page.locator('#caller .stanza-editor-language-hierarchy-expand').first().click();
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests())).toHaveLength(2);
+			await page.keyboard.press('Escape');
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests())).every(request => request.aborted)).toBe(true);
+			await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(1));
+			await expect(page.locator('#caller .stanza-editor-peek-view')).toHaveCount(0);
+		}
+		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	});
+}
+
+
+test('signature trigger metadata distinguishes initial and repeated triggers and carries active hints', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints(true, true, ['['], [':']));
+	await page.keyboard.type('(:');
+	await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 20)));
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests())).toEqual([]);
+	await page.keyboard.type('[');
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(1);
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests()))[0]!.context).toEqual({ kind: 'triggerCharacter', triggerCharacter: '[', isRetrigger: false });
+	await page.evaluate(() => window.ashStandaloneIntegration.finishParameterHintRequest(0, 'hints'));
+	await page.keyboard.type(':');
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(2);
+	expect((await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests()))[1]!.context).toMatchObject({ kind: 'triggerCharacter', triggerCharacter: ':', isRetrigger: true, activeSignatureHelp: { signatures: [{ label: 'call(value): plaintext' }] } });
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+test('signature providers without trigger metadata are invoked explicitly', async ({ page }) => {
+	await page.goto('/standalone.html');
+	await page.evaluate(() => window.ashStandaloneIntegration.prepareParameterHints(true, true, []));
+	await page.keyboard.type('(');
+	await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 20)));
+	expect(await page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests())).toEqual([]);
+	await page.keyboard.press('ControlOrMeta+Shift+Space');
+	await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readParameterHintRequests().length)).toBe(1);
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+
+for (const kind of ['rename', 'quickFix'] as const) {
+	test(`${kind} public action uses its editor and tracks writable provider availability`, async ({ page }) => {
+		await page.goto('/standalone.html');
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLanguageActions()))[kind]).toBe(false);
+		await page.evaluate(kind => {
+			if (kind === 'rename') window.ashStandaloneIntegration.prepareRenameRequests('prepare');
+			else window.ashStandaloneIntegration.prepareCodeActionRequests('query');
+			window.ashStandaloneIntegration.changeLanguageRequest('blur');
+		}, kind);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLanguageActions()))[kind]).toBe(true);
+		await page.evaluate(kind => window.ashStandaloneIntegration.invokeLanguageAction(`editor.action.${kind}`), kind);
+		await expect.poll(() => page.evaluate(kind => kind === 'rename'
+			? window.ashStandaloneIntegration.readRenameRequests().length
+			: window.ashStandaloneIntegration.readCodeActionRequests().length, kind)).toBe(1);
+		if (kind === 'rename') {
+			await page.evaluate(() => window.ashStandaloneIntegration.finishRenameRequest(0, 'edit'));
+			await expect(page.locator('#caller .stanza-editor-rename-input')).toBeFocused();
+			await page.evaluate(() => window.ashStandaloneIntegration.invokeLanguageAction('cancelRenameInput'));
+			await expect(page.locator('#caller .stanza-editor-rename')).toBeHidden();
+		} else {
+			await page.evaluate(() => window.ashStandaloneIntegration.finishCodeActionRequest(0, 'edit'));
+			await expect(page.locator('#caller .stanza-editor-code-action')).toBeVisible();
+		}
+		await page.evaluate(kind => {
+			if (kind === 'rename') window.ashStandaloneIntegration.changeRenameState('readonly');
+			else window.ashStandaloneIntegration.changeCodeActionState('readonly');
+		}, kind);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLanguageActions()))[kind]).toBe(false);
+		await page.evaluate(kind => window.ashStandaloneIntegration.invokeLanguageAction(`editor.action.${kind}`), kind);
+		expect(await page.evaluate(kind => kind === 'rename'
+			? window.ashStandaloneIntegration.readRenameRequests().length
+			: window.ashStandaloneIntegration.readCodeActionRequests().length, kind)).toBe(1);
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
 }

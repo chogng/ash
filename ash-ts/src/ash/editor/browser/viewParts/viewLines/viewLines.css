@@ -1,31 +1,6 @@
-/* Uncomment to see lines flashing when they're painted */
-/*.stanza-editor .view-lines > .view-line {
-	background-color: none;
-	animation-name: flash-background;
-	animation-duration: 800ms;
-}
-@keyframes flash-background {
-	0%   { background-color: lightgreen; }
-	100% { background-color: none }
-}*/
-
-.mtkcontrol {
-	color: rgb(255, 255, 255) !important;
-	background: rgb(150, 0, 0) !important;
-}
-
-.mtkoverflow {
-	background-color: var(--vscode-button-background, var(--vscode-editor-background));
-	color: var(--vscode-button-foreground, var(--vscode-editor-foreground));
-	border-width: 1px;
-	border-style: solid;
-	border-color: var(--vscode-contrastBorder);
-	border-radius: 2px;
-	padding: 4px;
-	cursor: pointer;
-}
-.mtkoverflow:hover {
-	background-color: var(--vscode-button-hoverBackground);
+.stanza-editor .view-line .mtkcontrol {
+	color: var(--ash-description-foreground);
+	background: var(--ash-editor-background);
 }
 
 .stanza-editor.no-user-select .lines-content,
@@ -41,7 +16,6 @@
 .stanza-editor.mac .view-lines:hover {
 	user-select: text;
 	-webkit-user-select: text;
-	-ms-user-select: text;
 }
 
 .stanza-editor.enable-user-select {
@@ -71,17 +45,10 @@
 }
 
 .stanza-editor .mtkw {
-	color: var(--vscode-editorWhitespace-foreground) !important;
+	color: var(--ash-editor-whitespace-foreground) !important;
 }
 
 .stanza-editor .mtkz {
 	display: inline-block;
-	color: var(--vscode-editorWhitespace-foreground) !important;
+	color: var(--ash-editor-whitespace-foreground) !important;
 }
-
-/* TODO@tokenization bootstrap fix */
-/*.stanza-editor .view-line > span > span {
-	float: none;
-	min-height: inherit;
-	margin-left: inherit;
-}*/

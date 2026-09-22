@@ -1,8 +1,25 @@
 import { registerColor, transparent } from '../../../platform/theme/common/colorRegistry.js';
-import { editorBackground } from '../../../platform/theme/common/colors/workbenchColors.js';
+import { editorBackground, editorForeground } from '../../../platform/theme/common/colors/workbenchColors.js';
+
+import { selectionBackground } from '../../../platform/theme/common/colors/componentColors.js';
+import { descriptionForeground, mutedForeground } from '../../../platform/theme/common/colors/baseColors.js';
 
 const owner = 'editor.presentation';
 const alias = (id: string, value: string, description: string): string => registerColor(id, { dark: value, light: value }, { description, owner });
+
+function editorColor(id: string, value: string, description: string): string {
+	return registerColor(id, { dark: value, light: value, highContrastDark: value, highContrastLight: value }, { description, owner });
+}
+
+export const editorSelectionBackground = editorColor('editor.selectionBackground', selectionBackground, 'Background of editor text selections.');
+export const editorInactiveSelection = registerColor('editor.inactiveSelectionBackground', {
+	dark: transparent(selectionBackground, 0.65), light: transparent(selectionBackground, 0.65),
+	highContrastDark: selectionBackground, highContrastLight: selectionBackground,
+}, { description: 'Background of selections in an unfocused editor.', owner });
+export const editorGutter = editorColor('editorGutter.background', editorBackground, 'Background of the editor gutter.');
+export const editorWhitespace = editorColor('editorWhitespace.foreground', mutedForeground, 'Foreground of visible editor whitespace.');
+export const editorLineNumbers = editorColor('editorLineNumber.foreground', descriptionForeground, 'Foreground of editor line numbers.');
+export const editorActiveLineNumber = editorColor('editorLineNumber.activeForeground', editorForeground, 'Foreground of the current editor line number.');
 
 export const editorCursorForeground = registerColor(
 	'editorCursor.foreground',

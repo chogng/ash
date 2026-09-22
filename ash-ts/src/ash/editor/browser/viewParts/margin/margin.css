@@ -1,3 +1,11 @@
+/* Both gutter surfaces follow the dimensions written by Margin. */
 .stanza-editor .margin {
-	background-color: var(--vscode-editorGutter-background);
+	background: var(--ash-editor-gutter-background);
+	user-select: none;
+}
+
+.stanza-editor .margin > .glyph-margin {
+	position: absolute;
+	inset-block-start: 0;
+	pointer-events: none;
 }

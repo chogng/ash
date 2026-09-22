@@ -43,7 +43,6 @@ import { ViewModelDecorations } from './viewModelDecorations.js';
 import { type IViewModelLines, ViewModelLinesFromModelAsIs, ViewModelLinesFromProjectedModel } from './viewModelLines.js';
 import { type TextModelEditSource } from '../textModelEditSource.js';
 
-const cursorOwners = new WeakMap<ViewModel, CursorsController>();
 
 /** Owns editor-instance cursor, line projection, layout, and their events. */
 export class ViewModel extends Disposable implements IViewModel {
@@ -94,7 +93,6 @@ export class ViewModel extends Disposable implements IViewModel {
 		this.coordinatesConverter = this.lines.createCoordinatesConverter();
 		this.cursorConfig = new CursorConfiguration(model.getLanguageId(), model.getOptions(), configuration, this.languageConfigurationService);
 		this.cursor = this._register(new CursorsController(model, this, this.coordinatesConverter, this.cursorConfig));
-		cursorOwners.set(this, this.cursor);
 		this.previousSelections = [...this.cursor.getSelections()];
 		this.viewLayout = this._register(new ViewLayout(configuration, this.lines.getViewLineCount(), [], scheduleAtNextAnimationFrame));
 		this.decorations = this._register(new ViewModelDecorations(editorId, model, configuration, this.lines, this.coordinatesConverter));
@@ -728,11 +726,4 @@ export class ViewModel extends Disposable implements IViewModel {
 
 export interface IBatchableTarget {
 	batchChanges<T>(callback: () => T): T;
-}
-
-/** @internal Used only by browser input code that has not yet moved to ViewModel commands. */
-export function getViewModelCursorController(viewModel: ViewModel): CursorsController {
-	const cursor = cursorOwners.get(viewModel);
-	if (!cursor) throw new ReferenceError('ViewModel cursor is unavailable');
-	return cursor;
 }

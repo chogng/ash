@@ -4,13 +4,13 @@ import { localize } from '../../../../nls.js';
 import { Color, RGBA } from '../../../../base/common/color.js';
 import { type ColorPickerModel } from './colorPickerModel.js';
 
-export interface EditorColorPickerDialogPosition {
+interface ColorPickerPosition {
 	readonly left: number;
 	readonly top: number;
 }
 
 /** Owns the retained color controls and projects one replaceable ColorPickerModel. */
-export class EditorColorPickerDialog extends Disposable {
+export class ColorPickerWidget extends Disposable {
 	readonly domNode: HTMLDivElement;
 	private readonly preview: HTMLDivElement;
 	private readonly presentationSelect: HTMLSelectElement;
@@ -68,6 +68,7 @@ export class EditorColorPickerDialog extends Disposable {
 			),
 			h(ownerDocument, 'div', { className: 'stanza-editor-color-picker-actions' }, cancelButton, this.applyButton),
 		);
+		host.append(this.domNode);
 		for (const input of [this.hueInput, this.saturationInput, this.lightnessInput, this.alphaInput]) {
 			this._register(addDisposableListener(input, 'input', () => this.handleColorInput()));
 		}
@@ -87,7 +88,7 @@ export class EditorColorPickerDialog extends Disposable {
 		return !this.domNode.hidden;
 	}
 
-	show(model: ColorPickerModel, position: EditorColorPickerDialogPosition, focus: boolean): void {
+	show(model: ColorPickerModel, position: ColorPickerPosition, focus: boolean): void {
 		this.modelListeners.clear();
 		this.model = model;
 		this.modelListeners.add(model.onDidChangeColor(color => this.renderColor(color)));
@@ -158,6 +159,7 @@ export class EditorColorPickerDialog extends Disposable {
 	}
 
 	protected override disposeCore(): void {
+		this.hide();
 		this.domNode.remove();
 		super.disposeCore();
 	}

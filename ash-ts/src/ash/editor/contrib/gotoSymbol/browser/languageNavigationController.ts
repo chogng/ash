@@ -7,8 +7,11 @@ import { Selection } from "../../../common/core/selection.js";
 import { type Position } from "../../../common/core/position.js";
 import { type View } from "../../../browser/view.js";
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
-import { EditorPeekViewWidget } from "../../peekView/browser/editorPeekViewWidget.js";
-import { type LanguageNavigationService } from "../common/languageNavigation.js";
+import { PeekViewWidget } from "../../peekView/browser/peekView.js";
+import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
+import { type LanguageFeatureRegistry } from '../../../common/languageFeatureRegistry.js';
+import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent, type LanguageLocationRequest } from '../../../common/languages.js';
+import { Range } from '../../../common/core/range.js';
 import { type LanguageLocation } from "../../../common/languages.js";
 
 export type LanguageNavigationKind = "definition" | "declaration" | "implementation" | "typeDefinition" | "references";
@@ -22,18 +25,25 @@ export class LanguageNavigationController extends Disposable {
 		private readonly input: HTMLElement,
 		private readonly editor: ICodeEditor,
 		private readonly viewport: View,
-		private readonly service: LanguageNavigationService,
 		private readonly resource: URI,
-		private readonly languageId: string,
 		private readonly openLocation: ((location: LanguageLocation) => void | Promise<void>) | undefined,
 		private readonly onError: (error: unknown) => void,
+		@ILanguageFeaturesService private readonly languageFeatures: ILanguageFeaturesService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super();
 		if (viewport.textModel !== editor.getModel()) throw new TypeError("Language navigation dependencies must share one text model");
 		this._register(addDisposableListener(input, "keydown", event => this.handleKeydown(event)));
 		this._register(viewport.textModel.onDidChangeContent(() => this.closePeek()));
-		this._register(toDisposable(() => this.cancelRequest()));
+		this._register(toDisposable(() => this.closePeek()));
+		this._register(viewport.textModel.onDidChangeLanguage(() => this.closePeek()));
+		this._register(viewport.textModel.onWillDispose(() => this.closePeek()));
+		this._register(editor.onDidChangeCursorSelection(() => this.closePeek()));
+		this._register(editor.onDidBlurEditorWidget(() => this.closePeek()));
+		for (const registry of [languageFeatures.definitionProvider, languageFeatures.declarationProvider,
+			languageFeatures.implementationProvider, languageFeatures.typeDefinitionProvider, languageFeatures.referenceProvider]) {
+			this._register(registry.onDidChange(() => this.closePeek()));
+		}
 	}
 
 	navigate(kind: LanguageNavigationKind, options: { readonly peek?: boolean; readonly includeDeclaration?: boolean } = {}): Promise<void> {
@@ -55,7 +65,7 @@ export class LanguageNavigationController extends Disposable {
 	}
 
 	private async requestLocations(kind: LanguageNavigationKind, options: { readonly peek?: boolean; readonly includeDeclaration?: boolean } = {}): Promise<void> {
-		this.cancelRequest();
+		this.closePeek();
 		const request = this.request = new AbortController();
 		const position = this.editor.getSelections()![0]!.getPosition();
 		try {
@@ -76,18 +86,43 @@ export class LanguageNavigationController extends Disposable {
 	}
 
 	private provide(kind: LanguageNavigationKind, position: Position, includeDeclaration: boolean, signal: AbortSignal): Promise<readonly LanguageLocation[]> {
+		const model = this.viewport.textModel;
+		const request = { ...createLanguageFeatureRequest(model, model.getLanguageId(), signal), resource: this.resource, position };
 		switch (kind) {
-			case "definition": return this.service.provideDefinition(this.languageId, position, signal);
-			case "declaration": return this.service.provideDeclaration(this.languageId, position, signal);
-			case "implementation": return this.service.provideImplementation(this.languageId, position, signal);
-			case "typeDefinition": return this.service.provideTypeDefinition(this.languageId, position, signal);
-			case "references": return this.service.provideReferences(this.languageId, position, includeDeclaration, signal);
+			case 'definition': return this.collect(request, this.languageFeatures.definitionProvider, provider => provider.provideDefinition(request, signal));
+			case 'declaration': return this.collect(request, this.languageFeatures.declarationProvider, provider => provider.provideDeclaration(request, signal));
+			case 'implementation': return this.collect(request, this.languageFeatures.implementationProvider, provider => provider.provideImplementation(request, signal));
+			case 'typeDefinition': return this.collect(request, this.languageFeatures.typeDefinitionProvider, provider => provider.provideTypeDefinition(request, signal));
+			case 'references': return this.collect(request, this.languageFeatures.referenceProvider, provider => provider.provideReferences({ ...request, includeDeclaration }, signal));
 		}
 	}
 
+	private async collect<T>(request: LanguageLocationRequest, registry: LanguageFeatureRegistry<T>, provide: (provider: T) => readonly LanguageLocation[] | Promise<readonly LanguageLocation[]>): Promise<readonly LanguageLocation[]> {
+		const locations: LanguageLocation[] = [];
+		for (const provider of registry.ordered(request.model)) {
+			if (!isLanguageFeatureRequestCurrent(request)) {
+				return [];
+			}
+			try {
+				const values = await provide(provider);
+				if (!isLanguageFeatureRequestCurrent(request)) {
+					return [];
+				}
+				locations.push(...values.map(normalizeLanguageLocation));
+			} catch (error) {
+				if (!request.signal.aborted) {
+					this.onError(error);
+				}
+			}
+		}
+		return deduplicateLocations(locations);
+	}
+
 	private showPeek(kind: LanguageNavigationKind, anchor: Position, locations: readonly LanguageLocation[]): void {
-		this.closePeek();
-		const widget = this.peek.add(new EditorPeekViewWidget(this.editor, anchor, `${locations.length} ${navigationLabel(kind)}${locations.length === 1 ? "" : "s"}`));
+		this.peek.clear();
+		const widget = this.peek.add(new PeekViewWidget(this.editor));
+		widget.setTitle(`${locations.length} ${navigationLabel(kind)}${locations.length === 1 ? "" : "s"}`);
+		this.peek.add(widget.onDidClose(() => this.closePeek()));
 		const list = h(widget.element.ownerDocument, "div");
 		list.className = "stanza-editor-language-locations";
 		list.setAttribute("role", "listbox");
@@ -120,14 +155,9 @@ export class LanguageNavigationController extends Disposable {
 			preview.revealRange(range);
 		}
 		widget.setBody(body);
-		widget.show();
+		widget.show(anchor);
 		(list.firstElementChild as HTMLButtonElement | null)?.focus({ preventScroll: true });
-		this.peek.add(addDisposableListener(widget.element, "keydown", event => {
-			if (event.key !== "Escape") return;
-			stopEvent(event);
-			this.closePeek();
-			this.input.focus({ preventScroll: true });
-		}));
+
 		this.viewport.announceAccessibilityStatus(`${locations.length} ${navigationLabel(kind)}${locations.length === 1 ? "" : "s"} found.`);
 	}
 
@@ -150,6 +180,7 @@ export class LanguageNavigationController extends Disposable {
 	}
 
 	private closePeek(): void {
+		this.cancelRequest();
 		this.peek.clear();
 	}
 
@@ -169,4 +200,25 @@ function navigationLabel(kind: LanguageNavigationKind): string {
 function resourceLabel(resource: URI): string {
 	const path = decodeURIComponent(resource.path).replace(/\/+$/, "");
 	return path.slice(path.lastIndexOf("/") + 1) || resource.toString();
+}
+
+function normalizeLanguageLocation(location: LanguageLocation): LanguageLocation {
+	if (!location || typeof location !== "object" || !location.resource || !(location.range instanceof Object)) throw new TypeError("Language location requires a resource and range");
+	const range = Range.fromPositions(location.range.getStartPosition(), location.range.getEndPosition());
+	const selectionRange = location.selectionRange ? Range.fromPositions(location.selectionRange.getStartPosition(), location.selectionRange.getEndPosition()) : undefined;
+	if (selectionRange && !range.containsRange(selectionRange)) throw new RangeError("Language location selection must be contained by its target range");
+	return Object.freeze({ resource: location.resource, range, ...(selectionRange ? { selectionRange } : {}) });
+}
+
+function deduplicateLocations(locations: readonly LanguageLocation[]): readonly LanguageLocation[] {
+	const keys = new Set<string>();
+	const result: LanguageLocation[] = [];
+	for (const location of locations) {
+		const selection = location.selectionRange ?? location.range;
+		const key = `${location.resource.toString()}\u0000${location.range.getStartPosition().lineNumber}:${location.range.getStartPosition().column}:${location.range.getEndPosition().lineNumber}:${location.range.getEndPosition().column}:${selection.getStartPosition().lineNumber}:${selection.getStartPosition().column}:${selection.getEndPosition().lineNumber}:${selection.getEndPosition().column}`;
+		if (keys.has(key)) continue;
+		keys.add(key);
+		result.push(location);
+	}
+	return Object.freeze(result);
 }

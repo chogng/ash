@@ -98,6 +98,9 @@ test('textarea fallback routes type and composition through the standard input p
 	const editor = page.locator('.stanza-editor');
 	const input = page.locator('textarea.stanza-editor-input');
 	await input.focus();
+	await expect(input).toHaveCSS('position', 'absolute');
+	await expect(input).toHaveCSS('opacity', '0');
+	await expect(input).toHaveCSS('width', '1px');
 	await page.evaluate(() => window.ashTextModelIntegration.setCursors([{ lineIndex: 0, columnIndex: 0 }]));
 	await page.keyboard.type('x');
 	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toMatch(/^xfn main/u);
@@ -108,6 +111,8 @@ test('textarea fallback routes type and composition through the standard input p
 		element.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '' }));
 	});
 	await expect(editor).toHaveClass(/\bcomposing\b/u);
+	await expect(input).toHaveCSS('opacity', '1');
+	await expect(input).toBeFocused();
 	await input.evaluate(element => {
 		const textArea = element as HTMLTextAreaElement;
 		textArea.value = 'xy';
@@ -125,6 +130,7 @@ test('textarea fallback routes type and composition through the standard input p
 		element.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: 'xy' }));
 	});
 	await expect(editor).not.toHaveClass(/\bcomposing\b/u);
+	await expect(input).toHaveCSS('opacity', '0');
 	await page.keyboard.press('ControlOrMeta+z');
 	await expect.poll(() => page.evaluate(() => window.ashTextModelIntegration.getValue())).toMatch(/^fn main/u);
 });
@@ -140,10 +146,10 @@ test("cursor layer retains nodes, animates stable moves, and resolves multi-curs
 	await retainedCaret.evaluate(element => { element.dataset.retainedIdentity = "true"; });
 	const lineHeight = await editor.locator('.view-line').first().evaluate(element => element.getBoundingClientRect().height);
 
-	const stableMove = await page.evaluate(() => {
-		window.ashTextModelIntegration.setCursors([{ lineIndex: 1, columnIndex: 2 }]);
-		const caret = document.querySelector<HTMLElement>('.stanza-editor-caret[data-selection-index="0"]');
-		if (!caret) throw new Error("Moved cursor is missing");
+	await page.locator('.stanza-editor-input').focus();
+	await page.keyboard.press('ArrowDown');
+	const stableMove = await retainedCaret.evaluate(element => {
+		const caret = element as HTMLElement;
 		return { top: caret.style.top, transitionProperty: caret.style.transitionProperty };
 	});
 	expect(stableMove).toEqual({ top: `${lineHeight}px`, transitionProperty: "" });
@@ -621,6 +627,57 @@ test('editor-owned colors preserve focused cursors, line borders and rulers in a
 		await expect(line).toHaveCSS('border-top-color', palette.line);
 		await expect(line).toHaveCSS('border-top-width', palette.border);
 		await expect(ruler).toHaveCSS('background-color', palette.ruler);
+	}
+});
+
+test('selection, gutter, whitespace and line numbers resolve editor colors in all four themes', async ({ page }) => {
+	await page.goto('/textModel.html');
+	await page.evaluate(() => {
+		window.ashTextModelIntegration.setValue('alpha beta\nsecond line');
+		window.ashTextModelIntegration.updateOptions({ renderWhitespace: 'all', lineNumbers: 'on' });
+		window.ashTextModelIntegration.setCursors([{ lineIndex: 0, columnIndex: 0 }]);
+	});
+	const editor = page.locator('.stanza-editor');
+	const input = page.locator('.stanza-editor-input');
+	await input.focus();
+	await page.keyboard.press('Shift+ArrowRight');
+	await expect(page.locator('.stanza-editor-selection').first()).toBeVisible();
+	await expect(page.locator('.stanza-editor-whitespace').first()).toBeVisible();
+	for (const theme of ['dark', 'light', 'contrast', 'contrastLight'] as const) {
+		await page.evaluate(theme => window.ashTextModelIntegration.setTheme(theme), theme);
+		for (const focused of [true, false]) {
+			if (focused) await input.focus();
+			else await input.blur();
+			await expect(editor.locator('.view-overlays').first()).toHaveClass(focused ? /\bfocused\b/u : /^(?!.*\bfocused\b)/u);
+			const colors = await editor.evaluate((element, focused) => {
+				const entries = [
+					['.stanza-editor-selection', 'background-color', focused ? '--ash-editor-selection-background' : '--ash-editor-inactive-selection-background'],
+					['.margin', 'background-color', '--ash-editor-gutter-background'],
+					['.stanza-editor-whitespace', 'color', '--ash-editor-whitespace-foreground'],
+					['.line-numbers.active-line-number', 'color', '--ash-editor-line-number-active-foreground'],
+					['.line-numbers:not(.active-line-number)', 'color', '--ash-editor-line-number-foreground'],
+				];
+				return entries.map(([selector, property, token]) => {
+					const target = element.querySelector(selector!);
+					if (!target) throw new Error(`Missing ${selector}`);
+					const probe = element.ownerDocument.createElement('span');
+					probe.style.setProperty(property!, `var(${token})`);
+					element.append(probe);
+					const result = {
+						actual: getComputedStyle(target).getPropertyValue(property!),
+						expected: getComputedStyle(probe).getPropertyValue(property!),
+						registered: getComputedStyle(target).getPropertyValue(token!).trim().length > 0,
+					};
+					probe.remove();
+					return result;
+				});
+			}, focused);
+			for (const color of colors) {
+				expect(color.registered).toBe(true);
+				expect(color.actual).toBe(color.expected);
+				expect(color.actual).not.toBe('rgba(0, 0, 0, 0)');
+			}
+		}
 	}
 });
 

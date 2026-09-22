@@ -106,16 +106,21 @@ class ParameterHintsController extends Disposable {
 		this._register(viewport.textModel.onDidChangeContent(change => {
 			const active = !!this.request || !!this.pending || !this.element.hidden;
 			const pending = this.pending;
+			const activeSignatureHelp = this.hints ?? pending?.activeSignatureHelp;
 			this.hide();
 			if (change.reason !== TextModelChangeReason.Edit || !this.canRequest()) {
 				return;
 			}
 			const inserted = change.changes.length === 1 ? change.changes[0]!.text : '';
-			const triggerIndex = Math.max(inserted.lastIndexOf('('), inserted.lastIndexOf(','));
-			if (triggerIndex >= 0) {
-				this.pending = { kind: 'triggerCharacter', triggerCharacter: inserted[triggerIndex]! };
+			const providers = languageFeaturesService.signatureHelpProvider.ordered(viewport.textModel);
+			const triggerCharacter = [...inserted].reverse().find(character => providers.some(provider =>
+				provider.signatureHelpTriggerCharacters?.includes(character)
+				|| (active && provider.signatureHelpRetriggerCharacters?.includes(character)),
+			));
+			if (triggerCharacter !== undefined) {
+				this.pending = { kind: 'triggerCharacter', triggerCharacter, isRetrigger: active, activeSignatureHelp };
 			} else if (active) {
-				this.pending = pending ?? { kind: 'contentChange' };
+				this.pending = { ...(pending ?? { kind: 'contentChange' }), isRetrigger: active, activeSignatureHelp };
 			}
 			if (this.pending) {
 				this.scheduler.schedule();
@@ -182,6 +187,12 @@ class ParameterHintsController extends Disposable {
 	}
 
 	private async refresh(context: languages.LanguageParameterHintsContext): Promise<void> {
+		const activeSignatureHelp = context.activeSignatureHelp ?? this.hints;
+		context = Object.freeze({
+			...context,
+			isRetrigger: context.isRetrigger ?? (!!this.request || !!this.hints),
+			...(activeSignatureHelp ? { activeSignatureHelp } : {}),
+		});
 		this.hide();
 		const model = this.viewport.textModel;
 		const position = this.editor.getSelections()?.[0]?.getPosition();
@@ -198,6 +209,11 @@ class ParameterHintsController extends Disposable {
 		for (const provider of this.languageFeaturesService.signatureHelpProvider.ordered(model)) {
 			if (!languages.isLanguageFeatureRequestCurrent(request)) {
 				return;
+			}
+			if (context.kind === 'triggerCharacter'
+				&& !provider.signatureHelpTriggerCharacters?.includes(context.triggerCharacter)
+				&& !(context.isRetrigger && provider.signatureHelpRetriggerCharacters?.includes(context.triggerCharacter))) {
+				continue;
 			}
 			try {
 				const value = await provider.provideParameterHints(request, request.signal);

@@ -38,7 +38,6 @@ import { type View } from './view.js';
 import type { BracketGuideSource } from './viewParts/indentGuides/indentGuides.js';
 import { type SemanticTokenSource } from './viewParts/viewLines/viewLine.js';
 import { type IVersionedEditorWorkerClient } from './services/editorWorkerService.js';
-import { type CursorsController } from '../common/cursor/cursor.js';
 import { type IViewModel } from '../common/viewModel.js';
 
 export type ServicesAccessor = InstantiationServicesAccessor;
@@ -537,7 +536,6 @@ export interface TextEditorContributionConfigurationContext extends SharedTextCo
 	>;
 	readonly renderDiagnosticDecorations: boolean;
 	readonly viewModel: IViewModel;
-	readonly selectionController: CursorsController;
 	readonly provideService: <T>(capability: ServiceIdentifier<T>, value: T) => void;
 	readonly setSemanticTokenSource: (source: SemanticTokenSource) => void;
 	readonly setBracketGuideSource: (source: BracketGuideSource) => void;
@@ -582,7 +580,6 @@ export interface TextEditorContributionContext extends SharedTextContext {
 	readonly controller: ViewController;
 	readonly view: View;
 	readonly viewModel: IViewModel;
-	readonly selectionController: CursorsController;
 	readonly onDidExecuteCommand: Event<EditorCommandEvent>;
 	readonly executeCommand: EditorCommandExecutor;
 	readonly registerBeforeSave?: (hook: () => void | Promise<void>) => IDisposable;

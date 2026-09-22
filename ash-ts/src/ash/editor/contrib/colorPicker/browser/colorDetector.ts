@@ -30,7 +30,6 @@ export class ColorDetector extends Disposable {
 		private readonly editor: ICodeEditor,
 		private readonly model: TextModel,
 		private readonly service: ColorService,
-		private readonly languageId: string,
 		private readonly targetWindow: Window,
 		private readonly options: ColorDetectorOptions,
 		private readonly onError: (error: unknown) => void,
@@ -41,7 +40,18 @@ export class ColorDetector extends Disposable {
 		this.dynamicCssRules = this._register(new DynamicCssRules(editor));
 		this.colorDecorationClassRefs = this._register(new DisposableStore());
 		this._register(model.onDidChangeContent(() => this.scheduleRefresh(250)));
-		this._register(service.onDidChange(() => this.scheduleRefresh(0)));
+		const refreshProviders = () => {
+			this.decorations.clear();
+			this.colorDecorationClassRefs.clear();
+			this.detectedCount = 0;
+			this.scheduleRefresh(0);
+		};
+		this._register(model.onDidChangeLanguage(refreshProviders));
+		this._register(model.onWillDispose(() => {
+			this.request?.abort();
+			this.refreshTimer.clear();
+		}));
+		this._register(service.onDidChange(refreshProviders));
 		this.scheduleRefresh(0);
 	}
 
@@ -69,7 +79,7 @@ export class ColorDetector extends Disposable {
 			return;
 		}
 		const request = this.request = new AbortController();
-		void this.service.provideDocumentColors(this.languageId, this.options.defaultColorDecorators, request.signal).then(colors => {
+		void this.service.provideDocumentColors(this.model.getLanguageId(), this.options.defaultColorDecorators, request.signal).then(colors => {
 			if (request.signal.aborted || this.isDisposed) return;
 			this.detectedCount = colors.length;
 			this.colorDecorationClassRefs.clear();
@@ -100,6 +110,8 @@ export class ColorDetector extends Disposable {
 	}
 
 	private scheduleRefresh(delay: number): void {
+		this.request?.abort();
+		if (this.model.isDisposed()) return;
 		this.refreshTimer.value = disposableWindowTimeout(this.targetWindow, () => {
 			this.refreshTimer.clear();
 			this.refresh();

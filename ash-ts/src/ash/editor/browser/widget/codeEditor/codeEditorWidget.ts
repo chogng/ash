@@ -7,7 +7,6 @@ import { type IMouseWheelEvent } from '../../../../base/browser/mouseEvent.js';
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
-import { CursorsController } from "../../../common/cursor/cursor.js";
 import { type IDimension } from '../../../common/core/2d/dimension.js';
 import { Selection, type ISelection } from "../../../common/core/selection.js";
 import { Position } from "../../../common/core/position.js";
@@ -42,7 +41,7 @@ import { type URI } from '../../../../base/common/uri.js';
 import { type IClipboardCopyEvent, type IClipboardPasteEvent } from '../../controller/editContext/clipboardUtils.js';
 import { DOMLineBreaksComputerFactory } from '../../view/domLineBreaksComputer.js';
 import { MonospaceLineBreaksComputerFactory } from '../../../common/viewModel/monospaceLineBreaksComputer.js';
-import { getViewModelCursorController, ViewModel } from '../../../common/viewModel/viewModelImpl.js';
+import { ViewModel } from '../../../common/viewModel/viewModelImpl.js';
 import { OutgoingViewModelEventKind } from '../../../common/viewModelEventDispatcher.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
@@ -114,7 +113,6 @@ export type CodeEditorViewState = ICodeEditorViewState;
 let decorationOwnerPool = 0;
 
 interface CodeEditorModelState {
-	selections: CursorsController;
 	view: View;
 	userInputEvents: ViewController['userInputEvents'];
 	contributions: CodeEditorContributions;
@@ -223,13 +221,6 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		const resource = this.activeState[key];
 		if (resource === undefined) throw new ReferenceError(`Code editor model resource '${key}' is not ready`);
 		return resource;
-	}
-
-	public get selections(): CursorsController {
-		return this.readModelResource('selections');
-	}
-	private set selections(value: CursorsController) {
-		this.activeState.selections = value;
 	}
 	public get controller(): ViewController {
 		return this.view.controller;
@@ -362,7 +353,6 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				attachedView,
 				{ batchChanges: callback => callback() },
 			));
-			this.selections = getViewModelCursorController(this.viewModel);
 			modelStore.add(this.viewModel.onEvent(event => {
 				if (event.kind === OutgoingViewModelEventKind.ModelContentChanged) {
 					this.changeEmitter.fire(event.event);
@@ -406,7 +396,6 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				options,
 				model: options.model,
 				viewModel: this.viewModel,
-				selectionController: this.selections,
 				editorWorker,
 				languageId: options.languageId,
 				languageFeaturesService,
@@ -533,7 +522,6 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				controller: this.controller,
 				view: this.view,
 				viewModel: this.viewModel,
-				selectionController: this.selections,
 				onLanguageError,
 				onDidExecuteCommand: commandEmitter.event,
 				executeCommand,
@@ -1065,11 +1053,13 @@ class EditorContextKeysManager extends Disposable {
 		const documentFormatting = EditorContextKeys.hasDocumentFormattingProvider.bindTo(contextKeyService);
 		const selectionFormatting = EditorContextKeys.hasDocumentSelectionFormattingProvider.bindTo(contextKeyService);
 		const signatureHelp = EditorContextKeys.hasSignatureHelpProvider.bindTo(contextKeyService);
+		const rename = EditorContextKeys.hasRenameProvider.bindTo(contextKeyService);
+		const codeActions = EditorContextKeys.hasCodeActionsProvider.bindTo(contextKeyService);
 		this._register(toDisposable(() => {
 			for (const key of [
 				this.editorSimpleInput, this.editorFocus, this.textInputFocus, this.editorTextFocus,
 				this.editorReadonly, this.hasMultipleSelections, this.hasNonEmptySelection,
-				this.isComposing, this.languageId, documentFormatting, selectionFormatting, signatureHelp,
+				this.isComposing, this.languageId, documentFormatting, selectionFormatting, signatureHelp, rename, codeActions,
 			]) {
 				key.reset();
 			}
@@ -1079,11 +1069,15 @@ class EditorContextKeysManager extends Disposable {
 			selectionFormatting.set(hasRangeProvider);
 			documentFormatting.set(hasRangeProvider || languageFeaturesService.documentFormattingEditProvider.has(model));
 			signatureHelp.set(languageFeaturesService.signatureHelpProvider.has(model));
+			rename.set(languageFeaturesService.renameProvider.has(model));
+			codeActions.set(languageFeaturesService.codeActionProvider.has(model));
 			this.languageId.set(model.getLanguageId());
 		};
 		this._register(languageFeaturesService.documentFormattingEditProvider.onDidChange(updateLanguageFeatures));
 		this._register(languageFeaturesService.documentRangeFormattingEditProvider.onDidChange(updateLanguageFeatures));
 		this._register(languageFeaturesService.signatureHelpProvider.onDidChange(updateLanguageFeatures));
+		this._register(languageFeaturesService.renameProvider.onDidChange(updateLanguageFeatures));
+		this._register(languageFeaturesService.codeActionProvider.onDidChange(updateLanguageFeatures));
 		this._register(model.onDidChangeLanguage(updateLanguageFeatures));
 		updateLanguageFeatures();
 		this.updateConfiguration();

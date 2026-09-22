@@ -23,7 +23,7 @@ import { ILanguageFeaturesService } from '../../../src/ash/editor/common/service
 import { StandaloneServices } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
 import { IMarkerService, MarkerSeverity } from '../../../src/ash/platform/markers/common/markers.js';
 import { Color } from '../../../src/ash/base/common/color.js';
-import { TokenizationRegistry } from '../../../src/ash/editor/common/languages.js';
+import { type LanguageFeatureRequest, TokenizationRegistry } from '../../../src/ash/editor/common/languages.js';
 import * as stanza from '../../../src/ash/editor/editor.main.js';
 import { EditorOption } from '../../../src/ash/editor/common/config/editorOptions.js';
 import { ScrollType } from '../../../src/ash/editor/common/editorCommon.js';
@@ -122,8 +122,18 @@ interface ParameterHintRequestState {
 	aborted: boolean;
 }
 
+type LanguageRequestKind = 'hover' | 'selection' | 'definition' | 'call' | 'type' | 'symbols';
+type LanguageRequestChange = 'text' | 'selection' | 'language' | 'provider' | 'model' | 'dispose' | 'blur';
 interface StandaloneHarness {
-	prepareParameterHints(enabled?: boolean, cycle?: boolean): void;
+	prepareColorPicker(): void;
+	invokeLanguageAction(id: string): void;
+	readLanguageActions(): { rename: boolean; quickFix: boolean };
+	prepareLanguageRequest(kind: LanguageRequestKind): void;
+	languageHoverPoint(): { x: number; y: number };
+	readLanguageRequests(): { languageId: string; aborted: boolean }[];
+	finishLanguageRequest(index: number): Promise<void>;
+	changeLanguageRequest(reason: LanguageRequestChange): void;
+	prepareParameterHints(enabled?: boolean, cycle?: boolean, triggers?: readonly string[], retriggers?: readonly string[]): void;
 	readParameterHintRequests(): ParameterHintRequestState[];
 	finishParameterHintRequest(index: number, outcome: 'hints' | 'empty' | 'error', hints?: stanza.LanguageParameterHints): Promise<void>;
 	runParameterHintCommand(id: string, global?: boolean): Promise<void>;
@@ -301,16 +311,22 @@ const openedLinks: string[] = [];
 const callerEditor = stanza.editor.create(callerContainer, {
 	model: callerModel,
 	placeholder: 'Caller model',
+	showSymbolIcons: !new URL(location.href).searchParams.has('symbolIconsOff'),
 	onOpenLink: target => { openedLinks.push(target); },
 	inlayHints: { enabled: new URL(location.href).searchParams.has('inlayHintsOff') ? 'off' : 'on' },
 });
-const ownedEditor = stanza.editor.create(ownedContainer, { value: 'owned', language: 'plaintext', resource: ownedResource, placeholder: 'Owned model' });
+const ownedEditor = stanza.editor.create(ownedContainer, {
+	value: 'owned', language: 'plaintext', resource: ownedResource, placeholder: 'Owned model',
+	showSymbolIcons: !new URL(location.href).searchParams.has('symbolIconsOff'),
+});
 callerEditor.layout({ width: callerContainer.clientWidth, height: callerContainer.clientHeight });
 ownedEditor.layout({ width: ownedContainer.clientWidth, height: ownedContainer.clientHeight });
 const ownedModel = ownedEditor.getModel();
 if (!ownedModel) throw new Error('Owned standalone editor has no model');
 let pointerMouseUpEvents = 0;
 const pointerMouseUpListener = callerEditor.onMouseUp(() => { pointerMouseUpEvents += 1; });
+const languageRequestProviders = new DisposableStore();
+const languageRequests: { languageId: string; signal: AbortSignal; finish: () => void }[] = [];
 let referenceRegistration: { dispose(): void } | undefined;
 let parameterHintsRegistration: ReturnType<typeof stanza.languages.registerSignatureHelpProvider> | undefined;
 const parameterHintRequests: {
@@ -430,13 +446,87 @@ let formattingProvider: { dispose(): void } | undefined;
 let bracketTokenRegistration: { dispose(): void } | undefined;
 
 window.ashStandaloneIntegration = {
-	prepareParameterHints: (enabled = true, cycle = true) => {
+	invokeLanguageAction: id => { callerEditor.trigger('test', id, {}); },
+	readLanguageActions: () => ({
+		rename: callerEditor.getAction('editor.action.rename')?.isSupported() ?? false,
+		quickFix: callerEditor.getAction('editor.action.quickFix')?.isSupported() ?? false,
+	}),
+	prepareLanguageRequest: kind => {
+		languageRequestProviders.clear();
+		callerEditor.setValue('first second');
+		callerEditor.setSelection(new stanza.Selection(1, 1, 1, 6));
+		callerEditor.focus();
+		const defer = <T>(request: LanguageFeatureRequest, value: T): Promise<T> => new Promise(resolve => {
+			languageRequests.push({ languageId: request.languageId, signal: request.signal, finish: () => resolve(value) });
+		});
+		if (kind === 'hover') {
+			languageRequestProviders.add(stanza.languages.registerHoverProvider('*', {
+				provideHover: request => defer(request, { contents: [`hover: ${request.languageId}`] }),
+			}));
+		} else if (kind === 'selection') {
+			languageRequestProviders.add(stanza.languages.registerSelectionRangeProvider('*', {
+				provideSelectionRanges: request => defer(request, [new stanza.Range(1, 1, 1, 13)]),
+			}));
+		} else if (kind === 'definition') {
+			languageRequestProviders.add(stanza.languages.registerDefinitionProvider('*', {
+				provideDefinition: request => defer(request, [{ resource: callerResource, range: new stanza.Range(1, 7, 1, 13) }]),
+			}));
+		} else if (kind === 'symbols') {
+			languageRequestProviders.add(stanza.languages.registerDocumentSymbolProvider('*', {
+				provideDocumentSymbols: request => defer(request, [{ name: 'second', kind: 'function', range: new stanza.Range(1, 7, 1, 13), selectionRange: new stanza.Range(1, 7, 1, 13) }]),
+			}));
+		} else {
+			const item = { name: 'root', symbolKind: 12, resource: callerResource, range: new stanza.Range(1, 1, 1, 6), selectionRange: new stanza.Range(1, 1, 1, 6), data: { opaque: 'root' } };
+			if (kind === 'call') {
+				languageRequestProviders.add(stanza.languages.registerCallHierarchyProvider('*', {
+					prepareCallHierarchy: request => defer(request, [item]),
+					provideIncomingCalls: request => defer(request, [{ item: { ...item, name: 'caller' }, fromRanges: [item.range] }]),
+					provideOutgoingCalls: request => defer(request, [{ item: { ...item, name: 'callee' }, fromRanges: [item.range] }]),
+				}));
+			} else {
+				languageRequestProviders.add(stanza.languages.registerTypeHierarchyProvider('*', {
+					prepareTypeHierarchy: request => defer(request, [item]),
+					provideSupertypes: request => defer(request, [{ ...item, name: 'base' }]),
+					provideSubtypes: request => defer(request, [{ ...item, name: 'derived' }]),
+				}));
+			}
+		}
+	},
+	languageHoverPoint: () => {
+		const bounds = callerEditor.getDomNode()!.getBoundingClientRect();
+		const point = callerEditor.getScrolledVisiblePosition(new stanza.Position(1, 3))!;
+		return { x: bounds.left + callerEditor.getLayoutInfo().contentLeft + point.left + 2, y: bounds.top + point.top + point.height / 2 };
+	},
+	readLanguageRequests: () => languageRequests.map(request => ({ languageId: request.languageId, aborted: request.signal.aborted })),
+	finishLanguageRequest: async index => {
+		languageRequests[index]!.finish();
+		await Promise.resolve();
+		await Promise.resolve();
+	},
+	changeLanguageRequest: reason => {
+		if (reason === 'text') callerEditor.setValue('changed');
+		if (reason === 'selection') callerEditor.setPosition(new stanza.Position(1, 2));
+		if (reason === 'language') callerModel.setLanguage('typescript');
+		if (reason === 'provider') languageRequestProviders.clear();
+		if (reason === 'model') callerEditor.setModel(ownedModel);
+		if (reason === 'dispose') callerEditor.dispose();
+		if (reason === 'blur') ownedEditor.focus();
+	},
+	prepareColorPicker: () => {
+		callerEditor.setValue('const color = #ff000080;');
+		callerModel.setLanguage('css');
+		callerEditor.setPosition(new stanza.Position(1, 16));
+		callerEditor.focus();
+	},
+	prepareParameterHints: (enabled = true, cycle = true, triggers = ['(', ','], retriggers = []) => {
 		parameterHintsRegistration?.dispose();
 		callerEditor.setValue('call');
 		callerEditor.setPosition(new stanza.Position(1, 5));
 		callerEditor.updateOptions({ parameterHints: { enabled, cycle } });
 		callerEditor.focus();
 		parameterHintsRegistration = stanza.languages.registerSignatureHelpProvider('*', {
+			signatureHelpTriggerCharacters: triggers,
+			signatureHelpRetriggerCharacters: retriggers,
 			provideParameterHints: (request, signal) => new Promise((resolve, reject) => parameterHintRequests.push({
 				state: {
 					text: request.snapshot.getText(),
@@ -627,7 +717,7 @@ window.ashStandaloneIntegration = {
 		if (reason === 'provider') codeActionRegistration?.dispose();
 		if (reason === 'readonly') callerEditor.updateOptions({ readOnly: true });
 		if (reason === 'model') callerEditor.setModel(ownedModel);
-		if (reason === 'contribution') callerEditor.getContribution('editor.contrib.codeAction')!.dispose();
+		if (reason === 'contribution') callerEditor.getContribution('editor.contrib.codeActionController')!.dispose();
 		if (reason === 'dispose') callerEditor.dispose();
 	},
 	prepareInlayRequests: () => {
@@ -834,7 +924,7 @@ window.ashStandaloneIntegration = {
 					prepareRename: async (_request, signal) => { await wait(signal); return undefined; },
 					provideRenameEdits: () => ({ entries: [] }),
 				})
-				: features.signatureHelpProvider.register('plaintext', { provideParameterHints: async (_request, signal) => { await wait(signal); return undefined; } });
+				: features.signatureHelpProvider.register('plaintext', { signatureHelpTriggerCharacters: ['('], provideParameterHints: async (_request, signal) => { await wait(signal); return undefined; } });
 		try {
 			callerEditor.focus();
 			const hints = kind === 'parameterHints' || kind === 'queuedParameterHints' ? callerEditor.getContribution('editor.controller.parameterHints') : undefined;
@@ -1898,6 +1988,7 @@ window.ashStandaloneIntegration = {
 	},
 	releaseOwned: () => ownedEditor.dispose(),
 	dispose: () => {
+		languageRequestProviders.dispose();
 		parameterHintsRegistration?.dispose();
 		for (const request of parameterHintRequests) request.finish('empty');
 		renameRegistration?.dispose();

@@ -85,12 +85,31 @@ function linkedEditingProvider(invoke: ExtensionHostProviderInvoker): languages.
 
 function parameterHintsProvider(invoke: ExtensionHostProviderInvoker): languages.LanguageParameterHintsProvider {
 	return Object.freeze({
+		signatureHelpTriggerCharacters: Object.freeze(['(', ',']),
 		provideParameterHints: async (request: languages.LanguageParameterHintsRequest, signal: AbortSignal): Promise<languages.LanguageParameterHints | undefined> => normalizeParameterHintsResult(await invoke("parameterHints", featurePayload(request, { position: positionValue(request.position), context: parameterHintsContextValue(request) }), signal)),
 	});
 }
 
 function parameterHintsContextValue(request: languages.LanguageParameterHintsRequest): JsonValue {
-	return request.context.kind === "triggerCharacter" ? Object.freeze({ kind: request.context.kind, triggerCharacter: request.context.triggerCharacter }) : Object.freeze({ kind: request.context.kind });
+	const context = request.context;
+	const hints = context.activeSignatureHelp;
+	return {
+		kind: context.kind,
+		...(context.kind === 'triggerCharacter' ? { triggerCharacter: context.triggerCharacter } : {}),
+		isRetrigger: context.isRetrigger === true,
+		...(hints ? { activeSignatureHelp: {
+			...(hints.activeSignature !== undefined ? { activeSignature: hints.activeSignature } : {}),
+			signatures: hints.signatures.map(signature => ({
+				label: signature.label,
+				...(signature.documentation !== undefined ? { documentation: signature.documentation } : {}),
+				...(signature.activeParameter !== undefined ? { activeParameter: signature.activeParameter } : {}),
+				parameters: signature.parameters.map(parameter => ({
+					label: parameter.label,
+					...(parameter.documentation !== undefined ? { documentation: parameter.documentation } : {}),
+				})),
+			})),
+		} } : {}),
+	};
 }
 
 function completionPayload(request: languages.LanguageCompletionProviderRequest): JsonValue {

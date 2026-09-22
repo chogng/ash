@@ -5,13 +5,10 @@ import { URI } from '../../../../../base/common/uri.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
-import { CursorsController } from '../../../../common/cursor/cursor.js';
 import { DocumentHighlightKind } from '../../../../common/languages.js';
 import { TextDecorationCollection } from '../../../../common/model/decorationCollection.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { TestLanguageFeaturesService } from '../../../../test/common/testLanguageFeaturesService.js';
-import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
-import { type TextMeasurer } from '../../../../common/viewModel.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 class TestResizeObserver {
@@ -32,8 +29,7 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { ViewController } = await import('../../../../browser/view/viewController.js');
-const { TestView: View } = await import('../../../../test/browser/viewModel/testViewModel.js');
+const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { TextualMultiDocumentHighlightFeature } = await import('../../browser/textualHighlightProvider.js');
 const { WordHighlighterContribution } = await import('../../browser/wordHighlighter.contribution.js');
 
@@ -93,7 +89,7 @@ test('Word highlighter cancels a stale provider request when the selection chang
 
 	harness.controller.restoreViewState(true);
 	await new Promise(resolve => setTimeout(resolve, 1));
-	harness.selections.setSelections([Selection.fromPositions(new Position((0) + 1, (6) + 1))]);
+	harness.editor.setSelections([Selection.fromPositions(new Position((0) + 1, (6) + 1))]);
 	await settleHighlights();
 
 	assert.equal(aborted, true);
@@ -111,62 +107,33 @@ test('Word highlighter obeys the off mode and navigates existing highlights', as
 	enabled.controller.restoreViewState(true);
 	await settleHighlights();
 	enabled.controller.moveNext();
-	assert.deepEqual(enabled.selections.getSelections()[0]!, Selection.fromPositions(new Position((0) + 1, (5) + 1)));
+	assert.deepEqual(enabled.editor.getSelections()![0]!, Selection.fromPositions(new Position((0) + 1, (5) + 1)));
 	enabled.controller.moveBack();
-	assert.deepEqual(enabled.selections.getSelections()[0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1)));
+	assert.deepEqual(enabled.editor.getSelections()![0]!, Selection.fromPositions(new Position((0) + 1, (0) + 1)));
 });
 
-function createHarness(text: string, languages: TestLanguageFeaturesService, resource: URI, mode: 'off' | 'singleFile' | 'multiFile'): EditorHarness {
+function createHarness(text: string, languages: TestLanguageFeaturesService, resource: URI, mode: 'off' | 'singleFile' | 'multiFile') {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const model = new TextModel(text, { languageId: 'typescript', resource });
-	const selections = createTestCursorsController(model, [Selection.fromPositions(new Position((0) + 1, (1) + 1))]);
+	const editor = createTestCodeEditor({
+		container, model, input: { resource }, languageId: 'typescript', languageFeaturesService: languages,
+		contributions: [], dimension: { width: 240, height: 60 },
+	});
+	editor.setSelection(new Selection(1, 2, 1, 2));
 	const textualProvider = new TextualMultiDocumentHighlightFeature(languages);
 	const decorations = new TextDecorationCollection<DocumentHighlightKind | undefined>(model);
-	const viewport = new View({
-		container,
-		model,
-		lineHeight: 20,
-		textMeasurer: new FixedTextMeasurer(),
-		selectionController: selections,
+	const controller = new WordHighlighterContribution(editor.controller, editor, decorations, {
+		resource, languageFeaturesService: languages, mode, delay: 0,
 	});
-	const view = viewport.controller;
-	const controller = new WordHighlighterContribution(view, selections, decorations, {
-		resource,
-		languageId: 'typescript',
-		languageFeaturesService: languages,
-		mode,
-		delay: 0,
-	});
-	viewport.layout({ width: 240, height: 60 });
-	return new EditorHarness(dom, model, selections, decorations, viewport, view, controller, textualProvider);
-}
-
-class EditorHarness implements Disposable {
-	constructor(
-		private readonly dom: JSDOM,
-		readonly model: TextModel,
-		readonly selections: CursorsController,
-		readonly decorations: TextDecorationCollection<DocumentHighlightKind | undefined>,
-		readonly viewport: InstanceType<typeof View>,
-		readonly view: InstanceType<typeof ViewController>,
-		readonly controller: InstanceType<typeof WordHighlighterContribution>,
-		private readonly textualProvider: InstanceType<typeof TextualMultiDocumentHighlightFeature>,
-	) {}
-
-	dispose(): void {
-		this.textualProvider.dispose();
-		this.controller.dispose();
-		this.viewport.dispose();
-		this.decorations.dispose();
-		this.selections.dispose();
-		this.model.dispose();
-		this.dom.window.close();
-	}
-
-	[Symbol.dispose](): void {
-		this.dispose();
-	}
+	return {
+		model, editor, decorations, controller,
+		[Symbol.dispose]: () => {
+			controller.dispose(); textualProvider.dispose(); decorations.dispose();
+			editor.dispose(); model.dispose(); dom.window.close();
+		},
+	};
 }
 
 function decorationRanges(decorations: TextDecorationCollection<DocumentHighlightKind | undefined>): readonly Range[] {
@@ -175,17 +142,4 @@ function decorationRanges(decorations: TextDecorationCollection<DocumentHighligh
 
 async function settleHighlights(): Promise<void> {
 	await new Promise(resolve => setTimeout(resolve, 10));
-}
-
-class FixedTextMeasurer implements TextMeasurer {
-	readonly horizontalPadding = 24;
-	readonly contentLeftPadding = 12;
-
-	refresh(): boolean {
-		return false;
-	}
-
-	measureLineWidth(text: string): number {
-		return text.length * 10;
-	}
 }

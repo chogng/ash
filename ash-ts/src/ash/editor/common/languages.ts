@@ -551,9 +551,16 @@ export interface LanguageParameterHintsRequest extends LanguageFeatureRequest {
 	readonly context: LanguageParameterHintsContext;
 }
 
-export type LanguageParameterHintsContext = { readonly kind: "invoke" } | { readonly kind: "triggerCharacter"; readonly triggerCharacter: string } | { readonly kind: "contentChange" };
+export type LanguageParameterHintsContext = (
+	{ readonly kind: 'invoke' } | { readonly kind: 'triggerCharacter'; readonly triggerCharacter: string } | { readonly kind: 'contentChange' }
+) & {
+	readonly isRetrigger?: boolean;
+	readonly activeSignatureHelp?: LanguageParameterHints;
+};
 
 export interface LanguageParameterHintsProvider {
+	readonly signatureHelpTriggerCharacters?: readonly string[];
+	readonly signatureHelpRetriggerCharacters?: readonly string[];
 	provideParameterHints(request: LanguageParameterHintsRequest, signal: AbortSignal): LanguageParameterHints | undefined | Promise<LanguageParameterHints | undefined>;
 }
 
