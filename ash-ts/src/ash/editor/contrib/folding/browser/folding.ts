@@ -1,9 +1,9 @@
 import { EditorContextKeys } from '../../../common/editorContextKeys.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
-import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
+import { KeyChord, KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { localize2 } from '../../../../nls.js';
-import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
-import { operatingSystem, OperatingSystem } from "../../../../base/common/platform.js";
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { type ICodeEditor, type IEditorMouseEvent, MouseTargetType } from '../../../browser/editorBrowser.js';
 import { EditorFoldingModel } from "./foldingModel.js";
@@ -14,7 +14,13 @@ import { type View } from "../../../browser/view.js";
 import { type ILanguageConfigurationService } from "../../../common/languages/languageConfigurationRegistry.js";
 import { type ILanguageFeaturesService } from "../../../common/services/languageFeatures.js";
 import { TextEditorCapability } from "../../textEditorCapabilities.js";
-import { EditorAction, registerEditorAction, registerEditorContribution, type ServicesAccessor } from "../../../browser/editorExtensions.js";
+import {
+	EditorAction,
+	registerEditorAction,
+	registerEditorContribution,
+	registerInstantiatedEditorAction,
+	type ServicesAccessor,
+} from "../../../browser/editorExtensions.js";
 import { EditorHiddenRangeModel } from "./hiddenRangeModel.js";
 import { computeEditorIndentFoldingRanges } from "./indentRangeProvider.js";
 import { computeEditorLanguageFoldingRanges, mergeEditorFoldingRanges } from "./syntaxRangeProvider.js";
@@ -23,6 +29,8 @@ import { FoldingDecorationProvider } from './foldingDecorations.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { Range } from '../../../common/core/range.js';
 import './folding.css';
+
+const foldingEnabled = new RawContextKey<boolean>('foldingEnabled', false);
 
 registerEditorContribution({
 	id: "editor.contrib.folding",
@@ -45,7 +53,7 @@ registerEditorContribution({
 			onError: context.onLanguageError,
 		}));
 		context.register(new FoldingDecorationPresenter(context.editor, folding, new FoldingDecorationProvider(context.editor)));
-		return new FoldingController(context.editor, context.view, folding);
+		return context.instantiationService.createInstance(FoldingController, context.editor, context.view, folding);
 	},
 });
 
@@ -162,85 +170,39 @@ class FoldingRangeSource extends Disposable {
 	}
 }
 
-export enum FoldingCommand {
-	Collapse = "collapse",
-	Expand = "expand",
-	CollapseRecursively = "collapseRecursively",
-	ExpandRecursively = "expandRecursively",
-	CreateManualRange = "createManualRange",
-	RemoveManualRange = "removeManualRange",
-	CollapseToLevel = "collapseToLevel",
-	CollapseAll = "collapseAll",
-	ExpandAll = "expandAll",
-}
-
-export interface FoldingControllerOptions {
-	readonly operatingSystem?: OperatingSystem;
-}
-
-/** Routes local VS Code fold chords and gutter controls through Stanza's folding model. */
+/** Applies editor actions and gutter controls to the existing folding model. */
 export class FoldingController extends Disposable {
-	private readonly targetOperatingSystem: OperatingSystem;
 	private readonly viewport: View;
 	private readonly editor: ICodeEditor;
 	private readonly folding: EditorFoldingModel;
-	private awaitingChord = false;
 
 	constructor(
 		editor: ICodeEditor,
 		viewport: View,
 		folding: EditorFoldingModel,
-		options: FoldingControllerOptions = {},
+		@IContextKeyService contextKeyService: IContextKeyService,
 	) {
 		super();
 		this.viewport = viewport;
 		this.editor = editor;
 		this.folding = folding;
 		try {
-			this.targetOperatingSystem = readOperatingSystem(options.operatingSystem);
 			if (this.viewport.textModel !== this.editor.getModel() || this.viewport.textModel !== this.folding.model) {
 				throw new TypeError("Stanza folding dependencies must share one text model");
 			}
 			if (folding.model.largeFile.tooLargeForTokenization) return;
-			this._register(addDisposableListener(viewport.domNode.domNode, "keydown", event => this.handleKeydown(event)));
+			const enabled = foldingEnabled.bindTo(contextKeyService);
+			const updateEnabled = (): void => enabled.set(editor.getOption(EditorOption.folding));
+			updateEnabled();
+			this._register(toDisposable(() => enabled.reset()));
 			this._register(this.editor.onMouseDown(event => this.handleGutterPointerDown(event)));
 			this._register(editor.onDidChangeConfiguration(event => {
-				if (event.hasChanged(EditorOption.folding)) this.awaitingChord = false;
+				if (event.hasChanged(EditorOption.folding)) updateEnabled();
 			}));
 		} catch (error) {
 			this.dispose();
 			throw error;
 		}
-	}
-
-	private handleKeydown(event: KeyboardEvent): void {
-		if (!this.editor.getOption(EditorOption.folding) || event.defaultPrevented || event.isComposing || event.getModifierState("AltGraph")) return;
-		const chord = resolveStanzaFoldingChord(event, this.targetOperatingSystem, this.awaitingChord);
-		if (chord === "prefix") {
-			stopEvent(event);
-			this.awaitingChord = true;
-			return;
-		}
-		this.awaitingChord = false;
-		if (chord) {
-			stopEvent(event);
-			if (typeof chord === "object") {
-				this.setCollapsedToLevel(chord.level);
-			} else if (chord === FoldingCommand.CollapseAll || chord === FoldingCommand.ExpandAll) {
-				this.setAllCollapsed(chord === FoldingCommand.CollapseAll);
-			} else if (chord === FoldingCommand.CreateManualRange) {
-				this.createManualRange();
-			} else if (chord === FoldingCommand.RemoveManualRange) {
-				this.removeManualRange();
-			} else {
-				this.setContainingFoldRecursively(chord === FoldingCommand.CollapseRecursively);
-			}
-			return;
-		}
-		const command = resolveStanzaFoldingCommand(event, this.targetOperatingSystem);
-		if (!command) return;
-		stopEvent(event);
-		this.setContainingFoldCollapsed(command === FoldingCommand.Collapse);
 	}
 
 	private handleGutterPointerDown(event: IEditorMouseEvent): void {
@@ -253,71 +215,78 @@ export class FoldingController extends Disposable {
 		event.event.stopPropagation();
 		this.viewport.domNode.domNode.focus({ preventScroll: true });
 		const region = this.folding.toggleAtLine(lineIndex);
-		if (region?.collapsed) this.relocateHiddenSelections(region);
+		if (region?.collapsed) this.relocateHiddenSelections([region]);
 	}
 
 	public setContainingFoldCollapsed(collapsed: boolean): void {
 		if (!this.editor.getOption(EditorOption.folding)) return;
-		const position = this.editor.getPosition();
-		if (!position) return;
-		const region = this.folding.setContainingLineCollapsed(position.lineNumber - 1, collapsed);
-		if (!region) return;
-		if (region.collapsed) this.relocateHiddenSelections(region);
+		const lines = this.editor.getSelections()?.map(selection => selection.startLineNumber - 1) ?? [];
+		this.folding.setContainingLinesCollapsed(lines, collapsed);
+		if (collapsed) this.relocateHiddenSelections(this.folding.regions);
 		this.revealPosition();
 	}
 
-	private setAllCollapsed(collapsed: boolean): void {
+	public setAllCollapsed(collapsed: boolean): void {
+		if (!this.editor.getOption(EditorOption.folding)) return;
 		if (!this.folding.setAllCollapsed(collapsed)) return;
-		if (collapsed) {
-			for (const region of this.folding.regions) if (region.collapsed) this.relocateHiddenSelections(region);
+		if (collapsed) this.relocateHiddenSelections(this.folding.regions);
+		this.revealPosition();
+	}
+
+	public setContainingFoldRecursively(collapsed: boolean): void {
+		if (!this.editor.getOption(EditorOption.folding)) return;
+		const lines = new Set(this.editor.getSelections()?.map(selection => selection.startLineNumber - 1));
+		for (const line of lines) {
+			if (collapsed) this.folding.collapseContainingRegionRecursively(line);
+			else this.folding.expandContainingRegionRecursively(line);
 		}
+		if (collapsed) this.relocateHiddenSelections(this.folding.regions);
 		this.revealPosition();
 	}
 
-	private setContainingFoldRecursively(collapsed: boolean): void {
-		const position = this.editor.getPosition();
-		if (!position) return;
-		const lineIndex = position.lineNumber - 1;
-		const region = collapsed
-			? this.folding.collapseContainingRegionRecursively(lineIndex)
-			: this.folding.expandContainingRegionRecursively(lineIndex);
-		if (!region) return;
-		if (collapsed) this.relocateHiddenSelections(region);
-		this.revealPosition();
-	}
-
-	private createManualRange(): void {
-		const selection = this.editor.getSelection();
-		if (!selection) return;
-		const endLineIndex = selection.endColumn === 1 && selection.endLineNumber > selection.startLineNumber
-			? selection.endLineNumber - 2
-			: selection.endLineNumber - 1;
-		const region = this.folding.addManualRange(selection.startLineNumber - 1, endLineIndex);
-		if (region) this.revealPosition();
-	}
-
-	private removeManualRange(): void {
-		const position = this.editor.getPosition();
-		if (!position) return;
-		const region = this.folding.removeContainingManualRange(position.lineNumber - 1);
-		if (region) this.revealPosition();
-	}
-
-	private setCollapsedToLevel(level: number): void {
-		if (!this.folding.collapseToLevel(level)) return;
-		for (const region of this.folding.regions) if (region.collapsed) this.relocateHiddenSelections(region);
-		this.revealPosition();
-	}
-
-	private relocateHiddenSelections(region: EditorFoldingRegion): void {
-		const header = new Position((region.startLineIndex) + 1, (this.viewport.textModel.getLineContent((region.startLineIndex) + 1).length) + 1);
-		const selections = (this.editor.getSelections() ?? []).map(selection => {
-			const activeLineIndex = selection.getPosition().lineNumber - 1;
-			return activeLineIndex > region.startLineIndex && activeLineIndex <= region.endLineIndex
-				? Selection.fromPositions(header)
-				: selection;
+	public createManualRanges(): void {
+		if (!this.editor.getOption(EditorOption.folding)) return;
+		const selections = this.editor.getSelections();
+		if (!selections) return;
+		const next = selections.map(selection => {
+			const endLineIndex = selection.endColumn === 1 && selection.endLineNumber > selection.startLineNumber
+				? selection.endLineNumber - 2
+				: selection.endLineNumber - 1;
+			const region = this.folding.addManualRange(selection.startLineNumber - 1, endLineIndex);
+			return region ? Selection.fromPositions(new Position(selection.startLineNumber, 1)) : selection;
 		});
-		this.editor.setSelections(selections, 'folding');
+		this.editor.setSelections(next, 'folding');
+		this.revealPosition();
+	}
+
+	public removeManualRanges(): void {
+		if (!this.editor.getOption(EditorOption.folding)) return;
+		this.folding.removeManualRanges(this.editor.getSelections() ?? []);
+		this.revealPosition();
+	}
+
+	public setCollapsedToLevel(level: number): void {
+		if (!this.editor.getOption(EditorOption.folding)) return;
+		const lines = this.editor.getSelections()?.map(selection => selection.startLineNumber - 1) ?? [];
+		if (!this.folding.collapseToLevel(level, lines)) return;
+		this.revealPosition();
+	}
+
+	private relocateHiddenSelections(regions: readonly EditorFoldingRegion[]): void {
+		const collapsed = regions.filter(region => region.collapsed).sort((left, right) => left.startLineIndex - right.startLineIndex);
+		const relocate = (position: Position): Position => {
+			const region = collapsed.find(region =>
+				position.lineNumber - 1 > region.startLineIndex && position.lineNumber - 1 <= region.endLineIndex);
+			return region
+				? new Position(region.startLineIndex + 1, this.folding.model.getLineMaxColumn(region.startLineIndex + 1))
+				: position;
+		};
+		const selections = this.editor.getSelections() ?? [];
+		const next = selections.map(selection => Selection.fromPositions(
+			relocate(selection.getSelectionStart()), relocate(selection.getPosition())));
+		if (next.some((selection, index) => !selection.equalsSelection(selections[index]!))) {
+			this.editor.setSelections(next, 'folding');
+		}
 	}
 
 	private revealPosition(): void {
@@ -326,52 +295,12 @@ export class FoldingController extends Disposable {
 	}
 }
 
-function resolveStanzaFoldingChord(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">, targetOperatingSystem: OperatingSystem, awaitingChord: boolean): FoldingChord | undefined {
-	const modifier = targetOperatingSystem === OperatingSystem.Macintosh ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
-	if (!modifier || event.shiftKey || event.altKey) return undefined;
-	if (!awaitingChord) return event.key.toLowerCase() === "k" ? "prefix" : undefined;
-	if (event.key === "0") return FoldingCommand.CollapseAll;
-	if (event.key.toLowerCase() === "j") return FoldingCommand.ExpandAll;
-	if (event.key === "[") return FoldingCommand.CollapseRecursively;
-	if (event.key === "]") return FoldingCommand.ExpandRecursively;
-	if (event.key === ",") return FoldingCommand.CreateManualRange;
-	if (event.key === ".") return FoldingCommand.RemoveManualRange;
-	const level = Number(event.key);
-	return Number.isSafeInteger(level) && level >= 1 && level <= 9
-		? Object.freeze({ command: FoldingCommand.CollapseToLevel, level })
-		: undefined;
-}
-
-type FoldingChord = FoldingCommand | "prefix" | { readonly command: FoldingCommand.CollapseToLevel; readonly level: number };
-
-/** Resolves the platform-specific fold and unfold chords used by VS Code. */
-export function resolveStanzaFoldingCommand(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">, targetOperatingSystem: OperatingSystem): FoldingCommand | undefined {
-	const command = event.key === "["
-		? FoldingCommand.Collapse
-		: event.key === "]"
-			? FoldingCommand.Expand
-			: undefined;
-	if (!command) return undefined;
-	if (targetOperatingSystem === OperatingSystem.Macintosh) {
-		return event.metaKey && event.altKey && !event.ctrlKey && !event.shiftKey ? command : undefined;
-	}
-	return event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey ? command : undefined;
-}
-
-function readOperatingSystem(value: OperatingSystem | undefined): OperatingSystem {
-	const resolved = value ?? operatingSystem;
-	if (!Object.values(OperatingSystem).includes(resolved)) {
-		throw new TypeError("Unknown Stanza folding operating system");
-	}
-	return resolved;
-}
-
 class FoldAction extends EditorAction {
 	constructor() {
 		super({
 			id: 'editor.fold',
 			label: localize2('fold', 'Fold'),
-			precondition: undefined,
+			precondition: foldingEnabled.isEqualTo(true),
 			kbOpts: {
 				primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.BracketLeft,
 				mac: { primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.BracketLeft },
@@ -391,7 +320,7 @@ class UnfoldAction extends EditorAction {
 		super({
 			id: 'editor.unfold',
 			label: localize2('unfold', 'Unfold'),
-			precondition: undefined,
+			precondition: foldingEnabled.isEqualTo(true),
 			kbOpts: {
 				primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.BracketRight,
 				mac: { primary: KeyMod.CtrlCmd | KeyMod.Alt | KeyCode.BracketRight },
@@ -408,3 +337,61 @@ class UnfoldAction extends EditorAction {
 
 registerEditorAction(FoldAction);
 registerEditorAction(UnfoldAction);
+
+function registerFoldChord(
+	id: string,
+	label: ReturnType<typeof localize2>,
+	key: KeyCode,
+	run: (controller: FoldingController) => void,
+): void {
+	registerInstantiatedEditorAction(new class extends EditorAction {
+		constructor() {
+			super({
+				id,
+				label,
+				precondition: foldingEnabled.isEqualTo(true),
+				kbOpts: {
+					primary: KeyChord(KeyMod.CtrlCmd | KeyCode.KeyK, KeyMod.CtrlCmd | key),
+					weight: KeybindingWeight.EditorContrib,
+					kbExpr: EditorContextKeys.editorTextFocus.isEqualTo(true),
+				},
+			});
+		}
+
+		run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
+			const controller = editor.getContribution<FoldingController>('editor.contrib.folding');
+			if (controller) run(controller);
+		}
+	}());
+}
+
+registerFoldChord(
+	'editor.foldAll', localize2('foldAll', 'Fold All'), KeyCode.Digit0,
+	controller => controller.setAllCollapsed(true),
+);
+registerFoldChord(
+	'editor.unfoldAll', localize2('unfoldAll', 'Unfold All'), KeyCode.KeyJ,
+	controller => controller.setAllCollapsed(false),
+);
+registerFoldChord(
+	'editor.foldRecursively', localize2('foldRecursively', 'Fold Recursively'), KeyCode.BracketLeft,
+	controller => controller.setContainingFoldRecursively(true),
+);
+registerFoldChord(
+	'editor.unfoldRecursively', localize2('unfoldRecursively', 'Unfold Recursively'), KeyCode.BracketRight,
+	controller => controller.setContainingFoldRecursively(false),
+);
+registerFoldChord(
+	'editor.createFoldingRangeFromSelection', localize2('createManualFoldRange', 'Create Folding Range from Selection'), KeyCode.Comma,
+	controller => controller.createManualRanges(),
+);
+registerFoldChord(
+	'editor.removeManualFoldingRanges', localize2('removeManualFoldRanges', 'Remove Manual Folding Ranges'), KeyCode.Period,
+	controller => controller.removeManualRanges(),
+);
+for (let level = 1; level <= 7; level++) {
+	registerFoldChord(
+		`editor.foldLevel${level}`, localize2('foldLevel', 'Fold Level {0}', level), KeyCode.Digit0 + level,
+		controller => controller.setCollapsedToLevel(level),
+	);
+}

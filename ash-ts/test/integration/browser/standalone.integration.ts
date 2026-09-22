@@ -157,6 +157,10 @@ interface StandaloneHarness {
 	readSelectionHighlights(): number;
 	prepareColorPicker(): void;
 	invokeLanguageAction(id: string): void;
+	setFoldingSelections(selections: [number, number, number, number][]): void;
+	setFoldingModelAttached(attached: boolean): void;
+	prepareFoldingKeybinding(): void;
+	readFoldingCommandState(): { supported: boolean; inChordMode: boolean };
 	readLanguageActions(): { rename: boolean; quickFix: boolean };
 	prepareLanguageRequest(kind: LanguageRequestKind, emptyDefinition?: boolean): void;
 	languageHoverPoint(): { x: number; y: number };
@@ -710,6 +714,18 @@ window.ashStandaloneIntegration = {
 	},
 	readSelectionHighlights: () => callerModel.getAllDecorations().filter(decoration => decoration.options.className === 'selection-highlight').length,
 	invokeLanguageAction: id => { callerEditor.trigger('test', id, {}); },
+	setFoldingSelections: selections => callerEditor.setSelections(selections.map(selection => new stanza.Selection(...selection))),
+	setFoldingModelAttached: attached => callerEditor.setModel(attached ? callerModel : null),
+	prepareFoldingKeybinding: () => {
+		contributionProviders.add(KeybindingsRegistry.registerKeybindingRule({
+			command: 'editor.foldAll',
+			keybinding: Keybinding.chord(logicalKey('F9'), logicalKey('F10')),
+		}));
+	},
+	readFoldingCommandState: () => ({
+		supported: callerEditor.getAction('editor.foldAll')!.isSupported(),
+		inChordMode: StandaloneServices.get().instantiationService.get(IKeybindingService).inChordMode,
+	}),
 	readLanguageActions: () => ({
 		rename: callerEditor.getAction('editor.action.rename')?.isSupported() ?? false,
 		quickFix: callerEditor.getAction('editor.action.quickFix')?.isSupported() ?? false,

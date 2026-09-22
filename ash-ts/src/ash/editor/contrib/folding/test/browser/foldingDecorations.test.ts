@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { TextModel } from '../../../../common/model/textModel.js';
-import { OperatingSystem, operatingSystem } from '../../../../../base/common/platform.js';
 
 const browser = new JSDOM('<!doctype html><body></body>');
 class TestResizeObserver {
@@ -63,7 +62,7 @@ test('FoldingDecorationProvider selects controls, highlights, and editor-owned d
 	dom.window.close();
 });
 
-test('Folding contribution projects model ranges through FoldingDecorationProvider', () => {
+test('Folding contribution projects model ranges through FoldingDecorationProvider', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('{\n  value\n}');
@@ -85,14 +84,7 @@ test('Folding contribution projects model ranges through FoldingDecorationProvid
 	const pointerCollapsedMarker = editor.getDomNode().querySelector<HTMLElement>('.ash-icon-folding-collapsed');
 	pointerCollapsedMarker?.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0, buttons: 1 }));
 	assert.ok(model.getAllDecorations().some(decoration => decoration.options.description === 'folding-expanded'));
-	const collapse = new dom.window.KeyboardEvent('keydown', {
-		bubbles: true,
-		cancelable: true,
-		key: '[',
-		...(operatingSystem === OperatingSystem.Macintosh ? { metaKey: true, altKey: true } : { ctrlKey: true, shiftKey: true }),
-	}) as unknown as KeyboardEvent;
-	editor.controller.element.dispatchEvent(collapse);
-	assert.equal(collapse.defaultPrevented, true);
+	await editor.getAction('editor.fold')!.run();
 	const collapsed = model.getAllDecorations().find(decoration => decoration.options.description === 'folding-collapsed');
 	assert.equal(collapsed?.options.afterContentClassName, 'inline-folded');
 	const collapsedMarker = editor.getDomNode().querySelector<HTMLElement>('.ash-icon-folding-collapsed');

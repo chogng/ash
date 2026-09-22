@@ -1,5 +1,36 @@
 # Editor API 对齐状态
 
+## Folding 命令续批（2026-09-21）
+
+已接通递归、全部、指定层级和手动范围的 13 个标准动作，移除控制器自己的组合键解析与等待状态。多选区使用原折叠模型，每次命令先确定目标再改状态，多个光标落在同一范围时不会重复折叠到父级。
+
+起始工作树干净，基线 `7b43fde26`。准入链：默认 / 自定义组合键或公开 action → 已有命令与快捷键服务 → FoldingController → EditorFoldingModel → 隐藏行、装饰、选区与焦点。此前这些动作绕过标准注册；多选区只处理主光标，层级命令会改动其他层级，手动范围创建后没有折叠。
+
+| 准确路径（相对 `ash-ts/src/ash/editor/`） | 文件关系 | 本批修改与唯一职责 |
+| --- | --- | --- |
+| `contrib/folding/browser/folding.ts` | 双方都有；editor.all 装配 | 标准动作进入现有操作，移除独立按键解析器；当前编辑器维护 foldingEnabled 条件，操作覆盖各选区 |
+| `contrib/folding/browser/foldingModel.ts` | 双方都有；Controller 消费 | 保留现有范围与折叠状态；修正指定层级、重复折叠上移与手动范围创建 / 删除语义 |
+| `contrib/folding/test/browser/foldingModel.test.ts`、`foldingDecorations.test.ts` | 既有测试 | 同步模型行为和动作入口；真实物理按键由浏览器验证 |
+| `api-alignment-status.md` | 既有台账 | 记录批次范围、验证和仍未完成的公开契约 |
+
+场景装配与行为测试仅追加既有 `ash-ts/test/integration/browser/standalone.integration.ts` / `.spec.ts`。不创建或删除文件，不修改 DOM、CSS、折叠范围来源或滚动 owner。上游证据限定命令 ID、组合键、配置条件以及 foldingModel 行为测试；实现继续使用 Ash 的折叠记录和模型事件。标准指定层级动作采用上游已有的 1–7 级，不添加上游没有的 8 / 9 级命令。`editor.fold` / `editor.unfold` 的 levels、direction、selectionLines 参数留待单独闭合，本批不声称完成全部 Folding API。
+
+本批行为结果：
+
+- `editor.foldAll` / `editor.unfoldAll`、`editor.foldRecursively` / `editor.unfoldRecursively`、`editor.createFoldingRangeFromSelection` / `editor.removeManualFoldingRanges`、`editor.foldLevel1`–`editor.foldLevel7` 接入同一注册链。默认与自定义组合键共用超时、Escape 和焦点变化取消。
+- `foldingEnabled` 由当前贡献维护，配置变化立即生效，模型移除 / 贡献释放时复位。只读编辑器仍允许改变折叠状态。
+- 普通折叠覆盖所有选区；重复调用从已折叠子范围移到展开的父范围。指定层级仅折叠该层，并跳过包含选区起始行的范围，保留其他层级的原状态。
+- 手动范围按各选区创建并立即折叠，选区收回标题；结束于下一行第一列时不包含该行。删除时按光标选取最近的手动范围，非空选区删除相交手动范围，范围外的空光标删除全部手动范围，提供者范围保留。
+
+Folding 仍为 9 个生产文件：8 个同路径、1 个既有 Ash 文件，大小写差异和上游缺失路径均为 0。总台账的 80 / 41 状态不变；没有把注册动作或新增公开操作计为完整控制器契约对齐。
+
+本批验证：
+
+- Folding 定向单测 22 项、7 个文件通过；新增的 5 个 Chromium 场景通过，覆盖公开动作、多光标、默认 / 自定义组合键、取消、配置切换、模型移除与重新装入。
+- `check-editor-alignment.mjs --test=all` 通过：1,240 项单测、234 个文件与 594 项浏览器测试全部通过；台账、文件集合、CSS 归属和类型检查通过，源码目录没有新增 JavaScript。保留测试环境既有的 JSDOM Canvas 提示。
+- `build:stanza` 通过，无新增构建警告。仓库未配置 TypeScript formatter / linter；人工复核 touched diff，`git diff --check` 通过。
+- 未运行上游 VS Code 窗口；本批预期来自本地上游公开动作与模型行为测试，不标为完整界面一致。
+
 ## Contrib 行为修复（2026-09-21）
 
 本轮接续下方目录审查，修复已复现的五类配置行为、补通九个标准命令，并按用户确认完成文件迁移与删除。保留 Ash 的文本、折叠、选区、DOM 和请求 owner；CSS 与布局结构没有变更。下方审查记录描述修复前的状态。
@@ -1818,7 +1849,7 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 | `contrib/codelens/browser/codelensWidget.ts` | `CodeLensWidget` | 当前已使用 `CodeLensWidget` 名称；其余公开契约仍待按生产调用方逐项验收 |
 | `contrib/colorPicker/browser/colorDetector.ts` | `ColorDetector` | 已恢复上游公开名；颜色 provider 结果写入标准 before decoration，动态 class ref 先于 CSS owner 释放，注入 marker 由标准鼠标目标读取 |
 | `contrib/find/browser/findController.ts` | `FindController` | 标准查找 / 替换动作及快捷键接通原控件；其余公开契约仍待分部验收 |
-| `contrib/folding/browser/folding.ts` | `FoldingController` | 标准 fold / unfold、范围策略和数量上限接通原折叠状态；完整命令参数、公开状态与 provider 契约仍待核对 |
+| `contrib/folding/browser/folding.ts` | `FoldingController` | 普通、递归、全部、1–7 级及手动范围动作接通原折叠状态；配置条件、多选区和组合键取消已验证。范围策略与数量上限已接通；完整命令参数、公开状态与 provider 契约仍待核对 |
 | `contrib/inlayHints/browser/inlayHintsController.ts` | `InlayHintsController` | 请求失效及四种 enabled 模式已接通；完整行内布局与其他展示选项仍待验收 |
 | `contrib/inlineCompletions/browser/controller/inlineCompletionsController.ts` | `InlineCompletionsController` | 自动建议开关、只读切换、trigger / commit / hide 命令已接通；完整模型、视图与交互公开契约仍待核对 |
 | `contrib/stickyScroll/browser/stickyScrollController.ts` | `StickyScrollController` | 文件职责、来源请求、候选行、命令、语法着色、行号、折叠图标与定义交互已接通；标准定义查询归属、高度事件消费方和上游同场景验证仍待核对，见 Sticky Scroll 记录 |

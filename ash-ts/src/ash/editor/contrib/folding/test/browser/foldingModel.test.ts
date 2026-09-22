@@ -82,11 +82,11 @@ test("Manual folding ranges persist through provider replacement and reject cros
 		[0, 4, EditorFoldingRangeSource.Provider],
 		[1, 3, EditorFoldingRangeSource.Manual],
 	]);
-	assert.equal(folding.removeContainingManualRange(2)?.startLineIndex, 1);
+	folding.removeManualRanges([new Range(3, 1, 3, 1)]);
 	assert.equal(folding.regions.length, 1);
 });
 
-test("Folding levels retain shallower headers and collapse nested descendants", () => {
+test("Folding a level preserves other levels and skips the selected scopes", () => {
 	using model = new TextModel("outer\nchild\ngrandchild\nend grandchild\nend child\nend outer\nother\nbody");
 	using folding = new EditorFoldingModel(model);
 	folding.setRanges([
@@ -97,8 +97,42 @@ test("Folding levels retain shallower headers and collapse nested descendants", 
 	]);
 
 	assert.equal(folding.collapseToLevel(2), true);
-	assert.deepEqual(folding.regions.map(region => region.collapsed), [false, true, true, false]);
-	assert.equal(folding.collapseToLevel(1), true);
-	assert.deepEqual(folding.regions.map(region => region.collapsed), [true, true, true, true]);
+	assert.deepEqual(folding.regions.map(region => region.collapsed), [false, true, false, false]);
+	assert.equal(folding.collapseToLevel(1, [6]), true);
+	assert.deepEqual(folding.regions.map(region => region.collapsed), [true, true, false, false]);
+	folding.setAllCollapsed(false);
+	assert.equal(folding.collapseToLevel(2, [2]), false);
+	assert.deepEqual(folding.regions.map(region => region.collapsed), [false, false, false, false]);
 	assert.throws(() => folding.collapseToLevel(0), /positive safe integer/);
+});
+
+test('Repeated folding moves from a collapsed child to its expanded parent', () => {
+	using model = new TextModel('outer\n  inner\n    child\n  end\nend');
+	using folding = new EditorFoldingModel(model);
+	folding.setRanges([{ startLineIndex: 0, endLineIndex: 4 }, { startLineIndex: 1, endLineIndex: 2 }]);
+	folding.setContainingLinesCollapsed([1, 2], true);
+	assert.deepEqual(folding.regions.map(region => region.collapsed), [false, true]);
+	folding.setContainingLinesCollapsed([1, 2], true);
+	assert.deepEqual(folding.regions.map(region => region.collapsed), [true, true]);
+	folding.setContainingLinesCollapsed([1], true);
+	assert.deepEqual(folding.regions.map(region => region.collapsed), [true, true]);
+});
+
+test('Manual folds collapse on creation and removal respects cursor and selection scopes', () => {
+	using model = new TextModel('outer\none\ntwo\nthree\nfour\nfive\nend\nafter');
+	using folding = new EditorFoldingModel(model);
+	folding.setProviderRanges([{ startLineIndex: 0, endLineIndex: 6 }]);
+	assert.equal(folding.addManualRange(1, 4)?.collapsed, true);
+	assert.equal(folding.addManualRange(2, 3)?.collapsed, true);
+	assert.equal(folding.addManualRange(5, 6)?.collapsed, true);
+	folding.removeManualRanges([new Range(4, 1, 4, 1)]);
+	assert.deepEqual(folding.regions.map(region => region.startLineIndex), [0, 1, 5]);
+	folding.removeManualRanges([new Range(3, 1, 6, 2)]);
+	assert.deepEqual(folding.regions.map(region => region.startLineIndex), [0]);
+	folding.addManualRange(1, 4);
+	folding.addManualRange(2, 3);
+	folding.removeManualRanges([new Range(8, 1, 8, 2)]);
+	assert.equal(folding.regions.length, 3);
+	folding.removeManualRanges([new Range(8, 1, 8, 1)]);
+	assert.deepEqual(folding.regions.map(region => region.source), [EditorFoldingRangeSource.Provider]);
 });

@@ -112,20 +112,21 @@ export class EditorFoldingModel extends Disposable {
 		return region;
 	}
 
-	/** Sets the innermost fold containing `lineIndex` to a specific collapse state. */
-	setContainingLineCollapsed(lineIndex: number, collapsed: boolean): EditorFoldingRegion | undefined {
-		validateEditorFoldingLineIndex(this.textModel, lineIndex);
+	/** Resolves all selected scopes before changing state, so repeated cursors fold a scope only once. */
+	setContainingLinesCollapsed(lineIndexes: readonly number[], collapsed: boolean): void {
 		if (typeof collapsed !== "boolean") throw new TypeError("Folding collapse state must be boolean");
-		const record = this.findRecord(candidate => {
-			const range = candidate.range.range;
-			return lineIndex >= range.startLineNumber - 1 && lineIndex <= range.endLineNumber - 1;
-		});
-		if (!record) return undefined;
-		if (record.collapsed === collapsed) return this.toRegion(record);
-		record.collapsed = collapsed;
-		const region = this.toRegion(record);
-		this.changeEmitter.fire();
-		return region;
+		const targets = new Set<EditorFoldingRegionRecord>();
+		for (const lineIndex of lineIndexes) {
+			validateEditorFoldingLineIndex(this.textModel, lineIndex);
+			const record = this.findRecord(candidate => {
+				const range = candidate.range.range;
+				return lineIndex >= range.startLineNumber - 1 && lineIndex <= range.endLineNumber - 1
+					&& (!collapsed || !candidate.collapsed);
+			});
+			if (record && record.collapsed !== collapsed) targets.add(record);
+		}
+		for (const record of targets) record.collapsed = collapsed;
+		if (targets.size > 0) this.changeEmitter.fire();
 	}
 
 	/** Collapses the innermost containing fold together with every nested descendant. */
@@ -147,26 +148,45 @@ export class EditorFoldingModel extends Disposable {
 			const range = record.range.range;
 			return record.source === EditorFoldingRangeSource.Manual && range.startLineNumber - 1 === startLineIndex && range.endLineNumber - 1 === endLineIndex;
 		});
-		if (existingManual) return this.toRegion(existingManual);
+		if (existingManual) {
+			if (!existingManual.collapsed) {
+				existingManual.collapsed = true;
+				this.changeEmitter.fire();
+			}
+			return this.toRegion(existingManual);
+		}
 		const ranges = this.regions
 			.filter(region => region.startLineIndex !== startLineIndex || region.endLineIndex !== endLineIndex)
 			.map(region => ({ ...region }));
-		ranges.push({ startLineIndex, endLineIndex, collapsed: false, source: EditorFoldingRangeSource.Manual });
+		ranges.push({ startLineIndex, endLineIndex, collapsed: true, source: EditorFoldingRangeSource.Manual });
 		this.setRanges(ranges);
 		return this.regions.find(region => region.source === EditorFoldingRangeSource.Manual && region.startLineIndex === startLineIndex && region.endLineIndex === endLineIndex);
 	}
 
-	/** Removes the innermost manual fold containing `lineIndex`. */
-	removeContainingManualRange(lineIndex: number): EditorFoldingRegion | undefined {
-		validateEditorFoldingLineIndex(this.textModel, lineIndex);
-		const target = this.findRecord(candidate => {
-			const range = candidate.range.range;
-			return candidate.source === EditorFoldingRangeSource.Manual && lineIndex >= range.startLineNumber - 1 && lineIndex <= range.endLineNumber - 1;
-		});
-		if (!target) return undefined;
-		const region = this.toRegion(target);
-		this.setRanges(this.records.filter(record => record !== target).map(record => this.toRegion(record)));
-		return region;
+	/** Removes selected manual folds; an empty selection outside them removes all manual folds. */
+	removeManualRanges(selections: readonly Range[]): void {
+		const manual = this.records.filter(record => record.source === EditorFoldingRangeSource.Manual);
+		const removed = new Set<EditorFoldingRegionRecord>();
+		for (const selection of selections) {
+			if (selection.isEmpty()) {
+				const containing = this.findRecord(record => record.source === EditorFoldingRangeSource.Manual
+					&& record.range.range.startLineNumber <= selection.startLineNumber
+					&& record.range.range.endLineNumber >= selection.startLineNumber);
+				if (containing) removed.add(containing);
+				else for (const record of manual) removed.add(record);
+			} else {
+				for (const record of manual) {
+					const range = record.range.range;
+					if (range.startLineNumber <= selection.endLineNumber && range.endLineNumber >= selection.startLineNumber) {
+						removed.add(record);
+					}
+				}
+			}
+		}
+		if (removed.size === 0) return;
+		this.records = Object.freeze(this.records.filter(record => !removed.has(record)));
+		for (const record of removed) record.range.dispose();
+		this.changeEmitter.fire();
 	}
 
 	/** Sets the collapse state of every current range. */
@@ -182,14 +202,15 @@ export class EditorFoldingModel extends Disposable {
 		return changed;
 	}
 
-	/** Collapses every fold at or below one one-based nesting level and expands shallower levels. */
-	collapseToLevel(level: number): boolean {
+	/** Collapses one nesting level, preserving other levels and ranges containing a selected line. */
+	collapseToLevel(level: number, selectedLineIndexes: readonly number[] = []): boolean {
 		if (!Number.isSafeInteger(level) || level < 1) throw new RangeError("Folding level must be a positive safe integer");
 		let changed = false;
 		for (const record of this.records) {
-			const collapsed = this.getNestingDepth(record) >= level;
-			if (record.collapsed === collapsed) continue;
-			record.collapsed = collapsed;
+			const range = record.range.range;
+			if (record.collapsed || this.getNestingDepth(record) !== level) continue;
+			if (selectedLineIndexes.some(line => line >= range.startLineNumber - 1 && line <= range.endLineNumber - 1)) continue;
+			record.collapsed = true;
 			changed = true;
 		}
 		if (changed) this.changeEmitter.fire();

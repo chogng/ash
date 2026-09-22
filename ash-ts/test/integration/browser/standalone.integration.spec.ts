@@ -4061,6 +4061,130 @@ test('hover options control requests, delay and keyboard modifiers', async ({ pa
 	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 });
 
+test.describe('folding command routing', () => {
+	const text = 'first\n  inner\n    body\n  sibling\nsecond\n  inner\n    body\n  sibling\nlast';
+
+	test.afterEach(async ({ page }) => {
+		await page.evaluate(() => window.ashStandaloneIntegration?.dispose());
+	});
+
+	test('recursive and all actions update every selected scope, including read-only editors', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(text => {
+			window.ashStandaloneIntegration.prepareClipboard(text, [[1, 1, 1, 1], [5, 1, 5, 1]]);
+			window.ashStandaloneIntegration.updateContributionOptions({ foldingStrategy: 'indentation', readOnly: true });
+		}, text);
+		const lines = page.locator('#caller .view-line');
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.foldRecursively'));
+		await expect(lines).toHaveCount(3);
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.unfold'));
+		await expect(lines).toHaveCount(7);
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.unfoldRecursively'));
+		await expect(lines).toHaveCount(9);
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.foldAll'));
+		await expect(lines).toHaveCount(3);
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.unfoldAll'));
+		await expect(lines).toHaveCount(9);
+		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ folding: false }));
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readFoldingCommandState())).supported).toBe(false);
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.foldAll'));
+		await expect(lines).toHaveCount(9);
+		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ folding: true }));
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readFoldingCommandState())).supported).toBe(true);
+		await page.evaluate(() => window.ashStandaloneIntegration.setFoldingModelAttached(false));
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readFoldingCommandState())).supported).toBe(false);
+		await page.evaluate(() => window.ashStandaloneIntegration.setFoldingModelAttached(true));
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readFoldingCommandState())).supported).toBe(true);
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.foldAll'));
+		await expect(lines).toHaveCount(3);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe(text);
+	});
+
+	test('default and custom chords share timeout, escape and focus cancellation', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.clock.install();
+		await page.evaluate(text => {
+			window.ashStandaloneIntegration.prepareClipboard(text, [[1, 1, 1, 1]]);
+			window.ashStandaloneIntegration.prepareFoldingKeybinding();
+		}, text);
+		await page.locator('#caller .stanza-editor-input').focus();
+		const lines = page.locator('#caller .view-line');
+		await page.keyboard.press('ControlOrMeta+k');
+		await page.keyboard.press('ControlOrMeta+0');
+		await expect(lines).toHaveCount(3);
+		await page.keyboard.press('ControlOrMeta+k');
+		await page.keyboard.press('ControlOrMeta+j');
+		await expect(lines).toHaveCount(9);
+		await page.keyboard.press('F9');
+		await page.keyboard.press('F10');
+		await expect(lines).toHaveCount(3);
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.unfoldAll'));
+		await expect(lines).toHaveCount(9);
+		for (const reason of ['timeout', 'escape', 'blur'] as const) {
+			await page.keyboard.press('ControlOrMeta+k');
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readFoldingCommandState())).inChordMode).toBe(true);
+			if (reason === 'timeout') await page.clock.runFor(5001);
+			if (reason === 'escape') await page.keyboard.press('Escape');
+			if (reason === 'blur') {
+				await page.locator('#owned .stanza-editor-input').focus();
+				await page.locator('#caller .stanza-editor-input').focus();
+			}
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readFoldingCommandState())).inChordMode).toBe(false);
+			await page.keyboard.press('ControlOrMeta+0');
+			await expect(lines).toHaveCount(9);
+		}
+	});
+
+	test('level actions preserve the selected scope and do not collapse deeper levels', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(text => {
+			window.ashStandaloneIntegration.prepareClipboard(text, [[2, 1, 2, 1]]);
+			window.ashStandaloneIntegration.updateContributionOptions({ foldingStrategy: 'indentation' });
+		}, text);
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.foldLevel2'));
+		await expect(page.locator('#caller .view-line[data-logical-line-index="2"]')).toHaveCount(1);
+		await expect(page.locator('#caller .view-line[data-logical-line-index="6"]')).toHaveCount(0);
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.foldLevel1'));
+		await expect(page.locator('#caller .view-line')).toHaveCount(6);
+		await page.evaluate(() => {
+			window.ashStandaloneIntegration.setFoldingSelections([[5, 1, 5, 1]]);
+			window.ashStandaloneIntegration.invokeLanguageAction('editor.unfold');
+		});
+		await expect(page.locator('#caller .view-line')).toHaveCount(8);
+		for (let level = 3; level <= 7; level++) {
+			await page.evaluate(level => window.ashStandaloneIntegration.runLineAction(`editor.foldLevel${level}`), level);
+		}
+		await expect(page.locator('#caller .view-line')).toHaveCount(8);
+	});
+
+	test('manual range actions collapse each selection, preserve text and remove selected ranges', async ({ page }) => {
+		await page.goto('/standalone.html');
+		const value = 'one\ntwo\nthree\nfour\nfive\nsix\nseven';
+		await page.evaluate(value => {
+			window.ashStandaloneIntegration.prepareClipboard(value, [[1, 1, 4, 1], [5, 1, 6, 4]]);
+			window.ashStandaloneIntegration.updateContributionOptions({ foldingStrategy: 'indentation' });
+		}, value);
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.createFoldingRangeFromSelection'));
+		await expect(page.locator('#caller .view-line')).toHaveCount(4);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).toEqual(['[1,1 -> 1,1]', '[5,1 -> 5,1]']);
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.removeManualFoldingRanges'));
+		await expect(page.locator('#caller .view-line')).toHaveCount(7);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.state('caller'))).value).toBe(value);
+	});
+
+	test('multiple cursors in one fold collapse it once before moving to the parent', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(text => {
+			window.ashStandaloneIntegration.prepareClipboard(text, [[2, 1, 2, 1], [3, 1, 3, 1], [6, 1, 6, 1]]);
+			window.ashStandaloneIntegration.updateContributionOptions({ foldingStrategy: 'indentation' });
+		}, text);
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.fold'));
+		await expect(page.locator('#caller .view-line')).toHaveCount(7);
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.fold'));
+		await expect(page.locator('#caller .view-line')).toHaveCount(3);
+	});
+});
+
 test('folding strategy cancels providers and region limits update hidden lines', async ({ page }) => {
 	await page.goto('/standalone.html');
 	await page.evaluate(() => {
