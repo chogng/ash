@@ -4183,6 +4183,102 @@ test.describe('folding command routing', () => {
 		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.fold'));
 		await expect(page.locator('#caller .view-line')).toHaveCount(3);
 	});
+
+	test('action arguments select zero-based lines and count levels in both directions', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(text => {
+			window.ashStandaloneIntegration.prepareClipboard(text, [[1, 1, 1, 1]]);
+			window.ashStandaloneIntegration.updateContributionOptions({ foldingStrategy: 'indentation' });
+		}, text);
+		const input = page.locator('#caller .stanza-editor-input');
+		await input.focus();
+		const lines = page.locator('#caller .view-line');
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.fold', { levels: 2, selectionLines: [4] }));
+		await expect(lines).toHaveCount(6);
+		await expect(page.locator('#caller .view-line[data-logical-line-index="2"]')).toHaveCount(1);
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.unfold', { levels: 1, selectionLines: [4] }));
+		await expect(lines).toHaveCount(8);
+		await expect(page.locator('#caller .view-line[data-logical-line-index="6"]')).toHaveCount(0);
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.unfold', { levels: 2, direction: 'up', selectionLines: [6] }));
+		await expect(lines).toHaveCount(9);
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.fold', { levels: 2, direction: 'up', selectionLines: [2] }));
+		await expect(lines).toHaveCount(6);
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.unfold', { selectionLines: [0] }));
+		await expect(lines).toHaveCount(8);
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.unfold', { selectionLines: [1] }));
+		await expect(lines).toHaveCount(9);
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).toEqual({ value: text, selections: ['[1,1 -> 1,1]'] });
+		await expect(input).toBeFocused();
+	});
+
+	test('explicit levels and direction keep repeated folds in the requested scope', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(text => {
+			window.ashStandaloneIntegration.prepareClipboard(text, [[5, 1, 5, 1]]);
+			window.ashStandaloneIntegration.updateContributionOptions({ foldingStrategy: 'indentation' });
+		}, text);
+		const lines = page.locator('#caller .view-line');
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.fold', { levels: 0, selectionLines: [1, 2, 1] }));
+		await expect(lines).toHaveCount(8);
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.fold', { direction: 'down', selectionLines: [1] }));
+		await expect(lines).toHaveCount(8);
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.fold', { selectionLines: [1] }));
+		await expect(lines).toHaveCount(6);
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.unfold', { levels: 0, selectionLines: [0] }));
+		await expect(lines).toHaveCount(8);
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.fold', { levels: 3, selectionLines: [-1, 99, 8] }));
+		await expect(lines).toHaveCount(8);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).selections).toEqual(['[5,1 -> 5,1]']);
+	});
+
+	test('custom keybindings deliver folding arguments through the command service', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(text => {
+			window.ashStandaloneIntegration.prepareClipboard(text, [[1, 1, 1, 1]]);
+			window.ashStandaloneIntegration.updateContributionOptions({ foldingStrategy: 'indentation' });
+			window.ashStandaloneIntegration.prepareFoldingKeybinding('editor.fold', { levels: 2, selectionLines: [4] });
+		}, text);
+		const input = page.locator('#caller .stanza-editor-input');
+		await input.focus();
+		await page.keyboard.press('F9');
+		await page.keyboard.press('F10');
+		await expect(page.locator('#caller .view-line')).toHaveCount(6);
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.unfold', { selectionLines: [4] }));
+		await expect(page.locator('#caller .view-line')).toHaveCount(8);
+		await expect(input).toBeFocused();
+	});
+
+	test('invalid folding arguments reject without changes and empty line lists retain their scope', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(text => {
+			window.ashStandaloneIntegration.prepareClipboard(text, [[1, 1, 1, 1]]);
+			window.ashStandaloneIntegration.updateContributionOptions({ foldingStrategy: 'indentation' });
+		}, text);
+		const rejected = await page.evaluate(async () => {
+			const errors: string[] = [];
+			for (const command of ['editor.fold', 'editor.unfold']) {
+				for (const args of [[], 'invalid', { levels: '2' }, { levels: NaN }, { direction: 2 }, { selectionLines: [0, '4'] }]) {
+					try {
+						await window.ashStandaloneIntegration.runLineAction(command, args);
+						errors.push('accepted');
+					} catch (error) {
+						errors.push((error as Error).name);
+					}
+				}
+			}
+			return errors;
+		});
+		expect(rejected).toEqual(Array(12).fill('TypeError'));
+		const lines = page.locator('#caller .view-line');
+		await expect(lines).toHaveCount(9);
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.fold', { selectionLines: [] }));
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.fold', { levels: 10, direction: 'up', selectionLines: [] }));
+		await expect(lines).toHaveCount(9);
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.fold', { levels: 2, selectionLines: [] }));
+		await expect(lines).toHaveCount(3);
+		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.unfold', { levels: 3, selectionLines: [] }));
+		await expect(lines).toHaveCount(9);
+	});
 });
 
 test('folding strategy cancels providers and region limits update hidden lines', async ({ page }) => {

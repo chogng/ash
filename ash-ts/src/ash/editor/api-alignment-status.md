@@ -1,5 +1,31 @@
 # Editor API 对齐状态
 
+## Folding 命令参数续批（2026-09-21）
+
+本批已接通 `editor.fold` / `editor.unfold` 的 `levels`、`direction` 和零起始 `selectionLines`。起始已有上一批暂存的 7 个文件变更，保持暂存内容；本批仅在工作区追加修改。
+
+准入链：公开 editor action / 带参数快捷键 → 已有 EditorAction 参数传递 → FoldingController → EditorFoldingModel 的同一组折叠记录 → 隐藏行、装饰和选区。View、隐藏行、装饰、文本和释放 owner 沿用原实现，不增加 DOM、样式或状态载体。
+
+| 准确路径（相对 `ash-ts/src/ash/editor/`） | 文件关系 | 本批职责与验证 |
+| --- | --- | --- |
+| `contrib/folding/browser/folding.ts` | 双方都有；已有 Fold / Unfold 动作 | 在命令边界读取参数，使用显式行号或当前选区，转入原控制器操作 |
+| `contrib/folding/browser/foldingModel.ts` | 双方都有；Controller 消费 | 原记录上按祖先 / 后代层数确定目标，合并多选区后一次修改状态 |
+| `contrib/folding/test/browser/foldingModel.test.ts` | 既有测试 | 验证层数、方向、重复范围和默认折叠行为的区别 |
+| `api-alignment-status.md` | 既有台账 | 记录边界、行为证据与验证结果 |
+
+测试装配与真实入口验证限定既有 `ash-ts/test/integration/browser/standalone.integration.ts` / `.spec.ts`，覆盖 action 参数、快捷键参数、行号覆盖与焦点。无新增或删除文件。Folding 目录仍为 8 个同路径和 1 个既有 Ash 文件；上游路径无缺失。
+
+实现依据是上游动作参数声明、模型测试，以及解释空行号数组和默认参数所需的最小行为片段。Ash 保留自己的有序范围记录，普通折叠仍查找未折叠祖先，指定方向 / 层数时计入已处于目标状态的范围；所有目标在修改状态前确定。命令元数据 schema 与控制器其余公开契约不纳入本批。
+
+行为结果：显式行号覆盖当前选区；层数省略或为 0 时使用 1，`up` 按包含当前行的范围向外处理，其他方向向内处理。重复或重叠行号只改一次状态，范围外行号无操作。空数组在普通折叠与向上操作中无操作；显式向下时以文档为起点，处理深度小于层数的范围。参数形状错误在状态变化前拒绝，文本保持不变。
+
+本批验证：
+
+- Folding 定向单测 25 项、7 个文件通过；9 个 Chromium 命令场景通过，其中新增 4 个参数场景。
+- `check-editor-alignment.mjs --test=all` 通过：1,243 项单测、234 个文件与 598 项浏览器测试全部通过。台账、文件集合、CSS 归属和类型检查通过，源码目录没有新增 JavaScript；保留测试环境既有的 JSDOM Canvas 提示。
+- `build:stanza` 通过，无新增构建警告。仓库未配置 TypeScript formatter / linter；人工复核本批 diff，`git diff --check` 通过。
+- 未运行上游 VS Code 窗口；预期依据本地上游公开参数、模型测试与最小行为片段，不标为完整界面一致。总台账仍为 80 项已处理、41 项待核对。
+
 ## Folding 命令续批（2026-09-21）
 
 已接通递归、全部、指定层级和手动范围的 13 个标准动作，移除控制器自己的组合键解析与等待状态。多选区使用原折叠模型，每次命令先确定目标再改状态，多个光标落在同一范围时不会重复折叠到父级。
@@ -1849,7 +1875,7 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 | `contrib/codelens/browser/codelensWidget.ts` | `CodeLensWidget` | 当前已使用 `CodeLensWidget` 名称；其余公开契约仍待按生产调用方逐项验收 |
 | `contrib/colorPicker/browser/colorDetector.ts` | `ColorDetector` | 已恢复上游公开名；颜色 provider 结果写入标准 before decoration，动态 class ref 先于 CSS owner 释放，注入 marker 由标准鼠标目标读取 |
 | `contrib/find/browser/findController.ts` | `FindController` | 标准查找 / 替换动作及快捷键接通原控件；其余公开契约仍待分部验收 |
-| `contrib/folding/browser/folding.ts` | `FoldingController` | 普通、递归、全部、1–7 级及手动范围动作接通原折叠状态；配置条件、多选区和组合键取消已验证。范围策略与数量上限已接通；完整命令参数、公开状态与 provider 契约仍待核对 |
+| `contrib/folding/browser/folding.ts` | `FoldingController` | 普通、递归、全部、1–7 级及手动范围动作接通原折叠状态；fold / unfold 的层数、方向与指定行参数已接通。配置条件、多选区、组合键取消、范围策略与数量上限已验证；命令元数据、公开状态与 provider 契约仍待核对 |
 | `contrib/inlayHints/browser/inlayHintsController.ts` | `InlayHintsController` | 请求失效及四种 enabled 模式已接通；完整行内布局与其他展示选项仍待验收 |
 | `contrib/inlineCompletions/browser/controller/inlineCompletionsController.ts` | `InlineCompletionsController` | 自动建议开关、只读切换、trigger / commit / hide 命令已接通；完整模型、视图与交互公开契约仍待核对 |
 | `contrib/stickyScroll/browser/stickyScrollController.ts` | `StickyScrollController` | 文件职责、来源请求、候选行、命令、语法着色、行号、折叠图标与定义交互已接通；标准定义查询归属、高度事件消费方和上游同场景验证仍待核对，见 Sticky Scroll 记录 |

@@ -159,7 +159,7 @@ interface StandaloneHarness {
 	invokeLanguageAction(id: string): void;
 	setFoldingSelections(selections: [number, number, number, number][]): void;
 	setFoldingModelAttached(attached: boolean): void;
-	prepareFoldingKeybinding(): void;
+	prepareFoldingKeybinding(command?: string, args?: unknown): void;
 	readFoldingCommandState(): { supported: boolean; inChordMode: boolean };
 	readLanguageActions(): { rename: boolean; quickFix: boolean };
 	prepareLanguageRequest(kind: LanguageRequestKind, emptyDefinition?: boolean): void;
@@ -247,7 +247,7 @@ interface StandaloneHarness {
 	runActiveClipboard(command: 'copy' | 'cut' | 'paste', target: 'outside' | 'readonly' | 'find'): Promise<{ values: string[]; written: string; reads: number; focused: boolean; documentCommands: string[] }>;
 	runDeferredPaste(change: 'none' | 'writableAgain' | 'selection' | 'composition' | 'escape'): Promise<{ value: string; handled: boolean; finishedBeforeDecode: boolean }>;
 	runDeferredDrop(change: 'none' | 'readonly' | 'writableAgain'): Promise<{ value: string; selectionUnchanged: boolean; handled: boolean }>;
-	runLineAction(id: string): Promise<void>;
+	runLineAction(id: string, args?: unknown): Promise<void>;
 	runScopedActions(): Promise<{ supported: boolean[]; values: string[]; otherValue: string; sameContext: boolean; focusRetained: boolean }>;
 	readLineCopy(): { value: string; selections: string[] };
 	prepareReferencePreview(): void;
@@ -716,10 +716,11 @@ window.ashStandaloneIntegration = {
 	invokeLanguageAction: id => { callerEditor.trigger('test', id, {}); },
 	setFoldingSelections: selections => callerEditor.setSelections(selections.map(selection => new stanza.Selection(...selection))),
 	setFoldingModelAttached: attached => callerEditor.setModel(attached ? callerModel : null),
-	prepareFoldingKeybinding: () => {
+	prepareFoldingKeybinding: (command = 'editor.foldAll', args) => {
 		contributionProviders.add(KeybindingsRegistry.registerKeybindingRule({
-			command: 'editor.foldAll',
+			command,
 			keybinding: Keybinding.chord(logicalKey('F9'), logicalKey('F10')),
+			args: [args],
 		}));
 	},
 	readFoldingCommandState: () => ({
@@ -1874,10 +1875,10 @@ window.ashStandaloneIntegration = {
 			focusRetained: ownedEditor.hasTextFocus(),
 		};
 	},
-	runLineAction: async id => {
+	runLineAction: async (id, args) => {
 		const action = callerEditor.getAction(id);
 		if (!action) throw new Error(`Missing editor action: ${id}`);
-		await action.run();
+		await action.run(args);
 	},
 	readLineCopy: () => ({ value: callerEditor.getValue(), selections: (callerEditor.getSelections() ?? []).map(selection => selection.toString()) }),
 	updateRenderingOptions: enabled => {

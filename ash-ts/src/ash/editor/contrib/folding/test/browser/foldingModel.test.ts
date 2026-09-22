@@ -118,6 +118,63 @@ test('Repeated folding moves from a collapsed child to its expanded parent', () 
 	assert.deepEqual(folding.regions.map(region => region.collapsed), [true, true]);
 });
 
+test('Explicit folding depth counts unchanged scopes and preserves unrelated branches', () => {
+	using model = new TextModel('outer\n  inner\n    leaf\n      body\n  sibling\n    body\nend\nother\n  body');
+	using folding = new EditorFoldingModel(model);
+	folding.setRanges([
+		{ startLineIndex: 0, endLineIndex: 5 },
+		{ startLineIndex: 1, endLineIndex: 3 },
+		{ startLineIndex: 2, endLineIndex: 3 },
+		{ startLineIndex: 4, endLineIndex: 5 },
+		{ startLineIndex: 7, endLineIndex: 8 },
+	]);
+
+	folding.setContainingLinesCollapsed([1, 2], true, { levels: 2, direction: 'down' });
+	assert.deepEqual(folding.regions.map(region => region.collapsed), [false, true, true, false, false]);
+	folding.setContainingLinesCollapsed([1], true, { levels: 1, direction: 'down' });
+	assert.deepEqual(folding.regions.map(region => region.collapsed), [false, true, true, false, false]);
+	folding.setContainingLinesCollapsed([0], false, { levels: 2, direction: 'down' });
+	assert.deepEqual(folding.regions.map(region => region.collapsed), [false, false, true, false, false]);
+	folding.setContainingLinesCollapsed([2, 3], true, { levels: 2, direction: 'up' });
+	assert.deepEqual(folding.regions.map(region => region.collapsed), [false, true, true, false, false]);
+	folding.setContainingLinesCollapsed([2], true, { levels: 3, direction: 'up' });
+	assert.deepEqual(folding.regions.map(region => region.collapsed), [true, true, true, false, false]);
+	folding.setContainingLinesCollapsed([3], false, { levels: 2, direction: 'up' });
+	assert.deepEqual(folding.regions.map(region => region.collapsed), [true, false, false, false, false]);
+});
+
+test('Folding targets are merged before publishing one change and ignore lines outside ranges', () => {
+	using model = new TextModel('outer\n  inner\n    body\nend');
+	using folding = new EditorFoldingModel(model);
+	folding.setRanges([{ startLineIndex: 0, endLineIndex: 2 }, { startLineIndex: 1, endLineIndex: 2 }]);
+	let changes = 0;
+	using listener = folding.onDidChange(() => changes++);
+	folding.setContainingLinesCollapsed([-1, 30, 3], true, { levels: 2, direction: 'down' });
+	assert.equal(changes, 0);
+	folding.setContainingLinesCollapsed([1, 2, 1], true, { levels: 2, direction: 'up' });
+	assert.deepEqual({ changes, collapsed: folding.regions.map(region => region.collapsed) }, { changes: 1, collapsed: [true, true] });
+	folding.setContainingLinesCollapsed([0, 1, 2], false, { levels: 2, direction: 'down' });
+	assert.deepEqual({ changes, collapsed: folding.regions.map(region => region.collapsed) }, { changes: 2, collapsed: [false, false] });
+});
+
+test('Empty explicit line lists use document depth only for downward folding', () => {
+	using model = new TextModel('outer\n  inner\n    body\nother\n  body');
+	using folding = new EditorFoldingModel(model);
+	folding.setRanges([
+		{ startLineIndex: 0, endLineIndex: 2 },
+		{ startLineIndex: 1, endLineIndex: 2 },
+		{ startLineIndex: 3, endLineIndex: 4 },
+	]);
+	folding.setContainingLinesCollapsed([], true);
+	folding.setContainingLinesCollapsed([], true, { levels: 3, direction: 'up' });
+	folding.setContainingLinesCollapsed([], true, { levels: 1, direction: 'down' });
+	assert.deepEqual(folding.regions.map(region => region.collapsed), [false, false, false]);
+	folding.setContainingLinesCollapsed([], true, { levels: 2, direction: 'down' });
+	assert.deepEqual(folding.regions.map(region => region.collapsed), [true, false, true]);
+	folding.setContainingLinesCollapsed([], false, { levels: 3, direction: 'down' });
+	assert.deepEqual(folding.regions.map(region => region.collapsed), [false, false, false]);
+});
+
 test('Manual folds collapse on creation and removal respects cursor and selection scopes', () => {
 	using model = new TextModel('outer\none\ntwo\nthree\nfour\nfive\nend\nafter');
 	using folding = new EditorFoldingModel(model);

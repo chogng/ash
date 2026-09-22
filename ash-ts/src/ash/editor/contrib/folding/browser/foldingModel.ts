@@ -113,17 +113,62 @@ export class EditorFoldingModel extends Disposable {
 	}
 
 	/** Resolves all selected scopes before changing state, so repeated cursors fold a scope only once. */
-	setContainingLinesCollapsed(lineIndexes: readonly number[], collapsed: boolean): void {
+	setContainingLinesCollapsed(
+		lineIndexes: readonly number[],
+		collapsed: boolean,
+		options?: { levels: number; direction: 'up' | 'down' },
+	): void {
 		if (typeof collapsed !== "boolean") throw new TypeError("Folding collapse state must be boolean");
 		const targets = new Set<EditorFoldingRegionRecord>();
+		const levels = options?.levels ?? 1;
+		const depths = options?.direction === 'down' && levels > 1
+			? new Map(this.records.map(record => [record, this.getNestingDepth(record)]))
+			: undefined;
+		if (lineIndexes.length === 0 && depths) {
+			for (const [record, depth] of depths) {
+				if (depth < levels && record.collapsed !== collapsed) {
+					targets.add(record);
+				}
+			}
+		}
 		for (const lineIndex of lineIndexes) {
-			validateEditorFoldingLineIndex(this.textModel, lineIndex);
-			const record = this.findRecord(candidate => {
+			const containing = this.records.filter(candidate => {
 				const range = candidate.range.range;
-				return lineIndex >= range.startLineNumber - 1 && lineIndex <= range.endLineNumber - 1
-					&& (!collapsed || !candidate.collapsed);
-			});
-			if (record && record.collapsed !== collapsed) targets.add(record);
+				return lineIndex >= range.startLineNumber - 1 && lineIndex <= range.endLineNumber - 1;
+			}).reverse();
+			if (!options) {
+				const record = containing.find(candidate => !collapsed || !candidate.collapsed);
+				if (record && record.collapsed !== collapsed) {
+					targets.add(record);
+				}
+			} else if (options.direction === 'up') {
+				for (let index = 0; index < containing.length && index + 1 <= levels; index++) {
+					const record = containing[index]!;
+					if (record.collapsed !== collapsed) {
+						targets.add(record);
+					}
+				}
+			} else {
+				const record = containing[0];
+				if (!record) {
+					continue;
+				}
+				if (record.collapsed !== collapsed) {
+					targets.add(record);
+				}
+				if (!depths) {
+					continue;
+				}
+				const root = record.range.range;
+				const rootDepth = depths.get(record)!;
+				for (const [candidate, depth] of depths) {
+					const range = candidate.range.range;
+					if (range.startLineNumber >= root.startLineNumber && range.endLineNumber <= root.endLineNumber
+						&& depth - rootDepth < levels && candidate.collapsed !== collapsed) {
+						targets.add(candidate);
+					}
+				}
+			}
 		}
 		for (const record of targets) record.collapsed = collapsed;
 		if (targets.size > 0) this.changeEmitter.fire();
