@@ -28,7 +28,7 @@ const CHAT_INPUT_MAX_HEIGHT = 320;
 /** Stanza-backed embedded editor hosted by the Chat input part. */
 export class ChatInputEditor extends Disposable implements IChatInputEditor {
 	readonly element: HTMLDivElement;
-	private readonly model = this._register(new TextModel());
+	private readonly model = this._register(new TextModel('', { languageId: CHAT_INPUT_LANGUAGE_ID }));
 	private readonly editor: CodeEditorWidget;
 	private readonly _onDidChange = this._register(new Emitter<string>());
 	private readonly _onDidSubmit = this._register(new Emitter<void>());
@@ -66,7 +66,6 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 			this.editor.controller,
 			completions,
 			completionSession,
-			CHAT_INPUT_LANGUAGE_ID,
 			{ widgetContainer: this.element },
 		));
 		const layout = this._register(new RunOnceScheduler(() => this.layout(), 0));

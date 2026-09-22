@@ -1,5 +1,149 @@
 import { expect, test } from '@playwright/test';
 
+test.describe('contribution lifecycle', () => {
+	test.afterEach(async ({ page }) => {
+		await page.evaluate(() => window.ashStandaloneIntegration?.dispose());
+	});
+
+	for (const reason of ['escape', 'language', 'selection', 'blur', 'readonly', 'dispose'] as const) {
+		test(`completion ${reason} cancels a pending request and rejects its late result`, async ({ page }) => {
+			await page.goto('/standalone.html');
+			await page.evaluate(() => window.ashStandaloneIntegration.prepareContributionRequests('completion'));
+			await page.keyboard.press('Control+Space');
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(1);
+			if (reason === 'escape') {
+				await page.keyboard.press('Escape');
+			} else {
+				await page.evaluate(reason => window.ashStandaloneIntegration.changeContributionState(reason), reason);
+			}
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).toEqual([{ languageId: 'typescript', aborted: true }]);
+			await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(0));
+			await expect(page.locator('#caller .stanza-editor-completion:not([hidden])')).toHaveCount(0);
+			await expect(page.locator('#caller .stanza-editor-input[aria-activedescendant]')).toHaveCount(0);
+		});
+	}
+
+	test('completion uses the new language and Escape stops incomplete refreshes', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareContributionRequests('completion'));
+		await page.evaluate(() => window.ashStandaloneIntegration.changeContributionState('language'));
+		await page.keyboard.press('Control+Space');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).toEqual([{ languageId: 'javascript', aborted: false }]);
+		await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(0));
+		await expect(page.locator('#caller .stanza-editor-completion')).toContainText('completion: javascript');
+		await page.keyboard.press('Escape');
+		await page.keyboard.type('z');
+		await expect(page.locator('#caller .stanza-editor-completion:not([hidden])')).toHaveCount(0);
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).toHaveLength(1);
+	});
+
+	test('folding cancels old language requests and queries the current language after edits', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareContributionRequests('folding'));
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBeGreaterThan(0);
+		const count = await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length);
+		await page.evaluate(() => window.ashStandaloneIntegration.changeContributionState('language'));
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().at(-1)?.languageId)).toBe('javascript');
+		const requests = await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests());
+		expect(requests.slice(0, count).every(request => request.aborted)).toBe(true);
+		expect(requests.slice(count).every(request => request.languageId === 'javascript')).toBe(true);
+		await page.evaluate(() => window.ashStandaloneIntegration.changeContributionState('edit'));
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBeGreaterThan(requests.length);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).slice(count).every(request => request.languageId === 'javascript')).toBe(true);
+	});
+
+	for (const reason of ['language', 'provider', 'dispose'] as const) {
+		test(`links ${reason} cancels an unresolved request`, async ({ page }) => {
+			await page.goto('/standalone.html');
+			await page.evaluate(() => window.ashStandaloneIntegration.prepareContributionRequests('links'));
+			const point = await page.evaluate(() => window.ashStandaloneIntegration.contributionPoint(3));
+			await page.mouse.move(point.x, point.y);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(1);
+			await page.mouse.move(point.x + 1, point.y);
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).toHaveLength(1);
+			await page.evaluate(reason => window.ashStandaloneIntegration.changeContributionState(reason), reason);
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).toEqual([{ languageId: 'typescript', aborted: true }]);
+			await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(0));
+			await expect(page.locator('#caller .stanza-editor-link-target')).toHaveCount(0);
+		});
+	}
+
+	test('links discard cached targets when language changes', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareContributionRequests('links'));
+		const point = await page.evaluate(() => window.ashStandaloneIntegration.contributionPoint(3));
+		await page.mouse.move(point.x, point.y);
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(1);
+		await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(0));
+		await expect(page.locator('#caller .stanza-editor-link-target')).toHaveCount(1);
+		await page.evaluate(() => window.ashStandaloneIntegration.changeContributionState('language'));
+		await page.mouse.click(point.x, point.y);
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readOpenedLinks())).toEqual([]);
+		await page.mouse.move(point.x + 1, point.y);
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(2);
+		await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(1));
+		await expect(page.locator('#caller .stanza-editor-link-target')).toHaveCount(1);
+		await page.mouse.click(point.x + 1, point.y);
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readOpenedLinks())).toEqual(['https://example.invalid/javascript']);
+	});
+
+	test('CodeLens removes old language commands and rejects late responses', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareContributionRequests('codelens'));
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(1);
+		await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(0));
+		await expect(page.locator('#caller .stanza-editor-codelens')).toHaveText('lens: typescript');
+		await page.evaluate(() => window.ashStandaloneIntegration.changeContributionState('language'));
+		await expect(page.locator('#caller .stanza-editor-codelens')).toHaveCount(0);
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(2);
+		await page.evaluate(() => window.ashStandaloneIntegration.changeContributionState('off'));
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests()))[1]!.aborted).toBe(true);
+		await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(1));
+		await expect(page.locator('#caller .stanza-editor-codelens')).toHaveCount(0);
+	});
+
+	test('CodeLens can be enabled after creation and toggled without restoring stale widgets', async ({ page }) => {
+		await page.goto('/standalone.html?codeLensOff');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareContributionRequests('codelens'));
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).toEqual([]);
+		await page.evaluate(() => window.ashStandaloneIntegration.changeContributionState('on'));
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(1);
+		await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(0));
+		await expect(page.locator('#caller .stanza-editor-codelens')).toHaveText('lens: typescript');
+		await page.evaluate(() => window.ashStandaloneIntegration.changeContributionState('off'));
+		await expect(page.locator('#caller .stanza-editor-codelens')).toHaveCount(0);
+		await page.evaluate(() => window.ashStandaloneIntegration.changeContributionState('on'));
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(2);
+		await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(1));
+		await expect(page.locator('#caller .stanza-editor-codelens')).toHaveText('lens: typescript');
+	});
+
+	test('selection highlighting responds to configuration without moving the selection', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareContributionRequests('hover'));
+		await page.evaluate(() => window.ashStandaloneIntegration.changeContributionState('selection'));
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readSelectionHighlights())).toBe(1);
+		const state = await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing());
+		await page.evaluate(() => window.ashStandaloneIntegration.changeContributionState('off'));
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readSelectionHighlights())).toBe(0);
+		await page.evaluate(() => window.ashStandaloneIntegration.changeContributionState('on'));
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readSelectionHighlights())).toBe(1);
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).toEqual(state);
+	});
+
+	test('hover clears documentation when the next word has no result', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareContributionRequests('hover'));
+		const first = await page.evaluate(() => window.ashStandaloneIntegration.contributionPoint(3));
+		await page.mouse.move(first.x, first.y);
+		await expect(page.locator('#caller .stanza-editor-hover:not([hidden])')).toHaveText('alpha documentation');
+		const next = await page.evaluate(() => window.ashStandaloneIntegration.contributionPoint(9));
+		await page.mouse.move(next.x, next.y);
+		await expect(page.locator('#caller .stanza-editor-hover')).toBeHidden();
+		await expect(page.locator('#caller .stanza-editor-hover')).toHaveText('');
+	});
+});
+
 test.describe('inlay hints', () => {
 	test.afterEach(async ({ page }) => {
 		await page.evaluate(() => window.ashStandaloneIntegration?.dispose());

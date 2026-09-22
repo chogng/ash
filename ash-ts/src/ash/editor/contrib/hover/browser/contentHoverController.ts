@@ -45,8 +45,7 @@ export class ContentHoverController extends Disposable {
 			this.hide();
 			return;
 		}
-		this.cancelRequest();
-		this.timer.clear();
+		this.hide();
 		const targetWindow = this.element.ownerDocument.defaultView;
 		if (!targetWindow) return;
 		this.timer.value = disposableWindowTimeout(targetWindow, () => {

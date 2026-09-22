@@ -124,7 +124,14 @@ interface ParameterHintRequestState {
 
 type LanguageRequestKind = 'hover' | 'selection' | 'definition' | 'call' | 'type' | 'symbols';
 type LanguageRequestChange = 'text' | 'selection' | 'language' | 'provider' | 'model' | 'dispose' | 'blur';
+type ContributionRequestKind = 'completion' | 'folding' | 'links' | 'codelens' | 'hover';
 interface StandaloneHarness {
+	prepareContributionRequests(kind: ContributionRequestKind): void;
+	readContributionRequests(): { languageId: string; aborted: boolean }[];
+	finishContributionRequest(index: number, empty?: boolean): Promise<void>;
+	changeContributionState(reason: 'language' | 'edit' | 'dispose' | 'provider' | 'off' | 'on' | 'selection' | 'blur' | 'readonly'): void;
+	contributionPoint(column: number): { x: number; y: number };
+	readSelectionHighlights(): number;
 	prepareColorPicker(): void;
 	invokeLanguageAction(id: string): void;
 	readLanguageActions(): { rename: boolean; quickFix: boolean };
@@ -313,6 +320,7 @@ const callerEditor = stanza.editor.create(callerContainer, {
 	placeholder: 'Caller model',
 	showSymbolIcons: !new URL(location.href).searchParams.has('symbolIconsOff'),
 	onOpenLink: target => { openedLinks.push(target); },
+	codeLens: !new URL(location.href).searchParams.has('codeLensOff'),
 	inlayHints: { enabled: new URL(location.href).searchParams.has('inlayHintsOff') ? 'off' : 'on' },
 });
 const ownedEditor = stanza.editor.create(ownedContainer, {
@@ -361,6 +369,12 @@ const inlayRequests: {
 }[] = [];
 let semanticRegistration: ReturnType<typeof stanza.languages.registerDocumentSemanticTokensProvider> | undefined;
 let completionRegistration: ReturnType<typeof stanza.languages.registerCompletionItemProvider> | undefined;
+const contributionProviders = new DisposableStore();
+const contributionRequests: { languageId: string; isAborted: () => boolean; finish: (empty: boolean) => void }[] = [];
+
+function deferContributionRequest<T>(languageId: string, isAborted: () => boolean, result: T, empty: T): Promise<T> {
+	return new Promise(resolve => contributionRequests.push({ languageId, isAborted, finish: isEmpty => resolve(isEmpty ? empty : result) }));
+}
 let viewZone: stanza.IViewZone | undefined;
 let viewZoneId = '';
 const computedZoneHeights: number[] = [];
@@ -446,6 +460,70 @@ let formattingProvider: { dispose(): void } | undefined;
 let bracketTokenRegistration: { dispose(): void } | undefined;
 
 window.ashStandaloneIntegration = {
+	prepareContributionRequests: kind => {
+		contributionProviders.clear();
+		callerModel.setLanguage('typescript');
+		callerEditor.setValue('alpha beta\n  gamma\nalpha');
+		callerEditor.setPosition(new stanza.Position(1, 6));
+		callerEditor.focus();
+		const selector = ['typescript', 'javascript'];
+		if (kind === 'completion') {
+			contributionProviders.add(stanza.languages.registerCompletionItemProvider(selector, {
+				id: 'standalone.contribution',
+				provideCompletions: (request, signal) => deferContributionRequest<stanza.LanguageCompletionProviderResult>(request.languageId, () => signal.aborted, {
+					items: [{ id: 'item', label: `completion: ${request.languageId}`, kind: stanza.languages.LanguageCompletionItemKind.Text, range: stanza.Range.fromPositions(request.position), insertText: 'result' }],
+					isIncomplete: true,
+				}, { items: [], isIncomplete: false }),
+			}));
+		} else if (kind === 'folding') {
+			contributionProviders.add(stanza.languages.registerFoldingRangeProvider(selector, {
+				provideFoldingRanges: (request, signal) => deferContributionRequest(request.languageId, () => signal.aborted, [{ startLineIndex: 0, endLineIndex: 2 }], []),
+			}));
+		} else if (kind === 'links') {
+			contributionProviders.add(stanza.languages.registerLinkProvider(selector, {
+				provideLinks: (request, signal) => deferContributionRequest(request.languageId, () => signal.aborted, [{ range: new stanza.Range(1, 1, 1, 6), target: `https://example.invalid/${request.languageId}` }], []),
+			}));
+		} else if (kind === 'codelens') {
+			contributionProviders.add(stanza.languages.registerCodeLensProvider(selector, {
+				provideCodeLenses: (model, token) => deferContributionRequest<stanza.CodeLensList>(model.getLanguageId(), () => token.isCancellationRequested, {
+					lenses: [{ range: new stanza.Range(1, 1, 1, 6), command: { id: 'test.command', title: `lens: ${model.getLanguageId()}` } }],
+				}, { lenses: [] }),
+			}));
+		} else {
+			contributionProviders.add(stanza.languages.registerHoverProvider(selector, {
+				provideHover: request => {
+					if (request.position.column >= 6) {
+						return undefined;
+					}
+					return { contents: ['alpha documentation'] };
+				},
+			}));
+		}
+	},
+	readContributionRequests: () => contributionRequests.map(request => ({ languageId: request.languageId, aborted: request.isAborted() })),
+	finishContributionRequest: async (index, empty = false) => {
+		contributionRequests[index]!.finish(empty);
+		await new Promise(resolve => setTimeout(resolve, 0));
+	},
+	changeContributionState: reason => {
+		switch (reason) {
+			case 'language': callerModel.setLanguage('javascript'); break;
+			case 'edit': callerModel.applyEdits([{ range: new stanza.Range(1, 1, 1, 1), text: 'x' }]); break;
+			case 'dispose': callerEditor.dispose(); break;
+			case 'provider': contributionProviders.clear(); break;
+			case 'off': callerEditor.updateOptions({ codeLens: false, selectionHighlight: false }); break;
+			case 'on': callerEditor.updateOptions({ codeLens: true, selectionHighlight: true }); break;
+			case 'selection': callerEditor.setSelection(new stanza.Selection(1, 1, 1, 6)); break;
+			case 'blur': ownedEditor.focus(); break;
+			case 'readonly': callerEditor.updateOptions({ readOnly: true }); break;
+		}
+	},
+	contributionPoint: column => {
+		const position = callerEditor.getScrolledVisiblePosition(new stanza.Position(1, column))!;
+		const bounds = callerEditor.getDomNode()!.getBoundingClientRect();
+		return { x: bounds.left + callerEditor.getLayoutInfo().contentLeft + position.left + 2, y: bounds.top + position.top + position.height / 2 };
+	},
+	readSelectionHighlights: () => callerModel.getAllDecorations().filter(decoration => decoration.options.className === 'selection-highlight').length,
 	invokeLanguageAction: id => { callerEditor.trigger('test', id, {}); },
 	readLanguageActions: () => ({
 		rename: callerEditor.getAction('editor.action.rename')?.isSupported() ?? false,
@@ -1988,6 +2066,10 @@ window.ashStandaloneIntegration = {
 	},
 	releaseOwned: () => ownedEditor.dispose(),
 	dispose: () => {
+		contributionProviders.dispose();
+		for (const request of contributionRequests) {
+			request.finish(true);
+		}
 		languageRequestProviders.dispose();
 		parameterHintsRegistration?.dispose();
 		for (const request of parameterHintRequests) request.finish('empty');

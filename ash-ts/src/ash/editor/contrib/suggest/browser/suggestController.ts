@@ -6,6 +6,7 @@ import { Position } from "../../../common/core/position.js";
 import { stopEvent } from '../../../../base/browser/dom.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
+import { EditorOption } from '../../../common/config/editorOptions.js';
 import { createLanguageCompletionIncompleteRefreshContext, createLanguageCompletionInvokeContext, type LanguageCompletionContext } from '../../../common/languages.js';
 import { LanguageCompletionService } from './suggest.js';
 import { type EditorViewDidEditEvent, type EditorViewTextUpdateEvent, type ViewController } from '../../../browser/view/viewController.js';
@@ -37,7 +38,6 @@ export class SuggestController extends Disposable {
 		private readonly view: ViewController,
 		private readonly service: LanguageCompletionService,
 		private readonly session: SuggestModel,
-		private readonly languageId: string,
 		options: SuggestControllerOptions = {},
 	) {
 		super();
@@ -70,6 +70,18 @@ export class SuggestController extends Disposable {
 			this._register(view.onWillTextUpdate(event => this.handleTextUpdate(event)));
 			this._register(view.onWillKeydown(event => this.handleKeydown(event)));
 			this._register(view.onDidEdit(event => this.handleDidEdit(event)));
+			this._register(service.textModel.onDidChangeLanguage(() => this.cancel()));
+			this._register(editor.onDidBlurEditorText(() => this.cancel()));
+			this._register(editor.onDidChangeCursorSelection(event => {
+				if (event.modelVersionId === event.oldModelVersionId) {
+					this.cancel();
+				}
+			}));
+			this._register(editor.onDidChangeConfiguration(event => {
+				if (event.hasChanged(EditorOption.readOnly) && editor.getOption(EditorOption.readOnly)) {
+					this.cancel();
+				}
+			}));
 			this._register(toDisposable(() => this.cancelCompletionRequest()));
 		} catch (error) {
 			this.dispose();
@@ -156,9 +168,12 @@ export class SuggestController extends Disposable {
 			!event.metaKey &&
 			event.key === 'Escape'
 		) {
-			if (this.session.cancelSnippetPlaceholderNavigation() || state) {
-				stopEvent(event);
-				if (state) this.session.cancel();
+			const cancelledSnippet = this.session.cancelSnippetPlaceholderNavigation();
+			if (cancelledSnippet || state || this.completionRequest) {
+				if (cancelledSnippet || state) {
+					stopEvent(event);
+				}
+				this.cancel();
 			}
 			return;
 		}
@@ -230,7 +245,7 @@ export class SuggestController extends Disposable {
 			const modelVersion = this.view.viewport.textModel.version;
 			const request = this.beginCompletionRequest();
 			void this.service.requestTriggerCharacter(
-				this.languageId,
+				this.service.textModel.getLanguageId(),
 				position,
 				insertedText,
 				{ signal: request.signal },
@@ -256,6 +271,9 @@ export class SuggestController extends Disposable {
 	}
 
 	private requestCompletion(context: LanguageCompletionContext): void {
+		if (this.editor.getOption(EditorOption.readOnly)) {
+			return;
+		}
 		const selections = this.editor.getSelections();
 		if (!selections || selections.length !== 1 || !selections[0]!.isEmpty()) {
 			this.session.cancel();
@@ -264,7 +282,7 @@ export class SuggestController extends Disposable {
 		const request = this.beginCompletionRequest();
 		try {
 			void this.service.request(
-				this.languageId,
+				this.service.textModel.getLanguageId(),
 				selections[0]!.getPosition(),
 				context,
 				{ signal: request.signal },
@@ -287,6 +305,17 @@ export class SuggestController extends Disposable {
 	private cancelCompletionRequest(): void {
 		this.completionRequest?.abort();
 		this.completionRequest = undefined;
+	}
+
+	private cancel(): void {
+		this.cancelCompletionRequest();
+		this.completionIsIncomplete = false;
+		if (!this.session.isDisposed) {
+			this.session.cancel();
+		}
+		if (!this.service.results.isDisposed) {
+			this.service.results.clear();
+		}
 	}
 
 	private releaseCompletionRequest(request: AbortController): void {
@@ -319,7 +348,7 @@ registerEditorContribution({
 		const session = context.register(new SuggestModel(completions.results, context.editor, {
 			resolver: completions,
 			onResolveError: context.onLanguageError,
-			onDidAccept: item => completions.executeCompletionCommand(context.languageId, item, new AbortController().signal),
+			onDidAccept: item => completions.executeCompletionCommand(context.model.getLanguageId(), item, new AbortController().signal),
 			snippetVariables: createSnippetVariables(context.options.input),
 		}));
 		return new SuggestController(
@@ -327,7 +356,6 @@ registerEditorContribution({
 			context.controller,
 			completions,
 			session,
-			context.languageId,
 			{ onRequestError: context.onLanguageError },
 		);
 	},

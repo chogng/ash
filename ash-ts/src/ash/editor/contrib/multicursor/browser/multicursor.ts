@@ -17,26 +17,19 @@ import { type TextModel } from '../../../common/model/textModel.js';
 
 import type { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { TrackedRangeStickiness, type ITextModel } from '../../../common/model.js';
+import { EditorOption } from '../../../common/config/editorOptions.js';
 
 const MAX_SELECTION_HIGHLIGHTS = 10_000;
 
 interface SelectionHighlighterOptions {
 	readonly languageId: string;
 	readonly languageFeaturesService: ILanguageFeaturesService;
-	readonly enabled?: boolean;
-	readonly multiline?: boolean;
-	readonly maxLength?: number;
-	readonly occurrenceHighlights?: boolean;
 }
 
 /** Owns textual matches for non-empty editor selections. */
 export class SelectionHighlighter extends Disposable {
 	public static readonly ID = 'editor.contrib.selectionHighlighter';
 
-	private readonly enabled: boolean;
-	private readonly multiline: boolean;
-	private readonly maxLength: number;
-	private readonly occurrenceHighlights: boolean;
 	private readonly languageId: string;
 	private readonly languageFeaturesService: ILanguageFeaturesService;
 	private readonly model: TextModel;
@@ -49,14 +42,18 @@ export class SelectionHighlighter extends Disposable {
 	) {
 		super();
 		this.model = validateSelectionHighlighter(editor, decorations, options);
-		this.enabled = options.enabled ?? true;
-		this.multiline = options.multiline ?? false;
-		this.maxLength = options.maxLength ?? 200;
-		this.occurrenceHighlights = options.occurrenceHighlights ?? true;
 		this.languageId = options.languageId;
 		this.languageFeaturesService = options.languageFeaturesService;
 		this._register(editor.onDidChangeCursorSelection(() => this.update()));
 		this._register(this.model.onDidChangeContent(() => this.update()));
+		this._register(editor.onDidChangeConfiguration(event => {
+			if (event.hasChanged(EditorOption.selectionHighlight)
+				|| event.hasChanged(EditorOption.selectionHighlightMultiline)
+				|| event.hasChanged(EditorOption.selectionHighlightMaxLength)
+				|| event.hasChanged(EditorOption.occurrencesHighlight)) {
+				this.update();
+			}
+		}));
 		this.update();
 	}
 
@@ -69,7 +66,7 @@ export class SelectionHighlighter extends Disposable {
 
 	private update(): void {
 		const ranges = this.findRanges();
-		const hasSemanticHighlights = this.occurrenceHighlights && this.languageFeaturesService.documentHighlightProvider.has(this.model);
+		const hasSemanticHighlights = this.editor.getOption(EditorOption.occurrencesHighlight) !== 'off' && this.languageFeaturesService.documentHighlightProvider.has(this.model);
 		const key = `${hasSemanticHighlights}:${ranges.map(range => `${this.model.offsetAt(range.getStartPosition())}-${this.model.offsetAt(range.getEndPosition())}`).join(',')}`;
 		if (key === this.lastKey) return;
 		this.lastKey = key;
@@ -85,13 +82,14 @@ export class SelectionHighlighter extends Disposable {
 	}
 
 	private findRanges(): readonly Range[] {
-		if (!this.enabled) return Object.freeze([]);
+		if (!this.editor.getOption(EditorOption.selectionHighlight)) return Object.freeze([]);
 		const selected = this.editor.getSelections() ?? [];
 		if (selected.some(selection => selection.isEmpty())) return Object.freeze([]);
 		const source = selected[0]!;
-		if (!this.multiline && source.getStartPosition().lineNumber !== source.getEndPosition().lineNumber) return Object.freeze([]);
+		if (!this.editor.getOption(EditorOption.selectionHighlightMultiline) && source.getStartPosition().lineNumber !== source.getEndPosition().lineNumber) return Object.freeze([]);
 		const text = this.model.getTextInRange(source);
-		if (!text || /^\s+$/u.test(text) || (this.maxLength > 0 && text.length > this.maxLength)) return Object.freeze([]);
+		const maxLength = this.editor.getOption(EditorOption.selectionHighlightMaxLength);
+		if (!text || /^\s+$/u.test(text) || (maxLength > 0 && text.length > maxLength)) return Object.freeze([]);
 		if (!selectionsContainSameText(this.model, selected, text)) return Object.freeze([]);
 		const word = this.model.getWordAtPosition(source.getStartPosition());
 		const wholeWord = word !== null && source.startLineNumber === source.endLineNumber && source.startColumn === word.startColumn && source.endColumn === word.endColumn;
@@ -107,10 +105,6 @@ function validateSelectionHighlighter(editor: ICodeEditor, decorations: TextDeco
 	const model = editor.getModel();
 	if (!model || model !== decorations.textModel) throw new TypeError('Selection highlighter dependencies must share one text model');
 	if (!options || typeof options !== 'object' || !options.languageId || !options.languageFeaturesService) throw new TypeError('Selection highlighter requires language services');
-	if (options.enabled !== undefined && typeof options.enabled !== 'boolean') throw new TypeError('Selection highlighter enabled option must be boolean');
-	if (options.multiline !== undefined && typeof options.multiline !== 'boolean') throw new TypeError('Selection highlighter multiline option must be boolean');
-	if (options.occurrenceHighlights !== undefined && typeof options.occurrenceHighlights !== 'boolean') throw new TypeError('Selection highlighter semantic option must be boolean');
-	if (options.maxLength !== undefined && (!Number.isSafeInteger(options.maxLength) || options.maxLength < 0)) throw new RangeError('Selection highlighter maximum length must be a non-negative integer');
 	return decorations.textModel;
 }
 
@@ -261,10 +255,6 @@ registerEditorContribution({ id: SelectionHighlighter.ID, install: context => {
 			{
 				languageId: context.languageId,
 				languageFeaturesService: context.languageFeaturesService,
-				enabled: context.options.selectionHighlight,
-				multiline: context.options.selectionHighlightMultiline,
-				maxLength: context.options.selectionHighlightMaxLength,
-				occurrenceHighlights: context.options.occurrencesHighlight !== "off",
 			},
 		);
 	}

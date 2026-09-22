@@ -32,7 +32,6 @@ registerEditorContribution({
 		if (context.options.folding === false || context.model.largeFile.tooLargeForTokenization) return;
 		const service = context.register(new FoldingRangeService(context.model, context.languageFeaturesService.foldingRangeProvider, context.options.input.resource));
 		context.register(new FoldingRangeSource(folding, service, {
-			languageId: context.languageId,
 			configurations: context.configurations,
 			providers: context.languageFeaturesService.foldingRangeProvider,
 			tabSize: context.options.indentation?.tabSize,
@@ -93,7 +92,6 @@ class FoldingRangeSource extends Disposable {
 		private readonly folding: EditorFoldingModel,
 		private readonly service: FoldingRangeService,
 		private readonly options: {
-			readonly languageId: string;
 			readonly configurations: ILanguageConfigurationService;
 			readonly providers: ILanguageFeaturesService['foldingRangeProvider'];
 			readonly tabSize?: number;
@@ -102,6 +100,7 @@ class FoldingRangeSource extends Disposable {
 	) {
 		super();
 		this._register(folding.model.onDidChangeContent(() => this.refresh()));
+		this._register(folding.model.onDidChangeLanguage(() => this.refresh()));
 		this._register(folding.model.onDidChangeTokens(() => this.refresh()));
 		this._register(options.configurations.onDidChange(() => this.refresh()));
 		this._register(options.providers.onDidChange(() => this.refresh()));
@@ -112,13 +111,13 @@ class FoldingRangeSource extends Disposable {
 	private refresh(): void {
 		this.request?.abort();
 		const local = mergeEditorFoldingRanges(
-			computeEditorLanguageFoldingRanges(this.folding.model, this.options.languageId, this.options.configurations),
+			computeEditorLanguageFoldingRanges(this.folding.model, this.folding.model.getLanguageId(), this.options.configurations),
 			computeEditorIndentFoldingRanges(this.folding.model, { tabSize: this.options.tabSize }),
 		);
 		this.folding.setProviderRanges(local);
 		if (!this.options.providers.has(this.folding.model)) return;
 		const request = this.request = new AbortController();
-		void this.service.provideFoldingRanges(this.options.languageId, request.signal).then(ranges => {
+		void this.service.provideFoldingRanges(this.folding.model.getLanguageId(), request.signal).then(ranges => {
 			if (request.signal.aborted || this.request !== request) return;
 			this.folding.setProviderRanges(mergeEditorFoldingRanges(local, ranges));
 		}, error => {

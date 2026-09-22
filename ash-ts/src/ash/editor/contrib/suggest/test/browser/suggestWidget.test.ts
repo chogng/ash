@@ -58,7 +58,7 @@ test("Completion widget projects named options, focus, ARIA, and content coordin
 	using session = new SuggestModel(service.results, editor);
 	viewport.layout({ width: 300, height: 40 });
 	const input = viewport.controller;
-	using suggest = new SuggestController(editor, input, service, session, "plaintext");
+	using suggest = new SuggestController(editor, input, service, session);
 	viewport.focus();
 	accept(service.results, model, 1, [
 		completion("constant", "const", LanguageCompletionItemKind.Keyword, "declaration"),
@@ -206,7 +206,7 @@ test("Escape cancels locally while clicking accepts the selected option", () => 
 	fixture.input.element.dispatchEvent(escape);
 	assert.equal(escape.defaultPrevented, true);
 	assert.equal(fixture.suggest.widget.visible, false);
-	assert.notEqual(fixture.store.result, undefined);
+	assert.equal(fixture.store.result, undefined);
 
 	accept(fixture.store, fixture.model, 2, [
 		completion("constant", "const", LanguageCompletionItemKind.Keyword),
@@ -246,8 +246,8 @@ test("Completion widget validates ownership and clears its active descendant on 
 	editor.setPosition(new Position((0) + 1, (3) + 1));
 	using session = new SuggestModel(service.results, editor);
 	const input = viewport.controller;
-	assert.throws(() => new SuggestController(editor, input, service, otherSession, "plaintext"), /must share one text model/);
-	using suggest = new SuggestController(editor, input, service, session, "plaintext");
+	assert.throws(() => new SuggestController(editor, input, service, otherSession), /must share one text model/);
+	using suggest = new SuggestController(editor, input, service, session);
 	assert.equal(input.element.getAttribute("aria-autocomplete"), "both");
 	suggest.dispose();
 	assert.equal(input.element.getAttribute("aria-autocomplete"), "both");
@@ -343,7 +343,7 @@ function createFixture(text: string, sessionOptions: LanguageCompletionSessionOp
 	const session = new SuggestModel(service.results, editor, sessionOptions);
 	viewport.layout({ width: 300, height: 40 });
 	const input = viewport.controller;
-	const suggest = new SuggestController(editor, input, service, session, "plaintext");
+	const suggest = new SuggestController(editor, input, service, session);
 	viewport.focus();
 	return {
 		dom,

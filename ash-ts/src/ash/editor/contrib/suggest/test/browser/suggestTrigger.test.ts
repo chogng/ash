@@ -176,7 +176,7 @@ test("Completion request wiring rejects a same-model session from another servic
 	using session = new SuggestModel(firstService.results, editor);
 
 	const input = viewport.controller;
-	assert.throws(() => new SuggestController(editor, input, secondService, session, "typescript"), /must share one text model and completion result store/);
+	assert.throws(() => new SuggestController(editor, input, secondService, session), /must share one text model and completion result store/);
 	dom.window.close();
 });
 
@@ -194,7 +194,7 @@ function createFixture(provider: LanguageCompletionProvider, text = "con"): Trig
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const registry = new LanguageCompletionProviderRegistry();
 	const registration = registry.register(provider);
-	const model = new TextModel(text);
+	const model = new TextModel(text, { languageId: "typescript" });
 	const service = new LanguageCompletionService(model, registry);
 	const editor = createTestCodeEditor({
 		container: requiredElement<HTMLElement>(dom.window.document, "main"),
@@ -209,7 +209,7 @@ function createFixture(provider: LanguageCompletionProvider, text = "con"): Trig
 	const session = new SuggestModel(service.results, editor);
 	viewport.layout({ width: 300, height: 40 });
 	const input = viewport.controller;
-	const suggest = new SuggestController(editor, input, service, session, "typescript");
+	const suggest = new SuggestController(editor, input, service, session);
 	viewport.focus();
 	return {
 		dom,

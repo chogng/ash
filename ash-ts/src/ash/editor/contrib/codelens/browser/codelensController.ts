@@ -1,6 +1,7 @@
 import { registerEditorContribution } from '../../../browser/editorExtensions.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
 import { type View } from '../../../browser/view.js';
+import { EditorOption } from '../../../common/config/editorOptions.js';
 import { StableEditorScrollState } from '../../../browser/stableEditorScroll.js';
 import { TimeoutTimer } from '../../../../base/common/async.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
@@ -47,8 +48,22 @@ export class CodeLensContribution extends Disposable {
 			this.clearWidgets();
 			this.scheduleRefresh();
 		}));
+		this._register(viewport.textModel.onDidChangeLanguage(() => {
+			if (this.resource) {
+				codeLensCache.delete(this.resource);
+			}
+			this.clear();
+			this.bindProviderListeners();
+			this.scheduleRefresh();
+		}));
+		this._register(editor.onDidChangeConfiguration(event => {
+			if (event.hasChanged(EditorOption.codeLens)) {
+				this.clear();
+				this.scheduleRefresh();
+			}
+		}));
 		this._register(viewport.onDidChangeLayout(() => this.layoutAndResolve()));
-		const cachedModel = resource ? codeLensCache.get(resource, viewport.textModel.lineCount) : undefined;
+		const cachedModel = resource && editor.getOption(EditorOption.codeLens) ? codeLensCache.get(resource, viewport.textModel.lineCount) : undefined;
 		if (cachedModel) {
 			this.cachedModel = cachedModel;
 			this.setModel(cachedModel);
@@ -99,6 +114,9 @@ export class CodeLensContribution extends Disposable {
 		this.resolvePromise = undefined;
 		this.resolvingWidgets.clear();
 		this.cacheExpiry.cancel();
+		if (!this.editor.getOption(EditorOption.codeLens)) {
+			return;
+		}
 		if (!this.providers.has(this.viewport.textModel)) {
 			this.showCachedModelUntilExpiry();
 			return;
@@ -114,6 +132,18 @@ export class CodeLensContribution extends Disposable {
 		this.updateCache();
 		this.reconcileWidgets(model.lenses);
 		this.layoutAndResolve();
+	}
+
+	private clear(): void {
+		this.request?.dispose(true);
+		this.request = undefined;
+		this.refreshPromise = undefined;
+		this.resolvePromise = undefined;
+		this.resolvingWidgets.clear();
+		this.cacheExpiry.cancel();
+		this.cachedModel = undefined;
+		this.setModel(CodeLensModel.Empty);
+		this.clearWidgets();
 	}
 
 	private showCachedModelUntilExpiry(): void {
@@ -251,7 +281,7 @@ function groupCodeLensItems(items: readonly CodeLensItem[]): ReadonlyMap<number,
 registerEditorContribution({
 	id: CodeLensContribution.ID,
 	install: context => {
-		if (context.kind !== 'text' || context.options.codeLens === false || context.model.largeFile.tooLargeForTokenization) return;
+		if (context.kind !== 'text' || context.model.largeFile.tooLargeForTokenization) return;
 		return new CodeLensContribution(
 			context.editor,
 			context.view,

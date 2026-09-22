@@ -7,7 +7,6 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { type IStorageService, type IStorageValueChangeEvent, type IWillSaveStateEvent, StorageScope, StorageTarget, type StorageValue, WillSaveStateReason } from '../../../../../platform/storage/common/storage.js';
 import { type ICodeEditor, type IEditorMouseEvent, MouseTargetType } from '../../../../browser/editorBrowser.js';
-import { type View as EditorView } from '../../../../browser/view.js';
 import { Position } from '../../../../common/core/position.js';
 import { Range } from '../../../../common/core/range.js';
 import { type CodeLens, type CodeLensProvider } from '../../../../common/languages.js';
@@ -356,8 +355,10 @@ function createViewport(dom: JSDOM, model: TextModel): InstanceType<typeof View>
 	return viewport;
 }
 
-function editorFor(viewport: EditorView): ICodeEditor {
+function editorFor(viewport: InstanceType<typeof View>): ICodeEditor {
 	return {
+		onDidChangeConfiguration: viewport.testConfiguration.onDidChange,
+		getOption: viewport.testConfiguration.options.get.bind(viewport.testConfiguration.options),
 		getScrollTop: () => viewport.currentLayout.scrollPosition.top,
 		getContentHeight: () => viewport.currentLayout.contentSize.height,
 		hasPendingScrollAnimation: () => false,

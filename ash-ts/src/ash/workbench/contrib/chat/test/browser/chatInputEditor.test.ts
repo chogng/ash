@@ -29,7 +29,6 @@ const { LanguageCompletionTriggerKind } = await import("../../../../../editor/co
 const { TextModel } = await import("../../../../../editor/common/model/textModel.js");
 const { ICodeEditorService } = await import("../../../../../editor/browser/services/codeEditorService.js");
 const { Selection } = await import('../../../../../editor/common/core/selection.js');
-const { IContextKeyService, ContextKeyService } = await import('../../../../../platform/contextkey/browser/contextKeyService.js');
 const { ILogService, NullLoggerService } = await import('../../../../../platform/log/common/log.js');
 const { SelectAllCommand } = await import("../../../../../editor/browser/editorExtensions.js");
 
@@ -41,7 +40,6 @@ test('Chat registers its focused editor for global commands and removes it on di
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using editorServices = new DisposableStore();
 	const services = createCodeEditorServices(editorServices);
-	services.registerInstance(IContextKeyService, editorServices.add(new ContextKeyService()));
 	services.registerInstance(ILogService, new NullLoggerService());
 	const editors = services.get(ICodeEditorService);
 	using editor = services.createInstance(ChatInputEditor, { container: requiredElement<HTMLElement>(dom.window.document, "main"), placeholder: "Ask Ash", ariaLabel: "Chat message", slashCommands: new SlashCommandCatalog(DesktopSlashCommands, []), skills: new SkillSelectorCatalog() });
