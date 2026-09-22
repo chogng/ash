@@ -1164,7 +1164,7 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 | `browser/config/domFontInfo.ts` | 7 / 1 | 人工检查：已通读入口、公开数据和同步状态变化；未发现本轮可复现缺陷。 |
 | `browser/config/editorConfiguration.ts` | 2 / 3 | 2026-09-22：构造注入窗口无障碍服务，统一计算编辑器 on/off/auto 优先级；能力检测读取容器窗口。模型挂载提供长行特征，ViewModel 在编辑、折叠、换行与 tabSize 变化后提供最新行数；验证行号宽度、缩略图 fit/fill 和读屏长行换行。 |
 | `browser/config/elementSizeObserver.ts` | 1 / 0 | 2026-09-22：尺寸事件发布前登记帧任务，使监听器内停止观察可以清理当前任务；补充同一回调中停止并重启自动布局的回归。 |
-| `browser/config/fontMeasurements.ts` | 1 / 1 | 2026-09-22：按窗口安排不可靠测量的到期任务，关闭窗口取消任务，缓存弱引用窗口；验证多个窗口分别失效。恢复后保存语义仍与上游不同，当前无生产恢复/保存调用方，未扩建持久化链路。 |
+| `browser/config/fontMeasurements.ts` | 2 / 1 | 2026-09-22：Workbench 启动恢复并预热字体，保存状态时写入 application/machine 存储。只恢复过旧读数时序列化返回 undefined，保留已有存储；重新测量后只保存可靠读数。校验持久化记录的版本与字段，按窗口失效并取消关闭窗口的任务；覆盖刷新、定期保存和关闭后的释放。 |
 | `browser/config/migrateOptions.ts` | 2 / 1 | 2026-09-22：布尔旧设置生成的嵌套对象归各次迁移独享；显式 allowCodeShifting 优先于旧 codeShifting。验证不同编辑器互不污染及新设置优先级。 |
 | `browser/config/tabFocus.ts` | 2 / 1 | 人工检查：Tab 焦点模式切换与事件发布。 |
 | `browser/controller/dragScrolling.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |

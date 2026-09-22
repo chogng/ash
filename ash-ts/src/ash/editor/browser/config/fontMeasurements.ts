@@ -3,6 +3,7 @@ import { addDisposableListener } from '../../../base/browser/dom.js';
 import { disposableWindowTimeout } from '../../../base/browser/scheduler.js';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable, DisposableMap, DisposableStore } from '../../../base/common/lifecycle.js';
+import { isRecord } from '../../../base/common/types.js';
 import { EditorFontLigatures } from '../../common/config/editorOptions.js';
 import { BareFontInfo, FontInfo, SERIALIZED_FONT_INFO_VERSION } from '../../common/config/fontInfo.js';
 import { CharWidthRequest, CharWidthRequestType, readCharWidths } from './charWidthReader.js';
@@ -27,8 +28,14 @@ export interface ISerializedFontInfo {
 	readonly maxDigitWidth: number;
 }
 
+interface FontCache {
+	readonly values: Map<string, FontInfo>;
+	restored: boolean;
+	measured: boolean;
+}
+
 export class FontMeasurementsImpl extends Disposable {
-	private _cache = new WeakMap<Window, Map<string, FontInfo>>();
+	private _cache = new WeakMap<Window, FontCache>();
 	private readonly _eviction = this._register(new DisposableMap<Window, DisposableStore>());
 	private readonly _onDidChange = this._register(new Emitter<void>());
 	readonly onDidChange = this._onDidChange.event;
@@ -41,39 +48,44 @@ export class FontMeasurementsImpl extends Disposable {
 		this._onDidChange.fire();
 	}
 
-	serializeFontInfo(targetWindow: Window): ISerializedFontInfo[] {
-		return [...this.cacheFor(targetWindow).values()].filter(fontInfo => fontInfo.isTrusted);
+	/** Undefined keeps persisted readings intact until this window measures a font. */
+	serializeFontInfo(targetWindow: Window): ISerializedFontInfo[] | undefined {
+		const cache = this.cacheFor(targetWindow);
+		if (cache.restored && !cache.measured) return undefined;
+		return [...cache.values.values()].filter(fontInfo => fontInfo.isTrusted);
 	}
 
 	restoreFontInfo(targetWindow: Window, savedFontInfos: ISerializedFontInfo[]): void {
 		for (const saved of savedFontInfos) {
-			if (saved.version !== SERIALIZED_FONT_INFO_VERSION) continue;
+			if (!isSerializedFontInfo(saved)) continue;
 			const fontInfo = new FontInfo(saved, false);
+			this.cacheFor(targetWindow).restored = true;
 			this.write(targetWindow, fontInfo, fontInfo);
 		}
 	}
 
 	readFontInfo(targetWindow: Window, bareFontInfo: BareFontInfo): FontInfo {
 		const cache = this.cacheFor(targetWindow);
-		const cached = cache.get(bareFontInfo.getId());
+		const cached = cache.values.get(bareFontInfo.getId());
 		if (cached) return cached;
 		let fontInfo = this.measure(targetWindow, bareFontInfo);
 		if (minimumWidth(fontInfo) <= 2) fontInfo = clampUnreliableFontInfo(fontInfo);
+		cache.measured = true;
 		this.write(targetWindow, bareFontInfo, fontInfo);
 		return fontInfo;
 	}
 
-	private cacheFor(targetWindow: Window): Map<string, FontInfo> {
+	private cacheFor(targetWindow: Window): FontCache {
 		let cache = this._cache.get(targetWindow);
 		if (!cache) {
-			cache = new Map();
+			cache = { values: new Map(), restored: false, measured: false };
 			this._cache.set(targetWindow, cache);
 		}
 		return cache;
 	}
 
 	private write(targetWindow: Window, key: BareFontInfo, value: FontInfo): void {
-		this.cacheFor(targetWindow).set(key.getId(), value);
+		this.cacheFor(targetWindow).values.set(key.getId(), value);
 		if (value.isTrusted || this._eviction.has(targetWindow)) return;
 		const eviction = this._eviction.set(targetWindow, new DisposableStore());
 		eviction.add(addDisposableListener(targetWindow, 'pagehide', () => {
@@ -82,7 +94,7 @@ export class FontMeasurementsImpl extends Disposable {
 		}));
 		eviction.add(disposableWindowTimeout(targetWindow, () => {
 			this._eviction.deleteAndDispose(targetWindow);
-			const cache = this.cacheFor(targetWindow);
+			const cache = this.cacheFor(targetWindow).values;
 			let changed = false;
 			for (const [id, fontInfo] of cache) {
 				if (fontInfo.isTrusted) continue;
@@ -140,6 +152,21 @@ export class FontMeasurementsImpl extends Disposable {
 			maxDigitWidth: Math.max(...digits.map(request => request.width)),
 		}, true);
 	}
+}
+
+function isSerializedFontInfo(value: unknown): value is ISerializedFontInfo {
+	if (!isRecord(value) || value.version !== SERIALIZED_FONT_INFO_VERSION) return false;
+	if (typeof value.isMonospace !== 'boolean' || typeof value.canUseHalfwidthRightwardsArrow !== 'boolean') return false;
+	for (const key of ['fontFamily', 'fontWeight', 'fontFeatureSettings', 'fontVariationSettings']) {
+		if (typeof value[key] !== 'string') return false;
+	}
+	for (const key of ['pixelRatio', 'fontSize', 'lineHeight', 'typicalHalfwidthCharacterWidth', 'typicalFullwidthCharacterWidth', 'spaceWidth', 'maxDigitWidth']) {
+		if (typeof value[key] !== 'number' || !Number.isFinite(value[key]) || value[key] <= 0) return false;
+	}
+	for (const key of ['middotWidth', 'wsmiddotWidth']) {
+		if (typeof value[key] !== 'number' || !Number.isFinite(value[key]) || value[key] < 0) return false;
+	}
+	return typeof value.letterSpacing === 'number' && Number.isFinite(value.letterSpacing);
 }
 
 function minimumWidth(fontInfo: FontInfo): number {
