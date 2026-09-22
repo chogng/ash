@@ -1,3 +1,4 @@
+import { createAppServerLanguageServerService } from "../../language/browser/languageServerService.js";
 import { AppServerCallService } from '../../call/browser/appServerCallService.js';
 import { AppServerMemoriesService } from '../../memories/browser/appServerMemoriesService.js';
 import { AppServerMemoryDiagnosticsService } from '../../memory/browser/appServerMemoryDiagnosticsService.js';
@@ -102,6 +103,7 @@ export function createRendererHost(connection: AppServerProtocolClient, connecto
 		diff: createAppServerDiffApi(connection),
 		syntax: createAppServerSyntaxApi(connection),
 		language: createAppServerLanguageApi(connection),
+		languageServers: createAppServerLanguageServerService(connection),
 		git: createAppServerGitApi(connection),
 		contentSearch: createAppServerContentSearchApi(connection),
 		terminal: new AppServerTerminalProcessService(connection, appServer),

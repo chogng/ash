@@ -50,7 +50,7 @@ export class MarketplaceLanguagePackService extends Disposable implements ILangu
 	}
 
 	async search(query: string, limit?: number): Promise<readonly LanguagePackPackage[]> {
-		const packages = await this.marketplace.search(query, "localization", limit);
+		const packages = await this.marketplace.search(query, { packageType: "localization", limit });
 		const installed = new Set(this._installedPackages.map(packageValue => `${packageValue.id}\0${packageValue.version}`));
 		return packages.map(packageValue => ({
 			id: packageValue.id,

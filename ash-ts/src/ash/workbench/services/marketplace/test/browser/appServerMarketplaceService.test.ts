@@ -7,6 +7,7 @@ import { AppServerMarketplaceService } from "../../browser/appServerMarketplaceS
 
 test("Marketplace browse snapshots survive view recreation and invalidate after lifecycle changes", async () => {
 	let searches = 0;
+	const requests: Parameters<IMarketplaceApi["search"]>[0][] = [];
 	let installedReads = 0;
 	let eventListener: ((event: ServerNotification) => void) | undefined;
 	const summary = { id: "example/docs", version: "1.0.0", packageType: "mcp", displayName: "Docs", description: "Documentation search." };
@@ -14,7 +15,8 @@ test("Marketplace browse snapshots survive view recreation and invalidate after 
 	const details = { package: packageReference, packageType: summary.packageType, displayName: summary.displayName, description: summary.description, license: "MIT", source: "thirdParty" as const, upstream: null, capabilities: [] };
 	const installed = { installationId: "installed-1", package: packageReference, state: "installed" as const, capabilities: [] };
 	const api = {
-		search: async () => {
+		search: async (params: Parameters<IMarketplaceApi["search"]>[0]) => {
+			requests.push(params);
 			searches += 1;
 			return { packages: [summary] };
 		},
@@ -41,21 +43,21 @@ test("Marketplace browse snapshots survive view recreation and invalidate after 
 	let installedChanges = 0;
 	service.onDidChangeInstalled(() => installedChanges++);
 
-	const first = await service.browse("", undefined, 100);
-	const reopened = await service.browse("", undefined, 100);
+	const first = await service.browse("", { limit: 100 });
+	const reopened = await service.browse("", { limit: 100 });
 	assert.equal(reopened, first);
-	assert.equal(service.cachedBrowse("", undefined, 100), first);
+	assert.equal(service.cachedBrowse("", { limit: 100 }), first);
 	assert.equal(searches, 1);
 	assert.equal(installedReads, 1);
 
 	await service.install(summary.id, summary.version);
 	assert.equal(installedChanges, 0);
-	assert.equal(service.cachedBrowse("", undefined, 100), first);
+	assert.equal(service.cachedBrowse("", { limit: 100 }), first);
 
 	eventListener?.({ method: "marketplace/changed", params: { instanceId: "marketplace-runtime-1", generation: 2 } });
 	assert.equal(installedChanges, 1);
-	assert.equal(service.cachedBrowse("", undefined, 100), undefined);
-	await service.browse("", undefined, 100);
+	assert.equal(service.cachedBrowse("", { limit: 100 }), undefined);
+	await service.browse("", { limit: 100 });
 	assert.equal(searches, 2);
 	assert.equal(installedReads, 2);
 
@@ -67,4 +69,12 @@ test("Marketplace browse snapshots survive view recreation and invalidate after 
 
 	eventListener?.({ method: "marketplace/changed", params: { instanceId: "marketplace-runtime-2", generation: 1 } });
 	assert.equal(installedChanges, 3, "a restarted authority accepts its lower initial generation");
+	const skills = await service.browse("", { capabilityKind: "skill" });
+	const lsp = await service.browse("", { capabilityKind: "executable", languageId: "typescriptreact" });
+	assert.notEqual(skills, lsp);
+	assert.equal(await service.browse("", { capabilityKind: "skill" }), skills);
+	assert.deepEqual(requests.slice(-2), [
+		{ query: "", packageType: null, limit: null, capabilityKind: "skill", languageId: null },
+		{ query: "", packageType: null, limit: null, capabilityKind: "executable", languageId: "typescriptreact" },
+	]);
 });

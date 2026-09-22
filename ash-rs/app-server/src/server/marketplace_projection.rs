@@ -173,6 +173,19 @@ fn capability_kind(value: CapabilityKind) -> MarketplaceCapabilityKindDto {
     }
 }
 
+pub(super) fn domain_capability_kind(value: MarketplaceCapabilityKindDto) -> CapabilityKind {
+    match value {
+        MarketplaceCapabilityKindDto::Skill => CapabilityKind::Skill,
+        MarketplaceCapabilityKindDto::Mcp => CapabilityKind::Mcp,
+        MarketplaceCapabilityKindDto::Connector => CapabilityKind::Connector,
+        MarketplaceCapabilityKindDto::Theme => CapabilityKind::Theme,
+        MarketplaceCapabilityKindDto::Language => CapabilityKind::Language,
+        MarketplaceCapabilityKindDto::Localization => CapabilityKind::Localization,
+        MarketplaceCapabilityKindDto::Executable => CapabilityKind::Executable,
+        MarketplaceCapabilityKindDto::Asset => CapabilityKind::Asset,
+    }
+}
+
 fn capability_descriptor(value: CapabilityDescriptor) -> MarketplaceCapabilityDescriptorDto {
     MarketplaceCapabilityDescriptorDto {
         reference: capability_ref(value.reference),

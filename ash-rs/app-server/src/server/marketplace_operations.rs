@@ -46,6 +46,10 @@ impl AppServer {
             .search(SearchPackagesRequest {
                 query: params.query,
                 package_type: params.package_type,
+                capability_kind: params
+                    .capability_kind
+                    .map(marketplace_projection::domain_capability_kind),
+                language_id: params.language_id,
                 limit: params.limit.map(|limit| limit as usize),
             })
             .map_err(marketplace_error)?;

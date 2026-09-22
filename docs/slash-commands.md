@@ -111,6 +111,32 @@ Theme picker，带 ID 时静默直接切换；Theme picker 不启用搜索，通
 - **隐藏条件**：光标离开末尾（如回退编辑命令名），或用户开始键入非空白参数字符时，虚提示立即消失。
 - **呈现规范**：输入框在光标后以置灰弱化样式（如 `context.muted()`）绘制虚提示；光标保持在实际输入的空格处，不移动物理光标，实际输入文本也不包含占位符内容。
 
+## Marketplace 与领域管理入口
+
+Web/Electron Workbench 使用一个包管理入口，加上各领域的使用入口。命令只打开对应功能；安装状态由
+[`Core Plugins`](../ash-rs/docs/core-plugins.md#一个包入口多个领域消费方) 统一持有。
+
+| 入口 | 用户操作 | 安装相关操作 |
+| --- | --- | --- |
+| `/marketplace` | 搜索所有来源、查看包内容与版本、安装、更新、卸载 | 使用同一个 Core Plugins 服务 |
+| `/skills` | 查看可用 Skill、启用/停用、查看诊断；通过 `$name` 调用 | “获取更多”打开 Marketplace 的 Skill 筛选 |
+| `/lsp` | 查看当前语言与服务器、配置启用状态和路径、检查运行故障 | “查找服务器”打开 Marketplace 的语言筛选 |
+| `/plugins` | 打开 Marketplace 已安装列表，查看各版本及其能力 | 按所选安装记录更新和卸载 |
+| MCP、Connector 领域 | 管连接、认证、工具与运行状态；当前不新增 Desktop slash command | Marketplace 提供对应 capability 筛选 |
+
+- package 是版本和卸载单位；一个 Plugin 包携带的 Skill、MCP 等能力不分别安装，也不重复登记。
+- 领域页面可直接提供安装按钮，但必须调用同一个包管理服务，并明确显示实际安装的整个包。
+- 包搜索支持 package family 和 capability 筛选；领域入口按 capability 查询，包含 Plugin bundle 中的能力。
+  `/skills` 不使用 `packageType=skill` 限制；`/lsp` 按当前编辑器语言 ID 查询明确的 executable 路由。
+- 搜索命中语言包不代表其中每种语言都有 LSP；服务器路由必须来自已验证 catalog 的明确声明。
+- 安装、更新和卸载通知使领域重新读取状态；进程、文档、认证、启用设置仍归各领域管理。
+
+当前 Web/Electron Chat 已注册 `/marketplace`、`/plugins`、`/skills`、`/lsp`，均无参数，打开相应 Workbench 页面。
+页面提供 Tab/方向键导航、Alt+F1 帮助与独立 accessibility verbosity 设置。安装前展示完整包的版本和能力；
+已安装列表按安装记录 ID 管理，同包多版本不会混用；目录不可用时仍可读取本地安装列表并卸载。
+Skill 启用和 LSP 配置使用后端配置 revision；遇到冲突保留输入并提示刷新，不自动覆盖。
+Ash Code 已有 `/skills`、`/mcp` 和 Connector 管理入口，本次不改变 TUI 命令。
+
 ## Config 边界
 
 `initialize.slashCommands` 不进入通用 config，也不由 slash command view 读取 config。它是 connection

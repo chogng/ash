@@ -51,7 +51,7 @@ fn app_server_exposes_only_the_manager_business_contract() {
         &mut connection,
         2,
         "marketplace/search",
-        json!({"query": "github", "packageType": "plugin", "limit": 20}),
+        json!({"query": "github", "packageType": "plugin", "capabilityKind": "skill", "languageId": "typescriptreact", "limit": 20}),
     );
     assert_eq!(found["result"]["packages"][0]["id"], "marketplace/github");
 
@@ -178,9 +178,17 @@ struct FakePluginsManager;
 impl PluginPackageService for FakePluginsManager {
     fn search(
         &self,
-        _: ash_core_plugins::SearchPackagesRequest,
+        request: ash_core_plugins::SearchPackagesRequest,
     ) -> Result<ash_core_plugins::SearchPackagesResult, ash_core_plugins::MarketplaceClientError>
     {
+        assert_eq!(request.query, "github");
+        assert_eq!(request.package_type.as_deref(), Some("plugin"));
+        assert_eq!(
+            request.capability_kind,
+            Some(ash_core_plugins::CapabilityKind::Skill)
+        );
+        assert_eq!(request.language_id.as_deref(), Some("typescriptreact"));
+        assert_eq!(request.limit, Some(20));
         Ok(ash_core_plugins::SearchPackagesResult {
             packages: vec![ash_core_plugins::PackageSummary {
                 id: "marketplace/github".to_owned(),

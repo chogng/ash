@@ -47,7 +47,7 @@ export class ChatPane extends Disposable {
 		}));
 		const inputDelegate: ChatInputDelegate = {
 			send: (text, skills, contexts) => this.send(text, skills, contexts),
-			executeCommand: (invocation) => commandService.executeCommand(invocation.commandId, invocation.argumentsText),
+			executeCommand: (invocation) => invocation.argumentsText ? commandService.executeCommand(invocation.commandId, invocation.argumentsText) : commandService.executeCommand(invocation.commandId),
 			executeServerCommand: async (invocation) => {
 				if (invocation.name !== "advisor" || invocation.argumentsText.trim()) {
 					await this.model.executeServerCommand(invocation.name, invocation.argumentsText);

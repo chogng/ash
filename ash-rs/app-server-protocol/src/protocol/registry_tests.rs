@@ -221,3 +221,32 @@ fn screen_controls_round_trip_and_reject_ambiguous_targets() {
         assert!(serde_json::from_value::<CallControlParams>(serde_json::json!({ "resourceId": "call-window", "control": { "type":"shareScreen", "target": target } })).is_err());
     }
 }
+
+#[test]
+fn marketplace_search_supports_capabilities_and_exact_language_routes() {
+    let mut capabilities = super::ServerCapabilities {
+        marketplace: true,
+        ..Default::default()
+    };
+    capabilities.advertise_contracts();
+    assert_eq!(capabilities.contracts["marketplaceSearch"].version, 1);
+    let wire = serde_json::json!({
+        "query": "tsx",
+        "packageType": null,
+        "capabilityKind": "executable",
+        "languageId": "typescriptreact",
+        "limit": 20
+    });
+    let params: super::MarketplaceSearchParams = serde_json::from_value(wire.clone()).unwrap();
+    assert_eq!(serde_json::to_value(params).unwrap(), wire);
+    let unfiltered: super::MarketplaceSearchParams =
+        serde_json::from_value(serde_json::json!({ "query": "review" })).unwrap();
+    assert!(unfiltered.capability_kind.is_none());
+    assert!(unfiltered.language_id.is_none());
+    assert!(
+        serde_json::from_value::<super::MarketplaceSearchParams>(serde_json::json!({
+            "query": "", "capabilityKind": "lsp"
+        }))
+        .is_err()
+    );
+}

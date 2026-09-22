@@ -81,6 +81,9 @@ pub struct MarketplacePackageSummaryDto {
 pub struct MarketplaceSearchParams {
     pub query: String,
     pub package_type: Option<String>,
+    pub capability_kind: Option<MarketplaceCapabilityKindDto>,
+    /// Requires a signed language-server route, excluding static-only language resources.
+    pub language_id: Option<String>,
     pub limit: Option<u32>,
 }
 

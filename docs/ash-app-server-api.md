@@ -347,6 +347,11 @@ Desktop 当前实现和 Playwright 后续边界见
 | `terminal/read` | connection + Terminal | 按 sequence 拉取有界 Base64 输出 |
 | `terminal/close` | connection + Terminal | 终止并释放 PTY |
 
+`marketplace/search` 的可选 `capabilityKind` 按包携带的能力筛选，跨 package family 包含 Plugin bundle；
+可选 `languageId` 要求已验证 catalog 声明该语言到 executable 的明确路由。它与 `query`、
+`packageType` 同时生效，不会把静态语法资源当作语言服务器。支持这些筛选的后端在 initialize
+发布 `contracts.marketplaceSearch.version=1`；客户端在带筛选的查询前检查该能力，防止旧后端忽略条件。
+
 `session/create`、`session/read`、`session/list` 与 Session mutation result 返回的每个 `Session`
 都包含 `manager` 读取视图。App Server 从完整 Thread snapshots 推导 `idle`、`needsInput`、
 `working`、`readyForReview`、`completed`、`failed`、`stopped`，同时提供进入当前状态的

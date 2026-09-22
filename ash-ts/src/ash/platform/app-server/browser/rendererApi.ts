@@ -1,3 +1,4 @@
+import { createDisconnectedLanguageServerService } from "../../language/browser/languageServerService.js";
 import { createDisconnectedAppServerApi, createDisconnectedResourceApi, createDisconnectedServerEventApi } from "./appServerApi.js";
 import { createDisconnectedFileApi } from "../../files/browser/fileApi.js";
 import { createDisconnectedExtensionApi } from "../../extensions/browser/extensionApi.js";
@@ -47,6 +48,7 @@ export function createDisconnectedRendererApi(): IRendererHost {
 		diff: createDisconnectedDiffApi(unavailableOperation),
 		syntax: createDisconnectedSyntaxApi(unavailableOperation),
 		language: createDisconnectedLanguageApi(unavailableOperation),
+		languageServers: createDisconnectedLanguageServerService(unavailableOperation),
 		git: createDisconnectedGitApi(unavailableOperation),
 		contentSearch: createDisconnectedContentSearchApi(unavailableOperation),
 		terminal: new DisconnectedTerminalProcessService(unavailableOperation, appServer),

@@ -57,7 +57,7 @@ impl PluginProvider for MarketplaceRemoteClient {
         self.with_catalog(|catalog| {
             Ok(SearchPackagesResult {
                 packages: catalog
-                    .search(&request.query, request.package_type.as_deref(), limit)?
+                    .search(&request, limit)?
                     .into_iter()
                     .map(|mut package| {
                         package.id = plugin_name(&package.id);

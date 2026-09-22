@@ -99,8 +99,8 @@ test("Chat input completes slash commands before submitting", async () => {
 
 	input.dispatchEvent(beforeInputEvent(dom.window, "/"));
 	assert.equal(editor.value, "/");
-	await waitFor(() => completionLabels(editor.element).length === 2);
-	assert.deepEqual(completionLabels(editor.element), ["/new", "/history"]);
+	await waitFor(() => completionLabels(editor.element).length === 6);
+	assert.deepEqual(completionLabels(editor.element), ["/new", "/history", "/marketplace", "/plugins", "/skills", "/lsp"]);
 	assert.equal(editor.element.querySelector(".stanza-editor")?.classList.contains("stanza-editor-embedded"), true);
 	assert.equal(editor.element.querySelector(".stanza-editor")?.classList.contains("word-wrapped"), true);
 	assert.equal(editor.element.querySelector(".stanza-editor-line-number"), null);

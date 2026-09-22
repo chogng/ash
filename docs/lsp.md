@@ -32,7 +32,7 @@ route 默认启用；显式 Config `Disabled` 仍可关闭。缺失或不可执�
 | 日志、show message 与 work-done progress | ✅ Desktop 将日志投影到 Output/Language Servers，showMessage 使用 Workbench Dialog，活动进度显示在状态栏与 Output | App Server + Desktop Workbench |
 | 显式替换服务器并恢复文档 | ✅ 新实例重放成功后切换 route/incarnation | 宿主需暂存 replacement 早期事件 |
 | 配置与发现 Rust/JSON/Shell server | ✅ 独立 Settings draft、revision-safe mode/path、resolver 校验与热重配 | 扩展安装 provider/UI |
-| 用共享 Node-compatible runtime 运行已验证 CSS package | ✅ Desktop 复用 Electron run-as-Node；Rust 同步 TUF catalog、校验兼容性，并从 activation receipt 自动重建 provider collection | 用户在 Settings/Languages 确认 exact signed package |
+| 用共享 Node-compatible runtime 运行已验证 CSS package | ✅ Desktop 复用 Electron run-as-Node；Rust 同步 TUF catalog、校验兼容性，并从 activation receipt 自动重建 provider collection | 通过 `/marketplace` 或 `/lsp` 查找并安装包 |
 | 意外退出、退避重启和 crash-loop | ✅ 断连 retirement、有限指数退避、状态展示和全文重放 | `ash-lsp-manager` + Desktop |
 | 安装、更新和移除 server | 按签名 catalog 的 languageServer/runtime 声明重建 provider；前端动态刷新语言列表和打开的文档 | Marketplace / App Server / Workbench |
 | 动态注册与 work-done progress | ✅ 按 server incarnation 隔离，静态与动态 capability 共同参与请求 gate | `ash-lsp` + `ash-lsp-manager` |
@@ -62,12 +62,20 @@ flowchart LR
 
 - `extensions/` 随产品提供语言识别、编辑配置、TextMate 语法和 snippets，离线可用。
 - Marketplace 的 language 包携带静态资源以及可选服务器；签名 catalog 的 `languageServer` 绑定 executable capability，`runtime` 声明启动方式。
+- `marketplace/search` 搜索包信息、capability ID，以及已验证 catalog 中的语言 ID、名称、别名和扩展名；
+  `typescriptreact`、`.tsx`、`jsonc`、`pyright` 可据此找到对应包，不依赖包简介刚好包含这些词。
+- 搜索结果是包候选，不是已安装服务器，也不自动下载安装。静态语言资源同样可被搜索到；schema 2 中
+  只有声明 `languageServer` 的语言才加入该 executable 的路由。
 - App Server 从验证后的安装记录取得语言映射，不再从编辑器资源清单推导服务器路由。
 - `language/servers` 返回当前目录已启用且可解析的服务器及语言 ID，不启动进程；Workbench 据此注册 provider。
 - 安装、卸载、配置变化后重新读取列表，并为仍打开的文档重建同步。已卸载服务器的晚到诊断被丢弃。
 - 同 ID 的已安装 provider 负责该服务器；用户显式 executable 配置传给该 provider，避免再创建同名 PATH 实例。
 - Node 服务器包的源码保留固定版本、lockfile 和构建配方；Marketplace 在发布时组装依赖并签名。Ash 按需安装整个语言包，校验后缓存，不在用户机器上运行 npm。
 - Marketplace 当前带服务器的语言包为 CSS/Less/SCSS、JSON/JSONC、Python、JavaScript/TypeScript 和 YAML；其他语法包的服务器需另行提供。
+- Web/Electron 的 `/lsp` 显示当前编辑器语言、可用服务器、运行状态及配置；“查找服务器”打开统一 Marketplace 页面，
+  使用 `languageId` 与 `capabilityKind=executable` 查找明确路由，排除只有语法资源的包。安装前展示整个包。
+  `/lsp` 可按工作区目录检查可用性，启用/停用服务器、保存宿主 executable 路径或移除配置覆盖。入口职责见
+  [Slash Commands](slash-commands.md#marketplace-与领域管理入口)。
 
 ## 1. 一次操作
 
@@ -177,8 +185,8 @@ App Server 拥有 Desktop 的 Environment-bound 目录访问与 LSP IPC boundary
 - 通用 Marketplace Manager 的 TUF verified download、整包 digest 复核、immutable install/update/uninstall；
 - Marketplace Language asset 投影到共享 Extension catalog，Executable 按 signed language route 和
   `node`/`direct` runtime 组合 provider；
-- Desktop Settings/Languages 复用通用 Marketplace API 的 `packageType=language` 发现与安装，并在
-  install/update/uninstall 后热重建 provider collection；
+- App Server 通过通用 Marketplace API 的 `packageType=language` 提供发现与安装，并在
+  install/update/uninstall 后热重建 provider collection；Desktop 已有消费服务，安装页面尚未接通；
 - in-memory protocol vertical tests。
 
 ### 计划

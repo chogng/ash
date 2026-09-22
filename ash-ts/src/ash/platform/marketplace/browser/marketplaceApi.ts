@@ -9,7 +9,12 @@ export function createDisconnectedMarketplaceApi(unavailable: UnavailableOperati
 
 export function createAppServerMarketplaceApi(connection: AppServerProtocolClient): IMarketplaceApi {
 	return {
-		search: params => appServerRequest(connection, "marketplace/search", params),
+		search: async params => {
+			if ((params.capabilityKind || params.languageId) && connection.capabilities?.contracts.marketplaceSearch?.version !== 1) {
+				throw new Error("This App Server does not support Marketplace capability and language filters. Update the App Server to search with these filters.");
+			}
+			return appServerRequest(connection, "marketplace/search", params);
+		},
 		get: params => appServerRequest(connection, "marketplace/get", params),
 		download: params => appServerRequest(connection, "marketplace/download", params),
 		install: params => appServerRequest(connection, "marketplace/install", params),

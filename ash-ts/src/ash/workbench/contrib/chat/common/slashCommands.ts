@@ -1,5 +1,9 @@
+import { OPEN_LANGUAGE_SERVERS_COMMAND_ID } from "../../../../platform/language/common/languageServerService.js";
+import { OPEN_SKILLS_COMMAND_ID } from "../../../../platform/skills/common/skillService.js";
 import type { SlashCommandDefinition } from "../../../services/chat/common/chatService.js";
 import { NEW_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from "./chat.js";
+
+import { OPEN_MARKETPLACE_COMMAND_ID, OPEN_PLUGINS_COMMAND_ID } from "../../../../platform/marketplace/common/marketplaceService.js";
 
 const SLASH_COMMAND_NAME = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
@@ -84,6 +88,10 @@ export class SlashCommandCatalog {
 export const DesktopSlashCommands: readonly LocalSlashCommandRegistration[] = Object.freeze([
 	localCommand("new", "Start a new chat", NEW_CHAT_COMMAND_ID),
 	localCommand("history", "Show chat history", SHOW_CHAT_HISTORY_COMMAND_ID, ["chats"]),
+	localCommand("marketplace", "Browse and install packages", OPEN_MARKETPLACE_COMMAND_ID),
+	localCommand("plugins", "Manage installed packages", OPEN_PLUGINS_COMMAND_ID),
+	localCommand("skills", "Browse and manage skills", OPEN_SKILLS_COMMAND_ID),
+	localCommand("lsp", "Manage language servers", OPEN_LANGUAGE_SERVERS_COMMAND_ID),
 ]);
 
 export function parseSlashCommandInput(value: string, catalog: SlashCommandCatalog): SlashCommandInput {

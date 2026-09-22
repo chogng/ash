@@ -256,12 +256,11 @@ impl Catalog {
 
     pub(crate) fn search(
         &self,
-        query: &str,
-        package_type: Option<&str>,
+        request: &crate::SearchPackagesRequest,
         limit: usize,
     ) -> Result<Vec<PackageSummary>, MarketplaceClientError> {
         self.refresh_remote_if_stale()?;
-        let query = query.trim().to_ascii_lowercase();
+        let query = request.query.trim().to_ascii_lowercase();
         let releases = self
             .releases
             .lock()
@@ -270,23 +269,7 @@ impl Catalog {
             .values()
             .filter_map(|versions| versions.last_key_value().map(|(_, release)| release))
             .filter(|release| {
-                package_type
-                    .is_none_or(|expected| release.manifest.package_type.as_str() == expected)
-                    && (query.is_empty()
-                        || release.manifest.id.to_ascii_lowercase().contains(&query)
-                        || release
-                            .manifest
-                            .display_name
-                            .to_ascii_lowercase()
-                            .contains(&query)
-                        || release
-                            .manifest
-                            .description
-                            .to_ascii_lowercase()
-                            .contains(&query)
-                        || release.manifest.upstream.as_ref().is_some_and(|upstream| {
-                            upstream.name.to_ascii_lowercase().contains(&query)
-                        }))
+                release.manifest.matches_filters(request) && release.manifest.matches(&query)
             })
             .take(limit)
             .map(Release::summary)
@@ -324,6 +307,52 @@ impl Catalog {
             return Ok(());
         }
         self.refresh_remote()
+    }
+}
+
+impl CatalogManifest {
+    fn matches_filters(&self, request: &crate::SearchPackagesRequest) -> bool {
+        request
+            .package_type
+            .as_deref()
+            .is_none_or(|expected| self.package_type.as_str() == expected)
+            && request.capability_kind.is_none_or(|kind| {
+                self.capabilities
+                    .iter()
+                    .any(|capability| capability.public_kind(self.package_type) == kind)
+            })
+            && request.language_id.as_deref().is_none_or(|language_id| {
+                self.capabilities.iter().any(|capability| {
+                    language_ids_for(self, capability)
+                        .iter()
+                        .any(|id| id == language_id)
+                })
+            })
+    }
+
+    fn matches(&self, query: &str) -> bool {
+        let contains = |value: &str| value.to_ascii_lowercase().contains(query);
+        query.is_empty()
+            || contains(&self.id)
+            || contains(&self.display_name)
+            || contains(&self.description)
+            || self
+                .upstream
+                .as_ref()
+                .is_some_and(|upstream| contains(&upstream.name))
+            || self
+                .capabilities
+                .iter()
+                .any(|capability| contains(&capability.id))
+            || self.languages.iter().any(|language| {
+                contains(&language.id)
+                    || contains(&language.display_name)
+                    || language.aliases.iter().any(|alias| contains(alias))
+                    || language
+                        .file_extensions
+                        .iter()
+                        .any(|extension| contains(extension))
+            })
     }
 }
 

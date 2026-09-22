@@ -122,6 +122,11 @@ pub struct SearchPackagesRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub package_type: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub capability_kind: Option<CapabilityKind>,
+    /// Requires an executable with a signed server route for this exact language ID.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub language_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<usize>,
 }
 

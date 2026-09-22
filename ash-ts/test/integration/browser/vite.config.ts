@@ -12,6 +12,7 @@ export default defineConfig({
 			output: rendererOutput,
 			input: {
 				language: resolve(import.meta.dirname, "language.html"),
+				marketplace: resolve(import.meta.dirname, "marketplace.html"),
 				advisor: resolve(import.meta.dirname, "advisor.html"),
 				themes: resolve(import.meta.dirname, "themes.html"),
 				webTransport: resolve(import.meta.dirname, 'webTransport.html'),

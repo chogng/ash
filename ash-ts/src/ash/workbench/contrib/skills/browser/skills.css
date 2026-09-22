@@ -1,0 +1,27 @@
+.ash-skills {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	min-width: 0;
+	min-height: 0;
+	overflow: auto;
+	padding: 12px;
+	font-size: var(--ash-font-size-body1);
+}
+.ash-skills label { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ash-skills .skills-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.ash-skills input, .ash-skills select, .ash-skills button {
+	box-sizing: border-box;
+	min-width: 0;
+	max-width: 100%;
+	padding: 6px 8px;
+	font: inherit;
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
+	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+	border-radius: 4px;
+}
+.ash-skills input[type='checkbox'] { align-self: flex-start; }
+.ash-skills pre { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; font: inherit; }
+.ash-skills button { cursor: pointer; }
+.ash-skills :focus-visible { outline: var(--ash-stroke-thickness) solid var(--ash-focus-border); outline-offset: 2px; }

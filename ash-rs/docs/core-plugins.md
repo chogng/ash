@@ -3,7 +3,7 @@
 > 类型：canonical 跨仓架构文档。
 > 当前状态：`ash-core-plugins` 通过具名 provider 聚合来源，现有 registry adapter 消费
 > HTTPS/TUF 静态分发；旧 JSONL compatibility adapter、独立 Core Plugins 进程和 Desktop packaging 已删除。
-> App Server package RPC 与 Settings service 已接通。Skill、MCP、Connector、Theme、Language、
+> App Server package RPC、Web/Electron Marketplace 页面及 `/skills`、`/lsp` 领域入口已接通。Skill、MCP、Connector、Theme、Language、
 > Localization
 > 和可选 executable Editor Extension 都从同一个 PluginsManager artifact/installation 入口进入各自领域；
 > 旧 Plugin/Language 专用远端分发与安装链路均已删除。
@@ -17,7 +17,7 @@ Marketplace 是 Plugin 来源，不是产品主领域。`ash-core-plugins` 聚�
 
 | 组件 | 位置 | 职责 |
 | --- | --- | --- |
-| Remote Marketplace | `../../marketplace` + GitHub Pages | catalog、publisher、签名、撤销、TUF metadata 和 package targets |
+| Remote Marketplace | `../../ash-marketplace` + GitHub Pages | catalog、publisher、签名、撤销、TUF metadata 和 package targets |
 | Marketplace registry adapter | `ash-rs/core-plugins/src/registry.rs` | HTTPS/TUF、远端发现和 verified download 的私有适配 |
 | Core Plugins | `ash-rs/core-plugins` | Plugin 来源聚合、本地 artifact、安装、authority、lease 和 opaque resource |
 | Plugin definitions | `ash-rs/plugin` | identity、manifest、path 与 package observation |
@@ -132,6 +132,15 @@ Installed → Acquired → Authorized → Activated → Deactivated → Released
 Package 是下载、安装、更新和卸载单位；capability 才是领域发现与激活单位。`packageType=plugin`
 只是一个可同时携带 Connector、MCP、Skill 与 executable 的集成 bundle，不是第二个安装器、第二个
 Marketplace 或必须常驻的 Plugin runtime。
+
+产品入口采用统一包管理与领域使用页面，具体命令及接入状态见
+[`Slash Commands`](../../docs/slash-commands.md#marketplace-与领域管理入口)。所有入口复用同一
+PluginsManager；领域页面不另建安装记录、更新策略或下载链路。
+
+远端包搜索读取已验证 catalog 的包信息、capability ID 和语言声明（ID、名称、别名、扩展名）。
+因此按 `jsonc`、`typescriptreact` 或服务器 ID 查找时，可以发现包含该能力的包；搜索不授予能力，也
+不把静态语言资源当作服务器。`packageType` 筛选整个包的 family；`capabilityKind` 筛选包携带的能力，包括 Plugin bundle；
+`languageId` 只匹配明确绑定 executable 的语言，三个筛选条件同时生效。
 
 | Marketplace capability | Ash consumer | 进入方式 | Core Plugins 不拥有 |
 | --- | --- | --- | --- |

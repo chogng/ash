@@ -1,0 +1,27 @@
+.ash-language-servers {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	min-width: 0;
+	min-height: 0;
+	overflow: auto;
+	padding: 12px;
+	font-size: var(--ash-font-size-body1);
+}
+.ash-language-servers label { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ash-language-servers .language-server-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.ash-language-servers input, .ash-language-servers select, .ash-language-servers button {
+	box-sizing: border-box;
+	min-width: 0;
+	max-width: 100%;
+	padding: 6px 8px;
+	font: inherit;
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
+	border: var(--ash-stroke-thickness) solid var(--ash-input-border);
+	border-radius: 4px;
+}
+.ash-language-servers input[type='checkbox'] { align-self: flex-start; }
+.ash-language-servers pre { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; font: inherit; }
+.ash-language-servers button { cursor: pointer; }
+.ash-language-servers :focus-visible { outline: var(--ash-stroke-thickness) solid var(--ash-focus-border); outline-offset: 2px; }

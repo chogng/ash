@@ -24033,6 +24033,23 @@
     },
     "MarketplaceSearchParams": {
       "properties": {
+        "capabilityKind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MarketplaceCapabilityKindDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "languageId": {
+          "description": "Requires a signed language-server route, excluding static-only language resources.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "limit": {
           "format": "uint32",
           "minimum": 0,

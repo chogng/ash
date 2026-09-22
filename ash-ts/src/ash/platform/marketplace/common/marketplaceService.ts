@@ -3,6 +3,21 @@ import { createServiceIdentifier } from "../../instantiation/common/instantiatio
 
 export type MarketplaceCapabilityKind = "skill" | "mcp" | "connector" | "theme" | "language" | "localization" | "executable" | "asset";
 
+export interface MarketplaceSearchOptions {
+	readonly packageType?: string;
+	readonly limit?: number;
+	readonly capabilityKind?: MarketplaceCapabilityKind;
+	readonly languageId?: string;
+}
+
+export interface MarketplaceOpenOptions extends Pick<MarketplaceSearchOptions, "capabilityKind" | "languageId"> {
+	readonly mode?: "browse" | "installed";
+	readonly query?: string;
+}
+
+export const OPEN_MARKETPLACE_COMMAND_ID = "ash.marketplace.open";
+export const OPEN_PLUGINS_COMMAND_ID = "ash.plugins.open";
+
 export interface MarketplacePackageRef {
 	readonly id: string;
 	readonly version: string;
@@ -66,8 +81,7 @@ export interface MarketplaceBrowsePackage {
 /** Renderer-ready catalog projection retained by the Workbench Marketplace service. */
 export interface MarketplaceBrowseSnapshot {
 	readonly query: string;
-	readonly packageType: string | undefined;
-	readonly limit: number | undefined;
+	readonly options: MarketplaceSearchOptions;
 	readonly packages: readonly MarketplaceBrowsePackage[];
 	readonly installed: readonly MarketplaceInstalledPackage[];
 }
@@ -89,10 +103,10 @@ export interface MarketplaceAcquiredCapability {
 /** Frontend Marketplace business capability, independent of distribution and package internals. */
 export interface IMarketplaceService {
 	readonly onDidChangeInstalled: Event<void>;
-	cachedBrowse(query: string, packageType?: string, limit?: number): MarketplaceBrowseSnapshot | undefined;
-	browse(query: string, packageType?: string, limit?: number): Promise<MarketplaceBrowseSnapshot>;
-	refreshBrowse(query: string, packageType?: string, limit?: number): Promise<MarketplaceBrowseSnapshot>;
-	search(query: string, packageType?: string, limit?: number): Promise<readonly MarketplacePackageSummary[]>;
+	cachedBrowse(query: string, options?: MarketplaceSearchOptions): MarketplaceBrowseSnapshot | undefined;
+	browse(query: string, options?: MarketplaceSearchOptions): Promise<MarketplaceBrowseSnapshot>;
+	refreshBrowse(query: string, options?: MarketplaceSearchOptions): Promise<MarketplaceBrowseSnapshot>;
+	search(query: string, options?: MarketplaceSearchOptions): Promise<readonly MarketplacePackageSummary[]>;
 	get(packageId: string, version?: string): Promise<MarketplacePackageDetails>;
 	download(packageId: string, version?: string): Promise<{ readonly id: string; readonly package: MarketplacePackageRef }>;
 	install(packageId: string, version?: string): Promise<MarketplaceInstalledPackage>;

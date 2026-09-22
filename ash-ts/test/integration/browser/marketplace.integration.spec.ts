@@ -1,0 +1,91 @@
+import { expect, test } from '@playwright/test';
+
+test('Marketplace ignores a failed browse request after switching to installed packages', async ({ page }) => {
+	await page.goto('/marketplace.html');
+	const view = page.locator('.ash-marketplace');
+	await expect(view.getByRole('button', { name: 'Install package', exact: true })).toBeEnabled();
+	await page.evaluate(() => window.ashMarketplaceIntegration.startHeldSearch());
+	await page.evaluate(() => window.ashMarketplaceIntegration.open({ mode: 'installed' }));
+	await expect(view.getByRole('status')).toHaveText('0 packages.');
+	await page.evaluate(() => window.ashMarketplaceIntegration.failHeldSearch());
+	await expect(view.getByRole('status')).toHaveText('0 packages.');
+	await expect(view.getByRole('button', { name: 'Install package', exact: true })).toBeDisabled();
+});
+
+test('Marketplace updates the selected installation to the reviewed version', async ({ page }) => {
+	await page.goto('/marketplace.html');
+	const view = page.locator('.ash-marketplace');
+	await view.getByRole('button', { name: 'Install package', exact: true }).click();
+	await page.getByRole('dialog', { name: 'Install package', exact: true }).getByRole('button', { name: 'Install', exact: true }).click();
+	await page.evaluate(() => window.ashMarketplaceIntegration.addOtherPackage());
+	await page.evaluate(() => window.ashMarketplaceIntegration.open({ mode: 'installed' }));
+	await view.getByLabel('Packages', { exact: true }).selectOption('version-one');
+	await view.getByRole('button', { name: 'Update package', exact: true }).click();
+	const confirmation = page.getByRole('dialog', { name: 'Update package', exact: true });
+	await expect(confirmation).toContainText('2.0.0');
+	await confirmation.getByRole('button', { name: 'Update', exact: true }).click();
+	await expect(view.getByLabel('Packages', { exact: true })).toContainText('2.0.0');
+	await expect(view.getByLabel('Packages', { exact: true })).toHaveValue('updated-installation');
+	expect(await page.evaluate(() => window.ashMarketplaceIntegration.requests.filter((entry: any) => entry[0] === 'update'))).toEqual([['update', { installationId: 'version-one', version: '2.0.0' }]]);
+});
+
+test('Marketplace reviews the whole package and manages the selected installation offline', async ({ page }) => {
+	await page.goto('/marketplace.html');
+	const view = page.locator('.ash-marketplace');
+	await expect(view.getByRole('button', { name: 'Install package', exact: true })).toBeEnabled();
+	await view.getByRole('button', { name: 'Install package', exact: true }).click();
+	const confirmation = page.getByRole('dialog', { name: 'Install package', exact: true });
+	await expect(confirmation).toContainText('executable: typescript-language-server');
+	await expect(confirmation).toContainText('skill: review');
+	await expect(confirmation).toContainText('Permissions: process');
+	await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click();
+	expect(await page.evaluate(() => window.ashMarketplaceIntegration.requests.filter((entry: any) => entry[0] === 'install'))).toEqual([]);
+	await view.getByRole('button', { name: 'Install package', exact: true }).click();
+	await confirmation.getByRole('button', { name: 'Install', exact: true }).click();
+	await expect(view.getByRole('button', { name: 'Show installed versions', exact: true })).toBeEnabled();
+	await page.evaluate(() => window.ashMarketplaceIntegration.addSecondVersion());
+	await view.getByRole('button', { name: 'Show installed versions', exact: true }).click();
+	await expect(view.getByLabel('Packages', { exact: true }).locator('option')).toHaveCount(2);
+	await view.getByLabel('Packages', { exact: true }).selectOption('version-two');
+	await expect(view.getByLabel('Package details', { exact: true })).toContainText('2.0.0');
+	await page.evaluate(() => window.ashMarketplaceIntegration.setOffline());
+	await view.getByRole('button', { name: 'Refresh', exact: true }).click();
+	await expect(view.getByRole('status')).toHaveText('Catalog unavailable');
+	await view.getByRole('button', { name: 'Uninstall package', exact: true }).click();
+	await page.getByRole('dialog', { name: 'Uninstall package', exact: true }).getByRole('button', { name: 'Uninstall', exact: true }).click();
+	await expect(view.getByLabel('Packages', { exact: true }).locator('option')).toHaveCount(1);
+	expect(await page.evaluate(() => window.ashMarketplaceIntegration.requests.filter((entry: any) => entry[0] === 'uninstall'))).toEqual([['uninstall', { installationId: 'version-two', mode: 'whenUnused' }]]);
+});
+
+test('LSP and Skills share capability discovery while retaining their own configuration', async ({ page }) => {
+	await page.goto('/marketplace.html');
+	const lsp = page.locator('.ash-language-servers');
+	await expect(lsp.getByLabel('Language ID', { exact: true })).toHaveValue('typescriptreact');
+	await expect(lsp.getByLabel('Server status', { exact: true })).toContainText('ready');
+	await lsp.getByRole('button', { name: 'Find language servers in Marketplace', exact: true }).click();
+	await expect(page.locator('.ash-marketplace').getByLabel('Language server for language ID')).toHaveValue('typescriptreact');
+	await expect.poll(() => page.evaluate(() => window.ashMarketplaceIntegration.requests.some((entry: any) => entry[0] === 'search' && entry[1].languageId === 'typescriptreact' && entry[1].capabilityKind === 'executable' && entry[1].packageType === null))).toBe(true);
+	const skills = page.locator('.ash-skills');
+	await expect(skills.getByLabel('Skill diagnostics', { exact: true })).toContainText('workspace / bad-skill: Invalid metadata');
+	await skills.getByRole('button', { name: 'Get skills from Marketplace', exact: true }).click();
+	await expect(page.locator('.ash-marketplace').getByLabel('Capability', { exact: true })).toHaveValue('skill');
+	await expect(page.locator('.ash-marketplace').getByLabel('Language server for language ID')).toHaveValue('');
+	await skills.getByRole('button', { name: 'Disable skill', exact: true }).click();
+	await expect(skills.getByRole('button', { name: 'Enable skill', exact: true })).toBeEnabled();
+	expect(await page.evaluate(() => window.ashMarketplaceIntegration.requests.filter((entry: any) => entry[0] === 'skill'))).toEqual([['skill', { source: 'marketplace:example/web', name: 'review' }, false, 3]]);
+	await lsp.getByRole('button', { name: 'Save server configuration', exact: true }).click();
+	await expect(lsp.getByRole('status')).toHaveText('Configuration changed. Refresh before saving.');
+	await lsp.getByRole('button', { name: 'Refresh', exact: true }).click();
+	await expect(lsp.getByRole('status')).toContainText('1 servers available.');
+	await lsp.getByLabel('Executable path (optional)', { exact: true }).fill('/tools/server');
+	await lsp.getByRole('button', { name: 'Save server configuration', exact: true }).click();
+	await expect.poll(() => page.evaluate(() => window.ashMarketplaceIntegration.requests.filter((entry: any) => entry[0] === 'configure').length)).toBe(2);
+	expect(await page.evaluate(() => window.ashMarketplaceIntegration.requests.filter((entry: any) => entry[0] === 'configure').at(-1))).toEqual(['configure', 'typescript-language-server', { mode: 'enabled', executable: '/tools/server' }, 4]);
+	await skills.getByLabel('Skills', { exact: true }).focus();
+	await page.keyboard.press('Alt+F1');
+	await expect(page.getByRole('dialog', { name: 'Skills help' })).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(skills.getByLabel('Skills', { exact: true })).toBeFocused();
+	await page.evaluate(() => window.ashMarketplaceIntegration.dispose());
+	await expect(page.locator('.ash-marketplace, .ash-skills, .ash-language-servers')).toHaveCount(0);
+});

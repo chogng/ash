@@ -47,6 +47,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             query: package_id.rsplit('/').next().unwrap_or_default().to_owned(),
             package_type: Some(package_type.to_owned()),
             limit: Some(10),
+            ..SearchPackagesRequest::default()
         })?;
         let package = search
             .packages

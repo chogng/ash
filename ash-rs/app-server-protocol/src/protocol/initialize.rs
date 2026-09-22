@@ -274,5 +274,11 @@ impl ServerCapabilities {
             .filter(|(_, available)| *available)
             .map(|(name, _)| (name.into(), CapabilityContract::current()))
             .collect();
+        if self.marketplace {
+            self.contracts.insert(
+                "marketplaceSearch".into(),
+                CapabilityContract { version: 1 },
+            );
+        }
     }
 }

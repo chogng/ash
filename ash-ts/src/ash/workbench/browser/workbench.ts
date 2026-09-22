@@ -1,3 +1,5 @@
+import { ISkillService } from "../../platform/skills/common/skillService.js";
+import { ILanguageServerService } from "../../platform/language/common/languageServerService.js";
 import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../editor/common/services/languageFeatureDebounce.js';
 import { IInlineCompletionsService, InlineCompletionsService } from '../../editor/browser/services/inlineCompletionsService.js';
 import { ICallService } from '../../platform/call/common/callService.js';
@@ -462,6 +464,8 @@ export class Workbench extends Disposable {
 		services.registerInstance(IPluginService, this._register(new AppServerPluginService(api.plugins, api.events)));
 		const marketplaceService = this._register(new AppServerMarketplaceService(api.marketplace, api.events));
 		services.registerInstance(IMarketplaceService, marketplaceService);
+		services.registerInstance(ISkillService, api.skills);
+		services.registerInstance(ILanguageServerService, api.languageServers);
 		services.registerInstance(IToolSearchService, new AppServerToolSearchService(api.toolSearch));
 		const workbenchState = workspaceContext.getWorkbenchState();
 		const workbenchWindow = this._register(new WorkbenchWindow({
