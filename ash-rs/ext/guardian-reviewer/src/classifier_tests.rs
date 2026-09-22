@@ -9,6 +9,77 @@ use async_utils::CancellationSource;
 struct StaticModel(&'static str);
 
 #[test]
+fn model_receives_bounded_history_without_losing_user_authority_or_action() {
+    use action_policy::ReviewContext;
+    use action_policy::ReviewEvidence;
+    use action_policy::ReviewEvidenceKind;
+    use action_policy::ReviewEvidenceTrust;
+    struct Inspect;
+    impl ReviewModel for Inspect {
+        fn complete(
+            &self,
+            request: &ReviewModelRequest,
+            _: &async_utils::CancellationToken,
+        ) -> Result<String, ReviewModelError> {
+            let input: serde_json::Value = serde_json::from_str(request.input_json()).unwrap();
+            assert_eq!(
+                input["context"]["user_intent"],
+                "Inspect only; do not publish."
+            );
+            assert_eq!(input["context"]["omitted_evidence"], 1);
+            assert_eq!(
+                input["context"]["evidence"][0]["content"],
+                "Inspect only; do not publish."
+            );
+            assert_eq!(
+                input["context"]["evidence"][1]["content"],
+                "prepared payload"
+            );
+            assert!(request.input_json().contains("call the configured API"));
+            assert!(
+                request.input_json().len()
+                    + request.system_prompt().len()
+                    + request.response_schema_json().len()
+                    <= MAX_MODEL_INPUT_TOKENS * 3
+            );
+            Ok(r#"{"recommendation":"deny","reason":"inspection only"}"#.into())
+        }
+    }
+    let context = ReviewContext::new(
+        "Inspect only; do not publish.",
+        [
+            ReviewEvidence::new(
+                ReviewEvidenceKind::PriorToolResult,
+                ReviewEvidenceTrust::UntrustedContent,
+                "tool",
+                "x".repeat(MAX_MODEL_INPUT_BYTES),
+            ),
+            ReviewEvidence::new(
+                ReviewEvidenceKind::UserMessage,
+                ReviewEvidenceTrust::TrustedUser,
+                "user",
+                "Inspect only; do not publish.",
+            ),
+            ReviewEvidence::new(
+                ReviewEvidenceKind::PreparedAction,
+                ReviewEvidenceTrust::TrustedHost,
+                "action",
+                "prepared payload",
+            ),
+        ],
+    );
+    LlmActionClassifier::new(Inspect)
+        .classify(
+            &request(SandboxCompatibility::NotApplicable {
+                reason: "remote API".into(),
+            })
+            .with_context(context),
+            &CancellationSource::new().token(),
+        )
+        .unwrap();
+}
+
+#[test]
 fn model_input_distinguishes_managed_network_from_unrestricted_network() {
     let request = request(SandboxCompatibility::Supported(
         sandboxing::SandboxPolicy::new(
@@ -16,8 +87,10 @@ fn model_input_distinguishes_managed_network_from_unrestricted_network() {
             sandboxing::NetworkAccess::Managed,
         ),
     ));
-    let input: serde_json::Value =
-        serde_json::from_str(&crate::protocol::input_json(&request).unwrap()).unwrap();
+    let input: serde_json::Value = serde_json::from_str(
+        &crate::protocol::input_with_context(&request, request.context()).unwrap(),
+    )
+    .unwrap();
     assert_eq!(input["sandbox"]["network"], "managed_proxy");
 }
 
@@ -141,7 +214,7 @@ fn binds_model_advice_to_the_host_action_and_action_policy_revision() {
         assessment.action_policy_revision(),
         request.action_policy_revision()
     );
-    assert_eq!(assessment.review_protocol_revision(), "review-protocol-4");
+    assert_eq!(assessment.review_protocol_revision(), "review-protocol-5");
     assert!(matches!(
         assessment.recommendation(),
         ClassifierRecommendation::Approve { .. }

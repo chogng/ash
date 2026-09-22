@@ -1,0 +1,18 @@
+[package]
+name = "ash-guardian-context"
+version.workspace = true
+edition.workspace = true
+license-file.workspace = true
+publish.workspace = true
+
+[lib]
+name = "guardian_context"
+doctest = false
+
+[dependencies]
+action-policy = { package = "ash-action-policy", path = "../action-policy" }
+protocol = { package = "ash-protocol", path = "../protocol" }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

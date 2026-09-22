@@ -22,6 +22,7 @@ chrono = { workspace = true }
 crossterm = { workspace = true }
 dirs = { workspace = true }
 pulldown-cmark = { workspace = true }
+mermaid = { workspace = true }
 ratatui = { workspace = true, features = [
     "unstable-backend-writer",
     "unstable-rendered-line-info",

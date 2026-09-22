@@ -14,6 +14,7 @@ name = "ash_core"
 path = "src/lib.rs"
 
 [dependencies]
+guardian-context = { workspace = true }
 audio = { workspace = true }
 core-api = { workspace = true }
 agent-graph-store = { workspace = true }

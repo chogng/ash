@@ -17,6 +17,9 @@ pub enum ReviewEvidenceTrust {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ReviewEvidenceKind {
+    UserMessage,
+    UserAnswer,
+    Delegation,
     AgentMessage,
     Plan,
     PriorToolCall,
@@ -74,6 +77,7 @@ impl ReviewEvidence {
 pub struct ReviewContext {
     user_intent: String,
     evidence: Vec<ReviewEvidence>,
+    omitted_evidence: usize,
 }
 
 impl ReviewContext {
@@ -84,6 +88,7 @@ impl ReviewContext {
         Self {
             user_intent: user_intent.into(),
             evidence: evidence.into_iter().collect(),
+            omitted_evidence: 0,
         }
     }
 
@@ -93,5 +98,16 @@ impl ReviewContext {
 
     pub fn evidence(&self) -> &[ReviewEvidence] {
         &self.evidence
+    }
+
+    /// Records whole evidence entries omitted by request budgeting; user authorization is never
+    /// shortened or omitted to make an advisory request fit.
+    pub fn with_omitted_evidence(mut self, count: usize) -> Self {
+        self.omitted_evidence = count;
+        self
+    }
+
+    pub fn omitted_evidence(&self) -> usize {
+        self.omitted_evidence
     }
 }

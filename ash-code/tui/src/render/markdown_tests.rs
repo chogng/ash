@@ -107,3 +107,60 @@ fn code_link_labels_keep_their_destination_and_list_continuations_align() {
     assert_eq!(rows[2].line.to_string(), "• one two ");
     assert!(rows[3].line.to_string().starts_with("  three"));
 }
+
+#[test]
+fn mermaid_diagrams_render_after_closing_and_keep_theme_and_container_width() {
+    let source = "Flow\n\n```mermaid\nflowchart LR\nA[输入] -->|check| B[Build]\n```\n\nSequence\n\n```mermaid\nsequenceDiagram\nparticipant U as User\nparticipant S as Service\nU->>S: ask\nS-->>U: result\n```";
+    let rows = render_text(source, 72);
+    let text = rows
+        .iter()
+        .map(|row| row.line.to_string())
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(text.contains("┌"));
+    assert!(!text.contains("flowchart"));
+    assert!(!text.contains("sequenceDiagram"));
+    crate::tui_assert_snapshot!("markdown_mermaid", text);
+    let mut buffer = ratatui::buffer::Buffer::empty(ratatui::layout::Rect::new(0, 0, 72, 40));
+    ratatui::widgets::Widget::render(
+        ratatui::widgets::Paragraph::new(
+            rows.iter().map(|row| row.line.clone()).collect::<Vec<_>>(),
+        ),
+        buffer.area,
+        &mut buffer,
+    );
+    let border = buffer
+        .content
+        .iter()
+        .find(|cell| cell.symbol() == "┌")
+        .unwrap();
+    assert_eq!(border.fg, test_context().r#type());
+    let nested = render_text("> - ```mermaid\n>   flowchart TD\n>   A --> B\n>   ```", 24);
+    assert!(nested.iter().all(|row| row.line.width() <= 24));
+    assert!(nested.iter().any(|row| row.line.to_string().contains('┌')));
+}
+
+#[test]
+fn mermaid_open_fences_unsupported_syntax_and_small_width_keep_source() {
+    for source in [
+        "```mermaid\nflowchart LR\nA --> B",
+        "````mermaid\nflowchart LR\nA --> B\n```",
+        "~~~mermaid\nflowchart LR\nA --> B\n```",
+        "```mermaid\nflowchart LR\nA --> B\n``` trailing",
+        "> ```mermaid\n> flowchart LR\n> A --> B\n\noutside",
+        "```mermaid\npie\n\"one\" : 1\n```",
+    ] {
+        let text = render_text(source, 70)
+            .iter()
+            .map(|row| row.line.to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(!text.contains('┌'), "{text}");
+        assert!(text.contains("flowchart") || text.contains("pie"), "{text}");
+    }
+    let small = render_text("```mermaid\nflowchart LR\nA[Long] --> B[Wide]\n```", 10);
+    assert!(small.iter().all(|row| row.line.width() <= 10));
+    assert!(small.iter().all(|row| !row.line.to_string().contains('┌')));
+    let tilde = render_text("~~~mermaid\nflowchart TD\nA --> B\n~~~", 40);
+    assert!(tilde.iter().any(|row| row.line.to_string().contains('┌')));
+}

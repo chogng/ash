@@ -1,0 +1,22 @@
+---
+source: ash-code/tui/src/render/markdown_tests.rs
+expression: text
+---
+Flow
+
+┌───────┐ check   ┌───────┐
+│ 输入  │────────▶│ Build │
+└───────┘         └───────┘
+
+Sequence
+
+┌─────────┐   ┌─────────┐
+│ User    │   │ Service │
+└─────────┘   └─────────┘
+     │ask          │
+     │────────────▶│
+     │             │
+     │result       │
+     │◀ ┄ ┄ ┄ ┄ ┄ ┄│
+     │             │
+     │             │

@@ -81,3 +81,30 @@ fn resize_and_theme_changes_rebuild_the_rendered_blocks() {
     );
     assert_eq!(calls, 3);
 }
+
+#[test]
+fn mermaid_streaming_closure_resize_and_replacement_match_fresh_render() {
+    let source = "```mermaid\nflowchart LR\nA[检查] --> B[Build]\n```";
+    let mut streaming = StreamingRender::default();
+    for end in source
+        .char_indices()
+        .map(|(index, _)| index)
+        .chain([source.len()])
+    {
+        let partial = &source[..end];
+        let actual = streaming.render("diagram", partial, 70, test_context(), &mut plain);
+        let fresh =
+            StreamingRender::default().render("diagram", partial, 70, test_context(), &mut plain);
+        assert_eq!(actual, fresh, "source boundary {end}");
+        let has_boxes = actual.iter().any(|row| row.line.to_string().contains('┌'));
+        assert_eq!(has_boxes, end == source.len(), "source boundary {end}");
+    }
+    for width in [8, 70] {
+        assert_eq!(
+            streaming.render("diagram", source, width, test_context(), &mut plain),
+            StreamingRender::default().render("diagram", source, width, test_context(), &mut plain),
+        );
+    }
+    let replaced = streaming.render("diagram", "replaced", 70, test_context(), &mut plain);
+    assert_eq!(replaced[0].line.to_string(), "replaced");
+}

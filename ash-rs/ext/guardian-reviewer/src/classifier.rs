@@ -8,6 +8,7 @@ use async_utils::CancellationToken;
 use std::fmt;
 
 const MAX_MODEL_INPUT_BYTES: usize = 64 * 1024;
+const MAX_MODEL_INPUT_TOKENS: usize = 16 * 1024;
 const MAX_MODEL_RESPONSE_BYTES: usize = 16 * 1024;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -70,13 +71,29 @@ impl<M: ReviewModel> LlmActionClassifier<M> {
         &self,
         request: &ActionReviewRequest,
     ) -> Result<ReviewModelRequest, AutoReviewError> {
-        let input_json = protocol::input_json(request)
+        let fixed_bytes = CURRENT_REVIEW_PROTOCOL.system_prompt().len()
+            + CURRENT_REVIEW_PROTOCOL.response_schema_json().len();
+        let context = guardian_context::fit(
+            request.context(),
+            guardian_context::RequestBudget {
+                max_bytes: MAX_MODEL_INPUT_BYTES,
+                max_estimated_tokens: MAX_MODEL_INPUT_TOKENS,
+            },
+            |context| {
+                protocol::input_with_context(request, context)
+                    .map(|input| input.len() + fixed_bytes)
+            },
+        )
+        .map_err(|error| match error {
+            guardian_context::BudgetError::Serialization(error) => {
+                AutoReviewError::InvalidRequest(error.to_string())
+            }
+            guardian_context::BudgetError::RequiredContextTooLarge { bytes } => {
+                AutoReviewError::RequestTooLarge { bytes }
+            }
+        })?;
+        let input_json = protocol::input_with_context(request, &context)
             .map_err(|error| AutoReviewError::InvalidRequest(error.to_string()))?;
-        if input_json.len() > MAX_MODEL_INPUT_BYTES {
-            return Err(AutoReviewError::RequestTooLarge {
-                bytes: input_json.len(),
-            });
-        }
         Ok(ReviewModelRequest::new(
             CURRENT_REVIEW_PROTOCOL.system_prompt(),
             input_json,

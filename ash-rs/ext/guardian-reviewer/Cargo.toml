@@ -12,6 +12,7 @@ name = "guardian_reviewer"
 path = "src/lib.rs"
 
 [dependencies]
+guardian-context = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 async-utils = { package = "ash-async-utils", path = "../../async-utils" }

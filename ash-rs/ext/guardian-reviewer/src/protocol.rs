@@ -131,13 +131,18 @@ impl ReviewProtocol {
 }
 
 pub(crate) const CURRENT_REVIEW_PROTOCOL: ReviewProtocol = ReviewProtocol {
-    revision: "review-protocol-4",
+    revision: "review-protocol-5",
     system_prompt: SYSTEM_PROMPT,
     response_schema_json: RESPONSE_SCHEMA_JSON,
 };
 
-pub(crate) fn input_json(request: &ActionReviewRequest) -> serde_json::Result<String> {
-    serde_json::to_string(&ModelInput::from(request))
+pub(crate) fn input_with_context(
+    request: &ActionReviewRequest,
+    context: &ReviewContext,
+) -> serde_json::Result<String> {
+    let mut input = ModelInput::from(request);
+    input.context = context;
+    serde_json::to_string(&input)
 }
 
 pub(crate) fn parse_recommendation(response: &str) -> serde_json::Result<ClassifierRecommendation> {

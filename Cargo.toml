@@ -61,11 +61,13 @@ members = [
     "ash-rs/apply-patch",
     "ash-rs/async-utils",
     "ash-rs/ext/guardian-reviewer",
+    "ash-rs/guardian-context",
     "ash-rs/automation",
     "ash-rs/memory-diagnostics",
     "ash-rs/bwrap",
     "ash-code/ansi-escape",
     "ash-code/cli",
+    "ash-code/mermaid",
     "ash-code/update-sign",
     "ash-code/sprite",
     "ash-rs/config",
@@ -213,6 +215,8 @@ publish = false
 version = "0.1.0"
 
 [workspace.dependencies]
+guardian-context = { package = "ash-guardian-context", path = "ash-rs/guardian-context" }
+mermaid = { package = "ash-mermaid", path = "ash-code/mermaid" }
 appcontainer_common = { git = "https://github.com/microsoft/mxc", rev = "ca7ea12ac6bd9f5420d6adecb37e32a8158da476" }
 bwrap_common = { path = "ash-rs/vendor/mxc/backends/bubblewrap/common" }
 seatbelt_common = { path = "ash-rs/vendor/mxc/backends/seatbelt/common" }

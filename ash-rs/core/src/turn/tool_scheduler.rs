@@ -528,13 +528,7 @@ impl ToolScheduler {
                 )
             }
         };
-        Ok(attach_review_context(
-            request,
-            &snapshot.items,
-            turn_id,
-            item_id,
-            evidence,
-        ))
+        attach_review_context(request, &self.threads, snapshot, item_id, evidence)
     }
 
     fn prepare_review_or_record_failure(

@@ -15,8 +15,16 @@ use ash_protocol::ThreadEvent;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadOrigin;
 use ash_protocol::WorkspaceCheckpoint;
+use std::sync::Arc;
 
 impl ThreadController {
+    pub(crate) fn read_history_prefix(
+        &self,
+        reference: &ash_protocol::HistoryPrefixRef,
+    ) -> Result<Arc<ThreadSnapshot>, CoreError> {
+        crate::history::HistoryReader::new(self.store.as_ref(), &[]).resolve(reference)
+    }
+
     pub fn message_checkpoints(
         &self,
         thread_id: &ThreadId,

@@ -38,7 +38,10 @@ impl<'a> HistoryReader<'a> {
         reduce_thread_event_with_prefix(snapshot, event, source.as_deref())
     }
 
-    fn resolve(&mut self, reference: &HistoryPrefixRef) -> Result<Arc<ThreadSnapshot>, CoreError> {
+    pub(crate) fn resolve(
+        &mut self,
+        reference: &HistoryPrefixRef,
+    ) -> Result<Arc<ThreadSnapshot>, CoreError> {
         let mut todo = vec![(reference.clone(), false)];
         let mut visiting = BTreeSet::new();
         let mut pending = BTreeMap::<String, HistoryPrefix>::new();

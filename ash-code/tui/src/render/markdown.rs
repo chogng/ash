@@ -20,7 +20,7 @@ use unicode_width::UnicodeWidthStr;
 
 pub(crate) struct MarkdownBlock<'a> {
     pub(crate) source: Range<usize>,
-    events: Vec<Event<'a>>,
+    events: Vec<(Event<'a>, bool)>,
 }
 
 /// Parse as a complete document so late reference definitions can resolve earlier links.
@@ -36,6 +36,7 @@ pub(crate) fn blocks(source: &str) -> Vec<MarkdownBlock<'_>> {
     let mut start = 0;
     let mut end = 0;
     let mut depth = 0usize;
+    let mut code_text_end = 0;
     for (event, range) in parser.into_offset_iter() {
         if events.is_empty() {
             start = range.start;
@@ -46,7 +47,23 @@ pub(crate) fn blocks(source: &str) -> Vec<MarkdownBlock<'_>> {
             Event::End(_) => depth = depth.saturating_sub(1),
             _ => {}
         }
-        events.push(event);
+        let closed = match &event {
+            Event::Start(Tag::CodeBlock(_)) => {
+                code_text_end = range.start;
+                false
+            }
+            Event::Text(_) => {
+                code_text_end = range.end;
+                false
+            }
+            // The parser's block range consumes a real closing fence beyond the final Text
+            // range. An EOF-generated End event has no such suffix, including in containers.
+            Event::End(TagEnd::CodeBlock) => source[code_text_end..range.end]
+                .trim_end()
+                .ends_with(['`', '~']),
+            _ => false,
+        };
+        events.push((event, closed));
         if depth == 0 && !references {
             result.push(MarkdownBlock {
                 source: start..end,
@@ -88,7 +105,7 @@ pub(crate) fn render(
         table: None,
         code_index: block.source.start,
     };
-    for event in &block.events {
+    for (event, closed) in &block.events {
         match event {
             Event::Start(Tag::CodeBlock(kind)) => {
                 writer.flush();
@@ -100,9 +117,21 @@ pub(crate) fn render(
             }
             Event::End(TagEnd::CodeBlock) => {
                 if let Some((language, source)) = writer.code.take() {
-                    for line in
-                        highlight(writer.code_index, &language, &source.replace('\t', "    "))
-                    {
+                    let diagram = if *closed && language == "mermaid" {
+                        mermaid::render(&source, writer.available_width()).ok()
+                    } else {
+                        None
+                    };
+                    let lines = match diagram {
+                        Some(rows) => rows
+                            .into_iter()
+                            .map(|row| Line::styled(row, Style::default().fg(context.r#type())))
+                            .collect(),
+                        None => {
+                            highlight(writer.code_index, &language, &source.replace('\t', "    "))
+                        }
+                    };
+                    for line in lines {
                         writer.current = HyperlinkLine {
                             line,
                             links: Vec::new(),

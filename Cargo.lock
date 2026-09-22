@@ -1178,6 +1178,7 @@ dependencies = [
  "ash-core-api",
  "ash-execpolicy",
  "ash-extension-api",
+ "ash-guardian-context",
  "ash-history",
  "ash-model-accounting",
  "ash-prompts",
@@ -1585,11 +1586,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "ash-guardian-context"
+version = "0.1.0"
+dependencies = [
+ "ash-action-policy",
+ "ash-protocol",
+ "serde_json",
+]
+
+[[package]]
 name = "ash-guardian-reviewer"
 version = "0.1.0"
 dependencies = [
  "ash-action-policy",
  "ash-async-utils",
+ "ash-guardian-context",
  "ash-sandboxing",
  "serde",
  "serde_json",
@@ -1981,6 +1992,14 @@ dependencies = [
  "sysinfo",
  "thiserror 2.0.19",
  "ts-rs",
+]
+
+[[package]]
+name = "ash-mermaid"
+version = "0.1.0"
+dependencies = [
+ "unicode-segmentation",
+ "unicode-width 0.2.0",
 ]
 
 [[package]]
@@ -2667,6 +2686,7 @@ dependencies = [
  "ash-keybinding",
  "ash-memories",
  "ash-memory-diagnostics",
+ "ash-mermaid",
  "ash-message-history",
  "ash-product-update",
  "ash-protocol",

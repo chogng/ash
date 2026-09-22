@@ -594,8 +594,16 @@ fn reviewer_approval_executes_with_bound_authority_and_user_context() {
     let context = observed.lock().unwrap();
     let context = context.as_ref().unwrap();
     assert_eq!(context.user_intent(), "run");
-    assert_eq!(context.evidence().len(), 1);
-    assert_eq!(context.evidence()[0].source(), "script.py");
+    assert_eq!(context.evidence().len(), 2);
+    assert_eq!(
+        context.evidence()[0].kind(),
+        ReviewEvidenceKind::UserMessage
+    );
+    assert_eq!(
+        context.evidence()[0].trust(),
+        ReviewEvidenceTrust::TrustedUser
+    );
+    assert_eq!(context.evidence()[1].source(), "script.py");
 }
 
 #[test]

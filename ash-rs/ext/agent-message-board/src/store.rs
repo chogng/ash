@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS agent_board_posts (
     body TEXT NOT NULL, search_body TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS agent_board_channel_posts ON agent_board_posts(channel, id);
+CREATE INDEX IF NOT EXISTS agent_board_channel_topics ON agent_board_posts(channel, id) WHERE topic IS NULL;
 CREATE INDEX IF NOT EXISTS agent_board_topic_posts ON agent_board_posts(topic, id);
 CREATE TABLE IF NOT EXISTS agent_board_channel_members (
     channel INTEGER NOT NULL REFERENCES agent_board_channels(id) ON DELETE CASCADE,

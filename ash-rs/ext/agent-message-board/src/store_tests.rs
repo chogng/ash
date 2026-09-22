@@ -48,6 +48,67 @@ fn channel(store: &Store, scope: &Scope) {
 }
 
 #[test]
+fn topic_index_is_installed_on_reopen_and_pagination_excludes_replies() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("board.sqlite3");
+    let scope = board_scope("session", "root");
+    let store = Store::open(&path).unwrap();
+    channel(&store, &scope);
+    let mut ids = Vec::new();
+    for number in 0..3 {
+        let topic = write(
+            &store,
+            &scope,
+            "root",
+            &format!("topic-{number}"),
+            json!({"action":"post","channel":"work","text":format!("topic {number}")}),
+        );
+        let id = topic.output["id"].as_i64().unwrap();
+        ids.push(id);
+        for reply in 0..10 {
+            write(
+                &store,
+                &scope,
+                "worker",
+                &format!("reply-{number}-{reply}"),
+                json!({"action":"post","channel":"work","topic":id,"text":"reply"}),
+            );
+        }
+    }
+    drop(store);
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    connection
+        .execute("DROP INDEX agent_board_channel_topics", [])
+        .unwrap();
+    let reopened = Store::open(&path).unwrap();
+    let first = read(
+        &reopened,
+        &scope,
+        json!({"action":"topics","channel":"work","limit":2}),
+    );
+    assert_eq!(first["items"][0]["id"], ids[2]);
+    assert_eq!(first["items"][1]["id"], ids[1]);
+    assert_eq!(first["items"][0]["replies"], 10);
+    let next = read(
+        &reopened,
+        &scope,
+        json!({"action":"topics","channel":"work","limit":2,"cursor":first["next_cursor"]}),
+    );
+    assert_eq!(next["items"].as_array().unwrap().len(), 1);
+    assert_eq!(next["items"][0]["id"], ids[0]);
+    connection.execute_batch("ANALYZE").unwrap();
+    let plan = connection.prepare(
+        "EXPLAIN QUERY PLAN SELECT p.id, COALESCE(p.topic,p.id), c.name, p.author, p.created_at, p.body,
+         (SELECT COUNT(*) FROM agent_board_posts replies WHERE replies.topic=p.id)
+         FROM agent_board_posts p JOIN agent_board_channels c ON c.id=p.channel
+         WHERE c.board=?1 AND p.channel=?2 AND p.topic IS NULL
+         AND (?3 IS NULL OR p.id<?3) ORDER BY p.id DESC LIMIT ?4"
+    ).unwrap().query_map(rusqlite::params![1, 1, Option::<i64>::None, 3], |row| row.get::<_, String>(3))
+        .unwrap().collect::<std::result::Result<Vec<_>, _>>().unwrap().join("\n");
+    assert!(plan.contains("agent_board_channel_topics"), "{plan}");
+}
+
+#[test]
 fn channel_and_topic_subscriptions_route_different_events_and_deduplicate_members() {
     let store = Store::in_memory().unwrap();
     let scope = board_scope("session", "root");
