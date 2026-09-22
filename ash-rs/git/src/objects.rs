@@ -263,10 +263,8 @@ impl GitClient {
         git_directory: &Path,
         reference: &GitPrivateRef,
     ) -> GitResult<()> {
-        let directory = std::fs::canonicalize(git_directory).map_err(|error| GitError::Io {
-            operation: "resolve checkpoint Git directory",
-            source: error,
-        })?;
+        let directory = std::fs::canonicalize(git_directory)
+            .map_err(|error| GitError::io("resolve checkpoint Git directory", error))?;
         self.run_mutation(
             &directory,
             [

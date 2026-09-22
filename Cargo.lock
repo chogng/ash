@@ -1528,6 +1528,7 @@ dependencies = [
  "ash-install-context",
  "ash-utils-pty",
  "dunce",
+ "futures",
  "pretty_assertions",
  "serde",
  "serde_json",

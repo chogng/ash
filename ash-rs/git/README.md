@@ -20,6 +20,7 @@ Git domain owner 下，而不是建立平级的 `ash-git-utils`：
 | 容易被低估的能力 | 当前实现价值 |
 | --- | --- |
 | 有界进程 | query 默认 5 秒、mutation 默认 30 秒；stdout/stderr 各自有 8 MiB 上限，达到上限后仍继续 drain child，最终返回明确错误 |
+| 仓库探测并发 | 同目录正在进行的探测共享结果；整个进程最多同时执行 8 次仓库探测 |
 | 非交互执行 | 禁用 terminal prompt 和 credential-manager 交互，固定 `LC_ALL=C`，避免后台调用等待 UI/input |
 | repository config 隔离 | 所有内部命令禁用 configured hooks；query 禁用 optional locks |
 | fsmonitor 安全与性能 | 不执行 repository-selected fsmonitor helper；仅当配置确实是 boolean true 且 Git 声明 built-in daemon capability 时保留 daemon |
@@ -36,6 +37,7 @@ Git domain owner 下，而不是建立平级的 `ash-git-utils`：
 | --- | --- | --- |
 | `src/client.rs` | Git executable identity、process profile、timeout、bounded capture、non-interactive config，以及流式 query process 生命周期 | `GitClient`、`GitExecutionLimits`、private `GitInvocation`、`GitCommandProfile`、`GitQueryStream`、`read_bounded` |
 | `src/repository.rs` | 从已有 path 打开 working tree，解析 worktree/git/common metadata path | `GitRepository`、`GitRepositoryKind`、`existing_directory` |
+| `src/discovery.rs` | 合并进行中的仓库探测、限制并发，并随最后一个调用方取消工作 | private `Coordinator` |
 | `src/status.rs` | porcelain-v2 snapshot 与 HEAD/change/submodule model | `GitRepositorySnapshot`、`GitHead`、private `parse_status` |
 | `src/content.rs` | 有界读取 HEAD 或 index 中一个 repository-relative file | `GitFileRevision`、`GitClient::read_file_at_revision` |
 | `src/text_diff.rs` | 从同一次状态快照构建 repository-wide 或 path-scoped 的有界 UTF-8 HEAD/worktree Diff 与文件级、聚合增删行统计 | `GitTextDiffSnapshot`、`GitTextDiff`、`GitDiffStatistics`、`GitClient::text_diff_snapshot[_under]` |
@@ -59,15 +61,18 @@ watch subscription、operation queue 或 wire DTO 放进上述 module，意味�
 - `GitClient::with_executable` 只接受调用方明确选择的绝对路径；相对路径直接返回配置错误。此入口保留调用方的子进程环境。
 - `GitClient::executable()` 返回 `GitResult<PathBuf>`；系统程序不存在、不可访问或越出安装根时返回错误。
 - 普通命令的超时覆盖等待退出、写入 stdin 和读取 stdout/stderr。输出采集直接属于当前 future，取消时同步释放，避免读写任务脱离操作生命周期。
+- 仓库探测按规范化目录、Git 程序、查询 PATH 策略和执行限制合并；不同程序或限制不会混用结果。
+- 探测完成或全部调用方取消后立即移除记录，不缓存成功或失败结果。单个调用方取消不会中断其他调用方；排队等待不占用进程执行超时。
 - Windows 普通命令与流式查询均通过 `pty::JobObject::spawn_contained` 创建。Job 在完整操作期间存活，超时、取消或错误释放时结束进程树；成功后保留正常启动的后台后代。
 
 ```text
 GitClient::open_repository
-└─ GitClient::run_query_unchecked
-   └─ git rev-parse --path-format=absolute
-      ├─ worktree root
-      ├─ git dir
-      └─ common git dir
+└─ GitClient::discover_repository
+   └─ discovery::Coordinator → GitClient::run_query_unchecked
+      └─ git rev-parse --path-format=absolute
+         ├─ worktree root
+         ├─ git dir
+         └─ common git dir
 
 GitClient::snapshot
 ├─ detect_fsmonitor_override

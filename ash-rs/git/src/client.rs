@@ -46,7 +46,7 @@ const REPOSITORY_SELECTOR_ENVIRONMENT: [&str; 15] = [
 ];
 
 /// Resource limits applied to every system Git process started by [`GitClient`].
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct GitExecutionLimits {
     query_timeout: Duration,
     mutation_timeout: Duration,
@@ -155,6 +155,39 @@ impl GitClient {
 
     pub fn limits(&self) -> GitExecutionLimits {
         self.limits
+    }
+
+    pub(crate) async fn discover_repository(&self, cwd: PathBuf) -> GitResult<GitCommandOutput> {
+        let key = crate::discovery::Key {
+            cwd: cwd.clone(),
+            executable: self.executable()?,
+            search_path: match &self.executable {
+                ExecutableSource::System(system) => Some(
+                    system
+                        .search_path()
+                        .map_err(|source| GitError::io("build system Git PATH", source))?,
+                ),
+                ExecutableSource::Explicit(_) => None,
+            },
+            limits: self.limits,
+        };
+        let client = self.clone();
+        crate::discovery::coordinator()
+            .query(key, async move {
+                client
+                    .run_query_unchecked(
+                        &cwd,
+                        [
+                            "rev-parse",
+                            "--path-format=absolute",
+                            "--show-toplevel",
+                            "--absolute-git-dir",
+                            "--git-common-dir",
+                        ],
+                    )
+                    .await
+            })
+            .await
     }
 
     pub(crate) async fn run_query<I, S>(&self, cwd: &Path, args: I) -> GitResult<GitCommandOutput>
@@ -549,6 +582,7 @@ impl GitInvocation {
     }
 }
 
+#[derive(Clone, Debug)]
 pub(crate) struct GitCommandOutput {
     pub(crate) command: String,
     pub(crate) status: ExitStatus,

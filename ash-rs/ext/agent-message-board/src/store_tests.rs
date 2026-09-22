@@ -102,7 +102,7 @@ fn topic_index_is_installed_on_reopen_and_pagination_excludes_replies() {
          (SELECT COUNT(*) FROM agent_board_posts replies WHERE replies.topic=p.id)
          FROM agent_board_posts p JOIN agent_board_channels c ON c.id=p.channel
          WHERE c.board=?1 AND p.channel=?2 AND p.topic IS NULL
-         AND (?3 IS NULL OR p.id<?3) ORDER BY p.id DESC LIMIT ?4"
+         ORDER BY p.id DESC LIMIT ?4"
     ).unwrap().query_map(rusqlite::params![1, 1, Option::<i64>::None, 3], |row| row.get::<_, String>(3))
         .unwrap().collect::<std::result::Result<Vec<_>, _>>().unwrap().join("\n");
     assert!(plan.contains("agent_board_channel_topics"), "{plan}");

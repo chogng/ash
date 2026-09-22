@@ -6,6 +6,7 @@
 mod branch;
 mod client;
 mod content;
+mod discovery;
 mod error;
 mod fsmonitor;
 mod graph;

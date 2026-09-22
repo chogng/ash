@@ -1,12 +1,13 @@
 use std::fmt;
 use std::io;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
 pub type GitResult<T> = Result<T, GitError>;
 
 /// Failure returned while configuring, invoking, or parsing a Git operation.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum GitError {
     InvalidConfiguration {
         field: &'static str,
@@ -20,7 +21,7 @@ pub enum GitError {
     },
     Io {
         operation: &'static str,
-        source: io::Error,
+        source: Arc<io::Error>,
     },
     Runtime {
         operation: &'static str,
@@ -48,7 +49,10 @@ pub enum GitError {
 
 impl GitError {
     pub(crate) fn io(operation: &'static str, source: io::Error) -> Self {
-        Self::Io { operation, source }
+        Self::Io {
+            operation,
+            source: Arc::new(source),
+        }
     }
 
     pub(crate) fn runtime(operation: &'static str, detail: impl Into<String>) -> Self {
@@ -119,7 +123,7 @@ impl fmt::Display for GitError {
 impl std::error::Error for GitError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Self::Io { source, .. } => Some(source),
+            Self::Io { source, .. } => Some(source.as_ref()),
             _ => None,
         }
     }

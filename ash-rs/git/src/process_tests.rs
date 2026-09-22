@@ -104,3 +104,31 @@ async fn cancelling_git_work_kills_its_running_descendants() {
     assert!(task.await.err().expect("cancelled task").is_cancelled());
     assert_descendant_stopped(directory.path()).await;
 }
+
+#[tokio::test]
+async fn cancelling_last_discovery_waiter_kills_its_running_descendants() {
+    let directory = tempfile::tempdir().unwrap();
+    let invocation = invocation(directory.path(), "parent");
+    let client = GitClient::system();
+    let key = crate::discovery::Key {
+        cwd: directory.path().to_path_buf(),
+        executable: client.executable().unwrap(),
+        search_path: None,
+        limits: client.limits(),
+    };
+    let query =
+        crate::discovery::coordinator().query(key, async move { client.run(invocation).await });
+    let survivor = query.clone();
+    let task = tokio::spawn(query);
+    tokio::time::timeout(Duration::from_secs(3), async {
+        while !directory.path().join("ready").exists() {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    task.abort();
+    assert!(task.await.unwrap_err().is_cancelled());
+    drop(survivor);
+    assert_descendant_stopped(directory.path()).await;
+}

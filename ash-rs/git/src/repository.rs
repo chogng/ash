@@ -43,18 +43,7 @@ impl GitClient {
     /// Opens the working tree containing `start` and resolves its Git metadata paths.
     pub async fn open_repository(&self, start: &Path) -> GitResult<GitRepository> {
         let cwd = existing_directory(start)?;
-        let output = self
-            .run_query_unchecked(
-                &cwd,
-                [
-                    "rev-parse",
-                    "--path-format=absolute",
-                    "--show-toplevel",
-                    "--absolute-git-dir",
-                    "--git-common-dir",
-                ],
-            )
-            .await?;
+        let output = self.discover_repository(cwd).await?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             if stderr.contains("not a git repository")
@@ -108,15 +97,15 @@ fn existing_directory(start: &Path) -> GitResult<PathBuf> {
             GitError::io("inspect Git start path", error)
         }
     })?;
-    if metadata.is_dir() {
-        return Ok(normalize_native_path(start.to_path_buf()));
-    }
-    start
-        .parent()
-        .map(|parent| normalize_native_path(parent.to_path_buf()))
-        .ok_or_else(|| GitError::InvalidStartPath {
+    let directory = if metadata.is_dir() {
+        start
+    } else {
+        start.parent().ok_or_else(|| GitError::InvalidStartPath {
             path: start.to_path_buf(),
-        })
+        })?
+    };
+    dunce::canonicalize(directory)
+        .map_err(|source| GitError::io("resolve Git start directory", source))
 }
 
 fn required_path(value: Option<&str>, command: &str, label: &str) -> GitResult<PathBuf> {

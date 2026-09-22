@@ -122,10 +122,7 @@ impl Store {
                 let channel = channel_id(&transaction, board, channel)?;
                 collect(
                     &transaction,
-                    &format!(
-                        "{POSTS} WHERE c.board=?1 AND p.channel=?2 AND p.topic IS NULL
-                     AND (?3 IS NULL OR p.id<?3) ORDER BY p.id DESC LIMIT ?4"
-                    ),
+                    &topics_sql(before),
                     params![board, channel, before, take],
                 )?
             }
@@ -158,12 +155,7 @@ impl Store {
                 let query = search_term(query)?;
                 collect(
                     &transaction,
-                    &format!(
-                        "{POSTS} WHERE c.board=?1 AND (?2 IS NULL OR c.name=?2)
-                     AND (?3 IS NULL OR p.topic=?3 OR p.id=?3)
-                     AND (?4 IS NULL OR p.author=?4) AND instr(p.search_body,?5)>0
-                     AND (?6 IS NULL OR p.id<?6) ORDER BY p.id DESC LIMIT ?7"
-                    ),
+                    &posts_sql(channel.as_deref(), *topic, author.as_ref(), &query, before),
                     params![
                         board,
                         channel,
@@ -178,6 +170,49 @@ impl Store {
             Read::Post { .. } => unreachable!(),
         };
         page(rows, limit, fingerprint)
+    }
+}
+
+fn topics_sql(before: Option<i64>) -> String {
+    let page = if before.is_some() { " AND p.id<?3" } else { "" };
+    format!(
+        "{POSTS} WHERE c.board=?1 AND p.channel=?2 AND p.topic IS NULL{page} ORDER BY p.id DESC LIMIT ?4"
+    )
+}
+
+fn posts_sql(
+    channel: Option<&str>,
+    topic: Option<i64>,
+    author: Option<&ThreadId>,
+    query: &str,
+    before: Option<i64>,
+) -> String {
+    let mut filters = String::from("c.board=?1");
+    if channel.is_some() {
+        filters.push_str(" AND c.name=?2");
+    }
+    if author.is_some() {
+        filters.push_str(" AND p.author=?4");
+    }
+    if !query.is_empty() {
+        filters.push_str(" AND instr(p.search_body,?5)>0");
+    }
+    if before.is_some() {
+        filters.push_str(" AND p.id<?6");
+    }
+    if topic.is_some() {
+        // Select one bounded page before loading bodies or counting replies on a root.
+        // Replies use (topic, id); the root uses its primary key. The two sets are disjoint.
+        let ids =
+            "SELECT p.id FROM agent_board_posts p JOIN agent_board_channels c ON c.id=p.channel";
+        format!(
+            "WITH page AS (
+            {ids} WHERE {filters} AND p.topic=?3 UNION ALL
+            {ids} WHERE {filters} AND p.id=?3 ORDER BY 1 DESC LIMIT ?7
+        ) {POSTS} JOIN page ON page.id=p.id ORDER BY p.id DESC"
+        )
+    } else {
+        format!("{POSTS} WHERE {filters} ORDER BY p.id DESC LIMIT ?7")
     }
 }
 
@@ -271,3 +306,7 @@ fn body(message: Message, offset: usize, limit: usize) -> Result<Value> {
     };
     Ok(output)
 }
+
+#[cfg(test)]
+#[path = "read_tests.rs"]
+mod tests;

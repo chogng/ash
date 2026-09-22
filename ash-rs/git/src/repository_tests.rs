@@ -58,3 +58,29 @@ async fn identifies_linked_worktree_metadata() {
     assert_eq!(opened.worktree_root(), worktree);
     assert_ne!(opened.git_dir(), opened.common_dir());
 }
+
+#[tokio::test]
+async fn completed_discovery_does_not_hide_repository_initialization() {
+    let directory = tempfile::tempdir().unwrap();
+    let git = GitClient::system();
+    assert!(matches!(
+        git.open_repository(directory.path()).await,
+        Err(GitError::NotAWorkingTree { .. })
+    ));
+    git.run_mutation(directory.path(), ["init", "--initial-branch=main"])
+        .await
+        .unwrap()
+        .require_success()
+        .unwrap();
+    let opened = git.open_repository(directory.path()).await.unwrap();
+    assert_eq!(
+        opened.worktree_root(),
+        dunce::canonicalize(directory.path()).unwrap()
+    );
+    assert_eq!(
+        opened,
+        git.open_repository(&directory.path().join("."))
+            .await
+            .unwrap()
+    );
+}
