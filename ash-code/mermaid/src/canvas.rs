@@ -2,10 +2,18 @@ use crate::RenderError;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) enum Stroke {
+    #[default]
+    Solid,
+    Dashed,
+}
+
 #[derive(Clone, Default)]
 struct Cell {
     text: Option<String>,
     strokes: u8,
+    stroke: Stroke,
 }
 
 pub(crate) struct Canvas {
@@ -63,18 +71,22 @@ impl Canvas {
         self.text(x, y + 2, &format!("└{}┘", "─".repeat(width - 2)))
     }
 
-    pub(crate) fn path(&mut self, points: &[(usize, usize)]) -> Result<(), RenderError> {
+    pub(crate) fn path(
+        &mut self,
+        points: &[(usize, usize)],
+        stroke: Stroke,
+    ) -> Result<(), RenderError> {
         for pair in points.windows(2) {
             let ((x1, y1), (x2, y2)) = (pair[0], pair[1]);
             if x1 == x2 {
                 for y in y1.min(y2)..=y1.max(y2) {
                     let bits = u8::from(y > y1.min(y2)) | (u8::from(y < y1.max(y2)) << 1);
-                    self.stroke(x1, y, bits)?;
+                    self.stroke(x1, y, bits, stroke)?;
                 }
             } else if y1 == y2 {
                 for x in x1.min(x2)..=x1.max(x2) {
                     let bits = (u8::from(x > x1.min(x2)) << 2) | (u8::from(x < x1.max(x2)) << 3);
-                    self.stroke(x, y1, bits)?;
+                    self.stroke(x, y1, bits, stroke)?;
                 }
             } else {
                 return Err(RenderError::Unsupported);
@@ -83,7 +95,7 @@ impl Canvas {
         Ok(())
     }
 
-    fn stroke(&mut self, x: usize, y: usize, bits: u8) -> Result<(), RenderError> {
+    fn stroke(&mut self, x: usize, y: usize, bits: u8, stroke: Stroke) -> Result<(), RenderError> {
         let cell = self
             .cells
             .get_mut(y)
@@ -96,17 +108,16 @@ impl Canvas {
         {
             return Err(RenderError::Unsupported);
         }
+        if cell.strokes == 0 || stroke == Stroke::Solid {
+            cell.stroke = stroke;
+        }
         cell.strokes |= bits;
         Ok(())
     }
 
     pub(crate) fn arrow(&mut self, x: usize, y: usize, symbol: &str) -> Result<(), RenderError> {
         let cell = &mut self.cells[y][x];
-        if cell
-            .text
-            .as_deref()
-            .is_some_and(|text| text != symbol && text != "┄")
-        {
+        if cell.text.as_deref().is_some_and(|text| text != symbol) {
             return Err(RenderError::Unsupported);
         }
         cell.text = Some(symbol.into());
@@ -121,6 +132,8 @@ impl Canvas {
                     .map(|cell| {
                         cell.text.unwrap_or_else(|| {
                             match cell.strokes {
+                                1..=3 if cell.stroke == Stroke::Dashed => "┆",
+                                4 | 8 | 12 if cell.stroke == Stroke::Dashed => "┄",
                                 1..=3 => "│",
                                 4 | 8 | 12 => "─",
                                 5 => "┘",

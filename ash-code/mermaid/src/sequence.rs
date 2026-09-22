@@ -1,5 +1,6 @@
 use crate::RenderError;
 use crate::canvas::Canvas;
+use crate::canvas::Stroke;
 use unicode_width::UnicodeWidthStr;
 
 struct Participant {
@@ -10,7 +11,7 @@ struct Message {
     from: usize,
     to: usize,
     text: String,
-    dashed: bool,
+    stroke: Stroke,
 }
 
 pub(crate) fn render<'a>(
@@ -29,24 +30,21 @@ pub(crate) fn render<'a>(
             continue;
         }
         let (route, text) = line.split_once(':').ok_or(RenderError::Unsupported)?;
-        let (arrow, dashed) = if route.contains("-->>") {
-            ("-->>", true)
+        let (arrow, stroke) = if route.contains("-->>") {
+            ("-->>", Stroke::Dashed)
         } else if route.contains("->>") {
-            ("->>", false)
+            ("->>", Stroke::Solid)
         } else {
             return Err(RenderError::Unsupported);
         };
         let (from, to) = route.split_once(arrow).ok_or(RenderError::Unsupported)?;
         let from = participant(from.trim(), &mut participants)?;
         let to = participant(to.trim(), &mut participants)?;
-        if from == to && dashed {
-            return Err(RenderError::Unsupported);
-        }
         messages.push(Message {
             from,
             to,
             text: crate::label(text)?.into(),
-            dashed,
+            stroke,
         });
         if messages.len() > 128 {
             return Err(RenderError::Limit);
@@ -62,7 +60,7 @@ pub(crate) fn render<'a>(
         .unwrap();
     let gap = messages
         .iter()
-        .map(|m| m.text.width() + 3)
+        .map(|m| m.text.width() + if m.from == m.to { 5 } else { 3 })
         .max()
         .unwrap_or(4)
         .max(box_width + 3);
@@ -80,10 +78,13 @@ pub(crate) fn render<'a>(
     let mut canvas = Canvas::new(columns, rows)?;
     for (index, participant) in participants.iter().enumerate() {
         canvas.box_at(index * gap, 0, box_width, &participant.label)?;
-        canvas.path(&[
-            (index * gap + box_width / 2, 3),
-            (index * gap + box_width / 2, rows - 1),
-        ])?;
+        canvas.path(
+            &[
+                (index * gap + box_width / 2, 3),
+                (index * gap + box_width / 2, rows - 1),
+            ],
+            Stroke::Solid,
+        )?;
     }
     let mut y = 4;
     for message in messages {
@@ -92,21 +93,16 @@ pub(crate) fn render<'a>(
         canvas.text(from.min(to) + 1, y - 1, &message.text)?;
         if from == to {
             let bend = from + message.text.width() + 3;
-            canvas.path(&[(from + 1, y), (bend, y), (bend, y + 2), (from + 1, y + 2)])?;
+            canvas.path(
+                &[(from + 1, y), (bend, y), (bend, y + 2), (from + 1, y + 2)],
+                message.stroke,
+            )?;
             canvas.arrow(from + 1, y + 2, "◀")?;
             y += 5;
         } else {
             let left = from.min(to) + 1;
             let right = from.max(to) - 1;
-            if message.dashed {
-                for x in left..=right {
-                    if x % 2 == 0 {
-                        canvas.text(x, y, "┄")?;
-                    }
-                }
-            } else {
-                canvas.path(&[(left, y), (right, y)])?;
-            }
+            canvas.path(&[(left, y), (right, y)], message.stroke)?;
             canvas.arrow(
                 if from < to { right } else { left },
                 y,

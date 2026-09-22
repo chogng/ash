@@ -27,7 +27,7 @@ just ash
 | 正文、执行输出、缓存与滚动 | [transcript](src/thread/transcript) |
 | Issue 分组、搜索、分页与工作详情 | [issues.rs](src/issues.rs) |
 | Markdown 排版与表格 | [markdown.rs](src/render/markdown.rs)、[table.rs](src/render/markdown/table.rs) |
-| Mermaid 流程图和时序图 | [独立排版 crate](../mermaid/README.md)；完整围栏后绘图，未支持或宽度不足时保留源码 |
+| Mermaid 流程图、状态图和时序图 | [独立排版 crate](../mermaid/README.md)；完整围栏后绘图，未支持或宽度不足时保留源码 |
 | 流式显示进度与提交队列 | [streaming.rs](src/thread/transcript/streaming.rs) |
 | 流式块复用与节奏策略 | [render.rs](src/thread/transcript/streaming/render.rs)、[chunking.rs](src/thread/transcript/streaming/chunking.rs) |
 | 链接范围、换行与 OSC 8 输出 | [hyperlinks.rs](src/terminal/hyperlinks.rs) |

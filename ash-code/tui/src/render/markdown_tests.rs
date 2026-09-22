@@ -141,6 +141,40 @@ fn mermaid_diagrams_render_after_closing_and_keep_theme_and_container_width() {
 }
 
 #[test]
+fn mermaid_shapes_cycles_states_and_dashed_self_messages_render_as_diagrams() {
+    let source = "Flow\n\n```mermaid\nflowchart LR\nA(检查) --> B{通过}\nB -->|yes| C[完成]\nB -.->|retry| A\n```\n\nState\n\n```mermaid\nstateDiagram-v2\ndirection LR\n[*] --> Ready\nstate \"等待\" as Ready\nReady --> Work: run\nWork: 处理\nWork --> Ready: retry\nWork --> [*]\n```\n\nSequence\n\n```mermaid\nsequenceDiagram\nparticipant S as Service\nS-->>S: lookup\n```";
+    let rows = render_text(source, 72);
+    let text = rows
+        .iter()
+        .map(|row| row.line.to_string())
+        .collect::<Vec<_>>()
+        .join("\n");
+    for header in ["flowchart", "stateDiagram", "sequenceDiagram"] {
+        assert!(!text.contains(header), "{text}");
+    }
+    assert!(rows.iter().all(|row| row.line.width() <= 72));
+    for label in ["检查", "通过", "完成", "等待", "处理", "lookup"] {
+        assert_eq!(text.matches(label).count(), 1, "{text}");
+    }
+    let mut buffer =
+        ratatui::buffer::Buffer::empty(ratatui::layout::Rect::new(0, 0, 72, rows.len() as u16));
+    ratatui::widgets::Widget::render(
+        ratatui::widgets::Paragraph::new(rows.into_iter().map(|row| row.line).collect::<Vec<_>>()),
+        buffer.area,
+        &mut buffer,
+    );
+    for glyph in ["╭", "╱", "●", "◉", "┄", "┆"] {
+        let cell = buffer
+            .content
+            .iter()
+            .find(|cell| cell.symbol() == glyph)
+            .unwrap();
+        assert_eq!(cell.fg, test_context().r#type(), "{glyph}");
+    }
+    crate::tui_assert_snapshot!("markdown_mermaid_states_and_cycles", text);
+}
+
+#[test]
 fn mermaid_open_fences_unsupported_syntax_and_small_width_keep_source() {
     for source in [
         "```mermaid\nflowchart LR\nA --> B",

@@ -2,7 +2,9 @@
 
 mod canvas;
 mod flowchart;
+mod graph;
 mod sequence;
+mod state;
 
 use unicode_width::UnicodeWidthStr;
 
@@ -32,12 +34,18 @@ pub fn render(source: &str, width: usize) -> Result<Vec<String>, RenderError> {
     let header = lines.next().ok_or(RenderError::Unsupported)?;
     let rows = if header == "sequenceDiagram" {
         sequence::render(lines, width)?
+    } else if matches!(header, "stateDiagram" | "stateDiagram-v2") {
+        state::render(lines, width)?
     } else {
         let direction = header
             .strip_prefix("flowchart ")
             .or_else(|| header.strip_prefix("graph "))
             .ok_or(RenderError::Unsupported)?;
-        flowchart::render(direction.trim(), lines, width)?
+        let (direction, first) = match direction.split_once(';') {
+            Some((direction, statement)) => (direction, Some(statement)),
+            None => (direction, None),
+        };
+        flowchart::render(direction.trim(), first.into_iter().chain(lines), width)?
     };
     if rows.iter().any(|row| row.width() > width) {
         return Err(RenderError::Width);
