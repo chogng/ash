@@ -120,6 +120,7 @@ fn remote_resume_requires_durable_identity_and_interactive_mode() {
 
 #[test]
 fn runtime_catalog_options_are_authenticated_complete_and_mutually_exclusive() {
+    let cache = std::env::temp_dir().join("ash-runtime-cache");
     let options = parse(&strings([
         "--host",
         "build-linux",
@@ -130,7 +131,7 @@ fn runtime_catalog_options_are_authenticated_complete_and_mutually_exclusive() {
         "--runtime-catalog-sha256",
         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "--runtime-cache",
-        "/var/tmp/ash-runtime-cache",
+        cache.to_str().unwrap(),
         "--check",
     ]))
     .unwrap();

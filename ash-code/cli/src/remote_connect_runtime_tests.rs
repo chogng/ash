@@ -33,7 +33,7 @@ fn runtime_selection_keeps_explicit_and_managed_sources_unambiguous() {
     ));
 
     let local = RemoteConnectRuntimeSelection::parse(RemoteConnectRuntimeInput {
-        local_catalog: Some(PathBuf::from("/opt/ash/catalog.json")),
+        local_catalog: Some(std::env::temp_dir().join("ash/catalog.json")),
         catalog_sha256: Some("a".repeat(64)),
         ..input()
     })
@@ -46,7 +46,7 @@ fn runtime_selection_keeps_explicit_and_managed_sources_unambiguous() {
     let network = RemoteConnectRuntimeSelection::parse(RemoteConnectRuntimeInput {
         catalog_url: Some("https://releases.example/ash/catalog.json".into()),
         catalog_sha256: Some("b".repeat(64)),
-        runtime_cache: Some(PathBuf::from("/var/tmp/ash-runtime-cache")),
+        runtime_cache: Some(std::env::temp_dir().join("ash-runtime-cache")),
         ..input()
     })
     .unwrap();

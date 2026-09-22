@@ -1,6 +1,6 @@
 # `ash-code`
 
-> 终端实现与测试从 [TUI README](tui/README.md) 进入；共享请求与通知见 [App Server API](../docs/ash-app-server-api.md)。
+> 命令用法与验证见 [CLI README](cli/README.md)；终端实现与测试见 [TUI README](tui/README.md)；共享请求与通知见 [App Server API](../docs/ash-app-server-api.md)。
 
 `ash-code` is the product-owned source boundary for the `ash code` terminal product.
 It contains the `ash-cli` command host and the `ash-tui` presentation shell.

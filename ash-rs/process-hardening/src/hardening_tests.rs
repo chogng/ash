@@ -240,3 +240,83 @@ fn traced_process_follows_build_policy() {
         })
     );
 }
+
+#[cfg(windows)]
+#[test]
+fn redirected_output_closes_while_a_descendant_is_running() {
+    use std::io::Write;
+    use std::process::Stdio;
+    use std::time::Duration;
+    use std::time::Instant;
+    const ROLE: &str = "ASH_HARDENING_PIPE_ROLE";
+    const ROOT: &str = "ASH_HARDENING_PIPE_ROOT";
+    const TEST: &str = "tests::redirected_output_closes_while_a_descendant_is_running";
+    if let Some(role) = std::env::var_os(ROLE) {
+        let root = std::path::PathBuf::from(std::env::var_os(ROOT).unwrap());
+        if role == "descendant" {
+            std::fs::write(root.join("ready"), b"").unwrap();
+            let deadline = Instant::now() + Duration::from_secs(30);
+            while !root.join("release").exists() && Instant::now() < deadline {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            std::fs::write(root.join("done"), b"").unwrap();
+        } else {
+            initialize().unwrap();
+            // Explicit redirection and inherited output still work after initialization.
+            let output = Command::new(std::env::current_exe().unwrap())
+                .arg("--list")
+                .output()
+                .unwrap();
+            assert!(output.status.success());
+            assert!(!output.stdout.is_empty());
+            assert!(
+                Command::new(std::env::current_exe().unwrap())
+                    .arg("--list")
+                    .status()
+                    .unwrap()
+                    .success()
+            );
+            std::io::stdout().write_all(b"parent output\n").unwrap();
+            let _descendant = Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", TEST, "--nocapture"])
+                .env(ROLE, "descendant")
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .unwrap();
+        }
+        return;
+    }
+    let root = std::env::temp_dir().join(format!("ash-pipe-{}", std::process::id()));
+    std::fs::create_dir(&root).unwrap();
+    let mut command = Command::new(std::env::current_exe().unwrap());
+    command
+        .args(["--exact", TEST, "--nocapture"])
+        .env(ROLE, "parent")
+        .env(ROOT, &root);
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let reader = std::thread::spawn(move || sender.send(command.output()).unwrap());
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !root.join("ready").exists() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let ready = root.join("ready").exists();
+    let output = receiver.recv_timeout(Duration::from_secs(2));
+    // Release the exact descendant before any assertions, including on regression.
+    std::fs::write(root.join("release"), b"").unwrap();
+    reader.join().unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !root.join("done").exists() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let done = root.join("done").exists();
+    std::fs::remove_dir_all(&root).unwrap();
+    assert!(ready && done, "descendant did not complete its lifecycle");
+    let output = output
+        .expect("descendant retained the parent's output pipe")
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    assert!(String::from_utf8_lossy(&output.stdout).contains("parent output"));
+    assert!(String::from_utf8_lossy(&output.stdout).contains(TEST));
+}

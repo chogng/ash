@@ -28,7 +28,7 @@ fn dangerous_key(key: &std::ffi::OsStr) -> bool {
 }
 
 /// Release builds disable dumps and debugger attachment; development builds preserve them.
-/// Windows DLL search protection applies in both modes.
+/// Windows DLL search protection and standard-handle inheritance isolation apply in both modes.
 /// Call as the first operation in each executable, before loading secrets or starting threads.
 /// Failure must stop startup. Clearing loader variables cannot undo libraries loaded at exec.
 pub fn initialize() -> io::Result<()> {
@@ -55,6 +55,13 @@ pub fn initialize() -> io::Result<()> {
     }
     #[cfg(windows)]
     {
+        use windows_sys::Win32::Foundation::HANDLE_FLAG_INHERIT;
+        use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
+        use windows_sys::Win32::Foundation::SetHandleInformation;
+        use windows_sys::Win32::System::Console::GetStdHandle;
+        use windows_sys::Win32::System::Console::STD_ERROR_HANDLE;
+        use windows_sys::Win32::System::Console::STD_INPUT_HANDLE;
+        use windows_sys::Win32::System::Console::STD_OUTPUT_HANDLE;
         use windows_sys::Win32::System::Diagnostics::Debug::SEM_NOGPFAULTERRORBOX;
         use windows_sys::Win32::System::Diagnostics::Debug::SetErrorMode;
         use windows_sys::Win32::System::LibraryLoader::LOAD_LIBRARY_SEARCH_DEFAULT_DIRS;
@@ -66,6 +73,22 @@ pub fn initialize() -> io::Result<()> {
             }
             SetErrorMode(SEM_NOGPFAULTERRORBOX);
         }
+        for stream in [STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, STD_ERROR_HANDLE] {
+            // SAFETY: these are borrowed process handles, inspected before worker threads start.
+            let handle = unsafe { GetStdHandle(stream) };
+            if handle == INVALID_HANDLE_VALUE {
+                return Err(io::Error::last_os_error());
+            }
+            // GUI and service entrypoints may have no standard handles.
+            if !handle.is_null()
+                // SAFETY: change only inheritance; do not close or replace the handle.
+                && unsafe { SetHandleInformation(handle, HANDLE_FLAG_INHERIT, 0) } == 0
+            {
+                return Err(io::Error::last_os_error());
+            }
+        }
+        // Command explicitly duplicates selected stdio handles. Clearing implicit inheritance
+        // prevents an unrelated daemon from keeping the caller's redirected pipes open.
     }
     Ok(())
 }

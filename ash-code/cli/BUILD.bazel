@@ -1,16 +1,16 @@
-load("//:defs.bzl", "ash_rust_binary")
+load("//:defs.bzl", "ash_rust_binary", "ash_rust_crate")
 load("//bazel/platforms:release_binaries.bzl", "multiplatform_binaries")
+
+ash_rust_crate(
+    name = "cli",
+    crate_name = "ash_cli",
+)
 
 ash_rust_binary(
     name = "ash",
     crate_name = "ash",
     crate_root = "src/main.rs",
-    deps = [],
-)
-
-alias(
-    name = "cli",
-    actual = ":ash",
+    deps = [":cli"],
 )
 
 multiplatform_binaries(name = "ash")

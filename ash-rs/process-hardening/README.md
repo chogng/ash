@@ -13,10 +13,12 @@
 | macOS 调试附加 | 保留系统默认策略 | 使用 `PT_DENY_ATTACH` |
 | `LD_*` / `DYLD_*` | 保留工具链环境 | 构造阶段全部清理 |
 | Windows DLL 搜索与崩溃弹窗 | 限制搜索目录、关闭弹窗 | 相同 |
+| Windows 标准句柄 | 关闭隐式继承；保留显式 stdio 重定向 | 相同 |
 
 - 自定义构建配置按 `debug_assertions` 决定策略；发布产物必须关闭该选项。
 - 发布版清理包含 `LD_LIBRARY_PATH`，不能依赖继承的加载器变量运行工具链；开发构建保留这些变量。
 - Windows 的 DLL 搜索策略依据 [SetDefaultDllDirectories](https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-setdefaultdlldirectories)，不承诺禁止调试或系统级转储。
+- Windows 启动时清除标准句柄的继承标记，避免后台子进程持有调用方的输出管道，使脚本迟迟读不到结束；`Command` 选择的标准输入输出仍可正常传递。
 
 ## 安全边界
 
@@ -32,4 +34,5 @@
 - Linux 测试实际父进程调试附加；运行账户不能拥有绕过限制的权限，测试环境需允许开发构建的父子调试。
 - macOS 测试已被跟踪的进程：开发构建正常运行，发布构建执行拒绝调试时以 `ENOTSUP` 退出。
 - Windows 测试崩溃弹窗设置、拒绝从当前目录隐式加载 DLL，以及仍可通过绝对路径加载同一 DLL。
+- Windows 管道测试验证后台后代仍在运行时，调用方已能收完输出；同时验证显式重定向与标准输出继承。
 - 各平台运行测试才能验证系统行为；跨平台编译只验证对应代码能够编译。

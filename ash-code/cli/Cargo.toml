@@ -4,12 +4,19 @@ version.workspace = true
 edition.workspace = true
 license-file.workspace = true
 publish.workspace = true
+default-run = "ash"
+
+[lib]
+name = "ash_cli"
+path = "src/lib.rs"
 
 [[bin]]
 name = "ash"
 path = "src/main.rs"
 
 [dependencies]
+clap = { workspace = true, features = ["derive"] }
+rand = { workspace = true }
 ash-utils-home-dir = { workspace = true }
 ash-app-server-daemon = { workspace = true }
 ash-app-server = { workspace = true }
@@ -37,6 +44,8 @@ arg0 = { workspace = true }
 ash-tui = { workspace = true }
 
 [dev-dependencies]
+core-plugins = { package = "ash-core-plugins", path = "../../ash-rs/core-plugins" }
+plugin = { package = "ash-plugin", path = "../../ash-rs/plugin" }
 ed25519-dalek = { workspace = true }
 insta = { workspace = true }
 portable-pty = { workspace = true }
