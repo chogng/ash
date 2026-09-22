@@ -11,16 +11,16 @@ name = "ash_attachments"
 path = "src/lib.rs"
 
 [dependencies]
+attachment-store = { workspace = true }
 audio = { workspace = true }
-tempfile = { workspace = true }
 thiserror = { workspace = true }
 url = { workspace = true }
 ash-http-client = { workspace = true }
 ash-protocol = { workspace = true }
 ash-utils-image = { workspace = true }
-ash-utils-path = { workspace = true }
 
 [dev-dependencies]
+tempfile = { workspace = true }
 image = { workspace = true, features = ["png"] }
 
 [lints]

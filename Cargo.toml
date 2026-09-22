@@ -37,6 +37,7 @@ members = [
     "ash-rs/external-agent-migration",
     "ash-rs/agent-roles",
     "ash-rs/ash-home",
+    "ash-rs/attachment-store",
     "ash-rs/attachments",
     "ash-rs/app-server",
     "ash-rs/app-server-daemon",
@@ -420,6 +421,7 @@ ash-agent-environment = { path = "ash-rs/agent-environment" }
 agent-graph-store = { package = "ash-agent-graph-store", path = "ash-rs/agent-graph-store" }
 external-agent-migration = { path = "ash-rs/external-agent-migration" }
 agent-roles = { package = "ash-agent-roles", path = "ash-rs/agent-roles" }
+attachment-store = { package = "ash-attachment-store", path = "ash-rs/attachment-store" }
 ash-attachments = { path = "ash-rs/attachments" }
 ash-ansi-escape = { path = "ash-code/ansi-escape" }
 ash-commands = { path = "app/commands" }

@@ -34,12 +34,12 @@ Ash 按能力及依赖边界安排实现，不按 Codex 的 crate 名称复制�
 ## 普通会话音频
 
 - `utils/audio` 校验 WAV、MP3、M4A、WebM、Ogg，最多 16 MiB、一个音轨、一小时；时长从容器包读取。
-- 图片和音频使用同一个 `AttachmentStore`。先保存字节，再把摘要、格式、大小、时长组成的音频引用写入会话。
+- 图片和音频使用 `ash-attachment-store` 的同一个 `AttachmentStore`。先保存字节，再把摘要、格式、大小、时长组成的音频引用写入会话。
 - 上传、Turn 接收、steer、历史恢复、上下文组装及工具结果沿各自已有入口处理音频；无效内容在持久事件之前拒绝。
 - 模型调用只把请求副本中的引用转换为音频 data URL，上下文按时长估算，不按 base64 字符数计费或裁剪。
 - Chat Completions 接受用户消息中的 WAV/MP3；ChatGPT Responses 使用 `input_audio.audio_url`。其他端点或角色不支持时明确报错。
 - 客户端能够读取并展示音频记录。TUI 队列恢复和重新提交保留附件引用；这次没有新增录音或播放器界面。
-- [附件协议](../app-server-protocol/README.md#图片与音频附件)负责上传参数和结果；[存储职责](../attachments/README.md)负责文件及引用校验。
+- [附件协议](../app-server-protocol/README.md#图片与音频附件)负责上传参数和结果；[附件服务](../attachments/README.md)负责媒体及引用校验；[附件存储](../attachment-store/README.md)负责文件和摘要校验。
 
 ## 实现差异与验证边界
 

@@ -17,11 +17,11 @@ use ash_utils_image::data_url_from_bytes;
 use ash_utils_image::detect_image_format;
 use ash_utils_image::load_data_url_for_prompt;
 use ash_utils_image::load_for_prompt_bytes;
+use attachment_store::AttachmentStore;
+use attachment_store::MemoryAttachmentStore;
 
 use crate::AttachmentError;
-use crate::AttachmentStore;
 use crate::MAX_IMAGE_ATTACHMENT_BYTES;
-use crate::MemoryAttachmentStore;
 use crate::RemoteImageFetcher;
 
 const MAX_PRODUCT_IMAGE_DIMENSION: u32 = 32_768;

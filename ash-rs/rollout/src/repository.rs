@@ -1,10 +1,10 @@
 use crate::LocalStateError;
 use crate::lease::LeaseDirectory;
 use ash_attachments::Attachments;
-use ash_attachments::FileAttachmentStore;
 use ash_core::ThreadController;
 use ash_core::ThreadStore;
 use ash_state::{SqliteThreadStore, StateRuntime};
+use attachment_store::FileAttachmentStore;
 use core_api::WriterLease;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};

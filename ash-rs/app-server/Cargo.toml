@@ -15,6 +15,7 @@ name = "ash_app_server"
 path = "src/lib.rs"
 
 [dependencies]
+attachment-store = { workspace = true }
 call = { package = "ash-call", path = "../call", features = ["runtime"] }
 livekit-client = { package = "ash-livekit-client", path = "../livekit-client" }
 ash-screen-capture = { workspace = true }

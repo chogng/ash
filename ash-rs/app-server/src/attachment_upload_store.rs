@@ -52,7 +52,7 @@ impl AttachmentUploadStore {
         expected_bytes: usize,
     ) -> Result<String, AttachmentUploadError> {
         self.expire_stale();
-        if expected_bytes == 0 || expected_bytes > ash_attachments::MAX_ATTACHMENT_BYTES {
+        if expected_bytes == 0 || expected_bytes > attachment_store::MAX_ATTACHMENT_BYTES {
             return Err(AttachmentUploadError::InvalidSize);
         }
         if self.uploads.len() >= MAX_CONCURRENT_ATTACHMENT_UPLOADS

@@ -49,5 +49,9 @@ fn repository_keeps_idle_history_lazy_and_loads_it_on_access() {
     assert_eq!(restored.title, "Primary branch");
     assert_eq!(restored.sequence, created.sequence);
     assert_eq!(recovered.list_loaded_threads().unwrap().len(), 1);
+    drop(recovered);
+    drop(threads);
+    drop(repository);
+    drop(state);
     fs::remove_dir_all(root).unwrap();
 }

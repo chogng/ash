@@ -2365,7 +2365,7 @@ fn audio_admission_is_durable_recoverable_and_rejects_forged_metadata_before_com
     let root = tempfile::tempdir().unwrap();
     let open = || {
         Arc::new(ash_attachments::Attachments::new(Arc::new(
-            ash_attachments::FileAttachmentStore::open(root.path()).unwrap(),
+            attachment_store::FileAttachmentStore::open(root.path()).unwrap(),
         )))
     };
     let attachments = open();

@@ -563,6 +563,7 @@ dependencies = [
  "ash-apply-patch",
  "ash-arg0",
  "ash-async-utils",
+ "ash-attachment-store",
  "ash-attachments",
  "ash-automation",
  "ash-build-info",
@@ -825,14 +826,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "ash-attachment-store"
+version = "0.1.0"
+dependencies = [
+ "ash-protocol",
+ "ash-utils-path",
+ "tempfile",
+ "thiserror 2.0.19",
+]
+
+[[package]]
 name = "ash-attachments"
 version = "0.1.0"
 dependencies = [
+ "ash-attachment-store",
  "ash-http-client",
  "ash-protocol",
  "ash-utils-audio",
  "ash-utils-image",
- "ash-utils-path",
  "image",
  "tempfile",
  "thiserror 2.0.19",
@@ -1159,6 +1170,7 @@ dependencies = [
  "ash-agent-environment",
  "ash-agent-graph-store",
  "ash-async-utils",
+ "ash-attachment-store",
  "ash-attachments",
  "ash-code-mode",
  "ash-code-mode-protocol",
@@ -2292,6 +2304,7 @@ dependencies = [
 name = "ash-rollout"
 version = "0.1.0"
 dependencies = [
+ "ash-attachment-store",
  "ash-attachments",
  "ash-core",
  "ash-core-api",

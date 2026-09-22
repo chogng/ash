@@ -1581,7 +1581,7 @@ fn default_dir_config(
 fn open_attachments(
     profile_root: &Path,
 ) -> Result<Arc<ash_attachments::Attachments>, OpenAppServerError> {
-    let image_store = ash_attachments::FileAttachmentStore::open(profile_root.join("attachments"))
+    let image_store = attachment_store::FileAttachmentStore::open(profile_root.join("attachments"))
         .map_err(|error| OpenAppServerError(error.to_string()))?;
     let remote_images = ash_attachments::SafeRemoteImageFetcher::production()
         .map_err(|error| OpenAppServerError(error.to_string()))?;
