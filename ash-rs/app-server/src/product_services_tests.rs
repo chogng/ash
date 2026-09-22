@@ -63,11 +63,11 @@ fn production_product_services_delegates_to_the_plugins_manager() {
     let registry = config.marketplaces().values().next().unwrap();
     assert_eq!(
         registry.metadata_base_url().as_str(),
-        "https://chogng.github.io/marketplace/metadata/"
+        "https://chogng.github.io/ash-marketplace/metadata/"
     );
     assert_eq!(
         registry.targets_base_url().as_str(),
-        "https://chogng.github.io/marketplace/targets/"
+        "https://chogng.github.io/ash-marketplace/targets/"
     );
     assert_eq!(
         registry.catalog_refresh_interval(),

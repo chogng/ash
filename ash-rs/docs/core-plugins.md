@@ -213,8 +213,8 @@ get/install/update 只访问 ID 指定的来源，并核对返回的名称和精
   "schemaVersion": 2,
   "marketplaces": [{
     "name": "ash",
-    "metadataBaseUrl": "https://chogng.github.io/marketplace/metadata/",
-    "targetsBaseUrl": "https://chogng.github.io/marketplace/targets/",
+    "metadataBaseUrl": "https://chogng.github.io/ash-marketplace/metadata/",
+    "targetsBaseUrl": "https://chogng.github.io/ash-marketplace/targets/",
     "trustedRoot": "marketplace-root.json",
     "catalogRefreshIntervalSeconds": 300
   }]

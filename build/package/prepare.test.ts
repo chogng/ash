@@ -333,7 +333,8 @@ test("assembles and validates the canonical Windows development layout", async (
     assert.equal((await readdir(join(staging, "ash-resources"))).includes("ash-command-runner.exe"), false);
     const productServices = JSON.parse(await readFile(join(staging, "ash-resources", "product-services", "product-services.json"), "utf8"));
     const marketplace = productServices.marketplaces.find((source: { name: string }) => source.name === "ash");
-    assert.equal(marketplace.metadataBaseUrl, "https://chogng.github.io/marketplace/metadata/");
+    assert.equal(marketplace.metadataBaseUrl, "https://chogng.github.io/ash-marketplace/metadata/");
+    assert.equal(marketplace.targetsBaseUrl, "https://chogng.github.io/ash-marketplace/targets/");
     assert.equal(marketplace.catalogRefreshIntervalSeconds, 300);
     assert.equal(
       await readFile(join(staging, "ash-resources", "product-services", "marketplace-root.json"), "utf8"),
