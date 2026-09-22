@@ -7,10 +7,18 @@ import { EditorAction2 } from '../../../browser/editorExtensions.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { EditorContextKeys } from '../../../common/editorContextKeys.js';
 import { StickyScrollController } from './stickyScrollController.js';
+import { MenuId } from '../../../../platform/actions/common/actions.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 
 export class ToggleStickyScroll extends EditorAction2 {
 	constructor() {
-		super({ id: 'editor.action.toggleStickyScroll', title: localize2('toggleStickyScroll', 'Toggle Editor Sticky Scroll'), f1: true });
+		super({
+			id: 'editor.action.toggleStickyScroll',
+			title: localize2('toggleStickyScroll', 'Toggle Editor Sticky Scroll'),
+			f1: true,
+			toggled: ContextKeyExpr.equals('config.editor.stickyScroll.enabled', true),
+			menu: { id: MenuId.StickyScrollContext },
+		});
 	}
 
 	public runEditorCommand(_accessor: ServicesAccessor, editor: ICodeEditor): void {

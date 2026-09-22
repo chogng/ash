@@ -29,6 +29,11 @@ import * as stanza from '../../../src/ash/editor/editor.main.js';
 import { EditorOption } from '../../../src/ash/editor/common/config/editorOptions.js';
 import { ScrollType } from '../../../src/ash/editor/common/editorCommon.js';
 import { EditorExtensionsRegistry } from '../../../src/ash/editor/browser/editorExtensions.js';
+import { MenusRegistry, MenuId } from '../../../src/ash/platform/actions/common/actions.js';
+import { KeybindingsRegistry } from '../../../src/ash/platform/keybinding/common/keybindingsRegistry.js';
+import { Keybinding, logicalKey } from '../../../src/ash/base/common/keybindings.js';
+import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
+import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 
 interface EditorState {
 	readonly value: string | null;
@@ -152,6 +157,9 @@ interface StandaloneHarness {
 	prepareLanguageRequest(kind: LanguageRequestKind): void;
 	languageHoverPoint(): { x: number; y: number };
 	readLanguageRequests(): { languageId: string; aborted: boolean }[];
+	readDefinitionPosition(): { lineNumber: number; column: number } | null;
+	prepareStickyMenu(): void;
+	readStickyMenu(): { callerEnabled: boolean; ownedEnabled: boolean; inChordMode: boolean; errors: string[] };
 	finishLanguageRequest(index: number): Promise<void>;
 	changeLanguageRequest(reason: LanguageRequestChange): void;
 	prepareParameterHints(enabled?: boolean, cycle?: boolean, triggers?: readonly string[], retriggers?: readonly string[]): void;
@@ -353,6 +361,7 @@ let pointerMouseUpEvents = 0;
 const pointerMouseUpListener = callerEditor.onMouseUp(() => { pointerMouseUpEvents += 1; });
 const languageRequestProviders = new DisposableStore();
 const languageRequests: { languageId: string; signal: AbortSignal; finish: () => void }[] = [];
+let definitionPosition: { lineNumber: number; column: number } | null = null;
 let referenceRegistration: { dispose(): void } | undefined;
 let parameterHintsRegistration: ReturnType<typeof stanza.languages.registerSignatureHelpProvider> | undefined;
 const parameterHintRequests: {
@@ -680,7 +689,10 @@ window.ashStandaloneIntegration = {
 			}));
 		} else if (kind === 'definition') {
 			languageRequestProviders.add(stanza.languages.registerDefinitionProvider('*', {
-				provideDefinition: request => defer(request, [{ resource: callerResource, range: new stanza.Range(1, 7, 1, 13) }]),
+				provideDefinition: request => {
+					definitionPosition = { lineNumber: request.position.lineNumber, column: request.position.column };
+					return defer(request, [{ resource: callerResource, range: new stanza.Range(1, 7, 1, 13) }]);
+				},
 			}));
 		} else if (kind === 'symbols') {
 			languageRequestProviders.add(stanza.languages.registerDocumentSymbolProvider('*', {
@@ -709,6 +721,23 @@ window.ashStandaloneIntegration = {
 		return { x: bounds.left + point.left + 2, y: bounds.top + point.top + point.height / 2 };
 	},
 	readLanguageRequests: () => languageRequests.map(request => ({ languageId: request.languageId, aborted: request.signal.aborted })),
+	readDefinitionPosition: () => definitionPosition,
+	prepareStickyMenu: () => {
+		contributionProviders.add(CommandsRegistry.register('test.sticky.fail', () => { throw new Error('Sticky command failed'); }));
+		contributionProviders.add(MenusRegistry.appendMenuItem(MenuId.StickyScrollContext, {
+			command: { id: 'test.sticky.fail', title: 'Fail sticky command' },
+		}));
+		contributionProviders.add(KeybindingsRegistry.registerKeybindingRule({
+			command: 'editor.action.toggleStickyScroll',
+			keybinding: Keybinding.chord(logicalKey('F9'), logicalKey('F10')),
+		}));
+	},
+	readStickyMenu: () => ({
+		callerEnabled: callerEditor.getOption(EditorOption.stickyScroll).enabled,
+		ownedEnabled: ownedEditor.getOption(EditorOption.stickyScroll).enabled,
+		inChordMode: StandaloneServices.get().instantiationService.get(IKeybindingService).inChordMode,
+		errors: StandaloneServices.get().instantiationService.get(INotificationService).getNotifications().map(item => item.message),
+	}),
 	finishLanguageRequest: async index => {
 		languageRequests[index]!.finish();
 		await Promise.resolve();

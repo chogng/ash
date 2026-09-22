@@ -7,7 +7,7 @@ import { MarkerDecorationsService } from '../../common/services/markerDecoration
 import { StandaloneCodeEditorService } from '../../standalone/browser/standaloneCodeEditorService.js';
 import { IInlineCompletionsService, InlineCompletionsService } from '../../browser/services/inlineCompletionsService.js';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
-import { IInstantiationService, ServiceContainer } from '../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, ServiceContainer, ServiceConstructionDescriptor } from '../../../platform/instantiation/common/instantiation.js';
 import { darkColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../platform/theme/test/common/testThemeService.js';
@@ -17,6 +17,14 @@ import { createTestLanguageConfigurationService } from '../common/modes/testLang
 import { ILanguageConfigurationService } from '../../common/languages/languageConfigurationRegistry.js';
 import { ILanguageFeaturesService } from '../../common/services/languageFeatures.js';
 import { LanguageFeaturesService } from '../../common/services/languageFeaturesService.js';
+import { StandaloneCommandService, StandaloneKeybindingService, StandaloneNotificationService } from '../../standalone/browser/standaloneServices.js';
+import { ICommandService } from '../../../platform/commands/common/commands.js';
+import { IKeybindingService } from '../../../platform/keybinding/common/keybinding.js';
+import { INotificationService } from '../../../platform/notification/common/notification.js';
+import { IMenuService, MenuService } from '../../../platform/actions/common/menuService.js';
+import { IContextMenuService, IContextViewService } from '../../../platform/contextview/browser/contextView.js';
+import { BrowserContextViewService } from '../../../platform/contextview/browser/contextViewService.js';
+import { BrowserContextMenuService } from '../../../platform/contextview/browser/contextMenuService.js';
 
 interface TestCodeEditorOptions extends CodeEditorWidgetOptions {
 	readonly instantiationService?: IInstantiationService;
@@ -26,6 +34,12 @@ interface TestCodeEditorOptions extends CodeEditorWidgetOptions {
 
 export function createCodeEditorServices(disposables: Pick<DisposableStore, 'add'>, parent?: IInstantiationService): ServiceContainer {
 	const services = disposables.add(parent ? parent.createChild() : new ServiceContainer());
+	registerCodeEditorServices(services);
+	return services;
+}
+
+/** Completes an existing test scope without replacing its explicit service overrides. */
+export function registerCodeEditorServices(services: ServiceContainer): void {
 	if (!services.has(IContextKeyService)) {
 		services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 	}
@@ -37,6 +51,28 @@ export function createCodeEditorServices(disposables: Pick<DisposableStore, 'add
 	}
 	if (!services.has(ICodeEditorService)) {
 		services.registerSingleton(ICodeEditorService, () => services.createInstance(StandaloneCodeEditorService));
+	}
+	if (!services.has(ICommandService)) {
+		services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
+	}
+	if (!services.has(IKeybindingService)) {
+		services.registerSingleton(IKeybindingService, () => services.createInstance(StandaloneKeybindingService));
+	}
+	if (!services.has(INotificationService)) {
+		services.registerSingleton(INotificationService, () => services.createInstance(StandaloneNotificationService));
+	}
+	if (!services.has(IMenuService)) {
+		services.registerSingleton(IMenuService, () => services.createInstance(new ServiceConstructionDescriptor(MenuService, {
+			serviceDependencies: [ICommandService, IContextKeyService],
+		})));
+	}
+	if (!services.has(IContextViewService)) {
+		services.registerSingleton(IContextViewService, () => services.createInstance(BrowserContextViewService, document.body));
+	}
+	if (!services.has(IContextMenuService)) {
+		services.registerSingleton(IContextMenuService, () => services.createInstance(new ServiceConstructionDescriptor(BrowserContextMenuService, {
+			serviceDependencies: [IMenuService, IContextKeyService, IKeybindingService, IContextViewService, INotificationService],
+		})));
 	}
 	if (!services.has(ILanguageFeatureDebounceService)) {
 		services.registerSingleton(ILanguageFeatureDebounceService, () => services.createInstance(LanguageFeatureDebounceService));
@@ -53,7 +89,6 @@ export function createCodeEditorServices(disposables: Pick<DisposableStore, 'add
 	if (!services.has(ILanguageFeaturesService)) {
 		services.registerSingleton(ILanguageFeaturesService, () => new LanguageFeaturesService());
 	}
-	return services;
 }
 
 export function createTestCodeEditor(options: TestCodeEditorOptions): CodeEditorWidget {

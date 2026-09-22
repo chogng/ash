@@ -12,8 +12,8 @@
 | `browser/stickyScrollModelProvider.ts` | 仅上游 | Provider：选取文档符号、现有折叠范围或缩进范围 | 声明行取 selectionRange；取消传到请求，拒绝过期结果 |
 | `browser/stickyScrollProvider.ts` | 仅上游 | Controller：候选行、更新调度和失效 | 过滤隐藏标题，配置的展示项不重复请求模型 |
 | `browser/stickyScrollWidget.ts` | 仅上游 | Controller：标题 DOM、行节点复用及布局 | 保留 LineId 身份；复用正文着色，显示行号、折叠按钮及结尾预览；布局和焦点随状态更新 |
-| `browser/stickyScrollActions.ts` | 仅上游 | Contribution / 标题键盘入口：六个标准命令 | 开关、聚焦、上下移动、定位和返回编辑器 |
-| `browser/stickyScrollController.ts` | 双方都有 | Contribution：候选行与编辑器滚动、选区之间的协调 | 使用标准 ID/get；点击及 Shift 点击定位、Shift 悬停预览、折叠和键盘操作；按窗口高度限制标题数量 |
+| `browser/stickyScrollActions.ts` | 仅上游 | Contribution / 标题键盘入口：六个标准命令 | 开关、聚焦、上下移动、定位和返回编辑器；标准 StickyScrollContext 菜单及选中状态 |
+| `browser/stickyScrollController.ts` | 双方都有 | Contribution：候选行与编辑器滚动、选区之间的协调 | 标题定位、结尾预览、折叠、按高度限制行数；修饰键点击定义、右键与键盘菜单 |
 | `browser/stickyScrollContribution.ts` | 双方都有 | editor.all：装配与初次更新 | 服务经实例化容器注入，构造阶段不启动请求 |
 | `browser/stickyScroll.css` | 双方都有 | Widget：Stanza 标题行与两个并列按钮 | 固定行号区域、着色文字、折叠按钮状态及主题焦点颜色；按钮不相互嵌套 |
 
@@ -23,12 +23,20 @@
 
 Widget 继续拥有并复用标题按钮，在同一行中增加独立折叠按钮和装饰性行号；调用正文已经使用的 `projectStanzaSemanticTokenLine`，不增加文字或 token 状态。Controller 监听着色、光标、模型选项及布局变化，折叠直接修改同一个折叠模型，等同步滚动完成再更新标题，保留键盘焦点。`showEndForLine` 和 `isInFoldingIconDomNode` 已有实际输入调用方；Shift 释放、指针离开或窗口失焦时退出结尾预览。标题数量同时受配置上限和编辑器约四分之一高度约束。
 
-尚未完整对齐的能力：Ctrl/Cmd 点击定义、上下文菜单和控件高度事件。定义导航现有 owner 是 `languageNavigationController.ts`，标准 `gotoSymbol/browser/goToSymbol.ts` 入口尚未对齐；菜单需要标准菜单注册及宿主服务；高度事件在本地暂无消费方，不增加空端口。开关命令修改当前编辑器选项；Workbench 的持久配置与菜单位置不在本批。`outlineProviderId` 尚未接入上游的多提供者选择规则。控制器仍保留在下方待核对表，不能按成员数记作全量完成。
+导航续批准入：修饰键点击 → Widget 的 `getEditorPositionFromNode` 与浏览器文字命中 → 当前编辑器选区 → 已确认的 `languageNavigationController.navigate('definition')` → 既有请求取消、结果去重和打开逻辑。仅修改上述 Widget、Controller 与既有浏览器测试；文字渲染返回的 CharacterMapping 由 Widget 保存，没有新建导航请求 owner。默认 Ctrl/Cmd、配置多光标使用 Ctrl/Cmd 时的 Alt 均有定向验证。
+
+菜单续批准入：右键 / Shift+F10 → Controller → `IContextMenuService` → `MenuId.StickyScrollContext` → `ToggleStickyScroll` → 当前编辑器选项。增加的生产路径为 `standalone/browser/standaloneServices.ts`、`../platform/actions/common/actions.ts` 与本目录 `browser/stickyScrollActions.ts`，均为双方已有文件；测试装配增加既有 `test/browser/testCodeEditor.ts`，文档仍只更新本文件。Standalone 注册真实命令、快捷键、通知、菜单与 ContextView 服务；浏览器菜单及按钮继续由 Platform/Base 拥有。快捷键复用 KeybindingResolver，通知写入可观察记录并报告到嵌入页控制台，菜单主题绑定到自己拥有的浮层根节点。Controller 构造注入菜单服务；菜单随模型释放，关闭后恢复来源标题焦点；选中状态读取当前编辑器的 stickyScroll 选项。
+
+全量验证暴露 Workbench 测试装配缺少菜单依赖，追加准入既有 `../workbench/contrib/codeEditor/test/browser/codeEditorPane.test.ts`：复用 Editor 测试服务注册，并断言 stickyScroll 控制器实际创建成功。没有修改 Workbench 生产实现。
+
+尚未完整对齐的能力：修饰键悬停时的定义可用性预检与下划线提示、控件高度事件、`outlineProviderId` 多提供者选择规则。标准 `gotoSymbol/browser/goToSymbol.ts` 入口仍是导航模块的待处理项，本批复用已有导航 owner。高度事件在本地暂无消费方，不增加空端口。开关命令修改当前编辑器选项，Workbench 持久配置不在本批。控制器仍保留在下方待核对表，不能按成员数记作全量完成。
 
 当前 Editor 文件集合为 **537 个：432 个上游同路径、105 个 Ash 自有；302 个上游路径未引入**。本批 CSS 审计无阻断项。实际验证：
 
 - 续批 `test:editor:browser --grep 'sticky'`：15 项通过，包括正文与标题颜色一致、着色更新不丢焦点、固定行号、相对与自定义行号、鼠标 / Enter / Space 折叠、隐藏按钮后转移焦点、Shift 结尾预览及窗口高度限制。
 - 续批 `check-editor-alignment.mjs --test=browser` 通过，包括结构、台账、CSS、类型检查与 555 个浏览器测试；`build:stanza` 通过。
+- 导航与菜单续批：3 个定义跳转测试及 3 个菜单测试通过，覆盖准确列号、修饰键配置、模型切换取消、来源编辑器、焦点恢复、高对比度、命令错误、组合键和菜单生命周期。首次编译遇到商城生成协议不同步，运行仓库 `typecheck:common` 同步后恢复，无商城源码修改。
+- 导航与菜单全量验证：`check-editor-alignment.mjs --test=all` 通过，包括 1,234 个单元测试（235 个文件）与 565 个浏览器测试；`build:stanza` 通过。修正测试装配后，单独运行 `codeEditorPane.test.ts` 的 12 项测试通过，缺失服务错误消失；该测试环境既有的 JSDOM Canvas 提示仍存在，浏览器行为由 Playwright 验证。
 - 首批 `test:editor:unit --grep 'Sticky scroll scope sources'`：4 个模型来源测试通过。续批未修改模型来源。
 - 首批 `test:unit --run test/architecture/editor-architecture.test.ts`：23 项通过、1 项失败。失败断言要求 `smartSelect/common/selectionRanges.ts`，该路径在 HEAD 中已经不存在，断言和相关实现均未由本批修改。
 - 未启动上游 VS Code 做同场景运行比较；上游证据来自公开契约及行为测试。本批不能据此宣称完整界面行为一致。

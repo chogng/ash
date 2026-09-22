@@ -336,6 +336,126 @@ test.describe('contribution lifecycle', () => {
 		expect((await page.evaluate(() => window.ashStandaloneIntegration.readStickyState())).line).toBe(end);
 	});
 
+	for (const modifier of ['ControlOrMeta', 'Alt'] as const) {
+		test(`sticky scroll ${modifier} click sends the clicked column to definition navigation`, async ({ page }) => {
+			await page.goto('/standalone.html');
+			await page.evaluate(modifier => {
+				window.ashStandaloneIntegration.prepareLanguageRequest('definition');
+				window.ashStandaloneIntegration.prepareStickyHeaders();
+				if (modifier === 'Alt') window.ashStandaloneIntegration.updateContributionOptions({ multiCursorModifier: 'ctrlCmd' });
+			}, modifier);
+			const text = page.locator('#caller .stanza-editor-sticky-scroll-text').last();
+			await expect(text).toHaveText('  function inner() {');
+			const point = await text.evaluate(element => {
+				const text = element.firstElementChild!.firstChild!;
+				const offset = text.textContent!.indexOf('inner') + 2;
+				const range = document.createRange();
+				range.setStart(text, offset);
+				range.setEnd(text, offset + 1);
+				const bounds = range.getBoundingClientRect();
+				return { x: bounds.left + bounds.width / 4, y: bounds.top + bounds.height / 2, column: offset + 1 };
+			});
+			await page.keyboard.down(modifier);
+			await page.mouse.click(point.x, point.y);
+			await page.keyboard.up(modifier);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readDefinitionPosition())).toEqual({ lineNumber: 2, column: point.column });
+			await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.getCallerPosition())).toEqual({ lineNumber: 1, column: 13 });
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).focused).toBe(true);
+		});
+	}
+
+	test('sticky scroll definition navigation cancels when its source editor changes model', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => {
+			window.ashStandaloneIntegration.prepareLanguageRequest('definition');
+			window.ashStandaloneIntegration.prepareStickyHeaders();
+		});
+		const text = page.locator('#caller .stanza-editor-sticky-scroll-text').last();
+		await expect(text).toHaveText('  function inner() {');
+		await text.locator('span').first().click({ modifiers: ['ControlOrMeta'] });
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().length)).toBe(1);
+		await page.evaluate(() => window.ashStandaloneIntegration.changeLanguageRequest('model'));
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests()))[0]!.aborted).toBe(true);
+		const position = await page.evaluate(() => window.ashStandaloneIntegration.getCallerPosition());
+		await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.getCallerPosition())).toEqual(position);
+	});
+
+	test('sticky scroll context menu restores focus, keeps the source editor and supports keyboard invocation', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => {
+			window.ashStandaloneIntegration.prepareStickyHeaders();
+			window.ashStandaloneIntegration.changeContributionState('blur');
+		});
+		const header = page.locator('#caller .stanza-editor-sticky-scroll-item').last();
+		await expect(header).toBeVisible();
+		const position = await page.evaluate(() => window.ashStandaloneIntegration.getCallerPosition());
+		await header.click({ button: 'right' });
+		const toggle = page.getByRole('menuitemcheckbox', { name: 'Toggle Editor Sticky Scroll' });
+		await expect(toggle).toBeVisible();
+		await expect(toggle).toHaveAttribute('aria-checked', 'true');
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.getCallerPosition())).toEqual(position);
+		await page.keyboard.press('Escape');
+		await expect(header).toBeFocused();
+		await page.keyboard.press('Shift+F10');
+		await expect(toggle).toBeFocused();
+		await page.keyboard.press('Enter');
+		await expect(page.locator('#caller .stanza-editor-sticky-scroll-item')).toHaveCount(0);
+		expect(await page.evaluate(() => window.ashStandaloneIntegration.readStickyMenu())).toEqual({ callerEnabled: false, ownedEnabled: true, inChordMode: false, errors: [] });
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).focused).toBe(true);
+	});
+
+	test('sticky scroll menu uses the active theme, reports action errors and dispatches registered chords', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => {
+			window.ashStandaloneIntegration.prepareStickyHeaders();
+			window.ashStandaloneIntegration.prepareStickyMenu();
+		});
+		const header = page.locator('#caller .stanza-editor-sticky-scroll-item').last();
+		for (const theme of ['ash-high-contrast-dark', 'ash-high-contrast-light']) {
+			await page.evaluate(theme => window.ashStandaloneIntegration.setStickyTheme(theme), theme);
+			await header.click({ button: 'right' });
+			const menu = page.getByRole('menu');
+			await expect(menu).toBeVisible();
+			const colors = await menu.evaluate(element => {
+				const style = getComputedStyle(element.parentElement!);
+				return { background: style.backgroundColor, token: style.getPropertyValue('--ash-editor-background').trim(), position: style.position };
+			});
+			expect(colors.token).not.toBe('');
+			expect(colors.background).not.toBe('rgba(0, 0, 0, 0)');
+			expect(colors.position).toBe('fixed');
+			await page.keyboard.press('Escape');
+		}
+		await header.click({ button: 'right' });
+		await page.getByRole('menuitem', { name: 'Fail sticky command' }).click();
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readStickyMenu().errors)).toEqual(['Sticky command failed']);
+		await page.evaluate(() => window.ashStandaloneIntegration.runStickyCommand('editor.action.selectEditor'));
+		await page.keyboard.press('F9');
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readStickyMenu())).inChordMode).toBe(true);
+		await page.keyboard.press('Escape');
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readStickyMenu())).inChordMode).toBe(false);
+		await page.keyboard.press('F9');
+		await page.keyboard.press('F10');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readStickyMenu().callerEnabled)).toBe(false);
+	});
+
+	test('sticky scroll menu closes with its model and respects the contextmenu option', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => {
+			window.ashStandaloneIntegration.prepareStickyHeaders();
+			window.ashStandaloneIntegration.updateContributionOptions({ contextmenu: false });
+		});
+		const header = page.locator('#caller .stanza-editor-sticky-scroll-item').last();
+		await header.click({ button: 'right' });
+		await expect(page.getByRole('menu')).toHaveCount(0);
+		await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ contextmenu: true }));
+		await header.click({ button: 'right' });
+		await expect(page.getByRole('menu')).toBeVisible();
+		await page.evaluate(() => window.ashStandaloneIntegration.changeLanguageRequest('model'));
+		await expect(page.getByRole('menu')).toHaveCount(0);
+	});
+
 	test('completion uses the new language and Escape stops incomplete refreshes', async ({ page }) => {
 		await page.goto('/standalone.html');
 		await page.evaluate(() => window.ashStandaloneIntegration.prepareContributionRequests('completion'));

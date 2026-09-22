@@ -13,6 +13,11 @@ import { EditorContextKeys } from "../../../common/editorContextKeys.js";
 import { StickyLineCandidateProvider, type IStickyLineCandidateProvider } from "./stickyScrollProvider.js";
 import { StickyScrollWidget, StickyScrollWidgetState } from "./stickyScrollWidget.js";
 import { StickyRange } from "./stickyScrollElement.js";
+import { isMacintosh } from '../../../../base/common/platform.js';
+import type { LanguageNavigationController } from '../../gotoSymbol/browser/languageNavigationController.js';
+import type { ContextMenuAnchor } from '../../../../base/browser/contextmenu.js';
+import { MenuId } from '../../../../platform/actions/common/actions.js';
+import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 
 /** Coordinates scope headers with the editor's existing layout and selection. */
 export class StickyScrollController extends Disposable {
@@ -23,6 +28,7 @@ export class StickyScrollController extends Disposable {
 	private hoveredLine: number | null = null;
 	private previewLine: number | null = null;
 	private changingFold = false;
+	private menuOpen = false;
 
 	constructor(
 		private readonly editor: ICodeEditor,
@@ -30,7 +36,8 @@ export class StickyScrollController extends Disposable {
 		private readonly folding: EditorFoldingModel,
 		onError: (error: unknown) => void,
 		@IInstantiationService instantiationService: IInstantiationService,
-		@IContextKeyService contextKeyService: IContextKeyService,
+		@IContextKeyService private readonly contextKeyService: IContextKeyService,
+		@IContextMenuService private readonly contextMenuService: IContextMenuService,
 	) {
 		super();
 		if (folding.model !== viewport.textModel) {
@@ -42,9 +49,14 @@ export class StickyScrollController extends Disposable {
 		viewport.domNode.domNode.append(element);
 		const focused = EditorContextKeys.stickyScrollFocused.bindTo(contextKeyService);
 		this.visible = EditorContextKeys.stickyScrollVisible.bindTo(contextKeyService);
+		const enabled = contextKeyService.createKey('config.editor.stickyScroll.enabled', editor.getOption(EditorOption.stickyScroll).enabled);
 		this._register(toDisposable(() => {
 			focused.reset();
 			this.visible.reset();
+			enabled.reset();
+			if (this.menuOpen) {
+				this.contextMenuService.hideContextMenu();
+			}
 		}));
 		this._register(addDisposableListener(element, "focusin", () => focused.set(true)));
 		this._register(addDisposableListener(element, "focusout", () => focused.set(this.isFocused())));
@@ -59,6 +71,12 @@ export class StickyScrollController extends Disposable {
 			}
 		}));
 		this._register(addDisposableListener(element, "keydown", event => {
+			if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) {
+				stopEvent(event);
+				const target = element.ownerDocument.activeElement as HTMLElement;
+				this.showContextMenu(target, this.widget.getLineIndexFromChildDomNode(target));
+				return;
+			}
 			if (event.defaultPrevented || event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
 				return;
 			}
@@ -92,11 +110,19 @@ export class StickyScrollController extends Disposable {
 		this._register(viewport.textModel.onDidChangeOptions(() => this.render()));
 		this._register(editor.onDidChangeCursorPosition(() => this.render()));
 		this._register(editor.onDidChangeConfiguration(event => {
+			if (event.hasChanged(EditorOption.stickyScroll)) {
+				enabled.set(editor.getOption(EditorOption.stickyScroll).enabled);
+			}
 			if (event.hasChanged(EditorOption.stickyScroll) || event.hasChanged(EditorOption.lineHeight)
 				|| event.hasChanged(EditorOption.fontInfo) || event.hasChanged(EditorOption.lineNumbers)
 				|| event.hasChanged(EditorOption.showFoldingControls) || event.hasChanged(EditorOption.folding)) {
 				this.render();
 			}
+		}));
+		this._register(addDisposableListener(element, 'contextmenu', event => {
+			stopEvent(event);
+			this.showContextMenu({ x: event.clientX, y: event.clientY, targetWindow: element.ownerDocument.defaultView! },
+				this.widget.getLineIndexFromChildDomNode(event.target as HTMLElement));
 		}));
 		this._register(addDisposableListener(element, "pointermove", event => {
 			const index = this.widget.getLineIndexFromChildDomNode(event.target as HTMLElement);
@@ -123,7 +149,24 @@ export class StickyScrollController extends Disposable {
 			this.preview(false);
 		}));
 		this._register(addDisposableListener(element, "click", event => {
-			if (event.button !== 0 || event.altKey || event.ctrlKey || event.metaKey) {
+			if (event.button !== 0) {
+				return;
+			}
+			const definitionModifier = this.editor.getOption(EditorOption.multiCursorModifier) === 'altKey'
+				? (isMacintosh ? event.metaKey : event.ctrlKey)
+				: event.altKey;
+			if (definitionModifier && !event.shiftKey) {
+				const range = element.ownerDocument.caretRangeFromPoint(event.clientX, event.clientY);
+				const position = this.widget.getEditorPositionFromNode(range?.startContainer.parentElement ?? null);
+				if (position && range && range.startContainer.parentElement === event.target) {
+					stopEvent(event);
+					this.editor.setPosition(new Position(position.lineNumber, position.column + range.startOffset), 'stickyScroll');
+					this.editor.focus();
+					void this.editor.getContribution<LanguageNavigationController>('editor.contrib.languageNavigation')?.navigate('definition');
+				}
+				return;
+			}
+			if (event.altKey || event.ctrlKey || event.metaKey) {
 				return;
 			}
 			const index = this.widget.getLineIndexFromChildDomNode(event.target as HTMLElement);
@@ -236,6 +279,32 @@ export class StickyScrollController extends Disposable {
 			this.previewLine = line;
 			this.render();
 		}
+	}
+
+	private showContextMenu(anchor: ContextMenuAnchor, index: number | null): void {
+		if (!this.editor.getOption(EditorOption.contextmenu) || index === null) {
+			return;
+		}
+		const lineNumber = this.widget.getCurrentLines()[index]!;
+		this.widget.focusLineWithIndex(index);
+		this.menuOpen = true;
+		this.contextMenuService.showContextMenu({
+			menuId: MenuId.StickyScrollContext,
+			contextKeyService: this.contextKeyService,
+			getAnchor: () => anchor,
+			onHide: () => {
+				this.menuOpen = false;
+				if (this.isDisposed) {
+					return;
+				}
+				const currentIndex = this.widget.getCurrentLines().indexOf(lineNumber);
+				if (currentIndex >= 0) {
+					this.widget.focusLineWithIndex(currentIndex);
+				} else {
+					this.editor.focus();
+				}
+			},
+		});
 	}
 
 	private revealLine(lineNumber: number): void {

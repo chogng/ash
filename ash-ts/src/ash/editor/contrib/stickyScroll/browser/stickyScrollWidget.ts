@@ -6,6 +6,8 @@ import { localize } from '../../../../nls.js';
 import type { ICodeEditor } from '../../../browser/editorBrowser.js';
 import { projectStanzaSemanticTokenLine } from '../../../browser/viewParts/viewLines/viewLine.js';
 import { EditorOption, RenderLineNumbersType } from '../../../common/config/editorOptions.js';
+import { Position } from '../../../common/core/position.js';
+import { CharacterMapping, DomPosition } from '../../../common/viewLayout/viewLineRenderer.js';
 import type { TextModel } from '../../../common/model/textModel.js';
 import type { EditorFoldingModel } from '../../folding/browser/foldingModel.js';
 import { foldingCollapsedIcon, foldingExpandedIcon } from '../../folding/browser/foldingDecorations.js';
@@ -36,6 +38,7 @@ export class StickyScrollWidget extends Disposable {
 	private readonly domNode: HTMLDivElement;
 	private lines: number[] = [];
 	private readonly rows = new Map<string, HeaderRow>();
+	private readonly characterMappings = new WeakMap<HTMLElement, CharacterMapping>();
 
 	constructor(private readonly editor: ICodeEditor, private readonly model: TextModel) {
 		super();
@@ -76,6 +79,20 @@ export class StickyScrollWidget extends Disposable {
 
 	public isInFoldingIconDomNode(node: HTMLElement): boolean {
 		return node.closest('.stanza-editor-sticky-scroll-folding') !== null && this.getLineIndexFromChildDomNode(node) !== null;
+	}
+
+	public getEditorPositionFromNode(node: HTMLElement | null): Position | null {
+		const index = this.getLineIndexFromChildDomNode(node);
+		if (index === null || !node || node.children.length !== 0) {
+			return null;
+		}
+		const row = this.rows.get(String(this.model.getLineId(this.lines[index]! - 1)))!;
+		if (node.parentElement !== row.text) {
+			return null;
+		}
+		const partIndex = Array.from(row.text.children).indexOf(node);
+		const column = this.characterMappings.get(row.text)!.getColumn(new DomPosition(partIndex, 0), node.textContent!.length);
+		return new Position(Number(row.button.dataset.lineNumber), column);
 	}
 
 	public setState(state: StickyScrollWidgetState, foldingModel: EditorFoldingModel): void {
@@ -129,7 +146,13 @@ export class StickyScrollWidget extends Disposable {
 				? `inset(${-state.lastLineRelativePosition}px 0 0)`
 				: '';
 			const label = this.model.getLineContent(displayLine);
-			projectStanzaSemanticTokenLine(text, label, this.model.tokenization.renderedTokens.getLineTokens(displayLine - 1), this.model.getOptions().tabSize);
+			const mapping = projectStanzaSemanticTokenLine(
+				text,
+				label,
+				this.model.tokenization.renderedTokens.getLineTokens(displayLine - 1),
+				this.model.getOptions().tabSize,
+			);
+			this.characterMappings.set(text, mapping);
 			button.title = localize('stickyScroll.reveal', 'Reveal line {0}: {1}', displayLine, label);
 			button.setAttribute('aria-label', button.title);
 			switch (lineNumbers.renderType) {

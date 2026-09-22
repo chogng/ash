@@ -48,7 +48,7 @@ for (const [name, value] of Object.entries({
 await import("../../../../../editor/editor.code.all.js");
 const { CodeEditorPane: EditorPane } = await import("../../browser/codeEditorPane.js");
 const { CodeEditorWidget } = await import('../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js');
-const { createTestCodeEditor } = await import('../../../../../editor/test/browser/testCodeEditor.js');
+const { createTestCodeEditor, registerCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
 const { BrowserTextModelService } = await import("../../../../services/textmodelResolver/browser/browserTextModelService.js");
 const { BrowserTextResourceStore } = await import("../../browser/browserTextResourceStore.js");
 const { EditorTextDirection } = await import("../../../../../editor/browser/view.js");
@@ -80,6 +80,7 @@ test("Stanza editor pane loads, lays out, focuses, hides, and clears one editor 
 	const control = pane.getControl();
 	assert.ok(control instanceof CodeEditorWidget);
 	assert.ok(control.getContribution('editor.contrib.inlayHints'));
+	assert.ok(control.getContribution('store.contrib.stickyScrollController'));
 	assert.deepEqual(pane.getStatus(), { lineNumber: 1, columnNumber: 1, languageId: "typescript", encoding: "UTF-8", endOfLine: "LF" });
 	assert.equal(parent.querySelectorAll(".stanza-editor-pane").length, 1);
 	assert.equal(parent.querySelectorAll(".stanza-editor").length, 1);
@@ -564,6 +565,7 @@ function paneServices(models: ITextModelResourceService, languages?: LanguageFea
 		services.registerSingleton(ILanguageFeaturesService, () => new LanguageFeaturesService());
 		services.registerSingleton(ILanguageConfigurationService, accessor => (accessor.get(ILanguageFeaturesService) as LanguageFeaturesService).languageConfigurationService);
 	}
+	registerCodeEditorServices(services);
 	return services;
 }
 

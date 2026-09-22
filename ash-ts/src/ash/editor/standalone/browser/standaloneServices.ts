@@ -4,8 +4,8 @@ import { IInlineCompletionsService, InlineCompletionsService } from '../../brows
 import { MarkerService, IMarkerService } from '../../../platform/markers/common/markers.js';
 import { MarkerDecorationsService } from '../../common/services/markerDecorationsService.js';
 import { IMarkerDecorationsService } from '../../common/services/markerDecorations.js';
-import { Disposable } from "../../../base/common/lifecycle.js";
-import { ServiceContainer } from "../../../platform/instantiation/common/instantiation.js";
+import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
+import { IInstantiationService, ServiceContainer, ServiceConstructionDescriptor } from "../../../platform/instantiation/common/instantiation.js";
 import { IThemeService } from "../../../platform/theme/common/themeService.js";
 import { ConfigurationTarget, IConfigurationService, isConfigurationUpdateOverrides, type IConfigurationChangeEvent, type IConfigurationData, type IConfigurationOverrides, type IConfigurationUpdateOptions, type IConfigurationUpdateOverrides, type IConfigurationValue } from '../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
@@ -25,13 +25,31 @@ import { isLinux, isMacintosh } from '../../../base/common/platform.js';
 import type { URI } from '../../../base/common/uri.js';
 import { type INamedEditorThemeService } from "../common/namedEditorTheme.js";
 import { NamedEditorThemeService } from "./namedEditorThemeService.js";
-import { type Event } from '../../../base/common/event.js';
+import { Emitter, type Event } from '../../../base/common/event.js';
 import { type IWorkspaceFolder } from '../../../platform/workspace/common/workspace.js';
 import { ILogService, NullLoggerService } from '../../../platform/log/common/log.js';
 import { BrowserClipboardService } from '../../../platform/clipboard/browser/browserClipboardService.js';
 import { IClipboardService } from '../../../platform/clipboard/common/clipboardService.js';
 import { ContextKeyService, IContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
 import { FormattingConflicts } from '../../contrib/format/browser/format.js';
+import { addDisposableListener, stopEvent } from '../../../base/browser/dom.js';
+import { ContextView } from '../../../base/browser/ui/contextview/contextview.js';
+import { RunOnceScheduler } from '../../../base/common/async.js';
+import { parseKeybinding } from '../../../base/common/keybindingParser.js';
+import { type Keybinding, type KeybindingEvent, type ResolvedKeybinding, resolveKeybinding } from '../../../base/common/keybindings.js';
+import { CommandsRegistry, ICommandService, type ICommandEvent } from '../../../platform/commands/common/commands.js';
+import { IMenuService, MenuService } from '../../../platform/actions/common/menuService.js';
+import type { Context, IContextKey } from '../../../platform/contextkey/common/contextkey.js';
+import { BrowserContextMenuService } from '../../../platform/contextview/browser/contextMenuService.js';
+import { IContextMenuService, IContextViewService } from '../../../platform/contextview/browser/contextView.js';
+import { IKeybindingService, KeybindingContextKeys } from '../../../platform/keybinding/common/keybinding.js';
+import { KeybindingResolver, KeybindingResolveKind } from '../../../platform/keybinding/common/keybindingResolver.js';
+import { INotificationService, NotificationSeverity, type NotificationAction, type NotificationHandle, type NotificationItem, type NotificationOptions } from '../../../platform/notification/common/notification.js';
+import { bindColorTheme } from '../../../platform/theme/browser/themeStyles.js';
+import '../../../base/browser/ui/contextview/contextview.css';
+import '../../../base/browser/ui/menu/menu.css';
+import '../../../base/browser/ui/button/button.css';
+import '../../../base/browser/ui/keybindinglabel/keybindinglabel.css';
 
 export interface StandaloneServiceOverrides {
 	readonly languageService?: IAshLanguageService;
@@ -62,6 +80,16 @@ export class StandaloneServiceCollection extends Disposable {
 		instantiationService.registerSingleton(IInlineCompletionsService, () => instantiationService.createInstance(InlineCompletionsService));
 		instantiationService.registerSingleton(ILanguageFeatureDebounceService, () => instantiationService.createInstance(LanguageFeatureDebounceService));
 		instantiationService.registerSingleton(IContextKeyService, () => new ContextKeyService());
+		instantiationService.registerSingleton(ICommandService, () => instantiationService.createInstance(StandaloneCommandService));
+		instantiationService.registerSingleton(INotificationService, () => instantiationService.createInstance(StandaloneNotificationService));
+		instantiationService.registerSingleton(IKeybindingService, () => instantiationService.createInstance(StandaloneKeybindingService));
+		instantiationService.registerSingleton(IMenuService, () => instantiationService.createInstance(new ServiceConstructionDescriptor(MenuService, {
+			serviceDependencies: [ICommandService, IContextKeyService],
+		})));
+		instantiationService.registerSingleton(IContextViewService, () => instantiationService.createInstance(StandaloneContextViewService));
+		instantiationService.registerSingleton(IContextMenuService, () => instantiationService.createInstance(new ServiceConstructionDescriptor(BrowserContextMenuService, {
+			serviceDependencies: [IMenuService, IContextKeyService, IKeybindingService, IContextViewService, INotificationService],
+		})));
 		instantiationService.registerSingleton(IMarkerService, () => new MarkerService());
 		instantiationService.registerSingleton(IMarkerDecorationsService, () => instantiationService.createInstance(MarkerDecorationsService));
 		instantiationService.registerInstance(IClipboardService, new BrowserClipboardService(window.navigator.clipboard));
@@ -100,6 +128,177 @@ export class StandaloneServiceCollection extends Disposable {
 		if (!overrides.languageService) this._register(registerBuiltinLanguageDescriptions(this.languageService.languages));
 		if (!overrides.languageConfigurationService) this._register(registerBuiltinLanguageConfigurations(this.languageConfigurationService));
 		this._register(FormattingConflicts.setFormatterSelector(async formatters => formatters[0]));
+	}
+}
+
+/** Executes a command in this standalone window's service scope. */
+export class StandaloneCommandService extends Disposable implements ICommandService {
+	private readonly willExecute = this._register(new Emitter<ICommandEvent>());
+	private readonly didExecute = this._register(new Emitter<ICommandEvent>());
+	readonly onWillExecuteCommand = this.willExecute.event;
+	readonly onDidExecuteCommand = this.didExecute.event;
+
+	constructor(@IInstantiationService private readonly instantiationService: IInstantiationService) {
+		super();
+	}
+
+	async executeCommand<T = unknown>(id: string, ...args: readonly unknown[]): Promise<T> {
+		const handler = CommandsRegistry.getCommand(id);
+		if (!handler) {
+			throw new Error(`Unknown command: ${id}`);
+		}
+		const event = { commandId: id, args };
+		this.willExecute.fire(event);
+		const result = this.instantiationService.invokeFunction(handler, ...args) as T | PromiseLike<T>;
+		this.didExecute.fire(event);
+		return result;
+	}
+}
+
+/** Resolves registered shortcuts and dispatches them while a standalone editor has text focus. */
+export class StandaloneKeybindingService extends Disposable implements IKeybindingService {
+	private readonly resolver = new KeybindingResolver();
+	private readonly chords: KeybindingEvent[] = [];
+	private readonly chordTimeout = this._register(new RunOnceScheduler(() => this.clearChords(), 5000));
+	private readonly inChordModeKey: IContextKey<boolean>;
+	readonly onDidUpdateKeybindings = this.resolver.onDidChangeKeybindings;
+
+	constructor(
+		@ICodeEditorService private readonly editors: ICodeEditorServiceContract,
+		@IContextKeyService private readonly contextKeys: IContextKeyService,
+		@ICommandService private readonly commands: ICommandService,
+		@INotificationService private readonly notifications: INotificationService,
+	) {
+		super();
+		this.inChordModeKey = KeybindingContextKeys.inChordMode.bindTo(contextKeys);
+		this._register(toDisposable(() => this.clearChords()));
+		this._register(addDisposableListener(document, 'keydown', event => this.dispatch(event), true));
+		this._register(addDisposableListener(document, 'focusin', () => this.clearChords()));
+		this._register(addDisposableListener(document, 'compositionstart', () => this.clearChords()));
+		this._register(addDisposableListener(window, 'blur', () => this.clearChords()));
+		this._register(this.resolver.onDidChangeKeybindings(() => this.clearChords()));
+	}
+
+	get inChordMode(): boolean { return this.chords.length > 0; }
+
+	resolveKeybinding(keybinding: Keybinding): ResolvedKeybinding { return resolveKeybinding(keybinding); }
+
+	resolveUserBinding(value: string): ResolvedKeybinding | undefined {
+		const keybinding = parseKeybinding(value);
+		return keybinding ? this.resolveKeybinding(keybinding) : undefined;
+	}
+
+	lookupKeybindings(command: string, context = this.contextKeys.getContext(document.activeElement)): readonly ResolvedKeybinding[] {
+		return this.resolver.lookupKeybindings(command, context);
+	}
+
+	lookupKeybinding(command: string, context: Context = this.contextKeys.getContext(document.activeElement)): ResolvedKeybinding | undefined {
+		return this.resolver.lookupKeybinding(command, context);
+	}
+
+	private dispatch(event: KeyboardEvent): void {
+		if (event.defaultPrevented || event.isComposing || event.getModifierState('AltGraph') || !this.editors.getFocusedCodeEditor()?.hasTextFocus()) {
+			return;
+		}
+		if (['Control', 'Meta', 'Alt', 'Shift'].includes(event.key)) {
+			return;
+		}
+		if (this.inChordMode && event.key === 'Escape') {
+			stopEvent(event);
+			this.clearChords();
+			return;
+		}
+		const result = this.resolver.resolve(this.contextKeys.getContext(event.target as Node), [...this.chords, event]);
+		if (result.kind === KeybindingResolveKind.NoMatch) {
+			if (this.inChordMode) {
+				stopEvent(event);
+			}
+			this.clearChords();
+			return;
+		}
+		stopEvent(event);
+		if (result.kind === KeybindingResolveKind.MoreChordsNeeded) {
+			this.chords.push(event);
+			this.inChordModeKey.set(true);
+			this.chordTimeout.schedule();
+			return;
+		}
+		this.clearChords();
+		if (result.kind === KeybindingResolveKind.Command) {
+			void this.commands.executeCommand(result.command, ...result.args).catch(error => this.notifications.error(String(error)));
+		}
+	}
+
+	private clearChords(): void {
+		this.chords.length = 0;
+		this.chordTimeout.cancel();
+		this.inChordModeKey.reset();
+	}
+}
+
+/** Standalone notifications are observable and reported to the embedding page's console. */
+export class StandaloneNotificationService extends Disposable implements INotificationService {
+	private readonly added = this._register(new Emitter<NotificationItem>());
+	private readonly removed = this._register(new Emitter<NotificationItem>());
+	private readonly items = new Map<number, NotificationItem>();
+	private nextId = 1;
+	readonly onDidAdd = this.added.event;
+	readonly onDidRemove = this.removed.event;
+
+	notify(options: NotificationOptions): NotificationHandle {
+		const item: NotificationItem = Object.freeze({ ...options, id: this.nextId++, createdAt: Date.now() });
+		this.items.set(item.id, item);
+		this.added.fire(item);
+		switch (item.severity) {
+			case NotificationSeverity.Error:
+				console.error(item.message);
+				break;
+			case NotificationSeverity.Warning:
+				console.warn(item.message);
+				break;
+			case NotificationSeverity.Info:
+				console.info(item.message);
+				break;
+		}
+		return { item, close: () => { this.remove(item.id); } };
+	}
+
+	info(message: string, actions?: readonly NotificationAction[]): NotificationHandle {
+		return this.notify({ severity: NotificationSeverity.Info, message, actions });
+	}
+	warning(message: string, actions?: readonly NotificationAction[]): NotificationHandle {
+		return this.notify({ severity: NotificationSeverity.Warning, message, actions });
+	}
+	error(message: string, actions?: readonly NotificationAction[]): NotificationHandle {
+		return this.notify({ severity: NotificationSeverity.Error, message, actions });
+	}
+	getNotifications(): readonly NotificationItem[] { return [...this.items.values()]; }
+	remove(id: number): boolean {
+		const item = this.items.get(id);
+		if (!item) {
+			return false;
+		}
+		this.items.delete(id);
+		this.removed.fire(item);
+		return true;
+	}
+	clear(): void {
+		for (const id of this.items.keys()) {
+			this.remove(id);
+		}
+	}
+	protected override disposeCore(): void {
+		this.clear();
+		super.disposeCore();
+	}
+}
+
+class StandaloneContextViewService extends ContextView implements IContextViewService {
+	get container(): HTMLElement { return this.element; }
+
+	constructor(@IThemeService themeService: IThemeService) {
+		super(document.body);
+		this._register(bindColorTheme(themeService, this.element));
 	}
 }
 
