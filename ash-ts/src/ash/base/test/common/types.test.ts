@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "mocha";
-import { assert as assertCondition, assertDefined, assertReturnsDefined, assertType, isDefined, isFunction, isNonEmptyString, isObject, isRecord, type Mutable } from "../../common/types.js";
+import { assert as assertCondition, assertDefined, assertReturnsDefined, assertType, isDefined, isFunction, isNonEmptyString, isObject, isRecord, validateConstraint, validateConstraints, type Mutable } from "../../common/types.js";
 
 test("assert narrows caller-defined conditions", () => {
 	assert.equal(requireStringFromUnknown("value"), "value");
@@ -66,6 +66,31 @@ test('general type guards expose object, function, defined, and mutable contract
 	assert.deepEqual([undefined, null, 0].filter(isDefined), [0]);
 	assert.doesNotThrow(() => assertType(typeof value.count === "number", "number"));
 	assert.throws(() => assertType(false, "string"), TypeError);
+});
+
+test('argument constraints accept primitives, class instances and strict predicates', () => {
+	class Value {}
+	class DerivedValue extends Value {}
+	const BoundValue = Value.bind(undefined);
+	validateConstraints([3, 'text', false], [Number, 'string', Boolean]);
+	validateConstraints([new DerivedValue(), new Value()], [Value, BoundValue]);
+	validateConstraints([() => undefined, undefined], [Function, (value: unknown) => value === undefined]);
+	validateConstraint('text', (value: unknown) => typeof value === 'string');
+	assert.throws(() => validateConstraint('3', Number), TypeError);
+	assert.throws(() => validateConstraint({}, Value), TypeError);
+	assert.throws(() => validateConstraint('text', (value: unknown) => value), TypeError);
+});
+
+test('argument constraints check supplied positions without changing values or swallowing predicate errors', () => {
+	const args = [3, 'extra'];
+	validateConstraints(args, ['number']);
+	validateConstraints([], ['number']);
+	validateConstraints([undefined], [undefined]);
+	assert.deepEqual(args, [3, 'extra']);
+	validateConstraints([null], ['object', 'number']);
+	assert.throws(() => validateConstraints([undefined], ['object']), TypeError);
+	const failure = new Error('predicate failed');
+	assert.throws(() => validateConstraint('text', (_value: unknown) => { throw failure; }), error => error === failure);
 });
 
 function requireString(value: string | undefined): string {

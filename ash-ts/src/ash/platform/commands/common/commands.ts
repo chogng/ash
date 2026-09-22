@@ -3,7 +3,7 @@ import type { Event } from "../../../base/common/event.js";
 import type { ServicesAccessor } from "../../instantiation/common/instantiation.js";
 import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
 import type { JsonSchema } from '../../../base/common/jsonSchema.js';
-import type { TypeConstraint } from '../../../base/common/types.js';
+import { validateConstraints, type TypeConstraint } from '../../../base/common/types.js';
 import type { ILocalizedString } from '../../action/common/action.js';
 
 export type CommandId = string;
@@ -15,6 +15,7 @@ export type CommandHandler = (
 export interface CommandDefinition {
 	readonly id: CommandId;
 	readonly handler: CommandHandler;
+	readonly metadata?: ICommandMetadata;
 }
 
 export interface ICommandMetadata {
@@ -98,7 +99,15 @@ function normalizeCommandDefinition(command: CommandDefinition): CommandDefiniti
 	if (!command || typeof command !== "object") throw new TypeError("Command definition must be an object");
 	if (typeof command.id !== "string" || command.id.trim().length === 0 || command.id.length > 256 || command.id.includes("\0")) throw new TypeError("Command ID must contain 1 to 256 characters without NUL");
 	if (typeof command.handler !== "function") throw new TypeError(`Command '${command.id}' must provide a handler`);
-	return Object.freeze({ id: command.id.trim(), handler: command.handler });
+	const constraints = command.metadata?.args?.map(argument => argument.constraint);
+	const execute = command.handler;
+	const handler = constraints
+		? (accessor: ServicesAccessor, ...args: unknown[]): unknown => {
+			validateConstraints(args, constraints);
+			return execute(accessor, ...args);
+		}
+		: execute;
+	return Object.freeze({ id: command.id.trim(), handler, metadata: command.metadata });
 }
 
 /** Realm-wide command definitions populated by static contributions. */

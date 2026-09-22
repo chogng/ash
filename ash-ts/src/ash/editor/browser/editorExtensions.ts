@@ -180,7 +180,11 @@ export abstract class Command {
 			}
 		}
 
-		CommandsRegistry.register(this.id, (accessor, args) => this.runCommand(accessor, args));
+		CommandsRegistry.registerMany([{
+			id: this.id,
+			handler: (accessor, args) => this.runCommand(accessor, args),
+			metadata: this.metadata,
+		}]);
 
 		if (this.canTriggerInlineEdits) {
 			TriggerInlineEditCommandsRegistry.registerCommand(this.id);

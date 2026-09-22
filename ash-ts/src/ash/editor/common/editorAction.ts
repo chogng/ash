@@ -1,3 +1,4 @@
+import { validateConstraints } from '../../base/common/types.js';
 import type { ICommandMetadata } from '../../platform/commands/common/commands.js';
 import type { ContextKeyExpression, IContextKeyService } from '../../platform/contextkey/common/contextkey.js';
 import type { IEditorAction } from './editorCommon.js';
@@ -19,6 +20,9 @@ export class InternalEditorAction implements IEditorAction {
 
 	public async run(args?: unknown): Promise<void> {
 		if (this.isSupported()) {
+			if (this.metadata?.args) {
+				validateConstraints(args === undefined ? [] : [args], this.metadata.args.map(argument => argument.constraint));
+			}
 			await this.execute(args);
 		}
 	}

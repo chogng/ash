@@ -4257,7 +4257,7 @@ test.describe('folding command routing', () => {
 		const rejected = await page.evaluate(async () => {
 			const errors: string[] = [];
 			for (const command of ['editor.fold', 'editor.unfold']) {
-				for (const args of [[], 'invalid', { levels: '2' }, { levels: NaN }, { direction: 2 }, { selectionLines: [0, '4'] }]) {
+				for (const args of [null, false, 0, '', [], 'invalid', { levels: '2' }, { levels: NaN }, { direction: 2 }, { selectionLines: [0, '4'] }]) {
 					try {
 						await window.ashStandaloneIntegration.runLineAction(command, args);
 						errors.push('accepted');
@@ -4268,7 +4268,7 @@ test.describe('folding command routing', () => {
 			}
 			return errors;
 		});
-		expect(rejected).toEqual(Array(12).fill('TypeError'));
+		expect(rejected).toEqual(Array(20).fill('TypeError'));
 		const lines = page.locator('#caller .view-line');
 		await expect(lines).toHaveCount(9);
 		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.fold', { selectionLines: [] }));
@@ -4278,6 +4278,59 @@ test.describe('folding command routing', () => {
 		await expect(lines).toHaveCount(3);
 		await page.evaluate(() => window.ashStandaloneIntegration.runLineAction('editor.unfold', { levels: 3, selectionLines: [] }));
 		await expect(lines).toHaveCount(9);
+	});
+
+	test('command service rejects malformed folding arguments before changing editor state', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(text => {
+			window.ashStandaloneIntegration.prepareClipboard(text, [[1, 1, 1, 1]]);
+			window.ashStandaloneIntegration.updateContributionOptions({ foldingStrategy: 'indentation' });
+		}, text);
+		await page.locator('#caller .stanza-editor-input').focus();
+		await page.evaluate(() => window.ashStandaloneIntegration.runFoldingCommand('editor.fold', { levels: 2, selectionLines: [4] }));
+		await expect(page.locator('#caller .view-line')).toHaveCount(6);
+		const errors = await page.evaluate(async () => {
+			const rejected: string[] = [];
+			for (const command of ['editor.fold', 'editor.unfold']) {
+				for (const args of [null, false, 0, '', { levels: '2' }, { direction: false }, { selectionLines: [null] }]) {
+					try {
+						await window.ashStandaloneIntegration.runFoldingCommand(command, args);
+						rejected.push('accepted');
+					} catch (error) {
+						rejected.push((error as Error).name);
+					}
+				}
+			}
+			return rejected;
+		});
+		expect(errors).toEqual(Array(14).fill('TypeError'));
+		await expect(page.locator('#caller .view-line')).toHaveCount(6);
+		await page.evaluate(() => window.ashStandaloneIntegration.runFoldingCommand('editor.unfold', { levels: 2, selectionLines: [4] }));
+		await expect(page.locator('#caller .view-line')).toHaveCount(9);
+		await page.evaluate(() => window.ashStandaloneIntegration.runFoldingCommand('editor.fold'));
+		await expect(page.locator('#caller .view-line')).toHaveCount(6);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLineCopy())).value).toBe(text);
+	});
+
+	test('public folding actions expose argument descriptions and schemas', async ({ page }) => {
+		await page.goto('/standalone.html');
+		const metadata = await page.evaluate(() => ['editor.fold', 'editor.unfold'].map(command => window.ashStandaloneIntegration.readFoldingMetadata(command)));
+		expect(metadata.map(entry => entry.description)).toEqual([
+			{ original: 'Collapse the selected folding ranges.', value: 'Collapse the selected folding ranges.' },
+			{ original: 'Expand the selected folding ranges.', value: 'Expand the selected folding ranges.' },
+		]);
+		for (const [index, entry] of metadata.entries()) {
+			expect(entry.args[0]?.name).toBe('Folding options');
+			expect(entry.args[0]?.description).toContain('zero-based lines');
+			expect(entry.args[0]?.schema).toEqual({
+				type: 'object',
+				properties: {
+					levels: index === 0 ? { type: 'number' } : { type: 'number', default: 1 },
+					direction: index === 0 ? { type: 'string', enum: ['up', 'down'] } : { type: 'string', enum: ['up', 'down'], default: 'down' },
+					selectionLines: { type: 'array', items: { type: 'number' } },
+				},
+			});
+		}
 	});
 });
 

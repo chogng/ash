@@ -62,6 +62,38 @@ export function isUndefined(value: unknown): value is undefined {
 
 export type TypeConstraint = string | Function;
 
+export function validateConstraints(args: unknown[], constraints: Array<TypeConstraint | undefined>): void {
+	for (let index = 0; index < args.length && index < constraints.length; index++) {
+		validateConstraint(args[index], constraints[index]);
+	}
+}
+
+export function validateConstraint(arg: unknown, constraint: TypeConstraint | undefined): void {
+	if (constraint === undefined) {
+		return;
+	}
+	if (typeof constraint === 'string') {
+		if (typeof arg === constraint) {
+			return;
+		}
+	} else {
+		try {
+			if (arg instanceof constraint) {
+				return;
+			}
+		} catch {
+			// A predicate can be an arrow function without an instance prototype.
+		}
+		if (arg !== null && arg !== undefined && Object(arg).constructor === constraint) {
+			return;
+		}
+		if (constraint.length === 1 && constraint(arg) === true) {
+			return;
+		}
+	}
+	throw new TypeError('Argument does not match its constraint');
+}
+
 export function isFunction(value: unknown): value is (...args: never[]) => unknown {
 	return typeof value === 'function';
 }

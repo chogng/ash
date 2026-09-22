@@ -8,6 +8,12 @@ const english: LanguagePackCatalog = {
 	localizedLanguageName: "English",
 	catalogVersion: ASH_LOCALIZATION_CATALOG_VERSION,
 	bundles: {
+		ash: {
+			"folding.fold.description": "Collapse the selected folding ranges.",
+			"folding.unfold.description": "Expand the selected folding ranges.",
+			"folding.arguments": "Folding options",
+			"folding.arguments.description": "levels sets the number of levels (default: 1). direction selects up or down. selectionLines supplies zero-based lines instead of the current selections. Fold without levels or direction finds the first expanded range at each line or above it.",
+		},
 		"ash.menu": {
 			file: "File",
 			edit: "Edit",
@@ -149,6 +155,12 @@ const chinese: LanguagePackCatalog = {
 	localizedLanguageName: "简体中文",
 	catalogVersion: ASH_LOCALIZATION_CATALOG_VERSION,
 	bundles: {
+		ash: {
+			"folding.fold.description": "折叠选定的范围。",
+			"folding.unfold.description": "展开选定的折叠范围。",
+			"folding.arguments": "折叠选项",
+			"folding.arguments.description": "levels 指定处理层数，默认为 1。direction 选择向上（up）或向下（down）。selectionLines 使用从 0 开始的行号替代当前选区。折叠时若不指定 levels 和 direction，则处理各行所在范围或其上层首个尚未折叠的范围。",
+		},
 		"ash.menu": {
 			file: "文件",
 			edit: "编辑",

@@ -1,9 +1,9 @@
 import { EditorContextKeys } from '../../../common/editorContextKeys.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { KeyChord, KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
-import { localize2 } from '../../../../nls.js';
-import { illegalArgument } from '../../../../base/common/errors.js';
+import { localize, localize2 } from '../../../../nls.js';
 import { isNumber, isObject } from '../../../../base/common/types.js';
+import type { ICommandMetadata } from '../../../../platform/commands/common/commands.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
@@ -220,8 +220,7 @@ export class FoldingController extends Disposable {
 		if (region?.collapsed) this.relocateHiddenSelections([region]);
 	}
 
-	public setContainingFoldCollapsed(collapsed: boolean, args: unknown = {}): void {
-		const options = readFoldingArguments(args);
+	public setContainingFoldCollapsed(collapsed: boolean, options: FoldingArguments = {}): void {
 		if (!this.editor.getOption(EditorOption.folding)) return;
 		const lines = options.selectionLines ?? this.editor.getSelections()?.map(selection => selection.startLineNumber - 1) ?? [];
 		let scope: { levels: number; direction: 'up' | 'down' } | undefined;
@@ -308,22 +307,40 @@ interface FoldingArguments {
 	selectionLines?: number[];
 }
 
-function readFoldingArguments(args: unknown): FoldingArguments {
+function foldingArgumentsConstraint(args: unknown): boolean {
+	if (args === undefined) {
+		return true;
+	}
 	if (!isObject(args)) {
-		throw illegalArgument('folding');
+		return false;
 	}
 	const options = args as FoldingArguments;
-	if (options.levels !== undefined && !isNumber(options.levels)) {
-		throw illegalArgument('levels');
-	}
-	if (options.direction !== undefined && typeof options.direction !== 'string') {
-		throw illegalArgument('direction');
-	}
-	if (options.selectionLines !== undefined
-		&& (!Array.isArray(options.selectionLines) || !options.selectionLines.every(isNumber))) {
-		throw illegalArgument('selectionLines');
-	}
-	return options;
+	return (options.levels === undefined || isNumber(options.levels))
+		&& (options.direction === undefined || typeof options.direction === 'string')
+		&& (options.selectionLines === undefined || Array.isArray(options.selectionLines) && options.selectionLines.every(isNumber));
+}
+
+function createFoldingMetadata(collapsed: boolean): ICommandMetadata {
+	return {
+		description: collapsed
+			? localize2('folding.fold.description', 'Collapse the selected folding ranges.')
+			: localize2('folding.unfold.description', 'Expand the selected folding ranges.'),
+		args: [{
+			name: localize('folding.arguments', 'Folding options'),
+			description: localize('folding.arguments.description', 'levels sets the number of levels (default: 1). direction selects up or down. selectionLines supplies zero-based lines instead of the current selections. Fold without levels or direction finds the first expanded range at each line or above it.'),
+			constraint: foldingArgumentsConstraint,
+			schema: {
+				type: 'object',
+				properties: {
+					levels: collapsed ? { type: 'number' } : { type: 'number', default: 1 },
+					direction: collapsed
+						? { type: 'string', enum: ['up', 'down'] }
+						: { type: 'string', enum: ['up', 'down'], default: 'down' },
+					selectionLines: { type: 'array', items: { type: 'number' } },
+				},
+			},
+		}],
+	};
 }
 
 class FoldAction extends EditorAction {
@@ -331,6 +348,7 @@ class FoldAction extends EditorAction {
 		super({
 			id: 'editor.fold',
 			label: localize2('fold', 'Fold'),
+			metadata: createFoldingMetadata(true),
 			precondition: foldingEnabled.isEqualTo(true),
 			kbOpts: {
 				primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.BracketLeft,
@@ -341,7 +359,7 @@ class FoldAction extends EditorAction {
 		});
 	}
 
-	public run(_accessor: ServicesAccessor, editor: ICodeEditor, args: unknown): void {
+	public run(_accessor: ServicesAccessor, editor: ICodeEditor, args: FoldingArguments): void {
 		editor.getContribution<FoldingController>('editor.contrib.folding')?.setContainingFoldCollapsed(true, args);
 	}
 }
@@ -351,6 +369,7 @@ class UnfoldAction extends EditorAction {
 		super({
 			id: 'editor.unfold',
 			label: localize2('unfold', 'Unfold'),
+			metadata: createFoldingMetadata(false),
 			precondition: foldingEnabled.isEqualTo(true),
 			kbOpts: {
 				primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.BracketRight,
@@ -361,7 +380,7 @@ class UnfoldAction extends EditorAction {
 		});
 	}
 
-	public run(_accessor: ServicesAccessor, editor: ICodeEditor, args: unknown): void {
+	public run(_accessor: ServicesAccessor, editor: ICodeEditor, args: FoldingArguments): void {
 		editor.getContribution<FoldingController>('editor.contrib.folding')?.setContainingFoldCollapsed(false, args);
 	}
 }

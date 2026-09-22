@@ -2,7 +2,7 @@ import { ILanguageFeatureDebounceService } from '../../../src/ash/editor/common/
 import { IInlineCompletionsService } from '../../../src/ash/editor/browser/services/inlineCompletionsService.js';
 import { InlineCompletionsController } from '../../../src/ash/editor/contrib/inlineCompletions/browser/controller/inlineCompletionsController.js';
 import type { ICodeEditor } from '../../../src/ash/editor/browser/editorBrowser.js';
-import { CommandsRegistry } from '../../../src/ash/platform/commands/common/commands.js';
+import { CommandsRegistry, ICommandService, type ICommandMetadata } from '../../../src/ash/platform/commands/common/commands.js';
 import { IContextKeyService } from "../../../src/ash/platform/contextkey/browser/contextKeyService.js";
 import { ICodeEditorService } from '../../../src/ash/editor/browser/services/codeEditorService.js';
 import { observableCodeEditor } from '../../../src/ash/editor/browser/observableCodeEditor.js';
@@ -161,6 +161,8 @@ interface StandaloneHarness {
 	setFoldingModelAttached(attached: boolean): void;
 	prepareFoldingKeybinding(command?: string, args?: unknown): void;
 	readFoldingCommandState(): { supported: boolean; inChordMode: boolean };
+	runFoldingCommand(command: string, args?: unknown): Promise<void>;
+	readFoldingMetadata(command: string): Omit<ICommandMetadata, 'args'> & { args: { name: string; description?: string; schema?: unknown }[] };
 	readLanguageActions(): { rename: boolean; quickFix: boolean };
 	prepareLanguageRequest(kind: LanguageRequestKind, emptyDefinition?: boolean): void;
 	languageHoverPoint(): { x: number; y: number };
@@ -727,6 +729,14 @@ window.ashStandaloneIntegration = {
 		supported: callerEditor.getAction('editor.foldAll')!.isSupported(),
 		inChordMode: StandaloneServices.get().instantiationService.get(IKeybindingService).inChordMode,
 	}),
+	runFoldingCommand: (command, args) => callerEditor.invokeWithinContext(accessor => accessor.get(ICommandService).executeCommand<void>(command, args)),
+	readFoldingMetadata: command => {
+		const metadata = callerEditor.getAction(command)!.metadata!;
+		return {
+			description: metadata.description,
+			args: metadata.args!.map(({ name, description, schema }) => ({ name, description, schema })),
+		};
+	},
 	readLanguageActions: () => ({
 		rename: callerEditor.getAction('editor.action.rename')?.isSupported() ?? false,
 		quickFix: callerEditor.getAction('editor.action.quickFix')?.isSupported() ?? false,

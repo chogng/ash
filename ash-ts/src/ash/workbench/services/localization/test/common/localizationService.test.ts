@@ -7,6 +7,7 @@ import { MarketplaceLanguagePackService } from "../../../../../platform/language
 import { builtinLanguagePackCatalogs } from "../../common/localizationCatalogs.js";
 import { LocalizationConfiguration, WorkbenchLocaleService, normalizeLocale, resolveLocale } from "../../common/locale.js";
 import { WorkbenchLocalizationService } from "../../browser/workbenchLocalizationService.js";
+import { resetNlsResolver } from '../../../../../nls.js';
 
 test("locale resolution prefers exact, base-language, and English fallback matches", () => {
 	assert.equal(normalizeLocale("ZH_cn"), "zh-CN");
@@ -36,6 +37,30 @@ test("localization lookup falls back to English and formats parameters", async (
 	await localization.whenReady;
 	assert.equal(localization.translate("ash.settings", "displayLanguage.title", "Fallback"), "Display Language");
 	assert.equal(localization.translate("ash.missing", "missing", "Hello {name}", { name: "Ada" }), "Hello Ada");
+});
+
+test('folding command metadata uses the selected Chinese language catalog', async () => {
+	using configuration = new InMemoryConfigurationService();
+	using languagePacks = new MarketplaceLanguagePackService(createMarketplace(), builtinLanguagePackCatalogs);
+	using localeService = new WorkbenchLocaleService(configuration, languagePacks);
+	using localization = new WorkbenchLocalizationService(localeService, languagePacks);
+	try {
+		await localization.whenReady;
+		await localeService.setLocale('zh-CN');
+		await import('../../../../../editor/contrib/folding/browser/folding.js');
+		const { EditorExtensionsRegistry } = await import('../../../../../editor/browser/editorExtensions.js');
+		const actions = [...EditorExtensionsRegistry.getEditorActions()];
+		const fold = actions.find(action => action.id === 'editor.fold')!.metadata!;
+		const unfold = actions.find(action => action.id === 'editor.unfold')!.metadata!;
+		assert.deepEqual([fold.description, unfold.description], [
+			{ original: 'Collapse the selected folding ranges.', value: '折叠选定的范围。' },
+			{ original: 'Expand the selected folding ranges.', value: '展开选定的折叠范围。' },
+		]);
+		assert.equal(fold.args![0]!.name, '折叠选项');
+		assert.match(fold.args![0]!.description!, /从 0 开始的行号/);
+	} finally {
+		resetNlsResolver();
+	}
 });
 
 function createMarketplace(): IMarketplaceService {

@@ -1,5 +1,33 @@
 # Editor API 对齐状态
 
+## Folding 元数据与命令参数边界（2026-09-21）
+
+本批已修复注册时丢失参数约束，以及直接 action 调用把 `null` / `false` 等值变成默认参数的问题。起始基线 `09682509e`，已有上一批 6 个暂存文件；本批保护既有变更，不创建或删除文件。
+
+准入链：命令服务 / 直接 editor action → 命令注册或 InternalEditorAction 的参数边界 → base 类型约束校验 → 既有 FoldingController → 原折叠记录与隐藏行。约束声明由 Folding 动作拥有；平台层不依赖 Folding，控制器只接收已校验参数。注册批次的替换与释放仍由原 CommandRegistry 管理。
+
+| 准确路径（相对 `ash-ts/src/ash/`） | 文件关系 | 本批职责 |
+| --- | --- | --- |
+| `base/common/types.ts` | 双方都有 | 以标准 validateConstraint / validateConstraints 契约提供唯一类型约束校验 |
+| `platform/commands/common/commands.ts` | 双方都有 | 原命令定义携带 metadata，注册时把参数约束接入 handler；保留原批次所有权 |
+| `editor/browser/editorExtensions.ts` | 双方都有 | 编辑器命令注册携带已有 metadata |
+| `editor/common/editorAction.ts` | 双方都有 | 直接 action 调用在默认参数转换前使用同一校验 |
+| `editor/contrib/folding/browser/folding.ts` | 双方都有 | 声明 Fold / Unfold 参数约束与公开 schema，移除控制器内的重复校验 |
+| `workbench/services/localization/common/localizationCatalogs.ts` | 既有 Ash 语言包数据 | 按仓库文案要求补英文与简体中文词条，不迁移归属 |
+| `editor/api-alignment-status.md` | 既有台账 | 记录范围和验证 |
+
+测试限定既有 `base/test/common/types.test.ts`、`platform/commands/test/common/commands.test.ts`、`workbench/services/commands/test/common/commandService.test.ts`、`workbench/services/localization/test/common/localizationService.test.ts`，以及 `ash-ts/test/integration/browser/standalone.integration.ts` / `.spec.ts`。验证参数拒绝早于副作用、成功参数完整传递、替换与释放、非默认语言，以及真实 action / 命令服务的隐藏行结果。上游只用于核对公开 metadata / 类型约束契约及测试；保留 Ash 注册结构、DOM、焦点和折叠模型。
+
+Fold / Unfold 的 metadata 现在包含本地化说明、参数约束及 `levels` / `direction` / `selectionLines` schema，可从公开 action 读取。两个外部调用入口使用同一 base 校验；错误值不会进入控制器，省略参数仍执行默认行为。原批次注册机制没有重构，本批不宣称 CommandRegistry 的完整公开对象与方法契约已经对齐。Folding 的其他公开状态与 provider 契约继续待核对。
+
+本批验证：
+
+- 基础类型、命令注册、Workbench 命令服务和本地化共 21 项定向单测、4 个文件通过；中文 metadata 从真实语言包服务加载后验证。
+- 11 个 Folding Chromium 场景通过，包括两条新增的命令服务与公开 metadata 场景；原错误参数场景追加 `null`、`false`、`0`、空字符串。
+- `check-editor-alignment.mjs --test=all` 通过：1,243 项编辑器单测、234 个文件与 600 项浏览器测试全部通过；台账、文件集合、CSS 归属和类型检查通过，源码目录没有新增 JavaScript。保留测试环境既有的 JSDOM Canvas 提示。
+- `build:stanza`、`build:renderer` 均通过，无新增构建警告。仓库未配置 TypeScript formatter / linter；人工复核本批 diff，`git diff --check` 通过。
+- 未运行上游 VS Code 窗口；公开契约与预期来自本地上游声明及测试，不标为完整界面一致。总台账仍为 80 项已处理、41 项待核对。
+
 ## Folding 命令参数续批（2026-09-21）
 
 本批已接通 `editor.fold` / `editor.unfold` 的 `levels`、`direction` 和零起始 `selectionLines`。起始已有上一批暂存的 7 个文件变更，保持暂存内容；本批仅在工作区追加修改。
@@ -1875,7 +1903,7 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 | `contrib/codelens/browser/codelensWidget.ts` | `CodeLensWidget` | 当前已使用 `CodeLensWidget` 名称；其余公开契约仍待按生产调用方逐项验收 |
 | `contrib/colorPicker/browser/colorDetector.ts` | `ColorDetector` | 已恢复上游公开名；颜色 provider 结果写入标准 before decoration，动态 class ref 先于 CSS owner 释放，注入 marker 由标准鼠标目标读取 |
 | `contrib/find/browser/findController.ts` | `FindController` | 标准查找 / 替换动作及快捷键接通原控件；其余公开契约仍待分部验收 |
-| `contrib/folding/browser/folding.ts` | `FoldingController` | 普通、递归、全部、1–7 级及手动范围动作接通原折叠状态；fold / unfold 的层数、方向与指定行参数已接通。配置条件、多选区、组合键取消、范围策略与数量上限已验证；命令元数据、公开状态与 provider 契约仍待核对 |
+| `contrib/folding/browser/folding.ts` | `FoldingController` | 普通、递归、全部、1–7 级及手动范围动作接通原折叠状态；fold / unfold 的层数、方向与指定行参数、命令元数据和参数校验已接通。配置条件、多选区、组合键取消、范围策略与数量上限已验证；公开状态与 provider 契约仍待核对 |
 | `contrib/inlayHints/browser/inlayHintsController.ts` | `InlayHintsController` | 请求失效及四种 enabled 模式已接通；完整行内布局与其他展示选项仍待验收 |
 | `contrib/inlineCompletions/browser/controller/inlineCompletionsController.ts` | `InlineCompletionsController` | 自动建议开关、只读切换、trigger / commit / hide 命令已接通；完整模型、视图与交互公开契约仍待核对 |
 | `contrib/stickyScroll/browser/stickyScrollController.ts` | `StickyScrollController` | 文件职责、来源请求、候选行、命令、语法着色、行号、折叠图标与定义交互已接通；标准定义查询归属、高度事件消费方和上游同场景验证仍待核对，见 Sticky Scroll 记录 |

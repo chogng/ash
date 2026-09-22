@@ -66,3 +66,24 @@ test("command service does not emit did when a handler throws", async () => {
 	assert.equal(willCount, 1);
 	assert.equal(didCount, 0);
 });
+
+test('command metadata rejects arguments before handler effects and completion events', async () => {
+	const registry = new CommandRegistry();
+	using services = new ServiceContainer();
+	const order: string[] = [];
+	using registration = registry.registerMany([{
+		id: 'test.command.arguments',
+		handler: (_accessor, value) => {
+			order.push('handler');
+			return value;
+		},
+		metadata: { description: 'test', args: [{ name: 'value', constraint: 'number' }] },
+	}]);
+	using service = new CommandService(services, registry);
+	using will = service.onWillExecuteCommand(() => order.push('will'));
+	using did = service.onDidExecuteCommand(() => order.push('did'));
+	await assert.rejects(service.executeCommand('test.command.arguments', null), TypeError);
+	assert.deepEqual(order, ['will']);
+	assert.equal(await service.executeCommand('test.command.arguments', 3), 3);
+	assert.deepEqual(order, ['will', 'will', 'handler', 'did']);
+});
