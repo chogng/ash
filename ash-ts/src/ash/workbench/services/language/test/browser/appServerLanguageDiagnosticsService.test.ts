@@ -80,6 +80,18 @@ test("App Server diagnostics keep equal relative paths isolated by Workspace fol
 	assert.equal(service.getDiagnostics(resource)?.diagnostics[0]?.message, "second root");
 });
 
+test('App Server diagnostics synchronize Shell documents using the grammar language identity', async () => {
+	const api = new FakeLanguageApi();
+	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/project') });
+	using service = new AppServerLanguageDiagnosticsService(api, new FakeServerEvents(), workspace);
+	using model = new TextModel('echo hello', { languageId: 'shellscript' });
+	using acquisition = service.acquire(URI.file('/project/main.sh'), 'shellscript', model);
+	await tick();
+	assert.equal(api.synchronized.length, 1);
+	assert.equal(api.synchronized[0]!.document.languageId, 'shellscript');
+	assert.equal(api.diagnosticPulls.length, 1);
+});
+
 class FakeServerEvents implements IServerEventApi {
 	private listener: ((event: ServerNotification) => void) | undefined;
 	subscribe(listener: (event: ServerNotification) => void) { this.listener = listener; return { dispose: () => { this.listener = undefined; } }; }

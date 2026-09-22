@@ -13,7 +13,8 @@ Stanza Text Engine 是 Ash 唯一的行式文本编辑权威。文本、版本�
 | 输入、删除、undo/redo | `TextModel` + `CursorsController` | 一个同步事务，不等待 IPC |
 | 换行、折叠、可见行和滚动 | `common/viewModel` + `common/viewLayout` | DOM-free、版本绑定 |
 | DOM、光标、选区和 decoration | `browser/view` + `browser/viewParts` | 只投影，不创建第二套模型或滚动权威 |
-| token、诊断、补全、折叠、符号和结构选择 | `common/languages`、通用 provider contract 与 frontend service | 异步结果必须通过 model identity 与 version gate；App Server provider 由 Workbench 注册 |
+| 基础 token 与预览着色 | 前端 TextMate Worker、TextModel tokenization | 消费前端版本快照，不请求 App Server parser |
+| 语义 token、诊断、补全、折叠、符号和结构选择 | `common/languages` 与异步 provider | 结果经过 model identity 与 version gate；App Server / LSP provider 由 Workbench 注册 |
 | 打开、保存、冲突和恢复 | Workbench model resolver 与 working copy | 文件传输不拥有 live model |
 | 可选编辑能力 | `contrib/<feature>` | 移除 feature 不破坏基础模型正确性 |
 

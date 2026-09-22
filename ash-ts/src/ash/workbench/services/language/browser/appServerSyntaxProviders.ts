@@ -1,12 +1,11 @@
 import { VSBuffer } from "../../../../base/common/buffer.js";
 import { raceCancellationError } from "../../../../base/common/async.js";
 import { Disposable } from "../../../../base/common/lifecycle.js";
-import type { ISyntaxApi, SyntaxAnalyzeResult, SyntaxDiagnostic, SyntaxSelectionRangesResult, SyntaxSymbol, SyntaxToken } from "../../../../platform/syntax/common/syntaxApi.js";
+import type { ISyntaxApi, SyntaxAnalyzeResult, SyntaxDiagnostic, SyntaxSelectionRangesResult, SyntaxSymbol, SyntaxRange } from "../../../../platform/syntax/common/syntaxApi.js";
 import { Position } from "../../../../editor/common/core/position.js";
 import { Range } from "../../../../editor/common/core/range.js";
 import { type TextSnapshot } from "../../../../editor/common/core/textChange.js";
 import { type LanguageDocumentSymbol, type LanguageDocumentSymbolProvider, type LanguageDocumentSymbolRequest, type LanguageFoldingRange, type LanguageFoldingRangeProvider, type LanguageFoldingRangeRequest, type LanguageSelectionRangeProvider, type LanguageSelectionRangeRequest, type SyntaxProvider, type SyntaxProviderRequest, LanguageDiagnosticSeverity, type LanguageDiagnosticResult } from '../../../../editor/common/languages.js';
-import { type LanguageToken, type LanguageTokenResult } from '../../../../editor/common/tokens/languageTokens.js';
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 
 const MAX_SYNTAX_INPUT_BYTES = 4 * 1024 * 1024;
@@ -17,7 +16,7 @@ interface CachedSyntaxFacts {
 }
 
 /**
- * Registers the App Server parser as ordinary Editor language providers.
+ * Registers asynchronous parser features; lexical tokens belong to the frontend TextMate Worker.
  */
 export class AppServerSyntaxProviders extends Disposable {
 	constructor(languageFeatures: ILanguageFeaturesService, api: ISyntaxApi) {
@@ -33,16 +32,10 @@ export class AppServerSyntaxProviders extends Disposable {
 class AppServerSyntaxProvider implements SyntaxProvider, LanguageDocumentSymbolProvider, LanguageFoldingRangeProvider, LanguageSelectionRangeProvider {
 	readonly id = "ash.appServer.syntax";
 	readonly languageIds = APP_SERVER_SYNTAX_LANGUAGE_IDS;
-	readonly tokenPriority = 100;
 	readonly diagnosticPriority = 100;
 	private cached: CachedSyntaxFacts | undefined;
 
 	constructor(private readonly syntax: ISyntaxApi) {}
-
-	async provideTokens(request: SyntaxProviderRequest, signal: AbortSignal): Promise<LanguageTokenResult | undefined> {
-		const result = await this.analyze(request.languageId, request.snapshot, signal);
-		return result ? projectAppServerSyntaxTokens(result, request.snapshot) : undefined;
-	}
 
 	async provideDiagnostics(request: SyntaxProviderRequest, signal: AbortSignal): Promise<LanguageDiagnosticResult | undefined> {
 		const result = await this.analyze(request.languageId, request.snapshot, signal);
@@ -99,7 +92,7 @@ class AppServerSyntaxProvider implements SyntaxProvider, LanguageDocumentSymbolP
 	}
 }
 
-export const APP_SERVER_SYNTAX_LANGUAGE_IDS = Object.freeze(["javascript", "javascriptreact", "json", "jsonc", "rust", "shell", "typescript", "typescriptreact"]);
+export const APP_SERVER_SYNTAX_LANGUAGE_IDS = Object.freeze(["javascript", "javascriptreact", "json", "jsonc", "rust", "shellscript", "typescript", "typescriptreact"]);
 
 export function syntaxLanguageForEditorLanguage(languageId: string): "javascript" | "javascriptreact" | "json" | "jsonc" | "rust" | "shell" | "typescript" | "typescriptreact" | undefined {
 	switch (languageId) {
@@ -108,53 +101,11 @@ export function syntaxLanguageForEditorLanguage(languageId: string): "javascript
 		case "json": return "json";
 		case "jsonc": return "jsonc";
 		case "rust": return "rust";
-		case "shell": return "shell";
+		case "shellscript": return "shell";
 		case "typescript": return "typescript";
 		case "typescriptreact": return "typescriptreact";
 		default: return undefined;
 	}
-}
-
-export function projectAppServerSyntaxTokens(result: SyntaxAnalyzeResult, snapshot: TextSnapshot): LanguageTokenResult {
-	assertMatchingRevision(result, snapshot);
-	const lines = snapshotLines(snapshot);
-	const tokens: LanguageToken[] = [];
-	for (const token of result.tokens) {
-		for (const range of projectSingleLineRanges(token.range, lines)) {
-			overlayToken(tokens, Object.freeze({
-				range,
-				tokenType: syntaxTokenType(token),
-				modifiers: Object.freeze([]),
-			}));
-		}
-	}
-	return Object.freeze({ tokens: Object.freeze(tokens) });
-}
-
-function overlayToken(tokens: LanguageToken[], incoming: LanguageToken): void {
-	const retained: LanguageToken[] = [];
-	for (const token of tokens) {
-		if (Position.compare(token.range.getEndPosition(), incoming.range.getStartPosition()) <= 0 || Position.compare(incoming.range.getEndPosition(), token.range.getStartPosition()) <= 0) {
-			retained.push(token);
-			continue;
-		}
-		if (Position.compare(token.range.getStartPosition(), incoming.range.getStartPosition()) < 0) retained.push(tokenWithRange(token, Range.fromPositions(token.range.getStartPosition(), incoming.range.getStartPosition())));
-		if (Position.compare(incoming.range.getEndPosition(), token.range.getEndPosition()) < 0) retained.push(tokenWithRange(token, Range.fromPositions(incoming.range.getEndPosition(), token.range.getEndPosition())));
-	}
-	retained.push(incoming);
-	retained.sort((left, right) => Position.compare(left.range.getStartPosition(), right.range.getStartPosition()) || Position.compare(left.range.getEndPosition(), right.range.getEndPosition()));
-	tokens.splice(0, tokens.length, ...retained);
-}
-
-function tokenWithRange(token: LanguageToken, range: Range): LanguageToken {
-	return Object.freeze({
-		range,
-		tokenType: token.tokenType,
-		modifiers: token.modifiers,
-		...(token.languageId === undefined ? {} : { languageId: token.languageId }),
-		...(token.balancedBrackets === false ? { balancedBrackets: false as const } : {}),
-		...(token.presentation === undefined ? {} : { presentation: token.presentation }),
-	});
 }
 
 export function projectAppServerSyntaxDiagnostics(result: SyntaxAnalyzeResult, snapshot: TextSnapshot): LanguageDiagnosticResult {
@@ -212,40 +163,7 @@ function projectAppServerSyntaxSymbol(symbol: SyntaxSymbol, lines: readonly stri
 	});
 }
 
-function syntaxTokenType(token: SyntaxToken): string {
-	switch (token.kind) {
-		case "attribute": return "modifier";
-		case "comment": return "comment";
-		case "constant": return "variable";
-		case "constructor": return "class";
-		case "embedded": return "string";
-		case "function": return "function";
-		case "keyword": return "keyword";
-		case "label": return "variable";
-		case "module": return "namespace";
-		case "number": return "number";
-		case "operator": return "operator";
-		case "property": return "property";
-		case "punctuation": return "punctuation";
-		case "string": return "string";
-		case "type": return "type";
-		case "variable": return "variable";
-	}
-}
-
-function projectSingleLineRanges(range: SyntaxToken["range"], lines: readonly string[]): readonly Range[] {
-	const projected = projectRange(range, lines);
-	if (projected.isEmpty()) return Object.freeze([]);
-	const ranges: Range[] = [];
-	for (let lineNumber = projected.startLineNumber; lineNumber <= projected.endLineNumber; lineNumber += 1) {
-		const startColumn = lineNumber === projected.startLineNumber ? projected.startColumn : 1;
-		const endColumn = lineNumber === projected.endLineNumber ? projected.endColumn : lines[lineNumber - 1]!.length + 1;
-		if (endColumn > startColumn) ranges.push(new Range(lineNumber, startColumn, lineNumber, endColumn));
-	}
-	return Object.freeze(ranges);
-}
-
-function projectRange(range: SyntaxToken["range"], lines: readonly string[]): Range {
+function projectRange(range: SyntaxRange, lines: readonly string[]): Range {
 	return Range.fromPositions(projectPosition(range.start, lines), projectPosition(range.end, lines));
 }
 

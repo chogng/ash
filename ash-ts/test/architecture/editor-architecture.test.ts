@@ -605,7 +605,7 @@ test("Text engine PieceTree tests follow VS Code's common model layout", () => {
 	assert.equal(statSafe(join(editorRoot, "test/common/pieceTreeTextBuffer.test.ts")), false);
 });
 
-test("Tree-sitter runtime stays behind App Server syntax facts", () => {
+test("Frontend lexical tokens stay independent of App Server syntax facts", () => {
 	const packageManifest = readFileSync(resolve(desktopRoot, "package.json"), "utf8");
 	const syntaxCrate = readFileSync(resolve(desktopRoot, "../ash-rs/syntax/src/lib.rs"), "utf8");
 	const syntaxOperations = readFileSync(resolve(desktopRoot, "../ash-rs/app-server/src/server/syntax_operations.rs"), "utf8");
@@ -619,7 +619,9 @@ test("Tree-sitter runtime stays behind App Server syntax facts", () => {
 	assert.match(syntaxCrate, /SyntaxDocument/u);
 	assert.match(syntaxOperations, /SyntaxDocument::open/u);
 	assert.match(syntaxAdapter, /ISyntaxApi/u);
-	assert.match(syntaxAdapter, /LanguageTokenResult/u);
+	assert.doesNotMatch(syntaxAdapter, /provideTokens|tokenPriority|LanguageTokenResult/u);
+	assert.match(syntaxAdapter, /provideDiagnostics/u);
+	assert.match(sharedWorkbench, /syntaxWorkerFactory/u);
 	assert.doesNotMatch(sharedWorkbench, /new AppServerSyntaxProviders/u);
 	assert.match(codeContribution, /new AppServerSyntaxProviders/u);
 	assert.doesNotMatch(academicContribution, /AppServerSyntaxProviders/u);

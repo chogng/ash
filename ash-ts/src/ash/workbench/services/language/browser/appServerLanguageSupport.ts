@@ -13,7 +13,10 @@ export class AppServerLanguageSupport {
 		const folders = workspace.getWorkspace().folders;
 		const entries = await Promise.all(folders.map(async folder => {
 			const result = await api.servers(folders.length > 1 ? { dirId: folder.id } : {});
-			return [folder.id, result.servers] as const;
+			return [folder.id, result.servers.map(server => ({
+				id: server.id,
+				languageIds: server.languageIds.map(languageId => languageId === 'shell' ? 'shellscript' : languageId),
+			}))] as const;
 		}));
 		return new AppServerLanguageSupport(new Map(entries));
 	}

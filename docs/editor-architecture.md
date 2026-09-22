@@ -29,7 +29,7 @@ Stanza 是当前唯一的 Ash editor runtime。不保留旧 editor ID、DOM clas
 | `workbench/services/textMate` | 已具备 | grammar revision registry、真实 TextMate/Oniguruma runtime、增量行状态缓存、Stanza provider/module adapter、版本化 catalog/theme wire、独立 browser Worker、声明式扩展资源、活动主题 token color、embedded language 与 bracket metadata 均已接通 |
 | Document service | 已具备 | `IFileService` 将 App Server `fs/changed` 映射为工作区失效事件，`ITextFileService` 转发；Stanza 模型服务提供 dirty、快照保存、显式 revert、CRLF/LF 保留、干净模型重载、脏模型外改状态与 expected-revision/CAS；Workbench 提供 workspace-scoped IndexedDB working-copy 恢复 |
 | Selection/decorations | 基础具备 | selection、实例控制器、tracked range、decoration collection |
-| Language model | 已具备 Code 主路径 | 版本化 token/diagnostic/completion、TextMate 与 parser facts、跨文件 definition/declaration/references/implementation/type definition、Peek、workspace symbols、call/type hierarchy、rename、code action 与有序 WorkspaceEdit 均接通 App Server；更广的语言覆盖由 LSP provider collection 演进，不再复制 editor contract |
+| Language model | 已具备 Code 主路径 | 基础 token 与预览着色由前端 TextMate Worker 计算；诊断、符号、折叠与结构选择通过异步 parser provider 获取，语义 token、补全、跨文件查询和重构由 LSP provider 接入；结果均检查模型版本 |
 | Browser view | 部分具备 | common viewport、虚拟行 DOM、字体行宽、gutter、selection/caret、基础 decoration、hit-test、active-position reveal、字符/块 canvas minimap（公共布局、semantic-token 颜色、click/drag scroll）、diagnostic severity marker、可见行缩进参考线已完成；富交互与主题细化尚未完成 |
 | EditorView / ViewController | 部分具备 | `EditorView` 选择并拥有 EditContext 生命周期，`ViewController` 将 beforeinput/textupdate/keydown 路由到 common command，覆盖 IME 协作、pointer selection、Alt+Shift 列选择、键盘导航、textarea 编辑、plain/syntax-marked safe HTML 选区与空选区整行 copy/cut/paste、单个显式文本文件 clipboard paste/drop 与 `text/uri-list`；Android/macOS 特化仍未完成 |
 | SuggestController | 部分具备 | 独立 contribution 拥有 completion service/session 的 browser 接线、键盘/鼠标接受、Ctrl+Space invoke、trigger character 与 incomplete refresh、completion/listbox ARIA；完整 screen-reader navigation 与平台辅助输入仍待真实平台验证 |
@@ -40,6 +40,8 @@ Stanza 是当前唯一的 Ash editor runtime。不保留旧 editor ID、DOM clas
 `src/ash/base` 继续保持领域无关。编辑器位置、文档版本、selection 和
 decoration 等身份只能由 `editor` 领域定义，不得为了复用而下沉到
 `base`。
+
+基础语法高亮不注册 App Server token provider。内置 JavaScript/JSX、TypeScript/TSX、JSON/JSONC、Rust 与 Shell grammar 由扩展资源服务装载，前端 TextMate Worker 持有行状态栈并计算 token。后台分析延迟不阻塞输入、撤销或词法着色；Semantic Tokens 在独立通道异步合成。Shell 在前端统一使用 `shellscript`，后台 `shell` 标识仅在 Workbench 领域适配处转换。
 
 ## 环境分层与 base 联动
 

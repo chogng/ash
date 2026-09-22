@@ -43,6 +43,18 @@ test("App Server language providers map cross-resource locations without double-
 	assert.equal(locations[0]!.selectionRange!.endColumn, 6);
 });
 
+test('App Server Shell registration uses the editor grammar language identity', async () => {
+	using languages = new LanguageFeaturesService();
+	using workspace = new WorkspaceContextService({ id: 'workspace', uri: URI.file('/project') });
+	const api = new FakeLanguageApi();
+	using providers = new AppServerLanguageProviders(languages, api, workspace);
+	await tick();
+	using model = new TextModel('value', { languageId: 'shellscript' });
+	await definition(languages, model, URI.file('/project/main.sh'), new Position(1, 2));
+	assert.equal(api.locationRequests[0]!.document.languageId, 'shellscript');
+	assert.equal(languages.completionProvider.getProvider('ash.appServer.completions')!.languageIds.includes('shellscript'), true);
+});
+
 test("App Server language providers route resources through their owning Workspace folder", async () => {
 	using languages = new LanguageFeaturesService();
 	using workspace = new WorkspaceContextService({
@@ -75,7 +87,7 @@ test("App Server workspace symbols query every supported Code language and dedup
 
 	const result = await getWorkspaceSymbols(languages.workspaceSymbolProvider.allNoModel(), "answer");
 
-	assert.deepEqual(api.workspaceSymbolLanguages.sort(), ["json", "rust", "shell", "typescript"]);
+	assert.deepEqual(api.workspaceSymbolLanguages.sort(), ["json", "rust", "shellscript", "typescript"]);
 	assert.equal(result.length, 1);
 	assert.equal(result[0]!.resource.toString(), "file:///C:/project/src/with%20space.ts");
 });

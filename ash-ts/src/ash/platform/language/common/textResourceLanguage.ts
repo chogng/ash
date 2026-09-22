@@ -38,7 +38,7 @@ const EXTENSION_LANGUAGES = new Map<string, string>([
 	[".md", "markdown"],
 	[".py", "python"],
 	[".rs", "rust"],
-	[".sh", "shell"],
+	[".sh", "shellscript"],
 	[".sql", "sql"],
 	[".toml", "ini"],
 	[".ts", "typescript"],

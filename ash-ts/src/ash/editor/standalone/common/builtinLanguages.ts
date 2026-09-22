@@ -153,7 +153,7 @@ const BUILTIN_LANGUAGE_DESCRIPTIONS: readonly LanguageDescription[] = Object.fre
 	{ id: "markdown", extensions: [".md"], mimetypes: ["text/markdown"] },
 	{ id: "python", extensions: [".py"] },
 	{ id: "rust", extensions: [".rs"] },
-	{ id: "shell", extensions: [".sh"] },
+	{ id: "shellscript", extensions: [".sh"] },
 	{ id: "sql", extensions: [".sql"] },
 	{ id: "typescript", extensions: [".ts"], mimetypes: ["application/typescript", "text/typescript"] },
 	{ id: "typescriptreact", extensions: [".tsx"] },

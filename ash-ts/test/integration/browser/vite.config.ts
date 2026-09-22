@@ -11,6 +11,7 @@ export default defineConfig({
 		rolldownOptions: {
 			output: rendererOutput,
 			input: {
+				tokenization: resolve(import.meta.dirname, 'tokenization.html'),
 				diff: resolve(import.meta.dirname, 'diff.html'),
 				language: resolve(import.meta.dirname, "language.html"),
 				marketplace: resolve(import.meta.dirname, "marketplace.html"),

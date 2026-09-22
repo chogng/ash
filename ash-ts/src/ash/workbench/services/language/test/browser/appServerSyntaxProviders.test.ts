@@ -1,6 +1,5 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'mocha';
-import { Position } from '../../../../../editor/common/core/position.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import { TextModel } from '../../../../../editor/common/model/textModel.js';
 import { DocumentSymbolService } from '../../../../../editor/contrib/documentSymbols/common/languageDocumentSymbols.js';
@@ -10,7 +9,7 @@ import { TestLanguageFeaturesService as LanguageFeaturesService } from '../../..
 import { AppServerSyntaxProviders, syntaxLanguageForEditorLanguage } from '../../browser/appServerSyntaxProviders.js';
 import { createSyntaxWorker } from '../../../../../editor/common/services/editorWebWorker.js';
 
-test('App Server syntax registers tokens, diagnostics, symbols, folds, and selection ranges through Editor providers', async () => {
+test('Frontend tokens remain independent of App Server diagnostics, symbols, folds, and selection ranges', async () => {
 	using model = new TextModel('fn main() {\n  /* hi\n  */\n}\n', { languageId: 'rust' });
 	using languages = new LanguageFeaturesService();
 	let analyzeCalls = 0;
@@ -42,7 +41,7 @@ test('App Server syntax registers tokens, diagnostics, symbols, folds, and selec
 		workerFactory: () => ({
 			run: async request => {
 				workerCalls += 1;
-				return request.lane === 'tokens' ? { lane: 'tokens' as const, value: { tokens: [] } } : { lane: 'diagnostics' as const, value: { diagnostics: [] } };
+				return request.lane === 'tokens' ? { lane: 'tokens' as const, value: { tokens: [{ range: new Range(1, 1, 1, 3), tokenType: 'keyword', modifiers: [] }] } } : { lane: 'diagnostics' as const, value: { diagnostics: [] } };
 			},
 			dispose() {},
 			[Symbol.dispose]() {},
@@ -52,6 +51,8 @@ test('App Server syntax registers tokens, diagnostics, symbols, folds, and selec
 	using folding = new FoldingRangeService(model, languages.foldingRangeProvider);
 
 	const tokens = await syntax.run({ requestId: 1, lane: 'tokens', payload: { languageId: 'rust' }, snapshot: model.createVersionedSnapshot() }, new AbortController().signal);
+	assert.equal(analyzeCalls, 0, 'Lexical tokens must not request backend analysis');
+	assert.equal(workerCalls, 1);
 	const diagnostics = await syntax.run({ requestId: 2, lane: 'diagnostics', payload: { languageId: 'rust' }, snapshot: model.createVersionedSnapshot() }, new AbortController().signal);
 	assert.equal(tokens.lane, 'tokens');
 	assert.equal(diagnostics.lane, 'diagnostics');
@@ -65,13 +66,9 @@ test('App Server syntax registers tokens, diagnostics, symbols, folds, and selec
 	}, signal);
 
 	assert.equal(analyzeCalls, 1);
-	assert.equal(workerCalls, 0);
+	assert.equal(workerCalls, 1);
 	assert.deepEqual(tokens.value.tokens.map(token => [token.range.getStartPosition().lineNumber, token.range.getStartPosition().column, token.range.getEndPosition().lineNumber, token.range.getEndPosition().column, token.tokenType]), [
 		[1, 1, 1, 3, 'keyword'],
-		[1, 3, 1, 4, 'variable'],
-		[1, 4, 1, 8, 'function'],
-		[2, 3, 2, 8, 'comment'],
-		[3, 1, 3, 5, 'comment'],
 	]);
 	assert.ok(diagnostics.value.diagnostics.some(diagnostic => diagnostic.code === 'syntax-missing' && diagnostic.source === 'ash-syntax'));
 	assert.deepEqual(documentSymbols.map(symbol => [symbol.name, symbol.kind]), [['main', 'function']]);
@@ -84,5 +81,7 @@ test('App Server syntax maps only supported editor languages', () => {
 	assert.equal(syntaxLanguageForEditorLanguage('javascriptreact'), 'javascriptreact');
 	assert.equal(syntaxLanguageForEditorLanguage('rust'), 'rust');
 	assert.equal(syntaxLanguageForEditorLanguage('typescriptreact'), 'typescriptreact');
+	assert.equal(syntaxLanguageForEditorLanguage('shellscript'), 'shell');
+	assert.equal(syntaxLanguageForEditorLanguage('shell'), undefined);
 	assert.equal(syntaxLanguageForEditorLanguage('markdown'), undefined);
 });

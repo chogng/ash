@@ -46,7 +46,7 @@ test("App Server workspace files open in Stanza and save through the editor regi
 	).toBe("const value = 2;");
 });
 
-test("Code consumes App Server Rust syntax facts in Stanza", async ({ target, workbench }) => {
+test("Code highlights Rust locally and obtains document symbols asynchronously", async ({ target, workbench }) => {
 	test.skip(
 		target.appServerMode !== "required" || target.workbenchMode !== "code",
 		"This scenario requires the Code App Server product",

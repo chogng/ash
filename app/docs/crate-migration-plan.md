@@ -25,7 +25,7 @@
 | 2 | `input-classifier`、`shell-completion` 移到 `app/` | 模型、词典、嵌入资源和相对路径完整迁移，输入分类与补全测试通过 | 已完成，macOS 定向验证通过 |
 | 3 | `terminal-detection` 移到 `ash-code/` | TUI 终端识别、主题调用与包构建验证通过 | 已完成，macOS Cargo 验证与 crate Bazel 单测通过；产品 Bazel 图限制见记录 |
 | 4 | TS 编辑器实时 Diff 改由前端计算 | 双栏、行内、Quick Diff、取消与版本检查验证通过；后台业务 Diff 独立保留 | 已完成，定向行为、浏览器与构建通过；既有架构检查问题见记录 |
-| 5 | TS 基础语法高亮解除对后台 parser 的依赖 | TextMate/前端 Worker 覆盖现有语言，token 与异步语言结果边界明确 | 待执行 |
+| 5 | TS 基础语法高亮解除对后台 parser 的依赖 | TextMate/前端 Worker 覆盖现有语言，token 与异步语言结果边界明确 | 已完成，八种语言、浏览器交互、Electron 产品场景与构建通过 |
 
 每批独立交付验证结果，再推进下一批。后两批涉及行为变化，不与目录移动混在一起。
 
@@ -91,6 +91,22 @@
 | `src/ash/editor/text-engine.md`、`src/ash/editor/browser/README.md`、`src/ash/platform/diff/common/diffApi.ts` | 同步当前职责说明 | 后台业务 API 保留，旧交互入口退出 |
 
 旧 `appServerDiffService.ts`、`appServerDiffComputationService.ts` 及适配器测试随本批替换退出；不保留双计算入口。
+
+## 第五批执行清单
+
+- 行为链：扩展 grammar 资源 → `BrowserTextMateService` → 前端 TextMate Worker → TextModel 版本检查 → 行与视口着色；打字、预览和撤销不等待后台 parser。
+- `AppServerSyntaxProviders` 退出基础 token 注册，仅提供异步诊断、符号、折叠和结构选择；保留现有请求取消与版本检查。LSP Semantic Tokens 继续独立合成。
+- 复用 `extensions/` 中 JavaScript/JSX、TypeScript/TSX、JSON/JSONC、Rust 和 Shell 的真实 grammar，不新增算法、依赖或资源副本。
+- Shell 前端语言标识统一为 grammar 与 LSP 使用的 `shellscript`；后台 `shell` 领域标识只在 Workbench 适配边界转换。
+
+| 准入路径（相对 ash-ts/） | 动作与验证 |
+| --- | --- |
+| `src/ash/workbench/services/language/browser/appServerSyntaxProviders.ts` 及对应测试 | 删除后台基础 token 提供与映射；验证异步语言能力独立工作 |
+| `src/ash/workbench/services/language/browser/appServerLanguageSupport.ts` 及现有 provider/diagnostic 测试 | 将服务目录中的 Shell 标识映射为前端标识，覆盖注册、请求与诊断支持判断 |
+| `src/ash/editor/standalone/common/builtinLanguages.ts`、`src/ash/platform/language/common/textResourceLanguage.ts` 及现有测试 | 文件识别返回唯一的 `shellscript`，与扩展声明一致 |
+| `test/integration/browser/tokenization.html`、`tokenization.integration.ts`、`tokenization.integration.spec.ts`、`vite.config.ts` | 真实扩展装载与 TextMate Worker，覆盖八种语言、后台分析未完成时编辑/撤销与 token 更新 |
+| `test/architecture/editor-architecture.test.ts`、`test/smoke/areas/editor/editor-open.spec.ts` | 更新基础 token 归属断言，保留后端 parser 与符号能力验证 |
+| `src/ash/editor/text-engine.md`、`docs/editor-architecture.md` | 同步词法高亮与后台语言能力边界 |
 
 ## 共享库与后续边界
 
@@ -198,4 +214,23 @@ CLI 的 PTY 场景完成编译检查，未执行真实交互场景；没有变�
 
 验证平台为 macOS。Electron 场景验证产品启动与装配，Diff 行为由 Chromium 真实 Worker 场景覆盖；未执行 Electron 后端完整业务场景、跨平台构建或帧率基准。Electron 测试输出环境已有的 `NO_COLOR`/`FORCE_COLOR` 冲突提示，产品构建没有新增 warning。
 
-后续按第五批处理 TypeScript 基础语法高亮。
+### 第五批执行记录
+
+- 2026-09-22：`AppServerSyntaxProviders` 已退出基础 token 注册，删除后台 token 的前端映射。Code 使用现有 `BrowserTextMateService` 和前端 Worker 计算词法高亮与假设文本预览；后台继续提供诊断、符号、折叠和结构选择。
+- 内置 JavaScript/JSX、TypeScript/TSX、JSON/JSONC、Rust 与 Shell 的真实扩展 manifest、grammar、注入规则和语言配置通过现有扩展装载链验证，没有复制 grammar 或增加依赖。
+- Shell 前端标识统一为 `shellscript`。文件识别、grammar、LSP provider 注册与诊断同步使用同一标识；后台语法接口和服务目录中的 `shell` 在 Workbench 适配处转换。
+- 浏览器场景让后台分析请求保持未完成，验证输入中文和 emoji、撤销注释结束符后的重新着色、预览着色和模型版本；释放后台请求后，诊断结果仍对应当前版本。
+- 未修改 Rust、协议、扩展资源或锁文件。TextModel 仍独占编辑事务、选区与历史；静态 grammar 资源仍由扩展资源服务提供。
+
+| 第五批验证 | 结果 |
+| --- | --- |
+| `pnpm --dir ash-ts test:unit`，用 `--run` 选择 `appServerSyntaxProviders`、`appServerLanguageProviders`、`appServerLanguageDiagnosticsService`、`textMateTokenizationService` 四个文件 | 32 个行为测试通过，包含异步能力分离、Shell 注册与同步、增量行状态、取消及预览 |
+| `pnpm --dir ash-ts test:unit --run test/architecture/editor-architecture.test.ts --grep 'Frontend lexical tokens'` | 本批受影响的 1 个归属检查通过；没有重跑全套架构检查，第四批记录的既有问题不在本批修改范围 |
+| `pnpm --dir ash-ts test:editor:browser tokenization.integration.spec.ts` | Chromium 下 2 个 Playwright 场景通过；真实扩展装载与 Worker 覆盖全部八种语言和编辑期间的异步边界 |
+| `pnpm --dir ash-ts build` | main/preload/renderer 完整构建通过，包含生产 TextMate Worker 与 Oniguruma WASM |
+| `pnpm --dir ash-ts exec tsc -p test/automation/tsconfig.json`；`pnpm --dir ash-ts exec playwright test --project=electron-editor-app-server --grep 'Code highlights Rust locally'` | 自动化类型检查通过；使用本机已有开发后台包，实际 Electron 产品中的 Rust 高亮与文档符号查询通过 |
+| 旧 token 入口检索、锁文件与资源检查、`git diff --check` | 通过，无新增依赖或生产构建 warning |
+
+验证平台为 macOS，未执行跨平台构建或帧率基准。Playwright 仍输出环境已有的 `NO_COLOR` / `FORCE_COLOR` 冲突提示。没有截图基线变更。
+
+本计划列出的五批迁移均已完成定向验证。后台业务 Diff、Git、Agent Patch、文件 I/O 和异步语言服务继续留在各自后端 owner。
