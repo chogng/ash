@@ -7,9 +7,9 @@
 /ash-rs/models-manager/templates/instructions/** text eol=lf
 
 # Keep embedded classifier assets identical to their pinned release hashes.
-/ash-rs/input-classifier/models/*.json text eol=lf
-/ash-rs/input-classifier/models/*.onnx -text
-/ash-rs/input-classifier/dictionaries/*.txt text eol=lf
+/app/input-classifier/models/*.json text eol=lf
+/app/input-classifier/models/*.onnx -text
+/app/input-classifier/dictionaries/*.txt text eol=lf
 
 # Keep product icon sources canonical across platforms.
 /resources/icons/*.svg text eol=lf

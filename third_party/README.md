@@ -26,7 +26,7 @@ assets.
 
 | Dependency | Purpose | Patch policy |
 | --- | --- | --- |
-| `candle-onnx` | Compile the embedded input-classifier ONNX model | Preserve the upstream 0.9.2 source and license; the local patch only supplies Cargo-vendored `protoc` to its build script |
+| `candle-onnx` | Compile the embedded input-classifier ONNX model | Preserve the upstream 0.9.2 source and license; the build script uses Cargo-vendored `protoc` or the explicit `PROTOC` tool path; Bazel selects that locked binary for its execution platform |
 
 ## Native runtimes
 

@@ -36,7 +36,7 @@ Desktop frontend paths below are relative to `ash-ts/`.
 | `src/ash/editor` | Editor models, state, projection, and contributions |
 | `src/ash/workbench` | Application shell, Parts, panes, and product composition |
 | `ash-rs` | Shared Rust backend protocols, domains, storage, execution, and backend-neutral server host |
-| `app` | Rust Desktop product, including editor text state, file editing lifecycle, terminal emulation, `zui`, `ash-ui-components`, `ash-workbench-ui`, renderer, `wgpu`, and `winit` |
+| `app` | Rust Desktop product, including editor text state, file editing lifecycle, terminal emulation, Composer input classification, Shell completion, `zui`, `ash-ui-components`, `ash-workbench-ui`, renderer, `wgpu`, and `winit` |
 | `ash-code` | `ash code` CLI and Ratatui product host |
 
 Preserve the frontend dependency direction `base → platform → editor → workbench`. Lower layers must not import, specialize for, or copy state from higher layers. Multiple callers do not justify moving a domain concept into `base`; the abstraction must be domain-neutral and have a complete current consumer contract.

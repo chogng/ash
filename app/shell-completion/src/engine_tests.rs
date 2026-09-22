@@ -93,7 +93,9 @@ fn dir_scripts_and_recipes_are_exact_argument_evidence() {
     )
     .unwrap();
     fs::write(root.path().join("Justfile"), "build:\n    cargo build\n").unwrap();
-    let engine = ShellCompletionEngine::for_working_directory(root.path());
+    let commands = command_dir(&["npm", "just"]);
+    let mut engine = ShellCompletionEngine::for_working_directory(root.path());
+    engine.set_path_entries([commands.path().to_path_buf()]);
 
     assert_eq!(
         kind(&engine.analyze("npm run dev"), "dev"),
@@ -172,7 +174,9 @@ fn completions_cover_commands_subcommands_options_dir_values_and_paths() {
     .unwrap();
     fs::create_dir(root.path().join("source")).unwrap();
     fs::write(root.path().join("source file.txt"), "source").unwrap();
-    let engine = ShellCompletionEngine::for_working_directory(root.path());
+    let commands = command_dir(&["git", "find", "npm", "cat"]);
+    let mut engine = ShellCompletionEngine::for_working_directory(root.path());
+    engine.set_path_entries([commands.path().to_path_buf()]);
 
     assert_completion(&engine, "gi", "git", ShellCompletionKind::Command, 0..2);
     assert_completion(
@@ -290,6 +294,20 @@ fn command_separator_completion_is_shell_syntax_aware() {
     }));
     assert!(engine.complete("echo \\|", "echo \\|".len()).is_empty());
     assert!(engine.complete("echo '#'", "echo '#'".len()).is_empty());
+}
+
+fn command_dir(commands: &[&str]) -> tempfile::TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    for command in commands {
+        let path = dir.path().join(command);
+        fs::write(&path, "").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+    }
+    dir
 }
 
 fn kinds(snapshot: &super::ShellTokenSnapshot) -> Vec<Option<ShellTokenKind>> {

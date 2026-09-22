@@ -21,7 +21,7 @@
 | 批次 | 范围 | 完成条件 | 状态 |
 | --- | --- | --- | --- |
 | 1 | `editor-core`、`text-file`、`terminal` 从 `ash-rs/` 移到 `app/` | 路径、Cargo/Bazel、文档与消费者同步，定向验证通过 | 已完成，macOS 定向验证通过 |
-| 2 | `input-classifier`、`shell-completion` 移到 `app/` | 模型、词典、嵌入资源和相对路径完整迁移，输入分类与补全测试通过 | 待执行 |
+| 2 | `input-classifier`、`shell-completion` 移到 `app/` | 模型、词典、嵌入资源和相对路径完整迁移，输入分类与补全测试通过 | 已完成，macOS 定向验证通过 |
 | 3 | `terminal-detection` 移到 `ash-code/` | TUI 终端识别、主题调用与包构建验证通过 | 待执行 |
 | 4 | TS 编辑器实时 Diff 改由前端计算 | 双栏、行内、Quick Diff、取消与版本检查验证通过；后台业务 Diff 独立保留 | 待执行 |
 | 5 | TS 基础语法高亮解除对后台 parser 的依赖 | TextMate/前端 Worker 覆盖现有语言，token 与异步语言结果边界明确 | 待执行 |
@@ -47,6 +47,17 @@
 - 构建与依赖：`just dependencies`、根 Cargo manifest、锁文件与三个新 Bazel target。
 
 第一批保持行为不变，复用既有行为测试；不增加只断言目录或重复实现的测试。完整 workspace 检查不属于本计划的默认验证范围。
+
+## 第二批执行清单
+
+1. 将输入分类和 Shell 补全一起移到 `app/`；保留 package 名、公开 API、现有实现与测试。
+2. 完整迁移模型、tokenizer、metadata、词典和第三方许可，保留资源字节与 crate 内相对路径。
+3. 更新 Cargo、Bazel、App 发布输入清单和 `.gitattributes`；保留 JSON/词典的 LF 与 ONNX 的二进制属性。
+4. 同步 App 边界检查和职责文档，检查 Session 输入框的生产与测试消费者。
+5. 验证模型摘要与概率基线、Shell parser 与补全，以及输入框的分类、版本失效、IME 和提交行为。
+6. 运行所属包与 App 消费者的定向构建、测试和 warning 检查，验证依赖方向与 Bazel 资源输入。
+
+本批不调整分类算法与公开 API，沿用现有行为测试。推理继续由 App 在进程内后台执行；输入 revision、候选展示与编辑提交仍由 Session/Editor 持有。资源校验和实际构建暴露的问题随本批修复，见执行记录。
 
 ## 共享库与后续边界
 
@@ -80,4 +91,28 @@ Bazel 仍输出已有第三方 crate annotation 建议和测试 size 提示；�
 第一批共运行 65 个 Rust 行为测试和 16 个 Python 打包/签名测试；Bazel 的 4 个测试 target 另行通过。
 CLI 的 PTY 场景完成编译检查，未执行真实交互场景；没有变更 UI 行为或启动窗口验收。此次验证平台为 macOS，未进行跨平台构建。
 
-下一批从输入分类与 Shell 补全开始，迁移前检查内嵌模型、词典、测试资源和资源打包路径。
+### 第二批执行记录
+
+- 2026-09-22：输入分类与 Shell 补全已从 `ash-rs/` 移到 `app/`，模型、词典、第三方许可、Cargo/Bazel 清单与 App 边界同步迁移。
+- 迁移中发现既有全库重命名误改 tokenizer 的 `zeta` 词条。已从重命名前的 Git 版本恢复精确资源字节，保留既有摘要 `b43e3d508ae9fe2c557ac2e0fb82f3487d59193a58f5328dc042ebf31ba1f72c` 和 token ID；没有修改摘要断言或模型权重。
+- Bazel 暴露的工作区补全测试依赖本机安装命令问题，改为显式提供临时 PATH fixture；保留原有行为断言。
+- Bazel 为模型构建显式提供已锁定的 `protoc` 工具，按执行平台选择，并传入当前沙箱路径；避免复用上一次编译沙箱中已失效的绝对路径。
+- 两个迁移 crate 的生产 Rust 实现和 package manifest 保持不变；34 个实现、测试和资源文件逐字节一致。差异限于恢复 tokenizer、三个测试文件中的 PATH fixture，以及职责说明和构建清单。
+- Cargo 与 Bazel 锁文件保持不变；Bazel query 确认 App 发布输入包含全部 38 个迁移实现、测试、manifest 和资源文件，其中 7 个为模型、词典与许可资源。
+
+| 第二批验证 | 结果 |
+| --- | --- |
+| `just check ash-input-classifier -p ash-shell-completion --locked` | 通过 |
+| `just test ash-input-classifier --lib --locked` | 31 个测试通过；手动性能比较保持 ignored |
+| `just test ash-shell-completion --lib --locked` | 22 个测试通过 |
+| `just test ash-session --lib chat_input --locked` | 56 个测试通过，覆盖分类、版本失效、IME、补全和提交 |
+| `just check app --locked` | 通过，包含 Session 和 Workbench 生产调用链及模型构建脚本 |
+| `just rust-warnings ash-input-classifier -p ash-shell-completion -p ash-session -p ash-workbench -p app --locked` | 通过 |
+| `just dependencies` | 通过，194 个 workspace member；仍报告既有 ScrollView 文件未链接提示 |
+| 两个新 Bazel 单测 target 与 App 边界 target | 3 个 target 全部通过；使用 `--lockfile_mode=off`，保留既有依赖事实记录 |
+| App 发布输入 query、资源摘要、Git 属性、本地文档链接和 `git diff --check` | 通过 |
+| 修改的 Rust 文件格式检查、边界脚本 Ruff 检查 | 通过 |
+
+本批共运行 109 个 Rust 行为测试，Bazel 的 3 个测试 target 另行通过。既有模型摘要和概率基线覆盖资源修复；PATH fixture 保留原行为断言，没有新增重复测试。Bazel 仍有第三方 crate annotation 建议与测试 size 提示，本批未更改相关依赖或测试大小。
+
+此次验证平台为 macOS；未进行跨平台构建、运行窗口或实际打包发布。下一批迁移 `terminal-detection` 到 `ash-code/`。

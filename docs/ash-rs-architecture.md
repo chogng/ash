@@ -101,6 +101,9 @@ ash-rs/
 `editor-core`、`text-file` 和 `terminal` 位于 `app/`，分别拥有端内编辑状态、文件编辑生命周期和终端模型。
 共享后端不依赖这些前端 crate；文件 I/O、PTY 执行和后台任务仍由各自后端能力负责。
 
+[`input-classifier`](../app/input-classifier/README.md) 与 [`shell-completion`](../app/shell-completion/README.md)
+同样位于 `app/`，拥有 Composer 的本端输入分类、内嵌模型与 Shell 补全。Session 持有输入版本与调度，后端负责命令执行。
+
 当前 `exec/` 仍实现 process `ToolExecutor`。它迁移为 `tool-executor/` 后，`exec/` 名称用于
 [`exec.md`](exec.md) 定义的 headless Agent runner；迁移完成前不能把目标目录注释理解为现状。
 

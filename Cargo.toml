@@ -107,7 +107,6 @@ members = [
     "ash-rs/windows-sandbox",
     "ash-rs/websocket-client",
     "ash-rs/install-context",
-    "ash-rs/input-classifier",
     "ash-rs/instructions",
     "ash-rs/keybinding",
     "ash-rs/keyring-store",
@@ -140,7 +139,6 @@ members = [
     "ash-rs/rmcp-client",
     "ash-rs/sandboxing",
     "ash-rs/shell-command",
-    "ash-rs/shell-completion",
     "ash-rs/slash-commands",
     "ash-rs/slash-launcher",
     "ash-rs/skills",
@@ -184,11 +182,13 @@ members = [
     "app/editor-host",
     "app/files",
     "app/icons",
+    "app/input-classifier",
     "app/markdown",
     "app/scm",
     "app/keybindings",
     "app/session",
     "app/settings",
+    "app/shell-completion",
     "app/terminal",
     "app/terminal-runtime",
     "app/text-file",
@@ -491,7 +491,7 @@ ash-hooks = { path = "ash-rs/hooks" }
 ash-http-client = { path = "ash-rs/http-client" }
 ash-websocket-client = { path = "ash-rs/websocket-client" }
 ash-install-context = { path = "ash-rs/install-context" }
-ash-input-classifier = { path = "ash-rs/input-classifier" }
+ash-input-classifier = { path = "app/input-classifier" }
 ash-instructions = { path = "ash-rs/instructions" }
 ash-keyring-store = { path = "ash-rs/keyring-store" }
 ash-kimi = { path = "ash-rs/kimi" }
@@ -533,7 +533,7 @@ ash-secrets = { path = "ash-rs/secrets" }
 ash-session = { path = "app/session" }
 ash-settings = { path = "app/settings" }
 ash-shell-command = { path = "ash-rs/shell-command" }
-ash-shell-completion = { path = "ash-rs/shell-completion" }
+ash-shell-completion = { path = "app/shell-completion" }
 ash-slash-commands = { path = "ash-rs/slash-commands" }
 ash-sprite = { path = "ash-code/sprite", default-features = false }
 ash-slash-launcher = { path = "ash-rs/slash-launcher" }

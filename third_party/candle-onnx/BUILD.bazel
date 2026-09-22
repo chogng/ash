@@ -1,0 +1,33 @@
+config_setting(
+    name = "macos_arm64",
+    constraint_values = ["@platforms//os:macos", "@platforms//cpu:aarch64"],
+)
+
+config_setting(
+    name = "macos_x64",
+    constraint_values = ["@platforms//os:macos", "@platforms//cpu:x86_64"],
+)
+
+config_setting(
+    name = "linux_arm64",
+    constraint_values = ["@platforms//os:linux", "@platforms//cpu:aarch64"],
+)
+
+config_setting(
+    name = "linux_x64",
+    constraint_values = ["@platforms//os:linux", "@platforms//cpu:x86_64"],
+)
+
+# Used as a build-script tool, so this selects the execution platform, including
+# when the Rust library is compiled for a different target.
+filegroup(
+    name = "protoc",
+    srcs = select({
+        ":macos_arm64": ["@crates//:protoc-bin-vendored-macos-aarch_64-bin"],
+        ":macos_x64": ["@crates//:protoc-bin-vendored-macos-x86_64-bin"],
+        ":linux_arm64": ["@crates//:protoc-bin-vendored-linux-aarch_64-bin"],
+        ":linux_x64": ["@crates//:protoc-bin-vendored-linux-x86_64-bin"],
+        "@platforms//os:windows": ["@crates//:protoc-bin-vendored-win32-bin"],
+    }),
+    visibility = ["//visibility:public"],
+)

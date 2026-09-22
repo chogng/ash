@@ -2,11 +2,13 @@
 
 > 本 README 是 Shell parser、command signature、token evidence 与 completion candidate 的实现契约。
 > Shell/Agent 路由顺序见 [`ash-input-classifier`](../input-classifier/README.md)；命令执行和授权见
-> [`ash-shell-command`](../shell-command/README.md)。
+> [`ash-shell-command`](../../ash-rs/shell-command/README.md)。
 
-本 crate 拥有后端无关的 Shell 结构知识。它解析一次输入，结合 command registry、PATH 快照、工作区
-manifest、现有路径和宿主提供的 alias，为每个精确 token 生成可验证的描述，并从同一状态生成补全项。
-它不执行命令、不读取交互 Shell 状态、不决定 Shell/Agent 路由，也不拥有任何 UI。
+1. 位于 `app/shell-completion`，拥有 App 进程内的 Shell 输入解析、命令规格与补全算法。
+2. 结合 PATH、工作区、路径和 alias 快照，为 token 生成描述，并从同一状态生成补全项。
+3. 向输入分类器和输入框提供结果；命令执行、Shell/Agent 路由与 UI 状态由各自能力负责。
+
+本 crate 不读取交互 Shell 状态，不启动命令。
 
 ## 公共契约
 
@@ -76,8 +78,9 @@ npm/pnpm/yarn/bun、Python/pytest、ripgrep、find 和 curl 的常用结构。PA
 ## 验证
 
 ```bash
-cargo test -p ash-shell-completion
-cargo clippy -p ash-shell-completion --all-targets -- -D warnings
+just check ash-shell-completion --locked
+just test ash-shell-completion --locked
+just rust-warnings ash-shell-completion --locked
 ```
 
 测试覆盖 parser byte span、pipeline、redirection、递归 grammar、严格未知值、组合短参数、command wrapper、

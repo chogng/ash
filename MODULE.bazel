@@ -128,6 +128,38 @@ crate.from_cargo(
 )
 use_repo(crate, "crates")
 
+# Export the locked protoc binaries for the build script's execution platform.
+[
+    crate.annotation(
+        crate = name,
+        additive_build_file_content = """
+filegroup(
+    name = "protoc_bin",
+    srcs = glob(["bin/*"]),
+    visibility = ["//visibility:public"],
+)
+""",
+        extra_aliased_targets = {name + "-bin": "protoc_bin"},
+        repositories = ["crates"],
+    )
+    for name in [
+        "protoc-bin-vendored-linux-aarch_64",
+        "protoc-bin-vendored-linux-x86_64",
+        "protoc-bin-vendored-macos-aarch_64",
+        "protoc-bin-vendored-macos-x86_64",
+        "protoc-bin-vendored-win32",
+    ]
+]
+
+crate.annotation(
+    crate = "candle-onnx",
+    build_script_tools = ["//third_party/candle-onnx:protoc"],
+    build_script_env = {
+        "PROTOC": "$(execpath @@//third_party/candle-onnx:protoc)",
+    },
+    repositories = ["crates"],
+)
+
 # MXC keeps its Cargo workspace below the repository root.
 [
     crate.annotation(

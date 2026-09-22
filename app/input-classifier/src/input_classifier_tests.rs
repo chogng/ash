@@ -20,6 +20,20 @@ fn standalone(current_route: InputRoute) -> InputClassificationContext {
     InputClassificationContext::new(current_route, InputConversation::Standalone)
 }
 
+pub(crate) fn command_dir(commands: &[&str]) -> tempfile::TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    for command in commands {
+        let path = dir.path().join(command);
+        fs::write(&path, "").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+    }
+    dir
+}
+
 #[test]
 fn embedded_assets_match_the_pinned_release() {
     let model = include_bytes!("../models/bert_tiny_v3_candle.onnx");
@@ -154,7 +168,9 @@ fn short_replies_use_agent_follow_up_context() {
 fn dir_token_semantics_short_circuit_only_clear_commands() {
     let root = tempfile::tempdir().unwrap();
     fs::write(root.path().join("Justfile"), "build:\n    cargo build\n").unwrap();
-    let classifier = InputClassifier::for_working_directory(root.path());
+    let commands = command_dir(&["just"]);
+    let mut classifier = InputClassifier::for_working_directory(root.path());
+    classifier.set_shell_path_entries([commands.path().to_path_buf()]);
 
     let command = classifier.classify("just build", standalone(InputRoute::Agent));
     let question = classifier.classify("just build 为什么失败了", standalone(InputRoute::Shell));

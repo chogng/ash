@@ -1,6 +1,0 @@
-load("//:defs.bzl", "ash_rust_crate")
-
-ash_rust_crate(
-    name = "shell-completion",
-    crate_name = "ash_shell_completion",
-)

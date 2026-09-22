@@ -23,11 +23,12 @@ Native UI 的 crate 从共享 workspace 中分离。
 | Renderer、wgpu、winit | 历史 `app/renderer`、`wgpu`、`winit` | private `app/zui` modules | 已收入单一 `zui` crate |
 | App Server、Core、Protocol、Session、File/Git、后台 Diff | `ash-rs/*` | `ash-rs` | 保留 |
 | 编辑事务、文件编辑生命周期、终端模型 | `app/editor-core`、`app/text-file`、`app/terminal` | `app` | 路径已迁移；验证状态见[前端 crate 迁移计划](crate-migration-plan.md) |
+| Composer 输入分类、Shell 补全 | `app/input-classifier`、`app/shell-completion` | `app` | 模型、词典和算法已迁移；验证状态见[前端 crate 迁移计划](crate-migration-plan.md) |
 | 共享解析算法、LSP manager | `ash-rs/syntax`、`ash-rs/lsp-manager` | 共享能力库 | 编辑器实例与交互状态由前端持有 |
 
 `ash-rs` 的“共享”按宿主无关的 Rust 语义和 backend contract 判断，不要求 Electron TypeScript 直接
 链接 Rust crate；Electron 通过 App Server protocol 使用业务能力。编辑器文本、文件编辑生命周期、
-终端模型、产品布局、窗口、GPU 与平台交互生命周期由各前端拥有。
+终端模型、Composer 输入分类与补全、产品布局、窗口、GPU 与平台交互生命周期由各前端拥有。
 
 ## 目标结构
 
@@ -43,6 +44,8 @@ ash/
 │   ├── editor-core/            # 文本、选区、事务与撤销
 │   ├── text-file/              # 保存基线、dirty 与外部修改冲突
 │   ├── terminal/               # 终端网格、光标、滚动与输入编码
+│   ├── input-classifier/       # Shell/Agent 分类、模型与词典
+│   ├── shell-completion/       # Shell 解析、命令规格与补全
 │   ├── composer/               # app Composer state, input, interaction and geometry
 │   ├── ui/                     # reusable UI components
 │   ├── workbench/              # pure Tab/Pane Workbench model

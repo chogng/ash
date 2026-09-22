@@ -1,11 +1,11 @@
 # `ash-input-classifier`
 
-`ash-input-classifier` 拥有本地 Shell/Agent 自动路由的完整决策管线：自然语言 parser、最近提交历史、
-确定性规则、BERT-Tiny v3 模型与 tokenizer、模型失败后的 fallback。Shell parser、command signatures、
-工作区/PATH/alias token evidence 和 completion candidates 由
-[`ash-shell-completion`](../shell-completion/README.md) canonical 拥有，本 crate 只消费它的 snapshot。
-产品宿主只提供当前工作目录、当前路由和会话位置，不得复制标签顺序、阈值或词典。分类结果不做
-命令风险判断，也不授权执行。
+1. 位于 `app/input-classifier`，拥有 App 进程内的 Shell/Agent 输入分类与模型依赖。
+2. 管理自然语言解析、提交历史匹配、决策规则、BERT-Tiny 模型、tokenizer 和词典。
+3. 消费 [`ash-shell-completion`](../shell-completion/README.md) 的 Shell 解析与补全快照。
+4. 宿主提供工作目录、当前路由和会话位置；分类不判断命令风险，也不授权执行。
+
+标签顺序、阈值和词典由本 crate 唯一持有。输入版本、推理调度、候选展示和提交由 App 的 Session 输入框负责。
 
 ## 公共契约
 
@@ -88,9 +88,12 @@ command-overlap 是为 Ash 独立整理的集合。TextBlob 许可文本位于
 路由；Candle panic 会被隔离，并在当前进程永久改走 `HeuristicFallback`。官方
 仓库补丁让 `candle-onnx` 的构建脚本通过 `protoc-bin-vendored` 获取 `protoc`，不依赖系统安装；
 产品运行时不需要也不会携带 `protoc`。
+Bazel 通过根 `MODULE.bazel` 和 `third_party/candle-onnx/BUILD.bazel` 声明构建工具，按执行平台选择同一已锁定的 `protoc`，并通过 `PROTOC` 传入当前沙箱路径。
 
 更新模型时必须一起更新 ONNX、tokenizer、`metadata.json`、摘要常量、标签解释、温度和概率基线
 测试，不能只替换其中一个文件。
+
+词表中的普通单词是模型训练数据，产品重命名不能改写词条；例如 `zeta` 必须保留原 token ID `23870`。
 
 初始化时将 ONNX initializer 转成共享的 CPU Tensor，并从解码后的图中移除对应 protobuf 数据。
 每次推理只复制 Tensor 引用，将当前输入张量加入独立的求值表；仍由上游 `simple_eval` 执行算子，
@@ -101,7 +104,7 @@ command-overlap 是为 Ash 独立整理的集合。TextBlob 许可文本位于
 - `classifier::prepare_classification` 固定决策顺序，`InputClassificationTask::run` 完成模型与失败分支；改动会影响所有路由消费者。
 - `history::InputHistory` 拥有 0.9 相似度门槛和“最新匹配胜出”语义；宿主只提供有序事实。
 - `shell::ShellContext` 只适配 `ash-shell-completion::ShellCompletionEngine` 与 classifier 阈值；parser、
-  command registry 和 completion 不得移回本 crate 或 App。
+  command registry 和 completion 不得移回本 crate 或 Workbench/Session 组合层。
 - `rules` 只放低风险、确定性的上下文和 allowlist 短路；模糊规则不得绕过模型。
 - `model::EmbeddedClassifier` 绑定模型图、tokenizer、标签和温度；任一资产变更都需要概率测试。
 - `natural_language::classify_with_fallback_heuristic` 只在模型不可用或 panic 后接管；它使用 Ash
@@ -116,8 +119,9 @@ natural-language-detection crate。只有出现这样的真实消费者，并且
 ## 验证
 
 ```bash
-just test ash-input-classifier --lib --locked
 just check ash-input-classifier --locked
+just test ash-input-classifier --lib --locked
+just rust-warnings ash-input-classifier --locked
 just test ash-input-classifier --lib inference_latency -- --ignored --nocapture
 ```
 

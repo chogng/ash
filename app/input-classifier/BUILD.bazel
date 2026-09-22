@@ -1,0 +1,21 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+filegroup(
+    name = "input-classifier_sources",
+    srcs = glob([
+        "src/**/*.rs",
+        "Cargo.toml",
+        "dictionaries/**",
+        "models/**",
+    ]),
+    visibility = ["//visibility:public"],
+)
+
+ash_rust_crate(
+    name = "input-classifier",
+    crate_name = "ash_input_classifier",
+    data = glob([
+        "dictionaries/**",
+        "models/**",
+    ]),
+)
