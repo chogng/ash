@@ -123,11 +123,11 @@ The following facts describe the current Ash implementation; they do not redefin
 | Area | Status | Current evidence and boundary |
 | --- | --- | --- |
 | Common measurement contract | Current | `common/viewModel.ts` exposes text width and padding inputs without importing browser APIs |
-| Browser editor geometry configuration | Current | `browser/config/editorConfiguration.ts` resolves font and line-height defaults/validation at the browser composition boundary; it does not aggregate product services or feature state |
+| Browser editor geometry configuration | Current | `browser/config/editorConfiguration.ts` resolves font, line height, and container geometry. It consumes the injected window accessibility service and owns each editor's computed `auto`/`on`/`off` policy; screen-reader content reads that same policy |
 | Browser element-size observation | Current | `browser/config/elementSizeObserver.ts` turns ResizeObserver and initial client-area reads into one coalesced dimension event for the viewport |
 | DOM font application | Current | `browser/config/domFontInfo.ts` applies the shared editor font vocabulary to viewport and diff surfaces; zoom remains feature-owned and invalidates measurements explicitly |
 | Tab-focus state | Current | `browser/config/tabFocus.ts` owns host-injectable state and change events; the `toggleTabFocusMode` contribution owns keybindings, DOM state, and announcements |
-| Browser font measurement | Current | `browser/config/fontMeasurements.ts` owns per-window `FontInfo` measurement, caching, serialization, and invalidation; `browser/config/charWidthReader.ts` owns batched DOM glyph-width requests |
+| Browser font measurement | Current | `browser/config/fontMeasurements.ts` owns per-window `FontInfo` measurement, caching, serialization, and independent expiry of unreliable readings. Pending work is cancelled when its window closes; `browser/config/charWidthReader.ts` measures batched glyph widths in layout pixels, unaffected by ancestor transforms |
 | Lazy line-width aggregation | Current | `browser/viewParts/viewLines/viewLines.ts` performs bounded initial work, cancellable slices, incremental edits, and lower-bound maximum tracking |
 | Virtualized visible rows | Current | `browser/viewParts/viewLines/viewLines.ts` owns rendered row DOM and semantic text projection; text-bearing roots use ordinary layout positioning instead of permanent transform promotion |
 | Browser-shaped visible geometry | Current, partial | `viewLine.ts` owns per-line reads, `CharacterMapping` maps UTF-16 columns to child spans, `rangeUtil.ts` reads and normalizes browser ranges, and `domReadingContext.ts` caches the layout basis |

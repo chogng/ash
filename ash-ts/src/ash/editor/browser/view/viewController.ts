@@ -27,7 +27,6 @@ import { NavigationCommandRevealType } from '../coreCommands.js';
 import { type AbstractEditContext, type CompositionController, type EditContextTextUpdate } from '../controller/editContext/editContext.js';
 import { TextAreaEditContext } from '../controller/editContext/textArea/textAreaEditContext.js';
 import { ViewUserInputEvents } from './viewUserInputEvents.js';
-import { type IAccessibilityService } from '../../../platform/accessibility/common/accessibility.js';
 import { type IEditorMouseEvent, type IPartialEditorMouseEvent } from '../editorBrowser.js';
 import { type SemanticTokenSource } from '../viewParts/viewLines/viewLine.js';
 import { type ILogService } from '../../../platform/log/common/log.js';
@@ -51,7 +50,6 @@ export interface ViewControllerOptions {
 	readonly ownerId?: string;
 	readonly logService?: ILogService;
 	readonly ariaLabel?: string;
-	readonly accessibilityService?: IAccessibilityService;
 	readonly semanticTokenSource?: SemanticTokenSource;
 	readonly userInputEvents?: ViewUserInputEvents;
 }

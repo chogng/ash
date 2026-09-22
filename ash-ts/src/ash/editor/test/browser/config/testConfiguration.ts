@@ -2,12 +2,48 @@ import { EditorConfiguration } from '../../../browser/config/editorConfiguration
 import { EditorFontLigatures, EditorFontVariations, type IEditorOptions } from '../../../common/config/editorOptions.js';
 import { type BareFontInfo, FontInfo } from '../../../common/config/fontInfo.js';
 import { MenuId } from '../../../../platform/actions/common/actions.js';
+import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
+import { ServiceContainer } from '../../../../platform/instantiation/common/instantiation.js';
+import { ContextKeyService, IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { AccessibilityService } from '../../../../platform/accessibility/browser/accessibilityService.js';
+
+export function createConfigurationServices(resources: DisposableStore, container: HTMLElement): ServiceContainer {
+	const services = resources.add(new ServiceContainer());
+	services.registerSingleton(IContextKeyService, () => new ContextKeyService());
+	services.registerSingleton(IConfigurationService, () => new InMemoryConfigurationService());
+	services.registerSingleton(IAccessibilityService, accessor => new AccessibilityService({
+		root: container.ownerDocument.body,
+		contextKeyService: accessor.get(IContextKeyService),
+		configurationService: accessor.get(IConfigurationService),
+	}));
+	return services;
+}
 
 export function createTestConfiguration(container: HTMLElement, options: IEditorOptions = {}): EditorConfiguration {
-	return new TestEditorConfiguration(false, MenuId.EditorContext, options, container);
+	const resources = new DisposableStore();
+	try {
+		const services = createConfigurationServices(resources, container);
+		return services.createInstance(TestEditorConfiguration, options, container, resources);
+	} catch (error) {
+		resources.dispose();
+		throw error;
+	}
 }
 
 class TestEditorConfiguration extends EditorConfiguration {
+	constructor(
+		options: IEditorOptions,
+		container: HTMLElement,
+		resources: DisposableStore,
+		@IAccessibilityService accessibilityService: IAccessibilityService,
+	) {
+		super(false, MenuId.EditorContext, options, container, accessibilityService);
+		this._register(resources);
+	}
+
 	protected override _readFontInfo(font: BareFontInfo): FontInfo {
 		return new FontInfo({
 			...font,

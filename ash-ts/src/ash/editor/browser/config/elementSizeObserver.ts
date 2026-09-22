@@ -57,13 +57,13 @@ export class ElementSizeObserver extends Disposable {
 		const dimension = this._pendingDimension;
 		this._resizePending = false;
 		this._pendingDimension = undefined;
-		this.observe(dimension);
 		this._frameLocked = true;
 		this._frame.value = scheduleAtNextAnimationFrame(getWindow(this._referenceDomElement), () => {
 			this._frame.clear();
 			this._frameLocked = false;
 			this.flushResize();
 		});
+		this.observe(dimension);
 	}
 
 	private measureReferenceDomElement(emitEvent: boolean, dimension?: IDimension): void {

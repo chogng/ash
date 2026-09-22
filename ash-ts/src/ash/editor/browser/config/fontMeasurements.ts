@@ -1,7 +1,8 @@
 import { PixelRatio } from '../../../base/browser/pixelRatio.js';
+import { addDisposableListener } from '../../../base/browser/dom.js';
 import { disposableWindowTimeout } from '../../../base/browser/scheduler.js';
 import { Emitter } from '../../../base/common/event.js';
-import { Disposable, MutableDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore } from '../../../base/common/lifecycle.js';
 import { EditorFontLigatures } from '../../common/config/editorOptions.js';
 import { BareFontInfo, FontInfo, SERIALIZED_FONT_INFO_VERSION } from '../../common/config/fontInfo.js';
 import { CharWidthRequest, CharWidthRequestType, readCharWidths } from './charWidthReader.js';
@@ -27,14 +28,16 @@ export interface ISerializedFontInfo {
 }
 
 export class FontMeasurementsImpl extends Disposable {
-	private readonly _cache = new Map<Window, Map<string, FontInfo>>();
-	private readonly _eviction = this._register(new MutableDisposable<IDisposable>());
+	private _cache = new WeakMap<Window, Map<string, FontInfo>>();
+	private readonly _eviction = this._register(new DisposableMap<Window, DisposableStore>());
 	private readonly _onDidChange = this._register(new Emitter<void>());
 	readonly onDidChange = this._onDidChange.event;
 
 	clearAllFontInfos(): void {
-		this._cache.clear();
-		this._eviction.clear();
+		this._cache = new WeakMap();
+		for (const targetWindow of this._eviction.keys()) {
+			this._eviction.deleteAndDispose(targetWindow);
+		}
 		this._onDidChange.fire();
 	}
 
@@ -71,9 +74,14 @@ export class FontMeasurementsImpl extends Disposable {
 
 	private write(targetWindow: Window, key: BareFontInfo, value: FontInfo): void {
 		this.cacheFor(targetWindow).set(key.getId(), value);
-		if (value.isTrusted || this._eviction.value) return;
-		this._eviction.value = disposableWindowTimeout(targetWindow, () => {
-			this._eviction.clear();
+		if (value.isTrusted || this._eviction.has(targetWindow)) return;
+		const eviction = this._eviction.set(targetWindow, new DisposableStore());
+		eviction.add(addDisposableListener(targetWindow, 'pagehide', () => {
+			this._cache.delete(targetWindow);
+			this._eviction.deleteAndDispose(targetWindow);
+		}));
+		eviction.add(disposableWindowTimeout(targetWindow, () => {
+			this._eviction.deleteAndDispose(targetWindow);
 			const cache = this.cacheFor(targetWindow);
 			let changed = false;
 			for (const [id, fontInfo] of cache) {
@@ -82,7 +90,7 @@ export class FontMeasurementsImpl extends Disposable {
 				changed = true;
 			}
 			if (changed) this._onDidChange.fire();
-		}, 5_000);
+		}, 5_000));
 	}
 
 	private measure(targetWindow: Window, bareFontInfo: BareFontInfo): FontInfo {

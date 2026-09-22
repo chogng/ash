@@ -2,7 +2,7 @@ import { addDisposableListener } from "../../../../../base/browser/dom.js";
 import { type FastDomNode } from '../../../../../base/browser/fastDomNode.js';
 import { Disposable, MutableDisposable, toDisposable } from "../../../../../base/common/lifecycle.js";
 import { type Event } from "../../../../../base/common/event.js";
-import { type IAccessibilityService } from "../../../../../platform/accessibility/common/accessibility.js";
+import { AccessibilitySupport } from "../../../../../platform/accessibility/common/accessibility.js";
 import { Position } from "../../../../common/core/position.js";
 import { type View } from "../../../view.js";
 import { RichScreenReaderContent } from "./screenReaderContentRich.js";
@@ -24,7 +24,6 @@ export interface NativeScreenReaderSupportOptions {
 	/** Logical focus events from NativeEditContext; they hide the IME bridge hop. */
 	readonly onDidFocus?: Event<void>;
 	readonly onDidBlur?: Event<void>;
-	readonly accessibilityService?: IAccessibilityService;
 	readonly semanticTokenSource?: SemanticTokenSource;
 }
 
@@ -66,14 +65,11 @@ export class ScreenReaderSupport extends Disposable {
 		if (options.semanticTokenSource) {
 			this._register(options.semanticTokenSource.onDidChange(() => this.scheduleSynchronization()));
 		}
-		if (options.accessibilityService) {
-			this._register(options.accessibilityService.onDidChangeScreenReaderOptimized(() => this.scheduleSynchronization()));
-		}
 		this.scheduleSynchronization();
 	}
 
 	private isEnabled(): boolean {
-		return this.options.accessibilityService?.isScreenReaderOptimized() ?? false;
+		return this.options.context.configuration.options.get(EditorOption.accessibilitySupport) === AccessibilitySupport.Enabled;
 	}
 
 	onWillCut(): void {
@@ -216,7 +212,6 @@ export class ScreenReaderSupport extends Disposable {
 				this.options.domNode,
 				this.options.context,
 				this.options.viewController,
-				this.options.accessibilityService,
 				{
 					semanticTokenSource: this.options.semanticTokenSource,
 				},
@@ -225,7 +220,6 @@ export class ScreenReaderSupport extends Disposable {
 				this.options.domNode,
 				this.options.context,
 				this.options.viewController,
-				this.options.accessibilityService,
 			);
 		content.onConfigurationChanged(configuration.options);
 		content.onFocusChange(this.focused);

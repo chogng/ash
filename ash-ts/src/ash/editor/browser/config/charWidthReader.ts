@@ -50,7 +50,7 @@ export function readCharWidths(targetWindow: Window, fontInfo: BareFontInfo, req
 	document.body.append(container);
 	try {
 		for (let index = 0; index < requests.length; index += 1) {
-			requests[index]!.fulfill(samples[index]!.getBoundingClientRect().width / 256);
+			requests[index]!.fulfill(samples[index]!.offsetWidth / 256);
 		}
 	} finally {
 		container.remove();

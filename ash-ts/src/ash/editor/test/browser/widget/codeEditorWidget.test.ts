@@ -27,7 +27,7 @@ import { EditorLineWrapping, EditorOption, RenderLineNumbersType } from '../../.
 import { ScrollType } from '../../../common/editorCommon.js';
 import { type ViewConfigurationChangedEvent, VerticalRevealType } from '../../../common/viewEvents.js';
 import { IContextKeyService, ContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
-import { AccessibilitySupport, type IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
+import { AccessibilitySupport, IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { CursorChangeReason } from '../../../common/cursorEvents.js';
 import { ViewContext } from '../../../common/viewModel/viewContext.js';
 import { darkColorTheme } from '../../../../platform/theme/common/colorTheme.js';
@@ -812,12 +812,12 @@ test('ScreenReaderSupport projects one model and screen-reader selection returns
 	const element = h(dom.window.document, 'div');
 	container.append(element);
 	const context = new ViewContext(viewport.testConfiguration, darkColorTheme, viewport.testViewModel);
+	viewport.testConfiguration.updateOptions({ accessibilitySupport: 'on' });
 	using support = new ScreenReaderSupport({
 		domNode: new FastDomNode(element),
 		context,
 		viewport,
 		viewController: viewport.controller,
-		accessibilityService: enabledAccessibilityService,
 	});
 
 	support.handleFocusChange(true);
@@ -896,7 +896,6 @@ test('ScreenReaderSupport projects one model and screen-reader selection returns
 		context: unrelatedContext,
 		viewport,
 		viewController: unrelatedViewport.controller,
-		accessibilityService: enabledAccessibilityService,
 	}), /must share one text model/u);
 	dom.window.close();
 });
@@ -2269,12 +2268,13 @@ test('CodeEditorWidget rejects missing shared services before creating its surfa
 	using theme = new TestThemeService(darkColorTheme);
 	using model = new TextModel('text');
 	using contextKeys = new ContextKeyService();
-	for (const missing of [IThemeService, ILanguageConfigurationService, ILanguageFeaturesService, IContextKeyService]) {
+	for (const missing of [IThemeService, ILanguageConfigurationService, ILanguageFeaturesService, IContextKeyService, IAccessibilityService]) {
 		using services = new ServiceContainer();
 		if (missing !== IContextKeyService) services.registerInstance(IContextKeyService, contextKeys);
 		if (missing !== IThemeService) services.registerInstance(IThemeService, theme);
 		if (missing !== ILanguageConfigurationService) services.registerInstance(ILanguageConfigurationService, configurations);
 		if (missing !== ILanguageFeaturesService) services.registerInstance(ILanguageFeaturesService, features);
+		if (missing !== IAccessibilityService) services.registerInstance(IAccessibilityService, enabledAccessibilityService);
 		const container = h(browserEnvironment.window.document, 'div');
 		assert.throws(() => services.createInstance(CodeEditorWidget, {
 			container, model, input: { resource: model.uri }, languageId: model.getLanguageId(), contributions: [],
@@ -2292,6 +2292,7 @@ test('CodeEditorWidget shares host language services across contributions and mo
 	services.registerInstance(IThemeService, theme);
 	services.registerInstance(ILanguageConfigurationService, configurations);
 	services.registerInstance(ILanguageFeaturesService, features);
+	services.registerInstance(IAccessibilityService, enabledAccessibilityService);
 	using first = new TextModel('first');
 	using second = new TextModel('second');
 	const seen: ILanguageFeaturesService[] = [];

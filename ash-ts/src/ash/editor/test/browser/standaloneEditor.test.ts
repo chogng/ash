@@ -27,8 +27,9 @@ Object.defineProperties(forcedColors, {
 Object.defineProperty(browserEnvironment.window, "matchMedia", {
 	configurable: true,
 	value: (query: string) => {
-		assert.equal(query, "(forced-colors: active)");
-		return forcedColors;
+		if (query === "(forced-colors: active)") return forcedColors;
+		assert.ok(["(prefers-reduced-motion: reduce)", "(prefers-reduced-transparency: reduce)"].includes(query));
+		return Object.assign(new browserEnvironment.window.EventTarget(), { matches: false, media: query });
 	},
 });
 let createdWorkerCount = 0;

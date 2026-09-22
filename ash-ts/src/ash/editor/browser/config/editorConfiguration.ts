@@ -4,7 +4,7 @@ import { PixelRatio } from '../../../base/browser/pixelRatio.js';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { isMacintosh } from '../../../base/common/platform.js';
-import { AccessibilitySupport } from '../../../platform/accessibility/common/accessibility.js';
+import { AccessibilitySupport, IAccessibilityService } from '../../../platform/accessibility/common/accessibility.js';
 import { type IEditorConfiguration } from '../../common/config/editorConfiguration.js';
 import { EditorZoom } from '../../common/config/editorZoom.js';
 import {
@@ -99,7 +99,13 @@ export class EditorConfiguration extends Disposable implements IEditorConfigurat
 	readonly onDidChangeFast = this.fastChangeEmitter.event;
 	options: ComputedEditorOptions;
 
-	constructor(isSimpleWidget: boolean, contextMenuId: MenuId, options: Readonly<IEditorConstructionOptions>, container: HTMLElement) {
+	constructor(
+		isSimpleWidget: boolean,
+		contextMenuId: MenuId,
+		options: Readonly<IEditorConstructionOptions>,
+		container: HTMLElement,
+		@IAccessibilityService private readonly accessibilityService: IAccessibilityService,
+	) {
 		super();
 		this.isSimpleWidget = isSimpleWidget;
 		this.contextMenuId = contextMenuId;
@@ -114,6 +120,7 @@ export class EditorConfiguration extends Disposable implements IEditorConfigurat
 		this._register(EditorZoom.onDidChangeZoomLevel(() => this.recomputeOptions()));
 		this._register(TabFocus.onDidChangeTabFocus(() => this.recomputeOptions()));
 		this._register(InputMode.onDidChangeInputMode(() => this.recomputeOptions()));
+		this._register(this.accessibilityService.onDidChangeScreenReaderOptimized(() => this.recomputeOptions()));
 		this._register(FontMeasurements.onDidChange(() => this.recomputeOptions()));
 		this._register(PixelRatio.getInstance(this.targetWindow).onDidChange(() => this.recomputeOptions()));
 		this._register(this.containerObserver.onDidChange(() => this.recomputeOptions()));
@@ -187,8 +194,10 @@ export class EditorConfiguration extends Disposable implements IEditorConfigurat
 			outerHeight: this.containerObserver.getHeight(),
 			emptySelectionClipboard: browser.isWebKit || browser.isFirefox,
 			pixelRatio: PixelRatio.getInstance(this.targetWindow).value,
-			accessibilitySupport: AccessibilitySupport.Unknown,
-			editContextSupported: typeof (globalThis as { EditContext?: unknown }).EditContext === 'function',
+			accessibilitySupport: this.accessibilityService.isScreenReaderOptimized()
+				? AccessibilitySupport.Enabled
+				: this.accessibilityService.getAccessibilitySupport(),
+			editContextSupported: typeof (this.targetWindow as Window & { EditContext?: unknown }).EditContext === 'function',
 		};
 	}
 

@@ -25,11 +25,16 @@ import { IMenuService, MenuService } from '../../../platform/actions/common/menu
 import { IContextMenuService, IContextViewService } from '../../../platform/contextview/browser/contextView.js';
 import { BrowserContextViewService } from '../../../platform/contextview/browser/contextViewService.js';
 import { BrowserContextMenuService } from '../../../platform/contextview/browser/contextMenuService.js';
+import { IAccessibilityService } from '../../../platform/accessibility/common/accessibility.js';
+import { AccessibilityService } from '../../../platform/accessibility/browser/accessibilityService.js';
+import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
 
 interface TestCodeEditorOptions extends CodeEditorWidgetOptions {
 	readonly instantiationService?: IInstantiationService;
 	readonly languageConfigurationService?: ILanguageConfigurationService;
 	readonly languageFeaturesService?: ILanguageFeaturesService;
+	readonly accessibilityService?: IAccessibilityService;
 }
 
 export function createCodeEditorServices(disposables: Pick<DisposableStore, 'add'>, parent?: IInstantiationService): ServiceContainer {
@@ -42,6 +47,16 @@ export function createCodeEditorServices(disposables: Pick<DisposableStore, 'add
 export function registerCodeEditorServices(services: ServiceContainer): void {
 	if (!services.has(IContextKeyService)) {
 		services.registerSingleton(IContextKeyService, () => new ContextKeyService());
+	}
+	if (!services.has(IConfigurationService)) {
+		services.registerSingleton(IConfigurationService, () => new InMemoryConfigurationService());
+	}
+	if (!services.has(IAccessibilityService)) {
+		services.registerSingleton(IAccessibilityService, accessor => new AccessibilityService({
+			root: document.body,
+			contextKeyService: accessor.get(IContextKeyService),
+			configurationService: accessor.get(IConfigurationService),
+		}));
 	}
 	if (!services.has(IMarkerService)) {
 		services.registerSingleton(IMarkerService, () => services.createInstance(MarkerService));
@@ -94,13 +109,16 @@ export function registerCodeEditorServices(services: ServiceContainer): void {
 export function createTestCodeEditor(options: TestCodeEditorOptions): CodeEditorWidget {
 	const resources = new DisposableStore();
 	try {
-		const { instantiationService, languageConfigurationService, languageFeaturesService, ...widgetOptions } = options;
+		const { instantiationService, languageConfigurationService, languageFeaturesService, accessibilityService, ...widgetOptions } = options;
 		const overrides = resources.add(instantiationService ? instantiationService.createChild() : new ServiceContainer());
 		if (languageConfigurationService) {
 			overrides.registerInstance(ILanguageConfigurationService, languageConfigurationService);
 		}
 		if (languageFeaturesService) {
 			overrides.registerInstance(ILanguageFeaturesService, languageFeaturesService);
+		}
+		if (accessibilityService) {
+			overrides.registerInstance(IAccessibilityService, accessibilityService);
 		}
 		const services = createCodeEditorServices(resources, overrides);
 		return services.createInstance(TestCodeEditor, widgetOptions, resources);

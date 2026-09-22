@@ -55,7 +55,7 @@ function registerSimpleEditorSettingMigration(key: string, values: [unknown, unk
 		if (value === undefined) return;
 		for (const [oldValue, newValue] of values) {
 			if (value === oldValue) {
-				write(key, newValue);
+				write(key, typeof newValue === 'object' && newValue !== null ? { ...newValue } : newValue);
 				return;
 			}
 		}
@@ -176,10 +176,12 @@ registerEditorSettingMigration('lightbulb.enabled', (value, _read, write) => {
 	if (typeof value === 'boolean') write('lightbulb.enabled', value ? undefined : 'off');
 });
 
-registerEditorSettingMigration('inlineSuggest.edits.codeShifting', (value, _read, write) => {
+registerEditorSettingMigration('inlineSuggest.edits.codeShifting', (value, read, write) => {
 	if (typeof value !== 'boolean') return;
 	write('inlineSuggest.edits.codeShifting', undefined);
-	write('inlineSuggest.edits.allowCodeShifting', value ? 'always' : 'never');
+	if (read('inlineSuggest.edits.allowCodeShifting') === undefined) {
+		write('inlineSuggest.edits.allowCodeShifting', value ? 'always' : 'never');
+	}
 });
 
 registerEditorSettingMigration('hover.enabled', (value, _read, write) => {

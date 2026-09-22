@@ -13,7 +13,10 @@ import { EditorOption, type IEditorOptions } from '../../../common/config/editor
 import { type BareFontInfo, FontInfo } from '../../../common/config/fontInfo.js';
 import { createBareFontInfoFromRawSettings } from '../../../common/config/fontInfoFromSettings.js';
 import { MenuId } from '../../../../platform/actions/common/actions.js';
-import { createTestConfiguration, TEST_FONT_INFO } from './testConfiguration.js';
+import { createConfigurationServices, createTestConfiguration, TEST_FONT_INFO } from './testConfiguration.js';
+import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import { AccessibilitySupport, IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
+import { ServiceContainer } from '../../../../platform/instantiation/common/instantiation.js';
 
 test('ComputedEditorOptions stores canonical option IDs', () => {
 	const options = new ComputedEditorOptions();
@@ -92,6 +95,55 @@ test('EditorConfiguration validates updates and reports the changed option', () 
 	dom.window.close();
 });
 
+test('EditorConfiguration requires the registered accessibility service at construction', () => {
+	const dom = new JSDOM('<div></div>');
+	using services = new ServiceContainer();
+	try {
+		assert.throws(() => services.createInstance(EditorConfiguration, false, MenuId.EditorContext, {}, dom.window.document.body), /accessibilityService/);
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('EditorConfiguration follows host accessibility and gives explicit editor settings precedence', () => {
+	const dom = new JSDOM('<div></div>');
+	using resources = new DisposableStore();
+	const services = createConfigurationServices(resources, dom.window.document.body);
+	const accessibility = services.get(IAccessibilityService);
+	const configuration = services.createInstance(EditorConfiguration, false, MenuId.EditorContext, { wrappingIndent: 'indent' }, dom.window.document.body);
+	const notifications: string[] = [];
+	using fast = configuration.onDidChangeFast(event => {
+		if (event.hasChanged(EditorOption.accessibilitySupport)) notifications.push('fast');
+	});
+	using normal = configuration.onDidChange(event => {
+		if (event.hasChanged(EditorOption.accessibilitySupport)) notifications.push('normal');
+	});
+	try {
+		accessibility.setAccessibilitySupport(AccessibilitySupport.Enabled);
+		assert.deepEqual({
+			support: configuration.options.get(EditorOption.accessibilitySupport),
+			indent: configuration.options.get(EditorOption.wrappingIndent),
+			notifications,
+		}, { support: AccessibilitySupport.Enabled, indent: 0, notifications: ['fast', 'normal'] });
+		configuration.updateOptions({ accessibilitySupport: 'off' });
+		assert.equal(configuration.options.get(EditorOption.accessibilitySupport), AccessibilitySupport.Disabled);
+		assert.equal(configuration.options.get(EditorOption.wrappingIndent), 2);
+		configuration.updateOptions({ accessibilitySupport: 'auto' });
+		assert.equal(configuration.options.get(EditorOption.accessibilitySupport), AccessibilitySupport.Enabled);
+		accessibility.setAccessibilitySupport(AccessibilitySupport.Disabled);
+		assert.equal(configuration.options.get(EditorOption.accessibilitySupport), AccessibilitySupport.Disabled);
+		configuration.updateOptions({ accessibilitySupport: 'on' });
+		assert.equal(configuration.options.get(EditorOption.accessibilitySupport), AccessibilitySupport.Enabled);
+		const count = notifications.length;
+		configuration.dispose();
+		accessibility.setAccessibilitySupport(AccessibilitySupport.Enabled);
+		assert.equal(notifications.length, count);
+	} finally {
+		configuration.dispose();
+		dom.window.close();
+	}
+});
+
 test('EditorConfiguration owns the rich screen-reader content option', () => {
 	const dom = new JSDOM('<div id="editor"></div>');
 	const container = dom.window.document.querySelector<HTMLElement>('#editor')!;
@@ -131,7 +183,9 @@ test('EditorConfiguration recomputes measured font options when the cache change
 	}
 	const dom = new JSDOM('<div id="editor"></div>');
 	const container = dom.window.document.querySelector<HTMLElement>('#editor')!;
-	using configuration = new MeasuredConfiguration(false, MenuId.EditorContext, { fontSize: 14 }, container);
+	using resources = new DisposableStore();
+	const services = createConfigurationServices(resources, container);
+	using configuration = services.createInstance(MeasuredConfiguration, false, MenuId.EditorContext, { fontSize: 14 }, container);
 	let changed = false;
 	configuration.onDidChange(event => changed ||= event.hasChanged(EditorOption.fontInfo));
 	width = 10;
@@ -180,6 +234,18 @@ test('EditorConfiguration owns automatic container observation and stops it with
 		assert.equal(observer.disconnected, true);
 		observer.emit(300, 180);
 		assert.equal(configuration.options.get(EditorOption.layoutInfo).width, 240);
+
+		configuration.updateOptions({ automaticLayout: true });
+		using restart = configuration.onDidChange(event => {
+			if (event.hasChanged(EditorOption.layoutInfo) && configuration.options.get(EditorOption.layoutInfo).width === 320) {
+				configuration.updateOptions({ automaticLayout: false });
+				configuration.updateOptions({ automaticLayout: true });
+			}
+		});
+		observers[1]!.emit(320, 180);
+		assert.equal(observers[1]!.disconnected, true);
+		observers[2]!.emit(340, 180);
+		assert.equal(configuration.options.get(EditorOption.layoutInfo).width, 340);
 	} finally {
 		configuration.dispose();
 		dom.window.close();
@@ -270,6 +336,29 @@ test('migrateOptions removes obsolete keys without overwriting current settings'
 		stickyScroll: { enabled: false },
 		codeActionWidget: { includeNearbyQuickfixes: undefined, includeNearbyQuickFixes: true },
 	});
+});
+
+test('EditorConfiguration keeps migrated nested options private to each editor', () => {
+	const dom = new JSDOM('<div></div>');
+	try {
+		using first = createTestConfiguration(dom.window.document.body, { hover: false } as unknown as IEditorOptions);
+		first.updateOptions({ hover: { enabled: 'on', delay: 900 } });
+		using second = createTestConfiguration(dom.window.document.body, { hover: false } as unknown as IEditorOptions);
+		assert.deepEqual({
+			first: first.options.get(EditorOption.hover),
+			second: second.getRawOptions().hover,
+		}, {
+			first: { ...second.options.get(EditorOption.hover), enabled: 'on', delay: 900 },
+			second: { enabled: 'off' },
+		});
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('migrateOptions preserves an explicit code shifting mode when the legacy key is also present', () => {
+	const options = migrate({ inlineSuggest: { edits: { codeShifting: false, allowCodeShifting: 'horizontal' } } });
+	assert.deepEqual(options, { inlineSuggest: { edits: { codeShifting: undefined, allowCodeShifting: 'horizontal' } } });
 });
 
 function migrate<T extends Record<string, unknown>>(options: T): T {

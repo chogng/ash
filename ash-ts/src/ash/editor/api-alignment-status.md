@@ -1150,7 +1150,7 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 
 - 链接、层级展开：功能卸载和异步返回交错时的 DOM/请求清理仍需复现。行内提示已在 2026-09-21 的控制器收敛批次验证并修复。
 - 富文本图片粘贴：读取图片期间正文或选区变化后可能恢复旧选区，尚未执行真实图片解码回归。
-- 字体及 GPU 样式缓存：多窗口过期、undefined 与 false/0 的区分仍需专门场景验证。
+- 字体缓存的多窗口过期已在 2026-09-22 验证并修复；GPU 样式缓存中 undefined 与 false/0 的区分仍需专门场景验证。
 - 原审查中的 collaboration 公共协议依赖已修复；其他 common 文件的 contribution 依赖仍按各自调用链处理。
 
 <details>
@@ -1160,12 +1160,12 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 
 | 文件 | 引用 | 检查证据与状态 |
 | --- | --- | --- |
-| `browser/config/charWidthReader.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
+| `browser/config/charWidthReader.ts` | 1 / 1 | 2026-09-22：字符宽度使用布局像素；真实编辑器在宿主 0.75/1.5 倍 transform 下重新测量，代表字符宽度保持一致。 |
 | `browser/config/domFontInfo.ts` | 7 / 1 | 人工检查：已通读入口、公开数据和同步状态变化；未发现本轮可复现缺陷。 |
-| `browser/config/editorConfiguration.ts` | 2 / 3 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
-| `browser/config/elementSizeObserver.ts` | 1 / 0 | 人工追踪：ResizeObserver、帧任务和 stopObserving 清理。 |
-| `browser/config/fontMeasurements.ts` | 1 / 1 | 人工追踪：单个到期任务仅清理首个窗口缓存，多窗口过期行为待验证。 |
-| `browser/config/migrateOptions.ts` | 2 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
+| `browser/config/editorConfiguration.ts` | 2 / 3 | 2026-09-22：构造注入窗口无障碍服务，跟随宿主状态并计算编辑器 on/off/auto 优先级；读屏内容统一消费计算结果。能力检测读取容器窗口；验证变化事件顺序、换行缩进、焦点和释放。 |
+| `browser/config/elementSizeObserver.ts` | 1 / 0 | 2026-09-22：尺寸事件发布前登记帧任务，使监听器内停止观察可以清理当前任务；补充同一回调中停止并重启自动布局的回归。 |
+| `browser/config/fontMeasurements.ts` | 1 / 1 | 2026-09-22：按窗口安排不可靠测量的到期任务，关闭窗口取消任务，缓存弱引用窗口；验证多个窗口分别失效。恢复后保存语义仍与上游不同，当前无生产恢复/保存调用方，未扩建持久化链路。 |
+| `browser/config/migrateOptions.ts` | 2 / 1 | 2026-09-22：布尔旧设置生成的嵌套对象归各次迁移独享；显式 allowCodeShifting 优先于旧 codeShifting。验证不同编辑器互不污染及新设置优先级。 |
 | `browser/config/tabFocus.ts` | 2 / 1 | 人工检查：Tab 焦点模式切换与事件发布。 |
 | `browser/controller/dragScrolling.ts` | 1 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
 | `browser/controller/editContext/clipboardUtils.ts` | 10 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |

@@ -2,7 +2,7 @@ import { addDisposableListener, h, text as createText } from "../../../../../bas
 import { type FastDomNode } from '../../../../../base/browser/fastDomNode.js';
 import { IME } from '../../../../../base/common/ime.js';
 import { Disposable, MutableDisposable, toDisposable } from "../../../../../base/common/lifecycle.js";
-import { type IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
+import { AccessibilitySupport } from '../../../../../platform/accessibility/common/accessibility.js';
 import { EditorOption, type IComputedEditorOptions } from '../../../../common/config/editorOptions.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { TextModel } from '../../../../common/model/textModel.js';
@@ -26,7 +26,6 @@ export class SimpleScreenReaderContent extends Disposable implements IScreenRead
 		private readonly domNode: FastDomNode<HTMLElement>,
 		private readonly context: ViewContext,
 		private readonly viewController: EditContextViewController,
-		private readonly accessibilityService: IAccessibilityService | undefined,
 	) {
 		super();
 		const model = context.viewModel.model;
@@ -167,7 +166,7 @@ export class SimpleScreenReaderContent extends Disposable implements IScreenRead
 		if (
 			!this.state ||
 			!this.focused ||
-			!this.accessibilityService?.isScreenReaderOptimized() ||
+			this.context.configuration.options.get(EditorOption.accessibilitySupport) !== AccessibilitySupport.Enabled ||
 			this.viewController.compositionController.composing ||
 			!IME.enabled
 		) return;

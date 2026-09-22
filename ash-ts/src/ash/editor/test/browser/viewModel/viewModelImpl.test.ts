@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { TestThemeService } from '../../../../platform/theme/test/common/testThemeService.js';
 import { darkColorTheme } from '../../../../platform/theme/common/colorTheme.js';
 import { MenuId } from '../../../../platform/actions/common/actions.js';
 import { EditorConfiguration } from '../../../browser/config/editorConfiguration.js';
+import { createConfigurationServices } from '../config/testConfiguration.js';
 import { CursorState } from '../../../common/cursorCommon.js';
 import { CursorChangeReason } from '../../../common/cursorEvents.js';
 import { Position } from '../../../common/core/position.js';
@@ -69,7 +70,9 @@ test('ViewModel owns line projection, cursor, layout, and visible-line publicati
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = dom.window.document.querySelector('main')!;
 	using cleanup = toDisposable(() => dom.window.close());
-	using configuration = new EditorConfiguration(false, MenuId.EditorContext, {
+	using resources = new DisposableStore();
+	const services = createConfigurationServices(resources, container);
+	using configuration = services.createInstance(EditorConfiguration, false, MenuId.EditorContext, {
 		dimension: { width: 200, height: 40 },
 		lineHeight: 20,
 	}, container);
@@ -159,7 +162,9 @@ test('ViewModel resets cursor markers through CursorsController after model flus
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	const container = dom.window.document.querySelector('main')!;
 	using cleanup = toDisposable(() => dom.window.close());
-	using configuration = new EditorConfiguration(false, MenuId.EditorContext, { dimension: { width: 200, height: 40 } }, container);
+	using resources = new DisposableStore();
+	const services = createConfigurationServices(resources, container);
+	using configuration = services.createInstance(EditorConfiguration, false, MenuId.EditorContext, { dimension: { width: 200, height: 40 } }, container);
 	using languages = createTestLanguageConfigurationService();
 	using model = new TextModel('one\ntwo', { languageConfigurationService: languages });
 	using theme = new TestThemeService(darkColorTheme);

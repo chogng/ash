@@ -10,7 +10,6 @@ import { type Selection } from '../../../common/core/selection.js';
 import { TextDecorationCollection, type TextDecorationId } from '../../../common/model/decorationCollection.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
 import { normalizeTextLineEndings } from "../../../common/core/textChange.js";
-import { type IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { type IEditorAriaOptions } from '../../editorBrowser.js';
 import { type View } from "../../view.js";
 import { ViewPart } from '../../view/viewPart.js';
@@ -84,7 +83,6 @@ export interface EditContextOptions {
 	) => EditContextCharacterBounds | undefined;
 	readonly viewController: EditContextViewController;
 	readonly viewport: View;
-	readonly accessibilityService?: IAccessibilityService;
 	readonly semanticTokenSource?: SemanticTokenSource;
 }
 

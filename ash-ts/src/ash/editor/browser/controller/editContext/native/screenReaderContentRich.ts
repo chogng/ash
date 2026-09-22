@@ -1,6 +1,5 @@
 import { fragment as createFragment, h, text as createText } from "../../../../../base/browser/dom.js";
 import { type FastDomNode } from '../../../../../base/browser/fastDomNode.js';
-import { type IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
 import { type ViewContext } from '../../../../common/viewModel/viewContext.js';
 import { type EditContextViewController } from '../editContext.js';
 import { projectStanzaSemanticTokenLine, type ResolvedSemanticToken, type SemanticTokenSource } from "../../../viewParts/viewLines/viewLine.js";
@@ -27,10 +26,9 @@ export class RichScreenReaderContent extends SimpleScreenReaderContent {
 		domNode: FastDomNode<HTMLElement>,
 		private readonly richContext: ViewContext,
 		viewController: EditContextViewController,
-		accessibilityService: IAccessibilityService | undefined,
 		private readonly options: RichScreenReaderContentOptions,
 	) {
-		super(domNode, richContext, viewController, accessibilityService);
+		super(domNode, richContext, viewController);
 		const model = richContext.viewModel.model;
 		if (options.semanticTokenSource && options.semanticTokenSource.textModel !== model) {
 			throw new TypeError("Native rich screen-reader semantic tokens must share the text model");

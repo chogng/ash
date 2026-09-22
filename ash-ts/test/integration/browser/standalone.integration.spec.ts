@@ -3620,6 +3620,42 @@ test('editor rendering follows updated configuration without replacing the view'
 	expect(errors).toEqual([]);
 });
 
+test('editor font measurements stay in layout pixels when the host is transformed', async ({ page }) => {
+	await page.goto('/standalone.html');
+	const before = await page.evaluate(() => window.ashStandaloneIntegration.readFontMetrics());
+	expect(before.halfwidth).toBeGreaterThan(2);
+	for (const scale of [0.75, 1.5, 1]) {
+		const after = await page.evaluate(scale => {
+			document.body.style.transform = `scale(${scale})`;
+			return window.ashStandaloneIntegration.readFontMetrics();
+		}, scale);
+		expect(after).toEqual(before);
+	}
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+});
+
+test('editor accessibility configuration follows the host and honors per-editor overrides', async ({ page }) => {
+	const errors: string[] = [];
+	page.on('pageerror', error => errors.push(error.message));
+	await page.goto('/standalone.html');
+	const input = page.locator('#caller .stanza-native-edit-context');
+	const mirror = page.locator('#caller .stanza-native-screen-reader-content');
+	for (const [host, option, enabled] of [
+		[true, 'auto', true],
+		[true, 'off', false],
+		[true, 'auto', true],
+		[false, 'auto', false],
+		[false, 'on', true],
+	] as const) {
+		expect(await page.evaluate(([host, option]) => window.ashStandaloneIntegration.configureAccessibility(host, option), [host, option] as const))
+			.toEqual({ support: enabled ? 2 : 1, indent: enabled ? 0 : 2 });
+		await expect(mirror).toHaveAttribute('aria-hidden', enabled ? 'false' : 'true');
+		await expect(input).toBeFocused();
+	}
+	await page.evaluate(() => window.ashStandaloneIntegration.dispose());
+	expect(errors).toEqual([]);
+});
+
 for (const [original, formatted] of [['😀 hello', '😀 Hello'], ['a😀z', 'a😁z'], ['a😀z', 'a🨀z'], ['first\n😀 hello', 'first\n😀 Hello']]) {
 	test(`formatting preserves UTF-16 characters: ${JSON.stringify(original)} to ${JSON.stringify(formatted)}`, async ({ page }) => {
 		await page.goto('/standalone.html');

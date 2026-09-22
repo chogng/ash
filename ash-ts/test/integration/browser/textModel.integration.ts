@@ -37,7 +37,7 @@ import { BrowserTextModelService } from "../../../src/ash/workbench/services/tex
 import { TextModel } from "../../../src/ash/editor/editor.api.js";
 import "../../../src/ash/editor/editor.code.all.js";
 import { MemoryTextFiles } from "./memoryTextFiles.js";
-import { AccessibilitySupport, type IAccessibilityService } from '../../../src/ash/platform/accessibility/common/accessibility.js';
+import { AccessibilitySupport, IAccessibilityService } from '../../../src/ash/platform/accessibility/common/accessibility.js';
 import { EditorExtensionsRegistry } from '../../../src/ash/editor/browser/editorExtensions.js';
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
@@ -94,20 +94,6 @@ disposables.add(toDisposable(() => files.dispose()));
 const resourceStore = new BrowserTextResourceStore(files);
 const languageService = disposables.add(new LanguageService());
 const configurationService = disposables.add(new InMemoryConfigurationService());
-const accessibilityService: IAccessibilityService = {
-	onDidChangeScreenReaderOptimized: Event.None,
-	onDidChangeReducedMotion: Event.None,
-	onDidChangeReducedTransparency: Event.None,
-	onDidChangeLinkUnderlines: Event.None,
-	alwaysUnderlineAccessKeys: async () => false,
-	isScreenReaderOptimized: () => true,
-	isMotionReduced: () => false,
-	isTransparencyReduced: () => false,
-	getAccessibilitySupport: () => AccessibilitySupport.Enabled,
-	setAccessibilitySupport: () => {},
-	alert: () => {},
-	status: () => {},
-};
 const languageConfigurationService = disposables.add(new LanguageConfigurationService(configurationService, languageService));
 const languageFeaturesService = disposables.add(new LanguageFeaturesService());
 const models = disposables.add(new BrowserTextModelService(resourceStore, { languageService, languageConfigurationService, languageFeaturesService }));
@@ -156,13 +142,13 @@ services.registerInstance(ILanguageFeaturesService, languageFeaturesService);
 services.registerInstance(ILanguageConfigurationService, languageConfigurationService);
 services.registerInstance(ILogService, new NullLoggerService());
 registerCodeEditorServices(services);
+services.get(IAccessibilityService).setAccessibilitySupport(AccessibilitySupport.Enabled);
 services.get(IKeybindingService);
 const pane = disposables.add(services.createInstance(CodeEditorPane, resourceStore, {
 	createPart: options => {
 		editorPart = createBrowserEditorPart(services, options);
 		return editorPart;
 	},
-	accessibilityService,
 	cursorSmoothCaretAnimation: "explicit",
 } satisfies EditorPaneOptions));
 const apiModel = disposables.add(new TextModel("editor-api"));

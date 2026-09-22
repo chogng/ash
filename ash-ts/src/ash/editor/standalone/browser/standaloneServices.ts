@@ -46,6 +46,8 @@ import { IKeybindingService, KeybindingContextKeys } from '../../../platform/key
 import { KeybindingResolver, KeybindingResolveKind } from '../../../platform/keybinding/common/keybindingResolver.js';
 import { INotificationService, NotificationSeverity, type NotificationAction, type NotificationHandle, type NotificationItem, type NotificationOptions } from '../../../platform/notification/common/notification.js';
 import { bindColorTheme } from '../../../platform/theme/browser/themeStyles.js';
+import { IAccessibilityService } from '../../../platform/accessibility/common/accessibility.js';
+import { AccessibilityService } from '../../../platform/accessibility/browser/accessibilityService.js';
 import '../../../base/browser/ui/contextview/contextview.css';
 import '../../../base/browser/ui/menu/menu.css';
 import '../../../base/browser/ui/button/button.css';
@@ -100,6 +102,11 @@ export class StandaloneServiceCollection extends Disposable {
 		this.completionWorkerFactory = overrides.completionWorkerFactory;
 		const configurationService = this._register(new StandaloneConfigurationService());
 		instantiationService.registerInstance(IConfigurationService, configurationService);
+		instantiationService.registerSingleton(IAccessibilityService, accessor => new AccessibilityService({
+			root: document.body,
+			contextKeyService: accessor.get(IContextKeyService),
+			configurationService: accessor.get(IConfigurationService),
+		}));
 		instantiationService.registerSingleton(ITextResourcePropertiesService, accessor => new StandaloneResourcePropertiesService(accessor.get(IConfigurationService)));
 		if (overrides.languageFeaturesService && !overrides.languageConfigurationService) throw new TypeError("Standalone language feature overrides require a language configuration service");
 		if (overrides.languageService) instantiationService.registerInstance(ILanguageService, overrides.languageService);

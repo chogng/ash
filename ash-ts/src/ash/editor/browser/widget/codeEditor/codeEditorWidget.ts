@@ -34,7 +34,6 @@ import { type ConfigurationChangedEvent, EditorLineWrapping, EditorOption, type 
 import { type LanguageCompletionWorkerFactory, type LanguageLocation, type LanguageWorkspaceEdit, type LanguageDiagnosticsHost } from '../../../common/languages.js';
 import { isCompletionsEnablement, type CompletionsEnablement } from '../../../common/services/completionsEnablement.js';
 import { type SemanticTokenSource } from '../../viewParts/viewLines/viewLine.js';
-import { type IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { type ICodeEditorService } from '../../services/codeEditorService.js';
 import { applyFontInfo } from '../../config/domFontInfo.js';
 import { type URI } from '../../../../base/common/uri.js';
@@ -73,7 +72,6 @@ export interface ICodeEditorWidgetOptions extends IEditorConstructionOptions {
 	readonly model: TextModel;
 	readonly ownerId?: string;
 	readonly codeEditorService?: ICodeEditorService;
-	readonly accessibilityService?: IAccessibilityService;
 	readonly editorWorkerFactory?: VersionedEditorWorkerFactory;
 	readonly completionWorkerFactory?: LanguageCompletionWorkerFactory;
 	readonly languageDiagnosticsService?: LanguageDiagnosticsHost;
@@ -267,7 +265,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			this.constructionOptions = constructionOptions;
 			this.instantiationService = this.rootServices;
 			this.onLanguageError = options.onLanguageError ?? options.onContributionError ?? reportLanguageError;
-			this.configuration = this._register(new EditorConfiguration(
+			this.configuration = this._register(this.rootServices.createInstance(EditorConfiguration,
 				options.isSimpleWidget ?? false,
 				options.contextMenuId ?? (options.isSimpleWidget ? MenuId.SimpleEditorContext : MenuId.EditorContext),
 				{
@@ -431,7 +429,6 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 					ownerId: this.ownerId ?? options.ownerId,
 					...(logService ? { logService } : {}),
 					ariaLabel: options.ariaLabel ?? editorLabel(options.input),
-					accessibilityService: options.accessibilityService,
 					semanticTokenSource,
 				},
 			}));

@@ -36,6 +36,8 @@ import { KeybindingsRegistry } from '../../../src/ash/platform/keybinding/common
 import { Keybinding, logicalKey } from '../../../src/ash/base/common/keybindings.js';
 import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
+import { FontMeasurements } from '../../../src/ash/editor/browser/config/fontMeasurements.js';
+import { AccessibilitySupport, IAccessibilityService } from '../../../src/ash/platform/accessibility/common/accessibility.js';
 
 interface EditorState {
 	readonly value: string | null;
@@ -255,6 +257,8 @@ interface StandaloneHarness {
 	prepareReferencePreview(): void;
 	setParentFontSize(): void;
 	updateRenderingOptions(enabled: boolean): number;
+	readFontMetrics(): { halfwidth: number; fullwidth: number; space: number; digit: number };
+	configureAccessibility(hostEnabled: boolean, option: 'auto' | 'on' | 'off'): { support: number; indent: number };
 	setTestMarkers(enabled: boolean): void;
 	setMinimapColor(color: string): void;
 	readMinimapPixel(): number[];
@@ -1899,6 +1903,26 @@ window.ashStandaloneIntegration = {
 			wordWrap: enabled ? 'on' : 'off',
 		});
 		return callerModel.getVersionId();
+	},
+	readFontMetrics: () => {
+		FontMeasurements.clearAllFontInfos();
+		const font = callerEditor.getOption(EditorOption.fontInfo);
+		return {
+			halfwidth: font.typicalHalfwidthCharacterWidth,
+			fullwidth: font.typicalFullwidthCharacterWidth,
+			space: font.spaceWidth,
+			digit: font.maxDigitWidth,
+		};
+	},
+	configureAccessibility: (hostEnabled, option) => {
+		const service = StandaloneServices.get().instantiationService.get(IAccessibilityService);
+		service.setAccessibilitySupport(hostEnabled ? AccessibilitySupport.Enabled : AccessibilitySupport.Disabled);
+		callerEditor.updateOptions({ accessibilitySupport: option, wrappingIndent: 'indent' });
+		callerEditor.focus();
+		return {
+			support: callerEditor.getOption(EditorOption.accessibilitySupport),
+			indent: callerEditor.getOption(EditorOption.wrappingIndent),
+		};
 	},
 	prepareReferencePreview: () => {
 		callerEditor.setValue('alpha beta\nalpha gamma');

@@ -145,7 +145,6 @@ export class NativeEditContext extends AbstractEditContext {
 			viewController: options.viewController,
 			onDidFocus: this.onDidFocus,
 			onDidBlur: this.onDidBlur,
-			accessibilityService: options.accessibilityService,
 			semanticTokenSource: options.semanticTokenSource,
 		}));
 		this.synchronizeState();

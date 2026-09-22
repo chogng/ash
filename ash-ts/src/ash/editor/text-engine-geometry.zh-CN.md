@@ -123,11 +123,11 @@ GPU 或 Canvas 后端可以提高密集文本的吞吐，但自身不提供原�
 | 领域 | 状态 | 当前证据与边界 |
 | --- | --- | --- |
 | Common 测量契约 | Current / 已实现 | `common/viewModel.ts` 提供文本宽度和 padding 输入，不导入浏览器 API |
-| 浏览器编辑器几何配置 | Current / 已实现 | `browser/config/editorConfiguration.ts` 在 browser composition boundary 解析字体和行高默认值/校验；不聚合产品服务或 feature 状态 |
+| 浏览器编辑器几何配置 | Current / 已实现 | `browser/config/editorConfiguration.ts` 解析字体、行高和容器尺寸；通过构造注入读取窗口无障碍服务，统一计算每个编辑器的 `auto`/`on`/`off` 策略，读屏内容消费同一结果 |
 | 浏览器元素尺寸观察 | Current / 已实现 | `browser/config/elementSizeObserver.ts` 将 ResizeObserver 和初始 client-area 读取统一为 viewport 使用的合并尺寸事件 |
 | DOM 字体应用 | Current / 已实现 | `browser/config/domFontInfo.ts` 为 viewport 和 diff surface 应用统一的编辑器字体词汇；zoom 仍由 feature 自己拥有，并显式使测量失效 |
 | Tab-focus 状态 | Current / 已实现 | `browser/config/tabFocus.ts` 拥有可由 host 注入的状态和变更事件；`toggleTabFocusMode` contribution 拥有快捷键、DOM 状态和播报 |
-| 浏览器字体测量 | Current / 已实现 | `browser/config/fontMeasurements.ts` 负责按窗口测量、缓存、序列化和失效 `FontInfo`；`browser/config/charWidthReader.ts` 负责批量 DOM 字符宽度请求 |
+| 浏览器字体测量 | Current / 已实现 | `browser/config/fontMeasurements.ts` 按窗口测量、缓存、序列化 `FontInfo`，并独立清理各窗口中到期的不可靠测量；窗口关闭时取消任务。`browser/config/charWidthReader.ts` 使用布局像素批量测量字符宽度，不受祖先元素 transform 影响 |
 | 惰性行宽聚合 | Current / 已实现 | `browser/viewParts/viewLines/viewLines.ts` 提供有界初始工作、可取消分片、编辑增量更新和 lower-bound 最大值 |
 | 可见行虚拟化 | Current / 已实现 | `browser/viewParts/viewLines/viewLines.ts` 拥有渲染行 DOM 和 semantic text projection；承载文字的根节点使用普通布局定位，不长期提升为 transform 合成层 |
 | 浏览器 shaping 后的可见几何 | Current / 部分具备 | `viewLine.ts` 负责单行读取，`CharacterMapping` 把 UTF-16 列映射到子 span，`rangeUtil.ts` 读取并整理浏览器范围，`domReadingContext.ts` 缓存布局基准 |
