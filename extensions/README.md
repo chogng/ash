@@ -22,8 +22,10 @@ that trusted package directory through `ash-extensions`; App is only a future co
 point. A running application does not authenticate to a Git repository to load built-in extensions.
 
 Marketplace language packages are maintained in the separate `ash-marketplace` repository. That
-repository owns versioned payloads, server entrypoints, dependency locks, licenses, and signed
-releases. Ash owns installation, activation, permissions, and process execution. Static language
+repository owns versioned sources, server entrypoints, dependency locks, build recipes, licenses,
+and signed releases. Node server dependencies are assembled during publication and included in the
+signed language ZIP; Ash downloads that package when the user installs it. Ash owns installation,
+activation, permissions, and process execution. Static language
 assets are exposed through the extension catalog; server routes are read from the signed language
 catalog and handled by the shared Rust LSP client.
 

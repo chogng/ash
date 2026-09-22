@@ -66,6 +66,7 @@ flowchart LR
 - `language/servers` 返回当前目录已启用且可解析的服务器及语言 ID，不启动进程；Workbench 据此注册 provider。
 - 安装、卸载、配置变化后重新读取列表，并为仍打开的文档重建同步。已卸载服务器的晚到诊断被丢弃。
 - 同 ID 的已安装 provider 负责该服务器；用户显式 executable 配置传给该 provider，避免再创建同名 PATH 实例。
+- Node 服务器包的源码保留固定版本、lockfile 和构建配方；Marketplace 在发布时组装依赖并签名。Ash 按需安装整个语言包，校验后缓存，不在用户机器上运行 npm。
 - Marketplace 当前带服务器的语言包为 CSS/Less/SCSS、JSON/JSONC、Python、JavaScript/TypeScript 和 YAML；其他语法包的服务器需另行提供。
 
 ## 1. 一次操作
