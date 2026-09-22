@@ -31299,7 +31299,7 @@
       "type": "string"
     },
     "SlashCommandDefinition": {
-      "description": "One server-advertised command in the immutable initialization snapshot.\n\nClients may merge these commands with local presentation commands. A submitted dynamic command\nremains ordinary ordered Turn input; the definition only makes its slash syntax discoverable\nand declares whether inline arguments are accepted.",
+      "description": "A command definition shared by local product bindings and the server catalog.\n\nClients may merge these commands with local presentation commands. A submitted dynamic command\nremains ordinary ordered Turn input; the definition only makes its slash syntax discoverable\nand declares whether inline arguments are accepted.",
       "properties": {
         "argumentHint": {
           "type": [

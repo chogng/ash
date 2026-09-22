@@ -1,3 +1,5 @@
+use crate::thread::composer::TuiSlashCommandAction;
+
 /// A typed side-effect intent emitted by the single-writer application state.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum AppCommand {
@@ -35,32 +37,27 @@ impl AppCommand {
             Self::Status(crate::status::Command::OpenLineEditor) => Some("Status line"),
             Self::Theme(crate::theme::Command::OpenPicker) => Some("Theme"),
             Self::Thread(crate::thread::Command::OpenRewindPicker) => Some("Rewind"),
-            Self::Thread(crate::thread::Command::ExecuteProductCommand(invocation))
-                if matches!(
-                    invocation.command.name.as_str(),
-                    "marketplace" | "plugins" | "lsp"
-                ) =>
-            {
-                Some(match invocation.command.name.as_str() {
-                    "lsp" => "Language servers",
-                    "plugins" => "Plugins",
-                    _ => "Marketplace",
-                })
-            }
-            Self::Thread(crate::thread::Command::ExecuteProductCommand(invocation))
-                if invocation.arguments.is_empty() =>
-            {
-                match invocation.command.name.as_str() {
-                    "model" => Some("Model"),
-                    "resume" => Some("Resume session"),
-                    "skills" => Some("Skills"),
-                    "memories" => Some("Memories"),
-                    "mcp" => Some("MCP"),
-                    "connectors" => Some("Connectors"),
-                    "status" => Some("Status"),
-                    "usage" => Some("Usage"),
-                    "rewind" => Some("Rewind"),
-                    "add-dir" => Some("Directories"),
+            Self::Thread(crate::thread::Command::ExecuteProductCommand(invocation)) => {
+                match invocation
+                    .command
+                    .name
+                    .parse::<TuiSlashCommandAction>()
+                    .ok()?
+                {
+                    TuiSlashCommandAction::Marketplace => Some("Marketplace"),
+                    TuiSlashCommandAction::Plugins => Some("Plugins"),
+                    TuiSlashCommandAction::Lsp => Some("Language servers"),
+                    _ if !invocation.arguments.is_empty() => None,
+                    TuiSlashCommandAction::Model => Some("Model"),
+                    TuiSlashCommandAction::Resume => Some("Resume session"),
+                    TuiSlashCommandAction::Skills => Some("Skills"),
+                    TuiSlashCommandAction::Memories => Some("Memories"),
+                    TuiSlashCommandAction::Mcp => Some("MCP"),
+                    TuiSlashCommandAction::Connectors => Some("Connectors"),
+                    TuiSlashCommandAction::Status => Some("Status"),
+                    TuiSlashCommandAction::Usage => Some("Usage"),
+                    TuiSlashCommandAction::Rewind => Some("Rewind"),
+                    TuiSlashCommandAction::AddDir => Some("Directories"),
                     _ => None,
                 }
             }

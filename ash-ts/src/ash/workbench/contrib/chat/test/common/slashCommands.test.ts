@@ -2,14 +2,30 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "mocha";
-import type { SlashCommandDefinition } from "../../../../services/chat/common/chatService.js";
-import { parseSlashCommandInput, SlashCommandCatalog } from "../../common/slashCommands.js";
+import { ProductSlashCommands, type SlashCommandDefinition } from "../../../../services/chat/common/chatService.js";
+import { DesktopSlashCommands, parseSlashCommandInput, SlashCommandCatalog } from "../../common/slashCommands.js";
 
 const local = [{
 	definition: { name: "history", description: "Show chat history", argumentMode: "none" as const },
 	actionId: "chat.history",
 	aliases: ["chats"],
 }];
+
+test("Product Slash Commands preserve shared definitions and local panel arguments", () => {
+	const catalog = new SlashCommandCatalog(DesktopSlashCommands, []);
+	for (const definition of Object.values(ProductSlashCommands)) {
+		assert.deepEqual(catalog.get(definition.name), definition);
+		assert.equal(catalog.binding(definition.name)?.origin, "local");
+		assert.equal(parseSlashCommandInput(`/${definition.name}`, catalog).kind, "command");
+		const parsed = parseSlashCommandInput(`/${definition.name} rust tools`, catalog);
+		if (definition.argumentMode === "none") {
+			assert.equal(parsed.kind, "unknown");
+		} else {
+			assert.equal(parsed.kind, "command");
+			if (parsed.kind === "command") { assert.equal(parsed.argumentsText, "rust tools"); }
+		}
+	}
+});
 
 test("Slash Command input switches only for a leading slash", () => {
 	const catalog = new SlashCommandCatalog(local, []);

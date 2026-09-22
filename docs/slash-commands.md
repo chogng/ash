@@ -131,7 +131,8 @@ Web/Electron Workbench 和 Ash Code TUI 使用一个包管理入口，加上各�
 - 搜索命中语言包不代表其中每种语言都有 LSP；服务器路由必须来自已验证 catalog 的明确声明。
 - 安装、更新和卸载通知使领域重新读取状态；进程、文档、认证、启用设置仍归各领域管理。
 
-当前 Web/Electron Chat 已注册 `/marketplace`、`/plugins`、`/skills`、`/lsp`，均无参数，打开相应 Workbench 页面。
+Web/Electron Chat 与 Ash Code 共用 `ProductSlashCommand` 的命令定义；Rust 直接读取，TypeScript 由协议生成器生成 `PRODUCT_SLASH_COMMANDS`。名称、描述、参数模式和占位提示只在共享契约中声明，各端仅绑定自身面板，不加入服务端会话命令。
+`/marketplace [query]` 打开并搜索包，`/lsp [language-id]` 打开服务器面板并设置查找语言；`/plugins` 与 `/skills` 不接受参数。
 页面提供 Tab/方向键导航、Alt+F1 帮助与独立 accessibility verbosity 设置。安装前展示完整包的版本和能力；
 已安装列表按安装记录 ID 管理，同包多版本不会混用；目录不可用时仍可读取本地安装列表并卸载。
 Skill 启用和 LSP 配置使用后端配置 revision；遇到冲突保留输入并提示刷新，不自动覆盖。

@@ -21,9 +21,9 @@ registerWorkbenchContribution('workbench.contrib.marketplace', WorkbenchPhase.Bl
 	registrations.add(ViewsRegistry.registerViews('ash.marketplace', [{ id: 'ash.marketplace.view', title: 'Marketplace', canToggleVisibility: false, ctorDescriptor: new ServiceConstructionDescriptor(MarketplaceViewPane) }]));
 	registrations.add(registerAction2(class OpenMarketplace extends Action2 {
 		constructor() { super({ id: OPEN_MARKETPLACE_COMMAND_ID, title: 'Open Marketplace', f1: true }); }
-		public override async run(accessor: ServicesAccessor, options?: MarketplaceOpenOptions): Promise<void> {
+		public override async run(accessor: ServicesAccessor, options?: MarketplaceOpenOptions | string): Promise<void> {
 			const view = accessor.get(IViewsService).openView('ash.marketplace.view');
-			if (view instanceof MarketplaceViewPane) { await view.open(options); }
+			if (view instanceof MarketplaceViewPane) { await view.open(typeof options === 'string' ? { query: options.trim() } : options); }
 		}
 	}));
 	registrations.add(registerAction2(class OpenPlugins extends Action2 {

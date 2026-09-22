@@ -5,6 +5,7 @@ export type { AppServerListenInfo } from './AppServerListenInfo.js';
 export type { WebListenInfo } from './WebListenInfo.js';
 export type { WebSessionInfo } from './WebSessionInfo.js';
 export { APP_SERVER_METHODS } from './AppServerRequestMap.js';
+export { PRODUCT_SLASH_COMMANDS } from './ProductSlashCommands.js';
 export type { AppServerMethod, AppServerMethodDefinition, AppServerRequest, AppServerRequestMap, AppServerResponse, MethodParams, MethodResult } from './AppServerRequestMap.js';
 export { APP_SERVER_NOTIFICATIONS } from './AppServerNotificationMap.js';
 export type { AppServerNotificationDefinition, AppServerNotificationMap, AppServerNotificationMethod, AppServerWireNotification, NotificationParams, ServerNotification } from './AppServerNotificationMap.js';

@@ -71,6 +71,10 @@ export class LanguageServersViewPane extends ViewPane {
 		this.applyEnabled();
 	}
 
+	public open(languageId?: string): void {
+		this.focus();
+		if (languageId !== undefined) { this.language.value = languageId.trim(); }
+	}
 	public override setVisible(visible: boolean): void {
 		super.setVisible(visible);
 		if (visible) { this.updateLanguage(); if (!this.snapshot) { void this.run(() => this.load()); } }
@@ -136,7 +140,7 @@ export class LanguageServersViewPane extends ViewPane {
 	}
 	private async showHelp(): Promise<void> {
 		const focus = this.element.ownerDocument.activeElement;
-		await this.dialogs.showMessage({ title: 'Language servers help', severity: DialogSeverity.Info, message: 'Language ID follows the active code editor and can be edited. Find language servers opens Marketplace filtered to executable routes for that exact language. Syntax-only packages are excluded. Choose a workspace folder to inspect server availability. Select a server or enter its ID to enable it or set an executable path on the App Server host. Leave the path empty to use the installed server or a server on PATH. Configuration applies to the profile. Use default removes the override; installed servers use their package defaults. If configuration changes elsewhere, refresh before saving again. Use Tab and Shift+Tab to navigate, arrow keys to select a server, and Escape to close help.' });
+		await this.dialogs.showMessage({ title: 'Language servers help', severity: DialogSeverity.Info, message: 'Open with /lsp [language-id] to set a language explicitly. Otherwise Language ID follows the active code editor and can be edited. Find language servers opens Marketplace filtered to executable routes for that exact language. Syntax-only packages are excluded. Choose a workspace folder to inspect server availability. Select a server or enter its ID to enable it or set an executable path on the App Server host. Leave the path empty to use the installed server or a server on PATH. Configuration applies to the profile. Use default removes the override; installed servers use their package defaults. If configuration changes elsewhere, refresh before saving again. Use Tab and Shift+Tab to navigate, arrow keys to select a server, and Escape to close help.' });
 		if (focus instanceof HTMLElement && focus.isConnected) { focus.focus(); }
 	}
 	private option(label: string, value: string): HTMLOptionElement { const option = h(this.element.ownerDocument, 'option'); option.textContent = label; option.value = value; return option; }

@@ -14,7 +14,7 @@ content underlying transcript content underlying transcript content
   /status                    show the active session, thread, and model        ┃
   /usage                     show ChatGPT quota and reset times                │
   /statusline                choose the items shown in the status line         │
-  /skills                    browse configured skill sources                   │
+  /skills                    browse and manage skills                          │
   /memories                  manage memories, reading consent and model saving │
   /mcp                       list configured MCP tools                         │
   ╭──────────────────────────────────────────────────────────────────────────╮  

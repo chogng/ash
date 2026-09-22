@@ -2,18 +2,20 @@
 
 use super::state::ChatInputItem;
 use super::state::ChatSubmission;
+use ash_slash_commands::ProductSlashCommand;
 use ash_slash_commands::SlashCommandArgumentMode;
 use ash_slash_commands::SlashCommandDefinition;
 use ash_slash_commands::SlashCommandInvocation as ParsedSlashCommand;
 use ash_slash_commands::SlashCommandOrigin;
 use strum::IntoEnumIterator;
-use strum_macros::{AsRefStr, EnumIter, EnumString, IntoStaticStr};
+use strum_macros::EnumIter;
+use strum_macros::IntoStaticStr;
 
 #[cfg(test)]
 use ash_slash_commands::SlashCommandCatalog;
 
 /// TUI execution binding for a locally contributed Slash Command definition.
-#[derive(AsRefStr, Clone, Copy, Debug, EnumIter, EnumString, Eq, IntoStaticStr, PartialEq)]
+#[derive(Clone, Copy, Debug, EnumIter, Eq, IntoStaticStr, PartialEq)]
 #[strum(serialize_all = "kebab-case")]
 pub(crate) enum TuiSlashCommandAction {
     Status,
@@ -69,12 +71,12 @@ impl TuiSlashCommandAction {
         }
     }
 
-    pub(crate) fn command(self) -> &'static str {
-        self.into()
+    pub(crate) fn command(self) -> String {
+        self.definition().name
     }
 
-    pub(crate) fn description(self) -> &'static str {
-        match self {
+    pub(crate) fn definition(self) -> SlashCommandDefinition {
+        let description = match self {
             Self::Pr => "ask the Agent to create or inspect a pull request",
             Self::Issue => "select issues to develop together",
             Self::Status => "show the active session, thread, and model",
@@ -83,10 +85,10 @@ impl TuiSlashCommandAction {
             Self::Dashboard => "open Dashboard",
             Self::Subagents => "focus the current Session Thread list",
             Self::Memories => "manage memories, reading consent and model saving",
-            Self::Marketplace => "find and install Marketplace packages",
-            Self::Plugins => "manage installed packages and exact versions",
-            Self::Lsp => "manage language servers and find packages",
-            Self::Skills => "browse configured skill sources",
+            Self::Marketplace => return ProductSlashCommand::Marketplace.definition(),
+            Self::Plugins => return ProductSlashCommand::Plugins.definition(),
+            Self::Lsp => return ProductSlashCommand::Lsp.definition(),
+            Self::Skills => return ProductSlashCommand::Skills.definition(),
             Self::Mcp => "list configured MCP tools",
             Self::Connectors => "show external service connections",
             Self::Resume => "list or resume a saved session",
@@ -108,14 +110,19 @@ impl TuiSlashCommandAction {
             Self::Theme => "show or set the terminal color theme",
             Self::New => "start a new chat",
             Self::Quit => "quit Ash",
+        };
+        let name: &'static str = self.into();
+        SlashCommandDefinition {
+            name: name.into(),
+            description: description.into(),
+            argument_mode: self.argument_mode(),
+            argument_hint: self.argument_hint().map(Into::into),
         }
     }
 
-    pub(crate) fn argument_mode(self) -> SlashCommandArgumentMode {
+    fn argument_mode(self) -> SlashCommandArgumentMode {
         match self {
-            Self::Marketplace
-            | Self::Lsp
-            | Self::Resume
+            Self::Resume
             | Self::Memories
             | Self::Rewind
             | Self::AddDir
@@ -130,11 +137,9 @@ impl TuiSlashCommandAction {
         }
     }
 
-    pub(crate) fn argument_hint(self) -> Option<&'static str> {
+    fn argument_hint(self) -> Option<&'static str> {
         match self {
             Self::Cd | Self::AddDir | Self::Export => Some("<path>"),
-            Self::Marketplace => Some("<query>"),
-            Self::Lsp => Some("<language-id>"),
             Self::Model => Some("<model> [effort]"),
             Self::Theme => Some("<theme>"),
             Self::Resume => Some("<session-id>"),
@@ -145,14 +150,15 @@ impl TuiSlashCommandAction {
             _ => None,
         }
     }
+}
 
-    pub(crate) fn definition(self) -> SlashCommandDefinition {
-        SlashCommandDefinition {
-            name: self.command().into(),
-            description: self.description().into(),
-            argument_mode: self.argument_mode(),
-            argument_hint: self.argument_hint().map(Into::into),
-        }
+impl std::str::FromStr for TuiSlashCommandAction {
+    type Err = ();
+
+    fn from_str(name: &str) -> Result<Self, Self::Err> {
+        Self::iter()
+            .find(|action| action.definition().name == name)
+            .ok_or(())
     }
 }
 
@@ -258,7 +264,7 @@ pub(crate) fn default_slash_command_catalog() -> SlashCommandCatalog {
 #[cfg(test)]
 pub(crate) fn built_in_catalog_command(command: TuiSlashCommandAction) -> SlashCommandDefinition {
     default_slash_command_catalog()
-        .command_named(command.command())
+        .command_named(&command.command())
         .expect("the requested TUI built-in command is registered")
         .clone()
 }

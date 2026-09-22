@@ -7,7 +7,7 @@ test('Marketplace slash commands open their Workbench owners without sending a c
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
 	const input = page.locator('.ash-chat-input-editor .stanza-editor-input');
-	for (const [command, selector] of [['/marketplace', '.ash-marketplace'], ['/plugins', '.ash-marketplace'], ['/skills', '.ash-skills'], ['/lsp', '.ash-language-servers']]) {
+	for (const [command, selector] of [['/marketplace rust tools', '.ash-marketplace'], ['/plugins', '.ash-marketplace'], ['/skills', '.ash-skills'], ['/lsp rust', '.ash-language-servers'], ['/marketplace', '.ash-marketplace'], ['/lsp', '.ash-language-servers']]) {
 		await input.focus();
 		await page.keyboard.press('ControlOrMeta+A');
 		await page.keyboard.insertText(command);
@@ -15,6 +15,9 @@ test('Marketplace slash commands open their Workbench owners without sending a c
 		await page.keyboard.press('Enter');
 		await expect(page.locator(selector)).toBeVisible();
 		if (command === '/plugins') { await expect(page.locator(selector).getByLabel('Package list', { exact: true })).toHaveValue('installed'); }
+		if (command === '/marketplace rust tools') { await expect(page.locator(selector).getByLabel('Search packages', { exact: true })).toHaveValue('rust tools'); }
+		if (command === '/marketplace') { await expect(page.locator(selector).getByLabel('Search packages', { exact: true })).toHaveValue(''); }
+		if (command === '/lsp rust') { await expect(page.locator(selector).getByLabel('Language ID', { exact: true })).toHaveValue('rust'); }
 	}
 	await expect(page.locator('.ash-chat-item-userMessage')).toHaveCount(0);
 	const lsp = page.locator('.ash-language-servers');

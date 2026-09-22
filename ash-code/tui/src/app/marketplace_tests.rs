@@ -164,28 +164,44 @@ fn marketplace_slash_commands_open_panels_without_creating_a_conversation() {
         json!({"servers":[]}),
     ]);
     let mut app = App::new();
-    for (command, argument, title) in [
-        (TuiSlashCommandAction::Marketplace, "rust", "Marketplace"),
+    for (command, argument, loading_title, title) in [
+        (
+            TuiSlashCommandAction::Marketplace,
+            "rust",
+            "Marketplace",
+            "Marketplace",
+        ),
         (
             TuiSlashCommandAction::Plugins,
             "",
+            "Plugins",
             "Plugins · Installed packages",
         ),
-        (TuiSlashCommandAction::Lsp, "rust", "Language servers"),
+        (
+            TuiSlashCommandAction::Lsp,
+            "rust",
+            "Language servers",
+            "Language servers",
+        ),
     ] {
+        let invocation = SlashCommandInvocation {
+            command: command.definition(),
+            origin: ash_slash_commands::SlashCommandOrigin::Local,
+            display_arguments: argument.into(),
+            arguments: (!argument.is_empty())
+                .then(|| ChatInputItem::Text(argument.into()))
+                .into_iter()
+                .collect(),
+        };
+        let request = AppCommand::Thread(crate::thread::Command::ExecuteProductCommand(
+            invocation.clone(),
+        ));
+        assert_eq!(request.panel_title(), Some(loading_title));
         let output = super::dispatch::execute_product_command(
             None,
             &mut client,
             std::path::Path::new("/workspace"),
-            SlashCommandInvocation {
-                command: command.definition(),
-                origin: ash_slash_commands::SlashCommandOrigin::Local,
-                display_arguments: argument.into(),
-                arguments: (!argument.is_empty())
-                    .then(|| ChatInputItem::Text(argument.into()))
-                    .into_iter()
-                    .collect(),
-            },
+            invocation,
         )
         .unwrap();
         assert!(output.conversation.is_none());

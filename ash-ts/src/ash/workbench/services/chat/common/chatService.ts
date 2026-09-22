@@ -1,4 +1,5 @@
 import type { Event } from "../../../../base/common/event.js";
+import { PRODUCT_SLASH_COMMANDS } from "../../../../platform/app-server/common/generated/index.js";
 import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
 import type { ApprovalMode, ModelRef, SessionId, ThreadId } from "../../../../sessions/services/sessions/common/session.js";
 import type { SkillReference } from "../../../../platform/skills/common/skillApi.js";
@@ -37,6 +38,9 @@ export interface SlashCommandDefinition {
 	readonly argumentMode: "none" | "optional";
 	readonly argumentHint?: string;
 }
+
+/** Shared product metadata; execution bindings remain with each client. */
+export const ProductSlashCommands: Readonly<Record<keyof typeof PRODUCT_SLASH_COMMANDS, SlashCommandDefinition>> = PRODUCT_SLASH_COMMANDS;
 
 export interface SkillSelectorDefinition {
 	readonly name: string;

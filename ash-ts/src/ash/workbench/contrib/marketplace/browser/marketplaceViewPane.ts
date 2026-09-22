@@ -201,7 +201,7 @@ export class MarketplaceViewPane extends ViewPane {
 
 	private async showHelp(): Promise<void> {
 		const focus = this.element.ownerDocument.activeElement;
-		await this.dialogs.showMessage({ title: 'Marketplace help', severity: DialogSeverity.Info, message: 'Search by package, capability, language name, alias, or file extension. Capability filters include capabilities bundled in Plugins. A language server ID filter requires an executable route for that exact language and excludes packages that only supply syntax resources. Installed lists local packages even when the catalog is unavailable. Install, update, and uninstall affect the whole package. Use Tab and Shift+Tab to navigate and arrow keys to select a package. Escape closes this help.' });
+		await this.dialogs.showMessage({ title: 'Marketplace help', severity: DialogSeverity.Info, message: 'Open with /marketplace [query] to search, or /plugins to manage installed packages. Search by package, capability, language name, alias, or file extension. Capability filters include capabilities bundled in Plugins. A language server ID filter requires an executable route for that exact language and excludes packages that only supply syntax resources. Installed lists local packages even when the catalog is unavailable. Install, update, and uninstall affect the whole package. Use Tab and Shift+Tab to navigate and arrow keys to select a package. Escape closes this help.' });
 		if (focus instanceof HTMLElement && focus.isConnected) { focus.focus(); }
 	}
 

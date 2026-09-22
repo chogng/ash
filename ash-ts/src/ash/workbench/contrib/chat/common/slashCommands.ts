@@ -1,6 +1,6 @@
 import { OPEN_LANGUAGE_SERVERS_COMMAND_ID } from "../../../../platform/language/common/languageServerService.js";
 import { OPEN_SKILLS_COMMAND_ID } from "../../../../platform/skills/common/skillService.js";
-import type { SlashCommandDefinition } from "../../../services/chat/common/chatService.js";
+import { ProductSlashCommands, type SlashCommandDefinition } from "../../../services/chat/common/chatService.js";
 import { NEW_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from "./chat.js";
 
 import { OPEN_MARKETPLACE_COMMAND_ID, OPEN_PLUGINS_COMMAND_ID } from "../../../../platform/marketplace/common/marketplaceService.js";
@@ -85,13 +85,17 @@ export class SlashCommandCatalog {
 	}
 }
 
+const productActions: Record<keyof typeof ProductSlashCommands, string> = {
+	marketplace: OPEN_MARKETPLACE_COMMAND_ID,
+	plugins: OPEN_PLUGINS_COMMAND_ID,
+	skills: OPEN_SKILLS_COMMAND_ID,
+	lsp: OPEN_LANGUAGE_SERVERS_COMMAND_ID,
+};
+
 export const DesktopSlashCommands: readonly LocalSlashCommandRegistration[] = Object.freeze([
 	localCommand("new", "Start a new chat", NEW_CHAT_COMMAND_ID),
 	localCommand("history", "Show chat history", SHOW_CHAT_HISTORY_COMMAND_ID, ["chats"]),
-	localCommand("marketplace", "Browse and install packages", OPEN_MARKETPLACE_COMMAND_ID),
-	localCommand("plugins", "Manage installed packages", OPEN_PLUGINS_COMMAND_ID),
-	localCommand("skills", "Browse and manage skills", OPEN_SKILLS_COMMAND_ID),
-	localCommand("lsp", "Manage language servers", OPEN_LANGUAGE_SERVERS_COMMAND_ID),
+	...Object.entries(productActions).map(([id, actionId]) => ({ definition: ProductSlashCommands[id as keyof typeof ProductSlashCommands], actionId })),
 ]);
 
 export function parseSlashCommandInput(value: string, catalog: SlashCommandCatalog): SlashCommandInput {

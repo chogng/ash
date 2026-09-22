@@ -21,7 +21,10 @@ registerWorkbenchContribution('workbench.contrib.languageServers', WorkbenchPhas
 	registrations.add(ViewsRegistry.registerViews('ash.languageServers', [{ id: 'ash.languageServers.view', title: 'Language servers', canToggleVisibility: false, ctorDescriptor: new ServiceConstructionDescriptor(LanguageServersViewPane) }]));
 	registrations.add(registerAction2(class OpenView extends Action2 {
 		constructor() { super({ id: OPEN_LANGUAGE_SERVERS_COMMAND_ID, title: 'Open language servers', f1: true }); }
-		public override run(accessor: ServicesAccessor): void { accessor.get(IViewsService).focusView('ash.languageServers.view'); }
+		public override run(accessor: ServicesAccessor, languageId?: string): void {
+			const view = accessor.get(IViewsService).openView('ash.languageServers.view');
+			if (view instanceof LanguageServersViewPane) { view.open(languageId); }
+		}
 	}));
 	return registrations;
 });
