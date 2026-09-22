@@ -49,16 +49,14 @@ flowchart LR
 | 层 | 当前 owner | 负责什么 | 不负责什么 |
 | --- | --- | --- | --- |
 | PTY/进程层 | `ash-utils-pty` | spawn、读写、resize、signal、exit | ANSI/VT 解析、网格、scrollback 语义 |
-| 终端语义层 | `ash-terminal` | ANSI/VT parser、cell/grid、cursor、mode、scrollback 等 | 创建 Shell 进程、Electron IPC、产品窗口 |
+| 终端语义层 | `app/terminal` 的 `ash-terminal` | App 进程内的 ANSI/VT parser、cell/grid、cursor、mode、scrollback 等 | 创建 Shell 进程、Electron IPC、产品窗口 |
 | 产品后端层 | Rust App Server | 连接级 Terminal session、授权、生命周期和 protocol DTO | Renderer DOM 或 TUI 绘制 |
 | Electron 桥接层 | `ash` 的 Electron Main | 进程监督、trusted IPC、Renderer adapter | 复制 Rust 终端状态机 |
 | TUI 宿主层 | `ash code` 的 `ash-tui` | raw mode、alternate screen、输入事件和 Ratatui frame | 第二套 Agent runtime 或 PTY authority |
 | Native 宿主层 | `app` 的 `app/` | 原生窗口、GPU/UI、终端输入输出组合 | Electron Main、Renderer bridge |
 
-因此，`ash-terminal` 不能被 `ash-utils-pty` 替代。两者在 `app` 中已经是上下层组合；
-在 `ash` 中是否由 App Server 进一步组合 `ash-terminal`，取决于是否把终端语义状态从
-Renderer 的 xterm 投影迁移为 Rust authoritative state，这属于独立的终端演进，不影响三条
-产品线的宿主划分。
+`ash-terminal` 与 `ash-utils-pty` 在 `app` 中分别承担终端模型与进程执行。Electron Renderer 的 xterm
+继续持有本端终端模型；App Server 提供 PTY 字节与进程状态，不统一接管各前端的网格、光标或滚动。
 
 ## 代码入口对照
 

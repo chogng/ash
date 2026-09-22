@@ -1,9 +1,11 @@
 # ash-text-file
 
-`ash-text-file` owns the editor-independent lifecycle of one UTF-8 directory file. Cross-crate
-placement and product composition are documented in
-[`docs/ash-rs-architecture.md`](../../docs/ash-rs-architecture.md); this README is canonical for
-the crate's implementation contract.
+1. 在 App 进程内持有 UTF-8 文件的保存基线、磁盘版本和待处理外部快照。
+2. 根据编辑器当前文本判断 dirty、reload 和冲突，生成带磁盘版本条件的保存请求。
+3. 由 EditorHost 和 Workbench 消费；文本编辑由编辑器负责，实际读写由文件能力执行。
+
+Cross-crate placement and product composition are documented in
+[`docs/ash-rs-architecture.md`](../../docs/ash-rs-architecture.md); this README owns the implementation contract.
 
 ## Ownership
 
@@ -57,7 +59,8 @@ performs no I/O and therefore has no transport errors. A snapshot for another pa
 
 ## Tests and modification impact
 
-Run `cargo test -p ash-text-file`. `lifecycle_tests.rs` covers dirty/save state, explicit optimistic
+Run `just check ash-text-file --locked`, `just test ash-text-file --locked`, and
+`just rust-warnings ash-text-file --locked`. `lifecycle_tests.rs` covers dirty/save state, explicit optimistic
 overwrite, read-only behavior, reload/conflict classification, baseline synchronization and path
 mismatch rejection.
 

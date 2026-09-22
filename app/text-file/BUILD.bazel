@@ -1,0 +1,12 @@
+load("//:defs.bzl", "ash_rust_crate")
+
+ash_rust_crate(
+    name = "text-file",
+    crate_name = "ash_text_file",
+)
+
+filegroup(
+    name = "text-file_sources",
+    srcs = glob(["src/**/*.rs", "Cargo.toml"]),
+    visibility = ["//visibility:public"],
+)

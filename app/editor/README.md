@@ -5,7 +5,7 @@
 > [`docs/ash-rs-architecture.md`](../../docs/ash-rs-architecture.md)；`ash-diff` 算法契约见
 > [`ash-diff`](../../ash-rs/diff/README.md)；异步结构分析与 revision binding 见
 > [`docs/syntax-analysis.md`](../../docs/syntax-analysis.md)；文件保存基线与冲突状态由
-> [`ash-text-file`](../../ash-rs/text-file/README.md) 独立拥有。共享 Rust document core 与跨运行时迁移边界见
+> [`ash-text-file`](../text-file/README.md) 独立拥有。App 的 Rust document core 与跨运行时边界见
 > [`docs/editor-core.md`](../../docs/editor-core.md)。
 
 `ash-editor` 拥有 Native UI 使用的多行代码编辑模型、caret/selection、键盘命令、有界

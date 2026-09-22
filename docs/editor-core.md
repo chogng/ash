@@ -2,7 +2,7 @@
 
 > 状态：Current。`ash-editor-core` 是 App Native editor 的纯 Rust document core；Stanza 是 Ash
 > Renderer 内独立的 TypeScript editor，不通过 WASM 或 App Server RPC 复用该同步 core。Rust 实现契约见
-> [`ash-editor-core`](../ash-rs/editor-core/README.md)，app presentation 见
+> [`ash-editor-core`](../app/editor-core/README.md)，App 编辑器实现见
 > [`ash-editor`](../app/editor/README.md)，Stanza 实现见
 > [`ash-ts/src/ash/editor/text-engine.md`](../ash-ts/src/ash/editor/text-engine.md)。
 
@@ -36,9 +36,12 @@ Rust result(resource + document version + request identity)
      └─ stale: discard
 ```
 
-Rust 后端适合拥有文件读写与冲突检测、language-server 生命周期和 document sync、workspace search、Git/diff、
-formatting、rename、code action 和 parser-grade 分析。Stanza 始终拥有这些结果的交互状态与 presentation，并通过自己
-的 `TextModel.applyEdits` 应用后端返回的 edits。
+Rust 后端适合拥有文件读写与磁盘版本检查、language-server 生命周期和 document sync、workspace search、Git 与后台业务 Diff、
+formatting、rename、code action 和异步语言分析。Stanza 持有 dirty buffer、保存冲突状态和交互，并通过自己的
+`TextModel.applyEdits` 应用后端返回的 edits。
+
+基础语法高亮与编辑器实时 Diff 的最终归属是前端。TS 当前仍有 App Server Diff 和 parser token 调用，
+后续切分与验证见[前端 crate 迁移计划](../app/docs/crate-migration-plan.md)；本次 Rust crate 目录迁移不表示这些调用已移除。
 
 ## `ash-editor-core` 的 Native 契约
 

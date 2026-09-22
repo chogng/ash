@@ -1,13 +1,15 @@
 # `ash-terminal`
 
 > 外部 AI CLI、Terminal Pane 和产品接线由
-> [`app/TERMINAL.md`](../../app/TERMINAL.md) 统一说明。本 README 只拥有
+> [`app/TERMINAL.md`](../TERMINAL.md) 统一说明。本 README 只拥有
 > terminal model 的当前实现契约、内部接口和修改路径；PTY process plumbing 见
-> [`ash-utils-pty`](../utils/pty/README.md)。
+> [`ash-utils-pty`](../../ash-rs/utils/pty/README.md)。
 
-`ash-terminal` 把 PTY 输出字节解析为可绘制的终端 grid，并把用户提交的命令及其 printable
-output 组织为有界 BlockList。它不启动进程、不拥有窗口、GPU、输入组件、shell profile、Session
-持久化或 Agent 状态。
+1. 在 App 进程内将 PTY 输出解析为终端网格，维护光标、屏幕、样式和滚动历史。
+2. 根据终端模式编码按键、粘贴与鼠标输入，并维护有界命令输出 BlockList。
+3. 由终端宿主直接调用；PTY 进程、窗口、GPU、Session 持久化与 Agent 状态各归所属能力。
+
+CLI 的 PTY 集成测试也使用本 crate 解析输出；这项测试依赖不改变 App 对终端模型的归属。
 
 ## 所有权
 
@@ -137,8 +139,10 @@ host resize
 ## 测试与限制
 
 ```bash
-cargo test --manifest-path Cargo.toml -p ash-terminal
-bazel test //ash-rs/terminal:terminal-unit-tests
+just check ash-terminal --locked
+just test ash-terminal --locked
+just rust-warnings ash-terminal --locked
+bazel test //app/terminal:terminal-unit-tests
 ```
 
 当前测试覆盖：

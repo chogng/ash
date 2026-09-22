@@ -1,12 +1,12 @@
 # `ash-editor-core`
 
 > 本 README 拥有纯 Rust 编辑器核心的实现契约。跨运行时的分层、前端服务边界与迁移阶段由
-> [`docs/editor-core.md`](../../docs/editor-core.md) 规范；Native presentation 的当前能力见
-> [`ash-editor`](../../app/editor/README.md)。
+> [`docs/editor-core.md`](../../docs/editor-core.md) 规范；App 编辑器的当前能力见
+> [`ash-editor`](../editor/README.md)。
 
-`ash-editor-core` 拥有 revision-bound 的文本事务、多选区值、UTF-16 offset 边界与有界 undo/redo。
-它不依赖 `zui`、`ash-ui`、Native、DOM、文件、语法解析器或 IPC transport。当前真实消费者是 Native
-`ash-editor`；Desktop Stanza 拥有独立的 TypeScript `TextModel`，不依赖本 crate。
+1. 在 App 进程内持有文本、选区、revision 和有界 undo/redo。
+2. 原子应用绑定 revision 的文本事务，并校验 UTF-16 offset 边界。
+3. 由 `ash-editor` 直接调用，不依赖绘制、文件、语法解析器或 IPC；TypeScript 端拥有自己的 `TextModel`。
 
 ## 当前 API 与调用路径
 
@@ -54,8 +54,9 @@ presentation 真正支持多 caret。
 ## 修改影响与验证
 
 ```bash
-cargo test --manifest-path Cargo.toml -p ash-editor-core
-cargo clippy --manifest-path Cargo.toml -p ash-editor-core --all-targets -- -D warnings
+just check ash-editor-core --locked
+just test ash-editor-core --locked
+just rust-warnings ash-editor-core --locked
 ```
 
 修改 UTF-16 mapping、transaction validation 或 history 时必须同步检查 `document_tests.rs`。如果该 crate

@@ -21,12 +21,13 @@ Native UI 的 crate 从共享 workspace 中分离。
 | Element、Scene、Interaction、Animation、Retained Runtime | `app/zui` | app-owned crates in root workspace | 已迁入 app |
 | Button、Tree、List、Editor/Environment pane presentation | `app/ui-components`、`editor`、`workbench/environment` | app-owned modules and crates in root workspace | 已迁入 app |
 | Renderer、wgpu、winit | 历史 `app/renderer`、`wgpu`、`winit` | private `app/zui` modules | 已收入单一 `zui` crate |
-| App Server、Core、Protocol、Session、File/Git、Diff、Terminal model | `ash-rs/*` | `ash-rs` | 保留 |
-| 纯 Rust editor transaction、syntax、LSP manager | `ash-rs/editor-core`、`syntax`、`lsp-manager` | `ash-rs` | 保留；presentation 与底层分离 |
+| App Server、Core、Protocol、Session、File/Git、后台 Diff | `ash-rs/*` | `ash-rs` | 保留 |
+| 编辑事务、文件编辑生命周期、终端模型 | `app/editor-core`、`app/text-file`、`app/terminal` | `app` | 路径已迁移；验证状态见[前端 crate 迁移计划](crate-migration-plan.md) |
+| 共享解析算法、LSP manager | `ash-rs/syntax`、`ash-rs/lsp-manager` | 共享能力库 | 编辑器实例与交互状态由前端持有 |
 
 `ash-rs` 的“共享”按宿主无关的 Rust 语义和 backend contract 判断，不要求 Electron TypeScript 直接
-链接 Rust crate；Electron 通过 App Server protocol 使用同一套 authority。只有产品布局、窗口、GPU、
-Native interaction composition 和平台生命周期不能继续进入 `ash-rs` shared layer。
+链接 Rust crate；Electron 通过 App Server protocol 使用业务能力。编辑器文本、文件编辑生命周期、
+终端模型、产品布局、窗口、GPU 与平台交互生命周期由各前端拥有。
 
 ## 目标结构
 
@@ -39,6 +40,9 @@ ash/
 │   ├── README.md
 │   ├── src/                    # app product host and composition root
 │   ├── zui/                    # complete public framework; capability-owned internal directories
+│   ├── editor-core/            # 文本、选区、事务与撤销
+│   ├── text-file/              # 保存基线、dirty 与外部修改冲突
+│   ├── terminal/               # 终端网格、光标、滚动与输入编码
 │   ├── composer/               # app Composer state, input, interaction and geometry
 │   ├── ui/                     # reusable UI components
 │   ├── workbench/              # pure Tab/Pane Workbench model
@@ -49,8 +53,6 @@ ash/
 │   ├── core/
 │   ├── app-server*/
 │   ├── protocol/
-│   ├── editor-core/
-│   ├── terminal/
 │   └── ...
 └── ash-ts/                    # Electron product host
 ```
@@ -89,7 +91,7 @@ ash-rs ───────→ no app/desktop product host
 ### 阶段二：分离 Native UI workspace（核心迁移已完成）
 
 - [x] 将 Native UI crates 迁入 `app/`，再把 icon/UI/runtime/wgpu/winit 职责收敛为单一 public `zui` crate 的同名能力目录；
-- [x] 保留 `ash-editor-core`、`ash-syntax` 等纯 Rust core 在 `ash-rs`，将 `ash-editor` presentation 迁入 app；
+- [x] 将 `ash-editor` 迁入 App；当时保留在共享目录的编辑核心，已按[前端 crate 迁移计划](crate-migration-plan.md)继续迁入 `app/editor-core`；`ash-syntax` 保留共享算法；
 - [x] 将 Files/SCM workspace panes、Native settings UI 和 Native keybinding UI 迁入 app-side modules/crates；
 - [x] 将 Markdown presentation crate 迁入 app-side crates，Theme manifest/resolver 保留在 shared backend；
 - [x] 保证 `ash-rs` backend crates 不再直接依赖 Native UI crate。
@@ -181,8 +183,7 @@ boundary CI 均已通过。
 - 不复制 `ash-rs/native` 形成第二个并行宿主；迁移必须保持单一运行入口。
 - 不在旧 Native 中修建新功能；若迁移过程中发现缺少通用能力，先在正确的下层 owner 实现，再由
   app 做最小接线。
-- 不把 `app/editor` 或 `app/workbench/environment` 等 presentation owner 直接误判为 shared backend；
-  先按“headless model/core”和“Native presentation”拆分。
+- 按状态归属区分前端与后端；没有绘制依赖的文本、撤销、文件编辑生命周期和终端模型仍属于前端。
 - 不让 `app` 类型、产品命令、窗口事件或布局类型进入 `ash-rs`。
 - 每个迁移阶段都必须保留 deterministic unit tests 和至少一个产品 targeted test；测试失败时先区分
   迁移回归与工作区已有的无关 dirty change。

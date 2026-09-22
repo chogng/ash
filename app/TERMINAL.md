@@ -1,6 +1,6 @@
 # `app` 终端
 
-> 状态：Proposed。本文是外部 AI CLI 接入、Terminal Pane、PTY 和终端协议边界的唯一说明。窗口层级见 [`LAYOUT.md`](LAYOUT.md)，终端模型实现见 [`ash-terminal`](../ash-rs/terminal/README.md)，PTY 实现见 [`ash-utils-pty`](../ash-rs/utils/pty/README.md)。
+> 状态：Proposed。本文是外部 AI CLI 接入、Terminal Pane、PTY 和终端协议边界的唯一说明。窗口层级见 [`LAYOUT.md`](LAYOUT.md)，终端模型实现见 [`ash-terminal`](terminal/README.md)，PTY 实现见 [`ash-utils-pty`](../ash-rs/utils/pty/README.md)。
 
 ## 快速理解
 

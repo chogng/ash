@@ -26,7 +26,7 @@ ash-tui transcript renderer
 原始 stdout/stderr 继续由 protocol 和 Thread presentation state 保存；本 crate 只在 render boundary
 生成 owned presentation value。不得让它读取 protocol DTO、修改 Thread message、维护跨 chunk VT
 parser state，或依赖 `ash-terminal`。完整 PTY terminal emulation 属于
-[`ash-terminal`](../../ash-rs/terminal/README.md)，不是此 adapter 的扩展方向。
+[`ash-terminal`](../../app/terminal/README.md)，不是此 adapter 的扩展方向。
 
 ## 内部实现与修改影响
 

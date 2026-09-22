@@ -76,7 +76,6 @@ members = [
     "ash-rs/debug-adapter",
     "ash-rs/extensions",
     "ash-rs/editor-extension-host",
-    "ash-rs/editor-core",
     "ash-rs/environment",
     "ash-rs/ext/extension-api",
     "ash-rs/ext/connectors",
@@ -145,8 +144,6 @@ members = [
     "ash-rs/skills",
     "ash-rs/state",
     "ash-rs/syntax",
-    "ash-rs/terminal",
-    "ash-rs/text-file",
     "ash-rs/thread-store",
     "ash-rs/thread-transcript",
     "ash-rs/git-turn-changes",
@@ -181,6 +178,7 @@ members = [
     "app",
     "app/commands",
     "app/editor",
+    "app/editor-core",
     "app/editor-host",
     "app/files",
     "app/icons",
@@ -189,7 +187,9 @@ members = [
     "app/keybindings",
     "app/session",
     "app/settings",
+    "app/terminal",
     "app/terminal-runtime",
+    "app/text-file",
     "app/theme",
     "app/ui-components",
     "app/workbench",
@@ -456,7 +456,7 @@ ash-diff = { path = "ash-rs/diff" }
 ash-debug-adapter = { path = "ash-rs/debug-adapter" }
 ash-editor = { path = "app/editor" }
 ash-editor-host = { path = "app/editor-host" }
-ash-editor-core = { path = "ash-rs/editor-core" }
+ash-editor-core = { path = "app/editor-core" }
 ash-environment = { path = "ash-rs/environment" }
 ash-extension-api = { path = "ash-rs/ext/extension-api" }
 connectors = { package = "ash-connectors-extension", path = "ash-rs/ext/connectors" }
@@ -536,10 +536,10 @@ ash-slash-launcher = { path = "ash-rs/slash-launcher" }
 ash-skills = { path = "ash-rs/skills" }
 ash-state = { path = "ash-rs/state" }
 ash-syntax = { path = "ash-rs/syntax" }
-ash-terminal = { path = "ash-rs/terminal" }
+ash-terminal = { path = "app/terminal" }
 ash-terminal-runtime = { path = "app/terminal-runtime" }
 ash-terminal-detection = { path = "ash-rs/terminal-detection" }
-ash-text-file = { path = "ash-rs/text-file" }
+ash-text-file = { path = "app/text-file" }
 ash-ui-theme = { path = "app/theme" }
 ash-thread-store = { path = "ash-rs/thread-store" }
 ash-thread-transcript = { path = "ash-rs/thread-transcript" }
