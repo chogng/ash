@@ -128,6 +128,22 @@ fn business_endpoints_use_both_routes_auth_cancellation_and_redacted_failures() 
             |backend, token| backend.list_workspace_messages(token).map(|_| ()),
         ),
         (
+            "rate-limit-reset-credits",
+            HttpMethod::Get,
+            r#"{"credits":[],"available_count":0}"#,
+            |backend, token| backend.list_reset_credits(token).map(|_| ()),
+        ),
+        (
+            "rate-limit-reset-credits/consume",
+            HttpMethod::Post,
+            r#"{"code":"reset","windows_reset":2}"#,
+            |backend, token| {
+                backend
+                    .consume_reset_credit("request-1", ResetCreditSelection::Available, token)
+                    .map(|_| ())
+            },
+        ),
+        (
             "usage",
             HttpMethod::Get,
             r#"{"plan_type":"plus"}"#,

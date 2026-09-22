@@ -6,7 +6,7 @@
 - 使用调用方提供的当前认证；凭据存储、刷新与账号生命周期由认证 crate 负责。
 - 共享 URL 校验、JSON 请求、取消传递和脱敏错误，复用 `ash-client` 与 `ash-http-client`。
 - 模型生成与流式协议由 `model-provider` 和 `ash-api` 负责。
-- 订阅接入只查询账号与使用情况，不提供充值、额度兑换、充值提醒或付款入口。
+- 订阅接入支持账号与用量查询，以及已有重置卡的查询和使用；不提供充值、购卡、充值提醒或付款入口。
 
 ## 模块与依赖
 
@@ -32,6 +32,8 @@
 | 个人统计与 token 历史 | `read_account_profile` | `GET profiles/me` |
 | 额度与完整策略 | `read_rate_limits`、`read_rate_limit_status` | `GET usage` |
 | Reserve 能力声明 | `read_rate_limits_with_reserve` | `GET usage`，附带 `x-openai-codex-luna-reserve: 1` |
+| 已有重置卡 | `list_reset_credits` | `GET rate-limit-reset-credits` |
+| 使用重置卡 | `consume_reset_credit` | `POST rate-limit-reset-credits/consume` |
 | 云端配置与约束 | `read_config_bundle` | `GET config/bundle` |
 | 用户设置 | `read_user_settings` | `GET settings/user`，禁止使用缓存 |
 | 工作区消息 | `list_workspace_messages` | `GET workspace-messages`，禁止保存缓存 |
@@ -80,9 +82,11 @@
 ## 调用约定
 
 - 每次操作传入 `CancellationToken`；认证目标由调用方提前解析。各供应商的认证 crate 负责 token 刷新、401 恢复与账号变化检查。
-- `read_rate_limits` 保持原有返回类型。`read_rate_limit_status` 额外返回用户身份、支出限制与限制原因。
+- `read_rate_limits` 保持原有返回类型。`read_rate_limit_status` 额外返回用户身份、可用重置卡数量、支出限制与限制原因。
+- 使用重置卡只消耗账号已有权益，调用方须取得本次使用的授权。通过 `ResetCreditSelection::Id` 指定卡，或用 `Available` 交给服务端选择；每次使用保留独立的 `redeem_request_id`，结果不确定时沿用原 ID，客户端不自动重试。
+- 重置卡查询和使用目前由 `backend-client::chatgpt` 提供，尚无 App Server RPC 或界面入口；普通额度查询不会自动使用重置卡。
 - 只有真正支持 Reserve 的消费方才调用 `read_rate_limits_with_reserve`；被动额度查询使用普通入口。
-- 创建任务的取消只表示本地停止等待，不能证明服务端未执行；客户端不会自动重放写入。
+- 创建任务或使用重置卡后的取消只表示本地停止等待，不能证明服务端未执行；客户端不会自动重放写入。
 - API key 费用查询需单独构建 `chatgpt::Client`，目标例如 `https://api.chatgpt.com`，并提供该目标的 API key、组织和项目请求头。客户端使用该目标的原始 origin，不猜测主机或转发另一个账号的认证。
 - 路径中的任务 ID 与查询参数分别编码；空路径段和 `.`、`..` 在发送前拒绝。
 - 云任务详情必须包含有效 `task` 元数据，且返回 ID 必须等于请求 ID。标题、环境、创建与更新时间、归档状态和关联 PR 由 `TaskMetadata` 保留；顶层与任务内的 `task_status_display` 分别保留，不互相覆盖。
@@ -108,7 +112,7 @@
 | 专项测试 | 主要覆盖 | 单独运行 |
 | --- | --- | --- |
 | `chatgpt/account_tests.rs` | 账号排序与身份、统计缺失与零值、调用记录 | `just test ash-backend-client chatgpt::account::tests` |
-| `chatgpt/usage_tests.rs` | 用量窗口、独立允许状态、支出策略与订阅状态 | `just test ash-backend-client chatgpt::usage::tests` |
+| `chatgpt/usage_tests.rs` | 用量窗口、独立允许状态、支出策略、重置卡列表与使用结果 | `just test ash-backend-client chatgpt::usage::tests` |
 | `chatgpt/config_tests.rs` | 配置层次、约束片段、设置布尔值、消息时间与缓存头 | `just test ash-backend-client chatgpt::config::tests` |
 | `chatgpt/tasks_tests.rs` | 分页与编码、任务身份与元数据、固定成功/失败响应、文本与差异提取 | `just test ash-backend-client chatgpt::tasks::tests` |
 | `chatgpt/costs_tests.rs` | 批量边界、线程/回合归属、十进制精度、结算与缺失数据 | `just test ash-backend-client chatgpt::costs::tests` |

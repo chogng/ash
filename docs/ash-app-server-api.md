@@ -1014,7 +1014,7 @@ account/updated
 `account/rateLimits/read` 按 `{ provider, accountId }` 查询指定账号。支持 `provider = "openai-chatgpt"` 和 `"xai-subscription"`。本地组合复用对应供应商的登录与模型认证对象，通过 `backend-client::chatgpt` 或 `backend-client::xai` 读取后台数据，不接触客户端凭据。
 
 - xAI 的 `limits` 为空、`credits` 为 `null`；`xai` 保留独立的信用额度合约：`usedPercent` 为小数，`periodType/periodStart/periodEnd` 为上游周期，`allowed/message` 为访问状态。`prepaidCents/onDemandUsedCents/onDemandCapCents` 为整数 USD 分字符串，避免跨语言精度损失。未提供的数据为 `null`；ChatGPT 不序列化 `xai`。
-- `account/read` 查询已就绪 xAI 账号的实时资料和套餐，并通过登录服务更新邮箱、姓名与组织；账号资料和额度查询均不持有全局读写锁。请求前后检查登录身份，取消或退出登录后的旧响应不进入账号状态。订阅接入不提供充值、额度兑换、充值提醒或付款入口。
+- `account/read` 查询已就绪 xAI 账号的实时资料和套餐，并通过登录服务更新邮箱、姓名与组织；账号资料和额度查询均不持有全局读写锁。请求前后检查登录身份，取消或退出登录后的旧响应不进入账号状态。订阅接入不提供充值、购卡、充值提醒或付款入口。已有重置卡的查询和使用保留在 `backend-client::chatgpt`，尚未暴露为 RPC。
 
 - 结果为 `{ provider, accountId, plan, limits, credits, xai? }`；`plan` 未提供时为 `null`。ChatGPT 的 `limits` 包含 `codex` 主额度和上游提供的附加模型额度，各项含 `id`、`name`、`model`、`allowed`、`limitReached`、`primary`、`secondary`。
 - 每个窗口返回已使用百分比 `usedPercent`、精确时长 `windowSeconds` 和 Unix 秒时间戳 `resetsAt`。余额为 `{ hasCredits, unlimited, balance }`，金额保留上游十进制字符串；缺失窗口、状态和余额保持 `null`。

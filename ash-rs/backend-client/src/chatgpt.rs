@@ -94,6 +94,12 @@ pub use usage::RateLimitReached;
 pub use usage::RateLimitStatus;
 pub use usage::RateLimitWindow;
 pub use usage::RateLimits;
+pub use usage::ResetCredit;
+pub use usage::ResetCreditCode;
+pub use usage::ResetCreditResult;
+pub use usage::ResetCreditSelection;
+pub use usage::ResetCredits;
+pub use usage::ResetCreditsSummary;
 pub use usage::SpendControl;
 pub use usage::SpendLimit;
 

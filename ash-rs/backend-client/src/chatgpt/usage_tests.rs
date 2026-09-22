@@ -1,3 +1,4 @@
+use crate::RequestError;
 use crate::chatgpt::test_support::target;
 use crate::chatgpt::*;
 use crate::test_support::Transport;
@@ -33,6 +34,80 @@ fn usage_keeps_server_permission_independent_of_displayed_percentage() {
                 .map(|window| window.used_percent),
             allowed.map(|_| percent)
         );
+    }
+}
+
+#[test]
+fn reset_credits_preserve_server_order_status_and_optional_metadata() {
+    let client = Transport::response(
+        200,
+        r#"{"credits":[{"id":"expired","reset_type":"full","status":"expired","granted_at":"2026-09-01","expires_at":"2026-09-10","title":"Gift","description":"Expired gift","future_field":true},{"id":"available","reset_type":"future","status":"available","granted_at":"2026-09-20"}],"available_count":1}"#,
+    );
+    let target = target(BASE_URL);
+    let credits = Client::new(&client, &target, RouteStyle::ChatGpt)
+        .unwrap()
+        .list_reset_credits(&CancellationSource::new().token())
+        .unwrap();
+    assert_eq!(credits.available_count, 1);
+    assert_eq!(credits.credits.len(), 2);
+    assert_eq!(
+        credits.credits[0],
+        ResetCredit {
+            id: "expired".into(),
+            reset_type: "full".into(),
+            status: "expired".into(),
+            granted_at: "2026-09-01".into(),
+            expires_at: Some("2026-09-10".into()),
+            title: Some("Gift".into()),
+            description: Some("Expired gift".into())
+        }
+    );
+    assert_eq!(credits.credits[1].id, "available");
+    assert_eq!(credits.credits[1].reset_type, "future");
+    assert_eq!(credits.credits[1].expires_at, None);
+    assert_eq!(credits.credits[1].title, None);
+}
+
+#[test]
+fn reset_credit_results_preserve_window_counts_and_reject_unknown_outcomes() {
+    let target = target(BASE_URL);
+    for (body, expected) in [
+        (
+            r#"{"code":"reset","windows_reset":2}"#,
+            Ok(ResetCreditResult {
+                code: ResetCreditCode::Reset,
+                windows_reset: 2,
+            }),
+        ),
+        (
+            r#"{"code":"no_credit"}"#,
+            Ok(ResetCreditResult {
+                code: ResetCreditCode::NoCredit,
+                windows_reset: 0,
+            }),
+        ),
+        (r#"{"code":"future"}"#, Err(RequestError::InvalidResponse)),
+        (
+            r#"{"code":"reset","windows_reset":-1}"#,
+            Err(RequestError::InvalidResponse),
+        ),
+        (
+            r#"{"code":"reset","windows_reset":null}"#,
+            Err(RequestError::InvalidResponse),
+        ),
+    ] {
+        let client = Transport::response(200, body);
+        assert_eq!(
+            Client::new(&client, &target, RouteStyle::ChatGpt)
+                .unwrap()
+                .consume_reset_credit(
+                    "stable-id",
+                    ResetCreditSelection::Available,
+                    &CancellationSource::new().token()
+                ),
+            expected
+        );
+        assert_eq!(client.requests.lock().unwrap().len(), 1);
     }
 }
 
@@ -158,9 +233,10 @@ fn absent_and_null_limits_are_unknown_instead_of_zero_usage() {
 }
 
 #[test]
-fn usage_metadata_and_reserve_header_preserve_the_backend_contract() {
+fn usage_metadata_and_reset_credit_selection_preserve_the_backend_contract() {
     let body = json!({
         "plan_type":"enterprise", "user_id":"user-1", "account_id":"account-1",
+        "rate_limit_reset_credits":{"available_count":3},
         "rate_limit":{"allowed":false,"limit_reached":true},
         "rate_limit_reached_type":{"type":"workspace_owner_credits"},
         "spend_control":{"reached":true,"individual_limit":{"source":"user","limit":"100.00","used":"100.00","remaining":"0","used_percent":100,"remaining_percent":0,"reset_after_seconds":20,"reset_at":2100000000}},
@@ -171,6 +247,7 @@ fn usage_metadata_and_reserve_header_preserve_the_backend_contract() {
     let backend = Client::new(&client, &target, RouteStyle::ChatGpt).unwrap();
     let status = backend.read_rate_limit_status(&token).unwrap();
     assert_eq!(status.user_id.as_deref(), Some("user-1"));
+    assert_eq!(status.reset_credits.unwrap().available_count, 3);
     assert_eq!(status.usage.limits[0].allowed, Some(false));
     assert_eq!(status.reached_type.unwrap().kind, "workspace_owner_credits");
     assert_eq!(
@@ -194,4 +271,54 @@ fn usage_metadata_and_reserve_header_preserve_the_backend_contract() {
             .headers()
             .contains(&HttpHeader::new("x-openai-codex-luna-reserve", "1"))
     );
+    drop(requests);
+
+    for (wire, expected) in [
+        ("reset", ResetCreditCode::Reset),
+        ("already_redeemed", ResetCreditCode::AlreadyRedeemed),
+        ("nothing_to_reset", ResetCreditCode::NothingToReset),
+        ("no_credit", ResetCreditCode::NoCredit),
+    ] {
+        let client = Transport::response(200, &json!({"code":wire}).to_string());
+        let backend = Client::new(&client, &target, RouteStyle::ChatGpt).unwrap();
+        for selection in [
+            ResetCreditSelection::Available,
+            ResetCreditSelection::Id("credit-1"),
+        ] {
+            assert_eq!(
+                backend
+                    .consume_reset_credit("stable-request", selection, &token)
+                    .unwrap()
+                    .code,
+                expected
+            );
+        }
+        let requests = client.requests.lock().unwrap();
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(requests[0].body()).unwrap(),
+            json!({"redeem_request_id":"stable-request"})
+        );
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(requests[1].body()).unwrap(),
+            json!({"redeem_request_id":"stable-request","credit_id":"credit-1"})
+        );
+    }
+    let client = Transport::response(
+        200,
+        r#"{"credits":[{"id":"c","reset_type":"full","status":"available","granted_at":"2026-09-01","expires_at":null,"title":"Gift"}],"available_count":1}"#,
+    );
+    let backend = Client::new(&client, &target, RouteStyle::Codex).unwrap();
+    let credits = backend.list_reset_credits(&token).unwrap();
+    assert_eq!(credits.credits[0].title.as_deref(), Some("Gift"));
+    assert_eq!(credits.credits[0].expires_at, None);
+    for (id, selection) in [
+        (" ", ResetCreditSelection::Available),
+        ("valid", ResetCreditSelection::Id("")),
+    ] {
+        assert_eq!(
+            backend.consume_reset_credit(id, selection, &token),
+            Err(RequestError::InvalidRequest)
+        );
+    }
+    assert_eq!(client.requests.lock().unwrap().len(), 1);
 }

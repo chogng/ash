@@ -2,6 +2,8 @@
 
 use crate::RequestError;
 use crate::chatgpt::Client;
+use crate::chatgpt::ResetCreditCode;
+use crate::chatgpt::ResetCreditSelection;
 use crate::chatgpt::RouteStyle;
 use crate::chatgpt::TaskListQuery;
 use crate::chatgpt::test_support::target;
@@ -22,6 +24,66 @@ use std::sync::Arc;
 use std::time::Duration;
 
 const WAIT: Duration = Duration::from_secs(5);
+
+#[test]
+fn existing_reset_credits_can_be_queried_and_used_without_replaying_failures() {
+    for (route, prefix) in [
+        (RouteStyle::Codex, "api/codex"),
+        (RouteStyle::ChatGpt, "wham"),
+    ] {
+        for status in [200, 429, 503] {
+            let mut replies = [
+                response(200, r#"{"credits":[{"id":"credit-1","reset_type":"full","status":"available","granted_at":"2026-09-01"}],"available_count":1}"#),
+                response(status, if status == 200 { r#"{"code":"reset","windows_reset":2}"# } else { "private-account-response" }),
+            ].into_iter();
+            let server = Server::start(move |stream| {
+                stream
+                    .write_all(&replies.next().expect("extra request"))
+                    .unwrap()
+            });
+            let transport = client();
+            let target = target(&format!("{}/backend-api/", server.url()));
+            let backend = Client::new(&transport, &target, route).unwrap();
+            let token = CancellationSource::new().token();
+            let credits = backend.list_reset_credits(&token).unwrap();
+            assert_eq!(credits.available_count, 1);
+            assert_eq!(credits.credits[0].id, "credit-1");
+            let result = backend.consume_reset_credit(
+                "stable-request",
+                ResetCreditSelection::Id(&credits.credits[0].id),
+                &token,
+            );
+            if status == 200 {
+                let result = result.unwrap();
+                assert_eq!(result.code, ResetCreditCode::Reset);
+                assert_eq!(result.windows_reset, 2);
+            } else {
+                assert_eq!(result, Err(RequestError::HttpStatus(status)));
+            }
+            let query = server.request();
+            assert_eq!(
+                query.line,
+                format!("GET /backend-api/{prefix}/rate-limit-reset-credits HTTP/1.1")
+            );
+            assert!(query.body.is_empty());
+            let use_credit = server.request();
+            assert_eq!(
+                use_credit.line,
+                format!("POST /backend-api/{prefix}/rate-limit-reset-credits/consume HTTP/1.1")
+            );
+            assert_eq!(
+                serde_json::from_slice::<serde_json::Value>(&use_credit.body).unwrap(),
+                json!({"redeem_request_id":"stable-request","credit_id":"credit-1"})
+            );
+            for request in [&query, &use_credit] {
+                for header in &target.headers {
+                    assert_eq!(request.header(header.name()), header.value());
+                }
+            }
+            server.assert_no_more_requests();
+        }
+    }
+}
 
 #[test]
 fn xai_business_queries_use_the_credits_contract_over_https() {
