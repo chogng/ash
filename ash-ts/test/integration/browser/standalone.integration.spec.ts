@@ -1,4 +1,18 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+async function stickyDefinitionPoint(page: Page): Promise<{ x: number; y: number; column: number }> {
+	const text = page.locator('#caller .stanza-editor-sticky-scroll-text').last();
+	await expect(text).toHaveText('  function inner() {');
+	return text.evaluate(element => {
+		const text = element.firstElementChild!.firstChild!;
+		const offset = text.textContent!.indexOf('inner') + 2;
+		const range = document.createRange();
+		range.setStart(text, offset);
+		range.setEnd(text, offset + 1);
+		const bounds = range.getBoundingClientRect();
+		return { x: bounds.left + bounds.width / 4, y: bounds.top + bounds.height / 2, column: offset + 1 };
+	});
+}
 
 test.describe('contribution lifecycle', () => {
 	test.afterEach(async ({ page }) => {
@@ -207,6 +221,28 @@ test.describe('contribution lifecycle', () => {
 		});
 	}
 
+	test('sticky scroll selects the widest outline and preserves its source until removal', async ({ page }) => {
+		await page.goto('/standalone.html?symbolIconsOff');
+		await page.evaluate(() => window.ashStandaloneIntegration.changeStickySources('initial'));
+		const headers = page.locator('#caller .stanza-editor-sticky-scroll-text');
+		await expect(headers).toHaveText(['  function inner() {', '    item 0']);
+		await page.evaluate(() => window.ashStandaloneIntegration.changeStickySources('larger'));
+		await expect(headers).toHaveText(['  function inner() {', '    item 0']);
+		await page.evaluate(() => window.ashStandaloneIntegration.changeStickySources('remove'));
+		await expect(headers).toHaveText(['function outer() {', '  function inner() {']);
+	});
+
+	test('sticky scroll uses indentation when every outline is empty and folding is disabled', async ({ page }) => {
+		await page.goto('/standalone.html?symbolIconsOff');
+		await page.evaluate(() => window.ashStandaloneIntegration.changeStickySources('initial'));
+		await page.evaluate(() => {
+			window.ashStandaloneIntegration.updateContributionOptions({ folding: false });
+			return window.ashStandaloneIntegration.changeStickySources('empty');
+		});
+		await expect(page.locator('#caller .stanza-editor-sticky-scroll-text')).toHaveText(['function outer() {', '  function inner() {']);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readStickyState())).hidden).toEqual([]);
+	});
+
 	test('sticky scroll clips a leaving scope and excludes headers inside hidden lines', async ({ page }) => {
 		await page.goto('/standalone.html');
 		await page.evaluate(() => {
@@ -344,26 +380,86 @@ test.describe('contribution lifecycle', () => {
 				window.ashStandaloneIntegration.prepareStickyHeaders();
 				if (modifier === 'Alt') window.ashStandaloneIntegration.updateContributionOptions({ multiCursorModifier: 'ctrlCmd' });
 			}, modifier);
-			const text = page.locator('#caller .stanza-editor-sticky-scroll-text').last();
-			await expect(text).toHaveText('  function inner() {');
-			const point = await text.evaluate(element => {
-				const text = element.firstElementChild!.firstChild!;
-				const offset = text.textContent!.indexOf('inner') + 2;
-				const range = document.createRange();
-				range.setStart(text, offset);
-				range.setEnd(text, offset + 1);
-				const bounds = range.getBoundingClientRect();
-				return { x: bounds.left + bounds.width / 4, y: bounds.top + bounds.height / 2, column: offset + 1 };
-			});
+			const point = await stickyDefinitionPoint(page);
 			await page.keyboard.down(modifier);
 			await page.mouse.click(point.x, point.y);
 			await page.keyboard.up(modifier);
 			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readDefinitionPosition())).toEqual({ lineNumber: 2, column: point.column });
-			await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
+			await page.evaluate(() => {
+				const index = window.ashStandaloneIntegration.readLanguageRequests().findIndex(request => !request.aborted);
+				return window.ashStandaloneIntegration.finishLanguageRequest(index);
+			});
 			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.getCallerPosition())).toEqual({ lineNumber: 1, column: 13 });
 			expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).focused).toBe(true);
 		});
+
+		test(`sticky scroll ${modifier} hover underlines definitions without moving the selection`, async ({ page }) => {
+			await page.goto('/standalone.html');
+			await page.evaluate(modifier => {
+				window.ashStandaloneIntegration.prepareLanguageRequest('definition');
+				window.ashStandaloneIntegration.prepareStickyHeaders();
+				window.ashStandaloneIntegration.setStickyTheme(modifier === 'Alt' ? 'ash-high-contrast-light' : 'ash-high-contrast-dark');
+				if (modifier === 'Alt') window.ashStandaloneIntegration.updateContributionOptions({ multiCursorModifier: 'ctrlCmd' });
+			}, modifier);
+			const point = await stickyDefinitionPoint(page);
+			const selection = await page.evaluate(() => window.ashStandaloneIntegration.getCallerPosition());
+			await page.mouse.move(point.x, point.y);
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests())).toEqual([]);
+			await page.keyboard.down(modifier);
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().length)).toBe(1);
+			await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
+			const token = page.locator('#caller .stanza-editor-sticky-scroll-text > span').last();
+			await expect(token).toHaveCSS('text-decoration-line', 'underline');
+			expect(await page.evaluate(() => window.ashStandaloneIntegration.getCallerPosition())).toEqual(selection);
+			await page.mouse.move(point.x + 1, point.y);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests())).length).toBe(1);
+			await page.keyboard.up(modifier);
+			await expect(token).toHaveCSS('text-decoration-line', 'none');
+		});
 	}
+
+	for (const reason of ['pointer', 'modifier', 'text', 'language', 'provider', 'model', 'dispose', 'layout', 'option'] as const) {
+		test(`sticky scroll definition hover cancels on ${reason} and rejects its late result`, async ({ page }) => {
+			await page.goto('/standalone.html');
+			await page.evaluate(() => {
+				window.ashStandaloneIntegration.prepareLanguageRequest('definition');
+				window.ashStandaloneIntegration.prepareStickyHeaders();
+			});
+			const point = await stickyDefinitionPoint(page);
+			await page.mouse.move(point.x, point.y);
+			await page.keyboard.down('ControlOrMeta');
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().length)).toBe(1);
+			if (reason === 'pointer') {
+				await page.mouse.move(0, 0);
+			} else if (reason === 'modifier') {
+				await page.keyboard.up('ControlOrMeta');
+			} else if (reason === 'layout') {
+				await page.evaluate(() => window.ashStandaloneIntegration.layoutContribution(590));
+			} else if (reason === 'option') {
+				await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ multiCursorModifier: 'ctrlCmd' }));
+			} else {
+				await page.evaluate(reason => window.ashStandaloneIntegration.changeLanguageRequest(reason), reason);
+			}
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests()))[0]!.aborted).toBe(true);
+			await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
+			await expect(page.locator('#caller .stanza-editor-sticky-scroll.definition-link')).toHaveCount(0);
+		});
+	}
+
+	test('sticky scroll definition hover leaves text unchanged when no definition exists', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => {
+			window.ashStandaloneIntegration.prepareLanguageRequest('definition', true);
+			window.ashStandaloneIntegration.prepareStickyHeaders();
+		});
+		const point = await stickyDefinitionPoint(page);
+		await page.keyboard.down('ControlOrMeta');
+		await page.mouse.move(point.x, point.y);
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().length)).toBe(1);
+		await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
+		await expect(page.locator('#caller .stanza-editor-sticky-scroll.definition-link')).toHaveCount(0);
+		await expect(page.locator('#caller .stanza-editor-sticky-scroll-text').last()).toHaveText('  function inner() {');
+	});
 
 	test('sticky scroll definition navigation cancels when its source editor changes model', async ({ page }) => {
 		await page.goto('/standalone.html');
@@ -374,11 +470,15 @@ test.describe('contribution lifecycle', () => {
 		const text = page.locator('#caller .stanza-editor-sticky-scroll-text').last();
 		await expect(text).toHaveText('  function inner() {');
 		await text.locator('span').first().click({ modifiers: ['ControlOrMeta'] });
-		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().length)).toBe(1);
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests().filter(request => !request.aborted).length)).toBe(1);
 		await page.evaluate(() => window.ashStandaloneIntegration.changeLanguageRequest('model'));
-		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests()))[0]!.aborted).toBe(true);
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readLanguageRequests())).every(request => request.aborted)).toBe(true);
 		const position = await page.evaluate(() => window.ashStandaloneIntegration.getCallerPosition());
-		await page.evaluate(() => window.ashStandaloneIntegration.finishLanguageRequest(0));
+		await page.evaluate(async () => {
+			for (const [index] of window.ashStandaloneIntegration.readLanguageRequests().entries()) {
+				await window.ashStandaloneIntegration.finishLanguageRequest(index);
+			}
+		});
 		expect(await page.evaluate(() => window.ashStandaloneIntegration.getCallerPosition())).toEqual(position);
 	});
 

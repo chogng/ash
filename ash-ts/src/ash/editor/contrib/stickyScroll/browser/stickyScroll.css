@@ -46,6 +46,10 @@
   text-overflow: ellipsis;
 }
 
+.stanza-editor-sticky-scroll.definition-link .stanza-editor-sticky-scroll-text > span:hover {
+  text-decoration: underline;
+}
+
 .stanza-editor-sticky-scroll-number {
   position: absolute;
   top: 0;

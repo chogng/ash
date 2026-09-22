@@ -18,6 +18,8 @@ import type { LanguageNavigationController } from '../../gotoSymbol/browser/lang
 import type { ContextMenuAnchor } from '../../../../base/browser/contextmenu.js';
 import { MenuId } from '../../../../platform/actions/common/actions.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
+import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
+import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent } from '../../../common/languages.js';
 
 /** Coordinates scope headers with the editor's existing layout and selection. */
 export class StickyScrollController extends Disposable {
@@ -29,15 +31,19 @@ export class StickyScrollController extends Disposable {
 	private previewLine: number | null = null;
 	private changingFold = false;
 	private menuOpen = false;
+	private pointer: { x: number; y: number } | undefined;
+	private definitionRequest: AbortController | undefined;
+	private definitionTarget: { node: HTMLElement; lineNumber: number; startColumn: number; endColumn: number } | undefined;
 
 	constructor(
 		private readonly editor: ICodeEditor,
 		private readonly viewport: View,
 		private readonly folding: EditorFoldingModel,
-		onError: (error: unknown) => void,
+		private readonly onError: (error: unknown) => void,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IContextKeyService private readonly contextKeyService: IContextKeyService,
 		@IContextMenuService private readonly contextMenuService: IContextMenuService,
+		@ILanguageFeaturesService private readonly languageFeatures: ILanguageFeaturesService,
 	) {
 		super();
 		if (folding.model !== viewport.textModel) {
@@ -51,6 +57,7 @@ export class StickyScrollController extends Disposable {
 		this.visible = EditorContextKeys.stickyScrollVisible.bindTo(contextKeyService);
 		const enabled = contextKeyService.createKey('config.editor.stickyScroll.enabled', editor.getOption(EditorOption.stickyScroll).enabled);
 		this._register(toDisposable(() => {
+			this.clearDefinitionLink();
 			focused.reset();
 			this.visible.reset();
 			enabled.reset();
@@ -109,7 +116,12 @@ export class StickyScrollController extends Disposable {
 		this._register(viewport.textModel.tokenization.renderedTokens.onDidChange(() => this.render()));
 		this._register(viewport.textModel.onDidChangeOptions(() => this.render()));
 		this._register(editor.onDidChangeCursorPosition(() => this.render()));
+		this._register(viewport.textModel.onDidChangeLanguage(() => this.clearDefinitionLink()));
+		this._register(languageFeatures.definitionProvider.onDidChange(() => this.clearDefinitionLink()));
 		this._register(editor.onDidChangeConfiguration(event => {
+			if (event.hasChanged(EditorOption.multiCursorModifier)) {
+				this.clearDefinitionLink();
+			}
 			if (event.hasChanged(EditorOption.stickyScroll)) {
 				enabled.set(editor.getOption(EditorOption.stickyScroll).enabled);
 			}
@@ -125,11 +137,15 @@ export class StickyScrollController extends Disposable {
 				this.widget.getLineIndexFromChildDomNode(event.target as HTMLElement));
 		}));
 		this._register(addDisposableListener(element, "pointermove", event => {
+			this.pointer = { x: event.clientX, y: event.clientY };
 			const index = this.widget.getLineIndexFromChildDomNode(event.target as HTMLElement);
 			this.hoveredLine = index === null ? null : this.widget.getCurrentLines()[index]!;
 			this.preview(event.shiftKey);
+			this.updateDefinitionLink(this.isDefinitionTrigger(event) && event.buttons === 0);
 		}));
 		this._register(addDisposableListener(element, "pointerleave", () => {
+			this.pointer = undefined;
+			this.clearDefinitionLink();
 			this.hoveredLine = null;
 			this.preview(false);
 		}));
@@ -138,13 +154,17 @@ export class StickyScrollController extends Disposable {
 			if (event.key === "Shift") {
 				this.preview(true);
 			}
+			this.updateDefinitionLink(this.isDefinitionTrigger(event) && !event.isComposing);
 		}));
 		this._register(addDisposableListener(window, "keyup", event => {
 			if (event.key === "Shift") {
 				this.preview(false);
 			}
+			this.updateDefinitionLink(this.isDefinitionTrigger(event));
 		}));
 		this._register(addDisposableListener(window, "blur", () => {
+			this.pointer = undefined;
+			this.clearDefinitionLink();
 			this.hoveredLine = null;
 			this.preview(false);
 		}));
@@ -152,14 +172,12 @@ export class StickyScrollController extends Disposable {
 			if (event.button !== 0) {
 				return;
 			}
-			const definitionModifier = this.editor.getOption(EditorOption.multiCursorModifier) === 'altKey'
-				? (isMacintosh ? event.metaKey : event.ctrlKey)
-				: event.altKey;
-			if (definitionModifier && !event.shiftKey) {
+			if (this.isDefinitionTrigger(event)) {
 				const range = element.ownerDocument.caretRangeFromPoint(event.clientX, event.clientY);
 				const position = this.widget.getEditorPositionFromNode(range?.startContainer.parentElement ?? null);
 				if (position && range && range.startContainer.parentElement === event.target) {
 					stopEvent(event);
+					this.clearDefinitionLink();
 					this.editor.setPosition(new Position(position.lineNumber, position.column + range.startOffset), 'stickyScroll');
 					this.editor.focus();
 					void this.editor.getContribution<LanguageNavigationController>('editor.contrib.languageNavigation')?.navigate('definition');
@@ -281,6 +299,66 @@ export class StickyScrollController extends Disposable {
 		}
 	}
 
+	private isDefinitionTrigger(event: MouseEvent | KeyboardEvent): boolean {
+		if (event.shiftKey || event.getModifierState('AltGraph')) {
+			return false;
+		}
+		return this.editor.getOption(EditorOption.multiCursorModifier) === 'altKey'
+			? (isMacintosh ? event.metaKey : event.ctrlKey)
+			: event.altKey;
+	}
+
+	private updateDefinitionLink(enabled: boolean): void {
+		const document = this.widget.getDomNode().ownerDocument;
+		const range = enabled && this.pointer ? document.caretRangeFromPoint(this.pointer.x, this.pointer.y) : null;
+		const node = range?.startContainer.parentElement ?? null;
+		const start = this.widget.getEditorPositionFromNode(node);
+		if (!start || !range || !node || document.elementFromPoint(this.pointer!.x, this.pointer!.y) !== node) {
+			this.clearDefinitionLink();
+			return;
+		}
+		const position = new Position(start.lineNumber, start.column + range.startOffset);
+		const word = this.viewport.textModel.getWordAtPosition(position);
+		if (!word || !this.languageFeatures.definitionProvider.has(this.viewport.textModel)) {
+			this.clearDefinitionLink();
+			return;
+		}
+		const target = this.definitionTarget;
+		if (target?.node === node && target.lineNumber === position.lineNumber && target.startColumn === word.startColumn && target.endColumn === word.endColumn) {
+			return;
+		}
+		this.clearDefinitionLink();
+		this.definitionTarget = { node, lineNumber: position.lineNumber, startColumn: word.startColumn, endColumn: word.endColumn };
+		const controller = this.definitionRequest = new AbortController();
+		void this.checkDefinition(position, controller);
+	}
+
+	private async checkDefinition(position: Position, controller: AbortController): Promise<void> {
+		const model = this.viewport.textModel;
+		const request = { ...createLanguageFeatureRequest(model, model.getLanguageId(), controller.signal), resource: model.uri, position };
+		const results = await Promise.all(this.languageFeatures.definitionProvider.ordered(model).map(async provider => {
+			try {
+				const locations = await provider.provideDefinition(request, controller.signal);
+				return locations.length > 0;
+			} catch (error) {
+				if (isLanguageFeatureRequestCurrent(request)) {
+					this.onError(error);
+				}
+				return false;
+			}
+		}));
+		if (isLanguageFeatureRequestCurrent(request)) {
+			this.widget.getDomNode().classList.toggle('definition-link', results.some(Boolean));
+		}
+	}
+
+	private clearDefinitionLink(): void {
+		this.definitionRequest?.abort();
+		this.definitionRequest = undefined;
+		this.definitionTarget = undefined;
+		this.widget.getDomNode().classList.remove('definition-link');
+	}
+
 	private showContextMenu(anchor: ContextMenuAnchor, index: number | null): void {
 		if (!this.editor.getOption(EditorOption.contextmenu) || index === null) {
 			return;
@@ -318,6 +396,7 @@ export class StickyScrollController extends Disposable {
 		if (this.changingFold) {
 			return;
 		}
+		this.clearDefinitionLink();
 		const state = this.findScrollWidgetState();
 		if (this.hoveredLine !== null && !state.startLineNumbers.includes(this.hoveredLine)) {
 			this.hoveredLine = null;

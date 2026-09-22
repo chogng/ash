@@ -45,7 +45,7 @@ export class StickyLineCandidateProvider extends Disposable implements IStickyLi
 	) {
 		super();
 		this.options = editor.getOption(EditorOption.stickyScroll);
-		this.modelProvider = this._register(instantiationService.createInstance(StickyModelProvider, editor, folding));
+		this.modelProvider = this._register(instantiationService.createInstance(StickyModelProvider, editor, folding, onError));
 		this._register(toDisposable(() => this.request?.dispose(true)));
 		this._register(folding.onDidChange(() => this.schedule()));
 		this._register(editor.onDidChangeModelContent(() => this.schedule()));

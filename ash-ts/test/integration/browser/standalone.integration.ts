@@ -136,6 +136,7 @@ interface StandaloneHarness {
 	readContributionDecorations(): { colors: number; highlights: number; folding: number };
 	prepareStickyHeaders(): void;
 	prepareStickySymbols(): void;
+	changeStickySources(change: 'initial' | 'larger' | 'remove' | 'empty'): Promise<void>;
 	setStickySyntax(foreground: string | null): void;
 	runStickyCommand(id: string): Promise<void>;
 	scrollSticky(top: number, left?: number): void;
@@ -154,7 +155,7 @@ interface StandaloneHarness {
 	prepareColorPicker(): void;
 	invokeLanguageAction(id: string): void;
 	readLanguageActions(): { rename: boolean; quickFix: boolean };
-	prepareLanguageRequest(kind: LanguageRequestKind): void;
+	prepareLanguageRequest(kind: LanguageRequestKind, emptyDefinition?: boolean): void;
 	languageHoverPoint(): { x: number; y: number };
 	readLanguageRequests(): { languageId: string; aborted: boolean }[];
 	readDefinitionPosition(): { lineNumber: number; column: number } | null;
@@ -486,6 +487,7 @@ let deferredFormatting: { token: CancellationToken; resolve: () => void }[] = []
 let formattingProvider: { dispose(): void } | undefined;
 let bracketTokenRegistration: { dispose(): void } | undefined;
 let stickySyntaxRegistration: { dispose(): void } | undefined;
+let stickyOutlineRegistration: { dispose(): void } | undefined;
 
 window.ashStandaloneIntegration = {
 	updateContributionOptions: options => callerEditor.updateOptions(options),
@@ -517,6 +519,36 @@ window.ashStandaloneIntegration = {
 				});
 			}),
 		}));
+	},
+	changeStickySources: change => {
+		const symbol = (start: number, end: number): stanza.LanguageDocumentSymbol => ({
+			name: `scope${start}`, kind: 'function', range: new stanza.Range(start, 1, end, 2), selectionRange: new stanza.Range(start, 1, start, 2),
+		});
+		if (change === 'initial') {
+			languageRequestProviders.clear();
+			window.ashStandaloneIntegration.prepareStickyHeaders();
+			stickyOutlineRegistration = languageRequestProviders.add(stanza.languages.registerDocumentSymbolProvider('*', {
+				provideDocumentSymbols: () => [{ ...symbol(2, 83), children: [symbol(3, 82)] }],
+			}));
+			languageRequestProviders.add(stanza.languages.registerDocumentSymbolProvider('*', { provideDocumentSymbols: () => [symbol(1, 84)] }));
+			languageRequestProviders.add(stanza.languages.registerDocumentSymbolProvider('*', { provideDocumentSymbols: () => [] }));
+		} else if (change === 'larger') {
+			languageRequestProviders.add(stanza.languages.registerDocumentSymbolProvider('*', {
+				provideDocumentSymbols: () => [{ ...symbol(1, 114), children: [symbol(2, 113)] }],
+			}));
+		} else if (change === 'remove') {
+			stickyOutlineRegistration!.dispose();
+		} else {
+			languageRequestProviders.clear();
+			languageRequestProviders.add(stanza.languages.registerDocumentSymbolProvider('*', { provideDocumentSymbols: () => [] }));
+		}
+		return new Promise(resolve => {
+			const provider = StickyScrollController.get(callerEditor)!.stickyScrollCandidateProvider;
+			const listener = languageRequestProviders.add(provider.onDidChangeStickyScroll(() => {
+				listener.dispose();
+				resolve();
+			}));
+		});
 	},
 	setStickySyntax: foreground => {
 		stickySyntaxRegistration?.dispose();
@@ -671,7 +703,7 @@ window.ashStandaloneIntegration = {
 		rename: callerEditor.getAction('editor.action.rename')?.isSupported() ?? false,
 		quickFix: callerEditor.getAction('editor.action.quickFix')?.isSupported() ?? false,
 	}),
-	prepareLanguageRequest: kind => {
+	prepareLanguageRequest: (kind, emptyDefinition = false) => {
 		languageRequestProviders.clear();
 		callerEditor.setValue('first second');
 		callerEditor.setSelection(new stanza.Selection(1, 1, 1, 6));
@@ -691,7 +723,7 @@ window.ashStandaloneIntegration = {
 			languageRequestProviders.add(stanza.languages.registerDefinitionProvider('*', {
 				provideDefinition: request => {
 					definitionPosition = { lineNumber: request.position.lineNumber, column: request.position.column };
-					return defer(request, [{ resource: callerResource, range: new stanza.Range(1, 7, 1, 13) }]);
+					return defer(request, emptyDefinition ? [] : [{ resource: callerResource, range: new stanza.Range(1, 7, 1, 13) }]);
 				},
 			}));
 		} else if (kind === 'symbols') {

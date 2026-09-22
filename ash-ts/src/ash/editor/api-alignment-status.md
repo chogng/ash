@@ -9,11 +9,11 @@
 | 路径（相对 `contrib/stickyScroll/`） | 起始关系 | 生产调用方与唯一职责 | 本批结果 |
 | --- | --- | --- | --- |
 | `browser/stickyScrollElement.ts` | 仅上游 | ModelProvider / Provider：带版本的作用域树及一基行号 | 数据契约进入实际计算链 |
-| `browser/stickyScrollModelProvider.ts` | 仅上游 | Provider：选取文档符号、现有折叠范围或缩进范围 | 声明行取 selectionRange；取消传到请求，拒绝过期结果 |
+| `browser/stickyScrollModelProvider.ts` | 仅上游 | Provider：选取文档符号、现有折叠范围或缩进范围 | 按累计范围选择符号组并保持来源；声明行取 selectionRange；并发取消、隔离提供者错误 |
 | `browser/stickyScrollProvider.ts` | 仅上游 | Controller：候选行、更新调度和失效 | 过滤隐藏标题，配置的展示项不重复请求模型 |
 | `browser/stickyScrollWidget.ts` | 仅上游 | Controller：标题 DOM、行节点复用及布局 | 保留 LineId 身份；复用正文着色，显示行号、折叠按钮及结尾预览；布局和焦点随状态更新 |
 | `browser/stickyScrollActions.ts` | 仅上游 | Contribution / 标题键盘入口：六个标准命令 | 开关、聚焦、上下移动、定位和返回编辑器；标准 StickyScrollContext 菜单及选中状态 |
-| `browser/stickyScrollController.ts` | 双方都有 | Contribution：候选行与编辑器滚动、选区之间的协调 | 标题定位、结尾预览、折叠、按高度限制行数；修饰键点击定义、右键与键盘菜单 |
+| `browser/stickyScrollController.ts` | 双方都有 | Contribution：候选行与编辑器滚动、选区之间的协调 | 标题定位、结尾预览、折叠、按高度限制行数；定义悬停预检与点击、右键与键盘菜单 |
 | `browser/stickyScrollContribution.ts` | 双方都有 | editor.all：装配与初次更新 | 服务经实例化容器注入，构造阶段不启动请求 |
 | `browser/stickyScroll.css` | 双方都有 | Widget：Stanza 标题行与两个并列按钮 | 固定行号区域、着色文字、折叠按钮状态及主题焦点颜色；按钮不相互嵌套 |
 
@@ -29,7 +29,15 @@ Widget 继续拥有并复用标题按钮，在同一行中增加独立折叠按�
 
 全量验证暴露 Workbench 测试装配缺少菜单依赖，追加准入既有 `../workbench/contrib/codeEditor/test/browser/codeEditorPane.test.ts`：复用 Editor 测试服务注册，并断言 stickyScroll 控制器实际创建成功。没有修改 Workbench 生产实现。
 
-尚未完整对齐的能力：修饰键悬停时的定义可用性预检与下划线提示、控件高度事件、`outlineProviderId` 多提供者选择规则。标准 `gotoSymbol/browser/goToSymbol.ts` 入口仍是导航模块的待处理项，本批复用已有导航 owner。高度事件在本地暂无消费方，不增加空端口。开关命令修改当前编辑器选项，Workbench 持久配置不在本批。控制器仍保留在下方待核对表，不能按成员数记作全量完成。
+模型来源续批准入：滚动后的标题、文档变化或提供者注册变化 → `StickyLineCandidateProvider.update` → `StickyModelProvider.update` → 当前文档符号提供者与现有折叠模型 → 保持有效来源、选择覆盖范围最大的符号组、按配置顺序选择范围 → 模型来源单测与 standalone Playwright。准确生产路径为本目录的 `browser/stickyScrollModelProvider.ts`（提供者选择、错误和取消）及 `browser/stickyScrollProvider.ts`（传递既有错误报告入口）；两者均为双方已有。测试路径为既有 `test/browser/stickyScroll.test.ts`、`ash-ts/test/integration/browser/standalone.integration.ts`、`ash-ts/test/integration/browser/standalone.integration.spec.ts`，文档仍只更新本文件。保留当前工作树中的导航和菜单改动。TextModel、折叠模型和 View 的状态及 Widget DOM、布局、焦点职责不变；不创建或删除文件。
+
+悬停续批准入：修饰键及指针 → 现有 Controller / Widget 命中映射 → `ILanguageFeaturesService.definitionProvider` → 版本绑定的可用性预检 → 标题根节点状态与文字下划线 → standalone Playwright。准确生产路径为本目录既有 `browser/stickyScrollController.ts` 和 `browser/stickyScroll.css`，均为双方已有。预检由 Controller 的指针会话取消；点击后的导航仍由既有导航控制器处理，其请求生命周期不同。只使用现有标题根节点状态，不改变内部 DOM、文字、布局或主题颜色；标题键盘定位后仍可通过 F12 跳转。测试继续使用上述 standalone 两个文件。
+
+模型来源已支持多个提供者并行返回、首次比较含子符号的累计范围、后续优先沿用 `outlineProviderId` 对应的有效来源；空结果和单个提供者错误不会丢弃其他有效来源。没有文档符号时选用现有折叠范围；没有折叠范围或折叠关闭时计算缩进范围。上游的独立 OutlineModel 分组与缓存尚未引入，本批选择状态仍归 StickyModelProvider。
+
+修饰键悬停预检与下划线提示已接通。同一单词内移动复用当前检查；松开修饰键、离开标题、重绘、语言 / 提供者 / 配置变化及释放时取消预检并移除提示。提示使用文字当前颜色，高对比度主题同样显示下划线，悬停不改变编辑器选区。
+
+尚未完整对齐的能力：控件高度事件在本地暂无消费方，不增加空端口；标准 `gotoSymbol/browser/goToSymbol.ts` 查询入口仍是导航模块的待处理项。预检只读取定义可用性，点击使用已有导航 owner。开关命令修改当前编辑器选项，Workbench 持久配置不在本批。控制器仍保留在下方待核对表，不能按成员数记作全量完成。
 
 当前 Editor 文件集合为 **537 个：432 个上游同路径、105 个 Ash 自有；302 个上游路径未引入**。本批 CSS 审计无阻断项。实际验证：
 
@@ -37,7 +45,9 @@ Widget 继续拥有并复用标题按钮，在同一行中增加独立折叠按�
 - 续批 `check-editor-alignment.mjs --test=browser` 通过，包括结构、台账、CSS、类型检查与 555 个浏览器测试；`build:stanza` 通过。
 - 导航与菜单续批：3 个定义跳转测试及 3 个菜单测试通过，覆盖准确列号、修饰键配置、模型切换取消、来源编辑器、焦点恢复、高对比度、命令错误、组合键和菜单生命周期。首次编译遇到商城生成协议不同步，运行仓库 `typecheck:common` 同步后恢复，无商城源码修改。
 - 导航与菜单全量验证：`check-editor-alignment.mjs --test=all` 通过，包括 1,234 个单元测试（235 个文件）与 565 个浏览器测试；`build:stanza` 通过。修正测试装配后，单独运行 `codeEditorPane.test.ts` 的 12 项测试通过，缺失服务错误消失；该测试环境既有的 JSDOM Canvas 提示仍存在，浏览器行为由 Playwright 验证。
-- 首批 `test:editor:unit --grep 'Sticky scroll scope sources'`：4 个模型来源测试通过。续批未修改模型来源。
+- 模型来源与悬停定向验证：2 个来源选择浏览器场景及 16 个悬停 / 点击相关场景通过，覆盖多提供者、来源移除、空符号与关闭折叠、修饰键配置、高对比度、无定义及过期结果拒绝。
+- 模型来源与悬停全量验证：`check-editor-alignment.mjs --test=all` 通过，包含 1,242 个单元测试（模型来源 12 项）与 579 个浏览器测试；结构、台账、CSS 归属、类型检查及 `git diff --check` 通过，`build:stanza` 通过。未出现新增缺失服务或编译错误；保留测试环境原有的 JSDOM Canvas 提示。
+- 首批 `test:editor:unit --grep 'Sticky scroll scope sources'`：4 个模型来源测试通过。
 - 首批 `test:unit --run test/architecture/editor-architecture.test.ts`：23 项通过、1 项失败。失败断言要求 `smartSelect/common/selectionRanges.ts`，该路径在 HEAD 中已经不存在，断言和相关实现均未由本批修改。
 - 未启动上游 VS Code 做同场景运行比较；上游证据来自公开契约及行为测试。本批不能据此宣称完整界面行为一致。
 
