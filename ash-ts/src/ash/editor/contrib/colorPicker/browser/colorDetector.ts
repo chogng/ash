@@ -6,16 +6,11 @@ import { type Position } from '../../../common/core/position.js';
 import { TextDecorationCollection, type TextDecorationSnapshot } from '../../../common/model/decorationCollection.js';
 import { type TextModel } from '../../../common/model/textModel.js';
 
-import { ColorService, type ColorData, type DefaultColorDecoratorsEnablement } from '../common/languageColors.js';
+import { ColorService, type ColorData } from '../common/languageColors.js';
+import { EditorOption } from '../../../common/config/editorOptions.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
 
 export const ColorDecorationInjectedTextMarker = Object.freeze({});
-
-export interface ColorDetectorOptions {
-	readonly enabled: boolean;
-	readonly limit: number;
-	readonly defaultColorDecorators: DefaultColorDecoratorsEnablement;
-}
 
 /** Owns provider refresh, version cancellation, tracked ranges, and color-swatch metadata. */
 export class ColorDetector extends Disposable {
@@ -31,11 +26,9 @@ export class ColorDetector extends Disposable {
 		private readonly model: TextModel,
 		private readonly service: ColorService,
 		private readonly targetWindow: Window,
-		private readonly options: ColorDetectorOptions,
 		private readonly onError: (error: unknown) => void,
 	) {
 		super();
-		if (!Number.isSafeInteger(options.limit) || options.limit < 0) throw new RangeError('Color decorator limit must be a non-negative integer');
 		this.decorations = this._register(new TextDecorationCollection<ColorData>(model));
 		this.dynamicCssRules = this._register(new DynamicCssRules(editor));
 		this.colorDecorationClassRefs = this._register(new DisposableStore());
@@ -52,6 +45,11 @@ export class ColorDetector extends Disposable {
 			this.refreshTimer.clear();
 		}));
 		this._register(service.onDidChange(refreshProviders));
+		this._register(editor.onDidChangeConfiguration(event => {
+			if (event.hasChanged(EditorOption.colorDecorators) || event.hasChanged(EditorOption.colorDecoratorsLimit) || event.hasChanged(EditorOption.defaultColorDecorators)) {
+				refreshProviders();
+			}
+		}));
 		this.scheduleRefresh(0);
 	}
 
@@ -60,7 +58,7 @@ export class ColorDetector extends Disposable {
 	}
 
 	get isLimited(): boolean {
-		return this.detectedCount > this.options.limit;
+		return this.detectedCount > this.editor.getOption(EditorOption.colorDecoratorsLimit);
 	}
 
 	findAtPosition(position: Position): ColorData | undefined {
@@ -72,18 +70,18 @@ export class ColorDetector extends Disposable {
 		this.assertNotDisposed();
 		this.refreshTimer.clear();
 		this.request?.abort();
-		if (!this.options.enabled || this.model.largeFile.tooLargeForTokenization) {
+		if (!this.editor.getOption(EditorOption.colorDecorators) || this.model.largeFile.tooLargeForTokenization) {
 			this.detectedCount = 0;
 			this.colorDecorationClassRefs.clear();
 			this.decorations.clear();
 			return;
 		}
 		const request = this.request = new AbortController();
-		void this.service.provideDocumentColors(this.model.getLanguageId(), this.options.defaultColorDecorators, request.signal).then(colors => {
+		void this.service.provideDocumentColors(this.model.getLanguageId(), this.editor.getOption(EditorOption.defaultColorDecorators), request.signal).then(colors => {
 			if (request.signal.aborted || this.isDisposed) return;
 			this.detectedCount = colors.length;
 			this.colorDecorationClassRefs.clear();
-			this.decorations.replaceAll(colors.slice(0, this.options.limit).map(data => {
+			this.decorations.replaceAll(colors.slice(0, this.editor.getOption(EditorOption.colorDecoratorsLimit)).map(data => {
 				const ref = this.colorDecorationClassRefs.add(this.dynamicCssRules.createClassNameRef({
 					backgroundColor: colorToCss(data.information.color),
 				}));

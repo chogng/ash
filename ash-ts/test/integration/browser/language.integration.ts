@@ -23,6 +23,7 @@ api.servers = async () => ({ servers: installed ? [{ id: 'pyright', languageIds:
 api.foldingRanges = async ({ document }) => ({ revision: document.revision, ranges: [] });
 api.linkedEditingRanges = async ({ document }) => ({ revision: document.revision, ranges: [], wordPattern: null });
 api.semanticTokens = async ({ document }) => ({ revision: document.revision, resultId: null, tokens: [] });
+api.documentSymbols = async ({ document }) => ({ revision: document.revision, symbols: [] });
 api.documentColors = async ({ document }) => ({ revision: document.revision, colors: [] });
 api.codeLenses = async ({ document }) => ({ revision: document.revision, lenses: [] });
 api.documentLinks = async ({ document }) => ({ revision: document.revision, links: [] });

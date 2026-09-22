@@ -888,7 +888,8 @@ export class View extends ViewEventHandler {
 		if (this.editorTextDirection === EditorTextDirection.LeftToRight) return undefined;
 		const visualLine = this.visualProjection.lineAt(visualLineIndex);
 		if (!visualLine) return undefined;
-		return this.viewLines.visibleRangeForPosition(new Position(visualLineIndex + 1, offset + 1))?.left;
+		const left = this.viewLines.visibleRangeForPosition(new Position(visualLineIndex + 1, offset + 1))?.left;
+		return left === undefined ? undefined : this.contentTextLeft + left;
 	}
 
 	private get measuredContentWidth(): number {

@@ -373,19 +373,19 @@ test("installed language servers register new languages and uninstall removes th
 	const events = new FakeServerEvents();
 	using providers = new AppServerLanguageProviders(languages, api, workspace, { events });
 	using model = new TextModel("value", { languageId: "python" });
-	using navigation = createNavigationService(languages, model, URI.file("/project/main.py"));
+	const resource = URI.file("/project/main.py");
 	await tick();
-	assert.deepEqual(await navigation.provideDefinition("python", new Position(1, 2)), []);
+	assert.deepEqual(languages.definitionProvider.ordered(model), []);
 
 	api.availableServers = [{ id: "pyright", languageIds: ["python"] }];
 	events.fire({ method: "marketplace/changed", params: { instanceId: "test", generation: 2 } });
 	await tick();
-	assert.equal((await navigation.provideDefinition("python", new Position(1, 2))).length, 1);
+	assert.equal((await definition(languages, model, resource, new Position(1, 2))).length, 1);
 	assert.equal(api.locationRequests[0]!.document.languageId, "python");
 
 	api.availableServers = [];
 	events.fire({ method: "marketplace/changed", params: { instanceId: "test", generation: 3 } });
 	await tick();
-	assert.deepEqual(await navigation.provideDefinition("python", new Position(1, 2)), []);
+	assert.deepEqual(languages.definitionProvider.ordered(model), []);
 	assert.equal(api.locationRequests.length, 1);
 });

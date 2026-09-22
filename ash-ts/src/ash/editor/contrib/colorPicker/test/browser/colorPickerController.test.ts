@@ -91,11 +91,7 @@ test('color detector returns the tracked range before its debounced provider ref
 	});
 	const providers = new LanguageFeatureRegistry<LanguageColorProvider>();
 	const service = new ColorService(model, providers);
-	using detector = new ColorDetector(editor, model, service, dom.window as unknown as Window, {
-		enabled: true,
-		limit: 500,
-		defaultColorDecorators: 'auto',
-	}, (error: unknown) => assert.fail(String(error)));
+	using detector = new ColorDetector(editor, model, service, dom.window as unknown as Window, (error: unknown) => assert.fail(String(error)));
 	detector.refresh();
 	await waitFor(() => detector.totalColorCount === 1);
 

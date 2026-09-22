@@ -119,13 +119,13 @@ function createHarness(text: string, languages: TestLanguageFeaturesService, res
 	const model = new TextModel(text, { languageId: 'typescript', resource });
 	const editor = createTestCodeEditor({
 		container, model, input: { resource }, languageId: 'typescript', languageFeaturesService: languages,
-		contributions: [], dimension: { width: 240, height: 60 },
+		contributions: [], occurrencesHighlight: mode, occurrencesHighlightDelay: 0, dimension: { width: 240, height: 60 },
 	});
 	editor.setSelection(new Selection(1, 2, 1, 2));
 	const textualProvider = new TextualMultiDocumentHighlightFeature(languages);
 	const decorations = new TextDecorationCollection<DocumentHighlightKind | undefined>(model);
 	const controller = new WordHighlighterContribution(editor.controller, editor, decorations, {
-		resource, languageFeaturesService: languages, mode, delay: 0,
+		resource, languageFeaturesService: languages,
 	});
 	return {
 		model, editor, decorations, controller,

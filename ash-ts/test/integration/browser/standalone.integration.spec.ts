@@ -5,7 +5,7 @@ test.describe('contribution lifecycle', () => {
 		await page.evaluate(() => window.ashStandaloneIntegration?.dispose());
 	});
 
-	for (const reason of ['escape', 'language', 'selection', 'blur', 'readonly', 'dispose'] as const) {
+	for (const reason of ['escape', 'language', 'selection', 'blur', 'readonly', 'provider', 'dispose'] as const) {
 		test(`completion ${reason} cancels a pending request and rejects its late result`, async ({ page }) => {
 			await page.goto('/standalone.html');
 			await page.evaluate(() => window.ashStandaloneIntegration.prepareContributionRequests('completion'));
@@ -20,6 +20,123 @@ test.describe('contribution lifecycle', () => {
 			await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(0));
 			await expect(page.locator('#caller .stanza-editor-completion:not([hidden])')).toHaveCount(0);
 			await expect(page.locator('#caller .stanza-editor-input[aria-activedescendant]')).toHaveCount(0);
+		});
+	}
+
+	test('completion provider removal hides resolved suggestions and prevents acceptance', async ({ page }) => {
+		await page.goto('/standalone.html');
+		await page.evaluate(() => window.ashStandaloneIntegration.prepareContributionRequests('completion'));
+		await page.keyboard.press('Control+Space');
+		await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(1);
+		await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(0));
+		await expect(page.locator('#caller .stanza-editor-completion')).toBeVisible();
+		await page.evaluate(() => window.ashStandaloneIntegration.changeContributionState('provider'));
+		await expect(page.locator('#caller .stanza-editor-completion')).toBeHidden();
+		await page.keyboard.press('Enter');
+		expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).value).not.toContain('result');
+	});
+
+	for (const scrolled of [false, true]) {
+		test(`completion and public coordinates include the gutter with scroll=${scrolled}`, async ({ page }) => {
+			await page.goto('/standalone.html');
+			await page.evaluate(() => window.ashStandaloneIntegration.prepareContributionRequests('completion'));
+			await page.evaluate(scrolled => window.ashStandaloneIntegration.prepareCompletionGeometry(scrolled), scrolled);
+			await page.keyboard.press('Control+Space');
+			await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(1);
+			await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(0));
+			await expect(page.locator('#caller .stanza-editor-completion')).toBeVisible();
+			const geometry = await page.evaluate(() => window.ashStandaloneIntegration.readCompletionGeometry());
+			expect(geometry.contentLeft).toBeGreaterThan(0);
+			expect(Math.abs(geometry.api.left - geometry.caret.left)).toBeLessThan(2);
+			expect(Math.abs(geometry.widget.left - geometry.caret.left)).toBeLessThan(2);
+			expect(Math.abs(geometry.widget.top - geometry.api.top - geometry.api.height)).toBeLessThan(2);
+			expect(geometry.textLeft).toBeGreaterThan(0);
+		});
+	}
+
+	for (const kind of ['colors', 'highlights'] as const) {
+		for (const initiallyOff of [false, true]) {
+			test(`${kind} responds to option toggles from initiallyOff=${initiallyOff} and rejects disabled requests`, async ({ page }) => {
+				await page.goto(initiallyOff ? '/standalone.html?contributionsOff' : '/standalone.html');
+				await page.evaluate(kind => window.ashStandaloneIntegration.prepareContributionRequests(kind), kind);
+				if (initiallyOff) {
+					expect(await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).toEqual([]);
+					await page.evaluate(kind => window.ashStandaloneIntegration.updateContributionOptions(kind === 'colors' ? { colorDecorators: true } : { occurrencesHighlight: 'singleFile' }), kind);
+				}
+				if (kind === 'highlights' && !initiallyOff) await page.keyboard.press('ArrowRight');
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(1);
+				await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(0));
+				await expect.poll(() => page.evaluate(kind => window.ashStandaloneIntegration.readContributionDecorations()[kind], kind)).toBe(2);
+				await page.evaluate(kind => window.ashStandaloneIntegration.updateContributionOptions(kind === 'colors' ? { colorDecorators: false } : { occurrencesHighlight: 'off' }), kind);
+				expect(await page.evaluate(kind => window.ashStandaloneIntegration.readContributionDecorations()[kind], kind)).toBe(0);
+				await page.keyboard.press('ArrowRight');
+				await page.evaluate(kind => window.ashStandaloneIntegration.updateContributionOptions(kind === 'colors' ? { colorDecorators: true, colorDecoratorsLimit: 1 } : { occurrencesHighlight: 'singleFile' }), kind);
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(2);
+				await page.evaluate(kind => window.ashStandaloneIntegration.updateContributionOptions(kind === 'colors' ? { colorDecorators: false } : { occurrencesHighlight: 'off' }), kind);
+				expect((await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests()))[1]!.aborted).toBe(true);
+				await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(1));
+				expect(await page.evaluate(kind => window.ashStandaloneIntegration.readContributionDecorations()[kind], kind)).toBe(0);
+				await page.evaluate(kind => window.ashStandaloneIntegration.updateContributionOptions(kind === 'colors' ? { colorDecorators: true } : { occurrencesHighlight: 'singleFile' }), kind);
+				await expect.poll(() => page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests().length)).toBe(3);
+				await page.evaluate(() => window.ashStandaloneIntegration.finishContributionRequest(2));
+				await expect.poll(() => page.evaluate(kind => window.ashStandaloneIntegration.readContributionDecorations()[kind], kind)).toBe(kind === 'colors' ? 1 : 2);
+			});
+		}
+	}
+
+	for (const initiallyOff of [false, true]) {
+		test(`folding toggles from initiallyOff=${initiallyOff}, restores hidden text and cancels providers`, async ({ page }) => {
+			await page.goto(initiallyOff ? '/standalone.html?contributionsOff' : '/standalone.html');
+			await page.evaluate(() => window.ashStandaloneIntegration.prepareContributionRequests('folding'));
+			if (initiallyOff) {
+				expect(await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).toEqual([]);
+				await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ folding: true }));
+			}
+			await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ showFoldingControls: 'always' }));
+			await expect(page.locator('#caller .ash-icon-folding-expanded').first()).toBeVisible();
+			await page.locator('#caller .ash-icon-folding-expanded').first().click();
+			await expect(page.locator('#caller .view-line[data-logical-line-index="1"]')).toHaveCount(0);
+			await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ folding: false }));
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readContributionRequests())).every(request => request.aborted)).toBe(true);
+			await page.evaluate(async () => {
+				const requests = window.ashStandaloneIntegration.readContributionRequests();
+				for (let index = 0; index < requests.length; index++) await window.ashStandaloneIntegration.finishContributionRequest(index);
+			});
+			await expect(page.locator('#caller .view-line[data-logical-line-index="1"]')).toHaveCount(1);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readContributionDecorations())).folding).toBe(0);
+			await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ folding: true }));
+			await expect(page.locator('#caller .ash-icon-folding-expanded').first()).toBeVisible();
+			await page.locator('#caller .ash-icon-folding-expanded').first().click();
+			await expect(page.locator('#caller .view-line[data-logical-line-index="1"]')).toHaveCount(0);
+		});
+	}
+
+	for (const initiallyOff of [false, true]) {
+		test(`sticky headers toggle from initiallyOff=${initiallyOff} and keep focused nodes through layout`, async ({ page }) => {
+			await page.goto(initiallyOff ? '/standalone.html?contributionsOff' : '/standalone.html');
+			await page.evaluate(() => {
+				window.ashStandaloneIntegration.updateContributionOptions({ folding: true });
+				window.ashStandaloneIntegration.prepareStickyHeaders();
+			});
+			const buttons = page.locator('#caller .stanza-editor-sticky-scroll-item');
+			if (initiallyOff) {
+				await expect(buttons).toHaveCount(0);
+				await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ stickyScroll: { enabled: true } }));
+			}
+			await expect(buttons).toHaveCount(2);
+			await expect(buttons.last()).toBeInViewport();
+			const button = await buttons.last().elementHandle();
+			await buttons.last().focus();
+			await page.evaluate(() => window.ashStandaloneIntegration.layoutContribution(590));
+			expect(await button!.evaluate(element => ({ connected: element.isConnected, focused: document.activeElement === element }))).toEqual({ connected: true, focused: true });
+			await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ stickyScroll: { maxLineCount: 1 } }));
+			await expect(buttons).toHaveCount(1);
+			expect(await button!.evaluate(element => document.activeElement === element)).toBe(true);
+			await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ stickyScroll: { enabled: false } }));
+			await expect(buttons).toHaveCount(0);
+			expect((await page.evaluate(() => window.ashStandaloneIntegration.readKeyboardEditing())).focused).toBe(true);
+			await page.evaluate(() => window.ashStandaloneIntegration.updateContributionOptions({ stickyScroll: { enabled: true, maxLineCount: 5 } }));
+			await expect(buttons).toHaveCount(2);
 		});
 	}
 

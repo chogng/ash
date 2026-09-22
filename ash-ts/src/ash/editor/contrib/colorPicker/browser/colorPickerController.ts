@@ -17,8 +17,6 @@ import { ColorPickerWidget } from './colorPickerWidget.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 
 
-export type ColorDecoratorsActivatedOn = 'clickAndHover' | 'click' | 'hover';
-
 /** Coordinates color detection, picker requests, focus, and one atomic editor edit. */
 export class ColorPickerController extends Disposable {
 	private readonly widget: ColorPickerWidget;
@@ -35,7 +33,6 @@ export class ColorPickerController extends Disposable {
 		private readonly viewport: View,
 		private readonly service: ColorService,
 		private readonly detector: ColorDetector,
-		private readonly activatedOn: ColorDecoratorsActivatedOn,
 		private readonly onError: (error: unknown) => void,
 	) {
 		super();
@@ -66,7 +63,9 @@ export class ColorPickerController extends Disposable {
 		this._register(viewport.textModel.onWillDispose(() => this.close(false)));
 		this._register(service.onDidChange(() => this.close(false)));
 		this._register(editor.onDidChangeConfiguration(event => {
-			if (event.hasChanged(EditorOption.readOnly)) this.close(false);
+			if (event.hasChanged(EditorOption.readOnly) || event.hasChanged(EditorOption.colorDecorators) || event.hasChanged(EditorOption.colorDecoratorsLimit) || event.hasChanged(EditorOption.defaultColorDecorators) || event.hasChanged(EditorOption.colorDecoratorsActivatedOn)) {
+				this.close(this.widget.domNode.contains(this.widget.domNode.ownerDocument.activeElement));
+			}
 		}));
 		this._register(viewport.onDidChangeLayout(() => this.close(false)));
 	}
@@ -108,7 +107,7 @@ export class ColorPickerController extends Disposable {
 	}
 
 	private handleEditorMouseDown(event: IEditorMouseEvent): void {
-		if (this.activatedOn === 'hover') return;
+		if (this.editor.getOption(EditorOption.colorDecoratorsActivatedOn) === 'hover') return;
 		const target = event.target;
 		if (target?.type !== MouseTargetType.CONTENT_TEXT || target.detail.injectedText?.options.attachedData !== ColorDecorationInjectedTextMarker || !target.position) return;
 		const data = this.detector.findAtPosition(this.viewport.coordinatesConverter.convertViewPositionToModelPosition(target.position));
@@ -119,7 +118,7 @@ export class ColorPickerController extends Disposable {
 	}
 
 	private handlePointerOver(event: PointerEvent): void {
-		if (this.activatedOn === 'click') return;
+		if (this.editor.getOption(EditorOption.colorDecoratorsActivatedOn) === 'click') return;
 		const swatch = colorSwatch(event.target);
 		if (!swatch) return;
 		const data = this.dataAtPointer(event);
@@ -265,11 +264,6 @@ registerEditorContribution({
 			context.model,
 			service,
 			targetWindow,
-			{
-				enabled: context.options.colorDecorators !== false,
-				limit: context.options.colorDecoratorsLimit ?? 500,
-				defaultColorDecorators: context.options.defaultColorDecorators ?? 'auto',
-			},
 			context.onLanguageError,
 		));
 		return new ColorPickerController(
@@ -278,7 +272,6 @@ registerEditorContribution({
 			context.view,
 			service,
 			detector,
-			context.options.colorDecoratorsActivatedOn ?? 'clickAndHover',
 			context.onLanguageError,
 		);
 	},

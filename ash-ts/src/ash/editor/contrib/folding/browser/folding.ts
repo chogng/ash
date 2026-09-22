@@ -16,7 +16,7 @@ import { computeEditorIndentFoldingRanges } from "./indentRangeProvider.js";
 import { computeEditorLanguageFoldingRanges, mergeEditorFoldingRanges } from "./syntaxRangeProvider.js";
 import { FoldingRangeService } from "../common/languageFoldingRanges.js";
 import { FoldingDecorationProvider } from './foldingDecorations.js';
-import type { IDecorationProvider } from './foldingModel.js';
+import { EditorOption } from '../../../common/config/editorOptions.js';
 import { Range } from '../../../common/core/range.js';
 import './folding.css';
 
@@ -29,36 +29,38 @@ registerEditorContribution({
 		const syncHiddenAreas = (): void => context.viewModel.setHiddenAreas(hidden.hiddenRanges);
 		syncHiddenAreas();
 		context.register(hidden.onDidChange(syncHiddenAreas));
-		if (context.options.folding === false || context.model.largeFile.tooLargeForTokenization) return;
+	},
+	install: context => {
+		if (context.kind !== "text" || context.model.largeFile.tooLargeForTokenization) return;
+		const folding = context.getService(TextEditorCapability.folding);
 		const service = context.register(new FoldingRangeService(context.model, context.languageFeaturesService.foldingRangeProvider, context.options.input.resource));
-		context.register(new FoldingRangeSource(folding, service, {
+		context.register(new FoldingRangeSource(context.editor, folding, service, {
 			configurations: context.configurations,
 			providers: context.languageFeaturesService.foldingRangeProvider,
 			tabSize: context.options.indentation?.tabSize,
 			onError: context.onLanguageError,
 		}));
-	},
-	install: context => {
-		if (context.kind !== "text" || context.options.folding === false || context.model.largeFile.tooLargeForTokenization) return;
-		const decorations = new FoldingDecorationProvider(context.editor);
-		decorations.showFoldingControls = context.options.showFoldingControls ?? 'mouseover';
-		decorations.showFoldingHighlights = context.options.foldingHighlight ?? true;
-		context.register(new FoldingDecorationPresenter(context.getService(TextEditorCapability.folding), decorations));
-		return new FoldingController(context.editor, context.view, context.getService(TextEditorCapability.folding));
+		context.register(new FoldingDecorationPresenter(context.editor, folding, new FoldingDecorationProvider(context.editor)));
+		return new FoldingController(context.editor, context.view, folding);
 	},
 });
 
 class FoldingDecorationPresenter extends Disposable {
 	private decorationIds: string[] = [];
 
-	constructor(private readonly folding: EditorFoldingModel, private readonly decorations: IDecorationProvider) {
+	constructor(private readonly editor: ICodeEditor, private readonly folding: EditorFoldingModel, private readonly decorations: FoldingDecorationProvider) {
 		super();
 		this._register(folding.onDidChange(() => this.refresh()));
+		this._register(editor.onDidChangeConfiguration(event => {
+			if (event.hasChanged(EditorOption.showFoldingControls) || event.hasChanged(EditorOption.foldingHighlight)) this.refresh();
+		}));
 		this._register(toDisposable(() => decorations.removeDecorations(this.decorationIds)));
 		this.refresh();
 	}
 
 	private refresh(): void {
+		this.decorations.showFoldingControls = this.editor.getOption(EditorOption.showFoldingControls);
+		this.decorations.showFoldingHighlights = this.editor.getOption(EditorOption.foldingHighlight);
 		let hiddenThrough = -1;
 		const next = this.folding.regions.map(region => {
 			const startLineNumber = region.startLineIndex + 1;
@@ -89,6 +91,7 @@ class FoldingRangeSource extends Disposable {
 	private request: AbortController | undefined;
 
 	constructor(
+		private readonly editor: ICodeEditor,
 		private readonly folding: EditorFoldingModel,
 		private readonly service: FoldingRangeService,
 		private readonly options: {
@@ -104,12 +107,19 @@ class FoldingRangeSource extends Disposable {
 		this._register(folding.model.onDidChangeTokens(() => this.refresh()));
 		this._register(options.configurations.onDidChange(() => this.refresh()));
 		this._register(options.providers.onDidChange(() => this.refresh()));
+		this._register(editor.onDidChangeConfiguration(event => {
+			if (event.hasChanged(EditorOption.folding)) this.refresh();
+		}));
 		this._register(toDisposable(() => this.request?.abort()));
 		this.refresh();
 	}
 
 	private refresh(): void {
 		this.request?.abort();
+		if (!this.editor.getOption(EditorOption.folding)) {
+			this.folding.setRanges([]);
+			return;
+		}
 		const local = mergeEditorFoldingRanges(
 			computeEditorLanguageFoldingRanges(this.folding.model, this.folding.model.getLanguageId(), this.options.configurations),
 			computeEditorIndentFoldingRanges(this.folding.model, { tabSize: this.options.tabSize }),
@@ -168,6 +178,9 @@ export class FoldingController extends Disposable {
 			if (folding.model.largeFile.tooLargeForTokenization) return;
 			this._register(addDisposableListener(viewport.domNode.domNode, "keydown", event => this.handleKeydown(event)));
 			this._register(this.editor.onMouseDown(event => this.handleGutterPointerDown(event)));
+			this._register(editor.onDidChangeConfiguration(event => {
+				if (event.hasChanged(EditorOption.folding)) this.awaitingChord = false;
+			}));
 		} catch (error) {
 			this.dispose();
 			throw error;
@@ -175,7 +188,7 @@ export class FoldingController extends Disposable {
 	}
 
 	private handleKeydown(event: KeyboardEvent): void {
-		if (event.defaultPrevented || event.isComposing || event.getModifierState("AltGraph")) return;
+		if (!this.editor.getOption(EditorOption.folding) || event.defaultPrevented || event.isComposing || event.getModifierState("AltGraph")) return;
 		const chord = resolveStanzaFoldingChord(event, this.targetOperatingSystem, this.awaitingChord);
 		if (chord === "prefix") {
 			stopEvent(event);
@@ -205,6 +218,7 @@ export class FoldingController extends Disposable {
 	}
 
 	private handleGutterPointerDown(event: IEditorMouseEvent): void {
+		if (!this.editor.getOption(EditorOption.folding)) return;
 		const target = event.target;
 		const foldingMarker = target.element?.closest<HTMLElement>('.stanza-editor-line-decoration[class*="ash-icon-folding-"]');
 		if (target.type !== MouseTargetType.GUTTER_LINE_DECORATIONS || !foldingMarker || !target.position) return;

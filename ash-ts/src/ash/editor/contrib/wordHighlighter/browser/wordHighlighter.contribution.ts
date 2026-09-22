@@ -19,6 +19,7 @@ import { type TextModel } from '../../../common/model/textModel.js';
 import type { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { getDocumentHighlightDecorationClassName } from './highlightDecorations.js';
 import { TextualMultiDocumentHighlightFeature } from './textualHighlightProvider.js';
+import { EditorOption } from '../../../common/config/editorOptions.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
 
 type OccurrencesHighlightMode = 'off' | 'singleFile' | 'multiFile';
@@ -26,8 +27,6 @@ type OccurrencesHighlightMode = 'off' | 'singleFile' | 'multiFile';
 interface WordHighlighterOptions {
 	readonly resource: URI;
 	readonly languageFeaturesService: ILanguageFeaturesService;
-	readonly mode?: OccurrencesHighlightMode;
-	readonly delay?: number;
 	readonly onError?: (error: unknown) => void;
 }
 
@@ -41,8 +40,6 @@ interface DocumentHighlightTarget {
 /** Owns semantic word highlights and their editor-local lifecycle. */
 class WordHighlighter extends Disposable {
 	private readonly resource: URI;
-	private readonly mode: OccurrencesHighlightMode;
-	private readonly delay: number;
 	private readonly onError: (error: unknown) => void;
 	private readonly providers: LanguageFeatureRegistry<DocumentHighlightProvider>;
 	private readonly multiDocumentProviders: LanguageFeatureRegistry<MultiDocumentHighlightProvider>;
@@ -63,16 +60,20 @@ class WordHighlighter extends Disposable {
 		super();
 		validateControllerDependencies(view, editor, decorations, options);
 		this.resource = options.resource;
-		this.mode = options.mode ?? 'singleFile';
-		this.delay = options.delay ?? 250;
 		this.onError = options.onError ?? reportHighlightError;
 		this.providers = options.languageFeaturesService.documentHighlightProvider;
 		this.multiDocumentProviders = options.languageFeaturesService.multiDocumentHighlightProvider;
 		this.coordinator = acquireCoordinator(options.languageFeaturesService, this);
-		this.scheduler = this._register(new RunOnceScheduler(() => void this.run(), this.delay));
+		this.scheduler = this._register(new RunOnceScheduler(() => void this.run(), this.editor.getOption(EditorOption.occurrencesHighlightDelay)));
 		this._register(toDisposable(() => {
 			this.cancelRequest();
 			this.coordinator.remove(this);
+		}));
+		this._register(editor.onDidChangeConfiguration(event => {
+			if (event.hasChanged(EditorOption.occurrencesHighlight) || event.hasChanged(EditorOption.occurrencesHighlightDelay)) {
+				this.handleModelChange();
+				this.schedule();
+			}
 		}));
 		this._register(editor.onDidChangeCursorSelection(change => this.handleSelectionChange(change)));
 		this._register(view.viewport.textModel.onDidChangeContent(() => this.handleModelChange()));
@@ -85,7 +86,7 @@ class WordHighlighter extends Disposable {
 	}
 
 	get highlightMode(): OccurrencesHighlightMode {
-		return this.mode;
+		return this.editor.getOption(EditorOption.occurrencesHighlight);
 	}
 
 	get documentResource(): URI {
@@ -113,7 +114,7 @@ class WordHighlighter extends Disposable {
 	}
 
 	trigger(): void {
-		if (this.mode === 'off') return;
+		if (this.editor.getOption(EditorOption.occurrencesHighlight) === 'off') return;
 		this.schedule(0);
 	}
 
@@ -176,9 +177,9 @@ class WordHighlighter extends Disposable {
 		event.stopPropagation();
 	}
 
-	private schedule(delay = this.delay): void {
+	private schedule(delay = this.editor.getOption(EditorOption.occurrencesHighlightDelay)): void {
 		this.cancelRequest();
-		if (this.mode === 'off' || (!this.focused && delay !== 0)) return;
+		if (this.editor.getOption(EditorOption.occurrencesHighlight) === 'off' || (!this.focused && delay !== 0)) return;
 		this.scheduler.schedule(delay);
 	}
 
@@ -372,8 +373,6 @@ function acquireCoordinator(service: ILanguageFeaturesService, controller: WordH
 function validateControllerDependencies(view: ViewController, editor: ICodeEditor, decorations: TextDecorationCollection<DocumentHighlightKind | undefined>, options: WordHighlighterOptions): void {
 	if (view.viewport.textModel !== editor.getModel() || editor.getModel() !== decorations.textModel) throw new TypeError('Word highlighter dependencies must share one text model');
 	if (!options || typeof options !== 'object' || !options.resource || !options.languageFeaturesService) throw new TypeError('Word highlighter requires resource and language services');
-	if (options.mode !== undefined && options.mode !== 'off' && options.mode !== 'singleFile' && options.mode !== 'multiFile') throw new TypeError('Word highlighter mode is invalid');
-	if (options.delay !== undefined && (!Number.isSafeInteger(options.delay) || options.delay < 0 || options.delay > 2_000)) throw new RangeError('Word highlighter delay must be an integer between 0 and 2000');
 	if (options.onError !== undefined && typeof options.onError !== 'function') throw new TypeError('Word highlighter error handler must be a function');
 }
 
@@ -428,8 +427,6 @@ registerEditorContribution({
 		return new WordHighlighterContribution(context.controller, context.editor, decorations, {
 			resource: context.options.input.resource,
 			languageFeaturesService: context.languageFeaturesService,
-			mode: context.options.occurrencesHighlight,
-			delay: context.options.occurrencesHighlightDelay,
 			onError: context.onLanguageError,
 		});
 	},

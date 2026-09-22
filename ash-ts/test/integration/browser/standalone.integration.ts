@@ -124,8 +124,14 @@ interface ParameterHintRequestState {
 
 type LanguageRequestKind = 'hover' | 'selection' | 'definition' | 'call' | 'type' | 'symbols';
 type LanguageRequestChange = 'text' | 'selection' | 'language' | 'provider' | 'model' | 'dispose' | 'blur';
-type ContributionRequestKind = 'completion' | 'folding' | 'links' | 'codelens' | 'hover';
+type ContributionRequestKind = 'colors' | 'highlights' | 'completion' | 'folding' | 'links' | 'codelens' | 'hover';
 interface StandaloneHarness {
+	updateContributionOptions(options: IEditorOptions): void;
+	readContributionDecorations(): { colors: number; highlights: number; folding: number };
+	prepareStickyHeaders(): void;
+	layoutContribution(width: number): void;
+	prepareCompletionGeometry(scrolled: boolean): void;
+	readCompletionGeometry(): { caret: { left: number; top: number; height: number }; api: { left: number; top: number; height: number }; widget: { left: number; top: number }; contentLeft: number; textLeft: number };
 	prepareContributionRequests(kind: ContributionRequestKind): void;
 	readContributionRequests(): { languageId: string; aborted: boolean }[];
 	finishContributionRequest(index: number, empty?: boolean): Promise<void>;
@@ -320,6 +326,10 @@ const callerEditor = stanza.editor.create(callerContainer, {
 	placeholder: 'Caller model',
 	showSymbolIcons: !new URL(location.href).searchParams.has('symbolIconsOff'),
 	onOpenLink: target => { openedLinks.push(target); },
+	folding: !new URL(location.href).searchParams.has('contributionsOff'),
+	colorDecorators: !new URL(location.href).searchParams.has('contributionsOff'),
+	occurrencesHighlight: new URL(location.href).searchParams.has('contributionsOff') ? 'off' : 'singleFile',
+	stickyScroll: { enabled: !new URL(location.href).searchParams.has('contributionsOff') },
 	codeLens: !new URL(location.href).searchParams.has('codeLensOff'),
 	inlayHints: { enabled: new URL(location.href).searchParams.has('inlayHintsOff') ? 'off' : 'on' },
 });
@@ -460,6 +470,53 @@ let formattingProvider: { dispose(): void } | undefined;
 let bracketTokenRegistration: { dispose(): void } | undefined;
 
 window.ashStandaloneIntegration = {
+	updateContributionOptions: options => callerEditor.updateOptions(options),
+	readContributionDecorations: () => {
+		const decorations = callerModel.getAllDecorations();
+		return {
+			colors: decorations.filter(decoration => decoration.options.description === 'colorDetector').length,
+			highlights: decorations.filter(decoration => decoration.options.description === 'word-highlight').length,
+			folding: decorations.filter(decoration => decoration.options.description?.startsWith('folding-')).length,
+		};
+	},
+	prepareStickyHeaders: () => {
+		callerEditor.setValue(['function outer() {', '  function inner() {', ...Array.from({ length: 80 }, (_, index) => `    item ${index}`), '  }', '}'].join('\n'));
+		callerEditor.setScrollTop(200);
+	},
+	layoutContribution: width => callerEditor.layout({ width, height: 180 }),
+	prepareCompletionGeometry: scrolled => {
+		const lineNumber = scrolled ? 40 : 1;
+		callerEditor.setValue(Array.from({ length: 80 }, () => 'alpha '.repeat(50)).join('\n'));
+		callerEditor.setPosition(new stanza.Position(lineNumber, scrolled ? 31 : 6));
+		callerEditor.setScrollPosition({ scrollTop: scrolled ? 650 : 0, scrollLeft: scrolled ? 80 : 0 });
+		callerEditor.focus();
+	},
+	readCompletionGeometry: () => {
+		const position = callerEditor.getPosition()!;
+		const row = callerContainer.querySelector<HTMLElement>(`.view-line[data-logical-line-index="${position.lineNumber - 1}"]`)!;
+		const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+		let remaining = position.column - 1;
+		let text: Node | null;
+		const range = document.createRange();
+		while (text = walker.nextNode()) {
+			if (remaining <= text.textContent!.length) {
+				range.setStart(text, remaining);
+				break;
+			}
+			remaining -= text.textContent!.length;
+		}
+		range.collapse(true);
+		const caret = range.getBoundingClientRect();
+		const root = callerEditor.getDomNode()!.getBoundingClientRect();
+		const widget = callerContainer.querySelector('.stanza-editor-completion')!.getBoundingClientRect();
+		return {
+			caret: { left: caret.left - root.left, top: caret.top - root.top, height: caret.height },
+			api: callerEditor.getScrolledVisiblePosition(position)!,
+			widget: { left: widget.left - root.left, top: widget.top - root.top },
+			contentLeft: callerEditor.getLayoutInfo().contentLeft,
+			textLeft: observableCodeEditor(callerEditor).getLeftOfPosition(position),
+		};
+	},
 	prepareContributionRequests: kind => {
 		contributionProviders.clear();
 		callerModel.setLanguage('typescript');
@@ -474,6 +531,23 @@ window.ashStandaloneIntegration = {
 					items: [{ id: 'item', label: `completion: ${request.languageId}`, kind: stanza.languages.LanguageCompletionItemKind.Text, range: stanza.Range.fromPositions(request.position), insertText: 'result' }],
 					isIncomplete: true,
 				}, { items: [], isIncomplete: false }),
+			}));
+		} else if (kind === 'colors') {
+			contributionProviders.add(stanza.languages.registerColorProvider(selector, {
+				provideDocumentColors: (request, signal) => deferContributionRequest(request.languageId, () => signal.aborted, [
+					{ range: new stanza.Range(1, 1, 1, 6), color: { red: 1, green: 0, blue: 0, alpha: 1 } },
+					{ range: new stanza.Range(3, 1, 3, 6), color: { red: 0, green: 1, blue: 0, alpha: 1 } },
+				], []),
+				provideColorPresentations: () => [],
+			}));
+		} else if (kind === 'highlights') {
+			callerEditor.updateOptions({ occurrencesHighlightDelay: 0 });
+			callerEditor.setPosition(new stanza.Position(1, 1));
+			contributionProviders.add(stanza.languages.registerDocumentHighlightProvider(selector, {
+				provideDocumentHighlights: (model, _position, token) => deferContributionRequest(model.getLanguageId(), () => token.isCancellationRequested, [
+					{ range: new stanza.Range(1, 1, 1, 6), kind: stanza.DocumentHighlightKind.Read },
+					{ range: new stanza.Range(3, 1, 3, 6), kind: stanza.DocumentHighlightKind.Read },
+				], []),
 			}));
 		} else if (kind === 'folding') {
 			contributionProviders.add(stanza.languages.registerFoldingRangeProvider(selector, {
@@ -521,7 +595,7 @@ window.ashStandaloneIntegration = {
 	contributionPoint: column => {
 		const position = callerEditor.getScrolledVisiblePosition(new stanza.Position(1, column))!;
 		const bounds = callerEditor.getDomNode()!.getBoundingClientRect();
-		return { x: bounds.left + callerEditor.getLayoutInfo().contentLeft + position.left + 2, y: bounds.top + position.top + position.height / 2 };
+		return { x: bounds.left + position.left + 2, y: bounds.top + position.top + position.height / 2 };
 	},
 	readSelectionHighlights: () => callerModel.getAllDecorations().filter(decoration => decoration.options.className === 'selection-highlight').length,
 	invokeLanguageAction: id => { callerEditor.trigger('test', id, {}); },
@@ -573,7 +647,7 @@ window.ashStandaloneIntegration = {
 	languageHoverPoint: () => {
 		const bounds = callerEditor.getDomNode()!.getBoundingClientRect();
 		const point = callerEditor.getScrolledVisiblePosition(new stanza.Position(1, 3))!;
-		return { x: bounds.left + callerEditor.getLayoutInfo().contentLeft + point.left + 2, y: bounds.top + point.top + point.height / 2 };
+		return { x: bounds.left + point.left + 2, y: bounds.top + point.top + point.height / 2 };
 	},
 	readLanguageRequests: () => languageRequests.map(request => ({ languageId: request.languageId, aborted: request.signal.aborted })),
 	finishLanguageRequest: async index => {
@@ -1621,7 +1695,7 @@ window.ashStandaloneIntegration = {
 		const node = callerEditor.getDomNode()!;
 		const bounds = node.getBoundingClientRect();
 		const position = callerEditor.getScrolledVisiblePosition(new stanza.Position(1, 6))!;
-		const event = new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer, clientX: bounds.left + callerEditor.getLayoutInfo().contentLeft + position.left, clientY: bounds.top + position.top + position.height / 2 });
+		const event = new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer, clientX: bounds.left + position.left, clientY: bounds.top + position.top + position.height / 2 });
 		node.dispatchEvent(event);
 		try {
 			if (change !== 'none') callerEditor.updateOptions({ readOnly: true });
