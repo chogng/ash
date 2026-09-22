@@ -1,8 +1,7 @@
-use crate::BackendClient;
+use super::Client;
 use crate::RequestError;
 use async_utils::CancellationToken;
 use serde::Deserialize;
-use serde::Serialize;
 use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -42,13 +41,6 @@ enum AccountCollection {
 #[derive(Deserialize)]
 struct AccountEnvelope {
     account: AccountEntry,
-}
-
-#[derive(Clone, Copy, Debug, Serialize, Eq, PartialEq)]
-#[serde(rename_all = "snake_case")]
-pub enum CreditNudge {
-    Credits,
-    UsageLimit,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
@@ -102,14 +94,15 @@ pub struct ProfileInvocation {
     pub usage_count: Option<u64>,
 }
 
-impl BackendClient<'_> {
+impl Client<'_> {
     /// Normalizes both account wire formats without dropping unordered workspace entries.
     pub fn read_accounts(
         &self,
         cancellation: &CancellationToken,
     ) -> Result<Accounts, RequestError> {
         let response: AccountsResponse =
-            self.get(self.endpoint(&["accounts", "check"])?, &[], cancellation)?;
+            self.http
+                .get(self.endpoint(&["accounts", "check"])?, &[], cancellation)?;
         let mut accounts = match response.accounts {
             AccountCollection::List(accounts) => accounts,
             AccountCollection::Map(accounts) => accounts
@@ -148,25 +141,8 @@ impl BackendClient<'_> {
         &self,
         cancellation: &CancellationToken,
     ) -> Result<AccountProfile, RequestError> {
-        self.get(self.endpoint(&["profiles", "me"])?, &[], cancellation)
-    }
-
-    /// Sends an administrator email only when the caller has authorized that action.
-    pub fn send_credit_nudge(
-        &self,
-        credit_type: CreditNudge,
-        cancellation: &CancellationToken,
-    ) -> Result<(), RequestError> {
-        #[derive(Serialize)]
-        struct Nudge {
-            credit_type: CreditNudge,
-        }
-        self.post_response(
-            self.endpoint(&["accounts", "send_add_credits_nudge_email"])?,
-            &Nudge { credit_type },
-            cancellation,
-        )?;
-        Ok(())
+        self.http
+            .get(self.endpoint(&["profiles", "me"])?, &[], cancellation)
     }
 }
 

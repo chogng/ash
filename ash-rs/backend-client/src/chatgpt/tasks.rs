@@ -1,4 +1,4 @@
-use crate::BackendClient;
+use super::Client;
 use crate::RequestError;
 use async_utils::CancellationToken;
 use serde::Deserialize;
@@ -258,7 +258,7 @@ impl TaskDetails {
     }
 }
 
-impl BackendClient<'_> {
+impl Client<'_> {
     pub fn list_tasks(
         &self,
         query: &TaskListQuery<'_>,
@@ -281,7 +281,7 @@ impl BackendClient<'_> {
                 url.query_pairs_mut().append_pair(name, value);
             }
         }
-        self.get(url, &[], cancellation)
+        self.http.get(url, &[], cancellation)
     }
 
     pub fn read_task(
@@ -290,7 +290,8 @@ impl BackendClient<'_> {
         cancellation: &CancellationToken,
     ) -> Result<TaskDetails, RequestError> {
         let details: TaskDetails =
-            self.get(self.endpoint(&["tasks", task_id])?, &[], cancellation)?;
+            self.http
+                .get(self.endpoint(&["tasks", task_id])?, &[], cancellation)?;
         if details.task.id != task_id {
             return Err(RequestError::InvalidResponse);
         }
@@ -303,7 +304,7 @@ impl BackendClient<'_> {
         turn_id: &str,
         cancellation: &CancellationToken,
     ) -> Result<SiblingTurns, RequestError> {
-        self.get(
+        self.http.get(
             self.endpoint(&["tasks", task_id, "turns", turn_id, "sibling_turns"])?,
             &[],
             cancellation,
@@ -326,7 +327,9 @@ impl BackendClient<'_> {
             task: Option<TaskId>,
             id: Option<String>,
         }
-        let created: Created = self.post(self.endpoint(&["tasks"])?, body, cancellation)?;
+        let created: Created = self
+            .http
+            .post(self.endpoint(&["tasks"])?, body, cancellation)?;
         let id = match (created.task, created.id) {
             (Some(task), None) => task.id,
             (None, Some(id)) => id,

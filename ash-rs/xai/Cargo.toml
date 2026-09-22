@@ -11,6 +11,7 @@ name = "xai"
 path = "src/lib.rs"
 
 [dependencies]
+backend-client = { workspace = true }
 fs2 = { workspace = true }
 getrandom = { workspace = true }
 serde = { workspace = true }

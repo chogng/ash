@@ -1,4 +1,4 @@
-use crate::BackendClient;
+use super::Client;
 use crate::RequestError;
 use async_utils::CancellationToken;
 use http_client::HttpHeader;
@@ -49,19 +49,20 @@ pub struct WorkspaceMessage {
     pub archived_at: Option<String>,
 }
 
-impl BackendClient<'_> {
+impl Client<'_> {
     pub fn read_config_bundle(
         &self,
         cancellation: &CancellationToken,
     ) -> Result<ConfigBundle, RequestError> {
-        self.get(self.endpoint(&["config", "bundle"])?, &[], cancellation)
+        self.http
+            .get(self.endpoint(&["config", "bundle"])?, &[], cancellation)
     }
 
     pub fn read_user_settings(
         &self,
         cancellation: &CancellationToken,
     ) -> Result<UserSettings, RequestError> {
-        self.get(
+        self.http.get(
             self.endpoint(&["settings", "user"])?,
             &[HttpHeader::new("Cache-Control", "no-cache, no-store")],
             cancellation,
@@ -72,7 +73,7 @@ impl BackendClient<'_> {
         &self,
         cancellation: &CancellationToken,
     ) -> Result<WorkspaceMessages, RequestError> {
-        self.get(
+        self.http.get(
             self.endpoint(&["workspace-messages"])?,
             &[HttpHeader::new("Cache-Control", "no-store")],
             cancellation,

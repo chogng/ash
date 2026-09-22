@@ -1,11 +1,11 @@
-use crate::BackendClient;
+use super::Client;
+use super::analytics_types::CreditUsageEventsResponse;
+use super::analytics_types::CurrentUserCreditUsageResponse;
+use super::analytics_types::DailyProductSurfaceUsageResponse;
+use super::analytics_types::DailySkillUsageMetricsResponse;
+use super::analytics_types::DailyWorkspaceUsageCountResponse;
+use super::analytics_types::PluginUsageMetricsResponse;
 use crate::RequestError;
-use crate::analytics_types::CreditUsageEventsResponse;
-use crate::analytics_types::CurrentUserCreditUsageResponse;
-use crate::analytics_types::DailyProductSurfaceUsageResponse;
-use crate::analytics_types::DailySkillUsageMetricsResponse;
-use crate::analytics_types::DailyWorkspaceUsageCountResponse;
-use crate::analytics_types::PluginUsageMetricsResponse;
 use async_utils::CancellationToken;
 use serde::Deserialize;
 
@@ -66,7 +66,7 @@ pub struct PlanLimitValue {
     pub basis_points: f64,
 }
 
-impl BackendClient<'_> {
+impl Client<'_> {
     pub fn read_analytics(
         &self,
         report: AnalyticsReport<'_>,
@@ -140,21 +140,27 @@ impl BackendClient<'_> {
             AnalyticsReport::Usage
             | AnalyticsReport::EnterpriseTokens
             | AnalyticsReport::WorkspaceCredits => self
+                .http
                 .get(url, &[], cancellation)
                 .map(AnalyticsResponse::Usage),
             AnalyticsReport::Credits => self
+                .http
                 .get(url, &[], cancellation)
                 .map(AnalyticsResponse::Credits),
             AnalyticsReport::EnterpriseCredits { .. } => self
+                .http
                 .get(url, &[], cancellation)
                 .map(AnalyticsResponse::EnterpriseCredits),
             AnalyticsReport::Messages => self
+                .http
                 .get(url, &[], cancellation)
                 .map(AnalyticsResponse::Messages),
             AnalyticsReport::Plugins { .. } => self
+                .http
                 .get(url, &[], cancellation)
                 .map(AnalyticsResponse::Plugins),
             AnalyticsReport::Skills { .. } => self
+                .http
                 .get(url, &[], cancellation)
                 .map(AnalyticsResponse::Skills),
         }
@@ -167,7 +173,7 @@ impl BackendClient<'_> {
     ) -> Result<Option<PlanLimitHistory>, RequestError> {
         let mut url = self.endpoint(&["usage", "plan_limit_history"])?;
         url.query_pairs_mut().append_pair("days", "7");
-        match self.get(url, &[], cancellation) {
+        match self.http.get(url, &[], cancellation) {
             Ok(history) => Ok(Some(history)),
             Err(RequestError::HttpStatus(404)) => Ok(None),
             Err(error) => Err(error),

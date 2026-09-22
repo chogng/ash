@@ -1,6 +1,7 @@
-use crate::test_support::Client;
-use crate::test_support::target;
-use crate::*;
+use crate::RequestError;
+use crate::chatgpt::test_support::target;
+use crate::chatgpt::*;
+use crate::test_support::Transport;
 use ::client::ResolvedApiTarget;
 use ::client::RetryPolicy;
 use async_utils::CancellationSource;
@@ -11,13 +12,13 @@ use std::collections::BTreeMap;
 
 #[test]
 fn thread_usage_keeps_unknown_amounts_and_checks_every_returned_identity() {
-    let target = target(CHATGPT_BACKEND_BASE_URL);
+    let target = target(BASE_URL);
     let token = CancellationSource::new().token();
-    let client = Client::response(200, &json!({"threads":[
+    let client = Transport::response(200, &json!({"threads":[
         {"thread_id":"a","estimated_usage_credits_micros":9007199254740993_i64,"groups":[{"model":"model","estimated_usage_credits_micros":123,"cached_input_tokens":5}]},
         {"thread_id":"b","estimated_usage_credits_micros":null}
     ]}).to_string());
-    let backend = BackendClient::new(&client, &target, RouteStyle::ChatGpt).unwrap();
+    let backend = Client::new(&client, &target, RouteStyle::ChatGpt).unwrap();
     let rows = backend.read_thread_usage(&["a", "b", "c"], &token).unwrap();
     assert_eq!(rows.len(), 2);
     assert_eq!(
@@ -39,9 +40,9 @@ fn thread_usage_keeps_unknown_amounts_and_checks_every_returned_identity() {
         json!({"threads":[{"thread_id":"other"}]}),
         json!({"threads":[{"thread_id":"a"},{"thread_id":"a"}]}),
     ] {
-        let client = Client::response(200, &body.to_string());
+        let client = Transport::response(200, &body.to_string());
         assert_eq!(
-            BackendClient::new(&client, &target, RouteStyle::Codex)
+            Client::new(&client, &target, RouteStyle::Codex)
                 .unwrap()
                 .read_thread_usage(&["a"], &token),
             Err(RequestError::InvalidResponse)
@@ -51,10 +52,10 @@ fn thread_usage_keeps_unknown_amounts_and_checks_every_returned_identity() {
 
 #[test]
 fn usage_queries_reject_empty_duplicate_overlapping_and_oversized_batches() {
-    let target = target(CHATGPT_BACKEND_BASE_URL);
+    let target = target(BASE_URL);
     let token = CancellationSource::new().token();
-    let client = Client::response(200, r#"{"threads":[]}"#);
-    let backend = BackendClient::new(&client, &target, RouteStyle::ChatGpt).unwrap();
+    let client = Transport::response(200, r#"{"threads":[]}"#);
+    let backend = Client::new(&client, &target, RouteStyle::ChatGpt).unwrap();
     let oversized = (0..101).map(|id| id.to_string()).collect::<Vec<_>>();
     let long_id = "a".repeat(513);
     for ids in [
@@ -101,7 +102,7 @@ fn usage_queries_reject_empty_duplicate_overlapping_and_oversized_batches() {
 
 #[test]
 fn task_usage_preserves_decimal_balances_partial_results_and_descendant_scope() {
-    let target = target(CHATGPT_BACKEND_BASE_URL);
+    let target = target(BASE_URL);
     let token = CancellationSource::new().token();
     let threads = [TaskUsageThread {
         thread_id: "root".into(),
@@ -109,11 +110,11 @@ fn task_usage_preserves_decimal_balances_partial_results_and_descendant_scope() 
         descendant_thread_ids: vec!["child".into()],
     }];
     let row = json!({"thread_id":"root","data_status":"partial","usage_source":"backend","five_hour_limit_percent":0.125,"weekly_limit_percent":null,"balance_usage_credits":"123456789012345678.00000001","groups":[{"product_experience":"codex","model":"future-model","weekly_limit_percent":0.5}]});
-    let client = Client::response(
+    let client = Transport::response(
         200,
         &json!({"data_as_of":"2026-09-22","threads":[row.clone()]}).to_string(),
     );
-    let backend = BackendClient::new(&client, &target, RouteStyle::ChatGpt).unwrap();
+    let backend = Client::new(&client, &target, RouteStyle::ChatGpt).unwrap();
     let usage = backend.read_task_usage(&threads, &token).unwrap();
     assert_eq!(usage.threads[0].data_status, TaskUsageStatus::Partial);
     assert_eq!(
@@ -137,9 +138,9 @@ fn task_usage_preserves_decimal_balances_partial_results_and_descendant_scope() 
     let mut child = row.clone();
     child["thread_id"] = json!("child");
     for rows in [json!([row.clone(), row]), json!([child])] {
-        let client = Client::response(200, &json!({"threads":rows}).to_string());
+        let client = Transport::response(200, &json!({"threads":rows}).to_string());
         assert_eq!(
-            BackendClient::new(&client, &target, RouteStyle::ChatGpt)
+            Client::new(&client, &target, RouteStyle::ChatGpt)
                 .unwrap()
                 .read_task_usage(&threads, &token),
             Err(RequestError::InvalidResponse)
@@ -149,7 +150,7 @@ fn task_usage_preserves_decimal_balances_partial_results_and_descendant_scope() 
 
 #[test]
 fn task_usage_rejects_invalid_credit_amounts_in_totals_and_groups() {
-    let target = target(CHATGPT_BACKEND_BASE_URL);
+    let target = target(BASE_URL);
     let token = CancellationSource::new().token();
     let query = [TaskUsageThread {
         thread_id: "root".into(),
@@ -174,8 +175,8 @@ fn task_usage_rejects_invalid_credit_amounts_in_totals_and_groups() {
                 &mut row["groups"][0]
             };
             amounts["balance_usage_credits"] = json!(invalid);
-            let client = Client::response(200, &json!({"threads":[row]}).to_string());
-            let result = BackendClient::new(&client, &target, RouteStyle::ChatGpt)
+            let client = Transport::response(200, &json!({"threads":[row]}).to_string());
+            let result = Client::new(&client, &target, RouteStyle::ChatGpt)
                 .unwrap()
                 .read_task_usage(&query, &token);
             assert_eq!(
@@ -189,7 +190,7 @@ fn task_usage_rejects_invalid_credit_amounts_in_totals_and_groups() {
 
 #[test]
 fn task_usage_preserves_signed_decimal_and_exponent_notation() {
-    let target = target(CHATGPT_BACKEND_BASE_URL);
+    let target = target(BASE_URL);
     let token = CancellationSource::new().token();
     let query = [TaskUsageThread {
         thread_id: "root".into(),
@@ -206,8 +207,8 @@ fn task_usage_preserves_signed_decimal_and_exponent_notation() {
         "-1E+3",
         "1e400",
     ] {
-        let client = Client::response(200, &json!({"threads":[{"thread_id":"root","data_status":"available","usage_source":"plan_and_credits","balance_usage_credits":amount,"groups":[]}]}).to_string());
-        let response = BackendClient::new(&client, &target, RouteStyle::ChatGpt)
+        let client = Transport::response(200, &json!({"threads":[{"thread_id":"root","data_status":"available","usage_source":"plan_and_credits","balance_usage_credits":amount,"groups":[]}]}).to_string());
+        let response = Client::new(&client, &target, RouteStyle::ChatGpt)
             .unwrap()
             .read_task_usage(&query, &token)
             .unwrap();
@@ -220,7 +221,7 @@ fn task_usage_preserves_signed_decimal_and_exponent_notation() {
 
 #[test]
 fn task_usage_requires_finite_numeric_percentages_without_clamping() {
-    let target = target(CHATGPT_BACKEND_BASE_URL);
+    let target = target(BASE_URL);
     let token = CancellationSource::new().token();
     let query = [TaskUsageThread {
         thread_id: "root".into(),
@@ -240,9 +241,9 @@ fn task_usage_requires_finite_numeric_percentages_without_clamping() {
                 let body = json!({"threads":[row]})
                     .to_string()
                     .replace("\"number-to-replace\"", number);
-                let client = Client::response(200, &body);
+                let client = Transport::response(200, &body);
                 assert_eq!(
-                    BackendClient::new(&client, &target, RouteStyle::ChatGpt)
+                    Client::new(&client, &target, RouteStyle::ChatGpt)
                         .unwrap()
                         .read_task_usage(&query, &token),
                     Err(RequestError::InvalidResponse),
@@ -251,11 +252,11 @@ fn task_usage_requires_finite_numeric_percentages_without_clamping() {
             }
         }
     }
-    let client = Client::response(
+    let client = Transport::response(
         200,
         r#"{"threads":[{"thread_id":"root","data_status":"available","usage_source":"plan_and_credits","five_hour_limit_percent":150.25,"groups":[{"weekly_limit_percent":0.125}]}]}"#,
     );
-    let response = BackendClient::new(&client, &target, RouteStyle::ChatGpt)
+    let response = Client::new(&client, &target, RouteStyle::ChatGpt)
         .unwrap()
         .read_task_usage(&query, &token)
         .unwrap();
@@ -271,12 +272,12 @@ fn task_usage_requires_finite_numeric_percentages_without_clamping() {
 
 #[test]
 fn chatgpt_turn_costs_preserve_settlement_and_validate_thread_and_turn_pairs() {
-    let target = target(CHATGPT_BACKEND_BASE_URL);
+    let target = target(BASE_URL);
     let token = CancellationSource::new().token();
     let threads = BTreeMap::from([("thread".into(), vec!["turn".into(), "pending".into()])]);
     let row = json!({"thread_id":"thread","turns":[{"turn_id":"turn","estimated_usage_usd_micros":7,"settled_response_ids":["response-1"]},{"turn_id":"pending"}]});
-    let client = Client::response(200, &json!({"threads":[row.clone()]}).to_string());
-    let backend = BackendClient::new(&client, &target, RouteStyle::ChatGpt).unwrap();
+    let client = Transport::response(200, &json!({"threads":[row.clone()]}).to_string());
+    let backend = Client::new(&client, &target, RouteStyle::ChatGpt).unwrap();
     let costs = backend.query_chatgpt_turn_costs(&threads, &token).unwrap();
     assert_eq!(
         costs[0].turns[0].settled_response_ids.as_ref().unwrap(),
@@ -294,9 +295,9 @@ fn chatgpt_turn_costs_preserve_settlement_and_validate_thread_and_turn_pairs() {
         json!({"threads":[{"thread_id":"thread","turns":[{"turn_id":"other"}]}]}),
         json!({"threads":[{"thread_id":"thread","turns":[{"turn_id":"turn"},{"turn_id":"turn"}]}]}),
     ] {
-        let client = Client::response(200, &body.to_string());
+        let client = Transport::response(200, &body.to_string());
         assert_eq!(
-            BackendClient::new(&client, &target, RouteStyle::ChatGpt)
+            Client::new(&client, &target, RouteStyle::ChatGpt)
                 .unwrap()
                 .query_chatgpt_turn_costs(&threads, &token),
             Err(RequestError::InvalidResponse)
@@ -326,11 +327,11 @@ fn api_key_costs_use_the_explicit_origin_auth_and_provider_scope() {
         ],
     );
     let token = CancellationSource::new().token();
-    let client = Client::response(
+    let client = Transport::response(
         200,
         r#"{"turns":[{"turn_id":"priced","status":"priced","total_usd":"0.000000123456789","responses":[{"response_id":"response","total_usd":"0.000000123456789"}]},{"turn_id":"pending","status":"pending"}]}"#,
     );
-    let backend = BackendClient::new(&client, &target, RouteStyle::Codex).unwrap();
+    let backend = Client::new(&client, &target, RouteStyle::Codex).unwrap();
     let costs = backend
         .query_api_key_turn_costs(&["priced".into(), "pending".into()], &token)
         .unwrap();
@@ -379,9 +380,9 @@ fn api_key_costs_use_the_explicit_origin_auth_and_provider_scope() {
             RequestError::InvalidResponse,
         ),
     ] {
-        let client = Client::response(status, body);
+        let client = Transport::response(status, body);
         assert_eq!(
-            BackendClient::new(&client, &target, RouteStyle::Codex)
+            Client::new(&client, &target, RouteStyle::Codex)
                 .unwrap()
                 .query_api_key_turn_costs(&["priced".into()], &token),
             Err(expected)

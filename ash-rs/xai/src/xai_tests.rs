@@ -42,6 +42,7 @@ impl OperationClient for ScriptedClient {
 
 fn credential(expires_at: u64) -> TokenCredential {
     TokenCredential {
+        profile: None,
         access_token: "old-access".into(),
         refresh_token: "old-refresh".into(),
         token_type: "Bearer".into(),
@@ -257,4 +258,86 @@ fn official_optional_device_and_token_fields_are_accepted() {
     assert!(credential.is_usable());
     assert!(!credential.needs_refresh());
     assert_eq!(credential.token_type, "Bearer");
+}
+
+#[test]
+fn catalog_delegates_wire_requests_and_recovers_one_unauthorized_response() {
+    for final_status in [200, 401] {
+        let dir = tempfile::tempdir().unwrap();
+        let client = ScriptedClient::new(&[
+            (401, "private account detail"),
+            (200, TOKEN),
+            (
+                final_status,
+                r#"{"data":[{"id":"grok-test","apiBackend":"responses"}]}"#,
+            ),
+        ]);
+        let auth = XaiOAuth::with_client(
+            Arc::new(MemorySecretStore::default()),
+            client.clone(),
+            dir.path().join("lock"),
+        );
+        auth.store_credential(&credential(now_epoch_seconds() + 3600))
+            .unwrap();
+        let result = auth.models("account-a", &CancellationSource::new().token());
+        if final_status == 200 {
+            assert_eq!(result.unwrap()[0].id, "grok-test");
+        } else {
+            assert_eq!(result.unwrap_err().kind(), XaiErrorKind::Authentication);
+            assert_eq!(
+                auth.read_account().unwrap().unwrap().status,
+                AccountStatus::ReauthenticationRequired
+            );
+        }
+        let requests = client.requests.lock().unwrap();
+        assert_eq!(
+            requests
+                .iter()
+                .map(|request| request.url())
+                .collect::<Vec<_>>(),
+            [
+                "https://cli-chat-proxy.grok.com/v1/models-v2",
+                TOKEN_URL,
+                "https://cli-chat-proxy.grok.com/v1/models-v2",
+            ]
+        );
+        for (index, bearer) in [(0, "Bearer old-access"), (2, "Bearer access-secret")] {
+            assert!(
+                requests[index]
+                    .headers()
+                    .iter()
+                    .any(|header| header.name() == "Authorization" && header.value() == bearer)
+            );
+        }
+    }
+}
+
+#[test]
+fn catalog_keeps_account_and_non_authentication_failures_out_of_refresh() {
+    for (status, kind) in [
+        (403, XaiErrorKind::Permission),
+        (426, XaiErrorKind::UpgradeRequired),
+        (429, XaiErrorKind::RateLimited),
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let client = ScriptedClient::new(&[(status, "private account detail")]);
+        let auth = XaiOAuth::with_client(
+            Arc::new(MemorySecretStore::default()),
+            client.clone(),
+            dir.path().join("lock"),
+        );
+        auth.store_credential(&credential(now_epoch_seconds() + 3600))
+            .unwrap();
+        let token = CancellationSource::new().token();
+        assert!(auth.models("another-account", &token).is_err());
+        assert!(client.requests.lock().unwrap().is_empty());
+        let error = auth.models("account-a", &token).unwrap_err();
+        assert_eq!(error.kind(), kind);
+        assert!(!error.to_string().contains("private"));
+        assert_eq!(client.requests.lock().unwrap().len(), 1);
+        assert_eq!(
+            auth.read_account().unwrap().unwrap().status,
+            AccountStatus::Ready
+        );
+    }
 }

@@ -1,23 +1,23 @@
-use crate::test_support::Client;
-use crate::test_support::target;
-use crate::*;
+use crate::RequestError;
+use crate::chatgpt::test_support::target;
+use crate::chatgpt::*;
+use crate::test_support::Transport;
 use async_utils::CancellationSource;
 use http_client::HttpMethod;
 use serde_json::json;
 
 #[test]
 fn credit_reports_preserve_signed_events_and_enterprise_series() {
-    let target = target(CHATGPT_BACKEND_BASE_URL);
+    let target = target(BASE_URL);
     let token = CancellationSource::new().token();
-    let client = Client::response(
+    let client = Transport::response(
         200,
         r#"{"data":[{"date":"2026-09-20","product_surface":"future","credit_amount":-0.004,"usage_id":"refund"},{"date":"2026-09-21","product_surface":"codex","credit_amount":0}]}"#,
     );
-    let AnalyticsResponse::Credits(report) =
-        BackendClient::new(&client, &target, RouteStyle::ChatGpt)
-            .unwrap()
-            .read_analytics(AnalyticsReport::Credits, "", "", &token)
-            .unwrap()
+    let AnalyticsResponse::Credits(report) = Client::new(&client, &target, RouteStyle::ChatGpt)
+        .unwrap()
+        .read_analytics(AnalyticsReport::Credits, "", "", &token)
+        .unwrap()
     else {
         panic!("expected credit events")
     };
@@ -34,12 +34,12 @@ fn credit_reports_preserve_signed_events_and_enterprise_series() {
     assert_eq!(report.data[1].credit_amount, 0.0);
     assert_eq!(report.data[1].usage_id, None);
 
-    let client = Client::response(
+    let client = Transport::response(
         200,
         r#"{"breakdown":"future","data":[{"date":"2026-09-21","values":{"model/a":1.25,"refund":-0.004}}],"series":[{"key":"model/a","label":"Model A","total":1.25}],"unit":"credits","data_freshness_ts":"2026-09-22T00:00:00Z"}"#,
     );
     let AnalyticsResponse::EnterpriseCredits(report) =
-        BackendClient::new(&client, &target, RouteStyle::ChatGpt)
+        Client::new(&client, &target, RouteStyle::ChatGpt)
             .unwrap()
             .read_analytics(
                 AnalyticsReport::EnterpriseCredits {
@@ -81,18 +81,17 @@ fn workspace_report_preserves_activity_models_and_grouped_costs() {
         "models":[{"model":"m","speed":"fast","credits":1.25,"on_demand_credits":0.25,"text_total_tokens":99}],
         "groups":[{"dimensions":{"model":"m","new-dimension":"new"},"is_other":false,"users":3,"turns":5,"cost_usd":"0.0000000000001"}]}]
     });
-    let client = Client::response(200, &body.to_string());
-    let target = target(CHATGPT_BACKEND_BASE_URL);
-    let AnalyticsResponse::Messages(report) =
-        BackendClient::new(&client, &target, RouteStyle::ChatGpt)
-            .unwrap()
-            .read_analytics(
-                AnalyticsReport::Messages,
-                "2026-09-20",
-                "2026-09-21",
-                &CancellationSource::new().token(),
-            )
-            .unwrap()
+    let client = Transport::response(200, &body.to_string());
+    let target = target(BASE_URL);
+    let AnalyticsResponse::Messages(report) = Client::new(&client, &target, RouteStyle::ChatGpt)
+        .unwrap()
+        .read_analytics(
+            AnalyticsReport::Messages,
+            "2026-09-20",
+            "2026-09-21",
+            &CancellationSource::new().token(),
+        )
+        .unwrap()
     else {
         panic!("expected workspace usage")
     };
@@ -137,22 +136,21 @@ fn workspace_report_preserves_activity_models_and_grouped_costs() {
 
 #[test]
 fn invocation_reports_preserve_plugin_and_skill_identity_and_counts() {
-    let target = target(CHATGPT_BACKEND_BASE_URL);
+    let target = target(BASE_URL);
     let token = CancellationSource::new().token();
-    let client = Client::response(
+    let client = Transport::response(
         200,
         r#"{"data":[{"date":"2026-09-21","plugin_usage_overviews":[{"plugin_id":"p","plugin_name":"review","display_name":"Review","marketplace":"company","invocation_counts":7}]}],"data_freshness_ts":"2026-09-22","group_by":"day"}"#,
     );
-    let AnalyticsResponse::Plugins(report) =
-        BackendClient::new(&client, &target, RouteStyle::ChatGpt)
-            .unwrap()
-            .read_analytics(
-                AnalyticsReport::Plugins { limit: 10 },
-                "2026-09-20",
-                "2026-09-21",
-                &token,
-            )
-            .unwrap()
+    let AnalyticsResponse::Plugins(report) = Client::new(&client, &target, RouteStyle::ChatGpt)
+        .unwrap()
+        .read_analytics(
+            AnalyticsReport::Plugins { limit: 10 },
+            "2026-09-20",
+            "2026-09-21",
+            &token,
+        )
+        .unwrap()
     else {
         panic!("expected plugin usage")
     };
@@ -167,20 +165,19 @@ fn invocation_reports_preserve_plugin_and_skill_identity_and_counts() {
             invocation_counts: 7
         }]
     );
-    let client = Client::response(
+    let client = Transport::response(
         200,
         r#"{"data":[{"date":"2026-09-21","skill_usage_overviews":[{"skill_name":"test","display_name":"Test","skill_ids":["local/test","plugin/test"],"invocation_counts":9}]}],"group_by":"day"}"#,
     );
-    let AnalyticsResponse::Skills(report) =
-        BackendClient::new(&client, &target, RouteStyle::ChatGpt)
-            .unwrap()
-            .read_analytics(
-                AnalyticsReport::Skills { limit: 10 },
-                "2026-09-20",
-                "2026-09-21",
-                &token,
-            )
-            .unwrap()
+    let AnalyticsResponse::Skills(report) = Client::new(&client, &target, RouteStyle::ChatGpt)
+        .unwrap()
+        .read_analytics(
+            AnalyticsReport::Skills { limit: 10 },
+            "2026-09-20",
+            "2026-09-21",
+            &token,
+        )
+        .unwrap()
     else {
         panic!("expected skill usage")
     };
@@ -198,8 +195,8 @@ fn invocation_reports_preserve_plugin_and_skill_identity_and_counts() {
 
 #[test]
 fn reports_reject_another_report_shape_without_exposing_body() {
-    let target = target(CHATGPT_BACKEND_BASE_URL);
-    let client = Client::response(
+    let target = target(BASE_URL);
+    let client = Transport::response(
         200,
         r#"{"data":[{"date":"2026-09-21","product_surface":"private-surface","credit_amount":1}]}"#,
     );
@@ -209,7 +206,7 @@ fn reports_reject_another_report_shape_without_exposing_body() {
         AnalyticsReport::Plugins { limit: 5 },
         AnalyticsReport::Skills { limit: 5 },
     ] {
-        let error = BackendClient::new(&client, &target, RouteStyle::ChatGpt)
+        let error = Client::new(&client, &target, RouteStyle::ChatGpt)
             .unwrap()
             .read_analytics(
                 report,
@@ -225,11 +222,11 @@ fn reports_reject_another_report_shape_without_exposing_body() {
 
 #[test]
 fn plan_history_preserves_approximation_freshness_and_fractional_breakdowns() {
-    let target = target(CHATGPT_BACKEND_BASE_URL);
+    let target = target(BASE_URL);
     for approximate in [json!(null), json!(false), json!(true)] {
-        let client = Client::response(200, &json!({"data_as_of":"2026-09-21","coverage_start":null,"coverage_complete":true,"approximate":approximate,"boundary_tolerance_seconds":300,
+        let client = Transport::response(200, &json!({"data_as_of":"2026-09-21","coverage_start":null,"coverage_complete":true,"approximate":approximate,"boundary_tolerance_seconds":300,
             "periods":[{"id":"p","window_minutes":300,"plan_type":"plus","starts_at":"2026-09-20","ends_at":"2026-09-21","accounting_complete":true,"used_basis_points":12.75,"breakdowns":[{"dimension":"model","rows":[{"key":"m","basis_points":12.75}]}]}]}).to_string());
-        let history = BackendClient::new(&client, &target, RouteStyle::ChatGpt)
+        let history = Client::new(&client, &target, RouteStyle::ChatGpt)
             .unwrap()
             .read_plan_limit_history(&CancellationSource::new().token())
             .unwrap()
@@ -304,8 +301,8 @@ fn every_analytics_report_uses_its_route_query_and_typed_response() {
             ),
         ];
         for (report, path, body) in reports {
-            let client = Client::response(200, body);
-            let backend = BackendClient::new(&client, &target, style).unwrap();
+            let client = Transport::response(200, body);
+            let backend = Client::new(&client, &target, style).unwrap();
             let response = backend
                 .read_analytics(report, "2026-09-01", "2026-09-22", &token)
                 .unwrap();
@@ -390,8 +387,8 @@ fn every_analytics_report_uses_its_route_query_and_typed_response() {
                     RequestError::HttpStatus(403),
                 ),
             ] {
-                let client = Client::response(status, body);
-                let backend = BackendClient::new(&client, &target, style).unwrap();
+                let client = Transport::response(status, body);
+                let backend = Client::new(&client, &target, style).unwrap();
                 assert_eq!(
                     backend.read_analytics(report, "2026-09-01", "2026-09-22", &token),
                     Err(expected)
@@ -403,16 +400,16 @@ fn every_analytics_report_uses_its_route_query_and_typed_response() {
 
 #[test]
 fn analytics_preserves_attribution_units_unknown_dimensions_and_missing_amounts() {
-    let target = target(CHATGPT_BACKEND_BASE_URL);
+    let target = target(BASE_URL);
     let token = CancellationSource::new().token();
-    let client = Client::response(200, &json!({
+    let client = Transport::response(200, &json!({
         "units":"credits", "data_freshness_ts":"2026-09-22T12:00:00Z", "breakdown_by":["future"],
         "data":[{"date":"2026-09-21","product_surface_usage_values":{"codex":12.5},
             "attribution":[{"thread_source":"cli","turn_trigger":"user","model":"future-model","surface":"codex","value":12.5}],
             "groups":[{"dimensions":{"future":"value"},"credits":12.5}],
             "models":[{"model":"future-model","credits":12.5,"text_output_tokens":123}]}]
     }).to_string());
-    let backend = BackendClient::new(&client, &target, RouteStyle::ChatGpt).unwrap();
+    let backend = Client::new(&client, &target, RouteStyle::ChatGpt).unwrap();
     let AnalyticsResponse::Usage(report) = backend
         .read_analytics(AnalyticsReport::Usage, "2026-09-21", "2026-09-22", &token)
         .unwrap()
@@ -437,10 +434,10 @@ fn analytics_preserves_attribution_units_unknown_dimensions_and_missing_amounts(
 
 #[test]
 fn analytics_rejects_invalid_dates_ranges_and_limits_before_network() {
-    let client = Client::response(200, r#"{"data":[]}"#);
-    let target = target(CHATGPT_BACKEND_BASE_URL);
+    let client = Transport::response(200, r#"{"data":[]}"#);
+    let target = target(BASE_URL);
     let token = CancellationSource::new().token();
-    let backend = BackendClient::new(&client, &target, RouteStyle::ChatGpt).unwrap();
+    let backend = Client::new(&client, &target, RouteStyle::ChatGpt).unwrap();
     for (start, end) in [
         ("2026-02-29", "2026-03-01"),
         ("2026-13-01", "2026-13-01"),
@@ -471,14 +468,14 @@ fn analytics_rejects_invalid_dates_ranges_and_limits_before_network() {
 
 #[test]
 fn plan_history_distinguishes_unavailable_from_failure_and_incomplete_accounting() {
-    let target = target(CHATGPT_BACKEND_BASE_URL);
+    let target = target(BASE_URL);
     let token = CancellationSource::new().token();
     let body = json!({"coverage_complete":false,"periods":[{
         "id":"period-1","window_minutes":10080,"plan_type":"old-plan","starts_at":"2026-09-01","ends_at":"2026-09-08","accounting_complete":false,
         "used_basis_points":null,"breakdowns":[{"dimension":"future","rows":[{"key":"test","basis_points":12.5}]}]
     }]});
-    let client = Client::response(200, &body.to_string());
-    let backend = BackendClient::new(&client, &target, RouteStyle::ChatGpt).unwrap();
+    let client = Transport::response(200, &body.to_string());
+    let backend = Client::new(&client, &target, RouteStyle::ChatGpt).unwrap();
     let history = backend.read_plan_limit_history(&token).unwrap().unwrap();
     assert_eq!(history.approximate, None);
     assert!(!history.coverage_complete);
@@ -493,8 +490,8 @@ fn plan_history_distinguishes_unavailable_from_failure_and_incomplete_accounting
             .ends_with("/usage/plan_limit_history?days=7")
     );
     for status in [404, 401, 500] {
-        let client = Client::response(status, "private data");
-        let backend = BackendClient::new(&client, &target, RouteStyle::ChatGpt).unwrap();
+        let client = Transport::response(status, "private data");
+        let backend = Client::new(&client, &target, RouteStyle::ChatGpt).unwrap();
         let result = backend.read_plan_limit_history(&token);
         if status == 404 {
             assert_eq!(result, Ok(None));

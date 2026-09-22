@@ -1,0 +1,30 @@
+---
+source: ash-code/tui/src/app/usage_tests.rs
+expression: screen
+---
+  .                                                        [— / —] [Dashboard]
+
+
+        ┌── Usage ─────────────────────────────────────────────────[✗]─┐
+        │                                                              │
+        │   ChatGPT    xAI                                             │
+        │                                                              │
+        │  xAI plan  ·  Not reported                                   │
+        │  Access  ·  Unavailable                                      │
+        │  Credits used  ·  105.125%                                   │
+        │  Period  ·  Not reported                                     │
+        │  Resets  ·  Not reported                                     │
+        │  Prepaid  ·  Not reported                                    │
+        │  On-demand used  ·  Not reported                             │
+        │  On-demand cap  ·  Not reported                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+        │                                                              │
+  ╭─────│  Tab/Shift+Tab to switch · Enter to return · Esc to close    │─────╮
+  │ > Bu└──────────────────────────────────────────────────────────────┘     │
+  ╰──────────────────────────────────────────────────────── Automatic model ─╯

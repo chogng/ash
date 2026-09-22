@@ -28,6 +28,29 @@ use std::sync::Mutex;
 use unicode_width::UnicodeWidthStr;
 
 #[test]
+fn usage_displays_xai_credits_without_rounding_or_inventing_missing_balances() {
+    let accounts = json!({"revision":1,"accounts":[{"provider":"xai-subscription","accountId":"xai-1","status":"ready","credentialRevision":1}]});
+    let data = json!({"provider":"xai-subscription","accountId":"xai-1","plan":"SuperGrokPro","limits":[],"credits":null,
+        "xai":{"usedPercent":12.125,"allowed":true,"periodType":"USAGE_PERIOD_TYPE_WEEKLY","periodEnd":"2026-09-28T00:00:00Z","prepaidCents":"9007199254740993","onDemandUsedCents":"0"}});
+    let (mut client, requests) = client(vec![accounts, data]);
+    let mut app = App::new();
+    app.update(crate::usage::load(&mut client).unwrap());
+    assert_eq!(
+        requests.lock().unwrap()[1],
+        json!({"method":"account/rateLimits/read","params":{"provider":"xai-subscription","accountId":"xai-1"}})
+    );
+    let screen = render(&app, 90, 30);
+    assert!(screen.contains("12.125%"));
+    assert!(screen.contains("USD 90071992547409.93"));
+    assert!(screen.contains("Not reported"));
+    assert!(!screen.contains("Auto top-up"));
+    assert!(!screen.contains("Manage billing"));
+    crate::tui_assert_snapshot!("usage_xai", screen);
+    app.handle_key(key(KeyCode::Esc));
+    assert!(app.command_panel().is_none());
+}
+
+#[test]
 fn usage_command_reads_the_selected_account_and_renders_both_screen_modes() {
     let mut app = App::new();
     let invocation = submit(&mut app);
@@ -75,6 +98,31 @@ fn usage_command_reads_the_selected_account_and_renders_both_screen_modes() {
     app.handle_key(key(KeyCode::Esc));
     assert!(app.command_panel().is_none());
     crate::tui_assert_snapshot!("usage_dismissed", render(&app, 80, 16));
+}
+
+#[test]
+fn usage_keeps_chatgpt_and_xai_in_separate_keyboard_selectable_groups() {
+    let mut accounts = account("ready");
+    accounts["accounts"].as_array_mut().unwrap().push(json!({"provider":"xai-subscription","accountId":"xai-1","status":"ready","credentialRevision":1}));
+    let (mut client, requests) = client(vec![
+        accounts,
+        quota(),
+        json!({"provider":"xai-subscription","accountId":"xai-1","plan":null,"limits":[],"credits":null,"xai":{"allowed":false,"usedPercent":105.125}}),
+    ]);
+    let mut app = App::new();
+    app.update(crate::usage::load(&mut client).unwrap());
+    assert_eq!(requests.lock().unwrap().len(), 3);
+    assert_eq!(
+        requests.lock().unwrap()[2]["params"]["provider"],
+        "xai-subscription"
+    );
+    assert!(render(&app, 80, 28).contains("ChatGPT plan"));
+    app.handle_key(key(KeyCode::Tab));
+    let screen = render(&app, 80, 28);
+    assert!(screen.contains("xAI plan"));
+    assert!(screen.contains("105.125%"));
+    assert!(screen.contains("Unavailable"));
+    crate::tui_assert_snapshot!("usage_subscriptions", screen);
 }
 
 #[test]

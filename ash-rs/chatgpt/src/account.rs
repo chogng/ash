@@ -2,11 +2,11 @@ use crate::ChatGptApiTarget;
 use crate::ChatGptOAuth;
 use crate::credential::AccountIdentity;
 use ash_async_utils::CancellationToken;
-use backend_client::BackendClient;
-use backend_client::CHATGPT_BACKEND_BASE_URL;
-use backend_client::RateLimits;
 use backend_client::RequestError;
-use backend_client::RouteStyle;
+use backend_client::chatgpt::BASE_URL;
+use backend_client::chatgpt::Client;
+use backend_client::chatgpt::RateLimits;
+use backend_client::chatgpt::RouteStyle;
 use std::fmt;
 use std::sync::Arc;
 
@@ -59,14 +59,14 @@ impl ChatGptAccount {
         check_cancelled(cancellation)?;
         let identity = self.account_identity(account_id)?;
         // A started credential refresh must commit rotated tokens even if this query is cancelled.
-        let target = self.auth.api_target_for(CHATGPT_BACKEND_BASE_URL);
+        let target = self.auth.api_target_for(BASE_URL);
         check_cancelled(cancellation)?;
         self.check_usage_account(&identity)?;
         let target = target.map_err(|_| ChatGptUsageError::AccountUnavailable)?;
         // The target must still identify the requested account after a concurrent refresh.
         check_target_account(&target, &identity)?;
         let read = |target: &ChatGptApiTarget| {
-            BackendClient::new(
+            Client::new(
                 self.auth.client.as_ref(),
                 target.api_target(),
                 RouteStyle::ChatGpt,
@@ -77,9 +77,7 @@ impl ChatGptAccount {
             Err(RequestError::HttpStatus(401)) => {
                 check_cancelled(cancellation)?;
                 self.check_usage_account(&identity)?;
-                let recovered = self
-                    .auth
-                    .recover_unauthorized_for(&target, CHATGPT_BACKEND_BASE_URL);
+                let recovered = self.auth.recover_unauthorized_for(&target, BASE_URL);
                 check_cancelled(cancellation)?;
                 self.check_usage_account(&identity)?;
                 let recovered = recovered.map_err(|_| ChatGptUsageError::AccountUnavailable)?;

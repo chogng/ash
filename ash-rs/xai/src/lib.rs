@@ -34,6 +34,7 @@ use std::fmt;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::Weak;
+use std::sync::atomic::AtomicU64;
 use std::thread;
 use std::time::Duration;
 use std::time::SystemTime;
@@ -41,10 +42,11 @@ use std::time::UNIX_EPOCH;
 use zeroize::Zeroize;
 
 pub const XAI_PROVIDER_ID: &str = "xai-subscription";
-pub const XAI_SUBSCRIPTION_API_BASE_URL: &str = "https://cli-chat-proxy.grok.com/v1";
+pub use backend_client::xai::BASE_URL as XAI_SUBSCRIPTION_API_BASE_URL;
 
-mod catalog;
-pub use catalog::CatalogModel;
+mod account;
+pub use account::Subscription;
+pub use backend_client::xai::CatalogModel;
 
 const CLIENT_ID: &str = "b1a00492-073a-47ea-816f-4c329264a828";
 const DEVICE_AUTHORIZATION_URL: &str = "https://auth.x.ai/oauth2/device/code";
@@ -70,6 +72,8 @@ pub struct XaiError {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum XaiErrorKind {
+    Cancelled,
+    AccountChanged,
     Authentication,
     Permission,
     UpgradeRequired,
@@ -120,6 +124,7 @@ pub struct XaiOAuth {
     login_service: Mutex<Weak<LoginService>>,
     active: Mutex<BTreeMap<LoginId, CancellationSource>>,
     refresh: Mutex<()>,
+    account_reads: AtomicU64,
     lock_path: std::path::PathBuf,
     minimum_poll_interval: Duration,
 }
@@ -159,6 +164,7 @@ impl XaiOAuth {
             login_service: Mutex::new(Weak::new()),
             active: Mutex::new(BTreeMap::new()),
             refresh: Mutex::new(()),
+            account_reads: AtomicU64::new(0),
             lock_path,
             minimum_poll_interval,
         })
@@ -252,63 +258,12 @@ impl XaiOAuth {
         if refreshed.refresh_token.is_empty() {
             refreshed.refresh_token = std::mem::take(&mut credential.refresh_token);
         }
+        refreshed.profile = credential.profile.clone();
         refreshed.account_id = credential.account_id.clone();
         refreshed.credential_revision = credential.credential_revision.saturating_add(1);
         self.store_credential(&refreshed)?;
         self.publish_account_update(&refreshed);
         Ok(refreshed)
-    }
-
-    pub(crate) fn get(
-        &self,
-        target: &ResolvedApiTarget,
-        path: &str,
-        cancellation: &CancellationToken,
-    ) -> Result<serde_json::Value, XaiError> {
-        let mut headers = target.headers.clone();
-        headers.push(HttpHeader::new("Accept", "application/json"));
-        let request = ClientRequest::new(
-            ash_http_client::HttpMethod::Get,
-            target
-                .endpoint(path)
-                .map_err(|_| XaiError::new("invalid xAI endpoint"))?,
-            headers,
-            Vec::new(),
-            RetryPolicy::never(),
-        )
-        .map_err(|_| XaiError::new("invalid xAI request"))?;
-        let response = self
-            .client
-            .execute_with_cancellation(&request, cancellation)
-            .map_err(|_| XaiError::new("xAI service is unavailable"))?;
-        if !response.is_success() {
-            let (kind, message) = match response.status() {
-                401 => (
-                    XaiErrorKind::Authentication,
-                    "xAI sign-in has expired; sign in again".into(),
-                ),
-                403 => (
-                    XaiErrorKind::Permission,
-                    "xAI subscription does not allow this request".into(),
-                ),
-                426 => (
-                    XaiErrorKind::UpgradeRequired,
-                    "xAI requires a newer Ash client".into(),
-                ),
-                429 => (
-                    XaiErrorKind::RateLimited,
-                    "xAI request rate limit reached".into(),
-                ),
-                status => (
-                    XaiErrorKind::Unavailable,
-                    format!("xAI request failed with HTTP {status}"),
-                ),
-            };
-            return Err(XaiError::with_kind(kind, message));
-        }
-        serde_json::from_slice(response.body()).map_err(|_| {
-            XaiError::with_kind(XaiErrorKind::InvalidResponse, "xAI returned invalid JSON")
-        })
     }
 
     fn lock_credentials(&self) -> Result<(std::sync::MutexGuard<'_, ()>, std::fs::File), XaiError> {
@@ -521,7 +476,7 @@ impl XaiOAuth {
     }
 
     fn api_headers(&self, credential: &TokenCredential) -> Vec<HttpHeader> {
-        vec![
+        let mut headers = vec![
             HttpHeader::new(
                 "Authorization",
                 format!("Bearer {}", credential.access_token),
@@ -532,7 +487,14 @@ impl XaiOAuth {
             HttpHeader::new("X-XAI-Token-Auth", "xai-grok-cli"),
             HttpHeader::new("x-authenticateresponse", "authenticate-response"),
             HttpHeader::new("x-grok-client-mode", "headless"),
-        ]
+        ];
+        if let Some(profile) = &credential.profile {
+            headers.push(HttpHeader::new("x-userid", &profile.user_id));
+            if let Some(email) = &profile.email {
+                headers.push(HttpHeader::new("x-email", email));
+            }
+        }
+        headers
     }
 
     fn credential_key() -> SecretKey {
@@ -564,10 +526,27 @@ impl XaiOAuth {
                 provider: XAI_PROVIDER_ID.into(),
                 account_id: credential.account_id.clone(),
             },
-            email: None,
-            display_name: Some("xAI Subscription".into()),
-            organization: None,
-            plan: None,
+            email: credential
+                .profile
+                .as_ref()
+                .and_then(|profile| profile.email.clone()),
+            display_name: credential.profile.as_ref().and_then(|profile| {
+                let name = [profile.first_name.as_deref(), profile.last_name.as_deref()]
+                    .into_iter()
+                    .flatten()
+                    .filter(|part| !part.trim().is_empty())
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                (!name.is_empty()).then_some(name)
+            }),
+            organization: credential
+                .profile
+                .as_ref()
+                .and_then(|profile| profile.organization_name.clone()),
+            plan: credential
+                .profile
+                .as_ref()
+                .and_then(|profile| profile.subscription_tier.clone()),
             status: if credential.is_usable() {
                 AccountStatus::Ready
             } else {
@@ -774,6 +753,7 @@ impl TokenResponse {
                 .map(|seconds| now_epoch_seconds().saturating_add(seconds as u64)),
             account_id,
             credential_revision,
+            profile: None,
         })
     }
 }
@@ -790,6 +770,8 @@ impl Drop for TokenResponse {
 
 #[derive(Deserialize, Serialize)]
 struct TokenCredential {
+    #[serde(default)]
+    profile: Option<backend_client::xai::Account>,
     access_token: String,
     refresh_token: String,
     token_type: String,

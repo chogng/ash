@@ -1,20 +1,16 @@
-use crate::BackendClient;
+use super::Client;
 use crate::RequestError;
 use async_utils::CancellationToken;
 use http_client::HttpHeader;
 use serde::Deserialize;
-use serde::Serialize;
-use serde_json::Value;
 
-/// Complete usage response, including account policy and reset-credit metadata.
+/// Usage response with account identity and subscription limits.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RateLimitStatus {
     pub usage: RateLimits,
     pub user_id: Option<String>,
-    pub reset_credits: Option<ResetCreditsSummary>,
     pub spend_control: Option<SpendControl>,
     pub reached_type: Option<RateLimitReached>,
-    pub upsell: Option<Value>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
@@ -41,52 +37,7 @@ pub struct RateLimitReached {
     pub kind: String,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct ResetCreditsSummary {
-    pub available_count: u64,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct ResetCredits {
-    pub credits: Vec<ResetCredit>,
-    pub available_count: u64,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct ResetCredit {
-    pub id: String,
-    pub reset_type: String,
-    pub status: String,
-    pub granted_at: String,
-    pub expires_at: Option<String>,
-    pub title: Option<String>,
-    pub description: Option<String>,
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
-#[serde(rename_all = "snake_case")]
-pub enum ResetCreditCode {
-    Reset,
-    NothingToReset,
-    NoCredit,
-    AlreadyRedeemed,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-pub struct ResetCreditResult {
-    pub code: ResetCreditCode,
-    #[serde(default)]
-    pub windows_reset: u64,
-}
-
-/// Select a credit explicitly or let the backend select an available credit.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ResetCreditSelection<'a> {
-    Available,
-    Id(&'a str),
-}
-
-impl BackendClient<'_> {
+impl Client<'_> {
     pub fn read_rate_limits(
         &self,
         cancellation: &CancellationToken,
@@ -98,7 +49,9 @@ impl BackendClient<'_> {
         &self,
         cancellation: &CancellationToken,
     ) -> Result<RateLimitStatus, RequestError> {
-        let response = self.get(self.endpoint(&["usage"])?, &[], cancellation)?;
+        let response = self
+            .http
+            .get(self.endpoint(&["usage"])?, &[], cancellation)?;
         Ok(status(response))
     }
 
@@ -107,54 +60,12 @@ impl BackendClient<'_> {
         &self,
         cancellation: &CancellationToken,
     ) -> Result<RateLimitStatus, RequestError> {
-        let response = self.get(
+        let response = self.http.get(
             self.endpoint(&["usage"])?,
             &[HttpHeader::new("x-openai-codex-luna-reserve", "1")],
             cancellation,
         )?;
         Ok(status(response))
-    }
-
-    pub fn list_reset_credits(
-        &self,
-        cancellation: &CancellationToken,
-    ) -> Result<ResetCredits, RequestError> {
-        self.get(
-            self.endpoint(&["rate-limit-reset-credits"])?,
-            &[],
-            cancellation,
-        )
-    }
-
-    /// Consumes one credit. The caller owns approval and retains the same request ID for retries.
-    /// Cancellation after dispatch does not establish whether the server consumed the credit.
-    pub fn consume_reset_credit(
-        &self,
-        request_id: &str,
-        credit: ResetCreditSelection<'_>,
-        cancellation: &CancellationToken,
-    ) -> Result<ResetCreditResult, RequestError> {
-        let credit_id = match credit {
-            ResetCreditSelection::Available => None,
-            ResetCreditSelection::Id(id) => Some(id),
-        };
-        if request_id.trim().is_empty() || credit_id.is_some_and(|id| id.trim().is_empty()) {
-            return Err(RequestError::InvalidRequest);
-        }
-        #[derive(Serialize)]
-        struct Redeem<'a> {
-            redeem_request_id: &'a str,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            credit_id: Option<&'a str>,
-        }
-        self.post(
-            self.endpoint(&["rate-limit-reset-credits", "consume"])?,
-            &Redeem {
-                redeem_request_id: request_id,
-                credit_id,
-            },
-            cancellation,
-        )
     }
 }
 
@@ -201,10 +112,8 @@ struct UsageResponse {
     additional_rate_limits: Option<Vec<AdditionalLimit>>,
     credits: Option<Credits>,
     user_id: Option<String>,
-    rate_limit_reset_credits: Option<ResetCreditsSummary>,
     spend_control: Option<SpendControl>,
     rate_limit_reached_type: Option<RateLimitReached>,
-    rate_limit_upsell: Option<Value>,
 }
 
 #[derive(Deserialize)]
@@ -260,10 +169,8 @@ fn status(payload: UsageResponse) -> RateLimitStatus {
     RateLimitStatus {
         usage,
         user_id: payload.user_id,
-        reset_credits: payload.rate_limit_reset_credits,
         spend_control: payload.spend_control,
         reached_type: payload.rate_limit_reached_type,
-        upsell: payload.rate_limit_upsell,
     }
 }
 

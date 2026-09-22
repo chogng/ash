@@ -112,6 +112,117 @@ use std::time::Instant;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+#[test]
+fn xai_account_and_usage_rpc_use_the_subscription_backend_and_observe_logout() {
+    use ash_client::ClientError;
+    use ash_client::ClientRequest;
+    use ash_client::ClientResponse;
+    use ash_client::OperationClient;
+    use ash_secrets::SecretStore;
+    struct Proxy {
+        requests: Mutex<Vec<String>>,
+        status: AtomicUsize,
+    }
+    impl OperationClient for Proxy {
+        fn execute(&self, request: &ClientRequest) -> Result<ClientResponse, ClientError> {
+            self.requests.lock().unwrap().push(request.url().to_owned());
+            let status = self.status.load(Ordering::SeqCst) as u16;
+            let body = match request
+                .url()
+                .strip_prefix("https://cli-chat-proxy.grok.com/v1/")
+                .unwrap()
+            {
+                "user?include=subscription" => {
+                    r#"{"userId":"user-a","email":"ada@example.test","firstName":"Ada","subscriptionTier":"SuperGrokPro"}"#
+                }
+                "settings" => r#"{"allow_access":true,"on_demand_enabled":false}"#,
+                "billing?format=credits" => {
+                    r#"{"config":{"creditUsagePercent":12.125,"prepaidBalance":{"val":"9007199254740993"},"onDemandUsed":{},"currentPeriod":{"type":"USAGE_PERIOD_TYPE_WEEKLY","end":"2026-09-28T00:00:00Z"}}}"#
+                }
+                _ => panic!("unexpected route"),
+            };
+            if !request.url().contains("/user?") {
+                assert!(
+                    request
+                        .headers()
+                        .iter()
+                        .any(|header| header.name() == "x-userid" && header.value() == "user-a")
+                );
+            }
+            Ok(ClientResponse::new(
+                status,
+                vec![],
+                body.as_bytes().to_vec(),
+            ))
+        }
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let secrets = Arc::new(ash_secrets::MemorySecretStore::default());
+    secrets.store(&ash_secrets::SecretKey::new("provider/xai/current/oauth").unwrap(), &ash_secrets::SecretValue::new(br#"{"access_token":"fixture-access","refresh_token":"fixture-refresh","token_type":"Bearer","scope":"","expires_at":4102444800,"account_id":"login-a","credential_revision":1}"#.to_vec())).unwrap();
+    let proxy = Arc::new(Proxy {
+        requests: Mutex::new(Vec::new()),
+        status: AtomicUsize::new(200),
+    });
+    let auth = xai::XaiOAuth::with_client(secrets, proxy.clone(), dir.path().join("lock"));
+    let login = Arc::new(LoginService::new(auth.clone()).unwrap());
+    auth.install_login_service(&login).unwrap();
+    let server = server().with_login_service(login).with_xai_account(auth);
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let account = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"account/read","params":{}}),
+    );
+    assert_eq!(
+        account["result"]["accounts"][0]["email"],
+        "ada@example.test"
+    );
+    assert_eq!(account["result"]["accounts"][0]["displayName"], "Ada");
+    let read = |connection: &mut ConnectionState, request_id: u64, account_id: &str| {
+        call(
+            &server,
+            connection,
+            serde_json::json!({"jsonrpc":"2.0","id":request_id,"method":"account/rateLimits/read","params":{"provider":"xai-subscription","accountId":account_id}}),
+        )
+    };
+    let result = read(&mut connection, 3, "login-a");
+    assert_eq!(result["result"]["plan"], "SuperGrokPro");
+    assert_eq!(result["result"]["xai"]["usedPercent"], 12.125);
+    assert_eq!(result["result"]["xai"]["prepaidCents"], "9007199254740993");
+    assert_eq!(result["result"]["xai"]["onDemandUsedCents"], "0");
+    assert!(result["result"]["xai"]["onDemandCapCents"].is_null());
+    assert_eq!(proxy.requests.lock().unwrap().len(), 4);
+    assert_eq!(
+        read(&mut connection, 4, "other")["error"]["message"],
+        "AccountChanged"
+    );
+    assert_eq!(proxy.requests.lock().unwrap().len(), 4);
+    proxy.status.store(429, Ordering::SeqCst);
+    assert_eq!(
+        read(&mut connection, 5, "login-a")["error"]["message"],
+        "AccountOperationFailed"
+    );
+    assert_eq!(proxy.requests.lock().unwrap().len(), 5);
+    call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":6,"method":"account/logout","params":{"provider":"xai-subscription"}}),
+    );
+    assert_eq!(
+        read(&mut connection, 7, "login-a")["error"]["message"],
+        "AccountChanged"
+    );
+    assert_eq!(proxy.requests.lock().unwrap().len(), 5);
+    assert!(
+        !format!(
+            "{account}{result}{:?}",
+            server.drain_notifications(&mut connection)
+        )
+        .contains("fixture-access")
+    );
+}
+
 fn server_with_model(model: Arc<dyn ModelService>) -> AppServer {
     let threads = Arc::new(ThreadController::with_store(Arc::new(
         InMemoryThreadStore::default(),

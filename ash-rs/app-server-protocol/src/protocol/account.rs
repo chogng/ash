@@ -45,15 +45,35 @@ pub struct AccountRateLimitsReadParams {
     pub account_id: String,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]
 pub struct AccountRateLimitsReadResult {
     pub provider: String,
     pub account_id: String,
-    pub plan: String,
+    pub plan: Option<String>,
     pub limits: Vec<AccountRateLimitDto>,
     pub credits: Option<AccountCreditBalanceDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub xai: Option<AccountXaiUsageDto>,
+}
+
+/// xAI credits retain fractional percentages, upstream periods, and exact USD cents.
+#[derive(Clone, Debug, Deserialize, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct AccountXaiUsageDto {
+    pub allowed: Option<bool>,
+    pub message: Option<String>,
+    pub used_percent: Option<f64>,
+    pub period_type: Option<String>,
+    pub period_start: Option<String>,
+    pub period_end: Option<String>,
+    pub prepaid_cents: Option<String>,
+    pub on_demand_enabled: Option<bool>,
+    pub on_demand_used_cents: Option<String>,
+    pub on_demand_cap_cents: Option<String>,
+    pub unified_billing: Option<bool>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

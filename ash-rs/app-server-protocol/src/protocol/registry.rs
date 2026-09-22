@@ -39,6 +39,8 @@ use crate::protocol::account::AccountReadResult;
 use crate::protocol::account::AccountStatusDto;
 use crate::protocol::account::AccountUpdated;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::account::AccountXaiUsageDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::agent::AgentReadParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::agent::AgentReadResult;
@@ -2761,7 +2763,7 @@ client_methods! {
     AccountRead => "account/read" {
         params: EmptyParams,
         response: AccountReadResult,
-        serialization: GlobalSharedRead,
+        serialization: None,
     },
     AccountRateLimitsRead => "account/rateLimits/read" {
         params: AccountRateLimitsReadParams,
@@ -3800,6 +3802,7 @@ typescript_bindings! {
     AccountReadResult,
     AccountRateLimitsReadParams,
     AccountRateLimitsReadResult,
+    AccountXaiUsageDto,
     AccountRateLimitDto,
     AccountRateLimitWindowDto,
     AccountCreditBalanceDto,

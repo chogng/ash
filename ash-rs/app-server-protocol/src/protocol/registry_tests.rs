@@ -120,6 +120,12 @@ fn environment_changes_exclude_concurrent_global_reads() {
 
 #[test]
 fn account_usage_queries_do_not_hold_the_global_mutation_lock() {
+    assert_eq!(
+        definition("account/read")
+            .serialization_scope(&serde_json::json!({}))
+            .unwrap(),
+        None
+    );
     let method = definition("account/rateLimits/read");
     assert_eq!(
         method
@@ -139,6 +145,16 @@ fn account_usage_queries_do_not_hold_the_global_mutation_lock() {
     assert!(encoded["limits"][0]["allowed"].is_null());
     assert!(encoded["limits"][0]["primary"].is_null());
     assert!(encoded["credits"].is_null());
+    assert!(encoded.get("xai").is_none());
+    let result: crate::protocol::account::AccountRateLimitsReadResult = serde_json::from_value(serde_json::json!({
+        "provider":"xai-subscription", "accountId":"login-a", "plan":null,
+        "limits":[], "credits":null, "xai":{"usedPercent":12.125,"prepaidCents":"9007199254740993","allowed":false}
+    })).unwrap();
+    let encoded = serde_json::to_value(result).unwrap();
+    assert!(encoded["plan"].is_null());
+    assert_eq!(encoded["xai"]["usedPercent"], 12.125);
+    assert_eq!(encoded["xai"]["prepaidCents"], "9007199254740993");
+    assert_eq!(encoded["xai"]["allowed"], false);
 }
 
 #[test]

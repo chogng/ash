@@ -1,6 +1,7 @@
-use crate::test_support::Client;
-use crate::test_support::target;
-use crate::*;
+use crate::RequestError;
+use crate::chatgpt::test_support::target;
+use crate::chatgpt::*;
+use crate::test_support::Transport;
 use ::client::ClientError;
 use ::client::ClientRequest;
 use ::client::ClientResponse;
@@ -14,7 +15,7 @@ use serde_json::json;
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
-type Operation = fn(&BackendClient<'_>, &CancellationToken) -> Result<(), RequestError>;
+type Operation = fn(&Client<'_>, &CancellationToken) -> Result<(), RequestError>;
 
 fn turn_query() -> BTreeMap<String, Vec<String>> {
     BTreeMap::from([("thread-1".into(), vec!["turn-1".into()])])
@@ -47,9 +48,9 @@ fn status_and_decode_errors_never_include_upstream_content() {
             RequestError::InvalidResponse,
         ),
     ] {
-        let client = Client::response(status, body);
-        let target = target(CHATGPT_BACKEND_BASE_URL);
-        let error = BackendClient::new(&client, &target, RouteStyle::ChatGpt)
+        let client = Transport::response(status, body);
+        let target = target(BASE_URL);
+        let error = Client::new(&client, &target, RouteStyle::ChatGpt)
             .unwrap()
             .read_rate_limits(&CancellationSource::new().token())
             .unwrap_err();
@@ -61,12 +62,12 @@ fn status_and_decode_errors_never_include_upstream_content() {
 
 #[test]
 fn cancellation_prevents_a_request_and_transport_errors_are_redacted() {
-    let client = Client {
+    let client = Transport {
         response: Err(ClientError::Transport("Bearer secret".into())),
         requests: Mutex::new(Vec::new()),
     };
-    let target = target(CHATGPT_BACKEND_BASE_URL);
-    let backend = BackendClient::new(&client, &target, RouteStyle::ChatGpt).unwrap();
+    let target = target(BASE_URL);
+    let backend = Client::new(&client, &target, RouteStyle::ChatGpt).unwrap();
     let cancelled = CancellationSource::new();
     cancelled.cancel();
     assert_eq!(
@@ -82,7 +83,7 @@ fn cancellation_prevents_a_request_and_transport_errors_are_redacted() {
 
 #[test]
 fn ambiguous_or_unsecured_base_urls_are_rejected_before_sending_credentials() {
-    let client = Client::response(200, "{}");
+    let client = Transport::response(200, "{}");
     for base in [
         "http://example.test",
         "https://user:secret@example.test",
@@ -92,7 +93,7 @@ fn ambiguous_or_unsecured_base_urls_are_rejected_before_sending_credentials() {
     ] {
         let target = target(base);
         assert!(matches!(
-            BackendClient::new(&client, &target, RouteStyle::Codex),
+            Client::new(&client, &target, RouteStyle::Codex),
             Err(RequestError::InvalidTarget)
         ));
     }
@@ -114,12 +115,6 @@ fn business_endpoints_use_both_routes_auth_cancellation_and_redacted_failures() 
             r#"{"stats":{}}"#,
             |backend, token| backend.read_account_profile(token).map(|_| ()),
         ),
-        (
-            "accounts/send_add_credits_nudge_email",
-            HttpMethod::Post,
-            "",
-            |backend, token| backend.send_credit_nudge(CreditNudge::Credits, token),
-        ),
         ("config/bundle", HttpMethod::Get, "{}", |backend, token| {
             backend.read_config_bundle(token).map(|_| ())
         }),
@@ -131,22 +126,6 @@ fn business_endpoints_use_both_routes_auth_cancellation_and_redacted_failures() 
             HttpMethod::Get,
             r#"{"messages":[]}"#,
             |backend, token| backend.list_workspace_messages(token).map(|_| ()),
-        ),
-        (
-            "rate-limit-reset-credits",
-            HttpMethod::Get,
-            r#"{"credits":[],"available_count":0}"#,
-            |backend, token| backend.list_reset_credits(token).map(|_| ()),
-        ),
-        (
-            "rate-limit-reset-credits/consume",
-            HttpMethod::Post,
-            r#"{"code":"reset","windows_reset":2}"#,
-            |backend, token| {
-                backend
-                    .consume_reset_credit("request-1", ResetCreditSelection::Available, token)
-                    .map(|_| ())
-            },
         ),
         (
             "usage",
@@ -231,8 +210,8 @@ fn business_endpoints_use_both_routes_auth_cancellation_and_redacted_failures() 
     ] {
         let target = target("https://example.test/backend-api/");
         for (path, method, body, run) in operations {
-            let client = Client::response(200, body);
-            let backend = BackendClient::new(&client, &target, route).unwrap();
+            let client = Transport::response(200, body);
+            let backend = Client::new(&client, &target, route).unwrap();
             let token = CancellationSource::new().token();
             run(&backend, &token).unwrap_or_else(|error| panic!("{path}: {error}"));
             {
@@ -270,16 +249,16 @@ fn business_endpoints_use_both_routes_auth_cancellation_and_redacted_failures() 
             );
             assert_eq!(client.requests.lock().unwrap().len(), 1);
             for status in [302, 401, 429, 503] {
-                let client = Client::response(status, "private account response");
-                let backend = BackendClient::new(&client, &target, route).unwrap();
+                let client = Transport::response(status, "private account response");
+                let backend = Client::new(&client, &target, route).unwrap();
                 let error = run(&backend, &token).unwrap_err();
                 assert_eq!(error, RequestError::HttpStatus(status), "{path}");
                 assert!(!format!("{error:?} {error}").contains("private"));
                 assert_eq!(client.requests.lock().unwrap().len(), 1);
             }
-            if *path != "accounts/send_add_credits_nudge_email" {
-                let client = Client::response(200, "<html>private</html>");
-                let backend = BackendClient::new(&client, &target, route).unwrap();
+            {
+                let client = Transport::response(200, "<html>private</html>");
+                let backend = Client::new(&client, &target, route).unwrap();
                 assert_eq!(
                     run(&backend, &token),
                     Err(RequestError::InvalidResponse),
@@ -303,7 +282,7 @@ fn cancellation_after_dispatch_does_not_turn_a_write_into_a_retry() {
             Ok(ClientResponse::new(
                 200,
                 Vec::new(),
-                br#"{"code":"reset","windows_reset":2}"#.to_vec(),
+                br#"{"task":{"id":"task-1"}}"#.to_vec(),
             ))
         }
     }
@@ -311,12 +290,11 @@ fn cancellation_after_dispatch_does_not_turn_a_write_into_a_retry() {
         source: CancellationSource::new(),
         requests: Mutex::new(Vec::new()),
     };
-    let target = target(CHATGPT_BACKEND_BASE_URL);
-    let backend = BackendClient::new(&client, &target, RouteStyle::ChatGpt).unwrap();
+    let target = target(BASE_URL);
+    let backend = Client::new(&client, &target, RouteStyle::ChatGpt).unwrap();
     assert_eq!(
-        backend.consume_reset_credit(
-            "stable-id",
-            ResetCreditSelection::Available,
+        backend.create_task(
+            json!({"input_items":[]}).as_object().unwrap(),
             &client.source.token()
         ),
         Err(RequestError::Cancelled)

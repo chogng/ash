@@ -3,6 +3,7 @@
 - Own xAI subscription device authorization and cancellation.
 - Store and refresh Ash-owned credentials through the secret store.
 - Resolve authenticated Grok CLI proxy requests per invocation.
+- Delegate model catalog, account, settings, and subscription usage HTTP requests and decoding to `backend-client::xai`; retain account checks and one-time authentication recovery.
 - Keep subscription credentials separate from API keys and Grok CLI storage.
 
 ## Subscription transport
@@ -12,7 +13,10 @@
 - `xai-subscription` is separate from the `xai` API-key provider. Ash stores credentials in its profile secret store and coordinates refreshes through the profile's `xai.lock`.
 - Start from Ash Code's `/config` → Providers → xAI Subscription. Complete the browser device challenge, then select a discovered model.
 - A failed rotating-token exchange requires signing in again; the submitted refresh token is never reused after an uncertain network result.
-- Account email, plan details, and subscription usage reporting are not queried by this integration.
+- `refresh_account` reads live identity and subscription metadata, merges it into the current credential under the credential lock, and updates the login service. A changed remote user/principal/team or a concurrent local login is rejected.
+- `read_subscription` reads the account, access settings, current credit usage and period, exact balances and usage history. `account/rateLimits/read` exposes the current xAI usage separately from ChatGPT windows; `/usage` displays both signed-in subscriptions.
+- Metadata refresh never changes the local login ID or credential revision. Token rotation retains account metadata. Each backend read observes cancellation and checks the login before and after network work; only a 401 permits one credential recovery.
+- Account data requests include the caller's current token and compatibility headers; after profile discovery, proxy requests also carry the confirmed `x-userid` and optional `x-email`.
 
 ## Client compatibility
 
@@ -29,3 +33,5 @@
 - This live check verifies existing-token authentication and generation; interactive device login and token refresh remain covered by isolated tests.
 
 Contract checked against [xAI's Grok Build source](https://github.com/xai-org/grok-build/tree/4247f661689354b831191f11eeeac8424993fe3d) and [official Build documentation](https://docs.x.ai/build/enterprise). The [gRPC API](https://docs.x.ai/developers/grpc-api-reference) describes the API-key service; it is not the transport used by this subscription integration.
+
+- Read-only live account/credits check: `just test ash-xai live_subscription_backend -- --ignored --nocapture`. It uses only Grok’s existing access token in memory and verifies that Grok authentication is unchanged.

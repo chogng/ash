@@ -20,6 +20,7 @@ export type { AccountRateLimitsReadResult } from './AccountRateLimitsReadResult.
 export type { AccountReadResult } from './AccountReadResult.js';
 export type { AccountStatusDto } from './AccountStatusDto.js';
 export type { AccountUpdated } from './AccountUpdated.js';
+export type { AccountXaiUsageDto } from './AccountXaiUsageDto.js';
 export type { ActionApprovalCapability } from './ActionApprovalCapability.js';
 export type { ActionApprovalCapabilityKind } from './ActionApprovalCapabilityKind.js';
 export type { ActionApprovalDecision } from './ActionApprovalDecision.js';

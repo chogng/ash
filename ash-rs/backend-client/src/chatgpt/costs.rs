@@ -1,4 +1,4 @@
-use crate::BackendClient;
+use super::Client;
 use crate::RequestError;
 use async_utils::CancellationToken;
 use serde::Deserialize;
@@ -118,7 +118,7 @@ pub struct ApiKeyTurnCost {
     pub reasoning_effort: Option<String>,
 }
 
-impl BackendClient<'_> {
+impl Client<'_> {
     /// Queries 1–100 distinct threads. Missing rows and missing amounts remain unavailable.
     pub fn read_thread_usage(
         &self,
@@ -134,7 +134,7 @@ impl BackendClient<'_> {
         struct Response {
             threads: Vec<ThreadUsage>,
         }
-        let response: Response = self.post(
+        let response: Response = self.http.post(
             self.endpoint(&["usage", "thread_usage", "query"])?,
             &Query { thread_ids },
             cancellation,
@@ -164,7 +164,7 @@ impl BackendClient<'_> {
         struct Query<'a> {
             threads: &'a [TaskUsageThread],
         }
-        let response: TaskUsageResponse = self.post(
+        let response: TaskUsageResponse = self.http.post(
             self.endpoint(&["usage", "thread_usage", "query_v2"])?,
             &Query { threads },
             cancellation,
@@ -216,7 +216,7 @@ impl BackendClient<'_> {
                 .collect(),
             include_settled_response_ids: true,
         };
-        let response: Response = self.post(
+        let response: Response = self.http.post(
             self.endpoint(&["usage", "thread-estimates", "query"])?,
             &query,
             cancellation,
@@ -252,7 +252,8 @@ impl BackendClient<'_> {
             turns: Vec<ApiKeyTurnCost>,
         }
         let response: Response =
-            self.post(self.api_key_endpoint(), &Query { turn_ids }, cancellation)?;
+            self.http
+                .post(self.api_key_endpoint(), &Query { turn_ids }, cancellation)?;
         response_ids(
             response.turns.iter().map(|turn| turn.turn_id.as_str()),
             &requested,

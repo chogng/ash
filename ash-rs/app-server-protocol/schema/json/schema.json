@@ -439,16 +439,28 @@
           "type": "array"
         },
         "plan": {
-          "type": "string"
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "provider": {
           "type": "string"
+        },
+        "xai": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AccountXaiUsageDto"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
         "provider",
         "accountId",
-        "plan",
         "limits"
       ],
       "type": "object"
@@ -490,6 +502,79 @@
       "required": [
         "account"
       ],
+      "type": "object"
+    },
+    "AccountXaiUsageDto": {
+      "description": "xAI credits retain fractional percentages, upstream periods, and exact USD cents.",
+      "properties": {
+        "allowed": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "message": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "onDemandCapCents": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "onDemandEnabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "onDemandUsedCents": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "periodEnd": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "periodStart": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "periodType": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "prepaidCents": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "unifiedBilling": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "usedPercent": {
+          "format": "double",
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
       "type": "object"
     },
     "ActionApprovalCapability": {

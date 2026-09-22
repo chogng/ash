@@ -48,6 +48,18 @@ impl AppServer {
         cancellation: &ash_async_utils::CancellationToken,
     ) -> Result<Value, RpcError> {
         let params: AccountRateLimitsReadParams = decode(params)?;
+        if params.account_id.trim().is_empty() {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
+        if params.provider == xai::XAI_PROVIDER_ID {
+            let subscription = self
+                .xai
+                .as_ref()
+                .ok_or_else(|| RpcError::new(-32030, AppServerErrorName::AccountUnavailable))?
+                .read_subscription(&params.account_id, cancellation)
+                .map_err(xai_error)?;
+            return result(&xai_usage(params, subscription));
+        }
         if params.provider != ash_chatgpt::OPENAI_CHATGPT_PROVIDER_ID {
             return Err(RpcError::new(
                 -32030,
@@ -63,7 +75,8 @@ impl AppServer {
         result(&AccountRateLimitsReadResult {
             provider: params.provider,
             account_id: params.account_id,
-            plan: usage.plan,
+            plan: Some(usage.plan),
+            xai: None,
             limits: usage
                 .limits
                 .into_iter()
@@ -85,10 +98,22 @@ impl AppServer {
         })
     }
 
-    pub(super) fn account_read(&self) -> Result<Value, RpcError> {
-        result(&account_state_dto(
-            self.login_service()?.refresh().map_err(login_error)?,
-        ))
+    pub(super) fn account_read(
+        &self,
+        cancellation: &ash_async_utils::CancellationToken,
+    ) -> Result<Value, RpcError> {
+        let login = self.login_service()?;
+        let state = login.refresh().map_err(login_error)?;
+        if let Some(auth) = &self.xai {
+            if let Some(account) = state.accounts.iter().find(|account| {
+                account.account.provider == xai::XAI_PROVIDER_ID
+                    && account.status == AccountStatus::Ready
+            }) {
+                auth.refresh_account(&account.account.account_id, cancellation)
+                    .map_err(xai_error)?;
+            }
+        }
+        result(&account_state_dto(login.refresh().map_err(login_error)?))
     }
 
     pub(super) fn account_login_start(&self, params: &Value) -> Result<Value, RpcError> {
@@ -283,4 +308,56 @@ fn login_error(error: LoginError) -> RpcError {
         LoginErrorKind::Driver => AppServerErrorName::AccountOperationFailed,
     };
     RpcError::new(-32030, name)
+}
+
+fn xai_error(error: xai::XaiError) -> RpcError {
+    let name = match error.kind() {
+        xai::XaiErrorKind::Cancelled => AppServerErrorName::RequestCancelled,
+        xai::XaiErrorKind::AccountChanged => AppServerErrorName::AccountChanged,
+        xai::XaiErrorKind::Authentication => AppServerErrorName::AccountAuthenticationRequired,
+        _ => AppServerErrorName::AccountOperationFailed,
+    };
+    RpcError::new(
+        if error.kind() == xai::XaiErrorKind::Cancelled {
+            -32800
+        } else {
+            -32030
+        },
+        name,
+    )
+}
+
+fn xai_usage(
+    params: AccountRateLimitsReadParams,
+    subscription: xai::Subscription,
+) -> AccountRateLimitsReadResult {
+    use ash_app_server_protocol::protocol::account::AccountXaiUsageDto;
+    let billing = subscription.billing.as_ref();
+    let period = billing.and_then(|billing| billing.current_period.as_ref());
+    AccountRateLimitsReadResult {
+        provider: params.provider,
+        account_id: params.account_id,
+        plan: subscription.account.subscription_tier,
+        limits: Vec::new(),
+        credits: None,
+        xai: Some(AccountXaiUsageDto {
+            allowed: subscription.settings.allow_access,
+            message: subscription.settings.gate_message,
+            used_percent: billing.and_then(|billing| billing.credit_usage_percent),
+            period_type: period.and_then(|period| period.period_type.clone()),
+            period_start: period.and_then(|period| period.start.clone()),
+            period_end: period.and_then(|period| period.end.clone()),
+            prepaid_cents: billing
+                .and_then(|billing| billing.prepaid_balance.as_ref())
+                .map(|value| value.val.to_string()),
+            on_demand_enabled: subscription.settings.on_demand_enabled,
+            on_demand_used_cents: billing
+                .and_then(|billing| billing.on_demand_used.as_ref())
+                .map(|value| value.val.to_string()),
+            on_demand_cap_cents: billing
+                .and_then(|billing| billing.on_demand_cap.as_ref())
+                .map(|value| value.val.to_string()),
+            unified_billing: billing.and_then(|billing| billing.is_unified_billing_user),
+        }),
+    }
 }

@@ -16,29 +16,52 @@ pub(crate) enum Event {
 
 pub(crate) fn load<T: JsonRpcTransport>(client: &mut AppServerClient<T>) -> Result<Event, String> {
     let accounts = client.read_accounts().map_err(query_error)?;
-    let Some(account) = accounts
+    let accounts: Vec<_> = accounts
         .accounts
         .into_iter()
-        .find(|account| account.provider == "openai-chatgpt")
-    else {
-        return Ok(message("Sign in to ChatGPT: /config > Providers."));
-    };
-    if account.status != AccountStatusDto::Ready {
-        return Ok(message("Reconnect ChatGPT in /config > Providers."));
-    }
-    let usage = client
-        .read_account_rate_limits(AccountRateLimitsReadParams {
-            provider: account.provider,
-            account_id: account.account_id,
+        .filter(|account| {
+            matches!(
+                account.provider.as_str(),
+                "openai-chatgpt" | "xai-subscription"
+            )
         })
-        .map_err(query_error)?;
-    Ok(Event::Opened(choices(usage)))
+        .collect();
+    if accounts.is_empty() {
+        return Ok(message("Sign in to ChatGPT or xAI: /config > Providers."));
+    }
+    let mut groups = Vec::new();
+    for account in accounts {
+        let name = if account.provider == "xai-subscription" {
+            "xAI"
+        } else {
+            "ChatGPT"
+        };
+        if account.status != AccountStatusDto::Ready {
+            return Ok(message(&format!(
+                "Reconnect {name} in /config > Providers."
+            )));
+        }
+        let usage = client
+            .read_account_rate_limits(AccountRateLimitsReadParams {
+                provider: account.provider,
+                account_id: account.account_id,
+            })
+            .map_err(query_error)?;
+        groups.push(choices(usage));
+    }
+    let single = groups.len() == 1;
+    let mut model =
+        ListSelectionModel::new("Usage", groups).with_key_hint_note("Run /usage to refresh");
+    if single {
+        model = model.without_tab_bar();
+    }
+    Ok(Event::Opened(model))
 }
 
 fn query_error(error: ClientError) -> String {
     match error {
         ClientError::Server { message, .. } if message == "AccountChanged" => {
-            "ChatGPT account changed. Run /usage again.".into()
+            "Account changed. Run /usage again.".into()
         }
         ClientError::Server { message, .. }
             if matches!(
@@ -46,9 +69,9 @@ fn query_error(error: ClientError) -> String {
                 "AccountAuthenticationRequired" | "AccountUnavailable"
             ) =>
         {
-            "Reconnect ChatGPT in /config > Providers.".into()
+            "Reconnect the account in /config > Providers.".into()
         }
-        _ => "Could not load ChatGPT usage. Run /usage to retry.".into(),
+        _ => "Could not load account usage. Run /usage to retry.".into(),
     }
 }
 
@@ -60,8 +83,14 @@ fn message(text: &str) -> Event {
     )
 }
 
-fn choices(usage: AccountRateLimitsReadResult) -> ListSelectionModel {
-    let mut items = vec![detail("ChatGPT plan", usage.plan)];
+fn choices(usage: AccountRateLimitsReadResult) -> ListSelectionGroup {
+    if let Some(xai) = usage.xai {
+        return xai_choices(usage.plan, xai);
+    }
+    let mut items = vec![detail(
+        "ChatGPT plan",
+        usage.plan.unwrap_or_else(|| "Not reported".into()),
+    )];
     if usage.limits.is_empty() {
         items.push(detail("Limits", "Not reported"));
     }
@@ -103,9 +132,7 @@ fn choices(usage: AccountRateLimitsReadResult) -> ListSelectionModel {
         },
     };
     items.push(detail("Credits", credits));
-    ListSelectionModel::new("Usage", vec![ListSelectionGroup::new("ChatGPT", items)])
-        .without_tab_bar()
-        .with_key_hint_note("Run /usage to refresh")
+    ListSelectionGroup::new("ChatGPT", items)
 }
 
 fn window_item(window: &AccountRateLimitWindowDto) -> ListSelectionItem {
@@ -134,4 +161,75 @@ fn window_item(window: &AccountRateLimitWindowDto) -> ListSelectionItem {
 
 fn detail(label: &str, value: impl Into<String>) -> ListSelectionItem {
     ListSelectionItem::new(label).with_description(value)
+}
+
+fn xai_choices(
+    plan: Option<String>,
+    usage: ash_app_server_protocol::protocol::account::AccountXaiUsageDto,
+) -> ListSelectionGroup {
+    let mut items = vec![detail(
+        "xAI plan",
+        plan.unwrap_or_else(|| "Not reported".into()),
+    )];
+    items.push(detail(
+        "Access",
+        match usage.allowed {
+            Some(true) => "Available",
+            Some(false) => "Unavailable",
+            None => "Not reported",
+        },
+    ));
+    if let Some(message) = usage.message {
+        items.push(detail("Status", message));
+    }
+    items.push(detail(
+        "Credits used",
+        usage
+            .used_percent
+            .map(|value| format!("{value}%"))
+            .unwrap_or_else(|| "Not reported".into()),
+    ));
+    items.push(detail(
+        "Period",
+        match usage.period_type.as_deref() {
+            Some("USAGE_PERIOD_TYPE_WEEKLY") => "Weekly",
+            Some("USAGE_PERIOD_TYPE_MONTHLY") => "Monthly",
+            Some(value) => value,
+            None => "Not reported",
+        },
+    ));
+    items.push(detail(
+        "Resets",
+        usage.period_end.unwrap_or_else(|| "Not reported".into()),
+    ));
+    for (label, cents) in [
+        ("Prepaid", usage.prepaid_cents),
+        ("On-demand used", usage.on_demand_used_cents),
+        ("On-demand cap", usage.on_demand_cap_cents),
+    ] {
+        items.push(detail(
+            label,
+            cents
+                .map(|value| dollars(&value))
+                .unwrap_or_else(|| "Not reported".into()),
+        ));
+    }
+    ListSelectionGroup::new("xAI", items)
+}
+
+// The backend supplies canonical integer cents; format decimal USD without floating point.
+fn dollars(cents: &str) -> String {
+    let (sign, digits) = match cents.strip_prefix('-') {
+        Some(digits) => ("-", digits),
+        None => ("", cents),
+    };
+    let amount = match digits.len() {
+        1 => format!("0.0{digits}"),
+        2 => format!("0.{digits}"),
+        _ => {
+            let (whole, fraction) = digits.split_at(digits.len() - 2);
+            format!("{whole}.{fraction}")
+        }
+    };
+    format!("USD {sign}{amount}")
 }

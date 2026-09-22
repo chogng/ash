@@ -3017,6 +3017,7 @@ name = "ash-xai"
 version = "0.1.0"
 dependencies = [
  "ash-async-utils",
+ "ash-backend-client",
  "ash-client",
  "ash-http-client",
  "ash-login",

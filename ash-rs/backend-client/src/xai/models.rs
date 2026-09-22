@@ -1,9 +1,8 @@
-use crate::XaiError;
-use crate::XaiErrorKind;
-use crate::XaiOAuth;
-use ash_async_utils::CancellationToken;
+use super::Client;
+use crate::RequestError;
+use async_utils::CancellationToken;
+use http_client::HttpHeader;
 use serde_json::Value;
-
 /// Subscription models returned by the authenticated models-v2 endpoint.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CatalogModel {
@@ -14,34 +13,16 @@ pub struct CatalogModel {
     pub reasoning_effort: Option<String>,
 }
 
-impl XaiOAuth {
-    pub fn models(
+impl Client<'_> {
+    pub fn read_models(
         &self,
-        account_id: &str,
         cancellation: &CancellationToken,
-    ) -> Result<Vec<CatalogModel>, XaiError> {
-        let target = self.api_target()?;
-        if target.account_id != account_id {
-            return Err(XaiError::new(
-                "xAI account changed; refresh the model catalog",
-            ));
-        }
-        let result = self.get(&target.target, "models-v2", cancellation);
-        let value = match result {
-            Err(error) if error.kind() == XaiErrorKind::Authentication => {
-                let Some(renewed) = self.recover_unauthorized(&target)? else {
-                    return Err(error);
-                };
-                self.get(&renewed.target, "models-v2", cancellation)
-                    .inspect_err(|error| {
-                        if error.kind() == XaiErrorKind::Authentication {
-                            self.note_rejected(&renewed);
-                        }
-                    })?
-            }
-            result => result?,
-        };
-        parse_models(value)
+    ) -> Result<Vec<CatalogModel>, RequestError> {
+        parse_models(self.http.get(
+            self.http.endpoint(["models-v2"])?,
+            &[HttpHeader::new("Accept", "application/json")],
+            cancellation,
+        )?)
     }
 }
 
@@ -54,13 +35,11 @@ fn field<'a>(entry: &'a Value, names: &[&str]) -> Option<&'a Value> {
     })
 }
 
-fn parse_models(value: Value) -> Result<Vec<CatalogModel>, XaiError> {
-    let entries = value.get("data").and_then(Value::as_array).ok_or_else(|| {
-        XaiError::with_kind(
-            XaiErrorKind::InvalidResponse,
-            "xAI model catalog is missing data",
-        )
-    })?;
+fn parse_models(value: Value) -> Result<Vec<CatalogModel>, RequestError> {
+    let entries = value
+        .get("data")
+        .and_then(Value::as_array)
+        .ok_or_else(|| RequestError::InvalidResponse)?;
     let mut models = Vec::new();
     for entry in entries {
         if field(entry, &["hidden"]).and_then(Value::as_bool) == Some(true)
@@ -72,12 +51,7 @@ fn parse_models(value: Value) -> Result<Vec<CatalogModel>, XaiError> {
         let id = field(entry, &["model", "modelId", "id"])
             .and_then(Value::as_str)
             .filter(|id| !id.trim().is_empty())
-            .ok_or_else(|| {
-                XaiError::with_kind(
-                    XaiErrorKind::InvalidResponse,
-                    "xAI model catalog is missing model identity",
-                )
-            })?;
+            .ok_or_else(|| RequestError::InvalidResponse)?;
         let context_window = field(
             entry,
             &["contextWindow", "context_window", "totalContextTokens"],
@@ -112,5 +86,5 @@ fn parse_models(value: Value) -> Result<Vec<CatalogModel>, XaiError> {
 }
 
 #[cfg(test)]
-#[path = "catalog_tests.rs"]
+#[path = "models_tests.rs"]
 mod tests;

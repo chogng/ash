@@ -1011,9 +1011,12 @@ account/login/completed
 account/updated
 ```
 
-`account/rateLimits/read` 按 `{ provider, accountId }` 查询指定账号。当前支持 `provider = "openai-chatgpt"`，本地组合复用登录与模型调用持有的同一个 ChatGPT 认证对象，通过 `ash-backend-client` 读取后端额度，不接触客户端凭据。
+`account/rateLimits/read` 按 `{ provider, accountId }` 查询指定账号。支持 `provider = "openai-chatgpt"` 和 `"xai-subscription"`。本地组合复用对应供应商的登录与模型认证对象，通过 `backend-client::chatgpt` 或 `backend-client::xai` 读取后台数据，不接触客户端凭据。
 
-- 结果为 `{ provider, accountId, plan, limits, credits }`；`limits` 包含 `codex` 主额度和上游提供的附加模型额度，各项含 `id`、`name`、`model`、`allowed`、`limitReached`、`primary`、`secondary`。
+- xAI 的 `limits` 为空、`credits` 为 `null`；`xai` 保留独立的信用额度合约：`usedPercent` 为小数，`periodType/periodStart/periodEnd` 为上游周期，`allowed/message` 为访问状态。`prepaidCents/onDemandUsedCents/onDemandCapCents` 为整数 USD 分字符串，避免跨语言精度损失。未提供的数据为 `null`；ChatGPT 不序列化 `xai`。
+- `account/read` 查询已就绪 xAI 账号的实时资料和套餐，并通过登录服务更新邮箱、姓名与组织；账号资料和额度查询均不持有全局读写锁。请求前后检查登录身份，取消或退出登录后的旧响应不进入账号状态。订阅接入不提供充值、额度兑换、充值提醒或付款入口。
+
+- 结果为 `{ provider, accountId, plan, limits, credits, xai? }`；`plan` 未提供时为 `null`。ChatGPT 的 `limits` 包含 `codex` 主额度和上游提供的附加模型额度，各项含 `id`、`name`、`model`、`allowed`、`limitReached`、`primary`、`secondary`。
 - 每个窗口返回已使用百分比 `usedPercent`、精确时长 `windowSeconds` 和 Unix 秒时间戳 `resetsAt`。余额为 `{ hasCredits, unlimited, balance }`，金额保留上游十进制字符串；缺失窗口、状态和余额保持 `null`。
 - 此接口只查询，不消费重置额度、不修改套餐、不计算本地参考成本。组织消费上限与重置额度明细不在当前结果中。
 - 每次查询读取当前认证，HTTP 401 只允许同一用户与工作区恢复一次；Codex 管理凭据时不会刷新或写入其凭据。查询前后及重试前检查这两个身份；上游提供用户 ID 时也校验它，避免将同一工作区内不同用户的结果混用。
@@ -1030,32 +1033,37 @@ pub enum AccountLoginMethod {
     OpenAiChatGptBrowser,
     OpenAiChatGptDeviceCode,
     KimiDeviceCode,
+    XaiDeviceCode,
 }
 ```
 
-上述 RPC、revisioned `accounts[]` projection 和 `account/login/completed` / `account/updated` 主动通知已实现，并通过注入的 multi-driver `LoginService` 工作；未安装服务时返回稳定 `AccountUnavailable`。`account/logout` 必须携带 provider，避免同时登录 ChatGPT 与 Kimi 时误删另一账户。
+上述 RPC、带版本的 `accounts[]` 和 `account/login/completed` / `account/updated` 主动通知已实现，并通过注入的 multi-driver `LoginService` 工作；未安装服务时返回稳定 `AccountUnavailable`。`account/logout` 必须携带 provider，避免同时登录多个供应商时误删另一账户。
 
-本地默认组合安装 native `ash-chatgpt` 与 `ash-kimi` driver。`account/login/start` 直接向对应 authorization server 请求 device code，并在本机后台轮询。API key 继续属于对应模型凭据领域，不进入 account/login payload。
+本地默认组合安装 `ash-chatgpt`、`ash-kimi` 与 `ash-xai` driver。`account/login/start` 直接向对应 authorization server 请求 device code，并在本机后台轮询。API key 继续属于对应模型凭据领域，不进入 account/login payload。
 
-Provider 是否支持 interactive login、credential 的实际所有者和 refresh 语义由 [`ash-login`](login.md) 的 exact driver 决定。ChatGPT 的 `ash-chatgpt` 与 Kimi 的 `ash-kimi` 都执行本地 device OAuth、SecretStore persistence 与 refresh。Ash App Server 只编排和映射 redacted control plane：
+Provider 是否支持 interactive login、credential 的实际所有者和 refresh 语义由 [`ash-login`](login.md) 的 exact driver 决定。ChatGPT、Kimi 与 xAI 的 driver 各自执行本地 device OAuth、SecretStore persistence 与 refresh。Ash App Server 只编排和映射 redacted control plane：
 
 ```text
 app-server-protocol/src/protocol/account.rs
   └─ login/account request、redacted result、notification DTO
 
-app-server/src/server/account/
-  ├─ mod.rs       ── start/cancel/read/logout dispatch 与 notification
-  ├─ login.rs     ── LoginService composition 与 redacted RPC mapping
-  └─ account_tests.rs
+app-server/src/server/account_operations.rs
+  └─ start/cancel/read/logout、额度查询和通知映射
 
 login/
-  └─ user-visible login lifecycle 与 redacted account projection
+  └─ 用户可见的登录生命周期和脱敏账号状态
 
 chatgpt/
-  └─ native device OAuth、token refresh、SecretStore owner 与 authenticated Responses target
+  └─ device OAuth、token refresh、SecretStore owner 与 authenticated Responses target
 
 kimi/
-  └─ native device OAuth、token refresh、SecretStore owner 与 authenticated API target
+  └─ device OAuth、token refresh、SecretStore owner 与 authenticated API target
+
+xai/
+  └─ device OAuth、凭据轮换、账号资料、订阅查询与 Responses 认证目标
+
+backend-client/
+  └─ chatgpt/ 与 xai/ 后台接口、wire 类型和解码；不持有凭据
 
 ash-secrets
   └─ direct-provider/API-key 或 exact OAuth-owner 的 opaque secret bytes

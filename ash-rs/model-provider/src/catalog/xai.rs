@@ -82,7 +82,8 @@ impl ModelCatalogSource for XaiCatalogSource {
                 .map_err(|error| {
                     CatalogSourceError::new(
                         match error.kind() {
-                            ::xai::XaiErrorKind::Authentication => {
+                            ::xai::XaiErrorKind::Authentication
+                            | ::xai::XaiErrorKind::AccountChanged => {
                                 CatalogSourceErrorKind::Authentication
                             }
                             ::xai::XaiErrorKind::Permission => CatalogSourceErrorKind::Permission,
@@ -93,6 +94,7 @@ impl ModelCatalogSource for XaiCatalogSource {
                             ::xai::XaiErrorKind::InvalidResponse => {
                                 CatalogSourceErrorKind::InvalidPayload
                             }
+                            ::xai::XaiErrorKind::Cancelled => CatalogSourceErrorKind::Cancelled,
                             ::xai::XaiErrorKind::Unavailable => CatalogSourceErrorKind::Unreachable,
                         },
                         error.to_string(),

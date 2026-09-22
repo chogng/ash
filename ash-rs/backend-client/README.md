@@ -1,27 +1,37 @@
 # Backend client
 
-- 封装 OpenAI/Codex 后端业务 HTTP API，与模型协议和 Ash 自有服务分开。
-- 查询账号、个人统计、额度、重置次数、支出限制和用量报表。
-- 读取云端配置、用户设置、工作区消息与云任务；支持创建云任务。
-- 查询任务和回合费用；保留原始金额精度、数据缺失和不完整状态。
-- 显式选择 `/api/codex` 或 `/wham` 路由，使用调用方提供的当前账号认证。
-- 复用 `ash-client` 和 `ash-http-client`；不读取凭据、不刷新 token、不维护登录状态。
-- 错误仅保留分类与 HTTP 状态，不暴露地址、认证头或响应正文；支持调用方取消。
-- 生产 transport 必须拒绝重定向；Ash 默认 HTTP 配置满足此要求。
+- 封装各供应商的后台业务 HTTP API，按供应商模块组织路由和响应类型。
+- `chatgpt` 提供账号、额度、账单、配置、统计与云任务接口。
+- `xai` 提供订阅模型目录、账号、访问设置、订阅额度、余额和用量历史查询。
+- 使用调用方提供的当前认证；凭据存储、刷新与账号生命周期由认证 crate 负责。
+- 共享 URL 校验、JSON 请求、取消传递和脱敏错误，复用 `ash-client` 与 `ash-http-client`。
+- 模型生成与流式协议由 `model-provider` 和 `ash-api` 负责。
+- 订阅接入只查询账号与使用情况，不提供充值、额度兑换、充值提醒或付款入口。
 
-## 公开接口
+## 模块与依赖
+
+| 模块 | 公开入口 | 负责内容 |
+| --- | --- | --- |
+| `chatgpt` | `chatgpt::Client`、`chatgpt::RouteStyle`、供应商响应类型 | ChatGPT `/wham`、Codex `/api/codex` 和 API key 费用路由 |
+| `xai` | `xai::Client`、供应商响应类型 | Grok 订阅后台路由、账号、模型与账单 |
+| crate 根 | `RequestError` | 不包含认证头或响应正文的请求错误 |
+
+- `chatgpt`、`xai` 认证 crate 依赖本 crate；本 crate 不依赖登录、凭据存储或模型运行时。
+- 各供应商客户端独立接收 `OperationClient` 与已解析的 `ResolvedApiTarget`；不同供应商不共享认证状态。
+- 生产 transport 必须拒绝重定向；Ash 默认 HTTP 配置满足此要求。
+- 新供应商在本 crate 内增加模块，只有真实接口需要时才增加子文件；后台请求不抽象成统一套餐或云任务模型。
+- 原根级 `BackendClient`、`RouteStyle` 和 ChatGPT 响应类型已迁到 `chatgpt`，调用方直接使用新路径。
+
+## ChatGPT 接口
 
 以下接口对应 Codex `backend-client` 的业务 HTTP 合约。路径相对于显式选择的路由前缀；API key 费用查询使用单独的目标地址。
 
-| 能力 | `BackendClient` 方法 | HTTP 合约 |
+| 能力 | `chatgpt::Client` 方法 | HTTP 合约 |
 | --- | --- | --- |
 | 账号与工作区 | `read_accounts` | `GET accounts/check`，支持列表与账号映射两种响应 |
 | 个人统计与 token 历史 | `read_account_profile` | `GET profiles/me` |
 | 额度与完整策略 | `read_rate_limits`、`read_rate_limit_status` | `GET usage` |
 | Reserve 能力声明 | `read_rate_limits_with_reserve` | `GET usage`，附带 `x-openai-codex-luna-reserve: 1` |
-| 重置券列表 | `list_reset_credits` | `GET rate-limit-reset-credits` |
-| 兑换重置券 | `consume_reset_credit` | `POST rate-limit-reset-credits/consume` |
-| 通知管理员 | `send_credit_nudge` | `POST accounts/send_add_credits_nudge_email` |
 | 云端配置与约束 | `read_config_bundle` | `GET config/bundle` |
 | 用户设置 | `read_user_settings` | `GET settings/user`，禁止使用缓存 |
 | 工作区消息 | `list_workspace_messages` | `GET workspace-messages`，禁止保存缓存 |
@@ -47,42 +57,64 @@
 | `Plugins` | `analytics/daily-plugin-usage-metrics` | 当前工作区用户，指定数量 |
 | `Skills` | `analytics/daily-skill-usage-metrics` | 当前工作区用户，指定数量 |
 
+## xAI 接口
+
+| 方法 | HTTP 合约 | 返回值 |
+| --- | --- | --- |
+| `xai::Client::read_models` | `GET /v1/models-v2` | `Vec<xai::CatalogModel>` |
+| `read_account` | `GET /v1/user?include=subscription` | `xai::Account`，包含实时套餐、团队和数据保留设置 |
+| `read_settings` | `GET /v1/settings` | `xai::Settings`，包含访问资格和计费开关 |
+| `read_billing` | `GET /v1/billing?format=credits` | `Option<xai::Billing>`，包含用量百分比、周期、余额和历史 |
+
+- `xai::BASE_URL` 指向 `https://cli-chat-proxy.grok.com/v1`；调用方提供该目标的当前认证与版本头。
+- 目录只返回可见的 Responses 模型，保留请求模型 ID、显示名称、上下文窗口和推理档位；缺失元数据保持为空。
+- 服务端返回的 `baseUrl`、凭据或路由覆盖值不参与请求目标解析。
+- `ash-xai::XaiOAuth::models` 负责账号检查及一次 HTTP 401 恢复，再委托此客户端读取目录。
+- 403、426、429 和其他 HTTP 错误保留状态；后台客户端不刷新认证，也不自动重发。
+- 按官方 Grok Build `4247f661689354b831191f11eeeac8424993fe3d` 的 `manager/enrichment.rs`、`subscription_check.rs`、`remote/client.rs` 和 `extensions/billing.rs` 对照接口；使用当前 credits 合约，不请求旧账单格式。
+- 用量百分比保留小数和超过 100 的值；金额保留整数 USD 分，不转换为浮点数。proto3 明确规定的 `Cent {}` 表示零；缺失金额对象、周期或额度仍为 `None`。
+- 设置仅保留账号访问与用量信息；Grok 自身功能开关不会改变 Ash 的行为。
+- `ash-xai::XaiOAuth::refresh_account/read_subscription` 负责当前账号检查、逐次查询取消和一次 401 恢复；从最新凭据合并资料，避免覆盖刚轮换的 token。
+- Grok 远程会话同步、分享、网页工作区和技能管理不属于本次订阅账号接入。
+
 ## 调用约定
 
-- 每次操作传入 `CancellationToken`；认证目标由调用方提前解析。`chatgpt` 继续负责 token 刷新、401 恢复与账号变化检查。
-- `read_rate_limits` 保持原有返回类型。`read_rate_limit_status` 额外返回用户身份、可用重置次数、支出限制、限制原因与服务端提示。
+- 每次操作传入 `CancellationToken`；认证目标由调用方提前解析。各供应商的认证 crate 负责 token 刷新、401 恢复与账号变化检查。
+- `read_rate_limits` 保持原有返回类型。`read_rate_limit_status` 额外返回用户身份、支出限制与限制原因。
 - 只有真正支持 Reserve 的消费方才调用 `read_rate_limits_with_reserve`；被动额度查询使用普通入口。
-- 兑换使用 `ResetCreditSelection::Available` 或 `Id`。调用方负责用户授权并保存 `redeem_request_id`；结果不确定时继续使用原 ID。所有请求均采用 `RetryPolicy::never()`。
-- 创建任务、兑换和发送邮件的取消只表示本地停止等待，不能证明服务端未执行；客户端不会自动重放写入。
-- API key 费用查询需单独构建 `BackendClient`，目标例如 `https://api.chatgpt.com`，并提供该目标的 API key、组织和项目请求头。客户端使用该目标的原始 origin，不猜测主机或转发另一个账号的认证。
+- 创建任务的取消只表示本地停止等待，不能证明服务端未执行；客户端不会自动重放写入。
+- API key 费用查询需单独构建 `chatgpt::Client`，目标例如 `https://api.chatgpt.com`，并提供该目标的 API key、组织和项目请求头。客户端使用该目标的原始 origin，不猜测主机或转发另一个账号的认证。
 - 路径中的任务 ID 与查询参数分别编码；空路径段和 `.`、`..` 在发送前拒绝。
 - 云任务详情必须包含有效 `task` 元数据，且返回 ID 必须等于请求 ID。标题、环境、创建与更新时间、归档状态和关联 PR 由 `TaskMetadata` 保留；顶层与任务内的 `task_status_display` 分别保留，不互相覆盖。
 - 线程用量每批 1–100 个不同 ID；任务用量每批最多 100 个任务、合计 1,000 个根与后代 ID，任务范围不能重叠。响应里的重复 ID、未请求 ID 和错配回合均报 `InvalidResponse`。
 - 缺失金额、额度、统计和设置保持为空；不推导零用量、允许状态或当前套餐。整数微单位和十进制金额字符串保留原精度。
 - 任务扣费只接受最多 128 字节的十进制字符串，可带正负号和 `i32` 范围的指数；不转换为浮点数。任务额度占比只接受有限数字，支持 `serde_json/arbitrary_precision`，不截断超过 100% 的值。
 - 历史套餐接口的 HTTP 404 表示报表不可用，返回 `None`；其他接口不会吞掉 HTTP 错误。
-- 此 crate 提供 HTTP 能力。当前产品已有调用方是 `chatgpt` 的账号额度查询；新增云任务、统计和写入能力尚未增加 UI 或 App Server RPC 入口。
+- 此 crate 提供 HTTP 能力。当前产品已有调用方是 `chatgpt` 的账号额度查询和 `xai` 的订阅模型、账号与额度查询；新增云任务、统计和写入能力尚未增加 UI 或 App Server RPC 入口。
 
 ## 实现与验证
 
-- `client.rs` 统一后端 URL、请求头、业务 JSON 和错误脱敏；取消令牌传给 `ash-client` 执行，`lib.rs` 仅保留公开导出。
-- `account.rs`、`usage.rs`、`config.rs`、`tasks.rs`、`costs.rs`、`analytics.rs` 分别拥有相应业务接口；`analytics_types.rs` 保存报表响应结构。
-- 业务测试按所属模块组织，共用 `test_support.rs` 中的请求记录器；原 `business_tests.rs` 的断言已迁入各业务专项测试和 `client_tests.rs`。
-- `transport_tests.rs` 贯穿 `BackendClient → AshClient → UreqHttpClient`，验证业务路由、认证、JSON、写入不重发和后端错误映射。
+- 根级 `client.rs` 统一 URL、认证头传递、JSON 编解码和错误脱敏；取消令牌交给 `ash-client` 执行。供应商路由留在各自模块。
+- ChatGPT 的业务文件和测试已由 `src/*.rs` 迁至 `src/chatgpt/`；`chatgpt.rs` 汇总公开接口。
+- `xai/models.rs` 接管原 `ash-xai/src/catalog.rs` 的 HTTP 请求和解析；原 `catalog_tests.rs` 覆盖迁至 `xai/models_tests.rs`，认证恢复测试仍在 `ash-xai`。
+- `transport_tests.rs` 贯穿 `chatgpt::Client / xai::Client → AshClient → UreqHttpClient`，验证业务路由、认证、JSON、任务创建不重发和后端错误映射。
 - 传输重定向、超时与原始响应读取由 `http-client` 验证；取消与重试执行由 `ash-client` 验证。两个下层 crate 的测试使用通用请求，不依赖后端业务类型。
-- HTTPS 测试使用独立 CA、随机回环端口和直接连接，不修改系统信任或代理环境；不访问真实账号、不兑换真实额度、不发送邮件。
+- HTTPS 测试使用独立 CA、随机回环端口和直接连接，不修改系统信任或代理环境；不访问真实账号。
 - 业务固定响应位于 [`tests/fixtures`](tests/fixtures/README.md)；HTTPS 服务和测试证书由 [`http-test-support`](../http-test-support/README.md) 提供，只通过 `dev-dependencies` 引入。Cargo 与 Bazel 使用同一份资源。
 - 验证命令：`just check ash-backend-client`、`just test ash-backend-client`、`just rust-warnings ash-backend-client`。
 - 小数解析配置回归：`just test ash-backend-client --features serde_json/arbitrary_precision`。
-- 现有消费方回归：`just check ash-chatgpt`、`just test ash-chatgpt account::tests`、`just rust-warnings ash-chatgpt`。
+- 消费方回归：`just check ash-chatgpt -p ash-xai -p ash-model-provider`、`just test ash-chatgpt account::tests`、`just test ash-xai`、`just test ash-model-provider xai_tests`。
 
 | 专项测试 | 主要覆盖 | 单独运行 |
 | --- | --- | --- |
-| `account_tests.rs` | 账号排序与身份、统计缺失与零值、调用记录、通知邮件 | `just test ash-backend-client account::tests` |
-| `usage_tests.rs` | 用量窗口、独立允许状态、支出策略、重置券结果与请求 ID | `just test ash-backend-client usage::tests` |
-| `config_tests.rs` | 配置层次、约束片段、设置布尔值、消息时间与缓存头 | `just test ash-backend-client config::tests` |
-| `tasks_tests.rs` | 分页与编码、任务身份与元数据、固定成功/失败响应、文本与差异提取 | `just test ash-backend-client tasks::tests` |
-| `costs_tests.rs` | 批量边界、线程/回合归属、十进制精度、结算与缺失数据 | `just test ash-backend-client costs::tests` |
-| `analytics_tests.rs` | 各报表真实数据结构、日期校验、负值扣费、插件/技能统计、历史额度 | `just test ash-backend-client analytics::tests` |
-| `client_tests.rs` | 全部业务请求的双路由、认证、取消、错误脱敏与禁止重试约定 | `just test ash-backend-client client::tests` |
+| `chatgpt/account_tests.rs` | 账号排序与身份、统计缺失与零值、调用记录 | `just test ash-backend-client chatgpt::account::tests` |
+| `chatgpt/usage_tests.rs` | 用量窗口、独立允许状态、支出策略与订阅状态 | `just test ash-backend-client chatgpt::usage::tests` |
+| `chatgpt/config_tests.rs` | 配置层次、约束片段、设置布尔值、消息时间与缓存头 | `just test ash-backend-client chatgpt::config::tests` |
+| `chatgpt/tasks_tests.rs` | 分页与编码、任务身份与元数据、固定成功/失败响应、文本与差异提取 | `just test ash-backend-client chatgpt::tasks::tests` |
+| `chatgpt/costs_tests.rs` | 批量边界、线程/回合归属、十进制精度、结算与缺失数据 | `just test ash-backend-client chatgpt::costs::tests` |
+| `chatgpt/analytics_tests.rs` | 各报表真实数据结构、日期校验、负值扣费、插件/技能统计、历史额度 | `just test ash-backend-client chatgpt::analytics::tests` |
+| `chatgpt/client_tests.rs` | 全部业务请求的双路由、认证、取消、错误脱敏与禁止重试约定 | `just test ash-backend-client chatgpt::client::tests` |
 | `transport_tests.rs` | 本地 HTTPS 实际调用链 | `just test ash-backend-client transport_tests` |
+| `xai/models_tests.rs` | 目录筛选与元数据解析 | `just test ash-backend-client xai::models::tests` |
+
+- xAI 业务接口验证：`just test ash-backend-client xai::`；认证与资料生命周期：`just test ash-xai`。

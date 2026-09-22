@@ -1,12 +1,10 @@
 //! Public backend operations through AshClient, UreqHttpClient, and a loopback TLS server.
 
-use crate::BackendClient;
-use crate::CreditNudge;
 use crate::RequestError;
-use crate::ResetCreditSelection;
-use crate::RouteStyle;
-use crate::TaskListQuery;
-use crate::test_support::target;
+use crate::chatgpt::Client;
+use crate::chatgpt::RouteStyle;
+use crate::chatgpt::TaskListQuery;
+use crate::chatgpt::test_support::target;
 use ::client::AshClient;
 use async_utils::CancellationSource;
 use http_client::CertificateBundle;
@@ -25,6 +23,52 @@ use std::time::Duration;
 
 const WAIT: Duration = Duration::from_secs(5);
 
+#[test]
+fn xai_business_queries_use_the_credits_contract_over_https() {
+    let mut replies = [
+        response(200, r#"{"userId":"user-1","subscriptionTier":"SuperGrokPro"}"#),
+        response(200, r#"{"allow_access":true}"#),
+        response(200, r#"{"config":{"creditUsagePercent":12.125,"prepaidBalance":{"val":"9007199254740993"}}}"#),
+    ].into_iter();
+    let server = Server::start(move |stream| {
+        stream
+            .write_all(&replies.next().expect("extra request"))
+            .unwrap()
+    });
+    let transport = client();
+    let target = ::client::ResolvedApiTarget::new(
+        format!("{}/v1/", server.url()),
+        vec![
+            http_client::HttpHeader::new("Authorization", "Bearer xai-fixture"),
+            http_client::HttpHeader::new("x-userid", "user-1"),
+        ],
+    );
+    let client = crate::xai::Client::new(&transport, &target).unwrap();
+    let token = CancellationSource::new().token();
+    assert_eq!(client.read_account(&token).unwrap().user_id, "user-1");
+    assert_eq!(
+        client.read_settings(&token).unwrap().allow_access,
+        Some(true)
+    );
+    let billing = client.read_billing(&token).unwrap().unwrap();
+    assert_eq!(billing.credit_usage_percent, Some(12.125));
+    assert_eq!(billing.prepaid_balance.unwrap().val, 9_007_199_254_740_993);
+    for path in [
+        "user?include=subscription",
+        "settings",
+        "billing?format=credits",
+    ] {
+        let request = server.request();
+        assert_eq!(request.line, format!("GET /v1/{path} HTTP/1.1"));
+        assert_eq!(request.header("Authorization"), "Bearer xai-fixture");
+        assert_eq!(request.header("x-userid"), "user-1");
+        assert_eq!(request.header("Accept"), "application/json");
+        assert_eq!(request.header("Cache-Control"), "no-store");
+        assert!(request.body.is_empty());
+    }
+    server.assert_no_more_requests();
+}
+
 fn client() -> AshClient {
     let ca = CertificateBundle::from_der(vec![CA_DER.to_vec()]).unwrap();
     let config = HttpClientConfig::new()
@@ -40,6 +84,35 @@ fn client() -> AshClient {
 }
 
 #[test]
+fn xai_catalog_uses_its_own_route_and_authentication_over_https() {
+    let server = Server::reply(response(
+        200,
+        r#"{"data":[{"model":"grok-test","apiBackend":"responses","contextWindow":500000,"baseUrl":"https://untrusted.example"}]}"#,
+    ));
+    let transport = client();
+    let target = ::client::ResolvedApiTarget::new(
+        format!("{}/v1/", server.url()),
+        vec![
+            http_client::HttpHeader::new("Authorization", "Bearer xai-secret"),
+            http_client::HttpHeader::new("X-XAI-Token-Auth", "xai-grok-cli"),
+        ],
+    );
+    let models = crate::xai::Client::new(&transport, &target)
+        .unwrap()
+        .read_models(&CancellationSource::new().token())
+        .unwrap();
+    assert_eq!(models[0].id, "grok-test");
+    assert_eq!(models[0].context_window, Some(500000));
+    let request = server.request();
+    assert_eq!(request.line, "GET /v1/models-v2 HTTP/1.1");
+    assert_eq!(request.header("Authorization"), "Bearer xai-secret");
+    assert_eq!(request.header("X-XAI-Token-Auth"), "xai-grok-cli");
+    assert_eq!(request.header("Accept"), "application/json");
+    assert!(request.body.is_empty());
+    server.assert_no_more_requests();
+}
+
+#[test]
 fn both_routes_send_authentication_queries_and_json_over_https() {
     for (route, prefix) in [
         (RouteStyle::Codex, "api/codex"),
@@ -49,7 +122,6 @@ fn both_routes_send_authentication_queries_and_json_over_https() {
             response(200, r#"{"plan_type":"plus"}"#),
             response(200, r#"{"items":[],"cursor":"next"}"#),
             response(201, r#"{"task":{"id":"new-task"}}"#),
-            response(204, ""),
         ]
         .into_iter();
         let server = Server::start(move |stream| {
@@ -59,7 +131,7 @@ fn both_routes_send_authentication_queries_and_json_over_https() {
         });
         let transport = client();
         let target = target(&format!("{}/backend-api/", server.url()));
-        let backend = BackendClient::new(&transport, &target, route).unwrap();
+        let backend = Client::new(&transport, &target, route).unwrap();
         let token = CancellationSource::new().token();
         assert_eq!(backend.read_rate_limits(&token).unwrap().plan, "plus");
         let list = backend
@@ -81,10 +153,7 @@ fn both_routes_send_authentication_queries_and_json_over_https() {
                 .unwrap(),
             "new-task"
         );
-        backend
-            .send_credit_nudge(CreditNudge::Credits, &token)
-            .unwrap();
-        for (index, request) in (0..4).map(|i| (i, server.request())) {
+        for (index, request) in (0..3).map(|i| (i, server.request())) {
             for header in &target.headers {
                 assert_eq!(request.header(header.name()), header.value());
             }
@@ -115,18 +184,6 @@ fn both_routes_send_authentication_queries_and_json_over_https() {
                         payload
                     );
                 }
-                3 => {
-                    assert_eq!(
-                        request.line,
-                        format!(
-                            "POST /backend-api/{prefix}/accounts/send_add_credits_nudge_email HTTP/1.1"
-                        )
-                    );
-                    assert_eq!(
-                        serde_json::from_slice::<serde_json::Value>(&request.body).unwrap(),
-                        json!({"credit_type":"credits"})
-                    );
-                }
                 _ => unreachable!(),
             }
             if index >= 2 {
@@ -138,29 +195,25 @@ fn both_routes_send_authentication_queries_and_json_over_https() {
 }
 
 #[test]
-fn failed_credit_redemptions_are_never_replayed_by_the_transport() {
+fn failed_task_creations_are_never_replayed_by_the_transport() {
     for status in [429, 503] {
         let server = Server::reply(response(status, "private-account-response"));
         let transport = client();
         let target = target(&format!("{}/backend-api/", server.url()));
-        let error = BackendClient::new(&transport, &target, RouteStyle::ChatGpt)
+        let error = Client::new(&transport, &target, RouteStyle::ChatGpt)
             .unwrap()
-            .consume_reset_credit(
-                "stable-id",
-                ResetCreditSelection::Id("credit-1"),
+            .create_task(
+                json!({"input_items":[]}).as_object().unwrap(),
                 &CancellationSource::new().token(),
             )
             .unwrap_err();
         assert_eq!(error, RequestError::HttpStatus(status));
         assert!(!format!("{error:?} {error}").contains("private-account"));
         let request = server.request();
-        assert_eq!(
-            request.line,
-            "POST /backend-api/wham/rate-limit-reset-credits/consume HTTP/1.1"
-        );
+        assert_eq!(request.line, "POST /backend-api/wham/tasks HTTP/1.1");
         assert_eq!(
             serde_json::from_slice::<serde_json::Value>(&request.body).unwrap(),
-            json!({"redeem_request_id":"stable-id","credit_id":"credit-1"})
+            json!({"input_items":[]})
         );
         server.assert_no_more_requests();
     }
@@ -182,11 +235,10 @@ fn malformed_and_truncated_success_bodies_are_redacted_without_replay() {
         let server = Server::reply(wire);
         let transport = client();
         let target = target(&format!("{}/backend-api/", server.url()));
-        let error = BackendClient::new(&transport, &target, RouteStyle::ChatGpt)
+        let error = Client::new(&transport, &target, RouteStyle::ChatGpt)
             .unwrap()
-            .consume_reset_credit(
-                "stable-id",
-                ResetCreditSelection::Available,
+            .create_task(
+                json!({"input_items":[]}).as_object().unwrap(),
                 &CancellationSource::new().token(),
             )
             .unwrap_err();

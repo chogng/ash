@@ -13,10 +13,10 @@ pub use storage::codex_home;
 
 pub use account::ChatGptAccount;
 pub use account::ChatGptUsageError;
-pub use backend_client::CreditBalance;
-pub use backend_client::RateLimit;
-pub use backend_client::RateLimitWindow;
-pub use backend_client::RateLimits;
+pub use backend_client::chatgpt::CreditBalance;
+pub use backend_client::chatgpt::RateLimit;
+pub use backend_client::chatgpt::RateLimitWindow;
+pub use backend_client::chatgpt::RateLimits;
 pub use oauth::CHATGPT_RESPONSES_BASE_URL;
 pub use oauth::ChatGptApiTarget;
 pub use oauth::ChatGptError;

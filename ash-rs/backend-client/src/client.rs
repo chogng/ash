@@ -12,15 +12,6 @@ use serde::de::DeserializeOwned;
 use std::fmt;
 use url::Url;
 
-pub const CHATGPT_BACKEND_BASE_URL: &str = "https://chatgpt.com/backend-api";
-
-/// Selects the upstream API contract independently of the hostname.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum RouteStyle {
-    Codex,
-    ChatGpt,
-}
-
 /// A redacted failure. Response bodies and credentials never become error text.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RequestError {
@@ -60,18 +51,16 @@ impl From<ClientError> for RequestError {
 
 /// Business HTTP operations using caller-resolved authentication and cancellation.
 /// The injected transport must reject redirects for authenticated requests.
-pub struct BackendClient<'a> {
+pub(crate) struct Client<'a> {
     client: &'a dyn OperationClient,
     target: &'a ResolvedApiTarget,
     base: Url,
-    route: RouteStyle,
 }
 
-impl<'a> BackendClient<'a> {
+impl<'a> Client<'a> {
     pub fn new(
         client: &'a dyn OperationClient,
         target: &'a ResolvedApiTarget,
-        route: RouteStyle,
     ) -> Result<Self, RequestError> {
         let base = Url::parse(target.base_url.trim_end_matches('/'))
             .map_err(|_| RequestError::InvalidTarget)?;
@@ -88,26 +77,20 @@ impl<'a> BackendClient<'a> {
             client,
             target,
             base,
-            route,
         })
     }
 
-    pub(crate) fn endpoint(&self, path: &[&str]) -> Result<Url, RequestError> {
+    pub(crate) fn endpoint<'p>(
+        &self,
+        path: impl IntoIterator<Item = &'p str>,
+    ) -> Result<Url, RequestError> {
         let mut url = self.base.clone();
         let mut segments = url
             .path_segments_mut()
             .map_err(|_| RequestError::InvalidTarget)?;
         segments.pop_if_empty();
-        match self.route {
-            RouteStyle::Codex => {
-                segments.extend(["api", "codex"]);
-            }
-            RouteStyle::ChatGpt => {
-                segments.push("wham");
-            }
-        }
         for segment in path {
-            if segment.trim().is_empty() || matches!(*segment, "." | "..") {
+            if segment.trim().is_empty() || matches!(segment, "." | "..") {
                 return Err(RequestError::InvalidRequest);
             }
             segments.push(segment);
@@ -116,9 +99,9 @@ impl<'a> BackendClient<'a> {
         Ok(url)
     }
 
-    pub(crate) fn api_key_endpoint(&self) -> Url {
+    pub(crate) fn origin_endpoint(&self, path: &str) -> Url {
         let mut url = self.base.clone();
-        url.set_path("/v1/analytics/codex/turn-costs");
+        url.set_path(path);
         url
     }
 
@@ -142,7 +125,7 @@ impl<'a> BackendClient<'a> {
         decode(response.body())
     }
 
-    pub(crate) fn post_response(
+    fn post_response(
         &self,
         url: Url,
         body: &impl Serialize,
@@ -186,7 +169,3 @@ impl<'a> BackendClient<'a> {
 pub(crate) fn decode<T: DeserializeOwned>(body: &[u8]) -> Result<T, RequestError> {
     serde_json::from_slice(body).map_err(|_| RequestError::InvalidResponse)
 }
-
-#[cfg(test)]
-#[path = "client_tests.rs"]
-mod tests;

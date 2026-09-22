@@ -1,20 +1,20 @@
-use crate::test_support::Client;
-use crate::test_support::target;
-use crate::*;
+use crate::RequestError;
+use crate::chatgpt::test_support::target;
+use crate::chatgpt::*;
+use crate::test_support::Transport;
 use async_utils::CancellationSource;
-use http_client::HttpHeader;
 use serde_json::json;
 
 #[test]
 fn profile_distinguishes_missing_statistics_from_zero_and_empty_lists() {
-    let target = target(CHATGPT_BACKEND_BASE_URL);
+    let target = target(BASE_URL);
     let token = CancellationSource::new().token();
     for stats in [
         json!({}),
         json!({"total_threads":null,"daily_usage_buckets":null}),
     ] {
-        let client = Client::response(200, &json!({"stats":stats}).to_string());
-        let profile = BackendClient::new(&client, &target, RouteStyle::ChatGpt)
+        let client = Transport::response(200, &json!({"stats":stats}).to_string());
+        let profile = Client::new(&client, &target, RouteStyle::ChatGpt)
             .unwrap()
             .read_account_profile(&token)
             .unwrap();
@@ -24,11 +24,11 @@ fn profile_distinguishes_missing_statistics_from_zero_and_empty_lists() {
         assert_eq!(profile.stats.daily_usage_buckets, None);
         assert_eq!(profile.stats.top_invocations, None);
     }
-    let client = Client::response(
+    let client = Transport::response(
         200,
         r#"{"stats":{"total_threads":0,"lifetime_tokens":0,"daily_usage_buckets":[],"top_invocations":[]}}"#,
     );
-    let stats = BackendClient::new(&client, &target, RouteStyle::ChatGpt)
+    let stats = Client::new(&client, &target, RouteStyle::ChatGpt)
         .unwrap()
         .read_account_profile(&token)
         .unwrap()
@@ -53,9 +53,9 @@ fn profile_retains_identity_freshness_history_and_invocation_details() {
             "top_invocations":[{"type":"plugin","plugin_name":"review","usage_count":5},{"type":"skill","skill_name":"test","usage_count":2}]
         }
     });
-    let client = Client::response(200, &body.to_string());
-    let target = target(CHATGPT_BACKEND_BASE_URL);
-    let profile = BackendClient::new(&client, &target, RouteStyle::ChatGpt)
+    let client = Transport::response(200, &body.to_string());
+    let target = target(BASE_URL);
+    let profile = Client::new(&client, &target, RouteStyle::ChatGpt)
         .unwrap()
         .read_account_profile(&CancellationSource::new().token())
         .unwrap();
@@ -126,7 +126,7 @@ fn profile_retains_identity_freshness_history_and_invocation_details() {
 
 #[test]
 fn profile_rejects_invalid_statistics_without_leaking_the_profile() {
-    let target = target(CHATGPT_BACKEND_BASE_URL);
+    let target = target(BASE_URL);
     for stats in [
         json!(null),
         json!({"total_threads":-1}),
@@ -134,11 +134,11 @@ fn profile_rejects_invalid_statistics_without_leaking_the_profile() {
         json!({"daily_usage_buckets":[{"tokens":3}]}),
         json!({"top_invocations":[{"usage_count":1}]}),
     ] {
-        let client = Client::response(
+        let client = Transport::response(
             200,
             &json!({"profile":{"display_name":"private-user"},"stats":stats}).to_string(),
         );
-        let error = BackendClient::new(&client, &target, RouteStyle::ChatGpt)
+        let error = Client::new(&client, &target, RouteStyle::ChatGpt)
             .unwrap()
             .read_account_profile(&CancellationSource::new().token())
             .unwrap_err();
@@ -150,7 +150,7 @@ fn profile_rejects_invalid_statistics_without_leaking_the_profile() {
 #[test]
 fn account_formats_keep_workspace_order_and_reject_ambiguous_ids() {
     let token = CancellationSource::new().token();
-    let target = target(CHATGPT_BACKEND_BASE_URL);
+    let target = target(BASE_URL);
     for accounts in [
         json!([
             {"id":"a", "plan_type":"future-plan", "name":"Personal"}, {"id":"b", "name":"Work"}, {"id":"c"}
@@ -161,12 +161,12 @@ fn account_formats_keep_workspace_order_and_reject_ambiguous_ids() {
             "c":{"account":{"account_id":"c"}}
         }),
     ] {
-        let client = Client::response(
+        let client = Transport::response(
             200,
             &json!({"accounts":accounts,"account_ordering":["b","a"],"default_account_id":"b"})
                 .to_string(),
         );
-        let backend = BackendClient::new(&client, &target, RouteStyle::ChatGpt).unwrap();
+        let backend = Client::new(&client, &target, RouteStyle::ChatGpt).unwrap();
         let accounts = backend.read_accounts(&token).unwrap();
         assert_eq!(
             accounts
@@ -186,9 +186,9 @@ fn account_formats_keep_workspace_order_and_reject_ambiguous_ids() {
         r#"{"accounts":{"a":{"account":{"account_id":"b"}}}}"#,
         r#"{"accounts":[{"id":"a"},{"id":"a"}]}"#,
     ] {
-        let client = Client::response(200, body);
+        let client = Transport::response(200, body);
         assert_eq!(
-            BackendClient::new(&client, &target, RouteStyle::ChatGpt)
+            Client::new(&client, &target, RouteStyle::ChatGpt)
                 .unwrap()
                 .read_accounts(&token),
             Err(RequestError::InvalidResponse)
@@ -199,46 +199,16 @@ fn account_formats_keep_workspace_order_and_reject_ambiguous_ids() {
 #[test]
 fn profile_preserves_large_counts_and_unknown_invocations() {
     let token = CancellationSource::new().token();
-    let target = target(CHATGPT_BACKEND_BASE_URL);
-    let client = Client::response(
+    let target = target(BASE_URL);
+    let client = Transport::response(
         200,
         r#"{"profile":{"display_name":"Reader"},"stats":{"lifetime_tokens":1234567890123,"fast_mode_usage_percentage":12.5,"top_invocations":[{"type":"future","usage_count":2}]}}"#,
     );
-    let profile = BackendClient::new(&client, &target, RouteStyle::ChatGpt)
+    let profile = Client::new(&client, &target, RouteStyle::ChatGpt)
         .unwrap()
         .read_account_profile(&token)
         .unwrap();
     assert_eq!(profile.stats.lifetime_tokens, Some(1234567890123));
     assert_eq!(profile.stats.total_threads, None);
     assert_eq!(profile.stats.top_invocations.unwrap()[0].kind, "future");
-}
-
-#[test]
-fn credit_nudge_sends_json_and_accepts_an_empty_response() {
-    let mut target = target(CHATGPT_BACKEND_BASE_URL);
-    target
-        .headers
-        .push(HttpHeader::new("cache-control", "stale"));
-    target
-        .headers
-        .push(HttpHeader::new("content-type", "text/plain"));
-    let token = CancellationSource::new().token();
-    let client = Client::response(204, "");
-    let backend = BackendClient::new(&client, &target, RouteStyle::ChatGpt).unwrap();
-    backend
-        .send_credit_nudge(CreditNudge::UsageLimit, &token)
-        .unwrap();
-    let requests = client.requests.lock().unwrap();
-    assert_eq!(
-        serde_json::from_slice::<serde_json::Value>(requests[0].body()).unwrap(),
-        json!({"credit_type":"usage_limit"})
-    );
-    assert_eq!(
-        requests[0]
-            .headers()
-            .iter()
-            .filter(|header| header.name().eq_ignore_ascii_case("content-type"))
-            .count(),
-        1
-    );
 }
