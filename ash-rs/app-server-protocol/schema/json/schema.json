@@ -6836,6 +6836,22 @@
         {
           "properties": {
             "method": {
+              "const": "language/servers",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/$defs/LanguageServersParams"
+            }
+          },
+          "required": [
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
               "const": "language/synchronize",
               "type": "string"
             },
@@ -11133,6 +11149,22 @@
             },
             "result": {
               "$ref": "#/$defs/SyntaxSelectionRangesResult"
+            }
+          },
+          "required": [
+            "method",
+            "result"
+          ],
+          "type": "object"
+        },
+        {
+          "properties": {
+            "method": {
+              "const": "language/servers",
+              "type": "string"
+            },
+            "result": {
+              "$ref": "#/$defs/LanguageServersResult"
             }
           },
           "required": [
@@ -22851,6 +22883,26 @@
       ],
       "type": "object"
     },
+    "LanguageServerDescriptorDto": {
+      "additionalProperties": false,
+      "description": "One enabled server and its editor language routes. Executable paths remain private.",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "languageIds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "languageIds"
+      ],
+      "type": "object"
+    },
     "LanguageServerMessageNotification": {
       "description": "One language-server log or user-visible message.",
       "properties": {
@@ -23103,6 +23155,44 @@
       "required": [
         "server",
         "state"
+      ],
+      "type": "object"
+    },
+    "LanguageServersParams": {
+      "additionalProperties": false,
+      "description": "Lists enabled, resolved servers for one directory without starting them.",
+      "properties": {
+        "dirId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sessionDirectory": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionDirSelector"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "LanguageServersResult": {
+      "additionalProperties": false,
+      "properties": {
+        "servers": {
+          "items": {
+            "$ref": "#/$defs/LanguageServerDescriptorDto"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "servers"
       ],
       "type": "object"
     },

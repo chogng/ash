@@ -1,0 +1,12 @@
+{
+  "CSS custom property": {
+    "prefix": "var",
+    "body": ["var(--${1:name}${2:, ${3:fallback}})$0"],
+    "description": "References a CSS custom property."
+  },
+  "Media query": {
+    "prefix": "media",
+    "body": ["@media (${1:width} >= ${2:768px}) {", "  $0", "}"],
+    "description": "Creates a media query block."
+  }
+}

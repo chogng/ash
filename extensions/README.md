@@ -21,11 +21,11 @@ copied into `ash-resources/extensions/` during development and production packag
 that trusted package directory through `ash-extensions`; App is only a future consumer extension
 point. A running application does not authenticate to a Git repository to load built-in extensions.
 
-If the package set later moves to a shared `ash-extension-packs` repository, that repository may
-be private and may own upstream pinning, license/notice preservation, validation, and CI builds.
-It must publish versioned extension artifacts for Ash and App to consume during their build or
-release process. A running application must consume the packaged artifact or extracted extension
-directory, never Git credentials or an unversioned repository checkout.
+Marketplace language packages are maintained in the separate `ash-marketplace` repository. That
+repository owns versioned payloads, server entrypoints, dependency locks, licenses, and signed
+releases. Ash owns installation, activation, permissions, and process execution. Static language
+assets are exposed through the extension catalog; server routes are read from the signed language
+catalog and handled by the shared Rust LSP client.
 
 The bundled packages are derived from `microsoft/vscode` and retain their package-level
 `NOTICE.md` provenance. The canonical upstream MIT license copy is
@@ -33,15 +33,14 @@ The bundled packages are derived from `microsoft/vscode` and retain their packag
 development packaging place it at `ash-resources/licenses/vscode/LICENSE.txt` alongside the
 extension packages.
 
-User-installed extensions are a separate profile-level root. They require an explicit registry or
-release distribution mechanism and must not be mixed with these built-in resources.
+User-installed extensions are a separate profile-level root. Marketplace packages use the signed registry and remain separate from these built-in resources.
 
 ## Bundled packages
 
 The current declarative pack contains the following package directories:
 
-- `css`, `html`, `javascript`, `json`, `markdown-basics`, `python`, `rust`, `shellscript`, `sql`,
-  `typescript-basics`, `xml`, and `yaml` provide language IDs, file associations, language
+- `css` (CSS/Less/SCSS), `go`, `html`, `javascript`, `json`, `markdown-basics`, `python`, `rust`, `shellscript`, `sql`,
+  `toml`, `typescript-basics`, `xml`, and `yaml` provide language IDs, file associations, language
   configuration, TextMate grammars, and—where upstream provides them—snippets.
 - `theme-seti` provides the Seti file icon document, font, and third-party notices.
 - `theme-defaults` provides four self-contained VS Code-derived color-theme documents. Themes that
@@ -66,7 +65,8 @@ Supported declarative fields are deliberately narrower than a VS Code extension 
 | `themes` | ✅ 严格解析、版本化 catalog、Workbench theme registration 和 active TextMate token projection | Extension/theme/TextMate services |
 | `debuggers` | ✅ 窄声明式 adapter command discovery；不提供 VS Code Debug Extension API | Extension registry / Debug service |
 | `configurationDefaults`, `semanticTokenScopes` | 尚未接入；bundled manifest 中的字段不会被投影 | 后续领域 adapter |
-| extension JavaScript, LSP server declarations | ❌ 不执行 | 独立信任与 runtime 评审 |
+| extension JavaScript | ❌ 不执行 | 声明式资源目录 |
+| Marketplace LSP executable | 由已验证 catalog 映射并运行 | App Server / LSP manager |
 
 User packages are read from the host-selected profile extension root, but the current Editor
 Extension system has no registry, download, enable/disable, signature, or grant authority. Built-in

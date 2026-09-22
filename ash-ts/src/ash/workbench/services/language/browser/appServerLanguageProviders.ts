@@ -13,7 +13,7 @@ import { workspaceRelativePath, workspaceResourceFromPath } from "../../../../pl
 import { type IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
 import { type IServerEventApi } from "../../../../platform/app-server/common/appServerApi.js";
 import { type IDirPermissionsService } from "../../../../platform/dirPermissions/common/dirPermissionsService.js";
-import { APP_SERVER_LANGUAGE_IDS } from "./appServerLanguageSupport.js";
+import { AppServerLanguageSupport } from "./appServerLanguageSupport.js";
 import { resolveAppServerLanguageDirAccess } from "./appServerLanguageWorkspace.js";
 
 type LocationKind = "declaration" | "definition" | "implementation" | "typeDefinition" | "references";
@@ -38,42 +38,42 @@ export class AppServerLanguageProviders extends Disposable {
 		if (options.dirPermissions && !options.events) throw new Error("Permission-aware App Server language providers require the App Server event stream");
 		if (options.events) {
 			const subscription = options.events.subscribe(event => {
-				if (event.method === "config/changed") this.queueRefresh();
+				if (event.method === "config/changed" || event.method === "marketplace/changed") this.queueRefresh();
 			});
 			this._register(toDisposable(() => subscription.dispose()));
 		}
 		this._register(workspace.onDidChangeWorkspace(() => this.queueRefresh()));
 		this._register(toDisposable(() => { this.alive = false; }));
-		if (!options.dirPermissions && workspace.getWorkspace().folders.length > 0) this.registrations.value = this.install();
-		else this.queueRefresh();
+		this.queueRefresh();
 	}
 
-	private install(): DisposableStore {
-		const adapter = new AppServerLanguageProvider(this.api, this.workspace);
+	private install(support: AppServerLanguageSupport): DisposableStore {
+		const languageIds = support.languageIds;
+		const adapter = new AppServerLanguageProvider(this.api, this.workspace, languageIds);
 		const registrations = new DisposableStore();
-		registrations.add(this.languageFeatures.hoverProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
+		registrations.add(this.languageFeatures.hoverProvider.register(languageIds, adapter));
 		registrations.add(this.languageFeatures.completionProvider.register(adapter));
-		registrations.add(this.languageFeatures.declarationProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
-		registrations.add(this.languageFeatures.definitionProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
-		registrations.add(this.languageFeatures.implementationProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
-		registrations.add(this.languageFeatures.typeDefinitionProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
-		registrations.add(this.languageFeatures.referenceProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
-		registrations.add(this.languageFeatures.callHierarchyProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
-		registrations.add(this.languageFeatures.typeHierarchyProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
-		registrations.add(this.languageFeatures.workspaceSymbolProvider.register('*', new AppServerWorkspaceSymbolProvider(this.api, this.workspace)));
-		registrations.add(this.languageFeatures.renameProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
-		registrations.add(this.languageFeatures.codeActionProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
-		registrations.add(this.languageFeatures.documentFormattingEditProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
-		registrations.add(this.languageFeatures.documentRangeFormattingEditProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
-		registrations.add(this.languageFeatures.signatureHelpProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
-		registrations.add(this.languageFeatures.inlayHintsProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
-		registrations.add(this.languageFeatures.linkedEditingRangeProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
-		registrations.add(this.languageFeatures.documentSemanticTokensProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
-		registrations.add(this.languageFeatures.documentSymbolProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
-		registrations.add(this.languageFeatures.codeLensProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
-		registrations.add(this.languageFeatures.linkProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
-		registrations.add(this.languageFeatures.colorProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
-		registrations.add(this.languageFeatures.foldingRangeProvider.register(APP_SERVER_LANGUAGE_IDS, adapter));
+		registrations.add(this.languageFeatures.declarationProvider.register(languageIds, adapter));
+		registrations.add(this.languageFeatures.definitionProvider.register(languageIds, adapter));
+		registrations.add(this.languageFeatures.implementationProvider.register(languageIds, adapter));
+		registrations.add(this.languageFeatures.typeDefinitionProvider.register(languageIds, adapter));
+		registrations.add(this.languageFeatures.referenceProvider.register(languageIds, adapter));
+		registrations.add(this.languageFeatures.callHierarchyProvider.register(languageIds, adapter));
+		registrations.add(this.languageFeatures.typeHierarchyProvider.register(languageIds, adapter));
+		registrations.add(this.languageFeatures.workspaceSymbolProvider.register('*', new AppServerWorkspaceSymbolProvider(this.api, this.workspace, support)));
+		registrations.add(this.languageFeatures.renameProvider.register(languageIds, adapter));
+		registrations.add(this.languageFeatures.codeActionProvider.register(languageIds, adapter));
+		registrations.add(this.languageFeatures.documentFormattingEditProvider.register(languageIds, adapter));
+		registrations.add(this.languageFeatures.documentRangeFormattingEditProvider.register(languageIds, adapter));
+		registrations.add(this.languageFeatures.signatureHelpProvider.register(languageIds, adapter));
+		registrations.add(this.languageFeatures.inlayHintsProvider.register(languageIds, adapter));
+		registrations.add(this.languageFeatures.linkedEditingRangeProvider.register(languageIds, adapter));
+		registrations.add(this.languageFeatures.documentSemanticTokensProvider.register(languageIds, adapter));
+		registrations.add(this.languageFeatures.documentSymbolProvider.register(languageIds, adapter));
+		registrations.add(this.languageFeatures.codeLensProvider.register(languageIds, adapter));
+		registrations.add(this.languageFeatures.linkProvider.register(languageIds, adapter));
+		registrations.add(this.languageFeatures.colorProvider.register(languageIds, adapter));
+		registrations.add(this.languageFeatures.foldingRangeProvider.register(languageIds, adapter));
 		return registrations;
 	}
 
@@ -96,7 +96,10 @@ export class AppServerLanguageProviders extends Disposable {
 		const access = await resolveAppServerLanguageDirAccess(this.workspace, this.options.dirPermissions);
 		if (!this.alive || generation !== this.refreshGeneration || this.workspace.getWorkspace().id !== access.workspaceId) return;
 		if (access.allowed) {
-			if (!this.registrations.value) this.registrations.value = this.install();
+			const support = await AppServerLanguageSupport.read(this.api, this.workspace);
+			if (!this.alive || generation !== this.refreshGeneration) return;
+			this.registrations.clear();
+			if (support.languageIds.length > 0) this.registrations.value = this.install(support);
 		} else {
 			this.registrations.clear();
 		}
@@ -110,11 +113,10 @@ export interface AppServerLanguageProvidersOptions {
 
 class AppServerLanguageProvider implements languages.LanguageCompletionProvider, languages.LanguageHoverProvider, languages.LanguageDeclarationProvider, languages.LanguageDefinitionProvider, languages.LanguageImplementationProvider, languages.LanguageTypeDefinitionProvider, languages.LanguageReferenceProvider, languages.LanguageCallHierarchyProvider, languages.LanguageTypeHierarchyProvider, languages.LanguageRenameProvider, languages.LanguageCodeActionProvider, languages.DocumentFormattingEditProvider, languages.DocumentRangeFormattingEditProvider, languages.LanguageParameterHintsProvider, languages.LanguageInlayHintsProvider, languages.LinkedEditingRangeProvider, languages.LanguageSemanticTokensProvider, languages.LanguageDocumentSymbolProvider, languages.CodeLensProvider, languages.LanguageLinkProvider, languages.LanguageColorProvider, languages.LanguageFoldingRangeProvider {
 	readonly signatureHelpTriggerCharacters = Object.freeze(['(', ',']);
-	readonly languageIds = APP_SERVER_LANGUAGE_IDS;
 	readonly id = "ash.appServer.completions";
 	readonly triggerCharacters = Object.freeze([".", ":", "<", "\"", "'", "/", "@", "#"]);
 
-	constructor(private readonly api: ILanguageApi, private readonly workspace: IWorkspaceContextService) {}
+	constructor(private readonly api: ILanguageApi, private readonly workspace: IWorkspaceContextService, readonly languageIds: readonly string[]) {}
 
 	async provideHover(request: languages.LanguageHoverRequest, signal: AbortSignal) {
 		const root = workspaceRootForResource(this.workspace, request.resource);
@@ -420,12 +422,12 @@ class AppServerLanguageProvider implements languages.LanguageCompletionProvider,
 }
 
 class AppServerWorkspaceSymbolProvider implements languages.LanguageWorkspaceSymbolProvider {
-	constructor(private readonly api: ILanguageApi, private readonly workspace: IWorkspaceContextService) {}
+	constructor(private readonly api: ILanguageApi, private readonly workspace: IWorkspaceContextService, private readonly support: AppServerLanguageSupport) {}
 
 	async provideWorkspaceSymbols(query: string, signal: AbortSignal): Promise<readonly languages.LanguageWorkspaceSymbol[]> {
 		const folders = this.workspace.getWorkspace().folders;
 		const roots = folders.map(folder => ({ id: folder.id, uri: folder.uri, ...(folders.length > 1 ? { wireId: folder.id } : {}) }));
-		const responses = await Promise.all(roots.flatMap(root => APP_SERVER_LANGUAGE_IDS.map(async languageId => {
+		const responses = await Promise.all(roots.flatMap(root => this.support.workspaceLanguageIds(root.id).map(async languageId => {
 			if (signal.aborted) return [];
 			try { return (await this.api.directorySymbols({ ...(root.wireId ? { dirId: root.wireId } : {}), languageId, query }, { signal })).symbols.map(symbol => ({ root, symbol })); } catch { return []; }
 		})));

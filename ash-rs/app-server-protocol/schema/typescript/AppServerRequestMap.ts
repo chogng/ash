@@ -225,6 +225,8 @@ import type { LanguageSemanticTokensParams } from './types/LanguageSemanticToken
 import type { LanguageSemanticTokensResult } from './types/LanguageSemanticTokensResult.js';
 import type { LanguageServerConfigureParams } from './types/LanguageServerConfigureParams.js';
 import type { LanguageServerRemoveParams } from './types/LanguageServerRemoveParams.js';
+import type { LanguageServersParams } from './types/LanguageServersParams.js';
+import type { LanguageServersResult } from './types/LanguageServersResult.js';
 import type { LanguageSignatureHelpParams } from './types/LanguageSignatureHelpParams.js';
 import type { LanguageSignatureHelpResult } from './types/LanguageSignatureHelpResult.js';
 import type { LanguageSynchronizeParams } from './types/LanguageSynchronizeParams.js';
@@ -571,6 +573,7 @@ export interface AppServerRequestMap {
   "diff/compute": { params: DiffComputeParams; response: DiffComputeResult };
   "syntax/analyze": { params: SyntaxAnalyzeParams; response: SyntaxAnalyzeResult };
   "syntax/selectionRanges": { params: SyntaxSelectionRangesParams; response: SyntaxSelectionRangesResult };
+  "language/servers": { params: LanguageServersParams; response: LanguageServersResult };
   "language/synchronize": { params: LanguageSynchronizeParams; response: null };
   "language/close": { params: LanguageCloseParams; response: null };
   "language/cancel": { params: LanguageCancelParams; response: LanguageCancelResult };
@@ -852,6 +855,7 @@ export const APP_SERVER_METHODS: { [M in AppServerMethod]: AppServerMethodDefini
   "diff/compute": { method: "diff/compute" },
   "syntax/analyze": { method: "syntax/analyze" },
   "syntax/selectionRanges": { method: "syntax/selectionRanges" },
+  "language/servers": { method: "language/servers" },
   "language/synchronize": { method: "language/synchronize" },
   "language/close": { method: "language/close" },
   "language/cancel": { method: "language/cancel" },

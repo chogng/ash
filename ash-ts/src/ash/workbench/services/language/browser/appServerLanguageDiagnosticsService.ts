@@ -1,6 +1,6 @@
 import { VSBuffer } from "../../../../base/common/buffer.js";
 import { Emitter } from "../../../../base/common/event.js";
-import { Disposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { Disposable, combinedDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
 import { type URI } from "../../../../base/common/uri.js";
 import { Position } from "../../../../editor/common/core/position.js";
 import { Range } from "../../../../editor/common/core/range.js";
@@ -14,7 +14,7 @@ import { type IWorkspaceContextService } from "../../../../platform/workspace/co
 import { type IDirPermissionsService } from "../../../../platform/dirPermissions/common/dirPermissionsService.js";
 import { type AppServerErrorName, type LanguageCodeActionDiagnosticDto, type LanguageDiagnosticsNotification } from "../../../../platform/app-server/common/generated/index.js";
 import { type ICodeIntelligenceDocumentService } from "../../codeIntelligence/common/codeIntelligenceDocumentService.js";
-import { APP_SERVER_WORKSPACE_DIAGNOSTIC_LANGUAGE_IDS, isAppServerLanguageId } from "./appServerLanguageSupport.js";
+import { AppServerLanguageSupport } from "./appServerLanguageSupport.js";
 import { resolveAppServerLanguageDirAccess } from "./appServerLanguageWorkspace.js";
 import { type ILanguageDiagnosticsService, type LanguageDiagnosticSnapshot } from "../common/languageDiagnosticsService.js";
 import { acquireJsonLanguageDiagnostics } from '../common/jsonLanguageDiagnostics.js';
@@ -54,21 +54,22 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 	private workspaceDiagnosticsQueued = false;
 	private permissionRefreshQueued = false;
 	private permissionRefreshGeneration = 0;
-	private languageAllowed: boolean;
+	private languageAllowed = false;
+	private support = new AppServerLanguageSupport();
 	private permissionQueue = Promise.resolve();
 	private alive = true;
 	readonly onDidChangeDiagnostics = this.changeEmitter.event;
 
 	constructor(private readonly api: ILanguageApi, events: IServerEventApi, private readonly workspace: IWorkspaceContextService, private readonly codeIntelligenceDocuments?: ICodeIntelligenceDocumentService, private readonly dirPermissions?: IDirPermissionsService) {
 		super();
-		this.languageAllowed = dirPermissions === undefined;
 		const subscription = events.subscribe(event => {
 			if (event.method === "language/diagnostics") this.acceptDiagnostics(event.params);
-			if (event.method === "config/changed") this.queuePermissionRefresh();
+			if (event.method === "config/changed" || event.method === "marketplace/changed") this.queuePermissionRefresh();
 		});
 		this._register(toDisposable(() => subscription.dispose()));
-		this._register(workspace.onDidChangeWorkspace(({ workspace: nextWorkspace }) => {
-			this.languageAllowed = this.dirPermissions === undefined;
+		this._register(workspace.onDidChangeWorkspace(() => {
+			this.languageAllowed = false;
+			this.support = new AppServerLanguageSupport();
 			for (const entry of this.entries.values()) {
 				if (entry.timer !== undefined) clearTimeout(entry.timer);
 				entry.timer = undefined;
@@ -76,7 +77,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 				entry.codeIntelligenceSynchronized = false;
 			}
 			this.clearServerDiagnostics();
-			if (nextWorkspace.folders.length > 0) this.queuePermissionRefresh();
+			this.queuePermissionRefresh();
 		}));
 		this._register(toDisposable(() => {
 			this.alive = false;
@@ -94,10 +95,9 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 
 	acquire(resource: URI, languageId: string, model: TextModel): IDisposable {
 		const jsonDiagnostics = acquireJsonLanguageDiagnostics(resource, languageId, model, () => this.createPublisher(resource));
-		if (jsonDiagnostics) return jsonDiagnostics;
-		if (!isAppServerLanguageId(languageId)) return toDisposable(() => undefined);
+
 		const target = this.workspaceTarget(resource);
-		if (!target || model.largeFile.tooLargeForSynchronization) return toDisposable(() => undefined);
+		if (!target || model.largeFile.tooLargeForSynchronization) return jsonDiagnostics ?? toDisposable(() => undefined);
 		const key = resource.toString();
 		const existing = this.entries.get(key);
 		if (existing) {
@@ -106,7 +106,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 			if (reopening) existing.modelListener = model.onDidChangeContent(() => this.schedule(existing, false));
 			existing.references += 1;
 			if (reopening) this.schedule(existing, true);
-			return toDisposable(() => this.release(key, existing));
+			return combinedDisposable(jsonDiagnostics ?? toDisposable(() => undefined), toDisposable(() => this.release(key, existing)));
 		}
 		const entry: LanguageDocumentEntry = {
 			resource,
@@ -129,7 +129,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		}
 		this.entries.set(key, entry);
 		this.schedule(entry, true);
-		return toDisposable(() => this.release(key, entry));
+		return combinedDisposable(jsonDiagnostics ?? toDisposable(() => undefined), toDisposable(() => this.release(key, entry)));
 	}
 
 	getDiagnostics(resource: URI): LanguageDiagnosticSnapshot | undefined {
@@ -184,24 +184,27 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 
 	private enqueueSynchronization(entry: LanguageDocumentEntry): void {
 		if (!this.languageAllowed) return;
+		const generation = this.permissionRefreshGeneration;
 		const snapshot = entry.model.createVersionedSnapshot();
 		const text = snapshot.getText();
 		if (VSBuffer.fromString(text).byteLength > MAX_LANGUAGE_DOCUMENT_BYTES) return;
 		entry.queue = entry.queue.catch(() => undefined).then(async () => {
-			if (!this.languageAllowed || entry.references === 0 || this.entries.get(entry.resource.toString()) !== entry) return;
+			if (!this.languageAllowed || generation !== this.permissionRefreshGeneration || entry.references === 0 || this.entries.get(entry.resource.toString()) !== entry) return;
 			const document = { ...(entry.wireWorkspaceFolderId ? { dirId: entry.wireWorkspaceFolderId } : {}), path: entry.path, languageId: entry.languageId, revision: snapshot.version, text };
 			let codeIntelligenceSynchronized = false;
 			await Promise.all([
-				this.api.synchronize({ document }),
+				this.support.supports(entry.dirId, entry.languageId) ? this.api.synchronize({ document }) : undefined,
 				this.canSynchronizeCodeIntelligence(entry)
 					? this.codeIntelligenceDocuments?.synchronize(document).then(() => { codeIntelligenceSynchronized = true; }).catch(reportCodeIntelligenceSynchronizationError)
 					: undefined,
 			]);
-			if (!this.languageAllowed || entry.references === 0 || this.entries.get(entry.resource.toString()) !== entry) return;
-			entry.languageSynchronized = true;
+			if (!this.languageAllowed || generation !== this.permissionRefreshGeneration || entry.references === 0 || this.entries.get(entry.resource.toString()) !== entry) return;
+			entry.languageSynchronized = this.support.supports(entry.dirId, entry.languageId);
 			entry.codeIntelligenceSynchronized ||= codeIntelligenceSynchronized;
+			if (!entry.languageSynchronized) return;
 			try {
 				const report = await this.api.documentDiagnostics({ document });
+				if (generation !== this.permissionRefreshGeneration) return;
 				if (report.kind === "full") this.acceptDiagnostics({ ...(entry.wireWorkspaceFolderId ? { dirId: entry.wireWorkspaceFolderId } : {}), path: entry.path, revision: report.revision, diagnostics: report.diagnostics });
 			} catch (error) {
 				if (!isUnsupportedDiagnosticPull(error)) throw error;
@@ -221,11 +224,12 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 
 	private async refreshWorkspaceDiagnostics(): Promise<void> {
 		if (!this.languageAllowed || !this.hasWorkspaceFolder()) return;
+		const generation = this.permissionRefreshGeneration;
 		const next = new Map<string, LanguageDiagnosticSnapshot>();
 		let supported = false;
 		for (const folder of this.workspace.getWorkspace().folders) {
-			for (const languageId of APP_SERVER_WORKSPACE_DIAGNOSTIC_LANGUAGE_IDS) {
-				if (!this.alive || !this.languageAllowed || !this.hasWorkspaceFolder()) return;
+			for (const languageId of this.support.workspaceLanguageIds(folder.id)) {
+				if (!this.alive || !this.languageAllowed || generation !== this.permissionRefreshGeneration || !this.hasWorkspaceFolder()) return;
 				try {
 					const report = await this.api.directoryDiagnostics({ ...(this.workspace.getWorkspace().folders.length > 1 ? { dirId: folder.id } : {}), languageId });
 					if (!report.supported) continue;
@@ -243,7 +247,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 				}
 			}
 		}
-		if (!this.alive) return;
+		if (!this.alive || generation !== this.permissionRefreshGeneration) return;
 		if (!supported) return;
 		const changed = new Map<string, URI>();
 		for (const key of this.workspaceServerKeys) {
@@ -271,6 +275,9 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 	private queuePermissionRefresh(): void {
 		if (!this.alive) return;
 		this.permissionRefreshGeneration += 1;
+		this.languageAllowed = false;
+		this.support = new AppServerLanguageSupport();
+		this.clearServerDiagnostics();
 		if (this.permissionRefreshQueued) return;
 		this.permissionRefreshQueued = true;
 		queueMicrotask(() => {
@@ -283,8 +290,11 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 	private async refreshDirAccess(generation: number): Promise<void> {
 		const access = await resolveAppServerLanguageDirAccess(this.workspace, this.dirPermissions);
 		if (!this.alive || generation !== this.permissionRefreshGeneration || this.workspace.getWorkspace().id !== access.workspaceId) return;
-		const changed = this.languageAllowed !== access.allowed;
+		const support = access.allowed ? await AppServerLanguageSupport.read(this.api, this.workspace) : new AppServerLanguageSupport();
+		if (!this.alive || generation !== this.permissionRefreshGeneration || this.workspace.getWorkspace().id !== access.workspaceId) return;
+		this.support = support;
 		this.languageAllowed = access.allowed;
+		this.clearServerDiagnostics();
 		if (!access.allowed) {
 			for (const entry of this.entries.values()) {
 				if (entry.timer !== undefined) clearTimeout(entry.timer);
@@ -292,10 +302,12 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 				entry.languageSynchronized = false;
 				entry.codeIntelligenceSynchronized = false;
 			}
-			if (changed) this.clearServerDiagnostics();
 			return;
 		}
-		if (changed) for (const entry of this.entries.values()) this.schedule(entry, true);
+		for (const entry of this.entries.values()) {
+			entry.languageSynchronized = false;
+			this.schedule(entry, true);
+		}
 		this.queueWorkspaceDiagnostics();
 	}
 
@@ -326,6 +338,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 	}
 
 	private acceptDiagnostics(notification: LanguageDiagnosticsNotification): void {
+		if (!this.alive || !this.languageAllowed) return;
 		const folders = this.workspace.getWorkspace().folders;
 		const folder = notification.dirId
 			? folders.find(folder => folder.id === notification.dirId)
@@ -335,7 +348,7 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		if (!resource) return;
 		const key = resource.toString();
 		const entry = this.entries.get(key);
-		if (!entry || notification.revision > entry.model.version) return;
+		if (!entry || entry.references === 0 || !this.support.supports(entry.dirId, entry.languageId) || notification.revision > entry.model.version) return;
 		const current = this.serverSnapshots.get(key);
 		if (current && current.revision > notification.revision) return;
 		const diagnostics = notification.diagnostics.flatMap(diagnostic => projectDiagnostic(diagnostic, entry.model));

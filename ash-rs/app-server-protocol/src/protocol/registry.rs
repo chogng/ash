@@ -908,6 +908,8 @@ use crate::protocol::language::LanguageSemanticTokenDto;
 use crate::protocol::language::LanguageSemanticTokensParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::language::LanguageSemanticTokensResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::language::LanguageServerDescriptorDto;
 use crate::protocol::language::LanguageServerMessageNotification;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::language::LanguageServerMessageSeverityDto;
@@ -917,6 +919,10 @@ use crate::protocol::language::LanguageServerProgressNotification;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::language::LanguageServerStateDto;
 use crate::protocol::language::LanguageServerStateNotification;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::language::LanguageServersParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::language::LanguageServersResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::language::LanguageSignatureHelpParams;
 #[cfg(any(test, feature = "export"))]
@@ -3045,6 +3051,11 @@ client_methods! {
         response: SyntaxSelectionRangesResult,
         serialization: GlobalSharedRead,
     },
+    LanguageServers => "language/servers" {
+        params: LanguageServersParams,
+        response: LanguageServersResult,
+        serialization: GlobalSharedRead,
+    },
     LanguageSynchronize => "language/synchronize" {
         params: LanguageSynchronizeParams,
         response: (),
@@ -4513,6 +4524,9 @@ typescript_bindings! {
     LanguagePositionDto,
     LanguageRangeDto,
     LanguageDocumentDto,
+    LanguageServersParams,
+    LanguageServersResult,
+    LanguageServerDescriptorDto,
     LanguageSynchronizeParams,
     LanguageCloseParams,
     LanguageOperationParams<()>,

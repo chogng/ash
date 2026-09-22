@@ -66,6 +66,9 @@ use ash_app_server_protocol::protocol::language::LanguageResolveCompletionParams
 use ash_app_server_protocol::protocol::language::LanguageSemanticTokenDto;
 use ash_app_server_protocol::protocol::language::LanguageSemanticTokensParams;
 use ash_app_server_protocol::protocol::language::LanguageSemanticTokensResult;
+use ash_app_server_protocol::protocol::language::LanguageServerDescriptorDto;
+use ash_app_server_protocol::protocol::language::LanguageServersParams;
+use ash_app_server_protocol::protocol::language::LanguageServersResult;
 use ash_app_server_protocol::protocol::language::LanguageSignatureHelpParams;
 use ash_app_server_protocol::protocol::language::LanguageSignatureHelpResult;
 use ash_app_server_protocol::protocol::language::LanguageSignatureHelpTriggerKindDto;
@@ -149,6 +152,44 @@ impl AppServer {
             status: self
                 .request_cancellations
                 .cancel_operation(connection.connection_id, params.operation_id),
+        })
+    }
+
+    pub(super) fn language_servers(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: LanguageServersParams = decode(params)?;
+        let dir = self
+            .language_dir_root_for(params.dir_id.as_deref(), params.session_directory.as_ref())?;
+        let snapshot = self
+            .config
+            .as_ref()
+            .ok_or_else(|| language_error(AppServerErrorName::LanguageServiceUnavailable))?
+            .read_snapshot()
+            .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
+        let runtime = self
+            .language
+            .lock()
+            .map_err(|_| language_error(AppServerErrorName::ServerOverloaded))?;
+        let definitions = runtime
+            .definitions(dir.canonical_path(), &snapshot.values.language_servers)
+            .map_err(|_| language_error(AppServerErrorName::LanguageServiceUnavailable))?;
+        result(&LanguageServersResult {
+            servers: definitions
+                .iter()
+                .map(|definition| LanguageServerDescriptorDto {
+                    id: definition.name().as_str().to_owned(),
+                    language_ids: definition
+                        .language_ids()
+                        .map(|language| {
+                            if language == "shellscript" {
+                                "shell"
+                            } else {
+                                language
+                            }
+                            .to_owned()
+                        })
+                        .collect(),
+                })
+                .collect(),
         })
     }
 

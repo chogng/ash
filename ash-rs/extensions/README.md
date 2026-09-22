@@ -64,6 +64,7 @@ package path，说明 ownership 已经漂移。
 每个可信根的直接子目录是一个 package，必须包含 UTF-8 JSON `package.json`。默认 manifest 的必填
 身份字段为 `name`、`publisher` 和 `version`，canonical ID 为 `publisher.name`。受信任 dynamic provider
 可以为 portable package family 提供 normalized declarative manifest；原始目录仍完整 snapshot/hash，
+App Server 为 Marketplace language 包从已验证 package identity 补齐 name、publisher、version；语言资源清单无需重复这些字段。
 normalized manifest 不能添加资源或改变 path containment。Descriptor 以 `manifest_sha256`
 校验暴露给客户端的 canonical `manifest_json` bytes，同时用确定性 `package_sha256` 绑定 package 内
 规范相对路径与全部原始 regular file bytes；digest 与 host absolute root 无关。

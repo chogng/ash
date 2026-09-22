@@ -43,8 +43,6 @@ use super::notification_queue::NotificationQueue;
 
 const LANGUAGE_MANIFEST: &[u8] = br#"{
   "name": "demo-language",
-  "publisher": "example",
-  "version": "1.0.0",
   "contributes": { "languages": [{ "id": "demo" }] }
 }"#;
 const SERVER_ENTRYPOINT: &[u8] = b"// demo language server\n";
@@ -127,6 +125,13 @@ fn installed_language_package_projects_assets_and_packaged_server() {
             .join("package.json")
             .is_file()
     );
+
+    let mut catalog = ExtensionCatalog::new(Vec::new()).with_dynamic_sources(Arc::new(
+        MarketplaceExtensionSourceProvider::new(manager.clone()),
+    ));
+    let catalog = catalog.list(ExtensionCatalogReload::Refresh);
+    assert!(catalog.diagnostics.is_empty(), "{:?}", catalog.diagnostics);
+    assert_eq!(catalog.extensions.len(), 1);
 
     let runtime = MarketplaceLanguageRuntime::new(
         manager.clone(),

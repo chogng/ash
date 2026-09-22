@@ -94,6 +94,14 @@ class FakeCodeIntelligenceDocuments implements ICodeIntelligenceDocumentService 
 }
 
 class FakeLanguageApi implements ILanguageApi {
+	availableServers = [
+		{ id: "typescript", languageIds: ["typescript", "typescriptreact", "javascript", "javascriptreact"] },
+		{ id: "rust", languageIds: ["rust"] },
+		{ id: "json", languageIds: ["json", "jsonc"] },
+		{ id: "shell", languageIds: ["shell"] },
+	];
+	async servers(): ReturnType<ILanguageApi["servers"]> { return { servers: this.availableServers }; }
+
 	readonly synchronized: Parameters<ILanguageApi["synchronize"]>[0][] = [];
 	readonly closed: Parameters<ILanguageApi["close"]>[0][] = [];
 	readonly diagnosticPulls: Parameters<ILanguageApi["documentDiagnostics"]>[0][] = [];
@@ -231,3 +239,49 @@ class FakeDirPermissionsService implements IDirPermissionsService {
 	async set(): ReturnType<IDirPermissionsService["set"]> { throw new Error("unused"); }
 	async forget(): ReturnType<IDirPermissionsService["forget"]> { throw new Error("unused"); }
 }
+
+test("installing a language server synchronizes an already open document and uninstall stops it", async () => {
+	const api = new FakeLanguageApi();
+	api.availableServers = [];
+	const events = new FakeServerEvents();
+	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("/project") });
+	using service = new AppServerLanguageDiagnosticsService(api, events, workspace);
+	using model = new TextModel("value = 1", { languageId: "python" });
+	using acquisition = service.acquire(URI.file("/project/main.py"), "python", model);
+	await tick();
+	assert.equal(api.synchronized.length, 0);
+	api.availableServers = [{ id: "pyright", languageIds: ["python"] }];
+	events.fire({ method: "marketplace/changed", params: { instanceId: "test", generation: 2 } });
+	await tick();
+	assert.equal(api.synchronized.length, 1);
+	assert.equal(api.synchronized[0]!.document.languageId, "python");
+	api.availableServers = [];
+	events.fire({ method: "marketplace/changed", params: { instanceId: "test", generation: 3 } });
+	await tick();
+	model.applyEdits([{ range: new Range(1, 1, 1, 1), text: "# comment\n" }]);
+	await new Promise(resolve => setTimeout(resolve, 200));
+	assert.equal(api.synchronized.length, 1);
+});
+
+
+test("uninstall discards pending workspace diagnostic reports and late server notifications", async () => {
+	const api = new FakeLanguageApi();
+	api.availableServers = [{ id: "pyright", languageIds: ["python"] }];
+	let complete!: (report: Awaited<ReturnType<ILanguageApi["directoryDiagnostics"]>>) => void;
+	api.directoryDiagnostics = () => new Promise(resolve => { complete = resolve; });
+	const events = new FakeServerEvents();
+	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("/project") });
+	using service = new AppServerLanguageDiagnosticsService(api, events, workspace);
+	await tick();
+	api.availableServers = [];
+	events.fire({ method: "marketplace/changed", params: { instanceId: "test", generation: 2 } });
+	await tick();
+	const diagnostic = { range: { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 1 } }, severity: "error" as const, message: "removed server", code: null, source: "pyright" };
+	complete({ supported: true, snapshots: [{ path: "main.py", diagnostics: [diagnostic] }] });
+	await tick();
+	assert.deepEqual(service.getAllDiagnostics(), []);
+	using model = new TextModel("x", { languageId: "python" });
+	using acquisition = service.acquire(URI.file("/project/main.py"), "python", model);
+	events.fire({ method: "language/diagnostics", params: { path: "main.py", revision: 1, diagnostics: [diagnostic] } });
+	assert.deepEqual(service.getAllDiagnostics(), []);
+});

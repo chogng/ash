@@ -1200,3 +1200,10 @@ Thread 保存选择策略；每次接受 Turn 时将解析后的顾问配置写�
 每次实际发起的顾问请求都有带 `toolCallId` 的 `ModelInvocationRecord`。顾问用量与参考费用计入 Turn、Thread 和目标预算；它不更新工作模型的上下文占用。供应商未返回用量时保留未知状态。恢复遵循既有 ToolCall 规则，已开始且结果未知的请求不自动重新计费调用。
 
 桌面端和 TUI 支持 `/advisor` 选择器、`/advisor provider/model`、`/advisor off`、`/advisor default`、`/advisor save` 和 `/advisor ask <question>`。`save` 将当前选择写为全局默认。所有设置与咨询使用上面的结构化请求。
+
+## 可用语言服务器
+
+`language/servers` 接收可选的 `dirId` 或 `sessionDirectory`，沿用语言操作的目录选择与执行权限校验。
+返回 `{ servers: [{ id, languageIds }] }`，只包含当前配置下可解析的服务器；无服务器时数组为空。
+该查询不启动服务器，也不暴露可执行文件路径。非法目录或权限不足按现有目录错误返回；配置或运行时不可用返回
+`LanguageServiceUnavailable`。客户端在 `config/changed`、`marketplace/changed` 和工作区变化后重新查询。

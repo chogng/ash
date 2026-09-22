@@ -204,6 +204,7 @@ class PackageTests(unittest.TestCase):
 
     BUILT_IN_EXTENSIONS = [
         "css",
+        "go",
         "html",
         "javascript",
         "json",
@@ -214,6 +215,7 @@ class PackageTests(unittest.TestCase):
         "sql",
         "theme-defaults",
         "theme-seti",
+        "toml",
         "typescript-basics",
         "xml",
         "yaml",

@@ -73,3 +73,9 @@ service. Active work-done progress is summarized through a transient statusbar
 entry, which is removed when no operation remains.
 
 TextMate is a separate provider under `workbench/services/textMate`. Without a registered grammar, models expose plain text; diagnostics come from registered language providers.
+
+The frontend reads `language/servers` for each workspace folder and registers the returned language
+IDs. `config/changed`, `marketplace/changed`, and workspace changes invalidate that snapshot.
+Installing a server adds its providers and synchronizes already open documents; removing it clears
+its registrations and diagnostics. Pending reports from an older snapshot are discarded. Workspace
+requests run once per server rather than once for every language supported by that server.

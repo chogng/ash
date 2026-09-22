@@ -29,6 +29,7 @@ test("App Server language providers map cross-resource locations without double-
 	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
+	await tick();
 	using model = new TextModel("value", { languageId: "typescript" });
 	const source = URI.file("C:\\project\\main file.ts");
 
@@ -54,6 +55,7 @@ test("App Server language providers route resources through their owning Workspa
 	});
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
+	await tick();
 	using model = new TextModel("value", { languageId: "typescript" });
 	const source = URI.file("C:\\backend\\main.ts");
 
@@ -69,10 +71,11 @@ test("App Server workspace symbols query every supported Code language and dedup
 	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
+	await tick();
 
 	const result = await getWorkspaceSymbols(languages.workspaceSymbolProvider.allNoModel(), "answer");
 
-	assert.deepEqual(api.workspaceSymbolLanguages.sort(), ["javascript", "javascriptreact", "json", "jsonc", "rust", "shell", "typescript", "typescriptreact"]);
+	assert.deepEqual(api.workspaceSymbolLanguages.sort(), ["json", "rust", "shell", "typescript"]);
 	assert.equal(result.length, 1);
 	assert.equal(result[0]!.resource.toString(), "file:///C:/project/src/with%20space.ts");
 });
@@ -82,6 +85,7 @@ test("App Server hover and completion providers keep revision, resource, and ins
 	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
+	await tick();
 	const resource = URI.file("C:\\project\\main.rs");
 	using model = new TextModel("pri", { languageId: "rust", resource });
 	using completions = new LanguageCompletionService(model, languages.completionProvider, { resource });
@@ -133,6 +137,7 @@ test("App Server rename and code actions preserve ordered workspace file operati
 	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
+	await tick();
 	using model = new TextModel("value", { languageId: "typescript" });
 	const resource = URI.file("C:\\project\\main.ts");
 	const signal = new AbortController().signal;
@@ -163,6 +168,7 @@ test("App Server formatting providers preserve snapshot, options, range, and edi
 	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
+	await tick();
 	using model = new TextModel("value", { languageId: "typescript", resource: URI.file("C:\\project\\main.ts") });
 	const options = { tabSize: 4, insertSpaces: false, trimTrailingWhitespace: true };
 	assert.deepEqual(languages.onTypeFormattingEditProvider.ordered(model), []);
@@ -189,6 +195,7 @@ test('App Server range formatting discards a response after the model changes', 
 		return { revision: params.document.revision, edits: [{ range: DTO_RANGE, newText: 'formatted' }] };
 	};
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
+	await tick();
 	using model = new TextModel('value', { languageId: 'typescript', resource: URI.file('/project/main.ts') });
 	const result = languages.documentRangeFormattingEditProvider.ordered(model)[0]!.provideDocumentRangeFormattingEdits(model, new Range(1, 1, 1, 6), { tabSize: 4, insertSpaces: true }, CancellationToken.None);
 	model.setValue('changed');
@@ -201,6 +208,7 @@ test("App Server language providers do not send documents above their transport 
 	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("C:\\project") });
 	const api = new FakeLanguageApi();
 	using providers = new AppServerLanguageProviders(languages, api, workspace);
+	await tick();
 	using model = new TextModel("界".repeat(Math.ceil((10 * 1024 * 1024 + 1) / 3)), { languageId: "typescript" });
 	const source = URI.file("C:\\project\\large.ts");
 
@@ -215,6 +223,7 @@ test("App Server language providers register only while directory permissions al
 	const events = new FakeServerEvents();
 	const permissions = new FakeDirPermissionsService("workspace", []);
 	using providers = new AppServerLanguageProviders(languages, api, workspace, { dirPermissions: permissions, events });
+	await tick();
 	using model = new TextModel("value", { languageId: "typescript" });
 	const source = URI.file("C:\\project\\main.ts");
 
@@ -252,6 +261,14 @@ class FakeDirPermissionsService implements IDirPermissionsService {
 async function tick(): Promise<void> { await new Promise(resolve => setTimeout(resolve, 0)); }
 
 class FakeLanguageApi implements ILanguageApi {
+	availableServers = [
+		{ id: "typescript", languageIds: ["typescript", "typescriptreact", "javascript", "javascriptreact"] },
+		{ id: "rust", languageIds: ["rust"] },
+		{ id: "json", languageIds: ["json", "jsonc"] },
+		{ id: "shell", languageIds: ["shell"] },
+	];
+	async servers(): ReturnType<ILanguageApi["servers"]> { return { servers: this.availableServers }; }
+
 	readonly locationRequests: Parameters<ILanguageApi["locations"]>[0][] = [];
 	readonly codeActionRequests: Parameters<ILanguageApi["codeActions"]>[0][] = [];
 	readonly workspaceSymbolLanguages: string[] = [];
@@ -347,3 +364,28 @@ class FakeLanguageApi implements ILanguageApi {
 		return { title: "Resolved", kind: null, isPreferred: false, disabledReason: null, edit: null, providerData: null };
 	}
 }
+
+test("installed language servers register new languages and uninstall removes their providers", async () => {
+	using languages = new LanguageFeaturesService();
+	using workspace = new WorkspaceContextService({ id: "workspace", uri: URI.file("/project") });
+	const api = new FakeLanguageApi();
+	api.availableServers = [];
+	const events = new FakeServerEvents();
+	using providers = new AppServerLanguageProviders(languages, api, workspace, { events });
+	using model = new TextModel("value", { languageId: "python" });
+	using navigation = createNavigationService(languages, model, URI.file("/project/main.py"));
+	await tick();
+	assert.deepEqual(await navigation.provideDefinition("python", new Position(1, 2)), []);
+
+	api.availableServers = [{ id: "pyright", languageIds: ["python"] }];
+	events.fire({ method: "marketplace/changed", params: { instanceId: "test", generation: 2 } });
+	await tick();
+	assert.equal((await navigation.provideDefinition("python", new Position(1, 2))).length, 1);
+	assert.equal(api.locationRequests[0]!.document.languageId, "python");
+
+	api.availableServers = [];
+	events.fire({ method: "marketplace/changed", params: { instanceId: "test", generation: 3 } });
+	await tick();
+	assert.deepEqual(await navigation.provideDefinition("python", new Position(1, 2)), []);
+	assert.equal(api.locationRequests.length, 1);
+});

@@ -15,7 +15,7 @@
 
 Ash 通过独立的 server provider、LSP manager 和 LSP 运行时连接现有语言服务器，而不是把语言分析逻辑
 写进编辑器。Desktop 已接入文档生命周期和事件循环；App Server Config authority 持久化
-三个内置服务器的 Disabled/Enabled 与可选绝对 executable path。Settings 中每个 server
+内置服务器的 Disabled/Enabled 与可选绝对 executable path。Settings 中每个 server
 都有独立的 Enable switch，默认关闭。未配置的 PATH server 默认 Disabled，不会自动拉起；用户显式开启后才从进程
 启动时冻结的 PATH 解析。Marketplace package 的安装确认同时写入 activation receipt，因此其 packaged
 route 默认启用；显式 Config `Disabled` 仍可关闭。缺失或不可执行时保持无语言服务器。
@@ -34,7 +34,7 @@ route 默认启用；显式 Config `Disabled` 仍可关闭。缺失或不可执�
 | 配置与发现 Rust/JSON/Shell server | ✅ 独立 Settings draft、revision-safe mode/path、resolver 校验与热重配 | 扩展安装 provider/UI |
 | 用共享 Node-compatible runtime 运行已验证 CSS package | ✅ Desktop 复用 Electron run-as-Node；Rust 同步 TUF catalog、校验兼容性，并从 activation receipt 自动重建 provider collection | 用户在 Settings/Languages 确认 exact signed package |
 | 意外退出、退避重启和 crash-loop | ✅ 断连 retirement、有限指数退避、状态展示和全文重放 | `ash-lsp-manager` + Desktop |
-| 安装、更新和选择其他 server | 部分具备；CSS 的 TUF download、确认、activation 与 provider collection 热重建已完成；其他 server 仍需 catalog adapter | Marketplace / catalog |
+| 安装、更新和移除 server | 按签名 catalog 的 languageServer/runtime 声明重建 provider；前端动态刷新语言列表和打开的文档 | Marketplace / App Server / Workbench |
 | 动态注册与 work-done progress | ✅ 按 server incarnation 隔离，静态与动态 capability 共同参与请求 gate | `ash-lsp` + `ash-lsp-manager` |
 | workspace edit | ✅ ordered workspace edit、Desktop transaction 与 Workbench preview 已接通 | `ash-lsp-manager` + Desktop Workbench |
 | LSP 3.18 新能力 | 尚未完成 | 后续按真实消费者逐项加入 |
@@ -57,6 +57,16 @@ flowchart LR
     Manager --> Host
     Host --> Editor["ash-editor / legacy editor runtime presentation"]
 ```
+
+## Marketplace 与内置扩展
+
+- `extensions/` 随产品提供语言识别、编辑配置、TextMate 语法和 snippets，离线可用。
+- Marketplace 的 language 包携带静态资源以及可选服务器；签名 catalog 的 `languageServer` 绑定 executable capability，`runtime` 声明启动方式。
+- App Server 从验证后的安装记录取得语言映射，不再从编辑器资源清单推导服务器路由。
+- `language/servers` 返回当前目录已启用且可解析的服务器及语言 ID，不启动进程；Workbench 据此注册 provider。
+- 安装、卸载、配置变化后重新读取列表，并为仍打开的文档重建同步。已卸载服务器的晚到诊断被丢弃。
+- 同 ID 的已安装 provider 负责该服务器；用户显式 executable 配置传给该 provider，避免再创建同名 PATH 实例。
+- Marketplace 当前带服务器的语言包为 CSS/Less/SCSS、JSON/JSONC、Python、JavaScript/TypeScript 和 YAML；其他语法包的服务器需另行提供。
 
 ## 1. 一次操作
 
@@ -162,7 +172,7 @@ App Server 拥有 Desktop 的 Environment-bound 目录访问与 LSP IPC boundary
 - Semantic Tokens、Document Symbols、CodeLens、Document Links、Document Colors、Folding 的 revision-bound facade 与 Desktop Editor provider；
 - document/workspace pull diagnostics 的 capability gate、report projection、App Server route 与 Desktop Problems 数据接入；
 - 多 definition target 使用现有 Peek 列表选择，单目标直接导航；
-- Rust、JSON/JSONC、Shell 三项 built-in resolver definitions；
+- Rust、JSON/JSONC、Shell、JavaScript/TypeScript 的内置 resolver definitions；
 - 通用 Marketplace Manager 的 TUF verified download、整包 digest 复核、immutable install/update/uninstall；
 - Marketplace Language asset 投影到共享 Extension catalog，Executable 按 signed language route 和
   `node`/`direct` runtime 组合 provider；

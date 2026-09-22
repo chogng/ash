@@ -464,20 +464,22 @@ impl AppServerLanguageRuntime {
         Ok(())
     }
 
-    fn restart(
-        &mut self,
+    pub(super) fn definitions(
+        &self,
         dir_root: &Path,
-        config_generation: u64,
         configuration: &LanguageServersConfig,
-    ) -> Result<(), String> {
-        self.shutdown_selected();
-        let resolver = LspServerResolver::new(preference(configuration, RUST_ANALYZER_SERVER_ID))
-            .with_json_language_server(preference(configuration, JSON_LANGUAGE_SERVER_ID))
-            .with_bash_language_server(preference(configuration, BASH_LANGUAGE_SERVER_ID))
-            .with_typescript_language_server(preference(
-                configuration,
-                TYPESCRIPT_LANGUAGE_SERVER_ID,
-            ));
+    ) -> Result<Vec<ash_lsp_manager::LanguageServerDefinition>, String> {
+        let builtin = |id| {
+            if self.providers.contains(id) {
+                LanguageServerPreference::disabled()
+            } else {
+                preference(configuration, id)
+            }
+        };
+        let resolver = LspServerResolver::new(builtin(RUST_ANALYZER_SERVER_ID))
+            .with_json_language_server(builtin(JSON_LANGUAGE_SERVER_ID))
+            .with_bash_language_server(builtin(BASH_LANGUAGE_SERVER_ID))
+            .with_typescript_language_server(builtin(TYPESCRIPT_LANGUAGE_SERVER_ID));
         let resolution = resolver
             .resolve(
                 &InstallContext::current(),
@@ -491,6 +493,17 @@ impl AppServerLanguageRuntime {
             configuration,
             dir_root,
         )?);
+        Ok(definitions)
+    }
+
+    fn restart(
+        &mut self,
+        dir_root: &Path,
+        config_generation: u64,
+        configuration: &LanguageServersConfig,
+    ) -> Result<(), String> {
+        self.shutdown_selected();
+        let definitions = self.definitions(dir_root, configuration)?;
         self.dir_state.language_servers = definitions
             .iter()
             .flat_map(|definition| {

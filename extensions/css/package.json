@@ -11,7 +11,9 @@
   "scripts": {
     "update-grammar": "node ../node_modules/vscode-grammar-updater/bin microsoft/vscode-css grammars/css.cson ./syntaxes/css.tmLanguage.json"
   },
-  "categories": ["Programming Languages"],
+  "categories": [
+    "Programming Languages"
+  ],
   "contributes": {
     "languages": [
       {
@@ -27,6 +29,28 @@
           "text/css"
         ],
         "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "less",
+        "aliases": [
+          "Less",
+          "less"
+        ],
+        "extensions": [
+          ".less"
+        ],
+        "configuration": "./less-language-configuration.json"
+      },
+      {
+        "id": "scss",
+        "aliases": [
+          "SCSS",
+          "scss"
+        ],
+        "extensions": [
+          ".scss"
+        ],
+        "configuration": "./scss-language-configuration.json"
       }
     ],
     "grammars": [
@@ -37,6 +61,30 @@
         "tokenTypes": {
           "meta.function.url string.quoted": "other"
         }
+      },
+      {
+        "language": "less",
+        "scopeName": "source.css.less",
+        "path": "./syntaxes/less.tmLanguage.json"
+      },
+      {
+        "language": "scss",
+        "scopeName": "source.css.scss",
+        "path": "./syntaxes/scss.tmLanguage.json"
+      },
+      {
+        "scopeName": "source.sassdoc",
+        "path": "./syntaxes/sassdoc.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "less",
+        "path": "./snippets/css.json"
+      },
+      {
+        "language": "scss",
+        "path": "./snippets/css.json"
       }
     ]
   },

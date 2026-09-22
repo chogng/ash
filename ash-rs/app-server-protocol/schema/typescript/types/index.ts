@@ -514,6 +514,7 @@ export type { LanguageSemanticTokensParams } from './LanguageSemanticTokensParam
 export type { LanguageSemanticTokensResult } from './LanguageSemanticTokensResult.js';
 export type { LanguageServerConfigDto } from './LanguageServerConfigDto.js';
 export type { LanguageServerConfigureParams } from './LanguageServerConfigureParams.js';
+export type { LanguageServerDescriptorDto } from './LanguageServerDescriptorDto.js';
 export type { LanguageServerMessageNotification } from './LanguageServerMessageNotification.js';
 export type { LanguageServerMessageSeverityDto } from './LanguageServerMessageSeverityDto.js';
 export type { LanguageServerMessageSourceDto } from './LanguageServerMessageSourceDto.js';
@@ -522,6 +523,8 @@ export type { LanguageServerProgressNotification } from './LanguageServerProgres
 export type { LanguageServerRemoveParams } from './LanguageServerRemoveParams.js';
 export type { LanguageServerStateDto } from './LanguageServerStateDto.js';
 export type { LanguageServerStateNotification } from './LanguageServerStateNotification.js';
+export type { LanguageServersParams } from './LanguageServersParams.js';
+export type { LanguageServersResult } from './LanguageServersResult.js';
 export type { LanguageSignatureHelpParams } from './LanguageSignatureHelpParams.js';
 export type { LanguageSignatureHelpResult } from './LanguageSignatureHelpResult.js';
 export type { LanguageSignatureHelpTriggerKindDto } from './LanguageSignatureHelpTriggerKindDto.js';

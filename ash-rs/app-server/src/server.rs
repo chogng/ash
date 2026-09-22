@@ -2308,6 +2308,7 @@ impl AppServer {
             Some(ClientMethod::SyntaxSelectionRanges) => {
                 self.syntax_selection_ranges(&request.params)
             }
+            Some(ClientMethod::LanguageServers) => self.language_servers(&request.params),
             Some(ClientMethod::LanguageSynchronize) => {
                 self.language_synchronize(&request.params, cancellation)
             }

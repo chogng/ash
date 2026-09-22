@@ -43,8 +43,11 @@ impl DynamicExtensionSourceProvider for MarketplaceExtensionSourceProvider {
             .local_capability_sources(CapabilityKind::Language)
             .map_err(|error| error.to_string())?
             .into_iter()
-            .map(|source| (source, None))
-            .collect::<Vec<_>>();
+            .map(|source| {
+                let manifest = normalized_language_manifest(&source)?;
+                Ok((source, Some(manifest)))
+            })
+            .collect::<Result<Vec<_>, String>>()?;
         for source in self
             .manager
             .local_capability_sources(CapabilityKind::Theme)
@@ -99,6 +102,26 @@ impl DynamicExtensionSourceProvider for MarketplaceExtensionSourceProvider {
             packages,
         })
     }
+}
+
+fn normalized_language_manifest(source: &LocalCapabilitySource) -> Result<String, String> {
+    let path = source.host_path().join("package.json");
+    let metadata = std::fs::symlink_metadata(&path)
+        .map_err(|_| "Marketplace language manifest is unavailable".to_string())?;
+    if !metadata.is_file() || metadata.len() > 4 * 1024 * 1024 {
+        return Err("Marketplace language manifest exceeds its file contract".into());
+    }
+    let mut manifest: serde_json::Map<String, serde_json::Value> = serde_json::from_slice(
+        &std::fs::read(path)
+            .map_err(|_| "Marketplace language manifest is unavailable".to_string())?,
+    )
+    .map_err(|_| "Marketplace language manifest is invalid".to_string())?;
+    let plugin = ash_plugin::PluginId::parse(&source.package().id)
+        .map_err(|_| "Marketplace language package identity is invalid".to_string())?;
+    manifest.insert("name".into(), plugin.plugin_name().into());
+    manifest.insert("publisher".into(), plugin.marketplace().as_str().into());
+    manifest.insert("version".into(), source.package().version.clone().into());
+    serde_json::to_string(&manifest).map_err(|error| error.to_string())
 }
 
 fn normalized_theme_manifest(source: &LocalCapabilitySource) -> Result<String, String> {
