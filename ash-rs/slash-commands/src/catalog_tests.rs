@@ -15,7 +15,9 @@ fn command(name: &str) -> SlashCommandDefinition {
 fn default_catalog_advertises_product_commands() {
     let catalog = SlashCommandCatalog::default();
 
-    assert_eq!(catalog.commands().len(), 3);
+    assert_eq!(catalog.commands().len(), 5);
+    assert_eq!(catalog.origin("team"), Some(SlashCommandOrigin::Server));
+    assert_eq!(catalog.origin("develop"), Some(SlashCommandOrigin::Server));
     assert_eq!(catalog.commands()[0].name, "advisor");
     assert_eq!(
         catalog.commands()[0].argument_mode,

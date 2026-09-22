@@ -1531,6 +1531,13 @@ pub fn open_local_app_server_with_codebase_providers(
             .with_local_dir_services(&database_path, &options.profile_root, &dir_root)
             .map_err(OpenAppServerError)?;
     }
+    server = server.with_workflow_store(Arc::new(
+        match options.session_state_mode {
+            SessionStateMode::Durable => workflows::Store::open(&database_path),
+            SessionStateMode::Ephemeral => workflows::Store::in_memory(),
+        }
+        .map_err(open_error)?,
+    ));
     server.bind_session_extensions().map_err(open_error)?;
     server
         .resume_recovered_agent_coordinations()

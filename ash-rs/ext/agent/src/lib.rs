@@ -1,8 +1,10 @@
 //! Agent selection and execution over the shared Thread owner.
 mod selection;
 mod tool;
+pub use selection::AgentLaunch;
 pub use selection::ResolvedAgentSelection;
 pub use selection::resolve_agent_selection;
+pub use selection::resolve_launched_agent;
 pub use selection::resolve_root_agent;
 pub use tool::MultiAgentToolService;
 pub use tool::SEND_AGENT_MESSAGE_TOOL_NAME;

@@ -275,6 +275,9 @@ impl AppServer {
                 .delete_session(&session_id)
                 .map_err(|error| core_error(core_api::CoreError::Execution(error.to_string())))?;
         }
+        self.workflows
+            .delete_session(&session_id)
+            .map_err(core_error)?;
         self.agent_extensions
             .state()
             .remove(&ash_extension_api::ExtensionScope::Session(

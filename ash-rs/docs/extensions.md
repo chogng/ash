@@ -9,6 +9,7 @@ Agent 能力由 `ext/` 中的 crate 拥有；Core 提交 Thread/Turn 事实并�
 | `ext/extension-api` | 按身份注册贡献、提示与上下文、续跑、工具与 MCP 生命周期、审核接口、Session/Thread/Turn 临时状态 |
 | `ext/agent` | 根 Agent 与子 Agent 的角色选择、能力范围、工具定义、启动和等待编排 |
 | `ext/agent-message-board` | 同一 Agent 树共享的频道、讨论、回复、订阅、持久化与当前 Turn 通知 |
+| `ext/workflows` | `/team`、`/develop` 的命令、阶段、版本、接受、失效与恢复；通过 Core 启动专用角色 |
 | `ext/goal` | Goal 工具、目标提示、续跑条件与重启恢复；通过 Core 的原子入口创建 Turn |
 | `ext/queue` | 消息持久化、FIFO、领取租约、交付结果、空闲唤醒与队列展示 |
 | `ext/guardian-reviewer` | 严格审核协议、结果绑定、并发上限、异步任务、超时、取消和暂时性失败重试 |

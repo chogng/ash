@@ -650,6 +650,7 @@ dependencies = [
  "ash-utils-sleep-inhibitor",
  "ash-voice-host",
  "ash-web-search-extension",
+ "ash-workflows",
  "ash-xai",
  "base64 0.22.1",
  "dunce",
@@ -3040,6 +3041,24 @@ dependencies = [
  "tar",
  "tempfile",
  "zui",
+]
+
+[[package]]
+name = "ash-workflows"
+version = "0.1.0"
+dependencies = [
+ "ash-agent",
+ "ash-agent-roles",
+ "ash-core",
+ "ash-core-api",
+ "ash-prompts",
+ "ash-protocol",
+ "ash-state",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
 ]
 
 [[package]]

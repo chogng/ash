@@ -1,6 +1,16 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
+/// Product entry points allowed to launch a packaged role.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RoleLaunch {
+    #[default]
+    Any,
+    Workflow,
+    Delegation,
+}
+
 /// Origin of one validated Agent role.
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum AgentRoleSource {
@@ -11,6 +21,9 @@ pub enum AgentRoleSource {
 /// One validated Agent execution role.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AgentRole {
+    launch: RoleLaunch,
+    callers: Vec<String>,
+    delegates: Option<Vec<String>>,
     name: String,
     description: String,
     source: AgentRoleSource,
@@ -31,6 +44,9 @@ pub struct AgentRole {
 }
 
 pub(crate) struct AgentRoleFields {
+    pub(crate) launch: RoleLaunch,
+    pub(crate) callers: Vec<String>,
+    pub(crate) delegates: Option<Vec<String>>,
     pub(crate) name: String,
     pub(crate) description: String,
     pub(crate) source: AgentRoleSource,
@@ -53,6 +69,9 @@ pub(crate) struct AgentRoleFields {
 impl AgentRole {
     pub(crate) fn new(fields: AgentRoleFields) -> Self {
         Self {
+            launch: fields.launch,
+            callers: fields.callers,
+            delegates: fields.delegates,
             name: fields.name,
             description: fields.description,
             source: fields.source,
@@ -75,6 +94,18 @@ impl AgentRole {
 
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    pub fn launch(&self) -> RoleLaunch {
+        self.launch
+    }
+
+    pub fn callers(&self) -> &[String] {
+        &self.callers
+    }
+
+    pub fn delegates(&self) -> Option<&[String]> {
+        self.delegates.as_deref()
     }
 
     pub fn description(&self) -> &str {

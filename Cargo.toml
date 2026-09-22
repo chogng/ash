@@ -11,6 +11,7 @@ members = [
     "ash-rs/ext/advisor",
     "ash-rs/ext/agent",
     "ash-rs/ext/agent-message-board",
+    "ash-rs/ext/workflows",
     "ash-rs/ext/guardian-v2",
     "ash-rs/memories",
     "ash-rs/ext/items",
@@ -261,6 +262,7 @@ goal = { package = "ash-goal", path = "ash-rs/ext/goal" }
 advisor = { package = "ash-advisor", path = "ash-rs/ext/advisor" }
 agent = { package = "ash-agent", path = "ash-rs/ext/agent" }
 agent-message-board = { package = "ash-agent-message-board", path = "ash-rs/ext/agent-message-board" }
+workflows = { package = "ash-workflows", path = "ash-rs/ext/workflows" }
 caseless = "0.2.2"
 guardian-v2 = { package = "ash-guardian-v2", path = "ash-rs/ext/guardian-v2" }
 memories = { package = "ash-memories", path = "ash-rs/memories" }

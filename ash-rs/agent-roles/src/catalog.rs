@@ -367,6 +367,9 @@ fn load_entry(
         return None;
     }
     Some(AgentRole::new(AgentRoleFields {
+        launch: crate::RoleLaunch::Any,
+        callers: Vec::new(),
+        delegates: None,
         name: frontmatter.name,
         description,
         source: source.clone(),

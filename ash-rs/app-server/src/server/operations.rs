@@ -87,6 +87,7 @@ use std::time::Duration;
 pub(super) enum TurnInstructionSelection {
     Agent,
     Product(ash_protocol::TurnInstructions),
+    Workflow(workflows::Command),
 }
 
 fn init_prompt() -> ash_protocol::TurnInstructions {
@@ -1025,7 +1026,19 @@ impl AppServer {
             None => TurnToolModeSelection::ConfiguredDefault,
         };
         let mut input = self.normalize_input(&mutation.session_id, input)?;
-        let selection = self.turn_instruction_selection(&mut input);
+        let command = input
+            .iter()
+            .find_map(|item| match item {
+                UserInput::Text { text } => Some(workflows::Command::parse(text)),
+                _ => None,
+            })
+            .transpose()
+            .map_err(core_error)?
+            .flatten();
+        let selection = match command {
+            Some(command) => TurnInstructionSelection::Workflow(command),
+            None => self.turn_instruction_selection(&mut input),
+        };
         self.start_agent_turn_request(
             mutation,
             thread_id,
@@ -1112,18 +1125,19 @@ impl AppServer {
                 None => ash_protocol::ToolMode::Direct,
             },
         };
-        if let Some(replayed) = self
-            .agent_runtime()
-            .replay_turn(
-                &thread_id,
-                &mutation.command_id,
-                core_api::SubmittedCommand::Turn {
-                    kind,
-                    tool_mode,
-                    input: &input,
-                },
-            )
-            .map_err(core_error)?
+        if !matches!(selection, TurnInstructionSelection::Workflow(_))
+            && let Some(replayed) = self
+                .agent_runtime()
+                .replay_turn(
+                    &thread_id,
+                    &mutation.command_id,
+                    core_api::SubmittedCommand::Turn {
+                        kind,
+                        tool_mode,
+                        input: &input,
+                    },
+                )
+                .map_err(core_error)?
         {
             return Ok(turn_start_result(replayed));
         }
@@ -1159,11 +1173,12 @@ impl AppServer {
             .filter(|guidance| guidance.model() == model.as_ref())
             .cloned()
             .unwrap_or_else(|| self.model_instructions.resolve(model.as_ref()));
-        let instructions = match selection {
-            TurnInstructionSelection::Agent => base,
-            TurnInstructionSelection::Product(prompt) => prompt.with_shared(&base),
-        }
-        .with_model_guidance(guidance);
+        let (workflow, instructions) = match selection {
+            TurnInstructionSelection::Agent => (None, base),
+            TurnInstructionSelection::Product(prompt) => (None, prompt.with_shared(&base)),
+            TurnInstructionSelection::Workflow(command) => (Some(command), base),
+        };
+        let instructions = instructions.with_model_guidance(guidance);
         let advisor_default = self
             .config
             .as_ref()
@@ -1183,26 +1198,41 @@ impl AppServer {
             .env_runtime_gate
             .lock()
             .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?;
+        let is_workflow = workflow.is_some();
+        let mut workflow_child = None;
         let receipt = self
             .browser_host
             .submit_turn(&thread_id, mutation.connection_id, || {
-                self.agent_runtime().submit_turn(
-                    &thread_id,
-                    core_api::SubmitTurnRequest {
-                        command_id: mutation.command_id,
-                        expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
-                        model,
-                        advisor,
-                        kind,
-                        instructions,
-                        approval_mode,
-                        tool_mode,
-                        activated_skills,
-                        input,
-                    },
-                )
+                let request = core_api::SubmitTurnRequest {
+                    command_id: mutation.command_id,
+                    expected_sequence: SequenceExpectation::Exact(mutation.expected_sequence),
+                    model,
+                    advisor,
+                    kind,
+                    instructions,
+                    approval_mode,
+                    tool_mode,
+                    activated_skills,
+                    input,
+                };
+                if let Some(command) = workflow {
+                    let result = self.submit_workflow(&thread_id, command, request)?;
+                    workflow_child = result.child;
+                    Ok(core_api::TurnReceipt {
+                        turn_id: result.turn_id,
+                        sequence: result.sequence,
+                    })
+                } else {
+                    self.agent_runtime().submit_turn(&thread_id, request)
+                }
             })
             .map_err(core_error)?;
+        if is_workflow {
+            self.notify_thread_updates(&thread_id, thread_before.sequence)?;
+            if let Some(child) = workflow_child {
+                self.notify_thread_updates(&child, 0)?;
+            }
+        }
         Ok(turn_start_result(receipt))
     }
 

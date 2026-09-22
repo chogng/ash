@@ -5,7 +5,7 @@ fn built_in_roles_are_packaged_as_validated_definitions() {
     let snapshot = built_in_roles();
 
     assert!(snapshot.diagnostics().is_empty());
-    assert_eq!(snapshot.entries().len(), 1);
+    assert_eq!(snapshot.entries().len(), 12);
     let role = snapshot
         .entries()
         .iter()

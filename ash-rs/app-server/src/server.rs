@@ -245,6 +245,7 @@ pub struct AppServer {
     agent_extensions: Arc<ExtensionRegistry>,
     notes: Option<Arc<history_notes::NotesStore>>,
     message_board: Option<Arc<agent_message_board::Store>>,
+    workflows: Arc<workflows::Store>,
     pub(super) skills: Option<Arc<SkillRuntime>>,
     _skill_watcher: Option<SkillWatcher>,
     _config_watcher: Option<config_runtime::ConfigWatcher>,
@@ -581,6 +582,7 @@ impl AppServer {
             agent_extensions,
             notes: None,
             message_board: None,
+            workflows: Arc::new(workflows::Store::in_memory().expect("new workflow store")),
             skills: None,
             _skill_watcher: None,
             _config_watcher: None,
@@ -1563,6 +1565,46 @@ impl AppServer {
         &self.threads
     }
 
+    pub fn with_workflow_store(mut self, store: Arc<workflows::Store>) -> Self {
+        self.workflows = store;
+        self
+    }
+
+    fn workflow_runtime(&self) -> workflows::Runtime<'_> {
+        workflows::Runtime {
+            store: &self.workflows,
+            threads: &self.threads,
+            agents: &self.multi_agent,
+            backend: self.turn_backend.as_ref(),
+        }
+    }
+
+    pub(super) fn submit_workflow(
+        &self,
+        thread: &ash_protocol::ThreadId,
+        command: workflows::Command,
+        request: core_api::SubmitTurnRequest,
+    ) -> Result<workflows::Receipt, CoreError> {
+        self.workflow_runtime().execute(
+            thread,
+            command,
+            ash_core::StartTurnRequest {
+                command_id: request.command_id,
+                expected_sequence: request.expected_sequence,
+                model: request.model,
+                advisor: request.advisor,
+                kind: request.kind,
+                instructions: request.instructions,
+                policy_revision: self.turn_executor_snapshot().policy_revision(),
+                approval_mode: request.approval_mode,
+                tool_mode: request.tool_mode,
+                tool_profile: Some(self.agent_runtime().tool_profile()?),
+                activated_skills: request.activated_skills,
+                input: request.input,
+            },
+        )
+    }
+
     pub(crate) fn bind_session_extensions(&self) -> Result<(), CoreError> {
         for session_id in self.session_ids()? {
             self.bind_session_runtime(&session_id)?;
@@ -1572,7 +1614,8 @@ impl AppServer {
 
     /// Reconciles durable Agent spawn/delivery sagas and starts newly materialized child Turns.
     pub fn resume_recovered_agent_coordinations(&self) -> Result<usize, CoreError> {
-        self.agent_runtime().recover_agents()
+        let workflows = self.workflow_runtime().recover()?;
+        Ok(workflows + self.agent_runtime().recover_agents()?)
     }
 
     /// Re-enqueues durable running Tool continuations after host services are installed.

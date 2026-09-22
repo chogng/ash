@@ -15,3 +15,4 @@ pub use model::AgentRoleCatalogSnapshot;
 pub use model::AgentRoleDiagnostic;
 pub use model::AgentRoleDiagnosticCode;
 pub use model::AgentRoleSource;
+pub use model::RoleLaunch;

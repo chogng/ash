@@ -15,6 +15,11 @@ const ISSUE: &str = include_str!("../assets/builtins/issue.toml");
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct BuiltInRole {
+    #[serde(default)]
+    launch: crate::RoleLaunch,
+    #[serde(default)]
+    callers: Vec<String>,
+    delegates: Option<Vec<String>>,
     name: String,
     version: u64,
     description: String,
@@ -42,7 +47,53 @@ pub fn built_in_roles() -> Arc<AgentRoleCatalogSnapshot> {
     static ROLES: LazyLock<Arc<AgentRoleCatalogSnapshot>> = LazyLock::new(|| {
         Arc::new(AgentRoleCatalogSnapshot::new(
             1,
-            vec![parse(ISSUE_PATH, ISSUE)],
+            vec![
+                parse(ISSUE_PATH, ISSUE),
+                parse(
+                    "team-coordinator.toml",
+                    include_str!("../assets/builtins/team-coordinator.toml"),
+                ),
+                parse(
+                    "team-implementer.toml",
+                    include_str!("../assets/builtins/team-implementer.toml"),
+                ),
+                parse(
+                    "team-reviewer.toml",
+                    include_str!("../assets/builtins/team-reviewer.toml"),
+                ),
+                parse(
+                    "develop-intent.toml",
+                    include_str!("../assets/builtins/develop-intent.toml"),
+                ),
+                parse(
+                    "develop-spec.toml",
+                    include_str!("../assets/builtins/develop-spec.toml"),
+                ),
+                parse(
+                    "develop-plan.toml",
+                    include_str!("../assets/builtins/develop-plan.toml"),
+                ),
+                parse(
+                    "develop-implementer.toml",
+                    include_str!("../assets/builtins/develop-implementer.toml"),
+                ),
+                parse(
+                    "develop-acceptance.toml",
+                    include_str!("../assets/builtins/develop-acceptance.toml"),
+                ),
+                parse(
+                    "intent-project-investigator.toml",
+                    include_str!("../assets/builtins/intent-project-investigator.toml"),
+                ),
+                parse(
+                    "intent-researcher.toml",
+                    include_str!("../assets/builtins/intent-researcher.toml"),
+                ),
+                parse(
+                    "intent-conflict-reviewer.toml",
+                    include_str!("../assets/builtins/intent-conflict-reviewer.toml"),
+                ),
+            ],
             Vec::new(),
         ))
     });
@@ -56,6 +107,8 @@ fn parse(path: &str, contents: &str) -> AgentRole {
     assert!(!role.description.trim().is_empty());
     assert!(!role.developer_instructions.trim().is_empty());
     assert!(role.version > 0);
+    assert!(valid_references(&role.callers));
+    assert!(role.delegates.as_deref().is_none_or(valid_references));
     assert!(
         role.model
             .as_deref()
@@ -102,6 +155,9 @@ fn parse(path: &str, contents: &str) -> AgentRole {
             .all(|required| skills.contains(required))
     }));
     AgentRole::new(AgentRoleFields {
+        launch: role.launch,
+        callers: role.callers,
+        delegates: role.delegates,
         name: role.name,
         description: role.description.trim().to_owned(),
         source: AgentRoleSource::BuiltIn,

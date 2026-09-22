@@ -22,6 +22,13 @@ pub struct ResolvedAgentSelection {
     pub capability_scope: AgentCapabilityScope,
 }
 
+/// Trusted entry point for role selection, supplied by the host rather than model arguments.
+pub enum AgentLaunch<'a> {
+    Session,
+    Workflow,
+    Delegation(Option<&'a AgentRoleSnapshot>),
+}
+
 pub fn resolve_agent_selection(
     requested: &protocol::AgentRoleSelection,
     current_model: Option<&ModelRef>,
@@ -30,6 +37,27 @@ pub fn resolve_agent_selection(
     agents: &[std::sync::Arc<AgentRoleCatalogSnapshot>],
     instructions: &[std::sync::Arc<InstructionCatalogSnapshot>],
 ) -> Result<ResolvedAgentSelection, CoreError> {
+    resolve_launched_agent(
+        requested,
+        current_model,
+        tool_ceiling,
+        active_skills,
+        agents,
+        instructions,
+        AgentLaunch::Session,
+    )
+}
+
+pub fn resolve_launched_agent(
+    requested: &protocol::AgentRoleSelection,
+    current_model: Option<&ModelRef>,
+    tool_ceiling: Vec<ToolName>,
+    active_skills: &[FrozenSkillActivation],
+    agents: &[std::sync::Arc<AgentRoleCatalogSnapshot>],
+    instructions: &[std::sync::Arc<InstructionCatalogSnapshot>],
+    launch: AgentLaunch<'_>,
+) -> Result<ResolvedAgentSelection, CoreError> {
+    validate_launch(requested, &launch, agents)?;
     let Some((definition, catalog_generation)) = select_definition(requested, agents)? else {
         return Ok(ResolvedAgentSelection {
             role: None,
@@ -77,6 +105,64 @@ pub fn resolve_agent_selection(
             skills,
         },
     })
+}
+
+fn validate_launch(
+    requested: &protocol::AgentRoleSelection,
+    launch: &AgentLaunch<'_>,
+    catalogs: &[std::sync::Arc<AgentRoleCatalogSnapshot>],
+) -> Result<(), CoreError> {
+    let parent = match launch {
+        AgentLaunch::Delegation(Some(parent)) => parent.definition.as_ref(),
+        _ => None,
+    };
+    let parent_role = parent
+        .filter(|parent| parent.source == AgentRoleSource::BuiltIn)
+        .map(|parent| {
+            let selection = protocol::AgentRoleSelection::Exact {
+                source: parent.source.clone(),
+                name: parent.name.clone(),
+            };
+            let (role, _) = select_definition(&selection, catalogs)?
+                .ok_or_else(|| CoreError::Policy("Parent role is unavailable".into()))?;
+            if role.content_digest() != parent.content_digest.as_str() {
+                return Err(CoreError::Policy(
+                    "Parent role changed; start a new Agent before delegating".into(),
+                ));
+            }
+            Ok(role)
+        })
+        .transpose()?;
+    if let Some(delegates) = parent_role.and_then(AgentRole::delegates) {
+        if !matches!(requested, protocol::AgentRoleSelection::Exact { source: AgentRoleSource::BuiltIn, name } if delegates.contains(name))
+        {
+            return Err(CoreError::Policy(
+                "The parent role cannot launch this Agent".into(),
+            ));
+        }
+    }
+    let Some((role, _)) = select_definition(requested, catalogs)? else {
+        return Ok(());
+    };
+    let caller_allowed =
+        parent_role.is_some_and(|parent| role.callers().iter().any(|name| name == parent.name()));
+    let allowed = match role.launch() {
+        agent_roles::RoleLaunch::Any => true,
+        agent_roles::RoleLaunch::Workflow => {
+            matches!(launch, AgentLaunch::Workflow) || caller_allowed
+        }
+        agent_roles::RoleLaunch::Delegation => {
+            matches!(launch, AgentLaunch::Delegation(_))
+                && (role.callers().is_empty() || caller_allowed)
+        }
+    };
+    if !allowed {
+        return Err(CoreError::Policy(format!(
+            "Agent '{}' is unavailable from this launch entry point",
+            role.name()
+        )));
+    }
+    Ok(())
 }
 
 fn resolve_tools(

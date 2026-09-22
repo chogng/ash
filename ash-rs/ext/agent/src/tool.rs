@@ -45,7 +45,6 @@ use std::time::Duration;
 use std::time::Instant;
 
 use crate::ResolvedAgentSelection;
-use crate::resolve_agent_selection;
 
 pub const SPAWN_AGENT_TOOL_NAME: &str = "spawn_agent";
 pub const SEND_AGENT_MESSAGE_TOOL_NAME: &str = "send_agent_message";
@@ -235,13 +234,19 @@ impl MultiAgentToolService {
             .as_ref()
             .map(|customizations| customizations.instruction_snapshots_for(identity.session_id()))
             .unwrap_or_default();
-        resolve_agent_selection(
+        let parent = self.threads.read_thread(identity.thread_id())?;
+        crate::resolve_launched_agent(
             &arguments.agent,
             identity.model(),
             facts.delegation_tools().cloned().collect(),
             facts.activated_skills(),
             &agent_snapshots,
             &instruction_snapshots,
+            crate::AgentLaunch::Delegation(
+                parent
+                    .agent_configuration()
+                    .and_then(|agent| agent.role.as_ref()),
+            ),
         )
     }
 
@@ -693,6 +698,7 @@ fn spawn_definition() -> ToolDefinition {
     let built_in_roles = agent_roles::built_in_roles()
         .entries()
         .iter()
+        .filter(|role| role.launch() == agent_roles::RoleLaunch::Any)
         .map(|role| format!("{}: {}", role.name(), role.description()))
         .collect::<Vec<_>>()
         .join("\n");

@@ -193,7 +193,7 @@ Agent 只声明默认值、覆盖权限、替换范围和能力要求。App Serv
 
 ## 5. 内置 Agent 清单
 
-普通会话与普通 worker 都选择 `Default`，不通过任务关键词寻找专用 Role，也不继承父 Role 的职责。当前 catalog 只打包 `issue.toml`，`general.toml` 已删除；根角色通过 `session/create.agent` 选择。以下清单维护专用 Role；所有内置 Role 默认使用本次启动已经解析的模型调用配置，表格只列不同于通用规则的任务、上下文、工具和能力边界。
+普通会话与普通 worker 都选择 `Default`，不通过任务关键词寻找专用 Role，也不继承父 Role 的职责。当前 catalog 打包 `issue`、三个 Team 角色、五个 Develop 阶段角色及三个 Intent 私有角色；根角色通过 `session/create.agent` 选择，工作流角色只能经过其运行入口。以下普通可选清单目前只有 `issue` 已上线，其余普通角色仍为设计；阶段表中的完整能力目标与当前工具边界分开说明。
 
 ### 5.1 普通可选 Agent
 
@@ -225,7 +225,7 @@ Agent 只声明默认值、覆盖权限、替换范围和能力要求。App Serv
 | `develop-implementer` | 严格按已接受工作契约修改分配范围，保留他人改动并产生可封存 ChangeSet | `selected`：已接受 Intent/Spec/Plan、工作契约和代码检查点 | `read_file`、`grep`、`glob`、`search_code`、`process_start`、`process_wait`、`process_terminate`、`apply_patch`、`edit`、`write_file` | 只读写分配的代码范围并运行获准验证 | 工作完成、失败或工作契约失效时停止；不能改写上游产物和验收规则 |
 | `develop-acceptance` | 独立对照原始意图、固定 Spec、最终差异和真实证据判断是否满足验收标准 | `fresh` 加显式选择的固定验收包 | `read_file`、`grep`、`glob`、`search_code`、`process_start`、`process_wait`、`process_terminate`、获准的 `browser_*` 验证工具、`write_acceptance_candidate` | 源码与控制资源只读，只能运行已定义验证并写验收候选 | 返回逐项证据和未满足项；不能修改候选代码或接受自己的工作 |
 
-`write_intent_candidate`、`write_spec_candidate`、`write_plan_candidate` 与 `write_acceptance_candidate` 是计划中的开发流程领域工具。它们只能操作当前开发工作的对应候选对象，不能用通用 `write_file` 代替，否则无法保证单写者、版本绑定和上游失效语义。
+`write_intent_candidate`、`write_spec_candidate`、`write_plan_candidate` 与 `write_acceptance_candidate` 是计划中的领域工具，当前不注册。当前阶段 Agent 用最终 JSON 提交候选，工作流只接收所绑定阶段 Thread 的终态结果，再按版本保存；接受与失效只能由用户命令触发，普通 `write_file` 不能改写领域候选。Spec、Plan、Acceptance 当前仅有 `read_file/grep/glob/board_read/board_write`，不获任意 Shell；Intent 另有协调工具。实现者使用获准工具上限，并且只能委托 Team 协调者。表中的进程资源、按文件范围授权与封存契约仍为目标。
 
 `develop-acceptance` 的浏览器工具不是每次全部加载。工作流从已接受 Spec 的验证方法推导本次必需工具，并在创建时冻结实际子集；任何必需工具不可用时验收阻塞，不能删掉该验收项继续通过。
 
@@ -255,6 +255,14 @@ Agent 只声明默认值、覆盖权限、替换范围和能力要求。App Serv
 阶段协调必须由确定性工作流完成，不能把 `develop.md` 整篇作为提示词交给会话入口 Agent。工作流创建阶段 Agent 时提交固定阶段身份、已接受上游版本、代码基线、工具范围、预算、时间和停止条件；阶段 Agent 只返回候选或证据，不能自行推进、接受或重写工作流状态。
 
 ## 6. 选择、可见性与执行流程
+
+当前内置定义用 `launch = any/workflow/delegation`、`callers` 与 `delegates` 表达启动范围。运行时校验准确内置来源、调用方定义摘要及委托目标；普通选择目录只列通用角色，Default 也不能绕过私有角色门禁。资源正文归 `ash-rs/agent-roles/assets/builtins`。
+
+| Team 角色 | 入口与当前工具边界 |
+| --- | --- |
+| `team-coordinator` | `/team` 或 `develop-implementer` 委托；源码读取、讨论板与协调工具，只能委托下面两个角色 |
+| `team-implementer` | 仅协调者委托；继承获准实现工具，不能继续委托 |
+| `team-reviewer` | 仅协调者委托；源码与已有证据读取、讨论板，不获代码写入或 Shell |
 
 ```mermaid
 flowchart LR
@@ -308,19 +316,19 @@ flowchart LR
 | Agent 模型继承、覆盖和兼容替换 | 尚未完成 | 当前委托只使用调用方当前 `ModelRef` 或定义中的准确模型；`ash-models-manager` 目前只解析指定模型，没有跨 provider 候选选择、替换决定和用户警告。 |
 | 会话入口选择 Agent 定义 | 已实现 | `session/create.agent` 接收带来源的选择，配置与 ThreadCreated 同批提交；重试复用原配置。 |
 | Default 与共同规则、模型指导、Role 组合 | 已实现 | 共同规则归 prompts，模型指导独立冻结，Role 通过统一 Thread 配置生效；见 [指令组合设计](../ash-rs/docs/agent-instructions.md)。 |
-| 统一定义契约 | 部分具备 | 内置 TOML 和目录 Markdown 已统一产出 `AgentRole`；模型完整策略、上下文策略、启动范围和带作用范围能力仍需补齐。 |
-| 内置专化 catalog 与本文角色资源 | 部分具备 | `issue.toml` 已随 `ash-agent-roles` 打包并进入委托选择；其他清单角色尚未加入。 |
-| 启动来源与 `/develop` 私有范围 | 尚未完成 | 需要统一启动来源、调用方身份、允许调用方、工作流阶段、候选领域工具和上下文包绑定，不能依赖提示词隔离。 |
+| 统一定义契约 | 部分具备 | 内置 TOML 和目录 Markdown 已统一产出 `AgentRole`；内置启动范围已接入，模型完整策略、上下文策略和带作用范围能力仍需补齐。 |
+| 内置专化 catalog 与本文角色资源 | 部分具备 | `issue`、Team、Develop 阶段与 Intent 私有角色已打包；其他普通角色仍未加入。 |
+| 启动来源与 `/develop` 私有范围 | 已实现当前入口 | 会话、工作流与委托入口检查准确内置来源、调用方摘要和允许目标；私有角色不进入通用工具目录，不能通过 Default 绕过。 |
 | 带来源的定义身份 | 已实现 | `AgentRole` 与 `FrozenAgentDefinitionRef` 都冻结 `BuiltIn` 或准确目录 ID，内置 Role 同时冻结版本与内容摘要。 |
 | 每个角色的带作用范围执行能力上限 | 尚未完成 | 当前 `AgentCapabilityScope` 已分离自身与下放 Tool，但仍需冻结并执行检查文件、进程、网络等 `Capability` 上限。 |
 | 委托基础指令与角色隔离 | 已实现 | 新委托冻结自己的共享规则和模型指导，不复制父 Role 或父 Turn 的专用审查模板；目录规则继续由实际环境提供。 |
 | 长时进程资源 | 尚未完成 | 当前 `shell-command` 默认 30 秒超时；需要可等待、可取消、可终止并能表达结果未知的进程资源，以及准确的构建产物写入范围。 |
 | 动态外部工具的动作 metadata | 尚未完成 | 当前 `ToolDefinition` 没有权威只读/修改分类；在来源签名、动作能力和摘要冻结完成前，专化角色不动态接入 Connector。 |
-| `/develop` 用户判断交互 | 尚未完成 | 阶段 Agent 应返回 `NeedsUserDecision`，由确定性工作流发起 server request 并恢复下一阶段运行；`request_user_input` 不是当前模型工具。 |
+| `/develop` 用户判断交互 | 部分具备 | `needs_user_decision` 候选保存问题，用户用 `/develop resume <决定>` 作答；交互式 server request 尚未接入。 |
 | 内置不进设置、运行时仍可观察 | 尚未完成 | 需要分别测试设置投影和 Agent 树投影，不能共用一个“是否可见”字段代替两个行为。 |
 | 内置角色选择与评测 | 部分具备 | 已覆盖准确来源、Default、根角色、缺 Tool/Skill、白黑名单与恢复；真实模型任务质量评测仍未完成。 |
 
-当前代码里“委托 Role 未声明模型时使用调用方当前模型”和“未传上下文时使用 `fresh`”已经存在，但前者不是目标继承语义：目标是从 Session 基线、Role 偏好和获准的本次启动请求生成一个请求模型，再由统一模型目录选择并冻结实际模型。会话入口已可选择并冻结 Agent Role；内置 catalog 当前只有 `issue`，Default 不读取专用定义。会话与委托已复用同一解析契约；委托继续复用既有子 Thread、上下文种子和工具/Skill 冻结机制，不建立第二套运行时。
+当前代码里“委托 Role 未声明模型时使用调用方当前模型”和“未传上下文时使用 `fresh`”已经存在，但前者不是目标继承语义：目标是从 Session 基线、Role 偏好和获准的本次启动请求生成一个请求模型，再由统一模型目录选择并冻结实际模型。会话入口已可选择并冻结 Agent Role；`issue` 对普通入口开放，Team、Develop 及 Intent 私有角色按入口和调用方收窄，Default 不读取专用定义。会话、委托与工作流复用同一解析契约；执行继续复用既有子 Thread、上下文种子和工具/Skill 冻结机制，不建立第二套运行时。
 
 ## 9. 维护与验收
 

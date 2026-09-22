@@ -55,6 +55,190 @@ fn model() -> ModelRef {
     )
 }
 
+struct WorkflowModel(mpsc::Sender<ModelRequest>);
+impl ModelService for WorkflowModel {
+    fn invoke(
+        &self,
+        _: ModelSelection<'_>,
+        request: &ModelRequest,
+        _: &CancellationToken,
+    ) -> Result<ModelResponse, CoreError> {
+        self.0.send(request.clone()).unwrap();
+        let acceptance = request
+            .instructions
+            .as_deref()
+            .unwrap_or_default()
+            .contains("Independently inspect the implementation against");
+        Ok(ModelResponse {
+            output: vec![ResponseItem::Text(serde_json::json!({"outcome":if acceptance { "passed" } else { "ready" },"content":"Candidate backed by the test fixture","evidence":["fixture source and recorded checks"]}).to_string())],
+            usage: None, billing: None, stop_reason: StopReason::Completed,
+        })
+    }
+}
+
+#[test]
+fn workflow_commands_run_dedicated_agents_through_rpc_and_require_user_acceptance() {
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        InMemoryThreadStore::default(),
+    )));
+    let (sender, requests) = mpsc::channel();
+    let mut server = AppServer::new(threads.clone(), Arc::new(WorkflowModel(sender)))
+        .with_tool_service(Arc::new(CatalogTools), Arc::new(UnusedPolicy));
+    server.model_catalog = Arc::new(TestModels);
+    let mut connection = server.connection();
+    call(
+        &server,
+        &mut connection,
+        "initialize",
+        serde_json::json!({"clientInfo":{"name":"workflow-test","version":"1"},"capabilities":{}}),
+    );
+    let rejected = call(
+        &server,
+        &mut connection,
+        "session/create",
+        serde_json::json!({"commandId":"forbidden-role", "title":"No workflow bypass", "agent":{"type":"exact","source":{"type":"builtIn"},"name":"develop-implementer"}}),
+    );
+    assert!(rejected.get("error").is_some(), "{rejected}");
+    let created = call(
+        &server,
+        &mut connection,
+        "session/create",
+        serde_json::json!({"commandId":"workflow-root", "title":"Workflow"}),
+    );
+    let session = created["result"]["session"]["sessionId"].as_str().unwrap();
+    let root = ThreadId::new(session).unwrap();
+    let mut submit = |id: &str, text: &str| {
+        let sequence = threads.read_thread(&root).unwrap().sequence;
+        call(
+            &server,
+            &mut connection,
+            "session/request",
+            serde_json::json!({"commandId":id,"sessionId":session,"request":{"type":"startTurn","threadId":session,"expectedSequence":sequence,"input":[{"type":"text","text":text}]}}),
+        )
+    };
+    let start = submit("workflow-start", "/develop add offline search");
+    assert!(start.get("error").is_none(), "{start}");
+    for (revision, role) in [
+        (1, "develop-intent"),
+        (2, "develop-spec"),
+        (3, "develop-plan"),
+        (4, "develop-implementer"),
+        (5, "develop-acceptance"),
+    ] {
+        let request = requests.recv_timeout(Duration::from_secs(10)).unwrap();
+        let snapshot = threads.read_thread(&root).unwrap();
+        let delegation = snapshot
+            .delegations
+            .values()
+            .find(|delegation| {
+                delegation
+                    .seed
+                    .agent
+                    .role
+                    .as_ref()
+                    .is_some_and(|selected| selected.name == role)
+            })
+            .unwrap();
+        let child = delegation.child_thread_id.clone().unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while threads
+            .read_thread(&child)
+            .unwrap()
+            .turns
+            .last()
+            .unwrap()
+            .status
+            != ash_protocol::TurnStatus::Completed
+        {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "stage Agent did not complete"
+            );
+            std::thread::yield_now();
+        }
+        assert!(
+            snapshot
+                .turns
+                .iter()
+                .all(|turn| turn.status == ash_protocol::TurnStatus::Completed)
+        );
+        assert!(
+            request
+                .instructions
+                .as_deref()
+                .unwrap()
+                .contains("Return your final response as one JSON object")
+        );
+        if role != "develop-implementer" {
+            assert!(
+                !request
+                    .tools
+                    .iter()
+                    .any(|tool| tool.name.as_str() == "write_file")
+            );
+        }
+        let status = submit(&format!("status-{revision}"), "/develop status");
+        assert!(status.get("error").is_none(), "{status}");
+        assert!(
+            requests.try_recv().is_err(),
+            "status must not invoke a model"
+        );
+        let advanced = submit(
+            &format!("accept-{revision}"),
+            &format!("/develop accept {revision}"),
+        );
+        assert!(advanced.get("error").is_none(), "{advanced}");
+    }
+    assert!(
+        requests.try_recv().is_err(),
+        "final acceptance must not launch another Agent"
+    );
+    let snapshot = threads.read_thread(&root).unwrap();
+    assert_eq!(snapshot.delegations.len(), 5);
+    assert!(
+        snapshot
+            .items
+            .iter()
+            .rev()
+            .find_map(|item| match item {
+                ash_protocol::ThreadItem::AgentMessage { text, .. } => Some(text),
+                _ => None,
+            })
+            .unwrap()
+            .contains("completed")
+    );
+    let replay = submit("workflow-start", "/develop add offline search");
+    assert_eq!(replay["result"], start["result"]);
+    let team = submit("team-start", "/team inspect search changes");
+    assert!(team.get("error").is_none(), "{team}");
+    let request = requests.recv_timeout(Duration::from_secs(10)).unwrap();
+    assert!(
+        request
+            .instructions
+            .as_deref()
+            .unwrap()
+            .contains("You coordinate one explicitly requested Team task")
+    );
+    assert!(
+        request
+            .tools
+            .iter()
+            .any(|tool| tool.name.as_str() == "spawn_agent")
+    );
+    assert!(
+        request
+            .tools
+            .iter()
+            .any(|tool| tool.name.as_str() == "board_write")
+    );
+    assert!(
+        !request
+            .tools
+            .iter()
+            .any(|tool| tool.name.as_str() == "write_file")
+    );
+}
+
 struct SkillConfig;
 impl SkillConfigSnapshotProvider for SkillConfig {
     fn snapshot(&self) -> Result<ash_config::SkillsConfig, String> {
@@ -65,7 +249,7 @@ impl SkillConfigSnapshotProvider for SkillConfig {
 struct CatalogTools;
 impl ToolService for CatalogTools {
     fn definitions(&self) -> Vec<ToolDefinition> {
-        ["read_file", "write_file", "search_tools", "call_mcp_tool", "spawn_agent", "send_agent_message", "wait_agent"].into_iter().map(|name| ToolDefinition {
+        ["read_file", "write_file", "grep", "glob", "board_read", "board_write", "search_tools", "call_mcp_tool", "spawn_agent", "send_agent_message", "wait_agent"].into_iter().map(|name| ToolDefinition {
             name: ToolName::new(name).unwrap(), description: name.into(), parameters: serde_json::json!({"type":"object", "properties":{}, "additionalProperties":false}), strict: true,
         }).collect()
     }

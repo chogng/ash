@@ -65,7 +65,7 @@ model。`origin`、Workbench `actionId` 和 TUI dispatcher identity 都是与 en
 Server-advertised Slash Command 必须有真实执行语义，不能仅凭 origin 猜测统一分发。当前内置
 `/compact` 由 Desktop 直接调用 `SessionRequest::CompactContext`，以独立 Turn 执行并把成功或失败留在
 当前对话；它不会把 `/compact` 文本发给模型。其他 server prompt command 继续把 unchanged invocation
-作为普通 `StartTurn.input`。Local command 必须存在真实 client execution path，否则不能进入 catalog。
+作为普通 `StartTurn.input`。`/team` 与 `/develop` 也通过 `StartTurn.input` 传输，但 App Server 识别后交给持久工作流执行，控制命令不会作为普通提示词调用模型；命令契约见 [Develop 当前命令](develop.md#当前可执行命令) 和 [Team](core-multi-agent.md#31-团队共享讨论)。Local command 必须存在真实 client execution path，否则不能进入 catalog。
 Desktop 的 `/new`、`/history` 属于
 Workbench command mapping；Codex TUI 的 `/model` 属于 Session model selector；Ash TUI 的 `/theme` 属于
 device-local presentation preference：无参数时打开由 `theme` 拥有的固定 Ash Code

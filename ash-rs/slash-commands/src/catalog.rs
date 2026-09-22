@@ -43,6 +43,24 @@ impl Default for SlashCommandCatalog {
                 argument_mode: SlashCommandArgumentMode::Optional,
                 argument_hint: Some("[workspace|user]".into()),
             },
+            SlashCommandDefinition {
+                name: "team".into(),
+                description: "Coordinate a task with dedicated implementation and review Agents"
+                    .into(),
+                argument_mode: SlashCommandArgumentMode::Optional,
+                argument_hint: Some("<task|status|resume|cancel>".into()),
+            },
+            SlashCommandDefinition {
+                name: "develop".into(),
+                description:
+                    "Develop through versioned Intent, Spec, Plan, implementation, and acceptance"
+                        .into(),
+                argument_mode: SlashCommandArgumentMode::Optional,
+                argument_hint: Some(
+                    "<task|status|accept revision|resume decision|revise stage reason|cancel>"
+                        .into(),
+                ),
+            },
         ])
         .expect("built-in slash command definitions are valid")
     }
