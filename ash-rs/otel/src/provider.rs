@@ -27,6 +27,16 @@ impl Telemetry {
         }
     }
 
+    /// Adds a host-owned exporter while retaining local diagnostic observations.
+    pub fn with_exporter(diagnostics: Diagnostics, exporter: impl SpanExporter + 'static) -> Self {
+        Self {
+            provider: SdkTracerProvider::builder()
+                .with_simple_exporter(LocalExporter(diagnostics))
+                .with_simple_exporter(exporter)
+                .build(),
+        }
+    }
+
     pub fn record(&self, activity: Activity, outcome: Outcome, elapsed: Duration) {
         let tracer = self.provider.tracer("ash");
         let end = SystemTime::now();

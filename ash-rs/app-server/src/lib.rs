@@ -25,6 +25,7 @@ mod tool_composition;
 mod tool_executor_adapter;
 mod tool_search_embedding;
 mod tool_search_models;
+mod trace;
 
 pub use ash_extensions::ExtensionRoot;
 pub use ash_extensions::ExtensionRootKind;

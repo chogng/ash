@@ -40,6 +40,7 @@ just test ash-app-server
 - `ash-app-server --listen stdio://` 提供直接连接；未设置 `ASH_WORKSPACE_ROOT` 时不继承当前目录授权。
 - WebSocket 使用 `--listen ws://127.0.0.1:0 --ws-auth capability-token --ws-token-sha256 HEX --emit-listen-info stdout-json`，监听成功后输出一条启动记录。
 - `src/startup.rs` 负责参数、环境绑定和服务启动；CLI 调用同一 `run`。
+- 实时 trace 默认关闭；显式启用后由 [otel-trace-websocket](../otel-trace-websocket/README.md) 提供本机只读流，App Server 只负责配置与生命周期装配，managed 模式的多个目录共享同一个 profile exporter。
 - profile 路径和随包产品服务发现由 `install-context` 提供，客户端消费相同契约。
 - `arg0` 在普通参数解析前分发内部 worker；启动命令绑定实际宿主可执行路径。
 - daemon 的连接和生命周期命令由 [`app-server-daemon`](../app-server-daemon/README.md) 提供。

@@ -50,6 +50,7 @@ memories = { workspace = true }
 memories-extension = { workspace = true }
 queue = { workspace = true }
 ash-otel = { workspace = true }
+otel-trace-websocket = { workspace = true }
 build-info = { workspace = true }
 analytics = { workspace = true }
 diagnostics = { workspace = true }

@@ -32,9 +32,12 @@ pub(crate) struct ProfileAppServerRegistry {
 
 impl ProfileAppServerRegistry {
     pub(crate) fn open(host: ConnectionOptions) -> Result<Self, String> {
-        let profile_runtime = Arc::new(
-            LocalProfileRuntime::open(host.profile_root()).map_err(|error| error.to_string())?,
-        );
+        let mut profile_runtime =
+            LocalProfileRuntime::open(host.profile_root()).map_err(|error| error.to_string())?;
+        if let Some(exporter) = crate::trace::from_environment()? {
+            profile_runtime = profile_runtime.with_trace_exporter(exporter);
+        }
+        let profile_runtime = Arc::new(profile_runtime);
         Ok(Self {
             host,
             profile_runtime,

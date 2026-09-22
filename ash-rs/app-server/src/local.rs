@@ -117,6 +117,7 @@ pub struct LocalAppServerOptions {
     language_server_providers: ash_lsp_server_provider::LspServerProviders,
     product_services: Option<crate::LocalProductServicesConfig>,
     profile_runtime: Option<Arc<LocalProfileRuntime>>,
+    trace_exporter: Option<otel_trace_websocket::Exporter>,
     pty_helper: Option<std::path::PathBuf>,
 }
 
@@ -174,6 +175,7 @@ impl LocalAppServerOptions {
             language_server_providers: ash_lsp_server_provider::LspServerProviders::new(),
             product_services: None,
             profile_runtime: None,
+            trace_exporter: None,
             pty_helper: None,
         }
     }
@@ -237,6 +239,13 @@ impl LocalAppServerOptions {
     /// Reuses one process-wide profile authority while composing a Directory-scoped runtime.
     pub fn with_profile_runtime(mut self, runtime: Arc<LocalProfileRuntime>) -> Self {
         self.profile_runtime = Some(runtime);
+        self
+    }
+
+    /// Streams this server's completed spans to an explicitly configured local viewer.
+    /// Shared profiles configure the exporter on `LocalProfileRuntime` instead.
+    pub fn with_trace_exporter(mut self, exporter: otel_trace_websocket::Exporter) -> Self {
+        self.trace_exporter = Some(exporter);
         self
     }
 
@@ -782,6 +791,12 @@ impl From<Option<ash_file_access::DirBinding>> for ProfileUpdateScopeKey {
 }
 
 impl LocalProfileRuntime {
+    /// Attaches one trace listener before this profile is shared by Directory runtimes.
+    pub fn with_trace_exporter(mut self, exporter: otel_trace_websocket::Exporter) -> Self {
+        self.telemetry = ash_otel::Telemetry::with_exporter(self.diagnostics.clone(), exporter);
+        self
+    }
+
     /// Opens and recovers one durable profile authority.
     pub fn open(profile_root: impl Into<PathBuf>) -> Result<Self, OpenAppServerError> {
         let requested_root = profile_root.into();
@@ -990,6 +1005,11 @@ pub fn open_local_app_server_with_codebase_providers(
     let plugins_manager = options.plugins_manager.take();
     let mcp_oauth_providers = std::mem::take(&mut options.mcp_oauth_providers);
     let profile_runtime = options.profile_runtime.take();
+    if profile_runtime.is_some() && options.trace_exporter.is_some() {
+        return Err(OpenAppServerError(
+            "configure trace export on the shared profile runtime".into(),
+        ));
+    }
     if profile_runtime.is_some() && options.session_state_mode != SessionStateMode::Durable {
         return Err(OpenAppServerError(
             "a shared profile runtime requires durable Session state".into(),
@@ -1208,7 +1228,10 @@ pub fn open_local_app_server_with_codebase_providers(
         ),
         None => {
             let diagnostics = diagnostics::Diagnostics::default();
-            let telemetry = ash_otel::Telemetry::new(diagnostics.clone());
+            let telemetry = match options.trace_exporter.take() {
+                Some(exporter) => ash_otel::Telemetry::with_exporter(diagnostics.clone(), exporter),
+                None => ash_otel::Telemetry::new(diagnostics.clone()),
+            };
             (
                 diagnostics,
                 telemetry,

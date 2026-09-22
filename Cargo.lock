@@ -623,6 +623,7 @@ dependencies = [
  "ash-mxc-sandbox",
  "ash-network-proxy",
  "ash-otel",
+ "ash-otel-trace-websocket",
  "ash-package-store",
  "ash-plugin",
  "ash-process-hardening",
@@ -2145,6 +2146,19 @@ dependencies = [
  "opentelemetry_sdk",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "ash-otel-trace-websocket"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "opentelemetry",
+ "opentelemetry_sdk",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite 0.28.0",
 ]
 
 [[package]]

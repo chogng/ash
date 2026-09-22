@@ -156,6 +156,97 @@ fn diagnostics_and_feedback_exclude_rpc_content_and_bind_the_owner() {
 }
 
 #[test]
+fn trace_websocket_and_diagnostics_observe_the_same_local_rpc_without_content() {
+    let profile = tempfile::tempdir().unwrap();
+    let token = "ab".repeat(32);
+    let exporter = otel_trace_websocket::Exporter::bind(
+        "127.0.0.1:0".parse().unwrap(),
+        token.parse().unwrap(),
+    )
+    .unwrap();
+    let address = exporter.local_addr();
+    let server = crate::open_local_app_server(
+        crate::LocalAppServerOptions::new(profile.path())
+            .with_codex_home(profile.path().join("codex"))
+            .without_built_in_skills()
+            .with_trace_exporter(exporter),
+    )
+    .unwrap();
+    assert_trace_rpc(&server, address, &token);
+    drop(server);
+    assert!(std::net::TcpStream::connect(address).is_err());
+}
+
+#[test]
+fn trace_websocket_is_owned_once_by_the_shared_profile() {
+    let profile = tempfile::tempdir().unwrap();
+    let token = "cd".repeat(32);
+    let exporter = otel_trace_websocket::Exporter::bind(
+        "127.0.0.1:0".parse().unwrap(),
+        token.parse().unwrap(),
+    )
+    .unwrap();
+    let address = exporter.local_addr();
+    let runtime = Arc::new(
+        crate::LocalProfileRuntime::open(profile.path())
+            .unwrap()
+            .with_trace_exporter(exporter),
+    );
+    let options = crate::LocalAppServerOptions::new(profile.path())
+        .with_codex_home(profile.path().join("codex"))
+        .without_built_in_skills()
+        .with_profile_runtime(runtime.clone());
+    let first = crate::open_local_app_server(options.clone()).unwrap();
+    let second = crate::open_local_app_server(options).unwrap();
+    assert_trace_rpc(&first, address, &token);
+    drop(first);
+    assert_trace_rpc(&second, address, &token);
+    drop(second);
+    drop(runtime);
+    assert!(std::net::TcpStream::connect(address).is_err());
+}
+
+fn assert_trace_rpc(server: &crate::AppServer, address: std::net::SocketAddr, token: &str) {
+    use futures::StreamExt;
+    use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime.block_on(async {
+        let stream = tokio::net::TcpStream::connect(address).await.unwrap();
+        let mut request = format!("ws://{address}/").into_client_request().unwrap();
+        request.headers_mut().insert("authorization", format!("Bearer {token}").parse().unwrap());
+        let (mut viewer, _) = tokio_tungstenite::client_async(request, stream).await.unwrap();
+        let ready = tokio::time::timeout(Duration::from_secs(5), viewer.next()).await.unwrap().unwrap().unwrap();
+        assert!(ready.to_text().unwrap().contains("ready"));
+        let mut connection = server.connection();
+        let initialized = call(server, &mut connection, json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"trace-test","version":"1"},"capabilities":{}}}));
+        assert!(initialized.get("result").is_some(), "{initialized}");
+        call(server, &mut connection, json!({"jsonrpc":"2.0","id":2,"method":"not-a-method","params":{"prompt":"private-user-content","authorization":"private-secret"}}));
+        let snapshot = call(server, &mut connection, json!({"jsonrpc":"2.0","id":3,"method":"diagnostics/read","params":{}}));
+        assert!(snapshot["result"]["recent"].as_array().unwrap().iter().any(|entry| entry["outcome"] == "failed"));
+        let mut failed = false;
+        for _ in 0..3 {
+            let frame = tokio::time::timeout(Duration::from_secs(5), viewer.next()).await.unwrap().unwrap().unwrap();
+            let text = frame.to_text().unwrap();
+            assert!(!text.contains("private-user-content"));
+            assert!(!text.contains("private-secret"));
+            assert!(!text.contains(token));
+            let value: serde_json::Value = serde_json::from_str(text).unwrap();
+            assert_eq!(value["name"], "rpc");
+            if value["attributes"].as_array().unwrap().iter().any(|attribute| attribute["key"] == "outcome" && attribute["value"]["value"] == "failed") {
+                failed = true;
+                break;
+            }
+        }
+        assert!(failed, "failed RPC was not exported");
+        server.close_connection(connection);
+    });
+}
+
+#[test]
 fn local_provider_diagnostics_reach_the_reviewed_feedback_bundle() {
     struct Rejected;
     impl ash_client::OperationClient for Rejected {

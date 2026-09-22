@@ -176,6 +176,7 @@ members = [
     "ash-rs/ash-api",
     "ash-rs/ash-client",
     "ash-rs/otel",
+    "ash-rs/otel-trace-websocket",
     "app",
     "app/commands",
     "app/editor",
@@ -453,6 +454,7 @@ guardian-reviewer = { package = "ash-guardian-reviewer", path = "ash-rs/ext/guar
 ash-api = { path = "ash-rs/ash-api" }
 ash-client = { path = "ash-rs/ash-client" }
 ash-otel = { path = "ash-rs/otel" }
+otel-trace-websocket = { package = "ash-otel-trace-websocket", path = "ash-rs/otel-trace-websocket" }
 ash-config = { path = "ash-rs/config" }
 ash-context-engine = { path = "ash-rs/context-engine" }
 ash-core = { path = "ash-rs/core" }
