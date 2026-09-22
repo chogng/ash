@@ -3,7 +3,8 @@
 > 命令用法与验证见 [CLI README](cli/README.md)；终端实现与测试见 [TUI README](tui/README.md)；共享请求与通知见 [App Server API](../docs/ash-app-server-api.md)。
 
 `ash-code` is the product-owned source boundary for the `ash code` terminal product.
-It contains the `ash-cli` command host and the `ash-tui` presentation shell.
+It contains the `ash-cli` command host, the `ash-tui` presentation shell, and
+[host-terminal detection](terminal-detection/README.md).
 
 The product depends on shared contracts and runtime services from `ash-rs`, but the terminal
 experience itself does not belong to the shared backend. Raw mode, alternate-screen lifecycle,

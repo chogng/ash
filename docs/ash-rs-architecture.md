@@ -104,6 +104,8 @@ ash-rs/
 [`input-classifier`](../app/input-classifier/README.md) 与 [`shell-completion`](../app/shell-completion/README.md)
 同样位于 `app/`，拥有 Composer 的本端输入分类、内嵌模型与 Shell 补全。Session 持有输入版本与调度，后端负责命令执行。
 
+[`terminal-detection`](../ash-code/terminal-detection/README.md) 位于 `ash-code/`，拥有 CLI/TUI 所在进程的宿主终端、复用器和颜色能力识别。终端查询与输入流由 TUI 协调，PTY 进程执行仍属于共享后端。
+
 当前 `exec/` 仍实现 process `ToolExecutor`。它迁移为 `tool-executor/` 后，`exec/` 名称用于
 [`exec.md`](exec.md) 定义的 headless Agent runner；迁移完成前不能把目标目录注释理解为现状。
 

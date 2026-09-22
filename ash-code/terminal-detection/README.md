@@ -1,9 +1,9 @@
 # `ash-terminal-detection`
 
-This crate identifies the terminal program, active multiplexer and color fidelity from process
-environment. It also resolves an OSC-reported background or `COLORFGBG` fallback into a light/dark
-appearance with an explicit evidence source. It does not read terminal input, send OSC/CSI queries,
-emulate a child terminal, manage a PTY, or choose a Ash theme.
+1. Lives in `ash-code/terminal-detection` and owns Ash Code's process-local host-terminal detection.
+2. Identifies the terminal program, multiplexer and color fidelity from process environment.
+3. Resolves background appearance from an OSC-reported color and `COLORFGBG`, retaining the evidence source.
+4. Leaves terminal input and queries, child-terminal emulation, PTY management and theme selection to their owners.
 
 | Symbol | Responsibility |
 | --- | --- |
@@ -14,14 +14,14 @@ emulate a child terminal, manage a PTY, or choose a Ash theme.
 | `resolve_background` | OSC 11 RGB → `COLORFGBG` → conservative Dark resolution |
 
 The TUI owns exclusive terminal-response probe windows because those reads must be coordinated with
-its crossterm event stream. `ash-terminal` separately owns child-terminal emulation, while
-`ash-utils-pty` owns process and PTY plumbing.
+its crossterm event stream. [`ash-terminal`](../../app/terminal/README.md) separately owns child-terminal emulation, while
+[`ash-utils-pty`](../../ash-rs/utils/pty/README.md) owns process and PTY plumbing.
 
 ```text
 ash-tui
 ├─ ash-terminal-detection  # environment identity
-├─ terminal_probe           # OSC query while TUI exclusively owns stdin
-└─ features/theme           # TUI-owned palettes, preference, and terminal colors
+├─ terminal/terminal_probe  # OSC query while TUI exclusively owns stdin
+└─ theme                    # TUI-owned palettes, preference, and terminal colors
 ```
 
 Detection favors `TERM_PROGRAM`, then terminal-specific variables, then `TERM`; tmux and Zellij
@@ -31,6 +31,8 @@ Detection never starts helper processes. TUI startup failures include these same
 and retain the original I/O error and terminal-mode cleanup.
 
 ```bash
-just test ash-terminal-detection
-bazel test //ash-rs/terminal-detection:terminal-detection-unit-tests
+just check ash-terminal-detection --locked
+just test ash-terminal-detection --locked
+just rust-warnings ash-terminal-detection --locked
+bazel test //ash-code/terminal-detection:terminal-detection-unit-tests
 ```

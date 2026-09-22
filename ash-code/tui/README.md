@@ -1,6 +1,6 @@
 # `ash-tui`
 
-终端启动失败会保留原始 I/O 错误，并附上 `ash-terminal-detection` 检测的终端、版本、复用器、TERM 和颜色能力；模式获取失败仍执行已有的终端状态恢复。
+终端启动失败会保留原始 I/O 错误，并附上 Ash Code 自有的 [`ash-terminal-detection`](../terminal-detection/README.md) 检测的终端、版本、复用器、TERM 和颜色能力；模式获取失败仍执行已有的终端状态恢复。
 
 `ash-tui` 是 Ash 的终端界面，主要负责：
 

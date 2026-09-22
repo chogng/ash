@@ -70,6 +70,7 @@ members = [
     "ash-code/mermaid",
     "ash-code/update-sign",
     "ash-code/sprite",
+    "ash-code/terminal-detection",
     "ash-rs/config",
     "ash-rs/context-engine",
     "ash-rs/core",
@@ -542,7 +543,7 @@ ash-state = { path = "ash-rs/state" }
 ash-syntax = { path = "ash-rs/syntax" }
 ash-terminal = { path = "app/terminal" }
 ash-terminal-runtime = { path = "app/terminal-runtime" }
-ash-terminal-detection = { path = "ash-rs/terminal-detection" }
+ash-terminal-detection = { path = "ash-code/terminal-detection" }
 ash-text-file = { path = "app/text-file" }
 ash-ui-theme = { path = "app/theme" }
 ash-thread-store = { path = "ash-rs/thread-store" }

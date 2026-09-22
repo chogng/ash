@@ -11,6 +11,7 @@
 | 文件保存基线、dirty、reload、冲突提示 | 各前端 | 由文件编辑生命周期持有，实际读写委托文件能力 |
 | 终端网格、光标、滚动和输入编码 | 各前端 | 在终端所在进程处理字节与交互 |
 | Composer 路由、Shell 输入补全 | App 输入能力 | 本端调度，推理不阻塞绘制 |
+| 宿主终端识别、颜色能力、背景明暗解析 | Ash Code | 本端读取环境与终端查询结果；输入查询由 TUI 协调 |
 | Git、Agent Patch、后台 Diff、索引、监听、进程执行 | `ash-rs` | 领域 crate 执行，App Server 提供业务接口 |
 | LSP、语义 token、异步语言查询 | 语言服务与前端分别负责 | 服务消费带版本的分析副本，前端检查版本并应用结果 |
 
@@ -22,7 +23,7 @@
 | --- | --- | --- | --- |
 | 1 | `editor-core`、`text-file`、`terminal` 从 `ash-rs/` 移到 `app/` | 路径、Cargo/Bazel、文档与消费者同步，定向验证通过 | 已完成，macOS 定向验证通过 |
 | 2 | `input-classifier`、`shell-completion` 移到 `app/` | 模型、词典、嵌入资源和相对路径完整迁移，输入分类与补全测试通过 | 已完成，macOS 定向验证通过 |
-| 3 | `terminal-detection` 移到 `ash-code/` | TUI 终端识别、主题调用与包构建验证通过 | 待执行 |
+| 3 | `terminal-detection` 移到 `ash-code/` | TUI 终端识别、主题调用与包构建验证通过 | 已完成，macOS Cargo 验证与 crate Bazel 单测通过；产品 Bazel 图限制见记录 |
 | 4 | TS 编辑器实时 Diff 改由前端计算 | 双栏、行内、Quick Diff、取消与版本检查验证通过；后台业务 Diff 独立保留 | 待执行 |
 | 5 | TS 基础语法高亮解除对后台 parser 的依赖 | TextMate/前端 Worker 覆盖现有语言，token 与异步语言结果边界明确 | 待执行 |
 
@@ -58,6 +59,16 @@
 6. 运行所属包与 App 消费者的定向构建、测试和 warning 检查，验证依赖方向与 Bazel 资源输入。
 
 本批不调整分类算法与公开 API，沿用现有行为测试。推理继续由 App 在进程内后台执行；输入 revision、候选展示与编辑提交仍由 Session/Editor 持有。资源校验和实际构建暴露的问题随本批修复，见执行记录。
+
+## 第三批执行清单
+
+1. 将 `terminal-detection` 完整移入 `ash-code/`，保留 package 名、公开 API、实现、测试与 Bazel 定义。
+2. 更新根 workspace 的成员与依赖路径、crate README 和产品职责说明。
+3. 检查 TUI 的终端探测、启动错误、主题和调色板消费者；终端输入流仍由 TUI 独占。
+4. 运行环境识别、颜色解析与 TUI 消费者测试，检查 CLI/TUI 正常构建和 warning。
+5. 验证 Cargo/Bazel 依赖图、锁文件与新 target，确认共享后端没有反向依赖。
+
+本批保持运行行为和终端输出不变，复用现有语义测试与 snapshot，不新增重复测试。
 
 ## 共享库与后续边界
 
@@ -115,4 +126,31 @@ CLI 的 PTY 场景完成编译检查，未执行真实交互场景；没有变�
 
 本批共运行 109 个 Rust 行为测试，Bazel 的 3 个测试 target 另行通过。既有模型摘要和概率基线覆盖资源修复；PATH fixture 保留原行为断言，没有新增重复测试。Bazel 仍有第三方 crate annotation 建议与测试 size 提示，本批未更改相关依赖或测试大小。
 
-此次验证平台为 macOS；未进行跨平台构建、运行窗口或实际打包发布。下一批迁移 `terminal-detection` 到 `ash-code/`。
+此次验证平台为 macOS；未进行跨平台构建、运行窗口或实际打包发布。
+
+### 第三批执行记录
+
+- 2026-09-22：`terminal-detection` 已从 `ash-rs/` 移到 `ash-code/`，同步根 Cargo workspace、依赖路径、README 和产品职责说明。
+- 7 个实现、测试、Cargo manifest 和 Bazel 定义逐字节一致；公开 API、运行行为与终端输出未变。Cargo metadata 确认唯一直接消费者为 `ash-tui`。
+- 新 Bazel 单测 target 已通过。额外的 CLI/TUI 依赖图查询分别被既有的 `app-server-protocol-noop-macros`、`sprite` 缺失 `BUILD.bazel` 阻塞；这两个目录在本批前就没有对应文件，不属于本次迁移。
+
+| 第三批验证 | 结果 |
+| --- | --- |
+| `just check ash-terminal-detection --locked` | 通过 |
+| `just test ash-terminal-detection --locked` | 11 个终端身份、复用器、颜色能力和背景解析测试通过 |
+| `just rust-warnings ash-terminal-detection --locked` | 通过 |
+| `just check ash-cli --locked` | 通过，覆盖 CLI 与 TUI 的正常构建检查 |
+| `just test ash-tui --lib terminal:: --locked` | 29 个终端探测、恢复和输出测试通过 |
+| `just test ash-tui --lib theme::resource:: --locked` | 6 个主题解析与切换测试通过 |
+| `just test ash-tui --lib render::palette:: --locked` | 4 个颜色能力与调色板测试通过 |
+| `just rust-warnings ash-tui -p ash-cli --locked` | 通过 |
+| `just dependencies` | 通过，196 个 workspace member；仍报告既有 ScrollView 文件未链接提示 |
+| `//ash-code/terminal-detection:terminal-detection-unit-tests` | Bazel 通过，使用 `--lockfile_mode=off` |
+| CLI/TUI Bazel 依赖图查询 | 被上述两处既有缺失 `BUILD.bazel` 阻塞，不视为产品 Bazel 构建通过 |
+| 文件逐字节对照、Cargo metadata、锁文件、本地文档链接与 `git diff --check` | 通过；旧目录引用已清除，本批未修改锁文件 |
+
+本批共运行 50 个 Rust 行为测试，迁移 crate 的 Bazel 单测另行通过。实现和测试未改写，现有行为断言足以覆盖此次目录移动；没有 snapshot 变更或待接受文件。
+
+此次验证平台为 macOS，未执行 Windows/Linux 构建、真实 PTY 交互或实际打包发布。Bazel 仍输出既有第三方 annotation 与测试 size 提示。
+
+后续按第四批处理 TypeScript 编辑器实时 Diff。
