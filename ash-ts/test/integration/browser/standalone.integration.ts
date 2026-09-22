@@ -5,6 +5,7 @@ import { IContextKeyService } from "../../../src/ash/platform/contextkey/browser
 import { ICodeEditorService } from '../../../src/ash/editor/browser/services/codeEditorService.js';
 import { observableCodeEditor } from '../../../src/ash/editor/browser/observableCodeEditor.js';
 import { FindController } from '../../../src/ash/editor/contrib/find/browser/findController.js';
+import { StickyScrollController } from '../../../src/ash/editor/contrib/stickyScroll/browser/stickyScrollController.js';
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
 import { CutAction, PasteAction } from '../../../src/ash/editor/contrib/clipboard/browser/clipboard.js';
@@ -129,6 +130,12 @@ interface StandaloneHarness {
 	updateContributionOptions(options: IEditorOptions): void;
 	readContributionDecorations(): { colors: number; highlights: number; folding: number };
 	prepareStickyHeaders(): void;
+	prepareStickySymbols(): void;
+	runStickyCommand(id: string): Promise<void>;
+	scrollSticky(top: number, left?: number): void;
+	hideStickyLines(start: number, end: number): void;
+	readStickyState(): { starts: number[]; ends: number[]; offset: number; focused: boolean; line: number; scrollLeft: number };
+	setStickyTheme(name: string): void;
 	layoutContribution(width: number): void;
 	prepareCompletionGeometry(scrolled: boolean): void;
 	readCompletionGeometry(): { caret: { left: number; top: number; height: number }; api: { left: number; top: number; height: number }; widget: { left: number; top: number }; contentLeft: number; textLeft: number };
@@ -480,9 +487,45 @@ window.ashStandaloneIntegration = {
 		};
 	},
 	prepareStickyHeaders: () => {
-		callerEditor.setValue(['function outer() {', '  function inner() {', ...Array.from({ length: 80 }, (_, index) => `    item ${index}`), '  }', '}'].join('\n'));
+		callerEditor.setValue(['function outer() {', '  function inner() {', ...Array.from({ length: 80 }, (_, index) => `    item ${index}`), '  }', '}', ...Array.from({ length: 30 }, () => 'outside')].join('\n'));
 		callerEditor.setScrollTop(200);
 	},
+	prepareStickySymbols: () => {
+		languageRequestProviders.clear();
+		callerEditor.setValue(['// leading comment', 'class Outer {', '  // method comment', '  method() {', ...Array.from({ length: 80 }, () => `    ${'body '.repeat(40)}`), '  }', '}'].join('\n'));
+		callerEditor.setScrollTop(200);
+		languageRequestProviders.add(stanza.languages.registerDocumentSymbolProvider('*', {
+			provideDocumentSymbols: request => new Promise(resolve => {
+				languageRequests.push({
+					languageId: request.languageId,
+					signal: request.signal,
+					finish: () => resolve([{
+						name: 'Outer', kind: 'class', range: new stanza.Range(1, 1, 86, 2), selectionRange: new stanza.Range(2, 1, 2, 6),
+						children: [{ name: 'method', kind: 'function', range: new stanza.Range(3, 1, 85, 4), selectionRange: new stanza.Range(4, 3, 4, 9) }],
+					}]),
+				});
+			}),
+		}));
+	},
+	runStickyCommand: async id => {
+		if (!callerEditor.hasWidgetFocus()) callerEditor.focus();
+		await callerEditor.invokeWithinContext(accessor => CommandsRegistry.getCommand(id)!(accessor));
+	},
+	scrollSticky: (top, left = 0) => callerEditor.setScrollPosition({ scrollTop: top, scrollLeft: left }),
+	hideStickyLines: (start, end) => callerEditor._getViewModel()!.setHiddenAreas([new stanza.Range(start, 1, end, 1)]),
+	readStickyState: () => {
+		const controller = StickyScrollController.get(callerEditor)!;
+		const state = controller.findScrollWidgetState();
+		return {
+			starts: state.startLineNumbers,
+			ends: state.endLineNumbers,
+			offset: state.lastLineRelativePosition,
+			focused: controller.isFocused(),
+			line: callerEditor.getPosition()!.lineNumber,
+			scrollLeft: callerEditor.getScrollLeft(),
+		};
+	},
+	setStickyTheme: name => stanza.editor.setTheme(name),
 	layoutContribution: width => callerEditor.layout({ width, height: 180 }),
 	prepareCompletionGeometry: scrolled => {
 		const lineNumber = scrolled ? 40 : 1;

@@ -8,21 +8,31 @@
   flex-direction: column;
   overflow: hidden;
   pointer-events: none;
-  background: color-mix(in srgb, var(--ash-editor-background) 94%, transparent);
+  background: var(--ash-editor-background);
   border-bottom: 1px solid var(--ash-widget-border);
 }
 
+.stanza-editor-sticky-scroll.empty {
+  display: none;
+}
+
 .stanza-editor-sticky-scroll-item {
-  height: 20px;
+  flex: none;
+  height: var(--stanza-sticky-line-height);
   overflow: hidden;
   color: var(--ash-description-foreground);
   font: inherit;
-  line-height: 20px;
+  line-height: var(--stanza-sticky-line-height);
   text-align: left;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: pre;
   pointer-events: auto;
   cursor: pointer;
   background: transparent;
   border: 0;
+}
+
+.stanza-editor-sticky-scroll-item:focus-visible {
+  outline: 1px solid var(--ash-focus-border);
+  outline-offset: -1px;
 }

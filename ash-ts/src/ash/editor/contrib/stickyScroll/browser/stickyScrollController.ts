@@ -1,77 +1,191 @@
-import "./stickyScroll.css";
 import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
 import { Position } from "../../../common/core/position.js";
 import { type ICodeEditor } from "../../../browser/editorBrowser.js";
 import { EditorOption } from "../../../common/config/editorOptions.js";
 import { type View } from "../../../browser/view.js";
 import { type EditorFoldingModel } from "../../folding/browser/foldingModel.js";
-import { buildStickyScrollEntries } from "../common/stickyScrollModel.js";
-import { addDisposableListener, h } from "../../../../base/browser/dom.js";
+import { addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
+import { CommandsRegistry } from "../../../../platform/commands/common/commands.js";
+import type { IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
+import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
+import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
+import { EditorContextKeys } from "../../../common/editorContextKeys.js";
+import { StickyLineCandidateProvider, type IStickyLineCandidateProvider } from "./stickyScrollProvider.js";
+import { StickyScrollWidget, StickyScrollWidgetState } from "./stickyScrollWidget.js";
+import { StickyRange } from "./stickyScrollElement.js";
 
-/** Projects folding ancestors above the viewport as an accessible sticky header stack. */
+/** Coordinates scope headers with the editor's existing layout and selection. */
 export class StickyScrollController extends Disposable {
-	private readonly element: HTMLDivElement;
+	public static readonly ID = "store.contrib.stickyScrollController";
+	private readonly widget: StickyScrollWidget;
+	private readonly candidateProvider: StickyLineCandidateProvider;
+	private readonly visible: IContextKey<boolean>;
 
-	constructor(private readonly editor: ICodeEditor, private readonly viewport: View, private readonly folding: EditorFoldingModel) {
+	constructor(
+		private readonly editor: ICodeEditor,
+		private readonly viewport: View,
+		folding: EditorFoldingModel,
+		onError: (error: unknown) => void,
+		@IInstantiationService instantiationService: IInstantiationService,
+		@IContextKeyService contextKeyService: IContextKeyService,
+	) {
 		super();
-		if (folding.model !== viewport.textModel) throw new TypeError("Stanza sticky scroll dependencies must share a text model");
-		this.element = h(viewport.domNode.domNode.ownerDocument, "div");
-		this.element.className = "stanza-editor-sticky-scroll";
-		this.element.setAttribute("aria-label", "Sticky section headers");
-		viewport.domNode.domNode.append(this.element);
-		this._register(toDisposable(() => this.element.remove()));
+		if (folding.model !== viewport.textModel) {
+			throw new TypeError("Stanza sticky scroll dependencies must share a text model");
+		}
+		this.candidateProvider = this._register(instantiationService.createInstance(StickyLineCandidateProvider, editor, folding, onError));
+		this.widget = this._register(new StickyScrollWidget(editor, viewport.textModel));
+		const element = this.widget.getDomNode();
+		viewport.domNode.domNode.append(element);
+		const focused = EditorContextKeys.stickyScrollFocused.bindTo(contextKeyService);
+		this.visible = EditorContextKeys.stickyScrollVisible.bindTo(contextKeyService);
+		this._register(toDisposable(() => {
+			focused.reset();
+			this.visible.reset();
+		}));
+		this._register(addDisposableListener(element, "focusin", () => focused.set(true)));
+		this._register(addDisposableListener(element, "focusout", () => focused.set(this.isFocused())));
+		this._register(addDisposableListener(element, "pointerdown", event => {
+			if (event.button === 0) {
+				stopEvent(event);
+			}
+		}));
+		this._register(addDisposableListener(element, "mousedown", event => {
+			if (event.button === 0) {
+				stopEvent(event);
+			}
+		}));
+		this._register(addDisposableListener(element, "keydown", event => {
+			if (event.defaultPrevented || event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+				return;
+			}
+			let command: string;
+			switch (event.key) {
+				case "ArrowDown":
+					command = "editor.action.selectNextStickyScrollLine";
+					break;
+				case "ArrowUp":
+					command = "editor.action.selectPreviousStickyScrollLine";
+					break;
+				case "Enter":
+					command = "editor.action.goToFocusedStickyScrollLine";
+					break;
+				case "Escape":
+					command = "editor.action.selectEditor";
+					break;
+				default:
+					return;
+			}
+			stopEvent(event);
+			this.editor.invokeWithinContext(accessor => CommandsRegistry.getCommand(command)!(accessor));
+		}));
 		this._register(viewport.onDidChangeLayout(() => this.render()));
-		this._register(folding.onDidChange(() => this.render()));
+		this._register(this.candidateProvider.onDidChangeStickyScroll(() => this.render()));
 		this._register(editor.onDidChangeConfiguration(event => {
-			if (event.hasChanged(EditorOption.stickyScroll)) this.render();
+			if (event.hasChanged(EditorOption.stickyScroll) || event.hasChanged(EditorOption.lineHeight) || event.hasChanged(EditorOption.fontInfo)) {
+				this.render();
+			}
 		}));
-		this._register(addDisposableListener(this.element, "click", event => {
-			const button = (event.target as HTMLElement).closest<HTMLButtonElement>(".stanza-editor-sticky-scroll-item");
-			if (!button || button.parentElement !== this.element) return;
-			this.viewport.revealPosition(new Position(Number(button.dataset.lineNumber), 1));
+		this._register(addDisposableListener(element, "click", event => {
+			if (event.button !== 0 || event.altKey || event.ctrlKey || event.metaKey) {
+				return;
+			}
+			const index = this.widget.getLineIndexFromChildDomNode(event.target as HTMLElement);
+			if (index === null) {
+				return;
+			}
+			const state = this.findScrollWidgetState();
+			this.revealLine(event.shiftKey ? state.endLineNumbers[index]! : state.startLineNumbers[index]!);
 		}));
-		this.render();
+	}
+
+	public static get(editor: ICodeEditor): StickyScrollController | null {
+		return editor.getContribution<StickyScrollController>(StickyScrollController.ID);
+	}
+
+	public get stickyScrollCandidateProvider(): IStickyLineCandidateProvider {
+		return this.candidateProvider;
+	}
+
+	public isFocused(): boolean {
+		const element = this.widget.getDomNode();
+		return element.contains(element.ownerDocument.activeElement);
+	}
+
+	public focus(): void {
+		this.widget.focusLineWithIndex(this.widget.getCurrentLines().length - 1);
+	}
+
+	public focusNext(): void {
+		const element = this.widget.getDomNode();
+		const index = this.widget.getLineIndexFromChildDomNode(element.ownerDocument.activeElement as HTMLElement);
+		if (index !== null) {
+			this.widget.focusLineWithIndex(index + 1);
+		}
+	}
+
+	public focusPrevious(): void {
+		const element = this.widget.getDomNode();
+		const index = this.widget.getLineIndexFromChildDomNode(element.ownerDocument.activeElement as HTMLElement);
+		if (index !== null) {
+			this.widget.focusLineWithIndex(index - 1);
+		}
+	}
+
+	public selectEditor(): void {
+		this.editor.focus();
+	}
+
+	public goToFocused(): void {
+		const element = this.widget.getDomNode();
+		const index = this.widget.getLineIndexFromChildDomNode(element.ownerDocument.activeElement as HTMLElement);
+		if (index !== null) {
+			this.revealLine(this.widget.getCurrentLines()[index]!);
+		}
+	}
+
+	public findScrollWidgetState(): StickyScrollWidgetState {
+		const options = this.editor.getOption(EditorOption.stickyScroll);
+		if (!options.enabled || this.candidateProvider.getVersionId() !== this.viewport.textModel.getVersionId()) {
+			return StickyScrollWidgetState.Empty;
+		}
+		const ranges = this.editor.getVisibleRanges();
+		if (ranges.length === 0) {
+			return StickyScrollWidgetState.Empty;
+		}
+		const candidates = this.candidateProvider.getCandidateStickyLinesIntersecting(new StickyRange(ranges[0]!.startLineNumber, ranges.at(-1)!.endLineNumber));
+		const starts: number[] = [];
+		const ends: number[] = [];
+		let offset = 0;
+		const scrollTop = this.editor.getScrollTop();
+		for (const candidate of candidates) {
+			if (starts.length === options.maxLineCount) {
+				break;
+			}
+			const slotTop = starts.length * candidate.height;
+			const end = this.editor.getBottomForLineNumber(candidate.endLineNumber) - scrollTop;
+			if (this.editor.getTopForLineNumber(candidate.startLineNumber) - scrollTop >= slotTop || end <= slotTop) {
+				continue;
+			}
+			starts.push(candidate.startLineNumber);
+			ends.push(candidate.endLineNumber);
+			offset = Math.min(0, end - slotTop - candidate.height);
+			if (offset < 0) {
+				break;
+			}
+		}
+		return new StickyScrollWidgetState(starts, ends, offset);
+	}
+
+	private revealLine(lineNumber: number): void {
+		const position = new Position(lineNumber, 1);
+		this.editor.setPosition(position, "stickyScroll");
+		this.viewport.revealPosition(position);
+		this.editor.focus();
 	}
 
 	private render(): void {
-		const visual = this.viewport.getVisualLineProjection();
-		const firstVisualLine = this.viewport.viewportLayout.visibleLines.startLineIndex;
-		const first = visual.lineAt(firstVisualLine);
-		const options = this.editor.getOption(EditorOption.stickyScroll);
-		const entries = first && options.enabled
-			? buildStickyScrollEntries(this.viewport.textModel, first.logicalLineIndex, this.folding.regions, options.maxLineCount)
-			: [];
-		const scroll = this.viewport.viewportLayout.scrollPosition;
-		this.element.style.transform = `translate(${scroll.left}px, ${scroll.top}px)`;
-		const focused = this.element.ownerDocument.activeElement;
-		const hadFocus = focused instanceof this.element.ownerDocument.defaultView!.HTMLElement && this.element.contains(focused);
-		const buttons = new Map(Array.from(this.element.children, child => {
-			const button = child as HTMLButtonElement;
-			return [button.dataset.lineId, button] as const;
-		}));
-		for (const [index, entry] of entries.entries()) {
-			const lineId = String(this.viewport.textModel.getLineId(entry.lineIndex));
-			let button = buttons.get(lineId);
-			if (!button) {
-				button = h(this.element.ownerDocument, "button");
-				button.type = "button";
-				button.className = "stanza-editor-sticky-scroll-item";
-				button.dataset.lineId = lineId;
-			}
-			buttons.delete(lineId);
-			button.dataset.lineNumber = String(entry.lineIndex + 1);
-			button.style.paddingLeft = `${8 + entry.depth * 12}px`;
-			const label = entry.label || `Line ${entry.lineIndex + 1}`;
-			if (button.textContent !== label) button.textContent = label;
-			button.title = `Reveal line ${entry.lineIndex + 1}`;
-			const current = this.element.children.item(index);
-			if (current !== button) this.element.insertBefore(button, current);
-		}
-		for (const button of buttons.values()) button.remove();
-		this.element.hidden = entries.length === 0;
-		if (hadFocus) {
-			if (this.element.contains(focused)) (focused as HTMLElement).focus({ preventScroll: true });
-			else this.editor.focus();
-		}
+		this.widget.setState(this.findScrollWidgetState());
+		this.visible.set(this.widget.getCurrentLines().length > 0);
 	}
 }

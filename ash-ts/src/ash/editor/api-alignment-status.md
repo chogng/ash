@@ -1,5 +1,33 @@
 # Editor API 对齐状态
 
+## Sticky Scroll 文件与调用链（2026-09-21）
+
+`contrib/stickyScroll` 的 8 个生产文件现在全部与上游同路径。模型来源、候选行、DOM 和命令已接入原有 `editor.all.ts` 注册链；文件齐全不表示全部上游交互已经实现。
+
+本批起始工作树干净。用户确认将仅 Ash 的 `common/stickyScrollModel.ts` 迁移并删除；其祖先筛选由 `browser/stickyScrollProvider.ts` 接管，测试迁至 `test/browser/stickyScroll.test.ts`。旧 import 和旧贡献 ID 均退出。
+
+| 路径（相对 `contrib/stickyScroll/`） | 起始关系 | 生产调用方与唯一职责 | 本批结果 |
+| --- | --- | --- | --- |
+| `browser/stickyScrollElement.ts` | 仅上游 | ModelProvider / Provider：带版本的作用域树及一基行号 | 数据契约进入实际计算链 |
+| `browser/stickyScrollModelProvider.ts` | 仅上游 | Provider：选取文档符号、现有折叠范围或缩进范围 | 声明行取 selectionRange；取消传到请求，拒绝过期结果 |
+| `browser/stickyScrollProvider.ts` | 仅上游 | Controller：候选行、更新调度和失效 | 过滤隐藏标题，配置的展示项不重复请求模型 |
+| `browser/stickyScrollWidget.ts` | 仅上游 | Controller：标题 DOM、行节点复用及布局 | 保留 LineId 身份；行高、水平滚动、裁切和焦点样式随当前状态更新 |
+| `browser/stickyScrollActions.ts` | 仅上游 | Contribution / 标题键盘入口：六个标准命令 | 开关、聚焦、上下移动、定位和返回编辑器 |
+| `browser/stickyScrollController.ts` | 双方都有 | Contribution：候选行与编辑器滚动、选区之间的协调 | 使用标准 ID/get；点击及 Shift 点击定位，移除后恢复焦点 |
+| `browser/stickyScrollContribution.ts` | 双方都有 | editor.all：装配与初次更新 | 服务经实例化容器注入，构造阶段不启动请求 |
+| `browser/stickyScroll.css` | 双方都有 | Widget：既有 Stanza 按钮结构 | 实际行高、空状态、实色背景和注册的焦点颜色 |
+
+外围修改限定为 `common/editorContextKeys.ts` 的两个状态键、现有 standalone 浏览器测试与本台账。模型文字和 LineId 归 TextModel，折叠状态归 EditorFoldingModel，滚动和坐标归现有 View；没有新增第二套编辑状态。
+
+尚未完整对齐的能力：标题仍以文字按钮呈现，未接入语法着色、行号与折叠图标；Ctrl/Cmd 点击定义、Shift 悬停结尾预览、上下文菜单和控件高度事件尚无完整调用链。开关命令修改当前编辑器选项；Workbench 的持久配置与菜单位置不在本批。`outlineProviderId` 也尚未接入上游的多提供者选择规则。控制器仍保留在下方待核对表，不能按成员数记作全量完成。
+
+当前 Editor 文件集合为 **537 个：432 个上游同路径、105 个 Ash 自有；302 个上游路径未引入**。本批 CSS 审计无阻断项。实际验证：
+
+- `check-editor-alignment.mjs --test=browser` 通过，包括结构、台账、CSS、类型检查与 550 个浏览器测试；其中 10 个为 stickyScroll 定向场景。
+- `test:editor:unit --grep 'Sticky scroll scope sources'`：4 个模型来源测试通过；`build:stanza` 通过。
+- `test:unit --run test/architecture/editor-architecture.test.ts`：23 项通过、1 项失败。失败断言要求 `smartSelect/common/selectionRanges.ts`，该路径在 HEAD 中已经不存在，断言和相关实现均未由本批修改。
+- 未启动上游 VS Code 做同场景运行比较；上游证据来自公开契约及行为测试。本批不能据此宣称完整界面行为一致。
+
 ## 现有功能链剩余修正（2026-09-21）
 
 本轮处理上次审查的八类问题，起始工作区干净。范围继续限定为现有功能链：保留单一文本、token、历史和后端 diff owner，不引入整套前端 diff / Tree-sitter。下面的当前结果覆盖历史批次中已经过时的缺口描述；历史数字只代表当时状态。
@@ -15,7 +43,7 @@
 | 内部光标入口 | Widget.selections、contribution.selectionController 和 getViewModelCursorController 已退出，调用方使用 ICodeEditor / IViewModel。 |
 | CSS 与记录 | 六份只替换品牌的 CSS 已重写，无效主题变量改用 Ash 注册颜色，输入样式命中实际 DOM；更新本记录与 browser/README.md。 |
 
-Editor 当前有 **533 个生产文件：427 个上游同路径、106 个 Ash 自有；307 个上游路径未引入**。54 份 CSS 中，与上游原样相同、仅替换品牌后相同、上游品牌残留均为 **0**。同名声明总账仍为 **80 项已处理、41 项待核对**；新路径、相同成员名和通过 Ash 测试不等于完整上游契约。
+此前轮次记录 **533 个生产文件：427 个上游同路径、106 个 Ash 自有；307 个上游路径未引入**。54 份 CSS 中，与上游原样相同、仅替换品牌后相同、上游品牌残留均为 **0**。同名声明总账仍为 **80 项已处理、41 项待核对**；新路径、相同成员名和通过 Ash 测试不等于完整上游契约。
 
 common 保持 **211 个文件：180 个同路径、31 个 Ash 自有；46 个上游路径未引入**。其中 22 个由现有 owner 承担、22 个属于已排除的 diff / Tree-sitter、2 个没有当前消费者。fixBrackets 和 languageFeatureDebounce 已接通；不是待新增文件。
 
@@ -1381,8 +1409,7 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 | `contrib/snippet/common/snippetParser.ts` | 4 / 1 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
 | `contrib/snippet/common/snippetTransform.ts` | 2 / 1 | 静态语法与依赖已扫描；未作逐行行为结论。 |
 | `contrib/stickyScroll/browser/stickyScrollContribution.ts` | 1 / 0 | 人工检查：贡献注册入口、安装条件与服务/控制器归属；功能实现结论见对应文件。 |
-| `contrib/stickyScroll/browser/stickyScrollController.ts` | 1 / 0 | 人工检查：DOM 与订阅由 controller 清理，字面文字写入 textContent；每次布局重建按钮的焦点保留待验证。 |
-| `contrib/stickyScroll/common/stickyScrollModel.ts` | 1 / 1 | 人工检查：祖先区域筛选、排序和数量裁剪；maxEntries 范围校验由配置入口负责。 |
+| `contrib/stickyScroll/browser/stickyScrollController.ts` | 1 / 0 | 已接入 Provider、Widget 和标准命令；节点复用、布局焦点、点击选区及请求失效有行为测试，完整上游交互仍待补齐。 |
 | `contrib/suggest/browser/suggestController.ts` | 2 / 3 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
 | `contrib/suggest/browser/suggestModel.ts` | 3 / 4 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
 | `contrib/suggest/browser/suggestWidget.ts` | 1 / 0 | 静态语法与依赖已扫描；含资源/集合操作；未作逐行行为结论。 |
@@ -1681,7 +1708,7 @@ TextMate 同批删除 `textMateSyntaxModule.ts`，客户端改名为 `textMateSy
 | `contrib/folding/browser/folding.ts` | `FoldingController` | 本地 contribution 实现改为 `EditorFoldingController` |
 | `contrib/inlayHints/browser/inlayHintsController.ts` | `InlayHintsController` | 本地 contribution 实现改为 `EditorInlayHintsController` |
 | `contrib/inlineCompletions/browser/controller/inlineCompletionsController.ts` | `InlineCompletionsController` | 本地 contribution 实现改为 `EditorInlineCompletionsController` |
-| `contrib/stickyScroll/browser/stickyScrollController.ts` | `StickyScrollController` | 人工检查：DOM 与订阅由 controller 清理，字面文字写入 textContent；每次布局重建按钮的焦点保留待验证。 |
+| `contrib/stickyScroll/browser/stickyScrollController.ts` | `StickyScrollController` | 文件职责、来源请求、候选行及命令已接通；语法着色、行号、折叠图标、定义跳转和高度事件仍待补齐，见顶部 Sticky Scroll 记录。 |
 | `contrib/suggest/browser/suggestController.ts` | `SuggestController` | 本地 contribution 实现改为 `EditorSuggestController` |
 
 ### 原待处理项
