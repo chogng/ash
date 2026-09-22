@@ -161,6 +161,7 @@ pub use context::HarnessInstruction;
 pub use context::InstructionActivation;
 pub use context::InstructionScope;
 
+use ash_protocol::ModelImageInputPolicy;
 use core_api::ActionPolicyService;
 use core_api::AfterToolHookRequest;
 use core_api::BeforeToolHookDecision;
@@ -170,7 +171,6 @@ use core_api::CoreError;
 use core_api::HookService;
 use core_api::LeaseGuard;
 use core_api::MessageCheckpointSource;
-use core_api::ModelImageInputPolicy;
 use core_api::ModelSelection;
 use core_api::ModelService;
 use core_api::ModelStreamSink;

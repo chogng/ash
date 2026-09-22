@@ -10,6 +10,9 @@ use ash_context_engine::ContextTokenMeasurementCapability;
 use ash_context_engine::ContextTokenMeasurementOutcome;
 use ash_model_provider_config::InputTokenCountProfile;
 use ash_model_provider_config::NormalizedModelProviderConfig;
+use ash_protocol::Model;
+use ash_protocol::ModelImageInputLimits;
+use ash_protocol::ModelImageInputPolicy;
 
 pub(crate) struct AnthropicAdapter {
     token_counter: Option<super::measurement::ProviderInputTokenCounter>,
@@ -35,6 +38,12 @@ impl AnthropicAdapter {
 }
 
 impl ProviderAdapter for AnthropicAdapter {
+    fn image_input_policy(&self, _: &Model) -> ModelImageInputPolicy {
+        const LOW: ModelImageInputLimits = ModelImageInputLimits::new(512, 256);
+        const STANDARD: ModelImageInputLimits = ModelImageInputLimits::new(1_568, 1_120);
+        ModelImageInputPolicy::new(STANDARD, LOW, STANDARD, STANDARD)
+    }
+
     fn endpoint(&self) -> ApiEndpoint {
         self.endpoint
     }

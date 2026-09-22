@@ -12,6 +12,9 @@ use ash_context_engine::ContextTokenMeasurementOutcome;
 use ash_http_client::HttpHeader;
 use ash_model_provider_config::InputTokenCountProfile;
 use ash_model_provider_config::NormalizedModelProviderConfig;
+use ash_protocol::Model;
+use ash_protocol::ModelImageInputLimits;
+use ash_protocol::ModelImageInputPolicy;
 
 pub(crate) struct GoogleAdapter {
     token_counter: Option<super::measurement::ProviderInputTokenCounter>,
@@ -31,6 +34,12 @@ impl GoogleAdapter {
 }
 
 impl ProviderAdapter for GoogleAdapter {
+    fn image_input_policy(&self, _: &Model) -> ModelImageInputPolicy {
+        const LOW: ModelImageInputLimits = ModelImageInputLimits::new(512, 256);
+        const STANDARD: ModelImageInputLimits = ModelImageInputLimits::new(3_072, 9_216);
+        ModelImageInputPolicy::new(STANDARD, LOW, STANDARD, STANDARD)
+    }
+
     fn endpoint(&self) -> ApiEndpoint {
         self.endpoint
     }

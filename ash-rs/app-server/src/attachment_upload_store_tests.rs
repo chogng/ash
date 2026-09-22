@@ -1,4 +1,3 @@
-use ash_protocol::ImageDetail;
 use ash_protocol::ImageMediaType;
 use std::time::Duration;
 use std::time::Instant;
@@ -16,7 +15,6 @@ fn uploads_are_sequential_connection_owned_and_exact_length() {
             7,
             AttachmentUploadContent::Image {
                 media_type: ImageMediaType::Png,
-                detail: ImageDetail::Auto,
             },
             4,
         )
@@ -43,7 +41,6 @@ fn closing_an_owner_discards_partial_uploads() {
             7,
             AttachmentUploadContent::Image {
                 media_type: ImageMediaType::Png,
-                detail: ImageDetail::Auto,
             },
             4,
         )
@@ -65,7 +62,6 @@ fn one_connection_cannot_create_unbounded_upload_sessions() {
                 7,
                 AttachmentUploadContent::Image {
                     media_type: ImageMediaType::Png,
-                    detail: ImageDetail::Auto,
                 },
                 16 * 1024 * 1024,
             )
@@ -84,7 +80,6 @@ fn one_connection_cannot_create_unbounded_upload_sessions() {
                 7,
                 AttachmentUploadContent::Image {
                     media_type: ImageMediaType::Png,
-                    detail: ImageDetail::Auto
                 },
                 1
             )
@@ -101,7 +96,6 @@ fn idle_uploads_expire_before_the_next_operation() {
             7,
             AttachmentUploadContent::Image {
                 media_type: ImageMediaType::Png,
-                detail: ImageDetail::Auto,
             },
             1,
         )

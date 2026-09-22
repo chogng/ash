@@ -47,18 +47,12 @@ impl AttachmentModelService {
                             .materialize_audio_data_url(attachment)
                             .map_err(|error| CoreError::Context(error.to_string()))?,
                     }),
-                    ContentPart::AudioUrl { url } => {
-                        let attachment = self
+                    ContentPart::AudioUrl { url } => Some(ContentPart::AudioUrl {
+                        url: self
                             .attachments
-                            .import_audio_data_url(url)
-                            .map_err(|error| CoreError::Context(error.to_string()))?;
-                        Some(ContentPart::AudioUrl {
-                            url: self
-                                .attachments
-                                .materialize_audio_data_url(&attachment)
-                                .map_err(|error| CoreError::Context(error.to_string()))?,
-                        })
-                    }
+                            .prepare_audio_data_url(url)
+                            .map_err(|error| CoreError::Context(error.to_string()))?,
+                    }),
                     ContentPart::ImageAttachment { attachment, detail } => {
                         let limits = policy.limits_for(*detail);
                         let data_url = self

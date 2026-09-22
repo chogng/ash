@@ -37,6 +37,7 @@ config resolver。本 crate 仍只拥有模型 API 选择、credential materiali
 | `ModelProviderRuntime` | built-in concrete resolver | 持有 config registry、shared `ModelsManager`、lazy operation client 和可选 local tokenizer service |
 | `ModelRuntimeRequest` | exact `ModelRef + ModelProviderConfig` | immutable selection request |
 | `ModelInvoker` | canonical `ModelRequest → ModelResponse` | one immutable provider/model snapshot |
+| `ModelInvoker::image_input_policy` | 按已解析的模型能力提供图片尺寸与 patch 限制 | 与请求计量和调用使用同一实例 |
 | `ModelInvoker::{input_token_measurement_capability,measure_input_with_cancellation}` | frozen request 的 tokenizer/preflight port | 与 invocation 相同 immutable snapshot |
 | re-exported `LocalTokenizerBinding` / `LocalTokenizerRegistry` | 宿主安装资产后的通用本地 tokenizer 接口 | composition safe point 构建后注入 runtime |
 | `EmbeddingInvoker` | ordered text batch → finite equal-dimension vectors | one immutable embedding model snapshot |
@@ -58,7 +59,7 @@ invocation，不原地修改已经运行的 `RegisteredModelInvoker`。
 | `LazyOperationClient` | private struct | 第一次 operation 才创建 production HTTP client，并缓存结果 | App Server 启动和 config inspection 不接触 TLS/proxy |
 | `Provider::instantiate` | crate-private | enforce definition/config ID equality，materialize adapter | 不读取 mutable config/credential store |
 | `providers::instantiate` | crate-private function | exhaustive `ProviderAdapter` enum dispatch | provider selection 唯一 switch |
-| `ProviderAdapter` | crate-private trait | endpoint、模型名映射、固定 Header 与 token measurement | 不拥有生成请求执行或响应解析 |
+| `ProviderAdapter` | crate-private trait | endpoint、模型名映射、固定 Header、图片输入限制与 token measurement | 不拥有生成请求执行或响应解析 |
 | `LocalInputTokenCounter` | crate-private struct | 官方预检不可用时把整份请求交给本地计数服务 | 不下载资产、不按 provider 猜 tokenizer revision |
 | `api_endpoint` | private function | `ApiProfile → ash_api::ApiEndpoint` | 按 profile，不按 provider name 猜 |
 | provider `*Adapter::new` | crate-private | endpoint 与供应商专属计数配置 | one immutable runtime snapshot |

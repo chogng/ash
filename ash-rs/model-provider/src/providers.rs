@@ -9,6 +9,8 @@ use ash_context_engine::ContextTokenMeasurementOutcome;
 use ash_model_provider_config::ApiProfile;
 use ash_model_provider_config::NormalizedModelProviderConfig;
 use ash_model_provider_config::ProviderAdapter as ProviderAdapterKind;
+use ash_protocol::Model;
+use ash_protocol::ModelImageInputPolicy;
 use std::sync::Arc;
 
 mod anthropic;
@@ -32,6 +34,11 @@ mod zai;
 /// the shared runtime; request encoding and response decoding belong to `ash-api`.
 pub(crate) trait ProviderAdapter: Send + Sync {
     fn endpoint(&self) -> ApiEndpoint;
+
+    /// Selects image limits from the model already resolved for this invocation.
+    fn image_input_policy(&self, _: &Model) -> ModelImageInputPolicy {
+        ModelImageInputPolicy::default()
+    }
 
     fn model_id<'a>(&self, model: &'a str) -> &'a str {
         model

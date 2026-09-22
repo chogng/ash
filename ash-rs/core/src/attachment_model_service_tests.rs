@@ -6,26 +6,25 @@ use ash_attachments::Attachments;
 use ash_protocol::ContentPart;
 use ash_protocol::ImageDetail;
 use ash_protocol::InputItem;
+use ash_protocol::ModelImageInputLimits;
 use ash_protocol::ModelRequest;
 use ash_protocol::ModelResponse;
 use ash_protocol::ResponseItem;
 use ash_protocol::StopReason;
 
 use super::AttachmentModelService;
+use crate::ContextTokenMeasurementOutcome;
 use crate::CoreError;
 use crate::ModelImageInputPolicy;
 use crate::ModelSelection;
 use crate::ModelService;
-use core_api::ModelImageInputLimits;
+use attachment_store::FileAttachmentStore;
 
 #[test]
 fn provider_receives_ephemeral_data_url_instead_of_durable_attachment_reference() {
     let attachments = Arc::new(Attachments::in_memory());
     let attachment = attachments
-        .import_data_url(
-            &crate::test_image::one_pixel_png_data_url(),
-            ImageDetail::Auto,
-        )
+        .import_data_url(&crate::test_image::one_pixel_png_data_url())
         .unwrap();
     let mut request = ModelRequest::text("describe this image");
     let InputItem::Message(message) = &mut request.input[0] else {
@@ -99,10 +98,68 @@ fn audio_is_materialized_only_in_the_provider_request() {
 }
 
 #[test]
+fn inline_audio_measurement_and_invocation_do_not_write_attachment_storage() {
+    let root = tempfile::tempdir().unwrap();
+    let attachments = Arc::new(Attachments::new(Arc::new(
+        FileAttachmentStore::open(root.path()).unwrap(),
+    )));
+    let source = audio::load_bytes(
+        include_bytes!("../../utils/audio/tests/fixtures/tone.wav")
+            .as_slice()
+            .into(),
+        audio::AudioFormat::Wav,
+    )
+    .unwrap()
+    .data_url();
+    let mut request = ModelRequest::text("describe the recording");
+    let InputItem::Message(message) = &mut request.input[0] else {
+        panic!("expected message")
+    };
+    message.content.push(ContentPart::AudioUrl { url: source });
+    let original = request.clone();
+    let provider = Arc::new(RecordingModel::default());
+    let service = AttachmentModelService::new(provider.clone(), attachments);
+    let cancellation = CancellationSource::new().token();
+
+    service
+        .measure_input(ModelSelection::ConfiguredDefault, &request, &cancellation)
+        .unwrap();
+    assert_eq!(provider.request.lock().unwrap().as_ref(), Some(&original));
+    assert!(std::fs::read_dir(root.path()).unwrap().next().is_none());
+
+    service
+        .invoke(ModelSelection::ConfiguredDefault, &request, &cancellation)
+        .unwrap();
+    assert_eq!(provider.request.lock().unwrap().as_ref(), Some(&original));
+    assert!(std::fs::read_dir(root.path()).unwrap().next().is_none());
+    assert_eq!(request, original);
+
+    let InputItem::Message(message) = &mut request.input[0] else {
+        panic!("expected message")
+    };
+    message.content[1] = ContentPart::AudioUrl {
+        url: "data:audio/wav;base64,Y29ycnVwdA==".into(),
+    };
+    *provider.request.lock().unwrap() = None;
+    assert!(
+        service
+            .measure_input(ModelSelection::ConfiguredDefault, &request, &cancellation)
+            .is_err()
+    );
+    assert!(
+        service
+            .invoke(ModelSelection::ConfiguredDefault, &request, &cancellation)
+            .is_err()
+    );
+    assert!(provider.request.lock().unwrap().is_none());
+    assert!(std::fs::read_dir(root.path()).unwrap().next().is_none());
+}
+
+#[test]
 fn selected_model_policy_downsamples_only_the_provider_request_clone() {
     let attachments = Arc::new(Attachments::in_memory());
     let attachment = attachments
-        .import_bytes(test_png(2_400, 1_200), ImageDetail::Auto)
+        .import_bytes(test_png(2_400, 1_200), ash_protocol::ImageMediaType::Png)
         .unwrap();
     let mut request = ModelRequest::text("describe this image");
     let InputItem::Message(message) = &mut request.input[0] else {
@@ -219,6 +276,16 @@ impl RecordingModel {
 }
 
 impl ModelService for RecordingModel {
+    fn measure_input(
+        &self,
+        _: ModelSelection<'_>,
+        request: &ModelRequest,
+        _: &ash_async_utils::CancellationToken,
+    ) -> Result<ContextTokenMeasurementOutcome, CoreError> {
+        *self.request.lock().unwrap() = Some(request.clone());
+        Ok(ContextTokenMeasurementOutcome::Unavailable)
+    }
+
     fn image_input_policy(
         &self,
         _: ModelSelection<'_>,

@@ -42,11 +42,11 @@ pub(super) fn normalize_attachments(
                 Ok(input.clone())
             }
             UserInput::Image { url } if is_data_url(url) => attachments
-                .import_data_url(url, ash_protocol::ImageDetail::Auto)
+                .import_data_url(url)
                 .map(|attachment| UserInput::ImageAttachment { attachment })
                 .map_err(|error| CoreError::InvalidInput(error.to_string())),
             UserInput::Image { url } if is_remote_image_url(url) => attachments
-                .import_remote_url(url, ash_protocol::ImageDetail::Auto)
+                .import_remote_url(url)
                 .map(|attachment| UserInput::ImageAttachment { attachment })
                 .map_err(|error| CoreError::InvalidInput(error.to_string())),
             UserInput::Image { .. } => Err(CoreError::InvalidInput(

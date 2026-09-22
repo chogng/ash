@@ -550,6 +550,73 @@ fn registered_openai_compatible_model_propagates_wire_stream_events() {
 }
 
 #[test]
+fn image_input_policy_belongs_to_the_resolved_model_invoker() {
+    use ash_protocol::ImageDetail;
+    use ash_protocol::ModelImageInputLimits;
+
+    let runtime = ModelProviderRuntime::builtin_with_client(Arc::new(FailingTransport));
+    for (provider, model, auto, high, original) in [
+        (
+            "openai",
+            "gpt-5.6",
+            (6_000, 10_000),
+            (2_048, 2_440),
+            (6_000, 10_000),
+        ),
+        (
+            "openai",
+            "unlisted-test-model",
+            (2_048, 2_440),
+            (2_048, 2_440),
+            (2_048, 2_440),
+        ),
+        (
+            "anthropic",
+            "claude-sonnet-4-20250514",
+            (1_568, 1_120),
+            (1_568, 1_120),
+            (1_568, 1_120),
+        ),
+        (
+            "google",
+            "gemini-3.6-flash",
+            (3_072, 9_216),
+            (3_072, 9_216),
+            (3_072, 9_216),
+        ),
+        (
+            "openai-compatible",
+            "compatible-test",
+            (2_048, 1_536),
+            (2_048, 1_536),
+            (2_048, 1_536),
+        ),
+    ] {
+        let config = if provider == "openai-compatible" {
+            provider_config_with_endpoint(provider, "https://example.test/v1")
+        } else {
+            provider_config(provider)
+        };
+        let invoker = runtime
+            .build_model(&config, &model_ref(provider, model))
+            .unwrap();
+        let policy = invoker.image_input_policy();
+        for (detail, (dimension, patches)) in [
+            (ImageDetail::Auto, auto),
+            (ImageDetail::Low, (512, 256)),
+            (ImageDetail::High, high),
+            (ImageDetail::Original, original),
+        ] {
+            assert_eq!(
+                policy.limits_for(detail),
+                ModelImageInputLimits::new(dimension, patches),
+                "{provider}/{model}: {detail:?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn registered_models_report_their_declared_output_transport() {
     let runtime = ModelProviderRuntime::builtin_with_client(Arc::new(FailingTransport));
     for (provider, model, expected) in [

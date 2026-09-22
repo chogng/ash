@@ -3,7 +3,6 @@ use std::time::Duration;
 use std::time::Instant;
 
 use ash_protocol::AudioMediaType;
-use ash_protocol::ImageDetail;
 use ash_protocol::ImageMediaType;
 
 pub const MAX_ATTACHMENT_UPLOAD_CHUNK_BYTES: usize = 192 * 1024;
@@ -21,13 +20,8 @@ pub struct AttachmentUploadStore {
 
 #[derive(Clone, Copy, Debug)]
 pub enum AttachmentUploadContent {
-    Image {
-        media_type: ImageMediaType,
-        detail: ImageDetail,
-    },
-    Audio {
-        media_type: AudioMediaType,
-    },
+    Image { media_type: ImageMediaType },
+    Audio { media_type: AudioMediaType },
 }
 
 #[derive(Debug)]

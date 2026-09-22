@@ -7,7 +7,6 @@ use ash_http_client::HttpClientError;
 use ash_http_client::HttpHeader;
 use ash_http_client::HttpRequest;
 use ash_http_client::HttpResponse;
-use ash_protocol::ImageDetail;
 use ash_utils_image::PromptImageMode;
 use ash_utils_image::PromptImagePolicy;
 use ash_utils_image::PromptImageResizeLimits;
@@ -24,7 +23,7 @@ fn file_store_round_trips_across_service_instances() {
     let root = tempfile::tempdir().unwrap();
     let first = Attachments::new(Arc::new(FileAttachmentStore::open(root.path()).unwrap()));
     let reference = first
-        .import_bytes(test_png(4, 3), ImageDetail::Auto)
+        .import_bytes(test_png(4, 3), ash_protocol::ImageMediaType::Png)
         .unwrap();
 
     let reopened = Attachments::new(Arc::new(FileAttachmentStore::open(root.path()).unwrap()));
@@ -36,14 +35,28 @@ fn file_store_round_trips_across_service_instances() {
 }
 
 #[test]
+fn mismatched_image_media_type_is_rejected_before_storage() {
+    let root = tempfile::tempdir().unwrap();
+    let service = Attachments::new(Arc::new(FileAttachmentStore::open(root.path()).unwrap()));
+
+    assert!(matches!(
+        service.import_bytes(test_png(2, 2), ash_protocol::ImageMediaType::Jpeg),
+        Err(crate::AttachmentError::Corrupt)
+    ));
+    assert!(std::fs::read_dir(root.path()).unwrap().next().is_none());
+}
+
+#[test]
 fn duplicate_content_reuses_the_same_reference() {
     let service = Attachments::in_memory();
     let bytes = test_png(2, 2);
 
     let first = service
-        .import_bytes(bytes.clone(), ImageDetail::Auto)
+        .import_bytes(bytes.clone(), ash_protocol::ImageMediaType::Png)
         .unwrap();
-    let second = service.import_bytes(bytes, ImageDetail::Auto).unwrap();
+    let second = service
+        .import_bytes(bytes, ash_protocol::ImageMediaType::Png)
+        .unwrap();
 
     assert_eq!(first, second);
 }
@@ -89,7 +102,7 @@ fn audio_survives_reopen_and_rejects_forged_duration_and_corrupt_bytes() {
 fn provider_materialization_downsamples_an_ephemeral_clone_and_keeps_the_stored_image() {
     let service = Attachments::in_memory();
     let reference = service
-        .import_bytes(test_png(2_400, 1_200), ImageDetail::Auto)
+        .import_bytes(test_png(2_400, 1_200), ash_protocol::ImageMediaType::Png)
         .unwrap();
 
     let data_url = service
@@ -117,7 +130,7 @@ fn provider_materialization_downsamples_an_ephemeral_clone_and_keeps_the_stored_
 fn forged_reference_metadata_is_rejected_on_read() {
     let service = Attachments::in_memory();
     let mut reference = service
-        .import_bytes(test_png(2, 2), ImageDetail::Auto)
+        .import_bytes(test_png(2, 2), ash_protocol::ImageMediaType::Png)
         .unwrap();
     reference.width = 7;
 

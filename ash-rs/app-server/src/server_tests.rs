@@ -629,6 +629,46 @@ fn attachment_upload_is_chunked_connection_owned_and_returns_an_attachment_refer
 }
 
 #[test]
+fn attachment_upload_rejects_a_mismatched_image_format() {
+    let server = server();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let mut encoded = Cursor::new(Vec::new());
+    image::DynamicImage::new_rgba8(2, 1)
+        .write_to(&mut encoded, image::ImageFormat::Png)
+        .unwrap();
+    let bytes = encoded.into_inner();
+    let started = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":10, "method":"attachment/upload/start",
+            "params":{"mediaType":"jpeg","encodedBytes":bytes.len(),"detail":"auto"}
+        }),
+    );
+    let upload_id = started["result"]["uploadId"].as_str().unwrap();
+    let written = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":11, "method":"attachment/upload/write",
+            "params":{"uploadId":upload_id,"offset":0,"dataBase64":base64::engine::general_purpose::STANDARD.encode(&bytes)}
+        }),
+    );
+    assert_eq!(written["result"]["nextOffset"], bytes.len());
+    let finished = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0", "id":12, "method":"attachment/upload/finish",
+            "params":{"uploadId":upload_id}
+        }),
+    );
+    assert_eq!(finished["error"]["message"], "InvalidParams");
+    assert!(finished["result"].is_null());
+}
+
+#[test]
 fn document_collaboration_orders_updates_and_returns_rebase_history() {
     let server = server();
     let mut first = server.connection();

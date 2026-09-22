@@ -13,6 +13,10 @@ use ash_context_engine::ContextTokenMeasurementOutcome;
 use ash_context_engine::ContextTokenMeasurementSource;
 use ash_model_provider_config::InputTokenCountProfile;
 use ash_model_provider_config::NormalizedModelProviderConfig;
+use ash_protocol::CapabilitySupport;
+use ash_protocol::Model;
+use ash_protocol::ModelImageInputLimits;
+use ash_protocol::ModelImageInputPolicy;
 
 pub(crate) struct OpenAiAdapter {
     token_counter: Option<super::measurement::ProviderInputTokenCounter>,
@@ -32,6 +36,17 @@ impl OpenAiAdapter {
 }
 
 impl ProviderAdapter for OpenAiAdapter {
+    fn image_input_policy(&self, model: &Model) -> ModelImageInputPolicy {
+        const LOW: ModelImageInputLimits = ModelImageInputLimits::new(512, 256);
+        const HIGH: ModelImageInputLimits = ModelImageInputLimits::new(2_048, 2_440);
+        const ORIGINAL: ModelImageInputLimits = ModelImageInputLimits::new(6_000, 10_000);
+        if model.capabilities.image_detail_original == CapabilitySupport::Supported {
+            ModelImageInputPolicy::new(ORIGINAL, LOW, HIGH, ORIGINAL)
+        } else {
+            ModelImageInputPolicy::new(HIGH, LOW, HIGH, HIGH)
+        }
+    }
+
     fn endpoint(&self) -> ApiEndpoint {
         self.endpoint
     }

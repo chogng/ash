@@ -23,9 +23,9 @@ pub(crate) fn prepare_tool_content(
                     .get(.."data:".len())
                     .is_some_and(|prefix| prefix.eq_ignore_ascii_case("data:"))
                 {
-                    attachments.import_data_url(url, *detail)
+                    attachments.import_data_url(url)
                 } else if url.starts_with("https://") || url.starts_with("http://") {
-                    attachments.import_remote_url(url, *detail)
+                    attachments.import_remote_url(url)
                 } else {
                     return Err(CoreError::InvalidInput(
                         "image input must use a data URL or an HTTP(S) URL".into(),

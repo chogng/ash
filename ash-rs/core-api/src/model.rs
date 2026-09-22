@@ -4,69 +4,12 @@ use ash_context_engine::ContextBudget;
 use ash_context_engine::ContextTokenMeasurementCapability;
 use ash_context_engine::ContextTokenMeasurementOutcome;
 use ash_protocol::ModelBillingScope;
+use ash_protocol::ModelImageInputPolicy;
 use ash_protocol::ModelRef;
 use ash_protocol::ModelRequest;
 use ash_protocol::ModelResponse;
 use ash_protocol::ModelStreamEvent;
 use ash_protocol::ReasoningConfig;
-
-/// Pixel and patch ceilings applied to one ephemeral provider-bound image clone.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct ModelImageInputLimits {
-    pub max_dimension: u32,
-    pub max_patches: usize,
-}
-
-impl ModelImageInputLimits {
-    pub const fn new(max_dimension: u32, max_patches: usize) -> Self {
-        Self {
-            max_dimension,
-            max_patches,
-        }
-    }
-}
-
-/// Provider/model-specific image limits selected before attachment materialization.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct ModelImageInputPolicy {
-    auto: ModelImageInputLimits,
-    low: ModelImageInputLimits,
-    high: ModelImageInputLimits,
-    original: ModelImageInputLimits,
-}
-
-impl ModelImageInputPolicy {
-    pub const fn new(
-        auto: ModelImageInputLimits,
-        low: ModelImageInputLimits,
-        high: ModelImageInputLimits,
-        original: ModelImageInputLimits,
-    ) -> Self {
-        Self {
-            auto,
-            low,
-            high,
-            original,
-        }
-    }
-
-    pub const fn limits_for(self, detail: ash_protocol::ImageDetail) -> ModelImageInputLimits {
-        match detail {
-            ash_protocol::ImageDetail::Auto => self.auto,
-            ash_protocol::ImageDetail::Low => self.low,
-            ash_protocol::ImageDetail::High => self.high,
-            ash_protocol::ImageDetail::Original => self.original,
-        }
-    }
-}
-
-impl Default for ModelImageInputPolicy {
-    fn default() -> Self {
-        const LOW: ModelImageInputLimits = ModelImageInputLimits::new(512, 256);
-        const STANDARD: ModelImageInputLimits = ModelImageInputLimits::new(2_048, 1_536);
-        Self::new(STANDARD, LOW, STANDARD, STANDARD)
-    }
-}
 
 /// Receives provider-neutral incremental output for one model invocation.
 ///

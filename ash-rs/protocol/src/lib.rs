@@ -130,6 +130,8 @@ pub use model::ModelContextUsage;
 pub use model::ModelContextUsageSource;
 pub use model::ModelCostLineItem;
 pub use model::ModelId;
+pub use model::ModelImageInputLimits;
+pub use model::ModelImageInputPolicy;
 pub use model::ModelInfo;
 pub use model::ModelInputEstimate;
 pub use model::ModelInvocationOutcome;

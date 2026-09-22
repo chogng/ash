@@ -51,6 +51,7 @@ use ash_models_manager::ModelRequirements;
 use ash_models_manager::ModelsManager;
 use ash_models_manager::ModelsManagerError;
 use ash_protocol::CapabilitySupport;
+use ash_protocol::ModelImageInputPolicy;
 use ash_protocol::ModelOutputTransport;
 use ash_protocol::ModelRef;
 use ash_secrets::SecretStore;
@@ -1165,6 +1166,11 @@ impl ModelRuntimeRequest {
 /// state or mutable product configuration; a newly resolved invoker is used when configuration
 /// changes should affect a later invocation.
 pub trait ModelInvoker: Send + Sync {
+    /// Returns image limits belonging to this immutable provider/model selection.
+    fn image_input_policy(&self) -> ModelImageInputPolicy {
+        ModelImageInputPolicy::default()
+    }
+
     fn invoke(&self, request: &ModelRequest) -> Result<ModelResponse, ModelProviderError> {
         self.invoke_with_cancellation(request, &CancellationSource::new().token())
     }
@@ -1250,6 +1256,10 @@ struct RegisteredModelInvoker {
 }
 
 impl ModelInvoker for RegisteredModelInvoker {
+    fn image_input_policy(&self) -> ModelImageInputPolicy {
+        self.provider.adapter.image_input_policy(&self.model)
+    }
+
     fn invoke_with_cancellation(
         &self,
         request: &ModelRequest,

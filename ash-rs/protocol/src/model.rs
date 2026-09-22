@@ -39,6 +39,8 @@ pub use invocation::Message;
 pub use invocation::MessageRole;
 pub use invocation::ModelContextUsage;
 pub use invocation::ModelContextUsageSource;
+pub use invocation::ModelImageInputLimits;
+pub use invocation::ModelImageInputPolicy;
 pub use invocation::ModelInputEstimate;
 pub use invocation::ModelRequest;
 pub use invocation::ModelResponse;

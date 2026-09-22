@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use ash_protocol::ContentDigest;
 use ash_protocol::ImageAttachmentRef;
-use ash_protocol::ImageDetail;
 use ash_protocol::ImageMediaType;
 use ash_utils_image::EncodedImage;
 use ash_utils_image::ImageAnimationPolicy;
@@ -52,11 +51,7 @@ impl Attachments {
         self
     }
 
-    pub fn import_data_url(
-        &self,
-        data_url: &str,
-        _detail: ImageDetail,
-    ) -> Result<ImageAttachmentRef, AttachmentError> {
+    pub fn import_data_url(&self, data_url: &str) -> Result<ImageAttachmentRef, AttachmentError> {
         let image = load_data_url_for_prompt(data_url, storage_policy())
             .map_err(|error| AttachmentError::InvalidImage(error.to_string()))?;
         let reference = reference_for_image(&image)?;
@@ -67,8 +62,11 @@ impl Attachments {
     pub fn import_bytes(
         &self,
         bytes: Vec<u8>,
-        _detail: ImageDetail,
+        media_type: ImageMediaType,
     ) -> Result<ImageAttachmentRef, AttachmentError> {
+        if image_media_type(&bytes) != Some(media_type) {
+            return Err(AttachmentError::Corrupt);
+        }
         let image =
             load_for_prompt_bytes(Path::new("<attachment-upload>"), bytes, storage_policy())
                 .map_err(|error| AttachmentError::InvalidImage(error.to_string()))?;
@@ -77,17 +75,14 @@ impl Attachments {
         Ok(reference)
     }
 
-    pub fn import_remote_url(
-        &self,
-        url: &str,
-        detail: ImageDetail,
-    ) -> Result<ImageAttachmentRef, AttachmentError> {
+    pub fn import_remote_url(&self, url: &str) -> Result<ImageAttachmentRef, AttachmentError> {
         let bytes = self
             .remote
             .as_ref()
             .ok_or(AttachmentError::RemoteUnavailable)?
             .fetch(url)?;
-        self.import_bytes(bytes, detail)
+        let media_type = image_media_type(&bytes).ok_or(AttachmentError::Corrupt)?;
+        self.import_bytes(bytes, media_type)
     }
 
     pub fn verify(&self, reference: &ImageAttachmentRef) -> Result<(), AttachmentError> {
@@ -145,7 +140,7 @@ impl Attachments {
     }
 }
 
-pub fn image_media_type(bytes: &[u8]) -> Option<ImageMediaType> {
+fn image_media_type(bytes: &[u8]) -> Option<ImageMediaType> {
     detect_image_format(bytes).map(media_type_for_format)
 }
 

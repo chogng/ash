@@ -35,6 +35,7 @@ use ash_model_provider_config::ProviderDefinition;
 use ash_plugin::LocalPluginPackage;
 use ash_protocol::CommandId;
 use ash_protocol::ImageDetail;
+use ash_protocol::ModelImageInputLimits;
 use ash_protocol::ModelRef;
 use ash_protocol::ModelRequest;
 use ash_protocol::ModelResponse;
@@ -1687,44 +1688,6 @@ fn config_backed_model_service_resolves_model_reasoning_effort() {
     );
 }
 
-#[test]
-fn image_input_policy_tracks_the_selected_provider_and_original_detail_capability() {
-    let providers = ProviderConfigRegistry::builtin();
-    let openai = ResolvedConfig {
-        model: Some(ModelRef::new(
-            ProviderId::new("openai").unwrap(),
-            ModelId::new("gpt-5.6").unwrap(),
-        )),
-        ..ResolvedConfig::default()
-    };
-    let anthropic = ResolvedConfig {
-        model: Some(ModelRef::new(
-            ProviderId::new("anthropic").unwrap(),
-            ModelId::new("claude-sonnet-4-20250514").unwrap(),
-        )),
-        ..ResolvedConfig::default()
-    };
-
-    let openai_policy = image_input_policy_for_config(&openai, &providers);
-    assert_eq!(
-        openai_policy.limits_for(ImageDetail::Auto),
-        ModelImageInputLimits::new(6_000, 10_000)
-    );
-    assert_eq!(
-        openai_policy.limits_for(ImageDetail::High),
-        ModelImageInputLimits::new(2_048, 2_440)
-    );
-    let anthropic_policy = image_input_policy_for_config(&anthropic, &providers);
-    assert_eq!(
-        anthropic_policy.limits_for(ImageDetail::Auto),
-        ModelImageInputLimits::new(1_568, 1_120)
-    );
-    assert_eq!(
-        anthropic_policy.limits_for(ImageDetail::Original),
-        ModelImageInputLimits::new(1_568, 1_120)
-    );
-}
-
 fn configure_test_provider(config: &ConfigStore, revision: ConfigRevision) -> ConfigRevision {
     config
         .apply(ConfigCommandRequest {
@@ -1897,6 +1860,16 @@ struct SnapshotModel {
 }
 
 impl ModelInvoker for SnapshotModel {
+    fn image_input_policy(&self) -> ModelImageInputPolicy {
+        let dimension = if self.model == "before-update" {
+            800
+        } else {
+            1_200
+        };
+        let limits = ModelImageInputLimits::new(dimension, 1_000);
+        ModelImageInputPolicy::new(limits, limits, limits, limits)
+    }
+
     fn output_transport(&self) -> ash_protocol::ModelOutputTransport {
         ash_protocol::ModelOutputTransport::Unary
     }
@@ -1918,7 +1891,7 @@ impl ModelInvoker for SnapshotModel {
 }
 
 #[test]
-fn model_invocations_use_latest_config_without_mutating_an_in_flight_snapshot() {
+fn model_invocations_and_image_limits_keep_an_in_flight_snapshot() {
     let path = config_path("model-snapshot");
     let config = Arc::new(ConfigStore::open(&path).unwrap());
     let configured = configure_test_provider(&config, ConfigRevision::INITIAL);
@@ -1942,6 +1915,13 @@ fn model_invocations_use_latest_config_without_mutating_an_in_flight_snapshot() 
     let in_flight_model = model.clone();
     let in_flight = thread::spawn(move || invoke_text(in_flight_model.as_ref(), "first"));
     gate.wait_until_entered();
+    assert_eq!(
+        model
+            .image_input_policy(ModelSelection::ConfiguredDefault)
+            .unwrap()
+            .limits_for(ImageDetail::Auto),
+        ModelImageInputLimits::new(800, 1_000)
+    );
     select_model(&config, "select-after", before_update, "after-update");
     gate.release();
 
@@ -1951,6 +1931,20 @@ fn model_invocations_use_latest_config_without_mutating_an_in_flight_snapshot() 
         "before-update"
     );
     assert_eq!(invoke_text(model.as_ref(), "second"), "after-update");
+    assert_eq!(
+        frozen
+            .image_input_policy(ModelSelection::ConfiguredDefault)
+            .unwrap()
+            .limits_for(ImageDetail::Auto),
+        ModelImageInputLimits::new(800, 1_000)
+    );
+    assert_eq!(
+        model
+            .image_input_policy(ModelSelection::ConfiguredDefault)
+            .unwrap()
+            .limits_for(ImageDetail::Auto),
+        ModelImageInputLimits::new(1_200, 1_000)
+    );
     remove_config_files(&path);
 }
 

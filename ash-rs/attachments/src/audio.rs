@@ -7,6 +7,13 @@ use ash_protocol::AudioMediaType;
 use ash_protocol::ContentDigest;
 
 impl Attachments {
+    /// Validates and encodes inline audio for a request without accessing attachment storage.
+    pub fn prepare_audio_data_url(&self, url: &str) -> Result<String, AttachmentError> {
+        ::audio::load_data_url(url)
+            .map(|audio| audio.data_url())
+            .map_err(|error| AttachmentError::InvalidAudio(error.to_string()))
+    }
+
     /// Validates an inline audio upload and commits bytes before returning its reference.
     pub fn import_audio_data_url(&self, url: &str) -> Result<AudioAttachmentRef, AttachmentError> {
         let audio = ::audio::load_data_url(url)

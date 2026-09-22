@@ -53,8 +53,6 @@ pub use hooks::HookService;
 pub use hooks::NoHookExecutionObserver;
 pub use hooks::ToolExecutionOutcome;
 pub use hooks::TurnCompletedHookRequest;
-pub use model::ModelImageInputLimits;
-pub use model::ModelImageInputPolicy;
 pub use model::ModelSelection;
 pub use model::ModelService;
 pub use model::ModelStreamSink;

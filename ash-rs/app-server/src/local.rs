@@ -71,14 +71,13 @@ use ash_models_manager::ModelsManager;
 use ash_protocol::ContextWindow;
 use ash_protocol::ModelAccess;
 use ash_protocol::ModelBillingScope;
+use ash_protocol::ModelImageInputPolicy;
 use ash_rollout::LocalStateRepository;
 use ash_secrets::FileSecretStore;
 use ash_secrets::SecretStore;
 use ash_skills_extension::BuiltInSkillSource;
 use ash_skills_extension::SkillConfigSnapshotProvider;
 use core_api::CoreError;
-use core_api::ModelImageInputLimits;
-use core_api::ModelImageInputPolicy;
 use core_api::ModelSelection;
 use core_api::ModelService;
 use core_api::ModelStreamSink as CoreModelStreamSink;
@@ -1953,12 +1952,10 @@ impl ModelService for ConfigBackedModelService {
         let config = self.config_for_selection(selection)?;
         let budget =
             context_budget_for_config(&config, &self.provider_configs, &self.models_manager)?;
-        let image_policy = image_input_policy_for_config(&config, &self.provider_configs);
         let billing_scope = billing_scope_for_config(&config);
         Ok(Some(Arc::new(FrozenModelService {
             provider: ProviderModelService::new(self.resolver.resolve(&config)),
             budget,
-            image_policy,
             billing_scope,
         })))
     }
@@ -1988,10 +1985,7 @@ impl ModelService for ConfigBackedModelService {
         selection: ModelSelection<'_>,
     ) -> Result<ModelImageInputPolicy, CoreError> {
         let config = self.config_for_selection(selection)?;
-        Ok(image_input_policy_for_config(
-            &config,
-            &self.provider_configs,
-        ))
+        Ok(self.resolver.resolve(&config).image_input_policy())
     }
 
     fn reasoning_config(
@@ -2392,48 +2386,6 @@ fn runtime_catalog_entry(
     Ok(result)
 }
 
-fn image_input_policy_for_config(
-    config: &ResolvedConfig,
-    providers: &ProviderConfigRegistry,
-) -> ModelImageInputPolicy {
-    // Conservative local resize budgets reviewed against provider guidance on 2026-08-23.
-    // Model capabilities decide whether OpenAI Auto/Original may use its larger original-detail
-    // envelope; unknown and compatible adapters intentionally keep Core's smaller default.
-    const LOW: ModelImageInputLimits = ModelImageInputLimits::new(512, 256);
-    const OPENAI_HIGH: ModelImageInputLimits = ModelImageInputLimits::new(2_048, 2_440);
-    const OPENAI_ORIGINAL: ModelImageInputLimits = ModelImageInputLimits::new(6_000, 10_000);
-    const ANTHROPIC: ModelImageInputLimits = ModelImageInputLimits::new(1_568, 1_120);
-    const GOOGLE: ModelImageInputLimits = ModelImageInputLimits::new(3_072, 9_216);
-
-    let Some(model_ref) = config.model.as_ref() else {
-        return ModelImageInputPolicy::default();
-    };
-    let Some(provider) = providers.get(&model_ref.provider) else {
-        return ModelImageInputPolicy::default();
-    };
-    match provider.adapter {
-        ash_model_provider_config::ProviderAdapter::Anthropic => {
-            ModelImageInputPolicy::new(ANTHROPIC, LOW, ANTHROPIC, ANTHROPIC)
-        }
-        ash_model_provider_config::ProviderAdapter::Google => {
-            ModelImageInputPolicy::new(GOOGLE, LOW, GOOGLE, GOOGLE)
-        }
-        ash_model_provider_config::ProviderAdapter::OpenAi => {
-            let supports_original = provider.models.iter().any(|model| {
-                model.id == model_ref.model
-                    && model.capabilities.image_detail_original
-                        == ash_protocol::CapabilitySupport::Supported
-            });
-            if supports_original {
-                ModelImageInputPolicy::new(OPENAI_ORIGINAL, LOW, OPENAI_HIGH, OPENAI_ORIGINAL)
-            } else {
-                ModelImageInputPolicy::new(OPENAI_HIGH, LOW, OPENAI_HIGH, OPENAI_HIGH)
-            }
-        }
-        _ => ModelImageInputPolicy::default(),
-    }
-}
-
 struct DirConfigTracker {
     store: DirConfigStore,
     observed: Mutex<Option<DirConfigObservation>>,
@@ -2490,6 +2442,13 @@ impl ProviderModelService {
 }
 
 impl ModelService for ProviderModelService {
+    fn image_input_policy(
+        &self,
+        _: ModelSelection<'_>,
+    ) -> Result<ModelImageInputPolicy, CoreError> {
+        Ok(self.invoker.image_input_policy())
+    }
+
     fn input_token_measurement_capability(
         &self,
         _: ModelSelection<'_>,
@@ -2697,7 +2656,6 @@ fn billing_scope_for_config(config: &ash_config::ResolvedConfig) -> ModelBilling
 struct FrozenModelService {
     provider: ProviderModelService,
     budget: ContextBudget,
-    image_policy: ModelImageInputPolicy,
     billing_scope: ModelBillingScope,
 }
 impl ModelService for FrozenModelService {
@@ -2711,7 +2669,8 @@ impl ModelService for FrozenModelService {
         &self,
         _: ModelSelection<'_>,
     ) -> Result<ModelImageInputPolicy, CoreError> {
-        Ok(self.image_policy)
+        self.provider
+            .image_input_policy(ModelSelection::ConfiguredDefault)
     }
     fn invoke(
         &self,

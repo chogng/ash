@@ -9,7 +9,6 @@ pub use error::AttachmentError;
 pub use remote::RemoteImageFetcher;
 pub use remote::SafeRemoteImageFetcher;
 pub use service::Attachments;
-pub use service::image_media_type;
 
 /// Maximum encoded bytes accepted for one product image attachment.
 pub const MAX_IMAGE_ATTACHMENT_BYTES: usize = attachment_store::MAX_ATTACHMENT_BYTES;

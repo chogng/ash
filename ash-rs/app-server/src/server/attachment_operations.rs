@@ -31,12 +31,9 @@ impl AppServer {
         let (content, encoded_bytes) = match params {
             AttachmentUploadStartParams::Image {
                 media_type,
-                detail,
+                detail: _,
                 encoded_bytes,
-            } => (
-                AttachmentUploadContent::Image { media_type, detail },
-                encoded_bytes,
-            ),
+            } => (AttachmentUploadContent::Image { media_type }, encoded_bytes),
             AttachmentUploadStartParams::Audio {
                 media_type,
                 encoded_bytes,
@@ -94,16 +91,11 @@ impl AppServer {
             .map_err(upload_error)?;
         let attachments = self.threads.attachments();
         let attachment = match upload.content {
-            AttachmentUploadContent::Image { media_type, detail } => {
-                if ash_attachments::image_media_type(&upload.bytes) != Some(media_type) {
-                    return Err(invalid_attachment_params());
-                }
-                AttachmentRef::Image(
-                    attachments
-                        .import_bytes(upload.bytes, detail)
-                        .map_err(|_| invalid_attachment_params())?,
-                )
-            }
+            AttachmentUploadContent::Image { media_type } => AttachmentRef::Image(
+                attachments
+                    .import_bytes(upload.bytes, media_type)
+                    .map_err(|_| invalid_attachment_params())?,
+            ),
             AttachmentUploadContent::Audio { media_type } => AttachmentRef::Audio(
                 attachments
                     .import_audio_bytes(upload.bytes, media_type)
@@ -132,7 +124,7 @@ impl AppServer {
         let attachment = self
             .threads
             .attachments()
-            .import_remote_url(&params.url, params.detail)
+            .import_remote_url(&params.url)
             .map_err(|_| invalid_attachment_params())?;
         result(&AttachmentMaterializeResult {
             attachment: AttachmentRef::Image(attachment),
