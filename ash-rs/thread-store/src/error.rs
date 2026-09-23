@@ -1,9 +1,11 @@
+use ash_protocol::ThreadId;
 use std::fmt;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ThreadStoreError {
     InvalidBatch(String),
     SequenceConflict { expected: u64, actual: u64 },
+    CatalogDamaged(ThreadId),
     Storage(String),
 }
 
@@ -18,6 +20,9 @@ impl fmt::Display for ThreadStoreError {
                     formatter,
                     "Thread sequence conflict: expected {expected}, actual {actual}"
                 )
+            }
+            Self::CatalogDamaged(thread_id) => {
+                write!(formatter, "Thread catalog record is damaged: {thread_id}")
             }
             Self::Storage(message) => write!(formatter, "Thread storage error: {message}"),
         }

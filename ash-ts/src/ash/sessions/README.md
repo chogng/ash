@@ -90,6 +90,8 @@ and dirs. It does not grant access and is not the editor window Workspace from
   draft materialization.
 - `test/browser/sessions-part.test.ts` verifies the Sessions-owned primary Part
   passively renders multiple full Chat surfaces and reports focus/close intent.
+- `test/browser/sessions-list.test.ts` verifies that list refresh retains buttons,
+  focus, and click behavior for unchanged Sessions.
 - `services/sessions/test/browser/sessionsManagementService.test.ts` protects
   catalog refresh, provider invalidation, drafts, and operations without
   inventing Session sequence state.

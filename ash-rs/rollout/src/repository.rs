@@ -63,25 +63,16 @@ impl LocalStateRepository {
             thread_lease,
             attachments,
         ));
-        let catalog = self.thread_store.list_catalog()?;
-        let catalog_ids = catalog
-            .iter()
-            .map(|record| record.thread.thread_id.clone())
-            .collect::<BTreeSet<_>>();
         let mut recovered = BTreeSet::new();
-        for thread_id in self.thread_store.list_thread_ids()? {
-            if catalog_ids.contains(&thread_id) {
-                continue;
-            }
+        for thread_id in self.thread_store.missing_catalog_thread_ids()? {
             threads.recover_thread(&thread_id)?;
             let record = threads.thread_catalog_record(&thread_id)?;
             self.thread_store.backfill_catalog(&record)?;
             recovered.insert(thread_id);
         }
-        for record in self.thread_store.list_catalog()? {
-            if record.requires_startup_recovery && recovered.insert(record.thread.thread_id.clone())
-            {
-                threads.recover_thread(&record.thread.thread_id)?;
+        for thread_id in self.thread_store.startup_recovery_thread_ids()? {
+            if recovered.insert(thread_id.clone()) {
+                threads.recover_thread(&thread_id)?;
             }
         }
 

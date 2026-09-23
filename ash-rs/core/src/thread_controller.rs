@@ -2038,16 +2038,30 @@ impl ThreadController {
 
     /// Reads lightweight durable Thread facts without loading full histories.
     pub fn list_thread_catalog(&self) -> Result<Vec<ThreadCatalogRecord>, CoreError> {
-        self.store.list_catalog().map_err(CoreError::from)
+        self.read_catalog(|store| store.list_catalog())
     }
 
     pub fn session_thread_catalog(
         &self,
         session_id: &SessionId,
     ) -> Result<Vec<ThreadCatalogRecord>, CoreError> {
-        self.store
-            .session_catalog(session_id)
-            .map_err(CoreError::from)
+        self.read_catalog(|store| store.session_catalog(session_id))
+    }
+
+    fn read_catalog(
+        &self,
+        read: impl Fn(&dyn ThreadStore) -> Result<Vec<ThreadCatalogRecord>, ThreadStoreError>,
+    ) -> Result<Vec<ThreadCatalogRecord>, CoreError> {
+        loop {
+            match read(self.store.as_ref()) {
+                Ok(records) => return Ok(records),
+                Err(ThreadStoreError::CatalogDamaged(thread_id)) => {
+                    let record = self.thread_catalog_record(&thread_id)?;
+                    self.store.backfill_catalog(&record)?;
+                }
+                Err(error) => return Err(error.into()),
+            }
+        }
     }
 
     /// Reads only histories already recovered for startup or opened by a caller.
@@ -2130,8 +2144,7 @@ impl ThreadController {
         session_id: &SessionId,
     ) -> Result<Vec<ThreadId>, CoreError> {
         let thread_ids = self
-            .store
-            .list_catalog()?
+            .list_thread_catalog()?
             .into_iter()
             .filter(|record| &record.session_id == session_id)
             .map(|record| record.thread.thread_id)

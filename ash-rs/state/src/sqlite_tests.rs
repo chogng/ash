@@ -147,6 +147,7 @@ fn sqlite_turn_changes_compare_and_swap_complete_records() {
             actual: sealed.revision,
         })
     );
+    drop(store);
     fs::remove_file(path).unwrap();
 }
 
@@ -192,6 +193,7 @@ fn sqlite_turn_change_commands_replay_the_original_response() {
         store.replay_command("command-1", "different"),
         Err(TurnChangeStoreError::CommandConflict(_))
     ));
+    drop(store);
     fs::remove_file(path).unwrap();
 }
 
@@ -234,6 +236,7 @@ fn sqlite_thread_store_recovers_typed_events() {
     let reopened = SqliteThreadStore::open(&path).unwrap();
     assert_eq!(reopened.load(&thread_id).unwrap(), vec![thread_event]);
     assert_eq!(reopened.list_catalog().unwrap(), vec![expected_catalog]);
+    drop(reopened);
     fs::remove_file(path).unwrap();
 }
 
@@ -267,8 +270,60 @@ fn sqlite_session_catalog_reads_only_the_requested_session() {
     );
     assert!(matches!(
         store.session_catalog(&second_session),
-        Err(ThreadStoreError::Storage(_))
+        Err(ThreadStoreError::CatalogDamaged(thread_id)) if thread_id == second_thread
     ));
+    drop(store);
+    fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn sqlite_catalog_startup_queries_read_only_missing_and_resumable_threads() {
+    let path = database_path("catalog-startup");
+    let session_id = SessionId::new("session-startup").unwrap();
+    let healthy = ThreadId::new("thread-healthy").unwrap();
+    let missing = ThreadId::new("thread-missing").unwrap();
+    let resumable = ThreadId::new("thread-resumable").unwrap();
+    let store = SqliteThreadStore::open(&path).unwrap();
+    append_created_thread(&store, &session_id, &healthy, 1);
+    append_created_thread(&store, &session_id, &missing, 2);
+    append_created_thread(&store, &session_id, &resumable, 3);
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    connection
+        .execute(
+            "DELETE FROM thread_catalog WHERE thread_id = ?1",
+            [missing.as_str()],
+        )
+        .unwrap();
+    connection
+        .execute(
+            "UPDATE thread_catalog SET requires_startup_recovery = 1 WHERE thread_id = ?1",
+            [resumable.as_str()],
+        )
+        .unwrap();
+
+    assert_eq!(store.missing_catalog_thread_ids().unwrap(), vec![missing]);
+    assert_eq!(
+        store.startup_recovery_thread_ids().unwrap(),
+        vec![resumable]
+    );
+    drop(connection);
+    drop(store);
+    fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn sqlite_thread_store_opens_current_catalog_while_another_connection_writes() {
+    let path = database_path("catalog-open-read");
+    let store = SqliteThreadStore::open(&path).unwrap();
+    let writer = rusqlite::Connection::open(&path).unwrap();
+    writer.execute_batch("BEGIN IMMEDIATE").unwrap();
+
+    let reader = SqliteThreadStore::open(&path).unwrap();
+    assert!(reader.list_catalog().unwrap().is_empty());
+
+    writer.execute_batch("ROLLBACK").unwrap();
+    drop(reader);
+    drop(writer);
     drop(store);
     fs::remove_file(path).unwrap();
 }
@@ -351,8 +406,84 @@ fn sqlite_thread_catalog_rejects_index_metadata_mismatch() {
         .unwrap();
     assert!(matches!(
         SqliteThreadStore::open(&path).unwrap().list_catalog(),
-        Err(ThreadStoreError::Storage(message)) if message.contains("metadata disagrees")
+        Err(ThreadStoreError::CatalogDamaged(damaged)) if damaged == thread_id
     ));
+    fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn sqlite_thread_catalog_rejects_changed_record_content() {
+    let path = database_path("catalog-digest");
+    let session_id = SessionId::new("session-digest").unwrap();
+    let thread_id = ThreadId::new("thread-digest").unwrap();
+    let store = SqliteThreadStore::open(&path).unwrap();
+    append_created_thread(&store, &session_id, &thread_id, 1);
+    rusqlite::Connection::open(&path)
+        .unwrap()
+        .execute(
+            "UPDATE thread_catalog SET record_json = REPLACE(record_json, 'Primary', 'Altered')
+             WHERE thread_id = ?1",
+            [thread_id.as_str()],
+        )
+        .unwrap();
+
+    assert!(matches!(
+        store.session_catalog(&session_id),
+        Err(ThreadStoreError::CatalogDamaged(damaged)) if damaged == thread_id
+    ));
+    drop(store);
+    fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn sqlite_thread_catalog_migrates_old_rows_and_marks_invalid_rows_for_rebuild() {
+    let path = database_path("catalog-migration");
+    let session_id = SessionId::new("session-migration").unwrap();
+    let healthy = ThreadId::new("thread-healthy").unwrap();
+    let invalid = ThreadId::new("thread-invalid").unwrap();
+    let store = SqliteThreadStore::open(&path).unwrap();
+    append_created_thread(&store, &session_id, &healthy, 1);
+    append_created_thread(&store, &session_id, &invalid, 2);
+    drop(store);
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    connection
+        .execute_batch(
+            "PRAGMA foreign_keys = OFF;
+             BEGIN;
+             CREATE TABLE old_catalog (
+                 thread_id TEXT PRIMARY KEY,
+                 session_id TEXT NOT NULL,
+                 requires_startup_recovery INTEGER NOT NULL,
+                 record_json TEXT NOT NULL,
+                 FOREIGN KEY (thread_id) REFERENCES thread_streams(thread_id)
+             );
+             INSERT INTO old_catalog
+             SELECT thread_id, session_id, requires_startup_recovery, record_json FROM thread_catalog;
+             DROP TABLE thread_catalog;
+             ALTER TABLE old_catalog RENAME TO thread_catalog;
+             UPDATE thread_catalog SET record_json = 'invalid' WHERE thread_id = 'thread-invalid';
+             UPDATE ash_schema_migrations SET version = 7 WHERE component = 'event-store';
+             COMMIT;",
+        )
+        .unwrap();
+    drop(connection);
+
+    let reopened = SqliteThreadStore::open(&path).unwrap();
+    assert_eq!(
+        reopened.missing_catalog_thread_ids().unwrap(),
+        vec![invalid.clone()]
+    );
+    reopened
+        .backfill_catalog(&catalog(&session_id, &invalid, 1))
+        .unwrap();
+    assert_eq!(
+        reopened.session_catalog(&session_id).unwrap(),
+        vec![
+            catalog(&session_id, &healthy, 1),
+            catalog(&session_id, &invalid, 1)
+        ]
+    );
+    drop(reopened);
     fs::remove_file(path).unwrap();
 }
 

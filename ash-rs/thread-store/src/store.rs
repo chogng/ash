@@ -60,7 +60,7 @@ pub trait ThreadStore: agent_graph_store::AgentGraphStore {
         session_id: &SessionId,
     ) -> Result<Vec<ThreadCatalogRecord>, ThreadStoreError>;
 
-    /// Installs a missing catalog row while upgrading an older event store.
+    /// Installs a missing or damaged catalog row from the authoritative Thread history.
     fn backfill_catalog(&self, record: &ThreadCatalogRecord) -> Result<(), ThreadStoreError>;
 
     /// Permanently removes every durable Thread owned by one Session.

@@ -220,7 +220,11 @@ fn migration_indexes_legacy_identity_without_rewriting_history() {
     connection.execute_batch("DROP TABLE thread_events; ALTER TABLE legacy_thread_events RENAME TO thread_events;
         DROP TABLE thread_history_prefixes; DROP TABLE history_prefix_links; DROP TABLE history_prefix_records; DROP TABLE history_prefixes;
         DROP TABLE history_workspace_refs; DROP TABLE history_checkpoint_cleanup; DROP TABLE history_records;
-        DROP TABLE agent_threads; DROP TABLE agents; UPDATE ash_schema_migrations SET version = 5 WHERE component = 'event-store';").unwrap();
+        DROP TABLE agent_threads; DROP TABLE agents;
+        CREATE TABLE legacy_thread_catalog (thread_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, requires_startup_recovery INTEGER NOT NULL, record_json TEXT NOT NULL);
+        INSERT INTO legacy_thread_catalog SELECT thread_id, session_id, requires_startup_recovery, record_json FROM thread_catalog;
+        DROP TABLE thread_catalog; ALTER TABLE legacy_thread_catalog RENAME TO thread_catalog;
+        UPDATE ash_schema_migrations SET version = 5 WHERE component = 'event-store';").unwrap();
     let store = Arc::new(SqliteThreadStore::open(&path).unwrap());
     let threads = ThreadController::with_store(store.clone());
     let recovered = threads.read_thread(&root.thread_id).unwrap();

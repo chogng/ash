@@ -1,6 +1,7 @@
 use super::connection::{from_sql_integer, open, sql_error, to_sql_integer};
 use ash_history::StoredEvent;
 use ash_history::supports_stored_event_schema_version;
+use ash_protocol::ContentDigest;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use ash_thread_store::AppendBatchResult;
@@ -17,20 +18,60 @@ use std::sync::Mutex;
 pub struct SqliteThreadStore {
     path: PathBuf,
     connection: Mutex<Connection>,
+    catalog_connection: Mutex<Connection>,
 }
 
 impl SqliteThreadStore {
     pub fn open(path: impl Into<PathBuf>) -> Result<Self, ThreadStoreError> {
         let path = path.into();
         let connection = open(&path).map_err(ThreadStoreError::Storage)?;
+        let catalog_connection = open(&path).map_err(ThreadStoreError::Storage)?;
         Ok(Self {
             path,
             connection: Mutex::new(connection),
+            catalog_connection: Mutex::new(catalog_connection),
         })
     }
 
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    /// Finds legacy Threads that still need a catalog row without reading their histories.
+    pub fn missing_catalog_thread_ids(&self) -> Result<Vec<ThreadId>, ThreadStoreError> {
+        self.catalog_thread_ids(
+            "SELECT streams.thread_id FROM thread_streams AS streams
+             WHERE streams.current_sequence > 0 AND NOT EXISTS (
+                 SELECT 1 FROM thread_catalog AS catalog
+                 WHERE catalog.thread_id = streams.thread_id AND catalog.record_version = 1
+             ) ORDER BY streams.thread_id",
+        )
+    }
+
+    /// Finds only Threads with durable work that must resume during startup.
+    pub fn startup_recovery_thread_ids(&self) -> Result<Vec<ThreadId>, ThreadStoreError> {
+        self.catalog_thread_ids(
+            "SELECT thread_id FROM thread_catalog
+             WHERE requires_startup_recovery = 1 ORDER BY session_id, thread_id",
+        )
+    }
+
+    fn catalog_thread_ids(&self, sql: &str) -> Result<Vec<ThreadId>, ThreadStoreError> {
+        let connection = self.catalog_connection()?;
+        let mut statement = connection.prepare(sql).map_err(storage_error)?;
+        statement
+            .query_map([], |row| row.get::<_, String>(0))
+            .map_err(storage_error)?
+            .map(|row| ThreadId::new(row.map_err(storage_error)?).map_err(storage_error))
+            .collect()
+    }
+
+    fn catalog_connection(
+        &self,
+    ) -> Result<std::sync::MutexGuard<'_, Connection>, ThreadStoreError> {
+        self.catalog_connection
+            .lock()
+            .map_err(|_| ThreadStoreError::Storage("Thread catalog SQLite lock poisoned".into()))
     }
 }
 
@@ -70,7 +111,7 @@ impl ThreadStore for SqliteThreadStore {
         &self,
         session_id: &SessionId,
     ) -> Result<Vec<ThreadId>, ThreadStoreError> {
-        let connection = self.connection()?;
+        let connection = self.catalog_connection()?;
         let mut statement = connection
             .prepare(
                 "SELECT thread_id FROM thread_catalog WHERE session_id = ?1 ORDER BY thread_id",
@@ -101,7 +142,7 @@ impl ThreadStore for SqliteThreadStore {
     }
 
     fn list_catalog(&self) -> Result<Vec<ThreadCatalogRecord>, ThreadStoreError> {
-        let connection = self.connection()?;
+        let connection = self.catalog_connection()?;
         query_catalog(
             &connection,
             "ORDER BY catalog.session_id, catalog.thread_id",
@@ -113,7 +154,7 @@ impl ThreadStore for SqliteThreadStore {
         &self,
         session_id: &SessionId,
     ) -> Result<Vec<ThreadCatalogRecord>, ThreadStoreError> {
-        let connection = self.connection()?;
+        let connection = self.catalog_connection()?;
         query_catalog(
             &connection,
             "WHERE catalog.session_id = ?1 ORDER BY catalog.thread_id",
@@ -402,7 +443,8 @@ fn query_catalog(
     let mut statement = connection
         .prepare(&format!(
             "SELECT catalog.thread_id, catalog.session_id, catalog.requires_startup_recovery,
-                catalog.record_json, streams.current_sequence
+                catalog.record_json, catalog.record_version, catalog.record_digest,
+                streams.current_sequence
          FROM thread_catalog AS catalog
          JOIN thread_streams AS streams ON streams.thread_id = catalog.thread_id
          {filter}"
@@ -416,14 +458,29 @@ fn query_catalog(
                 row.get::<_, i64>(2)?,
                 row.get::<_, String>(3)?,
                 row.get::<_, i64>(4)?,
+                row.get::<_, String>(5)?,
+                row.get::<_, i64>(6)?,
             ))
         })
         .map_err(storage_error)?
         .map(|row| {
-            let (thread_id, session_id, requires_recovery, record_json, current_sequence) =
-                row.map_err(storage_error)?;
-            let record =
-                serde_json::from_str::<ThreadCatalogRecord>(&record_json).map_err(storage_error)?;
+            let (
+                thread_id,
+                session_id,
+                requires_recovery,
+                record_json,
+                record_version,
+                record_digest,
+                current_sequence,
+            ) = row.map_err(storage_error)?;
+            let catalog_thread_id = ThreadId::new(thread_id.clone()).map_err(storage_error)?;
+            if record_version != 1
+                || ContentDigest::sha256(record_json.as_bytes()).as_str() != record_digest
+            {
+                return Err(ThreadStoreError::CatalogDamaged(catalog_thread_id));
+            }
+            let record = serde_json::from_str::<ThreadCatalogRecord>(&record_json)
+                .map_err(|_| ThreadStoreError::CatalogDamaged(catalog_thread_id.clone()))?;
             let current_sequence =
                 from_sql_integer(current_sequence).map_err(ThreadStoreError::Storage)?;
             if record.thread.thread_id.as_str() != thread_id
@@ -431,9 +488,7 @@ fn query_catalog(
                 || i64::from(record.requires_startup_recovery) != requires_recovery
                 || record.sequence != current_sequence
             {
-                return Err(ThreadStoreError::Storage(
-                    "Thread catalog metadata disagrees with its stored record".into(),
-                ));
+                return Err(ThreadStoreError::CatalogDamaged(catalog_thread_id));
             }
             Ok(record)
         })
@@ -444,21 +499,26 @@ fn write_catalog(
     connection: &Connection,
     record: &ThreadCatalogRecord,
 ) -> Result<(), ThreadStoreError> {
+    let json = serde_json::to_string(record)
+        .map_err(|error| ThreadStoreError::Storage(error.to_string()))?;
+    let digest = ContentDigest::sha256(json.as_bytes());
     connection
         .execute(
             "INSERT INTO thread_catalog
-             (thread_id, session_id, requires_startup_recovery, record_json)
-             VALUES (?1, ?2, ?3, ?4)
+             (thread_id, session_id, requires_startup_recovery, record_json, record_version, record_digest)
+             VALUES (?1, ?2, ?3, ?4, 1, ?5)
              ON CONFLICT(thread_id) DO UPDATE SET
                  session_id = excluded.session_id,
                  requires_startup_recovery = excluded.requires_startup_recovery,
-                 record_json = excluded.record_json",
+                 record_json = excluded.record_json,
+                 record_version = excluded.record_version,
+                 record_digest = excluded.record_digest",
             params![
                 record.thread.thread_id.as_str(),
                 record.session_id.as_str(),
                 record.requires_startup_recovery,
-                serde_json::to_string(record)
-                    .map_err(|error| ThreadStoreError::Storage(error.to_string()))?,
+                json,
+                digest.as_str(),
             ],
         )
         .map_err(storage_error)?;

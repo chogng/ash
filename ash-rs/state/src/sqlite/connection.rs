@@ -1,28 +1,35 @@
-use rusqlite::{Connection, OptionalExtension, TransactionBehavior};
+use ash_protocol::ContentDigest;
+use ash_thread_store::ThreadCatalogRecord;
+use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use std::path::Path;
 
 use crate::{SqliteDurability, open_sqlite_database};
 
-const STORAGE_SQLITE_SCHEMA_VERSION: u32 = 7;
+const STORAGE_SQLITE_SCHEMA_VERSION: u32 = 8;
 
 pub(super) fn open(path: &Path) -> Result<Connection, String> {
     let mut connection = open_sqlite_database(path, SqliteDurability::Durable)?;
-    connection
-        .execute_batch(
-            "CREATE TABLE IF NOT EXISTS ash_schema_migrations (
-                 component TEXT PRIMARY KEY,
-                 version INTEGER NOT NULL
-             );",
-        )
-        .map_err(sql_error)?;
-    let version = connection
+    let has_migrations = connection
         .query_row(
-            "SELECT version FROM ash_schema_migrations WHERE component = 'event-store'",
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'ash_schema_migrations'",
             [],
-            |row| row.get::<_, u32>(0),
+            |row| row.get::<_, i64>(0),
         )
         .optional()
-        .map_err(sql_error)?;
+        .map_err(sql_error)?
+        .is_some();
+    let version = if has_migrations {
+        connection
+            .query_row(
+                "SELECT version FROM ash_schema_migrations WHERE component = 'event-store'",
+                [],
+                |row| row.get::<_, u32>(0),
+            )
+            .optional()
+            .map_err(sql_error)?
+    } else {
+        None
+    };
     if let Some(version) = version
         && version > STORAGE_SQLITE_SCHEMA_VERSION
     {
@@ -30,8 +37,19 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
             "unsupported event-store SQLite schema version {version}"
         ));
     }
+    if version == Some(STORAGE_SQLITE_SCHEMA_VERSION) {
+        return Ok(connection);
+    }
     let transaction = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(sql_error)?;
+    transaction
+        .execute_batch(
+            "CREATE TABLE IF NOT EXISTS ash_schema_migrations (
+                 component TEXT PRIMARY KEY,
+                 version INTEGER NOT NULL
+             );",
+        )
         .map_err(sql_error)?;
     let locked_version = transaction
         .query_row(
@@ -116,7 +134,7 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
                  DROP TABLE IF EXISTS session_streams;",
             )
             .map_err(sql_error)?,
-        Some(4) | Some(5) | Some(6) | Some(STORAGE_SQLITE_SCHEMA_VERSION) => {}
+        Some(4) | Some(5) | Some(6) | Some(7) | Some(STORAGE_SQLITE_SCHEMA_VERSION) => {}
         Some(version) => {
             return Err(format!(
                 "unsupported event-store SQLite schema version {version}"
@@ -130,6 +148,8 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
                  session_id TEXT NOT NULL,
                  requires_startup_recovery INTEGER NOT NULL,
                  record_json TEXT NOT NULL,
+                 record_version INTEGER NOT NULL,
+                 record_digest TEXT NOT NULL,
                  FOREIGN KEY (thread_id) REFERENCES thread_streams(thread_id)
              );
              CREATE INDEX IF NOT EXISTS thread_catalog_session
@@ -176,10 +196,74 @@ pub(super) fn open(path: &Path) -> Result<Connection, String> {
     if locked_version.is_some_and(|version| version < 6) {
         super::graph::migrate_bindings(&transaction).map_err(sql_error)?;
     }
-    if locked_version != Some(STORAGE_SQLITE_SCHEMA_VERSION) {
+    if locked_version.is_none_or(|version| version < 7) {
         super::history::create_schema(&transaction)?;
         if locked_version.is_some() {
             super::history::migrate_records(&transaction)?;
+        }
+    }
+    if locked_version.is_some_and(|version| version < 8) {
+        let has_record_version = {
+            let mut statement = transaction
+                .prepare("PRAGMA table_info(thread_catalog)")
+                .map_err(sql_error)?;
+            statement
+                .query_map([], |row| row.get::<_, String>(1))
+                .map_err(sql_error)?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(sql_error)?
+                .into_iter()
+                .any(|name| name == "record_version")
+        };
+        if !has_record_version {
+            transaction
+                .execute_batch(
+                    "ALTER TABLE thread_catalog ADD COLUMN record_version INTEGER NOT NULL DEFAULT 0;
+                     ALTER TABLE thread_catalog ADD COLUMN record_digest TEXT NOT NULL DEFAULT '';",
+                )
+                .map_err(sql_error)?;
+        }
+        let mut statement = transaction
+            .prepare(
+                "SELECT catalog.thread_id, catalog.session_id, catalog.requires_startup_recovery,
+                        catalog.record_json, streams.current_sequence
+                 FROM thread_catalog AS catalog
+                 JOIN thread_streams AS streams ON streams.thread_id = catalog.thread_id",
+            )
+            .map_err(sql_error)?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, i64>(4)?,
+                ))
+            })
+            .map_err(sql_error)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(sql_error)?;
+        drop(statement);
+        for row in rows {
+            let (thread_id, session_id, requires_recovery, json, sequence) = row;
+            let Ok(record) = serde_json::from_str::<ThreadCatalogRecord>(&json) else {
+                continue;
+            };
+            if record.thread.thread_id.as_str() != thread_id
+                || record.session_id.as_str() != session_id
+                || i64::from(record.requires_startup_recovery) != requires_recovery
+                || i64::try_from(record.sequence).ok() != Some(sequence)
+            {
+                continue;
+            }
+            transaction
+                .execute(
+                    "UPDATE thread_catalog SET record_version = 1, record_digest = ?1
+                     WHERE thread_id = ?2",
+                    params![ContentDigest::sha256(json.as_bytes()).as_str(), thread_id],
+                )
+                .map_err(sql_error)?;
         }
     }
     transaction.commit().map_err(sql_error)?;
